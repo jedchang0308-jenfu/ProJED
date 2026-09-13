@@ -4,7 +4,7 @@ import {
   countActiveTaskFilters,
   matchesTaskFilters,
   normalizeTaskFilters,
-  type TaskFilterState,
+  type TaskFilterQuery,
 } from '../features/taskFilters';
 import {
   cloneCalendarBoardFilterSnapshot,
@@ -38,8 +38,8 @@ export type CalendarSubscriptionBuilderAssigneeOption = TaskConditionAssigneeOpt
 };
 
 export type CalendarSubscriptionBuilderPayload = {
-  version: 3;
-  v3_scope_type: 'per_board_filter_snapshot';
+  version: 4;
+  v4_scope_type: 'per_board_filter_snapshot';
   workspace_ids: string[];
   project_ids: string[];
   board_filters: Record<string, CalendarSubscriptionBoardFilterSnapshot>;
@@ -215,8 +215,8 @@ const CalendarSubscriptionBuilderPreview: React.FC<Props> = ({
   );
 
   const payload = useMemo<CalendarSubscriptionBuilderPayload>(() => ({
-    version: 3,
-    v3_scope_type: 'per_board_filter_snapshot',
+    version: 4,
+    v4_scope_type: 'per_board_filter_snapshot',
     workspace_ids: unique(boards.flatMap(board => [board.workspaceId])),
     project_ids: boards.map(board => board.id),
     board_filters: Object.fromEntries(boards.map(board => [
@@ -344,22 +344,16 @@ const CalendarSubscriptionBuilderPreview: React.FC<Props> = ({
     return options;
   }, [assigneeOptions, canManageSelectedBoard, currentUserId, selectedBoard]);
 
-  const updateSelectedFilters = (updates: Partial<TaskFilterState>) => {
+  const updateSelectedFilters = (nextFilters: TaskFilterQuery) => {
     if (!selectedBoard) return;
-    const guardedUpdates = !canManageSelectedBoard && currentUserId && updates.selectedAssigneeIds
-      ? { ...updates, selectedAssigneeIds: [currentUserId] }
-      : updates;
+    const guardedFilters = !canManageSelectedBoard && currentUserId
+      ? { ...nextFilters, people: { ids: [currentUserId], includeUnassigned: false } }
+      : nextFilters;
     setBoardFilters(current => ({
       ...current,
       [selectedBoard.id]: {
         ...(current[selectedBoard.id] ?? { included: true, date_types: ['due_date'], filters: createCalendarSafeDefaultTaskFilters(currentUserId) }),
-        filters: normalizeTaskFilters({
-          ...(current[selectedBoard.id]?.filters ?? createCalendarSafeDefaultTaskFilters(currentUserId)),
-          ...guardedUpdates,
-          statusFilters: guardedUpdates.statusFilters
-            ? { ...(current[selectedBoard.id]?.filters.statusFilters ?? {}), ...guardedUpdates.statusFilters }
-            : current[selectedBoard.id]?.filters.statusFilters,
-        }),
+        filters: normalizeTaskFilters(guardedFilters),
       },
     }));
   };
@@ -583,11 +577,11 @@ const CalendarSubscriptionBuilderPreview: React.FC<Props> = ({
 
                 <TaskConditionFilterControls
                   assigneeOptions={visibleAssigneeOptions}
-                  filters={selectedFilters}
+                  value={selectedFilters}
                   tags={tags}
                   unassignedDisabled={!canManageSelectedBoard}
                   unassignedDisabledReason="你只能訂閱自己負責的任務。"
-                  showOverdueFilter={false}
+                  showOverdueFilter
                   onChange={updateSelectedFilters}
                 />
 

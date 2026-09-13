@@ -1,11 +1,15 @@
 # QA-DEV-045: 行事曆訂閱逐看板篩選器與即時預覽驗證計畫
 
-關聯 DEV：DEV-045
+關聯 DEV：DEV-045、DEV-118
 關聯 SPEC：`ai-doc/specs/SPEC-045-calendar-subscription-filter-builder-preview.md`
 關聯 ADR：`ai-doc/decisions/ADR-038-calendar-subscription-per-board-filter-snapshot.md`
 狀態：Revised v3 QA Executed / Phase 1-2 Local Automated Gates Passed / Pre-production QA Plan Ready / Former v2 QC Historical Only / Release Gate Required
 建立日期：2026-07-06
 重大修訂：2026-07-12
+
+> DEV-118 Target Supersession - 2026-09-11：v3 production baseline與本文件執行結果保持有效；新v4
+> snapshot、positive-inclusion query、逾期、strict validator、Edge adapter與跨surface parity改由
+> `QA-DEV-118-task-filter-positive-inclusion-and-shared-controls.md`治理。目前v4尚未實作或發布。
 
 正式部署前專用驗證計畫：`ai-doc/qa/QA-DEV-045-pre-production-release-validation.md`。該文件定義Level 3、FMEA、Git / artifact boundary、Supabase TEST migration / Edge、live preview / ICS event identity、外部calendar client、cleanup、rollback與Go / No-Go；尚未執行，不代表Release Ready。
 

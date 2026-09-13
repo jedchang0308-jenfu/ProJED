@@ -1,4 +1,4 @@
-import type { TaskDisplaySettings, TaskFilterState } from './types';
+import type { TaskDisplaySettings, TaskFilterQuery } from './types';
 import type { TaskStatus } from '../../types';
 import type { ManualTaskStatus } from '../../utils/taskStatus';
 
@@ -9,6 +9,7 @@ export const TASK_STATUS_OPTIONS: Array<{ key: ManualTaskStatus; label: string }
   { key: 'completed', label: '完成' },
 ];
 
+/** Legacy v4 status map used only by migration fixtures and the old WBS helper. */
 export const createDefaultStatusFilters = (): Record<TaskStatus, boolean> => ({
   todo: true,
   in_progress: true,
@@ -18,12 +19,17 @@ export const createDefaultStatusFilters = (): Record<TaskStatus, boolean> => ({
   onhold: true,
 });
 
-export const createDefaultTaskFilters = (): TaskFilterState => ({
-  statusFilters: createDefaultStatusFilters(),
-  dueWithinDays: null,
-  overdueOnly: false,
-  selectedAssigneeIds: [],
-  selectedTagIds: [],
+export const createDefaultTaskFilters = (): TaskFilterQuery => ({
+  statuses: [],
+  due: {
+    includeOverdue: false,
+    upcomingWithinDays: null,
+  },
+  people: {
+    ids: [],
+    includeUnassigned: false,
+  },
+  tagIds: [],
   keyword: '',
 });
 

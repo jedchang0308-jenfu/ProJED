@@ -1,7 +1,7 @@
 # QA-DEV-108 任務明細會議補記持續呈現驗證計畫
 
 - 狀態：`Executed / PASS / Local-only / NOT RELEASED`
-- 日期：2026-09-07
+- 日期：2026-09-11
 - 對應：DEV-108、SPEC-108
 - 風險：Medium
 - Evidence rule：以 deterministic 資料證據、真實 browser flow、TypeScript、build 與 targeted regression
@@ -67,6 +67,7 @@ database migration 或 mobile meeting composer。
 2. 輸入 `決議先完成測試，再確認交期` 並按「加入」。
 3. 斷言第一層列表立即出現完全相同文字與固定時間，draft content 有 task token，輸入已清空。
 4. 快速雙擊／重送同一 submission 不得出現第二筆。
+5. 歷程區使用與備註欄相同的 `TaskNoteContentSurface`，保留唯讀內容與可聚焦的 region 語意。
 
 ### B02 快捷鍵與輸入邊界
 
@@ -102,9 +103,12 @@ database migration 或 mobile meeting composer。
 ### B07 latest-3 與精簡 UI
 
 - 一至三筆全部可見。四筆以上預設只顯示最新三筆且正序，新加入列位於三筆內。
-- 「其餘 N 筆」數量正確；展開在原位置顯示全部，收合後恢復三筆，未開 Modal／Drawer。
+- 「其餘 N 筆」數量正確；點擊後在原位置顯示全部，且不再顯示「收合」控制；關閉／重開任務
+  才回到三筆預設，不開 Modal／Drawer。
 - DOM／畫面確認：無列表外卡、每列框、icon、badge、搜尋、helper、空狀態、常駐成功文字。
 - 任務明細順序為：基本資料、任務說明、會議紀錄、其他備註、子任務。
+- 會議紀錄歷程使用單一固定最大高度 200px 的 Y 軸卷軸容器；展開後超過視窗高度時可捲動，
+  「其餘 N 筆」控制與 meeting composer 仍在容器外。
 
 ### B08 failure／recovery
 
@@ -122,7 +126,7 @@ database migration 或 mobile meeting composer。
 | 390×844 | 非 meeting 的持續列表可讀／可展開；既有 mobile meeting composer 仍 unavailable。 |
 
 鍵盤必測：Tab 順序與視覺順序一致、textarea → 加入 → 展開控制可達、Enter／Space 操作展開、Escape
-只執行既有 modal 行為；focus 不遺失。檢查 `aria-expanded`、控制 accessible name、200% zoom、移除顏色後
+只執行既有 modal 行為；focus 不遺失。檢查 `aria-expanded`、控制 accessible name、展開後無「收合」控制、200% zoom、移除顏色後
 仍可辨識。此 Medium lane 以語意 DOM／keyboard 為 gate；screen reader 實機可列 supplemental，未執行不得
 寫成已通過。
 
@@ -148,7 +152,7 @@ QC 必須記錄實際命令與結果，不得只寫「已回歸」。Targeted ES
 
 - Static JSON：`output/playwright/dev-108-task-meeting-note-persistent-list/static-result.json`
 - Browser JSON：`output/playwright/dev-108-task-meeting-note-persistent-list/result.json`
-- 截圖：desktop immediate、desktop expanded、laptop long/error、mobile persistent-list 各至少一張。
+- 截圖：desktop immediate、desktop expanded、meeting composer、laptop long/error、mobile persistent-list 各至少一張。
 - 每個 scenario 保存：fixture ids、entry ids、viewport、route、角色、expected／actual、console errors、page errors、
   failed requests、horizontal overflow 數值與 screenshot path。
 - Source absence／archive 必須保存 provider readback；active-draft continuity 必須保存每一步 rendered key count。

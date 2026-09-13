@@ -1155,7 +1155,7 @@ const getCurrentViewIntent = (): ViewMode | null => {
   if (typeof localStorage === 'undefined') return null;
   try {
     const value = localStorage.getItem('projed-last-view');
-    return value && ['home', 'list', 'mindmap', 'board', 'gantt', 'calendar', 'records', 'calendar_subscriptions', 'settings', 'recycle_bin'].includes(value)
+    return value && ['home', 'list', 'mindmap', 'board', 'goal', 'gantt', 'calendar', 'records', 'calendar_subscriptions', 'settings', 'recycle_bin'].includes(value)
       ? value as ViewMode
       : null;
   } catch {

@@ -127,7 +127,7 @@ const describeSourceFilter = (
   workspaceNameById: Map<string, string>,
   boardPathById: Map<string, string>
 ) => {
-  if (filters.version === 3 && filters.board_filters) {
+  if ((filters.version === 3 || filters.version === 4) && filters.board_filters) {
     const includedBoards = Object.entries(filters.board_filters)
       .filter(([, snapshot]) => snapshot.included)
       .map(([boardId]) => boardPathById.get(boardId) ?? boardId.slice(0, 8));
@@ -161,7 +161,7 @@ const describeConditionFilters = (
   const dateTypes = (filters.date_types ?? [])
     .map((type) => type === 'start_date' ? '開始日' : '到期日')
     .join('、');
-  if (filters.version === 3 && filters.board_filters) {
+  if ((filters.version === 3 || filters.version === 4) && filters.board_filters) {
     return '每張看板獨立任務條件與事件日期';
   }
 

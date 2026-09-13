@@ -4,8 +4,9 @@ import {
   migrateLegacyBoardTaskFilterPrefs,
   normalizeTaskFilters,
   type AccountBoardTaskFilterScope,
-  type TaskFilterState,
+  type TaskFilterQuery,
 } from '../features/taskFilters';
+import { UNASSIGNED_ASSIGNEE_FILTER } from '../features/taskFilters';
 import { taskFilterPreferenceRepository } from '../features/taskFilters/preferenceRepositoryInstance';
 import useAuthStore from './useAuthStore';
 import useUndoStore from './useUndoStore';
@@ -18,7 +19,7 @@ type TaskFilterStoreState = {
   accountId: string | null;
   boardId: string | null;
   generation: number;
-  filters: TaskFilterState;
+  filters: TaskFilterQuery;
   hydrationStatus: TaskFilterHydrationStatus;
   syncStatus: TaskFilterSyncStatus;
   warning: string | null;
@@ -30,7 +31,8 @@ type TaskFilterStoreActions = {
   activateScope: (accountId: string, boardId: string) => Promise<void>;
   clearScope: () => void;
   retrySync: () => Promise<void>;
-  toggleStatusFilter: (status: keyof TaskFilterState['statusFilters']) => void;
+  setQuery: (filters: TaskFilterQuery) => void;
+  toggleStatusFilter: (status: TaskFilterQuery['statuses'][number]) => void;
   setDueWithinDays: (days: number | null) => void;
   toggleOverdueFilter: () => void;
   toggleAssigneeFilter: (assigneeId: string) => void;
@@ -87,7 +89,7 @@ export const useTaskFilterStore = create<TaskFilterStoreState & TaskFilterStoreA
 
   const applyScopedFilters = (
     scope: AccountBoardTaskFilterScope,
-    filters: TaskFilterState,
+    filters: TaskFilterQuery,
     syncStatus: Extract<TaskFilterSyncStatus, 'pending-upsert' | 'pending-delete'>,
   ) => {
     const current = get();
@@ -102,7 +104,7 @@ export const useTaskFilterStore = create<TaskFilterStoreState & TaskFilterStoreA
   };
 
   const updateFilters = (
-    recipe: (filters: TaskFilterState) => TaskFilterState,
+    recipe: (filters: TaskFilterQuery) => TaskFilterQuery,
     label: string,
   ) => {
     const current = get();
@@ -183,31 +185,57 @@ export const useTaskFilterStore = create<TaskFilterStoreState & TaskFilterStoreA
       set({ syncStatus: result.synced ? 'synced' : 'sync-error', warning: result.warning });
     },
 
+    setQuery: filters => {
+      const current = get();
+      if (!current.accountId || !current.boardId) return;
+      const scope = { accountId: current.accountId, boardId: current.boardId };
+      const before = normalizeTaskFilters(current.filters);
+      const after = normalizeTaskFilters(filters);
+      if (JSON.stringify(before) === JSON.stringify(after)) return;
+      void applyScopedFilters(scope, after, 'pending-upsert');
+    },
+
     toggleStatusFilter: status => updateFilters(filters => ({
       ...filters,
-      statusFilters: { ...filters.statusFilters, [status]: !filters.statusFilters[status] },
+      statuses: filters.statuses.includes(status)
+        ? filters.statuses.filter(item => item !== status)
+        : [...filters.statuses, status],
     }), '修改篩選條件'),
 
-    setDueWithinDays: days => updateFilters(filters => ({ ...filters, dueWithinDays: days }), '修改到期篩選'),
-    toggleOverdueFilter: () => updateFilters(filters => ({ ...filters, overdueOnly: !filters.overdueOnly }), '切換逾期篩選'),
+    setDueWithinDays: days => updateFilters(filters => ({
+      ...filters,
+      due: { ...filters.due, upcomingWithinDays: days, includeOverdue: days === null ? filters.due.includeOverdue : true },
+    }), '修改到期篩選'),
+    toggleOverdueFilter: () => updateFilters(filters => ({
+      ...filters,
+      due: { ...filters.due, includeOverdue: !filters.due.includeOverdue },
+    }), '切換逾期篩選'),
 
     toggleAssigneeFilter: assigneeId => updateFilters(filters => ({
       ...filters,
-      selectedAssigneeIds: filters.selectedAssigneeIds.includes(assigneeId)
-        ? filters.selectedAssigneeIds.filter(id => id !== assigneeId)
-        : [...filters.selectedAssigneeIds, assigneeId],
+      people: assigneeId === UNASSIGNED_ASSIGNEE_FILTER
+        ? { ...filters.people, includeUnassigned: !filters.people.includeUnassigned }
+        : {
+          ...filters.people,
+          ids: filters.people.ids.includes(assigneeId)
+            ? filters.people.ids.filter(id => id !== assigneeId)
+            : [...filters.people.ids, assigneeId],
+        },
     }), '修改負責人篩選'),
 
-    clearAssigneeFilters: () => updateFilters(filters => ({ ...filters, selectedAssigneeIds: [] }), '清除負責人篩選'),
+    clearAssigneeFilters: () => updateFilters(filters => ({
+      ...filters,
+      people: { ids: [], includeUnassigned: false },
+    }), '清除負責人篩選'),
 
     toggleTagFilter: tagId => updateFilters(filters => ({
       ...filters,
-      selectedTagIds: filters.selectedTagIds.includes(tagId)
-        ? filters.selectedTagIds.filter(id => id !== tagId)
-        : [...filters.selectedTagIds, tagId],
+      tagIds: filters.tagIds.includes(tagId)
+        ? filters.tagIds.filter(id => id !== tagId)
+        : [...filters.tagIds, tagId],
     }), '修改標籤篩選'),
 
-    clearTagFilters: () => updateFilters(filters => ({ ...filters, selectedTagIds: [] }), '清除標籤篩選'),
+    clearTagFilters: () => updateFilters(filters => ({ ...filters, tagIds: [] }), '清除標籤篩選'),
     setKeyword: keyword => updateFilters(filters => ({ ...filters, keyword }), '修改關鍵字篩選'),
 
     resetFilters: () => {
@@ -227,15 +255,15 @@ export const useTaskFilterStore = create<TaskFilterStoreState & TaskFilterStoreA
     },
 
     reconcileAssigneeIds: (validIds, preserveIds = new Set(['__unassigned__'])) => {
-      const current = get().filters.selectedAssigneeIds;
+      const current = get().filters.people.ids;
       const next = current.filter(id => validIds.has(id) || preserveIds.has(id));
-      if (next.length !== current.length) updateFilters(filters => ({ ...filters, selectedAssigneeIds: next }), '清理失效負責人篩選');
+      if (next.length !== current.length) updateFilters(filters => ({ ...filters, people: { ...filters.people, ids: next } }), '清理失效負責人篩選');
     },
 
     reconcileTagIds: validIds => {
-      const current = get().filters.selectedTagIds;
+      const current = get().filters.tagIds;
       const next = current.filter(id => validIds.has(id));
-      if (next.length !== current.length) updateFilters(filters => ({ ...filters, selectedTagIds: next }), '清理失效標籤篩選');
+      if (next.length !== current.length) updateFilters(filters => ({ ...filters, tagIds: next }), '清理失效標籤篩選');
     },
 
     refreshProjection: () => set(state => ({ filters: normalizeTaskFilters(state.filters) })),

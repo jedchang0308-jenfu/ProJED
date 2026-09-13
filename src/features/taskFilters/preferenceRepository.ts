@@ -1,6 +1,7 @@
 import { createDefaultTaskFilters } from './defaults';
 import {
   BOARD_TASK_FILTER_PREFS_VERSION,
+  normalizePersistedTaskFilters,
   normalizeTaskFilters,
   readTaskFilterPreferenceCache,
   readTaskFilterPreferencePending,
@@ -12,7 +13,7 @@ import {
 import type {
   AccountBoardTaskFilterScope,
   TaskFilterPreferenceMutation,
-  TaskFilterState,
+  TaskFilterQuery,
 } from './types';
 export type TaskFilterPreferenceRemoteRow = {
   accountId: string;
@@ -26,8 +27,14 @@ export type TaskFilterPreferenceRemoteRow = {
 export type TaskFilterPreferenceRemoteAdapter = {
   enabled: boolean;
   read: (accountId: string, boardId: string) => Promise<TaskFilterPreferenceRemoteRow | null>;
-  upsert: (accountId: string, boardId: string, filters: TaskFilterState) => Promise<void>;
-  remove: (accountId: string, boardId: string) => Promise<void>;
+  compareAndSet?: (
+    accountId: string,
+    boardId: string,
+    expectedVersion: 4 | 5 | null,
+    filters: TaskFilterQuery,
+  ) => Promise<void>;
+  upsert?: (accountId: string, boardId: string, filters: TaskFilterQuery) => Promise<void>;
+  remove: (accountId: string, boardId: string, expectedVersion?: 5) => Promise<void>;
 };
 
 export type TaskFilterPreferenceLocalAdapter = {
@@ -40,7 +47,7 @@ export type TaskFilterPreferenceLocalAdapter = {
 };
 
 export type TaskFilterHydrationResult = {
-  filters: TaskFilterState;
+  filters: TaskFilterQuery;
   source: 'remote' | 'cache' | 'default' | 'local-only';
   hydrationStatus: 'ready' | 'fallback';
   syncStatus: 'synced' | 'sync-error';
@@ -90,8 +97,9 @@ export const createTaskFilterPreferenceRepository = (
 ) => {
   const queues = new Map<string, QueueState>();
   const blockedRemoteVersions = new Set<string>();
+  const remoteVersions = new Map<string, number | null>();
 
-  const getImmediate = (scope: AccountBoardTaskFilterScope): TaskFilterState => (
+  const getImmediate = (scope: AccountBoardTaskFilterScope): TaskFilterQuery => (
     local.readCache(scope)?.filters ?? createDefaultTaskFilters()
   );
 
@@ -102,13 +110,24 @@ export const createTaskFilterPreferenceRepository = (
       try {
         if (!queued.canSend()) return { synced: false, warning: SYNC_PENDING_WARNING };
         if (queued.mutation.kind === 'delete') {
-          await remote.remove(queued.scope.accountId, queued.scope.boardId);
+          await remote.remove(queued.scope.accountId, queued.scope.boardId, BOARD_TASK_FILTER_PREFS_VERSION);
         } else {
-          await remote.upsert(
-            queued.scope.accountId,
-            queued.scope.boardId,
-            normalizeTaskFilters(queued.mutation.filters),
-          );
+          const key = scopeKey(queued.scope);
+          const expectedVersion = remoteVersions.has(key) ? remoteVersions.get(key) : null;
+          const normalized = normalizeTaskFilters(queued.mutation.filters);
+          if (remote.compareAndSet) {
+            await remote.compareAndSet(
+              queued.scope.accountId,
+              queued.scope.boardId,
+              expectedVersion === 4 || expectedVersion === 5 ? expectedVersion : null,
+              normalized,
+            );
+          } else if (remote.upsert) {
+            await remote.upsert(queued.scope.accountId, queued.scope.boardId, normalized);
+          } else {
+            throw new Error('TASK_FILTER_CAS_UNSUPPORTED');
+          }
+          remoteVersions.set(key, BOARD_TASK_FILTER_PREFS_VERSION);
         }
         const currentPending = local.readPending(queued.scope);
         if (currentPending?.id === queued.mutation.id) {
@@ -118,6 +137,17 @@ export const createTaskFilterPreferenceRepository = (
         return { synced: true, warning: null };
       } catch (error) {
         lastError = error;
+        const message = error instanceof Error ? error.message : String(error);
+        if (queued.mutation.kind === 'upsert' && message.startsWith('TASK_FILTER_CAS_CONFLICT:')) {
+          const latest = await remote.read(queued.scope.accountId, queued.scope.boardId);
+          const key = scopeKey(queued.scope);
+          const latestVersion = latest?.preferenceVersion ?? null;
+          remoteVersions.set(key, latestVersion);
+          if (latestVersion !== null && latestVersion !== 4 && latestVersion !== BOARD_TASK_FILTER_PREFS_VERSION) {
+            blockedRemoteVersions.add(key);
+            return { synced: false, warning: UPGRADE_WARNING };
+          }
+        }
         if (attempt === 0) await delay(100);
       }
     }
@@ -163,7 +193,7 @@ export const createTaskFilterPreferenceRepository = (
 
   const persist = (
     scope: AccountBoardTaskFilterScope,
-    filters: TaskFilterState,
+    filters: TaskFilterQuery,
     canSend: () => boolean,
   ): Promise<TaskFilterMutationResult> => {
     const normalized = normalizeTaskFilters(filters);
@@ -192,8 +222,8 @@ export const createTaskFilterPreferenceRepository = (
     scope: AccountBoardTaskFilterScope,
     canSend: () => boolean,
   ): Promise<TaskFilterMutationResult> => {
-    const cacheRemoved = local.removeCache(scope);
     if (!remote.enabled) {
+      const cacheRemoved = local.removeCache(scope);
       return Promise.resolve({
         synced: cacheRemoved,
         warning: cacheRemoved ? null : SYNC_PENDING_WARNING,
@@ -250,10 +280,9 @@ export const createTaskFilterPreferenceRepository = (
     }
 
     try {
-      // Always inspect the remote version before replaying a v4 journal. This
-      // prevents an old client from overwriting a row created by a newer client.
+      // Always inspect the remote version before replaying the local journal.
       const initialRow = await remote.read(scope.accountId, scope.boardId);
-      if (initialRow && initialRow.preferenceVersion !== BOARD_TASK_FILTER_PREFS_VERSION) {
+      if (initialRow && initialRow.preferenceVersion > BOARD_TASK_FILTER_PREFS_VERSION) {
         blockedRemoteVersions.add(scopeKey(scope));
         return {
           filters: fallbackFilters,
@@ -264,7 +293,28 @@ export const createTaskFilterPreferenceRepository = (
           remoteVersion: initialRow.preferenceVersion,
         };
       }
+      remoteVersions.set(scopeKey(scope), initialRow?.preferenceVersion ?? null);
       blockedRemoteVersions.delete(scopeKey(scope));
+
+      if (initialRow?.preferenceVersion === 4 && remote.compareAndSet) {
+        try {
+          if (!remote.compareAndSet) {
+            throw new Error('TASK_FILTER_CAS_UNSUPPORTED');
+          }
+          await remote.compareAndSet(
+            scope.accountId,
+            scope.boardId,
+            4,
+            normalizePersistedTaskFilters(initialRow.filters),
+          );
+          remoteVersions.set(scopeKey(scope), BOARD_TASK_FILTER_PREFS_VERSION);
+        } catch (error) {
+          const latest = await remote.read(scope.accountId, scope.boardId);
+          const latestVersion = latest?.preferenceVersion ?? null;
+          remoteVersions.set(scopeKey(scope), latestVersion);
+          if (latestVersion !== BOARD_TASK_FILTER_PREFS_VERSION) throw error;
+        }
+      }
 
       const pending = local.readPending(scope);
       if (pending) {
@@ -283,11 +333,10 @@ export const createTaskFilterPreferenceRepository = (
 
       // Read again after replay so delete/upsert results, including concurrent
       // same-version last-write-wins commits, become the hydrate authority.
-      const row = pending
-        ? await remote.read(scope.accountId, scope.boardId)
-        : initialRow;
+      const row = await remote.read(scope.accountId, scope.boardId);
       if (!row) {
         blockedRemoteVersions.delete(scopeKey(scope));
+        remoteVersions.set(scopeKey(scope), null);
         local.removeCache(scope);
         return {
           filters: createDefaultTaskFilters(),
@@ -298,7 +347,7 @@ export const createTaskFilterPreferenceRepository = (
           remoteVersion: null,
         };
       }
-      if (row.preferenceVersion !== BOARD_TASK_FILTER_PREFS_VERSION) {
+      if (row.preferenceVersion > BOARD_TASK_FILTER_PREFS_VERSION) {
         blockedRemoteVersions.add(scopeKey(scope));
         return {
           filters: fallbackFilters,
@@ -310,7 +359,8 @@ export const createTaskFilterPreferenceRepository = (
         };
       }
       blockedRemoteVersions.delete(scopeKey(scope));
-      const filters = normalizeTaskFilters(row.filters as Partial<TaskFilterState>);
+      const filters = normalizePersistedTaskFilters(row.filters);
+      remoteVersions.set(scopeKey(scope), row.preferenceVersion);
       local.writeCache(scope, filters);
       return {
         filters,

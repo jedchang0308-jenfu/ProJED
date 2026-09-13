@@ -12,7 +12,7 @@ const assert = (name: string, ok: boolean, details?: unknown) => results.push({ 
 
 const fresh = materializeCalendarBoardFilters(boards, null, 'current-user');
 assert('new draft includes every current board', Object.values(fresh).every(snapshot => snapshot.included));
-assert('new draft defaults to current user', Object.values(fresh).every(snapshot => snapshot.filters.selectedAssigneeIds.join() === 'current-user'));
+assert('new draft defaults to current user', Object.values(fresh).every(snapshot => snapshot.filters.people.ids.join() === 'current-user'));
 assert('new draft defaults every board to due date', Object.values(fresh).every(snapshot => snapshot.date_types.join() === 'due_date'));
 
 const v1: CalendarSubscriptionFilters = {
@@ -23,9 +23,9 @@ const v1: CalendarSubscriptionFilters = {
 };
 const fromV1 = materializeCalendarBoardFilters(boards, v1, 'current-user');
 assert('v1 storage workspace alias materializes both boards', Object.values(fromV1).every(snapshot => snapshot.included));
-assert('v1 conversion preserves completed output', Object.values(fromV1).every(snapshot => snapshot.filters.statusFilters.completed));
+assert('v1 conversion defaults to unrestricted status output', Object.values(fromV1).every(snapshot => snapshot.filters.statuses.length === 0));
 assert('v1 selected and unassigned assignees are preserved', Object.values(fromV1).every(snapshot =>
-  snapshot.filters.selectedAssigneeIds.includes('current-user') && snapshot.filters.selectedAssigneeIds.includes('__unassigned__')));
+  snapshot.filters.people.ids.includes('current-user') && snapshot.filters.people.includeUnassigned));
 assert('v1 shared event dates are copied into every board', Object.values(fromV1).every(snapshot => snapshot.date_types.join() === 'due_date'));
 
 const v2: CalendarSubscriptionFilters = {
@@ -55,7 +55,7 @@ const v2: CalendarSubscriptionFilters = {
   },
 };
 const fromV2 = materializeCalendarBoardFilters(boards, v2, 'current-user');
-assert('v2 override becomes board A effective snapshot', fromV2['board-a'].filters.keyword === 'override' && fromV2['board-a'].filters.dueWithinDays === 7);
+assert('v2 override becomes board A effective snapshot', fromV2['board-a'].filters.keyword === 'override' && fromV2['board-a'].filters.due.upcomingWithinDays === 7);
 assert('v2 disabled board becomes excluded snapshot', fromV2['board-b'].included === false);
 assert('v2 shared event dates are copied into every board', Object.values(fromV2).every(snapshot => snapshot.date_types.join() === 'due_date'));
 

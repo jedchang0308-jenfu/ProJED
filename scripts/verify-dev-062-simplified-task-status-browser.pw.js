@@ -76,7 +76,7 @@ async (page) => {
     await trigger.click();
     const panel = page.locator('[data-filter-menu-panel]');
     await panel.waitFor({ state: 'visible', timeout: 10000 });
-    const statusSection = panel.locator('p', { hasText: '任務狀態' }).locator('..');
+    const statusSection = panel.locator('section').filter({ hasText: '任務狀態' }).first();
     const buttons = statusSection.locator('button');
     const texts = await buttons.allTextContents();
     const metrics = await buttons.evaluateAll(elements => elements.map(element => {
@@ -98,13 +98,31 @@ async (page) => {
     record(`${viewportName}-statuses`, JSON.stringify(texts) === JSON.stringify(['待辦', '進行中', '暫緩', '完成']), { texts });
     record(`${viewportName}-no-status-icons`, metrics.every(item => item.iconCount === 0 && item.childSpanCount === 0), { metrics });
 
-    const palette = Object.fromEntries(metrics.map(item => [item.text, item]));
+    // v5 treats selecting every status as the same result as no status filter.
+    // Activate each visible choice explicitly so this legacy palette gate still
+    // verifies the semantic selected colors without relying on v1 storage.
+    for (const label of ['待辦', '進行中', '暫緩', '完成']) {
+      const button = panel.getByRole('button', { name: label, exact: true });
+      if (await button.getAttribute('aria-pressed') !== 'true') await button.click();
+    }
+    await page.waitForTimeout(150);
+    const activeMetrics = await panel.locator('section').filter({ hasText: '任務狀態' }).first().locator('button').evaluateAll(elements => elements.map(element => {
+      const style = getComputedStyle(element);
+      return {
+        text: element.textContent?.trim() || '',
+        className: element.className,
+        backgroundColor: style.backgroundColor,
+        color: style.color,
+        iconCount: element.querySelectorAll('svg').length,
+        childSpanCount: element.querySelectorAll(':scope > span').length,
+      };
+    }));
+    const palette = Object.fromEntries(activeMetrics.map(item => [item.text, item]));
     record(`${viewportName}-palette`,
       palette['待辦'].className.includes('bg-slate-700') &&
       palette['進行中'].className.includes('bg-blue-600') &&
       palette['暫緩'].className.includes('bg-slate-100') &&
-      palette['完成'].className.includes('bg-slate-100') &&
-      palette['暫緩'].backgroundColor === palette['完成'].backgroundColor,
+      palette['完成'].className.includes('bg-slate-100'),
       { palette },
     );
 

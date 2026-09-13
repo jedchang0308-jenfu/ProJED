@@ -49,7 +49,7 @@ const safeSetItem = (key: string, value: string | null) => {
 const getStoredView = () => {
     try {
         const stored = localStorage.getItem(VIEW_STORAGE_KEY);
-        if (stored && ['list', 'mindmap', 'board', 'gantt', 'calendar', 'records', 'calendar_subscriptions', 'settings', 'recycle_bin'].includes(stored)) {
+        if (stored && ['list', 'mindmap', 'board', 'goal', 'gantt', 'calendar', 'records', 'calendar_subscriptions', 'settings', 'recycle_bin'].includes(stored)) {
             return stored as ViewMode;
         }
     } catch { /* ignore */ }
@@ -57,7 +57,7 @@ const getStoredView = () => {
 };
 
 const viewToTaskHostMode = (view: ViewMode): TaskHostMode => {
-    if (view === 'mindmap' || view === 'board' || view === 'gantt' || view === 'calendar') return view;
+    if (view === 'mindmap' || view === 'board' || view === 'goal' || view === 'gantt' || view === 'calendar') return view;
     return 'list';
 };
 
@@ -65,6 +65,7 @@ const viewToTaskSurfaceId = (view: ViewMode): TaskInteractionSurfaceId => {
     switch (view) {
         case 'mindmap': return 'mindmap.node';
         case 'board': return 'board.card';
+        case 'goal': return 'goal.row';
         case 'gantt': return 'gantt.task-bar';
         case 'calendar': return 'calendar.segment';
         default: return 'list.row';

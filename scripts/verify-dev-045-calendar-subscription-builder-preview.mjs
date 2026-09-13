@@ -30,11 +30,11 @@ const source = Object.fromEntries(
 );
 
 assert(
-  'v3 contract is explicit and keeps v1/v2 read compatibility',
+  'versioned contract is explicit and keeps v1/v2 read compatibility',
   source.databaseTypes.includes("CalendarSubscriptionV3ScopeType = 'per_board_filter_snapshot'") &&
     source.databaseTypes.includes('CalendarSubscriptionBoardFilterSnapshot') &&
-    source.databaseTypes.includes('version?: 1 | 2 | 3;') &&
-    source.databaseTypes.includes('board_filters?: Record<string, CalendarSubscriptionBoardFilterSnapshot>;'),
+    (source.databaseTypes.includes('version?: 1 | 2 | 3;') || source.databaseTypes.includes('version?: 1 | 2 | 3 | 4;')) &&
+    source.databaseTypes.includes('board_filters?: Record<string, CalendarSubscriptionBoardFilterSnapshot'),
 );
 
 assert(
@@ -45,7 +45,7 @@ assert(
 );
 
 assert(
-  'Calendar view has one v3 builder truth and no legacy global scope form',
+  'Calendar view has one versioned builder truth and no legacy global scope form',
   source.calendarView.includes('onValidationChange={setBuilderValidation}') &&
     source.calendarView.includes('manageableWorkspaceIds={manageableWorkspaceIds}') &&
   source.calendarView.includes('data-calendar-subscription-submit="true"') &&
@@ -68,8 +68,8 @@ assert(
 
 assert(
   'Builder emits complete per-board snapshots and blocks incomplete preview saves',
-  source.builder.includes('version: 3') &&
-    source.builder.includes("v3_scope_type: 'per_board_filter_snapshot'") &&
+  (source.builder.includes('version: 3') || source.builder.includes('version: 4')) &&
+    (source.builder.includes("v3_scope_type: 'per_board_filter_snapshot'") || source.builder.includes("v4_scope_type: 'per_board_filter_snapshot'")) &&
     source.builder.includes('board_filters: Object.fromEntries') &&
     source.builder.includes('failedBoardIds') &&
     source.builder.includes('missingDateTypeBoardIds') &&
@@ -97,9 +97,9 @@ assert(
 );
 
 assert(
-  'New, v1, v2, and v3 records materialize to independent board snapshots',
+  'New, v1, v2, v3 and v4 records materialize to independent board snapshots',
   source.conversion.includes('materializeCalendarBoardFilters') &&
-    source.conversion.includes("const isV3 = filters.version === 3") &&
+    source.conversion.includes('filters.version === 3') &&
     source.conversion.includes("const isV2 = filters.version === 2") &&
     source.conversion.includes("const scopeType = filters.scope_type ?? 'workspace'") &&
     source.conversion.includes('included: snapshot.included') &&
@@ -110,7 +110,7 @@ assert(
 assert(
   'Architecture and QA documents name the immutable per-board model',
   source.adr.includes('逐看板') &&
-    source.spec.includes('version: 3') &&
+  (source.spec.includes('version: 3') || source.spec.includes('version: 4')) &&
     source.qa.includes('QA-045') &&
     source.qc.includes('DEV-045') &&
     source.packageJson.includes('verify:dev-045-calendar-subscription-builder-preview'),

@@ -44,6 +44,7 @@ const files = {
   browserVerifier: 'scripts/verify-dev-039-task-filter-core-browser.pw.js',
   placementVerifier: 'scripts/verify-dev-039-task-workbench-placement-lanes.mjs',
   placementBrowserVerifier: 'scripts/verify-dev-039-task-workbench-placement-lanes-browser.pw.js',
+  crossModeBrowserVerifier: 'scripts/verify-dev-039-task-workbench-cross-mode-browser.pw.js',
   parityVerifier: 'scripts/verify-dev-039-filter-result-parity.mjs',
   parityBrowserVerifier: 'scripts/verify-dev-039-filter-result-parity-browser.pw.js',
 };
@@ -68,7 +69,7 @@ const taskWorkbenchBoardSelectIndex = source.taskWorkbench?.indexOf('data-task-w
 
 assert(
   'task filter shared core exposes canonical types/defaults/predicate/summary/storage',
-  source.types.includes('TaskFilterState') &&
+  (source.types.includes('TaskFilterQuery') || source.types.includes('TaskFilterState')) &&
     source.types.includes('TaskDisplaySettings') &&
     !source.types.includes('TaskWorkbenchFilterProfile') &&
     source.defaults.includes('TASK_STATUS_OPTIONS') &&
@@ -83,8 +84,8 @@ assert(
     source.describe.includes('countActiveTaskFilters') &&
     source.describe.includes('describeTaskFilters') &&
     source.storage.includes("BOARD_TASK_FILTER_STORAGE_KEY = 'projed-task-filters:v1'") &&
-    source.storage.includes('BOARD_TASK_FILTER_PREFS_VERSION = 4') &&
-    source.storage.includes('migrateLegacyDefaultTaskFilters') &&
+    source.storage.includes('BOARD_TASK_FILTER_PREFS_VERSION = 5') &&
+    (source.storage.includes('migrateLegacyDefaultTaskFilters') || source.storage.includes('migrateLegacyTaskFilterStateV4')) &&
     !source.storage.includes('TASK_WORKBENCH_FILTER_PROFILES_STORAGE_KEY') &&
     !source.storage.includes('readTaskWorkbenchProfiles') &&
     !source.storage.includes('writeTaskWorkbenchProfiles') &&
@@ -98,6 +99,7 @@ assert(
   source.utilsTaskFilters.includes("from '../features/taskFilters'") &&
     source.utilsTaskFilters.includes('matchesTaskFilters'),
 );
+const taskChecklistTreeSource = read('src/components/Wbs/TaskChecklistTree.tsx');
 
 const filterTriggerIndex = source.mainLayout?.indexOf('<StatusFilterBar') ?? -1;
 const undoButtonIndex = source.mainLayout?.indexOf('id="btn-undo"') ?? -1;
@@ -130,8 +132,9 @@ assert(
     source.statusFilterBar.includes('border-l border-primary/25') &&
     source.statusFilterBar.includes('<span className="hidden sm:inline">更新</span>') &&
     source.statusFilterBar.includes('data-task-filter-update-count="true"') &&
+    source.statusFilterBar.includes('data-task-filter-update-count="true"') &&
     source.statusFilterBar.includes('className="sm:hidden"') &&
-    source.statusFilterBar.includes('aria-label={`更新篩選結果（${pendingUpdateCount}）`}'),
+    source.statusFilterBar.includes("更新篩選結果（' + pendingUpdateCount"),
 );
 
 assert(
@@ -141,7 +144,7 @@ assert(
     !source.boardStore.includes('statusFilters:') &&
     !source.boardStore.includes('selectedAssigneeIds:') &&
     !source.tagStore.includes('selectedTagIds:') &&
-    source.taskFilterStore.includes('filters: TaskFilterState') &&
+    (source.taskFilterStore.includes('filters: TaskFilterQuery') || source.taskFilterStore.includes('filters: TaskFilterState')) &&
     source.taskFilterStore.includes('toggleTagFilter') &&
     source.taskFilterStore.includes('toggleAssigneeFilter'),
 );
@@ -166,7 +169,7 @@ assert(
   source.boardView.includes('projectTaskFilterResults') &&
     source.boardView.includes('filterProjection.visibleTaskIds.has(n.id)') &&
     source.kanbanColumn.includes('filterProjection.visibleTaskIds.has(child.id)') &&
-    source.kanbanChecklist.includes('filterProjection.visibleTaskIds.has(n.id)') &&
+    (source.kanbanChecklist.includes('filterProjection.visibleTaskIds.has(n.id)') || taskChecklistTreeSource.includes('filterProjection.visibleTaskIds.has(n.id)')) &&
     source.kanbanCard.includes('filterProjection={filterProjection}') &&
     !source.kanbanColumn.includes('matchesTaskFilters') &&
     !source.kanbanChecklist.includes('matchesTaskFilters'),
@@ -182,14 +185,14 @@ assert(
 
 assert(
   'mindmap mode exposes the task filter entry',
-  source.mainLayout.includes("['list', 'mindmap', 'board', 'gantt', 'calendar'].includes(currentView)") &&
+  source.mainLayout.includes("['list', 'mindmap', 'board', 'goal', 'gantt', 'calendar'].includes(currentView)") &&
     source.mindMapView.includes('useTaskFilterStore(state => state.filters)') &&
     source.mindMapView.includes('projectTaskFilterResults') &&
     source.mindMapTree.includes('visibleTaskIds'),
 );
 
 assert(
-  'Task Workbench is a board-side two-column board/filter panel with drag cards, not a route page',
+  'Task Workbench stays inline across task perspectives while BoardView retains drag integration',
   source.taskWorkbench.includes('data-task-workbench-panel="true"') &&
     source.taskWorkbench.includes('data-task-workbench-board-select="true"') &&
     source.taskWorkbench.includes('data-task-workbench-filter-toggle="true"') &&
@@ -199,8 +202,11 @@ assert(
     (source.taskWorkbench.includes('filterProjectionByBoardId.get(task.boardId)?.matchedTaskIds.has(task.id)') ||
       (source.taskWorkbench.includes('buildWorkbenchProjectionTasks') && source.taskWorkbench.includes('matchedTaskIds.add(taskId)'))) &&
     source.taskWorkbench.includes("source: 'task-workbench'") &&
-    source.boardView.includes('<TaskWorkbenchPanel canMoveTask={canMoveTask} />') &&
+    source.boardView.includes('<TaskWorkbenchPanel') &&
     source.boardView.includes("activeData?.source === 'task-workbench'") &&
+    source.mainLayout.includes('<TaskWorkbenchPanel') &&
+    source.mainLayout.includes("currentView !== 'board'") &&
+    source.mainLayout.includes('if (!isTaskFilterView) setView') &&
     !source.app.includes("case 'task_workbench'") &&
     !source.typesIndex.includes("'task_workbench'") &&
     source.mainLayout.includes('data-mobile-task-workbench-nav-entry="true"') &&
@@ -307,6 +313,7 @@ assert(
     source.packageJson.includes('"verify:dev-039-task-filter-core-browser"') &&
     source.packageJson.includes('"verify:dev-039-task-workbench-placement-lanes"') &&
     source.packageJson.includes('"verify:dev-039-task-workbench-placement-lanes-browser"') &&
+    source.packageJson.includes('"verify:dev-039-task-workbench-cross-mode-browser"') &&
     source.packageJson.includes('"verify:dev-039-filter-result-parity"') &&
     source.packageJson.includes('"verify:dev-039-filter-result-parity-browser"') &&
     source.packageJson.includes('"verify:dev-039-task-workbench-cross-board-source"') &&

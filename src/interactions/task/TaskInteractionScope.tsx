@@ -11,10 +11,11 @@ import {
 export type TaskInteractionScopeProps = PropsWithChildren<{
   hostMode?: TaskHostMode;
   origin?: TaskInteractionOrigin;
+  enablePlacementHoverSync?: boolean;
 }>;
 
 const viewToHostMode = (view: string): TaskHostMode => {
-  if (view === 'mindmap' || view === 'board' || view === 'gantt' || view === 'calendar') return view;
+  if (view === 'mindmap' || view === 'board' || view === 'goal' || view === 'gantt' || view === 'calendar') return view;
   return 'list';
 };
 
@@ -23,7 +24,12 @@ const TaskInteractionScopeContext = createContext<TaskInteractionLocation>({
   origin: 'mode-primary',
 });
 
-export const TaskInteractionScope = ({ children, hostMode, origin = 'mode-primary' }: TaskInteractionScopeProps) => {
+export const TaskInteractionScope = ({
+  children,
+  hostMode,
+  origin = 'mode-primary',
+  enablePlacementHoverSync = true,
+}: TaskInteractionScopeProps) => {
   const currentView = useBoardStore(state => state.currentView);
   const value = useMemo<TaskInteractionLocation>(() => ({
     hostMode: hostMode || viewToHostMode(currentView),
@@ -31,6 +37,8 @@ export const TaskInteractionScope = ({ children, hostMode, origin = 'mode-primar
   }), [currentView, hostMode, origin]);
 
   useEffect(() => {
+    if (!enablePlacementHoverSync) return undefined;
+
     const handlePointerOver = (event: PointerEvent) => {
       if (event.pointerType && event.pointerType !== 'mouse') return;
       const surface = getTaskPlacementHoverSurface(event.target);
@@ -56,7 +64,7 @@ export const TaskInteractionScope = ({ children, hostMode, origin = 'mode-primar
       document.removeEventListener('pointerout', handlePointerOut);
       clearTaskPlacementLinkedHover();
     };
-  }, []);
+  }, [enablePlacementHoverSync]);
 
   return <TaskInteractionScopeContext.Provider value={value}>{children}</TaskInteractionScopeContext.Provider>;
 };

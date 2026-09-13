@@ -1,6 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { Check, X } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import { topbarClassNames } from './compactTokens';
 
@@ -119,27 +119,11 @@ export function ModeSwitcher<T extends string>({
         <div
           ref={menuRef}
           role="menu"
+          aria-label="切換模式"
           data-mode-switcher-menu="true"
-          className="fixed z-[10000] w-[232px] overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-xl animate-in fade-in duration-150"
+          className="fixed z-[10000] w-[232px] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl animate-in fade-in duration-150"
           style={{ left: menuPosition.left, top: menuPosition.top }}
         >
-          <div className="grid h-9 grid-cols-[2rem_1fr_2rem] items-center border-b border-slate-100 px-2">
-            <span aria-hidden="true" />
-            <div className="text-center text-xs font-bold text-slate-500">切換模式</div>
-            <button
-              type="button"
-              onClick={() => {
-                setIsOpen(false);
-                triggerRef.current?.focus();
-              }}
-              className="inline-flex h-7 w-7 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-              aria-label="關閉模式選單"
-              data-mode-switcher-close="true"
-            >
-              <X size={15} />
-            </button>
-          </div>
-
           <div className="py-1">
             {options.map(option => {
               const active = option.value === value;

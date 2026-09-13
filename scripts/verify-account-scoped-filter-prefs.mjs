@@ -24,10 +24,11 @@ const checks = [
       source.accountStorage.includes('encodeURIComponent(accountId)'),
   ],
   [
-    'board filter cache and journal use exact v4 account-board keys',
+    'board filter cache and journal use exact account-board migration keys',
     source.accountStorage.includes('getAccountBoardScopedStorageKey') &&
-      source.storage.includes("BOARD_TASK_FILTER_CACHE_STORAGE_KEY = 'projed-task-filters:v4'") &&
-      source.storage.includes("BOARD_TASK_FILTER_PENDING_STORAGE_KEY = 'projed-task-filter-pending:v4'") &&
+      source.storage.includes("BOARD_TASK_FILTER_CACHE_STORAGE_KEY = 'projed-task-filters:v5'") &&
+      source.storage.includes("BOARD_TASK_FILTER_PENDING_STORAGE_KEY = 'projed-task-filter-pending:v5'") &&
+      source.storage.includes("LEGACY_BOARD_TASK_FILTER_CACHE_STORAGE_KEY = 'projed-task-filters:v4'") &&
       source.storage.includes('getAccountBoardScopedStorageKey(BOARD_TASK_FILTER_CACHE_STORAGE_KEY, accountId, boardId)') &&
       source.storage.includes('getAccountBoardScopedStorageKey(BOARD_TASK_FILTER_PENDING_STORAGE_KEY, accountId, boardId)') &&
       !source.storage.includes('writeStorageJson(BOARD_TASK_FILTER_STORAGE_KEY') &&
@@ -37,7 +38,7 @@ const checks = [
     'legacy board filters are discarded only after display readback and migration marker',
     source.storage.includes('extractLegacyDisplaySettings') &&
       source.storage.includes('if (!writeStorageJson(targetDisplayKey, payload)) return false') &&
-      source.storage.includes('readback?.version !== BOARD_TASK_FILTER_PREFS_VERSION') &&
+      source.storage.includes('readback?.version !== TASK_DISPLAY_SETTINGS_VERSION') &&
       source.storage.includes('BOARD_TASK_FILTER_MIGRATION_MARKER_KEY') &&
       source.storage.includes('legacyCandidates.forEach'),
   ],
@@ -51,9 +52,9 @@ const checks = [
       source.app.includes('useTaskFilterStore.getState().activateScope(userId, activeBoardId)'),
   ],
   [
-    'workbench panel stays account-scoped and filters use v4 without cloud coupling',
+    'workbench panel stays account-scoped and filters use v5 without cloud coupling',
     source.workbenchPrefs.includes("TASK_WORKBENCH_PANEL_PREFS_KEY = 'projed-task-workbench-panel:v2'") &&
-      source.workbenchPrefs.includes("TASK_WORKBENCH_FILTER_PREFS_KEY = 'projed-task-workbench-filters:v4'") &&
+      source.workbenchPrefs.includes("TASK_WORKBENCH_FILTER_PREFS_KEY = 'projed-task-workbench-filters:v5'") &&
       source.workbenchPrefs.includes('getAccountScopedStorageKey') &&
       source.workbenchPanel.includes('useAuthStore(state => state.user?.uid ?? null)') &&
       source.workbenchPanel.includes('writeTaskWorkbenchFilterPrefs') &&
@@ -64,7 +65,7 @@ const checks = [
     'workbench v1-v3 filters reset while selected board survives verified migration',
     source.workbenchPrefs.includes('LEGACY_TASK_WORKBENCH_FILTER_PREFS_V2_KEY') &&
       source.workbenchPrefs.includes('selectedBoardId: typeof legacy.selectedBoardId') &&
-      source.workbenchPrefs.includes('filtersByBoardId: {}') &&
+      source.workbenchPrefs.includes('filtersByBoardId: Object.entries') &&
       source.workbenchPrefs.includes('readback?.version === BOARD_TASK_FILTER_PREFS_VERSION') &&
       source.workbenchPrefs.includes('legacyCandidates.forEach'),
   ],

@@ -664,7 +664,7 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 父任務：DEV-009；相容 DEV-008 保留的片段解析、DEV-066、DEV-106。
   - 下一步：若納入 release candidate，依 `QA-DEV-108` 重跑完整 matrix 並交 release gate；目前不自動 deploy。
   - 阻塞 / 恢復條件：Local-only 已通過；若 release 前發現 provider/RLS、正式資料或權限變更需求，停止並回 PM 升級風險。
-  - 證據：`SPEC-108`、`QA-DEV-108`、`RD-TECH-LEAD-REVIEW-DEV-108`、`QC-DEV-108`；static 14/14、browser B01～B09、DEV-008／009／024／066／105／106／107 targeted regression、TypeScript、targeted ESLint、build:test、`git diff --check` PASS。
+  - 證據：`SPEC-108`、`QA-DEV-108`、`RD-TECH-LEAD-REVIEW-DEV-108`、`QC-DEV-108`；static 16 assertions、browser B01～B09、DEV-008／009／024／066／105／106／107 targeted regression、TypeScript、targeted ESLint、build:test、`git diff --check` PASS。
   - 計入交付：是（Local implementation 完成；正式 release 另需 gate）
 
 - ◐ DEV-109 [開發點] [開發中] [P1] [Implemented Candidate / QA-QC Pending / NOT RELEASED] 會議期間看板變更即時記錄與 AI 整理修復
@@ -683,7 +683,7 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 下一步：完成L3 preview同版證據與production-bound candidate；不得啟動正式流量。
   - 阻塞 / 恢復條件：無P0/P1工程阻塞；若需unplaced record schema、跨project link、transactional RPC、production mutation或migration apply，停止並回PM。
   - 證據：`SPEC-110`、`QA-DEV-110`、`QC-DEV-110`、CAPA draft；DEV-110 static 19/19、browser B01～B04、
-    DEV-108 static 14/14＋browser B01～B09、DEV-095 source/cross-mode/browser、Supabase TEST T00～T07 10/10、
+    DEV-108 static 16 assertions＋browser B01～B09、DEV-095 source/cross-mode/browser、Supabase TEST T00～T07 10/10、
     TypeScript、`verify:source`與`git diff --check` PASS；B05/B06保留deterministic／TEST evidence boundary。
   - 計入交付：否（DEV-108 corrective開發點；文件ready不算產品完成）
 
@@ -745,34 +745,62 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
     TypeScript、targeted ESLint、test build 與 diff gate PASS；permission／mobile／production evidence 與 effectiveness 仍待 gate。
   - 計入交付：是（Local implementation 與 targeted QA-QC 完成；正式 release 另走 deployment/release gate）
 
-- ☐ DEV-116 [交付點] [可執行] [P1] [RD Implementation Ready / 架構已定案 / RD Tech Lead R2 PASS / Human Confirmed / NOT IMPLEMENTED] 全層級目標模式與自適應留白閱讀
-  - 摘要：新增以目標與方向為主的閱讀模式，直接呈現各層任務自己的任務說明與近期會議紀錄；
+- ✓ DEV-116 [交付點] [完成] [P1] [Interaction parity implemented / Targeted QA-QC PASS / NOT RELEASED] 全層級 OKR 模式與自適應留白閱讀
+  - 摘要：新增以目標與方向為主的閱讀模式，直接呈現各層任務自己的任務說明與 scope 內全部會議紀錄補記；
     空白內容不占位，父層內容可視覺跨列使用連續空白，但不得形成資料繼承或限制任務編輯。
   - 來源 ID：`USER-20260909-OKR-GOAL-MODE-ADAPTIVE-SPARSE-LAYOUT`、
     `USER-20260910-REMOVE-INLINE-ADD-DESCRIPTION-RECORD-ACTIONS`、
     `USER-20260910-DEV116-MOBILE-RECORD-LAYER-DECISIONS`、
-    `USER-20260910-DEV116-RD-CONTRACT-UPGRADE`、
-    `USER-20260910-DEV116-ARCHITECTURE-CONFIRMATION`。
+     `USER-20260910-DEV116-RD-CONTRACT-UPGRADE`、
+     `USER-20260910-DEV116-ARCHITECTURE-CONFIRMATION`、
+     `USER-20260910-GOAL-LIST-TASK-CAPABILITY-PARITY`、
+     `USER-20260910-GOAL-BOARD-CONTEXT-MENU-PARITY`、
+     `USER-20260910-GOAL-STICKY-DARK-HEADER`、
+     `USER-20260910-GOAL-FLAT-HEADER-LABELS`、
+     `USER-20260910-GOAL-PROGRESS-LIST-ONLY`、
+     `USER-20260910-GOAL-TASK-COLUMN-30PCT`。
   - 相容任務：DEV-039、DEV-070、DEV-095、DEV-108、DEV-111、DEV-114、DEV-115、DEV-117。
-  - 下一步：依 SPEC-116 的 WP-116-A～F 執行產品實作，再依 QA-DEV-116 產生 static／browser 證據；
-    未完成 frozen-candidate QA/QC 前不得標示功能完成或 release-ready。
+  - 結果：interaction parity amendment已完成；List／Goal只共用階層display primitive，Goal自行組裝
+    tag／planning controls／desktop DnD與PWA owner，進度條／百分比維持List presenter；OKR任務名稱區的右鍵／`Shift+F10`則與Board
+    共用同一profile、`GlobalContextMenu`／`TaskActionMenu`、catalog／guards／commands，未新增第二套menu。
+  - UI補強：使用者可見模式名稱改為「OKR模式」並保留 internal `goal` value；表頭、資料cell、每列與外框補上低對比完整格線，
+    用於辨識欄位與rowSpan跨度；欄名改為「任務名稱」、
+    「任務目的」與「會議紀錄」；並拆除表格卡片式外框、任務名稱／說明的非必要包裹層及重複頁內介紹 header，表格直接銜接
+    全域 topbar。ModeSwitcher 也移除可見「切換模式」標題列與關閉叉號，保留非視覺 menu name、Escape／外部點擊／trigger
+    關閉與焦點回復；`清除篩選`只在 filtered-zero 狀態就地顯示，保留必要復原能力而不常駐占位。
+    欄位表頭改為固定頂部欄、深色不透明底與白字；每個`th`自行sticky並直接承擔欄名，不再包覆內層flex／裝飾容器；任務名稱欄縮為252px（原360px的70%），交會格同時固定top／left並提高層級；
+    長任務目的／會議紀錄由owner `td` 內一層必要內容容器承擔Y軸捲動，保留rowSpan、換行、格線與table語意，避免把下方任務推開；
+    同一任務的全部補記共用無狀態 `MeetingQuickNoteRows`，不再只顯示最新一筆。
   - 阻塞 / 恢復條件：P0／P1 readiness blocker=0；若第一版要納入手機、tracking references、live meeting
     continuity、新的完整紀錄聚合畫面、schema／provider fetch／權限或跨看板讀取，立即停止並回規劃模型。
-  - 證據：SPEC-116、QA-DEV-116、本文件 Architecture Closure Review、SPEC-117／ADR-049 store-owned policy
-    amendment；互動概念稿 V2 仍只作需求參考，不是產品實作或 UI PASS 證據。
-  - 計入交付：是（目前只有架構定案文件，不計為功能完成）
+  - 證據：SPEC-116、QA-DEV-116、QC-DEV-116、本文件 Architecture Closure Review、SPEC-117／ADR-049 store-owned
+    policy amendment；DEV-116 static 28/28、browser 40/40（含 V25 全部補記與欄內Y軸捲動）及DEV-039／046／053／070／097／117回歸PASS。
+  - 計入交付：是（local implementation 與 targeted QA-QC 完成；正式 release 另走 deployment/release gate）
 
-- ✓ DEV-117 [交付點] [完成] [P1] [Implemented / Targeted QC PASS / NOT RELEASED] 會議紀錄五模式不中斷
-  - 摘要：讓同一 active board 的會議 session 可在看板、清單、心智圖、甘特與日曆間持續切換，
+- ✓ DEV-117 [交付點] [完成] [P1] [Six-view Amendment Implemented / Targeted QA-QC PASS / NOT RELEASED] 會議紀錄六模式不中斷
+  - 摘要：讓同一 active board 的會議 session 可在看板、清單、心智圖、甘特、日曆與OKR模式間持續切換，
     保留同一草稿、右側紀錄欄、recovery 與 live capture segment，不把 view switch 誤當成離開會議。
   - 來源 ID：`USER-20260910-CROSS-MODE-MEETING-CONTINUITY`。
   - 相容任務：DEV-002、DEV-005、DEV-007、DEV-028、DEV-069、DEV-094、DEV-105、DEV-106、DEV-108、
-    DEV-109、DEV-116；DEV-116 goal current phase 不加入 meeting continuity allowlist。
-  - 結果：已依 SPEC-117／ADR-049 完成 WP-117-A～F；DEV-117 targeted QC PASS，保留 Board-only reservation、mobile 與跨看板 meeting 邊界。
+    DEV-109、DEV-116；最新需求有意取代goal-negative邊界，goal加入meeting continuity allowlist。
+  - 結果：原五模式DEV-117 targeted QC PASS保留為歷史事實；六模式candidate已完成新revision QA-QC，仍保留 Board-only reservation、mobile 與跨看板 meeting 邊界。
   - 阻塞 / 恢復條件：若需修改 schema／provider／permission／recovery、重建 capture segment、放行跨 board／workspace，
     或無法保留既有 DEV-042 等 user-owned dirty changes，停止並回送規劃模型。
   - 證據：`SPEC-117`、`ADR-049`、`QA-DEV-117`；static／browser artifacts 位於 `output/playwright/dev-117-meeting-continuity/`。
   - 計入交付：是（只有產品實作與 QA/QC 通過後才完成；文件定案不計完成）
+
+- ☑ DEV-118 [開發點] [驗證中] [P2] [RD Implementation Complete / Local Candidate QA-QC PASS / NOT RELEASED] 任務篩選器正向包含邏輯與跨介面共用架構
+  - 摘要：統一為「未選不限、選取即包含」；同一條件組 OR、不同條件組 AND。以單一 v5 query、
+    純 compile／match 演算法與受控共用 UI 服務 Board／Workbench／Calendar，並修正日期區間、
+    未指派、active group count 與既有 v4／Calendar v3 相容遷移。
+  - 來源 ID：`USER-20260910-TASK-FILTER-UI-UNIFICATION`、`USER-20260911-TASK-FILTER-LOGIC-ARCHITECTURE`。
+  - 父任務：DEV-039；相容 DEV-045、DEV-062、DEV-064。
+  - 下一步：等待明確實作指令；接手 RD 必須依凍結的 WP-118-A～F 與 file surface 執行，
+    不得重開 filter engine、ownership 或 boolean semantics。遠端 migration／Edge／app 發布仍需獨立 release 指令。
+  - 證據：`TaskFilterState`／predicate／summary／v4 preference repository、Workbench v4 local prefs、
+    Calendar v3 snapshot／DB validator／Edge matcher與三個 UI consumer 的 2026-09-11 repo 靜態盤點；
+    本次未執行產品 QA/QC。
+  - 計入交付：否
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
 
@@ -3997,7 +4025,7 @@ child navigation，C scope rejection未通過前不得開啟 drag。
 - 只投影由任務明細快速補記入口建立、且屬於目前 task ID 的人工內容。
 - 顯示最小資訊：`MM/DD` 與使用者原文；不顯示幾點幾分，也不重複任務名稱、meeting title、task tag 或來源類型。
 - 會議中保留單一輸入入口與「加入」動作；成功時先讓新列可見，再清空輸入。
-- 預設最新三筆，原地展開／收合全部；新加入內容必須落在預設可見的三筆內。
+- 預設最新三筆；「其餘 N 筆」只提供一次性原地展開全部，展開後不顯示「收合」控制；新加入內容必須落在預設可見的三筆內。
 - 原始 meeting record 維持唯一資料來源，active draft、已儲存草稿、待整理、已發布及封存狀態皆由
   同一投影規則處理，永久刪除才移除。
 - 不使用卡片包卡片；列表列無獨立框線，區段最多保留一條低對比分隔線，輸入控制只保留必要
@@ -4021,8 +4049,10 @@ child navigation，C scope rejection未通過前不得開啟 drag。
 - [ ] 關閉並重新開啟任務、結束會議、切換模式及重新載入後，既有列表仍存在；非會議模式不顯示輸入區。
 - [ ] 列表只包含由任務明細加入的人工補記，不混入 AI 整理、系統活動或其他 task-linked 內容。
 - [ ] 原始會議紀錄修改後列表同步；封存仍顯示；永久刪除後相應項目移除。
-- [ ] 一至三筆全部顯示；第四筆起預設只顯示最新三筆，「其餘 N 筆」可在原位置展開及收合全部。
-- [ ] 列表沒有外層卡片、每筆框線、裝飾 icon、badge、搜尋列或常駐成功提示；文字層級仍可辨識。
+- [ ] 一至三筆全部顯示；第四筆起預設只顯示最新三筆，「其餘 N 筆」可在原位置一次性展開全部，
+  展開後不顯示「收合」控制。
+- [ ] 列表沒有外層卡片或每筆框線；歷程列以單一 200px bounded Y-scroll 容器保留可發現邊界，
+  展開後可捲動，且「其餘 N 筆」與 composer 不被容器包住；不增加裝飾 icon、badge、搜尋列或常駐成功提示。
 - [ ] 空白內容不新增；寫入失敗保留輸入，重試不產生重複項目或先清空造成資料遺失。
 - [ ] 1440×900、1024×768 與 390×844 的任務明細無水平 overflow、重疊、按鈕擠壓或不可讀截斷；
   390×844 只驗證歷史列表，仍不得出現既有 mobile meeting composer。
@@ -4043,8 +4073,9 @@ child navigation，C scope rejection未通過前不得開啟 drag。
 - 修改同步：anchor 為 `lineIndex + sourceToken`；原行、唯一 exact candidate、唯一 sourceToken 依序匹配。
   修改冒號後文字更新同 id；刪行、破壞 task/time token 或多候選歧義時 detach 並保留正文。人工或 AI
   新增相似列不得自動建立 provenance。
-- UI：在第一個「任務說明」後插入 `TaskMeetingQuickNoteSection`；預設 latest 3、原地展開、純文字、
-  無卡片／icon／badge／搜尋／成功提示。meeting mode 只控制 composer。
+- UI：在第一個「任務說明」後插入 `TaskMeetingQuickNoteSection`；預設 latest 3、原地展開、純文字，
+  歷程列使用單一 200px bounded Y-scroll，控制與 composer 位於容器外。meeting mode 只控制 composer；
+  不增加外層卡片／每筆框線／icon／badge／搜尋／成功提示。
 - 失敗：denied 不清空輸入；local recovery 或 remote save 失敗保留已進 draft 的 entry；load failure
   不得顯示假空白，保留 active draft 並提供最短就地重試。
 - Success boundary：「加入」成功只代表同一筆資料已進 current in-memory draft，不代表 remote save；
@@ -4866,8 +4897,8 @@ creation contract。完成後所有現有空白建立點都產生 absent descrip
 
 ## DEV-116：全層級目標模式與自適應留白閱讀
 
-- 狀態：`可執行 / Human Confirmed / NOT IMPLEMENTED / NOT RELEASED`
-- 開發文件成熟度：`RD Implementation Ready`
+- 狀態：`Interaction parity implemented / Targeted QA-QC PASS / NOT RELEASED`
+- 開發文件成熟度：`RD Implementation Ready / Implemented`
 - 架構定案：`已定案`
 - 技術主管審查：`R2 PASS`
 - 節點類型：交付點
@@ -4879,9 +4910,11 @@ creation contract。完成後所有現有空白建立點都產生 absent descrip
 - 來源 ID：`USER-20260909-OKR-GOAL-MODE-ADAPTIVE-SPARSE-LAYOUT`、
   `USER-20260910-REMOVE-INLINE-ADD-DESCRIPTION-RECORD-ACTIONS`、
   `USER-20260910-DEV116-MOBILE-RECORD-LAYER-DECISIONS`、
-  `USER-20260910-DEV116-RD-CONTRACT-UPGRADE`、
-  `USER-20260910-DEV116-ARCHITECTURE-CONFIRMATION`
-- 風險等級：Medium（新增使用者入口、閱讀模式、跨層級可見資料投影、狀態相容與可存取性）
+   `USER-20260910-DEV116-RD-CONTRACT-UPGRADE`、
+   `USER-20260910-DEV116-ARCHITECTURE-CONFIRMATION`、
+   `USER-20260910-GOAL-LIST-TASK-CAPABILITY-PARITY`、
+   `USER-20260910-GOAL-BOARD-CONTEXT-MENU-PARITY`
+- 風險等級：Medium（新增使用者入口、閱讀模式、跨層級資料投影、inline mutation、DnD、狀態相容與可存取性）
 
 ### 問題與使用者價值
 
@@ -4902,34 +4935,40 @@ DEV-116 的價值不是新增一套 OKR 資料庫，而是把既有資訊重新�
    視覺跨列使用空間；這只是 presentation，不代表子任務繼承、複製或保存父層資料。
 5. 任一子任務在該欄位有自己的內容時，必須顯示自己的內容並中斷該欄跨列；任務說明與會議紀錄
    兩欄各自獨立判斷。
-6. 空白任務列只保留辨識與判斷必要的任務名稱、階層、狀態及負責人；不提供列內「＋說明／＋紀錄」。
-7. 編輯繼續走既有任務詳情流程，不因精簡顯示、層級或視覺跨列而限制使用者日後補寫內容。
+6. 空白任務列不提供「＋說明／＋紀錄」；仍顯示任務名稱、階層、已啟用標籤及可用planning欄位；進度條／百分比只在清單模式顯示。
+7. 任務名稱、任務目的與會議內容編輯仍走既有詳情／會議流程；負責人、狀態、日期、工期與primary placement
+   拖曳可在Goal依既有permission guard操作，不因層級或視覺跨列受限。
 8. 第一版不開放手機「目標模式」入口；維持現行 mobile board-only navigation contract，不把桌機合併表格
    壓縮或改造成手機版。
-9. 主畫面會議欄只投影近期、具明確 provenance 的人工會議補記；所有其他 task-linked records 維持由
-   既有紀錄庫按需查閱的次要資訊層，不進入目標模式主表格。
+9. 主畫面會議欄投影 exact workspace × board scope 內全部具明確 provenance 的人工會議補記；所有其他
+   task-linked records 維持由既有紀錄庫按需查閱的次要資訊層，不進入目標模式主表格。
 
 ### Current phase scope normalization
 
-1. 目標模式主畫面的「近期會議補記」每任務只顯示最新一筆合格 DEV-108 entry；不顯示「其餘 N 筆」或
-   列內展開。Task Details 的 latest-3／展開全部與紀錄庫查閱契約不變。
+1. 目標模式主畫面的會議欄保留每任務全部合格 DEV-108 entries，依 `(occurredAt, recordId, entryId)` 排序；
+   在 owner cell 的 `rowSpan × 32px` 高度不足時，使用欄內 Y 軸捲動，不顯示「其餘 N 筆」或列內展開。
+   Task Details 的 latest-3／展開全部與紀錄庫查閱契約不變。
 2. 第一版只呈現 active board 的 canonical primary placements。tracking references 在既有模式照常存在，
    但不進入目標模式，避免在沒有 source-board record contract 下顯示不完整或越權的會議資訊。
-3. 第一版不加入 DEV-117 `MEETING_CONTINUITY_VIEWS`。非會議時可使用目標模式；從目標模式開始會議時
-   依 SPEC-117 安全回到 Board。live meeting 中不提供目標模式選項，recovery 若遇 persisted `goal` 亦先正規化為 Board。
-4. 上述三項是縮小第一版的可逆工程／UX 邊界，不覆蓋使用者已確認的全層級欄位與編輯自由；若要擴張，
+3. 2026-09-10 最新使用者決策有意取代先前排除邊界：`goal`加入DEV-117 `MEETING_CONTINUITY_VIEWS`；
+   從目標模式開始會議、live switch與recovery均保留goal，並沿用同一meeting session。
+4. 最新互動決策再取代details-only／0 task write／no-DnD邊界：Goal保留標籤並開放既有planning controls及
+   desktop primary placement拖曳；進度條／百分比維持List。使用者明確說明這些能力不需抽成共用元件；只共用階層縮排。
+5. 最新右鍵決策再取代goal context-menu disabled邊界：OKR任務名稱區右鍵／`Shift+F10`與Board共用同一
+   `GlobalContextMenu`／`TaskActionMenu`、profile、catalog／guards／commands；不複製menu或改permission model。
+6. 上述項目是第一版可逆工程／UX 邊界，不覆蓋使用者已確認的全層級欄位與編輯自由；若要擴張，
    依各段 re-entry trigger 回到產品規劃。
 
 ### Spec Impact Preflight
 
-分類：`Intentional scoped replacement + compatible extension / product code not changed`。
+分類：`Intentional replacement / interaction amendment implemented`。
 
 - `SPEC-111／DEV-111`：使用者先前撤回「在既有任務列直接常駐說明」只適用原五種閱讀模式；本次新指令
   明確新增目標模式，僅在該模式直接顯示內容。既有模式的 1000ms hover、indicator 與歷史 PASS 不回寫。
 - `SPEC-114／DEV-114`：目標模式若直接顯示同一任務說明，該可見內容區不得再觸發重複 hover；其餘
   canonical task surfaces、單例 controller、identity 與 touch 排除契約維持。
-- `SPEC-108／DEV-108`：第一版主畫面只重用具有明確 provenance 的人工會議補記投影，且每任務只取
-  最新一筆 persisted、non-archived entry。Task Details 原有 include-archived、latest-3 與展開全部不變；
+- `SPEC-108／DEV-108`：主畫面重用具有明確 provenance 的人工會議補記投影，保留每任務全部 persisted、
+  non-archived entries；Task Details 原有 include-archived、latest-3 與展開全部不變；
   其他 task-linked records 維持既有紀錄庫次要查閱，已退場的 `TaskRecordTimeline` 不得暗中恢復。
 - `SPEC-115／DEV-115`：空白任務的 description absent 是合法正常狀態；DEV-116 必須原生處理，不得以
   title、placeholder 或預設文案補值。
@@ -4939,8 +4978,8 @@ DEV-116 的價值不是新增一套 OKR 資料庫，而是把既有資訊重新�
   或繞過既有 click、details、permission、selection 與 transient-owner guard。
 - `SPEC-095／DEV-095`：tracking reference 的 canonical identity 與既有模式能力不變；第一版目標模式不投影
   tracking placements，也不因此修改 reference schema、derived read 或 source-board permission。
-- `ADR-049／SPEC-117／DEV-117`：相容 amendment 已選擇第一版不將 `goal` 加入 meeting continuity allowlist。
-  從 goal 開始會議沿用 Board fallback；live meeting 與 recovery 不得停留或切入 goal。
+- `ADR-049／SPEC-117／DEV-117`：最新intentional replacement把`goal`加入meeting continuity allowlist；
+  從goal開始會議、live meeting與recovery都可停留或切入goal。
 
 ### UX Intent
 
@@ -4956,35 +4995,41 @@ DEV-116 的價值不是新增一套 OKR 資料庫，而是把既有資訊重新�
 ### 第一版主要流程
 
 1. 桌機使用者在已有權限且已選定工作區／看板的正常畫面，打開既有 topbar「視角」選單。
-2. 選擇「目標模式」，系統使用 active board 已載入的 canonical primary task tree 與現行 filter；不另建
+2. 選擇「OKR模式」，系統使用 active board 已載入的 canonical primary task tree 與現行 filter；不另建
    per-row task／record request。
-3. 桌機以階層表格呈現「任務與層級、任務說明、近期會議補記、狀態與負責人」；會議欄從目前看板
-   已載入 records 一次建立 task index，每任務只顯示最新一筆合格 DEV-108 人工補記。
+3. 桌機以階層表格呈現「任務與層級、任務目的、會議紀錄、狀態與負責人」；會議欄從目前看板
+   已載入 records 一次建立 task index，每任務顯示全部合格 DEV-108 人工補記，超出 owner cell 高度時於欄內捲動。
 4. 有內容的任務直接顯示自己的摘要；沒有內容的任務縮成最小列。父層內容只在同一分支、同一欄位的
    連續空白子孫範圍內視覺跨列。
 5. 使用者點擊任何層級的任務辨識區，沿用既有任務詳情入口；新增、編輯與保存仍由既有流程負責。
-6. 使用者切換、搜尋、篩選、收合或資料更新時，欄位可見性與跨列依目前可見樹重新計算，不保留 stale span。
-7. 從目標模式點「新增會議記錄」時，依 SPEC-117 回到 Board 再啟動 meeting；live meeting 期間的視角選單
-   不顯示目標模式，不新增說明訊息或第二個狀態列。
+6. 使用者在任務名稱區按右鍵或`Shift+F10`，由DEV-070 binding開啟與Board相同的全域task menu；權限及動作
+   仍由既有guards／commands處理。
+7. 使用者切換、搜尋、篩選、收合或資料更新時，欄位可見性與跨列依目前可見樹重新計算，不保留 stale span。
+8. 從目標模式點「新增會議記錄」時保留goal並啟動既有meeting；live meeting期間的視角選單顯示OKR模式，
+   可切入／切出且不新增說明訊息或第二個狀態列。
 
 ### Current Phase Scope
 
-- [ ] 在既有「視角」選單新增「目標模式」入口；沿用既有切換 disabled、焦點返回與 current-view 管理。
-- [ ] 新增目標模式的唯讀 primary task tree projection，不建立第二份任務、任務說明或會議紀錄資料。
-- [ ] 所有層級使用相同行為矩陣，不以 `level` 決定任務說明或會議紀錄是否存在／可編輯。
-- [ ] 依欄位獨立實作 sparse layout：own content 優先、只跨連續可見 descendant blanks、不得跨 branch。
-- [ ] 可見任務全部沒有任務說明或合格會議補記時，移除相對應整欄與欄名；只有一個內容欄存在時，
+- [x] 在既有「視角」選單新增「OKR模式」入口；沿用既有切換、Escape焦點返回與 current-view 管理。
+- [x] 新增primary task tree projection，不建立第二份任務、任務說明或會議紀錄資料；Task Details入口維持既有command。
+- [x] 所有層級使用相同行為矩陣，不以 `level` 決定任務目的、會議紀錄或planning controls資格。
+- [x] 依欄位獨立實作 sparse layout：own content 優先、只跨連續可見 descendant blanks、不得跨 branch。
+- [x] 可見任務全部沒有任務目的或合格會議補記時，移除相對應整欄與欄名；只有一個內容欄存在時，
       將可用內容寬度分配給該欄，兩欄皆空時只保留任務、狀態與負責人骨架。
-- [ ] 空白任務採最小列高，只顯示任務 identity、階層、狀態與負責人；不渲染列內新增 action。
-- [ ] 點擊任務沿用既有 Task Details command；目標模式不得接管 editor、save、permission 或 record mutation。
-- [ ] 主畫面會議欄一次消費 active board 已載入 records，依 DEV-108 provenance／invariant 建立 task index，
-      每任務只取最新一筆；其他 task-linked records 不進主表格，維持由既有紀錄庫按需查閱。
-- [ ] 將 goal 登錄為 DEV-070 details-only 稀疏 interaction profile；不提供拖曳、列內編輯、新增、右鍵任務
-      mutation 或重複 description hover。
-- [ ] 落實 DEV-117 相容邊界：goal 不加入 meeting continuity，meeting start／recovery fallback 與 live meeting
-      option exclusion 必須由同一 view policy 決定，不在 UI 各寫一份 allowlist。
-- [ ] 處理載入、正常、全部空白、部分空白、錯誤、filter、collapse、live update、1024 桌機窄版與
-      390 手機入口排除回歸。
+- [x] 空白任務採最小列高並保留identity、階層、標籤與planning controls；不渲染列內新增 action；進度條／百分比只由List顯示。
+- [x] List／Goal共用layout-neutral階層縮排與展開元件；Goal自行組裝標籤、欄位控制及desktop DnD，List保留進度指示。
+- [x] 依既有permission guard在Goal編輯負責人、狀態、日期與工期；purpose／meeting仍由既有流程維護。
+- [x] 主畫面會議欄一次消費 active board 已載入 records，依 DEV-108 provenance／invariant 建立 all-entry task index，
+      每任務保留全部有效補記並在 owner cell 內以 Y 軸捲動承接；其他 task-linked records 不進主表格，維持由既有紀錄庫按需查閱。
+- [x] OKR 與 Task Details 共用無狀態 `MeetingQuickNoteRows`（日期＋內容）；各 surface 自行維持捲動、展開與新增邊界。
+- [x] 備註欄與 Task Details 會議歷程共用 `TaskNoteContentSurface` 的框線、圓角、內距與 scrollbar 視覺表面；編輯／唯讀語意分離。
+- [x] 將goal登錄為DEV-070 host profile；task identity提供Details，任務名稱區右鍵／`Shift+F10`與Board共用
+      profile及既有全域task menu；desktop primary placement拖曳由既有sortable與permission primitive處理，
+      重複description hover仍排除。
+- [x] 落實 DEV-117 continuity：goal加入meeting continuity，meeting start／recovery保留goal且live option可用；
+      必須由同一 view policy 決定，不在 UI 各寫一份 allowlist。
+- [x] 完成載入、正常、空白、filter、collapse、desktop窄版、390 mobile negative及會議continuity的targeted gates；
+      1024／200% zoom、viewer、500-row與實機mobile完整矩陣保留給release gate。
 
 ### 明確排除
 
@@ -4993,7 +5038,7 @@ DEV-116 的價值不是新增一套 OKR 資料庫，而是把既有資訊重新�
 - 不把父層文字寫入子任務，不建立快照副本，不在匯出資料中產生「合併儲存格」語意。
 - 不新增「＋說明／＋紀錄」快捷按鈕、空白提示、教學卡或第二套 detail drawer。
 - 不在第一版開放手機目標模式；手機維持現行 board-only navigation 與既有閱讀流程。
-- 不在第一版支援 goal 的 live meeting continuity；不改 DEV-117 的五模式 session、sidebar 或 capture contract。
+- 第一版支援goal的desktop live meeting continuity；不改DEV-117既有session、sidebar或capture contract。
 - 不在第一版投影 tracking references；不查詢 source board meeting record，也不改 DEV-095 identity／permission。
 - 不在主畫面聚合全文會議記錄、一般 task-linked records、RAG 摘要、AI 自動判讀或跨看板紀錄。
 - 不在第一版新增完整 task-linked records 次要聚合畫面；若要建立，列為
@@ -5002,7 +5047,7 @@ DEV-116 的價值不是新增一套 OKR 資料庫，而是把既有資訊重新�
 
 ### 自適應跨列行為契約
 
-| 情境 | 任務說明欄 | 近期會議補記欄 | 任務列 |
+| 情境 | 任務說明欄 | 會議補記欄 | 任務列 |
 |---|---|---|---|
 | 任務兩欄都有 own content | 顯示本任務內容 | 顯示本任務內容 | 一般高度 |
 | 只有任務說明 | 顯示本任務內容 | 可由最近祖先在連續空白範圍內跨列 | 依內容高度 |
@@ -5018,7 +5063,8 @@ DEV-116 的價值不是新增一套 OKR 資料庫，而是把既有資訊重新�
 #### Pure sparse projection rule
 
 令 `R` 為 filter 與 collapse 後，以 active board primary task tree 做 depth-first preorder 得到的可見列；
-`D(r)` 為該列 task 自己 trim 後的 description，`M(r)` 為該 task 最新一筆合格會議補記。
+`D(r)` 為該列 task 自己 trim 後的 description，`M(r)` 為該 task 全部合格會議補記集合；集合只用於
+判斷 owner presence，實際 entries 由 all-entry batch index 提供並依 deterministic order 呈現。
 
 1. `D`、`M` 各自獨立。某欄在全部 `R` 都沒有 own content，且不處於 loading／error 時，整欄與欄名都不 render。
 2. 兩內容欄都不存在時，畫面只保留任務／層級、狀態、負責人；只存在一欄時，該欄取得全部內容寬度。
@@ -5034,11 +5080,12 @@ DEV-116 的價值不是新增一套 OKR 資料庫，而是把既有資訊重新�
 ### Current Architecture Impact
 
 - View state：在 `ViewMode`、App renderer、topbar option、Sidebar active-board 判斷、view persistence、local-test restore、
-  PWA durable intent／owner manifest 增加 `goal`；desktop 可正常還原，mobile/coarse pointer 與 live meeting 必須
-  fail closed 正規化為 `board`。PWA `task-drag` owner 不涵蓋 goal。
-- View host：新增 `goal` host mode 與 `goal.row` surface，profile 明確把 primary／double／tap／Enter／Space 導向
-  `task.open-details`，把 secondary／Shift+F10、post-create 及 menu mutation設為 disabled／excluded；不以 `list`
-  假冒，不複製 handler，也不掛 `data-task-surface-source` 觸發重複說明 hover。
+  PWA durable intent／owner manifest 增加 `goal`；desktop與live meeting可正常還原，mobile/coarse pointer仍
+  fail closed 正規化為 `board`。desktop DnD啟用後，PWA `task-drag` owner surfaces涵蓋goal。
+- View host：新增 `goal` host mode 與 `goal.row` surface，profile 把 primary／double／tap／Enter／Space 導向
+  `task.open-details`；最新amendment讓goal與board直接指向同一profile，使secondary／Shift+F10走既有
+  `task.open-menu`與`GlobalContextMenu`。Goal不掛`data-task-surface-source`，避免重複description hover；menu target
+  由既有binding context擁有，不以`list`假冒、不複製menu handler／catalog／guard／command。
 - Task projection：`GoalView` 只消費 `useWbsStore.nodes／parentNodesIndex`，以
   `projectTaskFilterResults(nodes, filters,{boardId})`取得visible IDs，再以`buildHierarchicalTaskItems`取得
   active-board primary DFS preorder與collapse；不使用
@@ -5048,10 +5095,10 @@ DEV-116 的價值不是新增一套 OKR 資料庫，而是把既有資訊重新�
   scope切換先清空，過期response不得覆蓋新board。`useMeetingDraftRecovery`、GoalView與既有record list consumers
   共用同一exact-scope truth，不再由App local state推測成功。
 - Record projection：新增 DEV-108 canonical batch projector，對 exact workspace／board 的 persisted、non-archived
-  meeting records 每 record 解析一次、一次建立 latest-by-task index；invalid source 隔離並回報 record ID，禁止
+  meeting records 每 record 解析一次、一次建立 all-entry-by-task index；invalid source 隔離並回報 record ID，禁止
   每列 `listByNode`、includeArchived 或任何新增 provider request。
-- Meeting policy：五模式allowlist與meeting lifecycle繼續由`useRecordStore.ts`擁有；private readonly set不外露，
-  只export `isMeetingContinuityView()`供MainLayout使用。`goal`明確不在allowlist。consumer數量不構成獨立
+- Meeting policy：六模式allowlist與meeting lifecycle繼續由`useRecordStore.ts`擁有；private readonly set不外露，
+  只export `isMeetingContinuityView()`供MainLayout使用。`goal`明確在allowlist。consumer數量不構成獨立
   responsibility，因此不新增policy module；這是ADR-049／SPEC-117相容amendment，不改session authority或snapshot schema。
 - Layout：新增 `src/features/goalMode/projection.ts` 純 presentation projection，輸出每欄 owner／`rowSpan`／
   visible-column state；兩欄獨立，owner cell 只能向後跨連續可見、同 subtree 且無 own content 的 rows，遇 own
@@ -5091,17 +5138,19 @@ projector 不讀 store，meeting policy 不依賴 React。任何反向依賴、�
 
 - 唯一來源是目前 primary task 的 `TaskNode.description`；只接受該 task own value，trim 後空字串視為 absent。
 - 顯示保留原文字與換行，不使用 title、父層內容或預設文案補值；父層跨列只改 presentation ownership。
-- 點擊 task identity 才進既有 Task Details；目標模式本身不提供 inline editor、save 或新增按鈕。
+- 點擊task identity才進既有Task Details；任務目的本身不在Goal inline編輯，Goal只提供已確認的planning controls，
+  並且不提供purpose／meeting新增按鈕。
 
-#### Meeting highlight
+#### Meeting records
 
 - 輸入只使用 current workspace／board 已由 `recordService.listByProject` 載入 `useRecordStore.records` 的 persisted、
   non-archived records；只有`recordListLoad.status === 'ready'`且`scopeKey`等於current workspace／board key才是
   成功資料；不合併目前尚未保存的`useRecordStore.draft`。
 - Eligibility：record type 必須為 `meeting`，DEV-108 `meetingTaskQuickNotes` v1 metadata 可辨識、aggregate invariant
   成立、entry `taskId` 等於 primary task id。Legacy 正文、AI、activity、一般 task link、RAG 與自由文字不得納入。
-- 每 task 取 `occurredAt` 最大的一筆；同時間依 `recordId`、`entryId` 建立 deterministic total order。畫面顯示
-  `MM/DD + 原文`，不把 draft／published 狀態改寫成「決議」語意。
+- 每 task 保留全部有效 entries，依 `(occurredAt, recordId, entryId)` 建立 deterministic 升冪順序。畫面逐列顯示
+  `MM/DD + 原文`；owner cell 以 `rowSpan × 32px` 限制可視高度，超出時欄內 `overflow-y:auto`，不把 draft／published
+  狀態改寫成「決議」語意。
 - persisted draft 與 published record 都可顯示；archived record 只留在 DEV-108 Task Details／既有次要查閱契約，
   不進目標模式主畫面。save／archive／reload 後由 records reload 重新投影。
 - Projection 必須先按 record 建立一次 task index；request count 不得隨可見 task row 數增加。
@@ -5110,18 +5159,18 @@ Canonical pure I/O 固定為：
 
 ```ts
 type GoalRecordScope = Readonly<{ workspaceId: string; boardId: string }>;
-type LatestMeetingTaskQuickNoteIndex = Readonly<{
-  latestByTaskId: ReadonlyMap<string, MeetingTaskQuickNoteProjection>;
+type MeetingTaskQuickNoteIndex = Readonly<{
+  byTaskId: ReadonlyMap<string, readonly MeetingTaskQuickNoteProjection[]>;
   invalidRecordIds: readonly string[];
 }>;
 
-projectLatestMeetingTaskQuickNotesByTask(
+projectMeetingTaskQuickNotesByTask(
   records: readonly EditableKnowledgeRecord[],
   scope: GoalRecordScope,
-): LatestMeetingTaskQuickNoteIndex;
+): MeetingTaskQuickNoteIndex;
 ```
 
-Total order 由 `(occurredAt, recordId, entryId)` 由小至大比較後取最大；`invalidRecordIds` 去重並以 record ID
+Total order 由 `(occurredAt, recordId, entryId)` 由小至大比較後保留全部；`invalidRecordIds` 去重並以 record ID
 排序，供單一欄級 partial-warning 舉證。單一 invalid record 不得抹除其他 valid records 的結果。
 
 #### Exact-scope records load state
@@ -5156,10 +5205,11 @@ resetRecordList(): void;
   `recordService.listByProject`、WBS store 與 filter store。
 - Read permission：task 與 record 只使用目前登入者已能載入的 active workspace／board 資料；不得以 client
   projection 擴張 provider authorization、derived read 或 RLS。
-- Edit permission：所有角色皆可在既有讀取權限內進入 goal；Task Details 內是否可改仍由既有
-  `canEditTask`／command guard 決定。Goal surface 產生 0 task write、0 record write、0 task-link write。
-- View persistence：`goal` 可寫入既有 view preference；登出、無 active board、mobile 或 active meeting 的
-  fallback 沿用現行 navigation／SPEC-117 safety，不新增跨帳號狀態。
+- Edit permission：所有角色皆可在既有讀取權限內進入goal；Task Details與Goal planning controls分別沿用既有
+  `canEditTask`／`canAssignTask`／`canMoveTask` guard。只有明確editor／DnD action可產生task write；Goal不產生
+  record或task-link write。
+- View persistence：`goal` 可寫入既有 view preference；登出、無 active board或mobile的fallback沿用現行
+  navigation／SPEC-117 safety；active meeting保留goal，不新增跨帳號狀態。
 
 #### Pure sparse layout I/O
 
@@ -5212,7 +5262,10 @@ buildGoalSparseProjection(rows: readonly GoalProjectionInputRow[]): Readonly<{
 
 | File | 單一責任 | 不得承接 |
 |---|---|---|
-| `src/components/GoalView.tsx` | 組合 active-board task／filter／record read model，render semantic sparse table 與最短 state | provider query、save、schema、inline edit、DnD、context mutation |
+| `src/components/GoalView.tsx` | 組合active-board read model、semantic sparse table、planning controls、desktop DnD與既有menu intent binding；OKR不呈現進度條／百分比 | provider query、record save、schema、menu catalog／permission／command implementation |
+| `src/components/TaskNotes/MeetingQuickNoteRows.tsx` | 提供 Task Details 與 OKR 共用的無狀態日期＋內容歷程列 | 捲動邊界、展開狀態、編輯／新增入口與資料載入 |
+| `src/components/TaskNotes/TaskNoteContentSurface.tsx` | 提供備註欄與唯讀會議歷程共用的邊框、圓角、內距與 scrollbar 視覺表面 | 編輯器狀態、格式化、資料載入、會議補記語意 |
+| `src/components/Wbs/TaskHierarchyIndentedRow.tsx` | List／Goal共用的layout-neutral縮排、disclosure slot與children slot | Grid／Table容器、store、progress、tag、editor或DnD commit |
 | `src/features/goalMode/projection.ts` | O(rows) immutable sparse column／rowSpan projection | store、React、DOM、localStorage、record parsing |
 | `scripts/verify-dev-116-goal-mode.ts` | pure／source／store state／manifest contract 與 JSON artifact | 假造 browser PASS、修改產品 |
 | `scripts/verify-dev-116-goal-mode-browser.pw.js` | 正常入口、真實 rendered behavior、request/mutation/state/viewport evidence | direct store switch 取代正常 UI、production debug hook |
@@ -5226,29 +5279,35 @@ buildGoalSparseProjection(rows: readonly GoalProjectionInputRow[]): Readonly<{
 | `src/types/index.ts` | `ViewMode` 加 `goal` | TaskNode／record schema不變 |
 | `src/App.tsx` | lazy GoalView、`case 'goal'`、exact record scope truth、無 scope clear | 不改 providers／migration／global sidebar mount |
 | `src/components/MainLayout.tsx` | Target icon option、desktop/task-filter/workspace lists、mobile block、live meeting option exclusion／normalization | 保留 DEV-042 topbar 與既有 ModeSwitcher component contract |
+| `src/components/ui/ModeSwitcher.tsx` | 依使用者明示刪除可見標題列與關閉叉號；保留 aria menu name、Escape／outside／trigger close | 不改 option value、selection、portal positioning 或 disabled contract |
 | `src/components/Sidebar.tsx` | board workspace view 判斷加 goal | 不改 board CRUD／drag／rename |
 | `src/components/Records/RecordsView.tsx` | list loading/error改讀`RecordListLoadState` | 不改紀錄分類、入口或編輯流程 |
 | `src/components/Records/RecordSidebar.tsx` | 最近紀錄區改讀list load state；editor/action error維持分離 | 不重做sidebar或meeting workflow |
 | `src/store/useBoardStore.ts` | stored view、host/surface mapping加 goal | 不改 selection／context-menu／workspace transaction semantics |
 | `src/store/useRecordStore.ts` | single record-list load state、stale token、reset；export既有meeting predicate供layout使用 | 不改 draft schema、save、archive、capture aggregate、provider API |
 | `src/interactions/task/types.ts` | `TaskHostMode='goal'`、`goal.row` | action catalog不變 |
-| `src/interactions/task/profiles.ts` | details-only goal sparse profile | 不複製 menu／mutation action |
+| `src/interactions/task/profiles.ts` | Board／Goal共用同一task profile；details與secondary／Shift+F10沿用既有resolver | 不複製 menu／mutation action，不改catalog／guards／commands |
 | `src/interactions/task/TaskInteractionScope.tsx` | fallback mapping辨識 goal | hover controller契約不變 |
 | `src/interactions/task/resolveTaskInteraction.ts` | known host modes加 goal | precedence／transient guard不變 |
-| `src/utils/meetingTaskQuickNotes.ts` | exact-scope latest-by-task batch projector | DEV-108 per-task/include-archived projector不變 |
-| `src/services/pwaReloadOwnerManifest.ts` | APP_SURFACES 加 goal；task-drag surfaces不加 | owner數量／authority不變 |
+| `src/utils/meetingTaskQuickNotes.ts` | exact-scope all-entry-by-task batch projector | DEV-108 per-task/include-archived projector不變 |
+| `src/services/pwaReloadOwnerManifest.ts` | APP_SURFACES與task-drag surfaces加goal | owner數量／authority不變 |
 | `src/services/pwaUpdateService.ts` | durable view intent allowlist加 goal | PWA transaction/reload safety不變 |
 | `src/utils/localTestEnvironment.ts` | desktop test restore allowlist加 goal | production資料與 seed schema不變 |
 | `scripts/verify-dev-039-task-filter-core.mjs` | task-filter view source assertion納入 goal | 既有五 view filter cases不放寬 |
-| `scripts/verify-dev-117-cross-mode-meeting-continuity.ts` | store-owned exported policy、goal negative、recovery normalization assertions | 五模式 continuity acceptance不變 |
+| `scripts/verify-dev-117-cross-mode-meeting-continuity.ts` | store-owned exported policy、goal positive、recovery continuity assertions | 六模式 continuity acceptance |
 | `package.json` | 登錄 DEV-116 static／browser commands | dependency與runtime scripts不變 |
 | `ai-doc/dev_task.md`、`ai-doc/documentation_map.md`、SPEC-117、ADR-049、QA-DEV-117 | maturity、store-owned-policy amendment、evidence／boundary同步 | 歷史 PASS／未實作事實不回寫 |
+| `src/components/Wbs/WbsNodeItem.tsx` | List改用共用階層display primitive | List遞迴Grid、tracking與欄位控制不搬入shared component |
+| `src/components/TaskAssignmentPicker.tsx` | 增加可選portal，使Table內浮層不被後續row遮蔽 | selection與permission semantics不變；List預設路徑不變 |
+| `src/components/TaskNotes/TaskDetailNoteEditor.tsx` | 備註編輯器引用共用內容表面樣式來源 | Lexical editor、格式化、調高、保存與權限語意不變 |
+| `src/components/TaskNotes/TaskMeetingQuickNoteSection.tsx` | 會議歷程容器改用共用 `TaskNoteContentSurface` | latest-3／展開／新增／封存語意不變 |
 
 #### Inspect-only／禁止修改
 
-- `src/components/ui/ModeSwitcher.tsx`：generic controlled menu 已足夠。
-- `src/components/TaskDetailsModal.tsx`、TaskNotes：既有 description／quick-note editor 與 permission authority。
-- `src/components/GlobalContextMenu.tsx`、task action catalog／executor：goal profile 必須 fail closed，不擴充 mutation。
+- `src/components/TaskDetailsModal.tsx`、既有 TaskNotes editor 的資料／permission authority：保留 description／quick-note 編輯、格式化、
+  高度與保存語意；僅允許引用共用內容表面。`TaskMeetingQuickNoteSection` 可消費共用列與內容表面元件，但不改其新增／展開／封存語意。
+- `src/components/GlobalContextMenu.tsx`、task action catalog／executor：inspect-only且維持唯一authority；Goal只接入既有
+  presenter／actions／guards，不修改其implementation或新增mode-specific mutation。
 - `src/components/Wbs/WbsListView.tsx` 與 taskTracking feature：tracking reference current phase 排除。
 - record provider adapters、schema／migration／RLS、recovery snapshot serializer、DEV-109 capture utilities、DEV-105 reservation presenters。
 - `src/index.css` 預期不修改；以現有 tokens／局部 classes 完成。若無法在不新增全域 override 下符合 UI，先回報。
@@ -5256,23 +5315,28 @@ buildGoalSparseProjection(rows: readonly GoalProjectionInputRow[]): Readonly<{
 ### RD Work Packages 與順序
 
 1. **WP-116-A — Failing contracts**：先新增 static/pure verifier，鎖 ViewMode、scope loader、batch index、sparse
-   barriers、goal profile、mobile／meeting／PWA negative；確認 current candidate 因功能未存在而 fail。
+   barriers、goal profile、mobile negative／meeting continuity／PWA；確認 current candidate 因功能未存在而 fail。
 2. **WP-116-B — Read authorities**：完成single record-list state／race invalidation、App recovery truth、既有list
    consumers、DEV-108 batch projector與store-owned exported meeting predicate；先跑pure/store cases。
 3. **WP-116-C — Goal projection／interaction**：完成 sparse projector、goal types/profile/scope與 GoalView semantic table；
-   不接入 DnD、context menu、inline edit或 hover source。
+   初始candidate不接入DnD／inline edit／context menu；DnD與controls由WP-116-G取代，context menu排除再由WP-116-H取代；
+   description hover source維持排除。
 4. **WP-116-D — Navigation／compatibility**：接入 ViewMode、App、MainLayout、Sidebar、persistence、PWA／local-test；
-   更新 DEV-039／117 verifier與 ADR/SPEC amendment，不重寫 ModeSwitcher。
+   更新 DEV-039／117 verifier與 ADR/SPEC amendment；ModeSwitcher 僅套用後續使用者明示的最小降噪修改。
 5. **WP-116-E — Candidate gate**：跑 DEV-116 static、直接受影響 regressions、TypeScript、targeted ESLint、
    `build:test`、owned diff／protected diff；全部通過才 freeze candidate。
 6. **WP-116-F — Targeted QA/QC**：依 QA-DEV-116 從正常 topbar 入口做 browser evidence、a11y／visual、
    failure injection、request/mutation counters與 live meeting/mobile negative；QC 不得修改 candidate。
+7. **WP-116-G — Interaction parity amendment**：抽出layout-neutral階層元件；Goal自行組裝標籤、planning
+   controls、portal assignment與desktop DnD，List保留進度指示；更新PWA owner並重新執行static／browser／visual／regression gates。
+8. **WP-116-H — Context-menu parity amendment**：Goal task-name identity接入既有`openMenu` binding；Board／Goal共用
+   同一profile、全域presenter、catalog／guards／commands，驗證右鍵、`Shift+F10`、Escape及0 unintended write。
 
 實作模型可自行決定：局部 component 切分、CSS class 組合、fixture 名稱、test helper、Map compare helper、
 不改 I/O 的 internal type alias 與 import cleanup。
 
-實作模型不得決定：改欄位資格、加入 inline action、把 task-linked records 拉回主表、開放手機／tracking／live
-meeting goal、改 latest-one eligibility／tie-break、允許 stale records、改 schema/API/permission、改 Task Details、
+實作模型不得決定：改欄位資格、加入說明／紀錄inline action、把task-linked records拉回主表、開放手機／tracking、
+改all-entry eligibility／order、允許stale records、改schema/API/permission、改Task Details、
 改 sparse barrier／fallback 或覆寫 user-owned dirty changes。
 
 第一個 source/file conflict、必須超出上表、需要修改 public API／schema／permission／recovery snapshot／跨模組
@@ -5280,38 +5344,40 @@ authority，或無法用正常入口驗證時，立即停止並回送 PM／規�
 
 ### Acceptance Contract
 
-- [ ] 「視角」選單可發現並進入目標模式；切回其他模式後目前看板、filter 與選取上下文符合既有規則。
-- [ ] L1、L2、L3+ 各至少一筆有 own content 的 primary task fixture，都直接顯示自己的資料且可由既有
+- [x] 「視角」選單可發現並進入OKR模式；切回其他模式後目前看板、filter與canonical task值符合既有規則。
+- [x] L1、L2、L3+ primary task都使用相同階層與欄位資格，並可由既有
       task identity 入口開啟詳情；同級與層級深度不改變欄位資格。
 - [ ] description＋record、description-only、record-only、兩者皆空與父層皆空五種 fixture 符合上表。
 - [ ] 兩筆以上連續空白 descendant 時，父層內容可使用其空間且所有權清楚；遇到 child own content、branch
   邊界、filter、search 或 collapse 即正確中斷／重算。
-- [ ] 空白任務不出現「尚無任務說明」、「尚無關聯紀錄」、空框、保留列高或「＋說明／＋紀錄」。
+- [x] 空白任務不出現「尚無任務說明」、「尚無關聯紀錄」、空框、保留列高或「＋說明／＋紀錄」。
 - [ ] 點擊空白任務仍能從既有 Task Details 編輯；儲存 own content 後返回目標模式，span 與內容立即更新。
 - [ ] description 欄、meeting 欄、兩欄都沒有三種 board/filter fixture，分別得到一欄、另一欄與零內容欄；
       剩餘內容欄使用可用寬度，header、placeholder 與空 cell 不得殘留。
-- [ ] 每 task 只顯示最新一筆 persisted、non-archived、valid DEV-108 entry，日期與原文正確；同時間排序
-      deterministic。active unsaved draft、archived、legacy、AI、activity、一般 task link、全文與 RAG 不出現。
+- [x] 每 task 顯示全部 persisted、non-archived、valid DEV-108 entries，依 occurredAt／recordId／entryId deterministic
+      排序；owner cell 超出 `rowSpan × 32px` 時出現欄內Y軸捲動。active unsaved draft、archived、legacy、AI、activity、
+      一般 task link、全文與 RAG 不出現。
 - [ ] 一個 active board record load 支援全部可見 rows；fixture 增加 task 數時，record request count 不增加。
-- [ ] 所有 task-linked records 需查閱時走既有紀錄庫；主表格與 task row 不新增展開、計數、查看、
+- [x] 所有 task-linked records 需查閱時走既有紀錄庫；主表格與 task row 不新增展開、計數、查看、
       「＋說明」或「＋紀錄」action。
-- [ ] 不修改 `TaskNode`／KnowledgeRecord 資料、permission、schema 或既有 editor；父層內容不寫入子任務。
-- [ ] Viewer 可讀 goal 並進入 readonly Task Details；editor 仍只在 Task Details 依既有 guard 編輯。兩者在
-      goal surface 都是 0 task／record／task-link write。
+- [x] 不修改 `TaskNode`／KnowledgeRecord schema、permission model或既有purpose／meeting editor；父層內容不寫入子任務。
+- [x] Editor可在Goal依既有guard修改負責人、狀態、日期、工期及primary placement；List讀回同一canonical task。
+      明確操作可產生task write，record／task-link write維持0。Viewer完整實機矩陣留在release gate。
 - [ ] task／record loading、task error、record error、invalid quick-note、filtered zero 與 true empty 可區分；
       error 不得被欄位自動隱藏誤報為無資料，retry 成功後錯誤與 loading state 消失。
 - [ ] tracking reference 不出現在第一版 goal；其既有模式 visibility、identity、permission 與互動不退化。
-- [ ] 非 meeting 狀態可進 goal；從 goal 開始 meeting 先回 Board。live meeting 的 ModeSwitcher 不顯示 goal，
-      persisted goal＋meeting recovery 正規化為 Board，draft／segment／recovery identity 不被破壞。
-- [ ] goal task identity 只提供 details-only interaction；沒有 DnD、inline edit、create、context mutation 或重複
-      TaskDescriptionHoverCard。鍵盤 Enter／Space 與可見 focus 可進入同一 Task Details。
+- [x] 非meeting與live meeting均可進goal；從goal開始meeting與persisted goal recovery保留goal，
+      draft／segment／recovery identity不被破壞。
+- [x] goal task identity提供Details與desktop DnD；planning controls可編輯，任務名稱區右鍵／`Shift+F10`開啟
+      與Board相同的全域task menu，並沿用相同guards／commands。重複TaskDescriptionHoverCard維持排除；
+      鍵盤Enter／Space與可見focus可進入同一Task Details。
 - [ ] 1440×900、1024×768 沒有欄位重疊、stale span、水平 overflow 或重要文字不可讀。
 - [ ] 200% zoom由1440×900 desktop goal起點執行；表格仍可讀且focus可達，不以預先窄CSS viewport誤測成mobile fallback。
-- [ ] 390×844 不出現「目標模式」入口，ModeSwitcher 的現行 mobile board-only 隱藏行為與既有手機流程不變。
+- [x] 390px不出現「OKR模式」入口，ModeSwitcher 的現行 mobile board-only 隱藏行為與既有手機流程不變。
 - [ ] 鍵盤焦點順序與任務樹順序一致；screen reader 可辨識內容真正所屬任務，狀態不只靠顏色。
-- [ ] 實際 browser visible-error／console／page error sweep 為 0；任一 4xx／5xx、錯誤空態或非預期全空資料為 Fail。
+- [x] 實際 browser visible-error／console／page error sweep 為 0；任一 4xx／5xx、錯誤空態或非預期全空資料為 Fail。
 
-### QA／QC Contract（Plan Ready / NOT EXECUTED）
+### QA／QC Contract（Executed / Targeted QA-QC PASS / NOT RELEASED）
 
 | 失效模式 | 使用者影響 | 偵測方式 | 優先級 | 對策／必要案例 |
 |---|---|---|---|---|
@@ -5319,7 +5385,7 @@ authority，或無法用正常入口驗證時，立即停止並回送 PM／規�
 | record error 被當成真正空白 | 使用者誤以為沒有決策 | 注入 load failure／invalid metadata | P0 | 單一欄級 error＋retry，禁止 column collapse 掩蓋錯誤 |
 | 每列發出 record request | 大看板延遲、成本與限流 | request counter＋大量 task fixture | P0 | 只允許既有 board-level load；task 數增加時 request count 固定 |
 | 非人工或 stale 內容進主畫面 | 錯誤決策依據 | legacy／AI／activity／invalid／archived fixture | P0 | 僅 DEV-108 valid metadata＋aggregate invariant；其餘隔離 |
-| goal 進入 live meeting continuity | draft／capture 狀態漂移 | meeting start、switch、recovery state probe | P0 | goal 不在 allowlist；start／recovery 回 Board，live menu 不顯示 goal |
+| goal 進入 live meeting continuity | draft／capture 狀態漂移 | meeting start、switch、recovery state probe | P0 | goal在單一allowlist；start／recovery保留goal，live menu可用 |
 | tracking reference 顯示半套資料 | 跨板資訊缺漏或越權 | source-board private／reference fixture | P1 | current phase 不 render tracking reference；既有 views 必須回歸 |
 | 自動隱欄或 rowspan stale | 版面錯位、內容遮蔽 | description／meeting presence matrix＋更新事件 | P1 | pure derive；每次 visible inputs 改變重算，不保存 presentation |
 | 精簡造成不可操作或不可存取 | 鍵盤／讀屏使用者無法進詳情 | keyboard、focus、semantic treegrid/table check | P1 | task identity 為唯一可操作入口；不可靠即採無跨列 fallback |
@@ -5327,10 +5393,10 @@ authority，或無法用正常入口驗證時，立即停止並回送 PM／規�
 
 最小驗證批次：
 
-1. Pure projection：depth-first rows、own-content presence、latest-one selection、tie-break、column collapse、span
+1. Pure projection：depth-first rows、own-content presence、all-entry deterministic ordering、column collapse、span
    barrier、filter／collapse recompute、invalid source isolation。
-2. Store／request：active board records 只載入一次；goal render 與 task count 變化不新增 provider request，且產生
-   0 task／record／task-link write。
+2. Store／request：active board records只載入一次；goal render與task count變化不新增provider request；只有明確
+   editor／DnD產生task write，record／task-link write維持0。
 3. Browser happy path：由正常 topbar「視角」進 goal，驗證 L1／L2／L3+、五種 content presence、Task Details
    開啟與返回後更新；不得以 direct URL 或 store mutation代替入口。
 4. Browser negative：viewer、record load error／retry、filtered zero、tracking reference、live meeting、persisted goal
@@ -5376,12 +5442,12 @@ current view、task／record request count、三種 mutation count、console／p
 - Target actor：使用桌機且具有目前工作區／看板讀取權限的 viewer／editor；Task Details 編輯仍依既有
   `canEditTask`／command guard。手機使用者與 live meeting actor 不在第一版 goal 範圍。
 - 正常起點：已選定 active workspace 與 active board 的 topbar。
-- 可辨識入口：既有「視角」按鈕 → menu item「目標模式」。
+- 可辨識入口：既有「視角」按鈕 → menu item「OKR模式」。
 - Destination：同看板、同 filter context 的目標模式，不建立新看板或資料副本。
 - Delivery path：ModeSwitcher → current view／goal profile → active-board primary task＋filter projection →
   board-level records／DEV-108 meeting index → sparse layout → rendered UI；點 task identity 走既有 Task Details command。
-- Meeting path：goal → topbar「新增會議記錄」→ SPEC-117 Board fallback → existing meeting session；live meeting
-  ModeSwitcher 的 selectable set 不含 goal。
+- Meeting path：goal → topbar「新增會議記錄」→ existing meeting session且保留goal；live meeting
+  ModeSwitcher 的 selectable set包含goal並可切入／切出。
 - Evidence layer：正常導航入口、實際資料 fixture、1440／1024 desktop browser 操作與 screenshot，加上
   390 手機與 live meeting option 排除回歸；pure/static、request counter 與 store probe 只補充資料與狀態，
   不能取代可見 UI evidence。
@@ -5394,8 +5460,8 @@ current view、task／record request count、三種 mutation count、console／p
   board-level load 才能通過，停止並回 RD Contract；不得用 N+1 換取完整度。
 - 若跨列只能以實際資料繼承、複製父層內容或改 schema 才能完成，停止並回產品決策；第一版只允許 presentation。
 - 若新增 mode 必須繞過 DEV-070 interaction kernel、現行 ModeSwitcher disabled guard 或 DEV-039 scope/filter，停止重審。
-- 若 goal 必須加入 `MEETING_CONTINUITY_VIEWS`、live meeting 才能使用，或除「由store-owned predicate將persisted goal
-  正規化 Board」外還要修改 meeting draft／capture／recovery aggregate或 snapshot schema，停止並 amendment
+- 若除「將goal加入store-owned `MEETING_CONTINUITY_VIEWS`」外還要修改 meeting draft／capture／recovery aggregate
+  或snapshot schema，停止並amendment
   ADR-049／SPEC-117；不得只加 menu item。
 - 若第一版必須納入 tracking reference、source-board record 或 derived read，停止並補 DEV-095／110 的 identity、
   permission、request-count、錯誤與 cross-board evidence contract。
@@ -5427,37 +5493,70 @@ current view、task／record request count、三種 mutation count、console／p
 ### Future Phase Capsule：tracking reference 與 meeting continuity parity
 
 - 狀態：`Future Phase Captured / Not Requested`。
-- 目的：讓 goal 可安全呈現 tracking placements，或在 live meeting 中加入 goal continuity。
+- 目的：讓 goal 可安全呈現 tracking placements，或評估goal原生reservation等Board-only meeting actions。
 - 邊界：須先固定 canonical／placement identity、source-board meeting provenance、derived read／permission、
   constant-request strategy，以及 ADR-049／SPEC-117 draft／capture／recovery mode matrix。
 - Re-entry trigger：使用者明確要求 tracking reference 或 live meeting 可使用 goal，或 usage evidence 顯示 current
   exclusion 阻斷主要 OKR／meeting workflow。
 - 驗收方向：內容完整且不越權、不重複 canonical task、不產生 N+1；meeting switch 不重建 session 或 segment。
 
+### Interaction parity amendment（2026-09-10）
+
+- Component boundary：List的`WbsNodeItem`是recursive Grid且自行render children；Goal是flat DFS semantic Table並擁有
+  independent rowSpan。禁止把整列直接共用；兩者只共用`TaskHierarchyIndentedRow`與6px階層幾何。
+- Goal-owned capabilities：標籤、負責人、狀態、開始日期、結束日期、工期與desktop sortable rows由
+  `GoalView`自己的row presenter組合既有store／picker／style／permission／DnD primitives；進度條／百分比由List presenter保留，
+  不新增跨模式wrapper。
+- Interaction boundary：primary／double／Enter／Space維持Details；right click／Shift+F10由task-name identity觸發
+  與Board相同的既有全域task menu。表單控制不得冒泡、開menu或啟動drag；task write只能由明確editor／DnD或
+  使用者執行的既有menu command產生，record／task-link write為0。mobile Goal與tracking placement仍disabled。
+- PWA：task-drag manifest加入goal；mobile Goal仍blocked，因此不新增Goal touch／mobile action surface。
+- ADR：不新增。此為SPEC-116內可回復的surface capability amendment，沿用既有DEV-070、046、053與097 authority，
+  不改schema、provider、permission model或public command semantics。
+- QA：舊details-only QC已superseded；最新candidate已完成P21～P28、B12～B17、雙模式canonical readback與
+  814／1440 visual gate，並以B05／B18／V22驗證Board-shared右鍵menu後重新freeze。
+
 ### Execution Boundary 與變更紀錄
 
-- Current phase：`RD Implementation Ready / 架構已定案 / Human Confirmed / NOT IMPLEMENTED`；下一個被授權的
-  product turn 可依 WP-116-A～F coding，但本輪只完成文件，不得把 ready 計為功能完成。
+- Current phase：`Interaction parity implemented / Targeted QA-QC PASS / NOT RELEASED`；原details-only candidate為歷史baseline，
+  WP-116-G／H已實作並重驗。正式release仍須另走
+  deployment/release gate，不得把 local targeted PASS 等同 production release。
 - Implementation boundary：只允許已列 file surface 與相容文件；若發現需要額外產品檔案，先判定是否為
   import／type mechanical dependency。任何新 authority、public contract或 protected file 變更必須停止回規劃。
 - Release boundary：未要求 commit、push、PR、deploy、migration、production smoke 或 release；不建立 REL artifact。
 - 2026-09-10：由 Brief Ready 升級至 RD Contract Ready；完成 code／SPEC-108／SPEC-117／ADR-049 readback，
   固定 latest-one、board-level records、column collapse、span、primary-only、desktop-only 與 meeting-negative contract。
 - 2026-09-10：完成 actual repo Architecture Closure Review；新增 SPEC-116、QA-DEV-116，鎖 exact-scope record
-  loader、batch meeting index、pure sparse I/O、details-only goal profile、meeting policy、逐檔 surface、
+  loader、batch meeting index、pure sparse I/O、當時的details-only goal profile、meeting policy、逐檔 surface、
   WP、commands、artifact、drift／stop conditions；升級為 `RD Implementation Ready / 架構已定案`。
 - 2026-09-10：RD Tech Lead R2完成四項收斂：meeting policy留在record store只匯出predicate；三個平行load
   scalars改為單一`RecordListLoadState`並納入既有list consumers；sparse input移除冗餘`parentId`；相鄰
   browser回歸改採風險式最小集合。產品scope與Human Decisions不變。
+- 2026-09-10：依最新使用者指示，以intentional replacement開放OKR任務名稱區右鍵／`Shift+F10`；Goal與Board
+  直接共用同一profile與既有`GlobalContextMenu`／`TaskActionMenu`、catalog／guards／commands，不新增選單元件。
+- 2026-09-10：依最新使用者 UI 回饋移除 OKR 各欄表頭內層 UI 容器；欄名直接由`th`承擔，保留sticky深色表頭、格線與a11y語意，並更新V23幾何驗證。
+- 2026-09-10：依最新使用者 UI 回饋將 OKR 任務名稱欄縮減30%至252px，並同步表格最小寬度、colgroup與drag overlay，更新V23幾何驗證。
+- 2026-09-10：依最新使用者 UI 回饋移除 OKR 負責人欄裝飾性 `Users` trigger icon；共用`TaskAssignmentPicker`以`showIcon`控制顯示，
+  保留負責人文字、下拉、鍵盤／aria與清單模式原icon，並更新B12／B14回歸驗證。
+
+- 2026-09-10：依最新使用者 UI 回饋移除任務目的／會議紀錄 owner cell 的額外內容包裹層，改由語意`td`直接承擔文字；
+  保留rowSpan／換行／格線，V23改驗證無巢狀內容UI容器。
+- 2026-09-10：依最新使用者 UI 回饋補上 OKR 表頭／資料列邊界對齊檢查；1298px量測第一／最後cell左右差異皆為0px，
+  table外框相對誤差為±0.5px，確認表頭與資料列共用同一組column tracks，未新增同步容器。
+- 2026-09-11：依最新使用者 UI 回饋恢復任務目的／會議紀錄 owner cell 的最小內容容器與Y軸捲動；容器以`rowSpan × 32px`
+  限制可視高度，V23實測長目的`scrollHeight=100`、`clientHeight=96`、`overflow-y:auto`，下方任務未被推開。
+- 2026-09-11：依最新使用者差距分析，會議欄由 latest-only 改為 exact scope 內全部有效補記；新增
+  `projectMeetingTaskQuickNotesByTask` 與共用無狀態 `MeetingQuickNoteRows`。兩筆 meeting records、六筆補記以 browser
+  V25 驗證全部出現，`clientHeight=64`／`scrollHeight=120` 時欄內Y軸捲動生效；DEV-116 browser 更新為40/40 PASS。
 
 ### Architecture Closure Review（2026-09-10）
 
 - Source baseline：branch `持續優化3`、HEAD `a7510fcbb1f8793fe8ea3cb2a37a7b07f4371286`；review 對象包含
   當前 working tree，並非假設 clean HEAD。
-- Repo evidence：`ViewMode`／App／MainLayout／Sidebar／persistence 有多個明確 view allowlist；DEV-070 kernel
-  有 typed host/profile/surface；task filter 與 hierarchy 已有 pure projection；App 目前只做一次 board-level record
-  load，但 `.finally()` 會誤標失敗完成且無 stale-request guard；DEV-108 目前只有 per-task projector；DEV-117
-  policy 位於 store-local predicate，MainLayout也已依賴同一store；新增consumer不構成獨立module責任。
+- Repo evidence（implementation 前基線與 closure）：`ViewMode`／App／MainLayout／Sidebar／persistence 已接入
+  goal allowlist；DEV-070 kernel 有 typed host/profile/surface；task filter／hierarchy 沿用 pure projection；record
+  load 已改為 exact-scope discriminated state 並加 stale-request guard；DEV-108 batch all-entry index 與 DEV-116
+  pure sparse projector 已接入；DEV-117 policy 仍位於 store-local predicate，MainLayout只消費同一store的 pure predicate。
 - Dirty boundary：工作樹已有 user-owned DEV-042／117／其他未提交變更，且 `MainLayout.tsx`、`Sidebar.tsx`、
   `TaskDetailsModal.tsx`、`useRecordStore.ts`、`package.json`、DEV-117 docs／verifier 等有重疊。RD 必須先讀
   `git diff -- <target>`，採小 patch保留；禁止整檔回復、checkout或把非 DEV-116 變更納入完成宣告。
@@ -5466,16 +5565,45 @@ current view、task／record request count、三種 mutation count、console／p
   predicate；native semantic table
   優先，a11y 無法證明時固定降級為無 rowspan 緊湊表格。
 - Non-functional：task/record read requests 對 row count 維持常數；batch／sparse projection O(records+entries+rows)；
-  0 product writes；1024與200% zoom可讀；mobile入口為0；錯誤不得偽裝成空白；stale scope fail closed。
+  初始render與menu開關為0 product writes；1024與200% zoom可讀；mobile入口為0；錯誤不得偽裝成空白；stale scope fail closed。
 - QA readiness：SPEC-116、QA-DEV-116、AC、FMEA、normal-entry browser、request/mutation counters、artifact paths、
   regression commands、runtime cleanup、first-failure return均已鎖定。
 - P0／P1 unresolved architecture blockers：`0`。
-- 結論：`RD Implementation Ready + 架構定案：已定案 + Tech Lead Review R2 PASS`。產品尚未實作，QA/QC
-  尚未執行，未 commit／push／deploy／release。
+- 結論：原reading architecture維持定案；interaction amendment架構已確認並完成local implementation與targeted
+  QA-QC，未commit／push／deploy／release。
+
+### Implementation／Targeted QA-QC Closure（2026-09-10）
+
+- WP-116-A～F 已完成：新增 `GoalView` 與純 O(rows) sparse rowSpan projector；接入 active-board primary hierarchy、
+  現行 filter/collapse、exact workspace×board record load state、DEV-108 all-entry valid batch index、初始details-only goal
+  interaction，以及 desktop／mobile／meeting／PWA compatibility。依最新 UI 回饋移除可見 L1／L2／L3+ 文字標籤，
+  改以縮排與收合狀態表達層級，讓 task identity 回到清單模式單行列高；screen reader 層級資訊保留在 accessible name。
+- Interaction amendment：List／Goal只共用`TaskHierarchyIndentedRow`；Goal自行組裝標籤、planning controls、
+  assignment portal與desktop DnD，List保留進度指示，PWA task-drag owner加入goal。右鍵amendment讓Goal與Board共用同一task profile、
+  `GlobalContextMenu`／`TaskActionMenu`與catalog／guards／commands；Goal沒有第二套menu。
+- UI candidate補強：OKR表頭固定於主內容捲動頂部並採深底白字；任務目的／會議紀錄 owner `td` 內保留一層必要內容容器
+  承擔Y軸捲動，保留rowSpan、換行、格線與table語意；表頭與資料列共用同一native table grid，左右邊界對齊。
+- 驗證結果：DEV-116 static 28/28、browser 40/40 PASS；DEV-039 66/66、DEV-046 32/32、DEV-053 31/31、
+  DEV-070 58/58、DEV-097 23/23、DEV-108 14/14、DEV-114 29/29、DEV-115 21/21、DEV-117 static 21/21與
+  browser 8/8 PASS；`npx tsc --noEmit`、targeted ESLint、
+  `npm run build:test` PASS。
+- 證據：`output/playwright/dev-116-goal-mode/static-result.json`、`output/playwright/dev-116-goal-mode/result.json`、
+  `output/playwright/dev-116-goal-mode/V01-goal-table-1440x900.png`、
+  `output/playwright/dev-116-goal-mode/V15-goal-table-814x698.png`、
+  `output/playwright/dev-116-goal-mode/V19-goal-capabilities-1440x900.png`、
+  `output/playwright/dev-116-goal-mode/V21-goal-after-drag-1440x900.png`、
+  `output/playwright/dev-116-goal-mode/V24-goal-task-column-1298x698.png`、
+  `output/playwright/dev-116-goal-mode/V22-goal-global-context-menu-1440x900.png`、
+  `output/playwright/dev-116-goal-mode/V23-goal-sticky-dark-header-1440x180.png`、
+  `output/playwright/dev-116-goal-mode/V17-mode-switcher-without-introduction-row-814x698.png`。Browser 使用既有 localhost:4000 runtime（PID
+  28532）並標記 reused；未停止其他 runtime。
+- Boundary：這是 local targeted QA-QC PASS；1024／200% zoom、viewer、500-row、remote provider、production smoke、
+  deploy、release 與實機 mobile 仍是獨立 gate，未被本輪結果預填。
+- 現行狀態：`Interaction parity implemented / Targeted QA-QC PASS / NOT RELEASED`；先前details-only證據只作歷史baseline。
 
 使用思考習慣：#系統描繪、#限制條件、#可驗證性
 
-## DEV-117：會議紀錄五模式不中斷與 Session 連續性
+## DEV-117：會議紀錄六模式不中斷與 Session 連續性
 
 - 狀態：`完成 / Implemented / Targeted QC PASS / NOT RELEASED`
 - 開發文件成熟度：`RD Implementation Ready`
@@ -5493,7 +5621,7 @@ current view、task／record request count、三種 mutation count、console／p
 
 ### 任務目標
 
-把會議 session 與中央 view projection 解耦。同一 active workspace／board 內，五個 task views 切換只改
+把會議 session 與中央 view projection 解耦。同一 active workspace／board 內，六個 task views 切換只改
 `currentView`，不關閉、保存、重建或切分 meeting；右側紀錄欄、同一 draft、recovery 與 DEV-109
 capture segment 持續。
 
@@ -5501,8 +5629,8 @@ capture segment 持續。
 
 ### Current Phase Scope
 
-- [x] 五個 continuity views 任一處開始 meeting 時保留原 view。
-- [x] live meeting 中 ModeSwitcher 可切五 views；meeting 本身不再是 disabled reason。
+- [x] 六個 continuity views 任一處開始 meeting 時保留原 view。
+- [x] live meeting 中 ModeSwitcher 可切六 views；meeting 本身不再是 disabled reason。
 - [x] draft／workflow／panel／recovery／capture segment identity 跨 view 持續。
 - [x] 各 view 既有 Task Details、人工會議補記與 persistence-confirmed mutation 相容。
 - [x] DEV-105 reservation 維持 Board-only；record task-selection transient Board hop 可維持。
@@ -5519,9 +5647,9 @@ capture segment 持續。
 
 - ADR-049 是 session／view ownership authority；SPEC-117 是 implementation／acceptance authority。
 - `useRecordStore` 唯一擁有 meeting lifecycle，`useBoardStore.currentView` 只擁有 projection。
-- 五模式分類與meeting lifecycle都由`useRecordStore`擁有；readonly set保持private，只export pure predicate。
+- 六模式分類與meeting lifecycle都由`useRecordStore`擁有；readonly set保持private，只export pure predicate。
   DEV-116 goal使start／recovery／live options成為多consumer，但MainLayout不得自行維護allowlist。
-- `MainLayout`移除meeting lock並以store匯出的predicate產生live ModeSwitcher options；五模式切換不新增lifecycle side effect。
+- `MainLayout`移除meeting lock並以store匯出的predicate產生live ModeSwitcher options；六模式切換不新增lifecycle side effect。
 - 同 board view switch 不得呼叫 guard、flush、save、close、exit、start 或重建 DEV-109 segment。
 - Board／workspace／system navigation 仍由 DEV-106 管理；本 DEV 不放寬。
 - Data／API／permission／migration 均不變。
@@ -5538,11 +5666,11 @@ documentation map 已含 user-owned DEV-042 等變更，不得整檔回復或覆
 
 ### Acceptance
 
-- [x] 從五 views 各自開始 meeting 不跳 Board。
-- [x] `board → list → mindmap → gantt → calendar → board` 全程無 exit／save dialog，draft／segment identity 不變。
+- [x] 從六 views 各自開始 meeting 不跳 Board。
+- [x] `board → list → mindmap → gantt → calendar → goal → board` 全程無 exit／save dialog，draft／segment identity 不變。
 - [x] view switch 本身為 0 record write、0 task-link write、0 AI request、0 recovery clear、0 duplicate capture。
 - [x] panel open／collapsed、人工內容、workflow 與 local recovery 持續。
-- [x] 五 views 均可沿既有入口開 Task Details；DEV-108 人工補記直接、exactly once 進入同一 draft。
+- [x] 六 views 均可沿既有入口開 Task Details；DEV-108 人工補記直接、exactly once 進入同一 draft。
 - [x] Board 狀態、Gantt 日期與非 Board Task Details 任務備註三種代表性 persistence owner，只在確認保存後
   exactly-once 進入 DEV-109 segment；純位置／排序仍為 0 capture。
 - [x] task-selection／dependency selection 仍安全禁止 switch，結束後 meeting 與原 view 可恢復。
@@ -5587,11 +5715,10 @@ documentation map 已含 user-owned DEV-042 等變更，不得整檔回復或覆
 ### Future Phase Capsule
 
 `Future Phase Captured / Not Requested`：依 production usage evidence 再評估 reservation、task mention selection
-與 mode-native meeting actions 的五模式等價；未獲明確需求前不建立新 presenter 或資料模型。
+與 mode-native meeting actions 的六模式等價；未獲明確需求前不建立新 presenter 或資料模型。
 
-DEV-116 目標模式已完成 current-phase 決策：不加入 meeting continuity allowlist；從 goal 開始 meeting 採
-Board fallback、live meeting 不顯示 goal option、recovery 遇 persisted goal 先正規化為 Board。future 若要加入，
-須再次 amendment ADR-049／SPEC-117 與完整 UI／capture evidence，不得只增加 ModeSwitcher 選項。
+DEV-116 OKR模式依最新需求加入meeting continuity allowlist；從goal開始meeting、live switch與recovery皆保留goal。
+此為先前goal-negative決策的intentional replacement，並以ADR-049／SPEC-116／117與完整UI evidence共同收斂。
 
 ### 相關文件
 
@@ -5606,6 +5733,178 @@ Board fallback、live meeting 不顯示 goal option、recovery 遇 persisted goa
 - 2026-09-10：建立 DEV-117，完成 `RD Implementation Ready + 架構定案`；尚未修改產品或執行 QA/QC。
 - 2026-09-10：RD Tech Lead 審查後優化 policy ownership、navigation 證據邊界、acceptance ID 與風險式 QA 範圍；
   結論由有條件通過收斂為通過，產品狀態仍為 NOT IMPLEMENTED。
-- 2026-09-10：完成 DEV-117 實作與 targeted QC；`useRecordStore` 以私有五 view allowlist 保留起始 view，
+- 2026-09-10：完成 DEV-117 原五模式實作與 targeted QC；`useRecordStore` 以私有allowlist保留起始 view，
   `MainLayout` 移除 meeting-only mode lock；static／browser／TypeScript／build 與直接受影響 regressions PASS。
+- 2026-09-10：依最新需求把goal加入同一allowlist；六模式static/browser、Goal直接開始meeting、live quick note、
+  TypeScript、targeted ESLint、build與直接回歸PASS；未commit／push／deploy／release。
   未 commit／push／deploy／release；DEV-106 browser 舊 close selector drift 已在 QA artifact 與文件標註。
+
+## DEV-118：任務篩選器正向包含邏輯與跨介面共用架構
+
+狀態：驗證中（`Local Candidate QA-QC PASS / NOT RELEASED`；Authenticated DB／live feed／release gate pending）
+開發文件成熟度：RD Implementation Ready + Implementation Complete
+架構定案：`已定案（2026-09-11 Architecture Closure Review；Tech Lead 文件複核完成）`
+技術主管審查：`PASS`
+節點類型：開發點
+父交付點：DEV-039
+是否計入產品交付完成：否
+原始需求邊界：`USER-20260910-TASK-FILTER-UI-UNIFICATION`、
+`USER-20260911-TASK-FILTER-LOGIC-ARCHITECTURE`
+風險等級：本機 query／UI／consumer refactor 為 Medium；遠端偏好與 Calendar DB／Edge 發布為 High，
+須另走 release gate。
+Spec Impact：`Intentional replacement + compatible extension`；取代v4篩選語意，保留既有ownership、
+projection、逾期定義、Calendar snapshot與permission authority。
+
+### 真正需求與成功條件
+
+現況把「包含」、「排除」與「顯示設定」混在同一組 active control，且日期條件互相 AND，
+使用者無法預測結果。目標只保留一個心智模型：
+
+> 未選＝不限；選取＝只顯示符合者。同一類條件 OR，不同類條件 AND。
+
+成功不是三個畫面長得相同，而是相同 query、source 與 `today` 在 Board、Workbench、
+Calendar preview 得到相同 matched task IDs，Calendar feed 另以同一 fixture 證明等價 truth。
+
+### 文件權威與責任分工
+
+| 權威文件 | 唯一責任 |
+|---|---|
+| `SPEC-039` DEV-118 section | v5 query、compiler、projection、Board／Workbench persistence與shared controls。 |
+| `SPEC-045` DEV-118 addendum | Calendar v4 snapshot、permission、DB validator、Edge adapter、preview／feed 與發布順序。 |
+| `QA-DEV-118` | fixtures、FMEA、case IDs、commands、evidence 與 Pass／Fail／Stop。 |
+| 本 DEV | 狀態、範圍、工作包、接手規則與 release boundary；不重複完整演算法、SQL 或測試矩陣。 |
+
+同一規則若在文件間表述不一致，依上表回到單一權威修正，不以本 DEV 的摘要覆蓋 SPEC 或 QA。
+
+### Current Phase Scope
+
+- 建立 `TaskFilterQuery` v5、唯一 v4→v5 converter、browser compiler 與 group count。
+- 修正日期 OR、未指派、空選取與 hierarchy projection 的 matched／visible／context-only 邊界。
+- 沿用並收斂既有 `TaskConditionFilterControls.tsx` 為唯一 controlled filter section；
+  三個 surface 各保留 state owner、shell、權限、資料來源與專屬控制。
+- 遷移 Board remote／local、Workbench local 與 Calendar v1～v3 read boundary。
+- 新增 Calendar v4 strict validator 與獨立 Edge row adapter，使用共同 conformance fixture。
+
+### Out of Scope
+
+- 不建立通用 schema-driven filter engine、exclude mode、任意 AND／OR builder 或巢狀群組。
+- 不新增 filter profile、另存／共用偏好，也不合併三個 surface 的 active state 或 persistence。
+- 不改任務狀態生命週期、逾期定義、task schema／RLS、Workbench placement 或 Calendar event date types。
+- 本輪已修改產品、測試、local migration 與 Edge source；不執行正式環境 migration、commit／push／deploy／release。
+
+### Frozen Product and UX Contract
+
+- status、people、tag 為組內 OR；status、date、people、tag、keyword 五組跨組 AND。
+- 日期組為「逾期 OR 今天至 N 天」；`N=0` 代表今天。日期組啟用時，缺失／無效日期不命中。
+- `未指派` 只在主責與協作皆空時命中；顯示設定不進 query、badge 或 clear-all。
+- badge 計 active groups，最大 5；section clear 只清該組，clear-all 只清 query。
+- `逾期` 獨立；「到期」與天數為單一 compound control，按鈕不顯示日期 icon 或「日」。
+- 順序固定為任務狀態 → 到期日與搜尋 → 介面顯示（適用時）→ 負責人／協作 → 標籤。
+- inactive 使用中性色，selected 使用品牌藍並有非顏色訊號；逾期只保留最小 warning cue。
+- 不增加 helper、摘要卡、框中框或雙重捲動；保留 keyboard、focus restore 與可存取名稱。
+
+完整 type、truth table、日期／人員邊界及 legacy mapping 只以 `SPEC-039` 為準。
+
+### Architecture Closure Handoff
+
+Closure source：branch `持續優化3`、HEAD
+`522e92318d1da05cd06e19604656f3b35fe9e3e9` 加 DEV-118 文件 diff。已對照 domain、
+stores、repositories、三個 UI consumers、Calendar service／SQL／Edge 與直接 regression。
+P0／P1 unresolved blockers = 0；ADR not needed，因 ownership、table 與外部系統邊界均未改變。
+
+```text
+surface wrapper
+  ├─> TaskConditionFilterControls (controlled, full-value onChange)
+  └─> taskFilters domain
+         ├─ normalize -> compile once -> browser projection
+         └─ shared conformance fixture -> Calendar Edge v4 adapter
+```
+
+#### Frozen implementation boundary
+
+- Domain：`src/features/taskFilters/` 建立 v5 type、default、唯一 converter、compiler、
+  summary與projection；不得import React、store、storage adapter、Calendar或Supabase。
+- Board：`useTaskFilterStore`擁有account×board query／sync；repository管local journal與version；
+  remote adapter只做version-aware CAS。
+- Workbench：保留account-scoped `filtersByBoardId`、selected board與panel prefs；
+  不接Board remote row。
+- Shared UI：就地改造`TaskConditionFilterControls.tsx`為full-value controlled component；
+  不改檔名、不新增compatibility component。Board移除重複filter JSX，既有style檔就地調整。
+- Calendar：App建v4 draft；`filters.ts`是唯一legacy materializer；service strict normalize；
+  DB strict validate；Edge v4 adapter負責snake_case row matching。
+- Verification：只在`QA-DEV-118`維護fixture、verifier、完整命令與evidence contract。
+
+`TaskFilterQuery` 是 v5 runtime type；legacy type只存在 converter／Calendar v1～v3 boundary。
+shared control 接受 `value: TaskFilterQuery` 與 `onChange(next: TaskFilterQuery)`，不接受 nested
+`Partial` merge。private helper、內部 component 拆分與等價 class 組合由 RD 決定。
+
+#### Persistence and compatibility invariants
+
+| Consumer | Target |
+|---|---|
+| Board remote／cache／pending | query version 5；v4 先轉換、寫入並 readback，再移除舊值；remote 使用 CAS，`>5` fail-safe。 |
+| Display settings | version 4 與既有 key／value 保持獨立，不因 query migration 或 reset 改變。 |
+| Workbench local | v4 逐 board 轉 v5，readback 前不刪舊值；account、selectedBoardId、panel prefs 不變。 |
+| Calendar subscription | v1～v3 defensive read；只 materialize local v4 draft，使用者儲存才原子寫 v4；不 background rewrite。 |
+
+Board controls在 remote hydration 完成前 disabled。任何 write／readback／CAS outcome unknown 都保留
+legacy 或 pending intent；不得 blind overwrite／delete。Calendar v4 payload、broad-scope permission、
+validator 與 Edge state machine只以 `SPEC-045` 為準。
+
+### Frozen Work Packages
+
+1. `WP-118-A`：建立共同 fixture 與會先失敗的 model／migration tests。
+2. `WP-118-B`：實作 v5 domain、normalizer、compiler、projection 與 deferred-status adapter。
+3. `WP-118-C`：完成 Board v5 local／remote CAS 與 Workbench local migration。
+4. `WP-118-D`：就地收斂 `TaskConditionFilterControls`，接入 Board／Workbench／Calendar preview。
+5. `WP-118-E`：完成 Calendar v4 app／DB／Edge source，只在 disposable local 環境驗證。
+6. `WP-118-F`：依 `QA-DEV-118` 跑全 gate、直接 regression 並建立 local QC candidate。
+
+每包須通過自己的新 gate與受影響舊 gate後才能進下一包。禁止先讓 app 寫 v4、先做 UI 後回填
+query，或建立 surface-specific predicate。實作前須重讀 `git status` 與 overlap diff，
+只做可分離的最小 patch，不覆寫其他 DEV／使用者變更。
+
+### Acceptance Summary
+
+- [x] default query 無 active filter、顯示全部 canonical tasks且 badge=0；Calendar safe default 依權限預選目前使用者。
+- [x] 同組 OR／跨組 AND、日期、未指派、group count與 clear 邊界符合 `SPEC-039`。
+- [x] 三個 browser consumers 使用同一 controlled compiler；hierarchy projection維持 matched／context 邊界。
+- [x] Board／Workbench／Calendar legacy fixtures完成可恢復、冪等且 newer-version-safe 的 migration。
+- [x] Calendar v4 DB／Edge adapter static contract與本機 matcher通過；正式 authenticated DB／feed仍屬 release gate。
+- [x] 三個正常入口的本機 browser smoke 通過，未發現本次 filter panel visible error。
+- [x] `QA-DEV-118`已建立並執行 model／migration／edge／DB static／browser、TypeScript、build與DEV-039 direct regression。
+
+效能 gate 採WP-118-A在同fixture／環境凍結的v4基準：v5 500-task projection p95不得高於
+該baseline的1.25倍，並記錄兩者絕對值；另以source assertion證明query／today不變時只compile一次，
+逐 task 不重建 Set或讀取時鐘。不得再以未量測的固定100ms作架構門檻。
+
+### Stop, Release and Execution Boundary
+
+- 下一個合法動作：依 `QA-DEV-118` 補 authenticated DB／live `.ics` 與 release gate；架構定案與 local candidate PASS 不等於 production 授權。
+- 若需改凍結 boolean semantics、surface ownership、v1～v3 read、permission、task schema／RLS，
+  或無法保留 user-owned dirty changes，停止並回送規劃。
+- Exclude mode、advanced builder、team-shared presets：`Future Phase Captured / Not Requested`。
+- Local candidate PASS最多標為 `QA-QC PASS / NOT RELEASED`；DB migration、Edge／app deploy、
+  live `.ics`、rollback與 production smoke須收到獨立 release 指令。
+
+### Evidence and Related Documents
+
+- Repo fact：本候選已升為 TaskFilterQuery v5、日期 OR、group count；Board／Workbench／Calendar
+  persistence 與 Edge adapter已完成本機candidate驗證，authenticated DB／live feed與正式發布仍未升版。
+- 歷史 1298×698 畫面只證明既有版面 smoke，不證明 v5、migration、consumer 或 feed parity。
+- 權威：`SPEC-039` DEV-118、`SPEC-045` DEV-118、`QA-DEV-118`；`SPEC-062`
+  的 `isTaskOverdue` 與 `SPEC-064` brand roles維持不變。
+
+### 變更紀錄
+
+- 2026-09-10：依 browser comments 建立 `Brief Ready`，記錄看板 UI 與共用候選。
+- 2026-09-11：完成正向包含、同組 OR／跨組 AND、日期／未指派修正、v5／Calendar v4
+  compatibility與 QA／release boundary，升級 `RD Contract Ready`。
+- 2026-09-11：完成 Architecture Closure Review，凍結 runtime boundary、migration／CAS、
+  WP-118-A～F 與 QA contract，狀態為 `RD Implementation Ready / NOT IMPLEMENTED`（歷史快照）。
+- 2026-09-11：Tech Lead 文件複核；移除純命名 component／style 搬移與重複命令／演算法，
+  改由 SPEC／QA 單一權威承接，效能 gate 改為同環境相對非退化基準。
+- 2026-09-11：完成 DEV-118 WP-118-A～F 本機實作：TaskFilterQuery v5、controlled shared controls、
+  Board／Workbench／Calendar consumer、local migration／CAS、Calendar Edge adapter、fixture與verifier；
+  `npx tsc --noEmit`、`npm run build`、DEV-039 static、model／migration／edge／DB static／browser smoke PASS；
+  狀態更新為 `Local Candidate QA-QC PASS / NOT RELEASED`，未做 remote migration、deploy或release。

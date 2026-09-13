@@ -135,6 +135,9 @@ const normalizeScopeType = (
 );
 
 const normalizeFilters = async (filters: CalendarSubscriptionFilters): Promise<CalendarSubscriptionFilters> => {
+  if (filters.version === 4 || filters.v4_scope_type === 'per_board_filter_snapshot') {
+    return normalizeV4Filters(filters);
+  }
   if (filters.version === 3 || filters.v3_scope_type === 'per_board_filter_snapshot') {
     return normalizeV3Filters(filters);
   }
@@ -181,6 +184,53 @@ const normalizeFilters = async (filters: CalendarSubscriptionFilters): Promise<C
     ...base,
     scope_type: 'workspace',
     workspace_ids: resolvedWorkspaceIds,
+  };
+};
+
+const normalizeV4Filters = async (filters: CalendarSubscriptionFilters): Promise<CalendarSubscriptionFilters> => {
+  if (filters.version !== 4 || filters.v4_scope_type !== 'per_board_filter_snapshot') {
+    throw new Error('行事曆 v4 payload 必須包含 version=4 與 per-board snapshot marker。');
+  }
+  if (filters.assignee || filters.global_filter || filters.board_overrides || filters.date_types || filters.scope_type || filters.v2_scope_type || filters.v3_scope_type) {
+    throw new Error('行事曆 v4 payload 不得混用舊版 scope 欄位。');
+  }
+  const inputProjectIds = unique(filters.project_ids ?? []);
+  if (inputProjectIds.length === 0 || !filters.board_filters) {
+    throw new Error('行事曆 v4 至少需要一張看板與完整條件快照。');
+  }
+  const resolvedWorkspaceIds = unique(await Promise.all(filters.workspace_ids.map(resolveWorkspaceId)));
+  const projectRefs = await Promise.all(inputProjectIds.map(projectId => resolveBoardRef(projectId, resolvedWorkspaceIds)));
+  const resolvedProjectIds = unique(projectRefs.map(project => project.id));
+  if (resolvedProjectIds.length !== inputProjectIds.length) throw new Error('行事曆 v4 看板不可重複。');
+  const normalizedBoardFilters: Record<string, CalendarSubscriptionBoardFilterSnapshot> = {};
+  const boardFilters = filters.board_filters;
+  const used = new Set<string>();
+  projectRefs.forEach((project, index) => {
+    const inputId = inputProjectIds[index];
+    const key = [inputId, project.id, project.appBoardId].find(candidate => Boolean(candidate && boardFilters[candidate]));
+    if (!key || used.has(key)) throw new Error('行事曆 v4 缺少逐看板條件快照。');
+    const snapshot = boardFilters[key] as CalendarSubscriptionBoardFilterSnapshot;
+    if (!snapshot || typeof snapshot.included !== 'boolean' || !snapshot.filters || !Array.isArray(snapshot.filters.statuses) || !snapshot.filters.due || !snapshot.filters.people || !Array.isArray(snapshot.filters.tagIds) || typeof snapshot.filters.keyword !== 'string') {
+      throw new Error('行事曆 v4 條件快照格式錯誤。');
+    }
+    const dateTypes = normalizeDateTypes(snapshot.date_types);
+    if (snapshot.included && dateTypes.length === 0) throw new Error('行事曆 v4 至少需要一種事件日期。');
+    used.add(key);
+    normalizedBoardFilters[project.id] = {
+      included: snapshot.included,
+      date_types: dateTypes,
+      filters: normalizeTaskFilters(snapshot.filters),
+    };
+  });
+  if (used.size !== Object.keys(boardFilters).length || !Object.values(normalizedBoardFilters).some(snapshot => snapshot.included)) {
+    throw new Error('行事曆 v4 看板快照必須完整且至少包含一張看板。');
+  }
+  return {
+    version: 4,
+    v4_scope_type: 'per_board_filter_snapshot',
+    workspace_ids: unique([...resolvedWorkspaceIds, ...projectRefs.map(project => project.workspaceId)]),
+    project_ids: resolvedProjectIds,
+    board_filters: normalizedBoardFilters,
   };
 };
 

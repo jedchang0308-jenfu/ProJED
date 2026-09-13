@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
 import type { TaskStatus } from '../../types';
-import { ChevronRight, ChevronDown, Link, Lock, Unlock } from 'lucide-react';
+import { Link, Lock, Unlock } from 'lucide-react';
 import { WbsDependencyContext } from './WbsListView';
 import { CSS } from '@dnd-kit/utilities';
 import dayjs from 'dayjs';
@@ -22,6 +22,7 @@ import { TaskSurfaceFrame } from './TaskSurfaceFrame';
 import { buildTaskPlacementTreeRows, TaskPlacementTree } from './TaskPlacementTree';
 import { useTaskPlacementController } from './useTaskPlacementController';
 import { TaskDescriptionIndicator } from '../TaskDescriptionIndicator';
+import { TaskHierarchyIndentedRow } from './TaskHierarchyIndentedRow';
 
 interface WbsNodeItemProps {
   nodeId: string;
@@ -334,27 +335,16 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
       >
         
         {/* Col 1: 任務名稱與階層結構 */}
-        <div
-          className="task-hierarchy-indented-row relative flex items-center gap-1 overflow-hidden pr-[10px]"
-          style={{
-            '--task-hierarchy-depth': level,
-            '--task-hierarchy-base': '0px',
-          } as React.CSSProperties}
-          data-task-hierarchy-row="true"
-          data-task-hierarchy-surface="list"
-          data-task-hierarchy-depth={level}
-          data-task-id={node.id}
+        <TaskHierarchyIndentedRow
+          depth={level}
+          hasChildren={hasChildren}
+          expanded={isExpanded}
+          onToggle={handleToggle}
+          taskId={node.id}
+          taskTitle={node.title || '未命名任務'}
+          surface="list"
+          className="pr-[10px]"
         >
-          <button 
-            onClick={(event) => {
-              event.stopPropagation();
-              handleToggle();
-            }}
-            className={`flex-shrink-0 w-5 h-5 flex items-center justify-center rounded hover:bg-slate-200 transition-colors text-slate-400 ${!hasChildren && 'invisible'}`}
-            title={isExpanded ? '收合' : '展開'}
-          >
-            {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-          </button>
 
           {node.nodeType === 'milestone' ? (
               <span className="flex-shrink-0 text-[10px] text-amber-600 border border-amber-300 bg-amber-50 px-1 py-0.5 rounded leading-none mr-1">里程碑</span>
@@ -369,7 +359,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
             <TaskDescriptionIndicator description={node.description} />
           </span>
 
-          <div className="flex items-center gap-1 flex-shrink-0 w-24">
+          <div className="flex items-center gap-1 flex-shrink-0 w-24" data-task-progress-indicator="true">
               <div className={`w-full bg-slate-200 overflow-hidden ${hasChildren ? 'h-1.5 rounded-full' : 'h-1 rounded-sm opacity-70'}`}>
                   <div 
                   className={`h-full ${getTaskProgressFillClass(progress)} transition-all`}
@@ -387,7 +377,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
               ))}
             </div>
           )}
-        </div>
+        </TaskHierarchyIndentedRow>
 
         {/* Col 2: 狀態 (原生 Select 偽裝 Badge) */}
         <div className="flex items-center">

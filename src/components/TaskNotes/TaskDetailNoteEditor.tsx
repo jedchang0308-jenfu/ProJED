@@ -56,6 +56,7 @@ import {
   Underline,
 } from 'lucide-react';
 import type { TaskDetailNote } from '../../types';
+import { TASK_NOTE_CONTENT_SURFACE_CLASS_NAME } from './TaskNoteContentSurface';
 import {
   createTaskNoteRichContent,
   getTaskNoteEditorStateJson,
@@ -676,9 +677,8 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
               <ContentEditable
                 ref={contentEditableRef}
                 className={[
-                  'scrollbar-thin min-h-[36px] w-full max-w-full resize-none overflow-x-hidden overflow-y-auto whitespace-pre-wrap rounded-md border border-slate-200/70',
-                  'bg-transparent px-2 py-1.5 text-sm leading-6 text-slate-700 outline-none transition',
-                  'hover:border-slate-300/70 focus:border-blue-300 focus:ring-2 focus:ring-blue-100',
+                  TASK_NOTE_CONTENT_SURFACE_CLASS_NAME,
+                  'resize-none',
                   'aria-disabled:cursor-default aria-disabled:border-slate-200/50 aria-disabled:text-slate-400',
                 ].join(' ')}
                 aria-label={'備註內容：' + noteLabel}

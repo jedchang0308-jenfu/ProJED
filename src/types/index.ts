@@ -7,7 +7,7 @@ import type {
 // Core scalar types
 export type TaskStatus = 'todo' | 'in_progress' | 'delayed' | 'completed' | 'unsure' | 'onhold';
 export type DependencySide = 'start' | 'end';
-export type ViewMode = 'home' | 'list' | 'mindmap' | 'board' | 'gantt' | 'calendar' | 'records' | 'calendar_subscriptions' | 'settings' | 'recycle_bin';
+export type ViewMode = 'home' | 'list' | 'mindmap' | 'board' | 'goal' | 'gantt' | 'calendar' | 'records' | 'calendar_subscriptions' | 'settings' | 'recycle_bin';
 export type DialogType = 'confirm' | 'prompt' | 'action';
 export type DialogActionVariant = 'primary' | 'secondary' | 'danger';
 export type DragType = 'move' | 'left' | 'right';

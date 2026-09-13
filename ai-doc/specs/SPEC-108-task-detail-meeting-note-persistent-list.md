@@ -1,7 +1,7 @@
 # SPEC-108 任務明細會議補記持續呈現
 
 - 狀態：`Implemented / QA-QC PASS / Local-only / NOT RELEASED`
-- 日期：2026-09-07
+- 日期：2026-09-11
 - 對應 DEV：DEV-108
 - 父交付點：DEV-009
 - 相容：DEV-008、DEV-024、DEV-066、DEV-106
@@ -19,6 +19,14 @@ reference source-board read、same-board append、generic error與unresolved tas
 2026-09-10 DEV-008 UI retirement amendment：使用者要求移除任務明細的完整「歷史資訊」入口與面板；
 本規格的第一層人工會議補記列表與 composer 不變。`TaskRecordTimeline` 已移除，
 `taskKnowledgeSnippets` 僅保留相容解析能力，不再是任務明細 UI。
+
+2026-09-11 UI boundary amendment：會議紀錄歷程在任務詳情內改為單一、可辨識的 bounded scroll
+container；展開多筆紀錄時容器固定最大高度 200px 並使用 Y 軸捲動，「其餘 N 筆」控制與 meeting
+composer 留在容器外，避免輸入區被歷程內容推離視窗。
+
+2026-09-11 interaction amendment：移除展開後的「收合」控制。四筆以上仍先顯示最新三筆，
+「其餘 N 筆」只負責一次性展開；展開後維持完整列表並由 bounded Y-scroll 瀏覽，關閉／重開任務
+才重新回到 latest-3 預設狀態。
 
 ## 1. 使用者決策與目標
 
@@ -65,11 +73,14 @@ reference source-board read、same-board append、generic error與unresolved tas
 - 無外層卡片、藍色背景、每列框線、裝飾 icon、badge、搜尋列、常駐成功訊息或 helper。
 - 區段最多一條低對比分隔線；輸入控制保留必要邊界及可見 focus。
 - 一至三筆全部顯示。四筆以上先取時間最新三筆，再以正序呈現；「其餘 N 筆」具 `aria-expanded`
-  及明確 accessible name，展開後顯示全部並提供最短「收合」控制。
+  及明確 accessible name，展開後顯示全部且不再提供「收合」控制。
 - 非 meeting mode 且有資料：只顯示標題與列表。非 meeting mode 且無資料：整區不 render。
 - meeting mode：顯示單一 textarea 與「加入」；既有 `Ctrl／Cmd + Enter` 行為維持。沒有歷史資料時不顯示
   空清單、空框或「尚無紀錄」。
 - 成功回饋由新文字列出現與輸入清空共同表達；不得新增 toast 或成功面板。
+- 歷程列本身位於單一 data-task-meeting-history-scroll 容器；容器最大高度為 200px、
+  overflow-y: auto，採低對比邊界與細捲軸保留可發現性。「其餘 N 筆」一次性展開控制及
+  meeting composer 必須位於容器外；不得形成每列各自的框線或第二層卡片。
 
 ## 3. Authoritative data contract
 
@@ -253,11 +264,14 @@ recovery，必須停止並回 PM 升級風險；不得在 DEV-108 scope 內順�
 - [ ] active draft 到 saved／published record 切換不閃退、不短暫消失、不重複、不改排序。
 - [ ] 結束 meeting mode、關閉／重開任務及 reload 後列表仍在；非 meeting mode 不顯示 composer。
 - [ ] archived meeting record 仍顯示；source hard delete 後成功 reload 不再顯示。
-- [ ] 一至三筆全顯示；四筆以上預設為最新三筆且正序；「其餘 N 筆」可原地展開／收合全部。
+- [ ] 一至三筆全顯示；四筆以上預設為最新三筆且正序；「其餘 N 筆」可原地一次性展開全部，
+  展開後不顯示「收合」控制。
 - [ ] 畫面順序正確，沒有卡片、每列框、icon、badge、搜尋、空狀態或常駐成功提示。
 - [ ] 任務明細不再顯示 `data-task-knowledge-*`、歷史資訊搜尋／空狀態或補會後／工作紀錄動作。
 - [ ] denied／invalid metadata／load failure／save failure 不假成功；原輸入或已進 draft 的內容可恢復，重試不重複。
 - [ ] DEV-008 task knowledge、DEV-009 append/token、DEV-024 synthesis、DEV-066 notes 與 DEV-106 recovery 不退化。
+- [ ] 會議紀錄歷程使用單一 200px bounded Y-scroll container；展開後 scrollHeight > clientHeight 時
+  可捲動，「其餘 N 筆」與 meeting composer 位於容器外且仍可操作。
 - [ ] 1440×900、1024×768、390×844 通過；390 只驗證持續列表，不開放既有 mobile meeting composer。
 - [ ] 鍵盤、focus、`aria-expanded`、accessible name、長文換行與 200% zoom 可完成主要流程。
 

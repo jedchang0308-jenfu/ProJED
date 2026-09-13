@@ -1,4 +1,4 @@
-import type { TaskFilterState } from '../../features/taskFilters';
+import type { TaskFilterQuery } from '../../features/taskFilters';
 import { isSupabaseBackend } from '../dataBackend';
 import { isSupabaseConfigured, supabase } from './client';
 import type { Json } from './database.types';
@@ -37,40 +37,43 @@ export const taskFilterPreferenceService = {
     };
   },
 
-  async upsert(accountId: string, projectId: string, filters: TaskFilterState): Promise<void> {
-    const filtersPayload = {
-      preference_version: 4,
-      filters: filters as unknown as Json,
-    };
-    const { data: updated, error: updateError } = await supabase
-      .from('account_board_task_filter_preferences')
-      .update(filtersPayload)
-      .eq('account_id', accountId)
-      .eq('project_id', projectId)
-      .eq('preference_version', 4)
-      .select('account_id')
-      .maybeSingle();
-    if (updateError) throw new Error(updateError.message);
-    if (updated) return;
-
-    // Insert only when no current v4 row exists. A duplicate caused by a newer
-    // or concurrent row fails safely and is handled by the bounded retry path.
-    const { error: insertError } = await supabase
-      .from('account_board_task_filter_preferences')
-      .insert({
+  async compareAndSet(
+    accountId: string,
+    projectId: string,
+    expectedVersion: 4 | 5 | null,
+    filters: TaskFilterQuery,
+  ): Promise<void> {
+    const filtersPayload = { preference_version: 5, filters: filters as unknown as Json };
+    if (expectedVersion === null) {
+      const { error } = await supabase.from('account_board_task_filter_preferences').insert({
         account_id: accountId,
         project_id: projectId,
         ...filtersPayload,
       });
-    if (insertError) throw new Error(insertError.message);
+      if (error) throw new Error('TASK_FILTER_CAS_CONFLICT:' + error.message);
+      return;
+    }
+    const { data, error } = await supabase
+      .from('account_board_task_filter_preferences')
+      .update(filtersPayload)
+      .eq('account_id', accountId)
+      .eq('project_id', projectId)
+      .eq('preference_version', expectedVersion)
+      .select('account_id')
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) throw new Error('TASK_FILTER_CAS_CONFLICT:version changed');
   },
 
-  async remove(accountId: string, projectId: string): Promise<void> {
-    const { error } = await supabase
+  async remove(accountId: string, projectId: string, expectedVersion?: 5): Promise<void> {
+    let query = supabase
       .from('account_board_task_filter_preferences')
       .delete()
       .eq('account_id', accountId)
       .eq('project_id', projectId);
+    if (expectedVersion !== undefined) query = query.eq('preference_version', expectedVersion);
+    const { data, error } = await query.select('account_id').maybeSingle();
     if (error) throw new Error(error.message);
+    if (!data && expectedVersion !== undefined) throw new Error('TASK_FILTER_CAS_CONFLICT:version changed');
   },
 };

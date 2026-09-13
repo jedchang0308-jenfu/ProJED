@@ -1,16 +1,18 @@
 import {
   createDefaultTaskDisplaySettings,
   createDefaultTaskFilters,
+  TASK_STATUS_OPTIONS,
 } from './defaults';
 import type {
   AccountBoardTaskFilterScope,
   BoardTaskFilterPrefs,
+  LegacyTaskFilterStateV4,
   TaskDisplaySettings,
   TaskFilterPreferenceCache,
   TaskFilterPreferenceMutation,
-  TaskFilterState,
+  TaskFilterQuery,
 } from './types';
-import type { TaskStatus } from '../../types';
+import type { ManualTaskStatus } from '../../utils/taskStatus';
 import {
   getAccountBoardScopedStorageKey,
   getAccountScopedStorageKey,
@@ -22,11 +24,14 @@ import {
 export const LEGACY_BOARD_FILTER_STORAGE_KEY = 'projed-filters';
 export const BOARD_TASK_FILTER_STORAGE_KEY = 'projed-task-filters:v1';
 export const ACCOUNT_BOARD_TASK_FILTER_STORAGE_KEY = 'projed-task-filters:v2';
+export const LEGACY_BOARD_TASK_FILTER_CACHE_STORAGE_KEY = 'projed-task-filters:v4';
+export const LEGACY_BOARD_TASK_FILTER_PENDING_STORAGE_KEY = 'projed-task-filter-pending:v4';
+export const BOARD_TASK_FILTER_CACHE_STORAGE_KEY = 'projed-task-filters:v5';
+export const BOARD_TASK_FILTER_PENDING_STORAGE_KEY = 'projed-task-filter-pending:v5';
 export const BOARD_TASK_FILTER_DISPLAY_STORAGE_KEY = 'projed-task-display:v4';
-export const BOARD_TASK_FILTER_CACHE_STORAGE_KEY = 'projed-task-filters:v4';
-export const BOARD_TASK_FILTER_PENDING_STORAGE_KEY = 'projed-task-filter-pending:v4';
-export const BOARD_TASK_FILTER_MIGRATION_MARKER_KEY = 'projed-task-filter-migration:v4';
-export const BOARD_TASK_FILTER_PREFS_VERSION = 4;
+export const BOARD_TASK_FILTER_MIGRATION_MARKER_KEY = 'projed-task-filter-migration:v5';
+export const BOARD_TASK_FILTER_PREFS_VERSION = 5;
+export const TASK_DISPLAY_SETTINGS_VERSION = 4;
 
 const isRecord = (value: unknown): value is Record<string, unknown> => (
   Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -34,39 +39,100 @@ const isRecord = (value: unknown): value is Record<string, unknown> => (
 
 const normalizeStringArray = (value: unknown): string[] => (
   Array.isArray(value)
-    ? Array.from(new Set(value.filter((item): item is string => typeof item === 'string' && item.length > 0)))
+    ? Array.from(new Set(value
+      .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+      .map(item => item.trim())))
+      .sort((left, right) => left < right ? -1 : left > right ? 1 : 0)
     : []
 );
 
-const normalizeDueWithinDays = (value: unknown): number | null => {
+const normalizeDays = (value: unknown): number | null => {
   if (value === null || value === undefined || value === '') return null;
-  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
-  return Math.max(0, Math.min(365, Math.floor(value)));
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > 365) return null;
+  return value;
 };
 
-export const migrateLegacyDefaultTaskFilters = (
-  _filters?: Partial<TaskFilterState> | null,
-  _version = 1,
-): TaskFilterState => createDefaultTaskFilters();
+const hasOwn = (value: Record<string, unknown>, key: string) => Object.prototype.hasOwnProperty.call(value, key);
 
-export const normalizeTaskFilters = (value?: Partial<TaskFilterState> | null): TaskFilterState => {
-  const defaults = createDefaultTaskFilters();
-  const rawStatusFilters: Record<string, unknown> = isRecord(value?.statusFilters) ? value.statusFilters : {};
-  const statusFilters = Object.fromEntries(
-    Object.entries(defaults.statusFilters).map(([status, defaultValue]) => [
-      status,
-      typeof rawStatusFilters?.[status] === 'boolean' ? rawStatusFilters[status] : defaultValue,
-    ]),
-  ) as Record<TaskStatus, boolean>;
+const normalizeStatuses = (value: unknown): ManualTaskStatus[] => {
+  const selected = new Set(
+    Array.isArray(value)
+      ? value.filter((item): item is ManualTaskStatus => TASK_STATUS_OPTIONS.some(option => option.key === item))
+      : [],
+  );
+  return TASK_STATUS_OPTIONS
+    .map(option => option.key)
+    .filter(status => selected.has(status));
+};
+
+const normalizeLegacyStatusSelection = (value: unknown): ManualTaskStatus[] => {
+  const statusFilters = isRecord(value) ? value : {};
+  const hasStatusInput = TASK_STATUS_OPTIONS.some(option => hasOwn(statusFilters, option.key));
+  const selected = TASK_STATUS_OPTIONS.filter(option => statusFilters[option.key] === true).map(option => option.key);
+  if (!hasStatusInput || selected.length === TASK_STATUS_OPTIONS.length || selected.length === 0) return [];
+  return selected;
+};
+
+export const migrateLegacyTaskFilterStateV4 = (
+  value?: LegacyTaskFilterStateV4 | null,
+): TaskFilterQuery => {
+  const source = isRecord(value) ? value : {};
+  const overdueOnly = source.overdueOnly === true;
+  const dueWithinDays = normalizeDays(source.dueWithinDays);
+  const selectedAssigneeIds = normalizeStringArray(source.selectedAssigneeIds);
+  const unassigned = selectedAssigneeIds.includes('__unassigned__');
 
   return {
-    statusFilters,
-    dueWithinDays: normalizeDueWithinDays(value?.dueWithinDays),
-    overdueOnly: typeof value?.overdueOnly === 'boolean' ? value.overdueOnly : defaults.overdueOnly,
-    selectedAssigneeIds: normalizeStringArray(value?.selectedAssigneeIds),
-    selectedTagIds: normalizeStringArray(value?.selectedTagIds),
-    keyword: typeof value?.keyword === 'string' ? value.keyword.trim() : '',
+    statuses: normalizeLegacyStatusSelection(source.statusFilters),
+    due: {
+      // Legacy due-only semantics included past dates. Preserve that result set
+      // by enabling overdue with the upcoming range; when overdue was already
+      // selected it is the complete date intent and the old range is redundant.
+      includeOverdue: overdueOnly || dueWithinDays !== null,
+      upcomingWithinDays: overdueOnly ? null : dueWithinDays,
+    },
+    people: {
+      ids: selectedAssigneeIds.filter(id => id !== '__unassigned__'),
+      includeUnassigned: unassigned,
+    },
+    tagIds: normalizeStringArray(source.selectedTagIds),
+    keyword: typeof source.keyword === 'string' ? source.keyword.trim() : '',
   };
+};
+
+export const normalizeTaskFilters = (
+  value?: Partial<TaskFilterQuery> | null,
+): TaskFilterQuery => {
+  const source = isRecord(value) ? value : {};
+  const dueSource: Record<string, unknown> = isRecord(source.due) ? source.due : {};
+  const peopleSource: Record<string, unknown> = isRecord(source.people) ? source.people : {};
+
+  return {
+    statuses: normalizeStatuses(source.statuses),
+    due: {
+      includeOverdue: dueSource['includeOverdue'] === true,
+      upcomingWithinDays: normalizeDays(dueSource['upcomingWithinDays']),
+    },
+    people: {
+      ids: normalizeStringArray(peopleSource['ids']),
+      includeUnassigned: peopleSource['includeUnassigned'] === true,
+    },
+    tagIds: normalizeStringArray(source.tagIds),
+    keyword: typeof source.keyword === 'string' ? source.keyword.trim() : '',
+  };
+};
+
+export const normalizePersistedTaskFilters = (value: unknown): TaskFilterQuery => {
+  if (isRecord(value) && (
+    'statusFilters' in value
+    || 'dueWithinDays' in value
+    || 'overdueOnly' in value
+    || 'selectedAssigneeIds' in value
+    || 'selectedTagIds' in value
+  )) {
+    return migrateLegacyTaskFilterStateV4(value);
+  }
+  return normalizeTaskFilters(isRecord(value) ? value : undefined);
 };
 
 export const normalizeTaskDisplaySettings = (
@@ -89,11 +155,22 @@ const cacheKey = ({ accountId, boardId }: AccountBoardTaskFilterScope) => (
   getAccountBoardScopedStorageKey(BOARD_TASK_FILTER_CACHE_STORAGE_KEY, accountId, boardId)
 );
 
+const legacyCacheKey = ({ accountId, boardId }: AccountBoardTaskFilterScope) => (
+  getAccountBoardScopedStorageKey(LEGACY_BOARD_TASK_FILTER_CACHE_STORAGE_KEY, accountId, boardId)
+);
+
 const pendingKey = ({ accountId, boardId }: AccountBoardTaskFilterScope) => (
   getAccountBoardScopedStorageKey(BOARD_TASK_FILTER_PENDING_STORAGE_KEY, accountId, boardId)
 );
 
-const createMigrationMarker = () => ({ version: BOARD_TASK_FILTER_PREFS_VERSION, migratedAt: Date.now() });
+const legacyPendingKey = ({ accountId, boardId }: AccountBoardTaskFilterScope) => (
+  getAccountBoardScopedStorageKey(LEGACY_BOARD_TASK_FILTER_PENDING_STORAGE_KEY, accountId, boardId)
+);
+
+const createMigrationMarker = () => ({
+  version: BOARD_TASK_FILTER_PREFS_VERSION,
+  migratedAt: Date.now(),
+});
 
 const extractLegacyDisplaySettings = (value: unknown): TaskDisplaySettings | null => {
   if (!isRecord(value)) return null;
@@ -123,18 +200,26 @@ export const migrateLegacyBoardTaskFilterPrefs = (
 
   const targetDisplayKey = displayKey(accountId);
   if (displaySettings) {
-    const payload = { version: BOARD_TASK_FILTER_PREFS_VERSION, displaySettings, updatedAt: Date.now() };
+    const payload = {
+      version: TASK_DISPLAY_SETTINGS_VERSION,
+      displaySettings,
+      updatedAt: Date.now(),
+    };
     if (!writeStorageJson(targetDisplayKey, payload)) return false;
     const readback = readStorageJson<{ version?: number }>(targetDisplayKey);
-    if (readback?.version !== BOARD_TASK_FILTER_PREFS_VERSION) return false;
+    if (readback?.version !== TASK_DISPLAY_SETTINGS_VERSION) return false;
   }
 
   if (!writeStorageJson(markerKey, createMigrationMarker())) return false;
   const markerReadback = readStorageJson<{ version?: number }>(markerKey);
   if (markerReadback?.version !== BOARD_TASK_FILTER_PREFS_VERSION) return false;
 
+  // Legacy account/global keys may contain filters scoped by an old UI. Keep
+  // them if a filter payload exists; board-scoped v4 values migrate below with
+  // an explicit readback-before-delete transaction.
   legacyCandidates.forEach(candidate => {
-    if (candidate.value !== null) removeStorageKey(candidate.key);
+    const hasFilterPayload = isRecord(candidate.value) && 'filters' in candidate.value;
+    if (candidate.value && !hasFilterPayload) removeStorageKey(candidate.key);
   });
   return true;
 };
@@ -154,16 +239,16 @@ export const writeBoardTaskDisplaySettings = (
   migrateLegacyBoardTaskFilterPrefs(accountId);
   const next = normalizeTaskDisplaySettings({ ...readBoardTaskDisplaySettings(accountId), ...settings });
   writeStorageJson(displayKey(accountId), {
-    version: BOARD_TASK_FILTER_PREFS_VERSION,
+    version: TASK_DISPLAY_SETTINGS_VERSION,
     displaySettings: next,
     updatedAt: Date.now(),
   });
   return next;
 };
 
-// Compatibility adapter for display-only callers. Filter conditions deliberately
-// resolve to default-all and are never persisted through this API.
-export const readBoardTaskFilterPrefs = (accountId: string | null | undefined = null): BoardTaskFilterPrefs => ({
+export const readBoardTaskFilterPrefs = (
+  accountId: string | null | undefined = null,
+): BoardTaskFilterPrefs => ({
   version: BOARD_TASK_FILTER_PREFS_VERSION,
   filters: createDefaultTaskFilters(),
   displaySettings: readBoardTaskDisplaySettings(accountId),
@@ -171,7 +256,7 @@ export const readBoardTaskFilterPrefs = (accountId: string | null | undefined = 
 });
 
 export const writeBoardTaskFilterPrefs = (
-  updates: { displaySettings?: Partial<TaskDisplaySettings>; filters?: Partial<TaskFilterState> },
+  updates: { displaySettings?: Partial<TaskDisplaySettings> },
   accountId: string | null | undefined = null,
 ): BoardTaskFilterPrefs => ({
   version: BOARD_TASK_FILTER_PREFS_VERSION,
@@ -182,21 +267,48 @@ export const writeBoardTaskFilterPrefs = (
   updatedAt: Date.now(),
 });
 
+const toVersionedQueryCache = (
+  raw: unknown,
+): TaskFilterPreferenceCache | null => {
+  if (!isRecord(raw) || typeof raw.version !== 'number' || !isRecord(raw.filters)) return null;
+  if (raw.version !== 4 && raw.version !== BOARD_TASK_FILTER_PREFS_VERSION) return null;
+  return {
+    version: BOARD_TASK_FILTER_PREFS_VERSION,
+    filters: raw.version === BOARD_TASK_FILTER_PREFS_VERSION
+      ? normalizeTaskFilters(raw.filters as Partial<TaskFilterQuery>)
+      : normalizePersistedTaskFilters(raw.filters),
+    updatedAt: typeof raw.updatedAt === 'number' ? raw.updatedAt : 0,
+  };
+};
+
 export const readTaskFilterPreferenceCache = (
   scope: AccountBoardTaskFilterScope,
 ): TaskFilterPreferenceCache | null => {
-  const cached = readStorageJson<Partial<TaskFilterPreferenceCache>>(cacheKey(scope));
-  if (cached?.version !== BOARD_TASK_FILTER_PREFS_VERSION || !isRecord(cached.filters)) return null;
-  return {
+  const current = toVersionedQueryCache(readStorageJson<unknown>(cacheKey(scope)));
+  if (current) return current;
+
+  const legacyRaw = readStorageJson<unknown>(legacyCacheKey(scope));
+  const legacy = toVersionedQueryCache(legacyRaw);
+  if (!legacy) return null;
+
+  const target = {
     version: BOARD_TASK_FILTER_PREFS_VERSION,
-    filters: normalizeTaskFilters(cached.filters),
-    updatedAt: typeof cached.updatedAt === 'number' ? cached.updatedAt : 0,
+    filters: legacy.filters,
+    updatedAt: Date.now(),
   };
+  if (writeStorageJson(cacheKey(scope), target)) {
+    const readback = toVersionedQueryCache(readStorageJson<unknown>(cacheKey(scope)));
+    if (readback?.version === BOARD_TASK_FILTER_PREFS_VERSION) {
+      removeStorageKey(legacyCacheKey(scope));
+      return readback;
+    }
+  }
+  return target;
 };
 
 export const writeTaskFilterPreferenceCache = (
   scope: AccountBoardTaskFilterScope,
-  filters: TaskFilterState,
+  filters: TaskFilterQuery,
 ): boolean => writeStorageJson(cacheKey(scope), {
   version: BOARD_TASK_FILTER_PREFS_VERSION,
   filters: normalizeTaskFilters(filters),
@@ -204,32 +316,63 @@ export const writeTaskFilterPreferenceCache = (
 });
 
 export const removeTaskFilterPreferenceCache = (scope: AccountBoardTaskFilterScope): boolean => (
-  removeStorageKey(cacheKey(scope))
+  (() => {
+    const targetRemoved = removeStorageKey(cacheKey(scope));
+    const legacyRemoved = removeStorageKey(legacyCacheKey(scope));
+    return targetRemoved && legacyRemoved;
+  })()
 );
+
+const toVersionedQueryMutation = (raw: unknown): TaskFilterPreferenceMutation | null => {
+  if (!isRecord(raw) || typeof raw.id !== 'string' || typeof raw.version !== 'number') return null;
+  if (raw.version !== 4 && raw.version !== BOARD_TASK_FILTER_PREFS_VERSION) return null;
+  if (raw.kind !== 'upsert' && raw.kind !== 'delete') return null;
+  return {
+    id: raw.id,
+    version: BOARD_TASK_FILTER_PREFS_VERSION,
+    kind: raw.kind,
+    filters: raw.kind === 'upsert'
+      ? (raw.version === BOARD_TASK_FILTER_PREFS_VERSION
+        ? normalizeTaskFilters(isRecord(raw.filters) ? raw.filters as Partial<TaskFilterQuery> : undefined)
+        : normalizePersistedTaskFilters(raw.filters))
+      : undefined,
+    updatedAt: typeof raw.updatedAt === 'number' ? raw.updatedAt : 0,
+  };
+};
 
 export const readTaskFilterPreferencePending = (
   scope: AccountBoardTaskFilterScope,
 ): TaskFilterPreferenceMutation | null => {
-  const pending = readStorageJson<Partial<TaskFilterPreferenceMutation>>(pendingKey(scope));
-  if (
-    pending?.version !== BOARD_TASK_FILTER_PREFS_VERSION
-    || (pending.kind !== 'upsert' && pending.kind !== 'delete')
-    || typeof pending.id !== 'string'
-  ) return null;
-  return {
-    id: pending.id,
-    version: BOARD_TASK_FILTER_PREFS_VERSION,
-    kind: pending.kind,
-    filters: pending.kind === 'upsert' ? normalizeTaskFilters(pending.filters) : undefined,
-    updatedAt: typeof pending.updatedAt === 'number' ? pending.updatedAt : 0,
-  };
+  const current = toVersionedQueryMutation(readStorageJson<unknown>(pendingKey(scope)));
+  if (current) return current;
+
+  const legacy = toVersionedQueryMutation(readStorageJson<unknown>(legacyPendingKey(scope)));
+  if (!legacy) return null;
+
+  const target = { ...legacy, version: BOARD_TASK_FILTER_PREFS_VERSION };
+  if (writeStorageJson(pendingKey(scope), target)) {
+    const readback = toVersionedQueryMutation(readStorageJson<unknown>(pendingKey(scope)));
+    if (readback?.id === target.id) {
+      removeStorageKey(legacyPendingKey(scope));
+      return readback;
+    }
+  }
+  return target;
 };
 
 export const writeTaskFilterPreferencePending = (
   scope: AccountBoardTaskFilterScope,
   mutation: TaskFilterPreferenceMutation,
-): boolean => writeStorageJson(pendingKey(scope), mutation);
+): boolean => writeStorageJson(pendingKey(scope), {
+  ...mutation,
+  version: BOARD_TASK_FILTER_PREFS_VERSION,
+  filters: mutation.kind === 'upsert' ? normalizeTaskFilters(mutation.filters) : undefined,
+});
 
 export const removeTaskFilterPreferencePending = (scope: AccountBoardTaskFilterScope): boolean => (
-  removeStorageKey(pendingKey(scope))
+  (() => {
+    const targetRemoved = removeStorageKey(pendingKey(scope));
+    const legacyRemoved = removeStorageKey(legacyPendingKey(scope));
+    return targetRemoved && legacyRemoved;
+  })()
 );

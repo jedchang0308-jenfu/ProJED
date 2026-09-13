@@ -83,6 +83,12 @@ type TaskSelectionModeOptions = {
 
 type MeetingSynthesisStatus = 'idle' | 'synthesizing' | 'ready' | 'error';
 
+export type RecordListLoadState =
+  | { status: 'idle'; scopeKey: null; error: null }
+  | { status: 'loading'; scopeKey: string; error: null }
+  | { status: 'ready'; scopeKey: string; error: null }
+  | { status: 'error'; scopeKey: string; error: string };
+
 type SaveDraftOptions = {
   nodes?: Record<string, TaskNode>;
   status?: KnowledgeRecordStatus;
@@ -122,9 +128,16 @@ const MEETING_CONTINUITY_VIEWS = new Set<ViewMode>([
   'mindmap',
   'gantt',
   'calendar',
+  'goal',
 ]);
 
-const isMeetingContinuityView = (view: ViewMode) => MEETING_CONTINUITY_VIEWS.has(view);
+export const isMeetingContinuityView = (view: ViewMode) => MEETING_CONTINUITY_VIEWS.has(view);
+
+export const createRecordScopeKey = (workspaceId: string, boardId: string): string => (
+  JSON.stringify([workspaceId, boardId])
+);
+
+let recordListRequestSequence = 0;
 
 const activeBoardIdForMeeting = () => useBoardStore.getState().activeBoardId;
 
@@ -140,7 +153,7 @@ const upsertRecordWithIntegrity = async (
 
 interface RecordStoreState {
   records: EditableKnowledgeRecord[];
-  loading: boolean;
+  recordListLoad: RecordListLoadState;
   saving: boolean;
   error: string | null;
   isPanelOpen: boolean;
@@ -172,6 +185,7 @@ interface RecordStoreState {
 
 interface RecordStoreActions {
   loadRecords: (workspaceId: string, boardId: string) => Promise<void>;
+  resetRecordList: () => void;
   openPanel: () => void;
   closePanel: () => void;
   togglePanelCollapsed: () => void;
@@ -534,7 +548,7 @@ const createMeetingSynthesisInput = (
 
 const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) => ({
   records: [],
-  loading: false,
+  recordListLoad: { status: 'idle', scopeKey: null, error: null },
   saving: false,
   error: null,
   isPanelOpen: false,
@@ -564,16 +578,26 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
   meetingProjectImportRequestId: 0,
 
   loadRecords: async (workspaceId, boardId) => {
-    set({ loading: true, error: null });
+    const scopeKey = createRecordScopeKey(workspaceId, boardId);
+    const requestId = ++recordListRequestSequence;
+    set({ records: [], recordListLoad: { status: 'loading', scopeKey, error: null } });
     try {
       const records = await recordService.listByProject(workspaceId, boardId);
-      set({ records, loading: false });
+      if (requestId !== recordListRequestSequence) return;
+      set({ records, recordListLoad: { status: 'ready', scopeKey, error: null } });
     } catch (error) {
-      set({
-        loading: false,
+      if (requestId !== recordListRequestSequence) return;
+      set({ records: [], recordListLoad: {
+        status: 'error',
+        scopeKey,
         error: error instanceof Error ? error.message : String(error),
-      });
+      } });
     }
+  },
+
+  resetRecordList: () => {
+    recordListRequestSequence += 1;
+    set({ records: [], recordListLoad: { status: 'idle', scopeKey: null, error: null } });
   },
 
   openPanel: () => set({ isPanelOpen: true, isPanelCollapsed: false }),
@@ -1527,7 +1551,10 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
     meetingDraftRecovery: { ...state.meetingDraftRecovery, ...updates },
   })),
 
-  restoreMeetingDraftSnapshot: (snapshot) => set({
+  restoreMeetingDraftSnapshot: (snapshot) => {
+    const { currentView, setView } = useBoardStore.getState();
+    if (!isMeetingContinuityView(currentView)) setView('board');
+    set({
     isPanelOpen: true,
     isPanelCollapsed: false,
     isTaskSelectionMode: false,
@@ -1559,7 +1586,8 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
     meetingProjectImportMessage: null,
     meetingProjectImportRequestId: get().meetingProjectImportRequestId + 1,
     contentFocusPending: false,
-  }),
+    });
+  },
 
   requestMeetingDraftRecoveryClear: () => set(state => ({
     meetingDraftRecoveryClearToken: state.meetingDraftRecoveryClearToken + 1,

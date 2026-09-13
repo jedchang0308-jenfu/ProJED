@@ -1,12 +1,123 @@
 # SPEC-045: 行事曆訂閱逐看板篩選器與即時預覽
 
-關聯 DEV：DEV-045
+關聯 DEV：DEV-045、DEV-118
 父交付點：DEV-037 行事曆訂閱來源範圍清晰化 / DEV-039 任務過濾器核心與全域任務平台
 關聯 ADR：`ai-doc/decisions/ADR-038-calendar-subscription-per-board-filter-snapshot.md`
-任務類型：Calendar subscription v3 / Per-board filter snapshot / External link safety
-狀態：Phase 1-2 Local Implemented / Automated QA-QC Passed / Former v2 Remote Gate Superseded and Frozen / Phase 3-4 Release Gate Required
+任務類型：Calendar subscription v3 production baseline / v4 target / Per-board filter snapshot / External link safety
+狀態：Phase 1-2 Local Implemented / Automated QA-QC Passed / v3 Production Baseline Preserved / DEV-118 v4 Local Candidate QA-QC PASS + NOT RELEASED / Authenticated DB and release gate pending
 建立日期：2026-07-06
-重大修訂：2026-07-12
+重大修訂：2026-07-12；DEV-118 compatibility addendum：2026-09-11
+
+## DEV-118 Compatibility Addendum - 2026-09-11
+
+文件狀態：`RD Implementation Ready / 架構定案：已定案 / Local Candidate QA-QC PASS / NOT RELEASED`
+
+Architecture Closure Review：`PASS / 2026-09-11 / P0-P1 unresolved blockers = 0`
+
+本節只治理 Calendar subscription 的 snapshot、permission、DB validator、Edge adapter與
+preview／feed相容性。`SPEC-039` DEV-118是`TaskFilterQuery`與match semantics authority；
+`QA-DEV-118`是完整驗證authority。既有v1～v3 rows與live feed仍是production baseline。
+
+### Target Snapshot
+
+使用者建立新訂閱，或開啟既有訂閱、確認preview並儲存後，target payload為：
+
+```ts
+type CalendarSubscriptionV4Filters = {
+  version: 4;
+  v4_scope_type: 'per_board_filter_snapshot';
+  workspace_ids: string[];
+  project_ids: string[];
+  board_filters: Record<string, {
+    included: boolean;
+    date_types: Array<'start_date' | 'due_date'>;
+    filters: TaskFilterQuery;
+  }>;
+};
+```
+
+- `project_ids`／`board_filters` key-set、included、date types、board isolation與event identity沿用v3。
+- safe default為status／date／tag／keyword不限，people只選目前使用者，因此people badge=1。
+- active count只計SPEC-039的五個query groups；included、date types與board selector不計。
+- Calendar wrapper持有draft、copy、permission、preview與save；shared controls不得寫subscription row。
+
+### Permission Boundary
+
+people只有 `ids=[currentUserId] && includeUnassigned=false` 可沿用member own-task scope。
+people不限、包含未指派或含其他identity都屬broad scope，included的每張board均須manage permission。
+
+前端disabled／hidden不是安全邊界；DB validation與每次feed request仍須重查owner active membership、
+board read與必要manage permission。public／anon不得execute validation helper。
+
+### Read, Upgrade and Failure Contract
+
+- v1～v3持續defensive read且不background rewrite。Builder只materialize local v4 draft；
+  未儲存前0 row write、0 token mutation。
+- v1～v3→v4使用SPEC-039唯一converter，保留included／date types／board aliases與permission。
+  現行v3 Edge type漏掉overdue，因此v3 overdue feed不是正確identity baseline；target evidence須明列修正差異。
+- save沿既有row update transaction原子替換`filters_json`為v4；失敗保留draft。
+- App不得在target DB validator與Edge均支援v4前寫入／發布v4。
+- source partial、legacy conversion不完整、payload invalid、permission不足或version不一致時，
+  disable save／generate並保留最短可恢復錯誤；不得fallback unrestricted或宣稱完整。
+
+### Frozen App, DB and Edge Boundary
+
+Closure以branch `持續優化3`、HEAD
+`522e92318d1da05cd06e19604656f3b35fe9e3e9`的builder、filters service／types、
+v2／v3 SQL validator與`calendar-feed/index.ts`為repo facts。現行production仍只支援v1～v3。
+
+| Layer | Target |
+|---|---|
+| Types | `database.types.ts`定義v1／v2／v3／v4 discriminated union；v1～v3持有legacy shape，v4持有`TaskFilterQuery`，不得混成optional-field bag。 |
+| Materializer | `src/features/calendarSubscriptions/filters.ts`是唯一v1～v3→v4 draft converter；重複執行結果相同。 |
+| Builder | `CalendarSubscriptionBuilderPreview.tsx`持有v4 draft，以browser compiler preview；每board compile一次；`TaskConditionFilterControls`回傳完整query，wrapper再守住permission。 |
+| Service | `calendarSubscriptionService.ts` strict normalize v4並保留v1～v3 read；create／update只接受已驗證v4。 |
+| SQL | CLI產生forward-only DEV-118 migration；新增v4 filter／snapshot validators，dispatcher接受1～4，保留v1～v3 helpers與authenticated-only grants，0 row rewrite。 |
+| Edge | 新增`calendar-feed/taskFilterV4.ts` pure snake_case row adapter；`index.ts`只做version dispatch、permission、candidate prefilter與event projection。 |
+
+#### Strict DB Contract
+
+- top-level exact含`version=4`、scope marker、非空workspace／project IDs與`board_filters`；
+  unknown keys、mixed markers與unknown version一律拒絕。
+- 去重後的project IDs必須與board keys exact相等；workspace relation、read permission、
+  至少一張included board與included date type沿用v3 invariants。
+- query exact含statuses、due、people、tagIds、keyword；status不得重複，days只允許null或0～365整數，
+  IDs為去重非空字串，people IDs須是active member UUID，keyword最長200字。DB不替client補default。
+- broad scope依上節公式逐included board檢查manage permission。
+- helpers固定`search_path`、exception fail false；execute只給authenticated。
+
+#### Edge State Machine
+
+1. 依version＋scope marker strict dispatch；unknown／mixed回受控失敗，不fallback v1 unrestricted。
+2. v1～v3走既有matcher；未save v4 draft不影響公開token。
+3. v4 request只解析一次Taipei today，重查membership與per-board permission，再建立candidate query。
+4. people／tag union prefilter只可多取，不可漏取；最終逐board `taskFilterV4` matcher才是truth。
+5. matched task依該board `date_types`投影event；parity identity為`task ID + date type`。
+6. source、permission或normalization未知一律fail closed；不得以partial 200回應完整feed。
+
+v4 Edge matcher與browser compiler共同讀取
+`scripts/fixtures/dev-118-task-filter-conformance.json`。允許差異只有row shape adapter與
+permission／source取得，不允許filter truth漂移。
+
+### Implementation and Release Order
+
+只在SPEC-039 WP-118-A～D通過後進入WP-118-E：types／materializer／service → SQL source →
+Edge adapter／parity。不可先讓builder emit v4再補remote support。
+
+Local DB gate在disposable transaction套用migration並rollback；service-role只建fixture，
+permission assertions使用authenticated actors。正式順序固定為DB apply/readback → Edge deploy/smoke →
+app artifact publish；實際commands、rollback與production smoke只由未來release gate產生。
+
+### Acceptance and Stop
+
+- v1～v3未save前row與token不變；v3 overdue完成corrective parity且差異有evidence。
+- v4 client／DB／Edge皆strict；member own-only允許，broad scope逐board要求manage，撤權後停止輸出。
+- v4 preview與feed的task ID＋date type一致，並與Board／Workbench matched truth一致。
+- Calendar正常入口、loading／partial／disabled、keyboard／focus與目標viewports符合`QA-DEV-118`。
+- exact cases、commands與evidence只查`QA-DEV-118`，不在本節複製。
+
+若需移除v1～v3 read、background rewrite正式rows、放寬permission、讓preview／feed使用不同truth，
+或在remote未支援v4前發布app，立即停止並回送規劃／release gate。
 
 ## 變更摘要
 

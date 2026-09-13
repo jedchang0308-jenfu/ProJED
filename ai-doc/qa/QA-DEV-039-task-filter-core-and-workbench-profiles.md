@@ -1,5 +1,9 @@
 # QA-DEV-039: 任務過濾器核心與全域任務平台兩欄篩選驗證計畫
 
+> DEV-118 Target Supersession - 2026-09-11：本文件既有v4／Phase 1～2結果保留為歷史與回歸證據；
+> 正向包含v5 query、shared Board／Workbench／Calendar controls、v4→v5 migration與Calendar v4的新candidate
+> 必須依`QA-DEV-118-task-filter-positive-inclusion-and-shared-controls.md`驗證，不得以本文件舊PASS替代。
+
 關聯 DEV：DEV-039、DEV-090
 關聯 SPEC：`ai-doc/specs/SPEC-039-task-filter-core-and-workbench-profiles.md`
 狀態：Phase 1/1A QA Passed / Phase 1B QA Passed / Phase 1C QA Passed / Phase 2 Cross-Board Source Slice QA Passed / Phase 2A Drag Trigger Parity QA Passed / Phase 2B Release Gate Passed / Authenticated Smoke Pending / Local Automated QC Passed / DEV-090 Board-filter Follow-up Superseded by QA-DEV-090

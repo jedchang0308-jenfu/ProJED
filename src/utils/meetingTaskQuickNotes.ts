@@ -65,6 +65,21 @@ export type MeetingTaskQuickNoteProjection = MeetingTaskQuickNoteEntry & {
   archived: boolean;
 };
 
+export type GoalRecordScope = Readonly<{
+  workspaceId: string;
+  boardId: string;
+}>;
+
+export type LatestMeetingTaskQuickNoteIndex = Readonly<{
+  latestByTaskId: ReadonlyMap<string, MeetingTaskQuickNoteProjection>;
+  invalidRecordIds: readonly string[];
+}>;
+
+export type MeetingTaskQuickNoteIndex = Readonly<{
+  byTaskId: ReadonlyMap<string, readonly MeetingTaskQuickNoteProjection[]>;
+  invalidRecordIds: readonly string[];
+}>;
+
 const isObject = (value: unknown): value is Record<string, unknown> => (
   typeof value === 'object' && value !== null && !Array.isArray(value)
 );
@@ -327,6 +342,87 @@ export const projectMeetingTaskQuickNotes = (
     || left.recordId.localeCompare(right.recordId)
     || left.id.localeCompare(right.id)
   ));
+};
+
+/** Project every valid note per task for an exact workspace × board scope. */
+export const projectMeetingTaskQuickNotesByTask = (
+  records: readonly (MeetingTaskQuickNoteRecordLike & {
+    type?: string;
+    workspaceId?: string;
+    boardId?: string;
+  })[],
+  scope: GoalRecordScope,
+): MeetingTaskQuickNoteIndex => {
+  const byTaskId = new Map<string, MeetingTaskQuickNoteProjection[]>();
+  const invalidRecordIds = new Set<string>();
+  records.forEach(record => {
+    const recordId = record.id;
+    if (!recordId || record.type !== 'meeting' || record.workspaceId !== scope.workspaceId || record.boardId !== scope.boardId || record.status === 'archived') return;
+    const parsed = parseMeetingTaskQuickNotesMetadata(record.metadata);
+    if (parsed.status === 'empty') return;
+    if (parsed.status === 'invalid' || !record.content) {
+      invalidRecordIds.add(recordId);
+      return;
+    }
+    const candidates = parseMeetingTaskDiscussionCandidates(record.content);
+    const byAnchor = new Map<string, MeetingTaskDiscussionCandidate[]>();
+    candidates.forEach(candidate => {
+      const key = `${candidate.lineIndex}|${candidate.sourceToken}|${candidate.taskId}|${candidate.text}`;
+      const bucket = byAnchor.get(key) ?? [];
+      bucket.push(candidate);
+      byAnchor.set(key, bucket);
+    });
+    const projections: MeetingTaskQuickNoteProjection[] = [];
+    let aggregateValid = true;
+    parsed.namespace.entries.forEach(entry => {
+      const key = `${entry.anchor.lineIndex}|${entry.anchor.sourceToken}|${entry.taskId}|${entry.text}`;
+      const matches = byAnchor.get(key) ?? [];
+      if (matches.length !== 1) {
+        aggregateValid = false;
+        return;
+      }
+      projections.push({
+        ...entry,
+        text: matches[0].text,
+        recordId,
+        recordStatus: record.status,
+        archived: false,
+      });
+    });
+    if (!aggregateValid) {
+      invalidRecordIds.add(recordId);
+      return;
+    }
+    projections.forEach(projection => {
+      const taskEntries = byTaskId.get(projection.taskId) ?? [];
+      taskEntries.push(projection);
+      byTaskId.set(projection.taskId, taskEntries);
+    });
+  });
+  byTaskId.forEach(entries => entries.sort((left, right) => (
+    left.occurredAt - right.occurredAt
+    || left.recordId.localeCompare(right.recordId)
+    || left.id.localeCompare(right.id)
+  )));
+  return { byTaskId, invalidRecordIds: Array.from(invalidRecordIds).sort() };
+};
+
+/** Project only the latest valid note per task for an exact workspace × board scope. */
+export const projectLatestMeetingTaskQuickNotesByTask = (
+  records: readonly (MeetingTaskQuickNoteRecordLike & {
+    type?: string;
+    workspaceId?: string;
+    boardId?: string;
+  })[],
+  scope: GoalRecordScope,
+): LatestMeetingTaskQuickNoteIndex => {
+  const all = projectMeetingTaskQuickNotesByTask(records, scope);
+  const latestByTaskId = new Map<string, MeetingTaskQuickNoteProjection>();
+  all.byTaskId.forEach((entries, taskId) => {
+    const latest = entries[entries.length - 1];
+    if (latest) latestByTaskId.set(taskId, latest);
+  });
+  return { latestByTaskId, invalidRecordIds: all.invalidRecordIds };
 };
 
 export const createMeetingTaskQuickNoteId = () => {

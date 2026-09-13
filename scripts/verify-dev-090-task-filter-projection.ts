@@ -60,7 +60,7 @@ check('S04 default projection matches every effectively visible board identity',
 });
 
 check('S04 matched descendant retains legal context ancestors without inflating match count', () => {
-  const filters = { ...createDefaultTaskFilters(), selectedAssigneeIds: ['target'] };
+  const filters = { ...createDefaultTaskFilters(), people: { ids: ['target'], includeUnassigned: false } };
   const projection = projectTaskFilterResults(nodes, filters, { boardId: 'board-1' });
   const snapshot = snapshotTaskFilterProjectionIdentities(projection, nodes);
   assert.deepEqual(snapshot.matchedTaskIds, ['grandchild-match']);
@@ -80,7 +80,7 @@ check('S04 archived, orphan, cyclic and cross-board identities never leak into t
 
 check('S04 ordered identity snapshots are stable across object insertion order', () => {
   const reversed = Object.fromEntries([...fixtureEntries].reverse());
-  const filters = { ...createDefaultTaskFilters(), selectedAssigneeIds: ['target'] };
+  const filters = { ...createDefaultTaskFilters(), people: { ids: ['target'], includeUnassigned: false } };
   const first = projectTaskFilterResults(nodes, filters, { boardId: 'board-1' });
   const second = projectTaskFilterResults(reversed, filters, { boardId: 'board-1' });
   assert.deepEqual(

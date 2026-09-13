@@ -57,6 +57,8 @@ const store = readFileSync('src/store/useRecordStore.ts', 'utf8');
 const backend = readFileSync('src/services/dataBackend.ts', 'utf8');
 assert('task detail uses persistent quick-note section', modal.includes('TaskMeetingQuickNoteSection') && section.includes('data-task-meeting-quick-notes'));
 assert('meeting quick-note history stays outside meeting composer condition', modal.includes('meetingQuickNotes.entries') && section.includes("if (!isMeetingMode && entries.length === 0 && !error) return null"));
+assert('meeting quick-note history has one bounded Y-scroll container outside the composer', section.includes('data-task-meeting-history-scroll="true"') && section.includes('TASK_MEETING_HISTORY_MAX_HEIGHT_PX = 200') && section.includes('overflow-y-auto') && section.includes('scrollbar-thin') && section.includes('data-task-meeting-quick-notes-composer'));
+assert('expanded quick-note history does not render a collapse action', section.includes('onClick={() => setExpanded(true)}') && !section.includes("'收合'"));
 assert('store append uses explicit transaction result', store.includes("status: 'appended'" ) && store.includes('appendMeetingTaskQuickNoteMetadata'));
 assert('task loader requests archived records', hook.includes('includeArchived: true') && backend.includes('options: { includeArchived?: boolean }'));
 assert('legacy blue meeting composer is removed', !modal.includes('MessageSquareText') && !modal.includes('本次會議'));

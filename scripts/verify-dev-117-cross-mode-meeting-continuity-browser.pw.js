@@ -30,8 +30,9 @@ async (page) => {
     mindmap: '[data-mindmap-view]',
     gantt: '[data-mobile-pan-surface="gantt"]',
     calendar: '[data-task-date-empty-hint="calendar"], [data-calendar-task-segment="true"], button[title="上個月"]',
+    goal: '[data-goal-view="true"]',
   };
-  const VIEWS = ['board', 'list', 'mindmap', 'gantt', 'calendar'];
+  const VIEWS = ['board', 'list', 'mindmap', 'gantt', 'calendar', 'goal'];
 
   const seed = async (view = 'board', width = 1440) => {
     const activeMeeting = page.locator('[data-active-record-kind="meeting"]');
@@ -127,7 +128,7 @@ async (page) => {
       await trigger.click();
       const activeItem = page.locator(`[data-mode-switcher-value="${view}"]`);
       assert(await activeItem.getAttribute('aria-checked') === 'true', 'meeting start must preserve view', { view });
-      await page.locator('[data-mode-switcher-close]').click();
+      await page.keyboard.press('Escape');
       assert(await page.locator('[data-record-composer-shell]').count() === 1, 'one meeting sidebar must remain mounted', { view });
       await page.screenshot({ path: `${OUTPUT_DIR}/V01-${view}.png`, fullPage: false });
       results[view] = { preserved: true, modeSwitcherEnabled: true, probe };
@@ -135,13 +136,13 @@ async (page) => {
     return results;
   });
 
-  await runCase('B02', 'live meeting can switch board to list to mindmap to gantt to calendar and back without restart', async () => {
+  await runCase('B02', 'live meeting can switch across all six task projections and back without restart', async () => {
     await seed('board');
     await startMeeting();
     const title = page.locator('[data-record-title-input]');
     await title.fill('DEV117-CONTINUITY-TITLE');
     const initialProbe = await meetingProbe();
-    const sequence = ['list', 'mindmap', 'gantt', 'calendar', 'board'];
+    const sequence = ['list', 'mindmap', 'gantt', 'calendar', 'goal', 'board'];
     const observed = [];
     for (const view of sequence) {
       await switchView(view);
@@ -170,7 +171,7 @@ async (page) => {
   });
 
   await runCase('B04', 'rapid repeated switching does not close, save, restart, or duplicate the meeting', async () => {
-    const sequence = ['board', 'list', 'board', 'list', 'mindmap', 'mindmap', 'gantt', 'calendar', 'board'];
+    const sequence = ['board', 'list', 'goal', 'board', 'list', 'mindmap', 'mindmap', 'gantt', 'calendar', 'goal', 'board'];
     const beforeProbe = await meetingProbe();
     for (const view of sequence) await switchView(view);
     const afterProbe = await meetingProbe();

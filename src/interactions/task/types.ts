@@ -1,4 +1,4 @@
-export type TaskHostMode = 'list' | 'mindmap' | 'board' | 'gantt' | 'calendar';
+export type TaskHostMode = 'list' | 'mindmap' | 'board' | 'goal' | 'gantt' | 'calendar';
 
 export type TaskInteractionOrigin =
   | 'mode-primary'
@@ -27,6 +27,7 @@ export type TaskInteractionSurfaceId =
   | 'board.column-header'
   | 'board.card'
   | 'board.checklist-row'
+  | 'goal.row'
   | 'gantt.task-bar'
   | 'shared-task-sidebar.row'
   | 'calendar.segment'

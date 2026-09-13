@@ -3,13 +3,10 @@ import React, { useState } from 'react';
 import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
 import { WbsNodeItem } from './WbsNodeItem';
-import { Button } from '../ui/Button';
-import { Plus, GitBranch, Link, X, Edit2, ArrowRight, Trash2 } from 'lucide-react';
-import type { TaskNode, TaskStatus } from '../../types';
+import type { TaskNode } from '../../types';
 import useDialogStore from '../../store/useDialogStore';
 import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core';
 import { useDragSensors } from '../../hooks/useDragSensors';
-import { ViewToolbar } from '../ui/ViewToolbar';
 import { compactClassNames } from '../ui/compactTokens';
 import { projectTaskFilterResults } from '../../features/taskFilters';
 import { useTaskFilterStore } from '../../store/useTaskFilterStore';
@@ -239,17 +236,6 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
         
 
         {/* 依賴選單 Modal 已經移除，統一由右鍵選單進入選取模式 */}
-
-      <ViewToolbar
-        rightControls={(
-        <div className="flex items-center gap-[8px] shrink-0">
-          <Button onClick={handleCreateRootNode} disabled={!canCreateTask} size="none" className="flex h-[30px] items-center gap-1.5 shrink-0 px-[10px] py-[5px] text-xs font-semibold">
-            <Plus size={18} />
-            <span>新增頂層任務</span>
-          </Button>
-        </div>
-        )}
-      />
 
       <div className={`flex-1 flex flex-col min-h-0 ${compactClassNames.canvas}`}>
 

@@ -470,13 +470,15 @@ async (page) => {
     await filterPanel.waitFor({ state: 'visible', timeout: 10000 });
     await filterPanel.getByRole('button', { name: /進行中/ }).click({ force: true });
     await page.waitForFunction(() => (
-      document.querySelectorAll('[data-task-workbench-placed-task-card="true"][data-task-id="dev039-placement-card-a"]').length === 0
+      document.querySelectorAll('[data-task-workbench-placed-task-card="true"][data-task-id="dev039-placement-card-a"]').length === 1
+      && !Array.from(document.querySelectorAll('[data-task-workbench-placed-task-card="true"]'))
+        .some(card => card.textContent?.includes('臨時拜訪客戶'))
     ), null, { timeout: 10000 }).catch(async (error) => {
       const filterDiagnostics = await page.evaluate(() => {
         const panel = document.querySelector('[data-task-workbench-filter-panel="true"]');
         return {
           selectedBoardId: panel?.querySelector('select')?.value || null,
-          prefs: localStorage.getItem('projed-task-workbench-filters:v1'),
+          prefs: localStorage.getItem('projed-task-workbench-filters:v5:account:local-test-user'),
           statusButtons: Array.from(panel?.querySelectorAll('button') || []).map(button => ({
             text: (button.textContent || '').trim(),
             pressed: button.getAttribute('aria-pressed'),
@@ -494,11 +496,15 @@ async (page) => {
           })),
         };
       });
-      throw new Error(`placed board filter did not hide in-progress task: ${error.message}: ${JSON.stringify(filterDiagnostics)}`);
+      throw new Error(`positive-inclusion filter did not keep only in-progress placed tasks: ${error.message}: ${JSON.stringify(filterDiagnostics)}`);
     });
     assert(
-      await workbenchPanel.locator('[data-task-workbench-placed-task-card="true"][data-task-id="dev039-placement-card-a"]').count() === 0,
-      'placed board lane should respond to board filters',
+      await workbenchPanel.locator('[data-task-workbench-placed-task-card="true"][data-task-id="dev039-placement-card-a"]').count() === 1,
+      'placed board lane should positively include the selected in-progress status',
+    );
+    assert(
+      await workbenchPanel.locator('[data-task-workbench-placed-task-card="true"]').filter({ hasText: '臨時拜訪客戶' }).count() === 0,
+      'placed board lane should exclude unselected task statuses',
     );
     assert(
       await workbenchPanel.locator('[data-task-workbench-unplaced-task-card="true"]').filter({ hasText: '尚未歸位的採購提醒' }).count() === 1,

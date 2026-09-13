@@ -1,5 +1,6 @@
 import type { TaskStatus } from '../../types';
 import { normalizeManualTaskStatus, type ManualTaskStatus } from '../../utils/taskStatus';
+import { taskFilterChoiceBaseClass } from './taskConditionFilterStyles';
 
 /**
  * 四種人工狀態只使用深灰、藍、淺灰三個視覺角色；逾期另由截止日使用橘紅色。
@@ -41,7 +42,7 @@ const inactiveStatusFilterClass: Record<ManualTaskStatus, string> = {
 };
 
 export const getTaskStatusFilterChipClass = (status: ManualTaskStatus, active: boolean) =>
-  `inline-flex h-7 items-center rounded-full border px-2.5 text-xs font-semibold transition-colors ${
+  `${taskFilterChoiceBaseClass} ${
     active
       ? `${activeStatusFilterClass[status]} ring-1`
       : inactiveStatusFilterClass[status]

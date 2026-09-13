@@ -1,4 +1,4 @@
-# QA-DEV-117：會議紀錄五模式不中斷驗證計畫
+# QA-DEV-117：會議紀錄六模式不中斷驗證計畫
 
 - 狀態：`Executed / Targeted QC PASS / Legacy DEV-106 browser contract exception / NOT RELEASED`
 - 日期：2026-09-10
@@ -23,7 +23,7 @@ Fixture 只建立案例前提：
 
 - account：`local-test-user`／owner。
 - 一個 workspace、一個 active board，至少含 L1／L2／L3 任務、日期、狀態、說明與一筆可修改備註。
-- 五個 views 都有可辨識的 task projection；Calendar 使用有日期任務。
+- 六個 views 都有可辨識的 task projection；Calendar 使用有日期任務。
 - 開始會議後產生的 draft、quick note、capture aggregate 必須由案例的 UI 操作建立，不能 seed 完成結果。
 
 每次 browser evidence 記錄：source revision／dirty boundary、artifact path、browser exact version、route、actor、
@@ -35,12 +35,12 @@ cleanup condition 與 port released 結果。
 | 失效模式 | 可能原因 | 使用者影響 | 偵測方式 | 優先級 | 對策／建議測試 |
 |---|---|---|---|---|---|
 | meeting 中仍無法開 ModeSwitcher | disabled predicate 仍含 `isMeetingMode` | 無法跨模式 | B02＋source assertion | P0 | 逐模式檢查 enabled／ARIA |
-| 開始 meeting 強制跳 Board | store 保留 unconditional `setView('board')` | 原工作上下文中斷 | B01 五起點 | P1 | pure policy＋UI route |
+| 開始 meeting 強制跳 Board | store 保留 unconditional `setView('board')` | 原工作上下文中斷 | B01 六起點 | P1 | pure policy＋UI route |
 | 切 view 關閉或重建 session | navigation 誤走 exit／start | 草稿或會議脈絡斷裂 | B02 state probe | P0 | 比對 draft／segment identity |
 | 快速切換造成重複 capture | view remount／async completion 重送 | 會議紀錄污染 | B04、B05 | P0 | sequence＋mutation count |
 | local recovery 被清除 | switch 誤觸 guard／clear token | crash 後無法恢復 | B03、R02 | P0 | token／snapshot readback |
 | 某 view 另走非 canonical mutation | presenter 自行 persistence | 修改漏記或先記後存 | B05＋DEV-109 regression | P1 | persistence-confirmed failure/success pair |
-| reservation 洩漏到非 Board | meeting state 被全域套入 menu/presenter | 不一致入口、誤改 metadata | B06 | P1 | 四 view＋Task Details negative |
+| reservation 洩漏到非 Board | meeting state 被全域套入 menu/presenter | 不一致入口、誤改 metadata | B06 | P1 | 五 view＋Task Details negative |
 | transient selection 被誤放行 | meeting lock 移除時一併移除 selection lock | 點擊落到錯誤任務 | B07 | P1 | dependency／record selection pair |
 | sidebar／topbar 遮擋 view | drawer reserve／viewport 回歸 | 無法閱讀或操作 | V01～V03 | P1 | 1440／1024／200% rendered QC |
 | visible error 或資料歸零被測試忽略 | 只看 assertion／direct state | false pass | 全 browser cases | P0 | visible-error＋data sanity hard gate |
@@ -49,7 +49,7 @@ cleanup condition 與 port released 結果。
 
 | ID | Case | Expected |
 |---|---|---|
-| P01 | store-local continuity policy（DEV-117 frozen candidate） | 五個positive；其他ViewMode不屬continuity；meeting start只有一份policy |
+| P01 | store-local continuity policy（current candidate） | 六個positive；其他ViewMode不屬continuity；meeting start只有一份policy |
 | P02 | start meeting | continuity view 不 set Board；non-continuity view 才 fallback Board |
 | P03 | switch disabled predicate | dependency／task-selection=true 時 disabled；meeting-only 時 enabled |
 | P04 | protected lifecycle（DEV-117 frozen candidate） | view handler不含guard、flush、save、close、exit、start；recovery/capture files不變 |
@@ -57,15 +57,15 @@ cleanup condition 與 port released 結果。
 | P06 | reservation boundary | DEV-105 surface allowlist與非 Board negatives維持 |
 | P07 | no platform changes | schema／migration／provider／dependencies 無 DEV-117 diff |
 
-DEV-116 compatibility addendum（`NOT EXECUTED`，不回寫本文件既有 Targeted QC PASS）：DEV-116 實作時由
-`QA-DEV-116` 驗證store-private set＋exported predicate唯一性、goal predicate=false、start fallback Board、live options DOM=0，以及
-persisted goal restore前Board且snapshot identity不變；完成後再以新的 source revision 附加回歸證據。
+DEV-116 continuity amendment（`Intentional replacement / Re-test required`）：`QA-DEV-116`與本文件改驗
+store-private set＋exported predicate唯一性、goal predicate=true、goal start/recovery保留原view與live option可用；
+新revision證據寫入既有 DEV-116／117 artifact目錄，不覆寫歷史文字結論。
 
 ## 5. Browser Delivery-path Cases
 
-### B01 五種起點開始會議
+### B01 六種起點開始會議
 
-分別從 Board、List、Mindmap、Gantt、Calendar：
+分別從 Board、List、Mindmap、Gantt、Calendar、Goal：
 
 1. 以 ModeSwitcher 進入目標 view。
 2. 點正常 topbar `新增會議記錄`。
@@ -74,7 +74,7 @@ persisted goal restore前Board且snapshot identity不變；完成後再以新的
 
 ### B02 單一會議完整切換序列
 
-在同一 draft 依序執行 `board → list → mindmap → gantt → calendar → board`。每一步斷言：
+在同一 draft 依序執行 `board → list → mindmap → gantt → calendar → goal → board`。每一步斷言：
 
 - target view 的 ready selector 可見。
 - draft ID、segment ID、`isMeetingMode`、workflow、content、panel state 不因 switch 改變。
@@ -96,14 +96,14 @@ persisted goal restore前Board且snapshot identity不變；完成後再以新的
 
 ### B05 各 view 的 canonical task path
 
-五 views 各自驗證可由既有入口開啟 Task Details，並在 active meeting 加入一筆 DEV-108 人工補記；
+六 views 各自驗證可由既有入口開啟 Task Details，並在 active meeting 加入一筆 DEV-108 人工補記；
 每筆應直接、exactly once 進入同一 meeting draft，切換後仍可見，不等待 task persistence。
 
 DEV-109 live capture 另選三種具有不同 persistence owner 的代表性 task mutation：Board 狀態、Gantt 日期，
 以及從任一非 Board view 開啟 Task Details 後保存任務備註。三者都做 success；另對共用 canonical
 persistence path 做一次 failure/readback negative：
 
-- failure 不 capture；三個 success 在同一 segment 各 exactly once；五個 quick note 都留在同一 draft。
+- failure 不 capture；三個 success 在同一 segment 各 exactly once；六個 quick note 都留在同一 draft。
 - 純位置／排序仍為 0 capture。
 - Task Details 的人工會議補記加入同一 draft，關閉／重開 details 後持續可見。
 
@@ -112,7 +112,7 @@ persistence path 做一次 failure/readback negative：
 ### B06 Board-only reservation negative
 
 - Board L1／L2／L3 仍可依 DEV-105 設定／顯示 reservation。
-- List／Mindmap／Gantt／Calendar／Task Details：reservation action、editor、mark 均為 0。
+- List／Mindmap／Gantt／Calendar／Goal／Task Details：reservation action、editor、mark 均為 0。
 - 切回 Board 後原值仍存在且不重複。
 
 ### B07 Transient owner
@@ -137,7 +137,7 @@ persistence path 做一次 failure/readback negative：
 
 | ID | Viewport／狀態 | Expected evidence |
 |---|---|---|
-| V01 | 1440×900，panel open，五 views | topbar、view、RecordSidebar 無遮擋／overflow；每 view screenshot |
+| V01 | 1440×900，panel open，六 views | topbar、view、RecordSidebar 無遮擋／overflow；每 view screenshot |
 | V02 | 1024×768，panel open＋collapsed | 主物件與 mode control 可達；無雙重捲動／文字截斷 |
 | V03 | 200% zoom | ModeSwitcher portal、sidebar、editor 可操作；無非預期水平 overflow |
 | V04 | keyboard | trigger、menuitemradio、Escape、focus return、visible focus 通過 |
@@ -191,8 +191,8 @@ browser QA 啟動前先記錄 project=`ProJED`、purpose=`DEV-117 local browser 
 
 `Executed / Targeted QC PASS / NOT RELEASED`（2026-09-10）。
 
-- DEV-117 static：PASS，17 assertions；artifact：`output/playwright/dev-117-meeting-continuity/static-result.json`。
-- DEV-117 browser：PASS；B01 五種起點、B02 完整切換序列、B03 panel／draft、B04 rapid switch、B05 五模式
+- DEV-117 static：PASS，21 assertions；artifact：`output/playwright/dev-117-meeting-continuity/static-result.json`。
+- DEV-117 browser：PASS；B01 六種起點、B02 完整切換序列、B03 panel／draft、B04 rapid switch、B05 六模式
   Task Details quick note、B06 mobile-negative、B07 error sweep，以及 V01、V02、V03 均通過；artifact：
   `output/playwright/dev-117-meeting-continuity/result.json`，screenshots 同目錄。
   Browser：Playwright `1.63.0`，route=`http://localhost:4000/`，actor=`dev117-browser-user`（owner），fixture：
@@ -211,3 +211,6 @@ browser QA 啟動前先記錄 project=`ProJED`、purpose=`DEV-117 local browser 
   test-contract maintenance，不修改 DEV-117 的 session／view 邊界。
 
 QC conclusion：DEV-117 frozen acceptance 的產品範圍已驗證完成；未執行 release、deploy、commit 或正式資料操作。
+
+2026-09-10 goal continuity amendment：Targeted QC PASS。Goal已納入B01正常入口、B02六模式sequence、B04 rapid
+switch與B05 Task Details quick note；draft／workflow／composer identity維持，diagnostics與HTTP failures為0。

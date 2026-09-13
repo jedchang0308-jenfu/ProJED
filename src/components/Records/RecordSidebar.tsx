@@ -3,7 +3,7 @@ import dayjs from 'dayjs';
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, FileText, Loader2, LogOut, MoreHorizontal, PenLine, Plus, Save, Send, SendHorizontal, Sparkles, Trash2, X } from 'lucide-react';
 import useAuthStore from '../../store/useAuthStore';
 import useBoardStore from '../../store/useBoardStore';
-import useRecordStore from '../../store/useRecordStore';
+import useRecordStore, { createRecordScopeKey } from '../../store/useRecordStore';
 import { useMemberStore } from '../../store/useMemberStore';
 import { useTagStore } from '../../store/useTagStore';
 import { useWbsStore } from '../../store/useWbsStore';
@@ -623,7 +623,8 @@ const RecordSidebar: React.FC = () => {
   const [meetingSaveFeedback, setMeetingSaveFeedback] = React.useState<'saving' | 'saved' | 'error' | null>(null);
   const records = useRecordStore(state => state.records);
   const draft = useRecordStore(state => state.draft);
-  const loading = useRecordStore(state => state.loading);
+  const recordListLoad = useRecordStore(state => state.recordListLoad);
+  const loadRecords = useRecordStore(state => state.loadRecords);
   const saving = useRecordStore(state => state.saving);
   const error = useRecordStore(state => state.error);
   const isPanelOpen = useRecordStore(state => state.isPanelOpen);
@@ -656,6 +657,15 @@ const RecordSidebar: React.FC = () => {
   const synthesizeMeetingDraft = useRecordStore(state => state.synthesizeMeetingDraft);
   const saveDraft = useRecordStore(state => state.saveDraft);
   const archiveRecord = useRecordStore(state => state.archiveRecord);
+  const recordScopeKey = activeWorkspaceId && activeBoardId ? createRecordScopeKey(activeWorkspaceId, activeBoardId) : null;
+  const recordsLoading = recordListLoad.status === 'loading' && recordListLoad.scopeKey === recordScopeKey;
+  const recordsLoadError = recordListLoad.status === 'error' && recordListLoad.scopeKey === recordScopeKey
+    ? recordListLoad.error
+    : null;
+  const scopedRecords = React.useMemo(
+    () => recordScopeKey && recordListLoad.scopeKey === recordScopeKey ? records : [],
+    [recordListLoad.scopeKey, recordScopeKey, records],
+  );
   const meetingSynthesisTrace = getMeetingSynthesisTrace(draft?.metadata);
   const meetingSynthesisUsedRules = isRuleBasedSynthesisProvider(meetingSynthesisProvider);
   const activitySummaryResolvers = React.useMemo(() => ({
@@ -671,7 +681,7 @@ const RecordSidebar: React.FC = () => {
   React.useEffect(() => {
     const handleOpenRecord = (event: Event) => {
       const detail = (event as CustomEvent<{ recordId?: string }>).detail;
-      const record = records.find(item => item.id === detail?.recordId);
+      const record = scopedRecords.find(item => item.id === detail?.recordId);
       if (record?.type === 'meeting' && isMeetingRecordUnavailable) return;
       if (record) {
         void guardRecordDraft(() => openExistingRecord(record), {
@@ -682,7 +692,7 @@ const RecordSidebar: React.FC = () => {
     };
     document.addEventListener('open-knowledge-record', handleOpenRecord);
     return () => document.removeEventListener('open-knowledge-record', handleOpenRecord);
-  }, [guardRecordDraft, isMeetingRecordUnavailable, openExistingRecord, records]);
+  }, [guardRecordDraft, isMeetingRecordUnavailable, openExistingRecord, scopedRecords]);
 
   React.useEffect(() => {
     sidebarWidthRef.current = sidebarWidth;
@@ -774,8 +784,8 @@ const RecordSidebar: React.FC = () => {
                 : '';
   const shouldShowMeetingRecoveryStatus = Boolean(meetingRecoveryStatus);
   const visibleRecords = isMeetingRecordUnavailable
-    ? records.filter(record => record.type !== 'meeting')
-    : records;
+    ? scopedRecords.filter(record => record.type !== 'meeting')
+    : scopedRecords;
   const isPublished = isMeetingDraft
     ? meetingActionState.isPublished
     : Boolean(
@@ -786,7 +796,7 @@ const RecordSidebar: React.FC = () => {
     );
   const hasSavedDraftRecord = Boolean(
     draft?.id &&
-    (records.some(record => record.id === draft.id) || lastSaveFeedback?.recordId === draft.id)
+    (scopedRecords.some(record => record.id === draft.id) || lastSaveFeedback?.recordId === draft.id)
   );
   const publishedAt = lastSaveFeedback?.savedAt ? dayjs(lastSaveFeedback.savedAt).format('HH:mm') : '';
   const canSave = isMeetingDraft
@@ -1615,8 +1625,14 @@ const RecordSidebar: React.FC = () => {
           <section data-record-recent-records className="p-3">
             <div className="mb-2 flex items-center justify-between">
               <h3 className="text-xs font-semibold text-slate-600">最近紀錄</h3>
-              {loading ? <span className="text-[11px] text-slate-400">載入中</span> : null}
+              {recordsLoading ? <span className="text-[11px] text-slate-400">載入中</span> : null}
             </div>
+            {recordsLoadError ? (
+              <div role="alert" className="mb-2 flex items-center justify-between gap-2 rounded border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] text-red-700">
+                <span className="truncate">紀錄載入失敗</span>
+                {activeWorkspaceId && activeBoardId ? <button type="button" onClick={() => void loadRecords(activeWorkspaceId, activeBoardId)} className="shrink-0 font-semibold underline">重試</button> : null}
+              </div>
+            ) : null}
             <div className="space-y-2">
               {visibleRecords.map(record => (
                 <RecordListItem
@@ -1625,7 +1641,7 @@ const RecordSidebar: React.FC = () => {
                   onOpen={() => handleGuardedOpenExistingRecord(record)}
                 />
               ))}
-              {!loading && visibleRecords.length === 0 ? (
+              {!recordsLoading && !recordsLoadError && visibleRecords.length === 0 ? (
                 <div className="rounded-md border border-dashed border-slate-200 px-3 py-5 text-center text-xs text-slate-400">
                   尚無紀錄
                 </div>

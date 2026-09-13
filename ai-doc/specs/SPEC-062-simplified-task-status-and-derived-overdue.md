@@ -2,7 +2,7 @@
 
 狀態：RD Implemented / Local Static + Browser QC Passed / Production Not Deployed
 
-關聯 DEV：DEV-062、DEV-028、DEV-039、DEV-060
+關聯 DEV：DEV-062、DEV-028、DEV-039、DEV-060、DEV-118
 
 ## 決策來源與目標
 
@@ -47,6 +47,12 @@
 - `TaskDetailsModal`、`WbsNodeItem` 與共用 filter controls 只暴露四種人工狀態。
 - `TaskDateBadge` 以橘紅色日期樣式呈現衍生逾期，並保留可驗證的 `data-task-overdue`，不增加「逾期」可見文字。
 - `TaskFilterState.overdueOnly` 為本機任務檢視／工作台篩選條件；行事曆訂閱 builder 暫不暴露此條件，避免在未部署 Edge contract 前產生不可兌現的遠端訂閱規則。
+
+> DEV-118 Target Supersession - 2026-09-11：`SPEC-039`／`SPEC-045` 已將行事曆訂閱的逾期條件納入
+> target v5 query／v4 snapshot、DB validator與Edge matcher契約，且已完成`RD Implementation Ready / 架構定案`；
+> 只有對應本機QA/QC及remote release gate
+> 完成後，Calendar builder才可移除`showOverdueFilter={false}`。在此之前，本段「暫不暴露」仍是runtime
+> 安全邊界。逾期定義本身仍完全由本SPEC與`isTaskOverdue()`治理。
 - Supabase `task_status` enum、既有備份格式、歷史活動紀錄與歷史報表文字保留 legacy read compatibility。
 
 ## Out of Scope

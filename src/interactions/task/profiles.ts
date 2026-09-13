@@ -24,6 +24,14 @@ const TASK_DEFAULT_PROFILE: TaskInteractionProfile = Object.freeze({
   }),
 });
 
+const BOARD_GOAL_TASK_PROFILE: TaskInteractionProfile = Object.freeze({
+  menu: Object.freeze({
+    include: ['task.create-tracking-reference', 'task.dependency-start', 'task.dependency-end'] as const,
+    exclude: ['task.create-relationship'] as const,
+  }),
+  triggers: Object.freeze({ 'keyboard.enter': 'task.open-details' }),
+});
+
 const HOST_MODE_PROFILES: Readonly<Record<TaskHostMode, TaskInteractionProfile>> = Object.freeze({
   list: Object.freeze({
     menu: Object.freeze({ include: ['task.dependency-start', 'task.dependency-end'] as const, exclude: ['task.create-relationship'] as const }),
@@ -45,10 +53,8 @@ const HOST_MODE_PROFILES: Readonly<Record<TaskHostMode, TaskInteractionProfile>>
       'keyboard.arrow-right': 'mindmap.select-next',
     }),
   }),
-  board: Object.freeze({
-    menu: Object.freeze({ include: ['task.create-tracking-reference', 'task.dependency-start', 'task.dependency-end'] as const, exclude: ['task.create-relationship'] as const }),
-    triggers: Object.freeze({ 'keyboard.enter': 'task.open-details' }),
-  }),
+  board: BOARD_GOAL_TASK_PROFILE,
+  goal: BOARD_GOAL_TASK_PROFILE,
   gantt: Object.freeze({
     menu: Object.freeze({ exclude: ['task.dependency-start', 'task.dependency-end', 'task.create-relationship'] as const }),
     triggers: Object.freeze({ 'keyboard.enter': 'task.open-details' }),

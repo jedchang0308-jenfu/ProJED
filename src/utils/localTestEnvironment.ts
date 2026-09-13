@@ -15,6 +15,7 @@ const LOCAL_TEST_RESTORABLE_VIEWS = new Set<ViewMode>([
   'list',
   'mindmap',
   'board',
+  'goal',
   'gantt',
   'calendar',
   'calendar_subscriptions',

@@ -10,7 +10,7 @@ import type {
 } from './types';
 import { getTaskActionCatalog, getTaskMenuActionIds } from './taskActionCatalog';
 
-const KNOWN_HOST_MODES = new Set(['list', 'mindmap', 'board', 'gantt', 'calendar']);
+const KNOWN_HOST_MODES = new Set(['list', 'mindmap', 'board', 'goal', 'gantt', 'calendar']);
 const KNOWN_ORIGINS = new Set(['mode-primary', 'task-workbench', 'shared-task-sidebar', 'calendar-segment']);
 
 const SYSTEM_BASE_PROFILE: TaskInteractionProfile = Object.freeze({

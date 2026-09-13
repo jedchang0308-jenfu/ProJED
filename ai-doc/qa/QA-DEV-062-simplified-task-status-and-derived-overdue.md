@@ -1,5 +1,8 @@
 # QA-DEV-062：任務狀態精簡與截止日衍生逾期
 
+> DEV-118 Target Supersession - 2026-09-11：本文件仍是四人工狀態與`isTaskOverdue()`定義／回歸權威；
+> Calendar逾期control、date OR語意與v4 feed parity的新candidate由`QA-DEV-118`驗證，現行runtime不變。
+
 狀態：Static + Browser QC Passed / Production Not Deployed
 
 ## 驗證範圍

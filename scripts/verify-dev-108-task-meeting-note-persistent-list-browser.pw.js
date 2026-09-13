@@ -37,7 +37,7 @@ async (page) => {
     makeRecord('dev108-active', 'published', [
       { time: '09:00', text: '確認 API 邊界' }, { time: '09:10', text: '補上驗證案例' }, { time: '09:20', text: '排入回歸測試' },
     ], fixtureNow - 7200000),
-    makeRecord('dev108-archived', 'archived', [{ time: '08:30', text: '歷史補記保留' }], fixtureNow - 10800000),
+    makeRecord('dev108-archived', 'archived', Array.from({ length: 10 }, (_, index) => ({ time: `08:${30 + index}`, text: index === 0 ? '歷史補記保留' : `歷史補記 ${index + 1}` })), fixtureNow - 10800000),
   ];
   const seed = async (viewport) => {
     await page.setViewportSize(viewport);
@@ -79,7 +79,11 @@ async (page) => {
   await runCase('B01', 'task detail opens without runtime error', async () => {
     modal = await openTask();
     assert(await modal.locator('[data-task-meeting-quick-notes]').count() === 1, 'quick-note section should mount');
-    return { section: 1 };
+    const history = modal.locator('[data-task-meeting-history-scroll="true"]');
+    assert(await history.count() === 1, 'meeting history should expose one bounded scroll container');
+    assert(await history.getAttribute('data-task-note-content-surface') === 'true', 'meeting history should reuse the task-note content surface');
+    assert(await history.getAttribute('role') === 'region' && await history.getAttribute('aria-label') === '會議紀錄歷程' && await history.getAttribute('tabindex') === '0', 'meeting history scroll container should be keyboard discoverable');
+    return { section: 1, historyA11y: true, sharedContentSurface: true };
   });
   await runCase('B02', 'active and archived records are projected', async () => {
     await modal.locator('[data-task-meeting-quick-note-row]').first().waitFor({ state: 'visible', timeout: 10000 });
@@ -87,15 +91,29 @@ async (page) => {
     assert(count === 3, 'latest three entries should be visible by default', { count });
     const dayLabels = await modal.locator('[data-task-meeting-quick-note-row] time').allTextContents();
     assert(dayLabels.every(label => /^\d{2}\/\d{2}$/.test(label.trim())), 'quick-note rows should show day labels only', { dayLabels });
-    assert((await modal.locator('[data-task-meeting-quick-notes-toggle]').textContent())?.includes('其餘 1 筆'), 'older entry toggle should be visible');
+    assert((await modal.locator('[data-task-meeting-quick-notes-toggle]').textContent())?.includes('其餘 10 筆'), 'older entry toggle should be visible');
+    const historyMetrics = await modal.locator('[data-task-meeting-history-scroll="true"]').evaluate(element => {
+      const style = window.getComputedStyle(element);
+      return { clientHeight: element.clientHeight, scrollHeight: element.scrollHeight, overflowY: style.overflowY, maxHeight: style.maxHeight };
+    });
+    assert(historyMetrics.overflowY === 'auto' && historyMetrics.maxHeight === '200px', 'meeting history should have an explicit bounded Y-scroll style', historyMetrics);
     await page.screenshot({ path: `${OUTPUT_DIR}/desktop-immediate-1440x900.png`, fullPage: true });
     screenshots.push(`${OUTPUT_DIR}/desktop-immediate-1440x900.png`);
-    return { visibleRows: count };
+    return { visibleRows: count, historyMetrics };
   });
   await runCase('B03', 'expand reveals all entries inline and source removal removes the archived projection', async () => {
     await modal.locator('[data-task-meeting-quick-notes-toggle]').click();
     const count = await modal.locator('[data-task-meeting-quick-note-row]').count();
-    assert(count === 4, 'expanded list should reveal archived entry', { count });
+    assert(count === 13, 'expanded list should reveal all archived entries', { count });
+    const expandedHistory = await modal.locator('[data-task-meeting-history-scroll="true"]').evaluate(element => ({
+      clientHeight: element.clientHeight,
+      scrollHeight: element.scrollHeight,
+      overflowY: window.getComputedStyle(element).overflowY,
+    }));
+    assert(expandedHistory.overflowY === 'auto' && expandedHistory.scrollHeight > expandedHistory.clientHeight, 'expanded meeting history should visibly overflow its bounded Y-scroll container', expandedHistory);
+    assert(await modal.locator('[data-task-meeting-quick-notes-toggle="true"]').count() === 0, 'expanded history should not show a collapse control');
+    assert(await modal.getByText('收合', { exact: true }).count() === 0, 'expanded history should not show 收合 text');
+    assert(await modal.locator('[data-task-meeting-quick-notes-composer]').count() === 0, 'non-meeting task details should keep composer absent');
     await page.screenshot({ path: `${OUTPUT_DIR}/desktop-expanded-1440x900.png`, fullPage: true });
     screenshots.push(`${OUTPUT_DIR}/desktop-expanded-1440x900.png`);
     await modal.getByRole('button', { name: '關閉任務詳情' }).click();
@@ -111,7 +129,7 @@ async (page) => {
     const afterRemoval = await modal.locator('[data-task-meeting-quick-note-row]').count();
     assert(afterRemoval === 3, 'source removal should remove the archived projection after reload', { afterRemoval });
     assert(await modal.getByText('歷史補記保留', { exact: true }).count() === 0, 'source removal must not leave stale text');
-    return { expandedRows: count, afterRemoval };
+    return { expandedRows: count, expandedHistory, afterRemoval };
   });
   await runCase('B04', 'legacy blue composer is absent', async () => {
     assert(await modal.getByText('本次會議', { exact: true }).count() === 0, 'old meeting section title should be absent');
@@ -141,6 +159,8 @@ async (page) => {
   await runCase('B06', 'append keeps input and list in one first-layer section', async () => {
     const composer = modal.locator('[data-task-meeting-quick-notes-composer]');
     const input = composer.locator('textarea');
+    const composerInsideHistory = await composer.evaluate(element => Boolean(element.closest('[data-task-meeting-history-scroll="true"]')));
+    assert(!composerInsideHistory, 'meeting composer should stay outside the bounded history scroll container');
     await input.fill('會議中新增補記');
     await composer.getByRole('button', { name: '加入', exact: true }).click();
     await page.waitForTimeout(500);
@@ -153,7 +173,9 @@ async (page) => {
     assert(afterAppend.rows === 3, 'in-memory append keeps the compact latest-three projection', afterAppend);
     assert(await modal.getByText('會議中新增補記', { exact: true }).count() >= 1, 'new quick note should remain visible');
     assert(afterAppend.inputValue === '', 'input clears only after in-memory append succeeds', afterAppend);
-    return { rows: afterAppend.rows };
+    const composerScreenshotPath = OUTPUT_DIR + '/meeting-mode-composer-1440x900.png';
+    await page.screenshot({ path: composerScreenshotPath, fullPage: true }); screenshots.push(composerScreenshotPath);
+    return { rows: afterAppend.rows, composerInsideHistory };
   });
   await runCase('B07', 'compact section has no horizontal overflow', async () => {
     const health = await page.evaluate(() => ({ width: window.innerWidth, scrollWidth: document.documentElement.scrollWidth }));

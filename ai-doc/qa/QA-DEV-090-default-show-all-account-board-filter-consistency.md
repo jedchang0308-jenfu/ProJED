@@ -1,5 +1,9 @@
 # QA-DEV-090：預設全顯示與帳號看板篩選一致性驗證計畫
 
+> DEV-118 Target Supersession - 2026-09-11：本文件v4 account×board repository、default與既有PASS保留為
+> migration／regression baseline；v5正向包含query、CAS 4→5、shared controls與新evidence須依`QA-DEV-118`
+> 重新驗證，不能沿用2026-08-26執行結果推定通過。
+
 - 關聯 DEV：DEV-090、DEV-039
 - 關聯 SPEC／ADR：`SPEC-039-task-filter-core-and-workbench-profiles.md`、`ADR-045-account-board-task-filter-preferences.md`
 - 狀態：Executed / Local Automated QA PASS / QC PASS / Release Not Run

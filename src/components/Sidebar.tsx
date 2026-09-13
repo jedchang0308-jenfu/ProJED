@@ -23,7 +23,7 @@ import {
 import { usePanelPreview } from './panelPreviewContext';
 import { isPrimaryPointerActivation } from '../interactions/pointerActivation';
 
-const BOARD_WORKSPACE_VIEWS = ['list', 'mindmap', 'board', 'gantt', 'calendar'];
+const BOARD_WORKSPACE_VIEWS = ['list', 'mindmap', 'board', 'goal', 'gantt', 'calendar'];
 const SETTINGS_SCOPE_VIEWS = ['settings', 'calendar_subscriptions'];
 const TITLE_INPUT_CLASS =
   'min-w-0 flex-1 rounded border border-primary/30 bg-white px-2 py-1 text-xs font-semibold text-slate-700 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20';

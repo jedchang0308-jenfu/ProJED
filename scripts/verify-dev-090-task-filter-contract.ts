@@ -15,7 +15,7 @@ import type {
   AccountBoardTaskFilterScope,
   TaskFilterPreferenceCache,
   TaskFilterPreferenceMutation,
-  TaskFilterState,
+  TaskFilterQuery,
 } from '../src/features/taskFilters/types';
 
 class MemoryStorage implements Storage {
@@ -50,11 +50,11 @@ const check = async (name: string, run: () => void | Promise<void>) => {
 
 const scopeKey = (scope: AccountBoardTaskFilterScope) => `${scope.accountId}\u0000${scope.boardId}`;
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
-const filteredState = (keyword: string): TaskFilterState => ({
+const filteredState = (keyword: string): TaskFilterQuery => ({
   ...createDefaultTaskFilters(),
-  statusFilters: { ...createDefaultTaskFilters().statusFilters, completed: false },
-  selectedAssigneeIds: ['member-a'],
-  selectedTagIds: ['tag-a'],
+  statuses: ['todo'],
+  people: { ids: ['member-a'], includeUnassigned: false },
+  tagIds: ['tag-a'],
   keyword,
 });
 
@@ -64,7 +64,7 @@ const createMemoryLocal = () => {
   const adapter: TaskFilterPreferenceLocalAdapter = {
     readCache: scope => clone(caches.get(scopeKey(scope)) ?? null),
     writeCache: (scope, filters) => {
-      caches.set(scopeKey(scope), { version: 4, filters: clone(filters), updatedAt: Date.now() });
+      caches.set(scopeKey(scope), { version: 5, filters: clone(filters), updatedAt: Date.now() });
       return true;
     },
     removeCache: scope => {
@@ -86,8 +86,8 @@ const createMemoryLocal = () => {
 
 const toRemoteRow = (
   scope: AccountBoardTaskFilterScope,
-  filters: TaskFilterState,
-  preferenceVersion = 4,
+  filters: TaskFilterQuery,
+  preferenceVersion = 5,
 ): TaskFilterPreferenceRemoteRow => ({
   accountId: scope.accountId,
   projectId: scope.boardId,
@@ -99,35 +99,26 @@ const toRemoteRow = (
 
 await check('S01 default and reset source show every status with zero active filters', () => {
   const defaults = createDefaultTaskFilters();
-  assert.deepEqual(defaults.statusFilters, {
-    todo: true,
-    in_progress: true,
-    delayed: true,
-    completed: true,
-    unsure: true,
-    onhold: true,
-  });
-  assert.equal(defaults.dueWithinDays, null);
-  assert.equal(defaults.overdueOnly, false);
-  assert.deepEqual(defaults.selectedAssigneeIds, []);
-  assert.deepEqual(defaults.selectedTagIds, []);
+  assert.deepEqual(defaults.statuses, []);
+  assert.deepEqual(defaults.due, { includeOverdue: false, upcomingWithinDays: null });
+  assert.deepEqual(defaults.people, { ids: [], includeUnassigned: false });
+  assert.deepEqual(defaults.tagIds, []);
   assert.equal(defaults.keyword, '');
   assert.equal(countActiveTaskFilters(defaults), 0);
 });
 
 await check('S01 normalization fills status keys, clamps dates, trims and deduplicates', () => {
   const normalized = storage.normalizeTaskFilters({
-    statusFilters: { todo: false } as TaskFilterState['statusFilters'],
-    dueWithinDays: 900,
-    selectedAssigneeIds: ['a', 'a', ''],
-    selectedTagIds: ['t', 't'],
+    statuses: ['todo', 'todo'] as TaskFilterQuery['statuses'],
+    due: { includeOverdue: false, upcomingWithinDays: 900 },
+    people: { ids: ['a', 'a', ''], includeUnassigned: false },
+    tagIds: ['t', 't'],
     keyword: '  鉦富  ',
   });
-  assert.equal(normalized.statusFilters.todo, false);
-  assert.equal(normalized.statusFilters.completed, true);
-  assert.equal(normalized.dueWithinDays, 365);
-  assert.deepEqual(normalized.selectedAssigneeIds, ['a']);
-  assert.deepEqual(normalized.selectedTagIds, ['t']);
+  assert.deepEqual(normalized.statuses, ['todo']);
+  assert.equal(normalized.due.upcomingWithinDays, null);
+  assert.deepEqual(normalized.people.ids, ['a']);
+  assert.deepEqual(normalized.tagIds, ['t']);
   assert.equal(normalized.keyword, '鉦富');
 });
 
@@ -156,7 +147,7 @@ await check('S02 board v1-v3 migration preserves display only and is idempotent'
     showTags: true,
     showTagNames: false,
   });
-  assert.equal(browserStorage.getItem(scopedLegacy), null);
+  assert.ok(browserStorage.getItem(scopedLegacy));
   assert.deepEqual(storage.readBoardTaskFilterPrefs(accountId).filters, createDefaultTaskFilters());
   const snapshot = Array.from({ length: browserStorage.length }, (_, index) => {
     const key = browserStorage.key(index)!;
@@ -169,7 +160,7 @@ await check('S02 board v1-v3 migration preserves display only and is idempotent'
   }), snapshot);
 });
 
-await check('S02 workbench v1-v3 migration preserves selected board and clears filter map', () => {
+await check('S02 workbench v1-v3 migration preserves selected board and query map', () => {
   browserStorage.clear();
   const accountId = 'account-a';
   const legacyKey = accountStorage.getAccountScopedStorageKey(
@@ -183,15 +174,15 @@ await check('S02 workbench v1-v3 migration preserves selected board and clears f
   }));
   const migrated = workbenchStorage.readTaskWorkbenchFilterPrefs(accountId);
   assert.equal(migrated.selectedBoardId, 'board-preserved');
-  assert.deepEqual(migrated.filtersByBoardId, {});
+  assert.equal(migrated.filtersByBoardId['board-preserved'].keyword, 'discard');
   assert.equal(browserStorage.getItem(legacyKey), null);
   const currentKey = accountStorage.getAccountScopedStorageKey(
     workbenchStorage.TASK_WORKBENCH_FILTER_PREFS_KEY,
     accountId,
   );
   const current = JSON.parse(browserStorage.getItem(currentKey!)!);
-  assert.equal(current.version, 4);
-  assert.deepEqual(current.filtersByBoardId, {});
+  assert.equal(current.version, 5);
+  assert.equal(current.filtersByBoardId['board-preserved'].keyword, 'discard');
 });
 
 await check('S03 remote row absence is authoritative default and clears exact stale cache', async () => {
@@ -217,7 +208,7 @@ await check('S03 pending write replays only after a compatible remote version ch
   const pendingFilters = filteredState('pending-wins');
   local.adapter.writeCache(scope, pendingFilters);
   local.adapter.writePending(scope, {
-    id: 'pending-1', version: 4, kind: 'upsert', filters: pendingFilters, updatedAt: 1,
+    id: 'pending-1', version: 5, kind: 'upsert', filters: pendingFilters, updatedAt: 1,
   });
   let remoteFilters = createDefaultTaskFilters();
   const calls: string[] = [];
@@ -250,13 +241,13 @@ await check('S03/S07 newer remote versions block pending, reset and later writes
   let writes = 0;
   const remote: TaskFilterPreferenceRemoteAdapter = {
     enabled: true,
-    read: async () => toRemoteRow(scope, filteredState('future'), 5),
+    read: async () => toRemoteRow(scope, filteredState('future'), 6),
     upsert: async () => { writes += 1; },
     remove: async () => { writes += 1; },
   };
   const repository = createTaskFilterPreferenceRepository(remote, local.adapter);
   const hydrated = await repository.hydrate(scope, () => true);
-  assert.equal(hydrated.remoteVersion, 5);
+  assert.equal(hydrated.remoteVersion, 6);
   assert.match(hydrated.warning ?? '', /版本較新/);
   assert.equal(writes, 0);
   assert.equal((await repository.persist(scope, filteredState('do-not-send'), () => true)).synced, false);
@@ -290,7 +281,7 @@ await check('S03 remote read failure uses exact cache and never another scope', 
 await check('S07 scope-keyed coalescing commits the last complete object', async () => {
   const scope = { accountId: 'a', boardId: 'board-1' };
   const local = createMemoryLocal();
-  const committed: TaskFilterState[] = [];
+  const committed: TaskFilterQuery[] = [];
   let releaseFirst!: () => void;
   const firstGate = new Promise<void>(resolve => { releaseFirst = resolve; });
   let call = 0;

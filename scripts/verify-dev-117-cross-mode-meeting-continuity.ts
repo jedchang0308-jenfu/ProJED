@@ -19,7 +19,7 @@ const quickNote = read('src/components/TaskNotes/TaskMeetingQuickNoteSection.tsx
 const dev010 = read('scripts/verify-dev-010-action-feedback.mjs');
 const dev020 = read('scripts/verify-dev-020-record-workflow-redesign.mjs');
 
-const continuityViews = ['board', 'list', 'mindmap', 'gantt', 'calendar'];
+const continuityViews = ['board', 'list', 'mindmap', 'gantt', 'calendar', 'goal'];
 const continuitySetStart = recordStore.indexOf('const MEETING_CONTINUITY_VIEWS');
 const continuitySetEnd = recordStore.indexOf('const activeBoardIdForMeeting');
 const continuitySet = continuitySetStart >= 0 && continuitySetEnd > continuitySetStart
@@ -27,14 +27,17 @@ const continuitySet = continuitySetStart >= 0 && continuitySetEnd > continuitySe
   : '';
 
 continuityViews.forEach(view => check(`meeting continuity includes ${view}`, continuitySet.includes(`'${view}'`)));
+check('meeting continuity predicate is store-owned and exported', recordStore.includes('export const isMeetingContinuityView') && recordStore.includes('const MEETING_CONTINUITY_VIEWS'));
+check('goal view is included in meeting continuity', continuitySet.includes("'goal'"));
 check('meeting start only falls back for non-continuity views', recordStore.includes('if (!isMeetingContinuityView(currentView)) setView(\'board\');'));
+check('meeting start and recovery share the continuity predicate', recordStore.split("if (!isMeetingContinuityView(currentView)) setView('board');").length - 1 === 2);
 const meetingStartSource = recordStore.slice(recordStore.indexOf('startMeetingRecord: () =>'), recordStore.indexOf('exitMeetingMode: () =>'));
 check('meeting start does not unconditionally force board', !meetingStartSource.includes('if (currentView !== \'board\') setView(\'board\');'));
 check('mode switcher keeps generic controlled contract', modeSwitcher.includes('onChange: (value: T) => void') && modeSwitcher.includes('disabled?: boolean'));
 check('meeting no longer disables mode switcher', !mainLayout.includes('Boolean(dependencySelection || isTaskSelectionMode || isMeetingMode)'));
 check('selection lock copy remains explicit', mainLayout.includes('disabledTitle="選取模式中無法切換檢視"'));
 check('meeting entry copy does not promise board fallback', mainLayout.includes('title="新增會議記錄，開啟右側紀錄欄"'));
-check('all five task views are rendered by App', continuityViews.every(view => app.includes(`case '${view}':`)));
+check('all continuity task views are rendered by App', continuityViews.every(view => app.includes(`case '${view}':`)));
 check('RecordSidebar exposes one global composer shell', sidebar.includes('data-record-composer-shell'));
 check('TaskDetails quick-note section is available in meeting mode', taskDetail.includes('<TaskMeetingQuickNoteSection') && quickNote.includes('data-task-meeting-quick-notes'));
 check('DEV-010 validates selection lock rather than meeting lock', dev010.includes('const isSelectingMode = Boolean(dependencySelection || isTaskSelectionMode)') && !dev010.includes('紀錄中先離開紀錄再切換檢視'));

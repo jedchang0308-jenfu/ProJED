@@ -17,7 +17,7 @@ import {
   countActiveTaskFilters,
   normalizeTaskFilters,
   projectTaskFilterResults,
-  type TaskFilterState,
+  type TaskFilterQuery,
 } from '../features/taskFilters';
 import {
   readTaskWorkbenchFilterPrefs,
@@ -637,13 +637,13 @@ const WorkbenchUnplacedHierarchy: React.FC<WorkbenchUnplacedHierarchyProps> = ({
 const WorkbenchFilterControls: React.FC<{
   assigneeOptions: Array<{ id: string; label: string }>;
   boardOptions: BoardOption[];
-  filters: TaskFilterState;
+  filters: TaskFilterQuery;
   selectedBoardId: string | null;
   showContainersInAllTasks: boolean;
   tags: ReturnType<typeof useTagStore.getState>['tags'];
   onSelectedBoardChange: (boardId: string | null) => void;
   onShowContainersInAllTasksChange: (show: boolean) => void;
-  updateFilters: (updates: Partial<TaskFilterState>) => void;
+  updateFilters: (filters: TaskFilterQuery) => void;
   resetFilters: () => void;
 }> = ({
   assigneeOptions,
@@ -702,7 +702,7 @@ const WorkbenchFilterControls: React.FC<{
 
       <TaskConditionFilterControls
         assigneeOptions={assigneeOptions}
-        filters={filters}
+        value={filters}
         tags={tags}
         onChange={updateFilters}
       />
@@ -728,7 +728,7 @@ const TaskWorkbenchPanel: React.FC<{
   const laneResizeCleanupRef = React.useRef<(() => void) | null>(null);
   const laneStackRef = React.useRef<HTMLDivElement>(null);
   const [selectedBoardId, setSelectedBoardId] = React.useState<string | null>(() => readTaskWorkbenchFilterPrefs(accountId).selectedBoardId);
-  const [filtersByBoardId, setFiltersByBoardId] = React.useState<Record<string, TaskFilterState>>(() => readTaskWorkbenchFilterPrefs(accountId).filtersByBoardId);
+  const [filtersByBoardId, setFiltersByBoardId] = React.useState<Record<string, TaskFilterQuery>>(() => readTaskWorkbenchFilterPrefs(accountId).filtersByBoardId);
   const filterToggleRef = React.useRef<HTMLButtonElement>(null);
   const filterPopoverRef = React.useRef<HTMLDivElement>(null);
   const workspaces = useBoardStore(state => state.workspaces);
@@ -831,31 +831,20 @@ const TaskWorkbenchPanel: React.FC<{
     laneResizeCleanupRef.current?.();
   }, []);
 
-  React.useEffect(() => {
-    const open = () => {
-      patchPanelPrefs({ open: true });
-    };
-    window.addEventListener(OPEN_PANEL_EVENT, open);
-    return () => window.removeEventListener(OPEN_PANEL_EVENT, open);
-  }, [patchPanelPrefs]);
-
-  React.useEffect(() => {
-    const toggle = () => {
-      setPanelPrefs(current => {
-        const next = { ...current, open: !current.open, filtersOpen: false };
-        writeTaskWorkbenchPanelPrefs(next, accountId);
-        return next;
-      });
+  React.useLayoutEffect(() => {
+    const syncPanelCommand = () => {
+      setPanelPrefs(readTaskWorkbenchPanelPrefs(accountId));
     };
 
-    window.addEventListener(TOGGLE_PANEL_EVENT, toggle);
-    return () => window.removeEventListener(TOGGLE_PANEL_EVENT, toggle);
+    window.addEventListener(OPEN_PANEL_EVENT, syncPanelCommand);
+    window.addEventListener(TOGGLE_PANEL_EVENT, syncPanelCommand);
+    window.addEventListener(CLOSE_PANEL_EVENT, syncPanelCommand);
+    return () => {
+      window.removeEventListener(OPEN_PANEL_EVENT, syncPanelCommand);
+      window.removeEventListener(TOGGLE_PANEL_EVENT, syncPanelCommand);
+      window.removeEventListener(CLOSE_PANEL_EVENT, syncPanelCommand);
+    };
   }, [accountId]);
-
-  React.useEffect(() => {
-    window.addEventListener(CLOSE_PANEL_EVENT, closePanel);
-    return () => window.removeEventListener(CLOSE_PANEL_EVENT, closePanel);
-  }, [closePanel]);
 
   React.useEffect(() => {
     if (!panelPrefs.filtersOpen) return;
@@ -924,7 +913,7 @@ const TaskWorkbenchPanel: React.FC<{
     writeTaskWorkbenchFilterPrefs({ selectedBoardId: boardId, filtersByBoardId }, accountId);
   }, [accountId, filtersByBoardId]);
 
-  const updateSelectedFilters = React.useCallback((updates: Partial<TaskFilterState>) => {
+  const updateSelectedFilters = React.useCallback((nextFilters: TaskFilterQuery) => {
     if (!selectedBoardId) return;
     setFiltersByBoardId(current => {
       const currentFilters = current[selectedBoardId] || createDefaultTaskFilters();
@@ -932,10 +921,7 @@ const TaskWorkbenchPanel: React.FC<{
         ...current,
         [selectedBoardId]: normalizeTaskFilters({
           ...currentFilters,
-          ...updates,
-          statusFilters: updates.statusFilters
-            ? { ...currentFilters.statusFilters, ...updates.statusFilters }
-            : currentFilters.statusFilters,
+          ...nextFilters,
         }),
       };
       writeTaskWorkbenchFilterPrefs({ selectedBoardId, filtersByBoardId: nextFiltersByBoardId }, accountId);

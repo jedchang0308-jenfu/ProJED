@@ -1,8 +1,7 @@
 import {
   createDefaultTaskFilters,
-  normalizeTaskFilters,
-  UNASSIGNED_ASSIGNEE_FILTER,
-  type TaskFilterState,
+  normalizePersistedTaskFilters,
+  type TaskFilterQuery,
 } from '../taskFilters';
 import type {
   CalendarSubscriptionBoardFilterSnapshot,
@@ -17,11 +16,12 @@ export type CalendarFilterBoardIdentity = {
   storageWorkspaceId?: string;
 };
 
-const cloneFilters = (filters: TaskFilterState): TaskFilterState => ({
+const cloneFilters = (filters: TaskFilterQuery): TaskFilterQuery => ({
   ...filters,
-  statusFilters: { ...filters.statusFilters },
-  selectedAssigneeIds: [...filters.selectedAssigneeIds],
-  selectedTagIds: [...filters.selectedTagIds],
+  statuses: [...filters.statuses],
+  due: { ...filters.due },
+  people: { ...filters.people, ids: [...filters.people.ids] },
+  tagIds: [...filters.tagIds],
 });
 
 const normalizeDateTypes = (
@@ -33,22 +33,25 @@ const normalizeDateTypes = (
   return normalized.length > 0 ? normalized : ['due_date'];
 };
 
-export const createCalendarSafeDefaultTaskFilters = (currentUserId?: string | null): TaskFilterState => ({
+export const createCalendarSafeDefaultTaskFilters = (currentUserId?: string | null): TaskFilterQuery => ({
   ...createDefaultTaskFilters(),
-  selectedAssigneeIds: currentUserId ? [currentUserId] : [],
+  people: {
+    ids: currentUserId ? [currentUserId] : [],
+    includeUnassigned: false,
+  },
 });
 
 const createLegacyTaskFilters = (
   filters: CalendarSubscriptionFilters,
   currentUserId?: string | null,
-): TaskFilterState => {
+): TaskFilterQuery => {
+  if (filters.global_filter) return normalizePersistedTaskFilters(filters.global_filter);
   const selectedAssigneeIds = (() => {
     const assignee = filters.assignee ?? { type: 'me' as const };
     if (assignee.type === 'user') return assignee.user_id ? [assignee.user_id] : [];
     if (assignee.type === 'selected') {
       return [
         ...assignee.user_ids,
-        ...(assignee.include_unassigned ? [UNASSIGNED_ASSIGNEE_FILTER] : []),
       ];
     }
     return currentUserId ? [currentUserId] : [];
@@ -57,10 +60,7 @@ const createLegacyTaskFilters = (
   const defaults = createDefaultTaskFilters();
   return {
     ...defaults,
-    statusFilters: Object.fromEntries(
-      Object.keys(defaults.statusFilters).map(status => [status, true]),
-    ) as TaskFilterState['statusFilters'],
-    selectedAssigneeIds,
+    people: { ids: selectedAssigneeIds, includeUnassigned: filters.assignee?.type === 'selected' && filters.assignee.include_unassigned === true },
   };
 };
 
@@ -96,7 +96,8 @@ export const materializeCalendarBoardFilters = (
     }]));
   }
 
-  const isV3 = filters.version === 3 || filters.v3_scope_type === 'per_board_filter_snapshot';
+  const isV4 = filters.version === 4 || filters.v4_scope_type === 'per_board_filter_snapshot' || filters.v3_scope_type === 'per_board_filter_snapshot' && Object.values(filters.board_filters ?? {}).some(snapshot => 'filters' in snapshot && 'due' in snapshot.filters);
+  const isV3 = !isV4 && (filters.version === 3 || filters.v3_scope_type === 'per_board_filter_snapshot');
   const isV2 = filters.version === 2 || filters.v2_scope_type === 'all_accessible_boards_snapshot';
   const legacyFilters = createLegacyTaskFilters(filters, currentUserId);
   const legacyDateTypes = normalizeDateTypes(filters.date_types);
@@ -105,13 +106,24 @@ export const materializeCalendarBoardFilters = (
     const aliases = boardAliases(board);
     const projectIncluded = hasAlias(filters.project_ids, aliases);
 
+    if (isV4) {
+      const snapshot = findRecordByAlias(filters.board_filters, aliases);
+      return [board.id, snapshot
+        ? {
+          included: snapshot.included,
+          date_types: normalizeDateTypes(snapshot.date_types ?? filters.date_types),
+          filters: cloneFilters(normalizePersistedTaskFilters(snapshot.filters)),
+        }
+        : { included: false, date_types: ['due_date'], filters: cloneFilters(safeDefault) }];
+    }
+
     if (isV3) {
       const snapshot = findRecordByAlias(filters.board_filters, aliases);
       return [board.id, snapshot
         ? {
           included: snapshot.included,
           date_types: normalizeDateTypes(snapshot.date_types ?? filters.date_types),
-          filters: cloneFilters(normalizeTaskFilters(snapshot.filters)),
+          filters: cloneFilters(normalizePersistedTaskFilters(snapshot.filters)),
         }
         : { included: false, date_types: ['due_date'], filters: cloneFilters(safeDefault) }];
     }
@@ -120,8 +132,8 @@ export const materializeCalendarBoardFilters = (
       const override = findRecordByAlias(filters.board_overrides, aliases);
       const included = projectIncluded && override?.enabled !== false;
       const effectiveFilters = override?.enabled !== false && override
-        ? normalizeTaskFilters(override)
-        : normalizeTaskFilters(filters.global_filter);
+        ? normalizePersistedTaskFilters(override)
+        : normalizePersistedTaskFilters(filters.global_filter);
       return [board.id, { included, date_types: [...legacyDateTypes], filters: cloneFilters(effectiveFilters) }];
     }
 

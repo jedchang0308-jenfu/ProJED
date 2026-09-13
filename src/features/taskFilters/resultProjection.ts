@@ -1,6 +1,6 @@
 import type { TaskNode } from '../../types';
-import { matchesTaskFilters } from './predicates';
-import type { TaskFilterState, TaskFilterableNode } from './types';
+import { compileTaskFilter } from './predicates';
+import type { TaskFilterQuery, TaskFilterableNode } from './types';
 
 export type TaskFilterProjectionNode = Pick<
   TaskNode,
@@ -19,6 +19,7 @@ export type TaskFilterResultProjection = {
 
 type ProjectTaskFilterResultsOptions = {
   boardId?: string | null;
+  today?: string;
 };
 
 const isSameBoard = (node: Pick<TaskNode, 'boardId'>, boardId?: string | null) =>
@@ -58,7 +59,7 @@ export const isTaskEffectivelyVisible = <T extends EffectiveVisibilityNode>(
 
 export const projectTaskFilterResults = <T extends TaskFilterProjectionNode>(
   nodesById: Record<string, T | null | undefined>,
-  filters: TaskFilterState,
+  filters: TaskFilterQuery,
   options: ProjectTaskFilterResultsOptions = {},
 ): TaskFilterResultProjection => {
   const boardTaskIds = new Set<string>();
@@ -69,12 +70,13 @@ export const projectTaskFilterResults = <T extends TaskFilterProjectionNode>(
   const matchedProjectionNodes: TaskFilterProjectionNode[] = [];
   const matchedPlacementIds = new Set<string>();
   const { boardId = null } = options;
+  const compiled = compileTaskFilter(filters, options.today);
 
   Object.values(nodesById).forEach(node => {
     if (!isTaskEffectivelyVisible(node, nodesById, { boardId })) return;
     const canonicalTaskId = node.canonicalTaskId || node.id;
     boardTaskIds.add(canonicalTaskId);
-    if (matchesTaskFilters(node, filters)) {
+    if (compiled.matches(node)) {
       if (!matchedTaskIds.has(canonicalTaskId)) matchedTasks.push(node);
       matchedTaskIds.add(canonicalTaskId);
       matchedPlacementIds.add(node.id);

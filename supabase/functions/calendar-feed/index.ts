@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { FEED_TASK_LIMIT, buildCalendarFeedIcs } from "./ics.mjs";
 import { resolveSupabaseFunctionKey } from "../_shared/supabaseApiKeys.mjs";
+import { matchesTaskFilterQueryV5, normalizeTaskFilterQueryV5, type TaskFilterQueryV5 } from "./taskFilterV4.ts";
 
 const renderCalendarFeedIcs = buildCalendarFeedIcs as unknown as (input: Record<string, unknown>) => string;
 
@@ -11,6 +12,7 @@ type SubscriptionFilters = {
   scope_type?: string;
   v2_scope_type?: string;
   v3_scope_type?: string;
+  v4_scope_type?: string;
   assignee?: {
     type?: string;
     user_id?: string;
@@ -18,7 +20,7 @@ type SubscriptionFilters = {
     include_unassigned?: boolean;
   };
   date_types?: string[];
-  global_filter?: Partial<TaskFilterState>;
+  global_filter?: Partial<TaskFilterState> | Partial<TaskFilterQueryV5>;
   board_overrides?: Record<string, BoardFilterOverride>;
   board_filters?: Record<string, BoardFilterSnapshot>;
 };
@@ -38,7 +40,7 @@ type BoardFilterOverride = Partial<TaskFilterState> & {
 type BoardFilterSnapshot = {
   included?: boolean;
   date_types?: string[];
-  filters?: Partial<TaskFilterState>;
+  filters?: Partial<TaskFilterState> | Partial<TaskFilterQueryV5>;
 };
 
 type CalendarSubscription = {
@@ -180,23 +182,26 @@ const normalizeBoardOverrides = (value: SubscriptionFilters["board_overrides"] |
 };
 
 const normalizeBoardFilters = (value: SubscriptionFilters["board_filters"] | undefined) => {
-  const normalized: Record<string, { included: boolean; dateTypes: string[]; filters: TaskFilterState }> = {};
+  const normalized: Record<string, { included: boolean; dateTypes: string[]; filters: TaskFilterState | TaskFilterQueryV5 }> = {};
   for (const [boardId, snapshot] of Object.entries(value ?? {})) {
     if (!UUID_RE.test(boardId) || typeof snapshot?.included !== "boolean") continue;
+    const rawFilter = snapshot.filters;
+    const isV5 = Boolean(rawFilter && typeof rawFilter === "object" && "statuses" in rawFilter);
     normalized[boardId] = {
       included: snapshot.included,
       dateTypes: Array.from(new Set((snapshot.date_types ?? []).filter((item) => DATE_TYPES.has(item)))),
-      filters: normalizeTaskFilterState(snapshot.filters),
+      filters: isV5 ? normalizeTaskFilterQueryV5(rawFilter) : normalizeTaskFilterState(rawFilter as Partial<TaskFilterState>),
     };
   }
   return normalized;
 };
 
 const normalizeFilters = (filters: SubscriptionFilters) => {
+  const isV4 = filters.version === 4 || filters.v4_scope_type === "per_board_filter_snapshot";
   const isV3 = filters.version === 3 || filters.v3_scope_type === "per_board_filter_snapshot";
   const isV2 = filters.version === 2 || filters.v2_scope_type === "all_accessible_boards_snapshot";
   return {
-    version: isV3 ? 3 : isV2 ? 2 : 1,
+    version: isV4 ? 4 : isV3 ? 3 : isV2 ? 2 : 1,
     workspaceIds: Array.from(new Set((filters.workspace_ids ?? []).filter(Boolean))),
     projectIds: Array.from(new Set((filters.project_ids ?? []).filter((item) => UUID_RE.test(item)))),
     scopeType: ["board", "workspace", "custom"].includes(filters.scope_type ?? "")
@@ -297,6 +302,22 @@ const matchesSubscriptionTaskFilters = (
   item: WbsItemWithTags,
   filters: ReturnType<typeof normalizeFilters>,
 ) => {
+  if (filters.version === 4) {
+    const snapshot = filters.boardFilters[item.project_id];
+    if (!snapshot?.included) return false;
+    if (snapshot.filters && "statuses" in snapshot.filters) {
+      return matchesTaskFilterQueryV5({
+        status: item.status,
+        end_date: item.end_date,
+        assignee_id: item.assignee_id,
+        assignee_ids: item.assignee_ids,
+        collaborator_ids: item.collaborator_ids,
+        tagIds: item.tagIds,
+        title: item.title,
+      }, snapshot.filters);
+    }
+    return false;
+  }
   if (filters.version !== 2 && filters.version !== 3) return true;
   const taskFilter = getEffectiveTaskFilter(filters, item.project_id);
   if (!taskFilter) return false;
@@ -308,6 +329,13 @@ const matchesSubscriptionTaskFilters = (
 };
 
 const getSelectedTagIds = (filters: ReturnType<typeof normalizeFilters>) => {
+  if (filters.version === 4) {
+    const ids = new Set<string>();
+    Object.values(filters.boardFilters).forEach((snapshot) => {
+      if (snapshot.included && "statuses" in snapshot.filters) snapshot.filters.tagIds.forEach((tagId) => ids.add(tagId));
+    });
+    return Array.from(ids);
+  }
   if (filters.version === 3) {
     const ids = new Set<string>();
     Object.values(filters.boardFilters).forEach((snapshot) => {
@@ -378,6 +406,10 @@ const getEffectiveDateTypes = (
   filters: ReturnType<typeof normalizeFilters>,
   projectId: string,
 ) => {
+  if (filters.version === 4) {
+    const snapshot = filters.boardFilters[projectId];
+    return snapshot?.included ? snapshot.dateTypes : [];
+  }
   if (filters.version !== 3) return filters.dateTypes;
   const snapshot = filters.boardFilters[projectId];
   return snapshot?.included ? snapshot.dateTypes : [];
@@ -394,6 +426,22 @@ const getAssigneeQuerySelection = (
   projectIds?: string[],
 ): AssigneeQuerySelection => {
   const filters = normalizeFilters(subscription.filters_json);
+  if (filters.version === 4) {
+    const selectedProjectIds = new Set(projectIds ?? filters.projectIds);
+    const userIds = new Set<string>();
+    let includeUnassigned = false;
+    let unrestricted = false;
+    for (const [projectId, snapshot] of Object.entries(filters.boardFilters)) {
+      if (!snapshot.included || !selectedProjectIds.has(projectId) || !("statuses" in snapshot.filters)) continue;
+      const people = snapshot.filters.people;
+      if (people.ids.length === 0 && !people.includeUnassigned) {
+        unrestricted = true;
+      }
+      people.ids.filter((userId) => UUID_RE.test(userId)).forEach((userId) => userIds.add(userId));
+      includeUnassigned = includeUnassigned || people.includeUnassigned;
+    }
+    return { userIds: Array.from(userIds), includeUnassigned, unrestricted };
+  }
   if (filters.version !== 3) {
     return { ...normalizeAssigneeSelection(subscription), unrestricted: false };
   }
@@ -422,6 +470,13 @@ const projectRequiresManagePermission = (
   projectId: string,
 ) => {
   const filters = normalizeFilters(subscription.filters_json);
+  if (filters.version === 4) {
+    const taskFilter = filters.boardFilters[projectId]?.filters;
+    if (!taskFilter || !("statuses" in taskFilter)) return false;
+    return taskFilter.people.ids.length === 0
+      || taskFilter.people.includeUnassigned
+      || taskFilter.people.ids.some((userId) => userId !== subscription.owner_user_id);
+  }
   if (filters.version !== 3) {
     const selection = normalizeAssigneeSelection(subscription);
     return selection.includeUnassigned
@@ -439,6 +494,10 @@ const getProjectSelectedUserIds = (
   projectId: string,
 ) => {
   const filters = normalizeFilters(subscription.filters_json);
+  if (filters.version === 4) {
+    const taskFilter = filters.boardFilters[projectId]?.filters;
+    return taskFilter && "statuses" in taskFilter ? taskFilter.people.ids.filter((userId) => UUID_RE.test(userId)) : [];
+  }
   if (filters.version !== 3) return normalizeAssigneeSelection(subscription).userIds;
   return (getEffectiveTaskFilter(filters, projectId)?.selectedAssigneeIds ?? [])
     .filter((userId) => UUID_RE.test(userId));
@@ -449,7 +508,7 @@ const getAllowedTenantAndProjectScope = async (subscription: CalendarSubscriptio
   const { workspaceIds, projectIds, scopeType, version, boardFilters } = normalizedFilters;
   if (workspaceIds.length === 0) return { tenantIds: [], projectIds: [] };
   const assigneeSelection = normalizeAssigneeSelection(subscription);
-  if (version !== 3 && assigneeSelection.userIds.length === 0 && !assigneeSelection.includeUnassigned) {
+  if (version !== 3 && version !== 4 && assigneeSelection.userIds.length === 0 && !assigneeSelection.includeUnassigned) {
     return { tenantIds: [], projectIds: [] };
   }
 
@@ -506,7 +565,7 @@ const getAllowedTenantAndProjectScope = async (subscription: CalendarSubscriptio
       || projectManagerIds.has(project.id)
   );
 
-  if (version === 3) {
+  if (version === 3 || version === 4) {
     const includedProjectIds = new Set(
       Object.entries(boardFilters)
         .filter(([, snapshot]) => snapshot.included)

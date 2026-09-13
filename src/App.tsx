@@ -11,14 +11,14 @@
  * - 遷移完成後，由 onSnapshot 自動更新畫面，無須手動 reload
  * - 若無舊版資料，跳過遷移
  */
-import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef } from 'react';
 import useBoardStore from './store/useBoardStore';
 import useAuthStore from './store/useAuthStore';
 import { useMemberStore } from './store/useMemberStore';
 import { useTagStore } from './store/useTagStore';
 import { useWbsStore } from './store/useWbsStore';
 import { useTaskFilterStore } from './store/useTaskFilterStore';
-import useRecordStore from './store/useRecordStore';
+import useRecordStore, { createRecordScopeKey } from './store/useRecordStore';
 import { useDataSync } from './hooks/useDataSync';
 import { boardInviteService, dataBackend } from './services/dataBackend';
 import { migrateLocalStorageToFirestore } from './utils/migration';
@@ -54,6 +54,7 @@ const MindMapView = lazy(() => import('./components/MindMap/MindMapView'));
 const WbsListView = lazy(() =>
   import('./components/Wbs/WbsListView').then(module => ({ default: module.WbsListView })),
 );
+const GoalView = lazy(() => import('./components/GoalView'));
 
 const formatBoardInviteAcceptError = (inviteError: unknown): string => {
   const message = inviteError instanceof Error ? inviteError.message : '';
@@ -84,7 +85,8 @@ function AppContent() {
   const userEmail = user?.email ?? null;
   const userDisplayName = user?.displayName ?? null;
   const loadRecords = useRecordStore(s => s.loadRecords);
-  const recordsLoading = useRecordStore(s => s.loading);
+  const resetRecordList = useRecordStore(s => s.resetRecordList);
+  const recordListLoad = useRecordStore(s => s.recordListLoad);
   const nodes = useWbsStore(s => s.nodes);
   const tags = useTagStore(s => s.tags);
   const tagsLoadedWorkspaceId = useTagStore(s => s.loadedWorkspaceId);
@@ -96,8 +98,7 @@ function AppContent() {
   const membersLoadedBoardId = useMemberStore(s => s.loadedBoardId);
   const membersLoading = useMemberStore(s => s.loading);
   const membersError = useMemberStore(s => s.error);
-  const recordsScopeKey = activeWorkspaceId && activeBoardId ? `${activeWorkspaceId}:${activeBoardId}` : null;
-  const [recordsLoadedScope, setRecordsLoadedScope] = useState<string | null>(null);
+  const recordsScopeKey = activeWorkspaceId && activeBoardId ? createRecordScopeKey(activeWorkspaceId, activeBoardId) : null;
   // 確保遷移只執行一次，不因 re-render 重複觸發
   const migrationDone = useRef(false);
   const processedInviteToken = useRef<string | null>(null);
@@ -109,7 +110,7 @@ function AppContent() {
     userId,
     workspaceId: activeWorkspaceId,
     boardId: activeBoardId,
-    recordsLoaded: Boolean(recordsScopeKey && !recordsLoading && recordsLoadedScope === recordsScopeKey),
+    recordsLoaded: Boolean(recordsScopeKey && recordListLoad.status === 'ready' && recordListLoad.scopeKey === recordsScopeKey),
   });
 
   // Display preferences remain account-scoped. Task conditions activate on the
@@ -177,14 +178,11 @@ function AppContent() {
 
   useEffect(() => {
     if (!userId || !activeWorkspaceId || !activeBoardId || !recordsScopeKey) {
-      setRecordsLoadedScope(null);
+      resetRecordList();
       return;
     }
-    setRecordsLoadedScope(null);
-    void loadRecords(activeWorkspaceId, activeBoardId)
-      .catch(console.error)
-      .finally(() => setRecordsLoadedScope(recordsScopeKey));
-  }, [activeBoardId, activeWorkspaceId, loadRecords, recordsScopeKey, userId]);
+    void loadRecords(activeWorkspaceId, activeBoardId);
+  }, [activeBoardId, activeWorkspaceId, loadRecords, resetRecordList, recordsScopeKey, userId]);
 
   useEffect(() => {
     if (!userId || dataBackend !== 'local-test') return;
@@ -341,6 +339,7 @@ function AppContent() {
       case 'list':        return <TaskInteractionScope hostMode="list"><WbsListView boardId={activeBoardId || ''} /></TaskInteractionScope>; // 攔截原本的 ListView
       case 'mindmap':     return <TaskInteractionScope hostMode="mindmap"><MindMapView /></TaskInteractionScope>;
       case 'board':       return <TaskInteractionScope hostMode="board"><BoardView /></TaskInteractionScope>;
+      case 'goal':        return <TaskInteractionScope hostMode="goal"><GoalView boardId={activeBoardId || ''} /></TaskInteractionScope>;
       case 'gantt':       return <TaskInteractionScope hostMode="gantt"><GanttView /></TaskInteractionScope>;
       case 'calendar':    return <TaskInteractionScope hostMode="calendar"><CalendarView /></TaskInteractionScope>;
       case 'records':     return <RecordsView />;

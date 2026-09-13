@@ -2,7 +2,7 @@ import React from 'react';
 import dayjs from 'dayjs';
 import { ArrowLeft, BriefcaseBusiness, CalendarClock } from 'lucide-react';
 import useBoardStore from '../../store/useBoardStore';
-import useRecordStore from '../../store/useRecordStore';
+import useRecordStore, { createRecordScopeKey } from '../../store/useRecordStore';
 import { useRecordDraftGuard } from '../../hooks/useRecordDraftGuard';
 import { renderRecordContentAsPlainText } from '../../utils/recordContentMentions';
 import { useMeetingRecordAvailability } from '../../utils/meetingRecordAvailability';
@@ -20,19 +20,29 @@ const RecordTable: React.FC<{ records: EditableKnowledgeRecord[]; onOpen: (recor
 const RecordsView: React.FC = () => {
   const [activeSection, setActiveSection] = React.useState<'meeting' | 'work_log'>('meeting');
   const records = useRecordStore(state => state.records);
-  const loading = useRecordStore(state => state.loading);
+  const recordListLoad = useRecordStore(state => state.recordListLoad);
+  const loadRecords = useRecordStore(state => state.loadRecords);
   const openExistingRecord = useRecordStore(state => state.openExistingRecord);
   const activeWorkspaceId = useBoardStore(state => state.activeWorkspaceId);
   const activeBoardId = useBoardStore(state => state.activeBoardId);
   const setView = useBoardStore(state => state.setView);
   const guardRecordDraft = useRecordDraftGuard();
   const { isMeetingRecordUnavailable } = useMeetingRecordAvailability();
+  const scopeKey = activeWorkspaceId && activeBoardId ? createRecordScopeKey(activeWorkspaceId, activeBoardId) : null;
+  const loading = recordListLoad.status === 'loading' && recordListLoad.scopeKey === scopeKey;
+  const loadError = recordListLoad.status === 'error' && recordListLoad.scopeKey === scopeKey
+    ? recordListLoad.error
+    : null;
+  const scopedRecords = React.useMemo(
+    () => scopeKey && recordListLoad.scopeKey === scopeKey ? records : [],
+    [recordListLoad.scopeKey, records, scopeKey],
+  );
   React.useEffect(() => {
     if (isMeetingRecordUnavailable && activeSection === 'meeting') setActiveSection('work_log');
   }, [activeSection, isMeetingRecordUnavailable]);
   const visibleRecords = React.useMemo(
-    () => records.filter(record => !isMeetingRecordUnavailable || record.type !== 'meeting'),
-    [isMeetingRecordUnavailable, records],
+    () => scopedRecords.filter(record => !isMeetingRecordUnavailable || record.type !== 'meeting'),
+    [isMeetingRecordUnavailable, scopedRecords],
   );
   const recordGroups = React.useMemo(() => [
     { key: 'meeting', label: '會議紀錄', records: visibleRecords.filter(record => record.type === 'meeting') },
@@ -80,7 +90,12 @@ const RecordsView: React.FC = () => {
         <nav aria-label="紀錄庫分區" role="tablist" className="mb-5 flex flex-wrap gap-2 border-b border-slate-200 pb-3" data-record-section-controls="true">
           {sections.map(section => <button key={section.key} id={`record-section-tab-${section.key}`} type="button" role="tab" aria-selected={activeSection === section.key} aria-controls={`record-panel-${section.key}`} onClick={() => setActiveSection(section.key)} className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${activeSection === section.key ? 'bg-blue-600 text-white' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`} data-record-section-tab={section.key}>{section.label}</button>)}
         </nav>
-        {loading ? <div className="rounded-md border border-slate-200 bg-white p-4 text-sm text-slate-500">載入紀錄中...</div> : recordGroups.map(group => <section key={group.key} id={`record-panel-${group.key}`} role="tabpanel" aria-labelledby={`record-section-heading-${group.key}`} hidden={activeSection !== group.key} data-record-section={group.key} className="mb-5"><div className="mb-2 flex items-center justify-between"><h2 id={`record-section-heading-${group.key}`} className="text-sm font-semibold text-slate-800">{group.label}</h2><span className="text-xs text-slate-400">{group.records.length} 筆</span></div>{group.records.length ? <RecordTable records={group.records} onOpen={handleOpenRecord} /> : <div className="rounded-md border border-dashed border-slate-300 bg-white p-4 text-xs text-slate-500">尚無{group.label}。</div>}</section>)}
+        {loadError ? (
+          <div role="alert" className="flex items-center justify-between gap-3 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            <span>紀錄載入失敗：{loadError}</span>
+            {activeWorkspaceId && activeBoardId ? <button type="button" onClick={() => void loadRecords(activeWorkspaceId, activeBoardId)} className="shrink-0 rounded border border-red-300 bg-white px-2 py-1 text-xs font-semibold hover:bg-red-100">重試</button> : null}
+          </div>
+        ) : loading ? <div className="rounded-md border border-slate-200 bg-white p-4 text-sm text-slate-500">載入紀錄中...</div> : recordGroups.map(group => <section key={group.key} id={`record-panel-${group.key}`} role="tabpanel" aria-labelledby={`record-section-heading-${group.key}`} hidden={activeSection !== group.key} data-record-section={group.key} className="mb-5"><div className="mb-2 flex items-center justify-between"><h2 id={`record-section-heading-${group.key}`} className="text-sm font-semibold text-slate-800">{group.label}</h2><span className="text-xs text-slate-400">{group.records.length} 筆</span></div>{group.records.length ? <RecordTable records={group.records} onOpen={handleOpenRecord} /> : <div className="rounded-md border border-dashed border-slate-300 bg-white p-4 text-xs text-slate-500">尚無{group.label}。</div>}</section>)}
       </div>
     </div>
   );

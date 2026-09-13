@@ -11,12 +11,13 @@ import {
   Network,
   Redo2,
   Sparkles,
+  Target,
   Undo2,
 } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import useUndoStore from '../store/useUndoStore';
 import useRagStore from '../store/useRagStore';
-import useRecordStore from '../store/useRecordStore';
+import useRecordStore, { isMeetingContinuityView } from '../store/useRecordStore';
 import { useMemberStore } from '../store/useMemberStore';
 import { useMeetingModeExitGuard } from '../hooks/useMeetingModeExitGuard';
 import { useRecordDraftGuard } from '../hooks/useRecordDraftGuard';
@@ -45,6 +46,8 @@ import { useWbsStore } from '../store/useWbsStore';
 import { useTaskFilterStore } from '../store/useTaskFilterStore';
 import { clearTaskSelection } from '../utils/taskInteractions';
 import TaskDescriptionHoverCard from './TaskDescriptionHoverCard';
+import TaskWorkbenchPanel from './TaskWorkbenchPanel';
+import { getHostModeFromView, TaskInteractionScope } from '../interactions/task/TaskInteractionScope';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -90,13 +93,16 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const lastRedoLabel = redoStack.length > 0 ? redoStack[redoStack.length - 1].label : '';
   const activeBoard = getActiveBoard();
   const activeWorkspace = getActiveWorkspace();
-  const isBoardWorkspaceView = ['list', 'mindmap', 'board', 'gantt', 'calendar', 'records'].includes(currentView);
-  const isTaskFilterView = ['list', 'mindmap', 'board', 'gantt', 'calendar'].includes(currentView);
+  const isBoardWorkspaceView = ['list', 'mindmap', 'board', 'goal', 'gantt', 'calendar', 'records'].includes(currentView);
+  const isTaskFilterView = ['list', 'mindmap', 'board', 'goal', 'gantt', 'calendar'].includes(currentView);
+  const shouldRenderCrossModeTaskWorkbench = isTaskFilterView
+    && currentView !== 'board'
+    && Boolean(activeWorkspace && activeBoard);
   const isSettingsScopeView = currentView === 'settings' || currentView === 'calendar_subscriptions';
   const isSystemPageView = isSettingsScopeView || currentView === 'records';
   const isMobileBoardOnly = isMeetingRecordUnavailable;
   const canPreviewPanels = !isMobileBoardOnly;
-  const mobileBlockedViews = React.useMemo(() => new Set<ViewMode>(['list', 'mindmap', 'gantt', 'calendar']), []);
+  const mobileBlockedViews = React.useMemo(() => new Set<ViewMode>(['list', 'mindmap', 'goal', 'gantt', 'calendar']), []);
 
   const handlePanelPreview = useCallback((panel: PanelPreviewId) => {
     if (!canPreviewPanels) return;
@@ -128,9 +134,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
   const handleToggleMobileTaskWorkbench = useCallback(() => {
     if (isMobileBoardOnly) setSidebarOpen(false);
-    setView(activeWorkspace && activeBoard ? 'board' : 'home');
+    if (!isTaskFilterView) setView(activeWorkspace && activeBoard ? 'board' : 'home');
     toggleTaskWorkbenchPanel();
-  }, [activeBoard, activeWorkspace, isMobileBoardOnly, setSidebarOpen, setView]);
+  }, [activeBoard, activeWorkspace, isMobileBoardOnly, isTaskFilterView, setSidebarOpen, setView]);
 
   const handleToggleWorkspaceSidebar = useCallback(() => {
     if (isMobileBoardOnly && !isSidebarOpen) closeTaskWorkbenchPanel();
@@ -160,7 +166,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       icon: <CalendarDays size={13} />,
       title: '日曆功能開發中，內容可能尚未穩定',
     },
+    { value: 'goal', label: 'OKR模式', icon: <Target size={13} /> },
   ];
+  const visibleModeSwitcherOptions = isMeetingMode
+    ? modeSwitcherOptions.filter(option => isMeetingContinuityView(option.value))
+    : modeSwitcherOptions;
   useEffect(() => {
     if (!isMobileBoardOnly || !activeWorkspace || !activeBoard) return;
     if (!mobileBlockedViews.has(currentView)) return;
@@ -340,7 +350,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                   {!isMobileBoardOnly ? (
                     <ModeSwitcher
                       value={currentView}
-                      options={modeSwitcherOptions}
+                      options={visibleModeSwitcherOptions}
                       onChange={handleModeChange}
                       disabled={isSelectingMode}
                       disabledTitle="選取模式中無法切換檢視"
@@ -447,6 +457,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           ) : (
             <button
               type="button"
+              aria-label="新增會議記錄"
               onClick={handleStartMeetingRecord}
               className={cn(
                 'btn-outline flex h-7 shrink-0 px-2 text-xs sm:h-8 sm:px-3 sm:text-sm',
@@ -455,7 +466,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
               )}
               title="新增會議記錄，開啟右側紀錄欄"
             >
-              <span className="hidden lg:inline">新增會議記錄</span>
+              <span className="hidden lg:inline">會議記錄</span>
             </button>
           ))}
 
@@ -510,6 +521,16 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
       <div className="flex flex-1 overflow-hidden">
         <Sidebar />
+
+        {shouldRenderCrossModeTaskWorkbench ? (
+          <TaskInteractionScope
+            hostMode={getHostModeFromView(currentView)}
+            origin="task-workbench"
+            enablePlacementHoverSync={false}
+          >
+            <TaskWorkbenchPanel />
+          </TaskInteractionScope>
+        ) : null}
 
         <main className={`relative flex h-full min-w-0 flex-1 flex-col ${meetingRecordReserveClass}`} data-app-main="true">
           {children}

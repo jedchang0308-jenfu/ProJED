@@ -1,8 +1,213 @@
 # SPEC-039: 任務過濾器核心與全域任務平台兩欄篩選重構
 
-關聯 DEV：DEV-039、DEV-090、DEV-091
+關聯 DEV：DEV-039、DEV-090、DEV-091、DEV-118
 關聯開發點：DEV-027D 心智圖日期顯示與既有過濾器串接、DEV-028 四模式任務操作契約、DEV-036 Trello-like Workspace Governance
-狀態：Phase 1/1A Implemented + Local Automated QC Passed / Phase 1B Implemented + Local Automated QC Passed / Phase 1C Implemented + Local Automated QC Passed / Phase 2 Cross-Board Source Slice Implemented + Local Automated QC Passed / Phase 2A Drag Trigger Parity Implemented + Local Automated QC Passed / Phase 2B Production Migration and Deploy Complete / Authenticated Smoke Pending / DEV-090 Implemented + Local Automated QA-QC Passed / DEV-091 Implemented + Local Automated QA-QC Passed / Release Gate Required
+狀態：Phase 1/1A Implemented + Local Automated QC Passed / Phase 1B Implemented + Local Automated QC Passed / Phase 1C Implemented + Local Automated QC Passed / Phase 2 Cross-Board Source Slice Implemented + Local Automated QC Passed / Phase 2A Drag Trigger Parity Implemented + Local Automated QC Passed / Phase 2B Production Migration and Deploy Complete / Authenticated Smoke Pending / DEV-090 Implemented + Local Automated QA-QC Passed / DEV-091 Implemented + Local Automated QA-QC Passed / DEV-118 Local Candidate QA-QC PASS + NOT RELEASED / Authenticated DB and release gate pending
+
+## DEV-118 Current Phase Implementation Contract：正向包含式篩選與共用控制
+
+文件狀態：`RD Implementation Ready / 架構定案：已定案 / Local Candidate QA-QC PASS / NOT RELEASED`
+
+Architecture Closure Review：`PASS / 2026-09-11 / P0-P1 unresolved blockers = 0`
+
+本節是 DEV-118 核心行為與 browser implementation authority。`SPEC-045`只治理 Calendar
+snapshot／permission／DB／Edge；`QA-DEV-118`只治理 fixtures、cases、commands與 evidence。
+若摘要文件與本節衝突，以本節為準。
+
+### Supersession and Preserved Authority
+
+本變更是 `Intentional replacement + compatible extension`：
+
+- 取代 DEV-090 v4 status boolean、overdue／due AND、逐選項 active count，以及
+  `未指派=沒有 primary assignee`。
+- 取代舊 Phase 3「只抽 UI、不改 predicate／persistence」的窄邊界。
+- 保留 `projectTaskFilterResults()` 的 matched／visible／context-only identity、account×board
+  ownership、unknown-version fail-safe與 DEV-062 `isTaskOverdue()`。
+- 三個 surface 不共享 active state；只共享 query contract、browser matcher與 controlled UI。
+
+ADR不新增：本次不建立新 ownership、table或外部系統，沿用 ADR-045 preference row與
+ADR-038 Calendar snapshot邊界。
+
+### Product Behavior Contract
+
+唯一心智模型：`未選＝不限；選取＝只顯示符合者。同一類條件 OR，不同類條件 AND。`
+
+| 邏輯組 | 未啟用 | 同組規則 | 跨組 |
+|---|---|---|---|
+| Status | 不限制 manual status | selected statuses OR | AND |
+| Date | 不限制到期日 | 逾期 OR 今天至 N 天 | AND |
+| People | 不限制主責／協作／未指派 | selected people與未指派 OR | AND |
+| Tag | 不限制標籤 | selected tags OR | AND |
+| Keyword | 不限制名稱 | normalized title contains | AND |
+
+`TaskDisplaySettings`不是 filter group。依賴線、開始日期與標籤顯示不得進 query、badge、
+summary或 clear-all。
+
+### Canonical v5 Query
+
+```ts
+type TaskFilterQuery = {
+  statuses: ManualTaskStatus[];
+  due: {
+    includeOverdue: boolean;
+    upcomingWithinDays: number | null;
+  };
+  people: {
+    ids: string[];
+    includeUnassigned: boolean;
+  };
+  tagIds: string[];
+  keyword: string;
+};
+```
+
+Normalization：
+
+- default為空 arrays、`false`、`null`與空 keyword，代表完全不限。
+- statuses只接受 `todo | in_progress | onhold | completed`；顯式四選全開不折疊，
+  取消最後一個則回到空陣列與不限。
+- people只有在 `ids=[] && includeUnassigned=false` 時不限。`未指派`須符合
+  `getTaskAssignmentIds(task).length === 0`。
+- arrays去重／去空並canonical排序：status依domain order，people／tag ID依code-point。
+- days只接受0～365整數；interactive invalid input回到`null`，strict persisted payload由其
+  boundary拒絕。keyword payload只trim，case-fold由compiler處理。
+- normalizer必須 deterministic、idempotent；不得用 Set iteration順序形成 UI contract。
+
+### Browser Compile and Match Algorithm
+
+`compileTaskFilter(query, today)`是 Board、Workbench與 Calendar preview唯一 precomputation
+boundary。它先normalize並建立sets，再回傳immutable query與matcher；`today`由caller注入為
+Taipei `YYYY-MM-DD`。逐task不得重建sets或讀系統時鐘。
+
+```ts
+statusMatch = statuses.empty || statuses.has(normalizeManualTaskStatus(task.status))
+
+days = validDueDate ? diffInLocalCalendarDays(dueDate, today) : null
+overdueMatch = includeOverdue && isTaskOverdue(task, today)
+upcomingMatch = upcomingWithinDays !== null
+  && days !== null && days >= 0 && days <= upcomingWithinDays
+dateMatch = dateInactive || overdueMatch || upcomingMatch
+
+peopleMatch = peopleInactive
+  || (includeUnassigned && getTaskAssignmentIds(task).length === 0)
+  || intersects(getTaskAssignmentIds(task), peopleIds)
+
+tagMatch = tagIds.empty || intersects(task.tagIds, tagIds)
+keywordMatch = keyword.empty || normalize(task.title).includes(keyword)
+
+matches = statusMatch && dateMatch && peopleMatch && tagMatch && keywordMatch
+```
+
+日期組啟用時，缺少／無效due date不命中；`N=0`只含今天，`N=7`含今天至第7天，
+過去日期只由overdue分支納入。completed是否顯示由status決定，overdue truth沿用DEV-062。
+
+`projectTaskFilterResults()`委派compiled matcher並保留hierarchy identity contract。
+同source／query／today下三個browser consumers的matched IDs必須相同；context-only ancestor
+不得計入結果或badge。
+
+Calendar Edge因Deno、snake_case row與permission prefilter保留獨立v4 adapter，不直接import
+browser module；兩個runtime必須共同讀取
+`scripts/fixtures/dev-118-task-filter-conformance.json`並輸出相同matched truth。
+
+### Active Count, Reset and Shared UI
+
+- active count按status、date、people、tag、keyword群組計算，最大5；同組多選仍計1。
+- section clear只清該組；clear-all只重設query，不改display、selected board或Calendar專屬draft。
+- `逾期`是獨立chip；到期label與days是單一compound control。到期按鈕只顯示「到期」，
+  不顯示日期icon或「日」；首次啟用預設7，清空或關閉回到`null`。
+- section順序：任務狀態 → 到期日與搜尋 → 介面顯示（適用時）→ 負責人／協作 → 標籤。
+- inactive為neutral；selected為brand blue且具有`aria-pressed`／outline等非顏色訊號。
+  逾期只保留最小orange warning cue；不得加入helper、摘要卡或框中框。
+- options loading／error保留selection；empty只顯示最短狀態。`Escape`關閉並恢復focus，
+  keyboard與screen reader可操作，320～1440px不得overflow、雙重捲動或裁切。
+
+既有 `src/components/ui/TaskConditionFilterControls.tsx` 就地成為唯一filter section JSX，
+不改檔名、不新增compatibility component，也不做style檔純命名搬移。target props為
+`value: TaskFilterQuery`、options、disabled reasons、必要slots與
+`onChange(next: TaskFilterQuery)`；禁止nested `Partial` merge。
+
+共同元件不得讀Zustand、localStorage、Supabase、portal／drawer state或permission service。
+Board wrapper保留portal、pending refresh、sync warning、display與tag create；Workbench保留
+board selector、list/group與local per-board state；Calendar保留included、date types、copy、
+permission、preview、save與drawer。
+
+### Architecture Closure and Implementation Surface
+
+Closure source：branch `持續優化3`、HEAD
+`522e92318d1da05cd06e19604656f3b35fe9e3e9`及 DEV-118文件diff。
+
+| Responsibility | Frozen surface |
+|---|---|
+| Query／legacy | `src/features/taskFilters/types.ts`、`defaults.ts`、`storage.ts`、`predicates.ts`、`describe.ts`、`resultProjection.ts`、`index.ts`。v5 runtime使用`TaskFilterQuery`；`LegacyTaskFilterStateV4`只供converter／v1～v3。 |
+| Deferred status | `useWbsStore.ts`透過compiled matcher的status override重算；`deferredRefresh.ts`只保存pending projection狀態。 |
+| Board | `useTaskFilterStore.ts`管理scope與query；`preferenceRepository.ts`管理local journal／remote version；Supabase service只提供version-aware CAS。 |
+| Workbench | `features/taskWorkbench/preferences.ts`保存account-scoped v5 per-board query與既有panel prefs。 |
+| Shared UI | 就地修改`TaskConditionFilterControls.tsx`；`StatusFilterBar.tsx`移除重複filter JSX，三個wrapper保留各自責任。既有style檔就地調整。 |
+| Calendar | 本節只要求browser preview接同一compiler；snapshot／service／SQL／Edge細節以`SPEC-045`為準。 |
+| Verification | fixture、五個DEV-118 verifier、direct regressions與commands只以`QA-DEV-118`為準。 |
+
+Dependency固定為 `surface wrapper -> TaskConditionFilterControls + taskFilters domain`。
+domain不得反向import React、store、storage adapter、Calendar或Supabase。runtime不得同時export
+舊新normalizer或boolean actions；legacy symbols不得被UI import。
+
+`TaskDetailsModal`／`TagPicker`的`selectedTagIds`、`ListView_old.txt`與legacy WBS
+migration不是本期query surface，除非typecheck證明直接依賴，否則保持inspect-only。
+
+### Persistence and Compatibility Contract
+
+| Surface／storage | Target |
+|---|---|
+| Board remote | `preference_version=5`；hydrate v4後CAS 4→5，正常write 5→5，無row用expected null insert，reset只刪v5；conflict re-read，`>5`block。 |
+| Board local cache／pending | v4先轉v5、write＋readback成功後才刪；pending upsert轉v5，pending delete保留delete intent；unknown outcome保留journal。 |
+| Display settings | 拆出`TASK_DISPLAY_SETTINGS_VERSION=4`，原key和值不因query升級／reset改變。 |
+| Workbench local | v4逐board轉v5，一次寫入並readback後才刪舊值；selectedBoardId、panel prefs與account isolation不變。 |
+| Calendar | v1～v3只materialize local v4 draft，未save前不寫row／不重生token；完整契約見`SPEC-045`。 |
+
+Board controls在remote hydration完成前disabled，避免cache interaction與version read競態。
+scope／auth generation變更時不得送舊mutation；任何network outcome unknown都不得blind overwrite。
+
+唯一 v4→v5 converter：
+
+1. 四個manual status全true → `statuses=[]`；1～3個true → selected statuses；
+   all false → `[]`並記錄intentional expansion，避免永久filtered-zero。
+2. `overdueOnly=true` → overdue only；只有`dueWithinDays=N` →
+   overdue＋upcoming N，以保存舊`diff <= N`的實際集合。
+3. people／tag／keyword去重搬移；`__unassigned__`轉`includeUnassigned=true`。
+   collaborator-only不再視為未指派，是有意修正而非identity-preserving migration。
+4. Calendar v1～v3使用同一converter；included、date types、permission保持不變且不background rewrite。
+
+Calendar validator、Edge與production row version受影響，但task schema、table與RLS不變。
+Remote migration／deploy／live `.ics`另走release gate，本節不提供release指令。
+
+### Ordered Implementation Slices
+
+`WP-118-A fixtures + failing tests` → `B domain` →
+`C Board／Workbench persistence` → `D shared UI + browser consumers` →
+`E Calendar v4 DB／Edge source` → `F local candidate QA/QC`。
+
+禁止先做UI再回填query、先讓app寫v4再補remote support，或建立surface-specific predicate。
+每包進下一包前須通過自己的新gate與受影響舊gate。exact commands與case IDs只查
+`QA-DEV-118`，不得複製到本節形成第二份命令清單。
+
+### Acceptance and Non-functional Gate
+
+- default query顯示全部canonical tasks、badge 0且display不變；Calendar safe default由`SPEC-045`定義。
+- 同組OR／跨組AND、日期、unassigned、group count與clear邊界全數通過。
+- 三個browser consumers matched IDs一致；hierarchy context不污染結果。
+- Board／Workbench／Calendar legacy migration可恢復、冪等且newer-version-safe。
+- Calendar preview／feed、permission、strict validator依`SPEC-045`與`QA-DEV-118`通過。
+- 三個正常入口、keyboard／focus與目標viewports無visible error、overflow、重疊或裁切。
+- query／today不變時只compile一次，逐task不建Set／讀clock。WP-118-A先在同fixture／環境
+  凍結v4 baseline；v5 500-task p95不得高於其1.25倍，並記錄兩者絕對值。
+
+### Execution Boundary and Stop Conditions
+
+- 本節只達 `RD Implementation Ready / NOT IMPLEMENTED`；收到明確實作指令後從WP-118-A開始。
+- 若需改boolean semantics、surface ownership、v1～v3 read、permission、task schema／RLS，
+  或不能維持canonical matched identity，停止並回送規劃。
+- Exclude mode、advanced builder、team-shared presets為
+  `Future Phase Captured / Not Requested`，不得擴張本期。
+- Local candidate PASS不代表release；DB／Edge／app deploy與production smoke須獨立授權。
 
 2026-09-08 DEV-110 meeting-record boundary addendum：`Intentional narrow exception / RD Implementation Ready`。
 「未歸位與已歸位功能等價」不再被解讀為可忽略資料ownership/FK；account-unplaced task仍可開詳情與
@@ -648,7 +853,7 @@ flowchart TD
 | Phase 1C | Implemented / Local Automated QC Passed | Filter Result Parity | 對齊看板階層式篩選與全域任務平台扁平篩選；同條件 matched task IDs 一致，父層容器只作 context |
 | Phase 2 | Cross-Board Source Slice Implemented / Local Automated QC Passed | Workbench Data Source Truth | cross-board task source、scoped store merge、deletion effective visibility；visible partial/error summary / DB-RLS-RPC follow-up 仍未授權 |
 | Phase 2A | Implemented / Local Automated QC Passed | Workbench Drag Trigger Surface Parity | 未歸位任務與所有任務排序列使用一致 row root drag surface，保留 left click details、right click menu、mobile long press、hierarchy cue 與日期資訊 |
-| Phase 3 | Deferred / Not Authorized | Filter Section Componentization | 將重複的狀態、到期日、負責人、標籤、關鍵字 UI section 元件化；不新增儲存功能 |
+| Phase 3 / DEV-118 | RD Implementation Complete / Local Candidate QA-QC PASS / NOT RELEASED | Positive-inclusion Query + Shared Controls | query v5、同組 OR／跨組 AND、date／unassigned修正、active-group count、controlled shared UI、CAS／Calendar v4與可執行QA契約；authenticated DB／release gate pending |
 | Phase 4 | Deferred / Not Authorized | Legacy Cleanup Guardrails | 移除 profile 遺留文件/測試/keys、補防回流 gate；不做 profile sync/governance |
 
 ## Phase 1 / 1A RD Contract（已完成歷史範圍）
@@ -1003,7 +1208,7 @@ Stop conditions：
 | 看板階層式篩選與全域任務平台扁平篩選結果一致性 | Same Spec Phase | Phase 1C | 已實作並通過本機自動化 QC；production release gate 仍需使用者明確部署授權 |
 | 未歸位 / 已歸位任務拖曳觸發窗口一致化 | Same Spec Phase | Phase 2A | 已完成產品碼、static/browser verifier 與本機自動化 QC；production release 仍需另行授權 |
 | Supabase RPC / RLS / DB role matrix | Same Spec Phase | Phase 2 | Phase 2 授權且需要遠端資料層 |
-| Filter UI section 元件化 | Same Spec Phase | Phase 3 | 兩欄工作台穩定後，RD 判定重複 UI 已造成維護成本 |
+| 正向包含 query、filter UI section 元件化與跨 surface parity | Implemented / Local Candidate QA-QC PASS / NOT RELEASED | Phase 3 / DEV-118 | WP-118-A～F 已完成本機實作與驗證；不得回到 exclude mode、分裂 predicate 或只抽 JSX；authenticated DB／release gate 另行處理 |
 | Profile / 設定檔 / 儲存 / 複製 / 同步 | Cancelled for DEV-039 | No active target | 使用者已明確取消；若未來重啟需新增 DEV 並重新決策 |
 | Calendar subscription filters | New DEV | DEV-037 | 依 DEV-037 source-scope contract 處理 |
 | Production deploy / remote migration / data repair | Production deploy and migration complete / data repair blocked | deployment-release-gate / Supabase gate | 使用者已明確授權並完成 production 與 DB operation；資料修復仍需另行授權 |
@@ -1053,7 +1258,7 @@ Acceptance：
 | Phase 2 | Frontend/local slice Authorized | Cross-Board Source Slice Implemented / Local Automated QC Passed | `listWorkbenchTasks()`、`mergeUnplacedTasks()`、`isTaskEffectivelyVisible()`、cross-board task source、scoped store merge、刪除後不殘留 | profile storage、未歸位跨裝置同步（由 Phase 2B 覆寫）、visible partial/error summary UI、production migration/deploy/data repair、RPC/RLS | 使用者授權 Phase 2 RD；若需 RPC/RLS/migration 則另取授權 | active board A/B 時仍顯示所有可見 board 任務；刪除 task/archived ancestor 後不在 `所有任務排序` 殘留；selected board 不改 source scope | cross-board static/browser verifier、parity/placement regression、TS、build:test；DB role matrix if RPC/RLS changed |
 | Phase 2A | Authorized / Complete | Implemented / Local Automated QC Passed | 統一未歸位任務與所有任務排序列的 row root drag surface | sensor 調整、拖曳把手、資料模型、DB/RLS/migration、production deploy、手機新手勢 | 使用者確認以未歸位任務方式為主，且要求寫成開發文件、QA 計畫並完成 RD | 兩種 row 都共用 row-root drag surface；左鍵詳情、右鍵選單、手機長按與 hierarchy cue 不回歸 | Phase 2A static/browser drag-surface gate、DEV-028/029/039 regression、TS、build:test |
 | Phase 2B | Authorized by user / Production Migration and Deploy Complete | Supabase account-owned unplaced persistence deployed / Authenticated Smoke Pending | 未歸位任務 Supabase table、RLS、首次 local migration、跨裝置 CRUD contract | Realtime、Firebase/local-test cross-device sync；authenticated smoke 需安全測試帳號或使用者人工補測 | 使用者 2026-08-10 確認「請執行」；migration、service、fallback、acceptance、release gate 已具備 | 同帳號跨裝置一致、跨帳號隔離、migration 失敗不遺失 local staging | migration history/readback、RLS table/policy/grant readback、TypeScript、build、Level 4 artifact smoke；authenticated two-device smoke pending |
-| Phase 3 | Not Authorized | RD Contract Ready / Not Authorized | filter section componentization | 儲存功能、profile governance | Phase 2 或工作台 UI 穩定後，RD 判定重複 UI 已造成維護成本 | UI 重複減少且行為不變 | static/browser regression |
+| Phase 3 / DEV-118 | Local Candidate Implemented | RD Implementation Complete / Local Candidate QA-QC PASS / NOT RELEASED | query v5、同組 OR／跨組 AND、date／unassigned／count修正、shared controls、Board CAS、v4／Calendar v1～v3 compatibility | exclude mode、advanced builder、shared presets、production release、authenticated remote DB migration | WP-118-A～F 已完成；遠端 migration／deploy／release 仍需獨立授權 | 三consumer identity parity、migration、UI與Calendar preview/feed gates全通；authenticated DB／live feed pending | QA-DEV-118 model/migration/browser/DB static/Edge；release evidence另走gate |
 | Phase 4 | Not Authorized | RD Contract Ready / Not Authorized | profile 遺留清理與防回流 gate | profile sync/governance | 發現舊 profile 概念、keys、文件或測試造成回流風險 | 舊 profile 概念不再回流 DEV-039 | static guard、docs audit |
 
 ## Stop Conditions
@@ -1072,4 +1277,8 @@ Acceptance：
 
 ## Assignment Filter Addendum - 2026-08-06
 
-Board 與 Workbench 的 assignee filter label 統一為「負責人/協作」，filter match identity 使用 `assigneeIds ∪ collaboratorIds`；「未指派」仍依沒有 primary assignee 判定。選項來源需從 selected board 的 active tasks 同時收集主責與協作，避免協作人只存在於資料卻無法被 UI 選取。這項語意由 DEV-048 filter follow-up browser QC 驗證。
+Board 與 Workbench 的 assignee filter label 統一為「負責人/協作」，filter match identity 使用 `assigneeIds ∪ collaboratorIds`；選項來源需從 selected board 的 active tasks 同時收集主責與協作，避免協作人只存在於資料卻無法被 UI 選取。這項已實作的 v4 語意由 DEV-048 filter follow-up browser QC 驗證。
+
+> DEV-118 Supersession Note - 2026-09-11：本段「未指派依沒有 primary assignee判定」已被上方
+> DEV-118 contract有意取代；target v5只在主責與協作皆空時命中未指派。v5已在 local candidate
+> 完成實作與驗證；既有 v4 runtime／遠端資料仍維持相容讀取，正式切換須通過 authenticated DB／release gate。

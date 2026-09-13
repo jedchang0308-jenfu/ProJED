@@ -1,7 +1,7 @@
 import {
   BOARD_TASK_FILTER_PREFS_VERSION,
-  normalizeTaskFilters,
-  type TaskFilterState,
+  normalizePersistedTaskFilters,
+  type TaskFilterQuery,
 } from '../taskFilters';
 import {
   getAccountScopedStorageKey,
@@ -14,7 +14,7 @@ export const LEGACY_TASK_WORKBENCH_PANEL_PREFS_KEY = 'projed-task-workbench-pane
 export const TASK_WORKBENCH_PANEL_PREFS_KEY = 'projed-task-workbench-panel:v2';
 export const LEGACY_TASK_WORKBENCH_FILTER_PREFS_KEY = 'projed-task-workbench-filters:v1';
 export const LEGACY_TASK_WORKBENCH_FILTER_PREFS_V2_KEY = 'projed-task-workbench-filters:v2';
-export const TASK_WORKBENCH_FILTER_PREFS_KEY = 'projed-task-workbench-filters:v4';
+export const TASK_WORKBENCH_FILTER_PREFS_KEY = 'projed-task-workbench-filters:v5';
 const TASK_WORKBENCH_OPEN_PREFS_VERSION = 1;
 export const DEFAULT_TASK_WORKBENCH_WIDTH = 340;
 export const MIN_TASK_WORKBENCH_WIDTH = 182;
@@ -51,7 +51,7 @@ export type TaskWorkbenchPanelPrefs = {
 
 export type TaskWorkbenchFilterPrefs = {
   selectedBoardId: string | null;
-  filtersByBoardId: Record<string, TaskFilterState>;
+  filtersByBoardId: Record<string, TaskFilterQuery>;
 };
 
 const DEFAULT_PANEL_PREFS: TaskWorkbenchPanelPrefs = {
@@ -133,11 +133,11 @@ export const readTaskWorkbenchFilterPrefs = (
 ): TaskWorkbenchFilterPrefs => {
   const scopedKey = getAccountScopedStorageKey(TASK_WORKBENCH_FILTER_PREFS_KEY, accountId);
   const parsed = readStorageJson<Partial<TaskWorkbenchFilterPrefs & { version: number }>>(scopedKey);
-  if (parsed?.version === BOARD_TASK_FILTER_PREFS_VERSION) {
-    const filtersByBoardId = Object.entries(parsed.filtersByBoardId || {}).reduce<Record<string, TaskFilterState>>(
+  if (parsed && (parsed.version === BOARD_TASK_FILTER_PREFS_VERSION || parsed.version === 4)) {
+    const filtersByBoardId = Object.entries(parsed.filtersByBoardId || {}).reduce<Record<string, TaskFilterQuery>>(
       (acc, [boardId, filters]) => {
         if (typeof boardId === 'string' && filters && typeof filters === 'object') {
-          acc[boardId] = normalizeTaskFilters(filters as Partial<TaskFilterState>);
+          acc[boardId] = normalizePersistedTaskFilters(filters);
         }
         return acc;
       },
@@ -166,7 +166,10 @@ export const readTaskWorkbenchFilterPrefs = (
   const migrated = {
     version: BOARD_TASK_FILTER_PREFS_VERSION,
     selectedBoardId: typeof legacy.selectedBoardId === 'string' ? legacy.selectedBoardId : null,
-    filtersByBoardId: {},
+    filtersByBoardId: Object.entries(legacy.filtersByBoardId || {}).reduce<Record<string, TaskFilterQuery>>((acc, [boardId, filters]) => {
+      acc[boardId] = normalizePersistedTaskFilters(filters);
+      return acc;
+    }, {}),
     updatedAt: Date.now(),
   };
   if (writeStorageJson(scopedKey, migrated)) {
@@ -179,7 +182,7 @@ export const readTaskWorkbenchFilterPrefs = (
   }
   return {
     selectedBoardId: migrated.selectedBoardId,
-    filtersByBoardId: {},
+    filtersByBoardId: migrated.filtersByBoardId,
   };
 };
 

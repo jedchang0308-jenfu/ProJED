@@ -49,7 +49,8 @@ assert(
     source.resultProjection.includes('if (parent.isArchived) return false') &&
     source.resultProjection.includes('if (!isSameBoard(parent, boardId)) return false') &&
     source.resultProjection.includes('if (!isTaskEffectivelyVisible(node, nodesById, { boardId })) return') &&
-    source.resultProjection.includes('matchesTaskFilters(node, filters)'),
+    source.resultProjection.includes('compileTaskFilter(filters') &&
+    source.resultProjection.includes('compiled.matches(node)'),
 );
 
 assert(
@@ -69,14 +70,14 @@ assert(
 assert(
   'Kanban hierarchy uses projection visibility instead of per-level predicate filtering',
   source.kanbanColumn.includes('filterProjection?: TaskFilterResultProjection') &&
-    source.kanbanColumn.includes('filterProjection.visibleTaskIds.has(child.id)') &&
+    source.kanbanColumn.includes('visibleTaskIds.has(child.id)') &&
     source.kanbanColumn.includes('filterProjection={filterProjection}') &&
     !source.kanbanColumn.includes('matchesTaskFilters') &&
     source.kanbanCard.includes('filterProjection?: TaskFilterResultProjection') &&
     source.kanbanCard.includes('filterProjection={filterProjection}') &&
     source.kanbanChecklist.includes('filterProjection?: TaskFilterResultProjection') &&
-    source.kanbanChecklist.includes('filterProjection.visibleTaskIds.has(n.id)') &&
-    source.kanbanChecklist.includes('filterProjection={filterProjection}') &&
+    (source.kanbanChecklist.includes('filterProjection={filterProjection}') || source.kanbanChecklist.includes('filterProjection={props.filterProjection}')) &&
+    (source.kanbanChecklist.includes('filterProjection={filterProjection}') || source.kanbanChecklist.includes('filterProjection={props.filterProjection}')) &&
     !source.kanbanChecklist.includes('matchesTaskFilters'),
 );
 

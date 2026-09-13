@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, Users } from 'lucide-react';
 import type { TaskNode } from '../types';
 import {
@@ -20,6 +21,9 @@ interface TaskAssignmentPickerProps {
   compact?: boolean;
   inline?: boolean;
   fullSummary?: boolean;
+  portal?: boolean;
+  /** Decorative trigger icon can be hidden by dense mode-specific surfaces. */
+  showIcon?: boolean;
   onChange: (primaryIds: string[], collaboratorIds: string[]) => void;
 }
 
@@ -37,10 +41,14 @@ export const TaskAssignmentPicker: React.FC<TaskAssignmentPickerProps> = ({
   compact = false,
   inline = false,
   fullSummary = false,
+  portal = false,
+  showIcon = true,
   onChange,
 }) => {
   const rootRef = React.useRef<HTMLDivElement | null>(null);
+  const panelRef = React.useRef<HTMLDivElement | null>(null);
   const [isOpen, setIsOpen] = React.useState(inline);
+  const [portalStyle, setPortalStyle] = React.useState<React.CSSProperties>();
   const currentSelection = React.useMemo(
     () => normalizeTaskAssignmentSelection(
       getTaskAssigneeIds(node),
@@ -83,7 +91,8 @@ export const TaskAssignmentPicker: React.FC<TaskAssignmentPickerProps> = ({
     if (inline || !isOpen) return undefined;
 
     const handlePointerDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setIsOpen(false);
+      const target = event.target as Node;
+      if (!rootRef.current?.contains(target) && !panelRef.current?.contains(target)) setIsOpen(false);
     };
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setIsOpen(false);
@@ -95,6 +104,36 @@ export const TaskAssignmentPicker: React.FC<TaskAssignmentPickerProps> = ({
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [inline, isOpen]);
+
+  const updatePortalPosition = React.useCallback(() => {
+    if (!portal || !rootRef.current) return;
+    const triggerRect = rootRef.current.getBoundingClientRect();
+    const panelHeight = panelRef.current?.getBoundingClientRect().height ?? 0;
+    const width = Math.max(250, triggerRect.width);
+    const left = Math.min(
+      Math.max(8, triggerRect.left),
+      Math.max(8, window.innerWidth - width - 8),
+    );
+    const belowTop = triggerRect.bottom + 4;
+    const aboveTop = triggerRect.top - panelHeight - 4;
+    const top = panelHeight > 0 && belowTop + panelHeight > window.innerHeight - 8 && aboveTop >= 8
+      ? aboveTop
+      : Math.min(belowTop, Math.max(8, window.innerHeight - panelHeight - 8));
+    setPortalStyle({ left, top, width });
+  }, [portal]);
+
+  React.useLayoutEffect(() => {
+    if (!portal || !isOpen) return undefined;
+    updatePortalPosition();
+    const frame = window.requestAnimationFrame(updatePortalPosition);
+    window.addEventListener('resize', updatePortalPosition);
+    window.addEventListener('scroll', updatePortalPosition, true);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('resize', updatePortalPosition);
+      window.removeEventListener('scroll', updatePortalPosition, true);
+    };
+  }, [isOpen, portal, updatePortalPosition]);
 
   const commit = (primaryIds: string[], collaboratorIds: string[]) => {
     const selection = normalizeTaskAssignmentSelection(primaryIds, collaboratorIds);
@@ -157,7 +196,9 @@ export const TaskAssignmentPicker: React.FC<TaskAssignmentPickerProps> = ({
 
   const panel = (
     <div
-      className={`${inline ? '' : 'absolute left-0 top-full z-[80] mt-1'} w-full min-w-[250px] space-y-2 rounded-lg border border-slate-200 bg-white p-2 text-left shadow-xl`}
+      ref={panelRef}
+      className={`${inline ? '' : portal ? 'fixed z-[10020]' : 'absolute left-0 top-full z-[80] mt-1'} w-full min-w-[250px] space-y-2 rounded-lg border border-slate-200 bg-white p-2 text-left shadow-xl`}
+      style={portal ? portalStyle : undefined}
       data-task-assignment-picker-panel="true"
       onClick={event => event.stopPropagation()}
     >
@@ -202,7 +243,7 @@ export const TaskAssignmentPicker: React.FC<TaskAssignmentPickerProps> = ({
         title={fullSummary ? fullSummaryTitle : undefined}
         className={`flex h-8 w-full min-w-0 items-center gap-2 rounded-md border border-slate-200 bg-white px-2 text-left text-sm text-slate-700 outline-none transition hover:border-slate-300 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400 ${compact ? 'text-xs' : ''}`}
       >
-        <Users size={compact ? 13 : 15} className="flex-shrink-0 text-blue-500" />
+        {showIcon ? <Users size={compact ? 13 : 15} className="flex-shrink-0 text-blue-500" data-task-assignment-trigger-icon="true" /> : null}
         <span className="min-w-0 flex-1 truncate">
           {fullSummary ? assignmentSummary : primarySummary}
         </span>
@@ -211,7 +252,7 @@ export const TaskAssignmentPicker: React.FC<TaskAssignmentPickerProps> = ({
         ) : null}
         <ChevronDown size={14} className={`flex-shrink-0 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
-      {isOpen ? panel : null}
+      {isOpen ? (portal ? createPortal(panel, document.body) : panel) : null}
       {!fullSummary && currentSelection.collaboratorIds.length > 0 ? (
         <div className="mt-1 flex items-center gap-1 text-[10px] text-slate-400" title="協作成員數量">
           <Users size={11} /> 協作 {currentSelection.collaboratorIds.length} 人

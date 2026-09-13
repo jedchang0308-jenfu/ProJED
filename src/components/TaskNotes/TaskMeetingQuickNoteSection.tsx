@@ -1,6 +1,7 @@
 import React from 'react';
-import dayjs from 'dayjs';
 import type { MeetingTaskQuickNoteProjection } from '../../utils/meetingTaskQuickNotes';
+import MeetingQuickNoteRows from './MeetingQuickNoteRows';
+import TaskNoteContentSurface from './TaskNoteContentSurface';
 
 interface TaskMeetingQuickNoteSectionProps {
   taskId: string;
@@ -18,6 +19,8 @@ interface TaskMeetingQuickNoteSectionProps {
   onAppend: () => void;
   onRetry: () => void;
 }
+
+const TASK_MEETING_HISTORY_MAX_HEIGHT_PX = 200;
 
 const TaskMeetingQuickNoteSection: React.FC<TaskMeetingQuickNoteSectionProps> = ({
   taskId,
@@ -54,28 +57,28 @@ const TaskMeetingQuickNoteSection: React.FC<TaskMeetingQuickNoteSectionProps> = 
 
       {visibleEntries.length > 0 ? (
         <div className="space-y-0.5" data-task-meeting-quick-notes-list="true">
-          {visibleEntries.map(entry => (
-            <div
-              key={`${entry.recordId}:${entry.id}`}
-              className="flex min-w-0 gap-2 text-sm leading-5"
-              data-task-meeting-quick-note-row="true"
-              data-record-status={entry.recordStatus}
-            >
-              <time className="w-10 shrink-0 text-xs tabular-nums text-slate-400" dateTime={new Date(entry.occurredAt).toISOString().slice(0, 10)}>
-                {dayjs(entry.occurredAt).format('MM/DD')}
-              </time>
-              <span className="min-w-0 break-words text-slate-700">{entry.text}</span>
-            </div>
-          ))}
+          <TaskNoteContentSurface
+            className="max-h-[200px] pr-1"
+            data-task-meeting-history-scroll="true"
+            role="region"
+            aria-label="會議紀錄歷程"
+            tabIndex={0}
+            style={{ maxHeight: `${TASK_MEETING_HISTORY_MAX_HEIGHT_PX}px` }}
+          >
+            <MeetingQuickNoteRows entries={visibleEntries} />
+          </TaskNoteContentSurface>
           {entries.length > 3 ? (
-            <button
-              type="button"
-              className="mt-1 text-xs text-slate-500 underline-offset-2 hover:text-slate-700 hover:underline"
-              onClick={() => setExpanded(current => !current)}
-              data-task-meeting-quick-notes-toggle="true"
-            >
-              {expanded ? '收合' : `其餘 ${hiddenCount} 筆`}
-            </button>
+            !expanded ? (
+              <button
+                type="button"
+                className="mt-1 text-xs text-slate-500 underline-offset-2 hover:text-slate-700 hover:underline"
+                onClick={() => setExpanded(true)}
+                aria-expanded={expanded}
+                data-task-meeting-quick-notes-toggle="true"
+              >
+                {'其餘 ' + hiddenCount + ' 筆'}
+              </button>
+            ) : null
           ) : null}
         </div>
       ) : null}

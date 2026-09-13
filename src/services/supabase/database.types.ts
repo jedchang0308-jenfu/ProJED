@@ -1,4 +1,4 @@
-import type { TaskFilterState } from '../../features/taskFilters';
+import type { LegacyTaskFilterStateV4, TaskFilterQuery } from '../../features/taskFilters';
 
 export type Json =
   | string
@@ -34,30 +34,37 @@ export type CalendarSubscriptionDateType = 'start_date' | 'due_date';
 export type CalendarSubscriptionScopeType = 'board' | 'workspace' | 'custom';
 export type CalendarSubscriptionV2ScopeType = 'all_accessible_boards_snapshot';
 export type CalendarSubscriptionV3ScopeType = 'per_board_filter_snapshot';
+export type CalendarSubscriptionV4ScopeType = 'per_board_filter_snapshot';
 export type CalendarSubscriptionAssigneeFilter =
   | { type: 'me' }
   | { type: 'user'; user_id: string }
   | { type: 'selected'; user_ids: string[]; include_unassigned?: boolean };
-export type CalendarSubscriptionBoardFilterOverride = Partial<TaskFilterState> & {
+export type CalendarSubscriptionBoardFilterOverride = Partial<LegacyTaskFilterStateV4> & {
   enabled?: boolean;
 };
 export type CalendarSubscriptionBoardFilterSnapshot = {
   included: boolean;
   date_types: CalendarSubscriptionDateType[];
-  filters: TaskFilterState;
+  filters: TaskFilterQuery;
+};
+export type CalendarSubscriptionLegacyBoardFilterSnapshot = {
+  included: boolean;
+  date_types: CalendarSubscriptionDateType[];
+  filters: LegacyTaskFilterStateV4;
 };
 export type CalendarSubscriptionFilters = {
-  version?: 1 | 2 | 3;
+  version?: 1 | 2 | 3 | 4;
   workspace_ids: string[];
   project_ids?: string[];
   scope_type?: CalendarSubscriptionScopeType;
   assignee?: CalendarSubscriptionAssigneeFilter;
   date_types?: CalendarSubscriptionDateType[];
   v2_scope_type?: CalendarSubscriptionV2ScopeType;
-  global_filter?: TaskFilterState;
+  global_filter?: LegacyTaskFilterStateV4;
   board_overrides?: Record<string, CalendarSubscriptionBoardFilterOverride>;
   v3_scope_type?: CalendarSubscriptionV3ScopeType;
-  board_filters?: Record<string, CalendarSubscriptionBoardFilterSnapshot>;
+  v4_scope_type?: CalendarSubscriptionV4ScopeType;
+  board_filters?: Record<string, CalendarSubscriptionBoardFilterSnapshot | CalendarSubscriptionLegacyBoardFilterSnapshot>;
 };
 
 type Table<Row> = {

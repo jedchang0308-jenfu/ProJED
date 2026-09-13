@@ -59,7 +59,7 @@ export const KanbanChecklist: React.FC<KanbanChecklistProps> = (props) => {
     meetingReservationValues,
   }), [dependencyContext, dependencySelection, insertRecordTaskMention, isMeetingMode, isRecordCaptureMode, meetingReservationValues, recordDraft, selectedTaskId, showTags]);
 
-  return <TaskChecklistTree {...props} hostAdapter={hostAdapter} />;
+  return <TaskChecklistTree {...props} filterProjection={props.filterProjection} hostAdapter={hostAdapter} />;
 };
 
 export default KanbanChecklist;
