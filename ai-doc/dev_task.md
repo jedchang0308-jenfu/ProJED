@@ -6,6 +6,12 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 Cold start：先讀下方 `## 總任務清單`；需要特定 DEV 詳細歷史時，再搜尋
 `ai-doc/archived/dev_task_pm_updates_2026-07-15.md` 的 DEV ID 並只讀命中段落。
 
+## Release update - 2026-09-15（REL-001）
+
+DEV-119～DEV-123 已由 source commit `3e21b862c58a9952c4207b6d53904915a530bfcd` 啟用至正式站，release ID 為 `20260915032709-a1b629`。正式 migration、Edge Functions、sealed frontend artifact、Level 3、candidate、canonical browser smoke 與 OAuth safe-cancel 均有獨立證據，詳見 [REL-001 release record](release/REL-001-DEV-119-123-20260915.md)。
+
+DEV-123 的 control plane 已部署並完成 hosted synthetic 18/18；因專案級 ZDR、真實 Provider cleanup 與品質 qualification 仍 Pending，正式 bundle 保持 `VITE_DEV123_MEETING_TASK_RESOLUTION_ENABLED=false`，錄音／任務辨識入口不對使用者開放。這是 release boundary，不代表 Provider 功能已完成。
+
 ## 總任務清單
 
 此區是 `dev_task.md` 的 canonical index；詳細契約、歷史與完整證據保留在直接連結的

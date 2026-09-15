@@ -1,5 +1,9 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-09-15（REL-001 DEV-119～DEV-123 / ACTIVATED）
+
+DEV-119～DEV-123 已部署至正式 Firebase canonical channel，release ID `20260915032709-a1b629`。Migration、Edge Functions、candidate／activation provenance 與 rollback anchor 由 [REL-001 release record](release/REL-001-DEV-119-123-20260915.md) 統一保存。DEV-123 production entry 仍由 feature gate 關閉，Provider Qualification Pending 的限制未被 release status 掩蓋。
+
 ## Documentation Map Update - 2026-09-15（DEV-122 手機零資料載入快速建待辦 / Tech Lead R10 / RD Implementation Candidate + 架構已定案 / Partial Evidence）
 
 [dev_task：DEV-122](dev_task.md#dev-122projed-手機零資料載入快速建待辦) 已完成 Tech Lead R7～R10 文件修正、local candidate implementation、DEV-097 相容 verifier 修正與 Architecture Closure Review。
