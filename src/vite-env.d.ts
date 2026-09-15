@@ -13,6 +13,7 @@ interface ImportMetaEnv {
   readonly VITE_SUPABASE_TEST_PASSWORD?: string;
   readonly VITE_SUPABASE_AUTO_TEST_LOGIN?: string;
   readonly VITE_ENABLE_SUPABASE_DIAGNOSTICS?: string;
+  readonly VITE_DEV123_MEETING_TASK_RESOLUTION_ENABLED?: string;
   readonly VITE_FIREBASE_API_KEY: string;
   readonly VITE_FIREBASE_AUTH_DOMAIN: string;
   readonly VITE_FIREBASE_PROJECT_ID: string;

@@ -28,6 +28,10 @@ import { isPrimaryPointerActivation } from '../../interactions/pointerActivation
 type ProjectChangeImportStatus = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
 type ProjectChangeImportStepState = 'pending' | 'skipped' | 'inserted';
 
+const isDev123MeetingTaskResolutionEnabled =
+  import.meta.env.MODE !== 'production' ||
+  import.meta.env.VITE_DEV123_MEETING_TASK_RESOLUTION_ENABLED === 'true';
+
 const LINK_ROLE_OPTIONS: Array<{ value: RecordTaskLinkRole; label: string }> = [
   { value: 'main', label: '主任務' },
   { value: 'related', label: '相關' },
@@ -1384,22 +1388,26 @@ const RecordSidebar: React.FC = () => {
                     onRunAi={() => void handleSynthesizeMeetingDraft()}
                     onPublish={() => handleSave('published')}
                   />
-                  <div className="mt-2">
-                    <MeetingRecordingControls
-                      tenantId={activeWorkspaceId}
-                      projectId={activeBoardId}
-                      initialCaptureId={meetingTaskResolutionCaptureId}
-                      onEnsureSaved={handleEnsureMeetingSaved}
-                      onCaptureStarted={handleMeetingCaptureStarted}
-                    />
-                  </div>
-                  <MeetingTaskMatchReview
-                    captureId={meetingTaskResolutionCaptureId}
-                    recordId={draft?.id ?? null}
-                    taskOptions={meetingTaskOptions}
-                    onReviewRevisionChange={handleMeetingReviewRevisionChange}
-                    onResolvedTaskLinksChange={handleMeetingResolvedTaskLinksChange}
-                  />
+                  {isDev123MeetingTaskResolutionEnabled ? (
+                    <>
+                      <div className="mt-2">
+                        <MeetingRecordingControls
+                          tenantId={activeWorkspaceId}
+                          projectId={activeBoardId}
+                          initialCaptureId={meetingTaskResolutionCaptureId}
+                          onEnsureSaved={handleEnsureMeetingSaved}
+                          onCaptureStarted={handleMeetingCaptureStarted}
+                        />
+                      </div>
+                      <MeetingTaskMatchReview
+                        captureId={meetingTaskResolutionCaptureId}
+                        recordId={draft?.id ?? null}
+                        taskOptions={meetingTaskOptions}
+                        onReviewRevisionChange={handleMeetingReviewRevisionChange}
+                        onResolvedTaskLinksChange={handleMeetingResolvedTaskLinksChange}
+                      />
+                    </>
+                  ) : null}
                   {shouldShowMeetingRecoveryStatus ? (
                     <div
                       role="status"

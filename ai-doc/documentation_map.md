@@ -43,7 +43,7 @@ Architecture Closure R4 + Implementation correction R5/R6 + Compatibility correc
 | [DEV-123](dev_task.md#dev-123會議任務辨識與滑鼠停留輔助連結) | `RD Implementation Ready / Architecture Confirmed / Local Candidate Implemented / NOT RELEASED`；產品決策、範圍、狀態／派工／future scope |
 | [SPEC-123](specs/SPEC-123-meeting-task-resolution-audio-pointer.md) | 實作契約；來源freeze、pointer API、audio/discussion版本、單unit worker、獨立cleanup／usage、人工CAS與投影ownership |
 | [ADR-051](decisions/ADR-051-projed-owned-meeting-analysis-pipeline.md) | 選擇ProJED durable pipeline及stateless provider的理由、代價與替代方案 |
-| [QA-DEV-123](qa/QA-DEV-123-meeting-task-resolution-audio-pointer.md) | Architecture Confirmed／Local Preflight PASS／Provider Qualification Pending／NOT EXECUTED；資格入口、frozen gold、跨層與失敗案例、phase gate；local preflight已記錄 |
+| [QA-DEV-123](qa/QA-DEV-123-meeting-task-resolution-audio-pointer.md) | Architecture Confirmed／Local Preflight PASS／Hosted Control API 18/18 PASS／Production Frontend Feature-Gated／Provider Qualification Pending；資格入口、frozen gold、跨層與失敗案例、phase gate |
 | [SPEC-109](specs/SPEC-109-meeting-live-task-change-capture.md)／[SPEC-110](specs/SPEC-110-unplaced-task-meeting-record-boundary.md) | 保留task activity／canonical owner權威；pointer不是task mutation |
 | [SPEC-117](specs/SPEC-117-cross-mode-meeting-session-continuity.md)／[ADR-049](decisions/ADR-049-meeting-session-view-independence.md) | 保留同看板六模式meeting session continuity |
 

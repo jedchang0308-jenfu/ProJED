@@ -863,7 +863,7 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
     `output/playwright/dev-122-mobile-zero-data-quick-task/` 與 `output/qa/dev-122/`。上述證據仍不取代真實 HTTPS 裝置、isolated full matrix 與完整 QA/QC。
   - 計入交付：否（候選實作已完成；目標裝置／資料庫隔離／QA-QC gate 通過後才轉為完成）
 
-- ◐ DEV-123 [交付點] [架構已定案] [P2] [RD Implementation Ready / Architecture Confirmed / Local Candidate Implemented / QA-QC NOT RUN / Provider Qualification Gate Pending / NOT RELEASED] 會議任務辨識與滑鼠停留輔助連結
+- ◐ DEV-123 [交付點] [架構已定案] [P2] [Production Backend Deployed / Frontend Feature-Gated / Hosted Synthetic PASS / Provider Qualification Gate Pending] 會議任務辨識與滑鼠停留輔助連結
   - 摘要：會中同步錄音與滑鼠線索，會後以雲端轉錄與 AI 辨識既有任務；明確匹配加入草稿、模糊者待確認，
     保留原文追溯與人工修正，講者標籤延後；會議室麥克風收音、錄音保留 7 天。
     已確認：試點每月 NT$1,000、上傳後 24 小時內草稿、正確率至少 95%／涵蓋至少 90%。
@@ -874,16 +874,16 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
     `USER-20260914-DEV123-GUIDED-7A-8C-9C`、`USER-20260914-DEV123-GUIDED-10A-11A-12A`、
     `USER-20260914-PROVIDER-RETENTION-BOUNDARY`（本段對話需求追蹤碼）。
   - 父任務：DEV-002；相容 DEV-003、DEV-011／012、DEV-109／110、DEV-111／114、DEV-117。
-  - 下一步：先執行 `WP-123-0a` 唯讀資格盤點；fake/local candidate 已落地，B01～B03入口 smoke 與 B04～B11 route-mocked browser/media candidate smoke 已有證據，接續做真實 browser/media、hosted authenticated DB／Storage 與 `WP-123-0b` synthetic probe。
+  - 下一步：完成 `WP-123-0a` 的專案級 ZDR／model／API／pricing 證據，再以合格 Provider 執行 `WP-123-0b` synthetic probe、Files cleanup readback、品質校準與真實 browser/media；通過前正式 build 固定隱藏 DEV-123 錄音／review 入口。
   - 阻塞 / 恢復條件：產品與架構決策已補齊；provider ZDR核准、各model/API、Files清理及繁中timestamp尚無專案級證據。
     Gate通過前不得傳真實會議內容；若無法符合ZDR、24h、7日、NT$1,000、95%／90%或raw權限，依SPEC stop condition回規劃。
   - 證據：SPEC-123、ADR-051、QA-DEV-123 與 Tech Lead 文件修訂；`npx tsc --noEmit`、DEV-123 pure verifier、targeted ESLint、`npm run verify:dev-123-provider-contract`（fake mode=`PENDING`、無 network dispatch）、`npm run verify:dev-123-meeting-task-resolution-db-isolated`、`npx supabase db lint --local`、`npm run build:test` PASS；`npm run verify:dev-123-meeting-task-resolution-browser` 的 B01～B03入口smoke PASS（artifact：`output/playwright/dev-123-meeting-task-resolution/result.json`），`npm run verify:dev-123-meeting-task-resolution-browser-media` 的 B04～B11 route-mocked candidate smoke PASS（artifact：`output/playwright/dev-123-meeting-task-resolution-media/result.json`；fake MediaRecorder／getUserMedia／Edge route mock，非完整 browser/media QA）。隔離 DB artifact 為 `output/qa/dev-123/db-isolated-result.json`；八份 migration 已在 task-owned PostgreSQL loopback 完成 control-plane core readback（source-version unique、cleanup identity unique、budget reserve／settle、`SKIP LOCKED` claim、decision CAS、complete upload 原子重送與 manifest timeline guard、manual retry `retryAtomicity`、accepted decision 缺省 link 由projection補入、published projection guard 與 frozen partial downgrade rejection、projection request key 同內容重送 no-op／異內容衝突）並清理 runtime；browser review callback會把accepted task同步進draft，save-projection仍由server accepted rows作最終authority；progress 不再寫入 verified audio row，append-pointer 另驗 tenant／project、live task／milestone／非 archived scope，cancel 只釋放未 dispatch 預留；worker／purge 已加獨立排程 secret fail-closed gate，worker 遇 published/archived record 不能建立新 transcript/projection；purge 對 provider cleanup obligation 已補上 fail-closed／retryable marker，不再靜默略過，且以 `lease_token／lease_expires_at` 避免重複處理、`deleting` row 會依 `due_at` 重掃、ledger update 失敗會 fail-fast；完整真實 browser/media、hosted authenticated DB／Storage、provider 0a/0b、95/90、24h、7日、budget 與 QA/QC 尚未取得證據。
-  - 計入交付：否（目前為 `Local Candidate Implemented / NOT RELEASED`；provider、QA/QC 與 release Gate 全數完成後才可升級）。
+  - 計入交付：否（control plane 已部署並以 disposable fixture 驗證；產品入口仍 feature-gated，provider、品質與完整 QA/QC 通過後才可視為功能交付）。
   - Local preflight：`npm run verify:dev-123-local-preflight` 已串接 pure/provider contract、isolated DB、task-owned Auth／Storage、含 Edge runtime 的 Control API、schema lint、typecheck、lint/build、protected regressions 與 browser/media candidate checks；結果為 `PASS_WITH_EXTERNAL_GATES_PENDING`（18 steps／7 artifacts，`output/qa/dev-123/local-preflight-result.json`）。同時保留 fake `PENDING` 與未具資格 mode 的 `FAIL_CLOSED` provider artifact，只收斂 local evidence，不取代 hosted authenticated DB／Storage、provider、完整 QA/QC 或 release gate。
   - Auth/Storage local readback：task-owned Supabase full-stack 已通過 `npm run verify:dev-123-auth-storage-local`（Auth、raw table RLS、private `meeting-audio` bucket/object、service-role readback、synthetic fixture cleanup；artifact：`output/qa/dev-123/auth-storage-local-result.json`）；不替代 hosted authenticated DB／Storage gate。
   - Control API local readback：含 Edge runtime 的 task-owned Supabase full-stack 已通過 `npm run verify:dev-123-control-api-local`（Auth actor、missing／invalid auth、same-project begin/status、cross-project begin／pointer deny、pointer append replay、signed upload／SHA-256 verify、stop freeze、complete-upload replay、fake worker ready／transcript／budget settlement、manual retry atomic／same-key idempotency／conflict no-orphan、purge secret／expired audio cleanup、signed playback、cancel／cancel後 playback deny、service-role raw readback；artifact：`output/qa/dev-123/control-api-local-result.json`）。驗證器對 token／signed URL 做遞迴 evidence redaction，不將 capability 寫入 artifact；retry RPC 的 enum boundary 已以 text cast 固定，避免 enum 與空字串比較造成誤失敗。private schema 僅供 service-role Edge 路徑使用，private table／RPC grants 仍拒絕 PUBLIC／anon／authenticated；不替代 hosted authenticated DB／Storage、provider 或完整 QA/QC gate。
-  - Hosted follow-up：需先在 hosted project 套用 `private` schema exposure 與 service-role-only table／RPC grants，再以相同 control API／Storage readback 重跑；local config 與 local artifact 不得直接升格 hosted ready。
-  - Hosted readiness readback：`npm run verify:dev-123-hosted-readiness` 為 read-only；linked ProJED project 的 remote schema lint PASS，但 9 份 DEV-122／DEV-123 migration 尚未入 remote history，`meeting_capture_control`／`process_meeting_analysis`／`purge_meeting_audio` 尚未部署，DEV-123 public/private table readback 分別為 404／406；`supabase db push --dry-run --project-ref knodlkxqpcqyrtgwpdst` 已確認待套用範圍只有該 9 份 migration；artifact：`output/qa/dev-123/hosted-readiness-result.json`，狀態維持 `PENDING`，未做 remote mutation。
+  - Hosted follow-up：已將 hosted PostgREST schema exposure 收斂為 `public,private,graphql_public`；private table／RPC grants 仍拒絕 PUBLIC／anon／authenticated，只由 service-role Edge 路徑使用。Provider adapter、Cron/Vault 啟用與真實內容仍維持封鎖。
+  - Hosted readiness／control readback：正式 project `knodlkxqpcqyrtgwpdst` 已套用授權範圍內 9 份 migration，部署 `meeting_capture_control`、`process_meeting_analysis`、`purge_meeting_audio`；`npm run verify:dev-123-hosted-readiness` 6/6 PASS。另以 disposable Auth user／tenant／project／WBS task／meeting／synthetic audio／pointer interval 跑完整 control API 與 Storage，18/18 PASS；辨識回同一合法任務，pointer feature `0.4166666666666667`、semantic score `0.5`，清理後 fixture tenant／capture 均為 0。worker 固定 fake、provider dispatch=false、費用=0，故不得解讀為 ZDR／真實轉錄／品質 PASS。artifact：`output/qa/dev-123/hosted-readiness-result.json`、`output/qa/dev-123/hosted-control-api-result.json`。
   - Lifecycle hardening：`MeetingRecordingControls` 只有在 `MediaRecorder.start()` 成功後才更新 recording／resumed UI；建立／啟動失敗沿 server-stop／missing-source recovery 收斂，B04 start-failure evidence 已通過。
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
@@ -6522,11 +6522,11 @@ Local candidate evidence（2026-09-15，`localhost:4000` reused；process owner 
 
 ## DEV-123：會議任務辨識與滑鼠停留輔助連結
 
-- 狀態：架構已定案；`RD Implementation Ready / Architecture Confirmed / Local Candidate Implemented / Provider Qualification Gate Pending / NOT RELEASED`。
-- 類型：交付點候選，P2初排；local candidate 已落地，但產品不因局部實作或smoke增加完成率。
-- 本輪邊界：依 `dev-pm` 將已確認的SPEC／ADR／QA契約落到 local candidate，保留其他DEV dirty changes；遠端migration、正式Provider、完整QA/QC及release不在本輪完成。
+- 狀態：架構已定案；`Production Backend Deployed / Hosted Synthetic PASS / Frontend Feature-Gated / Provider Qualification Gate Pending`。
+- 類型：交付點候選，P2初排；control plane 已落地正式環境，但產品入口仍因 Provider Gate 關閉，不計完整功能完成。
+- 本輪邊界：依 `dev-pm` 與 Tech Lead 契約完成 schema、Edge control plane、前端候選及 hosted synthetic 驗證；真實 Provider、品質校準與完整 QA/QC 仍由既定 Gate 管理。
 - 風險：本機文件／後續隔離實作為Medium；功能包含敏感資料、並行及刪除，需QA/QC。遠端migration、正式權限、外部付費啟用與release另屬High。
-- Source：canonical repo `C:\VIBE CODING\ProJED\ProJED`，branch `持續優化3`，HEAD `e335eaa07c14313afb5a27607a2c009ace3bcbc3` 加既有dirty tree；這是程式盤點，不是已部署證據。
+- Source：canonical repo `C:\VIBE CODING\ProJED\ProJED`，branch `持續優化3`；release 以不可變 manifest 的 source commit、tree SHA 與逐檔 hash 為準，不在長期文件硬編會過期的 HEAD。
 
 ### 問題、價值與需求來源
 
@@ -6624,7 +6624,7 @@ NT$1,000 已由 7A 接受為整體試點月預算；不能宣稱必定足夠處�
 
 ### RD派工、入口與完成判定
 
-下一步先做 **WP-123-0a 唯讀資格盤點**。0a缺實際project資料記Pending；fake/local工作可繼續；現有 B01～B03 browser smoke 與 B04～B11 route-mocked browser/media candidate smoke 不等同完整 browser/media gate。
+下一步完成 **WP-123-0a 唯讀資格盤點**。hosted DB／Storage control path 已以 disposable fixture 通過；0a仍缺實際 Gemini project 的 ZDR、model／API／pricing及Files cleanup資格證據。fake/local與hosted synthetic可繼續，但不等同完整 browser/media或Provider Gate。
 依SPEC：0a → WP1契約 → WP2資料／control → WP3錄音與WP4worker → **0b synthetic probe** → WP5配對／WP6投影 → WP7校準 → WP8 QA/QC。
 0b用已核准project、synthetic內容與受7A控制的probe ledger取得API／cleanup／時間戳證據，不要求「完整qualification已PASS」才可測。沒有完整provider gate不得傳真實會議內容；沒有quality gate不得啟用正式auto-accept。
 
@@ -6633,7 +6633,7 @@ NT$1,000 已由 7A 接受為整體試點月預算；不能宣稱必定足夠處�
 預定的additive schema/API修訂已寫入SPEC，不把執行既定migration誤認為新產品決策。
 
 完成需SPEC AC、QA/QC的正常UI路徑及資料readback、95/90、24h、7日、budget、權限與cleanup全數具證據；provider資格或fake單測不能取代產品完成。
-遠端migration、正式資料／權限、付費啟用及release不屬本輪文件工作，發布時另走release gate。
+遠端migration、Edge Functions 與 hosted synthetic 已完成；付費Provider與DEV-123產品入口仍須 Provider、品質及deployment activation gate。
 
 ### Tech Lead修訂與證據（2026-09-14）
 
@@ -6675,8 +6675,8 @@ NT$1,000 已由 7A 接受為整體試點月預算；不能宣稱必定足夠處�
 - `npm run build:test` PASS。
 - `npm run verify:dev-123-meeting-task-resolution-browser` PASS（B01～B03：控制可見、預設安全狀態、鼠標輔助提示；artifact：`output/playwright/dev-123-meeting-task-resolution/result.json`）；`npm run verify:dev-123-meeting-task-resolution-browser-media` PASS（B04～B11：受控 fake MediaRecorder／getUserMedia／Edge route mock 下的開始、recorder start／stop failure、audio track device loss、暫停、恢復、停止、分段、outbox 清空、單次 finalize、review candidate 顯示與 human accept decision；recorder `stop()` 例外時已讀回 `stop`／`complete-upload` 且 capture=`queued`；artifact：`output/playwright/dev-123-meeting-task-resolution-media/result.json`）；後者只屬 local candidate smoke，不替代真實 browser/media、authenticated DB／Storage、provider 或品質 gate。隔離 PostgreSQL 另讀回 stop metadata 的 default empty gaps、frozen epoch manifest、final pointer sequence 與 worker／pointer／transcript／expiry／cleanup index plans。
 - review/decision API、RecordSidebar 同草稿面板（含WBS補連／改連）、pause/resume 新 clock epoch、reservation／verify、source-version CAS、signed playback、review 原音回聽、atomic retry／cancel、worker claim／budget settlement、音訊 manifest 完整性與明確 recovery 已完成型別與靜態契約接線；isolated PostgreSQL control-plane core 已 readback PASS，但尚未宣稱完整 browser/media／authenticated DB／Storage／provider PASS。
-- 完整真實 browser/media、hosted authenticated DB／Storage end-to-end、provider 0a/0b、95/90、24h、7日、budget、QA/QC 尚未執行；已完成的 isolated PostgreSQL 涵蓋八份 migration 的 control-plane core、`cancelLateWorkerGuard`、`retryAtomicity`、`completeUploadTimelineGuard`、`acceptedDecisionProjection`、`projectionRequestIdempotency` 與 `saveProjectionPrivateAuth`，不等同完整 DB gate。task-owned local Auth／Storage readback已另以synthetic fixture通過，但不替代 hosted gate。
-- 新增 migration 由 `npx supabase migration new` 產生（capture schema：`20260914122616_dev_123_meeting_task_resolution.sql`；review CAS：`20260914130548_dev_123_review_decisions.sql`；control hardening：`20260914133819_dev_123_control_hardening.sql`；retry atomicity：`20260914154451_dev_123_retry_atomicity.sql`；projection task scope：`20260914161741_dev_123_projection_task_scope.sql`；accepted links：`20260915103000_dev_123_projection_accepted_links.sql`；manifest timeline：`20260915133000_dev_123_manifest_timeline_integrity.sql`；projection request idempotency：`20260915170000_dev_123_projection_request_idempotency.sql`）。八份 migration 已在 task-owned PostgreSQL 16 loopback 完成 control-plane core readback；本機 migration history 與既有版本有 drift，未執行 reset 或遠端套用。既有其他DEV dirty diff保留。
+- 完整真實 browser/media、provider 0a/0b、95/90、24h、7日、budget、QA/QC 尚未執行。hosted authenticated control API／Storage 已以一次性 fixture 18/18 PASS並完成資料清理；worker保持fake，沒有外部dispatch，故這份證據只關閉hosted control-plane缺口。
+- DEV-123 八份 additive migration 與 DEV-122 一份 migration 已在正式 project 依 release scope 套用；三個 Edge Functions 已部署。正式前端以 `VITE_DEV123_MEETING_TASK_RESOLUTION_ENABLED=false` fail closed，staging／local保留驗證入口；只有 Provider Qualification、cleanup與品質Gate通過後才能改為true並重建不可變候選。
 
 ### Future Phase Captured / Not Requested
 

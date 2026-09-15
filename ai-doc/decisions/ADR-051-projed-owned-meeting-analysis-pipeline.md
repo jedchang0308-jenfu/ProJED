@@ -1,9 +1,9 @@
 # ADR-051：ProJED 擁有會議分析排程、原始資料面與草稿投影
 
-- 狀態：`Accepted / Architecture Confirmed / DEV-123 Local Candidate Implemented / Provider Qualification Gate Pending / NOT RELEASED`
+- 狀態：`Accepted / Architecture Confirmed / Production Control Plane Deployed / Frontend Feature-Gated / Provider Qualification Gate Pending`
 - 日期：2026-09-14
 - 關聯：[DEV-123](../dev_task.md#dev-123會議任務辨識與滑鼠停留輔助連結)、[SPEC-123](../specs/SPEC-123-meeting-task-resolution-audio-pointer.md)、[QA-DEV-123](../qa/QA-DEV-123-meeting-task-resolution-audio-pointer.md)、SPEC-109／110／117、ADR-049
-- Source revision：branch `持續優化3`、HEAD `e335eaa07c14313afb5a27607a2c009ace3bcbc3` 加規劃時既有 dirty tree
+- Source revision：branch `持續優化3`；發布身分由不可變 release manifest 保存
 - 決策來源：使用者已確認錄音、pointer、會後處理、保存、預算、品質、權限與人工發布邊界，並要求升級到架構確定。供應商保存條件固定為「不得保留可回取的會議內容」，不再以問卷題號作為工程依賴。
 
 ## Context
@@ -70,3 +70,9 @@ Recorder UI 只有在 `MediaRecorder.start()` 成功後才進入 recording／res
 候選證據亦沿同一邊界保存：transcript word offsets 與 candidate quote range 隨 review 回傳，UI 明示原句範圍；沒有 quote 的 pointer-only 候選不能被當成可直接採用的文字匹配。
 
 使用思考習慣：#多層次分析、#系統描繪、#限制條件
+
+### Production fail-closed follow-up（2026-09-15）
+
+正式 project 已套用授權範圍的9份migration並部署3個Edge Functions；hosted readiness 6/6、一次性Auth／Storage／control fixture 18/18 PASS且cleanup readback為0。此證據仍由fake worker產生，沒有Provider network dispatch或費用，不能代替ZDR、Files lifecycle及95/90品質。
+
+由於未具資格的production入口會讓使用者建立無法完成真實轉錄的queue，前端activation採顯式build-time gate：production預設`VITE_DEV123_MEETING_TASK_RESOLUTION_ENABLED=false`，local／staging保留測試入口。Gate通過後必須把值改為true、重建不可變artifact並重新走candidate／activation，不能只改後端secret或直接操作資料庫繞過release gate。

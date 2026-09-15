@@ -1,9 +1,9 @@
 # SPEC-123：會議錄音、滑鼠線索與既有任務辨識
 
-- 狀態：`RD Implementation Ready / Architecture Confirmed / Local Candidate Implemented / Provider Qualification Gate Pending / NOT RELEASED`
+- 狀態：`Architecture Confirmed / Production Control Plane Deployed / Hosted Synthetic PASS / Frontend Feature-Gated / Provider Qualification Gate Pending`
 - 文件角色：DEV-123 current-phase implementation authority
 - 建立日期：2026-09-14
-- Source revision：branch `持續優化3`、HEAD `e335eaa07c14313afb5a27607a2c009ace3bcbc3` 加規劃時既有 dirty tree
+- Source revision：branch `持續優化3`；發布身分由 release manifest 的 source commit、tree SHA 與逐檔 hash 固定
 - 需求來源：`USER-20260914-MEETING-TASK-RESOLUTION`、`USER-20260914-POINTER-DWELL-EVIDENCE`、`USER-20260914-ARCHITECTURE-CONFIRMATION`
 - 架構記憶：[ADR-051](../decisions/ADR-051-projed-owned-meeting-analysis-pipeline.md)
 - QA authority：[QA-DEV-123](../qa/QA-DEV-123-meeting-task-resolution-audio-pointer.md)
@@ -480,7 +480,7 @@ Quality corpus、gold alignment、calibration/held-out門檻與分母以QA第3�
 - 本輪修訂：補pointer/stop API、audio/discussion/gold分界、source freeze、跨run人工保護、projection ownership、單unit worker、獨立cleanup/usage ledger及0a/0b資格入口；刪除provider wrapper與重複worker review狀態。Local candidate 已落地 capture control、5分鐘音訊分段／IDB outbox、pause/resume clock epoch、pointer evidence、review/decision API與RecordSidebar面板（含WBS補連／改連）、manifest完整性檢查、fake worker、清理與CAS projection。控制面再補上八份 additive migration，其中第六份讓projection transaction從stored accepted decision補入任務連結，第七份讓complete-upload把manifest timeline綁定server segment readback，第八份讓projection request key同內容重送不重複寫入、異內容重送 fail closed；另補上reservation／verify、source-version CAS、signed playback、manual retry／cancel、worker lease與budget settlement、原子 complete-upload／manual-retry RPC；capture-progress 只寫 timeline，cancel 只釋放未 dispatch reservation；review 段落提供 editor-only 短效原音回聽入口。現行 MediaRecorder 輪替沒有雙錄音器重疊，因此 candidate 宣告實測 `overlap_ms=0`，不得把 metadata 當成 overlap 證據；reload 只可明確觸發 finalized outbox recovery，不能自動開麥克風。
 - `npx tsc --noEmit`、DEV-123 pure verifier、`npm run verify:dev-123-meeting-task-resolution-db-isolated`、`npx supabase db lint --local`、`npm run build:test` 已通過；browser B01～B03 smoke 及 B04～B11 route-mocked browser/media candidate smoke 亦通過。B04～B11 使用受控 fake MediaRecorder、getUserMedia 與 Edge route mock，包含 recorder start／stop throw、audio track ended、pause/resume、single finalize、review candidate 與 human accept decision；只證明 UI lifecycle、分段、outbox 清空與 recovery 的 local candidate 邊界，不提供真實麥克風、hosted authenticated DB／Storage、provider 或品質證據。隔離 DB artifact 為 `output/qa/dev-123/db-isolated-result.json`，task-owned PostgreSQL 已以八份 migration 執行 control-plane core readback（source-version unique、budget reserve／settle、`SKIP LOCKED` claim、decision CAS、`complete_meeting_upload_v1` 原子重送、manifest timeline guard、manual retry 同 key replay／衝突不留 orphan run、accepted decision 缺省 link 仍由projection補入、projection 對 stale／archived／cross-project task link fail closed、projection request key 同內容重送 no-op／異內容衝突）並清理 runtime；task-owned local Auth／Storage readback另以 synthetic fixture 通過。仍無真實 browser/media、hosted authenticated DB／Storage、provider／品質／QA/QC證據；架構定案只適用本SPEC的條件式實作範圍，0a/0b失敗依第17節回送，不預填實測PASS。
 
-結論：DEV-123達 `RD Implementation Ready / Architecture Confirmed / Local Candidate Implemented / Provider Qualification Gate Pending / NOT RELEASED`。下一個合法動作是WP-123-0a、hosted authenticated DB／Storage與browser/media Gate，再進WP-123-0b；沒有provider evidence前只准synthetic/fake資料。
+結論：DEV-123已達 `Architecture Confirmed / Production Control Plane Deployed / Hosted Synthetic PASS / Frontend Feature-Gated / Provider Qualification Gate Pending`。hosted control API／Storage 已用 disposable fixture驗證並清理；下一個合法動作是WP-123-0a與真實browser/media，再以合格專案進WP-123-0b。沒有provider evidence前只准synthetic/fake資料，production build 必須將入口關閉。
 
 ### 20.1 Tech Lead follow-up（2026-09-15）
 
