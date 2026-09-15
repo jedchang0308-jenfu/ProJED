@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import dayjs from 'dayjs';
-import { eventLogService, recordService } from '../services/dataBackend';
+import { eventLogService, isSupabaseBackend, recordService } from '../services/dataBackend';
+import { meetingAnalysisService } from '../features/meetingTaskResolution/meetingAnalysisService';
 import { synthesizeMeetingRecord } from '../services/meetingSynthesisService';
 import useAuthStore from './useAuthStore';
 import useBoardStore from './useBoardStore';
@@ -1395,7 +1396,33 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
 
     set({ saving: true, error: null });
     try {
-      const saved = await upsertRecordWithIntegrity(activeWorkspaceId, activeBoardId, payload);
+      const resolutionMetadata = payload.metadata?.meetingTaskResolution;
+      const resolutionMetadataRecord = resolutionMetadata && typeof resolutionMetadata === 'object' && !Array.isArray(resolutionMetadata)
+        ? resolutionMetadata as Record<string, unknown>
+        : null;
+      const captureId = resolutionMetadataRecord && typeof resolutionMetadataRecord.captureId === 'string'
+        ? resolutionMetadataRecord.captureId
+        : null;
+      let saved: EditableKnowledgeRecord;
+      if (isSupabaseBackend && draft.type === 'meeting' && captureId) {
+        await meetingAnalysisService.saveProjection({
+          tenantId: activeWorkspaceId,
+          projectId: activeBoardId,
+          recordId: payload.id,
+          captureId,
+          expectedRecordUpdatedAt: previousRecord?.updatedAt ? new Date(previousRecord.updatedAt).toISOString() : null,
+          expectedReviewRevision: typeof resolutionMetadataRecord?.reviewRevision === 'number' ? resolutionMetadataRecord.reviewRevision : 0,
+          userDraft: payload,
+          taskLinks: payload.taskLinks,
+          requestKey: `projection:${payload.id}:${Date.now()}`,
+        });
+        const refreshed = await recordService.listByProject(activeWorkspaceId, activeBoardId);
+        const reloaded = refreshed.find(record => record.id === payload.id);
+        if (!reloaded) throw new Error('會議投影已寫入，但重新載入紀錄失敗。');
+        saved = reloaded;
+      } else {
+        saved = await upsertRecordWithIntegrity(activeWorkspaceId, activeBoardId, payload);
+      }
       const savedInput = toRecordInput(saved);
       set(state => ({
         saving: false,

@@ -36,6 +36,7 @@ const isTaskDragActive = () => (
 
 const isInlineEditorActive = () => {
   if (typeof document === 'undefined') return false;
+  if (document.querySelector('[data-goal-edit-session-state]:not([data-goal-edit-session-state="idle"])')) return true;
   const active = document.activeElement;
   if (!(active instanceof HTMLElement)) return false;
   return Boolean(active.closest('[data-inline-editor="true"], [data-workspace-title-input], [data-board-title-input], [data-tag-picker-panel], [data-mindmap-node-editor]'));

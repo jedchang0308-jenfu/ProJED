@@ -2,7 +2,7 @@ import React from 'react';
 
 /** Shared visual surface for task-note content and read-only meeting history. */
 export const TASK_NOTE_CONTENT_SURFACE_CLASS_NAME = [
-  'scrollbar-thin min-h-[36px] w-full max-w-full overflow-x-hidden overflow-y-auto whitespace-pre-wrap rounded-md border border-slate-200/70',
+  'min-h-[36px] w-full max-w-full overflow-x-hidden overflow-y-auto whitespace-pre-wrap rounded-md border border-slate-200/70',
   'bg-transparent px-2 py-1.5 text-sm leading-6 text-slate-700 outline-none transition',
   'hover:border-slate-300/70 focus-within:border-blue-300 focus-within:ring-2 focus-within:ring-blue-100',
 ].join(' ');

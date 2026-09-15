@@ -1492,11 +1492,13 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     // 紀錄上一步
     const label = normalizedUpdates.isArchived === true ? '封存任務' :
                   normalizedUpdates.isArchived === false ? '還原任務' : '修改任務';
-    useUndoStore.getState().pushUndo({
-        label,
-        undo: () => { get().updateNode(id, oldValues); },
-        redo: () => { get().updateNode(id, normalizedUpdates); },
-    });
+    if (hasChanges) {
+      useUndoStore.getState().pushUndo({
+          label,
+          undo: () => { get().updateNode(id, oldValues); },
+          redo: () => { get().updateNode(id, normalizedUpdates); },
+      });
+    }
 
     return { accepted: true, operationId, completion };
   },

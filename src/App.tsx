@@ -42,6 +42,7 @@ import { TaskInteractionScope } from './interactions/task/TaskInteractionScope';
 import { KanbanViewSizeProvider } from './features/kanbanViewSize/KanbanViewSizeProvider';
 import { createBoardAssigneeFilterOptions } from './features/taskFilters';
 import { PwaReloadSafetyBridge, PwaReloadSafetyOwners } from './components/PwaReloadSafetyBridge';
+import { GoalCellSessionProvider, GoalCellRecoveryNotice } from './components/GoalCellSessionProvider';
 import MeetingDraftRecoveryNotice from './components/Records/MeetingDraftRecoveryNotice';
 
 const BoardView = lazy(() => import('./components/BoardView'));
@@ -352,13 +353,16 @@ function AppContent() {
 
   return (
     <KanbanViewSizeProvider accountId={userId}>
-      <PwaReloadSafetyOwners currentView={currentView} userId={userId} />
-      <MainLayout>
-        <Suspense fallback={<div className="flex h-full items-center justify-center text-sm text-slate-500">載入中...</div>}>
-          {renderContent()}
-        </Suspense>
-        <GlobalDialog />
-      </MainLayout>
+      <GoalCellSessionProvider accountId={userId}>
+        <PwaReloadSafetyOwners currentView={currentView} userId={userId} />
+        <MainLayout>
+          <GoalCellRecoveryNotice />
+          <Suspense fallback={<div className="flex h-full items-center justify-center text-sm text-slate-500">載入中...</div>}>
+            {renderContent()}
+          </Suspense>
+          <GlobalDialog />
+        </MainLayout>
+      </GoalCellSessionProvider>
     </KanbanViewSizeProvider>
   );
 }

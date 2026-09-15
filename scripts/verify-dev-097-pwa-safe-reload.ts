@@ -28,7 +28,7 @@ const packageJson = read('package.json');
 
 assert(
   'typed manifest includes every mandatory owner and no authenticated owner for AuthGate-only shell',
-  PWA_RELOAD_SAFETY_OWNER_IDS.length === 9
+  PWA_RELOAD_SAFETY_OWNER_IDS.length === 10
     && getPwaReloadSafetyOwnerManifest(null).length === 0
     && getPwaReloadSafetyOwnerManifest('home').length === 6
     && getPwaReloadSafetyOwnerManifest('settings').some(entry => entry.ownerId === 'backup-import'),

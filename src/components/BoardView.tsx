@@ -2039,7 +2039,7 @@ const BoardView = () => {
                     {/* 列表畫布 (Lists Canvas) */}
                     <div
                         ref={setBoardCanvasRef}
-                        className={`scroll-container mobile-pan-surface flex-1 overflow-x-auto overflow-y-hidden bg-slate-100/90 ${compactClassNames.canvas} flex gap-[12px] items-start scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent`}
+                        className={`scroll-container mobile-pan-surface flex-1 overflow-x-auto overflow-y-hidden bg-slate-100/90 ${compactClassNames.canvas} flex gap-[12px] items-start`}
                         data-mobile-pan-surface="board"
                         data-kanban-mobile-surface={isMeetingRecordUnavailable ? 'true' : undefined}
                         data-kanban-view-size={effectiveViewSize}

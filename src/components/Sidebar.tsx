@@ -434,7 +434,7 @@ const Sidebar = () => {
         </div>
 
         <div
-          className="scrollbar-subtle flex-1 space-y-4 overflow-y-auto bg-slate-50/90 p-2"
+          className="flex-1 space-y-4 overflow-y-auto bg-slate-50/90 p-2"
           onContextMenu={handleSidebarContextMenu}
           data-sidebar-workspace-list="true"
         >

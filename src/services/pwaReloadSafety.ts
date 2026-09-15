@@ -1,6 +1,6 @@
-import type { ViewMode } from '../types';
 import {
   getPwaReloadSafetyOwnerManifest,
+  type PwaReloadSurface,
   type PwaReloadSafetyOwnerId,
 } from './pwaReloadOwnerManifest';
 
@@ -57,7 +57,7 @@ export type PwaReloadSafetySnapshot = {
   state: PwaReloadSafetyState;
   code: PwaReloadSafetyFailureCode | null;
   pendingBoundary: PwaReloadBoundary | null;
-  currentView: ViewMode | null;
+  currentView: PwaReloadSurface | null;
   ready: Record<PwaReloadReadinessScope, boolean>;
   owners: PwaReloadSafetyOwnerSnapshot[];
 };
@@ -93,7 +93,7 @@ const validReasons = new Set<PwaReloadSafetyReason>([
 let currentState: PwaReloadSafetyState = 'booting';
 let currentCode: PwaReloadSafetyFailureCode | null = null;
 let pendingBoundary: PwaReloadBoundary | null = null;
-let currentView: ViewMode | null = null;
+let currentView: PwaReloadSurface | null = null;
 
 const cloneSnapshot = (): PwaReloadSafetySnapshot => ({
   state: currentState,
@@ -166,12 +166,13 @@ const readOwnerSnapshots = () => {
 
 const readinessIsComplete = () => Object.values(readiness).every(item => item.ready && item.epoch.length > 0);
 
-const manifestIsComplete = (view: ViewMode | null) => {
+const manifestIsComplete = (view: PwaReloadSurface | null) => {
   const required = getPwaReloadSafetyOwnerManifest(view);
   return required.every(entry => owners.has(entry.ownerId));
 };
 
-const validateViewIntent = (view: ViewMode | null) => {
+const validateViewIntent = (view: PwaReloadSurface | null) => {
+  if (view === 'quick-task') return true;
   if (!view || typeof localStorage === 'undefined') return true;
   try {
     return localStorage.getItem('projed-last-view') === view;
@@ -180,7 +181,7 @@ const validateViewIntent = (view: ViewMode | null) => {
   }
 };
 
-const evaluateLocalSafety = (view: ViewMode | null) => {
+const evaluateLocalSafety = (view: PwaReloadSurface | null) => {
   if (!readinessIsComplete()) return { ok: false as const, code: 'SAFETY_NOT_READY' as const, localState: 'booting' as const };
   if (!manifestIsComplete(view)) return { ok: false as const, code: 'OWNER_MANIFEST_INCOMPLETE' as const, localState: 'blocked' as const };
   const ownerRead = readOwnerSnapshots();
@@ -201,13 +202,13 @@ export const subscribePwaReloadSafety = (listener: Listener) => {
   return () => listeners.delete(listener);
 };
 
-export const setPwaReloadSafetyCurrentView = (view: ViewMode | null) => {
+export const setPwaReloadSafetyCurrentView = (view: PwaReloadSurface | null) => {
   currentView = view;
   notify();
 };
 
 /** Re-evaluate local owners after a component or transient UI signal changes. */
-export const refreshPwaReloadSafety = (view: ViewMode | null = currentView) => {
+export const refreshPwaReloadSafety = (view: PwaReloadSurface | null = currentView) => {
   currentView = view;
   const local = evaluateLocalSafety(view);
   if (local.ok) setState('safe', null);
@@ -296,7 +297,7 @@ export const preparePwaReloadOwners = async (): Promise<PwaReloadGateResult> => 
 
 export const requestPwaReloadBoundary = async (
   boundary: PwaReloadBoundary,
-  view: ViewMode | null,
+  view: PwaReloadSurface | null,
 ): Promise<PwaReloadGateResult> => {
   currentView = view;
   pendingBoundary = boundary;

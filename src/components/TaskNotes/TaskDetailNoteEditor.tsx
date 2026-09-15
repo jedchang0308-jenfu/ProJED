@@ -9,6 +9,7 @@ import {
   COMMAND_PRIORITY_HIGH,
   COMMAND_PRIORITY_LOW,
   FORMAT_TEXT_COMMAND,
+  INSERT_LINE_BREAK_COMMAND,
   KEY_DOWN_COMMAND,
   REDO_COMMAND,
   SELECTION_CHANGE_COMMAND,
@@ -64,7 +65,8 @@ import {
   taskNoteRichContentToPlainText,
 } from '../../utils/taskNoteRichContent';
 
-interface TaskDetailNoteEditorProps {
+type TaskDetailNoteDetailsEditorProps = {
+  variant?: 'details';
   canEdit: boolean;
   accountId: string | null;
   taskId: string;
@@ -75,7 +77,21 @@ interface TaskDetailNoteEditorProps {
   onDelete: () => void;
   onSave: () => void;
   onUpdate: (updates: Partial<TaskDetailNote>) => void;
-}
+};
+
+type TaskDetailNoteCellEditorProps = {
+  variant: 'cell';
+  canEdit: boolean;
+  taskId: string;
+  note: TaskDetailNote;
+  onUpdate: (updates: Pick<TaskDetailNote, 'content' | 'richContent'>) => void;
+  onCommit: (intent: 'enter' | 'blur' | 'save') => void;
+  onCancel: () => void;
+};
+
+type TaskDetailNoteEditorProps =
+  | TaskDetailNoteDetailsEditorProps
+  | TaskDetailNoteCellEditorProps;
 
 const TASK_NOTE_EDITOR_HEIGHTS_KEY = 'projed.taskDetailNote.heights.v2';
 const TASK_NOTE_EDITOR_MIN_HEIGHT = 36;
@@ -143,6 +159,16 @@ const editorTheme = {
     underline: 'underline underline-offset-2',
     underlineStrikethrough: 'underline line-through underline-offset-2',
   },
+};
+
+// Goal table cells use the same 20px rhythm as their read-only surface.
+// Keep the full note editor's roomier paragraph spacing unchanged.
+const cellEditorTheme = {
+  ...editorTheme,
+  heading: {
+    h3: 'text-sm font-semibold leading-5 text-slate-900',
+  },
+  paragraph: 'min-h-5 leading-5',
 };
 
 const initializeLegacyContent = (content: string) => () => {
@@ -291,7 +317,8 @@ const NoteToolbarPlugin: React.FC<{
   canEdit: boolean;
   noteTitle: string;
   onSave: () => void;
-}> = ({ canEdit, noteTitle, onSave }) => {
+  showToolbar?: boolean;
+}> = ({ canEdit, noteTitle, onSave, showToolbar = true }) => {
   const [editor] = useLexicalComposerContext();
   const [isOpen, setIsOpen] = React.useState(false);
   const [state, setState] = React.useState<ToolbarState>(EMPTY_TOOLBAR_STATE);
@@ -399,6 +426,10 @@ const NoteToolbarPlugin: React.FC<{
 
   if (!canEdit) return null;
 
+  // Cell editing keeps the same keyboard commands and URL safety checks, but
+  // intentionally has no persistent details toolbar/card chrome.
+  if (!showToolbar) return null;
+
   return (
     <div className="contents md:relative md:block md:shrink-0" data-task-note-format-control="true">
       <button
@@ -482,7 +513,16 @@ const NoteToolbarPlugin: React.FC<{
 const NoteChangePlugin: React.FC<{
   onUpdate: (updates: Partial<TaskDetailNote>) => void;
 }> = ({ onUpdate }) => {
+  const initializedRef = React.useRef(false);
+
+  React.useEffect(() => {
+    initializedRef.current = true;
+  }, []);
+
   const handleChange = React.useCallback((editorState: EditorState) => {
+    // Lexical may emit an initialization update. It is not a user edit and
+    // must not lazy-upgrade a legacy note or create an Undo entry.
+    if (!initializedRef.current) return;
     const richContent = createTaskNoteRichContent(editorState.toJSON());
     onUpdate({
       richContent,
@@ -499,18 +539,75 @@ const NoteChangePlugin: React.FC<{
   );
 };
 
+const CellEditorInteractionPlugin: React.FC<{
+  onCommit: (intent: 'enter' | 'save') => void;
+  onCancel: () => void;
+}> = ({ onCommit, onCancel }) => {
+  const [editor] = useLexicalComposerContext();
+
+  React.useEffect(() => editor.registerCommand(
+    KEY_DOWN_COMMAND,
+    event => {
+      if (event.isComposing || event.keyCode === 229) return false;
+      const target = event.target as HTMLElement | null;
+      if (!target || !editor.getRootElement()?.contains(target)) return false;
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        onCancel();
+        return true;
+      }
+      if (event.key.toLowerCase() === 's' && (event.ctrlKey || event.metaKey)) {
+        event.preventDefault();
+        event.stopPropagation();
+        onCommit('save');
+        return true;
+      }
+      if (event.key === 'Enter' && (event.altKey || event.ctrlKey || event.metaKey)) {
+        event.preventDefault();
+        editor.dispatchCommand(INSERT_LINE_BREAK_COMMAND, true);
+        return true;
+      }
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        event.stopPropagation();
+        onCommit('enter');
+        return true;
+      }
+      return false;
+    },
+    COMMAND_PRIORITY_HIGH,
+  ), [editor, onCancel, onCommit]);
+
+  return null;
+};
+
 const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
-  canEdit,
-  accountId,
-  taskId,
-  isDescription,
-  note,
-  titleEditable = true,
-  onAdd,
-  onDelete,
-  onSave,
-  onUpdate,
+  ...props
 }) => {
+  const isCellVariant = props.variant === 'cell';
+  const canEdit = props.canEdit;
+  const accountId = props.variant === 'cell' ? null : props.accountId;
+  const taskId = props.taskId;
+  const isDescription = props.variant === 'cell' ? true : props.isDescription;
+  const note = props.note;
+  const titleEditable = props.variant === 'cell' ? false : props.titleEditable ?? true;
+  const onAdd = props.variant === 'cell' ? () => undefined : props.onAdd;
+  const onDelete = props.variant === 'cell' ? () => undefined : props.onDelete;
+  const onSave = props.variant === 'cell' ? () => props.onCommit('save') : props.onSave;
+  const cellCommit = props.variant === 'cell' ? props.onCommit : null;
+  const cellCancel = props.variant === 'cell' ? props.onCancel : null;
+  const onUpdate = React.useCallback((updates: Partial<TaskDetailNote>) => {
+    if (props.variant === 'cell') {
+      props.onUpdate({
+        content: updates.content ?? note.content,
+        richContent: updates.richContent,
+      });
+      return;
+    }
+    props.onUpdate(updates);
+  }, [note.content, props]);
   const contentEditableRef = React.useRef<HTMLDivElement | null>(null);
   const resizeFrameRef = React.useRef<number | null>(null);
   const heightPreferenceScopeKey = React.useMemo(
@@ -526,6 +623,7 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
   const noteLabel = note.id === 'note_default' ? '任務目的' : (note.title || '備註');
 
   const autoSizeContent = React.useCallback(() => {
+    if (isCellVariant) return;
     if (resizeFrameRef.current !== null) window.cancelAnimationFrame(resizeFrameRef.current);
     resizeFrameRef.current = window.requestAnimationFrame(() => {
       resizeFrameRef.current = null;
@@ -540,22 +638,25 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
       element.style.height = `${nextHeight}px`;
       setEditorHeight(nextHeight);
     });
-  }, []);
+  }, [isCellVariant]);
 
   React.useLayoutEffect(() => {
+    if (isCellVariant) return;
     preferredHeightRef.current = readTaskNoteEditorHeight(heightPreferenceScopeKey);
     autoSizeContent();
-  }, [autoSizeContent, heightPreferenceScopeKey]);
+  }, [autoSizeContent, heightPreferenceScopeKey, isCellVariant]);
 
   React.useLayoutEffect(() => {
+    if (isCellVariant) return;
     autoSizeContent();
-  }, [autoSizeContent, note.content, note.richContent]);
+  }, [autoSizeContent, isCellVariant, note.content, note.richContent]);
 
   React.useEffect(() => () => {
     if (resizeFrameRef.current !== null) window.cancelAnimationFrame(resizeFrameRef.current);
   }, []);
 
   const applyPreferredHeight = React.useCallback((height: number, persist = false) => {
+    if (isCellVariant) return;
     const nextHeight = clampTaskNoteEditorHeight(height);
     preferredHeightRef.current = nextHeight;
     pendingHeightRef.current = persist ? null : nextHeight;
@@ -563,16 +664,17 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
     if (element) element.style.height = `${nextHeight}px`;
     setEditorHeight(nextHeight);
     if (persist) writeTaskNoteEditorHeight(heightPreferenceScopeKey, nextHeight);
-  }, [heightPreferenceScopeKey]);
+  }, [heightPreferenceScopeKey, isCellVariant]);
 
   const finishPointerResize = React.useCallback(() => {
+    if (isCellVariant) return;
     if (!resizeStartRef.current) return;
     resizeStartRef.current = null;
     if (pendingHeightRef.current !== null) {
       writeTaskNoteEditorHeight(heightPreferenceScopeKey, pendingHeightRef.current);
       pendingHeightRef.current = null;
     }
-  }, [heightPreferenceScopeKey]);
+  }, [heightPreferenceScopeKey, isCellVariant]);
 
   const handleResizePointerDown = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (!canEdit || event.button !== 0) return;
@@ -620,13 +722,33 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
     onError(error: Error) {
       throw error;
     },
-    theme: editorTheme,
+    theme: isCellVariant ? cellEditorTheme : editorTheme,
   }));
+
+  React.useLayoutEffect(() => {
+    if (!isCellVariant) return undefined;
+    contentEditableRef.current?.focus({ preventScroll: true });
+    return undefined;
+  }, [isCellVariant]);
+
+  const handleCellBlur = React.useCallback((event: React.FocusEvent<HTMLDivElement>) => {
+    if (!isCellVariant) return;
+    const relatedTarget = event.relatedTarget;
+    const shell = event.currentTarget.closest('[data-goal-cell-editor="true"]');
+    if (relatedTarget instanceof Node && shell?.contains(relatedTarget)) return;
+    cellCommit?.('blur');
+  }, [cellCommit, isCellVariant]);
 
   return (
     <LexicalComposer initialConfig={initialConfig}>
-      <div className="relative min-w-0" data-task-detail-note-card="true" data-task-note-editor-loaded="true">
-        <div className="relative mb-1 flex min-w-0 flex-wrap items-center gap-1 md:flex-nowrap" data-task-detail-note-header="true">
+      <div
+        className={isCellVariant ? 'contents' : 'relative min-w-0'}
+        data-task-detail-note-card={isCellVariant ? undefined : 'true'}
+        data-goal-cell-editor={isCellVariant ? 'true' : undefined}
+        data-inline-editor={isCellVariant ? 'true' : undefined}
+        data-task-note-editor-loaded="true"
+      >
+        {!isCellVariant ? <div className="relative mb-1 flex min-w-0 flex-wrap items-center gap-1 md:flex-nowrap" data-task-detail-note-header="true">
           {titleEditable ? (
             <input
               type="text"
@@ -645,7 +767,7 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
               {noteLabel}
             </span>
           )}
-          <NoteToolbarPlugin canEdit={canEdit} noteTitle={noteLabel} onSave={onSave} />
+          <NoteToolbarPlugin canEdit={canEdit} noteTitle={noteLabel} onSave={onSave} showToolbar={!isCellVariant} />
           {!isDescription ? (
             <button
               type="button"
@@ -670,15 +792,16 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
           >
             <Trash2 size={14} />
           </button>
-        </div>
-        <div className="relative min-w-0" data-task-note-resize-frame="true">
+        </div> : null}
+        <div className={isCellVariant ? 'min-w-0' : 'relative min-w-0'} data-task-note-resize-frame={isCellVariant ? undefined : 'true'}>
           <RichTextPlugin
             contentEditable={(
               <ContentEditable
                 ref={contentEditableRef}
+                onBlur={isCellVariant ? handleCellBlur : undefined}
                 className={[
-                  TASK_NOTE_CONTENT_SURFACE_CLASS_NAME,
-                  'resize-none',
+                  isCellVariant ? 'min-h-0 w-full max-w-full whitespace-pre-wrap break-words bg-transparent text-xs leading-5 text-slate-700 outline-none' : TASK_NOTE_CONTENT_SURFACE_CLASS_NAME,
+                  isCellVariant ? '' : 'resize-none',
                   'aria-disabled:cursor-default aria-disabled:border-slate-200/50 aria-disabled:text-slate-400',
                 ].join(' ')}
                 aria-label={'備註內容：' + noteLabel}
@@ -697,7 +820,7 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
             )}
             ErrorBoundary={LexicalErrorBoundary}
           />
-          {canEdit ? (
+          {!isCellVariant && canEdit ? (
             <div
               role="separator"
               tabIndex={0}
@@ -729,6 +852,7 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
         <LinkSafetyPlugin />
         <EditorEditablePlugin editable={canEdit} />
         <NoteChangePlugin onUpdate={onUpdate} />
+        {isCellVariant && cellCommit && cellCancel ? <CellEditorInteractionPlugin onCommit={cellCommit} onCancel={cellCancel} /> : null}
       </div>
     </LexicalComposer>
   );

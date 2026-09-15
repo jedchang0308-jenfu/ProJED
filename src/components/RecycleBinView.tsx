@@ -126,7 +126,7 @@ const RecycleBinView = () => {
             </div>
 
             {/* Content List */}
-            <div className="flex-1 overflow-y-auto p-3 sm:p-6 scrollbar-thin scrollbar-thumb-slate-200">
+            <div className="flex-1 overflow-y-auto p-3 sm:p-6">
                 <div className="max-w-4xl mx-auto">
                     {archivedItems.length === 0 ? (
                         <div className="bg-white border border-slate-200 rounded-2xl flex flex-col items-center justify-center p-16 text-center shadow-sm">

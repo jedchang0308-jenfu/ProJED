@@ -6,6 +6,15 @@
 - 使用者決策：`2A／3A／4A`；舊 `1A` 已由 2026-08-20 `4A` 取代
 - Spec Impact：`Intentional replacement`（只取代手機 zero-editor／append-only 行為）
 
+## DEV-119 共用 surface 擴充（2026-09-14；Local Candidate Implemented，R10）
+
+[SPEC-119](SPEC-119-goal-cell-direct-edit-and-content-fit.md) R2 定案、R3 已實作同一 TaskDetailNoteEditor 的 cell variant，
+供 Goal 的第一則目的就地編輯；沿用本文件 Lexical engine、allowlist、rich canonical 與 plain aliases。
+cell 不呈現 details header/toolbar/resize，也不讀寫 details 高度偏好；原 details variant 的 UI／autosave 行為不變。
+此為 surface 局部擴充，非新增 editor 或改變資料權威；DEV-066 rich-text static／browser 已對 DEV-119 candidate 回歸通過，
+證據以 [SPEC-119](SPEC-119-goal-cell-direct-edit-and-content-fit.md) 與 [QA-DEV-119](../qa/QA-DEV-119-goal-cell-direct-edit-and-content-fit.md) 為準。
+R5 另固定 cell variant 的 paragraph 為 `min-h-5 leading-5`，R6／R7 再補上 Goal cell editing state／focus 視覺並精簡為單一 frame；R8／R9 細化 Goal 內容 owner 的必要捲軸視覺，R10 將 3px 樣式提升為全系統 CSS foundation。Task Note 的 overflow owner 只繼承共用視覺，不新增 wrapper；details variant 的原行距、高度與互動行為不變。
+
 ## 目標
 
 任務詳情的每一則備註在所有 viewport 共用同一個 Lexical 語意富文字編輯器、格式 allowlist、儲存流程與資料來源；手機不再切換成唯讀 renderer＋純文字追加欄，也不新增手機專用 editor 模組。裝置差異只限 responsive layout、觸控尺寸、selection 與軟鍵盤適配。AI 繼續取得可搜尋、去重、無 raw HTML 的語意投影。

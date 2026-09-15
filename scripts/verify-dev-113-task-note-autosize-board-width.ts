@@ -9,8 +9,10 @@ const assert = (label: string, condition: boolean) => {
 };
 
 const editor = readFileSync('src/components/TaskNotes/TaskDetailNoteEditor.tsx', 'utf8');
+const contentSurface = readFileSync('src/components/TaskNotes/TaskNoteContentSurface.tsx', 'utf8');
 const field = readFileSync('src/components/TaskNotes/TaskDetailNoteField.tsx', 'utf8');
 const detailsModal = readFileSync('src/components/TaskDetailsModal.tsx', 'utf8');
+const indexCss = readFileSync('src/index.css', 'utf8');
 
 assert('note editor receives account and task scope for height preference persistence', editor.includes('accountId: string | null')
   && editor.includes('taskId: string'));
@@ -25,15 +27,17 @@ assert('stored heights are clamped to a safe range', editor.includes('TASK_NOTE_
   && editor.includes('TASK_NOTE_EDITOR_MAX_HEIGHT = 960')
   && editor.includes('clampTaskNoteEditorHeight'));
 assert('empty editor defaults to one compact line', editor.includes("TASK_NOTE_EDITOR_MIN_HEIGHT = 36")
-  && editor.includes('min-h-[36px]'));
+  && contentSurface.includes('min-h-[36px]'));
 assert('content changes auto-size height from scrollHeight', editor.includes("element.style.height = 'auto'")
   && editor.includes('element.scrollHeight')
   && editor.includes('autoSizeContent'));
 assert('manual height can be smaller than content and expose vertical scrolling', editor.includes('preferredHeightRef.current === null')
-  && editor.includes('overflow-y-auto')
-  && editor.includes('scrollbar-thin')
+  && contentSurface.includes('overflow-y-auto')
+  && indexCss.includes('--scrollbar-system-size: 3px')
+  && !editor.includes('scrollbar-thin')
   && !editor.includes('Math.max(intrinsicHeightRef.current, clampTaskNoteEditorHeight(height))'));
-assert('editor width stays attached to its container and native resizing is disabled', editor.includes('w-full max-w-full resize-none')
+assert('editor width stays attached to its container and native resizing is disabled', contentSurface.includes('w-full max-w-full')
+  && editor.includes("isCellVariant ? '' : 'resize-none'")
   && !editor.includes('resize-x'));
 assert('full bottom edge owns the vertical resize interaction', editor.includes('data-task-note-resize-handle="bottom-edge"')
   && editor.includes('data-task-note-resize-axis="vertical"')
@@ -46,7 +50,7 @@ assert('bottom edge exposes keyboard separator semantics', editor.includes('role
   && editor.includes('aria-orientation="horizontal"')
   && editor.includes("event.key === 'ArrowUp'")
   && editor.includes("event.key === 'ArrowDown'"));
-assert('editor suppresses horizontal overflow and enables vertical overflow when manually compacted', editor.includes('overflow-x-hidden overflow-y-auto'));
+assert('editor suppresses horizontal overflow and enables vertical overflow when manually compacted', contentSurface.includes('overflow-x-hidden overflow-y-auto'));
 
 const artifact = {
   devId: 'DEV-113',

@@ -802,6 +802,90 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
     本次未執行產品 QA/QC。
   - 計入交付：否
 
+- ✓ DEV-119 [開發點] [完成] [P1] [Implemented / Targeted QA-QC PASS / NOT RELEASED] OKR 內容儲存格直接編輯與自動展開／收合
+  - 摘要：以 Excel／Google Sheets 肌肉記憶為基礎，OKR 任務目的 owner cell 可雙擊內容或 `F2` 就地編輯；
+    任務目的／會議紀錄 owner cell 可雙擊底邊完整展開，再執行一次收合並恢復欄內 Y 軸捲動；R10 將 3px 簡約捲軸提升為全系統 CSS 基底，保留隱藏式與甘特圖 12px 例外。
+  - 來源 ID：`USER-20260914-GOAL-CELL-DIRECT-EDIT-AUTOFIT-TOGGLE`、`USER-20260914-SYSTEM-SCROLLBAR-FOUNDATION`。
+  - 父交付點：DEV-116；保留富文字／Goal／meeting／task menu 權威，PWA 沿用既有 owner。
+  - 下一步：保留後續 release gate；本機 candidate 已依 SPEC-119 R5 的 WP-119-A→E 完成實作、編輯行距與收合命中修正及 targeted QA/QC，完整 failure injection／正式環境驗證另案執行。
+  - 阻塞 / 恢復條件：目前無未決產品選項；若需超出 SPEC §6 的資料／權限／rowSpan／meeting capture／
+    全域 task command 變更，或無法保留既有 dirty baseline，停止並回 PM。
+  - 權威文件：`ai-doc/specs/SPEC-119-goal-cell-direct-edit-and-content-fit.md`、
+    `ai-doc/qa/QA-DEV-119-goal-cell-direct-edit-and-content-fit.md`。
+  - 計入交付：否（本機 candidate targeted QA-QC PASS；未 commit／push／deploy／release）
+
+- ✓ DEV-120 [交付點] [完成] [P1] [Implemented / Targeted QA-QC PASS / NOT RELEASED] OKR 規劃欄極簡高密度介面
+  - 摘要：將 OKR 負責人、狀態、日期與工期改為 mounted quiet controls，移除常駐框體、pill 與重複 icon；
+    任務名稱固定為資料表格左側 frozen column，其餘欄位由同一 X 軸捲軸移動檢視。
+  - 來源 ID：`USER-20260914-OKR-PLANNING-COLUMNS-MINIMAL-DENSITY`、
+    `USER-20260914-GOAL-TABLE-FROZEN-TASK-NAME-COLUMN`。
+  - 父任務：DEV-116；相容 DEV-119。
+  - 下一步：保留獨立 release gate；不得重開 frozen column、單一 native table／X-scroll owner、canonical mutation
+    或 Goal-only presentation 邊界。完整 persistence／dependency failure injection、原生瀏覽器 zoom parity 與正式環境驗證另案執行。
+  - 阻塞 / 恢復條件：若需修改 projection、GoalCellSessionProvider、schema/API/permission/store/persistence、
+    shared default consumer，或 native table 無法達成 sticky／track／a11y 契約，停止並回送規劃模型。
+  - 證據：DEV-120 static 13/13、browser 19/19（1440／1298／814 viewport、frozen/X-scroll、quiet chrome、
+    native date/status、validation 保值、empty-date focus、lock／due signal、portal、2x zoom、read-only、visible-error sweep）；
+    DEV-116 static 30/30＋browser 全案例、DEV-119 static 18/18＋browser 全案例；
+    DEV-048 multi-person static、clear-primary browser、TypeScript、ESLint、test build 均通過。證據見
+    `output/playwright/dev-120-goal-planning-minimal-density/`、`output/playwright/dev-119-goal-cell-actions/result.json`。
+  - 計入交付：是（本機 candidate 已完成實作與 targeted QA-QC；未 commit／push／deploy／release）
+
+- ✓ DEV-121 [交付點] [完成] [P1] [R13 RD Implementation Complete / Targeted QA PASS / QC Ready / NOT RELEASED] OKR 父子任務樹狀對照與群組範圍
+  - 摘要：保留任務目的／會議紀錄的 native `rowSpan`，將看板模式的父層錨點、樹狀導引線、
+    群組邊界與橫向閱讀導引轉譯到 OKR 表格，降低父子關係及任務欄位比對錯列。
+  - 來源 ID：`USER-20260914-GOAL-HIERARCHY-COMPARISON`、
+    `USER-20260914-KEEP-GOAL-CONTENT-ROWSPAN`、`USER-20260915-GOAL-CONTENT-REVERSE-LOCATION`。
+  - 父任務：DEV-116；延續 DEV-120；相容 DEV-119。
+  - 交付結果：已依 [SPEC-121](specs/SPEC-121-goal-hierarchy-comparison-grid.md) 完成 WP-121-A → E，並依
+    [QA-DEV-121](qa/QA-DEV-121-goal-hierarchy-comparison-grid.md) 完成同一 candidate 的 static／browser self-test。
+  - 阻塞 / 恢復條件：需改 canonical hierarchy／projection、取消或模擬 `rowSpan`、改 content session、
+    改 shared default、建立 split table／第二個 X-scroll owner時停止並回送規劃模型。
+  - 證據：Architecture Closure R2＋R12 RowSpan Ownership Contrast Closure＋R13 Reverse Content Location Closure；DEV-121 static 16/16、browser 27/27；
+    DEV-116 30/30＋42/42、DEV-119 18/18＋17/17、DEV-120 13/13＋19/19；rowSpan owner 邊界與 active tint ownership、
+    TypeScript、targeted ESLint、test build 與 diff check PASS。
+    證據見 `output/playwright/dev-121-goal-hierarchy-comparison/` 及相容 regression output 目錄。
+  - 計入交付：是（本機 candidate 已完成實作與 targeted QA；QC Ready；未 commit／push／deploy／release）
+
+- ◇ DEV-122 [交付點] [驗證中] [P1] [R10 voice fallback 重試／R9 混合 writer lock／R8 安裝引導／R7 相容回歸裁定／架構已定案／RD Implementation Candidate／Local Candidate Implemented／Target-device + QA-QC Pending] ProJED 手機零資料載入快速建待辦
+  - 摘要：在手機提供第二個桌面入口「ProJED快速建待辦」；開啟後不等待 ProJED 業務資料，
+    第一個可操作畫面即為任務名稱編輯，名稱旁固定顯示「語音」按鈕；語音保留既有文字、由使用者確認建立，
+    本機保存後停在成功畫面，最後送入全域任務工作台未歸位。
+  - 來源 ID：`USER-20260914-MOBILE-QUICK-TODO-ZERO-DATA-LOAD`、
+    `USER-20260914-MOBILE-QUICK-TODO-DIRECT-VOICE-ENTRY`、`USER-20260914-GUIDED-DECISIONS-1A-2A-3B`。
+  - 父任務：DEV-034、DEV-039；相容 DEV-041、DEV-096、DEV-097、DEV-115。
+  - 下一步：依 [SPEC-122](specs/SPEC-122-mobile-zero-data-quick-task.md) 與 [QA-DEV-122](qa/QA-DEV-122-mobile-zero-data-quick-task.md) §10.4 handoff runbook 補齊真實 HTTPS 裝置、OAuth／語音／離線、isolated full-schema PostgreSQL 與完整 QA/QC gate；本機候選已先完成 WP-122-0 的可執行切片、root intent 回歸、固定 fixture concurrent transport 與 40-client mixed-writer-compatible transport 證據。
+    成熟度為 `RD Implementation Candidate`；正式交付仍需目標裝置與資料庫隔離驗證。
+  - 阻塞 / 恢復條件：任一目標平台不能可靠建立第二圖示並直達 quick entry、quick path 必須載入完整 App／
+    業務清單、或帳號隔離與 local readback 無法證明時停止，回 ADR-050 amendment。
+  - 證據：Human Confirmed `1A 2A 3B`、SPEC-122、ADR-050；targeted ESLint、test build、22 項 static、
+     quick browser local smoke 15 assertions（initial/edit/save、fallback後重試、IME、voice insertion、geometry、zero business request、delayed module、lease／claim、8次重試封頂後阻擋與人工重試重置、`install=1`安裝引導與原生 prompt 呼叫、iOS加入主畫面指引）、root intent browser R01-R03、service-worker 與 isolated PostgreSQL core matrix（22 checks）與固定 fixture pgbench concurrent transport（20 clients／20 rows／0 failed）與 mixed-writer-compatible transport（40 clients／20 Quick RPC＋20 test-only existing append fixture／40 unique orders／0 failed）均 PASS；full `npx tsc --noEmit` PASS；證據見
+    `output/playwright/dev-122-mobile-zero-data-quick-task/` 與 `output/qa/dev-122/`。上述證據仍不取代真實 HTTPS 裝置、isolated full matrix 與完整 QA/QC。
+  - 計入交付：否（候選實作已完成；目標裝置／資料庫隔離／QA-QC gate 通過後才轉為完成）
+
+- ◐ DEV-123 [交付點] [架構已定案] [P2] [RD Implementation Ready / Architecture Confirmed / Local Candidate Implemented / QA-QC NOT RUN / Provider Qualification Gate Pending / NOT RELEASED] 會議任務辨識與滑鼠停留輔助連結
+  - 摘要：會中同步錄音與滑鼠線索，會後以雲端轉錄與 AI 辨識既有任務；明確匹配加入草稿、模糊者待確認，
+    保留原文追溯與人工修正，講者標籤延後；會議室麥克風收音、錄音保留 7 天。
+    已確認：試點每月 NT$1,000、上傳後 24 小時內草稿、正確率至少 95%／涵蓋至少 90%。
+    `10A 11A 12A` 已確認：每場手動錄音、草稿就地修正，原始錄音與完整逐字稿限會議編輯者。
+    供應商不得保留可回取的會議內容；若採 Gemini，需專案級 ZDR、`store=false` 及用畢清理；ProJED 自己的 7 日音訊與會議保存規則維持不變。
+  - 來源 ID：`USER-20260914-MEETING-TASK-RESOLUTION-POINTER-CONTEXT`、
+    `USER-20260914-DEV123-GUIDED-1A-2A-3A`、`USER-20260914-DEV123-GUIDED-4A-5A-6C`、
+    `USER-20260914-DEV123-GUIDED-7A-8C-9C`、`USER-20260914-DEV123-GUIDED-10A-11A-12A`、
+    `USER-20260914-PROVIDER-RETENTION-BOUNDARY`（本段對話需求追蹤碼）。
+  - 父任務：DEV-002；相容 DEV-003、DEV-011／012、DEV-109／110、DEV-111／114、DEV-117。
+  - 下一步：先執行 `WP-123-0a` 唯讀資格盤點；fake/local candidate 已落地，B01～B03入口 smoke 與 B04～B11 route-mocked browser/media candidate smoke 已有證據，接續做真實 browser/media、hosted authenticated DB／Storage 與 `WP-123-0b` synthetic probe。
+  - 阻塞 / 恢復條件：產品與架構決策已補齊；provider ZDR核准、各model/API、Files清理及繁中timestamp尚無專案級證據。
+    Gate通過前不得傳真實會議內容；若無法符合ZDR、24h、7日、NT$1,000、95%／90%或raw權限，依SPEC stop condition回規劃。
+  - 證據：SPEC-123、ADR-051、QA-DEV-123 與 Tech Lead 文件修訂；`npx tsc --noEmit`、DEV-123 pure verifier、targeted ESLint、`npm run verify:dev-123-provider-contract`（fake mode=`PENDING`、無 network dispatch）、`npm run verify:dev-123-meeting-task-resolution-db-isolated`、`npx supabase db lint --local`、`npm run build:test` PASS；`npm run verify:dev-123-meeting-task-resolution-browser` 的 B01～B03入口smoke PASS（artifact：`output/playwright/dev-123-meeting-task-resolution/result.json`），`npm run verify:dev-123-meeting-task-resolution-browser-media` 的 B04～B11 route-mocked candidate smoke PASS（artifact：`output/playwright/dev-123-meeting-task-resolution-media/result.json`；fake MediaRecorder／getUserMedia／Edge route mock，非完整 browser/media QA）。隔離 DB artifact 為 `output/qa/dev-123/db-isolated-result.json`；八份 migration 已在 task-owned PostgreSQL loopback 完成 control-plane core readback（source-version unique、cleanup identity unique、budget reserve／settle、`SKIP LOCKED` claim、decision CAS、complete upload 原子重送與 manifest timeline guard、manual retry `retryAtomicity`、accepted decision 缺省 link 由projection補入、published projection guard 與 frozen partial downgrade rejection、projection request key 同內容重送 no-op／異內容衝突）並清理 runtime；browser review callback會把accepted task同步進draft，save-projection仍由server accepted rows作最終authority；progress 不再寫入 verified audio row，append-pointer 另驗 tenant／project、live task／milestone／非 archived scope，cancel 只釋放未 dispatch 預留；worker／purge 已加獨立排程 secret fail-closed gate，worker 遇 published/archived record 不能建立新 transcript/projection；purge 對 provider cleanup obligation 已補上 fail-closed／retryable marker，不再靜默略過，且以 `lease_token／lease_expires_at` 避免重複處理、`deleting` row 會依 `due_at` 重掃、ledger update 失敗會 fail-fast；完整真實 browser/media、hosted authenticated DB／Storage、provider 0a/0b、95/90、24h、7日、budget 與 QA/QC 尚未取得證據。
+  - 計入交付：否（目前為 `Local Candidate Implemented / NOT RELEASED`；provider、QA/QC 與 release Gate 全數完成後才可升級）。
+  - Local preflight：`npm run verify:dev-123-local-preflight` 已串接 pure/provider contract、isolated DB、task-owned Auth／Storage、含 Edge runtime 的 Control API、schema lint、typecheck、lint/build、protected regressions 與 browser/media candidate checks；結果為 `PASS_WITH_EXTERNAL_GATES_PENDING`（18 steps／7 artifacts，`output/qa/dev-123/local-preflight-result.json`）。同時保留 fake `PENDING` 與未具資格 mode 的 `FAIL_CLOSED` provider artifact，只收斂 local evidence，不取代 hosted authenticated DB／Storage、provider、完整 QA/QC 或 release gate。
+  - Auth/Storage local readback：task-owned Supabase full-stack 已通過 `npm run verify:dev-123-auth-storage-local`（Auth、raw table RLS、private `meeting-audio` bucket/object、service-role readback、synthetic fixture cleanup；artifact：`output/qa/dev-123/auth-storage-local-result.json`）；不替代 hosted authenticated DB／Storage gate。
+  - Control API local readback：含 Edge runtime 的 task-owned Supabase full-stack 已通過 `npm run verify:dev-123-control-api-local`（Auth actor、missing／invalid auth、same-project begin/status、cross-project begin／pointer deny、pointer append replay、signed upload／SHA-256 verify、stop freeze、complete-upload replay、fake worker ready／transcript／budget settlement、manual retry atomic／same-key idempotency／conflict no-orphan、purge secret／expired audio cleanup、signed playback、cancel／cancel後 playback deny、service-role raw readback；artifact：`output/qa/dev-123/control-api-local-result.json`）。驗證器對 token／signed URL 做遞迴 evidence redaction，不將 capability 寫入 artifact；retry RPC 的 enum boundary 已以 text cast 固定，避免 enum 與空字串比較造成誤失敗。private schema 僅供 service-role Edge 路徑使用，private table／RPC grants 仍拒絕 PUBLIC／anon／authenticated；不替代 hosted authenticated DB／Storage、provider 或完整 QA/QC gate。
+  - Hosted follow-up：需先在 hosted project 套用 `private` schema exposure 與 service-role-only table／RPC grants，再以相同 control API／Storage readback 重跑；local config 與 local artifact 不得直接升格 hosted ready。
+  - Hosted readiness readback：`npm run verify:dev-123-hosted-readiness` 為 read-only；linked ProJED project 的 remote schema lint PASS，但 9 份 DEV-122／DEV-123 migration 尚未入 remote history，`meeting_capture_control`／`process_meeting_analysis`／`purge_meeting_audio` 尚未部署，DEV-123 public/private table readback 分別為 404／406；`supabase db push --dry-run --project-ref knodlkxqpcqyrtgwpdst` 已確認待套用範圍只有該 9 份 migration；artifact：`output/qa/dev-123/hosted-readiness-result.json`，狀態維持 `PENDING`，未做 remote mutation。
+  - Lifecycle hardening：`MeetingRecordingControls` 只有在 `MediaRecorder.start()` 成功後才更新 recording／resumed UI；建立／啟動失敗沿 server-stop／missing-source recovery 收斂，B04 start-failure evidence 已通過。
+
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
 
 - 文件成熟度：Rework 4 `Implemented / Local Simulated QC PASS / Physical Device Pending`；Rework 1～3 為歷史 `Implemented / QC PASS`
@@ -3312,13 +3396,13 @@ frame、owner manifest缺漏、visible error／白畫面，或缺真實N→N+1�
   Workbox、`clientsClaim:false`、release-scoped cache retention、per-client local convergence、explicit
   readiness／typed owner manifest及完整owner regression gate；重新通過RD Readiness Gate，仍未實作。
 - 2026-08-31：依使用者授權完成 DEV-097 WP-097-A～E：改為 application-owned Workbox registration、
-  release-scoped cache namespace、local readiness／typed owner manifest、9 類 owner adapter、
+  release-scoped cache namespace、local readiness／typed owner manifest、9 類核心 owner adapter（另接入 DEV-122 quick-task-capture）、
   boundary safety／session reservation、compact prompt 與三層 verifier；`verify:dev-097-pwa-safe-reload`
   11/11、browser smoke、real-SW N→N+1 isolation、TypeScript、targeted ESLint、`build:test` 與 DEV-096
   static／browser／real-SW regressions fresh PASS。完整 QA／QC、production deploy／release 尚未執行。
 - 2026-08-31：QA回送並完成根因修正：readiness最後producer立即重評、九個真實owner UI訊號／取消與
   readback、stable waiting-worker activation、桌面縮手機寬時收側欄，以及DEV-047 V3 verifier同步。
-  DEV-097 static `23/23`、browser九-owner／雙分頁／失敗讀回、DEV-096／097 real-SW A→B→C、
+  DEV-097 static `23/23`、browser九類核心 owner／雙分頁／失敗讀回、DEV-096／097 real-SW A→B→C、
   DEV-028／034／041／045／047／054／069／092／095／RAG regressions、TypeScript、32-file ESLint
   （0 errors）、`build:test`與`git diff --check` fresh PASS。DEV-054 8px案例修正harness競態後連續兩輪
   `15/15`。當時狀態升為`Local Automated QA PASS / Independent QC Pending / 未 Release`，後續已由獨立QC
@@ -5908,3 +5992,697 @@ query，或建立 surface-specific predicate。實作前須重讀 `git status` �
   Board／Workbench／Calendar consumer、local migration／CAS、Calendar Edge adapter、fixture與verifier；
   `npx tsc --noEmit`、`npm run build`、DEV-039 static、model／migration／edge／DB static／browser smoke PASS；
   狀態更新為 `Local Candidate QA-QC PASS / NOT RELEASED`，未做 remote migration、deploy或release。
+
+## DEV-119：OKR 內容儲存格直接編輯與自動展開／收合
+
+- 狀態：完成；`Implemented / Targeted QA-QC PASS / NOT RELEASED`。
+- 文件與實作審查：2026-09-14 R10 收斂完成；R2 架構已落地，R10 將 3px 簡約捲軸提升為全系統低 specificity CSS 基底、移除重複 surface class，並保留 `.no-scrollbar` 與甘特圖 12px 例外；R8 單一 cell frame、R6 focus／辨識、R5 行距與 R4 內容 scroll 區收合命中修正維持。本機 targeted QA/QC 通過，非正式 release gate。
+- 節點類型：開發點；父交付點 DEV-116；風險 Medium；計入產品交付：否。
+- 需求來源：`USER-20260914-GOAL-CELL-DIRECT-EDIT-AUTOFIT-TOGGLE`、`USER-20260914-SYSTEM-SCROLLBAR-FOUNDATION`。
+
+### 需求與文件權威
+
+A：description owner cell 雙擊內容／F2，就地編輯同一富文字目的。
+B：description／meeting owner cell 雙擊底邊展開全文，再執行一次收合並恢復 Y 軸捲動；另有鍵盤短選單。
+保持扁平表格，meeting aggregate 唯讀；必要 scroll／editor／失敗恢復 UI 不刪除。收合內容捲軸繼承系統 3px 低干擾基底，展開後可再次收合。
+
+| 文件 | 唯一責任 |
+|---|---|
+| [SPEC-119](specs/SPEC-119-goal-cell-direct-edit-and-content-fit.md) | UX、資料／保存／生命週期、允許檔案、WP、AC、source baseline 與架構邊界。 |
+| [QA-DEV-119](qa/QA-DEV-119-goal-cell-direct-edit-and-content-fit.md) | fixtures、cases、oracles、命令、evidence 與 exit gate；本輪 Targeted QA-QC PASS。 |
+| SPEC-066／116 | 富文字資料與父 Goal authority；已加入 DEV-119 局部 target 修訂交叉引用。 |
+| 本 DEV | 進度、接手順序與交付邊界；不另複製互動／狀態／測試矩陣。 |
+
+### 架構確認（R2）
+
+已盤點 GoalView／projection、Lexical shared editor、Task Details、WBS callbacks/Undo、meeting capture 與 App/PWA 生命週期。
+修正 R1 的 no_changes 假成功、舊 payload retry、清空最後一欄與換 view 丟失恢復入口、ARIA 與 record 零寫入誤述。
+
+最小方案：同一 Lexical 的 cell variant、既有 rich-content utils 增補 pure mapping、
+GoalView-local presentation state，以及同帳號 AppContent 的唯一暫存 edit session。
+只有 draft／未完成保存需要跨 view 保留；不新增業務 store、持久化草稿、task command 或第二套 editor。
+task persistence 與 live meeting capture 分開判讀；PWA 沿用既有 inline-editor owner。
+
+R10 共用捲軸採全域 CSS tokens＋`:where(*)` base rules，不建立 React `ScrollArea` component，避免系統性增加 DOM 容器與 consumer migration；
+一般原生 overflow surface 取得 3px 基底，`.no-scrollbar` 與 `.scrollbar-gantt`（12px／雙軸直接拖曳）為唯一明確例外。此為 `Intentional replacement / cross-system visual foundation`，不改資料、API、權限、scroll owner 或事件契約。
+
+架構已定案，無待使用者裁決事項；產品行為已由 RD 實作，並完成共用捲軸基底、單一 editing frame、focus、行距與收合命中修正後的本機 targeted QA/QC。
+R2 允許的 App/session／最小 Undo guard／PWA 改動已明列 SPEC 第 6 節，不再受 R1 的 provider/store 全面禁改文字阻擋。
+跨 surface last-writer、capture 補捕與 crash recovery 限制明載 SPEC，不擴大為本 DEV 的新保證。
+
+### RD 接手
+
+依 SPEC 的 WP-119-A→E：failing contracts → pure note mapping → shared editor/details 回歸
+→ session／A-B／保存與 PWA → 新功能及直接回歸／獨立 QC。詳細退出條件只以 SPEC 與 QA 為準。
+開工前核對 SPEC source revision 與三個既有 dirty hashes；保留扁平化修改，不 reset／覆蓋他人工作。
+
+下一個合法動作是依 QA exit gate 補完整 failure injection／正式環境驗證。若需要改 schema/API、permission、rowSpan ownership、meeting capture 語意、
+全域 task command 或服務端 concurrency，停止並回 PM 更新架構。
+本輪未授權 commit、push、deploy 或 release；任何超出 SPEC §6 的變更仍須回 PM 更新架構。
+
+## DEV-120：OKR 規劃欄極簡高密度介面
+
+- 狀態：完成；`Implemented / Targeted QA-QC PASS / 架構已定案 / NOT RELEASED`。
+- 節點類型：交付點；父任務 DEV-116；相容 DEV-119；風險 Medium；計入產品交付：是。
+- 需求來源：`USER-20260914-OKR-PLANNING-COLUMNS-MINIMAL-DENSITY`、
+  `USER-20260914-GOAL-TABLE-FROZEN-TASK-NAME-COLUMN`。
+- Human Confirmed：極簡、極度降噪與版面利用率優先；任務名稱固定是指資料表格內左側 frozen first
+  column，其他欄位用表格同一條 X 軸捲軸移動，不是 app sidebar 或第二張 table。
+
+### 需求與文件權威
+
+目前五個 planning columns 的常駐 input/pill/icon/frame 在大量任務下形成主要視覺噪音，且設定寬度合計
+580px。DEV-120 保留既有 controls 與 handlers，正常狀態只呈現值，hover／focus／open 才顯示必要 affordance；
+目標 planning tracks 合計 428px。任務名稱維持資料表格內左側 frozen column，右側所有欄位在單一 native
+table／single X-scroll owner 內移動。
+
+| 文件 | 唯一責任 |
+|---|---|
+| [SPEC-120](specs/SPEC-120-goal-planning-minimal-density.md) | UX、intentional replacement、frozen column／X-scroll、呈現與互動、repo surface、WP、AC、source baseline 與架構邊界。 |
+| [QA-DEV-120](qa/QA-DEV-120-goal-planning-minimal-density.md) | fixtures、FMEA、static/browser/visual/a11y cases、commands、evidence、Pass／Fail／Stop。 |
+| SPEC-116 | Goal 入口、native table、projection／rowSpan、records、planning mutation、DnD／menu authority；局部 visual target 由 SPEC-120 取代。 |
+| SPEC-119 | description／meeting cell editor、expand／scroll、跨 view session、PWA 與共用 scrollbar authority；DEV-120 不接管。 |
+| 本 DEV | 任務狀態、執行邊界、下一步與交付判定；不複製完整 contract。 |
+
+### 架構定案與執行邊界
+
+Architecture Closure Review R2 已對照 branch `持續優化3`、HEAD
+`e335eaa07c14313afb5a27607a2c009ace3bcbc3` 與 current dirty tree。最小架構是 GoalView-local fixed／elastic
+`<col>` 分配與 mounted control quiet presentation，加上 default-preserving 的 `TaskAssignmentPicker` quiet trigger；
+不新增 planning active-cell、draft、formatter、presenter 或 session state。status quiet style 不改 shared default；
+現有 canonical handlers、permission／dependency truth、useWbsStore、projection、GoalCellSessionProvider、records與 persistence 全部維持。
+
+Current execution boundary 只包含 SPEC-120 WP-120-A→E 的本機產品實作、DEV-116 scoped verifier convergence、
+DEV-119／picker／status相容 regression及 QA-DEV-120 QA/QC。P0／P1 architecture blockers=0。
+
+實作模型可自行決定 Goal-local width／class constant 命名、class 排列與空日期 overlay DOM 次序；不得
+改變 frozen task-name、single native table/X-scroll owner、欄順序／tracks、mounted native controls、canonical
+mutation、shared default、SPEC-119 session、驗收閾值或禁止區，也不得新增 planning edit state。首個 contract
+drift 或需越界修改時立即停止回送規劃模型。
+
+本輪已依 WP-120-A→E 完成實作與 candidate freeze。DEV-120 static contract 13/13、browser 19/19，並完成
+DEV-116／DEV-119／DEV-048 受影響回歸、TypeScript、ESLint 與 test build；browser 證據重用既有
+`localhost:4000` local-test runtime，未啟動新 server。額外 DEV-048 collaborator-filter browser smoke 仍在
+fixture boot wait timeout，未納入本 DEV PASS；該案例需另案釐清 fixture／入口等待問題。
+本輪已完成本機產品與 QA/QC；未 commit／push／deploy／release。完整 persistence／dependency failure injection、
+原生瀏覽器 UI zoom parity 與正式環境驗證保留給獨立 gate。
+
+使用思考習慣：#問對問題、#簡潔優先、#系統描繪、#限制條件、#可驗證性
+
+## DEV-121：OKR 父子任務樹狀對照與群組範圍
+
+- 狀態：完成；`R13 RD Implementation Complete / Targeted QA PASS / QC Ready / NOT RELEASED`。
+- 開發文件成熟度：`RD Implementation Complete`；保留 Tech Lead R2 資料流，使用者確認的 owned-connector
+  wired-tree 契約與 WP-121-B → E 已落地；R8 已完成 X 軸緊縮與端點移除，R9 完成樹線柔和化，R10 完成目前任務自有 incoming relation 高亮，
+  R11 完成 active 線寬與欄位對比強化，R12 修正 rowSpan owner 與 active descendant 的視覺歸屬，R13 增加任務目的／會議紀錄反向定位。
+- 節點類型：交付點；父任務 DEV-116；延續 DEV-120；相容 DEV-119；計入產品交付：是。
+- 風險：Medium（改變 OKR 階層、群組與 hover／focus 的可見語意，但不變更資料或權限）。
+- 需求來源：`USER-20260914-GOAL-HIERARCHY-COMPARISON`、
+  `USER-20260914-KEEP-GOAL-CONTENT-ROWSPAN`、
+  `USER-20260915-GOAL-ROWSPAN-OWNERSHIP-CONTRAST`、
+  `USER-20260915-GOAL-CONTENT-REVERSE-LOCATION`。
+- 規格權威：[SPEC-121](specs/SPEC-121-goal-hierarchy-comparison-grid.md)。
+- 驗收權威：[QA-DEV-121](qa/QA-DEV-121-goal-hierarchy-comparison-grid.md)。
+
+### 目標、問題與差距
+
+目前 OKR 表格適合逐欄查看資料，但父子關係主要依賴小幅縮排、展開箭頭與任務名稱欄的局部底色；
+每列分隔線權重接近，使用者需要逐列推理某個子任務屬於哪個父任務，以及一組子樹在哪裡結束。
+眼睛跨越負責人、狀態、日期與工期時，也缺少從固定任務名稱欄延伸到個別任務欄位的閱讀導引，
+容易把相鄰列的資料看錯。
+
+看板模式已使用 L1 父層標題、L2 任務範圍、L3+ inset rail、縮排與父子鄰接建立層級感。
+本 DEV 將必要的非語言關係訊號轉譯到表格，使使用者能同時完成：
+
+1. 沿固定任務名稱欄快速辨識父任務、子任務、孫任務與群組終點。
+2. 保留任務目的／會議紀錄對整個子樹的群組脈絡。
+3. 從任務名稱橫向比對同一列的負責人、狀態、日期與工期，不誤讀相鄰列。
+
+底層差距是同一表格同時承載「一列一任務」的 planning 軸與「一格涵蓋連續子樹」的 content 軸，
+現況只有單列格線，沒有把兩種範圍分開表達。
+
+### Human Decisions 與不可變條件
+
+- Human Confirmed：任務目的與會議紀錄保留目前 native table `rowSpan`；它們是父層資訊涵蓋子樹的群組範圍，
+  不改成每一個子任務各自空白的獨立內容格。
+- Human Confirmed：任務名稱仍固定在資料表格左側第一欄，其他欄位使用同一條 X 軸捲軸移動。
+- 已拒絕：取消跨任務合併儲存格、將父層內容複製到子任務列、把 OKR 每個父任務卡片化。
+- Human Confirmed 的工程翻譯：保留 covered cell 無 DOM、內容 owner、展開／收合、欄內 Y-scroll、
+  session 與 persistence；connector reading guide 不進入 shared `rowSpan` cell，只有目前任務本身是 owner 時才套用 active tint，
+  active descendant 不染 ancestor owner；游標／焦點進入 description／meeting owner cell 時以 `ownerTaskId` 反向定位該任務。
+- 保留同一 native table、252px sticky-left task-name first column、single X-scroll owner、
+  shared 6px hierarchy default、Goal-local 8px depth step 與 DEV-120 quiet planning controls。
+
+上述條件不得由 RD 以 CSS／DOM 困難為由更改；需要越界時停止並回到規劃模型。
+
+### UX Intent 與刪除預設
+
+- 任務／結果：熟悉 OKR 的使用者在大量父子任務中，能快速判斷群組歸屬並正確比較每列 planning 資訊。
+- 主物件／主焦點：固定任務名稱欄中的任務樹；個別 planning 欄位是橫向比較結果。
+- 預設刪除：卡片框、斑馬紋、層級文字標籤、常駐說明、重複父任務名稱、常駐子任務數量與額外 toolbar。
+- 保留舉證：`rowSpan` 保留父層脈絡；樹狀導引線避免父子誤判；父群組邊界指出子樹終點；
+  hover／focus 閱讀導引避免跨欄錯列；收合後代數量只在內容不可見時補足範圍事實。
+- 非語言修復：先使用位置、縮排、線段、留白、淡背景與狀態轉換，不以 helper 或 badge 疊加說明。
+
+### 架構定案
+
+#### 單向投影
+
+1. 現有 `buildHierarchicalTaskItems` 以實際 `collapsedIds` 產生 rendered DFS rows；它繼續是 row order、
+   level、parent、filter 與可見性的 canonical truth。
+2. 同一 builder 以 empty `collapsedIds` 再產生 fully-expanded eligible rows；結果 memoize，僅供收合後代計數。
+3. 新增 Goal-only pure `buildGoalHierarchyDecorations({ renderedItems, fullyExpandedItems })`，輸出
+   `ReadonlyMap<taskId, decoration>`；每筆含 parent、visible child、ancestor path、帶 owner 的 continuation、
+   last sibling 與 eligible descendant count。taskId 由 map key 承擔，level／root boundary 直接使用 rendered row，不重複投影。
+4. GoalView 把 decoration 傳入既有 GoalRow；Goal sparse projection 仍獨立決定 content owner／covered／rowSpan。
+5. Goal-local CSS 只在 frozen task cell、planning cells 與真實 content owner cell 疊加視覺語法。
+
+這個架構刻意不修改 `src/utils/taskHierarchy.ts`、`TaskHierarchyIndentedRow.tsx` 或 Goal content projection，
+避免把 OKR 的樹線需求擴散到 Calendar、Gantt、List 與 Board，也避免建立第二套 hierarchy truth。
+
+#### Tech Lead R2 瘦身與呈現契約
+
+- projector 保留 R8 畫 owned relation 所需的最小事實；移除重複 `taskId`、`level`、root-group start／end。
+- DOM 先重用既有 `data-goal-task-row`、`data-goal-level`、`data-goal-planning-control`、
+  `data-goal-cell-kind`、`data-goal-span`，只新增 task-cell、group-span、guides／last-sibling、descendant-count hooks。
+- frozen task cell：Goal 局部使用 8px depth；1px owned rails 以 12px branch 直接接到任務文字，不渲染 endpoint，
+  最後 sibling 在列中心終止且 root groups 不跨接；disclosure 固定於樹線左側 20px 操作槽；L0 以 semibold與低對比不透明底成為錨點，
+  只有第二個及後續 root 畫 2px group top boundary；最後 group 由 table bottom 收束，不插 spacer row。
+- content owner：只有 `rowSpan > 1` 加低對比 group surface 與 2px inset scope rail；不 clone、不補 covered cell。
+- reading guide：pointer／focus 位於 task 或 planning cell 時，只連接該列的 task＋planning cells；只有目前任務本身是
+  rowSpan owner 時同步 tint，covered descendant 不染 ancestor owner。pointer／focus 位於 description／meeting owner cell
+  時回報該 cell 的 `ownerTaskId`，沿同一 scope 定位固定任務欄。selector 使用直接子 cell hooks 與 scoped `:has()`；
+  禁止泛用 `tr:hover > *`，避免 rowSpan 命中誤亮 owner row。
+- collapsed count：只有 `collapsed && eligibleDescendantCount > 0` 顯示弱化 `+N`，且具
+  `aria-label="已收合 N 個下層任務"`；展開時不存在。
+- guide layer：`aria-hidden`、`pointer-events:none`、不進 tab order；不改 native table role、headers、scope、rowSpan。
+
+完整型別、資料流、幾何、DOM hooks、CSS hitbox 與 a11y 契約由 SPEC-121 §5 唯一管理。
+
+### 使用流程
+
+1. 使用者由既有 topbar `視角 → OKR模式` 進入同一 active board。
+2. 使用者沿固定任務名稱欄的父層錨點、緊縮樹線與最後 sibling 終止位置辨識一個完整子樹。
+3. 使用者將滑鼠或鍵盤焦點移到任務列，沿橫向閱讀導引比較該任務的 planning 資訊。
+4. 使用者水平捲動查看右側欄位時，任務名稱與樹狀關係維持可見。
+5. 使用者收合父任務後看到最小後代數量；再次展開後恢復原順序、rowSpan 群組範圍與互動。
+
+### 實際 Repo Surface
+
+| 類型 | Files |
+|---|---|
+| 新增 | `src/features/goalMode/hierarchyPresentation.ts`、DEV-121 static／browser verifier、SPEC-121、QA-DEV-121。 |
+| 修改 | `src/components/GoalView.tsx`、`src/index.css`、`package.json`、`ai-doc/dev_task.md`、`ai-doc/documentation_map.md`。 |
+| 條件修改 | DEV-116／119／120 verifiers 只可接受 additive hooks，不得刪除或放寬既有 assertions。 |
+| 禁止 | shared hierarchy builder／row component、Goal content projection、TaskNode／filter／schema／API／permission／store／persistence／PWA session owner。 |
+
+### Work Packages
+
+| WP | 工作 | Gate |
+|---|---|---|
+| WP-121-A | 凍結 candidate hashes、建立 controlled fixture 與 fail-first tests。 | baseline、actor、fixture、runtime owner 可追溯。 |
+| WP-121-B | 實作 Goal-only owned decoration projector。 | parent／ancestor／owner／sibling／count／invalid-input static cases 全通過，無重複 row metadata。 |
+| WP-121-C | GoalView／Goal-scoped CSS 接入 tree、group surface、reading guide、`+N`。 | 不改 shared default、projection、mutation 或 scroll owner。 |
+| WP-121-D | 真實 browser geometry、pointer／keyboard、actor、rowSpan、DnD、X/Y scroll、zoom、visual evidence。 | QA B／V／A／G cases 全部有 artifact。 |
+| WP-121-E | DEV-116／119／120 回歸、type／lint／build／diff，凍結 RD candidate。 | 同一 source hash 全綠後交 QA／QC。 |
+
+執行順序固定 A → B → C → D → E。
+
+### 驗收與證據 Gate
+
+- 兩個 root groups、L1～L4+、兄弟尾端、深層分支、長名稱、rowSpan owner／barrier、collapse、filter
+  與 editor／viewer fixture 完整。
+- 任一可見子任務可由非顏色 rail／elbow／位置追溯父路徑，並可辨識 root group 終點。
+- content owner 數、rowSpan、covered DOM absence、內容、edit／expand／scroll session 接入前後等價。
+- task／planning hover／focus 只導引同一 task row；shared content hover／focus 反向定位真實 owner，covered descendant 不誤亮 owner row。
+- X-scroll 後 task-name／tree sticky left delta ≤1px；右側位移與 scroll delta 相差 ≤1px；scroll owner=1。
+- disclosure、task details、right-click／Shift+F10、planning、content cell 與 DnD hitbox 無退化。
+- 1440×900、1298×698、814×698、2x CSS zoom proxy、keyboard、editor／viewer 均有 computed geometry 與截圖。
+- static S01～S16、browser B01～B11、visual V01～V17、a11y A01～A03、error G01～G02
+  及 DEV-116／119／120 required regressions 必須在同一 frozen candidate 全通過。
+
+```text
+npm run verify:dev-121-goal-hierarchy-comparison
+npm run verify:dev-121-goal-hierarchy-comparison-browser
+npm run verify:dev-116-goal-mode
+npm run verify:dev-116-goal-mode-browser
+npm run verify:dev-119-goal-cell-actions
+npm run verify:dev-119-goal-cell-actions-browser
+npm run verify:dev-120-goal-planning-minimal-density
+npm run verify:dev-120-goal-planning-minimal-density-browser
+npx tsc --noEmit
+npx eslint <DEV-121 changed TS/TSX files>
+npm run build:test
+git diff --check -- <DEV-121 owned files>
+```
+
+### Stop、Fail 與 Release Boundary
+
+- Stop：需改 canonical hierarchy／projection、取消或模擬 `rowSpan`、改 content session／shared default、
+  建立 split table／第二 X-scroll，或 native table 無法同時達成 sticky／guide／a11y。
+- Fail：任一 order／level／rowSpan／owner drift、錯誤 rail／count、reading guide 進 group cell、hitbox 被擋、
+  必要 focus／validation／locked 訊號被蓋、其他模式 drift、visible error 或 task-owned resource 未清理。
+- Not verified：缺 source hash、fixture／actor provenance、computed geometry、screenshot、keyboard、viewer 或 scroll evidence。
+- commit、push、PR、deploy、production smoke、原生 browser UI zoom 與正式資料環境驗證不在本 DEV 文件定案範圍。
+
+### Architecture Closure R2（2026-09-14）
+
+- branch `持續優化3`；HEAD `e335eaa07c14313afb5a27607a2c009ace3bcbc3`；current dirty tree。
+- R2 初始定案：canonical hierarchy 兩次 pure 投影＋Goal-only decoration map＋同一 native table
+  presentation layering；R7／R8 只加入 owned relation facts與 Goal-local 幾何，root boundary 與 planning selector仍重用既有 row facts／hooks。
+- Tech Lead R2 結論：`PASS`；已刪除重複 projection fields／DOM hooks，不新增 selection state 或第二事件流；技術債 0。
+- P0／P1 未決策：0。RD 可自行決定局部 symbol／class 名稱、等價中性色 token 與 verifier 實作細節；
+  不得改動架構、資料流、幾何、hitbox、驗收門檻或禁止區。
+- R2 規劃狀態已由下方 Implementation Closure R3 取代；本節保留架構決策與 baseline 紀錄。
+
+### Implementation Closure R3（2026-09-14）
+
+- WP-121-A～E 已完成。Goal-only pure projector、tree／group／reading presentation、收合後代數量、browser evidence、
+  DEV-116／119／120 相容回歸與 quality gates 均已落地。
+- 實作維持同一 native table、252px frozen-left task column 與單一 X-scroll owner；description／meeting native `rowSpan`、
+  owner／covered semantics、content session、planning mutation、DnD、menu 與 viewer permission 未改變。
+- DEV-121 static 12/12、browser 15/15；DEV-116 static 30/30＋browser PASS；DEV-119 static 18/18＋browser PASS；
+  DEV-120 static 13/13＋browser PASS；`npx tsc --noEmit`、targeted ESLint、`npm run build:test`、`git diff --check` PASS。
+- Candidate evidence：`output/playwright/dev-121-goal-hierarchy-comparison/`（static result、browser result、V01／V02／V03／V05 screenshots）；
+  regression evidence 於 DEV-116／119／120 對應 output 目錄。
+- Release boundary：尚未 commit／push／PR／deploy／production smoke；原生 browser UI zoom、正式資料與獨立 release gate 仍 pending。
+
+### Visual Correction Closure R4（2026-09-14）
+
+- 依使用者回饋完成最小視覺修正：同一 root 群組內 rails 跨列重疊 1px 補齊斷點；disclosure 箭頭移到獨立左側 gutter，
+  不再與父子階層連線重疊；不改 hierarchy、rowSpan、content session 或 single X-scroll owner。
+- 新增 `V09-connector-continuity-and-disclosure-gutter`；DEV-121 browser 15/15，測得群組內最大 rail gap `0px`、
+  disclosure-to-rail gap `8px`；DEV-116／119／120 browser regressions 均 PASS。
+- Final source hashes：`GoalView.tsx`=`00FC3AD61B2CA3859844C1DD2AED81760C62D998A6D44CA8096A35F47F18056B`、
+  `index.css`=`8FEF3E1EA3553CB1513CD865D5291FC48169141766271CDC0B49BBBA51BC28BE`、
+  DEV-121 static=`0DBE8839E91E5E76AD99842AA85923DDA973EF6FEA43CE00654C0CC1ED7B483C`、
+  browser=`512BA0AC53400FA3DA2DC1B8255C4B277960FBD3563E7F8498EA827E57C75D0E`。
+
+### Visual Correction Closure R5（2026-09-14）
+
+- 依使用者回饋移除 OKR 任務列之間的常駐橫向格線；保留欄位垂直邊界與 root group 2px 上邊界，
+  不改階層連線、rowSpan、content session 或 single X-scroll owner。
+- 新增 `V10-no-inter-task-gridlines`；DEV-121 static 13/13、browser 16/16，測得 task rows `bottomBorders=[]`、
+  `rootBoundary=2px`；DEV-116／119／120 browser regressions 均 PASS。
+- Final source hashes：`GoalView.tsx`=`E5DDAD392625EFF0F9D7B217600C331041F78B4B7DD600FA76A8466168E2A75E`、`index.css`=`7B2BFBD4BC811CADD0230C37502DABD302C71131BCFC2E6A8C5814AA95AA6DE7`、
+  DEV-121 static=`FBFDD9A8C3C62A342D35A4B27F22DB4959DA012C6FCF4CF3738E3A90E0C1270E`、browser=`613280C9D0494F1C77350429EE951006682880EEAFA674C1BFEF66BB843E2A64`。
+
+### Visual Correction Closure R6（2026-09-14）
+
+- 依使用者回饋移除任務名稱欄最外側 level-0 continuation rail；level-0 elbow 保留短 branch，
+  使階層仍可由縮排、箭頭、分支與更深層 rail 辨識。
+- 新增 `V11-outermost-continuation-rail-removed`；DEV-121 static 14/14、browser 17/17，確認 continuation hidden、
+  elbow vertical background transparent、branch 保留；DEV-116／119／120 browser regressions 均 PASS。
+- Final source hashes：`GoalView.tsx`=`E5DDAD392625EFF0F9D7B217600C331041F78B4B7DD600FA76A8466168E2A75E`、`index.css`=`7CD097E3617D07EA28FB25EBC578716C675000F57F722D9AA58F24F8F6CB8127`、
+  DEV-121 static=`D6D045FC708EE97F5D6307EB42CE2C2E76B61B244CF65DED23095B60878F9329`、browser=`499C562100754370C5BFB967D4501F9A7E1ADB168EA29A169D38948C3FAE6A29`。
+
+### R7 Implementation Reopen（2026-09-14）
+
+- 使用者確認保留有線樹狀表格，並要求重新建立可追溯到正確父任務的連線；不採 line-free 退回方案。
+- R7 使用帶 `ownerTaskId` 的 relation segments、20px Goal-only depth、同列 4px endpoint、最後 sibling 中止、
+  root group 隔離，以及位於任務欄右側的 disclosure 操作槽。
+- hover／focus 只強調該父任務擁有的關係線與可見子樹；ephemeral scope state 不進 store 或 persistence。
+- 保留 native `rowSpan`、252px sticky-left task column、single X-scroll、無任務間橫線及既有 content／planning ownership。
+- 實作與驗證依 SPEC-121 R7、QA-DEV-121 R7 執行；完成前狀態維持執行中。
+
+### R7 Implementation Closure（2026-09-14）
+
+- 實作完成：每條 continuation／incoming／stem 具有 relation owner，同列 endpoint 與 last-sibling termination
+  可直接指出任務；root 群組不跨接；disclosure 位於任務欄右側；hover／focus 只強調所屬子樹。
+- 保留 native `rowSpan`、252px sticky task column、single X-scroll、無任務間橫線、planning／content owner 與 shared 6px default；
+  Goal surface 局部使用 20px depth step／32px row。
+- DEV-121 static 15/15、browser 20/20；DEV-116 30/30＋42/42、DEV-119 18/18＋17/17、
+  DEV-120 13/13＋19/19；TypeScript、targeted ESLint、test build、diff check PASS。
+- 實測 owner-lane gap `0px`、disclosure gap `145.5px`、endpoint 對列中心偏差 ≤`0.5px`，且 0 browser／HTTP／visible errors。
+- 文件與 evidence：[SPEC-121](specs/SPEC-121-goal-hierarchy-comparison-grid.md)、
+  [QA-DEV-121](qa/QA-DEV-121-goal-hierarchy-comparison-grid.md)、`output/playwright/dev-121-goal-hierarchy-comparison/`。
+- local candidate 完成，QC Ready；未 commit／push／PR／deploy／release。
+
+### R8 Implementation Closure（2026-09-14）
+
+- 依使用者要求最大限度縮小 X 軸縮排，並接受移除 endpoint；保留有線樹狀關係，不回到 line-free 方案。
+- Goal-local depth 由 20px 壓為 8px，lane start 為 20px，incoming branch 由 24px 壓為 12px，root branch 為 4px；
+  endpoint segment 與樣式完全移除，線直接接到任務文字。
+- `.task-title-text` 移除左側 padding；browser 量測 branch-to-title 絕對距離 ≤0.5px。
+- owned relation、最後 sibling 終止、root group 隔離、樹線左側 disclosure、hover／focus 子樹、native `rowSpan`、
+  252px sticky task column 與 single X-scroll owner 全部保留。
+- DEV-121 static 15/15、browser 20/20；DEV-116 30/30＋42/42、DEV-119 18/18＋17/17、
+  DEV-120 13/13＋19/19；TypeScript、ESLint、test build、diff check PASS。
+- 實測 depth `8px`、lane start `20px`、branch `12px`、endpoint count=0、owner-lane gap `0px`、disclosure-to-guide left gap `0px`、branch-to-title distance `0px`；
+  evidence 依 QA-DEV-121 R8 Execution Record。local candidate 為 QC Ready，未 commit／push／PR／deploy／release。
+
+### R9 Soft Connector Tone Closure（2026-09-14）
+
+- 依使用者要求降低樹狀線視覺噪音：normal 使用 `rgb(148 163 184 / 42%)`、active 使用 `rgb(99 102 241 / 76%)`，
+  所有 connector 加上 `border-radius: 999px`；不改 R8 幾何、owner、endpoint removal、disclosure 位置、rowSpan 或 X-scroll。
+- DEV-121 static 16/16、browser 21/21；V13 已驗證低對比色與柔和端角，0 browser／HTTP／visible errors。
+- TypeScript、targeted ESLint、test build、diff check PASS；local candidate 維持 QC Ready，未 commit／push／PR／deploy／release。
+
+### R10 Active Task Lineage Highlight Closure（2026-09-14）
+
+- 即時定位（hover／focus）時，目前任務自己的 parent-owned `incoming-vertical`／`incoming-branch` 與其 child stem、後代 incoming／continuation 同步 active；root task 沒有 parent relation，維持不新增線段。
+- 不相干 root continuation 與 sibling group 維持中性；active scope 仍為 Goal-local ephemeral state，不改 projector、rowSpan、single X-scroll、資料或 persistence。
+- DEV-121 static 16/16、browser 22/22；V14 驗證目前任務自有 incoming relation，0 browser／HTTP／visible errors。
+- TypeScript、targeted ESLint、test build、diff check PASS；local candidate 維持 QC Ready，未 commit／push／PR／deploy／release。
+
+### R11 Active Contrast Closure（2026-09-14；歷史基線，R12 已修正 rowSpan owner 邊界）
+
+- 即時定位的 active connector 提高為 2px，並保持在線軌中心；目前任務／planning cells 使用強化 indigo tint，後代使用次級 tint；
+  R11 曾讓涵蓋目前任務的 rowSpan owner content 同步染色，後續由 R12 收斂為只有實際 owner task 染色。
+- R10 的 self incoming lineage、root isolation、fixed task column、single X-scroll、native table／rowSpan 與資料流維持不變。
+- DEV-121 static 16/16、browser 23/23；V14 stroke、V15 scope tint 與 0 browser／HTTP／visible errors 通過（行為基線已由 R12 修正）。
+- TypeScript、targeted ESLint、test build、diff check PASS；local candidate 維持 QC Ready，未 commit／push／PR／deploy／release。
+
+### R12 RowSpan Ownership Contrast Closure（2026-09-15）
+
+- 保留 native `rowSpan` 的父層內容脈絡；active scope 落在 covered descendant 時，ancestor owner cell 維持 group surface，
+  不再讓子任務看起來擁有父層任務目的或會議紀錄。
+- active scope 正好位於 description／meeting 的實際 owner task 時，owner cell 仍使用明顯 active tint，染色與資料所有權一致。
+- R11 的 2px active connector、self incoming lineage、root isolation、fixed task column、single X-scroll、native table 與資料流維持不變。
+- DEV-121 static 16/16、browser 24/24；V15 驗證 covered owner 不誤染、V16 驗證 owner 自身會染色，0 browser／HTTP／visible errors。
+- TypeScript、targeted ESLint、test build、diff check PASS；local candidate 維持 QC Ready，未 commit／push／PR／deploy／release。
+
+### R13 Reverse Content Location Closure（2026-09-15）
+
+- description／meeting 的實際 owner cell 在 pointer hover 或 keyboard focus 時回報既有 `ownerTaskId`，
+  由同一個 Goal-local active scope 將定位、樹線與欄位 tint 對回真正所屬任務。
+- covered descendant 維持無 content `td`，不會被誤當成任務目的／會議紀錄 owner；任務名稱與所有 planning 欄位以 rendered row
+  的 task id 定位；離開 owner cell 且沒有 cell focus 時清除 scope。
+- R12 的 rowSpan owner tint 邊界、2px active connector、self incoming lineage、root isolation、fixed task column、
+  single X-scroll、native table、content session 與 planning mutation 維持不變。
+- DEV-121 static 16/16、browser 27/27；B11 驗證兩種內容欄反向定位，B12 驗證六個一列一任務欄位，V17 驗證回到任務列後 owner identity 不漂移；
+  0 browser／HTTP／visible errors。
+- TypeScript、targeted ESLint、test build、diff check PASS；local candidate 維持 QC Ready，未 commit／push／PR／deploy／release。
+
+使用思考習慣：#設計思考、#差距分析、#問對問題、#簡潔優先、#系統描繪、#限制條件、#可驗證性
+
+## DEV-122：ProJED 手機零資料載入快速建待辦
+
+- 文件成熟度：`RD Implementation Candidate + 架構已定案 / Human Confirmed / Local Candidate Implemented / QA-QC and Target-device Gates Pending`。
+- 審查：2026-09-15 Tech Lead R10；修正 voice fallback 後舊 session 殘留造成再次點擊無法重試，並完成 SM05 fallback→retry evidence；本地產品 candidate 已完成 quick MPA、`install=1` 安裝引導與原生 prompt 入口、raw form 無JS submit guard、IME composition guard、IDB outbox retry cap、固定身分 RPC adapter、root intent、Workbench hydration、共用 shell metadata、有限 callback query normalization、quick／existing placement 共用 account-unplaced advisory lock與DEV-097 verifier 相容修正；isolated PostgreSQL core matrix 與 DEV-097 browser 已通過，完整 QA、isolated full matrix、iOS／Android 真機尚待執行。
+- 架構定案：`PASS（2026-09-15 Architecture Closure R10；R5／R6／R7／R8／R9／R10 均為同一架構內的實作、相容、安裝引導、混合寫入鎖與 voice session 生命週期修正；P0／P1 unresolved = 0）`。WP-122-0 第二 App 可行性與後續 QA／QC 仍是外部 phase gates，不因架構定案而預先通過。
+- 狀態：實作候選待驗；節點類型：交付點；優先級 P1；實作風險 Medium；符合全部驗收案例後才計入產品交付。
+- 需求來源：`USER-20260914-MOBILE-QUICK-TODO-ZERO-DATA-LOAD`、
+  `USER-20260914-MOBILE-QUICK-TODO-DIRECT-VOICE-ENTRY`、
+  `USER-20260914-GUIDED-DECISIONS-1A-2A-3B`。
+- 父任務：DEV-034、DEV-039；相容依賴：DEV-041／096／097、DEV-115。
+- 實作權威：[SPEC-122](specs/SPEC-122-mobile-zero-data-quick-task.md)。
+- 架構取捨：[ADR-050](decisions/ADR-050-mobile-quick-task-entry-and-outbox.md)。
+- 驗收案例：[QA-DEV-122](qa/QA-DEV-122-mobile-zero-data-quick-task.md)。
+
+### 問題與產品決策
+
+現場使用者收到待辦時，只需先記住任務名稱。第二個手機桌面入口「ProJED快速建待辦」直接開啟名稱輸入，
+不先載入工作區、看板、成員或任務清單。確認後記在本機，登入且連線可用時同步至本人全域任務工作台未歸位，
+稍後再整理。
+
+| 題號 | 已確認決策 | 未採用方向 |
+|---|---|---|
+| 1 | `1A` 語音結束只更新名稱，使用者按建立／鍵盤完成才保存 | 語音結束立即建立、倒數自動建立 |
+| 2 | `2A` 從游標位置加入；有選取則取代選取，保留其餘文字 | 取代整個名稱、只允許空欄使用 |
+| 3 | `3B` 本機保存後停在成功畫面，提供再記一筆／前往工作台 | 自動清空、自動轉到完整工作台 |
+
+名稱旁固定可見麥克風＋「語音」，觸控目標至少48×48 CSS px。Web Speech可用時在tap內啟動；
+否則引導系統鍵盤聽寫，不宣稱網頁能代按鍵盤麥克風。平台限制與完整UI/voice/IME契約見SPEC第7節。
+
+### 範圍與唯一契約
+
+本期包括：獨立MPA/PWA入口、最小名稱／語音／成功畫面、account-bound IDB outbox、既有Google OAuth認領、
+單筆create RPC＋永久compact receipt、固定request身分、本機逐筆恢復、PWA更新整合、工作台到達／hydration相容與QA。
+不包括：選專案／指派／日期／附件、瀏覽既有任務、自有轉錄、native App、獨立origin、遠端migration或release。
+
+工程參數、狀態表、錯誤碼、schema與逐檔責任只在SPEC-122維護；本DEV只保留任務進度與派工入口。
+ADR記錄取捨，QA定義驗證；不得在三份文件重複維護完整RPC或state contract。
+
+### Tech Lead R4 修正結論
+
+| 發現與證據 | 本版修正 |
+|---|---|
+| SDK在request時讀最新session，account guard後仍可換成B token | 同一owner/token/epoch快照，單筆fetch固定Authorization；claim用同token驗證並CAS，不新增client |
+| root首頁不保證工作台開啟，部分view或無board沒有panel host | 一次性root intent、既有open command與互斥panel host；維持view／草稿，remote hydration不等board |
+| 失敗record雖保留title，原UI只有數量／泛用retry | 有backlog才顯示本機逐筆恢復；本人同ID重試，conflict複製／確認；8次暫停不被前景事件重置 |
+| OAuth callback含`capture／claim`時可能因cache key不同而miss quick precache | 在唯一Workbox設定集中有限query normalization；不在頁面刪query或增加第二worker |
+| 無receipt的既有capture id與int32 order邊界可能被當成一般DB錯誤 | RPC在同一transaction前置檢查並回`QT_EXISTING_ROW_INVALID`／`QT_ORDER_EXHAUSTED`；client保留原capture供人工處理 |
+
+R2的immutable receipt、progressive bootstrap／voice、OAuth／cache及WP0修正保留；R3明確化IDB index與claim reload guard；R4把callback query與RPC資料邊界收斂在唯一基礎設施／資料庫責任點。
+工程細節為 `Intentional replacement`，保留產品決策；現有unplaced PK/RLS、TaskNode內容與placement責任
+為 `Compatible extension`。未決P0／P1工程問題=0，真機可行性仍是未執行的phase gate。
+六個責任點（raw HTML、quick controller、IDB outbox、fixed JWT adapter、single RPC、root intent）各自只有一個authority；
+不得再加入第二worker／client、通用queue、remote inbox或平行draft store，除非先提出可驗證的ADR amendment。
+沒有把這次文件自我檢查宣稱為獨立QC或產品PASS。
+
+### Implementation correction R5
+
+- raw `quick-task` form 增加 `onsubmit="return false"`，JavaScript module 延遲時按 Enter 不導覽、不遺失原文；controller submit 同步檢查 IME composition。
+- browser verifier 已補上 fallback、IME、lease／claim、geometry、delayed module、voice insertion 與零業務 HTTP request sweep；R4 六責任點、資料模型、權限與 phase gate 不變。
+- full `npx tsc --noEmit` 本輪 PASS。
+
+### Implementation correction R6
+
+- `finishQuickCaptureLease` 在第 8 次自動 retryable failure 後，將 record 明確轉為 `failed_permanent` 並寫入 `AUTO_RETRY_EXHAUSTED`；`nextAttemptAt` 維持 `null`，foreground／online 不再重新取得 lease。
+- `retryQuickCapture` 只對使用者明確按下人工 retry 的 exhausted record 重置 `attemptCount` 與 state；資料、帳號、receipt、lease owner 與 RPC 契約不變，沒有新增 state authority。
+- static S19～S21 與 quick browser `SM12`／`SM13` 已驗證「未綁定 recovery 可見→明確 claim」及「8次失敗→永久暫停→下一次lease阻擋→人工retry重置」；S20 另固定 `Retry-After` 不得把永久暫停重新寫成可重試；R5 的 raw form／IME guard 與完整 phase gate維持。
+
+### Compatibility correction R7
+
+- DEV-097 browser 的原始 local failure 已分類為 `existing-regression-verifier-contract-mismatch`，修正後於 2026-09-14 完整 browser verifier PASS；診斷與 PASS artifact 分別為 `output/qa/dev-122/dev-097-compatibility-diagnostic.json`、`output/playwright/dev-097/ui-result.json`。verifier source SHA-256 為 `B80B3B8EF8A89C3EC9F0B7FFA513A08097E8B6947DFA86C63C11F729128F1DDE`。
+- 修正後驗證器操作設定前會先展開預設收合的側欄；空標題 prepare 失敗後，會議模式 `forceFlushMeetingDraft` 只代表 IDB recovery snapshot 已保存，不能推論 canonical record owner 已 safe。verifier 仍保留 fail-closed readback，並在 recovery 後執行明確的 user-confirmed canonical boundary；若未來要改產品 navigation／owner oracle，仍須另提 ADR amendment。
+- R7 不改 DEV-122 六個責任點、資料／安全／ownership boundary、worker、RPC 或 Workbench intent；DEV-097 browser gate 已解除，真機、完整 B/W/P 與正式 QA/QC 仍待後續 gate。
+
+### Install guidance correction R8
+
+- `quick-task/?install=1` 由 quick 自有輕量 install guide 處理；Android／桌面在 `beforeinstallprompt` 可用時由使用者明確點擊原生安裝，iOS／內嵌瀏覽器顯示適用指引，名稱欄保持可立即輸入。
+- R8 不新增 worker、client、state authority、storage、RPC 或資料邊界；SM14／SM15 與 `quick-task-install-390x844.png`、`quick-task-install-ios-guidance-390x844.png` 已通過本機 smoke，D01～D04 真機 install promotion 仍待 QA／QC。
+
+### Mixed-writer lock correction R9
+
+- quick create RPC 已改用既有 `move_task_workbench_subtree_v2` 的 `account:<owner>:unplaced:parent:root` transaction advisory scope；quick 建立與 board↔unplaced placement 的排序／ownership mutation 不再各自使用不同 lock key。
+- static S11-lock-scope guard 與 isolated PostgreSQL／固定 fixture pgbench 已重新 PASS；40-client mixed-writer-compatible fixture（20 Quick RPC＋20 test-only existing append fixture）產生 40 個連續唯一 order。這是 lock domain 相容性 evidence，不代表 P07 真實 mixed-writer placement transport、P10 placement 或完整 full-schema API／fault gate 已完成。
+
+### Voice fallback lifecycle correction R10
+
+- 根因是 voice adapter 回報 `fallback` 後 controller 保留舊 `voiceSession`；第二次 tap 只會停止舊 session，不能重新開始 recognition。
+- fallback 現在立即清除 session，再顯示鍵盤聽寫引導；SM05 已驗證 fallback 後再次點擊語音可取得新 final transcript `再試語音重試`。
+- 這是 quick controller 內的生命週期修正，不新增 worker、client、state authority、權限邊界或資料流；真機 permission denial／無聲音仍待 D06／D07。
+
+### Architecture Closure Handoff（Tech Lead R10）
+
+- 已凍結的六個責任點只有：raw HTML quick entry、quick controller、IndexedDB outbox、固定 JWT adapter、單一 create RPC、一次性 root intent；不得再引入第二 worker／client、remote inbox、通用 queue 或平行 draft store。
+- 已凍結的資料與安全邊界：client 不讀業務清單、不計算 owner／workspace／order、不傳 owner 或 task JSON；server／既有 authority 維持 context、排序、payload defaults、idempotency、RLS 與 placement。
+- 目前可交接的是 local candidate implementation；D01～D07、完整 B／W／P、真機與正式 QA／QC 仍未完成。任何未驗證平台限制不得以 shortcut 改寫成 PASS。
+- DEV-097 browser 相容 gate 已由修正後 verifier PASS 解除；SM05 fallback 後語音重試、`install=1` 安裝引導、原生 prompt、iOS 指引 smoke、quick／existing placement共用account-unplaced advisory lock guard與 40-client mixed-writer-compatible fixture亦已PASS；diagnostic、`ui-result.json`、SM14／SM15、S11-lock-scope與mixed-writer artifact僅證明既有 owner matrix／本機 UI事件／lock domain相容性，不能替代DEV-122的target-device、真實P07 placement、完整B／W／P或正式QA／QC證據。
+- 若後續工作需要新增 API／schema／RLS／state／ownership、第二 origin／worker、放寬既有 regression oracle，立即停止受影響 WP，提出 ADR amendment 後再繼續。
+
+### RD Work Packages 與 Phase Gates
+
+固定順序與逐WP required cases見SPEC第8節、QA第4及11節：
+
+| WP | 可執行交付 | 出口 |
+|---|---|---|
+| WP-122-0 | 最小MPA／manifest／icon／install CTA與quick routing | D01～D04依平台適用性驗證第二icon、launch、storage sentinel |
+| WP-122-1 | progressive shell、build/version、SW query cache、offline | S01～S05、B01/B16、W01/W05與D05所需能力 |
+| WP-122-2 | input／voice／IME／success／install／accessibility | S06/S07/S09、B03～B06/B14/B17與D06所需能力 |
+| WP-122-3 | RPC＋private receipt／RLS、generated types與minimal adapter | S10/S11、P01～P14；isolated DB及advisors review |
+| WP-122-4 | outbox／auth claim／固定JWT sync／本機恢復／safe reload | S08/S13、B07～B12/B18/B19/B21、W02～W04/W06與D07所需能力 |
+| WP-122-5 | 工作台一次性到達／互斥host／hydration與完整交付驗證 | S12/B13/B20、全部適用案例、效能與D01～D07真機證據、targeted回歸、QA/QC收斂 |
+
+WP0只允許上述最小slice；通過後才依序推進。缺裝置或HTTPS candidate標示未充分驗證，不可偽造PASS；
+一般implementation bug回RD，平台確實無法達到第二入口才回ADR評估獨立origin。
+
+### 驗收與執行邊界
+
+- 名稱立即可編輯；必要module ready後才啟用建立／語音，JS延遲不造成Enter導覽或文字進URL。
+- 未送出目前輸入時不產生它的RPC，業務list request始終為0；既有outbox補送及SW precache分別記錄。
+- IDB commit/readback後才顯示已記下；server receipt驗證後才顯示已建立，不承諾待同步已在工作台。
+- 原capture ID跨不明commit結果、timeout、離線、重開與task生命週期重播仍只建立一次。
+- A待辦在account guard後切到B也不帶B token；失敗資料能從本機待處理入口逐筆取回且不覆蓋目前輸入。
+- 前往工作台須真正在root打開單一panel，含需要登入／無active board；不以URL改變代替到達驗收。
+- 320／390、鍵盤展開、200%文字縮放、可見語音入口、真實平台fallback、帳號切換皆符合QA。
+- UI/API/DB與真機證據須對應同一收斂candidate；source scan或build不能代替完整交付路徑。
+
+基線repo：`C:\VIBE CODING\ProJED\ProJED`；branch `持續優化3`；HEAD
+`e335eaa07c14313afb5a27607a2c009ace3bcbc3`加dirty tree，相關source hashes見SPEC第14節。
+`PwaReloadSafetyBridge.tsx`、`pwaReloadOwnerManifest.ts`、`TaskWorkbenchPanel.tsx`、`package.json`等已有其他DEV修改；
+只允許語意合併，禁止reset／checkout／整檔覆寫。超出SPEC已列file/schema/API契約才回到規劃，不把預定additive migration本身誤判為drift。
+
+本輪已在同一 working tree 完成 DEV-122 local candidate implementation，並保留既有其他 DEV dirty changes；沒有執行遠端 migration、commit、push、deploy 或 release。
+已取得 static/pure、quick browser、root intent browser、test build、service-worker artifact、task-owned isolated PostgreSQL core matrix（22 checks）、固定 fixture pgbench concurrent transport（20 clients／20 rows／0 failed）與 40-client mixed-writer-compatible transport（20 Quick RPC＋20 test-only existing append fixture／40 unique orders／0 failed）證據；尚未取得真機 D01～D07、P07 混入真實既有 writer／placement 的完整 transport、P10 placement/P11 advisor/P12-P14 full API／fault matrix、完整 B/W regression、正式 QA/QC sign-off；本機 readiness 已確認無 ADB／Xcode simulator，測試 HTTPS host `/quick-task/` 回 404；quick create已改與既有 placement共用account-unplaced advisory lock，且S11-lock-scope guard PASS；voice fallback session cleanup 已由 SM05 PASS；P07固定fixture transport、P11 index+max-order EXPLAIN與P13 profile cascade已取得core evidence，因此 DEV-122 仍不可標記完成。獨立origin／native voice維持SPEC第12節future capsule。
+
+Local candidate evidence（2026-09-15，`localhost:4000` reused；process owner 28532 preserved）：
+`npm run verify:test-env`、`npm run verify:staging-env`（環境解析唯讀，無遠端 mutation）、targeted ESLint、`npm run build:test`、`npx tsc --noEmit` PASS、
+`npm run verify:dev-122-mobile-zero-data-quick-task`（22 assertions）、
+`npm run verify:dev-122-mobile-zero-data-quick-task-browser`（15 local smoke assertions PASS；含 fallback 後語音重試、`install=1` 安裝引導、原生 prompt 與 iOS 加入主畫面指引，詳細以 result.json 為準）、
+`npm run verify:dev-122-mobile-zero-data-quick-task-root-browser`（R01～R03 PASS）、
+`npm run verify:dev-122-mobile-zero-data-quick-task-sw`、
+`npm run verify:dev-122-mobile-zero-data-quick-task-db-isolated`、`npm run verify:dev-122-mobile-zero-data-quick-task-db-concurrent`、`git diff --check` 均通過。
+產物與截圖位於 `output/playwright/dev-122-mobile-zero-data-quick-task/`，相容 DEV-097 browser artifact 為 `output/playwright/dev-097/ui-result.json`，DB 檔案位於 `output/qa/dev-122/`（含 `db-isolated-result.json`、`db-concurrent-pgbench.txt`、`db-concurrent-check.txt`、`db-concurrent-mixed-pgbench.txt`、`db-concurrent-mixed-check.txt`、`dev-097-compatibility-diagnostic.json`）；`db-isolated-result.json` 含 migration／matrix／concurrent fixture sourceHashes、mixed-writer-compatible result 與 runtime cleanup；isolated matrix使用task-owned loopback runtime，沒有套用遠端或既有資料庫 migration；既有 Docker Supabase runtime 僅做唯讀 schema presence check，未套用 DEV-122 migration／placement RPC。
+相容回歸另完成 DEV-096 static 26/26 + browser + real-SW、DEV-097 static 23/23 + browser + real-SW、DEV-115 static 21/21 + browser B01～B09；DEV-097 browser 的原始 verifier 契約落差已修正，PASS artifact 為 `output/playwright/dev-097/ui-result.json`，不能再用 readiness timeout 描述取代實際結果。
+
+使用思考習慣：#第一性原理、#系統描繪、#可驗證性
+
+## DEV-123：會議任務辨識與滑鼠停留輔助連結
+
+- 狀態：架構已定案；`RD Implementation Ready / Architecture Confirmed / Local Candidate Implemented / Provider Qualification Gate Pending / NOT RELEASED`。
+- 類型：交付點候選，P2初排；local candidate 已落地，但產品不因局部實作或smoke增加完成率。
+- 本輪邊界：依 `dev-pm` 將已確認的SPEC／ADR／QA契約落到 local candidate，保留其他DEV dirty changes；遠端migration、正式Provider、完整QA/QC及release不在本輪完成。
+- 風險：本機文件／後續隔離實作為Medium；功能包含敏感資料、並行及刪除，需QA/QC。遠端migration、正式權限、外部付費啟用與release另屬High。
+- Source：canonical repo `C:\VIBE CODING\ProJED\ProJED`，branch `持續優化3`，HEAD `e335eaa07c14313afb5a27607a2c009ace3bcbc3` 加既有dirty tree；這是程式盤點，不是已部署證據。
+
+### 問題、價值與需求來源
+
+核心是辨識「正在討論哪個既有任務」，在會議草稿建立可追溯、可修正的連結。鼠標停留與預覽提供時間附近線索；任務辨識優先於講者標籤。
+需求來自本對話的Ambience AutoScribe分析、GitHub開源選型、鼠標輔助構想、寫入開發文件、引導補齊、架構確定及本輪Tech Lead優化。
+已確認產品決策以下表為準；工程契約以SPEC-123為準，不在DEV再維護schema/API副本。
+
+### Product Decision Brief（2026-09-14，產品決策完成）
+
+決策來源：使用者分別從 DEV-123 決策卡送出 `1A 2A 3A`、`4A 5A 6C`、`7A 8C 9C`、`10A 11A 12A`，
+並以文字確認供應商不得保留可回取的會議內容；此保存條件直接記為架構 invariant，不再以題號追蹤。
+
+| 題號與選擇 | 已確認規則 | 對原 Brief 的影響 |
+|---|---|---|
+| 1A | 首版會中同步錄音與滑鼠線索，會後產生逐字稿、任務連結與整理草稿；不顯示會中 AI 配對建議。 | 取代「語音輸入僅列後續整合」的 AI 建議；文字基線仍是驗證方法，不是首版交付終點。 |
+| 2A | 音訊可交雲端轉錄，逐字稿及必要任務內容可交雲端 AI 配對。 | 確認雲端處理方向；費用由 7A、ProJED 保存期由 5A、原始資料存取由 12A、供應商不得保留可回取內容；未啟用付費服務。 |
+| 3A | 通過原文證據與合法任務檢查的明確匹配直接加入草稿；模糊者待確認；可追溯、取消或改連結。 | 確認原先自動加入草稿建議；不代表模型自報高信心即合格，門檻仍需樣本校準。發布由使用者執行。 |
+| 4A | 首版以同一會議室、主持電腦的內建或會議麥克風收音，同步紀錄 ProJED 滑鼠線索。 | 收斂為單一麥克風來源；線上／混合會議的遠端音訊與系統音訊擷取不納入首版。 |
+| 5A | ProJED 的錄音副本自錄音結束起保留 7 天，期限內可回聽與重新轉錄，到期刪除；逐字稿及配對依據隨會議紀錄保存。 | 新增錄音保存規則；不能以重新轉錄延長期限。此選擇不直接控制 AI 供應商副本或其內部資料保留政策。 |
+| 6C | 先依候選服務及會議情境提出成本估算，再決定額度或逐場確認方式。 | 成本情境已補，額度後由 7A 補定；此決策的估算步驟已完成，沒有執行付費推論。 |
+| 7A | 整體試點的轉錄、任務配對、摘要與重試每月預算 NT$1,000；預留額度內自動處理，額度不足停止新的付費工作。 | 補定 6C 留待估算的費用規則；既有主機／儲存另計，非每人或每場 NT$1,000。本輪只寫文件，未啟用付費服務。 |
+| 8C | 60 分鐘會議，上傳完成後 24 小時內取得可檢查草稿，作為一般成功處理的首版目標。 | 選擇可隔日檢查，允許評估低急迫性方案；尚非特定供應商已達成承諾。不含錄音上傳、額度不足或服務中斷，這些狀態仍須可見。 |
+| 9C | 自動連結正確率至少 95%、涵蓋至少 90%；以人工標註的「討論段落－任務」配對計算。 | 明確取代原先未定案的 98% 建議與 9A 的 98%／80% 提案；優先減少漏連，接受較多草稿核對。不放寬合法 ID／權限／原文證據要求，也不改 3A 的模糊待確認與人工發布。 |
+| 10A | 每場建立會議後，由主持人按「開始錄音」，同步啟用音訊與任務停留紀錄；未啟用仍可手動記錄。 | 新增明確啟用動作；可見錄音／暫停狀態與停止控制。開啟舊紀錄、重整或恢復草稿不自動收音，不記住自動錄音偏好。 |
+| 11A | 直接在會議草稿中點任務連結或待確認標記，查看原句及任務完整路徑，更換、補連或取消。 | 沿用草稿作主要核對入口，不另建獨立配對工作畫面。人工更正優先；具權限且錄音未到期時可回聽。 |
+| 12A | 原始錄音與完整逐字稿限具該會議編輯權限的人存取；只有閱讀權限者不得取得。 | 新增原始資料權限，須映射真正的會議資料授權；發布正文及已引用原句沿用閱讀權限，不擴大任務或跨看板權限。5A 保存規則不變。 |
+| Provider retention boundary | 供應商不得保留可回取的會議內容；若採 Gemini，需專案級 ZDR、`store=false`、用畢清理暫存。未取得證據前不傳送真實會議內容。 | 不接受一般內容保留；不把 `store=false` 或刪除 Files 單獨當作 ZDR 證明。ProJED 音訊仍保留 7 天、逐字稿／依據仍隨會議，NT$1,000 月額與 12A 權限不變。 |
+
+本輪未選：首版會中串流建議、文字試點作為唯一交付、本機轉錄／全本機推論、所有建議逐筆先確認。
+上述未選方向不默認永久禁止；需要改變時回到產品決策與架構修訂，不暗中改動已確認基線。
+第 4–6 題未選：線上／混合會議作為首版來源、轉錄成功即刪或隨紀錄長期保留錄音、直接採用月額或逐場付費確認。
+第 7–9 題未選：每月 NT$3,000、每場付費前確認、10／30 分鐘草稿目標，以及 98%／80% 或 99%／60% 品質組合。
+第 10–12 題未選：記住錄音偏好並隨開始會議啟用、獨立配對清單作主要入口、原始資料僅啟動者或全體讀者可見。
+未採納：接受供應商一般內容保留；目前採「不得保留可回取內容」方向，沒有尚待回答的產品選項。
+既有成本試算仍不是實測帳單，已選等待時間與品質是驗收目標，不是已達成結果。
+
+使用思考習慣：#效用理論、#可驗證性、#限制條件
+
+### Current-phase 範圍與相容邊界
+
+桌面單主持端、同會議室麥克風、會中手動錄音／滑鼠，會後雲端轉錄及同看板existing task配對。
+明確者進草稿，模糊者待確認，一段可連多任務；支持人工更正及唯一人工發布。討論關聯不能改寫成執行待辦，例如「測試先不要做」仍可related，但不改task狀態。
+
+不變契約：7日音訊、完整上傳後24h、全試點月額NT$1,000、人工前95% precision／90% recall、editor-only raw、provider不得保留可回取內容。
+錄音開始與既有startMeetingRecord分開；SPEC-109 persistence-confirmed activity、SPEC-110 canonical owner及SPEC-117/ADR-049同看板session continuity均保留。
+
+| 維護位置 | 唯一責任 |
+|---|---|
+| 本DEV | 人類決策、需求／優先序、執行邊界、派工、完成與future scope |
+| [SPEC-123](specs/SPEC-123-meeting-task-resolution-audio-pointer.md) | §4–12 state/data/API/worker/budget/匹配/保存；§15檔案；§16工作順序；§17 stop；§18 AC |
+| [ADR-051](decisions/ADR-051-projed-owned-meeting-analysis-pipeline.md) | 為何選ProJED排程、原始資料分離與stateless Gemini；重要替代方案及代價 |
+| [QA-DEV-123](qa/QA-DEV-123-meeting-task-resolution-audio-pointer.md) | fixture／phase gate／gold分母／實際驗證方法；狀態NOT EXECUTED |
+
+### 選型與成本記憶
+
+首版重用現有canonical hover、Gemini 3072維RAG及record/task links，新增局限於錄音、配對與可靠保存所需責任。
+[Sentence Transformers](https://github.com/huggingface/sentence-transformers) 僅在排序瓶頸經實測證實時重評；[Graphiti](https://github.com/getzep/graphiti) 留待跨會議記憶需求。
+開源熱門度、demo與抽取新任務都不能證明ProJED既有task匹配已達標；採用前重驗授權與版本，不另加Python／圖資料庫服務。
+
+### 6C 成本情境與供應商限制（2026-09-14，未採購／未實測）
+
+以下是可重算的規劃情境，不是實測費用分布或帳單上限。首選評估方向為專用轉錄服務搭配既有 Gemini 整理；
+供應商專案 ZDR 資格／適用性尚未驗證；原試算不代表已含取得資格、支援方案或替代供應商的費用。
+現有整理入口的程式預設為 `gemini-3.5-flash`，環境變數可覆寫，正式設定尚未核實。
+本輪不因價格較新而替換全域模型，也不把「會後處理」直接當成可享 Batch API 折扣。
+
+| 項目 | 官方牌價或規劃假設 | 60 分鐘會議試算（美元） |
+|---|---|---|
+| Gemini 3.5 Transcribe | 每百萬音訊輸入 tokens $2、文字輸出 tokens $12；音訊約每秒 25 tokens。假設計費輸出 12,000–24,000 tokens，包含實際計費的時間標記等輸出。 | 音訊 90,000 tokens 為 $0.18；加輸出後 $0.324–0.468。 |
+| Gemini 3.5 Flash 任務配對＋摘要 | 每百萬輸入 tokens $1.50、輸出（含 thinking）$9。假設所有分段、配對與合併合計輸入 30,000–100,000、輸出 4,000–12,000 tokens。 | $0.081–0.258。 |
+| 合計 | 一次處理；未含失敗重試、額外重整、索引更新、主機／儲存／流量與稅。 | $0.405–0.726；以規劃匯率 1 美元＝NT$32，約 NT$13–24／小時。 |
+
+牌價來源：[Gemini API pricing](https://ai.google.dev/gemini-api/docs/pricing)。
+NT$32 是試算用固定匯率，非當日匯率。tokens 範圍是 AI 建議情境，尚未以繁中、術語及逐字時間標記的真實輸出校準；
+時間標記密度、冗長上下文、thinking 或重試均可能使實際費用超出表列上緣。
+官方約 $0.005／分鐘亦是特定輸出量下的換算，不能當成固定每分鐘封頂費率。
+
+同一假設下，每月 20／40／80 小時分別約 NT$260–465／519–929／1,037–1,859。
+若全部處理量加倍，40 小時約 NT$1,037–1,859；這只是敏感度情境，非重試率預測。
+NT$1,000 已由 7A 接受為整體試點月預算；不能宣稱必定足夠處理 40 小時，也不將每月約 20 小時的建議誤列為使用時數硬限制。
+
+備選價格參照：[Google Cloud Speech-to-Text V2](https://cloud.google.com/speech-to-text/pricing)
+首級標準辨識 $0.016／分鐘、低急迫性的 dynamic batch $0.003／分鐘；以單聲道 60 分鐘加上述 AI 整理，
+分別約 $1.041–1.218（NT$33–39）及 $0.261–0.438（NT$8–14）。
+多聲道依各聲道計費；dynamic batch 的等待時間、繁中模型及時間標記組合須另驗證，價格較低不代表可直接替換。
+
+音訊儲存量以假設 64 kbps 單聲道壓縮檔計，每小時約 28.8 MB；40 小時共 1.152 GB。
+若均勻分布 30 天，7 天滾動保留約 0.269 GB；若集中同週，峰值可達 1.152 GB。
+[Supabase Pro 公開價格](https://supabase.com/pricing) 超額檔案儲存 $0.0213／GB、一般 egress $0.09／GB；
+本專案方案、共用額度與實際音訊格式未確認，不將既有額度視為免費承諾，亦未將固定方案費算成每場新增費。
+既有 `gemini-embedding-001` 的索引更新費另行核實，不挪用新 embedding 模型價格，也不混用向量空間。
+
+上述6C表為2026-09-14既有決策試算記憶，非本輪重新核價或dispatch上限。Provider精確型號、Files及ZDR限制、價格來源回查由SPEC第9/21節及WP-123-0維護；
+預留／跨月／未知usage規則只在SPEC第10節維護。沒有新的付費授權，也不重新開啟已確認的保存條件。
+
+### RD派工、入口與完成判定
+
+下一步先做 **WP-123-0a 唯讀資格盤點**。0a缺實際project資料記Pending；fake/local工作可繼續；現有 B01～B03 browser smoke 與 B04～B11 route-mocked browser/media candidate smoke 不等同完整 browser/media gate。
+依SPEC：0a → WP1契約 → WP2資料／control → WP3錄音與WP4worker → **0b synthetic probe** → WP5配對／WP6投影 → WP7校準 → WP8 QA/QC。
+0b用已核准project、synthetic內容與受7A控制的probe ledger取得API／cleanup／時間戳證據，不要求「完整qualification已PASS」才可測。沒有完整provider gate不得傳真實會議內容；沒有quality gate不得啟用正式auto-accept。
+
+開發模型可決定局部命名、函式拆分、fixture及calibration參數；不准改人類決策、候選上限、pointer-only禁令、原權限或record/session權威。
+命中SPEC第17節時帶具體失敗證據回Tech Lead；不自行換provider、放寬門檻或越過既有spec邊界。
+預定的additive schema/API修訂已寫入SPEC，不把執行既定migration誤認為新產品決策。
+
+完成需SPEC AC、QA/QC的正常UI路徑及資料readback、95/90、24h、7日、budget、權限與cleanup全數具證據；provider資格或fake單測不能取代產品完成。
+遠端migration、正式資料／權限、付費啟用及release不屬本輪文件工作，發布時另走release gate。
+
+### Tech Lead修訂與證據（2026-09-14）
+
+根因：同一套工程決策在DEV／SPEC／ADR／map重複敘述，卻欠缺跨步驟的版本與清理契約；字面完整仍可能讓RD自行猜測。
+
+- 補pointer batch、stop/finalize及來源快照，區分audio/discussion/gold段落；多任務分別驗證，不用單一top-two規則排除。
+- 補resolution CAS、clear-all及跨ASR revision人工保護；正文／link ownership與既有saveDraft整合，避免雙寫與重複append。
+- 統一一invocation一unit；先記attempt才dispatch，cleanup／usage ledger不隨record cascade遺失。
+- 修正2小時upload token、播放TTL不得跨expiry、本機離線清除限制與跨月dispatch帳；0a/0b消除驗證循環。
+- local candidate 的 stop endpoint 現在以 server stop time 設定七日音訊到期；pointer flush 會先批次送出並在 source freeze 前等待完成。
+- worker 成功回寫 capture 改採 `queued`／`running`／`awaiting_budget` 狀態條件；取消若先取得 capture，晚到結果不能把 `cancelled` 復活成 `ready`，並保留 run／cleanup ledger 供後續對帳。
+- worker 先以 active lease 結算 usage，再將 run 收斂為 `ready`；結算失敗時保留可重試狀態，不產生 ready／reserved 不一致。
+- `save-projection` 的 Edge scope 改由 capture 解析並套用 private creator／recorded_by guard；security-definer projection RPC 同步重驗 actor，避免同 project writer 越過 private meeting 邊界。
+- stop／complete-upload 現在要求 expected source version，並在 `complete_meeting_upload_v1` 的 capture lock 內再次驗證；isolated matrix 已加入 stale complete-upload 的 `SOURCE_CONFLICT` 案例。
+- manual retry 改由 `retry_meeting_analysis_v1` 在同一 transaction 鎖 source run／capture、重驗 private meeting editor、保留原 deadline；同 request key 回既有 run，另一 request key 遇 queued／cancelled／expired capture 時拒絕，避免先 insert run 再 queue capture 造成 orphan work。isolated matrix 已加入 `retryAtomicity`。
+- pointer merge 現在要求相同 `clockEpoch` 才能合併；pause/resume 邊界的同任務區間保留為兩段，不以相同 offset 或 surface 偽造連續停留；clamp 後的零長度／全負 offset 也會被丟棄。
+- pointer batch 若 append 失敗，controller 會保留已封存音訊、標記 `pointerLoss`，停止時以 `partial` source completeness 完成凍結並禁止把遺失線索當成完整空集合；pause／stop／finalize/API 失敗則關閉 recorder、pointer observer 與 media tracks，清除錄音 UI 狀態並顯示可續傳的 recovery，而不是維持假錄音狀態。
+- reload recovery 若只有本機 finalized audio，因無法重建記憶體中的 pointer batch／完整 manifest，一律以 `partial` 凍結並要求重新確認；不能使用空 pointer hash 或局部音訊清單靜默排入分析。
+- projection RPC 現在逐筆重驗 task link 的 live、task 類型、tenant／project ownership 與非 archived 條件；stale、archived、deleted 或 cross-project link 整筆以 `TASK_OUTSIDE_PROJECT` fail closed，不以過濾 join 靜默遺失非法輸入。
+- pointer append 同步要求 tenant／project、live task／milestone 與非 archived；MediaRecorder 建立／start 失敗會停止 server capture、以 `missing` 凍結並進入 recovery，避免只清 UI 狀態而留下 server recording。
+- capture progress／stop 的 update 重新套用 server state predicate，並行 cancel 勝出時回 `MEETING_RECORD_CONFLICT`；cancelled／expired capture 不再簽發 playback URL。
+- stop 現在凍結完整 `epoch_manifest`、`final_pointer_sequence` 與 `source_gaps`；append-pointer／reserve-segment 對 payload 上限、capture identity、epoch、offset、sequence、gap、overlap、digest 與冪等 reservation 重驗。pointer observer 遇 element disconnect、drag、pointer cancel 會結束區間，audio track `ended` 會走 missing-source recovery；這些是 server timeline 與 pointer evidence 的完整性控制，不改變講者標籤的低優先序。
+- fake worker／review path 現在保存 word offsets 與 candidate `quoteRange`，候選旁顯示原句證據範圍；沒有 quote 的 pointer-only 候選明示仍需原句確認，維持任務辨識優先於講者標籤。
+- `decide_meeting_match_v1` 與 review UI 同步拒絕不存在候選或 pointer-only 的直接 `accept`；只有帶原句候選可採用，明確 `add`／`replace` 才能作人工補連，避免鼠標停留單獨升格為任務關聯。
+- save-projection Edge 不再把未知或跨 scope 的 task link 靜默丟掉；會保留 fail-closed 語意交由 projection scope 驗證，control API 的 auth／forbidden／conflict 也改回固定錯誤碼與 401／403／409，不回傳 SQL 或 provider 原文。
+- begin 的非 private meeting 權限與一般 project editor 語意一致，private 才檢查 creator／recorded_by；published／archived record 不建立新的 capture。
+- 各項失敗案例回鏈QA；刪除DEV工程副本及純轉呼叫provider wrapper。未更改已確認產品決策，SPEC-109/110/117及ADR-049維持原權威。
+
+本輪文件證據仍不是獨立QC或Provider PASS；新增 local candidate 證據如下：
+
+- `npx tsc --noEmit` PASS。
+- `npm run lint` PASS（0 errors；既有程式碼含 65 warnings，未新增 DEV-123 lint error）。
+- `npm run verify:dev-123-local-preflight` PASS_WITH_EXTERNAL_GATES_PENDING；已串接 pure/provider contract、isolated PostgreSQL、task-owned Auth／Storage、含 Edge runtime 的 Control API、schema lint、typecheck、全 repo lint/build、DEV-106/108/109/110/117 protected regressions、B01～B03 browser 與 B04～B11 browser/media，artifact：`output/qa/dev-123/local-preflight-result.json`（18 steps／7 artifacts）。此結果只代表 local evidence 收斂，不替代 hosted authenticated DB／Storage、provider、完整 QA/QC 或 release gate。
+- Pure verifier 已補 auth／Storage static contract：Bearer `auth.getUser()` actor verification、raw/private tables 只允許 `service_role`、`meeting-audio` private bucket；此證據仍不宣稱 authenticated runtime PASS。
+- `npm run verify:dev-123-provider-contract` PASS（fake mode=`PENDING`、`dispatchPerformed=false`、`networkCallPerformed=false`；artifact：`output/qa/dev-123/provider-contract-result.json`）。另以未具資格的 `gemini` mode 驗證 `FAIL_CLOSED`、零 dispatch。此 gate 只證明本地 fail-closed／無網路送出與契約存在，不代表 provider ZDR 或 synthetic qualification 已完成。
+- Protected regressions static PASS：DEV-106、DEV-108、DEV-109、DEV-110、DEV-117；這些結果只證明既有會議／草稿／跨模式契約未被本輪 control-plane 修正破壞，不替代各自完整 browser／QA authority。
+- `npm run verify:dev-123-meeting-task-resolution` PASS（segment rotation、pointer merge、pointer feature、projection revision）。
+- `npx supabase db lint --local` PASS（public/private schema no errors）。
+- `npm run build:test` PASS。
+- `npm run verify:dev-123-meeting-task-resolution-browser` PASS（B01～B03：控制可見、預設安全狀態、鼠標輔助提示；artifact：`output/playwright/dev-123-meeting-task-resolution/result.json`）；`npm run verify:dev-123-meeting-task-resolution-browser-media` PASS（B04～B11：受控 fake MediaRecorder／getUserMedia／Edge route mock 下的開始、recorder start／stop failure、audio track device loss、暫停、恢復、停止、分段、outbox 清空、單次 finalize、review candidate 顯示與 human accept decision；recorder `stop()` 例外時已讀回 `stop`／`complete-upload` 且 capture=`queued`；artifact：`output/playwright/dev-123-meeting-task-resolution-media/result.json`）；後者只屬 local candidate smoke，不替代真實 browser/media、authenticated DB／Storage、provider 或品質 gate。隔離 PostgreSQL 另讀回 stop metadata 的 default empty gaps、frozen epoch manifest、final pointer sequence 與 worker／pointer／transcript／expiry／cleanup index plans。
+- review/decision API、RecordSidebar 同草稿面板（含WBS補連／改連）、pause/resume 新 clock epoch、reservation／verify、source-version CAS、signed playback、review 原音回聽、atomic retry／cancel、worker claim／budget settlement、音訊 manifest 完整性與明確 recovery 已完成型別與靜態契約接線；isolated PostgreSQL control-plane core 已 readback PASS，但尚未宣稱完整 browser/media／authenticated DB／Storage／provider PASS。
+- 完整真實 browser/media、hosted authenticated DB／Storage end-to-end、provider 0a/0b、95/90、24h、7日、budget、QA/QC 尚未執行；已完成的 isolated PostgreSQL 涵蓋八份 migration 的 control-plane core、`cancelLateWorkerGuard`、`retryAtomicity`、`completeUploadTimelineGuard`、`acceptedDecisionProjection`、`projectionRequestIdempotency` 與 `saveProjectionPrivateAuth`，不等同完整 DB gate。task-owned local Auth／Storage readback已另以synthetic fixture通過，但不替代 hosted gate。
+- 新增 migration 由 `npx supabase migration new` 產生（capture schema：`20260914122616_dev_123_meeting_task_resolution.sql`；review CAS：`20260914130548_dev_123_review_decisions.sql`；control hardening：`20260914133819_dev_123_control_hardening.sql`；retry atomicity：`20260914154451_dev_123_retry_atomicity.sql`；projection task scope：`20260914161741_dev_123_projection_task_scope.sql`；accepted links：`20260915103000_dev_123_projection_accepted_links.sql`；manifest timeline：`20260915133000_dev_123_manifest_timeline_integrity.sql`；projection request idempotency：`20260915170000_dev_123_projection_request_idempotency.sql`）。八份 migration 已在 task-owned PostgreSQL 16 loopback 完成 control-plane core readback；本機 migration history 與既有版本有 drift，未執行 reset 或遠端套用。既有其他DEV dirty diff保留。
+
+### Future Phase Captured / Not Requested
+
+- 即時建議：會後版本驗收且出現明確需求再規劃streaming修訂／延遲／更正；目前錄音仍已包含。
+- 跨會議別名／關係記憶：錯誤分析證實單場上下文不足，再評估Graphiti與權限、記憶更新及刪除。
+- 多操作端、遠端／system audio、跨看板：單端試點達標且有需求，再定主持交接、clock、權重及授權。
+- Speaker label、自動建任務／改狀態、自動發布及全桌面監控未納入首版。
+
+使用思考習慣：#多層次分析、#系統描繪、#限制條件

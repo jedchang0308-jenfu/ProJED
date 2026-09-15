@@ -28,7 +28,7 @@ import { GlobalContextMenu } from './GlobalContextMenu';
 import { BoardShareDialog } from './BoardMembersPanel';
 import RagSidebar from './Rag/RagSidebar';
 import RecordSidebar from './Records/RecordSidebar';
-import { closeTaskWorkbenchPanel, toggleTaskWorkbenchPanel } from './taskWorkbenchPanelCommands';
+import { closeTaskWorkbenchPanel, openTaskWorkbenchPanel, toggleTaskWorkbenchPanel } from './taskWorkbenchPanelCommands';
 import { topbarClassNames } from './ui/compactTokens';
 import { ModeSwitcher, type ModeSwitcherOption } from './ui/ModeSwitcher';
 import { StatusFilterBar } from './ui/StatusFilterBar';
@@ -48,6 +48,7 @@ import { clearTaskSelection } from '../utils/taskInteractions';
 import TaskDescriptionHoverCard from './TaskDescriptionHoverCard';
 import TaskWorkbenchPanel from './TaskWorkbenchPanel';
 import { getHostModeFromView, TaskInteractionScope } from '../interactions/task/TaskInteractionScope';
+import { consumeQuickWorkbenchIntent } from '../features/taskWorkbench/entryIntent';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -79,6 +80,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const boardMemberCount = useMemberStore(state => state.boardMembers.length);
   const [isShareDialogOpen, setShareDialogOpen] = React.useState(false);
   const [previewedPanel, setPreviewedPanel] = React.useState<PanelPreviewId | null>(null);
+  const [quickWorkbenchIntentActive, setQuickWorkbenchIntentActive] = React.useState(false);
   const { isMeetingRecordUnavailable } = useMeetingRecordAvailability();
 
   const isNonMeetingRecordOpen = isRecordOpen && !isMeetingMode;
@@ -98,11 +100,26 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const shouldRenderCrossModeTaskWorkbench = isTaskFilterView
     && currentView !== 'board'
     && Boolean(activeWorkspace && activeBoard);
+  const shouldRenderQuickIntentTaskWorkbench = quickWorkbenchIntentActive
+    && currentView !== 'board'
+    && !shouldRenderCrossModeTaskWorkbench;
   const isSettingsScopeView = currentView === 'settings' || currentView === 'calendar_subscriptions';
   const isSystemPageView = isSettingsScopeView || currentView === 'records';
   const isMobileBoardOnly = isMeetingRecordUnavailable;
   const canPreviewPanels = !isMobileBoardOnly;
   const mobileBlockedViews = React.useMemo(() => new Set<ViewMode>(['list', 'mindmap', 'goal', 'gantt', 'calendar']), []);
+
+  React.useEffect(() => {
+    if (!consumeQuickWorkbenchIntent()) return;
+    setQuickWorkbenchIntentActive(true);
+    openTaskWorkbenchPanel();
+    if (isMobileBoardOnly) setSidebarOpen(false);
+  }, [isMobileBoardOnly, setSidebarOpen]);
+
+  React.useEffect(() => {
+    if (!quickWorkbenchIntentActive) return;
+    openTaskWorkbenchPanel();
+  }, [quickWorkbenchIntentActive]);
 
   const handlePanelPreview = useCallback((panel: PanelPreviewId) => {
     if (!canPreviewPanels) return;
@@ -529,6 +546,16 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             enablePlacementHoverSync={false}
           >
             <TaskWorkbenchPanel />
+          </TaskInteractionScope>
+        ) : null}
+
+        {shouldRenderQuickIntentTaskWorkbench ? (
+          <TaskInteractionScope
+            hostMode={getHostModeFromView(currentView)}
+            origin="task-workbench"
+            enablePlacementHoverSync={false}
+          >
+            <TaskWorkbenchPanel onClosed={() => setQuickWorkbenchIntentActive(false)} />
           </TaskInteractionScope>
         ) : null}
 

@@ -38,5 +38,14 @@ export const resolveSupabaseFunctionKey = (
   const singleValue = readEnv(source.singleEnv);
   if (present(singleValue)) return singleValue.trim();
 
+  // Supabase CLI intentionally rejects local edge-runtime secret names that
+  // start with SUPABASE_. Keep the escape hatch explicit and local-only so a
+  // task-owned runtime can exercise service-role readback without weakening
+  // the production key contract.
+  if (readEnv("DEV123_LOCAL_EDGE_RUNTIME") === "true") {
+    const localValue = readEnv("DEV123_LOCAL_EDGE_SERVICE_KEY");
+    if (present(localValue)) return localValue.trim();
+  }
+
   throw new Error(`Missing ${source.mapEnv} or ${source.singleEnv}`);
 };

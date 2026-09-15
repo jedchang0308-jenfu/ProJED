@@ -1,0 +1,16 @@
+{
+  "id": "/quick-task/",
+  "name": "ProJED快速建待辦",
+  "short_name": "快速建待辦",
+  "description": "不載入完整工作台，快速記下一個待辦",
+  "lang": "zh-Hant",
+  "start_url": "/quick-task/",
+  "scope": "/quick-task/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#0f766e",
+  "icons": [
+    { "src": "/icons/icon-vibrant-03-mango-berry.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-vibrant-03-mango-berry.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

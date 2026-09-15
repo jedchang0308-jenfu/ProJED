@@ -64,7 +64,7 @@ assert('normal activation is owned by direct stabilized-worker messaging', servi
 assert('post-reload completion compares current and target', service.includes('currentVersion === transaction.targetVersion') && service.includes('writeCompletedVersion'));
 assert('cross-tab lock has Web Locks and PWA IndexedDB paths', service.includes('locks.request(APPLY_LOCK_NAME') && service.includes("indexedDB.open(APPLY_LOCK_DB_NAME") && service.includes('ownerFence'));
 assert('production version uses injected release ID and release metadata', vite.includes('VITE_PROJED_RELEASE_ID') && env.includes('VITE_PROJED_RELEASE_ID') && service.includes('/release-meta.json'));
-assert('preview version uses app-shell hash when release ID is absent', service.includes('return canonicalBundleVersion(getCurrentBundleHash())') && service.includes('if (getProductionReleaseId())'));
+assert('preview version uses build-wide app-shell metadata with bundle-hash fallback when release ID is absent', service.includes('getEmbeddedAppShellVersion() || canonicalBundleVersion(getCurrentBundleHash())') && service.includes('if (getProductionReleaseId())'));
 assert('normal UI removes the redlined icon and description', !prompt.includes('RefreshCw') && !prompt.includes('一鍵更新到最新版') && !prompt.includes('description'));
 assert('normal UI retains DEV-097 compact reload action contract', prompt.includes('新版已就緒') && prompt.includes('重新載入') && prompt.includes('稍後') && !prompt.includes('關閉更新提示'));
 assert('new verifier scripts are registered', packageJson.includes('verify:dev-096-pwa-update-transaction-convergence') && packageJson.includes('verify:dev-096-pwa-update-transaction-convergence-browser') && packageJson.includes('verify:dev-096-pwa-update-transaction-convergence-sw'));

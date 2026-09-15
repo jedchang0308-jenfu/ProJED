@@ -114,7 +114,7 @@ export const KanbanColumnPresentation: React.FC<KanbanColumnPresentationProps> =
     <div
       ref={bodyRef}
       {...bodyProps}
-      className={`scroll-container mobile-pan-surface flex-1 overflow-y-auto rounded-md px-[8px] py-[8px] scrollbar-thin scrollbar-thumb-slate-300 transition-[background-color,box-shadow] duration-100 mx-0 mb-0 bg-surface-panel ${bodyClassName}`}
+      className={`scroll-container mobile-pan-surface flex-1 overflow-y-auto rounded-md px-[8px] py-[8px] transition-[background-color,box-shadow] duration-100 mx-0 mb-0 bg-surface-panel ${bodyClassName}`}
     >
       {children}
       <div className="mobile-pan-rail" data-mobile-pan-rail="kanban-column" aria-hidden="true" />

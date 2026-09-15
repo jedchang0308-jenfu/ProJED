@@ -84,8 +84,16 @@ async (page) => {
  );
   const workspaceTitleClass = await page.locator('[data-sidebar-title="true"]').getAttribute('class') || '';
   assert(!workspaceTitleClass.includes('rounded-md') && !workspaceTitleClass.includes('border'), 'workspace title should not have a nested rounded frame');
-  const workspaceScrollClass = await page.locator('[data-sidebar-workspace-list="true"]').getAttribute('class') || '';
-  assert(workspaceScrollClass.includes('scrollbar-subtle'), 'workspace sidebar should use the subtle vertical scrollbar');
+  const workspaceScrollProbe = await page.locator('[data-sidebar-workspace-list="true"]').evaluate(element => ({
+    className: element.className,
+    scrollbarWidth: getComputedStyle(element).scrollbarWidth,
+    webkitScrollbarWidth: getComputedStyle(element, '::-webkit-scrollbar').width,
+  }));
+  assert(
+    workspaceScrollProbe.scrollbarWidth === 'thin' && workspaceScrollProbe.webkitScrollbarWidth === '3px',
+    'workspace sidebar should inherit the shared system scrollbar',
+    workspaceScrollProbe,
+  );
   const sidebarUtilityButtons = await page.locator('[data-sidebar-records-button="true"], [data-sidebar-settings-button="true"]').evaluateAll(elements => elements.map(element => ({
     text: element.textContent?.trim() || '',
     iconCount: element.querySelectorAll('svg').length,
@@ -116,16 +124,19 @@ async (page) => {
   const taskWorkbenchTitleClass = await page.locator('[data-task-command-center-title="true"]').getAttribute('class') || '';
   assert(!taskWorkbenchTitleClass.includes('rounded-md') && !taskWorkbenchTitleClass.includes('border'), 'task workbench title should not have a nested rounded frame');
   const workbenchLanes = page.locator('[data-task-workbench-unclassified-section="true"], [data-task-workbench-placed-board-lane="true"]');
-  const workbenchLaneClasses = await workbenchLanes.evaluateAll(elements => elements.map(element => element.className));
-  const workbenchScrollAreas = page.locator('[data-task-workbench-unclassified-list="true"], [data-task-workbench-all-tasks-list="true"]');
-  const workbenchScrollClasses = await workbenchScrollAreas.evaluateAll(elements => elements.map(element => element.className));
+  const workbenchLaneProbes = await workbenchLanes.evaluateAll(elements => elements.map(element => ({
+    className: element.className,
+    scrollbarWidth: getComputedStyle(element).scrollbarWidth,
+    webkitScrollbarWidth: getComputedStyle(element, '::-webkit-scrollbar').width,
+    headerPosition: getComputedStyle(element.querySelector('[data-task-workbench-section-header]')).position,
+  })));
   assert(
-    workbenchLaneClasses.length === 2
-      && workbenchLaneClasses.every(className => className.includes('min-h-0') && className.includes('flex-1') && className.includes('basis-0') && className.includes('flex-col') && className.includes('overflow-hidden'))
-      && workbenchScrollClasses.length === 2
-      && workbenchScrollClasses.every(className => className.includes('scrollbar-subtle') && className.includes('min-h-0') && className.includes('flex-1') && className.includes('overflow-y-auto') && className.includes('overscroll-contain')),
-    'task workbench should keep fixed headers above two independent subtle vertical scroll areas',
-    { workbenchLaneClasses, workbenchScrollClasses },
+    workbenchLaneProbes.length === 2
+      && workbenchLaneProbes[0].className.includes('shrink-0')
+      && workbenchLaneProbes[1].className.includes('flex-1')
+      && workbenchLaneProbes.every(probe => probe.className.includes('min-h-0') && probe.className.includes('overflow-y-auto') && probe.className.includes('overscroll-contain') && probe.scrollbarWidth === 'thin' && probe.webkitScrollbarWidth === '3px' && probe.headerPosition === 'sticky'),
+    'task workbench should keep fixed headers above two independent shared-scrollbar areas',
+    { workbenchLaneProbes },
   );
   const workbenchLaneBoxes = await workbenchLanes.evaluateAll(elements => elements.map(element => {
     const box = element.getBoundingClientRect();
@@ -167,14 +178,14 @@ async (page) => {
     'hierarchy task rows should align to one shared left edge regardless of depth',
     { hierarchyRowPadding },
   );
-  const sectionHeaderClasses = await page.locator('[data-task-workbench-section-header="unplaced"], [data-task-workbench-section-header="all-tasks"]').evaluateAll(elements => elements.map(element => element.className));
+  const sectionHeaderClasses = await page.locator('[data-task-workbench-section-label="unplaced"], [data-task-workbench-section-label="all-tasks"]').evaluateAll(elements => elements.map(element => element.className));
   assert(
     sectionHeaderClasses.length === 2
       && sectionHeaderClasses.every(className => className.includes('box-border') && className.includes('w-[104px]') && className.includes('mb-px') && className.includes('rounded-md') && className.includes('border-slate-600') && className.includes('bg-slate-700') && className.includes('text-white') && !className.includes('mb-2') && !className.includes('bg-slate-200') && !className.includes('border-b')),
     'task workbench section headers should use shared dark blocks with white text',
     { sectionHeaderClasses },
   );
-  const sectionHeaderWidths = await page.locator('[data-task-workbench-section-header="unplaced"], [data-task-workbench-section-header="all-tasks"]').evaluateAll(elements => elements.map(element => Math.round(element.getBoundingClientRect().width)));
+  const sectionHeaderWidths = await page.locator('[data-task-workbench-section-label="unplaced"], [data-task-workbench-section-label="all-tasks"]').evaluateAll(elements => elements.map(element => Math.round(element.getBoundingClientRect().width)));
   assert(sectionHeaderWidths.length === 2 && sectionHeaderWidths[0] === 104 && sectionHeaderWidths[0] === sectionHeaderWidths[1], 'task workbench section header frames should use the fixed five-character width', { sectionHeaderWidths });
   const unplacedHeaderHeight = await page.locator('[data-task-workbench-section-header="unplaced"]').evaluate(element => Math.round(element.getBoundingClientRect().height));
   const modalCreateButtonHeight = await page.locator('[data-task-workbench-unclassified-modal-add="true"]').evaluate(element => Math.round(element.getBoundingClientRect().height));

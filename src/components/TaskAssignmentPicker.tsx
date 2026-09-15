@@ -21,6 +21,8 @@ interface TaskAssignmentPickerProps {
   compact?: boolean;
   inline?: boolean;
   fullSummary?: boolean;
+  /** Goal uses the quiet surface; default keeps every existing consumer unchanged. */
+  triggerVariant?: 'default' | 'quiet';
   portal?: boolean;
   /** Decorative trigger icon can be hidden by dense mode-specific surfaces. */
   showIcon?: boolean;
@@ -41,6 +43,7 @@ export const TaskAssignmentPicker: React.FC<TaskAssignmentPickerProps> = ({
   compact = false,
   inline = false,
   fullSummary = false,
+  triggerVariant = 'default',
   portal = false,
   showIcon = true,
   onChange,
@@ -231,6 +234,7 @@ export const TaskAssignmentPicker: React.FC<TaskAssignmentPickerProps> = ({
       ref={rootRef}
       className="relative w-full"
       data-task-assignment-picker="true"
+      data-task-assignment-trigger-variant={triggerVariant}
       data-task-assignment-full-summary={fullSummary ? 'true' : undefined}
       onClick={event => event.stopPropagation()}
     >
@@ -241,7 +245,10 @@ export const TaskAssignmentPicker: React.FC<TaskAssignmentPickerProps> = ({
         aria-expanded={isOpen}
         aria-haspopup="listbox"
         title={fullSummary ? fullSummaryTitle : undefined}
-        className={`flex h-8 w-full min-w-0 items-center gap-2 rounded-md border border-slate-200 bg-white px-2 text-left text-sm text-slate-700 outline-none transition hover:border-slate-300 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400 ${compact ? 'text-xs' : ''}`}
+        data-task-assignment-trigger="true"
+        className={triggerVariant === 'quiet'
+          ? `group flex h-7 w-full min-w-0 items-center gap-1 rounded-sm border border-transparent bg-transparent px-1 text-left text-sm text-slate-700 outline-none transition hover:bg-slate-100/70 focus-visible:bg-white focus-visible:outline focus-visible:outline-1 focus-visible:outline-primary/50 disabled:cursor-not-allowed disabled:text-slate-400 ${compact ? 'text-xs' : ''}`
+          : `flex h-8 w-full min-w-0 items-center gap-2 rounded-md border border-slate-200 bg-white px-2 text-left text-sm text-slate-700 outline-none transition hover:border-slate-300 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400 ${compact ? 'text-xs' : ''}`}
       >
         {showIcon ? <Users size={compact ? 13 : 15} className="flex-shrink-0 text-blue-500" data-task-assignment-trigger-icon="true" /> : null}
         <span className="min-w-0 flex-1 truncate">
@@ -250,7 +257,7 @@ export const TaskAssignmentPicker: React.FC<TaskAssignmentPickerProps> = ({
         {!fullSummary && currentSelection.primaryIds.length > 1 ? (
           <span className="flex-shrink-0 text-[10px] text-slate-400">{currentSelection.primaryIds.length} 人</span>
         ) : null}
-        <ChevronDown size={14} className={`flex-shrink-0 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown size={14} className={`flex-shrink-0 text-slate-400 transition-[opacity,transform] ${isOpen ? 'rotate-180 opacity-100' : triggerVariant === 'quiet' ? 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100' : ''}`} />
       </button>
       {isOpen ? (portal ? createPortal(panel, document.body) : panel) : null}
       {!fullSummary && currentSelection.collaboratorIds.length > 0 ? (

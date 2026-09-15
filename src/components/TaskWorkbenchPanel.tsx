@@ -155,7 +155,7 @@ const WorkbenchUnclassifiedSection: React.FC<{
   return (
     <section
       ref={setNodeRef}
-      className={`scrollbar-subtle min-h-0 shrink-0 overflow-y-auto overscroll-contain bg-slate-100 px-3 pb-3 transition-colors ${isOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/30' : ''}`}
+      className={`min-h-0 shrink-0 overflow-y-auto overscroll-contain bg-slate-100 px-3 pb-3 transition-colors ${isOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/30' : ''}`}
       style={style}
       data-task-workbench-unclassified-section="true"
       data-task-workbench-unplaced-lane="true"
@@ -713,11 +713,13 @@ const WorkbenchFilterControls: React.FC<{
 const TaskWorkbenchPanel: React.FC<{
   canMoveTask?: boolean;
   canManageTaskReference?: boolean;
-}> = ({ canMoveTask = false, canManageTaskReference = false }) => {
+  onClosed?: () => void;
+}> = ({ canMoveTask = false, canManageTaskReference = false, onClosed }) => {
   const accountId = useAuthStore(state => state.user?.uid ?? null);
   const { canCreateTask } = useBoardPermissions();
   const { previewedPanel } = usePanelPreview();
   const [panelPrefs, setPanelPrefs] = React.useState<PanelPrefs>(() => readTaskWorkbenchPanelPrefs(accountId));
+  const wasPanelOpenRef = React.useRef(panelPrefs.open);
   const [panelWidth, setPanelWidth] = React.useState(() => readTaskWorkbenchPanelPrefs(accountId).width);
   const [unplacedRatio, setUnplacedRatio] = React.useState(() => readTaskWorkbenchPanelPrefs(accountId).unplacedRatio);
   const [isResizing, setIsResizing] = React.useState(false);
@@ -803,6 +805,11 @@ const TaskWorkbenchPanel: React.FC<{
       cancelled = true;
     };
   }, [accountId]);
+
+  React.useEffect(() => {
+    if (wasPanelOpenRef.current && !panelPrefs.open) onClosed?.();
+    wasPanelOpenRef.current = panelPrefs.open;
+  }, [onClosed, panelPrefs.open]);
 
   React.useEffect(() => {
     panelWidthRef.current = panelWidth;
@@ -1026,12 +1033,13 @@ const TaskWorkbenchPanel: React.FC<{
   ), [unplacedTasks]);
 
   React.useEffect(() => {
-    if (!fallbackWorkspaceId) return;
     let cancelled = false;
     const hydrate = async () => {
       const storedTasks = await loadTaskWorkbenchUnplacedTasks(accountId);
       if (cancelled) return;
       hydrateUnplacedTasks(storedTasks);
+
+      if (!fallbackWorkspaceId) return;
 
       const legacyItems = getUnclassifiedItems(inboxItems);
       const existingNodes = useWbsStore.getState().nodes;
@@ -1341,7 +1349,7 @@ const TaskWorkbenchPanel: React.FC<{
 
           <div
             ref={setPlacedBoardLaneRef}
-            className={`scrollbar-subtle min-h-0 flex-1 overflow-y-auto overscroll-contain bg-slate-100 px-3 pb-3 transition-colors ${isPlacedBoardLaneOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/30' : ''}`}
+            className={`min-h-0 flex-1 overflow-y-auto overscroll-contain bg-slate-100 px-3 pb-3 transition-colors ${isPlacedBoardLaneOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/30' : ''}`}
             data-task-workbench-placed-board-lane="true"
             data-task-workbench-lane-drop-target="placed-board"
             data-task-workbench-reference-drop-target="true"

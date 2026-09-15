@@ -19,7 +19,10 @@ import { cn } from '../../utils/cn';
 import RecordContentEditor from './RecordContentEditor';
 import { TaskDescriptionIndicator } from '../TaskDescriptionIndicator';
 import MeetingProjectChangeImportControl from './MeetingProjectChangeImportControl';
+import MeetingRecordingControls from './MeetingRecordingControls';
+import MeetingTaskMatchReview from './MeetingTaskMatchReview';
 import type { EditableKnowledgeRecord, EditableKnowledgeRecordType, KnowledgeRecordStatus, KnowledgeRecordType, KnowledgeRecordVisibility, RecordTaskLinkRole } from '../../types';
+import { reconcileMeetingResolutionTaskLinks } from '../../features/meetingTaskResolution/meetingAnalysisContract';
 import { isPrimaryPointerActivation } from '../../interactions/pointerActivation';
 
 type ProjectChangeImportStatus = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
@@ -603,6 +606,13 @@ const RecordListItem: React.FC<{ record: EditableKnowledgeRecord; onOpen: () => 
 const RecordSidebar: React.FC = () => {
   const user = useAuthStore(state => state.user);
   const nodes = useWbsStore(state => state.nodes);
+  const meetingTaskOptions = React.useMemo(
+    () => Object.values(nodes)
+      .filter(node => !node.isArchived && node.nodeType !== 'group')
+      .sort((left, right) => left.title.localeCompare(right.title, 'zh-Hant'))
+      .map(node => ({ id: node.id, title: node.title, nodeType: node.nodeType })),
+    [nodes],
+  );
   const boardMembers = useMemberStore(state => state.boardMembers);
   const tags = useTagStore(state => state.tags);
   const { activeWorkspaceId, activeBoardId } = useBoardStore();
@@ -635,6 +645,68 @@ const RecordSidebar: React.FC = () => {
   const closePanel = useRecordStore(state => state.closePanel);
   const togglePanelCollapsed = useRecordStore(state => state.togglePanelCollapsed);
   const updateDraft = useRecordStore(state => state.updateDraft);
+  const handleMeetingReviewRevisionChange = React.useCallback((reviewRevision: number) => {
+    const currentDraft = useRecordStore.getState().draft;
+    if (!currentDraft || currentDraft.type !== 'meeting') return;
+    const currentResolution = currentDraft.metadata?.meetingTaskResolution;
+    const currentRevision = currentResolution && typeof currentResolution === 'object' && !Array.isArray(currentResolution)
+      ? (currentResolution as Record<string, unknown>).reviewRevision
+      : undefined;
+    if (currentRevision === reviewRevision) return;
+    updateDraft({
+      metadata: {
+        ...(currentDraft.metadata ?? {}),
+        meetingTaskResolution: {
+          ...(currentResolution && typeof currentResolution === 'object' && !Array.isArray(currentResolution) ? currentResolution : {}),
+          reviewRevision,
+        },
+      },
+    });
+  }, [updateDraft]);
+  const handleMeetingResolvedTaskLinksChange = React.useCallback((acceptedTaskIds: string[], manuallyResolvedTaskIds: string[]) => {
+    const currentDraft = useRecordStore.getState().draft;
+    if (!currentDraft || currentDraft.type !== 'meeting') return;
+    const currentResolution = currentDraft.metadata?.meetingTaskResolution;
+    const resolution = currentResolution && typeof currentResolution === 'object' && !Array.isArray(currentResolution)
+      ? currentResolution as Record<string, unknown>
+      : {};
+    const previousAutoLinkSet = Array.isArray(resolution.autoLinkSet)
+      ? resolution.autoLinkSet.filter((item): item is string => typeof item === 'string')
+      : [];
+    const previousManualLinkSet = Array.isArray(resolution.manualLinkSet)
+      ? resolution.manualLinkSet.filter((item): item is string => typeof item === 'string')
+      : [];
+    const previousResolutionLinkSet = Array.isArray(resolution.resolutionLinkSet)
+      ? resolution.resolutionLinkSet.filter((item): item is string => typeof item === 'string')
+      : [];
+    const nextResolution = reconcileMeetingResolutionTaskLinks(
+      currentDraft.taskLinks,
+      acceptedTaskIds,
+      manuallyResolvedTaskIds,
+      previousAutoLinkSet,
+      previousResolutionLinkSet,
+    );
+    const { taskLinks: nextTaskLinks, autoLinkSet: nextAutoLinkSet, manualLinkSet: nextManualLinkSet, resolutionLinkSet: nextResolutionLinkSet } = nextResolution;
+    const sameLinks = currentDraft.taskLinks.length === nextTaskLinks.length
+      && currentDraft.taskLinks.every((link, index) => link.nodeId === nextTaskLinks[index]?.nodeId && link.role === nextTaskLinks[index]?.role);
+    const sameIds = (left: string[], right: string[]) => left.length === right.length && left.every((id, index) => id === right[index]);
+    if (sameLinks
+      && sameIds(previousAutoLinkSet, nextAutoLinkSet)
+      && sameIds(previousManualLinkSet, nextManualLinkSet)
+      && sameIds(previousResolutionLinkSet, nextResolutionLinkSet)) return;
+    updateDraft({
+      taskLinks: nextTaskLinks,
+      metadata: {
+        ...(currentDraft.metadata ?? {}),
+        meetingTaskResolution: {
+          ...resolution,
+          autoLinkSet: nextAutoLinkSet,
+          manualLinkSet: nextManualLinkSet,
+          resolutionLinkSet: nextResolutionLinkSet,
+        },
+      },
+    });
+  }, [updateDraft]);
   const contentCursorOffset = useRecordStore(state => state.contentCursorOffset);
   const setContentCursorOffset = useRecordStore(state => state.setContentCursorOffset);
   const meetingActivities = useRecordStore(state => state.meetingActivities);
@@ -749,6 +821,10 @@ const RecordSidebar: React.FC = () => {
   const composerVariant = getRecordComposerVariant(draft, isMeetingMode);
   const isLiveMeeting = composerVariant === 'live-meeting';
   const isWorkLog = composerVariant === 'work-log';
+  const meetingTaskResolutionCaptureId = isLiveMeeting && draft?.metadata?.meetingTaskResolution && typeof draft.metadata.meetingTaskResolution === 'object' && !Array.isArray(draft.metadata.meetingTaskResolution)
+    && typeof (draft.metadata.meetingTaskResolution as Record<string, unknown>).captureId === 'string'
+    ? String((draft.metadata.meetingTaskResolution as Record<string, unknown>).captureId)
+    : null;
   const selectedLinks = draft?.taskLinks || [];
   const isSynthesizing = meetingSynthesisStatus === 'synthesizing';
   const isMeetingDraft = isLiveMeeting;
@@ -864,6 +940,31 @@ const RecordSidebar: React.FC = () => {
     setMeetingSaveFeedback('saving');
     const saved = await saveDraft({ nodes, status: 'draft' });
     setMeetingSaveFeedback(saved ? 'saved' : 'error');
+  };
+
+  const handleEnsureMeetingSaved = async () => {
+    if (!draft || draft.type !== 'meeting') return null;
+    if (draft.id && scopedRecords.some(record => record.id === draft.id)) return draft.id;
+    setMeetingSaveFeedback('saving');
+    const saved = await saveDraft({ nodes, status: 'draft' });
+    setMeetingSaveFeedback(saved ? 'saved' : 'error');
+    return saved?.id ?? null;
+  };
+
+  const handleMeetingCaptureStarted = (captureId: string) => {
+    if (!draft || draft.type !== 'meeting') return;
+    const currentResolution = draft.metadata?.meetingTaskResolution;
+    updateDraft({
+      metadata: {
+        ...(draft.metadata ?? {}),
+        meetingTaskResolution: {
+          ...(currentResolution && typeof currentResolution === 'object' && !Array.isArray(currentResolution) ? currentResolution : {}),
+          captureId,
+          contractVersion: 'dev-123.v1',
+          reviewRevision: 0,
+        },
+      },
+    });
   };
 
   const handleMeetingSaveAndExit = async () => {
@@ -1282,6 +1383,22 @@ const RecordSidebar: React.FC = () => {
                     onFocusContent={requestContentFocus}
                     onRunAi={() => void handleSynthesizeMeetingDraft()}
                     onPublish={() => handleSave('published')}
+                  />
+                  <div className="mt-2">
+                    <MeetingRecordingControls
+                      tenantId={activeWorkspaceId}
+                      projectId={activeBoardId}
+                      initialCaptureId={meetingTaskResolutionCaptureId}
+                      onEnsureSaved={handleEnsureMeetingSaved}
+                      onCaptureStarted={handleMeetingCaptureStarted}
+                    />
+                  </div>
+                  <MeetingTaskMatchReview
+                    captureId={meetingTaskResolutionCaptureId}
+                    recordId={draft?.id ?? null}
+                    taskOptions={meetingTaskOptions}
+                    onReviewRevisionChange={handleMeetingReviewRevisionChange}
+                    onResolvedTaskLinksChange={handleMeetingResolvedTaskLinksChange}
                   />
                   {shouldShowMeetingRecoveryStatus ? (
                     <div

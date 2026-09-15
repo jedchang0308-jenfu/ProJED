@@ -5,6 +5,7 @@ const files = {
   placement: 'src/features/taskWorkbench/placement.ts',
   taskDateBadge: 'src/components/Wbs/TaskDateBadge.tsx',
   taskWorkbench: 'src/components/TaskWorkbenchPanel.tsx',
+  indexCss: 'src/index.css',
   dragSensors: 'src/hooks/useDragSensors.ts',
   mainLayout: 'src/components/MainLayout.tsx',
   kanbanCard: 'src/components/Wbs/KanbanCard.tsx',
@@ -186,8 +187,10 @@ assert(
   'Task Workbench lane titles render as sticky section headers above scrollable task rows',
   source.taskWorkbench.includes('data-task-workbench-lane-stack="true"') &&
     source.taskWorkbench.includes('data-task-workbench-lane-resize-handle="true"') &&
-    source.taskWorkbench.includes('scrollbar-subtle min-h-0 shrink-0 overflow-y-auto overscroll-contain') &&
-    source.taskWorkbench.includes('scrollbar-subtle min-h-0 flex-1 overflow-y-auto overscroll-contain') &&
+    source.taskWorkbench.includes('min-h-0 shrink-0 overflow-y-auto overscroll-contain') &&
+    source.taskWorkbench.includes('min-h-0 flex-1 overflow-y-auto overscroll-contain') &&
+    !source.taskWorkbench.includes('scrollbar-subtle') &&
+    source.indexCss.includes('--scrollbar-system-size: 3px') &&
     source.taskWorkbench.includes('className="space-y-px" data-task-workbench-all-tasks-list="true"') &&
     source.taskWorkbench.includes('className="space-y-px" data-task-workbench-unclassified-list="true"') &&
     source.taskWorkbench.includes("isOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/30' : ''") &&

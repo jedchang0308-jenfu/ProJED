@@ -55,6 +55,10 @@
     ],
     "rewrites": [
       {
+        "source": "/quick-task{,/**}",
+        "destination": "/quick-task/index.html"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

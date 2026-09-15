@@ -401,6 +401,13 @@ export type TaskWorkbenchUnplacedItemRow = {
   updated_at: string;
 };
 
+export type QuickTaskCaptureReceiptRow = {
+  owner_id: string;
+  capture_id: string;
+  title_hash: string;
+  committed_at: string;
+};
+
 export type WbsItemPlacementRow = {
   id: string;
   tenant_id: string;
@@ -463,6 +470,7 @@ export interface Database {
       calendar_subscriptions: Table<CalendarSubscriptionRow>;
       account_board_task_filter_preferences: AccountBoardTaskFilterPreferenceTable;
       task_workbench_unplaced_items: Table<TaskWorkbenchUnplacedItemRow>;
+      quick_task_capture_receipts: Table<QuickTaskCaptureReceiptRow>;
       task_workbench_placement_operations: Table<TaskWorkbenchPlacementOperationRow>;
       wbs_item_placements: Table<WbsItemPlacementRow>;
     };
@@ -600,6 +608,14 @@ export interface Database {
           p_anchor_task_id: string | null;
           p_position: 'before' | 'after' | 'append';
           p_client_platform: 'desktop' | 'mobile';
+        };
+        Returns: Json;
+      };
+      create_quick_unplaced_task_v1: {
+        Args: {
+          p_capture_id: string;
+          p_title: string;
+          p_workspace_hint?: string | null;
         };
         Returns: Json;
       };

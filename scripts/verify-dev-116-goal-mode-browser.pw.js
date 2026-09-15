@@ -94,30 +94,58 @@ async (page) => {
         clientHeight: scroll?.clientHeight ?? 0,
         scrollHeight: scroll?.scrollHeight ?? 0,
         overflowY: scroll ? getComputedStyle(scroll).overflowY : null,
+        hasLegacyContainerClasses: Boolean(element.querySelector('div.min-h-0.max-w-full')),
       };
     });
-    record('V25-goal-meeting-cell-renders-all-record-notes-with-bounded-y-scroll', meetingHistoryProbe.rowCount === 6 && meetingHistoryProbe.texts.some(text => text.includes('聚焦本季關鍵成果')) && meetingHistoryProbe.texts.some(text => text.includes('拆解關鍵結果與驗收口徑')) && meetingHistoryProbe.texts.some(text => text.includes('確認本週追蹤節點')) && meetingHistoryProbe.texts.some(text => text.includes('記錄下次檢視時間')) && meetingHistoryProbe.overflowY === 'auto' && meetingHistoryProbe.scrollHeight > meetingHistoryProbe.clientHeight, meetingHistoryProbe);
+    record('V25-goal-meeting-cell-renders-all-record-notes-without-extra-ui-wrapper', meetingHistoryProbe.rowCount === 6 && meetingHistoryProbe.texts.some(text => text.includes('聚焦本季關鍵成果')) && meetingHistoryProbe.texts.some(text => text.includes('拆解關鍵結果與驗收口徑')) && meetingHistoryProbe.texts.some(text => text.includes('確認本週追蹤節點')) && meetingHistoryProbe.texts.some(text => text.includes('記錄下次檢視時間')) && meetingHistoryProbe.overflowY === 'auto' && meetingHistoryProbe.scrollHeight > meetingHistoryProbe.clientHeight && !meetingHistoryProbe.hasLegacyContainerClasses, meetingHistoryProbe);
     record('B03-no-inline-add-controls', await goalView.getByText('＋說明', { exact: true }).count() === 0 && await goalView.getByText('＋紀錄', { exact: true }).count() === 0, {});
     const child = page.locator('[data-goal-task-id="dev116-child"]');
     record('V01-desktop-goal-hierarchy-is-visible', await goalView.locator('[data-goal-task-table="true"]').isVisible(), {});
+    const dateInputSurfaceProbe = await page.evaluate(() => {
+      const dateCells = Array.from(document.querySelectorAll('[data-goal-column="start-date"], [data-goal-column="end-date"]'));
+      return {
+        dateCellCount: dateCells.length,
+        directDateInputs: dateCells.every(cell => Boolean(cell.querySelector(':scope > input[type="date"]'))),
+        extraRowWrappers: dateCells.filter(cell => cell.querySelector(':scope > div.relative.flex')).length,
+      };
+    });
+    record('V26-goal-date-inputs-are-direct-cell-children', dateInputSurfaceProbe.dateCellCount > 0 && dateInputSurfaceProbe.directDateInputs && dateInputSurfaceProbe.extraRowWrappers === 0, dateInputSurfaceProbe);
+    const taskTitleSurfaceProbe = await page.evaluate(() => {
+      const hierarchyRows = Array.from(document.querySelectorAll('[data-goal-task-row] [data-task-hierarchy-row="true"]'));
+      return {
+        hierarchyRowCount: hierarchyRows.length,
+        nestedTitleWrappers: hierarchyRows.filter(row => row.querySelector('.task-title-text > span')).length,
+        directTitleNodes: hierarchyRows.filter(row => row.querySelector(':scope > .task-title-text')).length,
+      };
+    });
+    record('V27-goal-task-title-has-no-redundant-text-wrapper', taskTitleSurfaceProbe.hierarchyRowCount > 0 && taskTitleSurfaceProbe.nestedTitleWrappers === 0 && taskTitleSurfaceProbe.directTitleNodes === taskTitleSurfaceProbe.hierarchyRowCount, taskTitleSurfaceProbe);
     await page.screenshot({ path: `${OUTPUT_DIR}/V01-goal-table-1440x900.png`, fullPage: false });
     result.screenshots.push(`${OUTPUT_DIR}/V01-goal-table-1440x900.png`);
     const firstGoalRowHeight = await rows.first().evaluate(element => element.getBoundingClientRect().height);
     record('V09-list-density-removes-visible-level-label', await goalView.locator('[id$="-level"]').count() === 0 && firstGoalRowHeight <= 40, { firstGoalRowHeight });
-    const verticalGridlineCount = await page.evaluate(() => Array.from(document.querySelectorAll('[data-goal-view="true"] [data-goal-column]')).filter(element => getComputedStyle(element).borderRightWidth !== '0px').length);
-    record('V10-vertical-gridlines-show-column-span', verticalGridlineCount > 0, { verticalGridlineCount });
+    const verticalGridlineProbe = await page.evaluate(() => {
+      const planningCells = Array.from(document.querySelectorAll('[data-goal-view="true"] [data-goal-planning-control]'));
+      const planningInternalGridlines = planningCells.filter(element => getComputedStyle(element).borderRightWidth !== '0px').length;
+      const contentBoundaryGridlines = Array.from(document.querySelectorAll('[data-goal-view="true"] [data-goal-column="description"], [data-goal-view="true"] [data-goal-column="meeting"]'))
+        .filter(element => getComputedStyle(element).borderRightWidth !== '0px').length;
+      return { planningCells: planningCells.length, planningInternalGridlines, contentBoundaryGridlines };
+    });
+    record('V10-planning-gridlines-removed-with-content-boundary-retained', verticalGridlineProbe.planningCells > 0 && verticalGridlineProbe.planningInternalGridlines === 0 && verticalGridlineProbe.contentBoundaryGridlines >= 0, verticalGridlineProbe);
     const fullGridProbe = await page.evaluate(() => {
       const table = document.querySelector('[data-goal-task-table="true"]');
       if (!table) return { rightBorderlessCells: -1, rowBorderlessRows: -1, outerBorderlessEdges: -1 };
       const cells = Array.from(table.querySelectorAll('th, td'));
       const rows = Array.from(table.querySelectorAll('tbody tr'));
       const rightBorderlessCells = cells.filter(element => getComputedStyle(element).borderRightWidth === '0px').length;
+      const planningInternalGridlines = Array.from(table.querySelectorAll('[data-goal-planning-control]')).filter(element => getComputedStyle(element).borderRightWidth !== '0px').length;
       const rowBorderlessRows = rows.filter(element => getComputedStyle(element).borderBottomWidth === '0px').length;
       const outerBorderlessEdges = ['borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth']
         .filter(property => getComputedStyle(table)[property] === '0px').length;
-      return { rightBorderlessCells, rowBorderlessRows, outerBorderlessEdges };
+      return { rightBorderlessCells, rowCount: rows.length, planningInternalGridlines, rowBorderlessRows, outerBorderlessEdges };
     });
-    record('V12-all-cell-gridlines-visible', fullGridProbe.rightBorderlessCells === 0 && fullGridProbe.rowBorderlessRows === 0 && fullGridProbe.outerBorderlessEdges === 0, fullGridProbe);
+    // DEV-121 R5 intentionally removes inter-task horizontal rules while preserving
+    // the existing no-frame and planning-gridline contract for the shared Goal table.
+    record('V12-goal-task-gridlines-and-table-frame-removed', fullGridProbe.planningInternalGridlines === 0 && fullGridProbe.rowBorderlessRows === fullGridProbe.rowCount && fullGridProbe.outerBorderlessEdges === 4, fullGridProbe);
     const goalColumnLabels = await page.evaluate(() => ({
       task: document.querySelector('#goal-column-task')?.textContent?.trim() || null,
       description: document.querySelector('#goal-column-description')?.textContent?.trim() || null,
@@ -131,7 +159,7 @@ async (page) => {
     await page.waitForTimeout(100);
     const taskColumnWidthAtReferenceViewport = await page.evaluate(() => ({
       width: document.querySelector('#goal-column-task')?.getBoundingClientRect().width ?? null,
-      configuredWidth: document.querySelector('[data-goal-task-table="true"] col')?.className.includes('w-[252px]') ?? false,
+       configuredWidth: document.querySelector('[data-goal-task-table="true"] col')?.getAttribute('style')?.includes('width: 252px') ?? false,
     }));
     const referenceTableBoundary = await page.evaluate(() => {
       const table = document.querySelector('[data-goal-task-table="true"]');
@@ -196,10 +224,12 @@ async (page) => {
       const purposeContent = {
         cellChildCount: purposeCell?.children.length ?? 0,
         scrollContainer: readScroll(purposeScroll),
+        hasLegacyContainerClasses: Boolean(purposeCell?.querySelector('div.min-h-0.max-w-full')),
       };
       const meetingContent = {
         cellChildCount: meetingOwnerCell?.children.length ?? 0,
         scrollContainer: readScroll(meetingScroll),
+        hasLegacyContainerClasses: Boolean(meetingOwnerCell?.querySelector('div.min-h-0.max-w-full')),
       };
       const readRect = element => {
         if (!element) return null;
@@ -276,15 +306,17 @@ async (page) => {
         && stickyHeaderProbe.before.purposeContent.scrollContainer?.overflowY === 'auto'
         && stickyHeaderProbe.before.purposeContent.scrollContainer?.scrollHeight > stickyHeaderProbe.before.purposeContent.scrollContainer?.clientHeight
         && stickyHeaderProbe.before.purposeContent.scrollContainer?.maxHeight !== 'none'
+        && !stickyHeaderProbe.before.purposeContent.hasLegacyContainerClasses
         && stickyHeaderProbe.before.meetingContent.cellChildCount === 1
         && stickyHeaderProbe.before.meetingContent.scrollContainer?.overflowY === 'auto'
+        && !stickyHeaderProbe.before.meetingContent.hasLegacyContainerClasses
         && stickyHeaderProbe.before.rowHeights.length === 4
         && stickyHeaderProbe.before.rowHeights.every(height => height <= 40)
-        && stickyHeaderProbe.before.headerCells.every(cell => cell.position === 'sticky' && cell.hasDarkSurface && cell.hasWhiteText && cell.hasNoInnerContainer && cell.backgroundColor !== 'rgba(0, 0, 0, 0)'),
+          && stickyHeaderProbe.before.headerCells.every(cell => cell.position === 'sticky' && !cell.hasDarkSurface && !cell.hasWhiteText && cell.hasNoInnerContainer && cell.backgroundColor !== 'rgba(0, 0, 0, 0)'),
       stickyHeaderProbe,
     );
-    await page.screenshot({ path: `${OUTPUT_DIR}/V23-goal-sticky-dark-header-1440x180.png`, fullPage: false });
-    result.screenshots.push(`${OUTPUT_DIR}/V23-goal-sticky-dark-header-1440x180.png`);
+    await page.screenshot({ path: `${OUTPUT_DIR}/V23-goal-sticky-light-header-1440x180.png`, fullPage: false });
+    result.screenshots.push(`${OUTPUT_DIR}/V23-goal-sticky-light-header-1440x180.png`);
     await page.setViewportSize({ width: 1440, height: 900 });
     await goalView.evaluate(element => { element.scrollTop = 0; });
     const flattenedGoalSurface = await page.evaluate(() => {
@@ -362,7 +394,7 @@ async (page) => {
     const readHierarchyGeometry = async (surface) => page.locator(`[data-task-hierarchy-row="true"][data-task-hierarchy-surface="${surface}"]`).evaluateAll(elements => {
       const read = id => {
         const element = elements.find(candidate => candidate.getAttribute('data-task-id') === id);
-        const title = element?.querySelector('.task-title-text > span');
+        const title = element?.querySelector('.task-title-text');
         return element && title ? {
           rowHeight: element.getBoundingClientRect().height,
           titleLeft: title.getBoundingClientRect().left,
@@ -431,7 +463,7 @@ async (page) => {
       list: listHierarchyGeometry,
       rowHeightDifference: goalHierarchyGeometry.parent && listHierarchyGeometry.parent ? Math.abs(goalHierarchyGeometry.parent.rowHeight - listHierarchyGeometry.parent.rowHeight) : null,
     };
-    record('V20-goal-and-list-share-hierarchy-indent-and-row-density', Math.abs(goalHierarchyGeometry.titleDelta - 6) <= 0.75 && Math.abs(listHierarchyGeometry.titleDelta - 6) <= 0.75 && goalHierarchyGeometry.parent.indentToken === '6px' && listHierarchyGeometry.parent.indentToken === '6px' && hierarchyParity.rowHeightDifference <= 3, hierarchyParity);
+    record('V20-goal-compact-owned-tree-and-list-shared-default-geometry', Math.abs(goalHierarchyGeometry.titleDelta - 8) <= 0.75 && Math.abs(listHierarchyGeometry.titleDelta - 6) <= 0.75 && goalHierarchyGeometry.parent.indentToken === '8px' && listHierarchyGeometry.parent.indentToken === '6px' && Math.abs(goalHierarchyGeometry.parent.rowHeight - 32) <= 1 && Math.abs(listHierarchyGeometry.parent.rowHeight - 20) <= 1, hierarchyParity);
     await page.locator('[data-mode-switcher-trigger]').click();
     await page.locator('[data-mode-switcher-value="goal"]').click();
     await goalView.waitFor({ state: 'visible', timeout: 10000 });

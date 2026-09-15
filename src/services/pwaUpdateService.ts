@@ -318,7 +318,7 @@ const removeTransactionIf = (transactionId: string) => {
 const dismissedTarget = () => getSessionValue(DISMISSED_TARGET_KEY);
 
 const extractBundleVersionFromSrc = (src: string | null | undefined) => {
-  const match = src?.match(/\/assets\/index-([A-Za-z0-9_-]+)\.js/);
+  const match = src?.match(/\/assets\/(?:index|main)-([A-Za-z0-9_-]+)\.js/);
   return match?.[1] ?? null;
 };
 
@@ -337,45 +337,69 @@ const getProductionReleaseId = () => {
 const canonicalReleaseVersion = (releaseId: string | null) => releaseId ? `release:${releaseId}` : null;
 const canonicalBundleVersion = (hash: string | null) => hash ? `bundle:${hash}` : null;
 
+const getEmbeddedAppShellVersion = () => {
+  if (typeof document === 'undefined') return null;
+  const value = document.querySelector('meta[name="projed-shell-version"]')?.getAttribute('content')?.trim();
+  return value || null;
+};
+
 const getCurrentAppVersion = () => {
   const releaseVersion = canonicalReleaseVersion(getProductionReleaseId());
   if (releaseVersion) return releaseVersion;
   // Vite's staging build also sets PROD=true. It does not receive the sealed
-  // release ID, so it must use the app-shell hash for update convergence.
-  return canonicalBundleVersion(getCurrentBundleHash());
+  // release ID, so it uses the build-wide app-shell version emitted into both
+  // HTML entries, with the historical bundle hash as a compatibility fallback.
+  return getEmbeddedAppShellVersion() || canonicalBundleVersion(getCurrentBundleHash());
 };
 
 const extractAppShellVersionFromHtml = (html: string) => (
-  extractBundleVersionFromSrc(html.match(/<script[^>]+src=["']([^"']*\/assets\/index-[A-Za-z0-9_-]+\.js)["']/)?.[1])
+  extractBundleVersionFromSrc(html.match(/<script[^>]+src=["']([^"']*\/assets\/(?:index|main)-[A-Za-z0-9_-]+\.js)["']/)?.[1])
 );
+
+const fetchLatestReleaseVersion = async (nonce: string) => {
+  const response = await fetch(`/release-meta.json?projed_update_check=${nonce}`, {
+    cache: 'no-store',
+    headers: { 'Cache-Control': 'no-cache' },
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const meta: unknown = await response.json();
+  if (!meta || typeof meta !== 'object') throw new Error('Invalid release metadata.');
+  const candidate = meta as { schemaVersion?: unknown; releaseId?: unknown };
+  if (candidate.schemaVersion !== 1 || typeof candidate.releaseId !== 'string') {
+    throw new Error('Invalid release metadata schema.');
+  }
+  const latest = canonicalReleaseVersion(candidate.releaseId);
+  if (!latest) throw new Error('Invalid release metadata release ID.');
+  return latest;
+};
 
 const fetchLatestAppVersion = async () => {
   const nonce = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  // Sealed production artifacts publish release-meta.json. Preview/staging
-  // artifacts do not, so compare their current index.html bundle hash.
-  if (getProductionReleaseId()) {
-    const response = await fetch(`/release-meta.json?projed_update_check=${nonce}`, {
+  try {
+    const response = await fetch(`/app-shell-meta.json?projed_update_check=${nonce}`, {
       cache: 'no-store',
       headers: { 'Cache-Control': 'no-cache' },
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const meta: unknown = await response.json();
-    if (!meta || typeof meta !== 'object') throw new Error('Invalid release metadata.');
-    const candidate = meta as { schemaVersion?: unknown; releaseId?: unknown };
-    if (candidate.schemaVersion !== 1 || typeof candidate.releaseId !== 'string') {
-      throw new Error('Invalid release metadata schema.');
+    if (!meta || typeof meta !== 'object') throw new Error('Invalid app-shell metadata.');
+    const candidate = meta as { schemaVersion?: unknown; version?: unknown };
+    if (candidate.schemaVersion !== 1 || typeof candidate.version !== 'string' || !candidate.version.trim()) {
+      throw new Error('Invalid app-shell metadata schema.');
     }
-    const latest = canonicalReleaseVersion(candidate.releaseId);
-    if (!latest) throw new Error('Invalid release metadata release ID.');
-    return latest;
+    return candidate.version;
+  } catch (appShellError) {
+    // Older sealed artifacts still publish release-meta.json. New artifacts
+    // use app-shell-meta as the canonical check above.
+    if (getProductionReleaseId()) return fetchLatestReleaseVersion(nonce);
+    const response = await fetch(`/index.html?projed_update_check=${nonce}`, {
+      cache: 'no-store',
+      headers: { 'Cache-Control': 'no-cache' },
+    });
+    if (!response.ok) throw appShellError;
+    const latestHash = extractAppShellVersionFromHtml(await response.text());
+    return canonicalBundleVersion(latestHash);
   }
-
-  const response = await fetch(`/index.html?projed_update_check=${nonce}`, {
-    cache: 'no-store',
-    headers: { 'Cache-Control': 'no-cache' },
-  });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return canonicalBundleVersion(extractAppShellVersionFromHtml(await response.text()));
 };
 
 const buildLatestReloadUrl = () => {

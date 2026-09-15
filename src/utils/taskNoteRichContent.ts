@@ -1,5 +1,5 @@
 import type { SerializedEditorState } from 'lexical';
-import type { TaskDetailNote, TaskDetailNoteRichContent } from '../types';
+import type { TaskDetailNote, TaskDetailNoteRichContent, TaskNode } from '../types';
 
 export const TASK_NOTE_RICH_CONTENT_SCHEMA = 'task-note.lexical-v1' as const;
 
@@ -232,4 +232,51 @@ export const taskNoteToAiMarkdown = (note: Pick<TaskDetailNote, 'content' | 'ric
   if (!isTaskNoteRichContent(note.richContent)) return note.content.trim();
   const projection = taskNoteRichContentToMarkdown(note.richContent);
   return projection || note.content.trim();
+};
+
+/**
+ * Resolve the first task note without creating a second source of truth for
+ * the Goal purpose cell. Legacy tasks are represented as the same default
+ * note shape used by Task Details until a real edit is committed.
+ */
+export const getTaskPurposeNote = (
+  node: Pick<TaskNode, 'detailNotes' | 'description'>,
+): TaskDetailNote => {
+  const firstNote = node.detailNotes?.[0];
+  if (firstNote) {
+    return firstNote.id === 'note_default' && firstNote.title !== '任務目的'
+      ? { ...firstNote, title: '任務目的' }
+      : firstNote;
+  }
+  return {
+    id: 'note_default',
+    title: '任務目的',
+    content: node.description || '',
+  };
+};
+
+/** Build the canonical first-note + description compatibility projection. */
+export const buildTaskPurposeUpdates = (
+  latest: Pick<TaskNode, 'detailNotes' | 'description'>,
+  draft: Pick<TaskDetailNote, 'content' | 'richContent'>,
+): Pick<TaskNode, 'detailNotes' | 'description'> => {
+  const firstNote = getTaskPurposeNote(latest);
+  const content = isTaskNoteRichContent(draft.richContent)
+    ? taskNoteRichContentToPlainText(draft.richContent)
+    : draft.content;
+  const nextFirstNote: TaskDetailNote = {
+    ...firstNote,
+    content,
+    ...(isTaskNoteRichContent(draft.richContent) ? { richContent: draft.richContent } : {}),
+  };
+  const latestNotes = latest.detailNotes || [];
+  const firstNoteUnchanged = Boolean(latestNotes[0])
+    && latestNotes[0].id === nextFirstNote.id
+    && latestNotes[0].title === nextFirstNote.title
+    && latestNotes[0].content === nextFirstNote.content
+    && areTaskNoteRichContentsEqual(latestNotes[0].richContent, nextFirstNote.richContent);
+  return {
+    detailNotes: firstNoteUnchanged ? latestNotes : [nextFirstNote, ...latestNotes.slice(1)],
+    description: content,
+  };
 };

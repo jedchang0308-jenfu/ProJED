@@ -297,7 +297,7 @@ const SharedTaskSidebar = ({
                             <ChevronLeft size={14} />
                         </button>
                     </div>
-                    <div className="flex-1 overflow-y-auto scrollbar-thin overflow-x-hidden">
+                    <div className="flex-1 overflow-y-auto overflow-x-hidden">
                         <DndContext
                             sensors={sensors}
                             collisionDetection={closestCorners}

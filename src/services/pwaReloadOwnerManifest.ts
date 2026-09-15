@@ -1,5 +1,7 @@
 import type { ViewMode } from '../types';
 
+export type PwaReloadSurface = ViewMode | 'quick-task';
+
 export type PwaReloadSafetyOwnerId =
   | 'record-draft'
   | 'task-details'
@@ -9,7 +11,8 @@ export type PwaReloadSafetyOwnerId =
   | 'board-member-invite'
   | 'inline-editor'
   | 'dirty-dialog'
-  | 'task-drag';
+  | 'task-drag'
+  | 'quick-task-capture';
 
 export type PwaReloadSafetyReadinessProducer =
   | 'app-content'
@@ -19,7 +22,7 @@ export type PwaReloadSafetyReadinessProducer =
 export type PwaReloadSafetyOwnerManifestEntry = {
   ownerId: PwaReloadSafetyOwnerId;
   authority: string;
-  surfaces: readonly ViewMode[];
+  surfaces: readonly PwaReloadSurface[];
   readiness: readonly PwaReloadSafetyReadinessProducer[];
 };
 
@@ -42,6 +45,12 @@ const APP_SURFACES: readonly ViewMode[] = [
  * live tabs and must never be used as an all-client safety consensus.
  */
 export const PWA_RELOAD_SAFETY_OWNER_MANIFEST = [
+  {
+    ownerId: 'quick-task-capture',
+    authority: 'quick-task/main.ts local title, voice, claim and commit controller',
+    surfaces: ['quick-task'],
+    readiness: ['pwa-update-service'],
+  },
   {
     ownerId: 'record-draft',
     authority: 'RecordSidebar / useMeetingDraftRecovery / useRecordStore',
@@ -80,7 +89,7 @@ export const PWA_RELOAD_SAFETY_OWNER_MANIFEST = [
   },
   {
     ownerId: 'inline-editor',
-    authority: 'Sidebar / TagPicker / MindMapNode / MindMapView',
+    authority: 'Sidebar / TagPicker / MindMapNode / MindMapView / GoalCellSessionProvider',
     surfaces: APP_SURFACES,
     readiness: ['app-content'],
   },
@@ -100,11 +109,11 @@ export const PWA_RELOAD_SAFETY_OWNER_MANIFEST = [
 
 export const PWA_RELOAD_SAFETY_OWNER_IDS = PWA_RELOAD_SAFETY_OWNER_MANIFEST.map(entry => entry.ownerId);
 
-export const getPwaReloadSafetyOwnerManifest = (currentView: ViewMode | null) => {
+export const getPwaReloadSafetyOwnerManifest = (currentView: PwaReloadSurface | null) => {
   // null means AuthGate is the complete visible shell and AppContent has not
   // mounted yet. Authenticated business owners do not exist at this boundary.
   if (currentView === null) return [];
   return PWA_RELOAD_SAFETY_OWNER_MANIFEST.filter(entry => (
-    (entry.surfaces as readonly ViewMode[]).includes(currentView)
+    (entry.surfaces as readonly PwaReloadSurface[]).includes(currentView)
   ));
 };

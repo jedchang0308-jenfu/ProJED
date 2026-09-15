@@ -1,0 +1,33 @@
+:root { color: #0f172a; background: #f8fafc; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; min-height: 100vh; background: radial-gradient(circle at 20% 0%, #ccfbf1 0, #f8fafc 42%); }
+button, input { font: inherit; }
+.quick-task-shell { width: min(100%, 540px); margin: 0 auto; padding: max(24px, env(safe-area-inset-top)) 20px max(28px, env(safe-area-inset-bottom)); }
+.quick-task-header { display: flex; align-items: center; gap: 12px; padding: 18px 0 42px; }
+.quick-task-install { margin: -22px 0 24px; padding: 14px 16px; border: 1px solid #99f6e4; border-radius: 14px; background: rgb(240 253 250 / 92%); color: #115e59; }
+.quick-task-install strong, .quick-task-install span, .quick-task-install small { display: block; }
+.quick-task-install strong { margin-bottom: 4px; color: #134e4a; }
+.quick-task-install span { font-size: 14px; line-height: 1.55; }
+.quick-task-install small { margin-top: 8px; color: #475569; font-size: 12px; }
+.quick-task-install button { min-height: 48px; margin-top: 12px; padding: 0 14px; border: 0; border-radius: 11px; background: #0f766e; color: white; font-weight: 800; cursor: pointer; }
+.quick-task-mark { display: grid; width: 44px; height: 44px; place-items: center; border-radius: 14px; background: #0f766e; color: white; font-size: 30px; font-weight: 800; box-shadow: 0 8px 18px rgb(15 118 110 / 25%); }
+.quick-task-eyebrow { margin: 0; color: #0f766e; font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+h1 { margin: 2px 0 0; font-size: clamp(24px, 7vw, 32px); letter-spacing: -.03em; }
+.quick-task-label { display: block; margin-bottom: 10px; color: #334155; font-size: 14px; font-weight: 700; }
+.quick-task-input-row { display: flex; align-items: stretch; gap: 8px; }
+#quick-task-title { width: 100%; min-width: 0; min-height: 56px; padding: 12px 15px; border: 2px solid #cbd5e1; border-radius: 14px; background: white; color: #0f172a; font-size: 17px; outline: none; }
+#quick-task-title:focus { border-color: #0f766e; box-shadow: 0 0 0 4px rgb(20 184 166 / 17%); }
+.quick-task-voice { display: inline-flex; min-width: 78px; min-height: 56px; align-items: center; justify-content: center; gap: 5px; border: 0; border-radius: 14px; background: #ccfbf1; color: #115e59; font-weight: 800; cursor: pointer; }
+.quick-task-voice:disabled, .quick-task-submit:disabled { cursor: not-allowed; opacity: .5; }
+.quick-task-voice[data-listening="true"] { background: #fecaca; color: #991b1b; }
+.quick-task-submit { width: 100%; min-height: 54px; margin-top: 14px; border: 0; border-radius: 14px; background: #0f766e; color: white; font-weight: 800; cursor: pointer; box-shadow: 0 8px 16px rgb(15 118 110 / 18%); }
+.quick-task-message { min-height: 24px; margin: 14px 2px 0; color: #475569; font-size: 14px; }
+.quick-task-success, .quick-task-recovery { margin-top: 20px; padding: 18px; border: 1px solid #99f6e4; border-radius: 16px; background: rgb(240 253 250 / 90%); }
+.quick-task-success strong { display: block; margin-bottom: 6px; font-size: 20px; }
+.quick-task-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.quick-task-actions button { min-height: 46px; padding: 0 14px; border: 1px solid #99f6e4; border-radius: 11px; background: white; color: #115e59; font-weight: 700; cursor: pointer; }
+.quick-task-actions button.primary { background: #0f766e; color: white; }
+.quick-task-recovery { border-color: #fed7aa; background: #fff7ed; }
+.quick-task-recovery strong { display: block; margin-bottom: 6px; color: #9a3412; }
+noscript { display: block; margin-top: 18px; color: #9f1239; font-size: 13px; }
+@media (min-width: 560px) { .quick-task-shell { padding-top: 56px; } }

@@ -97,6 +97,9 @@
     --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
     --radius: 8px;
     --task-hierarchy-indent: 6px;
+    --scrollbar-system-size: 3px;
+    --scrollbar-system-thumb: rgba(100, 116, 139, 0.28);
+    --scrollbar-system-thumb-hover: rgba(71, 85, 105, 0.48);
   }
 
   html,
@@ -118,6 +121,34 @@
   textarea {
     font: inherit;
     letter-spacing: 0;
+  }
+
+  :where(*) {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-system-thumb) transparent;
+  }
+
+  :where(*)::-webkit-scrollbar {
+    width: var(--scrollbar-system-size);
+    height: var(--scrollbar-system-size);
+  }
+
+  :where(*)::-webkit-scrollbar-track,
+  :where(*)::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  :where(*)::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-system-thumb);
+    border-radius: 999px;
+  }
+
+  :where(*)::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-system-thumb-hover);
+  }
+
+  :where(*)::-webkit-scrollbar-button {
+    display: none;
   }
 }
 
@@ -162,6 +193,22 @@
   outline: none;
   background-color: var(--color-primary-50);
   box-shadow: inset 0 0 0 2px var(--color-primary-500);
+}
+
+/* Goal cell inline edit must be visually distinct from a selected/read-only cell. */
+[data-goal-cell-editing="true"] {
+  position: relative;
+  z-index: 2;
+  background-color: var(--color-primary-50);
+  box-shadow: inset 0 0 0 2px var(--color-primary-500);
+}
+
+[data-goal-cell-editing="true"] [data-task-detail-note-content-input="true"] {
+  display: block;
+  border: 0;
+  background-color: rgb(255 255 255 / 72%);
+  padding: 2px 4px;
+  caret-color: var(--color-primary-700);
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -306,6 +353,168 @@ body[data-kanban-mouse-pan-active="true"] * {
   );
 }
 
+/* Goal keeps hierarchy decoration inside the native frozen task cell. Each
+   segment names the relation owner so sibling rails cannot bleed across roots. */
+[data-goal-view="true"] .goal-hierarchy-guides {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  pointer-events: none;
+}
+
+[data-goal-view="true"] .goal-task-hierarchy-row {
+  --task-hierarchy-indent: 8px;
+  --goal-hierarchy-lane-start: 20px;
+  --goal-hierarchy-branch-width: 12px;
+  --goal-hierarchy-line-color: rgb(148 163 184 / 42%);
+  --goal-hierarchy-line-active-color: rgb(99 102 241 / 76%);
+  position: static;
+  overflow: visible;
+  min-height: 32px;
+  padding-left: calc(
+    14px
+    + var(--task-hierarchy-base, 0px)
+    + (var(--task-hierarchy-depth, 0) * var(--task-hierarchy-indent))
+  );
+  padding-right: 10px;
+}
+
+/* Disclosure owns the compact left slot immediately before the connector lanes. */
+[data-goal-view="true"] .goal-task-hierarchy-row > button[data-goal-collapse-toggle] {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: 0;
+  right: auto;
+  transform: translateY(-50%);
+  margin: 0;
+  background: transparent;
+}
+
+[data-goal-view="true"] .goal-hierarchy-guide-segment {
+  position: absolute;
+  background: var(--goal-hierarchy-line-color);
+  border-radius: 999px;
+  pointer-events: none;
+  transition: background-color 120ms ease, box-shadow 120ms ease;
+}
+
+[data-goal-view="true"] .goal-hierarchy-guide-segment[data-goal-hierarchy-guide-active="true"] {
+  background: var(--goal-hierarchy-line-active-color);
+}
+
+/* Active relations carry the reading focus with a slightly heavier stroke.
+   Offset the stroke by half a pixel so its center stays on the compact lane. */
+[data-goal-view="true"] .goal-hierarchy-guide-segment[data-goal-hierarchy-guide-active="true"].goal-hierarchy-guide-continuation,
+[data-goal-view="true"] .goal-hierarchy-guide-segment[data-goal-hierarchy-guide-active="true"].goal-hierarchy-guide-incoming-vertical,
+[data-goal-view="true"] .goal-hierarchy-guide-segment[data-goal-hierarchy-guide-active="true"].goal-hierarchy-guide-child-stem {
+  width: 2px;
+  margin-left: -0.5px;
+}
+
+[data-goal-view="true"] .goal-hierarchy-guide-segment[data-goal-hierarchy-guide-active="true"].goal-hierarchy-guide-incoming-branch,
+[data-goal-view="true"] .goal-hierarchy-guide-segment[data-goal-hierarchy-guide-active="true"].goal-hierarchy-guide-root-branch {
+  height: 2px;
+  margin-top: -0.5px;
+}
+
+[data-goal-view="true"] .goal-hierarchy-guide-continuation {
+  left: calc(var(--goal-hierarchy-lane-start) + (var(--goal-guide-level, 0) * var(--task-hierarchy-indent)));
+  top: -1px;
+  bottom: -1px;
+  width: 1px;
+}
+
+[data-goal-view="true"] .goal-hierarchy-guide-incoming-vertical {
+  left: calc(var(--goal-hierarchy-lane-start) + (var(--goal-guide-level, 0) * var(--task-hierarchy-indent)));
+  top: -1px;
+  height: calc(50% + 1px);
+  width: 1px;
+}
+
+[data-goal-view="true"] .goal-hierarchy-guides[data-goal-hierarchy-last-sibling="false"] .goal-hierarchy-guide-incoming-vertical {
+  bottom: -1px;
+  height: auto;
+}
+
+[data-goal-view="true"] .goal-hierarchy-guide-incoming-branch {
+  left: calc(var(--goal-hierarchy-lane-start) + (var(--goal-guide-level, 0) * var(--task-hierarchy-indent)));
+  top: 50%;
+  width: var(--goal-hierarchy-branch-width);
+  height: 1px;
+}
+
+[data-goal-view="true"] .goal-hierarchy-guide-child-stem {
+  left: calc(var(--goal-hierarchy-lane-start) + (var(--goal-node-level, 0) * var(--task-hierarchy-indent)));
+  top: 50%;
+  bottom: -1px;
+  width: 1px;
+}
+
+[data-goal-view="true"] .goal-hierarchy-guide-root-branch {
+  left: calc(var(--goal-hierarchy-lane-start) + (var(--goal-node-level, 0) * var(--task-hierarchy-indent)));
+  top: 50%;
+  width: 4px;
+  height: 1px;
+}
+
+[data-goal-view="true"] tbody > tr[data-goal-level="0"]:not(:first-child) > * {
+  border-top: 2px solid rgb(226 232 240 / 90%);
+}
+
+/* Task rows stay visually continuous; only root-group boundaries separate blocks. */
+[data-goal-view="true"] tbody > tr[data-goal-task-row] > * {
+  border-bottom: 0;
+}
+
+[data-goal-view="true"] td[data-goal-group-span="true"] {
+  background: rgb(248 250 252 / 72%);
+  box-shadow: inset 2px 0 0 rgb(203 213 225 / 82%);
+}
+
+[data-goal-view="true"] tbody > tr > [data-goal-task-cell],
+[data-goal-view="true"] tbody > tr > [data-goal-planning-control] {
+  transition: background-color 120ms ease;
+}
+
+[data-goal-view="true"] tbody > tr > [data-goal-task-cell]:hover,
+[data-goal-view="true"] tbody > tr > [data-goal-task-cell]:focus-within,
+[data-goal-view="true"] tbody > tr > [data-goal-planning-control]:hover,
+[data-goal-view="true"] tbody > tr > [data-goal-planning-control]:focus-within {
+  background-color: rgb(241 245 249 / 72%);
+}
+
+@supports selector(tr:has(> td)) {
+  [data-goal-view="true"] tbody > tr:has(> [data-goal-task-cell]:hover, > [data-goal-task-cell]:focus-within, > [data-goal-planning-control]:hover, > [data-goal-planning-control]:focus-within) > [data-goal-task-cell],
+  [data-goal-view="true"] tbody > tr:has(> [data-goal-task-cell]:hover, > [data-goal-task-cell]:focus-within, > [data-goal-planning-control]:hover, > [data-goal-planning-control]:focus-within) > [data-goal-planning-control] {
+    background-color: rgb(241 245 249 / 72%);
+  }
+}
+
+[data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-hierarchy-scope="parent"] > th[data-goal-task-cell] {
+  background-color: rgb(238 242 255 / 92%);
+}
+
+[data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-hierarchy-scope="descendant"] > th[data-goal-task-cell] {
+  background-color: rgb(248 250 255 / 96%);
+}
+
+/* Scope tint is shared by the task identity, planning cells and any real
+   content owner cell whose rowSpan covers the located task. */
+[data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-hierarchy-scope="parent"] > th[data-goal-task-cell],
+[data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-hierarchy-scope="parent"] > [data-goal-planning-control] {
+  background-color: rgb(199 210 254 / 94%);
+}
+
+[data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-hierarchy-scope="descendant"] > th[data-goal-task-cell],
+[data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-hierarchy-scope="descendant"] > [data-goal-planning-control] {
+  background-color: rgb(224 231 255 / 90%);
+}
+
+[data-goal-view="true"] tbody > tr[data-goal-task-row] > [data-goal-content-scope="active"] {
+  background-color: rgb(199 210 254 / 94%);
+}
+
 .task-workbench-unplaced-hierarchy-row {
   --kanban-checklist-base: 3px;
 }
@@ -363,54 +572,12 @@ body[data-kanban-mouse-pan-active="true"] * {
   scrollbar-width: none;
 }
 
-/* 自定義滾動條樣式 */
-.scrollbar-thin::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-.scrollbar-thin::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.scrollbar-thin::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 3px;
-}
-
-.scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
-}
-
-/* 側欄內容區的低干擾垂直滾動條：保留可發現性，不搶走任務內容焦點 */
-.scrollbar-subtle {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(100, 116, 139, 0.42) transparent;
-}
-
-.scrollbar-subtle::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
-}
-
-.scrollbar-subtle::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.scrollbar-subtle::-webkit-scrollbar-thumb {
-  background: rgba(100, 116, 139, 0.42);
-  border-radius: 999px;
-}
-
-.scrollbar-subtle::-webkit-scrollbar-thumb:hover {
-  background: rgba(71, 85, 105, 0.64);
-}
-
-.scrollbar-subtle::-webkit-scrollbar-button {
-  display: none;
-}
-
 /* 甘特圖專用大型藍色滾動條 */
+.scrollbar-gantt {
+  scrollbar-width: auto;
+  scrollbar-color: var(--color-primary-500) #f1f5f9;
+}
+
 .scrollbar-gantt::-webkit-scrollbar {
   width: 12px;
   height: 12px;

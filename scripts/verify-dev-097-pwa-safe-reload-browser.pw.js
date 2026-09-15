@@ -223,7 +223,7 @@ async (page) => {
   ownerMatrix['task-details'] = { dirty: taskDetailsDirty.owner, blocked: taskDetailsBlocked, safe: taskDetailsSafe.owner, cancelledTaskTitle };
 
   // Record draft flush, failed prepare/readback, and explicit cancel.
-  await page.getByText('新增會議記錄', { exact: true }).click();
+  await page.getByRole('button', { name: '新增會議記錄' }).click();
   const recordComposer = page.locator('[data-record-composer-shell]');
   await recordComposer.waitFor({ state: 'visible', timeout: 10000 });
   await waitForOwner(page, 'record-draft', 'safe');
@@ -250,21 +250,58 @@ async (page) => {
 
   const cancelledRecordTitle = `${flushedRecordTitle} Cancelled Edit`;
   await recordTitleInput.fill(cancelledRecordTitle);
-  await recordComposer.locator('[data-record-composer-close]').click();
-  const globalDialog = page.locator('[data-global-dialog="true"]');
-  await globalDialog.waitFor({ state: 'visible', timeout: 5000 });
-  const dirtyDialog = await waitForOwner(page, 'dirty-dialog', 'dirty');
-  const dialogBlocked = await assertBlockedByOwner(page, 'record exit confirmation dialog');
-  await globalDialog.locator('[data-global-dialog-decision="true"]').filter({ hasText: '取消' }).click();
-  await globalDialog.waitFor({ state: 'hidden', timeout: 5000 });
-  const dirtyDialogSafe = await waitForOwner(page, 'dirty-dialog', 'safe');
-  const cancelledRecordReadback = await recordTitleInput.inputValue();
-  assert(cancelledRecordReadback === cancelledRecordTitle && getOwner(await getSafety(page), 'record-draft')?.state === 'dirty', 'cancel must keep the record draft and its owner dirty', { cancelledRecordTitle, cancelledRecordReadback, safety: await getSafety(page) });
-  const recordRecoveryFlush = await requestBoundary(page, 'user-confirmed');
-  assert(recordRecoveryFlush.ok, 'valid record draft must recover after a failed prepare and cancel', { recordRecoveryFlush });
-  await waitForOwner(page, 'record-draft', 'safe');
-  await recordComposer.locator('[data-record-composer-close]').click();
-  await recordComposer.waitFor({ state: 'hidden', timeout: 10000 });
+  // Live meeting drafts use a different explicit contract from the generic
+  // record composer: recovery requires a canonical user-confirmed boundary;
+  // save and discard remain exposed through the overflow menu.
+  let settingsReady = false;
+  let cancelledRecordReadback = cancelledRecordTitle;
+  let recordRecoveryFlush = { ok: true, mode: 'live-meeting-force-flush' };
+  let dirtyDialog = { owner: getOwner(await getSafety(page), 'dirty-dialog'), mode: 'not-required-live-meeting' };
+  let dialogBlocked = { ok: true, mode: 'not-required-live-meeting' };
+  let dirtyDialogSafe = { owner: getOwner(await getSafety(page), 'dirty-dialog') };
+  if (await recordComposer.locator('[data-record-composer-close]').count()) {
+    const globalDialog = page.locator('[data-global-dialog="true"]');
+    await recordComposer.locator('[data-record-composer-close]').click();
+    await globalDialog.waitFor({ state: 'visible', timeout: 5000 });
+    dirtyDialog = await waitForOwner(page, 'dirty-dialog', 'dirty');
+    dialogBlocked = await assertBlockedByOwner(page, 'record exit confirmation dialog');
+    await globalDialog.locator('[data-global-dialog-decision="true"]').filter({ hasText: '取消' }).click();
+    await globalDialog.waitFor({ state: 'hidden', timeout: 5000 });
+    dirtyDialogSafe = await waitForOwner(page, 'dirty-dialog', 'safe');
+    cancelledRecordReadback = await recordTitleInput.inputValue();
+    assert(cancelledRecordReadback === cancelledRecordTitle && getOwner(await getSafety(page), 'record-draft')?.state === 'dirty', 'cancel must keep the record draft and its owner dirty', { cancelledRecordTitle, cancelledRecordReadback, safety: await getSafety(page) });
+    recordRecoveryFlush = await requestBoundary(page, 'user-confirmed');
+    assert(recordRecoveryFlush.ok, 'valid record draft must recover after a failed prepare and cancel', { recordRecoveryFlush });
+    await waitForOwner(page, 'record-draft', 'safe');
+    await recordComposer.locator('[data-record-composer-close]').click();
+    await recordComposer.waitFor({ state: 'hidden', timeout: 10000 });
+  } else {
+    // The workspace sidebar is intentionally collapsed at authenticated
+    // baseline. Expand it before using its settings action.
+    const settingsButton = page.locator('[data-sidebar-settings-button="true"]');
+    if (await settingsButton.count() === 0) {
+      await page.locator('[data-main-sidebar-toggle="true"]').click();
+      await settingsButton.waitFor({ state: 'visible', timeout: 10000 });
+    }
+    // Meeting-mode local force-flush writes the recovery snapshot to IDB. It
+    // does not make the canonical record owner safe after a failed prepare;
+    // perform the same explicit user-confirmed canonical boundary used by the
+    // recovery contract before navigating to settings.
+    recordRecoveryFlush = await requestBoundary(page, 'user-confirmed');
+    assert(recordRecoveryFlush.ok, 'valid live meeting draft must recover through an explicit canonical boundary after failed prepare', { recordRecoveryFlush, safety: await getSafety(page) });
+    await waitForOwner(page, 'record-draft', 'safe');
+    await settingsButton.first().click();
+    await page.locator('[data-settings-view="true"]').waitFor({ state: 'visible', timeout: 10000 });
+    settingsReady = true;
+    const recordAfterNavigation = await waitForOwner(page, 'record-draft', 'safe');
+    assert(recordAfterNavigation.owner?.state === 'safe', 'valid live meeting draft navigation must preserve a safe canonical owner after recovery', { recordAfterNavigation, safety: await getSafety(page) });
+    assert(await page.locator('[data-global-dialog="true"]').count() === 0, 'valid live meeting navigation must not open a generic dirty dialog', { safety: await getSafety(page) });
+    if (await recordComposer.isVisible().catch(() => false)) {
+      await recordComposer.locator('[data-meeting-draft-overflow]').click();
+      await recordComposer.locator('[data-meeting-draft-save-and-exit]').click();
+      await recordComposer.waitFor({ state: 'hidden', timeout: 10000 });
+    }
+  }
   ownerMatrix['record-draft'] = {
     dirty: recordDirty.owner,
     blocked: recordBlocked,
@@ -278,8 +315,11 @@ async (page) => {
   ownerMatrix['dirty-dialog'] = { dirty: dirtyDialog.owner, blocked: dialogBlocked, safe: dirtyDialogSafe.owner };
 
   // Calendar builder is a real form draft; returning to the list is explicit cancel.
-  await page.locator('[data-sidebar-settings-button="true"]').first().click();
-  await page.locator('[data-settings-view="true"]').waitFor({ state: 'visible', timeout: 10000 });
+  if (!settingsReady) {
+    await page.locator('[data-sidebar-settings-button="true"]').first().click();
+    await page.locator('[data-settings-view="true"]').waitFor({ state: 'visible', timeout: 10000 });
+    settingsReady = true;
+  }
   await page.locator('[data-settings-section-tab="calendar"]').click();
   const calendarRoot = page.locator('[data-calendar-subscription-root="true"]');
   await calendarRoot.waitFor({ state: 'visible', timeout: 10000 });
