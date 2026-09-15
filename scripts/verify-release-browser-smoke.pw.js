@@ -79,8 +79,8 @@ async (page) => {
   const criticalFailed = failedRequests.filter((request) => (
     !/fonts\.gstatic|fonts\.googleapis|accounts\.google|apis\.google|favicon/i.test(request.url)
   ));
-  const hasMainBundle = result.scripts.some((src) => /\/assets\/index-[A-Za-z0-9_-]+\.js/.test(src || ''));
-  const hasMainStyle = result.styles.some((href) => /\/assets\/index-[A-Za-z0-9_-]+\.css/.test(href || ''));
+  const hasMainBundle = result.scripts.some((src) => /\/assets\/(?:index|main)-[A-Za-z0-9_-]+\.js/.test(src || ''));
+  const hasMainStyle = result.styles.some((href) => /\/assets\/(?:index|main)-[A-Za-z0-9_-]+\.css/.test(href || ''));
   const ok =
     result.rootNonEmpty &&
     hasMainBundle &&
