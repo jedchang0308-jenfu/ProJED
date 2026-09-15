@@ -32,6 +32,7 @@
     "verify:dev-123-auth-storage-local": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify-dev-123-auth-storage-local.ps1",
     "verify:dev-123-control-api-local": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify-dev-123-control-api-local.ps1",
     "verify:dev-123-hosted-readiness": "node scripts/verify-dev-123-hosted-readiness.mjs",
+    "verify:dev-123-hosted-control-api": "node scripts/verify-dev-123-hosted-control-api.mjs",
     "verify:dev-123-local-preflight": "node scripts/verify-dev-123-local-preflight.mjs",
     "verify:dev-123-meeting-task-resolution-db-isolated": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify-dev-123-meeting-task-resolution-db-isolated.ps1",
     "verify:dev-123-meeting-task-resolution-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix dev123-meeting-task-resolution -Filename scripts/verify-dev-123-meeting-task-resolution-browser.pw.js -OutputDirectory output/playwright/dev-123-meeting-task-resolution -BaseUrl http://localhost:4000/ -ArtifactWindowKey __DEV123_ARTIFACT -ArtifactPath output/playwright/dev-123-meeting-task-resolution/result.json",

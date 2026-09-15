@@ -72,8 +72,11 @@ const migrationRemoteIds = output => {
 const readApi = async (path, key, extra = {}) => {
   if (!baseUrl || !key) return { status: 'NOT_RUN', details: { reason: 'hosted URL and key were not provided' } };
   try {
+    const apiHeaders = key.startsWith('sb_')
+      ? { apikey: key }
+      : { apikey: key, Authorization: `Bearer ${key}` };
     const response = await fetch(`${baseUrl}${path}`, {
-      headers: { apikey: key, Authorization: `Bearer ${key}`, ...extra },
+      headers: { ...apiHeaders, ...extra },
     });
     const status = response.ok ? 'PASS' : [404, 406].includes(response.status) ? 'PENDING' : 'FAIL';
     return { status, details: { httpStatus: response.status } };
@@ -107,7 +110,8 @@ const main = async () => {
     }
     try {
       functions = runCli(['functions', 'list', '--project-ref', projectRef, '--output', 'json']);
-      const remoteFunctions = new Set((functions.json?.functions ?? []).map(item => String(item.slug ?? item.name)));
+      const functionRows = Array.isArray(functions.json) ? functions.json : functions.json?.functions ?? [];
+      const remoteFunctions = new Set(functionRows.map(item => String(item.slug ?? item.name)));
       const missing = requiredFunctions.filter(name => !remoteFunctions.has(name));
       add('hosted-edge-functions', missing.length === 0 ? 'PASS' : 'PENDING', {
         requiredFunctions,
@@ -117,7 +121,7 @@ const main = async () => {
       add('hosted-edge-functions', 'FAIL', { error: error instanceof Error ? error.message : String(error) });
     }
     try {
-      lint = runCli(['db', 'lint', '--linked', '--project-ref', projectRef, '--level', 'error', '--fail-on', 'error']);
+      lint = runCli(['db', 'lint', '--linked', '--level', 'error', '--fail-on', 'error']);
       add('hosted-schema-lint', 'PASS', { resultCount: Array.isArray(lint.json?.results) ? lint.json.results.length : 0 });
     } catch (error) {
       add('hosted-schema-lint', 'FAIL', { error: error instanceof Error ? error.message : String(error) });
