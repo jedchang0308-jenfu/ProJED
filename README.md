@@ -16,6 +16,7 @@ Start with:
 npm install
 npm run dev
 npm run dev:local
+npm run verify:daily
 npm run build
 npm run preview
 npm run lint
@@ -25,6 +26,22 @@ The fixed local browser test environment is available at `http://localhost:4000/
 Use `npm run dev:local` to start or reuse the managed Vite test server. The server
 binds to loopback for local-only access; `localhost:4000` is the canonical URL for
 browser tests, auth callbacks, and local QA evidence.
+
+### Docker-free daily workflow
+
+日常開發固定使用 `npm run dev:local`；它啟動的是 local-test Vite server，
+不會啟動 Docker 或本機 Supabase stack。提交前使用 `npm run verify:daily`，
+它會先檢查日常命令相依圖沒有混入 Docker，再執行完整的 source verification。
+
+只有需要驗證本機 Supabase 整合時，才明確執行下列按需例外：
+
+- `npm run verify:docker:dev-123-auth-storage`
+- `npm run verify:docker:dev-123-control-api`
+- `npm run verify:docker:dev-045-calendar-db`
+- `npm run verify:docker:dev-047-backup`
+
+這些例外不屬於 `dev:local` 或 `verify:daily`。遠端 parity／release 驗證仍須依
+ADR-037 使用 `ProJED-TEST`、備份與 cleanup gate；不得自動改用 production。
 
 ## Supabase Migration
 

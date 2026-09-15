@@ -108,6 +108,19 @@ Supabase Branch 是例外路徑，不是預設 staging。
 
 此段是既有固定測試環境決策的相容性補充，不改 production domain、Supabase API loopback、P9／preview port 或正式部署 gate。
 
+## Docker-free daily development addendum（2026-09-15）
+
+為降低 Windows 開發機的常駐記憶體、CPU 與 C 槽 VHDX 成本，本機完整 Supabase stack 不再屬於預設日常啟動或驗證路徑：
+
+- 日常啟動固定使用 `npm run dev:local`，只啟動 local-test Vite server。
+- 日常驗證固定使用 `npm run verify:daily`；`verify:daily:contract` 必須先確認命令相依圖未混入 Docker／本機 Supabase runtime，再執行 `verify:source`。
+- 直接需要 Docker 的驗證，集中為 `verify:docker:dev-123-auth-storage`、`verify:docker:dev-123-control-api`、`verify:docker:dev-045-calendar-db`、`verify:docker:dev-047-backup` 四個明確按需入口。
+- `verify:dev-123-local-preflight` 與 `verify:dev-047-backup-package` 會間接執行上述本機 stack 驗證，也視為 Docker 例外，不得加入日常命令相依圖。
+- 執行例外必須由當次任務明確要求；一般開發、lint、typecheck、build 或 source verification 不構成啟動 Docker 的授權。
+- 需要遠端 parity 或 release evidence 時，仍遵循本 ADR 的 `ProJED-TEST`、備份、fixture prefix、cleanup 與 Level 3 gate；不得把日常零 Docker 規則解讀成可直接測 production。
+
+本補充不授權解除安裝 Docker Desktop、刪除 WSL distro／VHDX，或移除既有本機 Supabase 測試。只有在至少兩個完整 Level 3／release-candidate 週期均能由 `ProJED-TEST` 提供所需證據、沒有不可替代的本機 stack 測試，且已確認其他專案不依賴 Docker 後，才可另案評估移除。
+
 ## HCS 思考習慣
 
 - `#批判`：避免把 Branch 當成看似專業但對新手更高風險的預設。
