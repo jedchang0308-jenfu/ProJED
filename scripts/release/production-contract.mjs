@@ -36,6 +36,7 @@ export const PRODUCTION_CONTRACT = Object.freeze({
     'VITE_SUPABASE_AUTO_TEST_LOGIN',
     'VITE_SUPABASE_TEST_EMAIL',
     'VITE_SUPABASE_TEST_PASSWORD',
+    'VITE_DEV123_MEETING_TASK_RESOLUTION_ENABLED',
   ]),
   fixedPublicValues: Object.freeze({
     VITE_DATA_BACKEND: 'supabase',
