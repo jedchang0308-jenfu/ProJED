@@ -266,14 +266,45 @@ export const assertCandidateEvidence = (manifest, evidencePath) => {
   return { ok: true, releaseId: evidence.releaseId, previewUrl: evidence.provenance.baseUrl };
 };
 
-export const verifyRemoteArtifact = async ({ manifest, baseUrl, fetchImpl = fetch }) => {
+const isRetryableRemoteStatus = status => [404, 408, 425, 429, 500, 502, 503, 504].includes(status);
+
+const fetchRemoteArtifactEntry = async ({ url, entryPath, fetchImpl, retryAttempts, retryDelayMs }) => {
+  const attempts = Math.max(1, Number.isInteger(retryAttempts) ? retryAttempts : 1);
+  let lastResponse;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      lastResponse = await fetchImpl(url, { cache: 'no-store' });
+      if (lastResponse.ok) return lastResponse;
+      if (!isRetryableRemoteStatus(lastResponse.status)) break;
+    } catch {
+      lastResponse = null;
+    }
+    if (attempt < attempts && retryDelayMs > 0) await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+  }
+  throw new Error(`DEV-083 remote artifact entry failed: ${entryPath}`);
+};
+
+export const verifyRemoteArtifact = async ({
+  manifest,
+  baseUrl,
+  fetchImpl = fetch,
+  retryAttempts = fetchImpl === fetch ? 25 : 1,
+  retryDelayMs = fetchImpl === fetch ? 5000 : 0,
+}) => {
   if (!baseUrl) throw new Error('DEV-083 remote provenance requires a Firebase preview/canonical URL from the deploy result.');
   const origin = baseUrl.replace(/\/$/, '');
   const remoteFiles = new Map();
   for (const entry of manifest.artifact.entries ?? []) {
     const encodedPath = entry.path.split('/').map(segment => encodeURIComponent(segment)).join('/');
-    const response = await fetchImpl(`${origin}/${encodedPath}`, { cache: 'no-store' });
-    if (!response.ok) throw new Error(`DEV-083 remote artifact entry failed: ${entry.path}`);
+    const artifactUrl = new URL(`${origin}/${encodedPath}`);
+    artifactUrl.searchParams.set('dev083ReleaseId', manifest.releaseId);
+    const response = await fetchRemoteArtifactEntry({
+      url: artifactUrl.toString(),
+      entryPath: entry.path,
+      fetchImpl,
+      retryAttempts,
+      retryDelayMs,
+    });
     const bytes = new Uint8Array(await response.arrayBuffer());
     if (bytes.byteLength !== entry.size) throw new Error(`DEV-083 remote artifact size mismatch: ${entry.path}`);
     if (sha256(bytes) !== entry.sha256) throw new Error(`DEV-083 remote artifact hash mismatch: ${entry.path}`);

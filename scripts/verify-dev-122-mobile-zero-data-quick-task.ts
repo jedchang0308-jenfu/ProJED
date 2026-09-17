@@ -58,6 +58,8 @@ const panel = read('src/components/TaskWorkbenchPanel.tsx');
 const pwaUpdate = read('src/services/pwaUpdateService.ts');
 const outbox = read('src/features/quickTaskCapture/outbox.ts');
 const sync = read('src/features/quickTaskCapture/sync.ts');
+const productionSameAccount = read('scripts/verify-dev-122-production-same-account.mjs');
+const productionQuickBrowser = read('scripts/verify-dev-122-production-quick-browser.pw.js');
 const buildMeta = (() => {
   try { return JSON.parse(read('dist/app-shell-meta.json')); }
   catch { return { version: 'unknown' }; }
@@ -123,6 +125,23 @@ check('S20', sync.includes("retryAfter > 0 && state === 'failed_retryable'")
   && sync.includes("updateQuickCapture(leased.captureId, { nextAttemptAt: Date.now() + retryAfter })"));
 check('S21', quickMain.includes("listQuickCaptures(authSnapshot?.accountId ?? null, true)")
   && quickMain.includes("record.state !== 'synced'"));
+check('S22-production-fixture-guard', productionSameAccount.includes('DEV122_ALLOW_PRODUCTION_FIXTURE')
+  && productionSameAccount.includes('--allow-production-fixture')
+  && productionSameAccount.includes("'projed-cc78d.web.app'")
+  && productionSameAccount.includes("'projed-cc78d--production-candidate-tsxgwy67.web.app'")
+  && productionSameAccount.includes("quickRpcRequests.length === 1")
+  && productionSameAccount.includes("quickAccountId === payload.expectedUserId")
+  && productionSameAccount.includes("rootAccountId === payload.expectedUserId")
+  && productionSameAccount.includes('cleanupComplete'),
+  'guarded production verifier proves one RPC, same account and complete cleanup');
+check('S23-production-quick-browser', productionQuickBrowser.includes("'projed-cc78d.web.app'")
+  && productionQuickBrowser.includes("'projed-cc78d--production-candidate-tsxgwy67.web.app'")
+  && productionQuickBrowser.includes('dev122ReleaseId')
+  && productionQuickBrowser.includes('result.titleFocused')
+  && productionQuickBrowser.includes("result.voiceLabel === '使用語音輸入任務名稱'")
+  && productionQuickBrowser.includes('businessRequests.length === 0')
+  && productionQuickBrowser.includes('result.rootMarkerCount === 0'),
+  'production quick browser is release-bound, zero-read and independent of the root app');
 
 const artifact = {
   devId: 'DEV-122',

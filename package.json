@@ -111,6 +111,7 @@
     "verify:dev-122-mobile-zero-data-quick-task-sw": "node scripts/verify-dev-122-mobile-zero-data-quick-task-sw.mjs",
     "verify:dev-122-mobile-zero-data-quick-task-db-isolated": "node scripts/verify-dev-122-mobile-zero-data-quick-task-db-isolated.mjs",
     "verify:dev-122-mobile-zero-data-quick-task-db-concurrent": "node scripts/verify-dev-122-mobile-zero-data-quick-task-db-concurrent.mjs",
+    "verify:dev-122-production-same-account": "node scripts/verify-dev-122-production-same-account.mjs",
     "verify:dev-118-calendar-filter-db": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify-dev-118-calendar-db.ps1",
     "verify:dev-118-task-filter-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix dev118-filter -Filename scripts/verify-dev-118-browser.pw.js -OutputDirectory output/playwright/dev-118 -BaseUrl http://localhost:4000/",
     "verify:dev-117-cross-mode-meeting-continuity-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix dev117-meeting-continuity -Filename scripts/verify-dev-117-cross-mode-meeting-continuity-browser.pw.js -OutputDirectory output/playwright/dev-117-meeting-continuity -BaseUrl http://localhost:4000/ -ArtifactWindowKey __DEV117_ARTIFACT -ArtifactPath output/playwright/dev-117-meeting-continuity/result.json",

@@ -148,6 +148,39 @@ try {
     const result = await verifyRemoteArtifact({ manifest: remoteManifest, baseUrl: 'https://candidate.example', fetchImpl: remoteFetch() });
     if (result.verifiedEntries !== remoteFiles.size) throw new Error('not every manifest entry was verified');
   });
+  await check('remote-provenance-cache-key-is-bound-to-release', async () => {
+    const stableFetch = remoteFetch();
+    const observedUrls = [];
+    const cacheAwareFetch = async (url, options) => {
+      observedUrls.push(url);
+      return stableFetch(url, options);
+    };
+    await verifyRemoteArtifact({ manifest: remoteManifest, baseUrl: 'https://candidate.example', fetchImpl: cacheAwareFetch });
+    if (observedUrls.length !== remoteFiles.size) throw new Error('not every artifact URL was observed');
+    if (observedUrls.some(url => new URL(url).searchParams.get('dev083ReleaseId') !== remoteManifest.releaseId)) {
+      throw new Error('artifact URL cache key is not bound to the release');
+    }
+  });
+  await check('remote-provenance-retries-hosting-propagation', async () => {
+    const stableFetch = remoteFetch();
+    let attempts = 0;
+    const delayedFetch = async (url, options) => {
+      attempts += 1;
+      if (new URL(url).searchParams.get('dev083ReleaseId') !== remoteManifest.releaseId) {
+        throw new Error('hosting propagation retry lost the release cache key');
+      }
+      if (attempts <= 2) return new Response('not propagated', { status: 404 });
+      return stableFetch(url, options);
+    };
+    const result = await verifyRemoteArtifact({
+      manifest: remoteManifest,
+      baseUrl: 'https://candidate.example',
+      fetchImpl: delayedFetch,
+      retryAttempts: 3,
+      retryDelayMs: 0,
+    });
+    if (attempts < 3 || result.verifiedEntries !== remoteFiles.size) throw new Error('hosting propagation retry did not converge');
+  });
   await check('remote-provenance-detects-non-entry-asset-tamper', async () => {
     const overrides = new Map([['assets/lazy.js', Buffer.from('tampered lazy asset')]]);
     try {

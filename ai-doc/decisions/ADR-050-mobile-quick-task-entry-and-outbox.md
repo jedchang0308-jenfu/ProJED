@@ -1,6 +1,6 @@
 # ADR-050：手機快速建待辦的獨立入口與單筆 outbox 架構
 
-狀態：`Accepted / Architecture Confirmed / R12 Tech Lead Optimized / RD Implementation Ready / WP-122-0B Pending`
+狀態：`Accepted / Architecture Confirmed R12 / REL-002 Production Verified with Accepted Exceptions`
 日期：2026-09-15；R11 amendment：2026-09-16；R12 tech lead closure：2026-09-16
 修訂：R12保留R11「快速建待辦」root app shortcut與選用第二identity，並固定manifest唯一來源、真實icon metadata、既有安裝更新證據、同帳號安全證明及平台適用性。一次安裝只保證功能與標準捷徑宣告隨主程式提供，不宣稱OS立即顯示或自動建立兩個圖示。R4～R10的資料、安全、語音、outbox、安裝引導與相容契約全部保留。
 關聯：[DEV-122](../dev_task.md#dev-122projed-手機零資料載入快速建待辦)、[SPEC-122](../specs/SPEC-122-mobile-zero-data-quick-task.md)、[QA-DEV-122](../qa/QA-DEV-122-mobile-zero-data-quick-task.md)、SPEC-034、SPEC-039、SPEC-115、ADR-047、ADR-048
@@ -93,7 +93,7 @@ R4 complexity boundary：raw HTML、quick controller、IDB outbox、fixed JWT ad
 - SPEC-122 是 current implementation authority；DEV-122 是狀態、派工與 evidence 索引。
 - WP-122-0 是架構 feasibility gate。通過前可做 spike／prototype，不得宣稱第二 App 已可交付；失敗時不得用 browser bookmark、單一 icon 或 root route 冒充 PASS。
 - WP-122-0B 是R12目前執行邊界。通過只代表root安裝包含標準shortcut宣告、支援平台可啟動quick route、既有安裝更新證據、fallback與同帳號安全鏈成立；不得把它寫成「立即更新」或「自動安裝第二個圖示」，也不得取代WP-122-0。
-- 本 ADR 不授權 production migration、deploy、push 或 release。
+- 本 ADR 不授權 production migration、push 或 live release；Level 3 preview deploy 需沿既有 release gate 並取得明確環境授權。
 - Supabase Auth/RLS 與 PWA platform 行為以實作時的官方文件與 target-device evidence 為準；文件變更若影響本決策，先 amendment 再繼續。
 
 ## Architecture Closure（2026-09-14）
@@ -113,11 +113,11 @@ Architecture Closure Review已對照branch `持續優化3`、HEAD `e335eaa07c143
 - 本機待處理入口涵蓋逐筆recovery與8次失敗暫停；保留目前輸入／帳號隔離，不引入remote任務管理。
 - root manifest shortcut只新增安裝後的launch surface，不新增第七個runtime責任點：`id/start_url/scope`不變、URL固定`/quick-task/`、quick manifest保留獨立identity；不支援平台沿用設定頁CTA與選用第二圖示。
 
-R4在R3基礎上修正callback cache query未集中配置，以及既有capture id碰撞／int32 order邊界未明確收斂的缺口；R3的固定身分快照、root intent與逐筆恢復保留。R5修正raw form／IME submit邊界與驗證器fixture；R6修正自動重試耗盡後仍可被前景 lease 取得的狀態漏洞：第8次自動失敗即轉為`failed_permanent/AUTO_RETRY_EXHAUSTED`，只有明確人工retry可重置。R7補充DEV-097相容回歸裁定；R8加入quick install引導；R9對齊account-unplaced lock；R10修正voice fallback session。R11新增root manifest app shortcut與設定頁雙入口說明；R12將manifest發佈、既有安裝更新、icon metadata與account proof收斂為可驗收契約。兩版都只改launch／discovery surface，不改六個runtime責任、資料、安全或ownership boundary。local candidate已落實R10以前的quick功能；R12尚待RD實作與驗證。SPEC工程契約為 `Intentional replacement`；產品決策與其他DEV權限契約為 `Compatible extension`。P0／P1未決工程問題=0；真機、isolated DB與完整產品測試仍未完成，不能從文件推定PASS。
+R4在R3基礎上修正callback cache query未集中配置，以及既有capture id碰撞／int32 order邊界未明確收斂的缺口；R3的固定身分快照、root intent與逐筆恢復保留。R5修正raw form／IME submit邊界與驗證器fixture；R6修正自動重試耗盡後仍可被前景 lease 取得的狀態漏洞：第8次自動失敗即轉為`failed_permanent/AUTO_RETRY_EXHAUSTED`，只有明確人工retry可重置。R7補充DEV-097相容回歸裁定；R8加入quick install引導；R9對齊account-unplaced lock；R10修正voice fallback session。R11新增root manifest app shortcut與設定頁雙入口說明；R12將manifest發佈、既有安裝更新、icon metadata與account proof收斂為可驗收契約。兩版都只改launch／discovery surface，不改六個runtime責任、資料、安全或ownership boundary。2026-09-17 local candidate已落實R12，並通過S15、B22～B24、W07與受影響相容回歸；另依明確授權建立 Firebase `level3-smoke` HTTPS candidate，證據見 [PREPRODUCTION-DEV-122-20260917](../release/PREPRODUCTION-DEV-122-20260917.md)。SPEC工程契約為 `Intentional replacement`，產品決策與其他DEV權限契約為 `Compatible extension`。P0／P1未決工程問題=0；target-device與完整產品QA/QC仍未完成，不能從local或hosted smoke推定完整PASS，並由REL-002 accepted residual risks承接。
 
 ## Decision outcome
 
-`Accepted / Architecture Confirmed / R12 Tech Lead Optimized / RD Implementation Ready`。R10以前的repo candidate evidence保留為回歸基線；R12的root manifest shortcut、設定頁文案與S15／B22～B24／W07／D08～D10尚未實作或驗證，不能沿用舊artifact宣稱通過。current phase沒有待使用者或實作模型補決策的P0／P1 blocker。
+`Accepted / Architecture Confirmed R12 / REL-002 Production Verified with Accepted Exceptions`。root manifest shortcut、quick icon metadata、設定頁文案與S15／B22～B24／W07已完成；canonical provenance、quick zero-read與同帳號建立／工作台讀回／cleanup均PASS。使用者接受本次release的實機、DEV-096 real-SW及完整B／W／P／獨立QA-QC殘餘風險；這不改變本ADR架構，也不把未通過案例改寫為PASS。current phase沒有待使用者或實作模型補決策的P0／P1 blocker。
 
 ### R11 Bundled Shortcut Amendment
 
@@ -135,9 +135,16 @@ R4在R3基礎上修正callback cache query未集中配置，以及既有capture 
 - Android Chrome/WebAPK與Chromium桌面是主要shortcut target；macOS Safari 17.4+有裝置時補充；iOS/iPadOS走設定頁CTA與選用加入主畫面，不以未證實的manifest shortcut UI作required gate。
 - Review：`PASS`；P0／P1 unresolved architecture blocker = 0。WP-122-0B只修改兩份manifest metadata、單一設定區塊及直接verifier；不修改Auth、quick runtime、API、schema、RLS、worker設定、Vite設定或Firebase rewrite。這是文件／架構通過，不是產品、QA、QC或release PASS。
 
+### R12 Implementation Record（2026-09-17）
+
+- 實作維持R12 write surface：兩份manifest metadata、`AppInstallAssistant.tsx`、DEV-122與DEV-034直接verifier；未修改Auth、quick runtime、API、schema、RLS、worker、Vite或Firebase rewrite。
+- Local targeted gate已PASS：S15、B22～B24、W07、DEV-034、DEV-096／097／115相容回歸、TypeScript、build及DB runner；root一般launch與quick zero-data route都維持原契約。
+- R12產品與verifier已由外部流程納入HEAD `5ee11786da4db07b9f125b0e315873dda479d1c9`；本輪只留下狀態與證據文件的working-tree收斂，不把Git署名推定為實際開發操作者。
+- ADR仍維持external gate；實機、DEV-096 real-SW與完整B／W／P／獨立QA-QC缺口已由使用者接受為本次release殘餘風險，未將其改寫為PASS。平台呈現或更新延遲照適用性記錄，不新增偵測、輪詢或強制刷新實作。
+
 ### Tech Lead R7 Compatibility Gate Note
 
-DEV-097 browser 的診斷與修正 artifact 為 `output/qa/dev-122/dev-097-compatibility-diagnostic.json`、`output/playwright/dev-097/ui-result.json`；這是既有 regression verifier 的入口與 owner oracle 落差，不構成 quick 架構漂移。修正保留空標題 prepare 的 fail-closed readback，並以完整 browser verifier PASS 解除 DEV-122 的 DEV-097 browser 相容 gate；真機、完整 QA/QC 與 release gate 仍未解除。
+DEV-097 browser 的診斷與修正 artifact 為 `output/qa/dev-122/dev-097-compatibility-diagnostic.json`、`output/playwright/dev-097/ui-result.json`；這是既有 regression verifier 的入口與 owner oracle 落差，不構成 quick 架構漂移。修正保留空標題 prepare 的 fail-closed readback，並以完整 browser verifier PASS 解除 DEV-122 的 DEV-097 browser 相容 gate；真機與完整QA/QC原始gate仍未通過，現由本次release exception承接其殘餘風險，REL-002 production gate則已另行完成。
 
 ### Tech Lead R9 Mixed-Writer Lock Note
 
@@ -150,6 +157,14 @@ voice adapter 回報 `fallback` 時，quick controller 現在立即清除舊 rec
 ### Tech Lead R8 Install Entry Note
 
 `/quick-task/?install=1` 由 quick 自有輕量 install guide 處理：Android／桌面在 `beforeinstallprompt` 可用時才顯示明確安裝按鈕，iOS 顯示 Safari 加入主畫面步驟，內嵌瀏覽器提示改用系統瀏覽器；所有情境保留同一 title input 與 quick capture path。此修正不引入第二 worker、client、state authority 或資料邊界；SM14／SM15 與安裝模式 screenshot 已 PASS，但不取代 target-device feasibility gate。
+
+### Release Exception Record（2026-09-17）
+
+使用者接受Android／iPhone實機案例、DEV-096 real-SW最新FAIL及完整B／W／P／獨立QA-QC缺口的本次release殘餘風險。此紀錄只改變release closure policy，不構成ADR amendment：六個runtime責任、manifest identity、單一worker、固定JWT、server-owned RPC與同帳號安全邊界全部不變。例外決策本身不授權production deploy或live activation；其後REL-002已另取得exact release核准並完成production artifact provenance、inactive candidate、rollback anchor、canonical live smoke及同帳號唯一單筆建立readback／cleanup。
+
+同日production-sealed inactive candidate已完成：45檔remote provenance、quick首次render零業務讀取、一次quick RPC、同actor返回root工作台exactly one與canonical DB exactly one均PASS，fixture完整cleanup且候選驗證當時live channel未變。這是既有架構不變下的release evidence；後續exact release live activation、canonical重驗與terminal release record同樣不構成ADR變更，且已由REL-002完成。
+
+其後使用者核准exact release，REL-002已完成live activation、canonical 45檔provenance、quick zero-read、同actor工作台／DB exactly one及完整cleanup，終態為`Production Verified with Accepted Exceptions`。這些是架構既有不變量的正式證據，不新增ADR決策。
 
 使用思考習慣：#設計思考、#問對問題、#第一性原理、#系統描繪、#限制條件、#可驗證性、#隱私
 

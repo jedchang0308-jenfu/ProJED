@@ -1,5 +1,11 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-09-17（REL-002 DEV-122 / Production Verified with Accepted Exceptions）
+
+DEV-122已由clean source commit `5ee11786da4db07b9f125b0e315873dda479d1c9`的sealed artifact啟用至Firebase canonical，release ID `20260917080116-1a5f27`、live release `1789648827546000`、version `59da8efd9cc1e02c`。45/45 provenance、root／OAuth、390×844 quick zero-read、同帳號建立／工作台唯一讀回／canonical DB唯一讀回與完整cleanup均PASS；terminal證據見[REL-002](release/REL-002-DEV-122-20260917.md)。
+
+本次依release-owner決策保留實機、DEV-096 real-SW最新FAIL及完整B／W／P／效能／獨立QA-QC缺口為accepted residual risks，原始狀態不改寫為PASS。DEV-122終態為`Production Verified with Accepted Exceptions`。
+
 ## Documentation Map Update - 2026-09-17（DEV-124 R14 armed child持續父任務定位 / Targeted QA PASS）
 
 [DEV-124](dev_task.md#dev-124okr-共用看板任務拖拉核心) 已完成R14 armed child持續父任務定位修正，現為
@@ -62,9 +68,9 @@ TD-124-01／02與mobile OKR、tracking、Workbench／跨看板future boundary維
 
 DEV-119～DEV-123 已部署至正式 Firebase canonical channel，release ID `20260915032709-a1b629`。Migration、Edge Functions、candidate／activation provenance 與 rollback anchor 由 [REL-001 release record](release/REL-001-DEV-119-123-20260915.md) 統一保存。DEV-123 production entry 仍由 feature gate 關閉，Provider Qualification Pending 的限制未被 release status 掩蓋。
 
-## Documentation Map Update - 2026-09-16（DEV-122 手機零資料載入快速建待辦 / R12 Tech Lead Optimized / RD Implementation Ready + 架構已定案）
+## Documentation Map Update - 2026-09-17（DEV-122 手機零資料載入快速建待辦 / REL-002 Production Verified with Accepted Exceptions）
 
-[dev_task：DEV-122](dev_task.md#dev-122projed-手機零資料載入快速建待辦)依使用者2026-09-16決策重新開啟。R12固定「安裝ProJED主程式即包含標準快速建待辦shortcut宣告；選用第二個quick圖示仍保留」，並完成Tech Lead Architecture Closure；R10以前的local candidate與approved Firebase HTTPS preview只作回歸基線，尚不包含R12產品變更。
+[dev_task：DEV-122](dev_task.md#dev-122projed-手機零資料載入快速建待辦)依使用者2026-09-16決策重新開啟。R12固定「安裝ProJED主程式即包含標準快速建待辦shortcut宣告；選用第二個quick圖示仍保留」，並已完成產品實作、local targeted QA-QC、同版 Level 3 HTTPS preview、production-sealed candidate及REL-002 canonical activation；完整發布證據見[REL-002](release/REL-002-DEV-122-20260917.md)，分層驗證見[PREPRODUCTION-DEV-122-20260917](release/PREPRODUCTION-DEV-122-20260917.md)，R10以前的preview只作歷史基線。使用者已於2026-09-17接受實機、DEV-096 real-SW及完整B／W／P／獨立QA-QC缺口的本次release殘餘風險；這些case仍保留原始FAIL／Not verified事實。
 第二個手機入口固定為 `/quick-task/` raw HTML form + small TypeScript progressive enhancement；title在React、auth、
 PWA service或任何業務資料載入前即可編輯。quick entry使用獨立manifest identity、同一root worker、quick navigation
 denylist與main／quick共同artifact version；名稱旁直接顯示「語音」，依既定`1A 2A 3B`從游標加入、確認後建立，
@@ -82,18 +88,19 @@ R12不新增第七個runtime責任點：`public/manifest.webmanifest`是唯一ro
 
 | 權威入口 | 狀態與唯一責任 |
 |---|---|
-| [DEV-122](dev_task.md#dev-122projed-手機零資料載入快速建待辦) | `R12 Tech Lead Optimized / RD Implementation Ready + 架構已定案 / WP-122-0B Ready for RD`；狀態、派工、phase gate、evidence與completion boundary。 |
+| [DEV-122](dev_task.md#dev-122projed-手機零資料載入快速建待辦) | `Production Verified with Accepted Exceptions / REL-002`；狀態、派工、accepted residual risks、production evidence與completion boundary。 |
 | [SPEC-122](specs/SPEC-122-mobile-zero-data-quick-task.md) | current implementation authority；root bundled shortcut、雙identity、exact file surface、entry/build、UI/voice、IDB、RPC/RLS、同帳號、工作台到達、drift與stop conditions。 |
 | [ADR-050](decisions/ADR-050-mobile-quick-task-entry-and-outbox.md) | Accepted Architecture Memory + R12 closure；root shortcut與選用第二identity、manifest發佈／更新、raw HTML MPA、one root SW、account outbox及server-owned idempotency。 |
-| [QA-DEV-122](qa/QA-DEV-122-mobile-zero-data-quick-task.md) | verification authority；S15、B22～B24、W07、D08～D10及既有static/browser/SW/DB/device cases；R12尚未執行，舊candidate只作回歸基線。 |
+| [QA-DEV-122](qa/QA-DEV-122-mobile-zero-data-quick-task.md) | verification authority；S15、B22～B24、W07與受影響回歸已local PASS，Level 3 HTTPS smoke已PASS；實機、DEV-096 real-SW FAIL及完整B/W/P／獨立QA-QC缺口由使用者接受為本次release殘餘風險，原始case狀態不變；第10.4.3節定義production替代結案證據。 |
 | [SPEC-034](specs/SPEC-034-fast-start-pwa-install-guidance.md) | 一般 ProJED install/update 與 QuickCaptureShell 退役 authority；DEV-122 為 compatible extension。 |
 | [SPEC-039](specs/SPEC-039-task-filter-core-and-workbench-profiles.md) | account-owned 未歸位與完整工作台 authority；quick entry 只新增來源。 |
 | [SPEC-115](specs/SPEC-115-blank-task-creation-contract.md) | blank-task content authority；quick RPC 必須 parity，description absent。 |
 
-下一個合法動作是RD只執行WP-122-0B：修改root／quick manifest metadata與單一設定區塊、補S15／B22～B24／W07 verifier並跑DEV-034回歸；source freeze後重建approved non-production HTTPS candidate，再由QA／QC執行D08～D10。完成後續接D01～D07與完整voice、OAuth、offline、RPC/RLS、outbox、Workbench gate。任何需要改identity、origin、worker、Vite manifest策略、API、schema、RLS、ownership或增加shortcut detection state的情況立即回送規劃模型。
+REL-002已從核准source建立production sealed artifact與inactive candidate、保留rollback anchor、取得live activation明確授權，並完成canonical production smoke與production-safe同帳號唯一單筆建立readback／cleanup。`level3-smoke`僅作staging證據，正式站使用獨立production artifact。任何未來需要改identity、origin、worker、Vite manifest策略、API、schema、RLS、ownership或增加shortcut detection state的情況仍須回送規劃模型。
 
-Architecture Closure R12：P0／P1 unresolved architecture blocker = 0；WP-122-0B可直接交RD。R10以前HTTPS candidate缺口已解除，但該candidate不含R12，不能重用為R12 PASS；DEV-097既有browser evidence維持回歸基線。
-R10以前已產出local candidate product code與additive migration；相關static／browser／SW／DB evidence保留，但R12本輪只完成文件與架構交接，尚未修改產品、執行R12驗證或建立新candidate。沒有新增遠端migration、commit、push、deploy或release。
+Architecture Closure R12：P0／P1 unresolved architecture blocker = 0；WP-122-0B產品與local targeted gates已完成。DEV-041／096／097／115 browser均PASS，DEV-097 real-SW PASS；DEV-096 real-SW最新兩次convergence FAIL保留為accepted residual risk。
+R12已修改root／quick manifest metadata、單一設定區塊與直接verifier；S15、B22～B24、W07、DEV-034及既有quick／DB回歸已PASS。本輪已依明確授權完成Level 3、production-sealed inactive candidate、45檔candidate與canonical provenance、quick zero-read smoke及production-safe同帳號唯一單筆建立readback／cleanup；未執行遠端migration或push，live channel已依exact release核准啟用。DEV-122現為`Production Verified with Accepted Exceptions`。
+驗證期間branch HEAD由外部流程推進到`5ee11786da4db07b9f125b0e315873dda479d1c9`；R12產品與verifier已在該HEAD，內容hash與local artifacts一致。本輪未執行commit；DEV-122狀態、release證據與verifier修正由本次working tree保存。
 
 使用思考習慣：#第一性原理、#系統描繪、#可驗證性
 

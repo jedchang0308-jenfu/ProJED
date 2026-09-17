@@ -12,7 +12,19 @@ const distRootManifestText = readFileSync(resolve('dist/manifest.webmanifest'), 
 const distQuickManifest = JSON.parse(readFileSync(resolve('dist/quick-task/manifest.webmanifest'), 'utf8'));
 const sourceRootManifest = JSON.parse(sourceRootManifestText);
 const distRootManifest = JSON.parse(distRootManifestText);
-const baselineRootManifestText = execFileSync('git', ['show', 'HEAD:public/manifest.webmanifest'], { encoding: 'utf8' });
+const manifestHistory = execFileSync('git', ['log', '--format=%H', '--', 'public/manifest.webmanifest'], { encoding: 'utf8' })
+  .trim()
+  .split(/\r?\n/u)
+  .filter(Boolean);
+const baselineEntry = manifestHistory
+  .map(ref => {
+    const text = execFileSync('git', ['show', `${ref}:public/manifest.webmanifest`], { encoding: 'utf8' });
+    return { ref, text, manifest: JSON.parse(text) };
+  })
+  .find(entry => !entry.manifest.shortcuts?.length);
+if (!baselineEntry) throw new Error('DEV-122 W07 baseline manifest without shortcuts was not found in Git history.');
+const baselineGitRef = baselineEntry.ref;
+const baselineRootManifestText = baselineEntry.text;
 const baselineRootManifest = JSON.parse(baselineRootManifestText);
 const md5 = value => createHash('md5').update(value).digest('hex');
 const sourceRevision = md5(sourceRootManifestText);
@@ -48,13 +60,14 @@ const artifact = {
   sourceRevision: 'working-tree',
   buildId: meta.version ?? 'unknown',
   actorAlias: 'DEV122-SW',
-  fixtureVersion: 'DEV122-SW-R12-V1',
+  fixtureVersion: 'DEV122-SW-R12-V3',
   platform: 'Node',
   route: 'service-worker',
   status: checks.every(([, ok]) => ok) ? 'PASS' : 'FAIL',
   manifestUpdate: {
     baselineRevision,
     candidateRevision: sourceRevision,
+    baselineGitRef,
     identityStable: baselineRootManifest.id === distRootManifest.id,
     baselineHadShortcut: Boolean(baselineRootManifest.shortcuts),
     candidateShortcutUrl: shortcut?.url ?? null,
