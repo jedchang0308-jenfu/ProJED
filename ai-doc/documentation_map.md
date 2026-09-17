@@ -1,5 +1,11 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-09-17（REL-003 DEV-123 / Direct Production Verification）
+
+DEV-123 已由 clean source commit `31df112b70f77061d1a69a3570d83c27d74e2be7` 以 `VITE_DEV123_MEETING_TASK_RESOLUTION_ENABLED=true` 建立 sealed artifact 並啟用至 Firebase canonical live，release ID `20260917150720-6533b0`。45/45 artifact provenance、production-bound readiness、credential rotation、canonical browser smoke、OAuth safe-cancel 與正式 bundle feature marker 均通過；terminal evidence 見 [REL-003](release/REL-003-DEV-123-20260917.md)。
+
+本次正式入口為授權的 verification exposure：fake provider 仍未呼叫外部 transcription，Provider ZDR／真實 API/model/pricing／Files cleanup／95-90 品質 qualification 保持 Pending。完整商用能力仍須走 Provider Qualification 後的 immutable artifact、candidate 與 activation 流程。
+
 ## Documentation Map Update - 2026-09-17（REL-002 DEV-122 / Production Verified with Accepted Exceptions）
 
 DEV-122已由clean source commit `5ee11786da4db07b9f125b0e315873dda479d1c9`的sealed artifact啟用至Firebase canonical，release ID `20260917080116-1a5f27`、live release `1789648827546000`、version `59da8efd9cc1e02c`。45/45 provenance、root／OAuth、390×844 quick zero-read、同帳號建立／工作台唯一讀回／canonical DB唯一讀回與完整cleanup均PASS；terminal證據見[REL-002](release/REL-002-DEV-122-20260917.md)。

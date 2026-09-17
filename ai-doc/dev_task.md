@@ -18,6 +18,12 @@ DEV-122已由clean source commit `5ee11786da4db07b9f125b0e315873dda479d1c9`的se
 
 依release-owner決策，本次仍保留Android／iPhone實機、DEV-096 real-SW最新FAIL及完整B／W／P／效能／獨立QA-QC缺口為accepted residual risks；原始case不改寫為PASS。DEV-122終態為`Production Verified with Accepted Exceptions`。
 
+## Release update - 2026-09-17（REL-003 DEV-123 / Direct Production Verification）
+
+依使用者明確授權，DEV-123 已由 clean source commit `31df112b70f77061d1a69a3570d83c27d74e2be7` 以 production flag `VITE_DEV123_MEETING_TASK_RESOLUTION_ENABLED=true` 建立 sealed artifact，並啟用至 Firebase canonical live，release ID `20260917150720-6533b0`。45/45 provenance、production-bound readiness、credential rotation、canonical browser smoke、OAuth safe-cancel 與正式 bundle feature marker 均通過；完整證據見 [REL-003 release record](release/REL-003-DEV-123-20260917.md)。
+
+本次是正式環境可見性與 control-path 驗證，`process_meeting_analysis` 仍為 fake provider，未呼叫真實 transcription provider；Provider ZDR、真實 API/model/pricing、Files cleanup 與 95/90 品質 qualification 仍列為 Pending。正式入口已開放供授權驗證，但不得將 fake worker 結果視為真實語音品質或商用 provider 完成。
+
 ## 總任務清單
 
 此區是 `dev_task.md` 的 canonical index；詳細契約、歷史與完整證據保留在直接連結的
