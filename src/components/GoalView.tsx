@@ -1,10 +1,10 @@
 import React from 'react';
 import dayjs from 'dayjs';
-import { DndContext, DragOverlay, closestCorners, type DragEndEvent } from '@dnd-kit/core';
+import { closestCorners, type DragEndEvent, type DragMoveEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { Link, Loader2, Lock, Unlock } from 'lucide-react';
+import { ChevronLeft, Link, Loader2, Lock, Unlock } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
+import useAuthStore from '../store/useAuthStore';
 import { useWbsStore } from '../store/useWbsStore';
 import { useTaskFilterStore } from '../store/useTaskFilterStore';
 import { useMemberStore } from '../store/useMemberStore';
@@ -33,12 +33,32 @@ import { taskStatusTitleClass } from './ui/taskStatusStyles';
 import { TaskHierarchyIndentedRow } from './Wbs/TaskHierarchyIndentedRow';
 import MeetingQuickNoteRows from './TaskNotes/MeetingQuickNoteRows';
 import { useTaskPlacementController } from './Wbs/useTaskPlacementController';
-import { useDragSensors } from '../hooks/useDragSensors';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
+import { useDragSensors } from '../hooks/useDragSensors';
 import { primaryPlacementId } from '../features/taskTracking/model';
+import DesktopTaskDragHost from './Wbs/taskDrag/DesktopTaskDragHost';
+import { DesktopTaskInsertionIndicator } from './Wbs/taskDrag/DesktopTaskDragLayer';
+import GoalHierarchyGuides from './Wbs/GoalHierarchyGuides';
+import { commitPrimaryDesktopTaskDrag } from './Wbs/taskDrag/taskDragCommit';
+import {
+  advanceTaskChildIntent,
+  getTaskChildIntentRemainingMs,
+  type TaskChildIntentSnapshot,
+} from './Wbs/taskDrag/taskChildDropTarget';
+import {
+  resolveGoalDropPosition,
+  resolveGoalChildEntryWindow,
+  resolveGoalTaskRowDropGeometry,
+  type GoalDropGeometry,
+  type GoalTaskRect,
+} from './Wbs/taskDrag/goalDesktopTaskDragAdapter';
 import TaskAssignmentPicker, { type TaskAssignmentOption } from './TaskAssignmentPicker';
 import { TagChip } from './Tags/TagChip';
 import { useGoalCellSession } from './GoalCellSessionProvider';
+import {
+  hydrateAccountLayoutPreferences,
+  persistAccountLayoutPreferences,
+} from '../services/accountPreferencesService';
 
 const TaskDetailNoteEditor = React.lazy(() => import('./TaskNotes/TaskDetailNoteEditor'));
 
@@ -47,15 +67,17 @@ type GoalViewProps = {
 };
 
 const GOAL_CONTENT_ROW_HEIGHT_PX = 32;
+const GOAL_CONTENT_LINE_HEIGHT_PX = 20;
 const GOAL_CONTENT_EDGE_HIT_PX = 12;
 const GOAL_TASK_COLUMN_WIDTH_PX = 252;
 const GOAL_CONTENT_COLUMN_MIN_WIDTH_PX = 220;
+const GOAL_COLLAPSED_COLUMN_WIDTH_PX = 22.4;
 const GOAL_PLANNING_WIDTHS = {
-  owner: 112,
-  status: 64,
-  start: 96,
-  end: 96,
-  duration: 60,
+  owner: 144,
+  status: 72,
+  start: 112,
+  end: 112,
+  duration: 84,
 } as const;
 const GOAL_STATUS_SELECT_CLASS = 'h-7 w-full appearance-none border-0 bg-transparent px-1 py-0 text-center text-[11px] font-semibold outline-none transition-colors focus-visible:rounded-sm focus-visible:outline focus-visible:outline-1 focus-visible:outline-primary/50';
 const GOAL_DATE_INPUT_CLASS = 'peer block h-7 w-full min-w-0 border border-transparent bg-transparent px-1 py-0 text-xs text-slate-600 outline-none transition-colors hover:bg-slate-100/50 focus:bg-white focus-visible:border-transparent focus-visible:outline focus-visible:outline-1 focus-visible:outline-primary/50 [&::-webkit-calendar-picker-indicator]:opacity-0 hover:[&::-webkit-calendar-picker-indicator]:opacity-100 focus:[&::-webkit-calendar-picker-indicator]:opacity-100';
@@ -74,6 +96,69 @@ const safeTaskDomId = (taskId: string) => `goal-task-${Array.from(taskId)
   .join('-')}`;
 
 type GoalCellColumn = 'description' | 'meeting';
+type GoalColumnKey = 'description' | 'meeting' | 'owner' | 'status' | 'start-date' | 'end-date' | 'duration';
+
+const GOAL_COLUMN_LABELS: Record<GoalColumnKey, string> = {
+  description: '任務目的',
+  meeting: '會議紀錄',
+  owner: '負責人',
+  status: '狀態',
+  'start-date': '開始日期',
+  'end-date': '結束日期',
+  duration: '工期(天)',
+};
+
+const normalizeGoalCollapsedColumns = (value: unknown): Set<GoalColumnKey> => {
+  if (!Array.isArray(value)) return new Set();
+  const allowed = new Set<GoalColumnKey>(['description', 'meeting', 'owner', 'status', 'start-date', 'end-date', 'duration']);
+  return new Set(value.filter((column): column is GoalColumnKey => typeof column === 'string' && allowed.has(column as GoalColumnKey)));
+};
+
+const GoalColumnHeader: React.FC<{
+  id: string;
+  column: GoalColumnKey;
+  collapsed: boolean;
+  onToggle: () => void;
+  className: string;
+  collapsedClassName?: string;
+}> = ({ id, column, collapsed, onToggle, className, collapsedClassName = 'w-[22.4px] min-w-[22.4px] px-0 text-center' }) => (
+  <th
+    id={id}
+    scope="col"
+    className={`${className} ${collapsed ? collapsedClassName : ''}`}
+    data-goal-column-header={column}
+  >
+    <span className={`flex w-full min-w-0 items-center ${collapsed ? 'justify-center' : 'justify-between gap-1'}`}>
+      <span className={collapsed ? 'sr-only' : 'shrink-0 whitespace-nowrap leading-none'} data-goal-column-label={column}>{GOAL_COLUMN_LABELS[column]}</span>
+      <button
+        type="button"
+        className={`group inline-grid ${collapsed ? 'h-5 w-5' : 'h-6 w-6'} shrink-0 place-items-center rounded-md text-slate-400 transition-transform duration-150 ease-out hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-1 focus-visible:ring-offset-surface-panel active:scale-95 motion-reduce:transform-none motion-reduce:transition-none`}
+        aria-label={collapsed ? `展開${GOAL_COLUMN_LABELS[column]}欄` : `收合${GOAL_COLUMN_LABELS[column]}欄`}
+        aria-expanded={!collapsed}
+        title={collapsed ? `展開${GOAL_COLUMN_LABELS[column]}欄` : `收合${GOAL_COLUMN_LABELS[column]}欄`}
+        data-goal-column-toggle={column}
+        data-goal-column-toggle-state={collapsed ? 'collapsed' : 'expanded'}
+        data-goal-description-column-toggle={column === 'description' ? 'true' : undefined}
+        onClick={onToggle}
+      >
+        <span
+          className={`grid ${collapsed ? 'h-4 w-4 rounded-[4px]' : 'h-[18px] w-[18px] rounded-[5px]'} place-items-center border transition-[color,background-color,border-color,box-shadow] duration-150 ease-out group-hover:border-primary/30 group-hover:bg-white group-hover:text-primary group-hover:shadow-sm motion-reduce:transition-none ${collapsed
+            ? 'border-primary/25 bg-primary/10 text-primary shadow-[0_1px_2px_rgb(79_70_229/0.10)]'
+            : 'border-slate-300/70 bg-white/70 text-slate-400 shadow-[0_1px_1px_rgb(15_23_42/0.04)]'
+          }`}
+          data-goal-column-toggle-glyph="true"
+          aria-hidden="true"
+        >
+          <ChevronLeft
+            size={11}
+            strokeWidth={2.25}
+            className={`transition-transform duration-150 ease-out motion-reduce:transition-none ${collapsed ? 'rotate-180' : ''}`}
+          />
+        </span>
+      </button>
+    </span>
+  </th>
+);
 
 const OwnedCell: React.FC<{
   cell: GoalOwnedCell<string>;
@@ -86,13 +171,14 @@ const OwnedCell: React.FC<{
   activeScope?: boolean;
   selected: boolean;
   expanded: boolean;
+  lineAlignedScroll?: boolean;
   canEdit: boolean;
   onSelect: () => void;
   onHierarchyScopeChange: (taskId: string | null) => void;
   onToggleExpanded: () => void;
   onOpenMenu: (event: React.MouseEvent<HTMLTableCellElement> | React.KeyboardEvent<HTMLTableCellElement>) => void;
   'data-goal-column'?: string;
-}> = ({ cell, column, ownerTaskId, className, children, headers, ownerAttribute, activeScope, selected, expanded, canEdit, onSelect, onHierarchyScopeChange, onToggleExpanded, onOpenMenu, 'data-goal-column': dataGoalColumn }) => {
+}> = ({ cell, column, ownerTaskId, className, children, headers, ownerAttribute, activeScope, selected, expanded, lineAlignedScroll = false, canEdit, onSelect, onHierarchyScopeChange, onToggleExpanded, onOpenMenu, 'data-goal-column': dataGoalColumn }) => {
   const goalSession = useGoalCellSession();
   const isDescriptionOwner = column === 'description' && cell.kind === 'owner' && Boolean(ownerTaskId);
   const isSessionCell = Boolean(ownerTaskId && goalSession.isCellActive(ownerTaskId, column));
@@ -101,6 +187,35 @@ const OwnedCell: React.FC<{
   const cellLabel = column === 'description' ? '任務目的' : '會議紀錄';
   const cellKey = ownerTaskId ? `${column}:${ownerTaskId}` : undefined;
   const content = children ?? (cell.kind === 'owner' ? cell.value : null);
+  const contentRef = React.useRef<HTMLDivElement | null>(null);
+  // Keep the meeting history viewport scrollable, but round its height down
+  // to a complete text-line boundary so the last visible glyph is never cut
+  // halfway by the rowSpan edge.
+  const lineAlignedViewportHeight = cell.kind === 'owner' && lineAlignedScroll
+    ? Math.max(GOAL_CONTENT_LINE_HEIGHT_PX, Math.floor((cell.rowSpan * GOAL_CONTENT_ROW_HEIGHT_PX) / GOAL_CONTENT_LINE_HEIGHT_PX) * GOAL_CONTENT_LINE_HEIGHT_PX)
+    : null;
+  React.useLayoutEffect(() => {
+    if (!lineAlignedScroll || expanded || cell.kind !== 'owner') return undefined;
+    const contentElement = contentRef.current;
+    if (!contentElement) return undefined;
+    const syncClippedRows = () => {
+      const viewport = contentElement.getBoundingClientRect();
+      contentElement.querySelectorAll<HTMLElement>('[data-task-meeting-quick-note-row]').forEach(row => {
+        const rect = row.getBoundingClientRect();
+        const intersectsViewport = rect.bottom > viewport.top + 0.5 && rect.top < viewport.bottom - 0.5;
+        const fullyVisible = rect.top >= viewport.top - 0.5 && rect.bottom <= viewport.bottom + 0.5;
+        row.setAttribute('data-goal-content-row-clipped', intersectsViewport && !fullyVisible ? 'true' : 'false');
+      });
+    };
+    syncClippedRows();
+    contentElement.addEventListener('scroll', syncClippedRows, { passive: true });
+    const resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(syncClippedRows);
+    resizeObserver?.observe(contentElement);
+    return () => {
+      contentElement.removeEventListener('scroll', syncClippedRows);
+      resizeObserver?.disconnect();
+    };
+  }, [cell.kind, content, expanded, lineAlignedScroll]);
   React.useEffect(() => {
     if (!isEditorVisible || !cellKey) return undefined;
     const frame = window.requestAnimationFrame(() => {
@@ -189,12 +304,16 @@ const OwnedCell: React.FC<{
     >
       {cell.kind === 'owner' ? (
         <div
+          ref={contentRef}
           className={expanded ? 'whitespace-pre-wrap break-words leading-5' : 'overflow-y-auto whitespace-pre-wrap break-words leading-5'}
           style={expanded
             ? { height: 'auto', maxHeight: 'none' }
-            : { height: '100%', maxHeight: `${cell.rowSpan * GOAL_CONTENT_ROW_HEIGHT_PX}px` }}
+            : lineAlignedViewportHeight
+              ? { height: `${lineAlignedViewportHeight}px`, maxHeight: `${lineAlignedViewportHeight}px` }
+              : { height: '100%', maxHeight: `${cell.rowSpan * GOAL_CONTENT_ROW_HEIGHT_PX}px` }}
           data-goal-content-scroll="true"
           data-goal-content-expanded={expanded ? 'true' : 'false'}
+          data-goal-content-line-aligned={lineAlignedViewportHeight ? 'true' : 'false'}
           onDoubleClick={handleContentDoubleClick}
         >
           {isEditorVisible && draftNote ? (
@@ -278,77 +397,6 @@ const GoalCellActionMenu: React.FC<{
   );
 };
 
-const GoalHierarchyGuides: React.FC<{
-  nodeId: string;
-  level: number;
-  decoration: GoalHierarchyDecoration;
-  activeScopeId: string | null;
-}> = ({ nodeId, level, decoration, activeScopeId }) => {
-  const activeAncestorIndex = activeScopeId ? decoration.ancestorTaskIds.indexOf(activeScopeId) : -1;
-  const nodeIsInActiveScope = Boolean(activeScopeId)
-    && (nodeId === activeScopeId || activeAncestorIndex >= 0);
-  const isRelationActive = (ownerTaskId: string) => {
-    if (!activeScopeId) return false;
-    // Keep the active task's own incoming relation visible in the same reading
-    // guide as its descendants. Root tasks have no parent relation to add.
-    if (nodeId === activeScopeId && decoration.parentId === ownerTaskId) return true;
-    if (ownerTaskId === activeScopeId) return true;
-    if (activeAncestorIndex < 0) return false;
-    const ownerAncestorIndex = decoration.ancestorTaskIds.indexOf(ownerTaskId);
-    return ownerTaskId === nodeId || ownerAncestorIndex > activeAncestorIndex;
-  };
-  const renderSegment = (
-    key: string,
-    kind: 'continuation' | 'incoming-vertical' | 'incoming-branch' | 'child-stem' | 'root-branch',
-    guideLevel: number,
-    ownerTaskId: string,
-    active: boolean,
-  ) => (
-    <span
-      key={key}
-      className={`goal-hierarchy-guide-segment goal-hierarchy-guide-${kind}`}
-      style={{ '--goal-guide-level': guideLevel, '--goal-node-level': level } as React.CSSProperties}
-      data-goal-hierarchy-guide-kind={kind}
-      data-goal-hierarchy-guide-level={guideLevel}
-      data-goal-hierarchy-guide-owner={ownerTaskId}
-      data-goal-hierarchy-guide-active={active ? 'true' : 'false'}
-    />
-  );
-
-  return (
-    <span
-      className="goal-hierarchy-guides"
-      aria-hidden="true"
-      data-goal-hierarchy-guides="true"
-      data-goal-hierarchy-node-id={nodeId}
-      data-goal-hierarchy-last-sibling={decoration.isLastVisibleSibling ? 'true' : 'false'}
-      data-goal-hierarchy-scope-active={nodeIsInActiveScope ? 'true' : 'false'}
-    >
-      {decoration.ancestorContinuations.map(({ guideLevel, ownerTaskId }) => (
-        renderSegment(
-          `continuation-${guideLevel}-${ownerTaskId}`,
-          'continuation',
-          guideLevel,
-          ownerTaskId,
-          isRelationActive(ownerTaskId),
-        )
-      ))}
-      {level > 0 && decoration.parentId ? (
-        <>
-          {renderSegment('incoming-vertical', 'incoming-vertical', level - 1, decoration.parentId, isRelationActive(decoration.parentId))}
-          {renderSegment('incoming-branch', 'incoming-branch', level - 1, decoration.parentId, isRelationActive(decoration.parentId))}
-        </>
-      ) : null}
-      {decoration.hasVisibleChildren
-        ? renderSegment('child-stem', 'child-stem', level, nodeId, isRelationActive(nodeId))
-        : null}
-      {level === 0 && decoration.hasVisibleChildren
-        ? renderSegment('root-branch', 'root-branch', level, nodeId, isRelationActive(nodeId))
-        : null}
-    </span>
-  );
-};
-
 const GoalRow: React.FC<{
   row: GoalProjectionRow;
   node: HierarchicalTaskViewItem;
@@ -357,6 +405,7 @@ const GoalRow: React.FC<{
   onToggle: () => void;
   showDescriptionColumn: boolean;
   showMeetingColumn: boolean;
+  collapsedColumns: ReadonlySet<GoalColumnKey>;
   meetingStatus: 'ready' | 'loading' | 'error' | 'partial' | 'empty';
   isFirstRow: boolean;
   onRetryMeeting: () => void;
@@ -367,6 +416,8 @@ const GoalRow: React.FC<{
   showTags: boolean;
   hierarchyDecoration: GoalHierarchyDecoration;
   activeHierarchyScopeId: string | null;
+  childDropCandidate: boolean;
+  childDropTarget: boolean;
   activeDescriptionOwner: boolean;
   activeMeetingOwner: boolean;
   onHierarchyScopeChange: (taskId: string | null) => void;
@@ -383,6 +434,7 @@ const GoalRow: React.FC<{
   onToggle,
   showDescriptionColumn,
   showMeetingColumn,
+  collapsedColumns,
   meetingStatus,
   isFirstRow,
   onRetryMeeting,
@@ -393,6 +445,8 @@ const GoalRow: React.FC<{
   showTags,
   hierarchyDecoration,
   activeHierarchyScopeId,
+  childDropCandidate,
+  childDropTarget,
   activeDescriptionOwner,
   activeMeetingOwner,
   onHierarchyScopeChange,
@@ -402,6 +456,13 @@ const GoalRow: React.FC<{
   onToggleCell,
   onOpenCellMenu,
 }) => {
+  const descriptionColumnCollapsed = collapsedColumns.has('description');
+  const meetingColumnCollapsed = collapsedColumns.has('meeting');
+  const ownerColumnCollapsed = collapsedColumns.has('owner');
+  const statusColumnCollapsed = collapsedColumns.has('status');
+  const startDateColumnCollapsed = collapsedColumns.has('start-date');
+  const endDateColumnCollapsed = collapsedColumns.has('end-date');
+  const durationColumnCollapsed = collapsedColumns.has('duration');
   const dependencies = useWbsStore(state => state.dependencies);
   const getNodeLockStatus = useWbsStore(state => state.getNodeLockStatus);
   const updateNode = useWbsStore(state => state.updateNode);
@@ -416,7 +477,7 @@ const GoalRow: React.FC<{
     origin: 'mode-primary',
   });
   const { interactionBinding, permissions, sortable } = placementController;
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = sortable;
+  const { attributes, listeners, setNodeRef, isDragging } = sortable;
   const { onKeyDown: sortableKeyDown, ...pointerDragListeners } = listeners ?? {};
   void sortableKeyDown;
   const lockStatus = getNodeLockStatus(node.id, dependencies);
@@ -518,8 +579,6 @@ const GoalRow: React.FC<{
     updateNode(node.id, { endDate: nextEndDate });
   };
   const dndStyle = {
-    transform: CSS.Transform.toString(transform),
-    transition,
     position: 'relative' as const,
     zIndex: isDragging ? 40 : 1,
   };
@@ -580,6 +639,8 @@ const GoalRow: React.FC<{
       data-goal-level={node.level}
       data-goal-hierarchy-last-sibling={hierarchyDecoration.isLastVisibleSibling ? 'true' : 'false'}
       data-goal-hierarchy-scope={hierarchyScope}
+      data-goal-child-drop-candidate={childDropCandidate ? 'true' : undefined}
+      data-goal-child-drop-target={childDropTarget ? 'true' : undefined}
       data-task-id={node.id}
       data-task-drag-surface="true"
       data-task-drag-surface-kind="goal-row"
@@ -587,8 +648,9 @@ const GoalRow: React.FC<{
       <th
         scope="row"
         id={safeTaskDomId(node.id)}
-        className={`relative sticky left-0 z-[2] min-w-[252px] border-r border-slate-200 px-[10px] py-0 align-middle text-left font-normal ${node.level === 0 ? 'bg-surface-panel' : node.level === 1 ? 'bg-white' : 'bg-slate-50'}`}
+        className="relative sticky left-0 z-[2] border-r border-t-0 border-slate-200 bg-white py-0 align-middle text-left font-normal min-w-[252px] px-[10px]"
         data-goal-task-cell="true"
+        data-goal-task-cell-located={hierarchyScope}
       >
         <TaskHierarchyIndentedRow
           depth={node.level}
@@ -605,11 +667,12 @@ const GoalRow: React.FC<{
           <GoalHierarchyGuides
             nodeId={node.id}
             level={node.level}
+            hasChildren={hasChildren}
             decoration={hierarchyDecoration}
             activeScopeId={activeHierarchyScopeId}
           />
           {node.nodeType === 'milestone' ? <span className="mr-1 shrink-0 rounded border border-amber-300 bg-amber-50 px-1 py-0.5 text-[10px] leading-none text-amber-600">里程碑</span> : null}
-           <span className={`task-title-text min-w-0 flex-1 truncate pr-1 text-sm ${node.level === 0 ? 'font-semibold' : 'font-medium'} ${taskStatusTitleClass[node.status]}`}>
+          <span className={`task-title-text min-w-0 flex-1 truncate pr-1 text-sm ${node.level === 0 ? 'font-semibold' : 'font-medium'} ${taskStatusTitleClass[node.status]}`} data-task-title-slot="true">
             {node.title || '未命名任務'}
           </span>
           {collapsed && hierarchyDecoration.eligibleDescendantCount > 0 ? (
@@ -628,16 +691,29 @@ const GoalRow: React.FC<{
           ) : null}
         </TaskHierarchyIndentedRow>
       </th>
-      {showDescriptionColumn ? (
+      {showDescriptionColumn && !descriptionColumnCollapsed ? (
         <OwnedCell cell={row.descriptionCell} column="description" ownerTaskId={row.descriptionCell.kind === 'owner' ? node.id : undefined} headers={`goal-column-description ${safeTaskDomId(node.id)}`} ownerAttribute={row.descriptionCell.kind === 'owner' ? node.id : undefined} activeScope={activeDescriptionOwner} className="max-w-[360px] border-r border-slate-200 px-3 py-0 align-top text-xs text-slate-600" selected={selectedCellKey === `description:${node.id}`} expanded={expandedCellKeys.has(`description:${node.id}`)} canEdit={permissions.canEditTask} onSelect={() => onSelectCell(`description:${node.id}`)} onHierarchyScopeChange={onHierarchyScopeChange} onToggleExpanded={() => onToggleCell(`description:${node.id}`)} onOpenMenu={event => onOpenCellMenu(`description:${node.id}`, 'description', node.id, event)} data-goal-column="description">
           {row.descriptionCell.kind === 'owner' ? row.descriptionCell.value : ''}
         </OwnedCell>
+      ) : descriptionColumnCollapsed ? (
+        <td
+          className="w-[22.4px] min-w-[22.4px] border-r border-slate-200 px-0 py-0"
+          data-goal-column="description"
+          data-goal-column-collapsed="true"
+          data-goal-description-column-collapsed="true"
+          aria-hidden="true"
+        />
       ) : null}
-      {showMeetingColumn ? (
-        <OwnedCell cell={row.meetingCell} column="meeting" ownerTaskId={row.meetingCell.kind === 'owner' ? node.id : undefined} headers={`goal-column-meeting ${safeTaskDomId(node.id)}`} ownerAttribute={row.meetingCell.kind === 'owner' ? node.id : undefined} activeScope={activeMeetingOwner} className="max-w-[380px] border-r border-slate-200 px-3 py-0 align-top text-xs text-slate-600" selected={selectedCellKey === `meeting:${node.id}`} expanded={expandedCellKeys.has(`meeting:${node.id}`)} canEdit={false} onSelect={() => onSelectCell(`meeting:${node.id}`)} onHierarchyScopeChange={onHierarchyScopeChange} onToggleExpanded={() => onToggleCell(`meeting:${node.id}`)} onOpenMenu={event => onOpenCellMenu(`meeting:${node.id}`, 'meeting', node.id, event)} data-goal-column="meeting">
+      {showMeetingColumn && !meetingColumnCollapsed ? (
+        <OwnedCell cell={row.meetingCell} column="meeting" ownerTaskId={row.meetingCell.kind === 'owner' ? node.id : undefined} headers={`goal-column-meeting ${safeTaskDomId(node.id)}`} ownerAttribute={row.meetingCell.kind === 'owner' ? node.id : undefined} activeScope={activeMeetingOwner} className="max-w-[380px] border-r border-slate-200 px-3 py-0 align-top text-xs text-slate-600" selected={selectedCellKey === `meeting:${node.id}`} expanded={expandedCellKeys.has(`meeting:${node.id}`)} lineAlignedScroll canEdit={false} onSelect={() => onSelectCell(`meeting:${node.id}`)} onHierarchyScopeChange={onHierarchyScopeChange} onToggleExpanded={() => onToggleCell(`meeting:${node.id}`)} onOpenMenu={event => onOpenCellMenu(`meeting:${node.id}`, 'meeting', node.id, event)} data-goal-column="meeting">
           {row.meetingCell.kind === 'owner' ? <MeetingQuickNoteRows entries={meetingEntries} /> : isFirstRow && meetingStatus === 'loading' ? <span className="inline-flex items-center gap-1 text-slate-400"><Loader2 size={12} className="animate-spin" />載入中…</span> : isFirstRow && meetingStatus === 'error' ? <span className="inline-flex flex-wrap items-center gap-2 text-red-600">紀錄載入失敗<button type="button" onClick={onRetryMeeting} className="font-semibold underline">重試</button></span> : null}
         </OwnedCell>
+      ) : showMeetingColumn && meetingColumnCollapsed ? (
+        <td className="w-[22.4px] min-w-[22.4px] border-r border-slate-200 px-0 py-0" data-goal-column="meeting" data-goal-column-collapsed="true" aria-hidden="true" />
       ) : null}
+      {ownerColumnCollapsed ? (
+        <td className="w-[22.4px] min-w-[22.4px] border-r border-slate-200 px-0 py-0" data-goal-column="owner" data-goal-column-collapsed="true" aria-hidden="true" />
+      ) : (
       <td className="border-l border-slate-200/70 px-1 py-0 align-middle" data-goal-column="owner" data-goal-planning-control="assignee">
         <TaskAssignmentPicker
           node={node}
@@ -655,6 +731,10 @@ const GoalRow: React.FC<{
           }}
         />
       </td>
+      )}
+      {statusColumnCollapsed ? (
+        <td className="w-[22.4px] min-w-[22.4px] border-r border-slate-200 px-0 py-0" data-goal-column="status" data-goal-column-collapsed="true" aria-hidden="true" />
+      ) : (
       <td className="whitespace-nowrap px-1 py-0 align-middle" data-goal-column="status" data-goal-planning-control="status">
         <select
           value={normalizeManualTaskStatus(node.status)}
@@ -673,7 +753,8 @@ const GoalRow: React.FC<{
           <option value="completed">完成</option>
         </select>
       </td>
-      {showStartDate ? (
+      )}
+      {showStartDate && !startDateColumnCollapsed ? (
         <td className="relative min-w-0 px-1 py-0 align-middle" data-goal-column="start-date" data-goal-planning-control="start-date">
           <input
             type="date"
@@ -684,10 +765,14 @@ const GoalRow: React.FC<{
             title={lockStatus.startLocked ? '此日期受依賴關係鎖定，請至甘特圖追蹤' : ''}
             aria-label={`修改「${node.title || '未命名任務'}」開始日期`}
           />
-          {!localStartDate ? <span className="pointer-events-none absolute inset-0 flex items-center bg-inherit px-1 text-xs text-slate-400 peer-focus:hidden">—</span> : null}
           {lockStatus.startLocked ? <Link size={11} className="pointer-events-none absolute right-7 text-slate-400" /> : null}
         </td>
+      ) : showStartDate && startDateColumnCollapsed ? (
+        <td className="w-[22.4px] min-w-[22.4px] border-r border-slate-200 px-0 py-0" data-goal-column="start-date" data-goal-column-collapsed="true" aria-hidden="true" />
       ) : null}
+      {endDateColumnCollapsed ? (
+        <td className="w-[22.4px] min-w-[22.4px] border-r border-slate-200 px-0 py-0" data-goal-column="end-date" data-goal-column-collapsed="true" aria-hidden="true" />
+      ) : (
       <td className="relative min-w-0 px-1 py-0 align-middle" data-goal-column="end-date" data-goal-planning-control="end-date">
         <input
           type="date"
@@ -698,9 +783,12 @@ const GoalRow: React.FC<{
           title={isEndDateEffectivelyLocked ? (node.isDurationLocked ? '因工期鎖定，請調整開始日期或修改工期' : '此日期受依賴關係鎖定，請至甘特圖追蹤') : ''}
           aria-label={`修改「${node.title || '未命名任務'}」結束日期`}
         />
-        {!localEndDate ? <span className={`pointer-events-none absolute inset-0 flex items-center bg-inherit px-1 text-xs ${isDueToday ? 'font-semibold text-orange-600' : 'text-slate-400'} peer-focus:hidden`}>—</span> : null}
-        {isEndDateEffectivelyLocked ? (node.isDurationLocked && !lockStatus.endLocked ? <span className="pointer-events-none absolute right-7 text-[10px] font-semibold text-slate-400">L</span> : <Link size={11} className="pointer-events-none absolute right-7 text-slate-400" />) : null}
+        {lockStatus.endLocked ? <Link size={11} className="pointer-events-none absolute right-7 text-slate-400" /> : null}
       </td>
+      )}
+      {durationColumnCollapsed ? (
+        <td className="w-[22.4px] min-w-[22.4px] border-r border-slate-200 px-0 py-0" data-goal-column="duration" data-goal-column-collapsed="true" aria-hidden="true" />
+      ) : (
       <td className="px-1 py-0 align-middle" data-goal-column="duration" data-goal-planning-control="duration">
         <div className={`group relative flex h-7 items-center gap-0.5 rounded-sm focus-within:outline focus-within:outline-1 focus-within:outline-primary/50 ${node.isDurationLocked ? 'text-amber-600' : 'text-slate-400'}`}>
           <button
@@ -727,15 +815,18 @@ const GoalRow: React.FC<{
           {durationDays === '' ? <span className="pointer-events-none absolute inset-y-0 left-5 flex items-center px-1 text-xs text-slate-400 peer-focus:hidden">—</span> : null}
         </div>
       </td>
+      )}
     </tr>
   );
 };
 
 const GoalView: React.FC<GoalViewProps> = ({ boardId }) => {
+  const accountId = useAuthStore(state => state.user?.uid ?? null);
   const activeWorkspaceId = useBoardStore(state => state.activeWorkspaceId);
   const nodes = useWbsStore(state => state.nodes);
   const parentNodesIndex = useWbsStore(state => state.parentNodesIndex);
   const batchUpdateNodes = useWbsStore(state => state.batchUpdateNodes);
+  const recalculateAncestorStatus = useWbsStore(state => state.recalculateAncestorStatus);
   const taskLoading = useWbsStore(state => state.loading);
   const taskError = useWbsStore(state => state.error);
   const taskFilters = useTaskFilterStore(state => state.filters);
@@ -751,6 +842,8 @@ const GoalView: React.FC<GoalViewProps> = ({ boardId }) => {
   const goalSession = useGoalCellSession();
   const sensors = useDragSensors();
   const [collapsedIds, setCollapsedIds] = React.useState<Set<string>>(() => new Set());
+  const [collapsedColumns, setCollapsedColumns] = React.useState<Set<GoalColumnKey>>(() => new Set());
+  const descriptionColumnCollapsed = collapsedColumns.has('description');
   const [activeHierarchyScopeId, setActiveHierarchyScopeId] = React.useState<string | null>(null);
   const [selectedCellKey, setSelectedCellKey] = React.useState<string | null>(null);
   const [expandedCellKeys, setExpandedCellKeys] = React.useState<Set<string>>(() => new Set());
@@ -762,13 +855,80 @@ const GoalView: React.FC<GoalViewProps> = ({ boardId }) => {
     y: number;
   } | null>(null);
   const [activeDragNode, setActiveDragNode] = React.useState<TaskNode | null>(null);
+  const visibleHierarchyScopeId = activeDragNode ? null : activeHierarchyScopeId;
+  const [goalDragPointer, setGoalDragPointer] = React.useState<{ x: number; y: number } | null>(null);
+  const [goalDropPreview, setGoalDropPreview] = React.useState<GoalDropGeometry | null>(null);
+  const [goalChildArmedId, setGoalChildArmedId] = React.useState<string | null>(null);
+  const [goalChildIntent, setGoalChildIntent] = React.useState<TaskChildIntentSnapshot>(() => ({
+    phase: 'none',
+    targetId: null,
+    candidateSince: null,
+  }));
+  const goalChildCandidateTargetId = goalChildIntent.phase === 'candidate'
+    ? goalChildIntent.targetId
+    : null;
+  const goalChildTargetId = goalChildIntent.phase === 'candidate' || goalChildIntent.phase === 'armed'
+    ? goalChildIntent.targetId
+    : null;
+  const goalDropPreviewRef = React.useRef<GoalDropGeometry | null>(null);
+  const goalChildArmedIdRef = React.useRef<string | null>(null);
+  const goalChildIntentRef = React.useRef<TaskChildIntentSnapshot>(goalChildIntent);
+  const goalDragPointerRef = React.useRef<{ x: number; y: number } | null>(null);
+  const updateGoalDropPreview = React.useCallback((next: GoalDropGeometry | null) => {
+    goalDropPreviewRef.current = next;
+    setGoalDropPreview(next);
+  }, []);
+  const updateGoalChildArmedId = React.useCallback((next: string | null) => {
+    goalChildArmedIdRef.current = next;
+    setGoalChildArmedId(next);
+  }, []);
+  const updateGoalChildIntent = React.useCallback((next: TaskChildIntentSnapshot) => {
+    const current = goalChildIntentRef.current;
+    if (current.phase === next.phase
+      && current.targetId === next.targetId
+      && current.candidateSince === next.candidateSince) return;
+    goalChildIntentRef.current = next;
+    setGoalChildIntent(next);
+  }, []);
+  const clearGoalChildIntent = React.useCallback(() => {
+    updateGoalChildIntent(advanceTaskChildIntent({
+      current: goalChildIntentRef.current,
+      targetId: null,
+      now: Date.now(),
+    }));
+    updateGoalChildArmedId(null);
+  }, [updateGoalChildArmedId, updateGoalChildIntent]);
+  React.useEffect(() => {
+    let cancelled = false;
+    setCollapsedColumns(new Set());
+    void hydrateAccountLayoutPreferences(accountId).then(preferences => {
+      if (cancelled) return;
+      setCollapsedColumns(normalizeGoalCollapsedColumns(preferences.goalCollapsedColumns));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [accountId]);
+
+  const toggleGoalColumn = React.useCallback((column: GoalColumnKey) => {
+    setCollapsedColumns(current => {
+      const next = new Set(current);
+      if (next.has(column)) next.delete(column); else next.add(column);
+      persistAccountLayoutPreferences(accountId, { goalCollapsedColumns: Array.from(next) });
+      return next;
+    });
+  }, [accountId]);
   React.useEffect(() => {
     setCollapsedIds(new Set());
     setActiveHierarchyScopeId(null);
     setSelectedCellKey(null);
     setExpandedCellKeys(new Set());
     setCellMenu(null);
-  }, [boardId]);
+    goalDragPointerRef.current = null;
+    setGoalDragPointer(null);
+    updateGoalDropPreview(null);
+    clearGoalChildIntent();
+  }, [boardId, clearGoalChildIntent, updateGoalDropPreview]);
 
   const filterProjection = React.useMemo(
     () => projectTaskFilterResults(nodes, taskFilters, { boardId }),
@@ -824,8 +984,8 @@ const GoalView: React.FC<GoalViewProps> = ({ boardId }) => {
   const activeContentOwnerIds = React.useMemo(() => {
     const description = new Set<string>();
     const meeting = new Set<string>();
-    if (!activeHierarchyScopeId) return { description, meeting };
-    const activeRow = projection.rows.find(row => row.taskId === activeHierarchyScopeId);
+    if (!visibleHierarchyScopeId) return { description, meeting };
+    const activeRow = projection.rows.find(row => row.taskId === visibleHierarchyScopeId);
     if (!activeRow) return { description, meeting };
     // A shared rowSpan remains visible as the real owner's group context, but
     // it must not look like content belonging to a located descendant row.
@@ -833,18 +993,25 @@ const GoalView: React.FC<GoalViewProps> = ({ boardId }) => {
     if (activeRow.descriptionCell.kind === 'owner') description.add(activeRow.taskId);
     if (activeRow.meetingCell.kind === 'owner') meeting.add(activeRow.taskId);
     return { description, meeting };
-  }, [activeHierarchyScopeId, projection.rows]);
-  const showDescriptionColumn = projection.hasDescriptionColumn;
+  }, [visibleHierarchyScopeId, projection.rows]);
+  const hasDescriptionColumn = projection.hasDescriptionColumn;
+  const showDescriptionColumn = hasDescriptionColumn;
   const showMeetingColumn = projection.hasMeetingColumn || meetingStatus === 'loading' || meetingStatus === 'error' || meetingStatus === 'partial';
-  const visibleContentColumnCount = Number(showDescriptionColumn) + Number(showMeetingColumn);
-  const visiblePlanningWidth = GOAL_PLANNING_WIDTHS.owner
-    + GOAL_PLANNING_WIDTHS.status
-    + (showStartDate ? GOAL_PLANNING_WIDTHS.start : 0)
-    + GOAL_PLANNING_WIDTHS.end
-    + GOAL_PLANNING_WIDTHS.duration;
+  const visibleContentColumnCount = Number(hasDescriptionColumn) + Number(showMeetingColumn);
+  const meetingColumnCollapsed = collapsedColumns.has('meeting');
+  const ownerColumnCollapsed = collapsedColumns.has('owner');
+  const statusColumnCollapsed = collapsedColumns.has('status');
+  const startDateColumnCollapsed = collapsedColumns.has('start-date');
+  const endDateColumnCollapsed = collapsedColumns.has('end-date');
+  const durationColumnCollapsed = collapsedColumns.has('duration');
   const goalTableMinWidth = GOAL_TASK_COLUMN_WIDTH_PX
-    + (visibleContentColumnCount * GOAL_CONTENT_COLUMN_MIN_WIDTH_PX)
-    + visiblePlanningWidth;
+    + (hasDescriptionColumn ? (descriptionColumnCollapsed ? GOAL_COLLAPSED_COLUMN_WIDTH_PX : GOAL_CONTENT_COLUMN_MIN_WIDTH_PX) : 0)
+    + (showMeetingColumn ? (meetingColumnCollapsed ? GOAL_COLLAPSED_COLUMN_WIDTH_PX : GOAL_CONTENT_COLUMN_MIN_WIDTH_PX) : 0)
+    + (ownerColumnCollapsed ? GOAL_COLLAPSED_COLUMN_WIDTH_PX : GOAL_PLANNING_WIDTHS.owner)
+    + (statusColumnCollapsed ? GOAL_COLLAPSED_COLUMN_WIDTH_PX : GOAL_PLANNING_WIDTHS.status)
+    + (showStartDate ? (startDateColumnCollapsed ? GOAL_COLLAPSED_COLUMN_WIDTH_PX : GOAL_PLANNING_WIDTHS.start) : 0)
+    + (endDateColumnCollapsed ? GOAL_COLLAPSED_COLUMN_WIDTH_PX : GOAL_PLANNING_WIDTHS.end)
+    + (durationColumnCollapsed ? GOAL_COLLAPSED_COLUMN_WIDTH_PX : GOAL_PLANNING_WIDTHS.duration);
   const hasElasticContentColumn = visibleContentColumnCount > 0;
   const assigneeOptions = React.useMemo<TaskAssignmentOption[]>(
     () => boardMembers.map(member => ({
@@ -854,38 +1021,145 @@ const GoalView: React.FC<GoalViewProps> = ({ boardId }) => {
     })),
     [boardMembers],
   );
-  const wouldCreateCycle = React.useCallback((draggedId: string, nextParentId: string | null) => {
-    if (!nextParentId) return false;
-    if (draggedId === nextParentId) return true;
-    const currentNodes = useWbsStore.getState().nodes;
-    const visited = new Set<string>([draggedId]);
-    let current: string | null = nextParentId;
-    while (current) {
-      if (current === draggedId || visited.has(current)) return true;
-      visited.add(current);
-      current = currentNodes[current]?.parentId || null;
+  React.useEffect(() => {
+    if (goalChildIntent.phase !== 'candidate' || !goalChildIntent.targetId) return undefined;
+    const remaining = getTaskChildIntentRemainingMs(goalChildIntent);
+    if (remaining === null) return undefined;
+    const targetId = goalChildIntent.targetId;
+    const timer = window.setTimeout(() => {
+      const next = advanceTaskChildIntent({
+        current: goalChildIntentRef.current,
+        targetId,
+        now: Date.now(),
+      });
+      if (next.targetId !== targetId) return;
+      updateGoalChildIntent(next);
+      const latestPreview = goalDropPreviewRef.current;
+      updateGoalChildArmedId(next.phase === 'armed'
+        && latestPreview?.feedbackKind !== 'origin'
+        && latestPreview?.targetNodeId === targetId
+        ? targetId
+        : null);
+    }, remaining);
+    return () => window.clearTimeout(timer);
+  }, [goalChildIntent, updateGoalChildArmedId, updateGoalChildIntent]);
+  const handleGoalDragMove = React.useCallback((event: DragMoveEvent) => {
+    const activeItem = event.active.data.current?.item as TaskNode | undefined;
+    const activeRect = event.active.rect.current.translated;
+    if (!activeItem || !activeRect) return;
+    const pointer = goalDragPointerRef.current || {
+      x: activeRect.left + activeRect.width / 2,
+      y: activeRect.top + activeRect.height / 2,
+    };
+    setGoalDragPointer(pointer);
+    const root = document.querySelector<HTMLElement>('[data-goal-view="true"]');
+    const lane = document.querySelector<HTMLElement>('#goal-column-task');
+    if (!root || !lane) {
+      clearGoalChildIntent();
+      updateGoalDropPreview(null);
+      return;
     }
-    return false;
-  }, []);
+    const laneRect = lane.getBoundingClientRect();
+    const rootRect = root.getBoundingClientRect();
+    const rows: GoalTaskRect[] = Array.from(root.querySelectorAll<HTMLElement>('[data-goal-task-row-id]')).map(row => {
+      const rect = row.getBoundingClientRect();
+      const hierarchyRow = row.querySelector<HTMLElement>('[data-task-hierarchy-row="true"]');
+      const title = hierarchyRow?.querySelector<HTMLElement>('[data-task-title-slot="true"]');
+      const titleRect = title?.getBoundingClientRect();
+      const hierarchyIndent = Number.parseFloat(
+        hierarchyRow ? window.getComputedStyle(hierarchyRow).getPropertyValue('--task-hierarchy-indent') : '',
+      );
+      const hierarchyStyle = hierarchyRow ? window.getComputedStyle(hierarchyRow) : null;
+      const hierarchyLaneStart = Number.parseFloat(hierarchyStyle?.getPropertyValue('--goal-hierarchy-lane-start') || '');
+      const level = Number(row.dataset.goalLevel) || 0;
+      const resolvedHierarchyIndent = Number.isFinite(hierarchyIndent) ? hierarchyIndent : 10.4;
+      const titleAnchorLeft = titleRect?.left ?? (laneRect.left + 14 + level * resolvedHierarchyIndent);
+      return {
+        nodeId: row.dataset.goalTaskRowId || '',
+        left: laneRect.left,
+        right: laneRect.right,
+        top: rect.top,
+        bottom: rect.bottom,
+        titleAnchorLeft,
+        childAnchorLeft: titleAnchorLeft + resolvedHierarchyIndent,
+        treeRailLeft: laneRect.left + (Number.isFinite(hierarchyLaneStart) ? hierarchyLaneStart : 20) + level * resolvedHierarchyIndent,
+        visibleSubtreeBottom: rect.bottom,
+        cellRight: laneRect.right,
+      };
+    }).filter(row => Boolean(row.nodeId));
+    const geometry = resolveGoalTaskRowDropGeometry({
+      sourceNodeId: activeItem.id,
+      pointer,
+      rows,
+      taskLaneRect: { nodeId: 'task-lane', left: laneRect.left, right: laneRect.right, top: rootRect.top, bottom: rootRect.bottom },
+      viewportRect: { nodeId: 'goal-viewport', left: rootRect.left, right: rootRect.right, top: rootRect.top, bottom: rootRect.bottom },
+      nodesRecord: nodes,
+    });
+    if (!geometry) {
+      clearGoalChildIntent();
+      updateGoalDropPreview(null);
+      return;
+    }
+    const targetRow = root.querySelector<HTMLElement>(`[data-goal-task-row-id="${CSS.escape(geometry.targetNodeId)}"]`);
+    const primary = targetRow?.querySelector<HTMLElement>('[data-task-drag-surface-kind="goal-row"]');
+    const primaryRect = primary?.getBoundingClientRect();
+    const childEntryWindow = primaryRect ? resolveGoalChildEntryWindow(primaryRect) : null;
+    const pointerTarget = document.elementFromPoint(pointer.x, pointer.y);
+    const pointerOnControl = isTaskPrimaryActionTarget(pointerTarget);
+    const targetHasHiddenChildren = (parentNodesIndex[geometry.targetNodeId] || []).length > 0
+      && collapsedIds.has(geometry.targetNodeId);
+    const childCandidate = Boolean(geometry.feedbackKind !== 'origin' && childEntryWindow
+      && !targetHasHiddenChildren
+      && !pointerOnControl
+      && pointer.x >= childEntryWindow.left && pointer.x <= childEntryWindow.right
+      && pointer.y >= childEntryWindow.top && pointer.y <= childEntryWindow.bottom);
+    if (!childCandidate) {
+      clearGoalChildIntent();
+      updateGoalDropPreview(geometry);
+      return;
+    }
+    const nextChildIntent = advanceTaskChildIntent({
+      current: goalChildIntentRef.current,
+      targetId: geometry.targetNodeId,
+      now: Date.now(),
+    });
+    updateGoalChildIntent(nextChildIntent);
+    updateGoalChildArmedId(nextChildIntent.phase === 'armed' ? geometry.targetNodeId : null);
+    updateGoalDropPreview(geometry);
+  }, [clearGoalChildIntent, collapsedIds, nodes, parentNodesIndex, updateGoalChildArmedId, updateGoalChildIntent, updateGoalDropPreview]);
   const handleDragEnd = React.useCallback((event: DragEndEvent) => {
     setActiveDragNode(null);
-    if (!canMoveTask || !event.over || event.active.id === event.over.id) return;
+    goalDragPointerRef.current = null;
+    setGoalDragPointer(null);
+    const presentedPreview = goalDropPreviewRef.current;
+    const presentedChildTargetId = goalChildArmedIdRef.current;
+    clearGoalChildIntent();
+    updateGoalDropPreview(null);
+    if (!canMoveTask || !event.over || !presentedPreview || presentedPreview.feedbackKind === 'origin' || event.active.id === event.over.id) return;
     const activeItem = event.active.data.current?.item as TaskNode | undefined;
     const overItem = event.over.data.current?.item as TaskNode | undefined;
     if (!activeItem || !overItem) return;
-    if (activeItem.parentId === overItem.parentId) {
-      batchUpdateNodes({
-        [activeItem.id]: { order: overItem.order },
-        [overItem.id]: { order: activeItem.order },
-      }, { label: '重排任務', mergeKey: `reorder:${activeItem.id}` });
-      return;
-    }
-    const nextParentId = overItem.parentId || null;
-    if (wouldCreateCycle(activeItem.id, nextParentId)) return;
-    batchUpdateNodes({
-      [activeItem.id]: { parentId: nextParentId, order: overItem.order + 0.5 },
-    }, { label: '移動任務位置', mergeKey: `move:${activeItem.id}` });
-  }, [batchUpdateNodes, canMoveTask, wouldCreateCycle]);
+    const activeRect = event.active.rect.current.translated;
+    const overRect = event.over.rect;
+    const orderingPosition = resolveGoalDropPosition(
+      activeRect ? { top: activeRect.top, height: activeRect.height } : null,
+      { top: overRect.top, height: overRect.height },
+    );
+    const sourceSurfaceKind = activeItem.parentId ? 'checklist-row' : 'column-header';
+    const isPresentedChild = presentedChildTargetId === overItem.id
+      && presentedPreview?.targetNodeId === overItem.id;
+    const targetSurfaceKind = isPresentedChild
+      ? 'task-title-child'
+      : overItem.parentId ? 'checklist-row' : 'column-header';
+    const resolvedOrderingPosition = presentedPreview?.targetNodeId === overItem.id
+      ? presentedPreview.orderingPosition
+      : orderingPosition;
+    commitPrimaryDesktopTaskDrag({
+      source: { nodeId: activeItem.id, surfaceKind: sourceSurfaceKind },
+      target: { nodeId: overItem.id, surfaceKind: targetSurfaceKind, orderingPosition: isPresentedChild ? undefined : resolvedOrderingPosition },
+      dependencies: { canMoveTask, batchUpdateNodes, recalculateAncestorStatus },
+    });
+  }, [batchUpdateNodes, canMoveTask, clearGoalChildIntent, recalculateAncestorStatus, updateGoalDropPreview]);
   const retryMeeting = React.useCallback(() => {
     if (activeWorkspaceId && boardId) void loadRecords(activeWorkspaceId, boardId);
   }, [activeWorkspaceId, boardId, loadRecords]);
@@ -943,6 +1217,10 @@ const GoalView: React.FC<GoalViewProps> = ({ boardId }) => {
 
   const hasNoTasks = filterProjection.totalTaskCount === 0;
   const hasNoFilteredTasks = filterProjection.totalTaskCount > 0 && hierarchy.items.length === 0;
+  const goalChildIsArmed = Boolean(goalDropPreview && goalChildArmedId === goalDropPreview.targetNodeId);
+  const goalTreePreview = goalDropPreview && goalDropPreview.feedbackKind !== 'origin'
+    ? (goalChildIsArmed ? goalDropPreview.childTreePreview : goalDropPreview.standardTreePreview)
+    : null;
   return (
     <div className="flex h-full min-h-0 flex-col overflow-auto bg-slate-50" data-goal-view="true" data-goal-record-state={meetingStatus}>
       {meetingStatus === 'error' ? <div role="alert" className="mx-3 mb-3 flex items-center justify-between gap-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 sm:mx-5"><span>會議紀錄載入失敗，暫不顯示舊資料。</span><button type="button" onClick={retryMeeting} className="shrink-0 font-semibold underline">重試</button></div> : null}
@@ -953,42 +1231,128 @@ const GoalView: React.FC<GoalViewProps> = ({ boardId }) => {
           <button type="button" onClick={resetTaskFilters} className="rounded border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50">清除篩選</button>
         </div>
       ) : (
-        <DndContext
+        <DesktopTaskDragHost
           sensors={sensors}
           collisionDetection={closestCorners}
           onDragStart={event => {
             const item = event.active.data.current?.item as TaskNode | undefined;
-            if (canMoveTask && item) setActiveDragNode(item);
+            if (canMoveTask && item) {
+              setActiveDragNode(item);
+              const rect = event.active.rect.current.initial;
+              if (rect) {
+                const point = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+                goalDragPointerRef.current = point;
+                setGoalDragPointer(point);
+              }
+            }
           }}
-          onDragCancel={() => setActiveDragNode(null)}
+          onDragMove={handleGoalDragMove}
+          onPointerMove={point => {
+            goalDragPointerRef.current = point;
+            setGoalDragPointer(point);
+          }}
+          onExternalInvalidate={() => {
+            clearGoalChildIntent();
+            updateGoalDropPreview(null);
+          }}
+          onDragCancel={() => {
+            setActiveDragNode(null);
+            goalDragPointerRef.current = null;
+            setGoalDragPointer(null);
+            clearGoalChildIntent();
+            updateGoalDropPreview(null);
+          }}
           onDragEnd={handleDragEnd}
+          overlay={(
+            <>
+              {goalDropPreview && goalTreePreview ? (
+                <GoalHierarchyGuides
+                  variant="preview"
+                  treePreview={goalTreePreview}
+                  targetNodeId={goalDropPreview.targetNodeId}
+                />
+              ) : null}
+              {goalDropPreview && goalDropPreview.feedbackKind !== 'origin' ? (
+                <DesktopTaskInsertionIndicator
+                  indicatorRect={goalChildIsArmed ? goalDropPreview.childIndicatorRect : goalDropPreview.indicatorRect}
+                  targetNodeId={goalDropPreview.targetNodeId}
+                  position={goalChildIsArmed ? 'child' : goalDropPreview.orderingPosition}
+                  surfaceKind={goalChildIsArmed ? 'task-title-child' : goalDropPreview.targetSurfaceKind}
+                  feedbackKind={goalChildIsArmed ? 'child' : 'standard'}
+                  presentation="kanban-marker"
+                  markerDataAttributes={{
+                    'data-goal-drag-marker': 'true',
+                    'data-goal-drag-position': goalChildIsArmed ? 'child' : goalDropPreview.orderingPosition,
+                    'data-goal-drag-preview-anchor': goalChildIsArmed
+                      ? goalDropPreview.targetNodeId
+                      : goalDropPreview.standardPreviewAnchorNodeId,
+                  }}
+                />
+              ) : null}
+              {activeDragNode ? (
+                <div
+                  className="task-title-text pointer-events-none fixed z-50 max-w-[252px] -translate-x-1/2 -translate-y-1/2 rotate-1 scale-[0.5] truncate rounded-md border border-primary/30 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-xl ring-2 ring-primary/20"
+                  style={{ left: goalDragPointer?.x ?? 16, top: goalDragPointer?.y ?? 16 }}
+                  data-task-drag-source-id={activeDragNode.id}
+                  data-goal-drag-overlay="true"
+                >
+                  {activeDragNode.title || '未命名任務'}
+                </div>
+              ) : null}
+            </>
+          )}
         >
           <table
             className="mb-3 w-full table-fixed border-collapse sm:mb-5"
-            style={{ minWidth: goalTableMinWidth }}
+            style={{ width: goalTableMinWidth, minWidth: goalTableMinWidth }}
             data-goal-task-table="true"
+            data-goal-collapsed-columns={Array.from(collapsedColumns).join(',')}
+            data-goal-description-column-state={hasDescriptionColumn ? (descriptionColumnCollapsed ? 'collapsed' : 'expanded') : 'absent'}
           >
             <caption className="sr-only">任務名稱、任務目的、會議紀錄、負責人、狀態、開始日期、結束日期與工期</caption>
             <colgroup>
-              <col style={hasElasticContentColumn ? { width: GOAL_TASK_COLUMN_WIDTH_PX } : undefined} />
-              {showDescriptionColumn ? <col /> : null}
-              {showMeetingColumn ? <col /> : null}
-              <col style={{ width: GOAL_PLANNING_WIDTHS.owner }} />
-              <col style={{ width: GOAL_PLANNING_WIDTHS.status }} />
-              {showStartDate ? <col style={{ width: GOAL_PLANNING_WIDTHS.start }} /> : null}
-              <col style={{ width: GOAL_PLANNING_WIDTHS.end }} />
-              <col style={{ width: GOAL_PLANNING_WIDTHS.duration }} />
+              <col style={{ width: hasElasticContentColumn ? GOAL_TASK_COLUMN_WIDTH_PX : undefined }} />
+              {hasDescriptionColumn ? <col style={descriptionColumnCollapsed ? { width: GOAL_COLLAPSED_COLUMN_WIDTH_PX } : undefined} /> : null}
+              {showMeetingColumn ? <col style={meetingColumnCollapsed ? { width: GOAL_COLLAPSED_COLUMN_WIDTH_PX } : undefined} /> : null}
+              <col style={{ width: ownerColumnCollapsed ? GOAL_COLLAPSED_COLUMN_WIDTH_PX : GOAL_PLANNING_WIDTHS.owner }} />
+              <col style={{ width: statusColumnCollapsed ? GOAL_COLLAPSED_COLUMN_WIDTH_PX : GOAL_PLANNING_WIDTHS.status }} />
+              {showStartDate ? <col style={{ width: startDateColumnCollapsed ? GOAL_COLLAPSED_COLUMN_WIDTH_PX : GOAL_PLANNING_WIDTHS.start }} /> : null}
+              <col style={{ width: endDateColumnCollapsed ? GOAL_COLLAPSED_COLUMN_WIDTH_PX : GOAL_PLANNING_WIDTHS.end }} />
+              <col style={{ width: durationColumnCollapsed ? GOAL_COLLAPSED_COLUMN_WIDTH_PX : GOAL_PLANNING_WIDTHS.duration }} />
             </colgroup>
             <thead className="text-left text-[11px] font-semibold text-slate-600" data-goal-sticky-header="true">
               <tr>
-                <th id="goal-column-task" scope="col" className="sticky left-0 top-0 z-[8] border-b border-r border-slate-200 bg-surface-panel py-1.5 pl-[30px] pr-[38px]">任務名稱</th>
-                {showDescriptionColumn ? <th id="goal-column-description" scope="col" className="sticky top-0 z-[7] border-b border-slate-200 bg-surface-panel px-3 py-1.5">任務目的</th> : null}
-                {showMeetingColumn ? <th id="goal-column-meeting" scope="col" className="sticky top-0 z-[7] border-b border-slate-200 bg-surface-panel px-3 py-1.5">會議紀錄</th> : null}
-                <th id="goal-column-owner" scope="col" className="sticky top-0 z-[7] border-b border-l border-slate-200 bg-surface-panel px-1 py-1.5">負責人</th>
-                <th id="goal-column-status" scope="col" className="sticky top-0 z-[7] border-b border-slate-200 bg-surface-panel px-1 py-1.5">狀態</th>
-                {showStartDate ? <th id="goal-column-start-date" scope="col" className="sticky top-0 z-[7] border-b border-slate-200 bg-surface-panel px-1 py-1.5">開始日期</th> : null}
-                <th id="goal-column-end-date" scope="col" className="sticky top-0 z-[7] border-b border-slate-200 bg-surface-panel px-1 py-1.5">結束日期</th>
-                <th id="goal-column-duration" scope="col" className="sticky top-0 z-[7] border-b border-slate-200 bg-surface-panel px-1 py-1.5">工期(天)</th>
+                <th
+                  id="goal-column-task"
+                  scope="col"
+                  className="sticky left-0 top-0 z-[8] min-w-[252px] border-b border-r border-slate-200 bg-surface-panel py-1.5 pl-[30px] pr-[38px]"
+                  data-goal-column-header="task"
+                >
+                  任務名稱
+                </th>
+                {hasDescriptionColumn ? (
+                  <GoalColumnHeader
+                    id="goal-column-description"
+                    column="description"
+                    collapsed={descriptionColumnCollapsed}
+                    onToggle={() => toggleGoalColumn('description')}
+                    className="sticky top-0 z-[7] border-b border-r border-slate-200 bg-surface-panel px-3 py-1.5"
+                  />
+                ) : null}
+                {showMeetingColumn ? (
+                  <GoalColumnHeader
+                    id="goal-column-meeting"
+                    column="meeting"
+                    collapsed={meetingColumnCollapsed}
+                    onToggle={() => toggleGoalColumn('meeting')}
+                    className="sticky top-0 z-[7] border-b border-r border-slate-200 bg-surface-panel px-3 py-1.5"
+                  />
+                ) : null}
+                <GoalColumnHeader id="goal-column-owner" column="owner" collapsed={ownerColumnCollapsed} onToggle={() => toggleGoalColumn('owner')} className="sticky top-0 z-[7] border-b border-l border-r border-slate-200 bg-surface-panel px-1 py-1.5" />
+                <GoalColumnHeader id="goal-column-status" column="status" collapsed={statusColumnCollapsed} onToggle={() => toggleGoalColumn('status')} className="sticky top-0 z-[7] border-b border-r border-slate-200 bg-surface-panel px-1 py-1.5" />
+                {showStartDate ? <GoalColumnHeader id="goal-column-start-date" column="start-date" collapsed={startDateColumnCollapsed} onToggle={() => toggleGoalColumn('start-date')} className="sticky top-0 z-[7] border-b border-r border-slate-200 bg-surface-panel px-1 py-1.5" /> : null}
+                <GoalColumnHeader id="goal-column-end-date" column="end-date" collapsed={endDateColumnCollapsed} onToggle={() => toggleGoalColumn('end-date')} className="sticky top-0 z-[7] border-b border-r border-slate-200 bg-surface-panel px-1 py-1.5" />
+                <GoalColumnHeader id="goal-column-duration" column="duration" collapsed={durationColumnCollapsed} onToggle={() => toggleGoalColumn('duration')} className="sticky top-0 z-[7] border-b border-r border-slate-200 bg-surface-panel px-1 py-1.5" />
               </tr>
             </thead>
             <tbody>
@@ -1008,6 +1372,7 @@ const GoalView: React.FC<GoalViewProps> = ({ boardId }) => {
                         return next;
                       })}
                       showDescriptionColumn={showDescriptionColumn}
+                      collapsedColumns={collapsedColumns}
                       showMeetingColumn={showMeetingColumn}
                       meetingStatus={meetingStatus}
                       isFirstRow={index === 0}
@@ -1018,7 +1383,9 @@ const GoalView: React.FC<GoalViewProps> = ({ boardId }) => {
                       showStartDate={showStartDate}
                       showTags={showTags}
                       hierarchyDecoration={hierarchyDecorations.get(node.id) ?? EMPTY_GOAL_HIERARCHY_DECORATION}
-                      activeHierarchyScopeId={activeHierarchyScopeId}
+                      activeHierarchyScopeId={visibleHierarchyScopeId}
+                      childDropCandidate={goalChildCandidateTargetId === node.id}
+                      childDropTarget={goalChildTargetId === node.id}
                       activeDescriptionOwner={activeContentOwnerIds.description.has(node.id)}
                       activeMeetingOwner={activeContentOwnerIds.meeting.has(node.id)}
                       onHierarchyScopeChange={setActiveHierarchyScopeId}
@@ -1033,18 +1400,7 @@ const GoalView: React.FC<GoalViewProps> = ({ boardId }) => {
               </SortableContext>
             </tbody>
           </table>
-          <DragOverlay dropAnimation={{ duration: 200, easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)' }}>
-            {activeDragNode ? (
-              <div
-                className="task-title-text pointer-events-none z-50 max-w-[252px] rotate-1 scale-[1.02] truncate rounded-md border border-primary/30 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-xl ring-2 ring-primary/20"
-                data-task-drag-source-id={activeDragNode.id}
-                data-goal-drag-overlay="true"
-              >
-                {activeDragNode.title || '未命名任務'}
-              </div>
-            ) : null}
-          </DragOverlay>
-        </DndContext>
+        </DesktopTaskDragHost>
       )}
       {cellMenu ? (
         <GoalCellActionMenu

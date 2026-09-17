@@ -160,7 +160,7 @@ viewer readonly，editor可沿既有guard編輯。任務名稱區right-click與`
 
 ### B12 Goal task capabilities
 
-1. 驗證 L1／L2／L3+ 任務名稱欄：List 保留 shared 6px 階層步距；Goal 依 SPEC-121 R8 使用局部 8px
+1. 驗證 L1／L2／L3+ 任務名稱欄：List 保留 shared 6px 階層步距；Goal 依 SPEC-121 R17 使用局部 10.4px（8px × 1.3）
    wired-tree 步距、32px 密度、柔和 connector 與樹線左側 disclosure slot，且不改共用元件 default。
 2. 驗證Goal不渲染進度條／百分比，已啟用標籤可見且空標籤不占位；OKR負責人欄不渲染裝飾性Users trigger icon但仍可操作，
    切回List驗證既有progress indicator與負責人trigger icon仍存在。
@@ -207,7 +207,7 @@ placement ID／source-board private meeting text DOM=0；Board/List既有trackin
 | V17 | minimal menu | 814×698 選單不顯示「切換模式」標題列或關閉叉號；`role="menu"`仍有可存取名稱 |
 | V18 | recovery | 無標題列的選單可用 Escape 關閉，且焦點回到「視角」trigger |
 | V19 | Goal capabilities | 1440×900不顯示進度條／百分比；負責人保留文字／下拉但不顯示裝飾性Users trigger icon；仍可見標籤、狀態、日期與工期控制；無重疊或浮層遮蔽；List保留progress與負責人icon |
-| V20 | shared primitive／surface geometry | List 維持 6px shared default／20px content height；Goal 使用 R8 的 8px compact owned-tree step／32px row height；兩者仍共用 hierarchy primitive。 |
+| V20 | shared primitive／surface geometry | List 維持 6px shared default／20px content height；Goal 依 SPEC-121 R17 使用 10.4px（8px × 1.3）compact owned-tree step／32px row height；兩者仍共用 hierarchy primitive。 |
 | V21 | DnD result | desktop Goal顯示owned drag overlay且commit後根層順序正確 |
 | V22 | shared context menu | OKR任務名稱右鍵顯示既有`GlobalContextMenu`；action、位置、層級、Escape與Board policy一致 |
 | V23 | flat sticky header／compact task column／bounded content scroll | 各欄表頭文字直接位於`th`；任務目的／會議紀錄 owner `td`各只有一層`data-goal-content-scroll`容器，`overflow-y:auto`且長目的可捲動；任務名稱欄在1298px參考視窗實測252px（原360px的70%）；每個欄位表頭皆為sticky top、深色不透明底與白字；實際垂直捲動後表頭不位移、資料列正常移動 |
@@ -291,7 +291,7 @@ owner process tree與cleanup condition；只清理本DEV擁有的process tree，
 2026-09-11 all-entry meeting amendment candidate已重新執行 targeted QA：static P01～P28為28/28 PASS；browser artifact含40/40
 PASS。V25以兩筆 meeting records、六筆補記證明 OKR owner cell 不再只取 latest，全部日期與內容均保留，且在 `clientHeight=64`、`scrollHeight=120` 時由欄內 Y 軸捲動承接。B12～B17證明Goal隱藏進度條／百分比、移除裝飾性負責人Users trigger icon但保留文字／下拉／操作與標籤、planning controls，B14證明List保留progress indicator與負責人icon；負責人／狀態／日期／工期在Goal修改後List讀到同一canonical
 task，desktop drag有owned overlay並正確提交根層順序；task mutation=6，record=0，task-link=0。下列 V20 的 6px parity
-屬於歷史 R6 evidence；SPEC-121 R8 已 intentional replacement 為 Goal 8px compact owned-tree step／32px row，List 仍為 6px／20px，需依更新案例重跑。V23另以47px實際捲動證明深底白字表頭位移僅0.5px，
+屬於歷史 R6 evidence；SPEC-121 R8 曾 intentional replacement 為 Goal 8px compact owned-tree step／32px row，現行 R17 再提升為 10.4px，List 仍為 6px／20px，需依更新案例重跑。V23另以47px實際捲動證明深底白字表頭位移僅0.5px，
 資料列正常位移-47px；目的／會議紀錄 owner `td`各含一層`data-goal-content-scroll`容器，V23實測長目的`scrollHeight=100`、`clientHeight=96`、`overflow-y:auto`，下方列未被推開；V25另實測會議欄六筆補記全數出現且 `scrollHeight=120`、`clientHeight=64`；V23在1298px參考視窗實測任務名稱欄寬252px；8個欄位皆為不透明sticky表頭且直接承擔欄名，沒有內層標題容器。V24補證表頭／資料列第一／最後cell左右邊界差異為0px，與table外框的0.5px為原生border-collapse誤差。
 B05、B18與V22證明right-click／`Shift+F10`
 使用既有全域task menu、Board相同profile與action set，開關menu不產生write。B07～B08及DEV-117 browser另證明從Goal開始會議與
@@ -300,6 +300,12 @@ B05、B18與V22證明right-click／`Shift+F10`
 
 Browser artifact為`output/playwright/dev-116-goal-mode/result.json`，static artifact為
 `output/playwright/dev-116-goal-mode/static-result.json`；主要rendered evidence為V01、V15、V19、V21、V22、V23、V24、V25與B08 PNG。
+
+### R17 compatibility re-test（2026-09-15）
+
+DEV-121 R17 將 Goal-local hierarchy step 由 8px 提升為 10.4px（+30%），R18／R19 再將 task-name frozen cell
+回復原生底色，因此本文件 V20 的現行 browser contract 已同步更新為 Goal `10.4px`／List `6px`；shared primitive、List 與其他模式仍維持原值。
+DEV-116 static 30/30、browser V20 與全套 interaction cases PASS；本輪變更未改動 DEV-116 的資料、事件或權限契約。
 
 本結果是本地 targeted QA，不等同 production、remote provider、正式 release 或完整 1024／200% zoom／viewer／500-row
 與實機 mobile matrix；上述未執行項目維持獨立 gate，不得被本輪 PASS 擴張解讀。

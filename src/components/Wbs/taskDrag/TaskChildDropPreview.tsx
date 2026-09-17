@@ -1,5 +1,5 @@
 import React from 'react';
-import { KanbanInsertionMarker } from '../KanbanInsertionMarker';
+import { DesktopTaskInsertionIndicator } from './DesktopTaskDragLayer';
 import { TaskOriginTitleField } from './TaskOriginTitleField';
 import type {
   TaskChildDropPreviewRect,
@@ -66,29 +66,39 @@ export const TaskChildDropPreview: React.FC<TaskChildDropPreviewProps> = ({
 
         {armed ? (
           <>
-            <div
-              className={`fixed ${resolvedOriginRect ? '' : '-translate-y-1/2'}`}
-              style={{
-                left: resolvedOriginRect?.left ?? previewRect.insertion.left,
-                top: resolvedOriginRect?.top ?? previewRect.insertion.top,
-                width: resolvedOriginRect?.width ?? previewRect.insertion.width,
-                height: resolvedOriginRect?.height,
-              }}
-              data-task-child-drop-insertion-preview="true"
-              data-task-child-drop-insertion-left={Math.round(previewRect.insertion.left)}
-              data-task-child-drop-origin={resolvedOriginRect ? 'true' : undefined}
-              data-task-child-drop-noop={resolvedOriginRect ? 'true' : undefined}
-            >
-              {resolvedOriginRect ? (
+            {resolvedOriginRect ? (
+              <div
+                className="fixed"
+                style={{
+                  left: resolvedOriginRect.left,
+                  top: resolvedOriginRect.top,
+                  width: resolvedOriginRect.width,
+                  height: resolvedOriginRect.height,
+                }}
+                data-task-child-drop-insertion-preview="true"
+                data-task-child-drop-insertion-left={Math.round(previewRect.insertion.left)}
+                data-task-child-drop-origin="true"
+                data-task-child-drop-noop="true"
+              >
                 <TaskOriginTitleField
                   title={sourceTitle || '未命名任務'}
                   surfaceKind={sourceSurfaceKind}
                   data-task-child-drop-origin-field="true"
                 />
-              ) : (
-                <KanbanInsertionMarker compact className="py-0" />
-              )}
-            </div>
+              </div>
+            ) : (
+                <DesktopTaskInsertionIndicator
+                  indicatorRect={previewRect.insertion}
+                  targetNodeId={targetNodeId}
+                  position="child"
+                  surfaceKind="task-title-child"
+                  feedbackKind="child"
+                  markerDataAttributes={{
+                    'data-task-child-drop-insertion-preview': 'true',
+                    'data-task-child-drop-insertion-left': Math.round(previewRect.insertion.left),
+                  }}
+                />
+            )}
           </>
         ) : null}
       </div>

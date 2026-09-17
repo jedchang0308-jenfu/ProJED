@@ -463,6 +463,10 @@ async (page) => {
     await mobileIndicator.waitFor({ state: 'visible', timeout: 5000 });
     const mobileMarker = mobileIndicator.locator('[data-kanban-insertion-marker="true"]');
     await mobileMarker.waitFor({ state: 'visible', timeout: 5000 });
+    const listMetricsDuringPreview = await mobileUnplacedList.evaluate(element => ({
+      height: element.getBoundingClientRect().height,
+      scrollHeight: element.scrollHeight,
+    }));
     const previewGeometry = await mobileIndicator.evaluate((indicator) => {
       const marker = indicator.querySelector('[data-kanban-insertion-marker="true"]');
       const list = document.querySelector('[data-task-workbench-unclassified-list="true"]');
@@ -500,6 +504,13 @@ async (page) => {
     assert(previewGeometry.documentOverflow <= 1, 'mobile marker must not create document-level overflow', {
       viewport,
       previewGeometry,
+    });
+    assert(Math.abs(listMetricsBefore.height - listMetricsDuringPreview.height) <= 1
+      && Math.abs(listMetricsBefore.scrollHeight - listMetricsDuringPreview.scrollHeight) <= 1,
+    'fixed mobile marker must not resize the unplaced list while the preview is shown', {
+      viewport,
+      listMetricsBefore,
+      listMetricsDuringPreview,
     });
     const previewScreenshot = `output/playwright/dev-086/unplaced-insertion-preview-mobile-${viewport.width}.png`;
     await page.screenshot({ path: previewScreenshot, fullPage: false });
@@ -547,7 +558,13 @@ async (page) => {
     assert(mobileHierarchy.length === 3 && mobileHierarchy.map(row => row.depth).join(',') === '0,1,2', 'mobile drop must render the complete subtree at depths 0/1/2', { viewport, mobileHierarchy });
     assert(mobilePersisted.map(node => node.parentId).join(',') === ',dev086-branch-root,dev086-child', 'mobile subtree staging must preserve descendant parent links', { viewport, mobilePersisted });
     assert(transient.indicator === 0 && transient.preview === 0 && transient.actionRail === 0, 'mobile drop must clean all transient drag UI', { viewport, transient });
-    assert(Math.abs(listMetricsBefore.height - listMetricsAfter.height) <= 1, 'fixed mobile marker must not resize the unplaced list', { viewport, listMetricsBefore, listMetricsAfter });
+    assert(listMetricsAfter.height >= listMetricsBefore.height
+      && listMetricsAfter.scrollHeight >= listMetricsBefore.scrollHeight,
+    'committed subtree must expand the unplaced list after the marker is removed', {
+      viewport,
+      listMetricsBefore,
+      listMetricsAfter,
+    });
     const visibleErrors = await page.evaluate(() => Array.from(document.querySelectorAll('.inline-error, [role="alert"]'))
       .filter((element) => {
         const rect = element.getBoundingClientRect();

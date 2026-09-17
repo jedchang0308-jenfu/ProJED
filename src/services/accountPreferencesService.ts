@@ -20,6 +20,7 @@ export type AccountLayoutPreferences = {
   workspaceSidebarWidth?: number;
   taskWorkbenchWidth?: number;
   taskWorkbenchUnplacedRatio?: number;
+  goalCollapsedColumns?: string[];
 };
 
 type UiPreferences = {
@@ -47,6 +48,11 @@ const normalizeLayoutPreferences = (value: unknown): AccountLayoutPreferences =>
   }
   if (typeof value.taskWorkbenchUnplacedRatio === 'number' && Number.isFinite(value.taskWorkbenchUnplacedRatio)) {
     layout.taskWorkbenchUnplacedRatio = clampTaskWorkbenchUnplacedRatio(value.taskWorkbenchUnplacedRatio);
+  }
+  if (Array.isArray(value.goalCollapsedColumns)) {
+    layout.goalCollapsedColumns = Array.from(new Set(
+      value.goalCollapsedColumns.filter((column): column is string => typeof column === 'string' && column.length <= 64),
+    )).slice(0, 32);
   }
   return layout;
 };
@@ -116,7 +122,7 @@ const mergeLayoutIntoPreferences = (
   ...preferences,
   layout: {
     ...normalizeLayoutPreferences(preferences.layout),
-    ...updates,
+    ...normalizeLayoutPreferences(updates),
   },
 });
 
@@ -168,7 +174,11 @@ export const hydrateAccountLayoutPreferences = (
     .then(async remotePreferences => {
       const localLayout = normalizeLayoutPreferences(localPreferences.layout);
       const remoteLayout = normalizeLayoutPreferences(remotePreferences.layout);
-      const mergedLayout = { ...localLayout, ...remoteLayout };
+      // A user can click a layout control while the remote profile request is
+      // still in flight. Preserve that in-memory write over the older remote
+      // snapshot so hydration never makes a fresh interaction disappear.
+      const pendingLayout = normalizeLayoutPreferences(preferencesCache.get(accountId)?.layout);
+      const mergedLayout = { ...localLayout, ...remoteLayout, ...pendingLayout };
       const mergedPreferences = {
         ...remotePreferences,
         layout: mergedLayout,
@@ -188,8 +198,9 @@ export const hydrateAccountLayoutPreferences = (
     })
     .catch(error => {
       console.warn('[accountPreferences] 個人介面偏好讀取失敗，使用本機快取:', error);
-      preferencesCache.set(accountId, localPreferences);
-      return normalizeLayoutPreferences(localPreferences.layout);
+      const fallbackPreferences = preferencesCache.get(accountId) || localPreferences;
+      preferencesCache.set(accountId, fallbackPreferences);
+      return normalizeLayoutPreferences(fallbackPreferences.layout);
     })
     .finally(() => {
       hydratePromises.delete(accountId);

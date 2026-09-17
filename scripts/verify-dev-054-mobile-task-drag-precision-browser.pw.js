@@ -209,7 +209,7 @@ async (page) => {
 
   await runCase('QA-054-R01', 'normal mobile topbar buttons accept native touch clicks', async () => {
     await openApp();
-    const menuButton = page.getByRole('button', { name: '展開工作區選單' }).first();
+    const menuButton = page.locator('[data-main-sidebar-toggle="true"]').first();
     await nativeTouch(menuButton);
     const sidebar = page.locator('[data-sidebar-inline="true"]').first();
     await sidebar.waitFor({ state: 'visible', timeout: 5000 });

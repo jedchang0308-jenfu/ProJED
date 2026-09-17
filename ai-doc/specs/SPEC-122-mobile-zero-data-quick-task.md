@@ -1,8 +1,8 @@
 # SPEC-122：ProJED 手機零資料載入快速建待辦
 
-狀態：`RD Implementation Candidate + 架構已定案 / Human Confirmed / Local Candidate Implemented / QA-QC and Target-device Gates Pending`
+狀態：`RD Implementation Ready + 架構已定案 / Human Confirmed / R12 Tech Lead Optimized / WP-122-0B Ready for RD`
 文件角色：DEV-122 current-phase implementation authority
-修訂：2026-09-15 Tech Lead R10；修正 voice fallback 後殘留 session 導致第二次點擊無法重試的 controller 狀態漏洞，並以 SM05 fallback→retry evidence 封存；R9 的 quick／existing placement 共用 account-unplaced advisory lock、R8 `install=1` 安裝引導、R7 的 DEV-097 verifier 相容裁定、R6 的 outbox 封頂與人工重試契約、產品決策 `1A／2A／3B` 均保留。
+修訂：2026-09-16 Architecture Closure R12；在R11的root ProJED app shortcut決策上，補齊manifest唯一來源與build輸出、既有安裝更新、真實icon metadata、同帳號安全證明及平台適用性。R4～R10的quick MPA、零業務載入、voice、outbox、RPC／RLS、工作台到達、獨立quick identity與安裝引導契約全部保留。
 架構決策：[ADR-050](../decisions/ADR-050-mobile-quick-task-entry-and-outbox.md)
 QA authority：[QA-DEV-122](../qa/QA-DEV-122-mobile-zero-data-quick-task.md)
 關聯：[DEV-122](../dev_task.md#dev-122projed-手機零資料載入快速建待辦)、[SPEC-034](SPEC-034-fast-start-pwa-install-guidance.md)、[SPEC-039](SPEC-039-task-filter-core-and-workbench-profiles.md)、[SPEC-115](SPEC-115-blank-task-creation-contract.md)、[ADR-047](../decisions/ADR-047-pwa-per-client-reload-isolation.md)、[ADR-048](../decisions/ADR-048-blank-task-creation-contract.md)
@@ -11,13 +11,14 @@ QA authority：[QA-DEV-122](../qa/QA-DEV-122-mobile-zero-data-quick-task.md)
 
 現場使用者收到新的待辦時，只需要先記住名稱。現行完整 App 會先掛載 `AuthGate → AppContent → MainLayout → useDataSync()`，可能在名稱可輸入前啟動 workspace、board、task、member、tag、record 與 calendar 讀取，與「先記一筆」的必要條件不相稱。
 
-本期目標是讓手機使用者從第二個桌面入口「ProJED快速建待辦」進入後，第一個可操作畫面就是任務名稱欄位，名稱旁固定有語音入口；輸入與本機保存不等待 ProJED 業務資料。使用者確認後先形成可讀回的本機事實，登入且連線可用時才同步到本人全域任務工作台的未歸位區，之後再整理。
+本期目標是讓手機使用者從 ProJED 主程式的app shortcut或選用的第二個桌面入口「ProJED快速建待辦」進入後，第一個可操作畫面就是任務名稱欄位，名稱旁固定有語音入口；輸入與本機保存不等待 ProJED 業務資料。使用者確認後先形成可讀回的本機事實，登入且連線可用時才同步到本人全域任務工作台的未歸位區，之後再整理。
 
 不可改變的限制：
 
 - quick critical path 必須是同源 nested `/quick-task/` MPA，不能偷偷變成 root route、bookmark 或完整 App route。
 - initial graph 不得載入 React、完整 App、Zustand store、業務資料 service、Google scripts、Firebase、Supabase client 或 Workbox。
 - 本期不新增第二 service worker、獨立 origin、native wrapper、自有轉錄、第二 Inbox、通用 queue framework 或遠端 list API。
+- root manifest一般啟動必須維持 `/`；app shortcut只能增加指向 `/quick-task/` 的啟動面，不得宣稱一次安裝會自動建立兩個獨立OS圖示。
 - owner、workspace、order、payload defaults、idempotency 與權限由 server／既有 authority 決定，client 不計算全域排序、不傳 owner 或 task JSON。
 - 不執行遠端 migration、production data mutation、commit、push、deploy 或 release；正式交付由後續 QA/QC 與 release gate 承接。
 
@@ -28,6 +29,7 @@ QA authority：[QA-DEV-122](../qa/QA-DEV-122-mobile-zero-data-quick-task.md)
 | 1 | `1A`：語音只更新名稱；使用者按「建立」或鍵盤完成才保存。 | 語音結束立即建立、倒數自動建立。 |
 | 2 | `2A`：語音 final 從目前游標加入；有選取時取代選取，保留其他文字。 | 取代整個名稱、只允許空欄。 |
 | 3 | `3B`：本機保存後停在成功畫面，提供「再記一筆」與「前往工作台」。 | 自動清空、自動跳完整工作台。 |
+| 4 | ProJED主程式manifest內建「快速建待辦」捷徑；獨立quick manifest保留為選用的第二圖示。 | 一次安裝自動建立兩個OS圖示、移除quick identity、把root一般啟動改到quick。 |
 
 名稱旁的按鈕固定顯示麥克風圖示與「語音」，觸控目標至少 48×48 CSS px。支援 Web Speech 時在同一次使用者 tap 內 focus/start；不支援、拒絕、無聲音或離線時聚焦名稱欄並明示使用手機鍵盤麥克風，不能宣稱網頁能代按鍵盤聽寫。
 
@@ -36,20 +38,23 @@ QA authority：[QA-DEV-122](../qa/QA-DEV-122-mobile-zero-data-quick-task.md)
 本期包含：
 
 - quick raw HTML／PWA identity、progressive enhancement、mobile input／voice／success UI。
+- root manifest app shortcut、手機／電腦設定頁的雙入口說明與未支援平台fallback。
 - account-bound IndexedDB outbox、local commit/readback、claim、lease、retry 與逐筆 recovery。
 - 固定 JWT snapshot 的單筆 RPC adapter、private immutable receipt、RLS/grants 與 server-owned context/order。
 - root 一次性 intent、既有 TaskWorkbench panel host 與 unplaced hydration 相容。
 - root／quick 共用 shell version、單一 Workbox worker、quick reload-safety owner、有限 callback query normalization。
 - static/pure、browser、real-SW、isolated PostgreSQL、target-device 與相容回歸的 QA 契約。
 
-不包含：選專案、指派、日期、附件、既有任務瀏覽、遠端清單、background sync 保證、native App、自有語音轉錄、獨立 origin、正式 Supabase／OAuth credentials 與 release。
+不包含：一次PWA安裝自動建立兩個OS圖示、保證所有iOS／瀏覽器顯示app shortcut、選專案、指派、日期、附件、既有任務瀏覽、遠端清單、background sync保證、native App、自有語音轉錄、獨立origin、正式Supabase／OAuth credentials與release。
 
-`WP-122-0` 是第二個 App 入口的外部 feasibility gate，不是 DEV-122 完成。DEV-122 只有在 S01～S14、B01～B21、W01～W06、P01～P14、效能目標、相容回歸及 D01～D07 適用案例都由同一收斂 candidate 證明後，才可標示 PASS。
+`WP-122-0` 是第二個 App 入口的外部 feasibility gate；`WP-122-0B` 是本輪重新開啟的root bundled shortcut slice。兩者都不是DEV-122完成。DEV-122只有在S01～S15、B01～B24、W01～W07、P01～P14、效能目標、相容回歸及D01～D10適用案例都由同一收斂candidate證明後，才可標示PASS。
 
 ## 4. 使用者流程與成功事實
 
 ```text
-桌面「ProJED快速建待辦」
+安裝ProJED主程式
+→ 支援平台：長按／右鍵ProJED圖示 →「快速建待辦」
+  或：使用者另行安裝桌面「ProJED快速建待辦」
 → /quick-task/ raw form
 → 名稱輸入或點語音
 → 使用者按建立／鍵盤完成
@@ -67,10 +72,16 @@ QA authority：[QA-DEV-122](../qa/QA-DEV-122-mobile-zero-data-quick-task.md)
 - `已建立` 只代表 server 回傳 strict committed receipt；remote pending 不可冒充工作台已可見。
 - 目前未送出的名稱不產生 RPC；quick path 的業務 list request 必須為 0。
 - remote task 被改名、歸位或刪除後，原 capture id 重播仍只回 receipt replay，不重建、不恢復舊 title。
+- 一般點擊ProJED主程式仍開`/`；root shortcut與選用quick icon都只將使用者帶到同一`/quick-task/`。
+- root shortcut不傳account、token或owner。同步以當次凍結的`ownerId + accessToken + authEpoch`送出，server以Bearer token的`auth.uid()`決定owner，client只在receipt owner與snapshot owner相等時宣告遠端成功；OAuth claim另以同一snapshot token呼叫`getUser()`。session缺失／過期時維持本機成功與登入後同步，不建立到推測帳號。
 
 ## 5. Target Architecture
 
 ```text
+root /manifest.webmanifest
+  ├─ start_url / → 完整ProJED
+  └─ shortcut「快速建待辦」→ /quick-task/
+
 /quick-task/ raw HTML form
   └─ src/quickTask/main.ts（DOM controller）
       ├─ model.ts（title／IME／success pure rules）
@@ -96,12 +107,20 @@ QA authority：[QA-DEV-122](../qa/QA-DEV-122-mobile-zero-data-quick-task.md)
 | single RPC | owner／workspace／order／payload／receipt transaction | client order、廣義 unplaced CRUD |
 | root intent | quick 到達既有 Workbench host | 第二 panel、root outbox worker、view replacement |
 
+root manifest shortcut是靜態launch metadata，不是新的runtime authority；仍只有上述六個責任點。
+
 不得新增 wrapper、第二 client/worker、remote inbox、平行 draft store 或通用 queue。新責任只有在具備獨立生命週期與安全邊界、且新增驗證案例證明必要時，才可用 ADR amendment 提出。
 
 ## 6. Entry、Build 與 PWA Contract
 
 - root `/` 維持既有完整 App；quick 是實體 `quick-task/index.html`，不可只在 React router 新增 route。
-- root manifest `id='/'`；quick manifest 的 `id/start_url/scope` 固定為 `/quick-task/`，使用第二個 install identity 與現有 icon assets。
+- `vite.config.js`固定`VitePWA({manifest:false})`，所以`public/manifest.webmanifest`是root manifest唯一source of truth；`index.html`只保留一個`/manifest.webmanifest`link。`vite build`必須將同內容輸出為`dist/manifest.webmanifest`並由root worker precache；不得另在Vite設定內維護第二份root manifest物件。
+- root manifest固定`id='/'`、`start_url='/'`、`scope='/'`，並有且僅有一筆本功能shortcut，且排在第一筆：`name='快速建待辦'`、`short_name='建待辦'`、`description='直接輸入一筆待辦'`、`url='/quick-task/'`、`icons=[{src:'/icons/icon-vibrant-03-mango-berry.png',sizes:'1024x1024',type:'image/png'}]`。shortcut URL必須保持在root scope內，不加追蹤query；verifier需讀PNG header證明資產實際為1024×1024，不可只相信manifest字串。
+- quick manifest的`id/start_url/scope`固定為`/quick-task/`，繼續提供選用的第二install identity；不得因root shortcut移除、合併或改成`id='/'`。其引用同一1024×1024資產的既有錯誤`192x192`／`512x512`metadata應在WP-122-0B一併改為真實`1024x1024`，不新增重複icon檔。
+- 一般點擊已安裝ProJED必須仍進入`/`；支援平台的app shortcut選擇才進入`/quick-task/`。平台忽略manifest shortcuts時不得顯示錯誤，也不得隱藏設定頁quick CTA或選用quick安裝流程。
+- root與quick入口維持同origin與既有Auth provider。root shortcut在同一installed root app中啟動；它不傳遞或複製憑證。直接同步的身分保證來自固定JWT snapshot、Bearer token、server `auth.uid()`與strict receipt owner equality；OAuth claim才另外使用`getUser(snapshot.accessToken)`。選用的獨立quick安裝若被平台配置到隔離storage/session，必須顯示登入／待同步流程，不能承諾自動共用root session。不得新增token bridge、跨origin handoff或local owner override。
+- `AppInstallAssistant`在mobile／desktop設定頁保留單一quick CTA，不增加第二組卡片或安裝按鈕。標題固定為「快速建待辦」；說明文字固定語意為：「安裝 ProJED 後，支援的平台可從 ProJED 圖示選『快速建待辦』；需要桌面單鍵入口，也可安裝獨立圖示。」CTA仍為「開啟快速建待辦」並指向`/quick-task/?install=1`；產品文案不使用manifest、scope或service worker等技術詞，也不承諾捷徑即時出現。
+- 全新安裝candidate以D08驗證。既有安裝取得新版shortcut的時機由瀏覽器／OS管理，產品不能強制刷新、查詢OS捷徑是否已出現或自行輪詢；只維持既有安全SW更新交易，由W07／D10記錄manifest版本、worker控制狀態及平台更新結果。平台延遲不得偽裝成產品已即時完成，也不得為此新增UA猜測、shortcut-detection state或第二更新服務。
 - 兩 entry 共用 `/sw.js`、update transaction 與 build-wide shell version；不註冊 quick worker。
 - root Workbox SPA fallback 必須 deny `/quick-task/`；`directoryIndex`、precache 與有限 query ignore 由同一 VitePWA 設定管理。只忽略 `utm_*`、`fbclid`、`install`、`capture`、`claim`、OAuth code/error 參數；update nonce 不得被忽略。
 - build plugin 先輸出 `app-shell-meta.json {schemaVersion:1, version}` 再讓 Workbox precache，並把同一 version 嵌入 root／quick HTML。
@@ -192,21 +211,23 @@ lastErrorCode?, leaseId?, leaseExpiresAt?, claimIntent?
 | WP | 交付 | 出口 |
 |---|---|---|
 | WP-122-0 | 最小 MPA、manifest、icon、install CTA、quick rewrite | D01～D04 依平台證明第二 icon、launch、storage sentinel |
+| WP-122-0B | root manifest bundled shortcut、設定頁雙入口說明、root／quick launch與既有安裝更新regression | S15、B22～B24、W07、D08～D10；一般root launch、zero-data quick launch、同帳號與manifest更新邊界成立 |
 | WP-122-1 | progressive shell、build/version、SW query/cache、offline | S01～S05、B01/B16、W01/W05、D05能力 |
 | WP-122-2 | input、voice、IME、success、install、accessibility | S06/S07/S09、B03～B06/B14/B17、D06能力 |
 | WP-122-3 | RPC、private receipt、RLS、generated types、minimal adapter | S10/S11、P01～P14、isolated DB/advisor |
 | WP-122-4 | outbox、auth claim、固定 JWT sync、recovery、safe reload | S08/S13、B07～B12/B18/B19/B21、W02～W04/W06、D07能力 |
 | WP-122-5 | Workbench intent／host／hydration與完整交付驗證 | S12、B13/B20、全部適用案例、效能、相容回歸與 QA/QC |
 
-WP-122-0 通過前只能做最小 slice 與 feasibility spike。缺裝置或 HTTPS candidate 記為 Not verified，不得偽造 PASS；平台確實無法形成第二 App 才回 ADR-050 amendment。
+本輪execution boundary只允許WP-122-0B；完成後回到既有WP-122-0與完整QA-QC gate。缺裝置或HTTPS candidate記為Not verified，不得偽造PASS；平台不支援manifest shortcuts時使用既定fallback，不視為第二App gate通過或失敗。平台確實無法形成選用第二App才回ADR-050 amendment。
 
 ## 9. 驗證契約與停止條件
 
-完整、可執行案例以 [QA-DEV-122](../qa/QA-DEV-122-mobile-zero-data-quick-task.md) 為準：S01～S14、B01～B21、W01～W06、P01～P14、D01～D07。QA 文件是案例細節唯一 authority；本文件只固定不可降級的資料流、責任與狀態。
+完整、可執行案例以 [QA-DEV-122](../qa/QA-DEV-122-mobile-zero-data-quick-task.md) 為準：S01～S15、B01～B24、W01～W07、P01～P14、D01～D10。QA文件是案例細節唯一authority；本文件只固定不可降級的資料流、責任與狀態。
 
 停止／回規劃條件：
 
 - root fallback 吞掉 quick path、quick initial graph 載入完整 App 或出現業務 list request。
+- root一般launch被改成quick、shortcut URL離開root scope、quick獨立identity被移除，或支援平台的shortcut啟動載入完整App。
 - 第二 icon、nested scope、install promotion 或平台 storage sentinel 無法可靠成立。
 - local readback 前顯示成功、receipt replay 重建 task、stale completion 覆寫狀態或跨帳號資料可見。
 - 需要 client order、privileged proxy、第二 worker/client、remote inbox、破壞性 migration 或修改 protected schema／existing oracle。
@@ -221,17 +242,17 @@ WP-122-0 通過前只能做最小 slice 與 feasibility spike。缺裝置或 HTT
 - Browser/SW root：`output/playwright/dev-122-mobile-zero-data-quick-task/`，含 quick/root/static/SW JSON、screenshots、console／HTTP sweep、request classification、IDB sanitized readback 與 geometry。
 - DB root：`output/qa/dev-122/`，含 `db-isolated-result.json`、`db-matrix.txt`、quick／mixed-writer-compatible pgbench output、EXPLAIN、migration hash、runtime cleanup 與 port release。
 - Device root：`output/qa/dev-122/devices/`，每平台保存 installed identity、launch URL、offline／voice／auth 結果與必要畫面；不得保存 title、token、email。
-- Artifact 每 case 應帶 `sourceRevision`、`buildId`、`actorAlias`、`route`、`viewport/platform`、`fixtureVersion`、`expected/actual/status`；local browser smoke 使用 `caseSet=local-smoke-v2`、`SM01`～`SM15`，不可直接當成 B01～B21 完成。
+- Artifact每case應帶`sourceRevision`、`buildId`、`actorAlias`、`route`、`viewport/platform`、`fixtureVersion`、`expected/actual/status`；R10 local browser smoke使用`caseSet=local-smoke-v2`、`SM01`～`SM15`，不可直接當成B01～B24或R12完成。
 
 ## 11. Required Cases 摘要
 
 ### 11.1 Static／Pure
 
-S01 two HTML inputs／raw form；S02 initial graph isolation；S03 manifest identity；S04 single worker／precache／query allowlist；S05 common shell version；S06 voice selection insertion；S07 IME/title boundary；S08 IDB schema/lease/retry；S09 progressive module timing；S10 RPC/RLS/grants；S11 blank payload parity；S12 Workbench hydration／intent；S13 reload profile；S14 package/docs/evidence consistency。
+S01 two HTML inputs／raw form；S02 initial graph isolation；S03 manifest identity；S04 single worker／precache／query allowlist；S05 common shell version；S06 voice selection insertion；S07 IME/title boundary；S08 IDB schema/lease/retry；S09 progressive module timing；S10 RPC/RLS/grants；S11 blank payload parity；S12 Workbench hydration／intent；S13 reload profile；S14 package/docs/evidence consistency；S15 root bundled shortcut與雙identity不變量。
 
 ### 11.2 Browser／SW／DB／Device
 
-B01～B21、W01～W06、P01～P14 與 D01～D07 的逐項條件、negative cases、兩帳號 fixture、fault injection、target-device 操作、advisors 與 cleanup 均由 QA authority 維護。Local smoke 只證明已實作切片，不提升完整 case 完成度。
+B01～B24、W01～W07、P01～P14與D01～D10的逐項條件、negative cases、兩帳號fixture、fault injection、target-device操作、advisors與cleanup均由QA authority維護。Local smoke只證明已實作切片，不提升完整case完成度。
 
 ## 12. Future Phase Capsule
 
@@ -295,6 +316,7 @@ quick entry 只能依賴 quick feature、shared PWA service 與 minimal Supabase
 
 | 動作 | 檔案 | 責任 |
 |---|---|---|
+| 修改 | `public/manifest.webmanifest` | 保持root identity／一般launch，新增`/quick-task/` app shortcut |
 | 修改 | `vite.config.js` | two HTML inputs、manifest、denylist、shell version、precache |
 | 修改 | `firebase.json` | quick rewrite before root catch-all |
 | 新增 | `quick-task/index.html`、`src/quickTask/main.ts`、`src/quickTask/quick-task.css` | raw form、controller、mobile visual |
@@ -304,8 +326,24 @@ quick entry 只能依賴 quick feature、shared PWA service 與 minimal Supabase
 | 新增／修改 | `src/services/supabase/quickTaskCaptureService.ts`、`database.types.ts` | fixed JWT adapter、strict parser、signature |
 | 新增 | `supabase/migrations/20260914120000_dev_122_quick_unplaced_task_rpc.sql` | additive RPC、receipt、RLS/grants |
 | 新增／修改 | `src/features/taskWorkbench/entryIntent.ts`、`src/components/MainLayout.tsx`、`src/components/TaskWorkbenchPanel.tsx` | intent、single host、hydration |
-| 修改 | `src/components/AppInstallAssistant.tsx` | settings quick install CTA |
+| 修改 | `src/components/AppInstallAssistant.tsx` | mobile／desktop settings說明主程式shortcut與選用quick icon；保留quick install CTA |
 | 新增／修改 | `ai-doc/*122*`、`scripts/verify-dev-122-*`、`package.json` | QA authority、verifier、command entry |
+
+### 15.2 R12／WP-122-0B current write surface
+
+本輪只允許以下產品與驗證檔案；先前已完成的quick runtime、Auth、RPC、DB、Workbox設定與Firebase rewrite都不因本次捷徑需求重開：
+
+| 動作 | 檔案 | R12責任 |
+|---|---|---|
+| 修改 | `public/manifest.webmanifest` | root唯一manifest來源；加入第一順位shortcut及真實1024×1024 icon metadata |
+| 修改 | `public/quick-task/manifest.webmanifest` | 只校正同一icon資產的尺寸metadata，不改quick identity／scope／launch |
+| 修改 | `src/components/AppInstallAssistant.tsx` | 一個設定區塊、一個CTA；說明root shortcut與選用獨立圖示，不承諾平台即時呈現 |
+| 修改 | `scripts/verify-dev-122-mobile-zero-data-quick-task.ts` | S15 source／dist JSON、唯一來源、identity、shortcut、PNG header與quick metadata guard |
+| 修改 | `scripts/verify-dev-122-mobile-zero-data-quick-task-root-browser.pw.js` | B22～B24 root／quick route、文案、responsive與零業務request guard |
+| 修改 | `scripts/verify-dev-122-mobile-zero-data-quick-task-sw.mjs` | W07 build A→B manifest／precache／controller更新證據 |
+| 視既有assert受影響修改 | `scripts/verify-dev-034-pwa-install-guidance.mjs`、`scripts/verify-dev-034-pwa-install-guidance-browser.pw.js` | 保持DEV-034設定入口與安裝引導回歸 |
+
+預期不修改`vite.config.js`：目前的`manifest:false`、`.webmanifest` precache及單一root worker已滿足R12。只有verifier證明build未複製或未precache canonical manifest時才停止並回Tech Lead，不可先建立第二份manifest設定。
 
 ## 16. Fixed Interface 與 transaction contract
 
@@ -335,13 +373,15 @@ intent key 只保存 `expiresAt` 與必要 non-sensitive marker，15 分鐘後�
 
 ## 17. 執行順序、命令與 evidence
 
-RD 一次只推進一個 WP；先跑 static／build，再跑 browser／root／SW，再跑 isolated DB，最後才在 approved HTTPS candidate 執行 device gate。固定命令：
+RD 一次只推進一個WP。本輪先完成WP-122-0B並跑static、root／quick browser、build、real-SW與DEV-034安裝引導regression；source freeze後才在新的approved HTTPS candidate執行D08～D10，再回既有device／DB gate。固定命令：
 
 ```text
 npm run verify:dev-122-mobile-zero-data-quick-task
 npm run verify:dev-122-mobile-zero-data-quick-task-browser
 npm run verify:dev-122-mobile-zero-data-quick-task-root-browser
 npm run verify:dev-122-mobile-zero-data-quick-task-sw
+npm run verify:dev-034-pwa-install-guidance
+npm run verify:dev-034-pwa-install-guidance-browser
 npm run verify:dev-122-mobile-zero-data-quick-task-db-isolated
 npm run verify:dev-122-mobile-zero-data-quick-task-db-concurrent
 npm run verify:dev-096-pwa-update-transaction-convergence
@@ -355,23 +395,43 @@ git diff --check -- <DEV-122 owned files>
 
 Local candidate execution record（2026-09-15，test mode）：`npm run verify:test-env` 與 `npm run verify:staging-env` 皆 PASS（僅解析環境，不做遠端 mutation），targeted ESLint、`npm run build:test`、`npx tsc --noEmit`、static/pure（22 assertions：含 retryable `Retry-After` 永久暫停 guard、unbound recovery visibility guard、quick install marker 與 quick／existing placement 共用 account-unplaced advisory lock guard）、quick browser local smoke（`caseSet=local-smoke-v2`、SM01～SM15；SM14覆蓋`install=1`引導與`beforeinstallprompt`原生安裝呼叫，SM15覆蓋iOS加入主畫面指引與標題欄可用，SM05覆蓋fallback後再次點擊語音可重試；reused Vite test server shell `build:1789392291929-8mqkr19f`）、root intent browser（R01～R03）、service-worker verification、isolated PostgreSQL core matrix（22 checks）、task-owned pgbench concurrent transport（20 clients／20 rows／0 failed）與 mixed-writer-compatible transport（40 clients：20 Quick RPC＋20 test-only existing append fixture／40 unique orders／0 failed）均 PASS；相容 DEV-097 browser 及 DEV-115 browser B01～B09 亦 PASS。最新 build artifact 的 common shell version 為 `build:1789406871768-qay417qi`（dist build），quick chunk gzip 約 7.75 KiB；quick path 未載入 React／Supabase，business request sweep 為 0。既有 `localhost:4000` test-mode process owner PID 28532 重用並保留；task-owned PostgreSQL runtime 每次驗證後均確認 port released／temp path removed。
 
-這些結果只涵蓋 repo／Chromium test mode 與 task-owned loopback DB 可重現的證據；本機 readiness 檢查顯示 ADB 與 Xcode simulator 不可用，測試 HTTPS host `/quick-task/` 回 404，尚無 approved HTTPS candidate；既有 Docker Supabase runtime 僅做唯讀 schema presence check，未套用 DEV-122 migration，不能作為正式服務證據；D01～D07、B01～B21 完整 QA cases、W01～W06、P07 混合既有 writer 的完整 placement transport／P10 placement／P11 advisor／P12-P14 full API/fault matrix、獨立 QA/QC 仍為 Not verified；DEV-097 browser 已於 2026-09-14 以修正後 verifier PASS，DEV-115 browser B01～B09 亦於本輪相容回歸 PASS。`local-smoke-v2` 不直接對應 B01～B21；本輪新增 static lock-scope guard 證明 quick create 與既有 placement source 共用 account-unplaced lock key，且 40-client mixed-writer-compatible fixture 已證明 20 個 Quick RPC 與 20 個 existing append fixture 產生 40 個連續唯一 order；這兩項仍不等同真實 placement writer／P10 或完整 API/fault transport PASS；固定 fixture P07 transport、P11 index+max-order EXPLAIN 與 P13 profile cascade 已在 22-check core evidence PASS。新增的 SM14 只證明 Chromium 可見安裝引導與原生 prompt 呼叫，SM15 只證明 Chromium UA 分支的 iOS 指引，不替代 iOS／Android install promotion。DEV-097 browser 的診斷與修正歷程見 `output/qa/dev-122/dev-097-compatibility-diagnostic.json` 及 `output/playwright/dev-097/ui-result.json`：原始落差是既有 verifier 未展開預設收合側欄，且失敗 prepare 後將「本機 recovery snapshot 已保存」誤當成「canonical record owner 已 safe」；修正後改以明確 user-confirmed canonical boundary，再由 browser artifact 證明九個 owner 最終 safe。此修正不改 DEV-122 架構，也不放寬既有 fail-closed oracle。
+2026-09-16 已建立 approved non-production HTTPS candidate：`https://projed-cc78d--level3-smoke-ua5z9m3e.web.app/quick-task/`。來源是乾淨 detached `HEAD 7b16ddf6e3af1d3bf26e3267c19de33fe343ecd4` 的 staging build，Firebase release `1789531899366000`／version `91e85ef60f5223c9`，到期 `2026-09-17T04:11:34.070987288Z`；未切換 live traffic。`/quick-task/`、`?install=1`、manifest、quick JS/CSS與`sw.js`皆200；390×844 browser smoke證明secure context、空白名稱欄自動聚焦、語音按鈕可見，critical console／page error／同源失敗請求為0。線上HTML、quick JS與SW雜湊均與本機 build `build:1789531768480-4g274ymv`一致；證據見 `output/playwright/dev-122-mobile-zero-data-quick-task/https-candidate-result.json` 與 `https-candidate-390x844.png`。原先 `projed-test.web.app` 的404不再作候選依據；本repo的既有Level 3契約以`projed-cc78d` preview channel承載Supabase ProJED-TEST staging build。
+
+這些結果已解除「無 approved HTTPS candidate／route 404」阻塞，但不等於target-device PASS，且candidate不含R12 root shortcut契約。R12 source或artifact產生後必須重建candidate；舊URL／雜湊只能作歷史證據。本機仍無ADB與Xcode simulator；既有Docker Supabase runtime僅做唯讀schema presence check。D01～D10、B01～B24完整QA cases、W01～W07、P07真實mixed-writer placement transport、P10 placement、P11 advisor、P12-P14 full API/fault matrix與獨立QA/QC仍為Not verified。
 
 ## 18. 實作裁量、禁止變更與 drift gate
 
 實作模型可自行決定局部 symbol 名稱、CSS token 等價值、module helper 拆分、assert library、fixture UUID 與不改契約的錯誤文案微調；需維持指定 accessible name、success facts 與 stable machine codes。
 
-不得自行改變：raw HTML + progressive enhancement、React-free critical graph、same-origin nested identity、one root worker、common build version、surface readiness、IDB schema/state/lease、claim／固定身分 request 規則、RPC signature/security/grants、private immutable receipt/replay、workspace resolution、SPEC-115 payload、Workbench 一次性到達／hydration boundary、本機恢復邊界、WP 順序、target devices、evidence layer 與 stop conditions。
+不得自行改變：root`id/start_url/scope='/'`、canonical root manifest來源、shortcut URL`/quick-task/`、quick獨立identity、raw HTML + progressive enhancement、React-free critical graph、same-origin nested identity、one root worker、common build version、surface readiness、IDB schema/state/lease、claim／固定身分 request規則、RPC signature/security/grants、private immutable receipt/replay、workspace resolution、SPEC-115 payload、Workbench一次性到達／hydration boundary、本機恢復邊界、WP順序、target devices、evidence layer與stop conditions。
 
-第一個出現以下情況即停止受影響部分並回送規劃模型：需要新增 API/schema/RLS/state/ownership、把 quick scope 擴到 `/`、新增第二 worker/origin、匯入完整 App/store、讓 client 計算 owner/order、略過 local readback、修改 protected file、放寬 DEV-096／097／115 oracle，或將未驗證平台限制以 shortcut 掩蓋。預定 additive RPC／receipt migration、局部命名、等價實作與一般 bug 修正不算 drift。
+第一個出現以下情況即停止受影響部分並回送規劃模型：需要新增API/schema/RLS/state/ownership、把root一般launch改為quick、把quick scope擴到`/`、移除獨立quick identity、新增第二worker/origin、建立manifest雙重來源、匯入完整App/store、讓client計算owner/order、略過local readback、修改protected file、放寬DEV-096／097／115 oracle，或新增UA猜測／OS捷徑偵測狀態、把app shortcut冒充自動第二圖示／全平台支援。局部命名、等價實作與一般bug修正不算drift。
 
 ## 19. Architecture Closure Review 結論
 
-2026-09-14 Tech Lead R4 將 callback query normalization、capture id collision 與 int32 order boundary 收斂在唯一 Workbox／RPC 基礎設施；R5 再補 raw form 無 JS submit guard、controller IME composition guard 與 local smoke evidence envelope；R6 修正自動重試耗盡的 state transition，讓失敗封頂後不再被 foreground lease 重新解鎖，並保留明確人工 retry；R7 修正 DEV-097 browser verifier 的既有側欄前置與 recovery oracle 落差，完整 browser verifier PASS；R8 補上 `install=1` 安裝引導與原生 prompt 入口，並由 SM14／SM15 與畫面 artifact 驗證；R9 讓 quick create 與既有 placement 共用 `account:<owner>:unplaced:parent:root` advisory scope，消除混合 writer 在 account-unplaced root 的排序鎖分裂；R10 修正 voice adapter 回報 fallback 時未清除 controller session 的重試失效，讓 fallback 後下一次 tap 可重新建立 voice session。核心責任仍只有 raw entry、quick controller、IDB outbox、固定 JWT adapter、單一 RPC、root intent；沒有新增第二 client、queue framework 或任務 domain。
+2026-09-14 Tech Lead R4 將 callback query normalization、capture id collision 與 int32 order boundary 收斂在唯一 Workbox／RPC 基礎設施；R5～R10依序完成raw form／IME、自動重試封頂、DEV-097相容、quick install引導、account-unplaced lock與voice fallback session修正。2026-09-16 R11依使用者決策重新開啟DEV-122：root manifest新增指向`/quick-task/`的app shortcut，設定頁說明主程式捷徑與選用第二圖示；root一般launch、quick獨立identity及既有六個runtime責任全部保留。R11不新增第二client、worker、queue、資料表、API、權限或任務domain。
 
 R4 架構已定案：P0／P1 unresolved architecture blocker = 0。R5、R6、R7、R8、R9、R10 都是同一架構內的實作／相容驗證契約修正，不改 data／security／ownership boundary：R5 防止 raw form／IME 誤送出，R6 封頂 `attemptCount >= 8` 時把 `failed_retryable` 轉為 `failed_permanent/AUTO_RETRY_EXHAUSTED`，並只允許明確人工 retry 重置；R7 僅調整既有 DEV-097 verifier 的側欄前置與 recovery 後 canonical boundary 驗證；R8 僅新增 quick 自有的 install guide、原生 prompt 事件處理與平台指引；R9 將 quick create 與既有 placement 的 account-unplaced advisory scope 對齊，並由 static lock-scope guard 與 40-client mixed-writer-compatible fixture 證明共用 lock domain 的相容 transaction 行為；R10 在 voice fallback 出口清除失效 session，使下一次 tap 能重新建立 session，並由 SM05 驗證，不新增狀態來源。local candidate 已落實 quick MPA、共用 shell metadata、voice/input、IDB lease/claim、RPC adapter、root intent、Workbench hydration、有限 callback query normalization 與 `install=1` 引導；`npx tsc --noEmit`、static、build、local smoke、root、SW、22-check core matrix、固定 fixture pgbench transport、40-client mixed-writer-compatible transport 與 DEV-097 browser 均有 artifact。
 
-DEV-122 目前仍為 `RD Implementation Candidate + 架構已定案`。D01～D04 第二 icon feasibility、真機 voice／OAuth／offline、DEV-122 自有完整 B/W、mixed-writer／placement／advisor／API／fault matrix、正式 QA/QC 與 release gate 尚未完成；既有 DEV-096／097／115 的 targeted regression 已有對應 PASS artifact，但不可從文件或 local candidate 推定 DEV-122 PASS。若 target-device gate 失敗，才依 ADR-050 評估獨立 origin；不得由 RD 靜默改路徑。
+DEV-122目前為`RD Implementation Ready + 架構已定案 / R12 Tech Lead Optimized`。本輪execution boundary只含WP-122-0B；第15.2節是完整預期修改面。實作模型可決定JSON排版與assert helper，但不得改root／quick identity、route、Auth、runtime責任或使用者文案語意。首個文件／程式衝突或平台需要不同架構時立即停止回送規劃模型。
+
+R10以前的local／HTTPS evidence保留為回歸基線，不包含R12。S15、B22～B24、W07、D08～D10、D01～D07、真機voice／OAuth／offline、完整B/W/P、正式QA/QC與release gate尚未完成；不可從舊candidate推定DEV-122或R12 PASS。
+
+### Architecture Closure R11：主程式綁定快速入口
+
+- W3C Web App Manifest `shortcuts`允許已安裝App提供常用任務入口，shortcut URL必須位於該manifest scope內；root scope為`/`，所以`/quick-task/`符合契約。參考：<https://www.w3.org/TR/appmanifest/>。
+- `shortcuts`是root install identity的啟動metadata，不是第二install identity。quick manifest保持`id='/quick-task/'`，因此使用者仍可選擇另行安裝第二圖示。
+- Safari／作業系統的呈現能力不同；官方WebKit已記錄macOS Safari支援manifest shortcuts，但本規格不推論iOS一定呈現。參考：<https://webkit.org/blog/15063/webkit-features-in-safari-17-4/>。
+- 不支援平台的產品fallback已定案為設定頁quick CTA與選用第二圖示；不得以UA猜測顯示「長按即可」的確定承諾。
+- 同帳號不是由shortcut或UI label保證：manifest不攜帶帳號、token或owner；直接同步以固定JWT snapshot送出，由server `auth.uid()`定owner並由strict receipt owner equality驗證，OAuth claim才使用`getUser(snapshot.accessToken)`。獨立quick identity若沒有可用session則維持未綁定／待登入。
+
+### Architecture Closure R12：manifest發佈、既有安裝與帳號證明
+
+- `public/manifest.webmanifest`是唯一root manifest來源，因現行`VitePWA({manifest:false})`不產生另一份manifest；`index.html`單一link、`dist/manifest.webmanifest`及worker precache必須由S15／W07交叉驗證。
+- shortcut icon使用現有實際1024×1024 PNG並宣告`1024x1024`；quick manifest同資產的舊尺寸metadata在本slice校正，避免瀏覽器依錯誤metadata選擇資產。
+- 全新安裝以D08作主要gate。既有安裝的manifest刷新與OS捷徑呈現由平台排程，W07先證明新worker不再提供舊manifest，D10再記錄實際平台更新；產品不實作shortcut availability detection或強制更新流程。參考：<https://web.dev/articles/web-apps/shortcuts>、<https://web.dev/articles/manifest-updates>。
+- 平台矩陣固定為Android Chrome/WebAPK與Chromium桌面主要驗證，macOS Safari 17.4+有裝置時補充；iOS/iPadOS不把manifest shortcut列為required，走設定頁CTA與選用加入主畫面流程。
+- Tech Lead R12 review結論為`PASS`：P0／P1 unresolved architecture blocker = 0；WP-122-0B可交RD。這是文件與架構通過，不是產品實作、QA、QC或release通過。
 
 ### Tech Lead R7 相容回歸裁定
 

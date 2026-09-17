@@ -76,6 +76,16 @@ assert(
 );
 
 assert(
+  'settings page explains bundled quick shortcut and optional independent icon without overpromising platform behavior',
+  source.appInstallAssistant.includes('data-quick-task-install-cta="true"') &&
+    source.appInstallAssistant.includes('>快速建待辦</div>') &&
+    source.appInstallAssistant.includes('安裝 ProJED 後，支援的平台可從 ProJED 圖示選「快速建待辦」；需要桌面單鍵入口，也可安裝獨立圖示。') &&
+    source.appInstallAssistant.includes('href="/quick-task/?install=1"') &&
+    source.appInstallAssistant.includes('>開啟快速建待辦</a>') &&
+    !/自動.{0,8}兩.{0,8}圖示|立即.{0,8}捷徑|iOS.{0,8}長按/u.test(source.appInstallAssistant),
+);
+
+assert(
   'auto prompt and settings prompt expose stable DOM contracts',
   source.appInstallAssistant.includes('data-pwa-install-assistant') &&
     source.appInstallAssistant.includes('data-pwa-install-settings') &&

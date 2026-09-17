@@ -29,6 +29,10 @@ async (page) => {
     if (response.status() >= 400 && !/favicon\.ico/.test(response.url())) result.httpFailures.push({ status: response.status(), url: response.url() });
   });
   page.on('dialog', async dialog => { dialogs.push({ type: dialog.type(), message: dialog.message() }); await dialog.dismiss(); });
+  await page.evaluate(async () => {
+    const registrations = await navigator.serviceWorker?.getRegistrations?.() || [];
+    await Promise.all(registrations.map(registration => registration.unregister()));
+  });
 
   const owner = { id: 'dev121-owner', uid: 'dev121-owner', email: 'dev121-owner@projed.local', displayName: 'DEV-121 Owner' };
   const viewer = { id: 'dev121-viewer', uid: 'dev121-viewer', email: 'dev121-viewer@projed.local', displayName: 'DEV-121 Viewer' };
@@ -58,6 +62,24 @@ async (page) => {
     status: 'published', visibility: 'project', occurredAt: 1704067200000,
     taskLinks: [{ nodeId: 'dev121-root-a', role: 'decision' }],
     metadata: { meetingTaskQuickNotes: { schemaVersion: 1, entries: [{ id: 'dev121-note', taskId: 'dev121-root-a', text: '確認群組範圍', occurredAt: 1704067200000, anchor: { lineIndex: 1, sourceToken: '09:00|dev121-root-a' } }] } },
+  };
+  const longMeetingRecord = {
+    ...meetingRecord,
+    id: 'dev121-long-meeting',
+    title: 'DEV-121 長紀錄對照會議',
+    content: `## 任務討論\n${Array.from({ length: 10 }, (_, index) => `- 09:${String(index).padStart(2, '0')} @[Root A｜年度產品交付目標](task:dev121-root-a)：長紀錄-${index + 1}：確認完整文字不被儲存格裁切`).join('\n')}`,
+    metadata: {
+      meetingTaskQuickNotes: {
+        schemaVersion: 1,
+        entries: Array.from({ length: 10 }, (_, index) => ({
+          id: `dev121-long-note-${index + 1}`,
+          taskId: 'dev121-root-a',
+          text: `長紀錄-${index + 1}：確認完整文字不被儲存格裁切`,
+          occurredAt: 1704067200000 + (index * 86400000),
+          anchor: { lineIndex: index + 1, sourceToken: `09:${String(index).padStart(2, '0')}|dev121-root-a` },
+        })),
+      },
+    },
   };
 
   const seed = async (width = 1440, height = 900, account = owner, currentWorkspace = workspace, currentNodes = nodes, records = [meetingRecord]) => {
@@ -93,18 +115,190 @@ async (page) => {
     const table = page.locator('[data-goal-task-table="true"]');
     const rows = goal.locator('[data-goal-task-row]');
     record('B01-normal-entry-and-order', await rows.count() === result.fixtureIds.length && await table.locator('thead').count() === 1 && await goal.locator('[data-goal-hierarchy-guides]').count() === result.fixtureIds.length, { rowCount: await rows.count(), guideCount: await goal.locator('[data-goal-hierarchy-guides]').count() });
+    const descriptionToggle = goal.locator('[data-goal-description-column-toggle]').first();
+    const descriptionExpandedProbe = await goal.evaluate(root => {
+      const button = root.querySelector('[data-goal-description-column-toggle]');
+      const glyph = button?.querySelector('[data-goal-column-toggle-glyph]');
+      const buttonRect = button?.getBoundingClientRect() || null;
+      const glyphRect = glyph?.getBoundingClientRect() || null;
+      const glyphStyle = glyph ? getComputedStyle(glyph) : null;
+      return {
+        state: root.querySelector('[data-goal-task-table]')?.getAttribute('data-goal-description-column-state') || '',
+        toggleState: button?.getAttribute('data-goal-column-toggle-state') || '',
+        label: button?.getAttribute('aria-label') || '',
+        expanded: button?.getAttribute('aria-expanded') || '',
+        buttonWidth: buttonRect ? Math.round(buttonRect.width) : null,
+        buttonHeight: buttonRect ? Math.round(buttonRect.height) : null,
+        glyphWidth: glyphRect ? Math.round(glyphRect.width) : null,
+        glyphHeight: glyphRect ? Math.round(glyphRect.height) : null,
+        glyphRadius: glyphStyle?.borderRadius || '',
+        glyphBackground: glyphStyle?.backgroundColor || '',
+      };
+    });
+    await descriptionToggle.click();
+    const descriptionCollapsedProbe = await goal.evaluate(root => {
+      const firstCell = root.querySelector('[data-goal-description-column-collapsed="true"]');
+      const button = root.querySelector('[data-goal-description-column-toggle]');
+      const glyph = button?.querySelector('[data-goal-column-toggle-glyph]');
+      const glyphStyle = glyph ? getComputedStyle(glyph) : null;
+      return {
+        state: root.querySelector('[data-goal-task-table]')?.getAttribute('data-goal-description-column-state') || '',
+        toggleState: button?.getAttribute('data-goal-column-toggle-state') || '',
+        label: button?.getAttribute('aria-label') || '',
+        expanded: button?.getAttribute('aria-expanded') || '',
+        placeholderCount: root.querySelectorAll('[data-goal-description-column-collapsed="true"]').length,
+        ownerCount: root.querySelectorAll('[data-goal-description-owner="true"]').length,
+        width: firstCell ? Math.round(firstCell.getBoundingClientRect().width) : null,
+        buttonWidth: button?.getBoundingClientRect() ? Math.round(button.getBoundingClientRect().width) : null,
+        buttonHeight: button?.getBoundingClientRect() ? Math.round(button.getBoundingClientRect().height) : null,
+        glyphWidth: glyph?.getBoundingClientRect() ? Math.round(glyph.getBoundingClientRect().width) : null,
+        glyphHeight: glyph?.getBoundingClientRect() ? Math.round(glyph.getBoundingClientRect().height) : null,
+        glyphRadius: glyphStyle?.borderRadius || '',
+        glyphBackground: glyphStyle?.backgroundColor || '',
+        glyphColor: glyphStyle?.color || '',
+      };
+    });
+    record('B13-description-column-collapse-and-restore-control', descriptionExpandedProbe.state === 'expanded'
+      && descriptionExpandedProbe.toggleState === 'expanded'
+      && descriptionExpandedProbe.expanded === 'true'
+      && descriptionExpandedProbe.buttonWidth === 24
+      && descriptionExpandedProbe.buttonHeight === 24
+      && descriptionExpandedProbe.glyphWidth === 18
+      && descriptionExpandedProbe.glyphHeight === 18
+      && descriptionExpandedProbe.glyphRadius === '5px'
+      && descriptionCollapsedProbe.state === 'collapsed'
+      && descriptionCollapsedProbe.toggleState === 'collapsed'
+      && descriptionCollapsedProbe.expanded === 'false'
+      && descriptionCollapsedProbe.placeholderCount === result.fixtureIds.length
+      && descriptionCollapsedProbe.ownerCount === 0
+      && descriptionCollapsedProbe.width === 22
+      && descriptionCollapsedProbe.buttonWidth === 20
+      && descriptionCollapsedProbe.buttonHeight === 20
+      && descriptionCollapsedProbe.glyphWidth === 16
+      && descriptionCollapsedProbe.glyphHeight === 16
+      && descriptionCollapsedProbe.glyphRadius === '4px'
+      && descriptionCollapsedProbe.glyphBackground !== descriptionExpandedProbe.glyphBackground, { expanded: descriptionExpandedProbe, collapsed: descriptionCollapsedProbe });
+    const compactToggleScreenshot = `${OUTPUT_DIR}/B13-dev121-compact-column-toggle-collapsed-1440x900.png`;
+    await page.screenshot({ path: compactToggleScreenshot, fullPage: false });
+    result.screenshots.push(compactToggleScreenshot);
+    await descriptionToggle.click();
+    const descriptionRestoredProbe = await goal.evaluate(root => ({
+      state: root.querySelector('[data-goal-task-table]')?.getAttribute('data-goal-description-column-state') || '',
+      expanded: root.querySelector('[data-goal-description-column-toggle]')?.getAttribute('aria-expanded') || '',
+      ownerCount: root.querySelectorAll('[data-goal-description-owner="true"]').length,
+    }));
+    record('B13-description-column-restore-keeps-owned-content', descriptionRestoredProbe.state === 'expanded'
+      && descriptionRestoredProbe.expanded === 'true'
+      && descriptionRestoredProbe.ownerCount > 0, descriptionRestoredProbe);
+    const visibleColumnKeys = await goal.locator('[data-goal-column-toggle]').evaluateAll(buttons => buttons.map(button => button.getAttribute('data-goal-column-toggle')).filter(Boolean));
+    const columnCollapseProbes = [];
+    for (const column of visibleColumnKeys) {
+      const toggle = goal.locator(`[data-goal-column-toggle="${column}"]`).first();
+      await toggle.click();
+      const collapsedProbe = await goal.evaluate((root, columnKey) => {
+        const header = root.querySelector(`[data-goal-column-header="${columnKey}"]`);
+        const button = root.querySelector(`[data-goal-column-toggle="${columnKey}"]`);
+        return {
+          column: columnKey,
+          collapsedColumns: root.querySelector('[data-goal-task-table]')?.getAttribute('data-goal-collapsed-columns') || '',
+          expanded: button?.getAttribute('aria-expanded') || '',
+          placeholderCount: root.querySelectorAll(`[data-goal-column="${columnKey}"][data-goal-column-collapsed="true"]`).length,
+          width: header ? Math.round(header.getBoundingClientRect().width) : null,
+        };
+      }, column);
+      columnCollapseProbes.push(collapsedProbe);
+      await toggle.click();
+    }
+    for (const column of visibleColumnKeys) await goal.locator(`[data-goal-column-toggle="${column}"]`).first().click();
+    const allCollapsedProbe = await goal.evaluate(root => ({
+      tableWidth: Math.round(root.querySelector('[data-goal-task-table]')?.getBoundingClientRect().width || 0),
+      widths: Array.from(root.querySelectorAll('[data-goal-column-header]'))
+        .filter(header => header.getAttribute('data-goal-column-header') !== 'task')
+        .map(header => ({
+          column: header.getAttribute('data-goal-column-header'),
+          width: Math.round(header.getBoundingClientRect().width),
+        })),
+    }));
+    for (const column of visibleColumnKeys) await goal.locator(`[data-goal-column-toggle="${column}"]`).first().click();
+    const taskLaneProbe = await goal.evaluate(root => {
+      const header = root.querySelector('[data-goal-column-header="task"]');
+      return {
+        width: header ? Math.round(header.getBoundingClientRect().width) : null,
+        hasColumnToggle: Boolean(root.querySelector('[data-goal-column-toggle="task"]')),
+      };
+    });
+    const allColumnCollapseOk = visibleColumnKeys.length >= 5
+      && columnCollapseProbes.every(probe => probe.expanded === 'false'
+        && probe.placeholderCount === result.fixtureIds.length
+        && probe.width === 22
+        && probe.collapsedColumns.split(',').includes(probe.column))
+      && allCollapsedProbe.widths.length === visibleColumnKeys.length
+      && allCollapsedProbe.widths.every(probe => probe.width === 22)
+      && Math.abs(allCollapsedProbe.tableWidth - (252 + (visibleColumnKeys.length * 22.4))) <= 3
+      && taskLaneProbe.width === 252
+      && !taskLaneProbe.hasColumnToggle;
+    record('B14-all-visible-columns-collapse-and-restore', allColumnCollapseOk, { visibleColumnKeys, probes: columnCollapseProbes, allCollapsedProbe, taskLaneProbe });
+    const persistedColumns = ['description', 'status', 'duration'];
+    for (const column of persistedColumns) await goal.locator(`[data-goal-column-toggle="${column}"]`).first().click();
+    await page.waitForFunction(({ accountId, columns }) => {
+      const key = `projed-ui-preferences:v1:account:${encodeURIComponent(accountId)}`;
+      try {
+        const parsed = JSON.parse(localStorage.getItem(key) || 'null');
+        return columns.every(column => parsed?.layout?.goalCollapsedColumns?.includes(column));
+      } catch {
+        return false;
+      }
+    }, { accountId: owner.id, columns: persistedColumns }, { timeout: 5000 });
+    const persistedPreferenceProbe = await page.evaluate(accountId => {
+      const key = `projed-ui-preferences:v1:account:${encodeURIComponent(accountId)}`;
+      try {
+        const parsed = JSON.parse(localStorage.getItem(key) || 'null');
+        return { key, columns: parsed?.layout?.goalCollapsedColumns || null };
+      } catch {
+        return { key, columns: null };
+      }
+    }, owner.id);
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.locator('[data-goal-view="true"]').waitFor({ state: 'visible', timeout: 15000 });
+    await page.locator('[data-goal-task-table="true"]').waitFor({ state: 'visible', timeout: 10000 });
+    await page.waitForFunction(columns => {
+      const table = document.querySelector('[data-goal-task-table="true"]');
+      const collapsed = (table?.getAttribute('data-goal-collapsed-columns') || '').split(',').filter(Boolean);
+      return columns.every(column => collapsed.includes(column));
+    }, persistedColumns, { timeout: 5000 });
+    const reloadedPreferenceProbe = await goal.evaluate(root => ({
+      collapsedColumns: (root.querySelector('[data-goal-task-table]')?.getAttribute('data-goal-collapsed-columns') || '').split(',').filter(Boolean),
+      collapsedPlaceholderColumns: Array.from(root.querySelectorAll('[data-goal-column-collapsed="true"]')).map(cell => cell.getAttribute('data-goal-column')).filter(Boolean),
+    }));
+    const preferencePersistenceOk = persistedColumns.every(column => persistedPreferenceProbe.columns?.includes(column))
+      && persistedColumns.every(column => reloadedPreferenceProbe.collapsedColumns.includes(column))
+      && persistedColumns.every(column => reloadedPreferenceProbe.collapsedPlaceholderColumns.includes(column));
+    record('B15-account-scoped-column-collapse-survives-reload', preferencePersistenceOk, { persistedPreferenceProbe, reloadedPreferenceProbe });
+    for (const column of persistedColumns) await goal.locator(`[data-goal-column-toggle="${column}"]`).first().click();
     const structure = await goal.evaluate(root => {
       const row = root.querySelector('[data-goal-task-row-id="dev121-a1a1"]');
       const guides = row?.querySelectorAll('[data-goal-hierarchy-guide-kind]') || [];
-      const disclosure = root.querySelector('[data-goal-task-row-id="dev121-a1"] button[data-goal-collapse-toggle]');
+      const nodeToggle = root.querySelector('[data-goal-task-row-id="dev121-a1"] button[data-goal-collapse-toggle]');
+      const nodeRail = root.querySelector('[data-goal-task-row-id="dev121-a1"] [data-goal-hierarchy-guide-kind="child-stem"][data-goal-hierarchy-guide-owner="dev121-a1"]');
+      const nodeTitle = root.querySelector('[data-goal-task-row-id="dev121-a1"] .task-title-text');
       const visibleGuides = Array.from(root.querySelectorAll('[data-goal-hierarchy-guide-kind]'))
         .filter(item => getComputedStyle(item).visibility !== 'hidden');
       const visibleGuideRects = visibleGuides.map(item => item.getBoundingClientRect());
       const maxGuideRight = visibleGuideRects.length ? Math.max(...visibleGuideRects.map(rect => rect.right)) : null;
       const minGuideLeft = visibleGuideRects.length ? Math.min(...visibleGuideRects.map(rect => rect.left)) : null;
-      const disclosureRect = disclosure?.getBoundingClientRect() || null;
+      const nodeToggleRect = nodeToggle?.getBoundingClientRect() || null;
+      const nodeRailRect = nodeRail?.getBoundingClientRect() || null;
+      const nodeTitleRect = nodeTitle?.getBoundingClientRect() || null;
+      const nodeToggleBefore = nodeToggle ? getComputedStyle(nodeToggle, '::before') : null;
+      const nodeToggleDotCenter = nodeToggleRect && nodeToggleBefore
+        ? nodeToggleRect.left + Number.parseFloat(nodeToggleBefore.left) + (Number.parseFloat(nodeToggleBefore.width) / 2)
+        : null;
+      const nodeRailCenter = nodeRailRect ? nodeRailRect.left + (nodeRailRect.width / 2) : null;
       const rootRows = Array.from(root.querySelectorAll('[data-goal-task-row]')).filter(item => item.getAttribute('data-goal-level') === '0');
-      const rootBoundary = rootRows[1]?.querySelector('th') ? getComputedStyle(rootRows[1].querySelector('th')).borderTopWidth : null;
+      const rootGridCell = rootRows[1]?.querySelector('[data-goal-column]');
+      const rootTaskCell = rootRows[1]?.querySelector('[data-goal-task-cell]');
+      const rootBoundary = rootGridCell ? getComputedStyle(rootGridCell).borderTopWidth : null;
+      const taskRootBoundary = rootTaskCell ? getComputedStyle(rootTaskCell).borderTopWidth : null;
       const verticalKinds = new Set(['continuation', 'incoming-vertical', 'child-stem']);
       const railRects = visibleGuides
         .filter(item => verticalKinds.has(item.getAttribute('data-goal-hierarchy-guide-kind')))
@@ -134,17 +328,27 @@ async (page) => {
       const childRow = root.querySelector('[data-goal-task-row-id="dev121-a1"] .goal-task-hierarchy-row');
       const rootPadding = rootRow ? Number.parseFloat(getComputedStyle(rootRow).paddingLeft) : null;
       const childPadding = childRow ? Number.parseFloat(getComputedStyle(childRow).paddingLeft) : null;
+      const indentToken = childRow ? getComputedStyle(childRow).getPropertyValue('--task-hierarchy-indent').trim() : '';
       return {
         deepGuideCount: guides.length,
         guideKinds: Array.from(guides).map(item => item.getAttribute('data-goal-hierarchy-guide-kind')),
         continuationOwners: Array.from(guides).filter(item => item.getAttribute('data-goal-hierarchy-guide-kind') === 'continuation').map(item => item.getAttribute('data-goal-hierarchy-guide-owner')),
         rootBoundary,
+        taskRootBoundary,
         lastSibling: row?.getAttribute('data-goal-hierarchy-last-sibling'),
-        disclosureLeft: disclosureRect?.left ?? null,
-        disclosureRight: disclosureRect?.right ?? null,
+        nodeToggleLeft: nodeToggleRect?.left ?? null,
+        nodeToggleRight: nodeToggleRect?.right ?? null,
+        nodeToggleWidth: nodeToggleRect?.width ?? null,
+        nodeToggleHeight: nodeToggleRect?.height ?? null,
+        nodeToggleDotDiameter: nodeToggleBefore ? Number.parseFloat(nodeToggleBefore.width) : null,
+        nodeToggleDotRadius: nodeToggleBefore?.borderRadius ?? null,
+        nodeToggleSvgDisplay: nodeToggle?.querySelector('svg') ? getComputedStyle(nodeToggle.querySelector('svg')).display : null,
+        nodeRailCenter,
+        nodeToggleDotCenter,
+        nodeToggleRailDelta: nodeToggleDotCenter !== null && nodeRailCenter !== null ? Math.abs(nodeToggleDotCenter - nodeRailCenter) : null,
+        nodeToggleTitleGap: nodeToggleRect && nodeTitleRect ? nodeTitleRect.left - nodeToggleRect.right : null,
         minGuideLeft,
         maxGuideRight,
-        disclosureGuideGap: disclosureRect && minGuideLeft !== null ? minGuideLeft - disclosureRect.right : null,
         maxRailGap,
         railGapDetails,
         verticalWidths,
@@ -152,13 +356,23 @@ async (page) => {
         endpointCount,
         maxBranchTitleDistance: branchTitleDistances.length ? Math.max(...branchTitleDistances) : null,
         depthStep: rootPadding !== null && childPadding !== null ? childPadding - rootPadding : null,
+        indentToken,
       };
     });
-    record('B02-owned-tree-guides-and-root-boundary', structure.deepGuideCount === 4 && structure.guideKinds.filter(kind => kind === 'continuation').length === 2 && structure.guideKinds.includes('incoming-vertical') && structure.guideKinds.includes('incoming-branch') && structure.endpointCount === 0 && JSON.stringify(structure.continuationOwners) === JSON.stringify(['dev121-root-a', 'dev121-a1']) && structure.rootBoundary === '2px', structure);
-    const geometryOk = structure.verticalWidths.every(width => Math.abs(width - 1) <= 0.1) && structure.branchWidths.every(width => Math.abs(width - 12) <= 0.1) && structure.endpointCount === 0 && structure.depthStep !== null && Math.abs(structure.depthStep - 8) <= 0.1 && structure.maxBranchTitleDistance !== null && structure.maxBranchTitleDistance <= 0.5;
+    record('B02-owned-tree-guides-and-root-boundary', structure.deepGuideCount === 4 && structure.guideKinds.filter(kind => kind === 'continuation').length === 2 && structure.guideKinds.includes('incoming-vertical') && structure.guideKinds.includes('incoming-branch') && structure.endpointCount === 0 && JSON.stringify(structure.continuationOwners) === JSON.stringify(['dev121-root-a', 'dev121-a1']) && structure.rootBoundary === '2px' && structure.taskRootBoundary === '0px', structure);
+    const geometryOk = structure.verticalWidths.every(width => Math.abs(width - 1) <= 0.1) && structure.branchWidths.every(width => Math.abs(width - 14.4) <= 0.1) && structure.endpointCount === 0 && structure.indentToken === '10.4px' && structure.depthStep !== null && Math.abs(structure.depthStep - 10.4) <= 0.1 && structure.maxBranchTitleDistance !== null && structure.maxBranchTitleDistance <= 0.5;
     record('V02-compact-owned-connector-geometry', geometryOk, structure);
-    const continuityOk = structure.disclosureGuideGap !== null && structure.disclosureGuideGap >= -0.1 && structure.maxRailGap <= 1.1;
-    record('V09-owned-connector-continuity-and-disclosure-separation', continuityOk, structure);
+    const continuityOk = structure.nodeToggleRailDelta !== null
+      && structure.nodeToggleRailDelta <= 0.5
+      && structure.nodeToggleTitleGap !== null
+      && structure.nodeToggleTitleGap >= -0.5
+      && Math.abs(structure.nodeToggleWidth - 20) <= 0.1
+      && Math.abs(structure.nodeToggleHeight - 20) <= 0.1
+      && Math.abs(structure.nodeToggleDotDiameter - 6) <= 0.1
+      && structure.nodeToggleDotRadius === '999px'
+      && structure.nodeToggleSvgDisplay === 'none'
+      && structure.maxRailGap <= 1.1;
+    record('V09-owned-connector-continuity-and-node-toggle-integration', continuityOk, structure);
     const toneProbe = await goal.evaluate(root => {
       const normal = root.querySelector('[data-goal-hierarchy-guide-kind="incoming-branch"][data-goal-hierarchy-guide-active="false"]');
       if (!normal) return { backgroundColor: '', borderRadius: '' };
@@ -168,14 +382,31 @@ async (page) => {
     record('V13-soft-connector-tone-and-rounded-joins', toneProbe.backgroundColor.includes('0.42') && toneProbe.borderRadius === '999px', toneProbe);
     const rowBorderProbe = await goal.evaluate(root => {
       const rows = Array.from(root.querySelectorAll('[data-goal-task-row]'));
-      const cells = rows.flatMap(row => Array.from(row.children));
-      const bottomBorders = cells
-        .map(cell => ({ taskId: cell.closest('[data-goal-task-row]')?.getAttribute('data-goal-task-row-id') || '', width: getComputedStyle(cell).borderBottomWidth, style: getComputedStyle(cell).borderBottomStyle }))
+      const taskCells = rows.map(row => row.querySelector('[data-goal-task-cell]')).filter(Boolean);
+      const gridCells = rows.flatMap(row => Array.from(row.querySelectorAll(':scope > [data-goal-column]')));
+      const taskBottomBorders = taskCells
+        .map(cell => ({ taskId: cell?.closest('[data-goal-task-row]')?.getAttribute('data-goal-task-row-id') || '', width: cell ? getComputedStyle(cell).borderBottomWidth : '', style: cell ? getComputedStyle(cell).borderBottomStyle : '' }))
+        .filter(cell => cell.width !== '0px' && cell.style !== 'none');
+      const gridBottomBorders = gridCells
+        .map(cell => ({ column: cell.getAttribute('data-goal-column') || '', width: getComputedStyle(cell).borderBottomWidth, style: getComputedStyle(cell).borderBottomStyle }))
+        .filter(cell => cell.width !== '0px' && cell.style !== 'none');
+      const gridRightBorders = gridCells
+        .map(cell => ({ column: cell.getAttribute('data-goal-column') || '', width: getComputedStyle(cell).borderRightWidth, style: getComputedStyle(cell).borderRightStyle }))
         .filter(cell => cell.width !== '0px' && cell.style !== 'none');
       const rootRows = rows.filter(row => row.getAttribute('data-goal-level') === '0');
-      return { rowCount: rows.length, bottomBorders, rootBoundary: rootRows[1]?.querySelector('th') ? getComputedStyle(rootRows[1].querySelector('th')).borderTopWidth : null };
+      const rootGridCell = rootRows[1]?.querySelector('[data-goal-column]');
+      const rootTaskCell = rootRows[1]?.querySelector('[data-goal-task-cell]');
+      return {
+        rowCount: rows.length,
+        taskBottomBorders,
+        gridCellCount: gridCells.length,
+        gridBottomBorders,
+        gridRightBorders,
+        rootBoundary: rootGridCell ? getComputedStyle(rootGridCell).borderTopWidth : null,
+        taskRootBoundary: rootTaskCell ? getComputedStyle(rootTaskCell).borderTopWidth : null,
+      };
     });
-    record('V10-no-inter-task-gridlines', rowBorderProbe.bottomBorders.length === 0 && rowBorderProbe.rootBoundary === '2px', rowBorderProbe);
+    record('V10-task-lane-open-scrollable-gridlines-visible', rowBorderProbe.taskBottomBorders.length === 0 && rowBorderProbe.gridBottomBorders.length === rowBorderProbe.gridCellCount && rowBorderProbe.gridRightBorders.length === rowBorderProbe.gridCellCount && rowBorderProbe.rootBoundary === '2px' && rowBorderProbe.taskRootBoundary === '0px', rowBorderProbe);
     const endpointProbe = await goal.evaluate(root => {
       const rows = Array.from(root.querySelectorAll('[data-goal-task-row]'));
       const probes = rows.map(row => {
@@ -211,6 +442,43 @@ async (page) => {
     record('B03-collapse-root-shows-total-count', collapsedRootCount === 3 && collapsedRootLabel === '已收合 5 個下層任務' && await goal.locator('[data-goal-task-row-id="dev121-a1"]').count() === 0, { collapsedRootCount, collapsedRootLabel });
     await rootToggle.click();
     record('B03-expand-restores-rows-and-hides-count', await rows.count() === result.fixtureIds.length && await goal.locator('[data-goal-descendant-count]').count() === 0, { rowCount: await rows.count(), countNodes: await goal.locator('[data-goal-descendant-count]').count() });
+
+    await rootToggle.focus();
+    await page.keyboard.press('Enter');
+    const keyboardNodeProbe = await rootToggle.evaluate(toggle => {
+      const before = getComputedStyle(toggle, '::before');
+      const toggleRect = toggle.getBoundingClientRect();
+      const rootBranch = toggle.closest('[data-goal-task-row]')?.querySelector('[data-goal-hierarchy-guide-kind="root-branch"]');
+      const rootBranchRect = rootBranch?.getBoundingClientRect() || null;
+      const dotCenter = toggleRect.left + Number.parseFloat(before.left) + (Number.parseFloat(before.width) / 2);
+      return {
+        ariaExpanded: toggle.getAttribute('aria-expanded'),
+        focused: document.activeElement === toggle,
+        dotDiameter: Number.parseFloat(before.width),
+        dotBorderWidth: before.borderTopWidth,
+        dotBorderStyle: before.borderTopStyle,
+        dotBorderRadius: before.borderRadius,
+        svgDisplay: toggle.querySelector('svg') ? getComputedStyle(toggle.querySelector('svg')).display : null,
+        rootBranchCount: rootBranch ? 1 : 0,
+        rootBranchStartDelta: rootBranchRect ? Math.abs(dotCenter - rootBranchRect.left) : null,
+      };
+    });
+    await page.screenshot({ path: `${OUTPUT_DIR}/A04-dev121-collapsed-node-toggle-1440x900.png` });
+    result.screenshots.push(`${OUTPUT_DIR}/A04-dev121-collapsed-node-toggle-1440x900.png`);
+    await page.keyboard.press('Enter');
+    const keyboardNodeRestored = await rootToggle.getAttribute('aria-expanded');
+    record('A04-keyboard-node-toggle-preserves-collapsed-shape-and-root-branch', keyboardNodeProbe.ariaExpanded === 'false'
+      && keyboardNodeProbe.focused
+      && keyboardNodeProbe.dotDiameter === 8
+      && keyboardNodeProbe.dotBorderWidth === '2px'
+      && keyboardNodeProbe.dotBorderStyle === 'solid'
+      && keyboardNodeProbe.dotBorderRadius === '999px'
+      && keyboardNodeProbe.svgDisplay === 'none'
+      && keyboardNodeProbe.rootBranchCount === 1
+      && keyboardNodeProbe.rootBranchStartDelta !== null
+      && keyboardNodeProbe.rootBranchStartDelta <= 0.5
+      && keyboardNodeRestored === 'true'
+      && await rows.count() === result.fixtureIds.length, { ...keyboardNodeProbe, restored: keyboardNodeRestored, restoredRowCount: await rows.count() });
 
     const midToggle = goal.locator('[data-goal-task-row-id="dev121-a1"] [data-goal-collapse-toggle]').first();
     await midToggle.click();
@@ -279,15 +547,19 @@ async (page) => {
     const guideProbe = await goal.evaluate(root => {
       const row = root.querySelector('[data-goal-task-row-id="dev121-a1"]');
       const task = row?.querySelector('[data-goal-task-cell]');
+      const descendantTask = root.querySelector('[data-goal-task-row-id="dev121-a1a"] [data-goal-task-cell]');
       const planning = row?.querySelector('[data-goal-planning-control]');
       const content = root.querySelector('[data-goal-description-owner="true"]');
-      const activeSegments = Array.from(root.querySelectorAll('[data-goal-hierarchy-guide-active="true"]')).map(segment => ({
+      const segments = Array.from(root.querySelectorAll('[data-goal-hierarchy-guide-kind]')).map(segment => ({
         rowId: segment.closest('[data-goal-task-row]')?.getAttribute('data-goal-task-row-id') || '',
         owner: segment.getAttribute('data-goal-hierarchy-guide-owner') || '',
         kind: segment.getAttribute('data-goal-hierarchy-guide-kind') || '',
+        active: segment.getAttribute('data-goal-hierarchy-guide-active') || '',
         width: getComputedStyle(segment).width,
         height: getComputedStyle(segment).height,
+        backgroundColor: getComputedStyle(segment).backgroundColor,
       }));
+      const activeSegments = segments.filter(segment => segment.active === 'true');
       const scopeRows = Array.from(root.querySelectorAll('[data-goal-hierarchy-scope]')).map(scopeRow => ({
         id: scopeRow.getAttribute('data-goal-task-row-id'),
         scope: scopeRow.getAttribute('data-goal-hierarchy-scope'),
@@ -295,53 +567,65 @@ async (page) => {
       const rootOwnedActiveContinuations = activeSegments.filter(segment => segment.owner === 'dev121-root-a' && segment.kind === 'continuation').length;
       return {
         task: task ? getComputedStyle(task).backgroundColor : '',
+        descendantTask: descendantTask ? getComputedStyle(descendantTask).backgroundColor : '',
         planning: planning ? getComputedStyle(planning).backgroundColor : '',
         content: content ? getComputedStyle(content).backgroundColor : '',
         contentScope: content?.getAttribute('data-goal-content-scope') || '',
+        segments,
         activeSegments,
         scopeRows,
         rootOwnedActiveContinuations,
       };
     });
-    const b06Ok = guideProbe.task.includes('199, 210, 254')
+    const b06Ok = guideProbe.task === 'rgba(224, 231, 255, 0.72)'
       && guideProbe.planning.includes('199, 210, 254')
       && guideProbe.content.includes('248, 250, 252')
       && guideProbe.contentScope === ''
       && guideProbe.scopeRows.some(item => item.id === 'dev121-a1' && item.scope === 'parent');
     record('B06-reading-guide-preserves-rowspan-owner-boundary', b06Ok, guideProbe);
-    const activeScopeTintOk = guideProbe.task === 'rgba(199, 210, 254, 0.94)'
+    const activeScopeTintOk = guideProbe.task === 'rgba(224, 231, 255, 0.72)'
       && guideProbe.planning === 'rgba(199, 210, 254, 0.94)'
       && guideProbe.content.includes('248, 250, 252')
       && guideProbe.contentScope === '';
     record('V15-active-descendant-does-not-tint-ancestor-rowspan-owner', activeScopeTintOk, {
       task: guideProbe.task,
+      descendantTask: guideProbe.descendantTask,
       planning: guideProbe.planning,
       content: guideProbe.content,
       contentScope: guideProbe.contentScope,
     });
+    record('V20-soft-task-name-location-tint-keeps-parent-descendant-contrast', guideProbe.task === 'rgba(224, 231, 255, 0.72)'
+      && guideProbe.descendantTask === 'rgba(239, 246, 255, 0.76)', {
+      parent: guideProbe.task,
+      descendant: guideProbe.descendantTask,
+    });
     const allowedActiveOwners = new Set(['dev121-a1', 'dev121-a1a', 'dev121-a1a1', 'dev121-a1b']);
     const scopeById = new Map(guideProbe.scopeRows.map(item => [item.id, item.scope]));
-    const ownIncomingRelationActive = guideProbe.activeSegments.some(segment =>
-      segment.rowId === 'dev121-a1'
-      && segment.owner === 'dev121-root-a'
-      && (segment.kind === 'incoming-vertical' || segment.kind === 'incoming-branch')
+    const ownIncomingVertical = guideProbe.segments.find(segment =>
+      segment.rowId === 'dev121-a1' && segment.owner === 'dev121-root-a' && segment.kind === 'incoming-vertical'
     );
-    const ownIncomingStrokeOk = guideProbe.activeSegments
-      .filter(segment => segment.rowId === 'dev121-a1' && segment.owner === 'dev121-root-a')
-      .every(segment => segment.kind === 'incoming-vertical' ? Number.parseFloat(segment.width) >= 2 : Number.parseFloat(segment.height) >= 2);
-    record('V14-active-task-incoming-relation-is-highlighted-and-thickened', ownIncomingRelationActive && ownIncomingStrokeOk, {
-      ownIncomingRelationActive,
-      ownIncomingStrokeOk,
-      activeSegments: guideProbe.activeSegments,
+    const ownIncomingBranch = guideProbe.segments.find(segment =>
+      segment.rowId === 'dev121-a1' && segment.owner === 'dev121-root-a' && segment.kind === 'incoming-branch'
+    );
+    const descendantIncomingVertical = guideProbe.segments.find(segment =>
+      segment.rowId === 'dev121-a1a' && segment.owner === 'dev121-a1' && segment.kind === 'incoming-vertical'
+    );
+    const selfUpstreamSuppressionOk = ownIncomingVertical?.active === 'false'
+      && Number.parseFloat(ownIncomingVertical.width) <= 1
+      && ownIncomingVertical.backgroundColor === 'rgba(148, 163, 184, 0.42)'
+      && ownIncomingBranch?.active === 'false'
+      && Number.parseFloat(ownIncomingBranch.height) <= 1
+      && ownIncomingBranch.backgroundColor === 'rgba(148, 163, 184, 0.42)'
+      && descendantIncomingVertical?.active === 'true'
+      && Number.parseFloat(descendantIncomingVertical.width) >= 2;
+    record('V14-active-task-upstream-relation-stays-neutral', selfUpstreamSuppressionOk, {
+      ownIncomingVertical,
+      ownIncomingBranch,
+      descendantIncomingVertical,
     });
-    const isAllowedSelfIncoming = segment =>
-      segment.rowId === 'dev121-a1'
-      && segment.owner === 'dev121-root-a'
-      && (segment.kind === 'incoming-vertical' || segment.kind === 'incoming-branch');
     const activeOwnershipOk = guideProbe.activeSegments.length > 0
-      && ownIncomingRelationActive
-      && ownIncomingStrokeOk
-      && guideProbe.activeSegments.every(segment => isAllowedSelfIncoming(segment) || allowedActiveOwners.has(segment.owner))
+      && selfUpstreamSuppressionOk
+      && guideProbe.activeSegments.every(segment => allowedActiveOwners.has(segment.owner))
       && guideProbe.rootOwnedActiveContinuations === 0
       && scopeById.get('dev121-a1') === 'parent'
       && ['dev121-a1a', 'dev121-a1a1', 'dev121-a1b'].every(id => scopeById.get(id) === 'descendant')
@@ -374,6 +658,122 @@ async (page) => {
       && reverseFocusProbe.activeTask === 'dev121-a1', reverseFocusProbe);
     await page.screenshot({ path: `${OUTPUT_DIR}/V06-dev121-owned-subtree-hover-1440x900.png` });
     result.screenshots.push(`${OUTPUT_DIR}/V06-dev121-owned-subtree-hover-1440x900.png`);
+    // V19 is an idle-surface assertion; use a fresh fixture so the intentional
+    // hierarchy scope used by V16/V17 cannot tint the measurement.
+    await seed(1440, 900);
+    const taskNameSurfaceProbe = await goal.evaluate(root => {
+      const cells = Array.from(root.querySelectorAll('[data-goal-task-cell]'));
+      const backgrounds = cells.map(cell => getComputedStyle(cell).backgroundColor);
+      return { backgrounds, uniqueBackgrounds: Array.from(new Set(backgrounds)) };
+    });
+    record('V19-all-hierarchy-levels-share-task-name-surface', taskNameSurfaceProbe.uniqueBackgrounds.length === 1 && taskNameSurfaceProbe.uniqueBackgrounds[0] === 'rgb(255, 255, 255)', taskNameSurfaceProbe);
+    const emptyDateNodes = {
+      ...nodes,
+      'dev121-a1': { ...nodes['dev121-a1'], startDate: '', endDate: '' },
+    };
+    await seed(1440, 900, owner, workspace, emptyDateNodes);
+    const dateLayoutProbe = await goal.evaluate(root => {
+      const headerWidths = Object.fromEntries(
+        Array.from(root.querySelectorAll('[data-goal-column-header]'))
+          .map(header => [header.getAttribute('data-goal-column-header') || '', Math.round(header.getBoundingClientRect().width)]),
+      );
+      const headerLabels = Array.from(root.querySelectorAll('[data-goal-column-label]')).map(label => ({
+        column: label.getAttribute('data-goal-column-label') || '',
+        text: label.textContent?.trim() || '',
+        fits: label.scrollWidth <= label.clientWidth + 1,
+      }));
+      const emptyDateCells = ['start-date', 'end-date'].flatMap(column => Array.from(root.querySelectorAll(`[data-goal-planning-control="${column}"]`))
+        .filter(cell => cell.querySelector('input')?.value === '')
+        .map(cell => ({ column, text: cell.textContent?.trim() || '' })));
+      return { headerWidths, headerLabels, emptyDateCells };
+    });
+    const dateLayoutOk = dateLayoutProbe.headerWidths['start-date'] >= 112
+      && dateLayoutProbe.headerWidths['end-date'] >= 112
+      && dateLayoutProbe.headerWidths.duration >= 84
+      && dateLayoutProbe.headerLabels.length >= 5
+      && dateLayoutProbe.headerLabels.every(label => label.fits)
+      && dateLayoutProbe.emptyDateCells.length > 0
+      && dateLayoutProbe.emptyDateCells.every(cell => !cell.text.includes('—'));
+    record('B16-empty-date-placeholder-and-planning-header-fit', dateLayoutOk, dateLayoutProbe);
+    await page.screenshot({ path: `${OUTPUT_DIR}/B16-dev121-empty-date-content-fit-1440x900.png` });
+    result.screenshots.push(`${OUTPUT_DIR}/B16-dev121-empty-date-content-fit-1440x900.png`);
+    const lockedDurationNodes = {
+      ...nodes,
+      'dev121-a1': { ...nodes['dev121-a1'], isDurationLocked: true },
+    };
+    await seed(1440, 900, owner, workspace, lockedDurationNodes);
+    const durationLockMarkerProbe = await goal.evaluate(root => {
+      const endDateCell = root.querySelector('[data-goal-task-row-id="dev121-a1"] [data-goal-column="end-date"]');
+      const durationCell = root.querySelector('[data-goal-task-row-id="dev121-a1"] [data-goal-column="duration"]');
+      return {
+        endDateText: endDateCell?.textContent?.trim() || '',
+        endDateHasLiteralLockMarker: endDateCell?.textContent?.includes('L') || false,
+        endDateReadOnly: endDateCell?.querySelector('input')?.hasAttribute('readonly') || false,
+        durationLockControl: durationCell?.querySelector('svg') ? true : false,
+      };
+    });
+    record('B17-duration-lock-keeps-date-readonly-without-inline-marker', !durationLockMarkerProbe.endDateHasLiteralLockMarker
+      && durationLockMarkerProbe.endDateReadOnly
+      && durationLockMarkerProbe.durationLockControl, durationLockMarkerProbe);
+    await page.screenshot({ path: `${OUTPUT_DIR}/B17-dev121-duration-lock-no-inline-marker-1440x900.png` });
+    result.screenshots.push(`${OUTPUT_DIR}/B17-dev121-duration-lock-no-inline-marker-1440x900.png`);
+    await seed(1440, 900, owner, workspace, nodes, [longMeetingRecord]);
+    await page.waitForFunction(() => document.querySelectorAll('[data-task-meeting-quick-note-row]').length >= 10, { timeout: 5000 });
+    const meetingFitProbe = await goal.evaluate(root => {
+      const cell = root.querySelector('[data-goal-meeting-owner="true"]');
+      const content = cell?.querySelector('[data-goal-content-scroll]');
+      const rows = Array.from(cell?.querySelectorAll('[data-task-meeting-quick-note-row]') || []);
+      const lastRow = rows[rows.length - 1] || null;
+      const cellRect = cell?.getBoundingClientRect() || null;
+      const contentRect = content?.getBoundingClientRect() || null;
+      const lastRowRect = lastRow?.getBoundingClientRect() || null;
+      const contentStyle = content ? getComputedStyle(content) : null;
+      const visibleRows = contentRect
+        ? rows.filter(row => {
+          const rect = row.getBoundingClientRect();
+          return rect.top >= contentRect.top - 1 && rect.bottom <= contentRect.bottom + 1;
+        })
+        : [];
+      const partialRows = contentRect
+        ? rows.filter(row => {
+          const rect = row.getBoundingClientRect();
+          return rect.bottom > contentRect.top + 0.5 && rect.top < contentRect.bottom - 0.5
+            && !(rect.top >= contentRect.top - 0.5 && rect.bottom <= contentRect.bottom + 0.5);
+        })
+        : [];
+      return {
+        rowCount: rows.length,
+        containsLastText: cell?.textContent?.includes('長紀錄-10') || false,
+        lineAligned: content?.getAttribute('data-goal-content-line-aligned') || '',
+        overflowY: contentStyle?.overflowY || '',
+        cellHeight: cellRect?.height || 0,
+        contentHeight: contentRect?.height || 0,
+        scrollHeight: content?.scrollHeight || 0,
+        clientHeight: content?.clientHeight || 0,
+        visibleRowCount: visibleRows.length,
+        visibleRowsComplete: visibleRows.every(row => {
+          const rect = row.getBoundingClientRect();
+          return contentRect ? rect.top >= contentRect.top - 1 && rect.bottom <= contentRect.bottom + 1 : false;
+        }),
+        partialRowCount: partialRows.length,
+        partialRowsHidden: partialRows.every(row => row.getAttribute('data-goal-content-row-clipped') === 'true' && getComputedStyle(row).visibility === 'hidden'),
+        lastRowBottom: lastRowRect?.bottom || 0,
+        cellBottom: cellRect?.bottom || 0,
+      };
+    });
+    const meetingFitOk = meetingFitProbe.rowCount === 10
+      && meetingFitProbe.containsLastText
+      && meetingFitProbe.lineAligned === 'true'
+      && meetingFitProbe.overflowY === 'auto'
+      && meetingFitProbe.scrollHeight > meetingFitProbe.clientHeight
+      && meetingFitProbe.clientHeight % 20 === 0
+      && meetingFitProbe.visibleRowCount > 0
+      && meetingFitProbe.visibleRowsComplete
+      && meetingFitProbe.partialRowCount > 0
+      && meetingFitProbe.partialRowsHidden;
+    record('B18-meeting-history-scrolls-by-complete-text-lines', meetingFitOk, meetingFitProbe);
+    await page.screenshot({ path: `${OUTPUT_DIR}/B18-dev121-meeting-history-no-clipping-1440x900.png` });
+    result.screenshots.push(`${OUTPUT_DIR}/B18-dev121-meeting-history-no-clipping-1440x900.png`);
     await page.mouse.move(1000, 20);
     const a1Identity = goal.locator('[data-goal-task-row-id="dev121-a1"] .goal-task-hierarchy-row');
     await a1Identity.focus();

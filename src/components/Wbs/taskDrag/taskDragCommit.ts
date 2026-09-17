@@ -18,8 +18,10 @@ import type {
 import {
   getTaskAppendOrder,
   isValidTaskDropIntent,
+  resolvePrimaryTaskMovePlan,
   resolveTaskDropOutcome,
   taskDragSourceKindToSurfaceKind,
+  type TaskDropDescriptor,
   type TaskDropIntent,
 } from './taskDropIntent';
 import { normalizeTaskMoveUpdates } from './taskMoveUpdateNormalization';
@@ -89,6 +91,63 @@ const commitTaskSubtreeToUnplaced = async (
 };
 
 export { normalizeTaskMoveUpdates } from './taskMoveUpdateNormalization';
+
+export type PrimaryDesktopTaskDragCommitDependencies = Pick<
+  TaskDragCommitDependencies,
+  'batchUpdateNodes' | 'recalculateAncestorStatus'
+> & Pick<TaskDragCommitDependencies, 'canMoveTask'>;
+
+/** Canonical primary Board/Goal commit. It intentionally excludes the
+ * Workbench/tracking special facade and always resolves against the latest
+ * store snapshot immediately before the single local batch. */
+export const commitPrimaryDesktopTaskDrag = ({
+  source,
+  target,
+  desktopPreview,
+  dependencies,
+}: {
+  source: TaskDropDescriptor;
+  target: TaskDropDescriptor;
+  desktopPreview?: DesktopTaskDropPreview | null;
+  dependencies: PrimaryDesktopTaskDragCommitDependencies;
+}): TaskDragCommitResult => {
+  if (!dependencies.canMoveTask) return noOp('move-permission-denied');
+  const state = useWbsStore.getState();
+  const sourceNode = state.nodes[source.nodeId];
+  const targetNode = state.nodes[target.nodeId];
+  if (!sourceNode || sourceNode.isArchived) return noOp('source-missing');
+  if (!targetNode || targetNode.isArchived) return noOp('target-missing');
+  if (sourceNode.workspaceId !== targetNode.workspaceId || sourceNode.boardId !== targetNode.boardId) {
+    return noOp('primary-scope-mismatch');
+  }
+  const plan = resolvePrimaryTaskMovePlan({ source, target, nodesRecord: state.nodes });
+  if (plan.outcomeKind === 'invalid' || !plan.intent || !plan.ordering) return noOp('invalid-drop-intent');
+  if (plan.outcomeKind === 'origin') return noOp('task-position-origin');
+  if (desktopPreview) {
+    if (desktopPreview.sourceNodeId !== plan.sourceNodeId || desktopPreview.targetNodeId !== plan.targetNodeId) {
+      return noOp('desktop-preview-target-mismatch');
+    }
+    if (desktopPreview.outcomeKind !== plan.outcomeKind
+      || desktopPreview.displayPosition !== plan.intent.displayPosition
+      || desktopPreview.intent.parentId !== plan.intent.parentId
+      || desktopPreview.intent.nodeType !== plan.intent.nodeType) {
+      return noOp('desktop-preview-stale');
+    }
+  }
+  try {
+    const updates = normalizeTaskMoveUpdates(source.nodeId, plan.intent, state.nodes, plan.ordering);
+    dependencies.batchUpdateNodes(updates, {
+      label: '移動任務位置',
+      mergeKey: `move:${source.nodeId}`,
+    });
+  } catch (error) {
+    console.error('[taskDrag] Failed to apply the canonical primary move.', error);
+    return failed('primary-local-batch-failed');
+  }
+  const isRootReorder = !sourceNode.parentId && !plan.intent.parentId;
+  if (!isRootReorder) dependencies.recalculateAncestorStatus(sourceNode.id);
+  return committed('task-position-updated');
+};
 
 const getBoardDestination = (
   targetOwnership: TaskOwnershipRef,
@@ -370,10 +429,24 @@ export const commitDesktopTaskDrag = async ({
       return failed('placement-persistence-failed');
     }
   } else {
-    const updates = normalizeTaskMoveUpdates(draggedNode.id, intent, state.nodes);
-    dependencies.batchUpdateNodes(updates, {
-      label: '移動任務位置',
-      mergeKey: `move:${draggedNode.id}`,
+    return commitPrimaryDesktopTaskDrag({
+      source: {
+        nodeId: draggedNode.id,
+        surfaceKind: latest.sourceSurfaceKind,
+      },
+      target: {
+        nodeId: overData.nodeId,
+        surfaceKind: latest.targetSurfaceKind,
+        orderingPosition: latest.intent.displayPosition === 'append'
+          ? undefined
+          : latest.intent.displayPosition,
+      },
+      desktopPreview,
+      dependencies: {
+        canMoveTask: dependencies.canMoveTask,
+        batchUpdateNodes: dependencies.batchUpdateNodes,
+        recalculateAncestorStatus: dependencies.recalculateAncestorStatus,
+      },
     });
   }
   dependencies.recalculateAncestorStatus(draggedNode.id);

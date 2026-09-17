@@ -362,12 +362,20 @@ body[data-kanban-mouse-pan-active="true"] * {
   pointer-events: none;
 }
 
-[data-goal-view="true"] .goal-task-hierarchy-row {
-  --task-hierarchy-indent: 8px;
-  --goal-hierarchy-lane-start: 20px;
-  --goal-hierarchy-branch-width: 12px;
+[data-goal-view="true"],
+[data-goal-hierarchy-guide-layer="preview"] {
   --goal-hierarchy-line-color: rgb(148 163 184 / 42%);
   --goal-hierarchy-line-active-color: rgb(99 102 241 / 76%);
+}
+
+[data-goal-view="true"] .goal-task-hierarchy-row {
+  /* R17: 8px baseline × 1.30, keeping every guide/title calculation aligned. */
+  --task-hierarchy-indent: 10.4px;
+  --goal-hierarchy-lane-start: 20px;
+  /* R17: extend the incoming branch by the same 2.4px added to the depth
+     track so the branch still meets the title edge after the +30% spacing. */
+  --goal-hierarchy-branch-width: 14.4px;
+  --goal-hierarchy-node-control-anchor: 16px;
   position: static;
   overflow: visible;
   min-height: 32px;
@@ -379,19 +387,77 @@ body[data-kanban-mouse-pan-active="true"] * {
   padding-right: 10px;
 }
 
-/* Disclosure owns the compact left slot immediately before the connector lanes. */
+/* The disclosure is the tree node. Its 20px hit target sits mostly to the left
+   of the rail and ends at the title edge, while the visible dot stays centered
+   on the task's own lane. */
 [data-goal-view="true"] .goal-task-hierarchy-row > button[data-goal-collapse-toggle] {
   position: absolute;
   z-index: 2;
   top: 50%;
-  left: 0;
+  left: calc(
+    var(--goal-hierarchy-lane-start)
+    + (var(--task-hierarchy-depth, 0) * var(--task-hierarchy-indent))
+    - var(--goal-hierarchy-node-control-anchor)
+  );
   right: auto;
   transform: translateY(-50%);
   margin: 0;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
   background: transparent;
+  cursor: pointer;
 }
 
-[data-goal-view="true"] .goal-hierarchy-guide-segment {
+[data-goal-view="true"] .goal-task-hierarchy-row > button[data-goal-collapse-toggle] > svg {
+  display: none;
+}
+
+[data-goal-view="true"] .goal-task-hierarchy-row > button[data-goal-collapse-toggle]::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--goal-hierarchy-node-control-anchor) - 3px);
+  top: 50%;
+  box-sizing: border-box;
+  width: 6px;
+  height: 6px;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background-color: var(--goal-hierarchy-line-color);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 88%);
+  transition: background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+[data-goal-view="true"] .goal-task-hierarchy-row > button[data-goal-collapse-toggle][aria-expanded="false"]::before {
+  left: calc(var(--goal-hierarchy-node-control-anchor) - 4px);
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--goal-hierarchy-line-color);
+  background-color: rgb(255 255 255 / 96%);
+}
+
+[data-goal-view="true"] tr[data-goal-hierarchy-scope] .goal-task-hierarchy-row > button[data-goal-collapse-toggle]::before {
+  background-color: var(--goal-hierarchy-line-active-color);
+}
+
+[data-goal-view="true"] tr[data-goal-hierarchy-scope] .goal-task-hierarchy-row > button[data-goal-collapse-toggle][aria-expanded="false"]::before {
+  border-color: var(--goal-hierarchy-line-active-color);
+  background-color: rgb(255 255 255 / 96%);
+}
+
+[data-goal-view="true"] .goal-task-hierarchy-row > button[data-goal-collapse-toggle]:hover::before,
+[data-goal-view="true"] .goal-task-hierarchy-row > button[data-goal-collapse-toggle]:focus-visible::before {
+  box-shadow: 0 0 0 4px rgb(224 231 255 / 86%);
+}
+
+[data-goal-view="true"] .goal-task-hierarchy-row > button[data-goal-collapse-toggle]:focus-visible {
+  outline: none;
+}
+
+[data-goal-view="true"] .goal-hierarchy-guide-segment,
+[data-goal-hierarchy-guide-layer="preview"] .goal-hierarchy-guide-segment {
   position: absolute;
   background: var(--goal-hierarchy-line-color);
   border-radius: 999px;
@@ -399,21 +465,36 @@ body[data-kanban-mouse-pan-active="true"] * {
   transition: background-color 120ms ease, box-shadow 120ms ease;
 }
 
-[data-goal-view="true"] .goal-hierarchy-guide-segment[data-goal-hierarchy-guide-active="true"] {
+[data-goal-view="true"] .goal-hierarchy-guide-segment[data-goal-hierarchy-guide-active="true"],
+[data-goal-hierarchy-guide-layer="preview"] .goal-hierarchy-guide-segment[data-goal-hierarchy-guide-active="true"] {
   background: var(--goal-hierarchy-line-active-color);
+}
+
+[data-goal-hierarchy-guide-layer="preview"] .goal-hierarchy-guide-incoming-vertical,
+[data-goal-hierarchy-guide-layer="preview"] .goal-hierarchy-guide-child-stem {
+  width: 1px;
+}
+
+[data-goal-hierarchy-guide-layer="preview"] .goal-hierarchy-guide-incoming-branch,
+[data-goal-hierarchy-guide-layer="preview"] .goal-hierarchy-guide-root-branch {
+  height: 1px;
 }
 
 /* Active relations carry the reading focus with a slightly heavier stroke.
    Offset the stroke by half a pixel so its center stays on the compact lane. */
 [data-goal-view="true"] .goal-hierarchy-guide-segment[data-goal-hierarchy-guide-active="true"].goal-hierarchy-guide-continuation,
 [data-goal-view="true"] .goal-hierarchy-guide-segment[data-goal-hierarchy-guide-active="true"].goal-hierarchy-guide-incoming-vertical,
-[data-goal-view="true"] .goal-hierarchy-guide-segment[data-goal-hierarchy-guide-active="true"].goal-hierarchy-guide-child-stem {
+[data-goal-view="true"] .goal-hierarchy-guide-segment[data-goal-hierarchy-guide-active="true"].goal-hierarchy-guide-child-stem,
+[data-goal-hierarchy-guide-layer="preview"] .goal-hierarchy-guide-segment[data-goal-hierarchy-guide-active="true"].goal-hierarchy-guide-incoming-vertical,
+[data-goal-hierarchy-guide-layer="preview"] .goal-hierarchy-guide-segment[data-goal-hierarchy-guide-active="true"].goal-hierarchy-guide-child-stem {
   width: 2px;
   margin-left: -0.5px;
 }
 
 [data-goal-view="true"] .goal-hierarchy-guide-segment[data-goal-hierarchy-guide-active="true"].goal-hierarchy-guide-incoming-branch,
-[data-goal-view="true"] .goal-hierarchy-guide-segment[data-goal-hierarchy-guide-active="true"].goal-hierarchy-guide-root-branch {
+[data-goal-view="true"] .goal-hierarchy-guide-segment[data-goal-hierarchy-guide-active="true"].goal-hierarchy-guide-root-branch,
+[data-goal-hierarchy-guide-layer="preview"] .goal-hierarchy-guide-segment[data-goal-hierarchy-guide-active="true"].goal-hierarchy-guide-incoming-branch,
+[data-goal-hierarchy-guide-layer="preview"] .goal-hierarchy-guide-segment[data-goal-hierarchy-guide-active="true"].goal-hierarchy-guide-root-branch {
   height: 2px;
   margin-top: -0.5px;
 }
@@ -458,13 +539,19 @@ body[data-kanban-mouse-pan-active="true"] * {
   height: 1px;
 }
 
-[data-goal-view="true"] tbody > tr[data-goal-level="0"]:not(:first-child) > * {
+[data-goal-view="true"] tbody > tr[data-goal-level="0"]:not(:first-child) > [data-goal-column] {
   border-top: 2px solid rgb(226 232 240 / 90%);
 }
 
-/* Task rows stay visually continuous; only root-group boundaries separate blocks. */
+/* Keep the frozen task-name lane open; the scrollable comparison area uses a
+   real cell grid so dates, status and ownership can be scanned by column. */
 [data-goal-view="true"] tbody > tr[data-goal-task-row] > * {
   border-bottom: 0;
+}
+
+[data-goal-view="true"] tbody > tr[data-goal-task-row] > [data-goal-column] {
+  border-bottom: 1px solid rgb(226 232 240 / 78%);
+  border-right: 1px solid rgb(226 232 240 / 78%);
 }
 
 [data-goal-view="true"] td[data-goal-group-span="true"] {
@@ -477,42 +564,60 @@ body[data-kanban-mouse-pan-active="true"] * {
   transition: background-color 120ms ease;
 }
 
-[data-goal-view="true"] tbody > tr > [data-goal-task-cell]:hover,
-[data-goal-view="true"] tbody > tr > [data-goal-task-cell]:focus-within,
 [data-goal-view="true"] tbody > tr > [data-goal-planning-control]:hover,
 [data-goal-view="true"] tbody > tr > [data-goal-planning-control]:focus-within {
   background-color: rgb(241 245 249 / 72%);
 }
 
 @supports selector(tr:has(> td)) {
-  [data-goal-view="true"] tbody > tr:has(> [data-goal-task-cell]:hover, > [data-goal-task-cell]:focus-within, > [data-goal-planning-control]:hover, > [data-goal-planning-control]:focus-within) > [data-goal-task-cell],
-  [data-goal-view="true"] tbody > tr:has(> [data-goal-task-cell]:hover, > [data-goal-task-cell]:focus-within, > [data-goal-planning-control]:hover, > [data-goal-planning-control]:focus-within) > [data-goal-planning-control] {
+  [data-goal-view="true"] tbody > tr:has(> [data-goal-planning-control]:hover, > [data-goal-planning-control]:focus-within) > [data-goal-planning-control] {
     background-color: rgb(241 245 249 / 72%);
   }
 }
 
-[data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-hierarchy-scope="parent"] > th[data-goal-task-cell] {
-  background-color: rgb(238 242 255 / 92%);
-}
-
-[data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-hierarchy-scope="descendant"] > th[data-goal-task-cell] {
-  background-color: rgb(248 250 255 / 96%);
-}
-
-/* Scope tint is shared by the task identity, planning cells and any real
-   content owner cell whose rowSpan covers the located task. */
-[data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-hierarchy-scope="parent"] > th[data-goal-task-cell],
-[data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-hierarchy-scope="parent"] > [data-goal-planning-control] {
+/* Keep every frozen task-name level on one shared surface while idle. During
+   location, the fixed task-name cell joins the same parent/descendant scope
+   tint as planning/content cells so the located task remains visible after
+   horizontal scrolling. */
+[data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-hierarchy-scope="parent"] > [data-goal-planning-control],
+[data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-child-drop-candidate="true"] > [data-goal-planning-control],
+[data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-child-drop-target="true"] > [data-goal-planning-control] {
   background-color: rgb(199 210 254 / 94%);
 }
 
-[data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-hierarchy-scope="descendant"] > th[data-goal-task-cell],
 [data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-hierarchy-scope="descendant"] > [data-goal-planning-control] {
   background-color: rgb(224 231 255 / 90%);
 }
 
+/* A located task must remain identifiable while the fixed task-name lane is
+   being compared against the horizontally scrollable columns. Keep the
+   normal lane surface neutral; apply the same two-level indigo scope tint
+   only while reverse location or pointer focus is active. */
+[data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-hierarchy-scope="parent"] > [data-goal-task-cell],
+[data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-child-drop-candidate="true"] > [data-goal-task-cell],
+[data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-child-drop-target="true"] > [data-goal-task-cell] {
+  background-color: rgb(224 231 255 / 72%);
+}
+
+[data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-hierarchy-scope="descendant"] > [data-goal-task-cell] {
+  background-color: rgb(239 246 255 / 76%);
+}
+
+[data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-hierarchy-scope] > [data-goal-task-cell] .task-title-text,
+[data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-child-drop-candidate="true"] > [data-goal-task-cell] .task-title-text,
+[data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-child-drop-target="true"] > [data-goal-task-cell] .task-title-text {
+  color: rgb(79 70 229);
+}
+
 [data-goal-view="true"] tbody > tr[data-goal-task-row] > [data-goal-content-scope="active"] {
   background-color: rgb(199 210 254 / 94%);
+}
+
+/* Meeting history stays scrollable, but a quick-note row is either fully
+   inside the viewport or hidden until it can be read whole. This prevents a
+   rowSpan edge from showing a half-rendered final line while scrolling. */
+[data-goal-view="true"] [data-goal-content-row-clipped="true"] {
+  visibility: hidden;
 }
 
 .task-workbench-unplaced-hierarchy-row {

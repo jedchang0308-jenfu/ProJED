@@ -18,6 +18,7 @@ const files = {
   board: 'src/components/BoardView.tsx',
   card: 'src/components/Wbs/KanbanCard.tsx',
   checklist: 'src/components/Wbs/KanbanChecklist.tsx',
+  sharedChecklistTree: 'src/components/Wbs/TaskChecklistTree.tsx',
   column: 'src/components/Wbs/KanbanColumn.tsx',
   workbench: 'src/components/TaskWorkbenchPanel.tsx',
   css: 'src/index.css',
@@ -34,6 +35,16 @@ const source = Object.fromEntries(Object.entries(files).map(([key, file]) => [
 const results = [];
 const check = (name, ok, details) => results.push({ name, ok: Boolean(ok), details });
 const hasAll = (value, needles) => needles.every((needle) => value.includes(needle));
+// Shared renderers and adapter boundaries may express the same data-* contract
+// either as JSX attributes or as object props passed to a presentation layer.
+// The verifier checks the rendered DOM contract, so accept both source forms.
+const hasDataAttribute = (component, attribute, value = 'true') => (
+  component.includes(`${attribute}="${value}"`)
+  || component.includes(`'${attribute}': '${value}'`)
+  || new RegExp(`['"]${attribute}['"]\\s*:[^,\\n]*['"]${value}['"]`).test(component)
+);
+const checklistRendererSource = `${source.checklist}\n${source.sharedChecklistTree}`;
+const columnDropSource = source.column.slice(source.column.indexOf("'data-mobile-pan-surface': 'kanban-column'"));
 
 Object.entries(files).forEach(([key, file]) => check(`file exists:${key}`, existsSync(resolve(file)), file));
 
@@ -58,11 +69,13 @@ check('mobile and desktop preview and commit use the same canonical outcome reso
   && !source.target.includes('rect.top + rect.height / 2'));
 
 check('explicit target surface kinds exist for card, checklist, and column',
-  source.card.includes('data-task-drop-surface-kind="kanban-card"')
-  && source.card.includes('data-mobile-task-card-primary="true"')
-  && source.checklist.includes('data-task-drop-surface-kind="checklist-row"')
-  && source.column.includes('data-task-drop-surface-kind="column-header"')
-  && /data-mobile-pan-surface="kanban-column"[\s\S]*?data-mobile-drop-target=\{nodeId\}[\s\S]*?data-task-drop-surface-kind="column-drop"/.test(source.column));
+  hasDataAttribute(source.card, 'data-task-drop-surface-kind', 'kanban-card')
+  && hasDataAttribute(source.card, 'data-mobile-task-card-primary')
+  && hasDataAttribute(checklistRendererSource, 'data-task-drop-surface-kind', 'checklist-row')
+  && hasDataAttribute(source.column, 'data-task-drop-surface-kind', 'column-header')
+  && hasDataAttribute(columnDropSource, 'data-mobile-pan-surface', 'kanban-column')
+  && columnDropSource.includes("'data-mobile-drop-target': nodeId")
+  && hasDataAttribute(columnDropSource, 'data-task-drop-surface-kind', 'column-drop'));
 
 check('mobile container surfaces own their geometry instead of borrowing the first descendant task',
   source.target.includes("surfaceKind === 'column-drop'")
@@ -103,9 +116,12 @@ check('every eligible task long-press surface suppresses native selection and iO
     'user-select: none;',
     ':is(input, textarea, [contenteditable="true"])',
   ])
-  && hasAll(source.column, ['data-task-touch-gesture-surface=', 'taskGesture.touchGestureEnabled'])
-  && hasAll(source.card, ['data-task-touch-gesture-surface=', 'taskGesture.touchGestureEnabled'])
-  && hasAll(source.checklist, ['data-task-touch-gesture-surface=', 'taskGesture.touchGestureEnabled'])
+  && (source.column.includes('data-task-touch-gesture-surface=') || source.column.includes("'data-task-touch-gesture-surface':"))
+  && source.column.includes('taskGesture.touchGestureEnabled')
+  && checklistRendererSource.includes('data-task-touch-gesture-surface=')
+  && checklistRendererSource.includes('taskGesture.touchGestureEnabled')
+  && (source.card.includes('data-task-touch-gesture-surface=') || source.card.includes("'data-task-touch-gesture-surface':"))
+  && source.card.includes('taskGesture.touchGestureEnabled')
   && hasAll(source.workbench, ['data-task-touch-gesture-surface=', 'touchGestureEnabled={taskGesture.touchGestureEnabled}']));
 
 check('Workbench keeps native pan while only eligible unplaced rows receive touch ownership',
@@ -139,9 +155,10 @@ check('preview remains finger-coupled and preserves z-order',
   source.presenter.includes('MOBILE_PREVIEW_FINGER_CLEARANCE_PX')
   && source.presenter.includes('data-mobile-preview-anchor="finger"')
   && !source.presenter.includes('MOBILE_PREVIEW_INDICATOR_GAP_PX')
-  && source.presenter.includes('z-[80]')
-  && source.presenter.includes('z-[90]')
-  && source.presenter.includes('z-[95]'));
+  && source.presenter.includes('overlayBaseZIndex = 80')
+  && source.presenter.includes('zIndex: overlayBaseZIndex')
+  && source.presenter.includes('zIndex: overlayBaseZIndex + 10')
+  && source.presenter.includes('zIndex: overlayBaseZIndex + 15'));
 
 check('mobile preview uses the same half-scale visual treatment as desktop', hasAll(source.presenter, [
   'TASK_DRAG_OVERLAY_SCALE',

@@ -20,6 +20,14 @@
 - 文件成熟度：`RD Implementation Ready / Implemented`
 - 架構定案：`已定案`
 
+## DEV-124 桌面拖拉 ownership intentional replacement（2026-09-16；架構已定案／未實作）
+
+[SPEC-124](SPEC-124-shared-desktop-task-drag-host.md) 有意取代本文件中「Goal 自有 DnD lifecycle／layout commit handler」
+的責任邊界：Board 與 Goal 將共用 desktop drag host、fixed feedback layer 與 canonical primary commit，
+各模式只保留 geometry adapter。此 amendment 不取代 Goal native table、`rowSpan`、252px frozen task-name first column、
+single X-scroll、content／planning ownership、menu、keyboard semantics 或 mobile blocked policy。
+在 DEV-124 尚未完成實作與 QA 前，現行 Goal runtime 仍依本文件既有 implemented behavior 運作；不得把架構定案誤寫成已交付。
+
 ## DEV-121 階層對照 compatible amendment（2026-09-14；架構已定案／未實作）
 
 [SPEC-121](SPEC-121-goal-hierarchy-comparison-grid.md) 在 Goal frozen task-name cell 增加 Goal-only tree rails、
@@ -27,6 +35,10 @@ root-group boundary 與 collapsed descendant count，並在 task＋planning cell
 本修訂保留本文件的 active-board primary DFS、shared `buildHierarchicalTaskItems`、
 `TaskHierarchyIndentedRow` 的 6px shared default、native table／`rowSpan`、DnD、menu、mobile negative 與 a11y authority。
 SPEC-121 R8/R9 對 Goal surface 局部覆寫 8px depth step、移除 endpoint、柔和化 connector，並把 disclosure 移到樹線左側的 20px 操作槽；List 與其他模式仍使用 6px default。
+SPEC-121 R15 後續只在 Goal surface 將該 disclosure 視覺整併為 own-lane node toggle；shared `TaskHierarchyIndentedRow` 的 button、`aria-expanded`、handler 與其他模式 chevron 均不變。
+SPEC-121 R16 只調整 Goal active presentation：current task 的 parent-owned `incoming-vertical`／`incoming-branch` 維持中性，其 own／descendant lineage 仍強調；shared hierarchy 與其他模式完全不變。
+SPEC-121 R17 只調整 Goal presentation token：樹狀線 X 軸間隔由 Goal 8px 基準調為 10.4px（+30%）；shared hierarchy default 與其他模式完全不變。
+SPEC-121 R18／R19 只調整 Goal presentation surface：定位／focus scope 時 task-name frozen cell 不套 active tint，且 root／L1／L2+ 所有層級共用同一白色底色；planning／content owner tint 與樹線定位仍保留；shared hierarchy 與其他模式完全不變。
 SPEC-121 的 decoration map 只消費 canonical builder 結果，不得決定 row order、visibility、parent、content owner 或 mutation。
 
 ## DEV-120 規劃欄極簡化局部 target replacement（2026-09-14；Implemented／Targeted QA-QC PASS）
@@ -37,6 +49,7 @@ target：移除 table 外框、planning cluster 常駐垂直格線、深色白�
 controls 及 112／64／96／96／60px tracks。controls 持續掛載並沿用既有 handlers，只由 normal／hover／focus／open
 樣式降低 chrome，不新增 planning editor/session state。DEV-116 的既有 V10／V12／V23 QA/QC 結果保留為歷史 candidate
 事實；DEV-120 實作時只更新被明確取代的 oracle，不回寫歷史 artifacts。
+DEV-121 R14 是後續的 Goal-only 視覺修正：在保留任務名稱固定欄無資料列格線的前提下，恢復可捲動比較欄位的水平與垂直 cell grid；這不改寫 DEV-120 的歷史 candidate artifacts。
 
 任務名稱仍是同一 native table 的第一欄，固定在資料表格左側：task-name th/td 使用 sticky left，其他
 欄位由表格唯一 X 軸捲軸移動。這不是 app sidebar、viewport-fixed panel、split table 或第二個 scroll owner。
@@ -514,8 +527,8 @@ permission、Task Details、barrier semantics、資料繼承、stale scope容忍
   非預期水平overflow；390×844無goal entry。Zoom case不得因測試先用窄CSS viewport而誤測成mobile normalization。
 - AC-116-17：keyboard focus order與DFS task order一致；screen reader能辨識content owner。無法證明時採no-rowspan fallback。
 - AC-116-18：browser console／page／HTTP／visible-error arrays為0，critical fixture counts非0；runtime cleanup完成。
-- AC-116-19：任務名稱欄與 List 共用階層縮排元件；List 保留 shared 6px depth step，Goal 依 SPEC-121 R8
-  使用局部 8px compact wired-tree step、無 endpoint、柔和 connector 與樹線左側 disclosure slot。List 保留進度條／百分比，Goal 不呈現進度指示但顯示啟用中的標籤，
+- AC-116-19：任務名稱欄與 List 共用階層縮排元件；List 保留 shared 6px depth step，Goal 依 SPEC-121 R17
+  使用局部 10.4px（8px × 1.3）compact wired-tree step、無 endpoint、柔和 connector 與樹線左側 disclosure slot。List 保留進度條／百分比，Goal 不呈現進度指示但顯示啟用中的標籤，
   且不限制 L1／L2／L3+ 欄位資格。
 - AC-116-20：editor可在Goal修改負責人、狀態、開始／結束日期與工期，並拖曳同層或跨層 primary placement；
   所有操作寫回canonical task後List可見同一結果。Viewer無上述mutation能力。

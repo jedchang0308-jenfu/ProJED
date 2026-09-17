@@ -10,7 +10,7 @@
   "background_color": "#f8fafc",
   "theme_color": "#0f766e",
   "icons": [
-    { "src": "/icons/icon-vibrant-03-mango-berry.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/icons/icon-vibrant-03-mango-berry.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    { "src": "/icons/icon-vibrant-03-mango-berry.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-vibrant-03-mango-berry.png", "sizes": "1024x1024", "type": "image/png", "purpose": "maskable" }
   ]
 }

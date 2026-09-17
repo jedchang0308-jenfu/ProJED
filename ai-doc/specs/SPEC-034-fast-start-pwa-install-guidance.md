@@ -3,10 +3,10 @@
 狀態：Done / Browser QC Passed / Local-first scope  
 文件角色：PM / RD 開發規格  
 建立日期：2026-06-29  
-更新日期：2026-07-03
+更新日期：2026-09-16（DEV-122 R12 compatible extension）
 需求來源：使用者在 `codex/UX優化` 分支提出出差臨時記事啟動摩擦、PWA 更新策略、加入主畫面指引過於複雜等 UX 問題。
 
-最新修正：2026-07-03，QuickCaptureShell 已退役；右下角 `待整理` 浮窗已由 DEV-039 全域任務平台的 `未歸位` lane 取代。保留 `useQuickCaptureStore` 與 `projed.quickCapture.inboxItems` 僅作舊本機快記資料遷移與未歸位來源，不再全域掛載可輸入浮窗。
+最新修正：2026-09-16，DEV-122 R12將`/quick-task/`加入canonical root ProJED manifest的app shortcut，保留選用的quick獨立install identity，並補齊既有安裝更新與平台fallback；本規格原有root安裝、更新與設定頁入口維持。QuickCaptureShell仍退役，右下角`待整理`浮窗仍由DEV-039全域任務平台的`未歸位`lane取代。
 
 ---
 
@@ -239,6 +239,15 @@ iPhone Safari：
 這些資訊若需要保留，應放在 debug、console、錯誤頁或開發文件，不放在一般使用者的任務指引中。
 
 ---
+
+### 8.5 DEV-122 R12 主程式快速捷徑擴充
+
+- root ProJED manifest維持`id/start_url/scope='/'`，一般點擊已安裝App仍開完整ProJED；新增「快速建待辦」app shortcut，URL為`/quick-task/`。
+- shortcut是主程式安裝後的快速動作，不是第二個自動安裝圖示。需要桌面單鍵入口的使用者可另行安裝DEV-122 quick manifest；兩種入口都由DEV-122維護。
+- 設定頁在手機與電腦版只保留一個「快速建待辦」區塊與一個CTA，說明：安裝ProJED後，支援的平台可從ProJED圖示選快速建待辦；需要桌面單鍵入口時可另行安裝獨立圖示。不得承諾所有iOS／瀏覽器都有相同長按UI或既有安裝會立即出現捷徑。
+- 不支援manifest shortcuts的平台維持一般ProJED啟動、設定頁quick CTA與選用第二圖示流程；不顯示錯誤，不使用技術詞要求使用者理解平台差異。
+- root manifest唯一來源、build／precache及既有安裝更新由SPEC-122的S15／W07／D10負責；本元件不得新增UA猜測、OS捷徑可用性偵測、polling或強制manifest更新。
+- 本擴充的實作、S15／B22～B24／W07／D08～D10與同帳號驗證由SPEC-122／QA-DEV-122負責；DEV-034既有QC結果不能替代R12證據。
 
 ## 9. 快速啟動與快記設計
 

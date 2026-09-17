@@ -31,6 +31,13 @@ const results = [];
 const check = (id, name, ok, details) => results.push({ id, name, ok: Boolean(ok), details });
 const hasAll = (value, needles) => needles.every((needle) => value.includes(needle));
 const checklistRendererSource = `${source.checklist}\n${source.sharedChecklistTree}`;
+// JSX object spreads are equivalent to literal data-* attributes in the
+// rendered DOM; accept both forms after the shared surface extraction.
+const hasDataAttribute = (component, attribute, value = 'true') => (
+  component.includes(`${attribute}="${value}"`)
+  || component.includes(`'${attribute}': '${value}'`)
+  || new RegExp(`['"]${attribute}['"]\\s*:[^,\\n]*['"]${value}['"]`).test(component)
+);
 
 Object.entries(files).forEach(([key, file]) => check('S00', `file exists:${key}`, existsSync(resolve(file)), file));
 
@@ -58,9 +65,9 @@ check('S03', 'desktop preview and commit reuse the canonical outcome resolver',
   && source.board.includes('resolveDesktopTaskDropPreview({'));
 
 check('S04', 'desktop source placeholders are neutral and cannot impersonate the live target',
-  (source.card.includes('data-kanban-drag-source-placeholder-neutral="true"')
+  (hasDataAttribute(source.card, 'data-kanban-drag-source-placeholder-neutral')
     || source.card.includes('kanban-drag-origin-placeholder'))
-  && source.column.includes('data-kanban-drag-source-placeholder-neutral="true"')
+  && hasDataAttribute(source.column, 'data-kanban-drag-source-placeholder-neutral')
   && !checklistRendererSource.includes('showSourceInsertionMarker')
   && !source.card.includes("import { KanbanInsertionMarker }")
   && !source.card.includes('<KanbanInsertionMarker')
@@ -73,9 +80,9 @@ check('S04A', 'source placeholder uses a neutral outline while the live destinat
   && !source.styles.includes('outline: 2px dashed var(--color-primary-400);'));
 
 check('S05', 'primary geometry owns targeting while complete task scope owns reorder marker boundaries',
-  source.card.includes('data-task-surface-source="true"')
-  && source.card.includes('data-task-card-primary="true"')
-  && source.card.includes('data-mobile-task-card-primary="true"')
+  hasDataAttribute(source.card, 'data-task-surface-source')
+  && hasDataAttribute(source.card, 'data-task-card-primary')
+  && hasDataAttribute(source.card, 'data-mobile-task-card-primary')
   && source.preview.includes("'[data-task-surface-source=\"true\"]'")
   && source.preview.includes('findTaskOrderingGeometryElement(targetElement, targetSurfaceKind)')
   && source.preview.includes("displayPosition === 'after' ? orderingGeometryRect.bottom : orderingGeometryRect.top")

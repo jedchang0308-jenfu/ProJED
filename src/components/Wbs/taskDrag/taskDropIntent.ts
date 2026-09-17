@@ -21,6 +21,22 @@ export interface TaskDropIntent {
   displayPosition: 'before' | 'after' | 'append';
 }
 
+/** Complete post-drop sibling ordering for the affected placement scopes. */
+export interface TaskMoveOrderingPlan {
+  sourceScopeKey: string;
+  destinationScopeKey: string;
+  sourceSiblingIds: readonly string[];
+  destinationSiblingIds: readonly string[];
+}
+
+export interface PrimaryTaskMovePlan {
+  sourceNodeId: string;
+  targetNodeId: string;
+  outcomeKind: TaskDropOutcome['kind'];
+  intent: TaskDropIntent | null;
+  ordering: TaskMoveOrderingPlan | null;
+}
+
 export type TaskDropOutcome =
   | { kind: 'move'; intent: TaskDropIntent }
   | { kind: 'origin'; intent: TaskDropIntent }
@@ -246,6 +262,83 @@ export const resolveTaskDropOutcome = ({
     intent,
     nodesRecord,
   });
+};
+
+/**
+ * Resolve a primary Board/Goal drop into one deterministic plan. Geometry is
+ * responsible only for selecting the target and before/after/append edge;
+ * this function performs the exact sibling splice against the latest store
+ * snapshot so dense and sparse orders cannot drift apart.
+ */
+export const resolvePrimaryTaskMovePlan = ({
+  source,
+  target,
+  nodesRecord,
+}: {
+  source: TaskDropDescriptor;
+  target: TaskDropDescriptor;
+  nodesRecord: Record<string, TaskNode>;
+}): PrimaryTaskMovePlan => {
+  const invalid = (intent: TaskDropIntent | null = null): PrimaryTaskMovePlan => ({
+    sourceNodeId: source.nodeId,
+    targetNodeId: target.nodeId,
+    outcomeKind: 'invalid',
+    intent,
+    ordering: null,
+  });
+  const sourceNode = nodesRecord[source.nodeId];
+  const targetNode = nodesRecord[target.nodeId];
+  if (!sourceNode || !targetNode || sourceNode.isArchived || targetNode.isArchived
+    || sourceNode.id === targetNode.id) return invalid();
+
+  const intent = resolveTaskDropIntent({ source, target, nodesRecord });
+  if (!intent) return invalid();
+  const sourceScopeKey = getPlacementScopeKey(getTaskPlacementScope(sourceNode));
+  const movedNode = {
+    ...sourceNode,
+    parentId: intent.parentId,
+    nodeType: intent.nodeType ?? sourceNode.nodeType,
+  };
+  const destinationScopeKey = getPlacementScopeKey(getTaskPlacementScope(movedNode));
+  const parentIndex = buildTaskParentIndex(nodesRecord);
+  const sourceIds = parentIndex[sourceScopeKey] || [];
+  const destinationIds = parentIndex[destinationScopeKey] || [];
+  if (!sourceIds.includes(sourceNode.id)
+    || (intent.displayPosition !== 'append' && !destinationIds.includes(targetNode.id))) return invalid(intent);
+
+  const sourceWithoutDragged = sourceIds.filter(id => id !== sourceNode.id);
+  const destinationBase = sourceScopeKey === destinationScopeKey
+    ? sourceWithoutDragged
+    : destinationIds.slice();
+  const targetIndex = destinationBase.indexOf(targetNode.id);
+  const insertionIndex = intent.displayPosition === 'append'
+    ? destinationBase.length
+    : targetIndex + (intent.displayPosition === 'after' ? 1 : 0);
+  if (intent.displayPosition !== 'append' && targetIndex < 0) return invalid(intent);
+
+  const destinationAfter = destinationBase.slice();
+  destinationAfter.splice(Math.max(0, insertionIndex), 0, sourceNode.id);
+  const origin = sourceScopeKey === destinationScopeKey
+    && sourceIds.length === destinationAfter.length
+    && sourceIds.every((id, index) => id === destinationAfter[index])
+    && (intent.nodeType ?? sourceNode.nodeType) === sourceNode.nodeType
+    && (sourceNode.parentId || null) === (intent.parentId || null);
+  const ownershipChanged = !taskOwnershipEquals(
+    getTaskOwnershipRef(sourceNode),
+    getTaskOwnershipRef(targetNode),
+  );
+  return {
+    sourceNodeId: sourceNode.id,
+    targetNodeId: targetNode.id,
+    outcomeKind: ownershipChanged ? 'move' : origin ? 'origin' : 'move',
+    intent,
+    ordering: {
+      sourceScopeKey,
+      destinationScopeKey,
+      sourceSiblingIds: sourceScopeKey === destinationScopeKey ? destinationAfter : sourceWithoutDragged,
+      destinationSiblingIds: destinationAfter,
+    },
+  };
 };
 
 export const taskDragSourceKindToSurfaceKind = (

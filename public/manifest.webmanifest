@@ -12,5 +12,16 @@
   "icons": [
     { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
     { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "快速建待辦",
+      "short_name": "建待辦",
+      "description": "直接輸入一筆待辦",
+      "url": "/quick-task/",
+      "icons": [
+        { "src": "/icons/icon-vibrant-03-mango-berry.png", "sizes": "1024x1024", "type": "image/png" }
+      ]
+    }
   ]
 }

@@ -1,9 +1,13 @@
 import type { TaskStatus } from '../../types';
 import { normalizeManualTaskStatus, type ManualTaskStatus } from '../../utils/taskStatus';
-import { taskFilterChoiceBaseClass } from './taskConditionFilterStyles';
+import {
+  taskFilterChoiceActiveClass,
+  taskFilterChoiceBaseClass,
+  taskFilterChoiceInactiveClass,
+} from './taskConditionFilterStyles';
 
 /**
- * 四種人工狀態只使用深灰、藍、淺灰三個視覺角色；逾期另由截止日使用橘紅色。
+ * 任務狀態欄位保留語意色；篩選晶片則使用共用的啟用樣式，避免不同篩選類型造成視覺不一致。
  */
 export const taskStatusTitleClass: Record<TaskStatus, string> = {
   todo: 'text-slate-800',
@@ -27,25 +31,11 @@ export const getTaskStatusSelectClass = (status: TaskStatus) =>
 export const getTaskStatusFieldClass = (status: TaskStatus) =>
   `h-8 min-w-0 flex-1 rounded-md border px-2 text-sm font-semibold outline-none transition-colors focus:ring-2 ${statusSelectClass[normalizeManualTaskStatus(status)]}`;
 
-const activeStatusFilterClass: Record<ManualTaskStatus, string> = {
-  todo: 'border-slate-700 bg-slate-700 text-white ring-slate-700/20',
-  in_progress: 'border-blue-600 bg-blue-600 text-white ring-blue-600/20',
-  onhold: 'border-slate-300 bg-slate-100 text-slate-500 ring-slate-300/30',
-  completed: 'border-slate-300 bg-slate-100 text-slate-500 ring-slate-300/30',
-};
-
-const inactiveStatusFilterClass: Record<ManualTaskStatus, string> = {
-  todo: 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50',
-  in_progress: 'border-blue-200 bg-white text-blue-600 hover:bg-blue-50',
-  onhold: 'border-slate-200 bg-white text-slate-400 hover:bg-slate-50',
-  completed: 'border-slate-200 bg-white text-slate-400 hover:bg-slate-50',
-};
-
-export const getTaskStatusFilterChipClass = (status: ManualTaskStatus, active: boolean) =>
+export const getTaskStatusFilterChipClass = (active: boolean) =>
   `${taskFilterChoiceBaseClass} ${
     active
-      ? `${activeStatusFilterClass[status]} ring-1`
-      : inactiveStatusFilterClass[status]
+      ? taskFilterChoiceActiveClass
+      : taskFilterChoiceInactiveClass
   }`;
 
 export const getTaskProgressFillClass = (progress: number) => {

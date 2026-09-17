@@ -1,14 +1,16 @@
 import React from 'react';
-import { Search, UserRound } from 'lucide-react';
+import { Search } from 'lucide-react';
 import {
   TASK_STATUS_OPTIONS,
   type TaskFilterQuery,
   normalizeTaskFilters,
 } from '../../features/taskFilters';
 import {
+  taskFilterChoiceActiveClass,
   getTaskFilterChoiceClass,
   taskFilterChoiceBaseClass,
   taskFilterChoiceGroupClass,
+  taskFilterChoiceInactiveClass,
   taskFilterFieldClass,
 } from './taskConditionFilterStyles';
 import { getTaskStatusFilterChipClass } from './taskStatusStyles';
@@ -95,7 +97,7 @@ const TaskConditionFilterControls: React.FC<Props> = ({
               type="button"
               disabled={disabled}
               onClick={() => toggleStatus(status.key)}
-              className={getTaskStatusFilterChipClass(status.key, value.statuses.includes(status.key))}
+              className={getTaskStatusFilterChipClass(value.statuses.includes(status.key))}
               aria-pressed={value.statuses.includes(status.key)}
             >
               {status.label}
@@ -107,25 +109,27 @@ const TaskConditionFilterControls: React.FC<Props> = ({
       <section className="space-y-2">
         <label className="text-[11px] font-bold uppercase text-slate-400">到期日與關鍵字</label>
         {showOverdueFilter ? (
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={() => change({ ...value, due: { ...value.due, includeOverdue: !value.due.includeOverdue } })}
-            className={`${taskFilterChoiceBaseClass} ${
-              value.due.includeOverdue
-                ? 'border-orange-300 bg-orange-50 text-orange-700 ring-1 ring-orange-200'
-                : 'border-orange-200 bg-white text-orange-600 hover:border-orange-300 hover:bg-orange-50'
-            }`}
-            aria-pressed={value.due.includeOverdue}
-            data-overdue-filter="true"
-          >
-            逾期
-          </button>
+          <div className="flex w-full">
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => change({ ...value, due: { ...value.due, includeOverdue: !value.due.includeOverdue } })}
+              className={`${taskFilterChoiceBaseClass} ${
+                value.due.includeOverdue
+                  ? taskFilterChoiceActiveClass
+                  : taskFilterChoiceInactiveClass
+              }`}
+              aria-pressed={value.due.includeOverdue}
+              data-overdue-filter="true"
+            >
+              逾期
+            </button>
+          </div>
         ) : null}
         <div
           className={`${taskFilterChoiceGroupClass} ${
             value.due.upcomingWithinDays !== null
-              ? 'border-primary/35 bg-primary/[0.04]'
+              ? 'border-primary-500 bg-primary-50 ring-2 ring-primary-200/80'
               : 'border-slate-300'
           }`}
           data-upcoming-due-filter-group="true"
@@ -134,13 +138,13 @@ const TaskConditionFilterControls: React.FC<Props> = ({
             type="button"
             disabled={disabled}
             onClick={() => change({ ...value, due: { ...value.due, upcomingWithinDays: value.due.upcomingWithinDays === null ? 7 : null } })}
-            className={`${taskFilterChoiceBaseClass} rounded-none border-0 border-r border-slate-200/80 px-2.5 ${value.due.upcomingWithinDays !== null ? 'bg-primary/10 text-primary' : 'text-slate-600 hover:bg-primary/5 hover:text-primary'}`}
+            className={`${taskFilterChoiceBaseClass} rounded-none border-0 border-r border-slate-200/80 px-2.5 ${value.due.upcomingWithinDays !== null ? taskFilterChoiceActiveClass : 'text-slate-600 hover:bg-primary-50 hover:text-primary-700'}`}
             aria-pressed={value.due.upcomingWithinDays !== null}
             data-upcoming-due-filter="true"
           >
             到期
           </button>
-          <label className="flex items-center gap-1.5 px-2 text-xs font-semibold text-slate-600">
+          <label className={`flex items-center gap-1.5 px-2 text-xs font-semibold ${value.due.upcomingWithinDays !== null ? 'text-primary-700' : 'text-slate-600'}`}>
             <input
               type="number"
               disabled={disabled}
@@ -155,7 +159,6 @@ const TaskConditionFilterControls: React.FC<Props> = ({
                 },
               })}
               className={taskFilterFieldClass + ' h-7 w-12 rounded-none border-0 bg-transparent px-0 text-right focus:border-0 focus:ring-0'}
-              placeholder="天數"
               aria-label="到期天數"
             />
             <span>天內</span>
@@ -191,7 +194,6 @@ const TaskConditionFilterControls: React.FC<Props> = ({
             title={unassignedDisabled ? unassignedDisabledReason : undefined}
             aria-pressed={value.people.includeUnassigned}
           >
-            <UserRound size={13} />
             未指派
           </button>
           {assigneeOptions.map(option => (
@@ -204,7 +206,6 @@ const TaskConditionFilterControls: React.FC<Props> = ({
               title={option.disabled ? option.disabledReason : undefined}
               aria-pressed={value.people.ids.includes(option.id)}
             >
-              <UserRound size={13} />
               <span className="max-w-[7rem] truncate">{option.label}</span>
             </button>
           ))}

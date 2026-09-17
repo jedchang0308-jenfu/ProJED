@@ -136,11 +136,13 @@ const getColumnLastTaskBottom = (targetElement: HTMLElement) => {
   const subtree = targetElement.querySelector<HTMLElement>(
     ':scope > [data-kanban-column-subtree-scope]',
   );
-  const tasks = Array.from(subtree?.children || [])
-    .filter((element): element is HTMLElement => (
-      element instanceof HTMLElement
-      && element.matches('[data-task-surface-scope="true"][data-task-id]')
-    ));
+  const tasks = Array.from(subtree?.querySelectorAll<HTMLElement>([
+    // TaskPlacementTree is the shared structural wrapper between a column
+    // subtree and its same-level task scopes. Keep the direct-child fallback
+    // for legacy surfaces that do not render that wrapper.
+    ':scope > [data-task-placement-tree="true"] > [data-task-surface-scope="true"][data-task-id]',
+    ':scope > [data-task-surface-scope="true"][data-task-id]',
+  ].join(', ')) || []);
   const lastTask = tasks[tasks.length - 1];
   return lastTask?.getBoundingClientRect().bottom ?? null;
 };

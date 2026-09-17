@@ -72,8 +72,8 @@ check('S06', 'source collision remains blocked and origin release cannot enter c
   "type: 'collision:source-block'",
   'return [];',
   'if (!canMoveTask) return;',
-  'if (!over) return;',
-]));
+]) && (source.board.includes('if (!over) return;')
+  || source.board.includes('if (!effectiveOver && !currentPreview) return;')));
 
 check('S07', 'cancel and end clear every origin session reference',
   (source.board.match(/desktopDragOriginIndicatorRef\.current = null/g) || []).length >= 2

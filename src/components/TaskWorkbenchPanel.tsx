@@ -60,7 +60,7 @@ import { KanbanInsertionMarker } from './Wbs/KanbanInsertionMarker';
 import { isMobileTaskActionMode } from './Wbs/mobileTaskActionContext';
 import { useTaskGestureSurface } from './Wbs/taskDrag/useTaskGestureSurface';
 import TaskConditionFilterControls from './ui/TaskConditionFilterControls';
-import { taskFilterFieldClass } from './ui/taskConditionFilterStyles';
+import { getTaskFilterTriggerClass, taskFilterFieldClass } from './ui/taskConditionFilterStyles';
 import { getSharedInlinePanelWidthStyle } from '../features/layout/preferences';
 import { buildWorkbenchProjectionTasks } from '../features/taskTracking/model';
 
@@ -1262,20 +1262,15 @@ const TaskWorkbenchPanel: React.FC<{
               ref={filterToggleRef}
               type="button"
               onClick={() => patchPanelPrefs({ filtersOpen: !panelPrefs.filtersOpen })}
-              className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
-                panelPrefs.filtersOpen
-                  ? 'border-primary/35 bg-primary/10 text-primary shadow-sm ring-1 ring-primary/15'
-                  : selectedBoardActiveFilterCount > 0
-                    ? 'border-primary/30 bg-primary/10 text-primary shadow-sm ring-1 ring-primary/15'
-                    : 'border-slate-300 bg-white text-slate-600 shadow-sm hover:border-slate-400 hover:bg-slate-100'
-              }`}
+              className={`inline-flex h-8 min-w-8 shrink-0 items-center justify-center rounded-md border px-1.5 transition-all disabled:cursor-not-allowed disabled:opacity-50 ${getTaskFilterTriggerClass(selectedBoardActiveFilterCount > 0, panelPrefs.filtersOpen)}`}
               data-task-workbench-filter-toggle="true"
               data-active-task-workbench-filter-count={selectedBoardActiveFilterCount}
               aria-expanded={panelPrefs.filtersOpen}
-              aria-label={selectedBoardActiveFilterCount > 0 ? '過濾器已啟用' : '過濾器'}
+              aria-label={selectedBoardActiveFilterCount > 0 ? `過濾器已啟用（${selectedBoardActiveFilterCount} 項）` : '過濾器'}
               title="調整過濾器"
             >
               <SlidersHorizontal size={13} />
+              {selectedBoardActiveFilterCount > 0 ? <span className="inline-flex min-w-4 items-center justify-center rounded-full bg-white px-1 py-0.5 text-[10px] font-bold leading-none text-primary-700" aria-hidden="true">{selectedBoardActiveFilterCount > 99 ? '99+' : selectedBoardActiveFilterCount}</span> : null}
             </button>
             <button
               type="button"

@@ -232,8 +232,8 @@ export const AppInstallAssistant: React.FC<AppInstallAssistantProps> = ({ mode =
           <div className="space-y-5">
             <AppInstallContent context={context} />
             <div className="rounded-lg border border-teal-200 bg-teal-50 p-4" data-quick-task-install-cta="true">
-              <div className="text-sm font-bold text-teal-900">現場只想先記下名稱？</div>
-              <p className="mt-1 text-sm leading-6 text-teal-800">安裝「ProJED快速建待辦」後，點桌面圖示就能直接輸入，不必等待完整工作台。</p>
+              <div className="text-sm font-bold text-teal-900">快速建待辦</div>
+              <p className="mt-1 text-sm leading-6 text-teal-800">安裝 ProJED 後，支援的平台可從 ProJED 圖示選「快速建待辦」；需要桌面單鍵入口，也可安裝獨立圖示。</p>
               <a href="/quick-task/?install=1" className="mt-3 inline-flex min-h-10 items-center justify-center rounded-lg bg-teal-700 px-4 py-2 text-sm font-bold text-white hover:bg-teal-800">開啟快速建待辦</a>
             </div>
           </div>

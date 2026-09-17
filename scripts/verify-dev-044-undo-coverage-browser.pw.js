@@ -55,6 +55,27 @@ async (page) => {
     );
   };
 
+  const editBoardTitleThroughSidebar = async (nextTitle) => {
+    const sidebar = page.locator('[data-layout-region="workspace-sidebar"]').first();
+    if (!(await sidebar.isVisible().catch(() => false))) {
+      await page.locator('[data-main-sidebar-toggle="true"]').click();
+      await sidebar.waitFor({ state: 'visible', timeout: 5000 });
+    }
+    const currentTitle = await titleText();
+    const row = sidebar.locator('[data-sidebar-board-row="true"]')
+      .filter({ hasText: currentTitle })
+      .first();
+    await row.waitFor({ state: 'visible', timeout: 5000 });
+    await row.focus();
+    await page.keyboard.press('F2');
+    const input = sidebar.locator('[data-board-title-input="true"]').first();
+    await input.waitFor({ state: 'visible', timeout: 5000 });
+    await input.fill(nextTitle);
+    await input.blur();
+    await waitForTitle(nextTitle);
+    return { currentTitle, nextTitle };
+  };
+
   const runCase = async (id, scenario, fn) => {
     const startedAt = new Date().toISOString();
     try {
@@ -73,16 +94,9 @@ async (page) => {
     await openApp();
 
     await runCase('QA-044-B01', 'board title undo/redo uses stable toolbar command labels', async () => {
-      const title = page.locator('.app-board-title').first();
       const originalTitle = await titleText();
       const nextTitle = `${originalTitle} DEV044`;
-
-      await title.click();
-      await title.evaluate((element, value) => {
-        element.textContent = value;
-      }, nextTitle);
-      await page.keyboard.press('Tab');
-      await waitForTitle(nextTitle);
+      await editBoardTitleThroughSidebar(nextTitle);
 
       const undo = page.locator('#btn-undo');
       await page.waitForFunction(() => !document.querySelector('#btn-undo')?.hasAttribute('disabled'), null, { timeout: 5000 });
@@ -109,15 +123,9 @@ async (page) => {
       await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
       await page.locator('[data-mobile-pan-surface="board"]').waitFor({ state: 'visible', timeout: 15000 });
       await page.locator('.app-board-title').waitFor({ state: 'visible', timeout: 10000 });
-      const title = page.locator('.app-board-title').first();
       const currentTitle = await titleText();
       const nextTitle = `${currentTitle} suppress`;
-      await title.click();
-      await title.evaluate((element, value) => {
-        element.textContent = value;
-      }, nextTitle);
-      await page.keyboard.press('Tab');
-      await waitForTitle(nextTitle);
+      await editBoardTitleThroughSidebar(nextTitle);
 
       await page.waitForFunction(() => !document.querySelector('#btn-undo')?.hasAttribute('disabled'), null, { timeout: 5000 });
       await page.locator('#btn-undo').click();
@@ -135,24 +143,42 @@ async (page) => {
       const recordTitle = `DEV-044 undo record ${Date.now()}`;
       const recordContent = 'DEV-044 封存復原瀏覽器驗證內容';
 
-      const workLogButton = page.locator('nav button', { hasText: '新增個人紀錄' }).first();
-      await workLogButton.waitFor({ state: 'visible', timeout: 10000 });
-      await workLogButton.click();
+      // Personal work-log creation is intentionally gated in the current
+      // local candidate; exercise the same record undo contract through the
+      // available meeting-record flow.
+      const meetingButton = page.getByRole('button', { name: '新增會議記錄' }).first();
+      await meetingButton.waitFor({ state: 'visible', timeout: 10000 });
+      await meetingButton.click();
       const recordPanel = page.locator('[data-record-composer-shell]').first();
       await recordPanel.waitFor({ state: 'visible', timeout: 10000 });
 
-      await page.locator('aside label', { hasText: '標題' }).locator('input').first().fill(recordTitle);
+      await recordPanel.locator('[data-record-title-input]').first().fill(recordTitle);
       const editor = page.locator('aside div[contenteditable="true"]').first();
       await editor.click();
       await page.keyboard.type(recordContent);
-      await page.locator('aside button', { hasText: '存草稿' }).first().click();
+      await recordPanel.locator('[data-meeting-draft-overflow]').click();
+      await recordPanel.locator('[data-meeting-draft-save-and-exit]').click();
       await page.waitForFunction(
         () => /新增紀錄/.test(document.querySelector('#btn-undo')?.getAttribute('title') || ''),
         null,
         { timeout: 10000 },
       );
 
-      const archiveButton = page.locator('aside button', { hasText: '封存' }).first();
+      const sidebar = page.locator('[data-layout-region="workspace-sidebar"]').first();
+      if (!(await sidebar.isVisible().catch(() => false))) {
+        await page.locator('[data-main-sidebar-toggle="true"]').click();
+        await sidebar.waitFor({ state: 'visible', timeout: 5000 });
+      }
+      const recordsButton = sidebar.locator('[data-sidebar-records-button="true"]').first();
+      await recordsButton.waitFor({ state: 'visible', timeout: 10000 });
+      await recordsButton.click();
+      await page.locator('h1', { hasText: '紀錄庫' }).waitFor({ state: 'visible', timeout: 10000 });
+      const savedRow = page.locator('.record-list-row', { hasText: recordTitle }).first();
+      await savedRow.waitFor({ state: 'visible', timeout: 10000 });
+      await savedRow.click();
+      const savedRecordPanel = page.locator('[data-record-composer-shell]').first();
+      await savedRecordPanel.waitFor({ state: 'visible', timeout: 10000 });
+      const archiveButton = savedRecordPanel.locator('button', { hasText: '封存' }).first();
       await archiveButton.waitFor({ state: 'visible', timeout: 10000 });
       await archiveButton.click();
       await page.waitForFunction(
@@ -169,10 +195,6 @@ async (page) => {
         { timeout: 10000 },
       );
 
-      const recordsButton = page.locator('button', { hasText: '紀錄庫' }).first();
-      await recordsButton.waitFor({ state: 'visible', timeout: 10000 });
-      await recordsButton.click();
-      await page.locator('h1', { hasText: '紀錄庫' }).waitFor({ state: 'visible', timeout: 10000 });
       const restoredRow = page.locator('.record-list-row', { hasText: recordTitle }).first();
       await restoredRow.waitFor({ state: 'visible', timeout: 10000 });
       const restoredText = await restoredRow.innerText();

@@ -1,6 +1,6 @@
 # SPEC-068：任務完整預選範圍停留移入子任務
 
-狀態：Implemented / Targeted Title-Anchor Browser Passed / Adjacent L1 Placeholder Regression Open / Physical Mobile 未充分驗證 / 未 Release
+狀態：Implemented / Targeted Browser 40/40 Passed / Physical Mobile 未充分驗證 / 未 Release
 
 日期：2026-08-16
 
@@ -160,6 +160,7 @@ QC：`ai-doc/qc/QC-DEV-068-task-title-center-child-drop.md`
 - 2026-08-25 L2 standard marker boundary targeted browser：desktop 2/2、mobile 2/2（各含 error sweep）；修正後 centerY 分別等於完整 scope bottom `274.09375px`／`254.09375px`。桌機視覺證據：`output/playwright/dev-068-title-child-drop-1787592996400-desktop-candidate-expanded-l2-boundary.png`。
 - 2026-08-25 `verify:dev-068-task-title-center-child-drop-browser` 重跑：新增的 L2／L3／L4+ 最終同層 title-anchor ≤1px、empty-level anchor 等值、L2 有／無展開鍵標題起點一致等 gate 全數 PASS；完整矩陣只留下與本輪無關的既存 L1 source placeholder 高度差（28.09375px vs 32px）。
 - 本輪視覺證據：`output/playwright/dev-068-title-child-drop-1787590112800-desktop-depth-insertion.png`；既有歷史 30/30 證據保留於 `output/playwright/dev-068-title-child-drop-1786851252620-*`。
+- 2026-09-16 DEV-124 shared-host re-entry：`verify:dev-068-task-title-center-child-drop-browser` 完整矩陣 40/40 PASS；同步修正 TaskPlacementTree wrapper DOM oracle、expanded L2 standard-after boundary、column-tail geometry 與 shared Host visibilityState cancel。error sweep（console／HTTP／visible error）=0；本次結果未取代 physical iPhone／Android gate。
 - QA 曾先後攔下 title-only scope、控制項候選殘留、task-source `role="button"` 過度排除、candidate 搶走 standard drop、Workbench來源誤入child intent、desktop viewport-change未取消，以及 candidate 過早顯示子任務藍框；均回送 RD 修正後才採信最終結果。
 - Physical iPhone／Android：未執行。
 - 本輪未 push、deploy 或 release。

@@ -4,7 +4,11 @@ import {
   getPlacementScopeKey,
   getTaskPlacementScope,
 } from '../../../features/taskWorkbench/taskPlacementCommand';
-import { buildTaskParentIndex, type TaskDropIntent } from './taskDropIntent';
+import {
+  buildTaskParentIndex,
+  type TaskDropIntent,
+  type TaskMoveOrderingPlan,
+} from './taskDropIntent';
 
 /**
  * Builds the canonical local update set for an already validated move intent.
@@ -15,9 +19,31 @@ export const normalizeTaskMoveUpdates = (
   draggedNodeId: string,
   intent: TaskDropIntent,
   nodesRecord: Record<string, TaskNode>,
+  orderingPlan?: TaskMoveOrderingPlan | null,
 ): BatchNodeUpdates => {
   const draggedNode = nodesRecord[draggedNodeId];
   if (!draggedNode) return {};
+  if (orderingPlan) {
+    const updates: BatchNodeUpdates = {};
+    const now = Date.now();
+    const destinationIds = orderingPlan.destinationSiblingIds;
+    const sourceIds = orderingPlan.sourceScopeKey === orderingPlan.destinationScopeKey
+      ? destinationIds
+      : orderingPlan.sourceSiblingIds;
+    sourceIds.forEach((id, index) => {
+      updates[id] = { ...(updates[id] || {}), order: index };
+    });
+    destinationIds.forEach((id, index) => {
+      updates[id] = { ...(updates[id] || {}), order: index };
+    });
+    updates[draggedNodeId] = {
+      ...(updates[draggedNodeId] || {}),
+      parentId: intent.parentId,
+      nodeType: intent.nodeType ?? draggedNode.nodeType,
+      updatedAt: now,
+    };
+    return updates;
+  }
   const originalParentIndex = buildTaskParentIndex(nodesRecord);
   const movedNodes = {
     ...nodesRecord,

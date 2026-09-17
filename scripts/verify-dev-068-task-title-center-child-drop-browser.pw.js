@@ -150,11 +150,17 @@ async (page) => {
       const style = getComputedStyle(element);
       return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
     });
-    const element = matches[0];
+    // L2 placeholders expose the marker on both the stable outer scope and
+    // its primary surface.  The contract is about the outer geometry frame;
+    // prefer that one while retaining the L1 header/L3 row fallback.
+    const scopeMatches = matches.filter((element) => element.matches('[data-task-surface-scope="true"]'));
+    const headerMatches = matches.filter((element) => element.matches('[data-kanban-column-header="true"]'));
+    const selected = scopeMatches.length > 0 ? scopeMatches : headerMatches.length > 0 ? headerMatches : matches;
+    const element = selected[0];
     const rect = element?.getBoundingClientRect();
     const style = element ? getComputedStyle(element) : null;
     return {
-      count: matches.length,
+      count: selected.length,
       rect: rect ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height } : null,
       outlineStyle: style?.outlineStyle || null,
       outlineWidth: style?.outlineWidth || null,
@@ -746,8 +752,10 @@ async (page) => {
       '[data-task-drop-surface-kind="column-drop"][data-task-id]',
     )).map((column) => {
       const subtree = column.querySelector(':scope > [data-kanban-column-subtree-scope]');
-      const cardIds = Array.from(subtree?.children || [])
-        .filter((element) => element.matches?.('[data-task-surface-scope="true"][data-task-id]'))
+      const cardIds = Array.from(subtree?.querySelectorAll(
+        ':scope > [data-task-placement-tree="true"] > [data-task-surface-scope="true"][data-task-id], '
+        + ':scope > [data-task-surface-scope="true"][data-task-id]',
+      ) || [])
         .map((element) => element.getAttribute('data-task-id'))
         .filter(Boolean);
       return { columnId: column.getAttribute('data-task-id'), cardIds };
@@ -771,8 +779,10 @@ async (page) => {
     ).first();
     const gapPoint = await columnDrop.evaluate((column) => {
       const subtree = column.querySelector(':scope > [data-kanban-column-subtree-scope]');
-      const cards = Array.from(subtree?.children || [])
-        .filter((element) => element.matches?.('[data-task-surface-scope="true"][data-task-id]'));
+      const cards = Array.from(subtree?.querySelectorAll(
+        ':scope > [data-task-placement-tree="true"] > [data-task-surface-scope="true"][data-task-id], '
+        + ':scope > [data-task-surface-scope="true"][data-task-id]',
+      ) || []);
       const pairs = cards.slice(0, -1).map((current, index) => {
         const currentRect = current.getBoundingClientRect();
         const nextRect = cards[index + 1].getBoundingClientRect();
@@ -971,10 +981,10 @@ async (page) => {
       ));
       for (const column of columns) {
         const subtree = column.querySelector(':scope > [data-kanban-column-subtree-scope]');
-        const cards = Array.from(subtree?.children || [])
-          .filter(element => element.matches?.(
-            '[data-task-surface-scope="true"][data-task-hierarchy-level="L2"][data-task-id]',
-          ));
+        const cards = Array.from(subtree?.querySelectorAll(
+          ':scope > [data-task-placement-tree="true"] > [data-task-surface-scope="true"][data-task-hierarchy-level="L2"][data-task-id], '
+          + ':scope > [data-task-surface-scope="true"][data-task-hierarchy-level="L2"][data-task-id]',
+        ) || []);
         for (let index = 0; index < cards.length - 1; index += 1) {
           const target = cards[index];
           const primary = target.querySelector(':scope > [data-task-surface-source="true"]');
@@ -1070,10 +1080,10 @@ async (page) => {
       ));
       for (const column of columns) {
         const subtree = column.querySelector(':scope > [data-kanban-column-subtree-scope]');
-        const cards = Array.from(subtree?.children || [])
-          .filter(element => element.matches?.(
-            '[data-task-surface-scope="true"][data-task-hierarchy-level="L2"][data-task-id]',
-          ));
+        const cards = Array.from(subtree?.querySelectorAll(
+          ':scope > [data-task-placement-tree="true"] > [data-task-surface-scope="true"][data-task-hierarchy-level="L2"][data-task-id], '
+          + ':scope > [data-task-surface-scope="true"][data-task-hierarchy-level="L2"][data-task-id]',
+        ) || []);
         for (let index = 0; index < cards.length - 1; index += 1) {
           const target = cards[index];
           const primary = target.querySelector(':scope > [data-task-surface-source="true"]');
@@ -1220,8 +1230,10 @@ async (page) => {
       const anchor = column.querySelector('[data-kanban-column-append-anchor="true"]');
       const anchorRect = anchor?.getBoundingClientRect();
       const subtree = column.querySelector(':scope > [data-kanban-column-subtree-scope]');
-      const cards = Array.from(subtree?.children || [])
-        .filter((element) => element.matches?.('[data-task-surface-scope="true"][data-task-id]'));
+      const cards = Array.from(subtree?.querySelectorAll(
+        ':scope > [data-task-placement-tree="true"] > [data-task-surface-scope="true"][data-task-id], '
+        + ':scope > [data-task-surface-scope="true"][data-task-id]',
+      ) || []);
       const lastRect = cards.at(-1)?.getBoundingClientRect();
       return anchorRect && lastRect ? {
         x: Math.round(columnRect.left + columnRect.width * 0.55),

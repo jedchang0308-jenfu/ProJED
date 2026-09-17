@@ -25,7 +25,17 @@ async (page) => {
   };
 
   const selectViewMode = async (mode) => {
-    await page.locator('[data-mode-switcher-trigger="true"]').click();
+    await closeTransient();
+    const trigger = page.locator('[data-mode-switcher-trigger="true"]');
+    try {
+      await trigger.click({ timeout: 3000 });
+    } catch (error) {
+      // The fixed fixture can restore a context-menu backdrop one frame after
+      // reload.  Dismiss it at the point of interaction, then retry the same
+      // user click without bypassing hit testing.
+      await closeTransient();
+      await trigger.click();
+    }
     await page.locator(`[data-mode-switcher-value="${mode}"]`).click();
     await page.waitForTimeout(300);
   };
@@ -67,6 +77,14 @@ async (page) => {
   })));
 
   const closeTransient = async () => {
+    const contextMenu = page.locator('[data-global-context-menu="true"]').first();
+    if (await contextMenu.isVisible().catch(() => false)) {
+      // GlobalContextMenu intentionally ignores the opening pointer for a
+      // short guard window; wait past it, then dismiss through its backdrop.
+      await page.waitForTimeout(260);
+      await page.mouse.click(1, 1);
+      await contextMenu.waitFor({ state: 'detached', timeout: 1500 }).catch(() => undefined);
+    }
     await page.keyboard.press('Escape');
     await page.waitForTimeout(100);
   };
@@ -168,6 +186,10 @@ async (page) => {
   await page.evaluate(() => window.__PROJED_QC__?.reset(12));
   await page.reload({ waitUntil: 'networkidle' });
   await waitForApp();
+  // Reset any context-menu state restored by the fixed test fixture before
+  // the first mode-switcher click.  The menu owns a high-z backdrop and would
+  // otherwise intercept the mode switcher even though the app is ready.
+  await closeTransient();
 
   await selectViewMode('board');
   await page.locator('[data-kanban-mouse-pan-surface="true"]').waitFor({ state: 'visible', timeout: 15000 });

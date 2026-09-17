@@ -130,7 +130,7 @@ async (page) => {
         .filter(element => getComputedStyle(element).borderRightWidth !== '0px').length;
       return { planningCells: planningCells.length, planningInternalGridlines, contentBoundaryGridlines };
     });
-    record('V10-planning-gridlines-removed-with-content-boundary-retained', verticalGridlineProbe.planningCells > 0 && verticalGridlineProbe.planningInternalGridlines === 0 && verticalGridlineProbe.contentBoundaryGridlines >= 0, verticalGridlineProbe);
+    record('V10-planning-gridlines-visible-with-content-boundary-retained', verticalGridlineProbe.planningCells > 0 && verticalGridlineProbe.planningInternalGridlines === verticalGridlineProbe.planningCells && verticalGridlineProbe.contentBoundaryGridlines > 0, verticalGridlineProbe);
     const fullGridProbe = await page.evaluate(() => {
       const table = document.querySelector('[data-goal-task-table="true"]');
       if (!table) return { rightBorderlessCells: -1, rowBorderlessRows: -1, outerBorderlessEdges: -1 };
@@ -138,14 +138,19 @@ async (page) => {
       const rows = Array.from(table.querySelectorAll('tbody tr'));
       const rightBorderlessCells = cells.filter(element => getComputedStyle(element).borderRightWidth === '0px').length;
       const planningInternalGridlines = Array.from(table.querySelectorAll('[data-goal-planning-control]')).filter(element => getComputedStyle(element).borderRightWidth !== '0px').length;
-      const rowBorderlessRows = rows.filter(element => getComputedStyle(element).borderBottomWidth === '0px').length;
+      const taskLaneBorderlessRows = rows.filter(element => {
+        const taskCell = element.querySelector('[data-goal-task-cell]');
+        return taskCell && getComputedStyle(taskCell).borderBottomWidth === '0px';
+      }).length;
+      const scrollableGridCells = Array.from(table.querySelectorAll('[data-goal-column]'));
+      const gridCellsWithBottom = scrollableGridCells.filter(element => getComputedStyle(element).borderBottomWidth !== '0px').length;
       const outerBorderlessEdges = ['borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth']
         .filter(property => getComputedStyle(table)[property] === '0px').length;
-      return { rightBorderlessCells, rowCount: rows.length, planningInternalGridlines, rowBorderlessRows, outerBorderlessEdges };
+      return { rightBorderlessCells, rowCount: rows.length, planningInternalGridlines, taskLaneBorderlessRows, scrollableGridCells: scrollableGridCells.length, gridCellsWithBottom, outerBorderlessEdges };
     });
-    // DEV-121 R5 intentionally removes inter-task horizontal rules while preserving
-    // the existing no-frame and planning-gridline contract for the shared Goal table.
-    record('V12-goal-task-gridlines-and-table-frame-removed', fullGridProbe.planningInternalGridlines === 0 && fullGridProbe.rowBorderlessRows === fullGridProbe.rowCount && fullGridProbe.outerBorderlessEdges === 4, fullGridProbe);
+    // DEV-121 R14 keeps the frozen task-name lane open while restoring the
+    // comparison grid in every scrollable Goal cell; the table itself remains frameless.
+    record('V12-goal-task-lane-open-scrollable-grid-visible-table-frame-removed', fullGridProbe.planningInternalGridlines > 0 && fullGridProbe.taskLaneBorderlessRows === fullGridProbe.rowCount && fullGridProbe.gridCellsWithBottom === fullGridProbe.scrollableGridCells && fullGridProbe.outerBorderlessEdges === 4, fullGridProbe);
     const goalColumnLabels = await page.evaluate(() => ({
       task: document.querySelector('#goal-column-task')?.textContent?.trim() || null,
       description: document.querySelector('#goal-column-description')?.textContent?.trim() || null,
@@ -267,7 +272,10 @@ async (page) => {
           color: getComputedStyle(cell).color,
           hasDarkSurface: cell.classList.contains('bg-slate-800'),
           hasWhiteText: cell.classList.contains('text-white') || cell.closest('thead')?.classList.contains('text-white'),
-          hasNoInnerContainer: cell.children.length === 0,
+          // Column controls are semantic span/button children in the fixed
+          // header component; the flat-surface contract forbids an inner
+          // layout container, not those accessible controls.
+          hasNoInnerContainer: !cell.querySelector(':scope > div'),
         })),
       };
     });
@@ -463,7 +471,7 @@ async (page) => {
       list: listHierarchyGeometry,
       rowHeightDifference: goalHierarchyGeometry.parent && listHierarchyGeometry.parent ? Math.abs(goalHierarchyGeometry.parent.rowHeight - listHierarchyGeometry.parent.rowHeight) : null,
     };
-    record('V20-goal-compact-owned-tree-and-list-shared-default-geometry', Math.abs(goalHierarchyGeometry.titleDelta - 8) <= 0.75 && Math.abs(listHierarchyGeometry.titleDelta - 6) <= 0.75 && goalHierarchyGeometry.parent.indentToken === '8px' && listHierarchyGeometry.parent.indentToken === '6px' && Math.abs(goalHierarchyGeometry.parent.rowHeight - 32) <= 1 && Math.abs(listHierarchyGeometry.parent.rowHeight - 20) <= 1, hierarchyParity);
+    record('V20-goal-compact-owned-tree-and-list-shared-default-geometry', Math.abs(goalHierarchyGeometry.titleDelta - 10.4) <= 0.75 && Math.abs(listHierarchyGeometry.titleDelta - 6) <= 0.75 && goalHierarchyGeometry.parent.indentToken === '10.4px' && listHierarchyGeometry.parent.indentToken === '6px' && Math.abs(goalHierarchyGeometry.parent.rowHeight - 32) <= 1 && Math.abs(listHierarchyGeometry.parent.rowHeight - 20) <= 1, hierarchyParity);
     await page.locator('[data-mode-switcher-trigger]').click();
     await page.locator('[data-mode-switcher-value="goal"]').click();
     await goalView.waitFor({ state: 'visible', timeout: 10000 });
@@ -475,7 +483,9 @@ async (page) => {
     await page.mouse.move(sourceBox.x + Math.min(120, sourceBox.width / 2), sourceBox.y + sourceBox.height / 2);
     await page.mouse.down();
     await page.mouse.move(sourceBox.x + Math.min(140, sourceBox.width / 2 + 20), sourceBox.y + sourceBox.height / 2 + 12, { steps: 4 });
-    await page.mouse.move(targetBox.x + Math.min(120, targetBox.width / 2), targetBox.y + targetBox.height / 2, { steps: 8 });
+    // Keep the regression's intended before-reorder explicit; R3 reserves the
+    // exact midpoint for the deterministic after side.
+    await page.mouse.move(targetBox.x + Math.min(120, targetBox.width / 2), targetBox.y + 4, { steps: 8 });
     const dragOverlayProbe = {
       overlayCount: await page.locator('[data-goal-drag-overlay="true"]').count(),
       sourceId: await page.locator('[data-goal-drag-overlay="true"]').getAttribute('data-task-drag-source-id').catch(() => null),

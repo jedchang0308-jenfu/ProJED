@@ -11,6 +11,7 @@ const files = {
   undoStore: 'src/store/useUndoStore.ts',
   wbsStore: 'src/store/useWbsStore.ts',
   boardStore: 'src/store/useBoardStore.ts',
+  taskFilterStore: 'src/store/useTaskFilterStore.ts',
   recordStore: 'src/store/useRecordStore.ts',
   boardView: 'src/components/BoardView.tsx',
   taskDragCommit: 'src/components/Wbs/taskDrag/taskDragCommit.ts',
@@ -126,17 +127,23 @@ assert(
 );
 
 assert(
-  'Filter/display undo is local-only snapshot based',
-  includesAll(source.boardStore, [
-    'cloneBoardTaskFilterSnapshot',
-    'writeBoardTaskFilterSnapshot',
-    'applyBoardTaskFilterSnapshot',
-    'pushBoardTaskFilterUndo',
+  'Filter/display undo is scoped snapshot based',
+  includesAll(source.taskFilterStore, [
+    'const before = normalizeTaskFilters(current.filters);',
+    'const after = normalizeTaskFilters(recipe(before));',
+    'void applyScopedFilters(scope, after, \'pending-upsert\');',
     "scope: 'filter'",
-    "'修改篩選條件'",
-    "'切換開始時間顯示'",
+    'undo: () => applyScopedFilters(scope, before, \'pending-upsert\')',
+    'redo: () => applyScopedFilters(scope, after, \'pending-upsert\')',
     "'修改負責人篩選'",
   ]) &&
+    includesAll(source.boardStore, [
+      'const cloneBoardDisplaySnapshot =',
+      'const applyBoardDisplaySnapshot =',
+      'const pushBoardDisplayUndo =',
+      "scope: 'filter'",
+      "'切換開始時間顯示'",
+    ]) &&
     !source.boardStore.includes("label: '刪除工作區'") &&
     !source.boardStore.includes("scope: 'workspace_delete'"),
 );
@@ -145,7 +152,7 @@ assert(
   'Record store registers save/archive snapshot undo',
   includesAll(source.recordStore, [
     "import useUndoStore from './useUndoStore';",
-    'const toRecordInput = (record: KnowledgeRecord): KnowledgeRecordInput => ({',
+    'const toRecordInput = (record: EditableKnowledgeRecord): KnowledgeRecordInput => {',
     'const previousRecord = payload.id',
     'const savedInput = toRecordInput(saved);',
     "label: previousInput",

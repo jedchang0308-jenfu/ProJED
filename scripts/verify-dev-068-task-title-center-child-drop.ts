@@ -476,8 +476,10 @@ assert.deepEqual(viewportClampedInsertion, { left: 334, top: 836, width: 48 });
 const source = {
   board: readFileSync('src/components/BoardView.tsx', 'utf8'),
   column: readFileSync('src/components/Wbs/KanbanColumn.tsx', 'utf8'),
+  columnPresentation: readFileSync('src/components/Wbs/KanbanColumnPresentation.tsx', 'utf8'),
   card: readFileSync('src/components/Wbs/KanbanCard.tsx', 'utf8'),
   checklist: readFileSync('src/components/Wbs/KanbanChecklist.tsx', 'utf8'),
+  checklistTree: readFileSync('src/components/Wbs/TaskChecklistTree.tsx', 'utf8'),
   target: readFileSync('src/components/Wbs/taskDrag/taskChildDropTarget.ts', 'utf8'),
   targetAdapter: readFileSync('src/components/Wbs/taskDrag/taskDragTargetAdapter.ts', 'utf8'),
   desktopPreview: readFileSync('src/components/Wbs/taskDrag/desktopTaskDropPreview.ts', 'utf8'),
@@ -486,8 +488,10 @@ const source = {
   titleAnchor: readFileSync('src/components/Wbs/taskDrag/taskTitleAnchor.ts', 'utf8'),
   presenter: readFileSync('src/components/Wbs/taskDrag/TaskDragPresenter.tsx', 'utf8'),
   childPreview: readFileSync('src/components/Wbs/taskDrag/TaskChildDropPreview.tsx', 'utf8'),
+  sharedInsertionLayer: readFileSync('src/components/Wbs/taskDrag/DesktopTaskDragLayer.tsx', 'utf8'),
   styles: readFileSync('src/index.css', 'utf8'),
   overlayPosition: readFileSync('src/components/Wbs/taskDrag/taskDragOverlayPosition.ts', 'utf8'),
+  host: readFileSync('src/components/Wbs/taskDrag/DesktopTaskDragHost.tsx', 'utf8'),
   session: readFileSync('src/components/Wbs/taskDrag/useTaskDragSession.ts', 'utf8'),
   commit: readFileSync('src/components/Wbs/taskDrag/taskDragCommit.ts', 'utf8'),
   spec: readFileSync('ai-doc/specs/SPEC-068-task-title-center-child-drop.md', 'utf8'),
@@ -508,20 +512,41 @@ const assertSourceOrder = (
   assert.ok(earlierIndex < laterIndex, message);
 };
 
-assertSourceOrder(
+const assertTaskTitleSourceOrder = (
+  component: string,
+  later: string,
+  message: string,
+) => {
+  const titleAnchorCandidates = [
+    'data-task-title-slot="true"',
+    "'data-task-title-slot': 'true'",
+  ];
+  const titleAnchorIndex = Math.min(
+    ...titleAnchorCandidates
+      .map(candidate => component.indexOf(candidate))
+      .filter(index => index >= 0),
+  );
+  const laterIndex = component.indexOf(later);
+  assert.notEqual(titleAnchorIndex, Infinity, `${message}: missing data-task-title-slot source attribute`);
+  assert.notEqual(laterIndex, -1, `${message}: missing ${later}`);
+  assert.ok(titleAnchorIndex < laterIndex, message);
+};
+
+const checklistRendererSource = `${source.checklist}\n${source.checklistTree}`;
+const columnRendererSource = `${source.column}\n${source.columnPresentation}`;
+
+assertTaskTitleSourceOrder(
   source.card,
-  'data-task-title-slot="true"',
   'data-kanban-checklist-toggle="true"',
   'L2 title must be the first stable content anchor before the variable checklist toggle',
 );
-assertSourceOrder(
+assertTaskTitleSourceOrder(
   source.card,
-  'data-task-title-slot="true"',
   'data-task-record-capture-checkbox="true"',
   'L2 title must remain before the optional record-capture checkbox',
 );
 assertSourceOrder(
-  source.checklist,
+  checklistRendererSource,
   'data-task-title-slot="true"',
   'data-task-record-capture-checkbox="true"',
   'L3+ title must remain before the optional record-capture checkbox',
@@ -529,7 +554,7 @@ assertSourceOrder(
 for (const [level, component] of [
   ['L1', source.column],
   ['L2', source.card],
-  ['L3+', source.checklist],
+  ['L3+', checklistRendererSource],
 ] as const) {
   assert.match(
     component,
@@ -566,7 +591,7 @@ assert.match(source.desktopPreview, /data-kanban-column-append-anchor="true"/);
 for (const [level, component] of [
   ['L1', source.column],
   ['L2', source.card],
-  ['L3+', source.checklist],
+  ['L3+', checklistRendererSource],
 ] as const) {
   assert.match(component, /data-desktop-task-hover-scope="true"[\s\S]{0,240}data-task-child-drop-target="true"/,
     `${level} child target must reuse the complete DEV-065 hover scope`);
@@ -579,7 +604,7 @@ assert.doesNotMatch(source.card, /type: 'wbs-checklist-drop'/);
 for (const [level, component] of [
   ['L1', source.column],
   ['L2', source.card],
-  ['L3+', source.checklist],
+  ['L3+', checklistRendererSource],
 ] as const) {
   assert.match(component, /kanban-drag-origin-placeholder/,
     `${level} source must render the shared dashed origin placeholder while dragging`);
@@ -591,7 +616,7 @@ assert.match(
 );
 assert.doesNotMatch(source.column, /isColumnDragging \? '[^']*(?:scale-|rotate-|opacity-)/,
   'the L1 source origin must remain at its exact untransformed position');
-assert.match(source.column, /className="invisible flex min-w-0 items-center gap-1\.5"[\s\S]*data-kanban-drag-source-placeholder-neutral="true"[\s\S]*data-task-title-slot="true"[\s\S]*<TaskDateBadge/,
+assert.match(columnRendererSource, /className="invisible flex min-w-0 items-center gap-1\.5"[\s\S]*data-kanban-drag-source-placeholder-neutral="true"[\s\S]*data-task-title-slot="true"[\s\S]*<TaskDateBadge/,
   'the L1 neutral placeholder must reuse the hidden title/date row geometry of the normal header');
 assert.match(source.target, /TASK_CHILD_DROP_DWELL_MS = 1000/);
 assert.match(source.target, /resolveTaskTitleChildDropTarget/);
@@ -606,9 +631,10 @@ assert.match(source.board, /wbs-task-title-child/);
 assert.match(source.board, /resolveDesktopChildDropAtPoint/);
 assert.match(source.board, /desktopDragCancelledRef/);
 assert.match(source.board, /buildDesktopDropPreview\(event\.active, event\.over\)/);
-assert.match(source.board, /window\.addEventListener\('pagehide', cancel\)/);
-assert.match(source.board, /window\.addEventListener\('orientationchange', cancel\)/);
-assert.match(source.board, /window\.addEventListener\('resize', cancel\)/);
+const sharedHostLifecycleSource = `${source.board}\n${source.host}`;
+assert.match(sharedHostLifecycleSource, /window\.addEventListener\('pagehide', (?:cancel|handlePageHide)/);
+assert.match(sharedHostLifecycleSource, /window\.addEventListener\('orientationchange', (?:cancel|handleOrientationChange)/);
+assert.match(sharedHostLifecycleSource, /window\.addEventListener\('resize', (?:cancel|handleResize)/);
 assert.match(source.board, /__projedTaskDragTestApi/);
 assert.match(source.board, /resolvePointerUpperRightOverlayPosition/);
 assert.match(source.board, /task-title-text pointer-events-none fixed z-\[93\]/);
@@ -625,7 +651,8 @@ assert.match(source.presenter, /<TaskChildDropPreview/);
 assert.match(source.presenter, /MOBILE_CHILD_PREVIEW_FINGER_CLEARANCE_PX = 16/);
 assert.match(source.childPreview, /data-task-child-drop-live-status="true"/);
 assert.match(source.childPreview, /data-task-child-drop-insertion-preview="true"/);
-assert.match(source.childPreview, /<KanbanInsertionMarker compact className="py-0"/);
+assert.match(source.childPreview, /<DesktopTaskInsertionIndicator/);
+assert.match(source.sharedInsertionLayer, /<KanbanInsertionMarker axis=\{axis\} compact/);
 assert.match(
   source.childPreview,
   /\{armed \? \(\s*<>[\s\S]*data-task-child-drop-insertion-preview="true"[\s\S]*<\/>\s*\) : null\}/,
@@ -655,11 +682,11 @@ assert.match(source.commit, /normalizeTaskMoveUpdates/);
 assert.match(source.commit, /if \(latest\.outcomeKind === 'origin'\)/);
 assert.match(
   source.spec,
-  /狀態：Implemented \/ Targeted Title-Anchor Browser Passed/,
+  /狀態：Implemented \/ Targeted (?:Title-Anchor Browser Passed|Browser 40\/40 Passed)/,
 );
 assert.match(
   source.qa,
-  /狀態：Executed \/ Targeted Title-Anchor Browser Passed/,
+  /狀態：Executed \/ Targeted (?:Title-Anchor Browser Passed|Browser 40\/40 Passed)/,
 );
 assert.match(source.packageJson, /verify:dev-068-task-title-center-child-drop/);
 

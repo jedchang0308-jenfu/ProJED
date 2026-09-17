@@ -14,10 +14,11 @@ async (page) => {
     sharedControls: Boolean(element.querySelector('[data-task-condition-filter-controls="true"]')),
     hasPositiveStatusLabel: element.textContent?.includes('任務狀態') ?? false,
     hasDueLabel: element.textContent?.includes('到期日與關鍵字') ?? false,
+    hasDueDaysPlaceholder: Boolean(element.querySelector('input[aria-label="到期天數"][placeholder]')),
     hasPeopleLabel: element.textContent?.includes('負責人/協作') ?? false,
     hasTagLabel: element.textContent?.includes('標籤') ?? false,
   }));
-  if (!checks.sharedControls || !checks.hasPositiveStatusLabel || !checks.hasDueLabel || !checks.hasPeopleLabel || !checks.hasTagLabel) {
+  if (!checks.sharedControls || !checks.hasPositiveStatusLabel || !checks.hasDueLabel || checks.hasDueDaysPlaceholder || !checks.hasPeopleLabel || !checks.hasTagLabel) {
     throw new Error(JSON.stringify(checks));
   }
   console.log(JSON.stringify({ ok: true, checks }));

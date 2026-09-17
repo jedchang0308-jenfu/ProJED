@@ -1,6 +1,6 @@
 # QA-DEV-068：任務完整預選範圍停留移入子任務
 
-狀態：Executed / Targeted Title-Anchor Browser Passed / Adjacent L1 Placeholder Regression Open / Physical Mobile 未充分驗證
+狀態：Executed / Targeted Browser 40/40 Passed / Physical Mobile 未充分驗證
 
 日期：2026-08-16
 
@@ -38,7 +38,7 @@
 
 ## 3. 核心真實操作矩陣
 
-`verify:dev-068-task-title-center-child-drop-browser` 共 30 案：
+`verify:dev-068-task-title-center-child-drop-browser` 現行矩陣共 40 項結果（含 error sweep）：
 
 - Desktop：L1/L2/L3+ 來源原位虛線框、pre-dwell standard release、armed exact child、child-origin 名稱預覽／zero-write、L1、L3+、L2／L3／L4+ insertion-start 對齊最終同層 title anchor 與 depth matrix、target switch、主表面空白、lifecycle/a11y、armed leave、subtree/Undo、L1 source normalization、invalids、包含 orientationchange／resize 的 cancel matrix、stale target、scope/title variants/control exclusion。
 - Mobile：L1/L2/L3+ 來源原位虛線框、pre-dwell standard release、armed exact child、child-origin 名稱預覽／zero-write、L1、touchcancel、cancel matrix、L3+、leave/re-enter/edge scroll、action rail matrix、10 次 commit＋10 次 cancel。
@@ -110,6 +110,7 @@
 - 2026-08-25 DEV-068 static/deterministic：73/73 PASS；TypeScript `--noEmit` PASS；test-mode build PASS。
 - 2026-08-25 rendered mouse/touch 完整重跑：新增 title-anchor 案 PASS，證實 L2／L3／L4+ marker 與最終同層標題差≤1px、實際／空層錨點差≤1px，且 L2 有／無展開鍵均維持同一 left。完整矩陣唯一失敗為既存 L1 source placeholder 高度 28.09375px vs 32px，與本輪標題錨點修改無關，未以放寬斷言掩蓋。
 - 本輪視覺證據：`output/playwright/dev-068-title-child-drop-1787590112800-desktop-depth-insertion.png`；歷史完整 30/30 截圖前綴仍為 `output/playwright/dev-068-title-child-drop-1786851252620-*`。
+- 2026-09-16 DEV-124 shared-host re-entry：DEV-068 static 101/101、browser 40/40 PASS；重驗來源 placeholder、expanded L2 standard-after boundary、TaskPlacementTree selector、column-tail、invalid cycle、desktop 7-way cancel、viewport 與 mobile trials，console／HTTP／visible error=0。physical iPhone／Android 仍未執行。
 - 相鄰browser：DEV-065 15/15、DEV-053 10/10、DEV-054 15/15、DEV-055 16/16、DEV-067 8/8，共64/64 PASS。
 - Browser true-operation 合計：94/94 PASS（核心30＋相鄰64）；console error：0、network error：0、visible HTTP/UI error：0。
 - 相鄰回歸與工程 gate 的最終數字以 `QC-DEV-068` 為準。

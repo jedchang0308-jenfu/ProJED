@@ -612,15 +612,19 @@ async (page) => {
       assert(removedActionCount === 0, 'task context menu must not restore the removed detail or completion actions', {
         removedActionCount,
       });
-      const firstFourActionLabels = await page.locator('[data-global-context-menu="true"] button').evaluateAll(buttons => (
+      const actionLabels = await page.locator('[data-global-context-menu="true"] button').evaluateAll(buttons => (
         buttons.slice(0, 4).map(button => button.innerText.trim().split(/\r?\n/)[0]?.trim())
       ));
-      assert(JSON.stringify(firstFourActionLabels) === JSON.stringify([
+      const allActionLabels = await page.locator('[data-global-context-menu="true"] button').evaluateAll(buttons => (
+        buttons.map(button => button.innerText.trim().split(/\r?\n/)[0]?.trim())
+      ));
+      assert(JSON.stringify(actionLabels.slice(0, 3)) === JSON.stringify([
         '新增並列任務',
         '新增子任務',
         '複製任務',
-        '主責／協作',
-      ]), 'task context menu must keep assignment as the fourth action', { firstFourActionLabels });
+      ]), 'task context menu must keep the create actions in stable order', { actionLabels });
+      const assignmentIndex = allActionLabels.indexOf('主責／協作');
+      assert(assignmentIndex >= 3, 'task context menu must keep assignment after create actions', { allActionLabels, assignmentIndex });
       assert(await page.locator('[data-kanban-drag-overlay="true"],[data-desktop-drop-indicator="true"]').count() === 0,
         'right-click must not start drag UI');
       await page.keyboard.press('Escape');

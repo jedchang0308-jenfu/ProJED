@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { CalendarDays, GitBranch, Plus, RefreshCw, SlidersHorizontal, Tag } from 'lucide-react';
+import { Plus, RefreshCw, SlidersHorizontal } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import useBoardStore from '../../store/useBoardStore';
 import { useTaskFilterStore } from '../../store/useTaskFilterStore';
@@ -10,6 +10,7 @@ import { countActiveTaskFilters, createBoardAssigneeFilterOptions } from '../../
 import TaskConditionFilterControls from './TaskConditionFilterControls';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 import { cn } from '../../utils/cn';
+import { getTaskFilterTriggerClass, getTaskFilterChoiceClass } from './taskConditionFilterStyles';
 
 const FILTER_PANEL_WIDTH = 288;
 const FILTER_PANEL_GUTTER = 8;
@@ -121,8 +122,10 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = ({
         className={cn(
           'inline-flex h-8 shrink-0 items-stretch overflow-hidden rounded-md border shadow-[0_1px_2px_rgba(15,23,42,0.05)] transition-colors',
           isOpen || hasActiveFilter || hasPendingUpdate
-            ? 'border-primary/30 bg-primary/[0.04] text-primary ring-1 ring-primary/15'
-            : 'border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:bg-slate-100 hover:text-slate-700',
+            ? hasActiveFilter
+              ? 'border-primary-500 bg-primary-50 ring-2 ring-primary-200/80'
+              : 'border-primary-400 bg-primary-50/70 text-primary-700 ring-2 ring-primary-200/70'
+            : 'border-slate-300 bg-white text-slate-600 hover:border-primary-400 hover:bg-primary-50 hover:text-primary-700',
         )}
         data-task-filter-control-group="true"
         data-task-filter-control-pending={hasPendingUpdate ? 'true' : 'false'}
@@ -132,16 +135,18 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = ({
           ref={triggerRef}
           id="filter-menu-trigger"
           type="button"
-          aria-label={hasActiveFilter ? '過濾器已啟用' : '過濾器'}
+          aria-label={hasActiveFilter ? `過濾器已啟用（${activeFilterCount} 項）` : '過濾器'}
           title="過濾器"
           onClick={openPanel}
           className={cn(
-            'inline-flex h-full w-8 shrink-0 items-center justify-center border-0 bg-transparent text-inherit transition-colors hover:bg-primary/10 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/35',
-            isOpen && 'bg-primary/10',
+            'inline-flex h-full min-w-8 shrink-0 items-center justify-center gap-1 border-0 px-1.5 text-inherit transition-colors focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/45',
+            getTaskFilterTriggerClass(hasActiveFilter, isOpen),
           )}
           data-active-task-filter-count={activeFilterCount}
+          data-task-filter-active={hasActiveFilter ? 'true' : 'false'}
         >
           <SlidersHorizontal size={13} />
+          {hasActiveFilter ? <span className="inline-flex min-w-4 items-center justify-center rounded-full bg-white px-1 py-0.5 text-[10px] font-bold leading-none text-primary-700" aria-hidden="true">{activeFilterCount > 99 ? '99+' : activeFilterCount}</span> : null}
         </button>
         {hasPendingUpdate ? (
           <button
@@ -178,9 +183,15 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = ({
           onClick={event => event.stopPropagation()}
           onMouseDown={event => event.stopPropagation()}
           onPointerDown={event => event.stopPropagation()}
-          className="fixed z-[10000] w-72 overflow-y-auto overscroll-contain rounded-xl border border-slate-200/90 bg-white shadow-[0_14px_36px_rgba(15,23,42,0.14)] animate-in fade-in duration-150"
+          className="fixed z-[10000] w-72 overflow-y-auto overscroll-contain rounded-xl border border-primary-200/90 bg-white shadow-[0_14px_36px_rgba(15,23,42,0.16)] animate-in fade-in duration-150"
           style={{ left: panelPosition.left, top: panelPosition.top, maxHeight: panelPosition.maxHeight }}
         >
+          <div className="flex items-center justify-between border-b border-primary-100 bg-primary-50/70 px-3 py-2.5">
+            <span className="text-xs font-bold text-slate-700">篩選條件</span>
+            <span className={cn('rounded-full px-2 py-1 text-[10px] font-bold', hasActiveFilter ? 'bg-primary-600 text-white' : 'bg-white text-slate-500 ring-1 ring-slate-200')}>
+              {hasActiveFilter ? `${activeFilterCount} 項啟用` : '未啟用'}
+            </span>
+          </div>
           <div className="px-3 py-3">
             <TaskConditionFilterControls
               value={filters}
@@ -207,14 +218,14 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = ({
           <div className="border-t border-slate-200/80 px-3 py-3" data-task-display-settings="true">
             <p className="mb-2 text-[11px] font-semibold leading-4 text-slate-500">介面顯示</p>
             <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={toggleDependencies} className={cn('inline-flex h-7 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-semibold', showDependencies ? 'border-primary/30 bg-primary/10 text-primary' : 'border-slate-200 bg-slate-50 text-slate-600')} aria-pressed={showDependencies}>
-                <GitBranch size={12} />依賴連線
+              <button type="button" onClick={toggleDependencies} className={getTaskFilterChoiceClass(showDependencies)} aria-pressed={showDependencies}>
+                依賴連線
               </button>
-              <button type="button" onClick={toggleStartDate} className={cn('inline-flex h-7 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-semibold', showStartDate ? 'border-primary/30 bg-primary/10 text-primary' : 'border-slate-200 bg-slate-50 text-slate-600')} aria-pressed={showStartDate}>
-                <CalendarDays size={12} />開始日期
+              <button type="button" onClick={toggleStartDate} className={getTaskFilterChoiceClass(showStartDate)} aria-pressed={showStartDate}>
+                開始日期
               </button>
-              <button type="button" onClick={toggleTags} className={cn('inline-flex h-7 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-semibold', showTags ? 'border-primary/30 bg-primary/10 text-primary' : 'border-slate-200 bg-slate-50 text-slate-600')} aria-pressed={showTags}>
-                <Tag size={12} />標籤
+              <button type="button" onClick={toggleTags} className={getTaskFilterChoiceClass(showTags)} aria-pressed={showTags}>
+                標籤
               </button>
             </div>
           </div>
