@@ -913,12 +913,12 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 計入交付：是（R14 RD implementation與targeted QA已完成；獨立QC、真機／正式持久化與release gate未完成，維持驗證中）
 
 - ◐ DEV-125 [開發點] [本機完成] [P1] [RD Implementation Complete / 架構已定案 / Targeted QA PASS / NOT RELEASED] 任務目的欄位統整
-  - 摘要：將歷史任務明細中的「說明」與「達到目標」在 Goal 看板與任務明細統一呈現為單一「任務目的」；「歷程紀錄」等其他備註維持獨立欄位與原順序。
+  - 摘要：將歷史任務明細中的「說明」、「達到目標」與「來源 WBS」在 Goal 看板與任務明細統一呈現為單一「任務目的」；來源 WBS 若等於任務標題則刪除，「歷程紀錄」等其他備註維持獨立欄位與原順序。
   - 來源 ID：`USER-20260918-TASK-PURPOSE-CONSOLIDATION`（正式看板瀏覽留言）。
   - 父任務：DEV-116；相容 DEV-066、DEV-111、DEV-119、DEV-121。
   - 架構決策：沿用 `TaskNode.detailNotes` 與 `description` 相容投影，不新增 schema、migration、RPC 或第二份資料；讀取只做純投影，只有使用者編輯／儲存時才將 legacy fragments 正規化回一個 `note_default`／`任務目的`，並保留非目的備註。
   - 阻塞 / 恢復條件：若要對正式資料做一次性 bulk migration，必須另行確認完整範圍（全域或指定看板）與 rollback／readback 證據；不得因讀取畫面自動寫入雲端。
-  - 證據：`SPEC-125`、`QA-DEV-125`；`npm run verify:dev-125-task-purpose-merge` 5/5、`npx tsc --noEmit`、targeted ESLint、`npm run build:test`、`git diff --check` PASS。
+  - 證據：`SPEC-125`、`QA-DEV-125`；`npm run verify:dev-125-task-purpose-merge` 8/8、`npx tsc --noEmit`、targeted ESLint、`npm run build:test`、`git diff --check` PASS。
   - 下一步：依 deployment-release-gate 建立 immutable production candidate；正式 activation 前仍需完成 release smoke。一次性既有資料整理另依使用者指定範圍執行。
   - 計入交付：否（本機 candidate 完成；尚未 commit／deploy／release）。
 

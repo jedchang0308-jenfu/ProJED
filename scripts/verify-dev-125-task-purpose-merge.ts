@@ -8,9 +8,10 @@ import {
 } from '../src/utils/taskNoteRichContent';
 import type { TaskDetailNote, TaskNode } from '../src/types';
 
-const makeNode = (detailNotes: TaskDetailNote[], description = ''): Pick<TaskNode, 'detailNotes' | 'description'> => ({
+const makeNode = (detailNotes: TaskDetailNote[], description = '', title = '測試任務'): Pick<TaskNode, 'detailNotes' | 'description' | 'title'> => ({
   detailNotes,
   description,
+  title,
 });
 
 const legacy = makeNode([
@@ -45,4 +46,19 @@ const richNode = makeNode([{ id: 'note_default', title: '任務目的', content:
 assert.equal(getTaskPurposeNote(richNode).content, '格式化目的');
 assert.deepEqual(getTaskPurposeNote(richNode).richContent, rich);
 
-console.log('DEV-125 task purpose merge verifier: PASS (5 cases)');
+const sourceWbsSameAsTitle = makeNode([
+  { id: 'source-wbs', title: '來源 WBS', content: '- 執行AB棟廠房規劃計畫(正式整理)' },
+  { id: 'history', title: '歷程紀錄', content: '保留歷程' },
+], '- 執行AB棟廠房規劃計畫(正式整理)', '執行AB棟廠房規劃計畫(正式整理)');
+assert.equal(getTaskPurposeText(sourceWbsSameAsTitle), '');
+assert.deepEqual(getTaskDetailNotesWithCanonicalPurpose(sourceWbsSameAsTitle).map(note => note.title), ['任務目的', '歷程紀錄']);
+
+const sourceWbsDifferentFromTitle = makeNode([
+  { id: 'source-wbs', title: '來源 WBS', content: '- 先完成廠區盤點' },
+], '', '執行AB棟廠房規劃計畫(正式整理)');
+assert.equal(getTaskPurposeText(sourceWbsDifferentFromTitle), '- 先完成廠區盤點');
+const sourceWbsUpdates = buildTaskPurposeUpdates(sourceWbsDifferentFromTitle, { content: '- 先完成廠區盤點' });
+assert.deepEqual(sourceWbsUpdates.detailNotes?.map(note => note.title), ['任務目的']);
+assert.equal(sourceWbsUpdates.detailNotes?.[0]?.content, '- 先完成廠區盤點');
+
+console.log('DEV-125 task purpose merge verifier: PASS (8 cases)');

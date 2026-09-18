@@ -2,13 +2,13 @@
 
 ## Documentation Map Update - 2026-09-18（DEV-125 任務目的欄位統整 / Targeted QA PASS / NOT RELEASED）
 
-[DEV-125](dev_task.md#dev-125任務目的欄位統整) 將 legacy「說明／達到目標」在 Goal 看板與任務明細統一投影為「任務目的」，並保留「歷程紀錄」等非目的備註。讀取採純投影，編輯／儲存才正規化 `detailNotes[0]` 與 `description`；不新增 schema、migration 或自動遠端 bulk mutation。
+[DEV-125](dev_task.md#dev-125任務目的欄位統整) 將 legacy「說明／達到目標／來源 WBS」在 Goal 看板與任務明細統一投影為「任務目的」；來源 WBS 與任務標題相同時刪除，不同時移入目的，並保留「歷程紀錄」等非目的備註。讀取採純投影，編輯／儲存才正規化 `detailNotes[0]` 與 `description`；不新增 schema、migration 或自動遠端 bulk mutation。
 
 | 權威入口 | 狀態與責任 |
 |---|---|
 | [DEV-125](dev_task.md#dev-125任務目的欄位統整) | `RD Implementation Complete / Architecture Confirmed / Targeted QA PASS / NOT RELEASED`；產品範圍、資料邊界與 release boundary |
 | [SPEC-125](specs/SPEC-125-task-purpose-consolidation.md) | 合併規則、唯一資料來源、保存契約與非目標 |
-| [QA-DEV-125](qa/QA-DEV-125-task-purpose-consolidation.md) | 5/5 focused cases、TypeScript、targeted lint、test build、diff check |
+| [QA-DEV-125](qa/QA-DEV-125-task-purpose-consolidation.md) | 8/8 focused cases、TypeScript、targeted lint、test build、diff check |
 
 目前尚未部署正式環境；一次性既有資料整理需另行確認全域或指定看板範圍，並以獨立 readback／rollback 證據執行。
 

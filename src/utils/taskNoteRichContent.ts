@@ -238,6 +238,26 @@ export const TASK_PURPOSE_NOTE_ID = 'note_default' as const;
 export const TASK_PURPOSE_TITLE = '任務目的' as const;
 
 const LEGACY_TASK_PURPOSE_TITLES = new Set(['說明', '達到目標']);
+const SOURCE_WBS_TITLE = '來源WBS';
+
+type TaskPurposeNode = Pick<TaskNode, 'detailNotes' | 'description'> & Partial<Pick<TaskNode, 'title'>>;
+
+const normalizePurposeComparisonText = (value: string): string => value
+  .trim()
+  .replace(/^[-•·]\s*/, '')
+  .replace(/\s+/g, ' ');
+
+const normalizePurposeNoteTitle = (value: string): string => value.trim().replace(/\s+/g, '');
+
+const isSourceWbsNote = (note: TaskDetailNote): boolean => (
+  normalizePurposeNoteTitle(note.title) === SOURCE_WBS_TITLE
+);
+
+const isSourceWbsSameAsTaskTitle = (note: TaskDetailNote, taskTitle?: string): boolean => {
+  if (!isSourceWbsNote(note) || !taskTitle?.trim()) return false;
+  return normalizePurposeComparisonText(normalizedPurposeFragment(note))
+    === normalizePurposeComparisonText(taskTitle);
+};
 
 /**
  * The first detail note was historically the description compatibility alias.
@@ -265,14 +285,15 @@ const uniquePurposeFragments = (notes: TaskDetailNote[]): string[] => {
 };
 
 const buildCanonicalPurposeNote = (
-  node: Pick<TaskNode, 'detailNotes' | 'description'>,
+  node: TaskPurposeNode,
 ): TaskDetailNote => {
   const notes = node.detailNotes || [];
   const sourceNotes = notes.filter(isTaskPurposeSourceNote);
-  const fragments = uniquePurposeFragments(sourceNotes);
-  const fallback = (node.description || '').trim();
+  const purposeNotes = sourceNotes.filter(note => !isSourceWbsSameAsTaskTitle(note, node.title));
+  const fragments = uniquePurposeFragments(purposeNotes);
+  const fallback = sourceNotes.length > 0 ? '' : (node.description || '').trim();
   const content = fragments.length > 0 ? fragments.join('\n\n') : fallback;
-  const singleSource = sourceNotes.length === 1 ? sourceNotes[0] : undefined;
+  const singleSource = purposeNotes.length === 1 ? purposeNotes[0] : undefined;
   const canKeepRichContent = Boolean(
     singleSource
     && isTaskNoteRichContent(singleSource.richContent)
@@ -293,12 +314,12 @@ const buildCanonicalPurposeNote = (
 
 /** Return the merged canonical purpose note without mutating the task. */
 export const getTaskPurposeNote = (
-  node: Pick<TaskNode, 'detailNotes' | 'description'>,
+  node: TaskPurposeNode,
 ): TaskDetailNote => buildCanonicalPurposeNote(node);
 
 /** Return the text shown by the GoalView purpose column. */
 export const getTaskPurposeText = (
-  node: Pick<TaskNode, 'detailNotes' | 'description'>,
+  node: TaskPurposeNode,
 ): string => taskNoteToPlainText(getTaskPurposeNote(node));
 
 /**
@@ -306,7 +327,7 @@ export const getTaskPurposeText = (
  * notes (for example 歷程紀錄) in their existing order.
  */
 export const getTaskDetailNotesWithCanonicalPurpose = (
-  node: Pick<TaskNode, 'detailNotes' | 'description'>,
+  node: TaskPurposeNode,
 ): TaskDetailNote[] => {
   const notes = node.detailNotes || [];
   const purpose = getTaskPurposeNote(node);
@@ -316,7 +337,7 @@ export const getTaskDetailNotesWithCanonicalPurpose = (
 
 /** Build the canonical first-note + description compatibility projection. */
 export const buildTaskPurposeUpdates = (
-  latest: Pick<TaskNode, 'detailNotes' | 'description'>,
+  latest: TaskPurposeNode,
   draft: Pick<TaskDetailNote, 'content' | 'richContent'>,
 ): Pick<TaskNode, 'detailNotes' | 'description'> => {
   const firstNote = getTaskPurposeNote(latest);
