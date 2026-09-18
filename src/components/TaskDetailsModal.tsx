@@ -14,7 +14,10 @@ import { buildAncestorPath } from '../utils/taskHierarchy';
 import { primaryPlacementId } from '../features/taskTracking/model';
 import { getTaskStatusFieldClass } from './ui/taskStatusStyles';
 import TaskDetailNoteField from './TaskNotes/TaskDetailNoteField';
-import { areTaskNoteRichContentsEqual } from '../utils/taskNoteRichContent';
+import {
+  areTaskNoteRichContentsEqual,
+  getTaskDetailNotesWithCanonicalPurpose,
+} from '../utils/taskNoteRichContent';
 import { toast } from '../store/useToastStore';
 import { isPrimaryPointerActivation } from '../interactions/pointerActivation';
 import { nodeService } from '../services/dataBackend';
@@ -101,14 +104,8 @@ const readSavedSize = () => {
   }
 };
 
-const normalizeTaskDetailNotes = (notes: TaskDetailNote[]): TaskDetailNote[] => notes.map(note => (
-  note.id === 'note_default' ? { ...note, title: '任務目的' } : note
-));
-
 const getDisplayedDetailNotes = (node: TaskNode | undefined): TaskDetailNote[] => (
-  node?.detailNotes?.length
-    ? normalizeTaskDetailNotes(node.detailNotes)
-    : [{ id: 'note_default', title: '任務目的', content: node?.description || '' }]
+  getTaskDetailNotesWithCanonicalPurpose(node || { detailNotes: [], description: '' })
 );
 
 const areDetailNotesEqual = (left: TaskDetailNote[], right: TaskDetailNote[]) => (
@@ -698,11 +695,10 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
 
   React.useEffect(() => {
     if (!currentNodeId) return;
-    setNotes(
-      currentNodeDetailNotes?.length
-        ? normalizeTaskDetailNotes(currentNodeDetailNotes)
-        : [{ id: 'note_default', title: '任務目的', content: currentNodeDescription }]
-    );
+    setNotes(getTaskDetailNotesWithCanonicalPurpose({
+      detailNotes: currentNodeDetailNotes,
+      description: currentNodeDescription,
+    }));
     skipNextNotesSave.current = true;
   }, [currentNodeDescription, currentNodeDetailNotes, currentNodeId]);
 

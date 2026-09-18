@@ -234,25 +234,84 @@ export const taskNoteToAiMarkdown = (note: Pick<TaskDetailNote, 'content' | 'ric
   return projection || note.content.trim();
 };
 
+export const TASK_PURPOSE_NOTE_ID = 'note_default' as const;
+export const TASK_PURPOSE_TITLE = '任務目的' as const;
+
+const LEGACY_TASK_PURPOSE_TITLES = new Set(['說明', '達到目標']);
+
 /**
- * Resolve the first task note without creating a second source of truth for
- * the Goal purpose cell. Legacy tasks are represented as the same default
- * note shape used by Task Details until a real edit is committed.
+ * The first detail note was historically the description compatibility alias.
+ * Older records may have split that content into notes titled 說明 and 達到目標.
+ * Keep the old first-note rule while recognizing those explicit legacy titles.
  */
-export const getTaskPurposeNote = (
+const isTaskPurposeSourceNote = (note: TaskDetailNote, index: number): boolean => (
+  index === 0
+  || note.id === TASK_PURPOSE_NOTE_ID
+  || note.title.trim() === TASK_PURPOSE_TITLE
+  || LEGACY_TASK_PURPOSE_TITLES.has(note.title.trim())
+);
+
+const normalizedPurposeFragment = (note: TaskDetailNote): string => taskNoteToPlainText(note).trim();
+
+const uniquePurposeFragments = (notes: TaskDetailNote[]): string[] => {
+  const seen = new Set<string>();
+  return notes
+    .map(normalizedPurposeFragment)
+    .filter((fragment) => {
+      if (!fragment || seen.has(fragment)) return false;
+      seen.add(fragment);
+      return true;
+    });
+};
+
+const buildCanonicalPurposeNote = (
   node: Pick<TaskNode, 'detailNotes' | 'description'>,
 ): TaskDetailNote => {
-  const firstNote = node.detailNotes?.[0];
-  if (firstNote) {
-    return firstNote.id === 'note_default' && firstNote.title !== '任務目的'
-      ? { ...firstNote, title: '任務目的' }
-      : firstNote;
-  }
+  const notes = node.detailNotes || [];
+  const sourceNotes = notes.filter(isTaskPurposeSourceNote);
+  const fragments = uniquePurposeFragments(sourceNotes);
+  const fallback = (node.description || '').trim();
+  const content = fragments.length > 0 ? fragments.join('\n\n') : fallback;
+  const singleSource = sourceNotes.length === 1 ? sourceNotes[0] : undefined;
+  const canKeepRichContent = Boolean(
+    singleSource
+    && isTaskNoteRichContent(singleSource.richContent)
+    && normalizedPurposeFragment(singleSource) === content,
+  );
+
   return {
-    id: 'note_default',
-    title: '任務目的',
-    content: node.description || '',
+    id: TASK_PURPOSE_NOTE_ID,
+    title: TASK_PURPOSE_TITLE,
+    content,
+    ...(canKeepRichContent
+      ? { richContent: singleSource?.richContent }
+      : fragments.length > 1
+        ? { richContent: createPlainTaskNoteRichContent(content) }
+        : {}),
   };
+};
+
+/** Return the merged canonical purpose note without mutating the task. */
+export const getTaskPurposeNote = (
+  node: Pick<TaskNode, 'detailNotes' | 'description'>,
+): TaskDetailNote => buildCanonicalPurposeNote(node);
+
+/** Return the text shown by the GoalView purpose column. */
+export const getTaskPurposeText = (
+  node: Pick<TaskNode, 'detailNotes' | 'description'>,
+): string => taskNoteToPlainText(getTaskPurposeNote(node));
+
+/**
+ * Present legacy split purpose notes as one field while preserving unrelated
+ * notes (for example 歷程紀錄) in their existing order.
+ */
+export const getTaskDetailNotesWithCanonicalPurpose = (
+  node: Pick<TaskNode, 'detailNotes' | 'description'>,
+): TaskDetailNote[] => {
+  const notes = node.detailNotes || [];
+  const purpose = getTaskPurposeNote(node);
+  const remaining = notes.filter((note, index) => !isTaskPurposeSourceNote(note, index));
+  return [purpose, ...remaining];
 };
 
 /** Build the canonical first-note + description compatibility projection. */
@@ -270,13 +329,21 @@ export const buildTaskPurposeUpdates = (
     ...(isTaskNoteRichContent(draft.richContent) ? { richContent: draft.richContent } : {}),
   };
   const latestNotes = latest.detailNotes || [];
-  const firstNoteUnchanged = Boolean(latestNotes[0])
-    && latestNotes[0].id === nextFirstNote.id
-    && latestNotes[0].title === nextFirstNote.title
-    && latestNotes[0].content === nextFirstNote.content
-    && areTaskNoteRichContentsEqual(latestNotes[0].richContent, nextFirstNote.richContent);
+  const nextNotes = [
+    nextFirstNote,
+    ...latestNotes.filter((note, index) => !isTaskPurposeSourceNote(note, index)),
+  ];
+  const firstNoteUnchanged = nextNotes.length === latestNotes.length
+    && nextNotes.every((note, index) => {
+      const current = latestNotes[index];
+      return Boolean(current)
+        && note.id === current.id
+        && note.title === current.title
+        && note.content === current.content
+        && areTaskNoteRichContentsEqual(note.richContent, current.richContent);
+    });
   return {
-    detailNotes: firstNoteUnchanged ? latestNotes : [nextFirstNote, ...latestNotes.slice(1)],
+    detailNotes: firstNoteUnchanged ? latestNotes : nextNotes,
     description: content,
   };
 };

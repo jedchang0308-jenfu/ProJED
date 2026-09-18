@@ -55,6 +55,7 @@ import {
 import TaskAssignmentPicker, { type TaskAssignmentOption } from './TaskAssignmentPicker';
 import { TagChip } from './Tags/TagChip';
 import { useGoalCellSession } from './GoalCellSessionProvider';
+import { getTaskPurposeText } from '../utils/taskNoteRichContent';
 import {
   hydrateAccountLayoutPreferences,
   persistAccountLayoutPreferences,
@@ -977,7 +978,7 @@ const GoalView: React.FC<GoalViewProps> = ({ boardId }) => {
     hierarchy.items.map(row => ({
       taskId: row.id,
       level: row.level,
-      description: goalSession.getDescriptionAnchor(row.id, row.description),
+      description: goalSession.getDescriptionAnchor(row.id, getTaskPurposeText(row)),
       meeting: meetingNotesByTaskId.has(row.id) ? 'meeting-notes' : null,
     })),
   ), [goalSession, hierarchy.items, meetingNotesByTaskId]);
