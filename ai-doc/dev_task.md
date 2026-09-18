@@ -855,7 +855,7 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
     `output/playwright/dev-120-goal-planning-minimal-density/`、`output/playwright/dev-119-goal-cell-actions/result.json`。
   - 計入交付：是（本機 candidate 已完成實作與 targeted QA-QC；未 commit／push／deploy／release）
 
-- ✓ DEV-121 [交付點] [完成] [P1] [R28 RD Implementation Complete / Targeted QA PASS / QC Ready / NOT RELEASED] OKR 父子任務樹狀對照與群組範圍
+- ✓ DEV-121 [交付點] [完成] [P1] [R29 RD Implementation Complete / Targeted QA PASS / QC Ready / NOT RELEASED] OKR 父子任務樹狀對照與群組範圍
   - 摘要：保留任務目的／會議紀錄的 native `rowSpan`，將看板模式的父層錨點、樹狀導引線、
     群組邊界與橫向閱讀導引轉譯到 OKR 表格，降低父子關係及任務欄位比對錯列。
   - 來源 ID：`USER-20260914-GOAL-HIERARCHY-COMPARISON`、
@@ -928,6 +928,48 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 正式 release：commit `ee0ed9dcedc60ec535e429b734aac66e589d906e`、release `20260918014117-658b30`、tree `e4d5b02e0bb7b50353f319113bf700d7ae7993ffffd990be6d44cbde09fafc16`；啟用前 live version `763361c04938dc87` 保留為 rollback anchor。
   - 下一步：既有正式資料一次性整理仍須另行指定範圍並建立 readback／rollback 證據；本 release 不自動執行。
   - 計入交付：是（production verified；bulk migration 不在本 DEV 範圍）。
+
+- ✓ DEV-126 [開發點] [完成] [P2] [RD Implementation Complete / Targeted UI Smoke PASS / NOT RELEASED] OKR 表格橫向追視
+  - 摘要：Goal 表格 idle 狀態依目前可見列順序使用低彩度奇偶列面，讓固定任務名稱欄與可水平捲動欄位可快速對齊；rowSpan owner cell 繼承起始所屬任務列面，讓任務目的／會議紀錄合併區塊維持同一底色，既有階層定位色與互動語意維持。
+  - 來源 ID：本輪使用者明確指示（2026-09-18）。
+  - 父任務：DEV-121；相容 DEV-116、DEV-119、DEV-120、DEV-124。
+  - Scope：只改 Goal-scoped CSS 與直接驗證文件；不改 hierarchy projector、rowSpan 計算、state、store、schema、persistence、planning mutation 或 DnD。
+  - Spec Impact：`Intentional replacement`；取代 SPEC-121 原「idle 全白／不做斑馬紋」條款，保留固定欄、single X-scroll、rowSpan ownership、階層 hover／focus tint 與 32px 密度。
+  - 驗收：visible rows 交錯 `#FFFFFF / #F3F6FA`；固定欄、水平捲動欄、collapsed track 與 rowSpan 內容不中斷；rowSpan owner surface 與起始所屬任務列相同；既有 active hierarchy scope 仍優先；無新增泛用 `tr:hover`。
+  - 阻塞 / 恢復條件：若需改變 rowSpan／hierarchy／selection state 或導入第二捲軸，停止並回規劃；目前無阻塞。
+  - 後續修正（2026-09-18）：依瀏覽器標註，任務目的／會議紀錄的 rowSpan owner 改為繼承起始所屬任務列面，不再透出跨列奇偶底色；同範圍重新驗證。
+  - 證據：`SPEC-121` DEV-126 amendment、`QA-DEV-126`；`npm run build:test`、`git diff --check`、1280×800 localhost:4000 代表截圖、928×698 標註欄位 follow-up 截圖，以及 900px desktop viewport 的 computed-style／overflow readback 均通過。
+  - 計入交付：否（Goal-only visual amendment；未授權 release）。
+
+- ✓ DEV-127 [開發點] [完成] [P2] [RD Implementation Complete / Targeted UI Smoke PASS / NOT RELEASED] OKR 表格頂部欄深色對比
+  - 摘要：Goal 表格欄位標題列使用深色底與白字，固定 header 與可收合控制維持可辨識性；不改欄位順序、資料、rowSpan、state、store 或 scroll owner。
+  - 來源 ID：本輪使用者瀏覽器標註（2026-09-18）。
+  - 父任務：DEV-126；相容 DEV-121、DEV-120。
+  - Scope：只改 Goal-scoped CSS 與直接驗證文件；不改 GoalView projection、state、store、schema、persistence、planning 或 DnD。
+  - 驗收：thead th computed background `#0F172A`、text `#FFFFFF`；toggle glyph 與 focus 維持可見；sticky header、single X-scroll 與欄位結構維持；無 visible alerts／overlap。
+  - 阻塞 / 恢復條件：若需改 header structure、column order 或 second scroll owner，停止回規劃；目前無阻塞。
+  - 證據：`QA-DEV-127`、`npm run build:test`、`git diff --check`、928×698 localhost Goal screenshot／computed-style readback。
+  - 計入交付：否（Goal-only visual amendment；未授權 release）。
+
+- ✓ DEV-128 [開發點] [完成] [P2] [RD Implementation Complete / Targeted UI Smoke PASS / NOT RELEASED] OKR rowSpan 左側分隔線降噪
+  - 摘要：移除任務目的／會議紀錄 rowSpan owner cell 額外的 2px inset 左側線，沿用既有 native table 欄位分隔線，避免合併內容看起來像被加粗框住；列面、header、rowSpan ownership 與資料／互動契約不變。
+  - 來源 ID：本輪使用者瀏覽器標註（2026-09-18；719×698）。
+  - 父任務：DEV-127；相容 DEV-126、DEV-121。
+  - Scope：只移除 Goal-scoped CSS 的額外 `box-shadow`；不改 DOM、rowSpan 計算、欄位順序、state、store、schema、persistence、planning 或 DnD。
+  - 驗收：rowSpan owner cell 的 computed `boxShadow` 為 `none`；既有欄位 divider 維持；斑馬列面、sticky header、single X-scroll 與內容高度不變；無 visible alerts／overlap。
+  - 阻塞 / 恢復條件：若需要改動 native divider、table structure 或 rowSpan ownership，停止回規劃；目前無阻塞。
+  - 證據：`QA-DEV-128`、`npm run build:test`、`git diff --check`、719×698 localhost Goal screenshot／computed-style readback。
+  - 計入交付：否（Goal-only visual amendment；未授權 release）。
+
+- ✓ DEV-129 [開發點] [完成] [P2] [RD Implementation Complete / Targeted UI Smoke PASS / NOT RELEASED] OKR 定位時補回任務目的與會議紀錄渲染
+  - 摘要：修正 Goal 定位 tint 與 rowSpan owner surface 的 CSS 優先序，讓定位中的任務目的／會議紀錄 owner cell 保留原有文字、quick-note 與可讀底色；不改 projection、rowSpan、資料、state、欄位順序或 scroll owner。
+  - 來源 ID：本輪使用者瀏覽器標註與附圖（2026-09-18）。
+  - 父任務：DEV-128；相容 DEV-126、DEV-127、DEV-121。
+  - Scope：只調整 Goal-scoped content-owner location selector；不改 DOM、資料模型、store、persistence、planning 或 DnD。
+  - 驗收：定位任務目的與會議紀錄 owner cell 仍有可見文字且套用 parent tint；長 rowSpan owner 不被 generic rowSpan surface 覆蓋；covered rows 不新增錯誤內容；無 alerts／overlap／第二捲軸。
+  - 阻塞 / 恢復條件：若需改 projection、rowSpan ownership、資料載入或新增 scroll owner，停止回規劃；目前無阻塞。
+  - 證據：`SPEC-121` DEV-129 amendment、`QA-DEV-129`、`QA-DEV-121` V16；Chrome localhost Goal 實機定位 readback、`npm run build:test`、`git diff --check`。
+  - 計入交付：否（Goal-only visual correction；未授權 release）。
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
 
@@ -6134,10 +6176,10 @@ fixture boot wait timeout，未納入本 DEV PASS；該案例需另案釐清 fix
 
 ## DEV-121：OKR 父子任務樹狀對照與群組範圍
 
-- 狀態：完成；`R28 RD Implementation Complete / Targeted QA PASS / QC Ready / NOT RELEASED`。
+- 狀態：完成；`R29 RD Implementation Complete / Targeted QA PASS / QC Ready / NOT RELEASED`。
 - 開發文件成熟度：`RD Implementation Complete`；保留 Tech Lead R2 資料流，使用者確認的 owned-connector
   wired-tree 契約與 WP-121-B → E 已落地；R8 已完成 X 軸緊縮與端點移除，R9 完成樹線柔和化，R10 完成目前任務自有 incoming relation 高亮，
-  R11 完成 active 線寬與欄位對比強化，R12 修正 rowSpan owner 與 active descendant 的視覺歸屬，R13 增加所有欄位反向定位，R14 恢復可捲動欄位格線，R15 將展開／收合整併為樹線節點，R16 移除定位 task 上游垂直／水平段的 active 筆畫，R17 將樹狀線 X 軸間隔增加 30%，R18 讓任務名稱固定欄維持原生底色並將定位色留在 planning／content owner，R19 將所有層級任務名稱欄統一為同一白色底色，R20 將定位 task-name tint 調整為柔和色階，R21 增加任務目的欄收合控制，R22 將全欄位收合與帳號偏好保存統一到同一套欄位設定，R23 取消任務名稱欄收合鈕並固定 252px 左側樹狀欄，R24 將其餘欄位收合鈕收斂為 24px hit target／18px 視覺框與柔和狀態回饋，R25 將收合軌道縮為 22.4px 並把收合控制縮為 20px hit target／16px 視覺框，R26 移除空白日期額外 `—` 並使規劃欄寬容納標題與標準內容，R27 移除結束日期欄重複的工期鎖定 `L` 標記，R28 讓會議紀錄內部捲軸只顯示完整文字行並隱藏部分可視的 quick-note row。
+  R11 完成 active 線寬與欄位對比強化，R12 修正 rowSpan owner 與 active descendant 的視覺歸屬，R13 增加所有欄位反向定位，R14 恢復可捲動欄位格線，R15 將展開／收合整併為樹線節點，R16 移除定位 task 上游垂直／水平段的 active 筆畫，R17 將樹狀線 X 軸間隔增加 30%，R18 讓任務名稱固定欄維持原生底色並將定位色留在 planning／content owner，R19 將所有層級任務名稱欄統一為同一白色底色，R20 將定位 task-name tint 調整為柔和色階，R21 增加任務目的欄收合控制，R22 將全欄位收合與帳號偏好保存統一到同一套欄位設定，R23 取消任務名稱欄收合鈕並固定 252px 左側樹狀欄，R24 將其餘欄位收合鈕收斂為 24px hit target／18px 視覺框與柔和狀態回饋，R25 將收合軌道縮為 22.4px 並把收合控制縮為 20px hit target／16px 視覺框，R26 移除空白日期額外 `—` 並使規劃欄寬容納標題與標準內容，R27 移除結束日期欄重複的工期鎖定 `L` 標記，R28 讓會議紀錄內部捲軸只顯示完整文字行並隱藏部分可視的 quick-note row，R29 將父任務與子任務／後代定位列收斂為兩種藍色。
 - 節點類型：交付點；父任務 DEV-116；延續 DEV-120；相容 DEV-119；計入產品交付：是。
 - 風險：Medium（改變 OKR 階層、群組與 hover／focus 的可見語意，但不變更資料或權限）。
 - 需求來源：`USER-20260914-GOAL-HIERARCHY-COMPARISON`、
@@ -6156,7 +6198,8 @@ fixture boot wait timeout，未納入本 DEV PASS；該案例需另案釐清 fix
   `USER-20260916-GOAL-COMPACT-COLLAPSE-CONTROLS`、
   `USER-20260917-GOAL-DATE-PLACEHOLDER-AND-CONTENT-FIT-WIDTH`、
   `USER-20260917-GOAL-REMOVE-DURATION-LOCK-MARKER`、
-  `USER-20260917-GOAL-MEETING-TEXT-NO-CLIP`。
+  `USER-20260917-GOAL-MEETING-TEXT-NO-CLIP`、
+  `USER-20260918-GOAL-TWO-COLOR-PARENT-CHILD-TINT`。
 - 規格權威：[SPEC-121](specs/SPEC-121-goal-hierarchy-comparison-grid.md)。
 - 驗收權威：[QA-DEV-121](qa/QA-DEV-121-goal-hierarchy-comparison-grid.md)。
 
@@ -6226,7 +6269,7 @@ fixture boot wait timeout，未納入本 DEV PASS；該案例需另案釐清 fix
 - frozen task cell：Goal 局部使用 10.4px depth（8px baseline × 1.3）；1px owned rails 以 14.4px incoming branch（12px 基準加上 2.4px 間隔增量）直接接到任務文字，不渲染裝飾 endpoint，
   最後 sibling 在列中心終止且 root groups 不跨接；有子任務的 disclosure 以 20×20px hit target 整併為 own-lane node dot；L0 以 semibold與低對比不透明底成為錨點，
   只有第二個及後續 root 畫 2px group top boundary；最後 group 由 table bottom 收束，不插 spacer row。
-- content owner：只有 `rowSpan > 1` 加低對比 group surface 與 2px inset scope rail；不 clone、不補 covered cell。
+- content owner：只有 `rowSpan > 1` 加低對比 group surface，沿用 native table 欄位 divider，不再加 2px inset 左側線；不 clone、不補 covered cell。
 - reading guide：pointer／focus 位於 task 或 planning cell 時，只連接該列的 task＋planning cells；只有目前任務本身是
   rowSpan owner 時同步 tint，covered descendant 不染 ancestor owner。pointer／focus 位於 description／meeting owner cell
   時回報該 cell 的 `ownerTaskId`，沿同一 scope 定位固定任務欄。selector 使用直接子 cell hooks 與 scoped `:has()`；
@@ -6548,6 +6591,12 @@ git diff --check -- <DEV-121 owned files>
 - 保留會議紀錄欄原生 rowSpan 與內部 Y 捲軸；collapsed viewport 向下對齊 20px 文字行高，維持既有 single X-scroll 與 content ownership。
 - `useLayoutEffect` 監聽 scroll／ResizeObserver，將部分落在 viewport 的 quick-note row 標記為 `data-goal-content-row-clipped="true"`，以 `visibility:hidden` 隱藏整列並保留高度，捲動到完整可見時再顯示。
 - 未新增資料、store、schema、persistence 或第二捲軸；expanded 內容仍可完整檢視。DEV-121 static 28/28、browser 37/37、TypeScript、targeted ESLint、test build、diff check PASS；本機 candidate 維持 QC Ready，未 commit／push／PR／deploy／release。
+
+### R29 Two-color Parent／Child Task Tint Closure（2026-09-18）
+
+- 父任務定位列的 task-name／planning surface 共用 `rgba(199, 210, 254, 0.94)`，子任務／後代共用 `rgba(224, 231, 255, 0.9)`；同一列不再因固定欄與可捲動欄分裂成額外 task-row 藍色。
+- content owner active tint 沿用 parent blue；樹線、狀態語意色、rowSpan、資料 ownership、single X-scroll 與互動行為不變。V15／V20 的 browser computed style assertion 已同步更新。
+- 本輪完成 targeted static／browser visual smoke 後，更新本 DEV、SPEC-121 與 QA-DEV-121 的 R29 contract；未 commit／push／deploy／release。
 
 使用思考習慣：#設計思考、#差距分析、#問對問題、#簡潔優先、#系統描繪、#限制條件、#可驗證性
 

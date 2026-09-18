@@ -1,6 +1,6 @@
 # QA-DEV-121：OKR 父子任務樹狀對照與群組範圍
 
-- 狀態：`R28 Executed / Targeted QA PASS / QC Ready / NOT RELEASED`；R22～R23 Executed、R24 Executed、R25 Executed、R26 Executed、R27 Executed baseline retained for regression traceability。
+- 狀態：`R29 Executed / Targeted QA PASS / QC Ready / NOT RELEASED`；R22～R23 Executed、R24 Executed、R25 Executed、R26 Executed、R27 Executed、R28 Executed baseline retained for regression traceability。
 - 對應 SPEC：[SPEC-121](../specs/SPEC-121-goal-hierarchy-comparison-grid.md)。
 - 對應 DEV：[DEV-121](../dev_task.md#dev-121okr-父子任務樹狀對照與群組範圍)。
 - 驗證角色：RD 先做同一 candidate self-test；QA 依本文件重跑；QC 只採信可追溯 artifact 與事實結果。
@@ -131,7 +131,7 @@ source 與 case 證據為準，避免用不穩定 wall-clock 門檻製造假失�
 | V17 | 從任務目的／會議紀錄 owner cell 反向定位後，樹線 active scope 的 task id 仍等於該 owner；不把 covered descendant 當成內容所有者。 |
 | V18 | 格線範圍符合最新 UI 契約：任務名稱欄無資料格線，其餘可捲動欄位完整顯示 cell grid，且 X-scroll owner 仍為 1。 |
 | V19 | idle 時所有 hierarchy levels 的 task-name cells computed background 只有一個值且為 `rgb(255, 255, 255)`；planning／content owner 定位色仍可見。 |
-| V20 | 定位／focus scope 下 task-name parent／descendant computed background 分別為 `rgba(224, 231, 255, 0.72)`／`rgba(239, 246, 255, 0.76)`，保留層級差異但降低藍色重量。 |
+| V20 | 定位／focus scope 下 task-name parent／descendant computed background 分別為 `rgba(199, 210, 254, 0.94)`／`rgba(224, 231, 255, 0.9)`；同一列 task-name／planning surface 不再使用額外 task-row 藍色。 |
 
 視覺比較至少保存 normal、hover、keyboard focus、collapsed、X-scrolled、rowSpan editing／expanded、viewer、2x zoom
 截圖；每張標記 viewport、actor、case 與 source hash。
@@ -471,6 +471,12 @@ candidate metadata、case results、console／HTTP sweep 與命名 screenshots�
 - Chromium B18 使用 10 筆長會議紀錄 fixture：`rowCount=10`、`overflowY=auto`、`scrollHeight=400 > clientHeight=180`、`clientHeight % 20 = 0`，部分可視列 `partialRowsHidden=true`；代表截圖為 `output/playwright/dev-121-goal-hierarchy-comparison/B18-dev121-meeting-history-no-clipping-1440x900.png`。
 - 既有 B01～B17、V01～V20、A01～A04、G01～G02 維持通過；browser 37/37、browser／HTTP／visible errors=0。
 - `npx tsc --noEmit`、targeted ESLint、`npm run build:test`、`git diff --check` PASS。本機 candidate 維持 QC Ready，未 commit／push／PR／deploy／release。
+
+## 9.23 R29 Execution Record（2026-09-18）
+
+- DEV-121 static 28/28；S16／V20 讀回父任務與子／後代任務只使用兩組 task-row blue：父任務 `rgba(199, 210, 254, 0.94)`、子／後代任務 `rgba(224, 231, 255, 0.9)`，同一層級的任務名稱與目的欄位一致。
+- Chromium B06／V15／V20 通過；parent、descendant、planning computed style 與上述色值一致，browser／HTTP／visible errors=0；代表截圖位於 `output/playwright/dev-121-goal-hierarchy-comparison/`。
+- `localhost:4000` 沿用既有 matching runtime，未停止非本任務程序；browser harness 已清理本次 task-owned surface。`npx tsc --noEmit`、targeted ESLint、`git diff --check` PASS。本機 candidate 維持 QC Ready，未 commit／push／PR／deploy／release。
 
 ## 10. Pass／Fail／Stop
 

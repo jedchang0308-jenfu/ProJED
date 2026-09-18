@@ -1,6 +1,6 @@
 # SPEC-121：OKR 父子任務樹狀對照與群組範圍
 
-- 文件版本：R28，2026-09-17；除固定任務名稱欄外的所有可見欄位可由表頭控制收合／還原，個人帳號保存欄位偏好；expanded 欄位控制採 24px 可操作區與 18px 低噪音視覺框，collapsed 後縮為 20px 可操作區與 16px 視覺框，收合軌道由 32px 縮為 22.4px（瀏覽器實際約 22px），收合狀態才使用柔和主色；任務名稱欄永遠維持 252px 固定左側樹狀欄，不提供欄位收合；所有層級任務名稱固定欄未定位時統一白色底色，定位時使用柔和 scope tint；空白日期不再額外渲染 `—`，規劃欄寬調整為可容納標題與標準內容；工期鎖定仍限制結束日期編輯，但不在日期欄內重複渲染 `L` 標記；會議紀錄維持內部 Y 捲軸，顯示區以 20px 文字行高對齊，部分可視 quick-note 整列暫隱藏，避免露出裁切字元。
+- 文件版本：R29，2026-09-18；除固定任務名稱欄外的所有可見欄位可由表頭控制收合／還原，個人帳號保存欄位偏好；expanded 欄位控制採 24px 可操作區與 18px 低噪音視覺框，collapsed 後縮為 20px 可操作區與 16px 視覺框，收合軌道由 32px 縮為 22.4px（瀏覽器實際約 22px），收合狀態才使用柔和主色；任務名稱欄永遠維持 252px 固定左側樹狀欄，不提供欄位收合；所有層級任務名稱固定欄未定位時統一白色底色，定位時父任務與子任務／後代各自只使用一種 task blue；空白日期不再額外渲染 `—`，規劃欄寬調整為可容納標題與標準內容；工期鎖定仍限制結束日期編輯，但不在日期欄內重複渲染 `L` 標記；會議紀錄維持內部 Y 捲軸，顯示區以 20px 文字行高對齊，部分可視 quick-note 整列暫隱藏，避免露出裁切字元。
 - 成熟度：`RD Implementation Complete / Targeted QA PASS / QC Ready / NOT RELEASED`。
 - 對應：DEV-121（交付點）；父任務 DEV-116；相容 DEV-119、DEV-120。
 - 需求來源：`USER-20260914-GOAL-HIERARCHY-COMPARISON`、
@@ -20,11 +20,32 @@
 - 風險：Medium。風險集中於 native `rowSpan`、sticky first column、列級 reading guide、
   DnD hitbox、深層樹線幾何與既有帳號偏好 hydration 的交互作用；不新增資料模型或權限責任。
 
+## DEV-126 表格橫向追視 amendment（2026-09-18；Intentional replacement）
+
+使用者明確要求改善大量列資料的橫向追視，因此取代本文件原本「idle 全白、不做斑馬紋」的視覺條款。
+Goal 表格在 idle 狀態依目前可見列順序交錯使用 `#FFFFFF` 與 `#F3F6FA`，背景套用到同一列的固定任務名稱欄、可捲動比較欄與 collapsed tracks；`td[rowSpan]` 的 owner group surface 繼承它起始所屬任務列的列面，讓任務目的／會議紀錄不在合併區塊內切換色階，並沿用 native table 欄位 divider，不額外加粗左側線。階層深度不再改變 idle 列面，parent／descendant 的 active tint、hover／focus、connector、selection outline、rowSpan ownership、single X-scroll、32px 密度與所有資料／互動契約維持不變。
+
+此 amendment 只允許 Goal-scoped CSS 與視覺驗證文件變更，不新增泛用 `tr:hover`，避免 rowSpan hit-testing 將 shared content 誤算到 owner row。驗收權威為 [QA-DEV-126](../qa/QA-DEV-126-goal-row-readability.md)。
+
+## DEV-127 表格頂部欄對比 amendment（2026-09-18；Intentional replacement）
+
+Goal 表格 sticky column header 使用深色 `#0F172A` surface、白色 `#FFFFFF` label 與 `#475569` 邊界，讓欄位標題與資料列斑馬紋形成清楚的閱讀錨點。欄位收合 glyph 維持白色系文字、邊界與 focus／hover 可見性；不改固定任務名稱欄、欄位順序、sticky header、single X-scroll、rowSpan ownership、資料／互動／偏好保存契約。
+
+此 amendment 只允許 Goal-scoped CSS 與直接驗證文件變更。驗收權威為 [QA-DEV-127](../qa/QA-DEV-127-goal-header-contrast.md)；若需改 header structure、column order 或導入第二捲軸，應停止實作並回到規劃。
+
+## DEV-128 rowSpan 左側分隔線 amendment（2026-09-18；Intentional replacement）
+
+`td[data-goal-group-span="true"]` 不再加上額外的 `inset 2px` 左側線；合併內容沿用 native table 欄位既有的細分隔線，避免任務目的／會議紀錄 owner 區塊被視為粗框。rowSpan owner、列面繼承、sticky header、single X-scroll、欄位順序、資料與互動契約不變。驗收權威為 [QA-DEV-128](../qa/QA-DEV-128-goal-rowspan-divider.md)。
+
+## DEV-129 定位時內容渲染 amendment（2026-09-18；Compatible additive correction）
+
+Goal 的任務目的／會議紀錄 owner cell 在 `data-goal-content-scope="active"` 時，必須保留原有可見文字、meeting quick-note 與 owner scroll viewport，並套用與定位父任務一致的 parent tint。active content selector 需明確匹配 `td`，以覆蓋 generic `td[data-goal-group-span="true"]` 的 rowSpan surface，而不以 `visibility`、條件渲染或資料重投影遮蔽內容。covered row 維持無獨立 content DOM，真正 owner task、rowSpan、欄位順序、sticky header、single X-scroll、資料與互動契約不變。驗收權威為 [QA-DEV-129](../qa/QA-DEV-129-goal-location-content.md)。
+
 ## DEV-124 桌面拖拉 ownership intentional replacement（2026-09-16；架構已定案／未實作）
 
 [SPEC-124](SPEC-124-shared-desktop-task-drag-host.md) 只取代本文件「不移植看板拖曳模型」中的 ownership 解讀：
 Goal 不移植看板卡片／欄位 DOM，但會共用 desktop drag lifecycle、fixed feedback、canonical intent／commit，
-並以 Goal adapter 保有縱向 DFS table geometry。R8～R21 的樹線、node toggle、`rowSpan`、frozen task lane、
+並以 Goal adapter 保有縱向 DFS table geometry。R8～R29 的樹線、node toggle、`rowSpan`、frozen task lane、
 comparison grid、single X-scroll、可收合欄位與帳號偏好都是 protected surface；固定任務名稱欄維持不可收合。DEV-124 未實作前，現行 R26 runtime 與既有證據不變。
 
 ## Tech Lead R2 Review
@@ -71,7 +92,7 @@ R16 進一步移除定位任務左側上游垂直段與短水平支線的 active
 9. 有子任務的 task 以位於自身 tree lane 的圓點作為唯一展開／收合控制；圓點仍是原生 button，必須保留 accessible name、`aria-expanded` 與鍵盤操作。
 10. 定位 task 時，其當列 parent-owned `incoming-vertical` 與 `incoming-branch` 都不套 active 色與 2px 筆畫；own child stem 與後代 lineage 照常 active。
 11. 樹狀線的 Goal-local X 軸層級間隔以既有 8px 為基準增加 30%，使用 10.4px；lane start、node hit target 與標題對齊規則維持，incoming branch 同步調整為 14.4px 以消除接點空隙。
-12. 所有層級（root、L1、L2+）的固定任務名稱欄在 idle 時共用同一白色 surface；定位或 focus scope 生效時改套用低飽和、半透明的 parent／descendant scope tint。planning 欄與真正的 content owner cell 維持定位色，樹狀線仍負責階層定位。
+12. 所有層級（root、L1、L2+）在 idle 時依目前可見列順序交錯使用低彩度中性 row surface；固定任務名稱欄、planning 欄與可捲動 comparison cells 必須保持同一列面，`rowSpan` owner cell 使用起始所屬任務列面，整個合併區塊維持同一色階。定位或 focus scope 生效時改套用低飽和、半透明的 parent／descendant scope tint，樹狀線仍負責階層定位。
 13. 任務目的、會議紀錄與 planning 欄位存在時，欄名旁提供原生 keyboard-accessible toggle；expanded 顯示完整欄位，collapsed 將內容與欄寬收斂為 22.4px 控制軌，並可由同一按鈕恢復。任務名稱固定欄永遠維持 252px 且沒有欄位收合鈕。不得新增第二張表、第二個 X-scroll owner、資料欄位或 persistence。
 14. expanded 欄位 toggle 的原生 button hit／focus target 為 24×24px、可見控制框為 18×18px；collapsed 為 20×20px、可見框為 16×16px，圖示維持 11px，並以 5px／4px 圓角區分狀態。expanded 使用低對比白底細框，collapsed 使用柔和主色底與反向箭頭。hover、focus、pressed、reduced-motion 與 accessible name 必須保留，不增加文字說明、badge 或第二層工具列。
 15. 規劃欄的空白開始／結束日期不渲染額外 `—`；expanded 欄位以內容可讀為優先，owner／status／start／end／duration 的基準寬度分別為 144／72／112／112／84px，表頭標題不得被截斷；collapsed 欄仍維持 22.4px compact track。
@@ -226,7 +247,7 @@ export function buildGoalHierarchyDecorations(args: Readonly<{
 
 ### 5.5 `rowSpan` 群組範圍面
 
-- `rowSpan > 1` 的 description／meeting owner cell 使用低對比中性 group surface 與 2px inset scope rail；
+- `rowSpan > 1` 的 description／meeting owner cell 繼承起始所屬任務的低對比 row surface，並沿用 native table 欄位 divider，不額外加上 2px inset 左側線；
   `rowSpan = 1` 不增加群組面。
 - group surface 由實際 owner `td` 承擔，不新增 wrapper cell、clone 或 covered placeholder。
 - `rowSpan` 數值、owner task id、headers、tabIndex、內容高度公式、Y-scroll、expanded state、editor session
@@ -242,7 +263,7 @@ export function buildGoalHierarchyDecorations(args: Readonly<{
 
 ### 5.6 橫向 reading guide
 
-- 正常任務列不顯示橫向 row divider，不做斑馬紋；只保留 root group 的 2px 上邊界作為群組分界。
+- 正常任務列依目前可見列順序顯示低彩度奇偶列面（`#FFFFFF`／`#F3F6FA`），跨固定欄、比較欄與 collapsed tracks 連續；不新增泛用 `tr:hover`，保留 root group 的 2px 上邊界與既有 hierarchy scope tint。
 - pointer hover 或 keyboard focus 位於 task cell／任一既有 `[data-goal-planning-control]` cell 時，固定任務名稱欄使用低飽和 parent／descendant scope tint，
   同一 `<tr>` 的 planning cells使用 active background shift；只有目前任務本身是 description／meeting
   owner 時，該 owner cell 才套用相同 active tint。若目前任務落在 ancestor 的 `rowSpan` covered 範圍，
@@ -345,7 +366,7 @@ rowSpan 必須模擬或第二個 X-scroll 才能完成時，停止並回送規�
 - AC-121-01：任務名稱是同一 native table 的 sticky-left first column；X-scroll owner 數量仍為 1。
 - AC-121-02：L1～L4+ fixture 中，每個非 root 可由 rail／elbow 與位置追溯至父路徑；最後 sibling 正確終止。
 - AC-121-03：第二個及後續 root 以單一上邊界開始新 group，最後 group 由 table bottom 收束；
-  沒有雙重 start/end line、spacer row、卡片框、斑馬紋或層級 badge。
+  沒有雙重 start/end line、spacer row、卡片框或層級 badge；idle row surface 依 DEV-126 amendment 交錯，不能在 rowSpan owner 區塊內切換。
 - AC-121-04：description／meeting owner 數、`rowSpan`、covered DOM absence、內容與 owner task id
   在接入前後完全相同。
 - AC-121-05：group surface 只出現在 `rowSpan > 1` owner；子任務 reading guide 不進 group cell。
@@ -360,6 +381,8 @@ rowSpan 必須模擬或第二個 X-scroll 才能完成時，停止並回送規�
   還原後 owner／rowSpan／欄位順序與單一 X-scroll 維持一致。
 - AC-121-14：所有可見欄位均有同一 accessible toggle contract；收合／還原不改欄位順序、單一 X-scroll、
   rowSpan 或資料內容，且收合欄位偏好以帳號 uid 保存，重新載入後仍能恢復相同欄位狀態。
+- AC-121-15：定位／focus scope 下，父任務 task-name／planning cells 共用一個 parent blue，子任務／後代
+  task-name／planning cells 共用一個 child blue；不因同一列的固定欄與可捲動欄再產生第三種 task-row 藍色。
 
 ## 9. Required Verification
 
@@ -704,5 +727,12 @@ single X-scroll、projection 與 mutation 契約全部維持。
 - collapsed owner viewport 以 `GOAL_CONTENT_LINE_HEIGHT_PX = 20` 向下取整，並由 `useLayoutEffect` 搭配 `scroll`／`ResizeObserver` 追蹤 quick-note row 與 viewport 的交集。
 - 只要 quick-note row 僅部分落在 viewport，就標記 `data-goal-content-row-clipped="true"` 並套用 `visibility: hidden`；保留該列高度與 scrollHeight，使用者捲動後可看到完整文字列，避免半截字元出現在 rowSpan 邊界。
 - 不改 meeting data、ownerTaskId、rowSpan、欄位收合偏好、反向定位、single X-scroll 或 expanded content；S28／B18 為本輪驗收證據。
+
+### R29 Two-color Parent／Child Task Tint Addendum（2026-09-18）
+
+- 依使用者最新要求，定位／focus scope 的任務名稱與 planning cells 收斂為兩種 task-row 藍色：父任務使用
+  `rgba(199, 210, 254, 0.94)`，子任務／後代使用 `rgba(224, 231, 255, 0.9)`；同一列的固定任務名稱欄與右側 planning 欄共用對應色。
+- content owner 的 active tint 沿用 parent blue；樹線、node toggle、狀態語意色、rowSpan、資料 ownership、
+  single X-scroll、資料與互動行為不變。V15／V20 讀值更新為兩色契約。
 
 使用思考習慣：#設計思考、#差距分析、#問對問題、#簡潔優先、#系統描繪、#限制條件、#可驗證性

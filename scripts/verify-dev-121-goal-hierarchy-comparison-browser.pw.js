@@ -577,13 +577,13 @@ async (page) => {
         rootOwnedActiveContinuations,
       };
     });
-    const b06Ok = guideProbe.task === 'rgba(224, 231, 255, 0.72)'
+    const b06Ok = guideProbe.task === 'rgba(199, 210, 254, 0.94)'
       && guideProbe.planning.includes('199, 210, 254')
       && guideProbe.content.includes('248, 250, 252')
       && guideProbe.contentScope === ''
       && guideProbe.scopeRows.some(item => item.id === 'dev121-a1' && item.scope === 'parent');
     record('B06-reading-guide-preserves-rowspan-owner-boundary', b06Ok, guideProbe);
-    const activeScopeTintOk = guideProbe.task === 'rgba(224, 231, 255, 0.72)'
+    const activeScopeTintOk = guideProbe.task === 'rgba(199, 210, 254, 0.94)'
       && guideProbe.planning === 'rgba(199, 210, 254, 0.94)'
       && guideProbe.content.includes('248, 250, 252')
       && guideProbe.contentScope === '';
@@ -594,8 +594,8 @@ async (page) => {
       content: guideProbe.content,
       contentScope: guideProbe.contentScope,
     });
-    record('V20-soft-task-name-location-tint-keeps-parent-descendant-contrast', guideProbe.task === 'rgba(224, 231, 255, 0.72)'
-      && guideProbe.descendantTask === 'rgba(239, 246, 255, 0.76)', {
+    record('V20-two-task-blue-tints-unify-parent-and-descendant-rows', guideProbe.task === 'rgba(199, 210, 254, 0.94)'
+      && guideProbe.descendantTask === 'rgba(224, 231, 255, 0.9)', {
       parent: guideProbe.task,
       descendant: guideProbe.descendantTask,
     });

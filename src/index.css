@@ -366,6 +366,45 @@ body[data-kanban-mouse-pan-active="true"] * {
 [data-goal-hierarchy-guide-layer="preview"] {
   --goal-hierarchy-line-color: rgb(148 163 184 / 42%);
   --goal-hierarchy-line-active-color: rgb(99 102 241 / 76%);
+  --goal-hierarchy-parent-task-blue: rgb(199 210 254 / 94%);
+  --goal-hierarchy-child-task-blue: rgb(224 231 255 / 90%);
+}
+
+[data-goal-view="true"] {
+  /* Keep the comparison grid easy to track across wide rows without
+     competing with the existing hierarchy scope tints. */
+  --goal-row-surface-odd: rgb(255 255 255 / 100%);
+  --goal-row-surface-even: rgb(243 246 250 / 100%);
+  --goal-header-surface: rgb(15 23 42 / 96%);
+  --goal-header-ink: rgb(255 255 255 / 96%);
+  --goal-header-border: rgb(71 85 105 / 88%);
+}
+
+/* Keep the column labels visually anchored above the alternating data rows.
+   The controls remain white-on-dark so their collapse affordances stay legible. */
+[data-goal-view="true"] thead[data-goal-sticky-header="true"] > tr > th {
+  background-color: var(--goal-header-surface);
+  border-color: var(--goal-header-border);
+  color: var(--goal-header-ink);
+}
+
+[data-goal-view="true"] thead[data-goal-sticky-header="true"] > tr > th button {
+  color: rgb(255 255 255 / 86%);
+  --tw-ring-offset-color: var(--goal-header-surface);
+}
+
+[data-goal-view="true"] thead[data-goal-sticky-header="true"] > tr > th [data-goal-column-toggle-glyph] {
+  border-color: rgb(203 213 225 / 58%);
+  background-color: rgb(255 255 255 / 12%);
+  color: rgb(255 255 255 / 92%);
+  box-shadow: none;
+}
+
+[data-goal-view="true"] thead[data-goal-sticky-header="true"] > tr > th button:hover [data-goal-column-toggle-glyph],
+[data-goal-view="true"] thead[data-goal-sticky-header="true"] > tr > th button:focus-visible [data-goal-column-toggle-glyph] {
+  border-color: rgb(255 255 255 / 72%);
+  background-color: rgb(255 255 255 / 20%);
+  color: rgb(255 255 255 / 100%);
 }
 
 [data-goal-view="true"] .goal-task-hierarchy-row {
@@ -554,9 +593,23 @@ body[data-kanban-mouse-pan-active="true"] * {
   border-right: 1px solid rgb(226 232 240 / 78%);
 }
 
-[data-goal-view="true"] td[data-goal-group-span="true"] {
-  background: rgb(248 250 252 / 72%);
-  box-shadow: inset 2px 0 0 rgb(203 213 225 / 82%);
+[data-goal-view="true"] tbody > tr[data-goal-task-row] {
+  --goal-row-surface: var(--goal-row-surface-odd);
+}
+
+[data-goal-view="true"] tbody > tr[data-goal-task-row]:nth-child(even) {
+  --goal-row-surface: var(--goal-row-surface-even);
+}
+
+[data-goal-view="true"] tbody > tr[data-goal-task-row] > * {
+  background-color: var(--goal-row-surface);
+}
+
+/* A row-spanning owner cell belongs to the task row where it starts. Keep the
+   whole merged region on that task's surface so purpose and meeting history do
+   not switch color halfway through the owned task group. */
+[data-goal-view="true"] tbody > tr[data-goal-task-row] > td[data-goal-group-span="true"] {
+  background-color: var(--goal-row-surface);
 }
 
 [data-goal-view="true"] tbody > tr > [data-goal-task-cell],
@@ -582,25 +635,25 @@ body[data-kanban-mouse-pan-active="true"] * {
 [data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-hierarchy-scope="parent"] > [data-goal-planning-control],
 [data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-child-drop-candidate="true"] > [data-goal-planning-control],
 [data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-child-drop-target="true"] > [data-goal-planning-control] {
-  background-color: rgb(199 210 254 / 94%);
+  background-color: var(--goal-hierarchy-parent-task-blue);
 }
 
 [data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-hierarchy-scope="descendant"] > [data-goal-planning-control] {
-  background-color: rgb(224 231 255 / 90%);
+  background-color: var(--goal-hierarchy-child-task-blue);
 }
 
 /* A located task must remain identifiable while the fixed task-name lane is
    being compared against the horizontally scrollable columns. Keep the
-   normal lane surface neutral; apply the same two-level indigo scope tint
-   only while reverse location or pointer focus is active. */
+   normal lane surface neutral; apply the same two-level task tint to the
+   task-name and planning cells while location or pointer focus is active. */
 [data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-hierarchy-scope="parent"] > [data-goal-task-cell],
 [data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-child-drop-candidate="true"] > [data-goal-task-cell],
 [data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-child-drop-target="true"] > [data-goal-task-cell] {
-  background-color: rgb(224 231 255 / 72%);
+  background-color: var(--goal-hierarchy-parent-task-blue);
 }
 
 [data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-hierarchy-scope="descendant"] > [data-goal-task-cell] {
-  background-color: rgb(239 246 255 / 76%);
+  background-color: var(--goal-hierarchy-child-task-blue);
 }
 
 [data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-hierarchy-scope] > [data-goal-task-cell] .task-title-text,
@@ -609,8 +662,11 @@ body[data-kanban-mouse-pan-active="true"] * {
   color: rgb(79 70 229);
 }
 
-[data-goal-view="true"] tbody > tr[data-goal-task-row] > [data-goal-content-scope="active"] {
-  background-color: rgb(199 210 254 / 94%);
+/* A content owner can also be a row-spanning cell. Match the cell element
+   explicitly so this location tint wins over the generic rowSpan surface rule
+   without changing the owner cell's text or scroll behavior. */
+[data-goal-view="true"] tbody > tr[data-goal-task-row] > td[data-goal-content-scope="active"] {
+  background-color: var(--goal-hierarchy-parent-task-blue);
 }
 
 /* Meeting history stays scrollable, but a quick-note row is either fully
