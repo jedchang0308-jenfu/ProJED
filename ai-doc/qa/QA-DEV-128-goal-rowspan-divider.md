@@ -1,6 +1,6 @@
 # QA-DEV-128：OKR rowSpan 左側分隔線降噪
 
-- 狀態：`Targeted UI Smoke PASS / NOT RELEASED`
+- 狀態：`Targeted UI Smoke PASS / Production Verified`
 - 範圍：Goal／OKR 表格任務目的與會議紀錄 rowSpan owner cell 的左側邊框權重。
 - 不在範圍：rowSpan 計算、資料、列面、欄位順序、sticky header、state／store／persistence、planning、DnD、release。
 - 驗證環境：`http://localhost:4000/`，Chromium in-app browser，Goal 模式，viewport `719×698`。
@@ -17,4 +17,4 @@
 
 ## 結論
 
-本次僅移除 Goal rowSpan owner cell 的額外 2px inset 左側線，沿用 native table divider；Targeted UI smoke 通過，未執行 release／deploy，維持 `NOT RELEASED`。
+本次僅移除 Goal rowSpan owner cell 的額外 2px inset 左側線，沿用 native table divider；Targeted UI smoke 與 REL-005 canonical release gate 通過。

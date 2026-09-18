@@ -1,6 +1,6 @@
 # QA-DEV-127：OKR 表格頂部欄深色對比
 
-- 狀態：`Targeted UI Smoke PASS / NOT RELEASED`
+- 狀態：`Targeted UI Smoke PASS / Production Verified`
 - 範圍：Goal／OKR 表格 sticky column header 的深色 surface、白色文字與欄位收合控制可見性。
 - 不在範圍：資料、欄位順序、rowSpan、state／store／persistence、planning、DnD、release。
 - 驗證環境：`http://localhost:4000/`，Chromium in-app browser，Goal 模式，viewport `928×698`。
@@ -18,4 +18,4 @@
 
 ## 結論
 
-本次僅以 Goal-scoped CSS 改善表格欄位標題對比，未改動資料或互動模型。Targeted UI smoke 通過；未執行 release／deploy，維持 `NOT RELEASED`。
+本次僅以 Goal-scoped CSS 改善表格欄位標題對比，未改動資料或互動模型。Targeted UI smoke 與 REL-005 canonical release gate 通過。

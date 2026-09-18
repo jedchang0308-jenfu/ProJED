@@ -1,12 +1,24 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-09-18（REL-005 DEV-126～DEV-129 / Production Verified）
+
+DEV-126～DEV-129 已由 source commit `14590740052afd4513ba1797d97f6f5b1e44220d` 的 sealed artifact 啟用至 Firebase canonical live，release `20260918093103-794d79`、artifact tree `dbc59e91558909a51a8ff215e59d6d0dc70341b01545b1bc6c8849cdf0faa03f`；證據集中於 [REL-005](release/REL-005-DEV-126-129-20260918.md)。
+
+| 權威入口 | 狀態與責任 |
+|---|---|
+| [DEV-126](dev_task.md#dev-126okr-表格橫向追視) ～ [DEV-129](dev_task.md#dev-129okr-定位時補回任務目的與會議紀錄渲染) | `Production Verified`；Goal 列面、深色 header、rowSpan divider、定位內容可見性 |
+| [QA-DEV-126](qa/QA-DEV-126-goal-row-readability.md) ～ [QA-DEV-129](qa/QA-DEV-129-goal-location-content.md) | local targeted UI 與 production release evidence |
+| [REL-005](release/REL-005-DEV-126-129-20260918.md) | release、45/45 provenance、canonical browser／OAuth smoke、rollback anchor |
+
+正式資料、schema、migration、權限與 persistence 未因本 release 改動。
+
 ## Documentation Map Update - 2026-09-18（DEV-129 OKR 定位內容渲染恢復 / Local Implemented）
 
 [DEV-129](dev_task.md#dev-129okr-定位時補回任務目的與會議紀錄渲染) 修正 Goal 定位 tint 與 rowSpan owner surface 的 selector 優先序，讓任務目的／會議紀錄在定位時維持可見文字與 quick-note，不改 projection、rowSpan、資料或互動契約。
 
 | 權威入口 | 狀態與責任 |
 |---|---|
-| [DEV-129](dev_task.md#dev-129okr-定位時補回任務目的與會議紀錄渲染) | `RD Implementation Complete / Targeted UI Smoke PASS / NOT RELEASED`；Goal-only 定位內容可見性 |
+| [DEV-129](dev_task.md#dev-129okr-定位時補回任務目的與會議紀錄渲染) | `Production Verified`；Goal-only 定位內容可見性 |
 | [SPEC-121 amendment](specs/SPEC-121-goal-hierarchy-comparison-grid.md#dev-129-定位時內容渲染-amendment) | owner content 在 active location scope 下的可見性與底色優先序 |
 | [QA-DEV-129](qa/QA-DEV-129-goal-location-content.md) | description／meeting owner 定位 readback、rowSpan、alerts、build 與 diff check 證據 |
 
@@ -16,7 +28,7 @@
 
 | 權威入口 | 狀態與責任 |
 |---|---|
-| [DEV-128](dev_task.md#dev-128okr-rowspan-左側分隔線降噪) | `RD Implementation Complete / Targeted UI Smoke PASS / NOT RELEASED`；Goal-only rowSpan divider 降噪 |
+| [DEV-128](dev_task.md#dev-128okr-rowspan-左側分隔線降噪) | `Production Verified`；Goal-only rowSpan divider 降噪 |
 | [SPEC-121 amendment](specs/SPEC-121-goal-hierarchy-comparison-grid.md#dev-128-rowspan-左側分隔線-amendment) | 不新增粗左線，沿用 native column divider |
 | [QA-DEV-128](qa/QA-DEV-128-goal-rowspan-divider.md) | 719×698 screenshot、computed style、overflow、alerts、build 與 diff check 證據 |
 
@@ -26,7 +38,7 @@
 
 | 權威入口 | 狀態與責任 |
 |---|---|
-| [DEV-127](dev_task.md#dev-127okr-表格頂部欄深色對比) | `RD Implementation Complete / Targeted UI Smoke PASS / NOT RELEASED`；Goal-only header 對比與範圍 |
+| [DEV-127](dev_task.md#dev-127okr-表格頂部欄深色對比) | `Production Verified`；Goal-only header 對比與範圍 |
 | [SPEC-121 amendment](specs/SPEC-121-goal-hierarchy-comparison-grid.md#dev-127-表格頂部欄對比-amendment) | 深色 header、白字、控制可見性與不變更結構契約 |
 | [QA-DEV-127](qa/QA-DEV-127-goal-header-contrast.md) | 928×698 screenshot、computed style、overflow、alerts、build 與 diff check 證據 |
 
@@ -36,7 +48,7 @@
 
 | 權威入口 | 狀態與責任 |
 |---|---|
-| [DEV-126](dev_task.md#dev-126okr-表格橫向追視) | `RD Implementation Complete / Targeted UI Smoke PASS / NOT RELEASED`；Goal-only 表格列面與驗證邊界 |
+| [DEV-126](dev_task.md#dev-126okr-表格橫向追視) | `Production Verified`；Goal-only 表格列面與驗證邊界 |
 | [SPEC-121 amendment](specs/SPEC-121-goal-hierarchy-comparison-grid.md#dev-126-表格橫向追視-amendment) | 取代 idle 全白／不做斑馬紋的既有視覺條款，保留階層與 rowSpan 契約 |
 | [QA-DEV-126](qa/QA-DEV-126-goal-row-readability.md) | computed-style、fixed-column／rowSpan screenshot、build 與 diff check 證據 |
 

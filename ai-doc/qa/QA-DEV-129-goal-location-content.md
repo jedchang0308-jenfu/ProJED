@@ -1,6 +1,6 @@
 # QA-DEV-129：OKR 定位時任務目的與會議紀錄渲染恢復
 
-- 狀態：`Targeted UI Smoke PASS / NOT RELEASED`
+- 狀態：`Targeted UI Smoke PASS / Production Verified`
 - 範圍：Goal／OKR 表格在 parent location scope 下的任務目的與會議紀錄 owner cell。
 - 不在範圍：projection、rowSpan 計算、資料、state／store／persistence、欄位順序、planning、DnD、release。
 - 驗證環境：`http://localhost:4000/`，Chromium local Goal mode；另以使用者附圖的 719×698 標註場景作需求對照。
@@ -18,4 +18,4 @@
 
 ## 結論
 
-本次僅提高 Goal active content selector 的 CSS specificity，恢復定位時任務目的與會議紀錄的可見渲染與 parent tint；未執行 release／deploy，維持 `NOT RELEASED`。
+本次僅提高 Goal active content selector 的 CSS specificity，恢復定位時任務目的與會議紀錄的可見渲染與 parent tint；REL-005 canonical CSS readback 與 browser／OAuth release gates 通過。

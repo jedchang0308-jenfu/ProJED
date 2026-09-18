@@ -1,6 +1,6 @@
 # QA-DEV-126：OKR 表格橫向追視
 
-- 狀態：`Targeted UI Smoke PASS / NOT RELEASED`。
+- 狀態：`Targeted UI Smoke PASS / Production Verified`。
 - 對應 DEV：[DEV-126](../dev_task.md#dev-126okr-表格橫向追視)。
 - 對應規格：[SPEC-121 DEV-126 amendment](../specs/SPEC-121-goal-hierarchy-comparison-grid.md#dev-126-表格橫向追視-amendment)。
 - 驗證角色：RD 完成最小實作；本輪以 QC 方式重讀 localhost:4000 的實際畫面與 computed style；不修改產品程式。
@@ -33,4 +33,4 @@
 
 ## 證據邊界
 
-本 QA 證明 local source 與 localhost:4000 的 Goal visual layer；不代表 production、正式 release、真機或跨瀏覽器完整 QC。
+本 QA 的 local evidence 已由 REL-005 的 sealed artifact、45/45 canonical provenance、browser smoke 與 OAuth safe-cancel 承接正式發布；不代表真機或跨瀏覽器完整 QC。

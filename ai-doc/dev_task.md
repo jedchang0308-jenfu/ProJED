@@ -30,6 +30,12 @@ DEV-125 已由 clean source commit `ee0ed9dcedc60ec535e429b734aac66e589d906e` �
 
 正式行為為 Goal 看板與任務明細共用「任務目的」投影：legacy「說明／達到目標」合併、來源 WBS 同標題時移除、不同時併入目的，其他備註保留。未執行既有正式資料 bulk migration；只在使用者編輯並儲存時正規化。
 
+## Release update - 2026-09-18（REL-005 DEV-126～DEV-129 / Production Verified）
+
+DEV-126～DEV-129 已由 clean source commit `14590740052afd4513ba1797d97f6f5b1e44220d` 的 sealed artifact 啟用至 Firebase canonical live，release ID `20260918093103-794d79`，artifact tree `dbc59e91558909a51a8ff215e59d6d0dc70341b01545b1bc6c8849cdf0faa03f`。45/45 artifact provenance、production-bound readiness、credential rotation、canonical browser smoke 與 OAuth safe-cancel 均通過；完整證據見 [REL-005 release record](release/REL-005-DEV-126-129-20260918.md)。
+
+正式 Goal 表格已包含低彩度交錯列面、深色表頭白字、rowSpan owner 原生細分隔線，以及定位時任務目的／會議紀錄的可見內容與 parent tint。未改資料、schema、migration、權限或 persistence。
+
 ## 總任務清單
 
 此區是 `dev_task.md` 的 canonical index；詳細契約、歷史與完整證據保留在直接連結的
@@ -929,7 +935,7 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 下一步：既有正式資料一次性整理仍須另行指定範圍並建立 readback／rollback 證據；本 release 不自動執行。
   - 計入交付：是（production verified；bulk migration 不在本 DEV 範圍）。
 
-- ✓ DEV-126 [開發點] [完成] [P2] [RD Implementation Complete / Targeted UI Smoke PASS / NOT RELEASED] OKR 表格橫向追視
+- ✓ DEV-126 [開發點] [完成] [P2] [Production Verified] OKR 表格橫向追視
   - 摘要：Goal 表格 idle 狀態依目前可見列順序使用低彩度奇偶列面，讓固定任務名稱欄與可水平捲動欄位可快速對齊；rowSpan owner cell 繼承起始所屬任務列面，讓任務目的／會議紀錄合併區塊維持同一底色，既有階層定位色與互動語意維持。
   - 來源 ID：本輪使用者明確指示（2026-09-18）。
   - 父任務：DEV-121；相容 DEV-116、DEV-119、DEV-120、DEV-124。
@@ -939,9 +945,10 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 阻塞 / 恢復條件：若需改變 rowSpan／hierarchy／selection state 或導入第二捲軸，停止並回規劃；目前無阻塞。
   - 後續修正（2026-09-18）：依瀏覽器標註，任務目的／會議紀錄的 rowSpan owner 改為繼承起始所屬任務列面，不再透出跨列奇偶底色；同範圍重新驗證。
   - 證據：`SPEC-121` DEV-126 amendment、`QA-DEV-126`；`npm run build:test`、`git diff --check`、1280×800 localhost:4000 代表截圖、928×698 標註欄位 follow-up 截圖，以及 900px desktop viewport 的 computed-style／overflow readback 均通過。
-  - 計入交付：否（Goal-only visual amendment；未授權 release）。
+  - 正式 release：REL-005；source `14590740052afd4513ba1797d97f6f5b1e44220d`、release `20260918093103-794d79`；啟用前 live version `0ced9227620e2289` 保留為 rollback anchor。
+  - 計入交付：是（Goal-only visual amendment；REL-005 production verified）。
 
-- ✓ DEV-127 [開發點] [完成] [P2] [RD Implementation Complete / Targeted UI Smoke PASS / NOT RELEASED] OKR 表格頂部欄深色對比
+- ✓ DEV-127 [開發點] [完成] [P2] [Production Verified] OKR 表格頂部欄深色對比
   - 摘要：Goal 表格欄位標題列使用深色底與白字，固定 header 與可收合控制維持可辨識性；不改欄位順序、資料、rowSpan、state、store 或 scroll owner。
   - 來源 ID：本輪使用者瀏覽器標註（2026-09-18）。
   - 父任務：DEV-126；相容 DEV-121、DEV-120。
@@ -949,9 +956,9 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 驗收：thead th computed background `#0F172A`、text `#FFFFFF`；toggle glyph 與 focus 維持可見；sticky header、single X-scroll 與欄位結構維持；無 visible alerts／overlap。
   - 阻塞 / 恢復條件：若需改 header structure、column order 或 second scroll owner，停止回規劃；目前無阻塞。
   - 證據：`QA-DEV-127`、`npm run build:test`、`git diff --check`、928×698 localhost Goal screenshot／computed-style readback。
-  - 計入交付：否（Goal-only visual amendment；未授權 release）。
+  - 計入交付：是（Goal-only visual amendment；REL-005 production verified）。
 
-- ✓ DEV-128 [開發點] [完成] [P2] [RD Implementation Complete / Targeted UI Smoke PASS / NOT RELEASED] OKR rowSpan 左側分隔線降噪
+- ✓ DEV-128 [開發點] [完成] [P2] [Production Verified] OKR rowSpan 左側分隔線降噪
   - 摘要：移除任務目的／會議紀錄 rowSpan owner cell 額外的 2px inset 左側線，沿用既有 native table 欄位分隔線，避免合併內容看起來像被加粗框住；列面、header、rowSpan ownership 與資料／互動契約不變。
   - 來源 ID：本輪使用者瀏覽器標註（2026-09-18；719×698）。
   - 父任務：DEV-127；相容 DEV-126、DEV-121。
@@ -959,9 +966,9 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 驗收：rowSpan owner cell 的 computed `boxShadow` 為 `none`；既有欄位 divider 維持；斑馬列面、sticky header、single X-scroll 與內容高度不變；無 visible alerts／overlap。
   - 阻塞 / 恢復條件：若需要改動 native divider、table structure 或 rowSpan ownership，停止回規劃；目前無阻塞。
   - 證據：`QA-DEV-128`、`npm run build:test`、`git diff --check`、719×698 localhost Goal screenshot／computed-style readback。
-  - 計入交付：否（Goal-only visual amendment；未授權 release）。
+  - 計入交付：是（Goal-only visual amendment；REL-005 production verified）。
 
-- ✓ DEV-129 [開發點] [完成] [P2] [RD Implementation Complete / Targeted UI Smoke PASS / NOT RELEASED] OKR 定位時補回任務目的與會議紀錄渲染
+- ✓ DEV-129 [開發點] [完成] [P2] [Production Verified] OKR 定位時補回任務目的與會議紀錄渲染
   - 摘要：修正 Goal 定位 tint 與 rowSpan owner surface 的 CSS 優先序，讓定位中的任務目的／會議紀錄 owner cell 保留原有文字、quick-note 與可讀底色；不改 projection、rowSpan、資料、state、欄位順序或 scroll owner。
   - 來源 ID：本輪使用者瀏覽器標註與附圖（2026-09-18）。
   - 父任務：DEV-128；相容 DEV-126、DEV-127、DEV-121。
@@ -969,7 +976,8 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 驗收：定位任務目的與會議紀錄 owner cell 仍有可見文字且套用 parent tint；長 rowSpan owner 不被 generic rowSpan surface 覆蓋；covered rows 不新增錯誤內容；無 alerts／overlap／第二捲軸。
   - 阻塞 / 恢復條件：若需改 projection、rowSpan ownership、資料載入或新增 scroll owner，停止回規劃；目前無阻塞。
   - 證據：`SPEC-121` DEV-129 amendment、`QA-DEV-129`、`QA-DEV-121` V16；Chrome localhost Goal 實機定位 readback、`npm run build:test`、`git diff --check`。
-  - 計入交付：否（Goal-only visual correction；未授權 release）。
+  - 正式 release：REL-005；canonical CSS asset `assets/main-CTgSoZBw.css` 45/45 provenance PASS，description／meeting quick-note production bundle readback 與 local Goal 定位 readback 均通過。
+  - 計入交付：是（Goal-only visual correction；REL-005 production verified）。
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
 
