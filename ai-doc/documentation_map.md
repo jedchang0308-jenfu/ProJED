@@ -1,16 +1,17 @@
 # ProJED Documentation Map
 
-## Documentation Map Update - 2026-09-18（DEV-125 任務目的欄位統整 / Targeted QA PASS / NOT RELEASED）
+## Documentation Map Update - 2026-09-18（REL-004 DEV-125 任務目的欄位統整 / Production Verified）
 
 [DEV-125](dev_task.md#dev-125任務目的欄位統整) 將 legacy「說明／達到目標／來源 WBS」在 Goal 看板與任務明細統一投影為「任務目的」；來源 WBS 與任務標題相同時刪除，不同時移入目的，並保留「歷程紀錄」等非目的備註。讀取採純投影，編輯／儲存才正規化 `detailNotes[0]` 與 `description`；不新增 schema、migration 或自動遠端 bulk mutation。
 
 | 權威入口 | 狀態與責任 |
 |---|---|
-| [DEV-125](dev_task.md#dev-125任務目的欄位統整) | `RD Implementation Complete / Architecture Confirmed / Targeted QA PASS / NOT RELEASED`；產品範圍、資料邊界與 release boundary |
-| [SPEC-125](specs/SPEC-125-task-purpose-consolidation.md) | 合併規則、唯一資料來源、保存契約與非目標 |
-| [QA-DEV-125](qa/QA-DEV-125-task-purpose-consolidation.md) | 8/8 focused cases、TypeScript、targeted lint、test build、diff check |
+| [DEV-125](dev_task.md#dev-125任務目的欄位統整) | `Production Verified`；產品範圍、資料邊界、正式 release 與 rollback anchor |
+| [SPEC-125](specs/SPEC-125-task-purpose-consolidation.md) | 合併規則、唯一資料來源、保存契約與非目標；Production Verified |
+| [QA-DEV-125](qa/QA-DEV-125-task-purpose-consolidation.md) | local 8/8、TypeScript、targeted lint、test build、diff check、candidate／canonical smoke PASS |
+| [REL-004](release/REL-004-DEV-125-20260918.md) | release `20260918014117-658b30`、45/45 provenance、canonical browser／OAuth smoke、rollback anchor |
 
-目前尚未部署正式環境；一次性既有資料整理需另行確認全域或指定看板範圍，並以獨立 readback／rollback 證據執行。
+目前已部署並完成正式 smoke；一次性既有資料整理仍需另行確認全域或指定看板範圍，並以獨立 readback／rollback 證據執行。
 
 ## Documentation Map Update - 2026-09-17（REL-003 DEV-123 / Direct Production Verification）
 

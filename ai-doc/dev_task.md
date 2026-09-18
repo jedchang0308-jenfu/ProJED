@@ -24,6 +24,12 @@ DEV-122已由clean source commit `5ee11786da4db07b9f125b0e315873dda479d1c9`的se
 
 本次是正式環境可見性與 control-path 驗證，`process_meeting_analysis` 仍為 fake provider，未呼叫真實 transcription provider；Provider ZDR、真實 API/model/pricing、Files cleanup 與 95/90 品質 qualification 仍列為 Pending。正式入口已開放供授權驗證，但不得將 fake worker 結果視為真實語音品質或商用 provider 完成。
 
+## Release update - 2026-09-18（REL-004 DEV-125 / Production Verified）
+
+DEV-125 已由 clean source commit `ee0ed9dcedc60ec535e429b734aac66e589d906e` 的 sealed artifact 啟用至 Firebase canonical live，release ID `20260918014117-658b30`，artifact tree `e4d5b02e0bb7b50353f319113bf700d7ae7993ffffd990be6d44cbde09fafc16`。45/45 artifact provenance、production-bound readiness、credential rotation、canonical browser smoke 與 OAuth safe-cancel 均通過；完整證據見 [REL-004 release record](release/REL-004-DEV-125-20260918.md)。
+
+正式行為為 Goal 看板與任務明細共用「任務目的」投影：legacy「說明／達到目標」合併、來源 WBS 同標題時移除、不同時併入目的，其他備註保留。未執行既有正式資料 bulk migration；只在使用者編輯並儲存時正規化。
+
 ## 總任務清單
 
 此區是 `dev_task.md` 的 canonical index；詳細契約、歷史與完整證據保留在直接連結的
@@ -912,15 +918,16 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 回歸：B51證明outer guard candidate=0、中心target-only tint=1；B52證明armed target parent=1、descendant=0且child feedback；B49／B50、Board shared presenter與Goal定位／樹線／浮卡／commit均PASS。TypeScript、targeted ESLint、`build:test`與diff check PASS。
   - 計入交付：是（R14 RD implementation與targeted QA已完成；獨立QC、真機／正式持久化與release gate未完成，維持驗證中）
 
-- ◐ DEV-125 [開發點] [本機完成] [P1] [RD Implementation Complete / 架構已定案 / Targeted QA PASS / NOT RELEASED] 任務目的欄位統整
+- ✓ DEV-125 [開發點] [完成] [P1] [Production Verified] 任務目的欄位統整
   - 摘要：將歷史任務明細中的「說明」、「達到目標」與「來源 WBS」在 Goal 看板與任務明細統一呈現為單一「任務目的」；來源 WBS 若等於任務標題則刪除，「歷程紀錄」等其他備註維持獨立欄位與原順序。
   - 來源 ID：`USER-20260918-TASK-PURPOSE-CONSOLIDATION`（正式看板瀏覽留言）。
   - 父任務：DEV-116；相容 DEV-066、DEV-111、DEV-119、DEV-121。
   - 架構決策：沿用 `TaskNode.detailNotes` 與 `description` 相容投影，不新增 schema、migration、RPC 或第二份資料；讀取只做純投影，只有使用者編輯／儲存時才將 legacy fragments 正規化回一個 `note_default`／`任務目的`，並保留非目的備註。
   - 阻塞 / 恢復條件：若要對正式資料做一次性 bulk migration，必須另行確認完整範圍（全域或指定看板）與 rollback／readback 證據；不得因讀取畫面自動寫入雲端。
-  - 證據：`SPEC-125`、`QA-DEV-125`；`npm run verify:dev-125-task-purpose-merge` 8/8、`npx tsc --noEmit`、targeted ESLint、`npm run build:test`、`git diff --check` PASS。
-  - 下一步：依 deployment-release-gate 建立 immutable production candidate；正式 activation 前仍需完成 release smoke。一次性既有資料整理另依使用者指定範圍執行。
-  - 計入交付：否（本機 candidate 完成；尚未 commit／deploy／release）。
+  - 證據：`SPEC-125`、`QA-DEV-125`、[REL-004](release/REL-004-DEV-125-20260918.md)；local 8/8、TypeScript、targeted ESLint、`build:test`、diff check、candidate 與 canonical production smoke PASS。
+  - 正式 release：commit `ee0ed9dcedc60ec535e429b734aac66e589d906e`、release `20260918014117-658b30`、tree `e4d5b02e0bb7b50353f319113bf700d7ae7993ffffd990be6d44cbde09fafc16`；啟用前 live version `763361c04938dc87` 保留為 rollback anchor。
+  - 下一步：既有正式資料一次性整理仍須另行指定範圍並建立 readback／rollback 證據；本 release 不自動執行。
+  - 計入交付：是（production verified；bulk migration 不在本 DEV 範圍）。
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
 

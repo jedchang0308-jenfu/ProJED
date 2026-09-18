@@ -2,7 +2,7 @@
 
 ## 文件狀態
 
-- `RD Implementation Complete / Architecture Confirmed / Targeted QA PASS / NOT RELEASED`
+- `RD Implementation Complete / Architecture Confirmed / Targeted QA PASS / Production Verified`
 - 來源：`USER-20260918-TASK-PURPOSE-CONSOLIDATION`
 - 影響範圍：Goal 看板任務目的欄、任務明細備註編輯器、既有 `detailNotes`／`description` 相容投影
 
