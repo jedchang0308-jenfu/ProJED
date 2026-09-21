@@ -1,6 +1,6 @@
 # QA-DEV-121：OKR 父子任務樹狀對照與群組範圍
 
-- 狀態：`R39 Executed / Targeted QA PASS / QC Ready / NOT RELEASED`；R22～R23 Executed、R24 Executed、R25 Executed、R26 Executed、R27 Executed、R28 Executed baseline retained for regression traceability。
+- 狀態：`R39 Executed / Targeted QA PASS / Production Verified with Scoped Feature Evidence / REL-006`；R22～R23 Executed、R24 Executed、R25 Executed、R26 Executed、R27 Executed、R28 Executed baseline retained for regression traceability。
 - 對應 SPEC：[SPEC-121](../specs/SPEC-121-goal-hierarchy-comparison-grid.md)。
 - 對應 DEV：[DEV-121](../dev_task.md#dev-121okr-父子任務樹狀對照與群組範圍)。
 - 驗證角色：RD 先做同一 candidate self-test；QA 依本文件重跑；QC 只採信可追溯 artifact 與事實結果。
@@ -526,6 +526,9 @@ candidate metadata、case results、console／HTTP sweep 與命名 screenshots�
 - B13 修正 sticky header collapsed glyph 的低對比背景差異；V19 將交錯 row surface 限定在可捲動 comparison／planning cells，固定 task-name lane 維持白色；B06／V15／V02 校正 browser probes 為白色 owner surface、native divider、無額外 inset shadow。
 - DEV-121 static `28/28`、Chromium `37/37`；B13／B06／V15／V19／V02 全部通過，browser／HTTP／visible errors `0`；截圖位於 `output/playwright/dev-121-goal-hierarchy-comparison/`。
 - Goal empty-location targeted browser、`npx tsc --noEmit`、targeted ESLint、`git diff --check` PASS；`localhost:4000` 沿用 matching runtime，未停止非本任務程序；本機 candidate 維持 QC Ready，未 commit／push／PR／deploy／release。
+
+- REL-006 已以 source commit `3579b4693c8d072a2958fc6e46240629ac311521` 部署至 `https://projed-cc78d.web.app`；direct receipt、47-entry canonical provenance、app-shell smoke 與正式 CSS readback PASS。
+- 正式 Goal authenticated fixture 未執行：既有 37-case runner 是 localhost/local-test-only，未建立或寫入 production fixture；因此保留 scoped feature evidence 邊界，不把 local-only PASS 擴張為 production authenticated smoke。
 
 ## 10. Pass／Fail／Stop
 

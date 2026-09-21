@@ -1,7 +1,7 @@
 # SPEC-121：OKR 父子任務樹狀對照與群組範圍
 
 - 文件版本：R39，2026-09-21；除固定任務名稱欄外的所有可見欄位可由表頭控制收合／還原，個人帳號保存欄位偏好；expanded 欄位控制採 24px 可操作區與 18px 低噪音視覺框，collapsed 後縮為 20px 可操作區與 16px 視覺框，收合軌道由 32px 縮為 22.4px（瀏覽器實際約 22px），收合狀態才使用柔和主色；任務名稱欄永遠維持 252px 固定左側樹狀欄，不提供欄位收合；所有層級任務名稱固定欄未定位時統一白色底色，定位時父任務使用 parent surface tint、子任務／後代使用更淡的 `#EDF8F8` surface tint，任務標題文字沿用原元件樣式；可捲動 comparison／planning cells 依列面交錯，rowSpan owner 繼承起始任務列面並只保留 native divider；樹狀線與節點改用低對比中性灰階，降低清單視覺噪音；空白日期不再額外渲染 `—`，規劃欄寬調整為可容納標題與標準內容；工期鎖定仍限制結束日期編輯，但不在日期欄內重複渲染 `L` 標記；會議紀錄維持內部 Y 捲軸，顯示區以 20px 文字行高對齊，部分可視 quick-note 整列暫隱藏，避免露出裁切字元。
-- 成熟度：`RD Implementation Complete / Targeted QA PASS / Production Verified (REL-005)`。
+- 成熟度：`RD Implementation Complete / Targeted QA PASS / Production Verified with Scoped Feature Evidence (REL-006)`。
 - 對應：DEV-121（交付點）；父任務 DEV-116；相容 DEV-119、DEV-120。
 - 需求來源：`USER-20260914-GOAL-HIERARCHY-COMPARISON`、
   `USER-20260914-KEEP-GOAL-CONTENT-ROWSPAN`、`USER-20260914-MINIMIZE-GOAL-X-INDENT`、

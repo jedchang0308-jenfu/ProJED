@@ -1,12 +1,22 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-09-21（REL-006 DEV-121 / Production Verified with Scoped Feature Evidence）
+
+DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521` 以 release `20260921072547-f7bca7` 啟用至 Firebase canonical live；47 entries provenance、canonical app-shell smoke 與正式 CSS readback 通過。Direct receipt 保留 `feature-pending`，因既有 37-case fixture runner 是 localhost/local-test-only；同 commit 的 local Chromium 37/37 與 static 28/28 已通過，未建立或寫入 production fixture。完整證據見 [REL-006](release/REL-006-DEV-121-20260921.md)。
+
+| 權威入口 | 狀態與責任 |
+|---|---|
+| [DEV-121](dev_task.md#dev-121okr-父子任務樹狀對照與群組範圍) | `Production Verified with Scoped Feature Evidence`；REL-006 |
+| [QA-DEV-121](qa/QA-DEV-121-goal-hierarchy-comparison-grid.md#931-r39-execution-record2026-09-21) | local static/browser PASS；canonical artifact/CSS readback PASS；authenticated Goal smoke scope explicitly limited |
+| [REL-006](release/REL-006-DEV-121-20260921.md) | release identity、47 entries、canonical smoke、CSS readback、rollback anchor |
+
 ## Documentation Map Update - 2026-09-21（DEV-121 Browser Regression Repair / Local Implemented）
 
 DEV-121 R39 修正 sticky header 收合 glyph 的色差與固定任務名稱欄的列面套用範圍；可捲動 comparison／planning cells 保留交錯列面，rowSpan owner 依起始任務列面渲染並沿用 native divider，不新增 inset shadow。B06／V15／V02 的 browser probe 同步回到 QA-DEV-128 契約；未改資料、權限、rowSpan ownership 或 scroll architecture。
 
 | 權威入口 | 狀態與責任 |
 |---|---|
-| [DEV-121](dev_task.md#dev-121okr-父子任務樹狀對照與群組範圍) | `R39 Implemented / Targeted QA PASS / QC Ready / NOT RELEASED`；browser regression repair |
+| [DEV-121](dev_task.md#dev-121okr-父子任務樹狀對照與群組範圍) | `R39 Implemented / Targeted QA PASS / Production Verified with Scoped Feature Evidence / REL-006`；browser regression repair |
 | [SPEC-121](specs/SPEC-121-goal-hierarchy-comparison-grid.md#r39-browser-regression-repair-follow-up) | R39 fixed task-name white surface、comparison/planning row surface 與 rowSpan native divider |
 | [QA-DEV-121](qa/QA-DEV-121-goal-hierarchy-comparison-grid.md#931-r39-execution-record2026-09-21) | `R39 Executed`；static 28/28、Chromium 37/37、error gates 0 |
 
