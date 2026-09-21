@@ -583,13 +583,13 @@ async (page) => {
     });
     const b06Ok = guideProbe.task === 'rgba(199, 210, 254, 0.94)'
       && guideProbe.planning.includes('199, 210, 254')
-      && guideProbe.content.includes('248, 250, 252')
+      && guideProbe.content === 'rgb(255, 255, 255)'
       && guideProbe.contentScope === ''
       && guideProbe.scopeRows.some(item => item.id === 'dev121-a1' && item.scope === 'parent');
     record('B06-reading-guide-preserves-rowspan-owner-boundary', b06Ok, guideProbe);
     const activeScopeTintOk = guideProbe.task === 'rgba(199, 210, 254, 0.94)'
       && guideProbe.planning === 'rgba(199, 210, 254, 0.94)'
-      && guideProbe.content.includes('248, 250, 252')
+      && guideProbe.content === 'rgb(255, 255, 255)'
       && guideProbe.contentScope === '';
     record('V15-active-descendant-does-not-tint-ancestor-rowspan-owner', activeScopeTintOk, {
       task: guideProbe.task,
@@ -805,7 +805,7 @@ async (page) => {
       tableCount: root.querySelectorAll('table').length,
       scrollOwner: getComputedStyle(root).overflowX,
     }));
-    record('V02-group-surface-and-single-table-owner', groupSurface.spanning.includes('203, 213, 225') && groupSurface.single === null && groupSurface.tableCount === 1 && groupSurface.scrollOwner === 'auto', groupSurface);
+    record('V02-group-surface-and-single-table-owner', groupSurface.spanning === 'none' && groupSurface.single === null && groupSurface.tableCount === 1 && groupSurface.scrollOwner === 'auto', groupSurface);
     await page.screenshot({ path: `${OUTPUT_DIR}/V02-dev121-rowspan-group-surface-1440x900.png` });
     result.screenshots.push(`${OUTPUT_DIR}/V02-dev121-rowspan-group-surface-1440x900.png`);
 

@@ -1,6 +1,6 @@
 # SPEC-121：OKR 父子任務樹狀對照與群組範圍
 
-- 文件版本：R38，2026-09-21；除固定任務名稱欄外的所有可見欄位可由表頭控制收合／還原，個人帳號保存欄位偏好；expanded 欄位控制採 24px 可操作區與 18px 低噪音視覺框，collapsed 後縮為 20px 可操作區與 16px 視覺框，收合軌道由 32px 縮為 22.4px（瀏覽器實際約 22px），收合狀態才使用柔和主色；任務名稱欄永遠維持 252px 固定左側樹狀欄，不提供欄位收合；所有層級任務名稱固定欄未定位時統一白色底色，定位時父任務使用 parent surface tint、子任務／後代使用更淡的 `#EDF8F8` surface tint，任務標題文字沿用原元件樣式；樹狀線與節點改用低對比中性灰階，降低清單視覺噪音；空白日期不再額外渲染 `—`，規劃欄寬調整為可容納標題與標準內容；工期鎖定仍限制結束日期編輯，但不在日期欄內重複渲染 `L` 標記；會議紀錄維持內部 Y 捲軸，顯示區以 20px 文字行高對齊，部分可視 quick-note 整列暫隱藏，避免露出裁切字元。
+- 文件版本：R39，2026-09-21；除固定任務名稱欄外的所有可見欄位可由表頭控制收合／還原，個人帳號保存欄位偏好；expanded 欄位控制採 24px 可操作區與 18px 低噪音視覺框，collapsed 後縮為 20px 可操作區與 16px 視覺框，收合軌道由 32px 縮為 22.4px（瀏覽器實際約 22px），收合狀態才使用柔和主色；任務名稱欄永遠維持 252px 固定左側樹狀欄，不提供欄位收合；所有層級任務名稱固定欄未定位時統一白色底色，定位時父任務使用 parent surface tint、子任務／後代使用更淡的 `#EDF8F8` surface tint，任務標題文字沿用原元件樣式；可捲動 comparison／planning cells 依列面交錯，rowSpan owner 繼承起始任務列面並只保留 native divider；樹狀線與節點改用低對比中性灰階，降低清單視覺噪音；空白日期不再額外渲染 `—`，規劃欄寬調整為可容納標題與標準內容；工期鎖定仍限制結束日期編輯，但不在日期欄內重複渲染 `L` 標記；會議紀錄維持內部 Y 捲軸，顯示區以 20px 文字行高對齊，部分可視 quick-note 整列暫隱藏，避免露出裁切字元。
 - 成熟度：`RD Implementation Complete / Targeted QA PASS / Production Verified (REL-005)`。
 - 對應：DEV-121（交付點）；父任務 DEV-116；相容 DEV-119、DEV-120。
 - 需求來源：`USER-20260914-GOAL-HIERARCHY-COMPARISON`、
@@ -40,6 +40,12 @@ Goal 表格 sticky column header 使用深色 `#0F172A` surface、白色 `#FFFFF
 ## DEV-129 定位時內容渲染 amendment（2026-09-18；Compatible additive correction）
 
 Goal 的任務目的／會議紀錄 owner cell 在 `data-goal-content-scope="active"` 時，必須保留原有可見文字、meeting quick-note 與 owner scroll viewport，並套用與定位父任務一致的 parent tint。active content selector 需明確匹配 `td`，以覆蓋 generic `td[data-goal-group-span="true"]` 的 rowSpan surface，而不以 `visibility`、條件渲染或資料重投影遮蔽內容。covered row 維持無獨立 content DOM，真正 owner task、rowSpan、欄位順序、sticky header、single X-scroll、資料與互動契約不變。驗收權威為 [QA-DEV-129](../qa/QA-DEV-129-goal-location-content.md)。
+
+## R39 Browser regression repair follow-up（2026-09-21；Compatible correction）
+
+- 修正 sticky header 下 expanded／collapsed column-toggle glyph 的低對比背景差異，並讓固定 task-name lane 的所有 hierarchy levels 維持同一白色 surface；斑馬列面只套用到可捲動 comparison／planning cells。
+- B06／V15／V02 的 browser probes 對齊現行 QA-DEV-128 契約：rowSpan owner 繼承起始任務列面、只保留 native divider、無額外 inset shadow；這是驗證契約校正，不改 rowSpan、owner、content、scroll 或 table 行為。
+- DEV-121 static `28/28`、Chromium `37/37`；browser／HTTP／visible errors `0`；代表截圖輸出於 `output/playwright/dev-121-goal-hierarchy-comparison/`。
 
 ## DEV-124 桌面拖拉 ownership intentional replacement（2026-09-16；架構已定案／未實作）
 

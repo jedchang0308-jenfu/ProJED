@@ -407,6 +407,11 @@ body[data-kanban-mouse-pan-active="true"] * {
   color: rgb(255 255 255 / 100%);
 }
 
+[data-goal-view="true"] thead[data-goal-sticky-header="true"] > tr > th [data-goal-column-toggle-state="collapsed"] [data-goal-column-toggle-glyph] {
+  border-color: rgb(255 255 255 / 72%);
+  background-color: rgb(255 255 255 / 24%);
+}
+
 [data-goal-view="true"] .goal-task-hierarchy-row {
   /* R17: 8px baseline × 1.30, keeping every guide/title calculation aligned. */
   --task-hierarchy-indent: 10.4px;
@@ -601,13 +606,13 @@ body[data-kanban-mouse-pan-active="true"] * {
   --goal-row-surface: var(--goal-row-surface-even);
 }
 
-[data-goal-view="true"] tbody > tr[data-goal-task-row] > * {
+[data-goal-view="true"] tbody > tr[data-goal-task-row] > [data-goal-column] {
   background-color: var(--goal-row-surface);
 }
 
 /* A row-spanning owner cell belongs to the task row where it starts. Keep the
-   whole merged region on that task's surface so purpose and meeting history do
-   not switch color halfway through the owned task group. */
+   whole merged region on that row's surface without adding a second divider;
+   the native table boundary remains the only group edge. */
 [data-goal-view="true"] tbody > tr[data-goal-task-row] > td[data-goal-group-span="true"] {
   background-color: var(--goal-row-surface);
 }

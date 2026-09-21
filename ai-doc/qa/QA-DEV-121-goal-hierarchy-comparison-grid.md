@@ -1,6 +1,6 @@
 # QA-DEV-121：OKR 父子任務樹狀對照與群組範圍
 
-- 狀態：`R38 Executed / Targeted QA PASS / QC Ready / NOT RELEASED`；R22～R23 Executed、R24 Executed、R25 Executed、R26 Executed、R27 Executed、R28 Executed baseline retained for regression traceability。
+- 狀態：`R39 Executed / Targeted QA PASS / QC Ready / NOT RELEASED`；R22～R23 Executed、R24 Executed、R25 Executed、R26 Executed、R27 Executed、R28 Executed baseline retained for regression traceability。
 - 對應 SPEC：[SPEC-121](../specs/SPEC-121-goal-hierarchy-comparison-grid.md)。
 - 對應 DEV：[DEV-121](../dev_task.md#dev-121okr-父子任務樹狀對照與群組範圍)。
 - 驗證角色：RD 先做同一 candidate self-test；QA 依本文件重跑；QC 只採信可追溯 artifact 與事實結果。
@@ -115,7 +115,7 @@ source 與 case 證據為準，避免用不穩定 wall-clock 門檻製造假失�
 | V01 | 1440×900 screenshot 可辨識兩個 root anchors、L1～L4+ parent paths、last sibling 與 group ends。 |
 | V02 | incoming／continuation／child-stem computed width 1px；無 endpoint；Goal depth=10.4px（8px × 1.3）、incoming branch=14.4px（同步補足接點）；branch-to-title distance ≤0.5px；guide 位於 frozen task `th`，不影響 title／focus ring。 |
 | V03 | 第二個及後續 root 只有一條 2px 上邊界；第一 root 無頂線，最後 group 不重複 end line，且沒有 spacer row／card／stripe／badge。 |
-| V04 | `rowSpan > 1` owner 有 group surface／2px scope rail；`rowSpan = 1` 無；selected／editing outline 優先可見。 |
+| V04 | `rowSpan > 1` owner 繼承起始任務列面並沿用 native table divider，不新增 2px scope rail；`rowSpan = 1` 同樣無額外 rail；selected／editing outline 優先可見。 |
 | V05 | connector reading guide 僅覆蓋 task＋planning cells；active descendant 不染 ancestor `rowSpan` owner，正常、hover、focus、open、locked、validation、due 狀態不互相吞沒。 |
 | V06 | 1298×698 的 252px task、content min width、144／72／112／112／84 planning tracks 仍各 ±1px；表頭標題完整可見。 |
 | V07 | 814×698 X-scroll ≥160px 後 task header／body left delta ≤1px；其他欄位位移與 scroll delta 相差 ≤1px；X-scroll owner=1。 |
@@ -124,14 +124,14 @@ source 與 case 證據為準，避免用不穩定 wall-clock 門檻製造假失�
 | V10 | 任務名稱欄的 computed `border-bottom` 全部為 0；可捲動 comparison cells 均有 1px 水平／垂直格線，root group boundary 只在可捲動欄位為 2px。 |
 | V11 | 每列 branch 的 Y 中心對準任務列中心 ±1px；最後 sibling 的 incoming vertical 在中心終止，非最後 sibling 延伸至列底；root 無 incoming line。 |
 | V12 | hover／focus A1 時，只啟用 A1 所擁有的 child stem、後代 incoming／continuation；Root A 的 continuation、A1 當列的 parent-owned `incoming-vertical`／`incoming-branch` 與其他 sibling 擁有的線維持中性。 |
-| V13 | normal connector 使用低對比色、active connector 保持可辨識 indigo，所有線段有圓角端點；不得新增 endpoint 或改變幾何。 |
+| V13 | normal／active connector 使用低對比中性灰階且仍可辨識，所有線段有圓角端點；不得新增 endpoint 或改變幾何。 |
 | V14 | hover／focus A1 時，A1 當列 parent-owned `incoming-vertical`／`incoming-branch` 必須 `active=false`、1px 且維持 normal tone；後代 vertical 必須 `active=true`、stroke ≥2px。root task 無 parent relation 時不新增線段。 |
 | V15 | hover／focus A1 時，任務名稱固定欄使用柔和 parent tint，planning cell 使用既有 active tint；涵蓋 A1 的 ancestor `rowSpan` owner content 保持 group surface；`owner`／`covered` 結構與內容值不變。 |
 | V16 | hover／focus Root A（實際 description owner）時，該 owner cell 使用明顯 active tint；證明染色只落在資料真正所屬的任務。 |
 | V17 | 從任務目的／會議紀錄 owner cell 反向定位後，樹線 active scope 的 task id 仍等於該 owner；不把 covered descendant 當成內容所有者。 |
 | V18 | 格線範圍符合最新 UI 契約：任務名稱欄無資料格線，其餘可捲動欄位完整顯示 cell grid，且 X-scroll owner 仍為 1。 |
 | V19 | idle 時所有 hierarchy levels 的 task-name cells computed background 只有一個值且為 `rgb(255, 255, 255)`；planning／content owner 定位色仍可見。 |
-| V20 | 定位／focus scope 下 parent task-name 使用 `rgba(199, 210, 254, 0.94)`；descendant task-name／content cells 保留交錯 row surface，並以 task-name 左側 `3px` indigo marker 與 `font-weight: 600` 表達階層。 |
+| V20 | 定位／focus scope 下 parent task-name 使用 `rgba(199, 210, 254, 0.94)`；descendant task-name／content cells 使用 `rgb(237, 248, 248)`，不新增 marker 或標題字重覆寫，原任務標題樣式維持。 |
 
 視覺比較至少保存 normal、hover、keyboard focus、collapsed、X-scrolled、rowSpan editing／expanded、viewer、2x zoom
 截圖；每張標記 viewport、actor、case 與 source hash。
@@ -519,6 +519,13 @@ candidate metadata、case results、console／HTTP sweep 與命名 screenshots�
 - DEV-121 static 28/28；S16／V20 改驗 parent 與 descendant 使用兩組不同 surface tint：parent `rgba(199, 210, 254, 0.94)`、descendant `rgba(224, 242, 254, 0.92)`。
 - Chromium V20 與 Goal empty-location targeted browser 通過；子任務目的／會議欄仍保留 descendant scope 與自身文字，固定任務名稱欄不再有左側 marker 或加粗字重，browser／HTTP／visible errors=0。
 - `localhost:4000` 沿用既有 matching runtime，未停止非本任務程序；未 commit／push／deploy／release。
+
+## 9.31 R39 Execution Record（2026-09-21）
+
+- 本輪先重現 5 個既有 full browser matrix failures：B13、B06、V15、V19、V02；其中 B13 的 expanded／collapsed glyph 色差與 V19 的 fixed task-name lane surface 是產品偏差，B06／V15／V02 則是 verifier 與 QA-DEV-128 現行契約漂移。
+- B13 修正 sticky header collapsed glyph 的低對比背景差異；V19 將交錯 row surface 限定在可捲動 comparison／planning cells，固定 task-name lane 維持白色；B06／V15／V02 校正 browser probes 為白色 owner surface、native divider、無額外 inset shadow。
+- DEV-121 static `28/28`、Chromium `37/37`；B13／B06／V15／V19／V02 全部通過，browser／HTTP／visible errors `0`；截圖位於 `output/playwright/dev-121-goal-hierarchy-comparison/`。
+- Goal empty-location targeted browser、`npx tsc --noEmit`、targeted ESLint、`git diff --check` PASS；`localhost:4000` 沿用 matching runtime，未停止非本任務程序；本機 candidate 維持 QC Ready，未 commit／push／PR／deploy／release。
 
 ## 10. Pass／Fail／Stop
 

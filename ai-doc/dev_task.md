@@ -6196,10 +6196,10 @@ fixture boot wait timeout，未納入本 DEV PASS；該案例需另案釐清 fix
 
 ## DEV-121：OKR 父子任務樹狀對照與群組範圍
 
-- 狀態：完成；`R38 RD Implementation Complete / Targeted QA PASS / QC Ready / NOT RELEASED`。
+- 狀態：完成；`R39 RD Implementation Complete / Targeted QA PASS / QC Ready / NOT RELEASED`。
 - 開發文件成熟度：`RD Implementation Complete`；保留 Tech Lead R2 資料流，使用者確認的 owned-connector
   wired-tree 契約與 WP-121-B → E 已落地；R8 已完成 X 軸緊縮與端點移除，R9 完成樹線柔和化，R10 完成目前任務自有 incoming relation 高亮，
-  R11 完成 active 線寬與欄位對比強化，R12 修正 rowSpan owner 與 active descendant 的視覺歸屬，R13 增加所有欄位反向定位，R14 恢復可捲動欄位格線，R15 將展開／收合整併為樹線節點，R16 移除定位 task 上游垂直／水平段的 active 筆畫，R17 將樹狀線 X 軸間隔增加 30%，R18 讓任務名稱固定欄維持原生底色並將定位色留在 planning／content owner，R19 將所有層級任務名稱欄統一為同一白色底色，R20 將定位 task-name tint 調整為柔和色階，R21 增加任務目的欄收合控制，R22 將全欄位收合與帳號偏好保存統一到同一套欄位設定，R23 取消任務名稱欄收合鈕並固定 252px 左側樹狀欄，R24 將其餘欄位收合鈕收斂為 24px hit target／18px 視覺框與柔和狀態回饋，R25 將收合軌道縮為 22.4px 並把收合控制縮為 20px hit target／16px 視覺框，R26 移除空白日期額外 `—` 並使規劃欄寬容納標題與標準內容，R27 移除結束日期欄重複的工期鎖定 `L` 標記，R28 讓會議紀錄內部捲軸只顯示完整文字行並隱藏部分可視的 quick-note row，R29 將父任務與子任務／後代定位列收斂為兩種藍色，R30 補回可見子任務內容定位渲染，R31 調淡子任務定位色，R32 的非填色階層 marker 由 R33 取代，R34 移除 Goal 對任務標題文字的額外顏色覆寫並恢復原樣式，R35 將子任務／後代定位色固定為使用者指定的 `#D1E9E9`，R36 再調淡為 `#E3F3F3`，R37 再調淡兩階為 `#EDF8F8`，R38 將樹狀線與節點改為低對比中性灰階。
+  R11 完成 active 線寬與欄位對比強化，R12 修正 rowSpan owner 與 active descendant 的視覺歸屬，R13 增加所有欄位反向定位，R14 恢復可捲動欄位格線，R15 將展開／收合整併為樹線節點，R16 移除定位 task 上游垂直／水平段的 active 筆畫，R17 將樹狀線 X 軸間隔增加 30%，R18 讓任務名稱固定欄維持原生底色並將定位色留在 planning／content owner，R19 將所有層級任務名稱欄統一為同一白色底色，R20 將定位 task-name tint 調整為柔和色階，R21 增加任務目的欄收合控制，R22 將全欄位收合與帳號偏好保存統一到同一套欄位設定，R23 取消任務名稱欄收合鈕並固定 252px 左側樹狀欄，R24 將其餘欄位收合鈕收斂為 24px hit target／18px 視覺框與柔和狀態回饋，R25 將收合軌道縮為 22.4px 並把收合控制縮為 20px hit target／16px 視覺框，R26 移除空白日期額外 `—` 並使規劃欄寬容納標題與標準內容，R27 移除結束日期欄重複的工期鎖定 `L` 標記，R28 讓會議紀錄內部捲軸只顯示完整文字行並隱藏部分可視的 quick-note row，R29 將父任務與子任務／後代定位列收斂為兩種藍色，R30 補回可見子任務內容定位渲染，R31 調淡子任務定位色，R32 的非填色階層 marker 由 R33 取代，R34 移除 Goal 對任務標題文字的額外顏色覆寫並恢復原樣式，R35 將子任務／後代定位色固定為使用者指定的 `#D1E9E9`，R36 再調淡為 `#E3F3F3`，R37 再調淡兩階為 `#EDF8F8`，R38 將樹狀線與節點改為低對比中性灰階，R39 修復 sticky glyph 色差與固定任務欄白色 surface 回歸，並校正過期 browser probe。
 - 節點類型：交付點；父任務 DEV-116；延續 DEV-120；相容 DEV-119；計入產品交付：是。
 - 風險：Medium（改變 OKR 階層、群組與 hover／focus 的可見語意，但不變更資料或權限）。
 - 需求來源：`USER-20260914-GOAL-HIERARCHY-COMPARISON`、
@@ -6634,6 +6634,12 @@ git diff --check -- <DEV-121 owned files>
 
 - 依使用者回饋，將 Goal 樹狀線 normal connector 調整為 `rgb(148 163 184 / 28%)`，active connector 調整為 `rgb(100 116 139 / 56%)`，降低高彩度藍線造成的清單噪音；保留既有 1px／2px geometry、rounded join、owner、定位 scope、縮排與節點操作。
 - Goal hierarchy browser／static targeted evidence PASS；父子定位色、任務目的／會議紀錄渲染、原任務標題樣式、rowSpan、single X-scroll 與資料行為不變；本機 candidate 維持 QC Ready，未 commit／push／PR／deploy／release。
+
+### R39 Browser Regression Repair Closure（2026-09-21）
+
+- 修正真正產品偏差：sticky header 的 expanded／collapsed column-toggle glyph 保持可辨識的低對比背景差異；固定 task-name lane 的所有 hierarchy levels 維持原本白色 surface，斑馬列面只套用到可捲動 comparison／planning cells。
+- B06／V15／V02 的 browser assertion 對齊 QA-DEV-128：rowSpan owner 繼承起始任務列面、只保留 native divider、無額外 inset shadow；未改 rowSpan／owner／content／scroll／table 行為。
+- DEV-121 static 28/28、Chromium browser 37/37；B13／B06／V15／V19／V02 全部通過，browser／HTTP／visible errors=0；Goal empty-location、TypeScript、targeted ESLint、git diff check PASS。本機 candidate 維持 QC Ready，未 commit／push／deploy／release。
 
 ### R37 Descendant Tint Softening Closure（2026-09-21；Superseded by R38）
 

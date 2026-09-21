@@ -1,5 +1,15 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-09-21（DEV-121 Browser Regression Repair / Local Implemented）
+
+DEV-121 R39 修正 sticky header 收合 glyph 的色差與固定任務名稱欄的列面套用範圍；可捲動 comparison／planning cells 保留交錯列面，rowSpan owner 依起始任務列面渲染並沿用 native divider，不新增 inset shadow。B06／V15／V02 的 browser probe 同步回到 QA-DEV-128 契約；未改資料、權限、rowSpan ownership 或 scroll architecture。
+
+| 權威入口 | 狀態與責任 |
+|---|---|
+| [DEV-121](dev_task.md#dev-121okr-父子任務樹狀對照與群組範圍) | `R39 Implemented / Targeted QA PASS / QC Ready / NOT RELEASED`；browser regression repair |
+| [SPEC-121](specs/SPEC-121-goal-hierarchy-comparison-grid.md#r39-browser-regression-repair-follow-up) | R39 fixed task-name white surface、comparison/planning row surface 與 rowSpan native divider |
+| [QA-DEV-121](qa/QA-DEV-121-goal-hierarchy-comparison-grid.md#931-r39-execution-record2026-09-21) | `R39 Executed`；static 28/28、Chromium 37/37、error gates 0 |
+
 ## Documentation Map Update - 2026-09-21（DEV-083 風險分級修訂／RD 本機驗證通過）
 
 使用者核准精簡正式發布流程。現行權威：[ADR-037](decisions/ADR-037-fixed-test-environment-and-level3-release-gate.md)、[SPEC-083](specs/SPEC-083-production-release-environment-integrity.md) 的快速 `direct`／保護三 phase 分流；驗收見 [QA-DEV-083](qa/QA-DEV-083-production-release-environment-integrity.md)，任務狀態見 `dev_task.md` 的 DEV-083 修訂。早期 DEV-083 三 phase 固定要求僅適用保護路徑，歷史 release evidence 不重寫。RD 本機 gate 61/61、edge-key regression、targeted ESLint／Node syntax／whitespace 通過；未執行真實部署。下一步為後續明確發布任務的 canonical／功能驗證，不因本機 PASS 宣稱正式驗證完成。
@@ -48,12 +58,12 @@ DEV-126～DEV-129 已由 source commit `14590740052afd4513ba1797d97f6f5b1e44220d
 
 ## Documentation Map Update - 2026-09-18（DEV-126 OKR 表格橫向追視 / Local Implemented）
 
-[DEV-126](dev_task.md#dev-126okr-表格橫向追視) 將 Goal 表格的 idle surface 改為依目前可見列順序交錯的低彩度斑馬紋，讓固定任務名稱欄與可水平捲動欄位能快速對齊；rowSpan 的任務目的／會議紀錄區塊繼承起始所屬任務列面，並保留既有階層 hover／focus tint、單一 X-scroll 與 planning controls，不新增資料、狀態或 persistence。
+[DEV-126](dev_task.md#dev-126okr-表格橫向追視) 將 Goal 表格可捲動 comparison／planning cells 的 idle surface 改為依目前可見列順序交錯的低彩度斑馬紋；固定任務名稱欄依 R19 維持白色，rowSpan 的任務目的／會議紀錄區塊繼承起始所屬任務列面並沿用 native divider，保留既有階層 hover／focus tint、單一 X-scroll 與 planning controls，不新增資料、狀態或 persistence。
 
 | 權威入口 | 狀態與責任 |
 |---|---|
 | [DEV-126](dev_task.md#dev-126okr-表格橫向追視) | `Production Verified`；Goal-only 表格列面與驗證邊界 |
-| [SPEC-121 amendment](specs/SPEC-121-goal-hierarchy-comparison-grid.md#dev-126-表格橫向追視-amendment) | 取代 idle 全白／不做斑馬紋的既有視覺條款，保留階層與 rowSpan 契約 |
+| [SPEC-121 amendment](specs/SPEC-121-goal-hierarchy-comparison-grid.md#dev-126-表格橫向追視-amendment) | 取代可捲動 comparison／planning cells 的 idle 全白／不做斑馬紋條款；固定 task-name lane 仍依 R19 為白色，保留階層與 rowSpan 契約 |
 | [QA-DEV-126](qa/QA-DEV-126-goal-row-readability.md) | computed-style、fixed-column／rowSpan screenshot、build 與 diff check 證據 |
 
 ## Documentation Map Update - 2026-09-18（REL-004 DEV-125 任務目的欄位統整 / Production Verified）
