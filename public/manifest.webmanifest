@@ -10,8 +10,8 @@
   "background_color": "#f8fafc",
   "theme_color": "#0f766e",
   "icons": [
-    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "/icons/projed-main-icon.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/projed-main-icon.png", "sizes": "1024x1024", "type": "image/png", "purpose": "maskable" }
   ],
   "shortcuts": [
     {
@@ -20,7 +20,7 @@
       "description": "直接輸入一筆待辦",
       "url": "/quick-task/",
       "icons": [
-        { "src": "/icons/icon-vibrant-03-mango-berry.png", "sizes": "1024x1024", "type": "image/png" }
+        { "src": "/icons/projed-quick-task-icon.png", "sizes": "1024x1024", "type": "image/png" }
       ]
     }
   ]
