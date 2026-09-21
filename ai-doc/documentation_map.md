@@ -1,5 +1,9 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-09-21（DEV-083 風險分級修訂／RD 本機驗證通過）
+
+使用者核准精簡正式發布流程。現行權威：[ADR-037](decisions/ADR-037-fixed-test-environment-and-level3-release-gate.md)、[SPEC-083](specs/SPEC-083-production-release-environment-integrity.md) 的快速 `direct`／保護三 phase 分流；驗收見 [QA-DEV-083](qa/QA-DEV-083-production-release-environment-integrity.md)，任務狀態見 `dev_task.md` 的 DEV-083 修訂。早期 DEV-083 三 phase 固定要求僅適用保護路徑，歷史 release evidence 不重寫。RD 本機 gate 61/61、edge-key regression、targeted ESLint／Node syntax／whitespace 通過；未執行真實部署。下一步為後續明確發布任務的 canonical／功能驗證，不因本機 PASS 宣稱正式驗證完成。
+
 ## Documentation Map Update - 2026-09-18（REL-005 DEV-126～DEV-129 / Production Verified）
 
 DEV-126～DEV-129 已由 source commit `14590740052afd4513ba1797d97f6f5b1e44220d` 的 sealed artifact 啟用至 Firebase canonical live，release `20260918093103-794d79`、artifact tree `dbc59e91558909a51a8ff215e59d6d0dc70341b01545b1bc6c8849cdf0faa03f`；證據集中於 [REL-005](release/REL-005-DEV-126-129-20260918.md)。
@@ -203,7 +207,7 @@ Pure contract 亦檢查 `auth.getUser()` actor boundary、raw/private table serv
 WP-123-0a 的官方能力 readback 亦已更新：`gemini-3.5-transcribe` 的 word timestamps 與 timestamp／diarization 時 30 分鐘上限支持現行 5 分鐘分段；project ZDR、實際設定與 Files delete readback 仍待資格證據。
 
 使用思考習慣：#系統描繪、#限制條件
-## Documentation Map Update - 2026-09-18（DEV-121 OKR 父子任務樹狀對照與群組範圍 / R29 Implemented / Targeted QA PASS / QC Ready / NOT RELEASED）
+## Documentation Map Update - 2026-09-21（DEV-121 OKR 父子任務樹狀對照與群組範圍 / R38 Implemented / Targeted QA PASS / QC Ready / NOT RELEASED）
 
 DEV-121 回應 OKR 表格難以辨識父子歸屬、子樹終點與橫向資料列的差距。設計方向將看板模式的父層錨點、
 L3+ inset rail、縮排與群組邊界轉譯為扁平樹狀對照表；任務名稱、樹線與展開控制維持在資料表格左側
@@ -218,13 +222,13 @@ frozen first column，右側欄位保留單一 native table／single X-scroll ow
   own-lane 圓形 node toggle，原獨立 chevron 不再顯示。除固定任務名稱欄外，所有可見欄位表頭共用可存取的原生收合鈕：一般欄位收合後保留 22.4px 控制軌，任務名稱固定欄永遠維持 252px 且沒有欄位收合鈕；收合 key 以帳號 uid 保存。R24 將欄位控制收斂為 expanded 24px hit／focus target、18px 低對比視覺框與 11px 單一旋轉箭頭，R25 再將 collapsed 控制縮為 20px／16px，並鎖定 table 總寬避免多欄同時收合時被拉寬，collapsed 才使用柔和 primary tint。空白開始／結束日期不再額外渲染 `—`；owner／status／start／end／duration expanded 欄寬調整為 144／72／112／112／84px，表頭標題完整呈現，不改變 collapsed track 或 fixed task lane。R27 移除結束日期欄重複的工期鎖定 `L` 標記，保留工期約束與必要的依賴 Link 提示。
   定位 task 的上游 `incoming-vertical`／`incoming-branch`
   維持 1px 中性線，只強調 own child stem 與後代 lineage，避免多餘的粗藍線段搶走焦點。樹狀線每層 X 軸間隔由 8px
-  增加 30% 為 10.4px，node、rail 與標題起點共用同一間隔 token；incoming branch 同步為 14.4px 以維持無斷點接合。R28 讓會議紀錄維持內部 Y 捲軸，視窗向下對齊 20px 文字行高，部分可視 quick-note row 整列暫隱藏，避免露出裁切字元。R29 將父任務與子任務／後代定位列收斂為兩種藍色，固定任務名稱欄與 planning 欄同列共用對應色。
+  增加 30% 為 10.4px，node、rail 與標題起點共用同一間隔 token；incoming branch 同步為 14.4px 以維持無斷點接合。R28 讓會議紀錄維持內部 Y 捲軸，視窗向下對齊 20px 文字行高，部分可視 quick-note row 整列暫隱藏，避免露出裁切字元。R29 保留父任務 surface tint；R30 補回可見子任務內容定位渲染；R31 的子任務淡色填色由 R33 取代，R32 marker 方案再由 R33 改為另一組淡藍色 surface tint，R34 恢復任務標題原樣式，R35 將子任務／後代定位色固定為 `#D1E9E9`，R36 再調淡為 `#E3F3F3`，R37 再調淡兩階為 `#EDF8F8`，R38 將樹狀線與節點改為低對比中性灰階。
 
 | 權威入口 | 狀態與唯一責任 |
 |---|---|
-| [dev_task：DEV-121](dev_task.md#dev-121okr-父子任務樹狀對照與群組範圍) | `R29 RD Implementation Complete / Targeted QA PASS / QC Ready / NOT RELEASED`；實作範圍、架構 closure、證據與 release boundary。 |
-| [SPEC-121](specs/SPEC-121-goal-hierarchy-comparison-grid.md) | `R29 / RD Implementation Complete`；現行 solution authority。R8 保留 compact owned connector，R9～R14 完成線條、定位、rowSpan 與 grid scope，R15 將 disclosure 整併為 own-lane node toggle，R16 抑制 active task 的 self upstream vertical／branch，R17 將 Goal X 間隔調為 10.4px，R18～R19 統一 task-name surface，R20 使用柔和定位色，R21 增加任務目的欄收合／還原控制，R22 統一可收合欄位與帳號偏好保存，R23 移除任務名稱欄收合鈕並維持 252px fixed lane，R24 精簡 toggle 視覺與狀態回饋，R25 將 collapsed track 縮為 22.4px 並採 20px／16px compact control，R26 移除空白日期額外 `—` 並調整規劃欄寬以容納標題與內容，R27 移除結束日期欄重複的工期鎖定 `L` 標記，R28 保留會議紀錄內部捲軸並隱藏部分可視的 quick-note row，R29 將父任務與子任務／後代定位列收斂為兩種藍色；無裝飾 endpoint。 |
-| [QA-DEV-121](qa/QA-DEV-121-goal-hierarchy-comparison-grid.md) | `R29 Executed / Targeted QA PASS / QC Ready`；controlled fixture、S／B／V／A／G cases、實際 commands 與 artifact。 |
+| [dev_task：DEV-121](dev_task.md#dev-121okr-父子任務樹狀對照與群組範圍) | `R38 RD Implementation Complete / Targeted QA PASS / QC Ready / NOT RELEASED`；實作範圍、架構 closure、證據與 release boundary。 |
+| [SPEC-121](specs/SPEC-121-goal-hierarchy-comparison-grid.md) | `R38 / RD Implementation Complete`；現行 solution authority。R8 保留 compact owned connector，R9～R14 完成線條、定位、rowSpan 與 grid scope，R15 將 disclosure 整併為 own-lane node toggle，R16 抑制 active task 的 self upstream vertical／branch，R17 將 Goal X 間隔調為 10.4px，R18～R19 統一 task-name surface，R20 使用柔和定位色，R21 增加任務目的欄收合／還原控制，R22 統一可收合欄位與帳號偏好保存，R23 移除任務名稱欄收合鈕並維持 252px fixed lane，R24 精簡 toggle 視覺與狀態回饋，R25 將 collapsed track 縮為 22.4px 並採 20px／16px compact control，R26 移除空白日期額外 `—` 並調整規劃欄寬以容納標題與內容，R27 移除結束日期欄重複的工期鎖定 `L` 標記，R28 保留會議紀錄內部捲軸並隱藏部分可視的 quick-note row，R29 保留 parent surface tint，R30 補回子任務內容定位，R31 由 R32 取代，R32 marker 方案由 R33 取代，R33 改用 descendant 淡藍色 surface tint，R34 恢復任務標題原樣式，R35 將 descendant tint 固定為 `#D1E9E9`，R36 再調淡為 `#E3F3F3`，R37 再調淡為 `#EDF8F8`，R38 將樹狀線與節點改為低對比中性灰階；無裝飾 endpoint。 |
+| [QA-DEV-121](qa/QA-DEV-121-goal-hierarchy-comparison-grid.md) | `R38 Executed / Targeted QA PASS / QC Ready`；controlled fixture、S／B／V／A／G cases、實際 commands 與 artifact。 |
 | [SPEC-116](specs/SPEC-116-goal-mode-adaptive-sparse-reading.md) | Preserved authority；shared hierarchy、native table／rowSpan、DnD／menu、mobile negative 與 accessibility；DEV-121 R5／R14／R17～R29 只調整 Goal 的 task-name lane、scrollable comparison grid、10.4px tree spacing、task-name surface、兩色定位藍、可收合欄位、compact toggle、account preference、內容適配寬度／日期空值、鎖定提示與會議文字不裁切視覺契約。 |
 | [SPEC-119](specs/SPEC-119-goal-cell-direct-edit-and-content-fit.md) | Preserved authority；content editor/session、rowSpan ownership、展開／收合、Y-scroll 與 PWA。 |
 | [SPEC-120](specs/SPEC-120-goal-planning-minimal-density.md) | Preserved authority；252px frozen task-name、single X-scroll、quiet controls 與 row density。 |

@@ -496,12 +496,13 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 阻塞 / 恢復條件：本輪未授權遠端 migration 或 deploy；沒有 authenticated two-user fixture，不宣稱正式環境即時同步已啟用。
   - 證據：`SPEC-082`、`scripts/verify-dev-082-board-realtime-sync.ts` PASS、TypeScript、targeted ESLint、`build:test`、DEV-081 rendered browser 9/9 PASS（console／page／network errors=0）、`git diff --check`。
   - 計入交付：是（本地實作完成；Remote Gate Pending）
-- ✓ DEV-083 [交付點] [完成] [P0] [Released / Permanent Credential Unrecoverable Policy] 正式發版環境隔離與 artifact 完整性閘門
+- ◇ DEV-083 [交付點] [驗證中] [P0] [風險分級已實作／本機驗證通過] 正式發版環境隔離與 artifact 完整性閘門
   - 摘要：以 production env隔離、sealed artifact與單一正式發版入口，阻止測試Supabase／localhost設定再次進入production。
   - 來源 ID：`USER-20260821-PRODUCTION-OAUTH-LOCALHOST-INCIDENT`
-  - 下一步：後續正式發版回到 P1 `release:production`；Management PAT輪替與P2技術防繞過保留為已接受資安／治理債，不阻塞本次release結案。
+  - 下一步：後續明確部署任務依風險選 direct 或保護三 phase，補該次 canonical／功能證據；本輪不部署。
   - 阻塞 / 恢復條件：若 canonical smoke、artifact identity或OAuth回歸失敗，回滾至Firebase version `93c2a80ddc1a798e`；DEV-081實機與DEV-082 production remote gate仍由各自DEV管理。
   - 證據：release `20260821144058-509110`、commit `4ee8bf8`、candidate version `880dfc3bbbc5d8b3`、live version `ca48cc7d514432d8`、39/39 remote hash、OAuth與authenticated smoke PASS。
+    2026-09-21 風險分級修訂：RD 本機 gate 61/61、edge-key regression、targeted ESLint／Node syntax／whitespace PASS；真實 direct 雲端驗證未執行。
   - 計入交付：是（P0＋P1已發布；PAT strict gate依使用者FMEA例外不宣稱PASS）
 - ✓ DEV-084 [開發點] [完成] [P1] [RD Implemented / QA-QC PASS / 未 Release] 非主按鍵不得觸發主按鍵互動
   - 摘要：以共用 raw-input guard 修正中鍵／右鍵誤啟動 task drag、Gantt／panel resize、mindmap relationship primary action與 modal backdrop close，同時保留左鍵、鍵盤、觸控、右鍵 menu及心智圖中鍵 pan。
@@ -1978,6 +1979,17 @@ ADR not needed：本輪不更換 provider 或既有 realtime 架構，只把現�
 - 未執行 commit、push、PR、merge、Supabase remote migration、deploy、production data 或 release。下一步必須進 deployment/release gate，先 test project 再 production。
 
 ## DEV-083：正式發版環境隔離與 artifact 完整性閘門
+
+### 2026-09-21 風險分級修訂（目前工作）
+
+- 來源：使用者要求評估 deployment-release-gate 是否過重，並核准「請執行修改」。
+- Spec Impact：`Intentional replacement`；同步 ADR-037、Level 3 runbook、SPEC-083、QA-DEV-083 與直接索引。以下原三 phase／credential policy 紀錄保留歷史；現行規則以本修訂與 SPEC-083 的 direct 契約為準。
+- 成熟度：`RD Implementation Ready`；owner 為本輪 RD，branch `持續優化3`，起點 `8931ba0`；本輪保留未提交 diff 供檢視。
+- 範圍：同 release 入口新增 direct、重用 sealed env/artifact/recovery/canonical checks、維持 protected phases、加強 Level 3 evidence 内容檢查；skill 只加流程過重的辨識與授權邊界說明。
+- 驗收：快速路徑無 Level 3/candidate/local server/未受影響的 backend gates；錯 env/target/artifact 仍阻擋；缺 feature check 不得 complete；重驗不重建／重部署；protected 負向案例保持拒絕。
+- 驗證：QA-DEV-083 本機 doubles 61/61 PASS、edge-key regression PASS、targeted ESLint／Node syntax／whitespace PASS；本輪為 RD 自我驗證，沒有獨立 QC 或真實 direct 雲端證據。
+- Spec Drift：`In sync`；ADR-037、runbook、SPEC-083、QA、程式及索引採相同快速／保護邊界，缺功能證據保持 pending。部署 workflow 已本機實作，正式使用時仍需另有該次部署授權。
+- 範圍外：既有 GoalView／其測試修改、app logo 已有提交及原發布作業。全域 skill 不屬 ProJED Git，單獨列檔案邊界。
 
 - 文件成熟度：`Implemented / Released / Permanent Credential Unrecoverable Policy`
 - 狀態：P0＋P1已實作並發布；Edge Functions新key遷移與legacy停用完成；DEV-083 retired credential set 已由使用者永久判定不可回收，strict gate改採 project-bound policy waiver
@@ -6184,10 +6196,10 @@ fixture boot wait timeout，未納入本 DEV PASS；該案例需另案釐清 fix
 
 ## DEV-121：OKR 父子任務樹狀對照與群組範圍
 
-- 狀態：完成；`R29 RD Implementation Complete / Targeted QA PASS / QC Ready / NOT RELEASED`。
+- 狀態：完成；`R38 RD Implementation Complete / Targeted QA PASS / QC Ready / NOT RELEASED`。
 - 開發文件成熟度：`RD Implementation Complete`；保留 Tech Lead R2 資料流，使用者確認的 owned-connector
   wired-tree 契約與 WP-121-B → E 已落地；R8 已完成 X 軸緊縮與端點移除，R9 完成樹線柔和化，R10 完成目前任務自有 incoming relation 高亮，
-  R11 完成 active 線寬與欄位對比強化，R12 修正 rowSpan owner 與 active descendant 的視覺歸屬，R13 增加所有欄位反向定位，R14 恢復可捲動欄位格線，R15 將展開／收合整併為樹線節點，R16 移除定位 task 上游垂直／水平段的 active 筆畫，R17 將樹狀線 X 軸間隔增加 30%，R18 讓任務名稱固定欄維持原生底色並將定位色留在 planning／content owner，R19 將所有層級任務名稱欄統一為同一白色底色，R20 將定位 task-name tint 調整為柔和色階，R21 增加任務目的欄收合控制，R22 將全欄位收合與帳號偏好保存統一到同一套欄位設定，R23 取消任務名稱欄收合鈕並固定 252px 左側樹狀欄，R24 將其餘欄位收合鈕收斂為 24px hit target／18px 視覺框與柔和狀態回饋，R25 將收合軌道縮為 22.4px 並把收合控制縮為 20px hit target／16px 視覺框，R26 移除空白日期額外 `—` 並使規劃欄寬容納標題與標準內容，R27 移除結束日期欄重複的工期鎖定 `L` 標記，R28 讓會議紀錄內部捲軸只顯示完整文字行並隱藏部分可視的 quick-note row，R29 將父任務與子任務／後代定位列收斂為兩種藍色。
+  R11 完成 active 線寬與欄位對比強化，R12 修正 rowSpan owner 與 active descendant 的視覺歸屬，R13 增加所有欄位反向定位，R14 恢復可捲動欄位格線，R15 將展開／收合整併為樹線節點，R16 移除定位 task 上游垂直／水平段的 active 筆畫，R17 將樹狀線 X 軸間隔增加 30%，R18 讓任務名稱固定欄維持原生底色並將定位色留在 planning／content owner，R19 將所有層級任務名稱欄統一為同一白色底色，R20 將定位 task-name tint 調整為柔和色階，R21 增加任務目的欄收合控制，R22 將全欄位收合與帳號偏好保存統一到同一套欄位設定，R23 取消任務名稱欄收合鈕並固定 252px 左側樹狀欄，R24 將其餘欄位收合鈕收斂為 24px hit target／18px 視覺框與柔和狀態回饋，R25 將收合軌道縮為 22.4px 並把收合控制縮為 20px hit target／16px 視覺框，R26 移除空白日期額外 `—` 並使規劃欄寬容納標題與標準內容，R27 移除結束日期欄重複的工期鎖定 `L` 標記，R28 讓會議紀錄內部捲軸只顯示完整文字行並隱藏部分可視的 quick-note row，R29 將父任務與子任務／後代定位列收斂為兩種藍色，R30 補回可見子任務內容定位渲染，R31 調淡子任務定位色，R32 的非填色階層 marker 由 R33 取代，R34 移除 Goal 對任務標題文字的額外顏色覆寫並恢復原樣式，R35 將子任務／後代定位色固定為使用者指定的 `#D1E9E9`，R36 再調淡為 `#E3F3F3`，R37 再調淡兩階為 `#EDF8F8`，R38 將樹狀線與節點改為低對比中性灰階。
 - 節點類型：交付點；父任務 DEV-116；延續 DEV-120；相容 DEV-119；計入產品交付：是。
 - 風險：Medium（改變 OKR 階層、群組與 hover／focus 的可見語意，但不變更資料或權限）。
 - 需求來源：`USER-20260914-GOAL-HIERARCHY-COMPARISON`、
@@ -6605,6 +6617,44 @@ git diff --check -- <DEV-121 owned files>
 - 父任務定位列的 task-name／planning surface 共用 `rgba(199, 210, 254, 0.94)`，子任務／後代共用 `rgba(224, 231, 255, 0.9)`；同一列不再因固定欄與可捲動欄分裂成額外 task-row 藍色。
 - content owner active tint 沿用 parent blue；樹線、狀態語意色、rowSpan、資料 ownership、single X-scroll 與互動行為不變。V15／V20 的 browser computed style assertion 已同步更新。
 - 本輪完成 targeted static／browser visual smoke 後，更新本 DEV、SPEC-121 與 QA-DEV-121 的 R29 contract；未 commit／push／deploy／release。
+
+### R32 Descendant Marker Contrast Closure（2026-09-21；Superseded by R33）
+
+- 依使用者回饋，移除子任務／後代 task-name、planning 與 descendant content cells 的淡藍整格填色，避免與靜態交錯格底色重複。
+- 子任務／後代改以固定任務名稱欄左側 `3px` indigo inset marker 與 `font-weight: 600` 標題表達階層；目的／會議／planning cells 保留既有 row surface，父任務 active surface tint、content scope、rowSpan、single X-scroll 與資料行為不變。
+- Goal empty-location targeted browser PASS；DEV-121 static 28/28；本機 candidate 維持 QC Ready，未 commit／push／PR／deploy／release。
+
+### R33 Descendant Surface Tint Closure（2026-09-21；Superseded by R34）
+
+- 依使用者回饋，取消子任務／後代固定任務名稱欄左側 `3px` marker 與 `font-weight: 600`，改由獨立的淡藍色 `rgba(224, 242, 254, 0.92)` surface tint 表達 descendant scope。
+- 子任務／後代 task-name、planning 與 content cells 使用同一組淡藍色；父任務維持 `rgba(199, 210, 254, 0.94)`，不再使用靜態交錯格底色，內容 scope、rowSpan、single X-scroll 與資料行為不變。
+- Goal empty-location targeted browser PASS；DEV-121 static 28/28；本機 candidate 維持 QC Ready，未 commit／push／PR／deploy／release。
+
+### R38 Quiet Tree Connector Tone Closure（2026-09-21）
+
+- 依使用者回饋，將 Goal 樹狀線 normal connector 調整為 `rgb(148 163 184 / 28%)`，active connector 調整為 `rgb(100 116 139 / 56%)`，降低高彩度藍線造成的清單噪音；保留既有 1px／2px geometry、rounded join、owner、定位 scope、縮排與節點操作。
+- Goal hierarchy browser／static targeted evidence PASS；父子定位色、任務目的／會議紀錄渲染、原任務標題樣式、rowSpan、single X-scroll 與資料行為不變；本機 candidate 維持 QC Ready，未 commit／push／PR／deploy／release。
+
+### R37 Descendant Tint Softening Closure（2026-09-21；Superseded by R38）
+
+- 依使用者回饋，將子任務／後代 task-name、planning 與 content cells 的定位 surface tint 由 `#E3F3F3` 再調淡兩階為 `#EDF8F8`（browser computed `rgb(237, 248, 248)`）。父任務維持 `rgba(199, 210, 254, 0.94)`。
+- Goal empty-location targeted browser PASS；DEV-121 static 28/28；子任務目的／會議紀錄渲染、原任務標題樣式、content scope、rowSpan、single X-scroll 與資料行為不變；本機 candidate 維持 QC Ready，未 commit／push／PR／deploy／release。
+
+### R36 Descendant Tint Softening Closure（2026-09-21；Superseded by R37）
+
+- 依使用者回饋，將子任務／後代 task-name、planning 與 content cells 的定位 surface tint 由 `#D1E9E9` 調淡為 `#E3F3F3`（browser computed `rgb(227, 243, 243)`）。父任務維持 `rgba(199, 210, 254, 0.94)`。
+- Goal empty-location targeted browser PASS；DEV-121 static 28/28；子任務目的／會議紀錄渲染、原任務標題樣式、content scope、rowSpan、single X-scroll 與資料行為不變；本機 candidate 維持 QC Ready，未 commit／push／PR／deploy／release。
+
+### R35 Descendant Tint Color Closure（2026-09-21；Superseded by R36）
+
+- 依使用者指定色票，將子任務／後代 task-name、planning 與 content cells 的定位 surface tint 固定為 `#D1E9E9`（browser computed `rgb(209, 233, 233)`）。父任務維持 `rgba(199, 210, 254, 0.94)`。
+- Goal empty-location targeted browser PASS；DEV-121 static 28/28；子任務目的／會議紀錄渲染、原任務標題樣式、content scope、rowSpan、single X-scroll 與資料行為不變；本機 candidate 維持 QC Ready，未 commit／push／PR／deploy／release。
+
+### R34 Original Task-title Style Closure（2026-09-21；Superseded by R35）
+
+- 依使用者回饋，移除 Goal 定位狀態對任務標題文字的額外顏色覆寫，恢復 `taskStatusTitleClass`、原本字重與文字樣式。
+- 父子任務淡藍色 surface tint、目的／會議紀錄渲染、content scope、rowSpan、single X-scroll 與資料行為不變。
+- Goal empty-location targeted browser PASS；DEV-121 static 28/28；本機 candidate 維持 QC Ready，未 commit／push／PR／deploy／release。
 
 使用思考習慣：#設計思考、#差距分析、#問對問題、#簡潔優先、#系統描繪、#限制條件、#可驗證性
 

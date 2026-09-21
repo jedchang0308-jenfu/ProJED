@@ -104,25 +104,26 @@ export const buildReleaseRuntimeEnv = (parentEnv = process.env) => buildSanitize
   extra: { PROJED_RELEASE_PROFILE: 'production' },
 });
 
-const runBrowserSmokeAtUrl = async ({ baseUrl, releaseId, sessionPrefix }) => {
+const runBrowserSmokeAtUrl = async ({ baseUrl, releaseId, sessionPrefix, filename = path.join(root, 'scripts', 'verify-release-browser-smoke.pw.js') }) => {
   const url = new URL(baseUrl);
   url.searchParams.set('dev083ReleaseId', releaseId);
-  const smoke = await run('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(root, 'scripts', 'run-playwright-code.ps1'), '-SessionPrefix', sessionPrefix, '-Filename', path.join(root, 'scripts', 'verify-release-browser-smoke.pw.js'), '-OutputDirectory', path.join(root, 'output', 'playwright', sessionPrefix), '-BaseUrl', url.toString()], { cwd: root, env: buildReleaseRuntimeEnv(process.env) });
+  const smoke = await run('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(root, 'scripts', 'run-playwright-code.ps1'), '-SessionPrefix', sessionPrefix, '-Filename', filename, '-OutputDirectory', path.join(root, 'output', 'playwright', sessionPrefix), '-BaseUrl', url.toString()], { cwd: root, env: buildReleaseRuntimeEnv(process.env) });
   if (smoke.code !== 0) throw new Error(`DEV-083 browser smoke failed: ${redact((smoke.stderr || smoke.stdout).trim().slice(-1200))}`);
   return { ok: true, baseUrl: url.origin, expectedReleaseId: releaseId };
 };
 
 const git = async args => {
   const result = await run('git', args, { cwd: root, env: process.env });
-  return result.code === 0 ? result.stdout.trim() : '';
+  if (result.code !== 0) throw new Error('DEV-083 could not resolve Git source identity; refusing to continue.');
+  return result.stdout.trim();
 };
 
 const assertCleanWorktree = async () => {
   const status = await git(['status', '--porcelain']);
-  if (status) throw new Error('DEV-083 P1 prepare requires a clean tracked worktree; commit or separately resolve changes before release preparation.');
+  if (status) throw new Error('DEV-083 release build requires a clean worktree; commit or separately resolve changes before release preparation.');
 };
 
-const assertLevel3 = (args, expectedCommit) => {
+export const assertLevel3 = (args, expectedCommit) => {
   if (!args.level3_evidence) throw new Error('DEV-083 P1 requires --level3-evidence <same-commit evidence path>; no remote deploy is attempted without it.');
   const evidencePath = path.resolve(root, args.level3_evidence);
   if (!fs.existsSync(evidencePath)) throw new Error('DEV-083 P1 Level3 evidence path does not exist.');
@@ -131,6 +132,18 @@ const assertLevel3 = (args, expectedCommit) => {
   const commit = evidence.sourceCommit ?? evidence.commit ?? evidence.source?.commit;
   if (!commit) throw new Error('DEV-083 P1 Level3 evidence has no source commit identity.');
   if (expectedCommit && commit !== expectedCommit) throw new Error('DEV-083 P1 Level3 evidence source commit does not match the immutable artifact.');
+  let preview;
+  try { preview = new URL(evidence.previewUrl); } catch { throw new Error('DEV-083 Level3 evidence requires a valid HTTPS preview URL.'); }
+  if (evidence.phase !== 'level3' || evidence.projectId !== PRODUCTION_CONTRACT.projectId
+    || evidence.stagingBackend !== PRODUCTION_CONTRACT.forbiddenSupabaseProjectRef
+    || preview.protocol !== 'https:' || preview.username || preview.password || preview.port
+    || !new RegExp(`^${PRODUCTION_CONTRACT.siteId}--level3-smoke-[a-z0-9-]+\\.web\\.app$`).test(preview.hostname)) {
+    throw new Error('DEV-083 Level3 evidence environment/preview identity mismatch.');
+  }
+  if (evidence.smoke?.result !== 'PASS' || typeof evidence.smoke?.scope !== 'string' || !evidence.smoke.scope.trim()
+    || evidence.smoke.pageErrors !== 0 || evidence.smoke.criticalFailedRequests !== 0) {
+    throw new Error('DEV-083 Level3 evidence requires passed scoped smoke with zero page errors and critical failed requests.');
+  }
 };
 
 const waitForHttp = async (url, timeoutMs = 20000) => {
@@ -326,6 +339,107 @@ export const verifyRemoteArtifact = async ({
   return { ok: true, baseUrl: origin, releaseId: meta.releaseId, treeSha256: manifest.artifact.treeSha256, verifiedEntries: remoteFiles.size };
 };
 
+// Explicit low-risk selection after reviewing the complete release diff. This is
+// not an automatic risk classifier or permission to mutate production data.
+export const runDirectRelease = async (args, services = {
+  assertCleanWorktree, git, buildProductionArtifact, verifyManifest,
+  readLiveReleaseSnapshot, deployExactArtifact, verifyRemoteArtifact, runBrowserSmokeAtUrl,
+}) => {
+  if (typeof args.reason !== 'string' || !args.reason.trim()) throw new Error('DEV-083 direct requires --reason describing bounded impact and quick recovery.');
+  if (args.verify_only !== undefined && args.verify_only !== true) throw new Error('DEV-083 --verify-only is a boolean flag.');
+  if (args.verify_only && !args.manifest) throw new Error('DEV-083 --verify-only requires the already published --manifest.');
+  if (args.level3_evidence || args.approve_release) throw new Error('DEV-083 direct does not consume protected-phase evidence or approval tokens.');
+  let featureFile;
+  let featureSha256;
+  if (args.feature_smoke !== undefined) {
+    if (typeof args.feature_smoke !== 'string' || !args.feature_smoke.endsWith('.pw.js')) throw new Error('DEV-083 --feature-smoke must name an existing repository .pw.js file.');
+    featureFile = fs.realpathSync(path.resolve(root, args.feature_smoke));
+    const relative = path.relative(fs.realpathSync(root), featureFile);
+    if (relative.startsWith('..') || path.isAbsolute(relative) || !fs.statSync(featureFile).isFile()) throw new Error('DEV-083 feature smoke must stay inside the repository.');
+    if (featureFile === fs.realpathSync(path.join(root, 'scripts', 'verify-release-browser-smoke.pw.js'))) throw new Error('DEV-083 app-shell smoke cannot replace changed-feature verification.');
+    featureSha256 = sha256(fs.readFileSync(featureFile));
+  }
+
+  let manifestPath;
+  if (args.manifest) {
+    manifestPath = readManifestPath(args.manifest);
+  } else {
+    await services.assertCleanWorktree();
+    const sourceCommit = await services.git(['rev-parse', 'HEAD']);
+    const artifact = await services.buildProductionArtifact();
+    await services.assertCleanWorktree();
+    if (await services.git(['rev-parse', 'HEAD']) !== sourceCommit || artifact.manifest.source.commit !== sourceCommit) throw new Error('DEV-083 release source changed during build.');
+    manifestPath = artifact.manifestPath;
+  }
+  const verified = services.verifyManifest(manifestPath, { root });
+  if (!verified.ok) throw new Error(`DEV-083 direct artifact verification failed: ${verified.errors.join('; ')}`);
+  const manifest = verified.manifest;
+  if (manifest.source?.dirty !== false || !manifest.source?.commit) throw new Error('DEV-083 direct requires a classified clean source artifact.');
+  const evidencePath = path.join(manifest.artifact.releaseDir, 'direct-evidence.json');
+  let receipt;
+  if (args.verify_only) {
+    if (!fs.existsSync(evidencePath)) throw new Error('DEV-083 verify-only requires the original direct release receipt.');
+    receipt = JSON.parse(fs.readFileSync(evidencePath, 'utf8'));
+    if (receipt.phase !== 'direct' || receipt.releaseId !== manifest.releaseId || receipt.treeSha256 !== manifest.artifact.treeSha256
+      || receipt.manifestPath !== manifestPath || !receipt.previousLiveRelease?.versionName) throw new Error('DEV-083 direct receipt identity/recovery mismatch.');
+  } else {
+    if (fs.existsSync(evidencePath)) throw new Error('DEV-083 direct already attempted; inspect live state and use --manifest with --verify-only instead of redeploying.');
+    const previousLiveRelease = await services.readLiveReleaseSnapshot();
+    if (!previousLiveRelease?.releaseName || !previousLiveRelease?.versionName) throw new Error('DEV-083 direct requires a previous live release/version for recovery.');
+    receipt = {
+      taskId: PRODUCTION_CONTRACT.taskId, phase: 'direct', releaseId: manifest.releaseId,
+      manifestPath, source: manifest.source, target: manifest.target, treeSha256: manifest.artifact.treeSha256,
+      reason: redact(args.reason.trim()), previousLiveRelease,
+      recoveryMethod: 'Restore previousLiveRelease.versionName from Firebase Hosting release history, then verify the canonical origin.',
+      published: false, complete: false, verification: 'pending', deployment: { status: 'not-started' },
+    };
+  }
+  const save = () => fs.writeFileSync(evidencePath, `${JSON.stringify(receipt, null, 2)}\n`);
+  receipt.complete = false;
+  receipt.verification = 'pending';
+  delete receipt.error;
+  delete receipt.provenance;
+  delete receipt.browser;
+  delete receipt.feature;
+  save();
+  try {
+    if (!args.verify_only) {
+      receipt.deployment = { status: 'attempting' };
+      save();
+      const deployment = await services.deployExactArtifact({ manifest, phase: 'direct' });
+      if (deployment?.ok !== true) throw new Error('DEV-083 direct deployment did not return success.');
+      receipt.deployment = { ...deployment, status: 'published' };
+      receipt.published = true;
+      save();
+    }
+    receipt.provenance = await services.verifyRemoteArtifact({ manifest, baseUrl: PRODUCTION_CONTRACT.canonicalOrigin });
+    if (receipt.provenance?.ok !== true) throw new Error('DEV-083 direct canonical provenance failed.');
+    receipt.published = true;
+    receipt.browser = await services.runBrowserSmokeAtUrl({ baseUrl: PRODUCTION_CONTRACT.canonicalOrigin, releaseId: manifest.releaseId, sessionPrefix: 'dev083-direct' });
+    if (receipt.browser?.ok !== true) throw new Error('DEV-083 direct canonical browser smoke failed.');
+    if (featureFile) {
+      receipt.feature = await services.runBrowserSmokeAtUrl({ baseUrl: PRODUCTION_CONTRACT.canonicalOrigin, releaseId: manifest.releaseId, sessionPrefix: 'dev083-direct-feature', filename: featureFile });
+      if (receipt.feature?.ok !== true) throw new Error('DEV-083 direct feature smoke failed.');
+      receipt.feature.filename = path.relative(root, featureFile).replaceAll(path.sep, '/');
+      if (sha256(fs.readFileSync(featureFile)) !== featureSha256) throw new Error('DEV-083 feature smoke changed during verification.');
+      receipt.feature.sha256 = featureSha256;
+    }
+    receipt.complete = Boolean(receipt.feature?.ok);
+    receipt.verification = receipt.complete ? 'passed' : 'feature-pending';
+    save();
+    return { ok: true, phase: 'direct', releaseId: manifest.releaseId, manifestPath, evidencePath, published: true, complete: receipt.complete, verification: receipt.verification };
+  } catch (error) {
+    receipt.verification = 'failed';
+    receipt.error = redact(error.message);
+    if (receipt.deployment.status === 'attempting') {
+      receipt.deployment.status = 'unknown';
+      receipt.published = null;
+    }
+    save();
+    throw error;
+  }
+};
+
 const prepare = async args => {
   await assertCleanWorktree();
   const artifact = await buildProductionArtifact();
@@ -390,7 +504,8 @@ const activate = async args => {
 export async function runRelease(argv = process.argv.slice(2)) {
   const args = parseArgs(argv);
   const phase = args.phase;
-  if (!['prepare', 'candidate', 'activate'].includes(phase)) throw new Error('DEV-083 P1 usage: npm run release:production -- --phase <prepare|candidate|activate> [args].');
+  if (!['direct', 'prepare', 'candidate', 'activate'].includes(phase)) throw new Error('DEV-083 P1 usage: npm run release:production -- --phase <direct|prepare|candidate|activate> [args]. direct requires --reason; --feature-smoke records changed-feature verification.');
+  if (phase === 'direct') return runDirectRelease(args);
   if (phase === 'prepare') return prepare(args);
   if (phase === 'candidate') return candidate(args);
   return activate(args);

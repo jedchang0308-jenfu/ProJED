@@ -364,10 +364,10 @@ body[data-kanban-mouse-pan-active="true"] * {
 
 [data-goal-view="true"],
 [data-goal-hierarchy-guide-layer="preview"] {
-  --goal-hierarchy-line-color: rgb(148 163 184 / 42%);
-  --goal-hierarchy-line-active-color: rgb(99 102 241 / 76%);
+  --goal-hierarchy-line-color: rgb(148 163 184 / 28%);
+  --goal-hierarchy-line-active-color: rgb(100 116 139 / 56%);
   --goal-hierarchy-parent-task-blue: rgb(199 210 254 / 94%);
-  --goal-hierarchy-child-task-blue: rgb(224 231 255 / 90%);
+  --goal-hierarchy-child-task-blue: #edf8f8;
 }
 
 [data-goal-view="true"] {
@@ -638,28 +638,17 @@ body[data-kanban-mouse-pan-active="true"] * {
   background-color: var(--goal-hierarchy-parent-task-blue);
 }
 
-[data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-hierarchy-scope="descendant"] > [data-goal-planning-control] {
-  background-color: var(--goal-hierarchy-child-task-blue);
-}
-
-/* A located task must remain identifiable while the fixed task-name lane is
-   being compared against the horizontally scrollable columns. Keep the
-   normal lane surface neutral; apply the same two-level task tint to the
-   task-name and planning cells while location or pointer focus is active. */
+/* Keep the active parent and its visible descendants visually distinct while
+   preserving the same scope tint across the fixed and scrollable columns. */
 [data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-hierarchy-scope="parent"] > [data-goal-task-cell],
 [data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-child-drop-candidate="true"] > [data-goal-task-cell],
 [data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-child-drop-target="true"] > [data-goal-task-cell] {
   background-color: var(--goal-hierarchy-parent-task-blue);
 }
 
+[data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-hierarchy-scope="descendant"] > [data-goal-planning-control],
 [data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-hierarchy-scope="descendant"] > [data-goal-task-cell] {
   background-color: var(--goal-hierarchy-child-task-blue);
-}
-
-[data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-hierarchy-scope] > [data-goal-task-cell] .task-title-text,
-[data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-child-drop-candidate="true"] > [data-goal-task-cell] .task-title-text,
-[data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-child-drop-target="true"] > [data-goal-task-cell] .task-title-text {
-  color: rgb(79 70 229);
 }
 
 /* A content owner can also be a row-spanning cell. Match the cell element
@@ -667,6 +656,10 @@ body[data-kanban-mouse-pan-active="true"] * {
    without changing the owner cell's text or scroll behavior. */
 [data-goal-view="true"] tbody > tr[data-goal-task-row] > td[data-goal-content-scope="active"] {
   background-color: var(--goal-hierarchy-parent-task-blue);
+}
+
+[data-goal-view="true"] tbody > tr[data-goal-task-row] > td[data-goal-content-scope="descendant"] {
+  background-color: var(--goal-hierarchy-child-task-blue);
 }
 
 /* Meeting history stays scrollable, but a quick-note row is either fully

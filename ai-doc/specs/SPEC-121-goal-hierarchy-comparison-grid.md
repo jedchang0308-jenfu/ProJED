@@ -1,6 +1,6 @@
 # SPEC-121：OKR 父子任務樹狀對照與群組範圍
 
-- 文件版本：R29，2026-09-18；除固定任務名稱欄外的所有可見欄位可由表頭控制收合／還原，個人帳號保存欄位偏好；expanded 欄位控制採 24px 可操作區與 18px 低噪音視覺框，collapsed 後縮為 20px 可操作區與 16px 視覺框，收合軌道由 32px 縮為 22.4px（瀏覽器實際約 22px），收合狀態才使用柔和主色；任務名稱欄永遠維持 252px 固定左側樹狀欄，不提供欄位收合；所有層級任務名稱固定欄未定位時統一白色底色，定位時父任務與子任務／後代各自只使用一種 task blue；空白日期不再額外渲染 `—`，規劃欄寬調整為可容納標題與標準內容；工期鎖定仍限制結束日期編輯，但不在日期欄內重複渲染 `L` 標記；會議紀錄維持內部 Y 捲軸，顯示區以 20px 文字行高對齊，部分可視 quick-note 整列暫隱藏，避免露出裁切字元。
+- 文件版本：R38，2026-09-21；除固定任務名稱欄外的所有可見欄位可由表頭控制收合／還原，個人帳號保存欄位偏好；expanded 欄位控制採 24px 可操作區與 18px 低噪音視覺框，collapsed 後縮為 20px 可操作區與 16px 視覺框，收合軌道由 32px 縮為 22.4px（瀏覽器實際約 22px），收合狀態才使用柔和主色；任務名稱欄永遠維持 252px 固定左側樹狀欄，不提供欄位收合；所有層級任務名稱固定欄未定位時統一白色底色，定位時父任務使用 parent surface tint、子任務／後代使用更淡的 `#EDF8F8` surface tint，任務標題文字沿用原元件樣式；樹狀線與節點改用低對比中性灰階，降低清單視覺噪音；空白日期不再額外渲染 `—`，規劃欄寬調整為可容納標題與標準內容；工期鎖定仍限制結束日期編輯，但不在日期欄內重複渲染 `L` 標記；會議紀錄維持內部 Y 捲軸，顯示區以 20px 文字行高對齊，部分可視 quick-note 整列暫隱藏，避免露出裁切字元。
 - 成熟度：`RD Implementation Complete / Targeted QA PASS / Production Verified (REL-005)`。
 - 對應：DEV-121（交付點）；父任務 DEV-116；相容 DEV-119、DEV-120。
 - 需求來源：`USER-20260914-GOAL-HIERARCHY-COMPARISON`、
@@ -240,7 +240,7 @@ export function buildGoalHierarchyDecorations(args: Readonly<{
   4px root branch 與低對比不透明底成為群組錨點；除第一個 rendered root 外，
   其他 `data-goal-level="0"` row 以 2px 上邊界開始新群組。
 - root group 間不插入 spacer row，避免改變 rowSpan 與 32px 密度。第一個 root 不畫多餘頂線。
-- 正常線使用中性低對比；hover／focus 父項時，該 task 擁有的 child stem 與可見後代 lineage 切成 indigo。
+- 正常線使用中性低對比；hover／focus 父項時，該 task 擁有的 child stem 與可見後代 lineage 仍提高辨識度，但維持低飽和中性灰階，不使用高彩度 indigo。
   位於目前 task 當列、由 parent 擁有的 `incoming-vertical` 與 `incoming-branch` 都維持 1px 中性線，
   避免形成與目標無直接指向性的 active rail；其他 owner 的 continuation 亦保持中性。
 - node hit target 不可蓋住任務文字、拖曳、右鍵或 focus ring；guide 仍 `pointer-events:none`。在 forced-colors／移除顏色時仍靠實心／空心、線段與位置表意。
@@ -736,3 +736,50 @@ single X-scroll、projection 與 mutation 契約全部維持。
   single X-scroll、資料與互動行為不變。V15／V20 讀值更新為兩色契約。
 
 使用思考習慣：#設計思考、#差距分析、#問對問題、#簡潔優先、#系統描繪、#限制條件、#可驗證性
+
+### R30 Located Subtree Content Scope Follow-up（2026-09-21；Compatible additive correction）
+
+- 依使用者 follow-up 要求，當定位 scope 位於父任務時，該父任務目前可見的子任務／後代列，其「任務目的」與「會議紀錄」實際欄位也要保留定位渲染；欄位為空白時仍渲染 descendant scope，欄位有自身內容時保留原文字／quick-note。
+- 父任務列維持 `active` parent tint；可見子任務／後代列使用 `descendant` child tint。真正的 `covered` rowSpan 仍無獨立 content `td`，不得複製父任務內容或新增 scroll owner。
+- 本 follow-up 只沿用既有 visible hierarchy scope 與 sparse projection 做 content scope readback；不改 projection、rowSpan ownership、資料、state／store、persistence、欄位順序或 single X-scroll。
+
+### R31 Child Scope Contrast Follow-up（2026-09-21；Superseded by R32）
+
+- 依使用者要求，子任務／後代 scope 改用較淡的 `rgba(239, 246, 255, 0.94)`；父任務維持 `rgba(199, 210, 254, 0.94)`，以拉大父子任務的視覺階層差異。
+- 後續 R32 已將子任務／後代由整格底色改為非填色階層標記；DOM、資料、rowSpan、scroll owner、欄位順序與定位 scope 邏輯仍不變。
+
+### R32 Descendant Marker Contrast Follow-up（2026-09-21；Superseded by R33）
+
+- 依使用者回饋，移除子任務／後代 task-name、planning 與 descendant content cells 的整格淡藍填色，避免與靜態交錯格底色重複或混淆。
+- 子任務／後代改以固定任務名稱欄左側 `3px` indigo inset marker 與 `font-weight: 600` 標題表達階層；目的／會議／planning cells 回到既有 `rgb(255 255 255)`／`rgb(243 246 250)` row surface，父任務 active surface tint 維持。
+- 不改 DOM、資料、rowSpan、scroll owner、欄位順序、content scope 或定位 scope 邏輯；子任務自身內容與 quick-note 仍須照常渲染。
+
+### R33 Descendant Surface Tint Follow-up（2026-09-21；Superseded by R34）
+
+- 依使用者回饋，取消 R32 的左側階層 marker 與子任務標題加粗，子任務／後代 task-name、planning 與 descendant content cells 改用獨立的淡藍色 `rgba(224, 242, 254, 0.92)` surface tint。
+- 父任務維持 `rgba(199, 210, 254, 0.94)`；子任務不再使用靜態交錯格底色，也不新增左側線或字重差異。DOM、資料、rowSpan、scroll owner、欄位順序、content scope 與定位 scope 邏輯不變。
+
+### R34 Original Task-title Style Follow-up（2026-09-21；Superseded by R35）
+
+- 依使用者回饋，移除 Goal 定位狀態對 `.task-title-text` 的額外顏色覆寫，任務標題恢復沿用元件既有的 `taskStatusTitleClass` 與原本字重／文字樣式。
+- 父子任務淡藍色 surface tint、目的／會議紀錄渲染、DOM、資料、rowSpan、scroll owner 與定位 scope 邏輯均不變。
+
+### R35 Descendant Tint Color Follow-up（2026-09-21；Superseded by R36）
+
+- 依使用者指定色票，將子任務／後代 task-name、planning 與 descendant content cells 的定位 surface tint 固定為 `#D1E9E9`（browser computed `rgb(209, 233, 233)`）。
+- 父任務色、任務標題原元件樣式、任務目的／會議紀錄渲染、DOM、資料、rowSpan、scroll owner 與定位 scope 邏輯均不變。
+
+### R36 Descendant Tint Softening Follow-up（2026-09-21；Superseded by R37）
+
+- 依使用者回饋，將子任務／後代定位色由 `#D1E9E9` 再調淡為 `#E3F3F3`（browser computed `rgb(227, 243, 243)`）。
+- 父任務色、任務標題原元件樣式、任務目的／會議紀錄渲染、DOM、資料、rowSpan、scroll owner 與定位 scope 邏輯均不變。
+
+### R37 Descendant Tint Softening Follow-up（2026-09-21；Compatible visual refinement）
+
+- 依使用者回饋，將子任務／後代定位色由 `#E3F3F3` 再調淡兩階為 `#EDF8F8`（browser computed `rgb(237, 248, 248)`），使其更接近白色。
+- 父任務色、任務標題原元件樣式、任務目的／會議紀錄渲染、DOM、資料、rowSpan、scroll owner 與定位 scope 邏輯均不變。
+
+### R38 Quiet Tree Connector Tone Follow-up（2026-09-21；Compatible visual refinement）
+
+- 依使用者回饋，將 Goal 樹狀線與節點的 normal connector 由 `rgb(148 163 184 / 42%)` 調整為 `rgb(148 163 184 / 28%)`，active connector 由高彩度 indigo 調整為 `rgb(100 116 139 / 56%)`，保留 1px／2px 幾何與圓角、owner、定位 scope、縮排及節點操作。
+- 只降低樹狀清單的視覺噪音，不改任務資料、DOM、rowSpan、scroll owner、hover／focus 行為或父子內容定位色。

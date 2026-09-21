@@ -1,7 +1,7 @@
 # QA-DEV-129：OKR 定位時任務目的與會議紀錄渲染恢復
 
 - 狀態：`Targeted UI Smoke PASS / Production Verified`
-- 範圍：Goal／OKR 表格在 parent location scope 下的任務目的與會議紀錄 owner cell。
+- 範圍：Goal／OKR 表格在 parent location scope 下的任務目的與會議紀錄 owner cell，以及可見子任務／後代內容 cell。
 - 不在範圍：projection、rowSpan 計算、資料、state／store／persistence、欄位順序、planning、DnD、release。
 - 驗證環境：`http://localhost:4000/`，Chromium local Goal mode；另以使用者附圖的 719×698 標註場景作需求對照。
 
@@ -16,6 +16,17 @@
 | V05 | 可見錯誤與結構回歸 | PASS | browser readback 無 visible `role=alert`／文字重疊；sticky header、固定任務名稱欄、single X-scroll 未新增第二 scroll owner |
 | V06 | 建置與變更格式檢查 | PASS | `npm run build:test`、`git diff --check` |
 
+## Follow-up：可見子任務內容定位渲染（2026-09-21）
+
+本 follow-up 延伸 DEV-129 的定位可見性：父任務定位時，空白子任務的「任務目的／會議紀錄」仍需存在並取得 descendant scope；子任務若有自身目的或 quick-note，文字仍需可見。rowSpan covered cell 仍不得新增 DOM 或複製內容。本機 targeted browser 證據由 `npm run verify:goal-empty-location-browser` 產生，未宣稱重新 production release。
+
+| ID | 驗收內容 | 結果 | 證據 |
+|---|---|---|---|
+| F01 | 父任務空白目的／會議欄位取得 `active` parent scope | PASS | Chromium 754×698：兩欄 `kind=empty`、scope=`active`、背景 `rgba(199, 210, 254, 0.94)` |
+| F02 | 空白子任務目的／會議欄位取得 `descendant` scope | PASS | Chromium 754×698：兩欄 scope=`descendant`、背景回到交錯 row surface（`rgb(255, 255, 255)`／`rgb(243, 246, 250)`）、文字為空 |
+| F03 | 有自身內容的子任務保留目的與會議文字 | PASS | Chromium 754×698：目的文字「子任務目的內容。」、會議 quick-note「子任務會議欄位」仍可見 |
+| F04 | 不新增 content scroll owner 或 visible error | PASS | target 空白列 content scroll owner=`0`、visible alerts=`0`、page／console／HTTP error=`0` |
+
 ## 結論
 
-本次僅提高 Goal active content selector 的 CSS specificity，恢復定位時任務目的與會議紀錄的可見渲染與 parent tint；REL-005 canonical CSS readback 與 browser／OAuth release gates 通過。
+原 DEV-129 提高 Goal active content selector 的 CSS specificity，恢復定位時任務目的與會議紀錄 owner cell 的可見渲染；本次 follow-up 再補上可見子任務／後代列的 descendant content scope。REL-005 的既有 canonical CSS readback 與 browser／OAuth release gates 保持歷史證據，本 follow-up 僅完成 local targeted validation，未宣稱重新 production release。

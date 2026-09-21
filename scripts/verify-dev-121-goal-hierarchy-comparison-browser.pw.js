@@ -379,7 +379,7 @@ async (page) => {
       const styles = getComputedStyle(normal);
       return { backgroundColor: styles.backgroundColor, borderRadius: styles.borderRadius };
     });
-    record('V13-soft-connector-tone-and-rounded-joins', toneProbe.backgroundColor.includes('0.42') && toneProbe.borderRadius === '999px', toneProbe);
+    record('V13-soft-connector-tone-and-rounded-joins', toneProbe.backgroundColor.includes('0.28') && toneProbe.borderRadius === '999px', toneProbe);
     const rowBorderProbe = await goal.evaluate(root => {
       const rows = Array.from(root.querySelectorAll('[data-goal-task-row]'));
       const taskCells = rows.map(row => row.querySelector('[data-goal-task-cell]')).filter(Boolean);
@@ -548,6 +548,7 @@ async (page) => {
       const row = root.querySelector('[data-goal-task-row-id="dev121-a1"]');
       const task = row?.querySelector('[data-goal-task-cell]');
       const descendantTask = root.querySelector('[data-goal-task-row-id="dev121-a1a"] [data-goal-task-cell]');
+      const descendantTaskTitle = descendantTask?.querySelector('.task-title-text');
       const planning = row?.querySelector('[data-goal-planning-control]');
       const content = root.querySelector('[data-goal-description-owner="true"]');
       const segments = Array.from(root.querySelectorAll('[data-goal-hierarchy-guide-kind]')).map(segment => ({
@@ -568,6 +569,9 @@ async (page) => {
       return {
         task: task ? getComputedStyle(task).backgroundColor : '',
         descendantTask: descendantTask ? getComputedStyle(descendantTask).backgroundColor : '',
+        descendantTaskMarker: descendantTask ? getComputedStyle(descendantTask).boxShadow : '',
+        descendantTaskTitleWeight: descendantTaskTitle ? getComputedStyle(descendantTaskTitle).fontWeight : '',
+        descendantTaskTitleColor: descendantTaskTitle ? getComputedStyle(descendantTaskTitle).color : '',
         planning: planning ? getComputedStyle(planning).backgroundColor : '',
         content: content ? getComputedStyle(content).backgroundColor : '',
         contentScope: content?.getAttribute('data-goal-content-scope') || '',
@@ -594,10 +598,18 @@ async (page) => {
       content: guideProbe.content,
       contentScope: guideProbe.contentScope,
     });
-    record('V20-two-task-blue-tints-unify-parent-and-descendant-rows', guideProbe.task === 'rgba(199, 210, 254, 0.94)'
-      && guideProbe.descendantTask === 'rgba(224, 231, 255, 0.9)', {
+    const expectedDescendantSurface = 'rgb(237, 248, 248)';
+    const noTaskMarker = marker => marker === '' || marker === 'none';
+    record('V20-descendant-uses-distinct-light-blue-surface', guideProbe.task === 'rgba(199, 210, 254, 0.94)'
+      && guideProbe.descendantTask === expectedDescendantSurface
+      && noTaskMarker(guideProbe.descendantTaskMarker)
+      && guideProbe.descendantTaskTitleWeight === '500'
+      && guideProbe.descendantTaskTitleColor === 'oklch(0.279 0.041 260.031)', {
       parent: guideProbe.task,
       descendant: guideProbe.descendantTask,
+      descendantTaskMarker: guideProbe.descendantTaskMarker,
+      descendantTaskTitleWeight: guideProbe.descendantTaskTitleWeight,
+      descendantTaskTitleColor: guideProbe.descendantTaskTitleColor,
     });
     const allowedActiveOwners = new Set(['dev121-a1', 'dev121-a1a', 'dev121-a1a1', 'dev121-a1b']);
     const scopeById = new Map(guideProbe.scopeRows.map(item => [item.id, item.scope]));
@@ -612,10 +624,10 @@ async (page) => {
     );
     const selfUpstreamSuppressionOk = ownIncomingVertical?.active === 'false'
       && Number.parseFloat(ownIncomingVertical.width) <= 1
-      && ownIncomingVertical.backgroundColor === 'rgba(148, 163, 184, 0.42)'
+      && ownIncomingVertical.backgroundColor === 'rgba(148, 163, 184, 0.28)'
       && ownIncomingBranch?.active === 'false'
       && Number.parseFloat(ownIncomingBranch.height) <= 1
-      && ownIncomingBranch.backgroundColor === 'rgba(148, 163, 184, 0.42)'
+      && ownIncomingBranch.backgroundColor === 'rgba(148, 163, 184, 0.28)'
       && descendantIncomingVertical?.active === 'true'
       && Number.parseFloat(descendantIncomingVertical.width) >= 2;
     record('V14-active-task-upstream-relation-stays-neutral', selfUpstreamSuppressionOk, {

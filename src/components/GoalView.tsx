@@ -97,6 +97,7 @@ const safeTaskDomId = (taskId: string) => `goal-task-${Array.from(taskId)
   .join('-')}`;
 
 type GoalCellColumn = 'description' | 'meeting';
+type GoalContentScope = 'active' | 'descendant';
 type GoalColumnKey = 'description' | 'meeting' | 'owner' | 'status' | 'start-date' | 'end-date' | 'duration';
 
 const GOAL_COLUMN_LABELS: Record<GoalColumnKey, string> = {
@@ -169,7 +170,7 @@ const OwnedCell: React.FC<{
   children?: React.ReactNode;
   headers?: string;
   ownerAttribute?: string;
-  activeScope?: boolean;
+  activeScope?: GoalContentScope;
   selected: boolean;
   expanded: boolean;
   lineAlignedScroll?: boolean;
@@ -290,7 +291,7 @@ const OwnedCell: React.FC<{
       data-goal-description-owner={dataGoalColumn === 'description' && cell.kind === 'owner' ? 'true' : undefined}
       data-goal-meeting-owner={dataGoalColumn === 'meeting' && cell.kind === 'owner' ? 'true' : undefined}
       data-goal-owner={ownerAttribute}
-      data-goal-content-scope={activeScope ? 'active' : undefined}
+      data-goal-content-scope={activeScope}
       data-goal-cell-editing={isEditorVisible ? 'true' : undefined}
       onMouseEnter={cell.kind === 'owner' && ownerTaskId ? () => onHierarchyScopeChange(ownerTaskId) : undefined}
       onMouseLeave={cell.kind === 'owner' && ownerTaskId ? event => {
@@ -419,8 +420,8 @@ const GoalRow: React.FC<{
   activeHierarchyScopeId: string | null;
   childDropCandidate: boolean;
   childDropTarget: boolean;
-  activeDescriptionOwner: boolean;
-  activeMeetingOwner: boolean;
+  activeDescriptionScope?: GoalContentScope;
+  activeMeetingScope?: GoalContentScope;
   onHierarchyScopeChange: (taskId: string | null) => void;
   selectedCellKey: string | null;
   expandedCellKeys: ReadonlySet<string>;
@@ -448,8 +449,8 @@ const GoalRow: React.FC<{
   activeHierarchyScopeId,
   childDropCandidate,
   childDropTarget,
-  activeDescriptionOwner,
-  activeMeetingOwner,
+  activeDescriptionScope,
+  activeMeetingScope,
   onHierarchyScopeChange,
   selectedCellKey,
   expandedCellKeys,
@@ -693,7 +694,7 @@ const GoalRow: React.FC<{
         </TaskHierarchyIndentedRow>
       </th>
       {showDescriptionColumn && !descriptionColumnCollapsed ? (
-        <OwnedCell cell={row.descriptionCell} column="description" ownerTaskId={row.descriptionCell.kind === 'owner' ? node.id : undefined} headers={`goal-column-description ${safeTaskDomId(node.id)}`} ownerAttribute={row.descriptionCell.kind === 'owner' ? node.id : undefined} activeScope={activeDescriptionOwner} className="max-w-[360px] border-r border-slate-200 px-3 py-0 align-top text-xs text-slate-600" selected={selectedCellKey === `description:${node.id}`} expanded={expandedCellKeys.has(`description:${node.id}`)} canEdit={permissions.canEditTask} onSelect={() => onSelectCell(`description:${node.id}`)} onHierarchyScopeChange={onHierarchyScopeChange} onToggleExpanded={() => onToggleCell(`description:${node.id}`)} onOpenMenu={event => onOpenCellMenu(`description:${node.id}`, 'description', node.id, event)} data-goal-column="description">
+        <OwnedCell cell={row.descriptionCell} column="description" ownerTaskId={row.descriptionCell.kind === 'owner' ? node.id : undefined} headers={`goal-column-description ${safeTaskDomId(node.id)}`} ownerAttribute={row.descriptionCell.kind === 'owner' ? node.id : undefined} activeScope={activeDescriptionScope} className="max-w-[360px] border-r border-slate-200 px-3 py-0 align-top text-xs text-slate-600" selected={selectedCellKey === `description:${node.id}`} expanded={expandedCellKeys.has(`description:${node.id}`)} canEdit={permissions.canEditTask} onSelect={() => onSelectCell(`description:${node.id}`)} onHierarchyScopeChange={onHierarchyScopeChange} onToggleExpanded={() => onToggleCell(`description:${node.id}`)} onOpenMenu={event => onOpenCellMenu(`description:${node.id}`, 'description', node.id, event)} data-goal-column="description">
           {row.descriptionCell.kind === 'owner' ? row.descriptionCell.value : ''}
         </OwnedCell>
       ) : descriptionColumnCollapsed ? (
@@ -706,7 +707,7 @@ const GoalRow: React.FC<{
         />
       ) : null}
       {showMeetingColumn && !meetingColumnCollapsed ? (
-        <OwnedCell cell={row.meetingCell} column="meeting" ownerTaskId={row.meetingCell.kind === 'owner' ? node.id : undefined} headers={`goal-column-meeting ${safeTaskDomId(node.id)}`} ownerAttribute={row.meetingCell.kind === 'owner' ? node.id : undefined} activeScope={activeMeetingOwner} className="max-w-[380px] border-r border-slate-200 px-3 py-0 align-top text-xs text-slate-600" selected={selectedCellKey === `meeting:${node.id}`} expanded={expandedCellKeys.has(`meeting:${node.id}`)} lineAlignedScroll canEdit={false} onSelect={() => onSelectCell(`meeting:${node.id}`)} onHierarchyScopeChange={onHierarchyScopeChange} onToggleExpanded={() => onToggleCell(`meeting:${node.id}`)} onOpenMenu={event => onOpenCellMenu(`meeting:${node.id}`, 'meeting', node.id, event)} data-goal-column="meeting">
+        <OwnedCell cell={row.meetingCell} column="meeting" ownerTaskId={row.meetingCell.kind === 'owner' ? node.id : undefined} headers={`goal-column-meeting ${safeTaskDomId(node.id)}`} ownerAttribute={row.meetingCell.kind === 'owner' ? node.id : undefined} activeScope={activeMeetingScope} className="max-w-[380px] border-r border-slate-200 px-3 py-0 align-top text-xs text-slate-600" selected={selectedCellKey === `meeting:${node.id}`} expanded={expandedCellKeys.has(`meeting:${node.id}`)} lineAlignedScroll canEdit={false} onSelect={() => onSelectCell(`meeting:${node.id}`)} onHierarchyScopeChange={onHierarchyScopeChange} onToggleExpanded={() => onToggleCell(`meeting:${node.id}`)} onOpenMenu={event => onOpenCellMenu(`meeting:${node.id}`, 'meeting', node.id, event)} data-goal-column="meeting">
           {row.meetingCell.kind === 'owner' ? <MeetingQuickNoteRows entries={meetingEntries} /> : isFirstRow && meetingStatus === 'loading' ? <span className="inline-flex items-center gap-1 text-slate-400"><Loader2 size={12} className="animate-spin" />載入中…</span> : isFirstRow && meetingStatus === 'error' ? <span className="inline-flex flex-wrap items-center gap-2 text-red-600">紀錄載入失敗<button type="button" onClick={onRetryMeeting} className="font-semibold underline">重試</button></span> : null}
         </OwnedCell>
       ) : showMeetingColumn && meetingColumnCollapsed ? (
@@ -982,17 +983,24 @@ const GoalView: React.FC<GoalViewProps> = ({ boardId }) => {
       meeting: meetingNotesByTaskId.has(row.id) ? 'meeting-notes' : null,
     })),
   ), [goalSession, hierarchy.items, meetingNotesByTaskId]);
-  const activeContentOwnerIds = React.useMemo(() => {
-    const description = new Set<string>();
-    const meeting = new Set<string>();
+  const activeContentScopes = React.useMemo(() => {
+    const description = new Map<string, GoalContentScope>();
+    const meeting = new Map<string, GoalContentScope>();
     if (!visibleHierarchyScopeId) return { description, meeting };
-    const activeRow = projection.rows.find(row => row.taskId === visibleHierarchyScopeId);
-    if (!activeRow) return { description, meeting };
-    // A shared rowSpan remains visible as the real owner's group context, but
-    // it must not look like content belonging to a located descendant row.
-    // Only the owner task itself receives the active content tint.
-    if (activeRow.descriptionCell.kind === 'owner') description.add(activeRow.taskId);
-    if (activeRow.meetingCell.kind === 'owner') meeting.add(activeRow.taskId);
+    const activeIndex = projection.rows.findIndex(row => row.taskId === visibleHierarchyScopeId);
+    if (activeIndex < 0) return { description, meeting };
+    const activeRow = projection.rows[activeIndex];
+    for (let index = activeIndex; index < projection.rows.length; index += 1) {
+      const row = projection.rows[index];
+      if (index > activeIndex && row.level <= activeRow.level) break;
+      const scope: GoalContentScope = index === activeIndex ? 'active' : 'descendant';
+      // A shared rowSpan remains visible as the real owner's group context, but
+      // it must not look like content belonging to a located descendant row.
+      // Empty cells belong to their rendered task and need the same visual
+      // positioning scope; covered cells have no independent DOM cell to tint.
+      if (row.descriptionCell.kind !== 'covered') description.set(row.taskId, scope);
+      if (row.meetingCell.kind !== 'covered') meeting.set(row.taskId, scope);
+    }
     return { description, meeting };
   }, [visibleHierarchyScopeId, projection.rows]);
   const hasDescriptionColumn = projection.hasDescriptionColumn;
@@ -1387,8 +1395,8 @@ const GoalView: React.FC<GoalViewProps> = ({ boardId }) => {
                       activeHierarchyScopeId={visibleHierarchyScopeId}
                       childDropCandidate={goalChildCandidateTargetId === node.id}
                       childDropTarget={goalChildTargetId === node.id}
-                      activeDescriptionOwner={activeContentOwnerIds.description.has(node.id)}
-                      activeMeetingOwner={activeContentOwnerIds.meeting.has(node.id)}
+                      activeDescriptionScope={activeContentScopes.description.get(node.id)}
+                      activeMeetingScope={activeContentScopes.meeting.get(node.id)}
                       onHierarchyScopeChange={setActiveHierarchyScopeId}
                       selectedCellKey={selectedCellKey}
                       expandedCellKeys={expandedCellKeys}

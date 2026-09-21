@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import { resolveProductionPublicEnv, buildSanitizedChildEnv } from './release/env-boundary.mjs';
 import { PRODUCTION_CONTRACT } from './release/production-contract.mjs';
@@ -13,8 +14,10 @@ import {
 } from './release/credential-rotation-evidence.mjs';
 import {
   assertCandidateEvidence,
+  assertLevel3,
   buildReleaseRuntimeEnv,
   runRelease,
+  runDirectRelease,
   summarizeLiveChannel,
   verifyRemoteArtifact,
 } from './release/production-release.mjs';
@@ -252,6 +255,204 @@ try {
     } catch (error) {
       if (!/approve-release|manifest|level3-evidence/i.test(error.message)) throw error;
     }
+  });
+
+  // Exercise the actual direct orchestrator with all external operations replaced.
+  // No Firebase process, browser, server, build or network runs in these fixtures.
+  const directArgs = { reason: 'Icon-only fixture; bounded visual impact; restore previous Hosting version.' };
+  const featureSmoke = 'scripts/verify-dev-122-mobile-zero-data-quick-task-root-browser.pw.js';
+  let fixtureNumber = 0;
+  const directFixture = ({ failAt, dirty = false, changedHead = false, invalidArtifact = false, missingRecovery = false } = {}) => {
+    const releaseDir = path.join(selfCheckDir, `direct-${++fixtureNumber}`);
+    fs.mkdirSync(releaseDir);
+    const manifestPath = path.join(releaseDir, 'manifest.json');
+    const manifest = {
+      releaseId: `direct-fixture-${fixtureNumber}`, source: { commit: 'a'.repeat(40), dirty },
+      target: { projectId: PRODUCTION_CONTRACT.projectId, origin: PRODUCTION_CONTRACT.canonicalOrigin },
+      artifact: { releaseDir, treeSha256: 'fixture-tree' },
+    };
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest));
+    const evidenceFile = path.join(releaseDir, 'direct-evidence.json');
+    const calls = [];
+    const record = name => { calls.push(name); if (failAt === name) throw new Error(`fixture ${name} failure`); };
+    const previousLiveRelease = { releaseName: 'live-before', versionName: 'version-before' };
+    let gitReads = 0;
+    const services = {
+      assertCleanWorktree: async () => { record('clean'); if (dirty) throw new Error('fixture dirty source'); },
+      git: async () => { record('git'); return changedHead && ++gitReads > 1 ? 'b'.repeat(40) : manifest.source.commit; },
+      buildProductionArtifact: async () => { record('build'); return { manifestPath, manifest }; },
+      verifyManifest: value => { record('artifact'); assert.equal(value, manifestPath); return { ok: !invalidArtifact, errors: ['fixture tamper'], manifest }; },
+      readLiveReleaseSnapshot: async () => { record('recovery'); return missingRecovery ? {} : previousLiveRelease; },
+      deployExactArtifact: async ({ manifest: candidate, phase }) => {
+        assert.equal(candidate, manifest);
+        assert.equal(phase, 'direct');
+        const before = JSON.parse(fs.readFileSync(evidenceFile, 'utf8'));
+        assert.deepEqual(before.previousLiveRelease, previousLiveRelease);
+        assert.equal(before.deployment.status, 'attempting');
+        assert.equal(before.complete, false);
+        record('deploy');
+        return { ok: true };
+      },
+      verifyRemoteArtifact: async ({ manifest: candidate, baseUrl }) => {
+        assert.equal(candidate, manifest);
+        assert.equal(baseUrl, PRODUCTION_CONTRACT.canonicalOrigin);
+        record('provenance');
+        return { ok: true, releaseId: manifest.releaseId };
+      },
+      runBrowserSmokeAtUrl: async ({ baseUrl, releaseId, filename }) => {
+        assert.equal(baseUrl, PRODUCTION_CONTRACT.canonicalOrigin);
+        assert.equal(releaseId, manifest.releaseId);
+        record(filename ? 'feature' : 'browser');
+        return { ok: true };
+      },
+    };
+    return { services, calls, manifest, manifestPath, evidenceFile, previousLiveRelease };
+  };
+  await check('direct-build-once-live-once-with-feature', async () => {
+    const f = directFixture();
+    const result = await runDirectRelease({ ...directArgs, feature_smoke: featureSmoke }, f.services);
+    assert.deepEqual(f.calls, ['clean', 'git', 'build', 'clean', 'git', 'artifact', 'recovery', 'deploy', 'provenance', 'browser', 'feature']);
+    assert.equal(result.complete, true);
+    assert.equal(result.verification, 'passed');
+    assert.equal(JSON.parse(fs.readFileSync(f.evidenceFile, 'utf8')).feature.sha256.length, 64);
+  });
+  await check('direct-shell-only-is-feature-pending', async () => {
+    const f = directFixture();
+    const result = await runDirectRelease(directArgs, f.services);
+    assert.equal(result.published, true);
+    assert.equal(result.complete, false);
+    assert.equal(result.verification, 'feature-pending');
+  });
+  for (const [name, args] of [
+    ['missing-reason', {}], ['blank-reason', { reason: ' ' }],
+    ['verify-only-without-manifest', { ...directArgs, verify_only: true }],
+    ['invalid-boolean', { ...directArgs, verify_only: 'false' }],
+    ['protected-evidence-in-direct', { ...directArgs, level3_evidence: 'unused.json' }],
+    ['missing-feature-file', { ...directArgs, feature_smoke: 'scripts/missing-direct-feature.pw.js' }],
+    ['shell-as-feature', { ...directArgs, feature_smoke: 'scripts/verify-release-browser-smoke.pw.js' }],
+  ]) {
+    await check(`direct-rejects-${name}-before-work`, async () => {
+      const f = directFixture();
+      await assert.rejects(runDirectRelease(args, f.services));
+      assert.deepEqual(f.calls, []);
+    });
+  }
+  for (const [name, options] of [
+    ['dirty-source', { dirty: true }], ['source-change-during-build', { changedHead: true }],
+    ['build-failure', { failAt: 'build' }], ['artifact-tamper', { invalidArtifact: true }],
+    ['recovery-unavailable', { failAt: 'recovery' }], ['recovery-missing-version', { missingRecovery: true }],
+  ]) {
+    await check(`direct-blocks-${name}-before-deploy`, async () => {
+      const f = directFixture(options);
+      await assert.rejects(runDirectRelease(directArgs, f.services));
+      assert.equal(f.calls.includes('deploy'), false);
+    });
+  }
+  for (const failAt of ['deploy', 'provenance', 'browser', 'feature']) {
+    await check(`direct-preserves-recovery-on-${failAt}-failure`, async () => {
+      const f = directFixture({ failAt });
+      await assert.rejects(runDirectRelease({ ...directArgs, feature_smoke: featureSmoke }, f.services), /fixture .* failure/);
+      const receipt = JSON.parse(fs.readFileSync(f.evidenceFile, 'utf8'));
+      assert.equal(receipt.complete, false);
+      assert.equal(receipt.verification, 'failed');
+      assert.deepEqual(receipt.previousLiveRelease, f.previousLiveRelease);
+      assert.equal(receipt.published, failAt === 'deploy' ? null : true);
+      assert.equal(receipt.deployment.status, failAt === 'deploy' ? 'unknown' : 'published');
+    });
+  }
+  await check('direct-pinned-artifact-does-not-rebuild-current-source', async () => {
+    const f = directFixture();
+    await runDirectRelease({ ...directArgs, manifest: f.manifestPath }, f.services);
+    assert.deepEqual(f.calls, ['artifact', 'recovery', 'deploy', 'provenance', 'browser']);
+  });
+  await check('direct-pinned-dirty-artifact-rejected', async () => {
+    const f = directFixture({ dirty: true });
+    await assert.rejects(runDirectRelease({ ...directArgs, manifest: f.manifestPath }, f.services), /clean source artifact/);
+    assert.deepEqual(f.calls, ['artifact']);
+  });
+  await check('direct-verify-only-reuses-artifact-and-original-recovery', async () => {
+    const f = directFixture();
+    await runDirectRelease(directArgs, f.services);
+    f.calls.length = 0;
+    const result = await runDirectRelease({ ...directArgs, manifest: f.manifestPath, verify_only: true, feature_smoke: featureSmoke }, f.services);
+    assert.equal(result.complete, true);
+    assert.deepEqual(f.calls, ['artifact', 'provenance', 'browser', 'feature']);
+    assert.deepEqual(JSON.parse(fs.readFileSync(f.evidenceFile, 'utf8')).previousLiveRelease, f.previousLiveRelease);
+  });
+  await check('direct-does-not-redeploy-an-existing-attempt', async () => {
+    const f = directFixture();
+    await runDirectRelease(directArgs, f.services);
+    f.calls.length = 0;
+    await assert.rejects(runDirectRelease({ ...directArgs, manifest: f.manifestPath }, f.services), /already attempted/);
+    assert.deepEqual(f.calls, ['artifact']);
+  });
+  await check('direct-reverification-failure-clears-prior-completion', async () => {
+    const f = directFixture();
+    await runDirectRelease({ ...directArgs, feature_smoke: featureSmoke }, f.services);
+    f.calls.length = 0;
+    f.services.verifyRemoteArtifact = async () => { throw new Error('fixture live changed'); };
+    await assert.rejects(runDirectRelease({ ...directArgs, manifest: f.manifestPath, verify_only: true }, f.services), /live changed/);
+    const receipt = JSON.parse(fs.readFileSync(f.evidenceFile, 'utf8'));
+    assert.equal(receipt.complete, false);
+    assert.equal(receipt.verification, 'failed');
+    assert.equal(receipt.feature, undefined);
+    assert.deepEqual(receipt.previousLiveRelease, f.previousLiveRelease);
+    assert.deepEqual(f.calls, ['artifact']);
+  });
+  await check('direct-verify-only-can-resolve-uncertain-deployment', async () => {
+    const f = directFixture({ failAt: 'deploy' });
+    await assert.rejects(runDirectRelease(directArgs, f.services), /deploy failure/);
+    f.calls.length = 0;
+    const result = await runDirectRelease({ ...directArgs, manifest: f.manifestPath, verify_only: true, feature_smoke: featureSmoke }, f.services);
+    assert.equal(result.published, true);
+    assert.equal(result.complete, true);
+    assert.deepEqual(f.calls, ['artifact', 'provenance', 'browser', 'feature']);
+  });
+  await check('direct-verify-only-requires-matching-receipt', async () => {
+    const f = directFixture();
+    await assert.rejects(runDirectRelease({ ...directArgs, manifest: f.manifestPath, verify_only: true }, f.services), /original direct release receipt/);
+    await runDirectRelease(directArgs, f.services);
+    const receipt = JSON.parse(fs.readFileSync(f.evidenceFile, 'utf8'));
+    receipt.releaseId = 'wrong-release';
+    fs.writeFileSync(f.evidenceFile, JSON.stringify(receipt));
+    f.calls.length = 0;
+    await assert.rejects(runDirectRelease({ ...directArgs, manifest: f.manifestPath, verify_only: true }, f.services), /identity/);
+    assert.deepEqual(f.calls, ['artifact']);
+  });
+  const level3Path = path.join(selfCheckDir, 'level3.json');
+  const level3 = {
+    phase: 'level3', sourceCommit: 'a'.repeat(40), projectId: PRODUCTION_CONTRACT.projectId,
+    stagingBackend: PRODUCTION_CONTRACT.forbiddenSupabaseProjectRef,
+    previewUrl: `https://${PRODUCTION_CONTRACT.siteId}--level3-smoke-fixture.web.app`,
+    smoke: { result: 'PASS', scope: 'Synthetic fixture for HTTPS shell only; not auth/data evidence.', pageErrors: 0, criticalFailedRequests: 0 },
+  };
+  await check('level3-accepts-matching-passed-scoped-evidence', () => {
+    fs.writeFileSync(level3Path, JSON.stringify(level3));
+    assertLevel3({ level3_evidence: level3Path }, level3.sourceCommit);
+  });
+  for (const [name, override] of [
+    ['commit-only', { phase: undefined, previewUrl: undefined, smoke: undefined }],
+    ['wrong-commit', { sourceCommit: 'b'.repeat(40) }],
+    ['wrong-project', { projectId: 'other-project' }],
+    ['production-backend', { stagingBackend: PRODUCTION_CONTRACT.supabaseProjectRef }],
+    ['live-preview', { previewUrl: PRODUCTION_CONTRACT.canonicalOrigin }],
+    ['http-preview', { previewUrl: level3.previewUrl.replace('https:', 'http:') }],
+    ['lookalike-preview', { previewUrl: level3.previewUrl.replace('.web.app', '.attacker.web.app') }],
+    ['failed-smoke', { smoke: { ...level3.smoke, result: 'FAIL' } }],
+    ['missing-scope', { smoke: { ...level3.smoke, scope: '' } }],
+    ['page-errors', { smoke: { ...level3.smoke, pageErrors: 1 } }],
+    ['request-errors', { smoke: { ...level3.smoke, criticalFailedRequests: 1 } }],
+  ]) {
+    await check(`level3-rejects-${name}`, () => {
+      fs.writeFileSync(level3Path, JSON.stringify({ ...level3, ...override }));
+      assert.throws(() => assertLevel3({ level3_evidence: level3Path }, level3.sourceCommit));
+    });
+  }
+  await check('direct-cli-missing-reason-does-not-start-work', async () => {
+    await assert.rejects(runRelease(['--phase', 'direct']), /requires --reason/);
+  });
+  await check('unknown-phase-does-not-start-work', async () => {
+    await assert.rejects(runRelease(['--phase', 'unknown']), /usage/);
   });
 } finally {
   fs.rmSync(selfCheckDir, { recursive: true, force: true });

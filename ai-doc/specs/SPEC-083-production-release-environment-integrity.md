@@ -7,6 +7,12 @@
 - 決策來源：使用者先核准P0＋P1、不做P2及Edge Functions／legacy remediation；2026-08-22的一次性例外由2026-08-26的永久 credential policy 取代，candidate、activation與正式站smoke仍保留
 - 實作證據：`scripts/release/credential-rotation-policy.json`（policy `DEV-083-retired-credential-set-20260826`）綁定production project ref；缺少該 retired set 的值時以`permanently-unrecoverable`通過，若有人提供值仍照常探測。
 
+### 2026-09-21 風險分級修訂（現行權威）
+
+使用者核准「請執行修改」：與 ADR-037 同步，以 `direct` 快速發布補上低風險路徑。以下三 phase、Level 2/3、candidate、OAuth/credential gates 僅為保護發布契約；歷史已發布證據維持其原始範圍。本次本機規則／工具修改不授權部署、遠端設定或正式資料操作。
+
+快速資格由執行者審查完整發布差異：影響有限、可快速恢復、可容忍短暫異常且無重大資料／安全／不可逆副作用；不得依副檔名或一段 reason 文字自動推定安全。無法成立時使用保護路徑。sealed env、artifact scan/hash、正確 target、還原 reference 兩路徑共用。
+
 ## 1. 目標與成功狀態
 
 修正「測試 Supabase 與 localhost 設定可經由 parent `process.env` 進入 production build」的系統性缺口，
@@ -17,13 +23,13 @@
 3. 每一份 production artifact 都有可重算 manifest、source identity、environment identity 與 SHA-256 tree identity。
 4. 正式 artifact 指向 production Supabase、production redirect 與 production Firebase target；錯誤 profile 在 deploy 前非零退出。
 5. OAuth cancel callback 可用不登入、不寫資料的方式自動驗證最終 Location。
-6. `release:production` 是 P1 唯一正式發版入口；candidate verification 與 live activation 是兩個不同 phase。
+6. `release:production` 是 P1 唯一正式發版入口；低風險用 `direct`，保護路徑的 candidate verification 與 live activation 仍分離。
 7. production 啟用後，canonical smoke 能證明線上載入的仍是同一份 artifact。
 
 ## 2. Human Decision Brief
 
 - 採用：P0 環境隔離、server/public env 分界、artifact manifest／掃描、OAuth callback 自動化。
-- 採用：P1 單一 `release:production` orchestration，包含 prepare、candidate、activate 三個明確 phase。
+- 採用：P1 單一 `release:production` orchestration，快速用 direct；保護發布用 prepare、candidate、activate 三個 phase。
 - 不採用：P2 CI protected environment、IAM／credential owner 收斂、技術性封鎖 direct deploy。
 - P2 不建立 future implementation capsule；只有使用者日後明確改變決策時才重新登錄。
 - 人類保留的必要決策只有 production activation go/no-go；遇到 Firebase／Google／Supabase re-auth 或 2FA 時，
@@ -47,7 +53,7 @@
 
 ### P1：單一正式發版入口
 
-- 新增唯一公開入口 `npm run release:production -- --phase <prepare|candidate|activate>`。
+- 唯一公開入口 `npm run release:production -- --phase <direct|prepare|candidate|activate>`；無 phase 不做任何動作。
 - `prepare` 只做 source boundary、Layer 1、sealed build、manifest、Layer 2 local artifact smoke；不得遠端 deploy。
 - `candidate` 只部署 manifest 指定 artifact 到 inactive Firebase preview channel，執行 production-bound read-only gate 與 credential-rotation gate；
   不得啟用 live traffic。
@@ -64,7 +70,7 @@
 - 不限制 Firebase Console 或 Firebase CLI 的 IAM/direct deploy 權限；這是明確接受的 P2 殘留風險。
 - 不修改 Supabase Auth dashboard、Google OAuth scope、redirect allowlist 或 Site URL。
 - 不修改 DB schema、migration、RLS、正式資料、使用者 session 或產品登入 UI。
-- 不重寫 ADR-037 的 Level 3 staging/test 流程；P1 只驗證並引用同 source commit 的 Level 3 evidence。
+- 保護路徑引用同 source commit 的 targeted Level 3 evidence；快速路徑不生成 Level 3 占位證據。
 - 不自動 rollback production；canonical smoke 失敗時只 fail closed 並輸出已擷取的 rollback reference。
 
 ## 5. Environment Authority 與資料流
@@ -190,11 +196,26 @@ Supabase 官方契約依據：`redirectTo` 必須符合專案 allowlist，produc
 
 ## 10. P1 `release:production` Phase Contract
 
-### Phase A — `prepare`
+### 快速發布 — `direct`
+
+`npm run release:production -- --phase direct --reason "本次變更、有限影響與快速恢復理由" [--feature-smoke scripts/<feature>.pw.js]`
+
+- `--reason` 是執行者記錄風險判斷，不是新增人類核准。既有明確部署授權涵蓋同範圍部署與啟用；改規則的授權不算部署授權。
+- 無 `--manifest` 時確認 clean source，再建置一次 sealed production artifact；build 前後 HEAD/dirty 改變即停止。給定既有 `--manifest` 時驗證並使用該固定 artifact，不因目前分支的新修改重建或偷換 release。
+- 檢查 env/target/secret/artifact，讀取 current live release/version 作還原點，沿用 Firebase Hosting 歷史版本還原方法。不得執行 Level 3、local artifact server、candidate、未受影響的 backend/OAuth/credential checks。
+- 在遠端操作前保存 `direct-evidence.json`（source、release、target、reason、previous live、deployment status）。部署 exact artifact，完成 canonical remote hashes/version 與 app shell smoke。
+- 有 `--feature-smoke` 時執行指定的 repo 內 `.pw.js`，使用同 canonical URL／release ID；檔案需在開始遠端操作前確認有效且已審查副作用。不傳 script 時，回傳 `published: true`、`complete: false`、`verification: feature-pending`；不得用 shell PASS 宣稱改動驗收完成，可另以既有證據記錄人工／其他工具驗證。
+- `--manifest <path> --verify-only` 只重驗已嘗試發布版本，不建置、不部署；必須找到同 manifest/release/tree 的 direct receipt。已存在 receipt 的普通 direct 重跑拒絕重新部署，要求先核對 live 並使用 verify-only；不得因缺輸出反覆發布。
+- deploy/smoke 失敗時非零退出，保留 `complete: false`、部署成功或不確定狀態與還原點；CLI 失敗而 live 結果未知時 `published: null`，不可誤稱尚未發布。恢復依 deployment-release-gate，不自動執行 rollback。
+- `prepare/candidate/activate` 仍為保護路徑，並不因 direct 存在而降低其 gates。
+
+本機實作驗證（2026-09-21）：release gate 61/61、edge-key regression、targeted ESLint、Node syntax 與 whitespace check 通過。外部呼叫使用 doubles；未以這些結果宣稱真實 Firebase direct／canonical 已驗證。功能 smoke 必須審查為指定 production origin 的實際改動檢查；測試失敗應 throw，不能以 local fixture 或 shell success 代替。
+
+### 保護發布 Phase A — `prepare`
 
 - 不帶 phase時顯示 usage並非零退出；不得採用「無參數即部署」。
 - 檢查 branch、HEAD、upstream、ahead/behind與 clean tracked worktree；dirty或 unknown-risk change立即停止。
-- 驗證同 commit的 ADR-037 Level 3 evidence存在；若該 release profile明確 N/A，需保存具體 rationale。
+- 驗證同 commit 的 scoped Level 3 evidence：`phase=level3`、正確 Firebase project/TEST ref、HTTPS preview、`smoke.result=PASS`、非空 scope、page errors/critical failed requests 為零。只含 commit 的 JSON、N/A 或 shell evidence 不可被當成未執行的 auth/data PASS。
 - 執行最小 Layer 1 source checks、sealed production build、artifact scan與 manifest建立。
 - 啟動 task-owned temporary preview runtime做 Layer 2 browser SPA smoke，完成後停止該 process tree並確認 port釋放。
 - 輸出 manifest path與 release ID；不得執行 Firebase remote operation。
@@ -302,9 +323,8 @@ Local-only data migration：RD實作時將 `.env.local` 的 release-controlled t
 - 驗證權威：`ai-doc/qa/QA-DEV-083-production-release-environment-integrity.md`。
 - Local evidence root：`output/release/dev-083/<release-id>/`；不得提交secret或generatedartifact。
 - Release evidence只有在使用者提出release型指令後產生；`RD Implementation Ready`不等於`Release Ready`。
-- Stop conditions：secret value/log exposure、dirty/unknown source、missing Level 2 artifact smoke、missing required Level 3、
-  missing production-bound candidate、candidate auto-activation、wrong target、hash mismatch、OAuth final target mismatch、
-  expired auth、canonical smoke fail。
+- 共用 stop conditions：secret exposure、unknown/unclassified source、wrong target、hash mismatch、必要部署憑證失效、canonical smoke fail。已有乾淨固定 artifact 時不因工作樹其他未納入變更而重建。
+- 保護路徑另需 Level 2、targeted Level 3、production-bound candidate 與 OAuth gates；candidate auto-activation 或缺必要證據即停止。快速路徑缺功能驗證只能標 feature-pending。
 - QC只執行驗證與蒐證，不修改產品或release scripts；失敗回送RD。
 - 本次永久 policy 僅適用 policy 明列的 DEV-083 retired credential set；不豁免新 project、新 credential generation、current credential active probe或其他 release stop conditions。
 

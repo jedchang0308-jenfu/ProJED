@@ -1,6 +1,6 @@
 # QA-DEV-121：OKR 父子任務樹狀對照與群組範圍
 
-- 狀態：`R29 Executed / Targeted QA PASS / QC Ready / NOT RELEASED`；R22～R23 Executed、R24 Executed、R25 Executed、R26 Executed、R27 Executed、R28 Executed baseline retained for regression traceability。
+- 狀態：`R38 Executed / Targeted QA PASS / QC Ready / NOT RELEASED`；R22～R23 Executed、R24 Executed、R25 Executed、R26 Executed、R27 Executed、R28 Executed baseline retained for regression traceability。
 - 對應 SPEC：[SPEC-121](../specs/SPEC-121-goal-hierarchy-comparison-grid.md)。
 - 對應 DEV：[DEV-121](../dev_task.md#dev-121okr-父子任務樹狀對照與群組範圍)。
 - 驗證角色：RD 先做同一 candidate self-test；QA 依本文件重跑；QC 只採信可追溯 artifact 與事實結果。
@@ -131,7 +131,7 @@ source 與 case 證據為準，避免用不穩定 wall-clock 門檻製造假失�
 | V17 | 從任務目的／會議紀錄 owner cell 反向定位後，樹線 active scope 的 task id 仍等於該 owner；不把 covered descendant 當成內容所有者。 |
 | V18 | 格線範圍符合最新 UI 契約：任務名稱欄無資料格線，其餘可捲動欄位完整顯示 cell grid，且 X-scroll owner 仍為 1。 |
 | V19 | idle 時所有 hierarchy levels 的 task-name cells computed background 只有一個值且為 `rgb(255, 255, 255)`；planning／content owner 定位色仍可見。 |
-| V20 | 定位／focus scope 下 task-name parent／descendant computed background 分別為 `rgba(199, 210, 254, 0.94)`／`rgba(224, 231, 255, 0.9)`；同一列 task-name／planning surface 不再使用額外 task-row 藍色。 |
+| V20 | 定位／focus scope 下 parent task-name 使用 `rgba(199, 210, 254, 0.94)`；descendant task-name／content cells 保留交錯 row surface，並以 task-name 左側 `3px` indigo marker 與 `font-weight: 600` 表達階層。 |
 
 視覺比較至少保存 normal、hover、keyboard focus、collapsed、X-scrolled、rowSpan editing／expanded、viewer、2x zoom
 截圖；每張標記 viewport、actor、case 與 source hash。
@@ -477,6 +477,48 @@ candidate metadata、case results、console／HTTP sweep 與命名 screenshots�
 - DEV-121 static 28/28；S16／V20 讀回父任務與子／後代任務只使用兩組 task-row blue：父任務 `rgba(199, 210, 254, 0.94)`、子／後代任務 `rgba(224, 231, 255, 0.9)`，同一層級的任務名稱與目的欄位一致。
 - Chromium B06／V15／V20 通過；parent、descendant、planning computed style 與上述色值一致，browser／HTTP／visible errors=0；代表截圖位於 `output/playwright/dev-121-goal-hierarchy-comparison/`。
 - `localhost:4000` 沿用既有 matching runtime，未停止非本任務程序；browser harness 已清理本次 task-owned surface。`npx tsc --noEmit`、targeted ESLint、`git diff --check` PASS。本機 candidate 維持 QC Ready，未 commit／push／PR／deploy／release。
+
+## 9.24 R32 Execution Record（2026-09-21）
+
+- DEV-121 static 28/28；S16／V20 改驗 parent surface 與 descendant 非填色 marker 契約：descendant task-name／content 背景為既有交錯 row surface，task-name 左側 marker 為 `rgba(99, 102, 241, 0.76)`、標題 `font-weight=600`。
+- Chromium V20 與 Goal empty-location targeted browser 通過；子任務目的／會議欄 scope 與自身文字維持，browser／HTTP／visible errors=0。
+- `localhost:4000` 沿用既有 matching runtime，未停止非本任務程序；未 commit／push／deploy／release。
+
+## 9.30 R38 Execution Record（2026-09-21）
+
+- DEV-121 static 28/28；S16／V13／V14 確認樹狀線 normal connector 為 `rgba(148, 163, 184, 0.28)`、active connector token 為 `rgb(100 116 139 / 56%)`，維持 rounded join 與 active relation geometry。
+- Goal empty-location targeted browser 通過；父子定位色、子任務目的／會議文字、content scope、任務標題原樣式與無 marker 契約維持，browser／HTTP／visible errors=0。
+- `localhost:4000` 沿用既有 matching runtime，未停止非本任務程序；未 commit／push／deploy／release。
+
+## 9.29 R37 Execution Record（2026-09-21；Superseded by R38）
+
+- DEV-121 static 28/28；S16／V20 確認子任務／後代定位 surface tint 由 `#E3F3F3` 再調淡兩階為 `#EDF8F8`，browser computed 為 `rgb(237, 248, 248)`；父任務仍為 `rgba(199, 210, 254, 0.94)`。
+- Goal empty-location targeted browser 通過；子任務目的／會議文字、content scope、任務標題原樣式與無 marker 契約維持，browser／HTTP／visible errors=0。
+- `localhost:4000` 沿用既有 matching runtime，未停止非本任務程序；未 commit／push／deploy／release。
+
+## 9.28 R36 Execution Record（2026-09-21；Superseded by R37）
+
+- DEV-121 static 28/28；S16／V20 確認子任務／後代定位 surface tint 由 `#D1E9E9` 調淡為 `#E3F3F3`，browser computed 為 `rgb(227, 243, 243)`；父任務仍為 `rgba(199, 210, 254, 0.94)`。
+- Goal empty-location targeted browser 通過；子任務目的／會議文字、content scope、任務標題原樣式與無 marker 契約維持，browser／HTTP／visible errors=0。
+- `localhost:4000` 沿用既有 matching runtime，未停止非本任務程序；未 commit／push／deploy／release。
+
+## 9.27 R35 Execution Record（2026-09-21；Superseded by R36）
+
+- DEV-121 static 28/28；S16／V20 確認子任務／後代定位 surface tint 使用指定色 `#D1E9E9`，browser computed 為 `rgb(209, 233, 233)`；父任務仍為 `rgba(199, 210, 254, 0.94)`。
+- Goal empty-location targeted browser 通過；子任務目的／會議文字、content scope、任務標題原樣式與無 marker 契約維持，browser／HTTP／visible errors=0。
+- `localhost:4000` 沿用既有 matching runtime，未停止非本任務程序；未 commit／push／deploy／release。
+
+## 9.26 R34 Execution Record（2026-09-21；Superseded by R35）
+
+- DEV-121 static 28/28；S16／V20 確認移除 Goal 對任務標題的額外顏色覆寫，子任務標題恢復原元件 `taskStatusTitleClass` 樣式，computed color 為 `oklch(0.279 0.041 260.031)`、字重 `500`。
+- Goal empty-location targeted browser 通過；父子淡藍色 surface tint、子任務目的／會議文字與 content scope 維持，browser／HTTP／visible errors=0。
+- `localhost:4000` 沿用既有 matching runtime，未停止非本任務程序；未 commit／push／deploy／release。
+
+## 9.25 R33 Execution Record（2026-09-21）
+
+- DEV-121 static 28/28；S16／V20 改驗 parent 與 descendant 使用兩組不同 surface tint：parent `rgba(199, 210, 254, 0.94)`、descendant `rgba(224, 242, 254, 0.92)`。
+- Chromium V20 與 Goal empty-location targeted browser 通過；子任務目的／會議欄仍保留 descendant scope 與自身文字，固定任務名稱欄不再有左側 marker 或加粗字重，browser／HTTP／visible errors=0。
+- `localhost:4000` 沿用既有 matching runtime，未停止非本任務程序；未 commit／push／deploy／release。
 
 ## 10. Pass／Fail／Stop
 

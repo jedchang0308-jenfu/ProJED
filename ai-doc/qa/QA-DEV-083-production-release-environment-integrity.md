@@ -5,6 +5,27 @@
 - 風險：Medium implementation／Lane 2 release
 - 執行邊界：P0＋P1 local gate已執行；本輪不執行遠端candidate或production activation
 
+## 2026-09-21 風險分級修訂驗收（DEV-083）
+
+本節與 SPEC-083／ADR-037 同步取代「所有發布均跑下列所有層」；後續既有 Level 2/3/candidate/OAuth/credential 案例屬保護路徑。快速發布仍共享 env/target/secret/artifact 保護，不因檢查變少而降低錯環境阻擋。
+
+本輪使用本機 dependency doubles 驗證 orchestration，所有 deploy／browser／provider 函式均替代為可觀察的本機函式，零遠端呼叫；不把它列為正式部署 PASS。
+
+| 案例 | 預期 |
+|---|---|
+| 合法 direct | 建置一次、artifact 驗證、先保存還原點、只呼叫 live deploy 一次、canonical 與 feature smoke；沒有 Level 3/local server/candidate/backend/OAuth gate |
+| reason 缺失、未知 phase、dirty source、build 中 HEAD 改變、artifact 不符、缺 live recovery | 在 deploy 前失敗；不留下 complete |
+| 有效 pinned manifest | 不重建、不把目前 HEAD 的其他修改放入 artifact |
+| 缺 feature smoke | 即使 canonical PASS，也只回 published / feature-pending / complete=false |
+| deploy／canonical／feature failure | 非零失敗或 throw、保存部署成功／不確定狀態及 previous live，complete=false |
+| verify-only | 只讀取同 release receipt 與重驗；build/deploy 呼叫皆為零，原始還原點不被目前 live 覆蓋 |
+| receipt 缺失、不符或普通重複 direct | 拒絕錯套 evidence／重複發布，先核對 live |
+| 保護路徑 Level 3 | 正確範圍成功證據可接受；commit-only、wrong commit/project/TEST ref/preview、FAIL 或錯誤計數不為零均拒絕 |
+
+驗證命令沿用 `npm run verify:dev-083-production-release-gate`。發布後才執行真實 canonical 與改動驗證；本輪不執行部署。
+
+RD 自我驗證（2026-09-21）：release gate 61/61 PASS、edge-key regression PASS、targeted ESLint／Node syntax／git diff whitespace PASS。涵蓋不確定部署的 verify-only 收斂及重驗失敗清除原 completion。這是本機 orchestration／negative tests 證據，未宣稱獨立 QC 或真實雲端發布通過。
+
 ## 1. 驗證目標與證據邊界
 
 證明production public env、server verification env、build artifact、inactive candidate與live production之間有明確
@@ -17,7 +38,7 @@ production-bound OAuth/candidate evidence不能被local或staging結果取代。
 |---|---|---|
 | 1 | source與pure fixtures | env isolation、secret boundary、phase state machine、negative tests |
 | 2 | exact sealed artifact | build result、manifest/tree hash、local browser app shell、asset與error sweep |
-| 3 | ADR-037 Level 3 | 同commit的ProJED-TEST/Firebase preview evidence或明確N/A rationale |
+| 3 | ADR-037 Level 3（保護路徑） | 同 commit 的 scoped TEST/HTTPS PASS；快速路徑不建立此證據 |
 | 4 | inactive production candidate | Firebase candidate URL、remote hash、release-meta、production Supabase OAuth cancel callback |
 | post | canonical production | HTTP/app shell/error sweep、remote hash、release-meta、OAuth callback與conditional authenticated smoke |
 
@@ -163,7 +184,7 @@ Activation後：
 - Source dirty/unknown、Level 3缺失、artifact mismatch、wrong target、OAuth mismatch：停止，不進下一phase。
 - Candidate驗證造成live變更：P0流程缺陷，回送RD，不可繼續activate。
 - Canonical smoke失敗：回送release gate決定rollback；QC不自行修改production。
-- 相同失敗修正後重跑最小受影響case；source/env/contract改變時，原artifact evidence全部失效並建立新release ID。
+- 相同失敗修正後重跑最小受影響 case；artifact 輸入或相關 env/contract 改變才重建及重驗其下游。固定 artifact 以外的文件／其他工作樹修改不使既有證據全部失效。
 
 ## 11. Evidence Layout 與QC回報
 
