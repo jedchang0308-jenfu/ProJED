@@ -49,7 +49,7 @@ const checks = [
     && shortcut.url === '/quick-task/'
     && shortcut.icons?.[0]?.sizes === '1024x1024'],
   ['quick-manifest-icon-metadata', distQuickManifest.id === '/quick-task/'
-    && distQuickManifest.icons?.every(icon => icon.src === '/icons/projed-quick-task-icon.png' && icon.sizes === '1024x1024' && icon.type === 'image/png')],
+    && distQuickManifest.icons?.every(icon => icon.src === '/icons/projed-quick-task-icon-brand-20260921.png' && icon.sizes === '1024x1024' && icon.type === 'image/png')],
   ['common-shell-meta-precache', sw.includes('app-shell-meta.json')],
   ['quick-denylist', sw.includes('quick-task(?:\\/|$)')],
   ['callback-query-normalization', sw.includes('capture') && sw.includes('claim') && sw.includes('install')],

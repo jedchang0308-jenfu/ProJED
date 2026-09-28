@@ -13,6 +13,9 @@ import { startVoiceCapture, type VoiceSession } from '../features/quickTaskCaptu
 import { flushQuickTaskOutbox } from '../features/quickTaskCapture/sync';
 import { installQuickReloadSafety } from '../features/quickTaskCapture/reloadSafety';
 import { installQuickInstallGuide } from '../features/quickTaskCapture/install';
+import { installAppIconRefresh } from '../services/appIconService';
+
+installAppIconRefresh('quick-task');
 
 const titleInput = document.querySelector<HTMLInputElement>('#quick-task-title');
 const form = document.querySelector<HTMLFormElement>('#quick-task-form');

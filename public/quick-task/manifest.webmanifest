@@ -6,11 +6,11 @@
   "lang": "zh-Hant",
   "start_url": "/quick-task/",
   "scope": "/quick-task/",
-  "display": "standalone",
+  "display": "minimal-ui",
   "background_color": "#f8fafc",
   "theme_color": "#0f766e",
   "icons": [
-    { "src": "/icons/projed-quick-task-icon.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" },
-    { "src": "/icons/projed-quick-task-icon.png", "sizes": "1024x1024", "type": "image/png", "purpose": "maskable" }
+    { "src": "/icons/projed-quick-task-icon-brand-20260921.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/projed-quick-task-icon-brand-20260921.png", "sizes": "1024x1024", "type": "image/png", "purpose": "maskable" }
   ]
 }

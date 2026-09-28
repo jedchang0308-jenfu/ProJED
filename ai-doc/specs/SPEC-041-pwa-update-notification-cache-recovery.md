@@ -661,3 +661,78 @@ readiness缺漏、登入或business storage異動、visible error／白畫面，
 - 若 worktree 有其他未提交變更，需先標示哪些是本 DEV 會觸碰的檔案。
 - 先讀 DEV-034 PWA install guidance，避免更新提示破壞安裝提示。
 - 先建立可測試的 update state injection 或 mock path，讓 browser verifier 能穩定觸發 `update-available`。
+
+## DEV-130 PWA 圖示更新 Chrome 交接 Addendum（2026-09-21）
+
+### 問題與決策
+
+Android Chrome 安裝版以 standalone 視窗開啟，不顯示網址列；要求使用者自行回到瀏覽器、重新輸入網址再找「檢閱應用程式更新」，會使圖示更新流程失敗。Chrome 仍要求使用者在瀏覽器介面核准 App identity 變更，網站不得代按，因此 DEV-130 將既有更新提示作為交接入口，不宣稱一鍵完成圖示變更。
+
+### 固定契約
+
+- 舊 Android Chrome standalone 於品牌圖示 revision `brand-20260921` 尚未完成時，顯示「更新桌面圖示／在 Chrome 繼續／稍後」。
+- 「在 Chrome 繼續」必須由使用者點擊直接啟動 `com.android.chrome`，開啟 canonical origin root，並帶 release-scoped query marker；Intent 必須包含同 URL 的 browser fallback。
+- Chrome 落地頁顯示「點右上角 ⋮，選『檢閱應用程式更新』，再點『更新』」與「完成」。完成是使用者自述，只負責停止此 revision 的提醒，不冒充瀏覽器核准回執。
+- `稍後`只在目前 session 隱藏；`完成`以 PWA-owned localStorage revision 隱藏。不得讀寫登入 token、業務資料或其他 owner storage。
+- 使用既有安裝紀錄的 `lastPromptedAt` 抑制圖示發布後的新安裝；缺少舊紀錄的 standalone 視為可能的 legacy install，允許顯示一次。
+- 一般 app-shell update、dirty reload、recovery exact visible set與優先序不變；當一般 update／recovery 可見時，它優先於 identity reminder。
+- 本 addendum 只允許 Android Chrome-specific transport detection，不延伸為 shortcut availability、pending identity update或實際核准狀態的推測。
+- 不改 manifest identity、icon URL、Service Worker lifecycle、資料庫、RLS、RPC、登入或帳號 storage。
+
+### 驗收與證據
+
+- Pure matrix：legacy standalone、非 standalone、非 Android Chrome、新安裝、已完成、同 session 稍後與 browser query landing。
+- Browser：390×844 standalone fixture 顯示單一交接主動作、Intent package／fallback／revision 正確且無 X overflow；browser landing guidance可完成並移除 query。
+- Regression：DEV-041／096 normal update與recovery prompt維持；TypeScript、targeted ESLint、production build及release gate通過。
+- Android 實際 Chrome 選單名稱與 identity approval仍屬 browser-owned UI；網站證據只驗證可到達 Chrome 與指引，不把瀏覽器外部核准記為自動 PASS。
+
+## DEV-130 Android standalone 選單可達性 Corrective Addendum（2026-09-22）
+
+### 正式缺陷與根因
+
+Android實機證明 `intent:` 即使指定 `com.android.chrome`，同網域URL仍可能留在目前WebAPK／standalone視窗；原流程因此顯示browser guidance，卻沒有Chrome工具列與三點選單。REL-006的browser fixture只驗證Intent字串與落地頁，未能證明Android Activity實際切換，原本的transport契約失效。
+
+### 修正契約
+
+- 主App與快速建立入口的manifest `display`改為`minimal-ui`，由瀏覽器提供固定title/origin bar與選單；`id`、`start_url`、`scope`、icon URL與帳號邊界不變。
+- 移除「在 Chrome 繼續」與self-targeted Chrome Intent，不再承諾網站能把同scope WebAPK強制搬到一般Chrome tab。
+- legacy standalone提示改為：若上方尚未出現選單，完全關閉後重開ProJED，再點上方選單 →「檢閱應用程式更新」→「更新」。
+- browser guidance只有在recognized revision query且目前不是standalone時成立；query仍落在standalone時必須回到installed-app guidance，不得冒充已進入browser。
+- guidance revision提升為`brand-20260921-menu-20260922`，讓曾完成或略過REL-006錯誤流程的舊安裝重新收到一次正確指引；新圖示發布後的新安裝仍以原發布時間抑制。
+- 一般app-shell update、recovery優先序、storage owner、登入、資料、Service Worker transaction皆不變。
+
+### 修正驗收
+
+- Pure：主／快速入口manifest皆為`minimal-ui`；standalone query不切成browser guidance；新版與REL-006 legacy query在非standalone皆可顯示browser guidance。
+- Browser 390×844：installed guidance含重開、上方選單與Chrome-owned action名稱；不存在「在 Chrome 繼續」；按鈕可操作、無X overflow；一般update／recovery優先序不變。
+- Production：canonical manifests readback為`minimal-ui`、source／artifact provenance一致、query landing與更新提示無critical error。
+- Android實機仍需確認WebAPK完成manifest refresh後出現minimal-ui選單；此項在使用者選擇直接正式測試時列為production observation，不以桌面fixture冒充。
+
+## DEV-130 Android WebAPK 更新提示矯正 Addendum（2026-09-24）
+
+### 實機反證與權威行為
+
+使用者已在Android Chrome一般分頁打開正式站，選單中有「開啟 ProJED 3.0｜專案管理系統」，卻沒有「檢閱應用程式更新」。前述將Chrome桌面版已安裝Web App的三點選單流程套用到Android，屬平台判斷錯誤；REL-007／008的頁面與瀏覽器fixture PASS不能證明該選項存在於Android。
+
+Chromium的[Android WebApkUpdateManager](https://chromium.googlesource.com/chromium/src/+/main/chrome/android/java/src/org/chromium/chrome/browser/webapps/WebApkUpdateManager.java)在WebAPK啟動後按其排程檢查manifest，遇到需使用者核准的圖示／名稱差異時顯示原生更新對話框；[桌面版manifest update流程](https://chromium.googlesource.com/experimental/chromium/src/+/refs/heads/main/chrome/browser/web_applications/docs/manifest_update_process.md)才在獨立App視窗顯示「Review App Update」選單，普通分頁不顯示。
+
+### 取代契約
+
+- Android installed-app提示改為說明Chrome定期在開啟App時檢查圖示；只有Chrome實際顯示更新確認時，才指示點「更新」。不再出現「開啟 Chrome 更新」或「檢閱應用程式更新」。
+- 舊bridge query仍可到達browser-guidance，但文案指出目前分頁沒有圖示更新選項，並引導使用者點Chrome選單中實際可見的「開啟 ProJED 3.0」返回App。bridge靜態URL保留給已部署舊版本的既有連結，不再作為新版主動作。
+- installed-app與browser-guidance只提供「知道了」確認；installed-app另保留「稍後」。確認只停止本站提醒，不代表WebAPK圖示已更新。
+- guidance revision提升，讓曾確認REL-008錯誤指引的舊安裝收到一次修正；manifest identity、icon URL、更新排程、登入、資料與既有PWA app-shell update／recovery流程不變。
+- Android是否跳出原生更新對話框取決於Chrome自身檢查、安裝狀態與圖示差異；網頁不得宣稱可直接呼叫或強制核准。
+
+### 驗收
+
+- Pure與390×844 browser fixture須確認新版沒有虛構選單／browser handoff、舊query可得到正確指引、提示可確認／稍後、無水平溢出、一般app-shell update／recovery優先序不變。
+- 正式站驗證必須證明新bundle文案／revision及既有bridge URL相容；Android原生對話框仍需實機證據，不得由HTTP 200或桌面browser fixture推定PASS。
+
+## DEV-130 既有 Android WebAPK 圖示實機失敗補正（2026-09-28）
+
+使用者在 `chrome://webapks` 看到更新 `Succeeded` 後，Android「應用程式資訊」仍顯示舊 J 圖示。此證據推翻「完成 Chrome 更新流程即可換圖」的交付假設；上方 2026-09-21～24 圖示提醒與操作指引契約僅作歷史紀錄，不再作為現行產品行為。
+
+- 現行 UI 只保留一般 Service Worker 網站版本更新／快取復原提示；不顯示「更新桌面圖示」提醒，不把按「知道了」、重新載入、等待或 Chrome `Succeeded` 當成 Android App 圖示已更新。
+- 主／快速入口固定採已發布的品牌 PNG 與版本化圖示 URL；manifest `id`、`start_url`、`scope` 維持。`minimal-ui` 與目前正式版對齊。舊 bridge URL 保留跳回 ProJED，但不再導入圖示更新 query 或指引。
+- 驗收分層：網站資產／新安裝提供新版圖示可由 manifest、HTTP 與新裝置驗證；**既有 WebAPK 套件換圖**只能由同一 Android 裝置的 App 資訊及桌面圖示判定。使用者不接受要求重新安裝、暫不採原生 App／受管理捷徑；在 Chrome 未提供可用機制之前，後者保持 FAIL／阻塞。

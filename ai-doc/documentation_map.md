@@ -1,5 +1,9 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-09-28（DEV-130 Android 圖示實機反證）
+
+Android「應用程式資訊」仍顯示舊 J，故 REL-009 的 Web 端 PASS 不可延伸為既有 WebAPK 圖示更換 PASS。本次補正移除誤導的站內更新圖示提醒，維持一般網站更新提示；正式版主／快速入口 manifest 與圖示資產需保持一致。任務狀態見 [DEV-130](dev_task.md#dev-130-補正紀錄---2026-09-28)，實機證據與驗收邊界見 [QA-DEV-130](qa/QA-DEV-130-pwa-identity-update-handoff.md)。
+
 ## Documentation Map Update - 2026-09-21（REL-006 DEV-121 / Production Verified with Scoped Feature Evidence）
 
 DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521` 以 release `20260921072547-f7bca7` 啟用至 Firebase canonical live；47 entries provenance、canonical app-shell smoke 與正式 CSS readback 通過。Direct receipt 保留 `feature-pending`，因既有 37-case fixture runner 是 localhost/local-test-only；同 commit 的 local Chromium 37/37 與 static 28/28 已通過，未建立或寫入 production fixture。完整證據見 [REL-006](release/REL-006-DEV-121-20260921.md)。

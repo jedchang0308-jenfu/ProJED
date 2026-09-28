@@ -6,12 +6,12 @@
   "lang": "zh-Hant",
   "start_url": "/",
   "scope": "/",
-  "display": "standalone",
+  "display": "minimal-ui",
   "background_color": "#f8fafc",
   "theme_color": "#0f766e",
   "icons": [
-    { "src": "/icons/projed-main-icon.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" },
-    { "src": "/icons/projed-main-icon.png", "sizes": "1024x1024", "type": "image/png", "purpose": "maskable" }
+    { "src": "/icons/projed-main-icon-brand-20260921.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/projed-main-icon-brand-20260921.png", "sizes": "1024x1024", "type": "image/png", "purpose": "maskable" }
   ],
   "shortcuts": [
     {
@@ -20,7 +20,7 @@
       "description": "直接輸入一筆待辦",
       "url": "/quick-task/",
       "icons": [
-        { "src": "/icons/projed-quick-task-icon.png", "sizes": "1024x1024", "type": "image/png" }
+        { "src": "/icons/projed-quick-task-icon-brand-20260921.png", "sizes": "1024x1024", "type": "image/png" }
       ]
     }
   ]
