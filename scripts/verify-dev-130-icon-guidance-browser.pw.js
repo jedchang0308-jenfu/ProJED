@@ -33,12 +33,8 @@ async (page) => {
     const manifest = await manifestResponse.json();
     if (manifest.id !== id || manifest.start_url !== id || manifest.scope !== id) failures.push(`${manifestPath} identity changed`);
     if (manifest.icons?.length !== 2 || manifest.icons.some(icon => icon.src !== iconPath)) failures.push(`${manifestPath} icon mismatch`);
-    const iconResponse = await page.request.get(`${origin}${iconPath}`);
-    if (!iconResponse.ok()) failures.push(`${iconPath} HTTP ${iconResponse.status()}`);
-    else {
-      const png = await iconResponse.body();
-      if (png[1] !== 80 || png[2] !== 78 || png[3] !== 71) failures.push(`${iconPath} is not PNG`);
-    }
+    // The release provenance gate verifies the complete icon bytes. This browser
+    // check only needs to confirm the manifest still points to that asset.
   }
 
   await page.goto(`${origin}/quick-task/`, { waitUntil: 'domcontentloaded' });
