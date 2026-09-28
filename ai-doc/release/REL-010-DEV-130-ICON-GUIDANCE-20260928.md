@@ -12,6 +12,8 @@
 
 正式網站停止顯示無法可靠完成的「更新桌面圖示」引導；舊 `pwa-update-bridge.html` 轉回主站，不再帶入舊提示 query。主程式與快速建立入口的 favicon、touch icon、manifest 統一引用定版青綠色圖示，manifest `id`、`start_url`、`scope` 不變。一般 Service Worker 網站版本更新與快取復原提示維持原有功能。未更動後端資料、認證或生產流量設定。
 
+本次 artifact 以 `持續優化3` 的最新開發基底封存，因此包含先前 REL-006 已發布的 DEV-121 Goal 顯示修復；REL-009 的獨立圖示 worktree 未包含那些提交。此差異未新增本輪 Goal 功能，登入後 Goal 畫面也未列入本輪正式站 smoke 的驗證範圍。
+
 ## 驗證與邊界
 
 - 本機：TypeScript、DEV-122/041/096 與 DEV-083 release gate、`build:test`、390×844 主／快速入口瀏覽器檢查 PASS。
