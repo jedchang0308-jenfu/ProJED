@@ -13,8 +13,8 @@ async (page) => {
 
   const targetUrl = page.url() && page.url() !== 'about:blank' ? page.url() : 'http://127.0.0.1:4174/';
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto(targetUrl, { waitUntil: 'networkidle' });
-  await page.waitForSelector('#root', { timeout: 15000 });
+  await page.goto(targetUrl, { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => Boolean(document.querySelector('#root')?.innerHTML.trim()), null, { timeout: 15000 });
   await page.waitForTimeout(2500);
 
   const result = await page.evaluate(async () => {
