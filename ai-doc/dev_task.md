@@ -6,6 +6,12 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 Cold start：先讀下方 `## 總任務清單`；需要特定 DEV 詳細歷史時，再搜尋
 `ai-doc/archived/dev_task_pm_updates_2026-07-15.md` 的 DEV ID 並只讀命中段落。
 
+## DEV-130 自願重新安裝補充 - 2026-09-28
+
+使用者更新決策：允許將「移除舊 App 後重新安裝」作為**自願選項**，不得自動解除安裝、強迫更新或反覆彈窗。主程式在 Android「設定中心 → 快速開啟」提供收合式引導，可選主程式／快速建待辦；快速入口在安裝說明頁提供自身的收合式引導。兩者均提醒先同步未完成的快速待辦與保存其他草稿，並提供保留安裝連結。舊 `appinstalled` localStorage 紀錄不得在解除安裝後誤判仍已安裝。網站不可保證既有 WebAPK 自動換圖；新安裝後桌面及 App 資訊的新圖示仍待 Android 實機確認。此補充取代下方「使用者不接受要求重新安裝」的歷史決策，不改寫當時驗證結果。
+
+本機證據：`npx tsc --noEmit`、targeted ESLint、`npm run build:test`、`scripts/verify-dev-130-optional-reinstall.ts` 與 390×844 主程式／快速入口瀏覽器操作 PASS；正式發布與 Android 解除安裝／重裝的結果尚未列為 PASS。契約見 [SPEC-041](specs/SPEC-041-pwa-update-notification-cache-recovery.md#dev-130-自願重新安裝圖示契約2026-09-28)，案例見 [QA-DEV-130](qa/QA-DEV-130-pwa-identity-update-handoff.md)。
+
 ## DEV-130 補正紀錄 - 2026-09-28
 
 Android Chrome 實機 `chrome://webapks` 顯示更新 `Succeeded`，但 Android「應用程式資訊」仍顯示舊 J 圖示；既有 WebAPK 圖示更換驗收判定 **未通過**。REL-009 僅證明網頁指引已發布，不證明系統 App 圖示已換。本站不再顯示「更新桌面圖示」提醒，也不把一般 PWA 網站更新稱為系統圖示更新；新版圖示資產與 manifest 維持供新安裝及 Chrome 後續自有更新機制使用。使用者明確不接受要求既有使用者重新安裝，且暫不採原生 App／受管理捷徑；因此不承諾現有 WebAPK 圖示可由網站一鍵變更。驗證見 [QA-DEV-130](qa/QA-DEV-130-pwa-identity-update-handoff.md)。
@@ -992,12 +998,12 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 正式 release：REL-005；canonical CSS asset `assets/main-CTgSoZBw.css` 45/45 provenance PASS，description／meeting quick-note production bundle readback 與 local Goal 定位 readback 均通過。
   - 計入交付：是（Goal-only visual correction；REL-005 production verified）。
 
-- ! DEV-130 [交付點] [阻塞] [P1] [Android WebAPK icon FAIL / Web guidance correction] PWA 圖示更新 Chrome 交接
+- ◇ DEV-130 [交付點] [驗證中] [P1] [Android WebAPK icon FAIL / optional reinstall guidance] PWA 圖示更新 Chrome 交接
   - 摘要：正式網站已提供新版青綠色主程式與快速建立圖示，但 Android 實機 `chrome://webapks` 顯示 `Succeeded` 後，「應用程式資訊」仍是舊 J；原定既有安裝圖示更新未通過。移除誤導的圖示更新提醒，保留一般網站版本更新與新安裝圖示資產。
   - 來源 ID：既有同 repo DEV-130／REL-009；使用者 2026-09-28 實機畫面、App 資訊回覆與「請依此執行」。
   - 父任務：DEV-041、DEV-096；相容 DEV-034、DEV-097、DEV-122。
-  - 下一步：網站補正已正式驗證；既有 Android WebAPK 換圖不得標記完成，除非同一裝置 App 資訊及桌面皆顯示新版。
-  - 阻塞 / 恢復條件：使用者不接受要求重新安裝，且暫不採原生 App／受管理捷徑；Chrome 未提供可由網站強制執行的圖示更換介面。
+  - 下一步：自願重新安裝引導本機已完成；正式發布後仍需同一 Android 裝置確認 App 資訊與桌面皆顯示新版，才能把實際換圖標記完成。
+  - 阻塞 / 恢復條件：使用者已改為接受**自由選擇**重新安裝，仍不接受強迫更新；Chrome 未提供可由網站強制執行的圖示更換介面。
   - 證據：[QA-DEV-130](qa/QA-DEV-130-pwa-identity-update-handoff.md)、`SPEC-041` DEV-130 addendum；原 REL-009 只驗證網站指引，Android 套件換圖實機 FAIL。
   - 計入交付：否（既有 Android WebAPK 圖示尚未更新）。
 

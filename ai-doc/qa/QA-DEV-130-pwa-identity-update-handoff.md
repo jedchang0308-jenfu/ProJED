@@ -101,3 +101,12 @@
 - sealed production release `20260924083403-ebcc33`：prepare Layer 2 本機 50/50 provenance 與 browser PASS；candidate <https://projed-cc78d--production-candidate-kbhim8hv.web.app> 50/50 provenance、browser、OAuth safe-cancel PASS，live 在候選期間未變。canonical <https://projed-cc78d.web.app/> source/release readback 正確、50/50 provenance、browser、OAuth safe-cancel PASS；root、quick route、兩份 manifest、`sw.js`、舊 bridge 端點均 HTTP 200。
 - canonical 390×844 舊 query 實測顯示「此分頁沒有圖示更新選項」與實機所見「開啟 ProJED 3.0」，沒有舊版錯誤選單文字，`scrollWidth/clientWidth=390/390`；「知道了」關閉提示並移除 query marker。正式 bundle 包含 installed-app 原生確認說明，不含「檢閱應用程式更新」。
 - 結論：`Production Web Behavior Verified / Android Native Dialog Physical Supplemental Not Verified`。Chrome 實際檢查時間、是否跳出原生圖示更新確認與使用者桌面圖示變更，不以瀏覽器模擬或 HTTP 檢查冒充實機通過。
+
+## 自願重新安裝引導驗證（2026-09-28）
+
+- 決策：重新安裝只作為使用者主動展開的選項；既有安裝者可保留舊圖示。不得將引導已發布當成 Android 圖示已變更。
+- O01：主程式 Android「設定中心 → 快速開啟」可主動展開並選主程式／快速入口；首次開啟收合。390×844 browser PASS，見 `output/playwright/dev130-optional/main-settings-390x844.png`。
+- O02：已安裝的快速入口預設仍可直接輸入任務，表單下方「安裝與圖示」連到 `?install=1`，再主動展開自身引導；首次開啟收合。390×844 browser PASS，見 `output/playwright/dev130-optional/quick-390x844.png`。
+- O03：browser 在 outbox 注入 1 筆未同步資料後，兩處均顯示「1 筆」與暫勿移除警示；讀取失敗文案採保守處理，也提供保存安裝連結及原帳號登入步驟。其他本機草稿仍需使用者自行確認，未宣稱可自動檢查所有資料。
+- O04：歷史 `installed=true` 且目前為 Android Chrome browser 時回復安裝指引；`minimal-ui` 時判已安裝。`scripts/verify-dev-130-optional-reinstall.ts` PASS。
+- O05：TypeScript、targeted ESLint（0 errors，既有 1 warning）、`npm run build:test`、DEV-122／034／041／096 靜態回歸及 `git diff --check` PASS。正式部署與 Android 實機移除／重裝圖示仍待獨立證據。

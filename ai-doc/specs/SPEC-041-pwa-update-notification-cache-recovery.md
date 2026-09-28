@@ -736,3 +736,13 @@ Chromium的[Android WebApkUpdateManager](https://chromium.googlesource.com/chrom
 - 現行 UI 只保留一般 Service Worker 網站版本更新／快取復原提示；不顯示「更新桌面圖示」提醒，不把按「知道了」、重新載入、等待或 Chrome `Succeeded` 當成 Android App 圖示已更新。
 - 主／快速入口固定採已發布的品牌 PNG 與版本化圖示 URL；manifest `id`、`start_url`、`scope` 維持。`minimal-ui` 與目前正式版對齊。舊 bridge URL 保留跳回 ProJED，但不再導入圖示更新 query 或指引。
 - 驗收分層：網站資產／新安裝提供新版圖示可由 manifest、HTTP 與新裝置驗證；**既有 WebAPK 套件換圖**只能由同一 Android 裝置的 App 資訊及桌面圖示判定。使用者不接受要求重新安裝、暫不採原生 App／受管理捷徑；在 Chrome 未提供可用機制之前，後者保持 FAIL／阻塞。
+
+## DEV-130 自願重新安裝圖示契約（2026-09-28）
+
+使用者已修正決策：允許把重新安裝當作**可自由選擇**的換圖方式。上一節的拒絕重新安裝是當時歷史判斷，不再限制此選用入口。網站不得自動卸載、導向或聲稱一鍵換掉 Android WebAPK 圖示；不選擇的人可繼續使用舊圖示與原有功能。
+
+- 主程式只在 Android 設定中心的「App 安裝與快速開啟」顯示收合式「自行更新桌面圖示（選用）」；已安裝的快速入口在輸入表單下方提供小型「安裝與圖示」連結，進入 `?install=1` 說明頁才顯示自身收合式選項。任何頁面初次開啟均不自動展開或跳出阻擋式提示。
+- 引導前先讀本裝置所有帳號／未綁定的快速待辦 outbox，凡未標為 `synced` 均計入警示；讀取失敗時保守提醒暫勿移除。其他未儲存草稿由使用者確認，網站不推定其已同步。
+- 使用者先以系統分享或複製保存當前入口安裝連結，再**自行**到 Android 設定解除安裝要換圖示的 App。主程式與快速入口分開選擇；僅換其中一個時不要求移除另一個。從保留的連結以 Chrome 重新安裝，登入原 ProJED 帳號。
+- `appinstalled` 留下的 localStorage `installed=true` 僅是歷史訊號。當前 `standalone`／`minimal-ui`／`fullscreen` 顯示模式才可判定已在 App；解除安裝後的普通 Android Chrome 分頁應重新顯示安裝指引。
+- 不新增 server API、資料 migration、Service Worker 更新控制或圖示版本；既有主／快速入口 manifest 與圖示保持不變。網站可驗證引導與資產，實際新 WebAPK 圖示仍以同一 Android 裝置的 App 資訊及桌面結果驗收。

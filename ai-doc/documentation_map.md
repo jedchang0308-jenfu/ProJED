@@ -1,5 +1,9 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-09-28（DEV-130 自願重新安裝）
+
+使用者已選擇讓 Android 使用者自行決定是否移除舊 App 並重新安裝新版圖示。主程式與快速入口的收合式引導、未同步快速待辦警示、安裝連結及舊安裝紀錄回復路徑，見 [DEV-130](dev_task.md#dev-130-自願重新安裝補充---2026-09-28)、[SPEC-041](specs/SPEC-041-pwa-update-notification-cache-recovery.md#dev-130-自願重新安裝圖示契約2026-09-28) 與 [QA-DEV-130](qa/QA-DEV-130-pwa-identity-update-handoff.md)。本機驗證通過；正式站與 Android 重裝後圖示仍須分開驗證。
+
 ## Documentation Map Update - 2026-09-28（DEV-130 Android 圖示實機反證）
 
 Android「應用程式資訊」仍顯示舊 J，故 REL-009 的 Web 端 PASS 不可延伸為既有 WebAPK 圖示更換 PASS。本次補正移除誤導的站內更新圖示提醒，維持一般網站更新提示；正式版主／快速入口 manifest 與圖示資產需保持一致。任務狀態見 [DEV-130](dev_task.md#dev-130-補正紀錄---2026-09-28)，實機證據與驗收邊界見 [QA-DEV-130](qa/QA-DEV-130-pwa-identity-update-handoff.md)，正式站發布與回復基準見 [REL-010](release/REL-010-DEV-130-ICON-GUIDANCE-20260928.md)。

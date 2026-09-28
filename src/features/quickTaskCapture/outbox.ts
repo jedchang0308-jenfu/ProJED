@@ -67,6 +67,11 @@ export const listQuickCaptures = async (accountId: string | null, includeUnbound
 
 export const countPendingQuickCaptures = async (accountId: string | null) => (await listQuickCaptures(accountId)).filter(record => record.state !== 'synced').length;
 
+export const countAllPendingQuickCaptures = async () => {
+  const records = await transaction<QuickCaptureRecord[]>('readonly', store => store.getAll());
+  return (records ?? []).filter(record => record.state !== 'synced').length;
+};
+
 export const updateQuickCapture = async (captureId: string, update: Partial<QuickCaptureRecord>, expectedLeaseId?: string | null) => {
   const db = await openDatabase();
   return new Promise<QuickCaptureRecord | null>((resolve, reject) => {

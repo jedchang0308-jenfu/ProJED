@@ -22,6 +22,7 @@ import { toast } from '../store/useToastStore';
 import useAuthStore from '../store/useAuthStore';
 import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
+import { OptionalIconReinstallGuide } from './OptionalIconReinstallGuide';
 
 type AppInstallAssistantProps = {
   mode?: 'auto' | 'settings';
@@ -68,6 +69,13 @@ const getGuidance = (context: PwaInstallContext) => {
         badge: 'Android',
         title: '加入手機桌面',
         description: '之後可直接點 ProJED 圖示快速記事。',
+      };
+    case 'android-browser':
+      return {
+        icon: Smartphone,
+        badge: 'Android',
+        title: '從 Chrome 安裝',
+        description: '點 Chrome 的 ⋮，選「安裝應用程式」或「安裝並建立捷徑」。',
       };
     case 'desktop-installable':
       return {
@@ -231,6 +239,7 @@ export const AppInstallAssistant: React.FC<AppInstallAssistantProps> = ({ mode =
         <div className="grid gap-4 p-4 lg:grid-cols-[1fr_260px]">
           <div className="space-y-5">
             <AppInstallContent context={context} />
+            <OptionalIconReinstallGuide />
             <div className="rounded-lg border border-teal-200 bg-teal-50 p-4" data-quick-task-install-cta="true">
               <div className="text-sm font-bold text-teal-900">快速建待辦</div>
               <p className="mt-1 text-sm leading-6 text-teal-800">安裝 ProJED 後，支援的平台可從 ProJED 圖示選「快速建待辦」；需要桌面單鍵入口，也可安裝獨立圖示。</p>
