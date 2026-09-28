@@ -109,4 +109,5 @@
 - O02：已安裝的快速入口預設仍可直接輸入任務，表單下方「安裝與圖示」連到 `?install=1`，再主動展開自身引導；首次開啟收合。390×844 browser PASS，見 `output/playwright/dev130-optional/quick-390x844.png`。
 - O03：browser 在 outbox 注入 1 筆未同步資料後，兩處均顯示「1 筆」與暫勿移除警示；讀取失敗文案採保守處理，也提供保存安裝連結及原帳號登入步驟。其他本機草稿仍需使用者自行確認，未宣稱可自動檢查所有資料。
 - O04：歷史 `installed=true` 且目前為 Android Chrome browser 時回復安裝指引；`minimal-ui` 時判已安裝。`scripts/verify-dev-130-optional-reinstall.ts` PASS。
-- O05：TypeScript、targeted ESLint（0 errors，既有 1 warning）、`npm run build:test`、DEV-122／034／041／096 靜態回歸及 `git diff --check` PASS。正式部署與 Android 實機移除／重裝圖示仍待獨立證據。
+- O05：TypeScript、targeted ESLint（0 errors，既有 1 warning）、`npm run build:test`、DEV-122／034／041／096 靜態回歸及 `git diff --check` PASS。
+- O06：正式 release `20260928064049-735933` 已發布；50/50 provenance、通用 smoke、390×844 快速入口選用引導與零 critical page error PASS。正式主程式設定頁未以真實帳號直接操作；依本機已驗畫面與正式 artifact 一致性作界定。Android 實機移除／重裝後的桌面與 App 資訊新圖示仍 Pending；詳見 [REL-011](../release/REL-011-DEV-130-OPTIONAL-REINSTALL-20260928.md)。

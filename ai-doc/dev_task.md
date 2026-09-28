@@ -10,7 +10,7 @@ Cold start：先讀下方 `## 總任務清單`；需要特定 DEV 詳細歷史�
 
 使用者更新決策：允許將「移除舊 App 後重新安裝」作為**自願選項**，不得自動解除安裝、強迫更新或反覆彈窗。主程式在 Android「設定中心 → 快速開啟」提供收合式引導，可選主程式／快速建待辦；快速入口在安裝說明頁提供自身的收合式引導。兩者均提醒先同步未完成的快速待辦與保存其他草稿，並提供保留安裝連結。舊 `appinstalled` localStorage 紀錄不得在解除安裝後誤判仍已安裝。網站不可保證既有 WebAPK 自動換圖；新安裝後桌面及 App 資訊的新圖示仍待 Android 實機確認。此補充取代下方「使用者不接受要求重新安裝」的歷史決策，不改寫當時驗證結果。
 
-本機證據：`npx tsc --noEmit`、targeted ESLint、`npm run build:test`、`scripts/verify-dev-130-optional-reinstall.ts` 與 390×844 主程式／快速入口瀏覽器操作 PASS；正式發布與 Android 解除安裝／重裝的結果尚未列為 PASS。契約見 [SPEC-041](specs/SPEC-041-pwa-update-notification-cache-recovery.md#dev-130-自願重新安裝圖示契約2026-09-28)，案例見 [QA-DEV-130](qa/QA-DEV-130-pwa-identity-update-handoff.md)。
+本機證據：`npx tsc --noEmit`、targeted ESLint、`npm run build:test`、`scripts/verify-dev-130-optional-reinstall.ts` 與 390×844 主程式／快速入口瀏覽器操作 PASS。正式站 release `20260928064049-735933` 的 50/50 provenance、通用 smoke 與 390×844 快速入口選用引導 PASS；Android 解除安裝／重裝後的系統圖示尚未列為 PASS。契約見 [SPEC-041](specs/SPEC-041-pwa-update-notification-cache-recovery.md#dev-130-自願重新安裝圖示契約2026-09-28)，案例見 [QA-DEV-130](qa/QA-DEV-130-pwa-identity-update-handoff.md)，正式發布見 [REL-011](release/REL-011-DEV-130-OPTIONAL-REINSTALL-20260928.md)。
 
 ## DEV-130 補正紀錄 - 2026-09-28
 
@@ -1002,9 +1002,9 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 摘要：正式網站已提供新版青綠色主程式與快速建立圖示，但 Android 實機 `chrome://webapks` 顯示 `Succeeded` 後，「應用程式資訊」仍是舊 J；原定既有安裝圖示更新未通過。移除誤導的圖示更新提醒，保留一般網站版本更新與新安裝圖示資產。
   - 來源 ID：既有同 repo DEV-130／REL-009；使用者 2026-09-28 實機畫面、App 資訊回覆與「請依此執行」。
   - 父任務：DEV-041、DEV-096；相容 DEV-034、DEV-097、DEV-122。
-  - 下一步：自願重新安裝引導本機已完成；正式發布後仍需同一 Android 裝置確認 App 資訊與桌面皆顯示新版，才能把實際換圖標記完成。
+  - 下一步：自願重新安裝引導已發布；仍需同一 Android 裝置確認 App 資訊與桌面皆顯示新版，才能把實際換圖標記完成。
   - 阻塞 / 恢復條件：使用者已改為接受**自由選擇**重新安裝，仍不接受強迫更新；Chrome 未提供可由網站強制執行的圖示更換介面。
-  - 證據：[QA-DEV-130](qa/QA-DEV-130-pwa-identity-update-handoff.md)、`SPEC-041` DEV-130 addendum；原 REL-009 只驗證網站指引，Android 套件換圖實機 FAIL。
+  - 證據：[QA-DEV-130](qa/QA-DEV-130-pwa-identity-update-handoff.md)、`SPEC-041` DEV-130 addendum、[REL-011](release/REL-011-DEV-130-OPTIONAL-REINSTALL-20260928.md)；Android 套件換圖仍待重裝後實機證據。
   - 計入交付：否（既有 Android WebAPK 圖示尚未更新）。
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
