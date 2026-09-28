@@ -2,7 +2,7 @@
 
 ## Documentation Map Update - 2026-09-28（DEV-130 Android 圖示實機反證）
 
-Android「應用程式資訊」仍顯示舊 J，故 REL-009 的 Web 端 PASS 不可延伸為既有 WebAPK 圖示更換 PASS。本次補正移除誤導的站內更新圖示提醒，維持一般網站更新提示；正式版主／快速入口 manifest 與圖示資產需保持一致。任務狀態見 [DEV-130](dev_task.md#dev-130-補正紀錄---2026-09-28)，實機證據與驗收邊界見 [QA-DEV-130](qa/QA-DEV-130-pwa-identity-update-handoff.md)。
+Android「應用程式資訊」仍顯示舊 J，故 REL-009 的 Web 端 PASS 不可延伸為既有 WebAPK 圖示更換 PASS。本次補正移除誤導的站內更新圖示提醒，維持一般網站更新提示；正式版主／快速入口 manifest 與圖示資產需保持一致。任務狀態見 [DEV-130](dev_task.md#dev-130-補正紀錄---2026-09-28)，實機證據與驗收邊界見 [QA-DEV-130](qa/QA-DEV-130-pwa-identity-update-handoff.md)，正式站發布與回復基準見 [REL-010](release/REL-010-DEV-130-ICON-GUIDANCE-20260928.md)。
 
 ## Documentation Map Update - 2026-09-21（REL-006 DEV-121 / Production Verified with Scoped Feature Evidence）
 

@@ -10,6 +10,8 @@ Cold start：先讀下方 `## 總任務清單`；需要特定 DEV 詳細歷史�
 
 Android Chrome 實機 `chrome://webapks` 顯示更新 `Succeeded`，但 Android「應用程式資訊」仍顯示舊 J 圖示；既有 WebAPK 圖示更換驗收判定 **未通過**。REL-009 僅證明網頁指引已發布，不證明系統 App 圖示已換。本站不再顯示「更新桌面圖示」提醒，也不把一般 PWA 網站更新稱為系統圖示更新；新版圖示資產與 manifest 維持供新安裝及 Chrome 後續自有更新機制使用。使用者明確不接受要求既有使用者重新安裝，且暫不採原生 App／受管理捷徑；因此不承諾現有 WebAPK 圖示可由網站一鍵變更。驗證見 [QA-DEV-130](qa/QA-DEV-130-pwa-identity-update-handoff.md)。
 
+網站補正已由 clean source `baeb2390cce3e1b0d854dd067528b01523800307` 發布至 Firebase Hosting 正式站 `projed-cc78d`，release ID `20260928034535-d4c2ec`。50/50 遠端檔案一致性、通用瀏覽器及 390×844 圖示專項檢查均 PASS；驗證腳本的兩項穩定性補正見後續 commit `a18f133`、`e066edd`，未重複部署。詳見 [REL-010](release/REL-010-DEV-130-ICON-GUIDANCE-20260928.md)。
+
 ## Release update - 2026-09-15（REL-001）
 
 DEV-119～DEV-123 已由 source commit `3e21b862c58a9952c4207b6d53904915a530bfcd` 啟用至正式站，release ID 為 `20260915032709-a1b629`。正式 migration、Edge Functions、sealed frontend artifact、Level 3、candidate、canonical browser smoke 與 OAuth safe-cancel 均有獨立證據，詳見 [REL-001 release record](release/REL-001-DEV-119-123-20260915.md)。
@@ -994,7 +996,7 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 摘要：正式網站已提供新版青綠色主程式與快速建立圖示，但 Android 實機 `chrome://webapks` 顯示 `Succeeded` 後，「應用程式資訊」仍是舊 J；原定既有安裝圖示更新未通過。移除誤導的圖示更新提醒，保留一般網站版本更新與新安裝圖示資產。
   - 來源 ID：既有同 repo DEV-130／REL-009；使用者 2026-09-28 實機畫面、App 資訊回覆與「請依此執行」。
   - 父任務：DEV-041、DEV-096；相容 DEV-034、DEV-097、DEV-122。
-  - 下一步：驗證本次網頁補正與正式站圖示資產；既有 Android WebAPK 換圖不得標記完成，除非同一裝置 App 資訊及桌面皆顯示新版。
+  - 下一步：網站補正已正式驗證；既有 Android WebAPK 換圖不得標記完成，除非同一裝置 App 資訊及桌面皆顯示新版。
   - 阻塞 / 恢復條件：使用者不接受要求重新安裝，且暫不採原生 App／受管理捷徑；Chrome 未提供可由網站強制執行的圖示更換介面。
   - 證據：[QA-DEV-130](qa/QA-DEV-130-pwa-identity-update-handoff.md)、`SPEC-041` DEV-130 addendum；原 REL-009 只驗證網站指引，Android 套件換圖實機 FAIL。
   - 計入交付：否（既有 Android WebAPK 圖示尚未更新）。

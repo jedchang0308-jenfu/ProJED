@@ -7,6 +7,7 @@
 - 新版主／快速入口 manifest、瀏覽器 favicon、Apple touch icon 與對應 PNG 均引用相同的定版資產；`id`、`start_url`、`scope` 不變。這只能證明網站可提供新版圖示，不能證明既有 Android WebAPK 套件圖示已更換。
 - 實機 FAIL 在 Chrome-owned 套件層；若未來再次宣稱既有使用者圖示已更新，必須以同一台 Android 的「應用程式資訊」新版圖示與桌面新版圖示作為證據。不得以 manifest、bundle、Chrome `Succeeded` 或瀏覽器截圖代替。
 - 本機補正驗證：TypeScript、DEV-122/041/096 與 DEV-083 release gate 通過；`build:test` 通過。390×844 瀏覽器 smoke 驗證主／快速入口皆載入新版 icon、兩個 manifest 身分不變、舊 query 不再顯示圖示更新誤導、無水平溢出與 page error。畫面留存於 `output/playwright/dev083-direct-feature/`；此結果不等於 Android WebAPK 套件圖示已更新。
+- 正式站補正結果（2026-09-28）：`https://projed-cc78d.web.app/` 已發布 release `20260928034535-d4c2ec`，source `baeb2390cce3e1b0d854dd067528b01523800307`。50/50 immutable artifact provenance、通用 app shell 瀏覽器 smoke、390×844 主／快速入口與舊 bridge 網址專項 smoke 均 PASS；無 page error 或水平溢出。第一次通用 smoke 的 `networkidle` 超時及第一次完整重驗的大圖檔重複下載超時屬驗證腳本穩定性問題，分別在 `a18f133`、`e066edd` 修正後，對同一已發布 artifact 執行 `--verify-only` 完成，未再次部署。發行 receipt：`output/release/dev-083/20260928034535-d4c2ec/direct-evidence.json`。網站補正 PASS；既有 Android WebAPK icon 仍 FAIL。
 
 ## 範圍
 
