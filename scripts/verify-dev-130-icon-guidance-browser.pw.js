@@ -20,19 +20,19 @@ async (page) => {
   if (/更新桌面圖示|檢閱應用程式更新|重新安裝/.test(rootView.text)) failures.push('obsolete icon update instruction is visible');
   if (rootView.identityGuidance !== 0) failures.push('obsolete identity reminder is mounted');
   if (rootView.width > rootView.viewport + 1) failures.push('mobile root has horizontal overflow');
-  if (!rootView.favicon?.includes('/icons/projed-main-icon-brand-20260921.png')) failures.push('root favicon is not the brand asset');
+  if (!rootView.favicon?.includes('/icons/projed-main-icon-brand-20260929-512.png')) failures.push('root favicon is not the brand asset');
   await page.screenshot({ path: 'output/playwright/dev083-direct-feature/dev130-root-390x844.png' });
 
   const paths = [
-    ['/manifest.webmanifest', '/icons/projed-main-icon-brand-20260921.png', '/'],
-    ['/quick-task/manifest.webmanifest', '/icons/projed-quick-task-icon-brand-20260921.png', '/quick-task/'],
+    ['/manifest.webmanifest', '/icons/projed-main-icon-brand-20260929-512.png', '/'],
+    ['/quick-task/manifest.webmanifest', '/icons/projed-quick-task-icon-brand-20260929-512.png', '/quick-task/'],
   ];
   for (const [manifestPath, iconPath, id] of paths) {
     const manifestResponse = await page.request.get(`${origin}${manifestPath}`);
     if (!manifestResponse.ok()) { failures.push(`${manifestPath} HTTP ${manifestResponse.status()}`); continue; }
     const manifest = await manifestResponse.json();
     if (manifest.id !== id || manifest.start_url !== id || manifest.scope !== id) failures.push(`${manifestPath} identity changed`);
-    if (manifest.icons?.length !== 2 || manifest.icons.some(icon => icon.src !== iconPath)) failures.push(`${manifestPath} icon mismatch`);
+    if (manifest.icons?.length !== 3 || !manifest.icons.some(icon => icon.src === iconPath && icon.sizes === '512x512')) failures.push(`${manifestPath} icon mismatch`);
     // The release provenance gate verifies the complete icon bytes. This browser
     // check only needs to confirm the manifest still points to that asset.
   }
@@ -44,7 +44,7 @@ async (page) => {
     viewport: document.documentElement.clientWidth,
     titleInput: Boolean(document.querySelector('#quick-task-title')),
   }));
-  if (!quickView.favicon?.includes('/icons/projed-quick-task-icon-brand-20260921.png')) failures.push('quick favicon is not the brand asset');
+  if (!quickView.favicon?.includes('/icons/projed-quick-task-icon-brand-20260929-512.png')) failures.push('quick favicon is not the brand asset');
   if (!quickView.titleInput) failures.push('quick task entry is missing');
   if (quickView.width > quickView.viewport + 1) failures.push('mobile quick task has horizontal overflow');
   await page.screenshot({ path: 'output/playwright/dev083-direct-feature/dev130-quick-390x844.png' });

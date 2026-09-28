@@ -44,7 +44,7 @@ const quickManifest = JSON.parse(quickManifestSource) as {
 const distRootManifest = existsSync(resolve('dist/manifest.webmanifest'))
   ? JSON.parse(read('dist/manifest.webmanifest')) as typeof rootManifest
   : null;
-const shortcutIconPath = resolve('public/icons/projed-quick-task-icon-brand-20260921.png');
+const shortcutIconPath = resolve('public/icons/projed-quick-task-icon-brand-20260929-512.png');
 const shortcutIcon = readFileSync(shortcutIconPath);
 const shortcutIconDimensions = shortcutIcon.length >= 24 && shortcutIcon.subarray(1, 4).toString('ascii') === 'PNG'
   ? { width: shortcutIcon.readUInt32BE(16), height: shortcutIcon.readUInt32BE(20) }
@@ -71,9 +71,10 @@ check('S02', !quickMain.includes("from '../App'") && !quickMain.includes("from '
 check('S03', quickManifest.id === '/quick-task/'
   && quickManifest.start_url === '/quick-task/'
   && quickManifest.scope === '/quick-task/'
-  && quickManifest.icons?.every(icon => icon.src === '/icons/projed-quick-task-icon-brand-20260921.png' && icon.sizes === '1024x1024' && icon.type === 'image/png')
-  && shortcutIconDimensions?.width === 1024
-  && shortcutIconDimensions.height === 1024
+  && quickManifest.icons?.some(icon => icon.src === '/icons/projed-quick-task-icon-brand-20260929-192.png' && icon.sizes === '192x192' && icon.type === 'image/png')
+  && quickManifest.icons?.some(icon => icon.src === '/icons/projed-quick-task-icon-brand-20260929-512.png' && icon.sizes === '512x512' && icon.type === 'image/png')
+  && shortcutIconDimensions?.width === 512
+  && shortcutIconDimensions.height === 512
   && vite.includes("quickTask: 'quick-task/index.html'")
   && quickHtml.includes('data-quick-install="true"'));
 check('S04', vite.includes("/^\\/quick-task(?:\\/|$)/")
@@ -105,10 +106,9 @@ check('S15', rootManifest.id === '/'
   && quickShortcut.short_name === '建待辦'
   && quickShortcut.description === '直接輸入一筆待辦'
   && quickShortcut.url === '/quick-task/'
-  && quickShortcut.icons?.length === 1
-  && quickShortcut.icons[0]?.src === '/icons/projed-quick-task-icon-brand-20260921.png'
-  && quickShortcut.icons[0]?.sizes === '1024x1024'
-  && quickShortcut.icons[0]?.type === 'image/png'
+  && quickShortcut.icons?.length === 2
+  && quickShortcut.icons.some(icon => icon.src === '/icons/projed-quick-task-icon-brand-20260929-192.png' && icon.sizes === '192x192' && icon.type === 'image/png')
+  && quickShortcut.icons.some(icon => icon.src === '/icons/projed-quick-task-icon-brand-20260929-512.png' && icon.sizes === '512x512' && icon.type === 'image/png')
   && (rootHtml.match(/rel=["']manifest["']/gu) ?? []).length === 1
   && rootHtml.includes('href="/manifest.webmanifest"')
   && vite.includes('manifest: false')

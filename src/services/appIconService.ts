@@ -1,8 +1,8 @@
 export type AppIconIdentity = 'main' | 'quick-task';
 
 const ICON_PATHS: Record<AppIconIdentity, string> = {
-  main: '/icons/projed-main-icon-brand-20260921.png',
-  'quick-task': '/icons/projed-quick-task-icon-brand-20260921.png',
+  main: '/icons/projed-main-icon-brand-20260929-512.png',
+  'quick-task': '/icons/projed-quick-task-icon-brand-20260929-512.png',
 };
 
 const iconVersion = import.meta.env.VITE_PROJED_RELEASE_ID?.trim() || 'local';

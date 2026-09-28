@@ -6,6 +6,12 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 Cold start：先讀下方 `## 總任務清單`；需要特定 DEV 詳細歷史時，再搜尋
 `ai-doc/archived/dev_task_pm_updates_2026-07-15.md` 的 DEV ID 並只讀命中段落。
 
+## DEV-130 Android 主程式重裝失敗修復 - 2026-09-29
+
+使用者已在 Android 設定解除安裝 ProJED 主程式，重新開啟正式站時，Chrome「安裝並建立捷徑」顯示「無法安裝這個應用程式」，僅提供「建立捷徑」。因此 REL-011 的選用重新安裝流程在此裝置 **FAIL**；不可把捷徑說成已安裝的 WebAPK。調查發現兩份正式 manifest 只有 1024×1024 圖示，缺少 Chromium 安裝建議的 192×192 與 512×512 `any` 尺寸。此為可修正的安裝相容性缺口，尚未證明是手機失敗的唯一原因。
+
+修復範圍：由已定案的品牌圖產生主程式／快速入口各 192 與 512 PNG；兩份 manifest、主程式 shortcut、HTML、執行時 favicon 指向同版資產，保持各自 `id`／`start_url`／`scope` 與選用重裝規則。需驗證 PNG 真實尺寸、建置產物一致性、桌面 Chrome installability 診斷與正式 HTTPS readback；Android 原生 WebAPK 是否可安裝仍須使用者在同一手機重試，不以桌面診斷冒充實機 PASS。詳見 [SPEC-041](specs/SPEC-041-pwa-update-notification-cache-recovery.md#dev-130-android-重新安裝失敗修復2026-09-29) 與 [QA-DEV-130](qa/QA-DEV-130-pwa-identity-update-handoff.md)。
+
 ## DEV-130 自願重新安裝補充 - 2026-09-28
 
 使用者更新決策：允許將「移除舊 App 後重新安裝」作為**自願選項**，不得自動解除安裝、強迫更新或反覆彈窗。主程式在 Android「設定中心 → 快速開啟」提供收合式引導，可選主程式／快速建待辦；快速入口在安裝說明頁提供自身的收合式引導。兩者均提醒先同步未完成的快速待辦與保存其他草稿，並提供保留安裝連結。舊 `appinstalled` localStorage 紀錄不得在解除安裝後誤判仍已安裝。網站不可保證既有 WebAPK 自動換圖；新安裝後桌面及 App 資訊的新圖示仍待 Android 實機確認。此補充取代下方「使用者不接受要求重新安裝」的歷史決策，不改寫當時驗證結果。

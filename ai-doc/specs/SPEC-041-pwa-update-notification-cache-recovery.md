@@ -746,3 +746,11 @@ Chromium的[Android WebApkUpdateManager](https://chromium.googlesource.com/chrom
 - 使用者先以系統分享或複製保存當前入口安裝連結，再**自行**到 Android 設定解除安裝要換圖示的 App。主程式與快速入口分開選擇；僅換其中一個時不要求移除另一個。從保留的連結以 Chrome 重新安裝，登入原 ProJED 帳號。
 - `appinstalled` 留下的 localStorage `installed=true` 僅是歷史訊號。當前 `standalone`／`minimal-ui`／`fullscreen` 顯示模式才可判定已在 App；解除安裝後的普通 Android Chrome 分頁應重新顯示安裝指引。
 - 不新增 server API、資料 migration、Service Worker 更新控制或圖示版本；既有主／快速入口 manifest 與圖示保持不變。網站可驗證引導與資產，實際新 WebAPK 圖示仍以同一 Android 裝置的 App 資訊及桌面結果驗收。
+
+## DEV-130 Android 重新安裝失敗修復（2026-09-29）
+
+使用者移除舊主程式後，Android Chrome 的原生安裝畫面仍顯示「無法安裝這個應用程式」。2026-09-28 的「保持圖示不變」限制被本次同任務修復取代；品牌圖案與自願重裝原則保持不變。網站只能修正自己的 manifest 與圖片，不能保證 Chrome／Google WebAPK 服務一定完成原生安裝。
+
+- 主程式與快速入口的 manifest 各列 192×192、512×512 PNG `any`，並保留 512×512 `maskable`；PNG 實際像素與宣告相同。主程式 shortcut 也列兩個尺寸。HTML favicon、Apple touch icon、登入畫面品牌圖與執行時 icon 指向同版 512 圖示。
+- 保持兩個 manifest 的 `id`、`start_url`、`scope`、`display`，避免把安裝問題變成新身份或路由。網站安裝引導仍由使用者選擇；不自動解除安裝。
+- 本機驗證 manifest、圖片與建置輸出；瀏覽器診斷確認本機 installability 無錯誤；正式站確認 HTTPS manifest／圖片可下載且像素正確。Android 需在同一手機實際點「安裝」，再由「應用程式資訊」及桌面確認新版圖示，才可將實機案例改為 PASS。若仍失敗，收集 Chrome 版本、手機型號、安裝畫面與 WebAPK 診斷，續查裝置／Chrome 服務，而非改判「建立捷徑」為安裝成功。

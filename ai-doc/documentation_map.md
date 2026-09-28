@@ -1,5 +1,9 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-09-29（DEV-130 Android 安裝失敗）
+
+Android 主程式舊 App 已移除，Chrome 仍顯示「無法安裝這個應用程式」；REL-011 的 Android 重裝結果為 FAIL。新版 192／512 PNG、manifest 與畫面圖示一致性修復見 [DEV-130](dev_task.md#dev-130-android-主程式重裝失敗修復---2026-09-29)、[SPEC-041](specs/SPEC-041-pwa-update-notification-cache-recovery.md#dev-130-android-重新安裝失敗修復2026-09-29)、[QA-DEV-130](qa/QA-DEV-130-pwa-identity-update-handoff.md)。正式發布證據後補；Android 再安裝與系統圖示結果仍須實機重試。
+
 ## Documentation Map Update - 2026-09-28（DEV-130 自願重新安裝）
 
 使用者已選擇讓 Android 使用者自行決定是否移除舊 App 並重新安裝新版圖示。主程式與快速入口的收合式引導、未同步快速待辦警示、安裝連結及舊安裝紀錄回復路徑，見 [DEV-130](dev_task.md#dev-130-自願重新安裝補充---2026-09-28)、[SPEC-041](specs/SPEC-041-pwa-update-notification-cache-recovery.md#dev-130-自願重新安裝圖示契約2026-09-28) 與 [QA-DEV-130](qa/QA-DEV-130-pwa-identity-update-handoff.md)。正式站已發布並完成網站驗證，見 [REL-011](release/REL-011-DEV-130-OPTIONAL-REINSTALL-20260928.md)；Android 重裝後圖示仍須實機確認。
