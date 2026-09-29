@@ -1,5 +1,9 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-09-29（DEV-131 獨立快速入口）
+
+Android 實機 `chrome://webapks/` 只有主程式，沒有快速入口，證明先前「已在 App 視窗」文案不能作為獨立安裝證據。使用者已授權同一 ProJED Firebase 正式站雙網址方案與必要的 Supabase Auth 回呼設定。[DEV-131](dev_task.md#dev-131-android-獨立快速入口雙網址修復---2026-09-29) 記錄本輪交付；[SPEC-122 DEV-131 修訂](specs/SPEC-122-mobile-zero-data-quick-task.md#dev-131-雙網址獨立安裝修訂2026-09-29) 覆蓋既有同源安裝假設；[QA-DEV-131](qa/QA-DEV-131-dual-origin-quick-install.md) 定義正式與實機證據。
+
 ## Documentation Map Update - 2026-09-29（DEV-130 Android 安裝失敗）
 
 Android 主程式舊 App 已移除，Chrome 仍顯示「無法安裝這個應用程式」；REL-011 的 Android 重裝結果為 FAIL。新版 192／512 PNG、manifest 與畫面圖示一致性修復見 [DEV-130](dev_task.md#dev-130-android-主程式重裝失敗修復---2026-09-29)、[SPEC-041](specs/SPEC-041-pwa-update-notification-cache-recovery.md#dev-130-android-重新安裝失敗修復2026-09-29)、[QA-DEV-130](qa/QA-DEV-130-pwa-identity-update-handoff.md)。正式站發布與 54/54 檔案驗證見 [REL-012](release/REL-012-DEV-130-ANDROID-INSTALL-ICONS-20260929.md)；Android 再安裝與系統圖示結果仍須實機重試。

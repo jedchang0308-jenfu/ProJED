@@ -1,4 +1,5 @@
 import { countAllPendingQuickCaptures } from './outbox';
+import { getQuickInstallUrl, isMainProductionOrigin } from './origins';
 
 type BeforeInstallPromptChoice = {
   outcome: 'accepted' | 'dismissed';
@@ -49,6 +50,12 @@ export const installQuickInstallGuide = (container: HTMLElement) => {
     return () => link.remove();
   }
 
+  if (isMainProductionOrigin(window.location.origin)) {
+    section.hidden = false;
+    section.innerHTML = '<strong>安裝獨立快速入口</strong><span>目前這個網址屬於 ProJED 主程式。若有尚未同步的待辦，請先在此完成同步；主程式內的快速記錄仍可照常使用。</span><a class="quick-task-install-destination" href="https://projed-cc78d.firebaseapp.com/quick-task/?install=1">開啟獨立安裝頁</a>';
+    return () => undefined;
+  }
+
   let deferredPrompt: BeforeInstallPromptEventLike | null = null;
   let installing = false;
   let showReinstall = false;
@@ -57,14 +64,14 @@ export const installQuickInstallGuide = (container: HTMLElement) => {
   let linkNotice = '';
   const platform = detectPlatform();
   const canReinstall = platform === 'standalone' && /Android/iu.test(navigator.userAgent || '');
-  const installUrl = new URL('/quick-task/?install=1', window.location.origin).toString();
+  const installUrl = new URL(getQuickInstallUrl(window.location.origin), window.location.origin).toString();
   const render = (notice = '') => {
     section.hidden = false;
     const action = deferredPrompt
       ? '<button type="button" data-quick-install-action="true">安裝快速建待辦</button>'
       : '';
     const body = platform === 'standalone'
-      ? '<strong>已在獨立 App 模式</strong><span>這個入口已可直接使用；下方名稱欄可立即記錄。</span>'
+      ? '<strong>目前以 App 視窗開啟</strong><span>可立即記錄待辦；是否已建立獨立手機圖示，請以 Android 應用程式清單為準。</span>'
       : platform === 'ios'
         ? '<strong>加入手機主畫面</strong><span>點 Safari 的分享，選「加入主畫面」，就會建立「ProJED快速建待辦」圖示。</span>'
         : platform === 'embedded'
@@ -81,7 +88,7 @@ export const installQuickInstallGuide = (container: HTMLElement) => {
           : '未發現未同步的快速待辦；其他未儲存草稿仍請先保存。';
     const reinstall = canReinstall
       ? `<button type="button" data-quick-icon-reinstall-toggle="true" aria-expanded="${showReinstall}">自行更新此圖示（選用）</button>${showReinstall
-        ? `<div class="quick-icon-reinstall" data-quick-icon-reinstall="true"><span>可保留舊圖示繼續使用。若要換圖，請自行完成：</span><ol><li>${escapeHtml(pendingMessage)}</li><li>先保留安裝連結，再到 Android「設定 → 應用程式」解除安裝「ProJED快速建待辦」。</li><li>從保留的連結以 Chrome 開啟，選「安裝應用程式」或「安裝並建立捷徑」，用原帳號登入。</li></ol><button type="button" data-quick-icon-reinstall-link="true">保留安裝連結</button><small>${escapeHtml(installUrl)}</small>${linkNotice ? `<small role="status">${escapeHtml(linkNotice)}</small>` : ''}</div>`
+        ? `<div class="quick-icon-reinstall" data-quick-icon-reinstall="true"><span>可保留舊圖示繼續使用。若要換圖，請自行完成：</span><ol><li>${escapeHtml(pendingMessage)}</li><li>先保留安裝連結；只有在 Android「設定 → 應用程式」找得到「ProJED快速建待辦」時，才解除安裝該 App。</li><li>從保留的連結以 Chrome 開啟，選「安裝應用程式」，用原帳號登入；完成後確認應用程式清單有獨立圖示。</li></ol><button type="button" data-quick-icon-reinstall-link="true">保留安裝連結</button><small>${escapeHtml(installUrl)}</small>${linkNotice ? `<small role="status">${escapeHtml(linkNotice)}</small>` : ''}</div>`
         : ''}`
       : '';
     section.innerHTML = `${body}${action}${reinstall}${notice ? `<small role="status">${escapeHtml(notice)}</small>` : ''}`;
@@ -129,7 +136,7 @@ export const installQuickInstallGuide = (container: HTMLElement) => {
     try {
       await promptEvent.prompt();
       const choice = await promptEvent.userChoice;
-      render(choice.outcome === 'accepted' ? '已送出安裝；完成後可從桌面圖示開啟。' : '安裝已取消，仍可直接使用快速輸入。');
+      render(choice.outcome === 'accepted' ? '已送出安裝；請確認 Android 應用程式清單中有獨立圖示。' : '安裝已取消，仍可直接使用快速輸入。');
     } catch {
       render('目前無法叫出安裝提示，請改用瀏覽器選單加入主畫面。');
     } finally {
@@ -143,7 +150,7 @@ export const installQuickInstallGuide = (container: HTMLElement) => {
   };
   const onAppInstalled = () => {
     deferredPrompt = null;
-    render('已完成安裝；下次請從桌面圖示開啟。');
+    render('Chrome 已完成安裝程序；請確認 Android 應用程式清單中有獨立圖示。');
   };
   window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt);
   window.addEventListener('appinstalled', onAppInstalled);

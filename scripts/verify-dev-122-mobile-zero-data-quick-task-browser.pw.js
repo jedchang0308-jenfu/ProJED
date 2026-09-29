@@ -230,7 +230,7 @@ async (page) => {
       const installAction = installPage.getByRole('button', { name: '安裝快速建待辦' });
       await installAction.waitFor({ state: 'visible' });
       await installAction.click();
-      await installPage.getByText('已送出安裝；完成後可從桌面圖示開啟。').waitFor({ state: 'visible' });
+      await installPage.getByText('已送出安裝；請確認 Android 應用程式清單中有獨立圖示。').waitFor({ state: 'visible' });
       await installPage.screenshot({ path: `${outputDir}/quick-task-install-390x844.png`, fullPage: true });
       result.screenshots.push(`${outputDir}/quick-task-install-390x844.png`);
       record('SM14', await installGuide.isVisible() && await titleOnInstall.isVisible() && await installPage.evaluate(() => Boolean(window.__DEV122_PROMPTED)), {

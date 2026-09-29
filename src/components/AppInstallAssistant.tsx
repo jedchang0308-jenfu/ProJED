@@ -20,6 +20,7 @@ import {
 } from '../services/pwaInstallService';
 import { toast } from '../store/useToastStore';
 import useAuthStore from '../store/useAuthStore';
+import { getQuickInstallUrl } from '../features/quickTaskCapture/origins';
 import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
 import { OptionalIconReinstallGuide } from './OptionalIconReinstallGuide';
@@ -242,8 +243,8 @@ export const AppInstallAssistant: React.FC<AppInstallAssistantProps> = ({ mode =
             <OptionalIconReinstallGuide />
             <div className="rounded-lg border border-teal-200 bg-teal-50 p-4" data-quick-task-install-cta="true">
               <div className="text-sm font-bold text-teal-900">快速建待辦</div>
-              <p className="mt-1 text-sm leading-6 text-teal-800">安裝 ProJED 後，支援的平台可從 ProJED 圖示選「快速建待辦」；需要桌面單鍵入口，也可安裝獨立圖示。</p>
-              <a href="/quick-task/?install=1" className="mt-3 inline-flex min-h-10 items-center justify-center rounded-lg bg-teal-700 px-4 py-2 text-sm font-bold text-white hover:bg-teal-800">開啟快速建待辦</a>
+              <p className="mt-1 text-sm leading-6 text-teal-800">安裝 ProJED 後，支援的平台可從 ProJED 圖示選「快速建待辦」；需要桌面單鍵入口，可另行安裝獨立圖示，第一次請以同一 Google 帳號登入。舊入口若有待同步待辦，請先完成同步。</p>
+              <a href={getQuickInstallUrl(window.location.origin)} className="mt-3 inline-flex min-h-10 items-center justify-center rounded-lg bg-teal-700 px-4 py-2 text-sm font-bold text-white hover:bg-teal-800">開啟快速建待辦</a>
             </div>
           </div>
           <div className="border border-slate-200 bg-slate-50 p-3">

@@ -79,7 +79,7 @@ async (page) => {
     assert(await quickEntry.count() === 1, `${label} should expose one quick-task entry`);
     const quickText = await quickEntry.innerText();
     assert(quickText.includes('快速建待辦'), `${label} should name the quick task entry`, { quickText });
-    assert(quickText.includes('安裝 ProJED 後，支援的平台可從 ProJED 圖示選「快速建待辦」；需要桌面單鍵入口，也可安裝獨立圖示。'), `${label} should explain bundled shortcut and optional icon`, { quickText });
+    assert(quickText.includes('需要桌面單鍵入口，可另行安裝獨立圖示，第一次請以同一 Google 帳號登入。'), `${label} should explain the separate login for the optional icon`, { quickText });
     assert(!/自動.{0,8}兩.{0,8}圖示|立即.{0,8}捷徑|iOS.{0,8}長按/u.test(quickText), `${label} should avoid unsupported shortcut promises`, { quickText });
     const quickLinks = await quickEntry.locator('a').evaluateAll(links => links.map(link => link.getAttribute('href')));
     assert(quickLinks.length === 1 && quickLinks[0] === '/quick-task/?install=1', `${label} should preserve one optional quick-install CTA`, { quickLinks });

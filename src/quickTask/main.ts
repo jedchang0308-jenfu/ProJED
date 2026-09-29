@@ -13,6 +13,7 @@ import { startVoiceCapture, type VoiceSession } from '../features/quickTaskCaptu
 import { flushQuickTaskOutbox } from '../features/quickTaskCapture/sync';
 import { installQuickReloadSafety } from '../features/quickTaskCapture/reloadSafety';
 import { installQuickInstallGuide } from '../features/quickTaskCapture/install';
+import { getWorkbenchUrl } from '../features/quickTaskCapture/origins';
 import { installAppIconRefresh } from '../services/appIconService';
 
 installAppIconRefresh('quick-task');
@@ -130,7 +131,7 @@ const renderSuccess = (record: QuickCaptureRecord, synced: boolean) => {
     void renderRecovery();
   });
   success.querySelector<HTMLButtonElement>('[data-workbench]')?.addEventListener('click', () => {
-    window.location.assign('/?quick_workbench=1');
+    window.location.assign(getWorkbenchUrl(window.location.origin));
   });
   success.querySelector<HTMLButtonElement>('[data-login]')?.addEventListener('click', () => {
     void beginClaim(record.captureId).catch(() => setMessage('登入尚未開啟，原名稱仍保留在本機。'));

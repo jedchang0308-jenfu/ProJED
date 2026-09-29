@@ -474,6 +474,17 @@ R10以前的local／HTTPS evidence保留為回歸基線。R12的S15、B22～B24�
 
 使用思考習慣：#第一性原理、#系統描繪、#限制條件、#可驗證性、#隱私
 
+## DEV-131 雙網址獨立安裝修訂（2026-09-29）
+
+使用者的 Android 實機在 `chrome://webapks/` 只看見主程式，設定的應用程式清單亦無 quick App。主程式 scope `/` 與 quick scope `/quick-task/` 巢狀；本期原先假設「同源且兩份 manifest 可選裝成兩個獨立 WebAPK」在該裝置未成立。本修訂由使用者明確授權，取代上文「不新增獨立 origin」與「同源 nested identity」對獨立 quick 安裝路徑的限制；其他零載入、語音、IDB、JWT owner、RPC、root 一般啟動及主程式 shortcut 契約保留。
+
+- 主程式維持 `https://projed-cc78d.web.app/`，既有 `id/start_url/scope='/'` 不動，不要求解除安裝。
+- 選用的獨立 quick 圖示由同一 Firebase Hosting 站點的 `https://projed-cc78d.firebaseapp.com/quick-task/` 安裝；manifest 的 path identity `id/start_url/scope='/quick-task/'` 不動。因 origin 不同，Android 可分別建立安裝身分。
+- 主程式設定頁的獨立安裝 CTA 指向新 origin。原 `web.app/quick-task/` 保留作為主程式 shortcut／既有本機記錄入口；其安裝說明改為連到新 origin，並提醒先同步原 origin 尚未同步的待辦。不得把兩個 origin 的本機 IndexedDB 或 token 自動合併。
+- 新 origin 首次 Google 登入使用同一 Supabase 專案 `knodlkxqpcqyrtgwpdst`；Auth 回呼白名單只新增 `https://projed-cc78d.firebaseapp.com/quick-task/*`，既有項目保留，不改 Site URL、provider、RLS、schema 或任務 owner 規則。不同 origin 的 session 分離；使用者需選同一 Google 帳號，server 仍以 JWT `auth.uid()` 判定任務 owner。
+- 從新 origin 的「前往工作台」回 `web.app/?quick_workbench=1`。其他來源、local 與 preview 沿用相對路徑，不讓 preview 誤跳正式站。
+- `display-mode` 只能描述目前視窗顯示方式，不代表 Android package 已安裝；產品文案不宣稱 WebAPK 已存在。正式網站與 OAuth 回呼可自動驗證，Android App 清單、`chrome://webapks/` 與選取同帳號須實機驗證。
+
 
 
 

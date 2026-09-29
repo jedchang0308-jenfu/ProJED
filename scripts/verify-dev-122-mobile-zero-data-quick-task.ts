@@ -93,7 +93,9 @@ check('S11-lock-scope', migration.includes("format('account:%s:unplaced:parent:r
   && migration.includes('pg_catalog.hashtextextended')
   && migration.includes('pg_catalog.pg_advisory_xact_lock'),
   'quick create and placement share the canonical account-unplaced advisory lock');
-check('S12', !quickMain.includes('credentials:') && !quickMain.includes("from '../services/dataBackend'") && quickMain.includes('quick_workbench=1'));
+check('S12', !quickMain.includes('credentials:') && !quickMain.includes("from '../services/dataBackend'")
+  && quickMain.includes('getWorkbenchUrl(window.location.origin)')
+  && read('src/features/quickTaskCapture/origins.ts').includes('quick_workbench=1'));
 check('S13', quickMain.includes('putClaimIntent') && quickMain.includes('getUser(snapshot.accessToken)') && quickMain.includes('history.replaceState'));
 check('S14', panel.includes('onClosed?: () => void') && workbench.includes('consumeQuickWorkbenchIntent') && workbench.includes('openTaskWorkbenchPanel'));
 check('S15-runtime-errors', classifyQuickSyncError(new Error('QT_AUTH_REQUIRED')) === 'failed_auth' && classifyQuickSyncError(new Error('QT_NO_AVAILABLE_WORKSPACE')) === 'failed_permanent');
@@ -114,7 +116,7 @@ check('S15', rootManifest.id === '/'
   && vite.includes('manifest: false')
   && distRootManifest !== null
   && JSON.stringify(distRootManifest) === JSON.stringify(rootManifest)
-  && appInstallAssistant.includes('安裝 ProJED 後，支援的平台可從 ProJED 圖示選「快速建待辦」；需要桌面單鍵入口，也可安裝獨立圖示。'));
+  && appInstallAssistant.includes('需要桌面單鍵入口，可另行安裝獨立圖示，第一次請以同一 Google 帳號登入。'));
 check('S16', vite.includes('app-shell-meta.json') && vite.includes('projed-shell-version') && pwaUpdate.includes('/app-shell-meta.json?projed_update_check='));
 check('S17', migration.includes("QT_EXISTING_ROW_INVALID") && migration.includes('where owner_id = v_owner and id = p_capture_id'));
 check('S18', migration.includes('v_order bigint') && migration.includes('v_order > 2147483647') && migration.includes("QT_ORDER_EXHAUSTED"));

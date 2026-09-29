@@ -71,7 +71,8 @@ async (page) => {
       && shortcut?.short_name === '建待辦'
       && shortcut?.description === '直接輸入一筆待辦'
       && shortcut?.url === '/quick-task/'
-      && shortcut?.icons?.[0]?.sizes === '1024x1024'
+      && shortcut?.icons?.some(icon => icon.sizes === '192x192')
+      && shortcut?.icons?.some(icon => icon.sizes === '512x512')
       && rootManifestLinks.length === 1
       && rootManifestLinks[0] === '/manifest.webmanifest'
       && page.url().replace('http://localhost:4000', '').split(/[?#]/u)[0] === '/', { rootManifest, rootManifestLinks, url: page.url() });
@@ -147,7 +148,7 @@ async (page) => {
     }
     record('B24', settingsEvidence.every(evidence => evidence.entryCount === 1
       && evidence.entryText.includes('快速建待辦')
-      && evidence.entryText.includes('安裝 ProJED 後，支援的平台可從 ProJED 圖示選「快速建待辦」；需要桌面單鍵入口，也可安裝獨立圖示。')
+      && evidence.entryText.includes('需要桌面單鍵入口，可另行安裝獨立圖示，第一次請以同一 Google 帳號登入。')
       && evidence.entryText.includes('開啟快速建待辦')
       && evidence.hrefs.length === 1
       && evidence.hrefs[0] === '/quick-task/?install=1'

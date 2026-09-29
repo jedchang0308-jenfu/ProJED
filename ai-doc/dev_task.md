@@ -6,6 +6,14 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 Cold start：先讀下方 `## 總任務清單`；需要特定 DEV 詳細歷史時，再搜尋
 `ai-doc/archived/dev_task_pm_updates_2026-07-15.md` 的 DEV ID 並只讀命中段落。
 
+## DEV-131 Android 獨立快速入口雙網址修復 - 2026-09-29
+
+使用者 Android 實機確認：`chrome://webapks/` 只有 ProJED 主程式，沒有「快速建待辦」；Android 應用程式清單也找不到後者。主程式 manifest scope `/` 涵蓋 quick scope `/quick-task/`，同源巢狀 PWA 會讓 Chrome 把內層入口視為已安裝的外層 App。使用者明確授權 ProJED、Firebase `projed-cc78d` 正式雙網址方案及必要 Supabase 登入回呼設定、驗證、部署；不強迫現有使用者重裝主程式。
+
+實作：主程式仍由 `web.app` 提供；獨立 quick 安裝導引改走同一 Firebase Hosting 站點的 `firebaseapp.com/quick-task/`，快速入口的任務資料仍送同一 ProJED Supabase 專案，但另一 origin 需首次以同一 Google 帳號登入。舊 `web.app/quick-task/` 保持可記錄並提示尚未同步資料；主程式 manifest shortcut 仍留在主程式 scope。成功後「前往工作台」返回 `web.app`。不跨 origin 複製 token、IndexedDB 或未同步待辦。避免把 display-mode 當作 Android 已安裝證據。
+
+Auth 變更限於 Supabase `knodlkxqpcqyrtgwpdst` 追加 `https://projed-cc78d.firebaseapp.com/quick-task/*` 回呼範圍；既有白名單保留。驗收：雙網址同版、quick manifest 與首屏可用、舊安裝頁轉往新網址、OAuth 回到新網址且 server owner 與主程式同帳號、實機 `chrome://webapks/` 及 Android 應用程式清單有兩筆獨立 App。前面幾項可自動驗證；Google 帳號選擇與原生安裝必須由 Android 實機確認，不以瀏覽器視窗冒充 PASS。架構與驗證見 [SPEC-122 DEV-131 修訂](specs/SPEC-122-mobile-zero-data-quick-task.md#dev-131-雙網址獨立安裝修訂2026-09-29)、[QA-DEV-131](qa/QA-DEV-131-dual-origin-quick-install.md)。
+
 ## DEV-130 Android 主程式重裝失敗修復 - 2026-09-29
 
 使用者已在 Android 設定解除安裝 ProJED 主程式，重新開啟正式站時，Chrome「安裝並建立捷徑」顯示「無法安裝這個應用程式」，僅提供「建立捷徑」。因此 REL-011 的選用重新安裝流程在此裝置 **FAIL**；不可把捷徑說成已安裝的 WebAPK。調查發現兩份正式 manifest 只有 1024×1024 圖示，缺少 Chromium 安裝建議的 192×192 與 512×512 `any` 尺寸。此為可修正的安裝相容性缺口，尚未證明是手機失敗的唯一原因。
@@ -1014,6 +1022,13 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 阻塞 / 恢復條件：使用者已改為接受**自由選擇**重新安裝，仍不接受強迫更新；Chrome 未提供可由網站強制執行的圖示更換介面。
   - 證據：[QA-DEV-130](qa/QA-DEV-130-pwa-identity-update-handoff.md)、`SPEC-041` DEV-130 addendum、[REL-011](release/REL-011-DEV-130-OPTIONAL-REINSTALL-20260928.md)、[REL-012](release/REL-012-DEV-130-ANDROID-INSTALL-ICONS-20260929.md)；Android 套件安裝與換圖仍待實機證據。
   - 計入交付：否（既有 Android WebAPK 圖示尚未更新）。
+
+- ◇ DEV-131 [交付點] [驗證中] [P1] Android 獨立快速建待辦雙網址修復
+  - 摘要：讓主程式與選用 quick 圖示分屬 `web.app`、`firebaseapp.com` 兩個 origin，維持同一 Supabase 帳號與無強制重裝。
+  - 來源 ID：使用者 2026-09-29 Android `chrome://webapks/` 與應用程式清單反證及本輪雙網址正式授權。
+  - 父任務：DEV-122；相容 DEV-130。
+  - 證據：[SPEC-122 DEV-131 修訂](specs/SPEC-122-mobile-zero-data-quick-task.md#dev-131-雙網址獨立安裝修訂2026-09-29)、[QA-DEV-131](qa/QA-DEV-131-dual-origin-quick-install.md)。
+  - 計入交付：否（正式及 Android 實機結果尚待驗證）。
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
 

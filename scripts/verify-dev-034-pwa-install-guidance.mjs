@@ -79,8 +79,8 @@ assert(
   'settings page explains bundled quick shortcut and optional independent icon without overpromising platform behavior',
   source.appInstallAssistant.includes('data-quick-task-install-cta="true"') &&
     source.appInstallAssistant.includes('>快速建待辦</div>') &&
-    source.appInstallAssistant.includes('安裝 ProJED 後，支援的平台可從 ProJED 圖示選「快速建待辦」；需要桌面單鍵入口，也可安裝獨立圖示。') &&
-    source.appInstallAssistant.includes('href="/quick-task/?install=1"') &&
+    source.appInstallAssistant.includes('需要桌面單鍵入口，可另行安裝獨立圖示，第一次請以同一 Google 帳號登入。') &&
+    source.appInstallAssistant.includes('href={getQuickInstallUrl(window.location.origin)}') &&
     source.appInstallAssistant.includes('>開啟快速建待辦</a>') &&
     !/自動.{0,8}兩.{0,8}圖示|立即.{0,8}捷徑|iOS.{0,8}長按/u.test(source.appInstallAssistant),
 );
