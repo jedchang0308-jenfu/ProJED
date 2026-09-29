@@ -16,6 +16,16 @@ Auth 變更限於 Supabase `knodlkxqpcqyrtgwpdst` 追加 `https://projed-cc78d.f
 
 正式雙網址已由 clean source `afa758c35e907569f88e241e1fe72a231001e7bc` 發布為 release `20260929055645-fad159`。首次即時核對短暫遇到 `app-shell-meta.json` 雜湊不一致；同一不可變發布包的本地／遠端原始位元組後續一致，使用 `--verify-only` 重試後 54/54 provenance、一般 browser 與雙網址 feature smoke 均 PASS，沒有再部署。Supabase Auth 白名單讀回正確；OAuth 起點 302 不代表同帳號登入完成。狀態：`Production Deployed / Web Verified / Android Independent Install Pending`，實機兩筆 App 與真實同帳號任務仍須驗收。見 [REL-013](release/REL-013-DEV-131-DUAL-ORIGIN-20260929.md)。
 
+2026-09-29 使用者回報獨立「快速建待辦」安裝成功；這是使用者實機結果，尚未提供 `chrome://webapks/` 與同帳號任務讀回證據，因此不改寫上述完整驗收狀態。
+
+## DEV-132 自願換圖指引與系統通知歷史 - 2026-09-29
+
+使用者確認雙 App 安裝成功後，選定自由選擇、一次重裝一個 App 的換圖方式，要求簡單乾淨的指引，並在「設定中心 → 系統通知」保留通知，避免提醒消失後找不到。此為 DEV-130 圖示更新交接的使用者介面補充，不修改 Chrome／Android 的系統安裝行為。
+
+本地實作：設定中心新增「系統通知」分類與一則帶日期的換圖公告；公告於重新載入後仍可查看，點擊「查看換圖步驟」會展開既有「快速開啟」中的自願重裝引導。引導縮為同步、保留連結、只移除目標 App 並在 Chrome 重裝三步，保留未同步快速待辦檢查；主程式內選快速入口時，安裝連結直達 `firebaseapp.com` 獨立 origin。系統通知採版本化、全裝置可讀的產品公告清單，不把會自動消失的操作 toast 當作歷史，也不虛構過去未儲存的提示；新增公告需隨後續產品更新加入清單。無資料庫、權限、登入或正式環境變更。
+
+驗收：390×844 設定頁公告可見、重新載入仍可讀、操作後指引展開、沒有橫向溢出；快速入口連結在正式 origin 對應獨立網址，主程式連結不變，舊快速待辦未同步時仍警示。已通過 TypeScript、`build:test`、DEV-132 手機 browser、DEV-130 自願重裝 browser、DEV-034 static/browser、DEV-038 static/browser 與 DEV-131 origin 檢查。狀態：`Local Implemented / Targeted QA PASS / Production Not Deployed`。
+
 ## DEV-130 Android 主程式重裝失敗修復 - 2026-09-29
 
 使用者已在 Android 設定解除安裝 ProJED 主程式，重新開啟正式站時，Chrome「安裝並建立捷徑」顯示「無法安裝這個應用程式」，僅提供「建立捷徑」。因此 REL-011 的選用重新安裝流程在此裝置 **FAIL**；不可把捷徑說成已安裝的 WebAPK。調查發現兩份正式 manifest 只有 1024×1024 圖示，缺少 Chromium 安裝建議的 192×192 與 512×512 `any` 尺寸。此為可修正的安裝相容性缺口，尚未證明是手機失敗的唯一原因。
@@ -1029,8 +1039,16 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 摘要：讓主程式與選用 quick 圖示分屬 `web.app`、`firebaseapp.com` 兩個 origin，維持同一 Supabase 帳號與無強制重裝。
   - 來源 ID：使用者 2026-09-29 Android `chrome://webapks/` 與應用程式清單反證及本輪雙網址正式授權。
   - 父任務：DEV-122；相容 DEV-130。
-  - 證據：[SPEC-122 DEV-131 修訂](specs/SPEC-122-mobile-zero-data-quick-task.md#dev-131-雙網址獨立安裝修訂2026-09-29)、[QA-DEV-131](qa/QA-DEV-131-dual-origin-quick-install.md)。
-  - 計入交付：否（正式及 Android 實機結果尚待驗證）。
+  - 證據：[SPEC-122 DEV-131 修訂](specs/SPEC-122-mobile-zero-data-quick-task.md#dev-131-雙網址獨立安裝修訂2026-09-29)、[QA-DEV-131](qa/QA-DEV-131-dual-origin-quick-install.md)、[REL-013](release/REL-013-DEV-131-DUAL-ORIGIN-20260929.md)；使用者回報 Android 安裝成功。
+  - 計入交付：否（正式網頁驗證通過；同帳號及完整 Android 實機證據仍待補齊）。
+
+- ◐ DEV-132 [交付點] [本地已實作] [P2] 自願換圖指引與系統通知歷史
+  - 摘要：設定中心保留可回看的換圖公告，從公告直達簡化的自願重裝指引；兩個 App 一次只重裝一個，快速入口安裝網址直達獨立 origin。
+  - 來源 ID：使用者 2026-09-29「採用自願重裝方案」與新增「系統通知」要求。
+  - 父任務：DEV-130；相容 DEV-131。
+  - 下一步：在正式發版授權後發布，再以正式站及 Android 實機確認通知入口和兩個 App 的換圖結果。
+  - 證據：`verify:dev-132-system-notifications-browser`、DEV-130／034／038 回歸與本節執行紀錄。
+  - 計入交付：否（尚未正式發布）。
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
 

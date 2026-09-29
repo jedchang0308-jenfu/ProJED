@@ -27,6 +27,7 @@ import { OptionalIconReinstallGuide } from './OptionalIconReinstallGuide';
 
 type AppInstallAssistantProps = {
   mode?: 'auto' | 'settings';
+  openIconGuide?: boolean;
 };
 
 const getExternalOpenUrl = () => {
@@ -206,7 +207,7 @@ const AppInstallContent: React.FC<{
   );
 };
 
-export const AppInstallAssistant: React.FC<AppInstallAssistantProps> = ({ mode = 'auto' }) => {
+export const AppInstallAssistant: React.FC<AppInstallAssistantProps> = ({ mode = 'auto', openIconGuide = false }) => {
   const user = useAuthStore((state) => state.user);
   const [context, setContext] = useState<PwaInstallContext>(() => getPwaInstallContext());
   const [isVisible, setIsVisible] = useState(false);
@@ -240,7 +241,7 @@ export const AppInstallAssistant: React.FC<AppInstallAssistantProps> = ({ mode =
         <div className="grid gap-4 p-4 lg:grid-cols-[1fr_260px]">
           <div className="space-y-5">
             <AppInstallContent context={context} />
-            <OptionalIconReinstallGuide />
+            <OptionalIconReinstallGuide initiallyExpanded={openIconGuide} />
             <div className="rounded-lg border border-teal-200 bg-teal-50 p-4" data-quick-task-install-cta="true">
               <div className="text-sm font-bold text-teal-900">快速建待辦</div>
               <p className="mt-1 text-sm leading-6 text-teal-800">安裝 ProJED 後，支援的平台可從 ProJED 圖示選「快速建待辦」；需要桌面單鍵入口，可另行安裝獨立圖示，第一次請以同一 Google 帳號登入。舊入口若有待同步待辦，請先完成同步。</p>
