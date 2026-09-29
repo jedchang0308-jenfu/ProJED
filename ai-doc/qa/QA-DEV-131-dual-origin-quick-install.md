@@ -23,4 +23,5 @@ Android 實機案例只能由裝置證據結案；桌面 Chromium、HTTP 200、O
 
 - 本機 TypeScript、DEV-131 origin 路由、DEV-122 static 25 assertions、DEV-034 static 23/23、DEV-034 手機／桌機 browser、DEV-122 quick browser SM01～SM15、DEV-122 root browser R01～R03／B22～B24均 PASS。兩個舊 browser verifier 曾因 DEV-130 圖示尺寸與本次文案不合而 FAIL；更新該驗收後重跑通過，未修改產品行為來迎合舊測試。
 - 正式 Firebase `web.app/quick-task/` 與 `firebaseapp.com/quick-task/` 均 HTTP 200。Supabase Auth readback 確認 `knodlkxqpcqyrtgwpdst` 的原有三筆 redirect URL 全保留，新增唯一 `https://projed-cc78d.firebaseapp.com/quick-task/*`；Site URL 未改。OAuth 授權起點可導向 Google，但沒有完成真實帳號回呼，因此不列同帳號 PASS。
-- 正式雙網址同版及 Android 兩筆 App 尚待部署後與實機驗證。
+- 正式 release `20260929055645-fad159` 由 source `afa758c35e907569f88e241e1fe72a231001e7bc` 發布。首次遠端即時驗證在 `app-shell-meta.json` 暫時出現雜湊不一致；直接讀回與不可變產物之位元組長度及 SHA-256 後相同，`--verify-only` 沿用原產物重試成功，未再次部署。54/54 遠端檔案 provenance、主程式 browser smoke、雙網址同版／manifest／舊頁連結／390×844 quick 首屏 feature smoke 均 PASS。發布證據見 [REL-013](../release/REL-013-DEV-131-DUAL-ORIGIN-20260929.md)。
+- Android 獨立 WebAPK 兩筆、完整 Google OAuth 回呼與同帳號待辦唯一讀回仍 Pending，不能以正式網站 smoke 或 OAuth 起點 302 代替。

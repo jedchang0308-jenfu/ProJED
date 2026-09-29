@@ -2,7 +2,7 @@
 
 ## Documentation Map Update - 2026-09-29（DEV-131 獨立快速入口）
 
-Android 實機 `chrome://webapks/` 只有主程式，沒有快速入口，證明先前「已在 App 視窗」文案不能作為獨立安裝證據。使用者已授權同一 ProJED Firebase 正式站雙網址方案與必要的 Supabase Auth 回呼設定。[DEV-131](dev_task.md#dev-131-android-獨立快速入口雙網址修復---2026-09-29) 記錄本輪交付；[SPEC-122 DEV-131 修訂](specs/SPEC-122-mobile-zero-data-quick-task.md#dev-131-雙網址獨立安裝修訂2026-09-29) 覆蓋既有同源安裝假設；[QA-DEV-131](qa/QA-DEV-131-dual-origin-quick-install.md) 定義正式與實機證據。
+Android 實機 `chrome://webapks/` 只有主程式，沒有快速入口，證明先前「已在 App 視窗」文案不能作為獨立安裝證據。使用者已授權同一 ProJED Firebase 正式站雙網址方案與必要的 Supabase Auth 回呼設定。[DEV-131](dev_task.md#dev-131-android-獨立快速入口雙網址修復---2026-09-29) 記錄本輪交付；[SPEC-122 DEV-131 修訂](specs/SPEC-122-mobile-zero-data-quick-task.md#dev-131-雙網址獨立安裝修訂2026-09-29) 覆蓋既有同源安裝假設；[QA-DEV-131](qa/QA-DEV-131-dual-origin-quick-install.md) 定義正式與實機證據；[REL-013](release/REL-013-DEV-131-DUAL-ORIGIN-20260929.md) 記錄正式雙網址發布與回復基準。網頁驗證通過，Android 獨立安裝與真實同帳號建立仍待實機。
 
 ## Documentation Map Update - 2026-09-29（DEV-130 Android 安裝失敗）
 

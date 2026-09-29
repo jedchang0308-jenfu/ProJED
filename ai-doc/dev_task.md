@@ -14,6 +14,8 @@ Cold start：先讀下方 `## 總任務清單`；需要特定 DEV 詳細歷史�
 
 Auth 變更限於 Supabase `knodlkxqpcqyrtgwpdst` 追加 `https://projed-cc78d.firebaseapp.com/quick-task/*` 回呼範圍；既有白名單保留。驗收：雙網址同版、quick manifest 與首屏可用、舊安裝頁轉往新網址、OAuth 回到新網址且 server owner 與主程式同帳號、實機 `chrome://webapks/` 及 Android 應用程式清單有兩筆獨立 App。前面幾項可自動驗證；Google 帳號選擇與原生安裝必須由 Android 實機確認，不以瀏覽器視窗冒充 PASS。架構與驗證見 [SPEC-122 DEV-131 修訂](specs/SPEC-122-mobile-zero-data-quick-task.md#dev-131-雙網址獨立安裝修訂2026-09-29)、[QA-DEV-131](qa/QA-DEV-131-dual-origin-quick-install.md)。
 
+正式雙網址已由 clean source `afa758c35e907569f88e241e1fe72a231001e7bc` 發布為 release `20260929055645-fad159`。首次即時核對短暫遇到 `app-shell-meta.json` 雜湊不一致；同一不可變發布包的本地／遠端原始位元組後續一致，使用 `--verify-only` 重試後 54/54 provenance、一般 browser 與雙網址 feature smoke 均 PASS，沒有再部署。Supabase Auth 白名單讀回正確；OAuth 起點 302 不代表同帳號登入完成。狀態：`Production Deployed / Web Verified / Android Independent Install Pending`，實機兩筆 App 與真實同帳號任務仍須驗收。見 [REL-013](release/REL-013-DEV-131-DUAL-ORIGIN-20260929.md)。
+
 ## DEV-130 Android 主程式重裝失敗修復 - 2026-09-29
 
 使用者已在 Android 設定解除安裝 ProJED 主程式，重新開啟正式站時，Chrome「安裝並建立捷徑」顯示「無法安裝這個應用程式」，僅提供「建立捷徑」。因此 REL-011 的選用重新安裝流程在此裝置 **FAIL**；不可把捷徑說成已安裝的 WebAPK。調查發現兩份正式 manifest 只有 1024×1024 圖示，缺少 Chromium 安裝建議的 192×192 與 512×512 `any` 尺寸。此為可修正的安裝相容性缺口，尚未證明是手機失敗的唯一原因。
