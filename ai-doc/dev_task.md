@@ -12,6 +12,8 @@ Cold start：先讀下方 `## 總任務清單`；需要特定 DEV 詳細歷史�
 
 修復範圍：由已定案的品牌圖產生主程式／快速入口各 192 與 512 PNG；兩份 manifest、主程式 shortcut、HTML、執行時 favicon 指向同版資產，保持各自 `id`／`start_url`／`scope` 與選用重裝規則。需驗證 PNG 真實尺寸、建置產物一致性、桌面 Chrome installability 診斷與正式 HTTPS readback；Android 原生 WebAPK 是否可安裝仍須使用者在同一手機重試，不以桌面診斷冒充實機 PASS。詳見 [SPEC-041](specs/SPEC-041-pwa-update-notification-cache-recovery.md#dev-130-android-重新安裝失敗修復2026-09-29) 與 [QA-DEV-130](qa/QA-DEV-130-pwa-identity-update-handoff.md)。
 
+正式站已由 source `3e979358ceaf036bd629f5e16a1ecbae23eb9599` 發布 release `20260928161446-318ce1`；首次發布後核對遇到短暫 `app-shell-meta.json` 雜湊不一致，沿用同一發布包 `--verify-only` 重試後 54/54 provenance、一般 browser 與圖示專項 smoke PASS，未重複部署。結果見 [REL-012](release/REL-012-DEV-130-ANDROID-INSTALL-ICONS-20260929.md)。Android 實機安裝仍 Pending。
+
 ## DEV-130 自願重新安裝補充 - 2026-09-28
 
 使用者更新決策：允許將「移除舊 App 後重新安裝」作為**自願選項**，不得自動解除安裝、強迫更新或反覆彈窗。主程式在 Android「設定中心 → 快速開啟」提供收合式引導，可選主程式／快速建待辦；快速入口在安裝說明頁提供自身的收合式引導。兩者均提醒先同步未完成的快速待辦與保存其他草稿，並提供保留安裝連結。舊 `appinstalled` localStorage 紀錄不得在解除安裝後誤判仍已安裝。網站不可保證既有 WebAPK 自動換圖；新安裝後桌面及 App 資訊的新圖示仍待 Android 實機確認。此補充取代下方「使用者不接受要求重新安裝」的歷史決策，不改寫當時驗證結果。
@@ -1008,9 +1010,9 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 摘要：正式網站已提供新版青綠色主程式與快速建立圖示，但 Android 實機 `chrome://webapks` 顯示 `Succeeded` 後，「應用程式資訊」仍是舊 J；原定既有安裝圖示更新未通過。移除誤導的圖示更新提醒，保留一般網站版本更新與新安裝圖示資產。
   - 來源 ID：既有同 repo DEV-130／REL-009；使用者 2026-09-28 實機畫面、App 資訊回覆與「請依此執行」。
   - 父任務：DEV-041、DEV-096；相容 DEV-034、DEV-097、DEV-122。
-  - 下一步：自願重新安裝引導已發布；仍需同一 Android 裝置確認 App 資訊與桌面皆顯示新版，才能把實際換圖標記完成。
+  - 下一步：192／512 安裝圖示已發布；仍需同一 Android 裝置實際完成主程式安裝，確認 App 資訊與桌面皆顯示新版，才能把實際換圖標記完成。
   - 阻塞 / 恢復條件：使用者已改為接受**自由選擇**重新安裝，仍不接受強迫更新；Chrome 未提供可由網站強制執行的圖示更換介面。
-  - 證據：[QA-DEV-130](qa/QA-DEV-130-pwa-identity-update-handoff.md)、`SPEC-041` DEV-130 addendum、[REL-011](release/REL-011-DEV-130-OPTIONAL-REINSTALL-20260928.md)；Android 套件換圖仍待重裝後實機證據。
+  - 證據：[QA-DEV-130](qa/QA-DEV-130-pwa-identity-update-handoff.md)、`SPEC-041` DEV-130 addendum、[REL-011](release/REL-011-DEV-130-OPTIONAL-REINSTALL-20260928.md)、[REL-012](release/REL-012-DEV-130-ANDROID-INSTALL-ICONS-20260929.md)；Android 套件安裝與換圖仍待實機證據。
   - 計入交付：否（既有 Android WebAPK 圖示尚未更新）。
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容

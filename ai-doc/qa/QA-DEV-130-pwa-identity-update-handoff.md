@@ -117,5 +117,5 @@
 - A01 實機反證：使用者確認主程式已在 Android 設定移除，Chrome 仍顯示「無法安裝這個應用程式」，只有「建立捷徑」。REL-011 引導網站 PASS，但此裝置的原生重新安裝 FAIL。
 - A02 資產修復：正式 manifest 原僅列 1024×1024；修復後主／快速入口各有 192、512 `any`，shortcut 同步；四張 PNG 真實像素、來源／建置檔案與 HTML／執行時路徑一致，`id`／`start_url`／`scope` 不變。
 - A03 本機：`verify-dev-130-install-icons.mjs`、TypeScript、DEV-122 靜態／Service Worker、`build:test` PASS；桌面 Chrome 本機 manifest 與 installability 錯誤皆空、兩份 manifest／四張 PNG／頁面 favicon readback PASS。此為桌面模擬證據，不代表 Android 原生安裝成功。
-- A04 正式站：發布後檢查 source/release、兩份 manifest、四張 PNG 與主／快速入口頁面；結果待 release receipt。
+- A04 正式站：release `20260928161446-318ce1` 已發布；首次核對遇到短暫 `app-shell-meta.json` hash mismatch，同一包 `--verify-only` 重試後 54/54 artifact provenance、通用 browser、圖示專項 browser PASS。兩份 manifest `id` 與 192／512 `any` 已直接讀回，見 [REL-012](../release/REL-012-DEV-130-ANDROID-INSTALL-ICONS-20260929.md)。
 - A05 實機：同一 Android 手機重新點主程式「安裝」，確認安裝完成、系統「應用程式資訊」與桌面均顯示青綠色三節點箭頭；使用者重試前為 Pending。若仍失敗，不能以「建立捷徑」替代 PASS。

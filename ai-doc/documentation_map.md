@@ -2,7 +2,7 @@
 
 ## Documentation Map Update - 2026-09-29（DEV-130 Android 安裝失敗）
 
-Android 主程式舊 App 已移除，Chrome 仍顯示「無法安裝這個應用程式」；REL-011 的 Android 重裝結果為 FAIL。新版 192／512 PNG、manifest 與畫面圖示一致性修復見 [DEV-130](dev_task.md#dev-130-android-主程式重裝失敗修復---2026-09-29)、[SPEC-041](specs/SPEC-041-pwa-update-notification-cache-recovery.md#dev-130-android-重新安裝失敗修復2026-09-29)、[QA-DEV-130](qa/QA-DEV-130-pwa-identity-update-handoff.md)。正式發布證據後補；Android 再安裝與系統圖示結果仍須實機重試。
+Android 主程式舊 App 已移除，Chrome 仍顯示「無法安裝這個應用程式」；REL-011 的 Android 重裝結果為 FAIL。新版 192／512 PNG、manifest 與畫面圖示一致性修復見 [DEV-130](dev_task.md#dev-130-android-主程式重裝失敗修復---2026-09-29)、[SPEC-041](specs/SPEC-041-pwa-update-notification-cache-recovery.md#dev-130-android-重新安裝失敗修復2026-09-29)、[QA-DEV-130](qa/QA-DEV-130-pwa-identity-update-handoff.md)。正式站發布與 54/54 檔案驗證見 [REL-012](release/REL-012-DEV-130-ANDROID-INSTALL-ICONS-20260929.md)；Android 再安裝與系統圖示結果仍須實機重試。
 
 ## Documentation Map Update - 2026-09-28（DEV-130 自願重新安裝）
 
