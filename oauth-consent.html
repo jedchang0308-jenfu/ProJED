@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="theme-color" content="#f8fafc" />
+    <title>ProJED 帳號授權</title>
+  </head>
+  <body>
+    <main class="oauth-consent" aria-labelledby="oauth-consent-title">
+      <header><span class="oauth-consent-brand">ProJED</span><h1 id="oauth-consent-title">授權快速建任務</h1></header>
+      <p id="oauth-consent-status" role="status" aria-live="polite">正在確認授權要求…</p>
+      <section id="oauth-consent-details" hidden>
+        <p>允許以下 App 使用你的 ProJED 身分建立待辦任務。</p>
+        <dl>
+          <div><dt>應用程式</dt><dd id="oauth-consent-client"></dd></div>
+          <div><dt>登入帳號</dt><dd id="oauth-consent-user"></dd></div>
+          <div><dt>要求的資料</dt><dd id="oauth-consent-scope"></dd></div>
+        </dl>
+        <div class="oauth-consent-actions">
+          <button id="oauth-consent-deny" class="secondary" type="button">拒絕</button>
+          <button id="oauth-consent-approve" type="button">允許</button>
+        </div>
+      </section>
+      <button id="oauth-consent-login" type="button" hidden>使用 Google 登入</button>
+    </main>
+    <script type="module" src="/src/quickTask/oauthConsent.ts"></script>
+  </body>
+</html>

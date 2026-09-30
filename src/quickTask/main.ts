@@ -5,6 +5,7 @@ import {
   getQuickCapture,
   listQuickCaptures,
   putClaimIntent,
+  removeExpiredQuickCaptures,
   retryQuickCapture,
   updateQuickCapture,
 } from '../features/quickTaskCapture/outbox';
@@ -15,42 +16,170 @@ import { installQuickReloadSafety } from '../features/quickTaskCapture/reloadSaf
 import { installQuickInstallGuide } from '../features/quickTaskCapture/install';
 import { getWorkbenchUrl } from '../features/quickTaskCapture/origins';
 import { installAppIconRefresh } from '../services/appIconService';
+import { isQuickOAuthRpcEnabled } from '../features/quickTaskCapture/oauthClient';
 
 installAppIconRefresh('quick-task');
 
 const titleInput = document.querySelector<HTMLInputElement>('#quick-task-title');
 const form = document.querySelector<HTMLFormElement>('#quick-task-form');
+const backButton = document.querySelector<HTMLButtonElement>('#quick-task-back');
+const authStatus = document.querySelector<HTMLElement>('#quick-task-auth-status');
 const voiceButton = document.querySelector<HTMLButtonElement>('#quick-task-voice');
 const submitButton = document.querySelector<HTMLButtonElement>('#quick-task-submit');
 const message = document.querySelector<HTMLElement>('#quick-task-message');
 const success = document.querySelector<HTMLElement>('#quick-task-success');
 const recovery = document.querySelector<HTMLElement>('#quick-task-recovery');
 
-if (!titleInput || !form || !voiceButton || !submitButton || !message || !success || !recovery) {
+if (!titleInput || !form || !authStatus || !voiceButton || !submitButton || !message || !success || !recovery) {
   throw new Error('QUICK_TASK_BOOTSTRAP_FAILED');
+}
+
+if (backButton) {
+  const syncBackButton = () => {
+    const canGoBack = window.history.length > 1;
+    backButton.disabled = !canGoBack;
+    backButton.title = canGoBack ? '返回上一頁' : '沒有可返回的上一頁';
+  };
+  syncBackButton();
+  window.addEventListener('pageshow', syncBackButton);
+  backButton.addEventListener('click', () => {
+    if (!backButton.disabled) window.history.back();
+  });
 }
 
 let voiceSession: VoiceSession | null = null;
 type QuickAuthApi = typeof import('../features/quickTaskCapture/auth');
 let authApiPromise: Promise<QuickAuthApi> | null = null;
 let authSnapshot: import('../services/supabase/quickTaskCaptureService').QuickAuthSnapshot | null = null;
+let verifiedAuthSnapshot: import('../features/quickTaskCapture/auth').VerifiedQuickAuthSnapshot | null = null;
 let currentRecord: QuickCaptureRecord | null = null;
 let isComposing = false;
 let localCommitInFlight = false;
 let claimInFlight = false;
+let recoveryPromptDismissed = false;
+let syncInFlight = false;
+let syncRequested = false;
+let cleanupInFlight: Promise<number> | null = null;
+let cleanupTimer = 0;
+let retryTimer: number | null = null;
 
 const getAuthApi = () => {
   authApiPromise ??= import('../features/quickTaskCapture/auth');
   return authApiPromise;
 };
 
-const setMessage = (text: string) => { message.textContent = text; };
+const setMessage = (text: string) => {
+  message.textContent = text;
+  message.hidden = text.length === 0;
+};
+const setAuthStatus = (text: string, showLogin: boolean) => {
+  authStatus.replaceChildren();
+  if (!text) {
+    authStatus.hidden = true;
+    return;
+  }
+  authStatus.hidden = false;
+  const label = document.createElement('span');
+  label.textContent = text;
+  authStatus.append(label);
+  if (showLogin) {
+    const loginButton = document.createElement('button');
+    loginButton.type = 'button';
+    loginButton.textContent = '登入';
+    loginButton.setAttribute('aria-label', '登入快速建任務');
+    loginButton.addEventListener('click', () => {
+      const callback = new URL(window.location.href);
+      callback.searchParams.delete('capture');
+      callback.searchParams.delete('claim');
+      callback.hash = '';
+      void getAuthApi().then(auth => auth.startQuickGoogleSignIn(callback.toString()))
+        .catch(() => setAuthStatus('目前無法登入，任務仍可先記在本機。', true));
+    });
+    authStatus.append(loginButton);
+  }
+};
 const listRecoverableQuickCaptures = () => listQuickCaptures(authSnapshot?.accountId ?? null, true);
+const removeExpiredCaptures = () => {
+  if (cleanupInFlight) return cleanupInFlight;
+  cleanupInFlight = removeExpiredQuickCaptures().finally(() => { cleanupInFlight = null; });
+  return cleanupInFlight;
+};
+const clearRetryTimer = () => {
+  if (retryTimer !== null) window.clearTimeout(retryTimer);
+  retryTimer = null;
+};
+const verifyAndFlush = async (expected: NonNullable<typeof authSnapshot>) => {
+  if (syncInFlight || localCommitInFlight) {
+    syncRequested = true;
+    return;
+  }
+  syncRequested = false;
+  clearRetryTimer();
+  syncInFlight = true;
+  try {
+    const verified = await (await getAuthApi()).verifyQuickSession(expected);
+    if (authSnapshot?.accountId !== expected.accountId || authSnapshot.authEpoch !== expected.authEpoch) return;
+    if (!verified) {
+      verifiedAuthSnapshot = null;
+      setAuthStatus(navigator.onLine ? '登入狀態待確認' : '離線；登入狀態待確認', navigator.onLine);
+      return;
+    }
+    verifiedAuthSnapshot = verified;
+    if (verified.clientId && !isQuickOAuthRpcEnabled(verified)) {
+      setAuthStatus(`此快速 App 已登入：${verified.email ?? 'ProJED 帳號'}（安全同步待啟用）`, false);
+      return;
+    }
+    setAuthStatus(`此快速 App 已登入：${verified.email ?? 'ProJED 帳號'}`, false);
+    await flushQuickTaskOutbox(verified, (captureId, state) => {
+      if (state === 'synced' && currentRecord?.captureId === captureId) renderSuccess(currentRecord, true);
+    });
+    const retryableRecords = await listQuickCaptures(verified.accountId).catch(() => []);
+    const nextAttemptAt = retryableRecords
+      .filter(record => record.state === 'failed_retryable' && record.nextAttemptAt !== null)
+      .reduce<number | null>((earliest, record) => earliest === null || record.nextAttemptAt! < earliest
+        ? record.nextAttemptAt
+        : earliest, null);
+    if (nextAttemptAt !== null && navigator.onLine) {
+      const scheduledAuth = { accountId: verified.accountId, authEpoch: verified.authEpoch };
+      retryTimer = window.setTimeout(() => {
+        retryTimer = null;
+        if (document.visibilityState !== 'visible' || !navigator.onLine
+          || authSnapshot?.accountId !== scheduledAuth.accountId
+          || authSnapshot.authEpoch !== scheduledAuth.authEpoch) return;
+        void verifyAndFlush(authSnapshot);
+      }, Math.max(0, nextAttemptAt - Date.now()));
+    }
+  } catch {
+    if (authSnapshot?.accountId === expected.accountId && authSnapshot.authEpoch === expected.authEpoch) {
+      verifiedAuthSnapshot = null;
+      setAuthStatus(navigator.onLine ? '登入狀態待確認' : '離線；登入狀態待確認', navigator.onLine);
+    }
+  } finally {
+    syncInFlight = false;
+    const latestSnapshot = authSnapshot;
+    const authChanged = latestSnapshot !== null
+      && (latestSnapshot.accountId !== expected.accountId || latestSnapshot.authEpoch !== expected.authEpoch);
+    const shouldRunAgain = syncRequested || authChanged;
+    syncRequested = false;
+    if (!localCommitInFlight && latestSnapshot && shouldRunAgain) {
+      void verifyAndFlush(latestSnapshot);
+    }
+  }
+};
+const refreshAuthAndSync = async () => {
+  const snapshot = await (await getAuthApi()).loadQuickSession().catch(() => null);
+  authSnapshot = snapshot;
+  if (!snapshot) {
+    verifiedAuthSnapshot = null;
+    return;
+  }
+  void verifyAndFlush(snapshot);
+};
 const enableControls = () => {
   voiceButton.disabled = false;
   submitButton.disabled = false;
   titleInput.focus();
-  setMessage('可以直接輸入名稱，或點右側「語音」。');
+  setMessage('');
 };
 
 const registerSharedRootWorker = () => {
@@ -71,6 +200,11 @@ const installReloadSafety = () => {
 };
 
 const renderRecovery = async () => {
+  if (recoveryPromptDismissed) {
+    recovery.hidden = true;
+    recovery.replaceChildren();
+    return;
+  }
   const count = (await listRecoverableQuickCaptures().catch(() => [])).filter(record => record.state !== 'synced').length;
   if (count === 0 || titleInput.value.trim() || currentRecord) {
     recovery.hidden = true;
@@ -78,8 +212,13 @@ const renderRecovery = async () => {
     return;
   }
   recovery.hidden = false;
-  recovery.innerHTML = `<strong>待處理 ${count} 筆</strong><span>之前記下的名稱還在本機，現在要處理嗎？</span><div class="quick-task-actions"><button type="button" data-recover="true">處理</button></div>`;
+  recovery.innerHTML = `<strong>待處理 ${count} 筆</strong><span>名稱仍保存在這台裝置。可以現在處理，或稍後再回來。</span><div class="quick-task-actions"><button type="button" data-recover="true">處理</button><button type="button" data-dismiss-recovery="true">稍後處理</button></div>`;
   recovery.querySelector<HTMLButtonElement>('[data-recover]')?.addEventListener('click', () => { void showNextRecovery(); });
+  recovery.querySelector<HTMLButtonElement>('[data-dismiss-recovery]')?.addEventListener('click', () => {
+    recoveryPromptDismissed = true;
+    recovery.hidden = true;
+    recovery.replaceChildren();
+  });
 };
 
 const showNextRecovery = async () => {
@@ -121,12 +260,13 @@ const escapeHtml = (value: string) => value.replace(/[&<>"']/gu, char => ({ '&':
 
 const renderSuccess = (record: QuickCaptureRecord, synced: boolean) => {
   success.hidden = false;
-  success.innerHTML = `<strong>${synced ? '已建立' : '已記下，待同步'}</strong><span>${escapeHtml(record.title)}</span><div class="quick-task-actions"><button class="primary" type="button" data-next="true">再記一筆</button><button type="button" data-workbench="true">前往工作台</button>${!synced ? '<button type="button" data-login="true">登入以同步</button>' : ''}</div>`;
+  const needsLogin = !record.accountId || verifiedAuthSnapshot?.accountId !== record.accountId;
+  success.innerHTML = `<strong>${synced ? '已建立' : '已記下，待同步'}</strong><span>${escapeHtml(record.title)}</span><div class="quick-task-actions"><button class="primary" type="button" data-next="true">再記一筆</button><button type="button" data-workbench="true">前往工作台</button>${!synced && needsLogin ? '<button type="button" data-login="true">登入以同步</button>' : ''}</div>`;
   success.querySelector<HTMLButtonElement>('[data-next]')?.addEventListener('click', () => {
     currentRecord = null;
     titleInput.value = '';
     success.hidden = true;
-    setMessage('可以直接輸入名稱，或點右側「語音」。');
+    setMessage('');
     titleInput.focus();
     void renderRecovery();
   });
@@ -162,22 +302,23 @@ const beginClaim = async (captureId: string) => {
 
 const finishClaimFromUrl = async () => {
   const params = new URLSearchParams(window.location.search);
-  const captureId = params.get('capture');
-  const nonce = params.get('claim');
+  const oauthClaim = (await getAuthApi()).consumeQuickOAuthClaimIntent();
+  const captureId = params.get('capture') ?? oauthClaim?.captureId ?? null;
+  const nonce = params.get('claim') ?? oauthClaim?.claimNonce ?? null;
   if (!captureId || !nonce) return;
   claimInFlight = true;
   try {
-    const snapshot = await (await getAuthApi()).loadQuickSession().catch(() => null);
+    const auth = await getAuthApi();
+    const snapshot = await auth.loadQuickSession().catch(() => null);
     if (!snapshot) { setMessage('登入尚未完成，請稍後再試。'); return; }
+    const verified = await auth.verifyQuickSession(snapshot).catch(() => null);
+    if (!verified) { setMessage('登入帳號無法驗證，原名稱仍保留在本機。'); return; }
     const hash = await digest(nonce);
     const record = await getQuickCapture(captureId);
     if (!record || !record.claimIntent || record.claimIntent.nonceHash !== hash || record.claimIntent.expiresAt < Date.now()) {
       setMessage('這筆登入恢復已失效，請從待處理入口明確恢復。');
       return;
     }
-    const { supabase } = await import('../services/supabase/client');
-    const { data, error } = await supabase.auth.getUser(snapshot.accessToken);
-    if (error || data.user?.id !== snapshot.accountId) { setMessage('登入帳號無法驗證，原名稱仍保留在本機。'); return; }
     const bound = await bindQuickCaptureClaim(captureId, snapshot.accountId, hash);
     if (!bound) {
       setMessage('這筆待辦已被其他登入流程處理，請重新整理待處理清單。');
@@ -189,8 +330,10 @@ const finishClaimFromUrl = async () => {
     nextUrl.hash = '';
     history.replaceState(history.state, '', `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
     authSnapshot = snapshot;
+    verifiedAuthSnapshot = verified;
+    setAuthStatus(`此快速 App 已登入：${verified.email ?? 'ProJED 帳號'}`, false);
     setMessage('已連結原帳號，正在同步。');
-    await flushQuickTaskOutbox(snapshot, (_id, state) => setMessage(state === 'synced' ? '已建立' : '仍待處理，名稱已保留。'));
+    await flushQuickTaskOutbox(verified, (_id, state) => setMessage(state === 'synced' ? '已建立' : '仍待處理，名稱已保留。'));
     currentRecord = null;
     await renderRecovery();
   } catch {
@@ -208,7 +351,9 @@ form.addEventListener('submit', async event => {
   submitButton.disabled = true;
   voiceButton.disabled = true;
   localCommitInFlight = true;
-  const snapshot = authSnapshot ?? await (await getAuthApi()).loadQuickSession().catch(() => null);
+  const snapshot = verifiedAuthSnapshot && verifiedAuthSnapshot.authEpoch === authSnapshot?.authEpoch
+    ? verifiedAuthSnapshot
+    : null;
   const record: QuickCaptureRecord = {
     schemaVersion: 1,
     captureId: currentRecord?.captureId ?? createQuickCaptureId(),
@@ -232,19 +377,17 @@ form.addEventListener('submit', async event => {
     if (!committed) throw new Error('IDB_UPDATE_FAILED');
     currentRecord = committed;
     titleInput.value = '';
-    setMessage(snapshot ? '正在同步。' : '登入後可同步到全域任務工作台。');
+    setMessage('');
     renderSuccess(committed, false);
-    if (snapshot) {
-      await flushQuickTaskOutbox(snapshot, (_id, state) => {
-        if (state === 'synced') renderSuccess(committed, true);
-      });
-    }
   } catch (error) {
-    setMessage(error instanceof Error && error.message === 'IDB_READBACK_FAILED' ? '尚未記下，請重試。' : '目前無法記下，請稍後重試。');
+    setMessage(error instanceof Error && error.message === 'IDB_READBACK_FAILED'
+      ? '無法確認是否已記下。請清空輸入欄查看待處理清單；若未出現再重試。'
+      : '目前無法記下，請稍後重試。');
   } finally {
     localCommitInFlight = false;
     submitButton.disabled = false;
     voiceButton.disabled = false;
+    if (authSnapshot) void verifyAndFlush(authSnapshot);
     await renderRecovery();
   }
 });
@@ -283,7 +426,13 @@ registerSharedRootWorker();
 installReloadSafety();
 void (async () => {
   const auth = await getAuthApi();
+  await auth.completeQuickOAuthCallback().catch(() => {
+    setMessage('登入驗證未完成；待辦仍保留在本機，請重新登入。');
+  });
   authSnapshot = await auth.loadQuickSession().catch(() => null);
+  if (authSnapshot) setAuthStatus('正在確認登入狀態…', false);
+  else setAuthStatus('此快速 App 尚未登入', true);
+  void removeExpiredCaptures().catch(() => undefined);
   await finishClaimFromUrl();
   await renderRecovery();
   const subscription = await auth.subscribeQuickAuth(snapshot => {
@@ -294,10 +443,43 @@ void (async () => {
       setMessage('登入帳號已變更；原待辦仍保留在本機，請從待處理入口恢復。');
     }
     authSnapshot = snapshot;
-    if (snapshot) void flushQuickTaskOutbox(snapshot, (_id, state) => { if (state === 'synced' && currentRecord) renderSuccess(currentRecord, true); });
-    else { voiceSession?.abort(); voiceSession = null; currentRecord = null; }
+    verifiedAuthSnapshot = null;
+    if (snapshot) {
+      setAuthStatus('正在確認登入狀態…', false);
+      void verifyAndFlush(snapshot);
+    } else {
+      clearRetryTimer();
+      setAuthStatus('此快速 App 尚未登入', true);
+      voiceSession?.abort();
+      voiceSession = null;
+      currentRecord = null;
+    }
   });
-  window.addEventListener('pagehide', () => { subscription.unsubscribe(); removeQuickInstallGuide(); });
+  const retryAndCleanup = () => {
+    if (document.visibilityState === 'visible') {
+      void removeExpiredCaptures().catch(() => undefined);
+      if (authSnapshot) void verifyAndFlush(authSnapshot);
+      else void refreshAuthAndSync();
+    }
+  };
+  const onOnline = () => { void refreshAuthAndSync(); };
+  const onOffline = () => clearRetryTimer();
+  window.addEventListener('online', onOnline);
+  window.addEventListener('offline', onOffline);
+  window.addEventListener('pageshow', retryAndCleanup);
+  document.addEventListener('visibilitychange', retryAndCleanup);
+  cleanupTimer = window.setInterval(() => { void removeExpiredCaptures().catch(() => undefined); }, 24 * 60 * 60 * 1000);
+  window.addEventListener('pagehide', () => {
+    subscription.unsubscribe();
+    removeQuickInstallGuide();
+    window.clearInterval(cleanupTimer);
+    clearRetryTimer();
+    window.removeEventListener('online', onOnline);
+    window.removeEventListener('offline', onOffline);
+    window.removeEventListener('pageshow', retryAndCleanup);
+    document.removeEventListener('visibilitychange', retryAndCleanup);
+  }, { once: true });
+  if (authSnapshot) void verifyAndFlush(authSnapshot);
 })().catch(() => {
   claimInFlight = false;
   setMessage('快速輸入已就緒；登入同步稍後可再試。');

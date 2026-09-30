@@ -6,6 +6,32 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 Cold start：先讀下方 `## 總任務清單`；需要特定 DEV 詳細歷史時，再搜尋
 `ai-doc/archived/dev_task_pm_updates_2026-07-15.md` 的 DEV ID 並只讀命中段落。
 
+## DEV-133 快速建任務同帳號與自動同步 - 2026-09-30
+
+### 執行邊界修訂（2026-09-30）
+
+使用者取消 Android 實機驗收並要求改以正式環境驗證；自動審查拒絕在目前 B0 證據下執行 B1 遠端 migration，因此 TEST／正式 B1、正式設定、部署與功能驗收本輪未執行。OAuth RPC 由 `VITE_QUICK_TASK_OAUTH_RPC_ENABLED` 保持關閉；不得以其他工具繞過審查。
+
+文件成熟度：**Slice A 本機可靠性 `已實作／本機瀏覽器部分 PASS；真實 Auth／RPC 未驗`；Slice B 跨來源同帳號 `架構已定案；B0 mock 10/10 SIMULATION PASS；TEST 桌面真實 OAuth 部分 PASS，Android 雙 PWA Gate 未驗`**。使用者選擇 `1A、2A、3B`，並補充本機資料定期清理；七日僅清理已同步副本沿用現有工程基線。任務狀態：`執行中；A 本機驗證部分 PASS；A Auth／RPC 整合待驗；B0 桌面 OAuth 部分 PASS、Android 雙 PWA／signOut／換帳與 live denial 未驗；B1 已條件授權但因 B0 Gate 未通過而未執行；未發布`。使用者明確授權 ProJED_TEST `fhisnnufoeulxqrchldf` 的設定讀回及必要測試；本輪依授權暫時設定 TEST OAuth Server／Site URL／Authorization Path／local callback allowlist 並執行桌面真實流程，結束後已還原原 Auth config 並移除本輪 public client，讀回確認復原；正式環境未觸及。B1 additive migration 與權限矩陣僅在 B0 完整通過後執行。DEV-133 是本地交付點，不改 DEV-122／DEV-131 的既有狀態。權威契約：[SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md)、[ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md)、[QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md)。基準 HEAD `127bc0dfecd65507879405210b18e9e178975f76`；本次前已重查工作樹，保留其他既有修改。
+
+**問題與價值。** 使用者要在手機上立即記下任務，並能確定它最後出現在本人 ProJED「全域任務工作台」。本次已補 quick origin 登入狀態、Auth 服務核身後才授權同步，以及啟動／網路恢復／回前景和 backoff 到期的重試觸發；離線建立仍先完成 IndexedDB 保存與讀回。主程式與獨立 quick App 正式環境分別在 `web.app`、`firebaseapp.com`；兩個 origin 使用同一 Supabase 專案與帳號身分，登入 session 與本機待同步資料仍各自隔離。此雙網址安排是 DEV-131 為獨立安裝採用的既有基線。跨來源同帳號仍須 B0 實證，不能從共用 Supabase 專案推定已完成。
+
+**已確認的主要流程（1A、2A）。** quick 頁不論有無網路或登入都可立即輸入；按「建立」每筆先完成本機保存與讀回，成功後才顯示「已記下，待同步」。線上但未登入也可先記，待登入並確認資料歸屬後再同步。有效登入同一 ProJED 帳號且服務可達時才嘗試送出，取得同帳號 server receipt 後顯示「已同步」。網路或服務暫時不可用時維持待同步，於 backoff 到期、連線恢復、頁面重新開啟或回到前景時重試；session 過期不因恢復網路就宣稱已登入。未綁定帳號的本機任務不自動送到後來登入的任意帳號。App 完全關閉時不承諾立即背景同步。
+
+**已確認的登入目標與定案架構（3B）。** 主程式與獨立 quick App 都有登入入口及各自經核實的登入狀態；主程式已登入後切 quick App 以 OAuth 2.1 public client + PKCE 銜接同一身分，目標是免再次輸入 Google 帳密。兩個 origin 的 session 仍各自獨立。ADR-053 已定案；B0 驗證 OAuth 設定、AuthGate／Google redirect 保存授權請求與 Android PWA 回跳。B1 另以 client_id 限縮資料權限並驗證 refresh／owner。首次授權可能需要同意；不承諾關閉 App 後背景同步或即時跨窗登出。
+
+**切片範圍。** A 已在現有 quick origin session 下補本機回網／回前景與 backoff 到期重試、七日清理及精簡狀態；Chrome local browser 19 cases 中 12 本機 PASS、7 `SIMULATION PASS`，Auth／RPC 真實整合仍待驗。B0 consent entry／PKCE／refresh source path 已實作，隔離 OAuth mock 10/10 `SIMULATION PASS`。依 TEST 授權，本輪另完成桌面真實 OAuth：首次 consent、quick callback、同一 TEST user identity 與 refresh token 輪替均 PASS；再次授權回到同一帳號 callback，但 consent 是否自動略過未能確證；live denial 因先前已保存 grant 而未抵達可拒絕的 consent 畫面，只有 mock denial 通過。OAuth 路徑以 localhost 暫時設定測試後已回復 TEST 原始 Auth config 並刪除臨時 client。這是桌面身份流程的部分證據，不代表 Android PWA、signOut／換帳、RPC／receipt 或 B1 權限驗收。
+
+**本機定期清理（使用者要求；保留週期採現行工程基線）。** 只自動清理已取得遠端成功回執、並在本機保留滿 7 天的 `synced` 副本；待登入、待同步及同步失敗任務不設自動刪除期限，以免清理造成不可恢復的資料遺失。`removeExpiredQuickCaptures()` 直接以 readwrite cursor 掃描原始 store，僅刪除 `synced` 且 `updatedAt` 有效、已滿 7 天的資料；啟動、回前景、頁面可見時及開啟期間每日觸發。離開或關閉 App 時不承諾準點清理。Chrome 本機瀏覽器測試已確認 8 日 synced 被刪、6 日 synced 與 40 日 pending／unbound 保留，重新開啟後補清；另確認清理與 pending→fresh synced 狀態轉換並行時不會誤刪，交易中止會明確回報錯誤。真多視窗 Auth／RPC 同步競態仍未驗證，見 QA-DEV-133。
+
+**不在本提案的範圍。** 不直接跨 origin 複製 token、IndexedDB 或未同步任務，不承諾關閉 App 後立即同步，不改主程式工作台資料模型或兩個 manifest 身分。B1 需新增最小 `client_id` 權限界線與窄化 RPC；不擴大一般登入權限、不回填資料。正式 OAuth 設定及發布另依環境授權與 release gate。本輪只在獲授權的 ProJED_TEST 做臨時設定並已復原，正式環境未變更。
+
+**驗收方向。** ① 有網路、無網路、API 逾時或服務故障時，每筆建立後本機可讀回，未取得遠端回執不得顯示已同步；② 線上未登入可先記，登入後確認歸屬才同步；③ 有效原帳號與服務恢復後，重新開啟或回到 quick 頁可自動重試，同一任務在工作台只出現一次；④ 從一邊登入後於另一邊免重輸入帳密且顯示經驗證的同一身分，session 失效、登出及跨帳號切換不錯送任務；⑤ 只有符合已確認保留政策的本機資料會定期清理，待送任務不能被誤清；⑥ 用正常安裝入口、手機窄版畫面與真實操作驗證可見狀態，並以兩邊帳號身分、server receipt、工作台讀回及本機清理讀回證明結果，不能只靠文案或 API 模擬宣稱通過。
+
+**執行邊界與下一關。** A 已在本地工作樹實作；本機 PASS 尚未涵蓋真實 Auth／RPC／owner／receipt。B0 在 ProJED_TEST 的首次桌面 OAuth consent、quick callback、同一 TEST 身分核對與 refresh token 輪替通過；重複授權只確認 callback 回到同一身分，consent 畫面是否略過仍不確定；live denial 因既有 grant 未能驗證。TEST Auth config 已回到測試前讀回的 baseline（OAuth Server disabled、Site URL 與 URI allowlist 原值、Authorization Path null），本輪 client 已刪除且 GET 回 404。使用者已取消 Android 驗收並要求直接以正式環境驗證，但自動審查仍把實體 Android B0 視為 B1 前置，故本輪沒有操作正式環境，也沒有執行 TEST migration／權限矩陣。OAuth RPC 以 `VITE_QUICK_TASK_OAUTH_RPC_ENABLED` 保持關閉；不得以其他工具繞過審查，也不得把桌面結果升格為完整 B0 或 DEV-133 完成。
+
+使用思考習慣：#批判、#效用理論、#設計思考
+
 ## DEV-131 Android 獨立快速入口雙網址修復 - 2026-09-29
 
 使用者 Android 實機確認：`chrome://webapks/` 只有 ProJED 主程式，沒有「快速建待辦」；Android 應用程式清單也找不到後者。主程式 manifest scope `/` 涵蓋 quick scope `/quick-task/`，同源巢狀 PWA 會讓 Chrome 把內層入口視為已安裝的外層 App。使用者明確授權 ProJED、Firebase `projed-cc78d` 正式雙網址方案及必要 Supabase 登入回呼設定、驗證、部署；不強迫現有使用者重裝主程式。
@@ -22,9 +48,23 @@ Auth 變更限於 Supabase `knodlkxqpcqyrtgwpdst` 追加 `https://projed-cc78d.f
 
 使用者確認雙 App 安裝成功後，選定自由選擇、一次重裝一個 App 的換圖方式，要求簡單乾淨的指引，並在「設定中心 → 系統通知」保留通知，避免提醒消失後找不到。此為 DEV-130 圖示更新交接的使用者介面補充，不修改 Chrome／Android 的系統安裝行為。
 
-本地實作：設定中心新增「系統通知」分類與一則帶日期的換圖公告；公告於重新載入後仍可查看，點擊「查看換圖步驟」會展開既有「快速開啟」中的自願重裝引導。引導縮為同步、保留連結、只移除目標 App 並在 Chrome 重裝三步，保留未同步快速待辦檢查；主程式內選快速入口時，安裝連結直達 `firebaseapp.com` 獨立 origin。系統通知採版本化、全裝置可讀的產品公告清單，不把會自動消失的操作 toast 當作歷史，也不虛構過去未儲存的提示；新增公告需隨後續產品更新加入清單。無資料庫、權限、登入或正式環境變更。
+本地實作：設定中心新增「系統通知」分類與一則帶日期的換圖公告；公告於重新載入後仍可查看，清單列本身就是明細入口，點擊任一通知列會開啟共用彈窗，不增加專屬「查看更換方式」按鈕。彈窗外框統一負責日期、標題、關閉、Esc、背景點擊、焦點管理與捲動；通知只提供自己的明細內容。「安裝APP」分類初始只呈現主程式與快速建待辦兩個選擇，選定後才顯示對應安裝動作。換圖引導保留同步檢查、保存連結、只移除目標 App 並在 Chrome 重裝；主程式與快速入口的圖示及安裝連結同時分列，快速入口連結直達 `firebaseapp.com` 獨立 origin。系統通知採版本化、全裝置可讀的產品公告清單，不把會自動消失的操作 toast 當作歷史，也不虛構過去未儲存的提示；新增公告需隨後續產品更新加入清單。無資料庫、權限、登入或正式環境變更。
 
-驗收：390×844 設定頁公告可見、重新載入仍可讀、操作後指引展開、沒有橫向溢出；快速入口連結在正式 origin 對應獨立網址，主程式連結不變，舊快速待辦未同步時仍警示。已通過 TypeScript、`build:test`、DEV-132 手機 browser、DEV-130 自願重裝 browser、DEV-034 static/browser、DEV-038 static/browser 與 DEV-131 origin 檢查。狀態：`Local Implemented / Targeted QA PASS / Production Not Deployed`。
+驗收：390×844 設定頁公告可見、重新載入仍可讀、操作後以彈窗呈現指引、兩組舊／新圖示可載入、「安裝APP」分類不出現換圖資訊，且沒有橫向溢出；快速入口連結在正式 origin 對應獨立網址，主程式連結不變。主程式未同步快記仍警示；獨立快速入口列明確提示需到該 App 內確認同步，避免跨網址不可見的資料被誤判為零。移位前的系統通知及安裝指引已通過 TypeScript、`build:test`、DEV-132 手機 browser、DEV-130 自願重裝 browser、DEV-034 static/browser、DEV-038 static/browser 與 DEV-131 origin 檢查。移位後 `tsc --noEmit`、DEV-034 static 23/23、targeted ESLint 0 errors（既有 effect warning 1）與 390×844 本機 headless Edge 實際操作 PASS：通知原位展開、主程式待同步 1 筆警示、快速入口跨網址警示、兩張圖載入、選項連結、「安裝APP」分類無換圖指引、無橫向溢出；截圖在 `output/playwright/dev-132/*-mobile-cdp.png`。狀態：`Local Implemented / Targeted QA PASS / Production Not Deployed`。
+
+2026-09-29 圖示對照補充：所選 App 下方並排顯示舊版與新版圖示；主程式舊 J 使用 `public/icons/icon-vibrant-02-aqua-lime.png`，快速建待辦舊版依使用者提供的圖重建為紅底白標誌 `public/icons/projed-quick-task-icon-legacy-red.png`，兩者新版均指向目前各自 manifest 的 192px 品牌圖。切換 App 時同步切換對照素材，已隨通知移位完成 390×844 畫面驗收；部署狀態不變。
+
+2026-09-29 通知文案重構：先交代網站圖示已更新、已安裝 App 可能仍顯示舊圖示，再說明保留舊圖不影響使用與自願更換；展開後依序選擇目標 App、看新舊對照、確認同步、在移除前保存該 App 連結、只移除所選 App 並用原帳號重裝。移除重複引言，將「保存安裝連結」按鈕移入對應步驟，避免先看到卸載指令才找到連結。`tsc --noEmit`、targeted ESLint、DEV-034 static 23/23 PASS；390×844 本機 Edge 核對兩個 App 的圖示、同步警示、連結與無橫向溢出 PASS，截圖 `output/playwright/dev-132/*-comms-cdp.png`。仍未正式部署。
+
+2026-09-29 單頁統整：依使用者對兩個內容重複切換按鈕的回饋，移除主程式／快速入口頁籤，在同一通知內以兩列對照四張圖，並在共同三步引導中各列同步提醒與各自的保存連結按鈕。使用者仍只需重裝想換圖的那個 App；獨立快速入口的本機待辦不可跨 origin 查讀。`tsc --noEmit`、targeted ESLint、390×844／320×844 本機 Edge 手機畫面檢查通過：兩個安裝網址正確、四張圖可載入、零頁籤與零橫向溢出。截圖 `output/playwright/dev-132/guide-unified-390-*.png`。狀態仍為本地完成、未正式部署。
+
+2026-09-29 重裝操作說明補充：將第三步拆成四個可跟做的動作：在 Android 應用程式設定只解除安裝所選 App、在 Chrome 新分頁開啟對應安裝連結、在 Chrome 選「安裝應用程式」並說明「建立捷徑」只是網頁捷徑、最後從 App 清單開啟並用原 Google 帳號登入。補充 Android 設定名稱可能因手機不同、找不到目標 App 時保留另一 App 並直接進入安裝。此次僅調整通知內操作文案，沒有新增測試或重新部署。
+
+2026-09-29 安裝頁重構：依使用者要求與 #溝通思考、#設計思考，設定中心「安裝APP」初始畫面只顯示 `ProJED 主程式`與`快速建待辦`兩個可點選圖示；主程式選後提供裝置適用的安裝動作／步驟，快速入口選後提供獨立安裝連結及同帳號提醒。移除常駐作用範圍徽章、提示狀態面板及長篇快速入口說明，自動提示服務本身未改。相關規格更新見 [SPEC-034 8.6](specs/SPEC-034-fast-start-pwa-install-guidance.md#86-dev-132安裝app頁面簡化2026-09-29)、[SPEC-038 更新](specs/SPEC-038-settings-scope-consistency-and-risk-guardrails.md)與[SPEC-122/QA B24 更新](specs/SPEC-122-mobile-zero-data-quick-task.md)。新版畫面型別、靜態契約與建置已通過；瀏覽器操作尚未驗證，未部署。
+
+同日後續需求：電腦版在主程式或獨立快速入口取得瀏覽器安裝事件時提供一鍵安裝；Android 手機版提供 Chrome 選單的兩步教學，仍容許可用的直接安裝按鈕；iPhone 維持 Safari 流程。兩個入口無事件時顯示可執行的手動方式，不偽裝成可強制安裝。
+
+電腦本機畫面回饋：原條件式渲染讓未收到安裝事件的瀏覽器完全沒有按鈕。已改為主程式始終顯示「安裝 ProJED 主程式」；有事件時直接喚起瀏覽器安裝視窗，無事件時點擊後顯示 Chrome／Edge 安裝指引。快速建待辦在主程式顯示獨立安裝頁入口，該頁電腦版也始終顯示安裝按鈕並在無事件時提供相同回饋。跨網址安裝仍需在獨立頁完成，不將「前往頁面」冒充安裝成功。
 
 ## DEV-130 Android 主程式重裝失敗修復 - 2026-09-29
 
@@ -1042,13 +1082,22 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 證據：[SPEC-122 DEV-131 修訂](specs/SPEC-122-mobile-zero-data-quick-task.md#dev-131-雙網址獨立安裝修訂2026-09-29)、[QA-DEV-131](qa/QA-DEV-131-dual-origin-quick-install.md)、[REL-013](release/REL-013-DEV-131-DUAL-ORIGIN-20260929.md)；使用者回報 Android 安裝成功。
   - 計入交付：否（正式網頁驗證通過；同帳號及完整 Android 實機證據仍待補齊）。
 
-- ◐ DEV-132 [交付點] [本地已實作] [P2] 自願換圖指引與系統通知歷史
-  - 摘要：設定中心保留可回看的換圖公告，從公告直達簡化的自願重裝指引；兩個 App 一次只重裝一個，快速入口安裝網址直達獨立 origin。
+- ◐ DEV-132 [交付點] [本地實作／型別、lint、build PASS；瀏覽器操作未重新驗證] [P2] 自願換圖指引與系統通知歷史
+  - 摘要：設定中心的換圖公告可回看，點擊通知列本身即可用共用彈窗閱讀自願重裝指引；「安裝APP」分類只呈現兩個安裝選擇與選後動作，兩個 App 一次只重裝一個，換圖公告保留舊／新圖示對照。
   - 來源 ID：使用者 2026-09-29「採用自願重裝方案」與新增「系統通知」要求。
   - 父任務：DEV-130；相容 DEV-131。
-  - 下一步：在正式發版授權後發布，再以正式站及 Android 實機確認通知入口和兩個 App 的換圖結果。
-  - 證據：`verify:dev-132-system-notifications-browser`、DEV-130／034／038 回歸與本節執行紀錄。
+  - 下一步：依既有正式發版授權流程處理，再以正式站及 Android 實機確認通知入口和兩個 App 的換圖結果。
+  - 證據：本地 390×844 headless Edge 操作與 `output/playwright/dev-132/*-mobile-cdp.png`、`tsc --noEmit`、DEV-034 static 23/23、targeted ESLint 0 errors；移位前 DEV-132／130／034／038 回歸與本節執行紀錄。
   - 計入交付：否（尚未正式發布）。
+
+- ◐ DEV-133 [交付點] [執行中；A 本機部分 PASS；B0 mock 10/10、TEST 桌面真實 OAuth 部分 PASS；Android Gate 未驗；B1 條件授權但未執行] [P1] 快速建任務同帳號與自動同步
+  - 摘要：依使用者 1A／2A／3B 與定期清理要求交付快速任務本機可靠性及跨 App 同帳號同步；A 瀏覽器 19 cases 中 12 本機 PASS、7 模擬 PASS；B 採 OAuth 2.1 public client／PKCE。B0 mock 10/10 SIMULATION PASS；授權 TEST 桌面真實首次 consent／callback／same-user／refresh 部分 PASS，Android Gate 未驗。
+  - 來源 ID：使用者 2026-09-30 雙 App 同帳號與自動同步方案、開發文件及架構定案指示。
+  - 父任務：DEV-122；延續 DEV-131 雙網址安裝，相容 DEV-130／132。
+  - 下一步：先解決自動審查對「Android B0 是 B1 必要前置」的邊界衝突；在該審查點解除前，不執行 TEST additive migration／權限矩陣或正式部署。
+  - 阻塞：使用者已取消 Android 實機驗收並改要求正式驗證，但自動審查仍拒絕在缺少實體 Gate 的狀態下執行 B1。TEST 桌面測試已依授權完成，測試後設定已復原、臨時 public client 已移除；OAuth RPC 保持關閉，遠端 B1／正式操作未執行。
+  - 證據：[SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md)、[ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md)、[QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md)、桌面 OAuth 摘要 `output/qa/dev-133/desktop-oauth-b0-20260930.json`、`output/playwright/dev-133-quick-task-local-browser/result.json`、`output/playwright/dev-133-quick-task-oauth-mock/result.json`、PGlite DEV-122 SQL core supplementary matrix（不代表 hosted Supabase／B1 驗收）。
+  - 計入交付：是（未完成，產品完成率貢獻 0）。
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
 
@@ -7460,3 +7509,8 @@ R14 current evidence為static 40/40與browser 27/27，新增S40／B52 armed pare
 獨立QC、真機、正式持久化與release gate仍未完成，故目前不是QC Ready或release ready；RD implementation與架構定案則已完成。
 
 使用思考習慣：#多層次分析、#系統描繪、#可驗證性
+
+
+2026-09-29 通知呈現採通用清單＋彈窗明細：整列可點擊並以右向符號提示可進入，沒有專屬「查看更換方式」按鈕；共用彈窗承載所選通知的標題、日期與明細內容。換圖公告的明細仍包括兩 App 圖示對照、同步檢查、各自安裝連結與重裝步驟。本次 `tsc --noEmit`、targeted ESLint、`build:test` 與 `git diff --check` PASS；瀏覽器互動未重新驗證，未部署正式環境。
+
+2026-09-29 設定分類入口由「快速開啟」改名為「安裝APP」，分類內仍包含 App 安裝、啟動與快速開啟提示設定；內部 section id 不變。

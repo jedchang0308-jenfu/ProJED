@@ -4,6 +4,8 @@ export type QuickAuthSnapshot = Readonly<{
   accountId: string;
   accessToken: string;
   authEpoch: number;
+  /** Present only for the isolated quick-task OAuth public client. */
+  clientId?: string;
 }>;
 
 export type QuickTaskCreateResult = {

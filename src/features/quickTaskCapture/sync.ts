@@ -2,10 +2,10 @@ import {
   acquireQuickCaptureLease,
   finishQuickCaptureLease,
   listQuickCaptures,
-  updateQuickCapture,
 } from './outbox';
 import { classifyQuickSyncError } from './model';
 import { createQuickUnplacedTask, type QuickAuthSnapshot } from '../../services/supabase/quickTaskCaptureService';
+import { isQuickOAuthRpcEnabled } from './oauthClient';
 
 const parseRetryAfter = (value: unknown) => {
   if (typeof value !== 'string' || !value.trim()) return 0;
@@ -16,6 +16,7 @@ const parseRetryAfter = (value: unknown) => {
 };
 
 export const flushQuickTaskOutbox = async (auth: QuickAuthSnapshot, onProgress?: (captureId: string, state: string) => void) => {
+  if (auth.clientId && !isQuickOAuthRpcEnabled(auth)) return;
   const records = await listQuickCaptures(auth.accountId);
   for (const record of records) {
     if (record.state === 'synced' || record.state === 'failed_auth' || record.state === 'failed_permanent') continue;
@@ -35,10 +36,13 @@ export const flushQuickTaskOutbox = async (auth: QuickAuthSnapshot, onProgress?:
     } catch (error) {
       const state = classifyQuickSyncError(error);
       const retryAfter = parseRetryAfter(error && typeof error === 'object' && 'retryAfter' in error ? (error as { retryAfter?: unknown }).retryAfter : null);
-      await finishQuickCaptureLease(leased.captureId, leased.leaseId!, state, error && typeof error === 'object' && 'code' in error ? String((error as { code?: unknown }).code) : 'SYNC_FAILED');
-      if (retryAfter > 0 && state === 'failed_retryable') {
-        await updateQuickCapture(leased.captureId, { nextAttemptAt: Date.now() + retryAfter });
-      }
+      await finishQuickCaptureLease(
+        leased.captureId,
+        leased.leaseId!,
+        state,
+        error && typeof error === 'object' && 'code' in error ? String((error as { code?: unknown }).code) : 'SYNC_FAILED',
+        retryAfter,
+      );
       onProgress?.(leased.captureId, state);
     } finally {
       window.clearTimeout(timeout);

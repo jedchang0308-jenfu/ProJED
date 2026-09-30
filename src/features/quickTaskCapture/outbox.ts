@@ -48,7 +48,12 @@ const transaction = async <T>(mode: IDBTransactionMode, action: (store: IDBObjec
 
 export const commitQuickCapture = async (record: QuickCaptureRecord) => {
   await transaction('readwrite', store => store.add(record));
-  const readback = await transaction<QuickCaptureRecord | undefined>('readonly', store => store.get(record.captureId));
+  let readback: QuickCaptureRecord | undefined;
+  try {
+    readback = await transaction<QuickCaptureRecord | undefined>('readonly', store => store.get(record.captureId));
+  } catch {
+    throw new Error('IDB_READBACK_FAILED');
+  }
   if (!readback || readback.captureId !== record.captureId || readback.title !== record.title) {
     throw new Error('IDB_READBACK_FAILED');
   }
@@ -124,14 +129,22 @@ export const acquireQuickCaptureLease = async (captureId: string, accountId: str
   });
 };
 
-export const finishQuickCaptureLease = async (captureId: string, leaseId: string, state: QuickCaptureState, lastErrorCode: string | null = null) => {
+export const finishQuickCaptureLease = async (
+  captureId: string,
+  leaseId: string,
+  state: QuickCaptureState,
+  lastErrorCode: string | null = null,
+  retryAfterMs = 0,
+) => {
   const record = await getQuickCapture(captureId);
   if (!record || record.leaseId !== leaseId) return null;
   const exhausted = state === 'failed_retryable' && record.attemptCount >= QUICK_CAPTURE_MAX_AUTOMATIC_ATTEMPTS;
   const nextState: QuickCaptureState = exhausted ? 'failed_permanent' : state;
   const nextErrorCode = exhausted ? 'AUTO_RETRY_EXHAUSTED' : lastErrorCode;
+  const retryAfterDelay = Number.isFinite(retryAfterMs) ? Math.max(0, retryAfterMs) : 0;
+  const backoffDelay = Math.min(15 * 60_000, 5_000 * (2 ** Math.max(0, record.attemptCount - 1)));
   const nextAttemptAt = nextState === 'failed_retryable'
-    ? Date.now() + Math.min(15 * 60_000, 5_000 * (2 ** Math.max(0, record.attemptCount - 1)))
+    ? Date.now() + Math.min(15 * 60_000, Math.max(backoffDelay, retryAfterDelay))
     : null;
   return updateQuickCapture(captureId, {
     state: nextState,
@@ -187,9 +200,35 @@ export const putClaimIntent = (captureId: string, nonceHash: string, expiresAt: 
   claimIntent: { captureId, nonceHash, expiresAt },
 });
 
-export const removeExpiredQuickCaptures = async () => {
-  const records = await listQuickCaptures(null, true);
-  await Promise.all(records.filter(record => record.state === 'synced' && Date.now() - record.updatedAt >= QUICK_CAPTURE_RETENTION_MS).map(async record => {
-    await transaction('readwrite', store => store.delete(record.captureId));
-  }));
+export const removeExpiredQuickCaptures = async (now = Date.now()) => {
+  const db = await openDatabase();
+  return new Promise<number>((resolve, reject) => {
+    let tx: IDBTransaction;
+    try {
+      tx = db.transaction(QUICK_CAPTURE_STORE, 'readwrite');
+    } catch (error) {
+      db.close();
+      reject(error);
+      return;
+    }
+    const cursorRequest = tx.objectStore(QUICK_CAPTURE_STORE).openCursor();
+    let removedCount = 0;
+
+    cursorRequest.onsuccess = () => {
+      const cursor = cursorRequest.result;
+      if (!cursor) return;
+
+      const record = cursor.value as QuickCaptureRecord;
+      if (record.state === 'synced' && Number.isFinite(record.updatedAt)
+        && now - record.updatedAt >= QUICK_CAPTURE_RETENTION_MS) {
+        cursor.delete();
+        removedCount += 1;
+      }
+      cursor.continue();
+    };
+
+    tx.oncomplete = () => { db.close(); resolve(removedCount); };
+    tx.onerror = () => { db.close(); reject(tx.error ?? new Error('IDB_CLEANUP_FAILED')); };
+    tx.onabort = () => { db.close(); reject(tx.error ?? new Error('IDB_CLEANUP_ABORTED')); };
+  });
 };
