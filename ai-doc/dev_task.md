@@ -12,7 +12,7 @@ Cold start：先讀下方 `## 總任務清單`；需要特定 DEV 詳細歷史�
 
 文件成熟度：**RD Implementation Ready／Human Confirmed；架構定案：已定案**。狀態：**執行中；本機實作完成、TEST／真實整合待驗；未發布**。使用者明確採用「共用帳號、各自登入、各自保存 Session、離線任務依帳號同步」，本輪已落地單一 Supabase SDK Auth、DB v2 auth_context／receipt、owner CAS、明確認領、local signOut barrier、嚴格回執及舊 OAuth 路徑退役；不把本機驗證宣稱產品完成。這取代早先 `3B` 的跨 App OAuth Server／免再次登入契約；`1A／2A` 的本機先存、未綁定資料明確認領及定期清理保護保留。DEV-133 仍為原交付點，不新增 DEV／完成率，也不改 DEV-122／131 的既有交付狀態。
 
-權威：[SPEC-133 Rev 3](specs/SPEC-133-quick-task-shared-identity-sync.md)、[ADR-053 Rev 3](decisions/ADR-053-quick-task-cross-origin-account-link.md)、[QA-DEV-133 新版 N01～N10](qa/QA-DEV-133-quick-task-shared-identity-sync.md)。canonical repo `C:\VIBE CODING\ProJED\ProJED`，branch `持續優化3`，HEAD `d0865f4`；其他既存 dirty changes 保留。
+權威：[SPEC-133 Rev 3](specs/SPEC-133-quick-task-shared-identity-sync.md)、[ADR-053 Rev 3](decisions/ADR-053-quick-task-cross-origin-account-link.md)、[QA-DEV-133 新版 N01～N10](qa/QA-DEV-133-quick-task-shared-identity-sync.md)。canonical repo `C:\VIBE CODING\ProJED\ProJED`，branch `持續優化3`，HEAD `e868611`；其他既存 dirty changes 保留。
 
 **目標與架構。** 主程式及獨立快速 App 重用同一環境 Supabase Auth／既有 Google provider，各 origin 保存自己的 Session；兩邊均有登入入口和本 App 帳號顯示。兩邊選同一 user ID 時共享本人工作台資料，但不自動複製登入、不保證帳號相同或即時連動。正常登出使用 local Session scope；已存在的明示全域撤銷按平台語意處理。取消 ProJED OAuth Server／public client／consent、自製 token lifecycle 與舊 B0／B1 作必要前置；Google OAuth 登入及安全 callback 仍保留。
 

@@ -1,6 +1,6 @@
 # SPEC-133：快速建任務共用帳號、各自登入與自動同步
 
-修訂：**2026-10-01 Rev 3；Human Confirmed（產品方向）；RD Implementation Ready；架構定案：已定案**。本版完成實際 source、設定責任面、hosted schema 與既有測試的 Architecture Closure Review，取代 Rev 2 的 readiness 待核對項。**可交 RD 依下列契約實作；程式尚未收斂、新驗收未執行、未達 Release Ready。**
+修訂：**2026-10-01 Rev 3；Human Confirmed（產品方向）；RD Implementation Ready；架構定案：已定案**。本版完成 source、設定責任面、hosted schema 與既有測試的 Architecture Closure Review，取代 Rev 2 的 readiness 待核對項。**架構契約已鎖定；本機第一輪實作已完成，真實 TEST／工作台整合尚未驗證，未達 Release Ready。**
 
 權威：[DEV-133](../dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30)、[ADR-053 Rev 3](../decisions/ADR-053-quick-task-cross-origin-account-link.md)、[QA-DEV-133](../qa/QA-DEV-133-quick-task-shared-identity-sync.md)。沿用原 DEV ID／文件路徑；[SPEC-122](SPEC-122-mobile-zero-data-quick-task.md) 的輸入、本機保存、RPC、工作台、manifest／SW 契約繼續適用，登入與認領交界以本版為準。
 
@@ -8,24 +8,24 @@
 
 目標是立即記下任務，可靠地同步到本人 ProJED「全域任務工作台」。使用者 2026-10-01 採用「共用帳號、各自登入、各自保存 Session、離線任務依帳號同步」，覆蓋早先 `3B` 的跨 App 自動登入；`1A／2A` 的本機先存、未綁定資料明確認領及清理保護保留。取消 ProJED OAuth Server／public client／consent 作必要依賴，保留普通 Google OAuth 登入。
 
-本輪僅修改文件及唯讀架構查證。後續 RD 可在 ProJED repo 實作下列責任面及必要測試；Git／TEST／正式操作延續原授權及各自驗收條件，不因文件定案直接執行。保留其他 dirty changes。使用者已取消實體 Android 驗收，瀏覽器手機模擬不得冒稱 Android PWA 實機 PASS。
+本輪文件以已完成的本機第一輪實作為基準，補齊責任面、驗證順序與交接條件；Git／TEST／正式操作仍須依原授權及各自 gate 執行，不因文件定案直接宣稱通過。保留其他 dirty changes。使用者已取消實體 Android 驗收，瀏覽器手機模擬不得冒稱 Android PWA 實機 PASS。
 
 範圍外：跨 origin token／IDB 複製、自製認證服務、強制帳號對齊、App 關閉後背景同步保證、修改已安裝 PWA identity、放寬 RLS／IAM／Secret 權限、管理金鑰進前端、業務資料改寫、清除未同步任務。快速 App 為第一方入口，普通 Session 沿用本人既有權限；不再承諾憑證本身只能新增任務，程式仍只呼叫 quick RPC，不載入業務清單。
 
 ## 2. Architecture Closure Review：實際基準與缺口定位
 
-基準 repo `C:/VIBE CODING/ProJED/ProJED`，branch `持續優化3`，HEAD `d0865f45e5a7af4ef10ba2f598a7a7879cabe58f`，2026-10-01 working tree。相關安裝／DEV-132 修改已存在且須保留。
+基準 repo `C:/VIBE CODING/ProJED/ProJED`，branch `持續優化3`，HEAD `e868611`（`feat(quick-task): adopt independent Supabase auth sessions`），2026-10-01 working tree。相關安裝／DEV-132 修改已存在且須保留；其餘 dirty changes 不屬本 DEV，不能納入本版證據。
 
 | 查證面 | 已觀察事實 | 本版固定處置 |
 |---|---|---|
-| Auth／SDK | `auth.ts` 同時走 SDK 及自製 OAuth；`client.ts` 依 quick OAuth 分支關閉 URL Session detection。主程式 `authService.signOut()` 未指定 scope。 | 單一 SDK Session 路徑，開啟 SDK callback detection；一般登出明示 local。保留主程式 Firebase／local-test 分支。 |
-| 本機／並行 | captures schema v1 有 owner／claim／lease，但沒有持久化已核實帳號或 receipt；epoch 只在記憶體。 | 同一 DB 加 auth context，帳號歸屬與 capture 寫入共用交易；保存有效 receipt。詳見 §4。 |
-| 認領／晚到回應 | `finishClaimFromUrl` 核身後即 bind；`sync.ts` 僅在 request 前檢查 epoch，回應後仍呼叫 UI progress。 | 認領前明確確認目的帳號；晚到回應只完成原記錄，不能更新新帳號 UI。 |
+| Auth／SDK | 舊基準同時走 SDK 及自製 OAuth，且 quick callback detection 曾被條件關閉；主程式登出未固定 scope。現行 HEAD 已移除自製 OAuth／consent 路徑。 | 單一 SDK Session 路徑，開啟 SDK callback detection；一般登出明示 local。保留主程式 Firebase／local-test 分支。 |
+| 本機／並行 | 舊 captures schema v1 沒有持久化已核實帳號或 receipt；epoch 只在記憶體。現行 HEAD 已升 DB v2。 | `auth_context` 與 capture 寫入共用交易，owner／context revision 使用 CAS，保存有效 receipt。詳見 §4。 |
+| 認領／晚到回應 | 舊 `finishClaimFromUrl` 核身後即 bind，回應路徑未完整隔離新帳號 UI。現行 HEAD 已改為明確認領。 | 認領前明確確認目的帳號；晚到回應只完成原記錄，不能更新新帳號 UI。 |
 | TEST `fhisnnufoeulxqrchldf` | DEV-122 alias `20260930154758`、v2 `20260930155041` 已套用；RPC 為 definer，空 search_path，execute 僅 postgres／authenticated／service_role。task／receipt 有 owner RLS 與 OAuth restrictive policies。 | 一支新 forward-only correction 恢復 canonical DEV-122 invoker；保留舊 migration、政策及未使用 allowlist。 |
 | 正式 `knodlkxqpcqyrtgwpdst` | DEV-122 `20260914120000` 已套用，v2 未套用；RPC 為 invoker，空 search_path；相同 execute ACL，task／receipt 有 owner RLS。 | 正式不用啟用 OAuth Server／註冊 client。release 階段選取新 correction，不單獨補套已退役 v2。 |
 | RPC 文字正規化 | TEST body 額外 trim `chr(8203)`；正式與 local DEV-122 不移除 U+200B。 | canonical body 以 local DEV-122 為準，前後端外圍空白規則一致；不改既有 task／receipt hash。 |
 | 首次使用依賴 | 兩環境的 auth.users 都沒有非內建 trigger；profiles／tenant_members／tenants 既有 RLS。主程式登入負責既有 profile 設定。 | quick 不另建 profile／membership／workspace；缺可用工作台時保留任務並導往主程式完成設定，再人工重試。 |
-| 測試／build | Vite 有 consent entry、release env 有三個 QUICK_TASK_OAUTH keys；DEV-133 只有本機／舊 OAuth mock runners。 | 移除產品舊路徑並更新測試；舊結果只能作歷史證據，不能替代 N01～N10。 |
+| 測試／build | 舊基準含 consent entry、三個 QUICK_TASK_OAUTH keys 及舊 mock runners；現行 HEAD 已移除產品舊路徑並新增 independent-auth contract check。 | typecheck／targeted lint／test build／contract check 已通過；既有 browser runner 尚缺 Playwright，真實 N01～N10 仍不得以靜態結果替代。 |
 
 以上為 scoped metadata 唯讀查證，不是權限矩陣或產品 PASS。RPC definition MD5：TEST `139a666b466ba55b9ee00aad52ce7b10`、正式 `ffc0eb5fdd4d284a113817d46eb53cfa`；僅作本次觀察綁定，實作前重讀，不能拿 hash 取代行為驗證。Auth provider／redirect allowlist 的最新遠端值本輪未讀回，列為 TEST 真實登入進入條件，不留成架構選項。
 
