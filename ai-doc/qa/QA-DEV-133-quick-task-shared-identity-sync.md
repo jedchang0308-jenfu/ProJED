@@ -70,11 +70,12 @@ QC 每例保存 sourceRevision／dirty boundary、build artifact、環境、acto
 |---|---|---|
 | `sign-in → getUser → signOut({scope:'local'})` | PASS | 真實 TEST Auth 核身與 local sign-out；未持久化 Session。 |
 | invalid-title quick RPC | PASS | 真實已核身 Bearer 可達 RPC；伺服器以 `QT_INVALID_TITLE` fail-closed，未寫入 task／receipt。 |
+| valid quick RPC → workbench row readback | PASS | 既有測試帳號有 2 筆 active membership；直接 authenticated SDK RPC 回傳合法 receipt，工作台 owner row 唯一讀回 1 筆。此為 direct API 證據，未替代正常 UI N02；唯一 smoke task 保留作 synced fixture。 |
 | 主程式／quick UI Session | PASS | 同一 ordinary Session 注入兩個隔離本機 origin；兩頁均顯示已登入。 |
 | quick local sign-out isolation | PASS | quick local sign-out 後主程式頁面 reload 仍 authenticated；未建立 task。 |
 | authenticated offline owner binding | PASS | quick 離線建立後隔離 IDB record 綁定 TEST user owner、state=`pending`，business request 數為 0。 |
 
-尚未補齊：工作台唯一讀回、第二帳號／非空 A/B fixture、真實登入取消與切帳、receipt replay／conflict、TEST correction migration 及完整 N01～N10。上述 probes 不解除 B0 prerequisite，也不授權繞過 migration review。
+尚未補齊：正常 quick UI→主程式工作台往返、第二帳號／非空 A/B fixture、真實登入取消與切帳、receipt replay／conflict、TEST correction migration 及完整 N01～N10。上述 probes 不解除 B0 prerequisite，也不授權繞過 migration review。
 
 本輪唯讀查證：
 - TEST 已套用 DEV-122 alias `20260930154758` 及 v2 `20260930155041`，RPC definer，MD5 `139a666b466ba55b9ee00aad52ce7b10`；正式僅 DEV-122 `20260914120000`，RPC invoker，MD5 `ffc0eb5fdd4d284a113817d46eb53cfa`。本輪新增 correction migration 尚未套用：因 B1 必須等待 B0 完整通過，遠端 apply 被安全審查拒絕並停止，沒有 workaround。
