@@ -62,6 +62,20 @@ QC 每例保存 sourceRevision／dirty boundary、build artifact、環境、acto
 
 真 TEST 前置不足時記 `NOT RUN / fixture or callback prerequisite unavailable`，只停止依賴該前置的 case，繼續本機／DB／型別驗證；不能重啟舊 OAuth Client／Android Gate。新 verifier 尚未實作，不能引用不存在的輸出作證據。新 evidence 統一放 `output/qa/dev-133/independent-auth/` 並記 source／artifact／route／actorAlias／實際操作；預期 TEST 任務名稱使用測試前綴，cleanup 僅限本輪已同步 fixture，不清任何未同步資料。
 
+### 2026-10-01 RD ordinary-session probes（部分證據）
+
+以下證據使用 TEST `fhisnnufoeulxqrchldf` 的既有測試帳號，所有 browser context 均為隔離 headless session；不輸出 token、email、title 或 user ID，不建立 task，也不修改遠端資料。這些 probes 只補強真實 ordinary-session 邊界，不能升格為完整 N01～N10 或獨立 QC PASS。
+
+| Probe | 結果 | 證據邊界 |
+|---|---|---|
+| `sign-in → getUser → signOut({scope:'local'})` | PASS | 真實 TEST Auth 核身與 local sign-out；未持久化 Session。 |
+| invalid-title quick RPC | PASS | 真實已核身 Bearer 可達 RPC；伺服器以 `QT_INVALID_TITLE` fail-closed，未寫入 task／receipt。 |
+| 主程式／quick UI Session | PASS | 同一 ordinary Session 注入兩個隔離本機 origin；兩頁均顯示已登入。 |
+| quick local sign-out isolation | PASS | quick local sign-out 後主程式頁面 reload 仍 authenticated；未建立 task。 |
+| authenticated offline owner binding | PASS | quick 離線建立後隔離 IDB record 綁定 TEST user owner、state=`pending`，business request 數為 0。 |
+
+尚未補齊：工作台唯一讀回、第二帳號／非空 A/B fixture、真實登入取消與切帳、receipt replay／conflict、TEST correction migration 及完整 N01～N10。上述 probes 不解除 B0 prerequisite，也不授權繞過 migration review。
+
 本輪唯讀查證：
 - TEST 已套用 DEV-122 alias `20260930154758` 及 v2 `20260930155041`，RPC definer，MD5 `139a666b466ba55b9ee00aad52ce7b10`；正式僅 DEV-122 `20260914120000`，RPC invoker，MD5 `ffc0eb5fdd4d284a113817d46eb53cfa`。本輪新增 correction migration 尚未套用：因 B1 必須等待 B0 完整通過，遠端 apply 被安全審查拒絕並停止，沒有 workaround。
 - 兩邊 RPC execute ACL 都只有 postgres／authenticated／service_role，empty search_path；task／receipt owner RLS 存在。TEST 另有 OAuth restrictive policies、allowlist及 insert guard；本期保留，不宣稱其已全面隔離 ProJED API。

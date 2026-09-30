@@ -165,7 +165,7 @@ Release impact 為 SDK callback bundle／env keys 退役、DB v2 相容、TEST f
 
 ## 11. 定案結論與交接條件
 
-2026-10-01 Architecture Closure Review：登入來源／origin／callback、context／capture 交易、owner／claim、RPC／receipt／RLS、retry／cleanup／upgrade、退役責任面及測試路徑均已鎖定，**沒有待選的 P0/P1 架構決策**；文件達 RD Implementation Ready，架構已定案。本機第一輪已完成 source implementation、typecheck／targeted lint／test build／contract check；Playwright 與真實 TEST Auth／RPC／工作台仍待補，TEST correction apply 因 B0 gate 被拒絕而未執行。Convergence 為 **Implementation needs TEST integration**；下一步依 §8 在 B0 完整通過後執行 correction，再比對 spec／QA 與實際 source／TEST。
+2026-10-01 Architecture Closure Review：登入來源／origin／callback、context／capture 交易、owner／claim、RPC／receipt／RLS、retry／cleanup／upgrade、退役責任面及測試路徑均已鎖定，**沒有待選的 P0/P1 架構決策**；文件達 RD Implementation Ready，架構已定案。本機第一輪已完成 source implementation、typecheck／targeted lint／test build／contract check；真實 TEST ordinary-session 核身、RPC fail-closed、跨 origin local sign-out 隔離及離線 owner 綁定 probes 已部分通過，工作台／多帳號／完整 N01～N10 仍待補，TEST correction apply 因 B0 gate 被拒絕而未執行。Convergence 為 **Implementation needs TEST integration**；下一步依 §8 在 B0 完整通過後執行 correction，再比對 spec／QA 與實際 source／TEST。
 
 新版 N01～N10 尚未執行；正式 DEV-133 尚未配置／部署／驗收。Auth allowlist 最新值與真 TEST actors 屬驗證前置，不將未知填成 PASS；不需重新取得已給定的 ProJED 授權。未来跨 App 自動登入、強制同帳號、即時全域登出或 create-only credential 只有重新要求時才回 ADR 審查，不預先建 broker。
 
