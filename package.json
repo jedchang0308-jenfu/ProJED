@@ -31,6 +31,7 @@
     "verify:source": "npm run lint && tsc --noEmit && npm run build && npm run verify:production-auth-mode && npm run verify:supabase:static && npm run verify:supabase:migration-aliases && npm run verify:calendar-feed-ics && npm run verify:core-regression-static && npm run verify:p9-edge-function",
     "verify:dev-123-meeting-task-resolution": "tsx scripts/verify-dev-123-meeting-task-resolution.ts",
     "verify:dev-133-independent-auth-contract": "tsx scripts/verify-dev-133-independent-auth-contract.ts",
+    "verify:dev-133-test-actor-readiness": "node scripts/verify-dev-133-test-actor-readiness.mjs",
     "verify:dev-123-provider-contract": "tsx scripts/verify-dev-123-provider-contract.ts",
     "verify:dev-123-auth-storage-local": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify-dev-123-auth-storage-local.ps1",
     "verify:dev-123-control-api-local": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify-dev-123-control-api-local.ps1",

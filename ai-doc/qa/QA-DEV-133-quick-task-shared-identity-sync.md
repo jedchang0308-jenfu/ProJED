@@ -62,6 +62,8 @@ QC 每例保存 sourceRevision／dirty boundary、build artifact、環境、acto
 
 真 TEST 前置不足時記 `NOT RUN / fixture or callback prerequisite unavailable`，只停止依賴該前置的 case，繼續本機／DB／型別驗證；不能重啟舊 OAuth Client／Android Gate。新 verifier 尚未實作，不能引用不存在的輸出作證據。新 evidence 統一放 `output/qa/dev-133/independent-auth/` 並記 source／artifact／route／actorAlias／實際操作；預期 TEST 任務名稱使用測試前綴，cleanup 僅限本輪已同步 fixture，不清任何未同步資料。
 
+`npm run verify:dev-133-test-actor-readiness` 已新增為 B0 actor 前置檢查。它只接受 TEST project ref `fhisnnufoeulxqrchldf`，使用兩個普通 Supabase Auth password session，對 `profiles`、active `tenant_members` 及 `task_workbench_unplaced_items` 做 read-only 查詢；缺少任一 actor 憑證、登入核身失敗或沒有有效 workbench 時回傳 `BLOCKED`，不使用 service-role key、不建立 task、不修改資料。A 可沿用 `VITE_SUPABASE_TEST_EMAIL/PASSWORD`，B 必須由 TEST 執行環境注入 `DEV133_TEST_ACTOR_B_EMAIL/PASSWORD`。
+
 ### 2026-10-01 RD ordinary-session probes（部分證據）
 
 以下證據使用 TEST `fhisnnufoeulxqrchldf` 的既有測試帳號，所有 browser context 均為隔離 headless session；不輸出 token、email、title 或 user ID。readback／Session／offline probes 不建立 task；valid RPC 與 quick UI E2E 使用本輪建立並保留的 smoke fixture，replay／conflict probe 未新增 row。這些 probes 只補強真實 ordinary-session 邊界，不能升格為完整 N01～N10 或獨立 QC PASS。
