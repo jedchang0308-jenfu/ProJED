@@ -66,6 +66,10 @@ QC 每例保存 sourceRevision／dirty boundary、build artifact、環境、acto
 
 以下證據使用 TEST `fhisnnufoeulxqrchldf` 的既有測試帳號，所有 browser context 均為隔離 headless session；不輸出 token、email、title 或 user ID。readback／Session／offline probes 不建立 task；valid RPC 與 quick UI E2E 使用本輪建立並保留的 smoke fixture，replay／conflict probe 未新增 row。這些 probes 只補強真實 ordinary-session 邊界，不能升格為完整 N01～N10 或獨立 QC PASS。
 
+### 2026-10-01 TEST fixture readback（唯讀）
+
+以 Supabase TEST `fhisnnufoeulxqrchldf` 執行 aggregate-only SQL readback，未讀取或輸出任何 email、user ID、title 或 token：active auth users `5`、profiles `3`、active memberships `5`、active membership users `3`、workbench rows `3`，其中有 workbench row 的不同 owner `2`。這證明 TEST 資料面已有可作 A/B 的候選 fixture，但不證明兩個 actor 都能以普通登入取得 Session；目前只有一組登入憑證可操作，因此 N01／N02 的 A/B、切帳及負向權限矩陣仍為 NOT RUN。
+
 | Probe | 結果 | 證據邊界 |
 |---|---|---|
 | `sign-in → getUser → signOut({scope:'local'})` | PASS | 真實 TEST Auth 核身與 local sign-out；未持久化 Session。 |
