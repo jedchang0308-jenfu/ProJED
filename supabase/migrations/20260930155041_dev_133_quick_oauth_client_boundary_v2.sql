@@ -43,16 +43,11 @@ create trigger quick_task_oauth_client_guard
   before insert on public.task_workbench_unplaced_items
   for each row execute function private.enforce_quick_task_oauth_client();
 
--- The existing quick RPC remains the only OAuth write path. It is a narrowly
--- scoped SECURITY DEFINER function with fixed search_path and owner checks;
--- the trigger above validates the OAuth client before its insert.
 alter function public.create_quick_unplaced_task_v1(text, text, text) security definer;
 alter function public.create_quick_unplaced_task_v1(text, text, text) set search_path = '';
 revoke all on function public.create_quick_unplaced_task_v1(text, text, text) from public, anon;
 grant execute on function public.create_quick_unplaced_task_v1(text, text, text) to authenticated, service_role;
 
--- OAuth sessions cannot use the public table APIs directly. Normal first-party
--- sessions have no client_id and retain their existing owner policies.
 drop policy if exists "oauth clients cannot direct read unplaced tasks" on public.task_workbench_unplaced_items;
 create policy "oauth clients cannot direct read unplaced tasks"
   on public.task_workbench_unplaced_items as restrictive
