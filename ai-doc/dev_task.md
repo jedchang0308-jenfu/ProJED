@@ -10,7 +10,7 @@ Cold start：先讀下方 `## 總任務清單`；需要特定 DEV 詳細歷史�
 
 ### 執行邊界修訂（2026-09-30）
 
-使用者取消 Android 實機驗收並要求改以正式環境驗證；自動審查拒絕在目前 B0 證據下執行 B1 遠端 migration，因此 TEST／正式 B1、正式設定、部署與功能驗收本輪未執行。OAuth RPC 由 `VITE_QUICK_TASK_OAUTH_RPC_ENABLED` 保持關閉；不得以其他工具繞過審查。
+使用者取消 Android 實機驗收並要求改以正式環境驗證，後續明確核准在已知風險下繼續；原先含全域 PostgREST hook 的 migration 被拒絕後，已改成 quick-task 資料表／RPC 窄化 boundary 並成功套用 TEST。TEST hosted synthetic matrix 已通過；正式 OAuth 設定、部署與正式功能驗收尚未執行。OAuth RPC 由 `VITE_QUICK_TASK_OAUTH_RPC_ENABLED` 保持關閉；不得以其他工具繞過審查。
 
 文件成熟度：**Slice A 本機可靠性 `已實作／本機瀏覽器部分 PASS；真實 Auth／RPC 未驗`；Slice B 跨來源同帳號 `架構已定案；B0 mock 10/10 SIMULATION PASS；TEST 桌面真實 OAuth 部分 PASS，Android 雙 PWA Gate 未驗`**。使用者選擇 `1A、2A、3B`，並補充本機資料定期清理；七日僅清理已同步副本沿用現有工程基線。任務狀態：`執行中；A 本機驗證部分 PASS；A Auth／RPC 整合待驗；B0 桌面 OAuth 部分 PASS、Android 雙 PWA／signOut／換帳與 live denial 未驗；B1 已條件授權但因 B0 Gate 未通過而未執行；未發布`。使用者明確授權 ProJED_TEST `fhisnnufoeulxqrchldf` 的設定讀回及必要測試；本輪依授權暫時設定 TEST OAuth Server／Site URL／Authorization Path／local callback allowlist 並執行桌面真實流程，結束後已還原原 Auth config 並移除本輪 public client，讀回確認復原；正式環境未觸及。B1 additive migration 與權限矩陣僅在 B0 完整通過後執行。DEV-133 是本地交付點，不改 DEV-122／DEV-131 的既有狀態。權威契約：[SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md)、[ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md)、[QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md)。基準 HEAD `127bc0dfecd65507879405210b18e9e178975f76`；本次前已重查工作樹，保留其他既有修改。
 
@@ -1090,8 +1090,8 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 證據：本地 390×844 headless Edge 操作與 `output/playwright/dev-132/*-mobile-cdp.png`、`tsc --noEmit`、DEV-034 static 23/23、targeted ESLint 0 errors；移位前 DEV-132／130／034／038 回歸與本節執行紀錄。
   - 計入交付：否（尚未正式發布）。
 
-- ◐ DEV-133 [交付點] [執行中；A 本機部分 PASS；B0 mock 10/10、TEST 桌面真實 OAuth 部分 PASS；Android Gate 未驗；B1 條件授權但未執行] [P1] 快速建任務同帳號與自動同步
-  - 摘要：依使用者 1A／2A／3B 與定期清理要求交付快速任務本機可靠性及跨 App 同帳號同步；A 瀏覽器 19 cases 中 12 本機 PASS、7 模擬 PASS；B 採 OAuth 2.1 public client／PKCE。B0 mock 10/10 SIMULATION PASS；授權 TEST 桌面真實首次 consent／callback／same-user／refresh 部分 PASS，Android Gate 未驗。
+- ◐ DEV-133 [交付點] [執行中；A 本機部分 PASS；B0 mock 10/10、TEST 桌面真實 OAuth 部分 PASS；Android 依使用者取消；TEST hosted synthetic B1 matrix PASS；正式 OAuth／部署未完成] [P1] 快速建任務同帳號與自動同步
+  - 摘要：依使用者 1A／2A／3B 與定期清理要求交付快速任務本機可靠性及跨 App 同帳號同步；A 瀏覽器 19 cases 中 12 本機 PASS、7 模擬 PASS；B 採 OAuth 2.1 public client／PKCE。B0 mock 10/10 SIMULATION PASS；TEST 桌面真實首次 consent／callback／same-user／refresh 部分 PASS；Android 依使用者取消，TEST hosted synthetic B1 matrix PASS。
   - 來源 ID：使用者 2026-09-30 雙 App 同帳號與自動同步方案、開發文件及架構定案指示。
   - 父任務：DEV-122；延續 DEV-131 雙網址安裝，相容 DEV-130／132。
   - 下一步：先解決自動審查對「Android B0 是 B1 必要前置」的邊界衝突；在該審查點解除前，不執行 TEST additive migration／權限矩陣或正式部署。

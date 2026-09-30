@@ -2,7 +2,7 @@
 
 ## Documentation Map Update - 2026-09-30（DEV-133 執行邊界修訂）
 
-使用者取消 Android 實機驗收並要求改以正式環境驗證；自動審查拒絕在目前 B0 證據下執行 B1 遠端 migration。本輪保留本機與 TEST 桌面證據，未執行 TEST／正式 B1、正式設定或部署；OAuth RPC 由 `VITE_QUICK_TASK_OAUTH_RPC_ENABLED` 保持關閉。補充證據見 [DEV-133 execution-boundary addendum](qa/DEV-133-execution-boundary-addendum-20260930.md)。
+使用者取消 Android 實機驗收並要求改以正式環境驗證，後續明確核准在已知風險下繼續；原先含全域 PostgREST hook 的 migration 被拒絕後，已改成 quick-task 資料表／RPC 窄化 boundary 並成功套用 TEST。TEST hosted synthetic matrix 已通過；正式 OAuth 設定、部署與正式功能驗收尚未執行；OAuth RPC 由 `VITE_QUICK_TASK_OAUTH_RPC_ENABLED` 保持關閉。補充證據見 [DEV-133 execution-boundary addendum](qa/DEV-133-execution-boundary-addendum-20260930.md)。
 
 ## Documentation Map Update - 2026-09-30（DEV-133 架構審查與切片）
 
@@ -215,7 +215,7 @@ R12不新增第七個runtime責任點：`public/manifest.webmanifest`是唯一ro
 | [SPEC-122](specs/SPEC-122-mobile-zero-data-quick-task.md) | current implementation authority；root bundled shortcut、雙identity、exact file surface、entry/build、UI/voice、IDB、RPC/RLS、同帳號、工作台到達、drift與stop conditions。 |
 | [ADR-050](decisions/ADR-050-mobile-quick-task-entry-and-outbox.md) | Accepted Architecture Memory + R12 closure；root shortcut與選用第二identity、manifest發佈／更新、raw HTML MPA、one root SW、account outbox及server-owned idempotency。 |
 | [QA-DEV-122](qa/QA-DEV-122-mobile-zero-data-quick-task.md) | verification authority；S15、B22～B24、W07與受影響回歸已local PASS，Level 3 HTTPS smoke已PASS；實機、DEV-096 real-SW FAIL及完整B/W/P／獨立QA-QC缺口由使用者接受為本次release殘餘風險，原始case狀態不變；第10.4.3節定義production替代結案證據。 |
-| [DEV-133](dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30) | delivery status／slice owner；A 部分 local PASS；B0 mock 10/10、TEST 桌面真實 OAuth 部分 PASS；Android Gate pending、B1 條件授權但未執行；整體仍進行中。 |
+| [DEV-133](dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30) | delivery status／slice owner；A 部分 local PASS；B0 mock 10/10、TEST 桌面真實 OAuth 部分 PASS；Android 依使用者取消；TEST hosted synthetic B1 matrix PASS，正式 OAuth／部署仍未完成。 |
 | [SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md) | current implementation contract；local-first outbox、雙 origin OAuth/PKCE、client-level 權限、清理與 B0/B1 gates。 |
 | [ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md) | accepted architecture；同帳號銜接方式、origin/session 邊界、最小權限與停止條件。 |
 | [QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md) | verification evidence；本機 browser、OAuth mock、TEST 唯讀設定讀回、PGlite SQL core supplementary matrix 與未驗證層次。 |

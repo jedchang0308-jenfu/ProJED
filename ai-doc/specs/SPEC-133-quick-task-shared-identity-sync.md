@@ -1,5 +1,9 @@
 # SPEC-133：ProJED-快速建任務同帳號與自動同步
 
+## 2026-09-30 B1 執行更新
+
+使用者取消 Android 實機驗收並核准在已知風險下繼續。TEST 已套用 DEV-122 quick RPC 與 DEV-133 窄化 boundary：OAuth client allowlist、quick RPC trigger、quick task／receipt direct API restrictive policies；未設定全域 PostgREST hook。Hosted synthetic matrix 已通過 allowlisted client RPC 交易回滾、unlisted client 拒絕、一般 first-party RPC 與 OAuth direct table read=0。尚無有效 OAuth client/token，因此正式 OAuth 設定、正式部署與真實 token 驗收仍未完成。
+
 狀態（2026-09-30）：**Slice A（本機可靠性）`已實作／本機瀏覽器部分 PASS；真實 Auth／RPC 未驗`；Slice B（跨來源同帳號）`架構已定案；B0 source/mock 10/10 SIMULATION PASS；TEST 桌面首次 consent／callback／same-user／refresh 部分 PASS；Android 驗收依使用者最新決定取消`。** 使用者已授權 ProJED_TEST ref `fhisnnufoeulxqrchldf` 與正式 Firebase／Supabase 範圍，但自動審查仍把實體 Android B0 視為 B1 前置，故本輪未能執行遠端 B1 migration 或正式部署。桌面重複授權成功回同一 user callback，但 consent UI 是否略過未確證；live denial 因既有 grant 未實測成功。OAuth RPC 在程式端增加明確環境開關，未經 migration／權限矩陣不得啟用。B0 是已定案架構的執行 Gate，不是待選架構。[QA-DEV-133](../qa/QA-DEV-133-quick-task-shared-identity-sync.md) 保存證據；基準 HEAD `127bc0dfecd65507879405210b18e9e178975f76`，工作樹另有未提交修改。
 
 權威：[DEV-133](../dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30)、[ADR-053](../decisions/ADR-053-quick-task-cross-origin-account-link.md)、[QA-DEV-133](../qa/QA-DEV-133-quick-task-shared-identity-sync.md)。Slice A 已在工作樹實作，補齊 [SPEC-122](SPEC-122-mobile-zero-data-quick-task.md) 的回網重試與本機清理；Slice B 依 ADR-053 採 Supabase OAuth 2.1 public client + PKCE，銜接同一身分但保留兩 origin 各自 session。共同不變條件：本機先存、未綁定資料明確 claim、account-bound outbox、固定 JWT RPC、server receipt、零業務資料首屏與雙 PWA 身分。使用者選擇 `1A、2A、3B` 並要求本機資料定期清理；七日且只清理已同步副本是現行工程基線，不歸因為額外人類選項。
