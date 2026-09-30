@@ -2,7 +2,7 @@
 
 ## Documentation Map Update - 2026-10-01（DEV-133 架構定案）
 
-使用者採用「共用帳號、各自登入、各自保存 Session、離線任務依帳號同步」，並要求補齊架構定案。[DEV-133](dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30) 維持執行中；[SPEC-133 Rev 3](specs/SPEC-133-quick-task-shared-identity-sync.md) 達 **RD Implementation Ready／架構定案：已定案**，[ADR-053 Rev 3](decisions/ADR-053-quick-task-cross-origin-account-link.md) 為現行決策。以 `e868611` 為本機實作基準，已完成單一 SDK Auth、DB v2 auth_context＋capture receipt、owner/context revision CAS、登入後明確認領、local signOut barrier、strict receipt 驗證與退役舊 OAuth 路徑，並通過 typecheck／lint／test build／contract check；真實 TEST Auth／RPC、workbench UI 與同帳號 quick E2E probes 已部分通過，第二帳號／切帳與完整矩陣仍待驗證。
+使用者採用「共用帳號、各自登入、各自保存 Session、離線任務依帳號同步」，並要求補齊架構定案。[DEV-133](dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30) 維持執行中；[SPEC-133 Rev 3](specs/SPEC-133-quick-task-shared-identity-sync.md) 達 **RD Implementation Ready／架構定案：已定案**，[ADR-053 Rev 3](decisions/ADR-053-quick-task-cross-origin-account-link.md) 為現行決策。以 `e868611` 為本機實作基準，已完成單一 SDK Auth、DB v2 auth_context＋capture receipt、owner/context revision CAS、登入後明確認領、local signOut barrier、strict receipt 驗證與退役舊 OAuth 路徑，並通過 typecheck／lint／test build／contract check；真實 TEST Auth／RPC、workbench UI、同帳號 quick E2E 及 receipt replay/conflict probes 已部分通過，第二帳號／切帳與完整矩陣仍待驗證。
 
 下一步：新方案 B0 的 TEST ordinary-session callback／fixture 完整驗收後，才可執行 additive correction migration，再跑 [QA-DEV-133 N01～N10](qa/QA-DEV-133-quick-task-shared-identity-sync.md)。本輪 correction apply 被安全審查拒絕，沒有 workaround、部署或資料修改；其他 dirty changes 保留，沒有新增 DEV 或產品完成率。實體 Android 已取消，普通 Google callback／同帳與異帳真實驗收仍必須完成。
 
