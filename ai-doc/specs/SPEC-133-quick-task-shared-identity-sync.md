@@ -14,7 +14,7 @@
 
 ## 2. Architecture Closure Review：實際基準與缺口定位
 
-基準 repo `C:/VIBE CODING/ProJED/ProJED`，branch `持續優化3`，HEAD `e868611`（`feat(quick-task): adopt independent Supabase auth sessions`），2026-10-01 working tree。相關安裝／DEV-132 修改已存在且須保留；其餘 dirty changes 不屬本 DEV，不能納入本版證據。
+基準 repo `C:/VIBE CODING/ProJED/ProJED`，branch `持續優化3`；source implementation baseline `e868611`（`feat(quick-task): adopt independent Supabase auth sessions`），current documentation evidence HEAD `a1d12a9`，2026-10-01 working tree。相關安裝／DEV-132 修改已存在且須保留；其餘 dirty changes 不屬本 DEV，不能納入本版證據。
 
 | 查證面 | 已觀察事實 | 本版固定處置 |
 |---|---|---|

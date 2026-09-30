@@ -64,7 +64,7 @@ QC 每例保存 sourceRevision／dirty boundary、build artifact、環境、acto
 
 ### 2026-10-01 RD ordinary-session probes（部分證據）
 
-以下證據使用 TEST `fhisnnufoeulxqrchldf` 的既有測試帳號，所有 browser context 均為隔離 headless session；不輸出 token、email、title 或 user ID，不建立 task，也不修改遠端資料。這些 probes 只補強真實 ordinary-session 邊界，不能升格為完整 N01～N10 或獨立 QC PASS。
+以下證據使用 TEST `fhisnnufoeulxqrchldf` 的既有測試帳號，所有 browser context 均為隔離 headless session；不輸出 token、email、title 或 user ID。readback／Session／offline probes 不建立 task；valid RPC 與 quick UI E2E 使用本輪建立並保留的 smoke fixture，replay／conflict probe 未新增 row。這些 probes 只補強真實 ordinary-session 邊界，不能升格為完整 N01～N10 或獨立 QC PASS。
 
 | Probe | 結果 | 證據邊界 |
 |---|---|---|
