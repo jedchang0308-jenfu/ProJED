@@ -72,6 +72,7 @@ QC 每例保存 sourceRevision／dirty boundary、build artifact、環境、acto
 | invalid-title quick RPC | PASS | 真實已核身 Bearer 可達 RPC；伺服器以 `QT_INVALID_TITLE` fail-closed，未寫入 task／receipt。 |
 | valid quick RPC → workbench row readback | PASS | 既有測試帳號有 2 筆 active membership；直接 authenticated SDK RPC 回傳合法 receipt，工作台 owner row 唯一讀回 1 筆。此為 direct API 證據，未替代正常 UI N02；唯一 smoke task 保留作 synced fixture。 |
 | `quick_workbench=1` workbench UI readback | PASS | task-owned 4173 runtime 明確使用 Supabase TEST env；以同一 Session 從正常 workbench entry 顯示既有 smoke fixture。此為 UI readback，仍未證明同一輪 quick UI 建立→工作台往返。 |
+| quick UI 建立→receipt→workbench UI 同帳號 E2E | PASS（N02 partial） | task-owned 4173 Supabase TEST runtime；正常 quick UI 建立後顯示已建立，按「前往工作台」後同一筆 title 在主程式 workbench UI 可見。第二帳號切換與跨帳隔離仍未驗。 |
 | 主程式／quick UI Session | PASS | 同一 ordinary Session 注入兩個隔離本機 origin；兩頁均顯示已登入。 |
 | quick local sign-out isolation | PASS | quick local sign-out 後主程式頁面 reload 仍 authenticated；未建立 task。 |
 | authenticated offline owner binding | PASS | quick 離線建立後隔離 IDB record 綁定 TEST user owner、state=`pending`，business request 數為 0。 |
