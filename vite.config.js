@@ -114,7 +114,6 @@ export default defineConfig(({ mode }) => {
       input: {
         main: 'index.html',
         quickTask: 'quick-task/index.html',
-        oauthConsent: 'oauth-consent.html',
       },
       output: {
         manualChunks(id) {

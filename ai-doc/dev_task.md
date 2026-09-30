@@ -8,29 +8,27 @@ Cold start：先讀下方 `## 總任務清單`；需要特定 DEV 詳細歷史�
 
 ## DEV-133 快速建任務同帳號與自動同步 - 2026-09-30
 
-### 執行邊界修訂（2026-09-30）
+### 架構修訂（2026-10-01；使用者已採用獨立登入方案）
 
-使用者取消 Android 實機驗收並要求改以正式環境驗證，後續明確核准在已知風險下繼續；原先含全域 PostgREST hook 的 migration 被拒絕後，已改成 quick-task 資料表／RPC 窄化 boundary 並成功套用 TEST。TEST hosted synthetic matrix 已通過；正式 OAuth 設定、部署與正式功能驗收尚未執行。OAuth RPC 由 `VITE_QUICK_TASK_OAUTH_RPC_ENABLED` 保持關閉；不得以其他工具繞過審查。
+文件成熟度：**RD Implementation Ready／Human Confirmed；架構定案：已定案**。狀態：**執行中；本機實作完成、TEST／真實整合待驗；未發布**。使用者明確採用「共用帳號、各自登入、各自保存 Session、離線任務依帳號同步」，本輪已落地單一 Supabase SDK Auth、DB v2 auth_context／receipt、owner CAS、明確認領、local signOut barrier、嚴格回執及舊 OAuth 路徑退役；不把本機驗證宣稱產品完成。這取代早先 `3B` 的跨 App OAuth Server／免再次登入契約；`1A／2A` 的本機先存、未綁定資料明確認領及定期清理保護保留。DEV-133 仍為原交付點，不新增 DEV／完成率，也不改 DEV-122／131 的既有交付狀態。
 
-文件成熟度：**Slice A 本機可靠性 `已實作／本機瀏覽器部分 PASS；真實 Auth／RPC 未驗`；Slice B 跨來源同帳號 `架構已定案；B0 mock 10/10 SIMULATION PASS；TEST 桌面真實 OAuth 部分 PASS，Android 雙 PWA Gate 未驗`**。使用者選擇 `1A、2A、3B`，並補充本機資料定期清理；七日僅清理已同步副本沿用現有工程基線。任務狀態：`執行中；A 本機驗證部分 PASS；A Auth／RPC 整合待驗；B0 桌面 OAuth 部分 PASS、Android 雙 PWA／signOut／換帳與 live denial 未驗；B1 已條件授權但因 B0 Gate 未通過而未執行；未發布`。使用者明確授權 ProJED_TEST `fhisnnufoeulxqrchldf` 的設定讀回及必要測試；本輪依授權暫時設定 TEST OAuth Server／Site URL／Authorization Path／local callback allowlist 並執行桌面真實流程，結束後已還原原 Auth config 並移除本輪 public client，讀回確認復原；正式環境未觸及。B1 additive migration 與權限矩陣僅在 B0 完整通過後執行。DEV-133 是本地交付點，不改 DEV-122／DEV-131 的既有狀態。權威契約：[SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md)、[ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md)、[QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md)。基準 HEAD `127bc0dfecd65507879405210b18e9e178975f76`；本次前已重查工作樹，保留其他既有修改。
+權威：[SPEC-133 Rev 3](specs/SPEC-133-quick-task-shared-identity-sync.md)、[ADR-053 Rev 3](decisions/ADR-053-quick-task-cross-origin-account-link.md)、[QA-DEV-133 新版 N01～N10](qa/QA-DEV-133-quick-task-shared-identity-sync.md)。canonical repo `C:\VIBE CODING\ProJED\ProJED`，branch `持續優化3`，HEAD `d0865f4`；其他既存 dirty changes 保留。
 
-**問題與價值。** 使用者要在手機上立即記下任務，並能確定它最後出現在本人 ProJED「全域任務工作台」。本次已補 quick origin 登入狀態、Auth 服務核身後才授權同步，以及啟動／網路恢復／回前景和 backoff 到期的重試觸發；離線建立仍先完成 IndexedDB 保存與讀回。主程式與獨立 quick App 正式環境分別在 `web.app`、`firebaseapp.com`；兩個 origin 使用同一 Supabase 專案與帳號身分，登入 session 與本機待同步資料仍各自隔離。此雙網址安排是 DEV-131 為獨立安裝採用的既有基線。跨來源同帳號仍須 B0 實證，不能從共用 Supabase 專案推定已完成。
+**目標與架構。** 主程式及獨立快速 App 重用同一環境 Supabase Auth／既有 Google provider，各 origin 保存自己的 Session；兩邊均有登入入口和本 App 帳號顯示。兩邊選同一 user ID 時共享本人工作台資料，但不自動複製登入、不保證帳號相同或即時連動。正常登出使用 local Session scope；已存在的明示全域撤銷按平台語意處理。取消 ProJED OAuth Server／public client／consent、自製 token lifecycle 與舊 B0／B1 作必要前置；Google OAuth 登入及安全 callback 仍保留。
 
-**已確認的主要流程（1A、2A）。** quick 頁不論有無網路或登入都可立即輸入；按「建立」每筆先完成本機保存與讀回，成功後才顯示「已記下，待同步」。線上但未登入也可先記，待登入並確認資料歸屬後再同步。有效登入同一 ProJED 帳號且服務可達時才嘗試送出，取得同帳號 server receipt 後顯示「已同步」。網路或服務暫時不可用時維持待同步，於 backoff 到期、連線恢復、頁面重新開啟或回到前景時重試；session 過期不因恢復網路就宣稱已登入。未綁定帳號的本機任務不自動送到後來登入的任意帳號。App 完全關閉時不承諾立即背景同步。
+**保存與同步。** 每筆建立都先完成 IndexedDB transaction + same-key readback；有已核實且未登出／切帳的 A 身分時綁 A，暫時離線不抹掉 owner。無已知帳號先 unbound，登入後明確確認目的帳號才 claim。回網、啟動、回前景及 backoff 到期只是重試提示；核實同 owner、凍結 token／epoch 才 RPC，只有同 owner committed receipt 才標同步。登入失效保留資料、要求原帳號重登；切 B 不改綁／代送 A，App 關閉不保證背景同步。
 
-**已確認的登入目標與定案架構（3B）。** 主程式與獨立 quick App 都有登入入口及各自經核實的登入狀態；主程式已登入後切 quick App 以 OAuth 2.1 public client + PKCE 銜接同一身分，目標是免再次輸入 Google 帳密。兩個 origin 的 session 仍各自獨立。ADR-053 已定案；B0 驗證 OAuth 設定、AuthGate／Google redirect 保存授權請求與 Android PWA 回跳。B1 另以 client_id 限縮資料權限並驗證 refresh／owner。首次授權可能需要同意；不承諾關閉 App 後背景同步或即時跨窗登出。
+**資料與權限。** 快速 App 程式只呼叫既有 quick RPC，不載入業務清單；普通 Session 沿用本人現有 RLS／workspace 權限，不再交付 App 專屬「僅可新增」憑證。此取捨不授權放寬 RLS／新增 grants／管理金鑰或業務資料改寫。延續 server `auth.uid()` owner、workspace membership、單 transaction task／receipt、同 ID replay 與 conflict。
 
-**切片範圍。** A 已在現有 quick origin session 下補本機回網／回前景與 backoff 到期重試、七日清理及精簡狀態；Chrome local browser 19 cases 中 12 本機 PASS、7 `SIMULATION PASS`，Auth／RPC 真實整合仍待驗。B0 consent entry／PKCE／refresh source path 已實作，隔離 OAuth mock 10/10 `SIMULATION PASS`。依 TEST 授權，本輪另完成桌面真實 OAuth：首次 consent、quick callback、同一 TEST user identity 與 refresh token 輪替均 PASS；再次授權回到同一帳號 callback，但 consent 是否自動略過未能確證；live denial 因先前已保存 grant 而未抵達可拒絕的 consent 畫面，只有 mock denial 通過。OAuth 路徑以 localhost 暫時設定測試後已回復 TEST 原始 Auth config 並刪除臨時 client。這是桌面身份流程的部分證據，不代表 Android PWA、signOut／換帳、RPC／receipt 或 B1 權限驗收。
+**本機清理。** 延續 7 日工程基線，只刪已取得嚴格遠端回執且 synced 滿 7 日的本機副本；未綁定、待送、同步中、失敗資料不自動刪除，也不因登出、切帳或改版清掉。開啟／回前景及開啟期間每日執行，關閉期間不保證準點清理。
 
-**本機定期清理（使用者要求；保留週期採現行工程基線）。** 只自動清理已取得遠端成功回執、並在本機保留滿 7 天的 `synced` 副本；待登入、待同步及同步失敗任務不設自動刪除期限，以免清理造成不可恢復的資料遺失。`removeExpiredQuickCaptures()` 直接以 readwrite cursor 掃描原始 store，僅刪除 `synced` 且 `updatedAt` 有效、已滿 7 天的資料；啟動、回前景、頁面可見時及開啟期間每日觸發。離開或關閉 App 時不承諾準點清理。Chrome 本機瀏覽器測試已確認 8 日 synced 被刪、6 日 synced 與 40 日 pending／unbound 保留，重新開啟後補清；另確認清理與 pending→fresh synced 狀態轉換並行時不會誤刪，交易中止會明確回報錯誤。真多視窗 Auth／RPC 同步競態仍未驗證，見 QA-DEV-133。
+**現況與證據。** 本機已通過 `tsc --noEmit`、targeted lint、test build 及 `verify-dev-133-independent-auth-contract.ts`；既有 browser runner 已切到 DB v2，但本輪環境沒有 Playwright package，未產生新的 browser artifact。真實 Auth／RPC／工作台整合仍缺。舊 OAuth mock 及 TEST 桌面 identity 僅為歷史方案證據，不能冒稱新方案 PASS。TEST 已套用 DEV-122 RPC與 v2 quick OAuth boundary；新增 correction migration 因 B0 完整驗收前置未成立而被安全審查拒絕，未執行遠端修改或 workaround。正式配置／部署／驗收尚未執行。歷史證據見 QA 及 [2026-09-30 補充](qa/DEV-133-execution-boundary-addendum-20260930.md)。
 
-**不在本提案的範圍。** 不直接跨 origin 複製 token、IndexedDB 或未同步任務，不承諾關閉 App 後立即同步，不改主程式工作台資料模型或兩個 manifest 身分。B1 需新增最小 `client_id` 權限界線與窄化 RPC；不擴大一般登入權限、不回填資料。正式 OAuth 設定及發布另依環境授權與 release gate。本輪只在獲授權的 ProJED_TEST 做臨時設定並已復原，正式環境未變更。
+**架構定案與下一步。** 已對照 source、SDK callback／local signOut、IDB／claim／late response、build/env、hosted RPC／RLS與既有測試完成 Closure Review。SPEC §3～§10 鎖定 DB v2 auth_context＋capture receipt／owner CAS、固定 callback、登入後明確認領、同 owner fixed Bearer／epoch、8 次重試及 legacy 缺回執保護；無待選 P0/P1 架構決策。本機 RD 實作已完成第一輪，下一步只能在 B0 完整驗收後執行 TEST correction migration，再依 QA N01～N10 驗證，不把本機證據當 DEV 完成。
 
-**驗收方向。** ① 有網路、無網路、API 逾時或服務故障時，每筆建立後本機可讀回，未取得遠端回執不得顯示已同步；② 線上未登入可先記，登入後確認歸屬才同步；③ 有效原帳號與服務恢復後，重新開啟或回到 quick 頁可自動重試，同一任務在工作台只出現一次；④ 從一邊登入後於另一邊免重輸入帳密且顯示經驗證的同一身分，session 失效、登出及跨帳號切換不錯送任務；⑤ 只有符合已確認保留政策的本機資料會定期清理，待送任務不能被誤清；⑥ 用正常安裝入口、手機窄版畫面與真實操作驗證可見狀態，並以兩邊帳號身分、server receipt、工作台讀回及本機清理讀回證明結果，不能只靠文案或 API 模擬宣稱通過。
+**2026-10-01 唯讀環境基準。** TEST 已套用 DEV-122 alias `20260930154758`／v2 `20260930155041`，RPC definer；正式僅 DEV-122 `20260914120000`，RPC invoker。execute ACL／owner RLS未變，兩邊 auth.users 無 profile bootstrap trigger。新 correction 收斂 canonical DEV-122 body（TEST 不再額外 trim U+200B）／invoker；正式不單獨補套 retired v2，不改已套用歷史／既有 task/receipt/hash。quick 不另做 profile／workspace 開通，依賴缺失導回主程式設定再人工重試。Auth 最新 allowlist／真 TEST fixture於驗收前核對，新 N01～N10 均 NOT RUN。
 
-**執行邊界與下一關。** A 已在本地工作樹實作；本機 PASS 尚未涵蓋真實 Auth／RPC／owner／receipt。B0 在 ProJED_TEST 的首次桌面 OAuth consent、quick callback、同一 TEST 身分核對與 refresh token 輪替通過；重複授權只確認 callback 回到同一身分，consent 畫面是否略過仍不確定；live denial 因既有 grant 未能驗證。TEST Auth config 已回到測試前讀回的 baseline（OAuth Server disabled、Site URL 與 URI allowlist 原值、Authorization Path null），本輪 client 已刪除且 GET 回 404。使用者已取消 Android 驗收並要求直接以正式環境驗證，但自動審查仍把實體 Android B0 視為 B1 前置，故本輪沒有操作正式環境，也沒有執行 TEST migration／權限矩陣。OAuth RPC 以 `VITE_QUICK_TASK_OAUTH_RPC_ENABLED` 保持關閉；不得以其他工具繞過審查，也不得把桌面結果升格為完整 B0 或 DEV-133 完成。
-
-使用思考習慣：#批判、#效用理論、#設計思考
+**授權與交付邊界。** 既有 ProJED repo、Supabase TEST `fhisnnufoeulxqrchldf`／production `knodlkxqpcqyrtgwpdst`、Firebase `projed-cc78d` 的授權在既定動作與資源範圍內延續；本輪文件指令不啟動遠端修改／Git交付／發布。使用者取消實體 Android 驗收的決定保留，不把窄版模擬稱實機 PASS；舊 OAuth B0／B1 被新方案驗收取代，而不是補登為通過。禁止跨專案、破壞性 migration、業務資料改寫、清除未同步任務及 IAM／Secret 擴權。
 
 ## DEV-131 Android 獨立快速入口雙網址修復 - 2026-09-29
 
@@ -1090,13 +1088,13 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 證據：本地 390×844 headless Edge 操作與 `output/playwright/dev-132/*-mobile-cdp.png`、`tsc --noEmit`、DEV-034 static 23/23、targeted ESLint 0 errors；移位前 DEV-132／130／034／038 回歸與本節執行紀錄。
   - 計入交付：否（尚未正式發布）。
 
-- ◐ DEV-133 [交付點] [執行中；A 本機部分 PASS；B0 mock 10/10、TEST 桌面真實 OAuth 部分 PASS；Android 依使用者取消；TEST hosted synthetic B1 matrix PASS；正式 OAuth／部署未完成] [P1] 快速建任務同帳號與自動同步
-  - 摘要：依使用者 1A／2A／3B 與定期清理要求交付快速任務本機可靠性及跨 App 同帳號同步；A 瀏覽器 19 cases 中 12 本機 PASS、7 模擬 PASS；B 採 OAuth 2.1 public client／PKCE。B0 mock 10/10 SIMULATION PASS；TEST 桌面真實首次 consent／callback／same-user／refresh 部分 PASS；Android 依使用者取消，TEST hosted synthetic B1 matrix PASS。
-  - 來源 ID：使用者 2026-09-30 雙 App 同帳號與自動同步方案、開發文件及架構定案指示。
+- ◐ DEV-133 [交付點] [執行中；本機實作完成、TEST／真實整合待驗] [P1] [本輪實作] 快速建任務各自登入與自動同步
+  - 摘要：共用 ProJED 帳號系統、兩個 App 各自登入與保存 Session；保留 owner-bound 離線保存、自動重試及七日已同步副本清理。
+  - 來源 ID：使用者 2026-10-01 採用獨立登入方案及修改開發文件／補齊到架構定案指示；延續 2026-09-30 DEV-133。
   - 父任務：DEV-122；延續 DEV-131 雙網址安裝，相容 DEV-130／132。
-  - 下一步：先解決自動審查對「Android B0 是 B1 必要前置」的邊界衝突；在該審查點解除前，不執行 TEST additive migration／權限矩陣或正式部署。
-  - 阻塞：使用者已取消 Android 實機驗收並改要求正式驗證，但自動審查仍拒絕在缺少實體 Gate 的狀態下執行 B1。TEST 桌面測試已依授權完成，測試後設定已復原、臨時 public client 已移除；OAuth RPC 保持關閉，遠端 B1／正式操作未執行。
-  - 證據：[SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md)、[ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md)、[QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md)、桌面 OAuth 摘要 `output/qa/dev-133/desktop-oauth-b0-20260930.json`、`output/playwright/dev-133-quick-task-local-browser/result.json`、`output/playwright/dev-133-quick-task-oauth-mock/result.json`、PGlite DEV-122 SQL core supplementary matrix（不代表 hosted Supabase／B1 驗收）。
+  - 下一步：本機第一輪實作與 contract／build 驗證已完成；依 SPEC-133 Rev 3 §8 先完成 B0 TEST callback／fixture，再執行 correction migration、真實 Auth／RPC／工作台與 QA N01～N10 驗證。
+  - 阻塞 / 恢復條件：B1 correction migration 已被安全審查以「B0 完整驗收前置未成立」拒絕，未繞過；真實 callback／fixture／workspace actor仍待核對。OAuth Client 註冊與已取消的 Android 實機不再是必要前置。
+  - 證據：[SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md)、[ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md)、[QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md)。舊 A 局部證據與 OAuth／synthetic 歷史另存 QA，新 N01～N10 尚未執行。
   - 計入交付：是（未完成，產品完成率貢獻 0）。
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容

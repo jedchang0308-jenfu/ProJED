@@ -1,50 +1,57 @@
-# ADR-053：ProJED-快速建任務與主程式的同帳號銜接
+# ADR-053：ProJED 雙 App 共用帳號、各自登入與依帳號同步
 
-狀態：**Accepted（架構已定案；B0 是實作 Gate）**；2026-09-30。ADR 的定案本身不代表遠端設定或正式發布已授權；本輪 ProJED_TEST 暫時 OAuth 設定與桌面 B0 測試另依使用者授權執行，測後已復原並確認。正式環境未觸及；Slice A 本機可靠性獨立於本 ADR。
+狀態：**Accepted — Rev 3（2026-10-01；產品方向已採用，工程架構已定案）**。本版取代 2026-09-30 的跨 App OAuth Server／public client 銜接決策；文件決策完成不代表程式、TEST 或正式環境已完成切換。
 
-關聯：[DEV-133](../dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30)、[SPEC-133](../specs/SPEC-133-quick-task-shared-identity-sync.md)、[SPEC-122](../specs/SPEC-122-mobile-zero-data-quick-task.md)、[ADR-050](ADR-050-mobile-quick-task-entry-and-outbox.md)。
+關聯：[DEV-133](../dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30)、[SPEC-133](../specs/SPEC-133-quick-task-shared-identity-sync.md)、[QA-DEV-133](../qa/QA-DEV-133-quick-task-shared-identity-sync.md)、[SPEC-122](../specs/SPEC-122-mobile-zero-data-quick-task.md)、[ADR-050](ADR-050-mobile-quick-task-entry-and-outbox.md)。沿用既有文件路徑與 DEV ID，避免續接引用失效。
 
-## 背景與不可變條件
+## 背景與決策來源
 
-DEV-131 保留兩個可獨立安裝的 PWA：主程式 `https://projed-cc78d.web.app/` 與快速入口 `https://projed-cc78d.firebaseapp.com/quick-task/`。不同 origin 的瀏覽器 session、IndexedDB 彼此隔離；共用 Supabase 專案不等於共用 session。使用者選擇 `1A、2A、3B`，並要求本機資料定期自動清理：快速入口即使離線或未登入仍能先記；兩 App 要能銜接同一帳號；未同步內容不可因自動清理遺失。現行程式採 7 日後清除已同步副本，這是工程保留契約，並非使用者另選的 `4A`。
+真正目標是立即記下任務，並可靠地送到本人 ProJED「全域任務工作台」。兩個 App 都是 ProJED 第一方產品，使用同一 Supabase 專案及帳號系統；為「免再次登入」另外建立身分提供者、consent、public client 與自製 token lifecycle，增加設定、權限及驗收成本。
 
-不可改變：PWA origin／manifest identity、不跨 origin 複製 token／IndexedDB／未同步任務、任務 owner 必須由已核實身分決定、遠端成功必須有同 owner receipt、未同步資料不自動刪除、App 關閉後不保證背景同步。
+使用者於 2026-10-01 明確採用「共用帳號、各自登入、各自保存 Session、離線任務依帳號同步」，並要求修改開發文件。這是 **Intentional replacement**：覆蓋早先 `3B` 被解讀為跨 App 自動銜接／免再次輸入帳密的契約；`1A／2A` 的本機先存、未綁定資料明確認領及定期清理保護繼續保留。
+
+DEV-131 的雙 PWA origin／manifest identity 保留。不同 origin 的 Session 與 IndexedDB 各自管理；共用帳號資料庫不等於共享登入狀態。同 origin 的 `/quick-task/` 相容入口可沿用該 origin 的 Session，不為模擬隔離另造一套儲存。
 
 ## 決策
 
-1. **身份銜接採 OAuth 2.1 Authorization Code + PKCE public client。** 主程式 origin 是 Supabase OAuth authorization/consent UI；獨立 quick origin 是專屬 public client，持有自己 origin 的 OAuth session。主程式已有有效登入時目標為免再次輸入 Google 密碼；首次使用可要求授權同意。不得直接共享或搬移 session/token。
-2. **帳號狀態分 origin 顯示。** 兩邊各有登入入口並顯示各自最近一次經 Auth 核實的帳號。OAuth 銜接代表取得相同 user identity，不代表瀏覽器即時同步 session。從主程式 signOut 不保證立刻撤銷 quick session；quick 下次驗證仍顯示自己的實際狀態，切帳號時不可將舊 owner 任務送給新帳號。即時跨 App 登出不在本期。
-3. **同步採 local-first。** 每筆先以 IndexedDB transaction 寫入並 same-key readback；已綁定且 Auth 核實的同 owner 項目可自動重試；未綁定資料必須由使用者明確 claim。`online`、重開、回前景只是重試提示，不代表登入或服務已恢復。
-4. **OAuth public client 必須有 client-level 最小權限。** Supabase access token 含 `client_id`；OAuth scope 只控制 OIDC 身分資訊，不能代替資料庫權限。B1 以受控 RPC 作唯一資料操作入口：private allowlist 驗證專屬 quick client ID；function 驗證 `auth.uid()` 和輸入契約，只建立一筆 unplaced task 並寫 immutable receipt；OAuth token 對 ProJED Data API 的直接資料讀寫 fail closed。主程式的一般 session（無 OAuth `client_id`）維持現有權限行為。安全 function 採固定空 `search_path`、完整 schema qualification、無動態 SQL、撤銷 `PUBLIC/anon` execute，並限制至 `authenticated`。必須逐行安全審查與負向測試；若無法證明權限收斂，B1 停止。
-5. **本機清理只移除已同步副本。** 採目前程式的 7 日工程基線，只刪有有效遠端 receipt 且已 `synced` 滿 7 日的本機副本；pending、unbound、failed 項目不設自動到期。改變保留週期需另行明確決策。
+1. **共用帳號系統，各自登入。** 兩個 App 沿用同一環境 Supabase Auth 與既有 Google provider；各自在自己的 origin 完成標準登入、保存及更新 Session。兩邊選擇同一 provider identity／Supabase user ID 時任務屬於同一使用者；不以 email 字串代替 user ID。允許兩邊選擇不同帳號，不自動對齊、切換或合併帳號。
+2. **登入狀態只代表本 App。** 兩邊各有登入入口與目前帳號顯示。一般登出明確使用本 Session 的 `scope:'local'`，不依賴 SDK 預設 global；同 origin 共用該 Session 的視窗可一起收到登出事件。既有明示「所有裝置登出」或管理撤銷仍可使其他 Session 失效，但不承諾跨 origin 即時更新畫面，也不新增全域登出功能。
+3. **同步仍採 local-first。** 每筆先完成 IndexedDB transaction 與 same-key readback。建立時已有本 App 已核實且未登出／切帳的 A 身分，任務綁 A；暫時離線不能把 A 記錄改成未綁定或改綁 B。無已知身分時保存 unbound，須在登入後由使用者明確確認「同步到〈帳號〉」才認領。
+4. **恢復連線與恢復登入分開處理。** 啟動、回前景、`online`、退避到期只觸發重試。送出前核實本 App 的 user ID，凍結 owner／token／epoch；只有與記錄 owner 相符才送出。登入過期要求重新登入原帳號，保留待送資料；網路中斷不反覆跳登入。App 關閉不保證背景同步。
+5. **採第一方使用者權限，取消 App 專屬憑證隔離。** 快速 App 正常程式只呼叫既有 quick-create RPC，不載入業務清單；一般 Session 在伺服器端仍沿用本人既有 RLS／workspace membership 權限。本版不再承諾「快速 App 的憑證只能新增任務」。這不授權新增 grants、放寬 RLS、使用管理金鑰或跨帳號存取。RPC 仍以 `auth.uid()` 決定 owner，驗證 workspace 與冪等 receipt。
+6. **本機清理只移除已同步副本。** 延續 7 日工程基線，只刪已取得有效遠端 receipt 且 `synced` 滿 7 日的本機副本。unbound、pending、syncing、failed 不自動到期，也不因登出、切帳或改版被清除。
 
-## 考慮過的方案
+## 方案取捨
 
-| 方案 | 決定 | 理由 |
+| 方案 | 決定 | 效果與代價 |
 |---|---|---|
-| 保留兩邊各自 Google 登入 | 不採 | 使用者可能選到不同帳號，無法達成同一身分銜接。 |
-| 跨 origin 傳 token、localStorage 或 IndexedDB | 禁止 | 繞過 origin 隔離並增加 token 外洩、任務錯綁風險。 |
-| 合併 origin 或要求重裝 | 不採 | 破壞 DEV-131 的雙 PWA identity 與既有安裝。 |
-| 自製 token broker／第二次 Google 登入 | 不採 | 增加自有憑證服務或重複登入，沒有必要且偏離免重輸帳密目標。 |
-| Supabase OAuth 2.1 public client + PKCE | **採用** | 官方支援 public client 與 PKCE；符合兩個獨立 origin，並可用簽章 token 的 `client_id` 建立 server-side 權限界線。 |
+| 同一 Supabase 帳號系統，兩邊標準 Google 登入 | **採用** | 重用既有 Auth，省去跨 App OAuth Server；使用者須自行選同帳號，Session 分開管理。 |
+| ProJED 作 OAuth Server，快速 App 為 public client | 已取代 | 可銜接登入身分及另做 client-level 權限，但不再是本期需求，取消 B0／B1 OAuth Gates。 |
+| 複製跨 origin token／IndexedDB 或自製 broker | 禁止 | 不需要此能力，且會增加憑證洩漏與任務錯綁風險。 |
+| 合併 origin 或要求使用者重裝 | 不採 | 不為登入簡化改變既有獨立 PWA 身分。 |
 
-## 實作邊界與驗證 Gate
+## 相容性與既有實作處置
 
-Supabase OAuth 2.1 Server 目前為 public beta，官方文件列為各方案可用，但必須由專案管理者在 Dashboard 的 Authentication > OAuth Server 啟用後才會提供 OAuth endpoints。啟用以外，還須設定 Site URL 與 Authorization Path，並登記 public OAuth client 和精確 callback URI；主程式需實作承接 `authorization_id` 的 consent UI。Supabase OAuth client 的 code exchange／refresh 需自行實作，不能把 `supabase-js` 當成完整 OAuth client。這些是實作風險，不是尚未選擇的架構。[官方 Getting Started](https://supabase.com/docs/guides/auth/oauth-server/getting-started)。
+- 「移除跨 App OAuth」不等於移除 Google OAuth 登入。保留 provider callback／取消登入／SDK Session 更新及原有 claim nonce 防護；取消的是 ProJED 作為 OAuth Server 的那一層。
+- `oauthClient.ts`、consent entry、自製 OAuth token store 及 `VITE_QUICK_TASK_OAUTH_*` 分支已存在於 HEAD `d0865f4`，屬待退役程式，不得假稱只改文件就完成簡化。不讀取、轉換或搬移舊 OAuth token；改版後需普通登入，原 IDB owner／captureId 保留，A 記錄只有 A 可續送。
+- TEST 曾套用 DEV-122 quick RPC 與 `20260930155041_dev_133_quick_oauth_client_boundary_v2.sql`，後者把 RPC 改為 `SECURITY DEFINER`。不得刪除／改寫已套用 migration 歷史。目標恢復 DEV-122 的 `SECURITY INVOKER`／原有 owner RLS；必要修正使用新 forward-only migration，不改 task／receipt 資料、不新增權限。既有 OAuth restrictive policies 與未使用的 private allowlist 可保留為停用歷史設施，不為清理而解除保護或刪表。
+- 2026-10-01 metadata 讀回：TEST RPC 仍為 definer、v2 已套用；正式 RPC 為 invoker、v2 未套用。新 forward-only correction 將 function body 收斂至 local DEV-122，修正 TEST 多 trim U+200B 的差異；ACL、RLS及既有資料不改。正式不得單獨補套 retired v2；若執行器不能排除，須有整體原子收斂且沒有中間 definer 暴露的方案，否則停止 schema release。
+- 舊 B0／B1 證據保留於 [QA 歷史紀錄](../qa/QA-DEV-133-quick-task-shared-identity-sync.md#dev-133-legacy-oauth-evidence)及 [2026-09-30 補充](../qa/DEV-133-execution-boundary-addendum-20260930.md)。它們不代表新登入流程已驗收。正式 OAuth Client 註冊不再是 DEV-133 上線前置。
 
-**B0（實作前可行性 Gate）**：只在授權的 ProJED 隔離 TEST 資源讀回並驗證 OAuth。初始 readback 顯示 `oauth_server_enabled=false`、Site URL 指向隔離 Level 3 smoke 網址、allowlist 缺少 canonical quick callback；依使用者授權，本輪暫時啟用 TEST OAuth Server、設定 localhost consent/callback URL 與 public client，完成桌面真實首次 consent、PKCE callback、同一 TEST user 核身及 refresh rotation。重複授權回到同一 callback／user，但 consent UI 是否略過無法確證；live denial 因既有 grant 未抵達拒絕 consent 畫面。測後 TEST Auth config 回復測前值、臨時 client 已移除並 readback 確認，正式環境未觸及。ADB／Android 裝置不可用，兩個真實安裝 PWA 的首次／再次使用、取消、回跳、主程式 signOut／切帳與 owner 保護仍未驗；故 B0 完整 Gate 尚未 PASS，B1 未執行。B1 已取得條件授權，但僅在 B0 完整通過後才開始。若平台設定不可用、callback 不能回原 PWA 或同帳號不能成立，停止資料權限 migration 並重新審查 ADR；不改用 token 複製或第二次 Google 登入。
+## 工程定案與責任邊界（2026-10-01）
 
-**B1（TEST 資料權限 migration 與矩陣）**：B0 consent entry、quick OAuth token lifecycle 與 Android identity round-trip 已通過後，且取得 migration 範圍授權，才實作 allowlisted client ID 與受控 RPC／RLS migration；用真 OAuth token 驗正確 quick client 可建立且 receipt owner 相符，錯 client／匿名／錯 owner／直接 Data API 讀寫全部拒絕，主程式一般 session 回歸通過。B1 通過前不宣稱雙 App 同帳號與自動同步完整交付。正式設定、資料或發布另受明確環境授權與 release gate 管制。
+本版工程細節定案於 [SPEC-133 §3～§10](../specs/SPEC-133-quick-task-shared-identity-sync.md#3-最小資料流與登入契約)，不再保留平行登入方案。SDK 是唯一 token／Session 來源；本 origin 的 IDB auth context 只保存已核實帳號的本機歸屬提示與登出 barrier，不授予雲端權限。DB version 2 增加 context store，capture schemaVersion 1及既有 owner／ID 保留；本機建立、認領、租約完成及清理用交易／CAS 防止切帳競態。
 
-## 重新審查條件
+unbound 在登入後另行明確確認目的帳號，標準 callback 不自動認領；同步固定 owner／Bearer／epoch，嚴格核對並保存 receipt／title hash。晚到 A 回應最多完成 A 的原記錄，不能更新 B UI。只清理滿七日且有有效 receipt 的 synced 副本；legacy 缺回執先以同 owner／同 ID 重放核實，不猜測成功、不清除未同步資料。
 
-- OAuth callback 無法回到原 Android PWA，或 AuthGate 無法安全保留同一 `authorization_id`。
-- 無法把 quick OAuth token 權限限制在受控 quick-create RPC，或 function 的 SECURITY DEFINER 邊界不能經 code review／negative tests 證明安全。
-- 同一 user identity、refresh／切帳號 fail-closed、receipt owner 等核心條件不成立。
-- 需要改變 origin／manifest identity、增加通用 broker、擴大資料權限或承諾即時跨 App 登出。
+quick 不另做 profile／workspace 開通；缺依賴導回主程式設定，同帳號人工重試。普通 Session 沿用既有 RLS，沒有 client-level create-only 保證。因 DB 升版，回復 client 必須能讀 v2；不得以刪 DB／清未同步任務解決相容性。
 
-## 架構審查紀錄
+Architecture Closure Review 已完成 source／build env／RPC／RLS／migration／既有測試比對，文件為 **RD Implementation Ready；架構定案：已定案**，程式仍 **Implementation needs correction**。新版 QA 全部 NOT RUN，metadata 讀回不是驗收 PASS。實作只允許 SPEC 的既定責任面；若需改 owner／API／權限／origin、新增認證服務或遇到未記錄的架構 drift，回送技術審查。局部命名／寫法／測試實現由 RD 決定。
 
-2026-09-30 已檢視 quick capture auth／outbox／sync、主程式 AuthGate 與 Google redirect、兩份 manifest、DEV-122 migration、DEV-131 雙網址基線及既有 QA。架構固定 protocol、session 所有權、資料流、最小權限、本機清理、恢復、修改面與 B0/B1 停止條件。B0 source/mock 10/10 `SIMULATION PASS`；另在使用者授權的 ProJED_TEST 完成桌面真實首次 consent／callback／same-user／refresh rotation 部分驗證。由於已保存 grant，重複 consent UI 是否略過及 live denial 未確證；Android 雙 PWA Gate 未驗。測後 TEST Auth config 已復原 baseline、測試 public client 已刪除並 readback 確認；B1 migration／真 token 權限矩陣未執行。這是定案架構及部分本機／桌面證據，不代表完整雙 App 交付或正式環境設定。
+## 成功判定與重新審查條件
 
-官方依據（2026-09-30 查閱）：[OAuth 2.1 Server](https://supabase.com/docs/guides/auth/oauth-server/)、[OAuth flows](https://supabase.com/docs/guides/auth/oauth-server/oauth-flows)、[Token security & RLS](https://supabase.com/docs/guides/auth/oauth-server/token-security)、[同源政策](https://developer.mozilla.org/en-US/docs/Web/Security/Defenses/Same-origin_policy)。
+成功需證明：兩邊各自登入／重開保留狀態；同帳號 quick UI 建立後在主程式工作台唯一讀回；不同帳號及切帳競態不錯送；離線回網且登入有效後同 ID 補送；登入失效保留資料；未綁定資料不自動認領；七日清理不刪未同步記錄。實體 Android 驗收沿用使用者取消的決定，窄版瀏覽器證據不得冒稱 Android PWA 實機證據。
+
+若日後重新要求跨 App 自動登入／帳號強制對齊、即時全域登出，或快速 App 憑證只能新增任務，須重新審查登入或權限架構；不在本版偷偷加回 broker／OAuth Server。既有 owner、RLS、receipt 或更新相容性不能成立時，停止受影響實作並回技術審查，不以搬移任務或放寬權限補救。
+
+技術依據（2026-10-01 查閱）：[標準 provider 登入](https://supabase.com/docs/reference/javascript/auth-signinwithoauth)、[Session 儲存](https://supabase.com/docs/reference/javascript/initializing)、[登出 scope](https://supabase.com/docs/reference/javascript/auth-signout)、[登入 redirect allowlist](https://supabase.com/docs/guides/auth/redirect-urls)、[OAuth client 與資料權限的區別](https://supabase.com/docs/guides/auth/oauth-server/token-security)。

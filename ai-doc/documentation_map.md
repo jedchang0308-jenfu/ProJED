@@ -1,12 +1,14 @@
 # ProJED Documentation Map
 
-## Documentation Map Update - 2026-09-30（DEV-133 執行邊界修訂）
+## Documentation Map Update - 2026-10-01（DEV-133 架構定案）
 
-使用者取消 Android 實機驗收並要求改以正式環境驗證，後續明確核准在已知風險下繼續；原先含全域 PostgREST hook 的 migration 被拒絕後，已改成 quick-task 資料表／RPC 窄化 boundary 並成功套用 TEST。TEST hosted synthetic matrix 已通過；正式 OAuth 設定、部署與正式功能驗收尚未執行；OAuth RPC 由 `VITE_QUICK_TASK_OAUTH_RPC_ENABLED` 保持關閉。補充證據見 [DEV-133 execution-boundary addendum](qa/DEV-133-execution-boundary-addendum-20260930.md)。
+使用者採用「共用帳號、各自登入、各自保存 Session、離線任務依帳號同步」，並要求補齊架構定案。[DEV-133](dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30) 維持執行中；[SPEC-133 Rev 3](specs/SPEC-133-quick-task-shared-identity-sync.md) 達 **RD Implementation Ready／架構定案：已定案**，[ADR-053 Rev 3](decisions/ADR-053-quick-task-cross-origin-account-link.md) 為現行決策。本輪已完成單一 SDK Auth、DB v2 auth_context＋capture receipt、owner/context revision CAS、登入後明確認領、local signOut barrier、strict receipt 驗證與退役舊 OAuth 路徑的第一輪本機實作，並通過 typecheck／lint／test build／contract check；真實 Auth／RPC／工作台仍待驗證。
 
-## Documentation Map Update - 2026-09-30（DEV-133 架構審查與切片）
+下一步：B0 TEST callback／fixture 完整驗收後，才可執行 additive correction migration，再跑 [QA-DEV-133 N01～N10](qa/QA-DEV-133-quick-task-shared-identity-sync.md)。本輪 correction apply 被安全審查拒絕，沒有 workaround、部署或資料修改；其他 dirty changes 保留，沒有新增 DEV 或產品完成率。實體 Android 已取消，普通 Google callback／同帳與異帳真實驗收仍必須完成。
 
-[DEV-133](dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30) 分為 **A 本機可靠性**（已實作；local browser 19 cases 中 12 本機 PASS、7 模擬 PASS，真實 Auth／RPC 尚待驗）及 **B 雙 App 同帳號**（架構已定案；OAuth mock 10/10 `SIMULATION PASS`；在授權 ProJED_TEST 完成桌面真實首次 consent／callback／same-user／refresh 部分 PASS）。重複 consent UI 與 live denial 未確證，Android 雙 PWA Gate 尚未驗，故 B0 不完整且 DEV-133 仍進行中；B1 additive migration／權限矩陣已條件授權但尚未執行。TEST OAuth 設定與本輪 public client 已於測後復原／移除並 readback 確認，正式環境未觸及。架構與資料流見 [ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md) 和 [SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md)，執行證據見 [QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md)。Slice A 本機 PASS、B mock PASS 與桌面 OAuth 部分 PASS 均不代表 Android、RPC、權限矩陣或整體 DEV PASS；DEV-122／131 狀態不變。
+2026-10-01 readback：TEST DEV-122 alias `20260930154758`／v2 `20260930155041` 已套用、RPC definer；正式只有 DEV-122 `20260914120000`、RPC invoker。新 correction 收斂 canonical DEV-122／invoker，保留歷史、RLS／ACL及資料；正式不單獨補套 retired v2。quick 不另做 profile／workspace 開通；缺依賴導回主程式設定，同 ID人工重試。Auth 最新 callback allowlist及真 TEST actors 為驗收進入條件，讀回不是矩陣 PASS。
+
+2026-09-30 歷史：舊 A 本機、OAuth mock／桌面與 TEST synthetic 部分證據保留於 QA 歷史區及 [execution-boundary addendum](qa/DEV-133-execution-boundary-addendum-20260930.md)，不能替代新方案／完整權限驗收。OAuth Server／Client 註冊與舊 B0／B1 不再是新版必要依賴，沒有補登舊 Gate 為 PASS。DEV-133 正式配置、部署及驗收未執行，DEV-122／131 狀態不變。
 
 ## Documentation Map Update - 2026-09-29（DEV-132 系統通知與換圖指引）
 
@@ -215,10 +217,10 @@ R12不新增第七個runtime責任點：`public/manifest.webmanifest`是唯一ro
 | [SPEC-122](specs/SPEC-122-mobile-zero-data-quick-task.md) | current implementation authority；root bundled shortcut、雙identity、exact file surface、entry/build、UI/voice、IDB、RPC/RLS、同帳號、工作台到達、drift與stop conditions。 |
 | [ADR-050](decisions/ADR-050-mobile-quick-task-entry-and-outbox.md) | Accepted Architecture Memory + R12 closure；root shortcut與選用第二identity、manifest發佈／更新、raw HTML MPA、one root SW、account outbox及server-owned idempotency。 |
 | [QA-DEV-122](qa/QA-DEV-122-mobile-zero-data-quick-task.md) | verification authority；S15、B22～B24、W07與受影響回歸已local PASS，Level 3 HTTPS smoke已PASS；實機、DEV-096 real-SW FAIL及完整B/W/P／獨立QA-QC缺口由使用者接受為本次release殘餘風險，原始case狀態不變；第10.4.3節定義production替代結案證據。 |
-| [DEV-133](dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30) | delivery status／slice owner；A 部分 local PASS；B0 mock 10/10、TEST 桌面真實 OAuth 部分 PASS；Android 依使用者取消；TEST hosted synthetic B1 matrix PASS，正式 OAuth／部署仍未完成。 |
-| [SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md) | current implementation contract；local-first outbox、雙 origin OAuth/PKCE、client-level 權限、清理與 B0/B1 gates。 |
-| [ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md) | accepted architecture；同帳號銜接方式、origin/session 邊界、最小權限與停止條件。 |
-| [QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md) | verification evidence；本機 browser、OAuth mock、TEST 唯讀設定讀回、PGlite SQL core supplementary matrix 與未驗證層次。 |
+| [DEV-133](dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30) | 執行中／架構已定案、待 RD 實作與新 N01～N10 驗收；未發布。 |
+| [SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md) | Rev 3／RD Implementation Ready／架構已定案；SDK/Auth context、IDB CAS／receipt、claim、RPC／RLS、forward correction、責任面／順序及可執行驗收鎖定。 |
+| [ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md) | Accepted Rev 3；取代跨 App OAuth Server，採第一方使用者 RLS、各 origin Session、owner/context交易及普通登入相容修正。 |
+| [QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md) | Rev 3 現行 N01～N10（NOT RUN）；新增架構定案對應的交易／回執／升級／真 TEST交接，metadata與歷史證據不代替功能驗收。 |
 | [SPEC-034](specs/SPEC-034-fast-start-pwa-install-guidance.md) | 一般 ProJED install/update 與 QuickCaptureShell 退役 authority；DEV-122 為 compatible extension。 |
 | [SPEC-039](specs/SPEC-039-task-filter-core-and-workbench-profiles.md) | account-owned 未歸位與完整工作台 authority；quick entry 只新增來源。 |
 | [SPEC-115](specs/SPEC-115-blank-task-creation-contract.md) | blank-task content authority；quick RPC 必須 parity，description absent。 |

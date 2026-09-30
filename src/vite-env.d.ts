@@ -6,9 +6,6 @@ interface ImportMetaEnv {
   readonly VITE_SUPABASE_URL?: string;
   readonly VITE_SUPABASE_ANON_KEY?: string;
   readonly VITE_SUPABASE_AUTH_REDIRECT_URL?: string;
-  readonly VITE_QUICK_TASK_OAUTH_CLIENT_ID?: string;
-  readonly VITE_QUICK_TASK_OAUTH_REDIRECT_URI?: string;
-  readonly VITE_QUICK_TASK_OAUTH_RPC_ENABLED?: string;
   readonly VITE_PROJED_APP_URL?: string;
   readonly VITE_PROJED_RELEASE_ID?: string;
   readonly VITE_SUPABASE_AUTH_MODE?: string;

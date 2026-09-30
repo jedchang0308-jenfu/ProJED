@@ -33,7 +33,7 @@ async (page) => {
   });
 
   const readRecords = () => page.evaluate(() => new Promise((resolve, reject) => {
-    const request = indexedDB.open('projed-quick-task-v1', 1);
+    const request = indexedDB.open('projed-quick-task-v1', 2);
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
       const db = request.result;
@@ -221,26 +221,41 @@ async (page) => {
       leaseId: null,
       leaseExpiresAt: null,
       claimIntent: null,
+      receipt: record.state === 'synced' ? {
+        status: 'committed', captureId: record.captureId, ownerId: record.accountId,
+        titleHash: 'a'.repeat(64), committedAt: record.updatedAt,
+      } : null,
       ...record,
     }));
-    await page.evaluate(rows => new Promise((resolve, reject) => {
-      const request = indexedDB.open('projed-quick-task-v1', 1);
+    await page.evaluate(async rows => {
+      const preparedRows = await Promise.all(rows.map(async row => {
+        if (row.state !== 'synced') return row;
+        const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(row.title));
+        return { ...row, receipt: {
+          status: 'committed', captureId: row.captureId, ownerId: row.accountId,
+          titleHash: Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join(''),
+          committedAt: row.updatedAt,
+        } };
+      }));
+      return new Promise((resolve, reject) => {
+      const request = indexedDB.open('projed-quick-task-v1', 2);
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
         const db = request.result;
         const tx = db.transaction('captures', 'readwrite');
-        rows.forEach(row => tx.objectStore('captures').put(row));
+        preparedRows.forEach(row => tx.objectStore('captures').put(row));
         tx.oncomplete = () => { db.close(); resolve(); };
         tx.onerror = () => { db.close(); reject(tx.error); };
         tx.onabort = () => { db.close(); reject(tx.error); };
       };
-    }), fixtures);
+      });
+    }, fixtures);
 
     await page.reload({ waitUntil: 'domcontentloaded' });
     await title.waitFor({ state: 'visible' });
     await page.waitForFunction(async () => {
       const rows = await new Promise((resolve, reject) => {
-        const request = indexedDB.open('projed-quick-task-v1', 1);
+        const request = indexedDB.open('projed-quick-task-v1', 2);
         request.onerror = () => reject(request.error);
         request.onsuccess = () => {
           const db = request.result;
@@ -283,7 +298,7 @@ async (page) => {
         claimIntent: null,
       };
       const openDb = () => new Promise((resolve, reject) => {
-        const request = indexedDB.open('projed-quick-task-v1', 1);
+        const request = indexedDB.open('projed-quick-task-v1', 2);
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
       });
@@ -309,7 +324,8 @@ async (page) => {
           request.onsuccess = () => {
             if (!request.result) return;
             found = true;
-            store.put({ ...request.result, state: 'synced', updatedAt, leaseId: null, leaseExpiresAt: null });
+            store.put({ ...request.result, state: 'synced', updatedAt, leaseId: null, leaseExpiresAt: null,
+              receipt: { status: 'committed', captureId, ownerId: request.result.accountId, titleHash: 'a'.repeat(64), committedAt: updatedAt } });
           };
           request.onerror = () => reject(request.error);
           tx.oncomplete = () => resolve({ found, updatedAt });
@@ -528,7 +544,7 @@ async (page) => {
           const passed = record?.state === scenario.expectedState
             && (scenario.minimumDelayMs === null ? delayMs === null : delayMs !== null && delayMs >= scenario.minimumDelayMs);
           const db = await new Promise((resolve, reject) => {
-            const request = indexedDB.open('projed-quick-task-v1', 1);
+            const request = indexedDB.open('projed-quick-task-v1', 2);
             request.onsuccess = () => resolve(request.result);
             request.onerror = () => reject(request.error);
           });

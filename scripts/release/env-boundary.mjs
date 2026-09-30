@@ -5,7 +5,6 @@ import {
   PUBLIC_ENV_KEYS,
   SERVER_ONLY_KEYS,
   isCanonicalRedirect,
-  isCanonicalQuickTaskOAuthRedirect,
   isProductionSupabaseUrl,
   isSafeHttpsFeed,
 } from './production-contract.mjs';
@@ -51,12 +50,6 @@ export function resolveProductionPublicEnv({ root = process.cwd(), parentEnv = p
   if (!isProductionSupabaseUrl(env.VITE_SUPABASE_URL)) errors.push('VITE_SUPABASE_URL must target the production Supabase project');
   if (!isCanonicalRedirect(env.VITE_SUPABASE_AUTH_REDIRECT_URL)) errors.push('VITE_SUPABASE_AUTH_REDIRECT_URL must be the canonical production redirect');
   if (env.VITE_PROJED_APP_URL && env.VITE_PROJED_APP_URL !== PRODUCTION_CONTRACT.canonicalOrigin) errors.push('VITE_PROJED_APP_URL must equal the canonical production origin');
-  if (env.VITE_QUICK_TASK_OAUTH_REDIRECT_URI && !isCanonicalQuickTaskOAuthRedirect(env.VITE_QUICK_TASK_OAUTH_REDIRECT_URI)) {
-    errors.push('VITE_QUICK_TASK_OAUTH_REDIRECT_URI must equal the canonical quick-task callback');
-  }
-  if (env.VITE_QUICK_TASK_OAUTH_CLIENT_ID && !/^[A-Za-z0-9._:-]{8,200}$/u.test(env.VITE_QUICK_TASK_OAUTH_CLIENT_ID)) {
-    errors.push('VITE_QUICK_TASK_OAUTH_CLIENT_ID must be a public OAuth client identifier');
-  }
   if (!isSafeHttpsFeed(env.VITE_GOOGLE_CALENDAR_FEED_URL)) errors.push('VITE_GOOGLE_CALENDAR_FEED_URL must be HTTPS and non-loopback');
   const local = readEnvFile(localPath);
   const localConflicts = Object.keys(local).filter(key => PUBLIC_ENV_KEYS.includes(key));
@@ -96,7 +89,7 @@ export function loadServerVerificationEnv({ root = process.cwd(), parentEnv = pr
 
 export function collectTestPublicForbiddenValues({ root = process.cwd() } = {}) {
   const files = ['.env.test.local', '.env.local', '.env.staging.local'];
-  const keys = ['VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY', 'VITE_SUPABASE_AUTH_REDIRECT_URL', 'VITE_GOOGLE_CLIENT_ID', 'VITE_QUICK_TASK_OAUTH_CLIENT_ID', 'VITE_QUICK_TASK_OAUTH_REDIRECT_URI', 'VITE_SUPABASE_TEST_EMAIL', 'VITE_SUPABASE_TEST_PASSWORD'];
+  const keys = ['VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY', 'VITE_SUPABASE_AUTH_REDIRECT_URL', 'VITE_GOOGLE_CLIENT_ID', 'VITE_SUPABASE_TEST_EMAIL', 'VITE_SUPABASE_TEST_PASSWORD'];
   const production = readEnvFile(path.join(root, '.env.production'));
   const productionValues = new Set(keys.map(key => production[key]).filter(present));
   const values = [];

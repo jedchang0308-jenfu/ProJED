@@ -1,77 +1,172 @@
-# SPEC-133：ProJED-快速建任務同帳號與自動同步
+# SPEC-133：快速建任務共用帳號、各自登入與自動同步
 
-## 2026-09-30 B1 執行更新
+修訂：**2026-10-01 Rev 3；Human Confirmed（產品方向）；RD Implementation Ready；架構定案：已定案**。本版完成實際 source、設定責任面、hosted schema 與既有測試的 Architecture Closure Review，取代 Rev 2 的 readiness 待核對項。**可交 RD 依下列契約實作；程式尚未收斂、新驗收未執行、未達 Release Ready。**
 
-使用者取消 Android 實機驗收並核准在已知風險下繼續。TEST 已套用 DEV-122 quick RPC 與 DEV-133 窄化 boundary：OAuth client allowlist、quick RPC trigger、quick task／receipt direct API restrictive policies；未設定全域 PostgREST hook。Hosted synthetic matrix 已通過 allowlisted client RPC 交易回滾、unlisted client 拒絕、一般 first-party RPC 與 OAuth direct table read=0。尚無有效 OAuth client/token，因此正式 OAuth 設定、正式部署與真實 token 驗收仍未完成。
+權威：[DEV-133](../dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30)、[ADR-053 Rev 3](../decisions/ADR-053-quick-task-cross-origin-account-link.md)、[QA-DEV-133](../qa/QA-DEV-133-quick-task-shared-identity-sync.md)。沿用原 DEV ID／文件路徑；[SPEC-122](SPEC-122-mobile-zero-data-quick-task.md) 的輸入、本機保存、RPC、工作台、manifest／SW 契約繼續適用，登入與認領交界以本版為準。
 
-狀態（2026-09-30）：**Slice A（本機可靠性）`已實作／本機瀏覽器部分 PASS；真實 Auth／RPC 未驗`；Slice B（跨來源同帳號）`架構已定案；B0 source/mock 10/10 SIMULATION PASS；TEST 桌面首次 consent／callback／same-user／refresh 部分 PASS；Android 驗收依使用者最新決定取消`。** 使用者已授權 ProJED_TEST ref `fhisnnufoeulxqrchldf` 與正式 Firebase／Supabase 範圍，但自動審查仍把實體 Android B0 視為 B1 前置，故本輪未能執行遠端 B1 migration 或正式部署。桌面重複授權成功回同一 user callback，但 consent UI 是否略過未確證；live denial 因既有 grant 未實測成功。OAuth RPC 在程式端增加明確環境開關，未經 migration／權限矩陣不得啟用。B0 是已定案架構的執行 Gate，不是待選架構。[QA-DEV-133](../qa/QA-DEV-133-quick-task-shared-identity-sync.md) 保存證據；基準 HEAD `127bc0dfecd65507879405210b18e9e178975f76`，工作樹另有未提交修改。
+## 1. 目標、決策及執行邊界
 
-權威：[DEV-133](../dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30)、[ADR-053](../decisions/ADR-053-quick-task-cross-origin-account-link.md)、[QA-DEV-133](../qa/QA-DEV-133-quick-task-shared-identity-sync.md)。Slice A 已在工作樹實作，補齊 [SPEC-122](SPEC-122-mobile-zero-data-quick-task.md) 的回網重試與本機清理；Slice B 依 ADR-053 採 Supabase OAuth 2.1 public client + PKCE，銜接同一身分但保留兩 origin 各自 session。共同不變條件：本機先存、未綁定資料明確 claim、account-bound outbox、固定 JWT RPC、server receipt、零業務資料首屏與雙 PWA 身分。使用者選擇 `1A、2A、3B` 並要求本機資料定期清理；七日且只清理已同步副本是現行工程基線，不歸因為額外人類選項。
+目標是立即記下任務，可靠地同步到本人 ProJED「全域任務工作台」。使用者 2026-10-01 採用「共用帳號、各自登入、各自保存 Session、離線任務依帳號同步」，覆蓋早先 `3B` 的跨 App 自動登入；`1A／2A` 的本機先存、未綁定資料明確認領及清理保護保留。取消 ProJED OAuth Server／public client／consent 作必要依賴，保留普通 Google OAuth 登入。
 
-## 0. 事實、假設與交付切片
+本輪僅修改文件及唯讀架構查證。後續 RD 可在 ProJED repo 實作下列責任面及必要測試；Git／TEST／正式操作延續原授權及各自驗收條件，不因文件定案直接執行。保留其他 dirty changes。使用者已取消實體 Android 驗收，瀏覽器手機模擬不得冒稱 Android PWA 實機 PASS。
 
-| 分類 | 現況與可執行邊界 |
+範圍外：跨 origin token／IDB 複製、自製認證服務、強制帳號對齊、App 關閉後背景同步保證、修改已安裝 PWA identity、放寬 RLS／IAM／Secret 權限、管理金鑰進前端、業務資料改寫、清除未同步任務。快速 App 為第一方入口，普通 Session 沿用本人既有權限；不再承諾憑證本身只能新增任務，程式仍只呼叫 quick RPC，不載入業務清單。
+
+## 2. Architecture Closure Review：實際基準與缺口定位
+
+基準 repo `C:/VIBE CODING/ProJED/ProJED`，branch `持續優化3`，HEAD `d0865f45e5a7af4ef10ba2f598a7a7879cabe58f`，2026-10-01 working tree。相關安裝／DEV-132 修改已存在且須保留。
+
+| 查證面 | 已觀察事實 | 本版固定處置 |
+|---|---|---|
+| Auth／SDK | `auth.ts` 同時走 SDK 及自製 OAuth；`client.ts` 依 quick OAuth 分支關閉 URL Session detection。主程式 `authService.signOut()` 未指定 scope。 | 單一 SDK Session 路徑，開啟 SDK callback detection；一般登出明示 local。保留主程式 Firebase／local-test 分支。 |
+| 本機／並行 | captures schema v1 有 owner／claim／lease，但沒有持久化已核實帳號或 receipt；epoch 只在記憶體。 | 同一 DB 加 auth context，帳號歸屬與 capture 寫入共用交易；保存有效 receipt。詳見 §4。 |
+| 認領／晚到回應 | `finishClaimFromUrl` 核身後即 bind；`sync.ts` 僅在 request 前檢查 epoch，回應後仍呼叫 UI progress。 | 認領前明確確認目的帳號；晚到回應只完成原記錄，不能更新新帳號 UI。 |
+| TEST `fhisnnufoeulxqrchldf` | DEV-122 alias `20260930154758`、v2 `20260930155041` 已套用；RPC 為 definer，空 search_path，execute 僅 postgres／authenticated／service_role。task／receipt 有 owner RLS 與 OAuth restrictive policies。 | 一支新 forward-only correction 恢復 canonical DEV-122 invoker；保留舊 migration、政策及未使用 allowlist。 |
+| 正式 `knodlkxqpcqyrtgwpdst` | DEV-122 `20260914120000` 已套用，v2 未套用；RPC 為 invoker，空 search_path；相同 execute ACL，task／receipt 有 owner RLS。 | 正式不用啟用 OAuth Server／註冊 client。release 階段選取新 correction，不單獨補套已退役 v2。 |
+| RPC 文字正規化 | TEST body 額外 trim `chr(8203)`；正式與 local DEV-122 不移除 U+200B。 | canonical body 以 local DEV-122 為準，前後端外圍空白規則一致；不改既有 task／receipt hash。 |
+| 首次使用依賴 | 兩環境的 auth.users 都沒有非內建 trigger；profiles／tenant_members／tenants 既有 RLS。主程式登入負責既有 profile 設定。 | quick 不另建 profile／membership／workspace；缺可用工作台時保留任務並導往主程式完成設定，再人工重試。 |
+| 測試／build | Vite 有 consent entry、release env 有三個 QUICK_TASK_OAUTH keys；DEV-133 只有本機／舊 OAuth mock runners。 | 移除產品舊路徑並更新測試；舊結果只能作歷史證據，不能替代 N01～N10。 |
+
+以上為 scoped metadata 唯讀查證，不是權限矩陣或產品 PASS。RPC definition MD5：TEST `139a666b466ba55b9ee00aad52ce7b10`、正式 `ffc0eb5fdd4d284a113817d46eb53cfa`；僅作本次觀察綁定，實作前重讀，不能拿 hash 取代行為驗證。Auth provider／redirect allowlist 的最新遠端值本輪未讀回，列為 TEST 真實登入進入條件，不留成架構選項。
+
+## 3. 最小資料流與登入契約
+
+```mermaid
+flowchart LR
+  M["主程式：本 origin SDK Session"] --> A["同環境 Supabase Auth"]
+  Q["快速 App：本 origin SDK Session"] --> A
+  I["輸入／建立"] --> L["本 origin IDB：capture + owner"]
+  Q --> V["getUser 核身／固定 token + epoch"]
+  L --> S["同 owner outbox"]
+  V --> S
+  S --> R["quick RPC：auth.uid + owner RLS"]
+  R --> D["交易內 task + immutable receipt"]
+  D --> W["主程式以自身帳號讀工作台"]
+```
+
+正式主程式 origin 保持 `https://projed-cc78d.web.app`，獨立 quick 保持 `https://projed-cc78d.firebaseapp.com/quick-task/`；同 origin `/quick-task/` 相容入口重用該 origin Session。不同 origin 各自登入及保存，不複製 token、cookie 或 IDB。兩邊以 Supabase user ID 判同一人，不以 email 合併帳號。
+
+- `persistSession:true / autoRefreshToken:true / detectSessionInUrl:true`；沿用現有 SDK provider flow，不另換 PKCE／自行交換 Google code。quick 使用 `signInWithOAuth({provider:'google', options:{redirectTo, queryParams:{prompt:'select_account'}}})`。
+- 新登入 redirectTo 固定為發起 origin 的 `/quick-task/`，不接收任意 return URL，不帶 token／owner／title。主程式保留既有 redirect。claim 不再依賴登入回跳自動認領；舊 `capture / claim` URL 只可帶到本機確認畫面。
+- TEST 只允許本輪核對的隔離測試 origin；正式 callback 必須允許上述 quick 的精確路徑及既有同 origin 相容路徑，保留既有合法設定，不新增任意 host wildcard。SDK 初始化／callback 完成後才處理 claim、移除 SDK 已處理的敏感 URL 內容；錯誤、取消、缺本機資料均不能 claim。
+- `getSession()` 是本機候選身分；送出前必須 `getUser(accessToken)` 確認 user ID，再讀最新 Session，確認 owner／token／epoch 未變。token 刷新或 owner 變更使舊核身 snapshot 失效；Auth listener 只更新 snapshot／排程，不在 SDK callback 中 await 另一 Auth 呼叫。[官方 getUser](https://supabase.com/docs/reference/javascript/auth-getuser)、[Auth events](https://supabase.com/docs/reference/javascript/auth-onauthstatechange)
+- 每批最多一個核身與 flush；同 owner TOKEN_REFRESHED 取消尚未 dispatch 的舊批，核身新 token 後續送。在途 A 已被 server commit 的有效回應可完成 A 的記錄，不綁新 token 或顯示 B 成功。
+- 網路／Auth 服務不可達：狀態為離線或「登入待確認」，保持最後核實的本機 owner，RPC=0，不自動跳登入。明確 token 失效／SIGNED_OUT：停止送出，提示重新登入；既有 A 記錄保持 A，SDK 身分消失後新記錄不得猜 A。
+- 一般登出先取消本頁調度、bump epoch，提交 §4 的持久化登出 barrier，再 `signOut({scope:'local'})`；同 origin 共用 Session 的 tabs 一起停送。barrier IDB 提交失敗時先停本頁調度，提示「無法保存登出狀態，請重試」，不回報已登出或承諾跨 reload 停送；barrier 已提交但 SDK 登出失敗時顯示「已停止同步，登出尚未完成」及重試，不宣稱 server 已撤銷。已提交 barrier 跨 reload 保留，殘存 SDK Session 不得自動啟動。使用者主動重新登入且 SDK callback／核身成功才解除。已有明示全域撤銷保留平台語意，不承諾立即撤銷未到期 access token。[官方 signOut](https://supabase.com/docs/reference/javascript/auth-signout)
+
+
+本機型別契約：`QuickAuthSnapshot` 固定 `readonly {accountId, accessToken, authEpoch, contextRevision}`，移除 clientId；`VerifiedQuickAuthSnapshot` 加 `email:string|null`。核身結果使用 `verified / unauthenticated / unreachable / cancelled` 判別式：分別為符合 snapshot 的真 user、缺 Session／明確失效、網路／429／5xx／逾時、epoch/token/revision 已變；不可再用同一個 null 混淆離線與登出。每次核身 deadline 15 秒，晚到結果只丟棄、不寫 context／觸發 flush；重試依 §7。context revision 與 binding barrier 必須在 lease transaction 及每次 dispatch 前檢查，同 origin 的另一 tab 即使未收到 SDK 事件也不能繼續派送。
+
+兩邊均顯示本 App 帳號；quick 的 `#quick-task-auth-status` 在同一表單容器上方提供未登入 CTA，已核實時提供帳號與「登出」操作，待確認時標明離線／重新登入。主程式重用既有登入頁及 Sidebar 帳號入口；不另造帳號管理模組。切 B 立即收起 A 的成功卡片／title／待處理內容；A 的未同步記錄保留，不提供改綁 B 操作。
+
+## 4. 本機模型、原子寫入及更新相容性
+
+固定延用 DB `projed-quick-task-v1`／store `captures`／key `captureId`。**DB version 升至 2，capture schemaVersion 仍為 1**；在 `model.ts` 分開 DB version 與 record version，避免將資料庫升版當作重建。只加 `auth_context` store（keyPath `key`）及 capture 可選 `receipt`，不改原 owner／captureId／title／時間。
+
+| 資料 | 固定欄位與用途 |
 |---|---|
-| 已知事實 | 目前工作樹的 `auth.ts` 會以 Auth `getUser(accessToken)` 核實帳號並重查 session／epoch；`main.ts` 在啟動、回網、回前景觸發驗證與同步；`outbox.ts` 以原始 store cursor 清理已同步副本。OAuth client／consent source path 已實作，browser mock 10/10 `SIMULATION PASS`，含 approve／deny（deny 帶回 `access_denied` 與 state、不交換 token）；真實 TEST 桌面 OAuth 首次 consent、callback、same-user 與 refresh rotation 部分通過；重複 consent UI 與 live denial 未確證。TEST OAuth config／public client 在桌面測試後已還原／刪除並 readback 確認；不能代表 Android／RPC／B1 驗收。兩正式 origin 的本機儲存與 session 隔離；既有 RPC 依 `auth.uid()` 決定 owner。 |
-| Slice A：已實作 | 本機先存；網路恢復、重開或回前景只是重試提示，必須先經 Auth 核實同一 owner。七天是目前工程基線，只刪有有效遠端 receipt 的 `synced` 副本；未同步資料不設自動刪除期限。登入入口與狀態只代表該 origin 自己的 session。 |
-| Slice B：架構已定案 | 採 Supabase OAuth 2.1 Authorization Code + PKCE public client；主程式 origin 承載授權／consent UI，獨立 quick origin 持有自己的 OAuth token/session，不複製跨 origin token。OAuth token 的 `client_id` 必須限制快速 App 權限；由單一窄化 RPC 建立任務，直接資料 API 對 OAuth client 拒絕存取。B0 驗證 beta 設定、AuthGate 與 Android PWA 回跳；B1 實作並驗證 client-level 資料權限。核心流程假設不成立才停止 B1 並回架構審查。 |
-| 交付判定 | Slice A PASS 只代表本機可靠性完成；使用者要求的雙 App 同帳號需 Slice B 另行 PASS，DEV-133 才能整體完成。 |
+| Auth context 唯一 key `current` | `projectRef, accountId:string|null, displayLabel:string|null, verifiedAt:number|null, bindingAllowed:boolean, revision:number`。只存本機歸屬提示，無 token／refresh token／provider secret；遠端授權仍只靠有效 SDK token。 |
+| Capture 原欄位 | `schemaVersion:1,captureId,accountId,title,workspaceHint,clientCreatedAt,updatedAt,state,attemptCount,nextAttemptAt,lastErrorCode,leaseId,leaseExpiresAt,claimIntent`。owner 一旦非 null 不可變。 |
+| 新增可選 receipt | `{status:'committed',captureId,ownerId,titleHash,created,committedAt}`，完全符合 §6 才保存並轉 synced。 |
+| claimIntent 保留 | `{captureId,nonceHash,expiresAt}`，15 分鐘、一次性 CAS；raw nonce 不寫 log、report 或跨 origin。 |
 
-## 1. 使用者流程與可見狀態
+Auth context 只在核身成功後啟用 binding；owner 改變或明確登出／SIGNED_OUT 時 revision 增加並停用舊 binding。context.projectRef 與 build 不同時是環境 drift：整個 origin 暫停同步及 binding，不覆寫 context 來重綁舊任務；須恢復原環境，UI 顯示同步設定異常／資料仍保留。登出 context 清除 accountId／displayLabel／verifiedAt 並保留 bindingAllowed=false barrier及新 revision；舊 A 的 owner 仍在 captures。普通網路錯誤不清已核實 owner；離線重開只能用同環境、未被登出 barrier 撤銷的 context 作本機歸屬，顯示「離線待確認」。context 缺失／損壞時安全降為 unbound；唯讀不到 context 不能推定已登出，該次本機寫入仍須確認 DB transaction 可用，若 storage／交易失敗保留輸入，不回報保存。不能把 SDK cache、URL owner 或舊自製 token 當已核實身分。新 SDK 候選為 B 而 context 是 A，先停用 A binding，核實 B 後才啟用 B。
 
-1. `web.app/quick-task/` 及獨立 `firebaseapp.com/quick-task/` 的任務名稱欄可立即打字或語音；Auth、網路與清理不阻塞首次輸入、IME 或本機提交。
-2. 「建立」先完成 IndexedDB write transaction 與 same-key readback。只有成功才顯示「已記下，待同步」；IDB 失敗顯示未記下與重試，不能聲稱遠端成功。線上未登入與離線一樣可記，`accountId=null` 的記錄不因後來偵測到登入就自動改綁。
-3. 快速頁與主程式各有登入入口，狀態顯示各自最近一次經 Auth 核實的帳號。B 上線後兩邊可銜接同一身分，但 session/token 仍各由自己的 origin 管理；不得宣稱即時同步登出。一般無待處理狀態不新增常駐說明或容器。未綁定記錄須由使用者明確選擇「同步到〈帳號〉」並核身後才 claim；取消保留本機資料。
-4. B 上線後，獨立快速 App 首次銜接或 session 失效時，以主程式 origin 的 OAuth 授權／consent UI 取得自己的 public-client session。主程式已登入時目標為不需再次輸入 Google 帳密；首次授權可要求同意。主程式未登入時，登入完成須回到同一 `authorization_id` 請求。銜接中仍可本機建立；核實身份及 client 權限之前不啟動遠端批次。
-5. 自動 RPC 只使用經 Auth 核實、與項目 owner 相符且 client ID 符合授權範圍的憑證。`online`、重開、回前景、授權成功與 backoff 到期只是重試提示；`navigator.onLine` 不是服務可達或登入有效證據。只有同 owner 的 strict committed receipt 才可顯示「已同步」；App 關閉時不承諾背景同步。
-6. 7 天後只自動刪除已嚴格驗證遠端回執的本機 `synced` 副本。`awaiting_auth`、`pending`、`syncing`、`failed_auth`、`failed_retryable`、`failed_permanent` 均不定期自動刪除。關閉 App 時不保證準點清理，恢復開啟後執行。
+建立使用同一 `readwrite` transaction 跨 captures + auth_context：以送入的 expected context revision 做 CAS，確認本機 owner 未變，再 `add` capture；交易完成後 same-key readback 核對 captureId／owner／title。與登出／切帳的 context transaction 序列化，CAS 不符保留輸入並請使用者在新狀態重新建立，不悄悄把這次輸入轉綁 B。首次啟動 Auth 尚未初始化不阻塞輸入，建立可保存 unbound。
 
-## 2. 責任與資料流
+captureId 必須是 `task_workbench_unplaced_<UUID>`；無 randomUUID 時用 getRandomValues 生成合法 UUID，不用目前的 Date／Math.random 字串。名稱只 trim JavaScript 空白、保留內部空白及 U+200B，1～500 Unicode code points；HTML maxlength 不得以 UTF-16 截斷合法輸入，沿用 IME／語音控制。IDB readback 失敗重試原 captureId；若原 key 已提交，先讀回比對，不能換 ID 宣稱第二筆已記下。
 
-| Authority / 模組 | 固定責任與影響 |
+Lease 取得、claim、人工 retry、finish、cleanup 均在各自 readwrite transaction 內重讀及 CAS。禁止先 readonly 判斷 owner／lease 再無條件 put。finish 須匹配 captureId、原 owner、leaseId，且已 synced 不倒退；原記錄不可被跨帳 retry／晚到 callback 改綁。
+
+升級只在 onupgradeneeded 加 store／必要 index；versionchange 關閉舊 connection，blocked／abort 顯示可重試保存錯誤，不能 deleteDatabase、清 store 或強制 reload 未存草稿。舊 synced 缺 receipt 者不自動刪：同 owner 核身後在 CAS 交易將缺回執的 legacy synced 轉 pending，以原 ID／title 重放取得回執，再依 §6／§7 清理；失敗保留，不在 list 階段用七日 filter 隱藏此類記錄。舊版曾 trim U+200B 的 TEST receipt 發生 conflict 時保留資料並報錯，不改 server hash。DB v2 後不能回退到只會 open(version=1) 的 client；回復候選必須會讀 v2，這是 release 相容條件。
+
+## 5. 認領與前往工作台
+
+- 無已知帳號可線上／離線保存 unbound；登入事件本身不認領。登入 CTA 只處理登入，回來後從「待處理」逐筆選擇記錄。
+- 核實 A 後顯示「同步到〈目前帳號〉」和該筆名稱，提供「確認同步」／「稍後處理」。建立並凍結 captureId、目的 accountId、authEpoch/context revision、15 分鐘 nonce；確認時再檢查最新身分及 IDB CAS；confirmation 畫面 reload／重開後必須重新顯示目的帳號及生成 nonce，不沿用記憶體已遺失的確認。B 取代 A、nonce 過期或 login callback 舊 claim 皆回確認畫面，必須重新確認 B。
+- CAS 只可將 accountId=null 且 nonce／expiry 符合的記錄轉 A-bound pending，並清 claimIntent；兩 tabs 確認只能一個成功。取消／錯 nonce／過期／衝突不刪記錄，稍後處理只收起提醒、不移除或改綁。
+- A-bound pending／failed 只有再次核實 A 才可處理；B UI 不顯示 A title，也不把 A 記錄加入可認領清單。裝置另有資料只提供不含內容的提醒及重新登入原帳號入口。
+- 「前往工作台」沿用 `origins.ts/getWorkbenchUrl` 到主程式，由主程式自己的登入／帳號讀資料；main 未登入自行登入，main B 不自動切成 quick A、不以 query 傳 user/token。沒有 active membership 或既有 profile 初始化未完成時提示「先到主程式完成帳號與工作台設定」，任務留本機，回來同帳號人工重試。quick 不呼叫 profile upsert／membership 建立 API。
+
+## 6. RPC、回執與權限不變條件
+
+保留 `POST /rest/v1/rpc/create_quick_unplaced_task_v1`，參數只有 `p_capture_id:text,p_title:text,p_workspace_hint:text|null`。使用 public anon key + 固定的本次 user Bearer，`credentials:'omit',cache:'no-store',redirect:'error'`，15 秒 timeout。clientId 欄位、OAuth RPC gate 及專屬 credential 刪除。
+
+owner 永遠由 `auth.uid()` 決定。workspace hint 只作提示；先找本人 active membership 中符合 hint 的 workspace，無效 hint 回落本人最新 active membership（updated_at desc／tenant_id tie-break）；完全無可用 membership 才 `QT_NO_AVAILABLE_WORKSPACE`。新 quick 記錄 workspaceHint 固定 null，避免沿用未帶 owner 的 `projed-last-ws`；舊記錄 hint 保留但由 server 驗證，不能藉 B 傳 A hint 選中 A workspace。
+
+Server 固定 canonical DEV-122 行為：空 search_path、SECURITY INVOKER、既有 owner RLS；同 owner unplaced root advisory lock 兼容 placement writers；同一 transaction 寫 task + receipt；task 主鍵 `(owner_id,id)`、receipt 主鍵 `(owner_id,capture_id)`、SHA-256 title_hash 32 bytes、owner FK 至 profiles（既有 ON DELETE CASCADE）、authenticated receipt 不可更新／刪除。相同 owner／ID／title replay 回 created=false；title 不同為 conflict。後來移動／刪除 task 仍可由 receipt 回 replay 成功，不能因 task 已移動／刪除而重建。
+
+Client receipt 必須 status=committed、captureId／ownerId 與 leased request 相符、created 為 boolean、titleHash 為 64 hex 且等於本次 normalized title 的 UTF-8 SHA-256、committedAt 為有限且安全的正整數毫秒。HTTP 成功、toast、空 JSON 都不能代替 receipt；不符為 `QT_INVALID_RECEIPT`，保留資料、停止該筆自動重試，不顯示 synced。有效 receipt 與 state=synced 在同一交易提交；即使 UI owner/epoch 已變，最多完成原 A 的 record，不向 B progress。
+
+現行 ACL 保持：RPC execute 不含 PUBLIC／anon，既有 authenticated／service_role 不擴張；client 不使用 service_role。receipt 僅既有 SELECT／INSERT 及 owner policy，無 UPDATE／DELETE；private schema 不新增 Data API exposure。task、profiles、tenant_members、tenants 的既有政策與 grants 不變。普通使用者合法工作台存取必須回歸，不能拿「quick 程式不查清單」宣稱其 JWT 無其他權限。
+
+## 7. 同步狀態、重試及清理
+
+| 事件 | 狀態轉移／操作 |
 |---|---|
-| `oauth-consent.html`、`src/quickTask/oauthConsent.ts`、`src/services/supabase/client.ts` | B0 consent entry 已在工作樹實作：承接並保留 `authorization_id`，驗證登入 user、client、scope、精確 callback，提供 approve／deny；TEST 桌面真實 OAuth 已完成首次 consent／callback／same-user／refresh 部分驗證。 |
-| `src/features/quickTaskCapture/auth.ts`、`oauthClient.ts` | A 沿用本 origin session，以 Auth `getUser(accessToken)` 核實 accountId，固定 owner/token/epoch 快照。B0 quick origin OAuth public-client code exchange／refresh 已實作；token store 與原 Supabase JS session 隔離，不建立第二個業務資料 client。 |
-| `src/quickTask/main.ts` 與 `quick-task/index.html`／`src/quickTask/quick-task.css` | 保持非阻塞表單、最小登入／連線／待同步狀態；OAuth callback 已接入。B1 gate 關閉時，不讓 OAuth token 進入 Data API／RPC flush。 |
-| `model.ts`、`outbox.ts`、`sync.ts` | 保留 `captureId`、accountId、lease、8 次自動重試上限、15 分鐘 claim nonce 與 7 天 retention。同步前固定同一次驗證的 owner/token/epoch；任何 epoch 或 owner 變化都停止、釋放／標記失敗，不以另一帳號續送。清理以未過濾原始 store 在 readwrite transaction 中逐筆判定，不能先經 `listQuickCaptures()` 的期限過濾。 |
-| `quickTaskCaptureService.ts` 與已存在 `create_quick_unplaced_task_v1` | 仍只送 `capture_id,title,workspace_hint`；明確 Bearer、`credentials:'omit'`、timeout，RPC 依 `auth.uid()` 決定 owner，在同一 transaction 寫 task + private immutable receipt。client 檢查 committed status、captureId、ownerId、titleHash 格式與 committedAt；server 以 title hash 判定同 ID replay／conflict。只有嚴格回執符合該次 owner 與 captureId 才宣稱遠端成功。 |
+| 本機提交 | 有允許 binding 的 context → pending；否則 awaiting_auth；只顯示「已記下／待同步」。 |
+| 明確認領 | awaiting_auth → pending，同交易凍結 owner；accountId 此後不可改。 |
+| 同 owner 核身且可調度 | pending／到期 failed_retryable／過期 syncing lease → syncing；lease 30 秒，每次實際 RPC dispatch 計 attempt。 |
+| 有效 receipt | syncing → synced，原 lease CAS 同時保存 receipt；UI 另檢查 current owner/epoch。 |
+| HTTP 401／明確 Auth 失效／QT_AUTH_REQUIRED | failed_auth，停止該 owner 批次並提示重登；重新核實同 A 後只把 A 的 failed_auth 轉 pending，保留 ID／內容，不影響 permanent。 |
+| 網路／15 秒 timeout／HTTP 408、429、5xx | failed_retryable，同 ID 退避；5 秒 × 2^(attempt-1)，上限 15 分鐘，尊重但 cap Retry-After 為 15 分鐘。 |
+| QT_INVALID_CAPTURE_ID／QT_INVALID_TITLE／QT_IDEMPOTENCY_CONFLICT／QT_EXISTING_ROW_INVALID／QT_ORDER_EXHAUSTED／QT_NO_AVAILABLE_WORKSPACE／42501／23503／QT_INVALID_RECEIPT／其餘非重試型 HTTP 4xx | failed_permanent；清楚提示，原記錄保留，不盲目重登或改 title/owner/ID。只有 workspace/profile 依賴恢復或 AUTO_RETRY_EXHAUSTED 允許同帳號人工重試；衝突／無效回執須查證。 |
+| 自動 RPC 達 8 次仍失敗 | failed_permanent + AUTO_RETRY_EXHAUSTED；人工重試原 ID 後可重設該輪 attempts，不能再自動啟動無限循環。 |
+| 登出／切帳／取消／pagehide | 取消新 dispatch／timer；已發出 RPC 不保證 server rollback。中止 request 保留原 ID，lease 自然過期後同 A replay；不把主動 cancel 當永久錯誤。 |
 
-不改工作台 task schema、receipt 語意、owner／placement 規則、主／quick manifest identity 或 root service worker；不搬移跨 origin 資料、不新增通用 queue、遠端 list 或背景同步保證。Slice B **需要一份 additive DB migration**：註冊允許的 OAuth `client_id`；限制 OAuth client 對公開資料 API 的直接讀寫；將 quick create 收斂為窄化的 `create_quick_unplaced_task_v1` server boundary（固定 search_path、完整 schema qualification、`auth.uid()` 與 allowlisted `client_id` 檢查、既有輸入／owner／冪等驗證、僅建立一筆 unplaced task 與 receipt、撤銷 public／anon execute）。主程式的一般登入政策維持原行為。不得放寬 grants／RLS 以讓 OAuth token 遍歷 ProJED 使用者資料；若現有資料暴露面無法被 client_id 限縮，B 停止並回 ADR 審查。無資料回填或破壞性 migration。
+Auth 核身尚未成功前不加 capture attempt、不取 RPC lease；網路核身重試同樣以 5 秒起退避、15 分鐘 cap、每次啟動／online／回前景事件週期最多 8 次，耗盡等下一次事件或人工處理，沒有自動登入跳轉。重登恢復 failed_auth 只重新開一輪同 owner 記錄，不能自動重設耗盡／永久失敗記錄。
 
-## 3. Slice B 已定案契約：OAuth、最小權限與帳號切換
+啟動、online、pageshow／可見前景、到期 timer 觸發核身及同 owner flush；navigator.onLine 只是提示，不是可用性判定。events 合併為 single-flight，空 outbox 不輪詢業務資料；Auth 失敗不阻塞輸入。pagehide 停調度，bfcache pageshow 需重新啟用恰好一份訂閱／timer，不能沿用目前一次 pagehide 便永久解除重試的生命週期。
 
-架構決策已鎖定；本節是 B0/B1 的實作契約。文件定案不代表 OAuth Server 已配置、雙 App 回跳可用或遠端操作已授權。使用者已取消 Android 實機驗收並要求改以正式環境驗證；遠端 B1 仍受自動審查的 B0 實體 Gate 限制，不能以文件假設補證據。
+清理啟動、回前景及開啟期間每日執行，直接 raw-store readwrite cursor 重查 record；只刪有效 receipt 且 synced、updatedAt 滿 7 日、非未來／損壞時間的本機副本。未同步、legacy 缺回執、租約未完成、交易 abort 一律保留；server task／receipt 不刪。關閉期間不保證準點，下次開啟補清。
 
-- 環境設定：Supabase OAuth Server 是 public beta。只在取得明確授權的 ProJED 隔離 TEST 資源設定／讀回；不改正式環境。主程式 origin 承載 authorization/consent UI；quick callback 精確固定為 `https://projed-cc78d.firebaseapp.com/quick-task/`，每環境註冊專屬 public client。依官方規格，自行實作 public-client code exchange／refresh；不得把 `supabase-js` 當完整 OAuth client。`email`／`openid` 僅按所需身分資訊決定。OAuth scopes 不限制資料庫權限；access token 含 `client_id`，資料存取必須由 RLS 與伺服器邊界約束。
-- 最小權限：OAuth token 僅可呼叫受控 quick-create RPC，不可直接讀寫 ProJED 使用者資料 API。私有 allowlist 保存各環境允許的 quick OAuth `client_id`；RPC 驗證 `auth.uid()`、client_id 及 capture contract。RPC 以受控 `SECURITY DEFINER` 邊界執行必要的 workspace/task/receipt 查詢與寫入，固定空 `search_path`、全 schema qualification、撤銷 `PUBLIC/anon` execute、只授權 `authenticated`，不使用動態 SQL、不回傳 task/tenant 資料；所有 direct Data API access 對有 `client_id` 的 OAuth session fail closed。既有一般 session (`client_id` absent) 沿用既有政策。SECURITY DEFINER 必須逐行 review 及 negative-test，若無法證明限縮則停止，不退回廣權限 invoker token。
-- 快速 App 產生高熵 `state` 與 PKCE S256 verifier/challenge，以本 origin 的短期儲存保留 verifier／原頁意圖；callback 校驗 state、期限、redirect origin、一次性與 token response，立即刪除 verifier。`code`、`state`、`authorization_id` 不寫入 analytics、console 或任務資料，也不把 access/refresh token 放 URL、跨 origin 訊息或 Service Worker cache。Web entry 只接受固定 allowlisted callback。
-- 快速 App 的 OAuth token store 與原 quick Supabase JS session storage 必須隔離；refresh 輪替不得有並行重用。B1 上線新 OAuth 路徑前，不以舊 quick session 授權該路徑的自動 flush；每批先取得固定且已核實的 owner/token/client 快照。主程式 signOut 不承諾即時撤銷 quick origin session；quick status 只顯示自身 session，換帳號時阻止舊 owner 任務送到新帳號。若使用者要求兩 App 即時同步登出，屬額外 revocation 功能，需另立決策與 DEV。
-- `web.app/quick-task/` 仍可讀同 origin session 與原有待送資料。**B1 啟用新 OAuth 路徑時**，獨立 quick 的舊 session 不可直接授權該新路徑的自動 flush；須先透過主程式 OAuth 銜接核對 `accountId` 相同。不同時保留各 account 的 IDB 記錄；A 記錄只能在 A 再登入時處理。舊 claim callback／15 分鐘 nonce 依原規則完成或過期，不遺失本機記錄。新流程不改現有已安裝 PWA origin、manifest identity 或強迫重裝。
-- 在快速 App 仍前景期間主程式另一視窗更換帳號，兩個 origin 不存在可靠同步事件；UI 只能宣告「上次已驗證帳號」。下一次回前景、重新開啟或遠端批次開始必須重核；任何本地觀察到的 account 變更立刻 bump epoch。server 永遠依 Bearer owner 寫入，不能因 UI 舊文案把 A 記錄送成 B。若產品日後要求**即時**跨窗登出，須另立授權／撤銷機制，不在本期默默承諾。
+## 8. 實作責任面與順序
 
-## 4. Slice A 本機狀態、並行與恢復
+依賴方向固定：main.ts 負責 UI／觸發；auth.ts 管 SDK／核身／epoch；outbox.ts 管 IDB transaction；sync.ts 管核身結果的同 owner 調度／lease；quickTaskCaptureService.ts 只管固定 Bearer RPC／嚴格回執解析。Auth context 寫入重用 outbox，不新增第二套 token store、通用 queue 或帳號 broker。
 
-- state machine 沿用 `awaiting_auth → pending → syncing → synced` 與 `failed_auth / failed_retryable / failed_permanent`。`online`、回前景與啟動只作**重試提示**：先非阻塞地取得本 origin session，經 Auth `getUser(accessToken)` 核實同一 accountId，再於 owner 相同且 backoff 到期時嘗試遠端送出；核實失敗維持待送／身分待確認。`navigator.onLine` 不能當服務可達或登入有效證據。`401`／refresh 失敗轉需登入；可重試錯誤遵守既有 backoff、`Retry-After` 與 8 次上限，耗盡轉人工重試，記錄不刪。沿用 30 秒 lease 防同 origin 並行 flush。暫時網路斷線不反覆自動跳登入。
-- remote timeout 後 receipt 可能已寫入；重試同一 captureId 與同一 owner，server replay 回同一 receipt，不另建任務。不同 owner 或不同 title 的 replay 視為衝突，保留本機與可見錯誤，不複製成新 capture。
-- `synced` 的 `updatedAt` 為 receipt 驗證後轉入 synced 的時間；只在 `now - updatedAt >= 7d` 且目前仍為 synced 時可刪。清理須直接掃未過濾的原始 store，於 readwrite transaction 中逐筆重查 state 與 updatedAt 後刪除；不能先用已隱藏逾期 synced 的 `listQuickCaptures()`。啟動、回前景與開啟期間每日一次觸發，錯誤下次再試。清理只刪本機副本，不碰 server receipt。
-- 本機儲存遭瀏覽器清除或 eviction 時無法保證追回尚未同步資料；UI 僅在 same-key readback 後宣稱「本機已記下」。不提供虛假的跨裝置本機資料同步。
+| 順序 | 實際檔案責任面 | 固定輸出與驗證 |
+|---|---|---|
+| 1 本機契約 | `src/features/quickTaskCapture/model.ts,outbox.ts` | DB v2／auth_context／receipt，原子 owner CAS、claim／retry／finish 保護、合法 UUID／code points、升級與 raw cleanup；N03／N06／N09／N10。 |
+| 2 單一路徑 Auth | `src/features/quickTaskCapture/auth.ts`、`src/services/supabase/client.ts`、`src/services/authService.ts`（僅 Supabase signOut） | 普通 SDK callback／核身、分類網路與失效、本 origin 登入／local signOut／barrier；N01／N05／N07。 |
+| 3 同步／UI | `src/features/quickTaskCapture/sync.ts`、`src/services/supabase/quickTaskCaptureService.ts`、`src/quickTask/main.ts,quick-task.css`、`quick-task/index.html` | 同 owner single-flight、固定 Bearer、receipt hash／CAS、post-login 確認／恢復操作／帳號可見；N02～N08／N10。main 的既有 `src/store/useAuthStore.ts / src/components/Sidebar.tsx / src/components/AuthGate.tsx` 僅核對入口，若現有入口足夠不修改。 |
+| 4 退役清單 | `src/features/quickTaskCapture/oauthClient.ts`、`oauth-consent.html`、`src/quickTask/oauthConsent.ts,oauth-consent.css`、`vite.config.js`、`src/vite-env.d.ts`、`scripts/release/production-contract.mjs,env-boundary.mjs` | 移除自製 OAuth／consent entry／三個 QUICK_TASK_OAUTH keys及專用 redirect helper；舊 env 鍵拒絕作輸入，掃描 source 與 build 不再有可啟用分支。普通 Google、主程式 env 邊界、DEV-123 等旗標保留。 |
+| 5 向前 schema 修正 | `supabase/migrations/20261001090000_dev_133_quick_rpc_security_invoker.sql`（本機 CLI 不可用，已保留可由 CLI review/apply 的明確 migration；不改歷史） | function body 收斂 local DEV-122、invoker／empty search_path，ACL／RLS／資料不變。TEST 讀回及真 ordinary Session 矩陣；N08／N10。 |
+| 6 驗證接手 | `scripts/run-dev-133-local-browser-check.cjs,verify-dev-133-quick-task-local-browser.pw.js`；新增 `scripts/verify-dev-133-independent-auth-contract.ts` | 擴充 existing runner 為新契約的 IDB／Auth 故障案例；新增 meaningful model／receipt／分類／退役契約測試。移除 `run-dev-133-oauth-mock-check.cjs,verify-dev-133-oauth-client-browser.pw.js` 的現行測試入口，歷史 artifacts 保留。 |
 
-## 5. 執行順序與 Gate
+舊 `projed.quick-task.oauth-session.v1 / oauth-transaction.v1` 不能讀取、搬移或轉成普通 Session，新版不依賴其存在。其資料可留為不執行的歷史殘留，本期不做 credential 清理；IDB 原 A 記錄須普通登入 A 才續送。已套用 TEST v2 的 policies／allowlist／trigger 保留，不為清理刪表或解除限制。
 
-**A：可獨立排 RD。** 只修改本地 retry 觸發、原始 IDB 清理與本 origin 可確認的精簡狀態，沿用現有登入／claim／RPC。A 的驗收必須覆蓋回網、回前景、錯 owner、清理邊界與 UI；A 完成只標 A PASS，不代表雙 App 同帳號已交付。
+禁止改 origin／manifest identity、已套用 migration、主程式業務工作台／帳號開通／membership 管理、無關 DEV-132 安裝 UI。可自行決定局部函式名稱、樣式及測試寫法；不得變更上述狀態來源、API／資料／權限／認領語意。發現未記錄的架構 drift、需新增 API／schema owner／放寬權限或既定驗收不可實作，停止該面並回送技術審查；既定工程修正不重新詢問人類。
 
-**B0：平台／使用者流程可行性（B1 資料權限 migration Gate，非架構決策）。** 架構已由 ADR-053 定案；B0 只核實已選方案能否落在目標環境。本輪在 localhost consent／quick callback 暫時設定下，真實桌面首次 consent、PKCE callback、同一 TEST user 核身與 token refresh rotation 通過；重複授權僅能確認回到同一 callback／user，是否略過 consent 不確定；live denial 因已有 persisted grant 未成功到達拒絕畫面。使用者最新決定取消 Android 實機驗收並改要求正式驗證；自動審查仍拒絕在缺少實體 Gate 的狀態下執行 B1，故 B1 與正式環境均暫停，不以桌面結果冒充完整 B0。
+## 9. 驗證命令、驗收與停止條件
 
-**B1：B0 Gate PASS 且取得 migration 範圍授權後執行。** 只新增專用 OAuth client 的最小權限 migration／受控 RPC，實作並驗證 client allowlist、資料 API fail-closed、refresh／帳號切換的 owner 邊界，再按 QA-DEV-133 驗證真 token 權限矩陣與一般主程式回歸。Consent entry、quick OAuth adapter 與 identity round-trip 屬 B0 前置程式，不得留待 migration 後才做。不得以 B0 結果擅自擴大既定資料權限。正式 OAuth 啟用、正式發布、migration 與正式資料操作分別遵循明確環境／資源授權及 release gate。B0 若失敗，不阻擋 A 的既定範圍；只有核心假設不成立時才重新審查 B 的 ADR，不得默默擴大 A。
+風險 lane：High（帳號／RLS、任務歸屬及清理），以 QA 失效案例與 targeted QC 控制；本機第一輪已完成 typecheck／targeted lint／test build／contract check，仍不能宣稱獨立 QC 或真實功能 PASS。Playwright package 不在目前環境，browser runner 本輪未產生新 artifact；TEST migration 受 B0 gate 阻擋。RD 實作後按下列順序驗證；新增 verifier 是本期實作交付。
 
-RD 可決定局部函式／CSS 寫法；不可改 origin／manifest、account-bound claim、client allowlist、受控 RPC 的唯一入口、七日清理條件、錯帳 fail-closed 或零業務資料首屏。實作允許新增 ADR-053 明定的最小權限 migration／RPC；若需要擴大權限、新增 schema ownership、改變 callback／identity 架構或公開契約，須回規劃審查。
+| 層 | 命令／入口 | 證據邊界 |
+|---|---|---|
+| 型別／lint／build | `npx tsc --noEmit`；對 §8 修改的 TS/JS 執行 targeted ESLint；`npm run build:test` | 配置、移除 consent entry／OAuth env 與一般登入 bundle 不破壞；不是功能驗收。 |
+| 契約／本機 | `npx tsx scripts/verify-dev-133-independent-auth-contract.ts`（RD 新增）；`node scripts/run-dev-133-local-browser-check.cjs`（RD 擴充） | DB v1→v2、context/logout CAS、nonce、receipt hash、401 status 分類、late response、cleanup／bfcache；注入另標 SIMULATION。 |
+| 原功能回歸 | `npm run verify:dev-122-mobile-zero-data-quick-task`、`npm run verify:dev-122-mobile-zero-data-quick-task-sw` | 保留 zero-business-read、輸入／語音／SW／identity；只修與新契約衝突的預期，不抹掉其他 dirty 改動。 |
+| 本機 DB | `npm run verify:dev-122-mobile-zero-data-quick-task-db-isolated`、`npm run verify:dev-122-mobile-zero-data-quick-task-db-concurrent`；`npm run verify:supabase:migration-aliases` | isolated DB runner 需加 v2→新 correction 升級路徑，再跑既有冪等／RLS／mixed writer 矩陣；fresh baseline 與 upgraded baseline 都驗。SQL claims 模擬不是真 JWT。 |
+| 真實 TEST | [QA N01～N10](../qa/QA-DEV-133-quick-task-shared-identity-sync.md) 的正常 Google 登入／quick UI／主程式工作台路徑 | 核對 TEST provider／固定 callback allowlist、受控 A/B profile+membership 與 build backend。真 ordinary Session、非空 fixture、相同 ID 唯一讀回、一般登出隔離。不能用舊 OAuth mock／SQL claims 替代。 |
 
-## 6. 驗收與架構審查記錄
+驗證 runner 若啟動 temporary Vite／DB／browser，先記 owner、用途、port、PID tree、cleanup 條件；本機 runner 使用既有 4173，不搶佔 user-owned 4000。TEST 雙 origin 選受控不同 port／origin並核對 allowlist，只改 TEST 暫時 URI；完後還原本輪設定，關閉 task-owned UI／process tree、確認 port 釋放。
 
-完整案例與證據層在 [QA-DEV-133](../qa/QA-DEV-133-quick-task-shared-identity-sync.md)。A 成功須有本機 readback、同 owner receipt、工作台唯一讀回、錯帳隔離與七日清理讀回；本輪 B0 只保留桌面 TEST identity 證據，Android 實機驗收已由使用者取消。OAuth RPC 仍須等 B1 migration／權限矩陣後以環境開關啟用；HTTP 302、`getSession()` local user 或桌面模擬不能代替資料權限證據。可觀測狀態只記 captureId、狀態碼、owner 是否匹配與 retry 次數，不記 title、token、authorization code 或 email 到 console／報表。
+QA 每例記錄 sourceRevision／dirty boundary、環境及兩個 origin、build artifact、actor alias、fixture、request owner／captureId／receipt 摘要、正常 UI 操作及結果。320×844、390×844、726×668、鍵盤：登入、帳號、認領／稍後、錯誤恢復可操作，不遮擋名稱／語音／建立，不新增重複容器；可見錯誤不能以 API PASS 抵消。詳情統一在 QA 文件，本 spec 不複製整套矩陣。
 
-Architecture Closure Review（2026-09-30）：已對照 `src/quickTask/main.ts`、quick auth/outbox/sync/OAuth client、Supabase services、consent entry、兩份 manifest、DEV-122 migration 與既有 QA。架構固定為雙 origin session 隔離、OAuth public client + PKCE、本機先存、owner 由 `auth.uid()` 決定、OAuth `client_id` 限權、唯一受控 RPC、七天只清已同步副本。Slice A 資料流已在工作樹實作；Slice B 責任、資料流、最小權限、恢復、驗收與停止條件已定案。B0 mock 10/10 PASS；本輪 ProJED_TEST 桌面真實 OAuth 首次 consent／callback／same-user／refresh 部分 PASS。測試後 TEST Auth config 已恢復 baseline、測試 public client 已刪除；重複 consent UI 與 live denial 未確證，Android 雙 PWA Gate 未驗，B1 migration／矩陣未執行。因此 B0 尚非完整 PASS，架構定案與桌面 identity 證據不代表交付完成。
+停止條件：A→B 錯綁／錯送、B 看見 A title、未有效 receipt 卻 synced、IDB 未 commit 卻保存成功、未同步資料消失、callback 回錯 origin、ordinary Session 合法權限退化、需要管理金鑰／新 grants／放寬 RLS。測試失败不得把預期改成寬鬆通過；測試輸出不得包含 token／code／個資原文。
 
-Implementation update（2026-09-30）：Slice A 已在本地工作樹實作。`auth.ts` 對 access token 呼叫 Auth `getUser` 並重查 session／epoch；`main.ts` 在啟動／online／pageshow／visibilitychange 驗證與重試，並依 `failed_retryable.nextAttemptAt` 安排到期重試；`outbox.ts` 以 readwrite transaction 只清已同步滿七日副本。Chrome local browser 19 cases：12 本機 PASS、7 `SIMULATION PASS`；TypeScript、targeted ESLint、test build PASS。B0 OAuth／consent mock 10/10 `SIMULATION PASS`。另依授權完成 TEST 桌面真實首次 consent／PKCE callback／same-user verification／refresh rotation；repeat authorization 回到同一 user，但 consent UI 行為未確證；live denial 未成功驗證（已有 grant，沒有到拒絕畫面）。測後 TEST config／allowlist 已回復初始 readback，臨時 client 已刪除並確認，localhost ports 4001／4002 已釋放。Android 真機、真實 Auth/RPC owner／receipt、多視窗同步、B1 權限矩陣仍未驗；ADB／Android 裝置不可用是 B0／B1 當前 gate。
+## 10. 向前修正與 Release Impact Note
 
-架構依據（2026-09-30 查閱）：[Supabase OAuth 2.1 Server](https://supabase.com/docs/guides/auth/oauth-server/)、[OAuth authorization flow](https://supabase.com/docs/guides/auth/oauth-server/oauth-flows)、[OAuth token security／client_id RLS](https://supabase.com/docs/guides/auth/oauth-server/token-security)、[同源政策](https://developer.mozilla.org/en-US/docs/Web/Security/Defenses/Same-origin_policy)。
+新增 migration 固定重建 canonical DEV-122 function body並顯式 SECURITY INVOKER／empty search_path，保留既有 execute ACL，不重建 receipt／task 表、不改 owner／workspace／既有 hash。TEST 已套用版本繼續保留，migration alias 按既有 remote/local 映射核對，不用重套 DEV-122 製造另一份歷史。
+
+正式 v2 未套用，release migration selection 必須排除單獨補套已退役 v2，不使用未審視的全量 db push；新 correction 在兩環境都是目標 invoker。若 executor 必須補齊 retired history，需有能讓相關變更整體原子提交、最終必為 invoker 的經審查方案，否則停止 schema release，不留下可被呼叫的中間 definer 狀態。本期不新增 PostgREST hook／OAuth client／Auth Server 設定。
+
+Release impact 為 SDK callback bundle／env keys 退役、DB v2 相容、TEST forward correction 與 ordinary Session 權限回歸。進入 release 前需新版 TEST 真實驗收及相容證據；Auth 最新設定／migration metadata 重新讀回綁定當次 package。舊 OAuth Gates 被新版驗收取代，沒有補登 PASS。實體 Android 已取消，保留平台使用風險而不阻擋本期既定驗收。本文件不產生 deploy、merge、正式 rollback 或 production smoke 操作表。
+
+## 11. 定案結論與交接條件
+
+2026-10-01 Architecture Closure Review：登入來源／origin／callback、context／capture 交易、owner／claim、RPC／receipt／RLS、retry／cleanup／upgrade、退役責任面及測試路徑均已鎖定，**沒有待選的 P0/P1 架構決策**；文件達 RD Implementation Ready，架構已定案。本機第一輪已完成 source implementation、typecheck／targeted lint／test build／contract check；Playwright 與真實 TEST Auth／RPC／工作台仍待補，TEST correction apply 因 B0 gate 被拒絕而未執行。Convergence 為 **Implementation needs TEST integration**；下一步依 §8 在 B0 完整通過後執行 correction，再比對 spec／QA 與實際 source／TEST。
+
+新版 N01～N10 尚未執行；正式 DEV-133 尚未配置／部署／驗收。Auth allowlist 最新值與真 TEST actors 屬驗證前置，不將未知填成 PASS；不需重新取得已給定的 ProJED 授權。未来跨 App 自動登入、強制同帳號、即時全域登出或 create-only credential 只有重新要求時才回 ADR 審查，不預先建 broker。
+
+歷史證據保留於 [QA 歷史區](../qa/QA-DEV-133-quick-task-shared-identity-sync.md#dev-133-legacy-oauth-evidence)及 [2026-09-30 執行補充](../qa/DEV-133-execution-boundary-addendum-20260930.md)；舊本機／桌面／synthetic 結果只支持當時的實際案例。

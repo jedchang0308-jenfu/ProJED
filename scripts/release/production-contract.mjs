@@ -7,7 +7,6 @@ export const PRODUCTION_CONTRACT = Object.freeze({
   siteId: 'projed-cc78d',
   canonicalOrigin: 'https://projed-cc78d.web.app',
   canonicalRedirectUrl: 'https://projed-cc78d.web.app/',
-  quickTaskOAuthRedirectUrl: 'https://projed-cc78d.firebaseapp.com/quick-task/',
   backend: 'supabase',
   supabaseProjectRef: 'knodlkxqpcqyrtgwpdst',
   supabaseUrl: 'https://knodlkxqpcqyrtgwpdst.supabase.co',
@@ -31,9 +30,6 @@ export const PRODUCTION_CONTRACT = Object.freeze({
   ]),
   publicOptionalKeys: Object.freeze([
     'VITE_PROJED_APP_URL',
-    'VITE_QUICK_TASK_OAUTH_CLIENT_ID',
-    'VITE_QUICK_TASK_OAUTH_REDIRECT_URI',
-    'VITE_QUICK_TASK_OAUTH_RPC_ENABLED',
     'VITE_GOOGLE_CALENDAR_FEED_URL',
     'VITE_DIAGNOSTICS_ENABLED',
     'VITE_SUPABASE_AUTH_MODE',
@@ -98,7 +94,6 @@ export const isProductionSupabaseUrl = value => value === PRODUCTION_CONTRACT.su
 
 export const isCanonicalRedirect = value => value === PRODUCTION_CONTRACT.canonicalRedirectUrl;
 
-export const isCanonicalQuickTaskOAuthRedirect = value => value === PRODUCTION_CONTRACT.quickTaskOAuthRedirectUrl;
 
 export const isSafeHttpsFeed = value => {
   if (!value) return true;

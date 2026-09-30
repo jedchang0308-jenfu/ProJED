@@ -5,6 +5,8 @@
 修訂：2026-09-16 Architecture Closure R12；在R11的root ProJED app shortcut決策上，補齊manifest唯一來源與build輸出、既有安裝更新、真實icon metadata、同帳號安全證明及平台適用性。R4～R10的quick MPA、零業務載入、voice、outbox、RPC／RLS、工作台到達、獨立quick identity與安裝引導契約全部保留。
 架構決策：[ADR-050](../decisions/ADR-050-mobile-quick-task-entry-and-outbox.md)
 QA authority：[QA-DEV-122](../qa/QA-DEV-122-mobile-zero-data-quick-task.md)
+
+2026-10-01 DEV-133 相容修訂：[SPEC-133 Rev 3](SPEC-133-quick-task-shared-identity-sync.md)／[ADR-053 Rev 3](../decisions/ADR-053-quick-task-cross-origin-account-link.md) 管理 DEV-131 雙 origin 的登入與同步，採共用帳號系統、各自標準登入／Session；不要求跨 App OAuth Server 或免再次登入。同 origin root shortcut 可重用該 origin Session；獨立 quick 需自行登入同一帳號才在本人工作台看到任務。原 account-bound outbox、明確 claim、普通 Google OAuth callback、固定 JWT／receipt、零業務載入與 manifest identity 保留；既有 DEV-122 release／QA 結果不因本修訂重算為 DEV-133 PASS。 本版已達 RD Implementation Ready／架構定案；IDB DB v2／auth_context／receipt、登入後確認、forward-only correction及責任面依 SPEC-133 §4～§10 執行，原 owner／ID／未同步資料保留。
 關聯：[DEV-122](../dev_task.md#dev-122projed-手機零資料載入快速建待辦)、[SPEC-034](SPEC-034-fast-start-pwa-install-guidance.md)、[SPEC-039](SPEC-039-task-filter-core-and-workbench-profiles.md)、[SPEC-115](SPEC-115-blank-task-creation-contract.md)、[ADR-047](../decisions/ADR-047-pwa-per-client-reload-isolation.md)、[ADR-048](../decisions/ADR-048-blank-task-creation-contract.md)
 
 ## 1. 真正問題、目標與限制
@@ -120,6 +122,10 @@ root manifest shortcut是靜態launch metadata，不是新的runtime authority�
 - 一般點擊已安裝ProJED必須仍進入`/`；支援平台的app shortcut選擇才進入`/quick-task/`。平台忽略manifest shortcuts時不得顯示錯誤，也不得隱藏設定頁quick CTA或選用quick安裝流程。
 - root與quick入口維持同origin與既有Auth provider。root shortcut在同一installed root app中啟動；它不傳遞或複製憑證。直接同步的身分保證來自固定JWT snapshot、Bearer token、server `auth.uid()`與strict receipt owner equality；OAuth claim才另外使用`getUser(snapshot.accessToken)`。選用的獨立quick安裝若被平台配置到隔離storage/session，必須顯示登入／待同步流程，不能承諾自動共用root session。不得新增token bridge、跨origin handoff或local owner override。
 - `AppInstallAssistant`在mobile／desktop設定頁保留單一quick CTA，不增加第二組卡片或安裝按鈕。標題固定為「快速建待辦」；說明文字固定語意為：「安裝 ProJED 後，支援的平台可從 ProJED 圖示選『快速建待辦』；需要桌面單鍵入口，也可安裝獨立圖示。」CTA仍為「開啟快速建待辦」並指向`/quick-task/?install=1`；產品文案不使用manifest、scope或service worker等技術詞，也不承諾捷徑即時出現。
+
+2026-09-29 DEV-132 畫面契約更新：上列單一區塊與固定文案是舊版設定頁驗收基線；設定中心「安裝APP」現改為先顯示「ProJED 主程式」與「快速建待辦」兩個可選入口，一次只展開所選 App 的安裝動作。選快速入口後，連結仍通往獨立快速入口的安裝頁，並提醒使用同一 Google 帳號及先同步舊入口待辦。此更新只調整設定頁呈現，不改 root／quick 安裝身分、零資料 quick 啟動或 OS 捷徑承諾邊界。
+
+同日補充：獨立快速入口安裝頁在電腦版始終顯示安裝按鈕；可取得原生安裝事件時由按鈕叫出瀏覽器提示，未取得時點擊後提供 Chrome／Edge 手動安裝方式。Android 手機顯示 Chrome 選單安裝步驟。不宣稱網站能強制安裝。
 - 全新安裝candidate以D08驗證。既有安裝取得新版shortcut的時機由瀏覽器／OS管理，產品不能強制刷新、查詢OS捷徑是否已出現或自行輪詢；只維持既有安全SW更新交易，由W07／D10記錄manifest版本、worker控制狀態及平台更新結果。平台延遲不得偽裝成產品已即時完成，也不得為此新增UA猜測、shortcut-detection state或第二更新服務。
 - 兩 entry 共用 `/sw.js`、update transaction 與 build-wide shell version；不註冊 quick worker。
 - root Workbox SPA fallback 必須 deny `/quick-task/`；`directoryIndex`、precache 與有限 query ignore 由同一 VitePWA 設定管理。只忽略 `utm_*`、`fbclid`、`install`、`capture`、`claim`、OAuth code/error 參數；update nonce 不得被忽略。
@@ -484,6 +490,12 @@ R10以前的local／HTTPS evidence保留為回歸基線。R12的S15、B22～B24�
 - 新 origin 首次 Google 登入使用同一 Supabase 專案 `knodlkxqpcqyrtgwpdst`；Auth 回呼白名單只新增 `https://projed-cc78d.firebaseapp.com/quick-task/*`，既有項目保留，不改 Site URL、provider、RLS、schema 或任務 owner 規則。不同 origin 的 session 分離；使用者需選同一 Google 帳號，server 仍以 JWT `auth.uid()` 判定任務 owner。
 - 從新 origin 的「前往工作台」回 `web.app/?quick_workbench=1`。其他來源、local 與 preview 沿用相對路徑，不讓 preview 誤跳正式站。
 - `display-mode` 只能描述目前視窗顯示方式，不代表 Android package 已安裝；產品文案不宣稱 WebAPK 已存在。正式網站與 OAuth 回呼可自動驗證，Android App 清單、`chrome://webapks/` 與選取同帳號須實機驗證。
+
+### DEV-133 舊 OAuth 後續契約（2026-09-30；歷史，已取代）
+
+> 本段是當時規劃快照；2026-10-01 使用者改採各自登入，現行規格及架構定案以 [SPEC-133 Rev 3](SPEC-133-quick-task-shared-identity-sync.md)／[ADR-053 Rev 3](../decisions/ADR-053-quick-task-cross-origin-account-link.md) 為準，不再要求下述 OAuth B0／B1。歷史結果不重算為新版驗收。
+
+上述「獨立 quick origin 首次另外 Google 登入」仍是現行正式行為。使用者後續確認兩邊同帳號免重輸入帳密；[SPEC-133](SPEC-133-quick-task-shared-identity-sync.md) 已把本機可靠性 A 與跨來源同帳號 B 分開：A 可先實作，B 的 [ADR-053](../decisions/ADR-053-quick-task-cross-origin-account-link.md) 仍為 Proposed，須通過 B0 可行性關卡才定案。DEV-133 的 B 實作、驗證與發布前，本節的雙網址／獨立安裝與各 origin 另行登入事實維持；不得把規劃中的 OAuth 銜接寫成已上線。DEV-122 的本機先存、明確 claim、RPC owner／receipt 與零業務資料首屏仍由本規格管制。
 
 
 
