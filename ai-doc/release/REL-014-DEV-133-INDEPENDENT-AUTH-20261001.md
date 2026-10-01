@@ -34,3 +34,7 @@ PROD 既有 canonical RPC prosrc MD5 `3ef7e8731dd6893594e0d66918ddfe16`，invoke
 Git 已有隔離 product commit；推送至既有 origin `https://github.com/jedchang0308-jenfu/ProJED` 的新 baseline／release 分支遭自動審查拒絕，理由是可信人類訊息尚未明確確認目的地。目的地確認問題已提出；本次未繞過、未 push／PR／merge／覆寫共享分支。後續 evidence-only commit 不改 product source，不能被誤當 sealed artifact 的 source commit。
 
 task-owned Chrome PID 37180 已關閉，CDP4195與 TEST4173/4174/4175釋放；profile與兩筆同步 fixture保留。精確 TEST callback 還原且 Site URL／原 allowlist不變。本次 level3／production-candidate channels已移除，cleanup前後 live release不變；正式入口不受影響。使用者瀏覽器、localhost4000與較早含未同步資料的failed profiles保留。release worktree暫留供Git review／證據交付，DEV-133 root負責之後歸檔；歸檔前須保存 ignored收據。
+
+## 後續統一 UI 候選：本機驗收
+
+**2026-10-01 最終統一同步狀態 UI 本機驗收 PASS。** Rev 9 的 11 筆清單、最近任務去重、首次展開／手動收合保留、重新核身與新 nonce、取消／切帳／過期 nonce 保留資料、其他帳號只計數、workspace/profile 恢復與無效回執保護，已以真 browser／IDB＋Auth/RPC SIMULATION 25/25 通過；型別檢查及 targeted lint PASS。320／390／726 無橫向溢出、摘要至少 44px，320px 短標籤與筆數同行；修正最近任務讀回空值型別及窄版摘要寬度。來源 UI digest `29cff0bb616834eceb36af1a06e1102092eb5db3fd2cb24edcb2aff6998ffd0f`，以正式核心 `8376086` 加三個 UI 檔凍結，未混入安裝／DEV-132 修改；本次不宣稱 hosted Auth/RPC PASS。證據 `output/qa/dev-133/independent-auth/unified-status/1790840255628-29cff0bb/local-evidence.json`、`browser/result.json`、`runtime.json`；前兩次 harness FAIL 及較早型別 FAIL 保留。task-owned BrowserServer／4196 均已清理。正式 UI 發布／只讀 smoke 與 Git 交付尚待。

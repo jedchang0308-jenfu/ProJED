@@ -1,6 +1,6 @@
 # SPEC-133：快速建任務共用帳號、各自登入與自動同步
 
-修訂：**2026-10-01 Rev 4；Human Confirmed（產品方向）；RD Implementation Ready；架構定案：已定案**。沿用 Rev 3 Architecture Closure Review；Rev 4 補齊已驗證失效路徑的實作契約，不重開產品方案。**TEST B0、29 項跨帳整合、向前 correction readback 及 correction 後 7 項核心權限案例已 PASS；N01～N10 尚有明列項目未驗，正式 release 未執行，尚未 Release Ready。**
+修訂：**2026-10-01 Rev 9；Human Confirmed（產品方向）；RD Implementation Ready；架構定案：已定案**。Rev 5 整併最近任務狀態與恢復入口；Rev 6 降低收合入口的視覺存在感；Rev 7 設定入口首次出現時預設展開；Rev 8 將未登入狀態提示標為紅字；Rev 9 在未登入狀態說明任務先保存在本機，並於展開後列出可認領的本機未綁定任務名稱。資料、owner、claim 與同步契約不變。REL-014 核心已正式發布並通過驗收；Git 遠端交付目的地待確認。最終 UI slice 的本機 browser／IDB＋Auth/RPC SIMULATION 25/25、型別及 targeted lint 已 PASS；正式 UI 發布尚待，證據範圍見 QA-DEV-133。
 
 權威：[DEV-133](../dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30)、[ADR-053 Rev 3](../decisions/ADR-053-quick-task-cross-origin-account-link.md)、[QA-DEV-133](../qa/QA-DEV-133-quick-task-shared-identity-sync.md)。沿用原 DEV ID／文件路徑；[SPEC-122](SPEC-122-mobile-zero-data-quick-task.md) 的輸入、本機保存、RPC、工作台、manifest／SW 契約繼續適用，登入與認領交界以本版為準。
 
@@ -59,7 +59,7 @@ flowchart LR
 
 local logout 的殘留 SDK Session 不能清除持久化 barrier。`auth_context` 可加非秘密 `sessionId` 作同一次 SDK Session 辨識；sessionStorage 的 `projed-quick-sdk-login-intent` 只記 15 分鐘內明確登入的時間，不是核身證據。恢復 binding 必須同時具備 barrier 後的明確登入、新 SDK session identity、普通 Auth 的網路 getUser 核實及 context CAS。舊 v2 context 缺此可選欄位仍可讀，不複製 token、不把舊自製 OAuth cache 換成新 Session。
 
-兩邊均顯示本 App 帳號；quick 的 `#quick-task-auth-status` 在同一表單容器上方提供未登入 CTA，已核實時提供帳號與「登出」操作，待確認時標明離線／重新登入。主程式重用既有登入頁及 Sidebar 帳號入口；不另造帳號管理模組。切 B 立即收起 A 的成功卡片／title／待處理內容；A 的未同步記錄保留，不提供改綁 B 操作。
+兩邊均顯示本 App 帳號；quick 的 `#quick-task-auth-status` 在同一表單容器上方提供未登入 CTA，已核實時提供帳號與「登出」操作，待確認時標明離線／重新登入。主程式重用既有登入頁及 Sidebar 帳號入口；不另造帳號管理模組。切 B 立即清除 A 最近任務的可見狀態並收起同步容器；A 的未同步記錄保留，不提供改綁 B 操作。
 
 ## 4. 本機模型、原子寫入及更新相容性
 
@@ -86,7 +86,13 @@ Lease 取得、claim、人工 retry、finish、cleanup 均在各自 readwrite tr
 
 ## 5. 認領與前往工作台
 
-- **2026-10-01 使用者核准的恢復入口精簡。** 空白輸入狀態只為未綁定任務、登入失效、永久失敗及其他帳號待辦顯示單一文字入口；同帳號正常 pending／syncing／failed_retryable 不顯示手動操作或常駐說明。未綁定以固定文字「本機待同步任務」提示，不在入口顯示筆數；失敗以「同步異常 N 筆」、其他帳號以不含內容的「原帳號待辦 N 筆」提示；混合時合併為「需處理 N 筆」。點開才顯示該筆的目的帳號確認或失敗原因及可用動作；已登入且核身成功時直接確認，不再次啟動登入。登入本身仍不認領；確認前重新核對 owner／Auth epoch／context revision，切帳或重開須重新確認。輸入新任務期間收起入口；稍後／返回仍保留資料及可再開啟的入口，不設一般狀態的「處理／稍後處理」雙按鈕。
+- **2026-10-01 使用者核准的恢復入口精簡。** 空白輸入狀態只為未綁定任務、登入失效、永久失敗及其他帳號待辦顯示單一文字入口；同帳號正常 pending／syncing／failed_retryable 不顯示手動操作或常駐說明。未綁定以「本機待同步任務 N 筆」提示；失敗以「同步異常 N 筆」、其他帳號以不含內容的「原帳號待辦 N 筆」提示；混合時合併為「需處理 N 筆」。展開後列出當前範圍內未綁定任務名稱，並沿用逐筆目的帳號確認或失敗處理流程；最近任務摘要已呈現的項目不重複列出，其他帳號任務不顯示名稱。已登入且核身成功時直接確認，不再次啟動登入。登入本身仍不認領；確認前重新核對 owner／Auth epoch／context revision，切帳或重開須重新確認。輸入新任務期間收起入口；稍後／返回仍保留資料及可再開啟的入口，不設一般狀態的「處理／稍後處理」雙按鈕。
+- **2026-10-01 後續呈現調整。** 未綁定任務使用「本機待同步任務」作為可展開／收合容器的標題；首次出現時預設展開，使用者仍可收合。收合不刪除任務、不代表確認認領；未完成的確認收合後，下次展開須重新核身及確認。
+- **2026-10-01 最近狀態與恢復入口整併。** 最近一次保存／同步狀態與任務名稱放在同一容器摘要；需要介入的待辦數量在同一摘要提示，展開後顯示認領或失敗處理。最近任務若仍未同步，只在摘要代表一次，不再重複計入其他待處理數；若最近任務本身需介入，摘要提示確認帳號、重新登入或同步異常。同帳號正常自動 pending／syncing／failed_retryable 維持自動同步，不列為人工恢復項目。切帳、稍後處理、明確認領與 owner 邊界不變。
+- **2026-10-01 收合入口視覺降噪。** 收合時使用透明背景與無外框的低對比摘要，標籤及筆數同行顯示並縮短高度；仍保留至少 44px 的操作高度。展開後保留淡色容器及既有操作提示。
+- **2026-10-01 預設展開入口。** 待同步／最近狀態容器首次顯示時自動展開；使用者手動收合後，背景同步或一般狀態刷新保留其收合狀態。確認綁定仍須明確操作。
+- **2026-10-01 未登入狀態色彩。** 「此快速 App 尚未登入」以紅字呈現，其他登入、網路及驗證狀態沿用一般提示色。
+- **2026-10-01 未登入保存說明與任務清單。** 未登入狀態明示任務會先保存在本機，登入 ProJED 帳號後才同步雲端；展開入口列出可認領的本機未綁定任務名稱。只顯示 accountId 為 null 的記錄，隱藏其他帳號任務標題；最近任務摘要已顯示者不重複列入清單。
 - 無已知帳號可線上／離線保存 unbound；登入事件本身不認領。登入 CTA 只處理登入，回來後從「待處理」逐筆選擇記錄。
 - 核實 A 後顯示「同步到〈目前帳號〉」和該筆名稱，提供「確認同步」／「稍後處理」。建立並凍結 captureId、目的 accountId、authEpoch/context revision、15 分鐘 nonce；確認時再檢查最新身分及 IDB CAS；confirmation 畫面 reload／重開後必須重新顯示目的帳號及生成 nonce，不沿用記憶體已遺失的確認。B 取代 A、nonce 過期或 login callback 舊 claim 皆回確認畫面，必須重新確認 B。
 - CAS 只可將 accountId=null 且 nonce／expiry 符合的記錄轉 A-bound pending，並清 claimIntent；兩 tabs 確認只能一個成功。取消／錯 nonce／過期／衝突不刪記錄，稍後處理只收起提醒、不移除或改綁。

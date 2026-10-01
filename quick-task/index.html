@@ -30,11 +30,18 @@
             </button>
           </div>
           <button id="quick-task-submit" class="quick-task-submit" type="submit" disabled>建立</button>
-          <p class="quick-task-submit-note">按「建立」後，待辦會同步至 ProJED 主程式的「全域任務工作台」。尚未登入時，登入 ProJED 帳號即可完成同步。</p>
+          <p class="quick-task-submit-note">按「建立」後，待辦會同步至 ProJED 主程式的「全域任務工作台」。</p>
         </form>
         <p id="quick-task-message" class="quick-task-message" role="status" aria-live="polite" hidden></p>
-        <section id="quick-task-success" class="quick-task-success" hidden aria-live="polite"></section>
-        <section id="quick-task-recovery" class="quick-task-recovery" hidden></section>
+        <details id="quick-task-recovery" class="quick-task-recovery" data-compact="true" hidden>
+          <summary class="quick-task-recovery-entry" data-recover="true" aria-controls="quick-task-recovery-message quick-task-recovery-list quick-task-recovery-content">
+            <span id="quick-task-success" class="quick-task-success" hidden aria-live="polite"></span>
+            <span id="quick-task-recovery-summary" class="quick-task-recovery-summary" data-recover-summary>本機待同步任務</span>
+          </summary>
+          <p id="quick-task-recovery-message" class="quick-task-recovery-message" role="status" aria-live="polite" hidden></p>
+          <ol id="quick-task-recovery-list" class="quick-task-recovery-list" aria-label="本機待同步任務清單" hidden></ol>
+          <section id="quick-task-recovery-content" class="quick-task-recovery-content" hidden></section>
+        </details>
       </div>
       <section id="quick-task-install" class="quick-task-install" data-quick-install="true" hidden aria-live="polite"></section>
       <noscript>需要啟用 JavaScript 才能建立待辦；目前可先選取並複製名稱。</noscript>

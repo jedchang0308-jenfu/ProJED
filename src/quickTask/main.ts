@@ -28,9 +28,14 @@ const voiceButton = document.querySelector<HTMLButtonElement>('#quick-task-voice
 const submitButton = document.querySelector<HTMLButtonElement>('#quick-task-submit');
 const message = document.querySelector<HTMLElement>('#quick-task-message');
 const success = document.querySelector<HTMLElement>('#quick-task-success');
-const recovery = document.querySelector<HTMLElement>('#quick-task-recovery');
+const recovery = document.querySelector<HTMLDetailsElement>('#quick-task-recovery');
+const recoverySummary = recovery?.querySelector<HTMLElement>('[data-recover-summary]');
+const recoveryMessage = document.querySelector<HTMLElement>('#quick-task-recovery-message');
+const recoveryList = document.querySelector<HTMLOListElement>('#quick-task-recovery-list');
+const recoveryContent = document.querySelector<HTMLElement>('#quick-task-recovery-content');
 
-if (!titleInput || !form || !authStatus || !voiceButton || !submitButton || !message || !success || !recovery) {
+if (!titleInput || !form || !authStatus || !voiceButton || !submitButton || !message || !success
+  || !recovery || !recoverySummary || !recoveryMessage || !recoveryList || !recoveryContent) {
   throw new Error('QUICK_TASK_BOOTSTRAP_FAILED');
 }
 
@@ -59,6 +64,7 @@ let localCommitInFlight = false;
 let claimInFlight = false;
 let recoveryCaptureId: string | null = null;
 let recoveryRenderRevision = 0;
+let recoveryInteractionRevision = 0;
 let syncInFlight = false;
 let syncRequested = false;
 let cleanupInFlight: Promise<number> | null = null;
@@ -74,18 +80,34 @@ const getAuthApi = () => {
 };
 
 const setMessage = (text: string) => {
-  message.textContent = text;
-  message.hidden = text.length === 0;
+  const target = !recovery.hidden && recovery.open ? recoveryMessage : message;
+  target.textContent = text;
+  target.hidden = text.length === 0;
+  if (target === recoveryMessage) {
+    message.textContent = '';
+    message.hidden = true;
+  }
 };
 const setAuthStatus = (text: string, showLogin: boolean, showLogout = false) => {
   authStatus.replaceChildren();
+  authStatus.removeAttribute('data-state');
   if (!text) {
     authStatus.hidden = true;
     return;
   }
   authStatus.hidden = false;
+  if (text === '此快速 App 尚未登入') authStatus.dataset.state = 'unauthenticated';
   const label = document.createElement('span');
-  label.textContent = text;
+  label.className = 'quick-task-auth-copy';
+  const statusLabel = document.createElement('span');
+  statusLabel.textContent = text;
+  label.append(statusLabel);
+  if (text === '此快速 App 尚未登入') {
+    const explanation = document.createElement('span');
+    explanation.className = 'quick-task-auth-explanation';
+    explanation.textContent = '此時建立的任務會先記錄在本機，登入 ProJED 帳號後才會同步至雲端。';
+    label.append(explanation);
+  }
   authStatus.append(label);
   if (showLogin) {
     const loginButton = document.createElement('button');
@@ -175,7 +197,10 @@ const verifyAndFlush = async (expected: NonNullable<typeof authSnapshot>) => {
     setAuthStatus(`此快速 App 已登入：${verified.email ?? 'ProJED 帳號'}`, false, true);
     const authFailed = await flushQuickTaskOutbox(verified, (captureId, state) => {
       if (authSnapshot?.accountId === verified.accountId && authSnapshot.authEpoch === verified.authEpoch
-        && state === 'synced' && currentRecord?.captureId === captureId) renderSuccess(currentRecord, true);
+        && state === 'synced' && currentRecord?.captureId === captureId) {
+        currentRecord = { ...currentRecord, state: 'synced' };
+        renderSuccess(currentRecord, true);
+      }
     });
     if (authFailed) {
       verifiedAuthSnapshot = null;
@@ -252,64 +277,177 @@ const installReloadSafety = () => {
 const needsRecovery = (record: QuickCaptureRecord) => record.state !== 'synced'
   && (record.accountId === null || record.state === 'failed_auth' || record.state === 'failed_permanent');
 
-const hideRecovery = () => {
-  recovery.hidden = true;
-  recovery.replaceChildren();
+const setRecoverySummary = (label: string, count?: number) => {
+  recoverySummary.textContent = label;
+  recoverySummary.hidden = !label;
+  if (count !== undefined && count > 0) {
+    recoverySummary.dataset.count = String(count);
+    recoverySummary.setAttribute('aria-label', `${label} ${count} 筆`);
+  } else {
+    delete recoverySummary.dataset.count;
+    recoverySummary.removeAttribute('aria-label');
+  }
 };
 
+const renderRecoveryList = (records: QuickCaptureRecord[]) => {
+  const listedRecords = records.filter(record => record.accountId === null
+    && record.captureId !== currentRecord?.captureId
+    && record.captureId !== pendingClaim?.captureId);
+  const items = document.createDocumentFragment();
+  for (const record of listedRecords) {
+    const item = document.createElement('li');
+    item.textContent = record.title;
+    items.append(item);
+  }
+  recoveryList.replaceChildren(items);
+  recoveryList.hidden = listedRecords.length === 0;
+};
+
+const hideRecovery = () => {
+  recoveryRenderRevision += 1;
+  recoveryInteractionRevision += 1;
+  pendingClaim = null;
+  recoveryCaptureId = null;
+  recovery.hidden = true;
+  recovery.open = false;
+  recovery.dataset.compact = 'true';
+  recoveryMessage.textContent = '';
+  recoveryMessage.hidden = true;
+  recoveryList.replaceChildren();
+  recoveryList.hidden = true;
+  recoveryContent.hidden = true;
+  recoveryContent.replaceChildren();
+};
+
+recovery.addEventListener('toggle', () => {
+  if (recovery.hidden) return;
+  if (recovery.open) {
+    if (!recoveryContent.hidden) return;
+    const interactionRevision = ++recoveryInteractionRevision;
+    if (message.textContent && !recoveryMessage.textContent) {
+      recoveryMessage.textContent = message.textContent;
+      recoveryMessage.hidden = false;
+    }
+    message.textContent = '';
+    message.hidden = true;
+    void showNextRecovery(interactionRevision);
+    return;
+  }
+  recoveryRenderRevision += 1;
+  recoveryInteractionRevision += 1;
+  pendingClaim = null;
+  recoveryCaptureId = null;
+  recoveryContent.hidden = true;
+  recoveryContent.replaceChildren();
+  if (recovery.dataset.compact === 'false') void renderRecovery();
+});
+
 const renderRecovery = async () => {
+  const wasHidden = recovery.hidden;
   const revision = ++recoveryRenderRevision;
-  if (titleInput.value.trim() || currentRecord) {
+  if (titleInput.value.trim()) {
     hideRecovery();
     return;
   }
+  const displayedRecord = currentRecord;
+  if (displayedRecord) {
+    const latestRecord = await getQuickCapture(displayedRecord.captureId).catch(() => displayedRecord);
+    if (revision !== recoveryRenderRevision || titleInput.value.trim()) return;
+    if (currentRecord?.captureId === displayedRecord.captureId) {
+      currentRecord = latestRecord ?? null;
+      if (latestRecord) renderSuccess(latestRecord, latestRecord.state === 'synced');
+      else success.hidden = true;
+    }
+  }
+  const records = (await listRecoverableQuickCaptures().catch(() => [])).filter(record => record.state !== 'synced');
+  if (revision !== recoveryRenderRevision || titleInput.value.trim()) return;
   if (pendingClaim) {
     const claim = pendingClaim;
     const record = await getQuickCapture(claim.captureId).catch(() => null);
-    if (revision !== recoveryRenderRevision || titleInput.value.trim() || currentRecord) return;
+    if (revision !== recoveryRenderRevision || titleInput.value.trim()) return;
     if (!record || record.accountId !== null || authSnapshot?.accountId !== claim.accountId
       || authSnapshot.authEpoch !== claim.authEpoch) {
       pendingClaim = null;
     } else {
+      renderRecoveryList(records);
       recovery.hidden = false;
       recovery.dataset.compact = 'false';
-      recovery.innerHTML = `<strong>同步到 ${escapeHtml(claim.email ?? '目前 ProJED 帳號')}</strong><span>${escapeHtml(record.title)}</span><div class="quick-task-actions"><button type="button" data-confirm-claim="true">確認同步</button><button type="button" data-cancel-claim="true">稍後處理</button></div>`;
-      recovery.querySelector<HTMLButtonElement>('[data-confirm-claim]')?.addEventListener('click', event => {
+      if (!currentRecord && recoverySummary.hidden) setRecoverySummary('本機待同步任務');
+      recoveryContent.hidden = false;
+      recoveryContent.innerHTML = `<strong>同步到 ${escapeHtml(claim.email ?? '目前 ProJED 帳號')}</strong><span>${escapeHtml(record.title)}</span><div class="quick-task-actions"><button type="button" data-confirm-claim="true">確認同步</button><button type="button" data-cancel-claim="true">稍後處理</button></div>`;
+      recovery.open = true;
+      recoveryContent.querySelector<HTMLButtonElement>('[data-confirm-claim]')?.addEventListener('click', event => {
         const button = event.currentTarget as HTMLButtonElement;
         button.disabled = true;
         void confirmPendingClaim().catch(() => setMessage('確認未完成，待辦仍保留在本機。'))
           .finally(() => { button.disabled = false; });
       });
-      recovery.querySelector<HTMLButtonElement>('[data-cancel-claim]')?.addEventListener('click', () => {
+      recoveryContent.querySelector<HTMLButtonElement>('[data-cancel-claim]')?.addEventListener('click', () => {
         pendingClaim = null;
-        void renderRecovery();
+        recovery.open = false;
       });
       return;
     }
   }
-  const records = (await listRecoverableQuickCaptures().catch(() => [])).filter(record => record.state !== 'synced');
   const actionable = records.filter(needsRecovery);
-  const otherCount = Math.max(0, await countAllPendingQuickCaptures().catch(() => records.length) - records.length);
-  if (revision !== recoveryRenderRevision || titleInput.value.trim() || currentRecord) return;
+  const pendingCount = await countAllPendingQuickCaptures().catch(() => records.length);
+  if (revision !== recoveryRenderRevision || titleInput.value.trim()) return;
+  renderRecoveryList(records);
+  const currentPending = currentRecord && currentRecord.state !== 'synced' ? 1 : 0;
+  let otherAccountPending = Math.max(0, pendingCount - records.length);
+  if (currentPending && !records.some(record => record.captureId === currentRecord?.captureId)) {
+    otherAccountPending = Math.max(0, otherAccountPending - 1);
+  }
+  const currentNeedsRecovery = Boolean(currentRecord && needsRecovery(currentRecord));
+  const actionableOthers = actionable.filter(record => record.captureId !== currentRecord?.captureId);
+  const count = actionableOthers.length + otherAccountPending;
+  const unboundCount = actionableOthers.filter(record => record.accountId === null).length;
+  const label = unboundCount === count ? '本機待同步任務'
+    : otherAccountPending === count ? '原帳號待辦'
+      : unboundCount === 0 && otherAccountPending === 0 ? '同步異常' : '需處理';
+  const currentActionHint = currentRecord && currentNeedsRecovery
+    ? currentRecord.accountId === null ? '需確認同步帳號'
+      : currentRecord.state === 'failed_auth' ? '需重新登入' : '需處理同步異常'
+    : '';
   const selected = actionable.find(record => record.captureId === recoveryCaptureId);
+  if (currentRecord) {
+    const summaryLabel = [currentActionHint, count > 0 ? `另有${label}` : ''].filter(Boolean).join('；');
+    setRecoverySummary(summaryLabel, count);
+  }
+  else setRecoverySummary(count > 0 ? label : '', count);
   if (selected?.accountId) {
+    recovery.hidden = false;
     renderRecoveryFailure(selected);
     return;
   }
   recoveryCaptureId = null;
-  const count = actionable.length + otherCount;
-  if (count === 0) {
+  if (!currentRecord && count === 0) {
+    const recoveryStatus = recoveryMessage.textContent ?? '';
     hideRecovery();
+    if (recoveryStatus) setMessage(recoveryStatus);
     return;
   }
-  const unboundCount = actionable.filter(record => record.accountId === null).length;
-  const label = unboundCount === count ? '本機待同步任務'
-    : otherCount === count ? `原帳號待辦 ${count} 筆`
-      : unboundCount === 0 && otherCount === 0 ? `同步異常 ${count} 筆` : `需處理 ${count} 筆`;
+  const needsDetailAction = currentNeedsRecovery || actionableOthers.length > 0 || otherAccountPending > 0;
+  if (message.textContent && !recoveryMessage.textContent) {
+    recoveryMessage.textContent = message.textContent;
+    recoveryMessage.hidden = false;
+    message.textContent = '';
+    message.hidden = true;
+  }
   recovery.hidden = false;
   recovery.dataset.compact = 'true';
-  recovery.innerHTML = `<button class="quick-task-recovery-entry" type="button" data-recover="true">${label}</button>`;
-  recovery.querySelector<HTMLButtonElement>('[data-recover]')?.addEventListener('click', () => { void showNextRecovery(); });
+  if (needsDetailAction) {
+    recoveryContent.hidden = true;
+    recoveryContent.replaceChildren();
+  } else {
+    recoveryContent.hidden = false;
+    recoveryContent.textContent = currentRecord?.state === 'synced'
+      ? '此任務已同步至 ProJED 主程式。'
+      : currentRecord
+        ? '此任務已保存在本機，等待登入狀態有效且網路可用後同步。'
+        : '目前沒有需要人工處理的任務。';
+  }
+  if (wasHidden) recovery.open = true;
 };
 
 const confirmPendingClaim = async () => {
@@ -346,23 +484,56 @@ const confirmPendingClaim = async () => {
   setMessage('已連結原帳號，正在同步。');
   await verifyAndFlush(verified);
   const completed = await getQuickCapture(claim.captureId).catch(() => null);
+  if (completed && currentRecord?.captureId === completed.captureId) {
+    currentRecord = completed;
+    renderSuccess(completed, completed.state === 'synced');
+  }
   if (authSnapshot?.accountId === claim.accountId && authSnapshot.authEpoch === claim.authEpoch) {
     setMessage(completed?.state === 'synced' ? '已建立' : '待辦仍保留在本機，等待同步。');
   }
   await renderRecovery();
 };
 
-const showNextRecovery = async () => {
-  if (titleInput.value.trim() || currentRecord) return;
-  const records = await listRecoverableQuickCaptures();
-  const record = records.find(needsRecovery);
+const showNextRecovery = async (interactionRevision: number) => {
+  const isCurrentInteraction = () => !recovery.hidden && recovery.open
+    && recoveryInteractionRevision === interactionRevision;
+  if (titleInput.value.trim()) return;
+  let records: QuickCaptureRecord[];
+  try {
+    records = await listRecoverableQuickCaptures();
+  } catch {
+    if (isCurrentInteraction()) setMessage('目前無法讀取本機待同步任務，資料仍保留在本機。');
+    return;
+  }
+  if (!isCurrentInteraction()) return;
+  const record = (currentRecord ? records.find(item => item.captureId === currentRecord?.captureId && needsRecovery(item)) : null)
+    ?? records.find(needsRecovery);
   if (!record) {
-    setMessage(authSnapshot ? '請先登出此 App，再登入建立這些待辦的原帳號。' : '請登入建立這些待辦的原帳號。');
-    authStatus.querySelector<HTMLButtonElement>('button')?.focus();
+    const pending = records.find(item => item.state !== 'synced');
+    const allPending = await countAllPendingQuickCaptures().catch(() => 0);
+    const scopedPending = records.filter(item => item.state !== 'synced').length;
+    const currentPendingOutsideScope = currentRecord && currentRecord.state !== 'synced'
+      && !records.some(item => item.captureId === currentRecord?.captureId) ? 1 : 0;
+    const otherAccountPending = Math.max(0, allPending - scopedPending - currentPendingOutsideScope);
+    if (otherAccountPending > 0) {
+      setMessage(authSnapshot ? '請先登出此 App，再登入建立這些待辦的原帳號。' : '請登入建立這些待辦的原帳號。');
+      authStatus.querySelector<HTMLButtonElement>('button')?.focus();
+    } else if (pending) {
+      setMessage('任務已保留在本機；已綁定原帳號的任務會在網路可用時自動同步。');
+    } else {
+      if (allPending === 0 && currentRecord?.state === 'synced') {
+        setMessage('最近一筆任務已同步至 ProJED 主程式。');
+      } else {
+        setMessage(authSnapshot ? '請先登出此 App，再登入建立這些待辦的原帳號。' : '請登入建立這些待辦的原帳號。');
+        authStatus.querySelector<HTMLButtonElement>('button')?.focus();
+      }
+    }
     return;
   }
   if (record.accountId === null) {
-    await beginClaim(record.captureId).catch(() => setMessage('目前無法確認同步帳號，待辦仍保留在本機。'));
+    await beginClaim(record.captureId, interactionRevision).catch(() => {
+      if (isCurrentInteraction()) setMessage('目前無法確認同步帳號，待辦仍保留在本機。');
+    });
     return;
   }
   recoveryCaptureId = record.captureId;
@@ -377,15 +548,17 @@ const renderRecoveryFailure = (record: QuickCaptureRecord) => {
       : canRetry ? '同步多次失敗，待辦仍保留在本機。' : '同步結果需要查證，待辦仍保留在本機。';
   recovery.hidden = false;
   recovery.dataset.compact = 'false';
-  recovery.innerHTML = `<strong>同步未完成</strong><span>${escapeHtml(record.title)}</span><span>${explanation}</span><div class="quick-task-actions">${record.state === 'failed_auth' ? '<button type="button" data-recovery-login="true">重新登入</button>' : ''}${needsWorkspace ? '<button type="button" data-workbench="true">前往工作台</button>' : ''}${canRetry ? '<button type="button" data-retry="true">重試</button>' : ''}<button type="button" data-back="true">返回</button></div>`;
-  recovery.querySelector<HTMLButtonElement>('[data-recovery-login]')?.addEventListener('click', () => {
+  recoveryContent.hidden = false;
+  recoveryContent.innerHTML = `<strong>同步未完成</strong><span>${escapeHtml(record.title)}</span><span>${explanation}</span><div class="quick-task-actions">${record.state === 'failed_auth' ? '<button type="button" data-recovery-login="true">重新登入</button>' : ''}${needsWorkspace ? '<button type="button" data-workbench="true">前往工作台</button>' : ''}${canRetry ? '<button type="button" data-retry="true">重試</button>' : ''}<button type="button" data-back="true">返回</button></div>`;
+  recovery.open = true;
+  recoveryContent.querySelector<HTMLButtonElement>('[data-recovery-login]')?.addEventListener('click', () => {
     void getAuthApi().then(auth => auth.startQuickGoogleSignIn(new URL('/quick-task/', window.location.origin).toString()))
       .catch(() => setMessage('目前無法登入，待辦仍保留在本機。'));
   });
-  recovery.querySelector<HTMLButtonElement>('[data-workbench]')?.addEventListener('click', () => {
+  recoveryContent.querySelector<HTMLButtonElement>('[data-workbench]')?.addEventListener('click', () => {
     window.location.assign(getWorkbenchUrl(window.location.origin));
   });
-  recovery.querySelector<HTMLButtonElement>('[data-retry]')?.addEventListener('click', event => {
+  recoveryContent.querySelector<HTMLButtonElement>('[data-retry]')?.addEventListener('click', event => {
     const button = event.currentTarget as HTMLButtonElement;
     button.disabled = true;
     void (async () => {
@@ -401,9 +574,9 @@ const renderRecoveryFailure = (record: QuickCaptureRecord) => {
       await renderRecovery();
     })().catch(() => setMessage('重試未完成，待辦仍保留在本機。')).finally(() => { button.disabled = false; });
   });
-  recovery.querySelector<HTMLButtonElement>('[data-back]')?.addEventListener('click', () => {
+  recoveryContent.querySelector<HTMLButtonElement>('[data-back]')?.addEventListener('click', () => {
     recoveryCaptureId = null;
-    void renderRecovery();
+    recovery.open = false;
   });
 };
 
@@ -411,19 +584,7 @@ const escapeHtml = (value: string) => value.replace(/[&<>"']/gu, char => ({ '&':
 
 const renderSuccess = (record: QuickCaptureRecord, synced: boolean) => {
   success.hidden = false;
-  success.innerHTML = `<strong>${synced ? '已建立' : '已記下，待同步'}</strong><span>${escapeHtml(record.title)}</span><div class="quick-task-actions"><button class="primary" type="button" data-next="true">再記一筆</button><button type="button" data-workbench="true">前往工作台</button></div>`;
-  success.querySelector<HTMLButtonElement>('[data-next]')?.addEventListener('click', () => {
-    currentRecord = null;
-    pendingLocalCommit = null;
-    titleInput.value = '';
-    success.hidden = true;
-    setMessage('');
-    titleInput.focus();
-    void renderRecovery();
-  });
-  success.querySelector<HTMLButtonElement>('[data-workbench]')?.addEventListener('click', () => {
-    window.location.assign(getWorkbenchUrl(window.location.origin));
-  });
+  success.innerHTML = `<strong>${synced ? '已建立' : '已記下，待同步'}</strong><span>${escapeHtml(record.title)}</span>`;
 };
 
 const digest = async (value: string) => {
@@ -432,13 +593,18 @@ const digest = async (value: string) => {
   return Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, '0')).join('');
 };
 
-const beginClaim = async (captureId: string) => {
+const beginClaim = async (captureId: string, interactionRevision: number) => {
   if (claimInFlight) return;
+  const isCurrentInteraction = () => !recovery.hidden && recovery.open
+    && recoveryInteractionRevision === interactionRevision;
   claimInFlight = true;
   try {
     const auth = await getAuthApi();
+    if (!isCurrentInteraction()) return;
     const snapshot = await auth.loadQuickSession();
+    if (!isCurrentInteraction()) return;
     const verified = snapshot ? await auth.verifyQuickSession(snapshot) : null;
+    if (!isCurrentInteraction()) return;
     if (!verified) {
       setMessage(snapshot ? '目前無法確認登入狀態，請連線後再試。' : '請先登入，再確認同步帳號。');
       if (!snapshot) authStatus.querySelector<HTMLButtonElement>('button')?.focus();
@@ -447,9 +613,11 @@ const beginClaim = async (captureId: string) => {
     const nonceBytes = crypto.getRandomValues(new Uint8Array(16));
     const nonce = Array.from(nonceBytes, byte => byte.toString(16).padStart(2, '0')).join('');
     const nonceHash = await digest(nonce);
+    if (!isCurrentInteraction()) return;
     await putClaimIntent(captureId, nonceHash, Date.now() + 15 * 60_000);
+    if (!isCurrentInteraction()) return;
     const latest = auth.getQuickAuthSnapshot();
-    if (latest?.accountId !== verified.accountId || latest.authEpoch !== verified.authEpoch) return;
+    if (!isCurrentInteraction() || latest?.accountId !== verified.accountId || latest.authEpoch !== verified.authEpoch) return;
     authSnapshot = verified;
     verifiedAuthSnapshot = verified;
     pendingClaim = { captureId, nonceHash, accountId: verified.accountId, email: verified.email,
@@ -458,6 +626,10 @@ const beginClaim = async (captureId: string) => {
     await renderRecovery();
   } finally {
     claimInFlight = false;
+    if (!recovery.hidden && recovery.open && recoveryContent.hidden
+      && recoveryInteractionRevision !== interactionRevision) {
+      void showNextRecovery(recoveryInteractionRevision);
+    }
   }
 };
 
