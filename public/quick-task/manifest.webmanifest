@@ -1,7 +1,7 @@
 {
   "id": "/quick-task/",
-  "name": "ProJED快速建待辦",
-  "short_name": "快速建待辦",
+  "name": "ProJED-快速建任務",
+  "short_name": "ProJED-快速建任務",
   "description": "不載入完整工作台，快速記下一個待辦",
   "lang": "zh-Hant",
   "start_url": "/quick-task/",

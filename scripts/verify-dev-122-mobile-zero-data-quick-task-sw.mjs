@@ -3,13 +3,14 @@ import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
-const html = readFileSync(resolve('dist/quick-task/index.html'), 'utf8');
-const rootHtml = readFileSync(resolve('dist/index.html'), 'utf8');
-const sw = readFileSync(resolve('dist/sw.js'), 'utf8');
-const meta = JSON.parse(readFileSync(resolve('dist/app-shell-meta.json'), 'utf8'));
+const buildOutputDirectory = process.env.DEV133_BUILD_OUTDIR ?? 'dist';
+const html = readFileSync(resolve(buildOutputDirectory, 'quick-task/index.html'), 'utf8');
+const rootHtml = readFileSync(resolve(buildOutputDirectory, 'index.html'), 'utf8');
+const sw = readFileSync(resolve(buildOutputDirectory, 'sw.js'), 'utf8');
+const meta = JSON.parse(readFileSync(resolve(buildOutputDirectory, 'app-shell-meta.json'), 'utf8'));
 const sourceRootManifestText = readFileSync(resolve('public/manifest.webmanifest'), 'utf8');
-const distRootManifestText = readFileSync(resolve('dist/manifest.webmanifest'), 'utf8');
-const distQuickManifest = JSON.parse(readFileSync(resolve('dist/quick-task/manifest.webmanifest'), 'utf8'));
+const distRootManifestText = readFileSync(resolve(buildOutputDirectory, 'manifest.webmanifest'), 'utf8');
+const distQuickManifest = JSON.parse(readFileSync(resolve(buildOutputDirectory, 'quick-task/manifest.webmanifest'), 'utf8'));
 const sourceRootManifest = JSON.parse(sourceRootManifestText);
 const distRootManifest = JSON.parse(distRootManifestText);
 const manifestHistory = execFileSync('git', ['log', '--format=%H', '--', 'public/manifest.webmanifest'], { encoding: 'utf8' })
@@ -43,8 +44,8 @@ const checks = [
     && distRootManifest.id === baselineRootManifest.id
     && distRootManifest.start_url === baselineRootManifest.start_url
     && distRootManifest.scope === baselineRootManifest.scope],
-  ['W07-build-b-shortcut', shortcut?.name === '快速建待辦'
-    && shortcut.short_name === '建待辦'
+  ['W07-build-b-shortcut', shortcut?.name === 'ProJED-快速建任務'
+    && shortcut.short_name === 'ProJED-快速建任務'
     && shortcut.description === '直接輸入一筆待辦'
     && shortcut.url === '/quick-task/'
     && shortcut.icons?.some(icon => icon.sizes === '192x192')
@@ -77,7 +78,7 @@ const artifact = {
   checks: checks.map(([id, ok]) => ({ id, expected: true, actual: ok, status: ok ? 'PASS' : 'FAIL' })),
   generatedAt: new Date().toISOString(),
 };
-const dir = resolve('output/playwright/dev-122-mobile-zero-data-quick-task');
+const dir = resolve(process.env.DEV133_REPORT_DIR ?? 'output/playwright/dev-122-mobile-zero-data-quick-task');
 mkdirSync(dir, { recursive: true });
 writeFileSync(resolve(dir, 'sw-result.json'), `${JSON.stringify(artifact, null, 2)}\n`, 'utf8');
 if (artifact.status !== 'PASS') { console.error(artifact); process.exit(1); }

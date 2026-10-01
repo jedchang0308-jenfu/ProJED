@@ -3,11 +3,28 @@
 body { margin: 0; min-width: 320px; min-height: 100vh; background: radial-gradient(circle at 20% 0%, #ccfbf1 0, #f8fafc 42%); }
 button, input { font: inherit; }
 .quick-task-shell { width: min(100%, 540px); margin: 0 auto; padding: max(24px, env(safe-area-inset-top)) 20px max(28px, env(safe-area-inset-bottom)); }
-.quick-task-header { display: flex; align-items: center; gap: 12px; padding: 18px 0 42px; }
-.quick-task-install { margin: -22px 0 24px; padding: 14px 16px; border: 1px solid #99f6e4; border-radius: 14px; background: rgb(240 253 250 / 92%); color: #115e59; }
+.quick-task-header { display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content; align-items: center; gap: 12px; padding: 18px 0 42px; }
+.quick-task-capture-card { margin: 0; padding: 16px; border: 1px solid #dbe5ee; border-radius: 16px; background: rgb(255 255 255 / 68%); box-shadow: 0 5px 16px rgb(15 23 42 / 4%); }
+.quick-task-back { display: grid; width: 48px; height: 48px; min-height: 48px; place-items: center; padding: 0; border: 0; border-radius: 12px; background: transparent; cursor: pointer; }
+.quick-task-back img { display: block; width: 48px; height: 48px; border-radius: 12px; object-fit: contain; }
+.quick-task-back:hover:not(:disabled) { filter: brightness(.95); }
+.quick-task-back:disabled { opacity: .58; cursor: not-allowed; }
+.quick-task-back:focus-visible { outline: 3px solid rgb(20 184 166 / 35%); outline-offset: 2px; }
+.quick-task-auth-status { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 10px; margin: 0 2px 12px; color: #64748b; font-size: 12px; line-height: 1.4; }
+.quick-task-auth-status[data-state="unauthenticated"] { align-items: flex-start; color: #b91c1c; }
+.quick-task-auth-status span { min-width: 0; overflow-wrap: anywhere; }
+.quick-task-auth-copy { display: flex; flex: 1 1 auto; flex-direction: column; gap: 3px; }
+.quick-task-auth-explanation { font-size: 12px; font-weight: 400; }
+.quick-task-auth-status button { flex: none; min-height: 32px; padding: 0 10px; border: 1px solid #cbd5e1; border-radius: 9px; background: rgb(255 255 255 / 75%); color: #0f766e; font-size: 12px; font-weight: 700; cursor: pointer; }
+.quick-task-auth-status button:focus-visible { outline: 3px solid rgb(20 184 166 / 35%); outline-offset: 2px; }
+.quick-task-install { margin: 20px 0 0; padding: 14px 16px; border: 1px solid #99f6e4; border-radius: 14px; background: rgb(240 253 250 / 92%); color: #115e59; }
+.quick-task-install-plain { max-width: min(240px, 45vw); margin: 0; padding: 0; border: 0; background: transparent; justify-self: end; align-self: center; }
+.quick-task-install-plain [data-quick-install-action] { min-height: 40px; margin-top: 0; padding: 0 12px; border: 1px solid rgb(15 118 110 / 18%); border-radius: 10px; background: rgb(255 255 255 / 58%); color: #0f766e; font-size: 13px; font-weight: 600; box-shadow: none; }
+.quick-task-install-plain [data-quick-install-action]:hover { border-color: rgb(15 118 110 / 30%); background: rgb(240 253 250 / 88%); }
 .quick-task-install strong, .quick-task-install span, .quick-task-install small { display: block; }
 .quick-task-install strong { margin-bottom: 4px; color: #134e4a; }
 .quick-task-install span { font-size: 14px; line-height: 1.55; }
+.quick-install-steps { margin: 8px 0 0; padding-left: 20px; font-size: 14px; line-height: 1.6; }
 .quick-task-install small { margin-top: 8px; color: #475569; font-size: 12px; }
 .quick-task-install button { min-height: 48px; margin-top: 12px; padding: 0 14px; border: 0; border-radius: 11px; background: #0f766e; color: white; font-weight: 800; cursor: pointer; }
 .quick-task-install-destination { display: inline-flex; align-items: center; min-height: 48px; margin-top: 12px; padding: 0 14px; border-radius: 11px; background: #0f766e; color: #fff; font-weight: 800; text-decoration: none; }
@@ -17,24 +34,57 @@ button, input { font: inherit; }
 .quick-icon-reinstall li + li { margin-top: 6px; }
 .quick-icon-reinstall [data-quick-icon-reinstall-link] { min-height: 40px; margin-top: 10px; font-size: 13px; }
 .quick-task-install-link { display: block; width: fit-content; margin-top: 40px; color: #64748b; font-size: 12px; text-decoration: underline; text-underline-offset: 2px; }
-.quick-task-mark { display: grid; width: 44px; height: 44px; place-items: center; border-radius: 14px; background: #0f766e; color: white; font-size: 30px; font-weight: 800; box-shadow: 0 8px 18px rgb(15 118 110 / 25%); }
-.quick-task-eyebrow { margin: 0; color: #0f766e; font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.quick-task-install-dialog { width: min(420px, calc(100vw - 32px)); max-height: 80vh; max-height: min(80dvh, 600px); margin: auto; padding: 22px; border: 1px solid #dbe5ee; border-radius: 16px; color: #0f172a; background: #fff; box-shadow: 0 20px 48px rgb(15 23 42 / 22%); }
+.quick-task-install-dialog::backdrop { background: rgb(15 23 42 / 38%); }
+.quick-task-install-dialog h2 { margin: 0; color: #134e4a; font-size: 19px; }
+.quick-task-install-dialog p { margin: 12px 0 0; color: #475569; font-size: 15px; line-height: 1.6; }
+.quick-task-install-dialog form { display: flex; justify-content: flex-end; margin-top: 20px; }
+.quick-task-install-dialog button { min-height: 42px; padding: 0 16px; border: 1px solid #cbd5e1; border-radius: 10px; color: #334155; background: #fff; font-weight: 650; cursor: pointer; }
+.quick-task-install-dialog button:hover { background: #f8fafc; }
+.quick-task-install-dialog button:focus-visible { outline: 3px solid rgb(20 184 166 / 35%); outline-offset: 2px; }
 h1 { margin: 2px 0 0; font-size: clamp(24px, 7vw, 32px); letter-spacing: -.03em; }
-.quick-task-label { display: block; margin-bottom: 10px; color: #334155; font-size: 14px; font-weight: 700; }
-.quick-task-input-row { display: flex; align-items: stretch; gap: 8px; }
-#quick-task-title { width: 100%; min-width: 0; min-height: 56px; padding: 12px 15px; border: 2px solid #cbd5e1; border-radius: 14px; background: white; color: #0f172a; font-size: 17px; outline: none; }
-#quick-task-title:focus { border-color: #0f766e; box-shadow: 0 0 0 4px rgb(20 184 166 / 17%); }
-.quick-task-voice { display: inline-flex; min-width: 78px; min-height: 56px; align-items: center; justify-content: center; gap: 5px; border: 0; border-radius: 14px; background: #ccfbf1; color: #115e59; font-weight: 800; cursor: pointer; }
+.quick-task-input-row { display: flex; min-height: 60px; align-items: stretch; gap: 0; overflow: hidden; border: 2px solid #cbd5e1; border-radius: 14px; background: white; }
+#quick-task-title { width: 100%; min-width: 0; min-height: 56px; padding: 12px 15px; border: 0; border-radius: 0; background: transparent; color: #0f172a; font-size: 17px; outline: none; }
+#quick-task-title::placeholder { color: #94a3b8; opacity: 1; }
+.quick-task-input-row:focus-within { border-color: #0f766e; box-shadow: 0 0 0 4px rgb(20 184 166 / 17%); }
+.quick-task-voice { display: inline-flex; min-width: 78px; min-height: 48px; align-self: center; align-items: center; justify-content: center; gap: 5px; margin: 4px; border: 0; border-radius: 11px; background: #ccfbf1; color: #115e59; font-weight: 800; cursor: pointer; }
 .quick-task-voice:disabled, .quick-task-submit:disabled { cursor: not-allowed; opacity: .5; }
 .quick-task-voice[data-listening="true"] { background: #fecaca; color: #991b1b; }
 .quick-task-submit { width: 100%; min-height: 54px; margin-top: 14px; border: 0; border-radius: 14px; background: #0f766e; color: white; font-weight: 800; cursor: pointer; box-shadow: 0 8px 16px rgb(15 118 110 / 18%); }
+.quick-task-submit-note { margin: 8px 4px 0; color: #64748b; font-size: 13px; line-height: 1.55; }
 .quick-task-message { min-height: 24px; margin: 14px 2px 0; color: #475569; font-size: 14px; }
-.quick-task-success, .quick-task-recovery { margin-top: 20px; padding: 18px; border: 1px solid #99f6e4; border-radius: 16px; background: rgb(240 253 250 / 90%); }
-.quick-task-success strong { display: block; margin-bottom: 6px; font-size: 20px; }
+.quick-task-success { flex: 1 1 auto; min-width: 0; margin: 0; padding: 0; border: 0; background: transparent; color: #0f172a; }
+.quick-task-success[hidden] { display: none; }
+.quick-task-success strong { display: block; margin-bottom: 4px; font-size: 17px; }
+.quick-task-success > span { display: block; overflow-wrap: anywhere; font-size: 14px; color: #334155; }
 .quick-task-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .quick-task-actions button { min-height: 46px; padding: 0 14px; border: 1px solid #99f6e4; border-radius: 11px; background: white; color: #115e59; font-weight: 700; cursor: pointer; }
 .quick-task-actions button.primary { background: #0f766e; color: white; }
-.quick-task-recovery { border-color: #fed7aa; background: #fff7ed; }
-.quick-task-recovery strong { display: block; margin-bottom: 6px; color: #9a3412; }
+.quick-task-recovery { margin: 8px 0 0; overflow: hidden; border: 1px solid #e2e8f0; border-radius: 12px; background: rgb(255 255 255 / 38%); }
+.quick-task-recovery:not([open]) { border-color: transparent; background: transparent; }
+.quick-task-recovery-entry { display: flex; min-height: 44px; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 8px; color: #64748b; font-size: 12px; font-weight: 500; cursor: pointer; list-style: none; }
+.quick-task-recovery-summary { flex: 0 1 auto; min-width: 0; max-width: 45%; align-self: center; overflow-wrap: anywhere; color: #64748b; font-size: 12px; font-weight: 500; text-align: right; }
+.quick-task-success[hidden] + .quick-task-recovery-summary { max-width: calc(100% - 24px); text-align: left; }
+.quick-task-recovery-summary[data-count]:not([data-count="0"])::after { content: attr(data-count) ' 筆'; display: inline; margin-left: 4px; color: #64748b; font-size: 11px; font-weight: 500; }
+.quick-task-recovery-summary[hidden] { display: none; }
+.quick-task-recovery-entry::-webkit-details-marker { display: none; }
+.quick-task-recovery-entry::after { content: '⌄'; color: #64748b; font-size: 15px; transition: transform 140ms ease; }
+.quick-task-recovery[open] > .quick-task-recovery-entry::after { transform: rotate(180deg); }
+.quick-task-recovery-entry:focus-visible { outline: 3px solid rgb(20 184 166 / 35%); outline-offset: -3px; border-radius: 12px; }
+.quick-task-recovery-message { margin: 0; padding: 0 14px 10px; color: #475569; font-size: 14px; line-height: 1.55; }
+.quick-task-recovery-list { max-height: min(40dvh, 280px); overflow-y: auto; margin: 0 14px 12px 34px; padding: 0; color: #334155; font-size: 13px; line-height: 1.5; }
+.quick-task-recovery-list[hidden] { display: none; }
+.quick-task-recovery-list li { padding: 4px 0; overflow-wrap: anywhere; }
+.quick-task-recovery-list li + li { border-top: 1px solid rgb(226 232 240 / 70%); }
+.quick-task-recovery-content { padding: 0 14px 14px; }
+.quick-task-recovery-content strong { display: block; margin-bottom: 6px; color: #9a3412; }
+.quick-task-recovery-content strong, .quick-task-recovery-content > span { overflow-wrap: anywhere; }
+.quick-task-recovery-content > span { display: block; }
 noscript { display: block; margin-top: 18px; color: #9f1239; font-size: 13px; }
 @media (min-width: 560px) { .quick-task-shell { padding-top: 56px; } }
+@media (max-width: 360px) {
+  .quick-task-header { grid-template-columns: max-content minmax(0, 1fr); grid-template-areas: "mark install" "mark title"; column-gap: 12px; row-gap: 6px; }
+  .quick-task-back { grid-area: mark; }
+  .quick-task-header h1 { grid-area: title; font-size: clamp(19px, 6vw, 22px); }
+  .quick-task-header #quick-task-install { grid-area: install; max-width: none; justify-self: end; align-self: start; }
+}

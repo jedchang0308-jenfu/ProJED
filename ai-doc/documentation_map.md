@@ -1,8 +1,65 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-10-02（DEV-133 Rev12 發布前 READY）
+
+Rev11 `673aeee9c10f01936a8aa4a0f2ca16ab7606a5ea`／release `20261001160355-057ccc` 仍是正式環境版本，production 指定功能矩陣 46/46 PASS、雙 origin 各 54/54；live version／recovery anchor 為 `c01b9588565a9025`。Rev12 direct corrective candidate 已達發布前 READY：360-file digest `ce3bb938cbe5fdae1b4d27de3679a4d0056f40f07839573cd5b024030ae12b3d`、UI／真 IDB simulation 25/25、ordinary TEST N06 11/11 PASS；舊 `673aeee` main baseline 的 R24 false warning 24/25 FAIL已保留。Source SHA／new release ID未知；Rev12正式發布後的 production UI／功能驗收、PR #5 review／merge及4195 cleanup仍待，DEV 不標 done。細節與原 FAIL 邊界見[QA Rev12](qa/QA-DEV-133-quick-task-shared-identity-sync.md)、[SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md)及[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)。本輪文件修改尚未提交，PR post-document head待root後續實際Git／PR readback。
+
+## Documentation Map Update - 2026-10-01（DEV-133 Rev10正式啟用）
+
+本節以下內容是 2026-10-01 Rev10 發布當時的快照；Rev11 release、指定功能證據與目前 UI final-audit 狀態以本文件上方更新為準。既有 TEST layer evidence 仍保留原 source 範圍。
+
+**2026-10-01 Rev10已正式啟用；改動功能的正式驗收續跑，Google獨立登入核身待完成。** Product source `8a0e738fcb68896a937f650666e53f2289729953`、同一protected release `20261001130712-4982b5` 已正式activate，live version `ae38a453a07ec4f3`；雙正式origin各54/54檔案hash、官方啟動與ordinary Google safe-cancel、三項strict readiness PASS。前一Rev9 `b88f428e0efa541e`保留為DB v2相容復原錨點。正式主程式既有Session透過普通SDK refresh後getUser200、指定actor與owner吻合；quick獨立Google登入因provider密碼／MFA尚待人類核身，不能把7/7前置檢查或舊40/40當作新版正式同步驗收。未執行正式migration／修改業務資料／擴張IAM或Secret。PR #5 head `144ea331448cd449dafca1bc7e284c67bf4e2f6d`已推送，合併前只讀審查進行中。 最新結果以[QA正式續驗](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-rev10正式啟用與驗收續跑)、[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)與[DEV-133](dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30)為準；以下部署前段落為歷史快照。
+
+最新 TEST 續驗以未提交 candidate digest `092f1fa088efb4d15567ae6cc1cdb48f45d051913aa6a9d74556fb8fbc54d2ab`（360 files）為界：fixed bundle offline 10/10、A→B→A built-SW／DB v2 10/10、N08 hosted ordinary-session recovery指定scenario 18/18 PASS；原始N08產品FAIL與中間 harness timeout仍保留。三項產品修正未commit／部署，PROD仍為 `8a0e738` Rev10。此處TEST結果不代表PROD installed-client／Google／speech或完整PWA更新驗收。N03 actual speech、PROD quick Google／新版功能續驗、PR #5 review／merge及4195專屬視窗 cleanup仍 required；4193／4194／4196已釋放、synthetic profiles保留。詳見[QA最新 N10／N08](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-rev10-fixed-test-built-sw-a-to-b-to-a-compatibility)與[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)。
+
+## Documentation Map Update - 2026-10-01（DEV-133 Rev 10 部署前競態修正）
+
+[SPEC-133 Rev10](specs/SPEC-133-quick-task-shared-identity-sync.md)補明load revision／auth epoch、IDB put／capture add guard與legacy barrier；product `8a0e738`已推送。[QA最新部署前結果](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-rev-10-auth-競態修正的部署前驗證)記錄82/82 SIMULATION、built離線10/10、真TEST A12/12、同提交HTTPS17/17及53/53hash、protected prepare／candidate54/54與strict readiness PASS。正式Site URL單欄位已修正並驗預設／兩App取消回呼，原allowlist不變、TEST設定已還原，兩個preview清理且live仍Rev9。[DEV-133](dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30)維持執行中，待同包正式activation／功能驗收及PR review／merge。[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)保存release `20261001130712-4982b5`與來源／NO_OP／設定修正收據；不把部署前PASS當正式功能PASS。
+
+## Documentation Map Update - 2026-10-01（DEV-133 Rev 9 部署前回歸歷史）
+
+[QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md) 已補登部署前回歸：57/57 隔離 browser／IDB SIMULATION、DEV-133 contract、型別、targeted lint、production auth-mode 與正式 manifest 完整性核對均 PASS。驗證確認目前產品 source 與已發布 release `20261001074739-df101c` 相符；本輪只有測試腳本修正，沒有新的產品 bundle 需要部署。測試收據與範圍限制見 QA 最新驗證節。
+
+## Documentation Map Update - 2026-10-01（DEV-133 Git 交付）
+
+DEV-133 已推送至公開 ProJED repository，並建立 PR #5：[feat(quick-task): independent auth sync and unified status UI](https://github.com/jedchang0308-jenfu/ProJED/pull/5)。建立 PR 時的原始 head 為 `0f3ad1a75825733aab539324217ae2302bef79d4`，base `codex/dev133-production-baseline`=`afa758c35e907569f88e241e1fe72a231001e7bc`；其後 QA／文件收斂與測試穩定修正已推送，分支包含驗證提交 `9a02030350a90c5126a27ac832d057efbe1a39c2`。最近讀回 PR 為 Open、merge state CLEAN，無 status checks 或 review；尚待 review／merge。未改 `main` 或既有共享分支。完整 payload review 與 PR 驗證見 [REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)。
+
+## Documentation Map Update - 2026-10-01（DEV-133 統一 UI 正式驗收）
+
+**2026-10-01 DEV-133 同步核心與統一 UI 已正式發布並驗收。** 最新 UI product source `9b5f73a1b32bdd8dc984c3017dceaf7225967d40`／release `20261001074739-df101c`／live version `b88f428e0efa541e`，雙正式 origin 各 54/54、正式匿名 UI 10/10、隔離 UI／IDB＋Auth/RPC SIMULATION 25/25、型別及 lint PASS。這次僅三個 UI 來源，Auth／RPC／IDB／sync 模組沿用原 `8376086` 的真登入／同步40/40證據，未把該40項改算新套件實測。未改遠端設定、migration、業務資料或 IAM／Secret；暫時 browser／ports已清理。證據見 [REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)；Git 已提交至公開分支並建立 PR，review／merge 狀態見上方最新更新。
+
+## Documentation Map Update - 2026-10-01（DEV-133 正式同步核心 REL-014）
+
+[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md) 記錄 clean source `8376086`／release `20261001061118-144be8` 已正式發布、雙 origin 各 54/54 及正式功能 40/40 PASS，PROD migration NO_OP與manual cache recovery明確分層。官方啟動／safe-cancel／cleanup PASS；此較早快照當時 Git 目的地仍待確認，後續已建立 PR #5（現況見本文件最新 DEV-133 更新）。此快照中「canonical 後續 UI 候選排除」及「以下較早正式未部署」也只代表該次檢查時的狀態。入口見 [DEV-133](dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30) 及 [QA 正式核心結果](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-正式同步核心驗收rel-014)。
+
+
+## Documentation Map Update - 2026-10-01（DEV-133 架構定案）
+
+架構定案階段快照（2026-10-01，後續正式發布狀態由上方 REL-014 更新取代）：TEST 29/29 跨帳整合、B0/core27與 Google cancellation gate、forward correction readback、post-correction 7/7 核心權限案例均 PASS；普通 TEST Google 取消登入有 picker/browser Back 的 21/21 證據。當時 PROD ordinary Google identity／canonical RPC schema preflight PASS、correction 對 PROD 為條件 no-op；正式 package／部署尚未執行。N01～N10 實際驗收層級以 [QA 最新審核表](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-完成審核逐項證據與剩餘) 為準。本文件其餘時間序列段落保留各自當時快照。
+
+使用者採用「共用帳號、各自登入、各自保存 Session、離線任務依帳號同步」，並要求補齊架構定案。[DEV-133](dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30) 維持執行中；[SPEC-133 Rev 4](specs/SPEC-133-quick-task-shared-identity-sync.md) 達 **RD Implementation Ready／架構定案：已定案**，[ADR-053 Rev 3](decisions/ADR-053-quick-task-cross-origin-account-link.md) 為現行決策。以 `e868611` 為本機實作基準，已完成單一 SDK Auth、DB v2 auth_context＋capture receipt、owner/context revision CAS、登入後明確認領、local signOut barrier、strict receipt 驗證與退役舊 OAuth 路徑，並通過 typecheck／lint／test build／contract check；最新 TEST 跨帳及 correction 證據見本節狀態更新與 QA 報告。
+
+早期交接快照：當時 B0 尚未完成，correction 尚未執行；該段狀態已由本節最新 execution update 取代。實體 Android 已取消，不作新版必要前置。
+
+早期 actor-readiness evidence：Google B 的 `getUser`／profile／membership／workbench 前置曾 PASS；其當時「完整 N01～N10／TEST correction 未完成」狀態後由最新 integration report 更新。原結果仍作該 actor 前置案例證據。
+
+早期 pre-correction metadata readback：當時 TEST RPC 為 definer、正式 RPC 為 invoker；目前 TEST correction 已套用且 readback 為 invoker，權限／資料不變。正式不單獨補套 retired v2；quick 不另做 profile／workspace 開通，缺依賴導回主程式設定，同 ID 人工重試。
+
+2026-09-30 歷史：舊 A 本機、OAuth mock／桌面與 TEST synthetic 部分證據保留於 QA 歷史區及 [execution-boundary addendum](qa/DEV-133-execution-boundary-addendum-20260930.md)，不能替代新方案／完整權限驗收。OAuth Server／Client 註冊與舊 B0／B1 不再是新版必要依賴，沒有補登舊 Gate 為 PASS。DEV-133 正式配置、部署及驗收未執行，DEV-122／131 狀態不變。
+
+早期恢復入口精簡 snapshot：16 項隔離 browser UI／IDB＋Auth/RPC SIMULATION、typecheck、targeted lint PASS，320／390／614 畫面已目視／量測。來源與 cleanup 見 [QA 局部驗收](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-恢復入口精簡的局部驗收)；最新 TEST 狀態以上述更新為準。
+
+早期真 TEST 跨帳整合 snapshot：固定 362-file source snapshot、23 assertions PASS。詳見 [QA 跨帳整合結果](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-跨帳整合結果)；原失敗、dirty boundary、去識別化結果與 cleanup 紀錄保留。後續 29-case runner 狀態見上方最新 update。
+
+早期 DEV-133 邊界續驗 snapshot：[SPEC-133 Rev 4](specs/SPEC-133-quick-task-shared-identity-sync.md)／[QA Rev 5 邊界續驗與修復](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-邊界續驗與修復)記錄 56 項 browser／IDB＋注入邊界、12 項 TEST A、SW／DB 案例，原 FAIL 及 source hashes 保留。該段「新版 A/B 與 hosted correction 仍待驗」已由最新 report 取代；正式站／預覽歷史及未發布狀態保留。
+
+## Documentation Map Update - 2026-09-29（DEV-132 系統通知與換圖指引）
+
+[DEV-132](dev_task.md#dev-132-自願換圖指引與系統通知歷史---2026-09-29) 記錄使用者選擇的自由重裝方式：設定中心「系統通知」採通用通知清單＋共用彈窗明細；點擊通知列本身即可看明細，不設專用「查看」按鈕。彈窗依所選通知顯示日期、標題及內容；換圖公告明細呈現兩個 App 的新舊圖示、各自同步提醒與安裝連結，以及完整重裝步驟。重裝說明列出 Android 移除所選 App、Chrome 開啟對應連結、選擇安裝應用程式及確認帳號等動作。「安裝APP」分類初始只顯示主程式與快速建待辦兩個選項，選定後顯示對應安裝動作；規格補充見 [SPEC-034 8.6](specs/SPEC-034-fast-start-pwa-install-guidance.md#86-dev-132安裝app頁面簡化2026-09-29) 與 [SPEC-038](specs/SPEC-038-settings-scope-consistency-and-risk-guardrails.md)。快速入口舊圖採使用者提供的 J 標誌紅底版；安裝連結直達獨立 origin。通知歷史從版本化產品公告開始，過去未保存的即時提示不回補。尚未正式發布。
+
 ## Documentation Map Update - 2026-09-29（DEV-131 獨立快速入口）
 
-Android 實機 `chrome://webapks/` 只有主程式，沒有快速入口，證明先前「已在 App 視窗」文案不能作為獨立安裝證據。使用者已授權同一 ProJED Firebase 正式站雙網址方案與必要的 Supabase Auth 回呼設定。[DEV-131](dev_task.md#dev-131-android-獨立快速入口雙網址修復---2026-09-29) 記錄本輪交付；[SPEC-122 DEV-131 修訂](specs/SPEC-122-mobile-zero-data-quick-task.md#dev-131-雙網址獨立安裝修訂2026-09-29) 覆蓋既有同源安裝假設；[QA-DEV-131](qa/QA-DEV-131-dual-origin-quick-install.md) 定義正式與實機證據。
+Android 實機先前 `chrome://webapks/` 只有主程式，沒有快速入口，證明「已在 App 視窗」文案不能作為獨立安裝證據。使用者已授權同一 ProJED Firebase 正式站雙網址方案與必要的 Supabase Auth 回呼設定。[DEV-131](dev_task.md#dev-131-android-獨立快速入口雙網址修復---2026-09-29) 記錄本輪交付；[SPEC-122 DEV-131 修訂](specs/SPEC-122-mobile-zero-data-quick-task.md#dev-131-雙網址獨立安裝修訂2026-09-29) 覆蓋既有同源安裝假設；[QA-DEV-131](qa/QA-DEV-131-dual-origin-quick-install.md) 定義正式與實機證據；[REL-013](release/REL-013-DEV-131-DUAL-ORIGIN-20260929.md) 記錄正式雙網址發布與回復基準。網頁驗證通過，使用者已回報 Android 安裝成功；同帳號建立與完整實機證據仍待驗收。
 
 ## Documentation Map Update - 2026-09-29（DEV-130 Android 安裝失敗）
 
@@ -203,6 +260,10 @@ R12不新增第七個runtime責任點：`public/manifest.webmanifest`是唯一ro
 | [SPEC-122](specs/SPEC-122-mobile-zero-data-quick-task.md) | current implementation authority；root bundled shortcut、雙identity、exact file surface、entry/build、UI/voice、IDB、RPC/RLS、同帳號、工作台到達、drift與stop conditions。 |
 | [ADR-050](decisions/ADR-050-mobile-quick-task-entry-and-outbox.md) | Accepted Architecture Memory + R12 closure；root shortcut與選用第二identity、manifest發佈／更新、raw HTML MPA、one root SW、account outbox及server-owned idempotency。 |
 | [QA-DEV-122](qa/QA-DEV-122-mobile-zero-data-quick-task.md) | verification authority；S15、B22～B24、W07與受影響回歸已local PASS，Level 3 HTTPS smoke已PASS；實機、DEV-096 real-SW FAIL及完整B/W/P／獨立QA-QC缺口由使用者接受為本次release殘餘風險，原始case狀態不變；第10.4.3節定義production替代結案證據。 |
+| [DEV-133](dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30) | Rev12直接修正發布前 READY：TEST simulation25/25、ordinary N06 11/11；production仍Rev11，正式驗收、PR #5及4195 cleanup待 root，DEV執行中。 |
+| [SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md) | 契約維持 Rev10／架構已定案；Rev12 candidate READY但未發布，production仍Rev11；正式驗收、PR及4195 cleanup待完成。 |
+| [ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md) | Accepted Rev 3；取代跨 App OAuth Server，採第一方使用者 RLS、各 origin Session、owner/context交易及普通登入相容修正。 |
+| [QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md) | Rev12發布前 READY；ce3bb… simulation25/25及ordinary N06 11/11 PASS，保留 baseline false-warning FAIL；Rev11正式46/46與speech仍依原範圍。 |
 | [SPEC-034](specs/SPEC-034-fast-start-pwa-install-guidance.md) | 一般 ProJED install/update 與 QuickCaptureShell 退役 authority；DEV-122 為 compatible extension。 |
 | [SPEC-039](specs/SPEC-039-task-filter-core-and-workbench-profiles.md) | account-owned 未歸位與完整工作台 authority；quick entry 只新增來源。 |
 | [SPEC-115](specs/SPEC-115-blank-task-creation-contract.md) | blank-task content authority；quick RPC 必須 parity，description absent。 |

@@ -144,6 +144,10 @@ Performance static budget：`quick-task/index.html`及首次render必需的quick
 | B23 | 以可重現的installed-app launch URL或等價browser harness開啟shortcut目標`/quick-task/`，首個可操作control為title、initial graph與network oracle維持零業務list request；不因launch來源載入React／完整App。harness只能證明route／render，不能冒充OS長按UI，後者由D08證明。 |
 | B24 | root設定頁在390×844與桌面viewport都只出現一個「快速建待辦」區塊與一個CTA；文案語意為「安裝ProJED後，支援的平台可從ProJED圖示選快速建待辦；需要桌面單鍵入口可安裝獨立圖示」，CTA仍到`/quick-task/?install=1`。不出現自動產生兩圖示、iOS必定有長按捷徑或捷徑會立即更新的承諾，無水平overflow。 |
 
+2026-09-29 DEV-132 更新 B24 的設定頁呈現判準：初始畫面應只見「ProJED 主程式」與「快速建待辦」兩個安裝選擇；選快速入口後才出現獨立安裝連結及同帳號／舊待辦同步提醒，選主程式後才出現裝置適用的安裝動作或說明。兩選擇在390×844與桌面viewport皆可操作、無水平overflow；不宣稱自動產生兩圖示、iOS必有長按捷徑或既有捷徑立即更新。上表單一區塊／固定文案要求保留為歷史基線，不再套用於此新版畫面。
+
+同日安裝分支檢查：桌面主程式與獨立快速入口皆須顯示安裝按鈕；可取得 `beforeinstallprompt` 時，按鈕實際呼叫瀏覽器提示；未取得事件時，點擊回饋手動安裝方法，不得顯示已安裝。Android 手機兩入口均可讀到 Chrome 安裝步驟；iOS 繼續顯示 Safari 加入主畫面流程。瀏覽器模擬僅證明 UI 與事件處理，不替代實機安裝結果。
+
 Network oracle從document request開始記錄；允許quick資產、SW、app-shell-meta、auth refresh/callback驗證，以及「既有outbox」的bounded create RPC，該RPC需能對應舊captureId。所有業務list request為0；目前輸入未submit不得產生其RPC。worker precache與document module流量分列，quick document不得import／execute full App，不能把worker下載量算成0；只排除runner自身流量。
 
 ## 7. Real Service Worker／Update Cases

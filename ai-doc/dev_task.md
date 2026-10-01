@@ -6,6 +6,56 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 Cold start：先讀下方 `## 總任務清單`；需要特定 DEV 詳細歷史時，再搜尋
 `ai-doc/archived/dev_task_pm_updates_2026-07-15.md` 的 DEV ID 並只讀命中段落。
 
+## DEV-133 快速建任務同帳號與自動同步 - 2026-09-30
+
+**2026-10-02 Rev12 最新狀態：直接 corrective release 發布前 READY；PROD 仍為 Rev11，DEV 執行中。** 最終 360-file candidate digest `ce3bb938cbe5fdae1b4d27de3679a4d0056f40f07839573cd5b024030ae12b3d` 的 UI／真 IDB simulation 25/25及普通 TEST N06 11/11 PASS；舊 `673aeee` baseline 的 R24 false warning 24/25 FAIL已重現並保留。Read-only review 無 P0/P1 阻礙，tsc／targeted ESLint exit 0。Source SHA／release ID 未讀回；正式發布及 production UI／功能驗收、PR #5 review／merge及專屬 4195 cleanup仍待，DEV 不標 done。詳細來源與限制見[QA Rev12](qa/QA-DEV-133-quick-task-shared-identity-sync.md)與[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)。
+
+**Rev11 正式發布快照：指定 production 功能矩陣 46/46 PASS。** Product commit `673aeee9c10f01936a8aa4a0f2ca16ab7606a5ea` 已推入 PR #5；direct release `20261001160355-057ccc`，雙 origin 54/54、official browser startup PASS，readback live version `c01b9588565a9025`，Rev10 version `ae38a453a07ec4f3` 為復原錨點。新版驗證普通真 Google／獨立 Session、同 owner、唯一 captureId、真 RPC／receipt／工作台、page-scoped offline 回網補送及 quick local logout 保留主程式 Session；legacy `P0001` 僅為本機 fault fixture。人工 speech PASS 沿用未變的 `8a0e738` voice source 範圍；既有 `092f1fa...` 的 N10／N08／邊界 TEST 收據維持各層來源，不與正式結果合併。
+
+Rev11正式驗收期間的 [390px 已同步畫面](../output/qa/dev-133/independent-auth/production/rev11/production-primary-synced-390.png)曾顯示要求先登出原帳號的提示；舊 `673aeee` main baseline 已在局部 simulation 精確重現同一提示，最終 Rev12 candidate 的對應測試通過。該延遲 IDB 競態控制只在 LOCAL SIMULATION，不代表 PROD fault injection；正式發布後仍須完成 production UI／功能驗收。既有 runner 的 pageError／critical Auth-RPC 計數也不代表所有 UI 狀態乾淨。PR #5 review／merge及專屬 4195 runtime／UI cleanup仍待；DEV 不標 done。此 worktree 的本輪文件修改尚未提交，PR #5 post-document head 待 root 依 Git／PR readback 更新；舊 `144ea...` 僅為 Rev10 歷史 head。當前證據與限制見[QA Rev12](qa/QA-DEV-133-quick-task-shared-identity-sync.md)及[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)。
+
+以下 2026-10-01 Rev10 與更早段落保留各自當時狀態；如與上述 Rev11 現況衝突，以本段及最新 QA／REL 為準。當中的 092f TEST 證據仍保留其原測試層級與 source 邊界。
+
+**2026-10-01 Rev10已正式啟用；改動功能的正式驗收續跑，Google獨立登入核身待完成。** Product source `8a0e738fcb68896a937f650666e53f2289729953`、同一protected release `20261001130712-4982b5` 已正式activate，live version `ae38a453a07ec4f3`；雙正式origin各54/54檔案hash、官方啟動與ordinary Google safe-cancel、三項strict readiness PASS。前一Rev9 `b88f428e0efa541e`保留為DB v2相容復原錨點。正式主程式既有Session透過普通SDK refresh後getUser200、指定actor與owner吻合；quick獨立Google登入因provider密碼／MFA尚待人類核身，不能把7/7前置檢查或舊40/40當作新版正式同步驗收。未執行正式migration／修改業務資料／擴張IAM或Secret。PR #5 head `144ea331448cd449dafca1bc7e284c67bf4e2f6d`已推送，合併前只讀審查進行中。詳見[QA正式續驗](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-rev10正式啟用與驗收續跑)與[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)。
+
+最新 TEST 續驗：未提交 candidate source digest `092f1fa088efb4d15567ae6cc1cdb48f45d051913aa6a9d74556fb8fbc54d2ab`（360 files）的 built offline 10/10 與 A→B→A built-SW／DB v2 10/10 PASS；N08 hosted ordinary-session recovery 指定 scenario 18/18 PASS。首輪真產品 FAIL及中間 rendered-SW 未 pin 的 harness timeout 保留原始收據；第三輪確認畫面載入 entry pin 到該 fixed build。三項產品修正尚未 commit／部署，PROD仍為 `8a0e738` Rev10，不把 TEST 結果宣稱為正式新修正通過。N08 sequence 與 N10 範圍詳見[QA 最新續驗](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-rev10-fixed-test-built-sw-a-to-b-to-a-compatibility)；4193／4194／4196已釋放，synthetic profiles保留。N03 actual speech、PROD quick Google核身與新版功能續驗、PR #5 review／merge及4195專屬視窗 cleanup仍 required，DEV-133維持執行中。以下保留原source／歷史邊界。
+
+**2026-10-01 DEV-133 同步核心與統一 UI 已正式發布並驗收。** 最新 UI product source `9b5f73a1b32bdd8dc984c3017dceaf7225967d40`／release `20261001074739-df101c`／live version `b88f428e0efa541e`，雙正式 origin 各 54/54、正式匿名 UI 10/10、隔離 UI／IDB＋Auth/RPC SIMULATION 25/25、型別及 lint PASS。這次僅三個 UI 來源，Auth／RPC／IDB／sync 模組沿用原 `8376086` 的真登入／同步40/40證據，未把該40項改算新套件實測。未改遠端設定、migration、業務資料或 IAM／Secret；暫時 browser／ports已清理。程式與開發文件已推送並建立 PR #5，狀態 Open／CLEAN，待 review／merge；部署與驗收見 [REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)。
+
+**2026-10-01 正式同步核心已發布／驗收 PASS（REL-014）。** clean product source `8376086144b31155a94477e6bea1f929ded475be` 已發布為 `20261001061118-144be8`，兩正式 origin 各 54/54 hash、真普通 Google／任務／離線補送／local logout 40/40、官方啟動及 safe-cancel PASS；PROD correction 綁定 NO_OP，未套 DDL／改 IAM／改寫既有資料。[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)／[QA 正式核心結果](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-正式同步核心驗收rel-014) 為最新發布權威。此段只記錄核心發布時的範圍，UI 後續已另行發布並驗收；Git 現況為 PR #5 Open／CLEAN、待 review／merge。下列發布前狀態保留為歷史快照。
+
+### 架構定案與發布前歷史快照（2026-10-01）
+
+下列架構契約沿用；其中 preflight、sealed package、部署／smoke及UI未驗收狀態是當時快照，已由本節頂端與REL-014／QA最新正式結果更新。核心及Rev9 UI已發布驗收，Git交付已提交至PR #5，待review／merge；不把歷史未執行或早期PASS改寫成新版案例實測。
+
+文件成熟度：**RD Implementation Ready／Human Confirmed；架構定案：已定案**。狀態：**執行中；核心與 Rev 9 UI 正式發布／驗收 PASS；Git PR #5 已提交，待 review／merge**。使用者明確採用「共用帳號、各自登入、各自保存 Session、離線任務依帳號同步」，本機 source implementation 已落地單一 Supabase SDK Auth、DB v2 auth_context／receipt、owner CAS、明確認領、local signOut barrier、嚴格回執及舊 OAuth 路徑退役；最新 TEST／PROD preflight 與實際殘餘見下方及 QA 逐項表。這取代早先 `3B` 的跨 App OAuth Server／免再次登入契約；`1A／2A` 的本機先存、未綁定資料明確認領及定期清理保護保留。DEV-133 仍為原交付點，不新增 DEV／完成率，也不改 DEV-122／131 的既有交付狀態。
+
+權威：[SPEC-133 Rev 4](specs/SPEC-133-quick-task-shared-identity-sync.md)、[ADR-053 Rev 3](decisions/ADR-053-quick-task-cross-origin-account-link.md)、[QA-DEV-133 新版 N01～N10](qa/QA-DEV-133-quick-task-shared-identity-sync.md)。canonical repo `C:\VIBE CODING\ProJED\ProJED`，branch `持續優化3`；source implementation baseline `e868611`，documentation evidence commits from `a1d12a9` onward；其他既存 dirty changes 保留。
+
+**目標與架構。** 主程式及獨立快速 App 重用同一環境 Supabase Auth／既有 Google provider，各 origin 保存自己的 Session；兩邊均有登入入口和本 App 帳號顯示。兩邊選同一 user ID 時共享本人工作台資料，但不自動複製登入、不保證帳號相同或即時連動。正常登出使用 local Session scope；已存在的明示全域撤銷按平台語意處理。取消 ProJED OAuth Server／public client／consent、自製 token lifecycle 與舊 B0／B1 作必要前置；Google OAuth 登入及安全 callback 仍保留。
+
+**保存與同步。** 每筆建立都先完成 IndexedDB transaction + same-key readback；有已核實且未登出／切帳的 A 身分時綁 A，暫時離線不抹掉 owner。無已知帳號先 unbound，登入後明確確認目的帳號才 claim。回網、啟動、回前景及 backoff 到期只是重試提示；核實同 owner、凍結 token／epoch 才 RPC，只有同 owner committed receipt 才標同步。登入失效保留資料、要求原帳號重登；切 B 不改綁／代送 A，App 關閉不保證背景同步。
+
+**資料與權限。** 快速 App 程式只呼叫既有 quick RPC，不載入業務清單；普通 Session 沿用本人現有 RLS／workspace 權限，不再交付 App 專屬「僅可新增」憑證。此取捨不授權放寬 RLS／新增 grants／管理金鑰或業務資料改寫。延續 server `auth.uid()` owner、workspace membership、單 transaction task／receipt、同 ID replay 與 conflict。
+
+**本機清理。** 延續 7 日工程基線，只刪已取得嚴格遠端回執且 synced 滿 7 日的本機副本；未綁定、待送、同步中、失敗資料不自動刪除，也不因登出、切帳或改版清掉。開啟／回前景及開啟期間每日執行，關閉期間不保證準點清理。
+
+**現況與證據。** 最新 fixed TEST candidate `1790830360462-b8d304f5` 的 integration suite 29/29 PASS、B0/core27 及正常 Google picker cancellation gate PASS；TEST correction source `20261001090000_dev_133_quick_rpc_security_invoker.sql` 對應 remote version `20261001045945`，readback 為 invoker／empty search_path，body MD5 `d80a1ea6932806c0cfa82fce1b73a842`，task／receipt ACL 與 receipt RLS 不變且無業務資料改寫；post-correction 核心矩陣 7/7 PASS，E24 真 TEST RPC 保留 U+200B 並讀回同 ID receipt。正常 Google 取消登入 21/21 PASS，picker 使用瀏覽器 Back；較早 driver timeout 與同 ID recovery 失敗仍保留。PROD preflight sanitized evidence：`output/qa/dev-133/independent-auth/production/ordinary-session-readiness/auth-result.json` 的 `/auth/v1/user`=200 且 actor／SDK／Google identity match；`database-before.json` 讀回 invoker／empty search_path／一致 ACL及 canonical body hash。與 DEV-133 correction 差異僅註解，正式 correction 是條件 no-op。各案例 live／injected layer、N01～N10 缺口及 cleanup 狀態見 [QA 最新 evidence](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-最新-test-跨帳與-correction-證據)。正式 source scope／sealed package／migration no-op 選擇綁定／quick-task production smoke 未完成；preflight 不等於 release。
+
+**架構定案與下一步。** 已對照 source、SDK callback／local signOut、IDB／claim／late response、build/env、hosted RPC／RLS與既有測試完成 Closure Review。SPEC §3～§10 鎖定 DB v2 auth_context＋capture receipt／owner CAS、固定 callback、登入後明確認領、同 owner fixed Bearer／epoch、8 次重試及 legacy 缺回執保護；無待選 P0/P1 架構決策。TEST ordinary-session、RPC、workbench UI、A/B 跨帳隔離、correction 及 post-correction 核心權限案例已按 QA 所列範圍通過；不把部分案例或 assertion 數字升格為整體 N01～N10 PASS。下一步隔離正式 DEV-133 source scope、準備 sealed package／canonical migration selection，之後依既有 gate 完成正式 deploy／smoke。
+
+**2026-10-01 唯讀環境基準與 TEST correction 更新。** DEV-122 alias `20260930154758`／retired v2 `20260930155041` 保留歷史；TEST correction remote version `20261001045945` 已讀回為 invoker，空 search_path，ACL／receipt RLS及既有資料未變，canonical U+200B 行為見 E24。正式仍只有 DEV-122 `20260914120000`、RPC invoker；選包必須排除單獨補套 retired v2，並在 package 綁定時重讀 metadata。quick 不另做 profile／workspace 開通，依賴缺失導回主程式設定再人工重試。正式 callback／origin與production smoke尚未驗。
+
+**授權與交付邊界。** 既有 ProJED repo、Supabase TEST `fhisnnufoeulxqrchldf`／production `knodlkxqpcqyrtgwpdst`、Firebase `projed-cc78d` 的授權在既定動作與資源範圍內延續；本輪已完成上述 TEST acceptance，正式尚未部署。後續 production package／smoke 仍依原授權、實際 release gate 與既有選包規則執行。使用者取消實體 Android 驗收的決定保留，不把窄版模擬稱實機 PASS；舊 OAuth B0／B1 被新方案驗收取代，而不是補登為通過。禁止跨專案、破壞性 migration、業務資料改寫、清除未同步任務及 IAM／Secret 擴權。
+
+**2026-10-01 指定第二 actor 的早期前置驗收（歷史）。** 使用者指定 Google B，當時普通 SDK 核身、profile／membership／非空工作台及 A/B 不同 user ID 前置檢查 PASS；該結果僅為 actor readiness。後續 29-case runner 已完成普通 A/B integration 及 TEST correction；最新 case scope／尚缺項目以 [QA 最新 TEST 證據](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-最新-test-跨帳與-correction-證據) 為準。原 callback/profile/runtime cleanup 事實保留於早期 QA 結果。
+
+**2026-10-01 恢復入口精簡（當時快照）。** 使用者採用 #效用理論 評估並核准執行：一般自動同步無操作區，需介入時僅顯示待確認／同步異常／原帳號待辦入口，點開才認領或恢復。已落地核身後直接確認、切帳／epoch 變更重新確認、稍後保留資料及 profile 依賴恢復同 ID 人工重試；未改遠端設定。16 項隔離 browser UI／IDB＋Auth/RPC SIMULATION、typecheck、targeted lint PASS；320／390／614 viewport 已目視／量測，task-owned BrowserServer 已清理，user-owned 4000／分頁保留。來源、source SHA、首個 harness 失敗及證據見 [QA 局部驗收](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-恢復入口精簡的局部驗收)。這只是一個局部 slice，不取代最新 TEST integration 狀態；文末「尚未正式 release」是當時快照，現況以 DEV-133 索引與 REL-014 為準。
+
+**2026-10-01 真 TEST 跨帳整合（較早 23-case snapshot）。** A/B 普通 Auth 與 quick UI→RPC／receipt→工作台、互相 task SELECT／UPDATE 拒絕、匿名拒絕、並行 replay／conflict、離線回網、切帳、認領及兩 origin 隔離等 23 項 assertions PASS。結果及 harness 歷史見 [QA 跨帳整合結果](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-跨帳整合結果)。本段的「correction 未執行」等狀態是當時快照；最新 29-case／correction 結果與殘餘見 QA 最新證據，不用舊數量代替完整 N01～N10 或 Release Ready。
+
+**2026-10-01 N01～N10 邊界續驗（較早 snapshot）。** 已補 56 項 browser／IDB＋Auth/RPC 注入邊界、普通 TEST A、SW、DB upgrade 等案例 PASS；具體層級與原 FAIL 見 [QA 邊界續驗與修復](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-邊界續驗與修復)。本段「新版 A/B 與 hosted correction 尚待收斂」描述後續 29-case runner 前的狀態，已由 QA 最新 TEST 證據更新。source／scope 隔離與 formal package／部署／smoke 仍待；舊 Firebase preview 404 與 runtime cleanup 紀錄保留，不據此宣稱正式發布。
+
 ## DEV-131 Android 獨立快速入口雙網址修復 - 2026-09-29
 
 使用者 Android 實機確認：`chrome://webapks/` 只有 ProJED 主程式，沒有「快速建待辦」；Android 應用程式清單也找不到後者。主程式 manifest scope `/` 涵蓋 quick scope `/quick-task/`，同源巢狀 PWA 會讓 Chrome 把內層入口視為已安裝的外層 App。使用者明確授權 ProJED、Firebase `projed-cc78d` 正式雙網址方案及必要 Supabase 登入回呼設定、驗證、部署；不強迫現有使用者重裝主程式。
@@ -13,6 +63,32 @@ Cold start：先讀下方 `## 總任務清單`；需要特定 DEV 詳細歷史�
 實作：主程式仍由 `web.app` 提供；獨立 quick 安裝導引改走同一 Firebase Hosting 站點的 `firebaseapp.com/quick-task/`，快速入口的任務資料仍送同一 ProJED Supabase 專案，但另一 origin 需首次以同一 Google 帳號登入。舊 `web.app/quick-task/` 保持可記錄並提示尚未同步資料；主程式 manifest shortcut 仍留在主程式 scope。成功後「前往工作台」返回 `web.app`。不跨 origin 複製 token、IndexedDB 或未同步待辦。避免把 display-mode 當作 Android 已安裝證據。
 
 Auth 變更限於 Supabase `knodlkxqpcqyrtgwpdst` 追加 `https://projed-cc78d.firebaseapp.com/quick-task/*` 回呼範圍；既有白名單保留。驗收：雙網址同版、quick manifest 與首屏可用、舊安裝頁轉往新網址、OAuth 回到新網址且 server owner 與主程式同帳號、實機 `chrome://webapks/` 及 Android 應用程式清單有兩筆獨立 App。前面幾項可自動驗證；Google 帳號選擇與原生安裝必須由 Android 實機確認，不以瀏覽器視窗冒充 PASS。架構與驗證見 [SPEC-122 DEV-131 修訂](specs/SPEC-122-mobile-zero-data-quick-task.md#dev-131-雙網址獨立安裝修訂2026-09-29)、[QA-DEV-131](qa/QA-DEV-131-dual-origin-quick-install.md)。
+
+正式雙網址已由 clean source `afa758c35e907569f88e241e1fe72a231001e7bc` 發布為 release `20260929055645-fad159`。首次即時核對短暫遇到 `app-shell-meta.json` 雜湊不一致；同一不可變發布包的本地／遠端原始位元組後續一致，使用 `--verify-only` 重試後 54/54 provenance、一般 browser 與雙網址 feature smoke 均 PASS，沒有再部署。Supabase Auth 白名單讀回正確；OAuth 起點 302 不代表同帳號登入完成。狀態：`Production Deployed / Web Verified / Android Independent Install Pending`，實機兩筆 App 與真實同帳號任務仍須驗收。見 [REL-013](release/REL-013-DEV-131-DUAL-ORIGIN-20260929.md)。
+
+2026-09-29 使用者回報獨立「快速建待辦」安裝成功；這是使用者實機結果，尚未提供 `chrome://webapks/` 與同帳號任務讀回證據，因此不改寫上述完整驗收狀態。
+
+## DEV-132 自願換圖指引與系統通知歷史 - 2026-09-29
+
+使用者確認雙 App 安裝成功後，選定自由選擇、一次重裝一個 App 的換圖方式，要求簡單乾淨的指引，並在「設定中心 → 系統通知」保留通知，避免提醒消失後找不到。此為 DEV-130 圖示更新交接的使用者介面補充，不修改 Chrome／Android 的系統安裝行為。
+
+本地實作：設定中心新增「系統通知」分類與一則帶日期的換圖公告；公告於重新載入後仍可查看，清單列本身就是明細入口，點擊任一通知列會開啟共用彈窗，不增加專屬「查看更換方式」按鈕。彈窗外框統一負責日期、標題、關閉、Esc、背景點擊、焦點管理與捲動；通知只提供自己的明細內容。「安裝APP」分類初始只呈現主程式與快速建待辦兩個選擇，選定後才顯示對應安裝動作。換圖引導保留同步檢查、保存連結、只移除目標 App 並在 Chrome 重裝；主程式與快速入口的圖示及安裝連結同時分列，快速入口連結直達 `firebaseapp.com` 獨立 origin。系統通知採版本化、全裝置可讀的產品公告清單，不把會自動消失的操作 toast 當作歷史，也不虛構過去未儲存的提示；新增公告需隨後續產品更新加入清單。無資料庫、權限、登入或正式環境變更。
+
+驗收：390×844 設定頁公告可見、重新載入仍可讀、操作後以彈窗呈現指引、兩組舊／新圖示可載入、「安裝APP」分類不出現換圖資訊，且沒有橫向溢出；快速入口連結在正式 origin 對應獨立網址，主程式連結不變。主程式未同步快記仍警示；獨立快速入口列明確提示需到該 App 內確認同步，避免跨網址不可見的資料被誤判為零。移位前的系統通知及安裝指引已通過 TypeScript、`build:test`、DEV-132 手機 browser、DEV-130 自願重裝 browser、DEV-034 static/browser、DEV-038 static/browser 與 DEV-131 origin 檢查。移位後 `tsc --noEmit`、DEV-034 static 23/23、targeted ESLint 0 errors（既有 effect warning 1）與 390×844 本機 headless Edge 實際操作 PASS：通知原位展開、主程式待同步 1 筆警示、快速入口跨網址警示、兩張圖載入、選項連結、「安裝APP」分類無換圖指引、無橫向溢出；截圖在 `output/playwright/dev-132/*-mobile-cdp.png`。狀態：`Local Implemented / Targeted QA PASS / Production Not Deployed`。
+
+2026-09-29 圖示對照補充：所選 App 下方並排顯示舊版與新版圖示；主程式舊 J 使用 `public/icons/icon-vibrant-02-aqua-lime.png`，快速建待辦舊版依使用者提供的圖重建為紅底白標誌 `public/icons/projed-quick-task-icon-legacy-red.png`，兩者新版均指向目前各自 manifest 的 192px 品牌圖。切換 App 時同步切換對照素材，已隨通知移位完成 390×844 畫面驗收；部署狀態不變。
+
+2026-09-29 通知文案重構：先交代網站圖示已更新、已安裝 App 可能仍顯示舊圖示，再說明保留舊圖不影響使用與自願更換；展開後依序選擇目標 App、看新舊對照、確認同步、在移除前保存該 App 連結、只移除所選 App 並用原帳號重裝。移除重複引言，將「保存安裝連結」按鈕移入對應步驟，避免先看到卸載指令才找到連結。`tsc --noEmit`、targeted ESLint、DEV-034 static 23/23 PASS；390×844 本機 Edge 核對兩個 App 的圖示、同步警示、連結與無橫向溢出 PASS，截圖 `output/playwright/dev-132/*-comms-cdp.png`。仍未正式部署。
+
+2026-09-29 單頁統整：依使用者對兩個內容重複切換按鈕的回饋，移除主程式／快速入口頁籤，在同一通知內以兩列對照四張圖，並在共同三步引導中各列同步提醒與各自的保存連結按鈕。使用者仍只需重裝想換圖的那個 App；獨立快速入口的本機待辦不可跨 origin 查讀。`tsc --noEmit`、targeted ESLint、390×844／320×844 本機 Edge 手機畫面檢查通過：兩個安裝網址正確、四張圖可載入、零頁籤與零橫向溢出。截圖 `output/playwright/dev-132/guide-unified-390-*.png`。狀態仍為本地完成、未正式部署。
+
+2026-09-29 重裝操作說明補充：將第三步拆成四個可跟做的動作：在 Android 應用程式設定只解除安裝所選 App、在 Chrome 新分頁開啟對應安裝連結、在 Chrome 選「安裝應用程式」並說明「建立捷徑」只是網頁捷徑、最後從 App 清單開啟並用原 Google 帳號登入。補充 Android 設定名稱可能因手機不同、找不到目標 App 時保留另一 App 並直接進入安裝。此次僅調整通知內操作文案，沒有新增測試或重新部署。
+
+2026-09-29 安裝頁重構：依使用者要求與 #溝通思考、#設計思考，設定中心「安裝APP」初始畫面只顯示 `ProJED 主程式`與`快速建待辦`兩個可點選圖示；主程式選後提供裝置適用的安裝動作／步驟，快速入口選後提供獨立安裝連結及同帳號提醒。移除常駐作用範圍徽章、提示狀態面板及長篇快速入口說明，自動提示服務本身未改。相關規格更新見 [SPEC-034 8.6](specs/SPEC-034-fast-start-pwa-install-guidance.md#86-dev-132安裝app頁面簡化2026-09-29)、[SPEC-038 更新](specs/SPEC-038-settings-scope-consistency-and-risk-guardrails.md)與[SPEC-122/QA B24 更新](specs/SPEC-122-mobile-zero-data-quick-task.md)。新版畫面型別、靜態契約與建置已通過；瀏覽器操作尚未驗證，未部署。
+
+同日後續需求：電腦版在主程式或獨立快速入口取得瀏覽器安裝事件時提供一鍵安裝；Android 手機版提供 Chrome 選單的兩步教學，仍容許可用的直接安裝按鈕；iPhone 維持 Safari 流程。兩個入口無事件時顯示可執行的手動方式，不偽裝成可強制安裝。
+
+電腦本機畫面回饋：原條件式渲染讓未收到安裝事件的瀏覽器完全沒有按鈕。已改為主程式始終顯示「安裝 ProJED 主程式」；有事件時直接喚起瀏覽器安裝視窗，無事件時點擊後顯示 Chrome／Edge 安裝指引。快速建待辦在主程式顯示獨立安裝頁入口，該頁電腦版也始終顯示安裝按鈕並在無事件時提供相同回饋。跨網址安裝仍需在獨立頁完成，不將「前往頁面」冒充安裝成功。
 
 ## DEV-130 Android 主程式重裝失敗修復 - 2026-09-29
 
@@ -1027,8 +1103,25 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 摘要：讓主程式與選用 quick 圖示分屬 `web.app`、`firebaseapp.com` 兩個 origin，維持同一 Supabase 帳號與無強制重裝。
   - 來源 ID：使用者 2026-09-29 Android `chrome://webapks/` 與應用程式清單反證及本輪雙網址正式授權。
   - 父任務：DEV-122；相容 DEV-130。
-  - 證據：[SPEC-122 DEV-131 修訂](specs/SPEC-122-mobile-zero-data-quick-task.md#dev-131-雙網址獨立安裝修訂2026-09-29)、[QA-DEV-131](qa/QA-DEV-131-dual-origin-quick-install.md)。
-  - 計入交付：否（正式及 Android 實機結果尚待驗證）。
+  - 證據：[SPEC-122 DEV-131 修訂](specs/SPEC-122-mobile-zero-data-quick-task.md#dev-131-雙網址獨立安裝修訂2026-09-29)、[QA-DEV-131](qa/QA-DEV-131-dual-origin-quick-install.md)、[REL-013](release/REL-013-DEV-131-DUAL-ORIGIN-20260929.md)；使用者回報 Android 安裝成功。
+  - 計入交付：否（正式網頁驗證通過；同帳號及完整 Android 實機證據仍待補齊）。
+
+- ◐ DEV-132 [交付點] [本地實作／型別、lint、build PASS；瀏覽器操作未重新驗證] [P2] 自願換圖指引與系統通知歷史
+  - 摘要：設定中心的換圖公告可回看，點擊通知列本身即可用共用彈窗閱讀自願重裝指引；「安裝APP」分類只呈現兩個安裝選擇與選後動作，兩個 App 一次只重裝一個，換圖公告保留舊／新圖示對照。
+  - 來源 ID：使用者 2026-09-29「採用自願重裝方案」與新增「系統通知」要求。
+  - 父任務：DEV-130；相容 DEV-131。
+  - 下一步：依既有正式發版授權流程處理，再以正式站及 Android 實機確認通知入口和兩個 App 的換圖結果。
+  - 證據：本地 390×844 headless Edge 操作與 `output/playwright/dev-132/*-mobile-cdp.png`、`tsc --noEmit`、DEV-034 static 23/23、targeted ESLint 0 errors；移位前 DEV-132／130／034／038 回歸與本節執行紀錄。
+  - 計入交付：否（尚未正式發布）。
+
+- ◐ DEV-133 [交付點] [Rev12直接修正發布前READY；TEST simulation25/25＋ordinary N06 11/11；正式驗收、PR與4195收尾待完成] [P1] [本輪實作] 快速建任務各自登入與自動同步
+  - 摘要：共用 ProJED 帳號系統、兩個 App 各自登入與保存 Session；保留 owner-bound 離線保存、自動重試及七日已同步副本清理。
+  - 來源 ID：使用者 2026-10-01 採用獨立登入方案及修改開發文件／補齊到架構定案指示；延續 2026-09-30 DEV-133。
+  - 父任務：DEV-122；延續 DEV-131 雙網址安裝，相容 DEV-130／132。
+  - 下一步：釐清 Rev11 390px 已同步畫面仍顯示原帳號登出提示，完成 UI final audit、PR #5 review／merge、4195 專屬 runtime／UI cleanup與證據保存。普通正式 Google／功能矩陣46/46及人工 speech 僅證明所列範圍，不抵銷可見畫面異常，也不等於 Android／完整 PWA 自動更新驗收或整份 DEV 完成。
+  - 阻塞 / 恢復條件：同次 production readback 無其他 pending capture且 owner 已同步，但人工截圖仍顯示原帳號登出提示；root 正查明其為過渡／恢復殘留或產品缺陷。指定 runner 0 pageError／critical Auth-RPC failures 不構成 UI clean 證據。原始 worker timeout及 replay harness 參數錯誤收據保留，修正工具後沿用原 fixtures 重驗；較早同 digest `092f1fa...` 的 N08/N10/邊界 TEST 結果仍依各自來源有效。專屬 4195 cleanup 由 root 負責；未同步或 synthetic pending profile／資料依原規則保留。
+  - 證據：[QA Rev11](qa/QA-DEV-133-quick-task-shared-identity-sync.md)、[REL-014 Rev11](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)、[SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md)、[ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md)；正式 mirror 收據位於 `output/qa/dev-133/independent-auth/production/rev11/`，Python direct feature receipt 位於 `output/release/dev-083/20261001160355-057ccc/direct-evidence.json`；同 digest TEST evidence仍見 N10／N08 QA 段落。
+  - 計入交付：是；正式指定功能與語音案例已驗收，UI final audit、PR #5 review／merge及4195 cleanup完成前 DEV-133維持執行中。
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
 
@@ -7440,3 +7533,8 @@ R14 current evidence為static 40/40與browser 27/27，新增S40／B52 armed pare
 獨立QC、真機、正式持久化與release gate仍未完成，故目前不是QC Ready或release ready；RD implementation與架構定案則已完成。
 
 使用思考習慣：#多層次分析、#系統描繪、#可驗證性
+
+
+2026-09-29 通知呈現採通用清單＋彈窗明細：整列可點擊並以右向符號提示可進入，沒有專屬「查看更換方式」按鈕；共用彈窗承載所選通知的標題、日期與明細內容。換圖公告的明細仍包括兩 App 圖示對照、同步檢查、各自安裝連結與重裝步驟。本次 `tsc --noEmit`、targeted ESLint、`build:test` 與 `git diff --check` PASS；瀏覽器互動未重新驗證，未部署正式環境。
+
+2026-09-29 設定分類入口由「快速開啟」改名為「安裝APP」，分類內仍包含 App 安裝、啟動與快速開啟提示設定；內部 section id 不變。
