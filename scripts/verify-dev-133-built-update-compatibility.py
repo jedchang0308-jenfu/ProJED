@@ -7,10 +7,10 @@ from pathlib import Path
 from playwright.async_api import async_playwright
 
 OUT = Path(sys.argv[1]).resolve()
-PROFILE = OUT / 'owned-update-profile'
+PROFILE = Path(sys.argv[2]).resolve() if len(sys.argv) > 2 else OUT / 'owned-update-profile'
 ORIGIN = 'http://127.0.0.1:4194'
 BUILDS = json.loads((OUT/'builds.json').read_text(encoding='utf-8'))
-RESULT = {'devId':'DEV-133','status':'FAIL','layer':'real built SW update / v2 fallback; synthetic local owner fixtures, no Auth or RPC','cases':[]}
+RESULT = {'devId':'DEV-133','status':'FAIL','layer':'real built SW update / v2 fallback; synthetic local owner fixtures, no Auth or RPC','cases':[], 'buildSourceDigests':{key:BUILDS[key].get('sourceDigest') for key in ['A','B']}, 'buildArtifactDigests':{key:BUILDS[key].get('artifactDigest') for key in ['A','B']}}
 
 def check(name, condition):
     RESULT['cases'].append({'case':name,'status':'PASS' if condition else 'FAIL'})
@@ -41,7 +41,7 @@ async def open_context(p, errors, requests, existing=None):
     page.on('request',lambda r:requests.append(True) if '/rest/v1/' in r.url or '/realtime/v1/' in r.url or 'firestore.googleapis.com' in r.url else None)
     await page.goto(ORIGIN+'/quick-task/')
     await page.wait_for_function('!document.querySelector("#quick-task-submit").disabled')
-    await page.evaluate('navigator.serviceWorker.ready')
+    await page.evaluate('Promise.race([navigator.serviceWorker.ready,new Promise((_,reject)=>setTimeout(()=>reject(Error("SW_READY_TIMEOUT")),45000))])')
     if not await page.evaluate('Boolean(navigator.serviceWorker.controller)'):
         await page.reload()
     await page.wait_for_function('navigator.serviceWorker.controller!==null')

@@ -65,8 +65,15 @@ export const createQuickUnplacedTask = async (input: {
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
     const error = payload && typeof payload === 'object' ? payload as Record<string, unknown> : {};
+    // RAISE EXCEPTION uses P0001 for every business error. Preserve a typed QT
+    // message so the durable outbox can distinguish workspace recovery from
+    // permanent conflicts after reload.
+    const databaseCode = typeof error.code === 'string' ? error.code : String(response.status);
+    const code = databaseCode === 'P0001' && typeof error.message === 'string' && /^QT_[A-Z_]+$/u.test(error.message)
+      ? error.message
+      : databaseCode;
     throw Object.assign(new Error(typeof error.message === 'string' ? error.message : `RPC_${response.status}`), {
-      code: typeof error.code === 'string' ? error.code : String(response.status),
+      code,
       status: response.status,
       retryAfter: response.headers.get('Retry-After'),
     });

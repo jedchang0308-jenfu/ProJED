@@ -292,7 +292,8 @@ export const retryQuickCapture = async (captureId: string, accountId: string) =>
       if (!record || record.accountId !== accountId || record.state === 'synced'
         || (record.leaseExpiresAt && record.leaseExpiresAt > Date.now())) return;
       if (record.state === 'failed_permanent' && !record.lastErrorCode?.includes('WORKSPACE')
-        && record.lastErrorCode !== '23503' && record.lastErrorCode !== 'AUTO_RETRY_EXHAUSTED') return;
+        && record.lastErrorCode !== '23503' && record.lastErrorCode !== 'AUTO_RETRY_EXHAUSTED'
+        && record.lastErrorCode !== 'P0001') return;
       next = { ...record, state: 'pending', attemptCount: 0, nextAttemptAt: null, lastErrorCode: null,
         leaseId: null, leaseExpiresAt: null, updatedAt: Date.now() };
       store.put(next);

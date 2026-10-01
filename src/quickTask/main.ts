@@ -542,14 +542,16 @@ const showNextRecovery = async (interactionRevision: number) => {
 
 const renderRecoveryFailure = (record: QuickCaptureRecord) => {
   const needsWorkspace = Boolean(record.lastErrorCode?.includes('WORKSPACE')) || record.lastErrorCode === '23503';
-  const canRetry = record.lastErrorCode === 'AUTO_RETRY_EXHAUSTED' || needsWorkspace;
+  const needsErrorVerification = record.lastErrorCode === 'P0001';
+  const canRetry = record.lastErrorCode === 'AUTO_RETRY_EXHAUSTED' || needsWorkspace || needsErrorVerification;
   const explanation = record.state === 'failed_auth' ? '請重新登入原帳號後同步。'
     : needsWorkspace ? '請先到主程式完成帳號與工作台設定，再回來重試。'
+      : needsErrorVerification ? '請以原帳號重新確認同步結果；原任務仍保留在本機。'
       : canRetry ? '同步多次失敗，待辦仍保留在本機。' : '同步結果需要查證，待辦仍保留在本機。';
   recovery.hidden = false;
   recovery.dataset.compact = 'false';
   recoveryContent.hidden = false;
-  recoveryContent.innerHTML = `<strong>同步未完成</strong><span>${escapeHtml(record.title)}</span><span>${explanation}</span><div class="quick-task-actions">${record.state === 'failed_auth' ? '<button type="button" data-recovery-login="true">重新登入</button>' : ''}${needsWorkspace ? '<button type="button" data-workbench="true">前往工作台</button>' : ''}${canRetry ? '<button type="button" data-retry="true">重試</button>' : ''}<button type="button" data-back="true">返回</button></div>`;
+  recoveryContent.innerHTML = `<strong>同步未完成</strong><span>${escapeHtml(record.title)}</span><span>${explanation}</span><div class="quick-task-actions">${record.state === 'failed_auth' ? '<button type="button" data-recovery-login="true">重新登入</button>' : ''}${needsWorkspace ? '<button type="button" data-workbench="true">前往工作台</button>' : ''}${canRetry ? `<button type="button" data-retry="true">${needsErrorVerification ? '重新確認' : '重試'}</button>` : ''}<button type="button" data-back="true">返回</button></div>`;
   recovery.open = true;
   recoveryContent.querySelector<HTMLButtonElement>('[data-recovery-login]')?.addEventListener('click', () => {
     void getAuthApi().then(auth => auth.startQuickGoogleSignIn(new URL('/quick-task/', window.location.origin).toString()))
