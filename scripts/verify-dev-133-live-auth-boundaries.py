@@ -39,15 +39,24 @@ async def login(page):
     credentials = {'email': os.environ['DEV133_TEST_ACTOR_A_EMAIL'], 'password': os.environ['DEV133_TEST_ACTOR_A_PASSWORD']}
     await page.evaluate("""async credentials=>{
       // Only a non-secret explicit login intent; ordinary SDK/getUser establish identity.
-      sessionStorage.setItem('projed-quick-sdk-login-intent',String(Date.now()));
       const c=(await import('/src/services/supabase/client.ts')).supabase;
+      const prior=await c.auth.getSession();let marker='unknown';
+      if(!prior.error){
+        marker='none';
+        if(prior.data.session){try{
+          const payload=JSON.parse(atob(prior.data.session.access_token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+          marker=typeof payload.session_id==='string'?'id:'+payload.session_id:'unknown';
+        }catch{marker='unknown';}}
+      }
+      sessionStorage.setItem('projed-quick-sdk-login-intent',String(Date.now()));
+      sessionStorage.setItem('projed-quick-sdk-login-prior-session',marker);
       if((await c.auth.signInWithPassword(credentials)).error)throw Error('ORDINARY_TEST_SIGNIN_FAILED');
     }""", credentials)
     await page.wait_for_function("document.querySelector('#quick-task-auth-status').textContent.includes('已登入')", timeout=30000)
     return await page.evaluate("async()=>{const c=(await import('/src/services/supabase/client.ts')).supabase;const r=await c.auth.getUser();if(r.error)throw Error('USER_VERIFY_FAILED');return r.data.user.id;}")
 
 async def create(page, label, state='synced'):
-    if await page.locator('[data-next]').is_visible():
+    if await page.locator('[data-next]').count() and await page.locator('[data-next]').is_visible():
         await page.locator('[data-next]').click()
     title = 'DEV133-LIVEBOUNDARY-' + suffix + '-' + label
     await page.locator('#quick-task-title').fill(title)

@@ -56,7 +56,6 @@ let voiceSession: VoiceSession | null = null;
 type QuickAuthApi = typeof import('../features/quickTaskCapture/auth');
 let authApiPromise: Promise<QuickAuthApi> | null = null;
 let authSnapshot: import('../services/supabase/quickTaskCaptureService').QuickAuthSnapshot | null = null;
-let verifiedAuthSnapshot: import('../features/quickTaskCapture/auth').VerifiedQuickAuthSnapshot | null = null;
 let currentRecord: QuickCaptureRecord | null = null;
 let pendingLocalCommit: { record: QuickCaptureRecord; context?: { revision: number; projectRef: string; accountId: string } } | null = null;
 let isComposing = false;
@@ -132,14 +131,14 @@ const setAuthStatus = (text: string, showLogin: boolean, showLogout = false) => 
     logoutButton.addEventListener('click', () => {
       clearRetryTimer();
       authSnapshot = null;
-      verifiedAuthSnapshot = null;
       pendingClaim = null;
       currentRecord = null;
       success.hidden = true;
       setAuthStatus('已停止同步，正在登出此 App…', false);
       void getAuthApi().then(auth => auth.signOutQuickSession())
-        .then(() => setAuthStatus('此快速 App 尚未登入', true))
+        .then(() => { if (!authSnapshot) setAuthStatus('此快速 App 尚未登入', true); })
         .catch(error => {
+          if (authSnapshot) return;
           setAuthStatus('已停止同步，登出尚未完成', false, true);
           setMessage(error instanceof Error && error.message === 'LOGOUT_BARRIER_FAILED'
             ? '無法保存登出狀態，請重試。' : '已停止同步，登出尚未完成，請重試。');
@@ -175,7 +174,6 @@ const verifyAndFlush = async (expected: NonNullable<typeof authSnapshot>) => {
     const verification = await auth.verifyQuickSessionState(expected);
     if (authSnapshot?.accountId !== expected.accountId || authSnapshot.authEpoch !== expected.authEpoch) return;
     if (verification.status !== 'verified') {
-      verifiedAuthSnapshot = null;
       const label = !navigator.onLine
         ? '目前離線；已保留原帳號本機綁定，網路恢復後自動同步'
         : verification.status === 'unreachable' ? '登入狀態待確認；服務恢復後自動同步'
@@ -193,7 +191,6 @@ const verifyAndFlush = async (expected: NonNullable<typeof authSnapshot>) => {
     }
     const verified = verification.snapshot;
     authRetryCount = 0;
-    verifiedAuthSnapshot = verified;
     setAuthStatus(`此快速 App 已登入：${verified.email ?? 'ProJED 帳號'}`, false, true);
     const authFailed = await flushQuickTaskOutbox(verified, (captureId, state) => {
       if (authSnapshot?.accountId === verified.accountId && authSnapshot.authEpoch === verified.authEpoch
@@ -203,7 +200,6 @@ const verifyAndFlush = async (expected: NonNullable<typeof authSnapshot>) => {
       }
     });
     if (authFailed) {
-      verifiedAuthSnapshot = null;
       setAuthStatus('登入已失效，請重新登入原帳號', true);
       return;
     }
@@ -225,7 +221,6 @@ const verifyAndFlush = async (expected: NonNullable<typeof authSnapshot>) => {
     }
   } catch {
     if (authSnapshot?.accountId === expected.accountId && authSnapshot.authEpoch === expected.authEpoch) {
-      verifiedAuthSnapshot = null;
       setAuthStatus(navigator.onLine ? '登入狀態待確認' : '離線；原帳號本機綁定仍保留', navigator.onLine);
     }
   } finally {
@@ -242,10 +237,16 @@ const verifyAndFlush = async (expected: NonNullable<typeof authSnapshot>) => {
   }
 };
 const refreshAuthAndSync = async () => {
-  const snapshot = await (await getAuthApi()).loadQuickSession().catch(() => null);
+  const auth = await getAuthApi();
+  const snapshot = await auth.loadQuickSession().catch(() => null);
+  const current = auth.getQuickAuthSnapshot();
+  if (snapshot ? current?.accountId !== snapshot.accountId || current.accessToken !== snapshot.accessToken
+    || current.authEpoch !== snapshot.authEpoch : current !== null) return;
   authSnapshot = snapshot;
   if (!snapshot) {
-    verifiedAuthSnapshot = null;
+    setAuthStatus(auth.getQuickSessionLoadState() === 'unreachable'
+      ? (navigator.onLine ? '登入狀態待確認；服務恢復後自動同步' : '目前離線；待辦仍保留在本機')
+      : '此快速 App 尚未登入', auth.getQuickSessionLoadState() !== 'unreachable');
     return;
   }
   void verifyAndFlush(snapshot);
@@ -479,7 +480,6 @@ const confirmPendingClaim = async () => {
     return;
   }
   authSnapshot = snapshot;
-  verifiedAuthSnapshot = verified;
   setAuthStatus(`此快速 App 已登入：${verified.email ?? 'ProJED 帳號'}`, false, true);
   setMessage('已連結原帳號，正在同步。');
   await verifyAndFlush(verified);
@@ -619,7 +619,6 @@ const beginClaim = async (captureId: string, interactionRevision: number) => {
     const latest = auth.getQuickAuthSnapshot();
     if (!isCurrentInteraction() || latest?.accountId !== verified.accountId || latest.authEpoch !== verified.authEpoch) return;
     authSnapshot = verified;
-    verifiedAuthSnapshot = verified;
     pendingClaim = { captureId, nonceHash, accountId: verified.accountId, email: verified.email,
       authEpoch: verified.authEpoch, contextRevision: verified.contextRevision };
     setMessage('');
@@ -657,7 +656,6 @@ const finishClaimFromUrl = async () => {
     nextUrl.hash = '';
     history.replaceState(history.state, '', `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
     authSnapshot = snapshot;
-    verifiedAuthSnapshot = verified;
     pendingClaim = { captureId, nonceHash: hash, accountId: verified.accountId, email: verified.email,
       authEpoch: verified.authEpoch, contextRevision: verified.contextRevision };
     setAuthStatus(`已登入：${verified.email ?? 'ProJED 帳號'}，待確認同步`, false, true);
@@ -679,13 +677,15 @@ form.addEventListener('submit', async event => {
   voiceButton.disabled = true;
   localCommitInFlight = true;
   try {
-    const offlineContext = await (await getAuthApi()).getQuickBindingContext().catch(() => null);
-    const snapshot = verifiedAuthSnapshot && verifiedAuthSnapshot.authEpoch === authSnapshot?.authEpoch
-      ? verifiedAuthSnapshot
-      : null;
-    const localAccountId = snapshot?.accountId
-      ?? (offlineContext?.bindingAllowed ? offlineContext.accountId : null);
-    const record: QuickCaptureRecord = pendingLocalCommit?.record.title === title ? pendingLocalCommit.record : {
+    const auth = await getAuthApi();
+    const offlineContext = await auth.getQuickBindingContext().catch(() => null);
+    const localAccountId = offlineContext?.bindingAllowed ? offlineContext.accountId : null;
+    const pendingRecord = pendingLocalCommit?.record.title === title ? pendingLocalCommit.record : null;
+    if (pendingRecord?.accountId && pendingRecord.accountId !== localAccountId) throw new Error('PENDING_CAPTURE_ACCOUNT_CHANGED');
+    if (pendingRecord?.accountId && offlineContext?.accountId === pendingRecord.accountId) {
+      pendingLocalCommit!.context = { revision: offlineContext.revision, projectRef: offlineContext.projectRef, accountId: offlineContext.accountId };
+    }
+    const record: QuickCaptureRecord = pendingRecord ?? {
       schemaVersion: 1,
       captureId: currentRecord?.captureId ?? createQuickCaptureId(),
       accountId: localAccountId,
@@ -702,13 +702,13 @@ form.addEventListener('submit', async event => {
       claimIntent: null,
     };
     if (!pendingLocalCommit || pendingLocalCommit.record !== record) {
-      pendingLocalCommit = { record, context: localAccountId && (snapshot?.contextRevision ?? offlineContext?.revision) !== undefined
-        ? { revision: snapshot?.contextRevision ?? offlineContext!.revision,
-          projectRef: snapshot?.contextProjectRef ?? offlineContext!.projectRef, accountId: localAccountId } : undefined };
+      pendingLocalCommit = { record, context: localAccountId && offlineContext
+        ? { revision: offlineContext.revision, projectRef: offlineContext.projectRef, accountId: localAccountId } : undefined };
     }
     const committed = currentRecord
       ? await updateQuickCapture(currentRecord.captureId, { state: record.state, lastErrorCode: null, nextAttemptAt: null, leaseId: null, leaseExpiresAt: null })
-      : await commitQuickCapture(record, pendingLocalCommit.context);
+      : await commitQuickCapture(record, pendingLocalCommit.context,
+        () => !record.accountId || Boolean(offlineContext && auth.isQuickBindingContextCurrent(offlineContext)));
     if (!committed) throw new Error('IDB_UPDATE_FAILED');
     currentRecord = committed;
     pendingLocalCommit = null;
@@ -718,7 +718,9 @@ form.addEventListener('submit', async event => {
   } catch (error) {
     setMessage(error instanceof Error && error.message === 'IDB_READBACK_FAILED'
       ? '無法確認是否已記下，請重試；會確認同一筆任務，不會重複建立。'
-      : '目前無法記下，請稍後重試。');
+      : error instanceof Error && error.message === 'PENDING_CAPTURE_ACCOUNT_CHANGED'
+        ? '這筆待辦先前的保存尚未確認；請恢復原登入帳號後再重試，任務名稱會保留。'
+        : '目前無法記下，請稍後重試。');
   } finally {
     localCommitInFlight = false;
     submitButton.disabled = false;
@@ -773,7 +775,9 @@ void (async () => {
   });
   authSnapshot = await auth.loadQuickSession().catch(() => null);
   if (authSnapshot) setAuthStatus('正在確認登入狀態…', false);
-  else setAuthStatus('此快速 App 尚未登入', true);
+  else if (auth.getQuickSessionLoadState() === 'unreachable') {
+    setAuthStatus(navigator.onLine ? '登入狀態待確認；服務恢復後自動同步' : '目前離線；待辦仍保留在本機', false);
+  } else setAuthStatus('此快速 App 尚未登入', true);
   void removeExpiredCaptures().catch(() => undefined);
   await finishClaimFromUrl();
   await renderRecovery();
@@ -791,13 +795,14 @@ void (async () => {
       setMessage('登入帳號已變更；原待辦仍保留在本機，請從待處理入口恢復。');
     }
     authSnapshot = snapshot;
-    verifiedAuthSnapshot = null;
     if (snapshot) {
       setAuthStatus('正在確認登入狀態…', false);
       void verifyAndFlush(snapshot);
     } else {
       clearRetryTimer();
-      setAuthStatus('此快速 App 尚未登入', true);
+      setAuthStatus(auth.getQuickSessionLoadState() === 'unreachable'
+        ? (navigator.onLine ? '登入狀態待確認；服務恢復後自動同步' : '目前離線；待辦仍保留在本機')
+        : '此快速 App 尚未登入', auth.getQuickSessionLoadState() !== 'unreachable');
       voiceSession?.abort();
       voiceSession = null;
       void renderRecovery();

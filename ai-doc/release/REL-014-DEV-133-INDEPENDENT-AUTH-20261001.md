@@ -1,6 +1,8 @@
 # REL-014：DEV-133 各自登入與依帳號同步
 
-狀態：**正式發布與功能驗收 PASS；Git 分支已推送，PR #5 已建立並等待 review／merge。** 原 `20261001061118-144be8` 核心包排除後續 UI；UI 已另以 `20261001074739-df101c` 發布，下方後續發布節為最新 UI 權威。
+狀態：**Rev9正式發布與功能驗收PASS；Rev10 Auth競態修正尚未發布。** 原 `20261001061118-144be8` 核心包排除後續UI，UI另以 `20261001074739-df101c` 發布；sealed包身份及其驗收保持原source邊界。Git PR #5已建立，最新修正交付與protected發布進度見下一段。
+
+2026-10-01部署前續驗發現stale Session／null／401及延遲logout barrier可跨較新epoch；Auth、outbox與quick UI已補guard。新版frozen source digest `3acceffc38997505d7d877fdbace868509b658ae426501cf449d999dc0ab99a9` 的82/82 SIMULATION、built真SW離線與browser restart10/10、真TEST A Auth／RPC12/12及型別／lint／contract PASS，詳細收據見[QA最新部署前驗證](../qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-rev-10-auth-競態修正的部署前驗證)。新版HTTPS protected candidate／正式驗收與修正PR收斂尚待完成；舊正式40/40不推定涵蓋新修正。本輪無schema／RPC／RLS／遠端設定改動，live仍為Rev9 `b88f428e0efa541e`；以此版本及核心`0aae27354f796317`作既有DB v2相容復原錨點。
 
 - 主程式：[ProJED](https://projed-cc78d.web.app/)。獨立快速入口：[ProJED-快速建任務](https://projed-cc78d.firebaseapp.com/quick-task/?install=1)。
 - 資源：Firebase project/site `projed-cc78d`；TEST Supabase `fhisnnufoeulxqrchldf`；PROD `knodlkxqpcqyrtgwpdst`。

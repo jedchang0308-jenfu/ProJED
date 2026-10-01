@@ -1,5 +1,20 @@
 # QA-DEV-133：雙 App 各自登入／依帳號同步／本機清理
 
+### 2026-10-01 Rev 10 Auth 競態修正的部署前驗證
+
+**新版候選本機／TEST驗證 PASS；新版 HTTPS protected release與正式驗收尚未執行。** 舊 Session載入／核身回應可能跨越新 Auth epoch；已在 Auth、IDB寫入及UI owner決定加入generation guard，補上legacy barrier登入前Session辨識。Spec convergence：No contract drift；SPEC-133 Rev10補明執行細節，無schema／RPC／RLS／遠端Auth設定變更。
+
+| 證據 | 結果與範圍 |
+|---|---|
+| [82項邊界](../../output/qa/dev-133/independent-auth/boundaries/1790855989748/result.json) | 82/82 PASS，真Chrome／IDB＋注入Auth/RPC，零連外。startup不猜舊A、晚到A／null／401不覆蓋B、IDB put／capture add前epoch變動則中止、延遲SIGNED_OUT不寫掉B、legacy殘留Session不解除barrier、unsubscribe仍保存登出、明確失效後503不復活owner，以及既有receipt／claim／retry／retention／upgrade／UI案例。 |
+| [建置離線](../../output/qa/dev-133/independent-auth/bundle/1790857159497-offline-retry/result.json) | 10/10 PASS；TEST public-only build `1790856078479`，360個source逐檔相符，digest `3acceffc38997505d7d877fdbace868509b658ae426501cf449d999dc0ab99a9`。真root SW、零business request、離線建立、reload及Chrome程序結束後離線重開；raw captureId／title／null owner／awaiting_auth不變、summary筆數正確，Tab順序及390×480無溢出。 |
+| [普通TEST A](../../output/qa/dev-133/independent-auth/live-auth-boundaries/1790857336285/result.json) | 12/12 PASS，真SDK password Auth／getUser／RPC／唯一工作台row。離線回網、server commit後丟回應同ID重播、local logout與晚到receipt、真Auth拒絕無效refresh、原owner重登續送及8日已同步本機清理後server資料不變。loss／delay／RPC503為注入；不冒稱Google B或HTTPS callback實測。raw全synced後才移除本輪profile。 |
+| 程式／相容 | TypeScript、targeted ESLint、contract6、production auth-mode5、core-regression-static11、DEV-122 static25、migration aliases65、三個Python driver AST均PASS；未執行migration。 |
+
+長路徑persistent Chrome profile下SW registration未完成（bundle `1790856078479`／`1790856257243-retry`）；同build短路徑診斷成功後修正driver。`1790857026559-short-profile-retry`因過時「待確認1筆」文案斷言FAIL，改用raw immutable fields及目前summary data-count，不放寬保存要求，另加browser restart。較早`1790855425857`缺terminal result維持INCOMPLETE；原FAIL／INCOMPLETE全部保留。
+
+4183／4185／4193與task-owned headless Chrome已停止，runtime確認埠釋放；含未同步synthetic任務的profile保留，由DEV-133 root保管。局部readonly review未發現所審查stale Auth／IDB guard的剩餘P0/P1。正式仍是Rev9 live `b88f428e0efa541e`，舊40/40與UI10/10不當作新版實測；Android取消、真麥克風、實際七日觀察及自動PWA更新殘餘維持原範圍。
+
 ### 2026-10-01 正式同步核心驗收（REL-014）
 
 **已發布且正式功能驗收 PASS；Git PR #5 已提交，狀態 Open／CLEAN，待 review／merge。** 本節只代表 clean release source `8376086144b31155a94477e6bea1f929ded475be`，不包含工作樹後續 `conditional-recovery-entry`／`unified-sync-status-panel`、視覺降噪 UI 或本機待同步任務名稱清單。UI 已另以後續 `20261001074739-df101c` 正式發布，下節為最新結果；未混入原核心包。發布、復原與完整來源見 [REL-014](../release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)。以下發布前完成審核表及 TEST／早期 OAuth 段落保留其當時事實，不覆蓋本節正式結果。
@@ -25,7 +40,7 @@ cleanup：task-owned Chrome PID 37180 已退出，4195／4173／4174／4175 無 
 
 **Rev 9 統一 UI 已正式發布並通過相稱驗收。** UI source `9b5f73a1b32bdd8dc984c3017dceaf7225967d40`／release `20261001074739-df101c`；雙正式 origin 各54/54及正式匿名 UI10/10 PASS。本機 UI25/25（真browser／IDB＋Auth/RPC SIMULATION）、型別及 targeted lint PASS，source/UI digest `29cff0bb616834eceb36af1a06e1102092eb5db3fd2cb24edcb2aff6998ffd0f`。原 `8376086` 普通 Auth／同步40/40僅作未變核心的重用證據，不改稱本次實測。首兩輪 harness FAIL 與空值型別 FAIL 保留，沒有覆寫成 PASS。新收據 `output/qa/dev-133/independent-auth/production/unified-ui-release/terminal-evidence.json`，本機收據 `output/qa/dev-133/independent-auth/unified-status/1790840255628-29cff0bb/local-evidence.json`；無正式任務寫入、migration或遠端Auth設定變動，task-owned browser／ports已清理。
 
-### 2026-10-01 部署前回歸驗證
+### 2026-10-01 部署前回歸驗證（Rev 9 歷史快照）
 
 **本輪驗證 PASS；沒有新的產品程式變更需要部署。** 已發布 UI source `9b5f73a1b32bdd8dc984c3017dceaf7225967d40` 仍是此分支最新產品程式來源，正式 release `20261001074739-df101c`／version `b88f428e0efa541e` 的 manifest 完整性核對 PASS，errors=0。
 
@@ -203,7 +218,7 @@ Git交付邊界：本輪不stage／commit其他人的UI／install／settings變�
 | N09 七日清理／race／server保留 | E25 safe local cleanup；既有 server task／immutable receipt 留存與清理 race 案例 | 8／6／40 日與 legacy／corrupt aging 仍為本機時間／資料案例；未實際等待七日週期。 |
 | N10 schema／更新／fallback／viewport | TEST correction readback、E24 U+200B、既有 v1→v2／SW 更新／viewport 證據；TEST correction body MD5 `d80a1ea6932806c0cfa82fce1b73a842`；PROD prosrc 與 local canonical DEV-122 原 migration 一致，PROD correction 為條件 no-op | 已有 preflight 證據可排除在 PROD 重套 correction；仍須把 no-op／hash 選擇綁定 sealed package，再完成 production deploy／smoke。Android 實機已由使用者取消。 |
 
-此表當時可追溯的 TEST suite 29/29、B0/core27+Google cancel gate、correction readback及 post-correction 7/7 均 PASS；source revision `57f8c8d3a751c8698a0e28539a9187868aff1873` 且 `sourceUnchanged=true`。早期 harness FAIL 仍保留，不折算 PASS。該次審核之後，正式封裝、部署、正式核心及 Rev 9 UI 驗收已依上方 REL-014 各節完成；部署前回歸為 57/57 PASS。DEV-133 目前僅待 PR #5 review／merge。Android 實機已取消。
+此表當時可追溯的 TEST suite 29/29、B0/core27+Google cancel gate、correction readback及 post-correction 7/7 均 PASS；source revision `57f8c8d3a751c8698a0e28539a9187868aff1873` 且 `sourceUnchanged=true`。早期 harness FAIL 仍保留，不折算 PASS。該次審核之後，正式封裝、部署、正式核心及 Rev 9 UI 驗收已依上方 REL-014 各節完成；部署前回歸為 57/57 PASS。該快照當時僅待 PR #5 review／merge；目前新增 Rev10 修正，依本文件頂端部署前節續接。Android 實機已取消。
 
 ### 2026-10-01 最新 TEST 跨帳與 correction 證據
 

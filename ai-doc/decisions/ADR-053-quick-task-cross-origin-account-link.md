@@ -50,6 +50,8 @@ Architecture Closure Review 已完成 source／build env／RPC／RLS／migration
 
 ## 成功判定與重新審查條件
 
+2026-10-01 Rev10執行更新：各自登入與owner不改綁決策維持。Session load revision／auth epoch延伸到每次await及IDB put／capture add前，legacy context缺sessionId時另核對非秘密登入前Session提示，失效後暫時不可達不能復活舊binding。82/82 SIMULATION、built離線／browser restart10/10與真TEST A12/12 PASS，詳見QA最新部署前結果；新產品修正尚未執行HTTPS protected發布及正式驗收，不把此前「僅待PR」歷史當作現況。無新schema／API／權限決策，No contract drift。
+
 成功需證明：兩邊各自登入／重開保留狀態；同帳號 quick UI 建立後在主程式工作台唯一讀回；不同帳號及切帳競態不錯送；離線回網且登入有效後同 ID 補送；登入失效保留資料；未綁定資料不自動認領；七日清理不刪未同步記錄。實體 Android 驗收沿用使用者取消的決定，窄版瀏覽器證據不得冒稱 Android PWA 實機證據。
 
 若日後重新要求跨 App 自動登入／帳號強制對齊、即時全域登出，或快速 App 憑證只能新增任務，須重新審查登入或權限架構；不在本版偷偷加回 broker／OAuth Server。既有 owner、RLS、receipt 或更新相容性不能成立時，停止受影響實作並回技術審查，不以搬移任務或放寬權限補救。

@@ -5,6 +5,10 @@ async group => {
   const rows = [];
   const check = (name, passed) => rows.push({ case: name, status: passed ? 'PASS' : 'FAIL' });
   const rejected = async action => { try { await action(); return false; } catch { return true; } };
+  const waitFor = async predicate => {
+    const deadline=Date.now()+5000;
+    while(!await predicate()){if(Date.now()>deadline)throw Error('FIXTURE_WAIT_TIMEOUT');await new Promise(resolve=>setTimeout(resolve,5));}
+  };
   const make = (accountId = 'actor-a', title = 'boundary fixture') => ({ schemaVersion: 1, captureId: m.createQuickCaptureId(), accountId, title, workspaceHint: null, clientCreatedAt: Date.now(), updatedAt: Date.now(), state: accountId ? 'pending' : 'awaiting_auth', attemptCount: 0, nextAttemptAt: null, lastErrorCode: null, leaseId: null, leaseExpiresAt: null, claimIntent: null });
   const hash = async text => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))), b => b.toString(16).padStart(2, '0')).join('');
   const receipt = async r => ({ status: 'committed', captureId: r.captureId, ownerId: r.accountId, titleHash: await hash(r.title), committedAt: Date.now(), created: true });
@@ -128,6 +132,130 @@ async group => {
       client.auth.getUser=async()=>{await new Promise(resolve=>originalTimer(resolve,60));return {data:{user:{id:'actor-b',email:'fixture'}},error:null};};
       const timeout=await a.verifyQuickSessionState(current); await new Promise(resolve=>originalTimer(resolve,80)); window.setTimeout=originalTimer;
       check('N05-auth-timeout-discards-late-verification',timeout.status==='unreachable' && !await a.getQuickBindingContext());
+      client.auth.getUser=async()=>({data:{user:{id:session?.user.id,email:'fixture'}},error:null});
+      await a.startQuickGoogleSignIn(location.href);
+      session={user:{id:'actor-a'},access_token:token('race-a')};
+      current=await a.loadQuickSession();
+      check('N05-race-fixture-restores-actor-a',(await a.verifyQuickSessionState(current)).status==='verified');
+      let authHandler=null; client.auth.onAuthStateChange=handler=>{authHandler=handler;return {data:{subscription:{unsubscribe:()=>undefined}}};};
+      const delivered=[]; const subscription=await a.subscribeQuickAuth(snapshot=>delivered.push(snapshot?.accountId??null));
+      const staleASession={user:{id:'actor-a'},access_token:token('race-a-late')};
+      const currentBSession={user:{id:'actor-b'},access_token:token('race-b-current')};
+      let resolveStaleA; let reads=0;
+      client.auth.getSession=()=>++reads===1?new Promise(resolve=>{resolveStaleA=resolve;}):Promise.resolve({data:{session:currentBSession},error:null});
+      authHandler('SIGNED_IN',staleASession);
+      await waitFor(()=>reads===1);
+      authHandler('SIGNED_IN',currentBSession);
+      await waitFor(()=>delivered.includes('actor-b'));
+      resolveStaleA({data:{session:staleASession},error:null});
+      await new Promise(resolve=>originalTimer(resolve,15));
+      const racedContext=await o.getQuickAuthContext();
+      check('N05-late-session-a-cannot-replace-b-or-deliver-a',a.getQuickAuthSnapshot()?.accountId==='actor-b'&&delivered.at(-1)==='actor-b'&&!delivered.slice(delivered.lastIndexOf('actor-b')+1).includes('actor-a')&&racedContext.accountId===null&&!racedContext.bindingAllowed&&!await a.getQuickBindingContext());
+      session=currentBSession;
+      current=await a.loadQuickSession();
+      check('N05-race-fixture-verifies-actor-b',(await a.verifyQuickSessionState(current)).status==='verified');
+      const boundBeforeLateNull=await o.getQuickAuthContext();
+      let resolveStaleNull; reads=0;
+      client.auth.getSession=()=>++reads===1?new Promise(resolve=>{resolveStaleNull=resolve;}):Promise.resolve({data:{session:currentBSession},error:null});
+      const staleNull=a.loadQuickSession();
+      await waitFor(()=>reads===1);
+      authHandler('SIGNED_IN',currentBSession);
+      await waitFor(()=>reads>=2&&delivered.at(-1)==='actor-b');
+      resolveStaleNull({data:{session:null},error:null});
+      const staleNullResult=await staleNull;
+      await new Promise(resolve=>originalTimer(resolve,15));
+      const boundAfterLateNull=await o.getQuickAuthContext();
+      check('N05-late-null-cannot-clear-b-binding',staleNullResult?.accountId==='actor-b'&&a.getQuickAuthSnapshot()?.accountId==='actor-b'&&boundAfterLateNull.bindingAllowed&&boundAfterLateNull.accountId==='actor-b'&&boundAfterLateNull.revision===boundBeforeLateNull.revision);
+      client.auth.getSession=async()=>({data:{session:{user:{id:'actor-a'},access_token:token('wrong-owner')}},error:null});
+      check('N05-binding-requires-current-sdk-session',!await a.getQuickBindingContext());
+      client.auth.getSession=async()=>({data:{session:null},error:{status:503}});
+      check('N05-network-outage-retains-last-verified-binding',Boolean(await a.getQuickBindingContext()));
+      client.auth.getSession=async()=>({data:{session:{user:{id:'actor-a'},access_token:token('wrong-with-error')}},error:{status:503}});
+      check('N05-error-with-other-sdk-owner-never-binds-b',!await a.getQuickBindingContext());
+
+      // The old verifier must not process an auth failure after a newer epoch wins.
+      for(const lateError of [null,{status:401}]) {
+        client.auth.getSession=async()=>({data:{session},error:null});
+        current=await a.loadQuickSession();await a.verifyQuickSessionState(current);
+        let resolveOldVerify;
+        client.auth.getSession=()=>new Promise(resolve=>{resolveOldVerify=resolve;});
+        const oldVerification=a.verifyQuickSessionState(current);
+        await waitFor(()=>Boolean(resolveOldVerify));
+        session={user:{id:'actor-b'},access_token:token('newer-b-'+Boolean(lateError))};
+        client.auth.getSession=async()=>({data:{session},error:null});
+        authHandler('SIGNED_IN',session);
+        await waitFor(()=>a.getQuickSessionLoadState()==='authenticated'&&a.getQuickAuthSnapshot()?.accessToken===session.access_token);
+        const newer=await a.verifyQuickSessionState(a.getQuickAuthSnapshot());
+        const before=await o.getQuickAuthContext();
+        resolveOldVerify({data:{session:null},error:lateError});
+        const late=await oldVerification, after=await o.getQuickAuthContext();
+        check('N05-stale-verifier-'+(lateError?'401':'null')+'-cannot-stop-new-session',newer.status==='verified'&&late.status==='stale'&&a.getQuickAuthSnapshot()?.accessToken===session.access_token&&after.bindingAllowed&&after.revision===before.revision);
+      }
+
+      // Change epoch in the IDB request success event, before the guarded write.
+      const nativeGet=IDBObjectStore.prototype.get;
+      const nativePut=IDBObjectStore.prototype.put;
+      let staleWrites=0, switched=false;
+      IDBObjectStore.prototype.put=function(value,...args){if(this.name===m.QUICK_AUTH_CONTEXT_STORE&&value.bindingAllowed)staleWrites++;return nativePut.call(this,value,...args);};
+      IDBObjectStore.prototype.get=function(...args){
+        const request=nativeGet.apply(this,args);
+        if(this.name===m.QUICK_AUTH_CONTEXT_STORE&&this.transaction.mode==='readwrite'&&!switched){
+          request.addEventListener('success',()=>{switched=true;session={user:{id:'actor-b'},access_token:token('idb-switch-b')};authHandler('SIGNED_IN',session);});
+        }
+        return request;
+      };
+      const staleSave=await a.verifyQuickSessionState(a.getQuickAuthSnapshot());
+      IDBObjectStore.prototype.get=nativeGet;IDBObjectStore.prototype.put=nativePut;
+      check('N05-context-save-rechecks-epoch-inside-idb',switched&&staleSave.status==='stale'&&staleWrites===0);
+      await waitFor(()=>a.getQuickSessionLoadState()==='authenticated');
+      await a.verifyQuickSessionState(a.getQuickAuthSnapshot());
+
+      let barrierWrites=0;switched=false;
+      IDBObjectStore.prototype.put=function(value,...args){if(this.name===m.QUICK_AUTH_CONTEXT_STORE&&value.barrierAt)barrierWrites++;return nativePut.call(this,value,...args);};
+      IDBObjectStore.prototype.get=function(...args){
+        const request=nativeGet.apply(this,args);
+        if(this.name===m.QUICK_AUTH_CONTEXT_STORE&&this.transaction.mode==='readwrite'&&!switched){
+          request.addEventListener('success',()=>{switched=true;session={user:{id:'actor-b'},access_token:token('signed-out-switch-b')};authHandler('SIGNED_IN',session);});
+        }
+        return request;
+      };
+      // Explicit new login intent allows the new session after local stop.
+      authHandler('SIGNED_OUT',null);
+      await a.startQuickGoogleSignIn(location.href);
+      await waitFor(()=>switched&&a.getQuickSessionLoadState()==='authenticated');
+      IDBObjectStore.prototype.get=nativeGet;IDBObjectStore.prototype.put=nativePut;
+      check('N07-stale-signed-out-barrier-cannot-stop-new-session',barrierWrites===0&&(await a.verifyQuickSessionState(a.getQuickAuthSnapshot())).status==='verified');
+
+      const legacyBarrier=await o.getQuickAuthContext();
+      await o.saveQuickAuthContext({...legacyBarrier,revision:legacyBarrier.revision+1,accountId:null,bindingAllowed:false,verifiedAt:null,barrierAt:Date.now(),sessionId:null},legacyBarrier.revision);
+      await a.startQuickGoogleSignIn(location.href);
+      check('N07-legacy-barrier-rejects-residual-session-after-login-intent',await a.loadQuickSession()===null);
+      session={user:{id:'actor-b'},access_token:token('legacy-new-login')};
+      const freshLegacy=await a.loadQuickSession();
+      check('N07-legacy-barrier-allows-distinct-new-login',(await a.verifyQuickSessionState(freshLegacy)).status==='verified');
+      client.auth.getSession=async()=>({data:{session:null},error:{status:401}});
+      const invalidBinding=await a.getQuickBindingContext(), invalidContext=await o.getQuickAuthContext();
+      client.auth.getSession=async()=>({data:{session},error:{status:503}});
+      check('N05-helper-401-persists-barrier-before-outage-fallback',!invalidBinding&&Boolean(invalidContext.barrierAt)&&!invalidContext.bindingAllowed&&!await a.getQuickBindingContext());
+      client.auth.getSession=async()=>({data:{session},error:null});
+      await a.startQuickGoogleSignIn(location.href);session={user:{id:'actor-b'},access_token:token('capture-guard-b')};
+      current=await a.loadQuickSession();await a.verifyQuickSessionState(current);
+      const captureGuard=make('actor-b','guarded commit');
+      const captureContext=await a.getQuickBindingContext();
+      let guardChanged=false;
+      IDBObjectStore.prototype.get=function(...args){const request=nativeGet.apply(this,args);if(this.name===m.QUICK_CAPTURE_STORE&&this.transaction.mode==='readwrite')request.addEventListener('success',()=>{guardChanged=true;authHandler('SIGNED_IN',{user:{id:'actor-a'},access_token:token('capture-switch-a')});});return request;};
+      const captureStopped=await rejected(()=>o.commitQuickCapture(captureGuard,captureContext.revision,()=>a.isQuickBindingContextCurrent(captureContext)));
+      IDBObjectStore.prototype.get=nativeGet;
+      check('N03-capture-commit-rechecks-epoch-inside-idb',guardChanged&&captureStopped&&!await o.getQuickCapture(captureGuard.captureId));
+      await waitFor(()=>a.getQuickSessionLoadState()==='authenticated');
+      client.auth.getSession=async()=>({data:{session:null},error:{status:503}});
+      await a.loadQuickSession();
+      authHandler('SIGNED_OUT',null);
+      check('N07-signed-out-after-outage-is-unauthenticated',a.getQuickSessionLoadState()==='unauthenticated'&&a.getQuickAuthSnapshot()===null);
+      subscription.unsubscribe();
+      await waitFor(async()=>Boolean((await o.getQuickAuthContext())?.barrierAt));
+      const finalBarrier=await o.getQuickAuthContext();
+      check('N07-unsubscribe-preserves-already-received-logout-barrier',!finalBarrier.bindingAllowed&&Boolean(finalBarrier.barrierAt));
     } else {
       const sync=await import('/src/features/quickTaskCapture/sync.ts');
       const records=[make(),make()]; for(const r of records) await o.commitQuickCapture(r);
@@ -145,6 +273,19 @@ async group => {
       await sync.flushQuickTaskOutbox(current);
       check('N07-other-tab-barrier-stops-stale-dispatch',requests===0 && (await o.getQuickCapture(stopped.captureId)).state==='pending');
     }
+  }
+  if(group === 'offline-auth-null' || group === 'offline-auth-401') {
+    await o.saveQuickAuthContext(context('actor-a'),null);
+    const client=(await import('/src/services/supabase/client.ts')).supabase;
+    const a=await import('/src/features/quickTaskCapture/auth.ts');
+    client.auth.getSession=async()=>({data:{session:null},error:{status:503}});
+    await a.loadQuickSession();
+    const offlineBinding=await a.getQuickBindingContext();
+    client.auth.getSession=async()=>({data:{session:null},error:group==='offline-auth-401'?{status:401}:null});
+    const failedBinding=await a.getQuickBindingContext(), barrier=await o.getQuickAuthContext();
+    client.auth.getSession=async()=>({data:{session:{user:{id:'actor-a'},access_token:'e30.'+btoa(JSON.stringify({session_id:'residual-a'}))+'.fixture'}},error:{status:503}});
+    await a.loadQuickSession();
+    check('N05-'+group+'-cannot-revive-offline-owner',offlineBinding?.accountId==='actor-a'&&!failedBinding&&Boolean(barrier.barrierAt)&&!barrier.bindingAllowed&&!await a.getQuickBindingContext());
   }
   if(group === 'upgrade-abort') {
     const original=indexedDB.open.bind(indexedDB);

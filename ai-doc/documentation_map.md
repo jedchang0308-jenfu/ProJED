@@ -1,6 +1,10 @@
 # ProJED Documentation Map
 
-## Documentation Map Update - 2026-10-01（DEV-133 部署前回歸驗證）
+## Documentation Map Update - 2026-10-01（DEV-133 Rev 10 部署前競態修正）
+
+[SPEC-133 Rev10](specs/SPEC-133-quick-task-shared-identity-sync.md)補明load revision／auth epoch、IDB put／capture add guard及legacy barrier登入前Session辨識；[QA最新部署前結果](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-rev-10-auth-競態修正的部署前驗證)記錄82/82 SIMULATION、真built離線／browser restart10/10與真TEST A Auth／RPC12/12 PASS。Auth／outbox／quick UI已有新產品修正，尚未納入已發布Rev9；[DEV-133](dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30)仍執行中，待修正commit／PR收斂、新版protected發布及正式驗收。[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)保留sealed release身份並補記本輪未發布邊界；不再把「只待PR」或「無產品變更」當作最新狀態。
+
+## Documentation Map Update - 2026-10-01（DEV-133 Rev 9 部署前回歸歷史）
 
 [QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md) 已補登部署前回歸：57/57 隔離 browser／IDB SIMULATION、DEV-133 contract、型別、targeted lint、production auth-mode 與正式 manifest 完整性核對均 PASS。驗證確認目前產品 source 與已發布 release `20261001074739-df101c` 相符；本輪只有測試腳本修正，沒有新的產品 bundle 需要部署。測試收據與範圍限制見 QA 最新驗證節。
 

@@ -1,6 +1,6 @@
 # SPEC-133：快速建任務共用帳號、各自登入與自動同步
 
-修訂：**2026-10-01 Rev 9；Human Confirmed（產品方向）；RD Implementation Ready；架構定案：已定案**。Rev 5 整併最近任務狀態與恢復入口；Rev 6 降低收合入口的視覺存在感；Rev 7 設定入口首次出現時預設展開；Rev 8 將未登入狀態提示標為紅字；Rev 9 在未登入狀態說明任務先保存在本機，並於展開後列出可認領的本機未綁定任務名稱。資料、owner、claim 與同步契約不變。REL-014 核心與最終 UI 已正式發布並驗收；2026-10-01 部署前回歸再驗 57/57 隔離案例、contract、型別、targeted lint、production auth-mode 與正式 manifest integrity PASS。PR #5 已推送，狀態 OPEN／CLEAN，等待 review／merge；驗收分層見 QA-DEV-133。
+修訂：**2026-10-01 Rev 10；Human Confirmed（產品方向）；RD Implementation Ready；架構定案：已定案**。Rev 5～9 UI 已隨 REL-014 發布；Rev 10 收斂既定 owner／登出 barrier 契約的非同步競態實作，不改 SDK provider、RPC、DB版本或權限。新版候選已通過 82/82 browser／IDB SIMULATION、10/10 真建置離線及瀏覽器重啟、12/12 真 TEST actor A Auth／RPC補驗、contract、型別與 targeted lint；新版 HTTPS protected release／正式驗收及 PR review／merge 尚待完成。先前57/57與正式40/40保留原source證據邊界，見 QA-DEV-133。
 
 權威：[DEV-133](../dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30)、[ADR-053 Rev 3](../decisions/ADR-053-quick-task-cross-origin-account-link.md)、[QA-DEV-133](../qa/QA-DEV-133-quick-task-shared-identity-sync.md)。沿用原 DEV ID／文件路徑；[SPEC-122](SPEC-122-mobile-zero-data-quick-task.md) 的輸入、本機保存、RPC、工作台、manifest／SW 契約繼續適用，登入與認領交界以本版為準。
 
@@ -57,7 +57,9 @@ flowchart LR
 
 本機型別契約：候選 `QuickAuthSnapshot` 固定 readonly accountId／accessToken／authEpoch；經核身的 `VerifiedQuickAuthSnapshot` 必須另含 email／contextRevision／contextProjectRef，移除 clientId。核身結果使用 `verified / unauthenticated / unreachable / stale` 判別式：分別為符合 snapshot 的真 user、缺 Session／明確失效、網路／429／5xx／逾時、epoch/token/revision 已變；不可再用同一個 null 混淆離線與登出。三次 SDK／網路檢查共用 15 秒 deadline，晚到結果不寫 context／觸發 flush。getSession refresh 失效、Session 消失、getUser 401 及最後 Session 重查失效，均立即停止 binding／bump epoch 並保留 captures；服務暫時不可達不當作已登出。context revision 與 binding barrier 必須在 lease transaction 及每次 dispatch 前檢查，同 origin 的另一 tab 即使未收到 SDK 事件也不能繼續派送。
 
-local logout 的殘留 SDK Session 不能清除持久化 barrier。`auth_context` 可加非秘密 `sessionId` 作同一次 SDK Session 辨識；sessionStorage 的 `projed-quick-sdk-login-intent` 只記 15 分鐘內明確登入的時間，不是核身證據。恢復 binding 必須同時具備 barrier 後的明確登入、新 SDK session identity、普通 Auth 的網路 getUser 核實及 context CAS。舊 v2 context 缺此可選欄位仍可讀，不複製 token、不把舊自製 OAuth cache 換成新 Session。
+local logout 的殘留 SDK Session 不能清除持久化 barrier。`auth_context` 可加非秘密 `sessionId` 作同一次 SDK Session 辨識；sessionStorage 的 `projed-quick-sdk-login-intent` 只記 15 分鐘內明確登入的時間，不是核身證據。登入發起時另以 `projed-quick-sdk-login-prior-session` 保存非秘密 `none`／`id:<session UUID>`／`unknown` 提示，防止舊 v2 context 缺 sessionId 時把殘留 Session 誤認為新登入；unknown 不得解除 barrier，成功核身／登出／登入錯誤清除提示。恢復 binding 必須同時具備 barrier 後的明確登入、不同於登出與登入前殘留值的新 SDK session identity、普通 Auth 的網路 getUser 核實及 context CAS。舊 v2 context 缺此可選欄位仍可讀，不複製 token、不把舊自製 OAuth cache 換成新 Session。
+
+Rev 10 非同步規則：每次 Session 載入固定 load revision 與 auth epoch，各 await 後及 IDB 實際 put 前核對，舊 A／null／401 回應不能覆蓋較新的 B。初始化 checking／明確 unauthenticated 不能猜用舊 context；只有 SDK 明確暫時不可達、同環境且沒有 barrier 才可保留最後核實的本機 owner。binding helper 收到明確失效或無 Session 時須持久停止 binding，後續503不可復活舊owner。SIGNED_OUT 延遲 barrier 不得覆蓋新登入，已收到登出即使 unsubscribe 仍須保存。UI 使用單一 binding context 決定 capture owner，交易內再核對 epoch／revision；已提交但 readback 失敗的重試保留同 captureId／title／owner，不因切帳改綁。
 
 兩邊均顯示本 App 帳號；quick 的 `#quick-task-auth-status` 在同一表單容器上方提供未登入 CTA，已核實時提供帳號與「登出」操作，待確認時標明離線／重新登入。主程式重用既有登入頁及 Sidebar 帳號入口；不另造帳號管理模組。切 B 立即清除 A 最近任務的可見狀態並收起同步容器；A 的未同步記錄保留，不提供改綁 B 操作。
 
@@ -178,6 +180,8 @@ QA 每例記錄 sourceRevision／dirty boundary、環境及兩個 origin、build
 Release impact 為 SDK callback bundle／env keys 退役、DB v2 相容、TEST forward correction 與 ordinary Session 權限回歸。TEST gate、正式 readonly preflight、隔離 sealed package 與兩次正式發布已依 [REL-014](../release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md) 完成。原核心 product `8376086` 的正式普通 Google／RPC／工作台／離線補送／local logout 40/40 PASS；後續 UI product `9b5f73a` 的本機 UI／IDB SIMULATION 25/25、正式匿名 UI 10/10及兩 origin各54/54 PASS。PROD correction NO_OP／metadata hash 已綁定原核心包，後續 UI 不改 DB／Auth 設定。PR #5 已提交，review／merge 尚待完成；部署前回歸及測試腳本修正見 QA 最新驗證節。不將各層 assertion 相加或把原核心重用證據改稱新 UI 實測。舊 OAuth Gates 不補登 PASS，Android 實機沿用使用者取消的決定。本文件不另建發布操作表。
 
 ## 11. 定案結論與交接條件
+
+Rev10最新交接：架構方向維持，新的Auth／IDB／UI競態修正已通過QA所列82/82、10/10及12/12；尚待修正commit／PR收斂與新版HTTPS protected發布／正式驗收。下列Rev9正式發布與「等待PR」描述保留當時source的歷史事實，不包含Rev10修正。
 
 2026-10-01 Architecture Closure Review：登入來源／origin／callback、context／capture 交易、owner／claim、RPC／receipt／RLS、retry／cleanup／upgrade、退役責任面及測試路徑均已鎖定，**沒有待選的 P0/P1 架構決策**。TEST 29/29 integration、B0/core27、Google cancel21/21、correction readback及post-correction7/7已完成；REL-014 的正式核心與 Rev9 UI 也已發布及驗收，source／artifact／復原版本與分層證據見 QA 最新正式結果。Git 分支與 PR #5 已交付，目前 OPEN／CLEAN，仍待 review／merge；DEV-133 在合併完成前維持執行中。
 
