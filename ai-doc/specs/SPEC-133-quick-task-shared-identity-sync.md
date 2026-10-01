@@ -1,6 +1,6 @@
 # SPEC-133：快速建任務共用帳號、各自登入與自動同步
 
-修訂：**2026-10-01 Rev 9；Human Confirmed（產品方向）；RD Implementation Ready；架構定案：已定案**。Rev 5 整併最近任務狀態與恢復入口；Rev 6 降低收合入口的視覺存在感；Rev 7 設定入口首次出現時預設展開；Rev 8 將未登入狀態提示標為紅字；Rev 9 在未登入狀態說明任務先保存在本機，並於展開後列出可認領的本機未綁定任務名稱。資料、owner、claim 與同步契約不變。REL-014 核心已正式發布並通過驗收；Git 遠端交付目的地待確認。最終 UI slice 的本機 browser／IDB＋Auth/RPC SIMULATION 25/25、型別及 targeted lint 已 PASS；正式 UI 發布尚待，證據範圍見 QA-DEV-133。
+修訂：**2026-10-01 Rev 9；Human Confirmed（產品方向）；RD Implementation Ready；架構定案：已定案**。Rev 5 整併最近任務狀態與恢復入口；Rev 6 降低收合入口的視覺存在感；Rev 7 設定入口首次出現時預設展開；Rev 8 將未登入狀態提示標為紅字；Rev 9 在未登入狀態說明任務先保存在本機，並於展開後列出可認領的本機未綁定任務名稱。資料、owner、claim 與同步契約不變。REL-014 核心已正式發布並通過驗收；Git 遠端交付目的地待確認。最終 UI slice 的本機 browser／IDB＋Auth/RPC SIMULATION25/25、型別／lint及正式匿名UI10/10、雙origin54/54已 PASS，release `20261001074739-df101c`；Git遠端交付尚待。證據範圍見 QA-DEV-133。
 
 權威：[DEV-133](../dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30)、[ADR-053 Rev 3](../decisions/ADR-053-quick-task-cross-origin-account-link.md)、[QA-DEV-133](../qa/QA-DEV-133-quick-task-shared-identity-sync.md)。沿用原 DEV ID／文件路徑；[SPEC-122](SPEC-122-mobile-zero-data-quick-task.md) 的輸入、本機保存、RPC、工作台、manifest／SW 契約繼續適用，登入與認領交界以本版為準。
 
@@ -27,7 +27,7 @@
 | 首次使用依賴 | 兩環境的 auth.users 都沒有非內建 trigger；profiles／tenant_members／tenants 既有 RLS。主程式登入負責既有 profile 設定。 | quick 不另建 profile／membership／workspace；缺可用工作台時保留任務並導往主程式完成設定，再人工重試。 |
 | 測試／build | 舊基準含 consent entry、三個 QUICK_TASK_OAUTH keys 及舊 mock runners；現行 HEAD 已移除產品舊路徑並新增 independent-auth contract check。 | typecheck／targeted lint／test build／contract check 已通過；最新 TEST 固定候選 29/29、B0/correction/readback 及 post-correction 7/7 已 PASS。N01～N10 僅能依 QA 逐項證據判定，不能以 assertion 總數替代。 |
 
-本表較早的 RPC definition MD5：TEST `139a666b466ba55b9ee00aad52ce7b10`、正式 `ffc0eb5fdd4d284a113817d46eb53cfa`，是 TEST correction 前 snapshot，不能代替目前 body hash 或行為驗證。最新 TEST correction body MD5、ACL／RLS readback 與真實登入證據見 [QA 最新 TEST 跨帳與 correction 證據](../qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-最新-test-跨帳與-correction-證據)。該 TEST callback 可完成普通 Google 登入；production origin 的 callback／release 驗收仍待正式 gate。
+本表較早的 RPC definition MD5：TEST `139a666b466ba55b9ee00aad52ce7b10`、正式 `ffc0eb5fdd4d284a113817d46eb53cfa`，是 TEST correction 前 snapshot，不能代替目前 body hash 或行為驗證。最新 TEST correction body MD5、ACL／RLS readback 與真實登入證據見 [QA 最新 TEST 跨帳與 correction 證據](../qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-最新-test-跨帳與-correction-證據)。該 TEST callback 可完成普通 Google 登入；production origin 的 ordinary Google callback／release 驗收已於 REL-014 通過，最終範圍及後續 UI 結果見 QA 正式驗收節。
 
 ## 3. 最小資料流與登入契約
 

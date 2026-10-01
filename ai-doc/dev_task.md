@@ -8,7 +8,7 @@ Cold start：先讀下方 `## 總任務清單`；需要特定 DEV 詳細歷史�
 
 ## DEV-133 快速建任務同帳號與自動同步 - 2026-09-30
 
-**2026-10-01 最終統一同步狀態 UI 本機驗收 PASS。** Rev 9 的 11 筆清單、最近任務去重、首次展開／手動收合保留、重新核身與新 nonce、取消／切帳／過期 nonce 保留資料、其他帳號只計數、workspace/profile 恢復與無效回執保護，已以真 browser／IDB＋Auth/RPC SIMULATION 25/25 通過；型別檢查及 targeted lint PASS。320／390／726 無橫向溢出、摘要至少 44px，320px 短標籤與筆數同行；修正最近任務讀回空值型別及窄版摘要寬度。來源 UI digest `29cff0bb616834eceb36af1a06e1102092eb5db3fd2cb24edcb2aff6998ffd0f`，以正式核心 `8376086` 加三個 UI 檔凍結，未混入安裝／DEV-132 修改；本次不宣稱 hosted Auth/RPC PASS。證據 `output/qa/dev-133/independent-auth/unified-status/1790840255628-29cff0bb/local-evidence.json`、`browser/result.json`、`runtime.json`；前兩次 harness FAIL 及較早型別 FAIL 保留。task-owned BrowserServer／4196 均已清理。正式 UI 發布／只讀 smoke 與 Git 交付尚待。
+**2026-10-01 DEV-133 同步核心與統一 UI 已正式發布並驗收。** 最新 UI product source `9b5f73a1b32bdd8dc984c3017dceaf7225967d40`／release `20261001074739-df101c`／live version `b88f428e0efa541e`，雙正式 origin 各 54/54、正式匿名 UI 10/10、隔離 UI／IDB＋Auth/RPC SIMULATION 25/25、型別及 lint PASS。這次僅三個 UI 來源，Auth／RPC／IDB／sync 模組沿用原 `8376086` 的真登入／同步40/40證據，未把該40項改算新套件實測。未改遠端設定、migration、業務資料或 IAM／Secret；暫時 browser／ports已清理。證據見 [REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)；Git目的地確認／push／PR仍待。
 
 **2026-10-01 正式同步核心已發布／驗收 PASS（REL-014）。** clean product source `8376086144b31155a94477e6bea1f929ded475be` 已發布為 `20261001061118-144be8`，兩正式 origin 各 54/54 hash、真普通 Google／任務／離線補送／local logout 40/40、官方啟動及 safe-cancel PASS；PROD correction 綁定 NO_OP，未套 DDL／改 IAM／改寫既有資料。[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)／[QA 正式核心結果](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-正式同步核心驗收rel-014) 為最新發布權威。Git 遠端目的地確認待回覆；後續收合／整併 UI 未包含、未驗收，整體 DEV-133 不因核心發布而將這些 slice 補登 PASS。下列發布前狀態保留為歷史快照，以本段為最新核心狀態。
 
@@ -1100,12 +1100,12 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 證據：本地 390×844 headless Edge 操作與 `output/playwright/dev-132/*-mobile-cdp.png`、`tsc --noEmit`、DEV-034 static 23/23、targeted ESLint 0 errors；移位前 DEV-132／130／034／038 回歸與本節執行紀錄。
   - 計入交付：否（尚未正式發布）。
 
-- ◐ DEV-133 [交付點] [核心正式發布／驗收 PASS；Git 交付及後續 UI slice 待完成] [P1] [本輪實作] 快速建任務各自登入與自動同步
+- ◐ DEV-133 [交付點] [核心及 UI 正式驗收 PASS；Git 交付待完成] [P1] [本輪實作] 快速建任務各自登入與自動同步
   - 摘要：共用 ProJED 帳號系統、兩個 App 各自登入與保存 Session；保留 owner-bound 離線保存、自動重試及七日已同步副本清理。
   - 來源 ID：使用者 2026-10-01 採用獨立登入方案及修改開發文件／補齊到架構定案指示；延續 2026-09-30 DEV-133。
   - 父任務：DEV-122；延續 DEV-131 雙網址安裝，相容 DEV-130／132。
-  - 下一步：完成已備妥 Git delivery 的遠端目的地確認與 PR；後續 UI 本機驗收已通過，完成隔離 UI 正式發布及只讀 smoke，不把 REL-014 核心40/40改算新 UI 案例。
-  - 阻塞 / 恢復條件：核心 TEST／HTTPS TEST／正式 40/40及 protected release 全部通過，正式 migration NO_OP。Git push 被自動審查要求確認目的地，已提出問題；後續 UI slice 本機25/25、型別及 lint PASS，正式 UI 發布尚待，排除原核心包。真麥克風／自動 PWA 更新與 Android residual 依 REL-014 明確標示，不增加新前置。
+  - 下一步：完成已備妥 Git delivery 的遠端目的地確認與 PR；統一 UI 已正式驗收，完成 Git push／PR 交付；舊40/40與新UI10/10依實測層級分開。
+  - 阻塞 / 恢復條件：核心 TEST／HTTPS TEST／正式 40/40及 protected release 全部通過，正式 migration NO_OP。Git push 被自動審查要求確認目的地，已提出問題；後續 UI 本機25/25、正式UI10/10、雙origin54/54 PASS；Git仍待目的地確認。真麥克風／自動 PWA 更新與 Android residual 依 REL-014 明確標示，不增加新前置。
   - 證據：[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)、[QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md)、[SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md)、[ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md)；canonical terminal-evidence.json 與 worktree activation-resume-evidence.json 綁定 source／artifact／case 層。
   - 計入交付：是（未完成，產品完成率貢獻 0）。
 

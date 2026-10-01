@@ -1,8 +1,8 @@
 # ProJED Documentation Map
 
-## Documentation Map Update - 2026-10-01（DEV-133 統一 UI 本機驗收）
+## Documentation Map Update - 2026-10-01（DEV-133 統一 UI 正式驗收）
 
-**2026-10-01 最終統一同步狀態 UI 本機驗收 PASS。** Rev 9 的 11 筆清單、最近任務去重、首次展開／手動收合保留、重新核身與新 nonce、取消／切帳／過期 nonce 保留資料、其他帳號只計數、workspace/profile 恢復與無效回執保護，已以真 browser／IDB＋Auth/RPC SIMULATION 25/25 通過；型別檢查及 targeted lint PASS。320／390／726 無橫向溢出、摘要至少 44px，320px 短標籤與筆數同行；修正最近任務讀回空值型別及窄版摘要寬度。來源 UI digest `29cff0bb616834eceb36af1a06e1102092eb5db3fd2cb24edcb2aff6998ffd0f`，以正式核心 `8376086` 加三個 UI 檔凍結，未混入安裝／DEV-132 修改；本次不宣稱 hosted Auth/RPC PASS。證據 `output/qa/dev-133/independent-auth/unified-status/1790840255628-29cff0bb/local-evidence.json`、`browser/result.json`、`runtime.json`；前兩次 harness FAIL 及較早型別 FAIL 保留。task-owned BrowserServer／4196 均已清理。正式 UI 發布／只讀 smoke 與 Git 交付尚待。
+**2026-10-01 DEV-133 同步核心與統一 UI 已正式發布並驗收。** 最新 UI product source `9b5f73a1b32bdd8dc984c3017dceaf7225967d40`／release `20261001074739-df101c`／live version `b88f428e0efa541e`，雙正式 origin 各 54/54、正式匿名 UI 10/10、隔離 UI／IDB＋Auth/RPC SIMULATION 25/25、型別及 lint PASS。這次僅三個 UI 來源，Auth／RPC／IDB／sync 模組沿用原 `8376086` 的真登入／同步40/40證據，未把該40項改算新套件實測。未改遠端設定、migration、業務資料或 IAM／Secret；暫時 browser／ports已清理。證據見 [REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)；Git目的地確認／push／PR仍待。
 
 ## Documentation Map Update - 2026-10-01（DEV-133 正式同步核心 REL-014）
 
@@ -236,10 +236,10 @@ R12不新增第七個runtime責任點：`public/manifest.webmanifest`是唯一ro
 | [SPEC-122](specs/SPEC-122-mobile-zero-data-quick-task.md) | current implementation authority；root bundled shortcut、雙identity、exact file surface、entry/build、UI/voice、IDB、RPC/RLS、同帳號、工作台到達、drift與stop conditions。 |
 | [ADR-050](decisions/ADR-050-mobile-quick-task-entry-and-outbox.md) | Accepted Architecture Memory + R12 closure；root shortcut與選用第二identity、manifest發佈／更新、raw HTML MPA、one root SW、account outbox及server-owned idempotency。 |
 | [QA-DEV-122](qa/QA-DEV-122-mobile-zero-data-quick-task.md) | verification authority；S15、B22～B24、W07與受影響回歸已local PASS，Level 3 HTTPS smoke已PASS；實機、DEV-096 real-SW FAIL及完整B/W/P／獨立QA-QC缺口由使用者接受為本次release殘餘風險，原始case狀態不變；第10.4.3節定義production替代結案證據。 |
-| [DEV-133](dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30) | 核心 REL-014 正式發布／驗收 PASS；Git 目的地確認及後續 UI slice 待完成。 |
-| [SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md) | Rev 3／RD Implementation Ready／架構已定案；SDK/Auth context、IDB CAS／receipt、claim、RPC／RLS、forward correction、責任面／順序及可執行驗收鎖定。 |
+| [DEV-133](dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30) | REL-014 同步核心及後續統一 UI 正式發布／驗收 PASS；Git 遠端交付待確認目的地。 |
+| [SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md) | Rev 9／架構已定案；共用帳號、各自 SDK Session、owner／claim／receipt 契約及統一狀態 UI 已落實。同步核心與後續 UI 正式驗收 PASS；Git 遠端交付待確認目的地。 |
 | [ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md) | Accepted Rev 3；取代跨 App OAuth Server，採第一方使用者 RLS、各 origin Session、owner/context交易及普通登入相容修正。 |
-| [QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md) | Rev 9：正式同步核心 40/40、雙 origin 各 54/54 PASS；N01～N10 各層及人工 PWA recovery 邊界見正式結果，後續 UI 未驗收。 |
+| [QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md) | Rev 9：原正式同步核心 40/40；後續 UI 本機 SIMULATION 25/25、正式匿名 10/10、雙 origin 各 54/54 PASS。N01～N10 證據分層及人工 PWA recovery 邊界見 QA；Git 遠端交付待確認。 |
 | [SPEC-034](specs/SPEC-034-fast-start-pwa-install-guidance.md) | 一般 ProJED install/update 與 QuickCaptureShell 退役 authority；DEV-122 為 compatible extension。 |
 | [SPEC-039](specs/SPEC-039-task-filter-core-and-workbench-profiles.md) | account-owned 未歸位與完整工作台 authority；quick entry 只新增來源。 |
 | [SPEC-115](specs/SPEC-115-blank-task-creation-contract.md) | blank-task content authority；quick RPC 必須 parity，description absent。 |

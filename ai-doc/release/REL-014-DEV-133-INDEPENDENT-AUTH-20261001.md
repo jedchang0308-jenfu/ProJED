@@ -1,6 +1,6 @@
 # REL-014：DEV-133 各自登入與依帳號同步
 
-狀態：**正式發布與功能驗收 PASS；Git 遠端交付待確認目的地。** 後續工作樹 UI 候選不在這次發布範圍。
+狀態：**正式發布與功能驗收 PASS；Git 遠端交付待確認目的地。** 原 `20261001061118-144be8` 核心包排除後續 UI；UI 已另以 `20261001074739-df101c` 發布，下方後續發布節為最新 UI 權威。
 
 - 主程式：[ProJED](https://projed-cc78d.web.app/)。獨立快速入口：[ProJED-快速建任務](https://projed-cc78d.firebaseapp.com/quick-task/?install=1)。
 - 資源：Firebase project/site `projed-cc78d`；TEST Supabase `fhisnnufoeulxqrchldf`；PROD `knodlkxqpcqyrtgwpdst`。
@@ -35,6 +35,10 @@ Git 已有隔離 product commit；推送至既有 origin `https://github.com/jed
 
 task-owned Chrome PID 37180 已關閉，CDP4195與 TEST4173/4174/4175釋放；profile與兩筆同步 fixture保留。精確 TEST callback 還原且 Site URL／原 allowlist不變。本次 level3／production-candidate channels已移除，cleanup前後 live release不變；正式入口不受影響。使用者瀏覽器、localhost4000與較早含未同步資料的failed profiles保留。release worktree暫留供Git review／證據交付，DEV-133 root負責之後歸檔；歸檔前須保存 ignored收據。
 
-## 後續統一 UI 候選：本機驗收
+## 後續統一 UI 正式發布：20261001074739-df101c
 
-**2026-10-01 最終統一同步狀態 UI 本機驗收 PASS。** Rev 9 的 11 筆清單、最近任務去重、首次展開／手動收合保留、重新核身與新 nonce、取消／切帳／過期 nonce 保留資料、其他帳號只計數、workspace/profile 恢復與無效回執保護，已以真 browser／IDB＋Auth/RPC SIMULATION 25/25 通過；型別檢查及 targeted lint PASS。320／390／726 無橫向溢出、摘要至少 44px，320px 短標籤與筆數同行；修正最近任務讀回空值型別及窄版摘要寬度。來源 UI digest `29cff0bb616834eceb36af1a06e1102092eb5db3fd2cb24edcb2aff6998ffd0f`，以正式核心 `8376086` 加三個 UI 檔凍結，未混入安裝／DEV-132 修改；本次不宣稱 hosted Auth/RPC PASS。證據 `output/qa/dev-133/independent-auth/unified-status/1790840255628-29cff0bb/local-evidence.json`、`browser/result.json`、`runtime.json`；前兩次 harness FAIL 及較早型別 FAIL 保留。task-owned BrowserServer／4196 均已清理。正式 UI 發布／只讀 smoke 與 Git 交付尚待。
+**Rev 9 統一 UI 已正式發布並通過相稱驗收。** UI source `9b5f73a1b32bdd8dc984c3017dceaf7225967d40`／release `20261001074739-df101c`；雙正式 origin 各54/54及正式匿名 UI10/10 PASS。本機 UI25/25（真browser／IDB＋Auth/RPC SIMULATION）、型別及 targeted lint PASS，source/UI digest `29cff0bb616834eceb36af1a06e1102092eb5db3fd2cb24edcb2aff6998ffd0f`。原 `8376086` 普通 Auth／同步40/40僅作未變核心的重用證據，不改稱本次實測。首兩輪 harness FAIL 與空值型別 FAIL 保留，沒有覆寫成 PASS。新收據 `output/qa/dev-133/independent-auth/production/unified-ui-release/terminal-evidence.json`，本機收據 `output/qa/dev-133/independent-auth/unified-status/1790840255628-29cff0bb/local-evidence.json`；無正式任務寫入、migration或遠端Auth設定變動，task-owned browser／ports已清理。
+
+- 後續 UI recovery：`0aae27354f796317`／release `1790835561633000`（原同步核心），已相容 DB v2；未執行 rollback。
+- 後續 UI tree：`6cebfe289b7ad63ea67db549f3cddb525cb469a7d18fe59404ddc9e0a2bc67fd`；live release `1790840941997000`／version `b88f428e0efa541e`。
+- 未動使用者 browser／localhost4000；本次精確CLI sessions與4196等暫時埠已確認無程序／listener。release worktree保留供Git交付，DEV-133 root負責後續歸檔並先保存ignored證據。

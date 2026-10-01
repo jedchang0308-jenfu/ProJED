@@ -2,7 +2,7 @@
 
 ### 2026-10-01 正式同步核心驗收（REL-014）
 
-**已發布且正式功能驗收 PASS；Git 遠端交付待目的地確認。** 本次只代表 clean release source `8376086144b31155a94477e6bea1f929ded475be`，不包含工作樹後續 `conditional-recovery-entry`／`unified-sync-status-panel`、視覺降噪 UI 或本機待同步任務名稱清單。UI 最終本機驗收另見下節，尚未併入原正式包。發布、復原與完整來源見 [REL-014](../release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)。以下發布前完成審核表及 TEST／早期 OAuth 段落保留其當時事實，不覆蓋本節正式結果。
+**已發布且正式功能驗收 PASS；Git 遠端交付待目的地確認。** 本次只代表 clean release source `8376086144b31155a94477e6bea1f929ded475be`，不包含工作樹後續 `conditional-recovery-entry`／`unified-sync-status-panel`、視覺降噪 UI 或本機待同步任務名稱清單。UI 已另以後續 `20261001074739-df101c` 正式發布，下節為最新結果；未混入原核心包。發布、復原與完整來源見 [REL-014](../release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)。以下發布前完成審核表及 TEST／早期 OAuth 段落保留其當時事實，不覆蓋本節正式結果。
 
 不可變 release `20261001061118-144be8` 的 54 個檔案，在正式 `web.app`／`firebaseapp.com` 各核對 54/54；tree SHA-256 `945f9a7a26f9c2ad7a9c416b819b3e921230eff47ad086dbf8783dc9120303cb`。11 個核心 source 與最後 frozen TEST 相符；同 commit 的 HTTPS TEST 22/22 功能、官方啟動及 53/53 package 核對 PASS。正式受控普通 Google Session 40/40 功能、官方 canonical 啟動及 safe-cancel callback PASS。PROD RPC 原已符合 canonical invoker／空 search_path／原 ACL/RLS，correction 選擇綁定為 NO_OP，沒有正式 DDL、IAM／Secret 擴權或業務資料改寫。
 
@@ -21,11 +21,11 @@
 cleanup：task-owned Chrome PID 37180 已退出，4195／4173／4174／4175 無 listener；兩筆正式受控任務均已同步、profile 保留。精確 TEST callback 已還原讀回；本次 level3／candidate preview channels 已移除，live version `0aae27354f796317` 未變。較早含未同步資料的失敗 profile 及使用者瀏覽器／4000 保留。release worktree 暫留供 Git review／證據交付，cleanup owner 為 DEV-133 root。
 
 
-### 2026-10-01 最終統一同步狀態 UI 本機驗收
+### 2026-10-01 最終統一同步狀態 UI 正式驗收
 
-**2026-10-01 最終統一同步狀態 UI 本機驗收 PASS。** Rev 9 的 11 筆清單、最近任務去重、首次展開／手動收合保留、重新核身與新 nonce、取消／切帳／過期 nonce 保留資料、其他帳號只計數、workspace/profile 恢復與無效回執保護，已以真 browser／IDB＋Auth/RPC SIMULATION 25/25 通過；型別檢查及 targeted lint PASS。320／390／726 無橫向溢出、摘要至少 44px，320px 短標籤與筆數同行；修正最近任務讀回空值型別及窄版摘要寬度。來源 UI digest `29cff0bb616834eceb36af1a06e1102092eb5db3fd2cb24edcb2aff6998ffd0f`，以正式核心 `8376086` 加三個 UI 檔凍結，未混入安裝／DEV-132 修改；本次不宣稱 hosted Auth/RPC PASS。證據 `output/qa/dev-133/independent-auth/unified-status/1790840255628-29cff0bb/local-evidence.json`、`browser/result.json`、`runtime.json`；前兩次 harness FAIL 及較早型別 FAIL 保留。task-owned BrowserServer／4196 均已清理。正式 UI 發布／只讀 smoke 與 Git 交付尚待。
+**Rev 9 統一 UI 已正式發布並通過相稱驗收。** UI source `9b5f73a1b32bdd8dc984c3017dceaf7225967d40`／release `20261001074739-df101c`；雙正式 origin 各54/54及正式匿名 UI10/10 PASS。本機 UI25/25（真browser／IDB＋Auth/RPC SIMULATION）、型別及 targeted lint PASS，source/UI digest `29cff0bb616834eceb36af1a06e1102092eb5db3fd2cb24edcb2aff6998ffd0f`。原 `8376086` 普通 Auth／同步40/40僅作未變核心的重用證據，不改稱本次實測。首兩輪 harness FAIL 與空值型別 FAIL 保留，沒有覆寫成 PASS。新收據 `output/qa/dev-133/independent-auth/production/unified-ui-release/terminal-evidence.json`，本機收據 `output/qa/dev-133/independent-auth/unified-status/1790840255628-29cff0bb/local-evidence.json`；無正式任務寫入、migration或遠端Auth設定變動，task-owned browser／ports已清理。
 
-以下 UI「未驗收」段落保留當次歷史快照；最終本機候選以本節為準，REL-014 原正式包仍排除這些 UI 變動。
+以下 UI「未驗收」段落保留當次歷史快照；最終候選及其後續正式 UI 發布以本節為準，REL-014 原正式包仍排除這些 UI 變動。
 
 ### 2026-10-01 最近狀態與恢復入口整併（未驗收）
 
@@ -43,7 +43,7 @@ cleanup：task-owned Chrome PID 37180 已退出，4195／4173／4174／4175 無 
 
 「此快速 App 尚未登入」改為紅字，其他登入驗證及網路狀態提示維持一般提示色。本次未執行 browser 驗收，Rev 8 UI scope 尚未驗收。
 
-修訂：**2026-10-01 Rev 9（REL-014 正式同步核心已發布／驗收 PASS；後續 UI scope 未驗收、Git 遠端交付待確認）**。來源為使用者採用「共用帳號、各自登入、各自保存 Session、離線任務依帳號同步」。依 [SPEC-133 Rev 9](../specs/SPEC-133-quick-task-shared-identity-sync.md) 及 [ADR-053 Rev 3](../decisions/ADR-053-quick-task-cross-origin-account-link.md) 驗收；[DEV-133](../dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30) 維持執行中：REL-014 核心已正式發布／驗收，Git 交付及後續 UI 尚未完成。
+修訂：**2026-10-01 Rev 9（REL-014 同步核心及後續統一 UI 已正式發布／驗收 PASS；Git 遠端交付待確認）**。來源為使用者採用「共用帳號、各自登入、各自保存 Session、離線任務依帳號同步」。依 [SPEC-133 Rev 9](../specs/SPEC-133-quick-task-shared-identity-sync.md) 及 [ADR-053 Rev 3](../decisions/ADR-053-quick-task-cross-origin-account-link.md) 驗收；[DEV-133](../dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30) 維持執行中，僅 Git 遠端交付待完成。各輪歷史與證據層級依上方最終結果判讀。
 
 ## 新版範圍與證據規則
 
