@@ -12,7 +12,9 @@ Cold start：先讀下方 `## 總任務清單`；需要特定 DEV 詳細歷史�
 
 **2026-10-01 正式同步核心已發布／驗收 PASS（REL-014）。** clean product source `8376086144b31155a94477e6bea1f929ded475be` 已發布為 `20261001061118-144be8`，兩正式 origin 各 54/54 hash、真普通 Google／任務／離線補送／local logout 40/40、官方啟動及 safe-cancel PASS；PROD correction 綁定 NO_OP，未套 DDL／改 IAM／改寫既有資料。[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)／[QA 正式核心結果](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-正式同步核心驗收rel-014) 為最新發布權威。Git 遠端目的地確認待回覆；後續收合／整併 UI 未包含、未驗收，整體 DEV-133 不因核心發布而將這些 slice 補登 PASS。下列發布前狀態保留為歷史快照，以本段為最新核心狀態。
 
-### 架構修訂（2026-10-01；使用者已採用獨立登入方案）
+### 架構定案與發布前歷史快照（2026-10-01）
+
+下列架構契約沿用；其中 preflight、sealed package、部署／smoke及UI未驗收狀態是當時快照，已由本節頂端與REL-014／QA最新正式結果更新。核心及Rev9 UI已發布驗收，Git遠端交付尚待；不把歷史未執行或早期PASS改寫成新版案例實測。
 
 文件成熟度：**RD Implementation Ready／Human Confirmed；架構定案：已定案**。狀態：**執行中；REL-014 核心正式發布／驗收 PASS，Git 交付及後續 UI slice 待完成**。使用者明確採用「共用帳號、各自登入、各自保存 Session、離線任務依帳號同步」，本機 source implementation 已落地單一 Supabase SDK Auth、DB v2 auth_context／receipt、owner CAS、明確認領、local signOut barrier、嚴格回執及舊 OAuth 路徑退役；最新 TEST／PROD preflight 與實際殘餘見下方及 QA 逐項表。這取代早先 `3B` 的跨 App OAuth Server／免再次登入契約；`1A／2A` 的本機先存、未綁定資料明確認領及定期清理保護保留。DEV-133 仍為原交付點，不新增 DEV／完成率，也不改 DEV-122／131 的既有交付狀態。
 
