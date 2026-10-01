@@ -126,7 +126,7 @@ const baseUrl = page.url().split('/').slice(0, 3).join('/');
     await page.locator('[data-backup-inspection-ready="true"]').waitFor({ state: 'visible', timeout: 10000 });
     const inspectionText = await page.locator('[data-backup-inspection-ready="true"]').innerText();
     assert(inspectionText.includes('檔案已通過完整性檢查'), 'selected backup should be inspected before any action', { inspectionText });
-    assert(/版本：V\d+/u.test(inspectionText) && inspectionText.includes('SHA-256'), 'inspection should expose version and checksum', { inspectionText });
+    assert(inspectionText.includes('V2') && inspectionText.includes('SHA-256'), 'inspection should expose version and checksum', { inspectionText });
     assert(await page.locator('[data-backup-mode-copy="true"]').getAttribute('aria-checked') === 'true', 'copy should remain the safe default');
     assert(await page.evaluate(() => localStorage.getItem('projed-local-test.nodes')) === nodesBefore, 'inspection must not mutate board data');
 

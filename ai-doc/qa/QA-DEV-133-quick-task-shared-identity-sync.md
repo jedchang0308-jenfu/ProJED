@@ -1,11 +1,11 @@
 # QA-DEV-133：雙 App 各自登入／依帳號同步／本機清理
 
-修訂：**2026-10-01 Rev 4；本機實作已落地，N01～N10 真實整合仍未執行**。來源為使用者採用「共用帳號、各自登入、各自保存 Session、離線任務依帳號同步」。依 [SPEC-133](../specs/SPEC-133-quick-task-shared-identity-sync.md) 及 [ADR-053 Rev 3](../decisions/ADR-053-quick-task-cross-origin-account-link.md) 驗收；[DEV-133](../dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30) 維持執行中，文件與本機程式實作不算產品完成。
+修訂：**2026-10-01 Rev 6；TEST B0、跨帳整合、correction readback 與 post-correction 核心案例已 PASS；正式 release 尚未驗收**。來源為使用者採用「共用帳號、各自登入、各自保存 Session、離線任務依帳號同步」。依 [SPEC-133 Rev 4](../specs/SPEC-133-quick-task-shared-identity-sync.md) 及 [ADR-053 Rev 3](../decisions/ADR-053-quick-task-cross-origin-account-link.md) 驗收；[DEV-133](../dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30) 維持執行中，TEST PASS 不等於正式 release 完成。
 
 ## 新版範圍與證據規則
 
 - 正常登入採既有 Supabase／Google provider，驗證兩個 origin 各自 Session；不再要求 ProJED OAuth Server／public client／consent 或舊 B0／B1 Gates。Google OAuth 登入與 callback 安全仍須測，不因名稱含 OAuth 就刪掉。
-- TEST 為既有授權的 `fhisnnufoeulxqrchldf`；正式資源範圍沿原授權，正式操作按實作及 release gate。本輪已完成本機 source／typecheck／lint／test build／獨立 auth contract；TEST migration 申請因 B0 完整驗收前置尚未成立而被安全審查拒絕，未執行遠端修改。RPC／RLS 讀回不算本矩陣 PASS。
+- TEST 為既有授權的 `fhisnnufoeulxqrchldf`；正式資源範圍沿原授權，正式操作按實作及 release gate。最新固定候選已完成 B0 gate、TEST correction、ordinary A/B 及 post-correction 矩陣；RPC／RLS metadata readback 單獨不算行為 PASS，逐項範圍見本 QA 最新審核表及 `cross-account-integration/1790830360462-b8d304f5/` 去識別化報告。
 - 使用者已取消實體 Android 驗收。窄版 Chrome／手機模擬可驗版面與操作，不能稱 Android PWA 實機 PASS；取消實機不等於省略真實登入／RPC／工作台與 owner 驗收。
 - 舊 A 本機 evidence 只有在 source／fixture／case 路徑仍相符時才可重用；舊 OAuth mock、桌面 B0、synthetic JWT 不能替代新方案真實憑證。舊 v2 只保護 quick 表，並非整個 ProJED API 的隔離證明；空表 SELECT 回 0 也不能證明隔離。
 
@@ -19,7 +19,21 @@ IDB fixture：DB v1 原始 captures及 DB v2 auth_context；unbound、A-bound pe
 
 ## 新版驗收案例
 
-下列 N01～N10 為完整驗收集合；最新跨帳整合 E01～E18 已補部分真實證據，**整組 N01～N10 仍未完成**。以本文件「跨帳整合結果」的覆蓋／缺口為準，不把舊 A/B 或局部 E 案例直接搬成整組 PASS。
+### 2026-10-01 恢復入口精簡的局部驗收
+
+來源：使用者核准「只在需要介入時出現精簡入口，移除一般狀態說明與處理／稍後處理雙按鈕」。本 slice 為 Medium；相容 SPEC §5、§7 的 owner／明確認領／人工恢復，不改資料模型、RPC、清理及遠端設定。N01～N10 的真實整合狀態沿用原紀錄，本地注入不替代它們。
+
+最小風險／驗收：正常待送被誤當人工操作 → pending／syncing／failed_retryable 無入口；未綁定任務無法找到 → 單一待確認入口可登入後確認；切帳／稍後／重開造成錯綁或消失 → A/B／nonce／raw IDB 查證；無效回執或衝突被盲目重試 → 無重試 CTA；其他帳號 title 洩漏 → 不含內容提醒；窄版／鍵盤不可操作 → 320×844、390×844、614×668、44px 目標、Enter 與可見錯誤掃描。
+
+執行入口：`scripts/verify-dev-133-recovery-browser.cjs`；重用 user-owned `http://localhost:4000`，只啟動隔離 browser contexts及 task-owned BrowserServer。Auth／RPC 以 module route 注入，真 browser UI／IDB 的確認、重試結果由正常按鈕產生；不連 TEST／正式 Auth／RPC，也不讀寫使用者瀏覽器資料。runner 於 finally 關閉 contexts／BrowserServer，核對該 PID 退出與 socket port 釋放，保留 4000 及使用者分頁。結果與候選 source SHA、browser version、viewport、截圖、cleanup 存在 `output/playwright/dev-133-recovery-entry/result.json`。
+
+本輪結果：**局部 UI／IDB 驗證 PASS；Auth／RPC 為 16/16 SIMULATION PASS**。`npx --no-install tsc --noEmit`、targeted ESLint PASS；normal UI 建立、一般自動同步無手動入口、4 筆 unbound 精簡入口／登入焦點／輸入收起、認領稍後／重新開啟／同 ID 確認、切帳重新確認、重開不認領、8 次耗盡人工重試、workspace／profile（23503）恢復、conflict 禁止重試、其他 owner 內容隱藏、重新登入、確認途中切帳及 nonce 過期及確認途中稍後處理均通過。614×668、390×844、320×844 的實際 screenshot／量測無水平溢出、入口最小 44px；614 的目的帳號確認畫面已目視檢查。browser errors／外部 requests／HTTP failures 均 0。
+
+執行基準：branch `持續優化3`／HEAD `8d9aa1ad85adef40721df3ea38b00403ca6ddcb3` + 本輪未提交的 `main.ts`、`quick-task.css`、`outbox.ts` 及 verifier；各 source SHA、browser version及截圖細節見 result.json。只補齊 SPEC 既定的 profile 依賴恢復人工重試，不允許 conflict／invalid receipt 重試，不改 owner／captureId。測試 BrowserServer PID `26964`／port `57273` 已退出／釋放；重用的 user-owned 4000 保留。其他既存 dirty changes及前輪成功卡按鈕移除／安裝文字修改保留。
+
+首個工具失敗保留：內建 browser kernel 啟動 Windows error 5；改用同 route 的隔離 Chrome。第一輪 12 案互動通過但整輪 FAIL，原因是 fixture init script 在 about:blank 初始化時觸發 IDB 拒絕；原始紀錄為 `result-first-harness-failure.json`，該 BrowserServer PID `4492`／port `54449` 已退出／釋放。修正 harness 僅在有效 origin 初始化後重跑最終候選，沒有忽略 browser errors。未讀取使用者截圖中 4 筆的實際資料，也沒有執行真實 Google／hosted RPC／工作台驗收；本結果不將 N01～N10 或整體 DEV-133 標為完成。
+
+下列 N01～N10 為完整驗收集合；最新跨帳整合 29/29 assertions、B0 gate、TEST correction readback 與 post-correction 7/7 已通過，但未涵蓋項目及正式 release 尚未完成。以本文件最新審核表的逐項覆蓋／缺口為準，不把 assertion 總數直接搬成整組 PASS。
 
 | 編號 | 前置、操作與可觀察通過條件 | 必要證據層 |
 |---|---|---|
@@ -90,6 +104,64 @@ QC 每例保存 sourceRevision／dirty boundary、build artifact、環境、acto
 
 **覆蓋與剩餘：** N01／N02／N03／N04／N05／N06／N07／N08／N10 均為部分證據，N09 本輪未重跑。尚缺主程式正常 logout／正式跨 origin callback／取消、核身 401 與 refresh 失效、SDK logout 失敗 barrier、late response、已 commit timeout、錯 receipt、workspace hint／無 membership、nonce／CAS 競態、retention／DB upgrade／bfcache／更新與 TEST correction schema。其他恢復入口 slice 的隔離 SIMULATION 按原證據層獨立保留，不轉換為 live Auth PASS。**DEV-133 仍執行中；E 套件 PASS 不等於完整 B0／N01～N10、TEST correction gate 或 Release Ready。**
 
+### 2026-10-01 邊界續驗與修復
+
+使用者要求繼續完整 N01～N10，既有開發／TEST／Git／正式授權延續；沒有再次要求 migration 或部署授權。前次 E 套件後停止是執行未接續，不是上述邊界不能驗。此輪維持 TEST correction 必須在新 B0 完整通過後執行；同一 executor 先 RD 修復、再以固定 snapshot 作 QC，沒有宣稱獨立人員審查。
+
+| 證據 | 結果與实际覆蓋 |
+|---|---|
+| [56 項 browser／IDB 邊界結果](../../output/qa/dev-133/independent-auth/boundaries/1790825198398/result.json) | PASS。真 Chrome／IDB，Auth／RPC／語音為注入：401、三個 SDK refresh／Session 消失路徑、15 秒 deadline、logout 失敗 barrier、跨 tab dispatch／首次 context CAS、nonce／claim／lease競態、嚴格 receipt／hash、8 次 retry耗盡／人工恢復、8 日／6 日／40 日清理與 abort、v1 blocked／abort／v2恢復、舊 OAuth cache及project drift拒絕、IME／500 emoji／同 ID readback／CSPRNG失敗、bfcache一份subscription及daily timer、320／390／726與可見錯誤。 |
+| [建置後真 SW 離線及zero-read 9 項](../../output/qa/dev-133/independent-auth/bundle/1790827939524/result.json) | PASS。最終 CSPRNG catch／縮排修復後的 TEST public-only bundle，真 Service Worker控制後斷網建立、route重載／IDB保留、Tab順序及390×480鍵盤縮小viewport。初始冷啟動與unbound保存沒有business API request。固定source digest `afa3b29926515d5c8992891e7eb8dbc9911be19e2401cef58e6faf5f3faf71b7`、driver另凍結hash；profile保留synthetic unbound fixture，未刪待送。這是TEST bundle，不是正式發布包；先前7項PASS保留。 |
+| [真 TEST A 補驗 12 項](../../output/qa/dev-133/independent-auth/live-auth-boundaries/1790824947886/result.json) | PASS。普通SDK登入及getUser、真離線回網原ID、真RPC已commit後中斷回應再created=false／唯一row、真local登出後delay回應僅完成原owner、重新普通登入、真Auth token endpoint拒絕故意無效refresh token且停止binding、原ID恢復，以及8日有效receipt本機清理後server task／immutable receipt仍可readback。傳輸中斷／delay／503另標注入，不冒稱B切帳或Googlecallback驗收。 |
+| [正常主程式 local logout 4 項](../../output/qa/dev-133/independent-auth/live-auth-boundaries/1790826916948/result.json) | PASS。兩個 loopback origin 各自普通 TEST A SDK 登入、不同 Session ID，透過主程式正常 UI 展開側欄並按「登出」，主程式 SDK Session 清除，另一 origin 仍真 `getUser` 核身成功，無可見 browser error。不建立 task；兩 origin 使用同一帳號，不冒稱指定 Google B 或正式 HTTPS origin 驗收。helper 初始 `allCapturesSynced=false` 不代表有 pending；profile 刪除前以 raw store 空集合證明沒有 capture。 |
+| [fresh canonical DB](../../output/qa/dev-133/independent-auth/database/fresh/db-isolated-result.json)／[retired boundary upgrade](../../output/qa/dev-133/independent-auth/database/upgraded/db-isolated-result.json) | 兩條PASS；各22項核心matrix＋U+200B／500codepoints／缺profile-membership／同ID恢復／foreign hint／receipt ACL補充；各20個並行quick writer及40個quick＋placement mixed writer，order唯一／無lost write。僅新建loopback PostgreSQL及SQL claims，不替代hosted ordinary JWT矩陣。 |
+| [真SW更新／v2相容回復10項](../../output/qa/dev-133/independent-auth/built-update/1790828604132/result.json) | PASS。固定A／B bundle、各自SW／manifest／shell hash；同origin先存unbound及synthetic A/B pending，worker waiting時及A→B→A實際啟用後，raw owner／ID／title／state全部不變、DB維持v2。無business dispatch、無可見錯誤，root／quick manifest identity不變。兩包quick核心source相同，本例測shell／SW版本更新；DB v1→v2另由56項覆蓋，不冒稱真正Android、發布或其他舊版client相容。關閉全部task-owned App頁面、保留browser程序讓waiting worker正常啟用後再開頁。原三個FAIL `built-update/1790828360670`／`1790828425091`／`1790828505700`在立即終止Chrome程序後過早查驗版本，原結果保留；沒有改產品或調弱B版本斷言。所有profile及synthetic pending保留，4194已釋放。 |
+| [DEV-122原功能回歸](../../output/qa/dev-133/independent-auth/regression/static-result.json)／[SW回歸](../../output/qa/dev-133/independent-auth/regression/sw-result.json) | 25項static及12項SW PASS，candidate outDir綁定最終修復bundle；migration aliases 65/0 PASS。初次static的S15為舊dist、S21為舊owner恢復函式寫法，FAIL另存`regression/initial-static-result.json`。改為指定bundle及既定context owner fallback，不放寬owner／synced保護；原有其他DEV修改保留。 |
+| 型別／契約／lint／parse | TypeScript、targeted ESLint、independent-auth contract、16項actor-readiness isolation及Python AST通過。 |
+
+主程式logout原始FAIL保留：`live-auth-boundaries/1790826131852`／`1790826375747` 的測試未先展開收合側欄；修正為正常UI展開，不繞過操作。`1790826780186`／`1790826853812` 在普通登入前被環境網路限制阻斷（token response無狀態，Node連線另回EACCES）；依原TEST授權在可連網執行環境重跑才取得4項PASS。未降低Session獨立性斷言，沒有因這些harness／環境失敗修改主程式。
+
+真實發現與修復：殘留Session可清除logout barrier；refresh失效後仍可綁舊owner；claim／retry與context交易未完全CAS；同ID readback重試可能產生重複；lease finish未直接核對原title SHA-256；清理只看時間／state而忽略競態內容；blocked open不拒絕；500合法emoji被HTML UTF-16 maxlength截短；bfcache未恢復訂閱；Auth outage原本多一次自動check；CSPRNG失敗使表單鎖住。已按SPEC契約修復，保留原owner／未同步資料，不改server業務資料。
+
+失敗保留、不折算PASS：`boundaries/1790821207988`初輪、`1790823566620`首次context／ACL分類、`1790823908278`第9次Authcheck、`1790824398337`三個refresh邊界、`1790825120692`CSPRNG／pageerror，均於相同父目錄保留原FAIL。較早layout/readback fixture及deadline加速器的harness失敗亦保留，修正的是測試前置而非降低產品斷言。`bundle/1790822873900`為Rollup輸入路徑FAIL；當時finally錯印PASS，現已修runner以實際build／driver exit判斷，該輪不得作PASS。`live-auth-boundaries/1790824849532`因新driver不在snapshot allowlist而未啟動，修正為獨立凍結driver＋hash後12項PASS。
+
+56項來源：HEAD `57f8c8d`加完整dirty boundary，固定snapshot／cases hash見同目錄runtime及candidate/source-manifest；CSPRNG修復後只有縮排整理不改語意。320×844、390×844、726×668截圖已目視，無水平溢出，登入入口／任務欄／語音／建立可達。本輪temporary4183／4185／4193／4194及兩個PostgreSQLport已釋放、cluster刪除；A補驗所有raw captures已synced讀回才清profile，server fixtures保留。user-owned4000／正式站分頁不動。
+
+**較早 live 嘗試失敗保留，不折算 PASS：** `1790829318100-8365543d` timeout；`1790829774308` readiness race（invalid context／probe 過早啟動）；`1790829840638` 與 `1790830079018` 晚到 `RouteAlreadyHandled`。harness 後續只修正啟動前 context/UI readiness 與完成等待順序，產品 source 及斷言未放寬。較早登入等待／resume 輪次仍按各自 artifacts 保留；最新成功證據另見下方 2026-10-01 最新 TEST integration，不能以舊失敗覆蓋新結果。
+
+Git交付邊界：本輪不stage／commit其他人的UI／install／settings變更。DEV-133包含quick-task/index.html、quickTaskCapture的model/auth/outbox/sync、quickTaskCaptureService、main.ts的Auth／提交／生命週期修復、邊界／bundle／SQL／live驗收腳本及SPEC／QA／dev_task／documentation_map續驗段落。root shortcut 的 `name`／`short_name` 兩欄及 `AppInstallAssistant` 的 quick 名稱文案僅作既有名稱契約對齊；不包含 DEV-132 install／notice 行為、Settings UI 或安裝助理自動提示功能。main.ts／outbox.ts有原有recovery UI／retry變更，拆提交前須對照 `boundaries/1790821207988/candidate` 初始snapshot保留；其他既存dirty（DEV-034／038／130／132及無關App／Settings／install變更）排除本輪交付。HEAD仍為57f8c8d，index空；目前是記錄明確範圍的dirty worktree，尚無可發布的乾淨commit包。
+
+使用者附圖的 `projed-cc78d--level3-smoke-p4rhm931.web.app` HTTP404／Site Not Found，Firebase channel list目前只有live；正式 `projed-cc78d.web.app` HTTP200。未重建消失的舊preview、未發布或清除已安裝App資料；不得把該預覽網址視為本輪TEST登入成功。
+
+### 2026-10-01 完成審核：逐項證據與剩餘
+
+此表對照本文件N01～N10原要求，不以assertion總數取代完成判定。TEST B0 與已列明的 TEST 行為證據通過；DEV-133 Gate 仍未通過，因正式 source scope／sealed package、部署及正式 smoke 尚未完成。
+
+| 要求 | 現行可追溯證據 | 尚未證成的範圍／下一步 |
+|---|---|---|
+| N01 獨立登入／重開／狀態 | 最新 E01、E14～E15：TEST 普通 A/B Session、Google callback 及兩 origin 隔離；PROD preflight：owned Chrome 4195 普通 Google login，`/auth/v1/user`=200 且 actor／SDK user／Google identity 三項 match | production Google login 身分前置已 PASS；quick-task production callback／獨立 Session 持久化及 PWA 重開仍待正式 smoke。 |
+| N02 UI建立→唯一工作台／不同帳號 | E02～E07、E10：正常 UI 建立／receipt／工作台、A/B 隔離及切回 owner 通過；post-correction A/B SELECT／UPDATE denial 另見 7/7 報告 | production origin 的完整 UI→工作台往返仍待正式 smoke；本輪只證明 TEST。 |
+| N03 本機建立／owner／輸入 | E08～E09、E22、E24：owner／離線／同 ID 恢復、U+200B 真 TEST RPC 與 receipt；既有輸入及 IDB 邊界案例保留 | 語音為 SpeechRecognition 事件注入；真麥克風及辨識服務轉寫未驗。 |
+| N04 回網／timeout／8次／稍後 | E08～E09、E23：B same-ID resume、真 commit 後 transport-loss replay 無重複；既有退避／8次注入仍屬本機案例 | 不承諾 App 關閉後背景同步；退避與耗盡情境未用實際長時間網路故障等待。 |
+| N05 401／refresh／切帳保留 | E19（401 注入）、E20（普通 Google relogin）、E11（取消 claim 保留資料）；正常 Google picker 的 browser Back 取消登入 21/21 PASS | production callback／取消登入流程尚未部署驗；401 案明確為注入層。 |
+| N06 明確認領／nonce／CAS | E11～E12：取消後保持 unbound、明確認領後 same-ID；nonce／CAS／雙 tab 邊界另有隔離案例 | nonce 過期／重播／競態仍是本機／注入證據；未以 TEST 外部真實競態驗證。 |
+| N07 local logout／late response | E15、E21～E22：origin 登出隔離、B 晚到回應不變成 A 成功、延遲 capture 保持 owner | 不新增或宣稱跨 origin 即時撤銷 global logout。 |
+| N08 receipt／ACL／無依賴／並行 | E03～E06、E23～E24；correction 後 7/7：A/B 非空 task 讀回、雙向 SELECT／UPDATE denial、private receipt schema 不暴露；TEST invoker／空 search_path、task／receipt ACL 與 receipt RLS 讀回未變；PROD prosrc MD5 `3ef7e8731dd6893594e0d66918ddfe16` 為 invoker 且 ACL 與 TEST 一致 | 尚未跑 foreign workspace hint／profile-missing recovery 完整 hosted 矩陣；此證據不代表整個 ProJED API 隔離。 |
+| N09 七日清理／race／server保留 | E25 safe local cleanup；既有 server task／immutable receipt 留存與清理 race 案例 | 8／6／40 日與 legacy／corrupt aging 仍為本機時間／資料案例；未實際等待七日週期。 |
+| N10 schema／更新／fallback／viewport | TEST correction readback、E24 U+200B、既有 v1→v2／SW 更新／viewport 證據；TEST correction body MD5 `d80a1ea6932806c0cfa82fce1b73a842`；PROD prosrc 與 local canonical DEV-122 原 migration 一致，PROD correction 為條件 no-op | 已有 preflight 證據可排除在 PROD 重套 correction；仍須把 no-op／hash 選擇綁定 sealed package，再完成 production deploy／smoke。Android 實機已由使用者取消。 |
+
+其餘交付：最新 TEST suite 29/29、B0/core27+Google cancel gate、correction readback及 post-correction 7/7 均 PASS；source revision `57f8c8d3a751c8698a0e28539a9187868aff1873` 且 `sourceUnchanged=true`。早期 harness FAIL 仍保留，不折算 PASS。DEV-133 仍執行中；下一步是正式 DEV-133 scope 隔離、sealed package／canonical migration selection，再依既有授權及 gate 做正式 smoke。Android 實機已取消，正式環境尚未部署。
+
+### 2026-10-01 最新 TEST 跨帳與 correction 證據
+
+最新報告位於 `output/qa/dev-133/independent-auth/cross-account-integration/1790830360462-b8d304f5/`：`result.json` 的 29/29 integration cases PASS，固定 source revision 如上且 `sourceUnchanged=true`；B0/core27 及 normal Google cancel gate PASS。普通 A/B 新 Session、正常 Google callback、互相隔離與同 ID owner 保護均標為 TEST live；401、transport-loss／late-response等各例依報告標示注入層。E24 以真 TEST RPC 保留 U+200B 並讀回同 ID receipt。correction source `20261001090000_dev_133_quick_rpc_security_invoker.sql` 對應 TEST remote version `20261001045945`；`test-correction-readback.json` 記錄 `SECURITY INVOKER`、空 search_path、body MD5 `d80a1ea6932806c0cfa82fce1b73a842`，task／receipt ACL 及 receipt RLS 與修正前相同，沒有業務資料改寫。`post-correction-result.json` 7/7 PASS，涵蓋非空 A/B task、雙向 SELECT／UPDATE 拒絕、private receipt schema 不暴露及 origin 不傳憑證。
+
+另有本輪 PROD auth／schema preflight，sanitized reports 為 `output/qa/dev-133/independent-auth/production/ordinary-session-readiness/auth-result.json` 與 `database-before.json`：owned Chrome 4195 的普通 Google 登入使 `/auth/v1/user` 回 200，`actorMatches`、`sdkUserMatches`、`googleIdentity` 均 true。PROD `create_quick_unplaced_task_v1` 為 `SECURITY INVOKER`、empty search_path，ACL 與 TEST 一致；prosrc MD5 `3ef7e8731dd6893594e0d66918ddfe16` 與 local canonical DEV-122 原 migration 相符。主代理比對 local correction 後確認兩者 7 行差異僅為註解刪除、行為相同；因此 PROD correction 是由 readback 支持的條件 no-op，不需重套。此為 PROD preflight，不是 quick-task 正式 smoke 或 release；沒有部署。
+
+正常 Google 登入取消已有獨立真實證據：`google-cancel-final/google-cancel-result.json` 21/21 PASS，從 Google picker 使用瀏覽器 Back 返回 quick origin；保持登出、原 unbound capture 不變且未先呼叫 RPC，明確認領後才同步。最初該 driver 在 ordinary A 後等待逾時及同 ID recovery 均保留為失敗／恢復歷史，不折算 21/21。`runtime.json` 記錄 task runtime、browser、profile 與 callback cleanup 已完成，勿據此推測其他 profile。
+
+目前尚未驗的是正式環境 source scope／不可變 sealed package、將 correction no-op 與 PROD prosrc hash 綁入 package、部署及 quick-task production-origin smoke；語音真麥克風／辨識服務、真實七日經過，以及 foreign workspace hint／profile-missing recovery 的 hosted 完整案例也未由這批報告證明。TEST pass 與 PROD auth/schema preflight 均不等於正式產品驗收。
+
 ### 2026-10-01 指定 Google B 的實際驗收
 
 使用者指定並授權第二 TEST actor，且在 task-owned Chrome 視窗完成 Google 登入。TEST 唯讀盤點確認該帳號已有 profile、2 筆 active membership、1 筆 workbench row，provider為 Google；未建立／修改任何業務資料。正常 `/quick-task/` 登入 CTA 回到 `http://127.0.0.1:4173/quick-task/` 後，browser SDK `getUser` 比對指定帳號，profile／membership／workbench查詢及兩個 actor ID 不同檢查通過。A 以普通 password Auth核身通過；A/B各為2筆active membership與至少1筆workbench fixture。結果 **actor prerequisite PASS**，不是 N01～N10、跨帳 RLS矩陣或 B0完整 PASS。
@@ -102,7 +174,9 @@ TEST build亦PASS：`node node_modules/vite/bin/vite.js build --mode test --conf
 
 以下證據使用 TEST `fhisnnufoeulxqrchldf` 的既有測試帳號，所有 browser context 均為隔離 headless session；不輸出 token、email、title 或 user ID。readback／Session／offline probes 不建立 task；valid RPC 與 quick UI E2E 使用本輪建立並保留的 smoke fixture，replay／conflict probe 未新增 row。這些 probes 只補強真實 ordinary-session 邊界，不能升格為完整 N01～N10 或獨立 QC PASS。
 
-### 2026-10-01 TEST fixture readback（唯讀）
+### 2026-10-01 TEST fixture readback（早期唯讀快照；現況見上方最新 TEST 證據）
+
+> 本節是在取得第二個普通 Google Session及執行 TEST correction 之前的狀態快照；「只有一組登入憑證」「correction 未執行」等措辭只描述該快照，不是目前狀態。當前結果以 `1790830360462-b8d304f5` 下的 sanitized reports 為準。
 
 以 Supabase TEST `fhisnnufoeulxqrchldf` 執行 aggregate-only SQL readback，未讀取或輸出任何 email、user ID、title 或 token：active auth users `5`、profiles `3`、active memberships `5`、active membership users `3`、workbench rows `3`，其中有 workbench row 的不同 owner `2`。這證明 TEST 資料面已有可作 A/B 的候選 fixture，但不證明兩個 actor 都能以普通登入取得 Session；目前只有一組登入憑證可操作，因此 N01／N02 的 A/B、切帳及負向權限矩陣仍為 NOT RUN。
 

@@ -59,7 +59,7 @@ export async function runGoogleActorReadiness({ supabaseUrl, anonKey, expectedEm
   const emptyEnv = path.join(tempRoot, 'env');
   await mkdir(emptyEnv, { recursive: true });
   const reportKey = randomUUID();
-  const lifecycle = { project: 'ProJED', purpose: integrationMode ? 'DEV-133 cross-account integration' : 'DEV-133 ordinary Google actor B readiness', port, additionalPorts: integrationMode ? [4174, 4175] : [], runnerPid: process.pid, browserPid: null, cleanupCondition: 'result, browser close, SIGINT, SIGTERM or 15-minute timeout', status: 'preparing' };
+  const lifecycle = { project: 'ProJED', purpose: integrationMode ? 'DEV-133 cross-account integration' : 'DEV-133 ordinary Google actor B readiness', port, additionalPorts: integrationMode ? [4174, 4175] : [], runnerPid: process.pid, browserPid: null, cleanupCondition: `result, browser close, SIGINT, SIGTERM or ${process.env.DEV133_WAIT_TEST_CORRECTION === '1' ? 30 : 15}-minute timeout; failed integration profile retained for same-task resume`, status: 'preparing' };
   const writeLifecycle = () => writeFile(path.join(artifactDir, 'runtime.json'), `${JSON.stringify(lifecycle, null, 2)}\n`);
   await writeLifecycle();
   let vite;
@@ -104,6 +104,7 @@ export async function runGoogleActorReadiness({ supabaseUrl, anonKey, expectedEm
             return res.end(`
               import { supabase } from '/src/services/supabase/client.ts';
               import { inspectTestActor } from '/scripts/dev133-actor-probe.mjs';
+              import { getQuickBindingContext } from '/src/features/quickTaskCapture/auth.ts';
               const banner = document.createElement('p');
               banner.textContent = ${JSON.stringify(integrationMode
                 ? 'DEV-133 TEST：請按下方「登入」，選擇指定的 Google 帳號。核身後將自動驗證跨帳隔離與同步，只建立本輪 TEST 任務。'
@@ -117,6 +118,9 @@ export async function runGoogleActorReadiness({ supabaseUrl, anonKey, expectedEm
                 try {
                   const { data } = await supabase.auth.getSession();
                   if (!data.session) return;
+                  const binding = await getQuickBindingContext();
+                  if (!binding || binding.accountId !== data.session.user.id
+                    || !document.querySelector('#quick-task-auth-status')?.textContent.includes('已登入')) return;
                   const result = await inspectTestActor(supabase, 'B', ${JSON.stringify(expectedEmail)}, data.session.access_token);
                   if (!result.actor.ready) {
                     banner.textContent = result.actor.reason === 'unexpected-test-account'
@@ -236,16 +240,32 @@ export async function runGoogleActorReadiness({ supabaseUrl, anonKey, expectedEm
       restoreProcess = spawn('python', [path.join(candidateRoot, 'scripts/verify-dev-133-cross-account-browser.py'), artifactDir, '--restore-actor-b'],
         { cwd: root, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: process.env });
       lifecycle.restorePid = restoreProcess.pid;
-      restoreProcess.stdout.resume();
+      restoreProcess.stdout.on('data', data => {
+        for (const line of String(data).trim().split('\n')) {
+          try {
+            const progress = JSON.parse(line);
+            if (progress.stage) console.log(JSON.stringify({ restoreStage: progress.stage }));
+            else if (progress.restore === 'FAIL') console.log(JSON.stringify({ restoreStatus: 'FAIL', kind: progress.kind }));
+          } catch { /* No raw browser output. */ }
+        }
+      });
       restoreProcess.stderr.resume();
-      restoreProcess.once('error', () => resolveDone('restore-launch-failed'));
-      restoreProcess.once('exit', code => { if (code !== 0 && !integrationStarted) resolveDone('restore-failed'); });
+      restoreProcess.once('error', () => {
+        lifecycle.restoreStatus = 'helper-unavailable-awaiting-manual-login';
+        void writeLifecycle();
+      });
+      restoreProcess.once('exit', code => {
+        lifecycle.restoreStatus = code === 0 ? 'profile-readback-complete' : 'helper-failed-awaiting-manual-login';
+        // Helper failure is not a failed Google identity check. Keep the owned
+        // window available for human authentication until the normal deadline.
+        void writeLifecycle();
+      });
     }
     lifecycle.browserPid = browser.pid ?? null;
     lifecycle.status = 'awaiting-user-google-login';
     await writeLifecycle();
     console.log(JSON.stringify({ status: 'AWAITING_GOOGLE_LOGIN', actor: 'B', projectRef: testProjectRef, route: callback, browserPid: lifecycle.browserPid }));
-    timeout = setTimeout(() => resolveDone('login-timeout'), 15 * 60 * 1000);
+    timeout = setTimeout(() => resolveDone('login-timeout'), process.env.DEV133_WAIT_TEST_CORRECTION === '1' ? 30 * 60 * 1000 : 15 * 60 * 1000);
     const endReason = await done;
     if (endReason !== 'result') {
       output.status = 'BLOCKED';
@@ -276,8 +296,7 @@ export async function runGoogleActorReadiness({ supabaseUrl, anonKey, expectedEm
       } catch { lifecycle.callbackCleanup = 'unconfirmed'; }
     } else lifecycle.callbackCleanup = 'no-config-change';
     // A failed suite may contain unsynced captures. Preserve those even in our test profile.
-    const safeToRemoveProfile = !integrationMode || (!resumeRoot && !integrationStarted)
-      || (output.status === 'PASS' && output.integration?.allCapturesSynced === true);
+    const safeToRemoveProfile = !integrationMode || (output.status === 'PASS' && output.integration?.allCapturesSynced === true);
     if (!safeToRemoveProfile) {
       lifecycle.profileCleanup = 'retained-for-corrective-resume-with-captures-preserved';
       lifecycle.retainedProfileRoot = tempRoot;

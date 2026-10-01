@@ -5,6 +5,7 @@ export type QuickAuthSnapshot = Readonly<{
   accessToken: string;
   authEpoch: number;
   contextRevision?: number;
+  contextProjectRef?: string;
 }>;
 
 export type QuickTaskCreateResult = {
@@ -21,7 +22,7 @@ const parseResult = (value: unknown): QuickTaskCreateResult => {
   const candidate = value as Record<string, unknown>;
   if (candidate.status !== 'committed' || typeof candidate.captureId !== 'string' || typeof candidate.ownerId !== 'string'
     || typeof candidate.titleHash !== 'string' || !/^[a-f0-9]{64}$/u.test(candidate.titleHash)
-    || typeof candidate.created !== 'boolean' || !Number.isFinite(candidate.committedAt)
+    || typeof candidate.created !== 'boolean' || !Number.isSafeInteger(candidate.committedAt)
     || Number(candidate.committedAt) <= 0) {
     throw Object.assign(new Error('INVALID_RECEIPT'), { code: 'INVALID_RECEIPT' });
   }

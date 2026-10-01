@@ -2,17 +2,23 @@
 
 ## Documentation Map Update - 2026-10-01（DEV-133 架構定案）
 
-使用者採用「共用帳號、各自登入、各自保存 Session、離線任務依帳號同步」，並要求補齊架構定案。[DEV-133](dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30) 維持執行中；[SPEC-133 Rev 3](specs/SPEC-133-quick-task-shared-identity-sync.md) 達 **RD Implementation Ready／架構定案：已定案**，[ADR-053 Rev 3](decisions/ADR-053-quick-task-cross-origin-account-link.md) 為現行決策。以 `e868611` 為本機實作基準，已完成單一 SDK Auth、DB v2 auth_context＋capture receipt、owner/context revision CAS、登入後明確認領、local signOut barrier、strict receipt 驗證與退役舊 OAuth 路徑，並通過 typecheck／lint／test build／contract check；真實 TEST Auth／RPC、workbench UI、同帳號 quick E2E 及 receipt replay/conflict probes 已部分通過，第二帳號／切帳與完整矩陣仍待驗證。
+最新執行狀態（2026-10-01）：TEST 29/29 跨帳整合、B0/core27與 Google cancellation gate、forward correction readback、post-correction 7/7 核心權限案例均 PASS；普通 TEST Google 取消登入有 picker/browser Back 的 21/21 證據。PROD ordinary Google identity／canonical RPC schema preflight PASS；correction 對 PROD 為條件 no-op。DEV-133 仍執行中，正式 source scope／sealed package、將 no-op／hash 綁定 package、部署及 quick-task smoke 尚未完成；N01～N10 實際殘餘以 [QA 最新審核表](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-完成審核逐項證據與剩餘) 為準。下列時間序列段落保留其當時快照，不能覆蓋此最新狀態。
 
-下一步：新方案 B0 的 TEST ordinary-session callback／fixture 完整驗收後，才可執行 additive correction migration，再跑 [QA-DEV-133 N01～N10](qa/QA-DEV-133-quick-task-shared-identity-sync.md)。本輪 correction apply 被安全審查拒絕，沒有 workaround、部署或資料修改；其他 dirty changes 保留，沒有新增 DEV 或產品完成率。實體 Android 已取消，普通 Google callback／同帳與異帳真實驗收仍必須完成。
+使用者採用「共用帳號、各自登入、各自保存 Session、離線任務依帳號同步」，並要求補齊架構定案。[DEV-133](dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30) 維持執行中；[SPEC-133 Rev 4](specs/SPEC-133-quick-task-shared-identity-sync.md) 達 **RD Implementation Ready／架構定案：已定案**，[ADR-053 Rev 3](decisions/ADR-053-quick-task-cross-origin-account-link.md) 為現行決策。以 `e868611` 為本機實作基準，已完成單一 SDK Auth、DB v2 auth_context＋capture receipt、owner/context revision CAS、登入後明確認領、local signOut barrier、strict receipt 驗證與退役舊 OAuth 路徑，並通過 typecheck／lint／test build／contract check；最新 TEST 跨帳及 correction 證據見本節狀態更新與 QA 報告。
 
-2026-10-01 第二 actor 補驗：使用者指定 Google B 並在獨立 TEST Chrome 完成正常 quick 登入，SDK `getUser`／profile／active membership／非空 workbench及A/B不同user檢查 **PASS**。修正 verifier 支援 `--browser`，只載 allowlisted TEST env；16項隔離回歸、typecheck／targeted lint通過。Google選帳補回既定`prompt:'select_account'`契約。結果、執行基準及cleanup見[QA 指定 Google B 實際驗收](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-指定-google-b-的實際驗收)。此為actor前置PASS，完整N01～N10、切帳／跨帳隔離、TEST correction及正式發布仍未完成。
+早期交接快照：當時 B0 尚未完成，correction 尚未執行；該段狀態已由本節最新 execution update 取代。實體 Android 已取消，不作新版必要前置。
 
-2026-10-01 readback：TEST DEV-122 alias `20260930154758`／v2 `20260930155041` 已套用、RPC definer；正式只有 DEV-122 `20260914120000`、RPC invoker。新 correction 收斂 canonical DEV-122／invoker，保留歷史、RLS／ACL及資料；正式不單獨補套 retired v2。quick 不另做 profile／workspace 開通；缺依賴導回主程式設定，同 ID人工重試。Auth 最新 callback allowlist及真 TEST actors 為驗收進入條件，讀回不是矩陣 PASS。
+早期 actor-readiness evidence：Google B 的 `getUser`／profile／membership／workbench 前置曾 PASS；其當時「完整 N01～N10／TEST correction 未完成」狀態後由最新 integration report 更新。原結果仍作該 actor 前置案例證據。
+
+早期 pre-correction metadata readback：當時 TEST RPC 為 definer、正式 RPC 為 invoker；目前 TEST correction 已套用且 readback 為 invoker，權限／資料不變。正式不單獨補套 retired v2；quick 不另做 profile／workspace 開通，缺依賴導回主程式設定，同 ID 人工重試。
 
 2026-09-30 歷史：舊 A 本機、OAuth mock／桌面與 TEST synthetic 部分證據保留於 QA 歷史區及 [execution-boundary addendum](qa/DEV-133-execution-boundary-addendum-20260930.md)，不能替代新方案／完整權限驗收。OAuth Server／Client 註冊與舊 B0／B1 不再是新版必要依賴，沒有補登舊 Gate 為 PASS。DEV-133 正式配置、部署及驗收未執行，DEV-122／131 狀態不變。
 
-2026-10-01 真 TEST 跨帳整合：固定 362-file source snapshot，23 項 assertions PASS，包含 A/B task 讀寫隔離、正常 UI→receipt→工作台、重送唯一、離線恢復、切帳／明確認領及兩 origin local Session 隔離。詳見 [QA 跨帳整合結果](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-跨帳整合結果)；原失敗、dirty boundary、去識別化結果與清理紀錄保留。此為新方案部分 live TEST 證據，完整 N01～N10、TEST correction及正式發布仍未完成；沒有新增 DEV 或提升產品完成率。
+早期恢復入口精簡 snapshot：16 項隔離 browser UI／IDB＋Auth/RPC SIMULATION、typecheck、targeted lint PASS，320／390／614 畫面已目視／量測。來源與 cleanup 見 [QA 局部驗收](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-恢復入口精簡的局部驗收)；最新 TEST 狀態以上述更新為準。
+
+早期真 TEST 跨帳整合 snapshot：固定 362-file source snapshot、23 assertions PASS。詳見 [QA 跨帳整合結果](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-跨帳整合結果)；原失敗、dirty boundary、去識別化結果與 cleanup 紀錄保留。後續 29-case runner 狀態見上方最新 update。
+
+早期 DEV-133 邊界續驗 snapshot：[SPEC-133 Rev 4](specs/SPEC-133-quick-task-shared-identity-sync.md)／[QA Rev 5 邊界續驗與修復](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-邊界續驗與修復)記錄 56 項 browser／IDB＋注入邊界、12 項 TEST A、SW／DB 案例，原 FAIL 及 source hashes 保留。該段「新版 A/B 與 hosted correction 仍待驗」已由最新 report 取代；正式站／預覽歷史及未發布狀態保留。
 
 ## Documentation Map Update - 2026-09-29（DEV-132 系統通知與換圖指引）
 

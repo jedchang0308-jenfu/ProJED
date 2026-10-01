@@ -94,7 +94,6 @@ export const isProductionSupabaseUrl = value => value === PRODUCTION_CONTRACT.su
 
 export const isCanonicalRedirect = value => value === PRODUCTION_CONTRACT.canonicalRedirectUrl;
 
-
 export const isSafeHttpsFeed = value => {
   if (!value) return true;
   try {

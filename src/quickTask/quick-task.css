@@ -56,6 +56,11 @@ h1 { margin: 2px 0 0; font-size: clamp(24px, 7vw, 32px); letter-spacing: -.03em;
 .quick-task-actions button { min-height: 46px; padding: 0 14px; border: 1px solid #99f6e4; border-radius: 11px; background: white; color: #115e59; font-weight: 700; cursor: pointer; }
 .quick-task-actions button.primary { background: #0f766e; color: white; }
 .quick-task-recovery strong { display: block; margin-bottom: 6px; color: #9a3412; }
+.quick-task-recovery strong, .quick-task-recovery > span { overflow-wrap: anywhere; }
+.quick-task-recovery > span { display: block; }
+.quick-task-recovery[data-compact="true"] { margin-top: 12px; padding: 0; border: 0; }
+.quick-task-recovery-entry { min-height: 44px; padding: 0; border: 0; background: transparent; color: #0f766e; font-size: 14px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.quick-task-recovery-entry:focus-visible { outline: 3px solid rgb(20 184 166 / 35%); outline-offset: 3px; border-radius: 4px; }
 noscript { display: block; margin-top: 18px; color: #9f1239; font-size: 13px; }
 @media (min-width: 560px) { .quick-task-shell { padding-top: 56px; } }
 @media (max-width: 360px) {

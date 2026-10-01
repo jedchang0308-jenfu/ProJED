@@ -1,19 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { countAllPendingQuickCaptures } from '../features/quickTaskCapture/outbox';
-import { getMainInstallUrl, getQuickInstallUrl } from '../features/quickTaskCapture/origins';
 import { Button } from './ui/Button';
 
 type IconTarget = 'main' | 'quick';
 type PendingCheck = { status: 'checking' | 'ready' | 'unavailable'; count: number };
 
-export const OptionalIconReinstallGuide: React.FC<{ initiallyExpanded?: boolean }> = ({ initiallyExpanded = false }) => {
-  const [expanded, setExpanded] = useState(initiallyExpanded);
+const installPath = (target: IconTarget) => target === 'main' ? '/' : '/quick-task/?install=1';
+
+export const OptionalIconReinstallGuide: React.FC = () => {
+  const [expanded, setExpanded] = useState(false);
   const [target, setTarget] = useState<IconTarget>('main');
   const [pending, setPending] = useState<PendingCheck>({ status: 'checking', count: 0 });
   const [linkStatus, setLinkStatus] = useState('');
+  const isAndroid = typeof navigator !== 'undefined' && /Android/iu.test(navigator.userAgent || '');
 
   useEffect(() => {
-    if (!expanded) return;
+    if (!expanded || !isAndroid) return;
     let cancelled = false;
     void countAllPendingQuickCaptures()
       .then(count => {
@@ -23,12 +25,11 @@ export const OptionalIconReinstallGuide: React.FC<{ initiallyExpanded?: boolean 
         if (!cancelled) setPending({ status: 'unavailable', count: 0 });
       });
     return () => { cancelled = true; };
-  }, [expanded]);
+  }, [expanded, isAndroid]);
 
-  const installUrl = new URL(
-    target === 'main' ? getMainInstallUrl(window.location.origin) : getQuickInstallUrl(window.location.origin),
-    window.location.origin,
-  ).toString();
+  if (!isAndroid) return null;
+
+  const installUrl = new URL(installPath(target), window.location.origin).toString();
   const saveLink = async () => {
     try {
       if (navigator.share) {
@@ -61,7 +62,7 @@ export const OptionalIconReinstallGuide: React.FC<{ initiallyExpanded?: boolean 
       </button>
       {expanded && (
         <div className="mt-3 space-y-3 text-sm leading-6 text-slate-700">
-          <p>想換圖示時，一次重裝一個 App；保留舊圖示也能繼續使用。</p>
+          <p>想立即換成新版圖示，可自行移除舊 App 再安裝；也可以保留目前圖示繼續使用。</p>
           <div className="flex flex-wrap gap-2" aria-label="選擇要更新的圖示">
             <Button type="button" size="sm" variant={target === 'main' ? 'primary' : 'secondary'} aria-pressed={target === 'main'} onClick={() => { setTarget('main'); setLinkStatus(''); }}>ProJED 主程式</Button>
             <Button type="button" size="sm" variant={target === 'quick' ? 'primary' : 'secondary'} aria-pressed={target === 'quick'} onClick={() => { setTarget('quick'); setLinkStatus(''); }}>快速建待辦</Button>
@@ -76,8 +77,9 @@ export const OptionalIconReinstallGuide: React.FC<{ initiallyExpanded?: boolean 
                 {pending.status === 'unavailable' && '無法檢查本機快速待辦；請先到快速入口確認同步狀態，暫勿直接移除。'}
               </span>
             </li>
-            <li>保留所選 App 的安裝連結，移除後才能找回。</li>
-            <li>到 Android「設定 → 應用程式」只移除所選 App；另一個入口無須移除。接著在 Chrome 開啟保存的連結並選「安裝應用程式」，用原本的 Google 帳號登入。</li>
+            <li>先保留安裝連結，確保移除舊 App 後找得回來。</li>
+            <li>自行到 Android「設定 → 應用程式」解除安裝想換圖示的那一個 App；另一個入口無須移除。</li>
+            <li>從保留的連結以 Chrome 開啟，選「安裝應用程式」或「安裝並建立捷徑」，完成後用原本的 ProJED 帳號登入。</li>
           </ol>
           <div className="flex flex-wrap items-center gap-2">
             <Button type="button" size="sm" variant="secondary" onClick={() => { void saveLink(); }} data-icon-reinstall-save-link>保留安裝連結</Button>

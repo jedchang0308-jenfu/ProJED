@@ -1,11 +1,15 @@
 param(
-  [switch]$IncludeConcurrent
+  [switch]$IncludeConcurrent,
+  [switch]$Dev133Correction,
+  [switch]$UpgradeRetiredBoundary
 )
 
 $ErrorActionPreference = 'Stop'
 
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $outputDirectory = Join-Path $projectRoot 'output\qa\dev-122'
+if ($Dev133Correction) { $outputDirectory = Join-Path $projectRoot ("output\qa\dev-133\independent-auth\database\" + $(if ($UpgradeRetiredBoundary) { 'upgraded' } else { 'fresh' })) }
+if ($UpgradeRetiredBoundary -and -not $Dev133Correction) { throw 'Retired boundary is only an isolated DEV-133 upgrade fixture.' }
 $postgresBin = Split-Path -Parent (Get-Command initdb.exe -ErrorAction Stop).Source
 $tempRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath())
 $runtimeName = "projed-dev122-postgres-$([guid]::NewGuid().ToString('N'))"
@@ -15,6 +19,8 @@ $logPath = Join-Path $runtimeRoot 'postgres.log'
 $database = 'dev122_verify'
 $bootstrapPath = Join-Path $projectRoot 'scripts\verify-dev-122-mobile-zero-data-quick-task-db-bootstrap.sql'
 $migrationPath = Join-Path $projectRoot 'supabase\migrations\20260914120000_dev_122_quick_unplaced_task_rpc.sql'
+$correctionPath = Join-Path $projectRoot 'supabase\migrations\20261001090000_dev_133_quick_rpc_security_invoker.sql'
+$retiredBoundaryPath = Join-Path $projectRoot 'supabase\migrations\20260930155041_dev_133_quick_oauth_client_boundary_v2.sql'
 $matrixPath = Join-Path $projectRoot 'scripts\verify-dev-122-mobile-zero-data-quick-task-db-matrix.sql'
 $placementMigrationPath = Join-Path $projectRoot 'supabase\migrations\20260826083940_dev_089_scope_safe_task_placement_command.sql'
 $concurrentPreludePath = Join-Path $projectRoot 'scripts\verify-dev-122-mobile-zero-data-quick-task-db-concurrent-prelude.sql'
@@ -79,6 +85,14 @@ try {
   Invoke-PgTool createdb.exe @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', $database)
   Invoke-PgTool psql.exe @('-X', '-v', 'ON_ERROR_STOP=1', '-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $database, '-f', $bootstrapPath)
   Invoke-PgTool psql.exe @('-X', '-v', 'ON_ERROR_STOP=1', '-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $database, '-f', $migrationPath)
+  if ($UpgradeRetiredBoundary) {
+    # auth.jwt exists on Supabase; this definition is limited to the isolated fixture.
+    Invoke-PgTool psql.exe @('-X', '-v', 'ON_ERROR_STOP=1', '-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $database, '-c', "create function auth.jwt() returns jsonb language sql stable as 'select coalesce(nullif(current_setting(''request.jwt.claims'', true), ''''), ''{}'')::jsonb'; grant execute on function auth.jwt() to authenticated;")
+    Invoke-PgTool psql.exe @('-X', '-v', 'ON_ERROR_STOP=1', '-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $database, '-f', $retiredBoundaryPath)
+  }
+  if ($Dev133Correction) {
+    Invoke-PgTool psql.exe @('-X', '-v', 'ON_ERROR_STOP=1', '-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $database, '-f', $correctionPath)
+  }
   if ($IncludeConcurrent) {
     Invoke-PgTool psql.exe @('-X', '-v', 'ON_ERROR_STOP=1', '-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $database, '-f', $concurrentPreludePath)
     $concurrentOutput = Invoke-PgTool pgbench.exe -Capture @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $database, '-n', '-c', '20', '-j', '4', '-t', '1', '-f', $concurrentScriptPath)
@@ -117,6 +131,8 @@ try {
       placementMigration = Get-Sha256Hex -Path $placementMigrationPath
       matrix = Get-Sha256Hex -Path $matrixPath
     }
+  if ($Dev133Correction) { $sourceHashes.correction = Get-Sha256Hex -Path $correctionPath }
+  if ($UpgradeRetiredBoundary) { $sourceHashes.retiredBoundary = Get-Sha256Hex -Path $retiredBoundaryPath }
   if ($IncludeConcurrent) {
     $sourceHashes.concurrentPrelude = Get-Sha256Hex -Path $concurrentPreludePath
     $sourceHashes.concurrentScript = Get-Sha256Hex -Path $concurrentScriptPath
@@ -128,6 +144,14 @@ try {
   if ($IncludeConcurrent) { $result | Add-Member -NotePropertyName concurrentTransport -NotePropertyValue $concurrentResult }
   $result | Add-Member -NotePropertyName runtimeCleanup -NotePropertyValue 'pending'
   if (-not [bool]$result.passed) { throw "DEV-122 isolated matrix reported a failed case." }
+  if ($Dev133Correction) {
+    $supplementPath = Join-Path $projectRoot 'scripts\verify-dev-133-db-supplement.sql'
+    $supplement = Invoke-PgTool psql.exe -Capture @('-X', '-A', '-t', '-v', 'ON_ERROR_STOP=1', '-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $database, '-f', $supplementPath)
+    if ($supplement -notmatch 'DEV133_SUPPLEMENT=PASS') { throw 'DEV-133 supplement did not pass.' }
+    $result.devId = 'DEV-133'
+    $result | Add-Member -NotePropertyName supplementalBoundary -NotePropertyValue 'PASS: U+200B, 500 code points, absent profile/membership, same-ID restore, foreign hint/receipt, immutable receipt ACL'
+    $result.sourceHashes.supplement = Get-Sha256Hex -Path $supplementPath
+  }
   Write-Output 'DEV-122 isolated PostgreSQL migration/RLS/RPC core matrix passed.'
 }
 catch {

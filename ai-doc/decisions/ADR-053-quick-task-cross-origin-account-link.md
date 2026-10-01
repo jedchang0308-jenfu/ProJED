@@ -35,7 +35,7 @@ DEV-131 的雙 PWA origin／manifest identity 保留。不同 origin 的 Session
 - 「移除跨 App OAuth」不等於移除 Google OAuth 登入。保留 provider callback／取消登入／SDK Session 更新及原有 claim nonce 防護；取消的是 ProJED 作為 OAuth Server 的那一層。
 - `oauthClient.ts`、consent entry、自製 OAuth token store 及 `VITE_QUICK_TASK_OAUTH_*` 分支已在 HEAD `e868611` 移除；舊版只保留為歷史證據，不讀取、轉換或搬移舊 OAuth token。改版後需普通登入，原 IDB owner／captureId 保留，A 記錄只有 A 可續送。
 - TEST 曾套用 DEV-122 quick RPC 與 `20260930155041_dev_133_quick_oauth_client_boundary_v2.sql`，後者把 RPC 改為 `SECURITY DEFINER`。不得刪除／改寫已套用 migration 歷史。目標恢復 DEV-122 的 `SECURITY INVOKER`／原有 owner RLS；必要修正使用新 forward-only migration，不改 task／receipt 資料、不新增權限。既有 OAuth restrictive policies 與未使用的 private allowlist 可保留為停用歷史設施，不為清理而解除保護或刪表。
-- 2026-10-01 metadata 讀回：TEST RPC 仍為 definer、v2 已套用；正式 RPC 為 invoker、v2 未套用。新 forward-only correction 將 function body 收斂至 local DEV-122，修正 TEST 多 trim U+200B 的差異；ACL、RLS及既有資料不改。正式不得單獨補套 retired v2；若執行器不能排除，須有整體原子收斂且沒有中間 definer 暴露的方案，否則停止 schema release。
+- 2026-10-01 metadata／TEST＋PROD preflight update：TEST correction source `20261001090000_dev_133_quick_rpc_security_invoker.sql` 對應 remote version `20261001045945`；function readback 為 `SECURITY INVOKER`／empty search_path，body MD5 `d80a1ea6932806c0cfa82fce1b73a842`，task／receipt ACL、receipt RLS 及既有資料不變。E24 真 TEST RPC 保留 U+200B 並讀回同 ID receipt。PROD `ordinary-session-readiness/auth-result.json` 的 `/auth/v1/user`=200 且三項 actor match；`database-before.json` 記錄 canonical DEV-122 invoker prosrc MD5 `3ef7e8731dd6893594e0d66918ddfe16`。與 correction 的差異僅註解，故目前 PROD correction 為條件 no-op；package 須綁定該 readback 與 no-op 決策。正式不得單獨補套 retired v2；部署及 smoke 尚未執行。
 - 舊 B0／B1 證據保留於 [QA 歷史紀錄](../qa/QA-DEV-133-quick-task-shared-identity-sync.md#dev-133-legacy-oauth-evidence)及 [2026-09-30 補充](../qa/DEV-133-execution-boundary-addendum-20260930.md)。它們不代表新登入流程已驗收。正式 OAuth Client 註冊不再是 DEV-133 上線前置。
 
 ## 工程定案與責任邊界（2026-10-01）
@@ -46,7 +46,7 @@ unbound 在登入後另行明確確認目的帳號，標準 callback 不自動�
 
 quick 不另做 profile／workspace 開通；缺依賴導回主程式設定，同帳號人工重試。普通 Session 沿用既有 RLS，沒有 client-level create-only 保證。因 DB 升版，回復 client 必須能讀 v2；不得以刪 DB／清未同步任務解決相容性。
 
-Architecture Closure Review 已完成 source／build env／RPC／RLS／migration／既有測試比對，文件為 **RD Implementation Ready；架構定案：已定案**，本機第一輪 source implementation 已完成；真實 TEST／工作台整合與新版 QA 仍 **NOT RUN**。metadata 讀回不是驗收 PASS。實作只允許 SPEC 的既定責任面；若需改 owner／API／權限／origin、新增認證服務或遇到未記錄的架構 drift，回送技術審查。局部命名／寫法／測試實現由 RD 決定。
+Architecture Closure Review 已完成 source／build env／RPC／RLS／migration／既有測試比對，文件為 **RD Implementation Ready；架構定案：已定案**。最新 TEST 證據為 29/29 跨帳整合、B0/core27及正常 Google cancellation gate、correction readback、post-correction 7/7 PASS；PROD ordinary Google identity／canonical RPC schema preflight 也 PASS，但未做 DEV-133 正式 smoke／deploy。正常 Google cancellation 是 picker 的 browser Back，舊 driver timeout 與同 ID recovery 仍保留為歷史失敗。各 case 的 live／injected 層及實際殘餘以 QA 最新審核表為準；metadata readback 不單獨代表行為 PASS。正式 source scope／sealed package／production deploy／smoke 尚未完成。實作只允許 SPEC 的既定責任面；若需改 owner／API／權限／origin、新增認證服務或遇到未記錄的架構 drift，回送技術審查。局部命名／寫法／測試實現由 RD 決定。
 
 ## 成功判定與重新審查條件
 

@@ -70,7 +70,7 @@ assert(
   source.settingsView.includes("id: 'app'") &&
     source.settingsView.includes("label: '快速開啟'") &&
     source.settingsView.includes('管理此裝置與目前帳號的快速開啟提示。') &&
-    source.settingsView.includes('<AppInstallAssistant mode="settings" openIconGuide={openIconGuide} />') &&
+    source.settingsView.includes('<AppInstallAssistant mode="settings" />') &&
     source.appInstallAssistant.includes('App 安裝與快速開啟') &&
     source.appInstallAssistant.includes('data-pwa-install-settings'),
 );

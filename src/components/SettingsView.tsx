@@ -3,7 +3,6 @@ import {
   ArrowLeft,
   CalendarPlus,
   DatabaseBackup,
-  Bell,
   Settings,
   ShieldCheck,
   Smartphone,
@@ -17,7 +16,7 @@ import { BoardMembersPanel } from './BoardMembersPanel';
 import CalendarSubscriptionsView from './CalendarSubscriptionsView';
 import { AppInstallAssistant } from './AppInstallAssistant';
 
-type SettingsSection = 'profile' | 'backup' | 'permissions' | 'calendar' | 'app' | 'notifications';
+type SettingsSection = 'profile' | 'backup' | 'permissions' | 'calendar' | 'app';
 
 type SettingsViewProps = {
   initialSection?: SettingsSection;
@@ -33,21 +32,10 @@ const SETTINGS_SECTIONS: Array<{
   { id: 'permissions', label: '看板權限', icon: ShieldCheck },
   { id: 'calendar', label: '行事曆訂閱', icon: CalendarPlus },
   { id: 'app', label: '快速開啟', icon: Smartphone },
-  { id: 'notifications', label: '系統通知', icon: Bell },
 ];
-
-const SYSTEM_NOTICES = [
-  {
-    id: 'optional-icon-reinstall-20260929',
-    date: '2026-09-29',
-    title: '手機 App 圖示可自由更新',
-    message: 'ProJED 主程式與快速建待辦可分別換成新版圖示；舊圖示仍可繼續使用。',
-  },
-] as const;
 
 const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'backup' }) => {
   const [activeSection, setActiveSection] = useState<SettingsSection>(initialSection);
-  const [openIconGuide, setOpenIconGuide] = useState(false);
 
   useEffect(() => {
     setActiveSection(initialSection);
@@ -96,7 +84,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'backup' }
           </div>
         </header>
 
-        <nav className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6" aria-label="設定分類">
+        <nav className="grid grid-cols-2 gap-2 sm:grid-cols-5" aria-label="設定分類">
           {SETTINGS_SECTIONS.map((section) => {
             const Icon = section.icon;
             const isActive = activeSection === section.id;
@@ -104,7 +92,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'backup' }
               <button
                 key={section.id}
                 type="button"
-                onClick={() => { setOpenIconGuide(false); setActiveSection(section.id); }}
+                onClick={() => setActiveSection(section.id)}
                 data-settings-section-tab={section.id}
                 className={`flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 overflow-hidden border px-2 py-2 text-center transition-colors sm:min-h-11 sm:flex-row sm:justify-start sm:gap-2 sm:px-3 sm:text-left ${
                   isActive
@@ -139,33 +127,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'backup' }
         {activeSection === 'app' && (
           <div className="space-y-2">
             <p className="text-xs leading-4 text-slate-500">管理此裝置與目前帳號的快速開啟提示。</p>
-            <AppInstallAssistant mode="settings" openIconGuide={openIconGuide} />
+            <AppInstallAssistant mode="settings" />
           </div>
-        )}
-        {activeSection === 'notifications' && (
-          <section className="border border-slate-200 bg-white" data-system-notifications="true" aria-label="系統通知">
-            <div className="border-b border-slate-200 px-4 py-3">
-              <h3 className="text-base font-bold text-slate-900">系統通知</h3>
-              <p className="mt-0.5 text-xs text-slate-500">系統公告會保留在這裡，方便日後查看。</p>
-            </div>
-            <div className="divide-y divide-slate-100">
-              {SYSTEM_NOTICES.map((notice) => (
-                <article key={notice.id} className="px-4 py-4" data-system-notice={notice.id}>
-                  <time className="text-xs text-slate-500" dateTime={notice.date}>{notice.date}</time>
-                  <h4 className="mt-1 text-sm font-bold text-slate-900">{notice.title}</h4>
-                  <p className="mt-1 text-sm leading-6 text-slate-600">{notice.message}</p>
-                  <button
-                    type="button"
-                    className="mt-2 text-sm font-semibold text-teal-700 underline-offset-2 hover:underline focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    onClick={() => { setOpenIconGuide(true); setActiveSection('app'); }}
-                    data-system-notice-action="icon-reinstall"
-                  >
-                    查看換圖步驟
-                  </button>
-                </article>
-              ))}
-            </div>
-          </section>
         )}
       </div>
     </div>

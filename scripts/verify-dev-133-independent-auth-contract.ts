@@ -46,6 +46,7 @@ const receipt = {
   captureId: baseRecord.captureId,
   ownerId: 'user-a',
   titleHash: 'a'.repeat(64),
+  created: true,
   committedAt: Date.now(),
 };
 assert.equal(isQuickCaptureReceipt(receipt, baseRecord), true);
