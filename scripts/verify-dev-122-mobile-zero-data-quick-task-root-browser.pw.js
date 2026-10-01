@@ -67,8 +67,8 @@ async (page) => {
       && rootManifest.value.id === '/'
       && rootManifest.value.start_url === '/'
       && rootManifest.value.scope === '/'
-      && shortcut?.name === '快速建待辦'
-      && shortcut?.short_name === '建待辦'
+      && shortcut?.name === 'ProJED-快速建任務'
+      && shortcut?.short_name === 'ProJED-快速建任務'
       && shortcut?.description === '直接輸入一筆待辦'
       && shortcut?.url === '/quick-task/'
       && shortcut?.icons?.some(icon => icon.sizes === '192x192')
@@ -122,7 +122,11 @@ async (page) => {
       const quickEntry = page.locator('[data-quick-task-install-cta="true"]');
       await quickEntry.waitFor({ state: 'visible', timeout: 10000 });
       const entryText = await quickEntry.innerText();
-      const hrefs = await quickEntry.locator('a').evaluateAll(links => links.map(link => link.getAttribute('href')));
+      await quickEntry.click();
+      const quickDetail = page.locator('[data-app-install-detail="quick"]');
+      await quickDetail.waitFor({ state: 'visible', timeout: 10000 });
+      const detailText = await quickDetail.innerText();
+      const hrefs = await quickDetail.locator('[data-quick-task-install-link]').evaluateAll(links => links.map(link => link.getAttribute('href')));
       const metrics = await page.evaluate(() => ({
         bodyScrollWidth: document.body.scrollWidth,
         bodyClientWidth: document.body.clientWidth,
@@ -138,6 +142,7 @@ async (page) => {
         viewport,
         entryCount: await quickEntry.count(),
         entryText,
+        detailText,
         hrefs,
         metrics,
       };
@@ -147,12 +152,12 @@ async (page) => {
       result.screenshots.push(screenshot);
     }
     record('B24', settingsEvidence.every(evidence => evidence.entryCount === 1
-      && evidence.entryText.includes('快速建待辦')
-      && evidence.entryText.includes('需要桌面單鍵入口，可另行安裝獨立圖示，第一次請以同一 Google 帳號登入。')
-      && evidence.entryText.includes('開啟快速建待辦')
+      && evidence.entryText.includes('ProJED-快速建任務')
+      && evidence.detailText.includes('與主程式相同的 Google 帳號登入')
+      && evidence.detailText.includes('開啟 ProJED-快速建任務安裝頁')
       && evidence.hrefs.length === 1
       && evidence.hrefs[0] === '/quick-task/?install=1'
-      && !/自動.{0,8}兩.{0,8}圖示|立即.{0,8}捷徑|iOS.{0,8}長按/u.test(evidence.entryText)
+      && !/自動.{0,8}兩.{0,8}圖示|立即.{0,8}捷徑|iOS.{0,8}長按/u.test(evidence.detailText)
       && evidence.metrics.bodyScrollWidth <= evidence.metrics.bodyClientWidth + 1
       && evidence.metrics.rootScrollWidth <= evidence.metrics.rootClientWidth + 1
       && evidence.metrics.visibleAlerts.length === 0)

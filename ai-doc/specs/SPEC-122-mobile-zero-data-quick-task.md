@@ -7,6 +7,7 @@
 QA authority：[QA-DEV-122](../qa/QA-DEV-122-mobile-zero-data-quick-task.md)
 
 2026-10-01 DEV-133 相容修訂：[SPEC-133 Rev 3](SPEC-133-quick-task-shared-identity-sync.md)／[ADR-053 Rev 3](../decisions/ADR-053-quick-task-cross-origin-account-link.md) 管理 DEV-131 雙 origin 的登入與同步，採共用帳號系統、各自標準登入／Session；不要求跨 App OAuth Server 或免再次登入。同 origin root shortcut 可重用該 origin Session；獨立 quick 需自行登入同一帳號才在本人工作台看到任務。原 account-bound outbox、明確 claim、普通 Google OAuth callback、固定 JWT／receipt、零業務載入與 manifest identity 保留；既有 DEV-122 release／QA 結果不因本修訂重算為 DEV-133 PASS。 本版已達 RD Implementation Ready／架構定案；IDB DB v2／auth_context／receipt、登入後確認、forward-only correction及責任面依 SPEC-133 §4～§10 執行，原 owner／ID／未同步資料保留。
+2026-10-01 DEV-133 同步 UI 修訂：[SPEC-133 Rev 9](SPEC-133-quick-task-shared-identity-sync.md) 將最近任務摘要與需要人工介入的恢復入口整併至同一可展開容器，降低收合入口視覺存在感，首次出現時預設展開，並在展開時列出本機未綁定任務；未登入狀態以紅字及本機保存／登入後同步說明呈現。原 DEV-122 資料、保存、owner、同步與工作台契約不變，既有 release／QA 結果不代表新 UI 候選已驗收。
 關聯：[DEV-122](../dev_task.md#dev-122projed-手機零資料載入快速建待辦)、[SPEC-034](SPEC-034-fast-start-pwa-install-guidance.md)、[SPEC-039](SPEC-039-task-filter-core-and-workbench-profiles.md)、[SPEC-115](SPEC-115-blank-task-creation-contract.md)、[ADR-047](../decisions/ADR-047-pwa-per-client-reload-isolation.md)、[ADR-048](../decisions/ADR-048-blank-task-creation-contract.md)
 
 ## 1. 真正問題、目標與限制
@@ -30,7 +31,7 @@ QA authority：[QA-DEV-122](../qa/QA-DEV-122-mobile-zero-data-quick-task.md)
 |---|---|---|
 | 1 | `1A`：語音只更新名稱；使用者按「建立」或鍵盤完成才保存。 | 語音結束立即建立、倒數自動建立。 |
 | 2 | `2A`：語音 final 從目前游標加入；有選取時取代選取，保留其他文字。 | 取代整個名稱、只允許空欄。 |
-| 3 | `3B`：本機保存後停在成功畫面，提供「再記一筆」與「前往工作台」。 | 自動清空、自動跳完整工作台。 |
+| 3 | `3B`：本機保存後停在成功畫面。2026-10-01 最新 UI 調整為把最近任務狀態／名稱與待處理入口收進同一可展開容器，不放成功操作按鈕；要記下一筆時直接使用名稱欄。 | 自動跳完整工作台。 |
 | 4 | ProJED主程式manifest內建「快速建待辦」捷徑；獨立quick manifest保留為選用的第二圖示。 | 一次安裝自動建立兩個OS圖示、移除quick identity、把root一般啟動改到quick。 |
 
 名稱旁的按鈕固定顯示麥克風圖示與「語音」，觸控目標至少 48×48 CSS px。支援 Web Speech 時在同一次使用者 tap 內 focus/start；不支援、拒絕、無聲音或離線時聚焦名稱欄並明示使用手機鍵盤麥克風，不能宣稱網頁能代按鍵盤聽寫。
@@ -65,9 +66,9 @@ QA authority：[QA-DEV-122](../qa/QA-DEV-122-mobile-zero-data-quick-task.md)
 → 使用者登入 CTA 才建立 claim intent
 → 固定 owner/token/epoch snapshot + leased single-item RPC
 → task + private immutable receipt 同一 transaction
-→ strict receipt validation 後顯示「已建立」
-→ 使用者點前往工作台
-→ /?quick_workbench=1 → root intent consume → 既有單一 panel → 未歸位 hydration
+→ 同一可展開同步容器摘要顯示「已建立」或「已記下，待同步」與最近任務名稱
+→ 有其他待處理任務時摘要顯示數量；展開後提供需要人工介入的任務與操作
+→ 名稱欄可直接開始輸入下一筆
 ```
 
 - `已記下` 只代表本機 transaction 與 readback 成功。
@@ -158,7 +159,7 @@ type QuickCapturePhase =
 - `saved_pending_auth`：local readback 已成功；顯示待同步或登入 CTA。
 - `requesting/listening`：語音中的 interim/final 狀態；手動輸入與 composition 受保護。
 - `syncing`：取得 lease 後固定 token dispatch；lease expiry 後可有 bounded overlap，stale completion 不得覆寫新狀態。
-- `synced`：strict receipt readback 成功；可再記一筆或前往工作台。
+- `synced`：strict receipt readback 成功；同步容器摘要顯示成功狀態與任務名稱。使用者可直接在名稱欄開始下一筆。
 - failed states：保留原 title/capture；retryable 以 backoff；auth 需明確登入；permanent 顯示可複製／人工處理。
 
 ### 7.2 Title、voice 與 IME

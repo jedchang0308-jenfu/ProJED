@@ -34,15 +34,14 @@ async (page) => {
     await title.fill('DEV122 現場快速記錄');
     await submit.click();
     await page.getByText('已記下，待同步').waitFor({ state: 'visible' });
-    record('SM02', await page.getByText('DEV122 現場快速記錄').isVisible() && await page.getByRole('button', { name: '前往工作台' }).isVisible());
+    record('SM02', await page.getByText('DEV122 現場快速記錄').isVisible());
     const localRecord = await page.evaluate(() => new Promise(resolve => {
       const open = indexedDB.open('projed-quick-task-v1');
       open.onsuccess = () => { const request = open.result.transaction('captures').objectStore('captures').getAll(); request.onsuccess = () => resolve(request.result); };
       open.onerror = () => resolve([]);
     }));
     record('SM03', Array.isArray(localRecord) && localRecord.length === 1 && localRecord[0].title === 'DEV122 現場快速記錄', { localRecord });
-    await page.getByRole('button', { name: '再記一筆' }).click();
-    record('SM04', await title.evaluate(element => element.matches(':focus')) && await page.getByText('可以直接輸入名稱，或點右側「語音」。').isVisible(), { focused: await title.evaluate(element => element.matches(':focus')), helperVisible: await page.getByText('可以直接輸入名稱，或點右側「語音」。').isVisible() });
+    record('SM04', await title.isEnabled() && await page.getByText('可以直接輸入名稱，或點右側「語音」。').isVisible(), { inputReady: await title.isEnabled(), helperVisible: await page.getByText('可以直接輸入名稱，或點右側「語音」。').isVisible() });
 
     await voice.click();
     const firstFallback = await title.evaluate(element => element.matches(':focus')) && await page.getByText('請點名稱欄，再點鍵盤麥克風。').isVisible();
@@ -212,11 +211,18 @@ async (page) => {
     record('SM13', outboxEvidence.exhaustedState === 'failed_permanent' && outboxEvidence.exhaustedBlocked && outboxEvidence.manualRetryReset, outboxEvidence);
     const installPage = await page.context().newPage();
     try {
-      await installPage.setViewportSize({ width: 390, height: 844 });
+      await installPage.setViewportSize({ width: 1440, height: 900 });
       await installPage.goto('http://localhost:4000/quick-task/?install=1', { waitUntil: 'domcontentloaded' });
       const installGuide = installPage.locator('[data-quick-install="true"]');
       await installGuide.waitFor({ state: 'visible' });
       const titleOnInstall = installPage.getByRole('textbox', { name: '任務名稱' });
+      const installAction = installPage.getByRole('button', { name: '在桌面建立APP' });
+      await installAction.waitFor({ state: 'visible' });
+      await installAction.click();
+      const nativeInstallAction = installPage.getByRole('button', { name: '安裝 ProJED-快速建任務' });
+      const installNoticeDialog = installPage.getByRole('dialog', { name: '安裝提示' });
+      const noPromptFeedback = await installNoticeDialog.getByText('目前瀏覽器無法直接開啟安裝視窗。請用 Chrome 或 Edge 開啟此頁，點網址列的安裝圖示。').isVisible();
+      await installNoticeDialog.getByRole('button', { name: '關閉' }).click();
       await installPage.evaluate(() => {
         let prompted = false;
         const event = new Event('beforeinstallprompt', { cancelable: true });
@@ -227,16 +233,33 @@ async (page) => {
         Object.defineProperty(window, '__DEV122_PROMPTED', { configurable: true, get: () => prompted });
         window.dispatchEvent(event);
       });
-      const installAction = installPage.getByRole('button', { name: '安裝快速建待辦' });
-      await installAction.waitFor({ state: 'visible' });
-      await installAction.click();
-      await installPage.getByText('已送出安裝；請確認 Android 應用程式清單中有獨立圖示。').waitFor({ state: 'visible' });
-      await installPage.screenshot({ path: `${outputDir}/quick-task-install-390x844.png`, fullPage: true });
-      result.screenshots.push(`${outputDir}/quick-task-install-390x844.png`);
-      record('SM14', await installGuide.isVisible() && await titleOnInstall.isVisible() && await installPage.evaluate(() => Boolean(window.__DEV122_PROMPTED)), {
+      await nativeInstallAction.waitFor({ state: 'visible' });
+      await nativeInstallAction.click();
+      await installPage.getByText('已送出安裝；請確認電腦應用程式清單中有獨立圖示。').waitFor({ state: 'visible' });
+      await installPage.screenshot({ path: `${outputDir}/quick-task-install-desktop.png`, fullPage: true });
+      result.screenshots.push(`${outputDir}/quick-task-install-desktop.png`);
+      const androidInstallPage = await page.context().newPage();
+      let androidGuideVisible = false;
+      try {
+        await androidInstallPage.addInitScript(() => {
+          Object.defineProperty(navigator, 'userAgent', { configurable: true, get: () => 'Mozilla/5.0 (Linux; Android 15; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36' });
+        });
+        await androidInstallPage.setViewportSize({ width: 390, height: 844 });
+        await androidInstallPage.goto('http://localhost:4000/quick-task/?install=1', { waitUntil: 'domcontentloaded' });
+        const androidGuide = androidInstallPage.locator('[data-quick-install="true"]');
+        await androidGuide.waitFor({ state: 'visible' });
+        androidGuideVisible = (await androidGuide.innerText()).includes('選「安裝應用程式」');
+        await androidInstallPage.screenshot({ path: `${outputDir}/quick-task-install-android-guide.png`, fullPage: true });
+        result.screenshots.push(`${outputDir}/quick-task-install-android-guide.png`);
+      } finally {
+        await androidInstallPage.close();
+      }
+      record('SM14', await installGuide.isVisible() && await titleOnInstall.isVisible() && noPromptFeedback && await installPage.evaluate(() => Boolean(window.__DEV122_PROMPTED)) && androidGuideVisible, {
         guideVisible: await installGuide.isVisible(),
         titleVisible: await titleOnInstall.isVisible(),
+        noPromptFeedback,
         prompted: await installPage.evaluate(() => Boolean(window.__DEV122_PROMPTED)),
+        androidGuideVisible,
       });
       const iosInstallPage = await page.context().newPage();
       try {

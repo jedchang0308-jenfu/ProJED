@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ArrowLeft,
   CalendarPlus,
+  ChevronRight,
   DatabaseBackup,
   Bell,
   Settings,
@@ -16,6 +17,8 @@ import BackupSettings from './BackupSettings';
 import { BoardMembersPanel } from './BoardMembersPanel';
 import CalendarSubscriptionsView from './CalendarSubscriptionsView';
 import { AppInstallAssistant } from './AppInstallAssistant';
+import { OptionalIconReinstallDetails } from './OptionalIconReinstallGuide';
+import { SystemNoticeDetailsDialog } from './SystemNoticeDetailsDialog';
 
 type SettingsSection = 'profile' | 'backup' | 'permissions' | 'calendar' | 'app' | 'notifications';
 
@@ -32,7 +35,7 @@ const SETTINGS_SECTIONS: Array<{
   { id: 'backup', label: '備份、還原與資料移轉', icon: DatabaseBackup },
   { id: 'permissions', label: '看板權限', icon: ShieldCheck },
   { id: 'calendar', label: '行事曆訂閱', icon: CalendarPlus },
-  { id: 'app', label: '快速開啟', icon: Smartphone },
+  { id: 'app', label: '安裝APP', icon: Smartphone },
   { id: 'notifications', label: '系統通知', icon: Bell },
 ];
 
@@ -40,14 +43,16 @@ const SYSTEM_NOTICES = [
   {
     id: 'optional-icon-reinstall-20260929',
     date: '2026-09-29',
-    title: '手機 App 圖示可自由更新',
-    message: 'ProJED 主程式與快速建待辦可分別換成新版圖示；舊圖示仍可繼續使用。',
+    title: '手機 App 新圖示：可自行選擇更換',
+    message: '網站圖示已更新，手機 App 可能仍顯示舊圖示。舊圖示可繼續使用；換圖是自願的。',
+    details: <OptionalIconReinstallDetails />,
   },
 ] as const;
 
 const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'backup' }) => {
   const [activeSection, setActiveSection] = useState<SettingsSection>(initialSection);
-  const [openIconGuide, setOpenIconGuide] = useState(false);
+  const [selectedNotice, setSelectedNotice] = useState<(typeof SYSTEM_NOTICES)[number] | null>(null);
+  const closeNoticeDetails = useCallback(() => setSelectedNotice(null), []);
 
   useEffect(() => {
     setActiveSection(initialSection);
@@ -104,7 +109,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'backup' }
               <button
                 key={section.id}
                 type="button"
-                onClick={() => { setOpenIconGuide(false); setActiveSection(section.id); }}
+                onClick={() => setActiveSection(section.id)}
                 data-settings-section-tab={section.id}
                 className={`flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 overflow-hidden border px-2 py-2 text-center transition-colors sm:min-h-11 sm:flex-row sm:justify-start sm:gap-2 sm:px-3 sm:text-left ${
                   isActive
@@ -138,8 +143,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'backup' }
         )}
         {activeSection === 'app' && (
           <div className="space-y-2">
-            <p className="text-xs leading-4 text-slate-500">管理此裝置與目前帳號的快速開啟提示。</p>
-            <AppInstallAssistant mode="settings" openIconGuide={openIconGuide} />
+            <AppInstallAssistant mode="settings" />
           </div>
         )}
         {activeSection === 'notifications' && (
@@ -148,26 +152,39 @@ const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'backup' }
               <h3 className="text-base font-bold text-slate-900">系統通知</h3>
               <p className="mt-0.5 text-xs text-slate-500">系統公告會保留在這裡，方便日後查看。</p>
             </div>
-            <div className="divide-y divide-slate-100">
+            <ul className="divide-y divide-slate-100">
               {SYSTEM_NOTICES.map((notice) => (
-                <article key={notice.id} className="px-4 py-4" data-system-notice={notice.id}>
-                  <time className="text-xs text-slate-500" dateTime={notice.date}>{notice.date}</time>
-                  <h4 className="mt-1 text-sm font-bold text-slate-900">{notice.title}</h4>
-                  <p className="mt-1 text-sm leading-6 text-slate-600">{notice.message}</p>
+                <li key={notice.id}>
                   <button
                     type="button"
-                    className="mt-2 text-sm font-semibold text-teal-700 underline-offset-2 hover:underline focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    onClick={() => { setOpenIconGuide(true); setActiveSection('app'); }}
-                    data-system-notice-action="icon-reinstall"
+                    className="group flex w-full items-center justify-between gap-4 px-4 py-4 text-left transition-colors hover:bg-slate-50 focus:outline-none focus-visible:bg-slate-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/50"
+                    aria-haspopup="dialog"
+                    data-system-notice={notice.id}
+                    data-system-notice-item="true"
+                    onClick={() => setSelectedNotice(notice)}
                   >
-                    查看換圖步驟
+                    <span className="min-w-0 flex-1">
+                      <time className="text-xs text-slate-500" dateTime={notice.date}>{notice.date}</time>
+                      <span className="mt-1 block text-sm font-bold text-slate-900 group-hover:underline group-focus-visible:underline">{notice.title}</span>
+                      <span className="mt-1 block text-sm leading-6 text-slate-600">{notice.message}</span>
+                    </span>
+                    <ChevronRight size={18} className="shrink-0 text-slate-400 transition-transform group-hover:translate-x-0.5 group-focus-visible:translate-x-0.5" aria-hidden="true" />
                   </button>
-                </article>
+                </li>
               ))}
-            </div>
+            </ul>
           </section>
         )}
       </div>
+      {selectedNotice && (
+        <SystemNoticeDetailsDialog
+          date={selectedNotice.date}
+          title={selectedNotice.title}
+          onClose={closeNoticeDetails}
+        >
+          {selectedNotice.details}
+        </SystemNoticeDetailsDialog>
+      )}
     </div>
   );
 };

@@ -19,6 +19,8 @@ const openDatabase = (): Promise<IDBDatabase> => new Promise((resolve, reject) =
     return;
   }
   const request = indexedDB.open(QUICK_CAPTURE_DB, QUICK_CAPTURE_SCHEMA_VERSION);
+  let abandoned = false;
+  request.onblocked = () => { abandoned = true; reject(new Error('IDB_UPGRADE_BLOCKED')); };
   request.onupgradeneeded = () => {
     const db = request.result;
     const store = db.objectStoreNames.contains(QUICK_CAPTURE_STORE)
@@ -33,7 +35,12 @@ const openDatabase = (): Promise<IDBDatabase> => new Promise((resolve, reject) =
       db.createObjectStore(QUICK_AUTH_CONTEXT_STORE, { keyPath: 'key' });
     }
   };
-  request.onsuccess = () => resolve(request.result);
+  request.onsuccess = () => {
+    const db = request.result;
+    db.onversionchange = () => db.close();
+    if (abandoned) { db.close(); return; }
+    resolve(db);
+  };
   request.onerror = () => reject(request.error ?? new Error('IDB_OPEN_FAILED'));
 });
 
@@ -75,6 +82,15 @@ export const commitQuickCapture = async (
     'readwrite',
     (tx) => {
       const captureStore = tx.objectStore(QUICK_CAPTURE_STORE);
+      const addOrRead = () => {
+        const existing = captureStore.get(record.captureId);
+        existing.onsuccess = () => {
+          const value = existing.result as QuickCaptureRecord | undefined;
+          if (!value) captureStore.add(record);
+          else if (value.accountId !== record.accountId || value.title !== record.title) tx.abort();
+        };
+        existing.onerror = () => tx.abort();
+      };
       if (expectedContextRevision !== undefined) {
         const contextRequest = tx.objectStore(QUICK_AUTH_CONTEXT_STORE).get('current');
         contextRequest.onsuccess = () => {
@@ -85,11 +101,11 @@ export const commitQuickCapture = async (
             tx.abort();
             return;
           }
-          captureStore.add(record);
+          addOrRead();
         };
         contextRequest.onerror = () => tx.abort();
       } else {
-        captureStore.add(record);
+        addOrRead();
       }
     },
   );
@@ -99,7 +115,7 @@ export const commitQuickCapture = async (
   } catch {
     throw new Error('IDB_READBACK_FAILED');
   }
-  if (!readback || readback.captureId !== record.captureId || readback.title !== record.title) {
+  if (!readback || readback.captureId !== record.captureId || readback.accountId !== record.accountId || readback.title !== record.title) {
     throw new Error('IDB_READBACK_FAILED');
   }
   return readback;
@@ -109,7 +125,7 @@ export const getQuickCapture = (captureId: string) => transaction<QuickCaptureRe
 
 export const getQuickAuthContext = () => transaction<QuickAuthContext | undefined>(QUICK_AUTH_CONTEXT_STORE, 'readonly', tx => tx.objectStore(QUICK_AUTH_CONTEXT_STORE).get('current'));
 
-export const saveQuickAuthContext = async (context: QuickAuthContext, expectedRevision?: number) => {
+export const saveQuickAuthContext = async (context: QuickAuthContext, expectedRevision?: number | null) => {
   await transaction(
     QUICK_AUTH_CONTEXT_STORE,
     'readwrite',
@@ -118,7 +134,7 @@ export const saveQuickAuthContext = async (context: QuickAuthContext, expectedRe
       const request = store.get('current');
       request.onsuccess = () => {
         const current = request.result as QuickAuthContext | undefined;
-        if (expectedRevision !== undefined && current?.revision !== expectedRevision) {
+        if (expectedRevision !== undefined && (current?.revision ?? null) !== expectedRevision) {
           tx.abort();
           return;
         }
@@ -146,6 +162,9 @@ export const countAllPendingQuickCaptures = async () => {
 };
 
 export const updateQuickCapture = async (captureId: string, update: Partial<QuickCaptureRecord>, expectedLeaseId?: string | null) => {
+  if (['captureId', 'accountId', 'title', 'clientCreatedAt', 'workspaceHint', 'schemaVersion'].some(key => key in update)) {
+    throw new Error('CAPTURE_IDENTITY_IMMUTABLE');
+  }
   const db = await openDatabase();
   return new Promise<QuickCaptureRecord | null>((resolve, reject) => {
     const tx = db.transaction(QUICK_CAPTURE_STORE, 'readwrite');
@@ -155,6 +174,7 @@ export const updateQuickCapture = async (captureId: string, update: Partial<Quic
     request.onsuccess = () => {
       const record = request.result as QuickCaptureRecord | undefined;
       if (!record || (expectedLeaseId !== undefined && record.leaseId !== expectedLeaseId)) return;
+      if (record.state === 'synced' && update.state && update.state !== 'synced') return;
       next = { ...record, ...update, updatedAt: Date.now() };
       store.put(next);
     };
@@ -165,14 +185,14 @@ export const updateQuickCapture = async (captureId: string, update: Partial<Quic
   });
 };
 
-export const acquireQuickCaptureLease = async (captureId: string, accountId: string) => {
+export const acquireQuickCaptureLease = async (captureId: string, accountId: string, expectedContext?: { revision: number; projectRef: string }) => {
   const db = await openDatabase();
   return new Promise<QuickCaptureRecord | null>((resolve, reject) => {
-    const tx = db.transaction(QUICK_CAPTURE_STORE, 'readwrite');
+    const tx = db.transaction(expectedContext ? [QUICK_CAPTURE_STORE, QUICK_AUTH_CONTEXT_STORE] : QUICK_CAPTURE_STORE, 'readwrite');
     const store = tx.objectStore(QUICK_CAPTURE_STORE);
     const request = store.get(captureId);
     let result: QuickCaptureRecord | null = null;
-    request.onsuccess = () => {
+    const acquire = () => {
       const current = request.result as QuickCaptureRecord | undefined;
       if (!current || current.accountId !== accountId) return;
       if (current.state === 'synced' || current.state === 'failed_permanent') return;
@@ -191,6 +211,15 @@ export const acquireQuickCaptureLease = async (captureId: string, accountId: str
       };
       store.put(result);
     };
+    request.onsuccess = () => {
+      if (!expectedContext) { acquire(); return; }
+      const contextRequest = tx.objectStore(QUICK_AUTH_CONTEXT_STORE).get('current');
+      contextRequest.onsuccess = () => {
+        const context = contextRequest.result as QuickAuthContext | undefined;
+        if (context?.bindingAllowed && context.accountId === accountId && context.revision === expectedContext.revision
+          && context.projectRef === expectedContext.projectRef) acquire();
+      };
+    };
     request.onerror = () => reject(request.error ?? new Error('IDB_REQUEST_FAILED'));
     tx.oncomplete = () => { db.close(); resolve(result); };
     tx.onerror = () => { db.close(); reject(tx.error ?? new Error('IDB_LEASE_FAILED')); };
@@ -206,6 +235,8 @@ export const finishQuickCaptureLease = async (
   retryAfterMs = 0,
   receipt?: QuickCaptureReceipt,
 ) => {
+  const frozen = state === 'synced' ? await getQuickCapture(captureId) : null;
+  const receiptMatches = state !== 'synced' || Boolean(frozen && receipt && await hasMatchingReceiptHash({ ...frozen, receipt }));
   const db = await openDatabase();
   return new Promise<QuickCaptureRecord | null>((resolve, reject) => {
     const tx = db.transaction(QUICK_CAPTURE_STORE, 'readwrite');
@@ -215,7 +246,9 @@ export const finishQuickCaptureLease = async (
     request.onsuccess = () => {
       const record = request.result as QuickCaptureRecord | undefined;
       if (!record || record.leaseId !== leaseId) return;
-      if (state === 'synced' && (!receipt || !isQuickCaptureReceipt(receipt, { captureId, accountId: record.accountId, title: record.title }))) {
+      if (record.state === 'synced') return;
+      if (state === 'synced' && (!receiptMatches || !receipt || !frozen || frozen.accountId !== record.accountId
+        || frozen.title !== record.title || !isQuickCaptureReceipt(receipt, { captureId, accountId: record.accountId, title: record.title }))) {
         next = { ...record, state: 'failed_permanent', lastErrorCode: 'RECEIPT_INVALID', nextAttemptAt: null, leaseId: null, leaseExpiresAt: null, updatedAt: Date.now() };
         store.put(next);
         return;
@@ -248,32 +281,41 @@ export const finishQuickCaptureLease = async (
 };
 
 export const retryQuickCapture = async (captureId: string, accountId: string) => {
-  const record = await getQuickCapture(captureId);
-  if (!record || record.accountId !== accountId) return null;
-  if (record.state === 'failed_permanent' && !record.lastErrorCode?.includes('WORKSPACE')
-    && record.lastErrorCode !== 'AUTO_RETRY_EXHAUSTED') return null;
-  return updateQuickCapture(captureId, {
-    state: 'pending',
-    attemptCount: 0,
-    nextAttemptAt: null,
-    lastErrorCode: null,
-    leaseId: null,
-    leaseExpiresAt: null,
+  let next: QuickCaptureRecord | null = null;
+  await transaction(QUICK_CAPTURE_STORE, 'readwrite', tx => {
+    const store = tx.objectStore(QUICK_CAPTURE_STORE), request = store.get(captureId);
+    request.onsuccess = () => {
+      const record = request.result as QuickCaptureRecord | undefined;
+      if (!record || record.accountId !== accountId || record.state === 'synced'
+        || (record.leaseExpiresAt && record.leaseExpiresAt > Date.now())) return;
+      if (record.state === 'failed_permanent' && !record.lastErrorCode?.includes('WORKSPACE')
+        && record.lastErrorCode !== '23503' && record.lastErrorCode !== 'AUTO_RETRY_EXHAUSTED') return;
+      next = { ...record, state: 'pending', attemptCount: 0, nextAttemptAt: null, lastErrorCode: null,
+        leaseId: null, leaseExpiresAt: null, updatedAt: Date.now() };
+      store.put(next);
+    };
   });
+  return next;
 };
 
-export const bindQuickCaptureClaim = async (captureId: string, accountId: string, nonceHash: string) => {
+export const bindQuickCaptureClaim = async (captureId: string, accountId: string, nonceHash: string, expectedContext?: { revision: number; projectRef: string }) => {
   const db = await openDatabase();
   return new Promise<QuickCaptureRecord | null>((resolve, reject) => {
-    const tx = db.transaction(QUICK_CAPTURE_STORE, 'readwrite');
+    const tx = db.transaction([QUICK_CAPTURE_STORE, QUICK_AUTH_CONTEXT_STORE], 'readwrite');
     const store = tx.objectStore(QUICK_CAPTURE_STORE);
     const request = store.get(captureId);
     let next: QuickCaptureRecord | null = null;
     request.onsuccess = () => {
       const record = request.result as QuickCaptureRecord | undefined;
       if (!record || record.accountId !== null || !record.claimIntent
-        || record.claimIntent.nonceHash !== nonceHash || record.claimIntent.expiresAt < Date.now()) return;
-      next = {
+        || record.claimIntent.captureId !== captureId || record.claimIntent.nonceHash !== nonceHash
+        || !Number.isSafeInteger(record.claimIntent.expiresAt) || record.claimIntent.expiresAt <= Date.now()) return;
+      const contextRequest = tx.objectStore(QUICK_AUTH_CONTEXT_STORE).get('current');
+      contextRequest.onsuccess = () => {
+        const context = contextRequest.result as QuickAuthContext | undefined;
+        if (!context?.bindingAllowed || context.accountId !== accountId || (expectedContext
+          && (context.revision !== expectedContext.revision || context.projectRef !== expectedContext.projectRef))) return;
+        next = {
         ...record,
         accountId,
         state: 'pending',
@@ -281,7 +323,8 @@ export const bindQuickCaptureClaim = async (captureId: string, accountId: string
         nextAttemptAt: null,
         updatedAt: Date.now(),
       };
-      store.put(next);
+        store.put(next);
+      };
     };
     request.onerror = () => reject(request.error ?? new Error('IDB_REQUEST_FAILED'));
     tx.oncomplete = () => { db.close(); resolve(next); };
@@ -301,13 +344,31 @@ const hasMatchingReceiptHash = async (record: QuickCaptureRecord) => {
   return titleHash === record.receipt.titleHash;
 };
 
+export const prepareQuickCapturesForSync = async (accountId: string) => {
+  const records = await listQuickCaptures(accountId);
+  for (const record of records) {
+    const legacy = record.state === 'synced' && !await hasMatchingReceiptHash(record);
+    if (!legacy && record.state !== 'failed_auth') continue;
+    await transaction(QUICK_CAPTURE_STORE, 'readwrite', tx => {
+      const store = tx.objectStore(QUICK_CAPTURE_STORE), request = store.get(record.captureId);
+      request.onsuccess = () => {
+        const current = request.result as QuickCaptureRecord | undefined;
+        if (!current || current.accountId !== accountId || JSON.stringify(current) !== JSON.stringify(record)) return;
+        store.put({ ...current, state: 'pending', nextAttemptAt: null, lastErrorCode: null,
+          leaseId: null, leaseExpiresAt: null, updatedAt: Date.now() });
+      };
+    });
+  }
+};
+
 export const removeExpiredQuickCaptures = async (now = Date.now()) => {
   const records = await transaction<QuickCaptureRecord[]>(QUICK_CAPTURE_STORE, 'readonly', tx => tx.objectStore(QUICK_CAPTURE_STORE).getAll());
-  const candidates = new Map<string, number>();
+  const candidates = new Map<string, string>();
   for (const record of records ?? []) {
-    if (record.state === 'synced' && Number.isFinite(record.updatedAt)
+    if (record.state === 'synced' && !record.leaseId && Number.isSafeInteger(record.updatedAt) && record.updatedAt > 0
+      && record.updatedAt <= now
       && now - record.updatedAt >= QUICK_CAPTURE_RETENTION_MS && await hasMatchingReceiptHash(record)) {
-      candidates.set(record.captureId, record.updatedAt);
+      candidates.set(record.captureId, JSON.stringify(record));
     }
   }
   if (candidates.size === 0) return 0;
@@ -320,7 +381,7 @@ export const removeExpiredQuickCaptures = async (now = Date.now()) => {
       const cursor = cursorRequest.result;
       if (!cursor) return;
       const record = cursor.value as QuickCaptureRecord;
-      if (candidates.get(record.captureId) === record.updatedAt && record.state === 'synced'
+      if (candidates.get(record.captureId) === JSON.stringify(record) && record.state === 'synced'
         && isQuickCaptureReceipt(record.receipt, record)) {
         cursor.delete();
         removedCount += 1;

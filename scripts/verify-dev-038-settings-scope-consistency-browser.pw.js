@@ -144,12 +144,14 @@ const baseUrl = page.url().split('/').slice(0, 3).join('/');
     const calendarScopeText = await page.locator('[data-calendar-settings-scope="external-link"]').innerText();
     assert(calendarScopeText.includes('外部連結'), 'calendar settings should show external-link scope', { calendarScopeText });
 
-    step = 'quick-open device/account scope';
+    step = 'App installation choices';
     await clickSettingsTab('app');
     await page.locator('[data-pwa-install-settings]').waitFor({ state: 'visible', timeout: 10000 });
-    const appText = await page.locator('[data-pwa-install-settings]').innerText();
-    assert(appText.includes('設定範圍：此裝置 / 目前帳號'), 'quick-open settings should show device/account scope', { appText });
-    assert(!appText.includes('目標：'), 'quick-open settings should not show board target wording', { appText });
+    const appPanel = page.locator('[data-pwa-install-settings]');
+    const appText = await appPanel.innerText();
+    assert(await appPanel.getAttribute('data-pwa-install-scope') === 'device-account', 'App installation should retain its device/account scope');
+    assert(await appPanel.locator('[data-app-install-choice]').count() === 2, 'App installation should offer two choices', { appText });
+    assert(!appText.includes('目標：'), 'App installation should not show board target wording', { appText });
 
     step = 'current-board trash page';
     await clickSettingsTab('backup');

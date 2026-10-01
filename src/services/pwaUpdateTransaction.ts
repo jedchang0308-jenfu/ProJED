@@ -20,6 +20,7 @@ export interface PwaUpdateTransactionV1 {
   updatedAt: number;
   leaseExpiresAt: number;
   errorCode?: string;
+  errorMessage?: string;
 }
 
 export const PWA_UPDATE_TRANSACTION_SCHEMA_VERSION = 1 as const;
@@ -85,7 +86,8 @@ export const isPwaUpdateTransaction = (value: unknown): value is PwaUpdateTransa
     && candidate.createdAt <= candidate.updatedAt
     && (candidate.phase !== 'awaiting-controller' || candidate.normalReloadReserved)
     && (candidate.phase !== 'recovering' || candidate.recoveryAttemptCount === 1)
-    && (candidate.errorCode === undefined || (typeof candidate.errorCode === 'string' && candidate.errorCode.length <= 128));
+    && (candidate.errorCode === undefined || (typeof candidate.errorCode === 'string' && candidate.errorCode.length <= 128))
+    && (candidate.errorMessage === undefined || (typeof candidate.errorMessage === 'string' && candidate.errorMessage.length <= 1024));
 };
 
 export const parsePwaUpdateTransaction = (raw: string | null): PwaUpdateTransactionV1 | null => {
@@ -136,7 +138,7 @@ export const transitionPwaUpdateTransaction = (
   transaction: PwaUpdateTransactionV1,
   phase: PwaUpdatePhase,
   now: number,
-  updates: Partial<Pick<PwaUpdateTransactionV1, 'normalReloadReserved' | 'recoveryAttemptCount' | 'errorCode'>> = {},
+  updates: Partial<Pick<PwaUpdateTransactionV1, 'normalReloadReserved' | 'recoveryAttemptCount' | 'errorCode' | 'errorMessage'>> = {},
 ): PwaUpdateTransactionV1 => {
   if (!isPwaUpdateTransaction(transaction)) throw new Error('Invalid PWA update transaction.');
   if (phase !== transaction.phase && !transitions[transaction.phase].includes(phase)) {
@@ -185,6 +187,7 @@ export const claimPwaUpdateTransaction = (
     updatedAt: now,
     leaseExpiresAt: now + PWA_UPDATE_LEASE_MS,
     errorCode: undefined,
+    errorMessage: undefined,
   };
   if (!isPwaUpdateTransaction(next)) throw new Error('Invalid claimed PWA update transaction.');
   return next;

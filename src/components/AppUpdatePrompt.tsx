@@ -6,6 +6,7 @@ import {
   dismissPwaUpdatePrompt,
   getPwaUpdateState,
   subscribePwaUpdateState,
+  retryPwaUpdate,
   type PwaUpdateState,
 } from '../services/pwaUpdateService';
 import { Button } from './ui/Button';
@@ -33,17 +34,24 @@ export const AppUpdatePrompt: React.FC = () => {
   const isUpdating = isApplying || state.reloadSafetyState === 'preparing' || state.status === 'applying' || state.status === 'awaiting-controller' || state.status === 'verifying';
 
   const handleUpdate = async () => {
-    if (isUpdating) return;
+    if (isUpdating || isRecovering) return;
     setIsApplying(true);
     await applyPwaUpdate();
     setIsApplying(false);
   };
 
   const handleRecovery = async () => {
-    if (isRecovering) return;
+    if (isRecovering || isUpdating) return;
     setIsRecovering(true);
     await clearPwaApplicationCacheAndReload();
     setIsRecovering(false);
+  };
+
+  const handleRetry = async () => {
+    if (isUpdating || isRecovering) return;
+    setIsApplying(true);
+    await retryPwaUpdate();
+    setIsApplying(false);
   };
 
   if (!visible) return null;
@@ -55,19 +63,19 @@ export const AppUpdatePrompt: React.FC = () => {
       role="status"
       aria-live="polite"
     >
-      <div className="mx-auto flex max-w-xl items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 shadow-xl shadow-slate-900/15 sm:px-4 sm:py-3">
+      <div className="mx-auto flex max-w-xl flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 shadow-xl shadow-slate-900/15 sm:px-4 sm:py-3">
         {isRecovery && (
           <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-amber-50 text-amber-600" aria-hidden="true">
             <AlertTriangle size={17} />
           </span>
         )}
-        <div className="min-w-0 flex-1">
+        <div className="min-w-[10rem] flex-1">
           <h2 className="truncate text-sm font-bold leading-5 text-slate-900">
-            {isRecovery ? '載入新版時發生問題' : '新版已就緒'}
+            {isRecovery ? (state.failureKind === 'load' ? '畫面載入失敗' : state.failureKind === 'cache-recovery' ? '快取恢復未完成' : '重新載入未完成') : '新版已就緒'}
           </h2>
           {(isRecovery || isBlocked) && (
             <p className="mt-0.5 break-words text-xs leading-4 text-slate-600" data-pwa-update-error>
-              {state.errorMessage || (isBlocked ? '目前無法確認內容是否已保存。' : '請重新整理；若仍無法開啟，可清除應用程式快取後再載入。')}
+              {state.errorMessage || (isBlocked ? '目前無法確認內容是否已保存。' : '請重試；若仍無法開啟，可清除應用程式快取後再載入。')}
             </p>
           )}
         </div>
@@ -77,19 +85,22 @@ export const AppUpdatePrompt: React.FC = () => {
               <Button
                 type="button"
                 size="sm"
-                onClick={() => window.location.reload()}
-                className="h-8 px-2.5 text-xs"
+                onClick={handleRetry}
+                isLoading={isApplying}
+                disabled={isRecovering}
+                className="h-8 px-2.5 text-xs focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                 data-pwa-update-action
               >
-                重新整理
+                重試
               </Button>
               <Button
                 type="button"
                 size="sm"
                 variant="secondary"
                 isLoading={isRecovering}
+                disabled={isUpdating}
                 onClick={handleRecovery}
-                className="h-8 px-2.5 text-xs"
+                className="h-8 px-2.5 text-xs focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                 data-pwa-cache-recovery
               >
                 清除快取後重整
@@ -102,7 +113,7 @@ export const AppUpdatePrompt: React.FC = () => {
                 size="sm"
                 isLoading={isUpdating}
                 onClick={handleUpdate}
-                className="h-8 px-2.5 text-xs"
+                className="h-8 px-2.5 text-xs focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                 data-pwa-update-action
               >
                 {isUpdating ? '準備重新載入' : '重新載入'}
@@ -113,7 +124,7 @@ export const AppUpdatePrompt: React.FC = () => {
                   size="sm"
                   variant="ghost"
                   onClick={dismissPwaUpdatePrompt}
-                  className="h-8 px-2 text-xs"
+                  className="h-8 px-2 text-xs focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                   data-pwa-update-later
                 >
                   稍後

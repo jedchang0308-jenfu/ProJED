@@ -31,7 +31,6 @@ import HomeView from './components/HomeView';
 // ListView 已由 WbsListView 取代，import 移除
 // CardModal 已在 Phase B 移除，改為在清單視圖行內編輯
 import GlobalDialog from './components/GlobalDialog';
-import { AppInstallAssistant } from './components/AppInstallAssistant';
 import { AppUpdatePrompt } from './components/AppUpdatePrompt';
 import { ToastContainer } from './components/ui/ToastContainer';
 import { toast } from './store/useToastStore';
@@ -374,7 +373,6 @@ function App() {
         <AppContent />
       </AuthGate>
       <AppUpdatePrompt />
-      <AppInstallAssistant />
       <MeetingDraftRecoveryNotice />
       <ToastContainer />
     </PwaReloadSafetyBridge>

@@ -45,7 +45,7 @@ assert(
   !updateService.includes('if (readCompletedVersion() === targetVersion) return null;')
     && updateService.includes('completedVersion is cross-tab history')
     && updateService.includes('do not\n    // create a second global transaction')
-    && updateService.includes("if (readCompletedVersion() === targetVersion) {\n    reloadAtOwnBoundary(targetVersion);"),
+    && /if \(readCompletedVersion\(\) === targetVersion\) \{\s*(?:if \(retryFailed\) clearPwaReloadReservation\(\);\s*)?reloadAtOwnBoundary\(targetVersion\);/.test(updateService),
 );
 assert(
   'document identity and post-reload recovery are local-tab scoped',

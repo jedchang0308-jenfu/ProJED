@@ -41,8 +41,9 @@ const quickManifest = JSON.parse(quickManifestSource) as {
   scope?: string;
   icons?: Array<{ src?: string; sizes?: string; type?: string }>;
 };
-const distRootManifest = existsSync(resolve('dist/manifest.webmanifest'))
-  ? JSON.parse(read('dist/manifest.webmanifest')) as typeof rootManifest
+const buildOutputDirectory = process.env.DEV133_BUILD_OUTDIR ?? 'dist';
+const distRootManifest = existsSync(resolve(buildOutputDirectory, 'manifest.webmanifest'))
+  ? JSON.parse(read(resolve(buildOutputDirectory, 'manifest.webmanifest'))) as typeof rootManifest
   : null;
 const shortcutIconPath = resolve('public/icons/projed-quick-task-icon-brand-20260929-512.png');
 const shortcutIcon = readFileSync(shortcutIconPath);
@@ -57,11 +58,12 @@ const workbench = read('src/components/MainLayout.tsx');
 const panel = read('src/components/TaskWorkbenchPanel.tsx');
 const pwaUpdate = read('src/services/pwaUpdateService.ts');
 const outbox = read('src/features/quickTaskCapture/outbox.ts');
+const quickAuth = read('src/features/quickTaskCapture/auth.ts');
 const sync = read('src/features/quickTaskCapture/sync.ts');
 const productionSameAccount = read('scripts/verify-dev-122-production-same-account.mjs');
 const productionQuickBrowser = read('scripts/verify-dev-122-production-quick-browser.pw.js');
 const buildMeta = (() => {
-  try { return JSON.parse(read('dist/app-shell-meta.json')); }
+  try { return JSON.parse(read(resolve(buildOutputDirectory, 'app-shell-meta.json'))); }
   catch { return { version: 'unknown' }; }
 })();
 
@@ -96,7 +98,8 @@ check('S11-lock-scope', migration.includes("format('account:%s:unplaced:parent:r
 check('S12', !quickMain.includes('credentials:') && !quickMain.includes("from '../services/dataBackend'")
   && quickMain.includes('getWorkbenchUrl(window.location.origin)')
   && read('src/features/quickTaskCapture/origins.ts').includes('quick_workbench=1'));
-check('S13', quickMain.includes('putClaimIntent') && quickMain.includes('getUser(snapshot.accessToken)') && quickMain.includes('history.replaceState'));
+check('S13', quickMain.includes('putClaimIntent') && quickMain.includes('verifyQuickSession(snapshot)')
+  && quickAuth.includes('supabase.auth.getUser(session.access_token)') && quickMain.includes('history.replaceState'));
 check('S14', panel.includes('onClosed?: () => void') && workbench.includes('consumeQuickWorkbenchIntent') && workbench.includes('openTaskWorkbenchPanel'));
 check('S15-runtime-errors', classifyQuickSyncError(new Error('QT_AUTH_REQUIRED')) === 'failed_auth' && classifyQuickSyncError(new Error('QT_NO_AVAILABLE_WORKSPACE')) === 'failed_permanent');
 check('S15', rootManifest.id === '/'
@@ -104,8 +107,8 @@ check('S15', rootManifest.id === '/'
   && rootManifest.scope === '/'
   && rootManifest.shortcuts?.filter(shortcut => shortcut.url === '/quick-task/').length === 1
   && quickShortcut !== undefined
-  && quickShortcut.name === '快速建待辦'
-  && quickShortcut.short_name === '建待辦'
+  && quickShortcut.name === 'ProJED-快速建任務'
+  && quickShortcut.short_name === 'ProJED-快速建任務'
   && quickShortcut.description === '直接輸入一筆待辦'
   && quickShortcut.url === '/quick-task/'
   && quickShortcut.icons?.length === 2
@@ -116,16 +119,19 @@ check('S15', rootManifest.id === '/'
   && vite.includes('manifest: false')
   && distRootManifest !== null
   && JSON.stringify(distRootManifest) === JSON.stringify(rootManifest)
-  && appInstallAssistant.includes('需要桌面單鍵入口，可另行安裝獨立圖示，第一次請以同一 Google 帳號登入。'));
+  && appInstallAssistant.includes('與主程式相同的 Google 帳號登入')
+  && appInstallAssistant.includes('data-quick-task-install-link="true"'));
 check('S16', vite.includes('app-shell-meta.json') && vite.includes('projed-shell-version') && pwaUpdate.includes('/app-shell-meta.json?projed_update_check='));
 check('S17', migration.includes("QT_EXISTING_ROW_INVALID") && migration.includes('where owner_id = v_owner and id = p_capture_id'));
 check('S18', migration.includes('v_order bigint') && migration.includes('v_order > 2147483647') && migration.includes("QT_ORDER_EXHAUSTED"));
 check('S19', outbox.includes("const nextState: QuickCaptureState = exhausted ? 'failed_permanent' : state")
   && outbox.includes("nextErrorCode = exhausted ? 'AUTO_RETRY_EXHAUSTED' : lastErrorCode")
   && outbox.includes("record.lastErrorCode !== 'AUTO_RETRY_EXHAUSTED'"));
-check('S20', sync.includes("retryAfter > 0 && state === 'failed_retryable'")
-  && sync.includes("updateQuickCapture(leased.captureId, { nextAttemptAt: Date.now() + retryAfter })"));
-check('S21', quickMain.includes("listQuickCaptures(authSnapshot?.accountId ?? null, true)")
+check('S20', sync.includes('        retryAfter,')
+  && outbox.includes("const nextAttemptAt = nextState === 'failed_retryable'")
+  && outbox.includes('Math.max(backoffDelay, retryAfterDelay)'));
+check('S21', quickMain.includes("listQuickCaptures(authSnapshot?.accountId ?? context?.accountId ?? null, true)")
+  && quickMain.includes('getQuickBindingContext()')
   && quickMain.includes("record.state !== 'synced'"));
 check('S22-production-fixture-guard', productionSameAccount.includes('DEV122_ALLOW_PRODUCTION_FIXTURE')
   && productionSameAccount.includes('--allow-production-fixture')
@@ -160,7 +166,7 @@ const artifact = {
   failures,
   generatedAt: new Date().toISOString(),
 };
-const outputDir = resolve('output/playwright/dev-122-mobile-zero-data-quick-task');
+const outputDir = resolve(process.env.DEV133_REPORT_DIR ?? 'output/playwright/dev-122-mobile-zero-data-quick-task');
 mkdirSync(outputDir, { recursive: true });
 writeFileSync(resolve(outputDir, 'static-result.json'), `${JSON.stringify(artifact, null, 2)}\n`, 'utf8');
 if (failures.length) {

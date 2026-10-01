@@ -77,7 +77,7 @@ async (page) => {
     const prompt = page.locator('[data-pwa-update-prompt]');
     await prompt.waitFor({ state: 'visible', timeout: 10000 });
     const text = await prompt.innerText();
-    assert(/載入新版時發生問題/.test(text), 'recovery prompt should explain load failure', { text });
+    assert(/畫面載入失敗/.test(text), 'recovery prompt should identify a load failure', { text });
     assert(await page.locator('[data-pwa-cache-recovery]').count() === 1, 'recovery prompt should expose cache recovery action');
     assert(await page.locator('[data-pwa-update-error]').count() === 1, 'recovery prompt should show error detail');
   };

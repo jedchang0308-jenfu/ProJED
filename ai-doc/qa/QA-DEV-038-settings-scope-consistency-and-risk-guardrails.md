@@ -94,6 +94,8 @@ npm.cmd run verify:dev-038-settings-scope-consistency
 | QA-038-B08 | 開啟快速開啟 | 顯示 `設定範圍：此裝置 / 目前帳號`，沒有看板目標文案 |
 | QA-038-B09 | 390px mobile viewport 逐頁切換 | section header、scope summary、CTA 不重疊、不水平 overflow |
 
+2026-09-29 DEV-132 設定頁補充判準：`QA-038-S09`與`QA-038-B08`原本要求顯示範圍徽章，現改為「安裝APP」初始僅顯示主程式與快速建待辦兩個選擇，選後顯示對應安裝動作；不顯示看板目標文案。此裝置／目前帳號的資料作用邊界不變，但不再以常駐徽章佔據畫面。`QA-038-B09`仍需檢查390px無水平溢出。
+
 建議新增 browser gate：
 
 ```powershell

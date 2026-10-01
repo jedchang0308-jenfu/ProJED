@@ -71,7 +71,7 @@ async (page) => {
   const recoveryPrompt = page.locator('[data-pwa-update-prompt]');
   await recoveryPrompt.waitFor({ state: 'visible', timeout: 10000 });
   const recoveryText = await recoveryPrompt.innerText();
-  assert(/載入新版時發生問題/.test(recoveryText), 'recovery prompt should explain load failure', { recoveryText });
+  assert(/畫面載入失敗/.test(recoveryText), 'recovery prompt should identify a load failure', { recoveryText });
   assert(await page.locator('[data-pwa-cache-recovery]').count() === 1, 'recovery prompt should expose manual cache recovery');
   assert(await page.locator('[data-pwa-update-error]').count() === 1, 'recovery prompt should show minimal error detail');
   await page.screenshot({ path: 'output/playwright/dev-096/pwa-update-recovery.png' });

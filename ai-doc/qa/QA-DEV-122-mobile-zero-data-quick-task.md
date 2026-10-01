@@ -1,5 +1,9 @@
 # QA-DEV-122：ProJED 手機零資料載入快速建待辦
 
+## 2026-10-01 UI scope update
+
+Quick Task 成功區依使用者要求只顯示保存狀態與任務名稱，移除「再記一筆」及「前往工作台」操作按鈕；下一筆從名稱欄開始輸入。下方既有驗收路徑及結果保留為當時候選版本的歷史證據；涉及成功區按鈕的 B12／B13 不再是目前成功畫面的驗收要求。此工作樹候選尚未重新驗收或部署。
+
 - 狀態：`Executed / Architecture Frozen R12 / REL-002 Production Verified with Accepted Exceptions`。
 - 修訂：Tech Lead R12補齊root manifest唯一來源／build輸出、真實icon metadata、既有安裝更新、同帳號安全證明與平台矩陣；新增W07／D10並強化S15／D09。R10以前的static／browser／DB／HTTPS evidence只作回歸基線，不包含R12。
 - 對應 SPEC：[SPEC-122](../specs/SPEC-122-mobile-zero-data-quick-task.md)。

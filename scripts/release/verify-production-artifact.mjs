@@ -80,6 +80,19 @@ export function verifyManifest(manifestPath, { root = process.cwd() } = {}) {
   const tree = distDir && fs.existsSync(distDir) ? digestTree(distDir) : null;
   if (!tree) errors.push('artifact dist directory missing');
   else if (tree.sha256 !== manifest.artifact.treeSha256) errors.push('artifact tree digest mismatch');
+  if (tree && JSON.stringify(tree.entries) !== JSON.stringify(manifest.artifact.entries)) errors.push('artifact file manifest mismatch');
+  const compatibility = manifest.artifact?.compatibility;
+  if (compatibility) {
+    if (compatibility.schemaVersion !== 1 || typeof compatibility.sourceReleaseId !== 'string'
+      || !/^[a-f0-9]{64}$/i.test(compatibility.sourceTreeSha256 || '') || !Array.isArray(compatibility.entries)) {
+      errors.push('previous asset provenance invalid');
+    } else {
+      for (const retained of compatibility.entries) {
+        const actual = tree?.entries.find(entry => entry.path === retained.path);
+        if (!actual || actual.sha256 !== retained.sha256 || actual.size !== retained.size) errors.push('previous asset provenance mismatch');
+      }
+    }
+  }
   const metaPath = distDir ? path.join(distDir, 'release-meta.json') : '';
   if (!metaPath || !fs.existsSync(metaPath)) errors.push('release-meta.json missing');
   else {

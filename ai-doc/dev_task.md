@@ -8,11 +8,31 @@ Cold start：先讀下方 `## 總任務清單`；需要特定 DEV 詳細歷史�
 
 ## DEV-133 快速建任務同帳號與自動同步 - 2026-09-30
 
-### 架構修訂（2026-10-01；使用者已採用獨立登入方案）
+**2026-10-01 DEV-133 同步核心與統一 UI 已正式發布並驗收。** 最新 UI product source `9b5f73a1b32bdd8dc984c3017dceaf7225967d40`／release `20261001074739-df101c`／live version `b88f428e0efa541e`，雙正式 origin 各 54/54、正式匿名 UI 10/10、隔離 UI／IDB＋Auth/RPC SIMULATION 25/25、型別及 lint PASS。這次僅三個 UI 來源，Auth／RPC／IDB／sync 模組沿用原 `8376086` 的真登入／同步40/40證據，未把該40項改算新套件實測。未改遠端設定、migration、業務資料或 IAM／Secret；暫時 browser／ports已清理。證據見 [REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)；Git目的地確認／push／PR仍待。
 
-文件成熟度：**RD Implementation Ready／Human Confirmed；架構定案：已定案**。狀態：**執行中；本機實作完成、TEST／真實整合待驗；未發布**。使用者明確採用「共用帳號、各自登入、各自保存 Session、離線任務依帳號同步」，本輪已落地單一 Supabase SDK Auth、DB v2 auth_context／receipt、owner CAS、明確認領、local signOut barrier、嚴格回執及舊 OAuth 路徑退役；不把本機驗證宣稱產品完成。這取代早先 `3B` 的跨 App OAuth Server／免再次登入契約；`1A／2A` 的本機先存、未綁定資料明確認領及定期清理保護保留。DEV-133 仍為原交付點，不新增 DEV／完成率，也不改 DEV-122／131 的既有交付狀態。
+**2026-10-01 正式同步核心已發布／驗收 PASS（REL-014）。** clean product source `8376086144b31155a94477e6bea1f929ded475be` 已發布為 `20261001061118-144be8`，兩正式 origin 各 54/54 hash、真普通 Google／任務／離線補送／local logout 40/40、官方啟動及 safe-cancel PASS；PROD correction 綁定 NO_OP，未套 DDL／改 IAM／改寫既有資料。[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)／[QA 正式核心結果](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-正式同步核心驗收rel-014) 為最新發布權威。Git 遠端目的地確認待回覆；後續收合／整併 UI 未包含、未驗收，整體 DEV-133 不因核心發布而將這些 slice 補登 PASS。下列發布前狀態保留為歷史快照，以本段為最新核心狀態。
 
-權威：[SPEC-133 Rev 3](specs/SPEC-133-quick-task-shared-identity-sync.md)、[ADR-053 Rev 3](decisions/ADR-053-quick-task-cross-origin-account-link.md)、[QA-DEV-133 新版 N01～N10](qa/QA-DEV-133-quick-task-shared-identity-sync.md)。canonical repo `C:\VIBE CODING\ProJED\ProJED`，branch `持續優化3`；source implementation baseline `e868611`，documentation evidence commits from `a1d12a9` onward；其他既存 dirty changes 保留。
+**2026-10-01 恢復入口收合呈現（DEV-133 / conditional-recovery-entry）。** 未綁定任務標題「本機待同步任務」改為原生可展開／收合容器；登入提示與既有確認／恢復流程收入容器，收合不代表認領。既有 browser verifier 的入口標籤預期已同步；本次未執行驗收。
+
+**2026-10-01 最近狀態與恢復入口整併（DEV-133 / unified-sync-status-panel）。** 最近任務的本機保存／遠端同步狀態及名稱成為同一可展開容器摘要；另有需人工介入的任務時摘要顯示數量，展開後沿用原認領／恢復流程。最近任務不重複計數；一般自動同步佇列仍不產生人工恢復入口。本次未執行驗收或部署。
+
+**2026-10-01 收合入口視覺降噪（DEV-133 / unified-sync-status-panel）。** 收合狀態改用透明無框樣式、低對比字色、同列筆數及 44px 操作高度；最近任務名稱與狀態維持較高可讀性。未執行驗收或部署。
+
+**2026-10-01 預設展開（DEV-133 / unified-sync-status-panel）。** 容器首次出現時自動展開；使用者手動收合後保留收合狀態，狀態刷新不會重新打開。確認同步仍需明確操作；未執行驗收或部署。
+
+**2026-10-01 未登入狀態提示（DEV-133 / unified-sync-status-panel）。** 「此快速 App 尚未登入」以紅字呈現，其他登入驗證及網路狀態提示維持一般提示色；未執行驗收。
+
+**2026-10-01 本機待同步任務清單（DEV-133 / unified-sync-status-panel）。** 展開入口列出可認領的未綁定任務名稱；其他帳號的記錄仍只顯示數量，最近任務摘要已有的項目不重複列出。未登入說明指出先存本機、登入後同步雲端。本輪未執行驗收。
+
+**2026-10-02 分支部署前本機驗證。** 目前分支工作樹候選（基準 HEAD `57f8c8d3a751c8698a0e28539a9187868aff1873`；362-file DEV-133 browser source snapshot digest `ab838922f579723ea4f2604850ec0015cfaf0d7df7f6a8749d22ec9133dfe063`）的 TypeScript、變更程式 ESLint（0 errors）、隔離 test build、production-mode compile、DEV-133 auth contract、DEV-034（23/23）、DEV-038（20/20）、DEV-122 static（25/25）及 DEV-083 release-gate mock 均通過；DEV-133 統一狀態面板 browser simulation 25/25 PASS，320／390／726 viewport 無橫向溢出。第一次 browser verifier 14/25 是 selector 過期，對齊實際 `#quick-task-recovery-details` 後重跑 25/25；第一次 DEV-122 S15 讀到空預設 `dist`，改讀隔離 test build 後 25/25。production-mode compile 使用本機合成 release id，沒有建立 sealed artifact 或比對 current live manifest；target-device、hosted Auth/RPC／production smoke、獨立 QC 及正式部署未執行。本機候選不代表整體 DEV-133 Gate／Release Ready。完整分層與限制見 [QA-DEV-133 分支部署前驗證](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-02-分支部署前本機驗證)。
+
+### 架構定案與發布前歷史快照（2026-10-01）
+
+下列架構契約沿用；其中 preflight、sealed package、部署／smoke及UI未驗收狀態是當時快照，已由本節頂端與REL-014／QA最新正式結果更新。核心及Rev9 UI已發布驗收，Git遠端交付尚待；不把歷史未執行或早期PASS改寫成新版案例實測。
+
+文件成熟度：**RD Implementation Ready／Human Confirmed；架構定案：已定案**。狀態：**執行中；REL-014 核心正式發布／驗收 PASS，Git 交付及後續 UI slice 待完成**。使用者明確採用「共用帳號、各自登入、各自保存 Session、離線任務依帳號同步」，本機 source implementation 已落地單一 Supabase SDK Auth、DB v2 auth_context／receipt、owner CAS、明確認領、local signOut barrier、嚴格回執及舊 OAuth 路徑退役；最新 TEST／PROD preflight 與實際殘餘見下方及 QA 逐項表。這取代早先 `3B` 的跨 App OAuth Server／免再次登入契約；`1A／2A` 的本機先存、未綁定資料明確認領及定期清理保護保留。DEV-133 仍為原交付點，不新增 DEV／完成率，也不改 DEV-122／131 的既有交付狀態。
+
+權威：[SPEC-133 Rev 9](specs/SPEC-133-quick-task-shared-identity-sync.md)、[ADR-053 Rev 3](decisions/ADR-053-quick-task-cross-origin-account-link.md)、[QA-DEV-133 新版 N01～N10](qa/QA-DEV-133-quick-task-shared-identity-sync.md)。canonical repo `C:\VIBE CODING\ProJED\ProJED`，branch `持續優化3`；source implementation baseline `e868611`，documentation evidence commits from `a1d12a9` onward；其他既存 dirty changes 保留。
 
 **目標與架構。** 主程式及獨立快速 App 重用同一環境 Supabase Auth／既有 Google provider，各 origin 保存自己的 Session；兩邊均有登入入口和本 App 帳號顯示。兩邊選同一 user ID 時共享本人工作台資料，但不自動複製登入、不保證帳號相同或即時連動。正常登出使用 local Session scope；已存在的明示全域撤銷按平台語意處理。取消 ProJED OAuth Server／public client／consent、自製 token lifecycle 與舊 B0／B1 作必要前置；Google OAuth 登入及安全 callback 仍保留。
 
@@ -22,17 +42,21 @@ Cold start：先讀下方 `## 總任務清單`；需要特定 DEV 詳細歷史�
 
 **本機清理。** 延續 7 日工程基線，只刪已取得嚴格遠端回執且 synced 滿 7 日的本機副本；未綁定、待送、同步中、失敗資料不自動刪除，也不因登出、切帳或改版清掉。開啟／回前景及開啟期間每日執行，關閉期間不保證準點清理。
 
-**現況與證據。** 本機已通過 `tsc --noEmit`、targeted lint、test build 及 `verify-dev-133-independent-auth-contract.ts`；另以真實 TEST 測試帳號完成 `sign-in → getUser → local sign-out`、invalid-title RPC fail-closed、兩 origin local sign-out 隔離、已核身離線 owner 綁定、直接 RPC→工作台唯一 row 讀回，以及 Supabase TEST runtime 的 quick UI 建立→receipt→`quick_workbench=1` 工作台 UI 同帳號往返；同一 `captureId`／title replay 回 `created=false`，改 title 回 `QT_IDEMPOTENCY_CONFLICT` 且未新增 row。TEST 唯讀 aggregate readback 顯示有 2 個不同 workbench owners，但目前只有一組可操作登入憑證，故資料 fixture 存在不等於 A/B actor 可驗。smoke task 保留作 synced fixture，未改寫既有業務資料。既有 browser runner 已切到 DB v2，但 Node Playwright package 不在環境；本輪新增的 Python headless probes 與 direct SDK probe 只算 RD 證據，不能替代完整 QA。第二帳號／非空 A/B fixture、切帳隔離、錯 owner／anon 負向矩陣、並行 timeout replay 及完整 N01～N10 仍缺。舊 OAuth mock 及 TEST 桌面 identity 僅為歷史方案證據，不能冒稱新方案 PASS。TEST 已套用 DEV-122 RPC與 v2 quick OAuth boundary；新增 correction migration 因 B0 完整驗收前置未成立而被安全審查拒絕，未執行遠端修改或 workaround。正式配置／部署／驗收尚未執行。歷史證據見 QA 及 [2026-09-30 補充](qa/DEV-133-execution-boundary-addendum-20260930.md)。
+**現況與證據。** 最新 fixed TEST candidate `1790830360462-b8d304f5` 的 integration suite 29/29 PASS、B0/core27 及正常 Google picker cancellation gate PASS；TEST correction source `20261001090000_dev_133_quick_rpc_security_invoker.sql` 對應 remote version `20261001045945`，readback 為 invoker／empty search_path，body MD5 `d80a1ea6932806c0cfa82fce1b73a842`，task／receipt ACL 與 receipt RLS 不變且無業務資料改寫；post-correction 核心矩陣 7/7 PASS，E24 真 TEST RPC 保留 U+200B 並讀回同 ID receipt。正常 Google 取消登入 21/21 PASS，picker 使用瀏覽器 Back；較早 driver timeout 與同 ID recovery 失敗仍保留。PROD preflight sanitized evidence：`output/qa/dev-133/independent-auth/production/ordinary-session-readiness/auth-result.json` 的 `/auth/v1/user`=200 且 actor／SDK／Google identity match；`database-before.json` 讀回 invoker／empty search_path／一致 ACL及 canonical body hash。與 DEV-133 correction 差異僅註解，正式 correction 是條件 no-op。各案例 live／injected layer、N01～N10 缺口及 cleanup 狀態見 [QA 最新 evidence](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-最新-test-跨帳與-correction-證據)。正式 source scope／sealed package／migration no-op 選擇綁定／quick-task production smoke 未完成；preflight 不等於 release。
 
-**架構定案與下一步。** 已對照 source、SDK callback／local signOut、IDB／claim／late response、build/env、hosted RPC／RLS與既有測試完成 Closure Review。SPEC §3～§10 鎖定 DB v2 auth_context＋capture receipt／owner CAS、固定 callback、登入後明確認領、同 owner fixed Bearer／epoch、8 次重試及 legacy 缺回執保護；無待選 P0/P1 架構決策。本機 RD 實作已完成第一輪，TEST ordinary-session、RPC、workbench UI、同帳號 quick E2E 及 receipt replay/conflict probes 已部分通過；新增 `verify:dev-133-test-actor-readiness` 作為普通 Session A/B 前置檢查。仍須補齊第二帳號／切帳隔離、多帳號 fixture、負向權限矩陣與 N01～N10，才能完成 B0 並執行 TEST correction migration，不把局部證據當 DEV 完成。
+**架構定案與下一步。** 已對照 source、SDK callback／local signOut、IDB／claim／late response、build/env、hosted RPC／RLS與既有測試完成 Closure Review。SPEC §3～§10 鎖定 DB v2 auth_context＋capture receipt／owner CAS、固定 callback、登入後明確認領、同 owner fixed Bearer／epoch、8 次重試及 legacy 缺回執保護；無待選 P0/P1 架構決策。TEST ordinary-session、RPC、workbench UI、A/B 跨帳隔離、correction 及 post-correction 核心權限案例已按 QA 所列範圍通過；不把部分案例或 assertion 數字升格為整體 N01～N10 PASS。下一步隔離正式 DEV-133 source scope、準備 sealed package／canonical migration selection，之後依既有 gate 完成正式 deploy／smoke。
 
-**2026-10-01 唯讀環境基準。** TEST 已套用 DEV-122 alias `20260930154758`／v2 `20260930155041`，RPC definer；正式僅 DEV-122 `20260914120000`，RPC invoker。execute ACL／owner RLS未變，兩邊 auth.users 無 profile bootstrap trigger。新 correction 收斂 canonical DEV-122 body（TEST 不再額外 trim U+200B）／invoker；正式不單獨補套 retired v2，不改已套用歷史／既有 task/receipt/hash。quick 不另做 profile／workspace 開通，依賴缺失導回主程式設定再人工重試。Auth 最新 allowlist／真 TEST fixture於驗收前核對，新 N01～N10 均 NOT RUN。
+**2026-10-01 唯讀環境基準與 TEST correction 更新。** DEV-122 alias `20260930154758`／retired v2 `20260930155041` 保留歷史；TEST correction remote version `20261001045945` 已讀回為 invoker，空 search_path，ACL／receipt RLS及既有資料未變，canonical U+200B 行為見 E24。正式仍只有 DEV-122 `20260914120000`、RPC invoker；選包必須排除單獨補套 retired v2，並在 package 綁定時重讀 metadata。quick 不另做 profile／workspace 開通，依賴缺失導回主程式設定再人工重試。正式 callback／origin與production smoke尚未驗。
 
-**授權與交付邊界。** 既有 ProJED repo、Supabase TEST `fhisnnufoeulxqrchldf`／production `knodlkxqpcqyrtgwpdst`、Firebase `projed-cc78d` 的授權在既定動作與資源範圍內延續；本輪文件指令不啟動遠端修改／Git交付／發布。使用者取消實體 Android 驗收的決定保留，不把窄版模擬稱實機 PASS；舊 OAuth B0／B1 被新方案驗收取代，而不是補登為通過。禁止跨專案、破壞性 migration、業務資料改寫、清除未同步任務及 IAM／Secret 擴權。
+**授權與交付邊界。** 既有 ProJED repo、Supabase TEST `fhisnnufoeulxqrchldf`／production `knodlkxqpcqyrtgwpdst`、Firebase `projed-cc78d` 的授權在既定動作與資源範圍內延續；本輪已完成上述 TEST acceptance，正式尚未部署。後續 production package／smoke 仍依原授權、實際 release gate 與既有選包規則執行。使用者取消實體 Android 驗收的決定保留，不把窄版模擬稱實機 PASS；舊 OAuth B0／B1 被新方案驗收取代，而不是補登為通過。禁止跨專案、破壞性 migration、業務資料改寫、清除未同步任務及 IAM／Secret 擴權。
 
-**2026-10-01 指定第二 actor 的續接。** 使用者已指定並授權 Google B，且在 task-owned TEST Chrome 完成正常 Google登入。普通SDK核身、profile／有效membership／非空工作台及A/B不同user ID前置檢查PASS；不再缺第二actor的帳號識別或fixture。`verify:dev-133-test-actor-readiness -- --browser`已支援Google，並保留password模式；16項隔離回歸、typecheck／targeted lint通過，quick選帳補回SPEC既定prompt。TEST精確臨時callback已還原readback、browser/profile及4173runtime清理完成；未修改業務資料。較早「只有一組可操作憑證」是補驗前狀態，現以[QA 最新Google B驗收](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-指定-google-b-的實際驗收)為準。actor前置不等於完整B0／N01～N10；切帳／跨帳隔離、TEST correction與正式發布仍未完成。
+**2026-10-01 指定第二 actor 的早期前置驗收（歷史）。** 使用者指定 Google B，當時普通 SDK 核身、profile／membership／非空工作台及 A/B 不同 user ID 前置檢查 PASS；該結果僅為 actor readiness。後續 29-case runner 已完成普通 A/B integration 及 TEST correction；最新 case scope／尚缺項目以 [QA 最新 TEST 證據](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-最新-test-跨帳與-correction-證據) 為準。原 callback/profile/runtime cleanup 事實保留於早期 QA 結果。
 
-**2026-10-01 真 TEST 跨帳整合。** A/B 普通 Auth 與正常 quick UI→RPC／receipt→工作台、互相 task SELECT／UPDATE 拒絕、匿名拒絕、並行 replay／conflict、實際離線回網、切帳保護、明確認領取消／確認、原 owner 續送及兩 origin 獨立 Session／local logout，固定 source 快照套件 23 項 assertions PASS。結果、來源 digest、初次 harness 失敗與復測、raw IDB／profile／callback／runtime cleanup 見 [QA 跨帳整合結果](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-跨帳整合結果)。這解除「尚無真實跨帳整合證據」缺口；不升格完整 N01～N10／B0／Release Ready。仍須補核身失效、SDK logout 失敗／late response、錯 receipt／timeout commit、nonce／CAS、清理／升級／bfcache及 canonical schema。未執行 TEST correction、正式設定或部署；保留其他 dirty changes與 server smoke fixtures，不清未同步任務。
+**2026-10-01 恢復入口精簡。** 使用者採用 #效用理論 評估並核准執行：一般自動同步無操作區，需介入時僅顯示待確認／同步異常／原帳號待辦入口，點開才認領或恢復。已落地核身後直接確認、切帳／epoch 變更重新確認、稍後保留資料及 profile 依賴恢復同 ID 人工重試；未改遠端設定。16 項隔離 browser UI／IDB＋Auth/RPC SIMULATION、typecheck、targeted lint PASS；320／390／614 viewport 已目視／量測，task-owned BrowserServer 已清理，user-owned 4000／分頁保留。來源、source SHA、首個 harness 失敗及證據見 [QA 局部驗收](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-恢復入口精簡的局部驗收)。這只是一個局部 slice，不取代最新 TEST integration 狀態，也不改 DEV-133 尚未正式 release。
+
+**2026-10-01 真 TEST 跨帳整合（較早 23-case snapshot）。** A/B 普通 Auth 與 quick UI→RPC／receipt→工作台、互相 task SELECT／UPDATE 拒絕、匿名拒絕、並行 replay／conflict、離線回網、切帳、認領及兩 origin 隔離等 23 項 assertions PASS。結果及 harness 歷史見 [QA 跨帳整合結果](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-跨帳整合結果)。本段的「correction 未執行」等狀態是當時快照；最新 29-case／correction 結果與殘餘見 QA 最新證據，不用舊數量代替完整 N01～N10 或 Release Ready。
+
+**2026-10-01 N01～N10 邊界續驗（較早 snapshot）。** 已補 56 項 browser／IDB＋Auth/RPC 注入邊界、普通 TEST A、SW、DB upgrade 等案例 PASS；具體層級與原 FAIL 見 [QA 邊界續驗與修復](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-邊界續驗與修復)。本段「新版 A/B 與 hosted correction 尚待收斂」描述後續 29-case runner 前的狀態，已由 QA 最新 TEST 證據更新。source／scope 隔離與 formal package／部署／smoke 仍待；舊 Firebase preview 404 與 runtime cleanup 紀錄保留，不據此宣稱正式發布。
 
 ## DEV-131 Android 獨立快速入口雙網址修復 - 2026-09-29
 
@@ -125,6 +149,13 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 同一 source commit 的 DEV-121 static 28/28、Chromium 37/37、Goal empty-location、TypeScript、targeted ESLint 與 diff check 均通過；direct receipt 保留 `feature-pending`，因完整 fixture runner 固定使用 localhost/local-test，未將 local-only 結果冒充 authenticated production Goal smoke。未改資料、schema、migration、權限或 persistence；部署前 live version `63d9b2ea3d7cdb4f` 保留為 rollback anchor。
 
 ## 總任務清單
+
+- ◐ DEV-134 [開發點] [本地完成] [P1] [本地 PASS；未部署] PWA 載入失敗恢復與前版資產相容
+  - 摘要：修正失敗交易反覆提示、背景檢查誤報與恢復導覽命中舊 HTML；發布包保留上一版雜湊資產。
+  - 父任務：DEV-041、DEV-096、DEV-097；發布包相容 DEV-083。
+  - 下一步：待正式發布指令，排除其他 dirty source、綁定當前正式 artifact，發布後驗證既有 controlled profile。
+  - 證據：[DEV-134 本地驗證](qa/QA-DEV-134-pwa-recovery-local-verification.md)；`output/qa/dev-134/`。
+  - 計入交付：否
 
 此區是 `dev_task.md` 的 canonical index；詳細契約、歷史與完整證據保留在直接連結的
 SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_2026-07-15.md` 的命中段落。
@@ -266,6 +297,7 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
 - ✓ DEV-034 [交付點] [完成] [P2] [本機已驗證] App 快速啟動與加入主畫面
   - 摘要：交付 PWA 快速啟動與安裝引導。
   - 證據：`SPEC-034`、`QC-DEV-034`
+  - 2026-10-01 使用者後續要求停止登入後自動彈出安裝助理。主程式已移除自動模式全域掛載，設定中心手動安裝保留；SPEC-034 8.7 與 DEV-034 static/browser verifier 已更新。本次未執行驗收或部署。
   - 計入交付：是
 - ✓ DEV-035 [交付點] [完成] [P1] [DB role QC 已通過] 工作區刪除持久化
   - 摘要：完成工作區刪除持久化與 Supabase role matrix。
@@ -1092,13 +1124,17 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 證據：本地 390×844 headless Edge 操作與 `output/playwright/dev-132/*-mobile-cdp.png`、`tsc --noEmit`、DEV-034 static 23/23、targeted ESLint 0 errors；移位前 DEV-132／130／034／038 回歸與本節執行紀錄。
   - 計入交付：否（尚未正式發布）。
 
-- ◐ DEV-133 [交付點] [執行中；本機實作完成、TEST／真實整合待驗] [P1] [本輪實作] 快速建任務各自登入與自動同步
+- ! DEV-133 [交付點] [核心及 UI 正式驗收 PASS；公開 Git 交付待核准] [P1] [本輪實作] 快速建任務各自登入與自動同步
   - 摘要：共用 ProJED 帳號系統、兩個 App 各自登入與保存 Session；保留 owner-bound 離線保存、自動重試及七日已同步副本清理。
   - 來源 ID：使用者 2026-10-01 採用獨立登入方案及修改開發文件／補齊到架構定案指示；延續 2026-09-30 DEV-133。
   - 父任務：DEV-122；延續 DEV-131 雙網址安裝，相容 DEV-130／132。
-  - 下一步：本機第一輪實作與 contract／build 驗證已完成；依 SPEC-133 Rev 3 §8 先完成 B0 TEST callback／fixture，再執行 correction migration、真實 Auth／RPC／工作台與 QA N01～N10 驗證。
-  - 阻塞 / 恢復條件：指定Google B的普通登入callback及A/B非空fixture前置已PASS；仍須完整同帳／切帳／跨帳隔離驗收，才可重試B1 correction migration。先前以B0前置未成立的安全審查拒絕未繞過；OAuth Client及已取消的Android實機不再是新版必要前置。
-  - 證據：[SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md)、[ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md)、[QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md)。舊 A 局部證據與 OAuth／synthetic 歷史另存 QA，新 N01～N10 尚未執行。
+  - 下一步：完成已備妥 Git delivery 的遠端目的地確認與 PR；統一 UI 已正式驗收，完成 Git push／PR 交付；舊40/40與新UI10/10依實測層級分開。
+  - 阻塞 / 恢復條件：核心與 Rev9 UI 正式驗收已通過，正式 migration NO_OP；公開 Git 交付待核准。
+    已核對人類原始第1–9項授權涵蓋 Git 交付；自動審查仍要求明確確認 public 目的地及完整提交內容。
+    審核清單：output/qa/dev-133/independent-auth/production/public-git-payload-review.md。
+    DEV-133差異58路徑、較早正式基準差異74路徑、44個尚未公開提交；核准後接續新分支／PR。
+    無 push／PR／共享分支改動；其他殘餘依 REL-014 保留，不新增發布 gate。
+  - 證據：[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)、[QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md)、[SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md)、[ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md)；canonical terminal-evidence.json 與 worktree activation-resume-evidence.json 綁定 source／artifact／case 層。
   - 計入交付：是（未完成，產品完成率貢獻 0）。
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
@@ -6807,7 +6843,7 @@ git diff --check -- <DEV-121 owned files>
 |---|---|---|
 | 1 | `1A` 語音結束只更新名稱，使用者按建立／鍵盤完成才保存 | 語音結束立即建立、倒數自動建立 |
 | 2 | `2A` 從游標位置加入；有選取則取代選取，保留其餘文字 | 取代整個名稱、只允許空欄使用 |
-| 3 | `3B` 本機保存後停在成功畫面，提供再記一筆／前往工作台 | 自動清空、自動轉到完整工作台 |
+| 3 | `3B` 本機保存後停在成功畫面；2026-10-01 最新 UI 調整為僅顯示狀態與任務名稱，下一筆從名稱欄輸入，不提供成功卡片操作按鈕 | 自動轉到完整工作台 |
 | 4 | ProJED 主程式 manifest 內建「快速建待辦」捷徑；第二個 quick icon 保留為選用安裝 | 宣稱一次安裝自動建立兩個 OS 圖示、移除獨立 quick manifest |
 
 名稱旁固定可見麥克風＋「語音」，觸控目標至少48×48 CSS px。Web Speech可用時在tap內啟動；
@@ -7516,3 +7552,12 @@ R14 current evidence為static 40/40與browser 27/27，新增S40／B52 armed pare
 2026-09-29 通知呈現採通用清單＋彈窗明細：整列可點擊並以右向符號提示可進入，沒有專屬「查看更換方式」按鈕；共用彈窗承載所選通知的標題、日期與明細內容。換圖公告的明細仍包括兩 App 圖示對照、同步檢查、各自安裝連結與重裝步驟。本次 `tsc --noEmit`、targeted ESLint、`build:test` 與 `git diff --check` PASS；瀏覽器互動未重新驗證，未部署正式環境。
 
 2026-09-29 設定分類入口由「快速開啟」改名為「安裝APP」，分類內仍包含 App 安裝、啟動與快速開啟提示設定；內部 section id 不變。
+
+## DEV-134：PWA 載入失敗恢復與前版資產相容
+
+- 狀態：本地實作及受影響回歸完成；Medium；開發點，父 DEV-041／096／097；正式發布及驗收待執行。
+- 人類原始授權：本 chat「請依此修復」「繼續」，目標 ProJED；依本 chat 環境授權規則執行本地實作／驗證，本輪尚無正式部署明確指令。
+- Authority：SPEC-041 DEV-134 addendum（frozen R01～R10）；ADR-047 架構保留；DEV-083 sealed artifact 兼容。
+- Source boundary：canonical `C:\VIBE CODING\ProJED\ProJED`，branch `持續優化3`，起始 HEAD `57f8c8d3a751c8698a0e28539a9187868aff1873`。既有 DEV-133 等 dirty changes 保留；只修改本輪 PWA／發布相容責任面與必要索引／verifier，未 stage／commit。
+- 驗證：service／artifact／Hosting 16/16、真 SW／UI browser 9/9、TypeScript、targeted lint PASS；DEV-096 26/26、DEV-097 23/23、DEV-083 release mock regression PASS。RD／本地 QA 分階段蒐證，不宣稱獨立 QC。詳見 [本地驗證紀錄](qa/QA-DEV-134-pwa-recovery-local-verification.md)，證據 `output/qa/dev-134/`、截圖 `output/playwright/dev-134/`；task-owned browser／runtime 已清理。
+- 完成條件：R01～R10 必要本地層級證據到位；正式環境 verification 留待另行 release。不得以本地 PASS 覆寫歷史正式 cache failure。

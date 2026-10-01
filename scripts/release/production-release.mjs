@@ -208,7 +208,17 @@ const readManifestPath = value => {
   return manifestPath;
 };
 
+export const assertLiveAssetCompatibility = async (manifest, { fetchImpl = fetch } = {}) => {
+  const previousReleaseId = manifest.artifact?.compatibility?.sourceReleaseId;
+  if (!previousReleaseId) throw new Error('DEV-134 shipping artifact must retain the current live assets; rebuild with --previous-manifest.');
+  const response = await fetchImpl(`${PRODUCTION_CONTRACT.canonicalOrigin}/release-meta.json?compatibility_check=${Date.now()}`, { cache: 'no-store' });
+  if (!response.ok) throw new Error('DEV-134 could not verify the current live asset compatibility binding.');
+  const metadata = await response.json();
+  if (metadata.schemaVersion !== 1 || metadata.releaseId !== previousReleaseId) throw new Error('DEV-134 previous asset binding no longer matches live; rebuild against the current live artifact.');
+};
+
 const deployExactArtifact = async ({ manifest, phase }) => {
+  await assertLiveAssetCompatibility(manifest);
   const configPath = path.resolve(manifest.artifact.firebaseConfig);
   const configDir = path.dirname(configPath);
   const config = path.basename(configPath);
@@ -366,7 +376,7 @@ export const runDirectRelease = async (args, services = {
   } else {
     await services.assertCleanWorktree();
     const sourceCommit = await services.git(['rev-parse', 'HEAD']);
-    const artifact = await services.buildProductionArtifact();
+    const artifact = await services.buildProductionArtifact({ previousManifestPath: args.previous_manifest, requirePreviousAssets: true });
     await services.assertCleanWorktree();
     if (await services.git(['rev-parse', 'HEAD']) !== sourceCommit || artifact.manifest.source.commit !== sourceCommit) throw new Error('DEV-083 release source changed during build.');
     manifestPath = artifact.manifestPath;
@@ -442,7 +452,7 @@ export const runDirectRelease = async (args, services = {
 
 const prepare = async args => {
   await assertCleanWorktree();
-  const artifact = await buildProductionArtifact();
+  const artifact = await buildProductionArtifact({ previousManifestPath: args.previous_manifest, requirePreviousAssets: true });
   assertLevel3(args, artifact.manifest.source.commit);
   const verified = verifyManifest(artifact.manifestPath, { root });
   if (!verified.ok) throw new Error(`DEV-083 P0 artifact verification failed: ${verified.errors.join('; ')}`);

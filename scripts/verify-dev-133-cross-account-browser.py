@@ -80,18 +80,24 @@ async def own_row(page, record):
       return {error:Boolean(q.error),rows:q.data??[]};
     }""", record)
 
-async def sign_password(page):
+async def sign_password(page, wait_ui=True):
     creds = {'email': os.environ['DEV133_TEST_ACTOR_A_EMAIL'], 'password': os.environ['DEV133_TEST_ACTOR_A_PASSWORD']}
     await page.evaluate("""async credentials => {
+      // Explicit password-login intent in the controlled actor-A fixture;
+      // this is not identity proof. Ordinary Auth and network getUser still verify it.
+      sessionStorage.setItem('projed-quick-sdk-login-intent',String(Date.now()));
       const c=(await import('/src/services/supabase/client.ts')).supabase;
       const r=await c.auth.signInWithPassword(credentials); if(r.error)throw Error('ACTOR_A_SIGNIN_FAILED');
     }""", creds)
-    await page.wait_for_function("document.querySelector('#quick-task-auth-status')?.textContent.includes('已登入')", timeout=30000)
+    if wait_ui:
+        await page.wait_for_function("document.querySelector('#quick-task-auth-status')?.textContent.includes('已登入')", timeout=30000)
     return await identity(page)
 
 async def google_existing(page):
     # Normal Google flow in the task-owned profile; only choose the specified account.
+    progress('google-normal-login-click')
     await page.locator('#quick-task-auth-status button').filter(has_text='登入').click()
+    progress('google-await-provider-navigation')
     await page.wait_for_url(re.compile(r'^https://accounts\.google\.com/'), timeout=20000)
     account = page.get_by_text(os.environ['DEV133_TEST_ACTOR_B_EMAIL'], exact=True)
     try:
@@ -103,7 +109,9 @@ async def google_existing(page):
         await row.click()
     except Exception:
         progress('google-interaction-needed')
+    progress('google-await-normal-callback')
     await page.wait_for_url(re.compile(r'^http://127\.0\.0\.1:417[34]/quick-task/'), timeout=120000)
+    progress('google-await-verified-UI')
     await page.wait_for_function("document.querySelector('#quick-task-auth-status')?.textContent.includes('已登入')", timeout=30000)
     return await identity(page)
 
@@ -291,6 +299,77 @@ async def main():
         await google_existing(quick)
         rp = await wait_record(quick, pending_title, 'synced')
         check('E13-original-B-restores-retained-same-id', rp['captureId'] == rp_after['captureId'] and rp['receipt']['ownerId'] == b['id'])
+        progress('N05-live-session-with-injected-401-and-normal-Google-restore')
+        async def reject_user(route):
+            await route.fulfill(status=401, content_type='application/json', body=json.dumps({'code':'bad_jwt','message':'injected acceptance 401'}))
+        await quick.route('**/auth/v1/user', reject_user)
+        before = len(rpc_requests)
+        await quick.evaluate("window.dispatchEvent(new Event('online'))")
+        await quick.wait_for_function("document.querySelector('#quick-task-auth-status')?.textContent.includes('尚未登入')", timeout=20000)
+        invalid_context = await quick.evaluate("async()=>await (await import('/src/features/quickTaskCapture/auth.ts')).getQuickBindingContext()")
+        check('E19-401-stops-RPC-and-verified-binding', invalid_context is None and len(rpc_requests) == before, 'live ordinary Session with injected Auth 401')
+        await quick.unroute('**/auth/v1/user', reject_user)
+        await google_existing(quick)
+        check('E20-normal-Google-relogin-restores-owner', (await identity(quick))['id'] == b['id'])
+
+        progress('N07-real-commit-delayed-response-during-account-switch')
+        server_committed, release_response, delivered_response = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        async def delay_committed(route):
+            response = await route.fetch()
+            if response.status != 200:
+                await route.fulfill(response=response)
+                return
+            server_committed.set()
+            await release_response.wait()
+            await route.fulfill(response=response)
+            delivered_response.set()
+        await quick.route('**/rest/v1/rpc/create_quick_unplaced_task_v1', delay_committed)
+        late_title = f'DEV133-retained-B-late-{suffix}'
+        progress('N07-late-create')
+        late_record = await create_ui(quick, late_title, None)
+        progress('N07-wait-server-commit')
+        await asyncio.wait_for(server_committed.wait(), 15)
+        progress('N07-local-logout-after-commit')
+        await quick_logout(quick)
+        progress('N07-password-A-after-commit')
+        switched_identity = await sign_password(quick, wait_ui=False)
+        check('E21-ordinary-A-authenticates-before-delayed-B-delivery', switched_identity['id'] == a['id'])
+        progress('N07-release-delayed-B-response')
+        release_response.set()
+        # Waiting for the new account's UI before releasing the old RPC would
+        # hold the single-flight flush until its deadline and dispose this route.
+        await asyncio.wait_for(delivered_response.wait(), 15)
+        await quick.wait_for_function("document.querySelector('#quick-task-auth-status')?.textContent.includes('已登入')", timeout=30000)
+        await quick.unroute('**/rest/v1/rpc/create_quick_unplaced_task_v1', delay_committed)
+        await asyncio.sleep(1)
+        late_after = await record_for(quick, late_title)
+        check('E21-late-B-receipt-never-becomes-A-success', late_after['accountId'] == b['id']
+              and late_title not in await quick.locator('body').inner_text()
+              and (not late_after.get('receipt') or late_after['receipt']['ownerId'] == b['id']), 'real committed RPC with delayed delivery during ordinary Auth switch')
+        await quick_logout(quick)
+        await google_existing(quick)
+        late_after = await wait_record(quick, late_title, 'synced')
+        check('E22-delayed-capture-restores-same-ID-unique-owner', late_after['captureId'] == late_record['captureId'] and len((await own_row(quick, late_after))['rows']) == 1)
+
+        progress('N08-real-commit-lost-response-and-automatic-replay')
+        lost_once = False
+        async def lose_after_commit(route):
+            nonlocal lost_once
+            if lost_once:
+                await route.continue_()
+                return
+            response = await route.fetch()
+            if response.status == 200:
+                lost_once = True
+                await route.abort('timedout')
+            else:
+                await route.fulfill(response=response)
+        await quick.route('**/rest/v1/rpc/create_quick_unplaced_task_v1', lose_after_commit)
+        lost_title = f'DEV133-retained-B-lost-{suffix}'
+        lost_record = await create_ui(quick, lost_title, 'failed_retryable')
+        recovered = await wait_record(quick, lost_title, 'synced')
+        await quick.unroute('**/rest/v1/rpc/create_quick_unplaced_task_v1', lose_after_commit)
+        check('E23-lost-committed-response-replays-without-duplicate', lost_once and recovered['captureId'] == lost_record['captureId'] and recovered['receipt']['created'] is False and len((await own_row(quick, recovered))['rows']) == 1, 'live TEST commit with transport-loss simulation')
         await actor_a.goto(MAIN + '/quick-task/', wait_until='domcontentloaded')
         await actor_a.wait_for_function("document.querySelector('#quick-task-auth-status')?.textContent.includes('已登入')", timeout=30000)
         await quick_logout(actor_a)
@@ -313,11 +392,30 @@ async def main():
         all_records = await raw_records(quick)
         RESULT['allCapturesSynced'] = await all_origin_captures_synced(context)
         check('E18-test-captures-all-synced-before-profile-cleanup', RESULT['allCapturesSynced'])
+        if os.environ.get('DEV133_WAIT_TEST_CORRECTION') == '1':
+            (OUT / 'b0-auth-result.json').write_text(json.dumps({'status':'PASS','tests':RESULT['tests'],'scope':'ordinary Auth, independent origins, offline owner and auth/dispatch boundaries; Android cancelled'}),encoding='utf-8')
+            progress('B0_AUTH_PASS-await-authorized-TEST-correction')
+            for _ in range(600):
+                if (OUT / 'test-correction-ready.json').exists():
+                    break
+                await asyncio.sleep(1)
+            else:
+                raise TimeoutError('TEST_CORRECTION_GATE_TIMEOUT')
+            progress('B1-corrected-live-RPC-zero-width-receipt-and-ACL-regression')
+            await actor_a.goto(MAIN + '/quick-task/',wait_until='domcontentloaded')
+            await actor_a.wait_for_function("document.querySelector('#quick-task-auth-status')?.textContent.includes('已登入')",timeout=30000)
+            corrected_title = '\u200bDEV133-corrected-' + suffix + '\u200b'
+            corrected = await create_ui(actor_a, corrected_title)
+            check('E24-canonical-correction-preserves-U200B-and-receipt', corrected['title'] == corrected_title and corrected['receipt']['ownerId'] == b['id'] and len((await own_row(actor_a, corrected))['rows']) == 1)
+            RESULT['allCapturesSynced'] = await all_origin_captures_synced(context)
+            check('E25-B1-fixtures-safe-local-cleanup', RESULT['allCapturesSynced'])
         RESULT['status'] = 'PASS'
         RESULT['retainedSyncedTestFixtures'] = len(all_records)
         await context.set_offline(False)
     except Exception as error:
-        RESULT['failure'] = {'stage': stage, 'kind': type(error).__name__}
+        message = str(error).splitlines()[0][:180] if str(error) else ''
+        message = re.sub(r'https?://\S+|\S+@\S+|eyJ[A-Za-z0-9_.-]+|DEV133-\S+', '[redacted]', message)
+        RESULT['failure'] = {'stage': stage, 'kind': type(error).__name__, 'message': message}
         if actor_a and not actor_a.is_closed():
             try:
                 await shot(actor_a, 'failure-other-origin.png')
@@ -367,12 +465,23 @@ async def restore_actor_b():
         actual=await page.evaluate("""async()=>{const c=(await import('/src/services/supabase/client.ts')).supabase;
           const r=await c.auth.getSession();return r.data.session?.user?.email?.toLowerCase()??null;}""")
         if actual==expected:
+            binding=await page.evaluate("async()=>await (await import('/src/features/quickTaskCapture/auth.ts')).getQuickBindingContext()")
+            if binding:
+                return 0
+            # A retained SDK Session alone is not a verified binding. After a
+            # previous Auth rejection, resume through the ordinary Google UI.
+            await page.wait_for_function("document.querySelector('#quick-task-auth-status')?.textContent.includes('尚未登入')",timeout=30000)
+            await google_existing(page)
             return 0
         if actual:
             await page.wait_for_function("document.querySelector('#quick-task-auth-status')?.textContent.includes('已登入')",timeout=30000)
             await quick_logout(page)
         else:
             await page.wait_for_function("document.querySelector('#quick-task-auth-status')?.textContent.includes('尚未登入')",timeout=30000)
+            # An empty retained profile has no Session to restore. Leave the
+            # normal login CTA available; do not start and time out a second
+            # Google interaction before the human has had time to respond.
+            return 0
         await google_existing(page)
         return 0
     except Exception as error:

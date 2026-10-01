@@ -2,6 +2,8 @@ import {
   acquireQuickCaptureLease,
   finishQuickCaptureLease,
   listQuickCaptures,
+  getQuickAuthContext,
+  prepareQuickCapturesForSync,
 } from './outbox';
 import { classifyQuickSyncError } from './model';
 import { createQuickUnplacedTask, type QuickAuthSnapshot } from '../../services/supabase/quickTaskCaptureService';
@@ -15,21 +17,33 @@ const parseRetryAfter = (value: unknown) => {
 };
 
 export const flushQuickTaskOutbox = async (auth: QuickAuthSnapshot, onProgress?: (captureId: string, state: string) => void) => {
+  const authApi = await import('./auth');
+  const allowed = async () => {
+    const context = await getQuickAuthContext();
+    const latest = authApi.getQuickAuthSnapshot();
+    return latest?.accountId === auth.accountId && latest.authEpoch === auth.authEpoch
+      && context?.bindingAllowed && context.accountId === auth.accountId
+      && context.revision === auth.contextRevision && context.projectRef === auth.contextProjectRef;
+  };
+  if (!await allowed()) return false;
+  await prepareQuickCapturesForSync(auth.accountId);
   const records = await listQuickCaptures(auth.accountId);
   for (const record of records) {
     if (record.state === 'synced' || record.state === 'failed_permanent') continue;
-    const leased = await acquireQuickCaptureLease(record.captureId, auth.accountId);
+    if (!await allowed()) return false;
+    const leased = await acquireQuickCaptureLease(record.captureId, auth.accountId,
+      { revision: auth.contextRevision!, projectRef: auth.contextProjectRef! });
     if (!leased || leased.accountId !== auth.accountId) continue;
-    if (auth.authEpoch !== (await import('./auth')).getQuickAuthSnapshot()?.authEpoch) {
+    if (!await allowed()) {
       await finishQuickCaptureLease(leased.captureId, leased.leaseId!, 'failed_auth', 'ACCOUNT_SWITCHED');
-      continue;
+      return false;
     }
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 15_000);
     try {
       const result = await createQuickUnplacedTask({ capture: leased, auth, signal: controller.signal });
-      await finishQuickCaptureLease(leased.captureId, leased.leaseId!, 'synced', null, 0, result);
-      onProgress?.(leased.captureId, 'synced');
+      const finished = await finishQuickCaptureLease(leased.captureId, leased.leaseId!, 'synced', null, 0, result);
+      if (finished?.state === 'synced' && await allowed()) onProgress?.(leased.captureId, 'synced');
     } catch (error) {
       const state = classifyQuickSyncError(error);
       const retryAfter = parseRetryAfter(error && typeof error === 'object' && 'retryAfter' in error ? (error as { retryAfter?: unknown }).retryAfter : null);
@@ -40,9 +54,11 @@ export const flushQuickTaskOutbox = async (auth: QuickAuthSnapshot, onProgress?:
         error && typeof error === 'object' && 'code' in error ? String((error as { code?: unknown }).code) : 'SYNC_FAILED',
         retryAfter,
       );
-      onProgress?.(leased.captureId, state);
+      if (await allowed()) onProgress?.(leased.captureId, state);
+      if (state === 'failed_auth') return true;
     } finally {
       window.clearTimeout(timeout);
     }
   }
+  return false;
 };

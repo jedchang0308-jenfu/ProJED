@@ -19,23 +19,35 @@
           <img src="/icons/projed-quick-task-icon-brand-20260929-192.png" alt="" aria-hidden="true" />
         </button>
         <h1>ProJED-快速建任務</h1>
+        <div class="quick-task-header-actions">
+          <a id="quick-task-main-app" class="quick-task-main-app" href="/">前往ProJED-主程式</a>
+        </div>
       </header>
       <div class="quick-task-capture-card">
-        <p id="quick-task-auth-status" class="quick-task-auth-status" role="status" aria-live="polite" hidden></p>
         <form id="quick-task-form" novalidate onsubmit="return false">
           <div class="quick-task-input-row">
-            <input id="quick-task-title" type="text" inputmode="text" enterkeyhint="done" autocomplete="off" aria-label="任務名稱" placeholder="要記下什麼待辦任務?" maxlength="500" />
+            <input id="quick-task-title" type="text" inputmode="text" enterkeyhint="done" autocomplete="off" aria-label="任務名稱" placeholder="要記下什麼待辦任務?" />
             <button id="quick-task-voice" class="quick-task-voice" type="button" disabled aria-label="使用語音輸入任務名稱" title="使用語音輸入任務名稱">
               <span aria-hidden="true">🎙</span><span>語音</span>
             </button>
           </div>
           <button id="quick-task-submit" class="quick-task-submit" type="submit" disabled>建立</button>
-          <p class="quick-task-submit-note">按「建立」後，待辦會同步至 ProJED 主程式的「全域任務工作台」。尚未登入時，登入 ProJED 帳號即可完成同步。</p>
+          <p class="quick-task-submit-note">按「建立」後，任務將會同步至 ProJED 主程式的「全域任務工作台」。</p>
         </form>
         <p id="quick-task-message" class="quick-task-message" role="status" aria-live="polite" hidden></p>
-        <section id="quick-task-success" class="quick-task-success" hidden aria-live="polite"></section>
-        <section id="quick-task-recovery" class="quick-task-recovery" hidden></section>
       </div>
+      <section id="quick-task-recovery" class="quick-task-recovery" data-compact="true" hidden>
+        <p id="quick-task-auth-status" class="quick-task-auth-status" role="status" aria-live="polite" hidden></p>
+        <details id="quick-task-recovery-details" class="quick-task-recovery-details" data-compact="true">
+          <summary class="quick-task-recovery-entry" data-recover="true" aria-controls="quick-task-recovery-message quick-task-recovery-list quick-task-recovery-content">
+            <span id="quick-task-success" class="quick-task-success" hidden aria-live="polite"></span>
+            <span id="quick-task-recovery-summary" class="quick-task-recovery-summary" data-recover-summary>本機待同步任務</span>
+          </summary>
+          <p id="quick-task-recovery-message" class="quick-task-recovery-message" role="status" aria-live="polite" hidden></p>
+          <ol id="quick-task-recovery-list" class="quick-task-recovery-list" aria-label="本機待同步任務清單" hidden></ol>
+          <section id="quick-task-recovery-content" class="quick-task-recovery-content" hidden></section>
+        </details>
+      </section>
       <section id="quick-task-install" class="quick-task-install" data-quick-install="true" hidden aria-live="polite"></section>
       <noscript>需要啟用 JavaScript 才能建立待辦；目前可先選取並複製名稱。</noscript>
     </main>

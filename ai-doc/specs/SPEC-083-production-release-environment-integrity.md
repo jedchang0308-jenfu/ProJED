@@ -344,3 +344,16 @@ Local-only data migration：RD實作時將 `.env.local` 的 release-controlled t
   production建議使用exact redirect URL。
 - [Firebase Hosting preview and live deploy](https://firebase.google.com/docs/hosting/test-preview-deploy)：
   preview URL可作inactive candidate，live activation仍需獨立決策與post-deploy verification。
+
+## 18. DEV-134 前版資產相容補正（2026-10-01）
+
+使用者要求修復正式站反覆出現載入失敗提示。本段是 DEV-134 對發布封裝的必要相容補正；既有環境、Auth 與發布授權邊界保持原契約。
+
+- `direct`／`prepare` 的 builder 必須有 `--previous-manifest <path>`，或既有 `PROJED_PREVIOUS_RELEASE_MANIFEST` machine binding；未指定即在建置前拒絕。檔案須是**當前正式 release** 的已驗證 sealed artifact manifest，不能以來源 commit、HTML 或任意舊 build 代替。
+- 封裝前驗證前版 production contract、非 dirty source、完整 tree／每檔 digest、canonical path；保留其自身 `/assets/*` 與 hashed Workbox runtime，排除前版繼承的更早資產。前版 HTML、metadata、`sw.js` 不攜入。相同 URL 不同 bytes 或目標目錄越界即拒絕；相同 bytes 的本版資產不被誤標為繼承資產。
+- `artifact.compatibility` 記錄 source release／tree SHA 及真正新增的 retention entries。新增檔案納入本版 tree、secret/test scan 及完整 remote provenance。保留最多前一代，避免 artifact 無限累積；正常更新不刪舊 release 的 browser cache。
+- 部署執行器在任何 Firebase mutation 前，只讀比對 canonical `/release-meta.json` 與 retention source release；正式版本已變更則須重新綁定並建置，不以舊候選覆蓋新版本。binding 改變本身不要求使用者重述同一環境內已授權的發布。
+- Hosting `/assets` 缺檔回 404，其他 SPA 及 quick-task 路由保持原契約。本輪僅完成本地封裝／路由 fixture，未執行 production deployment；canonical asset／route readback 仍在下次發布 gate 執行。
+- 舊頁面的新版 error recovery 邏輯要載入修正版後才生效。正式驗收須包含既有 controlled profile 的 A→B 生命週期，不能由新 profile 或本地 fixture 代替。
+
+驗證及 source scope：[DEV-134 本地驗證紀錄](../qa/QA-DEV-134-pwa-recovery-local-verification.md)。

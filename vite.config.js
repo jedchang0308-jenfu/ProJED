@@ -52,7 +52,7 @@ export default defineConfig(({ mode }) => {
         clientsClaim: false,
         skipWaiting: false,
         navigateFallback: 'index.html',
-        navigateFallbackDenylist: [/^\/api\//, /^\/__/, /^\/quick-task(?:\/|$)/],
+        navigateFallbackDenylist: [/^\/api\//, /^\/__/, /^\/quick-task(?:\/|$)/, /[?&]projed_update_latest=/],
         ignoreURLParametersMatching: [
           /^utm_/,
           /^fbclid$/,

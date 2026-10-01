@@ -34,6 +34,7 @@ export type QuickCaptureReceipt = {
   captureId: string;
   ownerId: string;
   titleHash: string;
+  created: boolean;
   committedAt: number;
 };
 
@@ -46,6 +47,8 @@ export type QuickAuthContext = {
   bindingAllowed: boolean;
   revision: number;
   barrierAt: number | null;
+  /** Non-secret SDK session identity; never used as remote authorization. */
+  sessionId?: string | null;
 };
 
 export const QUICK_CAPTURE_DB = 'projed-quick-task-v1';
@@ -81,11 +84,7 @@ export const createQuickCaptureId = () => {
     uuid = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
       .replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/u, '$1-$2-$3-$4-$5');
   } else {
-    const seed = `${Date.now().toString(16)}${Math.random().toString(16).slice(2)}${Math.random().toString(16).slice(2)}`
-      .padEnd(32, '0').slice(0, 32).split('');
-    seed[12] = '4';
-    seed[16] = ['8', '9', 'a', 'b'][Math.floor(Math.random() * 4)];
-    uuid = seed.join('').replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/u, '$1-$2-$3-$4-$5');
+    throw new Error('CRYPTO_UNAVAILABLE');
   }
   return `task_workbench_unplaced_${uuid}`;
 };
@@ -116,8 +115,10 @@ export const classifyQuickSyncError = (error: unknown): QuickCaptureState => {
     ? Number((error as { status?: unknown }).status)
     : NaN;
   const combined = `${code} ${message}`.toUpperCase();
+  if (/INVALID_TITLE|INVALID_CAPTURE|INVALID_RECEIPT|RECEIPT_INVALID|IDEMPOTENCY_CONFLICT|EXISTING_ROW_INVALID|ORDER_EXHAUSTED|NO_AVAILABLE_WORKSPACE|42501|23503|23505|23514/u.test(combined)) return 'failed_permanent';
   if (status === 401 || status === 403 || /QT_AUTH_REQUIRED|AUTH_REQUIRED|\b401\b|\b403\b|PGRST301/u.test(combined)) return 'failed_auth';
-  if ((status >= 400 && status < 500) || /INVALID_TITLE|INVALID_CAPTURE|IDEMPOTENCY_CONFLICT|EXISTING_ROW_INVALID|ORDER_EXHAUSTED|NO_AVAILABLE_WORKSPACE|42501|23505|23514/u.test(combined)) {
+  if (status === 408 || status === 429 || status >= 500) return 'failed_retryable';
+  if (status >= 400 && status < 500) {
     return 'failed_permanent';
   }
   return 'failed_retryable';
@@ -128,7 +129,8 @@ export const isQuickCaptureReceipt = (value: unknown, record?: Pick<QuickCapture
   const receipt = value as Partial<QuickCaptureReceipt>;
   if (receipt.status !== 'committed' || typeof receipt.captureId !== 'string'
     || typeof receipt.ownerId !== 'string' || !/^[a-f0-9]{64}$/u.test(receipt.titleHash ?? '')
-    || !Number.isFinite(receipt.committedAt) || (receipt.committedAt ?? 0) <= 0) return false;
+    || typeof receipt.created !== 'boolean' || !Number.isSafeInteger(receipt.committedAt)
+    || (receipt.committedAt ?? 0) <= 0) return false;
   if (record && (receipt.captureId !== record.captureId || receipt.ownerId !== record.accountId)) return false;
   return true;
 };

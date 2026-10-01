@@ -59,6 +59,8 @@ export type PwaUpdateState = {
   ownerFence: number;
   normalReloadReserved: boolean;
   errorMessage: string | null;
+  errorCode: string | null;
+  failureKind: 'update' | 'load' | 'cache-recovery' | null;
   reloadSafetyState: 'booting' | 'safe' | 'dirty' | 'preparing' | 'blocked';
   reloadSafetyCode: PwaReloadSafetyFailureCode | null;
   pendingBoundary: PwaReloadBoundary | null;
@@ -93,6 +95,7 @@ let registeredServiceWorker: ServiceWorkerRegistration | null = null;
 let workbox: Workbox | null = null;
 let updateChannel: BroadcastChannel | null = null;
 let applyPromise: Promise<boolean> | null = null;
+let retryPromise: Promise<boolean> | null = null;
 let appShellCheckListenersBound = false;
 let crossTabListenersBound = false;
 let setupDone = false;
@@ -118,6 +121,8 @@ let updateState: PwaUpdateState = {
   ownerFence: 0,
   normalReloadReserved: false,
   errorMessage: null,
+  errorCode: null,
+  failureKind: null,
   reloadSafetyState: 'booting',
   reloadSafetyCode: null,
   pendingBoundary: null,
@@ -418,6 +423,16 @@ const stripLatestReloadParam = () => {
 
 const statusForPhase = (phase: PwaUpdatePhase): PwaUpdateStatus => phase === 'available' ? 'update-available' : phase;
 
+const transactionFailureMessage = (transaction: PwaUpdateTransactionV1) => {
+  if (transaction.errorMessage) return transaction.errorMessage;
+  switch (transaction.errorCode) {
+    case 'TRANSACTION_STALE': return '先前重新載入未完成，請重試。';
+    case 'POST_RELOAD_MISMATCH': return '尚未載入目標版本，請重試。';
+    case 'TARGET_UNSTABLE': return '版本正在切換，請稍後重試。';
+    default: return '先前更新未完成，請重試。';
+  }
+};
+
 const syncStateFromTransaction = (transaction: PwaUpdateTransactionV1 | null) => {
   if (!transaction) return;
   const dismissed = dismissedTarget() === transaction.targetVersion;
@@ -430,12 +445,15 @@ const syncStateFromTransaction = (transaction: PwaUpdateTransactionV1 | null) =>
     ownerFence: transaction.ownerFence,
     normalReloadReserved: transaction.normalReloadReserved,
     recoveryAttemptCount: transaction.recoveryAttemptCount,
+    errorCode: transaction.phase === 'failed' ? transaction.errorCode || 'APPLY_FAILED' : null,
+    errorMessage: transaction.phase === 'failed' ? transactionFailureMessage(transaction) : null,
+    failureKind: transaction.phase === 'failed' ? 'update' : null,
   });
 };
 
 const failTransaction = (transaction: PwaUpdateTransactionV1, errorCode: string, message: string) => {
   try {
-    const failed = transitionPwaUpdateTransaction(transaction, 'failed', Date.now(), { errorCode });
+    const failed = transitionPwaUpdateTransaction(transaction, 'failed', Date.now(), { errorCode, errorMessage: message.slice(0, 1024) });
     writeTransaction(failed);
     setUpdateState({
       status: 'failed',
@@ -445,9 +463,11 @@ const failTransaction = (transaction: PwaUpdateTransactionV1, errorCode: string,
       ownerFence: failed.ownerFence,
       normalReloadReserved: failed.normalReloadReserved,
       errorMessage: message,
+      errorCode,
+      failureKind: 'update',
     });
   } catch {
-    setUpdateState({ status: 'failed', updateAvailable: false, errorMessage: message });
+    setUpdateState({ status: 'failed', updateAvailable: false, errorMessage: message, errorCode, failureKind: 'update' });
   }
 };
 
@@ -473,6 +493,8 @@ const completeTransaction = (transaction: PwaUpdateTransactionV1, currentVersion
     lastAppliedAt: Date.now(),
     pendingLocalTarget: null,
     errorMessage: null,
+    errorCode: null,
+    failureKind: null,
   });
   return true;
 };
@@ -495,7 +517,10 @@ const scheduleBoundedRecovery = (transaction: PwaUpdateTransactionV1) => {
       targetVersion: recovering.targetVersion,
       errorMessage: '正在重新取得最新應用程式檔案。',
     });
-    window.setTimeout(() => window.location.replace(buildLatestReloadUrl()), 50);
+    void requestPwaReloadBoundary('app-open', getCurrentViewIntent()).then((gate) => {
+      if (gate.ok) window.location.replace(buildLatestReloadUrl());
+      else failTransaction(recovering, 'RECOVERY_BLOCKED', safetyFailureMessage(gate.code));
+    });
     return true;
   } catch (error) {
     failTransaction(transaction, 'RECOVERY_RESERVATION_FAILED', error instanceof Error ? error.message : '更新恢復失敗。');
@@ -505,6 +530,8 @@ const scheduleBoundedRecovery = (transaction: PwaUpdateTransactionV1) => {
 
 const reconcilePendingTransaction = () => {
   if (normalReloadRequested) return;
+  // Shared activation history cannot prove this document's failed view loaded.
+  if (updateState.failureKind === 'load' || updateState.failureKind === 'cache-recovery') return;
   const transaction = readTransaction();
   if (!transaction) return;
 
@@ -514,12 +541,17 @@ const reconcilePendingTransaction = () => {
     return;
   }
 
+  if (transaction.phase === 'failed') {
+    syncStateFromTransaction(transaction);
+    return;
+  }
+
   if (isPwaUpdateTransactionStale(transaction, Date.now())) {
     failTransaction(transaction, 'TRANSACTION_STALE', '更新交易已逾時，請重新檢查版本。');
     return;
   }
 
-  if (transaction.normalReloadReserved && transaction.phase !== 'failed') {
+  if (transaction.normalReloadReserved) {
     const reservation = getPwaReloadReservation();
     const ownsLocalReload = transaction.ownerTabId === getTabId()
       && reservation?.targetVersion === transaction.targetVersion;
@@ -605,6 +637,7 @@ const checkForAppShellUpdate = async () => {
     if (normalReloadRequested) return false;
 
     setUpdateState({ latestVersion });
+    if (updateState.failureKind === 'load' || updateState.failureKind === 'cache-recovery') return false;
     const observedWaitingWorker = registeredServiceWorker?.waiting;
     if (
       observedWaitingWorker
@@ -622,11 +655,17 @@ const checkForAppShellUpdate = async () => {
     // has loaded it. An old tab must keep its local pending target.
     if (latestVersion === currentVersion) {
       if (!existing || existing.phase === 'failed') {
+        if (existing) removeTransactionIf(existing.transactionId);
         setUpdateState({
           status: 'idle',
           updateAvailable: false,
           dismissedAt: null,
           errorMessage: null,
+          errorCode: null,
+          failureKind: null,
+          targetVersion: null,
+          transactionId: null,
+          pendingLocalTarget: null,
         });
       }
       return false;
@@ -670,9 +709,11 @@ const checkForAppShellUpdate = async () => {
       ownerFence: transaction.ownerFence,
       normalReloadReserved: transaction.normalReloadReserved,
       lastUpdateFoundAt: transaction.phase === 'available' ? (updateState.lastUpdateFoundAt || Date.now()) : updateState.lastUpdateFoundAt,
-      errorMessage: null,
+      errorMessage: transaction.phase === 'failed' ? transactionFailureMessage(transaction) : null,
+      errorCode: transaction.phase === 'failed' ? transaction.errorCode || 'APPLY_FAILED' : null,
+      failureKind: transaction.phase === 'failed' ? 'update' : null,
     });
-    if (getPwaReloadSafetySnapshot().state === 'safe') void applyPwaUpdateAtBoundary('app-open');
+    if (transaction.phase !== 'failed' && getPwaReloadSafetySnapshot().state === 'safe') void applyPwaUpdateAtBoundary('app-open');
     return true;
   } catch (error) {
     console.warn('[PWA] App shell version check failed:', error);
@@ -768,7 +809,7 @@ const reloadAtOwnBoundary = (targetVersion: string) => {
       errorMessage: '重新載入尚未開始，請再試一次。',
     });
   }, 3000);
-  window.location.reload();
+  window.location.replace(buildLatestReloadUrl());
 };
 
 type ApplyLockRecord = {
@@ -876,7 +917,7 @@ const withApplyCriticalSection = async <T>(work: () => Promise<T>): Promise<T | 
   return work();
 };
 
-const claimApplyTransaction = async (sourceVersion: string, targetVersion: string) => withApplyCriticalSection(async () => {
+const claimApplyTransaction = async (sourceVersion: string, targetVersion: string, retryFailed = false) => withApplyCriticalSection(async () => {
   const lease = await acquireIndexedDbLock(targetVersion);
   if (!lease) return null;
 
@@ -885,19 +926,21 @@ const claimApplyTransaction = async (sourceVersion: string, targetVersion: strin
     await releaseIndexedDbLock(lease);
     return null;
   }
-  if (existing && existing.phase === 'failed' && existing.targetVersion === targetVersion) {
+  if (existing && existing.phase === 'failed' && existing.targetVersion === targetVersion && !retryFailed) {
     await releaseIndexedDbLock(lease);
     return null;
   }
 
-  const base = existing && existing.targetVersion === targetVersion
+  const base = existing && existing.targetVersion === targetVersion && existing.phase !== 'failed'
     ? existing
     : createAvailableTransaction(sourceVersion, targetVersion);
+  if (retryFailed && existing?.phase === 'failed') base.transactionId = createId('tx-retry');
   const claimed = claimPwaUpdateTransaction(base, getTabId(), lease.ownerFence, Date.now());
   if (!writeTransaction(claimed)) {
     await releaseIndexedDbLock(lease);
     throw new Error('Unable to persist PWA update owner transaction.');
   }
+  if (retryFailed) clearPwaReloadReservation();
   return { transaction: claimed, lease };
 });
 
@@ -1026,7 +1069,7 @@ const runTestModeApply = async () => {
   return true;
 };
 
-const runQueuedApply = async () => {
+const runQueuedApply = async (retryFailed = false) => {
   const currentVersion = getCurrentAppVersion() || updateState.currentVersion;
   const targetVersion = updateState.targetVersion || updateState.latestVersion;
   if (!currentVersion || !targetVersion || currentVersion === targetVersion) {
@@ -1035,11 +1078,12 @@ const runQueuedApply = async () => {
   }
 
   if (readCompletedVersion() === targetVersion) {
+    if (retryFailed) clearPwaReloadReservation();
     reloadAtOwnBoundary(targetVersion);
     return true;
   }
 
-  const ownership = await claimApplyTransaction(currentVersion, targetVersion);
+  const ownership = await claimApplyTransaction(currentVersion, targetVersion, retryFailed);
   if (!ownership) {
     syncStateFromTransaction(readTransaction());
     return false;
@@ -1055,6 +1099,8 @@ const runQueuedApply = async () => {
     ownerFence: transaction.ownerFence,
     normalReloadReserved: transaction.normalReloadReserved,
     errorMessage: null,
+    errorCode: null,
+    failureKind: null,
   });
   try {
     return await applyStandardUpdate(transaction, lease);
@@ -1067,7 +1113,7 @@ const runQueuedApply = async () => {
     if (latest && latest.transactionId === transaction.transactionId) {
       failTransaction(latest, error instanceof Error && error.message === 'TARGET_UNSTABLE' ? 'TARGET_UNSTABLE' : 'APPLY_FAILED', message);
     } else {
-      setUpdateState({ status: 'failed', updateAvailable: false, errorMessage: message });
+      setUpdateState({ status: 'failed', updateAvailable: false, errorMessage: message, errorCode: 'APPLY_FAILED', failureKind: 'update' });
     }
     return false;
   } finally {
@@ -1098,6 +1144,8 @@ const installPwaUpdateTestControls = () => {
       ownerFence: 0,
       normalReloadReserved: false,
       errorMessage: null,
+      errorCode: null,
+      failureKind: null,
       reloadSafetyState: getPwaReloadSafetySnapshot().state,
       reloadSafetyCode: getPwaReloadSafetySnapshot().code,
       pendingBoundary: null,
@@ -1138,7 +1186,7 @@ const installPwaUpdateTestControls = () => {
       setUpdateState({ status: 'updated', updateAvailable: false, currentVersion: 'test-next', latestVersion: 'test-next', previousVersion: 'test-current', lastAppliedAt: Date.now() });
     },
     simulateOfflineReady: () => setUpdateState({ status: 'offline-ready', offlineReady: true, errorMessage: null }),
-    simulateRecoverableCacheError: (message = '測試載入錯誤') => setUpdateState({ status: 'recoverable-cache-error', errorMessage: message }),
+    simulateRecoverableCacheError: (message = '測試載入錯誤') => setUpdateState({ status: 'recoverable-cache-error', errorMessage: message, errorCode: 'CHUNK_LOAD_FAILED', failureKind: 'load' }),
     reset: resetState,
   };
 };
@@ -1204,8 +1252,9 @@ const safetyFailureMessage = (code: PwaReloadSafetyFailureCode) => {
   }
 };
 
-const applyPwaUpdateAtBoundary = async (boundary: PwaReloadBoundary) => {
+const applyPwaUpdateAtBoundary = async (boundary: PwaReloadBoundary, retryFailed = false) => {
   if (applyPromise) return applyPromise;
+  if ((updateState.status === 'failed' || updateState.failureKind === 'load' || updateState.failureKind === 'cache-recovery') && !retryFailed) return false;
   if (!updateState.updateAvailable && !updateState.targetVersion && !updateState.latestVersion) return false;
 
   // Test-mode transaction controls intentionally bypass the production safety
@@ -1220,8 +1269,8 @@ const applyPwaUpdateAtBoundary = async (boundary: PwaReloadBoundary) => {
   syncReloadSafetyState();
   if (!gate.ok) {
     setUpdateState({
-      status: 'update-available',
-      updateAvailable: true,
+      status: retryFailed ? 'failed' : 'update-available',
+      updateAvailable: !retryFailed,
       pendingBoundary: boundary,
       pendingLocalTarget: updateState.targetVersion || updateState.latestVersion,
       errorMessage: safetyFailureMessage(gate.code),
@@ -1229,7 +1278,7 @@ const applyPwaUpdateAtBoundary = async (boundary: PwaReloadBoundary) => {
     return false;
   }
 
-  applyPromise = runQueuedApply().finally(() => { applyPromise = null; });
+  applyPromise = runQueuedApply(retryFailed).finally(() => { applyPromise = null; });
   return applyPromise;
 };
 
@@ -1238,7 +1287,55 @@ export const applyPwaUpdate = async () => {
   return applyPwaUpdateAtBoundary('user-confirmed');
 };
 
+// An explicit retry starts a new fenced attempt; background checks never reopen
+// a failed activation or silently discard its diagnostic information.
+const runPwaUpdateRetry = async () => {
+  if (applyPromise) return applyPromise;
+  const failureKind = updateState.failureKind;
+  const requiresReload = failureKind === 'load' || failureKind === 'cache-recovery';
+  try {
+    const currentVersion = getCurrentAppVersion();
+    const latestVersion = await fetchLatestAppVersion();
+    if (!currentVersion || !latestVersion) throw new Error('無法確認版本，請稍後重試。');
+    setUpdateState({ currentVersion, latestVersion, targetVersion: latestVersion });
+    if (latestVersion === currentVersion && !requiresReload) {
+      const transaction = readTransaction();
+      if (transaction?.phase === 'failed') removeTransactionIf(transaction.transactionId);
+      clearPwaReloadReservation();
+      setUpdateState({ status: 'idle', updateAvailable: false, targetVersion: null, transactionId: null, pendingLocalTarget: null, errorMessage: null, errorCode: null, failureKind: null });
+      return true;
+    }
+    if (requiresReload && latestVersion === currentVersion) {
+      const gate = await requestPwaReloadBoundary('user-confirmed', getCurrentViewIntent());
+      syncReloadSafetyState();
+      if (!gate.ok) {
+        setUpdateState({ errorMessage: safetyFailureMessage(gate.code) });
+        return false;
+      }
+      clearPwaReloadReservation();
+      reloadAtOwnBoundary(latestVersion);
+      return true;
+    }
+    return await applyPwaUpdateAtBoundary('user-confirmed', true);
+  } catch (error) {
+    setUpdateState({ status: 'failed', errorMessage: error instanceof Error ? error.message : '無法重試，請稍後再試。', errorCode: 'RETRY_CHECK_FAILED', failureKind: failureKind || 'update' });
+    return false;
+  }
+};
+
+export const retryPwaUpdate = () => {
+  if (retryPromise) return retryPromise;
+  retryPromise = runPwaUpdateRetry().finally(() => { retryPromise = null; });
+  return retryPromise;
+};
+
 export const clearPwaApplicationCacheAndReload = async () => {
+  const gate = await requestPwaReloadBoundary('user-confirmed', getCurrentViewIntent());
+  syncReloadSafetyState();
+  if (!gate.ok) {
+    setUpdateState({ errorMessage: safetyFailureMessage(gate.code) });
+    return false;
+  }
   setUpdateState({ status: 'recovering', updateAvailable: false, errorMessage: null });
 
   try {
@@ -1256,7 +1353,7 @@ export const clearPwaApplicationCacheAndReload = async () => {
   } catch (error) {
     const message = error instanceof Error ? error.message : '清除應用程式快取失敗。';
     console.warn('[PWA] Failed to clear app cache:', error);
-    setUpdateState({ status: 'failed', errorMessage: message });
+    setUpdateState({ status: 'failed', errorMessage: message, errorCode: 'CACHE_RECOVERY_FAILED', failureKind: 'cache-recovery' });
     return false;
   }
   window.location.replace(buildLatestReloadUrl());
@@ -1266,12 +1363,14 @@ export const clearPwaApplicationCacheAndReload = async () => {
 export const handleRecoverableAppLoadError = (error: unknown, source: 'error' | 'unhandledrejection' = 'error') => {
   const message = error instanceof Error ? error.message : typeof error === 'string' ? error : '新版檔案載入失敗。';
   console.warn(`[PWA] Recoverable app load error from ${source}:`, error);
-  setUpdateState({ status: 'recoverable-cache-error', updateAvailable: false, errorMessage: message });
+  setUpdateState({ status: 'recoverable-cache-error', updateAvailable: false, errorMessage: message, errorCode: 'CHUNK_LOAD_FAILED', failureKind: 'load' });
   if (!reserveAutomaticRecoveryAttempt()) {
     setUpdateState({ status: 'failed', errorMessage: message });
     return false;
   }
-  window.setTimeout(() => window.location.replace(buildLatestReloadUrl()), 50);
+  void requestPwaReloadBoundary('foreground', getCurrentViewIntent()).then((gate) => {
+    if (gate.ok) window.location.replace(buildLatestReloadUrl());
+  });
   return true;
 };
 
@@ -1313,6 +1412,10 @@ export const setupPwaLifecycle = () => {
   workbox = new Workbox('/sw.js', { scope: '/' });
   workbox.addEventListener('waiting', () => {
     if (normalReloadRequested) return;
+    if (updateState.status === 'failed' || updateState.failureKind === 'load' || updateState.failureKind === 'cache-recovery') {
+      void checkForAppShellUpdate();
+      return;
+    }
     setUpdateState({
       status: 'update-available',
       updateAvailable: true,
@@ -1327,6 +1430,10 @@ export const setupPwaLifecycle = () => {
     // Activation is deliberately not a navigation signal. With clientsClaim
     // disabled, each document decides its own later reload boundary.
     if (event.isUpdate && !normalReloadRequested) {
+      if (updateState.status === 'failed' || updateState.failureKind === 'load' || updateState.failureKind === 'cache-recovery') {
+        void checkForAppShellUpdate();
+        return;
+      }
       setUpdateState({ status: 'awaiting-controller', errorMessage: null });
     }
   });
@@ -1342,11 +1449,12 @@ export const setupPwaLifecycle = () => {
     registeredServiceWorker = registration;
     const checkForUpdate = () => {
       if (!navigator.onLine) return;
-      const canShowChecking = !updateState.updateAvailable && updateState.status !== 'updated';
+      const canShowChecking = !updateState.updateAvailable
+        && !['updated', 'failed', 'recoverable-cache-error', 'recovering'].includes(updateState.status);
       if (canShowChecking) setUpdateState({ status: 'checking', lastCheckedAt: Date.now() });
       registration.update().catch((error) => {
         console.warn('[PWA] Update check failed:', error);
-        if (!updateState.updateAvailable) setUpdateState({ status: 'failed', errorMessage: error instanceof Error ? error.message : '檢查更新失敗。' });
+        // An update check failing does not mean the currently loaded app failed.
       }).finally(() => {
         if (!updateState.updateAvailable && updateState.status === 'checking') setUpdateState({ status: 'idle' });
         void checkForAppShellUpdate();
@@ -1362,6 +1470,7 @@ export const setupPwaLifecycle = () => {
     checkForUpdate();
   }).catch((error) => {
     console.warn('[PWA] Service worker registration failed:', error);
-    setUpdateState({ status: 'failed', errorMessage: error instanceof Error ? error.message : '版本更新服務註冊失敗。' });
+    // Registration is optional for the already loaded app. Keep genuine
+    // transaction/load failures, but do not turn a background check into one.
   });
 };

@@ -754,3 +754,37 @@ Chromium的[Android WebApkUpdateManager](https://chromium.googlesource.com/chrom
 - 主程式與快速入口的 manifest 各列 192×192、512×512 PNG `any`，並保留 512×512 `maskable`；PNG 實際像素與宣告相同。主程式 shortcut 也列兩個尺寸。HTML favicon、Apple touch icon、登入畫面品牌圖與執行時 icon 指向同版 512 圖示。
 - 保持兩個 manifest 的 `id`、`start_url`、`scope`、`display`，避免把安裝問題變成新身份或路由。網站安裝引導仍由使用者選擇；不自動解除安裝。
 - 本機驗證 manifest、圖片與建置輸出；瀏覽器診斷確認本機 installability 無錯誤；正式站確認 HTTPS manifest／圖片可下載且像素正確。Android 需在同一手機實際點「安裝」，再由「應用程式資訊」及桌面確認新版圖示，才可將實機案例改為 PASS。若仍失敗，收集 Chrome 版本、手機型號、安裝畫面與 WebAPK 診斷，續查裝置／Chrome 服務，而非改判「建立捷徑」為安裝成功。
+
+## DEV-134 PWA 失敗恢復 Corrective Addendum（2026-10-01）
+
+成熟度：本地實作／受影響回歸完成；風險 Medium；狀態：本地 PASS，未部署。結果見 [QA-DEV-134](../qa/QA-DEV-134-pwa-recovery-local-verification.md)；不宣稱獨立 QC 或正式驗收。
+人類來源：正式站反覆出現「載入新版時發生問題」→多層次分析→四項根本方案→「請依此修復」。
+Spec Impact：Intentional replacement。取代 failed 只能清快取的實際行為與未受 safety gate 保護的恢復導覽；沿用 ADR-047 架構及其他既有 safety／資料／owner contract。
+
+### 本輪契約與邊界
+
+- 失敗診斷：v1 transaction 相容新增 optional errorMessage（最多 1024 字元）；hydrate／同 target 檢查保留 errorCode／原因。舊 v1 無原因時由 errorCode 提供最短可行說明。
+- failed 對背景檢查仍為 terminal；明確「重試」先重新取得 latest，已載入最新才解除已解決的 failed metadata。仍需切版時在本分頁 safety gate 及 Web Locks／PWA-owned IDB lease 內建立新 attempt／transaction ID，舊 owner 不可 commit；每個 attempt 仍只容許一次正常導覽與一次 bounded recovery。
+- 背景 registration／update／metadata 檢查失敗只記診斷，不把可用畫面升格為 load failure，不顯示假新版。metadata 成功後可收斂已解決狀態。
+- 錯誤 UI：update failure 顯示「重新載入未完成」、load failure 顯示「畫面載入失敗」、人工 cache recovery failure 顯示「快取恢復未完成」。primary「重試」使用同一安全流程；secondary 保留人工快取恢復，business/auth/IDB 不新增清除操作。320／390／1440 viewport 不溢出，keyboard CTA 可達。
+- 導覽：projed_update_latest recovery query 不可被 Workbox NavigationRoute 的 cached index fallback 攔截；自己的正常／恢復導覽仍由 pwaUpdateService 唯一 writer 控制。loaded releaseId === targetVersion 才 completed，HTTP 200 不是成功證據。
+- Shipping compatibility：sealed build 接受 machine binding --previous-manifest／PROJED_PREVIOUS_RELEASE_MANIFEST，驗證同 project／PROD、前版 tree／每檔 hash／canonical path，保留前版自身 assets（不遞迴携帶更早的 retention）。不能覆寫同 URL 不同 bytes、不能攜入前版 HTML／metadata／sw.js。保留項目納入新 manifest tree、scan 及 remote provenance。release executor 對缺前版 binding／retention 的新發布包 fail closed；binding 不構成新增人類批准。
+- Hosting /assets 缺漏不再 rewrite 到 index.html；quick-task 入口及正常 SPA 導覽保持原 route contract。
+- 不含 production deploy、遠端變更、強制更新、舊 cache 回收、schema／Auth／業務資料變更。現有其他 dirty changes 不 stage／還原；本地完整 app build 不代表可直接發布該 dirty 工作樹。
+
+### QA frozen acceptance
+
+| ID | 前置／操作 | 預期／證據 |
+|---|---|---|
+| R01 | 保存 failed 同 target，連續檢查／reload | 原因與錯誤碼保留，背景不重開 activation、不循環導覽；adapter＋browser |
+| R02 | failed 之後明確點重試 | 新 fenced attempt，可收斂；雙分頁只一 activation，loaded target 才結案；真 SW |
+| R03 | current=latest 且殘留 failed | 解除已解決 PWA 狀態，不動業務資料；adapter＋browser |
+| R04 | update／register／metadata 網路失敗，回網 | 現有可用 app 沒有載入失敗橫幅；真 browser＋fault injection |
+| R05 | dirty／booting／unknown owner 時 retry 或 load recovery | 無強制導覽；safe 後走本分頁安全流程；adapter＋browser |
+| R06 | controlled client 從舊版本以 recovery query 導覽 | GET 真網路 HTML，載入 target；原 SW/cache 保留；真 SW trace |
+| R07 | 前版 asset 不在新 build／同路徑不同 bytes／tamper／traversal | 前版自己的資產保留且 hash 正確；無限累積／tamper／collision／越界均拒絕；封裝 fixture |
+| R08 | 缺 /assets 檔案、quick-task、SPA route | assets 404；其他 route contract 正常；Firebase matcher＋local delivery；正式 readback 待發版 |
+| R09 | update/load/cache failure、normal dirty prompt，三 viewport／鍵盤 | 文案／原因／CTA 正確，無 overflow；UI screenshot／量測 |
+| R10 | A→B、背景往返、重整、多分頁與錯誤重試前後 sentinel | Session／草稿／localStorage／業務 IDB／舊 release cache 保留；真 browser |
+
+QC 在候選 source freeze 後執行；最初正式截圖 failure 保留。fixture 只支持實際層級，不將新 profile／匿名 smoke 代替使用者既有 profile 或正式 lifecycle。結果與精確命令由 DEV-134 記錄。
