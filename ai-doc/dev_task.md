@@ -8,13 +8,13 @@ Cold start：先讀下方 `## 總任務清單`；需要特定 DEV 詳細歷史�
 
 ## DEV-133 快速建任務同帳號與自動同步 - 2026-09-30
 
-**2026-10-02 Rev12 最新狀態：直接 corrective release 發布前 READY；PROD 仍為 Rev11，DEV 執行中。** 最終 360-file candidate digest `ce3bb938cbe5fdae1b4d27de3679a4d0056f40f07839573cd5b024030ae12b3d` 的 UI／真 IDB simulation 25/25及普通 TEST N06 11/11 PASS；舊 `673aeee` baseline 的 R24 false warning 24/25 FAIL已重現並保留。Read-only review 無 P0/P1 阻礙，tsc／targeted ESLint exit 0。Source SHA／release ID 未讀回；正式發布及 production UI／功能驗收、PR #5 review／merge及專屬 4195 cleanup仍待，DEV 不標 done。詳細來源與限制見[QA Rev12](qa/QA-DEV-133-quick-task-shared-identity-sync.md)與[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)。
+**2026-10-02 Rev12 正式發布與產品驗收完成；DEV-133 native task DONE。** Source `9e67d5dd2d269637f40545896bb96c76ba71eeed`／release `20261001171238-12446a`，tree `2a79f53bbff803e678967afbd80f830b0fee083d369dcabae2b38ee743d2d259`，live version `45fd4af302e5ef15`、Rev11 `c01b9588565a9025` recovery anchor；雙 origin各54/54與browser startup PASS。Rev12 direct changed-UI feature 23/23、local real-IDB simulation 25/25、ordinary TEST N06 11/11 PASS；PR #5 merged by `08b51fd7048bb993f9b8f23a93581f24f00206a0`。P0/P1 review無阻礙、task-owned runtime/browser cleanup完成且profile保留、未清除未同步資料。N01～N10按原 layer-specific evidence關閉，不將各層cases相加宣稱全套重測；細節見[QA closure table](qa/QA-DEV-133-quick-task-shared-identity-sync.md)。目前文件是合併後 closure follow-up。
 
 **Rev11 正式發布快照：指定 production 功能矩陣 46/46 PASS。** Product commit `673aeee9c10f01936a8aa4a0f2ca16ab7606a5ea` 已推入 PR #5；direct release `20261001160355-057ccc`，雙 origin 54/54、official browser startup PASS，readback live version `c01b9588565a9025`，Rev10 version `ae38a453a07ec4f3` 為復原錨點。新版驗證普通真 Google／獨立 Session、同 owner、唯一 captureId、真 RPC／receipt／工作台、page-scoped offline 回網補送及 quick local logout 保留主程式 Session；legacy `P0001` 僅為本機 fault fixture。人工 speech PASS 沿用未變的 `8a0e738` voice source 範圍；既有 `092f1fa...` 的 N10／N08／邊界 TEST 收據維持各層來源，不與正式結果合併。
 
-Rev11正式驗收期間的 [390px 已同步畫面](../output/qa/dev-133/independent-auth/production/rev11/production-primary-synced-390.png)曾顯示要求先登出原帳號的提示；舊 `673aeee` main baseline 已在局部 simulation 精確重現同一提示，最終 Rev12 candidate 的對應測試通過。該延遲 IDB 競態控制只在 LOCAL SIMULATION，不代表 PROD fault injection；正式發布後仍須完成 production UI／功能驗收。既有 runner 的 pageError／critical Auth-RPC 計數也不代表所有 UI 狀態乾淨。PR #5 review／merge及專屬 4195 runtime／UI cleanup仍待；DEV 不標 done。此 worktree 的本輪文件修改尚未提交，PR #5 post-document head 待 root 依 Git／PR readback 更新；舊 `144ea...` 僅為 Rev10 歷史 head。當前證據與限制見[QA Rev12](qa/QA-DEV-133-quick-task-shared-identity-sync.md)及[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)。
+Rev11正式驗收期間的 [390px 已同步畫面](../output/qa/dev-133/independent-auth/production/rev11/production-primary-synced-390.png)曾顯示要求先登出原帳號的提示；舊 `673aeee` main baseline 已在局部 simulation 精確重現同一提示，Rev12 local simulation及正式 changed-UI驗收均通過。該延遲 IDB 競態控制只在 LOCAL SIMULATION，不代表 PROD fault injection。PR #5及原產品交付已完成；本輪文件是合併後 closure follow-up，細節與證據邊界見[QA Rev12](qa/QA-DEV-133-quick-task-shared-identity-sync.md)及[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)。
 
-以下 2026-10-01 Rev10 與更早段落保留各自當時狀態；如與上述 Rev11 現況衝突，以本段及最新 QA／REL 為準。當中的 092f TEST 證據仍保留其原測試層級與 source 邊界。
+以下 2026-10-01 Rev11／Rev10 與更早段落均保留各自當時狀態；如有狀態衝突，以本段最上方 Rev12 closure 及最新 QA／REL 為準。當中的 TEST 證據仍保留其原測試層級與 source 邊界。
 
 **2026-10-01 Rev10已正式啟用；改動功能的正式驗收續跑，Google獨立登入核身待完成。** Product source `8a0e738fcb68896a937f650666e53f2289729953`、同一protected release `20261001130712-4982b5` 已正式activate，live version `ae38a453a07ec4f3`；雙正式origin各54/54檔案hash、官方啟動與ordinary Google safe-cancel、三項strict readiness PASS。前一Rev9 `b88f428e0efa541e`保留為DB v2相容復原錨點。正式主程式既有Session透過普通SDK refresh後getUser200、指定actor與owner吻合；quick獨立Google登入因provider密碼／MFA尚待人類核身，不能把7/7前置檢查或舊40/40當作新版正式同步驗收。未執行正式migration／修改業務資料／擴張IAM或Secret。PR #5 head `144ea331448cd449dafca1bc7e284c67bf4e2f6d`已推送，合併前只讀審查進行中。詳見[QA正式續驗](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-rev10正式啟用與驗收續跑)與[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)。
 
@@ -1114,14 +1114,14 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 證據：本地 390×844 headless Edge 操作與 `output/playwright/dev-132/*-mobile-cdp.png`、`tsc --noEmit`、DEV-034 static 23/23、targeted ESLint 0 errors；移位前 DEV-132／130／034／038 回歸與本節執行紀錄。
   - 計入交付：否（尚未正式發布）。
 
-- ◐ DEV-133 [交付點] [Rev12直接修正發布前READY；TEST simulation25/25＋ordinary N06 11/11；正式驗收、PR與4195收尾待完成] [P1] [本輪實作] 快速建任務各自登入與自動同步
+- ✓ DEV-133 [交付點] [Rev12正式發布、產品驗收與PR #5合併完成；closure文件追補] [P1] [本輪實作] 快速建任務各自登入與自動同步
   - 摘要：共用 ProJED 帳號系統、兩個 App 各自登入與保存 Session；保留 owner-bound 離線保存、自動重試及七日已同步副本清理。
   - 來源 ID：使用者 2026-10-01 採用獨立登入方案及修改開發文件／補齊到架構定案指示；延續 2026-09-30 DEV-133。
   - 父任務：DEV-122；延續 DEV-131 雙網址安裝，相容 DEV-130／132。
-  - 下一步：釐清 Rev11 390px 已同步畫面仍顯示原帳號登出提示，完成 UI final audit、PR #5 review／merge、4195 專屬 runtime／UI cleanup與證據保存。普通正式 Google／功能矩陣46/46及人工 speech 僅證明所列範圍，不抵銷可見畫面異常，也不等於 Android／完整 PWA 自動更新驗收或整份 DEV 完成。
-  - 阻塞 / 恢復條件：同次 production readback 無其他 pending capture且 owner 已同步，但人工截圖仍顯示原帳號登出提示；root 正查明其為過渡／恢復殘留或產品缺陷。指定 runner 0 pageError／critical Auth-RPC failures 不構成 UI clean 證據。原始 worker timeout及 replay harness 參數錯誤收據保留，修正工具後沿用原 fixtures 重驗；較早同 digest `092f1fa...` 的 N08/N10/邊界 TEST 結果仍依各自來源有效。專屬 4195 cleanup 由 root 負責；未同步或 synthetic pending profile／資料依原規則保留。
-  - 證據：[QA Rev11](qa/QA-DEV-133-quick-task-shared-identity-sync.md)、[REL-014 Rev11](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)、[SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md)、[ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md)；正式 mirror 收據位於 `output/qa/dev-133/independent-auth/production/rev11/`，Python direct feature receipt 位於 `output/release/dev-083/20261001160355-057ccc/direct-evidence.json`；同 digest TEST evidence仍見 N10／N08 QA 段落。
-  - 計入交付：是；正式指定功能與語音案例已驗收，UI final audit、PR #5 review／merge及4195 cleanup完成前 DEV-133維持執行中。
+  - 下一步：無產品／驗收阻塞；本輪為 PR #5 合併後的 closure 文件追補。未把 Android 或完整 PWA automatic-update 排除範圍升格為需求。
+  - 阻塞 / 恢復條件：無。Rev12正式 UI／功能驗收、runtime cleanup與PR #5 merge均有收據；原始 FAIL及各層範圍保留於 QA closure表，不影響已達成的交付。
+  - 證據：[QA Rev12 N01–N10 closure](qa/QA-DEV-133-quick-task-shared-identity-sync.md)、[REL-014 Rev12](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)、[SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md)、[PR #5 merge receipt](../output/qa/dev-133/independent-auth/closure/pr5-merged.json)、[production direct evidence](../output/qa/dev-133/independent-auth/production/rev12/direct-evidence.json)、[runtime cleanup](../output/qa/dev-133/independent-auth/production/rev12/runtime-cleanup.json)。
+  - 計入交付：是；DEV-133產品、正式驗收及 PR #5 交付完成。此文件追補不重開本 native task。
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
 
