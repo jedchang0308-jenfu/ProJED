@@ -1,6 +1,12 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-10-02（DEV-133 Rev12 發布前 READY）
+
+Rev11 `673aeee9c10f01936a8aa4a0f2ca16ab7606a5ea`／release `20261001160355-057ccc` 仍是正式環境版本，production 指定功能矩陣 46/46 PASS、雙 origin 各 54/54；live version／recovery anchor 為 `c01b9588565a9025`。Rev12 direct corrective candidate 已達發布前 READY：360-file digest `ce3bb938cbe5fdae1b4d27de3679a4d0056f40f07839573cd5b024030ae12b3d`、UI／真 IDB simulation 25/25、ordinary TEST N06 11/11 PASS；舊 `673aeee` main baseline 的 R24 false warning 24/25 FAIL已保留。Source SHA／new release ID未知；Rev12正式發布後的 production UI／功能驗收、PR #5 review／merge及4195 cleanup仍待，DEV 不標 done。細節與原 FAIL 邊界見[QA Rev12](qa/QA-DEV-133-quick-task-shared-identity-sync.md)、[SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md)及[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)。本輪文件修改尚未提交，PR post-document head待root後續實際Git／PR readback。
+
 ## Documentation Map Update - 2026-10-01（DEV-133 Rev10正式啟用）
+
+本節以下內容是 2026-10-01 Rev10 發布當時的快照；Rev11 release、指定功能證據與目前 UI final-audit 狀態以本文件上方更新為準。既有 TEST layer evidence 仍保留原 source 範圍。
 
 **2026-10-01 Rev10已正式啟用；改動功能的正式驗收續跑，Google獨立登入核身待完成。** Product source `8a0e738fcb68896a937f650666e53f2289729953`、同一protected release `20261001130712-4982b5` 已正式activate，live version `ae38a453a07ec4f3`；雙正式origin各54/54檔案hash、官方啟動與ordinary Google safe-cancel、三項strict readiness PASS。前一Rev9 `b88f428e0efa541e`保留為DB v2相容復原錨點。正式主程式既有Session透過普通SDK refresh後getUser200、指定actor與owner吻合；quick獨立Google登入因provider密碼／MFA尚待人類核身，不能把7/7前置檢查或舊40/40當作新版正式同步驗收。未執行正式migration／修改業務資料／擴張IAM或Secret。PR #5 head `144ea331448cd449dafca1bc7e284c67bf4e2f6d`已推送，合併前只讀審查進行中。 最新結果以[QA正式續驗](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-rev10正式啟用與驗收續跑)、[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)與[DEV-133](dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30)為準；以下部署前段落為歷史快照。
 
@@ -254,10 +260,10 @@ R12不新增第七個runtime責任點：`public/manifest.webmanifest`是唯一ro
 | [SPEC-122](specs/SPEC-122-mobile-zero-data-quick-task.md) | current implementation authority；root bundled shortcut、雙identity、exact file surface、entry/build、UI/voice、IDB、RPC/RLS、同帳號、工作台到達、drift與stop conditions。 |
 | [ADR-050](decisions/ADR-050-mobile-quick-task-entry-and-outbox.md) | Accepted Architecture Memory + R12 closure；root shortcut與選用第二identity、manifest發佈／更新、raw HTML MPA、one root SW、account outbox及server-owned idempotency。 |
 | [QA-DEV-122](qa/QA-DEV-122-mobile-zero-data-quick-task.md) | verification authority；S15、B22～B24、W07與受影響回歸已local PASS，Level 3 HTTPS smoke已PASS；實機、DEV-096 real-SW FAIL及完整B/W/P／獨立QA-QC缺口由使用者接受為本次release殘餘風險，原始case狀態不變；第10.4.3節定義production替代結案證據。 |
-| [DEV-133](dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30) | Rev10已啟用；未提交 TEST candidate 的N10 offline／built-SW各10/10、N08 hosted recovery指定scenario 18/18 PASS。source未commit／部署；新版正式 quick Google／功能驗收、N03 speech、PR review／merge及4195 cleanup required；執行中。 |
-| [SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md) | Rev10／架構已定案；N10新fixed TEST候選相容子項PASS、N08 hosted recovery指定scenario 18/18 PASS，原FAIL／harness timeout保留。三項修正未commit／部署；正式核身／功能、N03 speech、PR與4195 cleanup仍required。 |
+| [DEV-133](dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30) | Rev12直接修正發布前 READY：TEST simulation25/25、ordinary N06 11/11；production仍Rev11，正式驗收、PR #5及4195 cleanup待 root，DEV執行中。 |
+| [SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md) | 契約維持 Rev10／架構已定案；Rev12 candidate READY但未發布，production仍Rev11；正式驗收、PR及4195 cleanup待完成。 |
 | [ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md) | Accepted Rev 3；取代跨 App OAuth Server，採第一方使用者 RLS、各 origin Session、owner/context交易及普通登入相容修正。 |
-| [QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md) | 新未提交TEST候選 built offline及built-SW N10各10/10、N08 hosted recovery指定scenario 18/18 PASS；原FAIL／timeout保留。PROD仍8a Rev10，舊正式40/40不覆蓋新source；正式quick Google／功能、N03 speech、PR與4195 cleanup仍required。 |
+| [QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md) | Rev12發布前 READY；ce3bb… simulation25/25及ordinary N06 11/11 PASS，保留 baseline false-warning FAIL；Rev11正式46/46與speech仍依原範圍。 |
 | [SPEC-034](specs/SPEC-034-fast-start-pwa-install-guidance.md) | 一般 ProJED install/update 與 QuickCaptureShell 退役 authority；DEV-122 為 compatible extension。 |
 | [SPEC-039](specs/SPEC-039-task-filter-core-and-workbench-profiles.md) | account-owned 未歸位與完整工作台 authority；quick entry 只新增來源。 |
 | [SPEC-115](specs/SPEC-115-blank-task-creation-contract.md) | blank-task content authority；quick RPC 必須 parity，description absent。 |

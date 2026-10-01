@@ -1,5 +1,11 @@
 # SPEC-133：快速建任務共用帳號、各自登入與自動同步
 
+**最新執行狀態（2026-10-02 Rev12 直接 corrective release 發布前 READY；非契約修訂，SPEC contract revision 仍為 Rev10；PROD 仍為 Rev11）。** 最終 360-file candidate digest `ce3bb938cbe5fdae1b4d27de3679a4d0056f40f07839573cd5b024030ae12b3d` 已通過 UI／真 IDB simulation 25/25 與普通 TEST N06 11/11。修改只在 `src/quickTask/main.ts`，Auth、RPC、DB、SW、schema及 voice範圍未變；舊 `673aeee` baseline 的 R24 false warning 24/25 FAIL也已保留作為可重現對照。Source SHA與release ID尚未讀回；正式發布後的 production UI／功能驗收、PR #5 review／merge及 4195 cleanup仍待。細節、receipt及層級限制見[QA Rev12](../qa/QA-DEV-133-quick-task-shared-identity-sync.md)。
+
+**Rev11 正式執行證據快照（2026-10-02；非契約修訂）。** Product source `673aeee9c10f01936a8aa4a0f2ca16ab7606a5ea` 已推入 PR #5，direct release `20261001160355-057ccc`；雙正式 origin 54/54，provider live version readback 為 `c01b9588565a9025`。正式普通 Google／Session、真 owner RPC／receipt、工作台及 page-scoped offline 續送的指定矩陣 46/46 PASS，並有獨立人工 speech evidence。Rev11 390px 畫面曾見原帳號登出提示；前一 Rev12 TEST 迭代對該提示取得指定結果，但最新安全修正仍待重驗；證據與正式 UI audit 邊界見上方及[QA Rev12](../qa/QA-DEV-133-quick-task-shared-identity-sync.md)。
+
+下列 Rev10 發布狀態為 2026-10-01 快照，由上述 Rev11 執行狀態取代；既有 Rev10／TEST source-boundary 證據仍保留其原範圍。
+
 修訂：**2026-10-01 Rev10；Human Confirmed；RD Implementation Ready；架構定案：已定案。** **2026-10-01 Rev10已正式啟用；改動功能的正式驗收續跑，Google獨立登入核身待完成。** Product source `8a0e738fcb68896a937f650666e53f2289729953`、同一protected release `20261001130712-4982b5` 已正式activate，live version `ae38a453a07ec4f3`；雙正式origin各54/54檔案hash、官方啟動與ordinary Google safe-cancel、三項strict readiness PASS。前一Rev9 `b88f428e0efa541e`保留為DB v2相容復原錨點。正式主程式既有Session透過普通SDK refresh後getUser200、指定actor與owner吻合；quick獨立Google登入因provider密碼／MFA尚待人類核身，不能把7/7前置檢查或舊40/40當作新版正式同步驗收。未執行正式migration／修改業務資料／擴張IAM或Secret。PR #5 head `144ea331448cd449dafca1bc7e284c67bf4e2f6d`已推送，合併前只讀審查進行中。 部署前82/82 SIMULATION、built離線／restart10/10、真TEST A12/12、同提交HTTPS TEST17/17的分層證據仍有效；舊版正式40/40保留原source邊界。最新收據見QA與REL-014。
 
 權威：[DEV-133](../dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30)、[ADR-053 Rev 3](../decisions/ADR-053-quick-task-cross-origin-account-link.md)、[QA-DEV-133](../qa/QA-DEV-133-quick-task-shared-identity-sync.md)。沿用原 DEV ID／文件路徑；[SPEC-122](SPEC-122-mobile-zero-data-quick-task.md) 的輸入、本機保存、RPC、工作台、manifest／SW 契約繼續適用，登入與認領交界以本版為準。

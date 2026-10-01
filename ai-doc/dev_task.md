@@ -8,6 +8,14 @@ Cold start：先讀下方 `## 總任務清單`；需要特定 DEV 詳細歷史�
 
 ## DEV-133 快速建任務同帳號與自動同步 - 2026-09-30
 
+**2026-10-02 Rev12 最新狀態：直接 corrective release 發布前 READY；PROD 仍為 Rev11，DEV 執行中。** 最終 360-file candidate digest `ce3bb938cbe5fdae1b4d27de3679a4d0056f40f07839573cd5b024030ae12b3d` 的 UI／真 IDB simulation 25/25及普通 TEST N06 11/11 PASS；舊 `673aeee` baseline 的 R24 false warning 24/25 FAIL已重現並保留。Read-only review 無 P0/P1 阻礙，tsc／targeted ESLint exit 0。Source SHA／release ID 未讀回；正式發布及 production UI／功能驗收、PR #5 review／merge及專屬 4195 cleanup仍待，DEV 不標 done。詳細來源與限制見[QA Rev12](qa/QA-DEV-133-quick-task-shared-identity-sync.md)與[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)。
+
+**Rev11 正式發布快照：指定 production 功能矩陣 46/46 PASS。** Product commit `673aeee9c10f01936a8aa4a0f2ca16ab7606a5ea` 已推入 PR #5；direct release `20261001160355-057ccc`，雙 origin 54/54、official browser startup PASS，readback live version `c01b9588565a9025`，Rev10 version `ae38a453a07ec4f3` 為復原錨點。新版驗證普通真 Google／獨立 Session、同 owner、唯一 captureId、真 RPC／receipt／工作台、page-scoped offline 回網補送及 quick local logout 保留主程式 Session；legacy `P0001` 僅為本機 fault fixture。人工 speech PASS 沿用未變的 `8a0e738` voice source 範圍；既有 `092f1fa...` 的 N10／N08／邊界 TEST 收據維持各層來源，不與正式結果合併。
+
+Rev11正式驗收期間的 [390px 已同步畫面](../output/qa/dev-133/independent-auth/production/rev11/production-primary-synced-390.png)曾顯示要求先登出原帳號的提示；舊 `673aeee` main baseline 已在局部 simulation 精確重現同一提示，最終 Rev12 candidate 的對應測試通過。該延遲 IDB 競態控制只在 LOCAL SIMULATION，不代表 PROD fault injection；正式發布後仍須完成 production UI／功能驗收。既有 runner 的 pageError／critical Auth-RPC 計數也不代表所有 UI 狀態乾淨。PR #5 review／merge及專屬 4195 runtime／UI cleanup仍待；DEV 不標 done。此 worktree 的本輪文件修改尚未提交，PR #5 post-document head 待 root 依 Git／PR readback 更新；舊 `144ea...` 僅為 Rev10 歷史 head。當前證據與限制見[QA Rev12](qa/QA-DEV-133-quick-task-shared-identity-sync.md)及[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)。
+
+以下 2026-10-01 Rev10 與更早段落保留各自當時狀態；如與上述 Rev11 現況衝突，以本段及最新 QA／REL 為準。當中的 092f TEST 證據仍保留其原測試層級與 source 邊界。
+
 **2026-10-01 Rev10已正式啟用；改動功能的正式驗收續跑，Google獨立登入核身待完成。** Product source `8a0e738fcb68896a937f650666e53f2289729953`、同一protected release `20261001130712-4982b5` 已正式activate，live version `ae38a453a07ec4f3`；雙正式origin各54/54檔案hash、官方啟動與ordinary Google safe-cancel、三項strict readiness PASS。前一Rev9 `b88f428e0efa541e`保留為DB v2相容復原錨點。正式主程式既有Session透過普通SDK refresh後getUser200、指定actor與owner吻合；quick獨立Google登入因provider密碼／MFA尚待人類核身，不能把7/7前置檢查或舊40/40當作新版正式同步驗收。未執行正式migration／修改業務資料／擴張IAM或Secret。PR #5 head `144ea331448cd449dafca1bc7e284c67bf4e2f6d`已推送，合併前只讀審查進行中。詳見[QA正式續驗](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-rev10正式啟用與驗收續跑)與[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)。
 
 最新 TEST 續驗：未提交 candidate source digest `092f1fa088efb4d15567ae6cc1cdb48f45d051913aa6a9d74556fb8fbc54d2ab`（360 files）的 built offline 10/10 與 A→B→A built-SW／DB v2 10/10 PASS；N08 hosted ordinary-session recovery 指定 scenario 18/18 PASS。首輪真產品 FAIL及中間 rendered-SW 未 pin 的 harness timeout 保留原始收據；第三輪確認畫面載入 entry pin 到該 fixed build。三項產品修正尚未 commit／部署，PROD仍為 `8a0e738` Rev10，不把 TEST 結果宣稱為正式新修正通過。N08 sequence 與 N10 範圍詳見[QA 最新續驗](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-rev10-fixed-test-built-sw-a-to-b-to-a-compatibility)；4193／4194／4196已釋放，synthetic profiles保留。N03 actual speech、PROD quick Google核身與新版功能續驗、PR #5 review／merge及4195專屬視窗 cleanup仍 required，DEV-133維持執行中。以下保留原source／歷史邊界。
@@ -1106,14 +1114,14 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 證據：本地 390×844 headless Edge 操作與 `output/playwright/dev-132/*-mobile-cdp.png`、`tsc --noEmit`、DEV-034 static 23/23、targeted ESLint 0 errors；移位前 DEV-132／130／034／038 回歸與本節執行紀錄。
   - 計入交付：否（尚未正式發布）。
 
-- ◐ DEV-133 [交付點] [Rev10已啟用；新版 TEST N10及N08指定場景PASS；補正source未commit／部署；正式驗收及PR review／merge待完成] [P1] [本輪實作] 快速建任務各自登入與自動同步
+- ◐ DEV-133 [交付點] [Rev12直接修正發布前READY；TEST simulation25/25＋ordinary N06 11/11；正式驗收、PR與4195收尾待完成] [P1] [本輪實作] 快速建任務各自登入與自動同步
   - 摘要：共用 ProJED 帳號系統、兩個 App 各自登入與保存 Session；保留 owner-bound 離線保存、自動重試及七日已同步副本清理。
   - 來源 ID：使用者 2026-10-01 採用獨立登入方案及修改開發文件／補齊到架構定案指示；延續 2026-09-30 DEV-133。
   - 父任務：DEV-122；延續 DEV-131 雙網址安裝，相容 DEV-130／132。
-  - 下一步：完成新版 quick Google核身與PROD改動功能續驗；完成N03 actual speech驗收、PR #5 review／merge、4195專屬視窗 cleanup與證據保存。N10新fixed TEST候選的offline及A→B→A built-SW／DB v2各10/10，只是未提交source的本機相容證據；N08 hosted ordinary-session recovery指定scenario 18/18 PASS，三項source修正尚未commit／部署，不代表PROD新功能通過。這些結果不計為正式installed-client、Android、真Google、speech或完整自動PWA更新驗收，不新增原SPEC未要求的production installed-client gate。舊部署前82/82 SIMULATION、真TEST A12/12、HTTPS TEST17/17及舊正式40/40維持原source邊界。
-  - 阻塞 / 恢復條件：N08真TEST以原actor／profile／captureId完成缺profile／membership拒絕、legacy P0001同帳號人工重新確認、正常主程式設定後同ID單筆task／receipt及replay readback；C仍不能讀A。首輪產品FAIL及中間未pin rendered build的harness timeout均保留，最新第三輪18/18 PASS收據與驗證後render entry pinned build見QA。TEST候選source digest `092f1fa088efb4d15567ae6cc1cdb48f45d051913aa6a9d74556fb8fbc54d2ab`尚未commit／部署；PROD仍為Rev10 `8a0e738`。quick獨立Google密碼／MFA待本人核身，N03 speech、PROD功能續驗、PR review／merge與4195 cleanup仍required。4193／4194／4196已釋放，synthetic profiles保留；無未同步資料刪除。
-  - 證據：[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)、[QA 最新 N10／N08](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-rev10-fixed-test-built-sw-a-to-b-to-a-compatibility)、[SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md)、[ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md)；新證據位於 `output/qa/dev-133/independent-auth/bundle/1790868110999/`、`built-update/1790868229459/`、`hosted-recovery/1790868512440/`；正式 canonical `production/rev10/activation-terminal-pending.json`、`serving-readback.json`及worktree `20261001130712-4982b5/activation-evidence.json`仍只綁定已正式source／release。
-  - 計入交付：既有Rev10已推送並建立 PR；本輪三項source修正未commit／部署，PR review／merge完成前 DEV-133維持執行中。
+  - 下一步：釐清 Rev11 390px 已同步畫面仍顯示原帳號登出提示，完成 UI final audit、PR #5 review／merge、4195 專屬 runtime／UI cleanup與證據保存。普通正式 Google／功能矩陣46/46及人工 speech 僅證明所列範圍，不抵銷可見畫面異常，也不等於 Android／完整 PWA 自動更新驗收或整份 DEV 完成。
+  - 阻塞 / 恢復條件：同次 production readback 無其他 pending capture且 owner 已同步，但人工截圖仍顯示原帳號登出提示；root 正查明其為過渡／恢復殘留或產品缺陷。指定 runner 0 pageError／critical Auth-RPC failures 不構成 UI clean 證據。原始 worker timeout及 replay harness 參數錯誤收據保留，修正工具後沿用原 fixtures 重驗；較早同 digest `092f1fa...` 的 N08/N10/邊界 TEST 結果仍依各自來源有效。專屬 4195 cleanup 由 root 負責；未同步或 synthetic pending profile／資料依原規則保留。
+  - 證據：[QA Rev11](qa/QA-DEV-133-quick-task-shared-identity-sync.md)、[REL-014 Rev11](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)、[SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md)、[ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md)；正式 mirror 收據位於 `output/qa/dev-133/independent-auth/production/rev11/`，Python direct feature receipt 位於 `output/release/dev-083/20261001160355-057ccc/direct-evidence.json`；同 digest TEST evidence仍見 N10／N08 QA 段落。
+  - 計入交付：是；正式指定功能與語音案例已驗收，UI final audit、PR #5 review／merge及4195 cleanup完成前 DEV-133維持執行中。
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
 

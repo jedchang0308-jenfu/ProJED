@@ -495,8 +495,9 @@ const confirmPendingClaim = async () => {
 };
 
 const showNextRecovery = async (interactionRevision: number) => {
+  const renderRevision = recoveryRenderRevision;
   const isCurrentInteraction = () => !recovery.hidden && recovery.open
-    && recoveryInteractionRevision === interactionRevision;
+    && recoveryInteractionRevision === interactionRevision && recoveryRenderRevision === renderRevision;
   if (titleInput.value.trim()) return;
   let records: QuickCaptureRecord[];
   try {
@@ -510,7 +511,12 @@ const showNextRecovery = async (interactionRevision: number) => {
     ?? records.find(needsRecovery);
   if (!record) {
     const pending = records.find(item => item.state !== 'synced');
-    const allPending = await countAllPendingQuickCaptures().catch(() => 0);
+    const allPending = await countAllPendingQuickCaptures().catch(() => null);
+    if (!isCurrentInteraction()) return;
+    if (allPending === null) {
+      setMessage('目前無法讀取本機待同步任務，資料仍保留在本機。');
+      return;
+    }
     const scopedPending = records.filter(item => item.state !== 'synced').length;
     const currentPendingOutsideScope = currentRecord && currentRecord.state !== 'synced'
       && !records.some(item => item.captureId === currentRecord?.captureId) ? 1 : 0;
@@ -520,13 +526,10 @@ const showNextRecovery = async (interactionRevision: number) => {
       authStatus.querySelector<HTMLButtonElement>('button')?.focus();
     } else if (pending) {
       setMessage('任務已保留在本機；已綁定原帳號的任務會在網路可用時自動同步。');
+    } else if (allPending === 0) {
+      setMessage(currentRecord?.state === 'synced' ? '最近一筆任務已同步至 ProJED 主程式。' : '');
     } else {
-      if (allPending === 0 && currentRecord?.state === 'synced') {
-        setMessage('最近一筆任務已同步至 ProJED 主程式。');
-      } else {
-        setMessage(authSnapshot ? '請先登出此 App，再登入建立這些待辦的原帳號。' : '請登入建立這些待辦的原帳號。');
-        authStatus.querySelector<HTMLButtonElement>('button')?.focus();
-      }
+      setMessage('任務已保留在本機；已綁定原帳號的任務會在網路可用時自動同步。');
     }
     return;
   }
