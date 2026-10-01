@@ -8,9 +8,11 @@ Cold start：先讀下方 `## 總任務清單`；需要特定 DEV 詳細歷史�
 
 ## DEV-133 快速建任務同帳號與自動同步 - 2026-09-30
 
+**2026-10-01 正式同步核心已發布／驗收 PASS（REL-014）。** clean product source `8376086144b31155a94477e6bea1f929ded475be` 已發布為 `20261001061118-144be8`，兩正式 origin 各 54/54 hash、真普通 Google／任務／離線補送／local logout 40/40、官方啟動及 safe-cancel PASS；PROD correction 綁定 NO_OP，未套 DDL／改 IAM／改寫既有資料。[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)／[QA 正式核心結果](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-正式同步核心驗收rel-014) 為最新發布權威。Git 遠端目的地確認待回覆；後續收合／整併 UI 未包含、未驗收，整體 DEV-133 不因核心發布而將這些 slice 補登 PASS。下列發布前狀態保留為歷史快照，以本段為最新核心狀態。
+
 ### 架構修訂（2026-10-01；使用者已採用獨立登入方案）
 
-文件成熟度：**RD Implementation Ready／Human Confirmed；架構定案：已定案**。狀態：**執行中；TEST 跨帳／correction 核心驗收及 PROD auth/schema preflight PASS，正式 release 待完成**。使用者明確採用「共用帳號、各自登入、各自保存 Session、離線任務依帳號同步」，本機 source implementation 已落地單一 Supabase SDK Auth、DB v2 auth_context／receipt、owner CAS、明確認領、local signOut barrier、嚴格回執及舊 OAuth 路徑退役；最新 TEST／PROD preflight 與實際殘餘見下方及 QA 逐項表。這取代早先 `3B` 的跨 App OAuth Server／免再次登入契約；`1A／2A` 的本機先存、未綁定資料明確認領及定期清理保護保留。DEV-133 仍為原交付點，不新增 DEV／完成率，也不改 DEV-122／131 的既有交付狀態。
+文件成熟度：**RD Implementation Ready／Human Confirmed；架構定案：已定案**。狀態：**執行中；REL-014 核心正式發布／驗收 PASS，Git 交付及後續 UI slice 待完成**。使用者明確採用「共用帳號、各自登入、各自保存 Session、離線任務依帳號同步」，本機 source implementation 已落地單一 Supabase SDK Auth、DB v2 auth_context／receipt、owner CAS、明確認領、local signOut barrier、嚴格回執及舊 OAuth 路徑退役；最新 TEST／PROD preflight 與實際殘餘見下方及 QA 逐項表。這取代早先 `3B` 的跨 App OAuth Server／免再次登入契約；`1A／2A` 的本機先存、未綁定資料明確認領及定期清理保護保留。DEV-133 仍為原交付點，不新增 DEV／完成率，也不改 DEV-122／131 的既有交付狀態。
 
 權威：[SPEC-133 Rev 4](specs/SPEC-133-quick-task-shared-identity-sync.md)、[ADR-053 Rev 3](decisions/ADR-053-quick-task-cross-origin-account-link.md)、[QA-DEV-133 新版 N01～N10](qa/QA-DEV-133-quick-task-shared-identity-sync.md)。canonical repo `C:\VIBE CODING\ProJED\ProJED`，branch `持續優化3`；source implementation baseline `e868611`，documentation evidence commits from `a1d12a9` onward；其他既存 dirty changes 保留。
 
@@ -1096,13 +1098,13 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 證據：本地 390×844 headless Edge 操作與 `output/playwright/dev-132/*-mobile-cdp.png`、`tsc --noEmit`、DEV-034 static 23/23、targeted ESLint 0 errors；移位前 DEV-132／130／034／038 回歸與本節執行紀錄。
   - 計入交付：否（尚未正式發布）。
 
-- ◐ DEV-133 [交付點] [執行中；TEST 跨帳／correction 核心驗收 PASS，正式 release 待完成] [P1] [本輪實作] 快速建任務各自登入與自動同步
+- ◐ DEV-133 [交付點] [核心正式發布／驗收 PASS；Git 交付及後續 UI slice 待完成] [P1] [本輪實作] 快速建任務各自登入與自動同步
   - 摘要：共用 ProJED 帳號系統、兩個 App 各自登入與保存 Session；保留 owner-bound 離線保存、自動重試及七日已同步副本清理。
   - 來源 ID：使用者 2026-10-01 採用獨立登入方案及修改開發文件／補齊到架構定案指示；延續 2026-09-30 DEV-133。
   - 父任務：DEV-122；延續 DEV-131 雙網址安裝，相容 DEV-130／132。
-  - 下一步：依 SPEC-133／QA 最新審核表隔離 DEV-133 正式 source scope，形成 sealed package 並核對 canonical migration selection；之後依既有 gate 完成已授權的正式部署與 smoke。
-  - 阻塞 / 恢復條件：最新 TEST 固定候選 29/29 integration、B0/core27及 Google cancel gate、TEST correction readback、post-correction 核心矩陣 7/7 PASS；PROD Google identity／canonical RPC schema preflight PASS。QA 仍列語音真麥克風／辨識服務、實際七日經過、foreign workspace hint／profile-missing hosted recovery、quick-task production callback/session smoke 與 sealed package 尚未驗。正式尚未部署；已取消 Android 實機不作新版必要前置。
-  - 證據：[SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md)、[ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md)、[QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md)。最新 reports：`output/qa/dev-133/independent-auth/cross-account-integration/1790830360462-b8d304f5/`；29/29 suite、correction readback及 post-correction 7/7 依 QA case layer 標示，較早 harness failures 原樣保留。
+  - 下一步：完成已備妥 Git delivery 的遠端目的地確認與 PR；後續工作樹 UI 候選另依其 source 重跑驗收，不把 REL-014 證據套用至新 UI。
+  - 阻塞 / 恢復條件：核心 TEST／HTTPS TEST／正式 40/40及 protected release 全部通過，正式 migration NO_OP。Git push 被自動審查要求確認目的地，已提出問題；後續 UI slice 未驗收且排除本次包。真麥克風／自動 PWA 更新與 Android residual 依 REL-014 明確標示，不增加新前置。
+  - 證據：[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)、[QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md)、[SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md)、[ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md)；canonical terminal-evidence.json 與 worktree activation-resume-evidence.json 綁定 source／artifact／case 層。
   - 計入交付：是（未完成，產品完成率貢獻 0）。
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容

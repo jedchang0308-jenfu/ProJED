@@ -1,5 +1,10 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-10-01（DEV-133 正式同步核心 REL-014）
+
+[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md) 記錄 clean source `8376086`／release `20261001061118-144be8` 已正式發布、雙 origin 各 54/54 及正式功能 40/40 PASS，PROD migration NO_OP與manual cache recovery明確分層。官方啟動／safe-cancel／cleanup PASS；Git遠端目的地確認待回覆。canonical後續收合／最近同步UI候選排除，仍未驗收；以下較早「正式未部署」為當時快照，不覆蓋此更新。入口見 [DEV-133](dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30) 及 [QA 正式核心結果](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-正式同步核心驗收rel-014)。
+
+
 ## Documentation Map Update - 2026-10-01（DEV-133 架構定案）
 
 最新執行狀態（2026-10-01）：TEST 29/29 跨帳整合、B0/core27與 Google cancellation gate、forward correction readback、post-correction 7/7 核心權限案例均 PASS；普通 TEST Google 取消登入有 picker/browser Back 的 21/21 證據。PROD ordinary Google identity／canonical RPC schema preflight PASS；correction 對 PROD 為條件 no-op。DEV-133 仍執行中，正式 source scope／sealed package、將 no-op／hash 綁定 package、部署及 quick-task smoke 尚未完成；N01～N10 實際殘餘以 [QA 最新審核表](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-完成審核逐項證據與剩餘) 為準。下列時間序列段落保留其當時快照，不能覆蓋此最新狀態。

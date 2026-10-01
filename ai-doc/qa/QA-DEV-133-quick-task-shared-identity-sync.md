@@ -1,6 +1,27 @@
 # QA-DEV-133：雙 App 各自登入／依帳號同步／本機清理
 
-修訂：**2026-10-01 Rev 6；TEST B0、跨帳整合、correction readback 與 post-correction 核心案例已 PASS；正式 release 尚未驗收**。來源為使用者採用「共用帳號、各自登入、各自保存 Session、離線任務依帳號同步」。依 [SPEC-133 Rev 4](../specs/SPEC-133-quick-task-shared-identity-sync.md) 及 [ADR-053 Rev 3](../decisions/ADR-053-quick-task-cross-origin-account-link.md) 驗收；[DEV-133](../dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30) 維持執行中，TEST PASS 不等於正式 release 完成。
+### 2026-10-01 正式同步核心驗收（REL-014）
+
+**已發布且正式功能驗收 PASS；Git 遠端交付待目的地確認。** 本次只代表 clean release source `8376086144b31155a94477e6bea1f929ded475be`，不包含工作樹後續 `conditional-recovery-entry`／`unified-sync-status-panel` 及視覺降噪 UI。這些 UI slice 保留未驗收狀態。發布、復原與完整來源見 [REL-014](../release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)。以下發布前完成審核表及 TEST／早期 OAuth 段落保留其當時事實，不覆蓋本節正式結果。
+
+不可變 release `20261001061118-144be8` 的 54 個檔案，在正式 `web.app`／`firebaseapp.com` 各核對 54/54；tree SHA-256 `945f9a7a26f9c2ad7a9c416b819b3e921230eff47ad086dbf8783dc9120303cb`。11 個核心 source 與最後 frozen TEST 相符；同 commit 的 HTTPS TEST 22/22 功能、官方啟動及 53/53 package 核對 PASS。正式受控普通 Google Session 40/40 功能、官方 canonical 啟動及 safe-cancel callback PASS。PROD RPC 原已符合 canonical invoker／空 search_path／原 ACL/RLS，correction 選擇綁定為 NO_OP，沒有正式 DDL、IAM／Secret 擴權或業務資料改寫。
+
+| 契約 | 最終覆蓋與證據層 |
+|---|---|
+| N01／N02 | 真 TEST A/B 普通 Session、正常 UI／RPC／唯一工作台及跨帳拒絕；正式同帳號兩 origin 不同 Session、quick Google callback、正常建立→工作台、同 ID 唯一 row、reload 後 Session／row 保留。 |
+| N03／N04 | 真 TEST 與正式 page-scoped offline：本機保留原 owner／captureId，回網自動同 ID 同步且工作台唯一。IME、500 code points、IDB abort/readback/CAS、timeout／8次重試依原 browser／注入案例，不稱全部 hosted。真麥克風／辨識服務未驗，與本次 Auth／同步修改分開。 |
+| N05／N06 | 普通 TEST Google picker Back 取消及重登、明確 claim／取消；401／refresh failure、nonce／CAS／切帳與 late response 的故障注入證據保留層級。正式官方 ordinary Google safe-cancel callback 回 canonical origin。 |
+| N07 | TEST main local logout、雙 origin local logout；正式 quick 正常登出 CTA 清除自身 Session，main 原 Session 仍可 getUser=200。沒有宣稱全域撤銷即時連動。 |
+| N08 | TEST 真 A/B JWT＋非空 task 的雙向 SELECT／UPDATE denial、同 ID replay/conflict、private receipt 不暴露、correction 後 7/7；缺依賴／foreign workspace 的 SQL 負例和 UI 注入依原層級。正式兩筆同 ID receipt／task 各唯一，不宣稱整個 ProJED API 或所有負例都做了 hosted 重演。 |
+| N09 | 6／8／40日、legacy／corrupt receipt、交易中止及競態以隔離 browser/IDB 時間 fixture；真 TEST server task／receipt 留存。規格是閾值與交易保護，不需等待真實七日才證明閾值；不宣稱已觀察七日排程。 |
+| N10 | 既有 v1→v2／rollback／SW update 相容案例；PROD NO_OP hash 與 sealed package 綁定、兩 origin script／release 身分、390／726 無溢出。主程式舊 cached document 透過既有「清除快取後重整」正常 UI 復原，新 release／原 Session／canonical capture IDs 保留；不稱自動 PWA 更新通過。Android 實機已由使用者取消。 |
+
+終端收據：`output/qa/dev-133/independent-auth/production/terminal-evidence.json`；正式 feature：`production/feature-smoke/result.json` 40/40（pending=0）；工作樹 package：`output/release/dev-083/20261001061118-144be8/activation-resume-evidence.json`。首次 CDN metadata hash FAIL、三次舊 PWA／harness timing FAIL 保留原報告；沿用原包、同主 captureID 復測，未重部署或製造重複 primary。最終 result 仍有舊 retry 的 `failureFirstLine`，僅為歷史欄位；最終 status／errorKind／40 cases 及收據一致為 PASS，沒有改寫原報告。
+
+cleanup：task-owned Chrome PID 37180 已退出，4195／4173／4174／4175 無 listener；兩筆正式受控任務均已同步、profile 保留。精確 TEST callback 已還原讀回；本次 level3／candidate preview channels 已移除，live version `0aae27354f796317` 未變。較早含未同步資料的失敗 profile 及使用者瀏覽器／4000 保留。release worktree 暫留供 Git review／證據交付，cleanup owner 為 DEV-133 root。
+
+
+修訂：**2026-10-01 Rev 9（REL-014 正式同步核心已發布／驗收 PASS；後續 UI scope 未驗收、Git 遠端交付待確認）**。來源為使用者採用「共用帳號、各自登入、各自保存 Session、離線任務依帳號同步」。依 [SPEC-133 Rev 4](../specs/SPEC-133-quick-task-shared-identity-sync.md) 及 [ADR-053 Rev 3](../decisions/ADR-053-quick-task-cross-origin-account-link.md) 驗收；[DEV-133](../dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30) 維持執行中：REL-014 核心已正式發布／驗收，Git 交付及後續 UI 尚未完成。
 
 ## 新版範圍與證據規則
 
