@@ -1,5 +1,13 @@
 # QA-DEV-133：雙 App 各自登入／依帳號同步／本機清理
 
+### 2026-10-01 Rev10正式啟用與驗收續跑
+
+**2026-10-01 Rev10已正式啟用；改動功能的正式驗收續跑，Google獨立登入核身待完成。** Product source `8a0e738fcb68896a937f650666e53f2289729953`、同一protected release `20261001130712-4982b5` 已正式activate，live version `ae38a453a07ec4f3`；雙正式origin各54/54檔案hash、官方啟動與ordinary Google safe-cancel、三項strict readiness PASS。前一Rev9 `b88f428e0efa541e`保留為DB v2相容復原錨點。正式主程式既有Session透過普通SDK refresh後getUser200、指定actor與owner吻合；quick獨立Google登入因provider密碼／MFA尚待人類核身，不能把7/7前置檢查或舊40/40當作新版正式同步驗收。未執行正式migration／修改業務資料／擴張IAM或Secret。PR #5 head `144ea331448cd449dafca1bc7e284c67bf4e2f6d`已推送，合併前只讀審查進行中。
+
+Activation收據：release worktree `output/release/dev-083/20261001130712-4982b5/activation-evidence.json`；正式雙origin及Session收據：canonical `output/qa/dev-133/independent-auth/production/rev10/serving-readback.json`、`session-refresh.json`、`result.json`。本輪專屬Chrome／CDP4195暫留給人類核身與連續驗收，cleanup owner為DEV-133 root；不關閉使用者原有瀏覽器、不刪任何未同步任務。release worktree及ignored收據暫留到Git review／merge，歸檔前先保存證據。
+
+以下部署前與舊版結果保留歷史／來源邊界，不以assertion總和宣稱完整N01～N10或本輪正式功能PASS。
+
 ### 2026-10-01 Rev 10 Auth 競態修正的部署前驗證
 
 **Rev10 部署前驗證 PASS；新版正式程式尚未啟用，正式功能驗收仍待執行。** Product source `8a0e738fcb68896a937f650666e53f2289729953`，clean branch `codex/dev133-independent-auth-release`。舊 Session載入／核身回應可能跨越新 Auth epoch；已在 Auth、IDB寫入及UI owner決定加入generation guard，補上legacy barrier登入前Session辨識。Spec convergence：No contract drift；SPEC-133 Rev10補明執行細節，無schema／RPC／RLS變更。本輪另修正正式 Auth Site URL 一個欄位，細節及驗證如下。

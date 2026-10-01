@@ -1,6 +1,10 @@
 # REL-014：DEV-133 各自登入與依帳號同步
 
-狀態：**Rev9正式發布與功能驗收PASS；Rev10部署前驗證PASS，正式程式尚未activate。** 原 `20261001061118-144be8` 核心包排除後續UI，UI另以 `20261001074739-df101c` 發布；sealed包身份及其驗收保持原source邊界。Git PR #5已建立，修正product `8a0e738`已推送；最新protected候選與正式設定修正見下一段。
+狀態：**2026-10-01 Rev10已正式啟用；改動功能的正式驗收續跑，Google獨立登入核身待完成。** Product source `8a0e738fcb68896a937f650666e53f2289729953`、同一protected release `20261001130712-4982b5` 已正式activate，live version `ae38a453a07ec4f3`；雙正式origin各54/54檔案hash、官方啟動與ordinary Google safe-cancel、三項strict readiness PASS。前一Rev9 `b88f428e0efa541e`保留為DB v2相容復原錨點。正式主程式既有Session透過普通SDK refresh後getUser200、指定actor與owner吻合；quick獨立Google登入因provider密碼／MFA尚待人類核身，不能把7/7前置檢查或舊40/40當作新版正式同步驗收。未執行正式migration／修改業務資料／擴張IAM或Secret。PR #5 head `144ea331448cd449dafca1bc7e284c67bf4e2f6d`已推送，合併前只讀審查進行中。
+
+Activation收據：release worktree `output/release/dev-083/20261001130712-4982b5/activation-evidence.json`；正式雙origin及Session收據：canonical `output/qa/dev-133/independent-auth/production/rev10/serving-readback.json`、`session-refresh.json`、`result.json`。本輪專屬Chrome／CDP4195暫留給人類核身與連續驗收，cleanup owner為DEV-133 root；不關閉使用者原有瀏覽器、不刪任何未同步任務。release worktree及ignored收據暫留到Git review／merge，歸檔前先保存證據。
+
+以下Rev10部署前與Rev9發布段落均為各自當時快照，不能覆蓋本段當前狀態。
 
 2026-10-01部署前續驗發現stale Session／null／401及延遲logout barrier可跨較新epoch；Auth、outbox與quick UI已補guard。新版frozen source digest `3acceffc38997505d7d877fdbace868509b658ae426501cf449d999dc0ab99a9` 的82/82 SIMULATION、built真SW離線與browser restart10/10、真TEST A Auth／RPC12/12、同提交HTTPS TEST17/17及53/53遠端hash PASS，詳細收據見[QA最新部署前驗證](../qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-rev-10-auth-競態修正的部署前驗證)。Protected release `20261001130712-4982b5`／source `8a0e738fcb68896a937f650666e53f2289729953`，54 entries、tree `202dba19b6aece56041e9f2e925bf61538612d9390c6b13afa4ccfbb11a03d84`；prepare／candidate、遠端54/54、官方browser與safe-cancel、三項strict readiness均PASS。`dev133-cohort.json`綁定manifest、TEST與NO_OP收據。本輪正式Site URL由localhost修至`https://projed-cc78d.web.app/`，先TEST驗證／完整還原，正式其餘設定不變，預設／main／quick取消回呼3項及新增readiness17 checks PASS。無schema／RPC／RLS／IAM變更。兩個preview已清理，live仍為Rev9 `b88f428e0efa541e`，作DB v2相容復原錨點；未activate、未執行新版正式功能驗收，舊40/40不推定涵蓋新修正。PR review／merge仍待完成。
 

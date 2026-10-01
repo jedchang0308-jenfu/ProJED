@@ -48,7 +48,15 @@ quick 不另做 profile／workspace 開通；缺依賴導回主程式設定，�
 
 Architecture Closure Review 已完成 source／build env／RPC／RLS／migration／既有測試比對，文件為 **RD Implementation Ready；架構定案：已定案**。TEST29/29、正常Google cancel21/21、correction讀回及post-correction7/7已PASS；[REL-014](../release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)記錄正式同步核心40/40、後續UI本機25/25／正式匿名10/10及兩origin各54/54。PR #5 已交付且 OPEN／CLEAN；review／merge 尚待完成。各case的hosted／injected層與殘餘以QA最新正式結果為準，不以metadata或assertion總數替代功能證據；不宣稱自動PWA更新、真麥克風或取消的Android實機PASS。舊driver失敗保留。實作只允許SPEC既定責任面，owner／API／權限／origin變更或新增認證服務須回技術審查。
 
+## Rev10正式執行現況（2026-10-01）
+
+**2026-10-01 Rev10已正式啟用；改動功能的正式驗收續跑，Google獨立登入核身待完成。** Product source `8a0e738fcb68896a937f650666e53f2289729953`、同一protected release `20261001130712-4982b5` 已正式activate，live version `ae38a453a07ec4f3`；雙正式origin各54/54檔案hash、官方啟動與ordinary Google safe-cancel、三項strict readiness PASS。前一Rev9 `b88f428e0efa541e`保留為DB v2相容復原錨點。正式主程式既有Session透過普通SDK refresh後getUser200、指定actor與owner吻合；quick獨立Google登入因provider密碼／MFA尚待人類核身，不能把7/7前置檢查或舊40/40當作新版正式同步驗收。未執行正式migration／修改業務資料／擴張IAM或Secret。PR #5 head `144ea331448cd449dafca1bc7e284c67bf4e2f6d`已推送，合併前只讀審查進行中。 No contract drift；既定各自Session及owner不改綁決策不變。
+
+Activation收據：release worktree `output/release/dev-083/20261001130712-4982b5/activation-evidence.json`；正式雙origin及Session收據：canonical `output/qa/dev-133/independent-auth/production/rev10/serving-readback.json`、`session-refresh.json`、`result.json`。本輪專屬Chrome／CDP4195暫留給人類核身與連續驗收，cleanup owner為DEV-133 root；不關閉使用者原有瀏覽器、不刪任何未同步任務。release worktree及ignored收據暫留到Git review／merge，歸檔前先保存證據。
+
 ## 成功判定與重新審查條件
+
+以下Rev10部署前更新為啟用前快照，執行現況以上段及QA最新節為準。
 
 2026-10-01 Rev10執行更新：各自登入與owner不改綁決策維持。Session load revision／auth epoch延伸到每次await及IDB put／capture add前，legacy context缺sessionId時另核對非秘密登入前Session提示，失效後暫時不可達不能復活舊binding。Product `8a0e738` 的82/82 SIMULATION、built離線／browser restart10/10、真TEST A12/12、同提交HTTPS TEST17/17及protected prepare／candidate已PASS；正式程式仍Rev9，新版activation／正式功能驗收及PR review／merge待完成。詳見QA最新部署前結果，不把此前「僅待PR」歷史當現況。補查正式Site URL仍為localhost，先TEST驗證並還原後只修該欄位至正式主程式根網址，原allowlist與provider等設定不變；預設及兩個明確App取消回呼均PASS，發布gate新增固定project Site URL讀回。此為既定正式URL契約修正，無新schema／API／權限決策，No contract drift。
 

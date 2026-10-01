@@ -1,5 +1,9 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-10-01（DEV-133 Rev10正式啟用）
+
+**2026-10-01 Rev10已正式啟用；改動功能的正式驗收續跑，Google獨立登入核身待完成。** Product source `8a0e738fcb68896a937f650666e53f2289729953`、同一protected release `20261001130712-4982b5` 已正式activate，live version `ae38a453a07ec4f3`；雙正式origin各54/54檔案hash、官方啟動與ordinary Google safe-cancel、三項strict readiness PASS。前一Rev9 `b88f428e0efa541e`保留為DB v2相容復原錨點。正式主程式既有Session透過普通SDK refresh後getUser200、指定actor與owner吻合；quick獨立Google登入因provider密碼／MFA尚待人類核身，不能把7/7前置檢查或舊40/40當作新版正式同步驗收。未執行正式migration／修改業務資料／擴張IAM或Secret。PR #5 head `144ea331448cd449dafca1bc7e284c67bf4e2f6d`已推送，合併前只讀審查進行中。 最新結果以[QA正式續驗](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-rev10正式啟用與驗收續跑)、[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)與[DEV-133](dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30)為準；以下部署前段落為歷史快照。
+
 ## Documentation Map Update - 2026-10-01（DEV-133 Rev 10 部署前競態修正）
 
 [SPEC-133 Rev10](specs/SPEC-133-quick-task-shared-identity-sync.md)補明load revision／auth epoch、IDB put／capture add guard與legacy barrier；product `8a0e738`已推送。[QA最新部署前結果](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-rev-10-auth-競態修正的部署前驗證)記錄82/82 SIMULATION、built離線10/10、真TEST A12/12、同提交HTTPS17/17及53/53hash、protected prepare／candidate54/54與strict readiness PASS。正式Site URL單欄位已修正並驗預設／兩App取消回呼，原allowlist不變、TEST設定已還原，兩個preview清理且live仍Rev9。[DEV-133](dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30)維持執行中，待同包正式activation／功能驗收及PR review／merge。[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)保存release `20261001130712-4982b5`與來源／NO_OP／設定修正收據；不把部署前PASS當正式功能PASS。
