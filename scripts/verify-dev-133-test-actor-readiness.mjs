@@ -6,11 +6,13 @@ const config = loadTestActorConfig();
 const supabaseUrl = (config.VITE_SUPABASE_URL || '').trim();
 const anonKey = (config.VITE_SUPABASE_ANON_KEY || '').trim();
 const browserMode = process.argv.includes('--browser');
+const integrationMode = process.argv.includes('--integration');
 const actors = [
   { alias: 'A', email: config.DEV133_TEST_ACTOR_A_EMAIL || config.VITE_SUPABASE_TEST_EMAIL, password: config.DEV133_TEST_ACTOR_A_PASSWORD || config.VITE_SUPABASE_TEST_PASSWORD },
   { alias: 'B', email: config.DEV133_TEST_ACTOR_B_EMAIL, password: config.DEV133_TEST_ACTOR_B_PASSWORD },
 ];
-const output = { devId: 'DEV-133', status: 'BLOCKED', projectRef: testProjectRef, checks: [], actors: [], mutation: 'no-business-data-writes' };
+const output = { devId: 'DEV-133', status: 'BLOCKED', projectRef: testProjectRef, checks: [], actors: [],
+  mutation: integrationMode ? 'new-task-owned-TEST-fixtures-only' : 'no-business-data-writes' };
 const finish = () => {
   console.log(JSON.stringify(output));
   process.exitCode = output.status === 'PASS' ? 0 : 2;
@@ -49,7 +51,8 @@ async function main() {
       return finish();
     }
     const { runGoogleActorReadiness } = await import('./run-dev-133-google-actor-readiness.mjs');
-    await runGoogleActorReadiness({ supabaseUrl, anonKey, expectedEmail: actors[1].email.trim(), actorA, output });
+    await runGoogleActorReadiness({ supabaseUrl, anonKey, expectedEmail: actors[1].email.trim(), actorA, output,
+      integrationMode, actorACredentials: actors[0] });
     return finish();
   }
   const results = await Promise.all(actors.map(passwordActor));

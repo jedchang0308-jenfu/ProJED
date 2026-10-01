@@ -12,6 +12,8 @@
 
 2026-09-30 歷史：舊 A 本機、OAuth mock／桌面與 TEST synthetic 部分證據保留於 QA 歷史區及 [execution-boundary addendum](qa/DEV-133-execution-boundary-addendum-20260930.md)，不能替代新方案／完整權限驗收。OAuth Server／Client 註冊與舊 B0／B1 不再是新版必要依賴，沒有補登舊 Gate 為 PASS。DEV-133 正式配置、部署及驗收未執行，DEV-122／131 狀態不變。
 
+2026-10-01 真 TEST 跨帳整合：固定 362-file source snapshot，23 項 assertions PASS，包含 A/B task 讀寫隔離、正常 UI→receipt→工作台、重送唯一、離線恢復、切帳／明確認領及兩 origin local Session 隔離。詳見 [QA 跨帳整合結果](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-跨帳整合結果)；原失敗、dirty boundary、去識別化結果與清理紀錄保留。此為新方案部分 live TEST 證據，完整 N01～N10、TEST correction及正式發布仍未完成；沒有新增 DEV 或提升產品完成率。
+
 ## Documentation Map Update - 2026-09-29（DEV-132 系統通知與換圖指引）
 
 [DEV-132](dev_task.md#dev-132-自願換圖指引與系統通知歷史---2026-09-29) 記錄使用者選擇的自由重裝方式：設定中心「系統通知」採通用通知清單＋共用彈窗明細；點擊通知列本身即可看明細，不設專用「查看」按鈕。彈窗依所選通知顯示日期、標題及內容；換圖公告明細呈現兩個 App 的新舊圖示、各自同步提醒與安裝連結，以及完整重裝步驟。重裝說明列出 Android 移除所選 App、Chrome 開啟對應連結、選擇安裝應用程式及確認帳號等動作。「安裝APP」分類初始只顯示主程式與快速建待辦兩個選項，選定後顯示對應安裝動作；規格補充見 [SPEC-034 8.6](specs/SPEC-034-fast-start-pwa-install-guidance.md#86-dev-132安裝app頁面簡化2026-09-29) 與 [SPEC-038](specs/SPEC-038-settings-scope-consistency-and-risk-guardrails.md)。快速入口舊圖採使用者提供的 J 標誌紅底版；安裝連結直達獨立 origin。通知歷史從版本化產品公告開始，過去未保存的即時提示不回補。尚未正式發布。

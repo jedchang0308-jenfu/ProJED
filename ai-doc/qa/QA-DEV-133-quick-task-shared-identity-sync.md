@@ -19,7 +19,7 @@ IDB fixture：DB v1 原始 captures及 DB v2 auth_context；unbound、A-bound pe
 
 ## 新版驗收案例
 
-下列案例皆為 **NOT RUN（真實 Auth／RPC／工作台整合待執行）**；不能把舊 A/B 編號的 PASS 搬入本表。
+下列 N01～N10 為完整驗收集合；最新跨帳整合 E01～E18 已補部分真實證據，**整組 N01～N10 仍未完成**。以本文件「跨帳整合結果」的覆蓋／缺口為準，不把舊 A/B 或局部 E 案例直接搬成整組 PASS。
 
 | 編號 | 前置、操作與可觀察通過條件 | 必要證據層 |
 |---|---|---|
@@ -63,6 +63,32 @@ QC 每例保存 sourceRevision／dirty boundary、build artifact、環境、acto
 真 TEST 前置不足時記 `NOT RUN / fixture or callback prerequisite unavailable`，只停止依賴該前置的 case，繼續本機／DB／型別驗證；不能重啟舊 OAuth Client／Android Gate。actor-readiness verifier 已實作，但完整 N01～N10 runner 與證據仍須補齊。新 evidence 統一放 `output/qa/dev-133/independent-auth/` 並記 source／artifact／route／actorAlias／實際操作；預期 TEST 任務名稱使用測試前綴，cleanup 僅限本輪已同步 fixture，不清任何未同步資料。
 
 `npm run verify:dev-133-test-actor-readiness` 是 actor 前置檢查。它只接受完整 HTTPS TEST hostname `fhisnnufoeulxqrchldf.supabase.co` 及 public key；只從 `.env.test.local`／`.env.local` 讀取 allowlisted TEST 參數，不使用 generic env loader、production service-role key 或管理 token 作 actor。預設模式使用兩個普通 password session；A 可沿用 `VITE_SUPABASE_TEST_EMAIL/PASSWORD`。Google B 改用 `DEV133_TEST_ACTOR_B_EMAIL` 加 `--browser`，由正常 quick 登入 CTA、Google callback及網路 `getUser` 核身，不要求或保存 Google 密碼。對 profile、active membership及非空 workbench 唯讀檢查，並確認兩個 user ID 不同與 readback 期間 Session 未變；token／email／user ID 不寫入報表。Google runner 的管理 token 只用於已授權 TEST 的精確臨時 callback，結束還原並 readback；不作業務 API 身分。`verify:dev-133-actor-readiness-contract` 驗 hostile URL、production/admin env 排除、privileged key拒絕、same-actor拒絕、切帳與資料查詢失敗，屬隔離回歸證據。
+
+### 2026-10-01 跨帳整合執行計畫
+
+執行 `node scripts/verify-dev-133-test-actor-readiness.mjs --browser --integration`；指定 B 的 email 由環境變數提供，不寫入 artifact。先核實 A/B 普通 Auth、profile、active membership 與非空工作台，再於同一 task-owned Chrome profile 連續跑案例，避免前置完成後清掉 Session 才要求重新登入。TEST origin 為 `127.0.0.1:4173`／`127.0.0.1:4174`，CDP 僅 loopback `4175`。精確臨時 callback 僅加入已授權 TEST，結束還原並讀回；不涉及正式設定或部署。
+
+| 整合案例 | 對應與證據邊界 |
+|---|---|
+| E01～E07 | A/B 普通 Session、正常 quick UI 建立、owner receipt／唯一 row、互相 SELECT／UPDATE 拒絕、匿名拒絕、並行 replay／title conflict、正常工作台 CTA 及各自任務可見。補 N02／N08；本機 CTA 同 origin，不代替正式跨 origin redirect 驗收。 |
+| E08～E09 | 真 browser 斷網後 B-bound 本機保存且 RPC=0；回網自動以同 ID 同步且工作台唯一。補 N03／N04。 |
+| E10～E13 | RPC outage 注入保留 B 待送；登出新記錄 unbound、切 A 不送 B／不自動 claim；正常 UI 認領取消、重開、明確 A claim；B 重新普通 Google 登入才續送 B 原 ID。補 N05／N06；outage 是 simulation，其餘 Auth／RPC 為真 TEST。 |
+| E14～E15 | 相同 B 在兩 origin 各自普通登入、Session fingerprint 不同；quick local logout 後另一 origin 仍可網路核身且 logout barrier 跨 reload 保留。補 N01／N07，不代替 SDK logout 失敗／晚到回應注入。 |
+| E16～E18 | 320／390／726 viewport 溢出、截圖、可見錯誤及兩 origin captures 全 synced 後才清 profile。補 N10 的 UI 部分。 |
+
+每次紀錄 HEAD、dirty boundary 與 source SHA256，執行前後比對；最後改從 repo 公開 source／config 的固定快照執行，避免其他開發的 HMR 混入。快照不含 .env、憑證、.git 或 node_modules，依既有依賴執行，不安裝新套件。測試失敗保留原 assertion 與去識別化錯誤位置。只有兩 origin raw IDB 全 synced 經讀回才可刪 task profile；未同步或不可確認時關閉 task runtime／UI、保留 profile 並記後續恢復責任。新 TEST task fixture 會保留以供唯讀回查，不修改既有業務資料。完整 N01～N10 仍需補 401／refresh、late response、timeout commit、錯 receipt、nonce／CAS、retention、DB upgrade、更新／bfcache、canonical schema 等邊界；此補充計畫通過不能直接宣告 B0／DEV-133 完成。
+
+### 2026-10-01 跨帳整合結果
+
+**固定快照的 E01～E18 整合套件 PASS：23 項 assertions**，含 E04 雙向 UPDATE、E16 三個 viewport 及 2 項先前 fixture 恢復檢查。A/B 以普通 Auth 網路核身並有非空工作台；正常 quick UI 建立各自任務，嚴格 owner receipt／唯一 row、互相讀不到及改不到對方 task、匿名拒絕、並行 replay／title conflict、正常工作台 CTA 各自可見且不顯示對方任務均 PASS。實際 browser 離線時保存 B owner／RPC=0、回網自動原 ID 同步 PASS。RPC outage 注入後，切 A 保留 B pending／不自動 claim unbound；正常確認取消、reload 後明確 A claim、普通 Google 重登 B 才恢復 B 原 ID，以及 B 兩 origin 不同 Session／local logout 不登出另一 origin均 PASS。沒有忽略非預期 quick pageerror。
+
+執行基準 HEAD `8d9aa1ad85adef40721df3ea38b00403ca6ddcb3` 加上記錄的 dirty boundary；固定快照 362 files，digest `d0f0f2f978fdcef19379a788547d7b7f4e79e7671a426e0903fae9e297fcfafe`，前後 source hash 一致。Chrome `154.0.8037.58`；source 模式 Vite runtime，不是發布 bundle。A／B 身分、token、title 不寫進 artifact；去識別化結果見 [result.json](../../output/qa/dev-133/independent-auth/cross-account-integration/1790818543791-2a0bc7dd/result.json)／[browser-result.json](../../output/qa/dev-133/independent-auth/cross-account-integration/1790818543791-2a0bc7dd/browser-result.json)，source-manifest 與固定 candidate 同目錄。320×844、390×844、726×844 無水平溢出；320 截圖已目視檢查。登入狀態／任務欄已遮蔽，故截圖只作排版證據，不推論完整身分狀態可辨識或實機鍵盤 PASS。
+
+清理：[runtime.json](../../output/qa/dev-133/independent-auth/cross-account-integration/1790818543791-2a0bc7dd/runtime.json) 記錄 TEST 精確 callback 還原並讀回、task Chrome／Python／Vite 結束；4173／4174／4175 確認釋放，PID 31308／32032／37088／41440 均已退出。兩 origin raw captures store 所有記錄 synced 後才移除 TEST profile；quick origin 12 筆已同步測試副本，另一 origin 自身已同步 fixture 亦讀回。前次 pending／unbound 經正常 UI 明確認領或原 owner 自動續送，保留原 ID；TEST server fixture 保留，不刪使用者未同步資料，也未操作 user-owned 4000 或正式站分頁。本輪沒有 TEST migration／正式設定／部署。
+
+原始失敗保留且不計整體 PASS：首輪 harness 誤以無 accountId 的 owner-filtered list 作 raw readback，A server task／receipt 已存在，但本機同步狀態未建立證據；其 `allCapturesSynced` 結論無效，見 [first-attempt-assessment.json](../../output/qa/dev-133/independent-auth/cross-account-integration/first-attempt-assessment.json)。修正後第二輪因沿用已移除的中間恢復按鈕且 source 在 HMR 中改動，為 FAIL／來源未固定；後續快照首輪因未先恢復上次 unbound fixture、確認了較早一筆而 timeout，同樣保留 FAIL。另一次恢復卡在 Google email 子節點的 pointer overlay；改點指定帳號的實際選帳列，不繞過核身、不取得 Google 密碼。最終套件先恢復本輪舊 fixture，再執行新案例，沒有調弱 owner／唯一性／取消保留 assertion。
+
+**覆蓋與剩餘：** N01／N02／N03／N04／N05／N06／N07／N08／N10 均為部分證據，N09 本輪未重跑。尚缺主程式正常 logout／正式跨 origin callback／取消、核身 401 與 refresh 失效、SDK logout 失敗 barrier、late response、已 commit timeout、錯 receipt、workspace hint／無 membership、nonce／CAS 競態、retention／DB upgrade／bfcache／更新與 TEST correction schema。其他恢復入口 slice 的隔離 SIMULATION 按原證據層獨立保留，不轉換為 live Auth PASS。**DEV-133 仍執行中；E 套件 PASS 不等於完整 B0／N01～N10、TEST correction gate 或 Release Ready。**
 
 ### 2026-10-01 指定 Google B 的實際驗收
 
