@@ -1,8 +1,12 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-10-01（DEV-133 Git 交付）
+
+DEV-133 已推送至公開 ProJED repository，並建立 PR #5：[feat(quick-task): independent auth sync and unified status UI](https://github.com/jedchang0308-jenfu/ProJED/pull/5)。PR head `codex/dev133-independent-auth-release`=`0f3ad1a75825733aab539324217ae2302bef79d4`，base `codex/dev133-production-baseline`=`afa758c35e907569f88e241e1fe72a231001e7bc`；兩個 refs 均已遠端讀回。PR 為 Open、merge state CLEAN，目前無 status checks、尚未 review／merge。未改 `main` 或既有共享分支。完整 payload review 與 PR 驗證見本次 DEV-133 release worktree 交付收據及 [REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)。
+
 ## Documentation Map Update - 2026-10-01（DEV-133 統一 UI 正式驗收）
 
-**2026-10-01 DEV-133 同步核心與統一 UI 已正式發布並驗收。** 最新 UI product source `9b5f73a1b32bdd8dc984c3017dceaf7225967d40`／release `20261001074739-df101c`／live version `b88f428e0efa541e`，雙正式 origin 各 54/54、正式匿名 UI 10/10、隔離 UI／IDB＋Auth/RPC SIMULATION 25/25、型別及 lint PASS。這次僅三個 UI 來源，Auth／RPC／IDB／sync 模組沿用原 `8376086` 的真登入／同步40/40證據，未把該40項改算新套件實測。未改遠端設定、migration、業務資料或 IAM／Secret；暫時 browser／ports已清理。證據見 [REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)；Git目的地確認／push／PR仍待。
+**2026-10-01 DEV-133 同步核心與統一 UI 已正式發布並驗收。** 最新 UI product source `9b5f73a1b32bdd8dc984c3017dceaf7225967d40`／release `20261001074739-df101c`／live version `b88f428e0efa541e`，雙正式 origin 各 54/54、正式匿名 UI 10/10、隔離 UI／IDB＋Auth/RPC SIMULATION 25/25、型別及 lint PASS。這次僅三個 UI 來源，Auth／RPC／IDB／sync 模組沿用原 `8376086` 的真登入／同步40/40證據，未把該40項改算新套件實測。未改遠端設定、migration、業務資料或 IAM／Secret；暫時 browser／ports已清理。證據見 [REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)；Git 已提交至公開分支並建立 PR，review／merge 狀態見上方最新更新。
 
 ## Documentation Map Update - 2026-10-01（DEV-133 正式同步核心 REL-014）
 
@@ -11,7 +15,7 @@
 
 ## Documentation Map Update - 2026-10-01（DEV-133 架構定案）
 
-最新執行狀態（2026-10-01）：TEST 29/29 跨帳整合、B0/core27與 Google cancellation gate、forward correction readback、post-correction 7/7 核心權限案例均 PASS；普通 TEST Google 取消登入有 picker/browser Back 的 21/21 證據。PROD ordinary Google identity／canonical RPC schema preflight PASS；correction 對 PROD 為條件 no-op。DEV-133 仍執行中，正式 source scope／sealed package、將 no-op／hash 綁定 package、部署及 quick-task smoke 尚未完成；N01～N10 實際殘餘以 [QA 最新審核表](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-完成審核逐項證據與剩餘) 為準。下列時間序列段落保留其當時快照，不能覆蓋此最新狀態。
+架構定案階段快照（2026-10-01，後續正式發布狀態由上方 REL-014 更新取代）：TEST 29/29 跨帳整合、B0/core27與 Google cancellation gate、forward correction readback、post-correction 7/7 核心權限案例均 PASS；普通 TEST Google 取消登入有 picker/browser Back 的 21/21 證據。當時 PROD ordinary Google identity／canonical RPC schema preflight PASS、correction 對 PROD 為條件 no-op；正式 package／部署尚未執行。N01～N10 實際驗收層級以 [QA 最新審核表](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-完成審核逐項證據與剩餘) 為準。本文件其餘時間序列段落保留各自當時快照。
 
 使用者採用「共用帳號、各自登入、各自保存 Session、離線任務依帳號同步」，並要求補齊架構定案。[DEV-133](dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30) 維持執行中；[SPEC-133 Rev 4](specs/SPEC-133-quick-task-shared-identity-sync.md) 達 **RD Implementation Ready／架構定案：已定案**，[ADR-053 Rev 3](decisions/ADR-053-quick-task-cross-origin-account-link.md) 為現行決策。以 `e868611` 為本機實作基準，已完成單一 SDK Auth、DB v2 auth_context＋capture receipt、owner/context revision CAS、登入後明確認領、local signOut barrier、strict receipt 驗證與退役舊 OAuth 路徑，並通過 typecheck／lint／test build／contract check；最新 TEST 跨帳及 correction 證據見本節狀態更新與 QA 報告。
 

@@ -1,6 +1,6 @@
 # REL-014：DEV-133 各自登入與依帳號同步
 
-狀態：**正式發布與功能驗收 PASS；Git 遠端交付待確認目的地。** 原 `20261001061118-144be8` 核心包排除後續 UI；UI 已另以 `20261001074739-df101c` 發布，下方後續發布節為最新 UI 權威。
+狀態：**正式發布與功能驗收 PASS；Git 分支已推送，PR #5 已建立並等待 review／merge。** 原 `20261001061118-144be8` 核心包排除後續 UI；UI 已另以 `20261001074739-df101c` 發布，下方後續發布節為最新 UI 權威。
 
 - 主程式：[ProJED](https://projed-cc78d.web.app/)。獨立快速入口：[ProJED-快速建任務](https://projed-cc78d.firebaseapp.com/quick-task/?install=1)。
 - 資源：Firebase project/site `projed-cc78d`；TEST Supabase `fhisnnufoeulxqrchldf`；PROD `knodlkxqpcqyrtgwpdst`。
@@ -31,7 +31,7 @@ PROD 既有 canonical RPC prosrc MD5 `3ef7e8731dd6893594e0d66918ddfe16`，invoke
 
 完整 package／activation resume 收據位於 release worktree `C:\Users\user\.codex\worktrees\dev133-independent-auth-release\ProJED\output\release\dev-083\20261001061118-144be8\` 的 `manifest.json`、`dev133-cohort.json`、`activation-resume-evidence.json`。canonical sanitized terminal：`output/qa/dev-133/independent-auth/production/terminal-evidence.json`；feature 與 source runner 的 SHA 綁定收據，原 FAIL 未覆寫。
 
-Git 已有隔離 product commit；推送至既有 origin `https://github.com/jedchang0308-jenfu/ProJED` 的新 baseline／release 分支遭自動審查拒絕，理由是可信人類訊息尚未明確確認目的地。目的地確認問題已提出；本次未繞過、未 push／PR／merge／覆寫共享分支。後續 evidence-only commit 不改 product source，不能被誤當 sealed artifact 的 source commit。
+Git 交付更新（2026-10-01）：使用者已授權提交公開 payload review 清單內的所有程式碼及開發文件。隔離 baseline `afa758c35e907569f88e241e1fe72a231001e7bc` 推送為 `codex/dev133-production-baseline`；DEV-133 head `0f3ad1a75825733aab539324217ae2302bef79d4` 推送為 `codex/dev133-independent-auth-release`。兩個遠端 refs 已唯讀讀回，並建立 [PR #5](https://github.com/jedchang0308-jenfu/ProJED/pull/5)，base／head 符合預期。PR 為 Open、merge state CLEAN；目前無 status checks、尚未 review／merge。未改 `main` 或既有共享分支。先前自動審查曾在取得明確目的地授權前阻擋推送；授權後依核定清單正常推送，沒有繞過審查。後續 evidence-only commit 不改 product source，不能被誤當 sealed artifact 的 source commit。
 
 task-owned Chrome PID 37180 已關閉，CDP4195與 TEST4173/4174/4175釋放；profile與兩筆同步 fixture保留。精確 TEST callback 還原且 Site URL／原 allowlist不變。本次 level3／production-candidate channels已移除，cleanup前後 live release不變；正式入口不受影響。使用者瀏覽器、localhost4000與較早含未同步資料的failed profiles保留。release worktree暫留供Git review／證據交付，DEV-133 root負責之後歸檔；歸檔前須保存 ignored收據。
 
