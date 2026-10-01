@@ -25,6 +25,16 @@ cleanup：task-owned Chrome PID 37180 已退出，4195／4173／4174／4175 無 
 
 **Rev 9 統一 UI 已正式發布並通過相稱驗收。** UI source `9b5f73a1b32bdd8dc984c3017dceaf7225967d40`／release `20261001074739-df101c`；雙正式 origin 各54/54及正式匿名 UI10/10 PASS。本機 UI25/25（真browser／IDB＋Auth/RPC SIMULATION）、型別及 targeted lint PASS，source/UI digest `29cff0bb616834eceb36af1a06e1102092eb5db3fd2cb24edcb2aff6998ffd0f`。原 `8376086` 普通 Auth／同步40/40僅作未變核心的重用證據，不改稱本次實測。首兩輪 harness FAIL 與空值型別 FAIL 保留，沒有覆寫成 PASS。新收據 `output/qa/dev-133/independent-auth/production/unified-ui-release/terminal-evidence.json`，本機收據 `output/qa/dev-133/independent-auth/unified-status/1790840255628-29cff0bb/local-evidence.json`；無正式任務寫入、migration或遠端Auth設定變動，task-owned browser／ports已清理。
 
+### 2026-10-01 部署前回歸驗證
+
+**本輪驗證 PASS；沒有新的產品程式變更需要部署。** 已發布 UI source `9b5f73a1b32bdd8dc984c3017dceaf7225967d40` 仍是此分支最新產品程式來源，正式 release `20261001074739-df101c`／version `b88f428e0efa541e` 的 manifest 完整性核對 PASS，errors=0。
+
+`node scripts/run-dev-133-boundary-check.mjs`：57/57 PASS，範圍是真 Chrome／IndexedDB 加注入 Auth/RPC 的 **SIMULATION**，未連外；涵蓋 owner／receipt／CAS／重試／七日清理／升級／UI IME、語音選取替換、500 code points、登入失效退避、bfcache 與 320／390／726 viewport。runtime 收據 `output/qa/dev-133/independent-auth/boundaries/1790847301762/runtime.json` 顯示 task-owned PID 已停止且 port 4183 已釋放；結果 `result.json`。
+
+同輪 `npm run verify:dev-133-independent-auth-contract`、`tsc --noEmit`、DEV-133 targeted ESLint、`node scripts/verify-production-auth-mode.mjs`（5 checks）、TEST build 及指定正式 manifest verifier 均 PASS；build 的大 chunk／Browserslist 資料過期為非阻擋警告。正式 manifest verifier 指向 release `20261001074739-df101c`，沒有執行部署或遠端資料變更。
+
+本次僅修正邊界測試腳本：改用目前頁面實際存在的操作、等初始化完成後先測登入失效退避，避免舊 `[data-next]` 選擇器與共享頁面背景流程造成假失敗；產品 bundle 沒有變動。保留首輪舊選擇器與後續測試隔離失敗收據，最終完整執行為 57/57 PASS。SIMULATION 不取代既有 TEST／正式真實登入、RPC、工作台及權限證據；Android 實機已取消，真麥克風與自動 PWA 更新亦未宣稱通過。
+
 以下 UI「未驗收」段落保留當次歷史快照；最終候選及其後續正式 UI 發布以本節為準，REL-014 原正式包仍排除這些 UI 變動。
 
 ### 2026-10-01 最近狀態與恢復入口整併（未驗收）

@@ -38,23 +38,45 @@ async def main():
             html = (OUT / 'candidate/quick-task/index.html').read_text(encoding='utf-8')
             setup = '''<script type="module">
               const c=(await import('/src/services/supabase/client.ts')).supabase;
-              window.__fixture={subscriptions:0,users:0,session:null};
+              window.__fixture={subscriptions:0,users:0,session:null,outageChecks:[],retrySchedules:[],outageEvents:[]};
               const interval=window.setInterval.bind(window),clear=window.clearInterval.bind(window);
               window.__fixture.dailyTimers=new Set();
               window.setInterval=(fn,ms,...args)=>{const id=interval(fn,ms,...args);if(ms===86400000)window.__fixture.dailyTimers.add(id);return id;};
               window.clearInterval=id=>{window.__fixture.dailyTimers.delete(id);clear(id);};
               c.auth.getSession=async()=>({data:{session:window.__fixture.session},error:null});
-              c.auth.getUser=async()=>{window.__fixture.users++;return {data:{user:window.__fixture.userError?null:window.__fixture.session?.user},error:window.__fixture.userError??null};};
+              c.auth.getUser=async()=>{window.__fixture.users++;if(window.__fixture.recordOutage)window.__fixture.outageChecks.push(performance.now());return {data:{user:window.__fixture.userError?null:window.__fixture.session?.user},error:window.__fixture.userError??null};};
               c.auth.onAuthStateChange=handler=>{window.__fixture.handler=handler;window.__fixture.subscriptions++;return {data:{subscription:{unsubscribe:()=>window.__fixture.subscriptions--}}};};
               await import('/src/quickTask/main.ts');
             </script>'''
             html = html.replace('<script type="module" src="/src/quickTask/main.ts"></script>', setup)
             await page.route('**/quick-task/', lambda route: route.fulfill(content_type='text/html', body=html))
             await page.goto(ORIGIN + '/quick-task/')
-            await page.wait_for_function('window.__fixture?.subscriptions===1 && !document.querySelector("#quick-task-submit").disabled')
+            await page.wait_for_function('window.__fixture?.subscriptions===1 && window.__fixture.dailyTimers.size===1 && document.querySelector("#quick-task-auth-status").textContent.includes("尚未登入")')
             async def check(name, passed):
                 result['cases'].append({'case': name, 'status': 'PASS' if passed else 'FAIL'})
             title = page.locator('#quick-task-title')
+            await page.evaluate('''()=>{
+              window.__originalTimeout=window.setTimeout;
+              window.__fixture.recordOutage=true;
+              window.addEventListener('online',()=>window.__fixture.outageEvents.push('online'));
+              window.addEventListener('pageshow',()=>window.__fixture.outageEvents.push('pageshow'));
+              document.addEventListener('visibilitychange',()=>window.__fixture.outageEvents.push('visibilitychange:'+document.visibilityState));
+              window.setTimeout=(fn,ms,...args)=>{if(ms>=5000&&ms<=900000)window.__fixture.retrySchedules.push(ms);return window.__originalTimeout(fn,ms>=5000&&ms<=900000?1:ms,...args);};
+              window.__fixture.outageBaseline=window.__fixture.users;
+              window.__fixture.userError={status:503};
+              window.__fixture.session={user:{id:'fixture-a'},access_token:'e30.'+btoa(JSON.stringify({session_id:'fixture-session'}))+'.fixture'};
+              window.__fixture.handler('SIGNED_IN',window.__fixture.session);
+            }''')
+            await page.wait_for_function('window.__fixture.users>=8')
+            await asyncio.sleep(0.1)
+            auth_outage_counts = await page.evaluate('''()=>({before:window.__fixture.outageBaseline,after:window.__fixture.users})''')
+            await check('N04-Auth-outage-cycle-stops-at-eight-checks', auth_outage_counts['after'] - auth_outage_counts['before'] == 8)
+            if auth_outage_counts['after'] - auth_outage_counts['before'] != 8:
+                result['cases'][-1]['diagnostics'] = {**auth_outage_counts,
+                    'checkTimes': await page.evaluate('window.__fixture.outageChecks'),
+                    'retrySchedules': await page.evaluate('window.__fixture.retrySchedules'),
+                    'events': await page.evaluate('window.__fixture.outageEvents')}
+            await page.evaluate("window.setTimeout=window.__originalTimeout;window.__fixture.session=null;window.__fixture.handler('SIGNED_OUT',null)")
             await title.fill('IME fixture')
             await title.dispatch_event('compositionstart')
             await page.locator('#quick-task-submit').click()
@@ -75,7 +97,7 @@ async def main():
             await page.locator('#quick-task-success').wait_for(state='visible')
             captures = await page.evaluate("async()=>{const o=await import('/src/features/quickTaskCapture/outbox.ts');return await o.listQuickCaptures(null);}")
             await check('N03-UI-readback-retry-original-ID', len(captures) == 1 and captures[0]['title'] == 'IME fixture')
-            await page.locator('[data-next]').click()
+            await check('N03-UI-input-remains-available-after-success', not await title.is_disabled())
             await page.evaluate('''()=>{
               window.__speech={started:0};
               class FixtureSpeech {
@@ -94,17 +116,7 @@ async def main():
             await page.locator('#quick-task-success').wait_for(state='visible')
             captures = await page.evaluate("async()=>await (await import('/src/features/quickTaskCapture/outbox.ts')).listQuickCaptures(null)")
             await check('N03-UI-500-emoji-not-truncated', len(captures) == 2 and any(len(r['title']) == 500 for r in captures))
-            await page.evaluate('''()=>{
-              window.__originalTimeout=window.setTimeout;
-              window.setTimeout=(fn,ms,...args)=>window.__originalTimeout(fn,ms>=5000&&ms<=900000?1:ms,...args);
-              window.__fixture.userError={status:503};
-              window.__fixture.session={user:{id:'fixture-a'},access_token:'e30.'+btoa(JSON.stringify({session_id:'fixture-session'}))+'.fixture'};
-              window.__fixture.handler('SIGNED_IN',window.__fixture.session);
-            }''')
-            await page.wait_for_function('window.__fixture.users>=8')
-            await asyncio.sleep(0.1)
-            await check('N04-Auth-outage-cycle-stops-at-eight-checks',await page.evaluate('window.__fixture.users') == 8)
-            await page.evaluate("window.setTimeout=window.__originalTimeout;window.__fixture.session=null;window.__fixture.handler('SIGNED_OUT',null)")
+            await page.wait_for_function('!document.querySelector("#quick-task-submit").disabled')
             await page.evaluate("window.dispatchEvent(new PageTransitionEvent('pagehide',{persisted:true}))")
             await check('N10-pagehide-unsubscribes', await page.evaluate('window.__fixture.subscriptions') == 0)
             await check('N10-pagehide-clears-daily-timer', await page.evaluate('window.__fixture.dailyTimers.size') == 0)
@@ -115,8 +127,6 @@ async def main():
             await check('N10-bfcache-resumes-single-daily-timer', await page.evaluate('window.__fixture.dailyTimers.size') == 1)
             for width, height in [(320, 844), (390, 844), (726, 668)]:
                 await page.set_viewport_size({'width':width,'height':height})
-                if await page.locator('[data-next]').is_visible():
-                    await page.locator('[data-next]').click()
                 await title.focus()
                 geometry = await page.evaluate('''()=>{
                   const input=document.querySelector('#quick-task-title').getBoundingClientRect(),voice=document.querySelector('#quick-task-voice').getBoundingClientRect(),container=document.querySelector('.quick-task-input-row').getBoundingClientRect();

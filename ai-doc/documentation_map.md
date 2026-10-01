@@ -1,5 +1,9 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-10-01（DEV-133 部署前回歸驗證）
+
+[QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md) 已補登部署前回歸：57/57 隔離 browser／IDB SIMULATION、DEV-133 contract、型別、targeted lint、production auth-mode 與正式 manifest 完整性核對均 PASS。驗證確認目前產品 source 與已發布 release `20261001074739-df101c` 相符；本輪只有測試腳本修正，沒有新的產品 bundle 需要部署。測試收據與範圍限制見 QA 最新驗證節。
+
 ## Documentation Map Update - 2026-10-01（DEV-133 Git 交付）
 
 DEV-133 已推送至公開 ProJED repository，並建立 PR #5：[feat(quick-task): independent auth sync and unified status UI](https://github.com/jedchang0308-jenfu/ProJED/pull/5)。PR head `codex/dev133-independent-auth-release`=`0f3ad1a75825733aab539324217ae2302bef79d4`，base `codex/dev133-production-baseline`=`afa758c35e907569f88e241e1fe72a231001e7bc`；兩個 refs 均已遠端讀回。PR 為 Open、merge state CLEAN，目前無 status checks、尚未 review／merge。未改 `main` 或既有共享分支。完整 payload review 與 PR 驗證見本次 DEV-133 release worktree 交付收據及 [REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)。
