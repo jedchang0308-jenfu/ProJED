@@ -50,7 +50,7 @@ Architecture Closure Review 已完成 source／build env／RPC／RLS／migration
 
 ## 成功判定與重新審查條件
 
-2026-10-01 Rev10執行更新：各自登入與owner不改綁決策維持。Session load revision／auth epoch延伸到每次await及IDB put／capture add前，legacy context缺sessionId時另核對非秘密登入前Session提示，失效後暫時不可達不能復活舊binding。82/82 SIMULATION、built離線／browser restart10/10與真TEST A12/12 PASS，詳見QA最新部署前結果；新產品修正尚未執行HTTPS protected發布及正式驗收，不把此前「僅待PR」歷史當作現況。無新schema／API／權限決策，No contract drift。
+2026-10-01 Rev10執行更新：各自登入與owner不改綁決策維持。Session load revision／auth epoch延伸到每次await及IDB put／capture add前，legacy context缺sessionId時另核對非秘密登入前Session提示，失效後暫時不可達不能復活舊binding。Product `8a0e738` 的82/82 SIMULATION、built離線／browser restart10/10、真TEST A12/12、同提交HTTPS TEST17/17及protected prepare／candidate已PASS；正式程式仍Rev9，新版activation／正式功能驗收及PR review／merge待完成。詳見QA最新部署前結果，不把此前「僅待PR」歷史當現況。補查正式Site URL仍為localhost，先TEST驗證並還原後只修該欄位至正式主程式根網址，原allowlist與provider等設定不變；預設及兩個明確App取消回呼均PASS，發布gate新增固定project Site URL讀回。此為既定正式URL契約修正，無新schema／API／權限決策，No contract drift。
 
 成功需證明：兩邊各自登入／重開保留狀態；同帳號 quick UI 建立後在主程式工作台唯一讀回；不同帳號及切帳競態不錯送；離線回網且登入有效後同 ID 補送；登入失效保留資料；未綁定資料不自動認領；七日清理不刪未同步記錄。實體 Android 驗收沿用使用者取消的決定，窄版瀏覽器證據不得冒稱 Android PWA 實機證據。
 

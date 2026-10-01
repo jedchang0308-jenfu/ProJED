@@ -1,8 +1,8 @@
 # REL-014：DEV-133 各自登入與依帳號同步
 
-狀態：**Rev9正式發布與功能驗收PASS；Rev10 Auth競態修正尚未發布。** 原 `20261001061118-144be8` 核心包排除後續UI，UI另以 `20261001074739-df101c` 發布；sealed包身份及其驗收保持原source邊界。Git PR #5已建立，最新修正交付與protected發布進度見下一段。
+狀態：**Rev9正式發布與功能驗收PASS；Rev10部署前驗證PASS，正式程式尚未activate。** 原 `20261001061118-144be8` 核心包排除後續UI，UI另以 `20261001074739-df101c` 發布；sealed包身份及其驗收保持原source邊界。Git PR #5已建立，修正product `8a0e738`已推送；最新protected候選與正式設定修正見下一段。
 
-2026-10-01部署前續驗發現stale Session／null／401及延遲logout barrier可跨較新epoch；Auth、outbox與quick UI已補guard。新版frozen source digest `3acceffc38997505d7d877fdbace868509b658ae426501cf449d999dc0ab99a9` 的82/82 SIMULATION、built真SW離線與browser restart10/10、真TEST A Auth／RPC12/12及型別／lint／contract PASS，詳細收據見[QA最新部署前驗證](../qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-rev-10-auth-競態修正的部署前驗證)。新版HTTPS protected candidate／正式驗收與修正PR收斂尚待完成；舊正式40/40不推定涵蓋新修正。本輪無schema／RPC／RLS／遠端設定改動，live仍為Rev9 `b88f428e0efa541e`；以此版本及核心`0aae27354f796317`作既有DB v2相容復原錨點。
+2026-10-01部署前續驗發現stale Session／null／401及延遲logout barrier可跨較新epoch；Auth、outbox與quick UI已補guard。新版frozen source digest `3acceffc38997505d7d877fdbace868509b658ae426501cf449d999dc0ab99a9` 的82/82 SIMULATION、built真SW離線與browser restart10/10、真TEST A Auth／RPC12/12、同提交HTTPS TEST17/17及53/53遠端hash PASS，詳細收據見[QA最新部署前驗證](../qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-rev-10-auth-競態修正的部署前驗證)。Protected release `20261001130712-4982b5`／source `8a0e738fcb68896a937f650666e53f2289729953`，54 entries、tree `202dba19b6aece56041e9f2e925bf61538612d9390c6b13afa4ccfbb11a03d84`；prepare／candidate、遠端54/54、官方browser與safe-cancel、三項strict readiness均PASS。`dev133-cohort.json`綁定manifest、TEST與NO_OP收據。本輪正式Site URL由localhost修至`https://projed-cc78d.web.app/`，先TEST驗證／完整還原，正式其餘設定不變，預設／main／quick取消回呼3項及新增readiness17 checks PASS。無schema／RPC／RLS／IAM變更。兩個preview已清理，live仍為Rev9 `b88f428e0efa541e`，作DB v2相容復原錨點；未activate、未執行新版正式功能驗收，舊40/40不推定涵蓋新修正。PR review／merge仍待完成。
 
 - 主程式：[ProJED](https://projed-cc78d.web.app/)。獨立快速入口：[ProJED-快速建任務](https://projed-cc78d.firebaseapp.com/quick-task/?install=1)。
 - 資源：Firebase project/site `projed-cc78d`；TEST Supabase `fhisnnufoeulxqrchldf`；PROD `knodlkxqpcqyrtgwpdst`。

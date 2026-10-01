@@ -2,7 +2,7 @@
 
 ## Documentation Map Update - 2026-10-01（DEV-133 Rev 10 部署前競態修正）
 
-[SPEC-133 Rev10](specs/SPEC-133-quick-task-shared-identity-sync.md)補明load revision／auth epoch、IDB put／capture add guard及legacy barrier登入前Session辨識；[QA最新部署前結果](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-rev-10-auth-競態修正的部署前驗證)記錄82/82 SIMULATION、真built離線／browser restart10/10與真TEST A Auth／RPC12/12 PASS。Auth／outbox／quick UI已有新產品修正，尚未納入已發布Rev9；[DEV-133](dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30)仍執行中，待修正commit／PR收斂、新版protected發布及正式驗收。[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)保留sealed release身份並補記本輪未發布邊界；不再把「只待PR」或「無產品變更」當作最新狀態。
+[SPEC-133 Rev10](specs/SPEC-133-quick-task-shared-identity-sync.md)補明load revision／auth epoch、IDB put／capture add guard與legacy barrier；product `8a0e738`已推送。[QA最新部署前結果](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-rev-10-auth-競態修正的部署前驗證)記錄82/82 SIMULATION、built離線10/10、真TEST A12/12、同提交HTTPS17/17及53/53hash、protected prepare／candidate54/54與strict readiness PASS。正式Site URL單欄位已修正並驗預設／兩App取消回呼，原allowlist不變、TEST設定已還原，兩個preview清理且live仍Rev9。[DEV-133](dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30)維持執行中，待同包正式activation／功能驗收及PR review／merge。[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)保存release `20261001130712-4982b5`與來源／NO_OP／設定修正收據；不把部署前PASS當正式功能PASS。
 
 ## Documentation Map Update - 2026-10-01（DEV-133 Rev 9 部署前回歸歷史）
 
@@ -248,10 +248,10 @@ R12不新增第七個runtime責任點：`public/manifest.webmanifest`是唯一ro
 | [SPEC-122](specs/SPEC-122-mobile-zero-data-quick-task.md) | current implementation authority；root bundled shortcut、雙identity、exact file surface、entry/build、UI/voice、IDB、RPC/RLS、同帳號、工作台到達、drift與stop conditions。 |
 | [ADR-050](decisions/ADR-050-mobile-quick-task-entry-and-outbox.md) | Accepted Architecture Memory + R12 closure；root shortcut與選用第二identity、manifest發佈／更新、raw HTML MPA、one root SW、account outbox及server-owned idempotency。 |
 | [QA-DEV-122](qa/QA-DEV-122-mobile-zero-data-quick-task.md) | verification authority；S15、B22～B24、W07與受影響回歸已local PASS，Level 3 HTTPS smoke已PASS；實機、DEV-096 real-SW FAIL及完整B/W/P／獨立QA-QC缺口由使用者接受為本次release殘餘風險，原始case狀態不變；第10.4.3節定義production替代結案證據。 |
-| [DEV-133](dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30) | REL-014 同步核心及後續統一 UI 正式發布／驗收 PASS；PR #5 Open／CLEAN，待 review／merge。 |
-| [SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md) | Rev 9／架構已定案；共用帳號、各自 SDK Session、owner／claim／receipt 契約及統一狀態 UI 已落實。同步核心與後續 UI 正式驗收 PASS；PR #5 待 review／merge。 |
+| [DEV-133](dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30) | Rev9正式PASS；Rev10部署前PASS，正式activation／功能驗收及PR review／merge待完成。 |
+| [SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md) | Rev10／架構已定案；共用帳號、各自SDK Session、owner／claim／receipt與epoch guard落實；新版部署前PASS，正式功能未驗。 |
 | [ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md) | Accepted Rev 3；取代跨 App OAuth Server，採第一方使用者 RLS、各 origin Session、owner/context交易及普通登入相容修正。 |
-| [QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md) | Rev 9：原正式同步核心 40/40；後續 UI 本機 SIMULATION 25/25、正式匿名 10/10、雙 origin 各 54/54 PASS。N01～N10 證據分層及人工 PWA recovery 邊界見 QA；PR #5 待 review／merge。 |
+| [QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md) | Rev10：82/82 SIMULATION、built離線10/10、真TEST A12/12、HTTPS17/17、正式候選54/54及readiness PASS。原正式40/40保留舊source邊界，新版正式功能未驗；PR #5待review／merge。 |
 | [SPEC-034](specs/SPEC-034-fast-start-pwa-install-guidance.md) | 一般 ProJED install/update 與 QuickCaptureShell 退役 authority；DEV-122 為 compatible extension。 |
 | [SPEC-039](specs/SPEC-039-task-filter-core-and-workbench-profiles.md) | account-owned 未歸位與完整工作台 authority；quick entry 只新增來源。 |
 | [SPEC-115](specs/SPEC-115-blank-task-creation-contract.md) | blank-task content authority；quick RPC 必須 parity，description absent。 |

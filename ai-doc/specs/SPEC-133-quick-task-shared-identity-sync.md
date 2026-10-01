@@ -1,6 +1,6 @@
 # SPEC-133：快速建任務共用帳號、各自登入與自動同步
 
-修訂：**2026-10-01 Rev 10；Human Confirmed（產品方向）；RD Implementation Ready；架構定案：已定案**。Rev 5～9 UI 已隨 REL-014 發布；Rev 10 收斂既定 owner／登出 barrier 契約的非同步競態實作，不改 SDK provider、RPC、DB版本或權限。新版候選已通過 82/82 browser／IDB SIMULATION、10/10 真建置離線及瀏覽器重啟、12/12 真 TEST actor A Auth／RPC補驗、contract、型別與 targeted lint；新版 HTTPS protected release／正式驗收及 PR review／merge 尚待完成。先前57/57與正式40/40保留原source證據邊界，見 QA-DEV-133。
+修訂：**2026-10-01 Rev 10；Human Confirmed（產品方向）；RD Implementation Ready；架構定案：已定案**。Rev 5～9 UI 已隨 REL-014 發布；Rev 10 收斂既定 owner／登出 barrier 契約的非同步競態實作，不改 SDK provider、RPC、DB版本或權限。Product `8a0e738` 已通過82/82 browser／IDB SIMULATION、10/10真建置離線與瀏覽器重啟、12/12真TEST A Auth／RPC、同提交HTTPS TEST17/17及53/53檔案核對；正式sealed prepare／candidate與54/54核對、readiness亦PASS。正式Auth Site URL單欄位已修正並驗取消回呼，其他設定不變。新版程式尚未activate，正式功能驗收與PR review／merge仍待；先前57/57與正式40/40保留原source邊界，見QA-DEV-133。
 
 權威：[DEV-133](../dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30)、[ADR-053 Rev 3](../decisions/ADR-053-quick-task-cross-origin-account-link.md)、[QA-DEV-133](../qa/QA-DEV-133-quick-task-shared-identity-sync.md)。沿用原 DEV ID／文件路徑；[SPEC-122](SPEC-122-mobile-zero-data-quick-task.md) 的輸入、本機保存、RPC、工作台、manifest／SW 契約繼續適用，登入與認領交界以本版為準。
 
@@ -181,7 +181,7 @@ Release impact 為 SDK callback bundle／env keys 退役、DB v2 相容、TEST f
 
 ## 11. 定案結論與交接條件
 
-Rev10最新交接：架構方向維持，新的Auth／IDB／UI競態修正已通過QA所列82/82、10/10及12/12；尚待修正commit／PR收斂與新版HTTPS protected發布／正式驗收。下列Rev9正式發布與「等待PR」描述保留當時source的歷史事實，不包含Rev10修正。
+Rev10最新交接：架構方向維持，新的Auth／IDB／UI競態修正已提交／推送為`8a0e738`；QA所列82/82、10/10、12/12、同提交HTTPS17/17及正式protected prepare／candidate PASS。候選release `20261001130712-4982b5`保留，live仍Rev9；下一步是同包正式activation／改動功能驗收及PR review／merge。Site URL屬發布前既定正式URL契約：必須為`https://projed-cc78d.web.app/`，readiness以固定正式project的Auth config GET檢查，不能僅憑client redirect env推定遠端正確。下列Rev9紀錄保留原source歷史，不包含Rev10修正。
 
 2026-10-01 Architecture Closure Review：登入來源／origin／callback、context／capture 交易、owner／claim、RPC／receipt／RLS、retry／cleanup／upgrade、退役責任面及測試路徑均已鎖定，**沒有待選的 P0/P1 架構決策**。TEST 29/29 integration、B0/core27、Google cancel21/21、correction readback及post-correction7/7已完成；REL-014 的正式核心與 Rev9 UI 也已發布及驗收，source／artifact／復原版本與分層證據見 QA 最新正式結果。Git 分支與 PR #5 已交付，目前 OPEN／CLEAN，仍待 review／merge；DEV-133 在合併完成前維持執行中。
 
