@@ -1108,9 +1108,9 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 摘要：共用 ProJED 帳號系統、兩個 App 各自登入與保存 Session；保留 owner-bound 離線保存、自動重試及七日已同步副本清理。
   - 來源 ID：使用者 2026-10-01 採用獨立登入方案及修改開發文件／補齊到架構定案指示；延續 2026-09-30 DEV-133。
   - 父任務：DEV-122；延續 DEV-131 雙網址安裝，相容 DEV-130／132。
-  - 下一步：使用已驗證候選包`20261001130712-4982b5`（product `8a0e738`）執行正式activation與改動功能驗收，再完成PR #5 review／merge。82/82 SIMULATION、built離線10/10、真TEST A12/12、HTTPS TEST17/17與正式候選54/54分層保存，不重算舊正式40/40。
-  - 阻塞 / 恢復條件：部署前gate已PASS，無新增授權缺口；正式程式仍Rev9 `b88f428e0efa541e`，用於DB v2相容復原。正式Site URL單欄位修正已驗證；無schema／RPC／RLS／IAM變更，未清未同步資料。公開Git與ProJED環境操作原授權延續；真麥克風／自動PWA更新及已取消Android residual維持原範圍。
-  - 證據：[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)、[QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md)、[SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md)、[ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md)；canonical terminal-evidence.json 與 worktree activation-resume-evidence.json 綁定 source／artifact／case 層。
+  - 下一步：完成獨立quick Google核身，接續已啟用同包`20261001130712-4982b5`（product `8a0e738`）的改動功能正式驗收，再完成PR #5 review／merge及專屬runtime清理／證據保存。部署前82/82 SIMULATION、built離線10/10、真TEST A12/12、HTTPS TEST17/17分層保存，不重算舊正式40/40或本輪7/7前置檢查。
+  - 阻塞 / 恢復條件：protected activation及雙正式origin各54/54已PASS，live version `ae38a453a07ec4f3`；main SDK refresh/getUser200，quick獨立Google密碼／MFA待本人核身，無新增授權缺口。前版Rev9 `b88f428e0efa541e`保留為DB v2相容復原。正式Site URL單欄位修正已驗證；無schema／RPC／RLS／IAM變更，未清未同步資料。公開Git與ProJED環境原授權延續；真麥克風／自動PWA更新及已取消Android維持原範圍。
+  - 證據：[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)、[QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md)、[SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md)、[ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md)；最新 canonical `production/rev10/activation-terminal-pending.json`、`serving-readback.json`及worktree `20261001130712-4982b5/activation-evidence.json`綁定實際source／release／驗收層；較早terminal及activation-resume收據保留原source歷史。
   - 計入交付：是（已推送並建立 PR；PR review／merge 完成前維持執行中）。
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
