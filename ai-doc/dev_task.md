@@ -30,6 +30,8 @@ Cold start：先讀下方 `## 總任務清單`；需要特定 DEV 詳細歷史�
 
 **授權與交付邊界。** 既有 ProJED repo、Supabase TEST `fhisnnufoeulxqrchldf`／production `knodlkxqpcqyrtgwpdst`、Firebase `projed-cc78d` 的授權在既定動作與資源範圍內延續；本輪文件指令不啟動遠端修改／Git交付／發布。使用者取消實體 Android 驗收的決定保留，不把窄版模擬稱實機 PASS；舊 OAuth B0／B1 被新方案驗收取代，而不是補登為通過。禁止跨專案、破壞性 migration、業務資料改寫、清除未同步任務及 IAM／Secret 擴權。
 
+**2026-10-01 指定第二 actor 的續接。** 使用者已指定並授權 Google B，且在 task-owned TEST Chrome 完成正常 Google登入。普通SDK核身、profile／有效membership／非空工作台及A/B不同user ID前置檢查PASS；不再缺第二actor的帳號識別或fixture。`verify:dev-133-test-actor-readiness -- --browser`已支援Google，並保留password模式；16項隔離回歸、typecheck／targeted lint通過，quick選帳補回SPEC既定prompt。TEST精確臨時callback已還原readback、browser/profile及4173runtime清理完成；未修改業務資料。較早「只有一組可操作憑證」是補驗前狀態，現以[QA 最新Google B驗收](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-指定-google-b-的實際驗收)為準。actor前置不等於完整B0／N01～N10；切帳／跨帳隔離、TEST correction與正式發布仍未完成。
+
 ## DEV-131 Android 獨立快速入口雙網址修復 - 2026-09-29
 
 使用者 Android 實機確認：`chrome://webapks/` 只有 ProJED 主程式，沒有「快速建待辦」；Android 應用程式清單也找不到後者。主程式 manifest scope `/` 涵蓋 quick scope `/quick-task/`，同源巢狀 PWA 會讓 Chrome 把內層入口視為已安裝的外層 App。使用者明確授權 ProJED、Firebase `projed-cc78d` 正式雙網址方案及必要 Supabase 登入回呼設定、驗證、部署；不強迫現有使用者重裝主程式。
@@ -1093,7 +1095,7 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 來源 ID：使用者 2026-10-01 採用獨立登入方案及修改開發文件／補齊到架構定案指示；延續 2026-09-30 DEV-133。
   - 父任務：DEV-122；延續 DEV-131 雙網址安裝，相容 DEV-130／132。
   - 下一步：本機第一輪實作與 contract／build 驗證已完成；依 SPEC-133 Rev 3 §8 先完成 B0 TEST callback／fixture，再執行 correction migration、真實 Auth／RPC／工作台與 QA N01～N10 驗證。
-  - 阻塞 / 恢復條件：B1 correction migration 已被安全審查以「B0 完整驗收前置未成立」拒絕，未繞過；真實 callback／fixture／workspace actor仍待核對。OAuth Client 註冊與已取消的 Android 實機不再是必要前置。
+  - 阻塞 / 恢復條件：指定Google B的普通登入callback及A/B非空fixture前置已PASS；仍須完整同帳／切帳／跨帳隔離驗收，才可重試B1 correction migration。先前以B0前置未成立的安全審查拒絕未繞過；OAuth Client及已取消的Android實機不再是新版必要前置。
   - 證據：[SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md)、[ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md)、[QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md)。舊 A 局部證據與 OAuth／synthetic 歷史另存 QA，新 N01～N10 尚未執行。
   - 計入交付：是（未完成，產品完成率貢獻 0）。
 

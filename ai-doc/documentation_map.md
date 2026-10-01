@@ -6,6 +6,8 @@
 
 下一步：新方案 B0 的 TEST ordinary-session callback／fixture 完整驗收後，才可執行 additive correction migration，再跑 [QA-DEV-133 N01～N10](qa/QA-DEV-133-quick-task-shared-identity-sync.md)。本輪 correction apply 被安全審查拒絕，沒有 workaround、部署或資料修改；其他 dirty changes 保留，沒有新增 DEV 或產品完成率。實體 Android 已取消，普通 Google callback／同帳與異帳真實驗收仍必須完成。
 
+2026-10-01 第二 actor 補驗：使用者指定 Google B 並在獨立 TEST Chrome 完成正常 quick 登入，SDK `getUser`／profile／active membership／非空 workbench及A/B不同user檢查 **PASS**。修正 verifier 支援 `--browser`，只載 allowlisted TEST env；16項隔離回歸、typecheck／targeted lint通過。Google選帳補回既定`prompt:'select_account'`契約。結果、執行基準及cleanup見[QA 指定 Google B 實際驗收](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-指定-google-b-的實際驗收)。此為actor前置PASS，完整N01～N10、切帳／跨帳隔離、TEST correction及正式發布仍未完成。
+
 2026-10-01 readback：TEST DEV-122 alias `20260930154758`／v2 `20260930155041` 已套用、RPC definer；正式只有 DEV-122 `20260914120000`、RPC invoker。新 correction 收斂 canonical DEV-122／invoker，保留歷史、RLS／ACL及資料；正式不單獨補套 retired v2。quick 不另做 profile／workspace 開通；缺依賴導回主程式設定，同 ID人工重試。Auth 最新 callback allowlist及真 TEST actors 為驗收進入條件，讀回不是矩陣 PASS。
 
 2026-09-30 歷史：舊 A 本機、OAuth mock／桌面與 TEST synthetic 部分證據保留於 QA 歷史區及 [execution-boundary addendum](qa/DEV-133-execution-boundary-addendum-20260930.md)，不能替代新方案／完整權限驗收。OAuth Server／Client 註冊與舊 B0／B1 不再是新版必要依賴，沒有補登舊 Gate 為 PASS。DEV-133 正式配置、部署及驗收未執行，DEV-122／131 狀態不變。

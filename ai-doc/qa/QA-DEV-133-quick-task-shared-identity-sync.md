@@ -60,9 +60,17 @@ QC 每例保存 sourceRevision／dirty boundary、build artifact、環境、acto
 | migration／權限 | fresh DEV-122及 existing v2→new correction 各跑原 DB 矩陣；再用真普通 JWT 的 A／B／anon 作非空 Data API／RPC 驗收。metadata、SQL claims 模擬及真 JWT 結果分列；DB error 42501／23503、無 workspace及 replay receipt 都保留 ID。 |
 | 更新／生命周期 | 預載 v1 A pending／B pending／unbound／legacy synced，再載新 candidate；驗 raw owner／ID／title 前後不變、context 失效／環境 mismatch 停送、cleanup CAS、bfcache 回前景自動恢復及零重複 listener。 |
 
-真 TEST 前置不足時記 `NOT RUN / fixture or callback prerequisite unavailable`，只停止依賴該前置的 case，繼續本機／DB／型別驗證；不能重啟舊 OAuth Client／Android Gate。新 verifier 尚未實作，不能引用不存在的輸出作證據。新 evidence 統一放 `output/qa/dev-133/independent-auth/` 並記 source／artifact／route／actorAlias／實際操作；預期 TEST 任務名稱使用測試前綴，cleanup 僅限本輪已同步 fixture，不清任何未同步資料。
+真 TEST 前置不足時記 `NOT RUN / fixture or callback prerequisite unavailable`，只停止依賴該前置的 case，繼續本機／DB／型別驗證；不能重啟舊 OAuth Client／Android Gate。actor-readiness verifier 已實作，但完整 N01～N10 runner 與證據仍須補齊。新 evidence 統一放 `output/qa/dev-133/independent-auth/` 並記 source／artifact／route／actorAlias／實際操作；預期 TEST 任務名稱使用測試前綴，cleanup 僅限本輪已同步 fixture，不清任何未同步資料。
 
-`npm run verify:dev-133-test-actor-readiness` 已新增為 B0 actor 前置檢查。它只接受 TEST project ref `fhisnnufoeulxqrchldf`，使用兩個普通 Supabase Auth password session，對 `profiles`、active `tenant_members` 及 `task_workbench_unplaced_items` 做 read-only 查詢；缺少任一 actor 憑證、登入核身失敗或沒有有效 workbench 時回傳 `BLOCKED`，不使用 service-role key、不建立 task、不修改資料。A 可沿用 `VITE_SUPABASE_TEST_EMAIL/PASSWORD`，B 必須由 TEST 執行環境注入 `DEV133_TEST_ACTOR_B_EMAIL/PASSWORD`。
+`npm run verify:dev-133-test-actor-readiness` 是 actor 前置檢查。它只接受完整 HTTPS TEST hostname `fhisnnufoeulxqrchldf.supabase.co` 及 public key；只從 `.env.test.local`／`.env.local` 讀取 allowlisted TEST 參數，不使用 generic env loader、production service-role key 或管理 token 作 actor。預設模式使用兩個普通 password session；A 可沿用 `VITE_SUPABASE_TEST_EMAIL/PASSWORD`。Google B 改用 `DEV133_TEST_ACTOR_B_EMAIL` 加 `--browser`，由正常 quick 登入 CTA、Google callback及網路 `getUser` 核身，不要求或保存 Google 密碼。對 profile、active membership及非空 workbench 唯讀檢查，並確認兩個 user ID 不同與 readback 期間 Session 未變；token／email／user ID 不寫入報表。Google runner 的管理 token 只用於已授權 TEST 的精確臨時 callback，結束還原並 readback；不作業務 API 身分。`verify:dev-133-actor-readiness-contract` 驗 hostile URL、production/admin env 排除、privileged key拒絕、same-actor拒絕、切帳與資料查詢失敗，屬隔離回歸證據。
+
+### 2026-10-01 指定 Google B 的實際驗收
+
+使用者指定並授權第二 TEST actor，且在 task-owned Chrome 視窗完成 Google 登入。TEST 唯讀盤點確認該帳號已有 profile、2 筆 active membership、1 筆 workbench row，provider為 Google；未建立／修改任何業務資料。正常 `/quick-task/` 登入 CTA 回到 `http://127.0.0.1:4173/quick-task/` 後，browser SDK `getUser` 比對指定帳號，profile／membership／workbench查詢及兩個 actor ID 不同檢查通過。A 以普通 password Auth核身通過；A/B各為2筆active membership與至少1筆workbench fixture。結果 **actor prerequisite PASS**，不是 N01～N10、跨帳 RLS矩陣或 B0完整 PASS。
+
+結果：[result.json](../../output/qa/dev-133/independent-auth/google-actor-readiness/result.json)；生命周期：[runtime.json](../../output/qa/dev-133/independent-auth/google-actor-readiness/runtime.json)。task-owned browser tree已關閉、新建 Chrome profile已刪除、port4173確認釋放、精確 TEST callback已還原並readback；pre-existing正式站分頁及user-owned4000未改動。執行基準HEAD `d8280fc`＋本輪dirty auth／verifier；此為RD前置probe，不是frozen candidate完整QC。後續 hardening 的16項隔離回歸、typecheck、targeted lint通過；live登入本輪只執行一次，不把後續純靜態改善標為再次實機驗收。
+
+TEST build亦PASS：`node node_modules/vite/bin/vite.js build --mode test --configLoader runner --outDir output/qa/dev-133/independent-auth/actor-readiness-build`，2109 modules、PWA service worker產生完成。一般sandbox build曾因`.vite-temp`／既有`dist/sw.js`寫入EPERM失敗；改用runner loader與本任務隔離outDir完成，未發布此artifact。build包含保留的既有dirty boundary，不能當clean release package。
 
 ### 2026-10-01 RD ordinary-session probes（部分證據）
 

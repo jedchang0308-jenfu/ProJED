@@ -150,7 +150,10 @@ export const signOutQuickSession = async () => {
 };
 
 export const startQuickGoogleSignIn = async (redirectTo: string) => {
-  const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } });
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo, queryParams: { prompt: 'select_account' } },
+  });
   if (error) throw error;
 };
 
