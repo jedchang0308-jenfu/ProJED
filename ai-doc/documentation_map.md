@@ -1,8 +1,8 @@
 # ProJED Documentation Map
 
-## Documentation Map Update - 2026-10-02（DEV-133 Rev12 發布前 READY）
+## Documentation Map Update - 2026-10-02（DEV-133 Rev12 已發布結案）
 
-Rev11 `673aeee9c10f01936a8aa4a0f2ca16ab7606a5ea`／release `20261001160355-057ccc` 仍是正式環境版本，production 指定功能矩陣 46/46 PASS、雙 origin 各 54/54；live version／recovery anchor 為 `c01b9588565a9025`。Rev12 direct corrective candidate 已達發布前 READY：360-file digest `ce3bb938cbe5fdae1b4d27de3679a4d0056f40f07839573cd5b024030ae12b3d`、UI／真 IDB simulation 25/25、ordinary TEST N06 11/11 PASS；舊 `673aeee` main baseline 的 R24 false warning 24/25 FAIL已保留。Source SHA／new release ID未知；Rev12正式發布後的 production UI／功能驗收、PR #5 review／merge及4195 cleanup仍待，DEV 不標 done。細節與原 FAIL 邊界見[QA Rev12](qa/QA-DEV-133-quick-task-shared-identity-sync.md)、[SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md)及[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)。本輪文件修改尚未提交，PR post-document head待root後續實際Git／PR readback。
+Rev12 product source `9e67d5dd2d269637f40545896bb96c76ba71eeed`／release `20261001171238-12446a` 已正式發布，tree `2a79f53bbff803e678967afbd80f830b0fee083d369dcabae2b38ee743d2d259`；雙 origin 54/54，live version `45fd4af302e5ef15`，Rev11 `c01b9588565a9025` 為 recovery anchor。正式 changed-UI 23/23、LOCAL真IDB simulation 25/25、ordinary TEST N06 11/11 PASS；PR #5 merge `08b51fd7048bb993f9b8f23a93581f24f00206a0`。Runtime cleanup完成，task profile保留且未刪未同步資料；DEV-133 native task DONE。N01～N10閉合依各自source/layer evidence，不累加assertions作全套新測。直接入口：[QA N01–N10 closure](qa/QA-DEV-133-quick-task-shared-identity-sync.md)、[SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md)、[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)。本輪文件是合併後 closure follow-up。
 
 ## Documentation Map Update - 2026-10-01（DEV-133 Rev10正式啟用）
 
@@ -260,10 +260,10 @@ R12不新增第七個runtime責任點：`public/manifest.webmanifest`是唯一ro
 | [SPEC-122](specs/SPEC-122-mobile-zero-data-quick-task.md) | current implementation authority；root bundled shortcut、雙identity、exact file surface、entry/build、UI/voice、IDB、RPC/RLS、同帳號、工作台到達、drift與stop conditions。 |
 | [ADR-050](decisions/ADR-050-mobile-quick-task-entry-and-outbox.md) | Accepted Architecture Memory + R12 closure；root shortcut與選用第二identity、manifest發佈／更新、raw HTML MPA、one root SW、account outbox及server-owned idempotency。 |
 | [QA-DEV-122](qa/QA-DEV-122-mobile-zero-data-quick-task.md) | verification authority；S15、B22～B24、W07與受影響回歸已local PASS，Level 3 HTTPS smoke已PASS；實機、DEV-096 real-SW FAIL及完整B/W/P／獨立QA-QC缺口由使用者接受為本次release殘餘風險，原始case狀態不變；第10.4.3節定義production替代結案證據。 |
-| [DEV-133](dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30) | Rev12直接修正發布前 READY：TEST simulation25/25、ordinary N06 11/11；production仍Rev11，正式驗收、PR #5及4195 cleanup待 root，DEV執行中。 |
-| [SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md) | 契約維持 Rev10／架構已定案；Rev12 candidate READY但未發布，production仍Rev11；正式驗收、PR及4195 cleanup待完成。 |
+| [DEV-133](dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30) | ✓ Rev12正式發布、產品驗收、PR #5合併與runtime cleanup完成；DEV-133 DONE。 |
+| [SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md) | Contract仍Rev10／架構已定案；Rev12正式發布及指定驗收完成，N01～N10依source/layer closure；產品PR #5已合併。 |
 | [ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md) | Accepted Rev 3；取代跨 App OAuth Server，採第一方使用者 RLS、各 origin Session、owner/context交易及普通登入相容修正。 |
-| [QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md) | Rev12發布前 READY；ce3bb… simulation25/25及ordinary N06 11/11 PASS，保留 baseline false-warning FAIL；Rev11正式46/46與speech仍依原範圍。 |
+| [QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md) | Rev12 direct changed-UI 23/23、simulation25/25、ordinary N06 11/11 PASS；保留舊baseline false-warning FAIL及各scope限制；N01～N10 closure table。 |
 | [SPEC-034](specs/SPEC-034-fast-start-pwa-install-guidance.md) | 一般 ProJED install/update 與 QuickCaptureShell 退役 authority；DEV-122 為 compatible extension。 |
 | [SPEC-039](specs/SPEC-039-task-filter-core-and-workbench-profiles.md) | account-owned 未歸位與完整工作台 authority；quick entry 只新增來源。 |
 | [SPEC-115](specs/SPEC-115-blank-task-creation-contract.md) | blank-task content authority；quick RPC 必須 parity，description absent。 |
