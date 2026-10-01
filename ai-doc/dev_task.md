@@ -8,15 +8,15 @@ Cold start：先讀下方 `## 總任務清單`；需要特定 DEV 詳細歷史�
 
 ## DEV-133 快速建任務同帳號與自動同步 - 2026-09-30
 
-**2026-10-01 DEV-133 同步核心與統一 UI 已正式發布並驗收。** 最新 UI product source `9b5f73a1b32bdd8dc984c3017dceaf7225967d40`／release `20261001074739-df101c`／live version `b88f428e0efa541e`，雙正式 origin 各 54/54、正式匿名 UI 10/10、隔離 UI／IDB＋Auth/RPC SIMULATION 25/25、型別及 lint PASS。這次僅三個 UI 來源，Auth／RPC／IDB／sync 模組沿用原 `8376086` 的真登入／同步40/40證據，未把該40項改算新套件實測。未改遠端設定、migration、業務資料或 IAM／Secret；暫時 browser／ports已清理。證據見 [REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)；Git目的地確認／push／PR仍待。
+**2026-10-01 DEV-133 同步核心與統一 UI 已正式發布並驗收。** 最新 UI product source `9b5f73a1b32bdd8dc984c3017dceaf7225967d40`／release `20261001074739-df101c`／live version `b88f428e0efa541e`，雙正式 origin 各 54/54、正式匿名 UI 10/10、隔離 UI／IDB＋Auth/RPC SIMULATION 25/25、型別及 lint PASS。這次僅三個 UI 來源，Auth／RPC／IDB／sync 模組沿用原 `8376086` 的真登入／同步40/40證據，未把該40項改算新套件實測。未改遠端設定、migration、業務資料或 IAM／Secret；暫時 browser／ports已清理。程式與開發文件已推送並建立 PR #5，狀態 Open／CLEAN，待 review／merge；部署與驗收見 [REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)。
 
-**2026-10-01 正式同步核心已發布／驗收 PASS（REL-014）。** clean product source `8376086144b31155a94477e6bea1f929ded475be` 已發布為 `20261001061118-144be8`，兩正式 origin 各 54/54 hash、真普通 Google／任務／離線補送／local logout 40/40、官方啟動及 safe-cancel PASS；PROD correction 綁定 NO_OP，未套 DDL／改 IAM／改寫既有資料。[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)／[QA 正式核心結果](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-正式同步核心驗收rel-014) 為最新發布權威。Git 遠端目的地確認待回覆；後續收合／整併 UI 未包含、未驗收，整體 DEV-133 不因核心發布而將這些 slice 補登 PASS。下列發布前狀態保留為歷史快照，以本段為最新核心狀態。
+**2026-10-01 正式同步核心已發布／驗收 PASS（REL-014）。** clean product source `8376086144b31155a94477e6bea1f929ded475be` 已發布為 `20261001061118-144be8`，兩正式 origin 各 54/54 hash、真普通 Google／任務／離線補送／local logout 40/40、官方啟動及 safe-cancel PASS；PROD correction 綁定 NO_OP，未套 DDL／改 IAM／改寫既有資料。[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)／[QA 正式核心結果](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-正式同步核心驗收rel-014) 為最新發布權威。此段只記錄核心發布時的範圍，UI 後續已另行發布並驗收；Git 現況為 PR #5 Open／CLEAN、待 review／merge。下列發布前狀態保留為歷史快照。
 
 ### 架構定案與發布前歷史快照（2026-10-01）
 
-下列架構契約沿用；其中 preflight、sealed package、部署／smoke及UI未驗收狀態是當時快照，已由本節頂端與REL-014／QA最新正式結果更新。核心及Rev9 UI已發布驗收，Git遠端交付尚待；不把歷史未執行或早期PASS改寫成新版案例實測。
+下列架構契約沿用；其中 preflight、sealed package、部署／smoke及UI未驗收狀態是當時快照，已由本節頂端與REL-014／QA最新正式結果更新。核心及Rev9 UI已發布驗收，Git交付已提交至PR #5，待review／merge；不把歷史未執行或早期PASS改寫成新版案例實測。
 
-文件成熟度：**RD Implementation Ready／Human Confirmed；架構定案：已定案**。狀態：**執行中；REL-014 核心正式發布／驗收 PASS，Git 交付及後續 UI slice 待完成**。使用者明確採用「共用帳號、各自登入、各自保存 Session、離線任務依帳號同步」，本機 source implementation 已落地單一 Supabase SDK Auth、DB v2 auth_context／receipt、owner CAS、明確認領、local signOut barrier、嚴格回執及舊 OAuth 路徑退役；最新 TEST／PROD preflight 與實際殘餘見下方及 QA 逐項表。這取代早先 `3B` 的跨 App OAuth Server／免再次登入契約；`1A／2A` 的本機先存、未綁定資料明確認領及定期清理保護保留。DEV-133 仍為原交付點，不新增 DEV／完成率，也不改 DEV-122／131 的既有交付狀態。
+文件成熟度：**RD Implementation Ready／Human Confirmed；架構定案：已定案**。狀態：**執行中；核心與 Rev 9 UI 正式發布／驗收 PASS；Git PR #5 已提交，待 review／merge**。使用者明確採用「共用帳號、各自登入、各自保存 Session、離線任務依帳號同步」，本機 source implementation 已落地單一 Supabase SDK Auth、DB v2 auth_context／receipt、owner CAS、明確認領、local signOut barrier、嚴格回執及舊 OAuth 路徑退役；最新 TEST／PROD preflight 與實際殘餘見下方及 QA 逐項表。這取代早先 `3B` 的跨 App OAuth Server／免再次登入契約；`1A／2A` 的本機先存、未綁定資料明確認領及定期清理保護保留。DEV-133 仍為原交付點，不新增 DEV／完成率，也不改 DEV-122／131 的既有交付狀態。
 
 權威：[SPEC-133 Rev 4](specs/SPEC-133-quick-task-shared-identity-sync.md)、[ADR-053 Rev 3](decisions/ADR-053-quick-task-cross-origin-account-link.md)、[QA-DEV-133 新版 N01～N10](qa/QA-DEV-133-quick-task-shared-identity-sync.md)。canonical repo `C:\VIBE CODING\ProJED\ProJED`，branch `持續優化3`；source implementation baseline `e868611`，documentation evidence commits from `a1d12a9` onward；其他既存 dirty changes 保留。
 
@@ -38,7 +38,7 @@ Cold start：先讀下方 `## 總任務清單`；需要特定 DEV 詳細歷史�
 
 **2026-10-01 指定第二 actor 的早期前置驗收（歷史）。** 使用者指定 Google B，當時普通 SDK 核身、profile／membership／非空工作台及 A/B 不同 user ID 前置檢查 PASS；該結果僅為 actor readiness。後續 29-case runner 已完成普通 A/B integration 及 TEST correction；最新 case scope／尚缺項目以 [QA 最新 TEST 證據](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-最新-test-跨帳與-correction-證據) 為準。原 callback/profile/runtime cleanup 事實保留於早期 QA 結果。
 
-**2026-10-01 恢復入口精簡。** 使用者採用 #效用理論 評估並核准執行：一般自動同步無操作區，需介入時僅顯示待確認／同步異常／原帳號待辦入口，點開才認領或恢復。已落地核身後直接確認、切帳／epoch 變更重新確認、稍後保留資料及 profile 依賴恢復同 ID 人工重試；未改遠端設定。16 項隔離 browser UI／IDB＋Auth/RPC SIMULATION、typecheck、targeted lint PASS；320／390／614 viewport 已目視／量測，task-owned BrowserServer 已清理，user-owned 4000／分頁保留。來源、source SHA、首個 harness 失敗及證據見 [QA 局部驗收](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-恢復入口精簡的局部驗收)。這只是一個局部 slice，不取代最新 TEST integration 狀態，也不改 DEV-133 尚未正式 release。
+**2026-10-01 恢復入口精簡（當時快照）。** 使用者採用 #效用理論 評估並核准執行：一般自動同步無操作區，需介入時僅顯示待確認／同步異常／原帳號待辦入口，點開才認領或恢復。已落地核身後直接確認、切帳／epoch 變更重新確認、稍後保留資料及 profile 依賴恢復同 ID 人工重試；未改遠端設定。16 項隔離 browser UI／IDB＋Auth/RPC SIMULATION、typecheck、targeted lint PASS；320／390／614 viewport 已目視／量測，task-owned BrowserServer 已清理，user-owned 4000／分頁保留。來源、source SHA、首個 harness 失敗及證據見 [QA 局部驗收](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-恢復入口精簡的局部驗收)。這只是一個局部 slice，不取代最新 TEST integration 狀態；文末「尚未正式 release」是當時快照，現況以 DEV-133 索引與 REL-014 為準。
 
 **2026-10-01 真 TEST 跨帳整合（較早 23-case snapshot）。** A/B 普通 Auth 與 quick UI→RPC／receipt→工作台、互相 task SELECT／UPDATE 拒絕、匿名拒絕、並行 replay／conflict、離線回網、切帳、認領及兩 origin 隔離等 23 項 assertions PASS。結果及 harness 歷史見 [QA 跨帳整合結果](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-跨帳整合結果)。本段的「correction 未執行」等狀態是當時快照；最新 29-case／correction 結果與殘餘見 QA 最新證據，不用舊數量代替完整 N01～N10 或 Release Ready。
 

@@ -2,7 +2,7 @@
 
 ### 2026-10-01 正式同步核心驗收（REL-014）
 
-**已發布且正式功能驗收 PASS；Git 遠端交付待目的地確認。** 本次只代表 clean release source `8376086144b31155a94477e6bea1f929ded475be`，不包含工作樹後續 `conditional-recovery-entry`／`unified-sync-status-panel`、視覺降噪 UI 或本機待同步任務名稱清單。UI 已另以後續 `20261001074739-df101c` 正式發布，下節為最新結果；未混入原核心包。發布、復原與完整來源見 [REL-014](../release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)。以下發布前完成審核表及 TEST／早期 OAuth 段落保留其當時事實，不覆蓋本節正式結果。
+**已發布且正式功能驗收 PASS；Git PR #5 已提交，狀態 Open／CLEAN，待 review／merge。** 本節只代表 clean release source `8376086144b31155a94477e6bea1f929ded475be`，不包含工作樹後續 `conditional-recovery-entry`／`unified-sync-status-panel`、視覺降噪 UI 或本機待同步任務名稱清單。UI 已另以後續 `20261001074739-df101c` 正式發布，下節為最新結果；未混入原核心包。發布、復原與完整來源見 [REL-014](../release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)。以下發布前完成審核表及 TEST／早期 OAuth 段落保留其當時事實，不覆蓋本節正式結果。
 
 不可變 release `20261001061118-144be8` 的 54 個檔案，在正式 `web.app`／`firebaseapp.com` 各核對 54/54；tree SHA-256 `945f9a7a26f9c2ad7a9c416b819b3e921230eff47ad086dbf8783dc9120303cb`。11 個核心 source 與最後 frozen TEST 相符；同 commit 的 HTTPS TEST 22/22 功能、官方啟動及 53/53 package 核對 PASS。正式受控普通 Google Session 40/40 功能、官方 canonical 啟動及 safe-cancel callback PASS。PROD RPC 原已符合 canonical invoker／空 search_path／原 ACL/RLS，correction 選擇綁定為 NO_OP，沒有正式 DDL、IAM／Secret 擴權或業務資料改寫。
 
@@ -53,7 +53,7 @@ cleanup：task-owned Chrome PID 37180 已退出，4195／4173／4174／4175 無 
 
 「此快速 App 尚未登入」改為紅字，其他登入驗證及網路狀態提示維持一般提示色。本次未執行 browser 驗收，Rev 8 UI scope 尚未驗收。
 
-修訂：**2026-10-01 Rev 9（REL-014 同步核心及後續統一 UI 已正式發布／驗收 PASS；Git 遠端交付待確認）**。來源為使用者採用「共用帳號、各自登入、各自保存 Session、離線任務依帳號同步」。依 [SPEC-133 Rev 9](../specs/SPEC-133-quick-task-shared-identity-sync.md) 及 [ADR-053 Rev 3](../decisions/ADR-053-quick-task-cross-origin-account-link.md) 驗收；[DEV-133](../dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30) 維持執行中，僅 Git 遠端交付待完成。各輪歷史與證據層級依上方最終結果判讀。
+修訂：**2026-10-01 Rev 9（REL-014 同步核心及後續統一 UI 已正式發布／驗收 PASS；PR #5 已提交，待 review／merge）**。來源為使用者採用「共用帳號、各自登入、各自保存 Session、離線任務依帳號同步」。依 [SPEC-133 Rev 9](../specs/SPEC-133-quick-task-shared-identity-sync.md) 及 [ADR-053 Rev 3](../decisions/ADR-053-quick-task-cross-origin-account-link.md) 驗收；[DEV-133](../dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30) 維持執行中，待 PR review／merge。各輪歷史與證據層級依上方最終結果判讀。
 
 ## 新版範圍與證據規則
 
@@ -186,11 +186,11 @@ Git交付邊界：本輪不stage／commit其他人的UI／install／settings變�
 
 使用者附圖的 `projed-cc78d--level3-smoke-p4rhm931.web.app` HTTP404／Site Not Found，Firebase channel list目前只有live；正式 `projed-cc78d.web.app` HTTP200。未重建消失的舊preview、未發布或清除已安裝App資料；不得把該預覽網址視為本輪TEST登入成功。
 
-### 2026-10-01 完成審核：逐項證據與剩餘
+### 2026-10-01 發布前完成審核快照：逐項證據與剩餘
 
-此表對照本文件N01～N10原要求，不以assertion總數取代完成判定。TEST B0 與已列明的 TEST 行為證據通過；DEV-133 Gate 仍未通過，因正式 source scope／sealed package、部署及正式 smoke 尚未完成。
+此表是正式發布前的歷史快照，對照本文件N01～N10原要求，不以assertion總數取代完成判定。當時 TEST B0 與已列明的 TEST 行為證據通過，正式 source scope／sealed package、部署及正式 smoke 尚未完成；這些缺口已由上方 REL-014 正式驗收及部署前回歸結果更新。下表的「現行可追溯證據」與「尚未證成」欄只表示該次審核時的狀態。
 
-| 要求 | 現行可追溯證據 | 尚未證成的範圍／下一步 |
+| 要求 | 當時可追溯證據 | 當時尚未證成的範圍 |
 |---|---|---|
 | N01 獨立登入／重開／狀態 | 最新 E01、E14～E15：TEST 普通 A/B Session、Google callback 及兩 origin 隔離；PROD preflight：owned Chrome 4195 普通 Google login，`/auth/v1/user`=200 且 actor／SDK user／Google identity 三項 match | production Google login 身分前置已 PASS；quick-task production callback／獨立 Session 持久化及 PWA 重開仍待正式 smoke。 |
 | N02 UI建立→唯一工作台／不同帳號 | E02～E07、E10：正常 UI 建立／receipt／工作台、A/B 隔離及切回 owner 通過；post-correction A/B SELECT／UPDATE denial 另見 7/7 報告 | production origin 的完整 UI→工作台往返仍待正式 smoke；本輪只證明 TEST。 |
@@ -203,7 +203,7 @@ Git交付邊界：本輪不stage／commit其他人的UI／install／settings變�
 | N09 七日清理／race／server保留 | E25 safe local cleanup；既有 server task／immutable receipt 留存與清理 race 案例 | 8／6／40 日與 legacy／corrupt aging 仍為本機時間／資料案例；未實際等待七日週期。 |
 | N10 schema／更新／fallback／viewport | TEST correction readback、E24 U+200B、既有 v1→v2／SW 更新／viewport 證據；TEST correction body MD5 `d80a1ea6932806c0cfa82fce1b73a842`；PROD prosrc 與 local canonical DEV-122 原 migration 一致，PROD correction 為條件 no-op | 已有 preflight 證據可排除在 PROD 重套 correction；仍須把 no-op／hash 選擇綁定 sealed package，再完成 production deploy／smoke。Android 實機已由使用者取消。 |
 
-其餘交付：最新 TEST suite 29/29、B0/core27+Google cancel gate、correction readback及 post-correction 7/7 均 PASS；source revision `57f8c8d3a751c8698a0e28539a9187868aff1873` 且 `sourceUnchanged=true`。早期 harness FAIL 仍保留，不折算 PASS。DEV-133 仍執行中；下一步是正式 DEV-133 scope 隔離、sealed package／canonical migration selection，再依既有授權及 gate 做正式 smoke。Android 實機已取消，正式環境尚未部署。
+此表當時可追溯的 TEST suite 29/29、B0/core27+Google cancel gate、correction readback及 post-correction 7/7 均 PASS；source revision `57f8c8d3a751c8698a0e28539a9187868aff1873` 且 `sourceUnchanged=true`。早期 harness FAIL 仍保留，不折算 PASS。該次審核之後，正式封裝、部署、正式核心及 Rev 9 UI 驗收已依上方 REL-014 各節完成；部署前回歸為 57/57 PASS。DEV-133 目前僅待 PR #5 review／merge。Android 實機已取消。
 
 ### 2026-10-01 最新 TEST 跨帳與 correction 證據
 

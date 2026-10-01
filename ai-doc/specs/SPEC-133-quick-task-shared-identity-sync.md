@@ -1,6 +1,6 @@
 # SPEC-133：快速建任務共用帳號、各自登入與自動同步
 
-修訂：**2026-10-01 Rev 9；Human Confirmed（產品方向）；RD Implementation Ready；架構定案：已定案**。Rev 5 整併最近任務狀態與恢復入口；Rev 6 降低收合入口的視覺存在感；Rev 7 設定入口首次出現時預設展開；Rev 8 將未登入狀態提示標為紅字；Rev 9 在未登入狀態說明任務先保存在本機，並於展開後列出可認領的本機未綁定任務名稱。資料、owner、claim 與同步契約不變。REL-014 核心已正式發布並通過驗收；Git 遠端交付目的地待確認。最終 UI slice 的本機 browser／IDB＋Auth/RPC SIMULATION25/25、型別／lint及正式匿名UI10/10、雙origin54/54已 PASS，release `20261001074739-df101c`；Git遠端交付尚待。證據範圍見 QA-DEV-133。
+修訂：**2026-10-01 Rev 9；Human Confirmed（產品方向）；RD Implementation Ready；架構定案：已定案**。Rev 5 整併最近任務狀態與恢復入口；Rev 6 降低收合入口的視覺存在感；Rev 7 設定入口首次出現時預設展開；Rev 8 將未登入狀態提示標為紅字；Rev 9 在未登入狀態說明任務先保存在本機，並於展開後列出可認領的本機未綁定任務名稱。資料、owner、claim 與同步契約不變。REL-014 核心與最終 UI 已正式發布並驗收；2026-10-01 部署前回歸再驗 57/57 隔離案例、contract、型別、targeted lint、production auth-mode 與正式 manifest integrity PASS。PR #5 已推送，狀態 OPEN／CLEAN，等待 review／merge；驗收分層見 QA-DEV-133。
 
 權威：[DEV-133](../dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30)、[ADR-053 Rev 3](../decisions/ADR-053-quick-task-cross-origin-account-link.md)、[QA-DEV-133](../qa/QA-DEV-133-quick-task-shared-identity-sync.md)。沿用原 DEV ID／文件路徑；[SPEC-122](SPEC-122-mobile-zero-data-quick-task.md) 的輸入、本機保存、RPC、工作台、manifest／SW 契約繼續適用，登入與認領交界以本版為準。
 
@@ -175,11 +175,11 @@ QA 每例記錄 sourceRevision／dirty boundary、環境及兩個 origin、build
 
 正式 v2 未套用，release migration selection 必須排除單獨補套已退役 v2，不使用未審視的全量 db push。最新 PROD preflight 確認 canonical DEV-122 body 已存在，DEV-133 correction 在正式為條件 no-op；將選擇與 `database-before.json` 中 prosrc hash 綁入當次 package，避免不必要重套。若當次 readback 發生差異，依既有 correction／原子收斂規則審查，不能留下可被呼叫的中間 definer 狀態。本期不新增 PostgREST hook／OAuth client／Auth Server 設定。
 
-Release impact 為 SDK callback bundle／env keys 退役、DB v2 相容、TEST forward correction 與 ordinary Session 權限回歸。TEST gate、正式 readonly preflight、隔離 sealed package 與兩次正式發布已依 [REL-014](../release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md) 完成。原核心 product `8376086` 的正式普通 Google／RPC／工作台／離線補送／local logout 40/40 PASS；後續 UI product `9b5f73a` 的本機 UI／IDB SIMULATION 25/25、正式匿名 UI 10/10及兩 origin各54/54 PASS。PROD correction NO_OP／metadata hash 已綁定原核心包，後續 UI 不改 DB／Auth 設定。Git 遠端交付仍待完成；不將各層 assertion 相加或把原核心重用證據改稱新 UI 實測。舊 OAuth Gates 不補登 PASS，Android 實機沿用使用者取消的決定。本文件不另建發布操作表。
+Release impact 為 SDK callback bundle／env keys 退役、DB v2 相容、TEST forward correction 與 ordinary Session 權限回歸。TEST gate、正式 readonly preflight、隔離 sealed package 與兩次正式發布已依 [REL-014](../release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md) 完成。原核心 product `8376086` 的正式普通 Google／RPC／工作台／離線補送／local logout 40/40 PASS；後續 UI product `9b5f73a` 的本機 UI／IDB SIMULATION 25/25、正式匿名 UI 10/10及兩 origin各54/54 PASS。PROD correction NO_OP／metadata hash 已綁定原核心包，後續 UI 不改 DB／Auth 設定。PR #5 已提交，review／merge 尚待完成；部署前回歸及測試腳本修正見 QA 最新驗證節。不將各層 assertion 相加或把原核心重用證據改稱新 UI 實測。舊 OAuth Gates 不補登 PASS，Android 實機沿用使用者取消的決定。本文件不另建發布操作表。
 
 ## 11. 定案結論與交接條件
 
-2026-10-01 Architecture Closure Review：登入來源／origin／callback、context／capture 交易、owner／claim、RPC／receipt／RLS、retry／cleanup／upgrade、退役責任面及測試路徑均已鎖定，**沒有待選的 P0/P1 架構決策**。TEST 29/29 integration、B0/core27、Google cancel21/21、correction readback及post-correction7/7已完成；REL-014 的正式核心與 Rev9 UI 也已發布及驗收，source／artifact／復原版本與分層證據見 QA 最新正式結果。目前只剩 Git 遠端交付，不能因已發布而先將整體 DEV-133 標為完成。
+2026-10-01 Architecture Closure Review：登入來源／origin／callback、context／capture 交易、owner／claim、RPC／receipt／RLS、retry／cleanup／upgrade、退役責任面及測試路徑均已鎖定，**沒有待選的 P0/P1 架構決策**。TEST 29/29 integration、B0/core27、Google cancel21/21、correction readback及post-correction7/7已完成；REL-014 的正式核心與 Rev9 UI 也已發布及驗收，source／artifact／復原版本與分層證據見 QA 最新正式結果。Git 分支與 PR #5 已交付，目前 OPEN／CLEAN，仍待 review／merge；DEV-133 在合併完成前維持執行中。
 
 新版 N01～N10 以 [QA 正式契約矩陣](../qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-正式同步核心驗收rel-014) 為判定依據：普通 TEST A/B、正式同帳號獨立 Session、正常 UI／RPC／工作台及離線補送有真實服務證據；401／nonce／CAS／lease／清理及升級邊界依明示的 browser／IDB／SQL／故障注入層。七日閾值由6／8／40日fixture驗證，不宣稱觀察真實七日排程。foreign workspace／profile-missing 的完整 hosted recovery、真麥克風／辨識服務與自動 PWA 更新仍未驗；既有人工 PWA fallback 不替代自動更新 PASS，Android實機已取消。sealed package、正式callback／origin／Session與scope smoke已完成，不能保留為未發布狀態。PROD canonical prosrc與NO_OP已讀回綁定；既有 ProJED 授權延續。未來跨 App 自動登入、強制同帳號、即時全域登出或 create-only credential 只有使用者重新要求時才回 ADR 審查。
 

@@ -6,7 +6,7 @@
 
 ## Documentation Map Update - 2026-10-01（DEV-133 Git 交付）
 
-DEV-133 已推送至公開 ProJED repository，並建立 PR #5：[feat(quick-task): independent auth sync and unified status UI](https://github.com/jedchang0308-jenfu/ProJED/pull/5)。PR head `codex/dev133-independent-auth-release`=`0f3ad1a75825733aab539324217ae2302bef79d4`，base `codex/dev133-production-baseline`=`afa758c35e907569f88e241e1fe72a231001e7bc`；兩個 refs 均已遠端讀回。PR 為 Open、merge state CLEAN，目前無 status checks、尚未 review／merge。未改 `main` 或既有共享分支。完整 payload review 與 PR 驗證見本次 DEV-133 release worktree 交付收據及 [REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)。
+DEV-133 已推送至公開 ProJED repository，並建立 PR #5：[feat(quick-task): independent auth sync and unified status UI](https://github.com/jedchang0308-jenfu/ProJED/pull/5)。建立 PR 時的原始 head 為 `0f3ad1a75825733aab539324217ae2302bef79d4`，base `codex/dev133-production-baseline`=`afa758c35e907569f88e241e1fe72a231001e7bc`；其後 QA／文件收斂與測試穩定修正已推送，分支包含驗證提交 `9a02030350a90c5126a27ac832d057efbe1a39c2`。最近讀回 PR 為 Open、merge state CLEAN，無 status checks 或 review；尚待 review／merge。未改 `main` 或既有共享分支。完整 payload review 與 PR 驗證見 [REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)。
 
 ## Documentation Map Update - 2026-10-01（DEV-133 統一 UI 正式驗收）
 
@@ -14,7 +14,7 @@ DEV-133 已推送至公開 ProJED repository，並建立 PR #5：[feat(quick-tas
 
 ## Documentation Map Update - 2026-10-01（DEV-133 正式同步核心 REL-014）
 
-[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md) 記錄 clean source `8376086`／release `20261001061118-144be8` 已正式發布、雙 origin 各 54/54 及正式功能 40/40 PASS，PROD migration NO_OP與manual cache recovery明確分層。官方啟動／safe-cancel／cleanup PASS；Git遠端目的地確認待回覆。canonical後續收合／最近同步UI候選排除，仍未驗收；以下較早「正式未部署」為當時快照，不覆蓋此更新。入口見 [DEV-133](dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30) 及 [QA 正式核心結果](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-正式同步核心驗收rel-014)。
+[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md) 記錄 clean source `8376086`／release `20261001061118-144be8` 已正式發布、雙 origin 各 54/54 及正式功能 40/40 PASS，PROD migration NO_OP與manual cache recovery明確分層。官方啟動／safe-cancel／cleanup PASS；此較早快照當時 Git 目的地仍待確認，後續已建立 PR #5（現況見本文件最新 DEV-133 更新）。此快照中「canonical 後續 UI 候選排除」及「以下較早正式未部署」也只代表該次檢查時的狀態。入口見 [DEV-133](dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30) 及 [QA 正式核心結果](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-正式同步核心驗收rel-014)。
 
 
 ## Documentation Map Update - 2026-10-01（DEV-133 架構定案）
@@ -244,10 +244,10 @@ R12不新增第七個runtime責任點：`public/manifest.webmanifest`是唯一ro
 | [SPEC-122](specs/SPEC-122-mobile-zero-data-quick-task.md) | current implementation authority；root bundled shortcut、雙identity、exact file surface、entry/build、UI/voice、IDB、RPC/RLS、同帳號、工作台到達、drift與stop conditions。 |
 | [ADR-050](decisions/ADR-050-mobile-quick-task-entry-and-outbox.md) | Accepted Architecture Memory + R12 closure；root shortcut與選用第二identity、manifest發佈／更新、raw HTML MPA、one root SW、account outbox及server-owned idempotency。 |
 | [QA-DEV-122](qa/QA-DEV-122-mobile-zero-data-quick-task.md) | verification authority；S15、B22～B24、W07與受影響回歸已local PASS，Level 3 HTTPS smoke已PASS；實機、DEV-096 real-SW FAIL及完整B/W/P／獨立QA-QC缺口由使用者接受為本次release殘餘風險，原始case狀態不變；第10.4.3節定義production替代結案證據。 |
-| [DEV-133](dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30) | REL-014 同步核心及後續統一 UI 正式發布／驗收 PASS；Git 遠端交付待確認目的地。 |
-| [SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md) | Rev 9／架構已定案；共用帳號、各自 SDK Session、owner／claim／receipt 契約及統一狀態 UI 已落實。同步核心與後續 UI 正式驗收 PASS；Git 遠端交付待確認目的地。 |
+| [DEV-133](dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30) | REL-014 同步核心及後續統一 UI 正式發布／驗收 PASS；PR #5 Open／CLEAN，待 review／merge。 |
+| [SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md) | Rev 9／架構已定案；共用帳號、各自 SDK Session、owner／claim／receipt 契約及統一狀態 UI 已落實。同步核心與後續 UI 正式驗收 PASS；PR #5 待 review／merge。 |
 | [ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md) | Accepted Rev 3；取代跨 App OAuth Server，採第一方使用者 RLS、各 origin Session、owner/context交易及普通登入相容修正。 |
-| [QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md) | Rev 9：原正式同步核心 40/40；後續 UI 本機 SIMULATION 25/25、正式匿名 10/10、雙 origin 各 54/54 PASS。N01～N10 證據分層及人工 PWA recovery 邊界見 QA；Git 遠端交付待確認。 |
+| [QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md) | Rev 9：原正式同步核心 40/40；後續 UI 本機 SIMULATION 25/25、正式匿名 10/10、雙 origin 各 54/54 PASS。N01～N10 證據分層及人工 PWA recovery 邊界見 QA；PR #5 待 review／merge。 |
 | [SPEC-034](specs/SPEC-034-fast-start-pwa-install-guidance.md) | 一般 ProJED install/update 與 QuickCaptureShell 退役 authority；DEV-122 為 compatible extension。 |
 | [SPEC-039](specs/SPEC-039-task-filter-core-and-workbench-profiles.md) | account-owned 未歸位與完整工作台 authority；quick entry 只新增來源。 |
 | [SPEC-115](specs/SPEC-115-blank-task-creation-contract.md) | blank-task content authority；quick RPC 必須 parity，description absent。 |

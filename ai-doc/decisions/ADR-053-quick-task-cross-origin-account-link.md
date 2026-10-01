@@ -1,6 +1,6 @@
 # ADR-053：ProJED 雙 App 共用帳號、各自登入與依帳號同步
 
-狀態：**Accepted — Rev 3（2026-10-01；產品方向已採用，工程架構已定案）**。本版取代 2026-09-30 的跨 App OAuth Server／public client 銜接決策；文件決策完成不代表程式、TEST 或正式環境已完成切換。
+狀態：**Accepted — Rev 3（2026-10-01；產品方向已採用，工程架構已定案）**。本版取代 2026-09-30 的跨 App OAuth Server／public client 銜接決策；此處記錄決策當時的狀態。現行實作、TEST、正式發布與 PR 交付進度見本 ADR 後續 execution update 及 REL-014。
 
 關聯：[DEV-133](../dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30)、[SPEC-133](../specs/SPEC-133-quick-task-shared-identity-sync.md)、[QA-DEV-133](../qa/QA-DEV-133-quick-task-shared-identity-sync.md)、[SPEC-122](../specs/SPEC-122-mobile-zero-data-quick-task.md)、[ADR-050](ADR-050-mobile-quick-task-entry-and-outbox.md)。沿用既有文件路徑與 DEV ID，避免續接引用失效。
 
@@ -35,7 +35,7 @@ DEV-131 的雙 PWA origin／manifest identity 保留。不同 origin 的 Session
 - 「移除跨 App OAuth」不等於移除 Google OAuth 登入。保留 provider callback／取消登入／SDK Session 更新及原有 claim nonce 防護；取消的是 ProJED 作為 OAuth Server 的那一層。
 - `oauthClient.ts`、consent entry、自製 OAuth token store 及 `VITE_QUICK_TASK_OAUTH_*` 分支已在 HEAD `e868611` 移除；舊版只保留為歷史證據，不讀取、轉換或搬移舊 OAuth token。改版後需普通登入，原 IDB owner／captureId 保留，A 記錄只有 A 可續送。
 - TEST 曾套用 DEV-122 quick RPC 與 `20260930155041_dev_133_quick_oauth_client_boundary_v2.sql`，後者把 RPC 改為 `SECURITY DEFINER`。不得刪除／改寫已套用 migration 歷史。目標恢復 DEV-122 的 `SECURITY INVOKER`／原有 owner RLS；必要修正使用新 forward-only migration，不改 task／receipt 資料、不新增權限。既有 OAuth restrictive policies 與未使用的 private allowlist 可保留為停用歷史設施，不為清理而解除保護或刪表。
-- 2026-10-01 metadata／TEST＋PROD preflight update：TEST correction source `20261001090000_dev_133_quick_rpc_security_invoker.sql` 對應 remote version `20261001045945`；function readback 為 `SECURITY INVOKER`／empty search_path，body MD5 `d80a1ea6932806c0cfa82fce1b73a842`，task／receipt ACL、receipt RLS 及既有資料不變。E24 真 TEST RPC 保留 U+200B 並讀回同 ID receipt。PROD `ordinary-session-readiness/auth-result.json` 的 `/auth/v1/user`=200 且三項 actor match；`database-before.json` 記錄 canonical DEV-122 invoker prosrc MD5 `3ef7e8731dd6893594e0d66918ddfe16`。與 correction 的差異僅註解，故目前 PROD correction 為條件 no-op；package 須綁定該 readback 與 no-op 決策。正式不得單獨補套 retired v2。REL-014 已完成 sealed package／NO_OP綁定、正式核心40/40及後續Rev9 UI发布驗收；分層範圍見 QA 正式結果，Git遠端交付仍待。
+- 2026-10-01 metadata／TEST＋PROD preflight update：TEST correction source `20261001090000_dev_133_quick_rpc_security_invoker.sql` 對應 remote version `20261001045945`；function readback 為 `SECURITY INVOKER`／empty search_path，body MD5 `d80a1ea6932806c0cfa82fce1b73a842`，task／receipt ACL、receipt RLS 及既有資料不變。E24 真 TEST RPC 保留 U+200B 並讀回同 ID receipt。PROD `ordinary-session-readiness/auth-result.json` 的 `/auth/v1/user`=200 且三項 actor match；`database-before.json` 記錄 canonical DEV-122 invoker prosrc MD5 `3ef7e8731dd6893594e0d66918ddfe16`。與 correction 的差異僅註解，故目前 PROD correction 為條件 no-op；package 須綁定該 readback 與 no-op 決策。正式不得單獨補套 retired v2。REL-014 已完成 sealed package／NO_OP綁定、正式核心40/40及後續Rev9 UI发布驗收；分層範圍見 QA 正式結果，PR #5 已建立且 OPEN／CLEAN，review／merge 待完成。
 - 舊 B0／B1 證據保留於 [QA 歷史紀錄](../qa/QA-DEV-133-quick-task-shared-identity-sync.md#dev-133-legacy-oauth-evidence)及 [2026-09-30 補充](../qa/DEV-133-execution-boundary-addendum-20260930.md)。它們不代表新登入流程已驗收。正式 OAuth Client 註冊不再是 DEV-133 上線前置。
 
 ## 工程定案與責任邊界（2026-10-01）
@@ -46,7 +46,7 @@ unbound 在登入後另行明確確認目的帳號，標準 callback 不自動�
 
 quick 不另做 profile／workspace 開通；缺依賴導回主程式設定，同帳號人工重試。普通 Session 沿用既有 RLS，沒有 client-level create-only 保證。因 DB 升版，回復 client 必須能讀 v2；不得以刪 DB／清未同步任務解決相容性。
 
-Architecture Closure Review 已完成 source／build env／RPC／RLS／migration／既有測試比對，文件為 **RD Implementation Ready；架構定案：已定案**。TEST29/29、正常Google cancel21/21、correction讀回及post-correction7/7已PASS；[REL-014](../release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)記錄正式同步核心40/40、後續UI本機25/25／正式匿名10/10及兩origin各54/54。Git遠端交付待完成。各case的hosted／injected層與殘餘以QA最新正式結果為準，不以metadata或assertion總數替代功能證據；不宣稱自動PWA更新、真麥克風或取消的Android實機PASS。舊driver失敗保留。實作只允許SPEC既定責任面，owner／API／權限／origin變更或新增認證服務須回技術審查。
+Architecture Closure Review 已完成 source／build env／RPC／RLS／migration／既有測試比對，文件為 **RD Implementation Ready；架構定案：已定案**。TEST29/29、正常Google cancel21/21、correction讀回及post-correction7/7已PASS；[REL-014](../release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)記錄正式同步核心40/40、後續UI本機25/25／正式匿名10/10及兩origin各54/54。PR #5 已交付且 OPEN／CLEAN；review／merge 尚待完成。各case的hosted／injected層與殘餘以QA最新正式結果為準，不以metadata或assertion總數替代功能證據；不宣稱自動PWA更新、真麥克風或取消的Android實機PASS。舊driver失敗保留。實作只允許SPEC既定責任面，owner／API／權限／origin變更或新增認證服務須回技術審查。
 
 ## 成功判定與重新審查條件
 
