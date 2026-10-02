@@ -182,5 +182,33 @@ async page => {
     return {screenshots, widths:[320,390,1440], keyboard:true};
     } finally { await uiContext.close(); }
   });
+  await check('R11-quick-shell-activates-shared-update-at-safe-boundary', async () => {
+    await page.request.get(origin + '/__dev134/switch?release=A');
+    const quickContext = await context.browser().newContext();
+    const quickPage = await quickContext.newPage(); attach(quickPage);
+    try {
+      await quickPage.goto(origin + '/quick-task/?install=1');
+      await quickPage.waitForSelector('#quick-task-title:enabled', { timeout: 20000 });
+      await quickPage.evaluate(() => navigator.serviceWorker.ready);
+      await quickPage.reload();
+      await quickPage.waitForSelector('#quick-task-title:enabled', { timeout: 20000 });
+      await quickPage.waitForFunction(() => Boolean(navigator.serviceWorker.controller), null, { timeout: 20000 });
+      const before = await quickPage.locator('meta[name="projed-shell-version"]').getAttribute('content');
+      assert(before === a, 'quick shell did not start at build A', before);
+      const updaterLoaded = await quickPage.evaluate(() => performance.getEntriesByType('resource').some(entry => /pwaUpdateService[^/]*\.js/u.test(entry.name)));
+      assert(updaterLoaded, 'quick shell did not load the deferred shared updater');
+      await quickPage.request.get(origin + '/__dev134/switch?release=B');
+      await quickPage.evaluate(() => { void navigator.serviceWorker.getRegistration('/').then(registration => registration?.update()); });
+      await quickPage.waitForFunction(expected => document.querySelector('meta[name="projed-shell-version"]')?.getAttribute('content') === expected, b, { timeout: 45000 });
+      const after = await quickPage.evaluate(() => ({
+        version: document.querySelector('meta[name="projed-shell-version"]')?.getAttribute('content'),
+        controlled: Boolean(navigator.serviceWorker.controller),
+        titleEnabled: !document.querySelector('#quick-task-title')?.disabled,
+        route: location.pathname,
+      }));
+      assert(after.version === b && after.controlled && after.titleEnabled && after.route === '/quick-task/', 'quick update did not converge to B', after);
+      return { before, after, updaterLoaded, singleSharedWorker: true };
+    } finally { await quickContext.close(); }
+  });
   return {ok:results.every(item=>item.ok),results,diagnostics};
 }

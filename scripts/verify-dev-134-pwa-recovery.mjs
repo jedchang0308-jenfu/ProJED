@@ -10,7 +10,7 @@ import { assertLiveAssetCompatibility } from './release/production-release.mjs';
 import { PRODUCTION_CONTRACT, contractDigest, sha256 } from './release/production-contract.mjs';
 
 const root = process.cwd();
-const output = path.join(root, 'output', 'qa', 'dev-134');
+const output = path.resolve(process.env.DEV134_REPORT_DIR ?? path.join(root, 'output', 'qa', 'dev-134'));
 fs.mkdirSync(output, { recursive: true });
 const results = [];
 const check = async (name, work) => {
@@ -18,6 +18,8 @@ const check = async (name, work) => {
   catch (error) { results.push({ name, ok: false, error: error.message }); }
 };
 const compile = source => ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+const quickMain = fs.readFileSync('src/quickTask/main.ts', 'utf8');
+const quickPwaLifecycle = quickMain.slice(quickMain.indexOf('const installQuickPwaLifecycle'), quickMain.indexOf('const needsRecovery'));
 const transactionModule = { exports: {} };
 vm.runInNewContext(compile(fs.readFileSync('src/services/pwaUpdateTransaction.ts', 'utf8')), { exports: transactionModule.exports, module: transactionModule });
 const tx = transactionModule.exports;
@@ -55,6 +57,14 @@ function serviceFixture() {
   return { api: module.exports, localStorage, sessionStorage, navigations, emit: name => workerListeners.get(name)?.({ isUpdate: true }), latest: value => { latest = value; }, offline: value => { networkFailure = value; }, safe: value => { gateSafe = value; } };
 }
 const transactionKey = 'projed.pwa-update.transaction.v1';
+await check('R11-quick-shell-starts-shared-update-lifecycle-after-reload-safety', () => {
+  assert.ok(quickMain.includes('await installQuickReloadSafety(() => ({'));
+  assert.ok(quickPwaLifecycle.includes('void reloadSafetyReady.then(async (ready) => {'));
+  assert.ok(quickPwaLifecycle.indexOf('if (!ready)') < quickPwaLifecycle.indexOf("await import('../services/pwaUpdateService')"));
+  assert.ok(quickPwaLifecycle.includes('setupPwaLifecycle();'));
+  assert.ok(quickMain.includes('installQuickPwaLifecycle(installReloadSafety());'));
+  assert.ok(!quickMain.includes("from '../services/pwaUpdateService'"));
+});
 await check('R01-failed-replay-preserves-original-reason-and-stops-background-apply', async () => {
   const f = serviceFixture();
   f.localStorage.setItem(transactionKey, JSON.stringify(makeFailed()));

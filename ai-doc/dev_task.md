@@ -7555,9 +7555,9 @@ R14 current evidence為static 40/40與browser 27/27，新增S40／B52 armed pare
 
 ## DEV-134：PWA 載入失敗恢復與前版資產相容
 
-- 狀態：本地實作及受影響回歸完成；Medium；開發點，父 DEV-041／096／097；正式發布及驗收待執行。
-- 人類原始授權：本 chat「請依此修復」「繼續」，目標 ProJED；依本 chat 環境授權規則執行本地實作／驗證，本輪尚無正式部署明確指令。
+- 狀態：quick-task 更新生命週期補正已實作；R01～R11 本地回歸及部署授權已到位；Medium；開發點，父 DEV-041／096／097；正式發布與手機實機結果待本輪完成。
+- 人類原始授權：本 chat「手機APP沒有變更」後要求修正；此前明確要求推送遠端並部署到 live，並授權使用 ProJED-TEST／短期 Firebase 預覽補齊驗證及部署 live。授權範圍為本 canonical ProJED repo 與同一 Firebase live／preview 資源。
 - Authority：SPEC-041 DEV-134 addendum（frozen R01～R10）；ADR-047 架構保留；DEV-083 sealed artifact 兼容。
-- Source boundary：canonical `C:\VIBE CODING\ProJED\ProJED`，branch `持續優化3`，起始 HEAD `57f8c8d3a751c8698a0e28539a9187868aff1873`。既有 DEV-133 等 dirty changes 保留；只修改本輪 PWA／發布相容責任面與必要索引／verifier，未 stage／commit。
-- 驗證：service／artifact／Hosting 16/16、真 SW／UI browser 9/9、TypeScript、targeted lint PASS；DEV-096 26/26、DEV-097 23/23、DEV-083 release mock regression PASS。RD／本地 QA 分階段蒐證，不宣稱獨立 QC。詳見 [本地驗證紀錄](qa/QA-DEV-134-pwa-recovery-local-verification.md)，證據 `output/qa/dev-134/`、截圖 `output/playwright/dev-134/`；task-owned browser／runtime 已清理。
-- 完成條件：R01～R10 必要本地層級證據到位；正式環境 verification 留待另行 release。不得以本地 PASS 覆寫歷史正式 cache failure。
+- Source boundary：canonical `C:\VIBE CODING\ProJED\ProJED`，branch `持續優化3`，本輪起始 HEAD `a7bd84a22d0a00193b2699491729d5e40a3325d8`。保留原工作樹變更；限本輪 quick-task PWA lifecycle、直接回歸、SPEC／QA／索引更新。
+- 驗證：DEV-122 static 26/26、DEV-134 static 17/17、真 Workbox A→B browser 10/10（涵蓋 R11）、TypeScript、targeted ESLint 及 isolated build PASS；DEV-083 release regression 待同源 sealed release 執行。RD／本地 QA 分階段蒐證，不宣稱獨立 QC。詳見 [本地驗證紀錄](qa/QA-DEV-134-pwa-recovery-local-verification.md)，證據 `output/qa/dev-134/2026-10-02-quick-update/`、截圖 `output/playwright/dev-134/2026-10-02-quick-update-final/`；task-owned browser／runtime 已清理。
+- 完成條件：R01～R11 本地層級證據、同源 live deployment／雙 origin readback／功能 smoke；手機既有安裝仍需使用者關閉舊 app 後重開確認新 shell。不得以本地 PASS 覆寫歷史正式 cache failure，也不得將網站 smoke 宣稱為手機實機驗收。

@@ -33,6 +33,21 @@ Canonical repo `C:\VIBE CODING\ProJED\ProJED`，branch `持續優化3`，起始 
 
 `output/qa/dev-134/recovery-result.json`：16/16；`browser-result.json`：9/9，source digest 在 browser run 前後一致。Browser requests 含兩分頁自己的 recovery GET 與舊 controller 的 network bypass GET。`output/playwright/dev-134/` 保存代表截圖；已目視檢查 320 更新失敗與 390 載入失敗畫面。
 
+## 2026-10-02 Quick Task 更新生命週期補正
+
+使用者回報正式站手機 App 仍呈現舊版。遠端 fresh-browser readback 在兩個 Firebase origin 都是同一 current release；source review 找到 quick MPA 雖註冊共用 root worker，卻未啟動 `pwaUpdateService`。從 quick shortcut 開啟不會執行 main SPA lifecycle，這使 waiting worker 缺少 quick client 的版本檢查與安全套用入口。
+
+修正位於 `src/quickTask/main.ts`：先完成 quick reload-safety owner 註冊，再延遲匯入共用更新器。`vite build --mode test` isolated build PASS；quick bundle `quickTask-*.js` 33.14 kB（gzip 11.63 kB），`pwaUpdateService-*.js` 另成延遲 chunk 34.44 kB（gzip 10.70 kB），確認不會進入首屏 quick graph。沒有新增 worker、遠端資料寫入或使用者資料清除。
+
+| 驗收 | 證據 | 結果／限制 |
+|---|---|---|
+| Q01 | `scripts/verify-dev-122-mobile-zero-data-quick-task.ts`，指定隔離 build 輸出 | 26/26 static assertions PASS；含 safety-ready 後才載入共用 updater、不靜態引入 updater |
+| Q02 | `scripts/verify-dev-134-pwa-recovery.mjs` | 17/17 PASS；R11 quick-shell lifecycle source contract PASS |
+| Q03 | `scripts/verify-dev-134-pwa-recovery-browser.mjs` 的真生成 Workbox A→B | 10/10 PASS；A controlled quick page讀到延遲 updater，觸發更新後以 B release marker 重載，title control enabled 並留在 `/quick-task/`；R01～R10 同輪 PASS |
+| Q04 | TypeScript、變更檔 ESLint、isolated production-mode test build | 均 PASS；建置輸出獨立留在 `output/qa/dev-134/2026-10-02-quick-update/build-test/` |
+
+瀏覽器證據位於 `output/qa/dev-134/2026-10-02-quick-update/browser-final/`；R11 截圖與測試 runtime 在 `output/playwright/dev-134/2026-10-02-quick-update-final/` 及同層 runtime 收據。測試 browserClosed／portReleased 均為 true。首次 R11 因本機 fixture 未將 `/quick-task/` 正規化成 `quick-task/index.html` 而 timeout；修正 fixture 後全套重跑 PASS，初次失敗證據保留於 `browser-retry/`。這是隔離 Chromium／本機雙 build 驗證，不代表使用者 Android／iPhone 實機驗收。
+
 初次 browser R02 的 evaluate promise 被成功導覽中斷，及混用 lifecycle／synthetic UI 的 timer 競爭保留於初次收據／本輪工作紀錄；改以 loaded target readback 及獨立 UI context 驗證，未取消行為 oracle。正式最初截圖／REL-014 failure 保留。
 
 ## 命令與清理

@@ -19,6 +19,7 @@ const read = (path: string) => readFileSync(resolve(path), 'utf8');
 const quickHtml = read('quick-task/index.html');
 const rootHtml = read('index.html');
 const quickMain = read('src/quickTask/main.ts');
+const quickPwaLifecycle = quickMain.slice(quickMain.indexOf('const installQuickPwaLifecycle'), quickMain.indexOf('const needsRecovery'));
 const vite = read('vite.config.js');
 const firebase = read('firebase.json');
 const rootManifestSource = read('public/manifest.webmanifest');
@@ -122,6 +123,12 @@ check('S15', rootManifest.id === '/'
   && appInstallAssistant.includes('與主程式相同的 Google 帳號登入')
   && appInstallAssistant.includes('data-quick-task-install-link="true"'));
 check('S16', vite.includes('app-shell-meta.json') && vite.includes('projed-shell-version') && pwaUpdate.includes('/app-shell-meta.json?projed_update_check='));
+check('S16-quick-shared-update-lifecycle', quickPwaLifecycle.includes('void reloadSafetyReady.then(async (ready) => {')
+  && quickPwaLifecycle.includes("await import('../services/pwaUpdateService')")
+  && quickPwaLifecycle.includes('setupPwaLifecycle();')
+  && quickMain.includes('installQuickPwaLifecycle(installReloadSafety());')
+  && !quickMain.includes("from '../services/pwaUpdateService'"),
+  'the quick shell loads the shared updater only after reload-safety readiness, without adding Workbox to the initial graph');
 check('S17', migration.includes("QT_EXISTING_ROW_INVALID") && migration.includes('where owner_id = v_owner and id = p_capture_id'));
 check('S18', migration.includes('v_order bigint') && migration.includes('v_order > 2147483647') && migration.includes("QT_ORDER_EXHAUSTED"));
 check('S19', outbox.includes("const nextState: QuickCaptureState = exhausted ? 'failed_permanent' : state")

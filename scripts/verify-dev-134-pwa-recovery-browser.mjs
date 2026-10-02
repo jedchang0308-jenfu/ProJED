@@ -8,13 +8,13 @@ import { build } from 'vite';
 // Small, isolated production-mode adapter builds: actual service, prompt and
 // generated Workbox configuration, with no backend or user browser profile.
 const root = process.cwd();
-const output = path.join(root, 'output', 'qa', 'dev-134');
-const visuals = path.join(root, 'output', 'playwright', 'dev-134');
+const output = path.resolve(process.env.DEV134_REPORT_DIR ?? path.join(root, 'output', 'qa', 'dev-134'));
+const visuals = path.resolve(process.env.DEV134_VISUALS_DIR ?? path.join(root, 'output', 'playwright', 'dev-134'));
 const fixture = path.join(output, 'browser-fixture');
 fs.mkdirSync(fixture, { recursive: true });
 fs.mkdirSync(visuals, { recursive: true });
 const envDir = path.join(fixture, 'env'); fs.mkdirSync(envDir, { recursive: true });
-const sourceFiles = ['src/services/pwaUpdateService.ts', 'src/services/pwaUpdateTransaction.ts', 'src/components/AppUpdatePrompt.tsx', 'vite.config.js', 'firebase.json'];
+const sourceFiles = ['src/services/pwaUpdateService.ts', 'src/services/pwaUpdateTransaction.ts', 'src/features/quickTaskCapture/reloadSafety.ts', 'src/quickTask/main.ts', 'quick-task/index.html', 'src/components/AppUpdatePrompt.tsx', 'vite.config.js', 'firebase.json'];
 const digest = file => createHash('sha256').update(fs.readFileSync(path.join(root, file))).digest('hex');
 const source = Object.fromEntries(sourceFiles.map(file => [file, digest(file)]));
 const runId = randomUUID().slice(0, 8);
@@ -69,7 +69,7 @@ try {
             return code + '\nexport const __dev134 = { check: checkForAppShellUpdate, reconcile: reconcilePendingTransaction, set: setUpdateState, registration: () => registeredServiceWorker };';
           }
         },
-      }], build: { outDir: path.join(fixture, label), emptyOutDir: true, rollupOptions: { input: { main: path.join(root, 'index.html') } } },
+      }], build: { outDir: path.join(fixture, label), emptyOutDir: true, rollupOptions: { input: { main: path.join(root, 'index.html'), quickTask: path.join(root, 'quick-task/index.html') } } },
     });
   }
 } finally {
@@ -85,7 +85,8 @@ const server = http.createServer((req, res) => {
   if (url.pathname === '/__dev134/switch') { active = url.searchParams.get('release') === 'B' ? 'B' : 'A'; res.end(active); return; }
   if (url.pathname === '/__dev134/requests') { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(requests)); return; }
   requests.push({ url: req.url, release: active, time: Date.now() });
-  const relative = decodeURIComponent(url.pathname).replace(/^\/+/, '') || 'index.html';
+  let relative = decodeURIComponent(url.pathname).replace(/^\/+/, '') || 'index.html';
+  if (relative === 'quick-task' || relative.endsWith('/')) relative = `${relative.replace(/\/$/u, '')}/index.html`;
   let file = path.resolve(fixture, active, relative);
   if (!file.startsWith(path.join(fixture, active) + path.sep)) { res.writeHead(400); res.end(); return; }
   // The shipping retention implementation is independently hash-tested. This

@@ -267,14 +267,36 @@ const registerSharedRootWorker = () => {
   });
 };
 
-const installReloadSafety = () => {
-  void installQuickReloadSafety(() => ({
-    draft: Boolean(titleInput.value.trim()),
-    composing: isComposing,
-    voice: Boolean(voiceSession),
-    localCommit: localCommitInFlight,
-    claim: claimInFlight,
-  })).catch(() => undefined);
+const installReloadSafety = async () => {
+  try {
+    await installQuickReloadSafety(() => ({
+      draft: Boolean(titleInput.value.trim()),
+      composing: isComposing,
+      voice: Boolean(voiceSession),
+      localCommit: localCommitInFlight,
+      claim: claimInFlight,
+    }));
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const installQuickPwaLifecycle = (reloadSafetyReady: Promise<boolean>) => {
+  if (!import.meta.env.PROD || typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+  void reloadSafetyReady.then(async (ready) => {
+    if (!ready) {
+      registerSharedRootWorker();
+      return;
+    }
+    try {
+      const { setupPwaLifecycle } = await import('../services/pwaUpdateService');
+      setupPwaLifecycle();
+    } catch {
+      // Keep the optional worker available if update orchestration cannot load.
+      registerSharedRootWorker();
+    }
+  });
 };
 
 const needsRecovery = (record: QuickCaptureRecord) => record.state !== 'synced'
@@ -767,8 +789,7 @@ titleInput.addEventListener('input', () => {
 
 enableControls();
 const removeQuickInstallGuide = installQuickInstallGuide(document.querySelector<HTMLElement>('.quick-task-shell')!);
-registerSharedRootWorker();
-installReloadSafety();
+installQuickPwaLifecycle(installReloadSafety());
 void (async () => {
   const auth = await getAuthApi();
   await auth.completeQuickOAuthCallback().catch(() => {

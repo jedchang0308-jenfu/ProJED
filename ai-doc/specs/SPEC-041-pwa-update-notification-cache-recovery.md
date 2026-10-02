@@ -772,6 +772,12 @@ Spec Impact：Intentional replacement。取代 failed 只能清快取的實際�
 - Hosting /assets 缺漏不再 rewrite 到 index.html；quick-task 入口及正常 SPA 導覽保持原 route contract。
 - 不含 production deploy、遠端變更、強制更新、舊 cache 回收、schema／Auth／業務資料變更。現有其他 dirty changes 不 stage／還原；本地完整 app build 不代表可直接發布該 dirty 工作樹。
 
+### 2026-10-02 Quick Task 共用更新生命週期補正
+
+Quick Task 是獨立 MPA document，但與主程式共用同源 `/sw.js`。舊實作只用原生 `navigator.serviceWorker.register()` 註冊 worker，沒有在 quick shell 啟動 `pwaUpdateService`；從主程式捷徑或快速 App 圖示開啟時，更新 worker 可能停在 waiting，quick HTML 仍由舊 precache 回應。
+
+快速頁現在先註冊自己的 reload-safety owner，再以延遲匯入載入共用 `setupPwaLifecycle()`。空白且安全的頁面會沿既有 latest-version／waiting-worker／安全重載流程收斂新版；草稿、語音、認領或本機保存進行中仍由同一 safety gate 阻擋切換。更新器不加入 quick 首屏 graph、不新增第二 worker、不清除任何帳號、outbox 或其他儲存。驗收契約為 R11；本機產生的 Workbox build A→B 實測見 [QA-DEV-134](../qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-02-quick-task-更新生命週期補正)。
+
 ### QA frozen acceptance
 
 | ID | 前置／操作 | 預期／證據 |
@@ -786,5 +792,6 @@ Spec Impact：Intentional replacement。取代 failed 只能清快取的實際�
 | R08 | 缺 /assets 檔案、quick-task、SPA route | assets 404；其他 route contract 正常；Firebase matcher＋local delivery；正式 readback 待發版 |
 | R09 | update/load/cache failure、normal dirty prompt，三 viewport／鍵盤 | 文案／原因／CTA 正確，無 overflow；UI screenshot／量測 |
 | R10 | A→B、背景往返、重整、多分頁與錯誤重試前後 sentinel | Session／草稿／localStorage／業務 IDB／舊 release cache 保留；真 browser |
+| R11 | 以受控 build A 開啟 `/quick-task/`，切換候選至 B 並觸發 worker update | quick shell 延遲載入共用 updater，在安全邊界由 A 收斂至 B；title control 可用、仍留在 quick route、單一共用 root worker；真 Workbox browser |
 
 QC 在候選 source freeze 後執行；最初正式截圖 failure 保留。fixture 只支持實際層級，不將新 profile／匿名 smoke 代替使用者既有 profile 或正式 lifecycle。結果與精確命令由 DEV-134 記錄。

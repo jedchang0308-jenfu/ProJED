@@ -1,5 +1,9 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-10-02（手機 Quick Task 舊版快取補正）
+
+使用者回報手機 App 仍呈現舊 UI。檢查確認 Firebase 兩個正式 origin 的網站版本相同；quick-task MPA 未啟動共用 PWA updater，導致 standalone shortcut 缺少安全套用 waiting worker 的版本更新流程。已在 reload-safety owner 就緒後延遲載入共用 updater，保留編輯／保存中的本機任務。DEV-122 static 26/26、DEV-134 static 17/17、真 Workbox A→B browser 10/10（R01～R11）、TypeScript、targeted ESLint、隔離建置均 PASS。正式部署與雙 origin readback 正在進行；手機既有安裝需關閉舊 app 再重開才會載入新 shell，尚未宣稱實機驗收。詳見 [DEV-134](dev_task.md#dev-134pwa-載入失敗恢復與前版資產相容)、[SPEC-041](specs/SPEC-041-pwa-update-notification-cache-recovery.md)、[QA-DEV-134](qa/QA-DEV-134-pwa-recovery-local-verification.md)。
+
 ## Documentation Map Update - 2026-10-02（分支部署前本機驗證）
 
 目前 `持續優化3` 分支全部程式碼及開發文件的本機候選已完成 TypeScript、變更程式 ESLint、隔離 test／production-mode compile，以及 DEV-133 auth contract、DEV-034、DEV-038、DEV-122 static、DEV-083 release-gate mock 回歸；DEV-133 統一狀態面板 browser simulation 25/25 PASS。production-mode 編譯使用本機合成 release id，不等於 sealed production artifact 或 current-live provenance；hosted／production smoke、獨立 QC 與正式部署未執行。DEV-133 仍在執行中，狀態及完整限制見 [QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-02-分支部署前本機驗證) 與 [DEV-133](dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30)。
