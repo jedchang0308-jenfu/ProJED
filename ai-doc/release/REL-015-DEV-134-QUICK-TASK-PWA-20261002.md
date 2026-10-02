@@ -1,8 +1,8 @@
 # REL-015 — DEV-134 Quick Task PWA live update lifecycle
 
-日期：2026-10-02  
-狀態：Live deployed；dual-origin readback 與正式網站 browser smoke PASS。手機既有安裝仍待使用者實機確認。  
-專案／環境：ProJED／Firebase Hosting production live (`projed-cc78d`)  
+日期：2026-10-02
+狀態：Live deployed；dual-origin readback 與正式網站 browser smoke PASS。手機既有安裝仍待使用者實機確認。
+專案／環境：ProJED／Firebase Hosting production live (`projed-cc78d`)
 來源任務：DEV-134；release pipeline：DEV-083；規格：SPEC-041
 
 ## 發布內容
