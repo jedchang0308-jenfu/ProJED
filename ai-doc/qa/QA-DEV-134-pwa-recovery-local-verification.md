@@ -2,6 +2,12 @@
 
 日期：2026-10-01 起，2026-10-02 更新。原始記錄是部署前本地驗證快照；本文件末尾的 2026-10-02 發布後補記提供後續 release 與 live evidence。正式網站 smoke PASS；使用者手機既有安裝尚未實機驗證。
 
+## 2026-10-02 舊安裝 bootstrap 重現
+
+使用實際 sealed 舊版 `20261002013716-5cf1b1` 與 current `20261002054439-a538f0`，隔離 Chromium 模擬 Android installed；封鎖所有非 fixture origin 的請求。保留另一舊 client 時，普通 shortcut 仍讀舊版；network-bypass URL 可讀新版但 waiting worker 未自動啟用，回 shortcut 又退回舊版。關閉全部 fixture origin clients 再開原 shortcut 後，新版 marker／三點選單／本機已建立任務／localStorage sentinel 均讀回，task details 展開，page errors=0。
+
+結果 `output/qa/dev-134/legacy-bootstrap/result.json`／代表圖 `output/playwright/dev134-legacy-network-bootstrap.png`；初次 harness selector 量測錯誤保留為 `result-initial.json`／`run-initial.log`，不能當 UI failure。兩正式更新連結仍回相同 live release/source/hash；runtime.json 的 browserClosed／portReleased=true。沒有產品 source 改動、沒有遠端 RPC 或使用者 browser／手機操作。這證明一條保留資料的人工 bootstrap 流程，沒有證明舊安裝已自動升級或使用者手機一定存在其他 client。操作指引及既有說法更正見 [REL-015 bootstrap 補記](../release/REL-015-DEV-134-QUICK-TASK-PWA-20261002.md#2026-10-02-舊安裝-bootstrap-與操作指引更正)。
+
 ## 範圍與來源
 
 歷史快照（2026-10-01）：人類指令為本 chat「請依此修復」「繼續」，當時執行本地程式／設定／文件／驗證，沒有正式部署授權。2026-10-02 後續收到 live 部署明確授權，部署證據記於本文件發布後補記及 [REL-015](../release/REL-015-DEV-134-QUICK-TASK-PWA-20261002.md)。

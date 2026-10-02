@@ -7553,6 +7553,8 @@ R14 current evidence為static 40/40與browser 27/27，新增S40／B52 armed pare
 
 ## DEV-134：PWA 載入失敗恢復與前版資產相容
 
+- 2026-10-02 舊安裝補驗：真舊 sealed artifact → current artifact、保留其他同 origin client 的情境已重現。network-bypass 取得新 HTML，但 shortcut 仍可回舊版；關閉所有相關 ProJED 分頁與 App 後再開可讀新版，已建立本機任務保留。更正先前只關 App 的指引；fresh browser PASS 不代表 legacy bootstrap 自動完成。證據／操作見 [QA-DEV-134 bootstrap](qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-02-舊安裝-bootstrap-重現)、[REL-015](release/REL-015-DEV-134-QUICK-TASK-PWA-20261002.md#2026-10-02-舊安裝-bootstrap-與操作指引更正)。此輪產品 source/live 不變；手機自身 client 狀態與實機結果仍未確認。
+
 - 狀態：quick-task 更新生命週期補正已部署 live，雙正式 origin readback 與正式網站 browser smoke PASS；手機既有安裝的實機重新開啟確認仍待使用者回報。Medium；開發點，父 DEV-041／096／097。
 - 人類原始授權：本 chat「手機APP沒有變更」後要求修正；此前明確要求推送遠端並部署到 live，並授權使用 ProJED-TEST／短期 Firebase 預覽補齊驗證及部署 live。授權範圍為本 canonical ProJED repo 與同一 Firebase live／preview 資源。
 - Authority：SPEC-041 DEV-134 addendum（frozen R01～R10）；ADR-047 架構保留；DEV-083 sealed artifact 兼容。

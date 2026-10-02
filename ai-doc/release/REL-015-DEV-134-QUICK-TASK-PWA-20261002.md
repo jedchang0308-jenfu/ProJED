@@ -34,7 +34,7 @@
 
 ## 影響與後續確認
 
-未執行 live database／business data writes，未變更 Auth／IAM，未清除使用者資料。既有手機安裝需要完整關閉舊 app 後重新開啟一次以載入新版 shell；手機端結果待使用者確認。不得要求清除資料或解除安裝，以免影響尚未同步任務。
+未執行 live database／business data writes，未變更 Auth／IAM，未清除使用者資料。更正先前「只完整關閉舊 app 後重新開啟即可」的指引：同 origin 的瀏覽器分頁仍可能維持舊 worker，需連同相關 ProJED 分頁關閉；詳見下方舊安裝 bootstrap 補記。手機端結果待使用者確認。不得要求清除資料或解除安裝，以免影響尚未同步任務。
 
 Level 3 與 candidate 是短期驗證 channel，均預定於 2026-10-03 到期。正式 live 保留前一版 release 作回復錨點；未執行回復。
 
@@ -52,3 +52,11 @@ Level 3 與 candidate 是短期驗證 channel，均預定於 2026-10-03 到期�
 - UI fixture 只存於匿名 disposable browser contexts 的本機 IDB，remote RPC writes=0；各 contexts／task-owned sessions 已關閉，task-owned preview 4175 已釋放。沒有更動使用者裝置資料或既有 browser 分頁。
 
 Android／iPhone UA 與 installed display-mode 使用桌面 Chromium 模擬；真手機重新開啟確認仍待使用者回報。不同裝置的未綁定本機任務數量可不同，不能以 localhost 的一筆記錄推論手機也必須存在一筆。首輪正式及本機失敗紀錄保留於 [QA-DEV-133](../qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-02-手機-installed-ui-一致性補正)，不以新 PASS 覆寫。
+
+## 2026-10-02 舊安裝 bootstrap 與操作指引更正
+
+使用者再次回報手機沒有變更。以保存的真 sealed artifact `20261002013716-5cf1b1` 舊 Quick Task／Workbox，切換伺服器至目前 live artifact `20261002054439-a538f0` 重現：保留另一個同 origin 舊分頁時，普通重新載入仍提供舊 HTML。帶 `projed_update_latest` 的導覽取得新版 HTML 與三點選單，但目前版本等於 metadata 時不會主動套用 waiting worker，因此直接回原 shortcut 又回到舊版。這是既有安裝 bootstrap 缺口；fresh browser UI PASS 不能證明它已完成。
+
+已驗證的保留資料步驟：先保存正在輸入的任務；在手機原瀏覽器開啟同 origin `/quick-task/?install=1&projed_update_latest=20261002054439-a538f0`，讓新版 worker 下載；關閉該 origin 的所有 ProJED 瀏覽器分頁及已安裝 App，再由原圖示開啟。所有舊 clients 結束後 worker 正常啟用，普通 shortcut 讀回新版、三點選單存在，已建立的本機任務與 localStorage sentinel 保留。不需要清資料或重新安裝。獨立 Quick Task 安裝 origin 為 `https://projed-cc78d.firebaseapp.com`；不得改 origin 後把不同儲存誤算資料遺失。
+
+證據：`output/qa/dev-134/legacy-bootstrap/result.json` 的版本／選單／IDB 任務讀回 PASS、page errors=0；兩正式 origin 的更新連結 200、release/source/HTML hash 一致，見 `live-readback.json`。初次 harness 的選單 selector 未對齊而量到 0，保留 `result-initial.json`；更正後重跑。task-owned browserClosed／portReleased=true，沒有遠端寫入或使用者 profile 操作。此輪未變更產品程式、未重建或重部署；手機自身 worker/client 狀態及實機結果仍未取得，不能把隔離重現當成其確定根因。
