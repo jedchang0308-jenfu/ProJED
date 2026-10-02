@@ -96,9 +96,11 @@ const setAuthStatus = (text: string, showLogin: boolean, showLogout = false) => 
   authStatus.removeAttribute('data-state');
   if (!text) {
     authStatus.hidden = true;
+    recovery.hidden = recoveryDetails.hidden;
     return;
   }
   authStatus.hidden = false;
+  recovery.hidden = false;
   if (text === '此快速 App 尚未登入') authStatus.dataset.state = 'unauthenticated';
   const label = document.createElement('span');
   label.className = 'quick-task-auth-copy';
@@ -333,7 +335,8 @@ const hideRecovery = () => {
   recoveryInteractionRevision += 1;
   pendingClaim = null;
   recoveryCaptureId = null;
-  recovery.hidden = true;
+  recovery.hidden = authStatus.hidden;
+  recoveryDetails.hidden = true;
   recoveryDetails.open = false;
   recovery.dataset.compact = 'true';
   recoveryMessage.textContent = '';
@@ -368,7 +371,7 @@ recoveryDetails.addEventListener('toggle', () => {
 });
 
 const renderRecovery = async () => {
-  const wasHidden = recovery.hidden;
+  const wasHidden = recovery.hidden || recoveryDetails.hidden;
   const revision = ++recoveryRenderRevision;
   if (titleInput.value.trim()) {
     hideRecovery();
@@ -396,6 +399,7 @@ const renderRecovery = async () => {
     } else {
       renderRecoveryList(records);
       recovery.hidden = false;
+      recoveryDetails.hidden = false;
       recovery.dataset.compact = 'false';
       if (!currentRecord && recoverySummary.hidden) setRecoverySummary('本機待同步任務');
       recoveryContent.hidden = false;
@@ -442,6 +446,7 @@ const renderRecovery = async () => {
   else setRecoverySummary(count > 0 ? label : '', count);
   if (selected?.accountId) {
     recovery.hidden = false;
+    recoveryDetails.hidden = false;
     renderRecoveryFailure(selected);
     return;
   }
@@ -460,6 +465,7 @@ const renderRecovery = async () => {
     message.hidden = true;
   }
   recovery.hidden = false;
+  recoveryDetails.hidden = false;
   recovery.dataset.compact = 'true';
   if (needsDetailAction) {
     recoveryContent.hidden = true;

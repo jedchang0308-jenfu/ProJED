@@ -1,5 +1,9 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-10-02（手機安裝模式 UI 一致性）
+
+手機與本機差異已定位為平台／URL 與空任務清單的 UI 分支：Android installed 預設入口缺三點選單，零 pending 任務又連同 auth panel 被隱藏。依使用者比較截圖，在 DEV-133 Rev 10 統一各模式標頭選單，帳號狀態不再依 task count 消失；安裝與選用換圖導引保留明確點擊與 pending-data guard。目前 TypeScript／targeted ESLint PASS，舊 live 的 16 個 empty-UI 情境重現 FAIL；修正版發布／相同情境驗證進行中。詳見 [SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md)、[QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md)。
+
 ## Documentation Map Update - 2026-10-02（手機 Quick Task 舊版快取補正）
 
 使用者回報手機 App 仍呈現舊 UI。根因是 quick-task MPA 未啟動共用 PWA updater，standalone shortcut 因此缺少安全套用 waiting worker 的版本更新流程。已在 reload-safety owner 就緒後延遲載入共用 updater，保留編輯／保存中的本機任務。DEV-122 static 26/26、DEV-134 static 17/17、真 Workbox A→B browser 10/10（R01～R11）、TypeScript、targeted ESLint、隔離建置、候選環境與 live 部署均 PASS。release `20261002034352-6ee8fb`（程式 commit `e9317e66e3cbe5c9163a27a2bf045611ea0760cf`）已由 `web.app` 與 `firebaseapp.com` 讀回相同 Quick Task HTML／bundle／updater hashes，正式網站 browser smoke 通過。手機既有安裝仍待完整關閉舊 app 後重開確認新 shell；未宣稱實機驗收。詳見 [DEV-134](dev_task.md#dev-134pwa-載入失敗恢復與前版資產相容)、[SPEC-041](specs/SPEC-041-pwa-update-notification-cache-recovery.md)、[QA-DEV-134](qa/QA-DEV-134-pwa-recovery-local-verification.md)、[REL-015](release/REL-015-DEV-134-QUICK-TASK-PWA-20261002.md)。

@@ -1,5 +1,13 @@
 # QA-DEV-133：雙 App 各自登入／依帳號同步／本機清理
 
+## 2026-10-02 手機 installed UI 一致性補正
+
+使用者 Android 截圖已有縮小標題與主程式按鈕，但沒有三點選單，仍出現底部「安裝與圖示」；本機比較頁則有三點及一筆本機任務。source 查證有兩個顯示分支：`install.ts` 僅 browser＋`install=1` 使用標頭選單，Android installed 的預設 `/quick-task/` 改用底部連結；`renderRecovery()` 在 task count 為 0 時隱藏整個 auth wrapper。這些差異可由目前 live `20261002034352-6ee8fb` 的匿名獨立 browser contexts 重現，不再一概歸因於 stale shell。
+
+修正僅涉及安裝導引呈現與 recovery wrapper visibility；資料／Session／claim／同步契約不變。沒有任務時 auth status／login 仍可見、內層 task details 隱藏；有未綁定任務時維持首次展開清單。平台安裝說明與 Android 選用换圖／pending-data guard 收入明確點擊才開啟的 dialog。舊 footer entry 不再存在。
+
+`scripts/verify-dev-133-unified-status-hosted.pw.js` 改以兩正式 origin、browser／Android browser／Android installed／iPhone installed 四組 UA/display-mode 與 query 有無兩組入口驗證。舊 live 的 16 個 empty-UI 案例全部重現 FAIL；修正版 local／live 結果待本輪完成。TypeScript 與 targeted ESLint PASS。紀錄 `output/qa/dev-133/platform-ui/before.log`、`runtime-before.json`；browser contexts 與 task-owned session 已關閉。這是桌面 Chromium 的平台訊號模擬，不宣稱真 Android／iPhone 實機驗收；任務 fixture 只存獨立 disposable browser 的 IDB，無 authenticated remote RPC writes。
+
 ## 2026-10-02 分支部署前本機驗證
 
 本節記錄目前分支工作樹候選，不改寫下方已發布 REL-014、早期歷史結果或 DEV-133 尚未完成的整體驗收狀態。基準 branch 為 `持續優化3`、HEAD `57f8c8d3a751c8698a0e28539a9187868aff1873`。DEV-133 browser candidate 為 362 個 source files，digest `ab838922f579723ea4f2604850ec0015cfaf0d7df7f6a8749d22ec9133dfe063`，執行後 source hashes readback unchanged。

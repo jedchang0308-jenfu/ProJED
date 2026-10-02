@@ -8,6 +8,8 @@ Cold start：先讀下方 `## 總任務清單`；需要特定 DEV 詳細歷史�
 
 ## DEV-133 快速建任務同帳號與自動同步 - 2026-09-30
 
+**2026-10-02 手機 installed UI 一致性補正。** `829ac02` 及此前程式／文件已推送 origin；使用者新截圖顯示 installed mode 與零 pending count 的兩個 UI 分支造成三點選單及登入提示消失。Rev 10 統一標頭入口、登入狀態與 task details 的顯示邊界，保留 Android 選用換圖的本機 pending guard；TypeScript／targeted ESLint PASS，16 個舊 live empty-UI 例重現 FAIL，修正版 browser／live 結果待本輪。下列 Git 待核准等狀態為當時快照，以本段及最新 QA／REL-015 為準。
+
 **2026-10-01 DEV-133 同步核心與統一 UI 已正式發布並驗收。** 最新 UI product source `9b5f73a1b32bdd8dc984c3017dceaf7225967d40`／release `20261001074739-df101c`／live version `b88f428e0efa541e`，雙正式 origin 各 54/54、正式匿名 UI 10/10、隔離 UI／IDB＋Auth/RPC SIMULATION 25/25、型別及 lint PASS。這次僅三個 UI 來源，Auth／RPC／IDB／sync 模組沿用原 `8376086` 的真登入／同步40/40證據，未把該40項改算新套件實測。未改遠端設定、migration、業務資料或 IAM／Secret；暫時 browser／ports已清理。證據見 [REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)；Git目的地確認／push／PR仍待。
 
 **2026-10-01 正式同步核心已發布／驗收 PASS（REL-014）。** clean product source `8376086144b31155a94477e6bea1f929ded475be` 已發布為 `20261001061118-144be8`，兩正式 origin 各 54/54 hash、真普通 Google／任務／離線補送／local logout 40/40、官方啟動及 safe-cancel PASS；PROD correction 綁定 NO_OP，未套 DDL／改 IAM／改寫既有資料。[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)／[QA 正式核心結果](qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-01-正式同步核心驗收rel-014) 為最新發布權威。Git 遠端目的地確認待回覆；後續收合／整併 UI 未包含、未驗收，整體 DEV-133 不因核心發布而將這些 slice 補登 PASS。下列發布前狀態保留為歷史快照，以本段為最新核心狀態。
@@ -150,10 +152,10 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 
 ## 總任務清單
 
-- ◐ DEV-134 [開發點] [本地完成] [P1] [本地 PASS；未部署] PWA 載入失敗恢復與前版資產相容
+- ◐ DEV-134 [開發點] [live 網站驗證通過] [P1] [已部署；手機實機待確認] PWA 載入失敗恢復與前版資產相容
   - 摘要：修正失敗交易反覆提示、背景檢查誤報與恢復導覽命中舊 HTML；發布包保留上一版雜湊資產。
   - 父任務：DEV-041、DEV-096、DEV-097；發布包相容 DEV-083。
-  - 下一步：待正式發布指令，排除其他 dirty source、綁定當前正式 artifact，發布後驗證既有 controlled profile。
+  - 下一步：取得手機既有 installed profile 的更新確認；網站驗證與 Git 推送已完成。
   - 證據：[DEV-134 本地驗證](qa/QA-DEV-134-pwa-recovery-local-verification.md)；`output/qa/dev-134/`。
   - 計入交付：否
 
@@ -1124,16 +1126,12 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 證據：本地 390×844 headless Edge 操作與 `output/playwright/dev-132/*-mobile-cdp.png`、`tsc --noEmit`、DEV-034 static 23/23、targeted ESLint 0 errors；移位前 DEV-132／130／034／038 回歸與本節執行紀錄。
   - 計入交付：否（尚未正式發布）。
 
-- ! DEV-133 [交付點] [核心及 UI 正式驗收 PASS；公開 Git 交付待核准] [P1] [本輪實作] 快速建任務各自登入與自動同步
+- ◐ DEV-133 [交付點] [核心已交付；手機 UI 補正中] [P1] [同分支修正與 live 驗證] 快速建任務各自登入與自動同步
   - 摘要：共用 ProJED 帳號系統、兩個 App 各自登入與保存 Session；保留 owner-bound 離線保存、自動重試及七日已同步副本清理。
   - 來源 ID：使用者 2026-10-01 採用獨立登入方案及修改開發文件／補齊到架構定案指示；延續 2026-09-30 DEV-133。
   - 父任務：DEV-122；延續 DEV-131 雙網址安裝，相容 DEV-130／132。
-  - 下一步：完成已備妥 Git delivery 的遠端目的地確認與 PR；統一 UI 已正式驗收，完成 Git push／PR 交付；舊40/40與新UI10/10依實測層級分開。
-  - 阻塞 / 恢復條件：核心與 Rev9 UI 正式驗收已通過，正式 migration NO_OP；公開 Git 交付待核准。
-    已核對人類原始第1–9項授權涵蓋 Git 交付；自動審查仍要求明確確認 public 目的地及完整提交內容。
-    審核清單：output/qa/dev-133/independent-auth/production/public-git-payload-review.md。
-    DEV-133差異58路徑、較早正式基準差異74路徑、44個尚未公開提交；核准後接續新分支／PR。
-    無 push／PR／共享分支改動；其他殘餘依 REL-014 保留，不新增發布 gate。
+  - 下一步：部署 Rev10 顯示補正並完成兩 origin 平台／query 情境驗證；實機結果待使用者確認。
+  - 阻塞 / 恢復條件：Git 推送已完成，沿用明確 live 授權與同專案 corrective cycle；核心及 Rev9 證據保留，各層結果不互相代替。
   - 證據：[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)、[QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md)、[SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md)、[ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md)；canonical terminal-evidence.json 與 worktree activation-resume-evidence.json 綁定 source／artifact／case 層。
   - 計入交付：是（未完成，產品完成率貢獻 0）。
 

@@ -39,16 +39,16 @@ button, input { font: inherit; }
 .quick-task-install small { margin-top: 8px; color: #475569; font-size: 12px; }
 .quick-task-install button { min-height: 48px; margin-top: 12px; padding: 0 14px; border: 0; border-radius: 11px; background: #0f766e; color: white; font-weight: 800; cursor: pointer; }
 .quick-task-install-destination { display: inline-flex; align-items: center; min-height: 48px; margin-top: 12px; padding: 0 14px; border-radius: 11px; background: #0f766e; color: #fff; font-weight: 800; text-decoration: none; }
-.quick-task-install [data-quick-icon-reinstall-toggle] { min-height: 34px; padding: 0; border-radius: 0; background: transparent; color: #0f766e; font-size: 13px; text-decoration: underline; text-underline-offset: 2px; }
+.quick-task-install-dialog [data-quick-icon-reinstall-toggle] { min-height: 34px; margin-top: 12px; padding: 0; border: 0; border-radius: 0; background: transparent; color: #0f766e; font-size: 13px; text-decoration: underline; text-underline-offset: 2px; }
 .quick-icon-reinstall { margin-top: 10px; padding-top: 10px; border-top: 1px solid #99f6e4; }
 .quick-icon-reinstall ol { margin: 8px 0 0; padding-left: 22px; font-size: 13px; line-height: 1.6; }
 .quick-icon-reinstall li + li { margin-top: 6px; }
 .quick-icon-reinstall [data-quick-icon-reinstall-link] { min-height: 40px; margin-top: 10px; font-size: 13px; }
-.quick-task-install-link { display: block; width: fit-content; margin-top: 40px; color: #64748b; font-size: 12px; text-decoration: underline; text-underline-offset: 2px; }
 .quick-task-install-dialog { width: min(420px, calc(100vw - 32px)); max-height: 80vh; max-height: min(80dvh, 600px); margin: auto; padding: 22px; border: 1px solid #dbe5ee; border-radius: 16px; color: #0f172a; background: #fff; box-shadow: 0 20px 48px rgb(15 23 42 / 22%); }
 .quick-task-install-dialog::backdrop { background: rgb(15 23 42 / 38%); }
 .quick-task-install-dialog h2 { margin: 0; color: #134e4a; font-size: 19px; }
 .quick-task-install-dialog p { margin: 12px 0 0; color: #475569; font-size: 15px; line-height: 1.6; }
+.quick-task-install-dialog small { display: block; margin-top: 8px; overflow-wrap: anywhere; color: #475569; font-size: 12px; }
 .quick-task-install-dialog form { display: flex; justify-content: flex-end; margin-top: 20px; }
 .quick-task-install-dialog button { min-height: 42px; padding: 0 16px; border: 1px solid #cbd5e1; border-radius: 10px; color: #334155; background: #fff; font-weight: 650; cursor: pointer; }
 .quick-task-install-dialog button:hover { background: #f8fafc; }
@@ -73,6 +73,8 @@ button, input { font: inherit; }
 .quick-task-actions button.primary { background: #0f766e; color: white; }
 .quick-task-recovery { margin: 8px 0 0; overflow: hidden; border: 1px solid #e2e8f0; border-radius: 12px; background: rgb(255 255 255 / 38%); }
 .quick-task-recovery-details { margin: 0; border: 0; border-radius: 0; background: transparent; }
+.quick-task-recovery-details[hidden] { display: none; }
+.quick-task-recovery:has(> .quick-task-recovery-details[hidden]) { padding-bottom: 8px; }
 .quick-task-recovery-entry { display: flex; min-height: 44px; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 8px; color: #64748b; font-size: 12px; font-weight: 500; cursor: pointer; list-style: none; }
 .quick-task-recovery-summary { flex: 0 1 auto; min-width: 0; max-width: 45%; align-self: center; overflow-wrap: anywhere; color: #64748b; font-size: 12px; font-weight: 500; text-align: right; }
 .quick-task-success[hidden] + .quick-task-recovery-summary { max-width: calc(100% - 24px); text-align: left; }

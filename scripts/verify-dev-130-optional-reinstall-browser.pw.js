@@ -16,15 +16,16 @@ async (page) => {
   });
 
   await page.goto(`${origin}/quick-task/`, { waitUntil: 'domcontentloaded' });
-  const quickEntryLink = page.locator('[data-quick-install-link]');
-  await quickEntryLink.waitFor({ state: 'visible', timeout: 15000 });
+  await page.getByText('⋮', { exact: true }).click();
+  const quickEntry = page.getByRole('button', { name: '安裝與圖示', exact: true });
+  await quickEntry.waitFor({ state: 'visible', timeout: 15000 });
   if (!(await page.locator('#quick-task-title').isVisible())) failures.push('quick capture form hidden by optional entry');
-  await quickEntryLink.click();
-  if (!page.url().includes('install=1')) failures.push('quick installed entry did not open install guide');
+  await quickEntry.click();
+  await page.locator('.quick-task-install-dialog').waitFor({ state: 'visible' });
   const quickToggle = page.locator('[data-quick-icon-reinstall-toggle]');
   await quickToggle.waitFor({ state: 'visible', timeout: 15000 });
   await page.evaluate(() => new Promise((resolve, reject) => {
-    const request = indexedDB.open('projed-quick-task-v1', 1);
+    const request = indexedDB.open('projed-quick-task-v1', 2);
     request.onupgradeneeded = () => {
       if (!request.result.objectStoreNames.contains('captures')) request.result.createObjectStore('captures', { keyPath: 'captureId' });
     };

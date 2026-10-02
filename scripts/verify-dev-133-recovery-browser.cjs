@@ -156,7 +156,7 @@ const runCase = async (id, records, options, check) => {
   }
 };
 const compact = page => page.locator('#quick-task-recovery [data-recover]');
-const noRecovery = page => page.locator('#quick-task-recovery').waitFor({ state: 'hidden' });
+const noRecovery = page => page.locator('#quick-task-recovery-details').waitFor({ state: 'hidden' });
 const calls = page => page.evaluate(() => ({ rpc: window.__qaRpcCalls, login: window.__qaLoginCalls }));
 const main = async () => {
   browserServer = await chromium.launchServer({

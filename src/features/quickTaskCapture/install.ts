@@ -36,25 +36,9 @@ const escapeHtml = (value: string) => value.replace(/[&<>"']/gu, char => ({
 }[char] ?? char));
 
 export const installQuickInstallGuide = (container: HTMLElement) => {
-  const params = new URLSearchParams(window.location.search);
   const section = container.querySelector<HTMLElement>('#quick-task-install');
   if (!section) return () => undefined;
-  if (params.get('install') !== '1') {
-    if (detectPlatform() !== 'standalone' || !/Android/iu.test(navigator.userAgent || '')) return () => undefined;
-    const link = document.createElement('a');
-    link.href = '/quick-task/?install=1';
-    link.className = 'quick-task-install-link';
-    link.textContent = '安裝與圖示';
-    link.dataset.quickInstallLink = 'true';
-    container.append(link);
-    return () => link.remove();
-  }
-
-  if (isMainProductionOrigin(window.location.origin)) {
-    section.hidden = false;
-    section.innerHTML = '<strong>安裝 ProJED-快速建任務</strong><span>目前這個網址屬於 ProJED 主程式。若有尚未同步的待辦，請先在此完成同步；主程式內的快速記錄仍可照常使用。</span><a class="quick-task-install-destination" href="https://projed-cc78d.firebaseapp.com/quick-task/?install=1">開啟 ProJED-快速建任務安裝頁</a>';
-    return () => undefined;
-  }
+  const mainProductionOrigin = isMainProductionOrigin(window.location.origin);
 
   let deferredPrompt: BeforeInstallPromptEventLike | null = null;
   let installing = false;
@@ -63,18 +47,22 @@ export const installQuickInstallGuide = (container: HTMLElement) => {
   let pendingCount = 0;
   let linkNotice = '';
   const platform = detectPlatform();
-  if (platform === 'browser') {
-    container.querySelector<HTMLElement>('.quick-task-header-actions')?.append(section);
-  }
+  container.querySelector<HTMLElement>('.quick-task-header-actions')?.append(section);
   const installNoticeDialog = document.createElement('dialog');
   installNoticeDialog.className = 'quick-task-install-dialog';
   installNoticeDialog.setAttribute('aria-labelledby', 'quick-task-install-dialog-title');
   installNoticeDialog.setAttribute('aria-describedby', 'quick-task-install-dialog-description');
-  installNoticeDialog.innerHTML = '<h2 id="quick-task-install-dialog-title">安裝提示</h2><p id="quick-task-install-dialog-description" data-quick-install-dialog-message></p><form method="dialog"><button type="submit">關閉</button></form>';
+  installNoticeDialog.innerHTML = '<h2 id="quick-task-install-dialog-title">安裝提示</h2><p id="quick-task-install-dialog-description" data-quick-install-dialog-message></p><div data-quick-install-dialog-content></div><form method="dialog"><button type="submit">關閉</button></form>';
   document.body.append(installNoticeDialog);
   const dialogTitle = installNoticeDialog.querySelector<HTMLElement>('#quick-task-install-dialog-title');
   const compactViewport = window.matchMedia('(max-width: 559px)');
   const getInstallGuidance = () => {
+    if (platform === 'standalone') {
+      return {
+        title: '安裝與圖示',
+        message: '目前以 App 視窗開啟。是否已建立獨立手機圖示，請以裝置的應用程式清單為準。',
+      };
+    }
     if (platform === 'android' || (platform === 'browser' && compactViewport.matches)) {
       return {
         title: '從 Chrome 安裝 ProJED-快速建任務',
@@ -106,31 +94,20 @@ export const installQuickInstallGuide = (container: HTMLElement) => {
     if (!installNoticeDialog.open) installNoticeDialog.showModal();
     installNoticeDialog.querySelector<HTMLButtonElement>('button')?.focus();
   };
-  const canReinstall = platform === 'standalone' && /Android/iu.test(navigator.userAgent || '');
+  const canReinstall = !mainProductionOrigin && platform === 'standalone' && /Android/iu.test(navigator.userAgent || '');
   const installUrl = new URL(getQuickInstallUrl(window.location.origin), window.location.origin).toString();
   const render = (notice = '') => {
     section.hidden = false;
-    section.classList.toggle('quick-task-install-plain', platform === 'browser');
+    section.classList.add('quick-task-install-plain');
     const installMenuOpen = section.querySelector<HTMLDetailsElement>('[data-quick-install-menu]')?.open ?? false;
-    const actionLabel = deferredPrompt
+    const actionLabel = platform === 'standalone'
+      ? '安裝與圖示'
+      : deferredPrompt
       ? '安裝 ProJED-快速建任務'
-      : platform === 'browser' && compactViewport.matches
+      : platform !== 'browser' || compactViewport.matches
         ? 'APP安裝教學'
-        : platform === 'browser'
-          ? '安裝APP'
-          : '';
-    const action = actionLabel
-      ? `<button type="button" data-quick-install-action="true">${actionLabel}</button>`
-      : '';
-    const body = platform === 'standalone'
-      ? '<strong>目前以 App 視窗開啟</strong><span>可立即記錄待辦；是否已建立獨立手機圖示，請以 Android 應用程式清單為準。</span>'
-      : platform === 'ios'
-        ? '<strong>加入手機主畫面</strong><span>點 Safari 的分享，選「加入主畫面」，就會建立「ProJED-快速建任務」圖示。</span>'
-        : platform === 'embedded'
-          ? '<strong>請先開啟系統瀏覽器</strong><span>在內嵌瀏覽器中無法可靠建立 App，請用 Safari 或 Chrome 開啟本頁後再安裝。</span>'
-        : platform === 'android'
-            ? '<strong>從 Chrome 安裝 ProJED-快速建任務</strong><ol class="quick-install-steps"><li>用手機 Chrome 開啟此頁，點右上角「⋮」。</li><li>選「安裝應用程式」，再點「安裝」。</li></ol>'
-            : '';
+        : '安裝APP';
+    const action = `<button type="button" data-quick-install-action="true">${actionLabel}</button>`;
     const pendingMessage = pendingStatus === 'checking'
       ? '正在檢查本機待辦…'
       : pendingStatus === 'unavailable'
@@ -144,13 +121,20 @@ export const installQuickInstallGuide = (container: HTMLElement) => {
         : ''}`
       : '';
     const noticeMarkup = notice ? `<small role="status">${escapeHtml(notice)}</small>` : '';
-    section.innerHTML = platform === 'browser'
-      ? `<details class="quick-task-install-menu" data-quick-install-menu="true"><summary aria-label="更多選項" title="更多選項">⋮</summary><div class="quick-task-install-menu-panel">${action}${noticeMarkup}</div></details>`
-      : `${body}${action}${reinstall}${noticeMarkup}`;
+    section.innerHTML = `<details class="quick-task-install-menu" data-quick-install-menu="true"><summary aria-label="更多選項" title="更多選項">⋮</summary><div class="quick-task-install-menu-panel">${action}${noticeMarkup}</div></details>`;
+    const dialogContent = installNoticeDialog.querySelector<HTMLElement>('[data-quick-install-dialog-content]');
+    if (dialogContent) {
+      dialogContent.innerHTML = mainProductionOrigin
+        ? `<a class="quick-task-install-destination" href="${escapeHtml(installUrl)}">開啟 ProJED-快速建任務安裝頁</a>`
+        : reinstall;
+    }
     const installMenu = section.querySelector<HTMLDetailsElement>('[data-quick-install-menu]');
     if (installMenu) installMenu.open = installMenuOpen;
-    section.querySelector<HTMLButtonElement>('[data-quick-install-action]')?.addEventListener('click', () => { void promptInstall(); });
-    section.querySelector<HTMLButtonElement>('[data-quick-icon-reinstall-toggle]')?.addEventListener('click', () => {
+    section.querySelector<HTMLButtonElement>('[data-quick-install-action]')?.addEventListener('click', () => {
+      if (installMenu) installMenu.open = false;
+      void promptInstall();
+    });
+    dialogContent?.querySelector<HTMLButtonElement>('[data-quick-icon-reinstall-toggle]')?.addEventListener('click', () => {
       showReinstall = !showReinstall;
       render();
       if (showReinstall) {
@@ -165,7 +149,7 @@ export const installQuickInstallGuide = (container: HTMLElement) => {
         });
       }
     });
-    section.querySelector<HTMLButtonElement>('[data-quick-icon-reinstall-link]')?.addEventListener('click', () => {
+    dialogContent?.querySelector<HTMLButtonElement>('[data-quick-icon-reinstall-link]')?.addEventListener('click', () => {
       void (async () => {
         try {
           if (navigator.share) {
@@ -187,7 +171,11 @@ export const installQuickInstallGuide = (container: HTMLElement) => {
   };
   const promptInstall = async () => {
     if (installing) return;
-    if (!deferredPrompt) {
+    if (mainProductionOrigin) {
+      showInstallNotice('目前這個網址屬於 ProJED 主程式。若有尚未同步的任務，請先在此完成同步，再開啟快速 App 的安裝頁。', '安裝 ProJED-快速建任務');
+      return;
+    }
+    if (!deferredPrompt || platform === 'standalone') {
       const guidance = getInstallGuidance();
       showInstallNotice(guidance.message, guidance.title);
       return;
@@ -231,22 +219,18 @@ export const installQuickInstallGuide = (container: HTMLElement) => {
   };
   window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt);
   window.addEventListener('appinstalled', onAppInstalled);
-  if (platform === 'browser') {
-    document.addEventListener('pointerdown', closeInstallMenuOnOutsidePointer);
-    document.addEventListener('keydown', closeInstallMenuOnEscape);
-  }
+  document.addEventListener('pointerdown', closeInstallMenuOnOutsidePointer);
+  document.addEventListener('keydown', closeInstallMenuOnEscape);
   const onCompactViewportChange = () => {
-    if (platform === 'browser') render();
+    render();
   };
   compactViewport.addEventListener('change', onCompactViewportChange);
   render();
   return () => {
     window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
     window.removeEventListener('appinstalled', onAppInstalled);
-    if (platform === 'browser') {
-      document.removeEventListener('pointerdown', closeInstallMenuOnOutsidePointer);
-      document.removeEventListener('keydown', closeInstallMenuOnEscape);
-    }
+    document.removeEventListener('pointerdown', closeInstallMenuOnOutsidePointer);
+    document.removeEventListener('keydown', closeInstallMenuOnEscape);
     compactViewport.removeEventListener('change', onCompactViewportChange);
     installNoticeDialog.remove();
   };

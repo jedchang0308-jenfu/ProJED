@@ -16,11 +16,12 @@ async (page) => {
   });
 
   await page.goto(`${origin}/quick-task/`, { waitUntil: 'domcontentloaded' });
-  const entry = page.locator('[data-quick-install-link]');
+  await page.getByText('⋮', { exact: true }).click();
+  const entry = page.getByRole('button', { name: '安裝與圖示', exact: true });
   await entry.waitFor({ state: 'visible', timeout: 15000 });
   if (!(await page.locator('#quick-task-title').isVisible())) throw new Error('quick capture field was obscured');
   await entry.click();
-  if (!page.url().includes('install=1')) throw new Error('optional install entry did not open');
+  await page.locator('.quick-task-install-dialog').waitFor({ state: 'visible' });
 
   const toggle = page.locator('[data-quick-icon-reinstall-toggle]');
   await toggle.waitFor({ state: 'visible', timeout: 15000 });
