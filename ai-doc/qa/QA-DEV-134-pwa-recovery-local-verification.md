@@ -1,10 +1,10 @@
 # DEV-134 PWA 恢復本地驗證
 
-日期：2026-10-01。結果：本地實作／受影響回歸 PASS；正式發布與既有使用者 profile 的正式驗收尚未執行。
+日期：2026-10-01 起，2026-10-02 更新。原始記錄是部署前本地驗證快照；本文件末尾的 2026-10-02 發布後補記提供後續 release 與 live evidence。正式網站 smoke PASS；使用者手機既有安裝尚未實機驗證。
 
 ## 範圍與來源
 
-人類指令為本 chat「請依此修復」「繼續」，目標 ProJED。依同 chat 環境授權規則執行本地程式／設定／文件／驗證；本輪沒有新的正式部署明確指令，未改遠端資料、Auth、IAM 或雲端資源。
+歷史快照（2026-10-01）：人類指令為本 chat「請依此修復」「繼續」，當時執行本地程式／設定／文件／驗證，沒有正式部署授權。2026-10-02 後續收到 live 部署明確授權，部署證據記於本文件發布後補記及 [REL-015](../release/REL-015-DEV-134-QUICK-TASK-PWA-20261002.md)。
 
 Canonical repo `C:\VIBE CODING\ProJED\ProJED`，branch `持續優化3`，起始 HEAD `57f8c8d3a751c8698a0e28539a9187868aff1873`。本輪 PWA／release target 起始為 clean；其他 DEV-133／122／034／038 等既有 dirty 修改保留，未 stage／commit／還原。QA frozen R01～R10 位於 [SPEC-041 DEV-134 addendum](../specs/SPEC-041-pwa-update-notification-cache-recovery.md#dev-134-pwa-失敗恢復-corrective-addendum2026-10-01)，發布封裝補正見 [SPEC-083 §18](../specs/SPEC-083-production-release-environment-integrity.md#18-dev-134-前版資產相容補正2026-10-01)。RD 自驗與本地 QA 蒐證由同一 Agent 分階段執行，不宣稱獨立 QC。
 
@@ -60,4 +60,18 @@ Canonical repo `C:\VIBE CODING\ProJED\ProJED`，branch `持續優化3`，起始 
 
 HTTP routing fixture 與 browser fixture 均在啟動前記錄 project／PID／port／purpose／cleanup condition。最新 browser session `dev134-e7f8f12d`／PID `32884`／port `53930` 已關閉、確認連線拒絕；routing runtime 也已關閉。明確 session close 後不存在 task `.session` 檔；未操作使用者 browser 或 localhost4000。清理收據：`routing-runtime.json`、`browser-runtime.json`。
 
-目前尚未生成可發布 sealed package、未提交／部署、未驗證正式既有 profile。下一發布須先排除其他 dirty source、綁定當前正式 artifact、在 canonical 驗證 assets MIME/404、修正版身分及既有 controlled profile 的重試結果。新部署無法改寫已在執行的舊 JavaScript，使用者須先載入修正版才有新的恢復程式。
+部署前快照（2026-10-01）：當時尚未生成 sealed package、未提交／部署、未驗證正式既有 profile。此狀態已由 2026-10-02 發布後流程更新；當時敘述保留作為稽核時間脈絡，不代表目前 live 狀態。
+
+## 2026-10-02 發布後 live 驗證補記
+
+產品程式 commit `e9317e66e3cbe5c9163a27a2bf045611ea0760cf` 已推送至 `origin/持續優化3`，live release `20261002034352-6ee8fb` 已部署至 Firebase Hosting site `projed-cc78d`。部署前 DEV-122 static 26/26、DEV-134 static 17/17、Workbox A→B browser 10/10（含 R11）、TypeScript、targeted ESLint、staging artifact secret scan 及 DEV-083 release readiness/candidate gates 均 PASS。該驗證由同一 Agent 分階段執行，不宣稱獨立 QC。
+
+| 驗收 | 證據 | 結果／限制 |
+|---|---|---|
+| Level 3 preview | `output/release/dev-083/level3-evidence-e9317e6.json`；短期 URL `https://projed-cc78d--level3-smoke-lvbe8d9u.web.app` | Quick Task 390×844 read-only smoke PASS；無 page error／failed request；沒有 TEST data writes。預覽通道按設定於 2026-10-03 到期。 |
+| Production candidate | `output/release/dev-083/20261002034352-6ee8fb/candidate-evidence.json` | readiness、production-bound readiness、credential gate、75/75 artifact provenance、browser smoke、OAuth safe-cancel PASS；live before／after 相同。短期 URL `https://projed-cc78d--production-candidate-lpejam4w.web.app`，按設定於 2026-10-03 到期。 |
+| Live activation | `output/release/dev-083/20261002034352-6ee8fb/activation-evidence.json` | activation PASS；sealed tree SHA-256 `7d7683fea31d3845af09afdd017ac604d1bb8cfc8ec41ee8c4e0285b4c5dd7bb`，75/75 entries provenance PASS，正式 root browser smoke 與 OAuth safe-cancel 302 PASS。 |
+| Dual-origin readback | `output/qa/dev-134/2026-10-02-quick-update/live-readback.json` | `https://projed-cc78d.web.app` 與 `https://projed-cc78d.firebaseapp.com` 的 `/quick-task/` 均為 HTTP 200；release/source commit 一致；sealed Quick Task HTML、`assets/quickTask-BPLQbL9L.js` 與 `assets/pwaUpdateService-Di102aP1.js` SHA-256 全相符。 |
+| Live Quick Task browser smoke | release 驗證收據及部署後 canonical 390×844 smoke | title／submit controls enabled、延遲 updater 已載入、root `/sw.js` active、無 page errors／failed requests。這是 fresh browser 網站驗證，不代表使用者既有手機 profile 或 Android／iPhone 實機驗證。 |
+
+沒有執行 live database／business data writes、Auth／IAM 變更或使用者資料清除。部署不能改寫已在使用者手機執行中的舊 JavaScript；手機既有安裝須完整關閉 app 後重新開啟一次以載入新版 shell，屆時仍要由使用者確認結果。不得要求清除資料或解除安裝，以免影響尚未同步任務。

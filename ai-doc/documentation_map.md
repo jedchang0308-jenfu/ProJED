@@ -2,7 +2,7 @@
 
 ## Documentation Map Update - 2026-10-02（手機 Quick Task 舊版快取補正）
 
-使用者回報手機 App 仍呈現舊 UI。檢查確認 Firebase 兩個正式 origin 的網站版本相同；quick-task MPA 未啟動共用 PWA updater，導致 standalone shortcut 缺少安全套用 waiting worker 的版本更新流程。已在 reload-safety owner 就緒後延遲載入共用 updater，保留編輯／保存中的本機任務。DEV-122 static 26/26、DEV-134 static 17/17、真 Workbox A→B browser 10/10（R01～R11）、TypeScript、targeted ESLint、隔離建置均 PASS。正式部署與雙 origin readback 正在進行；手機既有安裝需關閉舊 app 再重開才會載入新 shell，尚未宣稱實機驗收。詳見 [DEV-134](dev_task.md#dev-134pwa-載入失敗恢復與前版資產相容)、[SPEC-041](specs/SPEC-041-pwa-update-notification-cache-recovery.md)、[QA-DEV-134](qa/QA-DEV-134-pwa-recovery-local-verification.md)。
+使用者回報手機 App 仍呈現舊 UI。根因是 quick-task MPA 未啟動共用 PWA updater，standalone shortcut 因此缺少安全套用 waiting worker 的版本更新流程。已在 reload-safety owner 就緒後延遲載入共用 updater，保留編輯／保存中的本機任務。DEV-122 static 26/26、DEV-134 static 17/17、真 Workbox A→B browser 10/10（R01～R11）、TypeScript、targeted ESLint、隔離建置、候選環境與 live 部署均 PASS。release `20261002034352-6ee8fb`（程式 commit `e9317e66e3cbe5c9163a27a2bf045611ea0760cf`）已由 `web.app` 與 `firebaseapp.com` 讀回相同 Quick Task HTML／bundle／updater hashes，正式網站 browser smoke 通過。手機既有安裝仍待完整關閉舊 app 後重開確認新 shell；未宣稱實機驗收。詳見 [DEV-134](dev_task.md#dev-134pwa-載入失敗恢復與前版資產相容)、[SPEC-041](specs/SPEC-041-pwa-update-notification-cache-recovery.md)、[QA-DEV-134](qa/QA-DEV-134-pwa-recovery-local-verification.md)、[REL-015](release/REL-015-DEV-134-QUICK-TASK-PWA-20261002.md)。
 
 ## Documentation Map Update - 2026-10-02（分支部署前本機驗證）
 

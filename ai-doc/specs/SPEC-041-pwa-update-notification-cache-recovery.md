@@ -757,7 +757,7 @@ Chromium的[Android WebApkUpdateManager](https://chromium.googlesource.com/chrom
 
 ## DEV-134 PWA 失敗恢復 Corrective Addendum（2026-10-01）
 
-成熟度：本地實作／受影響回歸完成；風險 Medium；狀態：本地 PASS，未部署。結果見 [QA-DEV-134](../qa/QA-DEV-134-pwa-recovery-local-verification.md)；不宣稱獨立 QC 或正式驗收。
+成熟度：本地實作／受影響回歸完成；風險 Medium；2026-10-02 狀態：live deployed、雙 origin readback 與正式網站 browser smoke PASS；手機實機驗收待確認。完整結果見 [QA-DEV-134](../qa/QA-DEV-134-pwa-recovery-local-verification.md) 與 [REL-015](../release/REL-015-DEV-134-QUICK-TASK-PWA-20261002.md)；不宣稱獨立 QC 或手機實機驗收。
 人類來源：正式站反覆出現「載入新版時發生問題」→多層次分析→四項根本方案→「請依此修復」。
 Spec Impact：Intentional replacement。取代 failed 只能清快取的實際行為與未受 safety gate 保護的恢復導覽；沿用 ADR-047 架構及其他既有 safety／資料／owner contract。
 
@@ -789,7 +789,7 @@ Quick Task 是獨立 MPA document，但與主程式共用同源 `/sw.js`。舊�
 | R05 | dirty／booting／unknown owner 時 retry 或 load recovery | 無強制導覽；safe 後走本分頁安全流程；adapter＋browser |
 | R06 | controlled client 從舊版本以 recovery query 導覽 | GET 真網路 HTML，載入 target；原 SW/cache 保留；真 SW trace |
 | R07 | 前版 asset 不在新 build／同路徑不同 bytes／tamper／traversal | 前版自己的資產保留且 hash 正確；無限累積／tamper／collision／越界均拒絕；封裝 fixture |
-| R08 | 缺 /assets 檔案、quick-task、SPA route | assets 404；其他 route contract 正常；Firebase matcher＋local delivery；正式 readback 待發版 |
+| R08 | 缺 /assets 檔案、quick-task、SPA route | assets 404；其他 route contract 正常；Firebase matcher＋local delivery；2026-10-02 live 雙 origin Quick Task route／sealed asset hash readback PASS（見 REL-015） |
 | R09 | update/load/cache failure、normal dirty prompt，三 viewport／鍵盤 | 文案／原因／CTA 正確，無 overflow；UI screenshot／量測 |
 | R10 | A→B、背景往返、重整、多分頁與錯誤重試前後 sentinel | Session／草稿／localStorage／業務 IDB／舊 release cache 保留；真 browser |
 | R11 | 以受控 build A 開啟 `/quick-task/`，切換候選至 B 並觸發 worker update | quick shell 延遲載入共用 updater，在安全邊界由 A 收斂至 B；title control 可用、仍留在 quick route、單一共用 root worker；真 Workbox browser |

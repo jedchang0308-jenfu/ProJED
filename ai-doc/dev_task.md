@@ -7555,9 +7555,10 @@ R14 current evidence為static 40/40與browser 27/27，新增S40／B52 armed pare
 
 ## DEV-134：PWA 載入失敗恢復與前版資產相容
 
-- 狀態：quick-task 更新生命週期補正已實作；R01～R11 本地回歸及部署授權已到位；Medium；開發點，父 DEV-041／096／097；正式發布與手機實機結果待本輪完成。
+- 狀態：quick-task 更新生命週期補正已部署 live，雙正式 origin readback 與正式網站 browser smoke PASS；手機既有安裝的實機重新開啟確認仍待使用者回報。Medium；開發點，父 DEV-041／096／097。
 - 人類原始授權：本 chat「手機APP沒有變更」後要求修正；此前明確要求推送遠端並部署到 live，並授權使用 ProJED-TEST／短期 Firebase 預覽補齊驗證及部署 live。授權範圍為本 canonical ProJED repo 與同一 Firebase live／preview 資源。
 - Authority：SPEC-041 DEV-134 addendum（frozen R01～R10）；ADR-047 架構保留；DEV-083 sealed artifact 兼容。
 - Source boundary：canonical `C:\VIBE CODING\ProJED\ProJED`，branch `持續優化3`，本輪起始 HEAD `a7bd84a22d0a00193b2699491729d5e40a3325d8`。保留原工作樹變更；限本輪 quick-task PWA lifecycle、直接回歸、SPEC／QA／索引更新。
-- 驗證：DEV-122 static 26/26、DEV-134 static 17/17、真 Workbox A→B browser 10/10（涵蓋 R11）、TypeScript、targeted ESLint 及 isolated build PASS；DEV-083 release regression 待同源 sealed release 執行。RD／本地 QA 分階段蒐證，不宣稱獨立 QC。詳見 [本地驗證紀錄](qa/QA-DEV-134-pwa-recovery-local-verification.md)，證據 `output/qa/dev-134/2026-10-02-quick-update/`、截圖 `output/playwright/dev-134/2026-10-02-quick-update-final/`；task-owned browser／runtime 已清理。
-- 完成條件：R01～R11 本地層級證據、同源 live deployment／雙 origin readback／功能 smoke；手機既有安裝仍需使用者關閉舊 app 後重開確認新 shell。不得以本地 PASS 覆寫歷史正式 cache failure，也不得將網站 smoke 宣稱為手機實機驗收。
+- 驗證：DEV-122 static 26/26、DEV-134 static 17/17、真 Workbox A→B browser 10/10（涵蓋 R11）、TypeScript、targeted ESLint、isolated build、DEV-083 sealed release gate、候選環境與 live 部署驗證均 PASS；正式 browser smoke 通過。RD／本地 QA 分階段蒐證，不宣稱獨立 QC。詳見 [驗證與部署紀錄](qa/QA-DEV-134-pwa-recovery-local-verification.md)、[REL-015](release/REL-015-DEV-134-QUICK-TASK-PWA-20261002.md)，證據 `output/qa/dev-134/2026-10-02-quick-update/`、`output/release/dev-083/20261002034352-6ee8fb/`；task-owned browser／runtime 已清理。
+- 發布綁定：產品程式 commit `e9317e66e3cbe5c9163a27a2bf045611ea0760cf`；live release `20261002034352-6ee8fb`；Firebase project/site `projed-cc78d`。`web.app` 與 `firebaseapp.com` 皆回傳 Quick Task route 200，HTML、quick bundle 與延遲 updater bundle hash 均符合 sealed manifest。
+- 完成條件：R01～R11 本地層級證據、同源 live deployment、雙 origin readback 與正式網站 smoke 已完成；手機既有安裝仍需完整關閉舊 app 後重開，確認載入新 shell。不得以本地或網站 browser PASS 覆寫歷史正式 cache failure，也不得宣稱手機實機驗收完成。
