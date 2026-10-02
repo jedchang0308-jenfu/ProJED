@@ -2,7 +2,7 @@
 
 ## Documentation Map Update - 2026-10-02（手機安裝模式 UI 一致性）
 
-手機與本機差異已定位為平台／URL 與空任務清單的 UI 分支：Android installed 預設入口缺三點選單，零 pending 任務又連同 auth panel 被隱藏。依使用者比較截圖，在 DEV-133 Rev 10 統一各模式標頭選單，帳號狀態不再依 task count 消失；安裝與選用換圖導引保留明確點擊與 pending-data guard。目前 TypeScript／targeted ESLint PASS，舊 live 的 16 個 empty-UI 情境重現 FAIL；修正版發布／相同情境驗證進行中。詳見 [SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md)、[QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md)。
+手機與本機差異已定位為平台／URL 與空任務清單的 UI 分支：Android installed 預設入口缺三點選單，零 pending 任務又連同 auth panel 被隱藏。DEV-133 Rev 10 統一各模式標頭選單，帳號狀態不再依 task count 消失，修正既有任務清單首次預設展開；安裝與選用換圖導引保留明確點擊與 pending-data guard。source `e69ac3f` 已推送、release `20261002054439-a538f0` 已部署 live；本機 38/38、兩正式 origin 平台 UI 71/71、79/79 canonical provenance、root smoke 與雙 origin entry hashes PASS。Android／iPhone display-mode 使用 Chromium 模擬，手機實機重開結果仍待使用者確認。詳見 [SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md)、[QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md)、[REL-015](release/REL-015-DEV-134-QUICK-TASK-PWA-20261002.md#2026-10-02-手機安裝模式-ui-corrective-release)。
 
 ## Documentation Map Update - 2026-10-02（手機 Quick Task 舊版快取補正）
 

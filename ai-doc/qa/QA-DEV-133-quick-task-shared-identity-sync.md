@@ -4,9 +4,11 @@
 
 使用者 Android 截圖已有縮小標題與主程式按鈕，但沒有三點選單，仍出現底部「安裝與圖示」；本機比較頁則有三點及一筆本機任務。source 查證有兩個顯示分支：`install.ts` 僅 browser＋`install=1` 使用標頭選單，Android installed 的預設 `/quick-task/` 改用底部連結；`renderRecovery()` 在 task count 為 0 時隱藏整個 auth wrapper。這些差異可由目前 live `20261002034352-6ee8fb` 的匿名獨立 browser contexts 重現，不再一概歸因於 stale shell。
 
-修正僅涉及安裝導引呈現與 recovery wrapper visibility；資料／Session／claim／同步契約不變。沒有任務時 auth status／login 仍可見、內層 task details 隱藏；有未綁定任務時維持首次展開清單。平台安裝說明與 Android 選用换圖／pending-data guard 收入明確點擊才開啟的 dialog。舊 footer entry 不再存在。
+修正僅涉及安裝導引呈現與 recovery wrapper visibility；資料／Session／claim／同步契約不變。沒有任務時 auth status／login 仍可見、內層 task details 隱藏；有未綁定任務時維持首次展開清單。平台安裝說明與 Android 選用換圖／pending-data guard 收入明確點擊才開啟的 dialog。舊 footer entry 不再存在。
 
-`scripts/verify-dev-133-unified-status-hosted.pw.js` 改以兩正式 origin、browser／Android browser／Android installed／iPhone installed 四組 UA/display-mode 與 query 有無兩組入口驗證。舊 live 的 16 個 empty-UI 案例全部重現 FAIL；修正版 local／live 結果待本輪完成。TypeScript 與 targeted ESLint PASS。紀錄 `output/qa/dev-133/platform-ui/before.log`、`runtime-before.json`；browser contexts 與 task-owned session 已關閉。這是桌面 Chromium 的平台訊號模擬，不宣稱真 Android／iPhone 實機驗收；任務 fixture 只存獨立 disposable browser 的 IDB，無 authenticated remote RPC writes。
+`scripts/verify-dev-133-unified-status-hosted.pw.js` 改以兩正式 origin、browser／Android browser／Android installed／iPhone installed 四組 UA/display-mode 與 query 有無兩組入口驗證。舊 live 的 16 個 empty-UI 案例全部重現 FAIL；修正版 sealed artifact 本機 38/38、兩正式 origin 71/71 PASS，page errors 0。TypeScript 與 targeted ESLint PASS。紀錄 `output/qa/dev-133/platform-ui/before.log`、`local-result.json`、`live-result.json`、`live-readback.json`；browser contexts 與 task-owned session 已關閉，preview 4175 portReleased=true。這是桌面 Chromium 的平台訊號模擬，不宣稱真 Android／iPhone 實機驗收；任務 fixture 只存獨立 disposable browser 的 IDB，無 authenticated remote RPC writes。
+
+初次本機量測未等非同步 IDB render 完成，修正 verifier 等待目標狀態後另發現真正的預設展開初始化問題：auth wrapper 先顯示，導致 `wasHidden` 失去首次任務清單出現的訊號。HTML 內層 details 初始 `hidden`，再由資料 renderer 顯示／展開；保留失敗 log（`local-initial.log`、`local-default-open-failure.log`），新 artifact 重跑全組 PASS。產品 source `e69ac3f452adf1b534fba458b2c30170f647b10c` 已推送並發布為 `20261002054439-a538f0`；direct receipt complete=true／verification=passed，79/79 canonical provenance 與 root browser smoke PASS。兩 origin 的 Quick Task HTML 及四個 entry assets hash 均符合 sealed manifest；正式窄版 screenshot 已產生。結果見 [REL-015 corrective release](../release/REL-015-DEV-134-QUICK-TASK-PWA-20261002.md#2026-10-02-手機安裝模式-ui-corrective-release)。
 
 ## 2026-10-02 分支部署前本機驗證
 

@@ -1,6 +1,7 @@
 # REL-015 — DEV-134 Quick Task PWA live update lifecycle
 
 日期：2026-10-02
+最新 corrective release：`20261002054439-a538f0`／product source `e69ac3f`；詳見本文末尾手機安裝模式 UI 補記。以下原始 binding 保留為第一次 lifecycle 發布的歷史紀錄。
 狀態：Live deployed；dual-origin readback 與正式網站 browser smoke PASS。手機既有安裝仍待使用者實機確認。
 專案／環境：ProJED／Firebase Hosting production live (`projed-cc78d`)
 來源任務：DEV-134；release pipeline：DEV-083；規格：SPEC-041
@@ -36,3 +37,18 @@
 未執行 live database／business data writes，未變更 Auth／IAM，未清除使用者資料。既有手機安裝需要完整關閉舊 app 後重新開啟一次以載入新版 shell；手機端結果待使用者確認。不得要求清除資料或解除安裝，以免影響尚未同步任務。
 
 Level 3 與 candidate 是短期驗證 channel，均預定於 2026-10-03 到期。正式 live 保留前一版 release 作回復錨點；未執行回復。
+
+## 2026-10-02 手機安裝模式 UI corrective release
+
+手機新截圖的三點選單與登入提示差異可由目前 source 重現：installed mode 的預設 URL 改用 footer entry，零 pending 任務又隱藏整個 auth wrapper。此次補正統一標頭入口與帳號狀態顯示，並讓已存在任務清單在初始化後預設展開；Auth／Session／owner／claim／RPC／outbox 資料契約不變。
+
+- Product source：`e69ac3f452adf1b534fba458b2c30170f647b10c`，branch `持續優化3`，已推送 origin。
+- Live release：`20261002054439-a538f0`；tree SHA-256 `033d170215227c4a9a2d0c081df458d2c79c7dc7a46de7d3c10aff71fb55f57b`。
+- Fast direct release：此變更為可回復的 UI 呈現／入口修正，不改登入或資料邊界；沿 SPEC-083 direct executor，沒有建立新的 TEST preview／candidate 或執行遠端資料 migration。
+- Recovery anchor：發布前 live version `24124903d23529bc`，release `1790913104924000`，product release `20261002034352-6ee8fb`；未執行 rollback。
+- TypeScript／targeted ESLint、sealed artifact 本機平台 UI 38/38 PASS；正式 canonical provenance 79/79、root browser smoke、兩 origin 平台 UI 71/71 PASS，page errors 0。
+- `output/release/dev-083/20261002054439-a538f0/direct-evidence.json`：published=true、complete=true、verification=passed；feature runner SHA-256 `44661b8cacc98c28f1e24c48a16a07d0f5fe515dca790fe4b30c3996cdcf8c80`。
+- `output/qa/dev-133/platform-ui/live-readback.json`：兩 origin `/quick-task/` HTTP 200，同一 source/release；HTML、`assets/quickTask-CXIjE4Y2.js`、`assets/quickTask-B3NsuS91.css` 與其餘 entry assets SHA-256 符合 sealed manifest。
+- UI fixture 只存於匿名 disposable browser contexts 的本機 IDB，remote RPC writes=0；各 contexts／task-owned sessions 已關閉，task-owned preview 4175 已釋放。沒有更動使用者裝置資料或既有 browser 分頁。
+
+Android／iPhone UA 與 installed display-mode 使用桌面 Chromium 模擬；真手機重新開啟確認仍待使用者回報。不同裝置的未綁定本機任務數量可不同，不能以 localhost 的一筆記錄推論手機也必須存在一筆。首輪正式及本機失敗紀錄保留於 [QA-DEV-133](../qa/QA-DEV-133-quick-task-shared-identity-sync.md#2026-10-02-手機-installed-ui-一致性補正)，不以新 PASS 覆寫。

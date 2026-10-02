@@ -8,7 +8,7 @@ Cold start：先讀下方 `## 總任務清單`；需要特定 DEV 詳細歷史�
 
 ## DEV-133 快速建任務同帳號與自動同步 - 2026-09-30
 
-**2026-10-02 手機 installed UI 一致性補正。** `829ac02` 及此前程式／文件已推送 origin；使用者新截圖顯示 installed mode 與零 pending count 的兩個 UI 分支造成三點選單及登入提示消失。Rev 10 統一標頭入口、登入狀態與 task details 的顯示邊界，保留 Android 選用換圖的本機 pending guard；TypeScript／targeted ESLint PASS，16 個舊 live empty-UI 例重現 FAIL，修正版 browser／live 結果待本輪。下列 Git 待核准等狀態為當時快照，以本段及最新 QA／REL-015 為準。
+**2026-10-02 手機 installed UI 一致性補正已部署。** source `e69ac3f` 已推送，live release `20261002054439-a538f0`。Rev 10 統一 installed／browser／query 的標頭三點入口、零任務時仍顯示登入狀態，並修正既有任務清單初始預設展開；保留 Android 選用換圖的本機 pending guard。TypeScript／targeted ESLint、sealed 本機 38/38、兩正式 origin 平台 UI 71/71、79/79 canonical provenance 與 root smoke 均 PASS；手機實機重開待使用者確認。16 個舊 live empty-UI FAIL 與初次本機時序／預設展開失敗均保留於 QA。下列 Git 待核准等狀態為當時快照，以本段及最新 QA／REL-015 為準。
 
 **2026-10-01 DEV-133 同步核心與統一 UI 已正式發布並驗收。** 最新 UI product source `9b5f73a1b32bdd8dc984c3017dceaf7225967d40`／release `20261001074739-df101c`／live version `b88f428e0efa541e`，雙正式 origin 各 54/54、正式匿名 UI 10/10、隔離 UI／IDB＋Auth/RPC SIMULATION 25/25、型別及 lint PASS。這次僅三個 UI 來源，Auth／RPC／IDB／sync 模組沿用原 `8376086` 的真登入／同步40/40證據，未把該40項改算新套件實測。未改遠端設定、migration、業務資料或 IAM／Secret；暫時 browser／ports已清理。證據見 [REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)；Git目的地確認／push／PR仍待。
 
@@ -1126,11 +1126,11 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 證據：本地 390×844 headless Edge 操作與 `output/playwright/dev-132/*-mobile-cdp.png`、`tsc --noEmit`、DEV-034 static 23/23、targeted ESLint 0 errors；移位前 DEV-132／130／034／038 回歸與本節執行紀錄。
   - 計入交付：否（尚未正式發布）。
 
-- ◐ DEV-133 [交付點] [核心已交付；手機 UI 補正中] [P1] [同分支修正與 live 驗證] 快速建任務各自登入與自動同步
+- ◐ DEV-133 [交付點] [核心及手機 UI 網站驗證通過] [P1] [已推送與 live 部署；手機實機待確認] 快速建任務各自登入與自動同步
   - 摘要：共用 ProJED 帳號系統、兩個 App 各自登入與保存 Session；保留 owner-bound 離線保存、自動重試及七日已同步副本清理。
   - 來源 ID：使用者 2026-10-01 採用獨立登入方案及修改開發文件／補齊到架構定案指示；延續 2026-09-30 DEV-133。
   - 父任務：DEV-122；延續 DEV-131 雙網址安裝，相容 DEV-130／132。
-  - 下一步：部署 Rev10 顯示補正並完成兩 origin 平台／query 情境驗證；實機結果待使用者確認。
+  - 下一步：取得手機既有 installed profile 的重新開啟確認；Rev10 兩 origin 平台／query 矩陣已通過。
   - 阻塞 / 恢復條件：Git 推送已完成，沿用明確 live 授權與同專案 corrective cycle；核心及 Rev9 證據保留，各層結果不互相代替。
   - 證據：[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)、[QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md)、[SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md)、[ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md)；canonical terminal-evidence.json 與 worktree activation-resume-evidence.json 綁定 source／artifact／case 層。
   - 計入交付：是（未完成，產品完成率貢獻 0）。
