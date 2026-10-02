@@ -795,4 +795,6 @@ Quick Task 是獨立 MPA document，但與主程式共用同源 `/sw.js`。舊�
 | R11 | 以受控 build A 開啟 `/quick-task/`，切換候選至 B 並觸發 worker update | quick shell 延遲載入共用 updater，在安全邊界由 A 收斂至 B；title control 可用、仍留在 quick route、單一共用 root worker；真 Workbox browser |
 | R12 | Quick Task safe／dirty／blocked 與 load／update recovery states | safe 更新維持靜默自動套用；dirty／blocked 顯示與主程式相同的「新版已就緒／重新載入／稍後」安全提示；失敗顯示相同重試／快取恢復動作；320px 不溢出；DOM browser fixture |
 
+2026-10-02 R12 live 驗證：release `20261002091531-2a1246` 的正式 read-only Quick Task smoke 確認 shared prompt 已掛載且 safe 狀態不顯示提示，320px 無水平溢出；canonical provenance 78/78。`web.app` 與 `firebaseapp.com` 的 Quick Task HTML／entry JS／CSS／prompt chunk／updater chunk 共 6 paths 均與 sealed manifest hash 相符。dirty／recovery 可見互動另由 Q06 隔離 browser fixture 9/9 驗證；這些 fresh browser 證據不推定手機舊 client 已更新。
+
 QC 在候選 source freeze 後執行；最初正式截圖 failure 保留。fixture 只支持實際層級，不將新 profile／匿名 smoke 代替使用者既有 profile 或正式 lifecycle。結果與精確命令由 DEV-134 記錄。

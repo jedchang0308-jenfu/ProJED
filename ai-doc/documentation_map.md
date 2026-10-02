@@ -2,7 +2,7 @@
 
 ## Documentation Map Update - 2026-10-02（Quick Task 更新提示）
 
-Quick Task 沿用主程式 PWA updater、安全 reload gate 與提示行為：safe 狀態靜默更新，dirty／blocked 狀態可選「重新載入／稍後」，失敗提供同一套恢復動作。DEV-134 R12 static 19/19、隔離 UI browser 9/9（320×844）、TypeScript 與 targeted ESLint PASS；正式部署與雙 origin readback 完成後更新 release binding。見 [SPEC-041](specs/SPEC-041-pwa-update-notification-cache-recovery.md)、[QA-DEV-134](qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-02-quick-task-更新提示與主程式一致)、[REL-015](release/REL-015-DEV-134-QUICK-TASK-PWA-20261002.md#2026-10-02-quick-task-更新提示與主程式一致)。
+Quick Task 沿用主程式 PWA updater、安全 reload gate 與提示行為：safe 狀態靜默更新，dirty／blocked 狀態可選「重新載入／稍後」，失敗提供同一套恢復動作。R12 static 19/19、隔離 UI browser 9/9（320×844）、正式 read-only smoke 與 canonical 78/78 provenance PASS。release `20261002091531-2a1246`（source `23a566bf49ae2e2cdf5e7b5bc6bad48cc174a18b`）已部署；兩個正式 origin 各 6 個 Quick Task 路徑 hash 符合 sealed manifest。真手機既有 app 結果仍待使用者確認。見 [SPEC-041](specs/SPEC-041-pwa-update-notification-cache-recovery.md)、[QA-DEV-134](qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-02-quick-task-更新提示與主程式一致)、[REL-015](release/REL-015-DEV-134-QUICK-TASK-PWA-20261002.md#2026-10-02-quick-task-更新提示與主程式一致)。
 
 ## Documentation Map Update - 2026-10-02（舊手機安裝 bootstrap）
 

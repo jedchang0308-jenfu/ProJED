@@ -1,8 +1,8 @@
 # REL-015 — DEV-134 Quick Task PWA live update lifecycle
 
 日期：2026-10-02
-最新 corrective release：`20261002054439-a538f0`／product source `e69ac3f`；詳見本文末尾手機安裝模式 UI 補記。以下原始 binding 保留為第一次 lifecycle 發布的歷史紀錄。
-狀態：Live deployed；dual-origin readback 與正式網站 browser smoke PASS。手機既有安裝仍待使用者實機確認。
+最新 corrective release：`20261002091531-2a1246`／product source `23a566bf49ae2e2cdf5e7b5bc6bad48cc174a18b`；詳見本文末尾 Quick Task 更新提示補記。以下較早 bindings 保留作歷史紀錄。
+狀態：Live deployed；78/78 canonical provenance、正式 Quick Task prompt smoke 與 dual-origin assets readback PASS。手機既有安裝仍待使用者實機確認。
 專案／環境：ProJED／Firebase Hosting production live (`projed-cc78d`)
 來源任務：DEV-134；release pipeline：DEV-083；規格：SPEC-041
 
@@ -63,7 +63,12 @@ Android／iPhone UA 與 installed display-mode 使用桌面 Chromium 模擬；�
 
 ## 2026-10-02 Quick Task 更新提示與主程式一致
 
-依使用者「希望跟主程式一樣的行為」，Quick Task 現在接入主程式同一個 updater state／actions 及安全 reload gate：safe 狀態沿用靜默自動更新；dirty／blocked 顯示「新版已就緒」、「重新載入」、「稍後」；recoverable failure 提供共用重試與快取恢復。此節在部署前記錄，部署 binding 與正式雙 origin readback 將於完成後補入。
+依使用者「希望跟主程式一樣的行為」，Quick Task 現在接入主程式同一個 updater state／actions 及安全 reload gate：safe 狀態沿用靜默自動更新；dirty／blocked 顯示「新版已就緒」、「重新載入」、「稍後」；recoverable failure 提供共用重試與快取恢復。
 
 - 本地驗證：R12 static 19/19、Quick Task prompt browser 9/9（含 320×844 無溢出）、TypeScript、targeted ESLint、diff check PASS；圖 `output/playwright/dev134-quick-task-prompt-320x844.png`。
-- 依既有授權，後續提交、推送與部署沿用 ProJED production live 的 release gate；無 DB/Auth/IAM/使用者資料變更。
+- Product source：`23a566bf49ae2e2cdf5e7b5bc6bad48cc174a18b`，branch `持續優化3`，已推送 origin。
+- Live release：`20261002091531-2a1246`；sealed tree SHA-256 `6cbdd571fac9a175a11b1af005f29c4bad5da34c49c57469a455477a7cd8784c`；Firebase site `projed-cc78d`。
+- Recovery anchor：發布前 version `7d5d6e292b059fc0`／release `1790920074933000`；沒有執行 rollback。
+- `output/release/dev-083/20261002091531-2a1246/direct-evidence.json`：published=true、complete=true、verification=passed；canonical provenance 78/78、root app-shell smoke PASS、`verify-dev-134-quick-task-update-prompt-hosted.pw.js` 正式 Quick Task 320×844 read-only smoke PASS。
+- 兩個正式 origin `projed-cc78d.web.app` 與 `projed-cc78d.firebaseapp.com` 均回傳同 release／source commit；release meta、Quick Task HTML、entry JS/CSS、prompt chunk、updater chunk 共 6 個 path 的 hash 均符合 sealed manifest。
+- 未改 DB/Auth/IAM，未清除使用者資料。正式 browser 使用匿名 disposable context；手機原有 PWA client 是否已重啟載入新版仍待實機確認。

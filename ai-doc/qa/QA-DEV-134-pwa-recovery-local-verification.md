@@ -93,3 +93,11 @@ Quick Task 在原有安全生命週期上接入相同的可見更新提示。saf
 | Q07 | TypeScript、變更來源 ESLint、`git diff --check` | 均 PASS。 |
 
 代表畫面：`output/playwright/dev134-quick-task-prompt-320x844.png`。驗證 harness 使用 task-owned Vite／Playwright runtime，結束時 browserClosed=true、portReleased=true。這是隔離瀏覽器行為驗證，部署後的手機舊 client／實機是否已套用仍須實機回報；部署本身不會替手機執行中的舊 JavaScript 熱換程式。
+
+本地 PASS 後的一次重跑在 UI 測試開始前被 Playwright CLI 擋下（`EPERM`，無法開啟已安裝 Chromium 目錄）；harness 已關閉該次 browser session 並釋放 port。先前保存的 9/9 行為驗證結果未被覆寫；同輪 R12 static、型別及 lint 仍 PASS。這是執行環境啟動錯誤，沒有形成產品行為的反證。
+
+## 2026-10-02 Quick Task 更新提示正式部署驗證
+
+Live release `20261002091531-2a1246`，source commit `23a566bf49ae2e2cdf5e7b5bc6bad48cc174a18b`。`output/release/dev-083/20261002091531-2a1246/direct-evidence.json` 記錄 `published=true`、`complete=true`、`verification=passed`：canonical origin sealed artifact provenance 78/78、app-shell browser smoke PASS、read-only Quick Task hosted feature smoke PASS（預期 release ID 相符、提示元件已掛載但 safe 狀態隱藏、320px 無水平溢出、page/runtime errors=0、remote RPC writes=0）。
+
+另對 `https://projed-cc78d.web.app` 及 `https://projed-cc78d.firebaseapp.com` 讀回 `release-meta.json`、`quick-task/index.html`、Quick Task entry JS/CSS、PWA prompt chunk、PWA update service chunk；各 6 個路徑皆為 HTTP 200，release/source identity 與 sealed artifact SHA-256 完全一致。這驗證兩個網站 origin 提供新版；不代表手機原有 service worker client 已重啟，真機畫面仍待使用者確認。此輪未變更 DB、Auth、IAM 或使用者資料。
