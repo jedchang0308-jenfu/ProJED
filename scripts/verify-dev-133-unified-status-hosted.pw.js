@@ -37,6 +37,8 @@ async (page) => {
           });
           await tab.goto(origin + '/quick-task/' + query, { waitUntil: 'domcontentloaded' });
           await tab.waitForFunction(() => document.querySelector('#quick-task-auth-status')?.textContent.includes('尚未登入'), null, { timeout: 15000 });
+          await tab.waitForFunction(() => document.querySelector('#quick-task-recovery-details')?.hidden
+            && document.querySelector('#quick-task-auth-status')?.checkVisibility(), null, { timeout: 5000 });
           const name = new URL(origin).hostname + '/' + mode.name + '/' + (query || 'default');
           const ui = await tab.evaluate(() => ({
             menu: Boolean(document.querySelector('.quick-task-header-actions [data-quick-install-menu]')),
@@ -97,6 +99,6 @@ async (page) => {
   check('no-page-errors', errors.length === 0, errors);
   const result = { ok: checks.every(item => item.ok), scope: 'anonymous fresh-browser UI; Android/iPhone UA and display-mode simulation; disposable local outbox fixture only', expectedReleaseId, checks, errors, contextsClosed: true };
   console.log(JSON.stringify(result));
-  if (!result.ok) throw new Error('DEV-133 platform UI failed: ' + checks.filter(item => !item.ok).map(item => item.name).join(', '));
+  if (!result.ok) throw new Error('DEV-133 platform UI failed: ' + JSON.stringify(checks.filter(item => !item.ok)));
   return result;
 }
