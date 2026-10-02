@@ -63,6 +63,20 @@ button, input { font: inherit; }
 .quick-task-voice[data-listening="true"] { background: #fecaca; color: #991b1b; }
 .quick-task-submit { width: 100%; min-height: 54px; margin-top: 14px; border: 0; border-radius: 14px; background: #0f766e; color: white; font-weight: 800; cursor: pointer; box-shadow: 0 8px 16px rgb(15 118 110 / 18%); }
 .quick-task-submit-note { margin: 8px 4px 0; color: #64748b; font-size: 13px; line-height: 1.55; }
+.quick-task-pwa-update { position: fixed; z-index: 9999; inset-inline: 0; bottom: 0; padding: 12px 12px calc(env(safe-area-inset-bottom, 0px) + 8px); }
+.quick-task-pwa-update[hidden] { display: none; }
+.quick-task-pwa-update-toast { display: flex; width: min(100%, 576px); flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 auto; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 10px; background: white; box-shadow: 0 16px 30px rgb(15 23 42 / 16%); }
+.quick-task-pwa-update-content { flex: 1 1 160px; min-width: 0; }
+.quick-task-pwa-update-content h2 { margin: 0; color: #0f172a; font-size: 14px; font-weight: 700; line-height: 20px; }
+.quick-task-pwa-update-content p { margin: 2px 0 0; overflow-wrap: anywhere; color: #475569; font-size: 12px; line-height: 16px; }
+.quick-task-pwa-update-content p[hidden], .quick-task-pwa-update-controls[hidden], .quick-task-pwa-update-buttons[hidden] { display: none; }
+.quick-task-pwa-update-controls { display: flex; flex: 0 1 auto; justify-content: flex-end; }
+.quick-task-pwa-update-buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+.quick-task-pwa-update-action { min-height: 32px; padding: 0 10px; border: 1px solid transparent; border-radius: 8px; font-size: 12px; font-weight: 650; cursor: pointer; }
+.quick-task-pwa-update-primary { color: #fff; background: #0f766e; }
+.quick-task-pwa-update-secondary { color: #334155; background: transparent; }
+.quick-task-pwa-update-action:disabled { cursor: wait; opacity: .6; }
+.quick-task-pwa-update-action:focus-visible { outline: 2px solid #0f766e; outline-offset: 2px; }
 .quick-task-message { min-height: 24px; margin: 14px 2px 0; color: #475569; font-size: 14px; }
 .quick-task-success { flex: 1 1 auto; min-width: 0; margin: 0; padding: 0; border: 0; background: transparent; color: #0f172a; }
 .quick-task-success[hidden] { display: none; }

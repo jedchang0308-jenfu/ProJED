@@ -7553,6 +7553,8 @@ R14 current evidence為static 40/40與browser 27/27，新增S40／B52 armed pare
 
 ## DEV-134：PWA 載入失敗恢復與前版資產相容
 
+- 2026-10-02 Quick Task 更新提示補正：依使用者要求沿用主程式行為，safe 狀態靜默自動更新；dirty／blocked 時顯示共用「新版已就緒」安全提示，load／update failure 顯示相同恢復動作。R12 static 19/19、獨立 Quick Task UI 9/9（320×844）、TypeScript、targeted ESLint、diff check PASS；截圖與清理證據記於 [QA-DEV-134](qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-02-quick-task-更新提示與主程式一致)。本輪 source 尚待提交與 live 發布，真手機執行中舊 client 結果不由本地 fixture 推定。
+
 - 2026-10-02 舊安裝補驗：真舊 sealed artifact → current artifact、保留其他同 origin client 的情境已重現。network-bypass 取得新 HTML，但 shortcut 仍可回舊版；關閉所有相關 ProJED 分頁與 App 後再開可讀新版，已建立本機任務保留。更正先前只關 App 的指引；fresh browser PASS 不代表 legacy bootstrap 自動完成。證據／操作見 [QA-DEV-134 bootstrap](qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-02-舊安裝-bootstrap-重現)、[REL-015](release/REL-015-DEV-134-QUICK-TASK-PWA-20261002.md#2026-10-02-舊安裝-bootstrap-與操作指引更正)。此輪產品 source/live 不變；手機自身 client 狀態與實機結果仍未確認。
 
 - 狀態：quick-task 更新生命週期補正已部署 live，雙正式 origin readback 與正式網站 browser smoke PASS；手機既有安裝的實機重新開啟確認仍待使用者回報。Medium；開發點，父 DEV-041／096／097。

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Quick Task update prompt fixture</title>
+    <link rel="stylesheet" href="/src/quickTask/quick-task.css" />
+  </head>
+  <body>
+    <main class="quick-task-shell">
+      <header class="quick-task-header"><h1>ProJED-快速建任務</h1></header>
+      <section class="quick-task-capture-card"><input aria-label="任務名稱" placeholder="要記下什麼待辦任務?" /></section>
+    </main>
+    <script type="module">
+      import { mountQuickTaskPwaUpdatePrompt } from '/src/features/quickTaskCapture/pwaUpdatePrompt.ts';
+      let state = { status: 'idle', updateAvailable: false, dismissedAt: null, reloadSafetyState: 'safe', failureKind: null, errorMessage: null };
+      const listeners = new Set();
+      const actions = { apply: 0, retry: 0, recover: 0, dismiss: 0 };
+      const operations = Object.fromEntries(Object.keys(actions).map(key => [key, async () => { actions[key] += 1; }]));
+      mountQuickTaskPwaUpdatePrompt({
+        subscribe(listener) { listeners.add(listener); listener(state); return () => listeners.delete(listener); },
+        ...operations,
+        dismiss() { actions.dismiss += 1; state = { ...state, dismissedAt: Date.now() }; listeners.forEach(listener => listener(state)); },
+      });
+      window.__DEV134_QUICK_UPDATE_FIXTURE = {
+        set(value) { state = { ...state, ...value }; listeners.forEach(listener => listener(state)); },
+        actions,
+      };
+    </script>
+  </body>
+</html>

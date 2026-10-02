@@ -20,6 +20,7 @@ const check = async (name, work) => {
 const compile = source => ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 const quickMain = fs.readFileSync('src/quickTask/main.ts', 'utf8');
 const quickPwaLifecycle = quickMain.slice(quickMain.indexOf('const installQuickPwaLifecycle'), quickMain.indexOf('const needsRecovery'));
+const quickPromptSource = fs.readFileSync('src/features/quickTaskCapture/pwaUpdatePrompt.ts', 'utf8');
 const transactionModule = { exports: {} };
 vm.runInNewContext(compile(fs.readFileSync('src/services/pwaUpdateTransaction.ts', 'utf8')), { exports: transactionModule.exports, module: transactionModule });
 const tx = transactionModule.exports;
@@ -64,6 +65,27 @@ await check('R11-quick-shell-starts-shared-update-lifecycle-after-reload-safety'
   assert.ok(quickPwaLifecycle.includes('setupPwaLifecycle();'));
   assert.ok(quickMain.includes('installQuickPwaLifecycle(installReloadSafety());'));
   assert.ok(!quickMain.includes("from '../services/pwaUpdateService'"));
+});
+await check('R12-quick-shell-mounts-the-shared-safe-reload-prompt-after-update-service', () => {
+  assert.ok(quickPwaLifecycle.includes('setupPwaLifecycle();'));
+  assert.ok(quickPwaLifecycle.indexOf('setupPwaLifecycle();') < quickPwaLifecycle.indexOf("await import('../features/quickTaskCapture/pwaUpdatePrompt')"));
+  for (const action of ['subscribePwaUpdateState', 'applyPwaUpdate', 'retryPwaUpdate', 'clearPwaApplicationCacheAndReload', 'dismissPwaUpdatePrompt']) assert.ok(quickPwaLifecycle.includes(action));
+  assert.ok(quickPromptSource.includes("state.reloadSafetyState === 'dirty' || state.reloadSafetyState === 'blocked'"));
+  assert.ok(quickPromptSource.includes("state.status === 'recoverable-cache-error'"));
+  assert.ok(quickPromptSource.includes("state.status === 'failed'"));
+});
+await check('R12-quick-prompt-mirrors-main-visibility-and-dismiss-contract', () => {
+  const promptModule = { exports: {} };
+  vm.runInNewContext(compile(quickPromptSource), { exports: promptModule.exports, module: promptModule });
+  const visible = promptModule.exports.shouldShowQuickTaskPwaUpdatePrompt;
+  const base = { status: 'idle', updateAvailable: true, dismissedAt: null, reloadSafetyState: 'safe' };
+  assert.equal(visible(base), false);
+  assert.equal(visible({ ...base, reloadSafetyState: 'dirty' }), true);
+  assert.equal(visible({ ...base, reloadSafetyState: 'blocked' }), true);
+  assert.equal(visible({ ...base, reloadSafetyState: 'dirty', dismissedAt: Date.now() }), false);
+  assert.equal(visible({ ...base, status: 'recoverable-cache-error', reloadSafetyState: 'safe' }), true);
+  assert.equal(visible({ ...base, status: 'failed', reloadSafetyState: 'safe' }), true);
+  assert.equal(visible({ ...base, updateAvailable: false, status: 'updated' }), false);
 });
 await check('R01-failed-replay-preserves-original-reason-and-stops-background-apply', async () => {
   const f = serviceFixture();

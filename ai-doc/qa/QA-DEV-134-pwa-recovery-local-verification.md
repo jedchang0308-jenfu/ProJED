@@ -81,3 +81,15 @@ HTTP routing fixture 與 browser fixture 均在啟動前記錄 project／PID／p
 | Live Quick Task browser smoke | release 驗證收據及部署後 canonical 390×844 smoke | title／submit controls enabled、延遲 updater 已載入、root `/sw.js` active、無 page errors／failed requests。這是 fresh browser 網站驗證，不代表使用者既有手機 profile 或 Android／iPhone 實機驗證。 |
 
 沒有執行 live database／business data writes、Auth／IAM 變更或使用者資料清除。部署不能改寫已在使用者手機執行中的舊 JavaScript；手機既有安裝須完整關閉 app 後重新開啟一次以載入新版 shell，屆時仍要由使用者確認結果。不得要求清除資料或解除安裝，以免影響尚未同步任務。
+
+## 2026-10-02 Quick Task 更新提示與主程式一致
+
+Quick Task 在原有安全生命週期上接入相同的可見更新提示。safe 狀態仍依共用 updater 自動套用並保持安靜；dirty／blocked 狀態顯示「新版已就緒」，由「重新載入」呼叫同一 safety gate、或選「稍後」記住 dismiss；recoverable load／update failure 顯示既有錯誤文案及「重試／清除快取後重整」。沒有新增 worker、資料清除路徑或同步協定。
+
+| 驗收 | 證據 | 結果／限制 |
+|---|---|---|
+| Q05 | `node scripts/verify-dev-134-pwa-recovery.mjs` | 19/19 PASS；新增 R12 source wiring、safe 靜默、dirty／blocked prompt、recovery states 與 dismiss contract。 |
+| Q06 | `node scripts/verify-dev-134-quick-task-update-prompt.mjs` | 9/9 PASS；safe 隱藏、dirty 提示與兩個 CTA、共享 dismiss/apply、recovery retry/cache actions、320×844 無水平溢出。 |
+| Q07 | TypeScript、變更來源 ESLint、`git diff --check` | 均 PASS。 |
+
+代表畫面：`output/playwright/dev134-quick-task-prompt-320x844.png`。驗證 harness 使用 task-owned Vite／Playwright runtime，結束時 browserClosed=true、portReleased=true。這是隔離瀏覽器行為驗證，部署後的手機舊 client／實機是否已套用仍須實機回報；部署本身不會替手機執行中的舊 JavaScript 熱換程式。

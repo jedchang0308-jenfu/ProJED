@@ -793,5 +793,6 @@ Quick Task 是獨立 MPA document，但與主程式共用同源 `/sw.js`。舊�
 | R09 | update/load/cache failure、normal dirty prompt，三 viewport／鍵盤 | 文案／原因／CTA 正確，無 overflow；UI screenshot／量測 |
 | R10 | A→B、背景往返、重整、多分頁與錯誤重試前後 sentinel | Session／草稿／localStorage／業務 IDB／舊 release cache 保留；真 browser |
 | R11 | 以受控 build A 開啟 `/quick-task/`，切換候選至 B 並觸發 worker update | quick shell 延遲載入共用 updater，在安全邊界由 A 收斂至 B；title control 可用、仍留在 quick route、單一共用 root worker；真 Workbox browser |
+| R12 | Quick Task safe／dirty／blocked 與 load／update recovery states | safe 更新維持靜默自動套用；dirty／blocked 顯示與主程式相同的「新版已就緒／重新載入／稍後」安全提示；失敗顯示相同重試／快取恢復動作；320px 不溢出；DOM browser fixture |
 
 QC 在候選 source freeze 後執行；最初正式截圖 failure 保留。fixture 只支持實際層級，不將新 profile／匿名 smoke 代替使用者既有 profile 或正式 lifecycle。結果與精確命令由 DEV-134 記錄。

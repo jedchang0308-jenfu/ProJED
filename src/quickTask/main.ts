@@ -292,8 +292,17 @@ const installQuickPwaLifecycle = (reloadSafetyReady: Promise<boolean>) => {
       return;
     }
     try {
-      const { setupPwaLifecycle } = await import('../services/pwaUpdateService');
+      const pwaUpdate = await import('../services/pwaUpdateService');
+      const { setupPwaLifecycle } = pwaUpdate;
       setupPwaLifecycle();
+      const { mountQuickTaskPwaUpdatePrompt } = await import('../features/quickTaskCapture/pwaUpdatePrompt');
+      mountQuickTaskPwaUpdatePrompt({
+        subscribe: pwaUpdate.subscribePwaUpdateState,
+        apply: pwaUpdate.applyPwaUpdate,
+        retry: pwaUpdate.retryPwaUpdate,
+        recover: pwaUpdate.clearPwaApplicationCacheAndReload,
+        dismiss: pwaUpdate.dismissPwaUpdatePrompt,
+      });
     } catch {
       // Keep the optional worker available if update orchestration cannot load.
       registerSharedRootWorker();

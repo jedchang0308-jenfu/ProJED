@@ -60,3 +60,10 @@ Android／iPhone UA 與 installed display-mode 使用桌面 Chromium 模擬；�
 已驗證的保留資料步驟：先保存正在輸入的任務；在手機原瀏覽器開啟同 origin `/quick-task/?install=1&projed_update_latest=20261002054439-a538f0`，讓新版 worker 下載；關閉該 origin 的所有 ProJED 瀏覽器分頁及已安裝 App，再由原圖示開啟。所有舊 clients 結束後 worker 正常啟用，普通 shortcut 讀回新版、三點選單存在，已建立的本機任務與 localStorage sentinel 保留。不需要清資料或重新安裝。獨立 Quick Task 安裝 origin 為 `https://projed-cc78d.firebaseapp.com`；不得改 origin 後把不同儲存誤算資料遺失。
 
 證據：`output/qa/dev-134/legacy-bootstrap/result.json` 的版本／選單／IDB 任務讀回 PASS、page errors=0；兩正式 origin 的更新連結 200、release/source/HTML hash 一致，見 `live-readback.json`。初次 harness 的選單 selector 未對齊而量到 0，保留 `result-initial.json`；更正後重跑。task-owned browserClosed／portReleased=true，沒有遠端寫入或使用者 profile 操作。此輪未變更產品程式、未重建或重部署；手機自身 worker/client 狀態及實機結果仍未取得，不能把隔離重現當成其確定根因。
+
+## 2026-10-02 Quick Task 更新提示與主程式一致
+
+依使用者「希望跟主程式一樣的行為」，Quick Task 現在接入主程式同一個 updater state／actions 及安全 reload gate：safe 狀態沿用靜默自動更新；dirty／blocked 顯示「新版已就緒」、「重新載入」、「稍後」；recoverable failure 提供共用重試與快取恢復。此節在部署前記錄，部署 binding 與正式雙 origin readback 將於完成後補入。
+
+- 本地驗證：R12 static 19/19、Quick Task prompt browser 9/9（含 320×844 無溢出）、TypeScript、targeted ESLint、diff check PASS；圖 `output/playwright/dev134-quick-task-prompt-320x844.png`。
+- 依既有授權，後續提交、推送與部署沿用 ProJED production live 的 release gate；無 DB/Auth/IAM/使用者資料變更。

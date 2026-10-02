@@ -1,5 +1,9 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-10-02（Quick Task 更新提示）
+
+Quick Task 沿用主程式 PWA updater、安全 reload gate 與提示行為：safe 狀態靜默更新，dirty／blocked 狀態可選「重新載入／稍後」，失敗提供同一套恢復動作。DEV-134 R12 static 19/19、隔離 UI browser 9/9（320×844）、TypeScript 與 targeted ESLint PASS；正式部署與雙 origin readback 完成後更新 release binding。見 [SPEC-041](specs/SPEC-041-pwa-update-notification-cache-recovery.md)、[QA-DEV-134](qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-02-quick-task-更新提示與主程式一致)、[REL-015](release/REL-015-DEV-134-QUICK-TASK-PWA-20261002.md#2026-10-02-quick-task-更新提示與主程式一致)。
+
 ## Documentation Map Update - 2026-10-02（舊手機安裝 bootstrap）
 
 DEV-134 補驗實際舊 sealed Quick Task／Workbox 升級：另一個同 origin 舊 client 可讓 shortcut 持續讀舊版；一次 network-bypass 只取得新 HTML，仍需關閉相關 ProJED 分頁與 App 才讓 waiting worker 啟用。保留本機任務的關閉／再開流程已在隔離 Chromium 驗證，正式雙 origin 更新連結仍為 current release；手機自身狀態／結果未確認。更正「只關 App 即可」指引，不要求重裝或清資料；此次只有證據文件更新，未重部署。見 [QA-DEV-134](qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-02-舊安裝-bootstrap-重現)、[REL-015](release/REL-015-DEV-134-QUICK-TASK-PWA-20261002.md#2026-10-02-舊安裝-bootstrap-與操作指引更正)。
