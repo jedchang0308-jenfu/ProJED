@@ -155,8 +155,8 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 - ◐ DEV-134 [開發點] [執行中] [P1] [更新操作第一批本地驗收通過；手機實機待確認] PWA 載入失敗恢復與前版資產相容
   - 摘要：修正失敗交易反覆提示、背景檢查誤報與恢復導覽命中舊 HTML；發布包保留上一版雜湊資產。
   - 父任務：DEV-041、DEV-096、DEV-097；發布包相容 DEV-083。
-  - 下一步：第一批1～3本地開發與驗收完成；接續發版須以本候選重新建立artifact及live證據，既有手機確認待辦保留。
-    - 更新操作文件 **Rev 4／RD Implementation Ready + 架構定案：已定案**；本地驗收通過，尚未提交／部署。
+  - 下一步：第一批1～3本地開發與驗收完成並已提交推送；正式建置受容量規則阻擋，待本次容量風險確認或空間恢復後建立artifact及live證據，既有手機確認待辦保留。
+    - 更新操作文件 **Rev 4／RD Implementation Ready + 架構定案：已定案**；本地驗收通過，產品commit `458b9a4`；尚未部署。
       見 [更新操作優化提案](#更新操作優化提案架構定案2026-10-03)、[工程契約](specs/SPEC-041-pwa-update-notification-cache-recovery.md#dev-134-更新操作架構定案2026-10-03)及[QA計畫與結果](qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-03-更新操作優化驗收計畫與結果)。
   - 證據：[DEV-134 本地驗證](qa/QA-DEV-134-pwa-recovery-local-verification.md)；`output/qa/dev-134/`。
   - 2026-10-03 本地維護：主程式／Quick Task 更新提示規則合併，修正 DEV-041 過時驗證；characterization、型別、lint、受影響回歸通過。本次尚未提交／部署，與既有 live 發布區分。
@@ -7564,7 +7564,7 @@ R14 current evidence為static 40/40與browser 27/27，新增S40／B52 armed pare
   既有 DEV-134 發布、本地維護與手機實機待辦保留各自狀態，不抵本批驗收。
 - 文件用途與主責：DEV-134 PM 保存需求與執行邊界，RD 技術規劃在 SPEC-041定案工程契約，QA／QC按本批計畫接手。
 - 本輪文件審查邊界：更新 ProJED 的 SPEC／QA／DEV／map；既有開發工作保留各自 source／verifier ownership。
-  第一批候選已凍結並完成本地驗收；本批提交／發布及手機實機確認尚未完成。
+  第一批候選已凍結並完成本地驗收；產品commit `458b9a4`已推送，本批發布及手機實機確認尚未完成。
 - 人類來源：本 chat「這個更新功能還可以如何優化？請提案」，接續要求「ProJED主程式也要有三點選單」
   及使用 `dev-pm`「寫成開發文件」，後續「補到架構定案」「rd-tech-lead 審視並優化開發文件」。兩個 App三點更新入口為已確認產品方向；
   依既有提案收斂第一批1～3作為本次架構交接範圍，4～5保留capsule；本次沒有擴張到其產品實作。
@@ -7654,7 +7654,7 @@ API、狀態權威、互斥／通知順序與版本可信條件只在 SPEC維護
   正常入口、焦點、真SW／bfcache及同安裝環境升級已完成本地驗收。最新計數、首跑失敗、證據層級與cleanup只見
   [QA Rev 4摘要](qa/QA-DEV-134-pwa-recovery-local-verification.md#rev-4-現行驗證摘要2026-10-03本地驗收通過)。
   同一Agent完成修正及凍結後事實驗證，非獨立QC；未將平台／Auth／麥克風模擬視為手機實機。
-  本批未提交／推送／部署；沒有新release package。下一個發版階段需正式artifact／live證據，後續4～5仍未要求實作。
+  本批產品已提交／推送（`458b9a4`）；尚未部署或建立新release package。正式建置受容量規則阻擋，須取得本次容量風險確認或空間恢復；正式artifact／live及手機仍待確認，後續4～5未要求實作。最新完成度與Spec Drift／Convergence結論見[QA續接](qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-03-完成度稽核與發版續接)。
 - 現行契約參考：[SPEC-041](specs/SPEC-041-pwa-update-notification-cache-recovery.md)、
   [ADR-047](decisions/ADR-047-pwa-per-client-reload-isolation.md)、
   [QA-DEV-134](qa/QA-DEV-134-pwa-recovery-local-verification.md)。

@@ -12,9 +12,9 @@
 Rev 4補自然邊界跨await、焦點DOM commit後的資格重驗與menu busy單一來源，延續Rev 3的重入及真返回契約。
 第一批1～3本地驗收通過；正常入口、真SW／bfcache及sealed前版同profile升級有證據，平台／Auth／麥克風模擬與手機實機分開。
 最新執行結果、失敗歷史與證據限制集中於 [QA Rev 4摘要](qa/QA-DEV-134-pwa-recovery-local-verification.md#rev-4-現行驗證摘要2026-10-03本地驗收通過)，避免索引計數過期。
-下一階段發版需正式候選artifact／live證據；本地工作未提交／部署，既有手機實機確認待辦保留。
+產品commit `458b9a4`已提交推送；正式建置受容量規則阻擋，待本次容量風險確認或空間恢復後建立artifact／live證據。現行完成度及Spec Drift／Convergence見[QA續接](qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-03-完成度稽核與發版續接)，既有手機實機確認待辦保留。
 載入成功確認／版本資訊與診斷複製保留後續capsule。
-沿用既有 DEV 與文件集，未新增交付點或計入產品完成；既有發布、手機未確認及本地未提交狀態保留。
+沿用既有 DEV 與文件集，未新增交付點或計入產品完成；既有發布及手機未確認狀態保留，下方未提交／部署文字為各輪歷史快照。
 
 ## Documentation Map Update - 2026-10-03（略過相同提示重繪）
 

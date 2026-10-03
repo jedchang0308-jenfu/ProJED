@@ -1,10 +1,19 @@
 # DEV-134 PWA 恢復本地驗證
 
-日期：2026-10-01 起，2026-10-03 更新。原始記錄是部署前本地驗證快照；本文件末尾的 2026-10-02 發布後補記提供後續 release 與 live evidence。同日兩輪提示維護及更新操作第一批1～3已完成本地驗證，尚未提交／部署。使用者手機既有安裝尚未實機驗證。
+日期：2026-10-01 起，2026-10-03 更新。原始記錄是部署前本地驗證快照；本文件末尾的 2026-10-02 發布後補記提供後續 release 與 live evidence。同日兩輪提示維護及更新操作第一批1～3已完成本地驗證，產品 commit `458b9a418509dbb391b38c80702d793aced60022` 已推送；本批尚未部署。使用者手機既有安裝尚未實機驗證。
+
+## 2026-10-03 完成度稽核與發版續接
+
+- 完整DEV-134尚未結案：第一批1～3本地開發／驗收通過；提交及遠端分支讀回已完成，本批正式artifact／live功能證據與手機既有安裝確認仍未取得。後續4～5仍未要求，不補算交付。
+- 本批產品及驗證腳本／開發文件共23檔已提交至 `458b9a418509dbb391b38c80702d793aced60022`，`origin/持續優化3` 的 `git ls-remote` 讀回相同commit；提交後工作樹clean。本文後續狀態修訂為文件續接，不改已驗收產品。
+- Spec Drift／Convergence Check：依Rev4工程契約逐項核對U01～U10與各層收據；下方對照及 `completion-audit/convergence.json` 支持第一批本地契約收斂。產品／verifier既有71筆hash仍吻合；歷史文件readback僅適用其原hash，本輪另記4份文件hash。這是root事實核對加Luna只讀審查，不是獨立QC執行或手機驗收。
+- 新增 `scripts/verify-dev-134-update-menu-hosted.pw.js` 為後續正式Quick Task功能smoke：真選單檢查、離線／重試、320／390／1440、鍵盤及零遠端業務寫入。Node syntax通過，但尚未執行；它不在舊binding中，也不以舊27／27替代正式功能驗證。Main真登入及手機實機仍分開記錄。
+- 原live部署授權延續於同一ProJED／Firebase `projed-cc78d` Hosting範圍。雙origin只讀查證目前仍為 `20261002091531-2a1246`／source `23a566bf…`；78檔前版sealed manifest核對通過，作資產相容與回復依據。
+- 建置前 `ai-dev-resource-governor` 回傳BLOCKED：2026-10-03T15:20Z附近free約49.51 GB（46.11 GiB），本次有效reservation25 GiB＋protected floor約23.78 GiB，需約48.78 GiB。盤點無可執行清理候選；已向人類詢問本次容量風險，未建置／部署或清理資源。這是容量規則的確認，不是重新要求live部署授權。
 
 ## 2026-10-03 更新操作優化驗收計畫與結果
 
-狀態：**第一批1～3本地驗收通過；未發布，手機實機未確認**。
+狀態：**第一批1～3本地驗收通過且已提交推送；未發布，手機實機未確認**。
 現行計畫：Rev 4，依 RD 技術主管續接審查修訂；case ID及第一批範圍保持一致。
 依人類「補到架構定案」固定第一批 1～3，最新文件審查補足同步通知重入、真返回次數與可見錯誤 gate。
 既有 RD／adapter 執行收據與文件審查分開記錄，不把單一 adapter assertion 補算整個 U 案例 PASS。
@@ -224,7 +233,7 @@ runtime、提交或部署；本批 U01～U10 仍待實作／待執行，這份�
 上列已執行 runner 的自有 browser／server 均已關閉且 portReleased=true；原 localhost4000／使用者分頁
 未被操作。receipt 中的 branch／HEAD、before／after hashes、SIMULATION與cleanup是證據 binding，
 不能推導正常 production bytes 或手機既有 profile 通過。此摘要取代 DEV／map 的即時計數副本；
-SPEC 只維護契約。Rev 4文件審查通過；第一批本地驗收通過，未提交／推送／部署。
+SPEC 只維護契約。Rev 4文件審查通過；本地驗收當時未提交／推送／部署，後續提交及發版狀態見本文完成度稽核。
 文件靜態核對歷史收據：`document-review-rev4/static-readback.json`，8項／23個本地連結與heading anchor通過；
 僅適用當時文件hash。現行文件binding另存`document-review-rev4/static-readback-02.json`，保留舊版；
 只核對文件，不計產品PASS。
