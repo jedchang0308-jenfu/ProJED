@@ -4,12 +4,14 @@
 
 ## 2026-10-03 完成度稽核與發版續接
 
-- 完整DEV-134尚未結案：第一批1～3本地開發／驗收通過；提交及遠端分支讀回已完成，本批正式artifact／live功能證據與手機既有安裝確認仍未取得。後續4～5仍未要求，不補算交付。
+- 完整DEV-134尚未結案：第一批1～3本地開發／驗收通過；提交、遠端分支讀回及正式artifact建置已完成，本批live功能證據與手機既有安裝確認仍未取得。後續4～5仍未要求，不補算交付。
 - 本批產品及驗證腳本／開發文件共23檔已提交至 `458b9a418509dbb391b38c80702d793aced60022`，`origin/持續優化3` 的 `git ls-remote` 讀回相同commit；提交後工作樹clean。本文後續狀態修訂為文件續接，不改已驗收產品。
 - Spec Drift／Convergence Check：依Rev4工程契約逐項核對U01～U10與各層收據；下方對照及 `completion-audit/convergence.json` 支持第一批本地契約收斂。產品／verifier既有71筆hash仍吻合；歷史文件readback僅適用其原hash，本輪另記4份文件hash。這是root事實核對加Luna只讀審查，不是獨立QC執行或手機驗收。
 - 新增 `scripts/verify-dev-134-update-menu-hosted.pw.js` 為後續正式Quick Task功能smoke：真選單檢查、離線／重試、320／390／1440、鍵盤及零遠端業務寫入。Node syntax通過，但尚未執行；它不在舊binding中，也不以舊27／27替代正式功能驗證。Main真登入及手機實機仍分開記錄。
 - 原live部署授權延續於同一ProJED／Firebase `projed-cc78d` Hosting範圍。雙origin只讀查證目前仍為 `20261002091531-2a1246`／source `23a566bf…`；78檔前版sealed manifest核對通過，作資產相容與回復依據。
-- 建置前 `ai-dev-resource-governor` 回傳BLOCKED：2026-10-03T15:20Z附近free約49.51 GB（46.11 GiB），本次有效reservation25 GiB＋protected floor約23.78 GiB，需約48.78 GiB。盤點無可執行清理候選；已向人類詢問本次容量風險，未建置／部署或清理資源。這是容量規則的確認，不是重新要求live部署授權。
+- 建置前 `ai-dev-resource-governor` 回傳BLOCKED：2026-10-03T15:20Z附近free約49.51 GB（46.11 GiB），本次有效reservation25 GiB＋protected floor約23.78 GiB，需約48.78 GiB。盤點無可執行清理候選；人類明確接受本次容量風險後，同一操作重新查證為HUMAN_RISK_ACCEPTED並完成一次建置，未清理資源。這是容量規則的確認，不是重新要求live部署授權。
+- Sealed artifact：`output/release/dev-083/20261003153455-01f632/manifest.json`，source `a12e387edc1b3cfbb8438798e279c35e2a63f258`（含產品commit `458b9a4`及文件續接），84檔，tree SHA-256 `45f9d7d8298cd9dd4b038bceeba515bcb51a00ef2db85a029a253643882d01f1`；manifest／secret／前版資產相容檢查通過。後續文件狀態修訂不改這份發布包。
+- Direct executor於部署前讀取Firebase live channel時失敗；Google token refresh回HTTP 400，`hosting:channel:list`及`projects:list`均失敗。尚未寫入direct-evidence或發布；雙origin仍為前版。保留建置包，正在完成Firebase CLI重新登入；恢復憑證後沿用manifest續接，不重建或重跑未失效本地驗收。
 
 ## 2026-10-03 更新操作優化驗收計畫與結果
 
