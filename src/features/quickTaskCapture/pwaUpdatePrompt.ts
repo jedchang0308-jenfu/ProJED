@@ -1,18 +1,14 @@
 import type { PwaUpdateState } from '../../services/pwaUpdateService';
+import { getPwaUpdatePresentation } from '../../services/pwaUpdatePresentation';
 
 type QuickTaskPwaUpdateActions = {
+  read: () => PwaUpdateState;
   subscribe: (listener: (state: PwaUpdateState) => void) => () => void;
   apply: () => Promise<boolean>;
   retry: () => Promise<boolean>;
   recover: () => Promise<boolean>;
   dismiss: () => void;
 };
-
-export const shouldShowQuickTaskPwaUpdatePrompt = (state: PwaUpdateState) => (
-  (state.updateAvailable && !state.dismissedAt && (state.reloadSafetyState === 'dirty' || state.reloadSafetyState === 'blocked'))
-  || state.status === 'recoverable-cache-error'
-  || state.status === 'failed'
-);
 
 const createButton = (label: string, variant: 'primary' | 'secondary', attribute: string) => {
   const button = document.createElement('button');
@@ -61,24 +57,23 @@ export const mountQuickTaskPwaUpdatePrompt = (actions: QuickTaskPwaUpdateActions
   let isApplying = false;
   let isRecovering = false;
   let active = true;
-  const updating = () => isApplying || isRecovering || currentState?.reloadSafetyState === 'preparing'
-    || currentState?.status === 'applying' || currentState?.status === 'awaiting-controller'
-    || currentState?.status === 'verifying';
+  let suspended = false;
+  let previousRenderValues: readonly unknown[] = [];
+  const updating = () => isApplying || isRecovering || currentState?.localUpdateBusy === true;
 
   const render = () => {
-    if (!currentState) return;
-    const isRecovery = currentState.status === 'recoverable-cache-error' || currentState.status === 'failed';
-    const isBlocked = !isRecovery && currentState.reloadSafetyState === 'blocked';
+    if (!active || suspended || !currentState) return;
+    const presentation = getPwaUpdatePresentation(currentState);
+    const { isRecovery } = presentation;
     const isUpdating = updating();
-    root.hidden = !shouldShowQuickTaskPwaUpdatePrompt(currentState);
-    heading.textContent = isRecovery
-      ? currentState.failureKind === 'load' ? '畫面載入失敗'
-        : currentState.failureKind === 'cache-recovery' ? '快取恢復未完成' : '重新載入未完成'
-      : '新版已就緒';
-    detail.textContent = (isRecovery || isBlocked)
-      ? currentState.errorMessage || (isBlocked ? '目前無法確認內容是否已保存。' : '請重試；若仍無法開啟，可清除應用程式快取後再載入。')
-      : '';
-    detail.hidden = !isRecovery && !isBlocked;
+    // Version checks and safety notifications can change metadata without changing this view.
+    const renderValues = [presentation.visible, isRecovery, presentation.title, presentation.detail, isUpdating, isApplying, isRecovering];
+    if (renderValues.every((value, index) => value === previousRenderValues[index])) return;
+    previousRenderValues = renderValues;
+    root.hidden = !presentation.visible;
+    heading.textContent = presentation.title;
+    detail.textContent = presentation.detail ?? '';
+    detail.hidden = presentation.detail === null;
     normalControls.hidden = isRecovery;
     recoveryControls.hidden = !isRecovery;
     update.textContent = isUpdating ? '準備重新載入' : '重新載入';
@@ -92,7 +87,7 @@ export const mountQuickTaskPwaUpdatePrompt = (actions: QuickTaskPwaUpdateActions
   };
 
   const run = async (operation: 'apply' | 'retry' | 'recover') => {
-    if (!active || updating()) return;
+    if (!active || suspended || updating()) return;
     if (operation === 'recover') isRecovering = true;
     else isApplying = true;
     render();
@@ -101,21 +96,47 @@ export const mountQuickTaskPwaUpdatePrompt = (actions: QuickTaskPwaUpdateActions
     } finally {
       isApplying = false;
       isRecovering = false;
-      if (active) render();
+      if (active && !suspended) render();
     }
   };
-  update.addEventListener('click', () => { void run('apply'); });
-  retry.addEventListener('click', () => { void run('retry'); });
-  recover.addEventListener('click', () => { void run('recover'); });
-  later.addEventListener('click', actions.dismiss);
+  const onUpdateClick = () => { void run('apply'); };
+  const onRetryClick = () => { void run('retry'); };
+  const onRecoverClick = () => { void run('recover'); };
+  const onDismissClick = () => {
+    if (active && !suspended && !updating()) actions.dismiss();
+  };
+  update.addEventListener('click', onUpdateClick);
+  retry.addEventListener('click', onRetryClick);
+  recover.addEventListener('click', onRecoverClick);
+  later.addEventListener('click', onDismissClick);
   const unsubscribe = actions.subscribe(state => { currentState = state; render(); });
+  const onPageHide = (event: PageTransitionEvent) => {
+    if (event.persisted) {
+      suspended = true;
+      return;
+    }
+    cleanup();
+  };
+  const onPageShow = (event: PageTransitionEvent) => {
+    if (!event.persisted || !active) return;
+    suspended = false;
+    currentState = actions.read();
+    previousRenderValues = [];
+    render();
+  };
   const cleanup = () => {
     if (!active) return;
     active = false;
     unsubscribe();
     root.remove();
-    window.removeEventListener('pagehide', cleanup);
+    update.removeEventListener('click', onUpdateClick);
+    retry.removeEventListener('click', onRetryClick);
+    recover.removeEventListener('click', onRecoverClick);
+    later.removeEventListener('click', onDismissClick);
+    window.removeEventListener('pagehide', onPageHide);
+    window.removeEventListener('pageshow', onPageShow);
   };
-  window.addEventListener('pagehide', cleanup, { once: true });
+  window.addEventListener('pagehide', onPageHide);
+  window.addEventListener('pageshow', onPageShow);
   return cleanup;
 };

@@ -24,6 +24,7 @@ import { useRecordDraftGuard } from '../hooks/useRecordDraftGuard';
 import { useMeetingRecordAvailability } from '../utils/meetingRecordAvailability';
 import { cn } from '../utils/cn';
 import Sidebar from './Sidebar';
+import AppMoreMenu from './AppMoreMenu';
 import { GlobalContextMenu } from './GlobalContextMenu';
 import { BoardShareDialog } from './BoardMembersPanel';
 import RagSidebar from './Rag/RagSidebar';
@@ -531,6 +532,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             <Sparkles size={14} className={isRagOpen ? 'text-blue-500' : 'text-slate-400'} />
             <span>問AI</span>
           </button>
+
+          <AppMoreMenu />
         </div>
       </nav>
 

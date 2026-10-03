@@ -8,16 +8,171 @@
   </head>
   <body>
     <main class="quick-task-shell">
-      <header class="quick-task-header"><h1>ProJED-快速建任務</h1></header>
+      <header class="quick-task-header">
+        <h1>ProJED-快速建任務</h1>
+        <div class="quick-task-header-actions">
+          <section id="quick-task-install" class="quick-task-install">
+            <strong>SIMULATION</strong>
+            <span>In-memory DEV-134 update API fixture; no production service worker.</span>
+          </section>
+        </div>
+      </header>
+      <p data-dev134-simulation-state role="note">SIMULATION — update provider and check results are controlled by this fixture.</p>
       <section class="quick-task-capture-card"><input aria-label="任務名稱" placeholder="要記下什麼待辦任務?" /></section>
     </main>
     <script type="module">
+      import { installQuickInstallGuide } from '/src/features/quickTaskCapture/install.ts';
       import { mountQuickTaskPwaUpdatePrompt } from '/src/features/quickTaskCapture/pwaUpdatePrompt.ts';
-      let state = { status: 'idle', updateAvailable: false, dismissedAt: null, reloadSafetyState: 'safe', failureKind: null, errorMessage: null };
+
+      const simulationState = Object.freeze({
+        mode: 'SIMULATION',
+        provider: 'in-memory deferred API',
+        serviceWorker: false,
+        normalU02InstallFlow: false,
+        normalQuickTaskEntryPoint: false,
+        realU06Lifecycle: false,
+      });
+      const apiState = {
+        check: { requestId: 0, phase: 'idle', currentVersion: 'bundle-A', latestVersion: 'bundle-A', startedAt: null, finishedAt: null, errorCode: null },
+        localUpdateBusy: false,
+        status: 'idle',
+        updateAvailable: false,
+        offlineReady: false,
+        dismissedAt: null,
+        lastCheckedAt: null,
+        lastUpdateFoundAt: null,
+        lastAppliedAt: null,
+        recoveryAttemptCount: 0,
+        currentVersion: 'bundle-A',
+        latestVersion: 'bundle-A',
+        previousVersion: null,
+        transactionId: null,
+        targetVersion: null,
+        ownerFence: 0,
+        normalReloadReserved: false,
+        errorMessage: null,
+        errorCode: null,
+        failureKind: null,
+        reloadSafetyState: 'safe',
+        reloadSafetyCode: null,
+        pendingBoundary: null,
+        pendingLocalTarget: null,
+      };
+      const apiListeners = new Set();
+      const providerBehaviors = [];
+      const checkPlans = [];
+      const pendingChecks = [];
+      let providerCount = 0;
+      let subscriptionCount = 0;
+      let applyCount = 0;
+      let applyGate = null;
+      let deferNextApply = false;
+      const checkCalls = [];
+      let providerGate = null;
+
+      const cloneApiState = () => ({ ...apiState, check: { ...apiState.check } });
+      const setApiState = patch => {
+        Object.assign(apiState, patch);
+        const snapshot = cloneApiState();
+        apiListeners.forEach(listener => listener(snapshot));
+      };
+      const createDeferred = () => {
+        let settled = false;
+        let resolvePromise;
+        const promise = new Promise(resolve => { resolvePromise = resolve; });
+        return {
+          promise,
+          get pending() { return !settled; },
+          resolve(value) {
+            if (settled) return;
+            settled = true;
+            resolvePromise(value);
+          },
+        };
+      };
+      const api = {
+        getPwaUpdateState: cloneApiState,
+        subscribePwaUpdateState(listener) {
+          subscriptionCount += 1;
+          apiListeners.add(listener);
+          listener(cloneApiState());
+          return () => apiListeners.delete(listener);
+        },
+        checkPwaUpdate(options) {
+          checkCalls.push({ deadlineAt: options?.deadlineAt ?? null, calledAt: Date.now() });
+          const plan = checkPlans.shift() ?? { kind: 'immediate', result: {
+            requestId: checkCalls.length,
+            phase: 'up-to-date',
+            currentVersion: apiState.currentVersion,
+            latestVersion: apiState.latestVersion,
+            startedAt: checkCalls[checkCalls.length - 1].calledAt,
+            finishedAt: Date.now(),
+            errorCode: null,
+          } };
+          if (plan.kind === 'deferred') {
+            return new Promise(resolve => pendingChecks.push(() => resolve(plan.result)));
+          }
+          return Promise.resolve(plan.result);
+        },
+        applyPwaUpdate() {
+          applyCount += 1;
+          setApiState({ localUpdateBusy: true });
+          if (deferNextApply) {
+            deferNextApply = false;
+            applyGate = createDeferred();
+            return applyGate.promise.then(() => {
+              setApiState({ localUpdateBusy: false });
+              return true;
+            });
+          }
+          return Promise.resolve().then(() => {
+            setApiState({ localUpdateBusy: false });
+            return true;
+          });
+        },
+      };
+      const getPwaApi = () => {
+        providerCount += 1;
+        const behavior = providerBehaviors.shift() ?? 'ready';
+        if (behavior === 'reject') return Promise.reject(new Error('SIMULATION provider rejected'));
+        if (behavior === 'deferred') {
+          providerGate = createDeferred();
+          return providerGate.promise;
+        }
+        return Promise.resolve(api);
+      };
+      installQuickInstallGuide(document.querySelector('.quick-task-shell'), { getPwaApi });
+      const observedMenu = document.querySelector('.quick-task-header-actions .quick-task-install-menu');
+      const syncObservations = [];
+      const checkButton = document.querySelector('[data-quick-update-check]');
+      const reloadButton = document.querySelector('[data-quick-update-reload]');
+      checkButton.addEventListener('click', () => syncObservations.push({
+        action: 'check',
+        checkDisabled: checkButton.disabled,
+        localUpdateBusy: apiState.localUpdateBusy,
+      }));
+      reloadButton.addEventListener('click', () => syncObservations.push({
+        action: 'reload',
+        checkDisabled: checkButton.disabled,
+        reloadHidden: reloadButton.hidden,
+        localUpdateBusy: apiState.localUpdateBusy,
+      }));
+
+      let state = {
+        status: 'idle',
+        updateAvailable: false,
+        dismissedAt: null,
+        reloadSafetyState: 'safe',
+        failureKind: null,
+        errorMessage: null,
+        check: { requestId: 0, phase: 'idle', currentVersion: null, latestVersion: null, startedAt: null, finishedAt: null, errorCode: null },
+        localUpdateBusy: false,
+      };
       const listeners = new Set();
       const actions = { apply: 0, retry: 0, recover: 0, dismiss: 0 };
       const operations = Object.fromEntries(Object.keys(actions).map(key => [key, async () => { actions[key] += 1; }]));
       mountQuickTaskPwaUpdatePrompt({
+        read() { return state; },
         subscribe(listener) { listeners.add(listener); listener(state); return () => listeners.delete(listener); },
         ...operations,
         dismiss() { actions.dismiss += 1; state = { ...state, dismissedAt: Date.now() }; listeners.forEach(listener => listener(state)); },
@@ -25,6 +180,32 @@
       window.__DEV134_QUICK_UPDATE_FIXTURE = {
         set(value) { state = { ...state, ...value }; listeners.forEach(listener => listener(state)); },
         actions,
+      };
+      window.__DEV134_QUICK_INSTALL_FIXTURE = {
+        simulationState,
+        configureProviderBehaviors(values) { providerBehaviors.push(...values); },
+        resolveDeferredProvider() { providerGate?.resolve(api); },
+        queueDeferredCheck(result) { checkPlans.push({ kind: 'deferred', result }); },
+        queueCheckResult(result) { checkPlans.push({ kind: 'immediate', result }); },
+        resolveNextCheck() { pendingChecks.shift()?.(); },
+        deferNextApply() { deferNextApply = true; },
+        resolveApply() { applyGate?.resolve(); },
+        setApiState,
+        snapshot() {
+          return {
+            simulationState,
+            providerCount,
+            subscriptionCount,
+            applyCount,
+            syncObservations: syncObservations.map(observation => ({ ...observation })),
+            checkCalls: checkCalls.map(call => ({ ...call })),
+            providerPending: Boolean(providerGate?.pending),
+            pendingCheckCount: pendingChecks.length,
+            applyPending: Boolean(applyGate?.pending),
+            sameMenuNode: document.querySelector('.quick-task-header-actions .quick-task-install-menu') === observedMenu,
+            apiState: cloneApiState(),
+          };
+        },
       };
     </script>
   </body>

@@ -18,6 +18,7 @@ const assert = (name: string, condition: boolean, details?: unknown) => results.
 const source = read('src/services/pwaReloadSafety.ts');
 const updateService = read('src/services/pwaUpdateService.ts');
 const prompt = read('src/components/AppUpdatePrompt.tsx');
+const presentation = read('src/services/pwaUpdatePresentation.ts');
 const ownerBridge = read('src/components/PwaReloadSafetyBridge.tsx');
 const authGate = read('src/components/AuthGate.tsx');
 const sidebar = read('src/components/Sidebar.tsx');
@@ -70,7 +71,7 @@ assert(
 assert('update service owns Workbox without virtual helper', updateService.includes("import { Workbox") && !updateService.includes('virtual:pwa-register') && updateService.includes("prepared.waitingWorker.postMessage({ type: 'SKIP_WAITING' })"));
 assert('worker isolation flags are fail-closed and normal cleanup is disabled', vite.includes('clientsClaim: false') && vite.includes('skipWaiting: false') && vite.includes('cleanupOutdatedCaches: false') && vite.includes('PROJED_RELEASE_ID'));
 assert('workbox-window is a direct runtime dependency', /"workbox-window"\s*:\s*"7\.4\.1"/.test(packageJson));
-assert('normal prompt has exact compact action set', prompt.includes('新版已就緒') && prompt.includes('重新載入') && prompt.includes('稍後') && !prompt.includes('關閉更新提示'));
+assert('normal prompt has exact compact action set', prompt.includes('getPwaUpdatePresentation(state)') && presentation.includes('新版已就緒') && prompt.includes('重新載入') && prompt.includes('稍後') && !prompt.includes('關閉更新提示'));
 assert(
   'owner bridge selectors return stable store snapshots',
   !/use(?:Record|Dialog|Rag)Store\(state\s*=>\s*\(\{/.test(ownerBridge)

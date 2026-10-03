@@ -6,7 +6,7 @@ button, input { font: inherit; }
 .quick-task-header { display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content; grid-template-areas: "mark title actions"; align-items: center; gap: 12px; padding: 18px 0 14px; }
 .quick-task-header-actions { grid-area: actions; display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .quick-task-header-actions #quick-task-install { flex: none; }
-.quick-task-main-app { display: inline-flex; flex: none; width: fit-content; min-height: 36px; align-items: center; margin: 0; padding: 0 12px; border: 1px solid rgb(15 118 110 / 18%); border-radius: 10px; background: rgb(255 255 255 / 58%); color: #0f766e; font-size: 13px; font-weight: 600; text-decoration: none; }
+.quick-task-main-app { display: inline-flex; flex: none; width: fit-content; min-height: 44px; align-items: center; margin: 0; padding: 0 12px; border: 1px solid rgb(15 118 110 / 18%); border-radius: 10px; background: rgb(255 255 255 / 58%); color: #0f766e; font-size: 13px; font-weight: 600; text-decoration: none; }
 .quick-task-main-app:hover { border-color: rgb(15 118 110 / 30%); background: rgb(240 253 250 / 88%); }
 .quick-task-main-app:focus-visible { outline: 3px solid rgb(20 184 166 / 35%); outline-offset: 2px; }
 .quick-task-capture-card { margin: 0; padding: 16px; border: 1px solid #dbe5ee; border-radius: 16px; background: rgb(255 255 255 / 68%); box-shadow: 0 5px 16px rgb(15 23 42 / 4%); }
@@ -23,15 +23,20 @@ button, input { font: inherit; }
 .quick-task-auth-status button { flex: none; min-height: 32px; padding: 0 10px; border: 1px solid #cbd5e1; border-radius: 9px; background: rgb(255 255 255 / 75%); color: #0f766e; font-size: 12px; font-weight: 700; cursor: pointer; }
 .quick-task-auth-status button:focus-visible { outline: 3px solid rgb(20 184 166 / 35%); outline-offset: 2px; }
 .quick-task-install { margin: 20px 0 0; padding: 14px 16px; border: 1px solid #99f6e4; border-radius: 14px; background: rgb(240 253 250 / 92%); color: #115e59; }
-.quick-task-install-plain { position: relative; width: 40px; height: 40px; margin: 0; padding: 0; border: 0; background: transparent; justify-self: end; align-self: center; }
+.quick-task-install-plain { position: relative; width: 44px; height: 44px; margin: 0; padding: 0; border: 0; background: transparent; justify-self: end; align-self: center; }
 .quick-task-install-menu { position: relative; }
-.quick-task-install-menu > summary { display: grid; width: 40px; min-height: 40px; place-items: center; border: 1px solid rgb(15 118 110 / 18%); border-radius: 10px; background: rgb(255 255 255 / 58%); color: #0f766e; font-size: 24px; line-height: 1; cursor: pointer; list-style: none; }
+.quick-task-install-menu > summary { display: grid; width: 44px; min-height: 44px; place-items: center; border: 1px solid rgb(15 118 110 / 18%); border-radius: 10px; background: rgb(255 255 255 / 58%); color: #0f766e; font-size: 24px; line-height: 1; cursor: pointer; list-style: none; }
 .quick-task-install-menu > summary::-webkit-details-marker { display: none; }
 .quick-task-install-menu > summary:hover { border-color: rgb(15 118 110 / 30%); background: rgb(240 253 250 / 88%); }
 .quick-task-install-menu > summary:focus-visible { outline: 3px solid rgb(20 184 166 / 35%); outline-offset: 2px; }
-.quick-task-install-menu-panel { position: absolute; z-index: 30; top: calc(100% + 8px); right: 0; min-width: 176px; padding: 8px; border: 1px solid #dbe5ee; border-radius: 12px; background: white; box-shadow: 0 10px 26px rgb(15 23 42 / 12%); }
-.quick-task-install-menu-panel [data-quick-install-action] { width: 100%; min-height: 40px; margin: 0; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: #0f766e; font-size: 13px; font-weight: 600; text-align: left; box-shadow: none; cursor: pointer; }
-.quick-task-install-menu-panel [data-quick-install-action]:hover { background: #f0fdfa; }
+.quick-task-install-menu-panel { position: absolute; z-index: 30; top: calc(100% + 8px); right: 0; display: grid; width: min(248px, calc(100vw - 32px)); max-height: min(70vh, calc(100vh - 96px)); max-height: min(70dvh, calc(100dvh - 96px)); gap: 6px; overflow-y: auto; padding: 8px; border: 1px solid #dbe5ee; border-radius: 12px; background: white; box-shadow: 0 10px 26px rgb(15 23 42 / 12%); }
+.quick-task-install-menu-panel .quick-task-install-menu-action { display: flex; width: 100%; min-height: 44px; align-items: center; margin: 0; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: #0f766e; font-size: 13px; font-weight: 600; text-align: left; overflow-wrap: anywhere; box-shadow: none; cursor: pointer; }
+.quick-task-install-menu-panel [data-quick-install-action]:hover, .quick-task-install-menu-action:hover:not(:disabled) { background: #f0fdfa; }
+.quick-task-update-menu-row { min-width: 0; }
+.quick-task-install-menu-panel [data-quick-update-status] { display: block; margin: 0; color: #475569; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+.quick-task-install-menu-panel [hidden] { display: none; }
+.quick-task-install-menu-action:disabled { cursor: wait; opacity: .6; }
+.quick-task-install-menu-action:focus-visible { outline: 3px solid rgb(20 184 166 / 35%); outline-offset: 1px; }
 .quick-task-install strong, .quick-task-install span, .quick-task-install small { display: block; }
 .quick-task-install strong { margin-bottom: 4px; color: #134e4a; }
 .quick-task-install span { font-size: 14px; line-height: 1.55; }
@@ -39,18 +44,18 @@ button, input { font: inherit; }
 .quick-task-install small { margin-top: 8px; color: #475569; font-size: 12px; }
 .quick-task-install button { min-height: 48px; margin-top: 12px; padding: 0 14px; border: 0; border-radius: 11px; background: #0f766e; color: white; font-weight: 800; cursor: pointer; }
 .quick-task-install-destination { display: inline-flex; align-items: center; min-height: 48px; margin-top: 12px; padding: 0 14px; border-radius: 11px; background: #0f766e; color: #fff; font-weight: 800; text-decoration: none; }
-.quick-task-install-dialog [data-quick-icon-reinstall-toggle] { min-height: 34px; margin-top: 12px; padding: 0; border: 0; border-radius: 0; background: transparent; color: #0f766e; font-size: 13px; text-decoration: underline; text-underline-offset: 2px; }
+.quick-task-install-dialog [data-quick-icon-reinstall-toggle] { min-height: 44px; margin-top: 12px; padding: 0; border: 0; border-radius: 0; background: transparent; color: #0f766e; font-size: 13px; text-decoration: underline; text-underline-offset: 2px; }
 .quick-icon-reinstall { margin-top: 10px; padding-top: 10px; border-top: 1px solid #99f6e4; }
 .quick-icon-reinstall ol { margin: 8px 0 0; padding-left: 22px; font-size: 13px; line-height: 1.6; }
 .quick-icon-reinstall li + li { margin-top: 6px; }
-.quick-icon-reinstall [data-quick-icon-reinstall-link] { min-height: 40px; margin-top: 10px; font-size: 13px; }
+.quick-icon-reinstall [data-quick-icon-reinstall-link] { min-height: 44px; margin-top: 10px; font-size: 13px; }
 .quick-task-install-dialog { width: min(420px, calc(100vw - 32px)); max-height: 80vh; max-height: min(80dvh, 600px); margin: auto; padding: 22px; border: 1px solid #dbe5ee; border-radius: 16px; color: #0f172a; background: #fff; box-shadow: 0 20px 48px rgb(15 23 42 / 22%); }
 .quick-task-install-dialog::backdrop { background: rgb(15 23 42 / 38%); }
 .quick-task-install-dialog h2 { margin: 0; color: #134e4a; font-size: 19px; }
 .quick-task-install-dialog p { margin: 12px 0 0; color: #475569; font-size: 15px; line-height: 1.6; }
 .quick-task-install-dialog small { display: block; margin-top: 8px; overflow-wrap: anywhere; color: #475569; font-size: 12px; }
 .quick-task-install-dialog form { display: flex; justify-content: flex-end; margin-top: 20px; }
-.quick-task-install-dialog button { min-height: 42px; padding: 0 16px; border: 1px solid #cbd5e1; border-radius: 10px; color: #334155; background: #fff; font-weight: 650; cursor: pointer; }
+.quick-task-install-dialog button { min-height: 44px; padding: 0 16px; border: 1px solid #cbd5e1; border-radius: 10px; color: #334155; background: #fff; font-weight: 650; cursor: pointer; }
 .quick-task-install-dialog button:hover { background: #f8fafc; }
 .quick-task-install-dialog button:focus-visible { outline: 3px solid rgb(20 184 166 / 35%); outline-offset: 2px; }
 .quick-task-header h1 { grid-area: title; margin: 2px 0 0; font-size: clamp(17px, 4.9vw, 22px); letter-spacing: -.03em; }

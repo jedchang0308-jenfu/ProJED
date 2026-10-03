@@ -9,14 +9,8 @@ import {
   retryPwaUpdate,
   type PwaUpdateState,
 } from '../services/pwaUpdateService';
+import { getPwaUpdatePresentation } from '../services/pwaUpdatePresentation';
 import { Button } from './ui/Button';
-
-const isVisibleState = (state: PwaUpdateState) => (
-  (state.updateAvailable && !state.dismissedAt && (state.reloadSafetyState === 'dirty' || state.reloadSafetyState === 'blocked'))
-  || (state.updateAvailable && !state.dismissedAt && typeof window !== 'undefined' && Boolean(window.__projedPwaUpdateTest))
-  || state.status === 'recoverable-cache-error'
-  || state.status === 'failed'
-);
 
 export const AppUpdatePrompt: React.FC = () => {
   const [state, setState] = useState<PwaUpdateState>(() => getPwaUpdateState());
@@ -28,30 +22,40 @@ export const AppUpdatePrompt: React.FC = () => {
     return unsubscribe;
   }, []);
 
-  const visible = isVisibleState(state);
-  const isRecovery = state.status === 'recoverable-cache-error' || state.status === 'failed';
-  const isBlocked = !isRecovery && state.reloadSafetyState === 'blocked';
-  const isUpdating = isApplying || state.reloadSafetyState === 'preparing' || state.status === 'applying' || state.status === 'awaiting-controller' || state.status === 'verifying';
+  const presentation = getPwaUpdatePresentation(state);
+  const { isRecovery } = presentation;
+  const visible = presentation.visible
+    || (state.updateAvailable && !state.dismissedAt && typeof window !== 'undefined' && Boolean(window.__projedPwaUpdateTest));
+  const isUpdating = state.localUpdateBusy || isApplying || isRecovering;
 
   const handleUpdate = async () => {
     if (isUpdating || isRecovering) return;
     setIsApplying(true);
-    await applyPwaUpdate();
-    setIsApplying(false);
+    try {
+      await applyPwaUpdate();
+    } finally {
+      setIsApplying(false);
+    }
   };
 
   const handleRecovery = async () => {
     if (isRecovering || isUpdating) return;
     setIsRecovering(true);
-    await clearPwaApplicationCacheAndReload();
-    setIsRecovering(false);
+    try {
+      await clearPwaApplicationCacheAndReload();
+    } finally {
+      setIsRecovering(false);
+    }
   };
 
   const handleRetry = async () => {
     if (isUpdating || isRecovering) return;
     setIsApplying(true);
-    await retryPwaUpdate();
-    setIsApplying(false);
+    try {
+      await retryPwaUpdate();
+    } finally {
+      setIsApplying(false);
+    }
   };
 
   if (!visible) return null;
@@ -71,11 +75,11 @@ export const AppUpdatePrompt: React.FC = () => {
         )}
         <div className="min-w-[10rem] flex-1">
           <h2 className="truncate text-sm font-bold leading-5 text-slate-900">
-            {isRecovery ? (state.failureKind === 'load' ? '畫面載入失敗' : state.failureKind === 'cache-recovery' ? '快取恢復未完成' : '重新載入未完成') : '新版已就緒'}
+            {presentation.title}
           </h2>
-          {(isRecovery || isBlocked) && (
+          {presentation.detail !== null && (
             <p className="mt-0.5 break-words text-xs leading-4 text-slate-600" data-pwa-update-error>
-              {state.errorMessage || (isBlocked ? '目前無法確認內容是否已保存。' : '請重試；若仍無法開啟，可清除應用程式快取後再載入。')}
+              {presentation.detail}
             </p>
           )}
         </div>
@@ -87,7 +91,7 @@ export const AppUpdatePrompt: React.FC = () => {
                 size="sm"
                 onClick={handleRetry}
                 isLoading={isApplying}
-                disabled={isRecovering}
+                disabled={isUpdating}
                 className="h-8 px-2.5 text-xs focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                 data-pwa-update-action
               >

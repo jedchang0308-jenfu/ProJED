@@ -1,6 +1,299 @@
 # DEV-134 PWA 恢復本地驗證
 
-日期：2026-10-01 起，2026-10-02 更新。原始記錄是部署前本地驗證快照；本文件末尾的 2026-10-02 發布後補記提供後續 release 與 live evidence。正式網站 smoke PASS；使用者手機既有安裝尚未實機驗證。
+日期：2026-10-01 起，2026-10-03 更新。原始記錄是部署前本地驗證快照；本文件末尾的 2026-10-02 發布後補記提供後續 release 與 live evidence。同日兩輪提示維護及更新操作第一批1～3已完成本地驗證，尚未提交／部署。使用者手機既有安裝尚未實機驗證。
+
+## 2026-10-03 更新操作優化驗收計畫與結果
+
+狀態：**第一批1～3本地驗收通過；未發布，手機實機未確認**。
+現行計畫：Rev 4，依 RD 技術主管續接審查修訂；case ID及第一批範圍保持一致。
+依人類「補到架構定案」固定第一批 1～3，最新文件審查補足同步通知重入、真返回次數與可見錯誤 gate。
+既有 RD／adapter 執行收據與文件審查分開記錄，不把單一 adapter assertion 補算整個 U 案例 PASS。
+需求入口為 [DEV-134 架構定案](../dev_task.md#更新操作優化提案架構定案2026-10-03)，
+工程權威為 [SPEC-041 本批契約](../specs/SPEC-041-pwa-update-notification-cache-recovery.md#dev-134-更新操作架構定案2026-10-03)。
+2026-10-01／02 release 與下方兩輪提示維護的 PASS 是各自歷史證據，不抵本批 U 案例。
+
+### 正常交付路徑、fixture 與驗收案例
+
+正常路徑：實際 MainLayout／Quick Task 標頭 → ⋮ →「檢查更新」→ 共用 service 網路檢查 →
+就地結果／既有 prompt → 明確重新載入或真正自然邊界 → local safety → 原 transaction →
+新 document current===target。主程式從 AuthGate 正常進入工作介面；Quick Task 使用真正路由與標頭。
+Fixtures 可建立隔離帳號／角色、前版 artifact、草稿／任務、metadata／SW 及網路故障；
+不得直接寫 expected check phase、目標 completed、reload success 或正常入口 DOM 再當完整流程 PASS。
+外部 Auth／RPC 的替身只建立前置登入與資料環境，需在收據標 SIMULATION，不宣稱正式帳號同步。
+
+#### 本批風險與案例對應
+
+| 失效模式 | 原因／條件 | 使用者影響 | 偵測方式 | 優先級 | 對策／案例 |
+|---|---|---|---|---|---|
+| 短caller等待取消共用flight | API晚就緒後把較早deadline寫到共用flight | 其他檢查被中斷／反覆重試 | 分開核對UI等待與flight截止、abort及通知 | P1 | caller只停止自己的等待；U04／U05 |
+| 共享phase變成本頁busy | foreign transaction／activated投影到status | 入口與恢復永久禁用 | 保留foreign phase，核對localUpdateBusy及真按鈕 | P1 | 本頁effect promise／準備狀態為權威；U03／U07／U08 |
+| 已知版本改變仍顯示舊成功 | 局部result一直保留到收合 | 假最新版／過期CTA | success結果後改metadata，再正常操作menu | P1 | clearResult永久丟棄舊成功；U03／U08 |
+| R03相容性被一般保留條文覆蓋 | 未區分failure retirement與target completed | 無義務仍提示失敗，或掩蓋真load failure | 原R03、current=target及load/cache同版三組對照 | P1 | 僅可信fresh結果退場update failure；U03／U10 |
+| 真bfcache始終不命中 | runner預設停用bfcache／fixture仍攔截返回主請求 | 無法證明返回提示恢復 | 記launch config／argv、persisted及document身分 | P1 | U06專用配置與真server；不以mock補算PASS |
+| 同步通知重入 | cancelled／busy 通知先於本地 effect guard | 同一頁重複 gate、apply 或 cache recovery | subscriber 同步再呼叫 action，核對 effect 次數及共享 promise | P1 | 先 guard 再通知；terminal flight 先退場；U04／U08 |
+
+| ID | 前置／操作（由正常入口產生結果） | 必要 assertions 與最低證據層級 |
+|---|---|---|
+| U01 主程式入口 | 已登入管理者／一般角色／無看板角色；從首頁及設定操作 MainLayout 右側唯一 ⋮；登入前查看既有 prompt。 | 所有已登入角色可達「檢查更新」，不依 board 權限；登入頁不新增 menu，updater 仍在 AuthGate 外。320／390／1440px 無溢出／裁切，觸控 hit area ≥44px，Tab／Enter／Space／Escape、composition、outside close 符合契約。實際 MainLayout browser 操作／截圖＋幾何量測；孤立元件不能替代入口證據。 |
+| U02 Quick Task 入口 | 真 `/quick-task/`、`?install=1`；登入／未登入、零／有待同步任務；browser、Android／iOS installed 模擬。人工檢查中及結果後觸發 install event、RWD render。 | 只有一個 ⋮；檢查在安裝項目前；summary／panel DOM 身分、焦點及本次結果保留；安裝動作仍可達，沒有更新列遺失。主程式連結／表單位置保留。真路由 DOM／UI＋平台模擬，標示 display-mode／UA 是模擬。 |
+| U03 結果可信度 | 真service fixture控制metadata、fallback、同／異／未知版本、離線、HTTP／parse／SPA 200、installing／waiting及worker refresh拒絕。另先取得人工成功，再讓有效背景檢查發現別的latest。 | 必要refresh成功＋可信當次比較才報成功；refresh失敗即使metadata異版仍error。global phase不是local busy；未知／逾時不清failed原因。背景版本改變使成功文案／CTA失效，後來回到相同identity也不復活舊結果。原R03退場update failure與loaded target completed、load/cache保留分別驗證。adapter全分支＋真menu成功／離線／失敗／結果失效。 |
+| U04 去重與需求提升 | 同 document 同時人工、15分鐘 metadata、1小時 worker、visible／pageshow、waiting 事件；再於 metadata-only flight fetch 已開始時人工加入。 | 一個 detection flight／requestId；worker native update 同時最多一個；無需求提升時每階段一個 primary fetch（fallback 按契約）；提升只容許 worker refresh 後一次順序 metadata 重讀。新 caller 不能縮短、重設或延長 flight deadline。完成／失敗後可新檢查，跨 document 不強加新共識。adapter 可控順序／請求計數＋真 browser endpoint log。 |
+| U05 逾時與遲到 | API readiness接近10秒才完成／拒絕；fetch body／fallback及native update掛起。短caller加入仍有效flight；caller先到期後讓flight成功。另讓flight本身到期／pagehide／本頁apply、retry或cache recovery後釋放舊response。 | UI從點擊10秒結束等待，不改共用flight deadline／abort／snapshot；有效flight後來可更新背景，但不寫回已逾時UI／焦點。flight本身逾時才abort，共用期限不延長，遲到結果不改target／binding／check。native guard直到settle，新caller有限等待且不疊加update；caller到期不清仍載入的API promise。fake clock／deferred精確assert＋真server延遲與UI再試。 |
+| U06 返回恢復 | 專用launch config啟用bfcache；Quick真server導航至同源簡單頁再正常Back，收集persisted與document身分。五次真返回至少覆蓋 normal 2次、recovery 2次、safe 1次；另測API載入或人工等待途中離開。 | 五次各自 pageshow.persisted=true 且 heap／root 身分讀回一致，read最新快照且動作可用，無重複DOM／subscription／handler。普通重載、未命中或合成事件不計五次；只有一例命中不得補算全部PASS。過期人工操作不回寫／搶焦點，setup／mount各至多一次；false pagehide／dispose清理冪等。未命中保存not-restored理由；launch與fixture路徑見下方U06執行條件。 |
+| U07 effect owner | 在 app-open 已結束的 safe 頁面單獨人工／timer／worker 檢查；另測真正初次3秒 app-open continuation、foreground、view-transition；途中 hidden／pagehide、其他 client 完成。 | 單純 detection 不 reload／SKIP_WAITING；真邊界以有效 token、visible、fresh safety 套用，人工加入不偽造邊界。離開使 token 失效。view-transition 不新增逐 route metadata。另一 client completed 不代表本頁完成；保留 lock／fence及唯一 reload writer。service trace＋真 SW A→B browser，記錄 effect 的來源 boundary。 |
+| U08 prompt 與資料安全 | UI正常建立草稿／任務、composition／語音／commit pending；dirty／blocked／booting及failed時由menu／prompt操作。保留foreign active phase及stale own reservation，再與真正local operation pending對照。 | prompt為唯一主動作且recovery優先；只在本次menu仍開著才移交焦點；invalid result無CTA／handoff。foreign phase／stale reservation不使按鈕永久busy，真local操作首個await前互斥、finally解鎖；retry內部apply不self-await。gate保護資料與pending任務，sentinel保留。真DOM互動＋gate／SW／隔離儲存，不宣稱正式Session。 |
+| U09 舊安裝升級 | 使用實際前版 sealed release `20261002091531-2a1246` 或已記錄、含現有 updater 的等價前版 A；候選 B 使用真正 production Workbox。同 profile 模擬 installed，先由正常表單建立本機任務，再發布 B，保留另一 unsafe A client並正常重開／返回。 | A 真載入，正常既有更新路徑升 B 後新 ⋮／檢查可操作，own current／controller／target 身分可核對，另一 unsafe client 草稿保留且不被 claim／reload。不得用 fresh profile、clear storage、unregister、直接寫 completed 或 mock SW 算升級 PASS。更早缺 updater artifact 的首次 bootstrap另記已知限制及沿用歷史補驗，不宣稱本批可在未載入 B 時提供新 menu。真 artifact＋SW＋profile；手機實機仍另列。 |
+| U10 回歸與交接 | 凍結candidate跑R01～R12、DEV-041／096／097、型別／lint及兩個renderer輸出；核對本批U證據。 | 原R03仍PASS；保留原因／retry fence／local safety／精確normal文案／七值去重／前版cache／安裝功能。renderer只容許明列的foreign phase≠local busy差異，保留真local busy禁用，不刪安全assertion。無新增週期polling／依賴／reload writer。case逐項綁source及fixture，不以mock代真UI／SW；未測明列。 |
+
+U04 必含 terminal 通知中同步發起新檢查：新 requestId／flight 成立，舊 finally 不清新 flight。
+U08 必含 cancelled／busy 通知中同步發起 apply、retry、cache recovery：guard 已可見，只有一個本頁
+operation／gate／effect，所有 caller 得到同一結果；正常 finally 後可再次操作。只證明 await 後重複點擊
+被擋，不足以通過同步重入案例。
+
+U07 的延遲反例須覆蓋已取得 available 後等待 safety gate，途中 hidden／pagehide，及
+stable-target／activation 等待期間資格失效：晚到成功不能啟用或 reload，pending target 仍可於下次
+安全操作處理。U08 焦點移交須在實際 DOM commit 後再次驗證成功結果身分、local busy與prompt優先權；
+等待焦點期間版本改變或使用者收合不能搶焦點。測試須等待 terminal，不能把「檢查中」當成結果。
+
+#### 可見錯誤與資料檢查
+
+U01／U02／U06／U09 每個正常 browser subcase 在開始、操作後及返回／重載後記錄以下結果：
+
+- 可見 `.inline-error`、`[role=alert]` failure、載入失敗、HTTP 4xx／5xx、Not Found、Internal Server Error
+  或 `/api/...` 錯誤文字，均使該正常案例 FAIL；另存畫面及原因。故障注入案例只豁免本例預期且已列明的錯誤，
+  仍須檢查無關錯誤，不能全部忽略 console／alert。
+- 每例先記 expected 任務數／名稱或 sentinel。明訂零資料的空白狀態可 PASS；有資料 fixture 卻呈現全零／
+  空清單時 FAIL。資料由正常表單操作建立的案例，不能以測試直接填入預期完成結果。
+- 容量、窄版幾何及 UI 文字檢查外，目視代表截圖核對正常入口與主動作。新的 browser／API／build PASS
+  不能覆寫使用者已回報的舊版畫面；手機既有 profile 仍另列未確認。
+
+U09 沿用 ADR-047：驗的是 unsafe client 無非自主 navigation、草稿保留與舊資產可用。
+既有 controlled document 可收到 controllerchange；不把 controller 永遠不變寫成接受條件，
+也不以 controllerchange 直接算 loaded current 已更新。
+
+### RD／QA 執行命令與證據保存
+
+先擴充以下既有 harness／fixture；不建新的測試框架或第二 PWA runtime。MainLayout 真入口與 Quick真路由
+可在 existing browser harness 加 bounded scenario；只測 prompt 的 fixture 仍僅是 renderer adapter。
+
+| 執行順序 | 現有命令／修改位置 | 用途與限制 |
+|---|---|---|
+| 1 | `node scripts/verify-dev-134-pwa-recovery.mjs` | 增加 U03～U05／U07～U08 的 service、pure presentation、lifecycle adapter assertions；fixtures 補 required check／localUpdateBusy 初始值，Quick prompt 補 read action。用可控 time／promise，保留失敗首跑證據。 |
+| 2 | `node node_modules/typescript/bin/tsc --noEmit --pretty false`；`node node_modules/eslint/bin/eslint.js <本批變更的來源及 verifier 檔案>` | 接手後以實際 allowlist填 lint檔案；不是掃整站／安裝依賴。未建立的 AppMoreMenu／fixture先實作再驗。 |
+| 3 | `npm run verify:dev-041-pwa-update-notification-cache-recovery`；`npm run verify:dev-096-pwa-update-transaction-convergence`；`npm run verify:dev-097-pwa-safe-reload` | 既有行為回歸；source structure變動時只改 assertion定位，不能刪 safety／transaction要求來取得 PASS。 |
+| 4 | `node scripts/verify-dev-134-quick-task-update-prompt.mjs` | 既有fixture補check／localUpdateBusy／read wiring；runner改用同一PLAYWRIGHT_CLI_PATH及DEV134_REPORT_DIR，避免硬編碼cache／固定output覆寫。此條只證明prompt局部UI。 |
+| 5 | `node scripts/verify-dev-134-pwa-recovery-browser.mjs` | 擴充為真 MainLayout／Quick entry、endpoint faults、真 bfcache、前版 A→候選 B場景。runner本機隔離 production Vite／Workbox及兩版artifact，沿用環境輸出變數；不以 build:test替代真 SW。 |
+
+PowerShell在同一執行 session 設 `$env:DEV134_REPORT_DIR` 指向 `output/qa/dev-134/<run-id>/`；
+browser另設 `$env:DEV134_VISUALS_DIR` 至同 run的圖像目錄，`$env:PLAYWRIGHT_CLI_PATH` 指向已安裝 CLI。
+既有quick prompt runner的固定CLI路徑在本機仍可讀，但不能作為可攜契約；先完成上述env修正。缺工具時回報環境缺口，不默默安裝或改用
+另一專案 runtime。使用者原有 localhost4000／browser不作為 fault fixture，也不得清除它們的儲存。
+
+#### U06執行條件
+
+Playwright官方Chromium defaults含停用bfcache的參數；先前只要求Back，不足以保證runner能驗本案例。
+這是規劃時識別的工具能力缺口；`entry-browser/attempt-02/browser-result.json` 已保存實際 Chromium
+argv，確認該輪沒有停用 bfcache 的旗標。該輪在 Back 前因前置條件失敗停止，尚不能判斷返回是否命中，
+也不能將這項工具條件寫成產品根因。後續結果統一記於下方 Rev 4 現行驗證摘要。
+([Playwright defaults](https://github.com/microsoft/playwright/blob/main/packages/playwright-core/src/server/chromium/chromiumSwitches.ts))
+既有browser runner為U06產生run-owned CLI JSON，僅此session使用：
+
+```json
+{ "browser": { "launchOptions": { "ignoreDefaultArgs": ["--disable-back-forward-cache"] } } }
+```
+
+透過已安裝CLI的 `--config <run-owned-json>` 啟動獨立session；先只讀其版本／help核對配置能力，
+記CLI／browser版本、配置hash及實際argv，不設ignoreDefaultArgs=true，也不改全域CLI config。
+配置欄位見[官方CLI schema](https://github.com/microsoft/playwright-cli#configuration-file)、
+精確過濾規則見[launch API](https://playwright.dev/docs/api/class-browsertype#browser-type-launch)。
+`entry-browser/attempt-03` 首次完成一組真 Back，沒有 persisted；navigation讀回
+`response-cache-control-no-store`／`response-cache-control-no-store-with-js-network-request`。
+後續U06專用HTML query `dev134Bfcache=1` 由隔離server送 `Cache-Control: no-cache`，只建立document可進入
+bfcache的delivery前置條件，request receipt明記SIMULATION。HTML／JS仍為相同candidate bytes，
+不合成persisted、不停用updater、不改正式Hosting設定；即使後續命中，也只證明此條件下的真document恢復，
+不宣稱正式no-store delivery或使用者手機已命中bfcache。該首跑與production delivery限制均保留。
+使用既有loopback server實際回應導航與metadata，不在此context啟用整頁route interception或offline fault；
+其他故障case使用原獨立context。頁面不得加unload listener，離開前依原owner責任完成或關閉妨礙freeze的連線；
+不可為了命中而停用產品updater或fake persisted。若仍未命中，保存not-restored診斷後回送fixture／架構，
+保持U06未驗，其他slice可繼續；不需要新增依賴、全域旗標或使用者原profile。
+
+Frozen candidate：記 branch／HEAD與 dirty diff清單，至少保存 spec、QA及所有修改的 service／presentation／
+兩 renderer／MainLayout／AppMoreMenu／Quick install／main／CSS／verifier SHA-256，保留前版與候選 artifact manifest。
+測試前後比對；source／fixture／assertion有變就更新 binding並重跑受影響案例，不能沿用舊 PASS。
+每筆 run包含 case ID、命令、時間、origin／route、artifact版本／hash、browser版本、角色、viewport、
+fixture／SIMULATION標記、實際請求計數、caller／flight各自deadline與結果、localUpdateBusy／clearResult、
+reload／controller／target、可見畫面、首跑失敗與cleanup。U大項所含分支各列subcase結果，不能以單一成功分支補算整列PASS。
+U06需五次原始 persisted事件及各次 document／heap／root identity；U09需同 profile A→B及資料讀回，兩者不是一張新版截圖即可證明。
+
+MainLayout fixture 若使用 Auth／migration／資料依賴替身，收據列每個 alias／transform 的路徑、目的及hash，
+標為 SIMULATION；入口仍走真 AuthGate／MainLayout，正常menu及service結果不可替身。隔離build的
+served hash只證明該fixture artifact，不能宣稱原production byte-identical。U09前版須由sealed manifest
+核對實際A的served bytes；候選B另存自己的manifest，不用當前source重建「模擬舊版」替代A。
+
+執行前記錄臨時 runtime的 project／purpose／port／PID tree／cleanup條件與新開 browser surface ID；
+結束只關該 run-owned process／tab／session並驗證 port釋放，記 runtime receipt。不得終止未知 node或4000 server。
+文件審查本身不建立暫時 runtime或UI；既有 RD verifier 的臨時 routing server 收據獨立保存，
+不得將其 cleanup 與文件作業混寫。
+
+### QA／QC gate、停止與 release re-entry
+
+RD按 SPEC-041限制實作後完成自驗；QA保存 U01～U10真實結果，QC以凍結候選的正常 UI入口及獨立重放
+核對 UI／fault／SW證據。若同一 Agent分階段執行，明記非獨立QC；需要獨立QC時另派工且取得適用授權。
+不因規劃工作宣稱已建立第二執行者、已執行QA或已取得手機實機結果。
+
+出現假最新版、越過gate的 reload、任務遺失、遲到結果改新target、第二reload writer、重複listener／請求、
+正常入口不可達或 true bfcache無法蒐證時不得通過對應case；保留來源／可重現序列並修復。
+契約內程式錯誤由RD修正再跑；需要超出文件的 API／schema／owner／禁止區域，或驗收路徑與架構不符，
+立即回送架構規劃，不以改 expected result或縮減案例消除失敗。
+
+本批產品Done需 U01～U10相應證據及Spec Drift／Convergence Check；Release Ready另由既有 release gate判斷。
+現有正式Web與使用者既有手機安裝是不同環境：正式 readback與 smoke只可在後續同批 release工作中取得，
+手機既有 installed profile沒有實測就保持未確認；文件不提供可執行live指令或聲稱需要重新安裝。
+
+上一輪2026-10-03架構定案文件readback（非本次Rev 2結果、非產品驗證）：DEV／SPEC／QA／documentation map的成熟度、第一批範圍、
+下一步及本批待執行狀態一致；本批文件互連的檔案／heading anchor已核對，canonical index位於dev_task前段。
+`git diff --check`通過；22個相關source／config／verifier的SHA-256與本輪開始時相同，既有dirty成果保留。
+本輪沒有啟動runtime／browser或執行產品tests／build；上述文件核對不計入U01～U10的PASS。
+
+**歷史：2026-10-03 Rev 2／RD 技術主管文件審查收據。** 修正 caller／flight 截止耦合、共享 phase 假 busy、
+過期成功結果、R03 退場例外與 bfcache runner 五項契約缺口；SPEC／DEV／QA／documentation map 同步。
+靜態核對：13 個本批本地文件連結及 heading anchor 有效，U01～U10 無缺號，四份文件均標 Rev 2；
+U06 CLI JSON 可解析，僅過濾指定 bfcache 參數；舊「10 秒共用總期限」摘要已移除。
+22 個相關 source／config／verifier 的 SHA-256 與本次審查起點相同，branch／HEAD 未變，
+`git diff --check` 通過。結論為修訂後文件審查通過／RD Implementation Ready，沒有產品測試、建置、
+runtime、提交或部署；本批 U01～U10 仍待實作／待執行，這份收據不作為產品 PASS 或獨立 QC。
+
+### Rev 3 審查與實作續接紀錄（2026-10-03）
+
+- 文件結論：第一批 1～3 保持 RD Implementation Ready／架構定案。SPEC 補狀態權威及同步重入順序；
+  QA 補五次真 bfcache、可見錯誤／資料檢查及 fixture artifact 證據界線；DEV／map同步為實作中、未驗收。
+- 實作差距：source先看到 apply／retry／local recovery 先 cancelDetection、後設promise guard；
+  新反例在 service adapter 的 attempt-03 重現 **32 PASS／3 FAIL**，三筆同步通知重入各產生2個
+  gate／read，預期1個。標為 Implementation needs correction（U08，兼U05取消情境），由原service責任面修復。
+  證據：`service-adapter/attempt-03/recovery-result.json`；同層routing-runtime記PID34908／port57401、closed=true。
+  這是adapter反例，未宣稱已重現真瀏覽器或使用者手機根因；terminal通知新flight反例已通過，不能掩蓋三筆FAIL。
+- RD 首跑：`output/qa/dev-134/2026-10-03-update-operations/before/recovery-result.json` 保存原service
+  缺 `checkPwaUpdate` 的 U03反例；`ok=false`，其餘既有assertions通過。這證明新增契約起初不存在，
+  不證明候選已通過；後續adapter重跑另存attempt，完成本批仍需U01～U10各必要subcase。
+- Git基準仍為branch `持續優化3`／HEAD `9924eaa945305b8f8df5f2df0cf3c6f829d84618`，工作樹dirty。
+  文件審查只修改本四份受控文件；既有 RD subagents 的source／verifier變更保留各自ownership，
+  不宣稱本輪所有source hash未變。文件before／after與靜態收據存於
+  `output/qa/dev-134/2026-10-03-update-operations/document-review-rev3/`。
+- 本批未完整驗收、未發布；歷史release及手機實機未確認狀態保留。後續4～5仍為
+  Future Phase Captured / Not Requested；沒有另建ADR、DEV或release package。
+- 文件靜態收據：四份文件版本／實作中狀態一致，13個本地連結及heading anchor有效，U01～U10無缺號，
+  五次真返回與錯誤／資料gate文字已核對，adapter 32／3與routing cleanup收據讀回相符；
+  四份文件的`git diff --check`通過。這12項靜態檢查只證明文件收斂，不計產品PASS或獨立QC。
+
+### Rev 3 RD 修復續接（2026-10-03；完整 browser 驗收中）
+
+- service 的 apply／retry／local recovery 改為先設本頁 promise guard，再取消 detection及同步通知。
+  `service-adapter/attempt-04/recovery-result.json` 為 **35 PASS／0 FAIL**，三筆同步重入反例均通過；
+  attempt-03 的 32／3 保留為修復前證據。attempt-04 routing-runtime 為 PID40072／port60598，closed=true。
+- `regression-01/`：DEV-041 23／23、DEV-096 26／26、DEV-097 23／23；targeted ESLint exit0、1 warning。
+  該輪 TypeScript exit2，六筆錯誤位於 install cleanup closure 的 nullable section。
+  修正為 early return 後綁定非 nullable section；`regression-02/` 的 TypeScript exit0、targeted ESLint exit0、
+  0 errors／1 warning（MainLayout.tsx 的 react-hooks/set-state-in-effect）。兩輪命令及來源 hash分別保存。
+- prompt 局部 UI fixture `prompt-browser/attempt-01/` 在取得 Vite served bytes 階段逾時，checks=0，browser尚未開啟；
+  保留 failed result，serverClosed／portReleased／cleanupComplete=true。這是 runner 初始化失敗，
+  未判為產品 UI 故障，也不補算任何 U 案例 PASS。後續修 fixture的錯誤定位及隨機埠後重跑。
+- 以上是 RD 自驗與平行回歸收據，不是獨立 QC；U01～U10的正常入口、真 bfcache與 sealed A→B證據尚需完整收斂。
+  本批產品維持實作中／未驗收，未提交、部署或建立新 release package。
+
+### Rev 4 現行驗證摘要（2026-10-03；本地驗收通過）
+
+所有路徑相對於 `output/qa/dev-134/2026-10-03-update-operations/`；下表只陳述實際證據層級，
+不將部分 assertion 補算為 U01～U10 完成。歷史首跑 FAIL 與修復後收據均保留；
+歷史列的待辦描述只適用當輪，現行結論由下方U01～U10證據對照及最終binding決定。
+
+| 責任面／證據 | 實際結果與限制 | 下一個必要動作 |
+|---|---|---|
+| service adapter `service-adapter/attempt-05/` → `attempt-06/` | 37 PASS／1 FAIL：自然邊界取得 available 後等待 gate，轉 hidden 再放行仍 reload 一次。修復跨 await 資格重驗後 38／38 PASS；原三筆同步重入也維持通過。這是 service adapter，非手機重現。 | 補真 UI／SW 證據；後續 async 階段見下一列。 |
+| service adapter `service-adapter/attempt-07/` → `attempt-08/` | 新增 stable-target 的 pagehide／hidden 與 deferred activation 後 hidden 三組反例。首跑40 PASS／1 FAIL為 host／VM物件prototype比較差異；保持同一SKIP_WAITING payload要求，正規化wire資料後41／41 PASS。三組均走實際claim／release流程，確認無無效navigation、pending target保留及finally解鎖。fixture的IDB／Workbox為最小primitive替身，產品source未因這次assertion修正而改動。 | 凍結候選後保存最終binding，並完成正常入口／SW及資料保護案例；不抵整個U07／U08。 |
+| `regression-03/` | DEV-041 23／23、DEV-096 26／26、DEV-097 23／23；TypeScript exit0，targeted ESLint exit0、0 errors／1 既有 warning。 | 候選 source 若再改，重跑受影響檢查並刷新 hash。 |
+| renderer `prompt-browser/attempt-04/` → `attempt-05/` → `attempt-06/` | 前兩輪均16 PASS／3 FAIL（19 項）；diagnostic讀回reload.hidden=true、computed display=flex、locator仍可見，確認CSS規則覆蓋隱藏狀態。將同scope的hidden規則移到display規則後，原assertions不變，attempt-06 19／19 PASS、sourceUnchanged=true。10秒readiness、provider重用、遲到隔離與成功結果永久清除均有局部DOM證據。 | 真API／正常入口與焦點情境仍補驗；API為SIMULATION，不抵真入口／U06。 |
+| 真 Workbox／入口 `entry-browser/attempt-02/` | 原 10 個 R 瀏覽器回歸通過；sourceUnchanged=true。U01 子頁前置、U02 terminal 等待及 U06 prompt 前置均 FAIL；U06 尚未進行 Back，persisted=0。不得解讀為已量測 bfcache 失敗。 | 修正 harness 前置／定位後重跑；補完整登入分支、五次真返回及 sealed A→B。 |
+| 真 Workbox／入口 `entry-browser/attempt-03/` → `attempt-04/` | 前版首跑12 PASS／8 FAIL；第二輪18 PASS／2 FAIL，sourceUnchanged=true。U01角色／正常子頁／鍵盤與U02登入零／一筆任務矩陣、真endpoint去重／10秒逾時重試已通過。U08結果清除案例通過；waiting B使回讀A為VERSION_UNKNOWN，不能代表真Main完整同身分返回。 | 保留原失敗；凍結修復後candidate，補焦點延遲及下一列解鎖。 |
+| U08 `entry-browser/attempt-04/` | 真Main關閉選單後service finally已解鎖，menu卻仍禁用並顯示「正在更新」。根因為重複isApplying狀態受選單sequence限制，關閉使finally無法清除；localUpdateBusy=false仍被舊flag覆蓋。 | RD移除選單apply busy副本，直接讀service；原同一反例重跑，不改PASS條件。 |
+| U06 `entry-browser/attempt-04/` | 5次核心＋1次等待途中真正pageshow.persisted=true，heap／document／root／menu身分與資料保留；setup=1、listener=2，過期結果／焦點無回寫。原attempt-03 no-store未命中仍保留。 | 只證明隔離no-cache HTML delivery；不推導正式no-store或手機實機。candidate改動後重綁受影響source。 |
+| U09 `entry-browser/attempt-04/` | sealed L 78檔驗證通過，真L任務及unsafe草稿保留；發布B後waiting成立，但45秒未載入B。原runner只有bringToFront，尚未驗同profile正常重開。診斷另對無release-meta的candidate fixture發出404，屬runner讀回錯誤。 | 保留失敗；正常reload重開同profile，candidate核對實有app-shell metadata；不修改sealed L、不偽造正式release receipt。 |
+| 真入口 `entry-browser/attempt-05/` | 21 PASS／1 FAIL，sourceUnchanged=true；移除menu isApplying副本後，原關閉套用反例PASS。兩個延遲frame案例以真Main callback／service結果驗證local busy與重開menu使焦點失效；只有frame delivery為SIMULATION。U09已同profile載入B並保留unsafe L草稿及本機任務，但收據仍因診斷讀回release-meta 404而FAIL。 | 改為只在發布前讀sealed L release-meta，發布後讀candidate實有metadata；保留404原失敗，不改HTTP gate。補真menu offline／HTTP錯誤與再試。 |
+| 最終真入口 `entry-browser/attempt-06/` | 27／27 PASS，47個source檔before／after一致；包含原10個R、正常Main／Quick入口、離線與HTTP503重試、真去重／10秒等待、finally解鎖、延遲焦點、Quick composition／voice／真IDB commit pending保護、sealed L同profile重開至B、6次真返回。visible-error與task／sentinel gates通過。 | 只適用隔離候選及明列SIMULATION；不推導production byte identity、真麥克風、OAuth或手機實機。 |
+| 最終補充 `service-adapter/attempt-09/`、`regression-05/` | adapter 41／41 PASS；同一來源before／after相同。DEV-041 23／23、DEV-096 26／26、DEV-097 23／23、tsc exit0；ESLint exit0、0 errors／1既有MainLayout warning。regression-04 wrapper在讀hash清單時失敗，尚未執行產品測試，原錯誤保留。prompt-browser/attempt-06 的19／19以8檔hash一致重用。 | hash／receipt適用範圍見final-evidence-binding.json；不把mock SW與真SW混算。 |
+
+上列已執行 runner 的自有 browser／server 均已關閉且 portReleased=true；原 localhost4000／使用者分頁
+未被操作。receipt 中的 branch／HEAD、before／after hashes、SIMULATION與cleanup是證據 binding，
+不能推導正常 production bytes 或手機既有 profile 通過。此摘要取代 DEV／map 的即時計數副本；
+SPEC 只維護契約。Rev 4文件審查通過；第一批本地驗收通過，未提交／推送／部署。
+文件靜態核對歷史收據：`document-review-rev4/static-readback.json`，8項／23個本地連結與heading anchor通過；
+僅適用當時文件hash。現行文件binding另存`document-review-rev4/static-readback-02.json`，保留舊版；
+只核對文件，不計產品PASS。
+
+#### 第一批本地驗收結論與證據對照
+
+本地結論由同一Agent完成RD修正，再依凍結候選做QA／事實核對；**非獨立QC**。
+U01～U10分母保持不變；下表明列各層證據，未以單一adapter assertion代替正常UI／SW路徑。
+
+| 案例 | 支持本地通過的證據與適用界線 |
+|---|---|
+| U01 | entry-06真AuthGate／MainLayout／Home／Settings；admin／一般／無看板、登入前prompt、320／390／1440、44px及鍵盤／outside／composition Escape、有效prompt handoff。Auth與migration只為SIMULATION前置。 |
+| U02 | entry-06真Quick路由；登入／未登入×零／一筆正常表單任務、DOM身分／install event／RWD；Android／iOS UA及display-mode為SIMULATION。實有資料與account binding、安裝動作保留。 |
+| U03 | adapter-09可信比較／fallback／錯誤／R03例外及pure presentation；entry-06真menu成功、BrowserContext離線、隔離server primary與fallback HTTP503後重試。HTTP故障只豁免本例預期503；不清應用failure或產生假最新版。 |
+| U04 | adapter-09同步terminal重入、需求提升、caller與flight期限及native guard；entry-06真metadata endpoint同requestId、提升至多一次順序重讀、native update maxActive=1。 |
+| U05 | adapter-09 deferred body／fallback／native／caller與flight各自逾時、pagehide及本頁effect取消；prompt-06真10秒readiness DOM與provider重用；entry-06真12秒網路延遲、10秒UI terminal、遲到隔離及再試。 |
+| U06 | entry-06原始5核心＋1等待途中persisted事件；同heap／document／root／menu、最新快照、過期結果及焦點失效、資料保留，setup=1／listener=2。adapter補false pagehide與冪等dispose。HTML no-cache為delivery前置SIMULATION，正式no-store與手機不在此結論。 |
+| U07 | adapter-09涵蓋單純detection無effect、真正app-open／foreground／view-transition資格與gate／stable-target／activation途中失效；entry-06真Workbox safe app-open更新、雙client隔離及nonce導覽。保留唯一writer／lease／fence。 |
+| U08 | adapter-09同步action重入、foreign phase與reservation≠local busy；entry-06真Main finally／延遲焦點及真Quick IME、voice、IDB保存待完成的gate／pending target／資料保護。frame delivery、SpeechRecognition engine及IME事件是明列SIMULATION；保存鎖與capture寫入為真IDB。成功身分永久清除由pure adapter及Quick renderer覆蓋，Main真回讀A遇waiting B為UNKNOWN，沒有假同版成功。 |
+| U09 | entry-06驗sealed L 78檔manifest後同profile真root SW升候選B；只正常reload重開，不清資料、不unregister、不直接寫completed。真表單建立的一筆任務／sentinel保留，另一unsafe L文檔timeOrigin／draft／scripts不變；B的新menu可檢查同版，無非預期HTTP／可見錯誤。Android installed為SIMULATION，真手機仍未確認。 |
+| U10 | adapter-09 41項、prompt-06 19項（8檔hash重用）、regression-05及entry-06原10個R；正常精確文案／七值去重、資料／cache／安裝與原R03維持。代表320px Main／Quick截圖已目視；其他viewport有截圖及幾何。無新增依賴／schema／週期polling／reload writer。 |
+
+最終binding：`final-evidence-binding.json`將各run的hash與目前產品／verifier逐檔對照，
+文件後補不回寫原凍結收據。歷史失敗保留；runtime／session／port皆完成自有清理。
+未驗事項：production release artifact與live讀回、使用者手機真installed profile、真OAuth／麥克風及
+正式no-store delivery的bfcache可用性。本批驗收不要求重新安裝，不修改正式資源，後續4～5未實作。
+
+## 2026-10-03 更新提示規則去重
+
+- 模式／範圍：使用者明確指定 `optimization-system-health`「執行優化」，本輪採直接低風險修改。Canonical repo `C:\VIBE CODING\ProJED\ProJED`、branch `持續優化3`、起始 HEAD `9924eaa945305b8f8df5f2df0cf3c6f829d84618`，工作樹原為 clean；沿用 DEV-134 的提示維護範圍。
+- 問題證據：`AppUpdatePrompt.tsx` 與 Quick Task `pwaUpdatePrompt.ts` 各自持有相同的顯示條件、失敗分類、標題與 fallback 訊息。相同產品契約分成兩處維護 → 調整時需同步修改 → 有漏改其中一處而出現行為分歧的風險；此處是維護風險，未宣稱已造成線上故障。
+- 修改：合併至 `src/services/pwaUpdatePresentation.ts` 的純函式，兩個 renderer 使用同一份結果。該模組只以 type import 參考 state，執行時無 React／Workbox／DOM 依賴。主程式測試 override、兩個 renderer 的操作中狀態、按鈕、樣式、reload safety、更新服務與資料存取不變。
+- 次要問題：以起始 HEAD 全部原始檔執行 DEV-041，重現 21/22、唯一失敗為「global prompt remains mounted outside AuthGate」。原檢查依賴已不在 `App.tsx` 的 `<AppInstallAssistant />`，實際 prompt 仍在 `</AuthGate>` 後。改為直接檢查 prompt 位於 AuthGate 結束後、PwaReloadSafetyBridge 結束前；保留相同的隔離要求。原失敗證據保存在 `baseline-041.json`。
+
+收益／風險／驗證成本排序：優先合併同義規則（維護來源 2 → 1，renderer 行為風險低，可用原版本逐項比對）；其次修正過時驗證（去除已重現的誤報，產品 runtime 不受影響）。未量測效能，不宣稱速度或 bundle 大小改善。
+
+本輪證據目錄：`output/qa/dev-134/2026-10-03-prompt-health/`。
+
+| 驗證 | 命令／證據 | 結果 |
+|---|---|---|
+| 修改前後 characterization | `node output/qa/dev-134/2026-10-03-prompt-health/characterize.mjs`；`before.json`、`after.json` | 以起始 HEAD 為 immutable baseline，執行兩個實際 renderer 的 VM adapter。主程式 21,120、Quick Task 2,640 組狀態輸出逐項相同；apply／retry／recover／dismiss 四個操作及 pending／settled 狀態相同。 |
+| Shared presentation／既有恢復契約 | `DEV134_REPORT_DIR=output/qa/dev-134/2026-10-03-prompt-health node scripts/verify-dev-134-pwa-recovery.mjs`（PowerShell 以 `$env:DEV134_REPORT_DIR` 設定）；`recovery-result.json` | 20/20 PASS；新增 recovery 優先於 blocked、dismiss 不隱藏失敗、空訊息 fallback、原始錯誤保留及精確文案驗證。 |
+| 既有 DEV-041／096／097 | `node scripts/verify-dev-041-pwa-update-notification-cache-recovery.mjs`；`node node_modules/tsx/dist/cli.mjs scripts/verify-dev-096-pwa-update-transaction-convergence.ts`；同方式執行 `verify-dev-097-pwa-safe-reload.ts`；`checks.json` | 23/23、26/26、23/23 PASS。只將文案來源檢查移至共用模組，原行為 assertions 保留。 |
+| 型別與 lint | `node node_modules/typescript/bin/tsc --noEmit --pretty false`；targeted ESLint（7 個變更來源檔，清單見 `checks.json`） | PASS。 |
+
+Characterization 比對的是 renderer 產生的結構／文字／屬性與按鈕呼叫，不是真實瀏覽器、Service Worker 或手機實機。初次 runner 僅因 Windows 路徑空白的 URL 解碼問題無法寫收據，修正 runner 後完成 before／after；沒有產品修正因此被掩蓋。既有完整瀏覽器／live 證據仍屬 2026-10-02 發布，不當成本輪驗收。
+
+DEV-134 routing fixture 依既有 harness 記錄 PID `38356`／port `50733`，結束時關閉並確認 port 不可連線，`routing-runtime.json` 的 `closed=true`。本輪沒有開啟 browser／UI；使用者 localhost4000 維持原狀。未執行 production build、Git 提交、部署或遠端資料操作；未做全系統效能審計。下一步為同批程式發布時納入正式驗證；手機實機待辦仍保留。
+
+## 2026-10-03 第二輪：略過相同提示重繪
+
+使用者「繼續優化」延續本地低風險範圍；branch／HEAD 仍為 `持續優化3`／`9924eaa945305b8f8df5f2df0cf3c6f829d84618`，保留第一輪未提交變更。起始三個 renderer／presentation 檔另存 immutable `baseline-*.ts`，其 hash 與第一輪完成證據一致。
+
+問題鏈：`pwaUpdateService.setUpdateState` 在版本檢查更新 `lastCheckedAt`、`latestVersion` 或刷新 safety metadata 時通知 subscribers → Quick Task 每次呼叫 render → 即使呈現不變，仍設定 14 個 DOM 的文字／hidden／disabled 屬性。以真實 renderer 搭配 setter adapter 重現；不是以字串搜尋推定執行次數。
+
+修改限定 `pwaUpdatePrompt.ts`：比較上一個可見結果的七個值（顯示、recovery、標題、細節、updating、applying、recovering），相同時略過 DOM 寫入。新通知仍更新 currentState，首次呈現、真正狀態變化和動作完成仍照原流程更新。這是一個本地 guard，沒有新增訂閱、計時器或共用 state cache；不改更新服務／資料／網路。收益為消除已量測的重複寫入；風險在漏列呈現依賴，使用完整 renderer 比對與操作中／完成後契約保護。
+
+證據根目錄：`output/qa/dev-134/2026-10-03-prompt-render/`。
+
+| 驗證 | 結果／證據 |
+|---|---|
+| DOM 寫入量（每種狀態各 100 次只變背景 metadata 的通知） | safe、dirty、blocked、recovery 均由 **1,400 → 0**；`before/prompt-render-measurements.json`、`after/prompt-render-measurements.json`。修改前新增檢查如預期失敗，保留在 `before/recovery-result.json`。 |
+| Renderer 輸出相容 | `node output/qa/dev-134/2026-10-03-prompt-render/characterize.mjs`；主程式 21,120、Quick Task 2,640 組狀態與 4 個操作逐項相同，`characterization.json`。baseline 為本輪開始時已含上一輪優化的檔案快照。 |
+| 受影響回歸 | 將 `DEV134_REPORT_DIR` 設為上述 `after` 子目錄後執行 `node scripts/verify-dev-134-pwa-recovery.mjs`：21/21 PASS；涵蓋 no-op 通知、顯示／dismiss、錯誤原因變更、apply／retry／recover pending 與完成狀態、重複點擊防護、清理冪等。 |
+| 型別／lint | `node node_modules/typescript/bin/tsc --noEmit --pretty false`、`node node_modules/eslint/bin/eslint.js src/features/quickTaskCapture/pwaUpdatePrompt.ts scripts/verify-dev-134-pwa-recovery.mjs` PASS。第一輪其他三個 verifier 對應來源未再改動，沿用已保存結果。 |
+
+首次修改後回歸的 adapter 過早讀取跨 VM Promise 的完成狀態，造成按鈕仍為「準備重新載入」的測試失敗；只將測試等待調整為下一個 event-loop turn，產品程式未再修改。該次結果保存在 `after/first-attempt-result.json`。完整 renderer 比對亦等待動作完成。
+
+測量層級是 DOM 屬性 setter 呼叫數，未量測瀏覽器實際 layout、FPS、耗電或手機效能，不能把此數字宣稱為整體加速比例。本輪未開啟 UI／瀏覽器，DEV-134 的暫時 routing fixture 已由 harness 關閉並確認 port 釋放（before／after 各有 `routing-runtime.json`）。沒有提交、部署或遠端操作；下一步為將兩輪維護變更一併納入後續發布前驗證。
 
 ## 2026-10-02 舊安裝 bootstrap 重現
 

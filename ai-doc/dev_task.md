@@ -152,11 +152,15 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 
 ## 總任務清單
 
-- ◐ DEV-134 [開發點] [live 網站驗證通過] [P1] [已部署；手機實機待確認] PWA 載入失敗恢復與前版資產相容
+- ◐ DEV-134 [開發點] [執行中] [P1] [更新操作第一批本地驗收通過；手機實機待確認] PWA 載入失敗恢復與前版資產相容
   - 摘要：修正失敗交易反覆提示、背景檢查誤報與恢復導覽命中舊 HTML；發布包保留上一版雜湊資產。
   - 父任務：DEV-041、DEV-096、DEV-097；發布包相容 DEV-083。
-  - 下一步：取得手機既有 installed profile 的更新確認；網站驗證與 Git 推送已完成。
+  - 下一步：第一批1～3本地開發與驗收完成；接續發版須以本候選重新建立artifact及live證據，既有手機確認待辦保留。
+    - 更新操作文件 **Rev 4／RD Implementation Ready + 架構定案：已定案**；本地驗收通過，尚未提交／部署。
+      見 [更新操作優化提案](#更新操作優化提案架構定案2026-10-03)、[工程契約](specs/SPEC-041-pwa-update-notification-cache-recovery.md#dev-134-更新操作架構定案2026-10-03)及[QA計畫與結果](qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-03-更新操作優化驗收計畫與結果)。
   - 證據：[DEV-134 本地驗證](qa/QA-DEV-134-pwa-recovery-local-verification.md)；`output/qa/dev-134/`。
+  - 2026-10-03 本地維護：主程式／Quick Task 更新提示規則合併，修正 DEV-041 過時驗證；characterization、型別、lint、受影響回歸通過。本次尚未提交／部署，與既有 live 發布區分。
+  - 同日第二輪：Quick Task 相同提示略過重繪；四種狀態每 100 次 metadata 通知的 DOM 屬性寫入各由 1,400 降為 0，21/21 受影響回歸通過，renderer 輸出一致。兩輪變更仍為本地未提交成果。
   - 計入交付：否
 
 此區是 `dev_task.md` 的 canonical index；詳細契約、歷史與完整證據保留在直接連結的
@@ -7552,6 +7556,117 @@ R14 current evidence為static 40/40與browser 27/27，新增S40／B52 armed pare
 2026-09-29 設定分類入口由「快速開啟」改名為「安裝APP」，分類內仍包含 App 安裝、啟動與快速開啟提示設定；內部 section id 不變。
 
 ## DEV-134：PWA 載入失敗恢復與前版資產相容
+
+### 更新操作優化提案（架構定案，2026-10-03）
+
+- 文件成熟度：**RD Implementation Ready；架構定案：已定案（第一批 1～3）**；第一批本地驗收通過。
+  現行版本為 **Rev 4／RD 技術主管續接審查**；工程契約集中於 SPEC、案例與最新收據集中於 QA，產品範圍與完成率不變。
+  既有 DEV-134 發布、本地維護與手機實機待辦保留各自狀態，不抵本批驗收。
+- 文件用途與主責：DEV-134 PM 保存需求與執行邊界，RD 技術規劃在 SPEC-041定案工程契約，QA／QC按本批計畫接手。
+- 本輪文件審查邊界：更新 ProJED 的 SPEC／QA／DEV／map；既有開發工作保留各自 source／verifier ownership。
+  第一批候選已凍結並完成本地驗收；本批提交／發布及手機實機確認尚未完成。
+- 人類來源：本 chat「這個更新功能還可以如何優化？請提案」，接續要求「ProJED主程式也要有三點選單」
+  及使用 `dev-pm`「寫成開發文件」，後續「補到架構定案」「rd-tech-lead 審視並優化開發文件」。兩個 App三點更新入口為已確認產品方向；
+  依既有提案收斂第一批1～3作為本次架構交接範圍，4～5保留capsule；本次沒有擴張到其產品實作。
+- 文件基準：canonical ProJED repo，branch `持續優化3`，HEAD `9924eaa945305b8f8df5f2df0cf3c6f829d84618`。
+  觀察包含既有未提交的兩輪提示優化；相關 source／證據見下方維護紀錄。
+- 風險：本輪文件編輯為 Low；未來新增 UI 入口及更新狀態互動至少為 Medium，須有 targeted QA／QC。
+
+#### 問題、價值與現況
+
+使用者曾多次回報手機 App 仍顯示舊版，並表示更新指引難以理解。目標是在原 App 內找到更新入口，
+按一次即可知道檢查結果；更新仍保護正在編輯及尚未同步的任務，普通更新不以重裝或清除資料為前提。
+
+規劃基線的主程式與 Quick Task 已共用 updater、安全 reload gate 與提示規則；Quick Task 已有三點安裝選單。
+本地兩輪優化只證明規則相容及 DOM 寫入減量，不能證明本提案已完成或手機已載入新版。
+下列兩項是 Rev 2 規劃時的 source／相依契約 readback，形成靜態失效模型；不能當作實作中現況。
+規劃時尚未取得本批真bfcache／正常入口證據；現行結果見QA。
+不宣稱是使用者手機舊版的已確認根因。當時的行為驗證安排在U04～U06：
+
+- Quick Task 提示在 `pagehide` 解除訂閱並移除 DOM；目前未見提示本身的 `pageshow` 恢復路徑。
+  其他帳號生命週期已有恢復處理，不能據此推定更新提示也恢復。需重現瀏覽器返回快取（bfcache）情境。
+- 版本檢查可由啟動、定時、回前景及 worker 事件觸發；目前未見版本 metadata 檢查的共用進行中請求
+  與明確逾時取消。需量測重複請求及慢網路結果，不能先宣稱已造成正式故障。
+
+#### 已確認需求與主要流程
+
+**ProJED 主程式與 Quick Task 都提供可辨識的 ⋮ 三點選單，內含「檢查更新」。**
+主程式入口固定在 MainLayout右側action group最右，所有已登入角色／無看板首頁／設定均可達；
+登入頁沿用既有背景 updater／prompt。Quick Task沿用標頭唯一選單，登入／未登入、browser／installed
+皆顯示檢查及原安裝項目。窄版保留44px觸控範圍、viewport內浮層與鍵盤／焦點契約。
+
+正常流程：開啟 App → ⋮ →「檢查更新」→ 顯示「檢查中」→ 顯示「已是最新版」、
+「發現新版」或「無法連線／檢查失敗」。發現新版後沿用既有準備及安全套用流程；
+僅得知伺服器有新版不能提前宣稱「新版已就緒」或「更新完成」。
+結果顯示於本次操作附近；沒有人工操作時保持現有低干擾呈現，不新增常駐更新狀態面板。
+
+#### 第一批範圍與定案契約
+
+| 項目 | 定案實作邊界 | 驗收契約 |
+|---|---|---|
+| 1. 兩個 App 的三點選單與「檢查更新」 | 沿用共用 service；各 renderer 擁有自己的操作與安裝列。 | U01～U03／U08；正常入口可達、當次結果可信、唯一更新主動作及本頁互斥。 |
+| 2. 返回 App後恢復提示 | 保留同一 Quick prompt，真返回讀最新快照；離開使舊操作失效。 | U06／U07；五次真 bfcache、提示可操作、safe安靜、無重複訂閱／listener。 |
+| 3. 檢查去重與逾時 | UI等待及共用flight各有10秒截止，caller只限制自己等待。 | U04／U05；去重／需求提升、native guard、逾時與遲到結果隔離。 |
+
+三項共同保留既有更新交易與 safety 規則：safe 狀態只在自己的 natural boundary 靜默套用；
+草稿、輸入、保存或其他安全阻擋存在時不得繞過 gate。手動檢查不新增一條直接 reload 路徑。
+兩個 App 共用行為語意，各自沿用既有 UI 元件及生命週期；不要求兩邊使用同一呈現框架。
+
+工程權威：[SPEC-041 更新操作架構定案](specs/SPEC-041-pwa-update-notification-cache-recovery.md#dev-134-更新操作架構定案2026-10-03)。
+API、狀態權威、互斥／通知順序與版本可信條件只在 SPEC維護，QA維護對應反例與通過條件。
+沿用 ADR-047單一 updater／reload writer、non-claiming activation；不新增DB、依賴或backend。
+
+#### RD交接、驗收與證據
+
+1. 接手時重讀branch／HEAD／dirty及source；保留本地兩輪提示維護。依SPEC先補failure-seeking assertions，
+   再做service／pure presentation、兩個正常入口及prompt resume，最後凍結candidate並蒐證。
+2. [QA U01～U10](qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-03-更新操作優化驗收計畫與結果)
+   已定義正常delivery path、fixtures、可執行現有命令、viewports／角色、真bfcache／SW／舊安裝、證據binding及cleanup。
+3. 本批完成須相應QA／QC證據與Spec Drift／Convergence Check；同一Agent分階段驗證須明記非獨立QC。
+   fresh browser、平台模擬及手機既有installed profile分開記錄；未取得的結果不得標PASS。
+4. RD可自行決定局部函式、class／test命名，不能改定案API／deadline／安全政策／effect owner／phase範圍。
+   首個需超出契約改schema／owner／禁止模組、或既定驗收路徑無法成立的缺口，停止並回送架構規劃。
+   契約內程式錯誤可修復再驗；候選hash改變時刷新binding及受影響證據，不重問同一產品方向。
+
+#### 後續項目（Future Phase Captured / Not Requested）
+
+- **4. 載入成功確認與版本資訊**：使用者可在三點選單查閱目前版本；人工更新後僅在實際載入版本
+  與該次目標版本一致時短暫顯示成功，避免把下載完成或 worker 啟用當成成功。
+  依賴既有版本／交易完成契約；驗收需跨 reload 核對，避免舊成功紀錄重複提示。
+  重新進入條件：第一批結果已知，且使用者要求納入此項，再補版本呈現與一次性回饋契約。
+- **5. 複製去識別診斷**：在人工操作的選單提供可複製的版本及失敗階段／代碼，協助回報。
+  限定明確白名單，不含 token、帳號、任務內容或網址中的敏感參數，不自動傳送至外部。
+  依賴穩定的版本及錯誤分類；驗收以實際剪貼簿內容及權限拒絕回饋為準。
+  重新進入條件：使用者要求此項，再補欄位白名單、格式與剪貼簿失敗處理。
+
+#### 限制、Closure Review與下一步
+
+- 本提案聚焦網站內容更新；不改 WebAPK 安裝身分、圖示更新保證、帳號／同步規則或既有任務資料。
+  不新增資料庫 migration、權限、遠端設定、遙測或部署執行計畫。
+- 新選單只能出現在已載入對應新版程式的 client；不能保證仍執行歷史 bootstrap 的 App 已有新入口。
+  既有安裝能否首次取得新版，須沿用舊版升級證據及相容處理，不能以新選單存在取代該驗收。
+- Rev 2 修正 caller截止、共享phase、過期成功、R03及bfcache runner五項缺口，歷史文件收據保留於QA。
+  Rev 3補狀態權威與同步通知重入順序，收斂五次真返回、可見錯誤／資料及fixture artifact證據界線。
+  文件層架構定案保持，產品差距回送RD；未用修改驗收來補算PASS。
+- Rev 4補自然邊界跨await及焦點DOM commit後的資格重驗；已修復反例與未通過驗證分開記錄，
+  不改既有安全策略、API、驗收分母或第一批範圍。
+- 本批收斂：同步重入、hidden期間自然更新及關閉選單後忙碌狀態未解除已修復。
+  正常入口、焦點、真SW／bfcache及同安裝環境升級已完成本地驗收。最新計數、首跑失敗、證據層級與cleanup只見
+  [QA Rev 4摘要](qa/QA-DEV-134-pwa-recovery-local-verification.md#rev-4-現行驗證摘要2026-10-03本地驗收通過)。
+  同一Agent完成修正及凍結後事實驗證，非獨立QC；未將平台／Auth／麥克風模擬視為手機實機。
+  本批未提交／推送／部署；沒有新release package。下一個發版階段需正式artifact／live證據，後續4～5仍未要求實作。
+- 現行契約參考：[SPEC-041](specs/SPEC-041-pwa-update-notification-cache-recovery.md)、
+  [ADR-047](decisions/ADR-047-pwa-per-client-reload-isolation.md)、
+  [QA-DEV-134](qa/QA-DEV-134-pwa-recovery-local-verification.md)。
+  平台背景參考：[bfcache](https://web.dev/articles/bfcache)、[PWA 更新](https://web.dev/learn/pwa/update)。
+- 2026-10-03：依人類要求從Brief Ready補到RD Implementation Ready＋架構定案；沿用DEV-134，
+  不新增交付點或改變產品完成率，既有release／本地維護的歷史結果保留。
+
+### 既有實作與發布紀錄
+
+- 2026-10-03 第二輪系統健康優化：依使用者「繼續優化」，保留第一輪 dirty changes；Quick Task 以七個呈現值略過不必要 DOM 寫入。四種狀態各 100 次背景 metadata 通知，由 1,400 次 setter 寫入降為 0；原 renderer 23,760 組狀態及 4 個操作相容，DEV-134 21/21、型別、targeted lint PASS。證據、首次測試等待修正及量測限制見 [QA 第二輪](qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-03-第二輪略過相同提示重繪)；沒有真瀏覽器效能／手機實機驗收，尚未提交／部署。
+
+- 2026-10-03 系統健康優化：人類指定 `optimization-system-health`「執行優化」，起始 HEAD `9924eaa945305b8f8df5f2df0cf3c6f829d84618`、clean branch `持續優化3`；同一 Agent 完成本地 RD／驗證。兩個提示 renderer 的同義規則合併為 `pwaUpdatePresentation.ts`；以原始 renderer 比對 23,760 組狀態及 4 個操作輸出相同，DEV-134 20/20、DEV-041 23/23、DEV-096 26/26、DEV-097 23/23、TypeScript、targeted ESLint PASS。DEV-041 舊檢查依賴已移除安裝元件的誤報已重現並修正。詳見 [QA 維護證據](qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-03-更新提示規則去重)；尚未提交／部署，既有手機實機待辦不變。
 
 - 2026-10-02 Quick Task 更新提示補正：依使用者要求沿用主程式行為，safe 狀態靜默自動更新；dirty／blocked 時顯示共用「新版已就緒」安全提示，load／update failure 顯示相同恢復動作。R12 static 19/19、獨立 Quick Task UI 9/9（320×844）、TypeScript、targeted ESLint、diff check、正式 read-only smoke PASS。commit `23a566bf49ae2e2cdf5e7b5bc6bad48cc174a18b` 已推送；live release `20261002091531-2a1246`，canonical provenance 78/78、兩 origin 各 6 個 Quick Task 路徑 hash 相符。證據見 [QA-DEV-134](qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-02-quick-task-更新提示與主程式一致)、[REL-015](release/REL-015-DEV-134-QUICK-TASK-PWA-20261002.md#2026-10-02-quick-task-更新提示與主程式一致)。真手機既有 app 是否已載入新版仍待使用者確認。
 

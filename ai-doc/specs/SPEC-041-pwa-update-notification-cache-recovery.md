@@ -798,3 +798,355 @@ Quick Task 是獨立 MPA document，但與主程式共用同源 `/sw.js`。舊�
 2026-10-02 R12 live 驗證：release `20261002091531-2a1246` 的正式 read-only Quick Task smoke 確認 shared prompt 已掛載且 safe 狀態不顯示提示，320px 無水平溢出；canonical provenance 78/78。`web.app` 與 `firebaseapp.com` 的 Quick Task HTML／entry JS／CSS／prompt chunk／updater chunk 共 6 paths 均與 sealed manifest hash 相符。dirty／recovery 可見互動另由 Q06 隔離 browser fixture 9/9 驗證；這些 fresh browser 證據不推定手機舊 client 已更新。
 
 QC 在候選 source freeze 後執行；最初正式截圖 failure 保留。fixture 只支持實際層級，不將新 profile／匿名 smoke 代替使用者既有 profile 或正式 lifecycle。結果與精確命令由 DEV-134 記錄。
+
+### 2026-10-03 DEV-134 更新提示維護補記
+
+主程式與 Quick Task 的 R12 顯示條件、recovery 分類、標題及補充訊息統一由 `src/services/pwaUpdatePresentation.ts` 純函式提供。safe 靜默、dirty／blocked 可見、dismiss 與失敗提示優先序維持既有契約；主程式的測試 override 留在原 renderer。React 與原生 DOM 各自保留呈現及按鈕生命週期，不變更更新交易、reload safety 或資料儲存。
+
+本輪為使用者指定系統健康優化的本地維護，驗證見 [QA-DEV-134](../qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-03-更新提示規則去重)。不新增產品需求；本地證據不等於發布或手機驗收。
+
+同日第二輪：Quick Task 在七個呈現值相同時略過 DOM 寫入；仍接收全部 state 通知並更新目前狀態，首次顯示、真實呈現變化及按鈕 pending／完成必須立即更新。背景 metadata 變化不得單獨造成重繪。setter 次數量測與 renderer 相容證據見 [QA 第二輪](../qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-03-第二輪略過相同提示重繪)。
+
+## DEV-134 更新操作架構定案（2026-10-03）
+
+文件成熟度：**RD Implementation Ready；架構定案：已定案（第一批 1～3）**。
+現行版本：**Rev 4／RD 技術主管續接審查（2026-10-03）**；同節先前文字以本版為準。
+產品狀態：**第一批1～3本地驗收通過；未提交／發布**；候選source已凍結驗證，手機實機未確認。
+文件定案與產品驗收分開：本節維護工程契約；已執行與尚缺的驗證統一在 QA 記錄。
+來源：本 chat 更新優化提案、「ProJED主程式也要有三點選單」、`dev-pm`「寫成開發文件」，
+以及後續「補到架構定案」「rd-tech-lead 審視並優化開發文件」。提案4～5（成功／版本資訊、診斷複製）
+仍為 Future Phase Captured / Not Requested。
+
+### 權威、範圍與相容性
+
+本節是第一批三項的工程權威；[DEV-134](../dev_task.md#更新操作優化提案架構定案2026-10-03) 保存需求與執行邊界，
+[QA 本批計畫](../qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-03-更新操作優化驗收計畫與結果) 保存驗收案例。
+ADR-047、DEV-096 transaction v1、DEV-097 local safety 及本文件 R01～R12 仍為相容基線。
+
+- 本批：兩個 App 的三點更新入口、檢查結果、檢查去重／逾時、Quick Task 返回提示恢復。
+- Spec Impact：新增人工檢查契約，替代背景檢查借用交易 `checking` 狀態的做法；修正持續存在的
+  document 在 `pagehide.persisted` 後永久 dispose 提示的生命週期。自動 normal prompt 的精確可見內容不變。
+- 手動檢查與定時／worker detection 不得偽造 `app-open` 更新邊界。規劃基線的 `checkForAppShellUpdate`
+  會在 safe detection 呼叫該邊界；本批把此效果收回實際 app-open／foreground／view-transition handler，
+  使工程行為符合既有 natural-boundary 契約；不新增 timer／idle 強制更新政策。
+- 不改業務 DB、IDB schema、Auth、owner manifest、安裝身分、原安裝功能或網站發布方式。
+  版本查閱／成功回饋與診斷複製本批不實作；不預建它們的儲存欄位、上報服務或設定。
+
+### 架構規劃時的程式基線與失效模型
+
+canonical repo `C:\VIBE CODING\ProJED\ProJED`，branch `持續優化3`，
+HEAD `9924eaa945305b8f8df5f2df0cf3c6f829d84618`；下表為 Rev 2 規劃時的 readback，
+包含既有兩輪未提交提示維護，不能當作 Rev 4 實作中的現況。實作／驗收進度以 QA 最新紀錄為準。
+
+| 已讀責任面 | 靜態事實及影響 |
+|---|---|
+| `pwaUpdateService.ts` | metadata 檢查回傳 boolean，false 混合無新版、離線、失敗及略過；多個啟動／timer／worker／visibility 入口可重疊；fetch 沒有明確逾時。不能據此回報人工檢查結果。 |
+| Quick Task `pwaUpdatePrompt.ts`／`main.ts` | 提示在所有 pagehide 永久 cleanup；掛載只在 bootstrap 執行。若 document 由 bfcache 恢復，JS 不重新 bootstrap，提示失去訂閱與 DOM。帳號的獨立 pageshow 不會重掛提示。 |
+| `install.ts` | 已擁有標頭 details 選單，但每次 render 重建 innerHTML；外部臨時 append 的更新按鈕會在安裝事件／RWD render 遺失。更新列須由同一 renderer 擁有。 |
+| `MainLayout.tsx`／`App.tsx` | 工作介面頂列有右側 action group，位於 AuthGate 內；更新 prompt 在 AuthGate 外。人工入口與背景更新生命周期須維持不同掛載責任。 |
+| `syncStateFromTransaction`／Workbox activated／兩個 prompt | 共享交易的 active phase 會投影到本頁 status；activated 也可在沒有本頁 apply promise 時寫 awaiting-controller。status 名稱不能證明本頁忙碌，不能據此永久禁用人工入口。 |
+| ADR-047／Vite／existing verifiers | Workbox root worker、non-claiming activation、單一 application reload writer、transaction／safety 契約已存在；無需另建更新服務、router 或跨分頁共識。 |
+
+條件式失效鏈：持續存在的 document → pagehide 被當成永久卸載 → 提示 DOM／subscription 移除 →
+恢復後沒有重新 bootstrap → 更新／恢復動作不可達。這是規劃時由source推導的缺口；當時尚未執行真bfcache／請求量測。
+現行實作與驗證見QA，不將隔離結果宣稱為使用者手機舊版的已確認根因。
+
+使用思考習慣：#多層次分析、#變數控制、#系統描繪
+
+### 目標架構與責任邊界
+
+```mermaid
+flowchart LR
+  M[主程式全域三點選單] --> C[pwaUpdateService 檢查協調]
+  Q[Quick Task 既有三點選單] --> C
+  B[啟動 定時 worker 返回事件] --> C
+  C --> V[同源版本 metadata 與既有 root worker]
+  C --> S[共用記憶體檢查快照]
+  S --> P[pwaUpdatePresentation 純呈現規則]
+  P --> M
+  P --> Q
+  C --> T[既有 available transaction 與 pending target]
+  A[重新載入 或真實自然邊界] --> G[既有 local safety gate]
+  G --> T
+  T --> R[既有唯一 activation 與 reload 流程]
+```
+
+只在既有 service 內加入檢查協調與記憶體狀態；共享 pure presentation 給兩種 renderer。
+React 選單及 Quick Task DOM 選單只呈現／呼叫 action，不自行讀 metadata、註冊 worker、清 cache 或導覽。
+不建立第二個 global store、通用 menu framework、跨 App session 鏡像或新 backend API。
+
+#### 狀態權威與生命週期
+
+| 既有／本批狀態 | 唯一責任來源 | 可證明的事實／失效條件 |
+|---|---|---|
+| document current version | 實際載入的 shell 身分 | 證明本頁版本；不得由其他分頁 completed、worker activation 或 network latest 代填。 |
+| service `check` | 有效 detection flight 的當次網路結果 | 僅證明檢查；不持久化，不等同下載就緒或交易完成。 |
+| `localUpdateBusy` | 本頁在途 effect promise／preparing／已啟動 reload | 投影本頁操作；foreign phase 與遺留 reservation 不可代替。 |
+| shared transaction／local pending target | 既有交易與每頁收斂流程 | 前者協調 activation，後者保存本頁尚未載入的義務；不新增資料欄位或鏡像 store。 |
+| menu 局部 pending／result | 該 renderer 的人工操作序號 | 收合、離開、卸載或成功身分失效即丟棄；背景不生成操作結果或焦點動作。 |
+
+主程式選單不得另存 apply busy 布林值；套用的互斥與完成狀態直接讀取 service
+`localUpdateBusy`。選單操作序號只使局部檢查結果與焦點失效，不能使已開始的套用
+失去 finally 解鎖。收合後服務仍繼續原操作，再開時呈現最新快照。
+
+工程契約只維護於本節；DEV 保存需求／進度，QA 保存案例／事實收據，不各自複製另一套狀態機。
+
+### 檢查介面與狀態契約
+
+新增下列 public 契約於 `pwaUpdateService.ts`，透過既有 snapshot／subscription 傳播：
+
+```ts
+type PwaCheckPhase = 'idle' | 'checking' | 'up-to-date' | 'available' | 'error' | 'cancelled' | 'busy';
+type PwaCheckErrorCode = 'CHECK_OFFLINE' | 'CHECK_TIMEOUT' | 'CHECK_FAILED'
+  | 'CHECK_UNAVAILABLE' | 'CHECK_VERSION_UNKNOWN';
+type PwaUpdateCheckState = {
+  requestId: number; // 0=尚未開始service flight；正值document-local，失效後不得重用
+  phase: PwaCheckPhase;
+  currentVersion: string | null;
+  latestVersion: string | null;
+  startedAt: number | null;
+  finishedAt: number | null;
+  errorCode: PwaCheckErrorCode | null;
+};
+// PwaUpdateState 新增 required check: PwaUpdateCheckState；所有 fixture 同步初始值。
+// 同時新增 required localUpdateBusy: boolean，為本document副作用的記憶體投影。
+export function checkPwaUpdate(options?: { deadlineAt?: number }): Promise<PwaUpdateCheckState>;
+// 人工入口；deadlineAt 是 UI 點擊開始後 10 秒的絕對時間，resolve terminal 結果。
+// caller只限制自己的等待；共用flight起始後10秒截止，不被caller縮短或延長。
+```
+
+- `check` 只記憶體保存，不寫 sessionStorage／localStorage／業務 IDB；getter 與通知須複製巢狀 check，
+  讓 UI 無法改寫 service state。背景可更新它，但只有本次選單人工操作顯示檢查回饋。
+  初始為requestId=0／idle，timestamps、versions與errorCode均為null；readiness階段的局部失敗亦用
+  requestId=0（沒有service flight），startedAt為點擊時間、finishedAt為失敗時間，不發布到共用snapshot。
+- `idle → checking → up-to-date／available／error`；document離開／本頁開始副作用造成 `cancelled`。
+  只有 localUpdateBusy=true 才回 `busy`，不能以共享transaction.phase或status名稱代替本頁副作用。
+  初始localUpdateBusy=false；它由本頁apply／retry／local recovery在途promise、local preparing及已啟動的own reload
+  衍生；getter及通知使用同一判斷。guard須在首個await前生效、finally發布解除，cache recovery加本地
+  promise防重入；所有外部action共用互斥判斷，retry內部apply continuation不得等待自己的retry promise。
+  「首個 await 前」也包含同步通知重入：先安裝本頁 effect guard，再取消 detection／發布 busy 通知，
+  最後才啟動非同步工作。subscriber 若在 cancelled／busy 通知內同步呼叫 apply／retry／recovery，
+  只能加入既有 operation，不得另起 gate、重試或 cache effect；finally 先解除自身 guard 再通知。
+  另一頁的lease／phase／reservation仍遵循原交易協調，但不使本頁永久busy；不改持久化schema／lease／fence。
+  遺留的own reservation旗標本身也不證明操作仍在執行；failed／blocked的恢復不能被它永久禁用。
+- `up-to-date` 必須有本次有效、未過期、可比較的 current 與 network latest，完全相同，且要求的
+  worker refresh 成功、沒有 installing／未知 waiting target。舊快照或 navigator.onLine=true 不足以證明。
+- `available` 表示 current 與有效 latest 不同；available transaction／local pending target 依既有規則建立。
+  它不是已下載、已就緒或已更新；apply 仍重新核對 target，loaded current===target 才 completed。
+  本次要求的worker refresh失敗／逾時時仍須回error，不得因metadata異版就回available；純metadata背景
+  flight可以發現target，人工加入提升需求後須等必要refresh及重讀完成才發布成功結果。
+- `CHECK_OFFLINE`：「無法連線」；`CHECK_TIMEOUT`：「檢查逾時，請重試」；`CHECK_FAILED`：
+  「檢查失敗，請重試」；`CHECK_UNAVAILABLE`：「目前無法檢查更新」；`CHECK_VERSION_UNKNOWN`：
+  「無法確認版本，請重試」。`busy`：「正在更新」；`cancelled` 不顯示失敗。
+- 檢查失敗只能改 check 子狀態；不得把可用頁面改成 load／cache／transaction failure。
+  保留既有 errorCode、failureKind、transaction、pending target、dismiss 及已知 latest 診斷；
+  本次失敗結果的 latest 為 null，不能使用先前成功值回報最新版。
+- 純檢查不重開 failed transaction，也不扮演「重試」。既有 retry 的 fresh target／fence／resolved-failure
+  規則保留；loaded target reconciliation 仍可正常完成真正已解決的交易。
+  保留R03既有例外：有效fresh current===latest、failureKind=update、failed交易身分未被新owner替換時，
+  可退場已無待更新義務的殘留update failure；這是retirement，不能寫completed(B)或宣稱曾載入舊target B。
+  current===transaction.target才是交易completed；load／cache-recovery failure即使current===latest仍保留，
+  必須走原明確恢復。離線／逾時／無效metadata不得利用R03清除原因。
+
+兩個 renderer 的局部操作狀態及共用純呈現介面固定如下；operation 不含 DOM／service effects：
+
+```ts
+type PwaCheckUiState = { pending: boolean; result: PwaUpdateCheckState | null };
+type PwaCheckPresentation = {
+  checkDisabled: boolean;
+  statusMessage: string | null;
+  showReload: boolean;
+  handoffToPrompt: boolean;
+  clearResult: boolean; // 成功結果與目前已知版本身分不一致，renderer永久丟棄該局部結果。
+};
+export function getPwaCheckPresentation(
+  state: PwaUpdateState, operation: PwaCheckUiState,
+): PwaCheckPresentation;
+```
+
+本次人工 pending 顯示「檢查中」並禁用檢查；背景 checking 不禁用人工加入既有 flight。
+人工結果 up-to-date 顯示「已是最新版」、available 顯示「發現新版」；error 使用上述固定對應，
+busy 顯示「正在更新」，idle／cancelled 不顯示結果。localUpdateBusy禁用新檢查與套用，優先於舊人工結果。
+showReload 僅在本次 available、localUpdateBusy=false 且既有 prompt 隱藏時為 true；prompt 可見時 handoffToPrompt
+為 true。焦點移交只在本次人工 completion 執行一次，不以每次 render 觸發。
+選單用自己的操作序號隔離 promise completion；收合／卸載後不寫結果、不搶焦點，再開是新一輪顯示。
+收合不取消 service flight，也不取消已開始的 apply；背景通知不能變成本次人工結果。
+up-to-date／available結果若currentVersion變動、已知latestVersion變動，或本頁開始更新，立即隱藏其訊息／
+CTA並回clearResult=true。renderer清除局部result，後續metadata即使回到相同identity也不能復活舊結果；
+背景只使結果失效，不生成新的人工結果／toast／焦點動作。error維持本次有限等待的結果，不被背景成功改寫。
+clearResult時showReload／handoffToPrompt均為false；若本頁確有在途更新，只顯示「正在更新」。
+
+### 並行、逾時與 metadata 相容
+
+1. 每個 document 只有一個 detection flight；人工與背景重疊呼叫加入它，不改既有flight截止時間。
+   service 保留遞增 requestId、flight promise、AbortController 與絕對 deadline；finally 只釋放自己的 flight。
+   成功／失敗 terminal 通知前，先將該 flight 退場；subscriber 在 terminal 通知內的新檢查取得新 requestId。
+   舊 flight 的 finally 不得清掉新 flight；同步通知也不能讓新 caller 加入已完成的 flight。
+2. **UI等待10,000ms／flight執行10,000ms，兩者各有自己的絕對截止時間**。UI從點擊起算，包含lazy
+   readiness；取得API後傳同一deadlineAt，遲到API不啟動該次檢查。flight從service建立時起算，包含
+   worker refresh、metadata及fallback；caller以min(自己的deadlineAt, flight截止)等待同一promise。
+   caller到期回局部CHECK_TIMEOUT，不abort共用flight、不改check snapshot／transaction；flight到期才
+   abort metadata並發布共用timeout。caller逾時後，仍有效flight的結果可以發布到背景state，但不能
+   寫回該次UI或移交焦點；逾時flight本身的遲到結果永遠無效。這兩種情境在U05分別驗證。
+   Date.now()在每個await及恢復時核對；單次timeout timer可用，不增加週期polling。readiness拒絕回
+   unavailable、到期回timeout，requestId=0；API promise成功保留，拒絕才清除，單一caller逾時不清除
+   尚在載入的共用promise，避免下次點擊疊加import／setup。
+3. 背景 metadata timer 仍為 15 分鐘、worker timer 仍為 1 小時，初次 metadata 檢查仍為 3 秒。
+   不加第二組週期timer。人工、worker timer 與 foreground 需要 worker refresh；純 metadata timer／worker event
+   不再重複 refresh。人工加入 metadata-only flight 時提升該 flight 的需求；若 metadata 已開始，
+   等 worker refresh 後在剩餘期限內重讀 metadata，最多一次依需求提升的順序重讀，不能並行重讀。
+4. `registration.update()` 經同一 registration 的單一 native promise guard；apply 的 stable-target preflight
+   也使用該 helper，仍保留 worker identity／retarget／owner fence 核對。update() 沒有 AbortSignal 參數，
+   逾時只結束 caller 等待，不宣稱取消 native operation；guard 到真正 settle 才釋放。
+   後續 caller 加入該 operation，並使用自己的有限等待；禁止逾時後疊加 native update 或重註冊 worker。
+5. metadata fetch 連同 response body 使用 AbortController；到期／離開即 abort，所有 fallback 共用剩餘期限。
+   先 `/app-shell-meta.json` schemaVersion=1；沿用 sealed `/release-meta.json` 或歷史 `/index.html` 相容路徑。
+   每次以既有 nonce 與 no-store／no-cache 取網路結果；abort／離線／期限耗盡不得繼續 fallback。
+6. 版本沿用現行 `release:`、`build:`、`bundle:` identity，視為 opaque identity，不排序字串。
+   有效同源 schema／identity 才比較；版本未知、無法建立既有相容表示或 worker／metadata 不一致時
+   回 VERSION_UNKNOWN。不把 parse 失敗、HTTP 200 的 SPA fallback 或空值認作最新版。
+7. 每個 await 後核對 requestId、deadline、document suspended 及 localUpdateBusy；寫入交易時另核對
+   原 owner／fence，不能將 foreign active phase 當成本頁 busy。expired／cancelled 或本頁已進入副作用的
+   detection 結果不得覆寫 check、target、worker binding 或交易。
+   開始本頁apply／retry／cache recovery時取消detection；apply 自己的 metadata preflight 保持獨立 fresh read，
+   同樣有 10 秒 fetch 期限，但不加入過期 detection read，也不被 UI 關閉取消。
+   waiting／activated 等原生事件只提交現況與新的 detection 需求；target／worker binding 的新增或修改
+   必須通過當次有效 metadata 核對。逾時 native operation 晚到不復活已失效 flight；apply 自己的
+   activation waiter／transaction reconciliation 保持原本責任，不由檢查 error 回復成成功。
+
+### 更新政策與返回生命週期
+
+- 檢查只偵測、發布結果及依現有規則保留 available target；不直接呼叫 reload／SKIP_WAITING。
+  app-open、foreground 與 view-transition handler 才可在實際邊界及安全快照就緒後要求自動套用。
+  人工「重新載入」呼叫現有 applyPwaUpdate，失敗則走現有 retry；兩者仍受 local owner gate 保護。
+- 初次 3 秒檢查是單次 bootstrap 的 app-open continuation，須由真正 setup／owner-ready handler
+  保存邊界 token。app-open／foreground handler 等該次 detection settle 後，核對 token 未失效、
+  document visible、結果 available 及最新 safety，才可要求自動套用；hidden／pagehide 使 token 失效。
+  view-transition 沿用既有已確認 pending target 與 safety，不新增逐 route 查詢。後續 metadata timer、
+  worker event、人工加入同一 flight 都不能自行產生邊界 token，保留舊 App 初次 safe 開啟的升級路徑。
+- worker activation／controllerchange、本次手動檢查、timer、idle、hidden、pagehide 都不是新 reload 邊界。
+  另一個 client 完成 target 不代表本頁完成；跨分頁 lock／lease／reservation 與 cache retention 不變。
+  沒有本頁副作用時，activated不能單獨設定本頁awaiting-controller；保留shared transaction的診斷phase，
+  以localUpdateBusy判斷操作。兩個prompt的updating改讀此值加各自button在途flag，保留既有文案與可見條件。
+- 自然邊界資格必須維持到副作用實際發生；非同步 safety gate／stable-target／activation 等待後，
+  啟用 worker 前及 reload 前重驗同一 boundary token、document 未 suspended、visible 與最新 safe 快照。
+  中途 hidden／pagehide 或 safety 改變即停止該次自動效果，保留 pending target；不得以另一 client
+  的 completed 走捷徑 reload。若本頁已取得 ownership，只釋放自己的鎖與 reservation，不能退回或刪除
+  foreign transaction。人工確認沿用既有 gate，不能將其轉換為新的自然邊界。
+- Quick prompt 增加 actions `read: () => PwaUpdateState`，由 main 注入 getPwaUpdateState。
+  pagehide.persisted=true 時只標 suspended，保留同一 root、subscription 及 button handlers，禁止動作。
+  pageshow.persisted=true 時解除 suspended，重新 read／render；必要時重設 render memo，確保 DOM 同快照。
+  pagehide.persisted=false 或顯式 dispose 才永久清理，並移除 pagehide／pageshow；dispose 必須冪等。
+- service 一次綁定 pagehide／pageshow。任何 pagehide 取消 detection 並失效 requestId；保留 native worker
+  guard及交易。pageshow.persisted 時先 reconcile transaction／loaded version及 reload safety，再發一次
+  foreground check；hidden 時只恢復狀態，等 visible 才允許自然邊界套用。既有 visibility 與 pageshow
+  重疊由 flight 去重，timer 不重新綁定；worker events 在 suspended 時不發布新的 detection 效果。
+- Quick main 的既有 auth resume 與 reload-safety owner 保留各自責任。PWA API 以一個 lazy promise 共用於
+  bootstrap 與人工入口，仍在 safety owner 就緒後 setup；若載入／readiness 失敗，選單顯示 unavailable，
+  原生 register fallback 與本機輸入仍可用。可在下一次人工操作重試 optional API 載入；不可重複成功 setup。
+
+Quick menu注入介面使用既有service匯出，不增加runtime wrapper模組：
+
+```ts
+type QuickPwaUpdateApi = Pick<typeof import('../../services/pwaUpdateService'),
+  'getPwaUpdateState' | 'subscribePwaUpdateState' | 'checkPwaUpdate' | 'applyPwaUpdate'>;
+export function installQuickInstallGuide(
+  container: HTMLElement,
+  options?: { getPwaApi: () => Promise<QuickPwaUpdateApi> },
+): () => void;
+```
+
+options延用既有單參數caller的相容性；production Quick main必須注入。缺provider／不支援worker時
+保留檢查列並回 unavailable，原安裝功能不受影響；單元fixture需明記此狀態，不能算正常檢查PASS。
+main只呼叫一次installReloadSafety並將同一ready promise交給bootstrap／getPwaApi。provider成功取得
+service並setup後，install renderer只訂閱一次；其disposer移除自己的訂閱／listener，不dispose共用service。
+prompt另保留自己的subscription及read action，由同一service提供；bootstrap mount也須有冪等guard，
+人工載入重試不可重掛prompt。失敗重試中若已完成setup／mount，保留已成功步驟，不能回退重做。
+非persisted pagehide／顯式main清理移除install guide和prompt；persisted保持兩者且使在途人工UI操作
+失效，pageshow恢復後重新讀取。service被初次lazy載入時若document已hidden／suspended，不產生
+新的app-open effect token；真正返回由foreground責任接續。
+
+### 正常入口、回饋與可存取性
+
+| 畫面／角色 | 固定入口與結果 |
+|---|---|
+| 主程式所有已登入角色，含無看板首頁／設定 | MainLayout 右側 action group 最右新增 AppMoreMenu，使用 ⋮／「更多選項」可存取名稱，第一批只有「檢查更新」。不依看板／workspace 權限判斷。 |
+| 主程式登入前 | 本批不增加登入頁導覽；既有 AuthGate 外 updater／prompt 繼續運作，不把檢查服務改成需登入。 |
+| Quick Task 登入／未登入，browser／installed、任何 install query | 沿用標頭的唯一 ⋮，順序為「檢查更新」、既有安裝項目；主程式連結位置及任務表單保留。 |
+
+使用原生 details／summary 與普通 button，語意為 disclosure，不宣告不完整的 ARIA menu。
+主程式沿用 compact token及現有色彩；兩邊在觸控模式提供至少 44px hit area。Tab／Enter／Space可達；
+Escape 收合並回到 trigger，點外部收合；IM composition 中不攔截 Escape。
+浮層靠右、距 viewport 邊界至少 8px、最大寬度不超過 viewport−16px，必要時限制高度並內捲。
+
+- 點檢查保持選單開啟、禁用該動作，單一就地 polite status 顯示「檢查中」。本次結果保留到失效、收合或下次檢查，
+  再開選單回到正常操作，不展示持久歷史或版本 badge；背景通知不打開選單、不發 toast。
+- available 且既有 normal／recovery prompt 可見時，以該 prompt 為唯一更新主動作：
+  選單仍開著才收合它並將焦點交給該 prompt；使用者已關選單時不得搶焦點。
+  recovery 優先，不把 failed 包裝成普通「發現新版」。
+  焦點等待該renderer的本次DOM commit並再次核對操作序號／mounted、current／latest identity、
+  localUpdateBusy及當下prompt優先權；失效就取消，不得在background render或
+  卸載後執行。既有prompt根節點／主動作需可被renderer定位，不能另建轉接彈窗。
+- available 且既有 prompt 隱藏時，選單就地顯示「發現新版」及唯一「重新載入」CTA，沿用 apply。
+  不清除稍後紀錄或偽造 user-confirmed；實際點該 CTA 才形成 user-confirmed。
+- check／apply busy 時不得新增第二個可套用 CTA；cancelled 回正常選單，不留下錯誤訊息。
+  Quick install renderer 必須維持同一 summary／panel 身分，僅更新需要的列，避免 innerHTML 重建造成焦點、
+  訂閱或檢查結果遺失；既有安裝 dialog、outside/Escape與平台動作功能保留。
+
+### RD 修改範圍與執行順序
+
+| 修改面 | 唯一責任／工程輸出 |
+|---|---|
+| `src/services/pwaUpdateService.ts` | check及localUpdateBusy快照、人工入口、flight與caller等待分離、native update guard、背景入口與自然邊界、resume及R03相容。 |
+| `src/services/pwaUpdatePresentation.ts` | getPwaCheckPresentation純投影，含clearResult及local busy；原prompt投影／文案保留。 |
+| 新 `src/components/AppMoreMenu.tsx`；`MainLayout.tsx` | 主程式原生 disclosure renderer與頂列右側唯一入口；unmount清理訂閱／outside／keyboard。 |
+| `src/features/quickTaskCapture/install.ts`；`src/quickTask/main.ts` | installQuickInstallGuide 注入 getPwaApi lazy action provider；同一API promise與 renderer 擁有安裝／更新列；subscription清理跟隨既有 disposer。 |
+| `src/components/AppUpdatePrompt.tsx`；Quick `pwaUpdatePrompt.ts`／`quick-task.css` | 兩個prompt使用localUpdateBusy；Quick persisted suspend／resume／read及局部樣式，保留七值去重。 |
+| DEV-134 existing verifiers／fixtures | U01～U10及check／localUpdateBusy／read fixtures；保留R01～R12，補foreign phase≠local busy的明確例外，不刪原安全要求。 |
+
+先補 service與pure presentation的 failure-seeking assertions，再實作協調及兩個入口／prompt resume，
+完成 targeted regression 後 freeze candidate，最後做正常入口與真 SW／bfcache驗收。
+具體命令、fixture及證據層級見 [QA 本批計畫](../qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-03-更新操作優化驗收計畫與結果)。
+
+本批只可修改表列責任及直接 fixture／文件；`pwaUpdateTransaction.ts`、`pwaReloadSafety.ts`／owners、
+Auth、outbox、business stores、Vite／Hosting／release scripts均為 inspect-only。
+禁止新增依賴、改全站頂列結構、清業務資料、修改遠端資源或引入第二 reload writer。
+RD 可決定局部函式拆分、class／test命名；不得改10秒deadline、狀態語意、phase範圍、gate／effect owner。
+首個需要超出本節改API／儲存／owner／worker scope、自然邊界或上述禁止區域的缺口，立即回送架構規劃。
+
+### 技術審查結論與後續範圍
+
+Rev 2更正上一輪「沒有未決P0/P1架構選擇」的判定：caller截止耦合、shared phase假busy、人工成功結果
+過期、R03殘留失敗退場與一般保留條文的矛盾，以及真bfcache的runner入口，原先仍有缺口。
+本版已固定各自deadline／local effect ownership／clearResult／R03例外，並由QA明列U06專用launch config，
+完成文件層closure；仍維持RD Implementation Ready及第一批架構定案。
+審查分類為Compatible exception／工程契約修訂；原正常更新、安全策略、資料與ADR-047 ownership不變，
+無需另建ADR。沒有修改產品來迎合規格，歷史PASS仍只適用原candidate，不宣稱runtime已收斂。
+
+Rev 3 續接審查補齊狀態權威、同步通知的重入順序及證據標準，並將產品狀態更正為實作中／未驗收。
+靜態 readback 發現 apply／retry／local recovery 在安裝 effect promise 前呼叫 cancelDetection，
+而 cancelDetection 同步通知 subscribers；因此存在 guard 尚未生效即重入的控制流。
+當時判為 **Implementation needs correction（U08）**；adapter 已保存三筆重入 FAIL，詳見 QA Rev 3 收據。
+差距在原 service 責任面修復再驗，最新結果見 QA；不得把契約改成允許重入，亦非已重現的使用者手機故障。
+Rev 4 補齊自然邊界跨 await 的資格重驗及 DOM commit 後的焦點資格重驗，屬既定安全政策的工程澄清；
+不增加狀態來源、公開 API、timer 或 reload writer。已修復的反例、未通過的 fixture 與入口驗證
+只在 QA 保存最新結果，SPEC 不把歷史 FAIL 當成目前仍未修復的結論。
+U06 必須取得五次真返回證據、U01／02／06／09
+須通過可見錯誤與資料檢查，細節只在 QA 維護。本批已取得限定第一批的本地驗收，證據層級及限制見QA；文件定案不代表live或手機實機通過。
+
+Rev 2 規劃基準的關鍵 SHA-256：service `1b90f59b01215dc4175302efcdc5d9535db8ef8e442f4b768e7fe33d15371606`；
+Quick prompt `b0c6d9b3a85f6bb4e401467bc037be066c07a3142dc140e643387ea375602708`；
+Quick install `b10288fcfc7efc09df81a1011bdd3c7b32bf6dbbb64d5e0a5ce72508206e14ce`；
+MainLayout `3541699c1cb8b15b44d123ebcbd9268b8b9c223ab1d002c4dd8a51d1b03d55f7`。
+實作接手先重讀工作樹；只有偏離契約的實際變更才重開Closure，不因文件行號或binding改變重問授權。
+
+後續4～5沿用 DEV-134 capsule：載入成功需真正document current===target；診斷採人工複製白名單、
+不含敏感資料且不自動傳送。本批 check快照不預建這兩項UI或storage；需要做時在同一契約補齊再進入實作。
+
+Release Impact Note：變更載入的shell／UI及PWA runtime檢查；發布須保持metadata、main／quick入口與同源
+root worker的一致版本，以及既有前版資產相容。無migration、環境變數或權限變更；本節不建立release package。
+
+平台依據（2026-10-03查證）：bfcache恢復使用pageshow.persisted並保留既有heap，
+所以永久dispose後不會重跑bootstrap（[web.dev](https://web.dev/articles/bfcache)）；
+native update()無參數，無法用AbortSignal取消（[MDN update](https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerRegistration/update)）；
+fetch及body可由AbortController取消（[MDN abort](https://developer.mozilla.org/en-US/docs/Web/API/AbortController/abort)）。

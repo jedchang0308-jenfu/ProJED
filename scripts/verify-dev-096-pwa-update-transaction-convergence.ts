@@ -53,6 +53,7 @@ for (const [name, value] of invalidCases) assert(`strict parser rejects ${name}`
 
 const service = read('src/services/pwaUpdateService.ts');
 const prompt = read('src/components/AppUpdatePrompt.tsx');
+const presentation = read('src/services/pwaUpdatePresentation.ts');
 const vite = read('vite.config.js');
 const env = read('src/vite-env.d.ts');
 const packageJson = read('package.json');
@@ -66,7 +67,7 @@ assert('cross-tab lock has Web Locks and PWA IndexedDB paths', service.includes(
 assert('production version uses injected release ID and release metadata', vite.includes('VITE_PROJED_RELEASE_ID') && env.includes('VITE_PROJED_RELEASE_ID') && service.includes('/release-meta.json'));
 assert('preview version uses build-wide app-shell metadata with bundle-hash fallback when release ID is absent', service.includes('getEmbeddedAppShellVersion() || canonicalBundleVersion(getCurrentBundleHash())') && service.includes('if (getProductionReleaseId())'));
 assert('normal UI removes the redlined icon and description', !prompt.includes('RefreshCw') && !prompt.includes('一鍵更新到最新版') && !prompt.includes('description'));
-assert('normal UI retains DEV-097 compact reload action contract', prompt.includes('新版已就緒') && prompt.includes('重新載入') && prompt.includes('稍後') && !prompt.includes('關閉更新提示'));
+assert('normal UI retains DEV-097 compact reload action contract', prompt.includes('getPwaUpdatePresentation(state)') && presentation.includes('新版已就緒') && prompt.includes('重新載入') && prompt.includes('稍後') && !prompt.includes('關閉更新提示'));
 assert('new verifier scripts are registered', packageJson.includes('verify:dev-096-pwa-update-transaction-convergence') && packageJson.includes('verify:dev-096-pwa-update-transaction-convergence-browser') && packageJson.includes('verify:dev-096-pwa-update-transaction-convergence-sw'));
 
 const failedResults = results.filter((result) => !result.ok);

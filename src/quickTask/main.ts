@@ -285,29 +285,48 @@ const installReloadSafety = async () => {
 };
 
 const installQuickPwaLifecycle = (reloadSafetyReady: Promise<boolean>) => {
-  if (!import.meta.env.PROD || typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
-  void reloadSafetyReady.then(async (ready) => {
-    if (!ready) {
-      registerSharedRootWorker();
-      return;
+  type QuickPwaApi = typeof import('../services/pwaUpdateService');
+  let apiPromise: Promise<QuickPwaApi> | null = null;
+  let serviceSetup = false;
+  let disposed = false;
+  let removePrompt: (() => void) | null = null;
+  const getPwaApi = (): Promise<QuickPwaApi> => {
+    if (disposed || typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
+      return Promise.reject(new Error('CHECK_UNAVAILABLE'));
     }
-    try {
+    if (apiPromise) return apiPromise;
+    apiPromise = (async () => {
+      if (!await reloadSafetyReady || disposed) throw new Error('CHECK_UNAVAILABLE');
       const pwaUpdate = await import('../services/pwaUpdateService');
-      const { setupPwaLifecycle } = pwaUpdate;
-      setupPwaLifecycle();
+      if (disposed) throw new Error('CHECK_UNAVAILABLE');
+      if (!serviceSetup) {
+        pwaUpdate.setupPwaLifecycle();
+        serviceSetup = true;
+      }
       const { mountQuickTaskPwaUpdatePrompt } = await import('../features/quickTaskCapture/pwaUpdatePrompt');
-      mountQuickTaskPwaUpdatePrompt({
+      if (disposed) throw new Error('CHECK_UNAVAILABLE');
+      removePrompt ??= mountQuickTaskPwaUpdatePrompt({
+        read: pwaUpdate.getPwaUpdateState,
         subscribe: pwaUpdate.subscribePwaUpdateState,
         apply: pwaUpdate.applyPwaUpdate,
         retry: pwaUpdate.retryPwaUpdate,
         recover: pwaUpdate.clearPwaApplicationCacheAndReload,
         dismiss: pwaUpdate.dismissPwaUpdatePrompt,
       });
-    } catch {
-      // Keep the optional worker available if update orchestration cannot load.
-      registerSharedRootWorker();
-    }
-  });
+      return pwaUpdate;
+    })().catch(error => { apiPromise = null; throw error; });
+    return apiPromise;
+  };
+  const onPageHide = (event: PageTransitionEvent) => {
+    if (event.persisted) return;
+    disposed = true;
+    removePrompt?.();
+    removeQuickInstallGuide();
+    window.removeEventListener('pagehide', onPageHide);
+  };
+  window.addEventListener('pagehide', onPageHide);
+  if (import.meta.env.PROD) void getPwaApi().catch(registerSharedRootWorker);
+  return getPwaApi;
 };
 
 const needsRecovery = (record: QuickCaptureRecord) => record.state !== 'synced'
@@ -803,8 +822,9 @@ titleInput.addEventListener('input', () => {
 });
 
 enableControls();
-const removeQuickInstallGuide = installQuickInstallGuide(document.querySelector<HTMLElement>('.quick-task-shell')!);
-installQuickPwaLifecycle(installReloadSafety());
+const reloadSafetyReady = installReloadSafety();
+const getPwaApi = installQuickPwaLifecycle(reloadSafetyReady);
+const removeQuickInstallGuide = installQuickInstallGuide(document.querySelector<HTMLElement>('.quick-task-shell')!, { getPwaApi });
 void (async () => {
   const auth = await getAuthApi();
   await auth.completeQuickOAuthCallback().catch(() => {
@@ -878,7 +898,6 @@ void (async () => {
     window.clearInterval(cleanupTimer);
     clearRetryTimer();
     if (event.persisted) return;
-    removeQuickInstallGuide();
     window.removeEventListener('online', onOnline);
     window.removeEventListener('offline', onOffline);
     window.removeEventListener('pageshow', onPageShow);

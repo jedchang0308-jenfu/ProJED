@@ -42,7 +42,20 @@ export type PwaUpdateStatus =
   | 'recoverable-cache-error'
   | 'failed';
 
+export type PwaCheckPhase = 'idle' | 'checking' | 'up-to-date' | 'available' | 'error' | 'cancelled' | 'busy';
+export type PwaCheckErrorCode = 'CHECK_OFFLINE' | 'CHECK_TIMEOUT' | 'CHECK_FAILED' | 'CHECK_UNAVAILABLE' | 'CHECK_VERSION_UNKNOWN';
+export type PwaUpdateCheckState = {
+  requestId: number;
+  phase: PwaCheckPhase;
+  currentVersion: string | null;
+  latestVersion: string | null;
+  startedAt: number | null;
+  finishedAt: number | null;
+  errorCode: PwaCheckErrorCode | null;
+};
 export type PwaUpdateState = {
+  check: PwaUpdateCheckState;
+  localUpdateBusy: boolean;
   status: PwaUpdateStatus;
   updateAvailable: boolean;
   offlineReady: boolean;
@@ -96,6 +109,22 @@ let workbox: Workbox | null = null;
 let updateChannel: BroadcastChannel | null = null;
 let applyPromise: Promise<boolean> | null = null;
 let retryPromise: Promise<boolean> | null = null;
+let recoveryPromise: Promise<boolean> | null = null;
+let documentSuspended = false;
+let boundaryEpoch = 0;
+const CHECK_TIMEOUT_MS = 10_000;
+const nativeUpdates = new WeakMap<ServiceWorkerRegistration, Promise<void>>();
+type DetectionFlight = {
+  requestId: number;
+  startedAt: number;
+  deadlineAt: number;
+  controller: AbortController;
+  requireWorker: boolean;
+  closed: boolean;
+  promise: Promise<PwaUpdateCheckState>;
+};
+let checkSequence = 0;
+let detectionFlight: DetectionFlight | null = null;
 let appShellCheckListenersBound = false;
 let crossTabListenersBound = false;
 let setupDone = false;
@@ -105,6 +134,8 @@ let normalReloadRequested = false;
 let safetySubscriptionBound = false;
 
 let updateState: PwaUpdateState = {
+  check: { requestId: 0, phase: 'idle', currentVersion: null, latestVersion: null, startedAt: null, finishedAt: null, errorCode: null },
+  localUpdateBusy: false,
   status: 'idle',
   updateAvailable: false,
   offlineReady: false,
@@ -142,7 +173,11 @@ declare global {
   }
 }
 
-const cloneState = (): PwaUpdateState => ({ ...updateState });
+const isLocalUpdateBusy = () => Boolean(applyPromise || retryPromise || recoveryPromise
+  || updateState.reloadSafetyState === 'preparing' || normalReloadRequested);
+const cloneState = (): PwaUpdateState => ({
+  ...updateState, localUpdateBusy: isLocalUpdateBusy(), check: { ...updateState.check },
+});
 
 const dispatchStateEvent = () => {
   if (typeof window === 'undefined') return;
@@ -150,8 +185,7 @@ const dispatchStateEvent = () => {
 };
 
 const notifyUpdateListeners = () => {
-  const nextState = cloneState();
-  listeners.forEach((listener) => listener(nextState));
+  listeners.forEach((listener) => listener(cloneState()));
   dispatchStateEvent();
 };
 
@@ -361,49 +395,97 @@ const extractAppShellVersionFromHtml = (html: string) => (
   extractBundleVersionFromSrc(html.match(/<script[^>]+src=["']([^"']*\/assets\/(?:index|main)-[A-Za-z0-9_-]+\.js)["']/)?.[1])
 );
 
-const fetchLatestReleaseVersion = async (nonce: string) => {
-  const response = await fetch(`/release-meta.json?projed_update_check=${nonce}`, {
+const waitUntil = <T>(promise: Promise<T>, deadlineAt: number, signal?: AbortSignal): Promise<T> => new Promise((resolve, reject) => {
+  let settled = false;
+  const finish = (error: unknown, value?: T) => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', aborted);
+    if (error) reject(error);
+    else resolve(value as T);
+  };
+  const timer = setTimeout(() => finish(new Error('CHECK_TIMEOUT')), Math.max(0, deadlineAt - Date.now()));
+  const aborted = () => finish(signal?.reason ?? new Error('CHECK_CANCELLED'));
+  if (signal?.aborted) aborted();
+  else signal?.addEventListener('abort', aborted, { once: true });
+  promise.then(value => {
+    if (signal?.aborted) aborted();
+    else if (Date.now() >= deadlineAt) finish(new Error('CHECK_TIMEOUT'));
+    else finish(null, value);
+  }, error => finish(error));
+});
+const refreshWorker = (registration: ServiceWorkerRegistration) => {
+  let pending = nativeUpdates.get(registration);
+  if (!pending) {
+    pending = Promise.resolve().then(() => registration.update()).then(() => undefined).finally(() => {
+      if (nativeUpdates.get(registration) === pending) nativeUpdates.delete(registration);
+    });
+    nativeUpdates.set(registration, pending);
+  }
+  return pending;
+};
+const validVersion = (value: unknown): value is string => typeof value === 'string'
+  && /^(?:release|build|bundle):[A-Za-z0-9][A-Za-z0-9._:-]{0,200}$/.test(value);
+const fetchLatestReleaseVersion = async (nonce: string, deadlineAt: number, signal: AbortSignal) => {
+  const response = await waitUntil(fetch(`/release-meta.json?projed_update_check=${nonce}`, {
+    signal,
     cache: 'no-store',
     headers: { 'Cache-Control': 'no-cache' },
-  });
+  }), deadlineAt, signal);
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  const meta: unknown = await response.json();
+  const meta: unknown = await waitUntil(response.json(), deadlineAt, signal);
   if (!meta || typeof meta !== 'object') throw new Error('Invalid release metadata.');
   const candidate = meta as { schemaVersion?: unknown; releaseId?: unknown };
   if (candidate.schemaVersion !== 1 || typeof candidate.releaseId !== 'string') {
     throw new Error('Invalid release metadata schema.');
   }
   const latest = canonicalReleaseVersion(candidate.releaseId);
-  if (!latest) throw new Error('Invalid release metadata release ID.');
+  if (!validVersion(latest)) throw new Error('CHECK_VERSION_UNKNOWN');
   return latest;
 };
 
-const fetchLatestAppVersion = async () => {
+const fetchLatestAppVersion = async (options?: { deadlineAt: number; signal: AbortSignal }) => {
+  const controller = options ? null : new AbortController();
+  const deadlineAt = options?.deadlineAt ?? Date.now() + CHECK_TIMEOUT_MS;
+  const signal = options?.signal ?? controller!.signal;
+  const timer = controller ? setTimeout(() => controller.abort(new Error('CHECK_TIMEOUT')), Math.max(0, deadlineAt - Date.now())) : null;
   const nonce = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   try {
-    const response = await fetch(`/app-shell-meta.json?projed_update_check=${nonce}`, {
+    try {
+    const response = await waitUntil(fetch(`/app-shell-meta.json?projed_update_check=${nonce}`, {
+      signal,
       cache: 'no-store',
       headers: { 'Cache-Control': 'no-cache' },
-    });
+    }), deadlineAt, signal);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const meta: unknown = await response.json();
+    const meta: unknown = await waitUntil(response.json(), deadlineAt, signal);
     if (!meta || typeof meta !== 'object') throw new Error('Invalid app-shell metadata.');
     const candidate = meta as { schemaVersion?: unknown; version?: unknown };
-    if (candidate.schemaVersion !== 1 || typeof candidate.version !== 'string' || !candidate.version.trim()) {
-      throw new Error('Invalid app-shell metadata schema.');
+    if (candidate.schemaVersion !== 1 || !validVersion(candidate.version)) {
+      throw new Error('CHECK_VERSION_UNKNOWN');
     }
     return candidate.version;
   } catch (appShellError) {
+    if (signal.aborted) throw signal.reason;
+    if (Date.now() >= deadlineAt) throw new Error('CHECK_TIMEOUT');
+    if (typeof navigator !== 'undefined' && !navigator.onLine) throw new Error('CHECK_OFFLINE');
     // Older sealed artifacts still publish release-meta.json. New artifacts
     // use app-shell-meta as the canonical check above.
-    if (getProductionReleaseId()) return fetchLatestReleaseVersion(nonce);
-    const response = await fetch(`/index.html?projed_update_check=${nonce}`, {
+    if (getProductionReleaseId()) return await fetchLatestReleaseVersion(nonce, deadlineAt, signal);
+    const response = await waitUntil(fetch(`/index.html?projed_update_check=${nonce}`, {
+      signal,
       cache: 'no-store',
       headers: { 'Cache-Control': 'no-cache' },
-    });
+    }), deadlineAt, signal);
     if (!response.ok) throw appShellError;
-    const latestHash = extractAppShellVersionFromHtml(await response.text());
-    return canonicalBundleVersion(latestHash);
+    const latestHash = extractAppShellVersionFromHtml(await waitUntil(response.text(), deadlineAt, signal));
+    const latest = canonicalBundleVersion(latestHash);
+    if (!validVersion(latest)) throw new Error('CHECK_VERSION_UNKNOWN');
+    return latest;
+  }
+  } finally {
+    if (timer !== null) clearTimeout(timer);
   }
 };
 
@@ -517,9 +599,11 @@ const scheduleBoundedRecovery = (transaction: PwaUpdateTransactionV1) => {
       targetVersion: recovering.targetVersion,
       errorMessage: '正在重新取得最新應用程式檔案。',
     });
-    void requestPwaReloadBoundary('app-open', getCurrentViewIntent()).then((gate) => {
+    void startLocalRecovery(async () => {
+      const gate = await requestPwaReloadBoundary('app-open', getCurrentViewIntent());
       if (gate.ok) window.location.replace(buildLatestReloadUrl());
       else failTransaction(recovering, 'RECOVERY_BLOCKED', safetyFailureMessage(gate.code));
+      return gate.ok;
     });
     return true;
   } catch (error) {
@@ -622,21 +706,9 @@ const ensureAvailableTransaction = (sourceVersion: string, targetVersion: string
   return next;
 };
 
-const checkForAppShellUpdate = async () => {
-  if (normalReloadRequested) return false;
-  const currentVersion = getCurrentAppVersion();
-  if (!currentVersion || (typeof navigator !== 'undefined' && !navigator.onLine)) return false;
-
-  setUpdateState({ currentVersion, lastCheckedAt: Date.now() });
-
-  try {
-    const latestVersion = await fetchLatestAppVersion();
-    if (!latestVersion) return false;
-    // An async check may have started before controllerchange. Do not let an
-    // old page publish a transaction after its normal reload was reserved.
-    if (normalReloadRequested) return false;
-
-    setUpdateState({ latestVersion });
+const publishDetectedTarget = (currentVersion: string, latestVersion: string, flight: DetectionFlight) => {
+    setUpdateState({ currentVersion, latestVersion, lastCheckedAt: Date.now() });
+    if (!flightIsCurrent(flight)) return false;
     if (updateState.failureKind === 'load' || updateState.failureKind === 'cache-recovery') return false;
     const observedWaitingWorker = registeredServiceWorker?.waiting;
     if (
@@ -671,6 +743,9 @@ const checkForAppShellUpdate = async () => {
       return false;
     }
 
+    // Detection never reopens a failed activation; retry owns that effect.
+    if (existing?.phase === 'failed' || updateState.failureKind === 'update') return false;
+
     // Another tab may already have activated and completed this target. The
     // current document is still stale, so keep a local obligation but do not
     // create a second global transaction or message the worker again.
@@ -690,7 +765,6 @@ const checkForAppShellUpdate = async () => {
         lastUpdateFoundAt: updateState.lastUpdateFoundAt || Date.now(),
         errorMessage: null,
       });
-      if (getPwaReloadSafetySnapshot().state === 'safe') void applyPwaUpdateAtBoundary('app-open');
       return true;
     }
 
@@ -713,22 +787,132 @@ const checkForAppShellUpdate = async () => {
       errorCode: transaction.phase === 'failed' ? transaction.errorCode || 'APPLY_FAILED' : null,
       failureKind: transaction.phase === 'failed' ? 'update' : null,
     });
-    if (transaction.phase !== 'failed' && getPwaReloadSafetySnapshot().state === 'safe') void applyPwaUpdateAtBoundary('app-open');
     return true;
-  } catch (error) {
-    console.warn('[PWA] App shell version check failed:', error);
-    if (!updateState.updateAvailable && updateState.status === 'checking') setUpdateState({ status: 'idle' });
-    return false;
-  }
 };
 
+const flightIsCurrent = (flight: DetectionFlight) => detectionFlight === flight && !flight.closed
+  && !flight.controller.signal.aborted && !documentSuspended && !isLocalUpdateBusy() && Date.now() < flight.deadlineAt;
+const checkResult = (phase: PwaCheckPhase, flight?: DetectionFlight, errorCode: PwaCheckErrorCode | null = null): PwaUpdateCheckState => ({
+  requestId: flight?.requestId ?? 0, phase, currentVersion: getCurrentAppVersion(), latestVersion: null,
+  startedAt: flight?.startedAt ?? Date.now(), finishedAt: Date.now(), errorCode,
+});
+const cancelDetection = () => {
+  const flight = detectionFlight;
+  if (!flight) return;
+  flight.closed = true;
+  detectionFlight = null;
+  flight.controller.abort(new Error('CHECK_CANCELLED'));
+  setUpdateState({ check: checkResult('cancelled', flight) });
+};
+const runDetection = async (flight: DetectionFlight): Promise<PwaUpdateCheckState> => {
+  let result: PwaUpdateCheckState;
+  const refresh = async () => {
+    if (!registeredServiceWorker) throw new Error('CHECK_UNAVAILABLE');
+    await waitUntil(refreshWorker(registeredServiceWorker), flight.deadlineAt, flight.controller.signal);
+  };
+  try {
+    const currentVersion = getCurrentAppVersion();
+    if (!validVersion(currentVersion)) throw new Error('CHECK_VERSION_UNKNOWN');
+    if (!navigator.onLine) throw new Error('CHECK_OFFLINE');
+    let refreshed = false;
+    if (flight.requireWorker) { await refresh(); refreshed = true; }
+    const options = { deadlineAt: flight.deadlineAt, signal: flight.controller.signal };
+    let latestVersion = await fetchLatestAppVersion(options);
+    if (flight.requireWorker && !refreshed) {
+      await refresh();
+      latestVersion = await fetchLatestAppVersion(options);
+    }
+    if (!flightIsCurrent(flight)) throw new Error('CHECK_CANCELLED');
+    const waiting = registeredServiceWorker?.waiting;
+    if (latestVersion === currentVersion && (registeredServiceWorker?.installing
+      || (waiting && waitingWorkerTargets.get(waiting) !== latestVersion))) {
+      throw new Error('CHECK_VERSION_UNKNOWN');
+    }
+    publishDetectedTarget(currentVersion, latestVersion, flight);
+    if (!flightIsCurrent(flight)) throw new Error('CHECK_CANCELLED');
+    result = { ...checkResult(latestVersion === currentVersion ? 'up-to-date' : 'available', flight), currentVersion, latestVersion };
+  } catch (error) {
+    const code = error instanceof Error ? error.message : '';
+    const cancelled = flight.closed || documentSuspended || isLocalUpdateBusy() || code === 'CHECK_CANCELLED';
+    const errorCode: PwaCheckErrorCode = Date.now() >= flight.deadlineAt || code === 'CHECK_TIMEOUT' ? 'CHECK_TIMEOUT'
+      : !navigator.onLine || code === 'CHECK_OFFLINE' ? 'CHECK_OFFLINE'
+        : code === 'CHECK_UNAVAILABLE' ? 'CHECK_UNAVAILABLE' : code === 'CHECK_VERSION_UNKNOWN' ? 'CHECK_VERSION_UNKNOWN' : 'CHECK_FAILED';
+    result = checkResult(cancelled ? 'cancelled' : 'error', flight, cancelled ? null : errorCode);
+  }
+  if (detectionFlight === flight && !flight.closed) {
+    flight.closed = true;
+    detectionFlight = null;
+    setUpdateState({ check: result });
+  }
+  return { ...result };
+};
+const detectUpdate = (requireWorker: boolean): DetectionFlight => {
+  if (detectionFlight && !detectionFlight.closed) {
+    detectionFlight.requireWorker ||= requireWorker;
+    return detectionFlight;
+  }
+  const startedAt = Date.now();
+  const flight: DetectionFlight = {
+    requestId: ++checkSequence, startedAt, deadlineAt: startedAt + CHECK_TIMEOUT_MS,
+    controller: new AbortController(), requireWorker, closed: false, promise: Promise.resolve(checkResult('idle')),
+  };
+  detectionFlight = flight;
+  const timer = setTimeout(() => flight.controller.abort(new Error('CHECK_TIMEOUT')), CHECK_TIMEOUT_MS);
+  flight.promise = Promise.resolve().then(() => runDetection(flight)).finally(() => {
+    clearTimeout(timer);
+    if (detectionFlight === flight) detectionFlight = null;
+  });
+  setUpdateState({ check: { ...checkResult('checking', flight), finishedAt: null } });
+  return flight;
+};
+export const checkPwaUpdate = async (options?: { deadlineAt?: number }): Promise<PwaUpdateCheckState> => {
+  if (documentSuspended) return checkResult('cancelled');
+  if (isLocalUpdateBusy()) return checkResult('busy');
+  const deadlineAt = options?.deadlineAt ?? Date.now() + CHECK_TIMEOUT_MS;
+  if (Date.now() >= deadlineAt) return checkResult('error', undefined, 'CHECK_TIMEOUT');
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return checkResult('error', undefined, 'CHECK_UNAVAILABLE');
+  const flight = detectUpdate(true);
+  try {
+    return { ...await waitUntil(flight.promise, Math.min(deadlineAt, flight.deadlineAt)) };
+  } catch {
+    return checkResult('error', flight, 'CHECK_TIMEOUT');
+  }
+};
+const checkForAppShellUpdate = async (requireWorker = false) => {
+  if (documentSuspended || isLocalUpdateBusy()) return false;
+  return (await detectUpdate(requireWorker).promise).phase === 'available';
+};
+const checkAtNaturalBoundary = async (boundary: 'app-open' | 'foreground') => {
+  const epoch = boundaryEpoch;
+  if (documentSuspended || document.visibilityState !== 'visible') return;
+  const result = await checkForAppShellUpdate(boundary === 'foreground');
+  if (result && epoch === boundaryEpoch && !documentSuspended && document.visibilityState === 'visible'
+    && getPwaReloadSafetySnapshot().state === 'safe') void applyPwaUpdateAtBoundary(boundary);
+};
 const bindAppShellUpdateChecks = () => {
   if (appShellCheckListenersBound || typeof window === 'undefined' || typeof document === 'undefined') return;
   appShellCheckListenersBound = true;
-  window.setTimeout(() => void checkForAppShellUpdate(), 3000);
+  const appOpenEpoch = boundaryEpoch;
+  const appOpenVisible = !documentSuspended && document.visibilityState === 'visible';
+  window.setTimeout(() => {
+    if (appOpenVisible && appOpenEpoch === boundaryEpoch) void checkAtNaturalBoundary('app-open');
+  }, 3000);
   window.setInterval(() => void checkForAppShellUpdate(), APP_SHELL_CHECK_INTERVAL_MS);
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') void checkForAppShellUpdate();
+    if (document.visibilityState === 'visible' && !documentSuspended) void checkAtNaturalBoundary('foreground');
+    else boundaryEpoch += 1;
+  });
+  window.addEventListener('pagehide', () => {
+    documentSuspended = true;
+    boundaryEpoch += 1;
+    cancelDetection();
+  });
+  window.addEventListener('pageshow', (event) => {
+    if (!event.persisted) return;
+    documentSuspended = false;
+    recordLoadedAppVersion();
+    syncReloadSafetyState();
+    if (document.visibilityState === 'visible') void checkAtNaturalBoundary('foreground');
   });
 };
 
@@ -985,7 +1169,7 @@ const prepareStableTarget = async (claimed: PwaUpdateTransactionV1) => {
     if (registration) {
       const previousWaiting = registration.waiting;
       const previousTarget = previousWaiting ? waitingWorkerTargets.get(previousWaiting) : null;
-      await registration.update();
+      await waitUntil(refreshWorker(registration), Date.now() + CHECK_TIMEOUT_MS);
       const nextWaitingWorker = previousWaiting
         && previousTarget === transaction.targetVersion
         && registration.waiting === previousWaiting
@@ -1011,12 +1195,13 @@ const prepareStableTarget = async (claimed: PwaUpdateTransactionV1) => {
   throw new Error('TARGET_UNSTABLE');
 };
 
-const applyStandardUpdate = async (transaction: PwaUpdateTransactionV1, lease: ApplyLockRecord) => {
+const applyStandardUpdate = async (transaction: PwaUpdateTransactionV1, lease: ApplyLockRecord, canContinue: () => boolean) => {
   const renewal = startLeaseRenewal(transaction, lease);
   let current = transaction;
   try {
     const prepared = await prepareStableTarget(current);
     current = prepared.transaction;
+    if (!canContinue()) return false;
     current = transitionPwaUpdateTransaction(current, 'awaiting-controller', Date.now(), { normalReloadReserved: true });
     if (!persistOwnedTransaction(current)) throw new Error('PWA update reservation was lost.');
     setUpdateState({
@@ -1030,6 +1215,7 @@ const applyStandardUpdate = async (transaction: PwaUpdateTransactionV1, lease: A
     });
 
     if (!assertApplyOwnership(current)) throw new Error('PWA update owner lease expired before activation.');
+    if (!canContinue()) return false;
     if (prepared.waitingWorker) {
       const activated = waitForWorkerActivated();
       // Message the exact worker that passed target stabilization. Workbox's
@@ -1038,6 +1224,7 @@ const applyStandardUpdate = async (transaction: PwaUpdateTransactionV1, lease: A
       prepared.waitingWorker.postMessage({ type: 'SKIP_WAITING' });
       if (!(await activated)) throw new Error('WORKER_ACTIVATION_FAILED');
     }
+    if (!canContinue()) return false;
     reloadAtOwnBoundary(current.targetVersion);
     return true;
   } finally {
@@ -1069,7 +1256,8 @@ const runTestModeApply = async () => {
   return true;
 };
 
-const runQueuedApply = async (retryFailed = false) => {
+const runQueuedApply = async (retryFailed = false, canContinue: () => boolean = () => !documentSuspended) => {
+  if (!canContinue()) return false;
   const currentVersion = getCurrentAppVersion() || updateState.currentVersion;
   const targetVersion = updateState.targetVersion || updateState.latestVersion;
   if (!currentVersion || !targetVersion || currentVersion === targetVersion) {
@@ -1102,8 +1290,11 @@ const runQueuedApply = async (retryFailed = false) => {
     errorCode: null,
     failureKind: null,
   });
+  let applied = false;
   try {
-    return await applyStandardUpdate(transaction, lease);
+    if (!canContinue()) return false;
+    applied = await applyStandardUpdate(transaction, lease, canContinue);
+    return applied;
   } catch (error) {
     const message = error instanceof Error && error.message === 'TARGET_UNSTABLE'
       ? '版本正在切換，請稍後重新檢查。'
@@ -1117,6 +1308,16 @@ const runQueuedApply = async (retryFailed = false) => {
     }
     return false;
   } finally {
+    // A departed boundary leaves the target pending for this document's next
+    // boundary. Retire only the attempt still owned by this exact fence.
+    if (!applied && !canContinue() && assertApplyOwnership(transaction)) {
+      removeTransactionIf(transaction.transactionId);
+      setUpdateState({
+        status: 'update-available', updateAvailable: true,
+        pendingLocalTarget: updateState.targetVersion || transaction.targetVersion,
+        transactionId: null, ownerFence: 0, normalReloadReserved: false,
+      });
+    }
     await releaseIndexedDbLock(lease);
   }
 };
@@ -1128,6 +1329,8 @@ const installPwaUpdateTestControls = () => {
 
   const resetState = () => {
     updateState = {
+      check: { requestId: 0, phase: 'idle', currentVersion: null, latestVersion: null, startedAt: null, finishedAt: null, errorCode: null },
+      localUpdateBusy: false,
       status: 'idle',
       updateAvailable: false,
       offlineReady: false,
@@ -1252,21 +1455,30 @@ const safetyFailureMessage = (code: PwaReloadSafetyFailureCode) => {
   }
 };
 
-const applyPwaUpdateAtBoundary = async (boundary: PwaReloadBoundary, retryFailed = false) => {
+const applyPwaUpdateAtBoundary = (boundary: PwaReloadBoundary, retryFailed = false): Promise<boolean> => {
   if (applyPromise) return applyPromise;
-  if ((updateState.status === 'failed' || updateState.failureKind === 'load' || updateState.failureKind === 'cache-recovery') && !retryFailed) return false;
-  if (!updateState.updateAvailable && !updateState.targetVersion && !updateState.latestVersion) return false;
+  if (retryPromise && !retryFailed) return retryPromise;
+  if (recoveryPromise) return recoveryPromise;
+  if (documentSuspended) return Promise.resolve(false);
+  if ((updateState.status === 'failed' || updateState.failureKind === 'load' || updateState.failureKind === 'cache-recovery') && !retryFailed) return Promise.resolve(false);
+  if (!updateState.updateAvailable && !updateState.targetVersion && !updateState.latestVersion) return Promise.resolve(false);
+  const naturalEpoch = boundary === 'user-confirmed' ? null : boundaryEpoch;
+  const canContinue = () => !documentSuspended
+    && getPwaReloadSafetySnapshot().state === 'safe'
+    && (naturalEpoch === null || (naturalEpoch === boundaryEpoch && document.visibilityState === 'visible'));
+  // Install the local effect guard before cancellation can synchronously notify subscribers.
+  applyPromise = Promise.resolve().then(async () => {
 
   // Test-mode transaction controls intentionally bypass the production safety
   // gate; production never exposes this control surface.
   if ((import.meta.env.DEV || import.meta.env.MODE === 'test') && typeof window !== 'undefined' && window.__projedPwaUpdateTest) {
-    applyPromise = runTestModeApply().finally(() => { applyPromise = null; });
-    return applyPromise;
+    return runTestModeApply();
   }
 
   const currentView = getCurrentViewIntent();
   const gate = await requestPwaReloadBoundary(boundary, currentView);
   syncReloadSafetyState();
+  if (gate.ok && !canContinue()) return false;
   if (!gate.ok) {
     setUpdateState({
       status: retryFailed ? 'failed' : 'update-available',
@@ -1278,7 +1490,10 @@ const applyPwaUpdateAtBoundary = async (boundary: PwaReloadBoundary, retryFailed
     return false;
   }
 
-  applyPromise = runQueuedApply(retryFailed).finally(() => { applyPromise = null; });
+  return runQueuedApply(retryFailed, canContinue);
+  }).finally(() => { applyPromise = null; notifyUpdateListeners(); });
+  cancelDetection();
+  notifyUpdateListeners();
   return applyPromise;
 };
 
@@ -1325,11 +1540,16 @@ const runPwaUpdateRetry = async () => {
 
 export const retryPwaUpdate = () => {
   if (retryPromise) return retryPromise;
-  retryPromise = runPwaUpdateRetry().finally(() => { retryPromise = null; });
+  if (applyPromise) return applyPromise;
+  if (recoveryPromise) return recoveryPromise;
+  if (documentSuspended) return Promise.resolve(false);
+  retryPromise = Promise.resolve().then(runPwaUpdateRetry).finally(() => { retryPromise = null; notifyUpdateListeners(); });
+  cancelDetection();
+  notifyUpdateListeners();
   return retryPromise;
 };
 
-export const clearPwaApplicationCacheAndReload = async () => {
+const runCacheRecovery = async () => {
   const gate = await requestPwaReloadBoundary('user-confirmed', getCurrentViewIntent());
   syncReloadSafetyState();
   if (!gate.ok) {
@@ -1360,6 +1580,17 @@ export const clearPwaApplicationCacheAndReload = async () => {
   return true;
 };
 
+const startLocalRecovery = (work: () => Promise<boolean>) => {
+  if (recoveryPromise) return recoveryPromise;
+  if (applyPromise) return applyPromise;
+  if (retryPromise) return retryPromise;
+  if (documentSuspended) return Promise.resolve(false);
+  recoveryPromise = Promise.resolve().then(work).finally(() => { recoveryPromise = null; notifyUpdateListeners(); });
+  cancelDetection();
+  notifyUpdateListeners();
+  return recoveryPromise;
+};
+export const clearPwaApplicationCacheAndReload = () => startLocalRecovery(runCacheRecovery);
 export const handleRecoverableAppLoadError = (error: unknown, source: 'error' | 'unhandledrejection' = 'error') => {
   const message = error instanceof Error ? error.message : typeof error === 'string' ? error : '新版檔案載入失敗。';
   console.warn(`[PWA] Recoverable app load error from ${source}:`, error);
@@ -1368,8 +1599,10 @@ export const handleRecoverableAppLoadError = (error: unknown, source: 'error' | 
     setUpdateState({ status: 'failed', errorMessage: message });
     return false;
   }
-  void requestPwaReloadBoundary('foreground', getCurrentViewIntent()).then((gate) => {
+  void startLocalRecovery(async () => {
+    const gate = await requestPwaReloadBoundary('foreground', getCurrentViewIntent());
     if (gate.ok) window.location.replace(buildLatestReloadUrl());
+    return gate.ok;
   });
   return true;
 };
@@ -1393,7 +1626,8 @@ export const setupPwaLifecycle = () => {
         && previousState.currentView !== nextState.currentView;
       const becameSafeAtAppOpen = previousState.state === 'booting' && nextState.state === 'safe';
       previousState = nextState;
-      if (updateState.updateAvailable && (viewChanged || becameSafeAtAppOpen) && nextState.state === 'safe') {
+      if (!documentSuspended && document.visibilityState === 'visible' && updateState.updateAvailable
+        && (viewChanged || becameSafeAtAppOpen) && nextState.state === 'safe') {
         void applyPwaUpdateAtBoundary(viewChanged ? 'view-transition' : 'app-open');
       }
     });
@@ -1411,31 +1645,13 @@ export const setupPwaLifecycle = () => {
 
   workbox = new Workbox('/sw.js', { scope: '/' });
   workbox.addEventListener('waiting', () => {
-    if (normalReloadRequested) return;
-    if (updateState.status === 'failed' || updateState.failureKind === 'load' || updateState.failureKind === 'cache-recovery') {
-      void checkForAppShellUpdate();
-      return;
-    }
-    setUpdateState({
-      status: 'update-available',
-      updateAvailable: true,
-      dismissedAt: null,
-      currentVersion: getCurrentAppVersion() ?? updateState.currentVersion,
-      lastUpdateFoundAt: Date.now(),
-      errorMessage: null,
-    });
+    if (normalReloadRequested || documentSuspended) return;
     void checkForAppShellUpdate();
   });
   workbox.addEventListener('activated', (event) => {
     // Activation is deliberately not a navigation signal. With clientsClaim
     // disabled, each document decides its own later reload boundary.
-    if (event.isUpdate && !normalReloadRequested) {
-      if (updateState.status === 'failed' || updateState.failureKind === 'load' || updateState.failureKind === 'cache-recovery') {
-        void checkForAppShellUpdate();
-        return;
-      }
-      setUpdateState({ status: 'awaiting-controller', errorMessage: null });
-    }
+    if (event.isUpdate && !normalReloadRequested && !documentSuspended) void checkForAppShellUpdate();
   });
   workbox.addEventListener('redundant', () => {
     // A redundant event can describe a duplicate worker installed by another
@@ -1447,26 +1663,8 @@ export const setupPwaLifecycle = () => {
   void workbox.register({ immediate: true }).then((registration) => {
     if (!registration) throw new Error('Service worker registration returned no registration.');
     registeredServiceWorker = registration;
-    const checkForUpdate = () => {
-      if (!navigator.onLine) return;
-      const canShowChecking = !updateState.updateAvailable
-        && !['updated', 'failed', 'recoverable-cache-error', 'recovering'].includes(updateState.status);
-      if (canShowChecking) setUpdateState({ status: 'checking', lastCheckedAt: Date.now() });
-      registration.update().catch((error) => {
-        console.warn('[PWA] Update check failed:', error);
-        // An update check failing does not mean the currently loaded app failed.
-      }).finally(() => {
-        if (!updateState.updateAvailable && updateState.status === 'checking') setUpdateState({ status: 'idle' });
-        void checkForAppShellUpdate();
-      });
-    };
+    const checkForUpdate = () => { void checkForAppShellUpdate(true); };
     window.setInterval(checkForUpdate, UPDATE_CHECK_INTERVAL_MS);
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') {
-        checkForUpdate();
-        void applyPwaUpdateAtBoundary('foreground');
-      }
-    });
     checkForUpdate();
   }).catch((error) => {
     console.warn('[PWA] Service worker registration failed:', error);

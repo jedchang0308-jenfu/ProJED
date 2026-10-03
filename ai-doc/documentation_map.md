@@ -1,5 +1,29 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-10-03（更新操作優化 / 架構定案）
+
+本 chat 要求將更新優化提案寫成開發文件，並確認 **ProJED 主程式也要有三點選單**。
+後續人類要求「補到架構定案」及「rd-tech-lead 審視並優化開發文件」；現行 **Rev 4／RD Implementation Ready＋架構定案：已定案（第一批1～3）**。
+需求與執行邊界：[DEV-134 更新操作優化提案](dev_task.md#更新操作優化提案架構定案2026-10-03)；
+工程權威：[SPEC-041 更新操作架構](specs/SPEC-041-pwa-update-notification-cache-recovery.md#dev-134-更新操作架構定案2026-10-03)；
+驗收：[QA U01～U10計畫](qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-03-更新操作優化驗收計畫與結果)。
+主責為 DEV-134 PM／RD 技術主管，讀者為接手 RD／QA／QC；工程細節只在SPEC、驗收只在QA維護。
+第一批為兩個App三點更新入口、返回提示恢復與檢查去重，沿用既有交易及reload writer。
+Rev 4補自然邊界跨await、焦點DOM commit後的資格重驗與menu busy單一來源，延續Rev 3的重入及真返回契約。
+第一批1～3本地驗收通過；正常入口、真SW／bfcache及sealed前版同profile升級有證據，平台／Auth／麥克風模擬與手機實機分開。
+最新執行結果、失敗歷史與證據限制集中於 [QA Rev 4摘要](qa/QA-DEV-134-pwa-recovery-local-verification.md#rev-4-現行驗證摘要2026-10-03本地驗收通過)，避免索引計數過期。
+下一階段發版需正式候選artifact／live證據；本地工作未提交／部署，既有手機實機確認待辦保留。
+載入成功確認／版本資訊與診斷複製保留後續capsule。
+沿用既有 DEV 與文件集，未新增交付點或計入產品完成；既有發布、手機未確認及本地未提交狀態保留。
+
+## Documentation Map Update - 2026-10-03（略過相同提示重繪）
+
+DEV-134 第二輪低風險優化：Quick Task 只在呈現或按鈕動作狀態有變化時寫入 DOM。四種狀態各 100 次背景 metadata 通知的 setter 寫入由 1,400 降為 0；完整 renderer 比對及 21/21 受影響回歸、型別、lint 通過。數據只代表 DOM 屬性寫入，未宣稱真機加速；保留上一輪 dirty changes，尚未提交／部署。見 [QA 第二輪](qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-03-第二輪略過相同提示重繪)、[SPEC-041](specs/SPEC-041-pwa-update-notification-cache-recovery.md#2026-10-03-dev-134-更新提示維護補記)、[DEV-134](dev_task.md#dev-134pwa-載入失敗恢復與前版資產相容)。
+
+## Documentation Map Update - 2026-10-03（更新提示規則去重）
+
+使用者指定系統健康優化，本輪只執行 ProJED 本地低風險維護：DEV-134 將主程式與 Quick Task 的同義更新提示規則合併為純函式，並修正 DEV-041 依賴已移除元件造成的驗證誤報。原始 renderer 23,760 組狀態與 4 個操作比對一致；型別、lint、DEV-134／041／096／097 回歸通過。尚未提交／部署；2026-10-02 live 與手機實機限制保留。見 [SPEC-041 維護補記](specs/SPEC-041-pwa-update-notification-cache-recovery.md#2026-10-03-dev-134-更新提示維護補記)、[QA-DEV-134](qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-03-更新提示規則去重)、[DEV-134](dev_task.md#dev-134pwa-載入失敗恢復與前版資產相容)。
+
 ## Documentation Map Update - 2026-10-02（Quick Task 更新提示）
 
 Quick Task 沿用主程式 PWA updater、安全 reload gate 與提示行為：safe 狀態靜默更新，dirty／blocked 狀態可選「重新載入／稍後」，失敗提供同一套恢復動作。R12 static 19/19、隔離 UI browser 9/9（320×844）、正式 read-only smoke 與 canonical 78/78 provenance PASS。release `20261002091531-2a1246`（source `23a566bf49ae2e2cdf5e7b5bc6bad48cc174a18b`）已部署；兩個正式 origin 各 6 個 Quick Task 路徑 hash 符合 sealed manifest。真手機既有 app 結果仍待使用者確認。見 [SPEC-041](specs/SPEC-041-pwa-update-notification-cache-recovery.md)、[QA-DEV-134](qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-02-quick-task-更新提示與主程式一致)、[REL-015](release/REL-015-DEV-134-QUICK-TASK-PWA-20261002.md#2026-10-02-quick-task-更新提示與主程式一致)。

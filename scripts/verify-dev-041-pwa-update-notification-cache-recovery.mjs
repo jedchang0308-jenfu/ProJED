@@ -6,6 +6,7 @@ const files = {
   transaction: 'src/services/pwaUpdateTransaction.ts',
   pwaUpdateService: 'src/services/pwaUpdateService.ts',
   appUpdatePrompt: 'src/components/AppUpdatePrompt.tsx',
+  updatePresentation: 'src/services/pwaUpdatePresentation.ts',
   app: 'src/App.tsx',
   main: 'src/main.tsx',
   errorBoundary: 'src/components/GlobalErrorBoundary.tsx',
@@ -28,8 +29,8 @@ assert('prompt update mode remains non-forced', source.viteConfig.includes("regi
 assert('worker update availability is visible but navigation remains application-owned', source.pwaUpdateService.includes("status: 'update-available'") && source.pwaUpdateService.includes('new Workbox') && source.pwaUpdateService.includes('reloadAtOwnBoundary') && !source.pwaUpdateService.includes('applyUpdateWhenBackgrounded'));
 assert('normal update keeps cache recovery as a separate manual path', !normalApplyBody.includes('clearPwaApplicationCacheAndReload') && source.pwaUpdateService.includes('export const clearPwaApplicationCacheAndReload') && source.pwaUpdateService.includes('navigator.serviceWorker.getRegistrations()') && source.pwaUpdateService.includes('window.caches.delete(cacheName)'));
 assert('post-reload version reconciliation exists', source.pwaUpdateService.includes('currentVersion === transaction.targetVersion') && source.pwaUpdateService.includes('writeCompletedVersion') && source.pwaUpdateService.includes('POST_RELOAD_MISMATCH'));
-assert('global prompt remains mounted outside AuthGate', source.app.includes("import { AppUpdatePrompt } from './components/AppUpdatePrompt'") && source.app.includes('<AppUpdatePrompt />') && source.app.indexOf('<AppUpdatePrompt />') < source.app.indexOf('<AppInstallAssistant />'));
-assert('normal prompt follows DEV-097 compact wording contract', source.appUpdatePrompt.includes('新版已就緒') && source.appUpdatePrompt.includes('重新載入') && source.appUpdatePrompt.includes('稍後') && !source.appUpdatePrompt.includes('關閉更新提示') && !source.appUpdatePrompt.includes('RefreshCw'));
+assert('global prompt remains mounted outside AuthGate', source.app.includes("import { AppUpdatePrompt } from './components/AppUpdatePrompt'") && source.app.includes('<AppUpdatePrompt />') && source.app.includes('</AuthGate>') && source.app.indexOf('</AuthGate>') < source.app.indexOf('<AppUpdatePrompt />') && source.app.indexOf('<AppUpdatePrompt />') < source.app.lastIndexOf('</PwaReloadSafetyBridge>'));
+assert('normal prompt follows DEV-097 compact wording contract', source.appUpdatePrompt.includes('getPwaUpdatePresentation(state)') && source.updatePresentation.includes('新版已就緒') && source.appUpdatePrompt.includes('重新載入') && source.appUpdatePrompt.includes('稍後') && !source.appUpdatePrompt.includes('關閉更新提示') && !source.appUpdatePrompt.includes('RefreshCw'));
 assert('recoverable load failures remain bounded', source.main.includes('handleRecoverableAppLoadError') && source.pwaUpdateService.includes('MAX_AUTO_RECOVERY_ATTEMPTS') && source.pwaUpdateService.includes('window.location.replace(buildLatestReloadUrl())'));
 assert('business storage is not cleared by recovery', source.errorBoundary.includes('clearPwaApplicationCacheAndReload') && !source.pwaUpdateService.includes('localStorage.clear()') && !source.pwaUpdateService.includes('sessionStorage.clear()'));
 assert('DEV-041 historical authority points to DEV-096 correction', source.spec.includes('DEV-096 Corrective Addendum') && source.qa.includes('authority note') && source.qa.includes('不得以本文件歷史 PASS 宣稱 DEV-096 已通過'));
