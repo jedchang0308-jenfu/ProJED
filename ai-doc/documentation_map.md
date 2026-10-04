@@ -12,7 +12,7 @@
 Rev 4補自然邊界跨await、焦點DOM commit後的資格重驗與menu busy單一來源，延續Rev 3的重入及真返回契約。
 第一批1～3本地驗收通過；正常入口、真SW／bfcache及sealed前版同profile升級有證據，平台／Auth／麥克風模擬與手機實機分開。
 最新執行結果、失敗歷史與證據限制集中於 [QA Rev 4摘要](qa/QA-DEV-134-pwa-recovery-local-verification.md#rev-4-現行驗證摘要2026-10-03本地驗收通過)，避免索引計數過期。
-產品commit `458b9a4`已提交推送；2026-10-04人類重新登入後，`20261003153455-01f632`已發布、雙origin各84/84 provenance與root smoke通過，但Quick檢查更新回CHECK_UNAVAILABLE。已補正同一registration promise的期限內等待，4項fail-first及完整45/45回歸通過，待補正建置與正式再驗。現行結果見[QA補正](qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-04-正式功能驗證與註冊等待補正)，Main真登入及既有手機實機待辦保留。
+第一批產品及補正已提交推送至 `349c552`；2026-10-04 live release `20261004001409-64b197` 的雙origin各78/78 provenance、canonical root及Quick正式檢查／離線／重試通過。首份release的CHECK_UNAVAILABLE失敗保留；同一registration promise期限內等待補正及45/45回歸通過。現行證據見[QA補正](qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-04-正式功能驗證與註冊等待補正)、[REL-015](release/REL-015-DEV-134-QUICK-TASK-PWA-20261002.md#2026-10-04-更新操作第一批與註冊等待補正)。Main真登入及既有手機待確認，DEV尚未結案。
 載入成功確認／版本資訊與診斷複製保留後續capsule。
 沿用既有 DEV 與文件集，未新增交付點或計入產品完成；既有發布及手機未確認狀態保留，下方未提交／部署文字為各輪歷史快照。
 

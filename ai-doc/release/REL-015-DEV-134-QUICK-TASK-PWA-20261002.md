@@ -1,10 +1,30 @@
 # REL-015 — DEV-134 Quick Task PWA live update lifecycle
 
-日期：2026-10-02
-最新 corrective release：`20261002091531-2a1246`／product source `23a566bf49ae2e2cdf5e7b5bc6bad48cc174a18b`；詳見本文末尾 Quick Task 更新提示補記。以下較早 bindings 保留作歷史紀錄。
-狀態：Live deployed；78/78 canonical provenance、正式 Quick Task prompt smoke 與 dual-origin assets readback PASS。手機既有安裝仍待使用者實機確認。
+日期：2026-10-02 起，2026-10-04 更新
+最新 corrective release：`20261004001409-64b197`／source `349c552cebb2c092e413897cb1c6d0963dcd0044`；詳見下方更新操作補記。以下較早bindings保留作歷史紀錄。
+狀態：Live deployed；雙origin各78/78 provenance、canonical root及正式Quick檢查更新／離線／重試PASS。Main真登入及手機既有安裝待確認，DEV尚未結案。
 專案／環境：ProJED／Firebase Hosting production live (`projed-cc78d`)
 來源任務：DEV-134；release pipeline：DEV-083；規格：SPEC-041
+
+## 2026-10-04 更新操作第一批與註冊等待補正
+
+第一批1～3提供兩個App的三點更新入口、檢查去重／期限與Quick返回提示恢復，含既有提示規則去重維護。首份release `20261003153455-01f632`部署後，正式Quick人工檢查在native registration未完成時立即回CHECK_UNAVAILABLE；檔案符合manifest及root啟動通過仍不足以判定功能通過。原失敗收據保留。
+
+補正保留同一Workbox registration promise，人工flight沿既有deadline等待；不新增worker、registration或reload writer。4項反例原source0/4、補正4/4，受影響回歸45/45及TypeScript／targeted ESLint通過。來源與驗證限制見[QA補正](../qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-04-正式功能驗證與註冊等待補正)。
+
+| Binding | 值 |
+|---|---|
+| Source／branch | `349c552cebb2c092e413897cb1c6d0963dcd0044`／`持續優化3`；已推送origin，打包時clean |
+| Live release／target | `20261004001409-64b197`／Firebase Hosting `projed-cc78d` live |
+| Sealed artifact | 78檔，11,386,441 bytes；tree SHA-256 `59994ae99688ebfce8f7daa4d8c7f7449cf5789cd5e05f71079cfb351041ac40` |
+| 前版相容來源 | `20261003153455-01f632`；保留一代資產，不累積多代 |
+| 回復錨點 | 發布前live version `5fe02d5d1ffef761`／release `1791071621256000`；更早已知可用version `fa941980dd574ddd`，未執行回復 |
+| Direct receipt | `output/release/dev-083/20261004001409-64b197/direct-evidence.json`；published=true、complete=true、verification=passed |
+| 正式功能驗證器 | `scripts/verify-dev-134-update-menu-hosted.pw.js`；SHA-256 `7ac5ebbf02afe82ed0cf65c32b41fec8f6c3fa42de57c05b97cfc6c3e5fb36a1` |
+
+canonical `https://projed-cc78d.web.app`及獨立安裝origin `https://projed-cc78d.firebaseapp.com`各78/78檔案符合sealed manifest。canonical root及匿名Quick真選單的最新版／離線／恢復連線重試通過，320／390／1440排版、安裝入口、Escape關閉與焦點返回、release／prompt binding、runtime錯誤及零業務寫入檢查通過。第二origin收據位於 `output/qa/dev-134/2026-10-03-update-operations/completion-audit/firebaseapp-provenance-corrective.json`。
+
+此direct receipt的complete只涵蓋已執行的root／Quick正式功能。Main真登入與使用者手機既有profile尚無實機結果；不以匿名瀏覽器、平台模擬或CLI登入成功替代。未修改Auth／資料／IAM。task-owned程序已退出及測試埠60163已釋放，使用者localhost4000及原瀏覽器／登入終端未操作。文件狀態續接不改已封存artifact，不需再次建置／部署。
 
 ## 發布內容
 

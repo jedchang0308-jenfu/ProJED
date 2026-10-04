@@ -152,15 +152,15 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 
 ## 總任務清單
 
-- ◐ DEV-134 [開發點] [執行中] [P1] [更新操作第一批本地驗收通過；手機實機待確認] PWA 載入失敗恢復與前版資產相容
+- ◇ DEV-134 [開發點] [驗證中] [P1] [更新操作第一批已部署；Main真登入及手機待確認] PWA 載入失敗恢復與前版資產相容
   - 摘要：修正失敗交易反覆提示、背景檢查誤報與恢復導覽命中舊 HTML；發布包保留上一版雜湊資產。
   - 父任務：DEV-041、DEV-096、DEV-097；發布包相容 DEV-083。
-  - 下一步：第一批1～3已發布首份候選；Quick正式功能驗證發現註冊等待缺口，補正及45/45回歸通過，待補正建置與正式再驗、Main真登入及手機確認。
-    - 更新操作文件 **Rev 4／RD Implementation Ready + 架構定案：已定案**；本地驗收通過，產品commit `458b9a4`；尚未部署。
+  - 下一步：確認Main真登入與手機既有App的「檢查更新」；第一批1～3已部署live，正式Quick功能及45/45回歸通過。
+    - 更新操作文件 **Rev 4／RD Implementation Ready + 架構定案：已定案**；source `349c552`／release `20261004001409-64b197`。
       見 [更新操作優化提案](#更新操作優化提案架構定案2026-10-03)、[工程契約](specs/SPEC-041-pwa-update-notification-cache-recovery.md#dev-134-更新操作架構定案2026-10-03)及[QA正式補正](qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-04-正式功能驗證與註冊等待補正)。
   - 證據：[DEV-134 本地驗證](qa/QA-DEV-134-pwa-recovery-local-verification.md)；`output/qa/dev-134/`。
-  - 2026-10-03 本地維護：主程式／Quick Task 更新提示規則合併，修正 DEV-041 過時驗證；characterization、型別、lint、受影響回歸通過。本次尚未提交／部署，與既有 live 發布區分。
-  - 同日第二輪：Quick Task 相同提示略過重繪；四種狀態每 100 次 metadata 通知的 DOM 屬性寫入各由 1,400 降為 0，21/21 受影響回歸通過，renderer 輸出一致。兩輪變更仍為本地未提交成果。
+  - 2026-10-03 本地維護：主程式／Quick Task 更新提示規則合併，修正 DEV-041 過時驗證；characterization、型別、lint、受影響回歸通過，現已包含於本批live source。
+  - 同日第二輪：Quick Task 相同提示略過重繪；四種狀態每 100 次 metadata 通知的 DOM 屬性寫入各由 1,400 降為 0，21/21 受影響回歸通過，renderer 輸出一致，現已包含於本批live source。
   - 計入交付：否
 
 此區是 `dev_task.md` 的 canonical index；詳細契約、歷史與完整證據保留在直接連結的
@@ -7654,7 +7654,7 @@ API、狀態權威、互斥／通知順序與版本可信條件只在 SPEC維護
   正常入口、焦點、真SW／bfcache及同安裝環境升級已完成本地驗收。最新計數、首跑失敗、證據層級與cleanup只見
   [QA Rev 4摘要](qa/QA-DEV-134-pwa-recovery-local-verification.md#rev-4-現行驗證摘要2026-10-03本地驗收通過)。
   同一Agent完成修正及凍結後事實驗證，非獨立QC；未將平台／Auth／麥克風模擬視為手機實機。
-  本批產品已提交／推送（`458b9a4`）；人類重新登入後首份sealed包（`20261003153455-01f632`／source `a12e387`）發布，雙origin各84/84及root smoke通過，但Quick正式檢查回unavailable。已在原deadline等待同一native registration，4項fail-first及45/45回歸通過，待提交／補正建置／正式再驗；Main真登入及手機仍待確認，後續4～5未要求實作。最新結果見[QA補正](qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-04-正式功能驗證與註冊等待補正)。
+  本批及補正產品已提交／推送（`349c552`），部署live `20261004001409-64b197`；雙origin各78/78、canonical root及Quick正式檢查／離線／重試通過。首份live功能失敗保留；同一native registration的原deadline等待補正，4項fail-first及45/45回歸通過。Main真登入及手機仍待確認，後續4～5未要求實作。最新結果見[QA補正](qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-04-正式功能驗證與註冊等待補正)、[REL-015](release/REL-015-DEV-134-QUICK-TASK-PWA-20261002.md#2026-10-04-更新操作第一批與註冊等待補正)。
 - 現行契約參考：[SPEC-041](specs/SPEC-041-pwa-update-notification-cache-recovery.md)、
   [ADR-047](decisions/ADR-047-pwa-per-client-reload-isolation.md)、
   [QA-DEV-134](qa/QA-DEV-134-pwa-recovery-local-verification.md)。

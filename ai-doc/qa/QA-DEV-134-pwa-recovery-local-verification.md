@@ -1,6 +1,6 @@
 # DEV-134 PWA 恢復本地驗證
 
-日期：2026-10-01 起，2026-10-04 更新。原始記錄是部署前本地驗證快照；各日期補記提供後續 release 與 live evidence。第一批1～3已提交推送並發布首份候選；正式功能驗證發現註冊等待缺口，補正驗證如下。使用者手機既有安裝尚未實機驗證。
+日期：2026-10-01 起，2026-10-04 更新。原始記錄是部署前本地驗證快照；各日期補記提供後續 release 與 live evidence。第一批1～3及註冊等待補正已提交推送並部署 live；正式 Quick Task 功能驗證通過。Main 真登入及使用者手機既有安裝尚待確認。
 
 ## 2026-10-04 正式功能驗證與註冊等待補正
 
@@ -10,7 +10,11 @@
 - 先增加4項U05註冊案例：原產品0/4（pending、reject時間、timeout、pagehide皆失敗）；修正後4/4。受影響完整service／artifact／routing adapter回歸45/45，routing server實際埠60163已關閉並確認拒絕連線；TypeScript及targeted ESLint通過。收據 `completion-audit/registration-fail-first/`、`registration-fixed/`、`registration-regression/`。這些是本地adapter證據，不是正式手機或獨立QC。
 - 原本71筆binding只沿用未變動輸入；本次service及verifier已改，須以新source／artifact及正式功能smoke補證。Rev4期限與單一owner契約保持一致；Main真登入及既有手機仍需分開驗收，後續4～5未要求。
 - 補正採已量測的小型Vite打包：首份manifest輸出11,614,491 bytes，既有builder僅寫新releaseDir及有界前版資產，沿用依賴且不安裝套件。本次不重用上次單次容量風險override；保存實際輸出及空間估算，沿既有已授權corrective release流程重新綁定候選。
-- 最新狀態：補正及受影響本地驗證完成，待提交／建置／正式再驗。首份live已發布但changed-feature失敗，不能以provenance或root smoke替代。
+- 補正產品 commit `349c552cebb2c092e413897cb1c6d0963dcd0044` 已推送 `origin/持續優化3`；以 clean source 建置並發布 `20261004001409-64b197`。sealed manifest 為78檔／11,386,441 bytes，tree SHA-256 `59994ae99688ebfce8f7daa4d8c7f7449cf5789cd5e05f71079cfb351041ac40`。前版相容來源為首份 release，仍只保留一代資產。
+- 正式 canonical `https://projed-cc78d.web.app` 與獨立安裝 origin `https://projed-cc78d.firebaseapp.com` 各78/78檔案核對通過；canonical root shell及匿名 Quick Task 三點選單檢查／離線／恢復連線重試通過，320／390／1440排版、44px操作區、安裝入口、Escape焦點返回、release binding及錯誤／業務寫入檢查均通過。正式驗證器 SHA-256 `7ac5ebbf02afe82ed0cf65c32b41fec8f6c3fa42de57c05b97cfc6c3e5fb36a1`。
+- 發布收據 `output/release/dev-083/20261004001409-64b197/direct-evidence.json` 為 published=true、complete=true、verification=passed；第二origin readback見 `completion-audit/firebaseapp-provenance-corrective.json`。此 complete 僅指本次 direct release 的 canonical root／Quick feature，不代表 Main 真登入、手機既有 profile 或整個 DEV 已驗收。回復錨點為首份live version `5fe02d5d1ffef761`，未執行回復；更早已知可用版本另保留 `fa941980dd574ddd`。
+- 最新狀態：第一批產品及正式 Quick 功能驗證完成，Main 真登入及既有手機確認待使用者回報；後續4～5未要求。task-owned部署／測試程序已退出，60163無listener；既有localhost4000與使用者瀏覽器／登入終端未操作。先前queued終端／auth頁未取得surface ID且未確認開啟，無法當成已清理畫面；若後續可辨識，由本task續接清理。
+- 現行收斂收據 `completion-audit/live-convergence-corrective.json` 綁定source／驗證器hash、雙origin及發布結果，goalComplete=false；`cleanup-corrective.json`確認本次已識別程序與埠均退出，`governor-session-ended.json`確認session已結束。較早convergence與binding是歷史快照，不當成補正source的全量驗收。
 
 ## 2026-10-03 完成度稽核與發版續接
 
