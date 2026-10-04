@@ -1,5 +1,9 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-10-04（主程式三點按鈕對齊）
+
+使用者要求主程式三點按鈕排版整齊。`AppMoreMenu` 將 32px 可見框置中於 44px 點擊範圍，沿用 topbar 邊框與圓角，浮層右緣對齊可見框；保留原鍵盤與更新操作。此次為 [DEV-134](dev_task.md#dev-134pwa-載入失敗恢復與前版資產相容) 本地樣式維護，未測試、提交或部署，不沿用前批驗收結果宣稱本次 UI 通過。
+
 ## Documentation Map Update - 2026-10-03（更新操作優化 / 架構定案）
 
 本 chat 要求將更新優化提案寫成開發文件，並確認 **ProJED 主程式也要有三點選單**。

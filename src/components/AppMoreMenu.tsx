@@ -284,19 +284,25 @@ const AppMoreMenu: React.FC = () => {
         ref={summaryRef}
         aria-label="更多選項"
         title="更多選項"
-        className={cn(
-          topbarClassNames.iconButton,
-          'min-h-11 min-w-11 cursor-pointer list-none [&::-webkit-details-marker]:hidden',
-          isOpen && 'border-slate-400 bg-slate-100 text-slate-700',
-        )}
+        className="group flex h-11 w-11 cursor-pointer list-none items-center justify-center focus:outline-none [&::-webkit-details-marker]:hidden"
       >
-        <MoreVertical size={18} aria-hidden="true" />
+        {/* Match the topbar's visible size while keeping a 44px touch target. */}
+        <span
+          aria-hidden="true"
+          className={cn(
+            topbarClassNames.iconButton,
+            'group-hover:border-slate-400 group-hover:bg-slate-100 group-hover:text-slate-700 group-focus-visible:ring-2 group-focus-visible:ring-primary/20',
+            isOpen && 'border-slate-400 bg-slate-100 text-slate-700',
+          )}
+        >
+          <MoreVertical size={16} />
+        </span>
         <span className="sr-only">更多選項</span>
       </summary>
 
       {isOpen ? (
         <div
-          className="absolute right-0 top-full z-50 mt-2 max-h-[calc(100dvh-3.5rem)] w-64 max-w-[calc(100vw-16px)] overflow-y-auto rounded-md border border-slate-200 bg-white p-2 shadow-lg"
+          className="absolute right-1.5 top-full z-50 mt-0.5 max-h-[calc(100dvh-3.5rem)] w-64 max-w-[calc(100vw-16px)] overflow-y-auto rounded-md border border-slate-200 bg-white p-2 shadow-lg"
           data-app-more-menu-panel="true"
         >
           <button
