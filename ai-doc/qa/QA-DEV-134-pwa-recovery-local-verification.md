@@ -1,6 +1,6 @@
 # DEV-134 PWA 恢復本地驗證
 
-日期：2026-10-01 起，2026-10-04 更新。原始記錄是部署前本地驗證快照；各日期補記提供後續 release 與 live evidence。第一批1～3及註冊等待補正已部署。使用者手機 Quick Task 確認選單／最新版結果；Main 手機回報版本確認失敗，正補正 waiting worker 身分查證，DEV 尚未結案。
+日期：2026-10-01 起，2026-10-04 更新。第一批1～3及註冊等待／worker身分補正已完成、部署live並驗收。雙origin、正式Quick選單及Main updater通過；手機Quick確認選單／最新版，Main親自按更新後回覆「已是最新版」，第一批實機流程收斂。後續4～5未要求，不計入本批。
 
 ## 2026-10-04 Main 手機版本確認失敗與 worker 身分補正
 
@@ -8,7 +8,13 @@
 - 真 sealed Main artifact A（`20261003153455-01f632`）保留舊 client；切換 B（`20261004001409-64b197`），新 Main document 與 fresh metadata 同為 B，generated Workbox B 仍 waiting。實際共用 API 回 CHECK_VERSION_UNKNOWN，與手機結果相符。新 document 的 WeakMap 沒有 worker 身分，不能據此斷言 waiting 已是新版；目前是可重現的充分條件，手機自身 worker profile 仍未知。
 - 修正於同一 generated Workbox 加入 build-bound readonly message receiver；沿人工 flight 原 deadline 等待 installing 狀態落定並詢問精確 waiting 物件。type/schema/requestId/version、原 registration、waiting 物件與 flight 都一致才確認。不同版本、錯誤、替換、逾時、離頁仍拒絕最新版；legacy worker 沒有 handler 時逾時。未新增 worker／registration、SKIP_WAITING、reload writer 或業務資料操作。契約位於 SPEC-041 U03補充。
 - fail-first 原 source 0/1；修正後新增8/8、完整受影響回歸53/53、TypeScript及targeted ESLint／Vite syntax通過。Luna僅只讀審查 source diff，未發現需修正路徑，不宣稱獨立QC。收據 `output/qa/dev-134/2026-10-04-main-version-check/qa-02/identity-{fail-first,fixed,regression}/recovery-result.json`，真失敗重現見 `baseline-result.json`。
-- 真 generated worker 的新 artifact 驗證及 corrective live release 待執行。Hosted verifier已增加實際 Main entry所載 updater的最新版／離線／重試，不以匿名 AuthGate或直接API替代已登入Main選單驗收。Quick原正式結果保留；Main手機仍須補正發布後再確認。
+- 補正產品與文件 commit `fcb84ad74237d6f0a30170d782f425ce71789138` 已推送，clean source只建置一次 `20261004031015-7a155c`：79檔／11,388,502 bytes，tree `12644eb6298e36461c60abe59993661cdba170d1ef2a6b4466599b18d11c3801`。前版相容來源為 `20261004001409-64b197`，一代有界保留。新 generated worker 的importScripts精確指向同 release身分的內容hash資產，manifest／secret檢查通過。測量建置估算採256 MiB保守輸出預算，free 39,191,678,976 bytes；未重用風險override或宣稱Governor容量admission。
+- 真 sealed A → 新補正artifact、保留舊Main client的同條件重演回 up-to-date，24ms完成（current、network與waiting同版）；worker仍waiting、原holder shell／controller／timeOrigin不變，本頁document未重載，task-owned localStorage sentinel保留並清除，pageErrors及遠端業務寫入為0。收據 `fixed-01-result.json`、`generated-worker-binding.json`；root及測試埠64029已退出／釋放。這是generated worker真行為，沒有以模擬reply代替；不是手機帳號或真任務保存證據。
+- corrective live已發布；canonical與獨立安裝origin各79/79檔案符合sealed manifest。初次canonical核對卡住超過5分鐘，核對原生PID／start token後停止task-owned樹，保存 `direct-network-wait.json`；未重複部署。第一次verify-only已有79/79及root啟動PASS，但Quick冷profile在20秒內未達stable worker，完整功能未通過（`feature-initialization-failure-01.json`）。另一輪完整檔案重驗遇網路逾時（`transport-timeout-02.json`），不將失敗改判PASS。
+- 最後只補缺少的changed feature：fresh release-meta重新核對同release／source，沿用未改包的79/79與root PASS，收據明列reusedFrom。冷worker fixture增加有界60秒狀態觀測，要求active.state===activated，人工check期限及功能斷言不變；實際4,714ms從installing到activated。Quick真選單最新版／離線／online retry、320／390／1440、44px操作區、安裝入口、Escape焦點返回通過；Main從當次HTML及entry bundle解析真updater，其最新版／離線／重試通過。pageErrors、critical request／console errors及業務寫入均0。
+- 發布收據 `output/release/dev-083/20261004031015-7a155c/direct-evidence.json` 為 published=true／complete=true／verification=passed；feature verifier SHA-256 `0f21e7c050855ac3b6d508144f2e1266185132bba91d59365dfad31ae765d7fc`，細節 `feature-browser-result.json`，第二origin `readback-status.json`。complete僅指root／Quick UI及匿名Main updater，不替代手機套用。原WinPS CLI輸出中文字有編碼損失，text leaf不當精確字形證據；字串相等assertion在真browser內執行且PASS，ASCII phase／version／binding及runtime結果完整。
+- 人類發布後依序回覆Main手機「發現新版」→「有更新按鈕，尚未按」→按更新後再檢查「已是最新版」：真登入Main選單偵測、更新入口、實際套用及再次檢查流程確認。原Quick手機選單／最新版呈現證據保留；第一批1～3完成。這是人類實機回覆，沒有精確origin／release／IDB readback，不擴算那些屬性或獨立QC。後續4～5未要求。回復錨點是發布前live version `d3b83250e608bf2a`，未執行回復。只部署一次，後續同manifest驗證及文件／verifier修訂無需重建。
+- task-owned 10個root、4個已識別browser PID及4個測試埠均無殘留；精確CLI session名查無daemon，Governor session已結束。收據 `cleanup-final.json`、`governor-session-ended.json`。使用者localhost4000、原browser／登入終端未操作；早先queued auth／terminal未證實開啟且無surface identity，不宣稱已關閉，若後續可辨識由root續接清理。
 
 ## 2026-10-04 正式功能驗證與註冊等待補正
 

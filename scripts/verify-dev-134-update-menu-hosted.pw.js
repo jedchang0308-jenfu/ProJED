@@ -21,14 +21,22 @@ async page => {
   await page.goto(target.toString(), { waitUntil: 'domcontentloaded' });
   await page.locator('#quick-task-title').waitFor({ state: 'visible', timeout: 15000 });
   await page.locator('[data-pwa-update-prompt]').waitFor({ state: 'attached', timeout: 15000 });
-  await page.evaluate(async () => {
-    const deadline = Date.now() + 20000;
+  const initialization = await page.evaluate(async () => {
+    // Cold production precaching is a fixture prerequisite, outside the user check deadline.
+    const startedAt = Date.now();
+    const deadline = startedAt + 60000;
+    const observations = [];
+    let previous;
     while (Date.now() < deadline) {
       const registration = await navigator.serviceWorker.getRegistration('/');
-      if (registration?.active && !registration.installing && !registration.waiting) return;
+      const state = { document: document.readyState, active: registration?.active?.state ?? null,
+        installing: registration?.installing?.state ?? null, waiting: registration?.waiting?.state ?? null };
+      const encoded = JSON.stringify(state);
+      if (encoded !== previous) { observations.push({ elapsedMs: Date.now() - startedAt, ...state }); previous = encoded; }
+      if (registration?.active?.state === 'activated' && !registration.installing && !registration.waiting) return { elapsedMs: Date.now() - startedAt, observations };
       await new Promise(resolve => setTimeout(resolve, 100));
     }
-    throw new Error('Production service worker did not reach a stable active state.');
+    throw new Error('Production worker initialization failed: ' + JSON.stringify(observations));
   });
   const menu = page.locator('[data-quick-install-menu]');
   const trigger = menu.locator('summary');
@@ -118,7 +126,7 @@ async page => {
   if (diagnostics.pageErrors.length || criticalFailedRequests.length || criticalConsoleErrors.length || diagnostics.remoteWrites.length) {
     failures.push('critical runtime failure or unexpected remote write');
   }
-  const result = { ok: failures.length === 0, origin, failures, binding, cases, layouts,
+  const result = { ok: failures.length === 0, origin, failures, binding, initialization, cases, layouts,
     main: { entry: mainAsset, updater: updaterAsset, current: mainCurrent, offline: mainOffline, retry: mainRetry },
     diagnostics: { ...diagnostics, criticalFailedRequests, criticalConsoleErrors },
     scope: 'Anonymous Quick Task menu and actual Main updater production delivery; authenticated Main menu and physical installed-phone confirmation remain separate.' };

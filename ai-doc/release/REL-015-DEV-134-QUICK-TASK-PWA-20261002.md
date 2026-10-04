@@ -1,10 +1,27 @@
 # REL-015 — DEV-134 Quick Task PWA live update lifecycle
 
 日期：2026-10-02 起，2026-10-04 更新
-最新 corrective release：`20261004001409-64b197`／source `349c552cebb2c092e413897cb1c6d0963dcd0044`；詳見下方更新操作補記。以下較早bindings保留作歷史紀錄。
-狀態：Live deployed；雙origin、root及正式Quick功能PASS。手機Quick選單／最新版呈現已確認；Main真登入手機版本確認失敗，新worker身分查證補正本地通過，待artifact與live續接，DEV尚未結案。
+最新 corrective release：`20261004031015-7a155c`／source `fcb84ad74237d6f0a30170d782f425ce71789138`；詳見下方Main worker補記。以下較早bindings保留作歷史紀錄。
+狀態：第一批1～3完成、live deployed／verified；雙origin各79/79、root／Quick選單／Main updater正式功能PASS。人類確認Quick手機呈現及Main「發現新版→按更新→已是最新版」；後續4～5未要求。
 專案／環境：ProJED／Firebase Hosting production live (`projed-cc78d`)
 來源任務：DEV-134；release pipeline：DEV-083；規格：SPEC-041
+
+## 2026-10-04 Main worker 身分補正
+
+Main手機真登入後原本版本檢查失敗；保留真前版client、載入新Main並同版waiting worker可重現UNKNOWN。補正只於既有generated worker加入build-bound readonly版本回覆，人工flight沿原期限核對精確waiting物件。不同版本、替換、錯誤、逾時、離頁仍拒絕最新版，不新增activation／reload／資料副作用。新增8/8、完整53/53、型別／targeted lint及真sealed重演PASS；Luna只讀審查不是獨立QC。
+
+| Binding | 值 |
+|---|---|
+| Source／branch | `fcb84ad74237d6f0a30170d782f425ce71789138`／`持續優化3`，已推送；建置時clean |
+| Live release／target | `20261004031015-7a155c`／ProJED Firebase Hosting `projed-cc78d` live |
+| Sealed artifact | 79檔／11,388,502 bytes；tree `12644eb6298e36461c60abe59993661cdba170d1ef2a6b4466599b18d11c3801` |
+| 前版相容／回復錨點 | 相容來源 `20261004001409-64b197`；前live version `d3b83250e608bf2a`／release `1791072922110000`，未回復 |
+| Direct receipt | `output/release/dev-083/20261004031015-7a155c/direct-evidence.json`，published=true／complete=true／verification=passed |
+| Feature verifier | `scripts/verify-dev-134-update-menu-hosted.pw.js`，SHA-256 `0f21e7c050855ac3b6d508144f2e1266185132bba91d59365dfad31ae765d7fc` |
+
+雙origin各79/79。原canonical網路等待、首次20秒cold-worker fixture失敗及再次transport逾時收據均保留；同一artifact只部署一次，最後fresh metadata核對同release/source，沿用已通過的provenance/root並明列reusedFrom，只補真feature。cold fixture觀測4,714ms至activated；Quick真選單最新版／離線／重試、RWD／44px／安裝／Escape通過；實際Main entry所載updater最新版／離線／重試通過，critical runtime及業務寫入均0。詳細來源、CLI文字編碼限制與收據見[QA Main補正](../qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-04-main-手機版本確認失敗與-worker-身分補正)。
+
+人類發布後依序回覆Main手機「發現新版」→「有更新按鈕，尚未按」→按更新後再檢查「已是最新版」，正式登入Main的偵測／更新／再次檢查流程確認，第一批1～3完成。這是實機回覆，不代替精確手機origin／release／IDB readback或獨立QC；後續4～5未要求。發布後文件及verifier fixture修訂不改產品artifact，未重建／重部署；task-owned程序及測試埠均釋放，Governor session結束，詳QA cleanup。
 
 ## 2026-10-04 更新操作第一批與註冊等待補正
 

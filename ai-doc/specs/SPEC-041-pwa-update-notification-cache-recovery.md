@@ -811,7 +811,7 @@ QC 在候選 source freeze 後執行；最初正式截圖 failure 保留。fixtu
 
 文件成熟度：**RD Implementation Ready；架構定案：已定案（第一批 1～3）**。
 現行版本：**Rev 4／RD 技術主管續接審查（2026-10-03）**；同節先前文字以本版為準。
-產品狀態：**第一批1～3及native registration等待補正已部署；手機Quick選單／最新版呈現已確認，Main手機回報CHECK_VERSION_UNKNOWN對應訊息，正在補正waiting worker身分查證**。目前live source `349c552`／release `20261004001409-64b197`；新補正8/8、53/53本地通過，真artifact／正式及Main手機再驗證待執行。現行證據與失敗歷史見QA的2026-10-04補記，DEV尚未結案。
+產品狀態：**第一批1～3及registration／waiting worker身分補正已完成、部署live並驗收**。live source `fcb84ad`／release `20261004031015-7a155c`；新增8/8、完整53/53、真sealed old-client重演及root／Quick／Main updater正式功能通過，雙origin各79/79。手機Quick呈現及Main「發現新版→按更新→已是最新版」由人類確認；不擴算精確手機origin／release／IDB或獨立QC。現行證據與失敗歷史集中QA的2026-10-04 Main補記，後續4～5未要求。
 文件定案與產品驗收分開：本節維護工程契約；已執行與尚缺的驗證統一在 QA 記錄。
 來源：本 chat 更新優化提案、「ProJED主程式也要有三點選單」、`dev-pm`「寫成開發文件」，
 以及後續「補到架構定案」「rd-tech-lead 審視並優化開發文件」。提案4～5（成功／版本資訊、診斷複製）

@@ -152,12 +152,12 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 
 ## 總任務清單
 
-- ◇ DEV-134 [開發點] [驗證中] [P1] [Quick手機已確認；Main版本檢查補正中] PWA 載入失敗恢復與前版資產相容
+- ✓ DEV-134 [開發點] [完成] [P1] [第一批1～3已部署並驗收；手機更新成功] PWA 載入失敗恢復與前版資產相容
   - 摘要：修正失敗交易反覆提示、背景檢查誤報與恢復導覽命中舊 HTML；發布包保留上一版雜湊資產。
   - 父任務：DEV-041、DEV-096、DEV-097；發布包相容 DEV-083。
-  - 下一步：完成Main waiting worker身分查證的artifact／live驗證，再確認Main原手機App；Quick手機選單／最新版已確認，補正新增8/8及完整53/53通過。
-    - 更新操作文件 **Rev 4／RD Implementation Ready + 架構定案：已定案**；source `349c552`／release `20261004001409-64b197`。
-      見 [更新操作優化提案](#更新操作優化提案架構定案2026-10-03)、[工程契約](specs/SPEC-041-pwa-update-notification-cache-recovery.md#dev-134-更新操作架構定案2026-10-03)及[QA正式補正](qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-04-正式功能驗證與註冊等待補正)。
+  - 下一步：本批無待辦；後續4～5未要求。Quick手機呈現、Main手機「發現新版→按更新→已是最新版」及正式root／Quick／Main updater已確認，補正8/8、完整53/53通過。
+    - 更新操作文件 **Rev 4／RD Implementation Ready + 架構定案：已定案**；source `fcb84ad`／release `20261004031015-7a155c`。
+      見 [更新操作優化提案](#更新操作優化提案架構定案2026-10-03)、[工程契約](specs/SPEC-041-pwa-update-notification-cache-recovery.md#dev-134-更新操作架構定案2026-10-03)及[QA Main補正](qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-04-main-手機版本確認失敗與-worker-身分補正)。
   - 證據：[DEV-134 本地驗證](qa/QA-DEV-134-pwa-recovery-local-verification.md)；`output/qa/dev-134/`。
   - 2026-10-03 本地維護：主程式／Quick Task 更新提示規則合併，修正 DEV-041 過時驗證；characterization、型別、lint、受影響回歸通過，現已包含於本批live source。
   - 同日第二輪：Quick Task 相同提示略過重繪；四種狀態每 100 次 metadata 通知的 DOM 屬性寫入各由 1,400 降為 0，21/21 受影響回歸通過，renderer 輸出一致，現已包含於本批live source。
@@ -7559,12 +7559,12 @@ R14 current evidence為static 40/40與browser 27/27，新增S40／B52 armed pare
 
 ### 更新操作優化提案（架構定案，2026-10-03）
 
-- 文件成熟度：**RD Implementation Ready；架構定案：已定案（第一批 1～3）**；第一批本地驗收通過。
+- 文件成熟度：**RD Implementation Ready；架構定案：已定案（第一批 1～3）**；第一批開發、本地／live及手機更新流程驗收完成。
   現行版本為 **Rev 4／RD 技術主管續接審查**；工程契約集中於 SPEC、案例與最新收據集中於 QA，產品範圍與完成率不變。
-  既有 DEV-134 發布、本地維護與手機實機待辦保留各自狀態，不抵本批驗收。
+  歷史DEV-134發布、本地維護及手機驗證保留各自source／scope，不重寫早期失敗；本批最新結果見QA Main補正。
 - 文件用途與主責：DEV-134 PM 保存需求與執行邊界，RD 技術規劃在 SPEC-041定案工程契約，QA／QC按本批計畫接手。
 - 本輪文件審查邊界：更新 ProJED 的 SPEC／QA／DEV／map；既有開發工作保留各自 source／verifier ownership。
-  第一批候選已凍結並完成本地驗收；產品commit `458b9a4`已推送，本批發布及手機實機確認尚未完成。
+  第一批產品及補正已推送（`fcb84ad`）、部署live `20261004031015-7a155c`；正式及人類手機更新流程已確認，後續4～5未要求。
 - 人類來源：本 chat「這個更新功能還可以如何優化？請提案」，接續要求「ProJED主程式也要有三點選單」
   及使用 `dev-pm`「寫成開發文件」，後續「補到架構定案」「rd-tech-lead 審視並優化開發文件」。兩個 App三點更新入口為已確認產品方向；
   依既有提案收斂第一批1～3作為本次架構交接範圍，4～5保留capsule；本次沒有擴張到其產品實作。
@@ -7654,7 +7654,7 @@ API、狀態權威、互斥／通知順序與版本可信條件只在 SPEC維護
   正常入口、焦點、真SW／bfcache及同安裝環境升級已完成本地驗收。最新計數、首跑失敗、證據層級與cleanup只見
   [QA Rev 4摘要](qa/QA-DEV-134-pwa-recovery-local-verification.md#rev-4-現行驗證摘要2026-10-03本地驗收通過)。
   同一Agent完成修正及凍結後事實驗證，非獨立QC；未將平台／Auth／麥克風模擬視為手機實機。
-  本批及註冊等待補正已提交／推送（`349c552`），部署live `20261004001409-64b197`；雙origin各78/78、canonical root及Quick正式檢查／離線／重試通過。使用者手機Quick確認選單與最新版呈現；Main真登入手機顯示「無法確認版本，請重試」。真前版client＋新Main document＋同版waiting worker已重現UNKNOWN，補正read-only worker身分查證新增8/8、完整53/53通過，artifact／live待續接；後續4～5未要求實作。最新結果見[QA Main補正](qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-04-main-手機版本確認失敗與-worker-身分補正)、[REL-015](release/REL-015-DEV-134-QUICK-TASK-PWA-20261002.md)。
+  本批及補正產品已推送（`fcb84ad`），live `20261004031015-7a155c`；雙origin各79/79、root／Quick真選單／Main updater最新版、離線、重試通過。原Main手機UNKNOWN對應訊息及真前版client＋同版waiting worker反例已重現，read-only身分補正8/8、完整53/53及真sealed重演通過。人類確認Quick手機呈現及Main「發現新版→按更新→已是最新版」，第一批1～3完成；後續4～5未要求實作。手機精確origin／release／IDB未另讀回，不擴算驗收。原網路等待、20秒fixture初始化及transport逾時失敗保留，只補缺少feature，不重複部署。最新結果見[QA Main補正](qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-04-main-手機版本確認失敗與-worker-身分補正)、[REL-015](release/REL-015-DEV-134-QUICK-TASK-PWA-20261002.md)。
 - 現行契約參考：[SPEC-041](specs/SPEC-041-pwa-update-notification-cache-recovery.md)、
   [ADR-047](decisions/ADR-047-pwa-per-client-reload-isolation.md)、
   [QA-DEV-134](qa/QA-DEV-134-pwa-recovery-local-verification.md)。
@@ -7672,7 +7672,9 @@ API、狀態權威、互斥／通知順序與版本可信條件只在 SPEC維護
 
 - 2026-10-02 舊安裝補驗：真舊 sealed artifact → current artifact、保留其他同 origin client 的情境已重現。network-bypass 取得新 HTML，但 shortcut 仍可回舊版；關閉所有相關 ProJED 分頁與 App 後再開可讀新版，已建立本機任務保留。更正先前只關 App 的指引；fresh browser PASS 不代表 legacy bootstrap 自動完成。證據／操作見 [QA-DEV-134 bootstrap](qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-02-舊安裝-bootstrap-重現)、[REL-015](release/REL-015-DEV-134-QUICK-TASK-PWA-20261002.md#2026-10-02-舊安裝-bootstrap-與操作指引更正)。此輪產品 source/live 不變；手機自身 client 狀態與實機結果仍未確認。
 
-- 狀態：quick-task 更新生命週期補正已部署 live，雙正式 origin readback 與正式網站 browser smoke PASS；手機既有安裝的實機重新開啟確認仍待使用者回報。Medium；開發點，父 DEV-041／096／097。
+### 2026-10-02 原發布歷史快照
+
+- 當時狀態：quick-task 更新生命週期補正已部署 live，雙正式 origin readback 與正式網站 browser smoke PASS；手機既有安裝的實機重新開啟確認仍待使用者回報。Medium；開發點，父 DEV-041／096／097。最新第一批完成狀態見上方及2026-10-04 QA，不回寫此歷史source的實機結果。
 - 人類原始授權：本 chat「手機APP沒有變更」後要求修正；此前明確要求推送遠端並部署到 live，並授權使用 ProJED-TEST／短期 Firebase 預覽補齊驗證及部署 live。授權範圍為本 canonical ProJED repo 與同一 Firebase live／preview 資源。
 - Authority：SPEC-041 DEV-134 addendum（frozen R01～R10）；ADR-047 架構保留；DEV-083 sealed artifact 兼容。
 - Source boundary：canonical `C:\VIBE CODING\ProJED\ProJED`，branch `持續優化3`，本輪起始 HEAD `a7bd84a22d0a00193b2699491729d5e40a3325d8`。保留原工作樹變更；限本輪 quick-task PWA lifecycle、直接回歸、SPEC／QA／索引更新。
