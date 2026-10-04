@@ -14,6 +14,7 @@ const output = path.resolve(process.env.DEV134_REPORT_DIR ?? path.join(root, 'ou
 fs.mkdirSync(output, { recursive: true });
 const results = [];
 const check = async (name, work) => {
+  if (process.env.DEV134_CASE_FILTER && !name.includes(process.env.DEV134_CASE_FILTER)) return;
   try { await work(); results.push({ name, ok: true }); }
   catch (error) { results.push({ name, ok: false, error: error.message }); }
 };
@@ -87,7 +88,7 @@ function serviceFixture({ autoRegister = true, withApplyLockDb = false } = {}) {
   const responseBody = pathname => pathname === '/release-meta.json'
     ? { schemaVersion: 1, releaseId: latest.replace(/^release:/u, '') }
     : { schemaVersion: 1, version: latest };
-  let workerUpdateCount = 0;
+  let workerUpdateCount = 0, workerRegisterCount = 0;
   const registration = {
     waiting: null, installing: null, active: null, scope: 'https://fixture.invalid/',
     update() {
@@ -103,7 +104,7 @@ function serviceFixture({ autoRegister = true, withApplyLockDb = false } = {}) {
       workerListeners.set(name, listeners);
     }
     removeEventListener(name, listener) { workerListeners.get(name)?.delete(listener); }
-    register() { return autoRegister ? Promise.resolve(registration) : registrationDeferred.promise; }
+    register() { workerRegisterCount++; return autoRegister ? Promise.resolve(registration) : registrationDeferred.promise; }
   }
   const serviceWorker = Object.assign(serviceWorkerEvents, {
     controller: null,
@@ -220,6 +221,7 @@ function serviceFixture({ autoRegister = true, withApplyLockDb = false } = {}) {
     safe: value => { gateSafe = value; },
     workerUpdate: implementation => { workerUpdate = implementation; },
     workerUpdateCount: () => workerUpdateCount,
+    workerRegisterCount: () => workerRegisterCount,
     reloadBoundaryCalls: () => reloadBoundaryCalls,
     reloadReservationCalls: () => reloadReservationCalls,
     applyLockRecords: () => applyLockDb?.records ?? null,
@@ -231,6 +233,7 @@ function serviceFixture({ autoRegister = true, withApplyLockDb = false } = {}) {
     runIntervals: async () => { for (const timer of [...intervals.values()]) timer.callback(); await flushPromises(); },
     flush: flushPromises,
     register: async () => { registrationDeferred.resolve(registration); await flushPromises(); },
+    rejectRegistration: async () => { registrationDeferred.reject(new Error('Native registration failed')); await flushPromises(); },
   };
 }
 const watchLocalBusyClear = f => {
@@ -250,6 +253,45 @@ const withinHarnessDeadline = (promise, label) => {
   ]).finally(() => globalThis.clearTimeout(timeout));
 };
 const transactionKey = 'projed.pwa-update.transaction.v1';
+await check('U05-native-registration-pending-waits-inside-original-deadline', async () => {
+  const f = serviceFixture({ autoRegister: false }); f.api.setupPwaLifecycle();
+  const pending = f.api.checkPwaUpdate(); await f.flush();
+  assert.equal(f.api.getPwaUpdateState().check.phase, 'checking');
+  assert.equal(f.workerUpdateCount(), 0); assert.equal(f.requests.length, 0);
+  await f.advance(9_000); await f.register();
+  const result = await pending;
+  assert.equal(result.phase, 'available'); assert.equal(result.errorCode, null);
+  assert.equal(f.workerRegisterCount(), 1); assert.equal(f.workerUpdateCount(), 1);
+  assert.equal(f.requestsFor('/app-shell-meta.json').length, 1);
+});
+await check('U05-native-registration-rejection-is-unavailable-not-timeout', async () => {
+  const f = serviceFixture({ autoRegister: false }); f.api.setupPwaLifecycle();
+  const pending = f.api.checkPwaUpdate(); await f.flush();
+  await f.advance(500); await f.rejectRegistration();
+  const result = await pending;
+  assert.equal(result.phase, 'error'); assert.equal(result.errorCode, 'CHECK_UNAVAILABLE');
+  assert.equal(result.finishedAt - result.startedAt, 500);
+  assert.equal(f.workerRegisterCount(), 1); assert.equal(f.workerUpdateCount(), 0); assert.equal(f.requests.length, 0);
+});
+await check('U05-native-registration-timeout-does-not-cancel-shared-setup-and-retry', async () => {
+  const f = serviceFixture({ autoRegister: false }); f.api.setupPwaLifecycle();
+  const pending = f.api.checkPwaUpdate(); await f.flush();
+  await f.advance(10_000);
+  const result = await pending;
+  assert.equal(result.phase, 'error'); assert.equal(result.errorCode, 'CHECK_TIMEOUT');
+  await f.advance(1_000); await f.register();
+  const retry = await f.api.checkPwaUpdate();
+  assert.equal(retry.phase, 'available'); assert.equal(f.workerRegisterCount(), 1);
+});
+await check('U05-native-registration-pagehide-retires-pending-check-without-effect', async () => {
+  const f = serviceFixture({ autoRegister: false }); f.api.setupPwaLifecycle();
+  const pending = f.api.checkPwaUpdate(); await f.flush();
+  f.pagehide(true);
+  assert.equal((await pending).phase, 'cancelled');
+  await f.register();
+  assert.equal(f.workerRegisterCount(), 1); assert.equal(f.workerUpdateCount(), 0); assert.equal(f.requests.length, 0);
+  assert.equal(f.navigations.length, 0); assert.equal(f.api.getPwaUpdateState().latestVersion, 'release:A');
+});
 await check('U03-manual-check-contract-is-distinct-from-transaction-status', () => {
   const f = serviceFixture();
   assert.equal(typeof f.api.checkPwaUpdate, 'function');

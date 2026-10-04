@@ -811,7 +811,7 @@ QC 在候選 source freeze 後執行；最初正式截圖 failure 保留。fixtu
 
 文件成熟度：**RD Implementation Ready；架構定案：已定案（第一批 1～3）**。
 現行版本：**Rev 4／RD 技術主管續接審查（2026-10-03）**；同節先前文字以本版為準。
-產品狀態：**第一批1～3本地驗收通過且已提交推送；未發布**；產品commit `458b9a4`，手機實機未確認。後續發版狀態見QA完成度稽核。
+產品狀態：**第一批1～3已提交推送並發布首份候選；正式功能驗證發現native registration等待缺口，補正本地通過，待正式再驗**；原產品commit `458b9a4`，手機實機未確認。現行狀態見QA的2026-10-04補記，不將首份provenance通過視為功能驗收通過。
 文件定案與產品驗收分開：本節維護工程契約；已執行與尚缺的驗證統一在 QA 記錄。
 來源：本 chat 更新優化提案、「ProJED主程式也要有三點選單」、`dev-pm`「寫成開發文件」，
 以及後續「補到架構定案」「rd-tech-lead 審視並優化開發文件」。提案4～5（成功／版本資訊、診斷複製）
@@ -999,6 +999,10 @@ clearResult時showReload／handoffToPrompt均為false；若本頁確有在途更
    也使用該 helper，仍保留 worker identity／retarget／owner fence 核對。update() 沒有 AbortSignal 參數，
    逾時只結束 caller 等待，不宣稱取消 native operation；guard 到真正 settle 才釋放。
    後續 caller 加入該 operation，並使用自己的有限等待；禁止逾時後疊加 native update 或重註冊 worker。
+   2026-10-04落實補記：setup的同一Workbox registration promise尚pending時，需要worker的flight在原
+   deadline內先等待該promise，不能以private registration仍null立即判unavailable。真正reject回
+   CHECK_UNAVAILABLE、deadline回CHECK_TIMEOUT、pagehide回cancelled；仍使用本flight的requestId。
+   單次caller／flight到期不取消或重建共享registration，late settle後可由後續有效caller重試。
 5. metadata fetch 連同 response body 使用 AbortController；到期／離開即 abort，所有 fallback 共用剩餘期限。
    先 `/app-shell-meta.json` schemaVersion=1；沿用 sealed `/release-meta.json` 或歷史 `/index.html` 相容路徑。
    每次以既有 nonce 與 no-store／no-cache 取網路結果；abort／離線／期限耗盡不得繼續 fallback。

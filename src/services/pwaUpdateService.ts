@@ -105,6 +105,7 @@ const listeners = new Set<PwaUpdateListener>();
 const waitingWorkerTargets = new WeakMap<ServiceWorker, string>();
 
 let registeredServiceWorker: ServiceWorkerRegistration | null = null;
+let serviceWorkerRegistrationPromise: Promise<ServiceWorkerRegistration> | null = null;
 let workbox: Workbox | null = null;
 let updateChannel: BroadcastChannel | null = null;
 let applyPromise: Promise<boolean> | null = null;
@@ -807,8 +808,18 @@ const cancelDetection = () => {
 const runDetection = async (flight: DetectionFlight): Promise<PwaUpdateCheckState> => {
   let result: PwaUpdateCheckState;
   const refresh = async () => {
-    if (!registeredServiceWorker) throw new Error('CHECK_UNAVAILABLE');
-    await waitUntil(refreshWorker(registeredServiceWorker), flight.deadlineAt, flight.controller.signal);
+    let registration = registeredServiceWorker;
+    if (!registration) {
+      if (!serviceWorkerRegistrationPromise) throw new Error('CHECK_UNAVAILABLE');
+      try {
+        registration = await waitUntil(serviceWorkerRegistrationPromise, flight.deadlineAt, flight.controller.signal);
+      } catch {
+        if (flight.controller.signal.aborted) throw flight.controller.signal.reason;
+        if (Date.now() >= flight.deadlineAt) throw new Error('CHECK_TIMEOUT');
+        throw new Error('CHECK_UNAVAILABLE');
+      }
+    }
+    await waitUntil(refreshWorker(registration), flight.deadlineAt, flight.controller.signal);
   };
   try {
     const currentVersion = getCurrentAppVersion();
@@ -1660,13 +1671,15 @@ export const setupPwaLifecycle = () => {
     if (!normalReloadRequested && updateState.updateAvailable) void checkForAppShellUpdate();
   });
 
-  void workbox.register({ immediate: true }).then((registration) => {
+  serviceWorkerRegistrationPromise = workbox.register({ immediate: true }).then((registration) => {
     if (!registration) throw new Error('Service worker registration returned no registration.');
     registeredServiceWorker = registration;
     const checkForUpdate = () => { void checkForAppShellUpdate(true); };
     window.setInterval(checkForUpdate, UPDATE_CHECK_INTERVAL_MS);
     checkForUpdate();
-  }).catch((error) => {
+    return registration;
+  });
+  void serviceWorkerRegistrationPromise.catch((error) => {
     console.warn('[PWA] Service worker registration failed:', error);
     // Registration is optional for the already loaded app. Keep genuine
     // transaction/load failures, but do not turn a background check into one.

@@ -21,10 +21,15 @@ async page => {
   await page.goto(target.toString(), { waitUntil: 'domcontentloaded' });
   await page.locator('#quick-task-title').waitFor({ state: 'visible', timeout: 15000 });
   await page.locator('[data-pwa-update-prompt]').waitFor({ state: 'attached', timeout: 15000 });
-  await page.waitForFunction(async () => {
-    const registration = await navigator.serviceWorker.getRegistration('/');
-    return Boolean(registration?.active && !registration.installing && !registration.waiting);
-  }, null, { timeout: 20000 });
+  await page.evaluate(async () => {
+    const deadline = Date.now() + 20000;
+    while (Date.now() < deadline) {
+      const registration = await navigator.serviceWorker.getRegistration('/');
+      if (registration?.active && !registration.installing && !registration.waiting) return;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    throw new Error('Production service worker did not reach a stable active state.');
+  });
   const menu = page.locator('[data-quick-install-menu]');
   const trigger = menu.locator('summary');
   const check = menu.locator('[data-quick-update-check]');

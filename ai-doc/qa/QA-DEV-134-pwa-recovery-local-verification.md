@@ -1,6 +1,16 @@
 # DEV-134 PWA 恢復本地驗證
 
-日期：2026-10-01 起，2026-10-03 更新。原始記錄是部署前本地驗證快照；本文件末尾的 2026-10-02 發布後補記提供後續 release 與 live evidence。同日兩輪提示維護及更新操作第一批1～3已完成本地驗證，產品 commit `458b9a418509dbb391b38c80702d793aced60022` 已推送；本批尚未部署。使用者手機既有安裝尚未實機驗證。
+日期：2026-10-01 起，2026-10-04 更新。原始記錄是部署前本地驗證快照；各日期補記提供後續 release 與 live evidence。第一批1～3已提交推送並發布首份候選；正式功能驗證發現註冊等待缺口，補正驗證如下。使用者手機既有安裝尚未實機驗證。
+
+## 2026-10-04 正式功能驗證與註冊等待補正
+
+- 人類完成Firebase CLI重新登入後，live channel讀取恢復；`20261003153455-01f632`／source `a12e387` 已發布，canonical與獨立安裝origin各84/84檔案符合manifest，正式root shell smoke通過。首輪Quick正常檢查及online retry回CHECK_UNAVAILABLE，故changed-feature驗證失敗，不宣稱完整發版或DEV結案。原失敗收據保留於 `completion-audit/direct-evidence-failure-01.json`。
+- 真正式頁面診斷觀察到同一Workbox的native registration promise仍pending，選單及API卻立即回unavailable。補正只在既有service保存同一registration promise，人工flight沿原deadline等待；reject回unavailable、deadline回timeout、pagehide取消flight，late registration本身仍保留。未新增registration、worker、reload writer或資料操作。
+- Hosted verifier原先使用async predicate的waitForFunction，沒有可靠地輪詢native SW狀態；改為page.evaluate內有20秒上限的明確輪詢，保留「已是最新版」／離線／重試及runtime assertions。這是前置條件的修正，不將原失敗改判PASS。
+- 先增加4項U05註冊案例：原產品0/4（pending、reject時間、timeout、pagehide皆失敗）；修正後4/4。受影響完整service／artifact／routing adapter回歸45/45，routing server實際埠60163已關閉並確認拒絕連線；TypeScript及targeted ESLint通過。收據 `completion-audit/registration-fail-first/`、`registration-fixed/`、`registration-regression/`。這些是本地adapter證據，不是正式手機或獨立QC。
+- 原本71筆binding只沿用未變動輸入；本次service及verifier已改，須以新source／artifact及正式功能smoke補證。Rev4期限與單一owner契約保持一致；Main真登入及既有手機仍需分開驗收，後續4～5未要求。
+- 補正採已量測的小型Vite打包：首份manifest輸出11,614,491 bytes，既有builder僅寫新releaseDir及有界前版資產，沿用依賴且不安裝套件。本次不重用上次單次容量風險override；保存實際輸出及空間估算，沿既有已授權corrective release流程重新綁定候選。
+- 最新狀態：補正及受影響本地驗證完成，待提交／建置／正式再驗。首份live已發布但changed-feature失敗，不能以provenance或root smoke替代。
 
 ## 2026-10-03 完成度稽核與發版續接
 
