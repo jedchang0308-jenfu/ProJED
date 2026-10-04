@@ -811,7 +811,7 @@ QC 在候選 source freeze 後執行；最初正式截圖 failure 保留。fixtu
 
 文件成熟度：**RD Implementation Ready；架構定案：已定案（第一批 1～3）**。
 現行版本：**Rev 4／RD 技術主管續接審查（2026-10-03）**；同節先前文字以本版為準。
-產品狀態：**第一批1～3及native registration等待補正已提交推送、部署live；正式Quick功能驗證通過，Main真登入及手機既有安裝待確認**；source `349c552`／release `20261004001409-64b197`。現行證據與首輪失敗歷史見QA的2026-10-04補記，DEV尚未結案。
+產品狀態：**第一批1～3及native registration等待補正已部署；手機Quick選單／最新版呈現已確認，Main手機回報CHECK_VERSION_UNKNOWN對應訊息，正在補正waiting worker身分查證**。目前live source `349c552`／release `20261004001409-64b197`；新補正8/8、53/53本地通過，真artifact／正式及Main手機再驗證待執行。現行證據與失敗歷史見QA的2026-10-04補記，DEV尚未結案。
 文件定案與產品驗收分開：本節維護工程契約；已執行與尚缺的驗證統一在 QA 記錄。
 來源：本 chat 更新優化提案、「ProJED主程式也要有三點選單」、`dev-pm`「寫成開發文件」，
 以及後續「補到架構定案」「rd-tech-lead 審視並優化開發文件」。提案4～5（成功／版本資訊、診斷複製）
@@ -1009,6 +1009,15 @@ clearResult時showReload／handoffToPrompt均為false；若本頁確有在途更
 6. 版本沿用現行 `release:`、`build:`、`bundle:` identity，視為 opaque identity，不排序字串。
    有效同源 schema／identity 才比較；版本未知、無法建立既有相容表示或 worker／metadata 不一致時
    回 VERSION_UNKNOWN。不把 parse 失敗、HTTP 200 的 SPA fallback 或空值認作最新版。
+   2026-10-04 Main補正：current與fresh latest相同、但有installing／未知waiting時，不能永久只依頁面內的
+   WeakMap判未知。沿原flight deadline等原生statechange收斂；再用獨立MessageChannel詢問exact waiting
+   worker的`PROJED_PWA_WORKER_VERSION_V1`身分。既有generated worker匯入一份hashed小型script，回覆
+   schemaVersion=1、requestId及打包時固定的shell version；該值與HTML／app-shell-meta共用同一build值。
+   回覆必須符合opaque identity且等於fresh latest；await後重驗flight、signal／deadline、同registration、
+   同waiting object且無installing，才可綁定該worker並判up-to-date。替換worker、版本不同或無效回覆仍
+   UNKNOWN；舊worker無此協定時不得猜版本，到期回TIMEOUT。所有成功／拒絕／到期／pagehide路徑都移除
+   statechange listener並關閉port。此只讀協定不執行SKIP_WAITING／reload、不寫transaction／data，
+   不新增worker／registration／週期timer；既有不同版本的available／stable-target與owner gate保留。
 7. 每個 await 後核對 requestId、deadline、document suspended 及 localUpdateBusy；寫入交易時另核對
    原 owner／fence，不能將 foreign active phase 當成本頁 busy。expired／cancelled 或本頁已進入副作用的
    detection 結果不得覆寫 check、target、worker binding 或交易。

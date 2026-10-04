@@ -152,10 +152,10 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 
 ## 總任務清單
 
-- ◇ DEV-134 [開發點] [驗證中] [P1] [更新操作第一批已部署；Main真登入及手機待確認] PWA 載入失敗恢復與前版資產相容
+- ◇ DEV-134 [開發點] [驗證中] [P1] [Quick手機已確認；Main版本檢查補正中] PWA 載入失敗恢復與前版資產相容
   - 摘要：修正失敗交易反覆提示、背景檢查誤報與恢復導覽命中舊 HTML；發布包保留上一版雜湊資產。
   - 父任務：DEV-041、DEV-096、DEV-097；發布包相容 DEV-083。
-  - 下一步：確認Main真登入與手機既有App的「檢查更新」；第一批1～3已部署live，正式Quick功能及45/45回歸通過。
+  - 下一步：完成Main waiting worker身分查證的artifact／live驗證，再確認Main原手機App；Quick手機選單／最新版已確認，補正新增8/8及完整53/53通過。
     - 更新操作文件 **Rev 4／RD Implementation Ready + 架構定案：已定案**；source `349c552`／release `20261004001409-64b197`。
       見 [更新操作優化提案](#更新操作優化提案架構定案2026-10-03)、[工程契約](specs/SPEC-041-pwa-update-notification-cache-recovery.md#dev-134-更新操作架構定案2026-10-03)及[QA正式補正](qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-04-正式功能驗證與註冊等待補正)。
   - 證據：[DEV-134 本地驗證](qa/QA-DEV-134-pwa-recovery-local-verification.md)；`output/qa/dev-134/`。
@@ -7654,7 +7654,7 @@ API、狀態權威、互斥／通知順序與版本可信條件只在 SPEC維護
   正常入口、焦點、真SW／bfcache及同安裝環境升級已完成本地驗收。最新計數、首跑失敗、證據層級與cleanup只見
   [QA Rev 4摘要](qa/QA-DEV-134-pwa-recovery-local-verification.md#rev-4-現行驗證摘要2026-10-03本地驗收通過)。
   同一Agent完成修正及凍結後事實驗證，非獨立QC；未將平台／Auth／麥克風模擬視為手機實機。
-  本批及補正產品已提交／推送（`349c552`），部署live `20261004001409-64b197`；雙origin各78/78、canonical root及Quick正式檢查／離線／重試通過。首份live功能失敗保留；同一native registration的原deadline等待補正，4項fail-first及45/45回歸通過。Main真登入及手機仍待確認，後續4～5未要求實作。最新結果見[QA補正](qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-04-正式功能驗證與註冊等待補正)、[REL-015](release/REL-015-DEV-134-QUICK-TASK-PWA-20261002.md#2026-10-04-更新操作第一批與註冊等待補正)。
+  本批及註冊等待補正已提交／推送（`349c552`），部署live `20261004001409-64b197`；雙origin各78/78、canonical root及Quick正式檢查／離線／重試通過。使用者手機Quick確認選單與最新版呈現；Main真登入手機顯示「無法確認版本，請重試」。真前版client＋新Main document＋同版waiting worker已重現UNKNOWN，補正read-only worker身分查證新增8/8、完整53/53通過，artifact／live待續接；後續4～5未要求實作。最新結果見[QA Main補正](qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-04-main-手機版本確認失敗與-worker-身分補正)、[REL-015](release/REL-015-DEV-134-QUICK-TASK-PWA-20261002.md)。
 - 現行契約參考：[SPEC-041](specs/SPEC-041-pwa-update-notification-cache-recovery.md)、
   [ADR-047](decisions/ADR-047-pwa-per-client-reload-isolation.md)、
   [QA-DEV-134](qa/QA-DEV-134-pwa-recovery-local-verification.md)。

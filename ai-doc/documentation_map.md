@@ -12,7 +12,7 @@
 Rev 4補自然邊界跨await、焦點DOM commit後的資格重驗與menu busy單一來源，延續Rev 3的重入及真返回契約。
 第一批1～3本地驗收通過；正常入口、真SW／bfcache及sealed前版同profile升級有證據，平台／Auth／麥克風模擬與手機實機分開。
 最新執行結果、失敗歷史與證據限制集中於 [QA Rev 4摘要](qa/QA-DEV-134-pwa-recovery-local-verification.md#rev-4-現行驗證摘要2026-10-03本地驗收通過)，避免索引計數過期。
-第一批產品及補正已提交推送至 `349c552`；2026-10-04 live release `20261004001409-64b197` 的雙origin各78/78 provenance、canonical root及Quick正式檢查／離線／重試通過。首份release的CHECK_UNAVAILABLE失敗保留；同一registration promise期限內等待補正及45/45回歸通過。現行證據見[QA補正](qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-04-正式功能驗證與註冊等待補正)、[REL-015](release/REL-015-DEV-134-QUICK-TASK-PWA-20261002.md#2026-10-04-更新操作第一批與註冊等待補正)。Main真登入及既有手機待確認，DEV尚未結案。
+第一批及註冊等待補正live `20261004001409-64b197`（`349c552`）的雙origin、root及Quick正式功能通過。使用者手機Quick已確認選單／最新版呈現；Main手機版本確認失敗，真前版client＋同版waiting worker重現UNKNOWN。新身分查證補正8/8、完整53/53通過，artifact／live待續接，Main手機仍需再確認。歷史失敗保留，最新狀態見[QA Main補正](qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-04-main-手機版本確認失敗與-worker-身分補正)、[REL-015](release/REL-015-DEV-134-QUICK-TASK-PWA-20261002.md)，DEV尚未結案。
 載入成功確認／版本資訊與診斷複製保留後續capsule。
 沿用既有 DEV 與文件集，未新增交付點或計入產品完成；既有發布及手機未確認狀態保留，下方未提交／部署文字為各輪歷史快照。
 

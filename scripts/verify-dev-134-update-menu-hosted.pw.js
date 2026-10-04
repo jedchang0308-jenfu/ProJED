@@ -1,5 +1,5 @@
 /* eslint-disable */
-// Real production Quick Task delivery; anonymous, disposable profile, no business writes.
+// Real production Quick Task delivery and Main updater; anonymous, disposable profile, no business writes.
 async page => {
   const origin = new URL(page.url()).origin;
   if (!['https://projed-cc78d.web.app', 'https://projed-cc78d.firebaseapp.com'].includes(origin)) {
@@ -89,14 +89,39 @@ async page => {
       releaseMatches: meta.releaseId === expectedReleaseId, promptMounted: Boolean(prompt), promptHidden: prompt?.hidden === true };
   }, releaseId);
   if (!binding.releaseMatches || !binding.promptMounted || !binding.promptHidden) failures.push('release/prompt binding mismatch');
+  // Resolve the updater from the served Main entry, never from retained asset order.
+  await page.goto(origin + '/?dev083ReleaseId=' + encodeURIComponent(releaseId), { waitUntil: 'domcontentloaded' });
+  const html = await (await page.request.get(origin + '/?dev083ReleaseId=' + encodeURIComponent(releaseId))).text();
+  const mainAsset = html.match(/src="(\/assets\/main-[^"]+\.js)"/)?.[1];
+  if (!mainAsset) throw new Error('Cannot resolve served Main entry.');
+  const mainSource = await (await page.request.get(origin + mainAsset)).text();
+  const updaterAsset = mainSource.match(/\.\/(pwaUpdateService-[A-Za-z0-9_-]+\.js)/)?.[1];
+  if (!updaterAsset) throw new Error('Cannot resolve actual Main updater.');
+  const mainCheck = async () => page.evaluate(async asset => {
+    const api = await import('/assets/' + asset);
+    return { check: await api.checkPwaUpdate(), shell: document.querySelector('meta[name="projed-shell-version"]')?.content };
+  }, updaterAsset);
+  const mainCurrent = await mainCheck();
+  if (mainCurrent.check.phase !== 'up-to-date' || mainCurrent.check.errorCode !== null
+    || mainCurrent.check.currentVersion !== 'release:' + releaseId || mainCurrent.check.latestVersion !== 'release:' + releaseId
+    || mainCurrent.shell !== 'release:' + releaseId) failures.push('Main current-version check failed');
+  let mainOffline;
+  await page.context().setOffline(true);
+  try {
+    mainOffline = await mainCheck();
+    if (mainOffline.check.phase !== 'error' || mainOffline.check.errorCode !== 'CHECK_OFFLINE') failures.push('Main offline check failed');
+  } finally { await page.context().setOffline(false); }
+  const mainRetry = await mainCheck();
+  if (mainRetry.check.phase !== 'up-to-date' || mainRetry.check.errorCode !== null) failures.push('Main online retry failed');
   const criticalFailedRequests = diagnostics.failedRequests.filter(item => !/favicon|fonts\.googleapis|fonts\.gstatic/i.test(item.url));
   const criticalConsoleErrors = diagnostics.consoleErrors.filter(text => !/favicon|ResizeObserver/i.test(text));
   if (diagnostics.pageErrors.length || criticalFailedRequests.length || criticalConsoleErrors.length || diagnostics.remoteWrites.length) {
     failures.push('critical runtime failure or unexpected remote write');
   }
   const result = { ok: failures.length === 0, origin, failures, binding, cases, layouts,
+    main: { entry: mainAsset, updater: updaterAsset, current: mainCurrent, offline: mainOffline, retry: mainRetry },
     diagnostics: { ...diagnostics, criticalFailedRequests, criticalConsoleErrors },
-    scope: 'Anonymous Quick Task production delivery; Main authenticated and physical installed-phone verification are separate.' };
+    scope: 'Anonymous Quick Task menu and actual Main updater production delivery; authenticated Main menu and physical installed-phone confirmation remain separate.' };
   console.log(JSON.stringify(result));
   if (!result.ok) throw new Error('DEV-134 production update menu failed: ' + JSON.stringify(result));
   return result;

@@ -805,6 +805,50 @@ const cancelDetection = () => {
   flight.controller.abort(new Error('CHECK_CANCELLED'));
   setUpdateState({ check: checkResult('cancelled', flight) });
 };
+const confirmSameVersionWaitingWorker = async (flight: DetectionFlight, latestVersion: string) => {
+  const registration = registeredServiceWorker;
+  if (!registration) return;
+  const installing = registration.installing;
+  if (installing) {
+    let onStateChange: () => void = () => {};
+    const settled = new Promise<void>(resolve => {
+      onStateChange = () => { if (installing.state !== 'parsed' && installing.state !== 'installing') resolve(); };
+      installing.addEventListener('statechange', onStateChange);
+      onStateChange();
+    });
+    try { await waitUntil(settled, flight.deadlineAt, flight.controller.signal); }
+    finally { installing.removeEventListener('statechange', onStateChange); }
+  }
+  if (!flightIsCurrent(flight)) throw new Error('CHECK_CANCELLED');
+  if (registeredServiceWorker !== registration || registration.installing) throw new Error('CHECK_VERSION_UNKNOWN');
+  const waiting = registration.waiting;
+  if (!waiting || waitingWorkerTargets.get(waiting) === latestVersion) return;
+  if (typeof MessageChannel === 'undefined') throw new Error('CHECK_VERSION_UNKNOWN');
+  const channel = new MessageChannel();
+  const requestId = String(flight.requestId);
+  const response = new Promise<unknown>((resolve, reject) => {
+    channel.port1.onmessage = event => resolve(event.data);
+    channel.port1.onmessageerror = () => reject(new Error('CHECK_VERSION_UNKNOWN'));
+  });
+  try {
+    waiting.postMessage({ type: 'PROJED_PWA_WORKER_VERSION_V1', requestId }, [channel.port2]);
+    const reply = await waitUntil(response, flight.deadlineAt, flight.controller.signal);
+    if (!flightIsCurrent(flight)) throw new Error('CHECK_CANCELLED');
+    const identity = reply as { type?: unknown; schemaVersion?: unknown; requestId?: unknown; version?: unknown } | null;
+    if (!identity || identity.type !== 'PROJED_PWA_WORKER_VERSION_V1' || identity.schemaVersion !== 1
+      || identity.requestId !== requestId || !validVersion(identity.version) || identity.version !== latestVersion
+      || registeredServiceWorker !== registration || registration.waiting !== waiting || registration.installing) {
+      throw new Error('CHECK_VERSION_UNKNOWN');
+    }
+    // Bind only the exact worker that answered, after the flight/snapshot checks.
+    waitingWorkerTargets.set(waiting, identity.version);
+  } finally {
+    channel.port1.onmessage = null;
+    channel.port1.onmessageerror = null;
+    channel.port1.close();
+    channel.port2.close();
+  }
+};
 const runDetection = async (flight: DetectionFlight): Promise<PwaUpdateCheckState> => {
   let result: PwaUpdateCheckState;
   const refresh = async () => {
@@ -832,6 +876,10 @@ const runDetection = async (flight: DetectionFlight): Promise<PwaUpdateCheckStat
     if (flight.requireWorker && !refreshed) {
       await refresh();
       latestVersion = await fetchLatestAppVersion(options);
+    }
+    if (!flightIsCurrent(flight)) throw new Error('CHECK_CANCELLED');
+    if (latestVersion === currentVersion && (registeredServiceWorker?.installing || registeredServiceWorker?.waiting)) {
+      await confirmSameVersionWaitingWorker(flight, latestVersion);
     }
     if (!flightIsCurrent(flight)) throw new Error('CHECK_CANCELLED');
     const waiting = registeredServiceWorker?.waiting;

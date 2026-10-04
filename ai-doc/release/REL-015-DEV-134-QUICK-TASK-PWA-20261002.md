@@ -2,7 +2,7 @@
 
 日期：2026-10-02 起，2026-10-04 更新
 最新 corrective release：`20261004001409-64b197`／source `349c552cebb2c092e413897cb1c6d0963dcd0044`；詳見下方更新操作補記。以下較早bindings保留作歷史紀錄。
-狀態：Live deployed；雙origin各78/78 provenance、canonical root及正式Quick檢查更新／離線／重試PASS。Main真登入及手機既有安裝待確認，DEV尚未結案。
+狀態：Live deployed；雙origin、root及正式Quick功能PASS。手機Quick選單／最新版呈現已確認；Main真登入手機版本確認失敗，新worker身分查證補正本地通過，待artifact與live續接，DEV尚未結案。
 專案／環境：ProJED／Firebase Hosting production live (`projed-cc78d`)
 來源任務：DEV-134；release pipeline：DEV-083；規格：SPEC-041
 

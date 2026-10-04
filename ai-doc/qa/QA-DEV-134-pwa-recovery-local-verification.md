@@ -1,6 +1,14 @@
 # DEV-134 PWA 恢復本地驗證
 
-日期：2026-10-01 起，2026-10-04 更新。原始記錄是部署前本地驗證快照；各日期補記提供後續 release 與 live evidence。第一批1～3及註冊等待補正已提交推送並部署 live；正式 Quick Task 功能驗證通過。Main 真登入及使用者手機既有安裝尚待確認。
+日期：2026-10-01 起，2026-10-04 更新。原始記錄是部署前本地驗證快照；各日期補記提供後續 release 與 live evidence。第一批1～3及註冊等待補正已部署。使用者手機 Quick Task 確認選單／最新版結果；Main 手機回報版本確認失敗，正補正 waiting worker 身分查證，DEV 尚未結案。
+
+## 2026-10-04 Main 手機版本確認失敗與 worker 身分補正
+
+- 使用者兩張原始手機畫面：Main 真登入後的三點選單顯示「無法確認版本，請重試」；Quick Task 已登入且顯示「已是最新版」。這支持實機選單與呈現，沒有顯示 origin、精確 release 或 IDB 保存，不將它擴算為所有手機升級驗收。原圖位於本 repo `.codex-remote-attachments/01a0f4f1-b448-7db3-8326-9e7dfa4d7a2d/6ba68116-48e3-4d94-b4b5-6f9c2dbb58c9/`，保留未修改。
+- 真 sealed Main artifact A（`20261003153455-01f632`）保留舊 client；切換 B（`20261004001409-64b197`），新 Main document 與 fresh metadata 同為 B，generated Workbox B 仍 waiting。實際共用 API 回 CHECK_VERSION_UNKNOWN，與手機結果相符。新 document 的 WeakMap 沒有 worker 身分，不能據此斷言 waiting 已是新版；目前是可重現的充分條件，手機自身 worker profile 仍未知。
+- 修正於同一 generated Workbox 加入 build-bound readonly message receiver；沿人工 flight 原 deadline 等待 installing 狀態落定並詢問精確 waiting 物件。type/schema/requestId/version、原 registration、waiting 物件與 flight 都一致才確認。不同版本、錯誤、替換、逾時、離頁仍拒絕最新版；legacy worker 沒有 handler 時逾時。未新增 worker／registration、SKIP_WAITING、reload writer 或業務資料操作。契約位於 SPEC-041 U03補充。
+- fail-first 原 source 0/1；修正後新增8/8、完整受影響回歸53/53、TypeScript及targeted ESLint／Vite syntax通過。Luna僅只讀審查 source diff，未發現需修正路徑，不宣稱獨立QC。收據 `output/qa/dev-134/2026-10-04-main-version-check/qa-02/identity-{fail-first,fixed,regression}/recovery-result.json`，真失敗重現見 `baseline-result.json`。
+- 真 generated worker 的新 artifact 驗證及 corrective live release 待執行。Hosted verifier已增加實際 Main entry所載 updater的最新版／離線／重試，不以匿名 AuthGate或直接API替代已登入Main選單驗收。Quick原正式結果保留；Main手機仍須補正發布後再確認。
 
 ## 2026-10-04 正式功能驗證與註冊等待補正
 

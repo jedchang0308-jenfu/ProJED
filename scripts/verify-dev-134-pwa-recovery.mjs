@@ -8,6 +8,7 @@ import { retainPreviousAssets, buildProductionArtifact } from './release/build-p
 import { verifyManifest } from './release/verify-production-artifact.mjs';
 import { assertLiveAssetCompatibility } from './release/production-release.mjs';
 import { PRODUCTION_CONTRACT, contractDigest, sha256 } from './release/production-contract.mjs';
+import { createPwaWorkerVersionSource } from './pwa-worker-version-source.mjs';
 
 const root = process.cwd();
 const output = path.resolve(process.env.DEV134_REPORT_DIR ?? path.join(root, 'output', 'qa', 'dev-134'));
@@ -41,7 +42,7 @@ const deferred = () => {
   return { promise, resolve, reject };
 };
 const flushPromises = async () => { for (let i = 0; i < 40; i++) await Promise.resolve(); };
-function serviceFixture({ autoRegister = true, withApplyLockDb = false } = {}) {
+function serviceFixture({ autoRegister = true, withApplyLockDb = false, withWorkerIdentityChannel = false } = {}) {
   const localStorage = storage(), sessionStorage = storage(), navigations = [];
   const clock = { now: Date.now() };
   const timers = new Map(), intervals = new Map();
@@ -97,6 +98,17 @@ function serviceFixture({ autoRegister = true, withApplyLockDb = false } = {}) {
     },
   };
   const registrationDeferred = deferred();
+  const messageChannels = [];
+  class FixtureMessageChannel {
+    constructor() {
+      const port1 = { onmessage: null, onmessageerror: null, closed: false, close() { this.closed = true; } };
+      this.port1 = port1;
+      this.port2 = { closed: false, close() { this.closed = true; }, postMessage(data) {
+        queueMicrotask(() => { if (!port1.closed) port1.onmessage?.({ data }); });
+      } };
+      messageChannels.push(this);
+    }
+  }
   class Workbox {
     addEventListener(name, listener) {
       const listeners = workerListeners.get(name) ?? new Set();
@@ -205,14 +217,16 @@ function serviceFixture({ autoRegister = true, withApplyLockDb = false } = {}) {
     require: name => name === 'workbox-window' ? { Workbox } : name.endsWith('pwaUpdateTransaction') ? tx : safety,
     console: { warn() {} }, Date: FixtureDate, crypto: { randomUUID: () => 'fixture-id' }, URL,
     AbortController, AbortSignal, setTimeout, clearTimeout, setInterval, clearInterval,
+    ...(withWorkerIdentityChannel ? { MessageChannel: FixtureMessageChannel } : {}),
     CustomEvent: class { constructor(type, options) { this.type = type; this.detail = options.detail; } },
     fetch,
   };
-  const source = fs.readFileSync('src/services/pwaUpdateService.ts', 'utf8').replaceAll('import.meta.env', '__env')
+  const source = fs.readFileSync(process.env.DEV134_SERVICE_SOURCE || 'src/services/pwaUpdateService.ts', 'utf8').replaceAll('import.meta.env', '__env')
     + '\nexport const fixture = { check: checkForAppShellUpdate, checkAtNaturalBoundary, reconcile: reconcilePendingTransaction, set: setUpdateState, register: value => { registeredServiceWorker = value; }, cancel: cancelDetection, flight: () => detectionFlight };';
   vm.runInNewContext(compile(source), context);
   return {
     api: module.exports, localStorage, sessionStorage, navigations, registration, requests, events, window, document, navigator,
+    messageChannels, eventTarget,
     emit: (name, event = { isUpdate: true }) => { for (const listener of [...(workerListeners.get(name) ?? [])]) listener(event); },
     pagehide: persisted => window.dispatchEvent({ type: 'pagehide', persisted }),
     pageshow: persisted => window.dispatchEvent({ type: 'pageshow', persisted }),
@@ -253,6 +267,109 @@ const withinHarnessDeadline = (promise, label) => {
   ]).finally(() => globalThis.clearTimeout(timeout));
 };
 const transactionKey = 'projed.pwa-update.transaction.v1';
+const makeIdentityWorker = (f, version, respond) => {
+  const messages = [];
+  const worker = Object.assign(f.eventTarget(), {
+    state: 'installed',
+    postMessage(message, ports) {
+      messages.push(message);
+      const reply = { type: 'PROJED_PWA_WORKER_VERSION_V1', schemaVersion: 1, requestId: message.requestId, version };
+      if (respond) respond(reply, ports[0]);
+      else ports[0].postMessage(reply);
+    },
+  });
+  return { worker, messages };
+};
+const identityFixture = () => {
+  const f = serviceFixture({ withWorkerIdentityChannel: true });
+  f.latest('release:A'); f.api.fixture.register(f.registration);
+  return f;
+};
+const assertIdentityPortsClosed = f => {
+  assert(f.messageChannels.length > 0);
+  for (const channel of f.messageChannels) {
+    assert.equal(channel.port1.closed, true); assert.equal(channel.port2.closed, true);
+    assert.equal(channel.port1.onmessage, null); assert.equal(channel.port1.onmessageerror, null);
+  }
+};
+await check('U03-worker-identity-current-shell-with-same-waiting-worker-is-latest', async () => {
+  const f = identityFixture(); const observed = makeIdentityWorker(f, 'release:A'); f.registration.waiting = observed.worker;
+  const result = await f.api.checkPwaUpdate();
+  assert.equal(result.phase, 'up-to-date'); assert.equal(result.latestVersion, 'release:A');
+  assert.equal(observed.messages.length, 1); assert.equal(f.workerUpdateCount(), 1);
+  assert.equal(f.requestsFor('/app-shell-meta.json').length, 1);
+  assert.equal(f.localStorage.getItem(transactionKey), null); assert.equal(f.navigations.length, 0);
+  assert.equal(observed.messages.some(message => message.type === 'SKIP_WAITING'), false);
+  assertIdentityPortsClosed(f);
+});
+await check('U03-worker-identity-installing-settles-inside-original-flight', async () => {
+  const f = identityFixture(); const observed = makeIdentityWorker(f, 'release:A');
+  observed.worker.state = 'installing'; f.registration.installing = observed.worker;
+  const pending = f.api.checkPwaUpdate(); await f.flush();
+  assert.equal(f.api.getPwaUpdateState().check.phase, 'checking');
+  await f.advance(2000); f.registration.installing = null; f.registration.waiting = observed.worker;
+  observed.worker.state = 'installed'; observed.worker.dispatchEvent({ type: 'statechange' });
+  const result = await pending;
+  assert.equal(result.phase, 'up-to-date'); assert.equal(result.finishedAt - result.startedAt, 2000);
+  assert.equal(observed.worker.listenerCount('statechange'), 0); assertIdentityPortsClosed(f);
+});
+await check('U03-worker-identity-mismatch-malformed-or-wrong-request-stays-unknown', async () => {
+  for (const mutate of [reply => ({ ...reply, version: 'release:C' }), reply => ({ ...reply, schemaVersion: 2 }),
+    reply => ({ ...reply, requestId: 'foreign' }), reply => ({ ...reply, version: '' })]) {
+    const f = identityFixture(); const observed = makeIdentityWorker(f, 'release:A', (reply, port) => port.postMessage(mutate(reply)));
+    f.registration.waiting = observed.worker;
+    f.api.fixture.set({ failureKind: 'load', errorCode: 'ORIGINAL', errorMessage: '保留原始載入原因' });
+    const result = await f.api.checkPwaUpdate();
+    assert.equal(result.phase, 'error'); assert.equal(result.errorCode, 'CHECK_VERSION_UNKNOWN'); assert.equal(result.latestVersion, null);
+    assert.equal(f.api.getPwaUpdateState().errorCode, 'ORIGINAL'); assert.equal(f.localStorage.getItem(transactionKey), null);
+    assertIdentityPortsClosed(f);
+  }
+});
+await check('U03-worker-identity-replaced-worker-cannot-bind-the-new-worker', async () => {
+  const f = identityFixture(); const replacement = makeIdentityWorker(f, 'release:A');
+  const previous = makeIdentityWorker(f, 'release:A', (reply, port) => { f.registration.waiting = replacement.worker; port.postMessage(reply); });
+  f.registration.waiting = previous.worker;
+  const stale = await f.api.checkPwaUpdate(); assert.equal(stale.errorCode, 'CHECK_VERSION_UNKNOWN');
+  const retry = await f.api.checkPwaUpdate(); assert.equal(retry.phase, 'up-to-date');
+  assert.equal(replacement.messages.length, 1); assertIdentityPortsClosed(f);
+});
+await check('U03-worker-identity-timeout-closes-ports-and-late-reply-does-not-publish', async () => {
+  const f = identityFixture(); let lateReply;
+  const observed = makeIdentityWorker(f, 'release:A', (reply, port) => { lateReply = () => port.postMessage(reply); });
+  f.registration.waiting = observed.worker;
+  const pending = f.api.checkPwaUpdate(); await f.flush(); await f.advance(10000);
+  const result = await pending; assert.equal(result.errorCode, 'CHECK_TIMEOUT');
+  assertIdentityPortsClosed(f); lateReply(); await f.flush();
+  assert.equal(f.api.getPwaUpdateState().check.phase, 'error'); assert.equal(f.localStorage.getItem(transactionKey), null);
+  const replacement = makeIdentityWorker(f, 'release:A'); f.registration.waiting = replacement.worker;
+  assert.equal((await f.api.checkPwaUpdate()).phase, 'up-to-date'); assertIdentityPortsClosed(f);
+});
+await check('U03-worker-identity-pagehide-cancels-without-late-binding', async () => {
+  const f = identityFixture(); let lateReply;
+  const observed = makeIdentityWorker(f, 'release:A', (reply, port) => { lateReply = () => port.postMessage(reply); });
+  f.registration.waiting = observed.worker; f.api.setupPwaLifecycle(); await f.flush();
+  const pending = f.api.checkPwaUpdate(); await f.flush(); f.pagehide(true);
+  assert.equal((await pending).phase, 'cancelled'); assertIdentityPortsClosed(f); lateReply(); await f.flush();
+  assert.equal(f.api.getPwaUpdateState().check.phase, 'cancelled'); assert.equal(f.navigations.length, 0);
+  const replacement = makeIdentityWorker(f, 'release:A'); f.registration.waiting = replacement.worker;
+  f.pageshow(true); assert.equal((await f.api.checkPwaUpdate()).phase, 'up-to-date'); assert.equal(replacement.messages.length, 1);
+});
+await check('U03-worker-identity-installing-timeout-removes-native-listener', async () => {
+  const f = identityFixture(); const observed = makeIdentityWorker(f, 'release:A');
+  observed.worker.state = 'installing'; f.registration.installing = observed.worker;
+  const pending = f.api.checkPwaUpdate(); await f.flush(); await f.advance(10000);
+  assert.equal((await pending).errorCode, 'CHECK_TIMEOUT'); assert.equal(observed.worker.listenerCount('statechange'), 0);
+  assert.equal(f.messageChannels.length, 0);
+});
+await check('U03-worker-identity-generated-receiver-is-read-only-and-build-bound', async () => {
+  let listener; const replies = [];
+  vm.runInNewContext(createPwaWorkerVersionSource('release:A'), { self: { addEventListener(type, fn) { assert.equal(type, 'message'); listener = fn; } } });
+  listener({ data: { type: 'SKIP_WAITING', requestId: 'x' }, ports: [{ postMessage: data => replies.push(data) }] });
+  listener({ data: { type: 'PROJED_PWA_WORKER_VERSION_V1', requestId: 'x' }, ports: [] });
+  listener({ data: { type: 'PROJED_PWA_WORKER_VERSION_V1', requestId: 'x' }, ports: [{ postMessage: data => replies.push(data) }] });
+  assert.equal(replies.length, 1); assert.equal(replies[0].version, 'release:A'); assert.equal(replies[0].schemaVersion, 1);
+  assert.throws(() => createPwaWorkerVersionSource('invalid'));
+});
 await check('U05-native-registration-pending-waits-inside-original-deadline', async () => {
   const f = serviceFixture({ autoRegister: false }); f.api.setupPwaLifecycle();
   const pending = f.api.checkPwaUpdate(); await f.flush();
@@ -665,7 +782,7 @@ await check('R12-shared-presentation-preserves-failure-precedence-and-exact-word
   }
 });
 await check('R12-quick-prompt-skips-equivalent-renders-and-keeps-action-feedback', async () => {
-  let writes = 0, listener, unsubscribeCount = 0, subscribeCount = 0, settle, readCount = 0;
+  let writes = 0, listener, unsubscribeCount = 0, subscribeCount = 0, settle;
   const nodes = [], roots = [], actions = [], windowListeners = new Map();
   let readState = { status: 'idle', updateAvailable: false, dismissedAt: null, reloadSafetyState: 'safe', failureKind: null, errorMessage: null,
     localUpdateBusy: false, check: { requestId: 0, phase: 'idle', currentVersion: null, latestVersion: null, startedAt: null, finishedAt: null, errorCode: null } };
@@ -689,7 +806,7 @@ await check('R12-quick-prompt-skips-equivalent-renders-and-keeps-action-feedback
   });
   const operation = name => () => { actions.push(name); return new Promise(resolve => { settle = resolve; }); };
   const cleanup = module.exports.mountQuickTaskPwaUpdatePrompt({
-    read: () => { readCount++; return readState; },
+    read: () => readState,
     subscribe: callback => { subscribeCount++; listener = callback; return () => { unsubscribeCount++; }; },
     apply: operation('apply'), retry: operation('retry'), recover: operation('recover'), dismiss: () => actions.push('dismiss'),
   });
@@ -749,7 +866,7 @@ await check('U06-adapter-synthetic-persisted-cycles-same-root-not-real-bfcache',
   const module = { exports: {} };
   vm.runInNewContext(compile(quickPromptSource), {
     exports: module.exports, module,
-    require: name => presentationModule.exports,
+    require: () => presentationModule.exports,
     document: { createElement: tag => { const node = createElement(tag); nodes.push(node); return node; }, body: { append(...items) { roots.push(...items); } } },
     window: {
       addEventListener(name, callback) { const group = windowListeners.get(name) ?? new Set(); group.add(callback); windowListeners.set(name, group); },
@@ -778,7 +895,8 @@ await check('U06-adapter-synthetic-persisted-cycles-same-root-not-real-bfcache',
   assert.equal(windowListeners.get('pagehide').size, 1);
   assert.equal(windowListeners.get('pageshow').size, 1);
 });
-results.at(-1).evidenceLevel = 'Synthetic prompt adapter persisted events; not real browser bfcache and not U06 PASS';
+const persistedAdapterResult = results.find(result => result.name === 'U06-adapter-synthetic-persisted-cycles-same-root-not-real-bfcache');
+if (persistedAdapterResult) persistedAdapterResult.evidenceLevel = 'Synthetic prompt adapter persisted events; not real browser bfcache and not U06 PASS';
 await check('R01-failed-replay-preserves-original-reason-and-stops-background-apply', async () => {
   const f = serviceFixture();
   f.localStorage.setItem(transactionKey, JSON.stringify(makeFailed()));

@@ -2,6 +2,8 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import { createHash } from 'node:crypto'
+import { createPwaWorkerVersionSource } from './scripts/pwa-worker-version-source.mjs'
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
@@ -9,6 +11,7 @@ export default defineConfig(({ mode }) => {
   const shellVersion = releaseId
     ? `release:${releaseId}`
     : `build:${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const workerVersionFile = `assets/pwaWorkerVersion-${createHash('sha256').update(shellVersion).digest('hex').slice(0, 16)}.js`;
   return ({
   ...(mode === 'production' && !process.env.PROJED_RELEASE_ID
     ? (() => { throw new Error('DEV-097: sealed production build requires PROJED_RELEASE_ID.'); })()
@@ -36,6 +39,11 @@ export default defineConfig(({ mode }) => {
       generateBundle() {
         this.emitFile({
           type: 'asset',
+          fileName: workerVersionFile,
+          source: createPwaWorkerVersionSource(shellVersion),
+        });
+        this.emitFile({
+          type: 'asset',
           fileName: 'app-shell-meta.json',
           source: `${JSON.stringify({ schemaVersion: 1, version: shellVersion })}\n`,
         });
@@ -47,6 +55,7 @@ export default defineConfig(({ mode }) => {
       includeAssets: ['icons/*.png'],
       manifest: false,
       workbox: {
+        importScripts: [`/${workerVersionFile}`],
         cacheId: `projed-${process.env.PROJED_RELEASE_ID || 'test'}`,
         cleanupOutdatedCaches: false,
         clientsClaim: false,
