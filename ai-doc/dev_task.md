@@ -153,7 +153,7 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 ## 總任務清單
 
 - ✓ DEV-134 [開發點] [完成] [P1] [第一批1～3已部署並驗收；手機更新成功] PWA 載入失敗恢復與前版資產相容
-  - 2026-10-04 UI 維護：主程式三點按鈕的可見框改為 32px，與「問AI」置中對齊；44px 點擊範圍保留，選單右緣對齊可見框。source `403e5fd` 已推送；此樣式尚未建置、視覺驗證或部署。Governor 容量預檢 BLOCKED（可用31.2GB；建置預留25GB；保護空間25.5GB），等待本次風險決定；DEV-134 第一批驗收不涵蓋本次變更。
+  - 2026-10-04 UI 維護已部署：主程式三點按鈕可見框為32px，置中於44px點擊範圍，選單右緣對齊可見框。產品變更 source `403e5fd`，部署綁定文件 commit `291f397fa35463a7ccdb4ba4d94b103eda92ff8f`；live release `20261004082518-04e5e7`。canonical artifact provenance 81/81、root browser及DEV-134 hosted feature smoke通過。匿名 smoke 沒有登入 MainLayout，故沒有直接量測登入後主程式頂列的手機視覺；不得把舊DEV-134驗收計入本次視覺QC。使用者接受本次建置容量風險，建置完成後容量預留已釋放、Governor session已結束。詳見[QA正式部署補記](qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-04-主程式三點按鈕正式部署與驗證)、[REL-015](release/REL-015-DEV-134-QUICK-TASK-PWA-20261002.md#2026-10-04-主程式三點按鈕排版修正)。
   - 摘要：修正失敗交易反覆提示、背景檢查誤報與恢復導覽命中舊 HTML；發布包保留上一版雜湊資產。
   - 父任務：DEV-041、DEV-096、DEV-097；發布包相容 DEV-083。
   - 下一步：本批無待辦；後續4～5未要求。Quick手機呈現、Main手機「發現新版→按更新→已是最新版」及正式root／Quick／Main updater已確認，補正8/8、完整53/53通過。

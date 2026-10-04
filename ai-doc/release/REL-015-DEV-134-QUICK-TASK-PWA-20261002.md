@@ -1,10 +1,25 @@
 # REL-015 — DEV-134 Quick Task PWA live update lifecycle
 
 日期：2026-10-02 起，2026-10-04 更新
-最新 corrective release：`20261004031015-7a155c`／source `fcb84ad74237d6f0a30170d782f425ce71789138`；詳見下方Main worker補記。以下較早bindings保留作歷史紀錄。
-狀態：第一批1～3完成、live deployed／verified；雙origin各79/79、root／Quick選單／Main updater正式功能PASS。人類確認Quick手機呈現及Main「發現新版→按更新→已是最新版」；後續4～5未要求。
+最新 corrective release：`20261004082518-04e5e7`／source `291f397fa35463a7ccdb4ba4d94b103eda92ff8f`；主程式三點按鈕排版修正見下方。DEV-134第一批1～3既有 release `20261004031015-7a155c`／source `fcb84ad74237d6f0a30170d782f425ce71789138` 保留作歷史紀錄。
+狀態：第一批1～3及2026-10-04主程式三點按鈕排版修正已部署。第一批手機更新流程由使用者確認完成；本次匿名正式 smoke未登入MainLayout，主程式頂列真機視覺尚未直接驗量。
 專案／環境：ProJED／Firebase Hosting production live (`projed-cc78d`)
 來源任務：DEV-134；release pipeline：DEV-083；規格：SPEC-041
+
+## 2026-10-04 主程式三點按鈕排版修正
+
+依使用者要求將主程式三點選單控制項整理為與相鄰 topbar 控制一致的對齊方式：可見框32px置中於44px點擊範圍，popup右緣對齊可見框；保留既有鍵盤、focus與更新操作。變更位於 `src/components/AppMoreMenu.tsx`。
+
+| Binding | 值 |
+|---|---|
+| Source commit | `291f397fa35463a7ccdb4ba4d94b103eda92ff8f`（產品UI修改 `403e5fd`） |
+| Live release | `20261004082518-04e5e7`，Firebase project/site `projed-cc78d`，`https://projed-cc78d.web.app` |
+| Artifact | 81 entries；tree SHA-256 `8698e9de936f2ac4d3964acf60ce74384c25a212c66af6877e2bb198bd8e1cbd` |
+| Verification | `direct-evidence.json`：published／complete／verification均成功，canonical provenance 81/81、root browser smoke及`verify-dev-134-update-menu-hosted.pw.js` hosted feature smoke通過 |
+| Evidence | `output/release/dev-083/20261004082518-04e5e7/direct-evidence.json` |
+| Recovery anchor | 前一live version `projects/projed-cc78d/sites/projed-cc78d/versions/124914080a04b358`；可由Firebase Hosting release history還原 |
+
+驗證限制：匿名 hosted smoke驗證發布身份與更新功能，但不登入 MainLayout，因此未直接量測本次主程式頂列在手機上的登入後視覺。不能以DEV-134先前更新器驗收代替本次視覺QC。此變更未改業務資料或存取控制；使用者接受本次容量風險，完成後Governor容量預留與session均已釋放／結束。手機既有安裝可由主程式「⋮ → 檢查更新」載入新版，不需重新安裝；使用者端更新後視覺尚待回報。
 
 ## 2026-10-04 Main worker 身分補正
 

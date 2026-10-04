@@ -2,7 +2,7 @@
 
 ## Documentation Map Update - 2026-10-04（主程式三點按鈕對齊）
 
-使用者要求主程式三點按鈕排版整齊。`AppMoreMenu` 將 32px 可見框置中於 44px 點擊範圍，沿用 topbar 邊框與圓角，浮層右緣對齊可見框；保留原鍵盤與更新操作。source `403e5fd` 已推送；尚未建置、視覺驗證或部署。Governor 容量預檢 BLOCKED（可用31.2GB；建置預留25GB；保護空間25.5GB），等待本次風險決定；DEV-134 前批驗收不代表本次 UI 已通過。
+使用者要求主程式三點按鈕排版整齊。`AppMoreMenu` 將 32px 可見框置中於 44px 點擊範圍，沿用 topbar 邊框與圓角，浮層右緣對齊可見框；保留原鍵盤與更新操作。source `403e5fd` 已部署至 Firebase live：release `20261004082518-04e5e7`，source binding `291f397fa35463a7ccdb4ba4d94b103eda92ff8f`；81/81 canonical provenance、root browser及DEV-134 hosted feature smoke通過。匿名 smoke 未登入 MainLayout，沒有直接量測登入後的頂列視覺；本次變更的人工手機視覺確認仍未取得。使用者接受本次容量風險，建置完成後容量預留與Governor session均已關閉。驗證限制與收據見[QA正式部署補記](qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-04-主程式三點按鈕正式部署與驗證)及[REL-015](release/REL-015-DEV-134-QUICK-TASK-PWA-20261002.md#2026-10-04-主程式三點按鈕排版修正)。
 
 ## Documentation Map Update - 2026-10-03（更新操作優化 / 架構定案）
 

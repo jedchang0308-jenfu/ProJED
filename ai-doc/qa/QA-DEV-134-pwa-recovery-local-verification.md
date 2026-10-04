@@ -2,6 +2,12 @@
 
 日期：2026-10-01 起，2026-10-04 更新。第一批1～3及註冊等待／worker身分補正已完成、部署live並驗收。雙origin、正式Quick選單及Main updater通過；手機Quick確認選單／最新版，Main親自按更新後回覆「已是最新版」，第一批實機流程收斂。後續4～5未要求，不計入本批。
 
+## 2026-10-04 主程式三點按鈕正式部署與驗證
+
+主程式 `AppMoreMenu` 排版調整已部署至 Firebase live。產品修改 commit `403e5fd`，部署綁定乾淨來源 commit `291f397fa35463a7ccdb4ba4d94b103eda92ff8f`，release `20261004082518-04e5e7`。收據 `output/release/dev-083/20261004082518-04e5e7/direct-evidence.json` 記錄 `published=true`、`complete=true`、`verification=passed`；canonical tree SHA-256 `8698e9de936f2ac4d3964acf60ce74384c25a212c66af6877e2bb198bd8e1cbd`，81/81 entries provenance通過，root browser及`verify-dev-134-update-menu-hosted.pw.js` hosted feature smoke通過。前一live version為 `projects/projed-cc78d/sites/projed-cc78d/versions/124914080a04b358`，本次未執行rollback。
+
+驗收邊界：hosted smoke是匿名瀏覽器檢查，涵蓋網站發布身份與更新功能，沒有登入主程式 MainLayout，故未直接量測登入後頂列的手機視覺或該按鈕的真機幾何；DEV-134早期 updater 測試不算本次排版的視覺驗收。使用者接受本次建置容量風險，建置後容量預留已釋放、Governor session已結束。AppMoreMenu僅變更控制項呈現，不涉及使用者資料或存取控制。手機已安裝主程式可走「⋮ → 檢查更新」取得新 shell，不需重新安裝；這次視覺在手機端的結果仍未知。
+
 ## 2026-10-04 Main 手機版本確認失敗與 worker 身分補正
 
 - 使用者兩張原始手機畫面：Main 真登入後的三點選單顯示「無法確認版本，請重試」；Quick Task 已登入且顯示「已是最新版」。這支持實機選單與呈現，沒有顯示 origin、精確 release 或 IDB 保存，不將它擴算為所有手機升級驗收。原圖位於本 repo `.codex-remote-attachments/01a0f4f1-b448-7db3-8326-9e7dfa4d7a2d/6ba68116-48e3-4d94-b4b5-6f9c2dbb58c9/`，保留未修改。
