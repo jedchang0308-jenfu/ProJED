@@ -2,7 +2,7 @@
 
 ## Documentation Map Update - 2026-10-06（DEV-137 AI 任務路徑補正）
 
-正式 AI 整理的 `INCOMPLETE_TASK_PATH` 修正，追蹤於 [DEV-137](dev_task.md#dev-137-ai-整理任務路徑補正與失敗診斷---2026-10-06) 與 [SPEC-012](specs/SPEC-012-ai-meeting-record-natural-language-quality.md)。可唯一識別的任務標題依來源補齊路徑，未知或歧義任務仍拒絕；回傳最小失敗診斷，前端只顯示一處中文原因。18 個 Edge/client 模擬與 7 項本機 browser 斷言、原稿保護回歸、型別與 lint 通過；正式發布／登入後結果待補記。本機 provider failure injection 與 deterministic success 不等同正式 Gemini／登入驗收。
+正式 AI 整理的 `INCOMPLETE_TASK_PATH` 修正，追蹤於 [DEV-137](dev_task.md#dev-137-ai-整理任務路徑補正與失敗診斷---2026-10-06) 與 [SPEC-012](specs/SPEC-012-ai-meeting-record-natural-language-quality.md)。可唯一識別的任務標題依來源補齊路徑，未知或歧義任務仍拒絕；回傳最小失敗診斷，前端只顯示一處中文原因。18 個 Edge/client 模擬與 7 項本機 browser 斷言、原稿保護回歸、型別與 lint 通過；clean source `fd0c225` 的 sealed artifact `20261005231837-de651b` 完整性檢查通過。正式 Edge 部署被自動核准審查拒絕（欠缺明確的人類正式部署／目標授權），Firebase 未部署；正式發布及登入後結果待補記。本機 provider failure injection 與 deterministic success 不等同正式 Gemini／登入驗收。
 
 ## Documentation Map Update - 2026-10-05（既有會議草稿續接 AI 整理）
 

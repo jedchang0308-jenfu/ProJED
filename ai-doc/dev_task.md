@@ -5,8 +5,8 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
 ## DEV-137 AI 整理任務路徑補正與失敗診斷 - 2026-10-06
 
-- 文件成熟度：RD Implementation Ready；狀態：本機驗證通過／正式發布準備；類型：開發點；父任務：DEV-012，相容 DEV-024／136。
-- 人類來源：本 chat 正式環境失敗截圖、改善方案及「請執行」。授權範圍為 ProJED 本地修正、驗證與該修正的正式發布／可清理測試草稿驗收；不延伸至其他專案或業務資料修改。
+- 文件成熟度：RD Implementation Ready；狀態：本機驗證通過／發布產物就緒／正式部署待明確授權；類型：開發點；父任務：DEV-012，相容 DEV-024／136。
+- 人類來源：本 chat 正式環境失敗截圖、改善方案及「請執行」。ProJED 本地修正與驗證已執行；正式部署嘗試被自動核准審查拒絕，理由為現有人類訊息未明確授權正式部署及目標範圍。更正先前將「請執行」直接記為正式發布授權的文字；遠端操作須待人類明確指定下列正式目標。不延伸至其他專案或業務資料修改。
 - 直接證據：正式 `synthesize_meeting_record` 於 2026-10-06 00:54:28（台灣時間）回報 `INCOMPLETE_TASK_PATH`，run `4bdd51d2-eee9-4a3c-ade4-4489ab08cb1e`；原生成內容沒有保存，不宣稱掌握漏路徑的具體任務。
 - Spec Impact：SPEC-012 compatible correction。維持自然語言正文、來源 grounding、v2 外部成功契約及 DEV-024 preserve；只將可唯一識別的完整路徑生成責任移交程式。未知 ID、跨分支／多任務標題或無來源識別不得猜測補正。
 - 實作：Edge 共用純函式補正 `2.x` 標題並從正文生成 linkedTaskIds，補正後仍通過完整品質 gate；失敗 response/log 增加 run ID、function version、違規代碼及任務 ID，避免紀錄正文。前端保留診斷、顯示單一中文錯誤，原稿維持不變。
@@ -16,6 +16,8 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 - 證據：`npm run verify:dev-137-meeting-synthesis` 18/18（含實際 Edge handler mock、HTTP 錯誤經實際 client service 的中文與 trace）；DEV-011／012／024 回歸、TypeScript、受影響 lint、test strict typecheck 與 diff check 通過。獨立 task-owned browser `dev137-20261006` 的 7 項 UI 斷言通過：單一中文錯誤、原稿 bytes、1024px overflow、重試、校稿保存、正常紀錄库重開與 trace恢復；截圖 `output/playwright/dev-137/`。成功來源為本機 deterministic；失敗由 service boundary 注入，不冒充 Gemini／正式登入驗收。
 - 前置驗證缺陷：首次依賴入口缺失，已按 lockfile 安裝；首次 browser fixture 缺少 canonical seed size／board selection，第二次用了錯誤 named store export，均為 harness 問題，修復後重跑通過。保留原正式失敗證據，不將本機通過宣稱為原正式畫面已復驗。
 - 路徑上限：來源路徑保留至 80 層；超過上限在 provider 生成前回 400，不再靜默截斷八層後造成前後端不一致。
+- 本地發布準備：實作 commit `fd0c2256212169326c8bd6a932327854edabd0ef`；乾淨來源 sealed artifact `20261005231837-de651b`，manifest `output/release/dev-083/20261005231837-de651b/manifest.json`，80 檔完整性檢查通過，tree SHA-256 `49014a202966cdb2edf35e0faff26449f450b2d9563abececac11daee368cc88`。保留正式前版 manifest `20261005141011-b3b16a` 與舊 Edge source `output/release/dev-137/function-before.json`。Supabase 部署在執行前被拒絕；Firebase 部署未執行，沒有正式更新或業務資料變更。
+- 臨時環境清理：task-owned browser `dev137-20261006` 已關閉；核對 Vite PID `133432`、啟動時間與 command line 後停止該程序樹，確認 port `4173` 釋放；resource governor runtime／lease／session 已結束。
 - 計入產品交付：否；正式版本／API／登入後 UI 結果待發布後補記。
 
 ## DEV-136 既有會議草稿續接 AI 整理與校稿流程 - 2026-10-05
@@ -188,7 +190,7 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 
 ## 總任務清單
 
-- ◇ DEV-137 [開發點] [本機驗證通過／正式發布準備] [P1] [ProJED AI 整理] 任務路徑補正與失敗診斷
+- ◇ DEV-137 [開發點] [本機驗證通過／發布產物就緒／正式部署待授權] [P1] [ProJED AI 整理] 任務路徑補正與失敗診斷
   - 摘要：以來源路徑補正可唯一識別的任務標題；失敗保留原稿並提供單一中文原因與執行追溯。
   - 父任務：DEV-012；相容 DEV-024／136。
   - 下一步：執行後端、原稿保護、UI 與正式版本驗證。
