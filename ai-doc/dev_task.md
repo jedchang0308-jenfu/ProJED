@@ -27,8 +27,9 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 - 即時會議的錄音、任務事件擷取、recovery 與專案變更匯入繼續限於 live mode；工作紀錄不顯示會議流程；沒有 schema、migration、權限或正式環境變更。
 - 父／相容任務：DEV-019、DEV-020、DEV-107、DEV-117；本次以 DEV-136 作 native task，不把來源回饋改掛為既有 DEV 的歷史 PASS。
 - 工程契約：[SPEC-019 DEV-136 addendum](specs/SPEC-019-record-type-and-meeting-workflow-layering.md#dev-136-架構定案既有會議草稿續接完整流程---2026-10-05)；驗收權威：[QA-DEV-136](qa/QA-DEV-136-meeting-draft-ai-continuation.md)。
-- 狀態：RD implementation complete；本機 targeted QA PASS；已發布 Firebase Hosting production。正式站 sealed artifact provenance 83/83、匿名 shell smoke 與 Google OAuth redirect smoke PASS；登入後 feature smoke 仍 pending，因正式測試身分與可清理資料範圍尚未配置；未修改 Supabase 或正式資料。本次 2026-10-06 smoke evidence 已補至 QA／REL 文件並另作本地文件提交，尚未推送。
+- 狀態：RD implementation complete；本機 targeted QA PASS；Firebase Hosting release `20261005141011-b3b16a` 已發布。正式站 sealed artifact provenance 83/83、匿名 shell smoke、Google OAuth redirect smoke，以及登入後限定草稿生命週期 smoke PASS；完整 N01～N09／AI trace matrix 仍 pending。測試草稿與唯一臨時看板已清理；未改 schema、migration 或設定。
 - 2026-10-05 驗證與發布：DEV-136 state 14/14、DEV-092 55 checks、DEV-020 13 file groups、DEV-107 browser 6/6、DEV-135 browser 6/6、TypeScript、完整 repo lint（0 errors，64 warnings）、`npm run verify:source` 與 `git diff --check` PASS。乾淨來源 artifact `20261005141011-b3b16a` 綁定 commit `42731b1e86883782069479655bfedaf2cd87ac77`；正式站 release `1791209475419000`／version `ae0e7e4538ce30bd`，remote provenance 83/83 與匿名 browser shell smoke 通過。Direct receipt 為 `feature-pending`；未登入 MainLayout，沒有正式資料或 schema 操作。部署限制與證據見 [QA-DEV-136](qa/QA-DEV-136-meeting-draft-ai-continuation.md#2026-10-05-正式-hosting-發布補記) 與 [REL-016](release/REL-016-DEV-135-136-HOSTING-20261005.md)。DEV-107 verifier 已對齊 DEV-135 將紀錄庫／會議入口移至右上更多選項的 UI；本機驗收限制見 [QA-DEV-136](qa/QA-DEV-136-meeting-draft-ai-continuation.md#2026-10-05-本機驗收紀錄)。
+- 2026-10-06 正式 smoke：在 `DEV136-SMOKE-20261006` 建立標記草稿，確認保存、離開、重開、編輯、再次保存及第二次重開讀回一致；封存後紀錄庫 0 筆，刪除唯一臨時看板後工作區 0 個看板。未呼叫 AI、錄音或發布。四個 Supabase Realtime channel 記錄 `socket closed: 1006`，但草稿流程成功，根因未知。完整 matrix 仍 pending；細節見 [QA-DEV-136](qa/QA-DEV-136-meeting-draft-ai-continuation.md#2026-10-06-登入後正式草稿生命週期-smoke) 與 [REL-016](release/REL-016-DEV-135-136-HOSTING-20261005.md)。
 
 ## DEV-135 主程式三點選單整合導覽、帳號與看板操作 - 2026-10-05
 
@@ -197,7 +198,7 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
   - 證據：本文件 DEV-137；SPEC-012 的 DEV-137 補記。
   - 計入交付：否。
 
-- ◦ DEV-136 [開發點] [RD完成／本機 targeted QA PASS／正式 Hosting 已發布；authenticated feature smoke pending] [P1] 既有會議草稿續接 AI 整理與校稿流程
+- ◦ DEV-136 [開發點] [RD完成／本機 targeted QA PASS／正式 Hosting 已發布；登入後限定草稿 smoke PASS／完整驗收 pending] [P1] 既有會議草稿續接 AI 整理與校稿流程
   - 已存會議草稿回到完整四階段；有效 AI trace 重開後可續編與重跑，AI optional、草稿與發布分開；即時擷取控制仍只在 live meeting。
   - [SPEC-019 架構定案](specs/SPEC-019-record-type-and-meeting-workflow-layering.md#dev-136-架構定案既有會議草稿續接完整流程---2026-10-05)；[QA-DEV-136](qa/QA-DEV-136-meeting-draft-ai-continuation.md)。
 - ✓ DEV-134 [開發點] [完成] [P1] [第一批1～3已部署並驗收；手機更新成功] PWA 載入失敗恢復與前版資產相容

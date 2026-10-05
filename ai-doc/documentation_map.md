@@ -8,11 +8,11 @@
 
 使用者回報紀錄庫重開的會議草稿不能接續 AI 整理，並要求完整保留後續編輯流程。此需求已建立為 DEV-136；架構契約更新在 [SPEC-019](specs/SPEC-019-record-type-and-meeting-workflow-layering.md#dev-136-架構定案既有會議草稿續接完整流程---2026-10-05)，驗收案例在 [QA-DEV-136](qa/QA-DEV-136-meeting-draft-ai-continuation.md)。
 
-範圍為：未發布會議草稿顯示速記、AI整理、校稿、發布四階段；有效 AI trace 與警告可隨保存草稿恢復；AI 可選，校稿階段可存草稿而不發布。即時錄音／事件擷取與 recovery 不延伸到一般草稿，個人工作紀錄維持原流程。純狀態、靜態回歸、型別、lint 及隔離瀏覽器驗收通過。clean source `42731b1e86883782069479655bfedaf2cd87ac77` 已發布為 Firebase Hosting release `20261005141011-b3b16a`；83/83 canonical provenance 與匿名 shell smoke PASS，authenticated feature smoke pending。沒有修改 Supabase、schema 或正式資料。驗收限制見 [QA-DEV-136](qa/QA-DEV-136-meeting-draft-ai-continuation.md#2026-10-05-正式-hosting-發布補記)；發布與回復資料見 [REL-016](release/REL-016-DEV-135-136-HOSTING-20261005.md)。
+範圍為：未發布會議草稿顯示速記、AI整理、校稿、發布四階段；有效 AI trace 與警告可隨保存草稿恢復；AI 可選，校稿階段可存草稿而不發布。即時錄音／事件擷取與 recovery 不延伸到一般草稿，個人工作紀錄維持原流程。純狀態、靜態回歸、型別、lint 及隔離瀏覽器驗收通過。clean source `42731b1e86883782069479655bfedaf2cd87ac77` 已發布為 Firebase Hosting release `20261005141011-b3b16a`；83/83 canonical provenance 與匿名 shell smoke PASS，authenticated 草稿生命週期 smoke 已完成限定子集合；full N01～N09／AI trace matrix pending。沒有修改 Supabase schema、migration 或設定；限定 smoke 的正式測試草稿及臨時看板已清理。驗收限制與讀回證據見 [QA-DEV-136](qa/QA-DEV-136-meeting-draft-ai-continuation.md#2026-10-06-登入後正式草稿生命週期-smoke)；發布與回復資料見 [REL-016](release/REL-016-DEV-135-136-HOSTING-20261005.md)。
 
 ## Documentation Map Update - 2026-10-05（主程式三點選單整合常用入口）
 
-人類要求把紀錄庫、設定與帳號功能移入右上角三點選單，後續再要求把頂列的分享看板、會議入口與未開放個人紀錄入口一起收進選單；會議動作顯示為「開始會議模式」。選單移除清單圖示、頭像圓點與登出箭頭，三點觸發按鈕仍保留。DEV-135 本地實作保留分享成員數、會議進行中狀態與停用說明；既有紀錄草稿保護仍由原 handler 負責。隔離瀏覽器驗收 `verify:dev-135-topbar-actions-browser` 6/6 PASS；正式 Hosting release `20261005141011-b3b16a` 的匿名 shell smoke 通過，登入後 feature smoke pending。先前對 4000 舊 worktree 的修正與服務重啟記錄見 [DEV-135](dev_task.md#dev-135-主程式三點選單整合導覽帳號與看板操作---2026-10-05)；正式發布範圍見 [REL-016](release/REL-016-DEV-135-136-HOSTING-20261005.md)。
+人類要求把紀錄庫、設定與帳號功能移入右上角三點選單，後續再要求把頂列的分享看板、會議入口與未開放個人紀錄入口一起收進選單；會議動作顯示為「開始會議模式」。選單移除清單圖示、頭像圓點與登出箭頭，三點觸發按鈕仍保留。DEV-135 本地實作保留分享成員數、會議進行中狀態與停用說明；既有紀錄草稿保護仍由原 handler 負責。隔離瀏覽器驗收 `verify:dev-135-topbar-actions-browser` 6/6 PASS；正式 Hosting release `20261005141011-b3b16a` 的匿名 shell smoke 通過，登入後已驗證「紀錄庫」與「開始會議模式」入口；完整 DEV-135／DEV-136 feature matrix pending。先前對 4000 舊 worktree 的修正與服務重啟記錄見 [DEV-135](dev_task.md#dev-135-主程式三點選單整合導覽帳號與看板操作---2026-10-05)；正式發布範圍見 [REL-016](release/REL-016-DEV-135-136-HOSTING-20261005.md)。
 
 DEV-135 後續依使用者回饋，頂列工作區／看板切換鈕移除圖示，全域任務平台入口由 `All` 改為「所有任務」；另於偵測到尚未略過的可用 PWA 更新時，在三點按鈕顯示「1」通知徽章並提供無障礙提示，更新完成或略過後清除。驗證與狀態仍以 DEV-135 任務紀錄為準。
 

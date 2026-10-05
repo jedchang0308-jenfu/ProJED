@@ -2,8 +2,8 @@
 
 - 對應 DEV：DEV-136；相容 DEV：DEV-019、DEV-020、DEV-107、DEV-117
 - 規格：SPEC-019「DEV-136 架構定案」
-- 驗收範圍：本機 candidate 驗收，加上本次 Firebase Hosting 發布身份、artifact provenance 與匿名 shell smoke；不含登入後正式功能、正式資料或 Supabase 驗證。
-- 結果：本機 DEV-107／DEV-135 targeted browser UI PASS（隔離外部服務）；Firebase Hosting 已發布，83/83 provenance 與 shell smoke PASS；authenticated feature smoke pending。詳見[正式 Hosting 發布補記](#2026-10-05-正式-hosting-發布補記)。
+- 驗收範圍：本機 candidate 驗收、Firebase Hosting artifact provenance／匿名 shell smoke，以及一筆明確標記且完成清理的正式會議草稿生命週期 smoke。正式 smoke 僅驗證建立、保存、重新開啟、編輯、再次保存與讀回；不呼叫 AI、不錄音、不發布。
+- 結果：本機 DEV-107／DEV-135 targeted browser UI PASS（隔離外部服務）；正式 Hosting 83/83 provenance 與匿名 shell smoke PASS；正式登入後草稿生命週期 smoke 的 N01／N05 子集合 PASS。完整 N01～N09／AI trace matrix 尚未完成；原始 release receipt 仍是 `feature-pending`，不以局部 smoke 改寫完整驗收狀態。
 
 ## 目標
 
@@ -69,10 +69,21 @@
 - Feature smoke 仍 pending：正式版使用 Google OAuth，`.env.production` 未設定測試 email/password；DEV-133 測試 actor helper 固定指向測試專案 `fhisnnufoeulxqrchldf`，與正式專案不同。沒有可用的正式專用測試身分與可清理資料範圍，因此未以測試帳號登入正式環境，也未讀寫正式業務資料。
 - Smoke 中 `navigator.serviceWorker.ready` 等待逾時，但不屬於既有 anonymous shell smoke 的通過條件；登入頁沒有 service worker controller。程式與正式 release 未變更，正式站仍提供同一 release，故未重複上傳相同 artifact。兩個 task-owned browser session 均已關閉，新增暫存快照與 console log 已清除。
 
-## 2026-10-06 登入後正式 smoke 資料範圍檢查
+## 2026-10-06 登入後正式 smoke 授權前資料範圍檢查
 
 - PASS：使用者在 task-owned 瀏覽器以指定的專用 Google 測試帳號完成登入，正式站載入工作區總覽；沒有把帳號識別資料寫入驗收紀錄。
 - PASS：看板選擇器沒有列出可用看板；工作區總覽顯示 `我的工作區` 為 0 個看板；紀錄庫顯示 0 筆會議紀錄。未開啟或讀取任何既有業務紀錄。
 - Feature smoke blocked：保存草稿要求目前已選 `activeWorkspaceId` 與 `activeBoardId`；此帳號沒有可用看板，無法建立可跨頁讀回的草稿。未建立草稿或看板，未寫入正式資料。
 - 原授權範圍為一筆可清理測試草稿；新增並刪除正式看板是額外資料異動，尚未取得授權。待使用者提供既有專用空白測試看板，或明確授權建立後清除一個臨時測試看板，才可繼續。
 - task-owned 可見瀏覽器 `projed-prod-draft-smoke-20261006` 暫時保持登入並開在紀錄庫，看板選擇器已收合；保留供立即後續使用，不佔用服務埠。Smoke 結束或使用者取消時由 Codex 關閉。
+- 本節是取得建立／清理臨時看板明確授權前的狀態快照；後續實測與清理結果見下節。
+
+## 2026-10-06 登入後正式草稿生命週期 smoke
+
+- Production binding：canonical `https://projed-cc78d.web.app` 仍提供 release `20261005141011-b3b16a`／source `42731b1e86883782069479655bfedaf2cd87ac77`。應用程式與 Hosting release 未變更，本次不需重新部署。
+- PASS（N01／N05 子集合）：以指定的專用測試帳號在「我的工作區」建立唯一臨時看板 `DEV136-SMOKE-20261006`；從「開始會議模式」開啟會議紀錄，未按「開始收音」。填入明確標記的合成標題與內容，按「校稿」存草稿；紀錄庫讀回 1 筆且狀態為「草稿」，標題與內容吻合。
+- PASS（保存／重開／編輯）：執行「儲存並離開」，由紀錄庫重開草稿，確認第一版文字仍在；修改成第二版後再次按「校稿」保存、離開並重新開啟，編輯器與紀錄庫均讀回第二版文字，狀態仍為「草稿」。
+- 邊界：未執行 AI 整理、錄音、發布、分享或其他資料操作；未讀取既有業務紀錄。這是本次明確授權的草稿生命週期子集合，不代表 N02～N04、N06～N09 或完整 DEV-136 matrix 全部通過。
+- Cleanup：使用產品「封存」動作後，紀錄庫顯示 0 筆會議紀錄；再刪除唯一臨時看板，工作區總覽顯示「我的工作區」0 個看板。正式版 service 將紀錄狀態標記為 `archived` 並關閉 RAG；部署 source 的 schema 對 `knowledge_records.project_id` 設有 `ON DELETE CASCADE`，臨時看板刪除後其關聯紀錄會隨之清除。正式 UI 最終回讀為 0 筆紀錄／0 個看板。
+- Runtime observation：Playwright console 記錄 4 個 Supabase Realtime channel `socket closed: 1006` 錯誤（workspace、member、board、tag）。草稿保存、退出、重開、修改及清理流程均成功；本次沒有定位這些 channel 關閉的根因，故不將其歸因於草稿流程。
+- Cleanup：task-owned browser session 已關閉；本次新增的 20 個 `.playwright-cli` 快照已移除。沒有修改產品程式碼、schema、migration 或設定；原 release receipt 維持 `verification=feature-pending`，直到其餘完整驗收案例完成。
