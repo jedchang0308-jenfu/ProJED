@@ -61,3 +61,10 @@
 - 首頁引用的 12 個 JS/CSS assets 全數 HTTP 200；主 bundle 含會議流程文案。來源程式與此 release 綁定的已提交版本一致；無需重建或重發 Hosting。
 - Playwright CLI 重跑在啟動前因 npm registry `EACCES` 失敗，因此本次沒有新的 browser-rendered evidence；測試工作階段已中止並清理。沿用 2026-10-05 已記錄的匿名 shell browser smoke PASS，不將本次 HTTP 讀回升格為瀏覽器驗收。
 - 登入後會議草稿 feature smoke 仍 pending；本次未登入、未呼叫 Supabase／資料 API，也未讀寫正式資料。
+
+## 2026-10-06 Playwright 正式站 smoke 補記
+
+- PASS：使用快取中的 Playwright CLI 0.1.22，以獨立 task-owned browser session 開啟正式站。release metadata 與 `20261005141011-b3b16a` 相符，頁面掛載、JS/CSS 主資產正常，無 critical console error、page error 或 failed request。
+- PASS：從登入頁按「使用 Google 帳號登入」後到達 Google OAuth 帳號頁；OAuth callback 指向正式 Supabase 專案 `knodlkxqpcqyrtgwpdst`，redirect 回 `https://projed-cc78d.web.app/`。未輸入帳密或完成登入。
+- Feature smoke 仍 pending：正式版使用 Google OAuth，`.env.production` 未設定測試 email/password；DEV-133 測試 actor helper 固定指向測試專案 `fhisnnufoeulxqrchldf`，與正式專案不同。沒有可用的正式專用測試身分與可清理資料範圍，因此未以測試帳號登入正式環境，也未讀寫正式業務資料。
+- Smoke 中 `navigator.serviceWorker.ready` 等待逾時，但不屬於既有 anonymous shell smoke 的通過條件；登入頁沒有 service worker controller。程式與正式 release 未變更，正式站仍提供同一 release，故未重複上傳相同 artifact。兩個 task-owned browser session 均已關閉，新增暫存快照與 console log 已清除。
