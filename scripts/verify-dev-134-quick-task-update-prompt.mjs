@@ -375,7 +375,7 @@ try {
   }
   if (origin && runtime.runtime.port !== null) {
     try {
-      const response = await fetch(origin, { signal: AbortSignal.timeout(1_500) });
+      await fetch(origin, { signal: AbortSignal.timeout(1_500) });
       runtime.runtime.portReleased = false;
     } catch {
       runtime.runtime.portReleased = true;
