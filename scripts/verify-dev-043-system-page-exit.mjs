@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 const files = {
   mainLayout: 'src/components/MainLayout.tsx',
   sidebar: 'src/components/Sidebar.tsx',
+  appMoreMenu: 'src/components/AppMoreMenu.tsx',
   settingsView: 'src/components/SettingsView.tsx',
   recordsView: 'src/components/Records/RecordsView.tsx',
   browserVerifier: 'scripts/verify-dev-043-system-page-exit-browser.pw.js',
@@ -39,14 +40,25 @@ assert(
 );
 
 assert(
-  'Sidebar active Settings and Records entries toggle back to board',
-  source.sidebar.includes('const returnToBoard = React.useCallback') &&
-    source.sidebar.includes('if (isRecordsView)') &&
-    source.sidebar.includes('if (isSettingsScopeView)') &&
-    source.sidebar.includes("title={isRecordsView ? '回到看板' : '紀錄庫'}") &&
-    source.sidebar.includes("title={isSettingsScopeView ? '回到看板' : '設定'}") &&
-    source.sidebar.includes('data-sidebar-settings-button="true"') &&
-    source.sidebar.includes('data-sidebar-records-button="true"'),
+  'Overflow menu exposes Settings and Records routes with active return behavior',
+  source.appMoreMenu.includes('data-app-more-settings="true"') &&
+    source.appMoreMenu.includes('data-app-more-records="true"') &&
+    source.appMoreMenu.includes("title={isRecordsView ? '回到看板' : '紀錄庫'}") &&
+    source.appMoreMenu.includes("title={isSettingsScopeView ? '回到看板' : '設定'}") &&
+    source.mainLayout.includes("const nextView = isRecordsView ? (activeBoard ? 'board' : 'home') : 'records';") &&
+    source.mainLayout.includes("const nextView = isSettingsScopeView ? (activeBoard ? 'board' : 'home') : 'settings';") &&
+    source.mainLayout.includes('void guardRecordDraft('),
+);
+
+assert(
+  'Account identity and sign-out action live in the overflow menu, not the workspace sidebar',
+  source.appMoreMenu.includes('data-app-more-account="true"') &&
+    source.appMoreMenu.includes('data-app-more-sign-out="true"') &&
+    source.appMoreMenu.includes('currentUser?.email') &&
+    source.appMoreMenu.includes('signOut()') &&
+    !source.sidebar.includes('data-sidebar-settings-button="true"') &&
+    !source.sidebar.includes('data-sidebar-records-button="true"') &&
+    !source.sidebar.includes('currentUser?.displayName'),
 );
 
 assert(

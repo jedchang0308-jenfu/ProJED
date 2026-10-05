@@ -36,7 +36,14 @@ const existingRecordBlockEnd = store.indexOf('\n  startMeetingRecord:', existing
 assert('existing meeting record does not switch live session state', existingRecordBlockStart >= 0 && existingRecordBlockEnd > existingRecordBlockStart && store.slice(existingRecordBlockStart, existingRecordBlockEnd).includes('isMeetingMode: false'));
 assert('editor has no native resize affordance', !editor.includes('resize-y') && editor.includes('resize-none overflow-visible'));
 assert('editor declares drawer scroll owner', editor.includes('data-record-content-editor-scroll-owner="record-sidebar"'));
-assert('meeting-record hides live-only controls', sidebar.includes('{isLiveMeeting ? (') && sidebar.includes('{isLiveMeeting && meetingSynthesisStatus !== \'idle\' ? ('));
+assert(
+  'meeting drafts show workflow while live-only controls stay hidden',
+  sidebar.includes('{isLiveMeeting ? (') &&
+    sidebar.includes('{isLiveMeeting && isDev123MeetingTaskResolutionEnabled ? (') &&
+    sidebar.includes('{isLiveMeeting && shouldShowMeetingRecoveryStatus ? (') &&
+    sidebar.includes('{isMeetingWorkflow ? (') &&
+    sidebar.includes('{isMeetingWorkflow && meetingSynthesisStatus !== \'idle\' ? ('),
+);
 assert('spec defines the corrective variant and scroll contract', spec.includes('meeting-record') && spec.includes('唯一垂直 scroll owner') && spec.includes('不得以切回 meeting mode 修補'));
 assert('QA defines the exact existing-draft case', qa.includes('TC-107-001') && qa.includes('既有會議草稿 exact regression') && qa.includes('1902x960'));
 assert('QA keeps mobile meeting negative boundary', qa.includes('TC-107-009') && qa.includes('390 mobile-negative'));

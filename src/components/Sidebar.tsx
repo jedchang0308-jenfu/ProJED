@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React from 'react';
-import { ChevronLeft, LogOut, X } from 'lucide-react';
+import { ChevronLeft, X } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import useAuthStore from '../store/useAuthStore';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
@@ -41,7 +41,6 @@ const isTextInputEvent = (event) => {
 
 const Sidebar = () => {
   const accountId = useAuthStore(state => state.user?.uid ?? null);
-  const currentUser = useAuthStore(state => state.user);
   const { previewedPanel } = usePanelPreview();
   const {
     workspaces,
@@ -53,7 +52,6 @@ const Sidebar = () => {
     updateWorkspaceTitle,
     updateBoardTitle,
     currentView,
-    setView,
     setContextMenuState,
     pendingWorkspaceTitleEditId,
     setPendingWorkspaceTitleEditId,
@@ -79,36 +77,8 @@ const Sidebar = () => {
   const sidebarWidthRef = React.useRef(sidebarWidth);
   const resizeCleanupRef = React.useRef<(() => void) | null>(null);
   const isSettingsScopeView = SETTINGS_SCOPE_VIEWS.includes(currentView);
-  const isRecordsView = currentView === 'records';
   const { canCreateBoard, canEditBoardSettings } = useBoardPermissions();
   const guardRecordDraft = useRecordDraftGuard();
-
-  const handleOpenRecords = React.useCallback(() => {
-    const nextView = isRecordsView ? (activeBoardId ? 'board' : 'home') : 'records';
-    void guardRecordDraft(() => {
-      setView(nextView);
-      if (isNarrowViewport) setSidebarOpen(false);
-    }, {
-      title: isRecordsView ? '返回看板？' : '開啟紀錄庫？',
-      message: isRecordsView
-        ? '返回看板會離開目前紀錄；若尚未完成本機保存，請先決定是否存草稿。'
-        : '開啟紀錄庫會離開目前紀錄；若尚未完成本機保存，請先決定是否存草稿。',
-    });
-  }, [activeBoardId, guardRecordDraft, isNarrowViewport, isRecordsView, setSidebarOpen, setView]);
-
-  const handleOpenSettings = React.useCallback(() => {
-    const nextView = isSettingsScopeView ? (activeBoardId ? 'board' : 'home') : 'settings';
-    void guardRecordDraft(() => {
-      setView(nextView);
-      if (isNarrowViewport) setSidebarOpen(false);
-    }, {
-      title: isSettingsScopeView ? '返回看板？' : '開啟設定？',
-      message: isSettingsScopeView
-        ? '返回看板會離開目前紀錄；若尚未完成本機保存，請先決定是否存草稿。'
-        : '開啟設定會離開目前紀錄；若尚未完成本機保存，請先決定是否存草稿。',
-    });
-  }, [activeBoardId, guardRecordDraft, isNarrowViewport, isSettingsScopeView, setSidebarOpen, setView]);
-
   React.useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
     const media = window.matchMedia('(max-width: 767px), (hover: none) and (pointer: coarse)');
@@ -570,51 +540,6 @@ const Sidebar = () => {
           ))}
         </div>
 
-        <div className="border-t border-slate-200/80 bg-white/80 p-2">
-          <button
-            onClick={handleOpenRecords}
-            className={`mb-1 flex w-full items-center rounded-lg px-3 py-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
-              isRecordsView
-                ? 'bg-primary text-sm font-bold tracking-wide text-white shadow-md'
-                : 'text-sm font-medium text-slate-600 hover:bg-white hover:text-primary hover:shadow-sm'
-            }`}
-            title={isRecordsView ? '回到看板' : '紀錄庫'}
-            data-sidebar-records-button="true"
-          >
-            <span className="min-w-0 flex-1 truncate text-left">紀錄庫</span>
-          </button>
-          <button
-            onClick={handleOpenSettings}
-            className={`flex w-full items-center rounded-lg px-3 py-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
-              isSettingsScopeView
-                ? 'bg-primary text-sm font-bold tracking-wide text-white shadow-md'
-                : 'text-sm font-medium text-slate-600 hover:bg-white hover:text-primary hover:shadow-sm'
-            }`}
-            title={isSettingsScopeView ? '回到看板' : '設定'}
-            data-sidebar-settings-button="true"
-          >
-            <span className="min-w-0 flex-1 truncate text-left">設定</span>
-          </button>
-        </div>
-
-        <div className="border-t border-slate-200/80 bg-white/80 p-4">
-          <div className="mb-3 flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-white shadow-sm">
-              {(currentUser?.displayName || 'U')[0].toUpperCase()}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-semibold text-slate-700">{currentUser?.displayName || '使用者'}</div>
-              <div className="truncate text-xs text-slate-400">{currentUser?.email || ''}</div>
-            </div>
-            <button
-              onClick={() => useAuthStore.getState().signOut()}
-              className="rounded p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-500"
-              title="登出"
-            >
-              <LogOut size={14} />
-            </button>
-          </div>
-        </div>
       </div>
 
       {isCreateWorkspaceOpen ? (

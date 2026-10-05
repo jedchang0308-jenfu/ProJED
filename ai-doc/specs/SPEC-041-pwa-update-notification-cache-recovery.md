@@ -1083,11 +1083,12 @@ prompt另保留自己的subscription及read action，由同一service提供；bo
 
 | 畫面／角色 | 固定入口與結果 |
 |---|---|
-| 主程式所有已登入角色，含無看板首頁／設定 | MainLayout 右側 action group 最右新增 AppMoreMenu，使用 ⋮／「更多選項」可存取名稱，第一批只有「檢查更新」。不依看板／workspace 權限判斷。 |
+| 主程式所有已登入角色，含無看板首頁／設定 | MainLayout 右側 action group 最右新增 AppMoreMenu，使用 ⋮／「更多選項」可存取名稱，入口為「立即檢查更新」。不依看板／workspace 權限判斷。 |
 | 主程式登入前 | 本批不增加登入頁導覽；既有 AuthGate 外 updater／prompt 繼續運作，不把檢查服務改成需登入。 |
 | Quick Task 登入／未登入，browser／installed、任何 install query | 沿用標頭的唯一 ⋮，順序為「檢查更新」、既有安裝項目；主程式連結位置及任務表單保留。 |
 
 使用原生 details／summary 與普通 button，語意為 disclosure，不宣告不完整的 ARIA menu。
+主程式背景自動偵測沿用既有 app-open、foreground、定時與 Service Worker 更新檢查；「立即檢查更新」只提供額外的當次手動檢查，不代表必須手動才能偵測，也不改變更新安全套用邊界。Quick Task 保留原「檢查更新」入口。
 主程式沿用 compact token及現有色彩；兩邊在觸控模式提供至少 44px hit area。Tab／Enter／Space可達；
 Escape 收合並回到 trigger，點外部收合；IM composition 中不攔截 Escape。
 浮層靠右、距 viewport 邊界至少 8px、最大寬度不超過 viewport−16px，必要時限制高度並內捲。

@@ -25,7 +25,11 @@ import {
   type MeetingSynthesisInput,
   type MeetingSynthesisResponse,
 } from '../utils/meetingRecordSynthesis';
-import { getRecordDraftSignature } from '../utils/meetingRecordWorkflow';
+import {
+  getMeetingSynthesisResumeState,
+  getRecordDraftSignature,
+  normalizeMeetingSynthesisContentForComparison,
+} from '../utils/meetingRecordWorkflow';
 import { updateMeetingTaskReservationMetadata } from '../utils/meetingTaskReservation';
 import { isMeetingRecordUnavailable } from '../utils/meetingRecordAvailability';
 import { mergeHumanDraftWithAiSynthesis } from '../utils/humanDraftSynthesisMerge';
@@ -414,6 +418,7 @@ const createMeetingSynthesisTraceMetadata = (
   generatedAt: result.generatedAt,
   normalization: result.normalization,
   quality: result.quality,
+  warnings: result.warnings,
   sourceContent,
   outputContent,
 });
@@ -425,16 +430,14 @@ const getMeetingSynthesisTraceMetadata = (draft: RecordDraft): MeetingSynthesisT
     : null;
 };
 
-const normalizeSynthesisContentForComparison = (content: string) =>
-  content.replace(/\r\n?/g, '\n').replace(/[ \t]+$/gm, '').trim();
-
 const getMeetingSynthesisSourceDraft = (draft: RecordDraft): RecordDraft => {
   const trace = getMeetingSynthesisTraceMetadata(draft);
   if (
     trace &&
     typeof trace.sourceContent === 'string' &&
     typeof trace.outputContent === 'string' &&
-    normalizeSynthesisContentForComparison(trace.outputContent) === normalizeSynthesisContentForComparison(draft.content)
+    normalizeMeetingSynthesisContentForComparison(trace.outputContent) ===
+      normalizeMeetingSynthesisContentForComparison(draft.content)
   ) {
     return { ...draft, content: trace.sourceContent };
   }
@@ -677,6 +680,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
         .map(link => link.nodeId)
         .filter(nodeId => !mentionedNodeIds.includes(nodeId)),
     };
+    const synthesisResumeState = getMeetingSynthesisResumeState(draft);
     set({
       isPanelOpen: true,
       isPanelCollapsed: false,
@@ -690,6 +694,11 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       appendedMeetingActivityIds: [],
       meetingLiveCaptureRuntime: null,
       ...resetMeetingSynthesisState,
+      ...(synthesisResumeState ? {
+        meetingSynthesisStatus: synthesisResumeState.status,
+        meetingSynthesisWarnings: synthesisResumeState.warnings,
+        meetingSynthesisProvider: synthesisResumeState.provider,
+      } : {}),
       lastSaveFeedback: null,
       error: null,
       meetingDraftRecovery: initialMeetingDraftRecoveryState,
@@ -1223,8 +1232,8 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
   }),
 
   synthesizeMeetingDraft: async (nodes = {}) => {
-    const { draft, meetingActivities, isMeetingMode } = get();
-    if (!draft || draft.type !== 'meeting' || !isMeetingMode) {
+    const { draft, meetingActivities } = get();
+    if (!draft || draft.type !== 'meeting' || draft.status !== 'draft') {
       set({ error: '目前沒有可統整的會議草稿。' });
       return false;
     }

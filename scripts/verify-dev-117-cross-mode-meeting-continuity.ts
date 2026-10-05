@@ -11,6 +11,7 @@ const check = (label: string, condition: boolean) => {
 
 const recordStore = read('src/store/useRecordStore.ts');
 const mainLayout = read('src/components/MainLayout.tsx');
+const appMoreMenu = read('src/components/AppMoreMenu.tsx');
 const app = read('src/App.tsx');
 const modeSwitcher = read('src/components/ui/ModeSwitcher.tsx');
 const sidebar = read('src/components/Records/RecordSidebar.tsx');
@@ -36,7 +37,7 @@ check('meeting start does not unconditionally force board', !meetingStartSource.
 check('mode switcher keeps generic controlled contract', modeSwitcher.includes('onChange: (value: T) => void') && modeSwitcher.includes('disabled?: boolean'));
 check('meeting no longer disables mode switcher', !mainLayout.includes('Boolean(dependencySelection || isTaskSelectionMode || isMeetingMode)'));
 check('selection lock copy remains explicit', mainLayout.includes('disabledTitle="選取模式中無法切換檢視"'));
-check('meeting entry copy does not promise board fallback', mainLayout.includes('title="新增會議記錄，開啟右側紀錄欄"'));
+check('meeting entry in overflow menu keeps accurate action copy', appMoreMenu.includes('title="開始會議模式，開啟右側紀錄欄"') && appMoreMenu.includes('data-app-more-meeting-record="true"'));
 check('all continuity task views are rendered by App', continuityViews.every(view => app.includes(`case '${view}':`)));
 check('RecordSidebar exposes one global composer shell', sidebar.includes('data-record-composer-shell'));
 check('TaskDetails quick-note section is available in meeting mode', taskDetail.includes('<TaskMeetingQuickNoteSection') && quickNote.includes('data-task-meeting-quick-notes'));

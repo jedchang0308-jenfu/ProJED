@@ -3,6 +3,27 @@
 Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 外層遞迴讀取 sibling clone 或備份資料夾。
 
+## DEV-136 既有會議草稿續接 AI 整理與校稿流程 - 2026-10-05
+
+- 人類來源：使用者指出已保存草稿無法繼續 AI 整理，要求保留整個流程以便完整編輯。目標為 ProJED 主程式。
+- 架構定案：未發布 meeting draft（包含紀錄庫重開）均顯示 `速記 → AI整理 → 校稿 → 發布`；AI 為選用動作，校稿可存為草稿，發布仍須明確操作。既有有效 synthesis trace 可恢復 ready 狀態；內容已改動時不沿用舊 ready。
+- 即時會議的錄音、任務事件擷取、recovery 與專案變更匯入繼續限於 live mode；工作紀錄不顯示會議流程；沒有 schema、migration、權限或正式環境變更。
+- 父／相容任務：DEV-019、DEV-020、DEV-107、DEV-117；本次以 DEV-136 作 native task，不把來源回饋改掛為既有 DEV 的歷史 PASS。
+- 工程契約：[SPEC-019 DEV-136 addendum](specs/SPEC-019-record-type-and-meeting-workflow-layering.md#dev-136-架構定案既有會議草稿續接完整流程---2026-10-05)；驗收權威：[QA-DEV-136](qa/QA-DEV-136-meeting-draft-ai-continuation.md)。
+- 狀態：RD implementation complete；局部本機 QA 通過，browser UI／互動驗收 Not verified；未 push、deploy 或修改正式資料。
+- 2026-10-05 驗證：DEV-136 state 14/14、DEV-092 55 checks、DEV-020 13 file groups、TypeScript、受影響檔案 ESLint 與 `git diff --check` PASS。完整 repo `npm run lint` 被未修改的 `scripts/verify-dev-134-quick-task-update-prompt.mjs:378` 未使用變數錯誤阻擋；完整 lint 與瀏覽器限制記於 [QA-DEV-136](qa/QA-DEV-136-meeting-draft-ai-continuation.md#2026-10-05-本機驗收紀錄)。DEV-107 browser case 已更新，但 npm registry `EACCES` 阻止 Playwright CLI 啟動；本次沒有 rendered UI 證據。
+
+## DEV-135 主程式三點選單整合導覽、帳號與看板操作 - 2026-10-05
+
+- UI 調整補充：選單第一項改為「設定」，紀錄庫順延第二；分享入口顯示為「分享看板」；頂列工作區／看板切換鈕移除圖示，全域任務平台入口顯示「所有任務」取代 `All`。正式版自動偵測行為維持，人工檢查按鈕改名為「立即檢查更新」；偵測到尚未略過的可用更新時，三點按鈕顯示「1」通知徽章並提供無障礙提示，更新完成或略過時清除；帳號名稱、信箱及登出移至選單底部，不增加常駐說明文字，保留既有更新安全邊界。
+
+- 人類來源：本 chat「這三個功能都移到右上角的三點按鈕清單裡」。目標為 ProJED 主程式。
+- 狀態：RD implementation complete；型別、受影響檔案 ESLint 與相關靜態契約通過；隔離瀏覽器 UI 驗收未驗證；未部署。
+- 變更：將紀錄庫、設定、帳號顯示及登出收進頂列 AppMoreMenu；把分享看板、開始會議模式及未開放的個人紀錄入口一併移入選單，從頂列移除重複動作。依後續使用者回饋，選單項目全面移除圖示、頭像圓點與登出箭頭，保留三點選單觸發按鈕；保留分享成員數、會議進行中狀態、個人紀錄停用原因、紀錄草稿離開確認、目前頁面的回到看板切換及窄版側欄收合行為；三點按鈕依既有 PWA 狀態顯示／清除更新通知徽章。
+- 邊界：只改 ProJED 本機原始碼與此任務索引／驗證器；沒有修改遠端設定、資料、權限或正式環境。
+- 2026-10-05 本機驗收補記：使用者核准重啟 4000 服務。已核對並停止由同一 ProJED repo 舊 worktree `C:\Users\user\.codex\worktrees\dev133-independent-auth-release\ProJED` 啟動的 listener PID 45064／wrapper PID 78340；隨後從 canonical repo `C:\VIBE CODING\ProJED\ProJED` 啟動持續運作的 `ProJED local-test`，port 4000，listener PID 83048／wrapper PID 39492。服務保留供使用者驗收；未操作既有瀏覽器頁籤，沿用使用者既有本機服務生命週期管理。
+- 驗證：TypeScript、Lint 無 error；DEV-020 workflow 13 file groups、DEV-026 share 16/16、DEV-043 system-page 13/13、DEV-117 continuity 21 assertions 均通過；`git diff --check` 通過。首頁與三個選單項目的來源模組回 HTTP 200，HTTP 讀回確認分享／會議／個人紀錄三項位於 AppMoreMenu，MainLayout 已無分享入口。DEV-031 初始檢查曾因 verifier 契約已漂移為 17/19；本輪同步更新 verifier 後為 21/21。`npm run verify:dev-135-topbar-actions-browser` 因 npm registry 請求回 EACCES 而未啟動 CLI；沒有視覺／互動驗收證據，判定 Not verified。Playwright CLI session 未建立，使用者既有頁籤未操作；4000 local-test 服務保留供使用者驗收。
+
 Cold start：先讀下方 `## 總任務清單`；需要特定 DEV 詳細歷史時，再搜尋
 `ai-doc/archived/dev_task_pm_updates_2026-07-15.md` 的 DEV ID 並只讀命中段落。
 
@@ -152,6 +173,9 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 
 ## 總任務清單
 
+- ◦ DEV-136 [開發點] [RD完成／局部QA PASS／Browser Not Verified] [P1] 既有會議草稿續接 AI 整理與校稿流程
+  - 已存會議草稿回到完整四階段；有效 AI trace 重開後可續編與重跑，AI optional、草稿與發布分開；即時擷取控制仍只在 live meeting。
+  - [SPEC-019 架構定案](specs/SPEC-019-record-type-and-meeting-workflow-layering.md#dev-136-架構定案既有會議草稿續接完整流程---2026-10-05)；[QA-DEV-136](qa/QA-DEV-136-meeting-draft-ai-continuation.md)。
 - ✓ DEV-134 [開發點] [完成] [P1] [第一批1～3已部署並驗收；手機更新成功] PWA 載入失敗恢復與前版資產相容
   - 2026-10-04 UI 維護已部署：主程式三點按鈕可見框為32px，置中於44px點擊範圍，選單右緣對齊可見框。產品變更 source `403e5fd`，部署綁定文件 commit `291f397fa35463a7ccdb4ba4d94b103eda92ff8f`；live release `20261004082518-04e5e7`。canonical artifact provenance 81/81、root browser及DEV-134 hosted feature smoke通過。匿名 smoke 沒有登入 MainLayout，故沒有直接量測登入後主程式頂列的手機視覺；不得把舊DEV-134驗收計入本次視覺QC。使用者接受本次建置容量風險，建置完成後容量預留已釋放、Governor session已結束。詳見[QA正式部署補記](qa/QA-DEV-134-pwa-recovery-local-verification.md#2026-10-04-主程式三點按鈕正式部署與驗證)、[REL-015](release/REL-015-DEV-134-QUICK-TASK-PWA-20261002.md#2026-10-04-主程式三點按鈕排版修正)。
   - 摘要：修正失敗交易反覆提示、背景檢查誤報與恢復導覽命中舊 HTML；發布包保留上一版雜湊資產。
@@ -7591,12 +7615,12 @@ R14 current evidence為static 40/40與browser 27/27，新增S40／B52 armed pare
 
 #### 已確認需求與主要流程
 
-**ProJED 主程式與 Quick Task 都提供可辨識的 ⋮ 三點選單，內含「檢查更新」。**
+**ProJED 主程式與 Quick Task 都提供可辨識的 ⋮ 三點選單，供使用者查看更新狀態與立即檢查。**
 主程式入口固定在 MainLayout右側action group最右，所有已登入角色／無看板首頁／設定均可達；
 登入頁沿用既有背景 updater／prompt。Quick Task沿用標頭唯一選單，登入／未登入、browser／installed
 皆顯示檢查及原安裝項目。窄版保留44px觸控範圍、viewport內浮層與鍵盤／焦點契約。
 
-正常流程：開啟 App → ⋮ →「檢查更新」→ 顯示「檢查中」→ 顯示「已是最新版」、
+正常流程：正式版本自動偵測更新；使用者也可開啟 App → ⋮ →「立即檢查更新」或 Quick Task 的「檢查更新」，顯示「檢查中」→ 顯示「已是最新版」、
 「發現新版」或「無法連線／檢查失敗」。發現新版後沿用既有準備及安全套用流程；
 僅得知伺服器有新版不能提前宣稱「新版已就緒」或「更新完成」。
 結果顯示於本次操作附近；沒有人工操作時保持現有低干擾呈現，不新增常駐更新狀態面板。
@@ -7605,7 +7629,7 @@ R14 current evidence為static 40/40與browser 27/27，新增S40／B52 armed pare
 
 | 項目 | 定案實作邊界 | 驗收契約 |
 |---|---|---|
-| 1. 兩個 App 的三點選單與「檢查更新」 | 沿用共用 service；各 renderer 擁有自己的操作與安裝列。 | U01～U03／U08；正常入口可達、當次結果可信、唯一更新主動作及本頁互斥。 |
+| 1. 兩個 App 的三點選單與更新檢查 | 沿用共用 service；主程式說明自動偵測並提供立即檢查，Quick Task 保留手動檢查；各 renderer 擁有自己的操作與安裝列。 | U01～U03／U08；入口可達、當次結果可信、唯一更新主動作及本頁互斥。 |
 | 2. 返回 App後恢復提示 | 保留同一 Quick prompt，真返回讀最新快照；離開使舊操作失效。 | U06／U07；五次真 bfcache、提示可操作、safe安靜、無重複訂閱／listener。 |
 | 3. 檢查去重與逾時 | UI等待及共用flight各有10秒截止，caller只限制自己等待。 | U04／U05；去重／需求提升、native guard、逾時與遲到結果隔離。 |
 

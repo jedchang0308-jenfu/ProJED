@@ -54,6 +54,14 @@ async (page) => {
     await page.locator('[data-system-page-return-button="true"]').waitFor({ state: 'detached', timeout: 5000 }).catch(() => undefined);
   };
 
+  const ensureMoreMenuOpen = async () => {
+    const menu = page.locator('[data-app-more-menu]');
+    if (!(await menu.evaluate(element => element.open))) {
+      await page.locator('[data-app-more-menu] > summary').click();
+    }
+    await page.locator('[data-app-more-menu-panel]').waitFor({ state: 'visible', timeout: 5000 });
+  };
+
   const ensureSidebarOpen = async () => {
     if (await page.locator('[data-sidebar-inline="true"]').count()) return;
     await page.locator('[data-main-sidebar-toggle="true"]').click();
@@ -61,28 +69,35 @@ async (page) => {
   };
 
   const openSettings = async () => {
-    await ensureSidebarOpen();
-    await page.locator('[data-sidebar-settings-button="true"]').click();
+    await ensureMoreMenuOpen();
+    await page.locator('[data-app-more-settings="true"]').click();
     await page.locator('[data-settings-return-button="true"]').waitFor({ state: 'visible', timeout: 5000 });
   };
 
   const openRecords = async () => {
-    await ensureSidebarOpen();
-    await page.locator('[data-sidebar-records-button="true"]').click();
+    await ensureMoreMenuOpen();
+    await page.locator('[data-app-more-records="true"]').click();
     await page.locator('[data-records-return-button="true"]').waitFor({ state: 'visible', timeout: 5000 });
   };
 
-  const layoutMetrics = async () => page.evaluate(() => ({
-    boardVisible: Boolean(document.querySelector('[data-mobile-pan-surface="board"]')),
-    settingsReturnCount: document.querySelectorAll('[data-settings-return-button="true"]').length,
-    recordsReturnCount: document.querySelectorAll('[data-records-return-button="true"]').length,
-    systemReturnCount: document.querySelectorAll('[data-system-page-return-button="true"]').length,
-    oldTopExitCount: Array.from(document.querySelectorAll('button')).filter(button => /離開設定/.test(button.textContent || '')).length,
-    settingsActiveTitle: document.querySelector('[data-sidebar-settings-button="true"]')?.getAttribute('title') || '',
-    recordsActiveTitle: document.querySelector('[data-sidebar-records-button="true"]')?.getAttribute('title') || '',
-    disabledBoardRows: document.querySelectorAll('[data-sidebar-board-row="true"][aria-disabled="true"]').length,
-    settingsBadgeText: Array.from(document.querySelectorAll('[data-sidebar-board-row="true"]')).map(row => row.textContent || '').filter(text => text.includes('設定中')).length,
-  }));
+  const layoutMetrics = async () => {
+    const pageMetrics = await page.evaluate(() => ({
+      boardVisible: Boolean(document.querySelector('[data-mobile-pan-surface="board"]')),
+      settingsReturnCount: document.querySelectorAll('[data-settings-return-button="true"]').length,
+      recordsReturnCount: document.querySelectorAll('[data-records-return-button="true"]').length,
+      systemReturnCount: document.querySelectorAll('[data-system-page-return-button="true"]').length,
+      oldTopExitCount: Array.from(document.querySelectorAll('button')).filter(button => /離開設定/.test(button.textContent || '')).length,
+      disabledBoardRows: document.querySelectorAll('[data-sidebar-board-row="true"][aria-disabled="true"]').length,
+      settingsBadgeText: Array.from(document.querySelectorAll('[data-sidebar-board-row="true"]')).map(row => row.textContent || '').filter(text => text.includes('設定中')).length,
+    }));
+    await ensureMoreMenuOpen();
+    const menuMetrics = await page.evaluate(() => ({
+      settingsActiveTitle: document.querySelector('[data-app-more-settings="true"]')?.getAttribute('title') || '',
+      recordsActiveTitle: document.querySelector('[data-app-more-records="true"]')?.getAttribute('title') || '',
+    }));
+    await page.locator('[data-app-more-menu] > summary').press('Escape');
+    return { ...pageMetrics, ...menuMetrics };
+  };
 
   const assertNoVisibleErrors = async () => {
     const alertTexts = await page.locator('.inline-error, [role="alert"]').evaluateAll((items) =>
@@ -131,8 +146,9 @@ async (page) => {
 
       await openSettings();
       let metrics = await layoutMetrics();
-      assert(metrics.settingsActiveTitle === '回到看板', 'active Settings sidebar entry should advertise return behavior', metrics);
-      await page.locator('[data-sidebar-settings-button="true"]').click();
+      assert(metrics.settingsActiveTitle === '回到看板', 'active Settings menu entry should advertise return behavior', metrics);
+      await ensureMoreMenuOpen();
+      await page.locator('[data-app-more-settings="true"]').click();
       await waitForBoard();
 
       await openSettings();
@@ -147,12 +163,13 @@ async (page) => {
       await openRecords();
       let metrics = await layoutMetrics();
       assert(metrics.recordsReturnCount === 1 && metrics.systemReturnCount === 1, 'Records should expose one content-level return button', metrics);
-      assert(metrics.recordsActiveTitle === '回到看板', 'active Records sidebar entry should advertise return behavior', metrics);
+      assert(metrics.recordsActiveTitle === '回到看板', 'active Records menu entry should advertise return behavior', metrics);
       await page.locator('[data-records-return-button="true"]').click();
       await waitForBoard();
 
       await openRecords();
-      await page.locator('[data-sidebar-records-button="true"]').click();
+      await ensureMoreMenuOpen();
+      await page.locator('[data-app-more-records="true"]').click();
       await waitForBoard();
 
       await openRecords();

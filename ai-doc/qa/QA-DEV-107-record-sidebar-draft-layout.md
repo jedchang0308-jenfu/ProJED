@@ -212,3 +212,7 @@ browser版本、base URL、role、fixture count、variant matrix、rect／scroll
 - 2026-09-07：DEV-107 local corrective slice完成；source 20/20、browser 5/5及DEV-020／092／094／106
   targeted regression均通過，更新為`QA Executed / Targeted PASS / NOT RELEASED`。完整release matrix仍須
   於frozen candidate依release gate重跑。
+
+## 2026-10-05 DEV-136 工作流程修訂
+
+DEV-136 取代本 QA 早期版本中「existing meeting draft 不顯示 meeting workflow」的測試斷言。現行預期是：重開會議草稿顯示完整四階段並可延續 AI 整理；composer 仍是 `meeting-record`，不得切換成 live meeting。DEV-107 原本的長內容、scroll owner、幾何、recent list 隱藏及 work-log 隔離條件維持。更新後 browser verifier 的本機互動結果以 [QA-DEV-136](QA-DEV-136-meeting-draft-ai-continuation.md) 為準。

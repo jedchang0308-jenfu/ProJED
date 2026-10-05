@@ -74,9 +74,9 @@ async (page) => {
     assert((await page.locator('[data-record-composer-summary]').count()) === 1, 'meeting mode should expose the shared composer summary selector');
     assert((await page.locator('[data-record-composer-workflow]').count()) === 1, 'meeting mode should show the meeting workflow in the shared workflow slot');
     assert((await page.locator('[data-record-workflow-kind="meeting"]').count()) === 1, 'meeting mode should mark meeting workflow kind');
-    assert((await page.locator('[data-meeting-workflow-step]').count()) === 3, 'meeting workflow should show three visible step buttons');
+    assert((await page.locator('[data-meeting-workflow-step]').count()) === 4, 'meeting workflow should show all four visible step buttons');
     assert((await page.locator('[data-meeting-workflow-step="project_import"]').count()) === 0, 'meeting workflow should not duplicate the import control as a step');
-    assert((await page.locator('[data-meeting-workflow-step="review"]').count()) === 0, 'meeting workflow should not render the review step');
+    assert((await page.locator('[data-meeting-workflow-step="review"]').count()) === 1, 'meeting workflow should render the review step');
     assert((await page.locator('[data-meeting-workflow-step="project_import"][data-meeting-workflow-step-optional="true"]').count()) === 1, 'meeting workflow should include optional project import step');
     assert((await page.locator('[data-meeting-workflow-step="ai_suggestion"][data-meeting-workflow-step-optional="true"]').count()) === 1, 'AI整理 step should be optional');
     assert((await page.locator('nav [data-active-record-kind="meeting"]', { hasText: '紀錄中' }).count()) === 1, 'meeting mode should show compact active record state in topbar');

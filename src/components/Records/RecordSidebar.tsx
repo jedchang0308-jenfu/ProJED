@@ -831,7 +831,7 @@ const RecordSidebar: React.FC = () => {
     : null;
   const selectedLinks = draft?.taskLinks || [];
   const isSynthesizing = meetingSynthesisStatus === 'synthesizing';
-  const isMeetingDraft = isLiveMeeting;
+  const isMeetingWorkflow = draft?.type === 'meeting';
   const draftIsDirty = Boolean(draft && getRecordDraftSignature(draft) !== draftBaselineSignature);
   const meetingActionState = getMeetingRecordActionState({
     draft,
@@ -866,7 +866,7 @@ const RecordSidebar: React.FC = () => {
   const visibleRecords = isMeetingRecordUnavailable
     ? scopedRecords.filter(record => record.type !== 'meeting')
     : scopedRecords;
-  const isPublished = isMeetingDraft
+  const isPublished = isMeetingWorkflow
     ? meetingActionState.isPublished
     : Boolean(
       draft?.status === 'published' ||
@@ -879,11 +879,11 @@ const RecordSidebar: React.FC = () => {
     (scopedRecords.some(record => record.id === draft.id) || lastSaveFeedback?.recordId === draft.id)
   );
   const publishedAt = lastSaveFeedback?.savedAt ? dayjs(lastSaveFeedback.savedAt).format('HH:mm') : '';
-  const canSave = isMeetingDraft
+  const canSave = isMeetingWorkflow
     ? meetingActionState.canSaveDraft
     : Boolean(activeWorkspaceId && activeBoardId && draft && draft.title.trim());
   const canPublish = Boolean(
-    isMeetingDraft
+    isMeetingWorkflow
       ? meetingActionState.canPublish
       : activeWorkspaceId &&
         activeBoardId &&
@@ -892,7 +892,7 @@ const RecordSidebar: React.FC = () => {
         draft.content.trim() &&
         !isPublished
   );
-  const publishLabel = isMeetingDraft
+  const publishLabel = isMeetingWorkflow
     ? isPublished
       ? '已發布'
       : '發布會議紀錄'
@@ -912,7 +912,7 @@ const RecordSidebar: React.FC = () => {
     isProjectImportExpanded,
     projectChangeImport.eventCount,
   );
-  const meetingWorkflowStepsForDisplay: MeetingWorkflowArrowStepItem[] = meetingWorkflowSteps.filter(step => step.stage !== 'review');
+  const meetingWorkflowStepsForDisplay: MeetingWorkflowArrowStepItem[] = meetingWorkflowSteps;
   const projectImportWorkLogStep: WorkLogWorkflowStep = {
     id: 'project_import',
     label: '匯入',
@@ -1372,12 +1372,13 @@ const RecordSidebar: React.FC = () => {
                 typeState={isLiveMeeting ? 'meeting-mode-locked' : 'draft-type-locked'}
               />
 
-              {isLiveMeeting ? (
+              {isMeetingWorkflow ? (
                 <div
                   data-record-composer-workflow
                   data-record-composer-actions
                   data-record-workflow-kind="meeting"
                   data-meeting-workflow-card="compact"
+                  data-meeting-workflow-context={isLiveMeeting ? 'live' : 'saved-draft'}
                   data-project-change-import-expanded={isProjectImportExpanded ? 'true' : 'false'}
                   className="min-w-0"
                 >
@@ -1388,7 +1389,7 @@ const RecordSidebar: React.FC = () => {
                     onRunAi={() => void handleSynthesizeMeetingDraft()}
                     onPublish={() => handleSave('published')}
                   />
-                  {isDev123MeetingTaskResolutionEnabled ? (
+                  {isLiveMeeting && isDev123MeetingTaskResolutionEnabled ? (
                     <>
                       <div className="mt-2">
                         <MeetingRecordingControls
@@ -1408,7 +1409,7 @@ const RecordSidebar: React.FC = () => {
                       />
                     </>
                   ) : null}
-                  {shouldShowMeetingRecoveryStatus ? (
+                  {isLiveMeeting && shouldShowMeetingRecoveryStatus ? (
                     <div
                       role="status"
                       aria-live="polite"
@@ -1546,7 +1547,7 @@ const RecordSidebar: React.FC = () => {
                 </div>
               </div>
 
-              {isLiveMeeting && meetingSynthesisStatus !== 'idle' ? (
+              {isMeetingWorkflow && meetingSynthesisStatus !== 'idle' ? (
                 <div
                   data-meeting-synthesis-status={meetingSynthesisStatus}
                   data-meeting-synthesis-provider={meetingSynthesisProvider ?? undefined}
@@ -1703,28 +1704,30 @@ const RecordSidebar: React.FC = () => {
                       封存
                     </button>
                   ) : <span />}
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      disabled={!canSave || saving || isSynthesizing}
-                      onClick={() => handleSave('draft')}
-                      title={!canSave ? '請先輸入標題。' : undefined}
-                      className="inline-flex h-9 items-center gap-1.5 rounded-md border border-slate-200 px-3 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
-                    >
-                      <Save size={13} />
-                      存草稿
-                    </button>
-                    <button
-                      type="button"
-                      disabled={!canPublish || saving || isSynthesizing}
-                      onClick={() => handleSave('published')}
-                      title={isPublished ? `已於 ${publishedAt} 發布成功。` : !canPublish ? '請先輸入標題與內容。' : '發布。'}
-                      className="inline-flex h-9 items-center gap-1.5 rounded-md bg-slate-900 px-3 text-xs font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-                    >
-                      {isPublished ? <CheckCircle2 size={13} /> : <Send size={13} />}
-                      {publishLabel}
-                    </button>
-                  </div>
+                  {!isMeetingWorkflow ? (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={!canSave || saving || isSynthesizing}
+                        onClick={() => handleSave('draft')}
+                        title={!canSave ? '請先輸入標題。' : undefined}
+                        className="inline-flex h-9 items-center gap-1.5 rounded-md border border-slate-200 px-3 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
+                      >
+                        <Save size={13} />
+                        存草稿
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!canPublish || saving || isSynthesizing}
+                        onClick={() => handleSave('published')}
+                        title={isPublished ? `已於 ${publishedAt} 發布成功。` : !canPublish ? '請先輸入標題與內容。' : '發布。'}
+                        className="inline-flex h-9 items-center gap-1.5 rounded-md bg-slate-900 px-3 text-xs font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                      >
+                        {isPublished ? <CheckCircle2 size={13} /> : <Send size={13} />}
+                        {publishLabel}
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </div>

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { MoreVertical } from 'lucide-react';
+import useAuthStore from '../store/useAuthStore';
 import {
   applyPwaUpdate,
   checkPwaUpdate,
@@ -20,6 +21,21 @@ type CheckOperation = {
 const emptyOperation = (): CheckOperation => ({ pending: false, result: null });
 const CHECK_WAIT_MS = 10_000;
 
+interface AppMoreMenuProps {
+  isRecordsView: boolean;
+  isSettingsScopeView: boolean;
+  showShareAction: boolean;
+  boardMemberCount: number;
+  isMeetingRecordUnavailable: boolean;
+  isMeetingMode: boolean;
+  isNonMeetingRecordOpen: boolean;
+  isRecordOpen: boolean;
+  onOpenRecords: () => void;
+  onOpenSettings: () => void;
+  onOpenShareDialog: () => void;
+  onToggleMeetingRecord: () => void;
+}
+
 const makeLocalCheckResult = (
   phase: 'error',
   errorCode: 'CHECK_FAILED' | 'CHECK_TIMEOUT',
@@ -35,10 +51,24 @@ const makeLocalCheckResult = (
   errorCode,
 });
 
-const AppMoreMenu: React.FC = () => {
+const AppMoreMenu: React.FC<AppMoreMenuProps> = ({
+  isRecordsView,
+  isSettingsScopeView,
+  showShareAction,
+  boardMemberCount,
+  isMeetingRecordUnavailable,
+  isMeetingMode,
+  isNonMeetingRecordOpen,
+  isRecordOpen,
+  onOpenRecords,
+  onOpenSettings,
+  onOpenShareDialog,
+  onToggleMeetingRecord,
+}) => {
   const [state, setState] = useState<PwaUpdateState>(() => getPwaUpdateState());
   const [operation, setOperation] = useState<CheckOperation>(emptyOperation);
   const [isOpen, setIsOpen] = useState(false);
+  const currentUser = useAuthStore(s => s.user);
   const detailsRef = useRef<HTMLDetailsElement>(null);
   const summaryRef = useRef<HTMLElement>(null);
   const mountedRef = useRef(false);
@@ -270,8 +300,13 @@ const AppMoreMenu: React.FC = () => {
   };
 
   const presentation = getPwaCheckPresentation(state, operation);
+  const hasUpdateNotification = state.status === 'update-available'
+    && state.updateAvailable
+    && !state.dismissedAt;
   const isLocalBusy = state.localUpdateBusy;
   const statusMessage = presentation.statusMessage;
+  const showPersonalRecordAction = !isMeetingMode && !isRecordOpen;
+  const hasWorkspaceActions = showShareAction || !isMeetingRecordUnavailable || showPersonalRecordAction;
 
   return (
     <details
@@ -282,8 +317,8 @@ const AppMoreMenu: React.FC = () => {
     >
       <summary
         ref={summaryRef}
-        aria-label="更多選項"
-        title="更多選項"
+        aria-label={hasUpdateNotification ? '更多選項，有可用更新' : '更多選項'}
+        title={hasUpdateNotification ? '更多選項，有可用更新' : '更多選項'}
         className="group flex h-11 w-11 cursor-pointer list-none items-center justify-center focus:outline-none [&::-webkit-details-marker]:hidden"
       >
         {/* Match the topbar's visible size while keeping a 44px touch target. */}
@@ -291,13 +326,22 @@ const AppMoreMenu: React.FC = () => {
           aria-hidden="true"
           className={cn(
             topbarClassNames.iconButton,
-            'group-hover:border-slate-400 group-hover:bg-slate-100 group-hover:text-slate-700 group-focus-visible:ring-2 group-focus-visible:ring-primary/20',
+            'relative group-hover:border-slate-400 group-hover:bg-slate-100 group-hover:text-slate-700 group-focus-visible:ring-2 group-focus-visible:ring-primary/20',
             isOpen && 'border-slate-400 bg-slate-100 text-slate-700',
           )}
         >
           <MoreVertical size={16} />
+          {hasUpdateNotification ? (
+            <span
+              aria-hidden="true"
+              className="absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold leading-none text-white shadow-sm ring-2 ring-white"
+              data-app-more-update-badge="true"
+            >
+              1
+            </span>
+          ) : null}
         </span>
-        <span className="sr-only">更多選項</span>
+        <span className="sr-only">{hasUpdateNotification ? '更多選項，有可用更新' : '更多選項'}</span>
       </summary>
 
       {isOpen ? (
@@ -307,12 +351,114 @@ const AppMoreMenu: React.FC = () => {
         >
           <button
             type="button"
+            className={`flex min-h-11 w-full items-center rounded px-3 text-left text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 ${
+              isSettingsScopeView ? 'bg-primary-50 text-primary-700' : 'text-slate-700 hover:bg-slate-50'
+            }`}
+            onClick={() => {
+              closeMenu();
+              onOpenSettings();
+            }}
+            aria-current={isSettingsScopeView ? 'page' : undefined}
+            title={isSettingsScopeView ? '回到看板' : '設定'}
+            data-app-more-settings="true"
+            data-sidebar-settings-button="true"
+          >
+            <span className="min-w-0 flex-1">設定</span>
+          </button>
+          <button
+            type="button"
+            className={`flex min-h-11 w-full items-center rounded px-3 text-left text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 ${
+              isRecordsView ? 'bg-primary-50 text-primary-700' : 'text-slate-700 hover:bg-slate-50'
+            }`}
+            onClick={() => {
+              closeMenu();
+              onOpenRecords();
+            }}
+            aria-current={isRecordsView ? 'page' : undefined}
+            title={isRecordsView ? '回到看板' : '紀錄庫'}
+            data-app-more-records="true"
+            data-sidebar-records-button="true"
+          >
+            <span className="min-w-0 flex-1">紀錄庫</span>
+          </button>
+          {hasWorkspaceActions ? <div className="my-1 h-px bg-slate-200" role="separator" /> : null}
+          {showShareAction ? (
+            <button
+              type="button"
+              className="flex min-h-11 w-full items-center rounded px-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+              onClick={() => {
+                closeMenu();
+                onOpenShareDialog();
+              }}
+              title="分享看板"
+              aria-label={`分享看板，${boardMemberCount} 位成員`}
+              data-board-share-open
+              data-app-more-share="true"
+            >
+              <span className="min-w-0 flex-1">分享看板</span>
+              <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-500">
+                {boardMemberCount}
+              </span>
+            </button>
+          ) : null}
+          {!isMeetingRecordUnavailable ? (
+            isMeetingMode ? (
+              <div
+                role="status"
+                data-active-record-kind="meeting"
+                className="flex min-h-11 items-center rounded px-3 text-sm text-blue-700"
+                title="已開啟會議紀錄；離開請使用右側紀錄欄的離開紀錄。"
+              >
+                <span>紀錄中</span>
+              </div>
+            ) : isNonMeetingRecordOpen ? (
+              <div
+                role="status"
+                data-active-record-kind="work-log"
+                className="flex min-h-11 items-center rounded px-3 text-sm text-blue-700"
+                title="已開啟個人紀錄；若要開始會議模式，請先離開目前紀錄。"
+              >
+                <span>紀錄中</span>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="flex min-h-11 w-full items-center rounded px-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                onClick={() => {
+                  closeMenu();
+                  onToggleMeetingRecord();
+                }}
+                title="開始會議模式，開啟右側紀錄欄"
+                data-app-more-meeting-record="true"
+              >
+                <span className="min-w-0 flex-1">開始會議模式</span>
+              </button>
+            )
+          ) : null}
+          {showPersonalRecordAction ? (
+            <>
+              <button
+                type="button"
+                disabled
+                aria-describedby="app-more-work-log-unavailable"
+                title="個人紀錄功能目前尚未開放，敬請期待。"
+                className="flex min-h-11 w-full cursor-not-allowed items-center rounded px-3 text-left text-sm font-medium text-slate-400"
+                data-work-log-unavailable="true"
+                data-app-more-work-log="true"
+              >
+                <span className="min-w-0 flex-1">新增個人紀錄</span>
+              </button>
+              <span id="app-more-work-log-unavailable" className="sr-only">個人紀錄功能目前尚未開放，敬請期待。</span>
+            </>
+          ) : null}
+          <button
+            type="button"
             className="flex min-h-11 w-full items-center rounded px-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={presentation.checkDisabled || operation.pending || isLocalBusy}
             onClick={handleCheck}
             data-app-update-check="true"
           >
-            檢查更新
+            立即檢查更新
           </button>
           {statusMessage ? (
             <p className="px-3 py-2 text-xs leading-5 text-slate-600" role="status" aria-live="polite" aria-atomic="true">
@@ -329,6 +475,23 @@ const AppMoreMenu: React.FC = () => {
               重新載入
             </button>
           ) : null}
+          <div className="my-1 h-px bg-slate-200" role="separator" />
+          <div className="flex min-w-0 items-center justify-between gap-2 px-2 py-2" data-app-more-account="true">
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-semibold text-slate-700">{currentUser?.displayName || '使用者'}</div>
+              <div className="truncate text-xs text-slate-400">{currentUser?.email || ''}</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => void useAuthStore.getState().signOut()}
+              className="flex h-9 shrink-0 items-center rounded px-2 text-xs font-semibold text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+              title="登出"
+              aria-label="登出"
+              data-app-more-sign-out="true"
+            >
+              登出
+            </button>
+          </div>
         </div>
       ) : null}
     </details>

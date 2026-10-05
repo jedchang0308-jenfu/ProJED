@@ -49,7 +49,7 @@ async (page) => {
     }],
   };
   const now = 1799000000000;
-  const makeRecord = (id, type, title, status, updatedAt, content) => ({
+  const makeRecord = (id, type, title, status, updatedAt, content, metadata = undefined) => ({
     id,
     workspaceId,
     boardId,
@@ -63,6 +63,7 @@ async (page) => {
     startedAt: type === 'work_log' ? now - 7200000 : undefined,
     endedAt: type === 'work_log' ? now - 3600000 : undefined,
     recordedBy: account.uid,
+    metadata,
     createdBy: account.uid,
     updatedBy: account.uid,
     createdAt: updatedAt - 1000,
@@ -71,8 +72,21 @@ async (page) => {
     taskLinks: [],
   });
   const longContent = Array.from({ length: 18 }, (_, index) => `第 ${index + 1} 行：會議討論、決議、進度、風險與待追蹤事項保留在同一份草稿中。`).join('\n');
+  const resumedSynthesisTrace = {
+    runId: 'dev136-saved-synthesis-fixture',
+    contractVersion: 'dev136-fixture',
+    functionVersion: 'dev136-fixture',
+    provider: 'deterministic-fixture',
+    model: 'fixture',
+    generatedAt: '2026-10-05T00:00:00.000Z',
+    normalization: { receivedActivityCount: 0, acceptedActivityCount: 0, droppedActivityCount: 0 },
+    quality: { passed: true, checks: [], violations: [] },
+    warnings: ['DEV-136 fixture 警告應在重開草稿後保留。'],
+    sourceContent: '原始會議速記內容。',
+    outputContent: longContent,
+  };
   const fixtureRecords = [
-    makeRecord('dev107-meeting-draft', 'meeting', TARGET_TITLE, 'draft', now + 3000, longContent),
+    makeRecord('dev107-meeting-draft', 'meeting', TARGET_TITLE, 'draft', now + 3000, longContent, { meetingSynthesis: resumedSynthesisTrace }),
     makeRecord('dev107-meeting-published', 'meeting', 'DEV-107 已發布會議紀錄', 'published', now + 2000, '已發布的歷史內容。'),
     makeRecord('dev107-work-log', 'work_log', 'DEV-107 個人工作紀錄', 'draft', now + 1000, '工作紀錄內容。'),
     makeRecord('dev107-meeting-old', 'meeting', 'DEV-107 另一筆會議紀錄', 'draft', now, '另一筆草稿。'),
@@ -137,7 +151,15 @@ async (page) => {
     const variant = page.locator('[data-record-composer-variant="meeting-record"]');
     assert(await shell.count() === 1, 'existing meeting draft should use one composer shell');
     assert(await variant.count() === 1, 'existing meeting draft should expose meeting-record variant');
-    assert(await page.locator('[data-record-workflow-kind="meeting"]').count() === 0, 'existing meeting draft must not render live meeting workflow');
+    assert(await page.locator('[data-record-workflow-kind="meeting"]').count() === 1, 'existing meeting draft should render the meeting workflow');
+    assert(await page.locator('[data-meeting-workflow-context="saved-draft"]').count() === 1, 'existing draft should stay outside live meeting mode');
+    assert(await page.locator('[data-meeting-workflow-step]').count() === 4, 'existing meeting draft should retain all four workflow steps');
+    assert(await page.locator('[data-meeting-workflow-step="review"]').count() === 1, 'existing meeting draft should expose the review step');
+    assert(await page.locator('[data-meeting-synthesis-status="ready"]').count() === 1, 'saved AI result should resume in the ready state');
+    assert(await page.locator('[data-meeting-synthesis-provider="deterministic-fixture"]').count() === 1, 'saved synthesis provider should be restored');
+    assert(await page.getByText('DEV-136 fixture 警告應在重開草稿後保留。').count() === 1, 'saved synthesis warnings should be restored');
+    assert(await page.locator('[data-meeting-recording-controls]').count() === 0, 'saved draft must not start live recording controls');
+    assert(await page.locator('[data-meeting-draft-overflow]').count() === 0, 'saved draft must not expose live meeting overflow actions');
     assert(await page.locator('[data-record-workflow-kind="work-log"]').count() === 0, 'existing meeting draft must not render work-log workflow');
     assert(await page.locator('[data-record-recent-records]').count() === 0, 'recent records must be hidden while a draft is open');
     assert(await page.getByText('個人流程', { exact: true }).count() === 0, 'existing meeting draft must not show personal workflow label');
@@ -206,6 +228,35 @@ async (page) => {
   await runCase('TC-107-001-1024', 'existing meeting draft renders meeting-record variant without overlap', async () => {
     await openExistingDraft({ width: 1024, height: 768 });
     return inspectMeetingRecord({ width: 1024, height: 768 });
+  });
+
+  await runCase('TC-136-001-saved-draft-ai-review', 'reopened meeting draft can rerun AI synthesis and save the reviewed draft', async () => {
+    await openExistingDraft({ width: 1440, height: 900 });
+    const initialRunId = await page.locator('[data-meeting-synthesis-status]').getAttribute('data-meeting-synthesis-run-id');
+    await page.locator('[data-record-title-input]').fill('DEV-136 可續編會議草稿');
+    const aiStep = page.locator('[data-meeting-workflow-step="ai_suggestion"]');
+    assert(await aiStep.isEnabled(), 'saved meeting draft should allow another AI synthesis run');
+    await aiStep.click();
+    await page.waitForFunction((previousRunId) => {
+      const status = document.querySelector('[data-meeting-synthesis-status]');
+      return status?.getAttribute('data-meeting-synthesis-status') === 'ready' &&
+        status.getAttribute('data-meeting-synthesis-run-id') !== previousRunId;
+    }, initialRunId, { timeout: 30000 });
+    assert(await page.locator('[data-record-composer-variant="meeting-record"]').count() === 1, 'AI synthesis should keep the existing-draft composer variant');
+    assert(await page.locator('[data-meeting-recording-controls]').count() === 0, 'AI synthesis should not enter live meeting mode');
+    const reviewStep = page.locator('[data-meeting-workflow-step="review"]');
+    assert(await reviewStep.isEnabled(), 'review step should save the AI result as a draft');
+    await reviewStep.click();
+    await page.waitForFunction(() =>
+      document.querySelector('[data-meeting-workflow-step="review"]')?.getAttribute('data-meeting-workflow-step-state') === 'complete',
+      undefined,
+      { timeout: 15000 },
+    );
+    return {
+      status: await page.locator('[data-meeting-synthesis-status]').getAttribute('data-meeting-synthesis-status'),
+      workflowSteps: await page.locator('[data-meeting-workflow-step]').count(),
+      reviewState: await page.locator('[data-meeting-workflow-step="review"]').getAttribute('data-meeting-workflow-step-state'),
+    };
   });
 
   await runCase('ROT-107-001-live', 'new live meeting keeps live workflow and meeting-only controls', async () => {

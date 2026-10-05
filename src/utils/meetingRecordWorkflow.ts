@@ -56,6 +56,53 @@ export type MeetingRecordDraftLike = {
   taskLinks: Array<{ nodeId: string; role: RecordTaskLinkRole }>;
 };
 
+export type MeetingSynthesisResumeState = {
+  status: 'ready';
+  provider: string | null;
+  warnings: string[];
+} | null;
+
+export const normalizeMeetingSynthesisContentForComparison = (content: string) =>
+  content.replace(/\r\n?/g, '\n').replace(/[ \t]+$/gm, '').trim();
+
+export const getMeetingSynthesisResumeState = (
+  draft: MeetingRecordDraftLike | null,
+): MeetingSynthesisResumeState => {
+  if (!draft || draft.type !== 'meeting' || draft.status !== 'draft') return null;
+  const trace = draft.metadata?.meetingSynthesis;
+  if (!trace || typeof trace !== 'object' || Array.isArray(trace)) return null;
+
+  const synthesis = trace as Record<string, unknown>;
+  if (
+    typeof synthesis.sourceContent !== 'string' ||
+    typeof synthesis.outputContent !== 'string' ||
+    typeof synthesis.runId !== 'string' ||
+    !synthesis.runId.trim() ||
+    typeof synthesis.contractVersion !== 'string' ||
+    !synthesis.contractVersion.trim() ||
+    typeof synthesis.functionVersion !== 'string' ||
+    !synthesis.functionVersion.trim() ||
+    typeof synthesis.provider !== 'string' ||
+    !synthesis.provider.trim() ||
+    typeof synthesis.generatedAt !== 'string' ||
+    !synthesis.generatedAt.trim() ||
+    !synthesis.quality ||
+    typeof synthesis.quality !== 'object' ||
+    Array.isArray(synthesis.quality) ||
+    (synthesis.quality as Record<string, unknown>).passed !== true ||
+    normalizeMeetingSynthesisContentForComparison(synthesis.outputContent) !==
+      normalizeMeetingSynthesisContentForComparison(draft.content)
+  ) return null;
+
+  return {
+    status: 'ready',
+    provider: typeof synthesis.provider === 'string' ? synthesis.provider : null,
+    warnings: Array.isArray(synthesis.warnings)
+      ? synthesis.warnings.filter((warning): warning is string => typeof warning === 'string')
+      : [],
+  };
+};
+
 export type MeetingRecordSaveFeedbackLike = {
   recordId: string;
   status: KnowledgeRecordStatus;
@@ -135,13 +182,14 @@ export const getMeetingRecordActionState = ({
   const hasDraft = Boolean(draft && draft.type === 'meeting');
   const hasTitle = Boolean(draft?.title.trim());
   const hasContent = Boolean(draft?.content.trim());
-  const hasSourceForAi = Boolean(hasContent || meetingActivityCount > 0);
+  const hasSourceForAi = Boolean(hasContent || meetingActivityCount > 0 || draft?.taskLinks.length);
   const isSynthesizing = meetingSynthesisStatus === 'synthesizing';
   const hasAiDraft = meetingSynthesisStatus === 'ready';
   const isPublished = Boolean(
+    draft?.status === 'published' ||
     draft?.id &&
-    lastSaveFeedback?.recordId === draft.id &&
-    lastSaveFeedback.status === 'published'
+      lastSaveFeedback?.recordId === draft.id &&
+      lastSaveFeedback.status === 'published'
   );
   const currentSignature = getRecordDraftSignature(draft);
   const hasUnresolvedActivities = meetingActivityCount > 0 && !hasAiDraft && !isPublished;
@@ -154,6 +202,8 @@ export const getMeetingRecordActionState = ({
     ? '請先選擇工作區與看板。'
     : !hasDraft
       ? '目前沒有會議草稿。'
+      : isPublished
+        ? '這筆會議紀錄已發布。'
       : !hasTitle
         ? '請先輸入會議標題。'
         : saving || isSynthesizing
@@ -164,6 +214,8 @@ export const getMeetingRecordActionState = ({
     ? '請先選擇工作區與看板。'
     : !hasDraft
       ? '目前沒有會議草稿。'
+      : isPublished
+        ? '這筆會議紀錄已發布。'
       : !hasTitle
         ? '請先輸入會議標題。'
         : !hasSourceForAi
@@ -270,7 +322,7 @@ export const getMeetingWorkflowStepActions = (
 ): MeetingWorkflowStepAction[] => {
   const captureComplete = Boolean(state.hasContent || state.hasAiDraft || state.isPublished);
   const aiComplete = Boolean(state.hasAiDraft || state.isPublished);
-  const reviewComplete = Boolean(state.isPublished);
+  const reviewComplete = Boolean(state.isPublished || (state.hasAiDraft && !state.isDirty));
   const publishComplete = Boolean(state.isPublished);
   const canUseActions = !state.isPublished && !state.isSynthesizing && !state.isSaving;
 
@@ -304,7 +356,7 @@ export const getMeetingWorkflowStepActions = (
     ? 'complete'
     : recommendedStage === 'review'
       ? state.canSaveDraft ? 'current' : 'locked'
-      : state.hasAiDraft && state.canSaveDraft
+      : state.canSaveDraft
         ? 'available'
         : 'locked';
 
@@ -350,15 +402,15 @@ export const getMeetingWorkflowStepActions = (
     createMeetingWorkflowStepAction({
       stage: 'review',
       label: '校稿',
-      actionLabel: '存校稿',
+      actionLabel: state.hasAiDraft ? '存校稿' : '存草稿',
       outcomeLabel: '確認後存草稿',
       command: 'saveDraft',
       visualState: reviewVisualState,
       tone: 'primary',
       isOptional: false,
-      ariaDescription: '校稿階段。按下後會保存校稿草稿，不會發布。',
-      disabledReason: state.hasAiDraft ? state.saveDraftDisabledReason : '請先完成 AI整理或手動整理內容。',
-      enabled: canUseActions && state.hasAiDraft && state.canSaveDraft,
+      ariaDescription: '校稿階段。按下後會保存目前內容為草稿，不會發布；AI整理為選用動作。',
+      disabledReason: state.saveDraftDisabledReason,
+      enabled: canUseActions && state.canSaveDraft,
       isComplete: reviewComplete,
       isRecommended: recommendedStage === 'review' && !state.isPublished,
     }),

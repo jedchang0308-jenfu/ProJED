@@ -142,9 +142,9 @@ async (page) => {
   assert((await page.locator('nav [data-active-record-kind="meeting"]', { hasText: '紀錄中' }).count()) === 1, 'topbar should immediately switch to compact active record state while meeting note is open');
   assert((await page.locator('nav button', { hasText: '離開會議' }).count()) === 0, 'topbar should not expose leave meeting while meeting note is open');
   assert((await page.locator('[data-record-workflow-kind="meeting"]').count()) === 1, 'meeting should show the meeting workflow card');
-  assert((await page.locator('[data-meeting-workflow-step]').count()) === 3, 'meeting workflow should show capture/AI/publish steps');
+  assert((await page.locator('[data-meeting-workflow-step]').count()) === 4, 'meeting workflow should show capture/AI/review/publish steps');
   assert((await page.locator('[data-meeting-workflow-step="project_import"]').count()) === 0, 'meeting workflow should not duplicate the import control as a step');
-  assert((await page.locator('[data-meeting-workflow-step="review"]').count()) === 0, 'meeting workflow should not render the review step');
+  assert((await page.locator('[data-meeting-workflow-step="review"]').count()) === 1, 'meeting workflow should render the review step');
   await assertWorkflowOrder('DEV-020 meeting composer order');
   assert((await page.locator('[data-meeting-project-change-import-control]').count()) === 1, 'DEV-020 meeting should keep one import control below the workflow');
   const meetingTitleInput = page.locator('aside label', { hasText: '標題' }).locator('input').first();

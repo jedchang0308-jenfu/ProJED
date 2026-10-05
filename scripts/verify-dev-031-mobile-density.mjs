@@ -5,7 +5,10 @@ const files = {
   css: 'src/index.css',
   compactTokens: 'src/components/ui/compactTokens.ts',
   mainLayout: 'src/components/MainLayout.tsx',
+  meetingRecordAvailability: 'src/utils/meetingRecordAvailability.ts',
+  appMoreMenu: 'src/components/AppMoreMenu.tsx',
   kanbanColumn: 'src/components/Wbs/KanbanColumn.tsx',
+  kanbanColumnPresentation: 'src/components/Wbs/KanbanColumnPresentation.tsx',
   taskDetailsModal: 'src/components/TaskDetailsModal.tsx',
   taskDetailNoteEditor: 'src/components/TaskNotes/TaskDetailNoteEditor.tsx',
   tagPicker: 'src/components/Tags/TagPicker.tsx',
@@ -35,16 +38,17 @@ assert(
 
 assert(
   'main layout exposes density hooks and mobile board-only routing',
-  source.mainLayout.includes('data-mobile-density="compact"') &&
+    source.mainLayout.includes('data-mobile-density="compact"') &&
     source.mainLayout.includes('app-main-nav') &&
     source.mainLayout.includes('app-board-title') &&
-    source.mainLayout.includes('useCoarsePointer()') &&
-    source.mainLayout.includes("window.matchMedia('(max-width: 640px)'") &&
+    source.meetingRecordAvailability.includes("window.matchMedia('(pointer: coarse)'") &&
+    source.meetingRecordAvailability.includes('MOBILE_MEETING_MAX_WIDTH = 640') &&
     source.mainLayout.includes('isMobileBoardOnly') &&
-    source.mainLayout.includes("new Set<ViewMode>(['list', 'mindmap', 'gantt', 'calendar'])") &&
-    source.mainLayout.includes("setView('board')") &&
+    source.mainLayout.includes("new Set<ViewMode>(['list', 'mindmap', 'goal', 'gantt', 'calendar'])") &&
+    source.mainLayout.includes("if (isMobileBoardOnly && nextView !== 'board') return;") &&
     source.mainLayout.includes('{!isMobileBoardOnly ? (') &&
-    source.mainLayout.includes('options={modeSwitcherOptions}'),
+    source.mainLayout.includes('visibleModeSwitcherOptions') &&
+    source.mainLayout.includes('options={visibleModeSwitcherOptions}'),
 );
 
 assert(
@@ -56,15 +60,15 @@ assert(
     source.mainLayout.includes('handleToggleMobileTaskWorkbench') &&
     source.mainLayout.includes('toggleTaskWorkbenchPanel') &&
     source.mainLayout.includes('data-task-workbench-nav-label="all"') &&
-    source.mainLayout.includes('All') &&
+    source.mainLayout.includes('所有任務') &&
     !source.mainLayout.includes('ClipboardList') &&
     source.mainLayout.includes('data-board-switcher="true"') &&
     source.mainLayout.includes('max-w-[48vw]') &&
     source.mainLayout.includes('truncate text-xs font-bold') &&
     !source.mainLayout.includes('cursor-text truncate') &&
-    source.mainLayout.includes('data-board-share-open') &&
-    source.mainLayout.includes('btn-outline hidden h-7') &&
-    source.mainLayout.includes('sm:flex sm:h-8'),
+    !source.mainLayout.includes('data-board-share-open') &&
+    source.appMoreMenu.includes('data-board-share-open') &&
+    source.appMoreMenu.includes('data-app-more-share="true"'),
 );
 
 assert(
@@ -85,9 +89,9 @@ assert(
   'board surface receives mobile density treatment',
   source.css.includes('[data-mobile-pan-surface="board"]') &&
     source.kanbanColumn.includes('data-kanban-column="true"') &&
-    source.kanbanColumn.includes('data-kanban-column-header="true"') &&
+    source.kanbanColumn.includes("'data-kanban-column-header': 'true'") &&
     source.css.includes('.kanban-task-card-body') &&
-    source.kanbanColumn.includes('data-mobile-pan-rail="kanban-column"'),
+    source.kanbanColumnPresentation.includes('data-mobile-pan-rail="kanban-column"'),
 );
 
 assert(

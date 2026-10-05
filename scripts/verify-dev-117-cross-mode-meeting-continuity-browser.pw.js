@@ -89,7 +89,7 @@ async (page) => {
   };
 
   const startMeeting = async () => {
-    await page.getByRole('button', { name: '新增會議記錄' }).click();
+    await page.getByRole('button', { name: '開始會議模式' }).click();
     await page.locator('[data-active-record-kind="meeting"]').waitFor({ state: 'visible', timeout: 10000 });
     await page.locator('[data-record-composer-shell]').waitFor({ state: 'visible', timeout: 10000 });
   };
@@ -239,7 +239,7 @@ async (page) => {
   await runCase('B06', 'coarse pointer mobile mode keeps meeting unavailable and does not expose cross-mode switching', async () => {
     await seed('board', 390);
     assert(await page.locator('[data-mode-switcher-trigger]').count() === 0, 'mobile board-only mode should hide mode switcher');
-    assert(await page.getByRole('button', { name: '新增會議記錄' }).count() === 0, 'mobile board-only mode should not expose meeting entry');
+    assert(await page.getByRole('button', { name: '開始會議模式' }).count() === 0, 'mobile board-only mode should not expose meeting entry');
     return { modeSwitcher: 0, meetingEntry: 0 };
   });
 

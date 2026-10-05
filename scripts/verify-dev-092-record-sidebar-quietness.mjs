@@ -20,7 +20,7 @@ const required = [
   'YYYY/MM/DD HH:mm',
   'data-record-meeting-meta-grid',
   'data-record-content-header',
-  "meetingWorkflowSteps.filter(step => step.stage !== 'review')",
+  'const meetingWorkflowStepsForDisplay: MeetingWorkflowArrowStepItem[] = meetingWorkflowSteps',
   'data-record-compact-controls className="rounded-md border border-slate-200 bg-white"',
   'selectedLinks.length ? (',
   'selectedLinks.length && isLinkedTasksOpen',
