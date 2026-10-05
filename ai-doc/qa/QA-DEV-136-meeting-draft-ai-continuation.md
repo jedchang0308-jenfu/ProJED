@@ -54,3 +54,10 @@
 - Hosted verification：canonical artifact provenance 83/83 與匿名 shell browser smoke PASS；release metadata 回讀相符 source/release。Direct receipt `published=true`、`complete=false`、`verification=feature-pending`：本次沒有執行登入後功能 smoke，未以本機 fixture 結果代替正式 authenticated feature 驗收。
 - Recovery：前一 live Firebase Hosting version `projects/projed-cc78d/sites/projed-cc78d/versions/a02e19f14202f6eb`（release `1791102442256000`）；未 rollback。
 - 範圍：只發布 Firebase Hosting 網站檔案；未使用正式 Google 登入、未讀寫 Supabase／正式業務資料、未修改 schema、migration、權限或其他雲端資源。Receipt：`output/release/dev-083/20261005141011-b3b16a/direct-evidence.json`。
+
+## 2026-10-06 正式 Hosting 唯讀讀回
+
+- Live `/release-meta.json` 回傳 release `20261005141011-b3b16a`，與預期相符；canonical root HTTP 200 且含 `#root`。
+- 首頁引用的 12 個 JS/CSS assets 全數 HTTP 200；主 bundle 含會議流程文案。來源程式與此 release 綁定的已提交版本一致；無需重建或重發 Hosting。
+- Playwright CLI 重跑在啟動前因 npm registry `EACCES` 失敗，因此本次沒有新的 browser-rendered evidence；測試工作階段已中止並清理。沿用 2026-10-05 已記錄的匿名 shell browser smoke PASS，不將本次 HTTP 讀回升格為瀏覽器驗收。
+- 登入後會議草稿 feature smoke 仍 pending；本次未登入、未呼叫 Supabase／資料 API，也未讀寫正式資料。
