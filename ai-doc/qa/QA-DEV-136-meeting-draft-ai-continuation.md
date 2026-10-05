@@ -68,3 +68,11 @@
 - PASS：從登入頁按「使用 Google 帳號登入」後到達 Google OAuth 帳號頁；OAuth callback 指向正式 Supabase 專案 `knodlkxqpcqyrtgwpdst`，redirect 回 `https://projed-cc78d.web.app/`。未輸入帳密或完成登入。
 - Feature smoke 仍 pending：正式版使用 Google OAuth，`.env.production` 未設定測試 email/password；DEV-133 測試 actor helper 固定指向測試專案 `fhisnnufoeulxqrchldf`，與正式專案不同。沒有可用的正式專用測試身分與可清理資料範圍，因此未以測試帳號登入正式環境，也未讀寫正式業務資料。
 - Smoke 中 `navigator.serviceWorker.ready` 等待逾時，但不屬於既有 anonymous shell smoke 的通過條件；登入頁沒有 service worker controller。程式與正式 release 未變更，正式站仍提供同一 release，故未重複上傳相同 artifact。兩個 task-owned browser session 均已關閉，新增暫存快照與 console log 已清除。
+
+## 2026-10-06 登入後正式 smoke 資料範圍檢查
+
+- PASS：使用者在 task-owned 瀏覽器以指定的專用 Google 測試帳號完成登入，正式站載入工作區總覽；沒有把帳號識別資料寫入驗收紀錄。
+- PASS：看板選擇器沒有列出可用看板；工作區總覽顯示 `我的工作區` 為 0 個看板；紀錄庫顯示 0 筆會議紀錄。未開啟或讀取任何既有業務紀錄。
+- Feature smoke blocked：保存草稿要求目前已選 `activeWorkspaceId` 與 `activeBoardId`；此帳號沒有可用看板，無法建立可跨頁讀回的草稿。未建立草稿或看板，未寫入正式資料。
+- 原授權範圍為一筆可清理測試草稿；新增並刪除正式看板是額外資料異動，尚未取得授權。待使用者提供既有專用空白測試看板，或明確授權建立後清除一個臨時測試看板，才可繼續。
+- task-owned 可見瀏覽器 `projed-prod-draft-smoke-20261006` 暫時保持登入並開在紀錄庫，看板選擇器已收合；保留供立即後續使用，不佔用服務埠。Smoke 結束或使用者取消時由 Codex 關閉。
