@@ -1,6 +1,11 @@
 import { isLocalTestBackend, isSupabaseBackend } from './dataBackend';
 import { isSupabaseConfigured, supabase } from './supabase/client';
 import {
+  getMeetingSynthesisFailureMessage,
+  readMeetingSynthesisFailureDetails,
+  type MeetingSynthesisFailureDetails,
+} from '../utils/meetingSynthesisErrors';
+import {
   buildDeterministicMeetingSynthesis,
   MEETING_SYNTHESIS_CONTRACT_VERSION,
   validateMeetingSynthesisOutput,
@@ -11,12 +16,14 @@ import {
 export class MeetingSynthesisError extends Error {
   public readonly code: string;
   public readonly status: number;
+  public readonly details?: MeetingSynthesisFailureDetails;
 
-  constructor(message: string, code = 'SYNTHESIS_ERROR', status = 500) {
+  constructor(message: string, code = 'SYNTHESIS_ERROR', status = 500, details?: MeetingSynthesisFailureDetails) {
     super(message);
     this.name = 'MeetingSynthesisError';
     this.code = code;
     this.status = status;
+    this.details = details;
   }
 }
 
@@ -111,6 +118,7 @@ const parseFunctionError = async (error: unknown) => {
   let code = 'SYNTHESIS_ERROR';
   let status = 500;
   let message = error instanceof Error ? error.message : String(error);
+  let details: MeetingSynthesisFailureDetails | undefined;
 
   if (error instanceof Error && 'context' in error) {
     const context = (error as { context?: { status?: number; text?: () => Promise<string> } }).context;
@@ -122,13 +130,14 @@ const parseFunctionError = async (error: unknown) => {
         const bodyJson = JSON.parse(bodyText);
         if (bodyJson?.error?.code) code = bodyJson.error.code;
         if (bodyJson?.error?.message) message = bodyJson.error.message;
+        details = readMeetingSynthesisFailureDetails(bodyJson?.error?.details);
       }
     } catch {
       // Supabase FunctionsHttpError does not guarantee a JSON body.
     }
   }
 
-  return new MeetingSynthesisError(message, code, status);
+  return new MeetingSynthesisError(getMeetingSynthesisFailureMessage(code, message, details), code, status, details);
 };
 
 export const synthesizeMeetingRecord = async (

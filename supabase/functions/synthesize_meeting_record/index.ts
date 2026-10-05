@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+import { repairMeetingSynthesisStructure } from '../_shared/meetingSynthesisStructure.ts';
 
 const ALLOWED_ORIGINS = [
   'http://localhost:5173',
@@ -16,7 +17,7 @@ const ALLOWED_ORIGINS = [
 ];
 
 const MEETING_SYNTHESIS_CONTRACT_VERSION = 'meeting-synthesis-v2';
-const MEETING_SYNTHESIS_FUNCTION_VERSION = 'synthesize_meeting_record-2026-08-07-v3';
+const MEETING_SYNTHESIS_FUNCTION_VERSION = 'synthesize_meeting_record-2026-10-06-v4';
 const QUALITY_CHECKS = [
   'non-empty-content',
   'numbered-section-structure',
@@ -86,8 +87,10 @@ const createJsonResponse = (payload: unknown, status: number, origin: string | n
     headers: { ...getCorsHeaders(origin), 'Content-Type': 'application/json' },
   });
 
-const createErrorResponse = (message: string, code: string, status: number, origin: string | null) =>
-  createJsonResponse({ error: { message, code } }, status, origin);
+const createErrorResponse = (
+  message: string, code: string, status: number, origin: string | null,
+  details?: { runId: string; functionVersion: string; violations: string[]; affectedTaskIds: string[] },
+) => createJsonResponse({ error: { message, code, ...(details ? { details } : {}) } }, status, origin);
 
 const truncate = (value: string | undefined, maxLength: number) => {
   const text = (value ?? '').replace(/\s+/g, ' ').trim();
@@ -227,6 +230,7 @@ const isValidInput = (input: unknown): input is MeetingSynthesisInput => {
     typeof value.rawContent === 'string' &&
     Array.isArray(value.taskLinks) &&
     Array.isArray(value.tasks) &&
+    value.tasks.every(task => !task?.path || Array.isArray(task.path) && task.path.length <= 80) &&
     Array.isArray(value.activities)
   );
 };
@@ -250,7 +254,7 @@ const normalizeInput = (input: MeetingSynthesisInput): MeetingSynthesisInput => 
       path: Array.isArray(task.path)
         ? task.path
           .filter(pathItem => safeString(pathItem?.id))
-          .slice(0, 8)
+          .slice(0, 80)
           .map(pathItem => ({
             id: safeString(pathItem.id),
             title: truncate(pathItem.title || pathItem.id, 160),
@@ -613,16 +617,20 @@ serve(async (req) => {
     }
 
     const parsed = parseJsonOutput(extractOutputText(genData));
-    const content = safeString(parsed.content);
+    const generatedContent = safeString(parsed.content);
 
-    if (!content) {
+    if (!generatedContent) {
       return createErrorResponse('AI response did not include content', 'EMPTY_SYNTHESIS', 502, origin);
     }
 
-    const linkedTaskIds = Array.isArray(parsed.linkedTaskIds)
-      ? parsed.linkedTaskIds.filter((item: unknown): item is string => typeof item === 'string' && item.length > 0)
-      : [];
+    const structure = repairMeetingSynthesisStructure(generatedContent, input.tasks, new Set([
+      ...collectDirectTaskTagIds(input.rawContent),
+      ...input.activities.map(activity => activity.nodeId),
+    ]));
+    const { content, linkedTaskIds } = structure;
     const quality = validateGeneratedOutput(input, content, linkedTaskIds);
+    quality.violations = [...new Set([...structure.violations, ...quality.violations])];
+    quality.passed = quality.violations.length === 0;
     if (!quality.passed) {
       console.warn(JSON.stringify({
         event: 'meeting_synthesis_quality_gate_failed',
@@ -631,13 +639,19 @@ serve(async (req) => {
         functionVersion: MEETING_SYNTHESIS_FUNCTION_VERSION,
         model: generationModel,
         violations: quality.violations,
+        affectedTaskIds: structure.affectedTaskIds,
+        repairedTaskIds: structure.repairedTaskIds,
         normalization,
       }));
       return createErrorResponse(
-        'AI synthesis output did not pass the meeting record quality gate',
+        quality.violations.some(code => ['UNKNOWN_TASK_ID', 'AMBIGUOUS_TASK_HEADING', 'INVALID_SOURCE_TASK_PATH'].includes(code))
+          ? '部分段落無法確認對應任務，原草稿已保留。'
+          : 'AI 整理結果未通過內容品質檢查，原草稿已保留。',
         'QUALITY_GATE_FAILED',
         502,
         origin,
+        { runId, functionVersion: MEETING_SYNTHESIS_FUNCTION_VERSION,
+          violations: quality.violations, affectedTaskIds: structure.affectedTaskIds },
       );
     }
 
@@ -649,6 +663,7 @@ serve(async (req) => {
       provider: 'gemini',
       model: generationModel,
       qualityPassed: true,
+      repairedTaskIds: structure.repairedTaskIds,
       normalization,
     }));
 

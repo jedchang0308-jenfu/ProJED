@@ -1317,7 +1317,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
         draft: preservedDraft,
         meetingSynthesisStatus: 'error',
         meetingSynthesisError: message,
-        error: `AI 統整失敗，原始草稿已保留：${message}`,
+        error: null,
       });
       return false;
     }

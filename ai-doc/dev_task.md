@@ -3,6 +3,21 @@
 Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 外層遞迴讀取 sibling clone 或備份資料夾。
 
+## DEV-137 AI 整理任務路徑補正與失敗診斷 - 2026-10-06
+
+- 文件成熟度：RD Implementation Ready；狀態：本機驗證通過／正式發布準備；類型：開發點；父任務：DEV-012，相容 DEV-024／136。
+- 人類來源：本 chat 正式環境失敗截圖、改善方案及「請執行」。授權範圍為 ProJED 本地修正、驗證與該修正的正式發布／可清理測試草稿驗收；不延伸至其他專案或業務資料修改。
+- 直接證據：正式 `synthesize_meeting_record` 於 2026-10-06 00:54:28（台灣時間）回報 `INCOMPLETE_TASK_PATH`，run `4bdd51d2-eee9-4a3c-ade4-4489ab08cb1e`；原生成內容沒有保存，不宣稱掌握漏路徑的具體任務。
+- Spec Impact：SPEC-012 compatible correction。維持自然語言正文、來源 grounding、v2 外部成功契約及 DEV-024 preserve；只將可唯一識別的完整路徑生成責任移交程式。未知 ID、跨分支／多任務標題或無來源識別不得猜測補正。
+- 實作：Edge 共用純函式補正 `2.x` 標題並從正文生成 linkedTaskIds，補正後仍通過完整品質 gate；失敗 response/log 增加 run ID、function version、違規代碼及任務 ID，避免紀錄正文。前端保留診斷、顯示單一中文錯誤，原稿維持不變。
+- QA／targeted QC：涵蓋漏父層、順序、同名、未知 ID、歧義、無直接證據、重複章節、正文 byte parity、補正冪等；執行實際 Edge handler mock provider、相關 preserve 回歸、型別、lint 與 browser 成功／失敗／儲存重開。模擬與正式結果分別記錄。
+- 正式邊界：Firebase `projed-cc78d` 與 Supabase `knodlkxqpcqyrtgwpdst/synthesize_meeting_record`；保留現有 JWT 設定／模型／Secret／schema，先保存既有 function source 與 Hosting recovery anchor，再發布和讀回。缺安全登入身分時，正式 API／匿名 shell 驗證與登入後業務 UI 驗收分別報告。
+- 成功條件：本次可補正的漏路徑案例通過；無法確認任務時原稿完整保留，中文錯誤只出現一次；正式後端版本與前端資產讀回吻合，必要功能驗證有實際證據。
+- 證據：`npm run verify:dev-137-meeting-synthesis` 18/18（含實際 Edge handler mock、HTTP 錯誤經實際 client service 的中文與 trace）；DEV-011／012／024 回歸、TypeScript、受影響 lint、test strict typecheck 與 diff check 通過。獨立 task-owned browser `dev137-20261006` 的 7 項 UI 斷言通過：單一中文錯誤、原稿 bytes、1024px overflow、重試、校稿保存、正常紀錄库重開與 trace恢復；截圖 `output/playwright/dev-137/`。成功來源為本機 deterministic；失敗由 service boundary 注入，不冒充 Gemini／正式登入驗收。
+- 前置驗證缺陷：首次依賴入口缺失，已按 lockfile 安裝；首次 browser fixture 缺少 canonical seed size／board selection，第二次用了錯誤 named store export，均為 harness 問題，修復後重跑通過。保留原正式失敗證據，不將本機通過宣稱為原正式畫面已復驗。
+- 路徑上限：來源路徑保留至 80 層；超過上限在 provider 生成前回 400，不再靜默截斷八層後造成前後端不一致。
+- 計入產品交付：否；正式版本／API／登入後 UI 結果待發布後補記。
+
 ## DEV-136 既有會議草稿續接 AI 整理與校稿流程 - 2026-10-05
 
 - 人類來源：使用者指出已保存草稿無法繼續 AI 整理，要求保留整個流程以便完整編輯。目標為 ProJED 主程式。
@@ -172,6 +187,13 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 同一 source commit 的 DEV-121 static 28/28、Chromium 37/37、Goal empty-location、TypeScript、targeted ESLint 與 diff check 均通過；direct receipt 保留 `feature-pending`，因完整 fixture runner 固定使用 localhost/local-test，未將 local-only 結果冒充 authenticated production Goal smoke。未改資料、schema、migration、權限或 persistence；部署前 live version `63d9b2ea3d7cdb4f` 保留為 rollback anchor。
 
 ## 總任務清單
+
+- ◇ DEV-137 [開發點] [本機驗證通過／正式發布準備] [P1] [ProJED AI 整理] 任務路徑補正與失敗診斷
+  - 摘要：以來源路徑補正可唯一識別的任務標題；失敗保留原稿並提供單一中文原因與執行追溯。
+  - 父任務：DEV-012；相容 DEV-024／136。
+  - 下一步：執行後端、原稿保護、UI 與正式版本驗證。
+  - 證據：本文件 DEV-137；SPEC-012 的 DEV-137 補記。
+  - 計入交付：否。
 
 - ◦ DEV-136 [開發點] [RD完成／本機 targeted QA PASS／正式 Hosting 已發布；authenticated feature smoke pending] [P1] 既有會議草稿續接 AI 整理與校稿流程
   - 已存會議草稿回到完整四階段；有效 AI trace 重開後可續編與重跑，AI optional、草稿與發布分開；即時擷取控制仍只在 live meeting。

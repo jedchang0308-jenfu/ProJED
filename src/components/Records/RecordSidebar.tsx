@@ -1550,6 +1550,7 @@ const RecordSidebar: React.FC = () => {
               {isMeetingWorkflow && meetingSynthesisStatus !== 'idle' ? (
                 <div
                   data-meeting-synthesis-status={meetingSynthesisStatus}
+                  role={meetingSynthesisStatus === 'error' ? 'alert' : 'status'}
                   data-meeting-synthesis-provider={meetingSynthesisProvider ?? undefined}
                   data-meeting-synthesis-contract={meetingSynthesisTrace?.contractVersion}
                   data-meeting-synthesis-function={meetingSynthesisTrace?.functionVersion}
@@ -1577,7 +1578,7 @@ const RecordSidebar: React.FC = () => {
                              ? '規則整理完成，請確認後發布'
                              : 'AI整理完成，請確認後發布'
                         : meetingSynthesisStatus === 'error'
-                          ? 'AI整理失敗，原草稿已保留'
+                          ? 'AI整理未完成'
                             : 'AI整理是建議動作，可跳過'}
                   </div>
                   <div className="mt-1">

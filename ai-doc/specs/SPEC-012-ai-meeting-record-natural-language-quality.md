@@ -5,6 +5,16 @@
 建立日期：2026-06-07  
 承接：DEV-011 / DEV-008
 
+## DEV-137 任務路徑補正與失敗診斷（2026-10-06）
+
+- 後端在 quality gate 前，僅以章節內明確 task ID 與直接來源證據唯一識別目標任務，按來源完整路徑重建 `2.x` 標題；不得按名稱猜測任務、移除外來路徑或改寫正文。
+- `linkedTaskIds` 由實際輸出 task tags 生成。未知 ID、多任務／跨分支歧義、無來源或無效來源路徑仍拒絕；原有內容／章節／重複等品質檢查繼續執行。
+- 品質錯誤 response 的 `error.details` 可含 runId、functionVersion、violations、affectedTaskIds；log 加入 repairedTaskIds。不得加入原草稿、被拒絕正文或人員資料。
+- 前端將品質錯誤轉成中文，使用 meeting synthesis 就地訊號，不另建立同義 global error。原稿保存及失敗恢復沿用 DEV-024。
+- 來源 path 保留至 80 層，超長輸入在生成前拒絕，不再默默截斷八層後造成前後端路徑不一致。
+- 外部成功契約維持 meeting-synthesis-v2；本次 function version 為 synthesize_meeting_record-2026-10-06-v4。模型／Secret／資料庫／JWT 設定維持現況。
+- 驗收案例、實際證據層級與 release 邊界以 DEV-137 為準；原 DEV-012 歷史 PASS 不代表本次正式修正已驗收。
+
 ## DEV-109 Live Source Clarification（2026-09-08）
 
 - Spec Impact：`Compatible clarification / Implemented Candidate / QA-QC Pending / NOT RELEASED`；詳細契約見 `SPEC-109`。
