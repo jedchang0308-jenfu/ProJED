@@ -2,8 +2,8 @@
 
 - 對應 DEV：DEV-136；相容 DEV：DEV-019、DEV-020、DEV-107、DEV-117
 - 規格：SPEC-019「DEV-136 架構定案」
-- 驗收範圍：ProJED 本機 candidate；不含正式環境、正式資料或部署。
-- 結果：分支部署前本機驗證通過；DEV-107／DEV-135 targeted browser UI PASS（隔離外部服務）；未部署
+- 驗收範圍：本機 candidate 驗收，加上本次 Firebase Hosting 發布身份、artifact provenance 與匿名 shell smoke；不含登入後正式功能、正式資料或 Supabase 驗證。
+- 結果：本機 DEV-107／DEV-135 targeted browser UI PASS（隔離外部服務）；Firebase Hosting 已發布，83/83 provenance 與 shell smoke PASS；authenticated feature smoke pending。詳見[正式 Hosting 發布補記](#2026-10-05-正式-hosting-發布補記)。
 
 ## 目標
 
@@ -42,6 +42,15 @@
 - PASS：DEV-107 rendered browser 6/6：1902×960、1440×900、1024×768 既有草稿版面，從已保存草稿重跑 AI 並校稿，live meeting regression，390×844 mobile-negative。截圖與結果在 `output/playwright/dev-107-record-sidebar-layout/repair-final/`；console/page error、HTTP 4xx/5xx、最後水平 overflow 均為 0。
 - PASS：DEV-135 rendered browser 6/6：更新徽章顯示／清除、頂列動作移入更多選項、分享人數與對話框、個人紀錄停用狀態、會議啟動與進行中狀態。截圖與結果在 `output/playwright/dev-135-topbar-actions/repair-final/`；console/page error、HTTP failure 與 failed request 均為 0。
 - PASS：完整 `npm run verify:source`；包含 ESLint、TypeScript、sealed production build、production auth mode 5 checks、Supabase static 26 snippets、migration aliases 65/65、calendar ICS、core regression 11 checks 與 P9 Edge Function。預提交工作樹產物 `20261005133528-ab6ad5` 的 `npm run verify:production-artifact` 與 `npm run verify:dev-083-production-release-gate` 均通過。
-- Artifact provenance：上述預提交產物由含本次待提交檔案的 working tree 建置，manifest 標示 dirty；它只證明建置與 artifact scan 通過，不作部署候選。提交後需重新產生並驗證綁定乾淨 commit 的 artifact；本任務不執行部署。
+- Artifact provenance：上述預提交產物由含本次待提交檔案的 working tree 建置，manifest 標示 dirty；它只證明建置與 artifact scan 通過，不作部署候選。提交後另產生並驗證綁定乾淨 commit 的正式 artifact，及後續 Hosting 結果見下方補記。
 - Browser 限制：isolated local-test browser 將 Google OAuth／Google API／Google Fonts 與 TaiwanCalendar 網路呼叫 stub；因此只驗證本機 UI 與功能流程，不涵蓋實際 OAuth、Google API 或權威行事曆資料。Playwright CLI/npm registry 的 `EACCES` 與 headed Edge 初始化錯誤曾阻止原驗證入口；改用已安裝的 Playwright 套件與 task-owned headless Chrome 後完成上述實際畫面／互動驗證，未操作使用者既有瀏覽器頁籤。
-- 本次瀏覽器範圍是針對 DEV-136／相容 DEV-107、DEV-135 的 targeted regression，不等同完整 N01～N09 matrix、獨立 QC 或 production smoke。未修改 localhost:4000，使用隔離的本機測試服務；未部署正式環境。
+- 本段只記錄發布前的本機瀏覽器範圍：針對 DEV-136／相容 DEV-107、DEV-135 的 targeted regression，不等同完整 N01～N09 matrix、獨立 QC 或 production smoke。未修改 localhost:4000，使用隔離的本機測試服務；當時尚未部署正式環境。
+
+## 2026-10-05 正式 Hosting 發布補記
+
+- Source：乾淨 commit `42731b1e86883782069479655bfedaf2cd87ac77`，branch `持續優化3`。
+- Firebase Hosting：project/site `projed-cc78d`；release `20261005141011-b3b16a`；canonical `https://projed-cc78d.web.app`；live release `1791209475419000`／version `ae0e7e4538ce30bd`。
+- Sealed artifact：83 manifest entries，tree SHA-256 `42dac3b004032821993128bb7d5b9dbb0c2c00f580616a99d43894f6cfa60bd7`；與前版 release `20261004082518-04e5e7` 綁定保留資產。
+- Hosted verification：canonical artifact provenance 83/83 與匿名 shell browser smoke PASS；release metadata 回讀相符 source/release。Direct receipt `published=true`、`complete=false`、`verification=feature-pending`：本次沒有執行登入後功能 smoke，未以本機 fixture 結果代替正式 authenticated feature 驗收。
+- Recovery：前一 live Firebase Hosting version `projects/projed-cc78d/sites/projed-cc78d/versions/a02e19f14202f6eb`（release `1791102442256000`）；未 rollback。
+- 範圍：只發布 Firebase Hosting 網站檔案；未使用正式 Google 登入、未讀寫 Supabase／正式業務資料、未修改 schema、migration、權限或其他雲端資源。Receipt：`output/release/dev-083/20261005141011-b3b16a/direct-evidence.json`。
