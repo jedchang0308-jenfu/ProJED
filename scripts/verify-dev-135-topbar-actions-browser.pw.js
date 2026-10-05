@@ -1,6 +1,7 @@
 /* eslint-disable */
 async (page) => {
-  const OUTPUT_DIR = 'output/playwright/dev-135-topbar-actions';
+  const OUTPUT_DIR = process.env.PROJED_PLAYWRIGHT_OUTPUT_DIR || 'output/playwright/dev-135-topbar-actions';
+  const BASE_URL = page.url().match(/^https?:\/\/[^/]+/)?.[0] || 'http://localhost:4000';
   const assert = (condition, message, details = {}) => {
     if (!condition) throw new Error(`${message}: ${JSON.stringify(details)}`);
   };
@@ -28,7 +29,7 @@ async (page) => {
   };
 
   await page.setViewportSize({ width: 1280, height: 760 });
-  await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
+  await page.goto(`${BASE_URL}/`, { waitUntil: 'domcontentloaded' });
   await page.evaluate(({ account, workspace }) => {
     localStorage.clear();
     sessionStorage.clear();

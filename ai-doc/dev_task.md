@@ -10,19 +10,19 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 - 即時會議的錄音、任務事件擷取、recovery 與專案變更匯入繼續限於 live mode；工作紀錄不顯示會議流程；沒有 schema、migration、權限或正式環境變更。
 - 父／相容任務：DEV-019、DEV-020、DEV-107、DEV-117；本次以 DEV-136 作 native task，不把來源回饋改掛為既有 DEV 的歷史 PASS。
 - 工程契約：[SPEC-019 DEV-136 addendum](specs/SPEC-019-record-type-and-meeting-workflow-layering.md#dev-136-架構定案既有會議草稿續接完整流程---2026-10-05)；驗收權威：[QA-DEV-136](qa/QA-DEV-136-meeting-draft-ai-continuation.md)。
-- 狀態：RD implementation complete；局部本機 QA 通過，browser UI／互動驗收 Not verified；未 push、deploy 或修改正式資料。
-- 2026-10-05 驗證：DEV-136 state 14/14、DEV-092 55 checks、DEV-020 13 file groups、TypeScript、受影響檔案 ESLint 與 `git diff --check` PASS。完整 repo `npm run lint` 被未修改的 `scripts/verify-dev-134-quick-task-update-prompt.mjs:378` 未使用變數錯誤阻擋；完整 lint 與瀏覽器限制記於 [QA-DEV-136](qa/QA-DEV-136-meeting-draft-ai-continuation.md#2026-10-05-本機驗收紀錄)。DEV-107 browser case 已更新，但 npm registry `EACCES` 阻止 Playwright CLI 啟動；本次沒有 rendered UI 證據。
+- 狀態：RD implementation complete；分支部署前本機驗證通過；DEV-107／DEV-135 targeted browser UI PASS（隔離外部服務）；未 push、deploy 或修改正式資料。
+- 2026-10-05 預提交驗證：DEV-136 state 14/14、DEV-092 55 checks、DEV-020 13 file groups、DEV-107 browser 6/6、DEV-135 browser 6/6、TypeScript、完整 repo lint（0 errors，64 warnings）、`npm run verify:source` 與 `git diff --check` PASS。預提交 artifact `20261005133528-ab6ad5` 的 artifact scan／DEV-083 release gate PASS，但 manifest 綁定 dirty working tree；正式提交後另建乾淨 commit artifact 並重跑 gate。DEV-107 verifier 已對齊 DEV-135 將紀錄庫／會議入口移至右上更多選項的 UI；完整驗收限制與證據見 [QA-DEV-136](qa/QA-DEV-136-meeting-draft-ai-continuation.md#2026-10-05-本機驗收紀錄)。
 
 ## DEV-135 主程式三點選單整合導覽、帳號與看板操作 - 2026-10-05
 
 - UI 調整補充：選單第一項改為「設定」，紀錄庫順延第二；分享入口顯示為「分享看板」；頂列工作區／看板切換鈕移除圖示，全域任務平台入口顯示「所有任務」取代 `All`。正式版自動偵測行為維持，人工檢查按鈕改名為「立即檢查更新」；偵測到尚未略過的可用更新時，三點按鈕顯示「1」通知徽章並提供無障礙提示，更新完成或略過時清除；帳號名稱、信箱及登出移至選單底部，不增加常駐說明文字，保留既有更新安全邊界。
 
 - 人類來源：本 chat「這三個功能都移到右上角的三點按鈕清單裡」。目標為 ProJED 主程式。
-- 狀態：RD implementation complete；型別、受影響檔案 ESLint 與相關靜態契約通過；隔離瀏覽器 UI 驗收未驗證；未部署。
+- 狀態：RD implementation complete；DEV-135 targeted browser UI 6/6、型別、lint 與相關靜態契約通過；外部 OAuth／Google API／行事曆服務採隔離 stub；未部署。
 - 變更：將紀錄庫、設定、帳號顯示及登出收進頂列 AppMoreMenu；把分享看板、開始會議模式及未開放的個人紀錄入口一併移入選單，從頂列移除重複動作。依後續使用者回饋，選單項目全面移除圖示、頭像圓點與登出箭頭，保留三點選單觸發按鈕；保留分享成員數、會議進行中狀態、個人紀錄停用原因、紀錄草稿離開確認、目前頁面的回到看板切換及窄版側欄收合行為；三點按鈕依既有 PWA 狀態顯示／清除更新通知徽章。
 - 邊界：只改 ProJED 本機原始碼與此任務索引／驗證器；沒有修改遠端設定、資料、權限或正式環境。
 - 2026-10-05 本機驗收補記：使用者核准重啟 4000 服務。已核對並停止由同一 ProJED repo 舊 worktree `C:\Users\user\.codex\worktrees\dev133-independent-auth-release\ProJED` 啟動的 listener PID 45064／wrapper PID 78340；隨後從 canonical repo `C:\VIBE CODING\ProJED\ProJED` 啟動持續運作的 `ProJED local-test`，port 4000，listener PID 83048／wrapper PID 39492。服務保留供使用者驗收；未操作既有瀏覽器頁籤，沿用使用者既有本機服務生命週期管理。
-- 驗證：TypeScript、Lint 無 error；DEV-020 workflow 13 file groups、DEV-026 share 16/16、DEV-043 system-page 13/13、DEV-117 continuity 21 assertions 均通過；`git diff --check` 通過。首頁與三個選單項目的來源模組回 HTTP 200，HTTP 讀回確認分享／會議／個人紀錄三項位於 AppMoreMenu，MainLayout 已無分享入口。DEV-031 初始檢查曾因 verifier 契約已漂移為 17/19；本輪同步更新 verifier 後為 21/21。`npm run verify:dev-135-topbar-actions-browser` 因 npm registry 請求回 EACCES 而未啟動 CLI；沒有視覺／互動驗收證據，判定 Not verified。Playwright CLI session 未建立，使用者既有頁籤未操作；4000 local-test 服務保留供使用者驗收。
+- 驗證：TypeScript、完整 lint（0 errors，64 warnings）、DEV-020 workflow 13 file groups、DEV-026 share 16/16、DEV-043 system-page 13/13、DEV-117 continuity 21 assertions 與 `git diff --check` 均通過。DEV-135 browser 6/6：更新徽章、更多選項入口、分享對話框／成員數、個人紀錄 disabled state、會議 active state；結果與截圖在 `output/playwright/dev-135-topbar-actions/repair-final/`，console/page／HTTP／request errors 均為 0。browser 將 Google OAuth／Google API／Google Fonts／TaiwanCalendar 外部請求隔離 stub，未覆蓋真實外部服務。DEV-031 初始檢查曾因 verifier 契約已漂移為 17/19；本輪同步更新 verifier 後為 21/21。使用者既有 4000 local-test 服務保留供驗收。
 
 Cold start：先讀下方 `## 總任務清單`；需要特定 DEV 詳細歷史時，再搜尋
 `ai-doc/archived/dev_task_pm_updates_2026-07-15.md` 的 DEV ID 並只讀命中段落。
@@ -173,7 +173,7 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 
 ## 總任務清單
 
-- ◦ DEV-136 [開發點] [RD完成／局部QA PASS／Browser Not Verified] [P1] 既有會議草稿續接 AI 整理與校稿流程
+- ◦ DEV-136 [開發點] [RD完成／本機部署前 targeted QA PASS／未部署] [P1] 既有會議草稿續接 AI 整理與校稿流程
   - 已存會議草稿回到完整四階段；有效 AI trace 重開後可續編與重跑，AI optional、草稿與發布分開；即時擷取控制仍只在 live meeting。
   - [SPEC-019 架構定案](specs/SPEC-019-record-type-and-meeting-workflow-layering.md#dev-136-架構定案既有會議草稿續接完整流程---2026-10-05)；[QA-DEV-136](qa/QA-DEV-136-meeting-draft-ai-continuation.md)。
 - ✓ DEV-134 [開發點] [完成] [P1] [第一批1～3已部署並驗收；手機更新成功] PWA 載入失敗恢復與前版資產相容

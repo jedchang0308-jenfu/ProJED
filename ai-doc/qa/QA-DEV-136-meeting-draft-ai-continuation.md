@@ -3,7 +3,7 @@
 - 對應 DEV：DEV-136；相容 DEV：DEV-019、DEV-020、DEV-107、DEV-117
 - 規格：SPEC-019「DEV-136 架構定案」
 - 驗收範圍：ProJED 本機 candidate；不含正式環境、正式資料或部署。
-- 結果：局部本機驗證通過；瀏覽器互動 Not verified；未發布
+- 結果：分支部署前本機驗證通過；DEV-107／DEV-135 targeted browser UI PASS（隔離外部服務）；未部署
 
 ## 目標
 
@@ -36,8 +36,12 @@
 
 ## 2026-10-05 本機驗收紀錄
 
-- PASS：DEV-136 純狀態 verifier 14/14；涵蓋 trace 恢復／失效、AI 重跑資格、選用 AI 後直接存草稿、發布鎖定。
-- PASS：DEV-092 靜態契約 55 checks；DEV-020 workflow 靜態回歸 13 file groups；TypeScript、DEV-136 touched-files ESLint、`git diff --check`。
-- PASS：受影響程式與驗證器 ESLint 無 error（`MainLayout.tsx:242` 有一項 effect warning）。完整 `npm run lint` 未通過：未修改的 `scripts/verify-dev-134-quick-task-update-prompt.mjs:378` 有一個 `no-unused-vars` error，另有 64 warnings；因此標準 `verify:source` gate 會在 lint 階段停止，未以此結果宣稱完整 gate 通過。
-- Not verified：`verify-dev-107-record-sidebar-layout-browser.pw.js` 已加入從紀錄庫重開、恢復 synthesis、重跑 AI、存校稿案例，但 Playwright CLI 在開啟頁面前無法下載：npm registry 回 `EACCES`，請求 `https://registry.npmjs.org/@playwright%2fcli`。另一個瀏覽器控制介面初始化以 Windows error 5 結束；未操作使用者既有瀏覽器頁籤。
-- 因瀏覽器沒有啟動，本紀錄不宣稱 N01～N09 的畫面／互動／幾何驗收通過；未啟動或停止 localhost:4000 服務，未部署正式環境。
+- PASS：DEV-136 純狀態 verifier 14/14；涵蓋 synthesis trace 恢復／失效、AI 重跑資格、選用 AI 後直接存草稿、發布鎖定。
+- PASS：DEV-092 靜態契約 55 checks；DEV-020 workflow 靜態回歸 13 file groups；TypeScript、受影響 ESLint、`git diff --check`。
+- PASS：完整 `npm run lint` 無 error（64 warnings）；原有 DEV-134 驗證器未使用變數已修復，標準 source gate 不再被 ESLint 阻擋。
+- PASS：DEV-107 rendered browser 6/6：1902×960、1440×900、1024×768 既有草稿版面，從已保存草稿重跑 AI 並校稿，live meeting regression，390×844 mobile-negative。截圖與結果在 `output/playwright/dev-107-record-sidebar-layout/repair-final/`；console/page error、HTTP 4xx/5xx、最後水平 overflow 均為 0。
+- PASS：DEV-135 rendered browser 6/6：更新徽章顯示／清除、頂列動作移入更多選項、分享人數與對話框、個人紀錄停用狀態、會議啟動與進行中狀態。截圖與結果在 `output/playwright/dev-135-topbar-actions/repair-final/`；console/page error、HTTP failure 與 failed request 均為 0。
+- PASS：完整 `npm run verify:source`；包含 ESLint、TypeScript、sealed production build、production auth mode 5 checks、Supabase static 26 snippets、migration aliases 65/65、calendar ICS、core regression 11 checks 與 P9 Edge Function。預提交工作樹產物 `20261005133528-ab6ad5` 的 `npm run verify:production-artifact` 與 `npm run verify:dev-083-production-release-gate` 均通過。
+- Artifact provenance：上述預提交產物由含本次待提交檔案的 working tree 建置，manifest 標示 dirty；它只證明建置與 artifact scan 通過，不作部署候選。提交後需重新產生並驗證綁定乾淨 commit 的 artifact；本任務不執行部署。
+- Browser 限制：isolated local-test browser 將 Google OAuth／Google API／Google Fonts 與 TaiwanCalendar 網路呼叫 stub；因此只驗證本機 UI 與功能流程，不涵蓋實際 OAuth、Google API 或權威行事曆資料。Playwright CLI/npm registry 的 `EACCES` 與 headed Edge 初始化錯誤曾阻止原驗證入口；改用已安裝的 Playwright 套件與 task-owned headless Chrome 後完成上述實際畫面／互動驗證，未操作使用者既有瀏覽器頁籤。
+- 本次瀏覽器範圍是針對 DEV-136／相容 DEV-107、DEV-135 的 targeted regression，不等同完整 N01～N09 matrix、獨立 QC 或 production smoke。未修改 localhost:4000，使用隔離的本機測試服務；未部署正式環境。

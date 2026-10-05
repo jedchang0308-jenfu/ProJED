@@ -1,6 +1,6 @@
 /* eslint-disable */
 async (page) => {
-  const OUTPUT_DIR = 'output/playwright/dev-107-record-sidebar-layout';
+  const OUTPUT_DIR = process.env.PROJED_PLAYWRIGHT_OUTPUT_DIR || 'output/playwright/dev-107-record-sidebar-layout';
   const BASE_URL = page.url().match(/^https?:\/\/[^/]+/)?.[0] || 'http://localhost:4000';
   const TARGET_TITLE = 'DEV-107 既有會議草稿排版驗證';
   const diagnostics = [];
@@ -125,7 +125,11 @@ async (page) => {
     await writeFixture(viewport);
     const sidebarExpandButton = page.locator('button[aria-label="展開工作區選單"]');
     if (await sidebarExpandButton.count() && await sidebarExpandButton.isVisible().catch(() => false)) await sidebarExpandButton.click();
-    const recordsButton = page.locator('[data-sidebar-records-button]').first();
+    const appMoreMenu = page.locator('[data-app-more-menu]');
+    const appMorePanel = page.locator('[data-app-more-menu-panel]');
+    if (!(await appMorePanel.isVisible().catch(() => false))) await appMoreMenu.locator('summary').click();
+    await appMorePanel.waitFor({ state: 'visible', timeout: 5000 });
+    const recordsButton = appMorePanel.locator('[data-sidebar-records-button]').first();
     await recordsButton.waitFor({ state: 'visible', timeout: 10000 });
     await recordsButton.click();
     await page.locator('[data-record-section-controls]').waitFor({ state: 'visible', timeout: 10000 });
@@ -261,7 +265,10 @@ async (page) => {
 
   await runCase('ROT-107-001-live', 'new live meeting keeps live workflow and meeting-only controls', async () => {
     await writeFixture({ width: 1024, height: 768 });
-    const start = page.getByRole('button', { name: '新增會議記錄' }).first();
+    const appMorePanel = page.locator('[data-app-more-menu-panel]');
+    await page.locator('[data-app-more-menu] summary').click();
+    await appMorePanel.waitFor({ state: 'visible', timeout: 5000 });
+    const start = appMorePanel.locator('[data-app-more-meeting-record="true"]');
     await start.waitFor({ state: 'visible', timeout: 10000 });
     await start.click();
     await page.locator('[data-record-composer-variant="live-meeting"]').waitFor({ state: 'visible', timeout: 10000 });
@@ -274,7 +281,7 @@ async (page) => {
   await runCase('TC-107-009-mobile-negative', '390px keeps meeting UI unavailable', async () => {
     await writeFixture({ width: 390, height: 844 });
     assert(await page.locator('[data-record-section-tab="meeting"]').count() === 0, 'mobile records library must hide meeting section');
-    assert(await page.getByRole('button', { name: '新增會議記錄' }).count() === 0, 'mobile must not expose meeting entry');
+    assert(await page.locator('[data-app-more-meeting-record="true"]').count() === 0, 'mobile must not expose the app-menu meeting entry');
     assert(await page.locator('[data-record-workflow-kind="meeting"]').count() === 0, 'mobile must not expose live meeting workflow');
     const errors = await visibleErrors();
     assert(errors.length === 0, 'mobile-negative surface must have no visible error', { errors });
