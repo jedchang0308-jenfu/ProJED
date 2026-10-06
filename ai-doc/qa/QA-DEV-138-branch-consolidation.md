@@ -28,7 +28,7 @@
 | Production readiness | 17/17 PASS；只讀核對正式 Auth Site URL 與 canonical production root 一致，未改 Auth 設定 |
 | Credential readiness | 9/9 PASS；只讀驗證現有憑證與退役策略，未輪替或變更 Secret |
 | Tracked public payload | PASS；1261 paths，無私密 env、raw QA/profile 輸出。既有 localhost Supabase-demo JWT 已人工辨識為 fixture，不是正式憑證 |
-| Sealed build／protected release／production feature | 未執行／待完成；最新容量狀態為 EMERGENCY，不能接受風險繼續建置，需先釋出容量並重新預檢 |
+| Sealed build／protected release／production feature | 未執行／待完成；容量准入尚未通過，需以當次預檢決定是否可建置；BLOCKED 需當次明確風險接受，EMERGENCY 不可覆寫 |
 
 Boundary 收據：`output/qa/dev-133/independent-auth/boundaries/1791256368502/result.json`。源碼 snapshot digest `d606a9f6aa4a8df78582e70e5aab8bee24031964b981e123db4c87a448c20bd2`。
 
@@ -46,12 +46,14 @@ Boundary 收據：`output/qa/dev-133/independent-auth/boundaries/1791256368502/r
 
 本機 runtime 的 ProJED／目的／port／PID／native start token／executable／cleanup condition 記錄於 `output/qa/dev-138/owned/*/runtime.json`，Governor 的 register/release receipts 同目錄。各已完成測試的 task-owned Node／Chrome 已停止，4183 與各 BrowserServer ports 已釋放；使用者原有 4000 runtime 與視窗未操作。
 
-## 最新容量阻擋
+## 容量阻擋紀錄
 
 2026-10-06 03:43:43 UTC 的 Governor 盤點收據 `output/qa/dev-138/capacity-emergency.json`：C 槽實體可用 16,365,629,440 bytes（約 15.2 GiB），保護門檻 25,534,503,118 bytes（約 23.8 GiB），另有 active leases 10 GiB，本建置要求預留 25 GiB，狀態為 `EMERGENCY`。未查證其他 lease 的任務歸屬與實體容量變動原因，未停止或釋放它們。套用當次 lease／policy 後完整准入需要約 58.8 GiB，缺口約 43.5 GiB；此數字須在重試前重新計算。
 
 原約 31.1 GiB 的 `BLOCKED` 請求與其待回覆風險接受選項已不適用；EMERGENCY 不得風險覆寫。限定盤點只有 report-only npm cache／Docker cache／受保護的主工作樹，無可執行候選；proposal 因 `no_candidates` 自動取消，source maintenance operation 已關閉。未執行任何容量清理或建置。釋出容量後重新檢查，才決定是否可繼續原發布流程。
 
+後續重查的 `output/qa/dev-138/capacity-blocked-audit.json`：實體可用約 29.1 GiB、active leases 0、狀態 `BLOCKED`，完整准入仍需約 48.8 GiB，無可執行清理候選。已另提出以此最新容量請求為範圍的一次性風險決策，尚未收到人類答案。此後容量與其他 lease 仍可能變動；以建置前機器結果為準，不把歷史 EMERGENCY／BLOCKED 寫成持續不變的狀態。
+
 ## 待完成
 
-整合 merge commit `8b57568d8f4b9c4ff229c1287978bbfbf5d955b6` 與只改驗證／文件的 follow-up `2c119a4` 已推送，Draft PR [#7](https://github.com/jedchang0308-jenfu/ProJED/pull/7) 已建立。有效舊分支 tips 均為整合來源的祖先；舊 icon-auto-migration 除外，其歷史按已核准計畫封存、方案不回放。與 `origin/main` 比較是 0 個缺少／180 個新增提交；相較當次正式 source，產品 diff 仍只有 4 個 quick-task 檔案。下一步為釋出容量與重新預檢 → 剩餘發布前驗證 → PR 合併至 main → protected release 與正式版本／行為驗證 → 文件收斂及冗餘分支清理；合併／發布的精確 source 以當次 clean commit 重新綁定，HTTPS Level 3 收據須符合當次來源。正式驗證完成前保留所有舊分支；本 QA 不宣告 DEV-138 結案。
+整合 merge commit `8b57568d8f4b9c4ff229c1287978bbfbf5d955b6` 與只改驗證／文件的 follow-up `2c119a4` 已推送，PR [#7](https://github.com/jedchang0308-jenfu/ProJED/pull/7) 已建立。有效舊分支 tips 均為整合來源的祖先；舊 icon-auto-migration 除外，其歷史按已核准計畫封存、方案不回放。相較當次正式 source，產品 diff 仍只有 4 個 quick-task 檔案。已通過本機驗證的來源可先經 PR 合併；容量 gate 只阻擋未獲准的建置，來源合併不代表已發布。下一步為 PR 合併至 main → 容量預檢 → clean main source 的剩餘發布前驗證 → protected release 與正式版本／行為驗證 → 文件收斂及冗餘分支清理；合併／發布的精確 source 以當次 clean commit 重新綁定，HTTPS Level 3 收據須符合當次來源。正式驗證完成前保留所有舊分支；本 QA 不宣告 DEV-138 結案。
