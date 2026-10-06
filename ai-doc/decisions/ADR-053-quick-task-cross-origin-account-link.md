@@ -2,6 +2,11 @@
 
 狀態：**Accepted — Rev 3（2026-10-01；產品方向已採用，工程架構已定案）**。本版取代 2026-09-30 的跨 App OAuth Server／public client 銜接決策；文件決策完成不代表程式、TEST 或正式環境已完成切換。
 
+## 執行與交付狀態更新（2026-10-06）
+
+Rev 3 的架構決策仍為既有契約。DEV-133 Rev12 product source `9e67d5dd2d269637f40545896bb96c76ba71eeed` 已由 PR #5 合併（merge `08b51fd7048bb993f9b8f23a93581f24f00206a0`）並發布 release `20261001171238-12446a`；該歷史結案與逐層驗證見 QA-DEV-133／REL-014。DEV-138 正在處理後續 guard 恢復、分支整合及正式驗證後清理；整合候選尚未被上述歷史 evidence 驗證或發布。此更新不修訂 ADR 的 accepted decision，也不把 DEV-138 算為新產品交付。
+
+
 關聯：[DEV-133](../dev_task.md#dev-133-快速建任務同帳號與自動同步---2026-09-30)、[SPEC-133](../specs/SPEC-133-quick-task-shared-identity-sync.md)、[QA-DEV-133](../qa/QA-DEV-133-quick-task-shared-identity-sync.md)、[SPEC-122](../specs/SPEC-122-mobile-zero-data-quick-task.md)、[ADR-050](ADR-050-mobile-quick-task-entry-and-outbox.md)。沿用既有文件路徑與 DEV ID，避免續接引用失效。
 
 ## 背景與決策來源

@@ -123,10 +123,11 @@ check('S15', rootManifest.id === '/'
   && appInstallAssistant.includes('與主程式相同的 Google 帳號登入')
   && appInstallAssistant.includes('data-quick-task-install-link="true"'));
 check('S16', vite.includes('app-shell-meta.json') && vite.includes('projed-shell-version') && pwaUpdate.includes('/app-shell-meta.json?projed_update_check='));
-check('S16-quick-shared-update-lifecycle', quickPwaLifecycle.includes('void reloadSafetyReady.then(async (ready) => {')
+check('S16-quick-shared-update-lifecycle', quickPwaLifecycle.includes('if (!await reloadSafetyReady || disposed)')
   && quickPwaLifecycle.includes("await import('../services/pwaUpdateService')")
   && quickPwaLifecycle.includes('setupPwaLifecycle();')
-  && quickMain.includes('installQuickPwaLifecycle(installReloadSafety());')
+  && quickMain.includes('const reloadSafetyReady = installReloadSafety();')
+  && quickMain.includes('const getPwaApi = installQuickPwaLifecycle(reloadSafetyReady);')
   && !quickMain.includes("from '../services/pwaUpdateService'"),
   'the quick shell loads the shared updater only after reload-safety readiness, without adding Workbox to the initial graph');
 check('S17', migration.includes("QT_EXISTING_ROW_INVALID") && migration.includes('where owner_id = v_owner and id = p_capture_id'));

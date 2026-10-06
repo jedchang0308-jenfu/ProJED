@@ -1,5 +1,8 @@
 # SPEC-133：快速建任務共用帳號、各自登入與自動同步
 
+
+**執行歷史與目前狀態（2026-10-06；SPEC 契約仍為 Rev10）。** DEV-133 Rev12 的 product source `9e67d5dd2d269637f40545896bb96c76ba71eeed` 已經 PR #5 merge `08b51fd7048bb993f9b8f23a93581f24f00206a0`，並發布 release `20261001171238-12446a`。此為 baseline `9577183` 的既有交付結案。DEV-138 正在恢復有效 guard 並整合分支；`bc58584a87b15fcc1136d1630a3f07f2046a6882` 起始的整合版尚未由 Rev12 QA／正式結果驗證，亦不代表已發布。本補記不改變 SPEC Rev10 契約；下方 Rev10／Rev9 的 Git pending、PR review 或 release 狀態皆為當時快照，現況以此更新及 QA／REL-014 的 Rev12 closure 為準。分層證據見 [QA-DEV-133](../qa/QA-DEV-133-quick-task-shared-identity-sync.md) 與 [REL-014](../release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)。
+
 2026-10-02 Rev 10 corrective addendum：使用者提供正式 Android App 與本機窄版比較，要求修正安裝模式差異。一般 browser、Android browser、Android／iPhone installed display-mode 及有無 `install=1` 皆保留同一標頭三點選單；平台安裝說明與選用換圖流程只在使用者點選後開啟。主程式 origin 的安裝轉址仍提示先完成本機同步。登入狀態及登入／登出入口獨立於 task count；沒有待同步任務時只隱藏內層 task details，保留帳號狀態，輸入草稿時也不隱藏登入說明。有待同步任務時維持首次展開及明確認領。資料、owner、Session、claim、RPC 與同步契約不變。TypeScript／targeted ESLint、本機平台 UI 38/38、兩正式 origin 平台 UI 71/71、79/79 canonical provenance 與 root smoke 均 PASS，live release `20261002054439-a538f0`／source `e69ac3f` 已推送與發布；實機仍需使用者確認。下列 Rev 9 發布／Git 待辦是歷史快照，Git 已推送至 `origin/持續優化3`（截至 `829ac02`）。
 
 修訂：**2026-10-01 Rev 9；Human Confirmed（產品方向）；RD Implementation Ready；架構定案：已定案**。Rev 5 整併最近任務狀態與恢復入口；Rev 6 降低收合入口的視覺存在感；Rev 7 設定入口首次出現時預設展開；Rev 8 將未登入狀態提示標為紅字；Rev 9 在未登入狀態說明任務先保存在本機，並於展開後列出可認領的本機未綁定任務名稱。資料、owner、claim 與同步契約不變。REL-014 核心已正式發布並通過驗收；Git 遠端交付目的地待確認。最終 UI slice 的本機 browser／IDB＋Auth/RPC SIMULATION25/25、型別／lint及正式匿名UI10/10、雙origin54/54已 PASS，release `20261001074739-df101c`；Git遠端交付尚待。證據範圍見 QA-DEV-133。

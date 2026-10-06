@@ -1,6 +1,17 @@
 # REL-014：DEV-133 各自登入與依帳號同步
 
-狀態：**正式發布與功能驗收 PASS；Git 遠端交付待確認目的地。** 原 `20261001061118-144be8` 核心包排除後續 UI；UI 已另以 `20261001074739-df101c` 發布，下方後續發布節為最新 UI 權威。
+## Rev12 恢復提示競態修正（2026-10-02；正式發布與驗收完成）
+
+Product source `9e67d5dd2d269637f40545896bb96c76ba71eeed` 已由 PR #5 合併：head `9e67d5dd2d269637f40545896bb96c76ba71eeed`、base `codex/dev133-production-baseline`、merge `08b51fd7048bb993f9b8f23a93581f24f00206a0`（2026-10-01 17:27:36Z；[merge receipt](../../output/qa/dev-133/independent-auth/closure/pr5-merged.json)）。Rev12 direct release `20261001171238-12446a`，tree SHA-256 `2a79f53bbff803e678967afbd80f830b0fee083d369dcabae2b38ee743d2d259`，雙正式 origin 各 54/54、CLI/browser startup PASS；live version `45fd4af302e5ef15`，Rev11 `c01b9588565a9025` 為 recovery anchor（[direct evidence](../../output/qa/dev-133/independent-auth/production/rev12/direct-evidence.json)、[serving readback](../../output/qa/dev-133/independent-auth/production/rev12/serving-readback.json)）。
+
+Rev12 production verification：changed-UI delta 23/23 PASS，使用保留的普通 Google SDK Session／getUser、無 injection；真 owner RPC／receipt／Data API 僅一列，7 筆既有 raw capture 保留並新增一筆後共 8 筆 synced、pending 0，`visibleAccountWarnings=[]`，pageError／critical Auth-RPC failures 各 0。320／390／726 無 overflow；人工檢視 synced 320／390／726及 empty 390畫面 PASS（[result](../../output/qa/dev-133/independent-auth/production/rev12/result.json)、[normal worker reopen](../../output/qa/dev-133/independent-auth/production/rev12/normal-worker-reopen.json)、[visual receipts](../../output/qa/dev-133/independent-auth/production/rev12/production-synced-320.png)、[390](../../output/qa/dev-133/independent-auth/production/rev12/production-synced-390.png)、[726](../../output/qa/dev-133/independent-auth/production/rev12/production-synced-726.png)、[empty 390](../../output/qa/dev-133/independent-auth/production/rev12/production-empty-draft-390.png)). Final LOCAL real-IDB simulation 25/25、ordinary TEST N06 11/11、typecheck／scoped lint PASS；read-only review found no P0/P1 blocker. The delayed IDB case is local simulation, not PROD fault injection. Auth/RPC/DB/SW/schema/voice were unchanged; 82/12/18/N10 and SQL evidence are reused only within their unchanged component scopes, not added into a claim that all cases were rerun together.
+
+Owned Chrome PID 37824／CDP 4195 was closed after its task-owned tabs were closed; the exact task profile was preserved with capture count 8/pending 0, and no data was deleted. The 11-port cleanup receipt reports no remaining listeners or task Chrome ([browser cleanup](../../output/qa/dev-133/independent-auth/production/rev12/browser-cleanup.json), [runtime cleanup](../../output/qa/dev-133/independent-auth/production/rev12/runtime-cleanup.json)). **DEV-133 product, acceptance and PR #5 delivery are complete.** The document changes here are post-merge closure follow-up; N01–N10 layer-specific dispositions and superseded/cancelled gate boundaries are in [QA-DEV-133](../qa/QA-DEV-133-quick-task-shared-identity-sync.md).
+
+**DEV-138 範圍界線。** 本節 Rev12 receipt 僅證明其指定 product source、release 與 production checks；不證明目前整合起點 `bc58584a87b15fcc1136d1630a3f07f2046a6882` 或 DEV-138 候選已 build、驗收、部署。新候選的 source／artifact／正式讀回須由 DEV-138 當輪收據綁定。
+
+
+以下 Rev9 UI 時點的狀態文字為歷史快照；DEV-133 Rev12 已合併與發布的結案資訊列於上方。DEV-138 所追蹤的後續整合候選仍未完成驗證或發布。
 
 - 主程式：[ProJED](https://projed-cc78d.web.app/)。獨立快速入口：[ProJED-快速建任務](https://projed-cc78d.firebaseapp.com/quick-task/?install=1)。
 - 資源：Firebase project/site `projed-cc78d`；TEST Supabase `fhisnnufoeulxqrchldf`；PROD `knodlkxqpcqyrtgwpdst`。

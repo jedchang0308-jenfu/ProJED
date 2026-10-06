@@ -75,6 +75,7 @@ const transaction = async <T>(
 export const commitQuickCapture = async (
   record: QuickCaptureRecord,
   expectedContext?: number | { revision: number; projectRef: string; accountId: string },
+  isCurrent: () => boolean = () => true,
 ) => {
   const expectedContextRevision = typeof expectedContext === 'number' ? expectedContext : expectedContext?.revision;
   await transaction(
@@ -83,8 +84,10 @@ export const commitQuickCapture = async (
     (tx) => {
       const captureStore = tx.objectStore(QUICK_CAPTURE_STORE);
       const addOrRead = () => {
+        if (!isCurrent()) { tx.abort(); return; }
         const existing = captureStore.get(record.captureId);
         existing.onsuccess = () => {
+          if (!isCurrent()) { tx.abort(); return; }
           const value = existing.result as QuickCaptureRecord | undefined;
           if (!value) captureStore.add(record);
           else if (value.accountId !== record.accountId || value.title !== record.title) tx.abort();
@@ -95,7 +98,7 @@ export const commitQuickCapture = async (
         const contextRequest = tx.objectStore(QUICK_AUTH_CONTEXT_STORE).get('current');
         contextRequest.onsuccess = () => {
           const context = contextRequest.result as QuickAuthContext | undefined;
-          if (!context || !context.bindingAllowed || context.revision !== expectedContextRevision
+          if (!isCurrent() || !context || !context.bindingAllowed || context.revision !== expectedContextRevision
             || context.accountId !== record.accountId
             || (typeof expectedContext !== 'number' && context.projectRef !== expectedContext?.projectRef)) {
             tx.abort();
@@ -125,7 +128,7 @@ export const getQuickCapture = (captureId: string) => transaction<QuickCaptureRe
 
 export const getQuickAuthContext = () => transaction<QuickAuthContext | undefined>(QUICK_AUTH_CONTEXT_STORE, 'readonly', tx => tx.objectStore(QUICK_AUTH_CONTEXT_STORE).get('current'));
 
-export const saveQuickAuthContext = async (context: QuickAuthContext, expectedRevision?: number | null) => {
+export const saveQuickAuthContext = async (context: QuickAuthContext, expectedRevision?: number | null, isCurrent: () => boolean = () => true) => {
   await transaction(
     QUICK_AUTH_CONTEXT_STORE,
     'readwrite',
@@ -134,7 +137,7 @@ export const saveQuickAuthContext = async (context: QuickAuthContext, expectedRe
       const request = store.get('current');
       request.onsuccess = () => {
         const current = request.result as QuickAuthContext | undefined;
-        if (expectedRevision !== undefined && (current?.revision ?? null) !== expectedRevision) {
+        if (!isCurrent() || (expectedRevision !== undefined && (current?.revision ?? null) !== expectedRevision)) {
           tx.abort();
           return;
         }
@@ -289,7 +292,8 @@ export const retryQuickCapture = async (captureId: string, accountId: string) =>
       if (!record || record.accountId !== accountId || record.state === 'synced'
         || (record.leaseExpiresAt && record.leaseExpiresAt > Date.now())) return;
       if (record.state === 'failed_permanent' && !record.lastErrorCode?.includes('WORKSPACE')
-        && record.lastErrorCode !== '23503' && record.lastErrorCode !== 'AUTO_RETRY_EXHAUSTED') return;
+        && record.lastErrorCode !== '23503' && record.lastErrorCode !== 'AUTO_RETRY_EXHAUSTED'
+        && record.lastErrorCode !== 'P0001') return;
       next = { ...record, state: 'pending', attemptCount: 0, nextAttemptAt: null, lastErrorCode: null,
         leaseId: null, leaseExpiresAt: null, updatedAt: Date.now() };
       store.put(next);

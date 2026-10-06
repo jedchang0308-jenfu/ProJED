@@ -3,6 +3,18 @@
 Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 外層遞迴讀取 sibling clone 或備份資料夾。
 
+## DEV-138 DEV-133 guard 恢復、分支整合與正式驗證後清理 - 2026-10-06
+
+- 文件成熟度：RD Implementation Ready；狀態：進行中；類型：開發點；父任務：DEV-133。
+- 範圍：恢復已有效的 DEV-133 guard 修正，整合既有分支到目前分支與 main，完成相稱 QA／QC 及 Firebase `projed-cc78d` production 驗證，再清理冗餘 ProJED 分支與工作樹。DEV-133 Rev12 的歷史結案證據不等於本整合版本已驗證。
+- 進度：source 修正已完成；TypeScript、lint、DEV-133 contract、DEV-136 14/14／DEV-137 18/18、DEV-122 26/26、DEV-034 23/23 PASS；Auth／IDB／RPC boundary 84/84、frozen recovery UI 25/25 SIMULATION PASS，typed RPC／P0001 recovery browser 進行中。320／390 畫面人工檢視 PASS；未將模擬結果算成真實登入或 RPC。Build 尚未執行：容量預檢要求等待已提出的一次性風險決策；尚無本次 sealed artifact、production 驗證或 release 完成宣告。分層結果見 [QA-DEV-138](qa/QA-DEV-138-branch-consolidation.md)。
+- 基準：整合起點 `bc58584a87b15fcc1136d1630a3f07f2046a6882`；DEV-133 Rev12 已合併產品基線 `9577183`。bundle `output/archive/dev-138/20261006/projed-pre-consolidation.bundle` 已 verify PASS，31 refs，SHA-256 `842623c501c84bf2550c656fa9d77e73be0f191daee02a0cc3150edc6ec01807`；raw QA／browser profiles 原地保留，不壓縮、不上傳。
+- Exact-tip 封存 refs（tag suffixes 均在 prefix `archive/projed-20261006/` 下）：`local-codex-android-icon-honest-update` → `a36aa5fae6c25836de257a5b36c1df7521428c4f`；`local-codex-dev133-closure-docs` → `b158d4cf9479bfb5ed375f8818df055b52c385ba`；`local-codex-dev133-independent-auth-release` → `9e67d5dd2d269637f40545896bb96c76ba71eeed`；`local-codex-icon-auto-migration` → `667e88fc4083b6291437198aa7ebe852fefb348a`；`local-main` → `3f680985be2f746ae9092451a759acd1b4aad10a`；`local-持續優化3` → `bc58584a87b15fcc1136d1630a3f07f2046a6882`；`remote-codex-dev133-production-baseline` → `9577183a1902c7c3c6a30b503e1a2a234c7a0cdd`；`remote-main` → `6f29ea507d32427d5d0fbdc032b9425da8694d53`；`remote-持續優化3` → `21da34bceac2a5e8e96023262b19edb1aa71fe1e`。
+- 最新既有正式 artifact（DEV-137，與 DEV-138 候選分開）：source `fd0c2256212169326c8bd6a932327854edabd0ef`；artifact `20261005231837-de651b`；[manifest](../output/release/dev-083/20261005231837-de651b/manifest.json)、[direct evidence receipt](../output/release/dev-083/20261005231837-de651b/direct-evidence.json)。
+- 下一步：完成 browser simulation 與其餘 QA／QC；依待覆核的一次性風險決策處理容量 gate，之後才執行 build／封存 artifact／production 驗證；正式驗證完成後再清理授權範圍內的冗餘分支／工作樹。不得把歷史 Rev12 PASS 寫成本次整合版 PASS 或已發布。
+- 證據：上述 local Git bundle、archival tags；DEV-133 Rev12 的來源、release、receipt 與分層驗證見 [QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md)、[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)。
+- 計入交付：否；本開發點不新增產品交付數。
+
 ## DEV-137 AI 整理任務路徑補正與失敗診斷 - 2026-10-06
 
 - 文件成熟度：RD Implementation Ready；狀態：本機及正式版本／合成 API 驗證通過／正式 UI 與草稿流程使用者回報 PASS；類型：開發點；父任務：DEV-012，相容 DEV-024／136。
@@ -46,6 +58,8 @@ Cold start：先讀下方 `## 總任務清單`；需要特定 DEV 詳細歷史�
 `ai-doc/archived/dev_task_pm_updates_2026-07-15.md` 的 DEV ID 並只讀命中段落。
 
 ## DEV-133 快速建任務同帳號與自動同步 - 2026-09-30
+
+**2026-10-02 Rev12 原產品交付結案（歷史基線）。** Product source `9e67d5dd2d269637f40545896bb96c76ba71eeed` 由 PR #5 合併（merge `08b51fd7048bb993f9b8f23a93581f24f00206a0`），正式 release `20261001171238-12446a`、live version `45fd4af302e5ef15`；依當時 source-bound evidence，Rev12 的命名 production UI、local real-IDB simulation、ordinary TEST N06 與 N01～N10 分層結案已完成，Android 實機 gate 由使用者取消。此為 `9577183` 基線上的既有交付，不能視為 `bc58584` 後續整合版的驗證或發布。後續 guard 恢復、分支整合與 production 驗證另由 DEV-138 追蹤；原 DEV-133 交付只計一次。詳見 [QA Rev12 closure](qa/QA-DEV-133-quick-task-shared-identity-sync.md)、[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)。
 
 **2026-10-02 手機 installed UI 一致性補正已部署。** source `e69ac3f` 已推送，live release `20261002054439-a538f0`。Rev 10 統一 installed／browser／query 的標頭三點入口、零任務時仍顯示登入狀態，並修正既有任務清單初始預設展開；保留 Android 選用換圖的本機 pending guard。TypeScript／targeted ESLint、sealed 本機 38/38、兩正式 origin 平台 UI 71/71、79/79 canonical provenance 與 root smoke 均 PASS；手機實機重開待使用者確認。16 個舊 live empty-UI FAIL 與初次本機時序／預設展開失敗均保留於 QA。下列 Git 待核准等狀態為當時快照，以本段及最新 QA／REL-015 為準。
 
@@ -190,6 +204,13 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 同一 source commit 的 DEV-121 static 28/28、Chromium 37/37、Goal empty-location、TypeScript、targeted ESLint 與 diff check 均通過；direct receipt 保留 `feature-pending`，因完整 fixture runner 固定使用 localhost/local-test，未將 local-only 結果冒充 authenticated production Goal smoke。未改資料、schema、migration、權限或 persistence；部署前 live version `63d9b2ea3d7cdb4f` 保留為 rollback anchor。
 
 ## 總任務清單
+
+- ◐ DEV-138 [開發點] [進行中／boundary 84/84、UI 25/25 SIMULATION PASS／build 與正式驗證未完成] [P1] [ProJED] DEV-133 guard 恢復、分支整合與正式驗證後清理
+  - 摘要：以 DEV-133 Rev12 已合併基線為歷史依據，恢復有效 guard、整合既有分支，完成正式驗證後再清理；不新增產品交付數。
+  - 父任務：DEV-133。
+  - 下一步：完成 browser simulation 及其餘 QA／QC；一次性容量風險決策待覆核，build 與 Firebase `projed-cc78d` production 驗證仍待執行；驗證後再清理冗餘分支／工作樹。
+  - 證據：目前 TypeScript、lint、DEV-133 contract、DEV-136／137 targeted checks PASS；`output/archive/dev-138/20261006/projed-pre-consolidation.bundle`（31 refs，SHA-256 `842623c501c84bf2550c656fa9d77e73be0f191daee02a0cc3150edc6ec01807`）；九個 exact-tip tags：`archive/projed-20261006/...`；raw QA profiles 保留於本機。
+  - 計入交付：否。
 
 - ◇ DEV-137 [開發點] [RD／本機 QA PASS／正式部署、資產與合成 API 驗證 PASS／登入後 UI 與草稿流程使用者回報 PASS] [P1] [ProJED AI 整理] 任務路徑補正與失敗診斷
   - 摘要：以來源路徑補正可唯一識別的任務標題；失敗保留原稿並提供單一中文原因與執行追溯。
@@ -1180,14 +1201,13 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 證據：本地 390×844 headless Edge 操作與 `output/playwright/dev-132/*-mobile-cdp.png`、`tsc --noEmit`、DEV-034 static 23/23、targeted ESLint 0 errors；移位前 DEV-132／130／034／038 回歸與本節執行紀錄。
   - 計入交付：否（尚未正式發布）。
 
-- ◐ DEV-133 [交付點] [核心及手機 UI 網站驗證通過] [P1] [已推送與 live 部署；手機實機待確認] 快速建任務各自登入與自動同步
+- ✓ DEV-133 [交付點] [Rev12 原產品交付與 PR #5 已結案] [P1] [既有 Rev12 production release 完成；後續整合由 DEV-138 追蹤] 快速建任務各自登入與自動同步
   - 摘要：共用 ProJED 帳號系統、兩個 App 各自登入與保存 Session；保留 owner-bound 離線保存、自動重試及七日已同步副本清理。
   - 來源 ID：使用者 2026-10-01 採用獨立登入方案及修改開發文件／補齊到架構定案指示；延續 2026-09-30 DEV-133。
-  - 父任務：DEV-122；延續 DEV-131 雙網址安裝，相容 DEV-130／132。
-  - 下一步：取得手機既有 installed profile 的重新開啟確認；Rev10 兩 origin 平台／query 矩陣已通過。
-  - 阻塞 / 恢復條件：Git 推送已完成，沿用明確 live 授權與同專案 corrective cycle；核心及 Rev9 證據保留，各層結果不互相代替。
-  - 證據：[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)、[QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md)、[SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md)、[ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md)；canonical terminal-evidence.json 與 worktree activation-resume-evidence.json 綁定 source／artifact／case 層。
-  - 計入交付：是（未完成，產品完成率貢獻 0）。
+  - 父任務：DEV-122；延續 DEV-131 雙網址，相容 DEV-130／132。
+  - 下一步：DEV-133 Rev12 原產品交付已結案；目前整合候選與正式驗證後清理由 DEV-138 管理，不把歷史 Rev12 PASS 重算為新版本驗證。
+  - 證據：[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)；[QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md)；[SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md)；[ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md)。
+  - 計入交付：是（僅原 Rev12 產品交付計一次；DEV-138 不計入）。
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
 

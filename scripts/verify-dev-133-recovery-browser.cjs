@@ -11,7 +11,13 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const root = path.resolve(__dirname, '..');
 const origin = process.env.DEV133_BASE_URL || 'http://localhost:4000';
 assert.match(origin, /^http:\/\/(localhost|127\.0\.0\.1):\d+$/);
-const output = path.join(root, 'output/playwright/dev-133-recovery-entry');
+const output = process.env.DEV133_OUTPUT_DIR
+  ? path.resolve(process.env.DEV133_OUTPUT_DIR)
+  : path.join(root, 'output/playwright/dev-133-recovery-entry');
+if (process.env.DEV133_OUTPUT_DIR) {
+  assert.equal(fs.existsSync(output), false, 'Refuse to overwrite prior recovery evidence');
+  assert.ok(output.startsWith(root + path.sep), 'Recovery evidence must remain inside ProJED');
+}
 fs.mkdirSync(output, { recursive: true });
 const result = {
   devId: 'DEV-133', slice: 'conditional-recovery-entry', status: 'FAIL',
@@ -23,7 +29,7 @@ const result = {
     file, crypto.createHash('sha256').update(fs.readFileSync(path.join(root, file))).digest('hex'),
   ])),
   runtime: { project: 'ProJED', purpose: 'DEV-133 isolated recovery UI checks', appPort: new URL(origin).port,
-    appOwnership: 'Pre-existing user runtime; reused', browserPort: 0,
+    appOwnership: process.env.DEV133_APP_OWNERSHIP || 'Pre-existing user runtime; reused', browserPort: 0,
     cleanupCondition: 'Close every test context and only this BrowserServer; preserve user runtime/tab' },
 };
 const makeRecord = (number, fields = {}) => ({
@@ -40,8 +46,10 @@ const authModule = [
   'let account = window.__qaAccount;',
   'let snapshot = account ? { accountId: account, accessToken: "fixture-token-" + account, authEpoch: epoch } : null;',
   'export const getQuickAuthSnapshot = () => snapshot;',
+  'export const getQuickSessionLoadState = () => window.__qaUnreachable ? "unreachable" : snapshot ? "authenticated" : "unauthenticated";',
   'export const loadQuickSession = async () => { await window.__fixtureReady; return snapshot; };',
   'export const getQuickBindingContext = async () => { await window.__fixtureReady; const context = await getQuickAuthContext(); return context?.bindingAllowed ? context : null; };',
+  'export const isQuickBindingContextCurrent = context => Boolean(context?.bindingAllowed && context.accountId === account && (snapshot?.accountId === context.accountId || window.__qaUnreachable));',
   'export const verifyQuickSessionState = async expected => {',
   '  await window.__fixtureReady;',
   '  if (window.__qaVerificationGate) await window.__qaVerificationGate;',
@@ -68,6 +76,7 @@ const authModule = [
 const serviceModule = [
   'export const createQuickUnplacedTask = async ({ capture, auth }) => {',
   '  window.__qaRpcCalls.push({ captureId: capture.captureId, accountId: auth.accountId });',
+  '  if (window.__qaRpcMode === "typed-workspace" && window.__qaTypedFailureCount++ === 0) throw Object.assign(new Error("QT_NO_AVAILABLE_WORKSPACE"), { code: "QT_NO_AVAILABLE_WORKSPACE", status: 400 });',
   '  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(capture.title));',
   '  return { status: "committed", captureId: capture.captureId, ownerId: auth.accountId, titleHash: Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join(""), committedAt: Date.now(), created: true };',
   '};',
@@ -82,6 +91,7 @@ const openFixture = async (records = [], options = {}) => {
     window.__qaUnreachable = options.unreachable ?? false;
     window.__qaRpcCalls = [];
     window.__qaLoginCalls = [];
+    window.__qaTypedFailureCount = 0;
     window.__fixtureReady = new Promise((resolve, reject) => {
       const request = indexedDB.open('projed-quick-task-v1', 2);
       request.onupgradeneeded = () => {
@@ -143,6 +153,14 @@ const readRows = page => page.evaluate(() => new Promise((resolve, reject) => {
     read.onerror = () => { db.close(); reject(read.error); };
   };
 }));
+const waitForRecord = async (page, captureId, predicate) => {
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    const record = (await readRows(page)).find(row => row.captureId === captureId);
+    if (record && predicate(record)) return record;
+    await page.waitForTimeout(25);
+  }
+  throw new Error('CAPTURE_STATE_TIMEOUT');
+};
 const runCase = async (id, records, options, check) => {
   let fixture;
   try {
@@ -359,6 +377,50 @@ const main = async () => {
     await page.waitForTimeout(200);
     assert.ok((await readRows(page)).every(record => record.accountId === null));
     assert.equal((await calls(page)).rpc.length, 0);
+  });
+  await runCase('R17-legacy-P0001-reconfirms-the-original-capture', [makeRecord(1, {
+    accountId: 'A', state: 'failed_permanent', lastErrorCode: 'P0001', title: '保留原始 P0001 任務',
+  })], { account: 'A' }, async page => {
+    const original = (await readRows(page))[0];
+    await compact(page).click();
+    await page.getByRole('button', { name: '重新確認', exact: true }).waitFor();
+    assert.equal(await page.getByRole('button', { name: '重試', exact: true }).count(), 0);
+    await page.getByRole('button', { name: '重新確認', exact: true }).click();
+    await noRecovery(page);
+    const recovered = (await readRows(page))[0];
+    assert.equal(recovered.captureId, original.captureId);
+    assert.equal(recovered.accountId, original.accountId);
+    assert.equal(recovered.title, original.title);
+    assert.equal(recovered.state, 'synced');
+    assert.equal(recovered.receipt.captureId, original.captureId);
+    assert.equal(recovered.receipt.ownerId, original.accountId);
+    assert.deepEqual((await calls(page)).rpc, [{ captureId: original.captureId, accountId: 'A' }]);
+  });
+  await runCase('R18-typed-QT-workspace-retry-keeps-original-capture', [makeRecord(1, {
+    accountId: 'A', state: 'pending', workspaceHint: 'stale-workspace-hint', title: '原始待同步任務',
+  })], { account: 'A', rpcMode: 'typed-workspace' }, async page => {
+    const original = (await readRows(page))[0];
+    const failed = await waitForRecord(page, original.captureId, row => row.state === 'failed_permanent');
+    assert.equal(failed.lastErrorCode, 'QT_NO_AVAILABLE_WORKSPACE');
+    assert.equal(failed.captureId, original.captureId);
+    assert.equal(failed.accountId, 'A');
+    assert.equal(failed.title, original.title);
+    assert.equal(failed.workspaceHint, original.workspaceHint);
+    assert.equal(failed.receipt ?? null, null);
+    await compact(page).click();
+    await page.getByRole('button', { name: '前往工作台', exact: true }).waitFor();
+    await page.getByRole('button', { name: '重試', exact: true }).click();
+    await noRecovery(page);
+    const recovered = await waitForRecord(page, original.captureId, row => row.state === 'synced');
+    assert.equal(recovered.captureId, original.captureId);
+    assert.equal(recovered.accountId, 'A');
+    assert.equal(recovered.title, original.title);
+    assert.equal(recovered.receipt.captureId, original.captureId);
+    assert.equal(recovered.receipt.ownerId, 'A');
+    assert.deepEqual((await calls(page)).rpc, [
+      { captureId: original.captureId, accountId: 'A' },
+      { captureId: original.captureId, accountId: 'A' },
+    ]);
   });
 
   // Visual evidence uses the frozen candidate after the interaction checks.

@@ -1,5 +1,11 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-10-06（DEV-138 DEV-133 分支整合）
+
+本輪新結果見 [QA-DEV-138](qa/QA-DEV-138-branch-consolidation.md)：Auth／IDB／RPC boundary 84/84、frozen recovery UI 25/25 SIMULATION PASS，TS／targeted lint、DEV-122／034／133／136／137 checks PASS；320／390 畫面人工檢視 PASS。原任務重試 browser 與本次 build／production release 尚未完成；舊分支清理依計畫留待正式驗證後。
+
+DEV-133 Rev12 原產品交付及 PR #5 已在 baseline `9577183` 結案；其 production receipts 僅證明該歷史 source／release 範圍。DEV-138 source 修正完成，TypeScript、lint、DEV-133 contract、DEV-136／137 targeted checks PASS；browser simulation 執行中。Build 尚未執行，容量預檢正在等待一次性風險決策，因此本次整合版尚未完成完整驗證或發布。合併前本機 bundle `output/archive/dev-138/20261006/projed-pre-consolidation.bundle` 已 verify PASS（31 refs，SHA-256 `842623c501c84bf2550c656fa9d77e73be0f191daee02a0cc3150edc6ec01807`），九個 exact-tip tags 為 `archive/projed-20261006/...`。raw QA／browser profiles 留在本機原位，未壓縮或上傳。任務狀態及交付計數見 [DEV-138／DEV-133](dev_task.md#總任務清單)；Rev12 歷史證據與限制見 [QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md)、[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)、[SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md) 與 [ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md)。
+
 ## Documentation Map Update - 2026-10-06（DEV-137 AI 任務路徑補正）
 
 正式 AI 整理的 `INCOMPLETE_TASK_PATH` 修正，追蹤於 [DEV-137](dev_task.md#dev-137-ai-整理任務路徑補正與失敗診斷---2026-10-06)、[SPEC-012](specs/SPEC-012-ai-meeting-record-natural-language-quality.md) 與 [QA-DEV-137](qa/QA-DEV-137-production-deployment.md)。可唯一識別的任務標題依來源補齊路徑，未知或歧義任務仍拒絕；回傳最小失敗診斷，前端只顯示一處中文原因。18 個 Edge/client 模擬與 7 項本機 browser 斷言、原稿保護回歸、型別與 lint 通過。clean source `fd0c225` 的 artifact `20261005231837-de651b` 已部署到 Firebase `projed-cc78d`，80/80 canonical provenance、browser shell smoke 與 Supabase v6 合成 API 完整路徑 smoke 通過。正式登入後會議 UI／草稿生命週期於 2026-10-06 由使用者回報「測過OK」，記錄為使用者回報 PASS；DEV-083 direct receipt 因未附專用 authenticated feature-smoke，仍標示 `feature-pending`／`complete=false`。本機 deterministic／failure injection 與正式收據欄位各自保留其證據範圍。

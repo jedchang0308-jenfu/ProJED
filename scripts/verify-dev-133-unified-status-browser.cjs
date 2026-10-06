@@ -117,6 +117,7 @@ const result = {
   forbiddenAuthRpcRequests: [],
   httpFailures: [],
   visibleErrorFindings: [],
+  visibleAccountWarningObservations: [],
   stubbedModules: { auth: 0, rpc: 0 },
   runtime: {
     project: 'ProJED',
@@ -158,6 +159,8 @@ const authModule = [
   'let snapshot = account ? { accountId: account, authEpoch: epoch } : null;',
   'let authCallback = null;',
   'export const getQuickAuthSnapshot = () => snapshot;',
+  'export const getQuickSessionLoadState = () => window.__qaUnreachable ? "unreachable" : snapshot ? "authenticated" : "unauthenticated";',
+  'export const isQuickBindingContextCurrent = context => Boolean(context?.bindingAllowed && (snapshot ? snapshot.accountId === context.accountId : window.__qaUnreachable));',
   'export const bumpQuickAuthEpoch = () => { epoch += 1; snapshot = null; };',
   'export const loadQuickSession = async () => { await window.__fixtureReady; return snapshot; };',
   'export const getQuickBindingContext = async () => {',
@@ -371,7 +374,10 @@ const panel = page => page.locator('#quick-task-recovery');
 const details = page => page.locator('#quick-task-recovery-details');
 const summary = page => page.locator('#quick-task-recovery-details > summary[data-recover]');
 const summaryLabel = page => page.locator('#quick-task-recovery [data-recover-summary]');
-const noPanel = page => panel(page).waitFor({ state: 'hidden' });
+const noPanel = async page => {
+  await details(page).waitFor({ state: 'hidden' });
+  await page.locator('#quick-task-auth-status').waitFor({ state: 'visible' });
+};
 const calls = page => page.evaluate(() => ({
   rpc: window.__qaRpcCalls,
   login: window.__qaLoginCalls,
@@ -879,6 +885,38 @@ const main = async () => {
 
   await runCase('R24-successful-latest-status-and-title-share-summary', [], { account: 'A' }, async page => {
     const titleValue = '已同步的最近任務';
+    await noPanel(page);
+    assert.equal(await page.locator('#quick-task-message').isVisible(), false);
+    assert.equal(await page.locator('#quick-task-success').isVisible(), false);
+    assert.equal((await readRows(page)).length, 0);
+    await page.evaluate(() => {
+      const phrases = ['請先登出此 App，再登入建立這些待辦的原帳號', '請登入建立這些待辦的原帳號'];
+      const visibleWarnings = [];
+      const visible = element => {
+        const style = getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        return !element.hidden && style.display !== 'none' && style.visibility !== 'hidden'
+          && rect.width > 0 && rect.height > 0;
+      };
+      const collect = () => {
+        for (const selector of ['#quick-task-message', '#quick-task-recovery-message']) {
+          const element = document.querySelector(selector);
+          const text = (element?.innerText || element?.textContent || '').trim();
+          if (element && visible(element) && phrases.some(phrase => text.includes(phrase))) {
+            visibleWarnings.push({ selector, text });
+          }
+        }
+      };
+      window.__qaVisibleAccountWarnings = visibleWarnings;
+      window.__qaAccountWarningObserver = new MutationObserver(collect);
+      window.__qaAccountWarningObserver.observe(document.body, {
+        subtree: true,
+        childList: true,
+        characterData: true,
+        attributes: true,
+        attributeFilter: ['hidden', 'open', 'style', 'class'],
+      });
+    });
     await page.getByRole('textbox', { name: '任務名稱' }).fill(titleValue);
     await page.getByRole('button', { name: '建立', exact: true }).click();
     await page.locator('#quick-task-success strong').waitFor({ state: 'visible' });
@@ -890,11 +928,71 @@ const main = async () => {
     assert.ok(saved.receipt);
     await panel(page).waitFor({ state: 'visible' });
     assert.equal(await isPanelOpen(page), true);
+    const syncedStatus = '此任務已同步至 ProJED 主程式。';
+    await page.getByText(syncedStatus, { exact: true }).waitFor({ state: 'visible' });
     const text = await summaryDomText(page);
     assert.match(text, /已建立/);
     assert.ok(text.includes(titleValue));
     assert.equal(text.split(titleValue).length - 1, 1);
+
+    await togglePanelTo(page, false);
+    assert.equal(await isPanelOpen(page), false);
+    await togglePanelTo(page, true);
+    assert.equal(await isPanelOpen(page), true);
+    await page.getByText(/^(?:此任務|最近一筆任務)已同步至 ProJED 主程式。$/).waitFor({ state: 'visible' });
+
+    // Deliver an earlier, successful IndexedDB read after a newer input/render.
+    // Auth and RPC remain simulated; the saved capture is not changed here.
+    await togglePanelTo(page, false);
+    await page.evaluate(() => {
+      const original = IDBDatabase.prototype.transaction;
+      let reads = 0;
+      window.__qaReadGateHeld = false;
+      window.__qaRestoreReadGate = () => { IDBDatabase.prototype.transaction = original; };
+      IDBDatabase.prototype.transaction = function (...args) {
+        const tx = original.apply(this, args);
+        const stores = typeof args[0] === 'string' ? [args[0]] : Array.from(args[0]);
+        if (args[1] === 'readonly' && stores.length === 1 && stores[0] === 'captures') {
+          const gated = ++reads === 2;
+          let handler = null;
+          Object.defineProperty(tx, 'oncomplete', {
+            configurable: true,
+            get: () => handler,
+            set: value => { handler = value; },
+          });
+          tx.addEventListener('complete', event => {
+            const deliver = () => handler?.call(tx, event);
+            if (gated) {
+              window.__qaDeliverOldRead = deliver;
+              window.__qaReadGateHeld = true;
+              window.__qaRestoreReadGate();
+            } else deliver();
+          }, { once: true });
+        }
+        return tx;
+      };
+    });
+    await togglePanelTo(page, true);
+    await page.waitForFunction(() => window.__qaReadGateHeld === true);
+    const title = page.getByRole('textbox', { name: '任務名稱' });
+    await title.fill('清空輸入回歸');
+    await noPanel(page);
+    await title.fill('');
+    await noPanel(page);
+    await page.evaluate(() => window.__qaDeliverOldRead());
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    assert.equal(await title.inputValue(), '');
+    assert.equal((await readRows(page)).length, 1, 'Clearing the next input must not change the saved capture count');
     assert.equal((await calls(page)).rpc.length, 1);
+    const visibleWarnings = await page.evaluate(() => window.__qaVisibleAccountWarnings);
+    result.visibleAccountWarningObservations.push({
+      caseId: 'R24-successful-latest-status-and-title-share-summary',
+      watchedSelectors: ['#quick-task-message', '#quick-task-recovery-message'],
+      controlledFault: 'delivery of a completed real IDB pending-count read after a newer draft/render',
+      visibleWarnings,
+    });
+    assert.deepEqual(visibleWarnings, [], 'Same-account create/sync must not show an original-account login warning');
+    await page.evaluate(() => window.__qaAccountWarningObserver.disconnect());
   });
 
   await runCase('R25-expired-sync-lease-retries-same-record', [
