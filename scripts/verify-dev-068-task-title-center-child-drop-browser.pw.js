@@ -1,0 +1,2708 @@
+/* eslint-disable */
+async (page) => {
+  const results = [];
+  const diagnostics = [];
+  const networkFailures = [];
+  const screenshotBase = `output/playwright/dev-068-title-child-drop-${Date.now()}`;
+  const requestedCaseId = page.url().match(/[?&]dev068Case=([^&]+)/)?.[1] || null;
+  const currentPageOrigin = page.url().match(/^https?:\/\/[^/]+/)?.[0];
+  const appBaseUrl = currentPageOrigin || 'http://localhost:4000';
+  const assert = (condition, message, details = {}) => {
+    if (!condition) throw new Error(`${message}: ${JSON.stringify(details)}`);
+  };
+
+  page.on('console', (message) => {
+    if (message.type() === 'error') diagnostics.push(`console:error:${message.text()}`);
+  });
+  page.on('pageerror', (error) => diagnostics.push(`pageerror:${error.message}`));
+  page.on('response', (response) => {
+    if (response.status() >= 400) networkFailures.push(`${response.status()} ${response.url()}`);
+  });
+
+  await page.addInitScript(() => {
+    try {
+      Object.defineProperty(navigator, 'maxTouchPoints', { configurable: true, get: () => 5 });
+    } catch (_) {}
+    const nativeMatchMedia = window.matchMedia.bind(window);
+    window.matchMedia = (query) => {
+      if (query.includes('pointer: coarse') || query.includes('hover: none')) {
+        return {
+          matches: true,
+          media: query,
+          onchange: null,
+          addListener: () => undefined,
+          removeListener: () => undefined,
+          addEventListener: () => undefined,
+          removeEventListener: () => undefined,
+          dispatchEvent: () => false,
+        };
+      }
+      return nativeMatchMedia(query);
+    };
+  });
+
+  const account = {
+    id: 'local-test-user',
+    uid: 'local-test-user',
+    email: 'test@projed.local',
+    displayName: 'ProJED local QA',
+    createdAt: 1704067200000,
+  };
+
+  const seedSession = async () => {
+    await page.evaluate(({ account }) => {
+      localStorage.setItem('projed-local-test.selected-account', account.id);
+      localStorage.setItem('projed-local-test.session', JSON.stringify({
+        uid: account.uid,
+        email: account.email,
+        displayName: account.displayName,
+        createdAt: account.createdAt,
+      }));
+      localStorage.setItem('projed-task-workbench-panel:v1', JSON.stringify({
+        open: false,
+        filtersOpen: false,
+        showContainersInAllTasks: false,
+      }));
+      localStorage.setItem('projed-last-view', 'board');
+    }, { account });
+  };
+
+  const openApp = async (viewport = { width: 1440, height: 900 }) => {
+    await page.mouse.up().catch(() => undefined);
+    await page.setViewportSize(viewport);
+    await page.goto(`${appBaseUrl}/`, { waitUntil: 'domcontentloaded' });
+    await seedSession();
+    await page.goto(`${appBaseUrl}/?qcReset=1&qcSize=72`, { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
+    await page.locator('[data-layout-region="board-canvas"]').waitFor({ state: 'visible', timeout: 15000 });
+    await page.waitForFunction(() => Boolean(window.__projedTaskDragTestApi), null, { timeout: 5000 });
+    const sidebar = page.locator('[data-mobile-sidebar-overlay="true"]').first();
+    if (await sidebar.isVisible().catch(() => false)) {
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(100);
+    }
+  };
+
+  const readNodes = async () => page.evaluate(() =>
+    JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}'));
+
+  const readNode = async (nodeId) => page.evaluate((id) => {
+    const nodes = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
+    return nodes[id] || null;
+  }, nodeId);
+
+  const readRuntimeNodes = async () => page.evaluate(() =>
+    window.__projedTaskDragTestApi.snapshotNodes());
+
+  const patchRuntimeNode = async (nodeId, patch) => page.evaluate(({ id, changes }) =>
+    window.__projedTaskDragTestApi.patchNode(id, changes), { id: nodeId, changes: patch });
+
+  const removeRuntimeNode = async (nodeId) => page.evaluate((id) =>
+    window.__projedTaskDragTestApi.removeNodeFromRuntime(id), nodeId);
+
+  const setMovePermission = async (allowed) => page.evaluate((next) =>
+    window.__projedTaskDragTestApi.setMovePermission(next), allowed);
+
+  const resetDesktopCommitSpy = async () => page.evaluate(() =>
+    window.__projedTaskDragTestApi.resetDesktopCommitSpy());
+
+  const readDesktopCommitSpy = async () => page.evaluate(() =>
+    window.__projedTaskDragTestApi.snapshotDesktopCommitSpy());
+
+  const resetMobileCommitSpy = async () => page.evaluate(() =>
+    window.__projedTaskDragTestApi.resetMobileCommitSpy());
+
+  const readMobileCommitSpy = async () => page.evaluate(() =>
+    window.__projedTaskDragTestApi.snapshotMobileCommitSpy());
+
+  const visibleErrorSweep = async (label) => {
+    const state = await page.evaluate(() => {
+      const visible = (element) => {
+        const style = getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+      };
+      const alerts = Array.from(document.querySelectorAll('.inline-error,[role="alert"]'))
+        .filter(visible)
+        .map((element) => (element.textContent || '').trim())
+        .filter(Boolean);
+      return {
+        route: location.href,
+        viewport: { width: innerWidth, height: innerHeight },
+        alerts,
+        visibleHttpError: /HTTP\s+[45]\d\d|Not Found|Internal Server Error|\/api\//i.test(document.body.innerText),
+        horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+      };
+    });
+    assert(state.alerts.length === 0 && !state.visibleHttpError && !state.horizontalOverflow,
+      `${label} visible error/overflow sweep must pass`, state);
+    return state;
+  };
+
+  const targetScopeFor = (nodeId) => page.locator(`[data-task-child-drop-target="true"][data-task-id="${nodeId}"]`).first();
+  const titleSlotFor = (nodeId) => page.locator(`[data-task-title-slot="true"][data-task-id="${nodeId}"]`).first();
+  const surfaceFor = (nodeId) => page.locator(`[data-task-surface-source="true"][data-task-id="${nodeId}"]`).first();
+  const readSourceOriginPlaceholder = async (nodeId) => page.evaluate((id) => {
+    const matches = Array.from(document.querySelectorAll(
+      `[data-kanban-drag-source-placeholder="true"][data-task-id="${id}"]`,
+    )).filter((element) => {
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+    });
+    // L2 placeholders expose the marker on both the stable outer scope and
+    // its primary surface.  The contract is about the outer geometry frame;
+    // prefer that one while retaining the L1 header/L3 row fallback.
+    const scopeMatches = matches.filter((element) => element.matches('[data-task-surface-scope="true"]'));
+    const headerMatches = matches.filter((element) => element.matches('[data-kanban-column-header="true"]'));
+    const selected = scopeMatches.length > 0 ? scopeMatches : headerMatches.length > 0 ? headerMatches : matches;
+    const element = selected[0];
+    const rect = element?.getBoundingClientRect();
+    const style = element ? getComputedStyle(element) : null;
+    return {
+      count: selected.length,
+      rect: rect ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height } : null,
+      outlineStyle: style?.outlineStyle || null,
+      outlineWidth: style?.outlineWidth || null,
+      outlineColor: style?.outlineColor || null,
+      outlineOffset: style?.outlineOffset || null,
+      backgroundColor: style?.backgroundColor || null,
+      boxShadow: style?.boxShadow || null,
+    };
+  }, nodeId);
+
+  const pointFor = async (locator, ratioX = 0.5, ratioY = 0.5) => {
+    await locator.scrollIntoViewIfNeeded();
+    const box = await locator.boundingBox();
+    assert(Boolean(box), 'target must expose a visible bounding box');
+    return { x: Math.round(box.x + box.width * ratioX), y: Math.round(box.y + box.height * ratioY), box };
+  };
+
+  const fixtureIds = async () => page.evaluate(() => {
+    const nodes = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
+    const unique = (selector) => Array.from(new Set(Array.from(document.querySelectorAll(selector))
+      .map((element) => element.getAttribute('data-task-id'))
+      .filter(Boolean)));
+    const l1 = unique('[data-kanban-column-header="true"][data-task-id]');
+    const l2 = unique('.kanban-task-card[data-task-id]');
+    const l3 = unique('.kanban-checklist-item[data-task-id]');
+    const isDescendant = (nodeId, ancestorId) => {
+      const visited = new Set();
+      let current = nodes[nodeId]?.parentId;
+      while (current && !visited.has(current)) {
+        if (current === ancestorId) return true;
+        visited.add(current);
+        current = nodes[current]?.parentId;
+      }
+      return false;
+    };
+    const pair = (ids) => {
+      for (const sourceId of ids) {
+        for (const targetId of ids) {
+          if (sourceId !== targetId && !isDescendant(targetId, sourceId) && !isDescendant(sourceId, targetId)) {
+            return [sourceId, targetId];
+          }
+        }
+      }
+      return [];
+    };
+    const visibleIds = Array.from(new Set([...l1, ...l2, ...l3]));
+    const originPair = visibleIds.map((sourceId) => {
+      const parentId = nodes[sourceId]?.parentId;
+      if (!parentId || !visibleIds.includes(parentId)) return null;
+      const siblings = Object.values(nodes)
+        .filter((node) => node && !node.isArchived && node.parentId === parentId)
+        .sort((left, right) => (left.order ?? 0) - (right.order ?? 0));
+      return siblings.at(-1)?.id === sourceId ? [sourceId, parentId] : null;
+    }).find(Boolean) || [];
+    const columnOriginPair = l2.map((sourceId) => {
+      const parentId = nodes[sourceId]?.parentId;
+      if (!parentId || !l1.includes(parentId)) return null;
+      const siblings = Object.values(nodes)
+        .filter((node) => node && !node.isArchived && node.parentId === parentId)
+        .sort((left, right) => (left.order ?? 0) - (right.order ?? 0));
+      return siblings.at(-1)?.id === sourceId ? [sourceId, parentId] : null;
+    }).find(Boolean) || [];
+    return { l1, l2, l3, l2Pair: pair(l2), l3Pair: pair(l3), originPair, columnOriginPair };
+  });
+
+  const descendantIds = (nodes, rootId) => {
+    const descendants = [];
+    const queue = [rootId];
+    const visited = new Set();
+    while (queue.length) {
+      const parentId = queue.shift();
+      if (!parentId || visited.has(parentId)) continue;
+      visited.add(parentId);
+      Object.values(nodes).forEach((node) => {
+        if (!node || node.isArchived || node.parentId !== parentId) return;
+        descendants.push(node.id);
+        queue.push(node.id);
+      });
+    }
+    return descendants;
+  };
+
+  const readTransientState = async () => page.evaluate(() => ({
+    childPreview: document.querySelectorAll('[data-task-child-drop-preview="true"]').length,
+    desktopOverlay: document.querySelectorAll('[data-kanban-drag-overlay="true"]').length,
+    desktopIndicator: document.querySelectorAll('[data-desktop-drop-indicator="true"]').length,
+    mobileRail: document.querySelectorAll('[data-mobile-task-action-rail="true"]').length,
+    mobilePreview: document.querySelectorAll('[data-mobile-drag-preview="true"]').length,
+    mobileIndicator: document.querySelectorAll('[data-mobile-drop-indicator="true"]').length,
+    bodyActive: document.body.hasAttribute('data-task-drag-touch-active'),
+  }));
+
+  const beginMouseDrag = async (sourceId) => {
+    const source = surfaceFor(sourceId);
+    const point = await pointFor(source, 0.55, 0.45);
+    await page.mouse.move(point.x, point.y);
+    await page.mouse.down();
+    await page.mouse.move(point.x + 14, point.y + 3, { steps: 4 });
+    await page.locator('[data-kanban-drag-overlay="true"]').waitFor({ state: 'visible', timeout: 5000 });
+    return point;
+  };
+
+  const moveMouseToTargetPrimary = async (targetId) => {
+    const point = await pointFor(surfaceFor(targetId), 0.5, 0.5);
+    await page.mouse.move(point.x, point.y, { steps: 6 });
+    return point;
+  };
+
+  const findPointOutsideTaskScopes = async () => page.evaluate(() => {
+    for (let y = Math.max(56, innerHeight - 80); y >= 56; y -= 24) {
+      for (let x = 8; x < innerWidth - 8; x += 24) {
+        const element = document.elementFromPoint(x, y);
+        if (!element?.closest('[data-task-child-drop-target="true"],[data-mobile-task-action-rail="true"]')) {
+          return { x, y };
+        }
+      }
+    }
+    return { x: 4, y: Math.max(56, innerHeight - 8) };
+  });
+
+  const readChildPreview = async () => page.evaluate(() => {
+    const preview = document.querySelector('[data-task-child-drop-preview="true"]');
+    const hitScope = document.querySelector('[data-task-child-drop-hit-scope="true"]');
+    const parent = document.querySelector('[data-task-child-drop-parent-frame="true"]');
+    const sourceFrame = document.querySelector('[data-task-child-drop-source-frame="true"]');
+    const subtreeFrame = document.querySelector('[data-task-child-drop-subtree-frame="true"]');
+    const scopeFrame = document.querySelector('[data-task-child-drop-scope-frame="true"]');
+    const childInsertion = document.querySelector('[data-task-child-drop-insertion-preview="true"]');
+    const childOriginField = document.querySelector('[data-task-child-drop-origin-field="true"]');
+    const standardInsertion = document.querySelector('[data-desktop-drop-indicator="true"],[data-mobile-drop-indicator="true"]');
+    const hitScopeRect = hitScope?.getBoundingClientRect();
+    const parentRect = parent?.getBoundingClientRect();
+    const subtreeRect = subtreeFrame?.getBoundingClientRect();
+    const childInsertionRect = childInsertion?.getBoundingClientRect();
+    const standardInsertionRect = standardInsertion?.getBoundingClientRect();
+    const sourceStyle = sourceFrame ? getComputedStyle(sourceFrame) : null;
+    const subtreeStyle = subtreeFrame ? getComputedStyle(subtreeFrame) : null;
+    const childOriginStyle = childOriginField ? getComputedStyle(childOriginField) : null;
+    return {
+      count: document.querySelectorAll('[data-task-child-drop-preview="true"]').length,
+      phase: preview?.getAttribute('data-task-child-drop-phase') || null,
+      target: preview?.getAttribute('data-task-child-drop-target') || null,
+      input: preview?.getAttribute('data-task-child-drop-input') || null,
+      safeWidth: Number(hitScope?.getAttribute('data-task-child-drop-safe-width') || 0),
+      safeHeight: Number(hitScope?.getAttribute('data-task-child-drop-safe-height') || 0),
+      sourceFrameCount: document.querySelectorAll('[data-task-child-drop-source-frame="true"]').length,
+      subtreeFrameCount: document.querySelectorAll('[data-task-child-drop-subtree-frame="true"]').length,
+      scopeFrameCount: document.querySelectorAll('[data-task-child-drop-scope-frame="true"]').length,
+      childInsertionCount: document.querySelectorAll('[data-task-child-drop-insertion-preview="true"]').length,
+      childGenericMarkerCount: childInsertion?.querySelectorAll('[data-kanban-insertion-marker="true"]').length || 0,
+      childOriginFieldCount: document.querySelectorAll('[data-task-child-drop-origin-field="true"]').length,
+      childOriginTitle: childOriginField?.textContent?.trim() || null,
+      childOriginNoop: childInsertion?.getAttribute('data-task-child-drop-noop') || null,
+      standardInsertionIndicatorCount: document.querySelectorAll('[data-desktop-drop-indicator="true"],[data-mobile-drop-indicator="true"]').length,
+      standardInsertionPosition: standardInsertion?.getAttribute('data-desktop-drop-position')
+        || standardInsertion?.getAttribute('data-mobile-drop-position')
+        || null,
+      standardInsertionRect: standardInsertionRect ? {
+        left: standardInsertionRect.left,
+        top: standardInsertionRect.top,
+        right: standardInsertionRect.right,
+        bottom: standardInsertionRect.bottom,
+        width: standardInsertionRect.width,
+        height: standardInsertionRect.height,
+        centerY: standardInsertionRect.top + standardInsertionRect.height / 2,
+      } : null,
+      hitScopeRect: hitScopeRect ? { left: hitScopeRect.left, top: hitScopeRect.top, right: hitScopeRect.right, bottom: hitScopeRect.bottom } : null,
+      parentRect: parentRect ? { left: parentRect.left, top: parentRect.top, right: parentRect.right, bottom: parentRect.bottom } : null,
+      subtreeRect: subtreeRect ? { left: subtreeRect.left, top: subtreeRect.top, right: subtreeRect.right, bottom: subtreeRect.bottom } : null,
+      childInsertionRect: childInsertionRect ? { left: childInsertionRect.left, top: childInsertionRect.top, right: childInsertionRect.right, bottom: childInsertionRect.bottom, width: childInsertionRect.width, height: childInsertionRect.height } : null,
+      sourceFrameStyle: sourceStyle ? { boxShadow: sourceStyle.boxShadow, backgroundColor: sourceStyle.backgroundColor } : null,
+      subtreeFrameStyle: subtreeStyle ? { boxShadow: subtreeStyle.boxShadow } : null,
+      childOriginStyle: childOriginStyle ? {
+        backgroundColor: childOriginStyle.backgroundColor,
+        color: childOriginStyle.color,
+      } : null,
+      viewport: { width: innerWidth, height: innerHeight },
+      childInsertionLeft: Number(childInsertion?.getAttribute('data-task-child-drop-insertion-left') || 0),
+    };
+  });
+
+  const readSourceOverlayGeometry = async (pointer) => page.evaluate(({ pointer }) => {
+    const desktop = document.querySelector('[data-kanban-drag-overlay="true"]');
+    const mobile = document.querySelector('[data-mobile-drag-preview="true"]');
+    const source = desktop || mobile;
+    const parent = document.querySelector('[data-task-child-drop-parent-frame="true"]');
+    const childInsertion = document.querySelector('[data-task-child-drop-insertion-preview="true"]');
+    const toRect = (element) => {
+      const rect = element?.getBoundingClientRect();
+      return rect ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height } : null;
+    };
+    const overlaps = (first, second) => Boolean(first && second
+      && first.left < second.right
+      && first.right > second.left
+      && first.top < second.bottom
+      && first.bottom > second.top);
+    const sourceRect = toRect(source);
+    const parentRect = toRect(parent);
+    const childInsertionRect = toRect(childInsertion);
+    return {
+      kind: desktop ? 'desktop' : mobile ? 'mobile' : null,
+      anchor: source?.getAttribute('data-task-drag-overlay-anchor')
+        || source?.getAttribute('data-mobile-preview-anchor')
+        || null,
+      placement: source?.getAttribute('data-task-drag-overlay-anchor')
+        || source?.getAttribute('data-mobile-preview-placement')
+        || null,
+      edgePlacement: source?.getAttribute('data-mobile-preview-edge-placement') || null,
+      pointerGap: Number(source?.getAttribute('data-task-drag-overlay-pointer-gap')
+        || source?.getAttribute('data-mobile-preview-pointer-gap')
+        || 0),
+      scale: Number(source?.getAttribute('data-task-drag-overlay-scale') || 1),
+      gap: Number(source?.getAttribute('data-task-drag-overlay-pointer-gap')
+        || source?.getAttribute('data-mobile-preview-finger-clearance')
+        || 0),
+      pointer,
+      sourceRect,
+      parentRect,
+      childInsertionRect,
+      overlapsParent: overlaps(sourceRect, parentRect),
+      overlapsChildInsertion: overlaps(sourceRect, childInsertionRect),
+      viewport: { width: innerWidth, height: innerHeight },
+    };
+  }, { pointer });
+
+  const startHeldTouchAtPoint = async (point, holdMs = 650) => {
+    const cdp = await page.context().newCDPSession(page);
+    let current = { x: point.x, y: point.y };
+    let released = false;
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ x: current.x, y: current.y, radiusX: 4, radiusY: 4, force: 1, id: 1 }],
+    });
+    await page.waitForTimeout(holdMs);
+    return {
+      moveTo: async (target) => {
+        const start = current;
+        for (let step = 1; step <= 5; step += 1) {
+          current = {
+            x: Math.round(start.x + ((target.x - start.x) * step) / 5),
+            y: Math.round(start.y + ((target.y - start.y) * step) / 5),
+          };
+          await cdp.send('Input.dispatchTouchEvent', {
+            type: 'touchMove',
+            touchPoints: [{ x: current.x, y: current.y, radiusX: 4, radiusY: 4, force: 1, id: 1 }],
+          });
+          await page.waitForTimeout(20);
+        }
+      },
+      moveExact: async (target) => {
+        current = { x: Math.round(target.x), y: Math.round(target.y) };
+        await cdp.send('Input.dispatchTouchEvent', {
+          type: 'touchMove',
+          touchPoints: [{ x: current.x, y: current.y, radiusX: 4, radiusY: 4, force: 1, id: 1 }],
+        });
+        await page.waitForTimeout(40);
+      },
+      end: async () => {
+        if (released) return;
+        released = true;
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+        await cdp.detach().catch(() => undefined);
+        await page.waitForTimeout(260);
+      },
+      cancel: async () => {
+        if (released) return;
+        released = true;
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
+        await cdp.detach().catch(() => undefined);
+        await page.waitForTimeout(220);
+      },
+    };
+  };
+
+  const startHeldTouch = async (sourceId) => {
+    const point = await pointFor(surfaceFor(sourceId), 0.48, 0.45);
+    const held = await startHeldTouchAtPoint(point);
+    await page.locator('[data-mobile-task-action-rail="true"]').waitFor({ state: 'visible', timeout: 5000 });
+    return held;
+  };
+
+  const readTaskScopeGeometry = async (nodeId) => page.evaluate((id) => {
+    const scope = Array.from(document.querySelectorAll('[data-task-surface-scope="true"][data-task-id]'))
+      .find((candidate) => candidate.getAttribute('data-task-id') === id);
+    const primary = scope?.querySelector(':scope > [data-task-surface-source="true"]');
+    const subtree = scope?.querySelector(':scope > [data-task-surface-subtree="true"]');
+    const toRect = (element) => {
+      const rect = element?.getBoundingClientRect();
+      return rect ? {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height,
+      } : null;
+    };
+    return { scope: toRect(scope), primary: toRect(primary), subtree: toRect(subtree) };
+  }, nodeId);
+
+  const runCase = async (id, scenario, operation) => {
+    if (requestedCaseId && requestedCaseId !== id) return;
+    try {
+      const details = await operation();
+      results.push({ id, scenario, result: 'PASS', details: details || {} });
+    } catch (error) {
+      const screenshotPath = `${screenshotBase}-${id}-FAIL.png`;
+      await page.screenshot({ path: screenshotPath, fullPage: false }).catch(() => undefined);
+      results.push({ id, scenario, result: 'FAIL', error: error.message, screenshotPath });
+      await page.mouse.up().catch(() => undefined);
+      await page.keyboard.press('Escape').catch(() => undefined);
+    }
+  };
+
+  page.setDefaultTimeout(8000);
+  page.setDefaultNavigationTimeout(20000);
+
+  await runCase('DEV068-SOURCE-ORIGIN-PLACEHOLDER', 'desktop L1/L2/L3+ and mobile keep a dashed frame at the source position while dragging', async () => {
+    const evidence = [];
+    for (const sample of [
+      { level: 'L1', viewport: { width: 1440, height: 900 }, fixtureKey: 'l1' },
+      { level: 'L2', viewport: { width: 1440, height: 900 }, fixtureKey: 'l2' },
+      { level: 'L3+', viewport: { width: 1024, height: 768 }, fixtureKey: 'l3' },
+    ]) {
+      await openApp(sample.viewport);
+      const fixture = await fixtureIds();
+      const sourceId = fixture[sample.fixtureKey][0];
+      assert(sourceId, `${sample.level} fixture must expose a draggable task`, fixture);
+      const beforeRect = await (sample.level === 'L2' ? targetScopeFor(sourceId) : surfaceFor(sourceId)).boundingBox();
+      await beginMouseDrag(sourceId);
+      await page.waitForTimeout(180);
+      const placeholder = await readSourceOriginPlaceholder(sourceId);
+      assert(placeholder.count === 1
+        && placeholder.outlineStyle === 'dashed'
+        && placeholder.outlineWidth === '1px'
+        && placeholder.outlineColor === 'rgb(148, 163, 184)'
+        && placeholder.boxShadow === 'none'
+        && placeholder.rect && beforeRect
+        && Math.abs(placeholder.rect.left - beforeRect.x) <= 1
+        && Math.abs(placeholder.rect.top - beforeRect.y) <= 1
+        && Math.abs(placeholder.rect.width - beforeRect.width) <= 1
+        && Math.abs(placeholder.rect.height - beforeRect.height) <= 1,
+      `${sample.level} must show one geometry-stable dashed frame at the original task position`, { beforeRect, placeholder });
+      if (sample.level === 'L2') {
+        const screenshotPath = `${screenshotBase}-desktop-source-origin-placeholder.png`;
+        await page.screenshot({ path: screenshotPath, fullPage: false });
+        placeholder.screenshotPath = screenshotPath;
+      }
+      evidence.push({ level: sample.level, sourceId, beforeRect, placeholder });
+      await page.keyboard.press('Escape');
+      await page.mouse.up().catch(() => undefined);
+    }
+
+    for (const sample of [
+      { level: 'mobile-L1', fixtureKey: 'l1' },
+      { level: 'mobile-L2', fixtureKey: 'l2' },
+      { level: 'mobile-L3+', fixtureKey: 'l3' },
+    ]) {
+      await openApp({ width: 390, height: 844 });
+      const fixture = await fixtureIds();
+      const sourceId = fixture[sample.fixtureKey][0];
+      assert(sourceId, `${sample.level} fixture must expose a draggable task`, fixture);
+      const beforeRect = await (sample.level === 'mobile-L2' ? targetScopeFor(sourceId) : surfaceFor(sourceId)).boundingBox();
+      const held = await startHeldTouch(sourceId);
+      await page.waitForTimeout(180);
+      const placeholder = await readSourceOriginPlaceholder(sourceId);
+      assert(placeholder.count === 1
+        && placeholder.outlineStyle === 'dashed'
+        && placeholder.outlineWidth === '1px'
+        && placeholder.outlineColor === 'rgb(148, 163, 184)'
+        && placeholder.boxShadow === 'none'
+        && placeholder.rect && beforeRect
+        && Math.abs(placeholder.rect.left - beforeRect.x) <= 1
+        && Math.abs(placeholder.rect.top - beforeRect.y) <= 1
+        && Math.abs(placeholder.rect.width - beforeRect.width) <= 1
+        && Math.abs(placeholder.rect.height - beforeRect.height) <= 1,
+      `${sample.level} long-press drag must show one geometry-stable dashed frame at the original task position`, { beforeRect, placeholder });
+      let screenshotPath = null;
+      if (sample.level === 'mobile-L2') {
+        screenshotPath = `${screenshotBase}-mobile-source-origin-placeholder.png`;
+        await page.screenshot({ path: screenshotPath, fullPage: false });
+      }
+      await held.cancel();
+      evidence.push({ level: sample.level, sourceId, beforeRect, placeholder: { ...placeholder, screenshotPath } });
+    }
+    return { evidence };
+  });
+
+  await runCase('DEV068-DESK-900', 'desktop task hover scope preserves the standard drop before one second', async () => {
+    await openApp({ width: 1440, height: 900 });
+    const fixture = await fixtureIds();
+    assert(fixture.l2Pair.length === 2, 'fixture must expose two independent L2 tasks', fixture);
+    const [sourceId, targetId] = fixture.l2Pair;
+    const before = await readNode(sourceId);
+    const targetBefore = await readNode(targetId);
+    await beginMouseDrag(sourceId);
+    await moveMouseToTargetPrimary(targetId);
+    await page.locator('[data-task-child-drop-phase="candidate"]').waitFor({ state: 'visible' });
+    await page.waitForTimeout(80);
+    const candidate = await readChildPreview();
+    const targetGeometry = await readTaskScopeGeometry(targetId);
+    assert(candidate.phase === 'candidate' && candidate.target === targetId && candidate.childInsertionCount === 0
+      && candidate.sourceFrameCount === 0 && candidate.subtreeFrameCount === 0 && candidate.scopeFrameCount === 0
+      && candidate.parentRect === null && candidate.subtreeRect === null
+      && candidate.standardInsertionIndicatorCount === 1,
+      'sub-threshold desktop hold must keep only the standard insertion intent visible without child frames', candidate);
+    assert(candidate.standardInsertionPosition === 'after'
+      && candidate.standardInsertionRect && targetGeometry.scope && targetGeometry.primary && targetGeometry.subtree
+      && targetGeometry.subtree.height > 0
+      && Math.abs(candidate.standardInsertionRect.centerY - targetGeometry.scope.bottom) <= 1
+      && candidate.standardInsertionRect.centerY > targetGeometry.primary.bottom + 1,
+    'expanded L2 standard after marker must render after the complete task subtree, never directly below the L2 title',
+    { candidate, targetGeometry });
+    const screenshotPath = `${screenshotBase}-desktop-candidate-expanded-l2-boundary.png`;
+    await page.screenshot({ path: screenshotPath, fullPage: false });
+    await page.mouse.up();
+    await page.waitForTimeout(260);
+    const after = await readNode(sourceId);
+    assert(after.parentId === targetBefore.parentId && after.parentId !== targetId && after.nodeType === before.nodeType,
+      'desktop release before dwell may use the standard target but must not commit child placement', { before, targetBefore, after });
+    assert(await page.locator('[data-task-child-drop-preview="true"]').count() === 0,
+      'candidate preview must clear after release');
+    return { sourceId, targetId, candidate, targetGeometry, before, targetBefore, after, screenshotPath };
+  });
+
+  await runCase('DEV068-DESK-ARMED', 'desktop armed preview shows only the child insertion marker and commits once', async () => {
+    await openApp({ width: 1440, height: 900 });
+    const fixture = await fixtureIds();
+    const [sourceId, targetId] = fixture.l2Pair;
+    const sourceBefore = await readNode(sourceId);
+    const targetBefore = await readNode(targetId);
+    const targetSurfaceBefore = await surfaceFor(targetId).boundingBox();
+    await resetDesktopCommitSpy();
+    const spyBefore = await readDesktopCommitSpy();
+    await beginMouseDrag(sourceId);
+    const targetPoint = await moveMouseToTargetPrimary(targetId);
+    await page.locator('[data-task-child-drop-phase="armed"]').waitFor({ state: 'visible', timeout: 1800 });
+    const armed = await readChildPreview();
+    const sourceOverlay = await readSourceOverlayGeometry(targetPoint);
+    const targetSurfaceArmed = await surfaceFor(targetId).boundingBox();
+    assert(armed.count === 1 && armed.childInsertionCount === 1 && armed.target === targetId
+      && armed.sourceFrameCount === 0 && armed.subtreeFrameCount === 0 && armed.scopeFrameCount === 0
+      && armed.standardInsertionIndicatorCount === 0
+      && armed.childInsertionRect && armed.parentRect === null && armed.subtreeRect === null
+      && armed.childInsertionRect.width >= 48,
+    'armed desktop preview must render only one child-level insertion marker and no blue target frames', armed);
+    assert(sourceOverlay.kind === 'desktop'
+      && sourceOverlay.anchor === 'pointer-upper-right'
+      && sourceOverlay.gap === 0
+      && sourceOverlay.scale === 0.5
+      && Math.abs(sourceOverlay.sourceRect.left - targetPoint.x) <= 1
+      && Math.abs(sourceOverlay.sourceRect.bottom - targetPoint.y) <= 1
+      && sourceOverlay.sourceRect.width >= 119
+      && sourceOverlay.sourceRect.width <= 121
+      && sourceOverlay.sourceRect.height >= 19
+      && sourceOverlay.sourceRect.height <= 21
+      && !sourceOverlay.overlapsChildInsertion,
+    'desktop source overlay must stay at 50 percent and attach precisely to the pointer upper-right without covering the child insertion marker', sourceOverlay);
+    assert(targetSurfaceBefore && targetSurfaceArmed
+      && Math.abs(targetSurfaceBefore.x - targetSurfaceArmed.x) <= 1
+      && Math.abs(targetSurfaceBefore.y - targetSurfaceArmed.y) <= 1
+      && Math.abs(targetSurfaceBefore.width - targetSurfaceArmed.width) <= 1
+      && Math.abs(targetSurfaceBefore.height - targetSurfaceArmed.height) <= 1,
+    'fixed preview must not change target layout geometry', { targetSurfaceBefore, targetSurfaceArmed });
+    const screenshotPath = `${screenshotBase}-desktop-armed.png`;
+    await page.screenshot({ path: screenshotPath, fullPage: false });
+    await page.mouse.up();
+    await page.waitForTimeout(320);
+    const sourceAfter = await readNode(sourceId);
+    const spyAfter = await readDesktopCommitSpy();
+    assert(sourceAfter.parentId === targetId && sourceAfter.nodeType === 'task',
+      'desktop armed release must make source the exact target child', { sourceBefore, sourceAfter, targetId });
+    assert(spyAfter.batchUpdateNodesCalls === 1
+      && spyAfter.ancestorRecalculationCalls === 1
+      && spyAfter.undoDepth === spyBefore.undoDepth + 1,
+    'a real desktop child move must still produce exactly one batch, ancestor recalculation and Undo command', {
+      spyBefore, spyAfter,
+    });
+    const announcement = await page.locator('[data-task-child-drop-announcement="true"]').textContent();
+    assert((announcement || '').includes(targetBefore.title), 'successful child move must announce target parent', { announcement });
+    return { sourceId, targetId, armed, sourceOverlay, sourceBefore, sourceAfter, spyBefore, spyAfter, screenshotPath, announcement };
+  });
+
+  await runCase('DEV068-DESK-ORIGIN-CHILD', 'desktop child append at the original position shows the source title and is zero-write', async () => {
+    await openApp({ width: 1440, height: 900 });
+    const fixture = await fixtureIds();
+    const [sourceId, targetId] = fixture.originPair;
+    assert(sourceId && targetId, 'fixture must expose a visible last child and its current parent', fixture);
+    const before = await readNode(sourceId);
+    await beginMouseDrag(sourceId);
+    await moveMouseToTargetPrimary(targetId);
+    await page.locator('[data-task-child-drop-phase="armed"]').waitFor({ state: 'visible', timeout: 1800 });
+    const armed = await readChildPreview();
+    assert(armed.childInsertionCount === 1
+      && armed.childOriginFieldCount === 1
+      && armed.childGenericMarkerCount === 0
+      && armed.childOriginTitle === before.title
+      && armed.childOriginNoop === 'true'
+      && armed.childOriginStyle?.backgroundColor === 'rgb(99, 102, 241)'
+      && armed.childOriginStyle?.color === 'rgb(255, 255, 255)',
+    'desktop origin child preview must reuse the blue source-title field instead of a generic insertion line', { before, armed });
+    const screenshotPath = `${screenshotBase}-desktop-origin-child.png`;
+    await page.screenshot({ path: screenshotPath, fullPage: false });
+    await page.mouse.up();
+    await page.waitForTimeout(320);
+    const after = await readNode(sourceId);
+    const announcement = await page.locator('[data-task-child-drop-announcement="true"]').textContent();
+    assert(JSON.stringify(after) === JSON.stringify(before),
+      'desktop origin child release must preserve the complete source node snapshot', { before, after });
+    assert(!(announcement || '').trim(), 'desktop origin child release must not announce a successful move', { announcement });
+    assert(await page.locator('[data-task-child-drop-preview="true"]').count() === 0,
+      'desktop origin child preview must clear after release');
+    return { sourceId, targetId, before, armed, after, screenshotPath, announcement };
+  });
+
+  await runCase('DEV068-DESK-ORIGIN-COLUMN-DROP', 'desktop column append at the original position uses the source title field and performs no commit', async () => {
+    await openApp({ width: 1440, height: 900 });
+    const fixture = await fixtureIds();
+    const [sourceId, columnId] = fixture.columnOriginPair;
+    assert(sourceId && columnId, 'fixture must expose a visible last L2 task and its current L1 column', fixture);
+    const beforeNodes = await readRuntimeNodes();
+    const sourceBefore = beforeNodes[sourceId];
+    const sourceTitleBefore = await surfaceFor(sourceId).locator('[data-task-title-slot="true"]').first().boundingBox();
+    assert(Boolean(sourceTitleBefore), 'source must expose a stable title anchor before drag', { sourceId });
+    await resetDesktopCommitSpy();
+    const spyBefore = await readDesktopCommitSpy();
+
+    await beginMouseDrag(sourceId);
+    const columnDrop = page.locator(`[data-task-drop-surface-kind="column-drop"][data-task-id="${columnId}"]`).first();
+    const dropBox = await columnDrop.boundingBox();
+    const appendAnchorBox = await columnDrop.locator('[data-kanban-column-append-anchor="true"]').boundingBox();
+    assert(Boolean(dropBox), 'column-drop surface must expose desktop geometry', { columnId });
+    assert(Boolean(appendAnchorBox), 'column-drop surface must expose an explicit tail append anchor', { columnId });
+    const dropPoint = {
+      x: Math.round(dropBox.x + 3),
+      y: Math.round(Math.min(dropBox.y + dropBox.height - 2, appendAnchorBox.y + 2)),
+    };
+    await page.mouse.move(dropPoint.x, dropPoint.y, { steps: 8 });
+    const originIndicator = page.locator('[data-desktop-drop-origin="true"][data-desktop-drop-position="origin"]').first();
+    await originIndicator.waitFor({ state: 'visible', timeout: 3000 });
+    const originField = originIndicator.locator('[data-desktop-origin-field="true"]').first();
+    const originFieldRect = await originField.boundingBox();
+    const originTextRect = await originField.locator('span').first().boundingBox();
+    const markerCount = await originIndicator.locator('[data-kanban-insertion-marker="true"]').count();
+    const originTitle = (await originField.textContent() || '').trim();
+    assert(originFieldRect && originTextRect
+      && originTitle === sourceBefore.title
+      && markerCount === 0
+      && Math.abs(originTextRect.x - sourceTitleBefore.x) <= 1,
+    'canonical column-drop origin must show only the source title field aligned to the original title text', {
+      sourceTitleBefore, originFieldRect, originTextRect, originTitle, markerCount,
+    });
+    const screenshotPath = `${screenshotBase}-desktop-origin-column-drop.png`;
+    await page.screenshot({ path: screenshotPath, fullPage: false });
+
+    await page.mouse.up();
+    await page.waitForTimeout(320);
+    const afterNodes = await readRuntimeNodes();
+    const spyAfter = await readDesktopCommitSpy();
+    assert(JSON.stringify(afterNodes) === JSON.stringify(beforeNodes),
+      'column-drop origin release must preserve the complete node record including updatedAt', {
+        sourceBefore, sourceAfter: afterNodes[sourceId],
+      });
+    assert(spyAfter.batchUpdateNodesCalls === 0
+      && spyAfter.ancestorRecalculationCalls === 0
+      && spyAfter.undoDepth === spyBefore.undoDepth,
+    'column-drop origin release must produce zero batch, ancestor and Undo changes', { spyBefore, spyAfter });
+    assert(await page.locator('[data-desktop-drop-indicator="true"]').count() === 0,
+      'column-drop origin preview must clear after release');
+    return {
+      sourceId,
+      columnId,
+      dropPoint,
+      sourceTitleBefore,
+      originFieldRect,
+      originTextRect,
+      markerCount,
+      spyBefore,
+      spyAfter,
+      screenshotPath,
+    };
+  });
+
+  await runCase('DEV068-DESK-COLUMN-GAP-PROXIMITY', 'desktop space between L2 cards resolves to the nearest task line instead of a distant column append', async () => {
+    await openApp({ width: 1440, height: 900 });
+    const fixture = await fixtureIds();
+    const beforeNodes = await readRuntimeNodes();
+    const columnFixtures = await page.evaluate(() => Array.from(document.querySelectorAll(
+      '[data-task-drop-surface-kind="column-drop"][data-task-id]',
+    )).map((column) => {
+      const subtree = column.querySelector(':scope > [data-kanban-column-subtree-scope]');
+      const cardIds = Array.from(subtree?.querySelectorAll(
+        ':scope > [data-task-placement-tree="true"] > [data-task-surface-scope="true"][data-task-id], '
+        + ':scope > [data-task-surface-scope="true"][data-task-id]',
+      ) || [])
+        .map((element) => element.getAttribute('data-task-id'))
+        .filter(Boolean);
+      return { columnId: column.getAttribute('data-task-id'), cardIds };
+    }));
+    const targetFixture = columnFixtures.find(({ columnId, cardIds }) => (
+      cardIds.length >= 2
+      && fixture.l2.some(sourceId => beforeNodes[sourceId]?.parentId !== columnId)
+    ));
+    assert(Boolean(targetFixture), 'fixture must expose a target column with two cards and a source in another column', {
+      fixture, columnFixtures,
+    });
+    const sourceId = fixture.l2.find(id => beforeNodes[id]?.parentId !== targetFixture.columnId);
+    assert(Boolean(sourceId), 'gap test must use a cross-column L2 source', { targetFixture, fixture });
+    const sourceBefore = beforeNodes[sourceId];
+    await resetDesktopCommitSpy();
+    const spyBefore = await readDesktopCommitSpy();
+    await beginMouseDrag(sourceId);
+
+    const columnDrop = page.locator(
+      `[data-task-drop-surface-kind="column-drop"][data-task-id="${targetFixture.columnId}"]`,
+    ).first();
+    const gapPoint = await columnDrop.evaluate((column) => {
+      const subtree = column.querySelector(':scope > [data-kanban-column-subtree-scope]');
+      const cards = Array.from(subtree?.querySelectorAll(
+        ':scope > [data-task-placement-tree="true"] > [data-task-surface-scope="true"][data-task-id], '
+        + ':scope > [data-task-surface-scope="true"][data-task-id]',
+      ) || []);
+      const pairs = cards.slice(0, -1).map((current, index) => {
+        const currentRect = current.getBoundingClientRect();
+        const nextRect = cards[index + 1].getBoundingClientRect();
+        return {
+          previousId: current.getAttribute('data-task-id'),
+          nextId: cards[index + 1].getAttribute('data-task-id'),
+          top: currentRect.bottom,
+          bottom: nextRect.top,
+        };
+      });
+      const gap = pairs.find(candidate => candidate.bottom - candidate.top >= 2);
+      const rect = column.getBoundingClientRect();
+      return gap ? {
+        ...gap,
+        x: Math.round(rect.left + rect.width * 0.55),
+        y: Math.round((gap.top + gap.bottom) / 2),
+      } : null;
+    });
+    assert(Boolean(gapPoint), 'target column must expose a measurable visual gap between adjacent cards', {
+      targetFixture,
+    });
+    await page.mouse.move(gapPoint.x, gapPoint.y, { steps: 1 });
+    await page.waitForTimeout(180);
+    const indicator = await page.evaluate(() => {
+      const matches = Array.from(document.querySelectorAll('[data-desktop-drop-indicator="true"]'));
+      const element = matches[0];
+      const rect = element?.getBoundingClientRect();
+      return {
+        count: matches.length,
+        targetNodeId: element?.getAttribute('data-desktop-drop-target') || null,
+        position: element?.getAttribute('data-desktop-drop-position') || null,
+        surfaceKind: element?.getAttribute('data-desktop-drop-surface-kind') || null,
+        lineY: Number.parseFloat(element?.style.top || ''),
+        rect: rect ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom } : null,
+      };
+    });
+    const placeholder = await readSourceOriginPlaceholder(sourceId);
+    const gapDebug = await page.evaluate(() => (window.__projedDesktopTaskDragDebug || []).slice(-30));
+    assert(indicator.count === 1
+      && indicator.surfaceKind === 'kanban-card'
+      && ['before', 'after'].includes(indicator.position)
+      && Number.isFinite(indicator.lineY)
+      && Math.abs(indicator.lineY - gapPoint.y) <= Math.max(6, (gapPoint.bottom - gapPoint.top) / 2 + 2),
+    'a card gap must show one same-level task indicator next to the pointer', { gapPoint, indicator, gapDebug });
+    assert(placeholder.outlineColor === 'rgb(148, 163, 184)'
+      && placeholder.outlineWidth === '1px'
+      && placeholder.boxShadow === 'none',
+    'the source placeholder must remain a neutral secondary signal', placeholder);
+    const screenshotPath = `${screenshotBase}-desktop-column-gap-proximity.png`;
+    await page.screenshot({ path: screenshotPath, fullPage: false });
+
+    const targetBefore = beforeNodes[indicator.targetNodeId];
+    await page.mouse.up();
+    await page.waitForTimeout(320);
+    const afterNodes = await readRuntimeNodes();
+    const sourceAfter = afterNodes[sourceId];
+    const targetAfter = afterNodes[indicator.targetNodeId];
+    const spyAfter = await readDesktopCommitSpy();
+    assert(sourceAfter.parentId === targetFixture.columnId
+      && sourceAfter.nodeType === sourceBefore.nodeType
+      && targetBefore?.parentId === targetFixture.columnId
+      && ((indicator.position === 'before' && sourceAfter.order < targetAfter.order)
+        || (indicator.position === 'after' && sourceAfter.order > targetAfter.order)),
+    'gap release must commit exactly where the nearby indicator was displayed', {
+      sourceBefore, sourceAfter, targetBefore, targetAfter, indicator,
+    });
+    assert(spyAfter.batchUpdateNodesCalls === 1
+      && spyAfter.ancestorRecalculationCalls === 1
+      && spyAfter.undoDepth === spyBefore.undoDepth + 1,
+    'gap release must retain the normal one-batch move contract', { spyBefore, spyAfter });
+    return {
+      sourceId,
+      targetColumnId: targetFixture.columnId,
+      gapPoint,
+      indicator,
+      gapDebug,
+      placeholder,
+      sourceBefore,
+      sourceAfter,
+      spyBefore,
+      spyAfter,
+      screenshotPath,
+    };
+  });
+
+  await runCase('DEV068-DESK-EXPANDED-L2-EDGE-PROXIMITY', 'desktop pointer near the bottom of an expanded L2 card resolves to that nearby lower edge', async () => {
+    await openApp({ width: 1440, height: 900 });
+    const fixture = await fixtureIds();
+    const beforeNodes = await readRuntimeNodes();
+    const expandedTargets = await page.evaluate(() => Array.from(document.querySelectorAll(
+      '[data-task-surface-scope="true"][data-task-hierarchy-level="L2"][data-task-id]',
+    )).map((scope) => {
+      const primary = scope.querySelector(':scope > [data-task-surface-source="true"]');
+      const scopeRect = scope.getBoundingClientRect();
+      const primaryRect = primary?.getBoundingClientRect();
+      return {
+        id: scope.getAttribute('data-task-id'),
+        scopeHeight: scopeRect.height,
+        primaryHeight: primaryRect?.height || 0,
+        subtreeHeight: Math.max(0, scopeRect.height - (primaryRect?.height || 0)),
+      };
+    }).filter(candidate => candidate.id && candidate.subtreeHeight >= 32)
+      .sort((left, right) => right.scopeHeight - left.scopeHeight));
+    const target = expandedTargets.find(candidate => fixture.l2.some(sourceId => (
+      beforeNodes[sourceId]?.parentId !== beforeNodes[candidate.id]?.parentId
+    )));
+    assert(Boolean(target), 'fixture must expose an expanded L2 target and a cross-column L2 source', {
+      fixture, expandedTargets,
+    });
+    const targetColumnId = beforeNodes[target.id]?.parentId;
+    const sourceId = fixture.l2.find(id => beforeNodes[id]?.parentId !== targetColumnId);
+    assert(Boolean(sourceId), 'expanded L2 proximity case must use a source from another column', {
+      target, targetColumnId,
+    });
+    const sourceBefore = beforeNodes[sourceId];
+    await resetDesktopCommitSpy();
+    const spyBefore = await readDesktopCommitSpy();
+    await beginMouseDrag(sourceId);
+    const targetPoint = await page.locator(
+      `[data-task-surface-scope="true"][data-task-hierarchy-level="L2"][data-task-id="${target.id}"]`,
+    ).first().evaluate((scope) => {
+      const rect = scope.getBoundingClientRect();
+      const x = Math.round(rect.right - 12);
+      const y = Math.round(rect.bottom - 10);
+      const hit = document.elementFromPoint(x, y);
+      return {
+        x,
+        y,
+        scopeRect: { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom },
+        hitTaskId: hit?.closest('[data-task-id]')?.getAttribute('data-task-id') || null,
+        hitSurfaceKind: hit?.closest('[data-task-drop-surface-kind]')?.getAttribute('data-task-drop-surface-kind') || null,
+      };
+    });
+    await page.mouse.move(targetPoint.x, targetPoint.y, { steps: 1 });
+    await page.waitForTimeout(180);
+    const indicator = await page.evaluate(() => {
+      const matches = Array.from(document.querySelectorAll('[data-desktop-drop-indicator="true"]'));
+      const element = matches[0];
+      const rect = element?.getBoundingClientRect();
+      return {
+        count: matches.length,
+        targetNodeId: element?.getAttribute('data-desktop-drop-target') || null,
+        position: element?.getAttribute('data-desktop-drop-position') || null,
+        surfaceKind: element?.getAttribute('data-desktop-drop-surface-kind') || null,
+        lineY: Number.parseFloat(element?.style.top || ''),
+        rect: rect ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom } : null,
+      };
+    });
+    const dragDebug = await page.evaluate(() => (window.__projedDesktopTaskDragDebug || []).slice(-40));
+    assert(indicator.count === 1
+      && Number.isFinite(indicator.lineY)
+      && Math.abs(indicator.lineY - targetPoint.y) <= 16,
+    'an expanded L2 lower-edge hover must keep the same-level insertion line beside the pointer', {
+      target, targetPoint, indicator, dragDebug,
+    });
+    const screenshotPath = `${screenshotBase}-desktop-expanded-l2-edge-proximity.png`;
+    await page.screenshot({ path: screenshotPath, fullPage: false });
+    await page.mouse.up();
+    await page.waitForTimeout(320);
+    const afterNodes = await readRuntimeNodes();
+    const sourceAfter = afterNodes[sourceId];
+    const targetAfter = afterNodes[target.id];
+    const spyAfter = await readDesktopCommitSpy();
+    assert(sourceAfter.parentId === targetColumnId
+      && sourceAfter.nodeType === sourceBefore.nodeType
+      && indicator.position === 'after'
+      && sourceAfter.order > targetAfter.order,
+    'expanded L2 lower-edge release must commit after the displayed L2 target', {
+      sourceBefore, sourceAfter, targetAfter, targetPoint, indicator,
+    });
+    assert(spyAfter.batchUpdateNodesCalls === 1
+      && spyAfter.ancestorRecalculationCalls === 1
+      && spyAfter.undoDepth === spyBefore.undoDepth + 1,
+    'expanded L2 lower-edge release must keep the one-batch move contract', { spyBefore, spyAfter });
+    return {
+      sourceId,
+      targetId: target.id,
+      targetColumnId,
+      targetPoint,
+      indicator,
+      dragDebug,
+      sourceBefore,
+      sourceAfter,
+      spyBefore,
+      spyAfter,
+      screenshotPath,
+    };
+  });
+
+  await runCase('DEV068-DESK-EXPANDED-L2-ORIGIN-EDGE', 'desktop lower-edge hover beside the source original slot stays nearby and performs no write', async () => {
+    await openApp({ width: 1440, height: 900 });
+    const beforeNodes = await readRuntimeNodes();
+    const fixture = await page.evaluate(() => {
+      const columns = Array.from(document.querySelectorAll(
+        '[data-task-drop-surface-kind="column-drop"][data-task-id]',
+      ));
+      for (const column of columns) {
+        const subtree = column.querySelector(':scope > [data-kanban-column-subtree-scope]');
+        const cards = Array.from(subtree?.querySelectorAll(
+          ':scope > [data-task-placement-tree="true"] > [data-task-surface-scope="true"][data-task-hierarchy-level="L2"][data-task-id], '
+          + ':scope > [data-task-surface-scope="true"][data-task-hierarchy-level="L2"][data-task-id]',
+        ) || []);
+        for (let index = 0; index < cards.length - 1; index += 1) {
+          const target = cards[index];
+          const primary = target.querySelector(':scope > [data-task-surface-source="true"]');
+          const targetRect = target.getBoundingClientRect();
+          const primaryRect = primary?.getBoundingClientRect();
+          if (targetRect.height - (primaryRect?.height || 0) < 32) continue;
+          return {
+            columnId: column.getAttribute('data-task-id'),
+            targetId: target.getAttribute('data-task-id'),
+            sourceId: cards[index + 1].getAttribute('data-task-id'),
+            targetHeight: targetRect.height,
+          };
+        }
+      }
+      return null;
+    });
+    assert(fixture?.targetId && fixture?.sourceId,
+      'fixture must expose an expanded L2 card followed by a same-column source', fixture);
+    const sourceBefore = beforeNodes[fixture.sourceId];
+    await resetDesktopCommitSpy();
+    const spyBefore = await readDesktopCommitSpy();
+    await beginMouseDrag(fixture.sourceId);
+    const targetPoint = await page.locator(
+      `[data-task-surface-scope="true"][data-task-hierarchy-level="L2"][data-task-id="${fixture.targetId}"]`,
+    ).first().evaluate((scope) => {
+      const rect = scope.getBoundingClientRect();
+      return {
+        x: Math.round(rect.right - 12),
+        y: Math.round(rect.bottom - 10),
+        targetBottom: rect.bottom,
+      };
+    });
+    await page.mouse.move(targetPoint.x, targetPoint.y, { steps: 1 });
+    await page.waitForTimeout(180);
+    const indicator = await page.evaluate(() => {
+      const matches = Array.from(document.querySelectorAll('[data-desktop-drop-indicator="true"]'));
+      const element = matches[0];
+      const rect = element?.getBoundingClientRect();
+      return {
+        count: matches.length,
+        targetNodeId: element?.getAttribute('data-desktop-drop-target') || null,
+        position: element?.getAttribute('data-desktop-drop-position') || null,
+        surfaceKind: element?.getAttribute('data-desktop-drop-surface-kind') || null,
+        feedbackKind: element?.getAttribute('data-desktop-drop-feedback-kind') || null,
+        rect: rect ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom } : null,
+      };
+    });
+    const dragDebug = await page.evaluate(() => (window.__projedDesktopTaskDragDebug || []).slice(-30));
+    assert(indicator.count === 1
+      && indicator.targetNodeId === fixture.sourceId
+      && indicator.position === 'origin'
+      && indicator.surfaceKind === 'kanban-card'
+      && indicator.rect
+      && Math.abs(indicator.rect.top - targetPoint.y) <= 32,
+    'the original slot immediately after an expanded L2 card must show its no-op field beside the pointer', {
+      fixture, targetPoint, indicator, dragDebug,
+    });
+    const screenshotPath = `${screenshotBase}-desktop-expanded-l2-origin-edge.png`;
+    await page.screenshot({ path: screenshotPath, fullPage: false });
+    await page.mouse.up();
+    await page.waitForTimeout(320);
+    const sourceAfter = (await readRuntimeNodes())[fixture.sourceId];
+    const spyAfter = await readDesktopCommitSpy();
+    assert(sourceAfter.parentId === sourceBefore.parentId
+      && sourceAfter.order === sourceBefore.order
+      && sourceAfter.nodeType === sourceBefore.nodeType,
+    'releasing at the source original slot must remain a data no-op', {
+      sourceBefore, sourceAfter, fixture, indicator,
+    });
+    assert(spyAfter.batchUpdateNodesCalls === 0
+      && spyAfter.ancestorRecalculationCalls === 0
+      && spyAfter.undoDepth === spyBefore.undoDepth,
+    'the original expanded L2 slot must not create a write or undo entry', { spyBefore, spyAfter });
+    return {
+      fixture,
+      targetPoint,
+      indicator,
+      dragDebug,
+      sourceBefore,
+      sourceAfter,
+      spyBefore,
+      spyAfter,
+      screenshotPath,
+    };
+  });
+
+  await runCase('DEV068-DESK-EXPANDED-L2-ORIGIN-GAP-STABILITY', 'desktop pointer jitter in the narrow gap after an expanded L2 card stays at the adjacent original slot', async () => {
+    await openApp({ width: 1440, height: 900 });
+    const beforeNodes = await readRuntimeNodes();
+    const fixture = await page.evaluate(() => {
+      const columns = Array.from(document.querySelectorAll(
+        '[data-task-drop-surface-kind="column-drop"][data-task-id]',
+      ));
+      for (const column of columns) {
+        const subtree = column.querySelector(':scope > [data-kanban-column-subtree-scope]');
+        const cards = Array.from(subtree?.querySelectorAll(
+          ':scope > [data-task-placement-tree="true"] > [data-task-surface-scope="true"][data-task-hierarchy-level="L2"][data-task-id], '
+          + ':scope > [data-task-surface-scope="true"][data-task-hierarchy-level="L2"][data-task-id]',
+        ) || []);
+        for (let index = 0; index < cards.length - 1; index += 1) {
+          const target = cards[index];
+          const primary = target.querySelector(':scope > [data-task-surface-source="true"]');
+          const targetRect = target.getBoundingClientRect();
+          const primaryRect = primary?.getBoundingClientRect();
+          if (targetRect.height - (primaryRect?.height || 0) < 32) continue;
+          return {
+            columnId: column.getAttribute('data-task-id'),
+            targetId: target.getAttribute('data-task-id'),
+            sourceId: cards[index + 1].getAttribute('data-task-id'),
+          };
+        }
+      }
+      return null;
+    });
+    assert(fixture?.targetId && fixture?.sourceId,
+      'fixture must expose an expanded L2 card followed by its same-column source', fixture);
+    const sourceBefore = beforeNodes[fixture.sourceId];
+    await resetDesktopCommitSpy();
+    const spyBefore = await readDesktopCommitSpy();
+    await beginMouseDrag(fixture.sourceId);
+    const gapGeometry = await page.evaluate(({ targetId, sourceId }) => {
+      const target = document.querySelector(
+        `[data-task-surface-scope="true"][data-task-hierarchy-level="L2"][data-task-id="${targetId}"]`,
+      );
+      const placeholder = document.querySelector(
+        `[data-kanban-drag-source-placeholder="true"][data-task-id="${sourceId}"]`,
+      );
+      const targetRect = target?.getBoundingClientRect();
+      const placeholderRect = placeholder?.getBoundingClientRect();
+      if (!targetRect || !placeholderRect) return null;
+      const gapTop = targetRect.bottom;
+      const gapBottom = placeholderRect.top;
+      return {
+        x: Math.round(targetRect.left + targetRect.width * 0.72),
+        gapTop,
+        gapBottom,
+        targetRect: {
+          left: targetRect.left,
+          top: targetRect.top,
+          right: targetRect.right,
+          bottom: targetRect.bottom,
+        },
+        placeholderRect: {
+          left: placeholderRect.left,
+          top: placeholderRect.top,
+          right: placeholderRect.right,
+          bottom: placeholderRect.bottom,
+        },
+      };
+    }, fixture);
+    assert(gapGeometry && gapGeometry.gapBottom >= gapGeometry.gapTop,
+      'dragging must expose the narrow visual gap before the source placeholder', { fixture, gapGeometry });
+    const gapHeight = Math.max(1, gapGeometry.gapBottom - gapGeometry.gapTop);
+    const jitterPoints = [
+      Math.round(gapGeometry.gapTop + Math.min(1, gapHeight / 2)),
+      Math.round(gapGeometry.gapTop + gapHeight / 2),
+      Math.round(gapGeometry.gapBottom - Math.min(1, gapHeight / 2)),
+      Math.round(gapGeometry.gapTop + gapHeight / 2),
+    ].map(y => ({ x: gapGeometry.x, y }));
+    const samples = [];
+    for (const point of jitterPoints) {
+      await page.mouse.move(point.x, point.y, { steps: 1 });
+      await page.waitForTimeout(60);
+      samples.push(await page.evaluate((pointer) => {
+        const matches = Array.from(document.querySelectorAll('[data-desktop-drop-indicator="true"]'));
+        const element = matches[0];
+        const rect = element?.getBoundingClientRect();
+        const overlay = document.querySelector('[data-desktop-drag-overlay="true"]');
+        const overlayRect = overlay?.getBoundingClientRect();
+        return {
+          pointer,
+          count: matches.length,
+          targetNodeId: element?.getAttribute('data-desktop-drop-target') || null,
+          position: element?.getAttribute('data-desktop-drop-position') || null,
+          surfaceKind: element?.getAttribute('data-desktop-drop-surface-kind') || null,
+          rect: rect ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom } : null,
+          overlayRect: overlayRect
+            ? { left: overlayRect.left, top: overlayRect.top, right: overlayRect.right, bottom: overlayRect.bottom }
+            : null,
+        };
+      }, point));
+    }
+    const dragDebug = await page.evaluate(() => (window.__projedDesktopTaskDragDebug || []).slice(-80));
+    assert(samples.every(sample => sample.count === 1
+      && sample.targetNodeId === fixture.sourceId
+      && sample.position === 'origin'
+      && sample.surfaceKind === 'kanban-card'
+      && sample.rect
+      && Math.abs(sample.rect.top - sample.pointer.y) <= 32),
+    'every pointer sample in the narrow gap must keep the no-op original field adjacent to the pointer', {
+      fixture, gapGeometry, samples, dragDebug,
+    });
+    const screenshotPath = `${screenshotBase}-desktop-expanded-l2-origin-gap-stability.png`;
+    await page.screenshot({ path: screenshotPath, fullPage: false });
+    await page.mouse.up();
+    await page.waitForTimeout(320);
+    const sourceAfter = (await readRuntimeNodes())[fixture.sourceId];
+    const spyAfter = await readDesktopCommitSpy();
+    assert(sourceAfter.parentId === sourceBefore.parentId
+      && sourceAfter.order === sourceBefore.order
+      && sourceAfter.nodeType === sourceBefore.nodeType,
+    'releasing in the original narrow gap must remain a data no-op', {
+      sourceBefore, sourceAfter, fixture, samples,
+    });
+    assert(spyAfter.batchUpdateNodesCalls === 0
+      && spyAfter.ancestorRecalculationCalls === 0
+      && spyAfter.undoDepth === spyBefore.undoDepth,
+    'the original narrow gap must not create a write or undo entry', { spyBefore, spyAfter });
+    return {
+      fixture,
+      gapGeometry,
+      samples,
+      dragDebug,
+      sourceBefore,
+      sourceAfter,
+      spyBefore,
+      spyAfter,
+      screenshotPath,
+    };
+  });
+
+  await runCase('DEV068-DESK-COLUMN-TAIL-APPEND', 'desktop column append remains available only beside the explicit tail anchor', async () => {
+    await openApp({ width: 1440, height: 900 });
+    const fixture = await fixtureIds();
+    const beforeNodes = await readRuntimeNodes();
+    const targetColumnId = fixture.l1.find(columnId => (
+      fixture.l2.some(taskId => beforeNodes[taskId]?.parentId === columnId)
+      && fixture.l2.some(taskId => beforeNodes[taskId]?.parentId !== columnId)
+    ));
+    const sourceId = fixture.l2.find(taskId => beforeNodes[taskId]?.parentId !== targetColumnId);
+    assert(sourceId && targetColumnId, 'tail test must expose a cross-column source and non-empty target column', {
+      fixture,
+    });
+    const sourceBefore = beforeNodes[sourceId];
+    await resetDesktopCommitSpy();
+    const spyBefore = await readDesktopCommitSpy();
+    await beginMouseDrag(sourceId);
+    const columnDrop = page.locator(
+      `[data-task-drop-surface-kind="column-drop"][data-task-id="${targetColumnId}"]`,
+    ).first();
+    const tailPoint = await columnDrop.evaluate((column) => {
+      const columnRect = column.getBoundingClientRect();
+      const anchor = column.querySelector('[data-kanban-column-append-anchor="true"]');
+      const anchorRect = anchor?.getBoundingClientRect();
+      const subtree = column.querySelector(':scope > [data-kanban-column-subtree-scope]');
+      const cards = Array.from(subtree?.querySelectorAll(
+        ':scope > [data-task-placement-tree="true"] > [data-task-surface-scope="true"][data-task-id], '
+        + ':scope > [data-task-surface-scope="true"][data-task-id]',
+      ) || []);
+      const lastRect = cards.at(-1)?.getBoundingClientRect();
+      return anchorRect && lastRect ? {
+        x: Math.round(columnRect.left + columnRect.width * 0.55),
+        y: Math.round(Math.min(columnRect.bottom - 2, anchorRect.top + 2)),
+        anchorY: anchorRect.top,
+        lastBottom: lastRect.bottom,
+        lastId: cards.at(-1)?.getAttribute('data-task-id') || null,
+        columnBottom: columnRect.bottom,
+      } : null;
+    });
+    assert(tailPoint
+      && tailPoint.y >= tailPoint.lastBottom
+      && tailPoint.y <= tailPoint.lastBottom + 32,
+    'tail append point must be inside the explicit 32px zone after the last card', tailPoint);
+    const readTailIndicator = () => page.evaluate(() => {
+      const matches = Array.from(document.querySelectorAll('[data-desktop-drop-indicator="true"]'));
+      const element = matches[0];
+      return {
+        count: matches.length,
+        targetNodeId: element?.getAttribute('data-desktop-drop-target') || null,
+        position: element?.getAttribute('data-desktop-drop-position') || null,
+        surfaceKind: element?.getAttribute('data-desktop-drop-surface-kind') || null,
+        lineY: Number.parseFloat(element?.style.top || ''),
+      };
+    });
+    const lowerEdgePoint = { x: tailPoint.x, y: Math.round(tailPoint.lastBottom - 1) };
+    const outsidePoint = { x: tailPoint.x, y: Math.round(tailPoint.columnBottom + 2) };
+    await page.mouse.move(lowerEdgePoint.x, lowerEdgePoint.y, { steps: 1 });
+    await page.waitForTimeout(40);
+    const lowerEdgeIndicator = await readTailIndicator();
+    await page.mouse.move(tailPoint.x, tailPoint.y, { steps: 1 });
+    await page.waitForTimeout(40);
+    const tailIndicator = await readTailIndicator();
+    await page.mouse.move(outsidePoint.x, outsidePoint.y, { steps: 1 });
+    await page.waitForTimeout(40);
+    const outsideIndicator = await readTailIndicator();
+    await page.mouse.move(tailPoint.x, tailPoint.y, { steps: 1 });
+    await page.waitForTimeout(80);
+    const indicator = await readTailIndicator();
+    const transitionIndicators = [lowerEdgeIndicator, tailIndicator, outsideIndicator, indicator];
+    assert(transitionIndicators.every(sample => sample.count === 1
+      && Number.isFinite(sample.lineY)
+      && Math.abs(sample.lineY - tailPoint.lastBottom) <= 1),
+    'the last-card lower edge, column tail and near-column exterior must share one stable insertion-line Y', {
+      tailPoint, lowerEdgePoint, outsidePoint, transitionIndicators,
+    });
+    assert(indicator.count === 1
+      && indicator.targetNodeId === targetColumnId
+      && indicator.surfaceKind === 'column-drop'
+      && indicator.position === 'append'
+      && Math.abs(indicator.lineY - tailPoint.lastBottom) <= 1,
+    'column append must reuse the final same-level card boundary instead of its 6px margin offset', {
+      tailPoint, indicator, transitionIndicators,
+    });
+    const screenshotPath = `${screenshotBase}-desktop-column-tail-append.png`;
+    await page.screenshot({ path: screenshotPath, fullPage: false });
+
+    await page.mouse.up();
+    await page.waitForTimeout(320);
+    const afterNodes = await readRuntimeNodes();
+    const sourceAfter = afterNodes[sourceId];
+    const siblingOrders = Object.values(afterNodes)
+      .filter(node => node && !node.isArchived && node.parentId === targetColumnId)
+      .map(node => node.order);
+    const spyAfter = await readDesktopCommitSpy();
+    assert(sourceAfter.parentId === targetColumnId
+      && sourceAfter.nodeType === sourceBefore.nodeType
+      && sourceAfter.order === Math.max(...siblingOrders),
+    'tail release must preserve canonical column append semantics', {
+      sourceBefore, sourceAfter, siblingOrders,
+    });
+    assert(spyAfter.batchUpdateNodesCalls === 1
+      && spyAfter.ancestorRecalculationCalls === 1
+      && spyAfter.undoDepth === spyBefore.undoDepth + 1,
+    'tail append must retain the normal one-batch move contract', { spyBefore, spyAfter });
+    return {
+      sourceId,
+      targetColumnId,
+      tailPoint,
+      lowerEdgePoint,
+      outsidePoint,
+      transitionIndicators,
+      indicator,
+      sourceBefore,
+      sourceAfter,
+      spyBefore,
+      spyAfter,
+      screenshotPath,
+    };
+  });
+
+  await runCase('DEV068-DESK-L1', 'desktop L2 to L1 hover scope becomes direct L2 child', async () => {
+    await openApp({ width: 1024, height: 768 });
+    const fixture = await fixtureIds();
+    const sourceId = fixture.l2[0];
+    const sourceBefore = await readNode(sourceId);
+    const targetId = fixture.l1.find((id) => id !== sourceBefore.parentId);
+    assert(sourceId && targetId, 'fixture must expose L2 source and other L1 target', fixture);
+    await beginMouseDrag(sourceId);
+    await moveMouseToTargetPrimary(targetId);
+    await page.locator('[data-task-child-drop-phase="armed"]').waitFor({ state: 'visible', timeout: 1800 });
+    const preview = await readChildPreview();
+    await page.mouse.up();
+    await page.waitForTimeout(300);
+    const after = await readNode(sourceId);
+    assert(after.parentId === targetId && after.nodeType === 'task',
+      'L1 hover scope must accept the source as direct L2 task', { sourceBefore, after, targetId });
+    return { sourceId, targetId, preview, sourceBefore, after };
+  });
+
+  await runCase('DEV068-DESK-DEEP', 'desktop L3+ hover scope accepts an exact next-level child', async () => {
+    await openApp({ width: 1440, height: 900 });
+    const fixture = await fixtureIds();
+    assert(fixture.l3Pair.length === 2, 'fixture must expose independent L3+ tasks', fixture);
+    const [sourceId, targetId] = fixture.l3Pair;
+    await beginMouseDrag(sourceId);
+    await moveMouseToTargetPrimary(targetId);
+    await page.locator('[data-task-child-drop-phase="armed"]').waitFor({ state: 'visible', timeout: 1800 });
+    const screenshotPath = `${screenshotBase}-desktop-deep-armed.png`;
+    await page.screenshot({ path: screenshotPath, fullPage: false });
+    await page.mouse.up();
+    await page.waitForTimeout(300);
+    const after = await readNode(sourceId);
+    assert(after.parentId === targetId, 'L3+ armed release must use exact deep target as parent', { sourceId, targetId, after });
+    return { sourceId, targetId, after, screenshotPath };
+  });
+
+  await runCase('DEV068-DESK-DEPTH-LINE', 'child insertion marker aligns with the final same-level title at L2, L3 and L4+', async () => {
+    const sampleDepth = async (level) => {
+      await openApp({ width: 1440, height: 900 });
+      const fixture = await fixtureIds();
+      let sourceId;
+      let targetId;
+      if (level === 'L2') {
+        sourceId = fixture.l2[0];
+        const source = await readNode(sourceId);
+        targetId = fixture.l1.find((id) => id !== source.parentId);
+      } else if (level === 'L3') {
+        [sourceId, targetId] = fixture.l2Pair;
+      } else {
+        [sourceId, targetId] = fixture.l3Pair;
+      }
+      assert(sourceId && targetId, `${level} depth sample needs independent source and target`, fixture);
+      await beginMouseDrag(sourceId);
+      const targetPoint = await moveMouseToTargetPrimary(targetId);
+      await page.locator('[data-task-child-drop-phase="armed"]').waitFor({ state: 'visible', timeout: 1800 });
+      const preview = await readChildPreview();
+      const targetGeometry = await page.evaluate((id) => {
+        const target = Array.from(document.querySelectorAll('[data-task-child-drop-target="true"][data-task-id]'))
+          .find((candidate) => candidate.getAttribute('data-task-id') === id);
+        const column = target?.closest('[data-kanban-column="true"]');
+        const columnRect = column?.getBoundingClientRect();
+        const directChild = target
+          ? Array.from(target.querySelectorAll('[data-task-child-drop-target="true"]'))
+            .find((candidate) => (
+              candidate.parentElement?.closest('[data-task-child-drop-target="true"]') === target
+            ))
+          : null;
+        const directChildPrimary = directChild?.querySelector(':scope > [data-task-surface-source="true"]');
+        const directChildTitle = directChildPrimary?.querySelector('[data-task-title-slot="true"]');
+        const emptyLevelTitleAnchor = target?.querySelector(
+          ':scope > [data-task-direct-child-title-anchor="true"]',
+        );
+        const directChildTitleLeft = directChildTitle?.getBoundingClientRect().left ?? null;
+        const emptyLevelTitleLeft = emptyLevelTitleAnchor?.getBoundingClientRect().left ?? null;
+        const l2Layouts = Array.from(document.querySelectorAll('[data-task-hierarchy-level="L2"]'))
+          .map((scope) => {
+            const primary = scope.querySelector(':scope > [data-task-surface-source="true"]');
+            const title = primary?.querySelector('[data-task-title-slot="true"]');
+            const titleContent = title?.closest('.kanban-task-title-content');
+            if (!primary || !title) return null;
+            return {
+              offset: title.getBoundingClientRect().left - primary.getBoundingClientRect().left,
+              titleIsFirst: titleContent?.firstElementChild === title,
+              hasToggle: Boolean(titleContent?.querySelector('[data-kanban-checklist-toggle="true"]')),
+            };
+          })
+          .filter(Boolean);
+        return {
+          targetLevel: target?.getAttribute('data-task-child-drop-level') || null,
+          columnLeft: columnRect?.left ?? null,
+          directChildTitleLeft,
+          emptyLevelTitleLeft,
+          expectedTitleLeft: directChildTitleLeft ?? emptyLevelTitleLeft,
+          l2Layouts,
+        };
+      }, targetId);
+      assert(preview.childInsertionRect
+        && targetGeometry.columnLeft !== null
+        && targetGeometry.expectedTitleLeft !== null,
+      `${level} depth sample must expose one insertion marker and its final-level title anchor`, { preview, targetGeometry });
+      assert(Math.abs(preview.childInsertionRect.left - targetGeometry.expectedTitleLeft) <= 1,
+        `${level} insertion marker must align with its final same-level title start`, { preview, targetGeometry });
+      if (targetGeometry.directChildTitleLeft !== null && targetGeometry.emptyLevelTitleLeft !== null) {
+        assert(Math.abs(targetGeometry.directChildTitleLeft - targetGeometry.emptyLevelTitleLeft) <= 1,
+          `${level} real and empty-level title anchors must share the same geometry`, targetGeometry);
+      }
+      const result = {
+        level,
+        sourceId,
+        targetId,
+        markerLeft: preview.childInsertionRect.left,
+        offsetFromColumn: preview.childInsertionRect.left - targetGeometry.columnLeft,
+        targetPoint,
+        targetGeometry,
+      };
+      if (level === 'L4+') {
+        result.screenshotPath = `${screenshotBase}-desktop-depth-insertion.png`;
+        await page.screenshot({ path: result.screenshotPath, fullPage: false });
+      }
+      await page.keyboard.press('Escape');
+      return result;
+    };
+
+    const l2 = await sampleDepth('L2');
+    const l3 = await sampleDepth('L3');
+    const l4 = await sampleDepth('L4+');
+    const l2Offsets = l2.targetGeometry.l2Layouts.map((layout) => layout.offset);
+    assert(l2Offsets.length >= 2
+      && l2.targetGeometry.l2Layouts.every((layout) => layout.titleIsFirst)
+      && Math.max(...l2Offsets) - Math.min(...l2Offsets) <= 1,
+    'L2 titles must keep one fixed start whether or not a row has a checklist toggle', l2.targetGeometry.l2Layouts);
+    assert(l2.offsetFromColumn + 6 <= l3.offsetFromColumn
+      && l3.offsetFromColumn + 6 <= l4.offsetFromColumn,
+    'each deeper child insertion marker must advance by at least the shared 6px hierarchy token', { l2, l3, l4 });
+    return { l2, l3, l4 };
+  });
+
+  await runCase('DEV068-DESK-SWITCH', 'desktop rapid target switching resets dwell and blocks stale commit', async () => {
+    await openApp({ width: 1440, height: 900 });
+    const fixture = await fixtureIds();
+    assert(fixture.l2.length >= 3, 'fixture must expose three L2 tasks', fixture);
+    const [sourceId, targetA, targetB] = fixture.l2;
+    const before = await readNode(sourceId);
+    const targetBBefore = await readNode(targetB);
+    await beginMouseDrag(sourceId);
+    await moveMouseToTargetPrimary(targetA);
+    await page.waitForTimeout(620);
+    await moveMouseToTargetPrimary(targetB);
+    await page.waitForTimeout(620);
+    const candidate = await readChildPreview();
+    assert(candidate.phase === 'candidate' && candidate.target === targetB && candidate.childInsertionCount === 0
+      && candidate.standardInsertionIndicatorCount === 1,
+      'new target must restart dwell and never inherit old armed state', candidate);
+    await page.mouse.up();
+    await page.waitForTimeout(260);
+    const after = await readNode(sourceId);
+    assert(after.parentId === targetBBefore.parentId && after.parentId !== targetA && after.parentId !== targetB,
+      'rapid target switch release may use the current standard target but must not commit a stale child parent', { before, targetBBefore, after });
+    return { sourceId, targetA, targetB, candidate, before, targetBBefore, after };
+  });
+
+  await runCase('DEV068-DESK-SCOPE-BLANK', 'blank space inside the task primary surface belongs to the complete hover scope', async () => {
+    await openApp({ width: 1440, height: 900 });
+    const fixture = await fixtureIds();
+    const [sourceId, targetId] = fixture.l2Pair;
+    const target = surfaceFor(targetId);
+    await beginMouseDrag(sourceId);
+    const bottom = await pointFor(target, 0.5, 0.94);
+    await page.mouse.move(bottom.x, bottom.y, { steps: 6 });
+    await page.locator('[data-task-child-drop-phase="armed"]').waitFor({ state: 'visible', timeout: 1800 });
+    const preview = await readChildPreview();
+    assert(preview.target === targetId && preview.childInsertionCount === 1,
+      'blank space inside the primary surface must arm the exact task hover scope', { bottom, preview });
+    await page.mouse.up();
+    await page.waitForTimeout(280);
+    const after = await readNode(sourceId);
+    assert(after.parentId === targetId, 'release on blank space inside the hover scope must commit the exact child', { sourceId, targetId, after });
+    return { sourceId, targetId, bottom, preview, after };
+  });
+
+  await runCase('DEV068-DESK-LIFECYCLE-A11Y', 'desktop candidate, armed hold, leave, stale timer and live status are coherent', async () => {
+    await openApp({ width: 1440, height: 900 });
+    const fixture = await fixtureIds();
+    const [sourceId, targetId] = fixture.l2Pair;
+    const before = await readNode(sourceId);
+    await beginMouseDrag(sourceId);
+    await moveMouseToTargetPrimary(targetId);
+    await page.locator('[data-task-child-drop-phase="candidate"]').waitFor({ state: 'visible' });
+    const candidateStatus = await page.locator('[data-task-child-drop-live-status="true"]').textContent();
+    assert((candidateStatus || '').includes('候選區') && (candidateStatus || '').includes('一秒'),
+      'candidate must expose an assistive child-intent instruction', { candidateStatus });
+    const candidateScreenshot = `${screenshotBase}-desktop-candidate.png`;
+    await page.screenshot({ path: candidateScreenshot, fullPage: false });
+    await page.locator('[data-task-child-drop-phase="armed"]').waitFor({ state: 'visible', timeout: 1800 });
+    const beforeExtendedHold = await readNode(sourceId);
+    await page.waitForTimeout(2100);
+    const armed = await readChildPreview();
+    const armedStatus = await page.locator('[data-task-child-drop-live-status="true"]').textContent();
+    const duringExtendedHold = await readNode(sourceId);
+    assert(armed.phase === 'armed' && armed.count === 1 && armed.childInsertionCount === 1,
+      'extended hold must remain one armed preview', armed);
+    assert(JSON.stringify(beforeExtendedHold) === JSON.stringify(duringExtendedHold),
+      'armed hold must never write before release', { beforeExtendedHold, duringExtendedHold });
+    assert((armedStatus || '').includes('已鎖定') && (armedStatus || '').includes('放開後'),
+      'armed state must expose release semantics to assistive technology', { armedStatus });
+    const outsidePoint = await findPointOutsideTaskScopes();
+    await page.mouse.move(outsidePoint.x, outsidePoint.y, { steps: 5 });
+    await page.waitForTimeout(120);
+    assert(await page.locator('[data-task-child-drop-preview="true"]').count() === 0,
+      'leaving all task hover scopes must clear child preview immediately');
+    await page.waitForTimeout(1150);
+    assert(await page.locator('[data-task-child-drop-preview="true"]').count() === 0,
+      'a cleared target timer must not arm later');
+    await page.mouse.up();
+    await page.waitForTimeout(240);
+    const after = await readNode(sourceId);
+    const announcement = await page.locator('[data-task-child-drop-announcement="true"]').textContent();
+    assert(after.parentId !== targetId,
+      'leave and release may follow the current standard drag target but must not commit the stale child parent', { before, after, targetId });
+    assert(!(announcement || '').includes('已移入'), 'no-op release must not announce success', { announcement });
+    return { sourceId, targetId, candidateStatus, armedStatus, armed, candidateScreenshot, before, after };
+  });
+
+  await runCase('DEV068-DESK-ARMED-LEAVE', 'desktop armed child intent clears after leaving every task hover scope', async () => {
+    await openApp({ width: 1440, height: 900 });
+    const fixture = await fixtureIds();
+    const [sourceId, targetId] = fixture.l2Pair;
+    const before = await readNode(sourceId);
+    await beginMouseDrag(sourceId);
+    await moveMouseToTargetPrimary(targetId);
+    await page.locator('[data-task-child-drop-phase="armed"]').waitFor({ state: 'visible', timeout: 1800 });
+    const generalPoint = await findPointOutsideTaskScopes();
+    await page.mouse.move(generalPoint.x, generalPoint.y, { steps: 6 });
+    await page.mouse.move(generalPoint.x + 1, generalPoint.y + 1, { steps: 2 });
+    await page.waitForTimeout(140);
+    assert(await page.locator('[data-task-child-drop-preview="true"]').count() === 0,
+      'leaving every task hover scope must clear the armed child preview');
+    await page.mouse.up();
+    await page.waitForTimeout(280);
+    const after = await readNode(sourceId);
+    assert(after.parentId !== targetId,
+      'release outside every task hover scope may use standard drag intent but must not retain the stale child parent', { before, after, targetId });
+    return { sourceId, targetId, before, after, generalPoint };
+  });
+
+  await runCase('DEV068-DESK-SUBTREE-UNDO', 'desktop child move preserves a source subtree, expands target, highlights result and supports one undo/redo', async () => {
+    await openApp({ width: 1440, height: 900 });
+    const sourceId = 'qc-card-1';
+    const targetId = 'qc-card-4';
+    const beforeNodes = await readNodes();
+    const sourceBefore = beforeNodes[sourceId];
+    const descendants = descendantIds(beforeNodes, sourceId);
+    assert(descendants.length >= 3, 'fixture source must expose a multi-level subtree', { descendants });
+    const relationBefore = Object.fromEntries(descendants.map((id) => [id, beforeNodes[id]?.parentId]));
+    const targetChildrenBefore = Object.values(beforeNodes)
+      .filter((node) => node && !node.isArchived && node.parentId === targetId && node.id !== sourceId);
+    const expectedOrder = targetChildrenBefore.reduce((max, node) => Math.max(max, node.order), -1) + 1;
+    const toggle = surfaceFor(targetId).locator('[data-kanban-checklist-toggle="true"]').first();
+    if (await toggle.getAttribute('aria-expanded') === 'true') await toggle.click();
+    assert(await toggle.getAttribute('aria-expanded') === 'false', 'target must start collapsed');
+    await beginMouseDrag(sourceId);
+    await moveMouseToTargetPrimary(targetId);
+    await page.locator('[data-task-child-drop-phase="armed"]').waitFor({ state: 'visible', timeout: 1800 });
+    await page.mouse.up();
+    await page.waitForTimeout(360);
+    const movedNodes = await readNodes();
+    const movedSource = movedNodes[sourceId];
+    const relationAfter = Object.fromEntries(descendants.map((id) => [id, movedNodes[id]?.parentId]));
+    assert(movedSource.parentId === targetId && movedSource.order === expectedOrder,
+      'source tree root must append to exact target', { sourceBefore, movedSource, expectedOrder });
+    assert(JSON.stringify(relationBefore) === JSON.stringify(relationAfter),
+      'all descendant parent relations must remain unchanged', { relationBefore, relationAfter });
+    await page.locator(`[data-task-id="${sourceId}"][data-task-child-drop-committed="true"]`).waitFor({ state: 'visible', timeout: 3000 });
+    assert(await toggle.getAttribute('aria-expanded') === 'true', 'successful child move must expand a collapsed target');
+    const screenshotPath = `${screenshotBase}-desktop-subtree-committed.png`;
+    await page.screenshot({ path: screenshotPath, fullPage: false });
+    const undo = page.locator('#btn-undo');
+    await page.waitForFunction(() => !document.querySelector('#btn-undo')?.hasAttribute('disabled'));
+    await undo.click();
+    await page.waitForTimeout(280);
+    const undone = await readNode(sourceId);
+    assert(undone.parentId === sourceBefore.parentId && undone.order === sourceBefore.order && undone.nodeType === sourceBefore.nodeType,
+      'one undo must restore parent, order and node type', { sourceBefore, undone });
+    const redo = page.locator('#btn-redo');
+    await page.waitForFunction(() => !document.querySelector('#btn-redo')?.hasAttribute('disabled'));
+    await redo.click();
+    await page.waitForTimeout(280);
+    const redone = await readNode(sourceId);
+    assert(redone.parentId === movedSource.parentId && redone.order === movedSource.order && redone.nodeType === movedSource.nodeType,
+      'one redo must reproduce the same child placement', { movedSource, redone });
+    return { sourceId, targetId, descendants, expectedOrder, sourceBefore, movedSource, undone, redone, screenshotPath };
+  });
+
+  await runCase('DEV068-DESK-L1-SOURCE', 'desktop L1 source normalizes to task while preserving its complete subtree', async () => {
+    await openApp({ width: 1440, height: 900 });
+    const sourceId = 'local-col-todo';
+    const targetId = 'qc-card-2';
+    const beforeNodes = await readNodes();
+    const sourceBefore = beforeNodes[sourceId];
+    const descendants = descendantIds(beforeNodes, sourceId);
+    const relationBefore = Object.fromEntries(descendants.map((id) => [id, beforeNodes[id]?.parentId]));
+    assert(descendants.length > 5 && beforeNodes[targetId]?.parentId !== sourceId,
+      'fixture must expose a large independent L1 subtree', { descendants: descendants.length, targetId });
+    await beginMouseDrag(sourceId);
+    await moveMouseToTargetPrimary(targetId);
+    await page.waitForTimeout(180);
+    await moveMouseToTargetPrimary(targetId);
+    await page.locator('[data-task-child-drop-phase="armed"]').waitFor({ state: 'visible', timeout: 1800 });
+    await page.mouse.up();
+    await page.waitForTimeout(380);
+    const movedNodes = await readNodes();
+    const movedSource = movedNodes[sourceId];
+    const relationAfter = Object.fromEntries(descendants.map((id) => [id, movedNodes[id]?.parentId]));
+    assert(movedSource.parentId === targetId && movedSource.nodeType === 'task',
+      'L1 source must become an exact child task', { sourceBefore, movedSource });
+    assert(JSON.stringify(relationBefore) === JSON.stringify(relationAfter),
+      'L1 source descendants must keep their topology', { relationBefore, relationAfter });
+    await page.locator('#btn-undo').click();
+    await page.waitForTimeout(300);
+    const restored = await readNode(sourceId);
+    assert(restored.parentId === null && restored.nodeType === sourceBefore.nodeType,
+      'undo must restore the source as L1 group', { sourceBefore, restored });
+    return { sourceId, targetId, descendantCount: descendants.length, sourceBefore, movedSource, restored };
+  });
+
+  await runCase('DEV068-DESK-INVALIDS', 'self, descendant and duplicate title targets cannot create a cycle or ambiguous parent', async () => {
+    const attempts = [];
+    for (const targetKind of ['self', 'descendant']) {
+      await openApp({ width: 1440, height: 900 });
+      const sourceId = 'qc-card-1';
+      const targetId = targetKind === 'self' ? sourceId : 'qc-card-1-child-1';
+      const before = await readNode(sourceId);
+      const targetPoint = await pointFor(surfaceFor(targetId));
+      await beginMouseDrag(sourceId);
+      await page.mouse.move(targetPoint.x, targetPoint.y, { steps: 6 });
+      await page.waitForTimeout(1150);
+      assert(await page.locator('[data-task-child-drop-preview="true"]').count() === 0,
+        `${targetKind} target must never candidate or arm`);
+      await page.mouse.up();
+      await page.waitForTimeout(260);
+      const after = await readNode(sourceId);
+      assert(after.parentId === before.parentId && after.order === before.order && after.nodeType === before.nodeType,
+        `${targetKind} release must be zero-write`, { before, after });
+      attempts.push({ targetKind, targetId, before, after });
+    }
+
+    await openApp({ width: 1440, height: 900 });
+    const [sourceId, targetId] = (await fixtureIds()).l2Pair;
+    await page.evaluate((id) => {
+      const scope = document.querySelector(`[data-task-child-drop-target="true"][data-task-id="${id}"]`);
+      if (!scope) return;
+      const clone = scope.cloneNode(false);
+      clone.setAttribute('data-dev068-duplicate-scope', 'true');
+      clone.setAttribute('hidden', '');
+      scope.appendChild(clone);
+    }, targetId);
+    await beginMouseDrag(sourceId);
+    await moveMouseToTargetPrimary(targetId);
+    await page.locator('[data-task-child-drop-phase="armed"]').waitFor({ state: 'visible', timeout: 1800 });
+    const duplicatePreview = await readChildPreview();
+    assert(duplicatePreview.count === 1 && duplicatePreview.target === targetId,
+      'duplicate DOM title metadata must still resolve one exact parent', duplicatePreview);
+    await page.keyboard.press('Escape');
+    await page.mouse.up();
+    return { attempts, duplicatePreview };
+  });
+
+  await runCase('DEV068-DESK-CANCEL-MATRIX', 'desktop pointer, lifecycle and viewport changes are terminal zero-write cancellations', async () => {
+    const cancellations = [];
+    for (const reason of ['escape', 'pointercancel', 'blur', 'pagehide', 'visibilitychange', 'orientationchange', 'resize']) {
+      await openApp({ width: 1440, height: 900 });
+      const [sourceId, targetId] = (await fixtureIds()).l2Pair;
+      const before = await readNode(sourceId);
+      await beginMouseDrag(sourceId);
+      await moveMouseToTargetPrimary(targetId);
+      await page.locator('[data-task-child-drop-phase="armed"]').waitFor({ state: 'visible', timeout: 1800 });
+      if (reason === 'escape') await page.keyboard.press('Escape');
+      else if (reason === 'pointercancel') await page.evaluate(() => window.dispatchEvent(new PointerEvent('pointercancel', { bubbles: true })));
+      else if (reason === 'blur') await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+      else if (reason === 'pagehide') await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+      else if (reason === 'visibilitychange') {
+        await page.evaluate(() => {
+          const descriptor = Object.getOwnPropertyDescriptor(document, 'visibilityState');
+          Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+          document.dispatchEvent(new Event('visibilitychange'));
+          if (descriptor) Object.defineProperty(document, 'visibilityState', descriptor);
+          else delete document.visibilityState;
+        });
+      } else if (reason === 'orientationchange') await page.evaluate(() => window.dispatchEvent(new Event('orientationchange')));
+      else await page.evaluate(() => window.dispatchEvent(new Event('resize')));
+      await page.waitForTimeout(120);
+      await page.mouse.up().catch(() => undefined);
+      await page.waitForTimeout(220);
+      const after = await readNode(sourceId);
+      const transient = await readTransientState();
+      assert(after.parentId === before.parentId && after.order === before.order && after.nodeType === before.nodeType,
+        `${reason} must be zero-write`, { before, after });
+      assert(transient.childPreview === 0 && transient.desktopOverlay === 0 && transient.desktopIndicator === 0,
+        `${reason} must clear all desktop drag feedback`, transient);
+      await beginMouseDrag(sourceId);
+      await moveMouseToTargetPrimary(targetId);
+      await page.locator('[data-task-child-drop-phase="candidate"]').waitFor({ state: 'visible' });
+      await page.mouse.up();
+      cancellations.push({ reason, transient, retry: 'PASS' });
+    }
+    return { cancellations };
+  });
+
+  await runCase('DEV068-DESK-STALE-REVALIDATION', 'viewer, revoked permission, filtered, archived and removed targets are zero-write in rendered release flow', async () => {
+    const evidence = [];
+
+    await openApp({ width: 1440, height: 900 });
+    const fixture = await fixtureIds();
+    const [viewerSourceId] = fixture.l2Pair;
+    await setMovePermission(false);
+    await page.waitForTimeout(120);
+    const viewerPoint = await pointFor(surfaceFor(viewerSourceId));
+    await page.mouse.move(viewerPoint.x, viewerPoint.y);
+    await page.mouse.down();
+    await page.mouse.move(viewerPoint.x + 18, viewerPoint.y + 3, { steps: 4 });
+    await page.waitForTimeout(180);
+    const viewerOverlay = await page.locator('[data-kanban-drag-overlay="true"]').count();
+    await page.mouse.up();
+    assert(viewerOverlay === 0, 'move-denied viewer must not start a desktop drag', { viewerOverlay });
+    evidence.push({ scenario: 'viewer', overlay: viewerOverlay });
+
+    for (const scenario of ['permission-revoked', 'target-filtered', 'target-archived', 'target-removed']) {
+      await openApp({ width: 1440, height: 900 });
+      const [sourceId, targetId] = (await fixtureIds()).l2Pair;
+      const beforeNodes = await readRuntimeNodes();
+      const sourceBefore = beforeNodes[sourceId];
+      await beginMouseDrag(sourceId);
+      await moveMouseToTargetPrimary(targetId);
+      await page.locator('[data-task-child-drop-phase="armed"]').waitFor({ state: 'visible', timeout: 1800 });
+      if (scenario === 'permission-revoked') await setMovePermission(false);
+      else if (scenario === 'target-filtered') {
+        await targetScopeFor(targetId).evaluate((scope) => {
+          if (!(scope instanceof HTMLElement)) throw new Error('target scope not found');
+          scope.dataset.qcFilteredOut = 'true';
+          scope.style.display = 'none';
+        });
+      }
+      else if (scenario === 'target-archived') await patchRuntimeNode(targetId, { isArchived: true });
+      else await removeRuntimeNode(targetId);
+      await page.waitForTimeout(160);
+      await page.mouse.up().catch(() => undefined);
+      await page.waitForTimeout(280);
+      const afterNodes = await readRuntimeNodes();
+      const sourceAfter = afterNodes[sourceId];
+      const transient = await readTransientState();
+      assert(sourceAfter.parentId === sourceBefore.parentId && sourceAfter.order === sourceBefore.order && sourceAfter.nodeType === sourceBefore.nodeType,
+        `${scenario} release must not mutate source`, { sourceBefore, sourceAfter });
+      assert(transient.childPreview === 0 && transient.desktopOverlay === 0,
+        `${scenario} must clean child and desktop overlays`, transient);
+      evidence.push({ scenario, sourceBefore, sourceAfter, transient });
+    }
+    return { evidence };
+  });
+
+  await runCase('DEV068-DESK-SCOPE-CONTROLS', 'the complete DEV-065 hover scope owns child intent while interactive controls stay excluded', async () => {
+    const samples = [];
+    const titleSamples = [
+      '這是一個非常長而且需要被截斷但仍然要能精準命中的中文任務標題'.repeat(2),
+      'LONG_UNBROKEN_ENGLISH_TASK_TITLE_'.repeat(8),
+      '',
+    ];
+    for (const title of titleSamples) {
+      await openApp({ width: 1024, height: 768 });
+      const [sourceId, targetId] = (await fixtureIds()).l2Pair;
+      await patchRuntimeNode(targetId, { title });
+      await page.waitForTimeout(100);
+      const titleSlot = titleSlotFor(targetId);
+      const geometry = await page.evaluate(({ targetId }) => {
+        const target = document.querySelector(`[data-task-child-drop-target="true"][data-task-id="${targetId}"]`);
+        const primary = target?.querySelector(':scope > [data-task-surface-source="true"]');
+        const subtree = target?.querySelector(':scope > [data-task-surface-subtree="true"]');
+        const slot = document.querySelector(`[data-task-title-slot="true"][data-task-id="${targetId}"]`);
+        const titleText = slot?.querySelector(':scope > span');
+        const targetRect = target?.getBoundingClientRect();
+        const primaryRect = primary?.getBoundingClientRect();
+        const subtreeRect = subtree?.getBoundingClientRect();
+        const slotRect = slot?.getBoundingClientRect();
+        const titleTextRect = titleText?.getBoundingClientRect();
+        return {
+          targetTag: target?.tagName || null,
+          isDesktopHoverScope: target?.getAttribute('data-desktop-task-hover-scope') === 'true',
+          primaryIsDirectChild: primary?.parentElement === target,
+          targetRect: targetRect ? { left: targetRect.left, top: targetRect.top, right: targetRect.right, bottom: targetRect.bottom, width: targetRect.width, height: targetRect.height } : null,
+          primaryRect: primaryRect ? { left: primaryRect.left, top: primaryRect.top, right: primaryRect.right, bottom: primaryRect.bottom, width: primaryRect.width, height: primaryRect.height } : null,
+          subtreeRect: subtreeRect ? { left: subtreeRect.left, top: subtreeRect.top, right: subtreeRect.right, bottom: subtreeRect.bottom, width: subtreeRect.width, height: subtreeRect.height } : null,
+          slotRect: slotRect ? { left: slotRect.left, right: slotRect.right, width: slotRect.width } : null,
+          titleTextRect: titleTextRect ? { left: titleTextRect.left, right: titleTextRect.right, width: titleTextRect.width } : null,
+          tailGap: titleTextRect && slotRect ? slotRect.right - titleTextRect.right : null,
+        };
+      }, { targetId });
+      assert(geometry.targetTag === 'DIV' && geometry.isDesktopHoverScope && geometry.primaryIsDirectChild
+        && geometry.targetRect && geometry.primaryRect && geometry.slotRect && geometry.titleTextRect,
+      'child target must be the same complete task scope used by DEV-065 hover preselection', { title, geometry });
+      assert(geometry.targetRect.left <= geometry.primaryRect.left + 1
+        && geometry.targetRect.top <= geometry.primaryRect.top + 1
+        && geometry.targetRect.right >= geometry.primaryRect.right - 1
+        && geometry.targetRect.bottom >= geometry.primaryRect.bottom - 1
+        && (!geometry.subtreeRect || (
+          geometry.targetRect.left <= geometry.subtreeRect.left + 1
+          && geometry.targetRect.top <= geometry.subtreeRect.top + 1
+          && geometry.targetRect.right >= geometry.subtreeRect.right - 1
+          && geometry.targetRect.bottom >= geometry.subtreeRect.bottom - 1
+        )),
+      'the target scope must contain both its primary task and visible descendant frame', { title, geometry });
+
+      let probeKind = 'primary-blank';
+      let probePoint;
+      if (geometry.tailGap !== null && geometry.tailGap >= 16) {
+        probeKind = 'title-tail';
+        probePoint = await pointFor(titleSlot, 0.96, 0.5);
+        assert(probePoint.x > geometry.titleTextRect.right + 4,
+          'tail probe must be visibly after the rendered title text', { title, geometry, probePoint });
+      } else probePoint = await pointFor(surfaceFor(targetId), 0.5, 0.94);
+
+      await beginMouseDrag(sourceId);
+      await page.mouse.move(probePoint.x, probePoint.y, { steps: 6 });
+      await page.locator('[data-task-child-drop-phase="armed"]').waitFor({ state: 'visible', timeout: 1800 });
+      const preview = await readChildPreview();
+      const liveStatus = await page.locator('[data-task-child-drop-live-status="true"]').textContent();
+      assert(preview.target === targetId && preview.childInsertionCount === 1
+        && preview.hitScopeRect
+        && Math.abs((preview.hitScopeRect.right - preview.hitScopeRect.left) - geometry.targetRect.width) <= 2
+        && Math.abs((preview.hitScopeRect.bottom - preview.hitScopeRect.top) - geometry.targetRect.height) <= 2,
+      'every title variant and blank primary area must arm the exact complete hover scope', { title, probeKind, probePoint, preview, geometry });
+      assert((liveStatus || '').includes(title || '未命名任務'),
+        'assistive text must use the exact title or fallback', { title, liveStatus });
+      if (samples.length === 0) await page.screenshot({ path: `${screenshotBase}-desktop-long-title.png`, fullPage: false });
+      await page.keyboard.press('Escape');
+      await page.mouse.up().catch(() => undefined);
+      samples.push({ titleLength: title.length, targetId, probeKind, probePoint, geometry, preview, liveStatus });
+    }
+
+    await openApp({ width: 1440, height: 900 });
+    const [sourceId, targetId] = (await fixtureIds()).l2Pair;
+    assert(sourceId && targetId, 'control exclusion fixture must expose independent source and target tasks');
+    await beginMouseDrag(sourceId);
+    const toggle = surfaceFor(targetId).locator('[data-kanban-checklist-toggle="true"]').first();
+    const controlPoint = await pointFor(toggle);
+    await page.mouse.move(controlPoint.x, controlPoint.y, { steps: 6 });
+    await page.waitForTimeout(1150);
+    const controlPreviewCount = await page.locator('[data-task-child-drop-preview="true"]').count();
+    await page.mouse.up();
+    assert(controlPreviewCount === 0, 'interactive expand control must never become a child target', { controlPoint });
+    return { samples, controlPoint, controlPreviewCount };
+  });
+
+  await runCase('DEV068-MOB-900', 'mobile complete hover-scope hold below one second preserves the standard drop', async () => {
+    await openApp({ width: 390, height: 844 });
+    const fixture = await fixtureIds();
+    const runtimeBefore = await readRuntimeNodes();
+    const targetId = fixture.l2Pair[1];
+    const targetNode = runtimeBefore[targetId];
+    const orderedSiblings = Object.values(runtimeBefore)
+      .filter(node => node && !node.isArchived && node.parentId === targetNode?.parentId)
+      .sort((left, right) => (left.order ?? 0) - (right.order ?? 0));
+    const targetSiblingIndex = orderedSiblings.findIndex(node => node.id === targetId);
+    const sourceId = orderedSiblings[targetSiblingIndex + 1]?.id
+      || orderedSiblings[targetSiblingIndex - 2]?.id;
+    assert(sourceId && targetId && sourceId !== targetId,
+      'mobile nearest-boundary fixture must expose a non-origin same-level move', {
+        fixture,
+        orderedSiblings: orderedSiblings.map(node => node.id),
+      });
+    const before = await readNode(sourceId);
+    const targetBefore = await readNode(targetId);
+    const targetScopeBefore = await targetScopeFor(targetId).boundingBox();
+    const held = await startHeldTouch(sourceId);
+    const targetPoint = await pointFor(surfaceFor(targetId));
+    await held.moveTo(targetPoint);
+    await page.locator('[data-task-child-drop-phase="candidate"]').waitFor({ state: 'visible' });
+    await page.waitForTimeout(720);
+    const candidate = await readChildPreview();
+    const targetGeometry = await readTaskScopeGeometry(targetId);
+    assert(candidate.input === 'touch' && candidate.childInsertionCount === 0
+      && candidate.sourceFrameCount === 0 && candidate.subtreeFrameCount === 0 && candidate.scopeFrameCount === 0
+      && candidate.parentRect === null && candidate.subtreeRect === null
+      && candidate.standardInsertionIndicatorCount === 1
+      && candidate.hitScopeRect && targetScopeBefore
+      && Math.abs(candidate.safeWidth - targetScopeBefore.width) <= 2
+      && Math.abs(candidate.safeHeight - targetScopeBefore.height) <= 2,
+      'mobile candidate must keep the complete hit scope without rendering child frames before arming', { candidate, targetScopeBefore });
+    assert(candidate.standardInsertionPosition === 'before'
+      && candidate.standardInsertionRect && targetGeometry.scope && targetGeometry.primary && targetGeometry.subtree
+      && targetGeometry.subtree.height > 0
+      && Math.abs(candidate.standardInsertionRect.centerY - targetGeometry.scope.top) <= 1
+      && candidate.standardInsertionRect.centerY <= targetGeometry.primary.top + 1
+      && Math.abs(candidate.standardInsertionRect.centerY - targetPoint.y) <= 24,
+    'expanded mobile L2 must choose the nearest leading same-level boundary and keep it close to the finger',
+    { candidate, targetGeometry, targetPoint });
+    await held.end();
+    const after = await readNode(sourceId);
+    const runtimeAfter = await readRuntimeNodes();
+    const siblingsAfter = Object.values(runtimeAfter)
+      .filter(node => node && !node.isArchived && node.parentId === targetBefore.parentId)
+      .sort((left, right) => (left.order ?? 0) - (right.order ?? 0));
+    const sourceAfterIndex = siblingsAfter.findIndex(node => node.id === sourceId);
+    const targetAfterIndex = siblingsAfter.findIndex(node => node.id === targetId);
+    assert(after.parentId === targetBefore.parentId && after.parentId !== targetId,
+      'mobile sub-threshold release may use the standard target but must not commit child placement', { before, targetBefore, after });
+    assert(sourceAfterIndex === targetAfterIndex - 1,
+      'mobile release must commit the exact before-target descriptor shown in preview', {
+        sourceAfterIndex,
+        targetAfterIndex,
+        siblingsAfter: siblingsAfter.map(node => node.id),
+      });
+    return { sourceId, targetId, targetPoint, candidate, targetGeometry, before, targetBefore, after, siblingsAfter };
+  });
+
+  await runCase('DEV068-MOB-STANDARD-SWITCH', 'mobile standard insertion switches to the current nearby boundary without retaining a stale line', async () => {
+    await openApp({ width: 390, height: 844 });
+    const fixture = await fixtureIds();
+    const nodes = await readRuntimeNodes();
+    const sameParent = fixture.l2
+      .map(id => nodes[id])
+      .filter(node => node && node.parentId === nodes[fixture.l2[0]]?.parentId)
+      .sort((left, right) => (left.order ?? 0) - (right.order ?? 0));
+    const targetA = sameParent[0]?.id;
+    const targetB = sameParent[1]?.id;
+    const sourceId = sameParent.at(-1)?.id;
+    assert(sourceId && targetA && targetB && ![targetA, targetB].includes(sourceId),
+      'stale-switch fixture must expose three same-level mobile tasks', {
+        sameParent: sameParent.map(node => node.id),
+      });
+
+    const readStandardIndicator = async (fingerPoint) => page.evaluate(({ fingerPoint }) => {
+      const indicator = document.querySelector('[data-mobile-drop-indicator="true"]');
+      const rect = indicator?.getBoundingClientRect();
+      return {
+        count: document.querySelectorAll('[data-mobile-drop-indicator="true"]').length,
+        target: indicator?.getAttribute('data-mobile-drop-target') || null,
+        position: indicator?.getAttribute('data-mobile-drop-position') || null,
+        axis: indicator?.getAttribute('data-mobile-drop-axis') || null,
+        distance: rect ? Math.abs((rect.top + rect.height / 2) - fingerPoint.y) : null,
+      };
+    }, { fingerPoint });
+
+    const held = await startHeldTouch(sourceId);
+    const pointA = await pointFor(surfaceFor(targetA));
+    await held.moveExact(pointA);
+    await page.waitForTimeout(100);
+    const indicatorA = await readStandardIndicator(pointA);
+    const pointB = await pointFor(surfaceFor(targetB));
+    await held.moveExact(pointB);
+    await page.waitForTimeout(100);
+    const indicatorB = await readStandardIndicator(pointB);
+    assert(indicatorA.count === 1
+      && indicatorA.target === targetA
+      && indicatorA.axis === 'horizontal'
+      && indicatorA.distance <= 24,
+    'first mobile ordering target must expose one nearby horizontal boundary', {
+      pointA,
+      indicatorA,
+    });
+    assert(indicatorB.count === 1
+      && indicatorB.target === targetB
+      && indicatorB.target !== indicatorA.target
+      && indicatorB.axis === 'horizontal'
+      && indicatorB.distance <= 24,
+    'crossing into another task must replace the old descriptor and keep the line near the finger', {
+      pointB,
+      indicatorA,
+      indicatorB,
+    });
+
+    const actionPoint = await pointFor(page.locator('[data-mobile-task-action="toggle-complete"]').first());
+    await held.moveExact(actionPoint);
+    await page.waitForTimeout(100);
+    const cleared = await page.evaluate(() => ({
+      indicatorCount: document.querySelectorAll('[data-mobile-drop-indicator="true"]').length,
+      originCount: document.querySelectorAll('[data-mobile-drop-origin="true"]').length,
+      actionActive: document.querySelector('[data-mobile-task-action="toggle-complete"]')
+        ?.getAttribute('class')?.includes('bg-emerald-500') || false,
+    }));
+    assert(cleared.indicatorCount === 0 && cleared.originCount === 0 && cleared.actionActive,
+      'leaving ordering targets must clear the last line before another target owns the gesture', cleared);
+    await held.cancel();
+    return { sourceId, targetA, targetB, pointA, pointB, indicatorA, indicatorB, cleared };
+  });
+
+  await runCase('DEV068-MOB-COLUMN-GAP-NEAREST', 'mobile L2 gap resolves to its nearest same-level boundary instead of a distant column append', async () => {
+    await openApp({ width: 390, height: 844 });
+    const fixture = await fixtureIds();
+    const beforeNodes = await readRuntimeNodes();
+    const sameParent = fixture.l2
+      .map(id => beforeNodes[id])
+      .filter(node => node && node.parentId === beforeNodes[fixture.l2[0]]?.parentId)
+      .sort((left, right) => (left.order ?? 0) - (right.order ?? 0));
+    const upperId = sameParent[0]?.id;
+    const lowerId = sameParent[1]?.id;
+    const sourceId = sameParent.at(-1)?.id;
+    assert(sourceId && upperId && lowerId && ![upperId, lowerId].includes(sourceId),
+      'mobile gap fixture must expose two adjacent targets and a separate source', {
+        sameParent: sameParent.map(node => node.id),
+      });
+
+    const held = await startHeldTouch(sourceId);
+    await targetScopeFor(upperId).scrollIntoViewIfNeeded();
+    const upperRect = await targetScopeFor(upperId).boundingBox();
+    const lowerRect = await targetScopeFor(lowerId).boundingBox();
+    assert(upperRect && lowerRect && lowerRect.y > upperRect.y + upperRect.height,
+      'adjacent mobile L2 scopes must expose a visual gap', { upperRect, lowerRect });
+    const gapPoint = {
+      x: Math.round(Math.max(8, Math.min(382, upperRect.x + upperRect.width / 2))),
+      y: Math.round((upperRect.y + upperRect.height + lowerRect.y) / 2),
+    };
+    await held.moveExact(gapPoint);
+    await page.waitForTimeout(100);
+    const indicator = await page.evaluate(({ gapPoint }) => {
+      const element = document.querySelector('[data-mobile-drop-indicator="true"]');
+      const rect = element?.getBoundingClientRect();
+      return {
+        count: document.querySelectorAll('[data-mobile-drop-indicator="true"]').length,
+        target: element?.getAttribute('data-mobile-drop-target') || null,
+        position: element?.getAttribute('data-mobile-drop-position') || null,
+        surfaceKind: element?.getAttribute('data-mobile-drop-surface-kind') || null,
+        axis: element?.getAttribute('data-mobile-drop-axis') || null,
+        centerY: rect ? rect.top + rect.height / 2 : null,
+        distance: rect ? Math.abs((rect.top + rect.height / 2) - gapPoint.y) : null,
+      };
+    }, { gapPoint });
+    assert(indicator.count === 1
+      && indicator.surfaceKind === 'kanban-card'
+      && indicator.axis === 'horizontal'
+      && ((indicator.target === upperId && indicator.position === 'after')
+        || (indicator.target === lowerId && indicator.position === 'before'))
+      && indicator.distance <= Math.max(4, (lowerRect.y - (upperRect.y + upperRect.height)) / 2 + 1),
+    'the L2 gap must own one canonical nearby card boundary, never column-drop append', {
+      gapPoint,
+      upperRect,
+      lowerRect,
+      indicator,
+    });
+    await held.end();
+    const afterNodes = await readRuntimeNodes();
+    const siblingsAfter = Object.values(afterNodes)
+      .filter(node => node && !node.isArchived && node.parentId === beforeNodes[upperId].parentId)
+      .sort((left, right) => (left.order ?? 0) - (right.order ?? 0));
+    const sourceIndex = siblingsAfter.findIndex(node => node.id === sourceId);
+    const upperIndex = siblingsAfter.findIndex(node => node.id === upperId);
+    const lowerIndex = siblingsAfter.findIndex(node => node.id === lowerId);
+    assert(sourceIndex === upperIndex + 1 && sourceIndex === lowerIndex - 1,
+      'gap release must commit the same between-siblings descriptor shown in preview', {
+        indicator,
+        siblingsAfter: siblingsAfter.map(node => node.id),
+      });
+    return { sourceId, upperId, lowerId, gapPoint, upperRect, lowerRect, indicator, siblingsAfter };
+  });
+
+  await runCase('DEV068-MOB-ARMED', 'mobile armed hover-scope preview commits exact child once', async () => {
+    await openApp({ width: 390, height: 844 });
+    const fixture = await fixtureIds();
+    const [sourceId, targetId] = fixture.l2Pair;
+    const targetBefore = await readNode(targetId);
+    const targetPoint = await pointFor(surfaceFor(targetId));
+    await resetMobileCommitSpy();
+    const spyBefore = await readMobileCommitSpy();
+    const held = await startHeldTouch(sourceId);
+    await held.moveTo(targetPoint);
+    await page.locator('[data-task-child-drop-phase="armed"]').waitFor({ state: 'visible', timeout: 1800 });
+    const armed = await readChildPreview();
+    const sourceOverlay = await readSourceOverlayGeometry(targetPoint);
+    assert(armed.count === 1 && armed.childInsertionCount === 1
+      && armed.sourceFrameCount === 0 && armed.subtreeFrameCount === 0 && armed.scopeFrameCount === 0
+      && armed.parentRect === null && armed.subtreeRect === null
+      && armed.standardInsertionIndicatorCount === 0
+      && armed.childInsertionRect.left >= 0 && armed.childInsertionRect.right <= armed.viewport.width
+      && armed.childInsertionRect.top >= 48 && armed.childInsertionRect.bottom <= armed.viewport.height,
+    'mobile armed preview must render only one child insertion marker and stay inside the viewport/action-rail safe area', armed);
+    assert(sourceOverlay.kind === 'mobile'
+      && sourceOverlay.anchor === 'finger'
+      && sourceOverlay.placement === 'upper-right'
+      && ['upper-right', 'upper-left'].includes(sourceOverlay.edgePlacement)
+      && sourceOverlay.pointerGap === 16
+      && sourceOverlay.sourceRect.left >= 8 - 1
+      && sourceOverlay.sourceRect.right <= sourceOverlay.viewport.width - 8 + 1
+      && sourceOverlay.sourceRect.bottom <= targetPoint.y - sourceOverlay.gap + 1
+      && !sourceOverlay.overlapsChildInsertion,
+    'mobile source preview must prefer upper-right, clamp safely at narrow edges, and stay above the finger without covering child feedback', sourceOverlay);
+    const screenshotPath = `${screenshotBase}-mobile-armed.png`;
+    await page.screenshot({ path: screenshotPath, fullPage: false });
+    await held.end();
+    const after = await readNode(sourceId);
+    const spyAfter = await readMobileCommitSpy();
+    assert(after.parentId === targetId && after.nodeType === 'task',
+      'mobile armed release must commit exact parent', { sourceId, targetId, after });
+    assert(spyAfter.batchUpdateNodesCalls === 1
+      && spyAfter.ancestorRecalculationCalls === 1
+      && spyAfter.undoDepth === spyBefore.undoDepth + 1,
+    'a real mobile child move must still produce exactly one batch, ancestor recalculation and Undo command', {
+      spyBefore, spyAfter,
+    });
+    const debug = await page.evaluate(() => window.__projedMobileTaskActionDebug || []);
+    const completions = debug.filter((entry) => entry.type === 'terminal:complete' && entry.nodeId === sourceId);
+    assert(completions.length === 1, 'mobile child drop must terminate exactly once', { completions });
+    return { sourceId, targetId, targetTitle: targetBefore.title, armed, sourceOverlay, after, spyBefore, spyAfter, completions: completions.length, screenshotPath };
+  });
+
+  await runCase('DEV068-MOB-ORIGIN-CHILD', 'mobile child append at the original position shows the source title and is zero-write', async () => {
+    await openApp({ width: 390, height: 844 });
+    const fixture = await fixtureIds();
+    const [sourceId, targetId] = fixture.originPair;
+    assert(sourceId && targetId, 'fixture must expose a visible mobile last child and its current parent', fixture);
+    const before = await readNode(sourceId);
+    const held = await startHeldTouch(sourceId);
+    await held.moveTo(await pointFor(surfaceFor(targetId)));
+    await page.locator('[data-task-child-drop-phase="armed"]').waitFor({ state: 'visible', timeout: 1800 });
+    const armed = await readChildPreview();
+    assert(armed.childInsertionCount === 1
+      && armed.childOriginFieldCount === 1
+      && armed.childGenericMarkerCount === 0
+      && armed.childOriginTitle === before.title
+      && armed.childOriginNoop === 'true'
+      && armed.childOriginStyle?.backgroundColor === 'rgb(99, 102, 241)'
+      && armed.childOriginStyle?.color === 'rgb(255, 255, 255)',
+    'mobile origin child preview must reuse the blue source-title field instead of a generic insertion line', { before, armed });
+    const screenshotPath = `${screenshotBase}-mobile-origin-child.png`;
+    await page.screenshot({ path: screenshotPath, fullPage: false });
+    await held.end();
+    const after = await readNode(sourceId);
+    const transient = await readTransientState();
+    assert(JSON.stringify(after) === JSON.stringify(before),
+      'mobile origin child release must preserve the complete source node snapshot', { before, after });
+    assert(Object.values(transient).every((value) => value === 0 || value === false),
+      'mobile origin child release must clear every transient surface', transient);
+    return { sourceId, targetId, before, armed, after, transient, screenshotPath };
+  });
+
+  await runCase('DEV068-MOB-ORIGIN-COLUMN-DROP', 'mobile column append at the original position uses the source title field and performs no commit', async () => {
+    await openApp({ width: 390, height: 844 });
+    const fixture = await fixtureIds();
+    const [sourceId, columnId] = fixture.columnOriginPair;
+    assert(sourceId && columnId, 'fixture must expose a visible mobile last L2 task and its current L1 column', fixture);
+    const sourcePoint = await pointFor(surfaceFor(sourceId), 0.48, 0.45);
+    const sourceTitleBefore = await titleSlotFor(sourceId).boundingBox();
+    assert(Boolean(sourceTitleBefore), 'mobile source must expose a stable title anchor before drag', { sourceId });
+    const beforeNodes = await readRuntimeNodes();
+    const sourceBefore = beforeNodes[sourceId];
+    await resetMobileCommitSpy();
+    const spyBefore = await readMobileCommitSpy();
+
+    const held = await startHeldTouchAtPoint(sourcePoint);
+    await page.locator('[data-mobile-task-action-rail="true"]').waitFor({ state: 'visible', timeout: 3000 });
+    const columnDrop = page.locator(`[data-task-drop-surface-kind="column-drop"][data-task-id="${columnId}"]`).first();
+    const dropBox = await columnDrop.boundingBox();
+    const appendAnchorBox = await columnDrop.locator('[data-kanban-column-append-anchor="true"]').boundingBox();
+    assert(Boolean(dropBox), 'mobile column-drop surface must expose geometry', { columnId });
+    const dropPoint = {
+      x: Math.round(dropBox.x + 3),
+      y: Math.round(Math.min(dropBox.y + dropBox.height - 4, (appendAnchorBox?.y ?? dropBox.y) + 12)),
+    };
+    await held.moveExact(dropPoint);
+    const origin = page.locator('[data-mobile-drop-origin="true"][data-mobile-drop-noop="true"]').first();
+    await origin.waitFor({ state: 'visible', timeout: 3000 });
+    const originField = origin.locator('[data-mobile-origin-field="true"]').first();
+    const originFieldRect = await originField.boundingBox();
+    const originTextRect = await originField.locator('span').first().boundingBox();
+    const markerCount = await origin.locator('[data-kanban-insertion-marker="true"]').count();
+    const indicatorCount = await page.locator('[data-mobile-drop-indicator="true"]').count();
+    const originTitle = (await originField.textContent() || '').trim();
+    assert(originFieldRect && originTextRect
+      && originTitle === sourceBefore.title
+      && markerCount === 0
+      && indicatorCount === 0
+      && Math.abs(originTextRect.x - sourceTitleBefore.x) <= 1,
+    'canonical mobile column-drop origin must show only the source title field aligned to the original title text', {
+      sourceTitleBefore, originFieldRect, originTextRect, originTitle, markerCount, indicatorCount,
+    });
+
+    const actionPoint = await pointFor(page.locator('[data-mobile-task-action="toggle-complete"]').first());
+    await held.moveExact(actionPoint);
+    await page.waitForTimeout(80);
+    const actionPriority = await page.evaluate(() => ({
+      originCount: document.querySelectorAll('[data-mobile-drop-origin="true"]').length,
+      indicatorCount: document.querySelectorAll('[data-mobile-drop-indicator="true"]').length,
+      activeClass: document.querySelector('[data-mobile-task-action="toggle-complete"]')?.getAttribute('class') || '',
+    }));
+    assert(actionPriority.originCount === 0
+      && actionPriority.indicatorCount === 0
+      && actionPriority.activeClass.includes('bg-emerald-500'),
+    'mobile action rail must retain priority over a canonical origin outcome', actionPriority);
+
+    await held.moveExact(dropPoint);
+    await origin.waitFor({ state: 'visible', timeout: 3000 });
+    const screenshotPath = `${screenshotBase}-mobile-origin-column-drop.png`;
+    await page.screenshot({ path: screenshotPath, fullPage: false });
+    await held.end();
+    const afterNodes = await readRuntimeNodes();
+    const spyAfter = await readMobileCommitSpy();
+    const debug = await page.evaluate(() => window.__projedMobileTaskActionDebug || []);
+    const terminal = [...debug].reverse().find(entry => entry.type === 'terminal:complete' && entry.nodeId === sourceId) || null;
+    assert(JSON.stringify(afterNodes) === JSON.stringify(beforeNodes),
+      'mobile column-drop origin release must preserve the complete node record including updatedAt', {
+        sourceBefore, sourceAfter: afterNodes[sourceId],
+      });
+    assert(spyAfter.batchUpdateNodesCalls === 0
+      && spyAfter.ancestorRecalculationCalls === 0
+      && spyAfter.undoDepth === spyBefore.undoDepth,
+    'mobile column-drop origin release must produce zero batch, ancestor and Undo changes', { spyBefore, spyAfter });
+    assert(terminal?.status === 'no-op' && terminal?.reason === 'task-position-origin',
+      'mobile release commit must classify the same target as canonical origin', { terminal });
+    assert(Object.values(await readTransientState()).every(value => value === 0 || value === false),
+      'mobile canonical origin release must clear every transient drag surface');
+    return {
+      sourceId,
+      columnId,
+      dropPoint,
+      sourceTitleBefore,
+      originFieldRect,
+      originTextRect,
+      markerCount,
+      indicatorCount,
+      actionPriority,
+      spyBefore,
+      spyAfter,
+      terminal,
+      screenshotPath,
+    };
+  });
+
+  await runCase('DEV068-MOB-MOVE-COLUMN-DROP', 'mobile direct column append preserves the canonical move result before child dwell arms', async () => {
+    await openApp({ width: 390, height: 844 });
+    const fixture = await fixtureIds();
+    const beforeNodes = await readRuntimeNodes();
+    const sourceId = fixture.l2.find(id => beforeNodes[id]?.parentId === fixture.l1[0]);
+    const sourceBefore = beforeNodes[sourceId];
+    const columnId = fixture.l1.find(id => id !== sourceBefore?.parentId);
+    assert(sourceId && sourceBefore && columnId,
+      'fixture must expose an L2 source and another visible L1 column', fixture);
+    const expectedOrder = Object.values(beforeNodes)
+      .filter(node => node && !node.isArchived && node.parentId === columnId && node.id !== sourceId)
+      .length;
+    const sourcePoint = await pointFor(surfaceFor(sourceId), 0.48, 0.45);
+    await resetMobileCommitSpy();
+    const spyBefore = await readMobileCommitSpy();
+
+    const held = await startHeldTouchAtPoint(sourcePoint);
+    await page.locator('[data-mobile-task-action-rail="true"]').waitFor({ state: 'visible', timeout: 3000 });
+    const columnDrop = page.locator(`[data-task-drop-surface-kind="column-drop"][data-task-id="${columnId}"]`).first();
+    const dropBox = await columnDrop.boundingBox();
+    const appendAnchorBox = await columnDrop.locator('[data-kanban-column-append-anchor="true"]').boundingBox();
+    assert(dropBox && dropBox.x < 390 && dropBox.x + dropBox.width > 0,
+      'another column-drop surface must remain at least partially visible', { columnId, dropBox });
+    const dropPoint = {
+      x: Math.round(Math.max(2, Math.min(388, dropBox.x + 3))),
+      y: Math.round(Math.min(dropBox.y + dropBox.height - 4, (appendAnchorBox?.y ?? dropBox.y) + 12)),
+    };
+    const farPoint = appendAnchorBox && appendAnchorBox.y + 64 < dropBox.y + dropBox.height - 4
+      ? { x: dropPoint.x, y: Math.round(appendAnchorBox.y + 64) }
+      : null;
+    if (farPoint) {
+      await held.moveExact(farPoint);
+      await page.waitForTimeout(80);
+      const farPreviewCount = await page.locator('[data-mobile-drop-indicator="true"], [data-mobile-drop-origin="true"]').count();
+      assert(farPreviewCount === 0,
+        'column whitespace beyond the explicit 32px tail must not imply a distant append target', {
+          farPoint,
+          dropBox,
+          appendAnchorBox,
+          farPreviewCount,
+        });
+    }
+    await held.moveExact(dropPoint);
+    const indicator = page.locator('[data-mobile-drop-indicator="true"]').first();
+    await indicator.waitFor({ state: 'visible', timeout: 800 });
+    const preview = await page.evaluate(({ dropPoint }) => {
+      const indicator = document.querySelector('[data-mobile-drop-indicator="true"]');
+      const rect = indicator?.getBoundingClientRect();
+      return {
+      indicatorCount: document.querySelectorAll('[data-mobile-drop-indicator="true"]').length,
+      originCount: document.querySelectorAll('[data-mobile-drop-origin="true"]').length,
+      markerCount: document.querySelectorAll('[data-mobile-drop-indicator="true"] [data-kanban-insertion-marker="true"]').length,
+      childPhase: document.querySelector('[data-task-child-drop-preview="true"]')?.getAttribute('data-task-child-drop-phase') || null,
+      surfaceKind: indicator?.getAttribute('data-mobile-drop-surface-kind') || null,
+      axis: indicator?.getAttribute('data-mobile-drop-axis') || null,
+      distanceFromFinger: rect ? Math.abs((rect.top + rect.height / 2) - dropPoint.y) : null,
+    };
+    }, { dropPoint });
+    assert(preview.indicatorCount === 1
+      && preview.originCount === 0
+      && preview.markerCount === 1
+      && preview.childPhase === 'candidate'
+      && preview.surfaceKind === 'column-drop'
+      && preview.axis === 'horizontal'
+      && preview.distanceFromFinger <= 16,
+    'only the explicit column tail may append, and its marker must stay close to the finger', preview);
+    await held.end();
+    const afterNodes = await readRuntimeNodes();
+    const sourceAfter = afterNodes[sourceId];
+    const spyAfter = await readMobileCommitSpy();
+    const debug = await page.evaluate(() => window.__projedMobileTaskActionDebug || []);
+    const terminal = [...debug].reverse().find(entry => entry.type === 'terminal:complete' && entry.nodeId === sourceId) || null;
+    assert(sourceAfter.parentId === columnId
+      && sourceAfter.order === expectedOrder
+      && sourceAfter.nodeType === sourceBefore.nodeType,
+    'mobile column-drop move must preserve canonical parent/order/nodeType semantics', {
+      sourceBefore, sourceAfter, columnId, expectedOrder,
+    });
+    assert(spyAfter.batchUpdateNodesCalls === 1
+      && spyAfter.ancestorRecalculationCalls === 1
+      && spyAfter.undoDepth === spyBefore.undoDepth + 1,
+    'mobile column-drop move must produce one batch, ancestor recalculation and Undo command', {
+      spyBefore, spyAfter,
+    });
+    assert(terminal?.status === 'committed' && terminal?.reason === 'task-position-updated',
+      'mobile column-drop move must terminate exactly once as committed', { terminal });
+    return {
+      sourceId,
+      columnId,
+      dropPoint,
+      farPoint,
+      preview,
+      sourceBefore,
+      sourceAfter,
+      expectedOrder,
+      spyBefore,
+      spyAfter,
+      terminal,
+    };
+  });
+
+  await runCase('DEV068-MOB-L1-SCOPE', 'mobile L2 source becomes a direct L2 child when the L1 hover scope visibly arms', async () => {
+    await openApp({ width: 390, height: 844 });
+    const fixture = await fixtureIds();
+    const sourceId = fixture.l2[0];
+    const sourceBefore = await readNode(sourceId);
+    const targetId = fixture.l1.find((id) => id !== sourceBefore.parentId);
+    assert(sourceId && targetId, 'fixture must expose an L2 source and independent L1 target', fixture);
+    const held = await startHeldTouch(sourceId);
+    await held.moveTo(await pointFor(surfaceFor(targetId)));
+    await page.locator('[data-task-child-drop-phase="armed"]').waitFor({ state: 'visible', timeout: 1800 });
+    const preview = await readChildPreview();
+    assert(preview.target === targetId && preview.input === 'touch' && preview.childInsertionCount === 1,
+      'mobile L1 center must visibly arm the exact L1 parent', { preview, targetId });
+    await held.end();
+    const after = await readNode(sourceId);
+    assert(after.parentId === targetId && after.nodeType === 'task',
+      'mobile L1 center release must keep the source as a direct L2 task', { sourceBefore, after, targetId });
+    return { sourceId, targetId, sourceBefore, preview, after };
+  });
+
+  await runCase('DEV068-MOB-ACTION', 'mobile action rail cancels child dwell and owns release', async () => {
+    await openApp({ width: 390, height: 844 });
+    const fixture = await fixtureIds();
+    const [sourceId, targetId] = fixture.l2Pair;
+    const before = await readNode(sourceId);
+    const held = await startHeldTouch(sourceId);
+    await held.moveTo(await pointFor(surfaceFor(targetId)));
+    await page.locator('[data-task-child-drop-phase="candidate"]').waitFor({ state: 'visible' });
+    const actionPoint = await pointFor(page.locator('[data-mobile-task-action="toggle-complete"]').first());
+    await held.moveTo(actionPoint);
+    await page.waitForTimeout(120);
+    const state = await page.evaluate(() => ({
+      childPreviewCount: document.querySelectorAll('[data-task-child-drop-preview="true"]').length,
+      activeActionClass: document.querySelector('[data-mobile-task-action="toggle-complete"]')?.getAttribute('class') || '',
+    }));
+    assert(state.childPreviewCount === 0 && state.activeActionClass.includes('bg-emerald-500'),
+      'action rail must clear child candidate and become the only active target', state);
+    await held.end();
+    const after = await readNode(sourceId);
+    assert(after.parentId === before.parentId && after.status !== before.status,
+      'action release may toggle status but must never move parent', { before, after });
+    return { sourceId, targetId, state, before, after };
+  });
+
+  await runCase('DEV068-MOB-CANCEL', 'mobile touchcancel clears armed preview and preserves data', async () => {
+    await openApp({ width: 390, height: 844 });
+    const fixture = await fixtureIds();
+    const [sourceId, targetId] = fixture.l2Pair;
+    const before = await readNode(sourceId);
+    const held = await startHeldTouch(sourceId);
+    await held.moveTo(await pointFor(surfaceFor(targetId)));
+    await page.locator('[data-task-child-drop-phase="armed"]').waitFor({ state: 'visible', timeout: 1800 });
+    await held.cancel();
+    const after = await readNode(sourceId);
+    const transient = await page.evaluate(() => ({
+      child: document.querySelectorAll('[data-task-child-drop-preview="true"]').length,
+      rail: document.querySelectorAll('[data-mobile-task-action-rail="true"]').length,
+      preview: document.querySelectorAll('[data-mobile-drag-preview="true"]').length,
+    }));
+    assert(before.parentId === after.parentId && before.order === after.order && Object.values(transient).every((count) => count === 0),
+      'touchcancel must clear session and produce zero write', { before, after, transient });
+    return { sourceId, targetId, before, after, transient };
+  });
+
+  await runCase('DEV068-MOB-CANCEL-MATRIX', 'mobile pointer, lifecycle and viewport changes clear an armed child session without writes', async () => {
+    const cancellations = [];
+    for (const reason of ['pointercancel', 'escape', 'blur', 'pagehide', 'visibilitychange', 'orientationchange', 'resize']) {
+      await openApp({ width: 390, height: 844 });
+      const [sourceId, targetId] = (await fixtureIds()).l2Pair;
+      const before = await readNode(sourceId);
+      const held = await startHeldTouch(sourceId);
+      await held.moveTo(await pointFor(surfaceFor(targetId)));
+      await page.locator('[data-task-child-drop-phase="armed"]').waitFor({ state: 'visible', timeout: 1800 });
+
+      let contextMenuSuppressed = null;
+      if (reason === 'orientationchange') {
+        contextMenuSuppressed = await page.evaluate(() => {
+          const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+          document.elementFromPoint(innerWidth / 2, innerHeight / 2)?.dispatchEvent(event);
+          return event.defaultPrevented && !document.querySelector('[data-global-context-menu="true"]');
+        });
+        assert(contextMenuSuppressed, 'synthetic mobile contextmenu must be suppressed during an active session');
+      }
+
+      if (reason === 'pointercancel') await page.evaluate(() => window.dispatchEvent(new PointerEvent('pointercancel', { pointerType: 'touch', bubbles: true })));
+      else if (reason === 'escape') await page.keyboard.press('Escape');
+      else if (reason === 'blur') await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+      else if (reason === 'pagehide') await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+      else if (reason === 'visibilitychange') {
+        await page.evaluate(() => {
+          const descriptor = Object.getOwnPropertyDescriptor(document, 'visibilityState');
+          Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+          document.dispatchEvent(new Event('visibilitychange'));
+          if (descriptor) Object.defineProperty(document, 'visibilityState', descriptor);
+          else delete document.visibilityState;
+        });
+      } else if (reason === 'orientationchange') await page.evaluate(() => window.dispatchEvent(new Event('orientationchange')));
+      else await page.evaluate(() => window.dispatchEvent(new Event('resize')));
+
+      await page.waitForTimeout(140);
+      await held.end();
+      const after = await readNode(sourceId);
+      const transient = await readTransientState();
+      assert(after.parentId === before.parentId && after.order === before.order && after.nodeType === before.nodeType,
+        `${reason} must be a zero-write cancellation`, { before, after });
+      assert(Object.values(transient).every((value) => value === 0 || value === false),
+        `${reason} must clear every transient drag surface`, transient);
+
+      const retry = await startHeldTouch(sourceId);
+      await page.locator('[data-mobile-task-action-rail="true"]').waitFor({ state: 'visible', timeout: 3000 });
+      await retry.end();
+      cancellations.push({ reason, contextMenuSuppressed, transient, retry: 'PASS' });
+    }
+    return { cancellations };
+  });
+
+  await runCase('DEV068-MOB-DEEP', 'mobile L3+ hover scope accepts an exact next-level child', async () => {
+    await openApp({ width: 430, height: 932 });
+    const fixture = await fixtureIds();
+    assert(fixture.l3Pair.length === 2, 'fixture must expose independent mobile L3+ tasks', fixture);
+    const [sourceId, targetId] = fixture.l3Pair;
+    const targetPoint = await pointFor(surfaceFor(targetId));
+    const held = await startHeldTouch(sourceId);
+    await held.moveTo(targetPoint);
+    await page.locator('[data-task-child-drop-phase="armed"]').waitFor({ state: 'visible', timeout: 1800 });
+    await held.end();
+    const after = await readNode(sourceId);
+    assert(after.parentId === targetId, 'mobile deep child drop must use exact target id', { sourceId, targetId, after });
+    return { sourceId, targetId, after };
+  });
+
+  await runCase('DEV068-MOB-MOTION-SCROLL', 'mobile complete-scope motion resets dwell and edge scroll cannot retain a stale child target', async () => {
+    await openApp({ width: 430, height: 932 });
+    let fixture = await fixtureIds();
+    let [sourceId, targetId] = fixture.l2Pair;
+    const before = await readNode(sourceId);
+    const targetPoint = await pointFor(surfaceFor(targetId));
+    let held = await startHeldTouch(sourceId);
+    await held.moveTo(targetPoint);
+    await page.locator('[data-task-child-drop-phase="armed"]').waitFor({ state: 'visible', timeout: 1800 });
+    await held.moveExact({ x: targetPoint.x + 2, y: targetPoint.y + 1 });
+    await page.waitForTimeout(120);
+    const stable = await readChildPreview();
+    assert(stable.phase === 'armed' && stable.target === targetId,
+      'micro movement inside the task hover scope must preserve the exact armed target', stable);
+    const outsidePoint = await findPointOutsideTaskScopes();
+    await held.moveExact(outsidePoint);
+    await page.waitForTimeout(120);
+    assert(await page.locator('[data-task-child-drop-preview="true"]').count() === 0,
+      'leaving every task hover scope must clear child preview immediately');
+    await page.waitForTimeout(1150);
+    assert(await page.locator('[data-task-child-drop-preview="true"]').count() === 0,
+      'outside point must never be magnetized back into an old child target');
+    await held.moveExact({ x: targetPoint.x, y: targetPoint.y });
+    await page.waitForTimeout(430);
+    const restarted = await readChildPreview();
+    assert(restarted.phase === 'candidate' && restarted.target === targetId && restarted.childInsertionCount === 0,
+      're-entering the task hover scope must restart a fresh dwell', restarted);
+    await held.cancel();
+    const afterMotionCancel = await readNode(sourceId);
+    assert(afterMotionCancel.parentId === before.parentId && afterMotionCancel.order === before.order,
+      'motion and cancel must remain zero-write', { before, afterMotionCancel });
+
+    await openApp({ width: 390, height: 844 });
+    fixture = await fixtureIds();
+    [sourceId, targetId] = fixture.l2Pair;
+    const beforeScrollRelease = await readNode(sourceId);
+    const board = page.locator('[data-layout-region="board-canvas"]');
+    await board.evaluate((element) => { element.scrollLeft = 0; });
+    const scrollTargetPoint = await pointFor(surfaceFor(targetId));
+    held = await startHeldTouch(sourceId);
+    await held.moveTo(scrollTargetPoint);
+    await page.locator('[data-task-child-drop-phase="candidate"]').waitFor({ state: 'visible' });
+    await page.waitForTimeout(560);
+    await held.moveExact({ x: 388, y: Math.max(120, Math.min(760, scrollTargetPoint.y)) });
+    await page.waitForTimeout(850);
+    const scrollLeft = await board.evaluate((element) => element.scrollLeft);
+    const postScrollPreview = await readChildPreview();
+    assert(scrollLeft > 0 && postScrollPreview.target !== targetId,
+      'edge auto-scroll must discard the pre-scroll child target; a newly rendered target under the finger may replace it',
+      { scrollLeft, targetId, postScrollPreview });
+    const wasVisiblyArmed = postScrollPreview.phase === 'armed';
+    await held.end();
+    const afterScrollRelease = await readNode(sourceId);
+    const scrollDebug = await page.evaluate(() => window.__projedMobileTaskActionDebug || []);
+    const endDrop = [...scrollDebug].reverse().find((entry) => entry.type === 'end:drop' && entry.nodeId === sourceId) || null;
+    if (endDrop?.targetSurfaceKind === 'task-title-child') {
+      assert(wasVisiblyArmed && afterScrollRelease.parentId === postScrollPreview.target,
+        'edge release may commit only the fresh target that was visibly armed after scrolling',
+        { postScrollPreview, beforeScrollRelease, afterScrollRelease, endDrop });
+    } else {
+      assert(afterScrollRelease.parentId !== targetId,
+        'edge release must never commit the pre-scroll child target',
+        { targetId, postScrollPreview, beforeScrollRelease, afterScrollRelease, endDrop });
+    }
+    assert(postScrollPreview.phase !== 'candidate' || endDrop?.targetSurfaceKind !== 'task-title-child',
+      'a candidate-only post-scroll preview must not become a child placement on release', { postScrollPreview, endDrop });
+    return { stable, restarted, scrollLeft, postScrollPreview, beforeScrollRelease, afterScrollRelease, endDrop };
+  });
+
+  await runCase('DEV068-MOB-ACTION-MATRIX', 'all mobile action-rail targets own release and never also perform a child move', async () => {
+    const actionEvidence = [];
+    for (const action of ['toggle-complete', 'add-sibling', 'add-child', 'archive']) {
+      await openApp({ width: 390, height: 844 });
+      const [sourceId, targetId] = (await fixtureIds()).l2Pair;
+      const beforeNodes = await readNodes();
+      const sourceBefore = beforeNodes[sourceId];
+      const held = await startHeldTouch(sourceId);
+      await held.moveTo(await pointFor(surfaceFor(targetId)));
+      await page.locator('[data-task-child-drop-phase="candidate"]').waitFor({ state: 'visible' });
+      const actionPoint = await pointFor(page.locator(`[data-mobile-task-action="${action}"]`).first());
+      await held.moveTo(actionPoint);
+      await page.waitForTimeout(100);
+      assert(await page.locator('[data-task-child-drop-preview="true"]').count() === 0,
+        `${action} must clear child candidate before release`);
+      await held.end();
+
+      if (action === 'archive') {
+        const confirm = page.getByRole('button', { name: '確認' }).last();
+        await confirm.waitFor({ state: 'visible', timeout: 5000 });
+        await confirm.click();
+        await page.waitForTimeout(260);
+      } else if (action === 'add-sibling' || action === 'add-child') {
+        const modal = page.locator('[data-task-details-modal="true"]').first();
+        await modal.waitFor({ state: 'visible', timeout: 5000 });
+        await page.locator('[data-task-details-modal="true"] [aria-label="關閉任務詳情"]').click();
+        await modal.waitFor({ state: 'detached', timeout: 3000 }).catch(() => undefined);
+      }
+
+      const afterNodes = await readNodes();
+      const sourceAfter = afterNodes[sourceId];
+      const newIds = Object.keys(afterNodes).filter((id) => !beforeNodes[id]);
+      if (action === 'toggle-complete') {
+        assert(sourceAfter.parentId === sourceBefore.parentId && sourceAfter.status !== sourceBefore.status && newIds.length === 0,
+          'toggle action must only change source status', { sourceBefore, sourceAfter, newIds });
+      } else if (action === 'add-sibling') {
+        assert(newIds.length === 1 && afterNodes[newIds[0]].parentId === sourceBefore.parentId,
+          'add-sibling must create exactly one sibling', { newIds, sourceBefore, created: afterNodes[newIds[0]] });
+      } else if (action === 'add-child') {
+        assert(newIds.length === 1 && afterNodes[newIds[0]].parentId === sourceId,
+          'add-child must create exactly one direct child', { newIds, created: afterNodes[newIds[0]] });
+      } else {
+        assert(sourceAfter?.isArchived === true, 'delete must archive only the source after confirmation', { sourceAfter });
+      }
+      assert(sourceAfter?.parentId === sourceBefore.parentId && sourceAfter?.parentId !== targetId,
+        `${action} must not also move source under the child target`, { sourceBefore, sourceAfter, targetId });
+      const debug = await page.evaluate(() => window.__projedMobileTaskActionDebug || []);
+      const terminals = debug.filter((entry) => entry.type === 'terminal:complete' && entry.nodeId === sourceId);
+      assert(terminals.length === 1, `${action} must complete exactly one terminal`, { terminals });
+      actionEvidence.push({ action, sourceId, targetId, newIds, terminalCount: terminals.length, sourceBefore, sourceAfter });
+    }
+    return { actionEvidence };
+  });
+
+  await runCase('DEV068-MOB-TRIALS', 'ten mobile child commits and ten armed cancels have zero wrong parent, double commit or stuck session', async () => {
+    const commits = [];
+    const cancels = [];
+    for (let index = 0; index < 10; index += 1) {
+      await openApp({ width: index % 2 === 0 ? 390 : 430, height: index % 2 === 0 ? 844 : 932 });
+      const [sourceId, targetId] = (await fixtureIds()).l2Pair;
+      const held = await startHeldTouch(sourceId);
+      await held.moveTo(await pointFor(surfaceFor(targetId)));
+      await page.locator('[data-task-child-drop-phase="armed"]').waitFor({ state: 'visible', timeout: 1800 });
+      await held.end();
+      const after = await readNode(sourceId);
+      const debug = await page.evaluate(() => window.__projedMobileTaskActionDebug || []);
+      const completions = debug.filter((entry) => entry.type === 'terminal:complete' && entry.nodeId === sourceId);
+      assert(after.parentId === targetId && completions.length === 1,
+        'mobile commit trial must use exact parent and one terminal', { index, sourceId, targetId, after, completions });
+      commits.push({ index, sourceId, targetId, parentId: after.parentId, terminalCount: completions.length });
+    }
+    for (let index = 0; index < 10; index += 1) {
+      await openApp({ width: index % 2 === 0 ? 390 : 430, height: index % 2 === 0 ? 844 : 932 });
+      const [sourceId, targetId] = (await fixtureIds()).l2Pair;
+      const before = await readNode(sourceId);
+      const held = await startHeldTouch(sourceId);
+      await held.moveTo(await pointFor(surfaceFor(targetId)));
+      await page.locator('[data-task-child-drop-phase="armed"]').waitFor({ state: 'visible', timeout: 1800 });
+      await held.cancel();
+      const after = await readNode(sourceId);
+      const transient = await readTransientState();
+      assert(after.parentId === before.parentId && after.order === before.order
+        && Object.values(transient).every((value) => value === 0 || value === false),
+      'armed cancel trial must be zero-write and fully clean', { index, before, after, transient });
+      const retry = await startHeldTouch(sourceId);
+      await page.locator('[data-mobile-task-action-rail="true"]').waitFor({ state: 'visible', timeout: 3000 });
+      await retry.end();
+      cancels.push({ index, sourceId, targetId, transient, retry: 'PASS' });
+    }
+    return { commits, cancels, wrongParent: 0, doubleCommit: 0, stuckSession: 0 };
+  });
+
+  await runCase('DEV068-VIEWPORTS', 'candidate and armed preview remain usable across five required viewports', async () => {
+    const viewports = [
+      { width: 1440, height: 900, input: 'mouse' },
+      { width: 1024, height: 768, input: 'mouse' },
+      { width: 390, height: 844, input: 'touch' },
+      { width: 430, height: 932, input: 'touch' },
+      { width: 320, height: 844, input: 'touch' },
+    ];
+    const evidence = [];
+    for (const viewport of viewports) {
+      await openApp({ width: viewport.width, height: viewport.height });
+      const fixture = await fixtureIds();
+      const [sourceId, targetId] = fixture.l2Pair;
+      if (viewport.input === 'mouse') {
+        await beginMouseDrag(sourceId);
+        await moveMouseToTargetPrimary(targetId);
+        await page.locator('[data-task-child-drop-phase="armed"]').waitFor({ state: 'visible', timeout: 1800 });
+      } else {
+        const targetPoint = await pointFor(surfaceFor(targetId));
+        const held = await startHeldTouch(sourceId);
+        await held.moveTo(targetPoint);
+        await page.locator('[data-task-child-drop-phase="armed"]').waitFor({ state: 'visible', timeout: 1800 });
+        viewport.held = held;
+      }
+      const preview = await readChildPreview();
+      assert(preview.childInsertionRect
+        && preview.childInsertionRect.left >= 0
+        && preview.childInsertionRect.right <= viewport.width
+        && preview.childInsertionRect.top >= (viewport.input === 'touch' ? 48 : 0)
+        && preview.childInsertionRect.bottom <= viewport.height,
+      'armed child insertion marker must fit viewport', { viewport, preview });
+      const screenshotPath = `${screenshotBase}-viewport-${viewport.width}x${viewport.height}.png`;
+      await page.screenshot({ path: screenshotPath, fullPage: false });
+      evidence.push({ viewport: { width: viewport.width, height: viewport.height, input: viewport.input }, preview, screenshotPath, sweep: await visibleErrorSweep(`viewport-${viewport.width}`) });
+      if (viewport.input === 'mouse') await page.keyboard.press('Escape');
+      else await viewport.held.cancel();
+    }
+    return { evidence };
+  });
+
+  const unexpectedDiagnostics = diagnostics.filter((message) => !/favicon|ResizeObserver/i.test(message));
+  const unexpectedNetworkFailures = networkFailures.filter((message) => !/favicon/i.test(message));
+  results.push({
+    id: 'DEV068-ERROR-SWEEP',
+    scenario: 'console and network error sweep',
+    result: unexpectedDiagnostics.length || unexpectedNetworkFailures.length ? 'FAIL' : 'PASS',
+    details: { unexpectedDiagnostics, unexpectedNetworkFailures },
+  });
+
+  const failed = results.filter((result) => result.result !== 'PASS');
+  const summary = {
+    ok: failed.length === 0,
+    summary: { pass: results.length - failed.length, fail: failed.length },
+    results,
+    diagnostics: diagnostics.slice(-30),
+    networkFailures: networkFailures.slice(-30),
+  };
+  await page.evaluate((payload) => {
+    localStorage.setItem('dev068-task-title-center-child-drop-result', JSON.stringify(payload));
+  }, summary).catch(() => undefined);
+  console.log(JSON.stringify(summary, null, 2));
+  if (failed.length) throw new Error(`DEV-068 browser verification failed: ${JSON.stringify(failed)}`);
+  return summary;
+}

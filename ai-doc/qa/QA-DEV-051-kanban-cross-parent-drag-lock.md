@@ -306,6 +306,6 @@ Pass 需同時滿足：
 
 ### 14.4 Boundary
 
-- 執行基準：branch `持續優化1`、dirty worktree based on `9efc596`；本輪未建立 commit。
+- 執行基準：branch `歷史開發來源`、dirty worktree based on `歷史工作樹基準`；本輪未建立 commit。
 - 未執行：physical phone supplemental、production smoke、deploy、remote data mutation。
 - 詳細事實報告：`ai-doc/qc/QC-DEV-051-kanban-cross-parent-drag-lock.md`。

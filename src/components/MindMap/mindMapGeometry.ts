@@ -1,5 +1,8 @@
 import type { MindMapDirection } from './MindMapNode';
 import { BRAND_BLUE, normalizeLegacyBrandBlue } from '../ui/brandColors';
+import type { MindMapWorldPoint, MindMapWorldRect } from './mindMapCoordinateSystem';
+
+export type { MindMapWorldPoint, MindMapWorldRect } from './mindMapCoordinateSystem';
 
 export interface MindMapConnectorPath {
   id: string;
@@ -47,19 +50,8 @@ export interface MindMapRelationshipAnchor {
   yRatio: number;
 }
 
-export interface MindMapRelationshipPoint {
-  x: number;
-  y: number;
-}
-
-export interface MindMapLayoutRect {
-  left: number;
-  top: number;
-  right: number;
-  bottom: number;
-  width: number;
-  height: number;
-}
+export type MindMapRelationshipPoint = MindMapWorldPoint;
+export type MindMapLayoutRect = MindMapWorldRect;
 
 export interface MindMapRelationshipPath {
   id: string;
@@ -147,22 +139,43 @@ const getCubicPoint = (
   };
 };
 
+const getCubicTangent = (
+  p0: MindMapRelationshipPoint,
+  p1: MindMapRelationshipPoint,
+  p2: MindMapRelationshipPoint,
+  p3: MindMapRelationshipPoint,
+  t: number,
+): MindMapRelationshipPoint => {
+  const mt = 1 - t;
+  return {
+    x: 3 * mt ** 2 * (p1.x - p0.x) + 6 * mt * t * (p2.x - p1.x) + 3 * t ** 2 * (p3.x - p2.x),
+    y: 3 * mt ** 2 * (p1.y - p0.y) + 6 * mt * t * (p2.y - p1.y) + 3 * t ** 2 * (p3.y - p2.y),
+  };
+};
+
 export const getRelationshipCurveHitSegments = (path: MindMapRelationshipPath) => {
   const p0 = { x: path.fromX, y: path.fromY };
   const p1 = { x: path.c1X, y: path.c1Y };
   const p2 = { x: path.c2X, y: path.c2Y };
   const p3 = { x: path.toX, y: path.toY };
-  const samples = [0, 0.16, 0.32, 0.5, 0.68, 0.84, 1].map(t => getCubicPoint(p0, p1, p2, p3, t));
+  const sampleTs = [0, 0.16, 0.32, 0.5, 0.68, 0.84, 1];
+  const samples = sampleTs.map(t => getCubicPoint(p0, p1, p2, p3, t));
   return samples.slice(0, -1).map((start, index) => {
     const end = samples[index + 1];
     const dx = end.x - start.x;
     const dy = end.y - start.y;
+    const midpointT = (sampleTs[index] + sampleTs[index + 1]) / 2;
+    const midpoint = getCubicPoint(p0, p1, p2, p3, midpointT);
+    const tangent = getCubicTangent(p0, p1, p2, p3, midpointT);
+    const angle = Math.hypot(tangent.x, tangent.y) > 0.001
+      ? Math.atan2(tangent.y, tangent.x)
+      : Math.atan2(dy, dx);
     return {
       index,
-      x: (start.x + end.x) / 2,
-      y: (start.y + end.y) / 2,
+      x: midpoint.x,
+      y: midpoint.y,
       length: Math.max(28, Math.hypot(dx, dy) + 18),
-      angle: Math.atan2(dy, dx),
+      angle,
     };
   });
 };
@@ -191,10 +204,9 @@ export const makeConnectorPath = (
   const fromY = fromRect.top + fromRect.height / 2;
   const toY = toRect.top + toRect.height / 2;
   if (variant === 'bracket') {
-    const gap = Math.max(Math.min(Math.abs(toX - fromX) * 0.42, 72), 34);
-    const trunkX = direction === 'right'
-      ? Math.min(fromX + gap, toX - 18)
-      : Math.max(fromX - gap, toX + 18);
+    // Keep the branch junction centered in the parent/child gap so the
+    // XMind-style collapse control can sit directly on the relationship line.
+    const trunkX = (fromX + toX) / 2;
     return {
       d: `M ${fromX.toFixed(2)} ${fromY.toFixed(2)} H ${trunkX.toFixed(2)} V ${toY.toFixed(2)} H ${toX.toFixed(2)}`,
       fromX,
@@ -216,19 +228,17 @@ export const makeRelationshipPath = (
   relationship: MindMapNoteRelationship,
   fromRect: MindMapLayoutRect,
   toRect: MindMapLayoutRect,
+  fromDirection: MindMapDirection,
+  toDirection: MindMapDirection,
 ) => {
   const style = mergeRelationshipStyle(relationship.style);
-  const fromCenterX = fromRect.left + fromRect.width / 2;
-  const toCenterX = toRect.left + toRect.width / 2;
-  const exitsRight = fromCenterX <= toCenterX;
   const fromAnchor = relationship.geometry?.fromAnchor;
   const toAnchor = relationship.geometry?.toAnchor;
-  const fromX = fromAnchor
-    ? fromRect.left + fromRect.width * clampRatio(fromAnchor.xRatio)
-    : (exitsRight ? fromRect.right : fromRect.left);
-  const toX = toAnchor
-    ? toRect.left + toRect.width * clampRatio(toAnchor.xRatio)
-    : (exitsRight ? toRect.left : toRect.right);
+  // Relationship endpoints belong on the branch's outer edge. Deriving both
+  // edges from the other endpoint's position puts cross-canvas relationships
+  // on the tree-facing side of their nodes.
+  const fromX = fromDirection === 'right' ? fromRect.right : fromRect.left;
+  const toX = toDirection === 'right' ? toRect.right : toRect.left;
   const fromY = fromAnchor
     ? fromRect.top + fromRect.height * clampRatio(fromAnchor.yRatio)
     : fromRect.top + fromRect.height / 2;
@@ -237,14 +247,14 @@ export const makeRelationshipPath = (
     : toRect.top + toRect.height / 2;
   const horizontalSpan = Math.abs(toX - fromX);
   const verticalSpan = Math.abs(toY - fromY);
-  const curveOffset = Math.max(44, Math.min(96, horizontalSpan * 0.34 + verticalSpan * 0.2));
+  const curveOffset = Math.max(44, Math.min(72, horizontalSpan * 0.34 + verticalSpan * 0.2));
   const [controlOne, controlTwo] = relationship.geometry?.controlPoints || [];
   const canUseStoredControls =
     isReasonableRelationshipControlPoint(controlOne, { x: fromX, y: fromY }, { x: toX, y: toY }) &&
     isReasonableRelationshipControlPoint(controlTwo, { x: toX, y: toY }, { x: fromX, y: fromY });
-  const c1X = canUseStoredControls ? controlOne.x : (exitsRight ? fromX + curveOffset : fromX - curveOffset);
+  const c1X = canUseStoredControls ? controlOne.x : (fromDirection === 'right' ? fromX + curveOffset : fromX - curveOffset);
   const c1Y = canUseStoredControls ? controlOne.y : fromY;
-  const c2X = canUseStoredControls ? controlTwo.x : (exitsRight ? toX + curveOffset : toX - curveOffset);
+  const c2X = canUseStoredControls ? controlTwo.x : (toDirection === 'right' ? toX + curveOffset : toX - curveOffset);
   const c2Y = canUseStoredControls ? controlTwo.y : toY;
   const labelX = (c1X + c2X) / 2;
   const labelY = (c1Y + c2Y) / 2;
@@ -269,8 +279,9 @@ export const makeRelationshipDraftPreview = (
   fromNodeId: string,
   sourceRect: MindMapLayoutRect,
   cursor: MindMapRelationshipPoint,
+  sourceDirection: MindMapDirection,
 ): MindMapRelationshipDraftPreview => {
-  const exitsRight = cursor.x >= sourceRect.left + sourceRect.width / 2;
+  const exitsRight = sourceDirection === 'right';
   const fromX = exitsRight ? sourceRect.right : sourceRect.left;
   const fromY = sourceRect.top + sourceRect.height / 2;
   const toX = cursor.x;

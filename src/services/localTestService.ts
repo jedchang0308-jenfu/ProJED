@@ -10,13 +10,18 @@ import {
   type Dependency,
   type ActivityEvent,
   type KnowledgeRecord,
+  type EditableKnowledgeRecord,
   type KnowledgeRecordInput,
+  type MeetingDraftCheckpointInput,
+  type MeetingDraftCheckpointResult,
   type TaskNode,
   type TaskTag,
   type Workspace,
   type WorkspaceMember,
 } from '../types';
 import { hashBoardInviteToken } from '../utils/boardInviteToken';
+import { getLocalTestProfileOverride } from './localTestProfileService';
+import { MeetingDraftCheckpointError } from './meetingDraftRecoveryService';
 
 const WORKSPACES_KEY = 'projed-local-test.workspaces';
 const NODES_KEY = 'projed-local-test.nodes';
@@ -28,6 +33,11 @@ const BOARD_ROLE_PERMISSIONS_KEY = 'projed-local-test.boardRolePermissions';
 const KNOWLEDGE_RECORDS_KEY = 'projed-local-test.knowledgeRecords';
 const ACTIVITY_EVENTS_KEY = 'projed-local-test.activityEvents';
 const LOCAL_TEST_SESSION_KEY = 'projed-local-test.session';
+const TASK_NODE_FAULT_KEY = 'projed-local-test.taskNodeFault';
+const TASK_NODE_FAULT_PROGRESS_KEY = 'projed-local-test.taskNodeFaultProgress';
+const TASK_PERSISTENCE_FAULT_KEY = 'projed-local-test.taskPersistenceFault';
+const TASK_PERSISTENCE_READBACK_FAULT_KEY = 'projed-local-test.taskPersistenceReadbackFault';
+const TASK_PERSISTENCE_TRACE_KEY = 'projed-local-test.taskPersistenceTrace';
 
 const readJson = <T>(key: string, fallback: T): T => {
   try {
@@ -155,13 +165,63 @@ const readBoardInvites = () => readJson<Record<string, LocalBoardInviteRecord[]>
 const writeBoardInvites = (invites: Record<string, LocalBoardInviteRecord[]>) => writeJson(BOARD_INVITES_KEY, invites);
 const readBoardRolePermissions = () => readJson<Record<string, Partial<BoardRolePermissionMatrix>>>(BOARD_ROLE_PERMISSIONS_KEY, {});
 const writeBoardRolePermissions = (permissions: Record<string, Partial<BoardRolePermissionMatrix>>) => writeJson(BOARD_ROLE_PERMISSIONS_KEY, permissions);
-const readKnowledgeRecords = () => readJson<KnowledgeRecord[]>(KNOWLEDGE_RECORDS_KEY, []);
+const readKnowledgeRecords = () => {
+  const records = readJson<KnowledgeRecord[]>(KNOWLEDGE_RECORDS_KEY, []);
+  const supportedRecords = records.filter(record => record.type === 'meeting' || record.type === 'work_log');
+  if (supportedRecords.length !== records.length) writeJson(KNOWLEDGE_RECORDS_KEY, supportedRecords);
+  return supportedRecords;
+};
 const writeKnowledgeRecords = (records: KnowledgeRecord[]) => writeJson(KNOWLEDGE_RECORDS_KEY, records);
 const readActivityEvents = () => readJson<ActivityEvent[]>(ACTIVITY_EVENTS_KEY, []);
 const writeActivityEvents = (events: ActivityEvent[]) => writeJson(ACTIVITY_EVENTS_KEY, events);
 const getBoardMemberKey = (workspaceId: string, boardId: string) => `${workspaceId}:${boardId}`;
 const readCurrentLocalUserId = () =>
   readJson<{ uid?: string } | null>(LOCAL_TEST_SESSION_KEY, null)?.uid || 'local-test-user';
+
+/** Browser QA only: inject one node persistence rejection in local-test mode. */
+const consumeTaskNodeFault = (fault: string): boolean => {
+  if (typeof localStorage === 'undefined') return false;
+  const configured = localStorage.getItem(TASK_NODE_FAULT_KEY);
+  if (configured !== fault) return false;
+  localStorage.removeItem(TASK_NODE_FAULT_KEY);
+  return true;
+};
+const consumeSecondTaskNodeCreateFault = (): boolean => {
+  if (typeof localStorage === 'undefined') return false;
+  if (localStorage.getItem(TASK_NODE_FAULT_KEY) !== 'create-second-once') return false;
+  const progress = Number(localStorage.getItem(TASK_NODE_FAULT_PROGRESS_KEY) || '0');
+  if (progress < 1) {
+    localStorage.setItem(TASK_NODE_FAULT_PROGRESS_KEY, '1');
+    return false;
+  }
+  localStorage.removeItem(TASK_NODE_FAULT_KEY);
+  localStorage.removeItem(TASK_NODE_FAULT_PROGRESS_KEY);
+  return true;
+};
+const consumeTaskPersistenceFault = (
+  fault: 'reject-once' | 'timeout-no-commit-once' | 'timeout-commit-once' | 'delay-response-once',
+): boolean => {
+  if (typeof localStorage === 'undefined') return false;
+  const configured = localStorage.getItem(TASK_PERSISTENCE_FAULT_KEY);
+  if (configured !== fault) return false;
+  localStorage.removeItem(TASK_PERSISTENCE_FAULT_KEY);
+  return true;
+};
+const consumeTaskPersistenceReadbackFault = (fault: 'unavailable-once'): boolean => {
+  if (typeof localStorage === 'undefined') return false;
+  const configured = localStorage.getItem(TASK_PERSISTENCE_READBACK_FAULT_KEY);
+  if (configured !== fault) return false;
+  localStorage.removeItem(TASK_PERSISTENCE_READBACK_FAULT_KEY);
+  return true;
+};
+const recordTaskPersistenceAttempt = (nodeId: string, updates: Partial<TaskNode>) => {
+  const attempts = readJson<Array<{ nodeId: string; keys: string[]; at: number }>>(
+    TASK_PERSISTENCE_TRACE_KEY,
+    [],
+  );
+  attempts.push({ nodeId, keys: Object.keys(updates).sort(), at: Date.now() });
+  writeJson(TASK_PERSISTENCE_TRACE_KEY, attempts.slice(-20));
+};
 const canManageBoard = (workspaceId: string, boardId: string, userId = readCurrentLocalUserId()) => {
   const records = readBoardMembers()[getBoardMemberKey(workspaceId, boardId)] || defaultBoardMemberRecords;
   const role = records.find(member => member.userId === userId)?.role;
@@ -224,8 +284,11 @@ const defaultBoardMemberRecords: LocalBoardMemberRecord[] = [
   { userId: 'local-test-viewer', role: 'viewer', createdAt: 1704067200000, updatedAt: 1704067200000 },
 ];
 
-const getLocalProfile = (userId: string) =>
-  localTestProfiles[userId as keyof typeof localTestProfiles];
+const getLocalProfile = (userId: string) => {
+  const profile = localTestProfiles[userId as keyof typeof localTestProfiles];
+  const override = getLocalTestProfileOverride(userId);
+  return profile ? { ...profile, ...override } : profile;
+};
 
 const toBoardMember = (workspaceId: string, boardId: string, record: LocalBoardMemberRecord): BoardMember => ({
   workspaceId,
@@ -264,7 +327,7 @@ export const localTestMemberService = {
       userId: 'local-test-user',
       role: 'owner',
       status: 'active',
-      profile: localTestProfiles['local-test-user'],
+      profile: getLocalProfile('local-test-user'),
       createdAt: 1704067200000,
       updatedAt: 1704067200000,
     },
@@ -273,7 +336,7 @@ export const localTestMemberService = {
       userId: 'local-test-pm',
       role: 'project_manager',
       status: 'active',
-      profile: localTestProfiles['local-test-pm'],
+      profile: getLocalProfile('local-test-pm'),
       createdAt: 1704067200000,
       updatedAt: 1704067200000,
     },
@@ -282,7 +345,7 @@ export const localTestMemberService = {
       userId: 'local-test-admin',
       role: 'admin',
       status: 'active',
-      profile: localTestProfiles['local-test-admin'],
+      profile: getLocalProfile('local-test-admin'),
       createdAt: 1704067200000,
       updatedAt: 1704067200000,
     },
@@ -291,7 +354,7 @@ export const localTestMemberService = {
       userId: 'local-test-member',
       role: 'member',
       status: 'active',
-      profile: localTestProfiles['local-test-member'],
+      profile: getLocalProfile('local-test-member'),
       createdAt: 1704067200000,
       updatedAt: 1704067200000,
     },
@@ -300,7 +363,7 @@ export const localTestMemberService = {
       userId: 'local-test-viewer',
       role: 'viewer',
       status: 'active',
-      profile: localTestProfiles['local-test-viewer'],
+      profile: getLocalProfile('local-test-viewer'),
       createdAt: 1704067200000,
       updatedAt: 1704067200000,
     },
@@ -309,7 +372,7 @@ export const localTestMemberService = {
       userId: 'local-test-analyst',
       role: 'member',
       status: 'active',
-      profile: localTestProfiles['local-test-analyst'],
+      profile: getLocalProfile('local-test-analyst'),
       createdAt: 1704067200000,
       updatedAt: 1704067200000,
     },
@@ -667,12 +730,19 @@ export const localTestBoardService = {
 };
 
 export const localTestNodeService = {
-  listByProject: async (workspaceId: string, boardId: string): Promise<TaskNode[]> =>
-    Object.values(readNodes())
+  listByProject: async (workspaceId: string, boardId: string): Promise<TaskNode[]> => {
+    if (consumeTaskPersistenceReadbackFault('unavailable-once')) {
+      throw new Error('local-test injected persistence readback unavailability');
+    }
+    return Object.values(readNodes())
       .filter(node => node.workspaceId === workspaceId && node.boardId === boardId)
-      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  },
 
   create: async (_workspaceId: string, _boardId: string, node: TaskNode): Promise<TaskNode> => {
+    if (consumeSecondTaskNodeCreateFault()) {
+      throw new Error('local-test injected second task create rejection');
+    }
     writeNodes({ ...readNodes(), [node.id]: node });
     return node;
   },
@@ -680,10 +750,28 @@ export const localTestNodeService = {
   update: async (_workspaceId: string, _boardId: string, nodeId: string, updates: Partial<TaskNode>): Promise<void> => {
     const nodes = readNodes();
     if (!nodes[nodeId]) return;
-    writeNodes({
+    recordTaskPersistenceAttempt(nodeId, updates);
+    if (consumeTaskPersistenceFault('reject-once') || consumeTaskNodeFault('update-once')) {
+      throw new Error('local-test injected task persistence rejection');
+    }
+    const nextNodes = {
       ...nodes,
       [nodeId]: { ...nodes[nodeId], ...updates, updatedAt: Date.now() },
-    });
+    };
+    if (consumeTaskPersistenceFault('timeout-commit-once')) {
+      writeNodes(nextNodes);
+      return new Promise<void>(() => {});
+    }
+    if (consumeTaskPersistenceFault('delay-response-once')) {
+      writeNodes(nextNodes);
+      return new Promise<void>((resolve) => {
+        window.setTimeout(resolve, 750);
+      });
+    }
+    if (consumeTaskPersistenceFault('timeout-no-commit-once')) {
+      return new Promise<void>(() => {});
+    }
+    writeNodes(nextNodes);
   },
 
   delete: async (_workspaceId: string, _boardId: string, nodeId: string): Promise<void> => {
@@ -693,11 +781,35 @@ export const localTestNodeService = {
   },
 
   batchUpdate: async (_workspaceId: string, _boardId: string, updates: { id: string; data: Partial<TaskNode> }[]): Promise<void> => {
+    if (consumeTaskNodeFault('batch-once')) {
+      throw new Error('測試故障：任務批次儲存失敗。');
+    }
     const nodes = readNodes();
+    if (consumeTaskNodeFault('batch-partial-once')) {
+      const [first] = updates;
+      if (first && nodes[first.id]) {
+        nodes[first.id] = { ...nodes[first.id], ...first.data, updatedAt: Date.now() };
+        writeNodes(nodes);
+      }
+      throw new Error('local-test injected partial task batch rejection');
+    }
     updates.forEach(update => {
       if (!nodes[update.id]) return;
       nodes[update.id] = { ...nodes[update.id], ...update.data, updatedAt: Date.now() };
     });
+    if (consumeTaskPersistenceFault('timeout-commit-once')) {
+      writeNodes(nodes);
+      return new Promise<void>(() => {});
+    }
+    if (consumeTaskPersistenceFault('delay-response-once')) {
+      writeNodes(nodes);
+      return new Promise<void>((resolve) => {
+        window.setTimeout(resolve, 750);
+      });
+    }
+    if (consumeTaskPersistenceFault('timeout-no-commit-once')) {
+      return new Promise<void>(() => {});
+    }
     writeNodes(nodes);
   },
 
@@ -779,29 +891,35 @@ export const localTestTagService = {
 };
 
 export const localTestRecordService = {
-  listByProject: async (workspaceId: string, boardId: string): Promise<KnowledgeRecord[]> =>
+  listByProject: async (workspaceId: string, boardId: string): Promise<EditableKnowledgeRecord[]> =>
     readKnowledgeRecords()
-      .filter(record => record.workspaceId === workspaceId && record.boardId === boardId && record.status !== 'archived')
+      .filter((record): record is EditableKnowledgeRecord => record.workspaceId === workspaceId && record.boardId === boardId && record.status !== 'archived')
       .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)),
 
-  listByNode: async (workspaceId: string, boardId: string, nodeId: string): Promise<KnowledgeRecord[]> =>
+  listByNode: async (
+    workspaceId: string,
+    boardId: string,
+    nodeId: string,
+    options: { includeArchived?: boolean } = {},
+  ): Promise<EditableKnowledgeRecord[]> =>
     readKnowledgeRecords()
-      .filter(record =>
+      .filter((record): record is EditableKnowledgeRecord =>
         record.workspaceId === workspaceId &&
         record.boardId === boardId &&
-        record.status !== 'archived' &&
+        (options.includeArchived || record.status !== 'archived') &&
         record.taskLinks.some(link => link.nodeId === nodeId)
       )
       .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)),
 
-  upsert: async (workspaceId: string, boardId: string, input: KnowledgeRecordInput): Promise<KnowledgeRecord> => {
+  upsert: async (workspaceId: string, boardId: string, input: KnowledgeRecordInput): Promise<EditableKnowledgeRecord> => {
     const now = Date.now();
     const records = readKnowledgeRecords();
     const existing = input.id ? records.find(record => record.id === input.id) : undefined;
+    const existingEditable = existing;
     const recordId = existing?.id || input.id || createId('local_record');
     const actorId = readCurrentLocalUserId();
-    const record: KnowledgeRecord = {
-      ...(existing || {}),
+    const record: EditableKnowledgeRecord = {
+      ...(existingEditable || {}),
       id: recordId,
       workspaceId,
       boardId,
@@ -815,6 +933,7 @@ export const localTestRecordService = {
       startedAt: input.startedAt,
       endedAt: input.endedAt,
       recordedBy: input.recordedBy ?? actorId,
+      metadata: input.metadata,
       createdBy: existing?.createdBy ?? actorId,
       updatedBy: actorId,
       createdAt: existing?.createdAt ?? now,
@@ -836,6 +955,10 @@ export const localTestRecordService = {
       ...records.filter(item => item.id !== record.id),
     ]);
     return record;
+  },
+
+  checkpointDraft: async (_workspaceId: string, _boardId: string, _input: MeetingDraftCheckpointInput): Promise<MeetingDraftCheckpointResult> => {
+    throw new MeetingDraftCheckpointError('transient', '會議雲端 checkpoint 已停用；請使用本機 recovery。');
   },
 
   delete: async (workspaceId: string, boardId: string, recordId: string): Promise<void> => {
@@ -866,6 +989,7 @@ export const localTestEventLogService = {
     scope: 'workspace' | 'board';
     startedAt: number;
     endedAt: number;
+    startBoundary?: 'inclusive' | 'exclusive';
     eventTypes?: string[];
   }): Promise<ActivityEvent[]> => {
     const eventTypeSet = query.eventTypes?.length ? new Set(query.eventTypes) : null;
@@ -875,7 +999,8 @@ export const localTestEventLogService = {
       .filter(event => !eventTypeSet || eventTypeSet.has(event.eventType))
       .filter(event => {
         const createdAt = event.createdAt ?? 0;
-        return createdAt >= query.startedAt && createdAt <= query.endedAt;
+        const afterStart = query.startBoundary === 'exclusive' ? createdAt > query.startedAt : createdAt >= query.startedAt;
+        return afterStart && createdAt <= query.endedAt;
       })
       .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
   },

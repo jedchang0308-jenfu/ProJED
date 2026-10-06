@@ -96,6 +96,10 @@
     --border: #e2e8f0;
     --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
     --radius: 8px;
+    --task-hierarchy-indent: 6px;
+    --scrollbar-system-size: 3px;
+    --scrollbar-system-thumb: rgba(100, 116, 139, 0.28);
+    --scrollbar-system-thumb-hover: rgba(71, 85, 105, 0.48);
   }
 
   html,
@@ -117,6 +121,34 @@
   textarea {
     font: inherit;
     letter-spacing: 0;
+  }
+
+  :where(*) {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-system-thumb) transparent;
+  }
+
+  :where(*)::-webkit-scrollbar {
+    width: var(--scrollbar-system-size);
+    height: var(--scrollbar-system-size);
+  }
+
+  :where(*)::-webkit-scrollbar-track,
+  :where(*)::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  :where(*)::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-system-thumb);
+    border-radius: 999px;
+  }
+
+  :where(*)::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-system-thumb-hover);
+  }
+
+  :where(*)::-webkit-scrollbar-button {
+    display: none;
   }
 }
 
@@ -143,6 +175,13 @@
   .kanban-drag-source-placeholder > :not([data-kanban-insertion-marker]) {
     visibility: hidden;
   }
+
+  .kanban-drag-origin-placeholder {
+    outline: 1px dashed rgb(148 163 184);
+    outline-offset: -1px;
+    background-color: rgb(248 250 252 / 72%) !important;
+    box-shadow: none !important;
+  }
 }
 
 [data-task-surface-source="true"][data-task-selected="true"] {
@@ -156,7 +195,30 @@
   box-shadow: inset 0 0 0 2px var(--color-primary-500);
 }
 
+/* Goal cell inline edit must be visually distinct from a selected/read-only cell. */
+[data-goal-cell-editing="true"] {
+  position: relative;
+  z-index: 2;
+  background-color: var(--color-primary-50);
+  box-shadow: inset 0 0 0 2px var(--color-primary-500);
+}
+
+[data-goal-cell-editing="true"] [data-task-detail-note-content-input="true"] {
+  display: block;
+  border: 0;
+  background-color: rgb(255 255 255 / 72%);
+  padding: 2px 4px;
+  caret-color: var(--color-primary-700);
+}
+
 @media (hover: hover) and (pointer: fine) {
+  /* 追蹤副本 hover 時，同一 canonical task 的正本同步顯示定位框。 */
+  body:not(:has([data-kanban-drag-overlay="true"]))
+    [data-task-placement-hover-surface="true"][data-task-linked-hover="true"] {
+    background-color: var(--color-primary-50);
+    box-shadow: inset 0 0 0 2px var(--color-primary-500);
+  }
+
   body:not(:has([data-kanban-drag-overlay="true"]))
     [data-desktop-task-hover-preview="true"]:hover:not(:has([data-desktop-task-hover-preview="true"]:hover)) {
     @apply ring-2 ring-inset ring-primary-500 bg-primary-50/60;
@@ -229,6 +291,22 @@
   user-select: none;
 }
 
+/*
+ * Task long-press arbitration starts before the 500ms timer fires. Native text
+ * selection and the iOS callout must therefore be disabled on every eligible
+ * task surface from touchstart, including Workbench rows that keep native pan.
+ */
+[data-task-touch-gesture-surface="true"] {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+[data-task-touch-gesture-surface="true"] :is(input, textarea, [contenteditable="true"]) {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 /* 拖動中的視覺效果 */
 .kanban-scroll-touch {
   touch-action: pan-x pan-y;
@@ -257,6 +335,368 @@ body[data-kanban-mouse-pan-active="true"],
 body[data-kanban-mouse-pan-active="true"] * {
   cursor: grabbing !important;
   user-select: none !important;
+}
+
+/* Every task hierarchy shares one depth increment. Individual surfaces keep
+   their own base inset, row height, typography, and interaction geometry. */
+.kanban-checklist-item {
+  padding-left: calc(
+    (var(--kanban-checklist-depth, 0) * var(--task-hierarchy-indent, 6px))
+    + var(--kanban-checklist-base, 4px)
+  );
+}
+
+.task-hierarchy-indented-row {
+  padding-left: calc(
+    var(--task-hierarchy-base, 0px)
+    + (var(--task-hierarchy-depth, 0) * var(--task-hierarchy-indent, 6px))
+  );
+}
+
+/* Goal keeps hierarchy decoration inside the native frozen task cell. Each
+   segment names the relation owner so sibling rails cannot bleed across roots. */
+[data-goal-view="true"] .goal-hierarchy-guides {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  pointer-events: none;
+}
+
+[data-goal-view="true"],
+[data-goal-hierarchy-guide-layer="preview"] {
+  --goal-hierarchy-line-color: rgb(148 163 184 / 28%);
+  --goal-hierarchy-line-active-color: rgb(100 116 139 / 56%);
+  --goal-hierarchy-parent-task-blue: rgb(199 210 254 / 94%);
+  --goal-hierarchy-child-task-blue: #edf8f8;
+}
+
+[data-goal-view="true"] {
+  /* Keep the comparison grid easy to track across wide rows without
+     competing with the existing hierarchy scope tints. */
+  --goal-row-surface-odd: rgb(255 255 255 / 100%);
+  --goal-row-surface-even: rgb(243 246 250 / 100%);
+  --goal-header-surface: rgb(15 23 42 / 96%);
+  --goal-header-ink: rgb(255 255 255 / 96%);
+  --goal-header-border: rgb(71 85 105 / 88%);
+}
+
+/* Keep the column labels visually anchored above the alternating data rows.
+   The controls remain white-on-dark so their collapse affordances stay legible. */
+[data-goal-view="true"] thead[data-goal-sticky-header="true"] > tr > th {
+  background-color: var(--goal-header-surface);
+  border-color: var(--goal-header-border);
+  color: var(--goal-header-ink);
+}
+
+[data-goal-view="true"] thead[data-goal-sticky-header="true"] > tr > th button {
+  color: rgb(255 255 255 / 86%);
+  --tw-ring-offset-color: var(--goal-header-surface);
+}
+
+[data-goal-view="true"] thead[data-goal-sticky-header="true"] > tr > th [data-goal-column-toggle-glyph] {
+  border-color: rgb(203 213 225 / 58%);
+  background-color: rgb(255 255 255 / 12%);
+  color: rgb(255 255 255 / 92%);
+  box-shadow: none;
+}
+
+[data-goal-view="true"] thead[data-goal-sticky-header="true"] > tr > th button:hover [data-goal-column-toggle-glyph],
+[data-goal-view="true"] thead[data-goal-sticky-header="true"] > tr > th button:focus-visible [data-goal-column-toggle-glyph] {
+  border-color: rgb(255 255 255 / 72%);
+  background-color: rgb(255 255 255 / 20%);
+  color: rgb(255 255 255 / 100%);
+}
+
+[data-goal-view="true"] thead[data-goal-sticky-header="true"] > tr > th [data-goal-column-toggle-state="collapsed"] [data-goal-column-toggle-glyph] {
+  border-color: rgb(255 255 255 / 72%);
+  background-color: rgb(255 255 255 / 24%);
+}
+
+[data-goal-view="true"] .goal-task-hierarchy-row {
+  /* R17: 8px baseline × 1.30, keeping every guide/title calculation aligned. */
+  --task-hierarchy-indent: 10.4px;
+  --goal-hierarchy-lane-start: 20px;
+  /* R17: extend the incoming branch by the same 2.4px added to the depth
+     track so the branch still meets the title edge after the +30% spacing. */
+  --goal-hierarchy-branch-width: 14.4px;
+  --goal-hierarchy-node-control-anchor: 16px;
+  position: static;
+  overflow: visible;
+  min-height: 32px;
+  padding-left: calc(
+    14px
+    + var(--task-hierarchy-base, 0px)
+    + (var(--task-hierarchy-depth, 0) * var(--task-hierarchy-indent))
+  );
+  padding-right: 10px;
+}
+
+/* The disclosure is the tree node. Its 20px hit target sits mostly to the left
+   of the rail and ends at the title edge, while the visible dot stays centered
+   on the task's own lane. */
+[data-goal-view="true"] .goal-task-hierarchy-row > button[data-goal-collapse-toggle] {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: calc(
+    var(--goal-hierarchy-lane-start)
+    + (var(--task-hierarchy-depth, 0) * var(--task-hierarchy-indent))
+    - var(--goal-hierarchy-node-control-anchor)
+  );
+  right: auto;
+  transform: translateY(-50%);
+  margin: 0;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+}
+
+[data-goal-view="true"] .goal-task-hierarchy-row > button[data-goal-collapse-toggle] > svg {
+  display: none;
+}
+
+[data-goal-view="true"] .goal-task-hierarchy-row > button[data-goal-collapse-toggle]::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--goal-hierarchy-node-control-anchor) - 3px);
+  top: 50%;
+  box-sizing: border-box;
+  width: 6px;
+  height: 6px;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background-color: var(--goal-hierarchy-line-color);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 88%);
+  transition: background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+[data-goal-view="true"] .goal-task-hierarchy-row > button[data-goal-collapse-toggle][aria-expanded="false"]::before {
+  left: calc(var(--goal-hierarchy-node-control-anchor) - 4px);
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--goal-hierarchy-line-color);
+  background-color: rgb(255 255 255 / 96%);
+}
+
+[data-goal-view="true"] tr[data-goal-hierarchy-scope] .goal-task-hierarchy-row > button[data-goal-collapse-toggle]::before {
+  background-color: var(--goal-hierarchy-line-active-color);
+}
+
+[data-goal-view="true"] tr[data-goal-hierarchy-scope] .goal-task-hierarchy-row > button[data-goal-collapse-toggle][aria-expanded="false"]::before {
+  border-color: var(--goal-hierarchy-line-active-color);
+  background-color: rgb(255 255 255 / 96%);
+}
+
+[data-goal-view="true"] .goal-task-hierarchy-row > button[data-goal-collapse-toggle]:hover::before,
+[data-goal-view="true"] .goal-task-hierarchy-row > button[data-goal-collapse-toggle]:focus-visible::before {
+  box-shadow: 0 0 0 4px rgb(224 231 255 / 86%);
+}
+
+[data-goal-view="true"] .goal-task-hierarchy-row > button[data-goal-collapse-toggle]:focus-visible {
+  outline: none;
+}
+
+[data-goal-view="true"] .goal-hierarchy-guide-segment,
+[data-goal-hierarchy-guide-layer="preview"] .goal-hierarchy-guide-segment {
+  position: absolute;
+  background: var(--goal-hierarchy-line-color);
+  border-radius: 999px;
+  pointer-events: none;
+  transition: background-color 120ms ease, box-shadow 120ms ease;
+}
+
+[data-goal-view="true"] .goal-hierarchy-guide-segment[data-goal-hierarchy-guide-active="true"],
+[data-goal-hierarchy-guide-layer="preview"] .goal-hierarchy-guide-segment[data-goal-hierarchy-guide-active="true"] {
+  background: var(--goal-hierarchy-line-active-color);
+}
+
+[data-goal-hierarchy-guide-layer="preview"] .goal-hierarchy-guide-incoming-vertical,
+[data-goal-hierarchy-guide-layer="preview"] .goal-hierarchy-guide-child-stem {
+  width: 1px;
+}
+
+[data-goal-hierarchy-guide-layer="preview"] .goal-hierarchy-guide-incoming-branch,
+[data-goal-hierarchy-guide-layer="preview"] .goal-hierarchy-guide-root-branch {
+  height: 1px;
+}
+
+/* Active relations carry the reading focus with a slightly heavier stroke.
+   Offset the stroke by half a pixel so its center stays on the compact lane. */
+[data-goal-view="true"] .goal-hierarchy-guide-segment[data-goal-hierarchy-guide-active="true"].goal-hierarchy-guide-continuation,
+[data-goal-view="true"] .goal-hierarchy-guide-segment[data-goal-hierarchy-guide-active="true"].goal-hierarchy-guide-incoming-vertical,
+[data-goal-view="true"] .goal-hierarchy-guide-segment[data-goal-hierarchy-guide-active="true"].goal-hierarchy-guide-child-stem,
+[data-goal-hierarchy-guide-layer="preview"] .goal-hierarchy-guide-segment[data-goal-hierarchy-guide-active="true"].goal-hierarchy-guide-incoming-vertical,
+[data-goal-hierarchy-guide-layer="preview"] .goal-hierarchy-guide-segment[data-goal-hierarchy-guide-active="true"].goal-hierarchy-guide-child-stem {
+  width: 2px;
+  margin-left: -0.5px;
+}
+
+[data-goal-view="true"] .goal-hierarchy-guide-segment[data-goal-hierarchy-guide-active="true"].goal-hierarchy-guide-incoming-branch,
+[data-goal-view="true"] .goal-hierarchy-guide-segment[data-goal-hierarchy-guide-active="true"].goal-hierarchy-guide-root-branch,
+[data-goal-hierarchy-guide-layer="preview"] .goal-hierarchy-guide-segment[data-goal-hierarchy-guide-active="true"].goal-hierarchy-guide-incoming-branch,
+[data-goal-hierarchy-guide-layer="preview"] .goal-hierarchy-guide-segment[data-goal-hierarchy-guide-active="true"].goal-hierarchy-guide-root-branch {
+  height: 2px;
+  margin-top: -0.5px;
+}
+
+[data-goal-view="true"] .goal-hierarchy-guide-continuation {
+  left: calc(var(--goal-hierarchy-lane-start) + (var(--goal-guide-level, 0) * var(--task-hierarchy-indent)));
+  top: -1px;
+  bottom: -1px;
+  width: 1px;
+}
+
+[data-goal-view="true"] .goal-hierarchy-guide-incoming-vertical {
+  left: calc(var(--goal-hierarchy-lane-start) + (var(--goal-guide-level, 0) * var(--task-hierarchy-indent)));
+  top: -1px;
+  height: calc(50% + 1px);
+  width: 1px;
+}
+
+[data-goal-view="true"] .goal-hierarchy-guides[data-goal-hierarchy-last-sibling="false"] .goal-hierarchy-guide-incoming-vertical {
+  bottom: -1px;
+  height: auto;
+}
+
+[data-goal-view="true"] .goal-hierarchy-guide-incoming-branch {
+  left: calc(var(--goal-hierarchy-lane-start) + (var(--goal-guide-level, 0) * var(--task-hierarchy-indent)));
+  top: 50%;
+  width: var(--goal-hierarchy-branch-width);
+  height: 1px;
+}
+
+[data-goal-view="true"] .goal-hierarchy-guide-child-stem {
+  left: calc(var(--goal-hierarchy-lane-start) + (var(--goal-node-level, 0) * var(--task-hierarchy-indent)));
+  top: 50%;
+  bottom: -1px;
+  width: 1px;
+}
+
+[data-goal-view="true"] .goal-hierarchy-guide-root-branch {
+  left: calc(var(--goal-hierarchy-lane-start) + (var(--goal-node-level, 0) * var(--task-hierarchy-indent)));
+  top: 50%;
+  width: 4px;
+  height: 1px;
+}
+
+[data-goal-view="true"] tbody > tr[data-goal-level="0"]:not(:first-child) > [data-goal-column] {
+  border-top: 2px solid rgb(226 232 240 / 90%);
+}
+
+/* Keep the frozen task-name lane open; the scrollable comparison area uses a
+   real cell grid so dates, status and ownership can be scanned by column. */
+[data-goal-view="true"] tbody > tr[data-goal-task-row] > * {
+  border-bottom: 0;
+}
+
+[data-goal-view="true"] tbody > tr[data-goal-task-row] > [data-goal-column] {
+  border-bottom: 1px solid rgb(226 232 240 / 78%);
+  border-right: 1px solid rgb(226 232 240 / 78%);
+}
+
+[data-goal-view="true"] tbody > tr[data-goal-task-row] {
+  --goal-row-surface: var(--goal-row-surface-odd);
+}
+
+[data-goal-view="true"] tbody > tr[data-goal-task-row]:nth-child(even) {
+  --goal-row-surface: var(--goal-row-surface-even);
+}
+
+[data-goal-view="true"] tbody > tr[data-goal-task-row] > [data-goal-column] {
+  background-color: var(--goal-row-surface);
+}
+
+/* A row-spanning owner cell belongs to the task row where it starts. Keep the
+   whole merged region on that row's surface without adding a second divider;
+   the native table boundary remains the only group edge. */
+[data-goal-view="true"] tbody > tr[data-goal-task-row] > td[data-goal-group-span="true"] {
+  background-color: var(--goal-row-surface);
+}
+
+[data-goal-view="true"] tbody > tr > [data-goal-task-cell],
+[data-goal-view="true"] tbody > tr > [data-goal-planning-control] {
+  transition: background-color 120ms ease;
+}
+
+[data-goal-view="true"] tbody > tr > [data-goal-planning-control]:hover,
+[data-goal-view="true"] tbody > tr > [data-goal-planning-control]:focus-within {
+  background-color: rgb(241 245 249 / 72%);
+}
+
+@supports selector(tr:has(> td)) {
+  [data-goal-view="true"] tbody > tr:has(> [data-goal-planning-control]:hover, > [data-goal-planning-control]:focus-within) > [data-goal-planning-control] {
+    background-color: rgb(241 245 249 / 72%);
+  }
+}
+
+/* Keep every frozen task-name level on one shared surface while idle. During
+   location, the fixed task-name cell joins the same parent/descendant scope
+   tint as planning/content cells so the located task remains visible after
+   horizontal scrolling. */
+[data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-hierarchy-scope="parent"] > [data-goal-planning-control],
+[data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-child-drop-candidate="true"] > [data-goal-planning-control],
+[data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-child-drop-target="true"] > [data-goal-planning-control] {
+  background-color: var(--goal-hierarchy-parent-task-blue);
+}
+
+/* Keep the active parent and its visible descendants visually distinct while
+   preserving the same scope tint across the fixed and scrollable columns. */
+[data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-hierarchy-scope="parent"] > [data-goal-task-cell],
+[data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-child-drop-candidate="true"] > [data-goal-task-cell],
+[data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-child-drop-target="true"] > [data-goal-task-cell] {
+  background-color: var(--goal-hierarchy-parent-task-blue);
+}
+
+[data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-hierarchy-scope="descendant"] > [data-goal-planning-control],
+[data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-hierarchy-scope="descendant"] > [data-goal-task-cell] {
+  background-color: var(--goal-hierarchy-child-task-blue);
+}
+
+/* A content owner can also be a row-spanning cell. Match the cell element
+   explicitly so this location tint wins over the generic rowSpan surface rule
+   without changing the owner cell's text or scroll behavior. */
+[data-goal-view="true"] tbody > tr[data-goal-task-row] > td[data-goal-content-scope="active"] {
+  background-color: var(--goal-hierarchy-parent-task-blue);
+}
+
+[data-goal-view="true"] tbody > tr[data-goal-task-row] > td[data-goal-content-scope="descendant"] {
+  background-color: var(--goal-hierarchy-child-task-blue);
+}
+
+/* Meeting history stays scrollable, but a quick-note row is either fully
+   inside the viewport or hidden until it can be read whole. This prevents a
+   rowSpan edge from showing a half-rendered final line while scrolling. */
+[data-goal-view="true"] [data-goal-content-row-clipped="true"] {
+  visibility: hidden;
+}
+
+.task-workbench-unplaced-hierarchy-row {
+  --kanban-checklist-base: 3px;
+}
+
+.task-workbench-unplaced-subtree-rail {
+  position: relative;
+}
+
+.task-workbench-unplaced-subtree-rail::before {
+  content: '';
+  position: absolute;
+  bottom: 1px;
+  left: 2px;
+  top: 1px;
+  width: 1px;
+  background: rgb(148 163 184 / 52%);
+  pointer-events: none;
+}
+
+@media (max-width: 767px) {
+  :root {
+    --task-hierarchy-indent: 5px;
+  }
 }
 
 .task-drag-hitbox,
@@ -291,26 +731,12 @@ body[data-kanban-mouse-pan-active="true"] * {
   scrollbar-width: none;
 }
 
-/* 自定義滾動條樣式 */
-.scrollbar-thin::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-.scrollbar-thin::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.scrollbar-thin::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 3px;
-}
-
-.scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
-}
-
 /* 甘特圖專用大型藍色滾動條 */
+.scrollbar-gantt {
+  scrollbar-width: auto;
+  scrollbar-color: var(--color-primary-500) #f1f5f9;
+}
+
 .scrollbar-gantt::-webkit-scrollbar {
   width: 12px;
   height: 12px;
@@ -359,7 +785,7 @@ body[data-kanban-mouse-pan-active="true"] * {
   }
 
   .app-board-title {
-    padding: 0 4px !important;
+    padding: 0 !important;
     font-size: 12px !important;
     line-height: 1.25 !important;
   }
@@ -480,15 +906,65 @@ body[data-kanban-mouse-pan-active="true"] * {
     gap: 8px !important;
   }
 
+  /* DEV-081：看板工作面專用雙尺寸 token。B 是線性 2.5 倍重排，不使用 zoom/transform，
+     因此滾動、命中測試與拖曳 overlay 仍沿用實際 DOM 幾何。 */
+  [data-mobile-pan-surface="board"][data-kanban-view-size="compact"] {
+    --kanban-column-width: 252px;
+    --kanban-board-gap: 8px;
+    --kanban-header-pad-y: 6px;
+    --kanban-header-pad-x: 7px;
+    --kanban-column-body-pad: 5px;
+    --kanban-card-pad-y: 2px;
+    --kanban-card-pad-x: 5px;
+    --kanban-l1-l2-title-size: 14px;
+    --kanban-l3-title-size: 12px;
+    --kanban-meta-size: 9px;
+    --kanban-tag-height: 13px;
+    --kanban-tag-font-size: 9px;
+    --kanban-checklist-base: 4px;
+    --kanban-checklist-body-pad-x: 2px;
+    --kanban-l3-min-height: 20px;
+  }
+
+  [data-mobile-pan-surface="board"][data-kanban-view-size="large"] {
+    --kanban-column-width: 630px;
+    --kanban-board-gap: 20px;
+    --kanban-header-pad-y: 15px;
+    --kanban-header-pad-x: 17.5px;
+    --kanban-column-body-pad: 12.5px;
+    --kanban-card-pad-y: 5px;
+    --kanban-card-pad-x: 12.5px;
+    --kanban-l1-l2-title-size: 35px;
+    --kanban-l3-title-size: 30px;
+    --kanban-meta-size: 22.5px;
+    --kanban-tag-height: 32.5px;
+    --kanban-tag-font-size: 22.5px;
+    --kanban-checklist-base: 10px;
+    --kanban-checklist-body-pad-x: 2px;
+    --kanban-l3-min-height: 50px;
+    gap: var(--kanban-board-gap) !important;
+  }
+
   [data-kanban-column],
   [data-mobile-pan-surface="board"] > .flex-shrink-0 {
     width: 252px !important;
     border-radius: 6px !important;
   }
 
+  [data-mobile-pan-surface="board"][data-kanban-view-size="large"] [data-kanban-column],
+  [data-mobile-pan-surface="board"][data-kanban-view-size="large"] > .flex-shrink-0 {
+    width: var(--kanban-column-width) !important;
+    border-radius: 15px !important;
+  }
+
   [data-kanban-column-header] {
     gap: 3px !important;
     padding: 6px 7px !important;
+  }
+
+  [data-mobile-pan-surface="board"][data-kanban-view-size="large"] [data-kanban-column-header] {
+    gap: 7.5px !important;
+    padding: var(--kanban-header-pad-y) var(--kanban-header-pad-x) !important;
   }
 
   [data-kanban-column-header] > div,
@@ -499,6 +975,58 @@ body[data-kanban-mouse-pan-active="true"] * {
   [data-mobile-pan-surface="kanban-column"] {
     padding: 5px !important;
     border-radius: 5px !important;
+  }
+
+  [data-mobile-pan-surface="board"][data-kanban-view-size="large"] [data-mobile-pan-surface="kanban-column"] {
+    padding: var(--kanban-column-body-pad) !important;
+    border-radius: 12.5px !important;
+  }
+
+  [data-mobile-pan-surface="board"][data-kanban-view-size="large"] [data-kanban-column-header] [data-task-title-slot],
+  [data-mobile-pan-surface="board"][data-kanban-view-size="large"] [data-task-hierarchy-level="L2"] [data-task-title-slot] {
+    font-size: var(--kanban-l1-l2-title-size) !important;
+    line-height: 1.15 !important;
+  }
+
+  [data-mobile-pan-surface="board"][data-kanban-view-size="large"] [data-task-hierarchy-level="L3+"] [data-task-title-slot] {
+    font-size: var(--kanban-l3-title-size) !important;
+    line-height: 1.15 !important;
+  }
+
+  [data-mobile-pan-surface="board"][data-kanban-view-size="large"] [data-task-date-badge="true"] {
+    font-size: var(--kanban-meta-size) !important;
+    line-height: 1.15 !important;
+    min-height: 32.5px !important;
+    padding: 0 10px !important;
+    gap: 1.25px !important;
+  }
+
+  [data-mobile-pan-surface="board"][data-kanban-view-size="large"] [data-kanban-tag-front="true"] {
+    height: var(--kanban-tag-height) !important;
+    font-size: var(--kanban-tag-font-size) !important;
+    padding-left: 15px !important;
+    padding-right: 15px !important;
+  }
+
+  [data-mobile-pan-surface="board"][data-kanban-view-size="large"] [data-kanban-tag-sticker="true"] {
+    height: 37.5px !important;
+    max-width: 180px !important;
+    min-width: 44px !important;
+  }
+
+  [data-mobile-pan-surface="board"][data-kanban-view-size="large"] .kanban-task-card-body {
+    padding: var(--kanban-card-pad-y) var(--kanban-card-pad-x) !important;
+  }
+
+  [data-mobile-pan-surface="board"][data-kanban-view-size="large"] .kanban-checklist-item {
+    min-height: var(--kanban-l3-min-height) !important;
+    gap: 10px !important;
+  }
+
+  [data-mobile-pan-surface="board"][data-kanban-view-size="large"] [data-kanban-column] .task-drag-hitbox,
+  [data-mobile-pan-surface="board"][data-kanban-view-size="large"] [data-kanban-column] [data-kanban-task-checkbox="true"] {
+    min-width: 44px !important;
+    min-height: 44px !important;
   }
 
   [data-kanban-column] form {
@@ -632,16 +1160,77 @@ body[data-kanban-mouse-pan-active="true"] * {
 
   [data-task-details-modal="true"] {
     align-items: stretch !important;
-    padding: 8px !important;
+    padding: max(8px, env(safe-area-inset-top, 0px))
+      max(8px, env(safe-area-inset-right, 0px))
+      max(8px, env(safe-area-inset-bottom, 0px))
+      max(8px, env(safe-area-inset-left, 0px)) !important;
   }
 
   [data-task-details-dialog="true"] {
-    width: calc(100vw - 16px) !important;
+    width: calc(100vw - max(8px, env(safe-area-inset-left, 0px)) - max(8px, env(safe-area-inset-right, 0px))) !important;
     min-width: 0 !important;
-    max-width: calc(100vw - 16px) !important;
+    max-width: calc(100vw - max(8px, env(safe-area-inset-left, 0px)) - max(8px, env(safe-area-inset-right, 0px))) !important;
     min-height: 0 !important;
-    max-height: calc(100vh - 16px) !important;
+    max-height: calc(100vh - max(8px, env(safe-area-inset-top, 0px)) - max(8px, env(safe-area-inset-bottom, 0px))) !important;
     resize: none !important;
+  }
+
+  [data-task-details-header="true"] {
+    display: grid !important;
+    grid-template-columns: auto minmax(0, 1fr) auto !important;
+    grid-template-rows: auto auto !important;
+    column-gap: 8px !important;
+    row-gap: 4px !important;
+    align-items: flex-start !important;
+    padding-top: max(16px, env(safe-area-inset-top, 0px)) !important;
+    padding-right: max(20px, env(safe-area-inset-right, 0px)) !important;
+    padding-bottom: 16px !important;
+    padding-left: max(20px, env(safe-area-inset-left, 0px)) !important;
+  }
+
+  [data-task-details-header="true"] > [data-task-details-parent="true"] {
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+  }
+
+  [data-task-details-header="true"] > .min-w-0.flex-1 {
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+  }
+
+  [data-task-details-header="true"] > .group {
+    grid-column: 3 !important;
+    grid-row: 1 !important;
+  }
+
+  [data-task-details-header="true"] > [data-task-details-save-status] {
+    grid-column: 2 !important;
+    grid-row: 2 !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    justify-self: start !important;
+    overflow: hidden !important;
+  }
+
+  [data-task-details-header="true"]:not(:has(> [data-task-details-parent="true"])) {
+    grid-template-columns: minmax(0, 1fr) auto !important;
+  }
+
+  [data-task-details-header="true"]:not(:has(> [data-task-details-parent="true"])) > .min-w-0.flex-1,
+  [data-task-details-header="true"]:not(:has(> [data-task-details-parent="true"])) > [data-task-details-save-status] {
+    grid-column: 1 !important;
+  }
+
+  [data-task-details-header="true"]:not(:has(> [data-task-details-parent="true"])) > .group {
+    grid-column: 2 !important;
+  }
+
+  /* idle 沒有回饋文字，不應在手機標題列保留空白 120px 佔位。 */
+  [data-task-details-header="true"] [data-task-details-save-status="idle"] {
+    display: none !important;
   }
 
   [data-task-details-meta-section="true"] {
@@ -1072,4 +1661,95 @@ body[data-kanban-mouse-pan-active="true"] * {
 
 .slide-in-from-top-1 {
   animation: slideIn 0.2s ease-out;
+}
+
+/* DEV-081 mobile board contract also covers touch landscape viewports whose CSS
+   media query is not emulated by a desktop browser harness. The JS-owned marker
+   is restricted to the board work surface, so desktop effective size remains A. */
+[data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"] {
+  --kanban-column-width: 252px;
+  --kanban-board-gap: 8px;
+  --kanban-header-pad-y: 6px;
+  --kanban-header-pad-x: 7px;
+  --kanban-column-body-pad: 5px;
+  --kanban-card-pad-y: 2px;
+  --kanban-card-pad-x: 5px;
+  --kanban-l1-l2-title-size: 14px;
+  --kanban-l3-title-size: 12px;
+  --kanban-meta-size: 9px;
+  --kanban-tag-height: 13px;
+  --kanban-tag-font-size: 9px;
+  --kanban-checklist-base: 4px;
+  --kanban-l3-min-height: 20px;
+  gap: var(--kanban-board-gap) !important;
+}
+
+[data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"][data-kanban-view-size="large"] {
+  --kanban-column-width: 630px;
+  --kanban-board-gap: 20px;
+  --kanban-header-pad-y: 15px;
+  --kanban-header-pad-x: 17.5px;
+  --kanban-column-body-pad: 12.5px;
+  --kanban-card-pad-y: 5px;
+  --kanban-card-pad-x: 12.5px;
+  --kanban-l1-l2-title-size: 35px;
+  --kanban-l3-title-size: 30px;
+  --kanban-meta-size: 22.5px;
+  --kanban-tag-height: 32.5px;
+  --kanban-tag-font-size: 22.5px;
+  --kanban-checklist-base: 10px;
+  --kanban-l3-min-height: 50px;
+}
+
+[data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"] [data-kanban-column],
+[data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"] > .flex-shrink-0 {
+  width: var(--kanban-column-width) !important;
+}
+
+[data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"] [data-kanban-column-header] {
+  padding: var(--kanban-header-pad-y) var(--kanban-header-pad-x) !important;
+}
+
+[data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"] [data-mobile-pan-surface="kanban-column"] {
+  padding: var(--kanban-column-body-pad) !important;
+}
+
+[data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"] [data-kanban-column-header] [data-task-title-slot],
+[data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"] [data-task-hierarchy-level="L2"] [data-task-title-slot] {
+  font-size: var(--kanban-l1-l2-title-size) !important;
+  line-height: 1.15 !important;
+}
+
+[data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"] [data-task-hierarchy-level="L3+"] [data-task-title-slot] {
+  font-size: var(--kanban-l3-title-size) !important;
+  line-height: 1.15 !important;
+}
+
+[data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"] [data-task-date-badge="true"] {
+  font-size: var(--kanban-meta-size) !important;
+}
+
+[data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"] [data-kanban-meta-chip="true"] {
+  font-size: var(--kanban-meta-size) !important;
+}
+
+[data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"][data-kanban-view-size="large"] [data-task-date-badge="true"] {
+  min-height: 32.5px !important;
+}
+
+[data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"][data-kanban-view-size="large"] [data-kanban-meta-chip="true"] {
+  min-height: 32.5px !important;
+}
+
+[data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"] [data-kanban-tag-front="true"] {
+  height: var(--kanban-tag-height) !important;
+  font-size: var(--kanban-tag-font-size) !important;
+}
+
+[data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"] .kanban-task-card-body {
+  padding: var(--kanban-card-pad-y) var(--kanban-card-pad-x) !important;
+}
+
+[data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"] .kanban-checklist-item {
+  min-height: var(--kanban-l3-min-height) !important;
 }

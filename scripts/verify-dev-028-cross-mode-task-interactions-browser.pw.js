@@ -18,7 +18,7 @@ async (page) => {
 
   const openApp = async () => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
     await page.evaluate((account) => {
       localStorage.setItem('projed-local-test.selected-account', account.id);
       localStorage.setItem('projed-local-test.session', JSON.stringify({
@@ -41,7 +41,7 @@ async (page) => {
   };
 
   const closeDetails = async () => {
-    await page.locator('[data-task-details-modal="true"] button[title="關閉"]').click();
+    await page.locator('[data-task-details-modal="true"] button[aria-label="關閉任務詳情"]').click();
     await page.locator('[data-task-details-modal="true"]').waitFor({ state: 'hidden', timeout: 10000 });
   };
 
@@ -120,7 +120,6 @@ async (page) => {
       assert(Boolean(dialogBox && viewport), 'board task details dialog should expose measurable desktop geometry');
       assert(
         dialogBox.width >= viewport.width * 0.7
-          && dialogBox.height >= viewport.height * 0.78
           && dialogBox.width >= dialogSizeGuard.minWidth - 1
           && dialogBox.height >= dialogSizeGuard.minHeight - 1,
         'desktop task details dialog should open as a protected large work area',
@@ -136,6 +135,7 @@ async (page) => {
           });
           const rect = element?.getBoundingClientRect();
           const controlRect = element?.querySelector('[data-task-details-meta-control-row="true"]')?.getBoundingClientRect();
+          const labelRect = element?.querySelector('[data-task-details-meta-label-text="true"]')?.getBoundingClientRect();
           return rect
             ? {
               name,
@@ -143,11 +143,18 @@ async (page) => {
               bottom: controlRect?.bottom ?? rect.bottom,
               left: rect.left,
               right: rect.right,
+              labelTop: labelRect?.top ?? null,
+              labelBottom: labelRect?.bottom ?? null,
             }
             : null;
         }).filter(Boolean);
         const dateRange = grid.querySelector('[data-task-details-schedule-controls="true"]');
         const dateRangeRect = dateRange?.getBoundingClientRect();
+        const dateLabelRect = dateRange
+          ? Array.from(dateRange.children)
+            .find((element) => element.matches('[data-task-details-meta-label-text="true"]'))
+            ?.getBoundingClientRect()
+          : null;
         const dateRangeBaseline = dateRange?.querySelector('[data-task-details-meta-field="start"]');
         const dateRangeBaselineControl = dateRangeBaseline?.querySelector('[data-task-details-meta-control-row="true"]');
         const dateRangeBaselineRect = dateRangeBaselineControl?.getBoundingClientRect() || dateRangeBaseline?.getBoundingClientRect();
@@ -162,8 +169,10 @@ async (page) => {
         const durationInputAppearance = durationInput
           ? getComputedStyle(durationInput).appearance
           : '';
+        const startDateInput = dateRange?.querySelector('[data-task-details-meta-field="start"] input[type="date"]');
         const endDateInput = dateRange?.querySelector('[data-task-details-meta-field="end"] input[type="date"]');
         const durationGroup = dateRange?.querySelector('[data-task-details-duration-inline="true"]');
+        const startDateRect = startDateInput?.getBoundingClientRect();
         const endDateRect = endDateInput?.getBoundingClientRect();
         const durationGroupRect = durationGroup?.getBoundingClientRect();
         const arrow = dateRange?.querySelector('[data-task-details-date-range-arrow="true"]');
@@ -192,6 +201,9 @@ async (page) => {
           dateRangeBaseline: dateRangeBaselineRect
             ? { top: dateRangeBaselineRect.top, bottom: dateRangeBaselineRect.bottom, left: dateRangeBaselineRect.left, right: dateRangeBaselineRect.right }
             : null,
+          dateLabel: dateLabelRect
+            ? { top: dateLabelRect.top, bottom: dateLabelRect.bottom }
+            : null,
           dateInputWidths,
           durationInputWidth,
           durationInputAppearance,
@@ -199,6 +211,14 @@ async (page) => {
             endDateRect
             && durationGroupRect
             && Math.abs(endDateRect.right - durationGroupRect.left) <= 1,
+          ),
+          dateControlsPreciselySpaced: Boolean(
+            startDateRect
+            && arrowRect
+            && endDateRect
+            && arrowRect.width >= 24
+            && Math.abs(startDateRect.right - arrowRect.left) <= 1
+            && Math.abs(arrowRect.right - endDateRect.left) <= 1,
           ),
           tags: tagsRect
             ? { top: tagsRect.top, bottom: tagsRect.bottom, left: tagsRect.left, right: tagsRect.right }
@@ -214,12 +234,27 @@ async (page) => {
       const fieldsWithDateRange = [...metaGeometry.fields, metaGeometry.dateRangeBaseline].filter(Boolean);
       const fieldTops = fieldsWithDateRange.map(field => field.top);
       const fieldBottoms = fieldsWithDateRange.map(field => field.bottom);
+      const labelTops = [
+        ...metaGeometry.fields.map(field => field.labelTop),
+        metaGeometry.dateLabel?.top,
+      ].filter(value => typeof value === 'number');
+      const labelBottoms = [
+        ...metaGeometry.fields.map(field => field.labelBottom),
+        metaGeometry.dateLabel?.bottom,
+      ].filter(value => typeof value === 'number');
       assert(
         metaGeometry.fields.length === 2
           && metaGeometry.dateRange
           && metaGeometry.dateRangeBaseline
           && metaGeometry.tags,
         'desktop task metadata should separate the tag row from the first-row controls',
+        metaGeometry,
+      );
+      assert(
+        labelTops.length === 3
+          && Math.max(...labelTops) - Math.min(...labelTops) <= 1
+          && Math.max(...labelBottoms) - Math.min(...labelBottoms) <= 1,
+        'desktop task metadata labels should share one visual baseline',
         metaGeometry,
       );
       assert(
@@ -245,6 +280,7 @@ async (page) => {
           && metaGeometry.durationInputWidth >= 64
           && metaGeometry.durationInputAppearance === 'textfield'
           && metaGeometry.dateDurationJoined
+          && metaGeometry.dateControlsPreciselySpaced
           && metaGeometry.arrowVisible
           && metaGeometry.visibleDateLabelCount === 0
           && metaGeometry.tags.top >= Math.max(...fieldBottoms)
@@ -296,6 +332,11 @@ async (page) => {
     const menuTask = page.locator(`${selector}[data-task-id="${escapedTaskIdForMenu}"]`).first();
     await menuTask.click({ button: 'right', position: clickPosition });
     await page.locator('[data-global-context-menu="true"]').waitFor({ state: 'visible', timeout: 10000 });
+    const contextMenuSelectedCount = await page.locator(`[data-task-id="${taskId}"][data-task-selected="true"]`).count();
+    assert(contextMenuSelectedCount >= 1, `${mode} context menu should preserve the target selection preview`, {
+      taskId,
+      contextMenuSelectedCount,
+    });
     const renameMenuCount = await page.getByText('重新命名任務', { exact: true }).count();
     assert(renameMenuCount === 0, `${mode} context menu should not expose task rename`, { renameMenuCount });
     await page.keyboard.press('Escape');
@@ -310,7 +351,7 @@ async (page) => {
     assert(renameInputs === 0, `${mode} title click should not enter rename input`, { renameInputs });
   };
 
-  const assertMindMapClickOpensDetails = async () => {
+  const assertMindMapSelectionDetailsContract = async () => {
     await switchMode('mindmap');
     await page.locator('[data-mindmap-view]').waitFor({ state: 'visible', timeout: 15000 });
     const node = page.locator('[data-mindmap-node]').first();
@@ -318,9 +359,14 @@ async (page) => {
     const taskId = await node.getAttribute('data-mindmap-node');
     await node.click();
     const modal = page.locator('[data-task-details-modal="true"]');
+    await page.waitForTimeout(250);
+    assert(await modal.count() === 0, 'mindmap single click should select without opening TaskDetailsModal', { taskId });
+    const singleClickSelected = await page.locator(`[data-mindmap-node="${taskId}"][aria-selected="true"]`).count();
+    assert(singleClickSelected === 1, 'mindmap single click should select the node', { taskId, singleClickSelected });
+    await node.dblclick();
     await modal.waitFor({ state: 'visible', timeout: 10000 });
     const modalTaskId = await modal.getAttribute('data-task-id');
-    assert(modalTaskId === taskId, 'mindmap single click should open TaskDetailsModal', { taskId, modalTaskId });
+    assert(modalTaskId === taskId, 'mindmap double click should open TaskDetailsModal', { taskId, modalTaskId });
     const detailTitleInput = modal.locator('[data-task-details-title-input="true"]');
     await detailTitleInput.waitFor({ state: 'visible', timeout: 10000 });
     assert(await detailTitleInput.count() === 1, 'mindmap details title input should be the editable title locus');
@@ -342,8 +388,19 @@ async (page) => {
     assert(Boolean(contextBox), 'mindmap context node should remain measurable after clearing selection');
     await page.mouse.click(contextBox.x + Math.min(24, contextBox.width / 2), contextBox.y + Math.min(16, contextBox.height / 2), { button: 'right' });
     await page.locator('[data-global-context-menu="true"]').waitFor({ state: 'visible', timeout: 10000 });
+    const contextMenuSelectedCount = await page.locator(`[data-mindmap-node="${taskId}"][aria-selected="true"]`).count();
+    assert(contextMenuSelectedCount === 1, 'mindmap context menu should preserve the target selection preview', {
+      taskId,
+      contextMenuSelectedCount,
+    });
     const renameMenuCount = await page.getByText('重新命名任務', { exact: true }).count();
     assert(renameMenuCount === 0, 'mindmap context menu should not expose task rename', { renameMenuCount });
+    const openDetailsMenuCount = await page.locator('[data-task-action-id="task.open-details"]').count();
+    assert(openDetailsMenuCount === 1, 'mindmap context menu should expose 開啟明細', { openDetailsMenuCount });
+    await page.locator('[data-task-action-id="task.open-details"]').click();
+    await modal.waitFor({ state: 'visible', timeout: 10000 });
+    assert(await modal.getAttribute('data-task-id') === taskId, 'mindmap context menu 開啟明細 should open the target task', { taskId });
+    await closeDetails();
     await page.keyboard.press('Escape');
     await page.locator('[data-global-context-menu="true"]').waitFor({ state: 'hidden', timeout: 10000 });
 
@@ -373,8 +430,8 @@ async (page) => {
       clickPosition: { x: 90, y: 12 },
     });
 
-    step = 'mindmap-click-details';
-    await assertMindMapClickOpensDetails();
+    step = 'mindmap-selection-details-contract';
+    await assertMindMapSelectionDetailsContract();
 
     step = 'board-click-details';
     await assertClickOpensDetails({

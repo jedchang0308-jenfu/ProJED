@@ -1,7 +1,13 @@
+import type { SerializedEditorState } from 'lexical';
+import type {
+  TaskInteractionLocation,
+  TaskInteractionSurfaceId,
+} from '../interactions/task/types';
+
 // Core scalar types
 export type TaskStatus = 'todo' | 'in_progress' | 'delayed' | 'completed' | 'unsure' | 'onhold';
 export type DependencySide = 'start' | 'end';
-export type ViewMode = 'home' | 'list' | 'mindmap' | 'board' | 'gantt' | 'calendar' | 'records' | 'calendar_subscriptions' | 'settings' | 'recycle_bin';
+export type ViewMode = 'home' | 'list' | 'mindmap' | 'board' | 'goal' | 'gantt' | 'calendar' | 'records' | 'calendar_subscriptions' | 'settings' | 'recycle_bin';
 export type DialogType = 'confirm' | 'prompt' | 'action';
 export type DialogActionVariant = 'primary' | 'secondary' | 'danger';
 export type DragType = 'move' | 'left' | 'right';
@@ -10,6 +16,7 @@ export type CollaborationRole = 'owner' | 'admin' | 'project_manager' | 'member'
 export type MembershipStatus = 'active' | 'invited' | 'suspended';
 export type BoardInviteStatus = 'pending' | 'accepted' | 'revoked' | 'expired';
 export type KnowledgeRecordType = 'meeting' | 'work_log';
+export type EditableKnowledgeRecordType = KnowledgeRecordType;
 export type KnowledgeRecordStatus = 'draft' | 'published' | 'archived';
 export type KnowledgeRecordVisibility = 'private' | 'project' | 'tenant';
 export type RecordTaskLinkRole = 'main' | 'related' | 'decision' | 'blocker' | 'follow_up';
@@ -31,6 +38,7 @@ export type PermissionCapability =
   | 'edit_task'
   | 'move_task'
   | 'delete_task'
+  | 'manage_task_reference'
   | 'assign_task'
   | 'create_dependency'
   | 'delete_dependency'
@@ -76,6 +84,7 @@ export const BOARD_ROLE_CAPABILITIES = {
     'edit_task',
     'move_task',
     'delete_task',
+    'manage_task_reference',
     'assign_task',
     'create_dependency',
     'delete_dependency',
@@ -93,6 +102,7 @@ export const BOARD_ROLE_CAPABILITIES = {
     'edit_task',
     'move_task',
     'delete_task',
+    'manage_task_reference',
     'assign_task',
     'create_dependency',
     'delete_dependency',
@@ -110,6 +120,7 @@ export const BOARD_ROLE_CAPABILITIES = {
     'edit_task',
     'move_task',
     'delete_task',
+    'manage_task_reference',
     'assign_task',
     'create_dependency',
     'delete_dependency',
@@ -121,6 +132,8 @@ export const BOARD_ROLE_CAPABILITIES = {
     'create_task',
     'edit_task',
     'move_task',
+    'delete_task',
+    'manage_task_reference',
     'assign_task',
     'create_dependency',
     'read_activity',
@@ -281,6 +294,7 @@ export type ActivityEventType =
   | 'task_moved'
   | 'task_dates_changed'
   | 'task_archived'
+  | 'task_collected'
   | 'task_restored'
   | 'task_tags_changed'
   | 'dependency_created'
@@ -317,6 +331,8 @@ export interface ActivityEventListQuery {
   scope: CollaborationScope;
   startedAt: number;
   endedAt: number;
+  /** Defaults to inclusive for legacy work-log imports; meetings use exclusive. */
+  startBoundary?: 'inclusive' | 'exclusive';
   eventTypes?: ActivityEventType[];
 }
 
@@ -330,11 +346,10 @@ export interface RecordTaskLink {
   createdAt?: number;
 }
 
-export interface KnowledgeRecord {
+export interface KnowledgeRecordBase {
   id: string;
   workspaceId: string;
   boardId: string;
-  type: KnowledgeRecordType;
   title: string;
   content: string;
   status: KnowledgeRecordStatus;
@@ -350,12 +365,19 @@ export interface KnowledgeRecord {
   updatedAt?: number;
   ragEnabled?: boolean;
   sourceDocumentId?: string | null;
+  metadata?: Record<string, unknown>;
   taskLinks: RecordTaskLink[];
 }
 
+export interface EditableKnowledgeRecord extends KnowledgeRecordBase {
+  type: EditableKnowledgeRecordType;
+}
+
+export type KnowledgeRecord = EditableKnowledgeRecord;
+
 export interface KnowledgeRecordInput {
   id?: string;
-  type: KnowledgeRecordType;
+  type: EditableKnowledgeRecordType;
   title: string;
   content: string;
   status: KnowledgeRecordStatus;
@@ -365,7 +387,83 @@ export interface KnowledgeRecordInput {
   startedAt?: number;
   endedAt?: number;
   recordedBy?: string | null;
+  metadata?: Record<string, unknown>;
   taskLinks: Array<Pick<RecordTaskLink, 'nodeId' | 'role'>>;
+}
+
+export type MeetingTaskActivityInput = {
+  eventType: string;
+  nodeId: string;
+  title: string;
+  occurredAt?: number;
+  payload?: Record<string, unknown>;
+};
+
+export type MeetingTaskActivity = Required<Omit<MeetingTaskActivityInput, 'payload'>> & {
+  payload: Record<string, unknown>;
+  summary: string;
+};
+
+export interface MeetingDraftRecoverySnapshot {
+  schemaVersion: 1 | 2;
+  scopeKey: string;
+  ownerUserId: string;
+  workspaceId: string;
+  boardId: string;
+  draftId: string;
+  savedAt: number;
+  writeSequence?: number;
+  localSignature: string;
+  /** @deprecated v1 only; never written by the v2 writer. */
+  remoteSignature?: string | null;
+  /** @deprecated v1 only; normalized in memory to canonicalBaselineSignature. */
+  baselineSignature?: string | null;
+  canonicalBaselineSignature?: string | null;
+  contentCursorOffset: number | null;
+  draft: KnowledgeRecordInput;
+  meetingActivities: MeetingTaskActivity[];
+  appendedMeetingActivityIds: string[];
+}
+
+export type MeetingDraftRecoverySnapshotV2 = MeetingDraftRecoverySnapshot & {
+  schemaVersion: 2;
+  writeSequence: number;
+  canonicalBaselineSignature: string | null;
+};
+
+export type MeetingDraftRecoveryLocalStatus = 'idle' | 'saving' | 'saved' | 'degraded' | 'error';
+export type MeetingDraftRecoveryCloudStatus = 'idle' | 'scheduled' | 'saving' | 'saved' | 'paused' | 'conflict' | 'error';
+
+export interface MeetingDraftRecoveryState {
+  localStatus: MeetingDraftRecoveryLocalStatus;
+  cloudStatus: MeetingDraftRecoveryCloudStatus;
+  localSavedAt: number | null;
+  cloudSavedAt: number | null;
+  message: string | null;
+  restoredAt: number | null;
+  conflictSnapshot: MeetingDraftRecoverySnapshot | null;
+  /**
+   * A recoverable local meeting draft discovered at app startup. It must not
+   * open meeting mode by itself; the user explicitly chooses when to restore.
+   */
+  pendingSnapshot: MeetingDraftRecoverySnapshot | null;
+}
+
+export interface MeetingDraftCheckpointInput {
+  ownerUserId: string;
+  workspaceId: string;
+  boardId: string;
+  record: KnowledgeRecordInput;
+  meetingActivities: MeetingTaskActivity[];
+  appendedMeetingActivityIds: string[];
+  localSignature: string;
+  remoteSignature: string | null;
+}
+
+export interface MeetingDraftCheckpointResult {
+  recordId: string;
+  confirmedAt: number;
+  remoteSignature: string;
 }
 
 export interface AuditLogEntry {
@@ -407,6 +505,14 @@ export interface TaskNode {
 
   // Optional compatibility metadata for board/kanban presentation only.
   kanbanStageId?: string;
+  /** Ephemeral projection marker; never persist this presentation-only flag. */
+  isTrackingReference?: boolean;
+  /** Ephemeral placement identity for projection-only drag/click handling. */
+  trackingReferenceId?: string;
+  /** Ephemeral parent placement identity for projection-only drag handling. */
+  trackingReferenceParentPlacementId?: string | null;
+  /** Ephemeral canonical task identity when a placement-scoped projection uses its own id. */
+  canonicalTaskId?: string;
 
   order: number;
   createdAt?: number;
@@ -418,7 +524,103 @@ export interface TaskDetailNote {
   id: string;
   title: string;
   content: string;
+  richContent?: TaskDetailNoteRichContent;
 }
+
+export interface TaskDetailNoteRichContent {
+  schema: 'task-note.lexical-v1';
+  editorState: SerializedEditorState;
+}
+
+/** Volatile meeting capture contract. These values must never be persisted in a draft snapshot. */
+export type MeetingLiveFieldKey =
+  | 'created'
+  | 'title'
+  | 'description'
+  | `detailNote:${string}`
+  | 'status'
+  | 'dates'
+  | 'assignees'
+  | 'collaborators'
+  | 'tags'
+  | 'archived';
+
+export type MeetingLiveDates = {
+  startDate: string | null;
+  endDate: string | null;
+  isDurationLocked: boolean;
+};
+
+export type MeetingLiveCreatedValue = {
+  title: string;
+  status: TaskStatus;
+  dates: MeetingLiveDates;
+  assigneeIds: string[];
+  collaboratorIds: string[];
+  tagIds: string[];
+  isArchived: boolean;
+};
+
+export type MeetingLiveTextFragment = {
+  text: string;
+  originalLength: number;
+  truncated: boolean;
+  fingerprint: `sha256:${string}`;
+};
+
+export type MeetingLiveContentValue = {
+  kind: 'content_delta';
+  baselineHash: `sha256:${string}`;
+  latestHash: `sha256:${string}`;
+  addedFragments: MeetingLiveTextFragment[];
+  removedFragments: MeetingLiveTextFragment[];
+};
+
+export type MeetingLiveAggregateValue =
+  | { kind: 'scalar'; baseline: string | boolean | null; latest: string | boolean | null }
+  | { kind: 'id_list'; baseline: string[]; latest: string[] }
+  | { kind: 'dates'; baseline: MeetingLiveDates; latest: MeetingLiveDates }
+  | { kind: 'created'; latest: MeetingLiveCreatedValue }
+  | MeetingLiveContentValue;
+
+export type MeetingLiveProjectionAnchor = {
+  lineIndex: number;
+  exactText: string;
+  fingerprint: `sha256:${string}`;
+  generation: number;
+};
+
+export type MeetingLiveFieldAggregate = {
+  key: string;
+  segmentId: string;
+  nodeId: string;
+  fieldKey: MeetingLiveFieldKey;
+  taskTitle: string;
+  value: MeetingLiveAggregateValue;
+  firstConfirmedAt: number;
+  lastConfirmedAt: number;
+  lastCommitSequence: number;
+  appliedMutationIds: string[];
+  projection: MeetingLiveProjectionAnchor | null;
+};
+
+export type MeetingLiveCaptureSegment = {
+  id: string;
+  draftId: string;
+  boardId: string;
+  startedAt: number;
+  closedAt: number | null;
+  nextDispatchSequence: number;
+};
+
+export type MeetingLiveCaptureRuntime = {
+  segment: MeetingLiveCaptureSegment;
+  aggregates: Map<string, MeetingLiveFieldAggregate>;
+  plaintextBaselines: Map<string, string>;
+  appliedMutationIds: Set<string>;
+  pendingMutationIds: Set<string>;
+  nextCommitSequence: number;
+};
 
 export interface TaskTag {
   id: string;
@@ -484,6 +686,7 @@ export interface AuthState {
 export interface AuthActions {
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
+  updateDisplayName: (displayName: string) => Promise<void>;
 }
 
 export type AuthStore = AuthState & AuthActions;
@@ -507,6 +710,12 @@ export type BoardContextMenuState =
       y: number;
       nodeId: string;
       title: string;
+      /** Placement-only context; when set, this row is a tracking projection. */
+      trackingReferenceId?: string;
+      taskPlacementContext?: import('../interactions/task/types').TaskPlacementInteractionContext;
+      interactionLocation?: TaskInteractionLocation;
+      surfaceId?: TaskInteractionSurfaceId;
+      interactionId?: string;
     }
   | {
       kind: 'workspace';
@@ -545,18 +754,16 @@ export interface BoardState {
   currentView: ViewMode;
   isSidebarOpen: boolean;
   editingItem: EditingItem | null;
-  statusFilters: StatusFilters;
-
   showDependencies: boolean;
   showStartDate: boolean;
   showTags: boolean;
   showTagNames: boolean;
-  dueWithinDays: number | null;
-  overdueOnly: boolean;
-  selectedAssigneeIds: string[];
 
   dependencySelection: { id: string; side: 'start' | 'end'; title: string } | null;
   contextMenuState: BoardContextMenuState | null;
+  lastTaskInteractionLocation: TaskInteractionLocation | null;
+  lastTaskInteractionSurfaceId: TaskInteractionSurfaceId | null;
+  lastTaskInteractionId: string | null;
   selectedTaskId: string | null;
   pendingTitleEditNodeId: string | null;
   pendingTitleEditInitialValue: string | null;
@@ -577,7 +784,7 @@ export interface BoardActions {
   updateWorkspaceTitle: (workspaceId: string, newTitle: string) => void;
 
   addBoard: (workspaceId: string, boardName: string) => string | void;
-  removeBoard: (wsId: string, bId: string) => void;
+  removeBoard: (wsId: string, bId: string) => Promise<void>;
   updateBoardTitle: (workspaceId: string, boardId: string, newTitle: string) => void;
   moveBoardToWorkspace: (workspaceId: string, boardId: string, targetWorkspaceId: string, expectedBoardTitle: string) => Promise<void>;
   switchBoard: (workspaceId: string, boardId: string) => void;
@@ -588,15 +795,11 @@ export interface BoardActions {
   showHome: () => void;
   openModal: (type: EditableItemType, itemId: string, listId: string, extra?: Record<string, unknown>) => void;
   closeModal: () => void;
-  toggleStatusFilter: (status: TaskStatus) => void;
   toggleDependencies: () => void;
   toggleStartDate: () => void;
   toggleTags: () => void;
   toggleTagNames: () => void;
-  setDueWithinDays: (days: number | null) => void;
-  toggleOverdueFilter: () => void;
-  toggleAssigneeFilter: (assigneeId: string) => void;
-  clearAssigneeFilters: () => void;
+  hydrateTaskDisplayPrefs: () => void;
 
   setDependencySelection: (state: { id: string; side: 'start' | 'end'; title: string } | null) => void;
   setContextMenuState: (state: BoardContextMenuState | null) => void;

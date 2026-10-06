@@ -169,3 +169,9 @@ Physical iOS Safari / Android Chrome 建議補跑：
 - touchcancel / app switch cleanup。
 
 這些是 supplemental，不阻塞 DEV-053 done；未執行時，QC 結論需寫明 `Physical phone supplemental not executed`。
+
+## 10. DEV-068 Source Preview Revalidation（2026-08-15）
+
+- 2026-08-24 使用者再次明示覆寫來源 overlay 尺寸與位置：來源卡視覺語彙、8px threshold、`dropAnimation={null}`、click/right-click與commit行為不變；桌機預覽必須 scale=`0.5`、gap=`0`，並以左下角精準貼住 pointer hotspot 的右上方，且與 child preview 解耦。手機 finger clearance 維持既有契約。
+- `QA-053-B01`以實際 mouse drag 驗證 anchor=`pointer-upper-right`、scale=`0.5`、gap=`0`、card rect=`120x20` 與原外觀內容；靠邊時允許翻到 pointer 左上方避免 viewport 裁切。
+- 完整藍框child candidate仍保留原standard drop；Workbench來源不建立child intent。DEV-055 B12另證明未歸位任務可歸位一次、placed row不可拖。

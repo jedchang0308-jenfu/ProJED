@@ -34,7 +34,7 @@ const app = read('src/App.tsx');
 check(
   'useFirestoreSync uses the existing static useWbsStore import instead of dynamically importing the same store',
   firestoreSync.includes("import { useWbsStore } from '../store/useWbsStore';") &&
-    firestoreSync.includes('useWbsStore.getState().setNodes(nodes);') &&
+    firestoreSync.includes('useWbsStore.getState().setNodes(nodes, {') &&
     !firestoreSync.includes("import('../store/useWbsStore')"),
 );
 
@@ -53,7 +53,7 @@ check(
 
 check(
   'App code-splits non-home workspace views instead of bundling every view into the initial app chunk',
-  app.includes("import { lazy, Suspense, useEffect, useRef } from 'react';") &&
+  app.includes("import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';") &&
     [
       "const MindMapView = lazy(() => import('./components/MindMap/MindMapView'))",
       "const BoardView = lazy(() => import('./components/BoardView'))",

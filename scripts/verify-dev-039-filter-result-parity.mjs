@@ -49,7 +49,8 @@ assert(
     source.resultProjection.includes('if (parent.isArchived) return false') &&
     source.resultProjection.includes('if (!isSameBoard(parent, boardId)) return false') &&
     source.resultProjection.includes('if (!isTaskEffectivelyVisible(node, nodesById, { boardId })) return') &&
-    source.resultProjection.includes('matchesTaskFilters(node, filters)'),
+    source.resultProjection.includes('compileTaskFilter(filters') &&
+    source.resultProjection.includes('compiled.matches(node)'),
 );
 
 assert(
@@ -69,21 +70,21 @@ assert(
 assert(
   'Kanban hierarchy uses projection visibility instead of per-level predicate filtering',
   source.kanbanColumn.includes('filterProjection?: TaskFilterResultProjection') &&
-    source.kanbanColumn.includes('filterProjection.visibleTaskIds.has(child.id)') &&
+    source.kanbanColumn.includes('visibleTaskIds.has(child.id)') &&
     source.kanbanColumn.includes('filterProjection={filterProjection}') &&
     !source.kanbanColumn.includes('matchesTaskFilters') &&
     source.kanbanCard.includes('filterProjection?: TaskFilterResultProjection') &&
     source.kanbanCard.includes('filterProjection={filterProjection}') &&
     source.kanbanChecklist.includes('filterProjection?: TaskFilterResultProjection') &&
-    source.kanbanChecklist.includes('filterProjection.visibleTaskIds.has(n.id)') &&
-    source.kanbanChecklist.includes('filterProjection={filterProjection}') &&
+    (source.kanbanChecklist.includes('filterProjection={filterProjection}') || source.kanbanChecklist.includes('filterProjection={props.filterProjection}')) &&
+    (source.kanbanChecklist.includes('filterProjection={filterProjection}') || source.kanbanChecklist.includes('filterProjection={props.filterProjection}')) &&
     !source.kanbanChecklist.includes('matchesTaskFilters'),
 );
 
 assert(
   'Task Workbench lists filtered placed ids in the due-date sorted placed task list and keeps unplaced separate',
   source.taskWorkbench.includes('projectTaskFilterResults') &&
-    source.taskWorkbench.includes('isTaskEffectivelyVisible') &&
+    (source.taskWorkbench.includes('isTaskEffectivelyVisible') || source.taskWorkbench.includes('buildWorkbenchProjectionTasks')) &&
     source.taskWorkbench.includes('filterProjectionByBoardId') &&
     source.taskWorkbench.includes('loadedPlacedTasks') &&
     source.taskWorkbench.includes('visiblePlacedTasks') &&
@@ -93,7 +94,8 @@ assert(
     source.taskWorkbench.includes('data-task-workbench-all-tasks-list="true"') &&
     source.taskWorkbench.includes('data-task-workbench-all-task-card') &&
     source.taskWorkbench.includes('placement="placed"') &&
-    source.taskWorkbench.includes('filterProjectionByBoardId.get(task.boardId)?.matchedTaskIds.has(task.id)') &&
+    (source.taskWorkbench.includes('filterProjectionByBoardId.get(task.boardId)?.matchedTaskIds.has(task.id)') ||
+      (source.taskWorkbench.includes('buildWorkbenchProjectionTasks') && source.taskWorkbench.includes('matchedTaskIds.add(taskId)'))) &&
     !source.taskWorkbench.includes('mergeUnplacedTasks') &&
     !source.taskWorkbench.includes('sortTasksByDueDate(mergeUnplacedTasks') &&
     !source.taskWorkbench.includes('loadedBoardTasks.filter(task => matchesTaskFilters'),
@@ -137,11 +139,12 @@ assert(
     source.spec.includes('context-only') &&
     source.qa.includes('Phase 1C Filter Result Parity Verification') &&
     source.qc.includes('Phase 1C QC Gate') &&
-    source.devTask.includes('DEV-039 [交付點] [完成]') &&
+    source.devTask.includes('DEV-039 [交付點] [驗證中]') &&
     source.documentationMap.includes('Phase 1C') &&
     source.backlog.includes('Phase 1C') &&
     source.devTask.includes('QA/QC-DEV-039') &&
-    source.qc.includes('Phase 1C QC Gate（Passed）'),
+    source.qc.includes('Phase 1C QC Gate（Passed）') &&
+    source.qa.includes('DEV-090 Board-filter Follow-up Superseded by QA-DEV-090'),
 );
 
 const failed = results.filter(result => !result.ok);

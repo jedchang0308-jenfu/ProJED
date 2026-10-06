@@ -18,7 +18,7 @@ async (page) => {
 
   const openApp = async () => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
     await page.evaluate((account) => {
       localStorage.setItem('projed-local-test.selected-account', account.id);
       localStorage.setItem('projed-local-test.session', JSON.stringify({
@@ -51,7 +51,7 @@ async (page) => {
 
   const nodeByTitle = (title) => page.locator(`[data-mindmap-node-title="${title}"]`).first();
   const selectedNode = () => page.locator('[data-mindmap-node][aria-selected="true"]').first();
-  const detailTitleInput = () => page.locator('[data-task-details-title-input="true"]').first();
+  const quickTitleInput = () => page.locator('[data-mindmap-quick-title-input="true"]').first();
   const relationshipGroupByLabel = (label) => page.locator(`[data-mindmap-note-relationship][data-label="${label}"]`).first();
   const selectedRelationshipGroupByLabel = (label) => page.locator(`[data-mindmap-note-relationship][data-label="${label}"][data-selected="true"]`).first();
   const relationshipPathByLabel = (label) => page.locator(`[data-mindmap-note-relationship-path][data-label="${label}"]`).first();
@@ -61,7 +61,7 @@ async (page) => {
   const closeTaskDetailsIfOpen = async () => {
     const modal = page.locator('[data-task-details-modal="true"]');
     if ((await modal.count()) === 0) return;
-    await modal.locator('button[title="關閉"]').click();
+    await modal.locator('button[aria-label="關閉任務詳情"]').click();
     await modal.waitFor({ state: 'hidden', timeout: 10000 });
   };
 
@@ -80,23 +80,30 @@ async (page) => {
   };
 
   const renameSelectedByTyping = async (title) => {
-    await page.locator('[data-task-details-modal="true"]').waitFor({ state: 'visible', timeout: 10000 });
-    await detailTitleInput().waitFor({ state: 'visible', timeout: 10000 });
-    await page.waitForFunction(() => document.activeElement?.matches('[data-task-details-title-input="true"]'), null, { timeout: 3000 });
-    const focused = await detailTitleInput().evaluate(element => document.activeElement === element);
-    assert(focused, 'new mind map task should focus the task details title input', { title });
+    await quickTitleInput().waitFor({ state: 'visible', timeout: 10000 });
+    await page.waitForFunction(() => document.activeElement?.matches('[data-mindmap-quick-title-input="true"]'), null, { timeout: 3000 });
+    const focused = await quickTitleInput().evaluate(element => document.activeElement === element);
+    assert(focused, 'new mind map task should focus quick naming input', { title });
     assert(
-      await page.locator('[data-mindmap-title-input]').count() === 0,
-      'new mind map task should not open an outer title input',
+      await page.locator('[data-task-details-modal="true"]').count() === 0,
+      'new mind map task should not open task details',
     );
-    await detailTitleInput().fill(title);
-    await detailTitleInput().press('Enter');
+    await quickTitleInput().fill(title);
+    await quickTitleInput().press('Enter');
     await nodeByTitle(title).waitFor({ state: 'visible', timeout: 10000 });
     await closeTaskDetailsIfOpen();
+    assert(await page.locator('[data-task-details-modal="true"]').count() === 0, 'quick naming Enter must not open task details');
   };
 
   const createRoot = async (title) => {
-    await page.locator('[data-mindmap-create-root]').click();
+    const createRootButton = page.locator('[data-mindmap-create-root]');
+    if (await createRootButton.count()) {
+      await createRootButton.click();
+    } else {
+      await page.locator('[data-mindmap-view]').focus();
+      await page.keyboard.press('Escape');
+      await page.keyboard.press('Enter');
+    }
     await selectedNode().waitFor({ state: 'visible', timeout: 10000 });
     await renameSelectedByTyping(title);
   };
@@ -175,12 +182,14 @@ async (page) => {
     await page.locator('[data-mindmap-note-relationship-draft-preview]').waitFor({ state: 'visible', timeout: 10000 });
     const previewMeta = await page.locator('[data-mindmap-note-relationship-draft-preview]').first().evaluate((element, previewPoint) => {
       const surface = document.querySelector('[data-mindmap-surface]');
-      const surfaceRect = surface?.getBoundingClientRect();
-      const zoom = Number(document.querySelector('[data-mindmap-view] [data-mindmap-zoom-level]')?.getAttribute('data-mindmap-zoom-level') || '1');
-      const expectedLocal = surfaceRect
+      const viewport = document.querySelector('[data-mindmap-viewport="true"]');
+      const viewportRect = viewport?.getBoundingClientRect();
+      const transform = surface ? new DOMMatrix(getComputedStyle(surface).transform) : null;
+      const scale = transform?.a || 1;
+      const expectedLocal = viewportRect
         ? {
-            x: (previewPoint.x - surfaceRect.left) / Math.max(zoom, 0.01),
-            y: (previewPoint.y - surfaceRect.top) / Math.max(zoom, 0.01),
+            x: (previewPoint.x - viewportRect.left + (viewport?.scrollLeft || 0) - (transform?.e || 0)) / Math.max(scale, 0.01),
+            y: (previewPoint.y - viewportRect.top + (viewport?.scrollTop || 0) - (transform?.f || 0)) / Math.max(scale, 0.01),
           }
         : { x: Number.NaN, y: Number.NaN };
       return {
@@ -286,8 +295,8 @@ async (page) => {
       lineHitboxStyles: readStyle(`[data-mindmap-note-relationship-line-click-target][data-label="${label}"]`),
       labelHitboxStyles: readStyle(`[data-mindmap-note-relationship-click-target][data-label="${label}"]`),
       endpointStyles: readStyle(`[data-relationship-id="${relationshipId}"][data-mindmap-note-relationship-endpoint]`),
-      controlPointStyles: readStyle(`[data-relationship-id="${relationshipId}"][data-mindmap-note-relationship-control-point]`),
-      controlArmStyles: readStyle(`[data-relationship-id="${relationshipId}"][data-mindmap-note-relationship-screen-control-arm]`),
+      controlPointStyles: readStyle(`[data-relationship-id="${relationshipId}"][data-mindmap-note-relationship-direction-joystick]`),
+      controlArmStyles: readStyle(`[data-relationship-id="${relationshipId}"][data-mindmap-note-relationship-direction-arm]`),
     };
   }, { relationshipId, label });
 
@@ -368,51 +377,25 @@ async (page) => {
   const drawerViewport = page.viewportSize();
   assert(Boolean(drawerBox) && drawerViewport && drawerBox.x + drawerBox.width >= drawerViewport.width - 2 && drawerBox.width >= 300, 'relationship style drawer should be fixed to the right side like Xmind', { drawerBox, drawerViewport });
   assert((await page.locator(`[data-relationship-id="${relationshipId}"][data-mindmap-note-relationship-endpoint]`).count()) >= 2, 'selected relationship should show two circular endpoints');
-  assert((await page.locator(`[data-relationship-id="${relationshipId}"][data-mindmap-note-relationship-control-arm]`).count()) === 2, 'selected relationship should show two Xmind-like endpoint control arms');
-  assert((await page.locator(`[data-relationship-id="${relationshipId}"][data-mindmap-note-relationship-screen-control-arm]`).count()) === 2, 'selected relationship should show two visible endpoint control arms in the map-local zoom layer');
-  assert((await page.locator(`[data-relationship-id="${relationshipId}"][data-mindmap-note-relationship-screen-control-point]`).count()) === 2, 'selected relationship should show two visible circular adjustment points in the map-local zoom layer');
-  assert((await page.locator(`[data-relationship-id="${relationshipId}"][data-mindmap-note-relationship-coordinate-space="map-local"]`).count()) >= 6, 'selected relationship handles should render in the same map-local layer as the SVG path');
-  assert((await page.locator(`[data-relationship-id="${relationshipId}"][data-mindmap-note-relationship-control-point]`).count()) >= 2, 'selected relationship should show two visible circular control points');
-  const selectedControlMeta = await finitePathMeta(label);
-  const controlArmLengths = [
-    Math.hypot(selectedControlMeta.c1X - selectedControlMeta.fromX, selectedControlMeta.c1Y - selectedControlMeta.fromY),
-    Math.hypot(selectedControlMeta.c2X - selectedControlMeta.toX, selectedControlMeta.c2Y - selectedControlMeta.toY),
+  const redlinedControlSelectors = [
+    '[data-mindmap-note-relationship-control-guide]',
+    '[data-mindmap-note-relationship-control-arm]',
+    '[data-mindmap-note-relationship-control-arm-overlay]',
+    '[data-mindmap-note-relationship-svg-control-point]',
+    '[data-mindmap-note-relationship-control-point]',
+    '[data-mindmap-note-relationship-screen-control-point]',
+    '[data-mindmap-note-relationship-screen-control-arm]',
   ];
-  assert(controlArmLengths.every(length => length >= 32 && length <= 120), 'Xmind-like control arms should stay close to each endpoint', { controlArmLengths, selectedControlMeta });
-  const getBoxes = async (selector) => page.locator(selector).evaluateAll(elements => elements.map((element) => {
-    const rect = element.getBoundingClientRect();
-    return {
-      left: rect.left,
-      top: rect.top,
-      right: rect.right,
-      bottom: rect.bottom,
-      width: rect.width,
-      height: rect.height,
-    };
+  const redlinedControlCounts = await page.evaluate((selectors) => Object.fromEntries(
+    selectors.map(selector => [selector, document.querySelectorAll(selector).length]),
+  ), redlinedControlSelectors);
+  const directionControlCounts = await page.evaluate(() => ({
+    arms: document.querySelectorAll('[data-mindmap-note-relationship-direction-arm]').length,
+    joysticks: document.querySelectorAll('[data-mindmap-note-relationship-direction-joystick]').length,
   }));
-  const selectedHandleBoxes = await getBoxes(`[data-relationship-id="${relationshipId}"][data-mindmap-note-relationship-screen-control-point]`);
-  assert(
-    selectedHandleBoxes.length === 2 && selectedHandleBoxes.every(box => box.width >= 18 && box.height >= 18),
-    'selected relationship adjustment control points should be visibly sized on screen',
-    { selectedHandleBoxes },
-  );
+  assert(Object.values(redlinedControlCounts).every(count => count === 0), 'selected relationship should omit the extra center guide and legacy duplicate controls', { redlinedControlCounts });
+  assert(directionControlCounts.arms === 2 && directionControlCounts.joysticks === 2, 'selected relationship should restore two XMind-like direction controls', { directionControlCounts });
   await page.screenshot({ path: 'output/playwright/dev-027E-relationship-selected-handles.png', fullPage: true });
-  const handleClip = selectedHandleBoxes.reduce((clip, box) => ({
-    left: Math.min(clip.left, box.left),
-    top: Math.min(clip.top, box.top),
-    right: Math.max(clip.right, box.right),
-    bottom: Math.max(clip.bottom, box.bottom),
-  }), { left: Number.POSITIVE_INFINITY, top: Number.POSITIVE_INFINITY, right: 0, bottom: 0 });
-  const viewport = page.viewportSize() || { width: 1440, height: 900 };
-  await page.screenshot({
-    path: 'output/playwright/dev-027E-relationship-selected-handles-detail.png',
-    clip: {
-      x: Math.max(0, handleClip.left - 72),
-      y: Math.max(0, handleClip.top - 56),
-      width: Math.min(viewport.width, handleClip.right - handleClip.left + 144),
-      height: Math.min(viewport.height, handleClip.bottom - handleClip.top + 112),
-    },
-  });
 
   await relationshipCurveHitboxByLabel(label).dblclick({ force: true });
   const labelEditor = page.locator(`[data-mindmap-note-relationship-label-input="${relationshipId}"]`);
@@ -433,18 +416,12 @@ async (page) => {
   assert(styledMeta.strokeWidth === 3.5, 'style panel should update relationship stroke width', { styledMeta });
   assert(styledMeta.strokeDasharray === '', 'style panel should update relationship dash style', { styledMeta });
 
-  const beforeDrag = await finitePathMeta(editedLabel);
   const editedRelationshipId = await relationshipGroupByLabel(editedLabel).getAttribute('data-mindmap-note-relationship');
-  const control = page.locator(`[data-relationship-id="${editedRelationshipId}"][data-mindmap-note-relationship-control-point="1"]`).first();
-  const controlBox = await control.boundingBox();
-  assert(Boolean(controlBox), 'control point should have a draggable bounding box');
-  await page.mouse.move(controlBox.x + controlBox.width / 2, controlBox.y + controlBox.height / 2);
-  await page.mouse.down();
-  await page.waitForTimeout(50);
-  await page.mouse.move(controlBox.x + controlBox.width / 2 + 80, controlBox.y + controlBox.height / 2 - 55, { steps: 8 });
-  await page.mouse.up();
-  const afterDrag = await finitePathMeta(editedLabel);
-  assert(Math.abs(afterDrag.c1X - beforeDrag.c1X) > 10 || Math.abs(afterDrag.c1Y - beforeDrag.c1Y) > 10, 'dragging a control point should update Bezier geometry', { beforeDrag, afterDrag });
+  const redlinedAfterEditCounts = await page.evaluate((selectors) => Object.fromEntries(
+    selectors.map(selector => [selector, document.querySelectorAll(selector).length]),
+  ), redlinedControlSelectors);
+  assert(Object.values(redlinedAfterEditCounts).every(count => count === 0), 'editing a relationship label should not restore the extra center guide or legacy controls', { redlinedAfterEditCounts });
+  assert(await page.locator('[data-mindmap-note-relationship-direction-joystick]').count() === 2, 'editing a relationship label should retain the two direction joysticks');
 
   const reconnectNodeId = await nodeByTitle(reconnectTarget).getAttribute('data-mindmap-node');
   await page.locator(`[data-mindmap-note-relationship-click-target][data-label="${editedLabel}"]`).click({ force: true });
@@ -483,14 +460,20 @@ async (page) => {
   const zoomedMeta = await finitePathMeta(editedLabel);
   assertFiniteGeometry(zoomedMeta, 'relationship geometry should remain finite after zoom');
   const zoomInvariantAfter = await relationshipZoomInvariantMeta(editedRelationshipId, editedLabel);
+  const placementEqual = (before, after) =>
+    before.length === after.length && before.every((item, index) =>
+      item.coordinateSpace === after[index].coordinateSpace &&
+      item.left === after[index].left &&
+      item.top === after[index].top,
+    );
   assert(
     JSON.stringify(zoomInvariantAfter.path) === JSON.stringify(zoomInvariantBefore.path) &&
-      JSON.stringify(zoomInvariantAfter.curveHitboxStyles) === JSON.stringify(zoomInvariantBefore.curveHitboxStyles) &&
-      JSON.stringify(zoomInvariantAfter.lineHitboxStyles) === JSON.stringify(zoomInvariantBefore.lineHitboxStyles) &&
-      JSON.stringify(zoomInvariantAfter.labelHitboxStyles) === JSON.stringify(zoomInvariantBefore.labelHitboxStyles) &&
-      JSON.stringify(zoomInvariantAfter.endpointStyles) === JSON.stringify(zoomInvariantBefore.endpointStyles) &&
-      JSON.stringify(zoomInvariantAfter.controlPointStyles) === JSON.stringify(zoomInvariantBefore.controlPointStyles) &&
-      JSON.stringify(zoomInvariantAfter.controlArmStyles) === JSON.stringify(zoomInvariantBefore.controlArmStyles),
+      placementEqual(zoomInvariantBefore.curveHitboxStyles, zoomInvariantAfter.curveHitboxStyles) &&
+      placementEqual(zoomInvariantBefore.lineHitboxStyles, zoomInvariantAfter.lineHitboxStyles) &&
+      placementEqual(zoomInvariantBefore.labelHitboxStyles, zoomInvariantAfter.labelHitboxStyles) &&
+      placementEqual(zoomInvariantBefore.endpointStyles, zoomInvariantAfter.endpointStyles) &&
+      placementEqual(zoomInvariantBefore.controlPointStyles, zoomInvariantAfter.controlPointStyles) &&
+      placementEqual(zoomInvariantBefore.controlArmStyles, zoomInvariantAfter.controlArmStyles),
     'zooming should not recompute or rewrite relationship path geometry or local interaction coordinates',
     { zoomInvariantBefore, zoomInvariantAfter },
   );

@@ -2,56 +2,73 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import { createHash } from 'node:crypto'
+import { createPwaWorkerVersionSource } from './scripts/pwa-worker-version-source.mjs'
 
 // https://vite.dev/config/
-export default defineConfig(({ mode }) => ({
+export default defineConfig(({ mode }) => {
+  const releaseId = process.env.PROJED_RELEASE_ID;
+  const shellVersion = releaseId
+    ? `release:${releaseId}`
+    : `build:${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const workerVersionFile = `assets/pwaWorkerVersion-${createHash('sha256').update(shellVersion).digest('hex').slice(0, 16)}.js`;
+  return ({
+  ...(mode === 'production' && !process.env.PROJED_RELEASE_ID
+    ? (() => { throw new Error('DEV-097: sealed production build requires PROJED_RELEASE_ID.'); })()
+    : {}),
+  // DEV-083 P0: sealed production builds point Vite at an isolated env directory,
+  // preventing root .env.local auto-loading and parent-process collisions.
+  envDir: process.env.PROJED_RELEASE_ENV_DIR || process.cwd(),
   define: mode === 'production'
     ? {
         'import.meta.env.VITE_SUPABASE_AUTH_MODE': JSON.stringify('oauth-google'),
         'import.meta.env.VITE_SUPABASE_AUTO_TEST_LOGIN': JSON.stringify('false'),
         'import.meta.env.VITE_SUPABASE_TEST_EMAIL': JSON.stringify(''),
         'import.meta.env.VITE_SUPABASE_TEST_PASSWORD': JSON.stringify(''),
+        'import.meta.env.VITE_PROJED_RELEASE_ID': JSON.stringify(process.env.PROJED_RELEASE_ID || ''),
       }
     : undefined,
   plugins: [
     react(),
     tailwindcss(),
+    {
+      name: 'projed-app-shell-meta',
+      transformIndexHtml(html) {
+        return html.replace('</head>', `    <meta name="projed-shell-version" content="${shellVersion}" />\n  </head>`);
+      },
+      generateBundle() {
+        this.emitFile({
+          type: 'asset',
+          fileName: workerVersionFile,
+          source: createPwaWorkerVersionSource(shellVersion),
+        });
+        this.emitFile({
+          type: 'asset',
+          fileName: 'app-shell-meta.json',
+          source: `${JSON.stringify({ schemaVersion: 1, version: shellVersion })}\n`,
+        });
+      },
+    },
     VitePWA({
       registerType: 'prompt',
       injectRegister: false,
       includeAssets: ['icons/*.png'],
-      manifest: {
-        name: 'ProJED 3.0',
-        short_name: 'ProJED',
-        description: '專案管理與快速工作紀錄工具',
-        lang: 'zh-Hant',
-        start_url: '/',
-        scope: '/',
-        display: 'standalone',
-        background_color: '#f8fafc',
-        theme_color: '#0f766e',
-        icons: [
-          {
-            src: '/icons/icon-512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'any',
-          },
-          {
-            src: '/icons/icon-512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'maskable',
-          },
-        ],
-      },
+      manifest: false,
       workbox: {
-        cleanupOutdatedCaches: true,
-        clientsClaim: true,
+        importScripts: [`/${workerVersionFile}`],
+        cacheId: `projed-${process.env.PROJED_RELEASE_ID || 'test'}`,
+        cleanupOutdatedCaches: false,
+        clientsClaim: false,
         skipWaiting: false,
         navigateFallback: 'index.html',
-        navigateFallbackDenylist: [/^\/api\//, /^\/__/],
+        navigateFallbackDenylist: [/^\/api\//, /^\/__/, /^\/quick-task(?:\/|$)/, /[?&]projed_update_latest=/],
+        ignoreURLParametersMatching: [
+          /^utm_/,
+          /^fbclid$/,
+          /^(install|capture|claim|code|error|error_code|error_description)$/,
+        ],
         globPatterns: ['**/*.{js,css,html,png,svg,ico,webmanifest}'],
+        additionalManifestEntries: [{ url: '/app-shell-meta.json', revision: shellVersion }],
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         runtimeCaching: [
           {
@@ -81,6 +98,20 @@ export default defineConfig(({ mode }) => ({
         enabled: false,
       },
     }),
+    {
+      name: 'dev-122-quick-manifest-isolation',
+      enforce: 'post',
+      transformIndexHtml(html, context) {
+        if (!context.filename.replaceAll('\\', '/').endsWith('/quick-task/index.html')) return html;
+        return html.replace(/\s*<link rel="manifest" href="\/manifest\.webmanifest">/u, '');
+      },
+      generateBundle(_options, bundle) {
+        Object.values(bundle).forEach(asset => {
+          if (asset.type !== 'asset' || !asset.fileName.endsWith('quick-task/index.html')) return;
+          asset.source = String(asset.source).replace(/\s*<link rel="manifest" href="\/manifest\.webmanifest">/gu, '');
+        });
+      },
+    },
   ],
   server: {
     watch: {
@@ -89,6 +120,10 @@ export default defineConfig(({ mode }) => ({
   },
   build: {
     rollupOptions: {
+      input: {
+        main: 'index.html',
+        quickTask: 'quick-task/index.html',
+      },
       output: {
         manualChunks(id) {
           if (!id.includes('node_modules')) return undefined;
@@ -110,4 +145,5 @@ export default defineConfig(({ mode }) => ({
       },
     },
   },
-}))
+  })
+})

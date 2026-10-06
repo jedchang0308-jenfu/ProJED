@@ -1,0 +1,184 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import {
+  classifyQuickSyncError,
+  createQuickCaptureId,
+  insertFinalTranscript,
+  isQuickTitleValid,
+  normalizeQuickTitle,
+} from '../src/features/quickTaskCapture/model';
+
+const checks: Array<{ id: string; ok: boolean; details?: unknown }> = [];
+const failures: string[] = [];
+const check = (id: string, ok: boolean, details?: unknown) => {
+  checks.push({ id, ok, details });
+  if (!ok) failures.push(id);
+};
+const read = (path: string) => readFileSync(resolve(path), 'utf8');
+
+const quickHtml = read('quick-task/index.html');
+const rootHtml = read('index.html');
+const quickMain = read('src/quickTask/main.ts');
+const quickPwaLifecycle = quickMain.slice(quickMain.indexOf('const installQuickPwaLifecycle'), quickMain.indexOf('const needsRecovery'));
+const vite = read('vite.config.js');
+const firebase = read('firebase.json');
+const rootManifestSource = read('public/manifest.webmanifest');
+const quickManifestSource = read('public/quick-task/manifest.webmanifest');
+const rootManifest = JSON.parse(rootManifestSource) as {
+  id?: string;
+  start_url?: string;
+  scope?: string;
+  shortcuts?: Array<{
+    name?: string;
+    short_name?: string;
+    description?: string;
+    url?: string;
+    icons?: Array<{ src?: string; sizes?: string; type?: string }>;
+  }>;
+};
+const quickManifest = JSON.parse(quickManifestSource) as {
+  id?: string;
+  start_url?: string;
+  scope?: string;
+  icons?: Array<{ src?: string; sizes?: string; type?: string }>;
+};
+const buildOutputDirectory = process.env.DEV133_BUILD_OUTDIR ?? 'dist';
+const distRootManifest = existsSync(resolve(buildOutputDirectory, 'manifest.webmanifest'))
+  ? JSON.parse(read(resolve(buildOutputDirectory, 'manifest.webmanifest'))) as typeof rootManifest
+  : null;
+const shortcutIconPath = resolve('public/icons/projed-quick-task-icon-brand-20260929-512.png');
+const shortcutIcon = readFileSync(shortcutIconPath);
+const shortcutIconDimensions = shortcutIcon.length >= 24 && shortcutIcon.subarray(1, 4).toString('ascii') === 'PNG'
+  ? { width: shortcutIcon.readUInt32BE(16), height: shortcutIcon.readUInt32BE(20) }
+  : null;
+const quickShortcut = rootManifest.shortcuts?.[0];
+const appInstallAssistant = read('src/components/AppInstallAssistant.tsx');
+const migration = read('supabase/migrations/20260914120000_dev_122_quick_unplaced_task_rpc.sql');
+const placementMigration = read('supabase/migrations/20260826083940_dev_089_scope_safe_task_placement_command.sql');
+const workbench = read('src/components/MainLayout.tsx');
+const panel = read('src/components/TaskWorkbenchPanel.tsx');
+const pwaUpdate = read('src/services/pwaUpdateService.ts');
+const outbox = read('src/features/quickTaskCapture/outbox.ts');
+const quickAuth = read('src/features/quickTaskCapture/auth.ts');
+const sync = read('src/features/quickTaskCapture/sync.ts');
+const productionSameAccount = read('scripts/verify-dev-122-production-same-account.mjs');
+const productionQuickBrowser = read('scripts/verify-dev-122-production-quick-browser.pw.js');
+const buildMeta = (() => {
+  try { return JSON.parse(read(resolve(buildOutputDirectory, 'app-shell-meta.json'))); }
+  catch { return { version: 'unknown' }; }
+})();
+
+const insertion = insertFinalTranscript({ value: '先確認閥門', selectionStart: 1, selectionEnd: 3, transcript: '現場' });
+check('S01', quickHtml.includes('id="quick-task-title"') && quickHtml.includes('id="quick-task-voice"') && quickHtml.includes('id="quick-task-submit"') && quickHtml.includes('onsubmit="return false"'));
+check('S02', !quickMain.includes("from '../App'") && !quickMain.includes("from '../store/") && !quickMain.includes("from '../services/dataBackend"));
+check('S03', quickManifest.id === '/quick-task/'
+  && quickManifest.start_url === '/quick-task/'
+  && quickManifest.scope === '/quick-task/'
+  && quickManifest.icons?.some(icon => icon.src === '/icons/projed-quick-task-icon-brand-20260929-192.png' && icon.sizes === '192x192' && icon.type === 'image/png')
+  && quickManifest.icons?.some(icon => icon.src === '/icons/projed-quick-task-icon-brand-20260929-512.png' && icon.sizes === '512x512' && icon.type === 'image/png')
+  && shortcutIconDimensions?.width === 512
+  && shortcutIconDimensions.height === 512
+  && vite.includes("quickTask: 'quick-task/index.html'")
+  && quickHtml.includes('data-quick-install="true"'));
+check('S04', vite.includes("/^\\/quick-task(?:\\/|$)/")
+  && vite.includes('ignoreURLParametersMatching')
+  && vite.includes('capture|claim')
+  && firebase.includes('"/quick-task{,/**}"'));
+check('S05', createQuickCaptureId().startsWith('task_workbench_unplaced_') && createQuickCaptureId() !== createQuickCaptureId());
+check('S06', insertion.value === '先現場閥門' && insertion.caret === 3);
+check('S07', normalizeQuickTitle('\u00a0  現場確認  \u3000') === '現場確認' && isQuickTitleValid('任務') && !isQuickTitleValid(' '.repeat(501)));
+check('S08', quickMain.includes('commitQuickCapture') && quickMain.includes('renderSuccess') && quickMain.includes('await finishClaimFromUrl()'));
+check('S09', quickMain.includes('startVoiceCapture') && quickMain.includes('installQuickInstallGuide') && quickMain.includes('使用語音輸入任務名稱') === false && quickHtml.includes('使用語音輸入任務名稱'));
+check('S10', migration.includes('security invoker') && migration.includes('create_quick_unplaced_task_v1') && migration.includes('quick_task_capture_receipts') && migration.includes('revoke all on function'));
+check('S11', migration.includes('pg_advisory_xact_lock') && migration.includes("'boardId', '__task_workbench_unplaced__'") && migration.includes("'detailNotes'"));
+check('S11-lock-scope', migration.includes("format('account:%s:unplaced:parent:root', v_owner::text)")
+  && placementMigration.includes("format('account:%s:unplaced:parent:root', v_user_id::text)")
+  && migration.includes('pg_catalog.hashtextextended')
+  && migration.includes('pg_catalog.pg_advisory_xact_lock'),
+  'quick create and placement share the canonical account-unplaced advisory lock');
+check('S12', !quickMain.includes('credentials:') && !quickMain.includes("from '../services/dataBackend'")
+  && quickMain.includes('getWorkbenchUrl(window.location.origin)')
+  && read('src/features/quickTaskCapture/origins.ts').includes('quick_workbench=1'));
+check('S13', quickMain.includes('putClaimIntent') && quickMain.includes('verifyQuickSession(snapshot)')
+  && quickAuth.includes('supabase.auth.getUser(session.access_token)') && quickMain.includes('history.replaceState'));
+check('S14', panel.includes('onClosed?: () => void') && workbench.includes('consumeQuickWorkbenchIntent') && workbench.includes('openTaskWorkbenchPanel'));
+check('S15-runtime-errors', classifyQuickSyncError(new Error('QT_AUTH_REQUIRED')) === 'failed_auth' && classifyQuickSyncError(new Error('QT_NO_AVAILABLE_WORKSPACE')) === 'failed_permanent');
+check('S15', rootManifest.id === '/'
+  && rootManifest.start_url === '/'
+  && rootManifest.scope === '/'
+  && rootManifest.shortcuts?.filter(shortcut => shortcut.url === '/quick-task/').length === 1
+  && quickShortcut !== undefined
+  && quickShortcut.name === 'ProJED-快速建任務'
+  && quickShortcut.short_name === 'ProJED-快速建任務'
+  && quickShortcut.description === '直接輸入一筆待辦'
+  && quickShortcut.url === '/quick-task/'
+  && quickShortcut.icons?.length === 2
+  && quickShortcut.icons.some(icon => icon.src === '/icons/projed-quick-task-icon-brand-20260929-192.png' && icon.sizes === '192x192' && icon.type === 'image/png')
+  && quickShortcut.icons.some(icon => icon.src === '/icons/projed-quick-task-icon-brand-20260929-512.png' && icon.sizes === '512x512' && icon.type === 'image/png')
+  && (rootHtml.match(/rel=["']manifest["']/gu) ?? []).length === 1
+  && rootHtml.includes('href="/manifest.webmanifest"')
+  && vite.includes('manifest: false')
+  && distRootManifest !== null
+  && JSON.stringify(distRootManifest) === JSON.stringify(rootManifest)
+  && appInstallAssistant.includes('與主程式相同的 Google 帳號登入')
+  && appInstallAssistant.includes('data-quick-task-install-link="true"'));
+check('S16', vite.includes('app-shell-meta.json') && vite.includes('projed-shell-version') && pwaUpdate.includes('/app-shell-meta.json?projed_update_check='));
+check('S16-quick-shared-update-lifecycle', quickPwaLifecycle.includes('if (!await reloadSafetyReady || disposed)')
+  && quickPwaLifecycle.includes("await import('../services/pwaUpdateService')")
+  && quickPwaLifecycle.includes('setupPwaLifecycle();')
+  && quickMain.includes('const reloadSafetyReady = installReloadSafety();')
+  && quickMain.includes('const getPwaApi = installQuickPwaLifecycle(reloadSafetyReady);')
+  && !quickMain.includes("from '../services/pwaUpdateService'"),
+  'the quick shell loads the shared updater only after reload-safety readiness, without adding Workbox to the initial graph');
+check('S17', migration.includes("QT_EXISTING_ROW_INVALID") && migration.includes('where owner_id = v_owner and id = p_capture_id'));
+check('S18', migration.includes('v_order bigint') && migration.includes('v_order > 2147483647') && migration.includes("QT_ORDER_EXHAUSTED"));
+check('S19', outbox.includes("const nextState: QuickCaptureState = exhausted ? 'failed_permanent' : state")
+  && outbox.includes("nextErrorCode = exhausted ? 'AUTO_RETRY_EXHAUSTED' : lastErrorCode")
+  && outbox.includes("record.lastErrorCode !== 'AUTO_RETRY_EXHAUSTED'"));
+check('S20', sync.includes('        retryAfter,')
+  && outbox.includes("const nextAttemptAt = nextState === 'failed_retryable'")
+  && outbox.includes('Math.max(backoffDelay, retryAfterDelay)'));
+check('S21', quickMain.includes("listQuickCaptures(authSnapshot?.accountId ?? context?.accountId ?? null, true)")
+  && quickMain.includes('getQuickBindingContext()')
+  && quickMain.includes("record.state !== 'synced'"));
+check('S22-production-fixture-guard', productionSameAccount.includes('DEV122_ALLOW_PRODUCTION_FIXTURE')
+  && productionSameAccount.includes('--allow-production-fixture')
+  && productionSameAccount.includes("'projed-cc78d.web.app'")
+  && productionSameAccount.includes("'projed-cc78d--production-candidate-tsxgwy67.web.app'")
+  && productionSameAccount.includes("quickRpcRequests.length === 1")
+  && productionSameAccount.includes("quickAccountId === payload.expectedUserId")
+  && productionSameAccount.includes("rootAccountId === payload.expectedUserId")
+  && productionSameAccount.includes('cleanupComplete'),
+  'guarded production verifier proves one RPC, same account and complete cleanup');
+check('S23-production-quick-browser', productionQuickBrowser.includes("'projed-cc78d.web.app'")
+  && productionQuickBrowser.includes("'projed-cc78d--production-candidate-tsxgwy67.web.app'")
+  && productionQuickBrowser.includes('dev122ReleaseId')
+  && productionQuickBrowser.includes('result.titleFocused')
+  && productionQuickBrowser.includes("result.voiceLabel === '使用語音輸入任務名稱'")
+  && productionQuickBrowser.includes('businessRequests.length === 0')
+  && productionQuickBrowser.includes('result.rootMarkerCount === 0'),
+  'production quick browser is release-bound, zero-read and independent of the root app');
+
+const artifact = {
+  devId: 'DEV-122',
+  status: failures.length ? 'FAIL' : 'PASS',
+  sourceRevision: 'working-tree',
+  buildId: buildMeta.version ?? 'unknown',
+  actorAlias: 'DEV122-STATIC',
+  fixtureVersion: 'DEV122-STATIC-V1',
+  platform: 'Node',
+  route: 'repo',
+  command: 'npm run verify:dev-122-mobile-zero-data-quick-task',
+  assertionCount: checks.length,
+  checks: checks.map(check => ({ ...check, expected: true, actual: check.ok, status: check.ok ? 'PASS' : 'FAIL' })),
+  failures,
+  generatedAt: new Date().toISOString(),
+};
+const outputDir = resolve(process.env.DEV133_REPORT_DIR ?? 'output/playwright/dev-122-mobile-zero-data-quick-task');
+mkdirSync(outputDir, { recursive: true });
+writeFileSync(resolve(outputDir, 'static-result.json'), `${JSON.stringify(artifact, null, 2)}\n`, 'utf8');
+if (failures.length) {
+  console.error(`DEV-122 static verification failed: ${failures.join(', ')}`);
+  process.exit(1);
+}
+console.log(`DEV-122 static verification passed: ${checks.length} assertions.`);

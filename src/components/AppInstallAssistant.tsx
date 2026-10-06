@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   CheckCircle2,
+  ChevronRight,
   ExternalLink,
   MonitorDown,
   MoreHorizontal,
@@ -12,7 +13,6 @@ import {
   dismissPwaInstallPrompt,
   getPwaInstallContext,
   promptPwaInstall,
-  resetPwaInstallPreference,
   setupPwaInstallPromptListener,
   snoozePwaInstallPrompt,
   subscribePwaInstallContext,
@@ -20,6 +20,7 @@ import {
 } from '../services/pwaInstallService';
 import { toast } from '../store/useToastStore';
 import useAuthStore from '../store/useAuthStore';
+import { getQuickInstallUrl } from '../features/quickTaskCapture/origins';
 import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
 
@@ -69,6 +70,13 @@ const getGuidance = (context: PwaInstallContext) => {
         title: '加入手機桌面',
         description: '之後可直接點 ProJED 圖示快速記事。',
       };
+    case 'android-browser':
+      return {
+        icon: Smartphone,
+        badge: 'Android',
+        title: '從 Chrome 安裝',
+        description: '點 Chrome 的 ⋮，選「安裝應用程式」或「安裝並建立捷徑」。',
+      };
     case 'desktop-installable':
       return {
         icon: MonitorDown,
@@ -110,6 +118,23 @@ const IosSteps = () => (
   </ol>
 );
 
+const AndroidChromeSteps: React.FC<{ target: string }> = ({ target }) => (
+  <ol className="list-decimal space-y-1 pl-5 text-sm leading-6 text-slate-600">
+    <li>用手機 Chrome 開啟 {target}，點右上角「⋮」。</li>
+    <li>選「安裝應用程式」，再點「安裝」。</li>
+  </ol>
+);
+
+const installMainApp = async () => {
+  const choice = await promptPwaInstall();
+  if (!choice) {
+    toast.info('請依畫面上的步驟加入主畫面。');
+    return;
+  }
+  if (choice.outcome === 'accepted') toast.success('已開始安裝 ProJED。');
+  else toast.info('已暫時略過，之後可在設定中查看。');
+};
+
 const AppInstallContent: React.FC<{
   context: PwaInstallContext;
   compact?: boolean;
@@ -117,16 +142,6 @@ const AppInstallContent: React.FC<{
 }> = ({ context, compact = false, onClose }) => {
   const guidance = useMemo(() => getGuidance(context), [context]);
   const Icon = guidance.icon;
-
-  const handleInstall = async () => {
-    const choice = await promptPwaInstall();
-    if (!choice) {
-      toast.info('請依畫面上的步驟加入主畫面。');
-      return;
-    }
-    if (choice.outcome === 'accepted') toast.success('已開始安裝 ProJED。');
-    else toast.info('已暫時略過，之後可在設定中查看。');
-  };
 
   const handleSnooze = () => {
     snoozePwaInstallPrompt();
@@ -162,7 +177,7 @@ const AppInstallContent: React.FC<{
 
       <div className={`flex gap-2 ${compact ? 'flex-col sm:flex-row' : 'flex-wrap'}`}>
         {canPrompt && (
-          <Button type="button" onClick={handleInstall} className="gap-2">
+          <Button type="button" onClick={() => { void installMainApp(); }} className="gap-2">
             <Smartphone size={16} />
             加入主畫面
           </Button>
@@ -199,8 +214,11 @@ const AppInstallContent: React.FC<{
 
 export const AppInstallAssistant: React.FC<AppInstallAssistantProps> = ({ mode = 'auto' }) => {
   const user = useAuthStore((state) => state.user);
+  const isAndroidDevice = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent || '');
   const [context, setContext] = useState<PwaInstallContext>(() => getPwaInstallContext());
   const [isVisible, setIsVisible] = useState(false);
+  const [selectedApp, setSelectedApp] = useState<'main' | 'quick' | null>(null);
+  const [showManualMainInstall, setShowManualMainInstall] = useState(false);
 
   useEffect(() => {
     setupPwaInstallPromptListener();
@@ -216,41 +234,97 @@ export const AppInstallAssistant: React.FC<AppInstallAssistantProps> = ({ mode =
 
   if (mode === 'settings') {
     return (
-      <section className="border border-slate-200 bg-white" data-pwa-install-settings>
-        <div className="border-b border-slate-200 px-4 py-3">
-          <div className="flex items-center gap-2 text-sm font-bold text-slate-800">
-            <Smartphone size={16} className="text-primary" />
-            App 安裝與快速開啟
-          </div>
-          <div className="mt-2 flex flex-wrap gap-2 text-xs" data-pwa-install-scope="device-account">
-            <span className="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-2 py-0.5 font-bold text-blue-700">
-              設定範圍：此裝置 / 目前帳號
-            </span>
-          </div>
-        </div>
-        <div className="grid gap-4 p-4 lg:grid-cols-[1fr_260px]">
-          <AppInstallContent context={context} />
-          <div className="border border-slate-200 bg-slate-50 p-3">
-            <div className="text-xs font-bold uppercase tracking-wider text-slate-400">提示狀態</div>
-            <div className="mt-2 text-sm font-semibold text-slate-800">
-              {context.status.installed ? '已完成' : context.status.dismissed ? '不再自動提示' : '可提示'}
-            </div>
-            <p className="mt-2 text-sm leading-6 text-slate-500">
-              若曾選擇稍後或不再提示，可在這裡重新開啟教學。
-            </p>
-            <Button
+      <section data-pwa-install-settings data-pwa-install-scope="device-account">
+        <div className="grid gap-3 sm:grid-cols-2" role="group" aria-label="選擇要安裝的 App">
+          {([
+            { id: 'main' as const, name: 'ProJED 主程式', description: '完整任務工作台', icon: '/icons/projed-main-icon-brand-20260929-192.png' },
+            { id: 'quick' as const, name: 'ProJED-快速建任務', description: '立即記下待辦', icon: '/icons/projed-quick-task-icon-brand-20260929-192.png' },
+          ]).map((app) => (
+            <button
+              key={app.id}
               type="button"
-              variant="secondary"
-              className="mt-4 w-full"
               onClick={() => {
-                resetPwaInstallPreference();
-                toast.success('已重設加入主畫面提示。');
+                setSelectedApp(app.id);
+                setShowManualMainInstall(false);
               }}
+              aria-pressed={selectedApp === app.id}
+              data-app-install-choice={app.id}
+              data-quick-task-install-cta={app.id === 'quick' ? 'true' : undefined}
+              className={`flex min-h-24 w-full items-center gap-3 rounded-lg border p-4 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+                selectedApp === app.id
+                  ? 'border-primary bg-primary/5 text-slate-900 shadow-sm'
+                  : 'border-slate-200 bg-white text-slate-800 hover:border-primary/50 hover:bg-slate-50'
+              }`}
             >
-              重新顯示提示
-            </Button>
-          </div>
+              <img src={app.icon} alt="" className="h-14 w-14 shrink-0 rounded-xl" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-base font-bold">{app.name}</span>
+                <span className="mt-1 block text-sm text-slate-500">{app.description}</span>
+              </span>
+              <ChevronRight size={18} className="shrink-0 text-slate-400" aria-hidden="true" />
+            </button>
+          ))}
         </div>
+
+        {selectedApp === 'main' && (
+          <div className="mt-4 border-t border-slate-200 pt-4" data-app-install-detail="main">
+            {context.platform === 'ios-safari' ? (
+              <IosSteps />
+            ) : context.platform === 'embedded' ? (
+              <div className="space-y-3">
+                <p className="text-sm text-slate-600">請用 Chrome 或 Safari 開啟此頁，再安裝 App。</p>
+                <a href={getExternalOpenUrl()} className="inline-flex min-h-10 items-center rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white">嘗試在瀏覽器開啟</a>
+              </div>
+            ) : context.platform === 'android-browser' || context.platform === 'android-installable' ? (
+              <div className="space-y-3">
+                <AndroidChromeSteps target="ProJED 頁面" />
+                {context.canPromptInstall && (
+                  <Button type="button" onClick={() => { void installMainApp(); }}>直接安裝 ProJED</Button>
+                )}
+              </div>
+            ) : context.platform === 'desktop-installable' || context.platform === 'desktop-browser' ? (
+              <div className="space-y-2">
+                <Button
+                  type="button"
+                  data-main-install-action="true"
+                  onClick={() => {
+                    if (context.canPromptInstall) {
+                      setShowManualMainInstall(false);
+                      void installMainApp();
+                    } else setShowManualMainInstall(true);
+                  }}
+                >
+                  安裝 ProJED 主程式
+                </Button>
+                {showManualMainInstall && !context.canPromptInstall && (
+                  <p className="text-sm leading-6 text-slate-600" role="status">
+                    目前瀏覽器無法直接開啟安裝視窗。請用 Chrome 或 Edge 開啟此頁，點網址列的安裝圖示。
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm leading-6 text-slate-600">
+                {context.platform === 'standalone' && '目前已從 ProJED App 開啟。'}
+                {context.platform === 'unsupported' && '請用 Safari、Chrome 或 Edge 開啟此頁。'}
+              </p>
+            )}
+          </div>
+        )}
+
+        {selectedApp === 'quick' && (
+          <div className="mt-4 border-t border-slate-200 pt-4" data-app-install-detail="quick">
+            <a
+              href={getQuickInstallUrl(window.location.origin)}
+              data-quick-task-install-link="true"
+              className="inline-flex min-h-10 items-center rounded-lg bg-teal-700 px-4 py-2 text-sm font-bold text-white hover:bg-teal-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+            >
+              開啟 ProJED-快速建任務安裝頁
+            </a>
+            {!isAndroidDevice && <p className="mt-2 text-sm leading-6 text-slate-600">ProJED-快速建任務使用獨立安裝頁；開啟後點「安裝 ProJED-快速建任務」。</p>}
+            {isAndroidDevice && <div className="mt-3"><AndroidChromeSteps target="ProJED-快速建任務安裝頁" /></div>}
+            <p className="mt-2 text-sm leading-6 text-slate-600">首次開啟獨立入口時，請用與主程式相同的 Google 帳號登入。若舊入口仍有待同步待辦，請先完成同步。</p>
+          </div>
+        )}
       </section>
     );
   }

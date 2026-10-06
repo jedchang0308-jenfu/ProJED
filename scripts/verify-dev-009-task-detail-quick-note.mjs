@@ -92,24 +92,25 @@ assert('DEV-008 task knowledge can read quick note', snippets.some(snippet => sn
 const storeSource = readFileSync('src/store/useRecordStore.ts', 'utf8');
 for (const snippet of [
   'appendTaskDiscussionToMeetingDraft',
-  'appendTaskDiscussionToRecordContent(state.draft.content, nodeId, title, text)',
-  'syncDraftContentLinks(state.draft, content)',
-  'contentCursorOffset: content.length',
+  'appendMeetingTaskQuickNoteToRecordContent',
+  'syncDraftContentLinks(state.draft, appended.content)',
+  'contentCursorOffset: appended.content.length',
   '...resetMeetingSynthesisState',
 ]) {
   assert(`useRecordStore missing snippet: ${snippet}`, storeSource.includes(snippet));
 }
 
 const modalSource = readFileSync('src/components/TaskDetailsModal.tsx', 'utf8');
+const quickNoteSource = readFileSync('src/components/TaskNotes/TaskMeetingQuickNoteSection.tsx', 'utf8');
 for (const snippet of [
-  'isMeetingMode ? (',
-  '本次會議',
-  'appendTaskDiscussionToMeetingDraft(node.id, node.title || node.id, meetingDiscussion)',
+  'TaskMeetingQuickNoteSection',
+  'appendTaskDiscussionToMeetingDraft({',
   "event.key === 'Enter'",
-  '加入紀錄',
-  '輸入此任務剛剛討論的內容',
 ]) {
   assert(`TaskDetailsModal missing snippet: ${snippet}`, modalSource.includes(snippet));
+}
+for (const snippet of ['會議紀錄', '加入', '輸入任務補記']) {
+  assert(`TaskMeetingQuickNoteSection missing snippet: ${snippet}`, quickNoteSource.includes(snippet));
 }
 
 if (failures.length > 0) {

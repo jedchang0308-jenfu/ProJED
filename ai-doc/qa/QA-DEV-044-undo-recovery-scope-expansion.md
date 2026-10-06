@@ -35,7 +35,7 @@
 
 | Gate | 結果 | 證據 |
 |---|---|---|
-| Release boundary | Pass | Branch `持續優化1`，release commit `b78540e`，Firebase project `projed-cc78d`，public directory `dist` |
+| Release boundary | Pass | Branch `歷史開發來源`，release commit `歷史 release artifact`，Firebase project `projed-cc78d`，public directory `dist` |
 | Production build | Pass | `npm.cmd run build`；main JS `dist/assets/index-BU14rK7W.js`，CSS `dist/assets/index-CYqvildz.css` |
 | Production-like preview smoke | Pass | `http://127.0.0.1:4174/` 載入 expected bundle，root non-empty，service worker ready，無 critical console/pageerror/failed request |
 | Firebase deploy | Pass | `node_modules\.bin\firebase.cmd deploy --only hosting --project projed-cc78d --non-interactive`；正式 URL `https://projed-cc78d.web.app` |

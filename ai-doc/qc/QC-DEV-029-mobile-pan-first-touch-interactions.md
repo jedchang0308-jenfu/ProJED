@@ -6,6 +6,13 @@
 狀態: Local Automated Browser QC Passed / Physical Phone Supplemental Not Executed / Production Not Deployed / Hotfix Covered / Canvas CTA Pass-Through Covered
 建立日期: 2026-07-04
 
+## 2026-08-14 Current UI Revalidation
+
+- Browser matrix：41 cases passed。
+- DEV-067 後的現行 UI 已移除欄內 inline add-task；B10 改驗證 removed selector + replacement add-list CTA pan，B11 改由 compact column body 驗證 vertical pan，B12 保留 add-list horizontal pan。
+- E04 驗證 add-list quick tap 建立 L1 並開啟 matching details；F02 驗證 canonical whole-task source，不再要求 explicit drag handle。
+- DEV-054 R12-R15 另通過 L1/L2/L3+ 零文字圈選、500ms/8px gesture boundary、844x390/1024x768 touch 與 Workbench native pan/no-drag。
+
 ## 驗證結論
 
 - 判定：通過，本機 automated + real browser gesture matrix 通過。

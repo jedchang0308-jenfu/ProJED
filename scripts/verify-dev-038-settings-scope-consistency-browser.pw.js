@@ -1,5 +1,6 @@
 /* eslint-disable */
 async (page) => {
+const baseUrl = page.url().split('/').slice(0, 3).join('/');
   const diagnostics = [];
   page.on('console', (message) => {
     diagnostics.push(`console:${message.type()}:${message.text()}`);
@@ -36,11 +37,11 @@ async (page) => {
 
   const openApp = async (viewport = { width: 1440, height: 900 }, reset = true) => {
     await page.setViewportSize(viewport);
-    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+    await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded' });
     await seedSession();
     const url = reset
-      ? 'http://127.0.0.1:4173/?qcReset=1&qcSize=18'
-      : 'http://127.0.0.1:4173/';
+      ? `${baseUrl}/?qcReset=1&qcSize=18`
+      : `${baseUrl}/`;
     await page.goto(url, { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
     await seedSession();
@@ -125,7 +126,7 @@ async (page) => {
     await page.locator('[data-backup-inspection-ready="true"]').waitFor({ state: 'visible', timeout: 10000 });
     const inspectionText = await page.locator('[data-backup-inspection-ready="true"]').innerText();
     assert(inspectionText.includes('檔案已通過完整性檢查'), 'selected backup should be inspected before any action', { inspectionText });
-    assert(inspectionText.includes('V2') && inspectionText.includes('SHA-256'), 'inspection should expose version and checksum', { inspectionText });
+    assert(/版本：V\d+/u.test(inspectionText) && inspectionText.includes('SHA-256'), 'inspection should expose version and checksum', { inspectionText });
     assert(await page.locator('[data-backup-mode-copy="true"]').getAttribute('aria-checked') === 'true', 'copy should remain the safe default');
     assert(await page.evaluate(() => localStorage.getItem('projed-local-test.nodes')) === nodesBefore, 'inspection must not mutate board data');
 
@@ -143,12 +144,14 @@ async (page) => {
     const calendarScopeText = await page.locator('[data-calendar-settings-scope="external-link"]').innerText();
     assert(calendarScopeText.includes('外部連結'), 'calendar settings should show external-link scope', { calendarScopeText });
 
-    step = 'quick-open device/account scope';
+    step = 'App installation choices';
     await clickSettingsTab('app');
     await page.locator('[data-pwa-install-settings]').waitFor({ state: 'visible', timeout: 10000 });
-    const appText = await page.locator('[data-pwa-install-settings]').innerText();
-    assert(appText.includes('設定範圍：此裝置 / 目前帳號'), 'quick-open settings should show device/account scope', { appText });
-    assert(!appText.includes('目標：'), 'quick-open settings should not show board target wording', { appText });
+    const appPanel = page.locator('[data-pwa-install-settings]');
+    const appText = await appPanel.innerText();
+    assert(await appPanel.getAttribute('data-pwa-install-scope') === 'device-account', 'App installation should retain its device/account scope');
+    assert(await appPanel.locator('[data-app-install-choice]').count() === 2, 'App installation should offer two choices', { appText });
+    assert(!appText.includes('目標：'), 'App installation should not show board target wording', { appText });
 
     step = 'current-board trash page';
     await clickSettingsTab('backup');
@@ -157,7 +160,7 @@ async (page) => {
     const trashText = await page.locator('[data-recycle-bin-view="current-board"]').innerText();
     assert(trashText.includes('目前看板回收桶'), 'trash page should use current-board title', { trashText });
     assert(trashText.includes(target.targetLabel), 'trash page should show active board target', { trashText, target });
-    assert(trashText.includes('目前看板沒有已刪除任務。'), 'empty trash should name current board scope', { trashText });
+    assert(trashText.includes('目前看板沒有封存任務。'), 'empty trash should name current board scope', { trashText });
 
     step = 'empty trash confirm wording';
     await page.evaluate(({ target }) => {
@@ -167,7 +170,7 @@ async (page) => {
         workspaceId: target.workspaceId,
         boardId: target.boardId,
         parentId: null,
-        title: 'DEV-038 已刪除任務',
+        title: 'DEV-038 封存任務',
         status: 'todo',
         nodeType: 'task',
         order: 999,
@@ -178,14 +181,14 @@ async (page) => {
       localStorage.setItem('projed-local-test.nodes', JSON.stringify(nodes));
       localStorage.setItem('projed-last-view', 'recycle_bin');
     }, { target });
-    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+    await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
     await page.locator('[data-recycle-bin-view="current-board"]').waitFor({ state: 'visible', timeout: 10000 });
     await page.getByText('清空回收桶', { exact: true }).click();
     await page.locator('.global-dialog-content').waitFor({ state: 'visible', timeout: 10000 });
     const clearDialogText = await page.locator('.global-dialog-content').innerText();
     assert(clearDialogText.includes(target.boardTitle), 'empty-trash confirm should include board title', { clearDialogText, target });
-    assert(clearDialogText.includes('1 筆已刪除任務'), 'empty-trash confirm should include archived item count', { clearDialogText });
+    assert(clearDialogText.includes('1 筆封存任務'), 'empty-trash confirm should include archived item count', { clearDialogText });
     await page.locator('.global-dialog-content').getByText('取消', { exact: true }).click();
     await page.locator('.global-dialog-content').waitFor({ state: 'hidden', timeout: 10000 });
     await page.screenshot({ path: 'output/playwright/dev-038-settings-scope-desktop.png', fullPage: false });
@@ -194,7 +197,7 @@ async (page) => {
     step = 'mobile viewport settings scope';
     await page.setViewportSize({ width: 390, height: 844 });
     await page.evaluate(() => localStorage.setItem('projed-last-view', 'settings'));
-    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+    await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
     await page.locator('[data-settings-view="true"]').waitFor({ state: 'visible', timeout: 10000 });
     await assertNoHorizontalOverflow('DEV-038 mobile backup');

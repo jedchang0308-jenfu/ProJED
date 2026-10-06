@@ -1,12 +1,11 @@
 import React from 'react';
-import { Link2, Maximize2, Network, Plus, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react';
+import { Link2, Maximize2, Network, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { compactClassNames } from '../ui/compactTokens';
 
 interface MindMapToolbarProps {
   isReadOnly: boolean;
   canEditTask: boolean;
-  canCreateTask: boolean;
   relationshipToolActive: boolean;
   relationshipDraftFromId: string;
   zoomLevel: number;
@@ -16,13 +15,11 @@ interface MindMapToolbarProps {
   onZoomIn: () => void;
   onZoomReset: () => void;
   onZoomFit: () => void;
-  onCreateRoot: () => void;
 }
 
 const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
   isReadOnly,
   canEditTask,
-  canCreateTask,
   relationshipToolActive,
   relationshipDraftFromId,
   zoomLevel,
@@ -32,7 +29,6 @@ const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
   onZoomIn,
   onZoomReset,
   onZoomFit,
-  onCreateRoot,
 }) => (
   <div className={compactClassNames.toolbar}>
     <div className={compactClassNames.toolbarLeft}>
@@ -40,7 +36,6 @@ const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
         <Network size={16} className="shrink-0 text-blue-500" />
         <div className="min-w-0">
           <div className="truncate text-sm font-bold text-slate-700">心智圖</div>
-          <div className="hidden truncate text-[11px] text-slate-500 sm:block">Enter 新增同階，Tab 新增子任務，Delete 刪除</div>
         </div>
       </div>
     </div>
@@ -115,19 +110,6 @@ const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
             <Maximize2 size={14} />
           </Button>
         </div>
-        <Button
-          type="button"
-          size="none"
-          variant="secondary"
-          onClick={onCreateRoot}
-          disabled={!canCreateTask}
-          title={canCreateTask ? '新增根任務' : '沒有新增權限'}
-          className="flex h-[30px] items-center gap-1.5 px-[10px] py-[5px] text-xs"
-          data-mindmap-create-root
-        >
-          <Plus size={15} />
-          <span>新增任務</span>
-        </Button>
       </div>
     </div>
   </div>

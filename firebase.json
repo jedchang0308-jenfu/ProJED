@@ -55,7 +55,11 @@
     ],
     "rewrites": [
       {
-        "source": "**",
+        "source": "/quick-task{,/**}",
+        "destination": "/quick-task/index.html"
+      },
+      {
+        "source": "!/@(assets){,/**}",
         "destination": "/index.html"
       }
     ]

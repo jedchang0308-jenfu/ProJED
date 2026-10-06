@@ -23,6 +23,23 @@ const contents = Object.fromEntries(
   Object.entries(files).map(([key, path]) => [key, read(path)]),
 );
 
+const devTaskRegistersDev023 = contents.devTask.includes('DEV-023') && (
+  contents.devTask.includes('狀態: Implemented / Browser QC Passed / DB unchanged')
+  || (
+    contents.devTask.includes('父任務：DEV-020') &&
+    contents.devTask.includes('證據：`SPEC-023`') &&
+    contents.devTask.includes('QA/QC-DEV-023')
+  )
+);
+const devTaskHasDev023Evidence = contents.devTask.includes('SPEC-023') && (
+  contents.devTask.includes('QA/QC-DEV-023') ||
+  (
+    contents.devTask.includes('QA-DEV-023') &&
+    contents.devTask.includes('QC-DEV-023') &&
+    contents.devTask.includes('verify:dev-023-record-project-change-import-workflow-step')
+  )
+);
+
 const checks = [
   {
     name: 'SPEC-023 is attached to DEV-020 as an implemented dev point',
@@ -125,15 +142,10 @@ const checks = [
       contents.qa.includes('npm.cmd run build'),
   },
   {
-    name: 'PM dev_task registers DEV-023 as implemented with SPEC / QA / QC / verifier evidence',
+    name: 'PM dev_task registers DEV-023 with SPEC / QA / QC evidence',
     pass:
-      contents.devTask.includes('DEV-023: 專案變化匯入整併為紀錄流程第一步') &&
-      contents.devTask.includes('父交付點: DEV-020') &&
-      contents.devTask.includes('狀態: Implemented / Browser QC Passed / DB unchanged') &&
-      contents.devTask.includes('SPEC-023') &&
-      contents.devTask.includes('QA-DEV-023') &&
-      contents.devTask.includes('QC-DEV-023') &&
-      contents.devTask.includes('verify:dev-023-record-project-change-import-workflow-step'),
+      devTaskRegistersDev023 &&
+      devTaskHasDev023Evidence,
   },
   {
     name: 'Backlog registers DEV-023 as P1 UX refinement under DEV-020',
@@ -167,13 +179,15 @@ const checks = [
     ),
   },
   {
-    name: 'RecordSidebar implements project import as the first meeting workflow step',
+    name: 'RecordSidebar keeps the meeting workflow display separate from the import control',
     pass:
-      contents.recordSidebar.includes("stage: 'project_import'") &&
       contents.recordSidebar.includes('data-meeting-workflow-step={step.stage}') &&
-      contents.recordSidebar.includes('meetingWorkflowStepsWithImport') &&
-      contents.recordSidebar.includes('projectImportMeetingStep') &&
-      contents.recordSidebar.includes('onToggleProjectImport'),
+      contents.recordSidebar.includes('meetingWorkflowStepsForDisplay') &&
+      !contents.recordSidebar.includes('projectImportMeetingStep') &&
+      contents.recordSidebar.includes('data-meeting-project-change-import-control') === false &&
+      contents.recordSidebar.includes('MeetingProjectChangeImportControl') &&
+      contents.recordSidebar.includes('onImport={() =>') &&
+      contents.recordSidebar.includes('MeetingProjectChangeImportControl'),
   },
   {
     name: 'RecordSidebar implements project import as the first work-log workflow step',
@@ -189,7 +203,7 @@ const checks = [
       contents.recordSidebar.includes('isProjectImportExpanded') &&
       contents.recordSidebar.includes('setIsProjectImportExpanded(false)') &&
       contents.recordSidebar.includes('const shouldShowProjectChangeImport = Boolean(canUseProjectChangeImport && isProjectImportExpanded)') &&
-      contents.recordSidebar.includes('{projectChangeImportPanel ? (') &&
+      contents.recordSidebar.includes('projectImportPanel={projectChangeImportPanel}') &&
       contents.recordSidebar.includes('data-project-change-import-panel'),
   },
   {

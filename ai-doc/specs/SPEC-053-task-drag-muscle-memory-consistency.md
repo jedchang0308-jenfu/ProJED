@@ -1,5 +1,7 @@
 # SPEC-053：任務拖拉肌肉記憶一致化
 
+> 2026-08-24 使用者最新決策（Intentional replacement）：桌機滑鼠拖曳中的來源任務預覽改為既有 UI 的 50%，並以零間距讓預覽左下角精準貼住滑鼠熱點右上方；靠近右側視窗邊界時可翻至左上方避免裁切。此決策只覆寫舊 overlay 尺寸／offset，8px 起手門檻、視覺語彙、drop、click／right-click 與手機觸控契約維持。
+
 狀態：Implemented / Local Static + Browser + QA True Operation Gate Passed / Production Not Deployed
 對應 DEV：DEV-053
 節點類型：交付點
@@ -202,6 +204,7 @@ Forbidden source：
 ```ts
 type TaskDragTargetKind =
   | 'task-position'
+  | 'workbench-unplaced-lane'
   | 'workbench-placed-lane'
   | 'mobile-action'
   | 'none';
@@ -335,6 +338,7 @@ Priority 固定：
 - Mobile action rail 的完成、新增同階、新增下階、刪除確認、position drop、edge auto-scroll browser cases 通過。
 - DEV-046 mobile checklist / child row whole-surface drag browser case 通過。
 - Workbench unplaced row 可拖入 placed lane。
+- 依 DEV-086 mobile addendum，看板 task source 可由同一 mobile session 拖入 `workbench-unplaced-lane`；提交整棵 canonical 子樹並使用共用 insertion marker。
 - Workbench placed row 不可拖回 unplaced，不可 reorder，不進 mobile action rail，不出現 drag preview，不寫 local unplaced persistence。
 - Placed row UI / data attribute 不暴露 draggable root、drag handle 或 draggable parity 語意。
 - 320px、390px、430px、1024px、1440px viewport 無 action rail 裁切、重疊、水平 overflow 或 visible runtime error。
@@ -401,6 +405,13 @@ npm.cmd run build:test
 - Browser verifier 失敗但只以 static pass 宣稱完成。
 - QA 真實操作驗證計畫尚未執行、任一必要案例失敗，或缺少可追溯操作證據卻宣稱完成。
 - DEV-052 archived contract 被作為 executable source of truth。
+
+## 14. DEV-068 使用者明示位置修訂（2026-08-15）
+
+- 使用者重驗確認舊桌機來源卡位置會遮住當時的「移入子任務」parent frame與ghost（DEV-068後續已改為child insertion marker），因此已完成本文件要求的Human Re-entry。
+- `Intentional replacement`只限active drag來源預覽的位置：由舊source-located右下偏移改為raw pointer右上方16px，右緣時左上fallback並以8px clamp。
+- 外觀內容、8px drag threshold、`dropAnimation={null}`、click／right-click、single session、at-most-once commit、cancel cleanup與Workbench placed-row no-drag全部維持；DEV-053回歸改以這些不變項及新位置契約驗證。
+- DEV-068最新完整藍框契約採candidate與standard indicator共存、armed才接管；Workbench來源明確不進child intent，未歸位歸位與placed-row no-drag仍由DEV-053／055回歸保護。
 
 ## 13. Deferred Scope Audit
 

@@ -1,8 +1,9 @@
 import { requireFirebaseDb } from './firebase';
-import { 
+import {
   collection, doc, setDoc, updateDoc, deleteDoc, writeBatch, deleteField, getDoc, getDocs
 } from 'firebase/firestore';
-import type { Workspace, Board, BoardMember, Dependency, KnowledgeRecord, KnowledgeRecordInput, TaskNode, TaskTag, WorkspaceMember } from '../types';
+import type { Workspace, Board, BoardMember, Dependency, EditableKnowledgeRecord, KnowledgeRecord, KnowledgeRecordInput, MeetingDraftCheckpointInput, MeetingDraftCheckpointResult, TaskNode, TaskTag, WorkspaceMember } from '../types';
+import { MeetingDraftCheckpointError } from './meetingDraftRecoveryService';
 
 // ==========================
 // Helper: 處理 undefined 轉 deleteField()
@@ -65,17 +66,21 @@ export const memberService = {
 
     const workspace = { ...(snapshot.data() as Workspace), id: snapshot.id };
     const memberIds = Array.from(new Set([...(workspace.members || []), workspace.ownerId].filter(Boolean) as string[]));
-    return memberIds.map(userId => ({
-      workspaceId: wsId,
-      userId,
-      role: userId === workspace.ownerId ? 'owner' : 'member',
-      status: 'active',
-      profile: {
-        id: userId,
-        email: null,
-        displayName: userId,
-      },
-      createdAt: workspace.createdAt,
+    return Promise.all(memberIds.map(async userId => {
+      const userSnapshot = await getDoc(doc(db, 'users', userId));
+      const userData = userSnapshot.exists() ? userSnapshot.data() as { email?: string | null; displayName?: string | null } : {};
+      return {
+        workspaceId: wsId,
+        userId,
+        role: userId === workspace.ownerId ? 'owner' : 'member',
+        status: 'active' as const,
+        profile: {
+          id: userId,
+          email: userData.email ?? null,
+          displayName: userData.displayName || userData.email || userId,
+        },
+        createdAt: workspace.createdAt,
+      };
     }));
   },
 
@@ -251,21 +256,35 @@ export const tagService = {
 };
 
 export const recordService = {
-  listByProject: async (wsId: string, bId: string): Promise<KnowledgeRecord[]> => {
+  listByProject: async (wsId: string, bId: string): Promise<EditableKnowledgeRecord[]> => {
     const db = requireFirebaseDb();
     const snapshot = await getDocs(collection(db, 'workspaces', wsId, 'boards', bId, 'records'));
     return snapshot.docs
       .map(docSnap => ({ ...(docSnap.data() as KnowledgeRecord), id: docSnap.id }))
-      .filter(record => record.status !== 'archived')
+      .filter((record): record is EditableKnowledgeRecord =>
+        record.status !== 'archived' && (record.type === 'meeting' || record.type === 'work_log')
+      )
       .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   },
 
-  listByNode: async (wsId: string, bId: string, nodeId: string): Promise<KnowledgeRecord[]> => {
-    const records = await recordService.listByProject(wsId, bId);
+  listByNode: async (
+    wsId: string,
+    bId: string,
+    nodeId: string,
+    options: { includeArchived?: boolean } = {},
+  ): Promise<EditableKnowledgeRecord[]> => {
+    const db = requireFirebaseDb();
+    const snapshot = await getDocs(collection(db, 'workspaces', wsId, 'boards', bId, 'records'));
+    const records = snapshot.docs
+      .map(docSnap => ({ ...(docSnap.data() as KnowledgeRecord), id: docSnap.id }))
+      .filter((record): record is EditableKnowledgeRecord =>
+        (options.includeArchived || record.status !== 'archived')
+        && (record.type === 'meeting' || record.type === 'work_log')
+      );
     return records.filter(record => record.taskLinks.some(link => link.nodeId === nodeId));
   },
 
-  upsert: async (wsId: string, bId: string, input: KnowledgeRecordInput): Promise<KnowledgeRecord> => {
+  upsert: async (wsId: string, bId: string, input: KnowledgeRecordInput): Promise<EditableKnowledgeRecord> => {
     const db = requireFirebaseDb();
     const recordRef = input.id
       ? doc(db, 'workspaces', wsId, 'boards', bId, 'records', input.id)
@@ -273,8 +292,9 @@ export const recordService = {
     const now = Date.now();
     const previous = input.id ? await getDoc(recordRef) : null;
     const existing = previous?.exists() ? previous.data() as KnowledgeRecord : undefined;
-    const record: KnowledgeRecord = {
-      ...(existing || {}),
+    const existingEditable = existing;
+    const record: EditableKnowledgeRecord = {
+      ...(existingEditable || {}),
       id: recordRef.id,
       workspaceId: wsId,
       boardId: bId,
@@ -288,6 +308,7 @@ export const recordService = {
       startedAt: input.startedAt,
       endedAt: input.endedAt,
       recordedBy: input.recordedBy,
+      metadata: input.metadata,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
       ragEnabled: input.status === 'published' && input.visibility !== 'private',
@@ -303,6 +324,10 @@ export const recordService = {
     };
     await setDoc(recordRef, record);
     return record;
+  },
+
+  checkpointDraft: async (_wsId: string, _bId: string, _input: MeetingDraftCheckpointInput): Promise<MeetingDraftCheckpointResult> => {
+    throw new MeetingDraftCheckpointError('transient', '會議雲端 checkpoint 已停用；請使用本機 recovery。');
   },
 
   delete: async (wsId: string, bId: string, recordId: string): Promise<void> => {

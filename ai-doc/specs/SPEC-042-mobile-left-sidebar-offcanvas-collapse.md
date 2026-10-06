@@ -1,11 +1,40 @@
-# SPEC-042: 手機左側欄收疊零佔寬與全域任務平台 Off-Canvas
+# SPEC-042: 手機與桌機共用左側 Inline 面板排列
 
 關聯 DEV：DEV-042
-狀態：Production Release Deployed / Local + Production Smoke Passed / User-Reported Physical Phone Supplemental Passed
+狀態：2026-09-10 Topbar Board Switcher Addendum Local QA-QC Passed / Production Not Deployed；2026-08-24 Shared Inline Layout Rework Width Alignment Local Verification Passed / Production Not Deployed；2026-07-06 Off-Canvas 版本為歷史已發布證據
 建立日期：2026-07-05
 任務類型：UI/UX RWD regression / mobile layout contract
 
-## Human Decision Brief
+## 2026-09-10 Topbar 看板切換器整合增補（目前權威入口契約）
+
+決策來源：使用者要求把 topbar 的 Sidebar 選單按鈕與目前看板名稱整合成單一元件，並放在「全域任務平台」入口左側，讓看板選擇入口可直接由目前看板名稱辨識。
+
+Spec Impact：`Intentional replacement / compatible with DEV-030 rename safety`。DEV-030 禁止從 topbar 看板名稱直接改名的資料安全契約保留；本增補只讓名稱區成為 Sidebar 開關，不提供 metadata 編輯或寫入。
+
+行為契約：
+
+- topbar 使用單一 `board switcher` 同時呈現選單 icon 與目前看板名稱；無 active board 時顯示「選擇看板」。
+- 整個 switcher（包含文字區）都開啟／收合既有 `Sidebar`，不得另建 dropdown、第二份 workspace tree 或 board picker state。
+- switcher 必須位於 `data-mobile-task-workbench-nav-entry="true"` 左側；全域任務平台維持獨立按鈕與既有 toggle 行為，入口以 `All` 文字標籤辨識。
+- 保留 `data-main-sidebar-toggle="true"`、`data-topbar-board-title="true"` 等既有 selector 相容性，並新增單一元件 selector。
+- switcher 提供 `aria-expanded`、`aria-controls` 與包含目前看板名稱的 accessible name；Sidebar 提供對應 id。
+- Sidebar 開啟時用同一個 switcher 的狀態樣式回饋，不新增常駐說明、badge 或第二個 topbar 標題。
+- 窄版允許看板名稱以 ellipsis 截斷，但 switcher 與全域任務平台不得重疊、被擠出 viewport 或造成水平 overflow；桌機正常名稱維持完整呈現。
+
+驗收：
+
+- `1440x900`：看板切換器在全域任務平台左側；目前看板名稱完整可見；點擊 icon 或文字區都能切換同一個 Sidebar。
+- `390x844`：看板切換器仍在全域任務平台左側，長名稱可安全截斷；兩個入口各自可辨識且無重疊／水平 overflow。
+- 全域任務平台入口顯示 `All`，不依賴僅憑圖形辨識；點擊區與既有 toggle 行為不變。
+- 點擊看板名稱、雙擊或按 `F2` 均不得出現工作區／看板改名輸入框。
+- 鍵盤可聚焦 switcher 並以 Enter／Space 切換；`aria-expanded` 與 Sidebar 顯示狀態一致。
+- 窄版從 switcher 開啟 Sidebar，再開啟全域任務平台時，沿用既有互斥 inline panel 行為。
+
+Out of scope：Sidebar IA、workspace／board 資料模型、改名權限、全域任務平台資料與 filter、production deploy。
+
+本機證據：DEV-042 static `22/22`、browser `8/8`、DEV-030 static `11/11` 與 browser、TypeScript、targeted ESLint（0 errors／1 既存 warning）、`build:test`、`git diff --check` 及 390／320／1440 rendered screenshots 通過。DEV-031 額外全頁 browser gate 的既有備註列 3px 對齊門檻未通過，與本次 topbar source／畫面無關，不以本增補掩蓋。
+
+## Human Decision Brief（2026-07 歷史決策，已由下方 Inline 契約取代）
 
 決策來源：
 
@@ -19,6 +48,53 @@
 - 手機版展開側欄 / 工作台時，採 overlay / drawer 覆蓋，不推擠主內容。
 - 桌機版可以保留精簡 collapsed rail，但寬度需受控，且不得回到大圖示卡片。
 - 任務主畫面與看板 canvas 的可用寬度優先於保留常駐左側 icon rail。
+
+## 2026-08-24 手機與桌機共用 Inline 元件增補（目前權威契約）
+
+決策來源：使用者指出手機版「全域任務平台」及「工作區與看板」目前覆蓋在看板上，明確要求改回與桌機版相同的排列方式、不得覆蓋，並與桌機版共用元件、不得另寫。此決策是對本文件既有 mobile off-canvas／overlay 契約的 `Intentional replacement`。
+
+目前權威行為：
+
+- 手機與桌機都直接使用既有 `Sidebar` 與 `TaskWorkbenchPanel`；不得新增 `MobileSidebar`、`MobileTaskWorkbench` 或複製內容樹。
+- 兩個面板開啟時都位於既有 flex layout flow，以 inline 方式排列在看板左側；開啟面板必須縮小相鄰 main／Board canvas，而不是以 `fixed`、overlay 或 backdrop 覆蓋看板。
+- 任一 viewport 都不得渲染 Sidebar／TaskWorkbench 專用遮罩、dimming backdrop 或 mobile overlay selector。
+- 收合狀態仍直接 unmount，不保留 collapsed rail；top navigation 的既有按鈕仍是共用開關。
+- 面板寬度沿用同一份帳號偏好與既有 viewport clamp；不再存在手機專用 `mobileOverlayOpen`、234px 或 128px gutter 契約。
+- 手機 Sidebar 的 computed width 必須與同 viewport 的 TaskWorkbench computed width 完全相同；兩者共用同一個 inline width helper 與 `calc(100vw - 48px)` viewport clamp。
+- 手機既有「開啟其中一個左側面板時關閉另一個」行為可保留，以避免兩個 inline 面板同時耗盡窄版看板寬度；這是同一元件的狀態協調，不是第二套 UI。
+- 未歸位任務在手機工作台中仍可長按拖曳到右側可見看板卡片或欄內空白區；已歸位工作台列仍不可作為 placement drag source。
+
+目前驗收：
+
+- `320x844`、`390x844`：開啟 Sidebar 時 `[data-sidebar-inline="true"]` 可見，main 左界等於 Sidebar 右界；overlay／backdrop 計數皆為 0。
+- `320x844`、`390x844`：開啟 TaskWorkbench 時 `[data-task-workbench-inline="true"]` 可見，Board canvas 左界等於 Workbench 右界；overlay／backdrop 計數皆為 0。
+- `320x844`、`390x844`：分別開啟 Sidebar 與 TaskWorkbench 時，兩個面板 computed width 差距不得超過 `1px`；預設值為 390px=`340px`、320px=`272px`。
+- 開啟面板前後的 main／Board 寬度差需等於 inline 面板實測寬度（±2px），證明是 layout reflow 而非覆蓋。
+- 窄版仍保留至少 48px 可見看板區，且 `document.scrollWidth` 不得超過 viewport。
+- 桌機既有 inline 版面、寬度偏好、resize、收合、鍵盤與雙面板並排不得回歸。
+
+2026-08-24 本輪 width alignment local evidence 已通過：DEV-042 static/browser、DEV-029／039／054 regression、TypeScript、targeted ESLint、`build:test`、`git diff --check` 與 390／320 rendered screenshots 均通過。正式環境部署與本增補後實體手機補充驗證未執行。
+
+下方 2026-07-05／2026-07-06 off-canvas 內容與 2026-08-24 default-open 內容保留為歷史決策與舊版發布證據；凡與本增補衝突者皆不再作為目前 RD／QA 驗收來源。
+
+## 2026-08-24 手機啟動預設開啟增補
+
+決策來源：使用者明確要求「現在手機版打開時，必須預設全域工作台開啟」。此指令有意取代既有手機初始關閉行為，但不改變 off-canvas、零佔寬與桌面偏好契約。
+
+- `<= 767px` 的 BoardView 首次掛載時，全域任務平台必須直接以 overlay 開啟，即使既有面板偏好為關閉。
+- 從桌面寬度切換進入 `<= 767px` 時，視為進入手機工作階段，工作台同樣預設開啟。
+- 使用者仍可用收合按鈕、遮罩或 `Escape` 關閉；關閉後不得留下 in-flow rail、gutter 或水平 overflow。
+- 手機預設開啟只控制 `mobileOverlayOpen` 的工作階段初始值；桌面 `panelPrefs.open` 與桌面 inline 開啟偏好維持既有行為。
+- 手機開啟工作區 Sidebar 時仍須關閉工作台，維持兩個左側 overlay 互斥。
+- 手機全域任務平台目標寬度改為 `234px`；viewport 不足時保留 `128px` 安全邊距，桌面 `panelWidth` 不變。
+
+增補驗收：
+
+- 在 `390x844` 且儲存的工作台 `open=false` 時重新載入 BoardView，`data-mobile-task-workbench-overlay="true"` 必須可見。
+- 預設開啟的 overlay 寬度必須是 `min(234px, calc(100vw - 128px))`；viewport `390px` 時應為 `234px ± 1px`，viewport `320px` 時應安全縮為 `192px ± 1px`。
+- 寬度調整後不得縮小 main / Board canvas computed width，也不得造成標題、過濾器、收合鍵、任務列或日期截斷／水平 overflow。
+- 關閉後再操作 Sidebar / 工作台切換、遮罩與 `Escape`，既有 off-canvas 行為全部維持。
+- 在 `1440x900` 且儲存的工作台 `open=false` 時，桌面工作台仍維持關閉，不得被手機預設值強制開啟。
 
 已拒絕或不可採用：
 
@@ -80,7 +156,7 @@ RD implementation scope：
 - `src/components/TaskWorkbenchPanel.tsx`
   - `isNarrowViewport && !mobileOverlayOpen` 時不得回傳 in-flow `<aside className="w-6 ...">`。
   - 若需要保留入口，使用固定定位的單一 icon button 或 top nav / Sidebar 內入口，不得佔用 flex layout 寬度。
-  - 手機展開工作台時維持 fixed overlay，並保留既有 `width: min(340px, calc(100vw - 52px))` 或等效安全寬度。
+  - 手機展開工作台時維持 fixed overlay，並保留 `width: min(234px, calc(100vw - 128px))` 或等效安全寬度。
   - collapsed task count 不得以 badge 撐寬 rail；如保留 count，需進入 tooltip、aria-label 或 overlay 內呈現。
 
 - `src/components/MainLayout.tsx`

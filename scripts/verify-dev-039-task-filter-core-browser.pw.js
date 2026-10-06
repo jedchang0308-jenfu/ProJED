@@ -126,7 +126,7 @@ async (page) => {
 
   const openApp = async (viewport = { width: 1440, height: 900 }) => {
     await page.setViewportSize(viewport);
-    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
     await page.reload({ waitUntil: 'networkidle' });
     try {
       await page.locator('nav').waitFor({ state: 'visible', timeout: 15000 });
@@ -142,6 +142,12 @@ async (page) => {
     await openApp();
 
     step = 'board-hidden-children-toggle';
+    await page.locator('#filter-menu-trigger').click();
+    const initialFilterPanel = page.locator('[data-filter-menu-panel]');
+    await initialFilterPanel.waitFor({ state: 'visible', timeout: 10000 });
+    await initialFilterPanel.getByRole('button', { name: '完成', exact: true }).click();
+    await page.keyboard.press('Escape');
+    await initialFilterPanel.waitFor({ state: 'detached', timeout: 10000 });
     const filteredParentCard = page.locator('.kanban-task-card[data-task-id="dev039-child-a"]');
     await filteredParentCard.waitFor({ state: 'visible', timeout: 10000 });
     assert(
@@ -297,7 +303,7 @@ async (page) => {
     await page.locator('[data-mode-switcher-value="mindmap"]').click();
     await page.locator('#filter-menu-trigger').waitFor({ state: 'visible', timeout: 10000 });
     const filterCount = await page.locator('#filter-menu-trigger').getAttribute('data-active-task-filter-count');
-    assert(filterCount === '1', 'mindmap filter trigger should use shared active count and default to hiding completed tasks', { filterCount });
+    assert(filterCount === '0', 'mindmap filter trigger should use the shared default-all active count', { filterCount });
 
     step = 'display-settings-not-active-filter';
     await page.locator('#filter-menu-trigger').click();
@@ -306,11 +312,16 @@ async (page) => {
     await panel.locator('[data-task-display-settings="true"]').getByText('標籤', { exact: true }).click();
     await page.keyboard.press('Escape');
     const countAfterDisplayToggle = await page.locator('#filter-menu-trigger').getAttribute('data-active-task-filter-count');
-    assert(countAfterDisplayToggle === '1', 'display settings should not increment active task filter count beyond the default completed filter', { countAfterDisplayToggle });
+    assert(countAfterDisplayToggle === '0', 'display settings should not increment the active task filter count', { countAfterDisplayToggle });
 
     step = 'task-workbench-board-filter';
-    await page.locator('[data-mobile-task-workbench-nav-entry="true"]').click();
     const workbenchPanel = page.locator('[data-task-workbench-panel="true"]');
+    const workbenchNavEntry = page.locator('[data-mobile-task-workbench-nav-entry="true"]');
+    await workbenchNavEntry.click();
+    await page.waitForTimeout(120);
+    if (await workbenchPanel.count() === 0 || !(await workbenchPanel.isVisible())) {
+      await workbenchNavEntry.click();
+    }
     await workbenchPanel.waitFor({ state: 'visible', timeout: 10000 });
     assert(await workbenchPanel.locator('[data-task-workbench-source-summary="true"]').count() === 0, 'workbench should not render the removed source summary');
     assert(await workbenchPanel.locator('[data-task-workbench-selected-board="true"]').count() === 0, 'workbench should not render the removed selected-board path summary');
@@ -336,13 +347,18 @@ async (page) => {
       'workbench should show seeded unclassified inbox item outside board filters',
     );
     assert(await unclassifiedSection.getByText('尚未歸類的採購提醒').count() === 1, 'seeded unclassified item should be visible');
-    await unclassifiedSection.locator('[data-task-workbench-unclassified-input="true"]').fill('臨時拜訪客戶');
-    await unclassifiedSection.locator('[data-task-workbench-unclassified-add="true"]').click();
+    await unclassifiedSection.locator('[data-task-workbench-unclassified-modal-add="true"]').click();
+    const createdTaskModal = page.locator('[data-task-details-modal="true"]');
+    await createdTaskModal.waitFor({ state: 'visible', timeout: 10000 });
+    const createdTaskTitleInput = createdTaskModal.locator('[data-task-details-title-input="true"]');
+    await createdTaskTitleInput.fill('臨時拜訪客戶');
+    await createdTaskModal.locator('button[aria-label="關閉任務詳情"]').click();
+    await createdTaskModal.waitFor({ state: 'detached', timeout: 10000 });
     assert(
       await unclassifiedSection.locator('[data-task-workbench-unclassified-item="true"]').count() === 2,
-      'adding unclassified item should append to the workbench inbox section',
+      'modal-created unclassified task should append to the workbench inbox section',
     );
-    assert(await unclassifiedSection.getByText('臨時拜訪客戶').count() === 1, 'new unclassified item should be visible immediately');
+    assert(await unclassifiedSection.getByText('臨時拜訪客戶').count() === 1, 'modal-created unclassified task should be visible immediately');
 
     assert(await workbenchPanel.locator('[data-task-workbench-placed-task-card="true"][data-task-id="dev039-child-a"]').count() === 1, 'cross-board task list should show board A task');
     assert(await workbenchPanel.locator('[data-task-workbench-placed-task-card="true"][data-task-id="dev039-root-b"]').count() === 1, 'cross-board task list should also show board B task');
@@ -381,7 +397,7 @@ async (page) => {
     await reloadedFilterPanel.waitFor({ state: 'visible', timeout: 10000 });
     assert(await reloadedFilterPanel.locator('[data-task-workbench-board-select="true"]').inputValue() === 'dev039-board-b', 'workbench selected board should persist after reload');
     assert(await reloadedWorkbenchPanel.locator('[data-task-workbench-placed-task-card="true"][data-task-id="dev039-root-b"]').count() === 0, 'board B todo filter should persist after reload');
-    assert(await reloadedWorkbenchPanel.locator('[data-task-workbench-filter-toggle="true"]').getAttribute('data-active-task-workbench-filter-count') === '2', 'workbench active filter count should persist after reload');
+    assert(await reloadedWorkbenchPanel.locator('[data-task-workbench-filter-toggle="true"]').getAttribute('data-active-task-workbench-filter-count') === '1', 'workbench active filter count should persist after reload without counting the default-enabled completed status');
     await reloadedFilterPanel.getByRole('button', { name: /重設/ }).click();
     assert(await reloadedWorkbenchPanel.locator('[data-task-workbench-placed-task-card="true"][data-task-id="dev039-root-b"]').count() === 1, 'reset should restore board B filter without save/profile controls');
     const reloadedUnclassifiedSection = page.locator('[data-task-workbench-unclassified-section="true"]');
@@ -397,8 +413,14 @@ async (page) => {
       return rect ? rect.width > 0 && rect.height > 0 && rect.left < window.innerWidth && rect.right > 0 : false;
     });
     assert(mobileBoardHasCard, 'mobile board should remain reachable while task workbench is closed');
-    await page.locator('[data-mobile-task-workbench-nav-entry="true"]').click();
-    await page.locator('[data-task-workbench-panel="true"]').waitFor({ state: 'visible', timeout: 10000 });
+    const mobileWorkbenchEntry = page.locator('[data-mobile-task-workbench-nav-entry="true"]');
+    const mobileWorkbenchPanel = page.locator('[data-task-workbench-panel="true"]');
+    await mobileWorkbenchEntry.click();
+    await page.waitForTimeout(120);
+    if (await mobileWorkbenchPanel.count() === 0 || !(await mobileWorkbenchPanel.isVisible())) {
+      await mobileWorkbenchEntry.click();
+    }
+    await mobileWorkbenchPanel.waitFor({ state: 'visible', timeout: 10000 });
     await page.screenshot({ path: 'output/playwright/dev-039-task-workbench-mobile.png', fullPage: true });
     const bodyText = await page.locator('body').innerText();
     assert(!/HTTP 4\d\d|HTTP 5\d\d|Internal Server Error|Not Found/i.test(bodyText), 'mobile viewport should not show visible runtime errors');

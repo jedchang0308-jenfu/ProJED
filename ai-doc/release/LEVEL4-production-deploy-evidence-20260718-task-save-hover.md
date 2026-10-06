@@ -6,9 +6,9 @@ Firebase Hosting production deploy 已完成，Level 4 正式站 smoke、線上�
 
 ## Release Scope
 
-- Branch: `codex/task-save-hover-release-20260718-151753`
-- Artifact commit: `1c7c060cc6d90eb85a2653f514097ab4e95e4be6`
-- Base / rollback reference: `e2f6956` on `codex/mobile-action-menu-hotfix-20260718`
+- Branch: `歷史 task-save-hover release`
+- Artifact commit: `歷史 task-save-hover artifactcc6d90eb85a2653f514097ab4e95e4be6`
+- Base / rollback reference: `歷史 rollback artifact` on `歷史 mobile-action release`
 - Worktree: clean release worktree isolated from the dirty main workspace
 - Firebase project: `projed-cc78d`
 - Production URL: `https://projed-cc78d.web.app`
@@ -61,10 +61,10 @@ Production HTML loads:
 ## Known Non-Blocking Risks
 
 - `npm ci` reports 44 inherited package vulnerabilities: 2 low, 19 moderate, 21 high, 2 critical. No dependency mutation was included in this release.
-- `npm run verify:source` is blocked by 5 inherited production migration hash-stability failures already present in base `e2f6956`; this release has no Supabase or migration diff.
+- `npm run verify:source` is blocked by 5 inherited production migration hash-stability failures already present in base `歷史 rollback artifact`; this release has no Supabase or migration diff.
 - Lint completed with warnings only; TypeScript, production auth mode, Supabase static, calendar feed, core regression, P9 edge function, staging env, production build and relevant feature suites passed.
 - Browserslist data is 6 months old.
 
 ## Rollback
 
-If a production regression is confirmed, roll Firebase Hosting back to the release built from `e2f6956` (`codex/mobile-action-menu-hotfix-20260718`) and rerun Level 4 smoke plus artifact hash comparison.
+If a production regression is confirmed, roll Firebase Hosting back to the release built from `歷史 rollback artifact` (`歷史 mobile-action release`) and rerun Level 4 smoke plus artifact hash comparison.

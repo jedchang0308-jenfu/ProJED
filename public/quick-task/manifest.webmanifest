@@ -1,0 +1,17 @@
+{
+  "id": "/quick-task/",
+  "name": "ProJED-快速建任務",
+  "short_name": "ProJED-快速建任務",
+  "description": "不載入完整工作台，快速記下一個待辦",
+  "lang": "zh-Hant",
+  "start_url": "/quick-task/",
+  "scope": "/quick-task/",
+  "display": "minimal-ui",
+  "background_color": "#f8fafc",
+  "theme_color": "#0f766e",
+  "icons": [
+    { "src": "/icons/projed-quick-task-icon-brand-20260929-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/projed-quick-task-icon-brand-20260929-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/projed-quick-task-icon-brand-20260929-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

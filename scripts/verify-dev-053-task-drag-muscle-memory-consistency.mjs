@@ -13,6 +13,7 @@ const files = {
   dragSensors: 'src/hooks/useDragSensors.ts',
   kanbanCard: 'src/components/Wbs/KanbanCard.tsx',
   kanbanChecklist: 'src/components/Wbs/KanbanChecklist.tsx',
+  taskChecklistTree: 'src/components/Wbs/TaskChecklistTree.tsx',
   kanbanColumn: 'src/components/Wbs/KanbanColumn.tsx',
   workbench: 'src/components/TaskWorkbenchPanel.tsx',
   packageJson: 'package.json',
@@ -42,7 +43,11 @@ assert(
     "'column-header'",
     "'wbs-list-row'",
     "'workbench-unplaced-row'",
-    "export type TaskDragTargetKind = 'task-position' | 'workbench-placed-lane' | 'mobile-action' | 'none';",
+    'export type TaskDragTargetKind =',
+    "'workbench-unplaced-lane'",
+    "'workbench-placed-lane'",
+    "'mobile-action'",
+    "'none'",
     'export interface TaskDragObservation',
     'export interface TaskDragSessionState',
   ]) && !source.types.includes("'workbench-placed-row'"),
@@ -62,10 +67,13 @@ assert(
 
 assert(
   'card, checklist, column header, and workbench use the shared gesture surface',
-  [source.kanbanCard, source.kanbanChecklist, source.kanbanColumn, source.workbench]
-    .every((value) => value.includes('useTaskGestureSurface')) &&
+  source.kanbanCard.includes('useTaskPlacementController') &&
+    source.kanbanChecklist.includes('TaskChecklistTree') &&
+    source.taskChecklistTree.includes('useTaskPlacementController') &&
+    source.kanbanColumn.includes('useTaskPlacementController') &&
+    source.workbench.includes('useTaskGestureSurface') &&
     source.kanbanCard.includes("sourceKind: 'kanban-card'") &&
-    source.kanbanChecklist.includes("sourceKind: 'checklist-row'") &&
+    source.taskChecklistTree.includes("sourceKind: 'checklist-row'") &&
     source.kanbanColumn.includes("sourceKind: 'column-header'") &&
     source.workbench.includes("sourceKind: 'workbench-unplaced-row'"),
 );
@@ -102,11 +110,12 @@ assert(
 );
 
 assert(
-  'target priority is centralized and ordered action, task, placed lane, none',
+  'target priority is centralized and includes action, task, unplaced lane, placed lane, none',
   includesAll(source.target, [
     'export const TASK_DRAG_TARGET_PRIORITY = [',
     "'mobile-action'",
     "'task-position'",
+    "'workbench-unplaced-lane'",
     "'workbench-placed-lane'",
     "'none'",
     'resolveTaskDragObservation',
@@ -153,8 +162,8 @@ assert(
     'const state = useWbsStore.getState();',
     'const latestNode = useWbsStore.getState().nodes[nodeId];',
     "noOp('workbench-placed-row-is-not-a-source')",
-    "dependencies.batchUpdateNodes(updates, { label: '移動任務位置'",
-    "dependencies.batchUpdateNodes({",
+    'dependencies.batchUpdateNodes(updates, {',
+    "label: '移動任務位置'",
     "mergeKey: `placement:${draggedNode.id}`",
     'isValidTaskDropIntent',
   ]),
@@ -166,7 +175,8 @@ assert(
     'useTaskDragSession({',
     '<TaskDragPresenter',
     'commitDesktopTaskDrag({',
-    '<DragOverlay dropAnimation={null}>',
+    '<DragOverlay',
+    'dropAnimation={null}',
   ]) &&
     !source.boardView.includes("window.addEventListener('touchmove'") &&
     !source.boardView.includes('resolveTaskDragObservation') &&
@@ -174,12 +184,17 @@ assert(
 );
 
 assert(
-  'approved desktop drag UI baseline remains frozen',
+  'desktop drag UI keeps its approved styling while the latest user decision owns half-scale pointer attachment',
   includesAll(source.boardView, [
     'data-kanban-drag-overlay="true"',
-    'pointer-events-none flex translate-x-4 translate-y-4 items-center gap-2 rounded-lg',
+    'resolvePointerUpperRightOverlayPosition',
+    'data-task-drag-overlay-anchor="pointer-upper-right"',
+    'data-task-drag-overlay-pointer-gap={DESKTOP_TASK_DRAG_OVERLAY_POINTER_GAP_PX}',
+    'data-task-drag-overlay-scale={DESKTOP_TASK_DRAG_OVERLAY_SCALE}',
+    'pointer-events-none fixed z-[93] flex h-10 origin-top-left items-center gap-2 rounded-lg',
     'border border-primary/30 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-lg',
     "activeDrag.type === 'wbs-column' ? 'w-[270px]' : 'w-[240px]'",
+    'transform: `scale(${DESKTOP_TASK_DRAG_OVERLAY_SCALE})`',
   ]) &&
     source.dragSensors.includes('SmartMouseSensor extends MouseSensor') &&
     source.dragSensors.includes('SmartKeyboardSensor extends KeyboardSensor') &&
@@ -204,7 +219,7 @@ assert(
   source.packageJson.includes('"verify:dev-053-task-drag-muscle-memory-consistency"') &&
     source.packageJson.includes('"verify:dev-053-task-drag-muscle-memory-consistency-browser"') &&
     includesAll(source.browserVerifier, [
-      'DEV-053 desktop approved drag overlay remains unchanged',
+      'desktop drag overlay scales to 50 percent and attaches to the pointer upper-right',
       'desktop card, checklist, and column header clicks open the matching details',
       'desktop card, checklist, and column header right click opens the task context menu',
       'mobile card, checklist, and column header quick taps open the matching details',

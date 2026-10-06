@@ -23,6 +23,7 @@ import {
 import { isLocalTestBackend, isSupabaseBackend } from '../services/dataBackend';
 import { seedLocalTestEnvironment } from '../utils/localTestEnvironment';
 import { BOARD_INVITE_TOKEN_PARAM } from '../utils/boardInviteToken';
+import { refreshPwaReloadSafety, setPwaReloadReadiness } from '../services/pwaReloadSafety';
 
 // 偵測是否為 App 內建瀏覽器 (Line, FB, IG 等)
 const detectInAppBrowser = (): boolean => {
@@ -149,6 +150,25 @@ export default function AuthGate({ children }: AuthGateProps) {
       .finally(() => setMigrationState('done'));
   }, [user?.uid]);
 
+  useEffect(() => {
+    const ready = !loading && (!user || migrationState === 'done');
+    const epoch = `${user?.uid ?? 'anonymous'}:${migrationState}`;
+    setPwaReloadReadiness('auth-shell', epoch, ready);
+    return () => setPwaReloadReadiness('auth-shell', epoch, false);
+  }, [loading, migrationState, user?.uid]);
+
+  useEffect(() => {
+    if (loading || user) return;
+
+    // 未登入時 AuthGate 就是目前的完整可見畫面；AppContent 尚未掛載，
+    // 因此必須由登入 shell 接手 active-view readiness，避免等待中的新版
+    // 永遠停在 booting，既不能安全自動套用，也不會出現 dirty 提示。
+    const epoch = `anonymous-auth-shell:${migrationState}`;
+    setPwaReloadReadiness('active-view', epoch, true);
+    refreshPwaReloadSafety(null);
+    return () => setPwaReloadReadiness('active-view', epoch, false);
+  }, [loading, migrationState, user?.uid]);
+
   // 載入中：顯示 spinner
   if (loading) {
     return (
@@ -170,7 +190,7 @@ export default function AuthGate({ children }: AuthGateProps) {
           {/* Logo 與標題 */}
           <div className="text-center mb-8">
             <div className="w-16 h-16 rounded-2xl mx-auto mb-4 overflow-hidden shadow-lg shadow-blue-500/25 border border-slate-700/50">
-              <img src="/icons/icon-vibrant-02-aqua-lime.png" alt="ProJED 標誌" className="w-full h-full object-cover" />
+              <img src="/icons/projed-main-icon-brand-20260929-512.png" alt="ProJED 標誌" className="w-full h-full object-cover" />
             </div>
             <h1 className="text-2xl font-bold text-white mb-2">ProJED</h1>
             <p className="text-slate-400 text-sm">專案管理，從登入開始</p>

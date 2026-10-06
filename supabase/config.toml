@@ -10,7 +10,9 @@ enabled = true
 port = 54321
 # Schemas to expose in your API. Tables, views and stored procedures in this schema will get API
 # endpoints. `public` and `graphql_public` schemas are included by default.
-schemas = ["public", "graphql_public"]
+# `private` is exposed only so service-role Edge functions can use PostgREST;
+# DEV-123 private tables revoke PUBLIC/anon/authenticated grants in migrations.
+schemas = ["public", "private", "graphql_public"]
 # Extra schemas to add to the search_path of every request.
 extra_search_path = ["public", "extensions"]
 # The maximum number of rows returns from a view, table, or stored procedure. Limits payload size
@@ -388,6 +390,15 @@ verify_jwt = false
 
 [functions.synthesize_meeting_record]
 verify_jwt = true
+
+[functions.meeting_capture_control]
+verify_jwt = true
+
+[functions.process_meeting_analysis]
+verify_jwt = false
+
+[functions.purge_meeting_audio]
+verify_jwt = false
 
 [analytics]
 enabled = true

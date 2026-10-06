@@ -31,7 +31,9 @@ import type {
   CalendarSubscriptionFilters,
   CalendarSubscriptionScopeType,
 } from '../services/supabase/database.types';
+import { PROFILE_UPDATED_EVENT, type ProfileUpdatedDetail } from '../utils/profileEvents';
 import { toast } from '../store/useToastStore';
+import { isPrimaryPointerActivation } from '../interactions/pointerActivation';
 import CalendarSubscriptionBuilderPreview, {
   type CalendarSubscriptionBuilderAssigneeOption,
   type CalendarSubscriptionBuilderPayload,
@@ -125,7 +127,7 @@ const describeSourceFilter = (
   workspaceNameById: Map<string, string>,
   boardPathById: Map<string, string>
 ) => {
-  if (filters.version === 3 && filters.board_filters) {
+  if ((filters.version === 3 || filters.version === 4) && filters.board_filters) {
     const includedBoards = Object.entries(filters.board_filters)
       .filter(([, snapshot]) => snapshot.included)
       .map(([boardId]) => boardPathById.get(boardId) ?? boardId.slice(0, 8));
@@ -159,7 +161,7 @@ const describeConditionFilters = (
   const dateTypes = (filters.date_types ?? [])
     .map((type) => type === 'start_date' ? '開始日' : '到期日')
     .join('、');
-  if (filters.version === 3 && filters.board_filters) {
+  if ((filters.version === 3 || filters.version === 4) && filters.board_filters) {
     return '每張看板獨立任務條件與事件日期';
   }
 
@@ -237,6 +239,108 @@ const CalendarSubscriptionSubmitBar: React.FC<CalendarSubscriptionSubmitBarProps
   </div>
 );
 
+const LOCAL_CALENDAR_FIXTURE_QUERY = 'qcCalendarSubscription';
+const LOCAL_CALENDAR_FIXTURE_ID = 'dev-084-local-calendar-subscription';
+const DEFAULT_CALENDAR_SUBSCRIPTION_NAME = '我的工作行事曆';
+
+type CalendarSubscriptionDeleteDialogProps = {
+  subscription: CalendarSubscription;
+  isDeleting: boolean;
+  workspaceNameById: Map<string, string>;
+  boardPathById: Map<string, string>;
+  memberNameById: Map<string, string>;
+  currentUserId?: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+};
+
+const CalendarSubscriptionDeleteDialog: React.FC<CalendarSubscriptionDeleteDialogProps> = ({
+  subscription,
+  isDeleting,
+  workspaceNameById,
+  boardPathById,
+  memberNameById,
+  currentUserId,
+  onCancel,
+  onConfirm,
+}) => (
+  <div
+    className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/30 p-4"
+    role="presentation"
+    data-calendar-subscription-delete-backdrop="true"
+    onMouseDown={(event) => {
+      if (event.currentTarget === event.target && !isDeleting && isPrimaryPointerActivation(event)) onCancel();
+    }}
+  >
+    <section
+      className="w-full max-w-lg border border-slate-200 bg-white shadow-xl"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="calendar-subscription-delete-title"
+      aria-describedby="calendar-subscription-delete-description"
+      data-calendar-subscription-delete-dialog="true"
+    >
+      <div className="flex items-start justify-between border-b border-slate-200 px-4 py-3">
+        <div className="flex items-start gap-2">
+          <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center bg-rose-50 text-rose-700">
+            <Trash2 size={16} />
+          </div>
+          <div>
+            <h3 id="calendar-subscription-delete-title" className="text-sm font-bold text-slate-900">刪除訂閱並撤銷連結</h3>
+            <p id="calendar-subscription-delete-description" className="mt-1 text-xs leading-5 text-slate-500">
+              刪除後無法恢復，使用此連結的外部行事曆將停止取得更新。
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={isDeleting}
+          className="inline-flex h-8 w-8 items-center justify-center text-slate-400 hover:bg-slate-50 hover:text-slate-700 disabled:cursor-not-allowed"
+          aria-label="取消刪除"
+          title="取消刪除"
+        >
+          <X size={16} />
+        </button>
+      </div>
+
+      <div className="space-y-3 px-4 py-4 text-sm">
+        <div className="border border-slate-200 bg-slate-50 px-3 py-2">
+          <div className="font-bold text-slate-900">{subscription.name}</div>
+          <div className="mt-1 text-xs leading-5 text-slate-600">
+            <div>來源：{describeSourceFilter(subscription.filters, workspaceNameById, boardPathById)}</div>
+            <div>條件：{describeConditionFilters(subscription.filters, memberNameById, currentUserId)}</div>
+          </div>
+        </div>
+        <div className="flex items-start gap-2 text-xs leading-5 text-rose-700" role="alert">
+          <ShieldAlert size={14} className="mt-0.5 shrink-0" />
+          <span>這會永久刪除訂閱設定並讓舊 ICS 連結失效；若要日後恢復，請改用「停用」。</span>
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-2 border-t border-slate-200 px-4 py-3">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={isDeleting}
+          className="h-9 border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
+        >
+          取消
+        </button>
+        <button
+          type="button"
+          onClick={onConfirm}
+          disabled={isDeleting}
+          className="inline-flex h-9 items-center gap-2 bg-rose-700 px-3 text-sm font-bold text-white hover:bg-rose-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+        >
+          {isDeleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+          {isDeleting ? '刪除中' : '刪除並撤銷連結'}
+        </button>
+      </div>
+    </section>
+  </div>
+);
+
 const CalendarSubscriptionsView: React.FC = () => {
   const user = useAuthStore((state) => state.user);
   const workspaces = useBoardStore((state) => state.workspaces);
@@ -255,7 +359,7 @@ const CalendarSubscriptionsView: React.FC = () => {
   const [boardRefs, setBoardRefs] = useState<CalendarBoardRef[]>([]);
   const [members, setMembers] = useState<CalendarWorkspaceMember[]>([]);
   const [generatedUrls, setGeneratedUrls] = useState<Record<string, string>>({});
-  const [name, setName] = useState('我的工作行事曆');
+  const [name, setName] = useState(DEFAULT_CALENDAR_SUBSCRIPTION_NAME);
   const [filters, setFilters] = useState<CalendarSubscriptionFilters>(() =>
     emptyFilters(activeWorkspace?.id, activeBoard?.id)
   );
@@ -274,7 +378,44 @@ const CalendarSubscriptionsView: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [subscriptionToDelete, setSubscriptionToDelete] = useState<CalendarSubscription | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [localPreviewDirty, setLocalPreviewDirty] = useState(false);
+  const localCalendarFixtureEnabled = isLocalTestBackend
+    && typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).get(LOCAL_CALENDAR_FIXTURE_QUERY) === '1';
+  const [localFixtureVisible, setLocalFixtureVisible] = useState(localCalendarFixtureEnabled);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const localFixtureSubscription = useMemo<CalendarSubscription>(() => ({
+    id: LOCAL_CALENDAR_FIXTURE_ID,
+    name: 'DEV-084 local calendar fixture',
+    filters: emptyFilters(activeWorkspace?.id, activeBoard?.id),
+    isActive: true,
+    expiresAt: null,
+    lastAccessedAt: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  }), [activeBoard?.id, activeWorkspace?.id]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleProfileUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<ProfileUpdatedDetail>).detail;
+      if (!detail?.uid) return;
+      setMembers(currentMembers => currentMembers.map(member => (
+        member.userId === detail.uid
+          ? {
+              ...member,
+              email: detail.email ?? member.email,
+              displayName: detail.displayName ?? member.displayName,
+            }
+          : member
+      )));
+    };
+
+    window.addEventListener(PROFILE_UPDATED_EVENT, handleProfileUpdated);
+    return () => window.removeEventListener(PROFILE_UPDATED_EVENT, handleProfileUpdated);
+  }, []);
 
   const boardOptions = useMemo<CalendarBoardOption[]>(() => {
     const map = new Map<string, CalendarBoardOption>();
@@ -337,7 +478,15 @@ const CalendarSubscriptionsView: React.FC = () => {
       current.workspaceIds.add(member.workspaceId);
       const ref = workspaceRefs.find((workspace) => workspace.id === member.workspaceId);
       if (ref?.appWorkspaceId) current.workspaceIds.add(ref.appWorkspaceId);
-      if (!current.member.displayName && member.displayName) current.member = member;
+      if (user?.uid === member.userId) {
+        current.member = {
+          ...current.member,
+          email: user.email ?? current.member.email,
+          displayName: user.displayName ?? current.member.displayName,
+        };
+      } else if (!current.member.displayName && member.displayName) {
+        current.member = member;
+      }
       byUserId.set(member.userId, current);
     });
     if (user && !byUserId.has(user.uid)) {
@@ -454,7 +603,7 @@ const CalendarSubscriptionsView: React.FC = () => {
   }, [selectedWorkspaceKey, effectiveMemberWorkspaceIds]);
 
   const resetForm = () => {
-    setName('我的工作行事曆');
+    setName(DEFAULT_CALENDAR_SUBSCRIPTION_NAME);
     setFilters(emptyFilters(activeWorkspace?.id, activeBoard?.id));
     setBuilderPayload(null);
     setBuilderValidation({
@@ -594,7 +743,11 @@ const CalendarSubscriptionsView: React.FC = () => {
     if (!subscriptionToDelete) return;
     setIsDeleting(true);
     try {
-      await calendarSubscriptionService.delete(subscriptionToDelete.id);
+      if (isLocalTestBackend && subscriptionToDelete.id === LOCAL_CALENDAR_FIXTURE_ID) {
+        setLocalFixtureVisible(false);
+      } else {
+        await calendarSubscriptionService.delete(subscriptionToDelete.id);
+      }
       setSubscriptions((current) => current.filter((item) => item.id !== subscriptionToDelete.id));
       setGeneratedUrls((current) => {
         const next = { ...current };
@@ -626,12 +779,17 @@ const CalendarSubscriptionsView: React.FC = () => {
 
   if (!isSupabaseBackend) {
     return (
-      <div className="h-full overflow-auto bg-slate-50 p-4 sm:p-6">
+      <div
+        className="h-full overflow-auto bg-slate-50 p-4 sm:p-6"
+        data-calendar-subscription-root="true"
+        data-pwa-calendar-state={localPreviewDirty || isDeleting ? 'dirty' : 'safe'}
+      >
         <div className="mx-auto flex max-w-3xl flex-col gap-4">
           {isLocalTestBackend && (
             <section
               className="border border-slate-200 bg-white p-4"
               data-calendar-subscription-local-preview="true"
+              data-calendar-subscription-view-mode={localPreviewDirty ? 'builder' : 'list'}
             >
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div className="inline-flex items-center gap-2 text-sm font-bold text-slate-800">
@@ -647,8 +805,26 @@ const CalendarSubscriptionsView: React.FC = () => {
                 namePlaceholder="例如：我的跨看板任務"
                 disabled
                 blockedReason="目前只能預覽；請到已連接 Supabase 的環境建立訂閱。"
-                onNameChange={setName}
+                onNameChange={(value) => {
+                  setName(value);
+                  setLocalPreviewDirty(value !== DEFAULT_CALENDAR_SUBSCRIPTION_NAME);
+                }}
               />
+
+              {localPreviewDirty ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setName(DEFAULT_CALENDAR_SUBSCRIPTION_NAME);
+                    setBuilderRevision(current => current + 1);
+                    setLocalPreviewDirty(false);
+                  }}
+                  className="mb-3 h-9 border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                  data-calendar-subscription-local-cancel="true"
+                >
+                  取消預覽變更
+                </button>
+              ) : null}
 
               <CalendarSubscriptionBuilderPreview
                 boards={boardOptions}
@@ -661,15 +837,54 @@ const CalendarSubscriptionsView: React.FC = () => {
               <div className="mt-3 border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-600" data-calendar-subscription-snapshot-summary="true">
                 已納入 {builderValidation.includedBoardCount} / {builderPayload?.project_ids.length ?? boardOptions.length} 張看板
               </div>
+
+              {localCalendarFixtureEnabled && localFixtureVisible ? (
+                <article className="mt-4 border border-slate-200 bg-white p-3" data-calendar-subscription-local-fixture="true">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="truncate text-sm font-bold text-slate-900">{localFixtureSubscription.name}</h3>
+                      <p className="mt-1 text-xs leading-5 text-slate-500">可重置的 local-test 訂閱資料，用於驗證刪除確認層的滑鼠按鍵隔離。</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSubscriptionToDelete(localFixtureSubscription)}
+                      className="inline-flex h-9 shrink-0 items-center gap-1.5 border border-rose-200 px-3 text-xs font-bold text-rose-700 hover:bg-rose-50"
+                      data-calendar-subscription-delete-trigger="true"
+                      aria-label={`刪除訂閱 ${localFixtureSubscription.name}`}
+                    >
+                      <Trash2 size={14} />
+                      刪除
+                    </button>
+                  </div>
+                </article>
+              ) : null}
             </section>
           )}
         </div>
+
+        {subscriptionToDelete && localCalendarFixtureEnabled ? (
+          <CalendarSubscriptionDeleteDialog
+            subscription={subscriptionToDelete}
+            isDeleting={isDeleting}
+            workspaceNameById={workspaceNameById}
+            boardPathById={boardPathById}
+            memberNameById={memberNameById}
+            currentUserId={user?.uid}
+            onCancel={() => setSubscriptionToDelete(null)}
+            onConfirm={() => void deleteSubscription()}
+          />
+        ) : null}
       </div>
     );
   }
 
   return (
-    <div ref={scrollContainerRef} className="h-full overflow-auto bg-slate-50">
+    <div
+      ref={scrollContainerRef}
+      className="h-full overflow-auto bg-slate-50"
+      data-calendar-subscription-root="true"
+      data-pwa-calendar-state={viewMode === 'builder' || isSaving || isDeleting ? 'dirty' : 'safe'}
+    >
       <div className="mx-auto flex max-w-6xl flex-col gap-4 p-4 sm:p-6">
         <header className="flex flex-col gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -865,82 +1080,18 @@ const CalendarSubscriptionsView: React.FC = () => {
         )}
       </div>
 
-      {subscriptionToDelete && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/30 p-4"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.currentTarget === event.target && !isDeleting) setSubscriptionToDelete(null);
-          }}
-        >
-          <section
-            className="w-full max-w-lg border border-slate-200 bg-white shadow-xl"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="calendar-subscription-delete-title"
-            aria-describedby="calendar-subscription-delete-description"
-            data-calendar-subscription-delete-dialog="true"
-          >
-            <div className="flex items-start justify-between border-b border-slate-200 px-4 py-3">
-              <div className="flex items-start gap-2">
-                <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center bg-rose-50 text-rose-700">
-                  <Trash2 size={16} />
-                </div>
-                <div>
-                  <h3 id="calendar-subscription-delete-title" className="text-sm font-bold text-slate-900">刪除訂閱並撤銷連結</h3>
-                  <p id="calendar-subscription-delete-description" className="mt-1 text-xs leading-5 text-slate-500">
-                    刪除後無法恢復，使用此連結的外部行事曆將停止取得更新。
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSubscriptionToDelete(null)}
-                disabled={isDeleting}
-                className="inline-flex h-8 w-8 items-center justify-center text-slate-400 hover:bg-slate-50 hover:text-slate-700 disabled:cursor-not-allowed"
-                aria-label="取消刪除"
-                title="取消刪除"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="space-y-3 px-4 py-4 text-sm">
-              <div className="border border-slate-200 bg-slate-50 px-3 py-2">
-                <div className="font-bold text-slate-900">{subscriptionToDelete.name}</div>
-                <div className="mt-1 text-xs leading-5 text-slate-600">
-                  <div>來源：{describeSourceFilter(subscriptionToDelete.filters, workspaceNameById, boardPathById)}</div>
-                  <div>條件：{describeConditionFilters(subscriptionToDelete.filters, memberNameById, user?.uid)}</div>
-                </div>
-              </div>
-              <div className="flex items-start gap-2 text-xs leading-5 text-rose-700" role="alert">
-                <ShieldAlert size={14} className="mt-0.5 shrink-0" />
-                <span>這會永久刪除訂閱設定並讓舊 ICS 連結失效；若要日後恢復，請改用「停用」。</span>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 border-t border-slate-200 px-4 py-3">
-              <button
-                type="button"
-                onClick={() => setSubscriptionToDelete(null)}
-                disabled={isDeleting}
-                className="h-9 border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                onClick={() => void deleteSubscription()}
-                disabled={isDeleting}
-                className="inline-flex h-9 items-center gap-2 bg-rose-700 px-3 text-sm font-bold text-white hover:bg-rose-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-              >
-                {isDeleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
-                {isDeleting ? '刪除中' : '刪除並撤銷連結'}
-              </button>
-            </div>
-          </section>
-        </div>
-      )}
+      {subscriptionToDelete && !localCalendarFixtureEnabled ? (
+        <CalendarSubscriptionDeleteDialog
+          subscription={subscriptionToDelete}
+          isDeleting={isDeleting}
+          workspaceNameById={workspaceNameById}
+          boardPathById={boardPathById}
+          memberNameById={memberNameById}
+          currentUserId={user?.uid}
+          onCancel={() => setSubscriptionToDelete(null)}
+          onConfirm={() => void deleteSubscription()}
+        />
+      ) : null}
     </div>
   );
 };

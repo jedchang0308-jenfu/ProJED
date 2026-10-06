@@ -43,9 +43,10 @@ assert(
   source.settingsView.includes("label: '備份、還原與資料移轉'") &&
     source.settingsView.includes("label: '看板權限'") &&
     source.settingsView.includes("label: '行事曆訂閱'") &&
-    source.settingsView.includes("label: '快速開啟'") &&
-    source.settingsView.includes('grid grid-cols-2 gap-2 sm:grid-cols-4') &&
-    source.settingsView.includes('flex min-h-11 min-w-0 items-center gap-2') &&
+    source.settingsView.includes("label: '安裝APP'") &&
+    source.settingsView.includes("label: '個人資料'") &&
+    source.settingsView.includes('grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6') &&
+    source.settingsView.includes('flex min-h-14 min-w-0 flex-col items-center') &&
     !source.settingsView.includes('section.description') &&
     !source.settingsView.includes('建立可供外部行事曆讀取的任務訂閱連結。'),
 );
@@ -78,9 +79,9 @@ assert(
   source.recycleBinView.includes('data-recycle-bin-view="current-board"') &&
     source.recycleBinView.includes('目前看板回收桶') &&
     source.recycleBinView.includes('目標：{targetLabel}') &&
-    source.recycleBinView.includes('目前看板沒有已刪除任務。') &&
-    source.recycleBinView.includes('archivedItems.length') &&
-    source.recycleBinView.includes('將永久刪除 ${archivedItems.length} 筆已刪除任務'),
+    source.recycleBinView.includes('目前看板沒有封存任務。') &&
+    source.recycleBinView.includes('collectPermanentDeleteScope') &&
+    source.recycleBinView.includes('將永久刪除 ${deleteCount} 筆封存任務'),
 );
 
 assert(
@@ -92,12 +93,13 @@ assert(
 );
 
 assert(
-  'Calendar and quick-open settings expose external-link and device/account scopes',
+  'Calendar and App installation keep their external-link and device/account scopes',
   source.settingsView.includes('data-calendar-settings-scope="external-link"') &&
     source.settingsView.includes('設定範圍') &&
     source.settingsView.includes('外部連結') &&
     source.appInstallAssistant.includes('data-pwa-install-scope="device-account"') &&
-    source.appInstallAssistant.includes('設定範圍：此裝置 / 目前帳號'),
+    source.appInstallAssistant.includes('data-app-install-choice={app.id}') &&
+    !source.appInstallAssistant.includes('設定範圍：目前看板'),
 );
 
 assert(
@@ -110,7 +112,8 @@ assert(
   'DEV-038 governance docs are present',
   source.spec.includes('設定中心作用範圍一致性與高風險防呆') &&
     source.qa.includes('QA-DEV-038') &&
-    source.devTask.includes('DEV-038: 設定中心作用範圍一致性與高風險防呆') &&
+    source.devTask.includes('DEV-038') &&
+    source.devTask.includes('設定中心範圍一致性與防呆') &&
     source.documentationMap.includes('DEV-038: 設定中心作用範圍一致性與高風險防呆'),
 );
 

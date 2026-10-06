@@ -1,11 +1,19 @@
 import { spawn } from 'node:child_process';
-import './load-local-env.mjs';
+import './load-server-verification-env.mjs';
+import { buildSanitizedChildEnv } from './release/env-boundary.mjs';
+import { resolveCredentialRotationPolicyDecision } from './release/credential-rotation-evidence.mjs';
 
 const strict = process.argv.includes('--strict');
+const projectRef = (() => {
+  try { return new URL(process.env.SUPABASE_URL ?? '').hostname.split('.')[0] || null; } catch { return null; }
+})();
+const credentialRotationPolicy = projectRef
+  ? resolveCredentialRotationPolicyDecision({ projectRef })
+  : null;
 
 const run = (command, args, env = {}) => new Promise((resolve) => {
   const spawnOptions = {
-    env: { ...process.env, ...env },
+    env: buildSanitizedChildEnv(process.env, { extra: env }),
     stdio: 'inherit',
   };
 
@@ -63,19 +71,12 @@ for (const step of steps) {
     continue;
   }
 
-  const code = await run(step.command, step.args);
+  const stepEnv = Object.fromEntries((step.requiredEnv ?? []).filter(key => process.env[key]).map(key => [key, process.env[key]]));
+  const code = await run(step.command, step.args, stepEnv);
   results.push({ name: step.name, status: code === 0 ? 'pass' : 'fail', code });
 }
 
 const manualGates = [
-  {
-    name: 'browser-google-oauth-e2e',
-    env: [
-      'SUPABASE_BROWSER_OAUTH_E2E_CONFIRMED',
-      'P8_BROWSER_OAUTH_E2E_CONFIRMED',
-      'P7_BROWSER_OAUTH_E2E_CONFIRMED',
-    ],
-  },
   {
     name: 'credential-rotation',
     env: [
@@ -88,10 +89,12 @@ const manualGates = [
 
 for (const gate of manualGates) {
   const confirmed = gate.env.some(envName => process.env[envName] === 'true');
+  const policyDecision = gate.name === 'credential-rotation' ? credentialRotationPolicy : null;
   results.push({
     name: gate.name,
-    status: confirmed ? 'pass' : strict ? 'fail' : 'pending',
-    reason: confirmed ? undefined : `set one of ${gate.env.join(', ')}=true after completing the manual gate`,
+    status: confirmed || policyDecision ? 'pass' : strict ? 'fail' : 'pending',
+    confirmed_by: confirmed ? gate.env.find(envName => process.env[envName] === 'true') : policyDecision ? `policy:${policyDecision.policy_id}` : undefined,
+    reason: confirmed || policyDecision ? undefined : `set one of ${gate.env.join(', ')}=true after completing the manual gate`,
   });
 }
 

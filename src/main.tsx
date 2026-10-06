@@ -7,7 +7,11 @@ import GlobalErrorBoundary from './components/GlobalErrorBoundary'
 import { installSupabaseBrowserDiagnostics } from './services/supabase/browserDiagnostics'
 import { setupPwaInstallPromptListener } from './services/pwaInstallService'
 import { handleRecoverableAppLoadError, setupPwaLifecycle } from './services/pwaUpdateService'
+import { installAppIconRefresh } from './services/appIconService'
+import { captureQuickWorkbenchIntent } from './features/taskWorkbench/entryIntent'
 
+installAppIconRefresh('main');
+captureQuickWorkbenchIntent();
 installSupabaseBrowserDiagnostics();
 setupPwaInstallPromptListener();
 setupPwaLifecycle();

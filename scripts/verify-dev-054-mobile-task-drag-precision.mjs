@@ -6,6 +6,9 @@ const files = {
   intent: 'src/components/Wbs/taskDrag/taskDropIntent.ts',
   target: 'src/components/Wbs/taskDrag/taskDragTargetAdapter.ts',
   session: 'src/components/Wbs/taskDrag/useTaskDragSession.ts',
+  gesturePolicy: 'src/components/Wbs/taskDrag/taskGesturePolicy.ts',
+  gestureSurface: 'src/components/Wbs/taskDrag/useTaskGestureSurface.ts',
+  dragSensors: 'src/hooks/useDragSensors.ts',
   commit: 'src/components/Wbs/taskDrag/taskDragCommit.ts',
   presenter: 'src/components/Wbs/taskDrag/TaskDragPresenter.tsx',
   originField: 'src/components/Wbs/taskDrag/TaskOriginTitleField.tsx',
@@ -15,8 +18,10 @@ const files = {
   board: 'src/components/BoardView.tsx',
   card: 'src/components/Wbs/KanbanCard.tsx',
   checklist: 'src/components/Wbs/KanbanChecklist.tsx',
+  sharedChecklistTree: 'src/components/Wbs/TaskChecklistTree.tsx',
   column: 'src/components/Wbs/KanbanColumn.tsx',
   workbench: 'src/components/TaskWorkbenchPanel.tsx',
+  css: 'src/index.css',
   spec: 'ai-doc/specs/SPEC-054-mobile-task-drag-precision.md',
   qa: 'ai-doc/qa/QA-DEV-054-mobile-task-drag-precision.md',
   browser: 'scripts/verify-dev-054-mobile-task-drag-precision-browser.pw.js',
@@ -30,6 +35,16 @@ const source = Object.fromEntries(Object.entries(files).map(([key, file]) => [
 const results = [];
 const check = (name, ok, details) => results.push({ name, ok: Boolean(ok), details });
 const hasAll = (value, needles) => needles.every((needle) => value.includes(needle));
+// Shared renderers and adapter boundaries may express the same data-* contract
+// either as JSX attributes or as object props passed to a presentation layer.
+// The verifier checks the rendered DOM contract, so accept both source forms.
+const hasDataAttribute = (component, attribute, value = 'true') => (
+  component.includes(`${attribute}="${value}"`)
+  || component.includes(`'${attribute}': '${value}'`)
+  || new RegExp(`['"]${attribute}['"]\\s*:[^,\\n]*['"]${value}['"]`).test(component)
+);
+const checklistRendererSource = `${source.checklist}\n${source.sharedChecklistTree}`;
+const columnDropSource = source.column.slice(source.column.indexOf("'data-mobile-pan-surface': 'kanban-column'"));
 
 Object.entries(files).forEach(([key, file]) => check(`file exists:${key}`, existsSync(resolve(file)), file));
 
@@ -46,21 +61,33 @@ check('task intent and action hit testing use the raw finger point',
   source.target.indexOf("closest('[data-mobile-task-action]')") < source.target.indexOf('const intentPoint = getTaskIntentPoint(point)')
   && source.target.includes('y: rawPoint.y'));
 
-check('mobile and desktop commit use the same canonical resolver',
-  (source.commit.match(/resolveTaskDropIntent\(/g) || []).length >= 2
-  && source.intent.includes('export const resolveTaskDropIntent')
+check('mobile and desktop preview and commit use the same canonical outcome resolver',
+  source.target.includes('resolveTaskDropOutcome({')
+  && source.originPreview.includes('resolveTaskDropOutcome({')
+  && source.commit.includes('resolveTaskDropOutcome({')
+  && source.intent.includes('export const resolveTaskDropOutcome')
   && !source.target.includes('rect.top + rect.height / 2'));
 
 check('explicit target surface kinds exist for card, checklist, and column',
-  source.card.includes('data-task-drop-surface-kind="kanban-card"')
-  && source.card.includes('data-mobile-task-card-primary="true"')
-  && source.checklist.includes('data-task-drop-surface-kind="checklist-row"')
-  && source.column.includes('data-task-drop-surface-kind="column-header"'));
+  hasDataAttribute(source.card, 'data-task-drop-surface-kind', 'kanban-card')
+  && hasDataAttribute(source.card, 'data-mobile-task-card-primary')
+  && hasDataAttribute(checklistRendererSource, 'data-task-drop-surface-kind', 'checklist-row')
+  && hasDataAttribute(source.column, 'data-task-drop-surface-kind', 'column-header')
+  && hasDataAttribute(columnDropSource, 'data-mobile-pan-surface', 'kanban-column')
+  && columnDropSource.includes("'data-mobile-drop-target': nodeId")
+  && hasDataAttribute(columnDropSource, 'data-task-drop-surface-kind', 'column-drop'));
 
-check('mobile hit testing is exact, innermost-first, and blocks ancestor fall-through',
+check('mobile container surfaces own their geometry instead of borrowing the first descendant task',
+  source.target.includes("surfaceKind === 'column-drop'")
+  && source.target.includes("surfaceKind === 'root-drop'")
+  && source.target.includes("surfaceKind === 'checklist-drop'")
+  && source.target.includes('containerOwnsGeometry'));
+
+check('mobile hit testing is exact, title-child-first, innermost-first, and blocks ancestor fall-through',
   source.target.includes('document.elementFromPoint(point.x, point.y)')
   && source.target.includes('The innermost task surface owns the point')
-  && source.target.includes("sourceSurfaceKind === 'checklist-row' && domSurfaceKind === 'kanban-card'")
+  && source.target.includes('resolveTaskTitleChildDropTarget({')
+  && source.target.indexOf('resolveTaskTitleChildDropTarget({') < source.target.indexOf('collectDirectCandidates(intentPoint, state)')
   && !source.target.includes('findNearestCandidate'));
 
 check('target stability tracks lock, pending handover, and freshness', hasAll(source.types, [
@@ -68,11 +95,48 @@ check('target stability tracks lock, pending handover, and freshness', hasAll(so
 ]) && hasAll(source.target, [
   'stabilizeCandidate', 'pointInsideTargetCore',
   'if (!withinRetainRegion)', 'MOBILE_RELEASE_FRESHNESS_MS',
-]));
+]) && source.session.includes('Date.now() - releaseObservation.lastStableAt <= MOBILE_RELEASE_FRESHNESS_MS')
+  && !source.target.includes('now - state.lastStableAt <= MOBILE_RELEASE_FRESHNESS_MS'));
 
 check('task drag owns touch movement after long press and pan broker yields', hasAll(source.panBroker, [
-  'isTaskDragTouchActive', 'document.body.hasAttribute', 'move:task-drag-owner', 'reset();',
-]));
+  'isTaskDragTouchActive', 'document.body.hasAttribute', 'task-drag-owner',
+]) && source.panBroker.includes('reset('));
+
+check('actual touch owns the dedicated drag session independently of viewport width',
+  source.gestureSurface.includes('if (mobileActionEnabled && sourceKind)')
+  && !source.gestureSurface.includes('if (isMobileTaskActionMode() && mobileActionEnabled && sourceKind)')
+  && !source.session.includes('if (!isMobileTaskActionMode()) return false;')
+  && !source.dragSensors.includes('TouchSensor'));
+
+check('every eligible task long-press surface suppresses native selection and iOS callout from touchstart',
+  hasAll(source.css, [
+    '[data-task-touch-gesture-surface="true"]',
+    '-webkit-touch-callout: none;',
+    '-webkit-user-select: none;',
+    'user-select: none;',
+    ':is(input, textarea, [contenteditable="true"])',
+  ])
+  && (source.column.includes('data-task-touch-gesture-surface=') || source.column.includes("'data-task-touch-gesture-surface':"))
+  && source.column.includes('taskGesture.touchGestureEnabled')
+  && checklistRendererSource.includes('data-task-touch-gesture-surface=')
+  && checklistRendererSource.includes('taskGesture.touchGestureEnabled')
+  && (source.card.includes('data-task-touch-gesture-surface=') || source.card.includes("'data-task-touch-gesture-surface':"))
+  && source.card.includes('taskGesture.touchGestureEnabled')
+  && hasAll(source.workbench, ['data-task-touch-gesture-surface=', 'touchGestureEnabled={taskGesture.touchGestureEnabled}']));
+
+check('Workbench keeps native pan while only eligible unplaced rows receive touch ownership',
+  source.workbench.includes("sourceKind: 'workbench-unplaced-row'")
+  && source.workbench.includes('sourceKind: null')
+  && source.workbench.includes('mobileActionEnabled: false')
+  && !source.css.includes('[data-task-touch-gesture-surface="true"] {\n  touch-action: none;'));
+
+const workbenchChildGuard = source.target.indexOf("if (state.source.kind !== 'workbench-unplaced-row')");
+const invalidChildZoneReturn = source.target.indexOf('if (childZone) return observation;', workbenchChildGuard);
+const workbenchDirectCandidate = source.target.indexOf('const directCandidate = collectDirectCandidates(intentPoint, state)[0] || null;', invalidChildZoneReturn);
+check('Workbench unplaced rows can resolve direct board targets without enabling child-drop intent',
+  workbenchChildGuard >= 0
+  && invalidChildZoneReturn > workbenchChildGuard
+  && workbenchDirectCandidate > invalidChildZoneReturn);
 
 check('release cannot fall back to a stale previous target',
   source.session.includes('withoutTarget(latestObservation)')
@@ -91,21 +155,37 @@ check('preview remains finger-coupled and preserves z-order',
   source.presenter.includes('MOBILE_PREVIEW_FINGER_CLEARANCE_PX')
   && source.presenter.includes('data-mobile-preview-anchor="finger"')
   && !source.presenter.includes('MOBILE_PREVIEW_INDICATOR_GAP_PX')
-  && source.presenter.includes('z-[80]')
-  && source.presenter.includes('z-[90]')
-  && source.presenter.includes('z-[95]'));
+  && source.presenter.includes('overlayBaseZIndex = 80')
+  && source.presenter.includes('zIndex: overlayBaseZIndex')
+  && source.presenter.includes('zIndex: overlayBaseZIndex + 10')
+  && source.presenter.includes('zIndex: overlayBaseZIndex + 15'));
+
+check('mobile preview uses the same half-scale visual treatment as desktop', hasAll(source.presenter, [
+  'TASK_DRAG_OVERLAY_SCALE',
+  'data-mobile-preview-scale={TASK_DRAG_OVERLAY_SCALE}',
+  'transform: `scale(${TASK_DRAG_OVERLAY_SCALE})`',
+  'previewVisualWidth',
+  'previewVisualHeight',
+]));
 
 check('mobile source placeholders do not impersonate the live drop indicator',
-  source.card.includes('data-kanban-drag-source-placeholder-neutral="true"')
+  source.card.includes('data-kanban-drag-source-placeholder={isDragPlaceholder')
+  && source.card.includes('kanban-drag-origin-placeholder')
   && !source.card.includes('showSourceInsertionMarker')
   && !source.checklist.includes('showSourceInsertionMarker')
   && !source.checklist.includes("import { KanbanInsertionMarker }")
   && source.presenter.includes('data-mobile-drop-indicator="true"'));
 
+check('mobile source lookup keeps placement identity across nested source surfaces',
+  source.target.includes('data-task-surface-frame="true"][data-task-placement-id]')
+  && source.target.includes('owningPlacement === placementId'));
+
 check('mobile source origin is a shared blue no-op title field outside normal flow', hasAll(source.target, [
   'resolveMobileTaskOriginFieldRect',
   'findMobileSourcePlaceholder',
   'originFieldRect,',
+  "candidate.outcomeKind === 'move' ? candidate.indicatorRect : null",
+  "candidate.outcomeKind === 'origin' ? candidate.originFieldRect : null",
 ]) && hasAll(source.presenter, [
   'data-mobile-drop-origin="true"',
   'data-mobile-drop-noop="true"',
@@ -116,11 +196,11 @@ check('mobile source origin is a shared blue no-op title field outside normal fl
   'text-white',
 ]) && source.originPreview.includes('export const resolveTaskOriginFieldRect'));
 
-check('browser verifier covers finger-centered hit, single live indicator, pan ownership, boundary jitter, and deliberate handover', hasAll(source.browser, [
-  'finger-centered point selects canonical same-parent order',
+check('browser verifier covers non-center raw-finger hit, single live indicator, pan ownership, boundary jitter, and deliberate handover', hasAll(source.browser, [
+  'non-center raw finger point selects the explicit same-parent boundary',
   'adjacent checklist boundary jitter keeps one stable target',
   'mobile checklist drag exposes only the live target indicator',
-  'rapid multi-row movement cannot retain a stale indicator or use a tall card outer rect',
+  'rapid multi-row movement cannot retain a stale indicator or use a title-only boundary',
   'checklist source geometry cannot fall through to its expanded parent card',
   'a visible indicator must never remain on a target outside its retain region',
   'an invalid innermost source row must block fall-through to its ancestor card',
@@ -133,6 +213,10 @@ check('browser verifier covers finger-centered hit, single live indicator, pan o
   'origin title field must fit the viewport',
   'mobile action rail must take priority and clear origin feedback while hovered',
   'card and column origin releases must be zero-write no-ops',
+  'every kanban task level owns native selection before long press activates',
+  '500ms and 8px gesture boundaries separate tap pan and drag',
+  'actual touch starts the dedicated drag session above the old 768px width gate',
+  'Workbench unplaced rows drag into the inline board while placed rows stay non-draggable',
 ]));
 
 const placedStart = source.workbench.indexOf('const WorkbenchPlacedReadOnlyCard');
@@ -145,9 +229,11 @@ check('workbench placed row remains non-draggable',
   && placedSource.includes('canUseDragSurface={false}')
   && !placedSource.includes('useDraggable('));
 
-check('desktop approved presenter and collision path remain present', hasAll(source.board, [
-  '<DragOverlay dropAnimation={null}>',
-  'pointer-events-none flex translate-x-4 translate-y-4 items-center gap-2 rounded-lg',
+check('desktop presenter keeps its collision path while honoring the latest half-scale pointer attachment', hasAll(source.board, [
+  '<DragOverlay dropAnimation={null}>{null}</DragOverlay>',
+  'resolvePointerUpperRightOverlayPosition',
+  'pointer-events-none fixed z-[93] flex h-10 origin-top-left items-center gap-2 rounded-lg',
+  'data-task-drag-overlay-scale={DESKTOP_TASK_DRAG_OVERLAY_SCALE}',
   'collisionDetection={collisionDetection}',
 ]));
 

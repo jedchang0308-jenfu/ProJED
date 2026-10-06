@@ -5,6 +5,15 @@
 狀態: Phase 1 + Phase 1B Local Automated Browser QA Passed / Physical Phone Supplemental Not Executed / Production Not Deployed / Canvas CTA Pass-Through Covered
 建立日期: 2026-07-04
 
+## Current UI Regression Addendum（2026-08-14）
+
+- DEV-067 已移除欄內 inline「新增任務」按鈕並恢復看板尾端「新增列表」CTA；舊 B10/B11/E04/F02 的 DOM 前置已按現行產品校正，歷史敘述不再作 executable contract。
+- B10：確認舊 `data-kanban-add-task-button` 為 0，並驗證替代的新增列表 CTA 可 horizontal short-pan、零新增、零 modal、零 action rail。
+- B11：在 390x415 compact viewport 從欄位內容區執行 vertical short-pan，驗證 column `scrollTop` 增加且零 click-through。
+- B12：新增列表 CTA horizontal short-pan 保留 board pan-first。
+- E04：quick tap 新增列表 CTA 必須建立一個 L1 並開啟對應 TaskDetails；F02 改驗證 canonical whole-task surface，不能再期待已移除的 explicit drag handle。
+- 2026-08-14 browser matrix 共 41 個情境全部通過；另由 DEV-054 R12-R15 補上原生圈選、500ms/8px、寬觸控 viewport 與 Workbench native pan/no-drag 邊界。
+
 ## Canvas CTA Pass-Through Addendum（2026-07-17）
 
 - 使用者回報手機模式按住「新增任務」按鈕時無法移動畫面；此為 pan-first 覆蓋面缺口。
@@ -61,9 +70,9 @@
 | QA-029-B07 | L2+ 子任務列垂直短滑 | checklist row 可見且欄位可垂直捲動 | 在 child task row 上向上短滑 | column `scrollTop` 有可觀察增加，不誤開任務功能 | scrollTop before/after |
 | QA-029-B08 | L2+ 子任務列水平短滑 | checklist row 可見且看板可水平捲動 | 在 child task row 上向左短滑 | board `scrollLeft` 有可觀察增加，不誤開任務功能 | scrollLeft before/after |
 | QA-029-B09 | 手機拖曳把手短滑 | task drag handle 可見且看板可水平捲動 | 從把手向左短滑 | board `scrollLeft` 有可觀察增加，不啟動 dnd-kit drag / action rail | scrollLeft before/after + negative DOM |
-| QA-029-B10 | 欄位新增任務按鈕水平短滑 | `data-kanban-add-task-button` 可見且看板可水平捲動 | 從欄位內「新增任務」向左短滑 | board `scrollLeft` 有可觀察增加，不新增任務、不開 modal、不進 action rail | scrollLeft before/after + node count + negative DOM |
-| QA-029-B11 | 欄位新增任務按鈕垂直短滑 | `data-kanban-add-task-button` 可見且欄位可垂直捲動 | 從欄位內「新增任務」向上短滑 | column `scrollTop` 有可觀察增加，不新增任務、不開 modal、不進 action rail | scrollTop before/after + node count + negative DOM |
-| QA-029-B12 | 看板尾端新增 CTA 水平短滑 | `data-kanban-add-column-button` 可見且看板可水平捲動 | 從看板尾端新增 CTA 向左短滑 | board `scrollLeft` 有可觀察增加，不新增欄位、不開 modal、不進 action rail | scrollLeft before/after + column count + negative DOM |
+| QA-029-B10 | Removed inline CTA + replacement pan | 現行 UI、看板可水平捲動 | 確認舊欄內新增任務 CTA 不存在；從看板尾端新增列表 CTA 向左短滑 | 舊 selector 為 0；board `scrollLeft` 增加，不新增列表、不開 modal、不進 action rail | DOM absence + scrollLeft + root count + negative DOM |
+| QA-029-B11 | 欄位內容區垂直短滑 | compact viewport、欄位可垂直捲動 | 從 column body 向上短滑 | column `scrollTop` 增加，不新增、不開 modal、不進 action rail | scrollTop before/after + negative DOM |
+| QA-029-B12 | 看板尾端新增列表 CTA 水平短滑 | `data-kanban-add-column-button` 可見且看板可水平捲動 | 從新增列表 CTA 向左短滑 | board `scrollLeft` 增加，不新增列表、不開 modal、不進 action rail | scrollLeft before/after + root count + negative DOM |
 
 ### C. 長按與取消情境
 
@@ -95,7 +104,7 @@
 | QA-029-E01 | 工作台 collapsed toggle | 390x844 | tap collapsed rail toggle | 工作台可展開，不被 pan guard 擋住 | screenshot |
 | QA-029-E02 | 工作台 filter button | 工作台展開 | tap `過濾器` | filter popover 開啟 | popover screenshot |
 | QA-029-E03 | 未歸位新增 input | 工作台展開 | tap input 並輸入文字 | input 可聚焦與輸入 | input value |
-| QA-029-E04 | 看板欄位新增任務 input | 欄位表單可見 | tap/fill `輸入任務名稱` | input 可聚焦與輸入，不開 details | input value |
+| QA-029-E04 | 看板新增列表 CTA | 看板尾端 CTA 可見 | quick tap 新增列表 | 建立一個新 L1，並開啟該 L1 對應 TaskDetails | root count + modal task id |
 | QA-029-E05 | 外層 rename control 移除後 hit-test | 任務卡可見 | 確認外層 rename control/input/menu 不存在，並 tap 卡片 title | 不存在外層 rename 控制項，且手機 tap 仍開啟正確任務詳情 | DOM count / modal task id |
 | QA-029-E06 | checklist 展開/收合 | card 有 child task | tap 展開/收合控制 | 只展開/收合，不開 details | DOM count / screenshot |
 | QA-029-E07 | date / dependency / assignee / tag controls | 對應控制可見 | tap 控制 | 控制自身行為正常，不開 details | control-specific DOM |
@@ -105,7 +114,7 @@
 | ID | 情境 | 前置條件 | 操作 | 預期結果 | 證據 |
 |---|---|---|---|---|---|
 | QA-029-F01 | 主卡面短滑不得啟動 drag | 任務卡可見 | 在主卡面短滑 | 不出現 drag overlay / preview，任務位置不變 | DOM / order |
-| QA-029-F02 | explicit drag handle 保留 | drag handle 可見且有權限 | 檢查 handle selector / computed style | `data-task-drag-handle="true"` 存在，且只有 handle 可 `touch-action: none` | DOM + computed style |
+| QA-029-F02 | canonical whole-task drag surface | 任務卡／checklist／column header 可見 | 檢查正式 source selector / computed style | source 使用 `data-task-surface-source="true"`；不依賴已移除的 explicit drag handle | DOM + computed style |
 | QA-029-F03 | dnd-kit 不早於 pan 搶事件 | 任務卡可見 | 小距離短滑、斜向短滑、縱向短滑 | 不誤拖、不開 details | negative DOM |
 
 ### G. Task Workbench mobile 回歸

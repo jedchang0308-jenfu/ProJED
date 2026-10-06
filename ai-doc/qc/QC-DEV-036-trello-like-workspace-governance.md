@@ -16,7 +16,7 @@ DEV-036 Phase 1 已通過本機自動化 QC。此次交付完成 Trello-like Wor
 
 | Gate | 結果 | 證據 |
 |---|---|---|
-| DEV-036 static | Pass | `npm.cmd run verify:dev-036-trello-like-workspace-governance`，24/24 |
+| DEV-036 static | Pass | `npm.cmd run verify:dev-036-trello-like-workspace-governance`，27/27 |
 | DEV-036 browser | Pass | `npm.cmd run verify:dev-036-trello-like-workspace-governance-browser` |
 | DEV-035 workspace delete static | Pass | `npm.cmd run verify:dev-035-workspace-delete-persistence-fix`，22/22 |
 | DEV-035 workspace delete browser | Pass | `npm.cmd run verify:dev-035-workspace-delete-browser` |
@@ -44,11 +44,23 @@ DEV-036 Phase 1 已通過本機自動化 QC。此次交付完成 Trello-like Wor
 - 已修正 `seedLocalTestEnvironment`：`home` view 可恢復，且在沒有 active board 時移除 `projed-last-board`，不自動塞回基準 board。
 - 已將此行為加入 DEV-036 static verifier，避免後續回歸。
 
+## 驗證對齊追加（2026-08-12）
+
+- DEV-036 static verifier 已通過 27/27；新增 pending board local id 不得在 backend create 完成前成為 active board 的回歸檢查。
+- 現行 canonical `dev_task` / `documentation_map` 索引與 SPEC / ADR / QA / QC 交叉引用一致。
+
 ## DB / Production 邊界
 
 - 不需要 Supabase DB QC：Phase 1 沒有新增 migration，也沒有改 RLS / membership。
 - 不需要 billing QC：本輪明確不新增 Workspace billing、seat、quota 或付費邏輯。
 - 未部署 production；若要部署，需另走 `deployment-release-gate`。
+
+## 2026-08-20 直接改名風險修訂 QC
+
+- Topbar active Board title 已由 `contentEditable` 改為純顯示；點擊、雙擊與 `F2` 不會開啟改名 input。
+- Sidebar Board 的受控 `F2`／右鍵改名仍可用，未繞過既有權限檢查。
+- Static：`npm.cmd run verify:dev-030-sidebar-rename-contract`，11/11 PASS。
+- Browser：`npm.cmd run verify:dev-030-sidebar-rename-contract-browser`，PASS；Chromium 1440x900，console errors=0。
 
 ## 殘餘風險
 

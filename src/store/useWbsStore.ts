@@ -1,29 +1,49 @@
 import { create } from 'zustand';
 import dayjs from 'dayjs';
 import type { ActivityEventType, Dependency, KanbanViewConfig, TaskNode, TaskStatus } from '../types';
-import { nodeService, dependencyService, workspaceService, boardService, tagService, eventLogService } from '../services/dataBackend';
+import { isSupabaseBackend, nodeService, dependencyService, workspaceService, boardService, tagService, eventLogService } from '../services/dataBackend';
 import useUndoStore from './useUndoStore';
 import useBoardStore from './useBoardStore';
 import useRecordStore from './useRecordStore';
+import useAuthStore from './useAuthStore';
+import { useMemberStore } from './useMemberStore';
 import { useTagStore } from './useTagStore';
 import {
   isTaskWorkbenchUnplacedTask,
+  persistRemoveTaskWorkbenchUnplacedTask,
+  persistTaskWorkbenchUnplacedTask,
   readTaskWorkbenchUnplacedTasks,
-  removeTaskWorkbenchUnplacedTask,
-  upsertTaskWorkbenchUnplacedTask,
 } from '../features/taskWorkbench/placement';
+import { persistTaskWorkbenchPlacementCommand } from '../features/taskWorkbench/placementTransaction';
+import {
+  assertMoveTaskSubtreeCommand,
+  buildRestoreDestination,
+  withNewTaskPlacementOperation,
+  type MoveTaskSubtreeCommand,
+} from '../features/taskWorkbench/taskPlacementCommand';
 import {
   getTaskAssigneeIds,
   normalizeTaskAssignmentNode,
   normalizeTaskAssignmentUpdates,
 } from '../utils/taskAssignments';
+import { persistTaskCreationBeforeActivity } from '../utils/taskCreationPersistence';
 import { normalizeManualTaskStatus } from '../utils/taskStatus';
 import {
   getDeferredTaskStatusForFilters,
   useDeferredTaskFilterRefreshStore,
 } from '../features/taskFilters/deferredRefresh';
 import { matchesTaskFiltersWithStatus } from '../features/taskFilters/predicates';
-import type { TaskFilterState } from '../features/taskFilters/types';
+import { useTaskFilterStore } from './useTaskFilterStore';
+import { getTaskTrackingReferenceService } from '../services/dataBackend';
+import { TaskTrackingError } from '../features/taskTracking/errors';
+import { buildProjectionNodes, getReferenceSubtree, primaryPlacementId } from '../features/taskTracking/model';
+import type {
+  StagedTaskTrackingReference,
+  TaskProjectionNode,
+  TaskTrackingReference,
+  TaskTrackingReferenceCapability,
+} from '../features/taskTracking/types';
+import { buildTaskTreeClonePlan } from '../features/taskClonePlan';
 
 /**
  * WbsStore 狀態定義
@@ -45,6 +65,12 @@ export interface WbsBoardState {
   // 選項與過濾狀態
   loading: boolean;
   error: string | null;
+  pendingPlacementNodeIds: Record<string, string>;
+  /** Non-owning placements; task content remains in `nodes` only. */
+  trackingReferences: TaskTrackingReference[];
+  /** Account-owned reference roots temporarily held outside every Board. */
+  stagedTrackingReferences: StagedTaskTrackingReference[];
+  trackingReferenceCapability: TaskTrackingReferenceCapability;
 }
 
 export type SetNodesOptions = {
@@ -54,7 +80,66 @@ export type SetNodesOptions = {
 
 export type BatchNodeUpdates = Record<string, Partial<TaskNode>>;
 
+export type UpdateNodeOptions = {
+  onPersistSuccess?: () => void;
+  onPersistError?: (error: unknown) => void;
+  /** Re-send the current canonical values after a prior persistence failure. */
+  forcePersistence?: boolean;
+  skipPersistence?: boolean;
+  skipActivity?: boolean;
+};
+
+export type UpdateNodeDispatchResult =
+  | {
+      accepted: false;
+      reason: 'missing_node' | 'no_changes';
+    }
+  | {
+      accepted: true;
+      operationId: string;
+      completion: Promise<'persisted' | 'failed'>;
+    };
+
 export type BatchUpdateNodesOptions = {
+  label?: string;
+  mergeKey?: string;
+  persistenceOrder?: 'parallel' | 'root-first' | 'leaves-first';
+};
+
+export type NodeBatchCommitStatus = 'committed' | 'rejected' | 'compensated' | 'indeterminate';
+
+export type NodeBatchCommitOutcome = Readonly<{
+  status: NodeBatchCommitStatus;
+  operationId: string;
+  affectedTaskIds: readonly string[];
+  error?: string;
+}>;
+
+export type CommitNodeBatchOptions = {
+  label?: string;
+  mergeKey?: string;
+  timeoutMs?: number;
+  recoveryKind?: 'copy-paste' | 'cut-paste' | 'assign' | 'archive' | 'undo' | 'redo';
+  presentation?: Readonly<{
+    commit: () => Promise<void>;
+    compensate: () => Promise<void>;
+    beforeFingerprint?: string;
+    afterFingerprint?: string;
+    onCommitted?: () => void;
+    onCompensated?: () => void;
+  }>;
+};
+
+export type CommitNodeForestCreateInput = Readonly<{
+  nodes: readonly TaskNode[];
+  dependencies?: readonly Dependency[];
+  existingUpdatesById?: BatchNodeUpdates;
+  label?: string;
+  timeoutMs?: number;
+  presentation?: CommitNodeBatchOptions['presentation'];
+}>;
+
+export type TaskPlacementCommandOptions = {
   label?: string;
   mergeKey?: string;
 };
@@ -68,6 +153,9 @@ export interface WbsBoardActions {
    */
   setNodes: (nodes: TaskNode[], options?: SetNodesOptions) => void;
 
+  /** Merge remotely hydrated unplaced tasks without writing them back during hydration. */
+  hydrateUnplacedTasks: (tasks: TaskNode[]) => void;
+
   /**
    * 新增單一任務節點
    */
@@ -76,21 +164,56 @@ export interface WbsBoardActions {
   /**
    * 更新任務節點 (部分欄位)
    */
-  updateNode: (id: string, updates: Partial<TaskNode>) => void;
+  updateNode: (
+    id: string,
+    updates: Partial<TaskNode>,
+    options?: UpdateNodeOptions,
+  ) => UpdateNodeDispatchResult;
 
   /**
    * 以單一 undo command 套用多筆任務更新，用於拖曳、重排與跨視圖歸位。
    */
   batchUpdateNodes: (updatesById: BatchNodeUpdates, options?: BatchUpdateNodesOptions) => void;
 
+  /** Await a durable same-board batch and expose compensation/uncertainty to callers. */
+  commitNodeBatch: (
+    updatesById: BatchNodeUpdates,
+    options?: CommitNodeBatchOptions,
+  ) => Promise<NodeBatchCommitOutcome>;
+
+  /** Resolve a reload-surviving batch descriptor before accepting another mutation. */
+  recoverNodeBatch: (boardId: string) => Promise<NodeBatchCommitOutcome | null>;
+
+  /** Persist a preplanned cloned forest, compensating every created row on failure. */
+  commitNodeForestCreate: (input: CommitNodeForestCreateInput) => Promise<NodeBatchCommitOutcome>;
+
+  /** Execute a scope-safe cross-ownership move and apply only the canonical result. */
+  commitTaskPlacementCommand: (
+    command: MoveTaskSubtreeCommand,
+    options?: TaskPlacementCommandOptions,
+  ) => Promise<void>;
+
   /**
-   * 軟刪除任務節點 (只標記 isArchived)
+   * 封存任務節點；只標記 isArchived，保留依賴供還原後繼續使用。
    */
-  removeNode: (id: string) => void;
+  archiveNode: (id: string) => void;
+  /**
+   * 從回收桶永久刪除已封存任務與其子樹；不可由一般 undo 復原。
+   */
+  permanentlyDeleteNodes: (rootIds: string[]) => Promise<number>;
   duplicateNodeTree: (
     id: string,
     options?: { includeInternalDependencies?: boolean; canCreateDependency?: boolean }
   ) => Promise<{ rootId: string; nodeCount: number; dependencyCount: number } | null>;
+
+  loadTrackingReferences: (workspaceId: string) => Promise<void>;
+  createTrackingReference: (taskId: string) => Promise<TaskTrackingReference | null>;
+  moveTrackingReference: (input: { referenceId: string; targetBoardId: string; targetParentPlacementId: string | null; anchorPlacementId?: string | null; position?: 'before' | 'after' | 'append' }) => Promise<TaskTrackingReference | null>;
+  stageTrackingReference: (referenceId: string) => Promise<StagedTaskTrackingReference | null>;
+  placeStagedTrackingReference: (input: { referenceId: string; targetBoardId: string; targetParentPlacementId: string | null; anchorPlacementId?: string | null; position?: 'before' | 'after' | 'append' }) => Promise<TaskTrackingReference | null>;
+  removeTrackingReference: (referenceId: string) => Promise<void>;
+  restoreTrackingReference: (referenceId: string) => Promise<TaskTrackingReference | null>;
+  getProjectionNodesForBoard: (workspaceId: string, boardId: string, access?: { canEditCanonicalTask?: boolean; canManageReferenceHere?: boolean }) => TaskProjectionNode[];
 
   /**
    * 變更節點的階層關係 (拖曳到另一個父節點下)
@@ -152,6 +275,7 @@ const mergeLocalUnplacedTasksForSetNodes = (
   incomingNodes: TaskNode[],
   currentNodes: Record<string, TaskNode>,
   options: SetNodesOptions = {},
+  pendingPlacementNodeIds: Record<string, string> = {},
 ) => {
   const mergedNodes = new Map<string, TaskNode>();
   incomingNodes.forEach(node => mergedNodes.set(node.id, node));
@@ -160,6 +284,10 @@ const mergeLocalUnplacedTasksForSetNodes = (
   if (options.preserveOutOfScope) {
     const hasScopedBoards = scopedBoardIds.size > 0;
     Object.values(currentNodes).forEach(task => {
+      if (pendingPlacementNodeIds[task.id]) {
+        mergedNodes.set(task.id, task);
+        return;
+      }
       if (
         isTaskWorkbenchUnplacedTask(task) ||
         (hasScopedBoards && scopedBoardIds.has(task.boardId)) ||
@@ -171,7 +299,7 @@ const mergeLocalUnplacedTasksForSetNodes = (
 
   [
     ...Object.values(currentNodes).filter(isTaskWorkbenchUnplacedTask),
-    ...readTaskWorkbenchUnplacedTasks(),
+    ...(isSupabaseBackend ? [] : readTaskWorkbenchUnplacedTasks()),
   ].forEach(task => {
     if (task.isArchived || mergedNodes.has(task.id)) return;
     mergedNodes.set(task.id, task);
@@ -222,17 +350,7 @@ const getTaskAndAncestorIds = (
   return ids;
 };
 
-const getCurrentTaskFilters = (): TaskFilterState => {
-  const boardState = useBoardStore.getState();
-  return {
-    statusFilters: boardState.statusFilters,
-    dueWithinDays: boardState.dueWithinDays,
-    overdueOnly: boardState.overdueOnly,
-    selectedAssigneeIds: boardState.selectedAssigneeIds,
-    selectedTagIds: useTagStore.getState().selectedTagIds,
-    keyword: '',
-  };
-};
+const getCurrentTaskFilters = () => useTaskFilterStore.getState().filters;
 
 const buildChangedNodePatch = (
   oldNode: TaskNode,
@@ -250,6 +368,58 @@ const buildChangedNodePatch = (
   }
 
   return Object.keys(after).length > 0 ? { before, after } : null;
+};
+
+const persistNodeTransition = async (
+  id: string,
+  oldNode: TaskNode,
+  newNode: TaskNode,
+  updates: Partial<TaskNode>,
+) => {
+  const oldWasUnplaced = isTaskWorkbenchUnplacedTask(oldNode);
+  const newIsUnplaced = isTaskWorkbenchUnplacedTask(newNode);
+
+  if (newIsUnplaced) {
+    await (newNode.isArchived
+      ? persistRemoveTaskWorkbenchUnplacedTask(id, useAuthStore.getState().user?.uid)
+      : persistTaskWorkbenchUnplacedTask(newNode, useAuthStore.getState().user?.uid));
+    if (!oldWasUnplaced && oldNode.workspaceId && oldNode.boardId) {
+      await nodeService.delete(oldNode.workspaceId, oldNode.boardId, id);
+    }
+    return;
+  }
+
+  if (newNode.workspaceId && newNode.boardId) {
+    if (oldWasUnplaced) {
+      await nodeService.create(newNode.workspaceId, newNode.boardId, newNode);
+      await persistRemoveTaskWorkbenchUnplacedTask(id, useAuthStore.getState().user?.uid);
+    } else if (oldNode.workspaceId !== newNode.workspaceId || oldNode.boardId !== newNode.boardId) {
+      await nodeService.create(newNode.workspaceId, newNode.boardId, newNode);
+      if (oldNode.workspaceId && oldNode.boardId) {
+        await nodeService.delete(oldNode.workspaceId, oldNode.boardId, id);
+      }
+    } else {
+      await nodeService.update(newNode.workspaceId, newNode.boardId, id, updates);
+    }
+  }
+};
+
+const createUpdateNodeOperationId = () => (
+  `task-update-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+);
+
+const getNodeHierarchyDepth = (nodeId: string, nodes: Record<string, TaskNode>) => {
+  let depth = 0;
+  let parentId = nodes[nodeId]?.parentId || null;
+  const visited = new Set<string>([nodeId]);
+
+  while (parentId && nodes[parentId] && !visited.has(parentId)) {
+    visited.add(parentId);
+    depth += 1;
+    parentId = nodes[parentId].parentId || null;
+  }
+
+  return depth;
 };
 
 const createDependencyId = () =>
@@ -364,18 +534,20 @@ const logTaskActivity = (
   });
 };
 
-const recordMeetingTaskActivity = (
-  node: TaskNode,
-  eventType: ActivityEventType,
-  payload: Record<string, unknown>
-) => {
-  useRecordStore.getState().recordMeetingTaskActivity({
-    eventType,
-    nodeId: node.id,
-    title: node.title || node.id,
-    payload,
-  });
-};
+const commitMeetingTaskMutation = (
+  beforeNode: TaskNode | null,
+  afterNode: TaskNode,
+  changedKeys: Array<keyof TaskNode>,
+  mutationId: string,
+) => useRecordStore.getState().commitMeetingTaskMutation({
+  mutationId,
+  beforeNode,
+  afterNode,
+  changedKeys,
+}).catch(error => {
+  console.error('[meetingLiveCapture] Failed to commit confirmed task mutation:', error);
+  return 'failed' as const;
+});
 
 const logDependencyActivity = (
   boardNode: TaskNode | undefined,
@@ -412,13 +584,26 @@ const buildTaskUpdateActivities = (
     left.length === right.length && left.every((id, index) => id === right[index]);
   const oldPrimaryIds = getTaskAssigneeIds(oldNode);
   const newPrimaryIds = getTaskAssigneeIds(newNode);
+  const getMemberName = (id: string) => {
+    const member = useMemberStore.getState().boardMembers.find(item => item.userId === id);
+    return member?.profile?.displayName || member?.profile?.email || null;
+  };
+  const getTagName = (id: string) => useTagStore.getState().tags.find(tag => tag.id === id)?.name || null;
 
   if (('assigneeIds' in updates || 'assigneeId' in updates) && !sameIds(oldPrimaryIds, newPrimaryIds)) {
     events.push({
       eventType: 'task_assigned',
       payload: {
-        before: { assigneeIds: oldPrimaryIds, assigneeId: oldPrimaryIds[0] ?? null },
-        after: { assigneeIds: newPrimaryIds, assigneeId: newPrimaryIds[0] ?? null },
+        before: {
+          assigneeIds: oldPrimaryIds,
+          assigneeId: oldPrimaryIds[0] ?? null,
+          assigneeNames: oldPrimaryIds.map(getMemberName),
+        },
+        after: {
+          assigneeIds: newPrimaryIds,
+          assigneeId: newPrimaryIds[0] ?? null,
+          assigneeNames: newPrimaryIds.map(getMemberName),
+        },
       },
     });
   }
@@ -429,8 +614,14 @@ const buildTaskUpdateActivities = (
     events.push({
       eventType: 'task_collaborators_changed',
       payload: {
-        before: { collaboratorIds: oldCollaboratorIds },
-        after: { collaboratorIds: newCollaboratorIds },
+        before: {
+          collaboratorIds: oldCollaboratorIds,
+          collaboratorNames: oldCollaboratorIds.map(getMemberName),
+        },
+        after: {
+          collaboratorIds: newCollaboratorIds,
+          collaboratorNames: newCollaboratorIds.map(getMemberName),
+        },
       },
     });
   }
@@ -495,13 +686,186 @@ const buildTaskUpdateActivities = (
     events.push({
       eventType: 'task_tags_changed',
       payload: {
-        before: { tagIds: oldNode.tagIds ?? [] },
-        after: { tagIds: newNode.tagIds ?? [] },
+        before: {
+          tagIds: oldNode.tagIds ?? [],
+          tagNames: (oldNode.tagIds ?? []).map(getTagName),
+        },
+        after: {
+          tagIds: newNode.tagIds ?? [],
+          tagNames: (newNode.tagIds ?? []).map(getTagName),
+        },
       },
     });
   }
 
   return events;
+};
+
+type NodeBatchRecoveryDescriptor = Readonly<{
+  version: 1;
+  operationId: string;
+  workspaceId: string;
+  boardId: string;
+  kind: 'copy-paste' | 'cut-paste' | 'assign' | 'archive' | 'undo' | 'redo';
+  createdAt: number;
+  targetIds: readonly string[];
+  expectedBeforeFingerprint: string;
+  expectedAfterFingerprint: string;
+  expectedPresentationBeforeFingerprint?: string;
+  expectedPresentationAfterFingerprint?: string;
+  phase: 'persisting' | 'compensating' | 'indeterminate';
+}>;
+
+const getNodeBatchRecoveryKey = (boardId: string) => `projed.mindmap.batch-recovery.v1.${boardId}`;
+
+const readNodeBatchRecovery = (boardId: string): NodeBatchRecoveryDescriptor | null => {
+  if (!boardId || typeof window === 'undefined') return null;
+  try {
+    const raw = window.sessionStorage.getItem(getNodeBatchRecoveryKey(boardId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as NodeBatchRecoveryDescriptor;
+    return parsed?.version === 1
+      && parsed.boardId === boardId
+      && Array.isArray(parsed.targetIds)
+      && typeof parsed.expectedBeforeFingerprint === 'string'
+      && typeof parsed.expectedAfterFingerprint === 'string'
+      ? parsed
+      : null;
+  } catch {
+    return null;
+  }
+};
+
+const hasCorruptNodeBatchRecovery = (boardId: string) => {
+  if (!boardId || typeof window === 'undefined') return false;
+  try {
+    return window.sessionStorage.getItem(getNodeBatchRecoveryKey(boardId)) !== null
+      && readNodeBatchRecovery(boardId) === null;
+  } catch {
+    return true;
+  }
+};
+
+const writeNodeBatchRecovery = (descriptor: NodeBatchRecoveryDescriptor) => {
+  if (typeof window === 'undefined') return true;
+  const key = getNodeBatchRecoveryKey(descriptor.boardId);
+  const serialized = JSON.stringify(descriptor);
+  window.sessionStorage.setItem(key, serialized);
+  return window.sessionStorage.getItem(key) === serialized;
+};
+
+const writeNodeBatchRecoveryPhase = (
+  descriptor: NodeBatchRecoveryDescriptor,
+  phase: NodeBatchRecoveryDescriptor['phase'],
+) => {
+  const next = { ...descriptor, phase };
+  if (!writeNodeBatchRecovery(next)) throw new Error('無法更新批次復原階段。');
+  return next;
+};
+
+const clearNodeBatchRecovery = (boardId: string, operationId: string) => {
+  if (typeof window === 'undefined') return;
+  const current = readNodeBatchRecovery(boardId);
+  if (!current || current.operationId === operationId) {
+    window.sessionStorage.removeItem(getNodeBatchRecoveryKey(boardId));
+  }
+};
+
+const getRecoveryTaskShape = (node: TaskNode | undefined) => {
+  if (!node) return null;
+  const excluded = new Set([
+    'storageId',
+    'updatedAt',
+    'isTrackingReference',
+    'trackingReferenceId',
+    'trackingReferenceParentPlacementId',
+    'canonicalTaskId',
+  ]);
+  return Object.fromEntries(Object.entries(node).filter(([key, value]) => !excluded.has(key) && value !== undefined));
+};
+
+const canonicalizeRecoveryValue = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(canonicalizeRecoveryValue);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, nested]) => [key, canonicalizeRecoveryValue(nested)]),
+    );
+  }
+  return value ?? null;
+};
+
+const hashRecoveryValue = (value: unknown) => {
+  const serialized = JSON.stringify(canonicalizeRecoveryValue(value));
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < serialized.length; index += 1) {
+    hash ^= serialized.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return `fnv1a32:${(hash >>> 0).toString(16).padStart(8, '0')}`;
+};
+
+const getNodeBatchRecoveryFingerprint = (
+  nodes: Readonly<Record<string, TaskNode>>,
+  targetIds: readonly string[],
+) => hashRecoveryValue(
+  [...targetIds]
+    .sort((left, right) => left.localeCompare(right))
+    .map(id => [id, getRecoveryTaskShape(nodes[id])]),
+);
+
+const applyBatchPatchesToSnapshot = (
+  nodes: Readonly<Record<string, TaskNode>>,
+  patches: BatchNodeUpdates,
+) => {
+  const next = { ...nodes };
+  Object.entries(patches).forEach(([id, patch]) => {
+    if (next[id]) next[id] = { ...next[id], ...patch };
+  });
+  return next;
+};
+
+const getBatchConvergence = (
+  nodes: Record<string, TaskNode>,
+  descriptor: NodeBatchRecoveryDescriptor,
+) => {
+  const fingerprint = getNodeBatchRecoveryFingerprint(nodes, descriptor.targetIds);
+  let presentationFingerprint: string | undefined;
+  if (descriptor.expectedPresentationBeforeFingerprint !== undefined || descriptor.expectedPresentationAfterFingerprint !== undefined) {
+    try {
+      presentationFingerprint = typeof window === 'undefined'
+        ? undefined
+        : window.localStorage.getItem(`projed.mindmap.rootSides.${descriptor.boardId}`) || '{}';
+    } catch {
+      return 'mixed' as const;
+    }
+  }
+  if (
+    fingerprint === descriptor.expectedAfterFingerprint
+    && (descriptor.expectedPresentationAfterFingerprint === undefined
+      || presentationFingerprint === descriptor.expectedPresentationAfterFingerprint)
+  ) return 'after' as const;
+  if (
+    fingerprint === descriptor.expectedBeforeFingerprint
+    && (descriptor.expectedPresentationBeforeFingerprint === undefined
+      || presentationFingerprint === descriptor.expectedPresentationBeforeFingerprint)
+  ) return 'before' as const;
+  return 'mixed' as const;
+};
+
+const withNodeBatchTimeout = async (promise: Promise<void>, timeoutMs: number) => {
+  let timeoutId: number | undefined;
+  try {
+    return await Promise.race([
+      promise.then(() => 'resolved' as const),
+      new Promise<'timeout'>(resolve => {
+        timeoutId = window.setTimeout(() => resolve('timeout'), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+  }
 };
 
 export const useWbsStore = create<WbsStore>((set, get) => ({
@@ -512,6 +876,10 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
   kanbanConfigs: {},
   loading: false,
   error: null,
+  pendingPlacementNodeIds: {},
+  trackingReferences: [],
+  stagedTrackingReferences: [],
+  trackingReferenceCapability: { supported: false, reason: 'schema_not_ready' },
 
   _buildIndices: (nodesRecord) => {
     const boardIndex: Record<string, string[]> = {};
@@ -537,7 +905,13 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
   },
 
   setNodes: (nodes, options = {}) => {
-    const nodesWithLocalUnplacedTasks = mergeLocalUnplacedTasksForSetNodes(nodes, get().nodes, options);
+    const currentState = get();
+    const nodesWithLocalUnplacedTasks = mergeLocalUnplacedTasksForSetNodes(
+      nodes,
+      currentState.nodes,
+      options,
+      currentState.pendingPlacementNodeIds,
+    );
     const nodesRecord = nodesWithLocalUnplacedTasks.reduce((acc, node) => {
       const normalizedNode = normalizeTaskStatusNode(normalizeTaskAssignmentNode(node));
       acc[normalizedNode.id] = normalizedNode;
@@ -549,6 +923,305 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     get()._buildIndices(nodesRecord);
   },
 
+  loadTrackingReferences: async (workspaceId) => {
+    const service = getTaskTrackingReferenceService(() => Object.values(get().nodes));
+    try {
+      const capability = await service.getCapability();
+      if (!capability.supported) {
+        set({ trackingReferences: [], stagedTrackingReferences: [], trackingReferenceCapability: capability });
+        return;
+      }
+      const [references, stagedReferences] = await Promise.all([
+        service.listByWorkspace(workspaceId),
+        service.listStagedByWorkspace(workspaceId),
+      ]);
+      set({
+        trackingReferences: references,
+        stagedTrackingReferences: stagedReferences,
+        trackingReferenceCapability: capability,
+      });
+      // A Supabase board load is intentionally scoped to the active board. A
+      // cross-board reference still needs its canonical source task hydrated,
+      // but that read must follow the derived-reference permission path rather
+      // than failing just because the source Board itself is private.
+      const missingTaskIds = Array.from(new Set(
+        [...references, ...stagedReferences]
+          .filter(reference => !get().nodes[reference.taskId])
+          .map(reference => reference.taskId),
+      ));
+      if (missingTaskIds.length > 0 && service.listCanonicalTasksByIds) {
+        try {
+          const canonicalTasks = await service.listCanonicalTasksByIds(workspaceId, missingTaskIds);
+          if (canonicalTasks.length > 0) get().setNodes(canonicalTasks, { preserveOutOfScope: true });
+        } catch (error) {
+          // Keep the reference list usable even if canonical hydration is
+          // temporarily unavailable; the next sync/focus refresh retries it.
+          console.warn('[taskTracking] Canonical derived-read hydration failed:', error);
+        }
+      }
+
+      // Local-test and legacy providers may not implement the derived-read
+      // helper. Fall back per source Board so one unreadable Board never hides
+      // references that were already returned for a readable target Board.
+      const missingSourceBoards = Array.from(new Set(
+        [...references, ...stagedReferences]
+          .filter(reference => !get().nodes[reference.taskId])
+          .map(reference => reference.sourceBoardId || ('boardId' in reference ? reference.boardId : reference.originalBoardId))
+          .filter(Boolean),
+      ));
+      if (missingSourceBoards.length > 0) {
+        const sourceResults = await Promise.all(missingSourceBoards.map(async boardId => {
+          try {
+            return await nodeService.listByProject(workspaceId, boardId);
+          } catch (error) {
+            console.warn('[taskTracking] Source Board hydration skipped:', { workspaceId, boardId, error });
+            return [];
+          }
+        }));
+        const sourceNodes = sourceResults.flat();
+        if (sourceNodes.length > 0) get().setNodes(sourceNodes, { preserveOutOfScope: true });
+      }
+    } catch (error) {
+      console.warn('[taskTracking] Failed to hydrate references:', error);
+      set({ trackingReferenceCapability: { supported: false, reason: 'schema_not_ready' } });
+    }
+  },
+
+  createTrackingReference: async (taskId) => {
+    const task = get().nodes[taskId];
+    if (!task || task.isArchived || !task.workspaceId || !task.boardId) return null;
+    const service = getTaskTrackingReferenceService(() => Object.values(get().nodes));
+    const createdReference = await service.create(task.workspaceId, {
+      sourcePlacementId: primaryPlacementId(taskId),
+      clientPlatform: 'web',
+    });
+    const reference = { ...createdReference, taskId: task.id, workspaceId: task.workspaceId, boardId: task.boardId };
+    set(state => ({ trackingReferences: [...state.trackingReferences.filter(item => item.id !== reference.id), reference] }));
+    useUndoStore.getState().pushUndo({
+      label: '建立追蹤副本',
+      undo: () => get().removeTrackingReference(reference.id),
+      redo: () => get().restoreTrackingReference(reference.id).then(() => undefined),
+    });
+    return reference;
+  },
+
+  moveTrackingReference: async ({ referenceId, targetBoardId, targetParentPlacementId, anchorPlacementId, position }) => {
+    const reference = get().trackingReferences.find(item => item.id === referenceId && !item.removedAt);
+    if (!reference) return null;
+    const originalSibling = get().trackingReferences
+      .filter(item => !item.removedAt
+        && item.id !== reference.id
+        && item.boardId === reference.boardId
+        && item.parentPlacementId === reference.parentPlacementId
+        && item.order > reference.order)
+      .sort((left, right) => left.order - right.order || left.id.localeCompare(right.id))[0];
+    const service = getTaskTrackingReferenceService(() => Object.values(get().nodes));
+    const movedResult = await service.move(reference.workspaceId, {
+      sourcePlacementId: referenceId,
+      expectedRevision: reference.revision,
+      targetBoardId,
+      targetParentPlacementId,
+      anchorPlacementId,
+      position,
+      clientPlatform: 'web',
+    });
+    const moved = { ...movedResult, taskId: reference.taskId, workspaceId: reference.workspaceId, boardId: targetBoardId, sourceBoardId: reference.sourceBoardId };
+    // A move RPC updates the complete tracking subtree and may normalize the
+    // destination siblings.  Re-read the workspace scope so the normalized
+    // placement state (including child board IDs and sibling order) cannot
+    // drift from the provider.  Preserve local tombstones used by undo.
+    let fresh: TaskTrackingReference[] | null = null;
+    try {
+      fresh = await service.listByWorkspace(reference.workspaceId);
+    } catch (error) {
+      // The command already committed; a recovery read must not surface as a
+      // false mutation failure.  Keep the root result and let the next reload
+      // reconcile the complete scope.
+      console.warn('[taskTracking] Move committed but refresh failed:', error);
+    }
+    if (!fresh) {
+      set(state => ({ trackingReferences: state.trackingReferences.map(item => item.id === moved.id ? moved : item) }));
+      useUndoStore.getState().pushUndo({
+        label: '移動追蹤副本',
+        undo: () => get().moveTrackingReference({ referenceId, targetBoardId: reference.boardId, targetParentPlacementId: reference.parentPlacementId, anchorPlacementId: originalSibling?.id ?? null, position: originalSibling ? 'before' : 'append' }).then(() => undefined),
+        redo: () => get().moveTrackingReference({ referenceId, targetBoardId, targetParentPlacementId, anchorPlacementId: anchorPlacementId ?? null, position }).then(() => undefined),
+      });
+      return moved;
+    }
+    set(state => {
+      const freshById = new Map(fresh.map(item => [item.id, item]));
+      const retained = state.trackingReferences.filter(item =>
+        item.workspaceId !== reference.workspaceId || (!freshById.has(item.id) && Boolean(item.removedAt)),
+      );
+      return { trackingReferences: [...retained, ...fresh] };
+    });
+    useUndoStore.getState().pushUndo({
+      label: '移動追蹤副本',
+      undo: () => get().moveTrackingReference({
+          referenceId,
+          targetBoardId: reference.boardId,
+          targetParentPlacementId: reference.parentPlacementId,
+          anchorPlacementId: originalSibling?.id ?? null,
+          position: originalSibling ? 'before' : 'append',
+        }).then(() => undefined),
+      redo: () => get().moveTrackingReference({
+          referenceId,
+          targetBoardId,
+          targetParentPlacementId,
+          anchorPlacementId: anchorPlacementId ?? null,
+          position,
+        }).then(() => undefined),
+    });
+    return moved;
+  },
+
+  stageTrackingReference: async (referenceId) => {
+    const reference = get().trackingReferences.find(item => item.id === referenceId && !item.removedAt);
+    if (!reference) return null;
+    const service = getTaskTrackingReferenceService(() => Object.values(get().nodes));
+    const staged = await service.stage(reference.workspaceId, {
+      sourcePlacementId: referenceId,
+      expectedRevision: reference.revision,
+      clientPlatform: 'web',
+    });
+    try {
+      const [freshReferences, freshStaged] = await Promise.all([
+        service.listByWorkspace(reference.workspaceId),
+        service.listStagedByWorkspace(reference.workspaceId),
+      ]);
+      set(state => ({
+        trackingReferences: [
+          ...state.trackingReferences.filter(item => item.workspaceId !== reference.workspaceId || Boolean(item.removedAt)),
+          ...freshReferences,
+        ],
+        stagedTrackingReferences: [
+          ...state.stagedTrackingReferences.filter(item => item.workspaceId !== reference.workspaceId),
+          ...freshStaged,
+        ],
+      }));
+    } catch (error) {
+      console.warn('[taskTracking] Stage committed but refresh failed:', error);
+      const stagedIds = new Set(getReferenceSubtree(get().trackingReferences, referenceId).map(item => item.id));
+      set(state => ({
+        trackingReferences: state.trackingReferences.filter(item => !stagedIds.has(item.id)),
+        stagedTrackingReferences: [
+          ...state.stagedTrackingReferences.filter(item => item.referenceId !== staged.referenceId),
+          { ...staged, taskId: reference.taskId, workspaceId: reference.workspaceId, sourceBoardId: reference.sourceBoardId, originalBoardId: reference.boardId },
+        ],
+      }));
+    }
+    return staged;
+  },
+
+  placeStagedTrackingReference: async ({ referenceId, targetBoardId, targetParentPlacementId, anchorPlacementId, position }) => {
+    const staged = get().stagedTrackingReferences.find(item => item.referenceId === referenceId);
+    if (!staged) return null;
+    const service = getTaskTrackingReferenceService(() => Object.values(get().nodes));
+    const placedResult = await service.placeStaged(staged.workspaceId, {
+      sourcePlacementId: referenceId,
+      expectedRevision: staged.revision,
+      targetBoardId,
+      targetParentPlacementId,
+      anchorPlacementId,
+      position,
+      clientPlatform: 'web',
+    });
+    const placed = {
+      ...placedResult,
+      taskId: staged.taskId,
+      workspaceId: staged.workspaceId,
+      boardId: targetBoardId,
+      sourceBoardId: staged.sourceBoardId,
+    };
+    try {
+      const [freshReferences, freshStaged] = await Promise.all([
+        service.listByWorkspace(staged.workspaceId),
+        service.listStagedByWorkspace(staged.workspaceId),
+      ]);
+      set(state => ({
+        trackingReferences: [
+          ...state.trackingReferences.filter(item => item.workspaceId !== staged.workspaceId || Boolean(item.removedAt)),
+          ...freshReferences,
+        ],
+        stagedTrackingReferences: [
+          ...state.stagedTrackingReferences.filter(item => item.workspaceId !== staged.workspaceId),
+          ...freshStaged,
+        ],
+      }));
+    } catch (error) {
+      console.warn('[taskTracking] Staged placement committed but refresh failed:', error);
+      set(state => ({
+        trackingReferences: [...state.trackingReferences.filter(item => item.id !== placed.id), placed],
+        stagedTrackingReferences: state.stagedTrackingReferences.filter(item => item.referenceId !== referenceId),
+      }));
+    }
+    return placed;
+  },
+
+  removeTrackingReference: async (referenceId) => {
+    const reference = get().trackingReferences.find(item => item.id === referenceId && !item.removedAt);
+    if (!reference) return;
+    const service = getTaskTrackingReferenceService(() => Object.values(get().nodes));
+    await service.remove(reference.workspaceId, { sourcePlacementId: referenceId, expectedRevision: reference.revision, clientPlatform: 'web' });
+    const removedIds = new Set(getReferenceSubtree(get().trackingReferences, referenceId).map(item => item.id));
+    set(state => ({ trackingReferences: state.trackingReferences.map(item => removedIds.has(item.id) ? { ...item, removedAt: Date.now(), revision: item.revision + 1 } : item) }));
+    useUndoStore.getState().pushUndo({
+      label: '移除此處追蹤',
+      undo: () => get().restoreTrackingReference(referenceId).then(() => undefined),
+      redo: () => get().removeTrackingReference(referenceId),
+    });
+  },
+
+  restoreTrackingReference: async (referenceId) => {
+    const reference = get().trackingReferences.find(item => item.id === referenceId && item.removedAt);
+    if (!reference) return null;
+    const service = getTaskTrackingReferenceService(() => Object.values(get().nodes));
+    const restored = await service.restore(reference.workspaceId, { sourcePlacementId: referenceId, expectedRevision: reference.revision, clientPlatform: 'web' });
+    const normalizedRestored = { ...restored, taskId: reference.taskId, workspaceId: reference.workspaceId, boardId: reference.boardId, sourceBoardId: reference.sourceBoardId };
+    // Restore RPC restores the entire reference subtree.  Refresh the active
+    // workspace scope so nested placements become visible together; retain
+    // unrelated tombstones for ordinary undo history.
+    let fresh: TaskTrackingReference[] | null = null;
+    try {
+      fresh = await service.listByWorkspace(reference.workspaceId);
+    } catch (error) {
+      console.warn('[taskTracking] Restore committed but refresh failed:', error);
+    }
+    if (!fresh) {
+      set(state => ({ trackingReferences: state.trackingReferences.map(item => item.id === normalizedRestored.id ? normalizedRestored : item) }));
+      return normalizedRestored;
+    }
+    set(state => {
+      const freshById = new Map(fresh.map(item => [item.id, item]));
+      const retained = state.trackingReferences.filter(item =>
+        item.workspaceId !== reference.workspaceId || (!freshById.has(item.id) && Boolean(item.removedAt)),
+      );
+      return { trackingReferences: [...retained, ...fresh] };
+    });
+    return normalizedRestored;
+  },
+
+  getProjectionNodesForBoard: (workspaceId, boardId, access = {}) => buildProjectionNodes(
+    Object.values(get().nodes).filter(node => node.workspaceId === workspaceId),
+    get().trackingReferences,
+    boardId,
+    { canEditCanonicalTask: access.canEditCanonicalTask ?? false, canManageReferenceHere: access.canManageReferenceHere ?? false },
+  ),
+
+  hydrateUnplacedTasks: (tasks) => {
+    if (tasks.length === 0) return;
+    const currentNodes = get().nodes;
+    const nextNodes = { ...currentNodes };
+    tasks.forEach(task => {
+      const normalizedNode = normalizeTaskStatusNode(normalizeTaskAssignmentNode(task));
+      if (!normalizedNode.isArchived && isTaskWorkbenchUnplacedTask(normalizedNode)) {
+        nextNodes[normalizedNode.id] = normalizedNode;
+      }
+    });
+    set({ nodes: nextNodes });
+    get()._buildIndices(nextNodes);
+  },
+
   addNode: (node) => {
     const state = get();
     const normalizedNode = normalizeTaskStatusNode(normalizeTaskAssignmentNode(node));
@@ -558,45 +1231,41 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     get()._buildIndices(updatedNodes);
 
     const isUnplacedTask = isTaskWorkbenchUnplacedTask(normalizedNode);
+    const creationActivityPayload = {
+      after: {
+        parentId: normalizedNode.parentId,
+        status: normalizedNode.status,
+        assigneeIds: getTaskAssigneeIds(normalizedNode),
+        assigneeId: normalizedNode.assigneeId ?? null,
+        collaboratorIds: normalizedNode.collaboratorIds ?? [],
+        startDate: normalizedNode.startDate ?? null,
+        endDate: normalizedNode.endDate ?? null,
+        order: normalizedNode.order,
+      },
+    };
 
     // 同步寫入資料來源；未歸位任務是工作台本機位置，不寫入假看板路徑。
     if (isUnplacedTask) {
-        upsertTaskWorkbenchUnplacedTask(normalizedNode);
+        void persistTaskWorkbenchUnplacedTask(normalizedNode, useAuthStore.getState().user?.uid)
+          .then(() => commitMeetingTaskMutation(null, normalizedNode, ['title'], `task-create-${normalizedNode.id}-${Date.now().toString(36)}`));
     } else if (normalizedNode.workspaceId && normalizedNode.boardId) {
-        nodeService.create(normalizedNode.workspaceId, normalizedNode.boardId, normalizedNode).catch(console.error);
-    }
-
-    if (!isUnplacedTask) {
-      logTaskActivity(normalizedNode, 'task_created', {
-        after: {
-            parentId: normalizedNode.parentId,
-            status: normalizedNode.status,
-            assigneeIds: getTaskAssigneeIds(normalizedNode),
-            assigneeId: normalizedNode.assigneeId ?? null,
-            collaboratorIds: normalizedNode.collaboratorIds ?? [],
-            startDate: normalizedNode.startDate ?? null,
-            endDate: normalizedNode.endDate ?? null,
-            order: normalizedNode.order,
-        },
-      });
-      recordMeetingTaskActivity(normalizedNode, 'task_created', {
-        after: {
-            parentId: normalizedNode.parentId,
-            status: normalizedNode.status,
-            assigneeIds: getTaskAssigneeIds(normalizedNode),
-            assigneeId: normalizedNode.assigneeId ?? null,
-            collaboratorIds: normalizedNode.collaboratorIds ?? [],
-            startDate: normalizedNode.startDate ?? null,
-            endDate: normalizedNode.endDate ?? null,
-            order: normalizedNode.order,
-        },
-      });
+        const workspaceId = normalizedNode.workspaceId;
+        const boardId = normalizedNode.boardId;
+         void persistTaskCreationBeforeActivity(
+           () => nodeService.create(workspaceId, boardId, normalizedNode),
+           async () => {
+             logTaskActivity(normalizedNode, 'task_created', creationActivityPayload);
+             await commitMeetingTaskMutation(null, normalizedNode, ['title', 'status', 'description', 'detailNotes', 'startDate', 'endDate', 'isDurationLocked', 'assigneeIds', 'assigneeId', 'collaboratorIds', 'tagIds', 'isArchived'], `task-create-${normalizedNode.id}-${Date.now().toString(36)}`);
+           },
+         ).catch(error => {
+          console.error('[wbsStore] Failed to persist created task before activity logging:', error);
+        });
     }
 
     // 紀錄上一步
     useUndoStore.getState().pushUndo({
         label: '新增任務',
-        undo: () => get().removeNode(normalizedNode.id),
+        undo: () => get().archiveNode(normalizedNode.id),
         redo: () => get().addNode(normalizedNode),
     });
   },
@@ -639,7 +1308,6 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       throw new Error('複製此任務需要建立依賴關係權限，否則無法完整複製子樹內部依賴。');
     }
 
-    const idMap = new Map(sourceTree.map(node => [node.id, createNodeId()]));
     const now = Date.now();
     const parentKey = sourceNode.parentId || 'root';
     const siblings = (state.parentNodesIndex[parentKey] || [])
@@ -647,177 +1315,51 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       .filter((sibling): sibling is TaskNode => Boolean(sibling) && sibling.boardId === sourceNode.boardId && !sibling.isArchived)
       .sort((a, b) => a.order - b.order);
     const currentIndex = siblings.findIndex(sibling => sibling.id === sourceNode.id);
-    const nextSibling = currentIndex >= 0 ? siblings[currentIndex + 1] : null;
-    const copiedRootOrder = nextSibling ? (sourceNode.order + nextSibling.order) / 2 : sourceNode.order + 1;
+    const copiedRootOrder = currentIndex >= 0 ? currentIndex + 1 : siblings.length;
+    const siblingOrderAfter = Object.fromEntries(siblings.map((sibling, index) => [
+      sibling.id,
+      index <= currentIndex ? index : index + 1,
+    ]));
+    const changedSiblingOrders = siblings
+      .filter(sibling => sibling.order !== siblingOrderAfter[sibling.id])
+      .map(sibling => ({ id: sibling.id, data: { order: siblingOrderAfter[sibling.id] } }));
 
-    const copiedNodes = sourceTree.map((node) => {
-      const copiedId = idMap.get(node.id);
-      if (!copiedId) throw new Error(`Missing duplicated node id for ${node.id}.`);
-
-      const isRoot = node.id === sourceNode.id;
-      const parentId = isRoot
-        ? sourceNode.parentId || null
-        : node.parentId
-          ? idMap.get(node.parentId) ?? null
-          : null;
-
-      const copiedNode: TaskNode = {
-        ...node,
-        id: copiedId,
-        parentId,
-        title: isRoot ? `${node.title || '未命名任務'}（副本）` : node.title,
-        detailNotes: node.detailNotes?.map(note => ({
-          ...note,
-          id: createNoteId(),
-        })),
-        collaboratorIds: node.collaboratorIds ? [...node.collaboratorIds] : undefined,
-        tagIds: node.tagIds ? [...node.tagIds] : undefined,
-        order: isRoot ? copiedRootOrder : node.order,
-        createdAt: now,
-        updatedAt: now,
-        isArchived: false,
-      };
-
-      return normalizeTaskStatusNode(copiedNode);
+    const clonePlan = buildTaskTreeClonePlan({
+      sourceRootIds: [sourceNode.id],
+      sourceNodes: state.nodes,
+      dependencies: state.dependencies,
+      destinationParentId: sourceNode.parentId || null,
+      rootOrders: { [sourceNode.id]: copiedRootOrder },
+      now,
+      createTaskId: createNodeId,
+      createNoteId,
+      createDependencyId,
+      includeInternalDependencies,
+      suffixRootTitles: true,
     });
+    const copiedNodes = clonePlan.nodes.map(node => normalizeTaskStatusNode(normalizeTaskAssignmentNode(node)));
+    const copiedDependencies = [...clonePlan.dependencies];
 
-    const copiedDependencies = includeInternalDependencies
-      ? internalDependencies.map(dep => ({
-          ...dep,
-          id: createDependencyId(),
-          fromId: idMap.get(dep.fromId) || dep.fromId,
-          toId: idMap.get(dep.toId) || dep.toId,
-        }))
-      : [];
-
-    const copiedNodeIds = new Set(copiedNodes.map(node => node.id));
-    const copiedDependencyIds = new Set(copiedDependencies.map(dep => dep.id));
-
-    const persistDuplicate = async () => {
-      for (const node of copiedNodes) {
-        if (node.workspaceId && node.boardId) {
-          await nodeService.create(node.workspaceId, node.boardId, node);
-        }
-      }
-
-      for (const dep of copiedDependencies) {
-        const node = copiedNodes.find(item => item.id === dep.fromId);
-        if (node?.workspaceId && node.boardId) {
-          await dependencyService.set(node.workspaceId, node.boardId, dep);
-        }
-      }
-    };
-
-    const applyDuplicateState = () => {
-      const current = get();
-      const nextNodes = { ...current.nodes };
-      copiedNodes.forEach(node => {
-        nextNodes[node.id] = node;
-      });
-
-      const existingDependencies = current.dependencies.filter(dep => !copiedDependencyIds.has(dep.id));
-      set({
-        nodes: nextNodes,
-        dependencies: [...existingDependencies, ...copiedDependencies],
-      });
-      get()._buildIndices(nextNodes);
-    };
-
-    const logDuplicateActivity = () => {
-      copiedNodes.forEach(node => {
-        logTaskActivity(node, 'task_created', {
-          source: 'duplicate_task_tree',
-          sourceTaskId: sourceNode.id,
-          after: {
-            parentId: node.parentId,
-            status: node.status,
-            assigneeIds: getTaskAssigneeIds(node),
-            assigneeId: node.assigneeId ?? null,
-            collaboratorIds: node.collaboratorIds ?? [],
-            startDate: node.startDate ?? null,
-            endDate: node.endDate ?? null,
-            order: node.order,
-          },
-        });
-        recordMeetingTaskActivity(node, 'task_created', {
-          source: 'duplicate_task_tree',
-          sourceTaskId: sourceNode.id,
-          after: {
-            parentId: node.parentId,
-            status: node.status,
-            assigneeIds: getTaskAssigneeIds(node),
-            assigneeId: node.assigneeId ?? null,
-            collaboratorIds: node.collaboratorIds ?? [],
-            startDate: node.startDate ?? null,
-            endDate: node.endDate ?? null,
-            order: node.order,
-          },
-        });
-      });
-
-      copiedDependencies.forEach(dep => {
-        logDependencyActivity(get().nodes[dep.fromId], dep, 'dependency_created', {
-          source: 'duplicate_task_tree',
-          sourceTaskId: sourceNode.id,
-          after: dep,
-        });
-      });
-    };
-
-    const removeDuplicate = async () => {
-      const current = get();
-      const nextNodes = { ...current.nodes };
-      copiedNodeIds.forEach(nodeId => {
-        delete nextNodes[nodeId];
-      });
-
-      set({
-        nodes: nextNodes,
-        dependencies: current.dependencies.filter(dep => !copiedDependencyIds.has(dep.id)),
-      });
-      get()._buildIndices(nextNodes);
-
-      for (const dep of copiedDependencies) {
-        const node = copiedNodes.find(item => item.id === dep.fromId);
-        if (node?.workspaceId && node.boardId) {
-          await dependencyService.delete(node.workspaceId, node.boardId, dep.id);
-        }
-      }
-
-      for (const node of [...copiedNodes].reverse()) {
-        if (node.workspaceId && node.boardId) {
-          await nodeService.delete(node.workspaceId, node.boardId, node.id);
-        }
-      }
-    };
-
-    await persistDuplicate();
-    applyDuplicateState();
-    logDuplicateActivity();
-
-    useUndoStore.getState().pushUndo({
+    const outcome = await get().commitNodeForestCreate({
+      nodes: copiedNodes,
+      dependencies: copiedDependencies,
+      existingUpdatesById: Object.fromEntries(changedSiblingOrders.map(({ id, data }) => [id, data])),
       label: '複製任務',
-      undo: () => { void removeDuplicate().catch(console.error); },
-      redo: () => {
-        void persistDuplicate()
-          .then(() => {
-            applyDuplicateState();
-            logDuplicateActivity();
-          })
-          .catch(console.error);
-      },
     });
+    if (outcome.status !== 'committed') {
+      throw new Error(outcome.error || `複製任務失敗：${outcome.status}`);
+    }
 
     return {
-      rootId: idMap.get(sourceNode.id) || copiedNodes[0].id,
+      rootId: clonePlan.rootIds[0] || copiedNodes[0].id,
       nodeCount: copiedNodes.length,
       dependencyCount: copiedDependencies.length,
     };
   },
 
-  updateNode: (id, updates) => {
+  updateNode: (id, updates, options): UpdateNodeDispatchResult => {
     const state = get();
-    if (!state.nodes[id]) return;
+    if (!state.nodes[id]) return { accepted: false, reason: 'missing_node' };
 
     const oldNode = state.nodes[id];
     const normalizedUpdates = normalizeTaskAssignmentUpdates(
@@ -834,7 +1376,9 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
             hasChanges = true;
         }
     }
-    if (!hasChanges) return;
+    if (!hasChanges && !options?.forcePersistence) {
+      return { accepted: false, reason: 'no_changes' };
+    }
 
     const newNode = { ...oldNode, ...normalizedUpdates, updatedAt: Date.now() };
     const updatedNodes = { ...state.nodes, [id]: newNode };
@@ -892,32 +1436,46 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
         );
     }
 
-    const oldWasUnplaced = isTaskWorkbenchUnplacedTask(oldNode);
     const newIsUnplaced = isTaskWorkbenchUnplacedTask(newNode);
-
-    // 非同步寫入資料來源；跨看板/未歸位移動使用 create/delete，避免只 update 新路徑造成舊路徑殘留。
-    if (newIsUnplaced) {
-        upsertTaskWorkbenchUnplacedTask(newNode);
-        if (!oldWasUnplaced && oldNode.workspaceId && oldNode.boardId) {
-            nodeService.delete(oldNode.workspaceId, oldNode.boardId, id).catch(console.error);
+    const operationId = createUpdateNodeOperationId();
+    let completion: Promise<'persisted' | 'failed'>;
+    if (!options?.skipPersistence) {
+      const persistence = persistNodeTransition(id, oldNode, newNode, normalizedUpdates);
+      completion = persistence.then(
+        async () => {
+          try {
+            options?.onPersistSuccess?.();
+          } catch (callbackError) {
+            console.error('[WbsStore] Persist success callback failed:', callbackError);
+          }
+          await commitMeetingTaskMutation(oldNode, newNode, Object.keys(normalizedUpdates) as Array<keyof TaskNode>, operationId);
+          return 'persisted' as const;
+        },
+        (error) => {
+          console.error('[WbsStore] Failed to persist task update:', error);
+          try {
+            options?.onPersistError?.(error);
+          } catch (callbackError) {
+            console.error('[WbsStore] Persist error callback failed:', callbackError);
+          }
+          return 'failed' as const;
+        },
+      );
+    } else if (options?.onPersistSuccess) {
+      completion = Promise.resolve().then(() => {
+        try {
+          options.onPersistSuccess?.();
+        } catch (callbackError) {
+          console.error('[WbsStore] Persist success callback failed:', callbackError);
         }
-    } else if (newNode.workspaceId && newNode.boardId) {
-        if (oldWasUnplaced) {
-            removeTaskWorkbenchUnplacedTask(id);
-            nodeService.create(newNode.workspaceId, newNode.boardId, newNode).catch(console.error);
-        } else if (oldNode.workspaceId !== newNode.workspaceId || oldNode.boardId !== newNode.boardId) {
-            nodeService.create(newNode.workspaceId, newNode.boardId, newNode).catch(console.error);
-            if (oldNode.workspaceId && oldNode.boardId) {
-                nodeService.delete(oldNode.workspaceId, oldNode.boardId, id).catch(console.error);
-            }
-        } else {
-            nodeService.update(newNode.workspaceId, newNode.boardId, id, normalizedUpdates).catch(console.error);
-        }
+        return 'persisted' as const;
+      });
+    } else {
+      completion = Promise.resolve('persisted' as const);
     }
 
-    if (!newIsUnplaced) buildTaskUpdateActivities(oldNode, newNode, normalizedUpdates).forEach(event => {
+    if (!options?.skipActivity && !newIsUnplaced) buildTaskUpdateActivities(oldNode, newNode, normalizedUpdates).forEach(event => {
         logTaskActivity(newNode, event.eventType, event.payload);
-        recordMeetingTaskActivity(newNode, event.eventType, event.payload);
     });
 
     if (normalizedUpdates.isArchived === true && oldNode.isArchived !== true) {
@@ -932,13 +1490,17 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     }
 
     // 紀錄上一步
-    const label = normalizedUpdates.isArchived === true ? '刪除任務' :
-                  normalizedUpdates.isArchived === false ? '復原任務' : '修改任務';
-    useUndoStore.getState().pushUndo({
-        label,
-        undo: () => get().updateNode(id, oldValues),
-        redo: () => get().updateNode(id, normalizedUpdates),
-    });
+    const label = normalizedUpdates.isArchived === true ? '封存任務' :
+                  normalizedUpdates.isArchived === false ? '還原任務' : '修改任務';
+    if (hasChanges) {
+      useUndoStore.getState().pushUndo({
+          label,
+          undo: () => { get().updateNode(id, oldValues); },
+          redo: () => { get().updateNode(id, normalizedUpdates); },
+      });
+    }
+
+    return { accepted: true, operationId, completion };
   },
 
   batchUpdateNodes: (updatesById, options = {}) => {
@@ -948,6 +1510,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     const state = get();
     const beforePatches: BatchNodeUpdates = {};
     const afterPatches: BatchNodeUpdates = {};
+    const beforeNodes: Record<string, TaskNode> = {};
 
     for (const [id, updates] of entries) {
       const oldNode = state.nodes[id];
@@ -958,6 +1521,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
 
       beforePatches[id] = patch.before;
       afterPatches[id] = patch.after;
+      beforeNodes[id] = oldNode;
     }
 
     const changedEntries = Object.entries(afterPatches);
@@ -969,10 +1533,34 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     if (!wasApplying) useUndoStore.setState({ isApplying: true });
     try {
       changedEntries.forEach(([id, updates]) => {
-        get().updateNode(id, updates);
+        get().updateNode(id, updates, {
+          skipPersistence: options.persistenceOrder !== undefined && options.persistenceOrder !== 'parallel',
+        });
       });
     } finally {
       if (!wasApplying) useUndoStore.setState({ isApplying: false });
+    }
+
+    if (options.persistenceOrder && options.persistenceOrder !== 'parallel') {
+      const updatedNodes = get().nodes;
+      const afterNodes = Object.fromEntries(
+        changedEntries.flatMap(([id]) => updatedNodes[id] ? [[id, updatedNodes[id]]] : []),
+      ) as Record<string, TaskNode>;
+      const persistenceEntries = [...changedEntries].sort(([leftId], [rightId]) => {
+        const depthDifference = getNodeHierarchyDepth(leftId, updatedNodes) - getNodeHierarchyDepth(rightId, updatedNodes);
+        return options.persistenceOrder === 'leaves-first' ? -depthDifference : depthDifference;
+      });
+      void (async () => {
+        for (const [id, updates] of persistenceEntries) {
+           const oldNode = beforeNodes[id];
+           const newNode = afterNodes[id];
+           if (!oldNode || !newNode) continue;
+           await persistNodeTransition(id, oldNode, newNode, updates);
+           await commitMeetingTaskMutation(oldNode, newNode, Object.keys(updates) as Array<keyof TaskNode>, `${createUpdateNodeOperationId()}:${id}`);
+         }
+      })().catch(error => {
+        console.error('[WbsStore] Failed to persist ordered task batch:', error);
+      });
     }
 
     if (wasApplying) return;
@@ -985,20 +1573,744 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       scope: 'batch',
       entityIds,
       mergeKey: options.mergeKey,
-      undo: () => get().batchUpdateNodes(beforePatches, { label, mergeKey: options.mergeKey }),
-      redo: () => get().batchUpdateNodes(afterPatches, { label, mergeKey: options.mergeKey }),
+      undo: () => get().batchUpdateNodes(beforePatches, {
+        label,
+        mergeKey: options.mergeKey,
+        persistenceOrder: options.persistenceOrder === 'root-first'
+          ? 'leaves-first'
+          : options.persistenceOrder === 'leaves-first'
+            ? 'root-first'
+            : options.persistenceOrder,
+      }),
+      redo: () => get().batchUpdateNodes(afterPatches, {
+        label,
+        mergeKey: options.mergeKey,
+        persistenceOrder: options.persistenceOrder,
+      }),
     });
   },
 
-  removeNode: (id) => {
-    // B3 修復：先清理所有關聯的孤兒依賴，再軟刪除
-    // 設計意圖：避免被刪除節點的依賴殘留，導致 _applyDependencySchedule 嘗試推動已封存節點
+  commitNodeBatch: async (updatesById, options = {}) => {
+    const operationId = `node-batch-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
     const state = get();
-    const orphanDeps = state.dependencies.filter(
-      dep => dep.fromId === id || dep.toId === id
+    const beforePatches: BatchNodeUpdates = {};
+    const afterPatches: BatchNodeUpdates = {};
+    const beforeNodes: Record<string, TaskNode> = {};
+
+    for (const [id, requestedUpdates] of Object.entries(updatesById)) {
+      const oldNode = state.nodes[id];
+      if (!oldNode) continue;
+      const normalizedUpdates = normalizeTaskAssignmentUpdates(
+        oldNode,
+        normalizeTaskStatusUpdates(requestedUpdates),
+      );
+      const patch = buildChangedNodePatch(oldNode, normalizedUpdates);
+      if (!patch) continue;
+      beforePatches[id] = patch.before;
+      afterPatches[id] = patch.after;
+      beforeNodes[id] = oldNode;
+    }
+
+    const affectedTaskIds = Object.keys(afterPatches);
+    if (affectedTaskIds.length === 0) {
+      return { status: 'committed', operationId, affectedTaskIds };
+    }
+    const firstNode = beforeNodes[affectedTaskIds[0]];
+    if (!firstNode || affectedTaskIds.some(id => (
+      beforeNodes[id].workspaceId !== firstNode.workspaceId || beforeNodes[id].boardId !== firstNode.boardId
+    ))) {
+      return { status: 'rejected', operationId, affectedTaskIds, error: '批次任務必須位於同一看板。' };
+    }
+    const existingRecovery = readNodeBatchRecovery(firstNode.boardId);
+    if (hasCorruptNodeBatchRecovery(firstNode.boardId)) {
+      return {
+        status: 'indeterminate',
+        operationId: `corrupt-recovery-${firstNode.boardId}`,
+        affectedTaskIds,
+        error: '批次復原紀錄損壞；完成看板資料重新載入前不得執行新的批次操作。',
+      };
+    }
+    if (existingRecovery) {
+      return {
+        status: 'indeterminate',
+        operationId: existingRecovery.operationId,
+        affectedTaskIds: existingRecovery.targetIds,
+        error: '前一筆批次操作仍待確認，請重新整理後完成復原。',
+      };
+    }
+
+    const descriptor: NodeBatchRecoveryDescriptor = {
+      version: 1,
+      operationId,
+      workspaceId: firstNode.workspaceId,
+      boardId: firstNode.boardId,
+      kind: options.recoveryKind || (
+        affectedTaskIds.every(id => afterPatches[id]?.isArchived === true)
+          ? 'archive'
+          : affectedTaskIds.some(id => 'assigneeIds' in (afterPatches[id] || {}) || 'collaboratorIds' in (afterPatches[id] || {}))
+            ? 'assign'
+            : 'cut-paste'
+      ),
+      createdAt: Date.now(),
+      targetIds: affectedTaskIds,
+      expectedBeforeFingerprint: getNodeBatchRecoveryFingerprint(state.nodes, affectedTaskIds),
+      expectedAfterFingerprint: getNodeBatchRecoveryFingerprint(
+        applyBatchPatchesToSnapshot(state.nodes, afterPatches),
+        affectedTaskIds,
+      ),
+      expectedPresentationBeforeFingerprint: options.presentation?.beforeFingerprint,
+      expectedPresentationAfterFingerprint: options.presentation?.afterFingerprint,
+      phase: 'persisting',
+    };
+    try {
+      if (!writeNodeBatchRecovery(descriptor)) {
+        return { status: 'rejected', operationId, affectedTaskIds, error: '無法建立批次復原紀錄。' };
+      }
+    } catch (error) {
+      return {
+        status: 'rejected',
+        operationId,
+        affectedTaskIds,
+        error: error instanceof Error ? error.message : '無法建立批次復原紀錄。',
+      };
+    }
+    if (options.presentation) {
+      try {
+        await options.presentation.commit();
+      } catch (error) {
+        clearNodeBatchRecovery(descriptor.boardId, descriptor.operationId);
+        return {
+          status: 'rejected',
+          operationId,
+          affectedTaskIds,
+          error: error instanceof Error ? error.message : '無法提交心智圖版面狀態。',
+        };
+      }
+    }
+
+    const persist = (patches: BatchNodeUpdates) => nodeService.batchUpdate(
+      descriptor.workspaceId,
+      descriptor.boardId,
+      Object.entries(patches).map(([id, data]) => ({ id, data })),
     );
-    orphanDeps.forEach(dep => get().removeDependency(dep.id));
+    const readRemoteNodes = async () => Object.fromEntries(
+      (await nodeService.listByProject(descriptor.workspaceId, descriptor.boardId)).map(node => [node.id, node]),
+    ) as Record<string, TaskNode>;
+    const applyCommittedPatches = (patches: BatchNodeUpdates) => {
+      const current = get();
+      const committedAt = Date.now();
+      const nextNodes = { ...current.nodes };
+      Object.entries(patches).forEach(([id, data]) => {
+        if (!nextNodes[id]) return;
+        nextNodes[id] = normalizeTaskStatusNode(normalizeTaskAssignmentNode({
+          ...nextNodes[id],
+          ...data,
+          updatedAt: committedAt,
+        }));
+      });
+      set({ nodes: nextNodes });
+      get()._buildIndices(nextNodes);
+    };
+    const finalizeCommitted = async () => {
+      applyCommittedPatches(afterPatches);
+      const committedNodes = get().nodes;
+      for (const id of affectedTaskIds) {
+        const beforeNode = beforeNodes[id];
+        const afterNode = committedNodes[id];
+        if (!beforeNode || !afterNode) continue;
+        buildTaskUpdateActivities(beforeNode, afterNode, afterPatches[id]).forEach(event => {
+          logTaskActivity(afterNode, event.eventType, event.payload);
+        });
+        await commitMeetingTaskMutation(beforeNode, afterNode, Object.keys(afterPatches[id]) as Array<keyof TaskNode>, `${operationId}:${id}`);
+        if (afterPatches[id].isArchived === true && beforeNode.isArchived !== true) {
+          deleteCalendarEventBestEffort(id);
+        }
+      }
+      clearNodeBatchRecovery(descriptor.boardId, descriptor.operationId);
+      options.presentation?.onCommitted?.();
+      if (!useUndoStore.getState().isApplying) {
+        const label = options.label || (affectedTaskIds.length > 1 ? '批次修改任務' : '修改任務');
+        useUndoStore.getState().pushUndo({
+          label,
+          scope: 'batch',
+          entityIds: affectedTaskIds,
+          mergeKey: options.mergeKey,
+          undo: async () => {
+            const outcome = await get().commitNodeBatch(beforePatches, {
+              label,
+              mergeKey: options.mergeKey,
+              timeoutMs: options.timeoutMs,
+              recoveryKind: 'undo',
+              presentation: options.presentation ? {
+                commit: options.presentation.compensate,
+                compensate: options.presentation.commit,
+                beforeFingerprint: options.presentation.afterFingerprint,
+                afterFingerprint: options.presentation.beforeFingerprint,
+                onCommitted: options.presentation.onCompensated,
+                onCompensated: options.presentation.onCommitted,
+              } : undefined,
+            });
+            if (outcome.status !== 'committed') throw new Error(outcome.error || `Undo batch ${outcome.status}`);
+          },
+          redo: async () => {
+            const outcome = await get().commitNodeBatch(afterPatches, {
+              label,
+              mergeKey: options.mergeKey,
+              timeoutMs: options.timeoutMs,
+              recoveryKind: 'redo',
+              presentation: options.presentation,
+            });
+            if (outcome.status !== 'committed') throw new Error(outcome.error || `Redo batch ${outcome.status}`);
+          },
+        });
+      }
+    };
+
+    let persistenceResult: 'resolved' | 'timeout';
+    try {
+      persistenceResult = await withNodeBatchTimeout(persist(afterPatches), options.timeoutMs ?? 8_000);
+    } catch (error) {
+      try {
+        const remoteNodes = await readRemoteNodes();
+        const convergence = getBatchConvergence(remoteNodes, descriptor);
+        if (convergence === 'after') {
+           await finalizeCommitted();
+          return { status: 'committed', operationId, affectedTaskIds };
+        }
+        if (convergence === 'before') {
+          if (options.presentation) {
+            try {
+              await options.presentation.compensate();
+              options.presentation.onCompensated?.();
+            } catch (presentationError) {
+              return {
+                status: 'indeterminate', operationId, affectedTaskIds,
+                error: presentationError instanceof Error ? presentationError.message : '版面補償結果無法確認。',
+              };
+            }
+          }
+          clearNodeBatchRecovery(descriptor.boardId, descriptor.operationId);
+          return {
+            status: 'rejected',
+            operationId,
+            affectedTaskIds,
+            error: error instanceof Error ? error.message : '批次儲存失敗。',
+          };
+        }
+        writeNodeBatchRecoveryPhase(descriptor, 'compensating');
+        await persist(beforePatches);
+        if (options.presentation) {
+          await options.presentation.compensate();
+          options.presentation.onCompensated?.();
+        }
+        const compensatedNodes = await readRemoteNodes();
+        if (getBatchConvergence(compensatedNodes, descriptor) === 'before') {
+          clearNodeBatchRecovery(descriptor.boardId, descriptor.operationId);
+          return {
+            status: 'compensated',
+            operationId,
+            affectedTaskIds,
+            error: error instanceof Error ? error.message : '批次儲存失敗，已還原。',
+          };
+        }
+      } catch (compensationError) {
+        return {
+          status: 'indeterminate',
+          operationId,
+          affectedTaskIds,
+          error: compensationError instanceof Error ? compensationError.message : '批次結果無法確認。',
+        };
+      }
+      return { status: 'indeterminate', operationId, affectedTaskIds, error: '批次結果無法確認。' };
+    }
+
+    if (persistenceResult === 'timeout') {
+      try {
+        const remoteNodes = await readRemoteNodes();
+        if (getBatchConvergence(remoteNodes, descriptor) === 'after') {
+           await finalizeCommitted();
+          return { status: 'committed', operationId, affectedTaskIds };
+        }
+      } catch {
+        // Keep the descriptor. A reload can converge it without guessing.
+      }
+      writeNodeBatchRecoveryPhase(descriptor, 'indeterminate');
+      return { status: 'indeterminate', operationId, affectedTaskIds, error: '批次儲存逾時，結果尚待確認。' };
+    }
+
+    await finalizeCommitted();
+    return { status: 'committed', operationId, affectedTaskIds };
+  },
+
+  commitNodeForestCreate: async (input) => {
+    const operationId = `node-forest-create-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    const plannedNodes = input.nodes.map(node => normalizeTaskStatusNode(normalizeTaskAssignmentNode({ ...node })));
+    const plannedDependencies = [...(input.dependencies || [])];
+    const createdTaskIds = plannedNodes.map(node => node.id);
+    const beforePatches: BatchNodeUpdates = {};
+    const afterPatches: BatchNodeUpdates = {};
+    const beforeNodes: Record<string, TaskNode> = {};
+    Object.entries(input.existingUpdatesById || {}).forEach(([id, requestedUpdates]) => {
+      const existing = get().nodes[id];
+      if (!existing) return;
+      const normalized = normalizeTaskAssignmentUpdates(existing, normalizeTaskStatusUpdates(requestedUpdates));
+      const patch = buildChangedNodePatch(existing, normalized);
+      if (!patch) return;
+      beforeNodes[id] = existing;
+      beforePatches[id] = patch.before;
+      afterPatches[id] = patch.after;
+    });
+    const affectedTaskIds = Array.from(new Set([...createdTaskIds, ...Object.keys(afterPatches)]));
+    const firstNode = plannedNodes[0];
+    if (!firstNode || plannedNodes.some(node => (
+      node.workspaceId !== firstNode.workspaceId || node.boardId !== firstNode.boardId
+    ))) {
+      return { status: 'rejected', operationId, affectedTaskIds, error: '建立森林必須位於同一看板。' };
+    }
+    if (createdTaskIds.some(id => Boolean(get().nodes[id]))) {
+      return { status: 'rejected', operationId, affectedTaskIds, error: '建立計畫含有重複任務識別碼。' };
+    }
+    const existingRecovery = readNodeBatchRecovery(firstNode.boardId);
+    if (hasCorruptNodeBatchRecovery(firstNode.boardId)) {
+      return {
+        status: 'indeterminate',
+        operationId: `corrupt-recovery-${firstNode.boardId}`,
+        affectedTaskIds,
+        error: '批次復原紀錄損壞；完成看板資料重新載入前不得執行新的批次操作。',
+      };
+    }
+    if (existingRecovery) {
+      return {
+        status: 'indeterminate',
+        operationId: existingRecovery.operationId,
+        affectedTaskIds: existingRecovery.targetIds,
+        error: '前一筆批次操作仍待確認。',
+      };
+    }
+    const predictedAfterNodes = applyBatchPatchesToSnapshot(get().nodes, afterPatches);
+    plannedNodes.forEach(node => { predictedAfterNodes[node.id] = node; });
+    const descriptor: NodeBatchRecoveryDescriptor = {
+      version: 1,
+      operationId,
+      workspaceId: firstNode.workspaceId,
+      boardId: firstNode.boardId,
+      kind: 'copy-paste',
+      createdAt: Date.now(),
+      targetIds: affectedTaskIds,
+      expectedBeforeFingerprint: getNodeBatchRecoveryFingerprint(get().nodes, affectedTaskIds),
+      expectedAfterFingerprint: getNodeBatchRecoveryFingerprint(predictedAfterNodes, affectedTaskIds),
+      expectedPresentationBeforeFingerprint: input.presentation?.beforeFingerprint,
+      expectedPresentationAfterFingerprint: input.presentation?.afterFingerprint,
+      phase: 'persisting',
+    };
+    try {
+      if (!writeNodeBatchRecovery(descriptor)) {
+        return { status: 'rejected', operationId, affectedTaskIds, error: '無法建立批次復原紀錄。' };
+      }
+    } catch (error) {
+      return { status: 'rejected', operationId, affectedTaskIds, error: error instanceof Error ? error.message : '無法建立批次復原紀錄。' };
+    }
+    if (input.presentation) {
+      try {
+        await input.presentation.commit();
+      } catch (error) {
+        clearNodeBatchRecovery(firstNode.boardId, operationId);
+        return { status: 'rejected', operationId, affectedTaskIds, error: error instanceof Error ? error.message : '無法提交心智圖版面狀態。' };
+      }
+    }
+
+    const createdNodeIds: string[] = [];
+    const createdDependencyIds: string[] = [];
+    const persistCreate = async () => {
+      if (Object.keys(afterPatches).length > 0) {
+        await nodeService.batchUpdate(
+          firstNode.workspaceId,
+          firstNode.boardId,
+          Object.entries(afterPatches).map(([id, data]) => ({ id, data })),
+        );
+      }
+      for (const node of plannedNodes) {
+        await nodeService.create(node.workspaceId, node.boardId, node);
+        createdNodeIds.push(node.id);
+      }
+      for (const dependency of plannedDependencies) {
+        await dependencyService.set(firstNode.workspaceId, firstNode.boardId, dependency);
+        createdDependencyIds.push(dependency.id);
+      }
+    };
+    const persistRemove = async () => {
+      for (const dependency of [...plannedDependencies].reverse()) {
+        await dependencyService.delete(firstNode.workspaceId, firstNode.boardId, dependency.id);
+      }
+      for (const node of [...plannedNodes].reverse()) {
+        await nodeService.delete(node.workspaceId, node.boardId, node.id);
+      }
+      if (Object.keys(beforePatches).length > 0) {
+        await nodeService.batchUpdate(
+          firstNode.workspaceId,
+          firstNode.boardId,
+          Object.entries(beforePatches).map(([id, data]) => ({ id, data })),
+        );
+      }
+    };
+    const applyCreatedState = () => {
+      const current = get();
+      const nextNodes = { ...current.nodes };
+      Object.entries(afterPatches).forEach(([id, data]) => {
+        if (nextNodes[id]) nextNodes[id] = { ...nextNodes[id], ...data, updatedAt: Date.now() };
+      });
+      plannedNodes.forEach(node => { nextNodes[node.id] = node; });
+      const dependencyIds = new Set(plannedDependencies.map(dependency => dependency.id));
+      set({
+        nodes: nextNodes,
+        dependencies: [
+          ...current.dependencies.filter(dependency => !dependencyIds.has(dependency.id)),
+          ...plannedDependencies,
+        ],
+      });
+      get()._buildIndices(nextNodes);
+    };
+    const applyRemovedState = () => {
+      const current = get();
+      const nextNodes = { ...current.nodes };
+      createdTaskIds.forEach(id => { delete nextNodes[id]; });
+      Object.entries(beforePatches).forEach(([id, data]) => {
+        if (nextNodes[id]) nextNodes[id] = { ...nextNodes[id], ...data, updatedAt: Date.now() };
+      });
+      const dependencyIds = new Set(plannedDependencies.map(dependency => dependency.id));
+      set({
+        nodes: nextNodes,
+        dependencies: current.dependencies.filter(dependency => !dependencyIds.has(dependency.id)),
+      });
+      get()._buildIndices(nextNodes);
+    };
+    const finalizeCommitted = async () => {
+      applyCreatedState();
+      clearNodeBatchRecovery(firstNode.boardId, operationId);
+      input.presentation?.onCommitted?.();
+      for (const node of plannedNodes) {
+        logTaskActivity(node, 'task_created', {
+          source: 'mindmap_clipboard',
+          after: { parentId: node.parentId, order: node.order },
+        });
+        await commitMeetingTaskMutation(null, node, ['title', 'status', 'description', 'detailNotes', 'startDate', 'endDate', 'isDurationLocked', 'assigneeIds', 'assigneeId', 'collaboratorIds', 'tagIds', 'isArchived'], `${operationId}:${node.id}`);
+      }
+      for (const id of Object.keys(afterPatches)) {
+        const beforeNode = beforeNodes[id];
+        const afterNode = get().nodes[id];
+        if (beforeNode && afterNode) {
+          await commitMeetingTaskMutation(beforeNode, afterNode, Object.keys(afterPatches[id]) as Array<keyof TaskNode>, `${operationId}:${id}`);
+        }
+      }
+      if (!useUndoStore.getState().isApplying) {
+        const label = input.label || '貼上任務';
+        useUndoStore.getState().pushUndo({
+          label,
+          scope: 'batch',
+          entityIds: affectedTaskIds,
+          undo: async () => {
+            const undoDescriptor: NodeBatchRecoveryDescriptor = {
+              ...descriptor,
+              operationId: `node-forest-undo-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+              kind: 'undo',
+              createdAt: Date.now(),
+              expectedBeforeFingerprint: descriptor.expectedAfterFingerprint,
+              expectedAfterFingerprint: descriptor.expectedBeforeFingerprint,
+              expectedPresentationBeforeFingerprint: descriptor.expectedPresentationAfterFingerprint,
+              expectedPresentationAfterFingerprint: descriptor.expectedPresentationBeforeFingerprint,
+              phase: 'persisting',
+            };
+            if (!writeNodeBatchRecovery(undoDescriptor)) throw new Error('無法建立復原操作紀錄。');
+            try {
+              await input.presentation?.compensate();
+              await persistRemove();
+              applyRemovedState();
+              input.presentation?.onCompensated?.();
+              clearNodeBatchRecovery(firstNode.boardId, undoDescriptor.operationId);
+            } catch (error) {
+              try {
+                writeNodeBatchRecoveryPhase(undoDescriptor, 'compensating');
+                await input.presentation?.commit();
+                await persistCreate();
+                clearNodeBatchRecovery(firstNode.boardId, undoDescriptor.operationId);
+              } catch {
+                try { writeNodeBatchRecoveryPhase(undoDescriptor, 'indeterminate'); } catch { /* keep lock */ }
+              }
+              throw error;
+            }
+          },
+          redo: async () => {
+            const outcome = await get().commitNodeForestCreate(input);
+            if (outcome.status !== 'committed') throw new Error(outcome.error || `Redo forest ${outcome.status}`);
+          },
+        });
+      }
+    };
+
+    try {
+      const result = await withNodeBatchTimeout(persistCreate(), input.timeoutMs ?? 8_000);
+      if (result === 'timeout') {
+        const remoteNodes = Object.fromEntries(
+          (await nodeService.listByProject(firstNode.workspaceId, firstNode.boardId)).map(node => [node.id, node]),
+        ) as Record<string, TaskNode>;
+        if (getBatchConvergence(remoteNodes, descriptor) !== 'after') {
+          writeNodeBatchRecoveryPhase(descriptor, 'indeterminate');
+          return { status: 'indeterminate', operationId, affectedTaskIds, error: '貼上逾時，結果尚待確認。' };
+        }
+      }
+      await finalizeCommitted();
+      return { status: 'committed', operationId, affectedTaskIds };
+    } catch (error) {
+      try {
+        writeNodeBatchRecoveryPhase(descriptor, 'compensating');
+        for (const dependencyId of [...createdDependencyIds].reverse()) {
+          await dependencyService.delete(firstNode.workspaceId, firstNode.boardId, dependencyId);
+        }
+        for (const nodeId of [...createdNodeIds].reverse()) {
+          await nodeService.delete(firstNode.workspaceId, firstNode.boardId, nodeId);
+        }
+        if (Object.keys(beforePatches).length > 0) {
+          await nodeService.batchUpdate(
+            firstNode.workspaceId,
+            firstNode.boardId,
+            Object.entries(beforePatches).map(([id, data]) => ({ id, data })),
+          );
+        }
+        if (input.presentation) {
+          await input.presentation.compensate();
+          input.presentation.onCompensated?.();
+        }
+        clearNodeBatchRecovery(firstNode.boardId, operationId);
+        return {
+          status: createdNodeIds.length || createdDependencyIds.length ? 'compensated' : 'rejected',
+          operationId,
+          affectedTaskIds,
+          error: error instanceof Error ? error.message : '貼上失敗。',
+        };
+      } catch (compensationError) {
+        try { writeNodeBatchRecoveryPhase(descriptor, 'indeterminate'); } catch { /* keep best-effort lock */ }
+        return {
+          status: 'indeterminate',
+          operationId,
+          affectedTaskIds,
+          error: compensationError instanceof Error ? compensationError.message : '貼上結果無法確認。',
+        };
+      }
+    }
+  },
+
+  recoverNodeBatch: async (boardId) => {
+    const descriptor = readNodeBatchRecovery(boardId);
+    if (!descriptor) {
+      return hasCorruptNodeBatchRecovery(boardId) ? {
+        status: 'indeterminate',
+        operationId: `corrupt-recovery-${boardId}`,
+        affectedTaskIds: [],
+        error: '批次復原紀錄損壞；請先完成看板資料重新載入。',
+      } : null;
+    }
+    const outcome = (status: NodeBatchCommitStatus, error?: string): NodeBatchCommitOutcome => ({
+      status,
+      operationId: descriptor.operationId,
+      affectedTaskIds: descriptor.targetIds,
+      error,
+    });
+    try {
+      const remoteNodes = Object.fromEntries(
+        (await nodeService.listByProject(descriptor.workspaceId, descriptor.boardId)).map(node => [node.id, node]),
+      ) as Record<string, TaskNode>;
+      const convergence = getBatchConvergence(remoteNodes, descriptor);
+      if (convergence === 'after') {
+        const current = get();
+        const nextNodes = { ...current.nodes };
+        descriptor.targetIds.forEach(id => {
+          if (remoteNodes[id]) nextNodes[id] = remoteNodes[id];
+        });
+        set({ nodes: nextNodes });
+        get()._buildIndices(nextNodes);
+        clearNodeBatchRecovery(boardId, descriptor.operationId);
+        return outcome('committed');
+      }
+      if (convergence === 'before') {
+        clearNodeBatchRecovery(boardId, descriptor.operationId);
+        return outcome('rejected');
+      }
+      return outcome('indeterminate', '批次資料與已知前後指紋皆不一致，已保持操作鎖。');
+    } catch (error) {
+      return outcome('indeterminate', error instanceof Error ? error.message : '無法確認前一筆批次結果。');
+    }
+  },
+
+  commitTaskPlacementCommand: async (command, options = {}) => {
+    const state = get();
+    if (command.destination.ownership.kind === 'account_unplaced') {
+      const blocked = command.expectedSubtreeIds.some(taskId => state.trackingReferences.some(reference => reference.taskId === taskId && !reference.removedAt));
+      if (blocked) throw new TaskTrackingError('TRACKING_REFERENCE_BLOCKS_UNPLACED', '請先移除所有追蹤副本，才能將任務移至未歸位。');
+    }
+    assertMoveTaskSubtreeCommand(command, state.nodes);
+    const beforeNodes = state.nodes;
+    const reverseDestination = buildRestoreDestination(command.rootTaskId, beforeNodes);
+    const pendingIds = [...command.expectedSubtreeIds];
+    set(current => ({
+      pendingPlacementNodeIds: {
+        ...current.pendingPlacementNodeIds,
+        ...Object.fromEntries(pendingIds.map(id => [id, command.operationId])),
+      },
+    }));
+
+    try {
+      const result = await persistTaskWorkbenchPlacementCommand({
+        command,
+        accountId: useAuthStore.getState().user?.uid,
+        nodesRecord: beforeNodes,
+      });
+      if (result.movedTaskIds.length !== command.expectedSubtreeIds.length
+        || result.movedTaskIds.some((id, index) => command.expectedSubtreeIds[index] !== id)) {
+        throw new Error('Canonical task placement result changed the expected subtree identity.');
+      }
+      const canonicalById = new Map(result.canonicalNodes.map(node => [node.id, node]));
+      const missingMovedId = command.expectedSubtreeIds.find(id => !canonicalById.has(id));
+      if (missingMovedId) {
+        throw new Error(`Canonical task placement result is missing moved task: ${missingMovedId}`);
+      }
+
+      const undoStore = useUndoStore.getState();
+      const wasApplying = undoStore.isApplying;
+      if (!wasApplying) useUndoStore.setState({ isApplying: true });
+      try {
+        result.canonicalNodes.forEach((canonical) => {
+          if (!get().nodes[canonical.id]) return;
+          get().updateNode(canonical.id, canonical, { skipPersistence: true, skipActivity: true });
+        });
+      } finally {
+        if (!wasApplying) useUndoStore.setState({ isApplying: false });
+      }
+
+      const committedNodes = get().nodes;
+      for (const id of command.expectedSubtreeIds) {
+        const oldNode = beforeNodes[id];
+        const newNode = committedNodes[id];
+        const canonical = canonicalById.get(id);
+        if (!oldNode || !newNode || !canonical) continue;
+        const patch = buildChangedNodePatch(oldNode, canonical);
+        if (!patch) continue;
+        buildTaskUpdateActivities(oldNode, newNode, patch.after).forEach(event => {
+          if (!result.activityLoggedRemotely) {
+            logTaskActivity(isTaskWorkbenchUnplacedTask(newNode) ? oldNode : newNode, event.eventType, {
+              ...event.payload,
+              operationId: command.operationId,
+              source: command.source,
+              target: command.destination.ownership,
+            });
+          }
+        });
+        await commitMeetingTaskMutation(oldNode, newNode, Object.keys(patch.after) as Array<keyof TaskNode>, `${command.operationId}:${id}`);
+      }
+
+      if (!wasApplying) {
+        const reverseTemplate: MoveTaskSubtreeCommand = {
+          ...command,
+          operationId: command.operationId,
+          source: command.destination.ownership,
+          destination: reverseDestination,
+        };
+        const label = options.label || '搬移任務';
+        useUndoStore.getState().pushUndo({
+          label,
+          scope: 'batch',
+          entityIds: [...command.expectedSubtreeIds],
+          mergeKey: options.mergeKey,
+          undo: () => get().commitTaskPlacementCommand(
+            withNewTaskPlacementOperation(reverseTemplate),
+            { label, mergeKey: options.mergeKey },
+          ),
+          redo: () => get().commitTaskPlacementCommand(
+            withNewTaskPlacementOperation(command),
+            { label, mergeKey: options.mergeKey },
+          ),
+        });
+      }
+    } finally {
+      set(current => ({
+        pendingPlacementNodeIds: Object.fromEntries(
+          Object.entries(current.pendingPlacementNodeIds)
+            .filter(([, pendingOperationId]) => pendingOperationId !== command.operationId),
+        ),
+      }));
+    }
+  },
+
+  archiveNode: (id) => {
+    // 封存是可逆生命週期：依賴必須保留，還原後才能完整回到封存前狀態。
     get().updateNode(id, { isArchived: true });
+  },
+
+  permanentlyDeleteNodes: async (rootIds) => {
+    const state = get();
+    const nodeIds = new Set<string>();
+
+    for (const rootId of rootIds) {
+      const root = state.nodes[rootId];
+      if (!root) continue;
+      if (!root.isArchived) {
+        throw new Error(`只有已封存任務可以永久刪除：${root.title || '未命名任務'}`);
+      }
+      const pending = [rootId];
+      while (pending.length > 0) {
+        const nodeId = pending.pop();
+        if (!nodeId || nodeIds.has(nodeId)) continue;
+        const node = state.nodes[nodeId];
+        if (!node) continue;
+        if (node.workspaceId !== root.workspaceId || node.boardId !== root.boardId) continue;
+        nodeIds.add(nodeId);
+        (state.parentNodesIndex[nodeId] || []).forEach(childId => pending.push(childId));
+      }
+    }
+
+    if (nodeIds.size === 0) return 0;
+
+    const dependenciesToDelete = state.dependencies.filter(
+      dependency => nodeIds.has(dependency.fromId) || nodeIds.has(dependency.toId),
+    );
+    for (const dependency of dependenciesToDelete) {
+      const endpoint = state.nodes[dependency.fromId] || state.nodes[dependency.toId];
+      if (endpoint?.workspaceId && endpoint.boardId) {
+        await dependencyService.delete(endpoint.workspaceId, endpoint.boardId, dependency.id);
+      }
+    }
+
+    const nodesToDelete = [...nodeIds]
+      .map(nodeId => state.nodes[nodeId])
+      .filter((node): node is TaskNode => Boolean(node))
+      .sort((left, right) => getNodeHierarchyDepth(right.id, state.nodes) - getNodeHierarchyDepth(left.id, state.nodes));
+
+    for (const node of nodesToDelete) {
+      if (isTaskWorkbenchUnplacedTask(node)) {
+        await persistRemoveTaskWorkbenchUnplacedTask(node.id, useAuthStore.getState().user?.uid);
+      } else if (node.workspaceId && node.boardId) {
+        await nodeService.delete(node.workspaceId, node.boardId, node.id);
+      }
+    }
+
+    const latest = get();
+    const nextNodes = { ...latest.nodes };
+    nodeIds.forEach(nodeId => {
+      delete nextNodes[nodeId];
+      deleteCalendarEventBestEffort(nodeId);
+    });
+    set({
+      nodes: nextNodes,
+      dependencies: latest.dependencies.filter(
+        dependency => !nodeIds.has(dependency.fromId) && !nodeIds.has(dependency.toId),
+      ),
+      // Supabase removes placement rows through the task FK cascade; the
+      // local-test projection must mirror that lifecycle explicitly so a
+      // deleted canonical task never leaves a dangling ghost reference.
+      trackingReferences: latest.trackingReferences.filter(reference => !nodeIds.has(reference.taskId)),
+      stagedTrackingReferences: latest.stagedTrackingReferences.filter(reference => !nodeIds.has(reference.taskId)),
+    });
+    get()._buildIndices(nextNodes);
+    return nodeIds.size;
   },
 
   moveNode: (id, newParentId) => {
@@ -1355,7 +2667,18 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       }
       for (const [key, batch] of Object.entries(groups)) {
           const [wsId, bId] = key.split('|');
-          nodeService.batchUpdate(wsId, bId, batch).catch(console.error);
+          const batchMutationId = `dependency-schedule-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+          nodeService.batchUpdate(wsId, bId, batch)
+            .then(async () => {
+              for (const { id, data } of batch) {
+                const beforeNode = state.nodes[id];
+                const afterNode = nextNodes[id];
+                if (beforeNode && afterNode) {
+                  await commitMeetingTaskMutation(beforeNode, afterNode, Object.keys(data) as Array<keyof TaskNode>, `${batchMutationId}:${id}`);
+                }
+              }
+            })
+            .catch(error => console.error('[WbsStore] Failed to persist dependency schedule:', error));
       }
 
       for (const { id, data } of updates) {
@@ -1376,7 +2699,6 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
                   },
               };
               logTaskActivity(afterNode, 'task_dates_changed', activityPayload);
-              recordMeetingTaskActivity(afterNode, 'task_dates_changed', activityPayload);
           }
 
           if ('status' in data) {
@@ -1386,7 +2708,6 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
                   after: { status: afterNode.status },
               };
               logTaskActivity(afterNode, 'task_status_changed', activityPayload);
-              recordMeetingTaskActivity(afterNode, 'task_status_changed', activityPayload);
           }
       }
   },
@@ -1443,13 +2764,14 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
 
   // ===== Import / Export =====
   exportData: () => {
-      const { nodes, dependencies } = get();
+      const { nodes, dependencies, trackingReferences } = get();
       const workspaces = useBoardStore.getState().workspaces;
       const tags = useTagStore.getState().tags;
       const exportObj = {
           version: 'wbs-1.2',
           nodes,
           dependencies,
+          trackingReferences,
           tags,
           workspaces,
           timestamp: Date.now()
@@ -1520,6 +2842,18 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
                   importedNodeIds = new Set(nodesArray.map(node => node.id));
                   get().setNodes(nodesArray);
                   await nodeService.replaceAllByProject(currentWsId, currentBoardId, nodesArray);
+              }
+
+              if (Array.isArray(parsed.trackingReferences)) {
+                  const importedReferences = parsed.trackingReferences.filter((reference: any) =>
+                      reference
+                      && typeof reference.id === 'string'
+                      && typeof reference.taskId === 'string'
+                      && reference.workspaceId === currentWsId
+                      && reference.boardId === currentBoardId
+                      && !reference.removedAt
+                  );
+                  set({ trackingReferences: importedReferences });
               }
 
               if (Array.isArray(parsed.tags)) {

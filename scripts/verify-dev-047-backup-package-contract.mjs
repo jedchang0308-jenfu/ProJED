@@ -57,9 +57,9 @@ check(
 );
 
 check(
-  'Package V2 has bounded schema, manifest, checksum, canonicalization, and semantic read-after-write verification',
+  'Package V3 (V2-compatible) has bounded schema, manifest, checksum, canonicalization, and semantic read-after-write verification',
   source.types?.includes("BACKUP_FORMAT = 'projed-backup'")
-    && source.types.includes('BACKUP_SCHEMA_VERSION = 2')
+    && (source.types.includes('BACKUP_SCHEMA_VERSION = 3') || source.types.includes('BACKUP_SCHEMA_VERSION = 2'))
     && source.types.includes('BACKUP_MAX_FILE_BYTES = 10 * 1024 * 1024')
     && source.types.includes('BACKUP_MAX_TASKS = 10_000')
     && source.packageDomain?.includes('calculateBackupChecksum')

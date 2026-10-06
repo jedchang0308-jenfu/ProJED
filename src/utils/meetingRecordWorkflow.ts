@@ -1,15 +1,17 @@
 import type {
   KnowledgeRecordStatus,
-  KnowledgeRecordType,
+  EditableKnowledgeRecordType,
   KnowledgeRecordVisibility,
   RecordTaskLinkRole,
 } from '../types';
+import { getMeetingProjectChangeImportMetadataForSignature } from './meetingProjectChangeImport';
+import { getMeetingTaskReservationsForSignature } from './meetingTaskReservation';
 
 export type MeetingSynthesisWorkflowStatus = 'idle' | 'synthesizing' | 'ready' | 'error';
 
 export type MeetingRecordWorkflowStage = 'capture' | 'ai_suggestion' | 'review' | 'published';
 
-export type MeetingWorkflowStepCommand = 'saveDraft' | 'runAi' | 'publish';
+export type MeetingWorkflowStepCommand = 'focusContent' | 'saveDraft' | 'runAi' | 'publish';
 
 export type MeetingWorkflowStepVisualState =
   | 'current'
@@ -40,7 +42,7 @@ export type MeetingWorkflowStepAction = {
 
 export type MeetingRecordDraftLike = {
   id?: string;
-  type: KnowledgeRecordType;
+  type: EditableKnowledgeRecordType;
   title: string;
   content: string;
   status: KnowledgeRecordStatus;
@@ -50,7 +52,55 @@ export type MeetingRecordDraftLike = {
   startedAt?: number;
   endedAt?: number;
   recordedBy?: string | null;
+  metadata?: Record<string, unknown>;
   taskLinks: Array<{ nodeId: string; role: RecordTaskLinkRole }>;
+};
+
+export type MeetingSynthesisResumeState = {
+  status: 'ready';
+  provider: string | null;
+  warnings: string[];
+} | null;
+
+export const normalizeMeetingSynthesisContentForComparison = (content: string) =>
+  content.replace(/\r\n?/g, '\n').replace(/[ \t]+$/gm, '').trim();
+
+export const getMeetingSynthesisResumeState = (
+  draft: MeetingRecordDraftLike | null,
+): MeetingSynthesisResumeState => {
+  if (!draft || draft.type !== 'meeting' || draft.status !== 'draft') return null;
+  const trace = draft.metadata?.meetingSynthesis;
+  if (!trace || typeof trace !== 'object' || Array.isArray(trace)) return null;
+
+  const synthesis = trace as Record<string, unknown>;
+  if (
+    typeof synthesis.sourceContent !== 'string' ||
+    typeof synthesis.outputContent !== 'string' ||
+    typeof synthesis.runId !== 'string' ||
+    !synthesis.runId.trim() ||
+    typeof synthesis.contractVersion !== 'string' ||
+    !synthesis.contractVersion.trim() ||
+    typeof synthesis.functionVersion !== 'string' ||
+    !synthesis.functionVersion.trim() ||
+    typeof synthesis.provider !== 'string' ||
+    !synthesis.provider.trim() ||
+    typeof synthesis.generatedAt !== 'string' ||
+    !synthesis.generatedAt.trim() ||
+    !synthesis.quality ||
+    typeof synthesis.quality !== 'object' ||
+    Array.isArray(synthesis.quality) ||
+    (synthesis.quality as Record<string, unknown>).passed !== true ||
+    normalizeMeetingSynthesisContentForComparison(synthesis.outputContent) !==
+      normalizeMeetingSynthesisContentForComparison(draft.content)
+  ) return null;
+
+  return {
+    status: 'ready',
+    provider: typeof synthesis.provider === 'string' ? synthesis.provider : null,
+    warnings: Array.isArray(synthesis.warnings)
+      ? synthesis.warnings.filter((warning): warning is string => typeof warning === 'string')
+      : [],
+  };
 };
 
 export type MeetingRecordSaveFeedbackLike = {
@@ -111,6 +161,8 @@ export const getRecordDraftSignature = (draft: MeetingRecordDraftLike | null) =>
     startedAt: draft.startedAt ?? null,
     endedAt: draft.endedAt ?? null,
     recordedBy: draft.recordedBy ?? null,
+    meetingTaskReservations: getMeetingTaskReservationsForSignature(draft.metadata),
+    meetingProjectChangeImport: getMeetingProjectChangeImportMetadataForSignature(draft.metadata),
     taskLinks: normalizeTaskLinks(draft),
   });
 };
@@ -130,13 +182,14 @@ export const getMeetingRecordActionState = ({
   const hasDraft = Boolean(draft && draft.type === 'meeting');
   const hasTitle = Boolean(draft?.title.trim());
   const hasContent = Boolean(draft?.content.trim());
-  const hasSourceForAi = Boolean(hasContent || meetingActivityCount > 0);
+  const hasSourceForAi = Boolean(hasContent || meetingActivityCount > 0 || draft?.taskLinks.length);
   const isSynthesizing = meetingSynthesisStatus === 'synthesizing';
   const hasAiDraft = meetingSynthesisStatus === 'ready';
   const isPublished = Boolean(
+    draft?.status === 'published' ||
     draft?.id &&
-    lastSaveFeedback?.recordId === draft.id &&
-    lastSaveFeedback.status === 'published'
+      lastSaveFeedback?.recordId === draft.id &&
+      lastSaveFeedback.status === 'published'
   );
   const currentSignature = getRecordDraftSignature(draft);
   const hasUnresolvedActivities = meetingActivityCount > 0 && !hasAiDraft && !isPublished;
@@ -149,6 +202,8 @@ export const getMeetingRecordActionState = ({
     ? '請先選擇工作區與看板。'
     : !hasDraft
       ? '目前沒有會議草稿。'
+      : isPublished
+        ? '這筆會議紀錄已發布。'
       : !hasTitle
         ? '請先輸入會議標題。'
         : saving || isSynthesizing
@@ -159,6 +214,8 @@ export const getMeetingRecordActionState = ({
     ? '請先選擇工作區與看板。'
     : !hasDraft
       ? '目前沒有會議草稿。'
+      : isPublished
+        ? '這筆會議紀錄已發布。'
       : !hasTitle
         ? '請先輸入會議標題。'
         : !hasSourceForAi
@@ -190,7 +247,7 @@ export const getMeetingRecordActionState = ({
         : 'capture';
 
   const statusMessage = isPublished
-    ? '會議紀錄已發布，可在紀錄庫與任務知識查找。'
+    ? '會議紀錄已發布，可在紀錄庫查找。'
     : saving
       ? '正在儲存會議紀錄。'
       : isSynthesizing
@@ -201,12 +258,12 @@ export const getMeetingRecordActionState = ({
             ? `AI整理失敗，原草稿已保留：${meetingSynthesisError || '請重試。'}`
             : !hasContent
               ? '目前是速記階段，先輸入會議內容或從任務詳情加入補記。'
-              : '目前可直接發布編輯器內容，也可先用 AI整理成校稿。';
+              : '目前可直接發布編輯器內容，也可先用 AI整理成待確認草稿。';
 
   const nextActionMessage = isPublished
     ? '下一步：可離開會議模式，或到紀錄庫查閱。'
     : hasAiDraft
-      ? '下一步：人工校稿後按「發布」。'
+      ? '下一步：確認內容後按「發布」。'
       : !hasContent
         ? '下一步：輸入會議內容；有內容後即可發布。'
         : '下一步：直接發布，或先按「AI整理」。';
@@ -214,10 +271,10 @@ export const getMeetingRecordActionState = ({
   const activityRisk = hasUnresolvedActivities
     ? `已偵測 ${meetingActivityCount} 筆任務變更。直接發布只保存目前編輯器內容；若要整理任務變更，請先按 AI整理或手動寫入內容。`
     : null;
-  const dirtyRisk = isDirty && !isPublished ? '有未儲存變更，離開會議模式前會詢問是否存草稿。' : null;
+  const dirtyRisk = isDirty && !isPublished ? '有未儲存變更，離開前會先自動保護內容。' : null;
   const riskMessage = activityRisk || dirtyRisk;
   const exitWarning = isDirty
-    ? '目前會議草稿有未儲存變更。你可以先存草稿後離開，或直接離開但不保存新變更。'
+    ? '目前會議草稿有未儲存變更；離開前系統會先自動保護內容，若保護失敗會留在畫面上。'
     : null;
 
   return {
@@ -265,7 +322,7 @@ export const getMeetingWorkflowStepActions = (
 ): MeetingWorkflowStepAction[] => {
   const captureComplete = Boolean(state.hasContent || state.hasAiDraft || state.isPublished);
   const aiComplete = Boolean(state.hasAiDraft || state.isPublished);
-  const reviewComplete = Boolean(state.isPublished);
+  const reviewComplete = Boolean(state.isPublished || (state.hasAiDraft && !state.isDirty));
   const publishComplete = Boolean(state.isPublished);
   const canUseActions = !state.isPublished && !state.isSynthesizing && !state.isSaving;
 
@@ -299,7 +356,7 @@ export const getMeetingWorkflowStepActions = (
     ? 'complete'
     : recommendedStage === 'review'
       ? state.canSaveDraft ? 'current' : 'locked'
-      : state.hasAiDraft && state.canSaveDraft
+      : state.canSaveDraft
         ? 'available'
         : 'locked';
 
@@ -315,15 +372,15 @@ export const getMeetingWorkflowStepActions = (
     createMeetingWorkflowStepAction({
       stage: 'capture',
       label: '速記',
-      actionLabel: state.hasAiDraft ? '存校稿' : '存草稿',
-      outcomeLabel: state.hasAiDraft ? '確認後存草稿' : '存草稿，不發布',
-      command: 'saveDraft',
+      actionLabel: '移至內容',
+      outcomeLabel: '移至內容編輯',
+      command: 'focusContent',
       visualState: captureVisualState,
       tone: 'primary',
       isOptional: false,
-      ariaDescription: '速記階段。按下後會保存草稿，不會發布。',
-      disabledReason: state.saveDraftDisabledReason,
-      enabled: canUseActions && state.canSaveDraft,
+      ariaDescription: '速記階段。按下後移至內容編輯，不會保存或發布。',
+      disabledReason: null,
+      enabled: canUseActions,
       isComplete: captureComplete,
       isRecommended: recommendedStage === 'capture' && !state.isPublished,
     }),
@@ -345,15 +402,15 @@ export const getMeetingWorkflowStepActions = (
     createMeetingWorkflowStepAction({
       stage: 'review',
       label: '校稿',
-      actionLabel: '存校稿',
+      actionLabel: state.hasAiDraft ? '存校稿' : '存草稿',
       outcomeLabel: '確認後存草稿',
       command: 'saveDraft',
       visualState: reviewVisualState,
       tone: 'primary',
       isOptional: false,
-      ariaDescription: '校稿階段。按下後會保存校稿草稿，不會發布。',
-      disabledReason: state.hasAiDraft ? state.saveDraftDisabledReason : '請先完成 AI整理或手動整理內容。',
-      enabled: canUseActions && state.hasAiDraft && state.canSaveDraft,
+      ariaDescription: '校稿階段。按下後會保存目前內容為草稿，不會發布；AI整理為選用動作。',
+      disabledReason: state.saveDraftDisabledReason,
+      enabled: canUseActions && state.canSaveDraft,
       isComplete: reviewComplete,
       isRecommended: recommendedStage === 'review' && !state.isPublished,
     }),

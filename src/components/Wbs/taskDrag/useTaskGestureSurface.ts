@@ -11,9 +11,21 @@ import {
   TASK_GESTURE_PAN_TOLERANCE_PX,
 } from './taskGesturePolicy';
 import type { TaskDragSourceKind } from './taskDragTypes';
+import { useWbsStore } from '../../../store/useWbsStore';
 
 interface UseTaskGestureSurfaceOptions {
-  task: { id: string; title?: string; status?: TaskStatus };
+  task: {
+    id: string;
+    title?: string;
+    status?: TaskStatus;
+    placementId?: string;
+    placementKind?: 'primary' | 'tracking_reference';
+    boardId?: string;
+    trackingReferenceId?: string;
+    canEditCanonicalTask?: boolean;
+    canCreateCanonicalTask?: boolean;
+    canDeleteCanonicalTask?: boolean;
+  };
   sourceKind: TaskDragSourceKind | null;
   mobileActionEnabled?: boolean;
   disabled?: boolean;
@@ -31,7 +43,11 @@ export const useTaskGestureSurface = ({
   const touchTapGuard = useTouchTapGuard({ threshold: TASK_GESTURE_PAN_TOLERANCE_PX });
   const [activeSurfaceHeight, setActiveSurfaceHeight] = React.useState<number | null>(null);
   const [mobileActionMode, setMobileActionMode] = React.useState(() => isMobileTaskActionMode());
-  const isActive = mobileTaskAction?.state?.phase === 'dragging' && mobileTaskAction.state.nodeId === task.id;
+  const isActive = mobileTaskAction?.state?.phase === 'dragging'
+    && mobileTaskAction.state.nodeId === task.id
+    && (!task.placementId || mobileTaskAction.state.source.placementId === task.placementId);
+  const isPlacementPending = useWbsStore(state => Boolean(state.pendingPlacementNodeIds[task.id]));
+  const interactionDisabled = disabled || isPlacementPending;
 
   React.useEffect(() => {
     const update = () => setMobileActionMode(isMobileTaskActionMode());
@@ -46,19 +62,22 @@ export const useTaskGestureSurface = ({
   }, []);
 
   const handleLongPress = React.useCallback((event: React.TouchEvent) => {
-    if (disabled || isTaskGestureInteractiveTarget(event.target)) return;
-    if (isMobileTaskActionMode() && mobileActionEnabled && sourceKind) {
+    if (interactionDisabled || isTaskGestureInteractiveTarget(event.target)) return;
+    // A real TouchEvent owns the mobile drag-action path regardless of viewport
+    // width. Viewport width is a layout concern and must not turn a tablet or a
+    // landscape phone long press into the desktop context-menu fallback.
+    if (mobileActionEnabled && sourceKind) {
       mobileTaskAction?.begin(task, event, sourceKind);
       return;
     }
     onNonMobileLongPress?.(event);
-  }, [disabled, mobileActionEnabled, mobileTaskAction, onNonMobileLongPress, sourceKind, task]);
+  }, [interactionDisabled, mobileActionEnabled, mobileTaskAction, onNonMobileLongPress, sourceKind, task]);
 
   const longPressHandlers = useLongPress(handleLongPress, {
     delay: TASK_GESTURE_LONG_PRESS_MS,
     tolerance: TASK_GESTURE_PAN_TOLERANCE_PX,
   });
-  const shouldBindLongPress = !disabled && canUseTaskSurfaceLongPress({
+  const shouldBindLongPress = !interactionDisabled && canUseTaskSurfaceLongPress({
     mobileActionEnabled,
     hasFallback: Boolean(onNonMobileLongPress),
   });
@@ -74,7 +93,7 @@ export const useTaskGestureSurface = ({
       }
     },
     onTouchMove: (event: React.TouchEvent) => {
-      if (mobileTaskAction?.isActive(task.id)) {
+      if (mobileTaskAction?.isActive(task.id, task.placementId)) {
         mobileTaskAction.move(event);
         return;
       }
@@ -82,7 +101,7 @@ export const useTaskGestureSurface = ({
       if (shouldBindLongPress) longPressHandlers.onTouchMove(event);
     },
     onTouchEnd: (event: React.TouchEvent) => {
-      if (mobileTaskAction?.isActive(task.id)) {
+      if (mobileTaskAction?.isActive(task.id, task.placementId)) {
         touchTapGuard.handlers.onTouchEnd(event);
         mobileTaskAction.end(event);
         longPressHandlers.onTouchEnd(event);
@@ -94,7 +113,7 @@ export const useTaskGestureSurface = ({
       setActiveSurfaceHeight(null);
     },
     onTouchCancel: (event: React.TouchEvent) => {
-      if (mobileTaskAction?.isActive(task.id)) {
+      if (mobileTaskAction?.isActive(task.id, task.placementId)) {
         touchTapGuard.handlers.onTouchCancel(event);
         mobileTaskAction.cancel(event);
         longPressHandlers.onTouchCancel(event);
@@ -107,7 +126,7 @@ export const useTaskGestureSurface = ({
     },
     onPointerDown: touchTapGuard.handlers.onPointerDown,
     onPointerMove: (event: React.PointerEvent) => {
-      if (event.pointerType !== 'touch' || mobileTaskAction?.isActive(task.id)) return;
+      if (event.pointerType !== 'touch' || mobileTaskAction?.isActive(task.id, task.placementId)) return;
       touchTapGuard.handlers.onPointerMove(event);
       if (shouldBindLongPress) longPressHandlers.onPointerMove(event);
     },
@@ -134,12 +153,14 @@ export const useTaskGestureSurface = ({
         longPressHandlers.onClickCapture(event);
       }
     },
-  }), [longPressHandlers, mobileTaskAction, shouldBindLongPress, task.id, touchTapGuard.handlers]);
+  }), [longPressHandlers, mobileTaskAction, shouldBindLongPress, task.id, task.placementId, touchTapGuard.handlers]);
 
   return {
     handlers,
     mobileActionMode,
+    touchGestureEnabled: shouldBindLongPress,
     isActive,
+    isPlacementPending,
     activeSurfaceHeight: isActive ? activeSurfaceHeight : null,
     shouldSuppressTap: touchTapGuard.shouldSuppressTap,
   };

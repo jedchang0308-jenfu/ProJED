@@ -39,7 +39,7 @@ assert.equal(isTaskOverdue(task('todo', '2026-08-04'), now), false, '截止日�
 assert.equal(isTaskOverdue(task('todo', '2026-08-05'), now), false, '未到截止日不得逾期');
 assert.equal(isTaskOverdue(task('todo'), now), false, '沒有截止日不得逾期');
 
-const overdueFilters = { ...createDefaultTaskFilters(), overdueOnly: true };
+const overdueFilters = { ...createDefaultTaskFilters(), due: { includeOverdue: true, upcomingWithinDays: null } };
 assert.equal(matchesTaskFilters(task('todo', '2026-08-03'), overdueFilters), true, '逾期篩選必須命中未完成逾期任務');
 assert.equal(matchesTaskFilters(task('completed', '2026-08-03'), overdueFilters), false, '逾期篩選不得命中完成任務');
 

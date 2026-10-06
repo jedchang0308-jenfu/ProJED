@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 const files = {
   boardMembersPanel: 'src/components/BoardMembersPanel.tsx',
   mainLayout: 'src/components/MainLayout.tsx',
+  appMoreMenu: 'src/components/AppMoreMenu.tsx',
   settingsView: 'src/components/SettingsView.tsx',
   packageJson: 'package.json',
   spec: 'ai-doc/specs/SPEC-026-trello-like-board-share-ui.md',
@@ -23,16 +24,20 @@ for (const [label, file] of Object.entries(files)) {
 
 const panel = read(files.boardMembersPanel);
 const mainLayout = read(files.mainLayout);
+const appMoreMenu = read(files.appMoreMenu);
 const settings = read(files.settingsView);
 const pkg = read(files.packageJson);
 const spec = read(files.spec);
 const qa = read(files.qa);
 
 assert(
-  'topbar exposes share button',
-  mainLayout.includes('data-board-share-open') &&
+  'overflow menu exposes share button',
+  appMoreMenu.includes('data-board-share-open') &&
+    appMoreMenu.includes('data-app-more-share="true"') &&
+    appMoreMenu.includes('onOpenShareDialog') &&
     mainLayout.includes('BoardShareDialog') &&
-    mainLayout.includes('setShareDialogOpen(true)'),
+    mainLayout.includes('onOpenShareDialog={() => setShareDialogOpen(true)}') &&
+    !mainLayout.includes('data-board-share-open'),
 );
 
 assert(

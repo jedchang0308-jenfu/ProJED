@@ -33,6 +33,14 @@ async (page) => {
         filtersOpen: false,
         showContainersInAllTasks: false,
       }));
+      localStorage.setItem(`projed-task-workbench-panel:v2:account:${encodeURIComponent(account.id)}`, JSON.stringify({
+        open: false,
+        filtersOpen: false,
+        showContainersInAllTasks: false,
+        width: 340,
+        openPreferenceVersion: 1,
+      }));
+      localStorage.setItem(`projed-workspace-sidebar-width:v1:account:${encodeURIComponent(account.id)}`, JSON.stringify(288));
       localStorage.setItem('projed-last-view', 'board');
     }, { account });
   };
@@ -43,9 +51,9 @@ async (page) => {
 
   const openApp = async (viewport) => {
     await page.setViewportSize(viewport);
-    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
     await seedAuxiliaryState();
-    await page.goto('http://127.0.0.1:4173/?qcReset=1&qcSize=36', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:4000/?qcReset=1&qcSize=36', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
     await seedAuxiliaryState();
     await page.reload({ waitUntil: 'domcontentloaded' });
@@ -140,91 +148,102 @@ async (page) => {
 
     await openApp({ width: 390, height: 844 });
 
-    await runCase('QA-042-B01', 'mobile closed state has zero in-flow left rails', async () => {
-      const metrics = await layoutMetrics();
-      assert(metrics.sidebarCollapsedCount === 0, 'mobile Sidebar collapsed rail should not be in DOM', metrics);
-      assert(metrics.workbenchCollapsedCount === 0, 'mobile TaskWorkbench collapsed rail should not be in DOM', metrics);
-      assert(metrics.main && metrics.main.left <= 4, 'mobile main should start at viewport left edge', metrics);
-      assert(metrics.board && metrics.board.left <= 4, 'mobile board should start at viewport left edge', metrics);
-      assert(metrics.documentScrollWidth <= metrics.documentClientWidth + 1, 'mobile document should not horizontally overflow', metrics);
-      const screenshotPath = `${screenshotBase}-mobile-closed.png`;
-      await page.screenshot({ path: screenshotPath, fullPage: false });
-      return { ...metrics, screenshotPath };
-    });
-
-    await runCase('QA-042-B02', 'mobile Sidebar opens as overlay without resizing main', async () => {
+    await runCase('QA-042-B01', 'mobile Sidebar opens inline and resizes the board workspace', async () => {
       const before = await layoutMetrics();
       await page.locator('[data-main-sidebar-toggle="true"]').click();
-      await page.locator('[data-mobile-sidebar-overlay="true"]').waitFor({ state: 'visible', timeout: 5000 });
-      const overlayBox = await page.locator('[data-mobile-sidebar-overlay="true"]').boundingBox();
+      await page.locator('[data-sidebar-inline="true"]').waitFor({ state: 'visible', timeout: 5000 });
+      const sidebarBox = await page.locator('[data-sidebar-inline="true"]').boundingBox();
       const after = await layoutMetrics();
-      assert(overlayBox && overlayBox.width <= 289, 'mobile Sidebar overlay should use safe drawer width', { overlayBox });
-      assert(await page.locator('[data-sidebar-task-workbench-button="true"]').count() === 0, 'mobile Sidebar overlay should not render duplicate TaskWorkbench entry');
-      assert(before.main && after.main && Math.abs(before.main.width - after.main.width) <= 1, 'Sidebar overlay should not resize main width', { before, after });
-      assert(after.mobileSidebarOverlayCount === 1, 'mobile Sidebar overlay should be visible exactly once', after);
-      const screenshotPath = `${screenshotBase}-mobile-sidebar-overlay.png`;
+      const expectedWidth = Math.min(340, after.innerWidth - 48);
+      assert(sidebarBox && sidebarBox.x <= 1, 'mobile Sidebar should remain in normal flex flow at the left edge', { sidebarBox });
+      assert(sidebarBox && Math.abs(sidebarBox.width - expectedWidth) <= 1, 'mobile Sidebar should match the shared TaskWorkbench width contract', { sidebarBox, expectedWidth });
+      assert(after.sidebarInlineCount === 1 && after.sidebarOverlayCount === 0 && after.sidebarBackdropCount === 0, 'mobile Sidebar must be inline without overlay or backdrop', after);
+      assert(before.main && after.main && sidebarBox && Math.abs(after.main.width - (before.main.width - sidebarBox.width)) <= 2, 'mobile Sidebar should reduce main width by its inline width', { before, after, sidebarBox });
+      assert(after.main && sidebarBox && Math.abs(after.main.left - sidebarBox.width) <= 2, 'mobile main should start immediately after Sidebar', { after, sidebarBox });
+      assert(after.board && after.main && Math.abs(after.board.left - after.main.left) <= 2, 'mobile board should remain arranged beside Sidebar', after);
+      const screenshotPath = `${screenshotBase}-mobile-sidebar-inline.png`;
       await page.screenshot({ path: screenshotPath, fullPage: false });
-      await page.locator('[data-mobile-sidebar-backdrop="true"]').click();
-      await page.locator('[data-mobile-sidebar-overlay="true"]').waitFor({ state: 'detached', timeout: 5000 });
+      await page.locator('[data-sidebar-collapse-toggle="true"]').click();
+      await page.locator('[data-sidebar-inline="true"]').waitFor({ state: 'detached', timeout: 5000 });
       const closed = await layoutMetrics();
-      assert(closed.sidebarCollapsedCount === 0 && closed.main.left <= 4, 'closing Sidebar overlay should return to zero-width state', closed);
-      return { before, after, closed, overlayBox, screenshotPath };
+      assert(closed.sidebarCollapsedCount === 0 && closed.main.left <= 4, 'closing inline Sidebar should return main to the left edge', closed);
+      return { before, after, closed, sidebarBox, screenshotPath };
     });
 
-    await runCase('QA-042-B03', 'mobile TaskWorkbench opens from top nav as overlay without resizing main', async () => {
+    await runCase('QA-042-B02', 'mobile TaskWorkbench opens inline beside the board', async () => {
       const before = await layoutMetrics();
       await page.locator('[data-mobile-task-workbench-nav-entry="true"]').click();
-      await page.locator('[data-mobile-task-workbench-overlay="true"]').waitFor({ state: 'visible', timeout: 5000 });
-      const overlayBox = await page.locator('[data-mobile-task-workbench-overlay="true"]').boundingBox();
+      await page.locator('[data-task-workbench-inline="true"]').waitFor({ state: 'visible', timeout: 5000 });
+      const workbenchBox = await page.locator('[data-task-workbench-inline="true"]').boundingBox();
       const after = await layoutMetrics();
-      assert(overlayBox && overlayBox.width <= 341, 'mobile TaskWorkbench overlay should use safe drawer width', { overlayBox });
-      assert(before.main && after.main && Math.abs(before.main.width - after.main.width) <= 1, 'TaskWorkbench overlay should not resize main width', { before, after });
-      assert(after.mobileWorkbenchOverlayCount === 1, 'mobile TaskWorkbench overlay should be visible exactly once', after);
-      const screenshotPath = `${screenshotBase}-mobile-workbench-overlay.png`;
+      const expectedWidth = Math.min(340, after.innerWidth - 48);
+      assert(workbenchBox && workbenchBox.x <= 1, 'mobile TaskWorkbench should stay at the left of BoardView flow', { workbenchBox });
+      assert(workbenchBox && Math.abs(workbenchBox.width - expectedWidth) <= 1, 'mobile TaskWorkbench should use the shared inline width contract', { workbenchBox, expectedWidth });
+      assert(after.workbenchInlineCount === 1 && after.workbenchOverlayCount === 0 && after.workbenchBackdropCount === 0, 'mobile TaskWorkbench must be inline without overlay or backdrop', after);
+      assert(before.main && after.main && Math.abs(before.main.width - after.main.width) <= 1, 'TaskWorkbench should reuse BoardView inner flow without changing outer main width', { before, after });
+      assert(before.board && after.board && workbenchBox && Math.abs(after.board.width - (before.board.width - workbenchBox.width)) <= 2, 'TaskWorkbench should reduce board width by its inline width', { before, after, workbenchBox });
+      assert(after.board && workbenchBox && Math.abs(after.board.left - workbenchBox.width) <= 2, 'board should start immediately after TaskWorkbench', { after, workbenchBox });
+      assert(after.board && after.board.width >= 47, 'mobile inline Workbench must preserve a visible board strip', after);
+      const screenshotPath = `${screenshotBase}-mobile-workbench-inline.png`;
       await page.screenshot({ path: screenshotPath, fullPage: false });
       await page.locator('[data-task-workbench-collapse-toggle="true"]').click();
-      await page.locator('[data-mobile-task-workbench-overlay="true"]').waitFor({ state: 'detached', timeout: 5000 });
+      await page.locator('[data-task-workbench-inline="true"]').waitFor({ state: 'detached', timeout: 5000 });
       const closed = await layoutMetrics();
-      assert(closed.workbenchCollapsedCount === 0 && closed.main.left <= 4, 'closing TaskWorkbench overlay should not leave a collapsed rail', closed);
-      return { before, after, closed, overlayBox, screenshotPath };
+      assert(closed.workbenchCollapsedCount === 0 && closed.board && closed.board.left <= 4, 'closing inline TaskWorkbench should restore the board width', closed);
+      return { before, after, closed, workbenchBox, screenshotPath };
     });
 
-    await runCase('QA-042-B03A', 'mobile TaskWorkbench toggles from top nav entry while Sidebar is open', async () => {
-      const before = await layoutMetrics();
-      await page.locator('[data-main-sidebar-toggle="true"]').click();
-      await page.locator('[data-mobile-sidebar-overlay="true"]').waitFor({ state: 'visible', timeout: 5000 });
-      const entryBox = await page.locator('[data-mobile-task-workbench-nav-entry="true"]').boundingBox();
-      assert(entryBox && entryBox.width >= 30 && entryBox.height >= 30 && entryBox.y <= 4, 'mobile top nav TaskWorkbench entry should be visible beside menu', { entryBox });
-      await page.locator('[data-mobile-task-workbench-nav-entry="true"]').click();
-      await page.locator('[data-mobile-task-workbench-overlay="true"]').waitFor({ state: 'visible', timeout: 5000 });
-      await page.locator('[data-mobile-sidebar-overlay="true"]').waitFor({ state: 'detached', timeout: 5000 });
-      const overlayBox = await page.locator('[data-mobile-task-workbench-overlay="true"]').boundingBox();
+    await runCase('QA-042-B03', 'mobile board switcher precedes TaskWorkbench and switches shared inline panels', async () => {
+      const boardSwitcher = page.locator('[data-board-switcher="true"]');
+      const boardTitle = boardSwitcher.locator('[data-topbar-board-title="true"]');
+      const workbenchEntry = page.locator('[data-mobile-task-workbench-nav-entry="true"]');
+      const workbenchLabel = workbenchEntry.locator('[data-task-workbench-nav-label="all"]');
+      const switcherBox = await boardSwitcher.boundingBox();
+      const titleText = (await boardTitle.textContent())?.trim();
+      const entryBox = await workbenchEntry.boundingBox();
+      assert(switcherBox && switcherBox.width > 32 && switcherBox.height >= 30 && switcherBox.y <= 4, 'mobile board switcher should integrate the menu icon and board title', { switcherBox, titleText });
+      assert(titleText && titleText !== '選擇看板', 'mobile board switcher should expose the active board name', { titleText });
+      assert(entryBox && switcherBox && switcherBox.x + switcherBox.width <= entryBox.x + 1, 'board switcher should be positioned to the left of TaskWorkbench', { switcherBox, entryBox });
+      assert(await workbenchLabel.count() === 1 && await workbenchLabel.isVisible() && (await workbenchLabel.innerText()).trim() === 'All', 'global TaskWorkbench entry should show the All label', { labelText: await workbenchLabel.textContent() });
+      assert(await boardSwitcher.getAttribute('aria-expanded') === 'false', 'closed board switcher should expose aria-expanded=false');
+      await boardTitle.click();
+      await page.locator('[data-sidebar-inline="true"]').waitFor({ state: 'visible', timeout: 5000 });
+      assert(await boardSwitcher.getAttribute('aria-expanded') === 'true', 'open board switcher should expose aria-expanded=true');
+      assert(entryBox && entryBox.width >= 30 && entryBox.height >= 30 && entryBox.y <= 4, 'mobile top nav TaskWorkbench entry should remain visible beside the board switcher', { entryBox });
+      await workbenchEntry.click();
+      await page.locator('[data-task-workbench-inline="true"]').waitFor({ state: 'visible', timeout: 5000 });
+      await page.locator('[data-sidebar-inline="true"]').waitFor({ state: 'detached', timeout: 5000 });
       const after = await layoutMetrics();
-      assert(overlayBox && overlayBox.width <= 341, 'mobile top nav TaskWorkbench overlay should use safe drawer width', { overlayBox });
-      assert(before.main && after.main && Math.abs(before.main.width - after.main.width) <= 1, 'top nav TaskWorkbench entry should not resize main width', { before, after });
-      assert(after.mobileWorkbenchOverlayCount === 1 && after.mobileSidebarOverlayCount === 0, 'top nav entry should replace Sidebar overlay with TaskWorkbench overlay', after);
-      const screenshotPath = `${screenshotBase}-mobile-workbench-nav-entry.png`;
+      assert(after.workbenchInlineCount === 1 && after.sidebarInlineCount === 0, 'top nav should replace Sidebar with the shared inline TaskWorkbench on mobile', after);
+      assert(after.mobileWorkbenchOverlayCount === 0 && after.mobileSidebarOverlayCount === 0, 'panel switch must not create mobile overlays', after);
+      assert(await boardSwitcher.getAttribute('aria-expanded') === 'false', 'opening TaskWorkbench should reset board switcher aria-expanded');
+      const overflow = await page.evaluate(() => ({
+        documentWidth: document.documentElement.scrollWidth,
+        viewportWidth: window.innerWidth,
+      }));
+      assert(overflow.documentWidth <= overflow.viewportWidth + 1, 'mobile board switcher must not create horizontal overflow', overflow);
+      const screenshotPath = `${screenshotBase}-mobile-inline-panel-switch.png`;
       await page.screenshot({ path: screenshotPath, fullPage: false });
-      await page.locator('[data-mobile-task-workbench-nav-entry="true"]').click();
-      await page.locator('[data-mobile-task-workbench-overlay="true"]').waitFor({ state: 'detached', timeout: 5000 });
+      await workbenchEntry.click();
+      await page.locator('[data-task-workbench-inline="true"]').waitFor({ state: 'detached', timeout: 5000 });
       const closed = await layoutMetrics();
-      assert(closed.workbenchCollapsedCount === 0 && closed.main.left <= 4, 'closing top-nav-opened TaskWorkbench overlay should not leave a collapsed rail', closed);
-      return { before, after, closed, entryBox, overlayBox, screenshotPath };
+      assert(closed.workbenchCollapsedCount === 0 && closed.main.left <= 4, 'closing top-nav-opened TaskWorkbench should restore the board', closed);
+      return { after, closed, switcherBox, entryBox, titleText, overflow, screenshotPath };
     });
 
-    await runCase('QA-042-B04', 'mobile overlays close with Escape and leave no gutter', async () => {
+    await runCase('QA-042-B04', 'mobile inline panels close with Escape', async () => {
       await page.locator('[data-main-sidebar-toggle="true"]').click();
-      await page.locator('[data-mobile-sidebar-overlay="true"]').waitFor({ state: 'visible', timeout: 5000 });
+      await page.locator('[data-sidebar-inline="true"]').waitFor({ state: 'visible', timeout: 5000 });
       await page.keyboard.press('Escape');
-      await page.locator('[data-mobile-sidebar-overlay="true"]').waitFor({ state: 'detached', timeout: 5000 });
+      await page.locator('[data-sidebar-inline="true"]').waitFor({ state: 'detached', timeout: 5000 });
 
       await page.locator('[data-mobile-task-workbench-nav-entry="true"]').click();
-      await page.locator('[data-mobile-task-workbench-overlay="true"]').waitFor({ state: 'visible', timeout: 5000 });
+      await page.locator('[data-task-workbench-inline="true"]').waitFor({ state: 'visible', timeout: 5000 });
       await page.keyboard.press('Escape');
-      await page.locator('[data-mobile-task-workbench-overlay="true"]').waitFor({ state: 'detached', timeout: 5000 });
+      await page.locator('[data-task-workbench-inline="true"]').waitFor({ state: 'detached', timeout: 5000 });
 
       const metrics = await layoutMetrics();
-      assert(metrics.sidebarCollapsedCount === 0 && metrics.workbenchCollapsedCount === 0, 'Escape close should not restore in-flow rails', metrics);
+      assert(metrics.sidebarInlineCount === 0 && metrics.workbenchInlineCount === 0, 'Escape should close both inline panels', metrics);
       assert(metrics.documentScrollWidth <= metrics.documentClientWidth + 1, 'Escape close should not create overflow', metrics);
       return metrics;
     });
@@ -232,6 +251,48 @@ async (page) => {
     await runCase('QA-042-B05', 'mobile visible error sweep', async () => {
       await assertNoVisibleErrors();
       return { diagnostics: diagnostics.slice(-10) };
+    });
+
+    await openApp({ width: 320, height: 844 });
+
+    await runCase('QA-042-B05A', '320px mobile uses shared inline panels and preserves board access', async () => {
+      await page.locator('[data-main-sidebar-toggle="true"]').click();
+      await page.locator('[data-sidebar-inline="true"]').waitFor({ state: 'visible', timeout: 5000 });
+      const sidebarMetrics = await layoutMetrics();
+      const sidebarBox = await page.locator('[data-sidebar-inline="true"]').boundingBox();
+      const expectedWidth = Math.min(340, sidebarMetrics.innerWidth - 48);
+      assert(sidebarBox && sidebarBox.width <= sidebarMetrics.innerWidth - 48 + 1, 'narrow mobile inline Sidebar should respect the shared viewport clamp', { sidebarBox, sidebarMetrics });
+      assert(sidebarBox && Math.abs(sidebarBox.width - expectedWidth) <= 1, 'narrow mobile Sidebar should match the TaskWorkbench width contract', { sidebarBox, expectedWidth });
+      assert(sidebarMetrics.board && sidebarMetrics.board.width >= 47, 'narrow mobile should keep a visible board strip beside Sidebar', sidebarMetrics);
+      assert(sidebarMetrics.sidebarOverlayCount === 0 && sidebarMetrics.sidebarBackdropCount === 0, 'narrow mobile Sidebar must remain inline', sidebarMetrics);
+      await page.locator('[data-sidebar-collapse-toggle="true"]').click();
+      await page.locator('[data-sidebar-inline="true"]').waitFor({ state: 'detached', timeout: 5000 });
+
+      await page.locator('[data-mobile-task-workbench-nav-entry="true"]').click();
+      await page.locator('[data-task-workbench-inline="true"]').waitFor({ state: 'visible', timeout: 5000 });
+      const metrics = await layoutMetrics();
+      const workbenchBox = await page.locator('[data-task-workbench-inline="true"]').boundingBox();
+      const expectedWorkbenchWidth = Math.min(340, metrics.innerWidth - 48);
+      assert(workbenchBox && workbenchBox.width <= metrics.innerWidth - 48 + 1, 'narrow mobile inline Workbench should respect the shared viewport clamp', { workbenchBox, metrics });
+      assert(workbenchBox && Math.abs(workbenchBox.width - expectedWorkbenchWidth) <= 1, 'narrow mobile Workbench should use the shared width contract', { workbenchBox, expectedWorkbenchWidth });
+      assert(sidebarBox && workbenchBox && Math.abs(sidebarBox.width - workbenchBox.width) <= 1, 'narrow mobile Sidebar and Workbench should have the same computed width', { sidebarBox, workbenchBox });
+      assert(metrics.board && metrics.board.width >= 47, 'narrow mobile should keep a visible board strip beside Workbench', metrics);
+      assert(metrics.workbenchOverlayCount === 0 && metrics.workbenchBackdropCount === 0, 'narrow mobile must not restore overlay behavior', metrics);
+      assert(metrics.documentScrollWidth <= metrics.documentClientWidth + 1, 'narrow mobile document should not horizontally overflow', metrics);
+      const unplacedLabelBox = await page.locator('[data-task-workbench-section-label="unplaced"]').boundingBox();
+      const createTaskButton = page.locator('[data-task-workbench-unclassified-modal-add="true"]');
+      const createTaskButtonBox = await createTaskButton.boundingBox();
+      assert(
+        unplacedLabelBox && createTaskButtonBox && createTaskButtonBox.width >= 76 &&
+          createTaskButtonBox.x + createTaskButtonBox.width <= workbenchBox.x + workbenchBox.width + 1 &&
+          createTaskButtonBox.x >= unplacedLabelBox.x + unplacedLabelBox.width + 4 &&
+          (await createTaskButton.innerText()).trim() === '+新增任務',
+        'narrow mobile section labels must yield space for the complete new-task button without clipping',
+        { unplacedLabelBox, createTaskButtonBox, workbenchBox },
+      );
+      const screenshotPath = `${screenshotBase}-mobile-320-inline.png`;
+      await page.screenshot({ path: screenshotPath, fullPage: false });
+      return { sidebarMetrics, sidebarBox, metrics, workbenchBox, screenshotPath };
     });
 
     await openApp({ width: 1440, height: 900 });
@@ -242,6 +303,21 @@ async (page) => {
         await page.locator('[data-sidebar-inline="true"]').waitFor({ state: 'detached', timeout: 5000 });
       }
       const closed = await layoutMetrics();
+      const boardSwitcher = page.locator('[data-board-switcher="true"]');
+      const boardTitle = boardSwitcher.locator('[data-topbar-board-title="true"]');
+      const workbenchEntry = page.locator('[data-mobile-task-workbench-nav-entry="true"]');
+      const workbenchLabel = workbenchEntry.locator('[data-task-workbench-nav-label="all"]');
+      const switcherBox = await boardSwitcher.boundingBox();
+      const workbenchEntryBox = await workbenchEntry.boundingBox();
+      const titleMetrics = await boardTitle.evaluate((element) => ({
+        text: element.textContent?.trim() || '',
+        scrollWidth: element.scrollWidth,
+        clientWidth: element.clientWidth,
+        textOverflow: getComputedStyle(element).textOverflow,
+      }));
+      assert(switcherBox && workbenchEntryBox && switcherBox.x + switcherBox.width <= workbenchEntryBox.x + 1, 'desktop board switcher should be positioned to the left of TaskWorkbench', { switcherBox, workbenchEntryBox });
+      assert(await workbenchLabel.count() === 1 && await workbenchLabel.isVisible() && (await workbenchLabel.innerText()).trim() === 'All', 'desktop TaskWorkbench entry should show the All label', { labelText: await workbenchLabel.textContent() });
+      assert(titleMetrics.text && titleMetrics.scrollWidth <= titleMetrics.clientWidth + 1 && titleMetrics.textOverflow !== 'ellipsis', 'desktop board switcher should show the full active board name', titleMetrics);
       assert(closed.sidebarCollapsedCount === 0, 'desktop Sidebar closed state should not render a collapsed rail', closed);
       assert(closed.sidebarInlineCount === 0 && closed.sidebarOverlayCount === 0 && closed.sidebarBackdropCount === 0, 'desktop Sidebar should be absent when closed', closed);
       assert(closed.main && closed.main.left <= 4, 'desktop main should start at viewport left edge when Sidebar is closed', closed);
@@ -272,13 +348,18 @@ async (page) => {
       assert(workbenchOpen.workbenchCollapsedCount === 0, 'desktop TaskWorkbench closed/open states should not use an in-flow collapsed rail', workbenchOpen);
       assert(workbenchOpen.workbenchInlineCount === 1 && workbenchOpen.workbenchOverlayCount === 0 && workbenchOpen.workbenchBackdropCount === 0, 'desktop TaskWorkbench should be inline, not overlay/backdrop', workbenchOpen);
       assert(workbenchOpen.board && workbenchBox && Math.abs(workbenchOpen.board.left - (workbenchBox.x + workbenchBox.width)) <= 2, 'desktop board should be laid out to the right of TaskWorkbench', { workbenchOpen, workbenchBox });
-      assert(closedAgain.board && workbenchOpen.board && workbenchOpen.board.width < closedAgain.board.width - 300, 'desktop TaskWorkbench should reduce board width instead of covering it', { closedAgain, workbenchOpen });
+      assert(
+        closedAgain.board && workbenchOpen.board && workbenchBox &&
+          Math.abs((closedAgain.board.width - workbenchOpen.board.width) - workbenchBox.width) <= 2,
+        'desktop TaskWorkbench should reduce board width by its actual inline width instead of covering it',
+        { closedAgain, workbenchOpen, workbenchBox },
+      );
       await page.locator('[data-mobile-task-workbench-nav-entry="true"]').click();
       await page.locator('[data-task-workbench-inline="true"]').waitFor({ state: 'detached', timeout: 5000 });
       const workbenchClosed = await layoutMetrics();
       assert(workbenchClosed.workbenchCollapsedCount === 0 && workbenchClosed.main.left <= 4, 'desktop TaskWorkbench close should return to zero-width state', workbenchClosed);
 
-      return { closed, open, closedAgain, workbenchOpen, workbenchClosed, sidebarBox, workbenchBox, screenshotPath };
+      return { closed, open, closedAgain, workbenchOpen, workbenchClosed, sidebarBox, workbenchBox, switcherBox, workbenchEntryBox, titleMetrics, screenshotPath };
     });
 
     await runCase('QA-042-B11', 'desktop Sidebar and TaskWorkbench stay inline side by side with board still visible', async () => {
@@ -315,7 +396,12 @@ async (page) => {
       assert(boardBox && workbenchBox && Math.abs(boardBox.x - (workbenchBox.x + workbenchBox.width)) <= 2, 'desktop board should start immediately to the right of TaskWorkbench', { boardBox, workbenchBox });
       assert(boardBox && boardBox.width >= 360, 'desktop board should keep visible task workspace after both panels open', { boardBox });
       assert(closed.main && simultaneous.main && sidebarBox && Math.abs(simultaneous.main.width - (closed.main.width - sidebarBox.width)) <= 2, 'desktop Sidebar should resize main width in inline mode', { closed, simultaneous, sidebarBox });
-      assert(closed.board && simultaneous.board && simultaneous.board.width < closed.board.width - 600, 'desktop dual inline panels should reduce board width instead of covering it', { closed, simultaneous });
+      assert(
+        closed.board && simultaneous.board && sidebarBox && workbenchBox &&
+          Math.abs((closed.board.width - simultaneous.board.width) - (sidebarBox.width + workbenchBox.width)) <= 2,
+        'desktop dual inline panels should reduce board width by their actual widths instead of covering it',
+        { closed, simultaneous, sidebarBox, workbenchBox },
+      );
       assert(!hitTest.isBackdrop && hitTest.isBoardSurface, 'desktop task surface should remain visible and hit-testable, not covered by panels', hitTest);
 
       const screenshotPath = `${screenshotBase}-desktop-sidebar-workbench-inline-side-by-side.png`;

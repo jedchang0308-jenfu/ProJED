@@ -19,19 +19,16 @@
  *   - 以 left = col/7 * 100%、width = span/7 * 100% 精準定位
  *   - 同一天可能有多條任務，用 `lane` (行道) 做垂直堆疊
  */
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
-import useDialogStore from '../store/useDialogStore';
-import { useTagStore } from '../store/useTagStore';
+import { useTaskFilterStore } from '../store/useTaskFilterStore';
 import dayjs from 'dayjs';
 import {
-    ChevronLeft, ChevronRight, ChevronDown, Calendar,
-    PanelLeftClose, PanelLeftOpen, LayoutList
+    ChevronLeft, ChevronRight, Calendar,
 } from 'lucide-react';
 
 // ── 常數 ─────────────────────────────────────────────────
-const SIDEBAR_ROW_HEIGHT = COMPACT_DIMENSIONS.taskRowHeight;
 // 每週最低高度（日期數字 + 任務條堆疊空間）
 const WEEK_DATE_HEADER_H = COMPACT_DIMENSIONS.calendarHeaderHeight; // px，日期數字列的高度
 const TASK_LANE_H = COMPACT_DIMENSIONS.calendarLaneHeight;        // px，每條任務條的高度（含間距）
@@ -56,9 +53,16 @@ const STATUS_STYLES = {
 
 import SharedTaskSidebar from './SharedTaskSidebar';
 import { ViewToolbar } from './ui/ViewToolbar';
-import { matchesTaskFilters } from '../features/taskFilters';
 import { COMPACT_DIMENSIONS, compactClassNames, compactIconButtonClass } from './ui/compactTokens';
+import { BAR_HEIGHT } from './Gantt/utils';
+import { useCoarsePointer } from '../hooks/useCoarsePointer';
 import { normalizeManualTaskStatus } from '../utils/taskStatus';
+import { selectAndOpenTaskDetails } from '../utils/taskInteractions';
+import { buildHierarchicalTaskItems } from '../utils/taskHierarchy';
+import { projectTaskFilterResults } from '../features/taskFilters';
+import { TaskFilterResultState } from './ui/TaskFilterResultState';
+import { buildCollapsedProjectionTasks, buildProjectionParentIndex } from '../features/taskTracking/model';
+import { TaskDescriptionIndicator } from './TaskDescriptionIndicator';
 
 // ──────────────────────────────────────────────────────────
 // 核心算法：將任務清單轉換為「按週分割的線段」
@@ -163,30 +167,35 @@ function buildWeekSegments(flattenedItems, weeks) {
 const CalendarView = () => {
     const {
         activeBoardId,
-        activeWorkspaceId,
-        statusFilters,
-        dueWithinDays,
-        overdueOnly,
-        selectedAssigneeIds,
-        isSidebarOpen,
-        setSidebarOpen,
-        toggleStatusFilter,
-        setView,
     } = useBoardStore();
-    const selectedTagIds = useTagStore(state => state.selectedTagIds);
-    const taskFilters = useMemo(() => ({
-        statusFilters,
-        dueWithinDays,
-        overdueOnly,
-        selectedAssigneeIds,
-        selectedTagIds,
-        keyword: '',
-    }), [dueWithinDays, overdueOnly, selectedAssigneeIds, selectedTagIds, statusFilters]);
+    const taskFilters = useTaskFilterStore(state => state.filters);
+    const resetTaskFilters = useTaskFilterStore(state => state.resetFilters);
 
     const [isTaskListOpen, setIsTaskListOpen] = useState(true);
     const [collapsedIds, setCollapsedIds] = useState(new Set());
     const [currentMonth, setCurrentMonth] = useState(dayjs().startOf('month'));
     const nodes = useWbsStore(s => s.nodes);
+    const trackingReferences = useWbsStore(s => s.trackingReferences);
+    const projectionTasks = useMemo(
+        () => buildCollapsedProjectionTasks(Object.values(nodes), trackingReferences, activeBoardId || ''),
+        [activeBoardId, nodes, trackingReferences],
+    );
+    const projectionNodes = useMemo(
+        () => Object.fromEntries(projectionTasks.map(task => [task.id, task])),
+        [projectionTasks],
+    );
+    const projectionParentNodesIndex = useMemo(
+        () => buildProjectionParentIndex(projectionTasks),
+        [projectionTasks],
+    );
+    const taskLoading = useWbsStore(s => s.loading);
+    const taskLoadError = useWbsStore(s => s.error);
+    const filterProjection = useMemo(
+        () => projectTaskFilterResults(projectionNodes, taskFilters, { boardId: activeBoardId }),
+        [activeBoardId, projectionNodes, taskFilters],
+    );
+    const isCoarsePointer = useCoarsePointer();
+    const ganttRowHeight = isCoarsePointer ? 22 : BAR_HEIGHT;
 
     const toggleCollapse = (id) => {
         setCollapsedIds(prev => {
@@ -199,42 +208,16 @@ const CalendarView = () => {
     // (workspaces 已不再需要)
     // (activeBoard 已不再需要)
 
-    // ── 資料扁平化（與 GanttView 一致）──────────────────
+    // ── 資料扁平化（與 GanttView 共用階層排序與收疊邏輯）────────
     const flattenedItems = useMemo(() => {
-        if (!activeBoardId) return [];
-        const items: any[] = [];
-        
-        Object.values(nodes).forEach((node: any) => {
-            if (!node || node.isArchived || node.boardId !== activeBoardId) return;
-            if (!matchesTaskFilters(node, taskFilters)) return;
-            
-            // Map nodeType to pseudoType for filters
-            let pseudoType = 'checklist';
-            if (node.nodeType === 'group') pseudoType = 'list';
-            else pseudoType = 'card';
-            
-            // Check visibility based on collapsible (parents must not be collapsed)
-            let isVisible = true;
-            let currentId = node.parentId;
-            while(currentId) {
-                if (collapsedIds.has(currentId)) {
-                    isVisible = false;
-                    break;
-                }
-                currentId = nodes[currentId]?.parentId;
-            }
-            if (!isVisible) return;
-            
-            items.push({
-                ...node,
-                type: pseudoType,
-                startDate: node.startDate,
-                endDate: node.endDate
-            });
-        });
-        
-        return items;
-    }, [activeBoardId, nodes, taskFilters, collapsedIds]);
+        return buildHierarchicalTaskItems({
+            nodes: projectionNodes,
+            parentNodesIndex: projectionParentNodesIndex,
+            activeBoardId,
+            visibleTaskIds: filterProjection.visibleTaskIds,
+            collapsedIds,
+        }).items;
+    }, [activeBoardId, projectionNodes, projectionParentNodesIndex, filterProjection, collapsedIds]);
 
     // ── 月曆週陣列：weeks[weekIdx][col(0-6)] = dayInfo ──
     const weeks = useMemo(() => {
@@ -286,8 +269,7 @@ const CalendarView = () => {
 
     // ── 事件處理 ──────────────────────────────────────────
     const handleItemClick = (item) => {
-        // 切換到清單視圖，讓使用者在行內編輯此節點
-        setView('list');
+        selectAndOpenTaskDetails(item.id, item.trackingReferenceId);
     };
 
     const goToPrevMonth = () => setCurrentMonth(prev => prev.subtract(1, 'month'));
@@ -302,45 +284,34 @@ const CalendarView = () => {
             <ViewToolbar
                 rightControls={(
                     <>
-                    <div className="flex items-center gap-[8px]">
-                        <button onClick={goToPrevMonth} className={compactIconButtonClass()} title="上個月">
-                            <ChevronLeft size={16} />
-                        </button>
-                        <span className="text-sm font-bold text-slate-700 min-w-[100px] text-center">
-                            {currentMonth.format('YYYY 年 M 月')}
-                        </span>
-                        <button onClick={goToNextMonth} className={compactIconButtonClass()} title="下個月">
-                            <ChevronRight size={16} />
-                        </button>
-                        <button onClick={goToToday} className={`${compactClassNames.textButtonBase} group`} title="回到今天">
-                            <Calendar size={14} className="group-hover:scale-110 transition-transform" />
-                            <span>今天</span>
-                        </button>
-                    </div>
-                    <div className="flex items-center gap-[8px] border-l border-slate-200 pl-[8px]">
-                        <div className={compactClassNames.segmented}>
-                            <button
-                                onClick={() => setSidebarOpen(!isSidebarOpen)}
-                                className={compactIconButtonClass(!isSidebarOpen)}
-                                title={isSidebarOpen ? "收疊工作區選單" : "展開工作區選單"}
-                            >
-                                {isSidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
+                        <div className="flex items-center gap-[8px]">
+                            <button onClick={goToPrevMonth} className={compactIconButtonClass()} title="上個月">
+                                <ChevronLeft size={16} />
                             </button>
-                            <button
-                                onClick={() => setIsTaskListOpen(!isTaskListOpen)}
-                                className={compactIconButtonClass(!isTaskListOpen)}
-                                title={isTaskListOpen ? "收疊任務清單" : "展開任務清單"}
-                            >
-                                <LayoutList size={16} />
+                            <span className="text-sm font-bold text-slate-700 min-w-[100px] text-center">
+                                {currentMonth.format('YYYY 年 M 月')}
+                            </span>
+                            <button onClick={goToNextMonth} className={compactIconButtonClass()} title="下個月">
+                                <ChevronRight size={16} />
+                            </button>
+                            <button onClick={goToToday} className={`${compactClassNames.textButtonBase} group`} title="回到今天">
+                                <Calendar size={14} className="group-hover:scale-110 transition-transform" />
+                                <span>今天</span>
                             </button>
                         </div>
-                    </div>
                     </>
                 )}
             />
 
+            <TaskFilterResultState
+                projection={filterProjection}
+                loading={taskLoading}
+                error={taskLoadError}
+                onReset={resetTaskFilters}
+            />
+
             {/* ── 主體 ── */}
-            <div className="flex-1 flex overflow-hidden">
+            {!taskLoading && !taskLoadError && filterProjection.matchedTaskIds.size > 0 ? <div className="flex-1 flex overflow-hidden">
                 {/* 左側側邊欄 */}
                 {/* ── 左側：任務清單側邊欄（複用共用側邊欄，支援拖曳）── */}
                 <SharedTaskSidebar
@@ -350,11 +321,20 @@ const CalendarView = () => {
                     onItemClick={handleItemClick}
                     isTaskListOpen={isTaskListOpen}
                     setIsTaskListOpen={setIsTaskListOpen}
-                    rowHeight={SIDEBAR_ROW_HEIGHT}
+                    surface="calendar"
+                    rowHeight={ganttRowHeight}
                 />
 
                 {/* 右側月曆主體 */}
-                <div className="flex-1 flex flex-col overflow-hidden">
+                <div className="relative flex-1 flex flex-col overflow-hidden">
+                    {weekSegments.length === 0 ? (
+                        <div
+                            className="pointer-events-none absolute inset-x-0 top-14 z-20 text-center text-xs text-slate-500"
+                            data-task-date-empty-hint="calendar"
+                        >
+                            符合篩選的任務未在本月排程
+                        </div>
+                    ) : null}
                     {/* 週標頭（固定，不隨內容捲動）*/}
                     <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50 shrink-0">
                         {weekDayNames.map((name, i) => (
@@ -456,11 +436,28 @@ const CalendarView = () => {
                                             return (
                                                 <div
                                                     key={`seg-${seg.item.id}-${wIdx}-${sIdx}`}
+                                                    data-calendar-task-segment="true"
+                                                    data-task-id={seg.item.id}
+                                                    data-task-canonical-id={seg.item.id}
+                                                    data-task-placement-hover-surface="true"
+                                                    data-task-description-hover-trigger={seg.item.description?.trim() ? 'true' : undefined}
+                                                    data-calendar-placement-kind={seg.item.isTrackingReference ? 'tracking-reference' : 'primary'}
+                                                    aria-label={seg.item.isTrackingReference ? `追蹤副本：${seg.item.title || '未命名任務'}` : seg.item.title || '未命名任務'}
                                                     onClick={() => handleItemClick(seg.item)}
                                                     onContextMenu={(e) => {
                                                         e.preventDefault();
                                                         e.stopPropagation();
-                                                        useBoardStore.getState().setContextMenuState({ kind: 'task', isOpen: true, x: e.clientX, y: e.clientY, nodeId: seg.item.id, title: seg.item.title });
+                                                        useBoardStore.getState().setContextMenuState({
+                                                            kind: 'task',
+                                                            isOpen: true,
+                                                            x: e.clientX,
+                                                            y: e.clientY,
+                                                            nodeId: seg.item.id,
+                                                            title: seg.item.title,
+                                                            interactionLocation: { hostMode: 'calendar', origin: 'calendar-segment' },
+                                                            surfaceId: 'calendar.segment',
+                                                            interactionId: `calendar-segment-${seg.item.id}-${Date.now().toString(36)}`,
+                                                        });
                                                     }}
                                                     style={{
                                                         position: 'absolute',
@@ -474,21 +471,22 @@ const CalendarView = () => {
                                                     className={`
                                                         flex items-center overflow-hidden cursor-pointer
                                                         ${styles.bar}
+                                                        ${seg.item.isTrackingReference ? 'border-2 border-dashed border-violet-300' : ''}
                                                         ${roundLeft} ${roundRight}
                                                         ${horizontalPadding}
                                                         shadow-[0_1px_2px_rgba(15,23,42,0.06)] ring-1 ring-white/70 hover:brightness-95 transition-all
                                                     `}
-                                                    title={`${seg.item.title}${seg.item.startDate ? ` (${seg.item.startDate}` : ''}${seg.item.endDate ? ` ~ ${seg.item.endDate})` : ')'}`}
                                                 >
                                                     {/* 只在起始段或單日顯示圓點 + 文字 */}
                                                     {(seg.isTaskStart || seg.isSingleDay) && (
                                                         <>
                                                             <div className={`flex-shrink-0 w-1.5 h-1.5 rounded-full mr-1 ${styles.dot}`} />
-                                                            <span className="task-title-text text-[11px] font-medium truncate leading-none">
+                                                            <span className="task-title-text min-w-0 truncate text-[11px] font-medium leading-none">
                                                                 {seg.item.title}
                                                             </span>
                                                         </>
                                                     )}
+                                                    <TaskDescriptionIndicator description={seg.item.description} className="ml-[2px]" />
                                                 </div>
                                             );
                                         })}
@@ -497,7 +495,7 @@ const CalendarView = () => {
                         })}
                     </div>
                 </div>
-            </div>
+            </div> : null}
         </div>
     );
 };

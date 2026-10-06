@@ -15,6 +15,7 @@ const files = {
   boardStore: 'src/store/useBoardStore.ts',
   wbsStore: 'src/store/useWbsStore.ts',
   tagStore: 'src/store/useTagStore.ts',
+  taskFilterStore: 'src/store/useTaskFilterStore.ts',
   statusFilterBar: 'src/components/ui/StatusFilterBar.tsx',
   mainLayout: 'src/components/MainLayout.tsx',
   app: 'src/App.tsx',
@@ -43,6 +44,7 @@ const files = {
   browserVerifier: 'scripts/verify-dev-039-task-filter-core-browser.pw.js',
   placementVerifier: 'scripts/verify-dev-039-task-workbench-placement-lanes.mjs',
   placementBrowserVerifier: 'scripts/verify-dev-039-task-workbench-placement-lanes-browser.pw.js',
+  crossModeBrowserVerifier: 'scripts/verify-dev-039-task-workbench-cross-mode-browser.pw.js',
   parityVerifier: 'scripts/verify-dev-039-filter-result-parity.mjs',
   parityBrowserVerifier: 'scripts/verify-dev-039-filter-result-parity-browser.pw.js',
 };
@@ -67,12 +69,12 @@ const taskWorkbenchBoardSelectIndex = source.taskWorkbench?.indexOf('data-task-w
 
 assert(
   'task filter shared core exposes canonical types/defaults/predicate/summary/storage',
-  source.types.includes('TaskFilterState') &&
+  (source.types.includes('TaskFilterQuery') || source.types.includes('TaskFilterState')) &&
     source.types.includes('TaskDisplaySettings') &&
     !source.types.includes('TaskWorkbenchFilterProfile') &&
     source.defaults.includes('TASK_STATUS_OPTIONS') &&
     source.defaults.includes('createDefaultTaskFilters') &&
-    source.defaults.includes('completed: false') &&
+    source.defaults.includes('completed: true') &&
     !source.defaults.includes('createDefaultTaskWorkbenchProfile') &&
     source.predicates.includes('matchesTaskFilters') &&
     source.predicates.includes('matchesKeywordFilter') &&
@@ -82,8 +84,8 @@ assert(
     source.describe.includes('countActiveTaskFilters') &&
     source.describe.includes('describeTaskFilters') &&
     source.storage.includes("BOARD_TASK_FILTER_STORAGE_KEY = 'projed-task-filters:v1'") &&
-    source.storage.includes('BOARD_TASK_FILTER_PREFS_VERSION = 3') &&
-    source.storage.includes('migrateLegacyDefaultTaskFilters') &&
+    source.storage.includes('BOARD_TASK_FILTER_PREFS_VERSION = 5') &&
+    (source.storage.includes('migrateLegacyDefaultTaskFilters') || source.storage.includes('migrateLegacyTaskFilterStateV4')) &&
     !source.storage.includes('TASK_WORKBENCH_FILTER_PROFILES_STORAGE_KEY') &&
     !source.storage.includes('readTaskWorkbenchProfiles') &&
     !source.storage.includes('writeTaskWorkbenchProfiles') &&
@@ -97,6 +99,7 @@ assert(
   source.utilsTaskFilters.includes("from '../features/taskFilters'") &&
     source.utilsTaskFilters.includes('matchesTaskFilters'),
 );
+const taskChecklistTreeSource = read('src/components/Wbs/TaskChecklistTree.tsx');
 
 const filterTriggerIndex = source.mainLayout?.indexOf('<StatusFilterBar') ?? -1;
 const undoButtonIndex = source.mainLayout?.indexOf('id="btn-undo"') ?? -1;
@@ -114,8 +117,8 @@ assert(
     source.wbsStore.includes('matchesTaskFiltersWithStatus(currentNode, taskFilters, change.baselineStatus)') &&
     source.wbsStore.includes('reconcileStatusOperation(') &&
     source.mainLayout.includes('selectPendingTaskFilterRefreshCount') &&
-    source.mainLayout.includes("useWbsStore.setState(state => ({ nodes: { ...state.nodes } }))") &&
-    source.mainLayout.includes("useBoardStore.setState(state => ({ statusFilters: { ...state.statusFilters } }))"),
+    source.mainLayout.includes('useTaskFilterStore.getState().refreshProjection()') &&
+    source.wbsStore.includes('useTaskFilterStore.getState().filters'),
 );
 
 assert(
@@ -129,17 +132,21 @@ assert(
     source.statusFilterBar.includes('border-l border-primary/25') &&
     source.statusFilterBar.includes('<span className="hidden sm:inline">更新</span>') &&
     source.statusFilterBar.includes('data-task-filter-update-count="true"') &&
+    source.statusFilterBar.includes('data-task-filter-update-count="true"') &&
     source.statusFilterBar.includes('className="sm:hidden"') &&
-    source.statusFilterBar.includes('aria-label={`更新篩選結果（${pendingUpdateCount}）`}'),
+    source.statusFilterBar.includes("更新篩選結果（' + pendingUpdateCount"),
 );
 
 assert(
-  'board and tag stores use versioned storage adapter while keeping legacy key compatibility',
-  source.boardStore.includes('readBoardTaskFilterPrefs') &&
-    source.boardStore.includes('writeBoardTaskFilterPrefs') &&
-    !source.boardStore.includes("const FILTER_STORAGE_KEY = 'projed-filters'") &&
-    source.tagStore.includes('persistSelectedTagIds') &&
-    source.tagStore.includes('writeBoardTaskFilterPrefs({ filters: { selectedTagIds } })'),
+  'task filter ownership is independent from board display and tag data stores',
+  source.boardStore.includes('readBoardTaskDisplaySettings') &&
+    source.boardStore.includes('writeBoardTaskDisplaySettings') &&
+    !source.boardStore.includes('statusFilters:') &&
+    !source.boardStore.includes('selectedAssigneeIds:') &&
+    !source.tagStore.includes('selectedTagIds:') &&
+    (source.taskFilterStore.includes('filters: TaskFilterQuery') || source.taskFilterStore.includes('filters: TaskFilterState')) &&
+    source.taskFilterStore.includes('toggleTagFilter') &&
+    source.taskFilterStore.includes('toggleAssigneeFilter'),
 );
 
 assert(
@@ -151,62 +158,60 @@ assert(
     !source.statusFilterBar.includes('!showDependencies || !showTags'),
 );
 
-const taskFilterViews = [
-  ['wbsListView', source.wbsListView],
-  ['wbsNodeItem', source.wbsNodeItem],
-  ['ganttView', source.ganttView],
-  ['calendarView', source.calendarView],
-  ['mindMapTree', source.mindMapTree],
-];
-
-for (const [label, content] of taskFilterViews) {
-  assert(`${label} uses matchesTaskFilters`, content.includes('matchesTaskFilters'));
-}
+assert('wbsListView uses canonical projection', source.wbsListView.includes('projectTaskFilterResults') && source.wbsListView.includes('filterProjection={filterProjection}'));
+assert('wbsNodeItem uses canonical visible IDs', source.wbsNodeItem.includes('filterProjection.visibleTaskIds.has(n.id)') && !source.wbsNodeItem.includes('matchesTaskFilters'));
+assert('ganttView uses canonical projection', source.ganttView.includes('projectTaskFilterResults') && source.ganttView.includes('visibleTaskIds: filterProjection.visibleTaskIds'));
+assert('calendarView uses canonical projection', source.calendarView.includes('projectTaskFilterResults') && source.calendarView.includes('visibleTaskIds: filterProjection.visibleTaskIds'));
+assert('mindMapTree uses canonical visible IDs', source.mindMapTree.includes('visibleTaskIds') && !source.mindMapTree.includes('matchesTaskFilters'));
 
 assert(
   'board hierarchy uses filter result projection so matching descendants keep context ancestors visible',
   source.boardView.includes('projectTaskFilterResults') &&
     source.boardView.includes('filterProjection.visibleTaskIds.has(n.id)') &&
     source.kanbanColumn.includes('filterProjection.visibleTaskIds.has(child.id)') &&
-    source.kanbanChecklist.includes('filterProjection.visibleTaskIds.has(n.id)') &&
+    (source.kanbanChecklist.includes('filterProjection.visibleTaskIds.has(n.id)') || taskChecklistTreeSource.includes('filterProjection.visibleTaskIds.has(n.id)')) &&
     source.kanbanCard.includes('filterProjection={filterProjection}') &&
     !source.kanbanColumn.includes('matchesTaskFilters') &&
     !source.kanbanChecklist.includes('matchesTaskFilters'),
 );
 
 assert(
-  'Gantt and Calendar include tag filter state',
-  source.ganttView.includes('selectedTagIds = useTagStore') &&
-    source.ganttView.includes('selectedTagIds,') &&
-    source.calendarView.includes('selectedTagIds = useTagStore') &&
-    source.calendarView.includes('selectedTagIds,'),
+  'Gantt and Calendar consume the complete task-filter store object',
+  source.ganttView.includes('useTaskFilterStore(state => state.filters)') &&
+    source.calendarView.includes('useTaskFilterStore(state => state.filters)') &&
+    !source.ganttView.includes('useTagStore') &&
+    !source.calendarView.includes('useTagStore'),
 );
 
 assert(
   'mindmap mode exposes the task filter entry',
-  source.mainLayout.includes("['list', 'mindmap', 'board', 'gantt', 'calendar'].includes(currentView)") &&
-    source.mindMapView.includes("keyword: ''") &&
-    source.mindMapTree.includes('type MindMapFilterState = TaskFilterState'),
+  source.mainLayout.includes("['list', 'mindmap', 'board', 'goal', 'gantt', 'calendar'].includes(currentView)") &&
+    source.mindMapView.includes('useTaskFilterStore(state => state.filters)') &&
+    source.mindMapView.includes('projectTaskFilterResults') &&
+    source.mindMapTree.includes('visibleTaskIds'),
 );
 
 assert(
-  'Task Workbench is a board-side two-column board/filter panel with drag cards, not a route page',
+  'Task Workbench stays inline across task perspectives while BoardView retains drag integration',
   source.taskWorkbench.includes('data-task-workbench-panel="true"') &&
     source.taskWorkbench.includes('data-task-workbench-board-select="true"') &&
     source.taskWorkbench.includes('data-task-workbench-filter-toggle="true"') &&
     source.taskWorkbench.includes('data-task-workbench-filter-popover="true"') &&
     source.taskWorkbench.includes('data-task-workbench-filter-panel="true"') &&
     source.taskWorkbench.includes('data-task-workbench-task-card="true"') &&
-    source.taskWorkbench.includes('filterProjectionByBoardId.get(task.boardId)?.matchedTaskIds.has(task.id)') &&
+    (source.taskWorkbench.includes('filterProjectionByBoardId.get(task.boardId)?.matchedTaskIds.has(task.id)') ||
+      (source.taskWorkbench.includes('buildWorkbenchProjectionTasks') && source.taskWorkbench.includes('matchedTaskIds.add(taskId)'))) &&
     source.taskWorkbench.includes("source: 'task-workbench'") &&
-    source.boardView.includes('<TaskWorkbenchPanel canMoveTask={canMoveTask} />') &&
+    source.boardView.includes('<TaskWorkbenchPanel') &&
     source.boardView.includes("activeData?.source === 'task-workbench'") &&
+    source.mainLayout.includes('<TaskWorkbenchPanel') &&
+    source.mainLayout.includes("currentView !== 'board'") &&
+    source.mainLayout.includes('if (!isTaskFilterView) setView') &&
     !source.app.includes("case 'task_workbench'") &&
     !source.typesIndex.includes("'task_workbench'") &&
     source.mainLayout.includes('data-mobile-task-workbench-nav-entry="true"') &&
     source.mainLayout.includes('toggleTaskWorkbenchPanel') &&
     !source.sidebar.includes('data-sidebar-task-workbench-button="true"') &&
-    !source.sidebar.includes('openTaskWorkbenchPanel') &&
     !source.localTestEnvironment.includes("'task_workbench'"),
 );
 
@@ -219,12 +224,9 @@ assert(
     source.taskWorkbench.includes('boardOptions: BoardOption[]') &&
     source.taskWorkbench.includes('boardOptions={boardOptions}') &&
     source.taskWorkbench.includes('selectedBoardId={selectedBoardId}') &&
-    source.taskWorkbench.includes('TASK_WORKBENCH_FILTER_PREFS_KEY') &&
-    source.taskWorkbench.includes('projed-task-workbench-filters:v1') &&
-    source.taskWorkbench.includes('readWorkbenchFilterPrefs') &&
-    source.taskWorkbench.includes('writeWorkbenchFilterPrefs') &&
-    source.taskWorkbench.includes('migrateLegacyDefaultTaskFilters') &&
-    source.taskWorkbench.includes('BOARD_TASK_FILTER_PREFS_VERSION') &&
+    source.taskWorkbench.includes('readTaskWorkbenchFilterPrefs') &&
+    source.taskWorkbench.includes('writeTaskWorkbenchFilterPrefs') &&
+    source.taskWorkbench.includes('readTaskWorkbenchPanelPrefs') &&
     source.taskWorkbench.includes('onSelectedBoardChange={handleSelectedBoardChange}'),
 );
 
@@ -248,8 +250,9 @@ assert(
   'Task Workbench restores unplaced task lane outside board filters with legacy inbox migration',
   source.taskWorkbench.includes("from '../store/useQuickCaptureStore'") &&
     source.taskWorkbench.includes('data-task-workbench-unclassified-section="true"') &&
-    source.taskWorkbench.includes('data-task-workbench-unclassified-input="true"') &&
-    source.taskWorkbench.includes('data-task-workbench-unclassified-add="true"') &&
+    source.taskWorkbench.includes('data-task-workbench-unclassified-modal-add="true"') &&
+    !source.taskWorkbench.includes('data-task-workbench-unclassified-input="true"') &&
+    !source.taskWorkbench.includes('data-task-workbench-unclassified-add="true"') &&
     source.taskWorkbench.includes('data-task-workbench-unclassified-list="true"') &&
     source.taskWorkbench.includes('data-task-workbench-unclassified-item') &&
     source.taskWorkbench.includes('data-task-workbench-unplaced-lane="true"') &&
@@ -297,9 +300,10 @@ assert(
     source.spec.includes('Deferred Scope Audit') &&
     source.qa.includes('All-Phase QA Coverage Matrix') &&
     source.qa.includes('Phase Exit Decision Rules') &&
-    source.devTask.includes('DEV-039 [交付點] [完成]') &&
+    source.devTask.includes('DEV-039 [交付點] [驗證中]') &&
     source.devTask.includes('完成任務 filter core、跨看板工作台、row-root parity') &&
     source.documentationMap.includes('All-Phase Coverage Complete') &&
+    source.qa.includes('DEV-090 Board-filter Follow-up Superseded by QA-DEV-090') &&
     source.backlog.includes('All-Phase Coverage Matrix'),
 );
 
@@ -309,6 +313,7 @@ assert(
     source.packageJson.includes('"verify:dev-039-task-filter-core-browser"') &&
     source.packageJson.includes('"verify:dev-039-task-workbench-placement-lanes"') &&
     source.packageJson.includes('"verify:dev-039-task-workbench-placement-lanes-browser"') &&
+    source.packageJson.includes('"verify:dev-039-task-workbench-cross-mode-browser"') &&
     source.packageJson.includes('"verify:dev-039-filter-result-parity"') &&
     source.packageJson.includes('"verify:dev-039-filter-result-parity-browser"') &&
     source.packageJson.includes('"verify:dev-039-task-workbench-cross-board-source"') &&

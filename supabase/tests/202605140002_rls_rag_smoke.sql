@@ -19,8 +19,10 @@ select policies_are(
   'public',
   'wbs_items',
   ARRAY[
-    'members read wbs items',
-    'members write wbs items'
+    'board readers or tracking viewers read wbs items',
+    'board writers create wbs items',
+    'canonical board writers update wbs items',
+    'board managers delete wbs items'
   ],
   'wbs_items has tenant member RLS policies'
 );
@@ -29,7 +31,7 @@ select policies_are(
   'public',
   'document_embeddings',
   ARRAY[
-    'members read embeddings',
+    'authorized users read embeddings',
     'service role writes embeddings'
   ],
   'document_embeddings separates member reads from service writes'

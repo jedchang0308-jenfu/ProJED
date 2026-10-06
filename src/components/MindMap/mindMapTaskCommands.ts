@@ -1,4 +1,5 @@
 import type { TaskNode } from '../../types';
+import { createBlankTaskNode } from '../../features/taskCreation/createBlankTaskNode';
 import {
   getInsertOrder,
   getSiblingNodes,
@@ -64,17 +65,15 @@ export const createMindMapTaskNode = ({
   order,
   title = DEFAULT_MINDMAP_TASK_TITLE,
   now = Date.now(),
-}: CreateMindMapTaskNodeOptions): TaskNode => ({
+}: CreateMindMapTaskNodeOptions): TaskNode => createBlankTaskNode({
   id: createMindMapNodeId(),
   workspaceId,
   boardId,
   parentId,
   title,
-  status: 'todo',
   nodeType: 'task',
   order,
-  createdAt: now,
-  updatedAt: now,
+  now,
 });
 
 export const getCommittedMindMapTitle = (title: string) =>

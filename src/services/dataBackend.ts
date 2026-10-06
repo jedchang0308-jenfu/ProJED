@@ -13,13 +13,14 @@ import {
   type BoardRolePermissionMatrix,
   type CurrentBoardAccess,
   type Dependency,
-  type KnowledgeRecord,
+  type EditableKnowledgeRecord,
   type KnowledgeRecordInput,
   type TaskNode,
   type TaskTag,
   type Workspace,
   type WorkspaceMember,
 } from '../types';
+import { MeetingDraftCheckpointError } from './meetingDraftRecoveryService';
 import {
   boardService as firestoreBoardService,
   dependencyService as firestoreDependencyService,
@@ -54,6 +55,10 @@ import {
 } from './localTestService';
 import { localTestBackupService } from './backup/localTestBackupService';
 import { BackupError, type BackupBackendAdapter } from '../features/backup/types';
+import { createLocalTaskTrackingReferenceService } from '../features/taskTracking/localService';
+import type { TrackingReferenceService } from '../features/taskTracking/types';
+import { TaskTrackingError } from '../features/taskTracking/errors';
+import { supabaseTaskTrackingReferenceService } from './supabase/taskTrackingReferenceService';
 
 export type DataBackend = 'firebase' | 'supabase' | 'local-test';
 
@@ -67,6 +72,27 @@ export const dataBackend: DataBackend =
       : 'firebase';
 export const isSupabaseBackend = dataBackend === 'supabase';
 export const isLocalTestBackend = dataBackend === 'local-test';
+
+const unsupportedTaskTrackingReferenceService: TrackingReferenceService = {
+  getCapability: async () => ({ supported: false, reason: 'backend_unsupported' }),
+  listByWorkspace: async () => [],
+  listStagedByWorkspace: async () => [],
+  create: async () => { throw new TaskTrackingError('BACKEND_UNSUPPORTED', 'Firebase 不支援追蹤副本。'); },
+  move: async () => { throw new TaskTrackingError('BACKEND_UNSUPPORTED', 'Firebase 不支援追蹤副本。'); },
+  stage: async () => { throw new TaskTrackingError('BACKEND_UNSUPPORTED', 'Firebase 不支援追蹤副本暫存。'); },
+  placeStaged: async () => { throw new TaskTrackingError('BACKEND_UNSUPPORTED', 'Firebase 不支援追蹤副本暫存。'); },
+  remove: async () => { throw new TaskTrackingError('BACKEND_UNSUPPORTED', 'Firebase 不支援追蹤副本。'); },
+  restore: async () => { throw new TaskTrackingError('BACKEND_UNSUPPORTED', 'Firebase 不支援追蹤副本。'); },
+};
+
+/** Provider capability boundary for tracking references. Firebase deliberately has no client fallback. */
+export const getTaskTrackingReferenceService = (getTasks: () => readonly TaskNode[] = () => []) => (
+  isLocalTestBackend
+    ? createLocalTaskTrackingReferenceService(getTasks)
+    : isSupabaseBackend
+      ? supabaseTaskTrackingReferenceService
+      : unsupportedTaskTrackingReferenceService
+);
 
 const unsupportedBackupBackend: BackupBackendAdapter = {
   readBoardSource: async () => {
@@ -170,6 +196,7 @@ export const workspaceService = {
       ? supabaseWorkspaceService.delete(workspaceId)
       : firestoreWorkspaceService.delete(workspaceId);
   },
+
 };
 
 export const boardService = {
@@ -506,26 +533,38 @@ export const tagService = {
 };
 
 export const recordService = {
-  listByProject: (workspaceId: string, boardId: string): Promise<KnowledgeRecord[]> =>
-    isLocalTestBackend
+  listByProject: (workspaceId: string, boardId: string): Promise<EditableKnowledgeRecord[]> =>
+    (isLocalTestBackend
       ? localTestRecordService.listByProject(workspaceId, boardId)
       : isSupabaseBackend
       ? supabaseRecordService.listByProject(workspaceId, boardId)
-      : firestoreRecordService.listByProject(workspaceId, boardId),
+      : firestoreRecordService.listByProject(workspaceId, boardId)),
 
-  listByNode: (workspaceId: string, boardId: string, nodeId: string): Promise<KnowledgeRecord[]> =>
-    isLocalTestBackend
-      ? localTestRecordService.listByNode(workspaceId, boardId, nodeId)
+  listByNode: (
+    workspaceId: string,
+    boardId: string,
+    nodeId: string,
+    options: { includeArchived?: boolean } = {},
+  ): Promise<EditableKnowledgeRecord[]> =>
+    (isLocalTestBackend
+      ? localTestRecordService.listByNode(workspaceId, boardId, nodeId, options)
       : isSupabaseBackend
-      ? supabaseRecordService.listByNode(workspaceId, boardId, nodeId)
-      : firestoreRecordService.listByNode(workspaceId, boardId, nodeId),
+      ? supabaseRecordService.listByNode(workspaceId, boardId, nodeId, options)
+      : firestoreRecordService.listByNode(workspaceId, boardId, nodeId, options)),
 
-  upsert: (workspaceId: string, boardId: string, input: KnowledgeRecordInput): Promise<KnowledgeRecord> =>
+  upsert: (workspaceId: string, boardId: string, input: KnowledgeRecordInput): Promise<EditableKnowledgeRecord> =>
     isLocalTestBackend
       ? localTestRecordService.upsert(workspaceId, boardId, input)
       : isSupabaseBackend
       ? supabaseRecordService.upsert(workspaceId, boardId, input)
       : firestoreRecordService.upsert(workspaceId, boardId, input),
+
+  checkpointDraft: async () => {
+    throw new MeetingDraftCheckpointError(
+      'transient',
+      '會議自動雲端 checkpoint 已停用；內容仍由本機 recovery 保護。',
+    );
+  },
 
   delete: (workspaceId: string, boardId: string, recordId: string): Promise<void> =>
     isLocalTestBackend

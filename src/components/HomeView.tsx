@@ -87,7 +87,11 @@ const HomeView = () => {
                                                         event.stopPropagation();
                                                         const confirmed = await useDialogStore.getState().showConfirm(`確定要刪除看板「${board.title}」嗎？您可以隨時使用 Ctrl+Z 復原。`);
                                                         if (confirmed) {
-                                                            removeBoard(workspace.id, board.id);
+                                                            try {
+                                                                await removeBoard(workspace.id, board.id);
+                                                            } catch (error) {
+                                                                console.error('[HomeView] delete board failed:', error);
+                                                            }
                                                         }
                                                     }}
                                                     className="absolute right-2 top-2 z-20 rounded-lg border border-slate-100 bg-white p-1.5 text-slate-300 opacity-0 shadow-sm transition-all hover:border-red-100 hover:text-red-500 group-hover:opacity-100"

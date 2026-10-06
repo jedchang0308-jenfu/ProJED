@@ -4,11 +4,12 @@ import useAuthStore from './useAuthStore';
 import useUndoStore from './useUndoStore';
 import { workspaceService, boardService } from '../services/dataBackend';
 import type { BoardStore, ViewMode } from '../types';
+import type { BoardContextMenuState } from '../types';
+import type { TaskHostMode, TaskInteractionLocation, TaskInteractionSurfaceId } from '../interactions/task/types';
 import {
     createDefaultTaskDisplaySettings,
-    createDefaultTaskFilters,
-    readBoardTaskFilterPrefs,
-    writeBoardTaskFilterPrefs,
+    readBoardTaskDisplaySettings,
+    writeBoardTaskDisplaySettings,
 } from '../features/taskFilters';
 
 // ===== Helper: 取得當前登入使用者的 uid =====
@@ -24,49 +25,19 @@ const WS_STORAGE_KEY = 'projed-last-ws';
 const BOARD_STORAGE_KEY = 'projed-last-board';
 const MODAL_STORAGE_KEY = 'projed-last-modal';
 
-const getDefaultFilters = () => ({
-    statusFilters: createDefaultTaskFilters().statusFilters,
+const getDefaultDisplaySettings = () => ({
     showDependencies: createDefaultTaskDisplaySettings().showDependencies,
     showStartDate: createDefaultTaskDisplaySettings().showStartDate,
     showTags: createDefaultTaskDisplaySettings().showTags,
     showTagNames: createDefaultTaskDisplaySettings().showTagNames,
-    dueWithinDays: createDefaultTaskFilters().dueWithinDays,
-    overdueOnly: createDefaultTaskFilters().overdueOnly,
-    selectedAssigneeIds: createDefaultTaskFilters().selectedAssigneeIds,
 });
 
-const getStoredFilters = () => {
+const getStoredDisplaySettings = () => {
     try {
-        const prefs = readBoardTaskFilterPrefs();
-        return {
-            ...getDefaultFilters(),
-            statusFilters: prefs.filters.statusFilters,
-            showDependencies: prefs.displaySettings.showDependencies,
-            showStartDate: prefs.displaySettings.showStartDate,
-            showTags: prefs.displaySettings.showTags,
-            showTagNames: prefs.displaySettings.showTagNames,
-            dueWithinDays: prefs.filters.dueWithinDays,
-            overdueOnly: prefs.filters.overdueOnly,
-            selectedAssigneeIds: prefs.filters.selectedAssigneeIds,
-        };
+        return readBoardTaskDisplaySettings(useAuthStore.getState().user?.uid ?? null);
     } catch { /* ignore */ }
-    return getDefaultFilters();
+    return getDefaultDisplaySettings();
 };
-
-const persistBoardTaskFilters = (state, updates = {}) => writeBoardTaskFilterPrefs({
-    filters: {
-        statusFilters: updates.statusFilters ?? state.statusFilters,
-        dueWithinDays: updates.dueWithinDays ?? state.dueWithinDays,
-        overdueOnly: updates.overdueOnly ?? state.overdueOnly,
-        selectedAssigneeIds: updates.selectedAssigneeIds ?? state.selectedAssigneeIds,
-    },
-    displaySettings: {
-        showDependencies: updates.showDependencies ?? state.showDependencies,
-        showStartDate: updates.showStartDate ?? state.showStartDate,
-        showTags: updates.showTags ?? state.showTags,
-        showTagNames: updates.showTagNames ?? state.showTagNames,
-    },
-});
 
 const safeSetItem = (key: string, value: string | null) => {
     try {
@@ -78,11 +49,46 @@ const safeSetItem = (key: string, value: string | null) => {
 const getStoredView = () => {
     try {
         const stored = localStorage.getItem(VIEW_STORAGE_KEY);
-        if (stored && ['list', 'mindmap', 'board', 'gantt', 'calendar', 'records', 'calendar_subscriptions', 'settings', 'recycle_bin'].includes(stored)) {
+        if (stored && ['list', 'mindmap', 'board', 'goal', 'gantt', 'calendar', 'records', 'calendar_subscriptions', 'settings', 'recycle_bin'].includes(stored)) {
             return stored as ViewMode;
         }
     } catch { /* ignore */ }
     return 'home' as ViewMode;
+};
+
+const viewToTaskHostMode = (view: ViewMode): TaskHostMode => {
+    if (view === 'mindmap' || view === 'board' || view === 'goal' || view === 'gantt' || view === 'calendar') return view;
+    return 'list';
+};
+
+const viewToTaskSurfaceId = (view: ViewMode): TaskInteractionSurfaceId => {
+    switch (view) {
+        case 'mindmap': return 'mindmap.node';
+        case 'board': return 'board.card';
+        case 'goal': return 'goal.row';
+        case 'gantt': return 'gantt.task-bar';
+        case 'calendar': return 'calendar.segment';
+        default: return 'list.row';
+    }
+};
+
+const createTaskInteractionId = () => {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+    return `task-interaction-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+};
+
+const normalizeTaskContextMenuState = (state: BoardContextMenuState, currentView: ViewMode): BoardContextMenuState => {
+    if (state.kind !== 'task') return state;
+    const interactionLocation: TaskInteractionLocation = state.interactionLocation || {
+        hostMode: viewToTaskHostMode(currentView),
+        origin: 'mode-primary',
+    };
+    return {
+        ...state,
+        interactionLocation,
+        surfaceId: state.surfaceId || viewToTaskSurfaceId(currentView),
+        interactionId: state.interactionId || createTaskInteractionId(),
+    };
 };
 
 const getStoredId = (key: string) => {
@@ -100,52 +106,34 @@ const getStoredModal = () => {
     return null;
 };
 
-const cloneBoardTaskFilterSnapshot = (state) => ({
-    statusFilters: { ...state.statusFilters },
+const cloneBoardDisplaySnapshot = (state) => ({
     showDependencies: Boolean(state.showDependencies),
     showStartDate: Boolean(state.showStartDate),
     showTags: Boolean(state.showTags),
     showTagNames: Boolean(state.showTagNames),
-    dueWithinDays: state.dueWithinDays ?? null,
-    overdueOnly: Boolean(state.overdueOnly),
-    selectedAssigneeIds: [...(state.selectedAssigneeIds || [])],
 });
 
-const writeBoardTaskFilterSnapshot = (snapshot) => writeBoardTaskFilterPrefs({
-    filters: {
-        statusFilters: snapshot.statusFilters,
-        dueWithinDays: snapshot.dueWithinDays,
-        overdueOnly: snapshot.overdueOnly,
-        selectedAssigneeIds: snapshot.selectedAssigneeIds,
-    },
-    displaySettings: {
-        showDependencies: snapshot.showDependencies,
-        showStartDate: snapshot.showStartDate,
-        showTags: snapshot.showTags,
-        showTagNames: snapshot.showTagNames,
-    },
-});
+const writeBoardDisplaySnapshot = (snapshot) => writeBoardTaskDisplaySettings(
+    snapshot,
+    useAuthStore.getState().user?.uid ?? null,
+);
 
-const applyBoardTaskFilterSnapshot = (set, snapshot) => {
-    writeBoardTaskFilterSnapshot(snapshot);
+const applyBoardDisplaySnapshot = (set, snapshot) => {
+    writeBoardDisplaySnapshot(snapshot);
     set({
-        statusFilters: { ...snapshot.statusFilters },
         showDependencies: snapshot.showDependencies,
         showStartDate: snapshot.showStartDate,
         showTags: snapshot.showTags,
         showTagNames: snapshot.showTagNames,
-        dueWithinDays: snapshot.dueWithinDays,
-        overdueOnly: snapshot.overdueOnly,
-        selectedAssigneeIds: [...snapshot.selectedAssigneeIds],
     });
 };
 
-const pushBoardTaskFilterUndo = (set, label, before, after) => {
+const pushBoardDisplayUndo = (set, label, before, after) => {
     useUndoStore.getState().pushUndo({
         label,
         scope: 'filter',
-        undo: () => applyBoardTaskFilterSnapshot(set, before),
-        redo: () => applyBoardTaskFilterSnapshot(set, after),
+        undo: () => applyBoardDisplaySnapshot(set, before),
+        redo: () => applyBoardDisplaySnapshot(set, after),
     });
 };
 
@@ -155,11 +143,17 @@ const useBoardStore = create<BoardStore>()(
         activeWorkspaceId: getStoredId(WS_STORAGE_KEY),
         activeBoardId: getStoredId(BOARD_STORAGE_KEY),
         currentView: getStoredView(),
-        isSidebarOpen: typeof window !== 'undefined' ? window.innerWidth >= 768 : true,
+        // The global task workbench is the default left-side workspace.
+        // Keep the workspace/board navigator available from the top-left menu
+        // without competing with the task workbench on initial load.
+        isSidebarOpen: false,
         editingItem: getStoredModal(),
-        ...getStoredFilters(),
+        ...getStoredDisplaySettings(),
         dependencySelection: null,
         contextMenuState: null,
+        lastTaskInteractionLocation: null,
+        lastTaskInteractionSurfaceId: null,
+        lastTaskInteractionId: null,
         selectedTaskId: null,
         pendingTitleEditNodeId: null,
         pendingTitleEditInitialValue: null,
@@ -168,7 +162,9 @@ const useBoardStore = create<BoardStore>()(
         pendingBoardTitleEdit: null,
 
         // ===== 基本 setters =====
-        setWorkspaces: (workspaces) => set({ workspaces }),
+        setWorkspaces: (workspaces) => {
+            set({ workspaces });
+        },
         setActiveWorkspace: (id) => {
             safeSetItem(WS_STORAGE_KEY, id);
             set({ activeWorkspaceId: id, selectedTaskId: null });
@@ -183,7 +179,21 @@ const useBoardStore = create<BoardStore>()(
         },
         setSidebarOpen: (isOpen) => set({ isSidebarOpen: isOpen }),
         setDependencySelection: (state) => set({ dependencySelection: state }),
-        setContextMenuState: (state) => set({ contextMenuState: state }),
+        // Opening a task menu moves the pointer onto the full-screen outside-click
+        // layer, so the task's hover preview would otherwise disappear immediately.
+        // Keep the menu target selected while the menu is open; closeContextMenu
+        // remains responsible for clearing it when the menu is dismissed.
+        setContextMenuState: (state) => set((currentState) => {
+            const normalizedState = state ? normalizeTaskContextMenuState(state, currentState.currentView) : null;
+            const taskState = normalizedState?.kind === 'task' ? normalizedState : null;
+            return {
+                contextMenuState: normalizedState,
+                selectedTaskId: taskState ? taskState.nodeId : currentState.selectedTaskId,
+                lastTaskInteractionLocation: taskState?.interactionLocation || currentState.lastTaskInteractionLocation,
+                lastTaskInteractionSurfaceId: taskState?.surfaceId || currentState.lastTaskInteractionSurfaceId,
+                lastTaskInteractionId: taskState?.interactionId || currentState.lastTaskInteractionId,
+            };
+        }),
         setSelectedTaskId: (nodeId) => set({ selectedTaskId: nodeId }),
         setPendingTitleEditNodeId: (nodeId, initialValue = null) => set({
             pendingTitleEditNodeId: nodeId,
@@ -276,73 +286,32 @@ const useBoardStore = create<BoardStore>()(
             });
         },
 
-        toggleStatusFilter: (status) => {
-            const before = cloneBoardTaskFilterSnapshot(get());
-            const newFilters = {
-                ...before.statusFilters,
-                [status]: !before.statusFilters[status]
-            };
-            const after = { ...before, statusFilters: newFilters };
-            applyBoardTaskFilterSnapshot(set, after);
-            pushBoardTaskFilterUndo(set, '修改篩選條件', before, after);
-        },
-
         // 切換 UI 顯示
         toggleDependencies: () => {
-            const before = cloneBoardTaskFilterSnapshot(get());
+            const before = cloneBoardDisplaySnapshot(get());
             const after = { ...before, showDependencies: !before.showDependencies };
-            applyBoardTaskFilterSnapshot(set, after);
-            pushBoardTaskFilterUndo(set, '切換依賴顯示', before, after);
+            applyBoardDisplaySnapshot(set, after);
+            pushBoardDisplayUndo(set, '切換依賴顯示', before, after);
         },
         toggleStartDate: () => {
-            const before = cloneBoardTaskFilterSnapshot(get());
+            const before = cloneBoardDisplaySnapshot(get());
             const after = { ...before, showStartDate: !before.showStartDate };
-            applyBoardTaskFilterSnapshot(set, after);
-            pushBoardTaskFilterUndo(set, '切換開始時間顯示', before, after);
+            applyBoardDisplaySnapshot(set, after);
+            pushBoardDisplayUndo(set, '切換開始時間顯示', before, after);
         },
         toggleTags: () => {
-            const before = cloneBoardTaskFilterSnapshot(get());
+            const before = cloneBoardDisplaySnapshot(get());
             const after = { ...before, showTags: !before.showTags };
-            applyBoardTaskFilterSnapshot(set, after);
-            pushBoardTaskFilterUndo(set, '切換標籤顯示', before, after);
+            applyBoardDisplaySnapshot(set, after);
+            pushBoardDisplayUndo(set, '切換標籤顯示', before, after);
         },
         toggleTagNames: () => {
-            const before = cloneBoardTaskFilterSnapshot(get());
+            const before = cloneBoardDisplaySnapshot(get());
             const after = { ...before, showTagNames: !before.showTagNames };
-            applyBoardTaskFilterSnapshot(set, after);
-            pushBoardTaskFilterUndo(set, '切換標籤名稱顯示', before, after);
+            applyBoardDisplaySnapshot(set, after);
+            pushBoardDisplayUndo(set, '切換標籤名稱顯示', before, after);
         },
-        setDueWithinDays: (days) => {
-            const before = cloneBoardTaskFilterSnapshot(get());
-            const nextDays = days === null || days === undefined ? null : Math.max(0, Math.min(365, Math.floor(days)));
-            if (before.dueWithinDays === nextDays) return;
-            const after = { ...before, dueWithinDays: nextDays };
-            applyBoardTaskFilterSnapshot(set, after);
-            pushBoardTaskFilterUndo(set, '修改到期篩選', before, after);
-        },
-        toggleOverdueFilter: () => {
-            const before = cloneBoardTaskFilterSnapshot(get());
-            const after = { ...before, overdueOnly: !before.overdueOnly };
-            applyBoardTaskFilterSnapshot(set, after);
-            pushBoardTaskFilterUndo(set, '切換逾期篩選', before, after);
-        },
-        toggleAssigneeFilter: (assigneeId) => {
-            const before = cloneBoardTaskFilterSnapshot(get());
-            const currentIds = Array.isArray(before.selectedAssigneeIds) ? before.selectedAssigneeIds : [];
-            const nextAssigneeIds = currentIds.includes(assigneeId)
-                ? currentIds.filter(id => id !== assigneeId)
-                : [...currentIds, assigneeId];
-            const after = { ...before, selectedAssigneeIds: nextAssigneeIds };
-            applyBoardTaskFilterSnapshot(set, after);
-            pushBoardTaskFilterUndo(set, '修改負責人篩選', before, after);
-        },
-        clearAssigneeFilters: () => {
-            const before = cloneBoardTaskFilterSnapshot(get());
-            if (before.selectedAssigneeIds.length === 0) return;
-            const after = { ...before, selectedAssigneeIds: [] };
-            applyBoardTaskFilterSnapshot(set, after);
-            pushBoardTaskFilterUndo(set, '清除負責人篩選', before, after);
-        },
+        hydrateTaskDisplayPrefs: () => set(getStoredDisplaySettings()),
 
         // ===== Navigation =====
         showHome: () => {
@@ -379,14 +348,17 @@ const useBoardStore = create<BoardStore>()(
             const { workspaces } = get();
             const ws = workspaces.find(w => w.id === workspaceId);
             const board = ws?.boards.find(b => b.id === boardId);
-            if (board) {
+            // Optimistic rows use a local-only id until Supabase returns the
+            // canonical project id. Never route the app into a board that the
+            // backend cannot resolve yet, even if the pending row is clicked.
+            if (board && !board.id.startsWith('b_')) {
                 safeSetItem(WS_STORAGE_KEY, workspaceId);
                 safeSetItem(BOARD_STORAGE_KEY, boardId);
                 safeSetItem(VIEW_STORAGE_KEY, 'board');
                 set({
                     activeWorkspaceId: workspaceId,
                     activeBoardId: boardId,
-                    currentView: 'board'
+                    currentView: 'board',
                 });
             }
         },
@@ -476,9 +448,11 @@ const useBoardStore = create<BoardStore>()(
             }
 
             const tempId = 'b_' + Date.now();
-            safeSetItem(WS_STORAGE_KEY, targetWorkspaceId);
-            safeSetItem(BOARD_STORAGE_KEY, tempId);
-            safeSetItem(VIEW_STORAGE_KEY, 'board');
+            // Keep the optimistic row visible while the request is pending, but
+            // do not make the temporary id active. Supabase resolves legacy
+            // board ids through `projects`, so loading/synchronising this id
+            // before the create request succeeds produces a blank board and a
+            // noisy "project not found" error.
             set((state) => ({
                 workspaces: state.workspaces.map(ws => {
                     if (ws.id !== targetWorkspaceId) return ws;
@@ -493,9 +467,6 @@ const useBoardStore = create<BoardStore>()(
                         }]
                     };
                 }),
-                activeWorkspaceId: targetWorkspaceId,
-                activeBoardId: tempId,
-                currentView: 'board',
             }));
             boardService.create(targetWorkspaceId, boardName)
                 .then((createdBoard) => {
@@ -554,24 +525,31 @@ const useBoardStore = create<BoardStore>()(
                         activateCreatedBoard(recreatedBoard);
                     };
 
+                    safeSetItem(WS_STORAGE_KEY, targetWorkspaceId);
+                    safeSetItem(BOARD_STORAGE_KEY, createdBoard.id);
+                    safeSetItem(VIEW_STORAGE_KEY, 'board');
                     set((state) => ({
                         workspaces: state.workspaces.map(ws => {
-                    if (ws.id !== targetWorkspaceId) return ws;
-                    return {
-                        ...ws,
-                        boards: ws.boards.map(board =>
-                            board.id === tempId ? { ...createdBoard, title: board.title || createdBoard.title } : board
-                        ),
-                    };
-                }),
-                activeBoardId: state.activeBoardId === tempId ? createdBoard.id : state.activeBoardId,
-                pendingBoardTitleEdit: state.pendingBoardTitleEdit?.boardId === tempId
-                    ? { workspaceId: targetWorkspaceId, boardId: createdBoard.id }
-                    : state.pendingBoardTitleEdit,
-            }));
-                    if (get().activeBoardId === createdBoard.id) {
-                        safeSetItem(BOARD_STORAGE_KEY, createdBoard.id);
-                    }
+                            if (ws.id !== targetWorkspaceId) return ws;
+                            const resolvedBoard = {
+                                ...createdBoard,
+                                title: ws.boards.find(board => board.id === tempId)?.title || createdBoard.title,
+                            };
+                            const hasCreatedBoard = ws.boards.some(board => board.id === createdBoard.id);
+                            return {
+                                ...ws,
+                                boards: hasCreatedBoard
+                                    ? ws.boards.map(board => board.id === createdBoard.id ? resolvedBoard : board)
+                                    : ws.boards.map(board => board.id === tempId ? resolvedBoard : board),
+                            };
+                        }),
+                        activeWorkspaceId: targetWorkspaceId,
+                        activeBoardId: createdBoard.id,
+                        currentView: 'board',
+                        pendingBoardTitleEdit: state.pendingBoardTitleEdit?.boardId === tempId
+                            ? { workspaceId: targetWorkspaceId, boardId: createdBoard.id }
+                            : state.pendingBoardTitleEdit,
+                    }));
                     const command = {
                         label: '新增看板',
                         scope: 'board',
@@ -581,18 +559,36 @@ const useBoardStore = create<BoardStore>()(
                     };
                     useUndoStore.getState().pushUndo(command);
                 })
-                .catch(console.error);
+                .catch((error) => {
+                    console.error('[useBoardStore] Board create failed:', error);
+                    set((state) => {
+                        const isActivePendingBoard = state.activeBoardId === tempId;
+                        const shouldClearPendingTitle = state.pendingBoardTitleEdit?.boardId === tempId;
+                        if (isActivePendingBoard) {
+                            safeSetItem(BOARD_STORAGE_KEY, null);
+                            safeSetItem(VIEW_STORAGE_KEY, 'home');
+                        }
+                        return {
+                            workspaces: state.workspaces.map(ws => ws.id === targetWorkspaceId
+                                ? { ...ws, boards: ws.boards.filter(board => board.id !== tempId) }
+                                : ws),
+                            activeBoardId: isActivePendingBoard ? null : state.activeBoardId,
+                            currentView: isActivePendingBoard ? 'home' : state.currentView,
+                            pendingBoardTitleEdit: shouldClearPendingTitle ? null : state.pendingBoardTitleEdit,
+                        };
+                    });
+                });
             return tempId;
         },
 
-        removeBoard: (wsId, bId) => {
+        removeBoard: async (wsId, bId) => {
+            await boardService.delete(wsId, bId);
             set((state) => ({
                 workspaces: state.workspaces.map(ws => {
                     if (ws.id !== wsId) return ws;
                     return { ...ws, boards: ws.boards.filter(b => b.id !== bId) };
                 })
             }));
-            boardService.delete(wsId, bId).catch(console.error);
         },
 
         // ===== Export / Import =====

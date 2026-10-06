@@ -1,4 +1,4 @@
-import type { TaskFilterState } from '../../features/taskFilters';
+import type { LegacyTaskFilterStateV4, TaskFilterQuery } from '../../features/taskFilters';
 
 export type Json =
   | string
@@ -34,30 +34,37 @@ export type CalendarSubscriptionDateType = 'start_date' | 'due_date';
 export type CalendarSubscriptionScopeType = 'board' | 'workspace' | 'custom';
 export type CalendarSubscriptionV2ScopeType = 'all_accessible_boards_snapshot';
 export type CalendarSubscriptionV3ScopeType = 'per_board_filter_snapshot';
+export type CalendarSubscriptionV4ScopeType = 'per_board_filter_snapshot';
 export type CalendarSubscriptionAssigneeFilter =
   | { type: 'me' }
   | { type: 'user'; user_id: string }
   | { type: 'selected'; user_ids: string[]; include_unassigned?: boolean };
-export type CalendarSubscriptionBoardFilterOverride = Partial<TaskFilterState> & {
+export type CalendarSubscriptionBoardFilterOverride = Partial<LegacyTaskFilterStateV4> & {
   enabled?: boolean;
 };
 export type CalendarSubscriptionBoardFilterSnapshot = {
   included: boolean;
   date_types: CalendarSubscriptionDateType[];
-  filters: TaskFilterState;
+  filters: TaskFilterQuery;
+};
+export type CalendarSubscriptionLegacyBoardFilterSnapshot = {
+  included: boolean;
+  date_types: CalendarSubscriptionDateType[];
+  filters: LegacyTaskFilterStateV4;
 };
 export type CalendarSubscriptionFilters = {
-  version?: 1 | 2 | 3;
+  version?: 1 | 2 | 3 | 4;
   workspace_ids: string[];
   project_ids?: string[];
   scope_type?: CalendarSubscriptionScopeType;
   assignee?: CalendarSubscriptionAssigneeFilter;
   date_types?: CalendarSubscriptionDateType[];
   v2_scope_type?: CalendarSubscriptionV2ScopeType;
-  global_filter?: TaskFilterState;
+  global_filter?: LegacyTaskFilterStateV4;
   board_overrides?: Record<string, CalendarSubscriptionBoardFilterOverride>;
   v3_scope_type?: CalendarSubscriptionV3ScopeType;
-  board_filters?: Record<string, CalendarSubscriptionBoardFilterSnapshot>;
+  v4_scope_type?: CalendarSubscriptionV4ScopeType;
+  board_filters?: Record<string, CalendarSubscriptionBoardFilterSnapshot | CalendarSubscriptionLegacyBoardFilterSnapshot>;
 };
 
 type Table<Row> = {
@@ -73,6 +80,7 @@ export type ProfileRow = {
   display_name: string | null;
   external_auth_provider: string | null;
   external_auth_id: string | null;
+  ui_preferences: Json;
   created_at: string;
   updated_at: string;
 };
@@ -358,6 +366,83 @@ export type CalendarSubscriptionRow = {
   updated_at: string;
 };
 
+export type TaskWorkbenchPlacementOperationRow = {
+  owner_id: string;
+  operation_id: string;
+  command_version: number;
+  direction: 'to_unplaced' | 'to_board';
+  source_kind: 'board' | 'account_unplaced' | null;
+  target_kind: 'board' | 'account_unplaced' | null;
+  root_task_id: string;
+  task_ids: Json;
+  source_workspace_id: string | null;
+  source_board_id: string | null;
+  target_workspace_id: string | null;
+  target_board_id: string | null;
+  target_parent_task_id: string | null;
+  anchor_task_id: string | null;
+  position: 'before' | 'after' | 'append' | null;
+  status: 'pending' | 'committed' | 'failed';
+  error_code: string | null;
+  client_platform: string | null;
+  result: Json | null;
+  elapsed_ms: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type TaskWorkbenchUnplacedItemRow = {
+  owner_id: string;
+  id: string;
+  workspace_id: string;
+  task: Json;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type QuickTaskCaptureReceiptRow = {
+  owner_id: string;
+  capture_id: string;
+  title_hash: string;
+  committed_at: string;
+};
+
+export type WbsItemPlacementRow = {
+  id: string;
+  tenant_id: string;
+  task_id: string;
+  project_id: string;
+  parent_placement_id: string | null;
+  parent_scope_key: string;
+  placement_kind: 'primary' | 'tracking_reference';
+  sort_order: number;
+  kanban_stage_id: string | null;
+  revision: number;
+  removed_at: string | null;
+  created_by: string | null;
+  removed_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AccountBoardTaskFilterPreferenceRow = {
+  account_id: string;
+  project_id: string;
+  preference_version: number;
+  filters: Json;
+  created_at: string;
+  updated_at: string;
+};
+
+type AccountBoardTaskFilterPreferenceTable = {
+  Row: AccountBoardTaskFilterPreferenceRow;
+  Insert: Pick<AccountBoardTaskFilterPreferenceRow, 'account_id' | 'project_id' | 'filters'>
+    & Partial<Pick<AccountBoardTaskFilterPreferenceRow, 'preference_version' | 'created_at' | 'updated_at'>>;
+  Update: Partial<Pick<AccountBoardTaskFilterPreferenceRow, 'preference_version' | 'filters' | 'updated_at'>>;
+  Relationships: [];
+};
+
 export interface Database {
   public: {
     Tables: {
@@ -383,6 +468,11 @@ export interface Database {
       rag_sync_jobs: Table<RagSyncJobRow>;
       external_rag_objects: Table<ExternalRagObjectRow>;
       calendar_subscriptions: Table<CalendarSubscriptionRow>;
+      account_board_task_filter_preferences: AccountBoardTaskFilterPreferenceTable;
+      task_workbench_unplaced_items: Table<TaskWorkbenchUnplacedItemRow>;
+      quick_task_capture_receipts: Table<QuickTaskCaptureReceiptRow>;
+      task_workbench_placement_operations: Table<TaskWorkbenchPlacementOperationRow>;
+      wbs_item_placements: Table<WbsItemPlacementRow>;
     };
     Views: Record<string, never>;
     Functions: {
@@ -490,6 +580,55 @@ export interface Database {
         };
         Returns: string;
       };
+      move_task_workbench_subtree: {
+        Args: {
+          p_operation_id: string;
+          p_direction: 'to_unplaced' | 'to_board';
+          p_root_task_id: string;
+          p_source_workspace_id: string | null;
+          p_source_board_id: string | null;
+          p_target_workspace_id: string | null;
+          p_target_board_id: string | null;
+          p_nodes: Json;
+        };
+        Returns: Json;
+      };
+      move_task_workbench_subtree_v2: {
+        Args: {
+          p_operation_id: string;
+          p_root_task_id: string;
+          p_expected_subtree_ids: Json;
+          p_source_kind: 'board' | 'account_unplaced';
+          p_source_workspace_id: string | null;
+          p_source_board_id: string | null;
+          p_target_kind: 'board' | 'account_unplaced';
+          p_target_workspace_id: string | null;
+          p_target_board_id: string | null;
+          p_target_parent_task_id: string | null;
+          p_anchor_task_id: string | null;
+          p_position: 'before' | 'after' | 'append';
+          p_client_platform: 'desktop' | 'mobile';
+        };
+        Returns: Json;
+      };
+      create_quick_unplaced_task_v1: {
+        Args: {
+          p_capture_id: string;
+          p_title: string;
+          p_workspace_hint?: string | null;
+        };
+        Returns: Json;
+      };
+      get_task_tracking_reference_capability_v1: { Args: Record<string, never>; Returns: Json };
+      list_task_tracking_references_v1: { Args: { p_tenant_id: string }; Returns: Json };
+      list_task_tracking_reference_staging_v1: { Args: { p_tenant_id: string }; Returns: Json };
+      get_board_task_projection_v1: { Args: { p_tenant_id: string; p_project_id: string }; Returns: Json };
+      create_task_tracking_reference_v1: { Args: Record<string, Json>; Returns: Json };
+      move_task_tracking_reference_v1: { Args: Record<string, Json>; Returns: Json };
+      stage_task_tracking_reference_v1: { Args: Record<string, Json>; Returns: Json };
+      place_staged_task_tracking_reference_v1: { Args: Record<string, Json>; Returns: Json };
+      remove_task_tracking_reference_v1: { Args: Record<string, Json>; Returns: Json };
+      restore_task_tracking_reference_v1: { Args: Record<string, Json>; Returns: Json };
     };
     Enums: {
       tenant_role: TenantRole;

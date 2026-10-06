@@ -3,10 +3,10 @@ import type { TaskStatus } from '../../../types';
 import { useWbsStore } from '../../../store/useWbsStore';
 import useBoardStore from '../../../store/useBoardStore';
 import type { MobileTaskActionContextValue } from '../mobileTaskActionContext';
-import { isMobileTaskActionMode } from './taskGesturePolicy';
 import { commitTaskDragObservation, type TaskDragCommitDependencies } from './taskDragCommit';
 import { resolveTaskOriginFieldRect } from './desktopTaskDropPreview';
 import { taskDragSourceKindToSurfaceKind } from './taskDropIntent';
+import { getTaskChildIntentRemainingMs } from './taskChildDropTarget';
 import {
   autoScrollTaskDragSurfaces,
   getTaskIntentPoint,
@@ -17,6 +17,7 @@ import {
   resolveTaskDragObservation,
 } from './taskDragTargetAdapter';
 import type {
+  TaskDragCommitResult,
   TaskDragObservation,
   TaskDragSessionState,
   TaskDragSourceKind,
@@ -43,17 +44,25 @@ const stateToObservation = (state: TaskDragSessionState): TaskDragObservation =>
   source: state.source,
   targetKind: state.targetKind,
   targetNodeId: state.hoverTargetId,
+  targetPlacementId: state.hoverTargetPlacementId,
   targetBoardId: state.targetBoardId,
   targetWorkspaceId: state.targetWorkspaceId,
   targetSurfaceKind: state.targetSurfaceKind,
   action: state.hoverAction,
   dropPosition: state.dropPosition,
   indicatorRect: state.dropIndicatorRect,
+  indicatorAxis: state.dropIndicatorAxis,
   originFieldRect: state.originFieldRect,
   lockedTargetRect: state.lockedTargetRect,
   pendingTargetId: state.pendingTargetId,
   pendingSince: state.pendingSince,
   lastStableAt: state.lastStableAt,
+  childIntentPhase: state.childIntentPhase,
+  childTargetId: state.childTargetId,
+  childTargetTitle: state.childTargetTitle,
+  childDropIsOrigin: state.childDropIsOrigin,
+  childCandidateSince: state.childCandidateSince,
+  childPreviewRect: state.childPreviewRect,
   pointer: { x: state.pointerX, y: state.pointerY },
   intentPointer: getTaskIntentPoint({ x: state.pointerX, y: state.pointerY }),
   observedAt: Date.now(),
@@ -63,29 +72,42 @@ const withoutTarget = (observation: TaskDragObservation): TaskDragObservation =>
   ...observation,
   targetKind: 'none',
   targetNodeId: null,
+  targetPlacementId: null,
   targetBoardId: null,
   targetWorkspaceId: null,
   targetSurfaceKind: null,
   action: null,
   dropPosition: null,
   indicatorRect: null,
+  indicatorAxis: null,
   originFieldRect: null,
   lockedTargetRect: null,
   pendingTargetId: null,
   pendingSince: null,
   lastStableAt: null,
+  childIntentPhase: 'none',
+  childTargetId: null,
+  childTargetTitle: null,
+  childDropIsOrigin: false,
+  childCandidateSince: null,
+  childPreviewRect: null,
 });
 
 interface UseTaskDragSessionOptions extends TaskDragCommitDependencies {
-  boardSurfaceRef: React.RefObject<HTMLElement | null>;
+  boardSurfaceRef?: React.RefObject<HTMLElement | null>;
+  dragSurfaceRef?: React.RefObject<HTMLElement | null>;
+  scrollSurfaceRef?: React.RefObject<HTMLElement | null>;
+  targetScopeRef?: React.RefObject<HTMLElement | null>;
   onSessionBegin?: () => void;
+  onCommit?: (result: TaskDragCommitResult, observation: TaskDragObservation) => void;
 }
 
 export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
   const [state, setState] = React.useState<TaskDragSessionState | null>(null);
   const stateRef = React.useRef<TaskDragSessionState | null>(null);
-  const dependenciesRef = React.useRef<TaskDragCommitDependencies>(options);
+  const dependenciesRef = React.useRef<UseTaskDragSessionOptions>(options);
   const onSessionBeginRef = React.useRef(options.onSessionBegin);
+  const onCommitRef = React.useRef(options.onCommit);
   const terminalSessionIdsRef = React.useRef<string[]>([]);
   const failsafeRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoScrollFrameRef = React.useRef<number | null>(null);
@@ -96,6 +118,7 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
   React.useLayoutEffect(() => {
     dependenciesRef.current = options;
     onSessionBeginRef.current = options.onSessionBegin;
+    onCommitRef.current = options.onCommit;
   }, [options]);
 
   const stopAutoScroll = React.useCallback(() => {
@@ -151,6 +174,8 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
     point,
     state: activeState,
     canMoveTask: dependenciesRef.current.canMoveTask,
+    canManageTaskReference: dependenciesRef.current.canManageTaskReference,
+    scopeElement: dependenciesRef.current.targetScopeRef?.current || null,
   }), []);
 
   const startAutoScroll = React.useCallback((point: { x: number; y: number }) => {
@@ -163,11 +188,14 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
       const activeState = stateRef.current;
       if (!currentPoint || !activeState || hasTerminated(activeState.sessionId)) return;
 
-      const boardSurface = options.boardSurfaceRef.current
+      const latestOptions = dependenciesRef.current;
+      const scrollSurfaceRef = latestOptions.scrollSurfaceRef || latestOptions.dragSurfaceRef || latestOptions.boardSurfaceRef;
+      const boardSurface = scrollSurfaceRef?.current
         || document.querySelector<HTMLElement>('[data-mobile-pan-surface="board"]');
       const scrollResult = autoScrollTaskDragSurfaces({
         point: currentPoint,
         boardSurface,
+        scopeElement: latestOptions.targetScopeRef?.current || null,
       });
       recordTaskDragDebug({
         type: 'edge-scroll:attempt',
@@ -187,16 +215,28 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
     };
 
     autoScrollFrameRef.current = window.requestAnimationFrame(tick);
-  }, [applyState, hasTerminated, options.boardSurfaceRef, resolveObservation]);
+  }, [applyState, hasTerminated, resolveObservation]);
 
   const begin = React.useCallback<MobileTaskActionContextValue['begin']>((
-    task: { id: string; title?: string; status?: TaskStatus },
+    task: {
+      id: string;
+      title?: string;
+      status?: TaskStatus;
+      placementId?: string;
+      placementKind?: 'primary' | 'tracking_reference';
+      boardId?: string;
+      trackingReferenceId?: string;
+      canEditCanonicalTask?: boolean;
+      canCreateCanonicalTask?: boolean;
+      canDeleteCanonicalTask?: boolean;
+    },
     event: React.TouchEvent,
     sourceKind: TaskDragSourceKind = 'kanban-card',
   ) => {
-    if (!isMobileTaskActionMode()) return false;
     const permissions = dependenciesRef.current;
-    if (!permissions.canMoveTask && !permissions.canEditTask && !permissions.canCreateTask && !permissions.canDeleteTask) {
+    if (task.placementKind === 'tracking_reference'
+      ? !permissions.canManageTaskReference
+      : !permissions.canMoveTask && !permissions.canEditTask && !permissions.canCreateTask && !permissions.canDeleteTask) {
       return false;
     }
     const point = readTaskTouchPoint(event);
@@ -230,9 +270,15 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
       phase: 'dragging',
       source: {
         nodeId: node.id,
+        placementId: task.placementId,
+        placementKind: task.placementKind,
+        trackingReferenceId: task.trackingReferenceId,
+        canEditCanonicalTask: task.canEditCanonicalTask,
+        canCreateCanonicalTask: task.canCreateCanonicalTask,
+        canDeleteCanonicalTask: task.canDeleteCanonicalTask,
         kind: sourceKind,
         inputMode: 'touch',
-        originBoardId: node.boardId || null,
+        originBoardId: task.boardId || node.boardId || null,
         originWorkspaceId: node.workspaceId || null,
       },
       nodeId: node.id,
@@ -245,17 +291,26 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
       hasMoved: false,
       hoverAction: null,
       hoverTargetId: null,
+      hoverTargetPlacementId: null,
       targetBoardId: null,
       targetWorkspaceId: null,
       targetSurfaceKind: null,
       targetKind: 'none',
       dropPosition: null,
       dropIndicatorRect: null,
+      dropIndicatorAxis: null,
       originFieldRect: initialOriginFieldRect,
+      sourceOriginFieldRect: initialOriginFieldRect,
       lockedTargetRect: null,
       pendingTargetId: null,
       pendingSince: null,
       lastStableAt: null,
+      childIntentPhase: 'none',
+      childTargetId: null,
+      childTargetTitle: null,
+      childDropIsOrigin: false,
+      childCandidateSince: null,
+      childPreviewRect: null,
       terminal: null,
     };
     recordTaskDragDebug({ type: 'begin', sessionId, nodeId: node.id, sourceKind });
@@ -300,6 +355,54 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
     moveAtPoint(point);
   }, [moveAtPoint]);
 
+  React.useEffect(() => {
+    if (
+      state?.phase !== 'dragging'
+      || state.childIntentPhase !== 'candidate'
+      || !state.childTargetId
+    ) {
+      return undefined;
+    }
+    const remaining = getTaskChildIntentRemainingMs({
+      phase: state.childIntentPhase,
+      targetId: state.childTargetId,
+      candidateSince: state.childCandidateSince,
+    });
+    if (remaining === null) return undefined;
+
+    const sessionId = state.sessionId;
+    const targetId = state.childTargetId;
+    const timer = window.setTimeout(() => {
+      const activeState = stateRef.current;
+      if (
+        !activeState
+        || activeState.sessionId !== sessionId
+        || activeState.phase !== 'dragging'
+        || activeState.childTargetId !== targetId
+        || hasTerminated(sessionId)
+      ) {
+        return;
+      }
+      const observation = resolveObservation(activeState, {
+        x: activeState.pointerX,
+        y: activeState.pointerY,
+      });
+      if (observation.childIntentPhase !== 'armed' || observation.childTargetId !== targetId) return;
+      recordTaskDragDebug({ type: 'child-intent:armed', sessionId, targetId });
+      applyState(observationToSessionState(activeState, observation));
+    }, remaining);
+    return () => window.clearTimeout(timer);
+  }, [
+    applyState,
+    hasTerminated,
+    resolveObservation,
+    state?.childCandidateSince,
+    state?.childIntentPhase,
+    state?.childTargetId,
+    state?.phase,
+    state?.sessionId,
+  ]);
+
   const finish = React.useCallback(async (
     activeState: TaskDragSessionState,
     observation: TaskDragObservation,
@@ -316,11 +419,16 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
       targetKind: observation.targetKind,
       action: observation.action,
       targetNodeId: observation.targetNodeId,
+      targetSurfaceKind: observation.targetSurfaceKind,
+      dropPosition: observation.dropPosition,
+      childIntentPhase: observation.childIntentPhase,
+      childTargetId: observation.childTargetId,
     });
     const result = await commitTaskDragObservation({
       observation,
       dependencies: dependenciesRef.current,
     });
+    onCommitRef.current?.(result, observation);
     recordTaskDragDebug({
       type: 'terminal:complete',
       sessionId: activeState.sessionId,
@@ -341,17 +449,25 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
         phase: 'armed',
         hoverAction: null,
         hoverTargetId: null,
+        hoverTargetPlacementId: null,
         targetBoardId: null,
         targetWorkspaceId: null,
         targetSurfaceKind: null,
         targetKind: 'none',
         dropPosition: null,
         dropIndicatorRect: null,
+        dropIndicatorAxis: null,
         originFieldRect: null,
         lockedTargetRect: null,
         pendingTargetId: null,
         pendingSince: null,
         lastStableAt: null,
+        childIntentPhase: 'none',
+        childTargetId: null,
+        childTargetTitle: null,
+        childDropIsOrigin: false,
+        childCandidateSince: null,
+        childPreviewRect: null,
       };
       recordTaskDragDebug({ type: 'end:armed', sessionId: activeState.sessionId, nodeId: activeState.nodeId });
       applyState(armedState);
@@ -365,17 +481,26 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
 
     const latestObservation = resolveObservation(activeState, point);
     let releaseObservation = latestObservation;
-    if (latestObservation.targetKind === 'task-position') {
+    if (
+      latestObservation.targetSurfaceKind === 'task-title-child'
+      && activeState.childIntentPhase !== 'armed'
+    ) {
+      // A release-time hit test may cross the dwell threshold before React has
+      // rendered the armed preview. Child placement is valid only when the
+      // user has already seen an armed state before lifting their finger.
+      releaseObservation = withoutTarget(latestObservation);
+    }
+    if (releaseObservation.targetKind === 'task-position') {
       const intentPoint = getTaskIntentPoint(point);
-      const rect = latestObservation.lockedTargetRect;
-      const fresh = latestObservation.lastStableAt !== null
-        && Date.now() - latestObservation.lastStableAt <= MOBILE_RELEASE_FRESHNESS_MS;
+      const rect = releaseObservation.lockedTargetRect;
+      const fresh = releaseObservation.lastStableAt !== null
+        && Date.now() - releaseObservation.lastStableAt <= MOBILE_RELEASE_FRESHNESS_MS;
       const retained = Boolean(rect
         && intentPoint.x >= rect.left - MOBILE_TARGET_RETAIN_PX
         && intentPoint.x <= rect.right + MOBILE_TARGET_RETAIN_PX
         && intentPoint.y >= rect.top - MOBILE_TARGET_RETAIN_PX
         && intentPoint.y <= rect.bottom + MOBILE_TARGET_RETAIN_PX);
-      if (!fresh || !retained) releaseObservation = withoutTarget(latestObservation);
+      if (!fresh || !retained) releaseObservation = withoutTarget(releaseObservation);
     }
     void finish(activeState, releaseObservation);
   }, [applyState, finish, hasTerminated, resolveObservation, stopAutoScroll]);
@@ -391,7 +516,7 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
   const cancelWithReason = React.useCallback((reason: string, event?: React.TouchEvent) => {
     const activeState = stateRef.current;
     if (event) {
-      event.preventDefault();
+      if (event.cancelable) event.preventDefault();
       event.stopPropagation();
     }
     if (!activeState) return;
@@ -403,6 +528,10 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
 
   const cancel = React.useCallback<MobileTaskActionContextValue['cancel']>((event) => {
     cancelWithReason('manual', event);
+  }, [cancelWithReason]);
+
+  const cancelForGestureConflict = React.useCallback(() => {
+    cancelWithReason('multitouch');
   }, [cancelWithReason]);
 
   const activateAction = React.useCallback<MobileTaskActionContextValue['activateAction']>((action) => {
@@ -453,7 +582,6 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
 
   React.useEffect(() => {
     const handleContextMenu = (event: MouseEvent) => {
-      if (!isMobileTaskActionMode()) return;
       const activeState = stateRef.current;
       if (!activeState) return;
       const target = event.target;
@@ -518,18 +646,23 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
     const handlePointerCancel = () => cancelWithReason('pointercancel');
     const handleBlur = () => cancelWithReason('blur');
     const handlePageHide = () => cancelWithReason('pagehide');
+    const handleViewportChange = () => cancelWithReason('viewport-change');
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     document.addEventListener('keydown', handleKeyDown, true);
     window.addEventListener('pointercancel', handlePointerCancel, true);
     window.addEventListener('blur', handleBlur);
     window.addEventListener('pagehide', handlePageHide);
+    window.addEventListener('orientationchange', handleViewportChange);
+    window.addEventListener('resize', handleViewportChange);
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       document.removeEventListener('keydown', handleKeyDown, true);
       window.removeEventListener('pointercancel', handlePointerCancel, true);
       window.removeEventListener('blur', handleBlur);
       window.removeEventListener('pagehide', handlePageHide);
+      window.removeEventListener('orientationchange', handleViewportChange);
+      window.removeEventListener('resize', handleViewportChange);
     };
   }, [cancelWithReason]);
 
@@ -547,10 +680,11 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
     end,
     cancel,
     activateAction,
-    isActive: (nodeId?: string) => {
+    isActive: (nodeId?: string, placementId?: string) => {
       const activeState = stateRef.current;
       if (!activeState || activeState.phase !== 'dragging') return false;
-      return nodeId ? activeState.nodeId === nodeId : true;
+      if (nodeId && activeState.nodeId !== nodeId) return false;
+      return placementId ? activeState.source.placementId === placementId : true;
     },
   }), [activateAction, begin, cancel, end, move, state]);
 
@@ -558,6 +692,7 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
     state,
     contextValue,
     cancel,
+    cancelForGestureConflict,
     activateAction,
   };
 };

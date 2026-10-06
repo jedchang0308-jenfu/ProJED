@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 const files = {
   sidebar: 'src/components/Sidebar.tsx',
   globalContextMenu: 'src/components/GlobalContextMenu.tsx',
+  mainLayout: 'src/components/MainLayout.tsx',
   browserVerifier: 'scripts/verify-dev-030-sidebar-rename-contract-browser.pw.js',
   packageJson: 'package.json',
 };
@@ -48,6 +49,16 @@ assert(
     globalContextMenu.includes('handleRenameBoard') &&
     globalContextMenu.includes('setPendingBoardTitleEdit({') &&
     globalContextMenu.includes('重新命名看板'),
+);
+
+assert(
+  'active board topbar title is a non-editing Sidebar switcher',
+  !read(files.mainLayout).includes('contentEditable') &&
+    !read(files.mainLayout).includes('updateBoardTitle') &&
+    read(files.mainLayout).includes('data-board-switcher="true"') &&
+    read(files.mainLayout).includes('data-topbar-board-title="true"') &&
+    read(files.mainLayout).includes('onClick={handleToggleWorkspaceSidebar}') &&
+    read(files.mainLayout).includes('aria-expanded={isSidebarOpen}'),
 );
 
 assert(

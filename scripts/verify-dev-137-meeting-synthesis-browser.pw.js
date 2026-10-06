@@ -1,0 +1,83 @@
+/* eslint-disable */
+async (page) => {
+  const baseUrl = page.url().match(/^https?:\/\/[^/]+/)[0];
+  const output = 'output/playwright/dev-137';
+  const title = 'DEV-137 會議草稿驗收';
+  const original = 'RD 已確認資料流。\nPM 明天確認驗收文字。';
+  const account = { id: 'local-test-user', uid: 'local-test-user', email: 'test@projed.local', displayName: 'DEV-137 測試', createdAt: 1704067200000 };
+  const workspace = { id: 'dev137-workspace', title: 'DEV-137', ownerId: account.uid, members: [account.uid], order: 1, createdAt: 1704067200000, boards: [{ id: 'dev137-board', title: '會議驗收', dependencies: [], order: 1, createdAt: 1704067200000 }] };
+  const record = { id: 'dev137-record', workspaceId: workspace.id, boardId: 'dev137-board', type: 'meeting', title, content: original, status: 'draft', visibility: 'private', participantsText: 'RD、PM', occurredAt: Date.now(), recordedBy: account.uid, createdBy: account.uid, updatedBy: account.uid, createdAt: Date.now(), updatedAt: Date.now(), ragEnabled: false, taskLinks: [] };
+  const assert = (condition, message) => { if (!condition) throw new Error(message); };
+  const pageErrors = [];
+  page.on('pageerror', error => pageErrors.push(error.message));
+  // Fail only the service boundary; the real button, store recovery and UI run.
+  await page.route('**/src/services/meetingSynthesisService.ts*', async route => {
+    const response = await route.fetch();
+    let code = await response.text();
+    const pattern = /(const synthesizeMeetingRecord = async \([^)]*\) => \{)/;
+    assert(pattern.test(code), 'service injection point must exist');
+    code = code.replace(pattern, '$1\nif (localStorage.getItem("dev137-force-failure") === "1") { await new Promise(resolve => setTimeout(resolve, 150)); throw new MeetingSynthesisError("部分段落無法確認對應任務，原草稿已保留。", "QUALITY_GATE_FAILED", 502); }');
+    await route.fulfill({ response, body: code });
+  });
+  await page.route('https://www.googleapis.com/**', route => route.fulfill({ status: 200, contentType: 'application/json', body: '{"items":[]}' }));
+  await page.route('https://accounts.google.com/**', route => route.fulfill({ status: 200, contentType: 'text/html', body: '' }));
+  await page.route('https://fonts.googleapis.com/**', route => route.fulfill({ status: 200, contentType: 'text/css', body: '' }));
+  await page.route('https://fonts.gstatic.com/**', route => route.fulfill({ status: 200, body: '' }));
+  await page.route('**/TaiwanCalendar/**', route => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(baseUrl);
+  await page.evaluate(({ account, workspace, record }) => {
+    localStorage.clear(); sessionStorage.clear();
+    localStorage.setItem('projed-local-test.selected-account', account.id);
+    localStorage.setItem('projed-local-test.session', JSON.stringify(account));
+    localStorage.setItem('projed-local-test.workspaces', JSON.stringify([workspace]));
+    localStorage.setItem('projed-local-test.nodes', '{}');
+    localStorage.setItem('projed-local-test.dependencies', '[]');
+    localStorage.setItem('projed-local-test.tags', '[]');
+    localStorage.setItem('projed-local-test.boardMembers', JSON.stringify({ [`${workspace.id}:dev137-board`]: [{ userId: account.uid, role: 'owner', createdAt: Date.now(), updatedAt: Date.now() }] }));
+    localStorage.setItem('projed-local-test.knowledgeRecords', JSON.stringify([record]));
+    localStorage.setItem('projed-local-test.seeded.v1', 'true');
+    localStorage.setItem('projed-local-test.seeded.size', '12');
+    localStorage.setItem('projed-last-ws', workspace.id);
+    localStorage.setItem('projed-last-board', 'dev137-board');
+  }, { account, workspace, record });
+  const openDraft = async () => {
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    const enter = page.getByRole('button', { name: /使用固定測試環境/ }).first();
+    if (await enter.isVisible().catch(() => false)) await enter.click({ force: true });
+    await page.locator('nav').waitFor({ state: 'visible', timeout: 15000 });
+    await page.locator('[data-app-more-menu] summary').click();
+    await page.locator('[data-sidebar-records-button]').first().click();
+    await page.locator('[data-record-section-tab="meeting"]').click();
+    await page.locator('.record-list-row').filter({ hasText: title }).first().click();
+    await page.locator('[data-record-composer-variant="meeting-record"]').waitFor({ state: 'visible' });
+  };
+  await openDraft();
+  await page.evaluate(() => localStorage.setItem('dev137-force-failure', '1'));
+  await page.locator('[data-meeting-workflow-step="ai_suggestion"]').click();
+  await page.locator('[data-meeting-synthesis-status="error"]').waitFor({ state: 'visible' });
+  assert(await page.locator('[role="alert"]').count() === 1, 'one visible synthesis failure only');
+  assert(await page.getByText('部分段落無法確認對應任務，原草稿已保留。', { exact: true }).count() === 1, 'localized cause appears once');
+  const failedDraft = await page.evaluate(async () => (await import('/src/store/useRecordStore.ts')).default.getState().draft.content);
+  assert(failedDraft === original, 'failed synthesis preserves draft bytes');
+  await page.screenshot({ path: `${output}/failure-1440.png`, fullPage: true });
+  await page.setViewportSize({ width: 1024, height: 768 });
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1);
+  assert(overflow, '1024px error surface has no horizontal overflow');
+  await page.screenshot({ path: `${output}/failure-1024.png`, fullPage: true });
+  await page.evaluate(() => localStorage.removeItem('dev137-force-failure'));
+  await page.locator('[data-meeting-workflow-step="ai_suggestion"]').click();
+  await page.locator('[data-meeting-synthesis-status="ready"]').waitFor({ state: 'visible', timeout: 30000 });
+  assert(await page.locator('[role="alert"]').count() === 0, 'success clears the failure');
+  await page.locator('[data-meeting-workflow-step="review"]').click();
+  await page.waitForFunction(() => document.querySelector('[data-meeting-workflow-step="review"]')?.getAttribute('data-meeting-workflow-step-state') === 'complete');
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('projed-local-test.knowledgeRecords')).find(record => record.id === 'dev137-record'));
+  assert(saved.status === 'draft' && saved.content.includes('RD 已確認資料流'), 'review saves a draft with human content');
+  await openDraft();
+  const reopened = await page.evaluate(async () => (await import('/src/store/useRecordStore.ts')).default.getState().draft);
+  assert(reopened.content === saved.content && reopened.status === 'draft', 'normal library entry reopens the saved draft');
+  assert(await page.locator('[data-meeting-synthesis-status="ready"]').count() === 1, 'saved trace recovers ready');
+  assert(pageErrors.length === 0, `no page errors: ${pageErrors.join('; ')}`);
+  await page.screenshot({ path: `${output}/saved-reopened-1024.png`, fullPage: true });
+  return { task: 'DEV-137', environment: 'local-test; service failure injected; deterministic success', passed: 7, cases: ['normal library entry', 'one localized failure', 'byte-preserving recovery', '1024px overflow', 'retry clears failure', 'review saves draft', 'library reopen restores draft and trace'], screenshots: [`${output}/failure-1440.png`, `${output}/failure-1024.png`, `${output}/saved-reopened-1024.png`], pageErrors };
+}

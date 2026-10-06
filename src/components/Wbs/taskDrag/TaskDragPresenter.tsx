@@ -4,10 +4,22 @@ import type { MobileTaskAction, TaskDragSessionState } from './taskDragTypes';
 import { MOBILE_PREVIEW_FINGER_CLEARANCE_PX } from './taskDragTargetAdapter';
 import { taskDragSourceKindToSurfaceKind } from './taskDropIntent';
 import { TaskOriginTitleField } from './TaskOriginTitleField';
+import { TaskChildDropPreview } from './TaskChildDropPreview';
+import { getTaskActionDefinition } from '../../../interactions/task/taskActionCatalog';
+import {
+  resolvePointerUpperRightOverlayPosition,
+  TASK_DRAG_OVERLAY_SCALE,
+  TASK_DRAG_OVERLAY_POINTER_GAP_PX,
+} from './taskDragOverlayPosition';
 
+const MOBILE_PREVIEW_WIDTH_PX = 240;
 const MOBILE_PREVIEW_HEIGHT_PX = 40;
 const MOBILE_PREVIEW_SAFE_TOP_PX = 48;
 const MOBILE_PREVIEW_SAFE_BOTTOM_PX = 8;
+const MOBILE_CHILD_PREVIEW_FINGER_CLEARANCE_PX = 16;
+const mobileActionLabel = (actionId: 'task.create-sibling' | 'task.create-child', fallback: string) => (
+  getTaskActionDefinition(actionId)?.label || fallback
+);
 
 const mobileActionItems: Array<{
   key: MobileTaskAction;
@@ -25,24 +37,24 @@ const mobileActionItems: Array<{
   },
   {
     key: 'add-sibling',
-    label: '新增同階任務',
+    label: mobileActionLabel('task.create-sibling', '新增並列任務'),
     permission: 'create',
     activeClassName: 'bg-sky-500 text-white',
     idleClassName: 'bg-sky-50 text-sky-700 hover:bg-sky-100',
   },
   {
     key: 'add-child',
-    label: '新增下階任務',
+    label: mobileActionLabel('task.create-child', '新增子任務'),
     permission: 'create',
     activeClassName: 'bg-indigo-500 text-white',
     idleClassName: 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100',
   },
   {
-    key: 'delete',
-    label: '刪除任務',
+    key: 'archive',
+    label: '封存任務',
     permission: 'delete',
-    activeClassName: 'bg-red-500 text-white',
-    idleClassName: 'bg-red-50 text-red-600 hover:bg-red-100',
+    activeClassName: 'bg-amber-500 text-white',
+    idleClassName: 'bg-amber-50 text-amber-700 hover:bg-amber-100',
   },
 ];
 
@@ -52,6 +64,7 @@ interface TaskDragPresenterProps {
   canCreateTask: boolean;
   canDeleteTask: boolean;
   onAction: (action: MobileTaskAction) => void;
+  overlayBaseZIndex?: number;
 }
 
 export const TaskDragPresenter: React.FC<TaskDragPresenterProps> = ({
@@ -60,19 +73,30 @@ export const TaskDragPresenter: React.FC<TaskDragPresenterProps> = ({
   canCreateTask,
   canDeleteTask,
   onAction,
+  overlayBaseZIndex = 80,
 }) => {
   if (!state) return null;
 
   const viewportWidth = typeof window === 'undefined' ? 390 : window.innerWidth;
   const viewportHeight = typeof window === 'undefined' ? 844 : window.innerHeight;
-  const previewLeft = Math.min(Math.max(state.pointerX, 124), Math.max(124, viewportWidth - 124));
+  const previewWidth = Math.min(MOBILE_PREVIEW_WIDTH_PX, Math.max(0, viewportWidth - 16));
+  const previewVisualWidth = previewWidth * TASK_DRAG_OVERLAY_SCALE;
+  const previewVisualHeight = MOBILE_PREVIEW_HEIGHT_PX * TASK_DRAG_OVERLAY_SCALE;
+  const previewHorizontalPosition = resolvePointerUpperRightOverlayPosition({
+    pointer: { x: state.pointerX, y: state.pointerY },
+    overlay: { width: previewVisualWidth, height: previewVisualHeight },
+    viewport: { left: 0, top: 0, width: viewportWidth, height: viewportHeight },
+  });
   const previewMaxTop = Math.max(
     MOBILE_PREVIEW_SAFE_TOP_PX,
-    viewportHeight - MOBILE_PREVIEW_HEIGHT_PX - MOBILE_PREVIEW_SAFE_BOTTOM_PX,
+    viewportHeight - previewVisualHeight - MOBILE_PREVIEW_SAFE_BOTTOM_PX,
   );
+  const previewFingerClearance = state.childIntentPhase === 'none'
+    ? MOBILE_PREVIEW_FINGER_CLEARANCE_PX
+    : MOBILE_CHILD_PREVIEW_FINGER_CLEARANCE_PX;
   const fingerPreviewTop = state.pointerY
-    - MOBILE_PREVIEW_FINGER_CLEARANCE_PX
-    - MOBILE_PREVIEW_HEIGHT_PX;
+    - previewFingerClearance
+    - previewVisualHeight;
   const previewTop = Math.min(
     previewMaxTop,
     Math.max(MOBILE_PREVIEW_SAFE_TOP_PX, fingerPreviewTop),
@@ -89,26 +113,58 @@ export const TaskDragPresenter: React.FC<TaskDragPresenterProps> = ({
     <>
       {state.phase === 'dragging' ? (
         <div
-          className="pointer-events-none fixed z-[80] flex h-10 max-w-[240px] -translate-x-1/2 items-center rounded-md border border-primary/25 bg-white px-3 text-sm font-semibold text-slate-800 shadow-xl ring-2 ring-primary/15"
-          style={{ left: previewLeft, top: previewTop }}
+          className="pointer-events-none fixed flex h-10 w-[240px] max-w-[calc(100vw-1rem)] items-center rounded-md border border-primary/25 bg-white px-3 text-sm font-semibold text-slate-800 shadow-xl ring-2 ring-primary/15"
+          style={{
+            left: previewHorizontalPosition.left,
+            top: previewTop,
+            transform: `scale(${TASK_DRAG_OVERLAY_SCALE})`,
+            transformOrigin: 'top left',
+            zIndex: overlayBaseZIndex,
+          }}
           data-mobile-drag-preview="true"
           data-task-id={state.nodeId}
           data-task-drag-session-id={state.sessionId}
           data-mobile-preview-anchor="finger"
-          data-mobile-preview-finger-clearance={MOBILE_PREVIEW_FINGER_CLEARANCE_PX}
+          data-mobile-preview-placement="upper-right"
+          data-mobile-preview-edge-placement={previewHorizontalPosition.placement}
+          data-mobile-preview-pointer-gap={TASK_DRAG_OVERLAY_POINTER_GAP_PX}
+          data-mobile-preview-finger-clearance={previewFingerClearance}
+          data-mobile-preview-scale={TASK_DRAG_OVERLAY_SCALE}
         >
           <div className="truncate">{state.title || '未命名任務'}</div>
         </div>
       ) : null}
 
-      {state.phase === 'dragging' && state.originFieldRect && sourceSurfaceKind ? (
+      {state.phase === 'dragging'
+      && state.childIntentPhase !== 'none'
+      && state.childTargetId
+      && state.childTargetTitle
+      && state.childPreviewRect ? (
+        <TaskChildDropPreview
+          phase={state.childIntentPhase}
+          sourceTitle={state.title || '未命名任務'}
+          targetNodeId={state.childTargetId}
+          targetTitle={state.childTargetTitle}
+          previewRect={state.childPreviewRect}
+          inputMode="touch"
+          isOrigin={state.childDropIsOrigin}
+          originFieldRect={state.sourceOriginFieldRect}
+          sourceSurfaceKind={sourceSurfaceKind || 'checklist-row'}
+        />
+      ) : null}
+
+      {state.phase === 'dragging'
+      && state.childIntentPhase !== 'armed'
+      && state.originFieldRect
+      && sourceSurfaceKind ? (
         <div
-          className="pointer-events-none fixed z-[90]"
+          className="pointer-events-none fixed"
           style={{
             left: state.originFieldRect.left,
             top: state.originFieldRect.top,
             width: state.originFieldRect.width,
             height: state.originFieldRect.height,
+            zIndex: overlayBaseZIndex + 10,
           }}
           data-mobile-drop-origin="true"
           data-mobile-drop-noop="true"
@@ -122,25 +178,40 @@ export const TaskDragPresenter: React.FC<TaskDragPresenterProps> = ({
             data-mobile-origin-field="true"
           />
         </div>
-      ) : state.phase === 'dragging' && state.dropIndicatorRect ? (
+      ) : state.phase === 'dragging'
+        && state.childIntentPhase !== 'armed'
+        && state.dropIndicatorRect ? (
         <div
-          className="pointer-events-none fixed z-[90] -translate-y-1/2"
+          className={`pointer-events-none fixed ${
+            state.dropIndicatorAxis === 'vertical' ? '' : '-translate-y-1/2'
+          }`}
           style={{
             left: state.dropIndicatorRect.left,
             top: state.dropIndicatorRect.top,
             width: state.dropIndicatorRect.width,
+            height: state.dropIndicatorAxis === 'vertical'
+              ? state.dropIndicatorRect.height
+              : undefined,
+            zIndex: overlayBaseZIndex + 10,
           }}
           data-mobile-drop-indicator="true"
+          data-mobile-drop-axis={state.dropIndicatorAxis || 'horizontal'}
           data-mobile-drop-target={state.hoverTargetId || undefined}
+          data-mobile-drop-target-kind={state.targetKind}
           data-mobile-drop-position={state.dropPosition || undefined}
+          data-mobile-drop-surface-kind={state.targetSurfaceKind || undefined}
         >
-          <KanbanInsertionMarker compact className="py-0" />
+          <KanbanInsertionMarker
+            axis={state.dropIndicatorAxis || 'horizontal'}
+            compact
+            className="py-0"
+          />
         </div>
       ) : null}
 
       <div
-        className="fixed left-1/2 z-[95] flex w-[calc(100vw-0.5rem)] max-w-[430px] -translate-x-1/2 gap-0 overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg"
-        style={{ top: 'env(safe-area-inset-top, 0px)' }}
+        className="fixed left-1/2 flex w-[calc(100vw-0.5rem)] max-w-[430px] -translate-x-1/2 gap-0 overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg"
+        style={{ top: 'env(safe-area-inset-top, 0px)', zIndex: overlayBaseZIndex + 15 }}
         data-mobile-task-action-rail="true"
         data-mobile-task-action-rail-placement="top"
         data-mobile-task-action-rail-mode={state.phase}

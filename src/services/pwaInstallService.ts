@@ -13,6 +13,7 @@ export type PwaInstallPlatform =
   | 'embedded'
   | 'ios-safari'
   | 'android-installable'
+  | 'android-browser'
   | 'desktop-installable'
   | 'desktop-browser'
   | 'unsupported';
@@ -72,6 +73,7 @@ const isStandaloneDisplay = () => {
   const nav = navigator as Navigator & { standalone?: boolean };
   return Boolean(
     window.matchMedia?.('(display-mode: standalone)').matches ||
+      window.matchMedia?.('(display-mode: minimal-ui)').matches ||
       window.matchMedia?.('(display-mode: fullscreen)').matches ||
       nav.standalone
   );
@@ -106,7 +108,9 @@ const isDesktop = () => !isIOS() && !isAndroid();
 export const getPwaInstallContext = (): PwaInstallContext => {
   const status = readStatus();
   const now = Date.now();
-  const installed = status.installed || isStandaloneDisplay();
+  // The persisted appinstalled event is historical. Origin storage may survive
+  // Android uninstall, so current display mode is the install-state signal.
+  const installed = isStandaloneDisplay();
   const snoozed = Boolean(status.snoozedUntil && status.snoozedUntil > now);
 
   let platform: PwaInstallPlatform = 'unsupported';
@@ -114,6 +118,7 @@ export const getPwaInstallContext = (): PwaInstallContext => {
   else if (isEmbeddedBrowser()) platform = 'embedded';
   else if (isIOS() && isSafari()) platform = 'ios-safari';
   else if (deferredPrompt && isAndroid()) platform = 'android-installable';
+  else if (isAndroid()) platform = 'android-browser';
   else if (deferredPrompt && isDesktop()) platform = 'desktop-installable';
   else if (isDesktop()) platform = 'desktop-browser';
 

@@ -1,18 +1,25 @@
 import type { TaskNode } from '../../types';
-import { matchesTaskFilters, type TaskFilterState } from '../../features/taskFilters';
 import type { MindMapDirection, MindMapDropMode } from './MindMapNode';
 
 type PositionedTaskNode = TaskNode & { mindMapSide?: MindMapDirection };
 export type SideOverrides = Record<string, MindMapDirection>;
 
-export type MindMapFilterState = TaskFilterState;
-
 const getParentKey = (parentId: string | null) => parentId || 'root';
 
 const sortTasks = (tasks: TaskNode[]) => [...tasks].sort((a, b) => a.order - b.order);
 
-const matchesMindMapFilters = (node: TaskNode, filters: MindMapFilterState) =>
-  matchesTaskFilters(node, filters);
+const getIndexedTasks = (
+  nodes: Record<string, TaskNode>,
+  indexedIds: string[],
+  boardId: string,
+) => {
+  const deduped = new Map<string, TaskNode>();
+  indexedIds.forEach((id) => {
+    const node = nodes[id];
+    if (node && node.boardId === boardId && !node.isArchived) deduped.set(node.id, node);
+  });
+  return Array.from(deduped.values());
+};
 
 export const getSiblingNodes = (
   nodes: Record<string, TaskNode>,
@@ -21,9 +28,7 @@ export const getSiblingNodes = (
   boardId: string,
 ) =>
   sortTasks(
-    (parentNodesIndex[getParentKey(parentId)] || [])
-      .map(id => nodes[id])
-      .filter((node): node is TaskNode => Boolean(node) && node.boardId === boardId && !node.isArchived),
+    getIndexedTasks(nodes, parentNodesIndex[getParentKey(parentId)] || [], boardId),
   );
 
 export const getInsertOrder = (
@@ -46,7 +51,7 @@ export const getMindMapRootNodes = (
   nodes: Record<string, TaskNode>,
   parentNodesIndex: Record<string, string[]>,
   boardId: string,
-  filters: MindMapFilterState,
+  visibleTaskIds: ReadonlySet<string>,
 ) => {
   if (!boardId) return [];
   const readRootBucket = (bucketId: string) =>
@@ -56,7 +61,7 @@ export const getMindMapRootNodes = (
         Boolean(node) &&
         node.boardId === boardId &&
         !node.isArchived &&
-        matchesMindMapFilters(node, filters),
+        visibleTaskIds.has(node.id),
       );
   const deduped = new Map<string, TaskNode>();
   [...readRootBucket('root'), ...readRootBucket(boardId)].forEach(node => deduped.set(node.id, node));
@@ -67,18 +72,12 @@ export const getMindMapChildren = (
   nodes: Record<string, TaskNode>,
   parentNodesIndex: Record<string, string[]>,
   boardId: string,
-  filters: MindMapFilterState,
+  visibleTaskIds: ReadonlySet<string>,
   nodeId: string,
 ) =>
   sortTasks(
-    (parentNodesIndex[nodeId] || [])
-      .map(id => nodes[id])
-      .filter((node): node is TaskNode =>
-        Boolean(node) &&
-        !node.isArchived &&
-        node.boardId === boardId &&
-        matchesMindMapFilters(node, filters),
-      ),
+    getIndexedTasks(nodes, parentNodesIndex[nodeId] || [], boardId)
+      .filter(node => visibleTaskIds.has(node.id)),
   );
 
 export const getMindMapRootAncestorId = (

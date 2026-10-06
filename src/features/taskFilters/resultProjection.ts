@@ -1,10 +1,10 @@
 import type { TaskNode } from '../../types';
-import { matchesTaskFilters } from './predicates';
-import type { TaskFilterState, TaskFilterableNode } from './types';
+import { compileTaskFilter } from './predicates';
+import type { TaskFilterQuery, TaskFilterableNode } from './types';
 
 export type TaskFilterProjectionNode = Pick<
   TaskNode,
-  'boardId' | 'id' | 'isArchived' | 'order' | 'parentId'
+  'boardId' | 'id' | 'isArchived' | 'order' | 'parentId' | 'canonicalTaskId'
 > & TaskFilterableNode;
 
 export type TaskFilterResultProjection = {
@@ -19,6 +19,7 @@ export type TaskFilterResultProjection = {
 
 type ProjectTaskFilterResultsOptions = {
   boardId?: string | null;
+  today?: string;
 };
 
 const isSameBoard = (node: Pick<TaskNode, 'boardId'>, boardId?: string | null) =>
@@ -58,7 +59,7 @@ export const isTaskEffectivelyVisible = <T extends EffectiveVisibilityNode>(
 
 export const projectTaskFilterResults = <T extends TaskFilterProjectionNode>(
   nodesById: Record<string, T | null | undefined>,
-  filters: TaskFilterState,
+  filters: TaskFilterQuery,
   options: ProjectTaskFilterResultsOptions = {},
 ): TaskFilterResultProjection => {
   const boardTaskIds = new Set<string>();
@@ -66,22 +67,28 @@ export const projectTaskFilterResults = <T extends TaskFilterProjectionNode>(
   const visibleContainerIds = new Set<string>();
   const visibleTaskIds = new Set<string>();
   const matchedTasks: TaskFilterProjectionNode[] = [];
+  const matchedProjectionNodes: TaskFilterProjectionNode[] = [];
+  const matchedPlacementIds = new Set<string>();
   const { boardId = null } = options;
+  const compiled = compileTaskFilter(filters, options.today);
 
   Object.values(nodesById).forEach(node => {
     if (!isTaskEffectivelyVisible(node, nodesById, { boardId })) return;
-    boardTaskIds.add(node.id);
-    if (matchesTaskFilters(node, filters)) {
-      matchedTaskIds.add(node.id);
-      matchedTasks.push(node);
+    const canonicalTaskId = node.canonicalTaskId || node.id;
+    boardTaskIds.add(canonicalTaskId);
+    if (compiled.matches(node)) {
+      if (!matchedTaskIds.has(canonicalTaskId)) matchedTasks.push(node);
+      matchedTaskIds.add(canonicalTaskId);
+      matchedPlacementIds.add(node.id);
+      matchedProjectionNodes.push(node);
     }
   });
 
-  matchedTaskIds.forEach(taskId => {
-    visibleTaskIds.add(taskId);
+  matchedProjectionNodes.forEach(matchedNode => {
+    visibleTaskIds.add(matchedNode.id);
 
-    let currentParentId = nodesById[taskId]?.parentId || null;
-    const visited = new Set<string>([taskId]);
+    let currentParentId = matchedNode.parentId || null;
+    const visited = new Set<string>([matchedNode.id]);
 
     while (currentParentId) {
       if (visited.has(currentParentId)) break;
@@ -97,10 +104,12 @@ export const projectTaskFilterResults = <T extends TaskFilterProjectionNode>(
   });
 
   const contextOnlyContainerIds = new Set<string>(
-    Array.from(visibleContainerIds).filter(id => !matchedTaskIds.has(id)),
+    Array.from(visibleContainerIds).filter(id => !matchedPlacementIds.has(id) && !matchedTaskIds.has(id)),
   );
 
-  matchedTasks.sort((left, right) => (left.order ?? 0) - (right.order ?? 0));
+  matchedTasks.sort((left, right) => (
+    (left.order ?? 0) - (right.order ?? 0) || left.id.localeCompare(right.id)
+  ));
 
   return {
     matchedTaskIds,
@@ -112,6 +121,25 @@ export const projectTaskFilterResults = <T extends TaskFilterProjectionNode>(
     totalTaskCount: boardTaskIds.size,
   };
 };
+
+export const orderTaskFilterIdentitySet = <T extends Pick<TaskNode, 'id' | 'order'>>(
+  ids: ReadonlySet<string>,
+  nodesById: Record<string, T | null | undefined>,
+): string[] => Array.from(ids).sort((leftId, rightId) => {
+  const left = nodesById[leftId];
+  const right = nodesById[rightId];
+  return (left?.order ?? 0) - (right?.order ?? 0) || leftId.localeCompare(rightId);
+});
+
+export const snapshotTaskFilterProjectionIdentities = <T extends Pick<TaskNode, 'id' | 'order'>>(
+  projection: TaskFilterResultProjection,
+  nodesById: Record<string, T | null | undefined>,
+) => ({
+  boardTaskIds: orderTaskFilterIdentitySet(projection.boardTaskIds, nodesById),
+  matchedTaskIds: orderTaskFilterIdentitySet(projection.matchedTaskIds, nodesById),
+  visibleTaskIds: orderTaskFilterIdentitySet(projection.visibleTaskIds, nodesById),
+  contextOnlyContainerIds: orderTaskFilterIdentitySet(projection.contextOnlyContainerIds, nodesById),
+});
 
 export const isTaskVisibleInFilterProjection = (
   projection: TaskFilterResultProjection | null | undefined,

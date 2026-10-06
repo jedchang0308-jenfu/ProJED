@@ -1,11 +1,14 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveSupabaseFunctionKey } from "../_shared/supabaseApiKeys.mjs";
 
 const ALLOWED_ORIGINS = [
   'http://localhost:5173',
+  'http://127.0.0.1:4000',
   'http://127.0.0.1:4173',
   'http://127.0.0.1:4174',
   'http://localhost:4173',
+  'http://localhost:4000',
   'http://localhost:4174',
   'http://127.0.0.1:5173',
   'https://projed-test.web.app',
@@ -454,8 +457,8 @@ serve(async (req) => {
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    const supabasePublishableKey = resolveSupabaseFunctionKey('publishable');
+    const supabase = createClient(supabaseUrl, supabasePublishableKey, {
       global: { headers: { Authorization: authHeader } },
     });
 

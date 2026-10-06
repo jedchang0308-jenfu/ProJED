@@ -5,6 +5,11 @@
 建立日期：2026-06-07
 承接：DEV-005 / DEV-007 / DEV-008
 
+> 2026-09-07 amendment：SPEC-108 已達 `RD Implementation Ready / Human Confirmed`，預計在 DEV-108
+> 實作與 QA/QC 完成後，取代本規格「成功只靠清空輸入與右側 draft 確認」及「非 meeting mode
+> 不顯示補記內容」的局部契約。DEV-108 未完成前，本文件仍是現行實作基準；其餘 append、task mention、
+> 空白 no-op、快捷鍵及不寫入 `TaskNode.detailNotes` 的契約維持。
+
 ## 背景
 
 會議中主畫面已回到看板，任務詳情也保留一般編輯能力；但記錄某個任務的討論內容時，使用者仍需要回到右側會議紀錄欄或紀錄頁編輯。這會打斷「看任務、改任務、補討論」的會議節奏。

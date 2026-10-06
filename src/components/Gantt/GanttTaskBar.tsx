@@ -9,6 +9,9 @@ import { useCoarsePointer } from '../../hooks/useCoarsePointer';
 import { useTouchTapGuard } from '../../hooks/useTouchTapGuard';
 import { getX, getDateFromX, GANTT_COLOR_MAP, BAR_HEIGHT } from './utils';
 import { COMPACT_DIMENSIONS } from '../ui/compactTokens';
+import { useTaskInteractionBinding } from '../../interactions/task/useTaskInteractionBinding';
+import { isPrimaryPointerActivation } from '../../interactions/pointerActivation';
+import { TaskDescriptionIndicator } from '../TaskDescriptionIndicator';
 
 interface TaskItem {
     id: string;
@@ -45,12 +48,25 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
 }) => {
     const updateNode = useWbsStore(s => s.updateNode);
     const wbsDependencies = useWbsStore(s => s.dependencies);
-    const setContextMenuState = useBoardStore(s => s.setContextMenuState);
     const selectedTaskId = useBoardStore(s => s.selectedTaskId);
     const { canEditTask, canMoveTask } = useBoardPermissions();
     const isCoarsePointer = useCoarsePointer();
     const touchTapGuard = useTouchTapGuard();
     const canEditSchedule = canEditTask && canMoveTask && !isCoarsePointer;
+
+    // Refs are created before any hook reads them. Gantt bars are mounted on
+    // mode entry, so reading this ref from the interaction binding before its
+    // declaration throws a TDZ ReferenceError and tears down the whole view.
+    const dragStateRef = useRef<any>(null);
+    const rafIdRef = useRef<number | null>(null);
+
+    const interactionBinding = useTaskInteractionBinding({
+        taskId: item.id,
+        title: item.title,
+        surfaceId: 'gantt.task-bar',
+        nodeRole: item.nodeType === 'group' || item.nodeType === 'milestone' ? item.nodeType : 'task',
+        blockers: dragStateRef.current?.hasDragged ? ['drag-established'] : [],
+    });
 
     // Hover state
     const [isHovered, setIsHovered] = useState(false);
@@ -59,9 +75,6 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
     const [dragState, setDragState] = useState<any>(null);
     const [dragDates, setDragDates] = useState<{ start: string; end: string } | null>(null);
     const [dragDeltaX, setDragDeltaX] = useState(0);
-
-    const dragStateRef = useRef<any>(null);
-    const rafIdRef = useRef<number | null>(null);
 
     const isMilestone = false;
     let start = item.startDate;
@@ -114,6 +127,7 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
     const isMoveLocked = lockStatus.moveLocked;
 
     const handleDragStart = (e: React.MouseEvent, type: string) => {
+        if (!isPrimaryPointerActivation(e)) return;
         e.stopPropagation();
         if (!canEditSchedule) return;
 
@@ -369,7 +383,7 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
 
             return (
                 <span
-                    className={`task-title-text absolute whitespace-nowrap text-[11px] font-medium pointer-events-none select-none px-2 transition-transform duration-75
+                    className={`task-title-text absolute inline-flex items-center gap-[2px] whitespace-nowrap text-[11px] font-medium pointer-events-none select-none px-2 transition-transform duration-75
                         ${item.type === 'list'
                             ? 'text-white drop-shadow-sm'
                             : item.type === 'card'
@@ -379,6 +393,7 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
                     style={textStyles}
                 >
                     <span>{item.title}</span>
+                    <TaskDescriptionIndicator description={item.description} />
                 </span>
             );
         } else {
@@ -388,7 +403,7 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
 
             return (
                 <div
-                    className={`task-title-text absolute ${isBarOnLeft ? 'left-full ml-3' : 'right-full mr-3'} text-[12px] font-medium whitespace-nowrap pointer-events-none select-none
+                    className={`task-title-text absolute ${isBarOnLeft ? 'left-full ml-3' : 'right-full mr-3'} inline-flex items-center gap-[2px] text-[12px] font-medium whitespace-nowrap pointer-events-none select-none
                         ${item.type === 'list'
                             ? `${GANTT_COLOR_MAP[status]?.list.match(/bg-status-\w+/)?.[0].replace('bg-', 'text-') || 'text-status-todo'} brightness-75`
                             : item.type === 'card'
@@ -397,6 +412,7 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
                     `}
                 >
                     <span>{item.title} {isInfiniteFallback && "(尚未設定日期)"}</span>
+                    <TaskDescriptionIndicator description={item.description} />
                 </div>
             );
         }
@@ -405,10 +421,16 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
     return (
         <div
             data-task-id={item.id}
+            data-task-canonical-id={item.id}
+            data-task-placement-hover-surface="true"
+            data-gantt-task-bar="true"
+            data-task-description-hover-trigger={item.description?.trim() ? 'true' : undefined}
+            data-gantt-placement-kind={item.isTrackingReference ? 'tracking-reference' : 'primary'}
+            aria-label={item.isTrackingReference ? `追蹤副本：${item.title || '未命名任務'}` : item.title || '未命名任務'}
             {...touchTapGuard.handlers}
             onMouseDown={(e) => {
                 // 只允許左鍵觸發拖曳（防止右鍵誤觸跳轉）
-                if (e.button !== 0) return;
+                if (!isPrimaryPointerActivation(e)) return;
                 if (!canEditSchedule || isMoveLocked) return;
                 handleDragStart(e, 'move');
             }}
@@ -416,20 +438,20 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
             onMouseLeave={() => setIsHovered(false)}
             onContextMenu={(e) => {
                 e.preventDefault();
-                setContextMenuState({ kind: 'task', isOpen: true, x: e.clientX, y: e.clientY, nodeId: item.id, title: item.title });
+                void interactionBinding.openMenu({ x: e.clientX, y: e.clientY });
             }}
             onMouseUp={(e) => {
                 // 只允許左鍵觸發點擊（防止右鍵觸發 setView）
-                if (e.button !== 0) return;
+                if (!isPrimaryPointerActivation(e)) return;
                 if (touchTapGuard.shouldSuppressTap()) return;
                 const latestDragState = dragStateRef.current;
                 if (!latestDragState || !latestDragState.hasDragged) {
-                    onItemClick(item);
+                    void interactionBinding.dispatch('pointer.primary');
                 }
             }}
             data-task-selected={selectedTaskId === item.id ? 'true' : undefined}
             data-touch-tap-guard="true"
-            className={`mobile-pan-item absolute flex items-center transition-all ${isDragging ? '' : (isMoveLocked || !canEditSchedule ? '' : 'hover:brightness-110')} ${isMoveLocked || !canEditSchedule ? 'cursor-pointer' : 'cursor-pointer'} group rounded-[6px] shadow-[0_2px_4px_rgba(15,23,42,0.10)] ring-1 ring-white/70 ${baseStyleClass} ${isInfiniteFallback ? 'opacity-30 border-2 border-dashed border-slate-400/40' : ''} z-20 ${isRelated ? 'ring-2 ring-primary ring-offset-1' : ''} ${selectedTaskId === item.id ? 'ring-2 ring-primary ring-offset-2' : ''}`}
+            className={`mobile-pan-item absolute flex items-center transition-all ${isDragging ? '' : (isMoveLocked || !canEditSchedule ? '' : 'hover:brightness-110')} ${isMoveLocked || !canEditSchedule ? 'cursor-pointer' : 'cursor-pointer'} group rounded-[6px] shadow-[0_2px_4px_rgba(15,23,42,0.10)] ring-1 ring-white/70 ${baseStyleClass} ${item.isTrackingReference ? 'border-2 border-dashed border-violet-300' : ''} ${isInfiniteFallback ? 'opacity-30 border-2 border-dashed border-slate-400/40' : ''} z-20 ${isRelated ? 'ring-2 ring-primary ring-offset-1' : ''} ${selectedTaskId === item.id ? 'ring-2 ring-primary ring-offset-2' : ''}`}
             style={{
                 left: x1,
                 width: width,
@@ -453,7 +475,9 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
                 <>
                     <div
                         className={`absolute left-0 top-0 bottom-0 w-2.5 ${isLeftLocked || !canEditSchedule ? 'cursor-not-allowed bg-[repeating-linear-gradient(-45deg,transparent,transparent_2px,rgba(0,0,0,0.1)_2px,rgba(0,0,0,0.1)_4px)]' : 'cursor-ew-resize hover:bg-white/30'} rounded-l-[6px]`}
+                        data-gantt-task-resize-handle="start"
                         onMouseDown={(e) => {
+                            if (!isPrimaryPointerActivation(e)) return;
                             e.stopPropagation();
                             if (!canEditSchedule || isLeftLocked) return;
                             handleDragStart(e, 'left');
@@ -462,7 +486,9 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
                     />
                     <div
                         className={`absolute right-0 top-0 bottom-0 w-2.5 ${isRightLocked || !canEditSchedule ? 'cursor-not-allowed bg-[repeating-linear-gradient(45deg,transparent,transparent_2px,rgba(0,0,0,0.1)_2px,rgba(0,0,0,0.1)_4px)]' : 'cursor-ew-resize hover:bg-white/30'} rounded-r-[6px]`}
+                        data-gantt-task-resize-handle="end"
                         onMouseDown={(e) => {
+                            if (!isPrimaryPointerActivation(e)) return;
                             e.stopPropagation();
                             if (!canEditSchedule || isRightLocked) return;
                             handleDragStart(e, 'right');

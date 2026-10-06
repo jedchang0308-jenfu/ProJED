@@ -1,0 +1,10 @@
+{
+  "today": "2026-09-11",
+  "tasks": [
+    { "id": "todo-owner", "title": "Alpha quality", "status": "todo", "endDate": "2026-09-11", "assigneeId": "user-a", "assigneeIds": ["user-a"], "collaboratorIds": [], "tagIds": ["tag-red"], "isArchived": false },
+    { "id": "progress-collab", "title": "Beta integration", "status": "in_progress", "endDate": "2026-09-12", "assigneeId": "user-b", "assigneeIds": ["user-b"], "collaboratorIds": ["user-a"], "tagIds": ["tag-blue"], "isArchived": false },
+    { "id": "overdue-unassigned", "title": "Gamma overdue", "status": "todo", "endDate": "2026-09-10", "assigneeId": null, "assigneeIds": [], "collaboratorIds": [], "tagIds": ["tag-red", "tag-blue"], "isArchived": false },
+    { "id": "completed", "title": "Delta done", "status": "completed", "endDate": "2026-09-20", "assigneeId": "user-c", "assigneeIds": ["user-c"], "collaboratorIds": [], "tagIds": [], "isArchived": false },
+    { "id": "invalid-date", "title": "Epsilon no date", "status": "todo", "endDate": null, "assigneeId": "user-a", "assigneeIds": ["user-a"], "collaboratorIds": [], "tagIds": ["tag-red"], "isArchived": false }
+  ]
+}

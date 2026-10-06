@@ -23,6 +23,7 @@ import {
   type WorkspaceMember,
   normalizeBoardRolePermissionMatrix,
 } from '../types';
+import { isPrimaryPointerActivation } from '../interactions/pointerActivation';
 import {
   buildBoardInviteUrl,
   generateBoardInviteToken,
@@ -60,7 +61,7 @@ const PERMISSION_ROWS: { capability: PermissionCapability; label: string }[] = [
   { capability: 'create_task', label: '建立任務' },
   { capability: 'edit_task', label: '編輯任務' },
   { capability: 'move_task', label: '移動任務' },
-  { capability: 'delete_task', label: '刪除任務' },
+  { capability: 'delete_task', label: '封存／永久刪除任務' },
   { capability: 'assign_task', label: '指派任務' },
   { capability: 'create_dependency', label: '建立相依關係' },
   { capability: 'manage_board_members', label: '管理看板成員' },
@@ -187,11 +188,19 @@ export const BoardShareDialog: React.FC<BoardShareDialogProps> = ({ open, onOpen
   React.useEffect(() => {
     if (!open) return;
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onOpenChange(false);
+      if (event.key !== 'Escape' || inviteLoading) return;
+      setInviteEmail('');
+      onOpenChange(false);
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onOpenChange, open]);
+  }, [inviteLoading, onOpenChange, open]);
+
+  const closeDialog = () => {
+    if (inviteLoading) return;
+    setInviteEmail('');
+    onOpenChange(false);
+  };
 
   const handleInvite = async () => {
     const email = inviteEmail.trim().toLowerCase();
@@ -293,8 +302,9 @@ export const BoardShareDialog: React.FC<BoardShareDialogProps> = ({ open, onOpen
     <div
       className="fixed inset-0 z-[10040] flex items-start justify-center bg-slate-950/45 px-3 py-8 sm:items-center sm:py-4"
       role="presentation"
+      data-board-share-backdrop="true"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onOpenChange(false);
+        if (event.target === event.currentTarget && isPrimaryPointerActivation(event)) closeDialog();
       }}
     >
       <section
@@ -303,6 +313,7 @@ export const BoardShareDialog: React.FC<BoardShareDialogProps> = ({ open, onOpen
         aria-labelledby="board-share-title"
         className="flex max-h-[calc(100vh-4rem)] w-full max-w-[660px] flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl"
         data-board-share-dialog
+        data-board-share-loading={inviteLoading ? 'true' : undefined}
       >
         <header className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
           <div className="min-w-0">
@@ -315,7 +326,8 @@ export const BoardShareDialog: React.FC<BoardShareDialogProps> = ({ open, onOpen
           </div>
           <button
             type="button"
-            onClick={() => onOpenChange(false)}
+            onClick={closeDialog}
+            disabled={inviteLoading}
             className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800"
             aria-label="關閉分享看板"
           >
@@ -340,6 +352,7 @@ export const BoardShareDialog: React.FC<BoardShareDialogProps> = ({ open, onOpen
               className="h-11 min-w-0 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100 disabled:text-slate-400"
               placeholder="電子郵件地址或名稱"
               aria-label="電子郵件地址或名稱"
+              data-board-share-invite-email="true"
             />
             <select
               value={inviteRole}

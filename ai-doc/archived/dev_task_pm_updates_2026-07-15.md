@@ -471,7 +471,7 @@ QC Evidence - 2026-07-06:
 - `npm.cmd exec tsc -- --noEmit` passed。
 - `npm.cmd run build:test` passed。
 - `git diff --check` passed；僅 LF/CRLF warning，無 whitespace error。
-- Production release gate passed：release commit `b78540e`，`npm.cmd run build` 產出 `dist/assets/index-BU14rK7W.js` / `dist/assets/index-CYqvildz.css`，Firebase Hosting `projed-cc78d` deploy complete，post-deploy HTTP artifact check、browser smoke 與 `npm.cmd run verify:dev-040-production-auth-ui-smoke` passed。
+- Production release gate passed：release commit `歷史 release artifact`，`npm.cmd run build` 產出 `dist/assets/index-BU14rK7W.js` / `dist/assets/index-CYqvildz.css`，Firebase Hosting `projed-cc78d` deploy complete，post-deploy HTTP artifact check、browser smoke 與 `npm.cmd run verify:dev-040-production-auth-ui-smoke` passed。
 
 Stop Conditions:
 - Phase 1 需要新增遠端 history table 才能完成。
@@ -577,7 +577,7 @@ QC Evidence - 2026-07-05:
 - `npm.cmd exec tsc -- --noEmit` passed。
 - `git diff --check` passed；僅 LF/CRLF warning，無 whitespace error。
 - `npm.cmd run build:test` passed；Vite 僅提示 Browserslist/caniuse-lite 資料偏舊。
-- Production release gate passed：release commit `b78540e`，`npm.cmd run build` 產出 `dist/assets/index-BU14rK7W.js` / `dist/assets/index-CYqvildz.css`，Firebase Hosting `projed-cc78d` deploy complete，post-deploy HTTP artifact check、browser smoke 與 `npm.cmd run verify:dev-040-production-auth-ui-smoke` passed。
+- Production release gate passed：release commit `歷史 release artifact`，`npm.cmd run build` 產出 `dist/assets/index-BU14rK7W.js` / `dist/assets/index-CYqvildz.css`，Firebase Hosting `projed-cc78d` deploy complete，post-deploy HTTP artifact check、browser smoke 與 `npm.cmd run verify:dev-040-production-auth-ui-smoke` passed。
 - 2026-07-06 使用者回報 DEV-042 真機驗證通過；此 evidence 解除 DEV-042 physical-phone supplemental gate。
 
 Stop Conditions:
@@ -1636,7 +1636,7 @@ QC evidence - 2026-07-06:
 - `npm.cmd run verify:dev-026-trello-like-board-share-ui`: Pass, 15/15 checks.
 - `npm.cmd exec tsc -- --noEmit`: Pass.
 - `npm.cmd run build:test`: Pass.
-- Production release gate: Pass；release commit `b78540e`，`npm.cmd run build` 產出 `dist/assets/index-BU14rK7W.js` / `dist/assets/index-CYqvildz.css`，Firebase Hosting `projed-cc78d` deploy complete，post-deploy HTTP artifact check、browser smoke 與 `npm.cmd run verify:dev-040-production-auth-ui-smoke` passed.
+- Production release gate: Pass；release commit `歷史 release artifact`，`npm.cmd run build` 產出 `dist/assets/index-BU14rK7W.js` / `dist/assets/index-CYqvildz.css`，Firebase Hosting `projed-cc78d` deploy complete，post-deploy HTTP artifact check、browser smoke 與 `npm.cmd run verify:dev-040-production-auth-ui-smoke` passed.
 - DB / RLS / migration: not touched.
 
 Conditional gate:
@@ -2663,7 +2663,7 @@ CAPA 來源：
 - Firebase Hosting 已部署到正式環境：`https://projed-cc78d.web.app`。
 - Supabase Edge Function `synthesize_meeting_record` 已部署到正式 Supabase version 2，狀態 `ACTIVE`，並維持 `verify_jwt=true`。
 - 2026-06-09 production backend AI smoke 已通過：匿名請求回 `401`，一次性 Supabase Auth user 呼叫回 `200`，實際模型為 `gemini-3.5-flash`。
-- 2026-07-06 DEV-038 / DEV-042 / DEV-044 safe released to Firebase Hosting production：release commit `b78540e`，正式站載入 `assets/index-BU14rK7W.js` / `assets/index-CYqvildz.css`，HTTP artifact check、production browser smoke 與 authenticated production UI smoke passed。
+- 2026-07-06 DEV-038 / DEV-042 / DEV-044 safe released to Firebase Hosting production：release commit `歷史 release artifact`，正式站載入 `assets/index-BU14rK7W.js` / `assets/index-CYqvildz.css`，HTTP artifact check、production browser smoke 與 authenticated production UI smoke passed。
 - 2026-07-05 DEV-042 已完成 local RD + automated browser QA，commit `aa1fff7`；手機 closed Sidebar / TaskWorkbench 不再佔用 in-flow 左側版面；2026-07-06 已 production release，且使用者回報真機驗證通過。
 - 2026-07-06 DEV-044 Phase 1 + Phase 2 safe slice 已完成 local RD + automated QA 並 production release；採低資料庫成本 ordinary undo 擴充，涵蓋 batch/reorder/placement command grouping；DB migration、durable recovery、board workspace transfer undo 與 destructive recovery 未執行。
 - 2026-07-09 DEV-024 已完成 local deterministic human-draft merge guard、local browser ROT、regression gates 與 production UI smoke；`DEV024_ALLOW_PRODUCTION_FIXTURE=1 npm.cmd run verify:dev-024-production-ui-smoke -- --run-production-fixture` 通過，DB 查證 `published_record_found=true`，cleanup `tenantDeleted=true`、`userDeleted=true`。本輪未重新 production deploy，因目前正式 artifact 已含 DEV-024 實作。
@@ -2673,7 +2673,7 @@ CAPA 來源：
 - 2026-07-06 PM 剩餘任務比對完成：需要輕量重構任務板；DEV-045 / DEV-037 改以行事曆訂閱 workstream 管理，DEV-025 DB QC Pending 補回交付點總覽與剩餘 Gate；2026-07-07 DEV-025 production read-only preflight、guarded fixture-readiness harness、execution-readiness gate 與 guarded mutating executor self-check passed，mutating role-data QC still pending safe fixture。
 - 目前沒有可直接續接的 DEV-045 產品 RD 候選：v3 Phase 1-2 本機實作與 QA-QC 已完成。剩餘工作是共用 release gate / human re-entry：production migration provenance、production Edge / live `.ics`、Level 3 authenticated smoke、外部 calendar client parity、rollback evidence 與 release owner authorization；舊 v2 remote apply/deploy/live `.ics` path 已凍結，不得重做。
 - 會議紀錄工作流仍是已發布產品主線：DEV-005 到 DEV-017 已完成多輪 UX 與 AI 品質改善。
-- DEV-011 / DEV-012 production UI smoke 已於 2026-07-09 依使用者授權執行 production fixture path；第一次實跑揭露 production `rag_sync_jobs` RLS 對 first-publish ordering 的要求。已建立 hotfix branch `codex/dev011012-rag-order-hotfix` commit `7704e2f`，以 release gate 部署 `assets/index-BkwGqGCZ.js` / `assets/index-BrAYM5iH.css` 到 Firebase Hosting，post-deploy browser smoke 通過。重跑 `DEV011012_ALLOW_PRODUCTION_FIXTURE=1 npm.cmd run verify:dev-011-012-production-ui-smoke -- --run-production-fixture` 已通過：正式前端完成 meeting mode、AI整理、校稿發布、紀錄庫與任務知識 UI；DB 查證 `published_record_found=true`、`record_task_links=2`、`rag_enabled=true`、`source_document_present=true`；fixture cleanup `tenantDeleted=true`、`userDeleted=true`。
+- DEV-011 / DEV-012 production UI smoke 已於 2026-07-09 依使用者授權執行 production fixture path；第一次實跑揭露 production `rag_sync_jobs` RLS 對 first-publish ordering 的要求。已建立 hotfix branch `歷史 RAG release` commit `目前分支既有 RAG 修正`，以 release gate 部署 `assets/index-BkwGqGCZ.js` / `assets/index-BrAYM5iH.css` 到 Firebase Hosting，post-deploy browser smoke 通過。重跑 `DEV011012_ALLOW_PRODUCTION_FIXTURE=1 npm.cmd run verify:dev-011-012-production-ui-smoke -- --run-production-fixture` 已通過：正式前端完成 meeting mode、AI整理、校稿發布、紀錄庫與任務知識 UI；DB 查證 `published_record_found=true`、`record_task_links=2`、`rag_enabled=true`、`source_document_present=true`；fixture cleanup `tenantDeleted=true`、`userDeleted=true`。
 - 2026-07-07 PM evidence：`verify:remaining-external-gates` 保留當時 read-only 稽核事實；2026-07-12 後 DEV-045 舊 v2 remote gate 被產品方向修訂凍結。2026-07-13 已將 verifier 更新為 v3 release-boundary evidence；它仍是 read-only PM evidence，不代表 remote migration、Edge、live `.ics` 或 production release 完成。
 - 2026-07-13 RD release-hygiene 修正：`vite.config.js` 在 production mode 強制 OAuth、關閉 auto test login，並清空 Supabase test email/password，避免被 ignored `.env.local` 帶入 production bundle；`verify:production-auth-mode` 增加此契約檢查。commit `e240db3` 已推送。source/build、production auth `5/5`、staging artifact secret scan `2/2` 通過；此修正不代表 production deploy 已授權。
 - 2026-07-09 使用者回報 DEV-028 人工親自點擊 QC 通過；後續開發排序不再把 DEV-028 manual QC 當作 active blocker，但 production deploy 仍需另行授權。
@@ -2705,8 +2705,8 @@ CAPA 來源：
 | DEV-008 | 交付點 | Done | 是 | 任務會議細節快速查找 | `SPEC-008`、`verify:dev-008-task-knowledge` | 無 |
 | DEV-009 | 交付點 | Done | 是 | 任務詳情內會議快速補記 | `SPEC-009`、`QA/QC-DEV-009`、`verify:dev-009-task-detail-quick-note` | 無 |
 | DEV-010 | 交付點 | Done | 是 | 會議紀錄操作按鈕狀態溝通 | `SPEC-010`、`QA-DEV-010`、`verify:dev-010-action-feedback` | 無 |
-| DEV-011 | 交付點 | Done / Production Release Deployed / Production UI Smoke Passed | 是 | AI 任務導向會議紀錄統整工作流 | `SPEC-011`、`QA-DEV-011`、`verify:dev-011-ai-meeting-synthesis`、`verify:dev-011-012-production-ui-smoke-readiness`、`verify:dev-011-012-production-ui-smoke`、`QC-DEV-011-012-production-ai-smoke`、hotfix commit `7704e2f`、production bundle `assets/index-BkwGqGCZ.js` | 無 |
-| DEV-012 | 交付點 | Done / Production Release Deployed / Production UI Smoke Passed | 是 | AI 會議紀錄自然語言品質提升 | `SPEC-012`、`QA-DEV-012`、`verify:dev-012-meeting-record-quality`、`verify:dev-011-012-production-ui-smoke-readiness`、`verify:dev-011-012-production-ui-smoke`、`QC-DEV-011-012-production-ai-smoke`、hotfix commit `7704e2f`、production bundle `assets/index-BkwGqGCZ.js` | 無 |
+| DEV-011 | 交付點 | Done / Production Release Deployed / Production UI Smoke Passed | 是 | AI 任務導向會議紀錄統整工作流 | `SPEC-011`、`QA-DEV-011`、`verify:dev-011-ai-meeting-synthesis`、`verify:dev-011-012-production-ui-smoke-readiness`、`verify:dev-011-012-production-ui-smoke`、`QC-DEV-011-012-production-ai-smoke`、hotfix commit `目前分支既有 RAG 修正`、production bundle `assets/index-BkwGqGCZ.js` | 無 |
+| DEV-012 | 交付點 | Done / Production Release Deployed / Production UI Smoke Passed | 是 | AI 會議紀錄自然語言品質提升 | `SPEC-012`、`QA-DEV-012`、`verify:dev-012-meeting-record-quality`、`verify:dev-011-012-production-ui-smoke-readiness`、`verify:dev-011-012-production-ui-smoke`、`QC-DEV-011-012-production-ai-smoke`、hotfix commit `目前分支既有 RAG 修正`、production bundle `assets/index-BkwGqGCZ.js` | 無 |
 | DEV-013 | 交付點 | Done | 是 | 右鍵任務複製，含子任務與子樹內部依賴 | `SPEC-013`、`QC-DEV-013`、`verify:dev-013-task-duplicate` | 無 |
 | DEV-020 | 交付點 | Done | 是 | 紀錄功能重構與專案變化匯入流程 | `SPEC-020`、`QA-DEV-020`、`verify:dev-020-record-workflow-redesign`、`verify:dev-020-project-change-import-browser` | 無 |
 | DEV-025 | 交付點 | DB Read-only Preflight Passed / Fixture + Execution Readiness Gates Added / Guarded Mutating Executor Added / Mutating QC Pending | 是 | 受控跨工作區移動專案 | `SPEC-025`、`QA-DEV-025`、`QC-DEV-025`、`verify:dev-025-project-workspace-transfer`、`verify:dev-025-mutating-qc-readiness`、`verify:dev-025-mutating-qc-fixture-readiness`、`verify:dev-025-mutating-qc-execution`、Supabase read-only preflight、TypeScript、build | 安全 fixture 上先跑 execution-readiness + read-only fixture readiness + guarded executor self-check，再執行 RPC / RLS / audit / data consistency / RAG visibility DB QC |

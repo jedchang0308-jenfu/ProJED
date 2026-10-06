@@ -1,7 +1,7 @@
 # QA-DEV-065：任務子樹 hover 與拖曳影響範圍預覽
 
-日期：2026-08-05  
-狀態：RD Rework 13 Static + Browser QC Passed  
+日期：2026-08-16
+狀態：RD Rework 14 Static 40/40 + Browser 15/15 QC Passed
 對應 SPEC：`ai-doc/specs/SPEC-065-task-subtree-hover-preview.md`
 
 ## 1. 驗證範圍
@@ -45,6 +45,8 @@
 | QA-065-011 | hover L1／L2／L3+ task title | task title 不帶原生 `title` tooltip；以 `aria-label` 保留可及性名稱，畫面不出現黑色瀏覽器提示框 | DOM attribute、browser screenshot、click/drag regression |
 | QA-065-012 | 1440x900 hover L2 card task title | `data-desktop-task-hover-preview` 位於卡片 root；卡片 root 顯示來源強框，標題列、`.task-title-text` 與 `data-task-card-primary` 不顯示第二個 inset 框 | DOM marker、computed box-shadow、screenshot |
 | QA-065-013 | 1440x900 hover L2 card task title，再移入 L3+ child | source hover 時同時存在外層 `primary-500` 與子任務區單一 `primary-400` inset；移入 child 後卡片兩層均清除，子任務 source／group 接手 | DOM marker、雙層 computed shadow、handoff screenshot |
+| QA-065-014 | 檢查 complete hover scope 與實際 drag/drop source ownership | outer scope 只提供完整命中幾何，不重複持有 hover/drag；primary source 與 subtree 必須為 direct children，實際 source 同時持有 hover、drag、drop | DOM architecture attributes |
+| QA-065-015 | 以滑鼠、鍵盤分別選取與 focus L2／L3+ source | selected/focus-visible 只落在 exact primary source，outer scope 不冒充選取來源；框色維持 primary-500 | selected attributes、focus-visible、computed shadow |
 
 ## 4. QC 指令與判定
 
@@ -54,7 +56,7 @@
 - `npm exec tsc -- --noEmit`
 - Targeted ESLint、test build。
 
-`通過`：QA-065-001～013 全數符合，browser console 0 errors，沒有 `.inline-error`、
+`通過`：QA-065-001～015 全數符合，browser console 0 errors，沒有 `.inline-error`、
 `[role=alert]` failure、4xx/5xx、Not Found 或 `/api/` 可見錯誤，且截圖／量測支持視覺契約。
 
 `未通過`：任一範圍、count、ownership、geometry、click／right-click／drag regression 或 visible-error gate 失敗。
@@ -106,3 +108,5 @@ Rework 11 重新驗證：使用者指出卡片來源任務仍未像列表一樣�
 Rework 12 重新驗證：依使用者目標示意，L2 source marker 改由 `.kanban-task-title-row` 承接，來源框只涵蓋任務名稱／日期標題列；卡片 root 保留基準外框，子任務區維持完整 `primary-400` group frame。QA-065-005、QA-065-007、QA-065-008、QA-065-012、QA-065-013 驗證 title-only ownership、子任務範圍、handoff、文字／cursor、drag overlay 與 geometry；browser 13/13、static 27/27。
 
 Rework 13 重新驗證：使用者再次確認來源任務層應像右側示意，由整張 L2 卡片最外層承接 `primary-500` source frame，標題列不另加內框，子任務區承接單一 `primary-400` group frame。QA-065-005、QA-065-007、QA-065-008、QA-065-012、QA-065-013 驗證 outer-source ownership、title 無 nested frame、子任務範圍、handoff、文字／cursor、drag overlay 與 geometry；browser 13/13、static 27/27。
+
+Rework 14 回歸（2026-08-16）：為 DEV-068 whole-hover-scope child intent 補強 outer scope／primary source 的責任分離與鍵盤選取可及性。QA-065-014 驗 outer scope 不重複持有 hover/drag、primary source 與 subtree 為 direct children；QA-065-015 驗 selected／focus-visible 只落 exact source。現行 verifier 共 15 個 record gates，browser 15/15、static 40/40、console 0 error，作為 DEV-068 相鄰回歸證據。

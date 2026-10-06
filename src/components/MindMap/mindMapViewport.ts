@@ -1,6 +1,7 @@
-import { getElementLocalRect } from './mindMapDomGeometry';
-import { MINDMAP_CONTENT_BOUNDS_SELECTOR } from './mindMapDomSelectors';
+import { getMindMapViewportSnapshot } from './mindMapDomGeometry';
+import type { MindMapCoordinateMapper, MindMapSceneLayout } from './mindMapCoordinateSystem';
 import type { MindMapLayoutRect } from './mindMapGeometry';
+import { MINDMAP_CONTENT_BOUNDS_SELECTOR } from './mindMapDomSelectors';
 import { clampZoom } from './mindMapZoom';
 
 export type MindMapContentCenterReason = 'initial' | 'fit' | 'repair';
@@ -18,11 +19,11 @@ export interface MindMapContentBounds {
 
 export const getMindMapContentBounds = (
   content: HTMLElement,
-  zoomLevel: number,
+  mapper: MindMapCoordinateMapper,
 ): MindMapContentBounds | null => {
   const elements = Array.from(content.querySelectorAll<HTMLElement>(MINDMAP_CONTENT_BOUNDS_SELECTOR));
   if (elements.length === 0) return null;
-  const rects: MindMapLayoutRect[] = elements.map(element => getElementLocalRect(element, content, zoomLevel));
+  const rects: MindMapLayoutRect[] = elements.map(element => mapper.elementToWorldRect(element));
   const left = Math.min(...rects.map(rect => rect.left));
   const top = Math.min(...rects.map(rect => rect.top));
   const right = Math.max(...rects.map(rect => rect.right));
@@ -41,14 +42,13 @@ export const getMindMapContentBounds = (
 
 export const centerMindMapContent = (
   surface: HTMLElement,
-  content: HTMLElement,
-  zoomLevel: number,
+  bounds: MindMapContentBounds,
+  layout: MindMapSceneLayout,
   reason: MindMapContentCenterReason = 'repair',
 ) => {
-  const bounds = getMindMapContentBounds(content, zoomLevel);
-  if (!bounds) return false;
-  const nextLeft = bounds.centerX * zoomLevel - surface.clientWidth / 2;
-  const nextTop = bounds.centerY * zoomLevel - surface.clientHeight / 2;
+  const viewport = getMindMapViewportSnapshot(surface);
+  const nextLeft = layout.translateX + bounds.centerX * layout.scale - viewport.clientWidth / 2;
+  const nextTop = layout.translateY + bounds.centerY * layout.scale - viewport.clientHeight / 2;
   surface.scrollLeft = Math.max(0, Math.min(surface.scrollWidth - surface.clientWidth, nextLeft));
   surface.scrollTop = Math.max(0, Math.min(surface.scrollHeight - surface.clientHeight, nextTop));
   surface.setAttribute('data-mindmap-content-centered', reason);
@@ -60,9 +60,8 @@ export const centerMindMapContent = (
 export const getFitZoomForBounds = (
   surface: HTMLElement,
   bounds: MindMapContentBounds,
-  currentZoom: number,
 ) => {
   const widthRatio = surface.clientWidth / Math.max(bounds.width, 1);
   const heightRatio = surface.clientHeight / Math.max(bounds.height, 1);
-  return clampZoom(currentZoom * Math.min(widthRatio, heightRatio) * 0.86);
+  return clampZoom(Math.min(widthRatio, heightRatio) * 0.86);
 };

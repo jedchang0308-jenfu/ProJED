@@ -95,7 +95,7 @@ assert(
   mindMapView.includes('useWbsStore') &&
     mindMapView.includes('addNode') &&
     mindMapView.includes('updateNode') &&
-    mindMapView.includes('removeNode') &&
+    mindMapView.includes('archiveTask') &&
     !mindMapView.includes('fetch('),
 );
 
@@ -105,7 +105,8 @@ assert(
     mindMapView.includes('boardTitle={activeBoard.title}') &&
     mindMapRootLayout.includes('data-mindmap-center') &&
     mindMapRootLayout.includes("boardTitle || '\\u672a\\u547d\\u540d\\u770b\\u677f'") &&
-    mindMapToolbar.includes('data-mindmap-create-root'),
+    !mindMapToolbar.includes('data-mindmap-create-root') &&
+    !mindMapToolbar.includes('Enter 新增同階，Tab 新增子任務，Delete 刪除'),
 );
 
 assert(
@@ -169,11 +170,11 @@ assert(
 );
 
 assert(
-  'Delete subtree has confirmation guard',
+  'Archive subtree has confirmation guard',
   mindMapView.includes('showConfirm') &&
-    mindMapMessages.includes('getMindMapDeleteTaskConfirmMessage') &&
+    mindMapMessages.includes('getMindMapArchiveTaskConfirmMessage') &&
     mindMapMessages.includes('子任務') &&
-    mindMapMessages.includes('刪除後會一併移除'),
+    mindMapMessages.includes('之後可從目前看板回收桶還原'),
 );
 
 assert(

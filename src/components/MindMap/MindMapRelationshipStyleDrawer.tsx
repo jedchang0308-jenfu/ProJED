@@ -74,7 +74,7 @@ const MindMapRelationshipStyleDrawer: React.FC<MindMapRelationshipStyleDrawerPro
     <div className="flex items-center gap-1" data-mindmap-note-relationship-style-dashes>
       {dashOptions.map(option => (
         <button
-          key={option.label}
+          key={option.value || 'solid'}
           type="button"
           className={`rounded border px-1.5 py-0.5 ${path.style.strokeDasharray === option.value ? 'border-sky-400 bg-sky-50 text-sky-700' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
           onClick={() => onUpdateStyle(path.id, { strokeDasharray: option.value })}

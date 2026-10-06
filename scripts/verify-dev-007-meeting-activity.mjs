@@ -10,7 +10,7 @@ const checks = [
       'meetingActivities: MeetingTaskActivity[]',
       'recordMeetingTaskActivity',
       'createMeetingActivity(activity)',
-      'createMeetingSynthesisInput(preservedDraft, meetingActivities, nodes)',
+      'createMeetingSynthesisInput(synthesisSourceDraft, meetingActivities, nodes)',
       'meetingSynthesisStatus',
     ],
     forbiddenSnippets: [
@@ -20,9 +20,15 @@ const checks = [
   },
   {
     path: 'src/store/useWbsStore.ts',
-    label: 'wbs update meeting activity bridge',
+    label: 'wbs persistence-confirmed meeting capture bridge',
     snippets: [
       "import useRecordStore from './useRecordStore'",
+      'const commitMeetingTaskMutation = (',
+      'useRecordStore.getState().commitMeetingTaskMutation({',
+      'await commitMeetingTaskMutation(oldNode, newNode',
+      'await commitMeetingTaskMutation(null, node',
+    ],
+    forbiddenSnippets: [
       'recordMeetingTaskActivity(newNode, event.eventType, event.payload)',
       "recordMeetingTaskActivity(normalizedNode, 'task_created'",
       "recordMeetingTaskActivity(afterNode, 'task_status_changed'",
@@ -44,8 +50,9 @@ const checks = [
     path: 'src/components/Wbs/KanbanChecklist.tsx',
     label: 'kanban checklist native meeting behavior',
     snippets: [
-      'const isRecordCaptureMode = isRecordSelectionMode;',
-      'insertRecordTaskMention(child.id, child.title || child.id)',
+      'const isRecordCaptureMode = useRecordStore(state => state.isTaskSelectionMode);',
+      'onRecordCapture: (taskId: string, title: string) => insertRecordTaskMention(taskId, title),',
+      '<TaskChecklistTree {...props} hostAdapter={hostAdapter} />',
     ],
     forbiddenSnippets: [
       'isMeetingMode && meetingTaskCaptureEnabled',
@@ -56,18 +63,23 @@ const checks = [
     path: 'src/components/Records/RecordSidebar.tsx',
     label: 'meeting activity sidebar evidence',
     snippets: [
-      'AI整理來源：任務變更',
-      'meetingActivities.length',
-      'isMeetingActivitySourceOpen',
-      'data-meeting-activity-source-toggle',
-      'aria-expanded={isMeetingActivitySourceOpen}',
-      'data-meeting-activity-source-list',
+      'meetingActivityCount: meetingActivities.length',
+      'meetingWorkflowStepsForDisplay',
+      'data-meeting-workflow-card="compact"',
+      'data-meeting-synthesis-status={meetingSynthesisStatus}',
+      'data-meeting-synthesis-contract={meetingSynthesisTrace?.contractVersion}',
       'AI_MEETING_SYNTHESIS_TOOLTIP',
       'getMeetingWorkflowStepTitle(step)',
       "step.stage === 'ai_suggestion'",
       "meetingSynthesisStatus !== 'idle'",
       'AI整理是建議動作，可跳過',
       '直接發布會保存目前編輯器內容',
+    ],
+    forbiddenSnippets: [
+      'AI整理來源：任務變更',
+      'isMeetingActivitySourceOpen',
+      'data-meeting-activity-source-toggle',
+      'data-meeting-activity-source-list',
     ],
   },
 ];

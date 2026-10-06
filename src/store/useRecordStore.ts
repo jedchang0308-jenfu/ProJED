@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import dayjs from 'dayjs';
-import { recordService } from '../services/dataBackend';
+import { eventLogService, isSupabaseBackend, recordService } from '../services/dataBackend';
+import { meetingAnalysisService } from '../features/meetingTaskResolution/meetingAnalysisService';
 import { synthesizeMeetingRecord } from '../services/meetingSynthesisService';
 import useAuthStore from './useAuthStore';
 import useBoardStore from './useBoardStore';
@@ -11,21 +12,65 @@ import {
   syncTaskLinksFromRecordContent,
   uniqueRecordTaskLinks,
 } from '../utils/recordContentMentions';
-import { appendTaskDiscussionToRecordContent } from '../utils/meetingTaskDiscussion';
+import {
+  appendMeetingTaskQuickNoteMetadata,
+  appendMeetingTaskQuickNoteToRecordContent,
+  parseMeetingTaskQuickNotesMetadata,
+  reconcileMeetingTaskQuickNoteMetadata,
+  validateMeetingTaskQuickNoteAggregate,
+} from '../utils/meetingTaskQuickNotes';
 import {
   filterMeetingSynthesisActivities,
   isLowValueMeetingActivity,
   type MeetingSynthesisInput,
+  type MeetingSynthesisResponse,
 } from '../utils/meetingRecordSynthesis';
-import { getRecordDraftSignature } from '../utils/meetingRecordWorkflow';
+import {
+  getMeetingSynthesisResumeState,
+  getRecordDraftSignature,
+  normalizeMeetingSynthesisContentForComparison,
+} from '../utils/meetingRecordWorkflow';
+import { updateMeetingTaskReservationMetadata } from '../utils/meetingTaskReservation';
+import { isMeetingRecordUnavailable } from '../utils/meetingRecordAvailability';
 import { mergeHumanDraftWithAiSynthesis } from '../utils/humanDraftSynthesisMerge';
 import { useMemberStore } from './useMemberStore';
+import { useTagStore } from './useTagStore';
+import { summarizeTaskActivity } from '../utils/meetingActivitySummary';
+import { TASK_WORKBENCH_UNPLACED_BOARD_ID } from '../features/taskWorkbench/placementModel';
+import { assertRecordTaskLinkSet } from '../services/recordTaskLinkContract';
+import {
+  createMeetingLiveAggregateValue,
+  formatMeetingLiveAggregateLine,
+  getMeetingLiveContentBaseline,
+  getMeetingLiveFieldChanges,
+  isMeetingLiveAggregateNoop,
+  isMeetingLiveContentField,
+  meetingLiveFingerprint,
+} from '../utils/meetingLiveTaskChanges';
+import {
+  createMeetingActivityQuery,
+  createMeetingProjectChangeImportBatch,
+  listMeetingProjectChangeDelta,
+  markMeetingProjectChangeImportAiIntegrated,
+  parseMeetingProjectChangeImportMetadata,
+  projectMeetingProjectChangeImportMetadata,
+  reconcileMeetingProjectChangeImportMetadata,
+  resolveMeetingProjectChangeImportWindow,
+  MeetingProjectChangeImportError,
+} from '../utils/meetingProjectChangeImport';
+import { PROJECT_CHANGE_EVENT_TYPES, createProjectChangeSynthesisInput, wrapProjectChangeImportContent } from '../utils/projectChangeImport';
 import type {
-  KnowledgeRecord,
+  EditableKnowledgeRecord,
   KnowledgeRecordInput,
+  EditableKnowledgeRecordType,
   KnowledgeRecordStatus,
-  KnowledgeRecordType,
   KnowledgeRecordVisibility,
+  MeetingDraftRecoverySnapshot,
+  MeetingDraftRecoveryState,
+  MeetingTaskActivity,
+  MeetingTaskActivityInput,
+  MeetingLiveCaptureRuntime,
+  MeetingLiveFieldAggregate,
   RecordTaskLinkRole,
   TaskNode,
   ViewMode,
@@ -43,6 +88,12 @@ type TaskSelectionModeOptions = {
 
 type MeetingSynthesisStatus = 'idle' | 'synthesizing' | 'ready' | 'error';
 
+export type RecordListLoadState =
+  | { status: 'idle'; scopeKey: null; error: null }
+  | { status: 'loading'; scopeKey: string; error: null }
+  | { status: 'ready'; scopeKey: string; error: null }
+  | { status: 'error'; scopeKey: string; error: string };
+
 type SaveDraftOptions = {
   nodes?: Record<string, TaskNode>;
   status?: KnowledgeRecordStatus;
@@ -54,22 +105,60 @@ type RecordSaveFeedback = {
   savedAt: number;
 } | null;
 
-export type MeetingTaskActivityInput = {
-  eventType: string;
-  nodeId: string;
-  title: string;
-  occurredAt?: number;
-  payload?: Record<string, unknown>;
+type MeetingLiveMutationInput = {
+  mutationId: string;
+  segmentId?: string;
+  beforeNode: TaskNode | null;
+  afterNode: TaskNode;
+  changedKeys?: Array<keyof TaskNode>;
 };
 
-export type MeetingTaskActivity = Required<Omit<MeetingTaskActivityInput, 'payload'>> & {
-  payload: Record<string, unknown>;
-  summary: string;
+type AppendMeetingTaskQuickNoteResult =
+  | { status: 'appended'; entryId: string }
+  | { status: 'noop'; entryId: string }
+  | {
+      status: 'denied';
+      reason:
+        | 'not-meeting'
+        | 'invalid-input'
+        | 'invalid-metadata'
+        | 'invalid-task'
+        | 'unsupported-task-owner'
+        | 'meeting-board-mismatch';
+    };
+
+const MEETING_CONTINUITY_VIEWS = new Set<ViewMode>([
+  'board',
+  'list',
+  'mindmap',
+  'gantt',
+  'calendar',
+  'goal',
+]);
+
+export const isMeetingContinuityView = (view: ViewMode) => MEETING_CONTINUITY_VIEWS.has(view);
+
+export const createRecordScopeKey = (workspaceId: string, boardId: string): string => (
+  JSON.stringify([workspaceId, boardId])
+);
+
+let recordListRequestSequence = 0;
+
+const activeBoardIdForMeeting = () => useBoardStore.getState().activeBoardId;
+
+const upsertRecordWithIntegrity = async (
+  workspaceId: string,
+  boardId: string,
+  input: KnowledgeRecordInput,
+) => {
+  const saved = await recordService.upsert(workspaceId, boardId, input);
+  assertRecordTaskLinkSet(input.taskLinks, saved.taskLinks);
+  return saved;
 };
 
 interface RecordStoreState {
-  records: KnowledgeRecord[];
-  loading: boolean;
+  records: EditableKnowledgeRecord[];
+  recordListLoad: RecordListLoadState;
   saving: boolean;
   error: string | null;
   isPanelOpen: boolean;
@@ -84,36 +173,74 @@ interface RecordStoreState {
   draftBaselineSignature: string | null;
   meetingActivities: MeetingTaskActivity[];
   appendedMeetingActivityIds: string[];
+  meetingLiveCaptureRuntime: MeetingLiveCaptureRuntime | null;
   meetingSynthesisStatus: MeetingSynthesisStatus;
   meetingSynthesisError: string | null;
   meetingSynthesisWarnings: string[];
   meetingSynthesisProvider: string | null;
   lastSaveFeedback: RecordSaveFeedback;
+  meetingDraftRecovery: MeetingDraftRecoveryState;
+  meetingDraftRecoveryClearToken: number;
+  contentFocusRequestId: number;
+  contentFocusPending: boolean;
+  meetingProjectImportStatus: 'idle' | 'loading' | 'complete' | 'empty' | 'error';
+  meetingProjectImportMessage: string | null;
+  meetingProjectImportRequestId: number;
 }
 
 interface RecordStoreActions {
   loadRecords: (workspaceId: string, boardId: string) => Promise<void>;
+  resetRecordList: () => void;
   openPanel: () => void;
   closePanel: () => void;
   togglePanelCollapsed: () => void;
-  openNewRecord: (type: KnowledgeRecordType, initialNodeId?: string) => void;
-  openExistingRecord: (record: KnowledgeRecord) => void;
+  openNewRecord: (type: EditableKnowledgeRecordType, initialNodeId?: string) => void;
+  openExistingRecord: (record: EditableKnowledgeRecord) => void;
   startMeetingRecord: () => void;
   exitMeetingMode: () => void;
   toggleMeetingTaskCapture: () => void;
+  setMeetingTaskReservation: (input: {
+    taskId: string;
+    value: number | null;
+    currentUserId: string;
+    activeBoardId: string;
+    taskExists: boolean;
+    taskArchived?: boolean;
+    taskBoardId?: string | null;
+  }) => 'updated' | 'cleared' | 'noop' | 'denied';
   updateDraft: (updates: Partial<RecordDraft>) => void;
   setContentCursorOffset: (offset: number) => void;
   setDraftTaskRole: (nodeId: string, role: RecordTaskLinkRole) => void;
   toggleDraftTask: (nodeId: string) => void;
   insertTaskMentionAtCursor: (nodeId: string, title: string) => void;
-  appendTaskDiscussionToMeetingDraft: (nodeId: string, title: string, text: string) => boolean;
+  appendTaskDiscussionToMeetingDraft: (input: {
+    taskId: string;
+    taskTitle: string;
+    taskBoardId: string;
+    text: string;
+    submissionId: string;
+    occurredAt: number;
+  }) => AppendMeetingTaskQuickNoteResult;
+  commitMeetingTaskMutation: (input: MeetingLiveMutationInput) => Promise<'committed' | 'ignored' | 'failed'>;
   recordMeetingTaskActivity: (activity: MeetingTaskActivityInput) => void;
   synthesizeMeetingDraft: (nodes?: Record<string, TaskNode>) => Promise<boolean>;
   enterTaskSelectionMode: (options?: TaskSelectionModeOptions) => void;
   exitTaskSelectionMode: (restorePanel?: boolean) => void;
-  saveDraft: (options?: SaveDraftOptions) => Promise<KnowledgeRecord | null>;
+  saveDraft: (options?: SaveDraftOptions) => Promise<EditableKnowledgeRecord | null>;
   archiveRecord: (recordId: string) => Promise<void>;
   clearSaveFeedback: () => void;
+  setMeetingDraftRecovery: (updates: Partial<MeetingDraftRecoveryState>) => void;
+  restoreMeetingDraftSnapshot: (snapshot: MeetingDraftRecoverySnapshot) => void;
+  requestMeetingDraftRecoveryClear: () => void;
+  resetMeetingDraftRecoveryState: () => void;
+  requestContentFocus: () => void;
+  consumeContentFocus: () => void;
+  importMeetingProjectChanges: (options?: {
+    mode?: 'default' | 'custom';
+    startedAt?: number;
+    endedAt?: number;
+    nodes?: Record<string, TaskNode>;
+  }) => Promise<boolean>;
 }
 
 const createId = () =>
@@ -122,7 +249,7 @@ const createId = () =>
     : `record_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 
 const createDefaultDraft = (
-  type: KnowledgeRecordType,
+  type: EditableKnowledgeRecordType,
   userId: string | null,
   initialNodeId?: string
 ): RecordDraft => {
@@ -130,7 +257,7 @@ const createDefaultDraft = (
   const end = now.endOf('day');
   const start = end.subtract(7, 'day');
   const title = type === 'meeting'
-    ? `會議紀錄 ${now.format('YYYY/MM/DD HH:mm')}`
+    ? '會議紀錄'
     : `工作紀錄 ${now.format('YYYY/MM/DD')}`;
 
   return {
@@ -152,7 +279,8 @@ const createDefaultDraft = (
 
 const uniqueLinks = uniqueRecordTaskLinks;
 
-const toRecordInput = (record: KnowledgeRecord): KnowledgeRecordInput => ({
+const toRecordInput = (record: EditableKnowledgeRecord): KnowledgeRecordInput => {
+  return {
   id: record.id,
   type: record.type,
   title: record.title,
@@ -164,12 +292,14 @@ const toRecordInput = (record: KnowledgeRecord): KnowledgeRecordInput => ({
   startedAt: record.startedAt,
   endedAt: record.endedAt,
   recordedBy: record.recordedBy,
-  taskLinks: record.taskLinks.map(link => ({ nodeId: link.nodeId, role: link.role })),
-});
+  metadata: record.metadata,
+    taskLinks: record.taskLinks.map(link => ({ nodeId: link.nodeId, role: link.role })),
+  };
+};
 
 const toDraftFromRecordInput = (
   input: KnowledgeRecordInput,
-  saved: KnowledgeRecord,
+  saved: EditableKnowledgeRecord,
 ): RecordDraft => ({
   ...input,
   id: saved.id,
@@ -182,74 +312,21 @@ const syncDraftContentLinks = (draft: RecordDraft, content: string): RecordDraft
   taskLinks: syncTaskLinksFromRecordContent(content, draft.taskLinks, draft.legacyTaskLinkNodeIds ?? []),
 });
 
-const statusLabels: Record<string, string> = {
-  todo: '待辦',
-  in_progress: '進行中',
-  completed: '已完成',
-  delayed: '延遲',
-  unsure: '未確認',
-  onhold: '暫停',
-};
-
-const getPayloadStatus = (payload: Record<string, unknown>, side: 'before' | 'after') => {
-  const sidePayload = payload[side] as Record<string, unknown> | undefined;
-  const status = sidePayload?.status;
-  return typeof status === 'string' ? status : '';
-};
-
-const formatStatus = (status: string) => statusLabels[status] ?? (status || '未設定');
-
-const formatDateRange = (value: Record<string, unknown> | undefined) => {
-  const start = typeof value?.startDate === 'string' && value.startDate ? value.startDate : '未設定';
-  const end = typeof value?.endDate === 'string' && value.endDate ? value.endDate : '未設定';
-  return `${start} 至 ${end}`;
-};
-
-const getPayloadAssigneeIds = (payload: Record<string, unknown>, side: 'before' | 'after') => {
-  const sidePayload = payload[side] as Record<string, unknown> | undefined;
-  const assigneeIds = sidePayload?.assigneeIds;
-  if (Array.isArray(assigneeIds)) {
-    return assigneeIds.filter((id): id is string => typeof id === 'string' && id.length > 0);
-  }
-  const assigneeId = sidePayload?.assigneeId;
-  return typeof assigneeId === 'string' && assigneeId ? [assigneeId] : [];
-};
-
-const shortId = (value: string) => value.slice(0, 8);
-
-const formatAssignee = (assigneeId: string | null) => {
-  if (!assigneeId) return '未指派';
-
-  const member = useMemberStore.getState().boardMembers.find(item => item.userId === assigneeId);
-  const label = member?.profile?.displayName || member?.profile?.email;
-  if (label) return label;
-
-  return `已離開成員（${shortId(assigneeId)}）`;
-};
-
-const formatAssignees = (assigneeIds: string[]) =>
-  assigneeIds.length ? assigneeIds.map(id => formatAssignee(id)).join('、') : '未指派';
-
 const summarizeMeetingActivity = (activity: MeetingTaskActivityInput) => {
-  const payload = activity.payload ?? {};
-  if (activity.eventType === 'task_status_changed') {
-    return `狀態由「${formatStatus(getPayloadStatus(payload, 'before'))}」改為「${formatStatus(getPayloadStatus(payload, 'after'))}」。`;
-  }
-  if (activity.eventType === 'task_moved') return '位置已調整。';
-  if (activity.eventType === 'task_dates_changed') {
-    const before = payload.before as Record<string, unknown> | undefined;
-    const after = payload.after as Record<string, unknown> | undefined;
-    return `日期由「${formatDateRange(before)}」改為「${formatDateRange(after)}」。`;
-  }
-  if (activity.eventType === 'task_assigned') {
-    return `主責成員改為「${formatAssignees(getPayloadAssigneeIds(payload, 'after'))}」。`;
-  }
-  if (activity.eventType === 'task_collaborators_changed') return '協作者已更新。';
-  if (activity.eventType === 'task_tags_changed') return '標籤已更新。';
-  if (activity.eventType === 'task_archived') return '任務已封存。';
-  if (activity.eventType === 'task_restored') return '任務已還原。';
-  if (activity.eventType === 'task_created') return `新增任務「${activity.title || activity.nodeId}」。`;
-  return '任務已更新。';
+  const memberNameById = new Map(
+    useMemberStore.getState().boardMembers.flatMap(member => {
+      const name = member.profile?.displayName || member.profile?.email;
+      return name ? [[member.userId, name] as const] : [];
+    }),
+  );
+  const tagNameById = new Map(useTagStore.getState().tags.map(tag => [tag.id, tag.name] as const));
+  const summary = summarizeTaskActivity(activity.eventType, activity.payload ?? {}, {
+    memberNameById,
+    tagNameById,
+  });
+  return activity.eventType === 'task_created'
+    ? `新增任務「${activity.title || activity.nodeId}」。`
+    : summary;
 };
 
 const createMeetingActivity = (activity: MeetingTaskActivityInput): MeetingTaskActivity => {
@@ -269,6 +346,119 @@ const resetMeetingSynthesisState = {
   meetingSynthesisError: null,
   meetingSynthesisWarnings: [],
   meetingSynthesisProvider: null,
+};
+
+const createMeetingLiveRuntime = (draftId: string, boardId: string): MeetingLiveCaptureRuntime => ({
+  segment: {
+    id: createId(),
+    draftId,
+    boardId,
+    startedAt: Date.now(),
+    closedAt: null,
+    nextDispatchSequence: 1,
+  },
+  aggregates: new Map(),
+  plaintextBaselines: new Map(),
+  appliedMutationIds: new Set(),
+  pendingMutationIds: new Set(),
+  nextCommitSequence: 1,
+});
+
+const meetingLiveCommitQueues = new Map<string, Promise<'committed' | 'ignored' | 'failed'>>();
+
+const getLineCandidates = (content: string, exactText: string) => content.split('\n')
+  .map((line, index) => line === exactText ? index : -1)
+  .filter(index => index >= 0);
+
+const rebaseMeetingLiveProjectionAnchors = (
+  runtime: MeetingLiveCaptureRuntime | null,
+  content: string,
+): MeetingLiveCaptureRuntime | null => {
+  if (!runtime) return null;
+  const nextAggregates = new Map<string, MeetingLiveFieldAggregate>();
+  runtime.aggregates.forEach((aggregate, key) => {
+    if (!aggregate.projection) {
+      nextAggregates.set(key, aggregate);
+      return;
+    }
+    const candidates = getLineCandidates(content, aggregate.projection.exactText);
+    nextAggregates.set(key, {
+      ...aggregate,
+      projection: candidates.length === 1
+        ? { ...aggregate.projection, lineIndex: candidates[0] }
+        : null,
+    });
+  });
+  return { ...runtime, aggregates: nextAggregates };
+};
+
+const initialMeetingDraftRecoveryState: MeetingDraftRecoveryState = {
+  localStatus: 'idle',
+  cloudStatus: 'idle',
+  localSavedAt: null,
+  cloudSavedAt: null,
+  message: null,
+  restoredAt: null,
+  conflictSnapshot: null,
+  pendingSnapshot: null,
+};
+
+type MeetingSynthesisTraceMetadata = ReturnType<typeof createMeetingSynthesisTraceMetadata>;
+
+const createMeetingSynthesisTraceMetadata = (
+  result: MeetingSynthesisResponse,
+  sourceContent: string,
+  outputContent: string,
+) => ({
+  runId: result.runId,
+  contractVersion: result.contractVersion,
+  functionVersion: result.functionVersion,
+  provider: result.provider,
+  model: result.model,
+  generatedAt: result.generatedAt,
+  normalization: result.normalization,
+  quality: result.quality,
+  warnings: result.warnings,
+  sourceContent,
+  outputContent,
+});
+
+const getMeetingSynthesisTraceMetadata = (draft: RecordDraft): MeetingSynthesisTraceMetadata | null => {
+  const trace = draft.metadata?.meetingSynthesis;
+  return trace && typeof trace === 'object' && !Array.isArray(trace)
+    ? trace as MeetingSynthesisTraceMetadata
+    : null;
+};
+
+const getMeetingSynthesisSourceDraft = (draft: RecordDraft): RecordDraft => {
+  const trace = getMeetingSynthesisTraceMetadata(draft);
+  if (
+    trace &&
+    typeof trace.sourceContent === 'string' &&
+    typeof trace.outputContent === 'string' &&
+    normalizeMeetingSynthesisContentForComparison(trace.outputContent) ===
+      normalizeMeetingSynthesisContentForComparison(draft.content)
+  ) {
+    return { ...draft, content: trace.sourceContent };
+  }
+  return draft;
+};
+
+const getMeetingSynthesisMergeViolations = (aiContent: string, mergedContent: string) => {
+  const violations: string[] = [];
+  for (const heading of ['1. 本次會議總結', '2. 任務討論與結論', '3. 其他']) {
+    if (!aiContent.includes(heading)) continue;
+    const occurrenceCount = mergedContent.split(heading).length - 1;
+    if (occurrenceCount !== 1) violations.push(`SECTION_COUNT:${heading}:${occurrenceCount}`);
+  }
+  const mergedTaskIds = new Set(extractTaskMentionIds(mergedContent));
+  if (extractTaskMentionIds(aiContent).some(taskId => !mergedTaskIds.has(taskId))) {
+    violations.push('TASK_MENTION_LOST');
+  }
+  if (/^2\.\d+(?:\.\d+)*\s+/m.test(mergedContent) && !mergedContent.includes('2. 任務討論與結論')) {
+    violations.push('ORPHAN_TASK_HEADING');
+  }
+  return violations;
 };
 
 type MeetingSynthesisTaskInput = MeetingSynthesisInput['tasks'][number];
@@ -362,7 +552,7 @@ const createMeetingSynthesisInput = (
 
 const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) => ({
   records: [],
-  loading: false,
+  recordListLoad: { status: 'idle', scopeKey: null, error: null },
   saving: false,
   error: null,
   isPanelOpen: false,
@@ -377,28 +567,46 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
   draftBaselineSignature: null,
   meetingActivities: [],
   appendedMeetingActivityIds: [],
+  meetingLiveCaptureRuntime: null,
   meetingSynthesisStatus: 'idle',
   meetingSynthesisError: null,
   meetingSynthesisWarnings: [],
   meetingSynthesisProvider: null,
   lastSaveFeedback: null,
+  meetingDraftRecovery: initialMeetingDraftRecoveryState,
+  meetingDraftRecoveryClearToken: 0,
+  contentFocusRequestId: 0,
+  contentFocusPending: false,
+  meetingProjectImportStatus: 'idle',
+  meetingProjectImportMessage: null,
+  meetingProjectImportRequestId: 0,
 
   loadRecords: async (workspaceId, boardId) => {
-    set({ loading: true, error: null });
+    const scopeKey = createRecordScopeKey(workspaceId, boardId);
+    const requestId = ++recordListRequestSequence;
+    set({ records: [], recordListLoad: { status: 'loading', scopeKey, error: null } });
     try {
       const records = await recordService.listByProject(workspaceId, boardId);
-      set({ records, loading: false });
+      if (requestId !== recordListRequestSequence) return;
+      set({ records, recordListLoad: { status: 'ready', scopeKey, error: null } });
     } catch (error) {
-      set({
-        loading: false,
+      if (requestId !== recordListRequestSequence) return;
+      set({ records: [], recordListLoad: {
+        status: 'error',
+        scopeKey,
         error: error instanceof Error ? error.message : String(error),
-      });
+      } });
     }
+  },
+
+  resetRecordList: () => {
+    recordListRequestSequence += 1;
+    set({ records: [], recordListLoad: { status: 'idle', scopeKey: null, error: null } });
   },
 
   openPanel: () => set({ isPanelOpen: true, isPanelCollapsed: false }),
 
-  closePanel: () => set({
+  closePanel: () => set(state => ({
     isPanelOpen: false,
     isPanelCollapsed: false,
     isTaskSelectionMode: false,
@@ -410,13 +618,21 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
     draftBaselineSignature: null,
     meetingActivities: [],
     appendedMeetingActivityIds: [],
+    meetingLiveCaptureRuntime: null,
     ...resetMeetingSynthesisState,
     lastSaveFeedback: null,
-  }),
+    meetingDraftRecoveryClearToken: state.meetingDraftRecoveryClearToken,
+    contentFocusRequestId: state.contentFocusRequestId,
+    contentFocusPending: false,
+    meetingProjectImportRequestId: state.meetingProjectImportRequestId + 1,
+    meetingProjectImportStatus: 'idle',
+    meetingProjectImportMessage: null,
+  })),
 
   togglePanelCollapsed: () => set(state => ({ isPanelCollapsed: !state.isPanelCollapsed })),
 
   openNewRecord: (type, initialNodeId) => {
+    if (type === 'meeting' && isMeetingRecordUnavailable()) return;
     const userId = useAuthStore.getState().user?.uid ?? null;
     const draft = createDefaultDraft(type, userId, initialNodeId);
     set({
@@ -430,13 +646,21 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       draftBaselineSignature: getRecordDraftSignature(draft),
       meetingActivities: [],
       appendedMeetingActivityIds: [],
+      meetingLiveCaptureRuntime: null,
       ...resetMeetingSynthesisState,
       lastSaveFeedback: null,
       error: null,
+      meetingDraftRecovery: initialMeetingDraftRecoveryState,
+      contentFocusRequestId: type === 'meeting' ? get().contentFocusRequestId + 1 : get().contentFocusRequestId,
+      contentFocusPending: type === 'meeting',
+      meetingProjectImportStatus: 'idle',
+      meetingProjectImportMessage: null,
+      meetingProjectImportRequestId: get().meetingProjectImportRequestId + 1,
     });
   },
 
   openExistingRecord: (record) => {
+    if (record.type === 'meeting' && isMeetingRecordUnavailable()) return;
     const mentionedNodeIds = extractTaskMentionIds(record.content);
     const draft = {
       id: record.id,
@@ -450,11 +674,13 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       startedAt: record.startedAt,
       endedAt: record.endedAt,
       recordedBy: record.recordedBy,
+      metadata: record.metadata,
       taskLinks: record.taskLinks.map(link => ({ nodeId: link.nodeId, role: link.role })),
       legacyTaskLinkNodeIds: record.taskLinks
         .map(link => link.nodeId)
         .filter(nodeId => !mentionedNodeIds.includes(nodeId)),
     };
+    const synthesisResumeState = getMeetingSynthesisResumeState(draft);
     set({
       isPanelOpen: true,
       isPanelCollapsed: false,
@@ -466,13 +692,26 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       draftBaselineSignature: getRecordDraftSignature(draft),
       meetingActivities: [],
       appendedMeetingActivityIds: [],
+      meetingLiveCaptureRuntime: null,
       ...resetMeetingSynthesisState,
+      ...(synthesisResumeState ? {
+        meetingSynthesisStatus: synthesisResumeState.status,
+        meetingSynthesisWarnings: synthesisResumeState.warnings,
+        meetingSynthesisProvider: synthesisResumeState.provider,
+      } : {}),
       lastSaveFeedback: null,
       error: null,
+      meetingDraftRecovery: initialMeetingDraftRecoveryState,
+      contentFocusRequestId: get().contentFocusRequestId,
+      contentFocusPending: false,
+      meetingProjectImportStatus: 'idle',
+      meetingProjectImportMessage: null,
+      meetingProjectImportRequestId: get().meetingProjectImportRequestId + 1,
     });
   },
 
   startMeetingRecord: () => {
+    if (isMeetingRecordUnavailable()) return;
     const { activeBoardId, currentView, setView } = useBoardStore.getState();
     if (!activeBoardId) {
       set({
@@ -483,7 +722,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       return;
     }
 
-    if (currentView !== 'board') setView('board');
+    if (!isMeetingContinuityView(currentView)) setView('board');
 
     const userId = useAuthStore.getState().user?.uid ?? null;
     set(state => {
@@ -506,9 +745,16 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
           : getRecordDraftSignature(draft),
         meetingActivities: state.draft === draft ? state.meetingActivities : [],
         appendedMeetingActivityIds: state.draft === draft ? state.appendedMeetingActivityIds : [],
+        meetingLiveCaptureRuntime: createMeetingLiveRuntime(draft.id ?? createId(), activeBoardId),
         ...(isExistingMeetingDraft ? {} : resetMeetingSynthesisState),
         lastSaveFeedback: null,
         error: null,
+        meetingDraftRecovery: isExistingMeetingDraft ? state.meetingDraftRecovery : initialMeetingDraftRecoveryState,
+        contentFocusRequestId: isExistingMeetingDraft ? state.contentFocusRequestId : state.contentFocusRequestId + 1,
+        contentFocusPending: !isExistingMeetingDraft,
+        meetingProjectImportStatus: isExistingMeetingDraft ? state.meetingProjectImportStatus : 'idle',
+        meetingProjectImportMessage: isExistingMeetingDraft ? state.meetingProjectImportMessage : null,
+        meetingProjectImportRequestId: state.meetingProjectImportRequestId + 1,
       };
     });
   },
@@ -516,6 +762,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
   exitMeetingMode: () => set({
     isMeetingMode: false,
     meetingTaskCaptureEnabled: false,
+    meetingLiveCaptureRuntime: null,
     isTaskSelectionMode: false,
     returnViewAfterSelection: null,
   }),
@@ -524,16 +771,182 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
     meetingTaskCaptureEnabled: !state.meetingTaskCaptureEnabled,
   })),
 
-  updateDraft: (updates) => set(state => ({
-    draft: state.draft
-      ? typeof updates.content === 'string'
-        ? syncDraftContentLinks({ ...state.draft, ...updates }, updates.content)
-        : { ...state.draft, ...updates }
-      : state.draft,
-    lastSaveFeedback: null,
-  })),
+  setMeetingTaskReservation: (input) => {
+    let outcome: 'updated' | 'cleared' | 'noop' | 'denied' = 'denied';
+    set(state => {
+      const draft = state.draft;
+      const authUserId = useAuthStore.getState().user?.uid;
+      const liveBoardId = useBoardStore.getState().activeBoardId;
+      const isAllowed = Boolean(
+        state.isMeetingMode
+        && draft?.id
+        && draft.type === 'meeting'
+        && draft.status === 'draft'
+        && input.taskId
+        && input.currentUserId
+        && input.currentUserId === authUserId
+        && draft.recordedBy === authUserId
+        && liveBoardId
+        && liveBoardId === input.activeBoardId
+        && input.taskExists
+        && !input.taskArchived
+        && input.taskBoardId === input.activeBoardId,
+      );
+      if (!isAllowed || !draft) return state;
+
+      const result = updateMeetingTaskReservationMetadata(draft.metadata, input.taskId, input.value);
+      outcome = result.status;
+      if (result.status === 'denied' || result.status === 'noop') return state;
+      return {
+        draft: { ...draft, metadata: result.metadata },
+        lastSaveFeedback: null,
+      };
+    });
+    return outcome;
+  },
+
+  updateDraft: (updates) => set(state => {
+    if (!state.draft) return {};
+    const previousContent = state.draft.content;
+    const nextDraft = typeof updates.content === 'string'
+      ? syncDraftContentLinks({ ...state.draft, ...updates }, updates.content)
+      : { ...state.draft, ...updates };
+    let reconciledDraft = nextDraft;
+    if (nextDraft.type === 'meeting' && typeof updates.content === 'string') {
+      const quickNoteReconcile = reconcileMeetingTaskQuickNoteMetadata(
+        previousContent,
+        nextDraft.content,
+        nextDraft.metadata,
+      );
+      reconciledDraft = { ...reconciledDraft, metadata: quickNoteReconcile.metadata };
+      if (activeBoardIdForMeeting()) {
+        reconciledDraft = {
+          ...reconciledDraft,
+          metadata: reconcileMeetingProjectChangeImportMetadata(
+            reconciledDraft.metadata,
+            activeBoardIdForMeeting() as string,
+            nextDraft.content,
+          ),
+        };
+      }
+    }
+    return { draft: reconciledDraft, lastSaveFeedback: null };
+  }),
 
   setContentCursorOffset: (offset) => set({ contentCursorOffset: offset }),
+
+  requestContentFocus: () => set(state => ({
+    contentFocusRequestId: state.contentFocusRequestId + 1,
+    contentFocusPending: true,
+  })),
+
+  consumeContentFocus: () => set({ contentFocusPending: false }),
+
+  importMeetingProjectChanges: async (options = {}) => {
+    const initial = get();
+    const { draft, isMeetingMode } = initial;
+    const { activeWorkspaceId, activeBoardId } = useBoardStore.getState();
+    if (!draft || draft.type !== 'meeting' || !isMeetingMode || !activeWorkspaceId || !activeBoardId) {
+      set({ meetingProjectImportStatus: 'error', meetingProjectImportMessage: '目前沒有可匯入的會議草稿。' });
+      return false;
+    }
+    const requestId = initial.meetingProjectImportRequestId + 1;
+    const clickedAt = Date.now();
+    set({
+      meetingProjectImportRequestId: requestId,
+      meetingProjectImportStatus: 'loading',
+      meetingProjectImportMessage: null,
+      error: null,
+    });
+
+    const isCurrentRequest = () => {
+      const current = get();
+      return current.meetingProjectImportRequestId === requestId && current.draft?.id === draft.id && current.isMeetingMode;
+    };
+
+    try {
+      const records = await recordService.listByProject(activeWorkspaceId, activeBoardId);
+      if (!isCurrentRequest()) return false;
+      set({ records });
+      const window = resolveMeetingProjectChangeImportWindow({
+        draftOccurredAt: draft.occurredAt,
+        clickedAt,
+        records,
+        boardId: activeBoardId,
+        mode: options.mode ?? 'default',
+        customStartedAt: options.startedAt,
+        customEndedAt: options.endedAt,
+      });
+      const events = await eventLogService.listActivity(createMeetingActivityQuery({
+        workspaceId: activeWorkspaceId,
+        boardId: activeBoardId,
+        startedAt: window.rangeStartedAt,
+        endedAt: window.rangeEndedAt,
+        eventTypes: PROJECT_CHANGE_EVENT_TYPES,
+      }));
+      if (!isCurrentRequest()) return false;
+      const currentDraft = get().draft;
+      if (!currentDraft || currentDraft.type !== 'meeting') return false;
+      const parsed = parseMeetingProjectChangeImportMetadata(currentDraft.metadata, activeBoardId);
+      const existingEventIds = parsed?.batches.flatMap(batch => batch.sourceEventIds) ?? [];
+      const deltaEvents = listMeetingProjectChangeDelta(events, existingEventIds);
+      if (deltaEvents.length === 0) {
+        set({ meetingProjectImportStatus: 'empty', meetingProjectImportMessage: '沒有可帶入的變更。' });
+        return false;
+      }
+      const result = await synthesizeMeetingRecord(createProjectChangeSynthesisInput(
+        currentDraft.title || '專案變化紀錄',
+        deltaEvents,
+        options.nodes ?? {},
+      ));
+      if (!isCurrentRequest()) return false;
+      const latestDraft = get().draft;
+      if (!latestDraft || latestDraft.type !== 'meeting' || latestDraft.status === 'published') return false;
+      const importedBlock = wrapProjectChangeImportContent(result.content);
+      if (!importedBlock) {
+        set({ meetingProjectImportStatus: 'empty', meetingProjectImportMessage: '沒有可帶入的變更。' });
+        return false;
+      }
+      const latestContent = latestDraft.content;
+      const nextContent = [latestContent.trim(), importedBlock].filter(Boolean).join('\n\n');
+      const batch = createMeetingProjectChangeImportBatch({
+        mode: options.mode ?? 'default',
+        rangeStartedAt: window.rangeStartedAt,
+        rangeEndedAt: window.rangeEndedAt,
+        events: deltaEvents,
+        beforeContentSignature: getRecordDraftSignature(latestDraft) ?? '',
+        importedAt: clickedAt,
+        content: nextContent,
+      });
+      const nextMetadata = {
+        ...(latestDraft.metadata ?? {}),
+        meetingProjectChangeImport: {
+          schemaVersion: 1 as const,
+          boardId: activeBoardId,
+          batches: [...(parsed?.batches ?? []), batch],
+        },
+      };
+      set(current => {
+        if (current.meetingProjectImportRequestId !== requestId || current.draft?.id !== draft.id) return current;
+        const nextDraft = syncDraftContentLinks({ ...current.draft!, metadata: nextMetadata }, nextContent);
+        return {
+          draft: nextDraft,
+          contentCursorOffset: nextContent.length,
+          meetingProjectImportStatus: 'complete',
+          meetingProjectImportMessage: '已完成',
+          lastSaveFeedback: null,
+        };
+      });
+      return true;
+    } catch (error) {
+      if (!isCurrentRequest()) return false;
+      const message = error instanceof MeetingProjectChangeImportError || error instanceof Error
+        ? error.message
+        : String(error);
+      set({ meetingProjectImportStatus: 'error', meetingProjectImportMessage: message });
+      return false;
+    }
+  },
 
   setDraftTaskRole: (nodeId, role) => set(state => {
     if (!state.draft) return {};
@@ -579,22 +992,232 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
     };
   }),
 
-  appendTaskDiscussionToMeetingDraft: (nodeId, title, text) => {
+  appendTaskDiscussionToMeetingDraft: (input) => {
     const state = get();
-    if (!state.isMeetingMode || state.draft?.type !== 'meeting') return false;
+    if (!state.isMeetingMode || state.draft?.type !== 'meeting') return { status: 'denied', reason: 'not-meeting' };
+    if (!input.taskId.trim() || !input.taskTitle.trim() || !input.taskBoardId.trim()) {
+      return { status: 'denied', reason: 'invalid-task' };
+    }
+    if (input.taskBoardId === TASK_WORKBENCH_UNPLACED_BOARD_ID) {
+      return { status: 'denied', reason: 'unsupported-task-owner' };
+    }
+    if (!activeBoardIdForMeeting() || input.taskBoardId !== activeBoardIdForMeeting()) {
+      return { status: 'denied', reason: 'meeting-board-mismatch' };
+    }
+    if (!input.submissionId.trim() || !Number.isFinite(input.occurredAt) || !input.text.trim()) {
+      return { status: 'denied', reason: 'invalid-input' };
+    }
+    const parsed = parseMeetingTaskQuickNotesMetadata(state.draft.metadata);
+    if (parsed.status === 'invalid') return { status: 'denied', reason: 'invalid-metadata' };
+    const existing = parsed.namespace?.entries.find(entry => entry.id === input.submissionId);
+    if (existing) return { status: 'noop', entryId: existing.id };
 
-    const content = appendTaskDiscussionToRecordContent(state.draft.content, nodeId, title, text);
-    if (!content) return false;
-
-    const draft = syncDraftContentLinks(state.draft, content);
+    const appended = appendMeetingTaskQuickNoteToRecordContent(
+      state.draft.content,
+      input.taskId,
+      input.taskTitle,
+      input.text,
+      input.occurredAt,
+      input.submissionId,
+    );
+    if (!appended) return { status: 'denied', reason: 'invalid-input' };
+    const metadataResult = appendMeetingTaskQuickNoteMetadata(state.draft.metadata, appended.entry);
+    if (metadataResult.status === 'denied') return { status: 'denied', reason: 'invalid-metadata' };
+    const draft = {
+      ...syncDraftContentLinks(state.draft, appended.content),
+      metadata: metadataResult.metadata,
+    };
 
     set({
       draft,
-      contentCursorOffset: content.length,
+      contentCursorOffset: appended.content.length,
       ...resetMeetingSynthesisState,
       lastSaveFeedback: null,
     });
-    return true;
+    return { status: 'appended', entryId: appended.entry.id };
+  },
+
+  commitMeetingTaskMutation: async (input) => {
+    const initial = get();
+    const runtime = initial.meetingLiveCaptureRuntime;
+    if (!initial.isMeetingMode || initial.draft?.type !== 'meeting' || !runtime) return 'ignored';
+    if (input.segmentId && input.segmentId !== runtime.segment.id) return 'ignored';
+    // A meeting segment is board-scoped.  A late persistence callback from a
+    // different board (or the unplaced workbench) must never leak into this
+    // meeting's live evidence.
+    if (runtime.segment.boardId && input.afterNode.boardId !== runtime.segment.boardId) return 'ignored';
+    const runCommit = async (): Promise<'committed' | 'ignored' | 'failed'> => {
+      const current = get();
+      if (
+        !current.isMeetingMode
+        || current.draft?.type !== 'meeting'
+        || current.draft.id !== initial.draft?.id
+        || current.meetingLiveCaptureRuntime !== runtime
+      ) return 'ignored';
+      if (runtime.appliedMutationIds.has(input.mutationId) || runtime.pendingMutationIds.has(input.mutationId)) return 'ignored';
+
+      runtime.pendingMutationIds.add(input.mutationId);
+      try {
+      const changes = getMeetingLiveFieldChanges(input.beforeNode, input.afterNode, input.changedKeys ?? []);
+      if (changes.length === 0) {
+        runtime.pendingMutationIds.delete(input.mutationId);
+        runtime.appliedMutationIds.add(input.mutationId);
+        return 'ignored';
+      }
+
+      const prepared = await Promise.all(changes.map(async change => {
+        const aggregateKey = `${input.afterNode.id}:${change.fieldKey}`;
+        const existing = runtime.aggregates.get(aggregateKey);
+        const isContent = isMeetingLiveContentField(change.fieldKey);
+        const baselineText = isContent
+          ? runtime.plaintextBaselines.get(aggregateKey) ?? getMeetingLiveContentBaseline(change)
+          : undefined;
+        if (isContent && !runtime.plaintextBaselines.has(aggregateKey)) {
+          runtime.plaintextBaselines.set(aggregateKey, baselineText ?? '');
+        }
+
+        let value = await createMeetingLiveAggregateValue(
+          change,
+          baselineText,
+        );
+        if (existing && existing.value.kind !== 'created' && value.kind !== 'created') {
+          if (value.kind === 'content_delta' && existing.value.kind === 'content_delta') {
+            value = await createMeetingLiveAggregateValue({
+              ...change,
+              before: existing.value.baselineHash,
+              beforeText: baselineText,
+            }, baselineText);
+          } else if (value.kind !== 'content_delta' && existing.value.kind !== 'content_delta') {
+            value = await createMeetingLiveAggregateValue({
+              ...change,
+              before: existing.value.baseline,
+            });
+          }
+        }
+        return { aggregateKey, change, value, existing };
+      }));
+
+      const latest = get();
+      if (latest.meetingLiveCaptureRuntime !== runtime || latest.draft?.id !== initial.draft?.id || !latest.isMeetingMode) {
+        runtime.pendingMutationIds.delete(input.mutationId);
+        return 'ignored';
+      }
+
+      const nextAggregates = new Map(runtime.aggregates);
+      const affectedKeys = new Set<string>();
+      prepared.forEach(({ aggregateKey, change, value, existing }) => {
+        affectedKeys.add(aggregateKey);
+        const nextAggregate: MeetingLiveFieldAggregate = {
+          key: aggregateKey,
+          segmentId: runtime.segment.id,
+          nodeId: input.afterNode.id,
+          fieldKey: change.fieldKey,
+          taskTitle: input.afterNode.title || input.afterNode.id,
+          value,
+          firstConfirmedAt: existing?.firstConfirmedAt ?? Date.now(),
+          lastConfirmedAt: Date.now(),
+          lastCommitSequence: runtime.nextCommitSequence,
+          appliedMutationIds: Array.from(new Set([...(existing?.appliedMutationIds ?? []), input.mutationId])),
+          projection: existing?.projection ?? null,
+        };
+        if (isMeetingLiveAggregateNoop(nextAggregate)) {
+          nextAggregates.delete(aggregateKey);
+          runtime.plaintextBaselines.delete(aggregateKey);
+        } else {
+          nextAggregates.set(aggregateKey, nextAggregate);
+        }
+      });
+
+      if (changes.some(change => change.fieldKey === 'title')) {
+        nextAggregates.forEach((aggregate, key) => {
+          if (aggregate.nodeId === input.afterNode.id) {
+            affectedKeys.add(key);
+            nextAggregates.set(key, { ...aggregate, taskTitle: input.afterNode.title || input.afterNode.id });
+          }
+        });
+      }
+
+      const previousAggregates = runtime.aggregates;
+      const lines = (latest.draft?.content ?? '').split('\n');
+      const locateAnchor = (anchor: MeetingLiveFieldAggregate['projection']) => {
+        if (!anchor) return [];
+        if (lines[anchor.lineIndex] === anchor.exactText) return [anchor.lineIndex];
+        return getLineCandidates(lines.join('\n'), anchor.exactText);
+      };
+      const removeLineFor = (aggregate: MeetingLiveFieldAggregate) => {
+        const candidates = locateAnchor(aggregate.projection);
+        if (candidates.length === 1) lines.splice(candidates[0], 1);
+      };
+      const appendLineFor = async (aggregate: MeetingLiveFieldAggregate) => {
+        const line = formatMeetingLiveAggregateLine(aggregate);
+        if (lines.length === 1 && !lines[0]) lines[0] = line;
+        else lines.push(line);
+        return {
+          ...aggregate,
+          projection: {
+            lineIndex: lines.length - 1,
+            exactText: line,
+            fingerprint: await meetingLiveFingerprint(line),
+            generation: (aggregate.projection?.generation ?? 0) + 1,
+          },
+        };
+      };
+      const replaceLineFor = async (aggregate: MeetingLiveFieldAggregate, previous: MeetingLiveFieldAggregate | undefined) => {
+        const line = formatMeetingLiveAggregateLine(aggregate);
+        const candidates = locateAnchor(previous?.projection ?? aggregate.projection);
+        if (candidates.length === 1) {
+          lines[candidates[0]] = line;
+          return {
+            ...aggregate,
+            projection: {
+              lineIndex: candidates[0],
+              exactText: line,
+              fingerprint: await meetingLiveFingerprint(line),
+              generation: previous?.projection?.generation ?? 0,
+            },
+          };
+        }
+        return appendLineFor(aggregate);
+      };
+
+      for (const [key, previous] of previousAggregates) {
+        if (!affectedKeys.has(key) || nextAggregates.has(key)) continue;
+        removeLineFor(previous);
+      }
+      for (const key of affectedKeys) {
+        const next = nextAggregates.get(key);
+        if (!next) continue;
+        const previous = previousAggregates.get(key);
+        nextAggregates.set(key, await replaceLineFor(next, previous));
+      }
+
+      runtime.nextCommitSequence += 1;
+      runtime.pendingMutationIds.delete(input.mutationId);
+      runtime.appliedMutationIds.add(input.mutationId);
+      const nextDraft = syncDraftContentLinks(latest.draft!, lines.join('\n'));
+      set({
+        draft: nextDraft,
+        meetingLiveCaptureRuntime: { ...runtime, aggregates: nextAggregates },
+        ...resetMeetingSynthesisState,
+        lastSaveFeedback: null,
+      });
+      return 'committed';
+      } catch (error) {
+        runtime.pendingMutationIds.delete(input.mutationId);
+        set({ error: error instanceof Error ? error.message : '會中變更暫時無法更新，請重試。' });
+        return 'failed';
+      }
+    };
+
+    const segmentId = runtime.segment.id;
+    const previousQueue = meetingLiveCommitQueues.get(segmentId) ?? Promise.resolve<'ignored'>('ignored');
+    const queued = previousQueue.then(runCommit, runCommit);
+    meetingLiveCommitQueues.set(segmentId, queued);
+    try {
+      return await queued;
+    } finally {
+      if (meetingLiveCommitQueues.get(segmentId) === queued) meetingLiveCommitQueues.delete(segmentId);
+    }
   },
 
   recordMeetingTaskActivity: (activity) => set(state => {
@@ -609,8 +1232,8 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
   }),
 
   synthesizeMeetingDraft: async (nodes = {}) => {
-    const { draft, meetingActivities, isMeetingMode } = get();
-    if (!draft || draft.type !== 'meeting' || !isMeetingMode) {
+    const { draft, meetingActivities } = get();
+    if (!draft || draft.type !== 'meeting' || draft.status !== 'draft') {
       set({ error: '目前沒有可統整的會議草稿。' });
       return false;
     }
@@ -632,14 +1255,36 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
     });
 
     try {
+      const synthesisSourceDraft = getMeetingSynthesisSourceDraft(preservedDraft);
       const result = await synthesizeMeetingRecord(
-        createMeetingSynthesisInput(preservedDraft, meetingActivities, nodes),
+        createMeetingSynthesisInput(synthesisSourceDraft, meetingActivities, nodes),
       );
-      const mergedContent = mergeHumanDraftWithAiSynthesis(result.content, preservedDraft.content);
+      const mergedContent = mergeHumanDraftWithAiSynthesis(result.content, synthesisSourceDraft.content);
+      const mergeViolations = getMeetingSynthesisMergeViolations(result.content, mergedContent);
+      if (mergeViolations.length > 0) {
+        throw new Error('AI 整理結果在合併後未通過完整性檢查，原始草稿已保留，請重試。');
+      }
+      const quickNoteReconcile = reconcileMeetingTaskQuickNoteMetadata(
+        synthesisSourceDraft.content,
+        mergedContent,
+        preservedDraft.metadata,
+      );
+      if (quickNoteReconcile.status === 'invalid' || quickNoteReconcile.detachedIds.length > 0) {
+        throw new Error('AI 整理結果無法唯一重定位任務會議補記，原始草稿已保留，請重試。');
+      }
       const nextDraft = syncDraftContentLinks(
         {
           ...preservedDraft,
           status: 'draft',
+          metadata: {
+            ...(preservedDraft.metadata ?? {}),
+            ...quickNoteReconcile.metadata,
+            meetingSynthesis: createMeetingSynthesisTraceMetadata(
+              result,
+              synthesisSourceDraft.content,
+              mergedContent,
+            ),
+          },
           legacyTaskLinkNodeIds: Array.from(new Set([
             ...(preservedDraft.legacyTaskLinkNodeIds ?? []),
             ...result.linkedTaskIds,
@@ -647,10 +1292,16 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
         },
         mergedContent,
       );
+      const activeBoardId = useBoardStore.getState().activeBoardId;
+      const aiIntegratedDraft = activeBoardId && nextDraft.type === 'meeting'
+        ? { ...nextDraft, metadata: markMeetingProjectChangeImportAiIntegrated(nextDraft.metadata, activeBoardId) }
+        : nextDraft;
+      const nextLiveRuntime = rebaseMeetingLiveProjectionAnchors(get().meetingLiveCaptureRuntime, mergedContent);
 
       set({
         saving: false,
-        draft: nextDraft,
+        draft: aiIntegratedDraft,
+        meetingLiveCaptureRuntime: nextLiveRuntime,
         contentCursorOffset: mergedContent.length,
         meetingSynthesisStatus: 'ready',
         meetingSynthesisError: null,
@@ -666,7 +1317,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
         draft: preservedDraft,
         meetingSynthesisStatus: 'error',
         meetingSynthesisError: message,
-        error: `AI 統整失敗，原始草稿已保留：${message}`,
+        error: null,
       });
       return false;
     }
@@ -724,9 +1375,19 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       set({ error: '工作紀錄的開始時間不可晚於結束時間。' });
       return null;
     }
+    if (draft.type === 'meeting') {
+      const quickNoteInvariant = validateMeetingTaskQuickNoteAggregate(draft.content, draft.metadata);
+      if (!quickNoteInvariant.valid) {
+        set({ error: `任務會議補記資料不一致，無法儲存：${quickNoteInvariant.errors[0]}` });
+        return null;
+      }
+    }
 
     const { legacyTaskLinkNodeIds, ...serializableDraft } = draft;
     void legacyTaskLinkNodeIds;
+    const projectedMetadata = draft.type === 'meeting'
+      ? projectMeetingProjectChangeImportMetadata(draft.metadata, activeBoardId, wantsPublish ? 'published' : 'draft')
+      : draft.metadata;
     const payload: KnowledgeRecordInput = {
       ...serializableDraft,
       title: draft.title.trim(),
@@ -735,6 +1396,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       taskLinks: uniqueLinks(draft.taskLinks),
       status: draft.status as KnowledgeRecordStatus,
       visibility: draft.visibility as KnowledgeRecordVisibility,
+      metadata: projectedMetadata,
     };
     const previousRecord = payload.id
       ? get().records.find(record => record.id === payload.id)
@@ -743,7 +1405,33 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
 
     set({ saving: true, error: null });
     try {
-      const saved = await recordService.upsert(activeWorkspaceId, activeBoardId, payload);
+      const resolutionMetadata = payload.metadata?.meetingTaskResolution;
+      const resolutionMetadataRecord = resolutionMetadata && typeof resolutionMetadata === 'object' && !Array.isArray(resolutionMetadata)
+        ? resolutionMetadata as Record<string, unknown>
+        : null;
+      const captureId = resolutionMetadataRecord && typeof resolutionMetadataRecord.captureId === 'string'
+        ? resolutionMetadataRecord.captureId
+        : null;
+      let saved: EditableKnowledgeRecord;
+      if (isSupabaseBackend && draft.type === 'meeting' && captureId) {
+        await meetingAnalysisService.saveProjection({
+          tenantId: activeWorkspaceId,
+          projectId: activeBoardId,
+          recordId: payload.id,
+          captureId,
+          expectedRecordUpdatedAt: previousRecord?.updatedAt ? new Date(previousRecord.updatedAt).toISOString() : null,
+          expectedReviewRevision: typeof resolutionMetadataRecord?.reviewRevision === 'number' ? resolutionMetadataRecord.reviewRevision : 0,
+          userDraft: payload,
+          taskLinks: payload.taskLinks,
+          requestKey: `projection:${payload.id}:${Date.now()}`,
+        });
+        const refreshed = await recordService.listByProject(activeWorkspaceId, activeBoardId);
+        const reloaded = refreshed.find(record => record.id === payload.id);
+        if (!reloaded) throw new Error('會議投影已寫入，但重新載入紀錄失敗。');
+        saved = reloaded;
+      } else {
+        saved = await upsertRecordWithIntegrity(activeWorkspaceId, activeBoardId, payload);
+      }
       const savedInput = toRecordInput(saved);
       set(state => ({
         saving: false,
@@ -768,7 +1456,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       const applyRecordInput = async (input: KnowledgeRecordInput) => {
         set({ saving: true, error: null });
         try {
-          const restored = await recordService.upsert(activeWorkspaceId, activeBoardId, input);
+          const restored = await upsertRecordWithIntegrity(activeWorkspaceId, activeBoardId, input);
           const restoredDraft = toDraftFromRecordInput(input, restored);
           set(state => ({
             saving: false,
@@ -823,6 +1511,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
         undo: () => previousInput ? applyRecordInput(previousInput) : archiveSavedRecord(),
         redo: () => applyRecordInput(savedInput),
       });
+      if (draft.type === 'meeting') get().requestMeetingDraftRecoveryClear();
       return saved;
     } catch (error) {
       set({
@@ -848,6 +1537,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
         draftBaselineSignature: state.draft?.id === recordId ? null : state.draftBaselineSignature,
         lastSaveFeedback: state.lastSaveFeedback?.recordId === recordId ? null : state.lastSaveFeedback,
       }));
+      if (archivedRecord?.type === 'meeting') get().requestMeetingDraftRecoveryClear();
       if (archivedRecord) {
         const restoreInput = toRecordInput(archivedRecord);
         useUndoStore.getState().pushUndo({
@@ -857,7 +1547,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
           undo: async () => {
             set({ saving: true, error: null });
             try {
-              const restored = await recordService.upsert(activeWorkspaceId, activeBoardId, restoreInput);
+              const restored = await upsertRecordWithIntegrity(activeWorkspaceId, activeBoardId, restoreInput);
               const restoredDraft = toDraftFromRecordInput(restoreInput, restored);
               set(state => ({
                 saving: false,
@@ -892,6 +1582,55 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       });
     }
   },
+
+  setMeetingDraftRecovery: (updates) => set(state => ({
+    meetingDraftRecovery: { ...state.meetingDraftRecovery, ...updates },
+  })),
+
+  restoreMeetingDraftSnapshot: (snapshot) => {
+    const { currentView, setView } = useBoardStore.getState();
+    if (!isMeetingContinuityView(currentView)) setView('board');
+    set({
+    isPanelOpen: true,
+    isPanelCollapsed: false,
+    isTaskSelectionMode: false,
+    isMeetingMode: true,
+    meetingTaskCaptureEnabled: false,
+    returnViewAfterSelection: null,
+    contentCursorOffset: snapshot.contentCursorOffset,
+    draft: {
+      ...snapshot.draft,
+      taskLinks: snapshot.draft.taskLinks.map(link => ({ nodeId: link.nodeId, role: link.role })),
+    },
+    draftBaselineSignature: snapshot.canonicalBaselineSignature ?? snapshot.baselineSignature ?? getRecordDraftSignature(snapshot.draft),
+    meetingActivities: snapshot.meetingActivities,
+    appendedMeetingActivityIds: snapshot.appendedMeetingActivityIds,
+    meetingLiveCaptureRuntime: createMeetingLiveRuntime(snapshot.draft.id ?? createId(), activeBoardIdForMeeting() ?? ''),
+    ...resetMeetingSynthesisState,
+    lastSaveFeedback: null,
+    error: null,
+    meetingDraftRecovery: {
+      ...initialMeetingDraftRecoveryState,
+      localStatus: 'saved',
+      cloudStatus: 'idle',
+      localSavedAt: snapshot.savedAt,
+      cloudSavedAt: null,
+      restoredAt: Date.now(),
+      pendingSnapshot: null,
+    },
+    meetingProjectImportStatus: 'idle',
+    meetingProjectImportMessage: null,
+    meetingProjectImportRequestId: get().meetingProjectImportRequestId + 1,
+    contentFocusPending: false,
+    });
+  },
+
+  requestMeetingDraftRecoveryClear: () => set(state => ({
+    meetingDraftRecoveryClearToken: state.meetingDraftRecoveryClearToken + 1,
+    meetingDraftRecovery: initialMeetingDraftRecoveryState,
+  })),
+
+  resetMeetingDraftRecoveryState: () => set({ meetingDraftRecovery: initialMeetingDraftRecoveryState }),
 
   clearSaveFeedback: () => set({ lastSaveFeedback: null }),
 }));

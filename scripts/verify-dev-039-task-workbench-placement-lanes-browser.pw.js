@@ -131,7 +131,18 @@ async (page) => {
           promotedTaskNodeId: null,
         },
       ]));
-      localStorage.setItem('projed-task-workbench-panel:v1', JSON.stringify({ open: true, filtersOpen: false }));
+      localStorage.setItem(`projed-task-workbench-panel:v2:account:${encodeURIComponent(account.id)}`, JSON.stringify({
+        open: true,
+        filtersOpen: false,
+        showContainersInAllTasks: false,
+        width: 340,
+        openPreferenceVersion: 1,
+      }));
+      localStorage.setItem(`projed-task-workbench-filters:v2:account:${encodeURIComponent(account.id)}`, JSON.stringify({
+        version: 2,
+        selectedBoardId: 'dev039-placement-board-a',
+        filtersByBoardId: {},
+      }));
       localStorage.setItem('projed-local-test.seeded.v1', 'true');
       localStorage.setItem('projed-local-test.seeded.size', '12');
       localStorage.setItem('projed-last-ws', workspace.id);
@@ -142,7 +153,7 @@ async (page) => {
 
   const openApp = async (viewport = { width: 1440, height: 900 }) => {
     await page.setViewportSize(viewport);
-    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
     await page.reload({ waitUntil: 'networkidle' });
     try {
       await page.locator('[data-task-workbench-panel="true"]').waitFor({ state: 'visible', timeout: 15000 });
@@ -229,8 +240,9 @@ async (page) => {
       { collapseToggleIconClass },
     );
     assert(await unplacedLane.getByText('未歸位').count() >= 1, 'unplaced lane should be clearly labelled');
-    assert(await unplacedLane.locator('[data-task-workbench-unclassified-input="true"]').getAttribute('placeholder') === '新增任務', 'unplaced lane add input should use the simplified new-task placeholder');
-    assert(await unplacedLane.locator('[data-task-workbench-unclassified-add="true"] svg.lucide-plus').count() === 1, 'unplaced lane add action should use a compact plus icon');
+    assert(await unplacedLane.locator('[data-task-workbench-unclassified-input="true"]').count() === 0, 'unplaced lane should remove the inline new-task input');
+    assert(await unplacedLane.locator('[data-task-workbench-unclassified-add="true"]').count() === 0, 'unplaced lane should remove the inline plus action');
+    assert(await unplacedLane.locator('[data-task-workbench-unclassified-modal-add="true"]').count() === 1, 'unplaced lane should keep one modal-based new-task entry');
     assert(await placedLane.getByText('已歸位').count() >= 1, 'placed lane should use the simplified placed-task section title');
     assert(await placedLane.getByText('所有任務排序').count() === 0, 'placed lane should not render the old all-task sorted section title');
     assert(await placedLane.getByText('全部看板').count() === 0, 'placed lane should not render the removed all-boards summary text');
@@ -242,10 +254,10 @@ async (page) => {
       return {
         unplacedLane: readBg('[data-task-workbench-unclassified-section="true"]'),
         placedLane: readBg('[data-task-workbench-placed-board-lane="true"]'),
-        unplacedHeader: readBg('[data-task-workbench-section-header="unplaced"]'),
-        placedHeader: readBg('[data-task-workbench-section-header="all-tasks"]'),
-        unplacedAccent: readBg('[data-task-workbench-header-accent="unplaced"]'),
-        placedAccent: readBg('[data-task-workbench-header-accent="placed"]'),
+        unplacedHeader: readBg('[data-task-workbench-section-label="unplaced"]'),
+        placedHeader: readBg('[data-task-workbench-section-label="all-tasks"]'),
+        unplacedAccentCount: document.querySelectorAll('[data-task-workbench-header-accent="unplaced"]').length,
+        placedAccentCount: document.querySelectorAll('[data-task-workbench-header-accent="placed"]').length,
       };
     });
     assert(
@@ -258,9 +270,34 @@ async (page) => {
     assert(
       placementTone.unplacedHeader === placementTone.placedHeader &&
         placementTone.unplacedHeader !== placementTone.unplacedLane &&
-        placementTone.unplacedAccent === placementTone.placedAccent,
-      'section headers should use one separate title tone from task bodies',
+        placementTone.unplacedAccentCount === 0 &&
+        placementTone.placedAccentCount === 0,
+      'section headers should use one shared dark tone without decorative accent icons',
       placementTone,
+    );
+    const readTaskTitleTypography = async locator => locator.evaluate(element => {
+      const style = getComputedStyle(element);
+      return {
+        fontFamily: style.fontFamily,
+        fontSize: style.fontSize,
+        fontWeight: style.fontWeight,
+        lineHeight: style.lineHeight,
+        color: style.color,
+      };
+    });
+    const unplacedTitleTypography = await readTaskTitleTypography(
+      unplacedLane.locator('[data-task-workbench-task-title="true"]').first(),
+    );
+    const placedTaskTitleTypography = await readTaskTitleTypography(
+      placedLane.locator('[data-task-workbench-placed-task-card="true"] [data-task-workbench-task-title="true"]').first(),
+    );
+    assert(
+      unplacedTitleTypography.fontFamily === placedTaskTitleTypography.fontFamily
+        && unplacedTitleTypography.fontSize === '12px'
+        && Number.parseFloat(unplacedTitleTypography.lineHeight) <= 16
+        && Number.parseFloat(placedTaskTitleTypography.fontSize) > Number.parseFloat(unplacedTitleTypography.fontSize),
+      'unplaced titles should use compact L3+ typography while placed read-only rows keep their browsing scale',
+      { unplacedTitleTypography, placedTaskTitleTypography },
     );
     assert(await workbenchPanel.locator('[data-task-workbench-unplaced-task-card="true"]').count() === 1, 'legacy inbox item should be migrated into one unplaced task card');
     assert(await workbenchPanel.locator('[data-task-workbench-placed-task-card="true"][data-task-id="dev039-placement-card-a"]').count() === 1, 'placed board lane should show existing board task');
@@ -347,12 +384,18 @@ async (page) => {
     step = 'unplaced-card-opens-details';
     await seededUnplacedCard.click();
     await page.locator('[data-task-details-modal="true"]').waitFor({ state: 'visible', timeout: 10000 });
-    await page.locator('[data-task-details-modal="true"] button[title="關閉"]').click();
+    await page.locator('[data-task-details-modal="true"] button[aria-label="關閉任務詳情"]').click();
     await page.locator('[data-task-details-modal="true"]').waitFor({ state: 'detached', timeout: 10000 });
 
-    step = 'add-unplaced-task';
-    await unplacedLane.locator('[data-task-workbench-unclassified-input="true"]').fill('臨時拜訪客戶');
-    await unplacedLane.locator('[data-task-workbench-unclassified-add="true"]').click();
+    step = 'modal-create-entry';
+    await unplacedLane.locator('[data-task-workbench-unclassified-modal-add="true"]').click();
+    const createdTaskModal = page.locator('[data-task-details-modal="true"]');
+    await createdTaskModal.waitFor({ state: 'visible', timeout: 10000 });
+    const createdTaskTitleInput = createdTaskModal.locator('[data-task-details-title-input="true"]');
+    assert(await createdTaskTitleInput.inputValue() === '新任務', 'modal-based unplaced task creation should open with the new title ready to edit');
+    await createdTaskTitleInput.fill('臨時拜訪客戶');
+    await createdTaskModal.locator('button[aria-label="關閉任務詳情"]').click();
+    await createdTaskModal.waitFor({ state: 'detached', timeout: 10000 });
     const newUnplacedCard = workbenchPanel.locator('[data-task-workbench-unplaced-task-card="true"]').filter({ hasText: '臨時拜訪客戶' }).first();
     await newUnplacedCard.waitFor({ state: 'visible', timeout: 10000 });
     assert(await newUnplacedCard.locator('[data-task-drag-handle="true"]').count() === 0, 'dense task rows should not render a separate drag handle');
@@ -427,13 +470,15 @@ async (page) => {
     await filterPanel.waitFor({ state: 'visible', timeout: 10000 });
     await filterPanel.getByRole('button', { name: /進行中/ }).click({ force: true });
     await page.waitForFunction(() => (
-      document.querySelectorAll('[data-task-workbench-placed-task-card="true"][data-task-id="dev039-placement-card-a"]').length === 0
+      document.querySelectorAll('[data-task-workbench-placed-task-card="true"][data-task-id="dev039-placement-card-a"]').length === 1
+      && !Array.from(document.querySelectorAll('[data-task-workbench-placed-task-card="true"]'))
+        .some(card => card.textContent?.includes('臨時拜訪客戶'))
     ), null, { timeout: 10000 }).catch(async (error) => {
       const filterDiagnostics = await page.evaluate(() => {
         const panel = document.querySelector('[data-task-workbench-filter-panel="true"]');
         return {
           selectedBoardId: panel?.querySelector('select')?.value || null,
-          prefs: localStorage.getItem('projed-task-workbench-filters:v1'),
+          prefs: localStorage.getItem('projed-task-workbench-filters:v5:account:local-test-user'),
           statusButtons: Array.from(panel?.querySelectorAll('button') || []).map(button => ({
             text: (button.textContent || '').trim(),
             pressed: button.getAttribute('aria-pressed'),
@@ -451,11 +496,15 @@ async (page) => {
           })),
         };
       });
-      throw new Error(`placed board filter did not hide in-progress task: ${error.message}: ${JSON.stringify(filterDiagnostics)}`);
+      throw new Error(`positive-inclusion filter did not keep only in-progress placed tasks: ${error.message}: ${JSON.stringify(filterDiagnostics)}`);
     });
     assert(
-      await workbenchPanel.locator('[data-task-workbench-placed-task-card="true"][data-task-id="dev039-placement-card-a"]').count() === 0,
-      'placed board lane should respond to board filters',
+      await workbenchPanel.locator('[data-task-workbench-placed-task-card="true"][data-task-id="dev039-placement-card-a"]').count() === 1,
+      'placed board lane should positively include the selected in-progress status',
+    );
+    assert(
+      await workbenchPanel.locator('[data-task-workbench-placed-task-card="true"]').filter({ hasText: '臨時拜訪客戶' }).count() === 0,
+      'placed board lane should exclude unselected task statuses',
     );
     assert(
       await workbenchPanel.locator('[data-task-workbench-unplaced-task-card="true"]').filter({ hasText: '尚未歸位的採購提醒' }).count() === 1,
@@ -465,6 +514,12 @@ async (page) => {
     step = 'mobile-viewport';
     await page.setViewportSize({ width: 390, height: 844 });
     await page.reload({ waitUntil: 'networkidle' });
+    const mobileWorkbenchNavEntry = page.locator('[data-mobile-task-workbench-nav-entry="true"]').first();
+    const mobileWorkbenchPanel = page.locator('[data-task-workbench-panel="true"]').first();
+    if (await mobileWorkbenchPanel.isVisible().catch(() => false)) {
+      await mobileWorkbenchNavEntry.click();
+      await mobileWorkbenchPanel.waitFor({ state: 'hidden', timeout: 10000 });
+    }
     assert(
       await page.locator('[data-task-workbench-panel="collapsed"]').count() === 0,
       'mobile closed task workbench should not render an in-flow collapsed rail',
@@ -522,9 +577,13 @@ async (page) => {
     const mobileClosedOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
     assert(!mobileClosedOverflow, 'mobile closed rails should not create document-level horizontal overflow');
 
-    await page.locator('[data-mobile-task-workbench-nav-entry="true"]').click();
-    await page.locator('[data-mobile-task-workbench-overlay="true"]').waitFor({ state: 'visible', timeout: 10000 });
-    await page.locator('[data-task-workbench-panel="true"]').waitFor({ state: 'visible', timeout: 10000 });
+    await mobileWorkbenchNavEntry.click();
+    const reopenedMobileWorkbench = page.locator('[data-task-workbench-panel="true"][data-task-workbench-inline="true"]');
+    await reopenedMobileWorkbench.waitFor({ state: 'visible', timeout: 10000 });
+    assert(
+      await page.locator('[data-mobile-task-workbench-overlay="true"], [data-task-workbench-backdrop="true"]').count() === 0,
+      'narrow workbench should keep the shared inline panel contract without a second overlay implementation',
+    );
     await page.locator('[data-task-workbench-unplaced-lane="true"]').waitFor({ state: 'visible', timeout: 10000 });
     await page.locator('[data-task-workbench-placed-board-lane="true"]').waitFor({ state: 'visible', timeout: 10000 });
     await page.screenshot({ path: 'output/playwright/dev-039-task-workbench-placement-lanes-mobile.png', fullPage: true });

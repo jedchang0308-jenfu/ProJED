@@ -15,7 +15,9 @@ import {
   type PortableDependencyV2,
   type PortableTagV2,
   type PortableTaskV2,
+  type PortableTrackingReferenceV3,
 } from './types';
+import type { TaskTrackingReference } from '../taskTracking/types';
 
 const INCLUDED_DOMAINS = [
   '看板名稱',
@@ -24,7 +26,10 @@ const INCLUDED_DOMAINS = [
   '父子階層與排序',
   '任務依賴',
   '任務使用的工作區標籤',
+  '追蹤副本與投影位置',
 ];
+
+const INCLUDED_DOMAINS_V2 = INCLUDED_DOMAINS.filter(domain => domain !== '追蹤副本與投影位置');
 
 const EXCLUDED_DOMAINS = [
   '工作區成員與看板權限',
@@ -100,6 +105,9 @@ export const canonicalizeBackupPayload = (payload: BackupPayloadV2): string => {
     tasks: [...payload.tasks].sort((left, right) => left.sourceId.localeCompare(right.sourceId)),
     dependencies: [...payload.dependencies].sort((left, right) => left.sourceId.localeCompare(right.sourceId)),
     tags: [...payload.tags].sort((left, right) => left.sourceId.localeCompare(right.sourceId)),
+    ...(payload.trackingReferences
+      ? { trackingReferences: [...payload.trackingReferences].sort((left, right) => left.sourceId.localeCompare(right.sourceId)) }
+      : {}),
   };
   return JSON.stringify(normalizeStableValue(normalized));
 };
@@ -130,6 +138,9 @@ export const compareBackupSemantics = async (
   const targetIdBySourceId = new Map(Object.entries(result.sourceTaskIdMap));
   const sourceIdByTargetId = new Map(
     Array.from(targetIdBySourceId, ([sourceId, targetId]) => [targetId, sourceId])
+  );
+  const sourceReferenceIdByTargetId = new Map(
+    Object.entries(result.sourceTrackingReferenceIdMap ?? {}).map(([sourceId, targetId]) => [targetId, sourceId]),
   );
   const packageTaskIds = new Set(packageValue.payload.tasks.map(task => task.sourceId));
   let valid = targetIdBySourceId.size === packageTaskIds.size
@@ -168,7 +179,10 @@ export const compareBackupSemantics = async (
     if (actualPrimaryIds.some(id => !expectedPrimaryIds.includes(id)) || expectedPrimaryIds.some(id => !actualPrimaryIds.includes(id))) valid = false;
     expectedPrimaryIds.forEach(id => recordPersonRetention(id, actualPrimaryIds.includes(id)));
     const expectedCollaborators = new Set(task.collaboratorIds);
-    const actualCollaborators = [...(actual?.collaboratorIds ?? [])].sort();
+    const actualCollaborators = normalizeTaskAssignmentSelection(
+      actualPrimaryIds,
+      actual?.collaboratorIds ?? [],
+    ).collaboratorIds;
     if (actualCollaborators.some(id => !expectedCollaborators.has(id))) valid = false;
     task.collaboratorIds.forEach(id => recordPersonRetention(id, actualCollaborators.includes(id)));
 
@@ -247,18 +261,40 @@ export const compareBackupSemantics = async (
   actualDependencies.sort((left, right) => dependencyKey(left).localeCompare(dependencyKey(right)));
   expectedTasks.sort((left, right) => String((left as { sourceId: string }).sourceId).localeCompare(String((right as { sourceId: string }).sourceId)));
   actualTasks.sort((left, right) => String((left as { sourceId: string }).sourceId).localeCompare(String((right as { sourceId: string }).sourceId)));
+  const expectedReferences = (packageValue.payload.trackingReferences ?? [])
+    .map(reference => `${reference.taskSourceId}|${reference.parentSourceId ?? 'root'}|${reference.order}`)
+    .sort();
+  const actualReferenceRows = (source.trackingReferences ?? [])
+    .filter(reference => reference.workspaceId === source.workspaceId && reference.boardId === source.boardId && !reference.removedAt);
+  const actualReferenceById = new Map(actualReferenceRows.map(reference => [reference.id, reference]));
+  const actualReferences = actualReferenceRows
+    .map(reference => {
+      const parentPlacementId = reference.parentPlacementId;
+      const parentSourceId = parentPlacementId
+        ? parentPlacementId.startsWith('primary:')
+          ? parentPlacementId.slice('primary:'.length)
+          : sourceReferenceIdByTargetId.get(parentPlacementId)
+            ?? actualReferenceById.get(parentPlacementId)?.taskId
+            ?? parentPlacementId
+        : 'root';
+      return `${sourceIdByTargetId.get(reference.taskId) ?? reference.taskId}|${sourceIdByTargetId.get(parentSourceId) ?? parentSourceId}|${reference.order}`;
+    })
+    .sort();
+  if (expectedReferences.length !== actualReferences.length) valid = false;
 
   const expectedSemantic = {
     integrityValid: true,
     boardTitle: result.targetBoardTitle,
     tasks: expectedTasks,
     dependencies: expectedDependencies,
+    trackingReferences: expectedReferences,
   };
   const actualSemantic = {
     integrityValid: valid,
     boardTitle: source.boardTitle,
     tasks: actualTasks,
     dependencies: actualDependencies,
+    trackingReferences: actualReferences,
   };
   const [expectedFingerprint, actualFingerprint] = await Promise.all([
     calculateStableFingerprint(expectedSemantic),
@@ -310,6 +346,19 @@ const toPortableTag = (tag: TaskTag): PortableTagV2 => ({
   name: tag.name,
   color: tag.color,
   order: tag.order,
+});
+
+const toPortableTrackingReference = (reference: TaskTrackingReference): PortableTrackingReferenceV3 => ({
+  sourceId: reference.id,
+  taskSourceId: reference.taskId,
+  parentSourceId: reference.parentPlacementId
+    ? reference.parentPlacementId.startsWith('primary:')
+      ? reference.parentPlacementId.slice('primary:'.length)
+      : reference.parentPlacementId
+    : null,
+  order: reference.order,
+  kanbanStageSourceId: reference.kanbanStageId,
+  revision: reference.revision,
 });
 
 export const buildBackupPayload = (source: BoardBackupSource): BackupPayloadV2 => {
@@ -367,11 +416,30 @@ export const buildBackupPayload = (source: BoardBackupSource): BackupPayloadV2 =
     throw new BackupError('INVALID_FILE', `任務引用的標籤 ${missingTagId} 無法從後端讀取，請重新整理後再備份。`);
   }
 
+  const activeBoardReferences = (source.trackingReferences ?? [])
+    .filter(reference => reference.workspaceId === source.workspaceId
+      && reference.boardId === source.boardId
+      && !reference.removedAt);
+  const externalReference = activeBoardReferences.find(reference => !taskIds.has(reference.taskId));
+  if (externalReference) {
+    // A board-scoped package cannot safely inline a task whose canonical
+    // ownership lives on another board: doing so would turn a projection into
+    // a second source of truth on import.  Fail closed with an actionable
+    // report instead of silently dropping the reference or cloning the task.
+    throw new BackupError(
+      'OUT_OF_PACKAGE_REFERENCE',
+      `追蹤副本 ${externalReference.id} 指向來源看板外的任務，無法建立安全的看板備份。請改從 canonical 來源看板備份。`,
+      { referenceId: externalReference.id, taskId: externalReference.taskId, boardId: source.boardId },
+    );
+  }
+  const trackingReferences = activeBoardReferences.map(toPortableTrackingReference);
+
   return {
     board: { title: source.boardTitle },
     tasks: scopedTasks.map(task => toPortableTask(task, canonicalStageId(task), canonicalParentId(task))),
     dependencies: dependencies.map(toPortableDependency),
     tags: tags.map(toPortableTag),
+    ...(trackingReferences.length ? { trackingReferences } : {}),
   };
 };
 
@@ -403,6 +471,9 @@ export const createBackupPackage = async (
         tasks: payload.tasks.length,
         dependencies: payload.dependencies.length,
         tags: payload.tags.length,
+        ...(payload.trackingReferences?.length
+          ? { trackingReferences: payload.trackingReferences.length }
+          : {}),
       },
       includes: [...INCLUDED_DOMAINS],
       excludes: [...EXCLUDED_DOMAINS],
@@ -443,6 +514,13 @@ const readRequiredBoolean = (value: unknown, label: string): boolean => {
 const readRequiredInteger = (value: unknown, label: string): number => {
   if (!isFiniteNumber(value) || !Number.isInteger(value)) {
     throw new BackupError('INVALID_FILE', `${label} 必須是整數。`);
+  }
+  return value;
+};
+
+const readRequiredFiniteNumber = (value: unknown, label: string): number => {
+  if (!isFiniteNumber(value)) {
+    throw new BackupError('INVALID_FILE', `${label} 必須是有效數字。`);
   }
   return value;
 };
@@ -529,6 +607,28 @@ const parsePortableTag = (value: unknown, index: number): PortableTagV2 => {
   };
 };
 
+const parsePortableTrackingReference = (value: unknown, index: number): PortableTrackingReferenceV3 => {
+  if (!isRecord(value)) throw new BackupError('INVALID_FILE', `第 ${index + 1} 個追蹤副本格式不正確。`);
+  const revision = readRequiredInteger(value.revision, `追蹤副本 ${index + 1} revision`);
+  if (revision < 1) throw new BackupError('INVALID_FILE', `追蹤副本 ${index + 1} revision 必須大於 0。`);
+  return {
+    sourceId: readRequiredString(value.sourceId, `追蹤副本 ${index + 1} sourceId`),
+    taskSourceId: readRequiredString(value.taskSourceId, `追蹤副本 ${index + 1} taskSourceId`),
+    parentSourceId: value.parentSourceId === null || value.parentSourceId === undefined
+      ? null
+      : readRequiredString(value.parentSourceId, `追蹤副本 ${index + 1} parentSourceId`),
+    // Reference order is a dense placement coordinate.  Creation and
+    // insertion can intentionally use fractional values (for example
+    // primary.order + 0.0001), so unlike canonical task order it must not be
+    // restricted to integers.
+    order: readRequiredFiniteNumber(value.order, `追蹤副本 ${index + 1} order`),
+    kanbanStageSourceId: value.kanbanStageSourceId === undefined
+      ? undefined
+      : readRequiredString(value.kanbanStageSourceId, `追蹤副本 ${index + 1} kanbanStageSourceId`),
+    revision,
+  };
+};
+
 const parsePayload = (value: unknown): BackupPayloadV2 => {
   if (!isRecord(value) || !isRecord(value.board)) {
     throw new BackupError('INVALID_FILE', '備份 payload 或 board 格式不正確。');
@@ -536,11 +636,17 @@ const parsePayload = (value: unknown): BackupPayloadV2 => {
   if (!Array.isArray(value.tasks) || !Array.isArray(value.dependencies) || !Array.isArray(value.tags)) {
     throw new BackupError('INVALID_FILE', '備份 payload 缺少 tasks、dependencies 或 tags 陣列。');
   }
+  const trackingReferences = value.trackingReferences === undefined
+    ? undefined
+    : Array.isArray(value.trackingReferences)
+      ? value.trackingReferences.map(parsePortableTrackingReference)
+      : (() => { throw new BackupError('INVALID_FILE', '備份 payload 的 trackingReferences 必須是陣列。'); })();
   return {
     board: { title: readRequiredString(value.board.title, '看板名稱') },
     tasks: value.tasks.map(parsePortableTask),
     dependencies: value.dependencies.map(parsePortableDependency),
     tags: value.tags.map(parsePortableTag),
+    ...(trackingReferences ? { trackingReferences } : {}),
   };
 };
 
@@ -553,6 +659,9 @@ export const validateBackupPayload = (payload: BackupPayloadV2): void => {
   }
   if (payload.dependencies.length > BACKUP_MAX_DEPENDENCIES) {
     throw new BackupError('INVALID_FILE', `備份含 ${payload.dependencies.length} 個依賴，超過 ${BACKUP_MAX_DEPENDENCIES} 個安全上限。`);
+  }
+  if ((payload.trackingReferences?.length ?? 0) > BACKUP_MAX_TASKS) {
+    throw new BackupError('INVALID_FILE', `備份含過多追蹤副本，超過 ${BACKUP_MAX_TASKS} 個安全上限。`);
   }
 
   const taskIds = new Set<string>();
@@ -581,6 +690,21 @@ export const validateBackupPayload = (payload: BackupPayloadV2): void => {
     if (!taskIds.has(dependency.fromSourceId) || !taskIds.has(dependency.toSourceId)) {
       throw new BackupError('INVALID_FILE', `依賴 ${dependency.sourceId} 指向不存在的任務。`);
     }
+  });
+
+  const referenceIds = new Set<string>();
+  const allReferenceIds = new Set((payload.trackingReferences ?? []).map(reference => reference.sourceId));
+  const referenceTaskIds = new Set<string>();
+  (payload.trackingReferences ?? []).forEach(reference => {
+    if (referenceIds.has(reference.sourceId)) throw new BackupError('INVALID_FILE', `追蹤副本 ID ${reference.sourceId} 重複。`);
+    referenceIds.add(reference.sourceId);
+    if (!taskIds.has(reference.taskSourceId)) throw new BackupError('OUT_OF_PACKAGE_REFERENCE', `追蹤副本 ${reference.sourceId} 指向備份外任務。`);
+    if (reference.parentSourceId && !taskIds.has(reference.parentSourceId) && !allReferenceIds.has(reference.parentSourceId)) {
+      throw new BackupError('OUT_OF_PACKAGE_REFERENCE', `追蹤副本 ${reference.sourceId} 的父位置不在備份內。`);
+    }
+    const duplicateScopeKey = `${reference.taskSourceId}:${reference.parentSourceId ?? 'root'}`;
+    if (referenceTaskIds.has(duplicateScopeKey)) throw new BackupError('INVALID_FILE', `追蹤副本 ${reference.taskSourceId} 在相同位置重複。`);
+    referenceTaskIds.add(duplicateScopeKey);
   });
 
   const taskById = new Map(payload.tasks.map(task => [task.sourceId, task]));
@@ -618,7 +742,8 @@ export const validateBackupPayload = (payload: BackupPayloadV2): void => {
 };
 
 const parseV2Package = async (value: Record<string, unknown>): Promise<BackupPackageV2> => {
-  if (value.format !== BACKUP_FORMAT || value.schemaVersion !== BACKUP_SCHEMA_VERSION) {
+  const inputSchemaVersion = value.schemaVersion;
+  if (value.format !== BACKUP_FORMAT || (inputSchemaVersion !== 2 && inputSchemaVersion !== BACKUP_SCHEMA_VERSION)) {
     throw new BackupError('UNSUPPORTED_VERSION', `不支援的備份格式或版本：${String(value.schemaVersion ?? value.format ?? 'unknown')}。`);
   }
   if (!isRecord(value.source) || !isRecord(value.manifest) || !isRecord(value.scope)) {
@@ -646,6 +771,7 @@ const parseV2Package = async (value: Record<string, unknown>): Promise<BackupPac
   }
 
   const payload = parsePayload(value.payload);
+  const isV3 = inputSchemaVersion === BACKUP_SCHEMA_VERSION;
   validateBackupPayload(payload);
   const checksum = readRequiredString(value.manifest.checksum.value, 'checksum');
   const actualChecksum = await calculateBackupChecksum(payload);
@@ -656,19 +782,22 @@ const parseV2Package = async (value: Record<string, unknown>): Promise<BackupPac
     tasks: payload.tasks.length,
     dependencies: payload.dependencies.length,
     tags: payload.tags.length,
+    ...(payload.trackingReferences ? { trackingReferences: payload.trackingReferences.length } : {}),
   };
   if (
     value.manifest.entities.tasks !== expectedCounts.tasks
     || value.manifest.entities.dependencies !== expectedCounts.dependencies
     || value.manifest.entities.tags !== expectedCounts.tags
+    || (isV3 && value.manifest.entities.trackingReferences !== expectedCounts.trackingReferences)
   ) {
     throw new BackupError('INVALID_FILE', '備份 manifest 數量與 payload 不一致。');
   }
   const includes = readStringArray(value.manifest.includes, 'manifest includes');
   const excludes = readStringArray(value.manifest.excludes, 'manifest excludes');
-  if (JSON.stringify(includes) !== JSON.stringify(INCLUDED_DOMAINS)
+  const expectedIncludes = isV3 ? INCLUDED_DOMAINS : INCLUDED_DOMAINS_V2;
+  if (JSON.stringify(includes) !== JSON.stringify(expectedIncludes)
     || JSON.stringify(excludes) !== JSON.stringify(EXCLUDED_DOMAINS)) {
-    throw new BackupError('INVALID_FILE', '備份 manifest 的包含或排除範圍與 V2 契約不一致。');
+    throw new BackupError('INVALID_FILE', `備份 manifest 的包含或排除範圍與 V${isV3 ? '3' : '2'} 契約不一致。`);
   }
 
   const sourceBoardTitle = readRequiredString(value.source.boardTitle, 'source boardTitle');
@@ -693,8 +822,10 @@ const parseV2Package = async (value: Record<string, unknown>): Promise<BackupPac
     },
     scope: { type: 'board' },
     manifest: {
-      entities: expectedCounts,
-      includes,
+      entities: {
+        ...expectedCounts,
+      },
+      includes: isV3 ? includes : INCLUDED_DOMAINS,
       excludes,
       canonicalization: 'json-sort-v1',
       checksum: { algorithm: 'SHA-256', value: actualChecksum },
@@ -810,7 +941,7 @@ const adaptLegacyPackage = async (value: Record<string, unknown>): Promise<Backu
     sourceKind: 'legacy-converted',
     legacyVersion,
     compatibleModes: ['copy_to_new_board', 'replace_current_board'],
-    warnings: ['這是舊版 WBS 單看板資料，已轉成 V2 檢查格式；不包含其他 ProJED 資料。'],
+    warnings: ['這是舊版 WBS 單看板資料，已轉成 V3 檢查格式；不包含其他 ProJED 資料。'],
   };
 };
 

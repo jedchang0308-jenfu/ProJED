@@ -36,10 +36,10 @@ const PM_QUICK_ACTIONS = [
 ];
 
 const RagSidebar: React.FC = () => {
-  const { isOpen, setIsOpen, chatHistory, isLoading, submitQuery, error, clearHistory, generationModel, setGenerationModel } = useRagStore();
+  const { isOpen, setIsOpen, chatHistory, isLoading, submitQuery, error, clearHistory, generationModel, setGenerationModel, queryDraft, setQueryDraft } = useRagStore();
   const { getActiveBoard, getActiveWorkspace } = useBoardStore();
 
-  const [input, setInput] = useState('');
+  const input = queryDraft;
   const [isQuickMenuOpen, setIsQuickMenuOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const quickMenuRef = useRef<HTMLDivElement>(null);
@@ -101,7 +101,7 @@ const RagSidebar: React.FC = () => {
 
     setIsQuickMenuOpen(false);
     submitQuery(buildScopedPrompt(prompt), activeWorkspace.id, activeBoard?.id || null);
-    setInput('');
+    setQueryDraft('');
   };
 
   const handleSubmit = (e?: React.FormEvent) => {
@@ -109,7 +109,7 @@ const RagSidebar: React.FC = () => {
     if (!input.trim() || isLoading || !activeWorkspace) return;
 
     submitQuery(input.trim(), activeWorkspace.id, activeBoard?.id || null);
-    setInput('');
+    setQueryDraft('');
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -293,7 +293,7 @@ const RagSidebar: React.FC = () => {
         <form onSubmit={handleSubmit} className="relative flex items-end">
           <textarea
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => setQueryDraft(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={activeWorkspace ? '詢問這個專案...' : '請先選擇工作區'}
             disabled={isLoading || !activeWorkspace}

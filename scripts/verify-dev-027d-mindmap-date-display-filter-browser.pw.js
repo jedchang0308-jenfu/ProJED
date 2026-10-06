@@ -34,7 +34,7 @@ async (page) => {
 
   const openApp = async () => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
     await page.evaluate((account) => {
       localStorage.setItem('projed-local-test.selected-account', account.id);
       localStorage.setItem('projed-local-test.session', JSON.stringify({
@@ -63,8 +63,8 @@ async (page) => {
   };
 
   const setFilters = async (overrides = {}) => {
-    await page.evaluate(({ defaultFilters, overrides }) => {
-      const legacyFilters = {
+    await page.evaluate(async ({ defaultFilters, overrides }) => {
+      const next = {
         ...defaultFilters,
         ...overrides,
         statusFilters: {
@@ -72,25 +72,25 @@ async (page) => {
           ...(overrides.statusFilters || {}),
         },
       };
-      localStorage.setItem('projed-filters', JSON.stringify(legacyFilters));
-      localStorage.setItem('projed-task-filters:v1', JSON.stringify({
-        version: 1,
+      const filterModule = await import('/src/store/useTaskFilterStore.ts');
+      filterModule.useTaskFilterStore.setState({
         filters: {
-          statusFilters: legacyFilters.statusFilters,
-          dueWithinDays: legacyFilters.dueWithinDays,
-          selectedAssigneeIds: legacyFilters.selectedAssigneeIds,
+          statusFilters: next.statusFilters,
+          dueWithinDays: next.dueWithinDays,
+          overdueOnly: false,
+          selectedAssigneeIds: next.selectedAssigneeIds,
           selectedTagIds: [],
           keyword: '',
         },
-        displaySettings: {
-          showDependencies: legacyFilters.showDependencies,
-          showStartDate: legacyFilters.showStartDate,
-          showTags: legacyFilters.showTags,
-        },
-        updatedAt: Date.now(),
-      }));
+      });
+      const boardModule = await import('/src/store/useBoardStore.ts');
+      boardModule.default.setState({
+        showDependencies: next.showDependencies,
+        showStartDate: next.showStartDate,
+        showTags: next.showTags,
+      });
     }, { defaultFilters, overrides });
-    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForTimeout(80);
     await enterMindMap();
   };
 
@@ -114,23 +114,31 @@ async (page) => {
   await openApp();
   await page.evaluate((defaultFilters) => {
     window.__PROJED_QC__?.reset(18);
-    localStorage.setItem('projed-filters', JSON.stringify(defaultFilters));
-    localStorage.setItem('projed-task-filters:v1', JSON.stringify({
-      version: 1,
+    const boardId = localStorage.getItem('projed-last-board');
+    if (!boardId) throw new Error('Missing active board for DEV-027D initial fixture');
+    localStorage.setItem(`projed-task-filters:v4:account:local-test-user:board:${encodeURIComponent(boardId)}`, JSON.stringify({
+      version: 4,
       filters: {
         statusFilters: defaultFilters.statusFilters,
         dueWithinDays: defaultFilters.dueWithinDays,
+        overdueOnly: false,
         selectedAssigneeIds: defaultFilters.selectedAssigneeIds,
         selectedTagIds: [],
         keyword: '',
       },
+      updatedAt: Date.now(),
+    }));
+    localStorage.setItem('projed-task-display:v4:account:local-test-user', JSON.stringify({
+      version: 4,
       displaySettings: {
         showDependencies: defaultFilters.showDependencies,
         showStartDate: defaultFilters.showStartDate,
         showTags: defaultFilters.showTags,
+        showTagNames: true,
       },
       updatedAt: Date.now(),
     }));
+    localStorage.setItem('projed-task-filter-migration:v4:account:local-test-user', JSON.stringify({ version: 4, migratedAt: Date.now() }));
   }, defaultFilters);
 
   const titles = await page.evaluate(() => {
@@ -143,36 +151,53 @@ async (page) => {
     const nearTitle = `DEV027D near ${stamp}`;
     const futureTitle = `DEV027D future ${stamp}`;
     const completedTitle = `DEV027D completed ${stamp}`;
+    const dateAtOffset = (days) => new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const nearStart = dateAtOffset(-4);
+    const nearEnd = dateAtOffset(-2);
+    const futureStart = dateAtOffset(30);
+    const futureEnd = dateAtOffset(32);
+    const completedStart = dateAtOffset(-4);
+    const completedEnd = dateAtOffset(-2);
 
-    Object.assign(roots[0], {
-      title: nearTitle,
+    const applySubtree = (rootId, updates) => {
+      const queue = [rootId];
+      while (queue.length) {
+        const nodeId = queue.shift();
+        const node = nodes[nodeId];
+        if (!node) continue;
+        Object.assign(node, updates, { updatedAt: Date.now() });
+        Object.values(nodes)
+          .filter(candidate => candidate?.parentId === nodeId)
+          .forEach(candidate => queue.push(candidate.id));
+      }
+    };
+
+    roots[0].title = nearTitle;
+    applySubtree(roots[0].id, {
       status: 'todo',
-      startDate: '2026-06-20',
-      endDate: '2026-06-22',
+      startDate: nearStart,
+      endDate: nearEnd,
       assigneeId: 'local-test-user',
       tagIds: [],
-      updatedAt: Date.now(),
     });
-    Object.assign(roots[1], {
-      title: futureTitle,
-      status: 'todo',
-      startDate: '2026-08-01',
-      endDate: '2026-08-10',
+    roots[1].title = futureTitle;
+    applySubtree(roots[1].id, {
+      status: 'in_progress',
+      startDate: futureStart,
+      endDate: futureEnd,
       assigneeId: 'local-test-user',
       tagIds: [],
-      updatedAt: Date.now(),
     });
-    Object.assign(roots[2], {
-      title: completedTitle,
+    roots[2].title = completedTitle;
+    applySubtree(roots[2].id, {
       status: 'completed',
-      startDate: '2026-06-19',
-      endDate: '2026-06-21',
+      startDate: completedStart,
+      endDate: completedEnd,
       assigneeId: 'local-test-pm',
       tagIds: [],
-      updatedAt: Date.now(),
     });
     localStorage.setItem('projed-local-test.nodes', JSON.stringify(nodes));
-    return { nearTitle, futureTitle, completedTitle };
+    return { nearTitle, futureTitle, completedTitle, nearStart, nearEnd };
   });
 
   await page.reload({ waitUntil: 'networkidle' });
@@ -186,8 +211,37 @@ async (page) => {
     start: element.getAttribute('data-start-date'),
     end: element.getAttribute('data-end-date'),
   }));
-  assert(nearBadge.start === '2026-06-20' && nearBadge.end === '2026-06-22', 'date badge should expose start and end date metadata', { nearBadge });
-  assert(nearBadge.text.includes('06/20') && nearBadge.text.includes('06/22'), 'date badge should render compact current-year dates', { nearBadge });
+  const compactDate = value => value.slice(5).replace('-', '/');
+  assert(nearBadge.start === titles.nearStart && nearBadge.end === titles.nearEnd, 'date badge should expose start and end date metadata', { nearBadge, expected: titles });
+  assert(nearBadge.text.includes(compactDate(titles.nearStart)) && nearBadge.text.includes(compactDate(titles.nearEnd)), 'date badge should render compact current-year dates', { nearBadge, expected: titles });
+
+  const sharedVisuals = await page.evaluate(({ nearTitle, futureTitle }) => {
+    const readNode = (title) => {
+      const node = document.querySelector(`[data-mindmap-node-title="${title}"]`);
+      const titleElement = node?.querySelector('[data-mindmap-node-title-text="true"]');
+      const badge = node?.querySelector('[data-mindmap-node-dates] [data-task-date-badge="true"]');
+      return {
+        titleClass: titleElement?.className || '',
+        badgeClass: badge?.className || '',
+        badgeVisual: badge?.getAttribute('data-task-date-visual'),
+        overdue: badge?.getAttribute('data-task-overdue'),
+      };
+    };
+    return { todo: readNode(nearTitle), inProgress: readNode(futureTitle) };
+  }, titles);
+  assert(
+    sharedVisuals.todo.badgeVisual === 'borderless' &&
+      sharedVisuals.todo.overdue === 'true' &&
+      sharedVisuals.todo.badgeClass.includes('orange'),
+    'Mind Map should render the shared Kanban date badge with overdue styling',
+    sharedVisuals,
+  );
+  assert(
+    sharedVisuals.todo.titleClass.includes('text-slate-800') &&
+      sharedVisuals.inProgress.titleClass.includes('text-blue-700'),
+    'task titles should reuse shared status colors',
+    sharedVisuals,
+  );
 
   const containment = await nodeByTitle(titles.nearTitle).evaluate((node) => {
     const badge = node.querySelector('[data-mindmap-node-dates]');
@@ -212,8 +266,8 @@ async (page) => {
     start: element.getAttribute('data-start-date'),
     end: element.getAttribute('data-end-date'),
   }));
-  assert(endOnlyBadge.start === '' && endOnlyBadge.end === '2026-06-22', 'showStartDate=false should hide the start date', { endOnlyBadge });
-  assert(!endOnlyBadge.text.includes('06/20') && endOnlyBadge.text.includes('06/22'), 'showStartDate=false should render only end date text', { endOnlyBadge });
+  assert(endOnlyBadge.start === '' && endOnlyBadge.end === titles.nearEnd, 'showStartDate=false should hide the start date', { endOnlyBadge, expected: titles });
+  assert(!endOnlyBadge.text.includes(compactDate(titles.nearStart)) && endOnlyBadge.text.includes(compactDate(titles.nearEnd)), 'showStartDate=false should render only end date text', { endOnlyBadge, expected: titles });
 
   await setFilters({ showStartDate: true, dueWithinDays: 7 });
   await nodeByTitle(titles.nearTitle).waitFor({ state: 'visible', timeout: 15000 });
@@ -229,6 +283,23 @@ async (page) => {
   await nodeByTitle(titles.completedTitle).waitFor({ state: 'visible', timeout: 15000 });
   assert(await nodeByTitle(titles.nearTitle).count() === 0, 'status filter should hide todo and keep completed');
   assert(await nodeByTitle(titles.completedTitle).count() > 0, 'status filter should keep completed root visible');
+  const completedVisuals = await nodeByTitle(titles.completedTitle).evaluate(node => {
+    const titleElement = node.querySelector('[data-mindmap-node-title-text="true"]');
+    const badge = node.querySelector('[data-mindmap-node-dates] [data-task-date-badge="true"]');
+    return {
+      titleClass: titleElement?.className || '',
+      badgeClass: badge?.className || '',
+      overdue: badge?.getAttribute('data-task-overdue'),
+    };
+  });
+  assert(
+    completedVisuals.titleClass.includes('text-slate-400') &&
+      completedVisuals.titleClass.includes('line-through') &&
+      completedVisuals.overdue === 'false' &&
+      !completedVisuals.badgeClass.includes('orange'),
+    'completed task should reuse the shared muted title and non-overdue date styling',
+    completedVisuals,
+  );
 
   await setFilters({
     dueWithinDays: null,
@@ -239,6 +310,30 @@ async (page) => {
   await nodeByTitle(titles.completedTitle).waitFor({ state: 'hidden', timeout: 10000 });
   assert(await nodeByTitle(titles.completedTitle).count() === 0, 'assignee filter should hide nodes assigned to other people');
 
-  await page.screenshot({ path: 'output/playwright/dev-027D-mindmap-date-filter.png', fullPage: true });
+  await page.screenshot({ path: 'output/playwright/dev-027D-mindmap-date-filter-1440.png', fullPage: true });
+  await page.setViewportSize({ width: 768, height: 844 });
+  await page.waitForTimeout(150);
+  await nodeByTitle(titles.nearTitle).waitFor({ state: 'visible', timeout: 15000 });
+  const mobileLayout = await nodeByTitle(titles.nearTitle).evaluate(node => {
+    const badge = node.querySelector('[data-mindmap-node-dates]');
+    const nodeRect = node.getBoundingClientRect();
+    const badgeRect = badge?.getBoundingClientRect();
+    return {
+      badgeContained: Boolean(badgeRect) &&
+        badgeRect.left >= nodeRect.left - 2 &&
+        badgeRect.right <= nodeRect.right + 2 &&
+        badgeRect.top >= nodeRect.top - 2 &&
+        badgeRect.bottom <= nodeRect.bottom + 2,
+      documentOverflowX: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+      nodeRect: { left: nodeRect.left, right: nodeRect.right, top: nodeRect.top, bottom: nodeRect.bottom },
+      badgeRect: badgeRect ? { left: badgeRect.left, right: badgeRect.right, top: badgeRect.top, bottom: badgeRect.bottom } : null,
+    };
+  });
+  assert(
+    mobileLayout.badgeContained && !mobileLayout.documentOverflowX,
+    'shared date badge should remain contained without page overflow at 768px',
+    mobileLayout,
+  );
+  await page.screenshot({ path: 'output/playwright/dev-027D-mindmap-date-filter-768.png', fullPage: false });
   await assertNoVisibleErrors('DEV-027D final');
 }

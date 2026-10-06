@@ -18,10 +18,14 @@ import type {
   CollaborationRole,
   CurrentBoardAccess,
   Dependency,
+  EditableKnowledgeRecord,
   KnowledgeRecord,
   KnowledgeRecordInput,
+  MeetingDraftCheckpointInput,
+  MeetingDraftCheckpointResult,
   PermissionCapability,
   RecordTaskLink,
+  RecordTaskLinkRole,
   TagColor,
   TaskNode,
   TaskTag,
@@ -32,6 +36,7 @@ import { isSupabaseConfigured, supabase } from './client';
 import type { ActivityEventRow, BoardInviteRow, BoardRolePermissionRow, DocumentRow, Json, KnowledgeRecordRow, ProjectMemberRow, ProjectRow, RecordTaskLinkRow, TaskTagRow, TenantMemberRow, TenantRow, WbsDependencyRow, WbsItemRow } from './database.types';
 import { hashBoardInviteToken } from '../../utils/boardInviteToken';
 import { RAG_EMBEDDING_PROVIDER } from '../rag/ragContract';
+import { MeetingDraftCheckpointError } from '../meetingDraftRecoveryService';
 import {
   getTaskAssigneeIds,
   normalizeTaskAssignmentSelection,
@@ -45,6 +50,10 @@ import {
   type BackupImportCounts,
   type BackupImportPlan,
 } from '../../features/backup/types';
+import {
+  assertRecordTaskLinkSet,
+  RecordTaskLinkResolutionError,
+} from '../recordTaskLinkContract';
 
 type WbsItemInsert = Partial<WbsItemRow>;
 type BoardInviteInsert = Partial<BoardInviteRow>;
@@ -54,7 +63,8 @@ type KnowledgeRecordInsert = Partial<KnowledgeRecordRow>;
 type RecordTaskLinkInsert = Partial<RecordTaskLinkRow>;
 type ResolvedRecordTaskLink = {
   nodeId: string;
-  insert: RecordTaskLinkInsert;
+  role: RecordTaskLinkRole;
+  itemId: string;
 };
 type WbsDependencyWithNodes = WbsDependencyRow & {
   from_item?: Pick<WbsItemRow, 'id' | 'legacy_node_id'> | null;
@@ -226,7 +236,7 @@ const mapProjectToBoard = (project: ProjectRow): Board => ({
   createdAt: toTimestamp(project.created_at),
 });
 
-const mapWbsItemToTaskNode = (
+export const mapWbsItemToTaskNode = (
   item: WbsItemRow,
   nodeIdByDbId: Map<string, string> = new Map(),
   requestedWorkspaceId?: string,
@@ -355,11 +365,13 @@ const mapKnowledgeRecord = (
   requestedBoardId: string
 ): KnowledgeRecord => {
   const recordId = legacyOrId(row.id, row.legacy_record_id);
-  return {
+  const metadata = row.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata)
+    ? row.metadata as Record<string, unknown>
+    : undefined;
+  const baseRecord = {
     id: recordId,
     workspaceId: requestedWorkspaceId,
     boardId: requestedBoardId,
-    type: row.record_type,
     title: row.title,
     content: row.content,
     status: row.status,
@@ -375,14 +387,29 @@ const mapKnowledgeRecord = (
     updatedAt: toTimestamp(row.updated_at),
     ragEnabled: row.rag_enabled,
     sourceDocumentId: row.source_document_id,
+    metadata,
     taskLinks: (row.record_task_links ?? []).map(link =>
       mapRecordTaskLink(link, recordId, requestedWorkspaceId, requestedBoardId)
     ),
   };
+  return {
+    ...baseRecord,
+    type: row.record_type as 'meeting' | 'work_log',
+  };
+};
+
+const workspaceResolutionCache = new Map<string, string>();
+const projectResolutionCache = new Map<string, string>();
+
+export const clearSupabaseResolutionCaches = () => {
+  workspaceResolutionCache.clear();
+  projectResolutionCache.clear();
 };
 
 export const resolveWorkspaceId = async (workspaceId: string): Promise<string> => {
   if (isUuid(workspaceId)) return workspaceId;
+  const cached = workspaceResolutionCache.get(workspaceId);
+  if (cached) return cached;
   const { data, error } = await supabase
     .from('tenants')
     .select('id')
@@ -390,11 +417,15 @@ export const resolveWorkspaceId = async (workspaceId: string): Promise<string> =
     .maybeSingle();
   assertNoError(error);
   if (!data?.id) throw new Error(`Supabase tenant not found for legacy workspace id: ${workspaceId}`);
+  workspaceResolutionCache.set(workspaceId, data.id);
   return data.id;
 };
 
 export const resolveProjectId = async (tenantId: string, projectId: string): Promise<string> => {
   if (isUuid(projectId)) return projectId;
+  const cacheKey = `${tenantId}:${projectId}`;
+  const cached = projectResolutionCache.get(cacheKey);
+  if (cached) return cached;
   const { data, error } = await supabase
     .from('projects')
     .select('id')
@@ -403,6 +434,7 @@ export const resolveProjectId = async (tenantId: string, projectId: string): Pro
     .maybeSingle();
   assertNoError(error);
   if (!data?.id) throw new Error(`Supabase project not found for legacy board id: ${projectId}`);
+  projectResolutionCache.set(cacheKey, data.id);
   return data.id;
 };
 
@@ -1167,10 +1199,11 @@ export const supabaseNodeService = {
         .update(updatePayload)
         .eq('tenant_id', tenantId)
         .eq('project_id', projectId);
-      const { error } = await (isUuid(nodeId)
+      const { data, error } = await (isUuid(nodeId)
         ? query.eq('id', nodeId)
-        : query.eq('legacy_node_id', nodeId));
+        : query.eq('legacy_node_id', nodeId)).select('id').single();
       assertNoError(error);
+      if (!data) throw new Error('Supabase did not update the requested WBS item.');
     }
     if ('tagIds' in updates) {
       await supabaseTagService.setNodeTags(workspaceId, boardId, nodeId, updates.tagIds ?? []);
@@ -1695,6 +1728,7 @@ const knowledgeRecordToInsert = async (
     visibility: input.visibility,
     rag_enabled: input.status === 'published' && input.visibility !== 'private',
     metadata: stripUndefinedForJson({
+      ...(input.metadata ?? {}),
       legacyRecordId: input.id && !isUuid(input.id) ? input.id : null,
     }) ?? {},
     updated_by: userId,
@@ -1703,7 +1737,7 @@ const knowledgeRecordToInsert = async (
 };
 
 export const supabaseRecordService = {
-  listByProject: async (workspaceId: string, boardId: string): Promise<KnowledgeRecord[]> => {
+  listByProject: async (workspaceId: string, boardId: string): Promise<EditableKnowledgeRecord[]> => {
     requireSupabase();
     const tenantId = await resolveWorkspaceId(workspaceId);
     const projectId = await resolveProjectId(tenantId, boardId);
@@ -1712,6 +1746,7 @@ export const supabaseRecordService = {
       .select(recordSelect)
       .eq('tenant_id', tenantId)
       .eq('project_id', projectId)
+      .in('record_type', ['meeting', 'work_log'])
       .neq('status', 'archived')
       .order('updated_at', { ascending: false });
     assertNoError(error);
@@ -1719,7 +1754,12 @@ export const supabaseRecordService = {
       .map(row => mapKnowledgeRecord(row, workspaceId, boardId));
   },
 
-  listByNode: async (workspaceId: string, boardId: string, nodeId: string): Promise<KnowledgeRecord[]> => {
+  listByNode: async (
+    workspaceId: string,
+    boardId: string,
+    nodeId: string,
+    options: { includeArchived?: boolean } = {},
+  ): Promise<EditableKnowledgeRecord[]> => {
     requireSupabase();
     const tenantId = await resolveWorkspaceId(workspaceId);
     const projectId = await resolveProjectId(tenantId, boardId);
@@ -1729,19 +1769,42 @@ export const supabaseRecordService = {
       .select(`record:knowledge_records!record_task_links_record_id_fkey(${recordSelect})`)
       .eq('tenant_id', tenantId)
       .eq('project_id', projectId)
+      .in('record.record_type', ['meeting', 'work_log'])
       .eq('item_id', itemId);
     assertNoError(error);
     return ((data ?? []) as unknown as Array<{ record?: KnowledgeRecordWithLinks | null }>)
       .map(row => row.record)
-      .filter((record): record is KnowledgeRecordWithLinks => Boolean(record && record.status !== 'archived'))
+      .filter((record): record is KnowledgeRecordWithLinks => Boolean(record && (options.includeArchived || record.status !== 'archived')))
       .map(record => mapKnowledgeRecord(record, workspaceId, boardId))
       .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   },
 
-  upsert: async (workspaceId: string, boardId: string, input: KnowledgeRecordInput): Promise<KnowledgeRecord> => {
+  upsert: async (workspaceId: string, boardId: string, input: KnowledgeRecordInput): Promise<EditableKnowledgeRecord> => {
     requireSupabase();
     const tenantId = await resolveWorkspaceId(workspaceId);
     const projectId = await resolveProjectId(tenantId, boardId);
+
+    const uniqueLinks = input.taskLinks.filter((link, index, links) =>
+      links.findIndex(item => item.nodeId === link.nodeId && item.role === link.role) === index
+    );
+    const resolutionResults = await Promise.all(uniqueLinks.map(async link => {
+      try {
+        const itemId = await resolveRecordTaskLinkItemId(tenantId, projectId, link.nodeId);
+        return { nodeId: link.nodeId, role: link.role, itemId };
+      } catch (error) {
+        console.warn('[supabaseRecordService] Record task link preflight failed:', link.nodeId, error);
+        return { nodeId: link.nodeId, role: link.role, itemId: null };
+      }
+    }));
+    const unresolvedNodeIds = Array.from(new Set(
+      resolutionResults
+        .filter(link => !link.itemId)
+        .map(link => link.nodeId),
+    ));
+    if (unresolvedNodeIds.length > 0) {
+      throw new RecordTaskLinkResolutionError(unresolvedNodeIds);
+    }
+
     const insert = await knowledgeRecordToInsert(tenantId, projectId, input);
     const { data: saved, error: saveError } = await supabase
       .from('knowledge_records')
@@ -1759,32 +1822,16 @@ export const supabaseRecordService = {
       .eq('record_id', saved.id);
     assertNoError(deleteLinksError);
 
-    const uniqueLinks = input.taskLinks.filter((link, index, links) =>
-      links.findIndex(item => item.nodeId === link.nodeId && item.role === link.role) === index
+    const resolvedLinkResults = resolutionResults.filter(
+      (link): link is ResolvedRecordTaskLink => Boolean(link.itemId),
     );
-    const resolvedLinkResults = (await Promise.all(uniqueLinks.map(async (link): Promise<ResolvedRecordTaskLink | null> => {
-      try {
-        const itemId = await resolveRecordTaskLinkItemId(tenantId, projectId, link.nodeId);
-        if (!itemId) {
-          console.warn('[supabaseRecordService] Skipping unresolved record task link:', link.nodeId);
-          return null;
-        }
-        return {
-          nodeId: link.nodeId,
-          insert: {
-            tenant_id: tenantId,
-            project_id: projectId,
-            record_id: saved.id,
-            item_id: itemId,
-            role: link.role,
-          },
-        };
-      } catch (error) {
-        console.warn('[supabaseRecordService] Skipping record task link after resolution failure:', link.nodeId, error);
-        return null;
-      }
-    }))).filter((link): link is ResolvedRecordTaskLink => Boolean(link));
-    const resolvedLinks = resolvedLinkResults.map(link => link.insert);
+    const resolvedLinks: RecordTaskLinkInsert[] = resolvedLinkResults.map(link => ({
+      tenant_id: tenantId,
+      project_id: projectId,
+      record_id: saved.id,
+      item_id: link.itemId,
+      role: link.role,
+    }));
     const resolvedLinkedTaskIds = resolvedLinkResults.map(link => link.nodeId);
 
     if (resolvedLinks.length > 0) {
@@ -1838,7 +1885,13 @@ export const supabaseRecordService = {
       .single();
     assertNoError(reloadError);
     if (!reloaded) throw new Error('Supabase did not return the saved knowledge record.');
-    return mapKnowledgeRecord(reloaded as unknown as KnowledgeRecordWithLinks, workspaceId, boardId);
+    const mapped = mapKnowledgeRecord(reloaded as unknown as KnowledgeRecordWithLinks, workspaceId, boardId) as EditableKnowledgeRecord;
+    assertRecordTaskLinkSet(uniqueLinks, mapped.taskLinks);
+    return mapped;
+  },
+
+  checkpointDraft: async (_workspaceId: string, _boardId: string, _input: MeetingDraftCheckpointInput): Promise<MeetingDraftCheckpointResult> => {
+    throw new MeetingDraftCheckpointError('transient', '會議雲端 checkpoint 已停用；請使用本機 recovery。');
   },
 
   delete: async (workspaceId: string, boardId: string, recordId: string): Promise<void> => {
@@ -1892,8 +1945,11 @@ export const supabaseEventLogService = {
     let request = supabase
       .from('activity_events')
       .select('*')
-      .eq('tenant_id', tenantId)
-      .gte('created_at', new Date(query.startedAt).toISOString())
+      .eq('tenant_id', tenantId);
+    request = query.startBoundary === 'exclusive'
+      ? request.gt('created_at', new Date(query.startedAt).toISOString())
+      : request.gte('created_at', new Date(query.startedAt).toISOString());
+    request = request
       .lte('created_at', new Date(query.endedAt).toISOString())
       .order('created_at', { ascending: true });
 
@@ -2032,7 +2088,7 @@ export const supabaseBackupService: BackupBackendAdapter = {
     requireSupabase();
     const tenantId = await resolveWorkspaceId(workspaceId);
     const projectId = await resolveProjectId(tenantId, boardId);
-    const [{ data: project, error: projectError }, tasks, dependencies, workspaceTags] = await Promise.all([
+    const [{ data: project, error: projectError }, tasks, dependencies, workspaceTags, trackingResult] = await Promise.all([
       supabase
         .from('projects')
         .select('*')
@@ -2042,10 +2098,27 @@ export const supabaseBackupService: BackupBackendAdapter = {
       supabaseNodeService.listByProject(workspaceId, boardId),
       supabaseDependencyService.listByProject(workspaceId, boardId),
       supabaseTagService.listByWorkspace(workspaceId),
+      supabase.rpc('list_task_tracking_references_v1', { p_tenant_id: tenantId }),
     ]);
     assertNoError(projectError);
     if (!project) throw new BackupError('INVALID_FILE', '找不到要備份的看板。');
     const referencedTagIds = new Set(tasks.flatMap(task => task.tagIds ?? []));
+    const trackingReferences = Array.isArray(trackingResult.data)
+      ? trackingResult.data
+        .filter((row: any) => row?.project_id === projectId && !row?.removed_at)
+        .map((row: any) => ({
+          id: String(row.id),
+          taskId: String(row.task_id),
+          workspaceId,
+          boardId,
+          parentPlacementId: row.parent_placement_id ? String(row.parent_placement_id) : null,
+          order: Number(row.sort_order ?? 0),
+          kanbanStageId: row.kanban_stage_id ? String(row.kanban_stage_id) : undefined,
+          revision: Number(row.revision ?? 1),
+          createdAt: row.created_at ? new Date(String(row.created_at)).getTime() : Date.now(),
+          updatedAt: row.updated_at ? new Date(String(row.updated_at)).getTime() : Date.now(),
+        }))
+      : [];
     return {
       workspaceId,
       boardId,
@@ -2053,6 +2126,7 @@ export const supabaseBackupService: BackupBackendAdapter = {
       tasks,
       dependencies,
       tags: workspaceTags.filter(tag => referencedTagIds.has(tag.id)),
+      trackingReferences,
     };
   },
 
@@ -2100,6 +2174,12 @@ export const supabaseBackupService: BackupBackendAdapter = {
       sourceTaskIdMap: Object.fromEntries(
         Object.entries(asBackupRecord(record.sourceTaskIdMap)).map(([sourceId, targetId]) => [sourceId, String(targetId)])
       ),
+      sourceTrackingReferenceIdMap: record.sourceTrackingReferenceIdMap && typeof record.sourceTrackingReferenceIdMap === 'object'
+        ? Object.fromEntries(
+          Object.entries(record.sourceTrackingReferenceIdMap as Record<string, unknown>)
+            .map(([sourceId, targetId]) => [sourceId, String(targetId)]),
+        )
+        : undefined,
       postWriteFingerprint: String(record.postWriteFingerprint ?? ''),
       idempotentReplay: record.idempotentReplay === true,
     } satisfies BackupExecutionResult;

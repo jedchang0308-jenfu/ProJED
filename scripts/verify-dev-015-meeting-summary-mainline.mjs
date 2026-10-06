@@ -6,13 +6,16 @@ import ts from 'typescript';
 const tempRoot = join(process.cwd(), 'node_modules', '.cache', 'verify-dev-015');
 const sources = [
   'src/utils/recordContentMentions.ts',
+  'src/utils/meetingActivitySummary.ts',
   'src/utils/meetingRecordSynthesis.ts',
 ];
 
 rmSync(tempRoot, { recursive: true, force: true });
 
 const rewriteImports = (outputText) =>
-  outputText.replaceAll("from './recordContentMentions'", "from './recordContentMentions.js'");
+  outputText
+    .replaceAll("from './recordContentMentions'", "from './recordContentMentions.js'")
+    .replaceAll("from './meetingActivitySummary'", "from './meetingActivitySummary.js'");
 
 for (const sourcePath of sources) {
   const source = readFileSync(sourcePath, 'utf8');
@@ -39,7 +42,7 @@ const assert = (label, condition) => {
 
 const pathOf = (...items) => items.map(([id, title]) => ({ id, title }));
 const mention = (id, title) => mentions.serializeTaskMention(id, title);
-const pathMentions = (...items) => items.map(([id, title]) => mention(id, title)).join(' ');
+const pathMentions = (...items) => items.map(([id, title]) => mention(id, title)).join('／');
 const createTask = (id, title, parentId, path, order) => ({
   id,
   title,
@@ -103,11 +106,10 @@ assert('summary includes QA decomposition', summarySection.includes('制定驗�
 assert('summary is not first-three activity log', (summarySection.match(/新增任務「/g) || []).length <= 1);
 assert('summary is not missing deeper tasks', summarySection.includes('問BOSS') && summarySection.includes('執行QC驗證'));
 
-assert('task section keeps numbered list heading', result.content.includes(`2.1 ${pathMentions(weekly)}`));
-assert('task section keeps numbered card heading with full path', result.content.includes(`2.1.1 ${pathMentions(weekly, rd)}`));
-assert('task section keeps numbered child heading with full path', result.content.includes(`2.1.1.1 ${pathMentions(weekly, rd, requirement)}`));
-assert('task section keeps numbered grandchild heading with full path', result.content.includes(`2.1.1.1.1 ${pathMentions(weekly, rd, requirement, boss)}`));
-assert('task section keeps QA hierarchy with full path', result.content.includes(`2.1.2 ${pathMentions(weekly, qa)}`) && result.content.includes(`2.1.2.1 ${pathMentions(weekly, qa, qaPlan)}`));
+assert('task sections use flat evidence numbering', result.content.includes(`2.1 ${pathMentions(weekly)}`) && result.content.includes(`2.2 ${pathMentions(weekly, rd)}`));
+assert('task sections keep RD paths on one heading line', result.content.includes(`2.3 ${pathMentions(weekly, rd, requirement)}`) && result.content.includes(`2.4 ${pathMentions(weekly, rd, requirement, boss)}`));
+assert('task sections keep QA paths on one heading line', result.content.includes(`2.7 ${pathMentions(weekly, qa)}`) && result.content.includes(`2.8 ${pathMentions(weekly, qa, qaPlan)}`));
+assert('task sections keep all linked paths', result.content.includes(`2.5 ${pathMentions(weekly, rd, spec)}`) && result.content.includes(`2.6 ${pathMentions(weekly, rd, startDev)}`) && result.content.includes(`2.9 ${pathMentions(weekly, qa, qc)}`) && result.content.includes(`2.10 ${pathMentions(weekly, transfer)}`));
 assert('task section is present', taskSection.includes(mention(...transfer)));
 
 for (const task of tasks) {

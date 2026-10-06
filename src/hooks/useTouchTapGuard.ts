@@ -60,12 +60,24 @@ export const useTouchTapGuard = ({ threshold = 10 }: UseTouchTapGuardOptions = {
   }, [scheduleSuppressReset]);
 
   const onTouchStart = React.useCallback<React.TouchEventHandler>((event) => {
+    if (event.touches.length !== 1 || document.body.hasAttribute('data-kanban-pinch-active')) {
+      startPositionRef.current = null;
+      pannedRef.current = true;
+      suppressNextTapRef.current = true;
+      scheduleSuppressReset();
+      return;
+    }
     const touch = event.touches[0];
     if (!touch) return;
     startAt(touch.clientX, touch.clientY);
-  }, [startAt]);
+  }, [scheduleSuppressReset, startAt]);
 
   const onTouchMove = React.useCallback<React.TouchEventHandler>((event) => {
+    if (event.touches.length !== 1 || document.body.hasAttribute('data-kanban-pinch-active')) {
+      pannedRef.current = true;
+      suppressNextTapRef.current = true;
+      return;
+    }
     const touch = event.touches[0];
     if (!touch) return;
     moveAt(touch.clientX, touch.clientY);

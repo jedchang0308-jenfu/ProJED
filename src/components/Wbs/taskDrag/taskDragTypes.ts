@@ -9,22 +9,39 @@ export type TaskDragSourceKind =
   | 'wbs-list-row'
   | 'workbench-unplaced-row';
 
-export type MobileTaskAction = 'toggle-complete' | 'add-sibling' | 'add-child' | 'delete';
+export type MobileTaskAction = 'toggle-complete' | 'add-sibling' | 'add-child' | 'archive';
 export type MobileTaskDropPosition = 'before' | 'after';
-export type TaskDragTargetKind = 'task-position' | 'workbench-placed-lane' | 'mobile-action' | 'none';
-export type TaskDragTerminalState = 'committed' | 'cancelled' | 'no-op';
+export type TaskDragIndicatorAxis = 'horizontal' | 'vertical';
+export type TaskDragTargetKind =
+  | 'task-position'
+  | 'board-root'
+  | 'workbench-unplaced-lane'
+  | 'workbench-placed-lane'
+  | 'mobile-action'
+  | 'none';
+export type TaskDragTerminalState = 'committed' | 'cancelled' | 'no-op' | 'failed';
 export type TaskDragPhase = 'dragging' | 'armed';
+export type TaskChildIntentPhase = 'none' | 'candidate' | 'armed';
 export type TaskDropSurfaceKind =
   | 'column-header'
   | 'kanban-card'
   | 'checklist-row'
+  | 'task-title-child'
   | 'column-drop'
+  | 'root-drop'
   | 'checklist-drop'
   | 'workbench-unplaced-row'
+  | 'workbench-unplaced-lane'
   | 'workbench-placed-lane';
 
 export interface TaskDragSource {
   nodeId: string;
+  placementId?: string;
+  placementKind?: 'primary' | 'tracking_reference';
+  trackingReferenceId?: string;
+  canEditCanonicalTask?: boolean;
+  canCreateCanonicalTask?: boolean;
+  canDeleteCanonicalTask?: boolean;
   kind: TaskDragSourceKind;
   inputMode: TaskDragInputMode;
   originBoardId?: string | null;
@@ -35,6 +52,7 @@ export interface TaskDragIndicatorRect {
   left: number;
   top: number;
   width: number;
+  height?: number;
 }
 
 export interface TaskDragOriginFieldRect extends TaskDragIndicatorRect {
@@ -50,6 +68,14 @@ export interface TaskDragTargetRect {
   height: number;
 }
 
+export interface TaskChildDropPreviewRect {
+  parent: TaskDragTargetRect;
+  safe: TaskDragTargetRect;
+  scope: TaskDragTargetRect | null;
+  subtree: TaskDragTargetRect | null;
+  insertion: TaskDragIndicatorRect;
+}
+
 export interface TaskDragObservation {
   sessionId: string;
   sequence: number;
@@ -57,17 +83,25 @@ export interface TaskDragObservation {
   source: TaskDragSource;
   targetKind: TaskDragTargetKind;
   targetNodeId: string | null;
+  targetPlacementId: string | null;
   targetBoardId: string | null;
   targetWorkspaceId: string | null;
   targetSurfaceKind: TaskDropSurfaceKind | null;
   action: MobileTaskAction | null;
   dropPosition: MobileTaskDropPosition | null;
   indicatorRect: TaskDragIndicatorRect | null;
+  indicatorAxis: TaskDragIndicatorAxis | null;
   originFieldRect: TaskDragOriginFieldRect | null;
   lockedTargetRect: TaskDragTargetRect | null;
   pendingTargetId: string | null;
   pendingSince: number | null;
   lastStableAt: number | null;
+  childIntentPhase: TaskChildIntentPhase;
+  childTargetId: string | null;
+  childTargetTitle: string | null;
+  childDropIsOrigin: boolean;
+  childCandidateSince: number | null;
+  childPreviewRect: TaskChildDropPreviewRect | null;
   pointer: { x: number; y: number } | null;
   intentPointer: { x: number; y: number } | null;
   observedAt: number;
@@ -88,21 +122,30 @@ export interface TaskDragSessionState {
   hasMoved: boolean;
   hoverAction: MobileTaskAction | null;
   hoverTargetId: string | null;
+  hoverTargetPlacementId: string | null;
   targetBoardId: string | null;
   targetWorkspaceId: string | null;
   targetSurfaceKind: TaskDropSurfaceKind | null;
   targetKind: TaskDragTargetKind;
   dropPosition: MobileTaskDropPosition | null;
   dropIndicatorRect: TaskDragIndicatorRect | null;
+  dropIndicatorAxis: TaskDragIndicatorAxis | null;
   originFieldRect: TaskDragOriginFieldRect | null;
+  sourceOriginFieldRect: TaskDragOriginFieldRect | null;
   lockedTargetRect: TaskDragTargetRect | null;
   pendingTargetId: string | null;
   pendingSince: number | null;
   lastStableAt: number | null;
+  childIntentPhase: TaskChildIntentPhase;
+  childTargetId: string | null;
+  childTargetTitle: string | null;
+  childDropIsOrigin: boolean;
+  childCandidateSince: number | null;
+  childPreviewRect: TaskChildDropPreviewRect | null;
   terminal: TaskDragTerminalState | null;
 }
 
 export interface TaskDragCommitResult {
-  status: 'committed' | 'no-op';
+  status: 'committed' | 'no-op' | 'failed';
   reason: string;
 }

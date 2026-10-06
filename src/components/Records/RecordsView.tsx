@@ -1,32 +1,63 @@
 import React from 'react';
 import dayjs from 'dayjs';
-import { ArrowLeft, BookOpenText, BriefcaseBusiness, CalendarClock, FileText, Plus } from 'lucide-react';
+import { ArrowLeft, BriefcaseBusiness, CalendarClock } from 'lucide-react';
 import useBoardStore from '../../store/useBoardStore';
-import useRecordStore from '../../store/useRecordStore';
+import useRecordStore, { createRecordScopeKey } from '../../store/useRecordStore';
 import { useRecordDraftGuard } from '../../hooks/useRecordDraftGuard';
 import { renderRecordContentAsPlainText } from '../../utils/recordContentMentions';
-
-const formatRecordType = (type: string) => (type === 'meeting' ? '會議紀錄' : '個人工作紀錄');
+import { useMeetingRecordAvailability } from '../../utils/meetingRecordAvailability';
+import type { EditableKnowledgeRecord } from '../../types';
 
 const formatRecordStatus = (status: string) => (status === 'published' ? '已發布' : '草稿');
 
+const RecordTable: React.FC<{ records: EditableKnowledgeRecord[]; onOpen: (record: EditableKnowledgeRecord) => void }> = ({ records, onOpen }) => (
+  <div className="overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm" data-record-list="true">
+    <div className="hidden grid-cols-[minmax(220px,1.05fr)_minmax(280px,2fr)_140px] items-center gap-4 border-b border-slate-200 bg-slate-50 px-4 py-2 text-[11px] font-semibold text-slate-500 md:grid"><span>紀錄</span><span>摘要</span><span>狀態</span></div>
+    <div className="divide-y divide-slate-100">{records.map(record => { const time = record.type === 'meeting' ? record.occurredAt : record.endedAt || record.startedAt; const previewText = renderRecordContentAsPlainText(record.content).trim() || '尚無內容摘要'; return <button key={record.id} type="button" onClick={() => onOpen(record)} className="record-list-row grid w-full gap-3 px-4 py-3 text-left transition hover:bg-blue-50/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-blue-500 md:grid-cols-[minmax(220px,1.05fr)_minmax(280px,2fr)_140px] md:items-center md:gap-4"><span className="flex min-w-0 items-start gap-3"><span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-slate-50 text-blue-500">{record.type === 'meeting' ? <CalendarClock size={16} /> : <BriefcaseBusiness size={16} />}</span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-900">{record.title}</span><span className="mt-1 block text-xs text-slate-500">{time ? dayjs(time).format('YYYY/MM/DD HH:mm') : '未填時間'}</span></span></span><span className="line-clamp-2 text-xs leading-5 text-slate-600 md:text-sm">{previewText}</span><span className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500"><span className={record.status === 'published' ? 'text-emerald-700' : 'text-amber-700'}>{formatRecordStatus(record.status)}</span></span></button>; })}</div>
+  </div>
+);
+
 const RecordsView: React.FC = () => {
+  const [activeSection, setActiveSection] = React.useState<'meeting' | 'work_log'>('meeting');
   const records = useRecordStore(state => state.records);
-  const loading = useRecordStore(state => state.loading);
-  const openNewRecord = useRecordStore(state => state.openNewRecord);
+  const recordListLoad = useRecordStore(state => state.recordListLoad);
+  const loadRecords = useRecordStore(state => state.loadRecords);
   const openExistingRecord = useRecordStore(state => state.openExistingRecord);
   const activeWorkspaceId = useBoardStore(state => state.activeWorkspaceId);
   const activeBoardId = useBoardStore(state => state.activeBoardId);
   const setView = useBoardStore(state => state.setView);
   const guardRecordDraft = useRecordDraftGuard();
-  const returnToBoard = () => setView(activeWorkspaceId && activeBoardId ? 'board' : 'home');
-
-  const handleNewMeetingRecord = () => {
-    void guardRecordDraft(() => openNewRecord('meeting'), {
-      title: '新增會後會議紀錄？',
-      message: '新增會後會議紀錄會開啟新的草稿；若目前紀錄尚未儲存，請先決定是否存草稿。',
+  const { isMeetingRecordUnavailable } = useMeetingRecordAvailability();
+  const scopeKey = activeWorkspaceId && activeBoardId ? createRecordScopeKey(activeWorkspaceId, activeBoardId) : null;
+  const loading = recordListLoad.status === 'loading' && recordListLoad.scopeKey === scopeKey;
+  const loadError = recordListLoad.status === 'error' && recordListLoad.scopeKey === scopeKey
+    ? recordListLoad.error
+    : null;
+  const scopedRecords = React.useMemo(
+    () => scopeKey && recordListLoad.scopeKey === scopeKey ? records : [],
+    [recordListLoad.scopeKey, records, scopeKey],
+  );
+  React.useEffect(() => {
+    if (isMeetingRecordUnavailable && activeSection === 'meeting') setActiveSection('work_log');
+  }, [activeSection, isMeetingRecordUnavailable]);
+  const visibleRecords = React.useMemo(
+    () => scopedRecords.filter(record => !isMeetingRecordUnavailable || record.type !== 'meeting'),
+    [isMeetingRecordUnavailable, scopedRecords],
+  );
+  const recordGroups = React.useMemo(() => [
+    { key: 'meeting', label: '會議紀錄', records: visibleRecords.filter(record => record.type === 'meeting') },
+    { key: 'work_log', label: '個人工作紀錄', records: visibleRecords.filter(record => record.type === 'work_log') },
+  ], [visibleRecords]);
+  const returnToBoard = () => {
+    void guardRecordDraft(() => setView(activeWorkspaceId && activeBoardId ? 'board' : 'home'), {
+      title: '返回看板？',
+      message: '返回看板會離開目前紀錄；若尚未完成本機保存，請先決定是否存草稿。',
     });
   };
+  const sections = [
+    ...(!isMeetingRecordUnavailable ? [{ key: 'meeting' as const, label: '會議紀錄' }] : []),
+    { key: 'work_log' as const, label: '個人工作紀錄' },
+  ];
 
   const handleOpenRecord = (record: Parameters<typeof openExistingRecord>[0]) => {
     void guardRecordDraft(() => openExistingRecord(record), {
@@ -36,9 +67,9 @@ const RecordsView: React.FC = () => {
   };
 
   return (
-    <div className="flex h-full flex-col bg-slate-50">
-      <div className="flex h-14 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-5">
-        <div className="flex items-center gap-2">
+    <div className="flex h-full flex-col bg-slate-50" data-records-active-section={activeSection}>
+      <div className="flex h-14 shrink-0 items-center border-b border-slate-200 bg-white px-5">
+        <div>
           <button
             type="button"
             onClick={returnToBoard}
@@ -51,82 +82,20 @@ const RecordsView: React.FC = () => {
             回到看板
             <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">Esc</span>
           </button>
-          <BookOpenText size={18} className="text-blue-500" />
-          <div>
-            <h1 className="text-sm font-semibold text-slate-900">紀錄庫</h1>
-            <p className="text-xs text-slate-500">會後查閱與整理會議紀錄/個人工作紀錄；開會主畫面請使用看板上的新增會議記錄入口。</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleNewMeetingRecord}
-            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 hover:bg-slate-50"
-            title="補一筆會後會議紀錄；開會中請使用上方新增會議記錄。"
-          >
-            <Plus size={14} />
-            補一筆會後紀錄
-          </button>
         </div>
       </div>
 
       <div className="flex-1 overflow-auto p-5">
-        {loading ? (
-          <div className="rounded-md border border-slate-200 bg-white p-4 text-sm text-slate-500">載入紀錄中...</div>
-        ) : records.length === 0 ? (
-          <div className="rounded-md border border-dashed border-slate-300 bg-white p-8 text-center">
-            <FileText size={24} className="mx-auto mb-2 text-slate-300" />
-            <div className="text-sm font-semibold text-slate-700">尚無紀錄</div>
-            <div className="mt-1 text-xs text-slate-500">本頁用於會後整理；開會時請回到看板啟動會議紀錄。</div>
+        <h1 className="sr-only">紀錄庫</h1>
+        <nav aria-label="紀錄庫分區" role="tablist" className="mb-5 flex flex-wrap gap-2 border-b border-slate-200 pb-3" data-record-section-controls="true">
+          {sections.map(section => <button key={section.key} id={`record-section-tab-${section.key}`} type="button" role="tab" aria-selected={activeSection === section.key} aria-controls={`record-panel-${section.key}`} onClick={() => setActiveSection(section.key)} className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${activeSection === section.key ? 'bg-blue-600 text-white' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`} data-record-section-tab={section.key}>{section.label}</button>)}
+        </nav>
+        {loadError ? (
+          <div role="alert" className="flex items-center justify-between gap-3 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            <span>紀錄載入失敗：{loadError}</span>
+            {activeWorkspaceId && activeBoardId ? <button type="button" onClick={() => void loadRecords(activeWorkspaceId, activeBoardId)} className="shrink-0 rounded border border-red-300 bg-white px-2 py-1 text-xs font-semibold hover:bg-red-100">重試</button> : null}
           </div>
-        ) : (
-          <div className="overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm">
-            <div className="hidden grid-cols-[minmax(220px,1.05fr)_minmax(280px,2fr)_140px_84px] items-center gap-4 border-b border-slate-200 bg-slate-50 px-4 py-2 text-[11px] font-semibold text-slate-500 md:grid">
-              <span>紀錄</span>
-              <span>摘要</span>
-              <span>狀態</span>
-              <span className="text-right">任務</span>
-            </div>
-            <div className="divide-y divide-slate-100">
-              {records.map(record => {
-                const time = record.type === 'meeting'
-                  ? record.occurredAt
-                  : record.endedAt || record.startedAt;
-                const previewText = renderRecordContentAsPlainText(record.content).trim() || '尚無內容摘要';
-                return (
-                  <button
-                    key={record.id}
-                    type="button"
-                    onClick={() => handleOpenRecord(record)}
-                    className="record-list-row grid w-full gap-3 px-4 py-3 text-left transition hover:bg-blue-50/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-blue-500 md:grid-cols-[minmax(220px,1.05fr)_minmax(280px,2fr)_140px_84px] md:items-center md:gap-4"
-                  >
-                    <span className="flex min-w-0 items-start gap-3">
-                      <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-slate-50 text-blue-500">
-                        {record.type === 'meeting' ? <CalendarClock size={16} /> : <BriefcaseBusiness size={16} />}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-semibold text-slate-900">{record.title}</span>
-                        <span className="mt-1 block text-xs text-slate-500">
-                          {time ? dayjs(time).format('YYYY/MM/DD HH:mm') : '未填時間'}
-                        </span>
-                      </span>
-                    </span>
-                    <span className="line-clamp-2 text-xs leading-5 text-slate-600 md:text-sm">
-                      {previewText}
-                    </span>
-                    <span className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                      <span>{formatRecordType(record.type)}</span>
-                      <span className={record.status === 'published' ? 'text-emerald-700' : 'text-amber-700'}>
-                        {formatRecordStatus(record.status)}
-                      </span>
-                    </span>
-                    <span className="text-xs font-medium text-slate-600 md:text-right">{record.taskLinks.length} 任務</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
+        ) : loading ? <div className="rounded-md border border-slate-200 bg-white p-4 text-sm text-slate-500">載入紀錄中...</div> : recordGroups.map(group => <section key={group.key} id={`record-panel-${group.key}`} role="tabpanel" aria-labelledby={`record-section-heading-${group.key}`} hidden={activeSection !== group.key} data-record-section={group.key} className="mb-5"><div className="mb-2 flex items-center justify-between"><h2 id={`record-section-heading-${group.key}`} className="text-sm font-semibold text-slate-800">{group.label}</h2><span className="text-xs text-slate-400">{group.records.length} 筆</span></div>{group.records.length ? <RecordTable records={group.records} onOpen={handleOpenRecord} /> : <div className="rounded-md border border-dashed border-slate-300 bg-white p-4 text-xs text-slate-500">尚無{group.label}。</div>}</section>)}
       </div>
     </div>
   );

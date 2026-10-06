@@ -92,3 +92,7 @@ npm.cmd run build
 ## 變更紀錄
 
 - 2026-06-11：建立 DEV-019 QA 計畫。
+
+## 2026-10-05 DEV-136 修訂
+
+原 `TC-001`「非會議模式新增會議紀錄時不顯示會議流程」只代表原有 UI 契約；DEV-136 已定案，現在未發布的 meeting draft（包含非 live 的新草稿與紀錄庫重開草稿）都顯示四階段。`isMeetingMode` 仍只代表即時會議狀態；錄音、即時事件擷取與 recovery 仍不得出現在一般草稿。個人工作紀錄的負向契約不變。現行實作與驗收狀態見 [DEV-136](../dev_task.md#dev-136-既有會議草稿續接-ai-整理與校稿流程---2026-10-05) 與 [QA-DEV-136](QA-DEV-136-meeting-draft-ai-continuation.md)。

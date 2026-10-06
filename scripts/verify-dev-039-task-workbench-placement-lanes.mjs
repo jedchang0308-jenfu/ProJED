@@ -5,10 +5,13 @@ const files = {
   placement: 'src/features/taskWorkbench/placement.ts',
   taskDateBadge: 'src/components/Wbs/TaskDateBadge.tsx',
   taskWorkbench: 'src/components/TaskWorkbenchPanel.tsx',
+  indexCss: 'src/index.css',
   dragSensors: 'src/hooks/useDragSensors.ts',
   mainLayout: 'src/components/MainLayout.tsx',
   kanbanCard: 'src/components/Wbs/KanbanCard.tsx',
+  kanbanCardPresentation: 'src/components/Wbs/KanbanCardPresentation.tsx',
   kanbanChecklist: 'src/components/Wbs/KanbanChecklist.tsx',
+  taskChecklistTree: 'src/components/Wbs/TaskChecklistTree.tsx',
   boardView: 'src/components/BoardView.tsx',
   taskDragCommit: 'src/components/Wbs/taskDrag/taskDragCommit.ts',
   wbsStore: 'src/store/useWbsStore.ts',
@@ -59,8 +62,8 @@ assert(
     source.wbsStore.includes('isTaskWorkbenchUnplacedTask') &&
     source.wbsStore.includes('readTaskWorkbenchUnplacedTasks') &&
     source.wbsStore.includes('mergeLocalUnplacedTasksForSetNodes') &&
-    source.wbsStore.includes('upsertTaskWorkbenchUnplacedTask') &&
-    source.wbsStore.includes('removeTaskWorkbenchUnplacedTask') &&
+    source.wbsStore.includes('persistTaskWorkbenchUnplacedTask') &&
+    source.wbsStore.includes('persistRemoveTaskWorkbenchUnplacedTask') &&
     source.wbsStore.includes('oldWasUnplaced') &&
     source.wbsStore.includes('newIsUnplaced') &&
     source.wbsStore.includes('nodeService.create(newNode.workspaceId, newNode.boardId, newNode)') &&
@@ -89,27 +92,39 @@ assert(
 
 assert(
   'Task Workbench task lists use dense shared rows without separate drag-handle chrome',
-  !source.taskWorkbench.includes('TaskDragHandle') &&
+    !source.taskWorkbench.includes('TaskDragHandle') &&
     !source.taskWorkbench.includes('data-task-drag-handle') &&
     source.taskWorkbench.includes('data-task-workbench-all-tasks-list="true"') &&
-    source.taskWorkbench.includes('className="space-y-0.5" data-task-workbench-all-tasks-list="true"') &&
-    source.taskWorkbench.includes('className="space-y-0.5" data-task-workbench-unclassified-list="true"') &&
+    source.taskWorkbench.includes('className="space-y-px" data-task-workbench-all-tasks-list="true"') &&
+    source.taskWorkbench.includes('className="space-y-px" data-task-workbench-unclassified-list="true"') &&
     source.taskWorkbench.includes('getTaskHierarchyDepth') &&
     source.taskWorkbench.includes('hierarchyDepth={getTaskHierarchyDepth(task, nodes)}') &&
     source.taskWorkbench.includes('data-task-workbench-hierarchy-depth') &&
-    source.taskWorkbench.includes('style: { paddingLeft:') &&
+    !source.taskWorkbench.includes('style: { paddingLeft:') &&
     source.browserVerifier.includes('dense task rows should not render a separate drag handle'),
 );
 
 assert(
   'Task Workbench keeps unplaced rows draggable while placed rows are read-only list entries',
-  source.taskWorkbench.includes('const renderWorkbenchTaskRow = ({') &&
+    source.taskWorkbench.includes('const renderWorkbenchTaskRow = ({') &&
     source.taskWorkbench.includes('const WorkbenchUnplacedDragCard') &&
     source.taskWorkbench.includes('const WorkbenchPlacedReadOnlyCard') &&
     source.taskWorkbench.includes('const { attributes, listeners, setNodeRef, isDragging } = useDraggable({') &&
-    source.taskWorkbench.includes('disabled: !canMoveTask || taskGesture.mobileActionMode') &&
-    source.taskWorkbench.includes('const canUseDragSurface = canMoveTask && !taskGesture.mobileActionMode') &&
-    source.taskWorkbench.includes('ref={canUseDragSurface ? setNodeRef : undefined}') &&
+    (
+      (
+        source.taskWorkbench.includes('disabled: !canMoveTask || taskGesture.mobileActionMode') &&
+        source.taskWorkbench.includes('const canUseDragSurface = canMoveTask && !taskGesture.mobileActionMode')
+      ) ||
+      (
+        source.taskWorkbench.includes('const canDragTask = task.isTrackingReference ? canManageTaskReference : canMoveTask;') &&
+        source.taskWorkbench.includes('disabled: !canDragTask || taskGesture.mobileActionMode || taskGesture.isPlacementPending') &&
+        source.taskWorkbench.includes('const canUseDragSurface = canDragTask && !taskGesture.mobileActionMode && !taskGesture.isPlacementPending')
+      )
+    ) &&
+    (
+      source.taskWorkbench.includes('ref={canUseDragSurface ? setNodeRef : undefined}') ||
+      source.taskWorkbench.includes('if (canUseDragSurface) setNodeRef?.(element);')
+    ) &&
     source.taskWorkbench.includes("data-task-workbench-drag-surface={canUseDragSurface ? 'task-row-root' : undefined}") &&
     source.taskWorkbench.includes('{...gestureHandlers}') &&
     source.taskWorkbench.includes('mobileActionEnabled: false') &&
@@ -129,12 +144,10 @@ assert(
 
 assert(
   'Task Workbench task rows open the shared GlobalContextMenu on right click',
-  source.taskWorkbench.includes('const setContextMenuState = useBoardStore(state => state.setContextMenuState)') &&
+  source.taskWorkbench.includes("import { useTaskInteractionBinding } from '../interactions/task/useTaskInteractionBinding'") &&
+    source.taskWorkbench.includes('const interactionBinding = useTaskInteractionBinding({') &&
     source.taskWorkbench.includes('const handleContextMenu = (event: React.MouseEvent) => {') &&
-    source.taskWorkbench.includes('setContextMenuState({') &&
-    source.taskWorkbench.includes("kind: 'task'") &&
-    source.taskWorkbench.includes('nodeId: task.id') &&
-    source.taskWorkbench.includes("title: task.title || '未命名任務'") &&
+    source.taskWorkbench.includes('void interactionBinding.openMenu({ x: event.clientX, y: event.clientY });') &&
     source.taskWorkbench.includes('onContextMenu={handleContextMenu}') &&
     source.taskWorkbench.includes("data-task-workbench-drag-surface={canUseDragSurface ? 'task-row-root' : undefined}") &&
     !source.taskWorkbench.includes('TaskWorkbenchContextMenu') &&
@@ -149,8 +162,18 @@ assert(
     source.taskDateBadge.includes("surface === 'kanban-card'") &&
     source.taskDateBadge.includes("surface === 'checklist'") &&
     source.taskDateBadge.includes("data-task-date-surface=\"workbench\"") &&
-    source.kanbanCard.includes("import { TaskDateBadge } from './TaskDateBadge'") &&
-    source.kanbanChecklist.includes("import { TaskDateBadge } from './TaskDateBadge'") &&
+    (
+      (
+        source.kanbanCard.includes("import { TaskDateBadge } from './TaskDateBadge'") &&
+        source.kanbanChecklist.includes("import { TaskDateBadge } from './TaskDateBadge'")
+      ) ||
+      (
+        source.kanbanCard.includes('KanbanCardPresentation') &&
+        source.kanbanCardPresentation.includes("import { TaskDateBadge } from './TaskDateBadge'") &&
+        source.kanbanChecklist.includes('TaskChecklistTree') &&
+        source.taskChecklistTree.includes("import { TaskDateBadge } from './TaskDateBadge'")
+      )
+    ) &&
     source.taskWorkbench.includes("import { TaskDateBadge } from './Wbs/TaskDateBadge'") &&
     source.taskWorkbench.includes('const renderWorkbenchTaskContent = ({') &&
     source.taskWorkbench.includes('renderWorkbenchTaskContent({') &&
@@ -162,21 +185,36 @@ assert(
 
 assert(
   'Task Workbench lane titles render as sticky section headers above scrollable task rows',
-  source.taskWorkbench.includes('max-h-[38vh] shrink-0 overflow-y-auto overscroll-contain') &&
-    source.taskWorkbench.includes("isOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/30' : 'bg-slate-100'") &&
-    source.taskWorkbench.includes("isPlacedBoardLaneOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/30' : 'bg-slate-100'") &&
-    !source.taskWorkbench.includes("'bg-sky-50/70'") &&
-    source.taskWorkbench.includes('bg-slate-200/95') &&
+  source.taskWorkbench.includes('data-task-workbench-lane-stack="true"') &&
+    source.taskWorkbench.includes('data-task-workbench-lane-resize-handle="true"') &&
+    source.taskWorkbench.includes('min-h-0 shrink-0 overflow-y-auto overscroll-contain') &&
+    source.taskWorkbench.includes('min-h-0 flex-1 overflow-y-auto overscroll-contain') &&
+    !source.taskWorkbench.includes('scrollbar-subtle') &&
+    source.indexCss.includes('--scrollbar-system-size: 3px') &&
+    source.taskWorkbench.includes('className="space-y-px" data-task-workbench-all-tasks-list="true"') &&
+    source.taskWorkbench.includes('className="space-y-px" data-task-workbench-unclassified-list="true"') &&
+    source.taskWorkbench.includes("isOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/30' : ''") &&
+    source.taskWorkbench.includes("isPlacedBoardLaneOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/30' : ''") &&
+    source.taskWorkbench.includes('rounded-md border border-slate-600 bg-slate-700') &&
+    source.taskWorkbench.includes('w-[104px]') &&
+    source.taskWorkbench.includes('w-full min-w-0 shrink-0 items-center gap-2') &&
+    source.taskWorkbench.includes('min-w-0 w-[104px] shrink') &&
+    source.taskWorkbench.includes('min-w-[80px] shrink-0') &&
+    !source.taskWorkbench.includes('absolute left-[112px]') &&
+    source.taskWorkbench.includes('text-white') &&
+    !source.taskWorkbench.includes('border-b border-slate-300') &&
+    !source.taskWorkbench.includes('bg-slate-200/95') &&
     !source.taskWorkbench.includes('bg-[#fbfcfc]/85') &&
     !source.taskWorkbench.includes('bg-[#e8eef2]/95') &&
-    source.taskWorkbench.includes('data-task-workbench-header-accent="unplaced"') &&
-    source.taskWorkbench.includes('data-task-workbench-header-accent="placed"') &&
-    source.taskWorkbench.includes('placeholder="新增任務"') &&
-    source.taskWorkbench.includes('aria-label="新增任務"') &&
-    source.taskWorkbench.includes('<Plus size={14} />') &&
-    !source.taskWorkbench.includes('新增未歸位任務') &&
+    !source.taskWorkbench.includes('data-task-workbench-header-accent=') &&
+    source.taskWorkbench.includes('data-task-workbench-unclassified-modal-add="true"') &&
+    !source.taskWorkbench.includes('data-task-workbench-unclassified-input="true"') &&
+    !source.taskWorkbench.includes('data-task-workbench-unclassified-add="true"') &&
+    source.taskWorkbench.includes('title="新增未歸位任務並開啟任務彈窗"') &&
     source.taskWorkbench.includes('data-task-workbench-section-header="unplaced"') &&
     source.taskWorkbench.includes('data-task-workbench-section-header="all-tasks"') &&
+    source.taskWorkbench.includes('data-task-workbench-section-label="unplaced"') &&
+    source.taskWorkbench.includes('data-task-workbench-section-label="all-tasks"') &&
     source.taskWorkbench.includes('sticky top-0 z-20') &&
     source.taskWorkbench.includes('className="sr-only" data-task-workbench-all-tasks-count="true"') &&
     source.taskWorkbench.includes('className="sr-only" data-task-workbench-unclassified-count="true"') &&
@@ -192,8 +230,9 @@ assert(
     !source.taskWorkbench.includes('NotebookText') &&
     source.taskWorkbench.includes('data-task-workbench-collapse-toggle="true"') &&
     source.taskWorkbench.includes('<ChevronLeft size={16} />') &&
-    source.taskWorkbench.includes("data-task-workbench-overlay={isNarrowViewport ? 'true' : undefined}") &&
-    source.taskWorkbench.includes('data-task-workbench-backdrop="true"') &&
+    source.taskWorkbench.includes('data-task-workbench-inline="true"') &&
+    !source.taskWorkbench.includes('data-task-workbench-overlay=') &&
+    !source.taskWorkbench.includes('data-task-workbench-backdrop=') &&
     source.taskWorkbench.includes('if (!isExpanded) {') &&
     source.taskWorkbench.includes('return null;') &&
     !source.taskWorkbench.includes('data-task-workbench-panel="collapsed"') &&
@@ -204,7 +243,7 @@ assert(
 
 assert(
   'Task Workbench migrates legacy unclassified inbox items into task-equivalent unplaced cards',
-  source.taskWorkbench.includes('readTaskWorkbenchUnplacedTasks') &&
+  (source.taskWorkbench.includes('loadTaskWorkbenchUnplacedTasks') || source.taskWorkbench.includes('readTaskWorkbenchUnplacedTasks')) &&
     source.taskWorkbench.includes('getUnclassifiedItems(inboxItems)') &&
     source.taskWorkbench.includes('createUnplacedTaskNodeFromInboxItem') &&
     source.taskWorkbench.includes('markInboxPromoted') &&
@@ -213,13 +252,15 @@ assert(
 );
 
 assert(
-  'Task drag committer handles placement while rejecting placed workbench sources',
+  'Task drag committer handles subtree placement while rejecting placed workbench sources',
   source.boardView.includes('commitDesktopTaskDrag') &&
     source.taskDragCommit.includes("activeData?.source === 'task-workbench' && activeData?.placement !== 'unplaced'") &&
     source.taskDragCommit.includes("overData?.type === 'task-workbench-unplaced-lane'") &&
     source.taskDragCommit.includes("overData?.type === 'task-workbench-placed-board-lane'") &&
-    source.taskDragCommit.includes('boardId: TASK_WORKBENCH_UNPLACED_BOARD_ID') &&
-    source.taskDragCommit.includes('boardId: overData.boardId'),
+    source.taskDragCommit.includes('buildMoveTaskSubtreeCommand') &&
+    source.taskDragCommit.includes("ownership: { kind: 'account_unplaced' }") &&
+    source.taskDragCommit.includes('boardId: overData.boardId') &&
+    source.taskDragCommit.includes('commitTaskPlacementCommand'),
 );
 
 assert(

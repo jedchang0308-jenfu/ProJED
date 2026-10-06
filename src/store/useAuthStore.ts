@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { authService } from '../services/authService';
+import { clearMeetingDraftRecoveryForUser } from '../services/meetingDraftRecoveryService';
 import type { AuthStore } from '../types';
 
 const useAuthStore = create<AuthStore>((set) => ({
@@ -19,13 +20,27 @@ const useAuthStore = create<AuthStore>((set) => ({
   
   signOut: async () => {
     try {
+      const currentUserId = useAuthStore.getState().user?.uid;
       set({ loading: true, error: null });
+      if (currentUserId) await clearMeetingDraftRecoveryForUser(currentUserId);
       await authService.signOut();
       set({ user: null, loading: false });
     } catch (error: any) {
       set({ error: error.message, loading: false });
     }
-  }
+  },
+
+  updateDisplayName: async (displayName) => {
+    try {
+      set({ error: null });
+      const user = await authService.updateDisplayName(displayName);
+      set({ user });
+    } catch (error: any) {
+      const message = error?.message || '顯示名稱儲存失敗。';
+      set({ error: message });
+      throw new Error(message);
+    }
+  },
 }));
 
 // Initialize the global auth state listener once

@@ -1,5 +1,6 @@
 /* eslint-disable */
 async (page) => {
+  const appBaseUrl = await page.evaluate(() => window.location.origin);
   const results = [];
   const diagnostics = [];
   const networkFailures = [];
@@ -98,9 +99,9 @@ async (page) => {
 
   const openApp = async (viewport) => {
     await page.setViewportSize(viewport);
-    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+    await page.goto(`${appBaseUrl}/`, { waitUntil: 'domcontentloaded' });
     await seedSession();
-    await page.goto('http://127.0.0.1:4173/?qcReset=1&qcSize=72', { waitUntil: 'domcontentloaded' });
+    await page.goto(`${appBaseUrl}/?qcReset=1&qcSize=72`, { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
     await page.locator('[data-mobile-pan-surface="board"]').waitFor({ state: 'visible', timeout: 15000 });
     await closeSidebarIfOpen();
@@ -284,9 +285,9 @@ async (page) => {
   page.setDefaultTimeout(6000);
   page.setDefaultNavigationTimeout(20000);
 
-  await runCase('QA-053-B01', 'DEV-053 desktop approved drag overlay remains unchanged', async () => {
+  await runCase('QA-053-B01', 'desktop drag overlay scales to 50 percent and attaches to the pointer upper-right', async () => {
     await openApp({ width: 1440, height: 900 });
-    const card = page.locator('.kanban-task-card[data-task-id]').first();
+    const card = page.locator('.kanban-task-card[data-task-id] > [data-task-card-primary="true"][data-task-surface-source="true"]').first();
     const point = await pointFor(card, 0.62, 0.34);
     const before = await card.evaluate((element) => ({
       taskId: element.getAttribute('data-task-id'),
@@ -300,23 +301,34 @@ async (page) => {
     const overlayState = await overlay.evaluate((element) => ({
       className: element.className,
       text: (element.textContent || '').trim(),
-      rect: (() => { const rect = element.getBoundingClientRect(); return { width: rect.width, height: rect.height }; })(),
+      anchor: element.getAttribute('data-task-drag-overlay-anchor'),
+      gap: Number(element.getAttribute('data-task-drag-overlay-pointer-gap') || 0),
+      scale: Number(element.getAttribute('data-task-drag-overlay-scale') || 0),
+      rect: (() => { const rect = element.getBoundingClientRect(); return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height }; })(),
     }));
-    assert(overlayState.className.includes('translate-x-4') && overlayState.className.includes('translate-y-4'), 'desktop overlay offset should match approved baseline', overlayState);
+    const pointer = { x: point.x + 18, y: point.y + 5 };
+    assert(overlayState.anchor === 'pointer-upper-right'
+      && overlayState.gap === 0
+      && overlayState.scale === 0.5
+      && Math.abs(overlayState.rect.left - pointer.x) <= 1
+      && Math.abs(overlayState.rect.bottom - pointer.y) <= 1,
+    'desktop overlay must render at 50 percent with its bottom-left corner attached to the pointer hotspot', { overlayState, pointer });
     assert(overlayState.className.includes('rounded-lg') && overlayState.className.includes('shadow-lg'), 'desktop overlay visual treatment should match approved baseline', overlayState);
-    assert(overlayState.rect.width >= 230 && overlayState.rect.width <= 250, 'desktop card overlay width should stay at the approved 240px baseline', overlayState);
-    const screenshotPath = `${screenshotBase}-B01-desktop-approved-overlay.png`;
+    assert(overlayState.rect.width >= 119 && overlayState.rect.width <= 121
+      && overlayState.rect.height >= 19 && overlayState.rect.height <= 21,
+    'desktop card overlay should be exactly 50 percent of the 240x40 base UI', overlayState);
+    const screenshotPath = `${screenshotBase}-B01-desktop-half-scale-pointer-anchor.png`;
     await page.screenshot({ path: screenshotPath, fullPage: false });
     await page.keyboard.press('Escape');
     await page.mouse.up();
     await page.waitForTimeout(180);
     assert(await page.locator('[data-kanban-drag-overlay="true"]').count() === 0, 'desktop overlay should clear after cancel');
-    return { route: page.url(), viewport: { width: 1440, height: 900 }, before, overlayState, screenshotPath };
+    return { route: page.url(), viewport: { width: 1440, height: 900 }, before, pointer, overlayState, screenshotPath };
   });
 
   await runCase('QA-053-B02', 'desktop card, checklist, and column header clicks open the matching details', async () => {
     await openApp({ width: 1440, height: 900 });
-    const card = page.locator('.kanban-task-card[data-task-id]').first();
+    const card = page.locator('.kanban-task-card[data-task-id] > [data-task-card-primary="true"][data-task-surface-source="true"]').first();
     const checklist = page.locator('.kanban-checklist-item[data-task-id]').first();
     const header = page.locator('[data-kanban-column-header="true"][data-task-id]').first();
     const details = [];
@@ -331,7 +343,7 @@ async (page) => {
   await runCase('QA-053-B03', 'desktop card, checklist, and column header right click opens the task context menu', async () => {
     await openApp({ width: 1440, height: 900 });
     const targets = [
-      ['card', page.locator('.kanban-task-card[data-task-id]').first()],
+      ['card', page.locator('.kanban-task-card[data-task-id] > [data-task-card-primary="true"][data-task-surface-source="true"]').first()],
       ['checklist', page.locator('.kanban-checklist-item[data-task-id]').first()],
       ['column header', page.locator('[data-kanban-column-header="true"][data-task-id]').first()],
     ];
@@ -348,7 +360,7 @@ async (page) => {
   await runCase('QA-053-B05', 'mobile card, checklist, and column header quick taps open the matching details', async () => {
     await openApp({ width: 390, height: 844 });
     const targets = [
-      ['card', page.locator('.kanban-task-card[data-task-id]').first()],
+      ['card', page.locator('.kanban-task-card[data-task-id] > [data-task-card-primary="true"][data-task-surface-source="true"]').first()],
       ['checklist', page.locator('.kanban-checklist-item[data-task-id]').first()],
       ['column header', page.locator('[data-kanban-column-header="true"][data-task-id]').first()],
     ];
@@ -376,7 +388,7 @@ async (page) => {
   await runCase('QA-053-B06', 'mobile short pan scrolls without task writes or click-through', async () => {
     await openApp({ width: 390, height: 844 });
     const board = page.locator('[data-mobile-pan-surface="board"]').first();
-    const card = page.locator('.kanban-task-card[data-task-id]').first();
+    const card = page.locator('.kanban-task-card[data-task-id] > [data-task-card-primary="true"][data-task-surface-source="true"]').first();
     await board.evaluate((element) => { element.scrollLeft = 0; });
     const before = {
       nodes: await page.evaluate(() => localStorage.getItem('projed-local-test.nodes')),
@@ -406,13 +418,12 @@ async (page) => {
 
   await runCase('QA-053-B07', 'mobile invalid drop is a zero-write no-op and the next session starts immediately', async () => {
     await openApp({ width: 390, height: 844 });
-    const card = page.locator('.kanban-task-card[data-task-id]').first();
-    const invalidTarget = page.locator('[data-kanban-add-task-button="true"]').first();
+    const card = page.locator('.kanban-task-card[data-task-id] > [data-task-card-primary="true"][data-task-surface-source="true"]').first();
     const beforeNodes = await page.evaluate(() => localStorage.getItem('projed-local-test.nodes'));
     const firstSession = await startHeldTouch(card);
     await page.locator('[data-mobile-task-action-rail="true"]').waitFor({ state: 'visible', timeout: 5000 });
     await page.locator('[data-mobile-drag-preview="true"]').waitFor({ state: 'visible', timeout: 5000 });
-    await firstSession.moveTo(await pointFor(invalidTarget, 0.5, 0.5));
+    await firstSession.moveTo({ x: 2, y: 2 });
     await firstSession.end();
     const afterNodes = await page.evaluate(() => localStorage.getItem('projed-local-test.nodes'));
     const afterInvalid = {
@@ -444,7 +455,7 @@ async (page) => {
     const cancellations = [];
     for (const reason of ['touchcancel', 'pointercancel', 'escape', 'blur', 'visibilitychange']) {
       await openApp({ width: 390, height: 844 });
-      const card = page.locator('.kanban-task-card[data-task-id]').first();
+      const card = page.locator('.kanban-task-card[data-task-id] > [data-task-card-primary="true"][data-task-surface-source="true"]').first();
       const beforeNodes = await page.evaluate(() => localStorage.getItem('projed-local-test.nodes'));
       const heldTouch = await startHeldTouch(card);
       await page.locator('[data-mobile-task-action-rail="true"]').waitFor({ state: 'visible', timeout: 5000 });
@@ -519,6 +530,14 @@ async (page) => {
     assert(longPressState.actionRailCount === 0 && longPressState.previewCount === 0, 'placed row long press must not enter mobile drag mode', longPressState);
     assert(longPressState.dragSurface === null && longPressState.genericDragSurface === null, 'placed row must not expose draggable attributes', longPressState);
     assert(longPressState.afterStorage === beforeStorage, 'placed row long press must not write unplaced persistence', { beforeStorage, longPressState });
+    // A held compatibility touch may still dispatch the row's normal click
+    // on touchend.  Close that read-only details view before issuing the
+    // independent quick-tap assertion below.
+    const longPressModal = page.locator('[data-task-details-modal="true"] button[aria-label="關閉任務詳情"], [data-task-details-modal="true"] button[title="關閉"]').first();
+    if (await longPressModal.count()) {
+      await longPressModal.click({ force: true, timeout: 1200 }).catch(() => undefined);
+      await page.waitForTimeout(100);
+    }
     await dispatchTouch(placedRow, { compatibilityClick: true });
     const modal = page.locator('[data-task-details-modal="true"]').first();
     await modal.waitFor({ state: 'visible', timeout: 5000 });
@@ -538,17 +557,39 @@ async (page) => {
     const sweeps = [];
     for (const viewport of [{ width: 320, height: 844 }, { width: 390, height: 844 }, { width: 430, height: 932 }]) {
       await openApp(viewport);
-      const card = page.locator('.kanban-task-card[data-task-id]').first();
-      const target = page.locator('.kanban-task-card[data-task-id]').nth(1);
+      const card = page.locator('.kanban-task-card[data-task-id] > [data-task-card-primary="true"][data-task-surface-source="true"]').first();
+      const targetCard = page.locator('.kanban-task-card[data-task-id]').nth(1);
+      const targetToggle = targetCard.locator('.kanban-checklist-toggle').first();
+      // DEV-068 deliberately owns the complete expanded task scope.  Collapse
+      // this regression's destination so the case remains a standard
+      // same-level insertion assertion rather than a 1s child-intent test.
+      if (await targetToggle.getAttribute('aria-expanded') === 'true') {
+        await targetToggle.click();
+        await page.waitForTimeout(120);
+      }
+      const target = targetCard.locator(':scope > [data-task-card-primary="true"][data-task-surface-source="true"]');
       await card.waitFor({ state: 'visible', timeout: 5000 });
       const heldTouch = await startHeldTouch(card);
       const rail = page.locator('[data-mobile-task-action-rail="true"]').first();
       const preview = page.locator('[data-mobile-drag-preview="true"]').first();
       await rail.waitFor({ state: 'visible', timeout: 5000 });
       await preview.waitFor({ state: 'visible', timeout: 5000 });
-      await heldTouch.moveTo(await pointFor(target, 0.5, 0.4));
+      // DEV-068 reserves the task-title center for the deliberate child intent.
+      // Keep this DEV-053 regression on the lower primary-card surface so it
+      // continues to verify the original same-level insertion indicator.
+      await heldTouch.moveTo(await pointFor(target, 0.08, 0.82));
       const indicator = page.locator('[data-mobile-drop-indicator="true"]').first();
-      await indicator.waitFor({ state: 'visible', timeout: 5000 });
+      try {
+        await indicator.waitFor({ state: 'visible', timeout: 5000 });
+      } catch (error) {
+        const mobileDebug = await page.evaluate(() => ({
+          debug: (window.__projedMobileTaskActionDebug || []).slice(-40),
+          active: document.body.getAttribute('data-task-drag-touch-active'),
+          taskIndicators: Array.from(document.querySelectorAll('[data-mobile-drop-indicator="true"]')).map((element) => element.outerHTML.slice(0, 500)),
+          targetRects: Array.from(document.querySelectorAll('.kanban-task-card[data-task-id] > [data-task-card-primary="true"][data-task-surface-source="true"]')).slice(0, 4).map((element) => { const rect = element.getBoundingClientRect(); return { id: element.getAttribute('data-task-id'), left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom }; }),
+        }));
+        throw new Error(`${error.message} ${JSON.stringify(mobileDebug)}`);
+      }
       const railRect = await rail.evaluate((element) => {
         const rect = element.getBoundingClientRect();
         return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width, height: rect.height };
@@ -574,7 +615,7 @@ async (page) => {
   });
 
   const failCount = results.filter((result) => result.result !== 'PASS').length;
-  const unexpectedDiagnostics = diagnostics.filter((message) => !/favicon|ResizeObserver/i.test(message));
+  const unexpectedDiagnostics = diagnostics.filter((message) => !/favicon|ResizeObserver|Ignored attempt to cancel a touchcancel event with cancelable=false/i.test(message));
   const unexpectedNetworkFailures = networkFailures.filter((message) => !/favicon/i.test(message));
   if (unexpectedDiagnostics.length || unexpectedNetworkFailures.length) {
     results.push({
@@ -598,7 +639,7 @@ async (page) => {
   const summary = {
     ok: finalFailCount === 0,
     summary: { pass: results.length - finalFailCount, fail: finalFailCount },
-    route: 'http://127.0.0.1:4173/?qcReset=1&qcSize=72',
+    route: 'http://localhost:4000/?qcReset=1&qcSize=72',
     results,
     diagnostics: diagnostics.slice(-30),
     networkFailures: networkFailures.slice(-30),

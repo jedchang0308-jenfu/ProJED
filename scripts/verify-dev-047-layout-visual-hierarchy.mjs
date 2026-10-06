@@ -7,6 +7,7 @@ const source = {
   statusFilterBar: read('src/components/ui/StatusFilterBar.tsx'),
   taskWorkbench: read('src/components/TaskWorkbenchPanel.tsx'),
   boardView: read('src/components/BoardView.tsx'),
+  modeSwitcher: read('src/components/ui/ModeSwitcher.tsx'),
 };
 
 const assert = (name, condition) => {
@@ -100,6 +101,14 @@ assert(
     !taskWorkbenchFilterTriggerBlock.includes('<span') &&
     !taskWorkbenchFilterTriggerBlock.includes('<ChevronDown') &&
     !taskWorkbenchFilterTriggerBlock.includes('rounded-full bg-amber-400'),
+);
+
+assert(
+  'mode switch trigger uses the visible 視角 label without directional arrows',
+  source.modeSwitcher.includes('data-mode-switcher-label="view"') &&
+    source.modeSwitcher.includes('視角') &&
+    !source.modeSwitcher.includes('ChevronDown') &&
+    !source.modeSwitcher.includes('ChevronUp'),
 );
 
 assert(

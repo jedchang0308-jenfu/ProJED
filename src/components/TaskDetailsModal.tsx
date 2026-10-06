@@ -1,21 +1,56 @@
 import React from 'react';
 import dayjs from 'dayjs';
-import { CheckCircle2, Lock, MessageSquareText, Plus, Save, Send, Trash2, Unlock, X } from 'lucide-react';
-import { useWbsStore } from '../store/useWbsStore';
+import { AlertCircle, ArrowUp, CheckCircle2, LoaderCircle, Lock, Unlock, X } from 'lucide-react';
+import { useWbsStore, type UpdateNodeDispatchResult } from '../store/useWbsStore';
 import { useMemberStore } from '../store/useMemberStore';
 import useRecordStore from '../store/useRecordStore';
 import { TagPicker } from './Tags/TagPicker';
-import TaskRecordTimeline from './Records/TaskRecordTimeline';
 import type { TaskDetailNote, TaskNode, TaskStatus } from '../types';
-import { useBoardPermissions } from '../hooks/useBoardPermissions';
+import { useTaskPlacementPermissions } from '../hooks/useTaskPlacementPermissions';
 import useBoardStore from '../store/useBoardStore';
 import TaskAssignmentPicker from './TaskAssignmentPicker';
 import { MANUAL_TASK_STATUSES, normalizeManualTaskStatus, TASK_STATUS_LABELS } from '../utils/taskStatus';
+import { buildAncestorPath } from '../utils/taskHierarchy';
+import { primaryPlacementId } from '../features/taskTracking/model';
 import { getTaskStatusFieldClass } from './ui/taskStatusStyles';
+import TaskDetailNoteField from './TaskNotes/TaskDetailNoteField';
+import {
+  areTaskNoteRichContentsEqual,
+  getTaskDetailNotesWithCanonicalPurpose,
+} from '../utils/taskNoteRichContent';
+import { toast } from '../store/useToastStore';
+import { isPrimaryPointerActivation } from '../interactions/pointerActivation';
+import { nodeService } from '../services/dataBackend';
+import {
+  arePersistedValuesEqual,
+  readbackToTerminalOutcome,
+  settlePersistenceOperationOnce,
+  type TaskPersistenceReadback,
+  type TaskPersistenceTerminalOutcome,
+} from '../utils/taskPersistenceConvergence';
+import {
+  clampTaskDetailsModalSize,
+  getTaskDetailsModalDefaultSize,
+  getTaskDetailsModalMaximumSize,
+  getTaskDetailsModalMinimumSize,
+  type TaskDetailsModalViewport,
+} from './taskDetailsModalSizing';
+import { TaskDetailsSubtaskSection } from './TaskDetailsSubtaskSection';
+import { resolveTaskDetailsPersistenceDecision, TASK_DETAILS_NAVIGATE_EVENT } from './taskDetailsNavigation';
+import { useTaskMeetingQuickNotes } from '../hooks/useTaskMeetingQuickNotes';
+import TaskMeetingQuickNoteSection from './TaskNotes/TaskMeetingQuickNoteSection';
+import { useMeetingRecordAvailability } from '../utils/meetingRecordAvailability';
+import useAuthStore from '../store/useAuthStore';
 
 interface TaskDetailsModalProps {
   nodeId: string;
+  /** Placement identity used to resolve target/source capabilities independently. */
+  trackingReferenceId?: string;
   onClose: () => void;
+  canGoBack?: boolean;
+  onBack?: () => void;
+  onNavigateToTask?: (taskId: string, trackingReferenceId?: string, placementId?: string) => void;
+  onCreateChild?: (taskId: string) => void;
 }
 
 const STATUS_OPTIONS: Array<{ value: TaskStatus; label: string }> = MANUAL_TASK_STATUSES.map(value => ({
@@ -24,24 +59,25 @@ const STATUS_OPTIONS: Array<{ value: TaskStatus; label: string }> = MANUAL_TASK_
 }));
 
 const createNote = (index: number): TaskDetailNote => ({
-  id: `note_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
-  title: `備註 ${index}`,
+  id: index === 1 ? 'note_default' : `note_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
+  title: index === 1 ? '任務目的' : '備註',
   content: '',
 });
 
+const formatTaskDateForMobile = (value: string) => (
+  value && dayjs(value).isValid() ? dayjs(value).format('YYYY/MM/DD') : ''
+);
+
 const SIZE_STORAGE_KEY = 'projed.taskDetailsModal.size.v4';
 
-const getDefaultModalSize = () => {
-  const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1120;
-  const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 720;
-  const maxWidth = viewportWidth * 0.94;
-  const maxHeight = viewportHeight * 0.9;
+const getCurrentViewport = (): TaskDetailsModalViewport => ({
+  width: typeof window !== 'undefined' ? window.innerWidth : 1120,
+  height: typeof window !== 'undefined' ? window.innerHeight : 720,
+});
 
-  return {
-    width: Math.min(Math.max(viewportWidth * 0.64, 1040), maxWidth),
-    height: Math.min(Math.max(viewportHeight * 0.84, 680), maxHeight),
-  };
-};
+const getDefaultModalSize = () => getTaskDetailsModalDefaultSize(getCurrentViewport());
+const getMinimumModalSize = () => getTaskDetailsModalMinimumSize(getCurrentViewport());
+const getMaximumModalSize = () => getTaskDetailsModalMaximumSize(getCurrentViewport());
 
 const readSavedSize = () => {
   const defaultSize = getDefaultModalSize();
@@ -55,53 +91,21 @@ const readSavedSize = () => {
     const parsed = JSON.parse(saved);
     const savedWidth = Number(parsed.width);
     const savedHeight = Number(parsed.height);
-    // 不接受曾被縮到過小的尺寸，避免視窗在下一次開啟時持續變小。
-    if (
-      !Number.isFinite(savedWidth)
-      || !Number.isFinite(savedHeight)
-      || savedWidth < defaultSize.width
-      || savedHeight < defaultSize.height
-    ) {
+    if (!Number.isFinite(savedWidth) || !Number.isFinite(savedHeight)) {
       return defaultSize;
     }
 
-    return {
-      width: Math.min(savedWidth, window.innerWidth * 0.94),
-      height: Math.min(savedHeight, window.innerHeight * 0.9),
-    };
+    return clampTaskDetailsModalSize(
+      { width: savedWidth, height: savedHeight },
+      getCurrentViewport(),
+    );
   } catch {
     return defaultSize;
   }
 };
 
-const buildAncestorPath = (
-  node: TaskNode | undefined,
-  nodes: Record<string, TaskNode>
-): TaskNode[] => {
-  if (!node?.parentId) return [];
-
-  const ancestors: TaskNode[] = [];
-  const seenAncestorIds = new Set<string>();
-  let currentParentId: string | null = node.parentId;
-
-  while (currentParentId) {
-    if (seenAncestorIds.has(currentParentId)) break;
-    seenAncestorIds.add(currentParentId);
-
-    const parent: TaskNode | undefined = nodes[currentParentId];
-    if (!parent || parent.isArchived) break;
-
-    ancestors.unshift(parent);
-    currentParentId = parent.parentId;
-  }
-
-  return ancestors;
-};
-
 const getDisplayedDetailNotes = (node: TaskNode | undefined): TaskDetailNote[] => (
-  node?.detailNotes?.length
-    ? node.detailNotes
-    : [{ id: 'note_default', title: '備註', content: node?.description || '' }]
+  getTaskDetailNotesWithCanonicalPurpose(node || { detailNotes: [], description: '' })
 );
 
 const areDetailNotesEqual = (left: TaskDetailNote[], right: TaskDetailNote[]) => (
@@ -110,37 +114,127 @@ const areDetailNotesEqual = (left: TaskDetailNote[], right: TaskDetailNote[]) =>
     note.id === right[index]?.id
     && note.title === right[index]?.title
     && note.content === right[index]?.content
+    && areTaskNoteRichContentsEqual(note.richContent, right[index]?.richContent)
   ))
 );
 
-export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onClose }) => {
+const readbackTaskPersistence = async (
+  sourceNode: TaskNode,
+  requestUpdates: Partial<TaskNode>,
+  persistedKeys: string[],
+): Promise<TaskPersistenceReadback> => {
+  if (!sourceNode.workspaceId || !sourceNode.boardId) return 'unavailable';
+
+  try {
+    const canonicalNodes = await nodeService.listByProject(sourceNode.workspaceId, sourceNode.boardId);
+    const canonicalNode = canonicalNodes.find(item => item.id === sourceNode.id);
+    if (!canonicalNode) return 'mismatch';
+
+    return persistedKeys.every((key) => arePersistedValuesEqual(
+      (canonicalNode as unknown as Record<string, unknown>)[key],
+      (requestUpdates as Record<string, unknown>)[key],
+    ))
+      ? 'confirmed'
+      : 'mismatch';
+  } catch {
+    return 'unavailable';
+  }
+};
+
+const PINCH_CLOSE_MIN_DISTANCE_DELTA = 36;
+const PINCH_CLOSE_MAX_DISTANCE_RATIO = 0.78;
+const TASK_DETAILS_AUTOSAVE_DELAY_MS = 900;
+const TASK_DETAILS_PERSISTENCE_DEADLINE_MS = 10_000;
+const TASK_DETAILS_PERSISTENCE_READBACK_DEADLINE_MS = 5_000;
+
+type TaskDetailsSaveState = 'idle' | 'saving' | 'saved' | 'error' | 'unknown';
+
+const getTouchDistance = (touches: React.TouchList) => {
+  const first = touches[0];
+  const second = touches[1];
+  if (!first || !second) return null;
+
+  return Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY);
+};
+
+type TaskDetailsTransition =
+  | { kind: 'close' }
+  | { kind: 'back' }
+  | { kind: 'navigate'; taskId: string; trackingReferenceId?: string; placementId?: string }
+  | { kind: 'create-child'; parentId: string };
+
+export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
+  nodeId,
+  trackingReferenceId,
+  onClose,
+  onBack,
+  onNavigateToTask,
+  onCreateChild,
+}) => {
   const node = useWbsStore((state) => state.nodes[nodeId]);
+  const currentAccountId = useAuthStore((state) => state.user?.uid ?? null);
   const nodes = useWbsStore((state) => state.nodes);
+  const trackingReferences = useWbsStore((state) => state.trackingReferences);
   const updateNode = useWbsStore((state) => state.updateNode);
   const dependencies = useWbsStore((state) => state.dependencies);
+  const trackingReference = useWbsStore((state) => trackingReferenceId
+    ? state.trackingReferences.find(reference => reference.id === trackingReferenceId && !reference.removedAt) || null
+    : null);
   const getNodeLockStatus = useWbsStore((state) => state.getNodeLockStatus);
   const boardMembers = useMemberStore((state) => state.boardMembers);
   const membersLoading = useMemberStore((state) => state.loading);
   const modalRef = React.useRef<HTMLDivElement | null>(null);
+  const bodyRef = React.useRef<HTMLDivElement | null>(null);
   const titleInputRef = React.useRef<HTMLInputElement | null>(null);
-  const { canEditTask, canAssignTask } = useBoardPermissions();
+  const placementPermissions = useTaskPlacementPermissions(node, trackingReference);
+  // The same details component is used for primary and tracking placements.
+  // Canonical mutations are enabled only by source-board capabilities; target
+  // placement membership contributes derived read/manage-reference access.
+  const canEditTask = placementPermissions.canEditTask;
+  const canAssignTask = placementPermissions.canAssignTask;
+  const canPersistTask = canEditTask || canAssignTask;
   const pendingTitleEditNodeId = useBoardStore((state) => state.pendingTitleEditNodeId);
   const pendingTitleEditInitialValue = useBoardStore((state) => state.pendingTitleEditInitialValue);
   const setPendingTitleEditNodeId = useBoardStore((state) => state.setPendingTitleEditNodeId);
   const [size, setSize] = React.useState(readSavedSize);
-  const minimumModalSize = React.useMemo(() => getDefaultModalSize(), []);
+  const [minimumModalSize, setMinimumModalSize] = React.useState(getMinimumModalSize);
+  const [maximumModalSize, setMaximumModalSize] = React.useState(getMaximumModalSize);
   const [startDate, setStartDate] = React.useState('');
   const [endDate, setEndDate] = React.useState('');
   const [durationDraft, setDurationDraft] = React.useState<string | null>(null);
   const [titleValue, setTitleValue] = React.useState('');
   const [notes, setNotes] = React.useState<TaskDetailNote[]>([]);
   const [meetingDiscussion, setMeetingDiscussion] = React.useState('');
+  const [meetingDiscussionError, setMeetingDiscussionError] = React.useState<string | null>(null);
   const isMeetingMode = useRecordStore((state) => state.isMeetingMode);
+  const activeMeetingBoardId = useBoardStore((state) => state.activeBoardId);
+  const { isMeetingRecordUnavailable } = useMeetingRecordAvailability();
   const appendTaskDiscussionToMeetingDraft = useRecordStore((state) => state.appendTaskDiscussionToMeetingDraft);
+  const meetingQuickNotes = useTaskMeetingQuickNotes(node, activeMeetingBoardId);
   const skipNextNotesSave = React.useRef(true);
   const skipNextTitleBlurSave = React.useRef(false);
-  const [saveFeedbackVisible, setSaveFeedbackVisible] = React.useState(false);
+  const [saveState, setSaveState] = React.useState<TaskDetailsSaveState>('idle');
+  const [isClosePending, setIsClosePending] = React.useState(false);
   const saveFeedbackTimerRef = React.useRef<number | null>(null);
+  const titleAutosaveTimerRef = React.useRef<number | null>(null);
+  const titleEditSequenceRef = React.useRef(0);
+  const titleSaveAttemptRef = React.useRef<{ nodeId: string; value: string } | null>(null);
+  const optimisticTitleRef = React.useRef<{ nodeId: string; value: string; version: number; settled: boolean } | null>(null);
+  const pendingPersistCountRef = React.useRef(0);
+  const pendingPersistOperationsRef = React.useRef(new Set<string>());
+  const persistVersionRef = React.useRef(0);
+  const latestPersistVersionByKeyRef = React.useRef<Record<string, number>>({});
+  const failedUpdatesRef = React.useRef<Partial<TaskNode>>({});
+  const failedUpdateVersionsRef = React.useRef<Record<string, number>>({});
+  const unknownUpdatesRef = React.useRef<Partial<TaskNode>>({});
+  const unknownUpdateVersionsRef = React.useRef<Record<string, number>>({});
+  const persistenceOwnerNodeIdRef = React.useRef<string | undefined>(undefined);
+  const pendingTransitionRef = React.useRef<TaskDetailsTransition | null>(null);
+  const previousNodeIdRef = React.useRef<string | undefined>(undefined);
+  const pinchCloseRef = React.useRef<{
+    initialDistance: number;
+    triggered: boolean;
+  } | null>(null);
   const assigneeOptions = React.useMemo(
     () => boardMembers.map(member => ({
       id: member.userId,
@@ -156,27 +250,232 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
   const currentNodeDetailNotes = node?.detailNotes;
   const currentNodeDescription = node?.description || '';
 
-  const clearSaveFeedback = React.useCallback(() => {
+  const clearSaveFeedbackTimer = React.useCallback(() => {
     if (saveFeedbackTimerRef.current !== null) {
       window.clearTimeout(saveFeedbackTimerRef.current);
       saveFeedbackTimerRef.current = null;
     }
-    setSaveFeedbackVisible(false);
   }, []);
 
   const showSaveFeedback = React.useCallback(() => {
-    if (saveFeedbackTimerRef.current !== null) {
-      window.clearTimeout(saveFeedbackTimerRef.current);
+    clearSaveFeedbackTimer();
+    setSaveState('saved');
+  }, [clearSaveFeedbackTimer]);
+
+  const markDraftDirty = React.useCallback(() => {
+    clearSaveFeedbackTimer();
+    if (pendingPersistCountRef.current === 0) setSaveState('idle');
+  }, [clearSaveFeedbackTimer]);
+
+  const runTransition = React.useCallback((transition: TaskDetailsTransition) => {
+    setIsClosePending(false);
+    if (transition.kind === 'close') {
+      onClose();
+    } else if (transition.kind === 'back') {
+      onBack?.();
+    } else if (transition.kind === 'create-child') {
+      onCreateChild?.(transition.parentId);
+    } else {
+      onNavigateToTask?.(transition.taskId, transition.trackingReferenceId, transition.placementId);
     }
-    setSaveFeedbackVisible(true);
-    saveFeedbackTimerRef.current = window.setTimeout(() => {
-      setSaveFeedbackVisible(false);
-      saveFeedbackTimerRef.current = null;
-    }, 1600);
-  }, []);
+  }, [onBack, onClose, onCreateChild, onNavigateToTask]);
+
+  const settlePersistence = React.useCallback((
+    sourceNodeId: string,
+    operationId: string,
+    outcome: TaskPersistenceTerminalOutcome,
+    requestUpdates: Partial<TaskNode>,
+    requestVersion: number,
+    persistedKeys: string[],
+  ) => {
+    if (persistenceOwnerNodeIdRef.current !== sourceNodeId) {
+      pendingPersistOperationsRef.current.delete(operationId);
+      return;
+    }
+    if (!settlePersistenceOperationOnce(pendingPersistOperationsRef.current, operationId)) return;
+    pendingPersistCountRef.current = Math.max(0, pendingPersistCountRef.current - 1);
+    if (
+      optimisticTitleRef.current?.nodeId === sourceNodeId
+      && optimisticTitleRef.current.version === requestVersion
+    ) {
+      optimisticTitleRef.current = { ...optimisticTitleRef.current, settled: true };
+    }
+
+    if (outcome === 'persisted') {
+      persistedKeys.forEach((key) => {
+        const failedVersion = failedUpdateVersionsRef.current[key];
+        if (failedVersion !== undefined && failedVersion <= requestVersion) {
+          delete failedUpdateVersionsRef.current[key];
+          delete (failedUpdatesRef.current as Record<string, unknown>)[key];
+        }
+        const unknownVersion = unknownUpdateVersionsRef.current[key];
+        if (unknownVersion !== undefined && unknownVersion <= requestVersion) {
+          delete unknownUpdateVersionsRef.current[key];
+          delete (unknownUpdatesRef.current as Record<string, unknown>)[key];
+        }
+      });
+    } else {
+      persistedKeys.forEach((key) => {
+        if (latestPersistVersionByKeyRef.current[key] !== requestVersion) return;
+        (failedUpdatesRef.current as Record<string, unknown>)[key] = (
+          requestUpdates as Record<string, unknown>
+        )[key];
+        failedUpdateVersionsRef.current[key] = requestVersion;
+        if (outcome === 'unknown') {
+          (unknownUpdatesRef.current as Record<string, unknown>)[key] = (
+            requestUpdates as Record<string, unknown>
+          )[key];
+          unknownUpdateVersionsRef.current[key] = requestVersion;
+        } else {
+          delete (unknownUpdatesRef.current as Record<string, unknown>)[key];
+          delete unknownUpdateVersionsRef.current[key];
+        }
+      });
+    }
+
+    const hasFailedUpdates = Object.keys(failedUpdatesRef.current).length > 0;
+    const persistenceDecision = resolveTaskDetailsPersistenceDecision({
+      pendingCount: pendingPersistCountRef.current,
+      hasFailedUpdates,
+      hasPendingTransition: Boolean(pendingTransitionRef.current),
+    });
+    if (persistenceDecision === 'wait') return;
+
+    if (persistenceDecision === 'stay') {
+      clearSaveFeedbackTimer();
+      setSaveState(Object.keys(unknownUpdatesRef.current).length > 0 ? 'unknown' : 'error');
+      if (pendingTransitionRef.current) {
+        pendingTransitionRef.current = null;
+        setIsClosePending(false);
+        toast.error(
+          Object.keys(unknownUpdatesRef.current).length > 0 ? '儲存狀態未確認，請重試' : '儲存失敗，請重試',
+          { duration: 1800 },
+        );
+      }
+      return;
+    }
+
+    if (persistenceDecision === 'run' && pendingTransitionRef.current) {
+      const transition = pendingTransitionRef.current;
+      pendingTransitionRef.current = null;
+      runTransition(transition);
+      return;
+    }
+
+    showSaveFeedback();
+  }, [clearSaveFeedbackTimer, runTransition, showSaveFeedback]);
+
+  const recordRejectedPersistence = React.useCallback((
+    requestUpdates: Partial<TaskNode>,
+    persistedKeys: string[],
+  ) => {
+    const requestVersion = persistVersionRef.current + 1;
+    persistVersionRef.current = requestVersion;
+    persistedKeys.forEach((key) => {
+      latestPersistVersionByKeyRef.current[key] = requestVersion;
+      (failedUpdatesRef.current as Record<string, unknown>)[key] = (
+        requestUpdates as Record<string, unknown>
+      )[key];
+      failedUpdateVersionsRef.current[key] = requestVersion;
+    });
+    clearSaveFeedbackTimer();
+    setSaveState('error');
+  }, [clearSaveFeedbackTimer]);
+
+  const persistTaskUpdates = React.useCallback((
+    updates: Partial<TaskNode>,
+    options: { forcePersistence?: boolean; skipActivity?: boolean } = {},
+  ) => {
+    if (!currentNodeId || !node || !canPersistTask || Object.keys(updates).length === 0) return false;
+
+    const requestUpdates: Partial<TaskNode> = {
+      ...updates,
+      updatedAt: updates.updatedAt ?? Date.now(),
+    };
+    const persistedKeys = Object.keys(requestUpdates).filter((key) => key !== 'updatedAt');
+    if (persistedKeys.length === 0) return false;
+
+    const dispatchResult: UpdateNodeDispatchResult = updateNode(currentNodeId, requestUpdates, {
+      forcePersistence: options.forcePersistence,
+      skipActivity: options.skipActivity,
+    });
+    if (!dispatchResult.accepted) {
+      if (dispatchResult.reason !== 'no_changes') {
+        recordRejectedPersistence(requestUpdates, persistedKeys);
+      }
+      return false;
+    }
+
+    const requestVersion = persistVersionRef.current + 1;
+    persistVersionRef.current = requestVersion;
+    persistedKeys.forEach((key) => {
+      latestPersistVersionByKeyRef.current[key] = requestVersion;
+    });
+    if (typeof requestUpdates.title === 'string') {
+      optimisticTitleRef.current = {
+        nodeId: currentNodeId,
+        value: requestUpdates.title,
+        version: requestVersion,
+        settled: false,
+      };
+    }
+
+    clearSaveFeedbackTimer();
+    setSaveState('saving');
+    pendingPersistOperationsRef.current.add(dispatchResult.operationId);
+    pendingPersistCountRef.current += 1;
+
+    let deadlineTimer: number | null = null;
+    const finish = (outcome: TaskPersistenceTerminalOutcome) => {
+      if (deadlineTimer !== null) {
+        window.clearTimeout(deadlineTimer);
+        deadlineTimer = null;
+      }
+      settlePersistence(
+        currentNodeId,
+        dispatchResult.operationId,
+        outcome,
+        requestUpdates,
+        requestVersion,
+        persistedKeys,
+      );
+    };
+
+    void dispatchResult.completion.then(
+      (status) => finish(status === 'persisted' ? 'persisted' : 'failed'),
+      () => finish('failed'),
+    );
+
+    deadlineTimer = window.setTimeout(() => {
+      console.warn('[TaskDetails] Persistence deadline exceeded; running canonical readback', {
+        operationId: dispatchResult.operationId,
+        taskId: currentNodeId,
+      });
+      const readbackDeadline = new Promise<TaskPersistenceReadback>((resolve) => {
+        window.setTimeout(() => resolve('unavailable'), TASK_DETAILS_PERSISTENCE_READBACK_DEADLINE_MS);
+      });
+      void Promise.race([
+        readbackTaskPersistence(node, requestUpdates, persistedKeys),
+        readbackDeadline,
+      ]).then(
+        (readback) => finish(readbackToTerminalOutcome(readback)),
+        () => finish('unknown'),
+      );
+    }, TASK_DETAILS_PERSISTENCE_DEADLINE_MS);
+
+    return true;
+  }, [
+    canPersistTask,
+    clearSaveFeedbackTimer,
+    currentNodeId,
+    node,
+    recordRejectedPersistence,
+    settlePersistence,
+    updateNode,
+  ]);
 
   const savePendingTaskDetails = React.useCallback(() => {
-    if (!node || !canEditTask) return;
+    if (!node || !canEditTask) return false;
 
     const updates: Partial<TaskNode> = {};
     const trimmedTitle = titleValue.trim();
@@ -195,26 +494,97 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
     }
 
     if (Object.keys(updates).length > 0) {
-      updates.updatedAt = Date.now();
-      updateNode(node.id, updates);
+      return persistTaskUpdates(updates);
     }
-  }, [canEditTask, node, notes, titleValue, updateNode]);
+    return false;
+  }, [canEditTask, node, notes, persistTaskUpdates, titleValue]);
+
+  const retryFailedSave = React.useCallback(() => {
+    if (pendingPersistCountRef.current > 0) return false;
+    const failedUpdates = { ...failedUpdatesRef.current };
+    if (Object.keys(failedUpdates).length === 0) return false;
+
+    failedUpdatesRef.current = {};
+    failedUpdateVersionsRef.current = {};
+    unknownUpdatesRef.current = {};
+    unknownUpdateVersionsRef.current = {};
+    return persistTaskUpdates(failedUpdates, { forcePersistence: true, skipActivity: true });
+  }, [persistTaskUpdates]);
 
   const handleSaveDetails = React.useCallback(() => {
-    savePendingTaskDetails();
+    const didQueueDraft = savePendingTaskDetails();
+    if (didQueueDraft || pendingPersistCountRef.current > 0) return;
+    if (retryFailedSave()) return;
     showSaveFeedback();
-  }, [savePendingTaskDetails, showSaveFeedback]);
+  }, [retryFailedSave, savePendingTaskDetails, showSaveFeedback]);
+
+  const requestTransition = React.useCallback((transition: TaskDetailsTransition) => {
+    if (pendingTransitionRef.current || isClosePending) return;
+    if (!canPersistTask) {
+      runTransition(transition);
+      return;
+    }
+    if (titleAutosaveTimerRef.current !== null) {
+      window.clearTimeout(titleAutosaveTimerRef.current);
+      titleAutosaveTimerRef.current = null;
+    }
+
+    pendingTransitionRef.current = transition;
+    setIsClosePending(true);
+
+    // A rejected write is an explicit recovery state.  Navigation must not
+    // silently retry a failed draft; the user must press the visible Retry
+    // control first, then request the transition again.
+    if (Object.keys(failedUpdatesRef.current).length > 0) {
+      pendingTransitionRef.current = null;
+      setIsClosePending(false);
+      const isUnknown = Object.keys(unknownUpdatesRef.current).length > 0;
+      setSaveState(isUnknown ? 'unknown' : 'error');
+      toast.error(isUnknown ? '儲存狀態未確認，請先重試' : '儲存失敗，請先重試', { duration: 1800 });
+      return;
+    }
+    const didQueueDraft = savePendingTaskDetails();
+
+    if (!didQueueDraft && pendingPersistCountRef.current === 0) {
+      pendingTransitionRef.current = null;
+      runTransition(transition);
+    }
+  }, [canPersistTask, isClosePending, runTransition, savePendingTaskDetails]);
+
+  React.useEffect(() => {
+    const handleDetailsNavigate = (event: Event) => {
+      const detail = (event as CustomEvent<{ taskId?: string; trackingReferenceId?: string; returnFocusPlacementId?: string }>).detail;
+      if (!detail?.taskId) return;
+      requestTransition({
+        kind: 'navigate',
+        taskId: detail.taskId,
+        trackingReferenceId: detail.trackingReferenceId,
+        placementId: detail.returnFocusPlacementId,
+      });
+    };
+    document.addEventListener(TASK_DETAILS_NAVIGATE_EVENT, handleDetailsNavigate);
+    return () => document.removeEventListener(TASK_DETAILS_NAVIGATE_EVENT, handleDetailsNavigate);
+  }, [requestTransition]);
 
   const handleClose = React.useCallback(() => {
-    savePendingTaskDetails();
-    onClose();
-  }, [onClose, savePendingTaskDetails]);
+    requestTransition({ kind: 'close' });
+  }, [requestTransition]);
 
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || event.isComposing) return;
       if (event.target instanceof Element && event.target.closest('[data-task-details-title-input="true"]')) return;
-      const hasNestedOverlay = Boolean(document.querySelector('[data-tag-picker-panel], .global-dialog-content'));
+      // Let dnd-kit cancel an active keyboard drag before the modal owns Escape.
+      // The sortable source exposes aria-pressed while the sensor is active;
+      // keeping this event in the DnD layer prevents Escape from closing the
+      // surrounding details surface.
+      const hasActiveKeyboardTaskDrag = Boolean(document.querySelector(
+        '[data-task-details-modal="true"] [data-task-surface-source="true"][aria-pressed="true"]',
+      ));
+      if (hasActiveKeyboardTaskDrag) return;
+      const hasNestedOverlay = Boolean(document.querySelector(
+        '[data-tag-picker-panel], .global-dialog-content, [data-task-note-toolbar-popover="true"], [data-global-context-menu="true"]',
+      ));
       if (hasNestedOverlay) return;
       event.preventDefault();
       event.stopPropagation();
@@ -227,32 +597,110 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
   }, [handleClose]);
 
   React.useEffect(() => () => {
-    if (saveFeedbackTimerRef.current !== null) {
-      window.clearTimeout(saveFeedbackTimerRef.current);
+    clearSaveFeedbackTimer();
+    if (titleAutosaveTimerRef.current !== null) window.clearTimeout(titleAutosaveTimerRef.current);
+  }, [clearSaveFeedbackTimer]);
+
+  const handlePinchTouchStart = React.useCallback((event: React.TouchEvent<HTMLDivElement>) => {
+    if (event.touches.length !== 2) {
+      pinchCloseRef.current = null;
+      return;
     }
+
+    const initialDistance = getTouchDistance(event.touches);
+    pinchCloseRef.current = initialDistance === null
+      ? null
+      : { initialDistance, triggered: false };
+  }, []);
+
+  const handlePinchTouchMove = React.useCallback((event: React.TouchEvent<HTMLDivElement>) => {
+    const gesture = pinchCloseRef.current;
+    if (!gesture || gesture.triggered || event.touches.length !== 2) return;
+
+    const currentDistance = getTouchDistance(event.touches);
+    if (currentDistance === null) return;
+
+    const distanceDelta = gesture.initialDistance - currentDistance;
+    const distanceRatio = currentDistance / gesture.initialDistance;
+    if (
+      distanceDelta < PINCH_CLOSE_MIN_DISTANCE_DELTA
+      || distanceRatio > PINCH_CLOSE_MAX_DISTANCE_RATIO
+    ) return;
+
+    gesture.triggered = true;
+    handleClose();
+  }, [handleClose]);
+
+  const handlePinchTouchEnd = React.useCallback((event: React.TouchEvent<HTMLDivElement>) => {
+    if (event.touches.length < 2) pinchCloseRef.current = null;
   }, []);
 
   React.useEffect(() => {
-    if (!currentNodeId) return;
+    persistenceOwnerNodeIdRef.current = currentNodeId;
+    if (previousNodeIdRef.current === currentNodeId) return;
+    previousNodeIdRef.current = currentNodeId;
+    pendingPersistOperationsRef.current.clear();
+    pendingPersistCountRef.current = 0;
+    optimisticTitleRef.current = null;
+    failedUpdatesRef.current = {};
+    failedUpdateVersionsRef.current = {};
+    unknownUpdatesRef.current = {};
+    unknownUpdateVersionsRef.current = {};
+    pendingTransitionRef.current = null;
+    setIsClosePending(false);
+    setSaveState('idle');
+    setMeetingDiscussion('');
+    setMeetingDiscussionError(null);
+    if (titleAutosaveTimerRef.current !== null) {
+      window.clearTimeout(titleAutosaveTimerRef.current);
+      titleAutosaveTimerRef.current = null;
+    }
+    titleEditSequenceRef.current += 1;
+  }, [currentNodeId]);
 
-    setTitleValue(currentNodeTitle);
+  React.useEffect(() => {
+    if (!currentNodeId) return;
+    const optimisticTitle = optimisticTitleRef.current;
+    if (optimisticTitle?.nodeId === currentNodeId) {
+      if (!optimisticTitle.settled) {
+        if (currentNodeTitle !== optimisticTitle.value) setTitleValue(optimisticTitle.value);
+        return;
+      }
+      if (currentNodeTitle === optimisticTitle.value) {
+        optimisticTitleRef.current = null;
+      } else {
+        setTitleValue((current) => {
+          const isEditingTitle = document.activeElement === titleInputRef.current;
+          const hasNewerLocalDraft = isEditingTitle
+            && current.trim() !== currentNodeTitle
+            && current.trim() !== optimisticTitle.value;
+          return hasNewerLocalDraft ? current : optimisticTitle.value;
+        });
+        return;
+      }
+    }
+    setTitleValue((current) => {
+      const isEditingTitle = document.activeElement === titleInputRef.current;
+      const hasLocalDraft = isEditingTitle && current.trim() !== currentNodeTitle;
+      return hasLocalDraft ? current : currentNodeTitle;
+    });
+  }, [currentNodeId, currentNodeTitle]);
+
+  React.useEffect(() => {
+    if (!currentNodeId) return;
     setStartDate(currentNodeStartDate);
     setEndDate(currentNodeEndDate);
     setDurationDraft(null);
-    setNotes(
-      currentNodeDetailNotes?.length
-        ? currentNodeDetailNotes
-        : [{ id: 'note_default', title: '備註', content: currentNodeDescription }]
-    );
+  }, [currentNodeEndDate, currentNodeId, currentNodeStartDate]);
+
+  React.useEffect(() => {
+    if (!currentNodeId) return;
+    setNotes(getTaskDetailNotesWithCanonicalPurpose({
+      detailNotes: currentNodeDetailNotes,
+      description: currentNodeDescription,
+    }));
     skipNextNotesSave.current = true;
-  }, [
-    currentNodeDescription,
-    currentNodeDetailNotes,
-    currentNodeEndDate,
-    currentNodeId,
-    currentNodeStartDate,
-    currentNodeTitle,
-  ]);
+  }, [currentNodeDescription, currentNodeDetailNotes, currentNodeId]);
 
   React.useEffect(() => {
     if (!node || !canEditTask) return;
@@ -300,6 +748,19 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
   }, []);
 
   React.useEffect(() => {
+    const handleViewportResize = () => {
+      const viewport = getCurrentViewport();
+      const nextMinimum = getTaskDetailsModalMinimumSize(viewport);
+      setMinimumModalSize(nextMinimum);
+      setMaximumModalSize(getTaskDetailsModalMaximumSize(viewport));
+      setSize((current) => clampTaskDetailsModalSize(current, viewport));
+    };
+
+    window.addEventListener('resize', handleViewportResize);
+    return () => window.removeEventListener('resize', handleViewportResize);
+  }, []);
+
+  React.useEffect(() => {
     if (!node) return;
 
     if (skipNextNotesSave.current) {
@@ -307,18 +768,48 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
       return;
     }
 
+    const displayedNotes = getDisplayedDetailNotes(node);
+    const nextDescription = notes[0]?.content || '';
+    if (areDetailNotesEqual(notes, displayedNotes) && nextDescription === (node.description || '')) return;
+
     const timer = window.setTimeout(() => {
       if (!canEditTask) return;
-      updateNode(node.id, {
+      persistTaskUpdates({
         detailNotes: notes,
-        description: notes[0]?.content || '',
+        description: nextDescription,
       });
-    }, 450);
+    }, TASK_DETAILS_AUTOSAVE_DELAY_MS);
 
     return () => window.clearTimeout(timer);
-  }, [canEditTask, notes, node, updateNode]);
+  }, [canEditTask, notes, node, persistTaskUpdates]);
 
   const ancestorPath = buildAncestorPath(node, nodes);
+
+  const parentPlacementId = trackingReference?.parentPlacementId || null;
+  const parentTrackingReference = parentPlacementId && !parentPlacementId.startsWith('primary:')
+    ? trackingReferences.find(reference => reference.id === parentPlacementId && !reference.removedAt) || null
+    : null;
+  const parentTaskId = trackingReference
+    ? parentPlacementId?.startsWith('primary:')
+      ? parentPlacementId.slice('primary:'.length)
+      : parentTrackingReference?.taskId
+    : node?.parentId;
+  const parentTask = parentTaskId ? nodes[parentTaskId] : undefined;
+  const canNavigateToParent = Boolean(
+    onNavigateToTask
+    && parentTask
+    && !parentTask.isArchived
+    && parentTask.id !== node?.id,
+  );
+  const navigateToParent = React.useCallback(() => {
+    if (!canNavigateToParent || !parentTask || !node) return;
+    requestTransition({
+      kind: 'navigate',
+      taskId: parentTask.id,
+      trackingReferenceId: parentTrackingReference?.id,
+      placementId: trackingReference?.id || primaryPlacementId(node.id),
+    });
+  }, [canNavigateToParent, node, parentTask, parentTrackingReference?.id, requestTransition, trackingReference?.id]);
 
   if (!node) return null;
 
@@ -353,19 +844,56 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
     if (field === 'endDate') {
       setEndDate(value);
     }
-    updateNode(node.id, updates);
+    persistTaskUpdates(updates);
+  };
+
+  const handleDateChange = (field: 'startDate' | 'endDate', event: React.ChangeEvent<HTMLInputElement>) => {
+    // Chromium may emit a transient out-of-range value while navigating an
+    // empty native date picker. Let the input constraints reject that value
+    // without treating month navigation as a real date change.
+    if (!event.currentTarget.validity.valid) {
+      event.currentTarget.value = field === 'startDate' ? startDate : endDate;
+      return;
+    }
+    updateDate(field, event.currentTarget.value);
   };
 
   const handleAssignmentChange = (primaryIds: string[], collaboratorIds: string[]) => {
     if (!canAssignTask) return;
-    updateNode(node.id, {
+    persistTaskUpdates({
       assigneeIds: primaryIds,
       collaboratorIds,
-      updatedAt: Date.now(),
     });
   };
 
+  const handleTitleChange = (value: string) => {
+    if (!canEditTask) return;
+    markDraftDirty();
+    setTitleValue(value);
+    if (titleAutosaveTimerRef.current !== null) window.clearTimeout(titleAutosaveTimerRef.current);
+    const editSequence = titleEditSequenceRef.current + 1;
+    titleEditSequenceRef.current = editSequence;
+
+    const trimmed = value.trim();
+    if (!trimmed || trimmed === node.title) {
+      titleAutosaveTimerRef.current = null;
+      return;
+    }
+
+    titleAutosaveTimerRef.current = window.setTimeout(() => {
+      if (titleEditSequenceRef.current !== editSequence) return;
+      titleAutosaveTimerRef.current = null;
+      persistTaskUpdates({ title: trimmed });
+      setTitleValue(trimmed);
+    }, TASK_DETAILS_AUTOSAVE_DELAY_MS);
+  };
+
   const saveTitle = () => {
+    titleEditSequenceRef.current += 1;
+    if (titleAutosaveTimerRef.current !== null) {
+      window.clearTimeout(titleAutosaveTimerRef.current);
+      titleAutosaveTimerRef.current = null;
+    }
     if (skipNextTitleBlurSave.current) {
       skipNextTitleBlurSave.current = false;
       setTitleValue(node.title || '');
@@ -381,8 +909,17 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
       setTitleValue(node.title || '');
       return;
     }
-    if (trimmed !== node.title) {
-      updateNode(node.id, { title: trimmed, updatedAt: Date.now() });
+    if (currentNodeId && trimmed !== node.title) {
+      const duplicateAttempt = titleSaveAttemptRef.current?.nodeId === currentNodeId
+        && titleSaveAttemptRef.current.value === trimmed;
+      if (!duplicateAttempt) {
+        const attempt = { nodeId: currentNodeId, value: trimmed };
+        titleSaveAttemptRef.current = attempt;
+        void Promise.resolve().then(() => {
+          if (titleSaveAttemptRef.current === attempt) titleSaveAttemptRef.current = null;
+        });
+        persistTaskUpdates({ title: trimmed });
+      }
     }
     setTitleValue(trimmed);
   };
@@ -396,6 +933,10 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
       event.currentTarget.blur();
     } else if (event.key === 'Escape') {
       event.preventDefault();
+      if (titleAutosaveTimerRef.current !== null) {
+        window.clearTimeout(titleAutosaveTimerRef.current);
+        titleAutosaveTimerRef.current = null;
+      }
       skipNextTitleBlurSave.current = true;
       setTitleValue(node.title || '');
       event.currentTarget.blur();
@@ -432,12 +973,12 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
 
   const handleToggleDurationLock = () => {
     if (!canEditTask) return;
-    updateNode(node.id, { isDurationLocked: !node.isDurationLocked });
+    persistTaskUpdates({ isDurationLocked: !node.isDurationLocked });
   };
 
   const updateNote = (noteId: string, updates: Partial<TaskDetailNote>) => {
     if (!canEditTask) return;
-    clearSaveFeedback();
+    markDraftDirty();
     setNotes((current) =>
       current.map((note) => (note.id === noteId ? { ...note, ...updates } : note))
     );
@@ -445,7 +986,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
 
   const addNote = () => {
     if (!canEditTask) return;
-    clearSaveFeedback();
+    markDraftDirty();
     setNotes((current) => [...current, createNote(current.length + 1)]);
   };
 
@@ -461,7 +1002,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
     );
     if (!confirmed) return;
 
-    clearSaveFeedback();
+    markDraftDirty();
     setNotes((current) => {
       const nextNotes = current.filter((item) => item.id !== noteId);
       return nextNotes.length > 0 ? nextNotes : [createNote(1)];
@@ -470,60 +1011,128 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
 
   const handleAppendMeetingDiscussion = () => {
     if (!canEditTask) return;
-    const didAppend = appendTaskDiscussionToMeetingDraft(node.id, node.title || node.id, meetingDiscussion);
-    if (didAppend) setMeetingDiscussion('');
+    if (!meetingQuickNotes.composerAvailable) {
+      setMeetingDiscussionError(meetingQuickNotes.availabilityMessage || '目前任務無法載入會議紀錄。');
+      return;
+    }
+    const submissionId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `quick_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    const result = appendTaskDiscussionToMeetingDraft({
+      taskId: node.id,
+      taskTitle: node.title || node.id,
+      taskBoardId: node.boardId,
+      text: meetingDiscussion,
+      submissionId,
+      occurredAt: Date.now(),
+    });
+    if (result.status === 'appended' || result.status === 'noop') {
+      setMeetingDiscussion('');
+      setMeetingDiscussionError(null);
+      return;
+    }
+    const messages: Record<typeof result.reason, string> = {
+      'not-meeting': '目前不在會議模式。',
+      'invalid-input': '請輸入補記內容。',
+      'invalid-metadata': '補記資料無法辨識，請先儲存或復原草稿。',
+      'invalid-task': '目前任務無法加入補記。',
+      'unsupported-task-owner': '請先將任務放入目前會議的看板，再新增會議紀錄。',
+      'meeting-board-mismatch': '此任務屬於其他看板；請在原看板的會議中新增紀錄。',
+    };
+    setMeetingDiscussionError(messages[result.reason]);
   };
 
   const { startLocked, endLocked } = getNodeLockStatus(node.id, dependencies);
   const currentStatus = normalizeManualTaskStatus(node.status);
   const isDueToday = currentStatus !== 'completed' && !!endDate && dayjs(endDate).isSame(dayjs(), 'day');
+  const closeButtonTitle = saveState === 'error' || saveState === 'unknown'
+    ? '重試確認儲存後關閉'
+    : saveState === 'saving' || isClosePending
+      ? '儲存完成後關閉'
+      : canPersistTask
+        ? '關閉（變更會自動儲存）'
+      : '關閉';
+  const taskDetailsHasLocalChanges = Boolean(
+    canPersistTask
+    && node
+    && (
+      titleValue.trim() !== (node.title || '').trim()
+      || !areDetailNotesEqual(notes, getDisplayedDetailNotes(node))
+      || saveState === 'saving'
+      || saveState === 'error'
+      || saveState === 'unknown'
+    ),
+  );
 
   return (
     <div
       data-task-details-modal="true"
       data-task-id={node.id}
+      data-task-tracking-reference-id={trackingReferenceId}
+      data-task-details-readonly={!canPersistTask ? 'true' : undefined}
+      data-pwa-task-details-state={taskDetailsHasLocalChanges ? 'dirty' : 'safe'}
       className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/35 px-4 py-6 backdrop-blur-[2px]"
+      data-task-details-pinch-close="true"
+      onTouchStart={handlePinchTouchStart}
+      onTouchMove={handlePinchTouchMove}
+      onTouchEnd={handlePinchTouchEnd}
+      onTouchCancel={() => { pinchCloseRef.current = null; }}
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) handleClose();
+        // A real double-click on a task opens after the first click; its second
+        // mousedown can then land on the newly mounted backdrop.  Do not treat
+        // that continuation as an explicit backdrop-close gesture.
+        if (event.detail > 1) return;
+        if (event.target === event.currentTarget && isPrimaryPointerActivation(event)) handleClose();
       }}
     >
       <div
         ref={modalRef}
         data-task-details-dialog="true"
-        className="flex max-h-[90vh] max-w-[94vw] min-h-[420px] min-w-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl"
+        className="flex min-h-[420px] min-w-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl"
         style={{
           width: size.width,
           height: size.height,
           minWidth: minimumModalSize.width,
           minHeight: minimumModalSize.height,
+          maxWidth: maximumModalSize.width,
+          maxHeight: maximumModalSize.height,
           resize: 'both',
         }}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div
-          className="flex items-start gap-3 border-b border-slate-200 px-5 py-4"
+          className="flex items-start gap-2 px-5 py-3"
           data-task-details-header="true"
         >
+          {canNavigateToParent ? (
+            <button
+              type="button"
+              onClick={navigateToParent}
+              disabled={isClosePending}
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:cursor-wait disabled:opacity-60"
+              aria-label="回到上一階任務"
+              title="回到上一階任務"
+              data-task-details-parent="true"
+            >
+              <ArrowUp size={18} aria-hidden="true" />
+            </button>
+          ) : null}
           <div className="min-w-0 flex-1">
-            <div className="flex min-w-0 flex-col gap-2">
+            <div className="flex min-w-0 flex-col gap-0.5">
               {canEditTask ? (
                 <input
                   ref={titleInputRef}
                   type="text"
                   value={titleValue}
-                  onChange={(event) => {
-                    clearSaveFeedback();
-                    setTitleValue(event.target.value);
-                  }}
+                  onChange={(event) => handleTitleChange(event.target.value)}
                   onBlur={saveTitle}
                   onKeyDown={handleTitleKeyDown}
                   data-task-details-title-input="true"
                   aria-label="編輯任務名稱"
-                  className="h-10 w-full min-w-0 rounded-lg border border-slate-200 bg-slate-50/80 px-3 text-base font-semibold text-slate-900 outline-none transition hover:border-blue-200 hover:bg-white focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
-                  title={node.title}
+                  className="h-9 w-full min-w-0 border-0 bg-transparent px-0 text-base font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 hover:bg-slate-50/80 focus:bg-white focus:ring-2 focus:ring-blue-100"
                 />
               ) : (
-                <p className="truncate text-sm font-semibold text-slate-900" title={node.title}>
+                <p className="truncate text-sm font-semibold text-slate-900">
                   {node.title}
                 </p>
               )}
@@ -531,18 +1140,28 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                 <nav
                   aria-label="任務完整位置"
                   data-task-details-parent-path="true"
-                  className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs font-medium leading-5 text-slate-500"
+                  className="flex min-w-0 items-center gap-x-1 overflow-hidden whitespace-nowrap text-[11px] font-medium leading-4 text-slate-500"
                 >
-                  <span className="shrink-0 font-semibold text-slate-400">位置</span>
                   {ancestorPath.map((ancestor, index) => (
                     <React.Fragment key={ancestor.id}>
-                      <span
+                      <button
+                        type="button"
+                        onClick={() => requestTransition({
+                          kind: 'navigate',
+                          taskId: ancestor.id,
+                          placementId: trackingReference?.id || (node ? primaryPlacementId(node.id) : undefined),
+                        })}
+                        disabled={isClosePending}
                         data-task-details-parent-name="true"
-                        className="inline-flex min-w-0 max-w-[min(13rem,42vw)] truncate rounded-md border border-slate-200/80 bg-slate-50 px-2 py-0.5 text-slate-600"
-                        title={ancestor.title || '未命名任務'}
+                        data-task-details-parent-link="true"
+                        data-task-details-parent-id={ancestor.id}
+                        data-task-id={ancestor.id}
+                        data-task-description-hover-trigger={ancestor.description?.trim() ? 'true' : undefined}
+                        aria-label={`開啟上層任務：${ancestor.title || '未命名任務'}`}
+                        className="min-w-0 max-w-[min(11rem,30vw)] truncate text-left text-blue-700 underline decoration-blue-200 underline-offset-2 transition-colors hover:text-blue-800 hover:decoration-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:ring-offset-1 disabled:cursor-wait disabled:opacity-60"
                       >
                         {ancestor.title || '未命名任務'}
-                      </span>
+                      </button>
                       {index < ancestorPath.length - 1 && (
                         <span className="shrink-0 text-slate-300" aria-hidden="true">
                           /
@@ -554,38 +1173,67 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
               )}
             </div>
           </div>
-          {canEditTask ? (
+          {canPersistTask ? (
+            <div
+              className="flex h-9 min-w-[7.5rem] shrink-0 items-center justify-end text-xs font-medium"
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+              data-task-details-save-status={saveState}
+            >
+              {saveState === 'saving' ? (
+                <span className="inline-flex items-center gap-1.5 text-slate-500">
+                  <LoaderCircle size={14} className="animate-spin" aria-hidden="true" />
+                  儲存中…
+                </span>
+              ) : saveState === 'saved' ? (
+                <span className="inline-flex items-center gap-1.5 text-emerald-700">
+                  <CheckCircle2 size={14} aria-hidden="true" />
+                  已儲存
+                </span>
+              ) : saveState === 'error' || saveState === 'unknown' ? (
+                <button
+                  type="button"
+                  onClick={retryFailedSave}
+                  className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-red-600 transition-colors hover:bg-red-50 hover:text-red-700 focus:outline-none focus:ring-2 focus:ring-red-100"
+                  title={saveState === 'unknown' ? '重新讀取並重試未確認的變更' : '重新儲存未同步的變更'}
+                  data-task-details-save-retry="true"
+                >
+                  <AlertCircle size={14} aria-hidden="true" />
+                  {saveState === 'unknown' ? '狀態未確認，請重試' : '儲存失敗，請重試'}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          <div className="group relative shrink-0">
             <button
               type="button"
-              onClick={handleSaveDetails}
-              className={`inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-100 ${
-                saveFeedbackVisible
-                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                  : 'border-blue-200 bg-blue-50 text-blue-700 hover:border-blue-300 hover:bg-blue-100'
-              }`}
-              title="儲存目前任務內容"
-              aria-label="儲存目前任務內容"
-              data-task-details-save="true"
+              onClick={handleClose}
+              disabled={isClosePending}
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-500 transition-colors hover:border-slate-300 hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:cursor-wait disabled:opacity-60"
+              aria-label="關閉任務詳情"
+              aria-describedby="task-details-close-description"
             >
-              {saveFeedbackVisible ? <CheckCircle2 size={16} /> : <Save size={16} />}
-              <span>{saveFeedbackVisible ? '已儲存' : '儲存'}</span>
+              <X size={20} />
             </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={handleClose}
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-500 transition-colors hover:border-slate-300 hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-100"
-            title="關閉"
-            aria-label="關閉任務詳情"
-          >
-            <X size={20} />
-          </button>
+            <span
+              id="task-details-close-tooltip"
+              role="tooltip"
+              className="pointer-events-none invisible absolute right-0 top-full z-50 mt-2 w-max max-w-[min(18rem,calc(100vw-2rem))] rounded-md bg-slate-800 px-2.5 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+              data-task-details-close-tooltip="true"
+            >
+              {closeButtonTitle}
+            </span>
+            <span id="task-details-close-description" className="sr-only">
+              {closeButtonTitle}
+            </span>
+          </div>
         </div>
 
-        <div className="flex-1 overflow-auto px-4 py-4">
-          <section className="border-b border-slate-100 pb-3" data-task-details-meta-section="true">
+        <div ref={bodyRef} className="flex-1 overflow-auto px-4 py-4" data-task-details-scroll-surface="true">
+          <section className="pb-2" data-task-details-meta-section="true">
             <div
-              className="grid gap-y-3 lg:grid-cols-[5.5rem_24rem_minmax(0,1fr)] lg:items-end lg:gap-x-2 lg:gap-y-2"
+              className="grid gap-y-3 lg:grid-cols-[5.5rem_24rem_minmax(0,1fr)] lg:items-end lg:gap-x-3 lg:gap-y-2"
               data-task-details-meta-grid="true"
             >
               <div
@@ -593,7 +1241,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                 data-task-details-mobile-meta="true"
               >
                 <div
-                  className="space-y-1.5 bg-white px-2 py-2 md:grid md:grid-cols-[8.5rem_minmax(0,1fr)] md:items-start md:gap-x-3 md:gap-y-2 md:space-y-0 md:bg-transparent md:px-0 md:py-0 lg:grid lg:grid-cols-[5.5rem_24rem_minmax(0,1fr)] lg:items-end lg:gap-x-2 lg:gap-y-2"
+                  className="space-y-1.5 bg-white px-2 py-2 md:grid md:grid-cols-[8.5rem_minmax(0,1fr)] md:items-start md:gap-x-3 md:gap-y-2 md:space-y-0 md:bg-transparent md:px-0 md:py-0 lg:grid lg:grid-cols-[5.5rem_24rem_minmax(0,1fr)] lg:items-end lg:gap-x-3 lg:gap-y-2"
                   data-task-details-mobile-meta-controls="true"
                 >
               <div
@@ -602,7 +1250,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                 data-task-details-schedule-row="true"
               >
                 <div
-                  className="grid min-w-0 grid-cols-[minmax(0,1fr)_1rem_minmax(0,1fr)_auto] items-end gap-2 lg:col-start-2 lg:row-start-1"
+                  className="grid min-w-0 grid-cols-[minmax(0,1fr)_1rem_minmax(0,1fr)_auto] items-end gap-2 lg:col-start-2 lg:row-start-1 lg:grid-cols-[8rem_2rem_8rem_auto] lg:gap-x-0 lg:gap-y-1"
                   data-task-details-schedule-controls="true"
                   data-task-details-mobile-schedule-controls="true"
                 >
@@ -617,17 +1265,27 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                     >
                     <span className="hidden" data-task-details-meta-label-text="true">開始日期</span>
                     <div className="mt-1 flex items-center gap-2 lg:mt-0" data-task-details-meta-control-row="true">
-                      <input
-                        type="date"
-                        value={startDate}
-                        onChange={(event) => updateDate('startDate', event.target.value)}
-                        readOnly={!canEditTask || startLocked}
-                        className={`h-8 min-w-0 flex-1 rounded-md px-2 text-sm outline-none transition focus:ring-2 lg:min-w-[7.5rem] ${
-                          !canEditTask || startLocked
-                            ? 'border border-dashed border-slate-300 bg-slate-50 text-slate-500 pointer-events-none'
-                            : 'border border-slate-200 text-slate-700 focus:border-blue-400 focus:ring-blue-100'
-                        }`}
-                      />
+                      <div className="relative min-w-0 flex-1 lg:w-[8rem] lg:flex-none">
+                        <input
+                          type="date"
+                          value={startDate}
+                          onChange={(event) => handleDateChange('startDate', event)}
+                          max={!node.isDurationLocked ? (endDate || undefined) : undefined}
+                          readOnly={!canEditTask || startLocked}
+                          className={`h-8 w-full min-w-0 rounded-md px-2 text-sm text-transparent outline-none transition focus:ring-2 sm:text-slate-700 lg:w-[8rem] lg:flex-none ${
+                            !canEditTask || startLocked
+                              ? 'border border-dashed border-slate-300 bg-slate-50 sm:text-slate-500 pointer-events-none'
+                              : 'border border-slate-200 focus:border-blue-400 focus:ring-blue-100'
+                          }`}
+                        />
+                        <span
+                          aria-hidden="true"
+                          className="pointer-events-none absolute inset-y-0 left-2 right-5 flex items-center whitespace-nowrap text-[11px] font-normal text-slate-700 sm:hidden"
+                          data-task-details-mobile-date-value="true"
+                        >
+                          {formatTaskDateForMobile(startDate)}
+                        </span>
+                      </div>
                       <span
                         className={`${startLocked ? 'inline-flex' : 'hidden'} h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border ${
                           startLocked
@@ -642,7 +1300,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                     </label>
 
                     <span
-                      className="col-start-2 flex h-8 w-4 shrink-0 items-center justify-center text-sm font-semibold text-slate-300"
+                      className="col-start-2 flex h-8 w-full shrink-0 items-center justify-center text-sm font-semibold text-slate-300"
                       aria-hidden="true"
                       data-task-details-date-range-arrow="true"
                     >
@@ -656,19 +1314,29 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                     >
                     <span className="hidden" data-task-details-meta-label-text="true">結束日期</span>
                     <div className="mt-1 flex items-center gap-2 lg:mt-0" data-task-details-meta-control-row="true">
-                      <input
-                        type="date"
-                        value={endDate}
-                        onChange={(event) => updateDate('endDate', event.target.value)}
-                        readOnly={!canEditTask || endLocked || node.isDurationLocked}
-                        className={`h-8 min-w-0 flex-1 rounded-md rounded-r-none border-r-0 px-2 text-sm outline-none transition focus:ring-2 lg:min-w-[7.5rem] ${
-                          !canEditTask || endLocked || node.isDurationLocked
-                            ? 'border border-dashed border-slate-300 bg-slate-50 text-slate-500 pointer-events-none'
-                            : isDueToday
-                            ? 'border border-orange-300 bg-orange-50 text-orange-700 shadow-[0_0_0_1px_rgba(251,146,60,0.25)] focus:border-orange-400 focus:ring-orange-100'
-                            : 'border border-slate-200 text-slate-700 focus:border-blue-400 focus:ring-blue-100'
-                        }`}
-                      />
+                      <div className="relative min-w-0 flex-1 lg:w-[8rem] lg:flex-none">
+                        <input
+                          type="date"
+                          value={endDate}
+                          onChange={(event) => handleDateChange('endDate', event)}
+                          min={startDate || undefined}
+                          readOnly={!canEditTask || endLocked || node.isDurationLocked}
+                          className={`h-8 w-full min-w-0 rounded-md rounded-r-none border-r-0 px-2 text-sm text-transparent outline-none transition focus:ring-2 sm:text-slate-700 lg:w-[8rem] lg:flex-none ${
+                            !canEditTask || endLocked || node.isDurationLocked
+                              ? 'border border-dashed border-slate-300 bg-slate-50 sm:text-slate-500 pointer-events-none'
+                              : isDueToday
+                              ? 'border border-orange-300 bg-orange-50 sm:text-orange-700 shadow-[0_0_0_1px_rgba(251,146,60,0.25)] focus:border-orange-400 focus:ring-orange-100'
+                              : 'border border-slate-200 focus:border-blue-400 focus:ring-blue-100'
+                          }`}
+                        />
+                        <span
+                          aria-hidden="true"
+                          className="pointer-events-none absolute inset-y-0 left-2 right-5 flex items-center whitespace-nowrap text-[11px] font-normal text-slate-700 sm:hidden"
+                          data-task-details-mobile-date-value="true"
+                        >
+                          {formatTaskDateForMobile(endDate)}
+                        </span>
+                      </div>
                       <span
                         className={`${endLocked ? 'inline-flex' : 'hidden'} h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-amber-200 bg-amber-50 text-amber-600`}
                         title="結束日期已有依賴關係鎖定"
@@ -679,7 +1347,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                   </label>
                   </div>
                   <span
-                    className={`col-start-4 -ml-2 inline-flex h-8 shrink-0 items-center overflow-hidden rounded-l-none rounded-r-md border ${
+                    className={`col-start-4 ml-0 inline-flex h-8 shrink-0 items-center overflow-hidden rounded-l-none rounded-r-md border ${
                       node.isDurationLocked
                         ? 'border-amber-200 bg-amber-50/70'
                         : 'border-slate-200 bg-slate-50'
@@ -731,7 +1399,9 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                     <div className="mt-1 flex items-center gap-2" data-task-details-meta-control-row="true">
                       <select
                         value={currentStatus}
-                        onChange={(event) => { if (canEditTask) updateNode(node.id, { status: event.target.value as TaskStatus }); }}
+                        onChange={(event) => {
+                          if (canEditTask) persistTaskUpdates({ status: event.target.value as TaskStatus });
+                        }}
                         disabled={!canEditTask}
                         className={getTaskStatusFieldClass(currentStatus)}
                       >
@@ -779,7 +1449,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                       <TagPicker
                         workspaceId={node.workspaceId}
                         selectedTagIds={node.tagIds || []}
-                        onChange={(tagIds) => updateNode(node.id, { tagIds, updatedAt: Date.now() })}
+                        onChange={(tagIds) => persistTaskUpdates({ tagIds })}
                         disabled={!canEditTask}
                         compact
                       />
@@ -792,101 +1462,62 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
             </div>
           </section>
 
-          {isMeetingMode ? (
-            <section className="border-b border-slate-100 py-4">
-              <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
-                <MessageSquareText size={16} className="text-blue-500" />
-                <span>本次會議</span>
-              </div>
-              <div className="rounded-lg border border-blue-100 bg-blue-50/40 p-3">
-                <textarea
-                  value={meetingDiscussion}
-                  onChange={(event) => setMeetingDiscussion(event.target.value)}
-                  onKeyDown={(event) => {
-                    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-                      event.preventDefault();
-                      handleAppendMeetingDiscussion();
-                    }
-                  }}
-                  disabled={!canEditTask}
-                  className="min-h-[88px] w-full resize-y rounded-md border border-blue-100 bg-white px-3 py-2 text-sm leading-6 text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50 disabled:text-slate-400"
-                  placeholder="輸入此任務剛剛討論的內容"
-                />
-                <div className="mt-2 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={handleAppendMeetingDiscussion}
-                    disabled={!canEditTask || !meetingDiscussion.trim()}
-                    className="inline-flex h-8 items-center gap-1.5 rounded-md bg-blue-600 px-3 text-xs font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-                  >
-                    <Send size={13} />
-                    加入紀錄
-                  </button>
-                </div>
-              </div>
-            </section>
-          ) : null}
-
-          <section className="pt-4" data-task-detail-notes-section="true">
-            <div className="grid gap-3" data-task-detail-notes-grid="true">
+          <section className="pt-2" data-task-detail-notes-section="true">
+            <div className="grid gap-2" data-task-detail-notes-grid="true">
               {notes.map((note, noteIndex) => (
-                <div
+                <TaskDetailNoteField
                   key={note.id}
-                  className="rounded-lg border border-slate-200 bg-slate-50/70 p-3"
-                  data-task-detail-note-card="true"
-                >
-                  <div
-                    className="mb-2 flex min-w-0 items-center gap-2"
-                    data-task-detail-note-header="true"
-                  >
-                    <input
-                      type="text"
-                      value={note.title}
-                      onChange={(event) => updateNote(note.id, { title: event.target.value })}
-                      disabled={!canEditTask}
-                      className="h-8 min-w-0 flex-1 rounded-md border border-transparent bg-white px-2 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50 disabled:text-slate-400"
-                      placeholder="備註標題"
-                      data-task-detail-note-title-input="true"
-                    />
-                    {noteIndex === 0 ? (
-                      <button
-                        type="button"
-                        onClick={addNote}
-                        disabled={!canEditTask}
-                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:opacity-40"
-                        title="新增備註欄"
-                        aria-label="新增備註欄"
-                        data-task-detail-note-add="true"
-                      >
-                        <Plus size={14} />
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={() => deleteNote(note.id)}
-                      disabled={!canEditTask}
-                      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-transparent text-slate-400 transition-colors hover:border-red-100 hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-100 disabled:cursor-not-allowed disabled:opacity-40"
-                      title="刪除此備註欄"
-                      aria-label={`刪除備註欄：${note.title || '未命名備註'}`}
-                      data-task-detail-note-delete="true"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                  <textarea
-                    value={note.content}
-                    onChange={(event) => updateNote(note.id, { content: event.target.value })}
-                    disabled={!canEditTask}
-                    className="min-h-[120px] w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                    placeholder="輸入備註內容"
-                    data-task-detail-note-content-input="true"
-                  />
-                </div>
+                  canEdit={canEditTask}
+                  accountId={currentAccountId}
+                  taskId={node.id}
+                  isDescription={note.id === 'note_default'}
+                  note={note}
+                  titleEditable={noteIndex > 0 || note.id !== 'note_default'}
+                  onAdd={addNote}
+                  onDelete={() => deleteNote(note.id)}
+                  onSave={handleSaveDetails}
+                  onUpdate={updates => updateNote(note.id, updates)}
+                />
               ))}
             </div>
           </section>
 
-          <TaskRecordTimeline nodeId={node.id} />
+          <TaskMeetingQuickNoteSection
+            taskId={node.id}
+            taskTitle={node.title || node.id}
+            isMeetingMode={isMeetingMode && !isMeetingRecordUnavailable}
+            composerAvailable={isMeetingMode && !isMeetingRecordUnavailable && meetingQuickNotes.composerAvailable}
+            availabilityMessage={isMeetingMode && !isMeetingRecordUnavailable
+              ? meetingQuickNotes.availabilityMessage
+              : null}
+            canEdit={canEditTask && !meetingQuickNotes.composerBlocked}
+            entries={meetingQuickNotes.entries}
+            loading={meetingQuickNotes.loading}
+            error={meetingQuickNotes.error}
+            discussion={meetingDiscussion}
+            appendError={meetingDiscussionError}
+            onDiscussionChange={(value) => {
+              setMeetingDiscussion(value);
+              if (meetingDiscussionError) setMeetingDiscussionError(null);
+            }}
+            onAppend={handleAppendMeetingDiscussion}
+            onRetry={() => { void meetingQuickNotes.refresh(); }}
+          />
+
+          <TaskDetailsSubtaskSection
+            node={node}
+            trackingReference={trackingReference}
+            bodyRef={bodyRef}
+            canCreateTask={placementPermissions.canCreateTask && !trackingReference}
+            onCreateChild={parentId => requestTransition({ kind: 'create-child', parentId })}
+            onOpenDetails={(taskId, targetTrackingReferenceId, placementId) => requestTransition({
+              kind: 'navigate',
+              taskId,
+              trackingReferenceId: targetTrackingReferenceId,
+              placementId,
+            })}
+          />
+
         </div>
       </div>
     </div>

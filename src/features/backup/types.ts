@@ -1,7 +1,8 @@
 import type { DependencySide, TagColor, TaskDetailNote, TaskStatus } from '../../types';
+import type { TaskTrackingReference } from '../taskTracking/types';
 
 export const BACKUP_FORMAT = 'projed-backup' as const;
-export const BACKUP_SCHEMA_VERSION = 2 as const;
+export const BACKUP_SCHEMA_VERSION = 3 as const;
 export const BACKUP_MAX_FILE_BYTES = 10 * 1024 * 1024;
 export const BACKUP_MAX_TASKS = 10_000;
 export const BACKUP_MAX_DEPENDENCIES = 30_000;
@@ -76,12 +77,27 @@ export interface PortableTagV2 {
   order: number;
 }
 
+/** Placement-only projection metadata.  It never duplicates canonical task
+ * content; taskSourceId resolves back to the task entry in the same package. */
+export interface PortableTrackingReferenceV3 {
+  sourceId: string;
+  taskSourceId: string;
+  parentSourceId: string | null;
+  order: number;
+  kanbanStageSourceId?: string;
+  revision: number;
+}
+
 export interface BackupPayloadV2 {
   board: PortableBoardV2;
   tasks: PortableTaskV2[];
   dependencies: PortableDependencyV2[];
   tags: PortableTagV2[];
+  /** Optional on V2 input; always emitted for newly-created V3 packages. */
+  trackingReferences?: PortableTrackingReferenceV3[];
 }
+
+export type BackupPayloadV3 = BackupPayloadV2;
 
 export interface BackupPackageV2 {
   format: typeof BACKUP_FORMAT;
@@ -103,6 +119,7 @@ export interface BackupPackageV2 {
       tasks: number;
       dependencies: number;
       tags: number;
+      trackingReferences?: number;
     };
     includes: string[];
     excludes: string[];
@@ -115,6 +132,8 @@ export interface BackupPackageV2 {
   payload: BackupPayloadV2;
 }
 
+export type BackupPackageV3 = BackupPackageV2;
+
 export interface BoardBackupSource {
   workspaceId: string;
   workspaceTitle?: string;
@@ -123,6 +142,7 @@ export interface BoardBackupSource {
   tasks: import('../../types').TaskNode[];
   dependencies: import('../../types').Dependency[];
   tags: import('../../types').TaskTag[];
+  trackingReferences?: TaskTrackingReference[];
 }
 
 export interface BackupInspection {
@@ -143,6 +163,7 @@ export interface BackupImportCounts {
   tagsToReuse: number;
   unresolvedPeople: number;
   blockingRecordLinks: number;
+  trackingReferences?: number;
 }
 
 export interface BackupImportTarget {
@@ -177,6 +198,8 @@ export interface BackupExecutionResult {
   counts: BackupImportCounts;
   warnings: string[];
   sourceTaskIdMap: Record<string, string>;
+  /** Optional v3 placement map used to verify nested tracking-reference parents. */
+  sourceTrackingReferenceIdMap?: Record<string, string>;
   postWriteFingerprint: string;
   idempotentReplay: boolean;
 }

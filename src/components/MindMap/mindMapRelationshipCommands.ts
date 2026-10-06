@@ -121,18 +121,25 @@ export const updateRelationshipControlPointById = (
   relationshipId: string,
   handle: MindMapRelationshipControlHandle,
   point: MindMapRelationshipPoint,
-  now = Date.now(),
-) =>
-  relationships.map(item => {
+  options?: {
+    fallbackControlPoints?: readonly [MindMapRelationshipPoint, MindMapRelationshipPoint];
+    now?: number;
+  },
+) => {
+  const now = options?.now ?? Date.now();
+  return relationships.map(item => {
     if (item.id !== relationshipId) return item;
     const geometry = { ...item.geometry };
-    const current = geometry.controlPoints || [];
+    const current = geometry.controlPoints?.length === 2
+      ? geometry.controlPoints
+      : options?.fallbackControlPoints || [];
     geometry.controlPoints = [
       handle === 'control-1' ? point : current[0] || point,
       handle === 'control-2' ? point : current[1] || point,
     ];
     return { ...item, geometry, updatedAt: now };
   });
+};
 
 export const getRelationshipEndpointNodeId = (
   relationships: MindMapNoteRelationship[],

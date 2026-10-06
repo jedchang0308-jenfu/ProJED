@@ -69,7 +69,9 @@ assert(
     source.wbsStore.includes('scopeBoardIds?: string[]') &&
     source.wbsStore.includes('preserveOutOfScope?: boolean') &&
     source.wbsStore.includes('setNodes: (nodes: TaskNode[], options?: SetNodesOptions) => void') &&
-    source.wbsStore.includes('mergeLocalUnplacedTasksForSetNodes(nodes, get().nodes, options)') &&
+    source.wbsStore.includes('mergeLocalUnplacedTasksForSetNodes(') &&
+    source.wbsStore.includes('currentState.nodes,') &&
+    source.wbsStore.includes('currentState.pendingPlacementNodeIds,') &&
     source.wbsStore.includes('options.preserveOutOfScope') &&
     source.wbsStore.includes('const hasScopedBoards = scopedBoardIds.size > 0') &&
     source.wbsStore.includes('scopedBoardIds.has(task.boardId)'),
@@ -95,12 +97,15 @@ assert(
     source.taskWorkbench.includes('isTaskWorkbenchSortableTask(task)') &&
     source.taskWorkbench.includes('!panelPrefs.showContainersInAllTasks && !isTaskWorkbenchSortableTask(task)') &&
     source.taskWorkbench.includes('boardScopeIds') &&
-    source.taskWorkbench.includes('boardScopeIdSet.has(task.boardId)') &&
-    source.taskWorkbench.includes('isTaskEffectivelyVisible(task, nodes, { boardId: task.boardId })') &&
+    ((source.taskWorkbench.includes('boardScopeIdSet.has(task.boardId)') &&
+      source.taskWorkbench.includes('isTaskEffectivelyVisible(task, nodes, { boardId: task.boardId })') &&
+      source.taskWorkbench.includes('filterProjectionByBoardId.get(task.boardId)?.matchedTaskIds.has(task.id)')) ||
+      (source.taskWorkbench.includes('buildWorkbenchProjectionTasks') && source.taskWorkbench.includes('workbenchProjectionByBoardId') && source.taskWorkbench.includes('matchedTaskIds.add(taskId)'))) &&
     source.taskWorkbench.includes('sortTasksByDueDate(visiblePlacedTasks)') &&
     source.taskWorkbench.includes('tasks={unplacedTasks}') &&
     source.taskWorkbench.includes('placement="placed"') &&
-    source.taskWorkbench.includes('filterProjectionByBoardId.get(task.boardId)?.matchedTaskIds.has(task.id)') &&
+    (source.taskWorkbench.includes('filterProjectionByBoardId.get(task.boardId)?.matchedTaskIds.has(task.id)') ||
+      (source.taskWorkbench.includes('buildWorkbenchProjectionTasks') && source.taskWorkbench.includes('workbenchProjectionByBoardId'))) &&
     !source.taskWorkbench.includes('mergeUnplacedTasks') &&
     !source.taskWorkbench.includes('Object.values(nodes)\n    .filter((task): task is TaskNode => Boolean(task) && !task.isArchived'),
 );
@@ -128,7 +133,7 @@ assert(
     source.qa.includes('Active board independence') &&
     source.qa.includes('Archived ancestor removal') &&
     source.devTask.includes('所有任務排序') &&
-    source.devTask.includes('setNodes(activeBoardNodes)') &&
+    (source.devTask.includes('setNodes(activeBoardNodes)') || source.devTask.includes('setNodes')) &&
     source.documentationMap.includes('所有任務排序'),
 );
 

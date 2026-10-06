@@ -1,47 +1,52 @@
 import React, { useCallback, useEffect } from 'react';
 import {
-  BookOpenText,
-  BriefcaseBusiness,
   CalendarDays,
   ChevronRight,
-  ClipboardList,
   Columns,
   LineChart,
   ListChecks,
-  Menu,
   Network,
   Redo2,
-  SquarePen,
   Sparkles,
+  Target,
   Undo2,
-  UserPlus,
 } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import useUndoStore from '../store/useUndoStore';
 import useRagStore from '../store/useRagStore';
-import useRecordStore from '../store/useRecordStore';
+import useRecordStore, { isMeetingContinuityView } from '../store/useRecordStore';
 import { useMemberStore } from '../store/useMemberStore';
 import { useMeetingModeExitGuard } from '../hooks/useMeetingModeExitGuard';
 import { useRecordDraftGuard } from '../hooks/useRecordDraftGuard';
-import { useCoarsePointer } from '../hooks/useCoarsePointer';
+import { useMeetingRecordAvailability } from '../utils/meetingRecordAvailability';
 import { cn } from '../utils/cn';
 import Sidebar from './Sidebar';
+import AppMoreMenu from './AppMoreMenu';
 import { GlobalContextMenu } from './GlobalContextMenu';
 import { BoardShareDialog } from './BoardMembersPanel';
 import RagSidebar from './Rag/RagSidebar';
 import RecordSidebar from './Records/RecordSidebar';
-import { closeTaskWorkbenchPanel, toggleTaskWorkbenchPanel } from './taskWorkbenchPanelCommands';
+import { closeTaskWorkbenchPanel, openTaskWorkbenchPanel, toggleTaskWorkbenchPanel } from './taskWorkbenchPanelCommands';
 import { topbarClassNames } from './ui/compactTokens';
 import { ModeSwitcher, type ModeSwitcherOption } from './ui/ModeSwitcher';
 import { StatusFilterBar } from './ui/StatusFilterBar';
 import type { ViewMode } from '../types';
 import { getTopOpenLeftPanel } from '../utils/leftPanelEscapeStack';
 import {
+  PanelPreviewProvider,
+  type PanelPreviewId,
+} from './panelPreviewContext';
+import {
   selectPendingTaskFilterRefreshCount,
   useDeferredTaskFilterRefreshStore,
 } from '../features/taskFilters/deferredRefresh';
 import { useWbsStore } from '../store/useWbsStore';
+import { useTaskFilterStore } from '../store/useTaskFilterStore';
 import { clearTaskSelection } from '../utils/taskInteractions';
+import TaskDescriptionHoverCard from './TaskDescriptionHoverCard';
+import TaskWorkbenchPanel from './TaskWorkbenchPanel';
+import { getHostModeFromView, TaskInteractionScope } from '../interactions/task/TaskInteractionScope';
+import { consumeQuickWorkbenchIntent } from '../features/taskWorkbench/entryIntent';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -52,7 +57,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     currentView,
     getActiveBoard,
     getActiveWorkspace,
-    updateBoardTitle,
     setView,
     isSidebarOpen,
     setSidebarOpen,
@@ -67,18 +71,18 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     isPanelCollapsed: isRecordPanelCollapsed,
     isMeetingMode,
     startMeetingRecord,
-    openNewRecord,
     isTaskSelectionMode,
   } = useRecordStore();
   const requestExitMeetingMode = useMeetingModeExitGuard();
   const guardRecordDraft = useRecordDraftGuard();
   const boardMemberCount = useMemberStore(state => state.boardMembers.length);
   const [isShareDialogOpen, setShareDialogOpen] = React.useState(false);
-  const [isSmallViewport, setIsSmallViewport] = React.useState(false);
-  const isCoarsePointer = useCoarsePointer();
+  const [previewedPanel, setPreviewedPanel] = React.useState<PanelPreviewId | null>(null);
+  const [quickWorkbenchIntentActive, setQuickWorkbenchIntentActive] = React.useState(false);
+  const { isMeetingRecordUnavailable } = useMeetingRecordAvailability();
 
   const isNonMeetingRecordOpen = isRecordOpen && !isMeetingMode;
-  const isSelectingMode = Boolean(dependencySelection || isTaskSelectionMode || isMeetingMode);
+  const isSelectingMode = Boolean(dependencySelection || isTaskSelectionMode);
   const meetingRecordReserveClass =
     isMeetingMode && isRecordOpen
       ? isRecordPanelCollapsed
@@ -89,12 +93,36 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const lastRedoLabel = redoStack.length > 0 ? redoStack[redoStack.length - 1].label : '';
   const activeBoard = getActiveBoard();
   const activeWorkspace = getActiveWorkspace();
-  const isBoardWorkspaceView = ['list', 'mindmap', 'board', 'gantt', 'calendar', 'records'].includes(currentView);
-  const isTaskFilterView = ['list', 'mindmap', 'board', 'gantt', 'calendar'].includes(currentView);
+  const isBoardWorkspaceView = ['list', 'mindmap', 'board', 'goal', 'gantt', 'calendar', 'records'].includes(currentView);
+  const isTaskFilterView = ['list', 'mindmap', 'board', 'goal', 'gantt', 'calendar'].includes(currentView);
+  const shouldRenderCrossModeTaskWorkbench = isTaskFilterView
+    && currentView !== 'board'
+    && Boolean(activeWorkspace && activeBoard);
+  const shouldRenderQuickIntentTaskWorkbench = quickWorkbenchIntentActive
+    && currentView !== 'board'
+    && !shouldRenderCrossModeTaskWorkbench;
   const isSettingsScopeView = currentView === 'settings' || currentView === 'calendar_subscriptions';
   const isSystemPageView = isSettingsScopeView || currentView === 'records';
-  const isMobileBoardOnly = isCoarsePointer || isSmallViewport;
-  const mobileBlockedViews = React.useMemo(() => new Set<ViewMode>(['list', 'mindmap', 'gantt', 'calendar']), []);
+  const isMobileBoardOnly = isMeetingRecordUnavailable;
+  const canPreviewPanels = !isMobileBoardOnly;
+  const mobileBlockedViews = React.useMemo(() => new Set<ViewMode>(['list', 'mindmap', 'goal', 'gantt', 'calendar']), []);
+
+  React.useEffect(() => {
+    if (!consumeQuickWorkbenchIntent()) return;
+    setQuickWorkbenchIntentActive(true);
+    openTaskWorkbenchPanel();
+    if (isMobileBoardOnly) setSidebarOpen(false);
+  }, [isMobileBoardOnly, setSidebarOpen]);
+
+  React.useEffect(() => {
+    if (!quickWorkbenchIntentActive) return;
+    openTaskWorkbenchPanel();
+  }, [quickWorkbenchIntentActive]);
+
+  const handlePanelPreview = useCallback((panel: PanelPreviewId) => {
+    if (!canPreviewPanels) return;
+    setPreviewedPanel(panel);
+  }, [canPreviewPanels]);
 
   const handleModeChange = (nextView: ViewMode) => {
     if (isMobileBoardOnly && nextView !== 'board') return;
@@ -108,20 +136,63 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     // Refresh both node-driven projections and list roots whose memoization is
     // keyed by the active filter object.
     useWbsStore.setState(state => ({ nodes: { ...state.nodes } }));
-    useBoardStore.setState(state => ({ statusFilters: { ...state.statusFilters } }));
+    useTaskFilterStore.getState().refreshProjection();
   }, []);
 
   const returnToBoard = useCallback(() => {
-    setView(activeWorkspace && activeBoard ? 'board' : 'home');
-  }, [activeBoard, activeWorkspace, setView]);
+    const nextView = activeWorkspace && activeBoard ? 'board' : 'home';
+    void guardRecordDraft(() => setView(nextView), {
+      title: '返回看板？',
+      message: '返回看板會離開目前紀錄；若尚未完成本機保存，請先決定是否存草稿。',
+    });
+  }, [activeBoard, activeWorkspace, guardRecordDraft, setView]);
+
+  const isRecordsView = currentView === 'records';
+  const handleOpenRecords = useCallback(() => {
+    const nextView = isRecordsView ? (activeBoard ? 'board' : 'home') : 'records';
+    void guardRecordDraft(() => {
+      setView(nextView);
+      const narrowViewport = typeof window !== 'undefined'
+        && typeof window.matchMedia === 'function'
+        && window.matchMedia('(max-width: 767px), (hover: none) and (pointer: coarse)').matches;
+      if (narrowViewport) setSidebarOpen(false);
+    }, {
+      title: isRecordsView ? '返回看板？' : '開啟紀錄庫？',
+      message: isRecordsView
+        ? '返回看板會離開目前紀錄；若尚未完成本機保存，請先決定是否存草稿。'
+        : '開啟紀錄庫會離開目前紀錄；若尚未完成本機保存，請先決定是否存草稿。',
+    });
+  }, [activeBoard, guardRecordDraft, isRecordsView, setSidebarOpen, setView]);
+
+  const handleOpenSettings = useCallback(() => {
+    const nextView = isSettingsScopeView ? (activeBoard ? 'board' : 'home') : 'settings';
+    void guardRecordDraft(() => {
+      setView(nextView);
+      const narrowViewport = typeof window !== 'undefined'
+        && typeof window.matchMedia === 'function'
+        && window.matchMedia('(max-width: 767px), (hover: none) and (pointer: coarse)').matches;
+      if (narrowViewport) setSidebarOpen(false);
+    }, {
+      title: isSettingsScopeView ? '返回看板？' : '開啟設定？',
+      message: isSettingsScopeView
+        ? '返回看板會離開目前紀錄；若尚未完成本機保存，請先決定是否存草稿。'
+        : '開啟設定會離開目前紀錄；若尚未完成本機保存，請先決定是否存草稿。',
+    });
+  }, [activeBoard, guardRecordDraft, isSettingsScopeView, setSidebarOpen, setView]);
 
   const handleToggleMobileTaskWorkbench = useCallback(() => {
     if (isMobileBoardOnly) setSidebarOpen(false);
-    setView(activeWorkspace && activeBoard ? 'board' : 'home');
+    if (!isTaskFilterView) setView(activeWorkspace && activeBoard ? 'board' : 'home');
     toggleTaskWorkbenchPanel();
-  }, [activeBoard, activeWorkspace, isMobileBoardOnly, setSidebarOpen, setView]);
+  }, [activeBoard, activeWorkspace, isMobileBoardOnly, isTaskFilterView, setSidebarOpen, setView]);
+
+  const handleToggleWorkspaceSidebar = useCallback(() => {
+    if (isMobileBoardOnly && !isSidebarOpen) closeTaskWorkbenchPanel();
+    setSidebarOpen(!isSidebarOpen);
+  }, [isMobileBoardOnly, isSidebarOpen, setSidebarOpen]);
 
   const handleStartMeetingRecord = () => {
+    if (isMeetingRecordUnavailable) return;
     if (isMeetingMode) {
       void requestExitMeetingMode();
       return;
@@ -132,39 +203,44 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     });
   };
 
-  const handleStartWorkLog = () => {
-    void guardRecordDraft(() => openNewRecord('work_log'), {
-      title: '新增個人紀錄？',
-      message: '新增個人紀錄會開啟新的紀錄草稿；若目前紀錄尚未儲存，請先決定是否存草稿。',
-    });
-  };
-
   const modeSwitcherOptions: ModeSwitcherOption<ViewMode>[] = [
-    { value: 'list', label: '清單', icon: <ListChecks size={13} /> },
-    { value: 'mindmap', label: '心智圖', icon: <Network size={13} /> },
-    { value: 'board', label: '看板', icon: <Columns size={13} /> },
-    { value: 'gantt', label: '甘特', icon: <LineChart size={13} /> },
+    { value: 'board', label: '看板模式', icon: <Columns size={13} /> },
+    { value: 'list', label: '清單模式', icon: <ListChecks size={13} /> },
+    { value: 'mindmap', label: '心智圖模式', icon: <Network size={13} /> },
+    { value: 'gantt', label: '甘特圖模式', icon: <LineChart size={13} /> },
     {
       value: 'calendar',
-      label: '日曆(開發中)',
+      label: '日曆模式',
       icon: <CalendarDays size={13} />,
       title: '日曆功能開發中，內容可能尚未穩定',
     },
+    { value: 'goal', label: 'OKR模式', icon: <Target size={13} /> },
   ];
-  useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
-    const query = window.matchMedia('(max-width: 640px)');
-    const updateSmallViewport = () => setIsSmallViewport(query.matches);
-    updateSmallViewport();
-    query.addEventListener?.('change', updateSmallViewport);
-    return () => query.removeEventListener?.('change', updateSmallViewport);
-  }, []);
-
+  const visibleModeSwitcherOptions = isMeetingMode
+    ? modeSwitcherOptions.filter(option => isMeetingContinuityView(option.value))
+    : modeSwitcherOptions;
   useEffect(() => {
     if (!isMobileBoardOnly || !activeWorkspace || !activeBoard) return;
     if (!mobileBlockedViews.has(currentView)) return;
     setView('board');
   }, [activeBoard, activeWorkspace, currentView, isMobileBoardOnly, mobileBlockedViews, setView]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+
+    const narrowViewport = window.matchMedia('(max-width: 767px), (hover: none) and (pointer: coarse)');
+    const closeDesktopSidebarAfterViewportNarrowing = (event: MediaQueryListEvent) => {
+      if (event.matches) setSidebarOpen(false);
+    };
+
+    narrowViewport.addEventListener?.('change', closeDesktopSidebarAfterViewportNarrowing);
+    return () => narrowViewport.removeEventListener?.('change', closeDesktopSidebarAfterViewportNarrowing);
+  }, [setSidebarOpen]);
+
+  useEffect(() => {
+    if (canPreviewPanels) return;
+    setPreviewedPanel(null);
+  }, [canPreviewPanels]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -220,7 +296,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   }, [canRedo, canUndo, isSystemPageView, redo, returnToBoard, setSidebarOpen, undo]);
 
   return (
-    <div className="flex h-screen flex-col bg-slate-100 text-slate-800" data-mobile-density="compact">
+    <PanelPreviewProvider value={{ previewedPanel, setPreviewedPanel }}>
+      <div className="flex h-screen flex-col bg-slate-100 text-slate-800" data-mobile-density="compact">
       <nav
         className="app-main-nav z-40 flex h-10 shrink-0 items-center justify-between gap-2 border-b border-slate-300/80 bg-white/95 px-2 shadow-[0_1px_8px_rgba(15,23,42,0.08)] backdrop-blur sm:px-3"
         data-layout-region="topbar"
@@ -229,23 +306,58 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
           <button
             type="button"
-            onClick={() => setSidebarOpen(!isSidebarOpen)}
-            className={cn(topbarClassNames.iconButton, 'mr-1 sm:mr-2')}
-            title={isSidebarOpen ? '收合側欄' : '展開側欄'}
-            aria-label={isSidebarOpen ? '收合工作區選單' : '展開工作區選單'}
+            onClick={handleToggleWorkspaceSidebar}
+            onPointerEnter={() => handlePanelPreview('workspace-sidebar')}
+            onPointerLeave={() => setPreviewedPanel(null)}
+            onFocus={() => handlePanelPreview('workspace-sidebar')}
+            onBlur={() => setPreviewedPanel(null)}
+            className={cn(
+              topbarClassNames.textButton,
+              'app-board-switcher min-w-0 max-w-[48vw] justify-start px-2 sm:max-w-none',
+              isSidebarOpen && 'border-primary-300 bg-primary-50 text-primary-700',
+              previewedPanel === 'workspace-sidebar' && 'z-50 border-primary-500 bg-primary-100 text-primary-800 ring-2 ring-primary-300 shadow-[0_0_0_4px_rgba(99,102,241,0.28)]',
+            )}
+            title={activeWorkspace && activeBoard
+              ? `${isSidebarOpen ? '收合' : '展開'}工作區與看板：${activeWorkspace.title} / ${activeBoard.title}`
+              : `${isSidebarOpen ? '收合' : '展開'}工作區與看板`}
+            aria-label={activeBoard
+              ? `${isSidebarOpen ? '收合' : '展開'}工作區與看板，目前看板：${activeBoard.title}`
+              : `${isSidebarOpen ? '收合' : '展開'}工作區與看板，選擇看板`}
+            aria-expanded={isSidebarOpen}
+            aria-controls="workspace-board-sidebar"
             data-main-sidebar-toggle="true"
+            data-board-switcher="true"
           >
-            <Menu size={18} />
+            <span
+              data-topbar-board-title="true"
+              className="app-board-title min-w-0 truncate text-xs font-bold text-slate-800 sm:overflow-visible sm:text-clip sm:text-sm"
+            >
+              {activeBoard?.title || '選擇看板'}
+            </span>
           </button>
           <button
             type="button"
             onClick={handleToggleMobileTaskWorkbench}
-            className={cn(topbarClassNames.iconButton, 'text-sky-700 hover:text-sky-700')}
-            title="開啟全域任務平台"
-            aria-label="開啟全域任務平台"
+            onPointerEnter={() => handlePanelPreview('task-workbench')}
+            onPointerLeave={() => setPreviewedPanel(null)}
+            onFocus={() => handlePanelPreview('task-workbench')}
+            onBlur={() => setPreviewedPanel(null)}
+            className={cn(
+              topbarClassNames.textButton,
+              'px-2 text-xs text-primary-700 hover:text-primary-700',
+              previewedPanel === 'task-workbench' && 'z-50 border-primary-500 bg-primary-100 text-primary-800 ring-2 ring-primary-300 shadow-[0_0_0_4px_rgba(99,102,241,0.28)]',
+            )}
+            title="開啟或收合所有任務"
+            aria-label="開啟或收合所有任務"
             data-mobile-task-workbench-nav-entry="true"
           >
-            <ClipboardList size={17} />
+            <span
+              aria-hidden="true"
+              className="text-[11px] font-black leading-none tracking-tight"
+              data-task-workbench-nav-label="all"
+            >
+              所有任務
+            </span>
           </button>
 
           <div
@@ -274,13 +386,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
             {isBoardWorkspaceView && activeWorkspace && activeBoard ? (
               <>
-                <h1
-                  contentEditable
-                  suppressContentEditableWarning
-                  title={`目前位置：${activeWorkspace.title} / ${activeBoard.title}`}
-                  onBlur={(event) => updateBoardTitle(activeWorkspace.id, activeBoard.id, event.currentTarget.innerText)}
-                  className="app-board-title min-w-[1.5rem] shrink-0 cursor-text whitespace-nowrap rounded px-1.5 py-0.5 text-xs font-bold text-slate-800 hover:bg-slate-100 focus:bg-white focus:outline-primary sm:px-2 sm:text-sm"
-                >
+                <h1 className="sr-only" data-topbar-board-heading="true">
                   {activeBoard.title}
                 </h1>
 
@@ -291,10 +397,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                   {!isMobileBoardOnly ? (
                     <ModeSwitcher
                       value={currentView}
-                      options={modeSwitcherOptions}
+                      options={visibleModeSwitcherOptions}
                       onChange={handleModeChange}
                       disabled={isSelectingMode}
-                      disabledTitle={isMeetingMode ? '紀錄中先離開紀錄再切換檢視' : '選取模式中無法切換檢視'}
+                      disabledTitle="選取模式中無法切換檢視"
                     />
                   ) : null}
 
@@ -342,90 +448,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         </div>
 
         <div
-          className="relative z-20 hidden shrink-0 items-center gap-1 rounded-lg sm:flex"
+          className="relative z-20 flex shrink-0 items-center gap-1 rounded-lg sm:gap-2"
           data-topbar-action-group="true"
         >
-          {isBoardWorkspaceView && activeWorkspace && activeBoard ? (
-            <button
-              type="button"
-              onClick={() => setShareDialogOpen(true)}
-              className={cn(
-                'btn-outline hidden h-7 shrink-0 px-2 text-xs sm:flex sm:h-8 sm:px-3 sm:text-sm',
-                topbarClassNames.textButton,
-                'hover:border-blue-400 hover:text-blue-600',
-              )}
-              title="分享看板"
-              data-board-share-open
-            >
-              <UserPlus size={14} className="text-slate-400" />
-              <span>分享</span>
-              <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-500">
-                {boardMemberCount}
-              </span>
-            </button>
-          ) : null}
-
-          <div className="hidden items-center gap-1 sm:flex sm:gap-2">
-          {isMeetingMode ? (
-            <div
-              role="status"
-              data-active-record-kind="meeting"
-              className={cn(
-                'btn-outline flex h-7 shrink-0 cursor-default px-2 text-xs sm:h-8 sm:px-3 sm:text-sm',
-                topbarClassNames.textButton,
-                'border-blue-200 bg-blue-50 text-blue-700 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700',
-              )}
-              title="已開啟會議紀錄；離開請使用右側紀錄欄的離開紀錄。"
-            >
-              <BookOpenText size={14} className="text-blue-600" />
-              <span className="hidden lg:inline">紀錄中</span>
-            </div>
-          ) : isNonMeetingRecordOpen ? (
-            <div
-              role="status"
-              data-active-record-kind="work-log"
-              className={cn(
-                'btn-outline flex h-7 shrink-0 cursor-default px-2 text-xs sm:h-8 sm:px-3 sm:text-sm',
-                topbarClassNames.textButton,
-                'border-blue-200 bg-blue-50 text-blue-700 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700',
-              )}
-              title="已開啟個人紀錄；若要新增會議記錄，請先離開目前紀錄。"
-            >
-              <BookOpenText size={14} className="text-blue-600" />
-              <span className="hidden lg:inline">紀錄中</span>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={handleStartMeetingRecord}
-              className={cn(
-                'btn-outline flex h-7 shrink-0 px-2 text-xs sm:h-8 sm:px-3 sm:text-sm',
-                topbarClassNames.textButton,
-                'hover:border-emerald-400 hover:text-emerald-600',
-              )}
-              title="新增會議記錄，切到看板並開啟右側紀錄欄"
-            >
-              <SquarePen size={14} className="text-slate-400" />
-              <span className="hidden lg:inline">新增會議記錄</span>
-            </button>
-          )}
-
-          {!isMeetingMode && !isRecordOpen ? (
-            <button
-              type="button"
-              onClick={handleStartWorkLog}
-              className={cn(
-                'btn-outline flex h-7 shrink-0 px-2 text-xs sm:h-8 sm:px-3 sm:text-sm',
-                topbarClassNames.textButton,
-                'hover:border-slate-400 hover:text-slate-700',
-              )}
-              title="新增個人紀錄開發中，內容可能尚未穩定"
-            >
-              <BriefcaseBusiness size={14} className="text-slate-400" />
-              <span className="hidden xl:inline">新增個人紀錄(開發中)</span>
-            </button>
-          ) : null}
-
           <button
             type="button"
             onClick={toggleRagPanel}
@@ -434,12 +459,28 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
               topbarClassNames.textButton,
               isRagOpen ? 'border-blue-400 bg-blue-50 text-blue-600' : 'hover:border-blue-400 hover:text-blue-600',
             )}
-            title="開啟 AI 全域分析"
+            title="問AI"
+            aria-label="問AI"
+            data-ai-analysis-open="true"
           >
             <Sparkles size={14} className={isRagOpen ? 'text-blue-500' : 'text-slate-400'} />
-            <span className="hidden lg:inline">AI 分析</span>
+            <span>問AI</span>
           </button>
-          </div>
+
+          <AppMoreMenu
+            isRecordsView={isRecordsView}
+            isSettingsScopeView={isSettingsScopeView}
+            showShareAction={isBoardWorkspaceView && Boolean(activeWorkspace && activeBoard)}
+            boardMemberCount={boardMemberCount}
+            isMeetingRecordUnavailable={isMeetingRecordUnavailable}
+            isMeetingMode={isMeetingMode}
+            isNonMeetingRecordOpen={isNonMeetingRecordOpen}
+            isRecordOpen={isRecordOpen}
+            onOpenRecords={handleOpenRecords}
+            onOpenSettings={handleOpenSettings}
+            onOpenShareDialog={() => setShareDialogOpen(true)}
+            onToggleMeetingRecord={handleStartMeetingRecord}
+          />
         </div>
       </nav>
 
@@ -447,6 +488,26 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
       <div className="flex flex-1 overflow-hidden">
         <Sidebar />
+
+        {shouldRenderCrossModeTaskWorkbench ? (
+          <TaskInteractionScope
+            hostMode={getHostModeFromView(currentView)}
+            origin="task-workbench"
+            enablePlacementHoverSync={false}
+          >
+            <TaskWorkbenchPanel />
+          </TaskInteractionScope>
+        ) : null}
+
+        {shouldRenderQuickIntentTaskWorkbench ? (
+          <TaskInteractionScope
+            hostMode={getHostModeFromView(currentView)}
+            origin="task-workbench"
+            enablePlacementHoverSync={false}
+          >
+            <TaskWorkbenchPanel onClosed={() => setQuickWorkbenchIntentActive(false)} />
+          </TaskInteractionScope>
+        ) : null}
 
         <main className={`relative flex h-full min-w-0 flex-1 flex-col ${meetingRecordReserveClass}`} data-app-main="true">
           {children}
@@ -456,8 +517,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         <RagSidebar />
       </div>
 
-      <GlobalContextMenu />
-    </div>
+        <GlobalContextMenu />
+        <TaskDescriptionHoverCard />
+      </div>
+    </PanelPreviewProvider>
   );
 };
 

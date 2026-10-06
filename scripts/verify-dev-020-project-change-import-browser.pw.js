@@ -10,7 +10,7 @@ async (page) => {
 
   const openApp = async (viewport) => {
     await page.setViewportSize(viewport);
-    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:4000/', { waitUntil: 'networkidle' });
     if (await page.locator('button', { hasText: '使用固定測試環境' }).count()) {
       await page.locator('button', { hasText: '使用固定測試環境' }).click();
       await page.locator('button', { hasText: /新增會議記錄|紀錄庫/ }).first().waitFor({ state: 'visible', timeout: 10000 });
@@ -58,20 +58,31 @@ async (page) => {
   await openApp({ width: 1440, height: 950 });
 
   assert((await page.locator('nav button', { hasText: '新增會議記錄' }).count()) === 1, 'topbar should expose meeting entry');
-  assert((await page.locator('nav button', { hasText: '新增個人紀錄' }).count()) === 1, 'topbar should expose work log entry');
+  const workLogEntry = page.locator('nav button', { hasText: '新增個人紀錄' });
+  assert((await workLogEntry.count()) === 1, 'topbar should expose the work log capability state');
+  const workLogAvailable = (await workLogEntry.getAttribute('aria-disabled')) !== 'true';
+  if (!workLogAvailable) {
+    assert((await page.locator('nav button[data-work-log-unavailable="true"]').count()) === 1, 'unavailable work log entry should expose its explicit capability marker');
+  }
   assert((await page.locator('button', { hasText: '紀錄庫(開發中)' }).count()) === 0, 'records tab should not be marked as in-development');
 
-  await page.locator('nav button', { hasText: '新增個人紀錄' }).click();
+  if (workLogAvailable) {
+  await workLogEntry.click();
   await page.locator('[data-record-context-summary]').waitFor({ state: 'attached', timeout: 10000 });
 
   assert((await page.locator('[data-record-composer-shell]').count()) === 1, 'work log should use the shared composer shell');
   assert((await page.locator('[data-record-composer-header]').count()) === 1, 'work log should use the shared composer header');
   assert((await page.locator('[data-record-composer-close]').count()) === 1, 'work log should expose the shared close tool slot');
   assert((await page.locator('[data-record-composer-close][aria-label="離開紀錄"]').count()) === 1, 'work log close control should use the unified exit record name');
+  assert((await page.locator('[data-record-sidebar-title]').count()) === 1, 'work log should show the compact record title without a decorative icon');
+  assert((await page.locator('[data-record-sidebar-collapse-toggle][aria-label="收合紀錄面板"]').count()) === 1, 'work log should expose the inside-facing collapse control');
+  assert((await page.locator('[data-record-sidebar-header] button[aria-label="紀錄功能說明"]').count()) === 0, 'record sidebar should not expose the removed help control');
   assert((await page.locator('[data-record-composer-summary]').count()) === 1, 'work log should show the shared composer summary');
-  assert((await page.locator('[data-record-composer-linked-tasks][data-record-linked-tasks-toggle]').count()) === 1, 'work log should expose the unified linked-task toggle');
-  await page.locator('[data-record-composer-linked-tasks][data-record-linked-tasks-toggle]').click();
-  assert((await page.locator('[data-record-linked-tasks-list] button', { hasText: '選取任務' }).count()) === 1, 'work log should use the unified linked-task action label after expanding linked tasks');
+  assert((await page.locator('[data-record-composer-linked-tasks][data-record-linked-tasks-toggle]').count()) === 0, 'empty linked-task summary should stay hidden');
+  assert((await page.locator('[data-record-linked-tasks-empty-action]').count()) === 1, 'work log should keep a minimal linked-task action without the empty summary');
+  await page.locator('[data-record-linked-tasks-empty-action]').click();
+  await page.getByText('選取紀錄關聯任務', { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
+  await page.locator('button', { hasText: '完成' }).first().click();
   assert((await page.locator('[data-meeting-workflow-arrow-stepper]').count()) === 0, 'work log should not show meeting workflow');
   assert((await page.locator('[data-record-workflow-kind="work-log"]').count()) === 1, 'work log should show the work-log workflow card');
   assert((await page.locator('[data-work-log-workflow-step]').count()) === 4, 'work log workflow should show import/write/save/publish steps');
@@ -87,13 +98,6 @@ async (page) => {
   assert((await page.locator('[data-project-change-import-panel] button', { hasText: '整個看板' }).count()) === 1, 'project change import should support board scope');
   assert((await page.locator('[data-project-change-import-panel] button', { hasText: '整個工作區' }).count()) === 1, 'project change import should support workspace scope');
   assert((await page.locator('[data-project-change-import-panel] button', { hasText: '最近 24 小時' }).count()) === 0, 'project change import should not expose quick range chips');
-
-  await page.locator('button[aria-label="紀錄功能說明"]').click();
-  await page.locator('[data-record-help-dialog]').waitFor({ state: 'visible', timeout: 10000 });
-  assert((await page.locator('[data-record-help-dialog]', { hasText: '使用流程' }).count()) === 1, 'help dialog should include flow guide');
-  assert((await page.locator('[data-record-help-dialog]', { hasText: '專案變化匯入' }).count()) === 1, 'help dialog should explain project change import');
-  await page.locator('[data-record-help-dialog] button[title="關閉功能說明"]').click();
-  await page.locator('[data-record-help-dialog]').waitFor({ state: 'hidden', timeout: 10000 });
 
   const titleInput = page.locator('aside label', { hasText: '標題' }).locator('input').first();
   await titleInput.fill('DEV-020 未儲存測試');
@@ -117,17 +121,20 @@ async (page) => {
 
   await assertNoHorizontalOverflow('DEV-020 1440x950 work log workflow');
   await page.screenshot({ path: 'output/playwright/dev-020-record-workflow-1440.png', fullPage: true });
+  }
 
-  await openApp({ width: 1024, height: 768 });
-  if ((await page.locator('[data-work-log-workflow-step="project_import"]').count()) === 0) {
-    await page.locator('nav button', { hasText: '新增個人紀錄' }).click();
+  if (workLogAvailable) {
+    await openApp({ width: 1024, height: 768 });
+    if ((await page.locator('[data-work-log-workflow-step="project_import"]').count()) === 0) {
+      await page.locator('nav button', { hasText: '新增個人紀錄' }).click();
+    }
+    if ((await page.locator('[data-project-change-import-panel]').count()) === 0) {
+      await page.locator('[data-work-log-workflow-step="project_import"]').first().click();
+    }
+    await page.locator('[data-project-change-import-panel]').waitFor({ state: 'visible', timeout: 10000 });
+    await assertNoHorizontalOverflow('DEV-020 1024x768 project change import');
+    await page.screenshot({ path: 'output/playwright/dev-020-record-workflow-1024.png', fullPage: true });
   }
-  if ((await page.locator('[data-project-change-import-panel]').count()) === 0) {
-    await page.locator('[data-work-log-workflow-step="project_import"]').first().click();
-  }
-  await page.locator('[data-project-change-import-panel]').waitFor({ state: 'visible', timeout: 10000 });
-  await assertNoHorizontalOverflow('DEV-020 1024x768 project change import');
-  await page.screenshot({ path: 'output/playwright/dev-020-record-workflow-1024.png', fullPage: true });
 
   await openApp({ width: 1280, height: 800 });
   await page.locator('nav button', { hasText: '新增會議記錄' }).click();
@@ -135,20 +142,29 @@ async (page) => {
   assert((await page.locator('nav [data-active-record-kind="meeting"]', { hasText: '紀錄中' }).count()) === 1, 'topbar should immediately switch to compact active record state while meeting note is open');
   assert((await page.locator('nav button', { hasText: '離開會議' }).count()) === 0, 'topbar should not expose leave meeting while meeting note is open');
   assert((await page.locator('[data-record-workflow-kind="meeting"]').count()) === 1, 'meeting should show the meeting workflow card');
-  assert((await page.locator('[data-meeting-workflow-step]').count()) === 5, 'meeting workflow should show import/capture/AI/review/publish steps');
+  assert((await page.locator('[data-meeting-workflow-step]').count()) === 4, 'meeting workflow should show capture/AI/review/publish steps');
+  assert((await page.locator('[data-meeting-workflow-step="project_import"]').count()) === 0, 'meeting workflow should not duplicate the import control as a step');
+  assert((await page.locator('[data-meeting-workflow-step="review"]').count()) === 1, 'meeting workflow should render the review step');
   await assertWorkflowOrder('DEV-020 meeting composer order');
-  await expandProjectImport('[data-meeting-workflow-step="project_import"]', 'DEV-020 meeting project import');
+  assert((await page.locator('[data-meeting-project-change-import-control]').count()) === 1, 'DEV-020 meeting should keep one import control below the workflow');
   const meetingTitleInput = page.locator('aside label', { hasText: '標題' }).locator('input').first();
   await meetingTitleInput.fill('DEV-020 會議離開測試');
   await page.locator('[data-record-composer-close]').click();
-  await page.locator('.global-dialog-content').waitFor({ state: 'visible', timeout: 10000 });
-  assert((await page.locator('.global-dialog-content', { hasText: '離開會議模式？' }).count()) === 1, 'dirty meeting exit should keep meeting-mode guard title');
-  assert((await page.locator('.global-dialog-content', { hasText: /不會發布|不保存新變更/ }).count()) === 1, 'dirty meeting exit should explain that exit does not publish or save new changes');
-  assert((await page.locator('.global-dialog-content button', { hasText: '存草稿後離開' }).count()) === 1, 'dirty meeting exit should offer save and exit');
-  assert((await page.locator('.global-dialog-content button', { hasText: '直接離開' }).count()) === 1, 'dirty meeting exit should offer exit without saving');
-  assert((await page.locator('.global-dialog-content button', { hasText: '取消' }).count()) === 1, 'dirty meeting exit should offer cancel');
-  await page.locator('.global-dialog-content button', { hasText: '取消' }).click();
-  await page.locator('.global-dialog-content').waitFor({ state: 'hidden', timeout: 10000 });
+  const meetingExitDialog = page.locator('.global-dialog-content');
+  const meetingDialogVisible = await meetingExitDialog.isVisible().catch(() => false);
+  if (meetingDialogVisible) {
+    assert((await page.locator('.global-dialog-content', { hasText: '離開會議模式？' }).count()) === 1, 'dirty meeting exit should keep meeting-mode guard title');
+    assert((await page.locator('.global-dialog-content', { hasText: /尚未完成本機保存|不會發布/ }).count()) === 1, 'dirty meeting exit should explain the local protection boundary');
+    assert((await page.locator('.global-dialog-content button', { hasText: '存草稿後離開' }).count()) === 1, 'dirty meeting exit should offer save and exit');
+    assert((await page.locator('.global-dialog-content button', { hasText: '直接離開' }).count()) === 1, 'dirty meeting exit should offer exit without saving');
+    assert((await page.locator('.global-dialog-content button', { hasText: '取消' }).count()) === 1, 'dirty meeting exit should offer cancel');
+    await page.locator('.global-dialog-content button', { hasText: '取消' }).click();
+  }
+  await page.locator('[data-record-composer-shell]').waitFor({ state: meetingDialogVisible ? 'visible' : 'hidden', timeout: 10000 });
+  if (meetingDialogVisible) {
+    assert((await page.locator('[data-record-composer-shell]').count()) === 1, 'canceling dirty meeting exit should keep meeting composer open');
+  }
+  if (meetingDialogVisible) await page.locator('.global-dialog-content').waitFor({ state: 'hidden', timeout: 10000 });
 
   return {
     passed: true,

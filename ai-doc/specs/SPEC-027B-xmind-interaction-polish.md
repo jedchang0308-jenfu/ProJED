@@ -5,6 +5,8 @@
 父層 DEV: DEV-027
 類型: P0 UI quality reopen
 
+> DEV-074 target architecture note（2026-08-19）：`SPEC-074`／`ADR-044` 已達 `RD Implementation Ready / Not Implemented`，RD 可依 S0～S5 直接實作；完成後純 zoom／pan 將以單一 Scene matrix 投影並不再重算 connector world geometry。本規格的可觀察對齊、縮放範圍與 interaction requirements 維持；DEV-074 尚未實作前，現行 runtime 不因文件 ready 改變。
+
 ## 背景
 
 DEV-027B 補強 ProJED 心智圖模式，使 WBS 任務操作更接近 Xmind。使用者新增最新要求：Xmind 在新增任務後不會立即進入任務名稱編輯模式，而是只選取新任務；此時仍可用方向鍵移動選取。2026-07-06 DEV-028 detail-only title edit 已取代「選取任務上直接打字進入改名」的舊契約，現行命名 / 改名需開啟任務詳情並使用 title input。
@@ -30,8 +32,8 @@ DEV-027B 補強 ProJED 心智圖模式，使 WBS 任務操作更接近 Xmind。�
 ### 3. 方向鍵移動選取
 
 - `ArrowUp` / `ArrowDown`：依目前畫面可見任務順序移動到上一個或下一個任務。
-- `ArrowLeft`：選取目前任務的 parent；若已是 root，維持目前選取。
-- `ArrowRight`：若目前任務有子任務，展開並選取第一個子任務。
+- 水平鍵依分支方向解析：右側分支`ArrowLeft`、左側分支`ArrowRight`為朝中心，先選parent；root再朝中心時跳過中央看板名稱並選取對側相對位置最接近的root。
+- 右側分支`ArrowRight`、左側分支`ArrowLeft`為離開中心；若目前任務有子任務，展開並選取第一個子任務。中央看板名稱本身不取得task selection或focus。
 - 方向鍵移動不得建立任務、不得開啟 rename input。
 
 ### 4. Detail-only title edit alignment
@@ -73,6 +75,14 @@ DEV-027B 補強 ProJED 心智圖模式，使 WBS 任務操作更接近 Xmind。�
 - 新增任務後 `aria-selected="true"` 落在新任務。
 - 連續 `Enter` 可建立 5 個同階任務，且每次新增後新任務保持選取。
 - 連續 `Tab` 可建立 child -> grandchild。
-- `ArrowUp` / `ArrowDown` / `ArrowLeft` / `ArrowRight` 可移動選取。
+- `ArrowUp`／`ArrowDown`可依可見順序移動；水平鍵可依左右分支方向進入parent／child，並可由左右root雙向穿過中央看板名稱。
 - 直接打字、`F2` 或雙擊不得進入節點外層 rename；命名 / 改名需走任務詳情 title input。
 - Zoom、tidy connector、drag insertion preview 的 DEV-027B 既有 gates 必須維持通過。
+
+## 最新 UX 增補：關係線上的展開／收合控制（2026-08-18）
+
+- 具子任務的節點，展開／收合控制不得佔用任務節點欄位內的水平空間；控制項必須放在父節點與子節點群組之間的關係線交會位置。
+- 控制項採 XMind 式小型圓形按鈕：展開狀態顯示減號、收合狀態顯示加號；保留 `aria-expanded`、可見 focus ring、tooltip 與鍵盤啟動。
+- 控制項平時不得常駐顯示；滑鼠進入父子關係線的感應區時才顯示，滑鼠離開後淡出。鍵盤 Tab 聚焦、`focus-within` 或程式化 focus 時，即使沒有滑鼠 hover 仍必須保持可見。
+- 點擊控制項只切換該節點的子樹顯示，不得觸發節點選取、雙擊明細、拖曳或快速命名；關係線 trunk 的幾何中心與控制項中心需對齊。
+- 收合、展開、zoom、scroll 與 drag 後，控制項與 connector 必須重新對齊；沒有子任務的節點不得顯示控制項。

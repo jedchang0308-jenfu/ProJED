@@ -2,16 +2,19 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
-import { useTagStore } from '../store/useTagStore';
+import { useTaskFilterStore } from '../store/useTaskFilterStore';
 import dayjs from 'dayjs';
-import { Calendar, PanelLeftClose, PanelLeftOpen, LayoutList, GitBranch } from 'lucide-react';
+import { Calendar } from 'lucide-react';
 import SharedTaskSidebar from './SharedTaskSidebar';
 import { ViewToolbar } from './ui/ViewToolbar';
 import { GanttHeader, GanttGrid, GanttRow, GanttTaskBar, getColWidth, getX, BAR_HEIGHT } from './Gantt';
-import { matchesTaskFilters } from '../features/taskFilters';
-import { compactClassNames, compactIconButtonClass, compactSegmentedButtonClass } from './ui/compactTokens';
+import { compactClassNames, compactSegmentedButtonClass } from './ui/compactTokens';
 import { selectAndOpenTaskDetails } from '../utils/taskInteractions';
+import { buildHierarchicalTaskItems } from '../utils/taskHierarchy';
 import { useCoarsePointer } from '../hooks/useCoarsePointer';
+import { projectTaskFilterResults } from '../features/taskFilters';
+import { TaskFilterResultState } from './ui/TaskFilterResultState';
+import { buildCollapsedProjectionTasks, buildProjectionParentIndex } from '../features/taskTracking/model';
 
 const DEFAULT_GRID_START = dayjs().startOf('year');
 
@@ -19,23 +22,10 @@ const GanttView = () => {
     const {
         activeBoardId,
         activeWorkspaceId,
-        statusFilters,
-        dueWithinDays,
-        overdueOnly,
-        selectedAssigneeIds,
-        isSidebarOpen,
-        setSidebarOpen,
         showDependencies,
     } = useBoardStore();
-    const selectedTagIds = useTagStore(state => state.selectedTagIds);
-    const taskFilters = useMemo(() => ({
-        statusFilters,
-        dueWithinDays,
-        overdueOnly,
-        selectedAssigneeIds,
-        selectedTagIds,
-        keyword: '',
-    }), [dueWithinDays, overdueOnly, selectedAssigneeIds, selectedTagIds, statusFilters]);
+    const taskFilters = useTaskFilterStore(state => state.filters);
+    const resetTaskFilters = useTaskFilterStore(state => state.resetFilters);
 
     const [isTaskListOpen, setIsTaskListOpen] = useState(true);
     const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
@@ -64,15 +54,29 @@ const GanttView = () => {
 
     // Subscribe to nodes so GanttView re-renders when task dates or orders change
     const nodes = useWbsStore(s => s.nodes);
+    const trackingReferences = useWbsStore(s => s.trackingReferences);
+    const projectionTasks = useMemo(
+        () => buildCollapsedProjectionTasks(Object.values(nodes), trackingReferences, activeBoardId || ''),
+        [activeBoardId, nodes, trackingReferences],
+    );
+    const projectionNodes = useMemo(
+        () => Object.fromEntries(projectionTasks.map(task => [task.id, task])),
+        [projectionTasks],
+    );
+    const projectionParentNodesIndex = useMemo(
+        () => buildProjectionParentIndex(projectionTasks),
+        [projectionTasks],
+    );
+    const taskLoading = useWbsStore(s => s.loading);
+    const taskLoadError = useWbsStore(s => s.error);
+    const filterProjection = useMemo(
+        () => projectTaskFilterResults(projectionNodes, taskFilters, { boardId: activeBoardId }),
+        [activeBoardId, projectionNodes, taskFilters],
+    );
 
 
     const { flattenedItems, groups, gridStart, gridEnd, totalUnits } = useMemo(() => {
         if (!activeBoardId) return { flattenedItems: [], groups: [], gridStart: DEFAULT_GRID_START, gridEnd: dayjs(DEFAULT_GRID_START).add(60, 'day'), totalUnits: 60 };
-        
-        const state = useWbsStore.getState();
-        const items: any[] = [];
-        const allGroups: any[] = [];
-        let currentRow = 0;
 
         let minDate: dayjs.Dayjs | null = null;
         let maxDate: dayjs.Dayjs | null = null;
@@ -88,61 +92,14 @@ const GanttView = () => {
             }
         };
 
-        const traverse = (nodeId: string, level: number) => {
-            const node = state.nodes[nodeId];
-            if (!node || node.isArchived) return -1;
-            if (!matchesTaskFilters(node, taskFilters)) return -1;
-
-            // Map level to legacy types for gantt filters temporarily
-            let pseudoType = 'checklist';
-            if (level === 0) pseudoType = 'list';
-            else if (level === 1) pseudoType = 'card';
-
-            const startRow = currentRow;
-            updateBounds(node.startDate || null, node.endDate || null);
-
-            items.push({ 
-                ...node, 
-                type: pseudoType, 
-                row: currentRow++, 
-                level,
-                startDate: node.startDate, 
-                endDate: node.endDate 
-            });
-
-            const isCollapsed = collapsedIds.has(nodeId);
-            const childIds = state.parentNodesIndex[nodeId] || [];
-            
-            if (!isCollapsed && childIds.length > 0) {
-                 const children = childIds.map(id => state.nodes[id]).filter(Boolean).sort((a,b) => a.order - b.order);
-                 children.forEach(child => traverse(child.id, level + 1));
-            }
-
-            const endRow = currentRow - 1;
-            if (endRow > startRow && (!isCollapsed || childIds.length > 0)) {
-                 allGroups.push({
-                     start: startRow,
-                     end: endRow,
-                     id: node.id,
-                     level: level,
-                     startDate: node.startDate,
-                     endDate: node.endDate
-                 });
-            }
-            
-            return startRow;
-        };
-
-        // start from root nodes
-        const rootIds = state.parentNodesIndex[activeBoardId] || [];
-        const orphanRootIds = state.parentNodesIndex['root'] || [];
-        
-        const allRootIds = Array.from(new Set([...rootIds, ...orphanRootIds]));
-        const rootNodes = allRootIds.map(id => state.nodes[id])
-            .filter(n => n && n.boardId === activeBoardId && !n.isArchived)
-            .sort((a,b) => a.order - b.order);
-        
-        rootNodes.forEach(rn => traverse(rn.id, 0));
+        const { items, groups } = buildHierarchicalTaskItems({
+            nodes: projectionNodes,
+            parentNodesIndex: projectionParentNodesIndex,
+            activeBoardId,
+            visibleTaskIds: filterProjection.visibleTaskIds,
+            collapsedIds,
+        });
+        items.forEach(item => updateBounds(item.startDate || null, item.endDate || null));
 
         const today = dayjs();
         const start = (minDate && minDate.isBefore(today)) ? minDate : today;
@@ -173,12 +130,16 @@ const GanttView = () => {
 
         return {
             flattenedItems: items,
-            groups: allGroups,
+            groups,
             gridStart: calculatedGridStart,
             gridEnd: calculatedGridEnd,
             totalUnits: units
         };
-    }, [activeBoardId, taskFilters, mode, collapsedIds, nodes]);
+    }, [activeBoardId, filterProjection, mode, collapsedIds, projectionNodes, projectionParentNodesIndex]);
+    const isTimelineEligible = (item: any) => [item.startDate, item.endDate]
+        .some(value => Boolean(value && dayjs(value).isValid()));
+    const timelineItems = flattenedItems.filter(isTimelineEligible);
+    const hasScheduledItems = timelineItems.length > 0;
 
     const colWidth = getColWidth(mode);
 
@@ -218,7 +179,7 @@ const GanttView = () => {
     }, [mode, colWidth, gridStart]);
 
     const handleItemClick = (item: any) => {
-        selectAndOpenTaskDetails(item.id);
+        selectAndOpenTaskDetails(item.id, item.trackingReferenceId);
     };
 
     return (
@@ -244,21 +205,17 @@ const GanttView = () => {
                         </button>
                     </div>
 
-                    <div className="flex items-center gap-[8px] border-l border-slate-200 pl-[8px]">
-                        <div className={compactClassNames.segmented}>
-                            <button onClick={() => setSidebarOpen(!isSidebarOpen)} className={compactIconButtonClass(!isSidebarOpen)} title={isSidebarOpen ? "收疊工作區選單" : "展開工作區選單"}>
-                                {isSidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
-                            </button>
-                            <button onClick={() => setIsTaskListOpen(!isTaskListOpen)} className={compactIconButtonClass(!isTaskListOpen)} title={isTaskListOpen ? "收疊任務清單" : "展開任務清單"}>
-                                <LayoutList size={16} />
-                            </button>
-                        </div>
-                    </div>
                     </>
                 )}
             />
 
-            <div className="flex-1 flex overflow-hidden">
+            <TaskFilterResultState
+                projection={filterProjection}
+                loading={taskLoading}
+                error={taskLoadError}
+                onReset={resetTaskFilters}
+            />
+            {!taskLoading && !taskLoadError && filterProjection.matchedTaskIds.size > 0 ? <div className="flex-1 flex overflow-hidden">
                 {/* Left Sidebar */}
                 <SharedTaskSidebar
                     flattenedItems={flattenedItems}
@@ -267,11 +224,17 @@ const GanttView = () => {
                     onItemClick={handleItemClick}
                     isTaskListOpen={isTaskListOpen}
                     setIsTaskListOpen={setIsTaskListOpen}
+                    surface="gantt"
                     rowHeight={ganttRowHeight}
                 />
 
                 {/* Right Timeline */}
                 <div className="flex-1 overflow-hidden relative">
+                    {!hasScheduledItems ? (
+                        <div className="pointer-events-none absolute inset-x-0 top-14 z-20 text-center text-xs text-slate-500" data-task-date-empty-hint="gantt">
+                            符合篩選的任務尚未設定日期
+                        </div>
+                    ) : null}
                     <div
                         ref={scrollAreaRef}
                         onScroll={handleScroll}
@@ -286,7 +249,7 @@ const GanttView = () => {
                             
                             <GanttRow groups={groups} colWidth={colWidth} mode={mode} gridStart={gridStart} />
 
-                            {flattenedItems.map((item: any) => (
+                            {timelineItems.map((item: any) => (
                                 <GanttTaskBar
                                     key={`${item.type}-${item.id}`}
                                     item={item}
@@ -310,7 +273,7 @@ const GanttView = () => {
                         </div>
                     </div>
                 </div>
-            </div>
+            </div> : null}
         </div>
     );
 };

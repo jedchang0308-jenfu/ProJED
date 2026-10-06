@@ -60,21 +60,33 @@ async (page) => {
         filtersOpen: false,
         showContainersInAllTasks: false,
       }));
+      localStorage.setItem(`projed-task-workbench-panel:v2:account:${encodeURIComponent(account.id)}`, JSON.stringify({
+        open: false,
+        filtersOpen: false,
+        showContainersInAllTasks: false,
+        width: 340,
+        openPreferenceVersion: 1,
+      }));
       localStorage.setItem('projed-last-view', 'board');
     }, { account });
   };
 
   const openApp = async (viewport = { width: 390, height: 844 }) => {
     await page.setViewportSize(viewport);
-    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
     await seedSession();
-    await page.goto('http://127.0.0.1:4173/?qcReset=1&qcSize=72', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:4000/?qcReset=1&qcSize=72', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
     await page.locator('[data-mobile-pan-surface="board"]').waitFor({ state: 'visible', timeout: 15000 });
-    const sidebar = page.locator('[data-mobile-sidebar-overlay="true"]').first();
+    const sidebar = page.locator('[data-sidebar-inline="true"]').first();
     if (await sidebar.isVisible().catch(() => false)) {
       await page.keyboard.press('Escape');
       await page.waitForTimeout(100);
+    }
+    const workbenchPanel = page.locator('[data-task-workbench-panel="true"]').first();
+    if (await workbenchPanel.isVisible().catch(() => false)) {
+      await page.locator('[data-mobile-task-workbench-nav-entry="true"]').first().click();
+      await workbenchPanel.waitFor({ state: 'hidden', timeout: 3000 }).catch(() => undefined);
     }
   };
 
@@ -166,7 +178,18 @@ async (page) => {
 
   const readNode = async (nodeId) => page.evaluate((id) => {
     const nodes = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
-    return nodes[id] || null;
+    if (nodes[id]) return nodes[id];
+    const accountId = localStorage.getItem('projed-local-test.selected-account');
+    const unplacedKeys = [
+      'projed-task-workbench-unplaced-tasks:v1',
+      accountId ? `projed-task-workbench-unplaced-tasks:v1:account:${encodeURIComponent(accountId)}` : null,
+    ].filter(Boolean);
+    for (const key of unplacedKeys) {
+      const tasks = JSON.parse(localStorage.getItem(key) || '[]');
+      const task = Array.isArray(tasks) ? tasks.find((item) => item?.id === id) : null;
+      if (task) return task;
+    }
+    return null;
   }, nodeId);
 
   const runCase = async (id, scenario, operation) => {
@@ -186,10 +209,12 @@ async (page) => {
 
   await runCase('QA-054-R01', 'normal mobile topbar buttons accept native touch clicks', async () => {
     await openApp();
-    const menuButton = page.getByRole('button', { name: '展開工作區選單' }).first();
+    const menuButton = page.locator('[data-main-sidebar-toggle="true"]').first();
     await nativeTouch(menuButton);
-    const sidebar = page.locator('[data-mobile-sidebar-overlay="true"]').first();
+    const sidebar = page.locator('[data-sidebar-inline="true"]').first();
     await sidebar.waitFor({ state: 'visible', timeout: 5000 });
+    assert(await page.locator('[data-sidebar-overlay="true"], [data-sidebar-backdrop="true"]').count() === 0,
+      'mobile Sidebar must use the shared inline component without overlay or backdrop');
     await page.keyboard.press('Escape');
     await sidebar.waitFor({ state: 'detached', timeout: 3000 }).catch(() => undefined);
 
@@ -197,6 +222,8 @@ async (page) => {
     await nativeTouch(workbenchButton);
     const panel = page.locator('[data-task-workbench-panel="true"]').first();
     await panel.waitFor({ state: 'visible', timeout: 5000 });
+    assert(await page.locator('[data-task-workbench-overlay="true"], [data-task-workbench-backdrop="true"]').count() === 0,
+      'mobile Workbench must use the shared inline component without overlay or backdrop');
     const screenshotPath = `${screenshotBase}-B01-native-topbar-touch.png`;
     await page.screenshot({ path: screenshotPath, fullPage: false });
     return { menuOpened: true, workbenchOpened: true, screenshotPath };
@@ -210,6 +237,15 @@ async (page) => {
     const held = await startHeldTouch(card.locator(':scope > [data-task-surface-source="true"]'));
     const rail = page.locator('[data-mobile-task-action-rail="true"]').first();
     await rail.waitFor({ state: 'visible', timeout: 5000 });
+    const actionLabels = await page.locator('[data-mobile-task-action]').evaluateAll((items) => (
+      Object.fromEntries(items.map((item) => [
+        item.getAttribute('data-mobile-task-action'),
+        item.getAttribute('data-mobile-task-action-label'),
+      ]))
+    ));
+    assert(actionLabels['add-sibling'] === '新增並列任務'
+      && actionLabels['add-child'] === '新增子任務',
+    'mobile action rail create labels must match the desktop task menu', actionLabels);
     await held.end();
     await page.waitForFunction(() => document.querySelector('[data-mobile-task-action-rail="true"]')?.getAttribute('data-mobile-task-action-rail-mode') === 'armed');
     assert(await page.locator('[data-mobile-drag-preview="true"]').count() === 0, 'armed rail must not leave a finger-following preview');
@@ -224,13 +260,13 @@ async (page) => {
     assert(completions.length === 1, 'action rail click must terminate the session exactly once', { nodeId, completions });
     const screenshotPath = `${screenshotBase}-B02-armed-action-touch.png`;
     await page.screenshot({ path: screenshotPath, fullPage: false });
-    return { nodeId, beforeStatus: before.status, afterStatus: after.status, completions: completions.length, screenshotPath };
+    return { nodeId, beforeStatus: before.status, afterStatus: after.status, completions: completions.length, actionLabels, screenshotPath };
   });
 
-  await runCase('QA-054-R03', 'finger-centered point selects canonical same-parent order while preview remains finger-coupled', async () => {
+  await runCase('QA-054-R03', 'non-center raw finger point selects the explicit same-parent boundary while preview remains finger-coupled', async () => {
     await openApp();
     const source = page.locator('.kanban-task-card[data-task-id]').first();
-    const target = page.locator('.kanban-task-card[data-task-id]').nth(1);
+    const target = page.locator('.kanban-task-card[data-task-id="qc-card-7"]');
     const sourceSurface = source.locator(':scope > [data-task-surface-source="true"]');
     const targetSurface = target.locator(':scope > [data-task-surface-source="true"]');
     const sourceId = await source.getAttribute('data-task-id');
@@ -241,7 +277,7 @@ async (page) => {
       'fixture must start with source before target under the same parent', { beforeSource, beforeTarget });
 
     const held = await startHeldTouch(sourceSurface);
-    const targetPoint = await pointFor(targetSurface, 0.5, 0.5);
+    const targetPoint = await pointFor(targetSurface, 0.08, 0.5);
     const rawPoint = { x: targetPoint.x, y: targetPoint.y };
     await held.moveTo(rawPoint);
     const indicator = page.locator('[data-mobile-drop-indicator="true"]').first();
@@ -260,31 +296,33 @@ async (page) => {
         dropPosition: indicator.getAttribute('data-mobile-drop-position'),
       };
     }, { rawY: rawPoint.y });
-    assert(geometry.targetId === targetId && geometry.dropPosition === 'after', 'mobile target must use canonical desktop same-parent moving-down intent', { sourceId, targetId, geometry });
+    assert(geometry.targetId === targetId && geometry.dropPosition === 'before', 'mobile target must preserve the explicit boundary selected by the finger', { sourceId, targetId, geometry });
     assert(geometry.previewAnchor === 'finger'
-      && Math.abs(geometry.fingerClearance - 12) <= 1
+      && Math.abs(geometry.fingerClearance - 16) <= 1
       && geometry.indicatorZ > geometry.previewZ,
     'a valid target must not pull the preview away from the finger', geometry);
     await held.end();
     const afterSource = await readNode(sourceId);
     const afterTarget = await readNode(targetId);
-    assert(afterSource.parentId === afterTarget.parentId && afterSource.order > afterTarget.order,
-      'release commit must match the visible after indicator', { afterSource, afterTarget });
+    assert(afterSource.parentId === afterTarget.parentId && afterSource.order < afterTarget.order,
+      'release commit must match the visible before indicator', { afterSource, afterTarget });
     return { sourceId, targetId, geometry, afterSourceOrder: afterSource.order, afterTargetOrder: afterTarget.order };
   });
 
   await runCase('QA-054-R04', 'adjacent checklist boundary jitter keeps one stable target until deliberate handover', async () => {
     await openApp();
     const source = page.locator('.kanban-task-card[data-task-id="qc-card-4"]');
-    const firstTarget = page.locator('.kanban-checklist-item[data-task-id="qc-card-1-child-1"]');
+    // child-1 owns a visible descendant, so it is not adjacent to child-3 in
+    // rendered geometry. child-2 and child-3 are the actual neighboring rows.
+    const firstTarget = page.locator('.kanban-checklist-item[data-task-id="qc-card-1-child-2"]');
     const secondTarget = page.locator('.kanban-checklist-item[data-task-id="qc-card-1-child-3"]');
     const firstId = await firstTarget.getAttribute('data-task-id');
     const secondId = await secondTarget.getAttribute('data-task-id');
     assert(firstId && secondId && firstId !== secondId, 'fixture must expose two adjacent checklist targets', { firstId, secondId });
 
     const sourcePoint = await visiblePointFor(source.locator(':scope > [data-task-surface-source="true"]'), 0.48, 0.45);
-    const firstPoint = await visiblePointFor(firstTarget, 0.5, 0.5);
-    const secondPoint = await visiblePointFor(secondTarget, 0.5, 0.5);
+    const firstPoint = await visiblePointFor(firstTarget, 0.08, 0.5);
+    const secondPoint = await visiblePointFor(secondTarget, 0.08, 0.5);
     const boundaryY = Math.round((firstPoint.box.y + firstPoint.box.height + secondPoint.box.y) / 2);
     const column = source.locator('xpath=ancestor::*[@data-mobile-pan-surface="kanban-column"]').first();
     const initialScrollTop = await column.evaluate((element) => element.scrollTop);
@@ -352,7 +390,7 @@ async (page) => {
       'fixture must start with the checklist source below the target', { beforeSource, beforeTarget });
 
     const sourcePoint = await visiblePointFor(source, 0.5, 0.5);
-    const targetPoint = await visiblePointFor(target, 0.5, 0.5);
+    const targetPoint = await visiblePointFor(target, 0.08, 0.12);
     const held = await startHeldTouchAtPoint(sourcePoint);
     await held.moveTo({ x: targetPoint.x, y: targetPoint.y });
     const indicator = page.locator('[data-mobile-drop-indicator="true"]').first();
@@ -372,6 +410,7 @@ async (page) => {
       const indicatorRect = indicator?.getBoundingClientRect();
       const targetRect = target?.getBoundingClientRect();
       const previewRect = preview?.getBoundingClientRect();
+      const childPreview = document.querySelector('[data-task-child-drop-preview="true"]');
       return {
         sourcePlaceholderMarkers: sourcePlaceholder?.querySelectorAll('[data-kanban-insertion-marker="true"]').length ?? -1,
         visibleMarkerCount: visibleMarkers.length,
@@ -381,6 +420,7 @@ async (page) => {
         targetTop: targetRect?.top ?? null,
         previewBottom: previewRect?.bottom ?? null,
         fingerClearance: previewRect ? rawY - previewRect.bottom : null,
+        childIntentPhase: childPreview?.getAttribute('data-task-child-drop-phase') || 'none',
         sourceCenterY,
       };
     }, { sourceId, targetId, sourceCenterY: sourcePoint.y, rawY: targetPoint.y });
@@ -393,7 +433,9 @@ async (page) => {
       'the only visible marker must identify the current canonical target', geometry);
     assert(Math.abs(geometry.indicatorY - geometry.targetTop) <= 2,
       'the live marker must be geometrically attached to the target row', geometry);
-    assert(geometry.fingerClearance !== null && Math.abs(geometry.fingerClearance - 12) <= 1,
+    assert(geometry.childIntentPhase === 'candidate'
+      && geometry.fingerClearance !== null
+      && Math.abs(geometry.fingerClearance - 16) <= 1,
       'the preview must remain coupled to the finger while the indicator stays on its target', geometry);
     assert(Math.abs(geometry.indicatorY - geometry.sourceCenterY) >= 12,
       'the live marker must not remain at the source row position', geometry);
@@ -408,17 +450,17 @@ async (page) => {
     return { sourceId, targetId, geometry, screenshotPath };
   });
 
-  await runCase('QA-054-R06', 'rapid multi-row movement cannot retain a stale indicator or use a tall card outer rect', async () => {
+  await runCase('QA-054-R06', 'rapid multi-row movement cannot retain a stale indicator or use a title-only boundary', async () => {
     await openApp();
     const source = page.locator('.kanban-task-card[data-task-id="qc-card-4"]');
     const firstTarget = page.locator('.kanban-checklist-item[data-task-id="qc-card-1-child-1"]');
-    const farTarget = page.locator('.kanban-task-card[data-task-id="qc-card-7"]');
+    const farTarget = page.locator('.kanban-task-card[data-task-id="qc-card-10"]');
     const firstTargetId = await firstTarget.getAttribute('data-task-id');
     const farTargetId = await farTarget.getAttribute('data-task-id');
     const sourceId = await source.getAttribute('data-task-id');
     const sourcePoint = await visiblePointFor(source.locator(':scope > [data-task-surface-source="true"]'), 0.48, 0.45);
-    const firstPoint = await visiblePointFor(firstTarget, 0.5, 0.5);
-    const farPoint = await visiblePointFor(farTarget.locator(':scope > [data-task-surface-source="true"]'), 0.5, 0.03);
+    const firstPoint = await visiblePointFor(firstTarget, 0.08, 0.5);
+    const farPoint = await visiblePointFor(farTarget.locator(':scope > [data-task-surface-source="true"]'), 0.08, 0.03);
     assert(sourceId && firstTargetId && farTargetId, 'fixture must expose source, first, and far targets', {
       sourceId,
       firstTargetId,
@@ -441,9 +483,7 @@ async (page) => {
         ? document.querySelector(`[data-mobile-drop-target][data-task-id="${indicatorTargetId}"]`)
         : null;
       const selectedRect = selectedTarget?.getBoundingClientRect();
-      const selectedSourceRect = selectedTarget?.matches('[data-task-surface-source="true"]')
-        ? selectedTarget.getBoundingClientRect()
-        : selectedTarget?.querySelector('[data-task-surface-source="true"]')?.getBoundingClientRect();
+      const selectedScopeRect = selectedTarget?.closest('[data-task-surface-scope]')?.getBoundingClientRect();
       const distanceToSelectedRect = selectedRect
         ? Math.hypot(
           Math.max(selectedRect.left - x, 0, x - selectedRect.right),
@@ -452,6 +492,7 @@ async (page) => {
         : null;
       const indicatorRect = indicator?.getBoundingClientRect();
       const previewRect = preview?.getBoundingClientRect();
+      const childPreview = document.querySelector('[data-task-child-drop-preview="true"]');
       const indicatorY = indicatorRect ? indicatorRect.top + indicatorRect.height / 2 : null;
       return {
         firstTargetId,
@@ -460,8 +501,9 @@ async (page) => {
         distanceToSelectedRect,
         previewAnchor: preview?.getAttribute('data-mobile-preview-anchor') || null,
         fingerClearance: previewRect ? y - previewRect.bottom : null,
+        childIntentPhase: childPreview?.getAttribute('data-task-child-drop-phase') || 'none',
         indicatorY,
-        selectedSourceBottom: selectedSourceRect?.bottom ?? null,
+        selectedScopeTop: selectedScopeRect?.top ?? null,
         debug: (window.__projedMobileTaskActionDebug || []).slice(-12),
       };
     }, { x: farPoint.x, y: farPoint.y, firstTargetId, farTargetId });
@@ -471,43 +513,52 @@ async (page) => {
     assert(handover.indicatorTargetId === farTargetId && handover.distanceToSelectedRect === 0,
       'a direct far target must take ownership immediately even when the pointer is near its edge', handover);
     assert(handover.previewAnchor === 'finger'
+      && handover.childIntentPhase === 'candidate'
       && handover.fingerClearance !== null
-      && Math.abs(handover.fingerClearance - 12) <= 1,
+      && Math.abs(handover.fingerClearance - 16) <= 1,
     'a tall target must not pull the preview away from the finger', handover);
     assert(handover.indicatorY !== null
-      && handover.selectedSourceBottom !== null
-      && Math.abs(handover.indicatorY - handover.selectedSourceBottom) <= 2,
-    'a tall card indicator must use the bounded source surface rather than the neutral outer scope', handover);
+      && handover.selectedScopeTop !== null
+      && Math.abs(handover.indicatorY - handover.selectedScopeTop) <= 2,
+    'an expanded card indicator must align to the complete same-level ordering scope', handover);
     const screenshotPath = `${screenshotBase}-B06-no-distant-stale-indicator.png`;
     await page.screenshot({ path: screenshotPath, fullPage: false });
     await held.end();
     const afterSource = await readNode(sourceId);
     const afterTarget = await readNode(farTargetId);
-    assert(afterSource.parentId === afterTarget.parentId && afterSource.order > afterTarget.order,
+    assert(afterSource.parentId === afterTarget.parentId && afterSource.order < afterTarget.order,
       'release must commit the far target shown by the indicator', { afterSource, afterTarget });
     return { sourceId, firstTargetId, farTargetId, handover, screenshotPath };
   });
 
-  await runCase('QA-054-R07', 'leaving a target for an invalid control produces a zero-write release', async () => {
+  await runCase('QA-054-R07', 'leaving a target for the invalid screen edge produces a zero-write release', async () => {
     await openApp();
     const source = page.locator('.kanban-task-card[data-task-id]').first();
-    const target = page.locator('.kanban-task-card[data-task-id]').nth(1);
-    const invalid = page.locator('[data-kanban-add-task-button="true"]').first();
+    const target = page.locator('.kanban-task-card[data-task-id="qc-card-7"]');
     const before = await page.evaluate(() => localStorage.getItem('projed-local-test.nodes'));
     const held = await startHeldTouch(source.locator(':scope > [data-task-surface-source="true"]'));
-    const targetPoint = await pointFor(target.locator(':scope > [data-task-surface-source="true"]'));
+    const targetPoint = await pointFor(target.locator(':scope > [data-task-surface-source="true"]'), 0.08, 0.5);
     await held.moveTo({ x: targetPoint.x, y: targetPoint.y });
     await page.locator('[data-mobile-drop-indicator="true"]').waitFor({ state: 'visible', timeout: 5000 });
-    await held.moveTo(await pointFor(invalid));
+    await held.moveTo({ x: 1, y: 20 });
     await page.waitForTimeout(160);
     await held.end();
     const after = await page.evaluate(() => localStorage.getItem('projed-local-test.nodes'));
+    const beforeNodes = JSON.parse(before || '{}');
+    const afterNodes = JSON.parse(after || '{}');
+    const changedNodes = Array.from(new Set([...Object.keys(beforeNodes), ...Object.keys(afterNodes)]))
+      .filter((nodeId) => JSON.stringify(beforeNodes[nodeId]) !== JSON.stringify(afterNodes[nodeId]))
+      .map((nodeId) => ({ nodeId, before: beforeNodes[nodeId] || null, after: afterNodes[nodeId] || null }));
     const transient = await page.evaluate(() => ({
       rail: document.querySelectorAll('[data-mobile-task-action-rail="true"]').length,
       preview: document.querySelectorAll('[data-mobile-drag-preview="true"]').length,
       indicator: document.querySelectorAll('[data-mobile-drop-indicator="true"]').length,
     }));
-    assert(before === after, 'invalid release must not commit the previous target', { beforeLength: before?.length, afterLength: after?.length });
+    assert(before === after, 'invalid release must not commit the previous target', {
+      beforeLength: before?.length,
+      afterLength: after?.length,
+      changedNodes,
+    });
     assert(transient.rail === 0 && transient.preview === 0 && transient.indicator === 0, 'invalid release must clean transient drag UI', transient);
     return { zeroWrite: true, transient };
   });
@@ -528,7 +579,8 @@ async (page) => {
         const originField = document.querySelector('[data-mobile-origin-field="true"]')?.getBoundingClientRect();
         return {
           rail: { left: rail.left, right: rail.right, top: rail.top, bottom: rail.bottom },
-          preview: { left: preview.left, right: preview.right, top: preview.top, bottom: preview.bottom },
+          preview: { left: preview.left, right: preview.right, top: preview.top, bottom: preview.bottom, width: preview.width, height: preview.height },
+          previewScale: Number(document.querySelector('[data-mobile-drag-preview="true"]')?.getAttribute('data-mobile-preview-scale') || 1),
           originField: originField
             ? { left: originField.left, right: originField.right, top: originField.top, bottom: originField.bottom }
             : null,
@@ -537,6 +589,10 @@ async (page) => {
       });
       assert(geometry.rail.left >= -1 && geometry.rail.right <= viewport.width + 1, 'action rail must fit the viewport', { viewport, geometry });
       assert(geometry.preview.left >= -1 && geometry.preview.right <= viewport.width + 1, 'preview must fit the viewport', { viewport, geometry });
+      assert(geometry.previewScale === 0.5
+        && Math.abs(geometry.preview.width - 120) <= 1
+        && Math.abs(geometry.preview.height - 20) <= 1,
+      'mobile drag preview should render at the approved half-scale size', { viewport, geometry });
       assert(geometry.originField
         && geometry.originField.left >= -1
         && geometry.originField.right <= viewport.width + 1,
@@ -629,7 +685,7 @@ async (page) => {
     const sourceCardId = await sourceCard.getAttribute('data-task-id');
     const sourceCardNode = await readNode(sourceCardId);
     const sourceCardPoint = await visiblePointFor(sourceCard.locator(':scope > [data-task-surface-source="true"]'), 0.48, 0.45);
-    const targetCardPoint = await visiblePointFor(targetCard.locator(':scope > [data-task-surface-source="true"]'), 0.5, 0.5);
+    const targetCardPoint = await visiblePointFor(targetCard.locator(':scope > [data-task-surface-source="true"]'), 0.08, 0.5);
     const heldCard = await startHeldTouchAtPoint(sourceCardPoint);
     const cardOriginPoint = { x: sourceCardPoint.x + 10, y: sourceCardPoint.y };
     await heldCard.moveExact(cardOriginPoint, 40);
@@ -758,6 +814,250 @@ async (page) => {
       transient,
       cardScreenshotPath,
       columnScreenshotPath,
+    };
+  });
+
+  await runCase('QA-054-R12', 'every kanban task level owns native selection before long press activates', async () => {
+    await openApp();
+    const surfaces = [
+      { level: 'L1', locator: page.locator('[data-kanban-column-header="true"][data-task-touch-gesture-surface="true"]').first() },
+      { level: 'L2', locator: page.locator('.kanban-task-card > [data-task-touch-gesture-surface="true"]').first() },
+      { level: 'L3+', locator: page.locator('.kanban-checklist-item[data-task-touch-gesture-surface="true"]').first() },
+    ];
+    const measurements = [];
+    for (const surface of surfaces) {
+      await surface.locator.scrollIntoViewIfNeeded();
+      const before = await surface.locator.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return {
+          marker: element.getAttribute('data-task-touch-gesture-surface'),
+          userSelect: style.userSelect,
+          webkitUserSelect: style.webkitUserSelect,
+          touchAction: style.touchAction,
+        };
+      });
+      assert(before.marker === 'true'
+        && before.userSelect === 'none'
+        && before.webkitUserSelect === 'none',
+      `${surface.level} must suppress native selection from touchstart`, before);
+      const held = await startHeldTouch(surface.locator);
+      const rail = page.locator('[data-mobile-task-action-rail="true"]').first();
+      await rail.waitFor({ state: 'visible', timeout: 5000 });
+      const during = await page.evaluate(() => ({
+        selection: String(window.getSelection() || ''),
+        contextMenuCount: document.querySelectorAll('[data-global-context-menu="true"]').length,
+        railMode: document.querySelector('[data-mobile-task-action-rail="true"]')?.getAttribute('data-mobile-task-action-rail-mode') || null,
+      }));
+      assert(during.selection === '' && during.contextMenuCount === 0 && during.railMode === 'dragging',
+        `${surface.level} long press must enter task drag without selection or desktop menu`, during);
+      await held.end();
+      await page.keyboard.press('Escape');
+      await rail.waitFor({ state: 'detached', timeout: 3000 }).catch(() => undefined);
+      measurements.push({ level: surface.level, before, during });
+    }
+    const screenshotPath = `${screenshotBase}-R12-selection-ownership.png`;
+    await page.screenshot({ path: screenshotPath, fullPage: false });
+    return { measurements, screenshotPath };
+  });
+
+  await runCase('QA-054-R13', '500ms and 8px gesture boundaries separate tap pan and drag', async () => {
+    const samples = [];
+
+    await openApp();
+    let surface = page.locator('.kanban-task-card > [data-task-touch-gesture-surface="true"]').first();
+    let point = await pointFor(surface);
+    let held = await startHeldTouchAtPoint(point, 0);
+    await page.waitForTimeout(430);
+    samples.push({ sample: '430ms', railCount: await page.locator('[data-mobile-task-action-rail="true"]').count() });
+    assert(samples.at(-1).railCount === 0, 'sub-threshold hold must not activate drag', samples.at(-1));
+    await held.end();
+    await page.keyboard.press('Escape');
+
+    await openApp();
+    surface = page.locator('.kanban-task-card > [data-task-touch-gesture-surface="true"]').first();
+    point = await pointFor(surface);
+    held = await startHeldTouchAtPoint(point, 0);
+    // Send the boundary move near the start of the 500ms window. CDP touch
+    // dispatch can be delayed when the full browser regression suite is busy;
+    // an early move keeps this assertion on the product's 8px boundary instead
+    // of racing the harness against the long-press timer.
+    await page.waitForTimeout(40);
+    await held.moveExact({ x: point.x + 7, y: point.y }, 20);
+    await page.waitForTimeout(500);
+    const sevenPxRail = page.locator('[data-mobile-task-action-rail="true"]').first();
+    await sevenPxRail.waitFor({ state: 'visible', timeout: 3000 });
+    samples.push({ sample: '7px', railCount: await sevenPxRail.count() });
+    await held.end();
+    await page.keyboard.press('Escape');
+
+    await openApp();
+    surface = page.locator('.kanban-task-card > [data-task-touch-gesture-surface="true"]').first();
+    point = await pointFor(surface);
+    held = await startHeldTouchAtPoint(point, 0);
+    await page.waitForTimeout(40);
+    await held.moveExact({ x: point.x + 9, y: point.y }, 20);
+    await page.waitForTimeout(500);
+    const ninePxRailCount = await page.locator('[data-mobile-task-action-rail="true"]').count();
+    samples.push({ sample: '9px', railCount: ninePxRailCount });
+    assert(ninePxRailCount === 0, 'movement beyond 8px must cancel long press', samples.at(-1));
+    await held.end();
+    await page.keyboard.press('Escape');
+    return { samples };
+  });
+
+  await runCase('QA-054-R14', 'actual touch starts the dedicated drag session above the old 768px width gate', async () => {
+    const measurements = [];
+    for (const viewport of [{ width: 844, height: 390 }, { width: 1024, height: 768 }]) {
+      await openApp(viewport);
+      const surface = page.locator('.kanban-task-card > [data-task-touch-gesture-surface="true"]').first();
+      const held = await startHeldTouch(surface);
+      const rail = page.locator('[data-mobile-task-action-rail="true"]').first();
+      await rail.waitFor({ state: 'visible', timeout: 5000 });
+      const state = await page.evaluate(() => ({
+        width: window.innerWidth,
+        railMode: document.querySelector('[data-mobile-task-action-rail="true"]')?.getAttribute('data-mobile-task-action-rail-mode') || null,
+        selection: String(window.getSelection() || ''),
+        contextMenuCount: document.querySelectorAll('[data-global-context-menu="true"]').length,
+      }));
+      assert(state.width > 768 && state.railMode === 'dragging' && state.selection === '' && state.contextMenuCount === 0,
+        'wide touch viewport must not fall back to desktop selection or context menu', { viewport, state });
+      await held.end();
+      await page.keyboard.press('Escape');
+      measurements.push({ viewport, state });
+    }
+    return { measurements };
+  });
+
+  await runCase('QA-054-R15', 'Workbench unplaced rows drag into the inline board while placed rows stay non-draggable', async () => {
+    await openApp();
+    await nativeTouch(page.locator('[data-mobile-task-workbench-nav-entry="true"]').first());
+    const panel = page.locator('[data-task-workbench-panel="true"]').first();
+    await panel.waitFor({ state: 'visible', timeout: 5000 });
+    assert(await page.locator('[data-task-workbench-overlay="true"], [data-task-workbench-backdrop="true"]').count() === 0,
+      'mobile Workbench must use the shared inline component without overlay or backdrop');
+    const panelBox = await panel.boundingBox();
+    const boardBox = await page.locator('[data-mobile-pan-surface="board"]').boundingBox();
+    assert(panelBox && boardBox && Math.abs(boardBox.x - (panelBox.x + panelBox.width)) <= 2,
+      'Workbench and board must be adjacent inline regions before cross-panel drag', { panelBox, boardBox });
+    const priorUnplacedIds = await page.locator('[data-task-workbench-unplaced-task-card="true"][data-task-id]')
+      .evaluateAll((elements) => elements.map((element) => element.getAttribute('data-task-id')).filter(Boolean));
+    await nativeTouch(page.locator('[data-task-workbench-unclassified-modal-add="true"]').first());
+    const taskDetails = page.locator('[data-task-details-modal="true"]').first();
+    await taskDetails.waitFor({ state: 'visible', timeout: 5000 });
+    await page.locator('[data-task-details-modal="true"] [aria-label="關閉任務詳情"]').click();
+    await taskDetails.waitFor({ state: 'detached', timeout: 5000 });
+    const unplacedCards = page.locator('[data-task-workbench-unplaced-task-card="true"][data-task-id]');
+    await unplacedCards.first().waitFor({ state: 'visible', timeout: 5000 });
+    const sourceId = await unplacedCards.evaluateAll((elements, existingIds) => (
+      elements.map((element) => element.getAttribute('data-task-id')).find((id) => id && !existingIds.includes(id)) || null
+    ), priorUnplacedIds);
+    assert(sourceId, 'newly created unplaced task must be identifiable', { priorUnplacedIds });
+    const unplaced = page.locator(`[data-task-workbench-unplaced-task-card="true"][data-task-id="${sourceId}"]`).first();
+    await unplaced.waitFor({ state: 'visible', timeout: 5000 });
+    const beforeNode = await readNode(sourceId);
+    assert(beforeNode?.boardId === '__task_workbench_unplaced__', 'drag source must start in the unplaced lane', { sourceId, beforeNode });
+    const unplacedStyle = await unplaced.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        marker: element.getAttribute('data-task-touch-gesture-surface'),
+        userSelect: style.userSelect,
+        webkitUserSelect: style.webkitUserSelect,
+        touchAction: style.touchAction,
+      };
+    });
+    assert(unplacedStyle.marker === 'true'
+      && unplacedStyle.userSelect === 'none'
+      && unplacedStyle.webkitUserSelect === 'none'
+      && unplacedStyle.touchAction !== 'none',
+    'unplaced row must block selection while preserving Workbench native pan', unplacedStyle);
+
+    const target = await page.evaluate(() => {
+      const board = document.querySelector('[data-mobile-pan-surface="board"]');
+      const panel = document.querySelector('[data-task-workbench-inline="true"]');
+      const boardRect = board?.getBoundingClientRect();
+      const panelRect = panel?.getBoundingClientRect();
+      if (!boardRect || !panelRect) return null;
+      const candidates = Array.from(document.querySelectorAll('.kanban-task-card > [data-mobile-drop-target][data-task-id]'));
+      for (const element of candidates) {
+        const rect = element.getBoundingClientRect();
+        const left = Math.max(rect.left, boardRect.left, panelRect.right, 0);
+        const right = Math.min(rect.right, boardRect.right, window.innerWidth);
+        const top = Math.max(rect.top, 48);
+        const bottom = Math.min(rect.bottom, window.innerHeight - 8);
+        if (right - left < 10 || bottom - top < 14) continue;
+        return {
+          id: element.getAttribute('data-task-id'),
+          surfaceKind: element.getAttribute('data-task-drop-surface-kind'),
+          x: Math.round(left + Math.min(12, (right - left) / 2)),
+          y: Math.round(top + (bottom - top) / 2),
+          rect: { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom },
+          boardRect: { left: boardRect.left, right: boardRect.right },
+          panelRight: panelRect.right,
+        };
+      }
+      return null;
+    });
+    assert(target?.id && target.surfaceKind === 'kanban-card', 'visible board strip must expose a direct card drop target', { target, panelBox, boardBox });
+    const targetNode = await readNode(target.id);
+    assert(targetNode?.boardId && targetNode.boardId !== '__task_workbench_unplaced__', 'drop target must belong to the active board', { target, targetNode });
+
+    const heldUnplaced = await startHeldTouch(unplaced);
+    const rail = page.locator('[data-mobile-task-action-rail="true"]').first();
+    await rail.waitFor({ state: 'visible', timeout: 5000 });
+    assert(await page.evaluate(() => String(window.getSelection() || '')) === '', 'Workbench long press must not create native text selection');
+    await heldUnplaced.moveTo({ x: target.x, y: target.y });
+    await page.waitForFunction(({ targetId }) => (
+      document.querySelector('[data-mobile-drop-indicator="true"]')?.getAttribute('data-mobile-drop-target') === targetId
+    ), { targetId: target.id }, { timeout: 5000 });
+    const hit = await page.evaluate(({ x, y }) => {
+      const element = document.elementFromPoint(x, y);
+      return {
+        targetId: element?.closest?.('[data-mobile-drop-target]')?.getAttribute('data-mobile-drop-target') || null,
+        insideBoard: Boolean(element?.closest?.('[data-mobile-pan-surface="board"]')),
+        insideWorkbench: Boolean(element?.closest?.('[data-task-workbench-panel="true"]')),
+      };
+    }, { x: target.x, y: target.y });
+    assert(hit.targetId === target.id && hit.insideBoard && !hit.insideWorkbench,
+      'finger point must hit the inline board target instead of Workbench coverage', { target, hit });
+    const dragScreenshotPath = `${screenshotBase}-R15-workbench-to-inline-board.png`;
+    await page.screenshot({ path: dragScreenshotPath, fullPage: false });
+    await heldUnplaced.end();
+    await page.waitForFunction(({ nodeId }) => {
+      const nodes = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
+      return nodes[nodeId]?.boardId && nodes[nodeId].boardId !== '__task_workbench_unplaced__';
+    }, { nodeId: sourceId }, { timeout: 5000 });
+    const afterNode = await readNode(sourceId);
+    const debug = await page.evaluate(() => window.__projedMobileTaskActionDebug || []);
+    const completions = debug.filter((entry) => entry.type === 'terminal:complete' && entry.nodeId === sourceId);
+    assert(afterNode?.boardId === targetNode.boardId && completions.length === 1
+      && completions[0].status === 'committed' && completions[0].reason === 'task-position-updated',
+    'unplaced task must commit exactly once into the board selected by the visible indicator', {
+      sourceId, beforeNode, afterNode, targetNode, completions,
+    });
+
+    if (!await panel.isVisible().catch(() => false)) {
+      await nativeTouch(page.locator('[data-mobile-task-workbench-nav-entry="true"]').first());
+      await panel.waitFor({ state: 'visible', timeout: 5000 });
+    }
+    const placed = page.locator('[data-task-workbench-placed-task-card="true"]').first();
+    await placed.waitFor({ state: 'visible', timeout: 5000 });
+    const placedMarker = await placed.getAttribute('data-task-touch-gesture-surface');
+    assert(placedMarker === null, 'placed row must not become a long-press drag source', { placedMarker });
+    const heldPlaced = await startHeldTouch(placed);
+    const placedRailCount = await page.locator('[data-mobile-task-action-rail="true"]').count();
+    assert(placedRailCount === 0, 'placed row long press must not enter action rail', { placedRailCount });
+    await heldPlaced.end();
+    await page.keyboard.press('Escape');
+    return {
+      sourceId,
+      target,
+      beforeBoardId: beforeNode.boardId,
+      afterBoardId: afterNode.boardId,
+      completions: completions.length,
+      unplacedStyle,
+      placedMarker,
+      placedRailCount,
+      dragScreenshotPath,
     };
   });
 

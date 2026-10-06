@@ -16,7 +16,7 @@ async (page) => {
 
   const openApp = async () => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
     await page.evaluate((account) => {
       localStorage.setItem('projed-local-test.selected-account', account.id);
       localStorage.setItem('projed-local-test.session', JSON.stringify({
@@ -27,11 +27,27 @@ async (page) => {
       }));
     }, account);
     await page.reload({ waitUntil: 'networkidle' });
-    await page.locator('nav').waitFor({ state: 'visible', timeout: 15000 });
+    try {
+      await page.locator('nav').waitFor({ state: 'visible', timeout: 15000 });
+    } catch (error) {
+      const localTestLogin = page.getByRole('button', { name: /使用固定測試環境/ }).first();
+      if (await localTestLogin.count() > 0) {
+        await localTestLogin.click();
+        await page.locator('nav').waitFor({ state: 'visible', timeout: 15000 });
+      } else {
+        throw error;
+      }
+    }
 
     if (await page.locator('[data-sidebar-workspace-title="true"]').count() === 0) {
-      await page.getByTitle('展開工作區選單').click();
+      const mainSidebarToggle = page.locator('[data-main-sidebar-toggle="true"]').first();
+      if (await mainSidebarToggle.count() > 0) {
+        await mainSidebarToggle.click();
+      } else {
+        await page.getByTitle('展開工作區選單').click();
+      }
     }
+    await page.waitForTimeout(1000);
     await page.locator('[data-sidebar-workspace-title="true"]').first().waitFor({ state: 'visible', timeout: 15000 });
     await page.locator('[data-sidebar-board-title="true"]').first().waitFor({ state: 'visible', timeout: 15000 });
   };
@@ -60,6 +76,31 @@ async (page) => {
   let step = 'open-app';
   try {
     await openApp();
+
+    step = 'topbar-board-switcher-no-rename';
+    const topbarBoardSwitcher = page.locator('[data-board-switcher="true"]').first();
+    const topbarBoardTitle = topbarBoardSwitcher.locator('[data-topbar-board-title="true"]');
+    await topbarBoardSwitcher.waitFor({ state: 'visible', timeout: 10000 });
+    await topbarBoardTitle.waitFor({ state: 'visible', timeout: 10000 });
+    await assert(topbarBoardTitle.getAttribute('contenteditable') !== 'true', `${step} should render a display-only title`);
+    assert(await topbarBoardSwitcher.getAttribute('aria-expanded') === 'true', `${step} should start with the Sidebar open`);
+    await topbarBoardTitle.click();
+    await page.locator('[data-sidebar-panel="expanded"]').waitFor({ state: 'hidden', timeout: 10000 });
+    assert(await topbarBoardSwitcher.getAttribute('aria-expanded') === 'false', `${step} title click should close the Sidebar`);
+    await topbarBoardTitle.click();
+    await page.locator('[data-sidebar-panel="expanded"]').waitFor({ state: 'visible', timeout: 10000 });
+    assert(await topbarBoardSwitcher.getAttribute('aria-expanded') === 'true', `${step} title click should reopen the Sidebar`);
+    await topbarBoardSwitcher.focus();
+    await page.keyboard.press('F2');
+    await page.waitForTimeout(150);
+    await page.keyboard.press('Space');
+    await page.locator('[data-sidebar-panel="expanded"]').waitFor({ state: 'hidden', timeout: 10000 });
+    assert(await topbarBoardSwitcher.getAttribute('aria-expanded') === 'false', `${step} Space should close the Sidebar`);
+    await page.keyboard.press('Enter');
+    await page.locator('[data-sidebar-panel="expanded"]').waitFor({ state: 'visible', timeout: 10000 });
+    assert(await topbarBoardSwitcher.getAttribute('aria-expanded') === 'true', `${step} Enter should reopen the Sidebar`);
+    await page.screenshot({ path: 'output/playwright/dev030-sidebar-rename-topbar-board-switcher.png' });
+    await assertNoRenameInputs(step);
 
     step = 'workspace-click-no-rename';
     const workspaceTitle = page.locator('[data-sidebar-workspace-title="true"]').first();

@@ -114,7 +114,13 @@ export const buildMindMapOverlayPaths = ({
       fromNodeId: relationship.fromId,
       toNodeId: relationship.toId,
       label: relationship.label,
-      ...makeRelationshipPath(relationship, getLocalRect(fromElement, surface), getLocalRect(toElement, surface)),
+      ...makeRelationshipPath(
+        relationship,
+        getLocalRect(fromElement, surface),
+        getLocalRect(toElement, surface),
+        getNodeSide(relationship.fromId),
+        getNodeSide(relationship.toId),
+      ),
     });
   });
 

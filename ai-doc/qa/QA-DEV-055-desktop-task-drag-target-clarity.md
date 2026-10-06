@@ -52,7 +52,7 @@ Static verifier 至少檢查：
 | S02 | Desktop indicator data attrs | 程式包含 `data-desktop-drop-indicator`、`data-desktop-drop-target`、`data-desktop-drop-position` |
 | S03 | Canonical resolver reuse | desktop preview / commit helper 皆呼叫 `resolveTaskDropIntent()`，不得複製 before / after / append 規則 |
 | S04 | Source placeholder separation | desktop source placeholder 不渲染 `data-desktop-drop-indicator`，且不使用 live target wrapper |
-| S05 | Generic primary geometry | card primary geometry 有 `data-task-card-primary="true"`，既有 `data-mobile-task-card-primary="true"` 保留 |
+| S05 | Hit／display geometry separation | primary geometry 保留命中；展開 card/checklist 的 standard before／after marker 使用完整 task scope 邊界 |
 | S06 | Invalid ancestor blocking | helper 對 invalid innermost target 回傳 null，不 fallback ancestor |
 | S07 | Desktop baseline protected | `BoardView.tsx` 仍保留 `<DragOverlay dropAnimation={null}>` 與 `data-kanban-drag-overlay="true"` |
 | S08 | Workbench placed row no-drag | `workbench-placed-row-is-not-a-source` guard 或等效 no-op 仍存在 |
@@ -157,7 +157,7 @@ DEV-055 完成前必跑：
 - Evidence base：`output/playwright/dev-055-desktop-drag-1784299443605-*`。
 - Latest current-state revalidation：2026-07-17 於 T01-T08 使用者驗收失敗回送 RD 後再跑 DEV-055 static 27/27、DEV-055 browser B01-B16 16/16、DEV-046 static/browser、DEV-053 static/browser、DEV-054 static/browser、`npx.cmd tsc --noEmit`、`npm.cmd run build`，均 Pass；最新 DEV-055 evidence base：`output/playwright/dev-055-desktop-drag-1784301885366-*`。
 - User revalidation：2026-07-17 使用者回報 RD Rework 1 後 T01-T08 測試通過，確認同格不飄、L3+ 不被定位線推開、桌機手感沒有被重做。
-- Release gate：2026-07-17 使用者要求部署正式環境；release branch `codex/dev055-production-release-20260717-234436`、artifact commit `e07ba4b`。Level 2 local production artifact smoke Pass；Level 3 Firebase preview `https://projed-cc78d--level3-smoke-o1na5wft.web.app` Pass；Level 4 production `https://projed-cc78d.web.app` Pass。正式站載入 `assets/index-DpRjvQu-.js` / `assets/index-B8eLAVHK.css`，線上 hash 與本機 artifact 一致。
+- Release gate：2026-07-17 使用者要求部署正式環境；release branch `歷史 DEV-055 release`、artifact commit `歷史 DEV-055 artifact`。Level 2 local production artifact smoke Pass；Level 3 Firebase preview `https://projed-cc78d--level3-smoke-o1na5wft.web.app` Pass；Level 4 production `https://projed-cc78d.web.app` Pass。正式站載入 `assets/index-DpRjvQu-.js` / `assets/index-B8eLAVHK.css`，線上 hash 與本機 artifact 一致。
 - QC report：`ai-doc/qc/QC-DEV-055-desktop-task-drag-target-clarity.md`。
 - Completion gate：RD Rework 1 後的 T01-T08 共 38 次使用者真實桌機操作與新版桌機手感主觀確認已通過；本 QA 宣告 DEV-055 completion gate 通過。
 
@@ -166,3 +166,16 @@ DEV-055 完成前必跑：
 - 2026-07-17：完成 Firebase Hosting production deployment 與 Level 4 smoke；authenticated production drag smoke 未由 Codex 自動登入執行，需使用者登入正式站後補人工操作證據。
 - 2026-07-17：使用者 T01-T08 Attempt 1 未通過後完成 RD Rework 1，補 B15 鎖定「同格不飄、L3+ 不被推開」；使用者重跑 T01-T08 回報測試通過，最後完成門檻已通過。
 - 2026-07-17：建立 QA plan，將 DEV-055 的自動化、回歸與真實操作驗證納入完成標準。
+
+## 10. DEV-068 Source Preview Revalidation（2026-08-15）
+
+- 使用者明示來源卡不得遮住child parent frame／ghost，因此舊位置凍結已由DEV-068取代；其餘single live indicator、fixed overlay-only marker、display/commit equivalence與no-layout-shift仍是回歸門檻。
+- 最新DEV-055 static 28/28、browser 16/16 PASS；B01-B06、B15與error sweep確認同階／跨欄／L3+落點未因來源卡獨立定位而回歸。
+- B12另攔下並修正Workbench桌機來源被完整L1 scope誤納child intent；最終未歸位任務可正常column append歸位，placed row仍不可拖。
+
+## 11. 展開 L2 standard marker 邊界回歸（2026-08-25）
+
+- Failure-first rendered gate 量到完整 L2 scope bottom=`274.09375px`、primary title bottom=`201.09375px`，舊 marker centerY=`201.09375px`，確認預覽線錯落在標題與 62px 可見子樹之間。
+- 修正後桌機 marker centerY=`274.09375px`，等於完整 scope bottom；primary rect 與 hit scope 仍分離，未改 collision ownership。
+- DEV-055 static 29/29、完整 browser B01-B16 16/16 PASS；此邊界另由 DEV-068 `DEV068-DESK-900` 真實 mouse drag gate 驗證，並保留 `output/playwright/dev-068-title-child-drop-1787592996400-desktop-candidate-expanded-l2-boundary.png`。最新 DEV-055 evidence base：`output/playwright/dev-055-desktop-drag-1787593310935-*`。
+- TypeScript 與 `build:test` PASS；本輪未部署、未 release，既有 2026-07-17 production 歷史證據不被改寫。

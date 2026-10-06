@@ -1,36 +1,21 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Plus, RefreshCw, SlidersHorizontal } from 'lucide-react';
 import { createPortal } from 'react-dom';
-import { CalendarDays, GitBranch, Plus, RefreshCw, SlidersHorizontal, Tag, UserRound } from 'lucide-react';
 import useBoardStore from '../../store/useBoardStore';
+import { useTaskFilterStore } from '../../store/useTaskFilterStore';
 import { useMemberStore } from '../../store/useMemberStore';
 import { useWbsStore } from '../../store/useWbsStore';
 import { useTagStore } from '../../store/useTagStore';
-import {
-  createBoardAssigneeFilterOptions,
-  countActiveTaskFilters,
-  TASK_STATUS_OPTIONS,
-  UNASSIGNED_ASSIGNEE_FILTER,
-} from '../../features/taskFilters';
-import { getTagDotStyle } from '../../utils/tags';
+import { countActiveTaskFilters, createBoardAssigneeFilterOptions } from '../../features/taskFilters';
+import TaskConditionFilterControls from './TaskConditionFilterControls';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 import { cn } from '../../utils/cn';
-import { getTaskStatusFilterChipClass } from './taskStatusStyles';
-
-const filterPillClass = (active: boolean) =>
-  `flex h-[26px] items-center gap-1.5 rounded-full border bg-white px-2.5 py-0.5 text-[11px] font-semibold text-slate-700 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all ${
-    active
-      ? 'border-primary/40 bg-primary/5 text-primary ring-2 ring-primary/20'
-      : 'border-slate-200 hover:border-primary/25 hover:bg-primary/5 hover:text-primary'
-  }`;
+import { getTaskFilterTriggerClass, getTaskFilterChoiceClass } from './taskConditionFilterStyles';
 
 const FILTER_PANEL_WIDTH = 288;
 const FILTER_PANEL_GUTTER = 8;
 
-type FilterPanelPosition = {
-  left: number;
-  top: number;
-  maxHeight: number;
-};
+type FilterPanelPosition = { left: number; top: number; maxHeight: number };
 
 const getFilterPanelPosition = (trigger: HTMLButtonElement): FilterPanelPosition => {
   const rect = trigger.getBoundingClientRect();
@@ -38,12 +23,7 @@ const getFilterPanelPosition = (trigger: HTMLButtonElement): FilterPanelPosition
   const maxLeft = Math.max(FILTER_PANEL_GUTTER, window.innerWidth - FILTER_PANEL_WIDTH - FILTER_PANEL_GUTTER);
   const left = Math.min(Math.max(rect.left, FILTER_PANEL_GUTTER), maxLeft);
   const top = Math.max(rect.bottom + 4, navBottom + 4);
-
-  return {
-    left,
-    top,
-    maxHeight: Math.max(160, window.innerHeight - top - FILTER_PANEL_GUTTER),
-  };
+  return { left, top, maxHeight: Math.max(160, window.innerHeight - top - FILTER_PANEL_GUTTER) };
 };
 
 type StatusFilterBarProps = {
@@ -60,66 +40,61 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = ({
   const [panelPosition, setPanelPosition] = useState<FilterPanelPosition | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-
   const activeWorkspaceId = useBoardStore(s => s.activeWorkspaceId);
-  const statusFilters = useBoardStore(s => s.statusFilters);
-  const toggleStatusFilter = useBoardStore(s => s.toggleStatusFilter);
   const showDependencies = useBoardStore(s => s.showDependencies);
   const toggleDependencies = useBoardStore(s => s.toggleDependencies);
   const showStartDate = useBoardStore(s => s.showStartDate);
   const toggleStartDate = useBoardStore(s => s.toggleStartDate);
   const showTags = useBoardStore(s => s.showTags);
   const toggleTags = useBoardStore(s => s.toggleTags);
-  const dueWithinDays = useBoardStore(s => s.dueWithinDays);
-  const setDueWithinDays = useBoardStore(s => s.setDueWithinDays);
-  const overdueOnly = useBoardStore(s => s.overdueOnly);
-  const toggleOverdueFilter = useBoardStore(s => s.toggleOverdueFilter);
-  const selectedAssigneeIds = useBoardStore(s => s.selectedAssigneeIds);
-  const toggleAssigneeFilter = useBoardStore(s => s.toggleAssigneeFilter);
-  const clearAssigneeFilters = useBoardStore(s => s.clearAssigneeFilters);
   const activeBoardId = useBoardStore(s => s.activeBoardId);
+  const filters = useTaskFilterStore(s => s.filters);
+  const setQuery = useTaskFilterStore(s => s.setQuery);
+  const clearAssigneeFilters = useTaskFilterStore(s => s.clearAssigneeFilters);
+  const clearTagFilters = useTaskFilterStore(s => s.clearTagFilters);
+  const resetFilters = useTaskFilterStore(s => s.resetFilters);
+  const retrySync = useTaskFilterStore(s => s.retrySync);
+  const syncStatus = useTaskFilterStore(s => s.syncStatus);
+  const syncWarning = useTaskFilterStore(s => s.warning);
+  const hydrationStatus = useTaskFilterStore(s => s.hydrationStatus);
   const nodes = useWbsStore(s => s.nodes);
   const { canEditTask } = useBoardPermissions();
   const workspaceMembers = useMemberStore(s => s.workspaceMembers);
   const boardMembers = useMemberStore(s => s.boardMembers);
-
   const tags = useTagStore(s => s.tags);
-  const selectedTagIds = useTagStore(s => s.selectedTagIds);
   const createTag = useTagStore(s => s.createTag);
-  const toggleTagFilter = useTagStore(s => s.toggleTagFilter);
-  const clearTagFilters = useTagStore(s => s.clearTagFilters);
+  const assigneeOptions = React.useMemo(
+    () => createBoardAssigneeFilterOptions(activeBoardId, boardMembers, nodes, workspaceMembers),
+    [activeBoardId, boardMembers, nodes, workspaceMembers],
+  );
+  const activeFilterCount = countActiveTaskFilters(filters);
+  const hasActiveFilter = activeFilterCount > 0;
+  const hasPendingUpdate = pendingUpdateCount > 0;
+  const hasSyncFailure = syncStatus === 'sync-error';
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
-      if (
-        panelRef.current && !panelRef.current.contains(target) &&
-        triggerRef.current && !triggerRef.current.contains(target)
-      ) {
+      if (panelRef.current && !panelRef.current.contains(target) && triggerRef.current && !triggerRef.current.contains(target)) {
         setIsOpen(false);
       }
     };
-
     if (isOpen) document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
-
     const updatePanelPosition = () => {
-      if (!triggerRef.current) return;
-      setPanelPosition(getFilterPanelPosition(triggerRef.current));
+      if (triggerRef.current) setPanelPosition(getFilterPanelPosition(triggerRef.current));
     };
-
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || event.isComposing) return;
       event.preventDefault();
       event.stopPropagation();
-      event.stopImmediatePropagation();
       setIsOpen(false);
     };
-
+    updatePanelPosition();
     window.addEventListener('resize', updatePanelPosition);
     window.addEventListener('scroll', updatePanelPosition, true);
     window.addEventListener('keydown', handleKeyDown, { capture: true });
@@ -130,106 +105,73 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = ({
     };
   }, [isOpen]);
 
-  const selectedTagSet = useMemo(() => new Set(selectedTagIds), [selectedTagIds]);
-  const selectedAssigneeSet = useMemo(() => new Set(selectedAssigneeIds), [selectedAssigneeIds]);
-  const assigneeOptions = useMemo(
-    () => createBoardAssigneeFilterOptions(activeBoardId, boardMembers, nodes, workspaceMembers),
-    [activeBoardId, boardMembers, nodes, workspaceMembers]
-  );
-  const activeTagCount = selectedTagIds.length;
-  const activeAssigneeCount = selectedAssigneeIds.length;
-  const hasDueFilter = dueWithinDays !== null && dueWithinDays !== undefined;
-  const hasAnyDueFilter = hasDueFilter || overdueOnly;
-  const activeFilterCount = countActiveTaskFilters({
-    statusFilters,
-    dueWithinDays,
-    overdueOnly,
-    selectedAssigneeIds,
-    selectedTagIds,
-    keyword: '',
-  });
-  const hasActiveFilter = activeFilterCount > 0;
-  const hasPendingUpdate = pendingUpdateCount > 0;
-
-  const handleDueDaysChange = (value: string) => {
-    if (value === '') {
-      setDueWithinDays(null);
-      return;
-    }
-
-    const nextDays = Number(value);
-    if (Number.isFinite(nextDays)) {
-      setDueWithinDays(nextDays);
-    }
-  };
-
   const handleCreateTag = async () => {
-    if (!canEditTask) return;
-    if (!activeWorkspaceId) return;
-    const name = window.prompt('請輸入新標籤名稱');
-    const trimmed = name?.trim();
-    if (!trimmed) return;
-    await createTag(activeWorkspaceId, trimmed);
+    if (!canEditTask || !activeWorkspaceId) return;
+    const name = window.prompt('請輸入新標籤名稱')?.trim();
+    if (name) await createTag(activeWorkspaceId, name);
   };
 
-  const handleFilterToggle = () => {
-    if (isOpen) {
-      setIsOpen(false);
-      return;
-    }
-
-    if (triggerRef.current) {
-      setPanelPosition(getFilterPanelPosition(triggerRef.current));
-    }
-    setIsOpen(true);
+  const openPanel = () => {
+    if (triggerRef.current) setPanelPosition(getFilterPanelPosition(triggerRef.current));
+    setIsOpen(value => !value);
   };
 
   return (
-    <div className={`relative ${isOpen ? 'z-[10000]' : 'z-10'}`}>
+    <div className={cn('relative', isOpen ? 'z-[10000]' : 'z-10')}>
       <div
         className={cn(
           'inline-flex h-8 shrink-0 items-stretch overflow-hidden rounded-md border shadow-[0_1px_2px_rgba(15,23,42,0.05)] transition-colors',
           isOpen || hasActiveFilter || hasPendingUpdate
-            ? 'border-primary/30 bg-primary/[0.04] text-primary ring-1 ring-primary/15'
-            : 'border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:bg-slate-100 hover:text-slate-700',
+            ? hasActiveFilter
+              ? 'border-primary-500 bg-primary-50 ring-2 ring-primary-200/80'
+              : 'border-primary-400 bg-primary-50/70 text-primary-700 ring-2 ring-primary-200/70'
+            : 'border-slate-300 bg-white text-slate-600 hover:border-primary-400 hover:bg-primary-50 hover:text-primary-700',
         )}
         data-task-filter-control-group="true"
         data-task-filter-control-pending={hasPendingUpdate ? 'true' : 'false'}
+        data-task-filter-sync-error={hasSyncFailure ? 'true' : 'false'}
       >
         <button
           ref={triggerRef}
           id="filter-menu-trigger"
           type="button"
-          aria-label={hasActiveFilter ? '過濾器已啟用' : '過濾器'}
+          aria-label={hasActiveFilter ? `過濾器已啟用（${activeFilterCount} 項）` : '過濾器'}
           title="過濾器"
-          onClick={handleFilterToggle}
+          onClick={openPanel}
           className={cn(
-            'inline-flex h-full w-8 shrink-0 items-center justify-center border-0 bg-transparent text-inherit transition-colors hover:bg-primary/10 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/35',
-            isOpen && 'bg-primary/10',
+            'inline-flex h-full min-w-8 shrink-0 items-center justify-center gap-1 border-0 px-1.5 text-inherit transition-colors focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/45',
+            getTaskFilterTriggerClass(hasActiveFilter, isOpen),
           )}
           data-active-task-filter-count={activeFilterCount}
+          data-task-filter-active={hasActiveFilter ? 'true' : 'false'}
         >
           <SlidersHorizontal size={13} />
+          {hasActiveFilter ? <span className="inline-flex min-w-4 items-center justify-center rounded-full bg-white px-1 py-0.5 text-[10px] font-bold leading-none text-primary-700" aria-hidden="true">{activeFilterCount > 99 ? '99+' : activeFilterCount}</span> : null}
         </button>
-
         {hasPendingUpdate ? (
           <button
             type="button"
             onClick={onApplyPendingUpdate}
-            className="inline-flex h-full min-w-8 items-center justify-center gap-1 border-0 border-l border-primary/25 bg-primary/[0.07] px-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/15 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/35 sm:px-2"
-            title={`更新篩選結果（${pendingUpdateCount}）`}
-            aria-label={`更新篩選結果（${pendingUpdateCount}）`}
-            data-task-filter-update-button="true"
+            className="inline-flex h-full min-w-8 items-center justify-center gap-1 border-0 border-l border-primary/25 bg-primary/[0.07] px-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/15"
+            title={'更新篩選結果（' + pendingUpdateCount + '）'}
+            aria-label={'更新篩選結果（' + pendingUpdateCount + '）'}
           >
             <RefreshCw size={13} className="sm:hidden" aria-hidden="true" />
             <span className="hidden sm:inline">更新</span>
-            <span
-              className="inline-flex min-w-4 items-center justify-center rounded-full bg-primary px-1 py-0.5 text-[10px] font-bold leading-none text-white"
-              data-task-filter-update-count="true"
-              aria-hidden="true"
-            >
+            <span className="inline-flex min-w-4 items-center justify-center rounded-full bg-primary px-1 py-0.5 text-[10px] font-bold leading-none text-white" data-task-filter-update-count="true">
               {pendingUpdateCount > 99 ? '99+' : pendingUpdateCount}
             </span>
+          </button>
+        ) : null}
+        {hasSyncFailure ? (
+          <button
+            type="button"
+            onClick={() => void retrySync()}
+            className="inline-flex h-full w-8 items-center justify-center border-0 border-l border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
+            title={syncWarning || '重新同步篩選偏好'}
+            aria-label={syncWarning || '重新同步篩選偏好'}
+          >
+            <span aria-hidden="true">!</span>
           </button>
         ) : null}
       </div>
@@ -241,231 +183,70 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = ({
           onClick={event => event.stopPropagation()}
           onMouseDown={event => event.stopPropagation()}
           onPointerDown={event => event.stopPropagation()}
-          className="fixed z-[10000] w-72 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl animate-in fade-in duration-150"
-          style={{
-            left: panelPosition.left,
-            top: panelPosition.top,
-            maxHeight: panelPosition.maxHeight,
-          }}
+          className="fixed z-[10000] w-72 overflow-y-auto overscroll-contain rounded-xl border border-primary-200/90 bg-white shadow-[0_14px_36px_rgba(15,23,42,0.16)] animate-in fade-in duration-150"
+          style={{ left: panelPosition.left, top: panelPosition.top, maxHeight: panelPosition.maxHeight }}
         >
-          <div className="px-3 pt-2 pb-2">
-            <p className="mb-2 text-[10px] font-semibold text-slate-500">任務狀態</p>
-            <div className="flex flex-wrap gap-2">
-              {TASK_STATUS_OPTIONS.map(status => {
-                const isActive = statusFilters[status.key];
-                return (
-                  <button
-                    key={status.key}
-                    type="button"
-                    onClick={() => toggleStatusFilter(status.key)}
-                    className={getTaskStatusFilterChipClass(status.key, isActive)}
-                    aria-pressed={isActive}
-                  >
-                    {status.label}
-                  </button>
-                );
-              })}
-            </div>
+          <div className="flex items-center justify-between border-b border-primary-100 bg-primary-50/70 px-3 py-2.5">
+            <span className="text-xs font-bold text-slate-700">篩選條件</span>
+            <span className={cn('rounded-full px-2 py-1 text-[10px] font-bold', hasActiveFilter ? 'bg-primary-600 text-white' : 'bg-white text-slate-500 ring-1 ring-slate-200')}>
+              {hasActiveFilter ? `${activeFilterCount} 項啟用` : '未啟用'}
+            </span>
           </div>
-
-          <div className="mx-3 h-px bg-slate-100" />
-
-          <div className="px-3 pt-2 pb-3">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <p className="text-[10px] font-semibold text-slate-500">到期日</p>
-              {hasAnyDueFilter && (
+          <div className="px-3 py-3">
+            <TaskConditionFilterControls
+              value={filters}
+              assigneeOptions={assigneeOptions}
+              tags={tags.map(tag => ({ id: tag.id, name: tag.name }))}
+              onChange={setQuery}
+              onClearPeople={clearAssigneeFilters}
+              onClearTags={clearTagFilters}
+              disabled={hydrationStatus === 'hydrating'}
+              tagActions={(
                 <button
                   type="button"
-                  onClick={() => {
-                    setDueWithinDays(null);
-                    if (overdueOnly) toggleOverdueFilter();
-                  }}
-                  className="text-[10px] font-semibold text-slate-400 hover:text-slate-700"
+                  onClick={() => void handleCreateTag()}
+                  disabled={!activeWorkspaceId || !canEditTask || hydrationStatus === 'hydrating'}
+                  className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] font-semibold text-primary hover:bg-primary/5 disabled:cursor-not-allowed disabled:text-slate-300"
                 >
-                  清除
+                  <Plus size={11} />
+                  新增標籤
                 </button>
               )}
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={toggleOverdueFilter}
-                className={`flex h-[26px] items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold transition-colors ${
-                  overdueOnly
-                    ? 'border-orange-300 bg-orange-50 text-orange-700 ring-1 ring-orange-200'
-                    : 'border-orange-200 bg-white text-orange-600 hover:bg-orange-50'
-                }`}
-                aria-pressed={overdueOnly}
-                data-overdue-filter="true"
-              >
-                逾期
-              </button>
-              <button
-                type="button"
-                onClick={() => setDueWithinDays(hasDueFilter ? null : 7)}
-                className={filterPillClass(hasDueFilter)}
-                aria-pressed={hasDueFilter}
-              >
-                <CalendarDays size={12} className="text-amber-600" />
-                到期日
-              </button>
-
-              <label className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-700 shadow-sm">
-                <input
-                  type="number"
-                  min={0}
-                  max={365}
-                  value={dueWithinDays ?? ''}
-                  onChange={event => handleDueDaysChange(event.target.value)}
-                  placeholder="天數"
-                  className="w-12 bg-transparent text-right text-[11px] font-semibold text-slate-700 outline-none placeholder:text-slate-300"
-                  aria-label="到期天數"
-                />
-                <span>天內</span>
-              </label>
-            </div>
+            />
           </div>
 
-          <div className="px-3 pt-2 pb-3" data-task-display-settings="true">
-            <p className="mb-2 text-[10px] font-semibold text-slate-500">介面顯示</p>
+          <div className="border-t border-slate-200/80 px-3 py-3" data-task-display-settings="true">
+            <p className="mb-2 text-[11px] font-semibold leading-4 text-slate-500">介面顯示</p>
             <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={toggleDependencies}
-                className={filterPillClass(showDependencies)}
-                aria-pressed={showDependencies}
-              >
-                <GitBranch size={12} className="text-amber-600" />
+              <button type="button" onClick={toggleDependencies} className={getTaskFilterChoiceClass(showDependencies)} aria-pressed={showDependencies}>
                 依賴連線
               </button>
-
-              <button
-                type="button"
-                onClick={toggleStartDate}
-                className={filterPillClass(showStartDate)}
-                aria-pressed={showStartDate}
-              >
-                <CalendarDays size={12} className="text-amber-600" />
+              <button type="button" onClick={toggleStartDate} className={getTaskFilterChoiceClass(showStartDate)} aria-pressed={showStartDate}>
                 開始日期
               </button>
-
-              <button
-                type="button"
-                onClick={toggleTags}
-                className={filterPillClass(showTags)}
-                aria-pressed={showTags}
-              >
-                <Tag size={12} className="text-amber-600" />
+              <button type="button" onClick={toggleTags} className={getTaskFilterChoiceClass(showTags)} aria-pressed={showTags}>
                 標籤
               </button>
             </div>
           </div>
 
-          <div className="mx-3 h-px bg-slate-100" />
-
-          <div className="px-3 pt-2 pb-3">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <p className="text-[10px] font-semibold text-slate-500">標籤</p>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleCreateTag}
-                  disabled={!activeWorkspaceId || !canEditTask}
-                  className="inline-flex items-center gap-1 text-[10px] font-semibold text-primary transition-colors hover:text-primary/80 disabled:cursor-not-allowed disabled:text-slate-300"
-                >
-                  <Plus size={11} />
-                  新增標籤
-                </button>
-                {activeTagCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={clearTagFilters}
-                    className="text-[10px] font-semibold text-slate-400 hover:text-slate-700"
-                  >
-                    清除
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {tags.length === 0 ? (
-                <div className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-700 shadow-sm">
-                <Tag size={12} />
-                尚未建立標籤
-              </div>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {tags.map(tag => {
-                  const isActive = selectedTagSet.has(tag.id);
-                  return (
-                    <button
-                      key={tag.id}
-                      type="button"
-                      onClick={() => toggleTagFilter(tag.id)}
-                      className={filterPillClass(isActive)}
-                      aria-pressed={isActive}
-                    >
-                      <span className={`h-2 w-2 flex-shrink-0 rounded-full ${getTagDotStyle(tag.color)}`} />
-                      <span className="max-w-[7rem] truncate">{tag.name}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          <div className="mx-3 h-px bg-slate-100" />
-
-          <div className="px-3 pt-2 pb-3">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <p className="text-[10px] font-semibold text-slate-500">負責人/協作</p>
-              {activeAssigneeCount > 0 && (
-                <button
-                  type="button"
-                  onClick={clearAssigneeFilters}
-                  className="text-[10px] font-semibold text-slate-400 hover:text-slate-700"
-                >
-                  清除
-                </button>
-              )}
-            </div>
-            <div className="flex flex-wrap gap-2">
+          {hasActiveFilter ? (
+            <div className="border-t border-slate-200/80 px-3 py-3">
               <button
                 type="button"
-                onClick={() => toggleAssigneeFilter(UNASSIGNED_ASSIGNEE_FILTER)}
-                className={filterPillClass(selectedAssigneeSet.has(UNASSIGNED_ASSIGNEE_FILTER))}
-                aria-pressed={selectedAssigneeSet.has(UNASSIGNED_ASSIGNEE_FILTER)}
+                onClick={resetFilters}
+                className="h-8 w-full rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs font-semibold text-slate-600 hover:border-slate-300 hover:bg-slate-100"
+                data-task-filter-reset="true"
               >
-                <UserRound size={12} className="text-slate-500" />
-                未指派
+                清除全部篩選
               </button>
-              {assigneeOptions.length === 0 ? (
-                <div className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-400 shadow-sm">
-                  <UserRound size={12} />
-                  尚無看板成員
-                </div>
-              ) : (
-                assigneeOptions.map(member => {
-                  const isActive = selectedAssigneeSet.has(member.id);
-                  return (
-                    <button
-                      key={member.id}
-                      type="button"
-                      onClick={() => toggleAssigneeFilter(member.id)}
-                      className={filterPillClass(isActive)}
-                      aria-pressed={isActive}
-                    >
-                      <UserRound size={12} className="text-blue-600" />
-                      <span className="max-w-[7rem] truncate">{member.label}</span>
-                    </button>
-                  );
-                })
-              )}
             </div>
-          </div>
+          ) : null}
         </div>,
-        document.body
+        document.body,
       )}
     </div>
   );
 };
+
+export default StatusFilterBar;

@@ -14,14 +14,14 @@ type MindMapKeyboardAction =
   | { type: 'remove-selected-relationship' }
   | { type: 'edit-selected-relationship-label' }
   | { type: 'select-vertical'; direction: 'up' | 'down' }
-  | { type: 'select-parent' }
-  | { type: 'select-first-child' }
+  | { type: 'select-horizontal'; direction: 'left' | 'right' }
   | { type: 'create-sibling' }
   | { type: 'create-child' }
   | { type: 'archive-selected-node' };
 
 interface MindMapKeyboardState {
   isEditingText: boolean;
+  isQuickTitleEditing?: boolean;
   hasSelectedNode: boolean;
   hasSelectedRelationship: boolean;
   hasRelationshipMode: boolean;
@@ -33,8 +33,16 @@ export const isMindMapTextEditingTarget = (target: EventTarget | null) => {
   return element.tagName === 'INPUT' || element.tagName === 'TEXTAREA' || element.isContentEditable;
 };
 
+export const isMindMapQuickTitleEditingTarget = (target: EventTarget | null) => {
+  const element = target as HTMLElement | null;
+  return element?.getAttribute?.('data-mindmap-quick-title-input') === 'true';
+};
+
 export const isMindMapDeleteKey = (event: MindMapKeyboardEventLike) =>
   event.key === 'Delete' || event.key === 'Backspace';
+
+export const isMindMapForwardDeleteKey = (event: MindMapKeyboardEventLike) =>
+  event.key === 'Delete';
 
 export const isMindMapSpaceKey = (event: MindMapKeyboardEventLike) =>
   event.key === ' ' || event.key === 'Space' || event.key === 'Spacebar' || event.code === 'Space';
@@ -52,7 +60,12 @@ export const getMindMapKeyboardAction = (
   event: MindMapKeyboardEventLike,
   state: MindMapKeyboardState,
 ): MindMapKeyboardAction | null => {
-  if (state.isEditingText) return null;
+  if (state.isEditingText) {
+    // Quick naming is visually an editor so users can type immediately, but
+    // Delete remains a task command. Backspace and all other text keys stay
+    // native so relationship/details inputs keep their editing semantics.
+    if (!state.isQuickTitleEditing || !isMindMapForwardDeleteKey(event)) return null;
+  }
   if (isMindMapRelationshipToolToggleKey(event)) return { type: 'toggle-relationship-tool' };
   if (hasMindMapShortcutModifier(event)) return null;
 
@@ -63,8 +76,8 @@ export const getMindMapKeyboardAction = (
   if (isMindMapSpaceKey(event) && state.hasSelectedRelationship) return { type: 'edit-selected-relationship-label' };
   if (event.key === 'ArrowUp' && state.hasSelectedNode) return { type: 'select-vertical', direction: 'up' };
   if (event.key === 'ArrowDown' && state.hasSelectedNode) return { type: 'select-vertical', direction: 'down' };
-  if (event.key === 'ArrowLeft' && state.hasSelectedNode) return { type: 'select-parent' };
-  if (event.key === 'ArrowRight' && state.hasSelectedNode) return { type: 'select-first-child' };
+  if (event.key === 'ArrowLeft' && state.hasSelectedNode) return { type: 'select-horizontal', direction: 'left' };
+  if (event.key === 'ArrowRight' && state.hasSelectedNode) return { type: 'select-horizontal', direction: 'right' };
   if (event.key === 'Enter') return { type: 'create-sibling' };
   if (event.key === 'Tab') return { type: 'create-child' };
   if (isMindMapDeleteKey(event) && state.hasSelectedNode) return { type: 'archive-selected-node' };

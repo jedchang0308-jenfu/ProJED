@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { AlertTriangle, ArrowRightLeft, Copy, Plus, Trash2, GitBranch, CornerLeftUp, CornerRightDown, ChevronRight, UserRound, Pencil, LayoutDashboard, X } from 'lucide-react';
+import { AlertTriangle, ArrowRightLeft, Plus, Trash2, Pencil, LayoutDashboard, X } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
 import { useMemberStore } from '../store/useMemberStore';
@@ -17,9 +17,29 @@ import {
   OPEN_TASK_DETAILS_EVENT,
   isTextInputTarget,
   prepareNewTaskNaming,
+  rememberTaskDetailsReturnFocus,
+  requestMindMapRelationshipStart,
+  restoreTaskDetailsReturnFocus,
   selectAndOpenTaskDetails,
 } from '../utils/taskInteractions';
 import { getTaskAssigneeIds } from '../utils/taskAssignments';
+import { resolveTaskMenu } from '../interactions/task/resolveTaskInteraction';
+import { getTaskActionEnabledMap, guardTaskAction } from '../interactions/task/taskActionGuards';
+import { TaskActionMenu } from '../interactions/task/TaskActionMenu';
+import type { InteractionContext } from '../interactions/task/types';
+import { useTaskPlacementPermissions } from '../hooks/useTaskPlacementPermissions';
+import { getReferenceSubtree, PRIMARY_PLACEMENT_PREFIX, primaryPlacementId } from '../features/taskTracking/model';
+import { requestTaskDetailsNavigation, useTaskDetailsNavigation } from './taskDetailsNavigation';
+import { createBlankTaskNode } from '../features/taskCreation/createBlankTaskNode';
+import useRecordStore from '../store/useRecordStore';
+import {
+  getMeetingTaskReservationValue,
+  parseMeetingTaskReservationInput,
+} from '../utils/meetingTaskReservation';
+import {
+  MEETING_TASK_MENU_PROFILE,
+  TASK_DETAILS_TASK_MENU_PROFILE,
+} from '../interactions/task/profiles';
 
 export const GlobalContextMenu: React.FC = () => {
   const contextMenuState = useBoardStore((state) => state.contextMenuState);
@@ -42,19 +62,46 @@ export const GlobalContextMenu: React.FC = () => {
   const showStartDate = useBoardStore((state) => state.showStartDate);
   const toggleStartDate = useBoardStore((state) => state.toggleStartDate);
   const addNode = useWbsStore((state) => state.addNode);
-  const removeNode = useWbsStore((state) => state.removeNode);
+  const archiveNode = useWbsStore((state) => state.archiveNode);
   const updateNode = useWbsStore((state) => state.updateNode);
   const duplicateNodeTree = useWbsStore((state) => state.duplicateNodeTree);
-  const { canCreateTask, canEditTask, canMoveTask, canDeleteTask, canAssignTask, canCreateDependency, canCreateBoard, canDeleteWorkspace, canEditBoardSettings, canMoveBoardBetweenWorkspaces } = useBoardPermissions();
+  const createTrackingReference = useWbsStore((state) => state.createTrackingReference);
+  const moveTrackingReference = useWbsStore((state) => state.moveTrackingReference);
+  const removeTrackingReference = useWbsStore((state) => state.removeTrackingReference);
+  const trackingReferenceCapability = useWbsStore((state) => state.trackingReferenceCapability);
+  const { canCreateTask: boardCanCreateTask, canEditTask: boardCanEditTask, canMoveTask: boardCanMoveTask, canDeleteTask: boardCanDeleteTask, canAssignTask: boardCanAssignTask, canCreateDependency: boardCanCreateDependency, canManageTaskReference: boardCanManageTaskReference, canCreateBoard, canDeleteWorkspace, canEditBoardSettings, canMoveBoardBetweenWorkspaces } = useBoardPermissions();
+  const currentNode = useWbsStore((state) => contextMenuState?.kind === 'task' ? state.nodes[contextMenuState.nodeId] : null);
+  const currentTrackingReference = useWbsStore((state) => contextMenuState?.kind === 'task' && contextMenuState.trackingReferenceId
+    ? state.trackingReferences.find(reference => reference.id === contextMenuState.trackingReferenceId && !reference.removedAt) || null
+    : null);
+  const taskPlacementPermissions = useTaskPlacementPermissions(currentNode, currentTrackingReference);
+  const canCreateTask = currentNode ? taskPlacementPermissions.canCreateTask : boardCanCreateTask;
+  const canEditTask = currentNode ? taskPlacementPermissions.canEditTask : boardCanEditTask;
+  const canMoveTask = currentTrackingReference
+    ? taskPlacementPermissions.canManageTaskReference
+    : (currentNode ? taskPlacementPermissions.canMoveTask : boardCanMoveTask);
+  const canDeleteTask = currentNode ? taskPlacementPermissions.canDeleteTask : boardCanDeleteTask;
+  const canAssignTask = currentNode ? taskPlacementPermissions.canAssignTask : boardCanAssignTask;
+  const canCreateDependency = currentNode ? taskPlacementPermissions.canCreateDependency : boardCanCreateDependency;
+  const canManageTaskReference = currentNode ? taskPlacementPermissions.canManageTaskReference : boardCanManageTaskReference;
   const currentUserId = useAuthStore((state) => state.user?.uid);
+  const isMeetingMode = useRecordStore((state) => state.isMeetingMode);
+  const meetingDraft = useRecordStore((state) => state.draft);
+  const setMeetingTaskReservation = useRecordStore((state) => state.setMeetingTaskReservation);
   const workspaceMembers = useMemberStore((state) => state.workspaceMembers);
   const currentBoardAccess = useMemberStore((state) => state.currentBoardAccess);
   const boardMembers = useMemberStore((state) => state.boardMembers);
   const membersLoading = useMemberStore((state) => state.loading);
-  const [detailsNodeId, setDetailsNodeId] = useState<string | null>(null);
+  const detailsNavigation = useTaskDetailsNavigation();
+  const detailsNodeId = detailsNavigation.current?.taskId || null;
+  const detailsTrackingReferenceId = detailsNavigation.current?.trackingReferenceId || null;
   const [transferBoardTarget, setTransferBoardTarget] = useState(null);
   const [isAssigneeMenuOpen, setIsAssigneeMenuOpen] = useState(false);
   const [isDeletingWorkspace, setIsDeletingWorkspace] = useState(false);
+  const [reservationEditorKey, setReservationEditorKey] = useState<string | null>(null);
+  const [reservationInput, setReservationInput] = useState('');
+  const [reservationError, setReservationError] = useState<string | null>(null);
+  const reservationInputRef = useRef<HTMLInputElement | null>(null);
   const [menuPosition, setMenuPosition] = useState({ left: 12, top: 12, maxHeight: 320 });
   const menuRef = useRef<HTMLDivElement | null>(null);
   const openedAtRef = useRef(0);
@@ -62,10 +109,75 @@ export const GlobalContextMenu: React.FC = () => {
   const IGNORE_OPENING_TOUCH_MS = 750;
   const MENU_WIDTH = 220;
   const VIEWPORT_PADDING = 12;
-  const isDependencySupportedView = currentView === 'board' || currentView === 'list';
   const menuKind = contextMenuState?.kind || 'task';
   const isTaskMenu = menuKind === 'task';
-  const currentNode = isTaskMenu && contextMenuState ? useWbsStore.getState().nodes[contextMenuState.nodeId] : null;
+  const meetingReservationSurfaceIds = ['board.column-header', 'board.card', 'board.checklist-row'];
+  const reservationContextKey = contextMenuState?.kind === 'task'
+    ? `${contextMenuState.nodeId}:${contextMenuState.surfaceId || ''}:${contextMenuState.interactionId || ''}`
+    : null;
+  const isActiveMeetingDraft = Boolean(
+    isMeetingMode
+    && meetingDraft?.type === 'meeting'
+    && meetingDraft.status === 'draft',
+  );
+  const isMeetingReservationSurface = Boolean(
+    contextMenuState?.kind === 'task'
+    && meetingReservationSurfaceIds.includes(contextMenuState.surfaceId || ''),
+  );
+  const canEditMeetingReservation = Boolean(
+    isActiveMeetingDraft
+    && isMeetingReservationSurface
+    && currentUserId
+    && meetingDraft?.recordedBy === currentUserId
+    && currentNode
+    && !currentNode.isArchived
+    && currentNode.boardId === activeBoardId,
+  );
+  const currentReservationValue = getMeetingTaskReservationValue(meetingDraft?.metadata, currentNode?.id || '');
+  const isReservationEditorOpen = Boolean(reservationEditorKey && reservationEditorKey === reservationContextKey);
+  const taskMenuInteractionContext: InteractionContext | null = isTaskMenu && contextMenuState?.kind === 'task'
+    ? {
+      interactionId: contextMenuState.interactionId || 'legacy-context-menu',
+      location: contextMenuState.interactionLocation || { hostMode: currentView === 'mindmap' || currentView === 'board' || currentView === 'gantt' || currentView === 'calendar' ? currentView : 'list', origin: 'mode-primary' },
+      surfaceId: contextMenuState.surfaceId || 'list.row',
+      taskId: contextMenuState.nodeId,
+      modality: 'fine-pointer',
+      transientOwners: [],
+      blockers: [],
+    }
+    : null;
+  const candidateTaskMenuActionIds = taskMenuInteractionContext
+    ? resolveTaskMenu(
+      taskMenuInteractionContext,
+      [
+        ...(taskMenuInteractionContext.surfaceId === 'task-details.subtask-row'
+          ? [TASK_DETAILS_TASK_MENU_PROFILE]
+          : []),
+        ...(canEditMeetingReservation ? [MEETING_TASK_MENU_PROFILE] : []),
+      ],
+    ).filter(actionId =>
+      (actionId !== 'task.create-tracking-reference' || (!currentTrackingReference && trackingReferenceCapability.supported))
+        && (actionId !== 'task.remove-tracking-reference' || Boolean(currentTrackingReference && trackingReferenceCapability.supported))
+    )
+    : [];
+  const candidateTaskActionEnabled = getTaskActionEnabledMap(candidateTaskMenuActionIds, {
+    nodeExists: Boolean(currentNode),
+    canCreateTask,
+    canEditTask,
+    canMoveTask,
+    canDeleteTask,
+    canAssignTask,
+    canCreateDependency,
+    canManageTaskReference: canManageTaskReference && trackingReferenceCapability.supported,
+    canEditMeetingReservation,
+  });
+  const resolvedTaskMenuActionIds = candidateTaskMenuActionIds.filter(actionId => candidateTaskActionEnabled[actionId]);
+  const isDependencySupportedView = resolvedTaskMenuActionIds.includes('task.dependency-start')
+    && resolvedTaskMenuActionIds.includes('task.dependency-end');
+  const taskActionEnabled = {
+    ...candidateTaskActionEnabled,
+    'task.archive': canDeleteTask,
+  };
   const getWorkspace = (workspaceId: string) => workspaces.find(workspace => workspace.id === workspaceId);
   const getWorkspaceRole = (workspaceId: string) => {
     if (currentBoardAccess?.workspaceId === workspaceId) return currentBoardAccess.workspaceRole;
@@ -133,17 +245,137 @@ export const GlobalContextMenu: React.FC = () => {
   };
 
   const closeContextMenu = (options: { preserveTaskSelection?: boolean } = {}) => {
-    const wasTaskMenu = useBoardStore.getState().contextMenuState?.kind === 'task';
+    const currentContextMenuState = useBoardStore.getState().contextMenuState;
+    const wasTaskMenu = currentContextMenuState?.kind === 'task';
     setContextMenuState(null);
-    if (wasTaskMenu && !options.preserveTaskSelection) clearTaskSelection();
+    if (!wasTaskMenu) return;
+
+    // A browser contextmenu keeps focus on the source row. Remove that
+    // transient focus ring when the menu closes; keyboard focus is restored by
+    // the existing task-details return-focus flow when navigation needs it.
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement && activeElement.closest('[data-task-surface-source="true"]')) {
+      activeElement.blur();
+    }
+
+    if (!options.preserveTaskSelection) {
+      clearTaskSelection();
+      return;
+    }
+
+    // Opening a menu inside Task Details temporarily selects the child row so
+    // its hover/target state remains visible. Once dismissed, restore the
+    // task represented by the modal instead of leaving the child highlighted.
+    if (detailsNodeId) setSelectedTaskId(detailsNodeId);
   };
 
   useEffect(() => {
+    if (!contextMenuState?.isOpen || contextMenuState.kind !== 'task') {
+      setReservationEditorKey(null);
+      setReservationError(null);
+    }
+  }, [contextMenuState?.isOpen, contextMenuState?.kind, contextMenuState?.nodeId, contextMenuState?.surfaceId, contextMenuState?.interactionId]);
+
+  useEffect(() => {
+    if (!isReservationEditorOpen) return undefined;
+    setReservationInput(currentReservationValue === null ? '' : String(currentReservationValue));
+    setReservationError(null);
+    const focusInput = () => {
+      reservationInputRef.current?.focus();
+      reservationInputRef.current?.select();
+    };
+    if (typeof requestAnimationFrame === 'function') {
+      const frameId = requestAnimationFrame(focusInput);
+      return () => cancelAnimationFrame(frameId);
+    }
+    focusInput();
+    return undefined;
+  }, [currentReservationValue, isReservationEditorOpen, reservationContextKey]);
+
+  const cancelReservationEditor = () => {
+    setReservationEditorKey(null);
+    setReservationError(null);
+    closeContextMenu({ preserveTaskSelection: true });
+  };
+
+  const commitReservation = () => {
+    if (!canEditMeetingReservation || !currentNode || !currentUserId || !activeBoardId) return;
+    const parsed = parseMeetingTaskReservationInput(reservationInput);
+    if (parsed.status === 'invalid') {
+      setReservationError(parsed.message);
+      return;
+    }
+    try {
+      const result = setMeetingTaskReservation({
+        taskId: currentNode.id,
+        value: parsed.status === 'clear' ? null : parsed.value,
+        currentUserId,
+        activeBoardId,
+        taskExists: Boolean(currentNode),
+        taskArchived: Boolean(currentNode.isArchived),
+        taskBoardId: currentNode.boardId,
+      });
+      if (result === 'denied') {
+        setReservationError('目前無法更新預約時間');
+        return;
+      }
+      closeContextMenu({ preserveTaskSelection: true });
+    } catch (error) {
+      console.error('[GlobalContextMenu] meeting reservation failed:', error);
+      setReservationError('目前無法更新預約時間');
+    }
+  };
+
+  const meetingReservationEditor = isReservationEditorOpen ? (
+    <div className="px-2.5 py-1.5" data-meeting-reservation-editor="true">
+      <input
+        ref={reservationInputRef}
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        maxLength={3}
+        value={reservationInput}
+        onChange={(event) => {
+          setReservationInput(event.target.value);
+          setReservationError(null);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            event.stopPropagation();
+            cancelReservationEditor();
+            return;
+          }
+          if (event.key === 'Enter') {
+            if (event.nativeEvent.isComposing || event.isComposing || event.keyCode === 229) return;
+            event.preventDefault();
+            event.stopPropagation();
+            commitReservation();
+          }
+        }}
+        aria-label="預約時間"
+        aria-invalid={reservationError ? 'true' : 'false'}
+        aria-describedby={reservationError ? 'meeting-reservation-error' : undefined}
+        className="w-full rounded border border-indigo-300 bg-white px-2 py-1 text-sm text-slate-800 outline-none ring-indigo-200 focus:ring-2"
+        data-meeting-reservation-input="true"
+      />
+      {reservationError ? (
+        <p id="meeting-reservation-error" role="alert" className="mt-1 text-[11px] leading-4 text-rose-600">
+          {reservationError}
+        </p>
+      ) : null}
+    </div>
+  ) : null;
+
+  useEffect(() => {
     const handleOpenTaskDetails = (event: Event) => {
-      const customEvent = event as CustomEvent<{ taskId: string }>;
+      const customEvent = event as CustomEvent<{ taskId: string; trackingReferenceId?: string }>;
       if (customEvent.detail?.taskId) {
         setSelectedTaskId(customEvent.detail.taskId);
-        setDetailsNodeId(customEvent.detail.taskId);
+        detailsNavigation.openRoot({
+          taskId: customEvent.detail.taskId,
+          trackingReferenceId: customEvent.detail.trackingReferenceId,
+        });
       }
     };
 
@@ -152,7 +384,7 @@ export const GlobalContextMenu: React.FC = () => {
     return () => {
       document.removeEventListener(OPEN_TASK_DETAILS_EVENT, handleOpenTaskDetails);
     };
-  }, [setSelectedTaskId]);
+  }, [detailsNavigation.openRoot, setSelectedTaskId]);
 
   useEffect(() => {
     if (!contextMenuState) return;
@@ -236,7 +468,7 @@ export const GlobalContextMenu: React.FC = () => {
       window.removeEventListener('resize', updateMenuPosition);
       window.visualViewport?.removeEventListener('resize', updateMenuPosition);
     };
-  }, [MENU_WIDTH, VIEWPORT_PADDING, contextMenuState?.isOpen, contextMenuState?.nodeId, contextMenuState?.x, contextMenuState?.y, isDependencySupportedView]);
+  }, [MENU_WIDTH, VIEWPORT_PADDING, contextMenuState?.isOpen, contextMenuState?.nodeId, contextMenuState?.x, contextMenuState?.y, isDependencySupportedView, isReservationEditorOpen, reservationError]);
 
   const closeFromOutsideEvent = (event: React.PointerEvent | React.MouseEvent) => {
     const elapsed = performance.now() - openedAtRef.current;
@@ -261,18 +493,14 @@ export const GlobalContextMenu: React.FC = () => {
     reopenCompletedTaskForInsert(node);
 
     const childrenIds = state.parentNodesIndex[contextMenuState.nodeId] || [];
-    const newNode: TaskNode = {
+    const newNode = createBlankTaskNode({
       id: `node_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
       workspaceId: node.workspaceId,
       boardId: node.boardId,
       parentId: node.id,
-      title: '新任務',
-      status: 'todo',
       nodeType: 'task',
       order: childrenIds.length,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
+    });
 
     addNode(newNode);
     prepareNewTaskNaming(newNode.id);
@@ -299,29 +527,56 @@ export const GlobalContextMenu: React.FC = () => {
     const nextSibling = currentIndex >= 0 ? siblings[currentIndex + 1] : null;
     const order = nextSibling ? (node.order + nextSibling.order) / 2 : node.order + 1;
 
-    const newNode: TaskNode = {
+    const newNode = createBlankTaskNode({
       id: `node_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
       workspaceId: node.workspaceId,
       boardId: node.boardId,
       parentId: node.parentId || null,
-      title: '新任務',
-      status: 'todo',
-      nodeType: node.parentId ? 'task' : node.nodeType,
+      nodeType: node.parentId ? 'task' : (node.nodeType || 'task'),
       order,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
+    });
 
     addNode(newNode);
     prepareNewTaskNaming(newNode.id);
     closeContextMenu({ preserveTaskSelection: true });
   };
 
-  const handleMoveUp = () => {
+  const handleMoveUp = async () => {
     if (!canMoveTask) return;
     if (!contextMenuState) return;
     const state = useWbsStore.getState();
     const node = state.nodes[contextMenuState.nodeId];
+
+    if (currentTrackingReference) {
+      const parentPlacementId = currentTrackingReference.parentPlacementId;
+      if (!parentPlacementId) {
+        toast.warning('已經是最上層任務，無法再往上移動。');
+        closeContextMenu();
+        return;
+      }
+      const parentReference = parentPlacementId.startsWith(PRIMARY_PLACEMENT_PREFIX)
+        ? null
+        : state.trackingReferences.find(reference => reference.id === parentPlacementId && !reference.removedAt);
+      const parentTask = parentPlacementId.startsWith(PRIMARY_PLACEMENT_PREFIX)
+        ? state.nodes[parentPlacementId.slice(PRIMARY_PLACEMENT_PREFIX.length)]
+        : null;
+      const targetParentPlacementId = parentReference?.parentPlacementId
+        ?? (parentTask?.parentId ? primaryPlacementId(parentTask.parentId) : null);
+      try {
+        await moveTrackingReference({
+          referenceId: currentTrackingReference.id,
+          targetBoardId: currentTrackingReference.boardId,
+          targetParentPlacementId,
+          anchorPlacementId: parentPlacementId,
+          position: 'after',
+        });
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : '移動追蹤副本失敗，原位置已保留。');
+      } finally {
+        closeContextMenu({ preserveTaskSelection: true });
+      }
+      return;
+    }
 
     if (!node || !node.parentId) {
       toast.warning('已經是最上層任務，無法再往上移動。');
@@ -340,12 +595,56 @@ export const GlobalContextMenu: React.FC = () => {
     closeContextMenu();
   };
 
-  const handleMoveDown = () => {
+  const handleMoveDown = async () => {
     if (!canMoveTask) return;
     if (!contextMenuState) return;
     const state = useWbsStore.getState();
     const node = state.nodes[contextMenuState.nodeId];
     if (!node) return;
+
+    if (currentTrackingReference) {
+      const parentPlacementId = currentTrackingReference.parentPlacementId;
+      const primarySiblings = parentPlacementId === null
+        ? Object.values(state.nodes).filter(task => task.boardId === currentTrackingReference.boardId && !task.parentId && !task.isArchived)
+        : parentPlacementId.startsWith(PRIMARY_PLACEMENT_PREFIX)
+          ? Object.values(state.nodes).filter(task => task.boardId === currentTrackingReference.boardId
+            && task.parentId === parentPlacementId.slice(PRIMARY_PLACEMENT_PREFIX.length)
+            && !task.isArchived)
+          : [];
+      const placementSiblings = [
+        ...primarySiblings.map(task => ({ placementId: primaryPlacementId(task.id), order: task.order, task })),
+        ...state.trackingReferences
+          .filter(reference => !reference.removedAt
+            && reference.boardId === currentTrackingReference.boardId
+            && reference.parentPlacementId === parentPlacementId)
+          .map(reference => ({ placementId: reference.id, order: reference.order, task: state.nodes[reference.taskId] })),
+      ].sort((left, right) => left.order - right.order || left.placementId.localeCompare(right.placementId));
+      const currentIndex = placementSiblings.findIndex(sibling => sibling.placementId === currentTrackingReference.id);
+      if (currentIndex <= 0) {
+        toast.warning('沒有前一個相鄰的任務，無法往下移動成為其下層任務。');
+        closeContextMenu();
+        return;
+      }
+      const previousSibling = placementSiblings[currentIndex - 1];
+      if (previousSibling.task?.status === 'completed') {
+        toast.warning('無法移動到已完成的任務之下。');
+        closeContextMenu();
+        return;
+      }
+      try {
+        await moveTrackingReference({
+          referenceId: currentTrackingReference.id,
+          targetBoardId: currentTrackingReference.boardId,
+          targetParentPlacementId: previousSibling.placementId,
+          position: 'append',
+        });
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : '移動追蹤副本失敗，原位置已保留。');
+      } finally {
+        closeContextMenu({ preserveTaskSelection: true });
+      }
+      return;
+    }
 
     const siblings = (state.parentNodesIndex[node.parentId || 'root'] || [])
       .map(id => state.nodes[id])
@@ -404,14 +703,89 @@ export const GlobalContextMenu: React.FC = () => {
     }
   };
 
-  const handleDelete = () => {
+  const handleArchive = () => {
     if (!canDeleteTask) return;
     if (!contextMenuState) return;
 
-    if (window.confirm(`確定要刪除「${contextMenuState.title}」嗎？`)) {
-      removeNode(contextMenuState.nodeId);
+    if (guardTaskAction('task.archive', { canDeleteTask }).allowed) {
+      archiveNode(contextMenuState.nodeId);
     }
     closeContextMenu();
+  };
+
+  const handleCreateTrackingReference = async () => {
+    if (!canManageTaskReference || currentTrackingReference || !trackingReferenceCapability.supported || !contextMenuState || contextMenuState.kind !== 'task') return;
+    try {
+      const reference = await createTrackingReference(contextMenuState.nodeId);
+      if (reference) toast.success('已建立追蹤副本；請拖曳虛線副本到要追蹤的位置。');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '建立追蹤副本失敗。');
+    } finally {
+      closeContextMenu({ preserveTaskSelection: true });
+    }
+  };
+
+  const handleRemoveTrackingReference = async () => {
+    if (!canManageTaskReference || !currentTrackingReference || !trackingReferenceCapability.supported) return;
+    const subtreeCount = getReferenceSubtree(useWbsStore.getState().trackingReferences, currentTrackingReference.id).length;
+    if (subtreeCount > 1 && !window.confirm(`將移除此處的 ${subtreeCount} 個追蹤位置，正本任務不會被刪除。確定繼續？`)) return;
+    try {
+      await removeTrackingReference(currentTrackingReference.id);
+      toast.success(subtreeCount > 1 ? `已移除此處的 ${subtreeCount} 個追蹤位置。` : '已移除此處追蹤。');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '移除追蹤副本失敗，原位置已保留。');
+    } finally {
+      closeContextMenu({ preserveTaskSelection: true });
+    }
+  };
+
+  const handleTaskAction = (actionId) => {
+    switch (actionId) {
+      case 'task.open-details':
+        if (contextMenuState?.kind !== 'task') return;
+        if (detailsNodeId && contextMenuState.surfaceId === 'task-details.subtask-row') {
+          requestTaskDetailsNavigation({
+            taskId: contextMenuState.nodeId,
+            trackingReferenceId: contextMenuState.trackingReferenceId,
+            returnFocusPlacementId: contextMenuState.taskPlacementContext?.placementId,
+          });
+          return closeContextMenu({ preserveTaskSelection: true });
+        }
+        rememberTaskDetailsReturnFocus(contextMenuState.taskPlacementContext?.placementId
+          ? Array.from(document.querySelectorAll<HTMLElement>('[data-task-placement-id]'))
+            .find(element => element.getAttribute('data-task-placement-id') === contextMenuState.taskPlacementContext?.placementId) || null
+          : null);
+        selectAndOpenTaskDetails(contextMenuState.nodeId, contextMenuState.trackingReferenceId);
+        return closeContextMenu({ preserveTaskSelection: true });
+      case 'task.toggle-complete':
+        if (contextMenuState?.kind !== 'task' || !currentNode || !canEditTask) return;
+        updateNode(currentNode.id, {
+          status: currentNode.status === 'completed' ? 'todo' : 'completed',
+          updatedAt: Date.now(),
+        });
+        return closeContextMenu({ preserveTaskSelection: true });
+      case 'task.create-sibling': return handleAddSibling();
+      case 'task.create-child': return handleAddChild();
+      case 'task.create-relationship': {
+        if (contextMenuState?.kind !== 'task' || !canEditTask) return;
+        requestMindMapRelationshipStart(contextMenuState.nodeId);
+        return closeContextMenu({ preserveTaskSelection: true });
+      }
+      case 'task.duplicate': return handleDuplicate();
+      case 'task.create-tracking-reference': return handleCreateTrackingReference();
+      case 'task.remove-tracking-reference': return handleRemoveTrackingReference();
+      case 'task.edit-meeting-reservation':
+        if (!canEditMeetingReservation || !reservationContextKey) return;
+        setReservationEditorKey(reservationContextKey);
+        setReservationError(null);
+        return;
+      case 'task.dependency-start': return enterDependencyMode('start');
+      case 'task.dependency-end': return enterDependencyMode('end');
+      case 'task.promote': return handleMoveUp();
+      case 'task.demote': return handleMoveDown();
+      case 'task.archive': return handleArchive();
+      default: return undefined;
+    }
   };
 
   const handleRenameWorkspace = () => {
@@ -497,9 +871,11 @@ export const GlobalContextMenu: React.FC = () => {
     const { workspaceId, boardId, title } = contextMenuState;
     const confirmed = await useDialogStore.getState().showConfirm(`確定要刪除看板「${title}」嗎？`);
     if (confirmed) {
-      removeBoard(workspaceId, boardId);
-      if (activeBoardId === boardId) {
-        showHome();
+      try {
+        await removeBoard(workspaceId, boardId);
+        if (activeBoardId === boardId) showHome();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : '刪除看板失敗，請重新整理後再試。');
       }
     }
     closeContextMenu();
@@ -510,7 +886,7 @@ export const GlobalContextMenu: React.FC = () => {
       {contextMenuState?.isOpen && (
         <>
           <div
-            className="fixed inset-0 z-[9998]"
+            className="fixed inset-0 z-[10028]"
             onPointerDown={closeFromOutsideEvent}
             onContextMenu={closeFromOutsideEvent}
           />
@@ -519,14 +895,20 @@ export const GlobalContextMenu: React.FC = () => {
             onClick={(event) => event.stopPropagation()}
             data-global-context-menu="true"
             data-global-context-menu-kind={menuKind}
-            className="fixed z-[9999] flex w-[220px] flex-col overflow-y-auto overscroll-contain rounded-lg border border-gray-200 bg-white py-1 text-sm shadow-xl dark:border-gray-700 dark:bg-gray-800"
+            className="fixed z-[10029] flex w-[220px] flex-col overflow-y-auto overscroll-contain rounded-lg border border-gray-200 bg-white py-1 text-sm shadow-xl dark:border-gray-700 dark:bg-gray-800"
             style={{ top: menuPosition.top, left: menuPosition.left, maxHeight: menuPosition.maxHeight }}
           >
-            <div className="mb-1 border-b border-gray-100 px-3 py-1.5 dark:border-gray-700/50">
-              <p className="truncate text-xs font-semibold text-gray-500" title={contextMenuState.title}>
-                {contextMenuState.title}
-              </p>
-            </div>
+            {menuKind !== 'task' ? (
+              <div className="mb-1 border-b border-gray-100 px-3 py-2 dark:border-gray-700/50">
+                <p
+                  className="truncate text-sm font-bold text-gray-800 dark:text-gray-100"
+                  title={contextMenuState.title}
+                  data-context-menu-current-task-title="true"
+                >
+                  {contextMenuState.title}
+                </p>
+              </div>
+            ) : null}
 
             {menuKind === 'sidebar' ? (
               <button
@@ -616,120 +998,33 @@ export const GlobalContextMenu: React.FC = () => {
                 </button>
               </>
             ) : (
-              <>
-            <button
-              onClick={handleAddSibling}
-              disabled={!canCreateTask}
-              className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
-            >
-              <Plus size={14} className="flex-shrink-0 text-sky-500" />
-              <span>新增同階任務</span>
-            </button>
-
-            <button
-              onClick={handleAddChild}
-              disabled={!canCreateTask}
-              className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
-            >
-              <Plus size={14} className="flex-shrink-0 text-blue-500" />
-              <span>新增下層任務</span>
-            </button>
-
-            <button
-              onClick={() => void handleDuplicate()}
-              disabled={!canCreateTask}
-              className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
-            >
-              <Copy size={14} className="flex-shrink-0 text-slate-500" />
-              <span>複製任務</span>
-            </button>
-
-            <div>
-              <button
-                type="button"
-                onClick={() => setIsAssigneeMenuOpen(current => !current)}
-                disabled={!canAssignTask}
-                className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-blue-50 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-700"
-              >
-                <UserRound size={14} className="flex-shrink-0 text-blue-500" />
-                <span className="min-w-0 flex-1">
-                  <span className="block">主責／協作</span>
-                  <span className="block truncate text-[11px] text-gray-400">{currentAssigneeLabel}</span>
-                </span>
-                <ChevronRight size={14} className={`flex-shrink-0 text-gray-400 transition-transform ${isAssigneeMenuOpen ? 'rotate-90' : ''}`} />
-              </button>
-
-              {isAssigneeMenuOpen && (
-                <div className="border-y border-gray-100 bg-gray-50/80 py-1 dark:border-gray-700 dark:bg-gray-900/30">
-                  {currentNode ? (
-                    <TaskAssignmentPicker
-                      node={currentNode}
-                      options={assigneeOptions}
-                      membersLoading={membersLoading}
-                      disabled={!canAssignTask}
-                      inline
-                      onChange={(primaryIds, collaboratorIds) => updateNode(currentNode.id, {
-                        assigneeIds: primaryIds,
-                        collaboratorIds,
-                        updatedAt: Date.now(),
-                      })}
-                    />
-                  ) : null}
-                </div>
-              )}
-            </div>
-
-            {isDependencySupportedView && (
-              <>
-                <div className="my-1 border-t border-gray-100 dark:border-gray-700" />
-                <button
-                  onClick={() => enterDependencyMode('start')}
-                  disabled={!canCreateDependency}
-                  className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-amber-50 dark:text-gray-200 dark:hover:bg-gray-700"
-                >
-                  <GitBranch size={14} className="flex-shrink-0 text-amber-500" />
-                  <span>設定依賴關係（開始日）</span>
-                </button>
-                <button
-                  onClick={() => enterDependencyMode('end')}
-                  disabled={!canCreateDependency}
-                  className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-purple-50 dark:text-gray-200 dark:hover:bg-gray-700"
-                >
-                  <GitBranch size={14} className="flex-shrink-0 text-purple-500" />
-                  <span>設定依賴關係（結束日）</span>
-                </button>
-              </>
-            )}
-
-            <button
-              onClick={handleMoveUp}
-              disabled={!canMoveTask}
-              className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
-            >
-              <CornerLeftUp size={14} className="flex-shrink-0 text-emerald-500" />
-              <span>往上一階</span>
-            </button>
-
-            <button
-              onClick={handleMoveDown}
-              disabled={!canMoveTask}
-              className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
-            >
-              <CornerRightDown size={14} className="flex-shrink-0 text-emerald-500" />
-              <span>往下一階</span>
-            </button>
-
-            <div className="my-1 border-t border-gray-100 dark:border-gray-700" />
-
-            <button
-              onClick={handleDelete}
-              disabled={!canDeleteTask}
-              className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
-            >
-              <Trash2 size={14} className="flex-shrink-0 text-red-500" />
-              <span>刪除任務</span>
-            </button>
-              </>
+              <TaskActionMenu
+                actionIds={resolvedTaskMenuActionIds}
+                enabled={taskActionEnabled}
+                onAction={handleTaskAction}
+                assignmentOpen={isAssigneeMenuOpen}
+                assignmentSummary={currentAssigneeLabel}
+                onToggleAssignment={() => setIsAssigneeMenuOpen(current => !current)}
+                assignmentContent={currentNode ? (
+                  <TaskAssignmentPicker
+                    node={currentNode}
+                    options={assigneeOptions}
+                    membersLoading={membersLoading}
+                    disabled={!canAssignTask}
+                    inline
+                    onChange={(primaryIds, collaboratorIds) => updateNode(currentNode.id, {
+                      assigneeIds: primaryIds,
+                      collaboratorIds,
+                      updatedAt: Date.now(),
+                    })}
+                  />
+                ) : null}
+                actionLabelOverrides={{
+                  'task.toggle-complete': currentNode?.status === 'completed' ? '取消完成' : '狀態改完成',
+                }}
+                inlineActionId={isReservationEditorOpen ? 'task.edit-meeting-reservation' : null}
+                inlineActionContent={meetingReservationEditor}
+              />
             )}
           </div>
         </>
@@ -738,9 +1033,65 @@ export const GlobalContextMenu: React.FC = () => {
       {detailsNodeId && (
         <TaskDetailsModal
           nodeId={detailsNodeId}
+          trackingReferenceId={detailsTrackingReferenceId || undefined}
+          canGoBack={detailsNavigation.canGoBack}
+          onBack={() => {
+            const returnFocusPlacementId = detailsNavigation.current?.returnFocusPlacementId;
+            const previous = detailsNavigation.pop();
+            if (previous) {
+              setSelectedTaskId(previous.taskId);
+              if (returnFocusPlacementId) {
+                window.requestAnimationFrame(() => {
+                  const focusTarget = Array.from(document.querySelectorAll<HTMLElement>('[data-task-placement-id]'))
+                    .find(element => element.getAttribute('data-task-placement-id') === returnFocusPlacementId);
+                  focusTarget?.focus();
+                });
+              }
+            }
+          }}
+          onNavigateToTask={(taskId, targetTrackingReferenceId, placementId) => {
+            const state = useWbsStore.getState();
+            const targetNode = state.nodes[taskId];
+            const targetReference = targetTrackingReferenceId
+              ? state.trackingReferences.find(reference => reference.id === targetTrackingReferenceId && !reference.removedAt)
+              : null;
+            if (!targetNode || targetNode.isArchived || (targetTrackingReferenceId && !targetReference)) {
+              toast.warning('此子任務已不存在或已封存。');
+              return;
+            }
+            detailsNavigation.push({
+              taskId,
+              trackingReferenceId: targetReference?.id,
+              returnFocusPlacementId: placementId,
+            });
+            setSelectedTaskId(taskId);
+          }}
+          onCreateChild={(parentId) => {
+            const state = useWbsStore.getState();
+            const parentNode = state.nodes[parentId];
+            if (!parentNode) return;
+            reopenCompletedTaskForInsert(parentNode);
+            const childrenIds = state.parentNodesIndex[parentId] || [];
+            const newNode = createBlankTaskNode({
+              id: `node_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
+              workspaceId: parentNode.workspaceId,
+              boardId: parentNode.boardId,
+              parentId,
+              nodeType: 'task',
+              order: childrenIds.length,
+            });
+            addNode(newNode);
+            useBoardStore.getState().setPendingTitleEditNodeId(newNode.id);
+            detailsNavigation.push({
+              taskId: newNode.id,
+              returnFocusPlacementId: primaryPlacementId(parentId),
+            });
+            setSelectedTaskId(newNode.id);
+          }}
           onClose={() => {
-            setDetailsNodeId(null);
+            detailsNavigation.clear();
             clearTaskSelection();
+            window.requestAnimationFrame(() => restoreTaskDetailsReturnFocus());
           }}
         />
       )}

@@ -5,8 +5,12 @@ const files = {
   css: 'src/index.css',
   compactTokens: 'src/components/ui/compactTokens.ts',
   mainLayout: 'src/components/MainLayout.tsx',
+  meetingRecordAvailability: 'src/utils/meetingRecordAvailability.ts',
+  appMoreMenu: 'src/components/AppMoreMenu.tsx',
   kanbanColumn: 'src/components/Wbs/KanbanColumn.tsx',
+  kanbanColumnPresentation: 'src/components/Wbs/KanbanColumnPresentation.tsx',
   taskDetailsModal: 'src/components/TaskDetailsModal.tsx',
+  taskDetailNoteEditor: 'src/components/TaskNotes/TaskDetailNoteEditor.tsx',
   tagPicker: 'src/components/Tags/TagPicker.tsx',
   browserVerifier: 'scripts/verify-dev-031-mobile-density-browser.pw.js',
   packageJson: 'package.json',
@@ -34,16 +38,17 @@ assert(
 
 assert(
   'main layout exposes density hooks and mobile board-only routing',
-  source.mainLayout.includes('data-mobile-density="compact"') &&
+    source.mainLayout.includes('data-mobile-density="compact"') &&
     source.mainLayout.includes('app-main-nav') &&
     source.mainLayout.includes('app-board-title') &&
-    source.mainLayout.includes('useCoarsePointer()') &&
-    source.mainLayout.includes("window.matchMedia('(max-width: 640px)'") &&
+    source.meetingRecordAvailability.includes("window.matchMedia('(pointer: coarse)'") &&
+    source.meetingRecordAvailability.includes('MOBILE_MEETING_MAX_WIDTH = 640') &&
     source.mainLayout.includes('isMobileBoardOnly') &&
-    source.mainLayout.includes("new Set<ViewMode>(['list', 'mindmap', 'gantt', 'calendar'])") &&
-    source.mainLayout.includes("setView('board')") &&
+    source.mainLayout.includes("new Set<ViewMode>(['list', 'mindmap', 'goal', 'gantt', 'calendar'])") &&
+    source.mainLayout.includes("if (isMobileBoardOnly && nextView !== 'board') return;") &&
     source.mainLayout.includes('{!isMobileBoardOnly ? (') &&
-    source.mainLayout.includes('options={modeSwitcherOptions}'),
+    source.mainLayout.includes('visibleModeSwitcherOptions') &&
+    source.mainLayout.includes('options={visibleModeSwitcherOptions}'),
 );
 
 assert(
@@ -54,12 +59,16 @@ assert(
     source.mainLayout.includes('data-mobile-task-workbench-nav-entry="true"') &&
     source.mainLayout.includes('handleToggleMobileTaskWorkbench') &&
     source.mainLayout.includes('toggleTaskWorkbenchPanel') &&
-    source.mainLayout.includes('ClipboardList') &&
-    source.mainLayout.includes('whitespace-nowrap rounded') &&
+    source.mainLayout.includes('data-task-workbench-nav-label="all"') &&
+    source.mainLayout.includes('所有任務') &&
+    !source.mainLayout.includes('ClipboardList') &&
+    source.mainLayout.includes('data-board-switcher="true"') &&
+    source.mainLayout.includes('max-w-[48vw]') &&
+    source.mainLayout.includes('truncate text-xs font-bold') &&
     !source.mainLayout.includes('cursor-text truncate') &&
-    source.mainLayout.includes('data-board-share-open') &&
-    source.mainLayout.includes('btn-outline hidden h-7') &&
-    source.mainLayout.includes('sm:flex sm:h-8'),
+    !source.mainLayout.includes('data-board-share-open') &&
+    source.appMoreMenu.includes('data-board-share-open') &&
+    source.appMoreMenu.includes('data-app-more-share="true"'),
 );
 
 assert(
@@ -80,9 +89,9 @@ assert(
   'board surface receives mobile density treatment',
   source.css.includes('[data-mobile-pan-surface="board"]') &&
     source.kanbanColumn.includes('data-kanban-column="true"') &&
-    source.kanbanColumn.includes('data-kanban-column-header="true"') &&
+    source.kanbanColumn.includes("'data-kanban-column-header': 'true'") &&
     source.css.includes('.kanban-task-card-body') &&
-    source.kanbanColumn.includes('data-mobile-pan-rail="kanban-column"'),
+    source.kanbanColumnPresentation.includes('data-mobile-pan-rail="kanban-column"'),
 );
 
 assert(
@@ -109,10 +118,14 @@ assert(
   'task details add-note action shares the note header row',
   source.taskDetailsModal.includes('data-task-detail-notes-section="true"') &&
     source.taskDetailsModal.includes('data-task-detail-notes-grid="true"') &&
-    source.taskDetailsModal.includes('data-task-detail-note-header="true"') &&
-    source.taskDetailsModal.includes('data-task-detail-note-add="true"') &&
-    source.taskDetailsModal.includes('aria-label="新增備註欄"') &&
-    source.taskDetailsModal.includes('noteIndex === 0') &&
+    source.taskDetailNoteEditor.includes('data-task-detail-note-header="true"') &&
+    source.taskDetailNoteEditor.includes('data-task-detail-note-add="true"') &&
+    source.taskDetailNoteEditor.includes('aria-label="新增備註欄"') &&
+    source.taskDetailNoteEditor.includes('onClick={onAdd}') &&
+    source.taskDetailNoteEditor.includes('{!isDescription ? (') &&
+    source.taskDetailNoteEditor.includes('說明任務的目的、要解決的問題、要達成的目標。') &&
+    source.taskDetailNoteEditor.includes('輸入備註內容') &&
+    !source.taskDetailNoteEditor.includes('noteIndex === 0') &&
     !source.taskDetailsModal.includes('className="mb-3 flex justify-end"'),
 );
 

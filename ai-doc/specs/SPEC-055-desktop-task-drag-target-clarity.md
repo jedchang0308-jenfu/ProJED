@@ -131,7 +131,7 @@ Slice A 通過 QA-055-A gate 前不得進 Slice B。Slice B 不得反向改動 S
 - indicator 使用 `KanbanInsertionMarker`，但 wrapper 必須具備 `data-desktop-drop-indicator="true"`。
 - indicator wrapper 必須以 fixed overlay 呈現，並標記 `data-desktop-drop-indicator-layer="fixed-overlay"`；不得在 card 或 checklist normal flow 內插入可見 marker。
 - indicator rect 預設以 target primary/title 左緣對齊；寬度不得小於 24px，且不得超出目前 target 所屬 column 的可視寬度。
-- `append` 位置顯示在 target 可接收子任務區域底部；`before` / `after` 分別顯示在 target primary geometry top / bottom。
+- `append` 位置顯示在 target 可接收子任務區域底部。`kanban-card`／`checklist-row` 的 `before`／`after` 顯示位置須使用完整 task scope 的 top／bottom，因排序單位包含其可見子樹；primary geometry 仍只負責 pointer 命中與 innermost ownership。沒有可見子樹時，完整 scope 邊界自然等同單列邊界。
 - 若下一次 preview 與上一個 preview 的 source / target / dndId / surfaceKind / displayPosition / parent / order / nodeType 完全一致，且 rect 差異在微小 retain 門檻內，可沿用前一個 rect 以避免同格視覺漂移。
 
 3. Source placeholder rule
@@ -251,8 +251,22 @@ RD 必須停止並回報，不得硬做完：
 
 ## 10. 變更紀錄
 
-- 2026-07-17：依使用者正式部署指令，從 clean release worktree branch `codex/dev055-production-release-20260717-234436` artifact commit `e07ba4b` 發布 Firebase Hosting production。Level 2 local artifact smoke、Level 3 Firebase preview `level3-smoke`、Level 4 production `https://projed-cc78d.web.app` 均通過；正式站載入 `assets/index-DpRjvQu-.js` / `assets/index-B8eLAVHK.css`，線上 hash 與本機 production artifact 一致。
+- 2026-07-17：依使用者正式部署指令，從 clean release worktree branch `歷史 DEV-055 release` artifact commit `歷史 DEV-055 artifact` 發布 Firebase Hosting production。Level 2 local artifact smoke、Level 3 Firebase preview `level3-smoke`、Level 4 production `https://projed-cc78d.web.app` 均通過；正式站載入 `assets/index-DpRjvQu-.js` / `assets/index-B8eLAVHK.css`，線上 hash 與本機 production artifact 一致。
 - 2026-07-17：使用者回報 RD Rework 1 後 T01-T08 測試通過，確認同格不飄、L3+ 不被定位線推開、桌機手感沒有被重做；DEV-055 completion gate 通過。
 - 2026-07-17：RD Rework 1 完成。修正使用者 T01-T08 回報的兩項失敗：同一格定位線漂移、L3+ 任務被定位線推開。實作改為 overlay-only checklist append dropzone、桌機 task drag sortable displacement freeze、fixed overlay indicator rect micro-retain。DEV-055 static 27/27、browser B01-B16 16/16 通過；B15 證明 L3+ row top/bottom delta = 0、parentTransform = `none`、同格 indicator rect delta = 0。DEV-046/053/054 static/browser、TypeScript 與 build 亦通過。
 - 2026-07-17：第一次 Slice A / B 自動化通過（已被後續 T01-T08 Attempt 1 失敗與 RD Rework 1 supersede）：DEV-055 static 25/25、browser 15/15、DEV-046/053/054 指定回歸、TypeScript 與 build 通過。當時 T01-T08 共 38 次使用者真實桌機操作與新版手感主觀確認仍為完成門檻。
 - 2026-07-17：依使用者 `#引導模式` 要求，將 DEV-055 補為 RD Implementation Ready，建立桌機落點清晰化與跨階層定位升級契約。
+
+## 11. DEV-068 使用者明示位置修訂（2026-08-15）
+
+- 使用者已依本文件Stop Condition／Re-entry Trigger明示要求更改來源overlay位置，原因是舊位置遮住新的child target preview。
+- `Intentional replacement`只限來源任務卡的幾何anchor：改為raw pointer右上方16px、右緣左上fallback、8px viewport clamp，並與dnd-kit collision transform解耦。
+- `DragOverlay`視覺內容、`dropAnimation={null}`、8px threshold、single live target、fixed insertion indicator、before／after／append commit equivalence及L3+ no-layout-shift均保留並完成回歸。
+- DEV-068完整藍框在candidate階段與single insertion indicator共存，armed後才清線並接管release；Workbench `source="task-workbench"`不進child intent，保留column append歸位。
+
+## 12. 展開任務排序線邊界修訂（2026-08-25）
+
+- 使用者指出 standard `after` marker 不得出現在 L2 標題正下方、既有 L3+ 子樹正上方；該位置會把「移動整個 L2 任務」錯畫成「插入 L2 內部」。
+- Spec Impact：對本文件 4.2 的 primary hit geometry 為 `No conflict`；對 5.2 舊有「before／after 使用 primary top／bottom」為 `Intentional replacement`，只替換顯示線的垂直邊界。
+- 桌機與手機共用 `taskOrderingGeometry`：collision／hit testing、locked target rect 與 exact innermost ownership 繼續使用 primary geometry；standard reorder marker 的 before／after 改用完整 task scope top／bottom。
+- 最終 parent／order、commit revalidation、dwell、append、來源 overlay、水平 title anchor 與資料契約均不變。本輪僅本機驗證，未部署或 release。

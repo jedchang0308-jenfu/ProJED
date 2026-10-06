@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../src/components/TaskDetailsModal.tsx', import.meta.url), 'utf8');
+const hierarchySource = readFileSync(new URL('../src/utils/taskHierarchy.ts', import.meta.url), 'utf8');
 
 const checks = [
   {
@@ -9,19 +10,19 @@ const checks = [
   },
   {
     name: 'ancestor path is built from parentId',
-    pass: source.includes('const buildAncestorPath =') &&
+    pass: source.includes("import { buildAncestorPath } from '../utils/taskHierarchy';") &&
       source.includes('const ancestorPath = buildAncestorPath(node, nodes);') &&
-      source.includes('let currentParentId: string | null = node.parentId;'),
+      hierarchySource.includes('let currentParentId: string | null = node.parentId;'),
   },
   {
     name: 'ancestor walk guards against circular parent links',
-    pass: source.includes('const seenAncestorIds = new Set<string>();') &&
-      source.includes('seenAncestorIds.has(currentParentId)') &&
-      source.includes('seenAncestorIds.add(currentParentId)'),
+    pass: hierarchySource.includes('const seenAncestorIds = new Set<string>();') &&
+      hierarchySource.includes('seenAncestorIds.has(currentParentId)') &&
+      hierarchySource.includes('seenAncestorIds.add(currentParentId)'),
   },
   {
     name: 'ancestor path excludes archived or missing parents',
-    pass: source.includes('if (!parent || parent.isArchived) break;'),
+    pass: hierarchySource.includes('if (!parent || parent.isArchived) break;'),
   },
   {
     name: 'parent path has stable DOM hooks for browser QC',

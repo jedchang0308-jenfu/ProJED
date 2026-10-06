@@ -1,0 +1,29 @@
+{
+  "id": "/",
+  "name": "ProJED 3.0",
+  "short_name": "ProJED",
+  "description": "專案管理與快速工作紀錄工具",
+  "lang": "zh-Hant",
+  "start_url": "/",
+  "scope": "/",
+  "display": "minimal-ui",
+  "background_color": "#f8fafc",
+  "theme_color": "#0f766e",
+  "icons": [
+    { "src": "/icons/projed-main-icon-brand-20260929-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/projed-main-icon-brand-20260929-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/projed-main-icon-brand-20260929-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "ProJED-快速建任務",
+      "short_name": "ProJED-快速建任務",
+      "description": "直接輸入一筆待辦",
+      "url": "/quick-task/",
+      "icons": [
+        { "src": "/icons/projed-quick-task-icon-brand-20260929-192.png", "sizes": "192x192", "type": "image/png" },
+        { "src": "/icons/projed-quick-task-icon-brand-20260929-512.png", "sizes": "512x512", "type": "image/png" }
+      ]
+    }
+  ]
+}

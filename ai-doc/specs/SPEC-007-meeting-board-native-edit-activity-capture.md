@@ -1,11 +1,22 @@
 # SPEC-007：會議中保留原生看板編輯與任務變更紀錄
 
-狀態：Implemented / Activity content contract partially superseded by DEV-011 / DEV-012
+狀態：Implemented baseline / DEV-109 correction implemented candidate / QA-QC pending
 Owner：PM
 建立日期：2026-06-06
-關聯：DEV-007、DEV-005、DEV-006、DEV-011、DEV-012
+關聯：DEV-007、DEV-005、DEV-006、DEV-011、DEV-012、DEV-109
 
 ---
+
+## DEV-109 Target Contract Amendment（2026-09-08）
+
+- Spec Impact：`Intentional targeted replacement / Implemented Candidate / QA-QC Pending / NOT RELEASED`。
+- `SPEC-109-meeting-live-task-change-capture.md` 是 live task change 的現行目標權威；本文件仍管理「會議模式保持原生看板操作」。
+- 被取代：只把 activity 留在 memory buffer、到 `saveDraft` 才逐筆 append，以及純位置／拖曳可成為會議內容。
+- 新契約：會議開啟後只接受 allowlist 中、已確認 task persistence 成功的語意變更，立即以同欄 net aggregate 投影到目前
+  meeting draft；離開後停止，重入建立新 segment。
+- DEV-109 aggregate 只存在目前分頁 runtime；唯一持久化 live evidence 是已投影的 `draft.content`，不另寫 `meetingActivities`。
+- `AI整理` 只重整目前 raw content 與既有 legacy activities，不另送 DEV-109 aggregate、不讀 provider history；歷史匯入仍是 DEV-020／094 的獨立明確操作。
+- DEV-109 已完成本機候選實作；在完整 QA/QC 與 release gate 通過前，不得宣告正式環境已具備即時投影、內容欄位捕捉或 save-level exactly-once。
 
 ## 1. 背景
 

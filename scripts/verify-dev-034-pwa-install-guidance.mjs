@@ -57,31 +57,40 @@ assert(
 );
 
 assert(
-  'auto install assistant is mounted globally after auth gate without retired quick capture shell',
-  source.app.includes("import { AppInstallAssistant } from './components/AppInstallAssistant'") &&
+  'auto install assistant is not mounted globally; retired quick capture shell stays absent',
+  !source.app.includes("import { AppInstallAssistant } from './components/AppInstallAssistant'") &&
+    !source.app.includes('<AppInstallAssistant') &&
     !source.app.includes('QuickCaptureShell') &&
-    source.app.includes('<AppInstallAssistant />') &&
-    source.app.indexOf('</AuthGate>') < source.app.indexOf('<AppInstallAssistant />') &&
     !existsSync(resolve('src/components/QuickCaptureShell.tsx')),
 );
 
 assert(
-  'settings page exposes quick-start entry and persistent guidance',
+  'settings page exposes the two App installation choices',
   source.settingsView.includes("id: 'app'") &&
-    source.settingsView.includes("label: '快速開啟'") &&
-    source.settingsView.includes('管理此裝置與目前帳號的快速開啟提示。') &&
+    source.settingsView.includes("label: '安裝APP'") &&
     source.settingsView.includes('<AppInstallAssistant mode="settings" />') &&
-    source.appInstallAssistant.includes('App 安裝與快速開啟') &&
-    source.appInstallAssistant.includes('data-pwa-install-settings'),
+    source.appInstallAssistant.includes('data-pwa-install-settings') &&
+    source.appInstallAssistant.includes('data-app-install-choice={app.id}') &&
+    source.appInstallAssistant.includes("name: 'ProJED 主程式'") &&
+    source.appInstallAssistant.includes("name: 'ProJED-快速建任務'"),
 );
 
 assert(
-  'auto prompt and settings prompt expose stable DOM contracts',
-  source.appInstallAssistant.includes('data-pwa-install-assistant') &&
+  'quick App choice leads to its independent installation page with same-account guidance',
+  source.appInstallAssistant.includes("data-quick-task-install-cta={app.id === 'quick' ? 'true' : undefined}") &&
+    source.appInstallAssistant.includes('data-quick-task-install-link="true"') &&
+    source.appInstallAssistant.includes('href={getQuickInstallUrl(window.location.origin)}') &&
+    source.appInstallAssistant.includes('開啟 ProJED-快速建任務安裝頁') &&
+    source.appInstallAssistant.includes('與主程式相同的 Google 帳號登入') &&
+    !/自動.{0,8}兩.{0,8}圖示|立即.{0,8}捷徑|iOS.{0,8}長按/u.test(source.appInstallAssistant),
+);
+
+assert(
+  'settings install choices remain available without an automatic prompt mount',
+  !source.app.includes('<AppInstallAssistant') &&
+    source.settingsView.includes('<AppInstallAssistant mode="settings" />') &&
     source.appInstallAssistant.includes('data-pwa-install-settings') &&
-    source.appInstallAssistant.includes('context.shouldAutoShow') &&
-    source.appInstallAssistant.includes('mode === \'settings\'') &&
-    source.appInstallAssistant.includes('useAuthStore'),
+    source.appInstallAssistant.includes('mode === \'settings\''),
 );
 
 assert(
@@ -93,7 +102,9 @@ assert(
     source.appInstallAssistant.includes('加入主畫面') &&
     source.appInstallAssistant.includes('稍後') &&
     source.appInstallAssistant.includes('不再提示') &&
-    source.appInstallAssistant.includes('重新顯示提示'),
+    source.appInstallAssistant.includes('data-main-install-action="true"') &&
+    source.appInstallAssistant.includes('安裝 ProJED 主程式') &&
+    source.appInstallAssistant.includes('開啟 ProJED-快速建任務安裝頁'),
 );
 
 assert(

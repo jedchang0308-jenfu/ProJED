@@ -122,7 +122,7 @@ getMeetingRecordActionState({
   - `發布` disabled 時可看見原因。
   - `結束會議` 改為 `離開會議模式` 或加 tooltip 說明不會發布。
 - 修改 `RecordSidebar`：
-  - 底部 `存草稿` / `發布` 使用同一套 action state。
+  - 內容編輯器下方 `存草稿` 使用既有 action state；`發布` 由會議 workflow 唯一入口提供。
   - 不得出現看板上可發布、側欄不可發布的矛盾。
 - 修改 `useRecordStore.saveDraft`：
   - 讓 `status === 'draft'` 的 meeting draft 可保存空內容。

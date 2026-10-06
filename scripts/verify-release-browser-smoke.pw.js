@@ -13,8 +13,8 @@ async (page) => {
 
   const targetUrl = page.url() && page.url() !== 'about:blank' ? page.url() : 'http://127.0.0.1:4174/';
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto(targetUrl, { waitUntil: 'networkidle' });
-  await page.waitForSelector('#root', { timeout: 15000 });
+  await page.goto(targetUrl, { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => Boolean(document.querySelector('#root')?.innerHTML.trim()), null, { timeout: 15000 });
   await page.waitForTimeout(2500);
 
   const result = await page.evaluate(async () => {
@@ -22,6 +22,14 @@ async (page) => {
     const scripts = Array.from(document.querySelectorAll('script[src]')).map((script) => script.getAttribute('src'));
     const styles = Array.from(document.querySelectorAll('link[rel="stylesheet"]')).map((link) => link.getAttribute('href'));
     const bodyText = document.body.innerText.slice(0, 1200);
+    const expectedReleaseId = new URL(window.location.href).searchParams.get('dev083ReleaseId');
+    let releaseMeta = null;
+    try {
+      const response = await fetch('/release-meta.json', { cache: 'no-store' });
+      if (response.ok) releaseMeta = await response.json();
+    } catch {
+      // Existing non-DEV-083 browser smoke targets may not expose release metadata.
+    }
     const serviceWorker = {
       supported: 'serviceWorker' in navigator,
       ready: false,
@@ -55,6 +63,9 @@ async (page) => {
       title: document.title,
       rootNonEmpty: Boolean(root && root.innerHTML.trim().length > 0),
       bodyText,
+      expectedReleaseId,
+      releaseMeta,
+      releaseIdentityMatch: !expectedReleaseId || Boolean(releaseMeta && releaseMeta.releaseId === expectedReleaseId),
       scripts,
       styles,
       serviceWorker,
@@ -68,15 +79,16 @@ async (page) => {
   const criticalFailed = failedRequests.filter((request) => (
     !/fonts\.gstatic|fonts\.googleapis|accounts\.google|apis\.google|favicon/i.test(request.url)
   ));
-  const hasMainBundle = result.scripts.some((src) => /\/assets\/index-[A-Za-z0-9_-]+\.js/.test(src || ''));
-  const hasMainStyle = result.styles.some((href) => /\/assets\/index-[A-Za-z0-9_-]+\.css/.test(href || ''));
+  const hasMainBundle = result.scripts.some((src) => /\/assets\/(?:index|main)-[A-Za-z0-9_-]+\.js/.test(src || ''));
+  const hasMainStyle = result.styles.some((href) => /\/assets\/(?:index|main)-[A-Za-z0-9_-]+\.css/.test(href || ''));
   const ok =
     result.rootNonEmpty &&
     hasMainBundle &&
     hasMainStyle &&
     criticalMessages.length === 0 &&
     pageErrors.length === 0 &&
-    criticalFailed.length === 0;
+    criticalFailed.length === 0 &&
+    result.releaseIdentityMatch;
 
   if (!ok) {
     throw new Error(JSON.stringify({ result, criticalMessages, pageErrors, criticalFailed }, null, 2));

@@ -50,7 +50,7 @@ async (page) => {
 
   try {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
     await page.evaluate(account => {
       localStorage.setItem('projed-local-test.selected-account', account.id);
       localStorage.setItem('projed-local-test.session', JSON.stringify({
@@ -108,13 +108,9 @@ async (page) => {
       return {
         unplacedLane: readBackground('[data-task-workbench-unclassified-section="true"]'),
         placedLane: readBackground('[data-task-workbench-placed-board-lane="true"]'),
-        unplacedAccent: readBackground('[data-task-workbench-header-accent="unplaced"]'),
-        placedAccent: readBackground('[data-task-workbench-header-accent="placed"]'),
       };
     });
     record('QA-064-003', statusBackground === tokenEvidence.primary['600'] &&
-      workbenchEvidence.unplacedAccent === tokenEvidence.primary['500'] &&
-      workbenchEvidence.placedAccent === tokenEvidence.primary['500'] &&
       workbenchEvidence.unplacedLane === workbenchEvidence.placedLane,
     { statusBackground, workbenchEvidence });
     await page.screenshot({ path: screenshots.board, fullPage: false });
@@ -124,7 +120,7 @@ async (page) => {
     const details = page.locator('[data-task-details-modal="true"]');
     await details.waitFor({ state: 'visible', timeout: 10000 });
     await page.screenshot({ path: screenshots.details, fullPage: false });
-    await details.locator('button[title="關閉"]').click();
+    await details.locator('button[aria-label="關閉任務詳情"]').click();
     await details.waitFor({ state: 'detached', timeout: 10000 });
 
     await switchMode('mindmap');

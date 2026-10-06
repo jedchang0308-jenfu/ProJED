@@ -13,8 +13,11 @@ const files = {
   boardView: 'src/components/BoardView.tsx',
   wbsNodeItem: 'src/components/Wbs/WbsNodeItem.tsx',
   kanbanColumn: 'src/components/Wbs/KanbanColumn.tsx',
+  kanbanColumnPresentation: 'src/components/Wbs/KanbanColumnPresentation.tsx',
   kanbanCard: 'src/components/Wbs/KanbanCard.tsx',
+  kanbanCardPresentation: 'src/components/Wbs/KanbanCardPresentation.tsx',
   kanbanChecklist: 'src/components/Wbs/KanbanChecklist.tsx',
+  taskChecklistTree: 'src/components/Wbs/TaskChecklistTree.tsx',
   taskDateBadge: 'src/components/Wbs/TaskDateBadge.tsx',
   kanbanTagSticker: 'src/components/Tags/KanbanTagSticker.tsx',
   tagChip: 'src/components/Tags/TagChip.tsx',
@@ -54,8 +57,11 @@ const taskDetailsModal = read(files.taskDetailsModal);
 const boardView = read(files.boardView);
 const wbsNodeItem = read(files.wbsNodeItem);
 const kanbanColumn = read(files.kanbanColumn);
+const kanbanColumnPresentation = read(files.kanbanColumnPresentation);
 const kanbanCard = read(files.kanbanCard);
+const kanbanCardPresentation = read(files.kanbanCardPresentation);
 const kanbanChecklist = read(files.kanbanChecklist);
+const taskChecklistTree = read(files.taskChecklistTree);
 const taskDateBadge = read(files.taskDateBadge);
 const kanbanTagSticker = read(files.kanbanTagSticker);
 const mindMapView = read(files.mindMapView);
@@ -64,7 +70,6 @@ const mindMapKeyboard = read(files.mindMapKeyboard);
 const ganttView = read(files.ganttView);
 const ganttTaskBar = read(files.ganttTaskBar);
 const sharedTaskSidebar = read(files.sharedTaskSidebar);
-const recordSidebar = read(files.recordSidebar);
 const tagPicker = read(files.tagPicker);
 const statusFilterBar = read(files.statusFilterBar);
 const ragSidebar = read(files.ragSidebar);
@@ -73,10 +78,13 @@ const manualClickReadiness = read(files.manualClickReadiness);
 const pkg = read(files.packageJson);
 const spec = read(files.spec);
 const qa = read(files.qa);
-const kanbanCardTitleStart = kanbanCard.indexOf('kanban-task-title-row');
-const kanbanCardTitleSection = kanbanCard.slice(
+const kanbanColumnContract = `${kanbanColumn}\n${kanbanColumnPresentation}`;
+const kanbanCardContract = `${kanbanCard}\n${kanbanCardPresentation}`;
+const kanbanChecklistContract = `${kanbanChecklist}\n${taskChecklistTree}`;
+const kanbanCardTitleStart = kanbanCardContract.indexOf('kanban-task-title-row');
+const kanbanCardTitleSection = kanbanCardContract.slice(
   kanbanCardTitleStart,
-  kanbanCard.indexOf('{isSelectingMode &&', kanbanCardTitleStart),
+  kanbanCardContract.indexOf('{meta}', kanbanCardTitleStart),
 );
 
 assert(
@@ -100,7 +108,8 @@ assert(
 assert(
   'global task details listener is permanent and task keyboard no longer starts outer rename',
   globalContextMenu.includes('document.addEventListener(OPEN_TASK_DETAILS_EVENT, handleOpenTaskDetails)') &&
-    globalContextMenu.includes('setDetailsNodeId(customEvent.detail.taskId)') &&
+    (globalContextMenu.includes('setDetailsNodeId(customEvent.detail.taskId)') ||
+      globalContextMenu.includes('detailsNavigation.openRoot({')) &&
     globalContextMenu.includes('clearTaskSelection();') &&
     globalContextMenu.includes('onClose={() => {') &&
     globalContextMenu.includes("!['list', 'board', 'gantt'].includes(currentView)") &&
@@ -134,8 +143,6 @@ assert(
     taskDetailsModal.includes('onClose()') &&
     globalContextMenu.includes("event.key !== 'Escape' || event.isComposing || isMoving") &&
     globalContextMenu.includes('BoardWorkspaceTransferDialog') &&
-    recordSidebar.includes('data-record-help-dialog') &&
-    recordSidebar.includes("event.key !== 'Escape'") &&
     tagPicker.includes('data-tag-picker-panel') &&
     tagPicker.includes('if (editingTagId)') &&
     tagPicker.includes('setIsOpen(false)') &&
@@ -160,53 +167,59 @@ assert(
 
 assert(
   'board hierarchy distinguishes framed elevated L2 cards from inset unlined L3+ rows without progress bars',
-  kanbanColumn.includes('selectAndOpenTaskDetails(nodeId)') &&
+  (kanbanColumn.includes('selectAndOpenTaskDetails(nodeId)') ||
+    kanbanColumn.includes("interactionBinding.dispatch('pointer.primary')")) &&
     kanbanColumn.includes('prepareNewTaskNaming(newNode.id)') &&
     kanbanColumn.includes('data-task-id={nodeId}') &&
-    kanbanCard.includes('selectAndOpenTaskDetails(nodeId)') &&
+    (kanbanCard.includes('selectAndOpenTaskDetails(nodeId)') ||
+      kanbanCard.includes("interactionBinding.dispatch('pointer.primary')")) &&
     kanbanCard.includes('kanban-checklist-section') &&
     kanbanCard.includes('<KanbanChecklist') &&
     kanbanCard.includes('KanbanTagSticker') &&
-    kanbanChecklist.includes('KanbanTagSticker') &&
-    kanbanCard.includes('surface="checklist"') &&
+    kanbanChecklistContract.includes('KanbanTagSticker') &&
+    kanbanCardContract.includes('surface="checklist"') &&
     !kanbanColumn.includes('kanban-task-progress') &&
     !kanbanCard.includes('kanban-task-progress') &&
-    kanbanColumn.includes('data-kanban-header-visual="tonal-borderless"') &&
-    kanbanColumn.includes('data-kanban-add-task-visual="borderless"') &&
+    (kanbanColumn.includes('data-kanban-header-visual="tonal-borderless"') ||
+      kanbanColumn.includes("'data-kanban-header-visual': 'tonal-borderless'")) &&
+    // The inline column "新增任務" affordance was intentionally removed by
+    // the compact Kanban contract (90cfcb4). Creation remains available from
+    // the canonical task menu / drag command paths; this verifier must not
+    // resurrect the retired visual marker as a required baseline.
+    !kanbanColumn.includes('data-kanban-add-task-visual="borderless"') &&
     boardView.includes('data-kanban-add-column-visual="borderless"') &&
     !boardView.includes('border-2 border-dashed border-slate-200') &&
-    kanbanColumn.includes('variant="ghost"') &&
-    !kanbanColumn.includes('flex flex-col gap-1 border-b') &&
     !kanbanColumn.includes('variant="dashed"') &&
+    !kanbanColumn.includes('flex flex-col gap-1 border-b') &&
     kanbanCard.includes('data-kanban-card-visual="framed-elevated"') &&
     kanbanCard.includes('data-task-hierarchy-level="L2"') &&
     kanbanCard.includes('data-kanban-checklist-visual="inset-rail"') &&
     kanbanCard.includes('kanban-checklist-section') &&
     kanbanCard.includes('mt-1 rounded-md border-l-2') &&
-    kanbanChecklist.includes('data-kanban-checklist-row-visual="flat-unlined"') &&
-    kanbanChecklist.includes('data-task-hierarchy-level="L3+"') &&
-    !kanbanChecklist.includes('border-b border-slate-200/80') &&
-    !kanbanChecklist.includes('kanban-checklist-root mt-px border-t') &&
+    kanbanChecklistContract.includes('data-kanban-checklist-row-visual="flat-unlined"') &&
+    kanbanChecklistContract.includes('data-task-hierarchy-level="L3+"') &&
+    !kanbanChecklistContract.includes('border-b border-slate-200/80') &&
+    !kanbanChecklistContract.includes('kanban-checklist-root mt-px border-t') &&
     taskDateBadge.includes('data-task-date-visual="borderless"') &&
     taskDateBadge.includes("bg-slate-100/80 text-slate-500") &&
     kanbanTagSticker.includes('data-kanban-tag-sticker="true"') &&
     kanbanTagSticker.includes('data-kanban-tag-popover="true"') &&
     !kanbanCard.includes('<TagChip') &&
-    !kanbanChecklist.includes('<TagChip') &&
+    !kanbanChecklistContract.includes('<TagChip') &&
     !kanbanCard.includes('CheckSquare') &&
     !kanbanCard.includes('childStats.completed') &&
-    kanbanChecklist.includes('selectAndOpenTaskDetails(child.id)') &&
-    kanbanChecklist.includes('data-task-id={child.id}') &&
-    kanbanChecklist.includes('surface="checklist"') &&
-    !kanbanChecklist.includes('{grandchildIds.length}') &&
+    kanbanChecklistContract.includes('selectAndOpenTaskDetails(child.id)') &&
+    kanbanChecklistContract.includes('data-task-id={child.id}') &&
+    kanbanChecklistContract.includes('surface="checklist"') &&
+    !kanbanChecklistContract.includes('{grandchildIds.length}') &&
     !kanbanColumn.includes('data-task-title-input="true"') &&
     !kanbanCard.includes('data-task-title-input="true"') &&
-    !kanbanChecklist.includes('data-task-title-input="true"') &&
+    !kanbanChecklistContract.includes('data-task-title-input="true"') &&
     !kanbanColumn.includes('title="重新命名任務"') &&
     !kanbanCard.includes('title="重新命名任務"') &&
-    !kanbanChecklist.includes('title="重新命名任務"') &&
+    !kanbanChecklistContract.includes('title="重新命名任務"') &&
     !kanbanCard.includes('title="點擊以編輯任務名稱"') &&
-    !kanbanChecklist.includes('title="點擊以編輯任務名稱"'),
+    !kanbanChecklistContract.includes('title="點擊以編輯任務名稱"'),
 );
 
 assert(
@@ -214,9 +227,9 @@ assert(
     kanbanCardTitleSection.includes('<TaskDateBadge') &&
     kanbanCardTitleSection.includes('surface="checklist"') &&
     kanbanCardTitleSection.includes('className="ml-0.5 self-center"') &&
-    kanbanColumn.includes('showStartDate={false}') &&
-    kanbanCard.includes('showStartDate={false}') &&
-    kanbanChecklist.includes('showStartDate={false}') &&
+    kanbanColumnContract.includes('showStartDate={false}') &&
+    kanbanCardContract.includes('showStartDate={false}') &&
+    kanbanChecklistContract.includes('showStartDate={false}') &&
     !kanbanColumn.includes('state.showStartDate') &&
     !kanbanCard.includes('s => s.showStartDate') &&
     !kanbanChecklist.includes('s => s.showStartDate') &&
@@ -233,23 +246,30 @@ assert(
     mainLayout.includes('clearTaskSelection();') &&
     indexCss.includes('[data-desktop-task-hover-preview="true"]:hover') &&
     indexCss.includes('@apply ring-2 ring-inset ring-primary-500 bg-primary-50/60;') &&
-    boardStore.includes('set({ currentView: view, selectedTaskId: null })') &&
+    boardStore.includes('set({ currentView: view,') &&
+    boardStore.includes('selectedTaskId: null') &&
     boardStore.includes('set({ activeBoardId: id, selectedTaskId: null })') &&
     boardStore.includes('set({ activeWorkspaceId: id, selectedTaskId: null })'),
 );
 
 assert(
-  'mind map click opens details, supports explicit clear selection, and no longer exposes node-title rename gestures',
-  mindMapView.includes('openTaskDetails(nodeId)') &&
+  'mind map keeps shared select/double-details actions while DEV-073 host owns the quick-title exception',
+  (mindMapView.includes('const taskId = getCanonicalTaskId(nodeId)') ||
+    mindMapView.includes('const taskId = projected?.canonicalTaskId || nodeId')) &&
+    mindMapView.includes('setSelectedTaskId(taskId)') &&
+    mindMapView.includes('openTaskDetails(taskId, trackingReferenceId)') &&
     mindMapView.includes('CLEAR_TASK_SELECTION_EVENT') &&
     mindMapView.includes('clearTaskSelection();') &&
     mindMapView.includes('initialSelectionBoardRef') &&
     mindMapView.includes('clearSelection();') &&
-    mindMapView.includes('setContextMenuState({') &&
-    mindMapNode.includes('onOpenDetails(node.id)') &&
+    (mindMapView.includes('setContextMenuState({') || mindMapView.includes('setLocalMenu({')) &&
+    mindMapNode.includes("interactionBinding.dispatch('pointer.primary')") &&
+    mindMapNode.includes("interactionBinding.dispatch('pointer.double')") &&
+    mindMapNode.includes('data-mindmap-quick-title-input="true"') &&
+    mindMapView.includes('handleNodePointerPrimary') &&
     mindMapNode.includes('onOpenContextMenu(node.id') &&
     !mindMapNode.includes('data-mindmap-title-input') &&
-    !mindMapNode.includes('onDoubleClick') &&
+    mindMapNode.includes('onDoubleClick') &&
     !mindMapKeyboard.includes("type: 'rename-selected'") &&
     !mindMapKeyboard.includes("event.key === 'F2' && state.hasSelectedNode") &&
     !mindMapNode.includes('onRelationshipStart') &&
@@ -260,7 +280,7 @@ assert(
 
 assert(
   'gantt task bar and sidebar open details without switching back to list',
-  ganttView.includes('selectAndOpenTaskDetails(item.id)') &&
+  ganttView.includes('selectAndOpenTaskDetails(item.id, item.trackingReferenceId)') &&
     !ganttView.includes("setView('list')") &&
     ganttTaskBar.includes('const latestDragState = dragStateRef.current') &&
     ganttTaskBar.includes('!latestDragState.hasDragged') &&
@@ -306,7 +326,9 @@ assert(
     browserVerifier.includes('selectedCount === 0') &&
     browserVerifier.includes('mindmap should clear selected node after closing details') &&
     browserVerifier.includes('blank click should clear mindmap selection') &&
-    browserVerifier.includes('single click should open TaskDetailsModal') &&
+    browserVerifier.includes('mindmap single click should select') &&
+    browserVerifier.includes('mindmap double click should open TaskDetailsModal') &&
+    browserVerifier.includes('data-task-action-id="task.open-details"') &&
     browserVerifier.includes('context menu should not expose task rename') &&
     browserVerifier.includes('data-task-details-title-input="true"'),
 );

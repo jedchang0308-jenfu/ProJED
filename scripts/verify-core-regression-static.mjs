@@ -60,8 +60,15 @@ const checks = [
   {
     name: 'toast is non-blocking above dialogs/menus',
     ok: includes('src/components/ui/ToastContainer.tsx', 'pointer-events-none') &&
-      includes('src/components/ui/ToastContainer.tsx', 'z-[9999]') &&
+      includes('src/components/ui/ToastContainer.tsx', 'z-[10001]') &&
       includes('src/components/ui/ToastContainer.tsx', 'pointer-events-auto'),
+  },
+  {
+    name: 'task details supports deliberate two-finger pinch-in close without changing single-finger scroll behavior',
+    ok: includes('src/components/TaskDetailsModal.tsx', 'data-task-details-pinch-close="true"') &&
+      includes('src/components/TaskDetailsModal.tsx', 'event.touches.length !== 2') &&
+      includes('src/components/TaskDetailsModal.tsx', 'PINCH_CLOSE_MIN_DISTANCE_DELTA') &&
+      includes('src/components/TaskDetailsModal.tsx', 'handleClose();'),
   },
   {
     name: 'task model keeps parent/order/kanban stage mutations auditable',
@@ -76,9 +83,11 @@ const checks = [
       includes('src/components/Wbs/WbsNodeItem.tsx', '下層任務的日期不得超出上層任務的範圍'),
   },
   {
-    name: 'shared task sidebar guards missing node level before style calculations',
+    name: 'shared task sidebar guards node level and consumes the shared hierarchy token',
     ok: includes('src/components/SharedTaskSidebar.tsx', 'Number.isFinite(item.level) ? item.level : 0') &&
-      includes('src/components/SharedTaskSidebar.tsx', 'paddingLeft: Math.max(10, 10 + (level * 14))'),
+      includes('src/components/SharedTaskSidebar.tsx', "'--task-hierarchy-depth': level") &&
+      includes('src/components/SharedTaskSidebar.tsx', "'--task-hierarchy-base': '10px'") &&
+      includes('src/components/SharedTaskSidebar.tsx', 'task-hierarchy-indented-row'),
   },
 ];
 

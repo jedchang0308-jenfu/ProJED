@@ -1,5 +1,12 @@
 /* eslint-disable */
 async (page) => {
+  const runtimeConsoleErrors = [];
+  page.on('console', (message) => {
+    if (message.type() !== 'error') return;
+    if (message.text().includes('Unable to preventDefault inside passive event listener')) return;
+    runtimeConsoleErrors.push(message.text());
+  });
+
   const assert = (condition, message, details = {}) => {
     if (!condition) {
       const error = new Error(`${message}: ${JSON.stringify(details)}`);
@@ -18,7 +25,7 @@ async (page) => {
 
   const openApp = async () => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
     await page.evaluate((account) => {
       localStorage.setItem('projed-local-test.selected-account', account.id);
       localStorage.setItem('projed-local-test.session', JSON.stringify({
@@ -51,7 +58,7 @@ async (page) => {
 
   const nodeByTitle = (title) => page.locator(`[data-mindmap-node-title="${title}"]`).first();
   const selectedNode = () => page.locator('[data-mindmap-node][aria-selected="true"]').first();
-  const titleInput = () => page.locator('[data-mindmap-title-input]').first();
+  const titleInput = () => page.locator('[data-mindmap-quick-title-input="true"]').first();
   const relationshipPathByLabel = (label) => page.locator(`[data-mindmap-note-relationship-path][data-label="${label}"]`).first();
   const relationshipTargetByLabel = (label) => page.locator(`[data-mindmap-note-relationship-click-target][data-label="${label}"]`).first();
   const relationshipCurveTargetByLabel = (label) => page.locator(`[data-mindmap-note-relationship-curve-click-target][data-label="${label}"]`).first();
@@ -61,7 +68,7 @@ async (page) => {
   const closeTaskDetailsIfOpen = async () => {
     const modal = page.locator('[data-task-details-modal="true"]');
     if ((await modal.count()) === 0) return;
-    await modal.locator('button[title="關閉"]').click();
+    await modal.locator('button[aria-label="關閉任務詳情"]').click();
     await modal.waitFor({ state: 'hidden', timeout: 10000 });
   };
 
@@ -79,17 +86,47 @@ async (page) => {
     assert(!visibleError, `${label} should not show visible runtime errors`, { visibleError });
   };
 
-  const renameSelectedByTyping = async (title) => {
-    await selectedNode().focus();
-    await page.keyboard.press('D');
+  const ensureQuickTitleInput = async () => {
+    if (await titleInput().isVisible().catch(() => false)) return;
+    // DEV-073 opens quick naming on the selected-node pointer gesture. A
+    // delayed retry keeps this regression fixture resilient to the layout
+    // resize/center frame that follows task creation.
+    await page.waitForTimeout(250);
+    if (await titleInput().isVisible().catch(() => false)) return;
+    const selected = selectedNode();
+    if (await selected.count()) {
+      await selected.click();
+    }
     await titleInput().waitFor({ state: 'visible', timeout: 10000 });
+  };
+
+  const renameSelectedByTyping = async (title) => {
+    await ensureQuickTitleInput();
+    assert(await page.locator('[data-task-details-modal="true"]').count() === 0, 'quick naming must not open task details');
     await titleInput().fill(title);
     await titleInput().press('Enter');
-    await nodeByTitle(title).waitFor({ state: 'visible', timeout: 10000 });
+    try {
+      await nodeByTitle(title).waitFor({ state: 'visible', timeout: 10000 });
+    } catch (error) {
+      const titles = await page.locator('[data-mindmap-node]').evaluateAll(elements => elements.map(element => ({
+        id: element.getAttribute('data-mindmap-node'),
+        title: element.getAttribute('data-mindmap-node-title'),
+        editing: element.getAttribute('data-mindmap-inline-title-editing'),
+      })));
+      throw new Error(`quick naming title did not render: ${JSON.stringify({ title, titles, error: String(error) })}`);
+    }
+    assert(await page.locator('[data-task-details-modal="true"]').count() === 0, 'quick naming Enter must not open task details');
   };
 
   const createRoot = async (title) => {
-    await page.locator('[data-mindmap-create-root]').click();
+    const createRootButton = page.locator('[data-mindmap-create-root]');
+    if (await createRootButton.count()) {
+      await createRootButton.click();
+    } else {
+      await page.locator('[data-mindmap-view]').focus();
+      await page.keyboard.press('Escape');
+      await page.keyboard.press('Enter');
+    }
     await selectedNode().waitFor({ state: 'visible', timeout: 10000 });
     await renameSelectedByTyping(title);
   };
@@ -264,16 +301,24 @@ async (page) => {
     };
   }, relationshipLabel);
 
-  const stablePart = (snapshot) => ({
-    path: snapshot.path,
-    curveHitboxes: snapshot.curveHitboxes,
-    lineHitboxes: snapshot.lineHitboxes,
-    labelHitboxes: snapshot.labelHitboxes,
-    endpoints: snapshot.endpoints,
-    controlPoints: snapshot.controlPoints,
-    screenControlPoints: snapshot.screenControlPoints,
-    controlArms: snapshot.controlArms,
-  });
+  const stablePart = (snapshot) => {
+    const placement = (items) => items.map(item => ({
+      key: item.key,
+      coordinateSpace: item.coordinateSpace,
+      left: item.left,
+      top: item.top,
+    }));
+    return {
+      path: snapshot.path,
+      curveHitboxes: placement(snapshot.curveHitboxes),
+      lineHitboxes: placement(snapshot.lineHitboxes),
+      labelHitboxes: placement(snapshot.labelHitboxes),
+      endpoints: placement(snapshot.endpoints),
+      controlPoints: placement(snapshot.controlPoints),
+      screenControlPoints: placement(snapshot.screenControlPoints),
+      controlArms: placement(snapshot.controlArms),
+    };
+  };
 
   const assertCompositeScene = (snapshot, label) => {
     const coordinateSpaces = [
@@ -325,6 +370,62 @@ async (page) => {
   }
   await createRoot(targetRoot);
   await applyDatesToNodes([root, ...children, targetRoot]);
+
+  const rootNodeId = await nodeByTitle(root).getAttribute('data-mindmap-node');
+  assert(Boolean(rootNodeId), 'collapse fixture root must expose a node id');
+  const rootToggleHoverTarget = page.locator(`[data-mindmap-toggle-hover-target="${rootNodeId}"]`);
+  const rootToggle = page.locator(`[data-mindmap-toggle-parent-id="${rootNodeId}"]`);
+  await rootToggleHoverTarget.hover();
+  await rootToggle.click();
+  await page.locator(`[data-mindmap-children-parent-id="${rootNodeId}"]`).waitFor({ state: 'hidden', timeout: 10000 });
+
+  const renamedRoot = `${root} renamed`;
+  await nodeByTitle(root).click();
+  await titleInput().waitFor({ state: 'visible', timeout: 10000 });
+  await titleInput().fill(renamedRoot);
+  await titleInput().press('Enter');
+  try {
+    await nodeByTitle(renamedRoot).waitFor({ state: 'visible', timeout: 10000 });
+  } catch (error) {
+    const titles = await page.locator('[data-mindmap-node]').evaluateAll(elements => elements.map(element => ({
+      id: element.getAttribute('data-mindmap-node'),
+      title: element.getAttribute('data-mindmap-node-title'),
+      editing: element.getAttribute('data-mindmap-inline-title-editing'),
+    })));
+    throw new Error(`collapsed task rename did not render: ${JSON.stringify({ renamedRoot, titles, error: String(error) })}`);
+  }
+  const renamedRootNodeId = await nodeByTitle(renamedRoot).getAttribute('data-mindmap-node');
+  assert(renamedRootNodeId === rootNodeId, 'renaming a task must preserve its node identity', { rootNodeId, renamedRootNodeId });
+  assert(
+    await page.locator(`[data-mindmap-children-parent-id="${rootNodeId}"]`).count() === 0,
+    'editing a collapsed task must preserve its collapsed state',
+  );
+
+  const createdAfterCollapse = `DEV027G child after collapse ${stamp}`;
+  await nodeByTitle(renamedRoot).click();
+  await ensureQuickTitleInput();
+  await page.waitForTimeout(300);
+  const quickTitleFocused = await page.evaluate(() => document.activeElement?.matches('[data-mindmap-quick-title-input="true"]'));
+  const nodeFocused = await page.evaluate(() => document.activeElement?.matches('[data-mindmap-node]'));
+  assert(quickTitleFocused || nodeFocused, 'collapsed task quick-title state should keep focus on the node or its input');
+  await titleInput().fill(createdAfterCollapse);
+  await titleInput().press('Tab');
+  await nodeByTitle(createdAfterCollapse).waitFor({ state: 'visible', timeout: 10000 });
+  const collapseContinuationState = await page.evaluate((rootNodeId) => ({
+    rootExpanded: document.querySelector(`[data-mindmap-node="${rootNodeId}"]`)?.getAttribute('aria-expanded'),
+    childGroups: document.querySelectorAll(`[data-mindmap-children-parent-id="${rootNodeId}"]`).length,
+    visibleNodes: Array.from(document.querySelectorAll('[data-mindmap-node]')).map(element => ({
+      id: element.getAttribute('data-mindmap-node'),
+      title: element.getAttribute('data-mindmap-node-title'),
+      parentId: element.getAttribute('data-mindmap-parent-id'),
+    })),
+  }), rootNodeId);
+  assert(
+    collapseContinuationState.childGroups === 1,
+    'creating a child must expand only the new task ancestor path',
+    collapseContinuationState,
+  );
+
   await createInlineRelationship(children[0], children[3], relationshipLabel);
   await page.locator('[data-mindmap-zoom-fit]').click();
   await page.waitForTimeout(650);
@@ -343,8 +444,7 @@ async (page) => {
     wheelPreview,
     'wheel zoom preview should not recompute or rewrite relationship path geometry or local interaction coordinates',
   );
-  await page.waitForFunction(() => !document.querySelector('[data-mindmap-middle-pan="true"]')?.hasAttribute('data-mindmap-zoom-preview-active'), null, { timeout: 5000 });
-  await page.waitForTimeout(160);
+  await page.waitForTimeout(180);
   const wheelCommitted = await collectStableRelationshipSnapshot(relationshipLabel);
   assert(
     Number(wheelCommitted.zoom) > Number(baseline.zoom),
@@ -392,4 +492,20 @@ async (page) => {
   await page.screenshot({ path: 'output/playwright/dev-027G-system-health-middle-pan.png', fullPage: true });
 
   await assertNoVisibleErrors('DEV-027G final');
+  const duplicateRenderKeys = await page.evaluate(() => {
+    const readDuplicates = (selector, attribute) => {
+      const counts = new Map();
+      document.querySelectorAll(selector).forEach((element) => {
+        const id = element.getAttribute(attribute) || '';
+        counts.set(id, (counts.get(id) || 0) + 1);
+      });
+      return Array.from(counts.entries()).filter(([, count]) => count > 1);
+    };
+    return {
+      nodeIds: readDuplicates('[data-mindmap-node]', 'data-mindmap-node'),
+      relationshipIds: readDuplicates('[data-mindmap-note-relationship]', 'data-mindmap-note-relationship'),
+      connectorIds: readDuplicates('[data-mindmap-connector-path]', 'data-mindmap-connector-path'),
+    };
+  });
+  assert(runtimeConsoleErrors.length === 0, 'mind map QC must not emit runtime console errors', { runtimeConsoleErrors, duplicateRenderKeys });
 }

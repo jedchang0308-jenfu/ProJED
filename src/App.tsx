@@ -11,11 +11,14 @@
  * - 遷移完成後，由 onSnapshot 自動更新畫面，無須手動 reload
  * - 若無舊版資料，跳過遷移
  */
-import { lazy, Suspense, useEffect, useRef } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef } from 'react';
 import useBoardStore from './store/useBoardStore';
 import useAuthStore from './store/useAuthStore';
 import { useMemberStore } from './store/useMemberStore';
-import useRecordStore from './store/useRecordStore';
+import { useTagStore } from './store/useTagStore';
+import { useWbsStore } from './store/useWbsStore';
+import { useTaskFilterStore } from './store/useTaskFilterStore';
+import useRecordStore, { createRecordScopeKey } from './store/useRecordStore';
 import { useDataSync } from './hooks/useDataSync';
 import { boardInviteService, dataBackend } from './services/dataBackend';
 import { migrateLocalStorageToFirestore } from './utils/migration';
@@ -28,12 +31,18 @@ import HomeView from './components/HomeView';
 // ListView 已由 WbsListView 取代，import 移除
 // CardModal 已在 Phase B 移除，改為在清單視圖行內編輯
 import GlobalDialog from './components/GlobalDialog';
-import { AppInstallAssistant } from './components/AppInstallAssistant';
 import { AppUpdatePrompt } from './components/AppUpdatePrompt';
 import { ToastContainer } from './components/ui/ToastContainer';
 import { toast } from './store/useToastStore';
 import { BOARD_INVITE_TOKEN_PARAM } from './utils/boardInviteToken';
 import { seedLocalTestEnvironment } from './utils/localTestEnvironment';
+import { useMeetingDraftRecovery } from './hooks/useMeetingDraftRecovery';
+import { TaskInteractionScope } from './interactions/task/TaskInteractionScope';
+import { KanbanViewSizeProvider } from './features/kanbanViewSize/KanbanViewSizeProvider';
+import { createBoardAssigneeFilterOptions } from './features/taskFilters';
+import { PwaReloadSafetyBridge, PwaReloadSafetyOwners } from './components/PwaReloadSafetyBridge';
+import { GoalCellSessionProvider, GoalCellRecoveryNotice } from './components/GoalCellSessionProvider';
+import MeetingDraftRecoveryNotice from './components/Records/MeetingDraftRecoveryNotice';
 
 const BoardView = lazy(() => import('./components/BoardView'));
 const GanttView = lazy(() => import('./components/GanttView'));
@@ -45,6 +54,7 @@ const MindMapView = lazy(() => import('./components/MindMap/MindMapView'));
 const WbsListView = lazy(() =>
   import('./components/Wbs/WbsListView').then(module => ({ default: module.WbsListView })),
 );
+const GoalView = lazy(() => import('./components/GoalView'));
 
 const formatBoardInviteAcceptError = (inviteError: unknown): string => {
   const message = inviteError instanceof Error ? inviteError.message : '';
@@ -75,6 +85,20 @@ function AppContent() {
   const userEmail = user?.email ?? null;
   const userDisplayName = user?.displayName ?? null;
   const loadRecords = useRecordStore(s => s.loadRecords);
+  const resetRecordList = useRecordStore(s => s.resetRecordList);
+  const recordListLoad = useRecordStore(s => s.recordListLoad);
+  const nodes = useWbsStore(s => s.nodes);
+  const tags = useTagStore(s => s.tags);
+  const tagsLoadedWorkspaceId = useTagStore(s => s.loadedWorkspaceId);
+  const tagsLoading = useTagStore(s => s.loading);
+  const tagsError = useTagStore(s => s.error);
+  const workspaceMembers = useMemberStore(s => s.workspaceMembers);
+  const boardMembers = useMemberStore(s => s.boardMembers);
+  const membersLoadedWorkspaceId = useMemberStore(s => s.loadedWorkspaceId);
+  const membersLoadedBoardId = useMemberStore(s => s.loadedBoardId);
+  const membersLoading = useMemberStore(s => s.loading);
+  const membersError = useMemberStore(s => s.error);
+  const recordsScopeKey = activeWorkspaceId && activeBoardId ? createRecordScopeKey(activeWorkspaceId, activeBoardId) : null;
   // 確保遷移只執行一次，不因 re-render 重複觸發
   const migrationDone = useRef(false);
   const processedInviteToken = useRef<string | null>(null);
@@ -82,10 +106,83 @@ function AppContent() {
   // 啟動目前資料後端的同步監聽
   useDataSync();
 
+  useMeetingDraftRecovery({
+    userId,
+    workspaceId: activeWorkspaceId,
+    boardId: activeBoardId,
+    recordsLoaded: Boolean(recordsScopeKey && recordListLoad.status === 'ready' && recordListLoad.scopeKey === recordsScopeKey),
+  });
+
+  // Display preferences remain account-scoped. Task conditions activate on the
+  // exact account × board scope and clear immediately on logout/switch.
+  useLayoutEffect(() => {
+    if (!userId) {
+      useTaskFilterStore.getState().clearScope();
+      return;
+    }
+    useBoardStore.getState().hydrateTaskDisplayPrefs();
+    if (!activeBoardId) {
+      useTaskFilterStore.getState().clearScope();
+      return;
+    }
+    void useTaskFilterStore.getState().activateScope(userId, activeBoardId);
+  }, [activeBoardId, userId]);
+
   useEffect(() => {
-    if (!userId || !activeWorkspaceId || !activeBoardId) return;
-    loadRecords(activeWorkspaceId, activeBoardId).catch(console.error);
-  }, [activeBoardId, activeWorkspaceId, loadRecords, userId]);
+    const retryVisibleScope = () => {
+      if (document.visibilityState === 'visible') void useTaskFilterStore.getState().retrySync();
+    };
+    window.addEventListener('online', retryVisibleScope);
+    document.addEventListener('visibilitychange', retryVisibleScope);
+    return () => {
+      window.removeEventListener('online', retryVisibleScope);
+      document.removeEventListener('visibilitychange', retryVisibleScope);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (
+      !activeWorkspaceId
+      || tagsLoading
+      || tagsError
+      || tagsLoadedWorkspaceId !== activeWorkspaceId
+    ) return;
+    useTaskFilterStore.getState().reconcileTagIds(new Set(tags.map(tag => tag.id)));
+  }, [activeWorkspaceId, tags, tagsError, tagsLoadedWorkspaceId, tagsLoading]);
+
+  useEffect(() => {
+    if (
+      !activeWorkspaceId
+      || !activeBoardId
+      || membersLoading
+      || membersError
+      || membersLoadedWorkspaceId !== activeWorkspaceId
+      || membersLoadedBoardId !== activeBoardId
+    ) return;
+    const validIds = new Set(
+      createBoardAssigneeFilterOptions(activeBoardId, boardMembers, nodes, workspaceMembers)
+        .map(option => option.id),
+    );
+    useTaskFilterStore.getState().reconcileAssigneeIds(validIds);
+  }, [
+    activeBoardId,
+    activeWorkspaceId,
+    boardMembers,
+    membersError,
+    membersLoadedBoardId,
+    membersLoadedWorkspaceId,
+    membersLoading,
+    nodes,
+    workspaceMembers,
+  ]);
+
+  useEffect(() => {
+    if (!userId || !activeWorkspaceId || !activeBoardId || !recordsScopeKey) {
+      resetRecordList();
+      return;
+    }
+    void loadRecords(activeWorkspaceId, activeBoardId);
+  }, [activeBoardId, activeWorkspaceId, loadRecords, resetRecordList, recordsScopeKey, userId]);
 
   useEffect(() => {
     if (!userId || dataBackend !== 'local-test') return;
@@ -239,11 +336,12 @@ function AppContent() {
   const renderContent = () => {
     switch (currentView) {
       case 'home':        return <HomeView />;
-      case 'list':        return <WbsListView boardId={activeBoardId || ''} />; // 攔截原本的 ListView
-      case 'mindmap':     return <MindMapView />;
-      case 'board':       return <BoardView />;
-      case 'gantt':       return <GanttView />;
-      case 'calendar':    return <CalendarView />;
+      case 'list':        return <TaskInteractionScope hostMode="list"><WbsListView boardId={activeBoardId || ''} /></TaskInteractionScope>; // 攔截原本的 ListView
+      case 'mindmap':     return <TaskInteractionScope hostMode="mindmap"><MindMapView /></TaskInteractionScope>;
+      case 'board':       return <TaskInteractionScope hostMode="board"><BoardView /></TaskInteractionScope>;
+      case 'goal':        return <TaskInteractionScope hostMode="goal"><GoalView boardId={activeBoardId || ''} /></TaskInteractionScope>;
+      case 'gantt':       return <TaskInteractionScope hostMode="gantt"><GanttView /></TaskInteractionScope>;
+      case 'calendar':    return <TaskInteractionScope hostMode="calendar"><CalendarView /></TaskInteractionScope>;
       case 'records':     return <RecordsView />;
       case 'calendar_subscriptions': return <SettingsView initialSection="calendar" />;
       case 'settings':    return <SettingsView />;
@@ -253,25 +351,31 @@ function AppContent() {
   };
 
   return (
-    <MainLayout>
-      <Suspense fallback={<div className="flex h-full items-center justify-center text-sm text-slate-500">載入中...</div>}>
-        {renderContent()}
-      </Suspense>
-      <GlobalDialog />
-    </MainLayout>
+    <KanbanViewSizeProvider accountId={userId}>
+      <GoalCellSessionProvider accountId={userId}>
+        <PwaReloadSafetyOwners currentView={currentView} userId={userId} />
+        <MainLayout>
+          <GoalCellRecoveryNotice />
+          <Suspense fallback={<div className="flex h-full items-center justify-center text-sm text-slate-500">載入中...</div>}>
+            {renderContent()}
+          </Suspense>
+          <GlobalDialog />
+        </MainLayout>
+      </GoalCellSessionProvider>
+    </KanbanViewSizeProvider>
   );
 }
 
 function App() {
   return (
-    <>
+    <PwaReloadSafetyBridge>
       <AuthGate>
         <AppContent />
       </AuthGate>
       <AppUpdatePrompt />
-      <AppInstallAssistant />
+      <MeetingDraftRecoveryNotice />
       <ToastContainer />
-    </>
+    </PwaReloadSafetyBridge>
   );
 }
 
