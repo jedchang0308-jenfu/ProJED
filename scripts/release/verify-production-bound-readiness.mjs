@@ -59,10 +59,19 @@ if (serverEnv.SUPABASE_URL && serverEnv.SUPABASE_ANON_KEY && serverEnv.SUPABASE_
     add('readonly-admin-probe', 'fail', { reason: error.message });
   }
   try {
-    const managementResponse = await fetch('https://api.supabase.com/v1/projects', { headers: { Authorization: `Bearer ${serverEnv.SUPABASE_ACCESS_TOKEN}` } });
+    const managementResponse = await fetch(`https://api.supabase.com/v1/projects/${PRODUCTION_CONTRACT.supabaseProjectRef}/config/auth`, { headers: { Authorization: `Bearer ${serverEnv.SUPABASE_ACCESS_TOKEN}` } });
     add('readonly-management-probe', [200, 401, 403].includes(managementResponse.status) ? (managementResponse.status === 200 ? 'pass' : 'fail') : 'fail', { http_status: managementResponse.status });
+    if (managementResponse.ok) {
+      const authConfig = await managementResponse.json();
+      add('production-auth-site-url', authConfig.site_url === PRODUCTION_CONTRACT.canonicalRedirectUrl ? 'pass' : 'fail', {
+        expected: 'canonical-production-root',
+      });
+    } else {
+      add('production-auth-site-url', 'fail', { reason: 'auth config could not be verified' });
+    }
   } catch (error) {
     add('readonly-management-probe', 'fail', { reason: error.message });
+    add('production-auth-site-url', 'fail', { reason: 'auth config could not be verified' });
   }
 } else {
   add('readonly-probes', failOrPending());

@@ -86,7 +86,7 @@ const overlayFiles = ['src/quickTask/main.ts', 'src/quickTask/quick-task.css', '
 const overlayHashes = Object.fromEntries(overlayFiles.map(file => [file, sourceHashes[file]]));
 assert.equal(sha256(JSON.stringify(overlayHashes)), sourceManifest.uiOverlayDigest,
   'Frozen UI overlay digest does not match the selected UI source hashes');
-const EXPECTED_CASE_COUNT = 25;
+const EXPECTED_CASE_COUNT = 27;
 const { chromium } = require(playwrightModule);
 
 // A new directory is required so this runner cannot replace an earlier PASS report.
@@ -201,7 +201,9 @@ const authModule = [
 const serviceModule = [
   'export const createQuickUnplacedTask = async ({ capture, auth }) => {',
   '  window.__qaRpcCalls.push({ captureId: capture.captureId, accountId: auth.accountId });',
+  '  window.__qaRpcRequestDetails.push({ captureId: capture.captureId, accountId: auth.accountId, title: capture.title, workspaceHint: capture.workspaceHint });',
   '  if (window.__qaRpcMode === "conflict") throw Object.assign(new Error("fixture idempotency conflict"), { code: "QT_IDEMPOTENCY_CONFLICT", status: 409 });',
+  '  if (window.__qaRpcMode === "typed-workspace" && window.__qaTypedFailureCount++ === 0) throw Object.assign(new Error("QT_NO_AVAILABLE_WORKSPACE"), { code: "QT_NO_AVAILABLE_WORKSPACE", status: 400 });',
   '  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(capture.title));',
   '  const titleHash = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");',
   '  return { status: "committed", captureId: capture.captureId, ownerId: auth.accountId, titleHash: window.__qaRpcMode === "invalid-receipt" ? "0".repeat(64) : titleHash, committedAt: Date.now(), created: true };',
@@ -221,6 +223,8 @@ const openFixture = async (records = [], options = {}) => {
     window.__qaUnreachable = options.unreachable ?? false;
     window.__qaRpcMode = options.rpcMode ?? 'success';
     window.__qaRpcCalls = [];
+    window.__qaRpcRequestDetails = [];
+    window.__qaTypedFailureCount = 0;
     window.__qaLoginCalls = [];
     window.__qaVerificationCount = 0;
     window.__qaVerificationActive = 0;
@@ -1010,6 +1014,89 @@ const main = async () => {
     assert.equal(after.accountId, 'A');
     assert.ok(after.receipt);
     assert.equal((await calls(page)).rpc.length, 1);
+    await noPanel(page);
+  });
+
+  await runCase('R26-legacy-P0001-reconfirms-original-capture-only-for-owner', [makeRecord(1, {
+    accountId: 'A',
+    state: 'failed_permanent',
+    lastErrorCode: 'P0001',
+    title: '保留原始 P0001 任務',
+  })], { account: 'B' }, async page => {
+    const original = (await readRows(page))[0];
+    await panel(page).waitFor({ state: 'visible' });
+    assert.equal(await page.locator('#quick-task-recovery-list > li').count(), 0);
+    assert.equal((await panel(page).innerText()).includes(original.title), false);
+    assert.equal(await page.getByRole('button', { name: '重新確認', exact: true }).count(), 0);
+    assert.equal(await page.getByRole('button', { name: '重試', exact: true }).count(), 0);
+    assert.equal((await calls(page)).rpc.length, 0);
+
+    await page.evaluate(() => window.__qaSwitchAccount('A'));
+    await page.waitForFunction(() => document.querySelector('#quick-task-auth-status')?.textContent.includes('已登入'));
+    await waitForButton(page, '重新確認');
+    assert.equal(await page.getByRole('button', { name: '重試', exact: true }).count(), 0);
+    await page.getByRole('button', { name: '重新確認', exact: true }).click();
+    const recovered = await waitForRecord(page, original.captureId, record => record.state === 'synced', 'legacy P0001 confirmation');
+    assert.equal(recovered.captureId, original.captureId);
+    assert.equal(recovered.accountId, original.accountId);
+    assert.equal(recovered.title, original.title);
+    assert.equal(recovered.receipt.captureId, original.captureId);
+    assert.equal(recovered.receipt.ownerId, original.accountId);
+    assert.equal(recovered.receipt.titleHash, sha256(original.title));
+    assert.deepEqual((await calls(page)).rpc, [{ captureId: original.captureId, accountId: 'A' }]);
+  });
+
+  await runCase('R27-typed-workspace-retry-preserves-original-capture-only-for-owner', [makeRecord(1, {
+    accountId: 'A',
+    state: 'pending',
+    title: '保留原始 workspace 任務',
+    workspaceHint: null,
+  })], { account: 'A', rpcMode: 'typed-workspace' }, async page => {
+    const original = (await readRows(page))[0];
+    const failed = await waitForRecord(page, original.captureId, record => record.state === 'failed_permanent', 'typed workspace failure');
+    assert.equal(failed.lastErrorCode, 'QT_NO_AVAILABLE_WORKSPACE');
+    assert.equal(failed.captureId, original.captureId);
+    assert.equal(failed.accountId, original.accountId);
+    assert.equal(failed.title, original.title);
+    assert.equal(failed.workspaceHint, original.workspaceHint);
+    assert.equal(failed.receipt ?? null, null);
+    await waitForButton(page, '前往工作台');
+    assert.equal(await page.getByRole('button', { name: '重試', exact: true }).count(), 1);
+    assert.equal((await calls(page)).rpc.length, 1);
+
+    await page.evaluate(() => window.__qaSwitchAccount('B'));
+    await page.waitForFunction(() => document.querySelector('#quick-task-auth-status')?.textContent.includes('已登入'));
+    await panel(page).waitFor({ state: 'visible' });
+    await page.waitForFunction(title => {
+      const recovery = document.querySelector('#quick-task-recovery');
+      return recovery && !recovery.innerText.includes(title)
+        && recovery.querySelectorAll('#quick-task-recovery-list > li').length === 0;
+    }, original.title);
+    assert.equal(await page.locator('#quick-task-recovery-list > li').count(), 0);
+    assert.equal((await panel(page).innerText()).includes(original.title), false);
+    assert.equal(await page.getByRole('button', { name: '前往工作台', exact: true }).count(), 0);
+    assert.equal(await page.getByRole('button', { name: '重試', exact: true }).count(), 0);
+    assert.equal((await calls(page)).rpc.length, 1, 'A different owner must not retry the failed capture');
+
+    await page.evaluate(() => window.__qaSwitchAccount('A'));
+    await page.waitForFunction(() => document.querySelector('#quick-task-auth-status')?.textContent.includes('已登入'));
+    await waitForButton(page, '前往工作台');
+    await page.getByRole('button', { name: '重試', exact: true }).click();
+    const recovered = await waitForRecord(page, original.captureId, record => record.state === 'synced', 'typed workspace retry');
+    assert.equal(recovered.captureId, original.captureId);
+    assert.equal(recovered.accountId, original.accountId);
+    assert.equal(recovered.title, original.title);
+    assert.equal(recovered.receipt.captureId, original.captureId);
+    assert.equal(recovered.receipt.ownerId, original.accountId);
+    assert.equal(recovered.receipt.titleHash, sha256(original.title));
+    assert.deepEqual((await calls(page)).rpc, [
+      { captureId: original.captureId, accountId: 'A' },
+      { captureId: original.captureId, accountId: 'A' },
+    ]);
+    assert.deepEqual((await page.evaluate(() => window.__qaRpcRequestDetails)), [
+      { captureId: original.captureId, accountId: 'A', title: original.title, workspaceHint: original.workspaceHint },
+      { captureId: original.captureId, accountId: 'A', title: original.title, workspaceHint: original.workspaceHint },
+    ]);
     await noPanel(page);
   });
 
