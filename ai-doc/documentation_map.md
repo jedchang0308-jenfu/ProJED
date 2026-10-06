@@ -2,7 +2,7 @@
 
 ## Documentation Map Update - 2026-10-06（DEV-137 AI 任務路徑補正）
 
-正式 AI 整理的 `INCOMPLETE_TASK_PATH` 修正，追蹤於 [DEV-137](dev_task.md#dev-137-ai-整理任務路徑補正與失敗診斷---2026-10-06)、[SPEC-012](specs/SPEC-012-ai-meeting-record-natural-language-quality.md) 與 [QA-DEV-137](qa/QA-DEV-137-production-deployment.md)。可唯一識別的任務標題依來源補齊路徑，未知或歧義任務仍拒絕；回傳最小失敗診斷，前端只顯示一處中文原因。18 個 Edge/client 模擬與 7 項本機 browser 斷言、原稿保護回歸、型別與 lint 通過。clean source `fd0c225` 的 artifact `20261005231837-de651b` 已部署到 Firebase `projed-cc78d`，80/80 canonical provenance、browser shell smoke 與 Supabase v6 合成 API 完整路徑 smoke 通過。正式登入後會議 UI／草稿生命週期仍 pending；本機 deterministic／failure injection 不冒充 Gemini 或登入 UI 證據。
+正式 AI 整理的 `INCOMPLETE_TASK_PATH` 修正，追蹤於 [DEV-137](dev_task.md#dev-137-ai-整理任務路徑補正與失敗診斷---2026-10-06)、[SPEC-012](specs/SPEC-012-ai-meeting-record-natural-language-quality.md) 與 [QA-DEV-137](qa/QA-DEV-137-production-deployment.md)。可唯一識別的任務標題依來源補齊路徑，未知或歧義任務仍拒絕；回傳最小失敗診斷，前端只顯示一處中文原因。18 個 Edge/client 模擬與 7 項本機 browser 斷言、原稿保護回歸、型別與 lint 通過。clean source `fd0c225` 的 artifact `20261005231837-de651b` 已部署到 Firebase `projed-cc78d`，80/80 canonical provenance、browser shell smoke 與 Supabase v6 合成 API 完整路徑 smoke 通過。正式登入後會議 UI／草稿生命週期於 2026-10-06 由使用者回報「測過OK」，記錄為使用者回報 PASS；DEV-083 direct receipt 因未附專用 authenticated feature-smoke，仍標示 `feature-pending`／`complete=false`。本機 deterministic／failure injection 與正式收據欄位各自保留其證據範圍。
 
 ## Documentation Map Update - 2026-10-05（既有會議草稿續接 AI 整理）
 

@@ -20,13 +20,12 @@
 | 正式匿名 browser shell smoke | PASS | browser receipt `ok=true`，預期 release ID `20261005231837-de651b` 相符。 |
 | 正式 Edge Function readback | PASS | 第 6 版 ACTIVE、JWT verification enabled、v4 source marker 存在，部署檔案包含任務路徑 helper。 |
 | 正式合成 API 功能 smoke | PASS | HTTP 200；function v4、contract v2、quality passed；結果包含合成父／子 ID `dev137-root-20261006`、`dev137-child-20261006`，正文標籤含完整路徑。沒有保存生成正文。 |
-| 登入後正式會議 UI／草稿生命週期 | Pending | 沒有使用正式測試帳號登入，也沒有建立正式測試草稿；本機 7 項 UI 驗收不替代此證據。 |
+| 登入後正式會議 UI／草稿生命週期 | 使用者回報 PASS | 2026-10-06，使用者回覆「測過OK」。此列記錄使用者的正式環境驗收結果；本紀錄未附獨立 UI smoke 收據或逐項案例結果。 |
 
-Hosting direct receipt 的狀態為 `feature-pending`／`complete=false`：DEV-083 receipt 尚未包含專用 authenticated feature-smoke。首次部署後自動 provenance 讀回中斷並記為 `terminated`；本輪以同一 receipt 執行 `--verify-only`，未再次部署，80/80 provenance 與 browser shell smoke 均通過。正式功能 API smoke 另以合成資料完成；登入後 UI 仍待合適的正式測試身分與可清理草稿範圍。
+Hosting direct receipt 仍標示 `feature-pending`／`complete=false`，因 DEV-083 receipt 未包含專用 authenticated feature-smoke；這是收據欄位狀態，與使用者本輪回報的 UI／草稿驗收結果分開記錄。首次部署後自動 provenance 讀回中斷並記為 `terminated`；本輪以同一 receipt 執行 `--verify-only`，未再次部署，80/80 provenance 與 browser shell smoke 均通過。正式功能 API smoke 另以合成資料完成。
 
 ## 邊界與清理
 
 - 未執行 migration、schema、Auth、IAM、Secret 或正式業務資料變更。
 - Hosting 發布前保留既有 live version 作 recovery anchor；本輪未執行 rollback。
 - task-owned browser smoke session 已關閉；沒有留下本機測試 server 或 listening port。resource governor browser lease/session 已釋放。
-

@@ -5,20 +5,20 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
 ## DEV-137 AI 整理任務路徑補正與失敗診斷 - 2026-10-06
 
-- 文件成熟度：RD Implementation Ready；狀態：本機驗證通過／正式版本與合成 API 驗證通過／登入後功能 UI 待驗收；類型：開發點；父任務：DEV-012，相容 DEV-024／136。
-- 人類來源：本 chat 正式環境失敗截圖、改善方案、「請執行」及後續明確授權部署 Firebase `projed-cc78d` 與 Supabase `knodlkxqpcqyrtgwpdst` 並驗證。最初部署曾受核准審查阻擋；取得明確授權與可用專案登入後，Edge 及 Hosting 均已部署。不延伸至其他專案或業務資料修改。
+- 文件成熟度：RD Implementation Ready；狀態：本機及正式版本／合成 API 驗證通過／正式 UI 與草稿流程使用者回報 PASS；類型：開發點；父任務：DEV-012，相容 DEV-024／136。
+- 人類來源：本 chat 正式環境失敗截圖、改善方案、「請執行」及後續明確授權部署 Firebase `projed-cc78d` 與 Supabase `knodlkxqpcqyrtgwpdst` 並驗證；使用者於 2026-10-06 回報已測試正式登入後會議 UI／草稿生命週期且「測過OK」。最初部署曾受核准審查阻擋；取得明確授權與可用專案登入後，Edge 及 Hosting 均已部署。不延伸至其他專案或業務資料修改。
 - 直接證據：正式 `synthesize_meeting_record` 於 2026-10-06 00:54:28（台灣時間）回報 `INCOMPLETE_TASK_PATH`，run `4bdd51d2-eee9-4a3c-ade4-4489ab08cb1e`；原生成內容沒有保存，不宣稱掌握漏路徑的具體任務。
 - Spec Impact：SPEC-012 compatible correction。維持自然語言正文、來源 grounding、v2 外部成功契約及 DEV-024 preserve；只將可唯一識別的完整路徑生成責任移交程式。未知 ID、跨分支／多任務標題或無來源識別不得猜測補正。
 - 實作：Edge 共用純函式補正 `2.x` 標題並從正文生成 linkedTaskIds，補正後仍通過完整品質 gate；失敗 response/log 增加 run ID、function version、違規代碼及任務 ID，避免紀錄正文。前端保留診斷、顯示單一中文錯誤，原稿維持不變。
 - QA／targeted QC：涵蓋漏父層、順序、同名、未知 ID、歧義、無直接證據、重複章節、正文 byte parity、補正冪等；執行實際 Edge handler mock provider、相關 preserve 回歸、型別、lint 與 browser 成功／失敗／儲存重開。模擬與正式結果分別記錄。
-- 正式邊界與結果：Supabase `knodlkxqpcqyrtgwpdst/synthesize_meeting_record` 第 6 版 ACTIVE，`verify_jwt=true`；未改模型／Secret／schema。合成 DEV-137 請求得到 HTTP 200、函式版本 `synthesize_meeting_record-2026-10-06-v4`、v2 contract 及品質 gate PASS，`linkedTaskIds` 包含合成父子 ID，回傳完整路徑。Firebase `projed-cc78d` Hosting 已發布 artifact `20261005231837-de651b`，live release `1791248410504000`／version `275451cd3513e687`；80/80 entries provenance 與匿名 browser shell smoke PASS。沒有使用真實會議資料。正式登入後會議 UI／草稿生命週期尚未驗收，DEV-083 receipt 因此保留 `feature-pending`。完整證據見 [QA-DEV-137 正式部署與驗證](qa/QA-DEV-137-production-deployment.md)。
+- 正式邊界與結果：Supabase `knodlkxqpcqyrtgwpdst/synthesize_meeting_record` 第 6 版 ACTIVE，`verify_jwt=true`；未改模型／Secret／schema。合成 DEV-137 請求得到 HTTP 200、函式版本 `synthesize_meeting_record-2026-10-06-v4`、v2 contract 及品質 gate PASS，`linkedTaskIds` 包含合成父子 ID，回傳完整路徑。Firebase `projed-cc78d` Hosting 已發布 artifact `20261005231837-de651b`，live release `1791248410504000`／version `275451cd3513e687`；80/80 entries provenance 與匿名 browser shell smoke PASS。沒有使用真實會議資料。正式登入後會議 UI／草稿生命週期由使用者於 2026-10-06 回報 PASS；DEV-083 receipt 因未附專用 authenticated feature-smoke，工具欄位仍為 `feature-pending`／`complete=false`。完整證據見 [QA-DEV-137 正式部署與驗證](qa/QA-DEV-137-production-deployment.md)。
 - 成功條件：本次可補正的漏路徑案例通過；無法確認任務時原稿完整保留，中文錯誤只出現一次；正式後端版本與前端資產讀回吻合，必要功能驗證有實際證據。
 - 證據：`npm run verify:dev-137-meeting-synthesis` 18/18（含實際 Edge handler mock、HTTP 錯誤經實際 client service 的中文與 trace）；DEV-011／012／024 回歸、TypeScript、受影響 lint、test strict typecheck 與 diff check 通過。獨立 task-owned browser `dev137-20261006` 的 7 項 UI 斷言通過：單一中文錯誤、原稿 bytes、1024px overflow、重試、校稿保存、紀錄庫重開與 trace 恢復；截圖 `output/playwright/dev-137/`。正式 80/80 asset provenance、匿名 browser shell smoke 與合成 API 功能 smoke 見 [QA-DEV-137](qa/QA-DEV-137-production-deployment.md)。本機 provider failure injection 不冒充正式 Gemini／登入 UI 驗收。
 - 前置驗證缺陷：首次依賴入口缺失，已按 lockfile 安裝；首次 browser fixture 缺少 canonical seed size／board selection，第二次用了錯誤 named store export，均為 harness 問題，修復後重跑通過。保留原正式失敗證據，不將本機通過宣稱為原正式畫面已復驗。
 - 路徑上限：來源路徑保留至 80 層；超過上限在 provider 生成前回 400，不再靜默截斷八層後造成前後端不一致。
 - 發布產物：產品 commit `fd0c2256212169326c8bd6a932327854edabd0ef`；clean source sealed artifact `20261005231837-de651b`，manifest `output/release/dev-083/20261005231837-de651b/manifest.json`，80 entries 完整性通過，tree SHA-256 `49014a202966cdb2edf35e0faff26449f450b2d9563abececac11daee368cc88`。保留前版 manifest `20261005141011-b3b16a` 與 Edge source `output/release/dev-137/function-before.json`；正式回復錨點及 receipt 見 QA-DEV-137。
 - 臨時環境清理：task-owned browser `dev137-20261006` 與正式 shell smoke session 均已關閉；DEV-137 Vite PID `133432` 已核對後停止，port `4173` 釋放；resource governor runtime／lease／session 已結束。
-- 計入產品交付：否；正式發布及合成 API smoke 通過，登入後正式 UI／草稿生命週期仍待驗收。
+- 計入產品交付：否；正式發布及合成 API smoke 通過，正式登入後 UI／草稿流程由使用者回報 PASS；DEV-083 receipt 的 feature-smoke 欄位仍 pending。
 
 ## DEV-136 既有會議草稿續接 AI 整理與校稿流程 - 2026-10-05
 
@@ -191,10 +191,10 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 
 ## 總任務清單
 
-- ◇ DEV-137 [開發點] [RD／本機 QA PASS／正式已部署、資產與合成 API 驗證 PASS／登入後 UI pending] [P1] [ProJED AI 整理] 任務路徑補正與失敗診斷
+- ◇ DEV-137 [開發點] [RD／本機 QA PASS／正式部署、資產與合成 API 驗證 PASS／登入後 UI 與草稿流程使用者回報 PASS] [P1] [ProJED AI 整理] 任務路徑補正與失敗診斷
   - 摘要：以來源路徑補正可唯一識別的任務標題；失敗保留原稿並提供單一中文原因與執行追溯。
   - 父任務：DEV-012；相容 DEV-024／136。
-  - 下一步：取得合適的正式測試身分與可清理草稿範圍後，完成登入後會議 UI／草稿生命週期 smoke。
+  - 下一步：無待執行的 DEV-137 功能驗收；使用者已回報正式登入後 UI／草稿流程通過。DEV-083 receipt 未含專用 authenticated feature-smoke，故收據欄位仍為 `feature-pending`。
   - 證據：本文件 DEV-137；[QA-DEV-137](qa/QA-DEV-137-production-deployment.md)；SPEC-012 的 DEV-137 補記。
   - 計入交付：否。
 
