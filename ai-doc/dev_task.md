@@ -5,14 +5,15 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
 ## DEV-138 DEV-133 guard 恢復、分支整合與正式驗證後清理 - 2026-10-06
 
-- 文件成熟度：RD Implementation Ready；狀態：進行中；類型：開發點；父任務：DEV-133。
+- 文件成熟度：RD Implementation Ready；狀態：已完成；類型：開發點；父任務：DEV-133。
 - 範圍：恢復已有效的 DEV-133 guard 修正，整合既有分支到目前分支與 main，完成相稱 QA／QC 及 Firebase `projed-cc78d` production 驗證，再清理冗餘 ProJED 分支與工作樹。DEV-133 Rev12 的歷史結案證據不等於本整合版本已驗證。
-- 進度：source 修正已完成並推送 merge commit `8b57568` 與驗證 follow-up `2c119a4`，[Draft PR #7](https://github.com/jedchang0308-jenfu/ProJED/pull/7) 已建立；TypeScript、lint、DEV-133 contract、DEV-136 14/14／DEV-137 18/18、DEV-122 26/26、DEV-034 23/23 PASS；Auth／IDB／RPC boundary 84/84、frozen recovery UI 27/27 SIMULATION PASS，包含 typed RPC／P0001 原任務重試與不同 owner 不可重試。320／390 畫面人工檢視 PASS；未將模擬結果算成真實登入或 RPC。正式只讀 readiness 17/17、credential readiness 9/9 PASS，未更改 Auth／Secret。Build 尚未執行：容量准入連續未通過，曾為 EMERGENCY；後續約 29.1 GiB 的當次結果為 BLOCKED，已提出限定本次建置的一次性風險決策，待人類回覆。准入須在建置前重查。尚無本次 sealed artifact、production 驗證或 release 完成宣告。分層結果見 [QA-DEV-138](qa/QA-DEV-138-branch-consolidation.md)。
+- 進度：[PR #7](https://github.com/jedchang0308-jenfu/ProJED/pull/7) 已合併至 main `aefb93384c72f2b4c04dbb526fa01a30848cbcc6`；同來源 sealed artifact `20261006063124-2c064e` 已完成 prepare／candidate／activate，兩個正式網域讀回一致，82/82 assets provenance、browser 與 OAuth cancel PASS。正常 QA 登入及不同 owner 本機恢復拒絕 PASS；明確授權的兩筆 online／offline QA 任務均有同 ID、owner、title hash 的 committed receipt，透過 UI 清除回 DELETE 204，重載後不存在，本次三筆 local captures 亦已清除。原 create runner 在清理監聽失敗，後續讀回與清理收據獨立保留，未補造 RPC HTTP 計數。原 TS／lint、DEV-133／136／137／122／034 checks、boundary 84/84 與 UI 27/27 SIMULATION PASS 保留其證據範圍。完整分層結果見 [QA-DEV-138](qa/QA-DEV-138-branch-consolidation.md)。
 - 基準：整合起點 `bc58584a87b15fcc1136d1630a3f07f2046a6882`；DEV-133 Rev12 已合併產品基線 `9577183`。bundle `output/archive/dev-138/20261006/projed-pre-consolidation.bundle` 已 verify PASS，31 refs，SHA-256 `842623c501c84bf2550c656fa9d77e73be0f191daee02a0cc3150edc6ec01807`；raw QA／browser profiles 原地保留，不壓縮、不上傳。
 - Exact-tip 封存 refs（tag suffixes 均在 prefix `archive/projed-20261006/` 下）：`local-codex-android-icon-honest-update` → `a36aa5fae6c25836de257a5b36c1df7521428c4f`；`local-codex-dev133-closure-docs` → `b158d4cf9479bfb5ed375f8818df055b52c385ba`；`local-codex-dev133-independent-auth-release` → `9e67d5dd2d269637f40545896bb96c76ba71eeed`；`local-codex-icon-auto-migration` → `667e88fc4083b6291437198aa7ebe852fefb348a`；`local-main` → `3f680985be2f746ae9092451a759acd1b4aad10a`；`local-持續優化3` → `bc58584a87b15fcc1136d1630a3f07f2046a6882`；`remote-codex-dev133-production-baseline` → `9577183a1902c7c3c6a30b503e1a2a234c7a0cdd`；`remote-main` → `6f29ea507d32427d5d0fbdc032b9425da8694d53`；`remote-持續優化3` → `21da34bceac2a5e8e96023262b19edb1aa71fe1e`。
-- 最新既有正式 artifact（DEV-137，與 DEV-138 候選分開）：source `fd0c2256212169326c8bd6a932327854edabd0ef`；artifact `20261005231837-de651b`；[manifest](../output/release/dev-083/20261005231837-de651b/manifest.json)、[direct evidence receipt](../output/release/dev-083/20261005231837-de651b/direct-evidence.json)。
-- 下一步：已通過本機驗證的來源經 PR 合併至 main；之後以當次結果通過容量預檢（或在 BLOCKED 時取得限定本次建置的明確風險接受），以 clean main source 完成剩餘發布前驗證、protected release 與 production 驗證；正式驗證完成後清理授權範圍內的冗餘分支／工作樹。不得把歷史 Rev12 PASS 寫成本次整合版 PASS 或已發布。
-- 證據：上述 local Git bundle、archival tags；DEV-133 Rev12 的來源、release、receipt 與分層驗證見 [QA-DEV-133](qa/QA-DEV-133-quick-task-shared-identity-sync.md)、[REL-014](release/REL-014-DEV-133-INDEPENDENT-AUTH-20261001.md)。
+- 發布與恢復：本次 source `aefb933`、artifact `20261006063124-2c064e`、live version `206d252a093527aa`，tree SHA-256 `3e1594285ded72ffd1558a0f35ecdd05986ad2fcec1738628d032372e980c067`。前版 DEV-137 artifact `20261005231837-de651b`／source `fd0c225` 的 manifest、dist、原 direct receipt 原地保留作恢復錨點；未修改 Supabase schema、Auth 設定、IAM 或 Secret。後續文件提交不改此次封存產品來源。
+- 清理：6 個冗餘本地、5 個遠端分支以 exact SHA 檢查／原子交易及 lease 保護刪除；有效來源均在 main，舊 icon-auto-migration 的取代歷史由 archive tag／bundle 保存。僅一個 canonical worktree，沒有額外工作樹可移除。8 個本次 QA 副本／Chrome cache 清除 134,618,319 bytes（128.4 MiB），當次 C 槽 physical free delta 為 +133.3 MiB、可用約 30.6 GiB，後者可能受其他工作影響。三個 task-created preview channels 已刪除，live 不變；QA profiles、原證據、stash／Codex snapshots 保留。所有 task-owned runtime／UI 已關閉，容量 lease 與 Governor session 已釋放；port 4000 最後未見 listener，原因未知，本任務未對它發出停止指令。
+- 下一步：本開發點無剩餘產品或發布工作；結案文件透過獨立 PR 歸 main，短期文件分支於合併收尾移除，最終工作樹／refs 讀回記錄於 `output/qa/dev-138/final-audit.json`。
+- 證據：`output/qa/dev-138/production-acceptance.json`；sealed manifest 與 prepare／candidate／activation receipts：`output/release/dev-083/20261006063124-2c064e/`；`cleanup-space.json`、`cleanup-branches.json`、`cleanup-channels.json`、`workspace-cleanup.json`、`session-end.json` 均在 `output/qa/dev-138/`。上述 bundle／tags 與 [QA-DEV-138](qa/QA-DEV-138-branch-consolidation.md) 保存本次原始失敗與恢復證據；DEV-133 Rev12 及 DEV-137 使用者回報仍各自保留，不重算產品交付。
 - 計入交付：否；本開發點不新增產品交付數。
 
 ## DEV-137 AI 整理任務路徑補正與失敗診斷 - 2026-10-06
@@ -205,11 +206,11 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 
 ## 總任務清單
 
-- ◐ DEV-138 [開發點] [進行中／boundary 84/84、UI 25/25 SIMULATION PASS／build 與正式驗證未完成] [P1] [ProJED] DEV-133 guard 恢復、分支整合與正式驗證後清理
+- ✓ DEV-138 [開發點] [已完成／正式發布、限定登入與 RPC 驗收及清理 PASS] [P1] [ProJED] DEV-133 guard 恢復、分支整合與正式驗證後清理
   - 摘要：以 DEV-133 Rev12 已合併基線為歷史依據，恢復有效 guard、整合既有分支，完成正式驗證後再清理；不新增產品交付數。
   - 父任務：DEV-133。
-  - 下一步：完成 browser simulation 及其餘 QA／QC；一次性容量風險決策待覆核，build 與 Firebase `projed-cc78d` production 驗證仍待執行；驗證後再清理冗餘分支／工作樹。
-  - 證據：目前 TypeScript、lint、DEV-133 contract、DEV-136／137 targeted checks PASS；`output/archive/dev-138/20261006/projed-pre-consolidation.bundle`（31 refs，SHA-256 `842623c501c84bf2550c656fa9d77e73be0f191daee02a0cc3150edc6ec01807`）；九個 exact-tip tags：`archive/projed-20261006/...`；raw QA profiles 保留於本機。
+  - 下一步：無剩餘產品／發布工作；限定範圍與原始失敗見 QA-DEV-138，不將 Auth/RPC simulation 或歷史驗收升格為全矩陣正式 PASS。
+  - 證據：source `aefb933`／release `20261006063124-2c064e`；`output/qa/dev-138/production-acceptance.json` 與同目錄清理收據；82/82 provenance、正常 QA Auth／原兩筆 committed receipts／UI 清除 PASS。封存 bundle 與九個 exact-tip tags 保留，raw QA profiles 未上傳；本開發點不新增產品交付數。
   - 計入交付：否。
 
 - ◇ DEV-137 [開發點] [RD／本機 QA PASS／正式部署、資產與合成 API 驗證 PASS／登入後 UI 與草稿流程使用者回報 PASS] [P1] [ProJED AI 整理] 任務路徑補正與失敗診斷
