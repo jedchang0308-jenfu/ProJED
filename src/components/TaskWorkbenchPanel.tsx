@@ -1221,17 +1221,22 @@ const TaskWorkbenchPanel: React.FC<{
 
   return (
       <aside
-        className={`relative z-20 flex h-full shrink-0 flex-col bg-gradient-to-b from-slate-50 via-slate-100 to-slate-200 shadow-[4px_0_20px_rgba(15,23,42,0.12)] ${isResizing ? 'transition-none' : ''}`}
+        className={`relative z-20 flex h-full shrink-0 flex-col overflow-hidden rounded-xl border bg-slate-200 shadow-sm ${
+          previewedPanel === 'task-workbench'
+            ? 'border-primary-500 ring-2 ring-primary-400/95 shadow-[0_0_0_4px_rgba(99,102,241,0.22)]'
+            : 'border-slate-300'
+        } ${isResizing ? 'transition-none' : ''}`}
        style={{ width: panelWidthStyle }}
         data-task-workbench-panel="true"
         data-layout-region="task-command-center"
         data-task-workbench-inline="true"
+       data-ui-container="task-workbench"
        data-panel-previewed={previewedPanel === 'task-workbench' ? 'task-workbench' : undefined}
-       aria-label="全域任務平台"
+       aria-label="所有任務"
      >
         <div
           role="separator"
-          aria-label="調整全域任務平台寬度"
+          aria-label="調整所有任務寬度"
           aria-orientation="vertical"
           aria-valuemin={MIN_TASK_WORKBENCH_WIDTH}
           aria-valuemax={MAX_TASK_WORKBENCH_WIDTH}
@@ -1239,23 +1244,23 @@ const TaskWorkbenchPanel: React.FC<{
           tabIndex={0}
           onPointerDown={handleResizeStart}
           onKeyDown={handleResizeKeyDown}
-          title="拖拉調整全域任務平台寬度；方向鍵也可微調"
+          title="拖拉調整所有任務寬度；方向鍵也可微調"
           className="task-workbench-resize-handle absolute right-0 top-0 z-30 h-full w-3 cursor-col-resize focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
           data-task-workbench-resize-handle="true"
         />
         <div
-          className={previewedPanel === 'task-workbench' ? 'relative flex min-h-0 flex-1 flex-col ring-2 ring-inset ring-primary-400/95' : 'relative flex min-h-0 flex-1 flex-col'}
+          className="relative flex min-h-0 flex-1 flex-col"
           data-panel-preview-subtree={previewedPanel === 'task-workbench' ? 'task-workbench' : undefined}
         >
           <div
-            className={previewedPanel === 'task-workbench' ? 'relative border border-primary-500 bg-primary-50/70 px-3 py-2.5 ring-2 ring-inset ring-primary-500' : 'relative border border-slate-300 bg-gradient-to-r from-white via-slate-50 to-slate-100 px-3 py-2.5 shadow-[0_1px_0_rgba(15,23,42,0.08)]'}
+            className={previewedPanel === 'task-workbench' ? 'relative h-[43px] shrink-0 border border-slate-300 bg-primary-50/70 px-3 py-1' : 'relative h-[43px] shrink-0 border border-slate-300 bg-gradient-to-r from-white via-slate-50 to-slate-100 px-3 py-1 shadow-[0_1px_0_rgba(15,23,42,0.08)]'}
             data-task-workbench-filter-control-area="true"
             data-panel-preview-source={previewedPanel === 'task-workbench' ? 'task-workbench' : undefined}
           >
           <div className="flex items-center gap-2">
             <div className="min-w-0 shrink-0 px-1 py-1" data-task-command-center-title="true">
               <div className="whitespace-nowrap text-sm font-black text-slate-700">
-                全域任務平台
+                所有任務
               </div>
             </div>
             <button
@@ -1276,7 +1281,7 @@ const TaskWorkbenchPanel: React.FC<{
               type="button"
               onClick={closePanel}
               className="ml-auto inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700"
-              title="收合全域任務平台"
+              title="收合所有任務"
               data-task-workbench-collapse-toggle="true"
             >
               <ChevronLeft size={16} />
@@ -1308,7 +1313,7 @@ const TaskWorkbenchPanel: React.FC<{
 
         <div
           ref={laneStackRef}
-          className="flex min-h-0 flex-1 flex-col overflow-hidden"
+          className="flex min-h-0 flex-1 flex-col overflow-hidden bg-slate-200"
           data-task-workbench-lane-stack="true"
         >
           <WorkbenchUnclassifiedSection
@@ -1332,7 +1337,7 @@ const TaskWorkbenchPanel: React.FC<{
             onPointerDown={handleLaneResizeStart}
             onKeyDown={handleLaneResizeKeyDown}
             title="拖拉調整未歸位與已歸位高度；上下方向鍵也可微調"
-            className={`group relative z-30 flex h-3 shrink-0 touch-none cursor-row-resize items-center bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${isResizingLanes ? 'bg-primary/5' : ''}`}
+            className={`group relative z-30 flex h-3 shrink-0 touch-none cursor-row-resize items-center bg-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${isResizingLanes ? 'bg-primary/5' : ''}`}
             data-task-workbench-lane-resize-handle="true"
           >
             <span

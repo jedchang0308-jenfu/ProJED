@@ -1,26 +1,18 @@
 // @ts-nocheck
 import React from 'react';
-import { ChevronLeft, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
-import useAuthStore from '../store/useAuthStore';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
 import { useRecordDraftGuard } from '../hooks/useRecordDraftGuard';
 import { toast } from '../store/useToastStore';
 import { markLeftPanelClosed, markLeftPanelOpened } from '../utils/leftPanelEscapeStack';
-import {
-  clampWorkspaceSidebarWidth,
-  getSharedInlinePanelWidthStyle,
-  MAX_WORKSPACE_SIDEBAR_WIDTH,
-  MIN_WORKSPACE_SIDEBAR_WIDTH,
-  readWorkspaceSidebarWidth,
-  writeWorkspaceSidebarWidth,
-} from '../features/layout/preferences';
-import { readTaskWorkbenchPanelPrefs } from '../features/taskWorkbench/preferences';
-import {
-  hydrateAccountLayoutPreferences,
-  persistAccountLayoutPreferences,
-} from '../services/accountPreferencesService';
 import { usePanelPreview } from './panelPreviewContext';
+import {
+  clampTaskDetailsModalSize,
+  getTaskDetailsModalDefaultSize,
+  getTaskDetailsModalMaximumSize,
+  getTaskDetailsModalMinimumSize,
+} from './taskDetailsModalSizing';
 import { isPrimaryPointerActivation } from '../interactions/pointerActivation';
 
 const BOARD_WORKSPACE_VIEWS = ['list', 'mindmap', 'board', 'goal', 'gantt', 'calendar'];
@@ -28,19 +20,12 @@ const SETTINGS_SCOPE_VIEWS = ['settings', 'calendar_subscriptions'];
 const TITLE_INPUT_CLASS =
   'min-w-0 flex-1 rounded border border-primary/30 bg-white px-2 py-1 text-xs font-semibold text-slate-700 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20';
 
-const persistWorkspaceSidebarWidth = (width: number, accountId: string | null) => {
-  const clampedWidth = clampWorkspaceSidebarWidth(width);
-  writeWorkspaceSidebarWidth(clampedWidth, accountId);
-  persistAccountLayoutPreferences(accountId, { workspaceSidebarWidth: clampedWidth });
-};
-
 const isTextInputEvent = (event) => {
   const target = event.target;
   return target?.closest?.('input, textarea, select, [contenteditable="true"]');
 };
 
 const Sidebar = () => {
-  const accountId = useAuthStore(state => state.user?.uid ?? null);
   const { previewedPanel } = usePanelPreview();
   const {
     workspaces,
@@ -69,63 +54,27 @@ const Sidebar = () => {
   const [newWorkspaceTitle, setNewWorkspaceTitle] = React.useState('');
   const [newWorkspaceError, setNewWorkspaceError] = React.useState('');
   const [isCreatingWorkspace, setIsCreatingWorkspace] = React.useState(false);
-  const [isNarrowViewport, setIsNarrowViewport] = React.useState(false);
-  const [sidebarWidth, setSidebarWidth] = React.useState(() => (
-    readWorkspaceSidebarWidth(accountId)
+  const getViewport = React.useCallback(() => ({
+    width: typeof window === 'undefined' ? 1120 : window.innerWidth,
+    height: typeof window === 'undefined' ? 720 : window.innerHeight,
+  }), []);
+  const [workspaceModalSize, setWorkspaceModalSize] = React.useState(() => (
+    getTaskDetailsModalDefaultSize(getViewport())
   ));
-  const [isResizing, setIsResizing] = React.useState(false);
-  const sidebarWidthRef = React.useRef(sidebarWidth);
-  const resizeCleanupRef = React.useRef<(() => void) | null>(null);
+  const workspaceModalMinimumSize = getTaskDetailsModalMinimumSize(getViewport());
+  const workspaceModalMaximumSize = getTaskDetailsModalMaximumSize(getViewport());
   const isSettingsScopeView = SETTINGS_SCOPE_VIEWS.includes(currentView);
   const { canCreateBoard, canEditBoardSettings } = useBoardPermissions();
   const guardRecordDraft = useRecordDraftGuard();
-  React.useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
-    const media = window.matchMedia('(max-width: 767px), (hover: none) and (pointer: coarse)');
-    const syncViewport = () => setIsNarrowViewport(media.matches);
-    syncViewport();
-    media.addEventListener?.('change', syncViewport);
-    return () => media.removeEventListener?.('change', syncViewport);
-  }, []);
-
-  React.useEffect(() => {
-    const nextWidth = readWorkspaceSidebarWidth(accountId);
-    sidebarWidthRef.current = nextWidth;
-    setSidebarWidth(nextWidth);
-
-    let cancelled = false;
-    void hydrateAccountLayoutPreferences(accountId).then(preferences => {
-      if (cancelled || typeof preferences.workspaceSidebarWidth !== 'number') return;
-      const hydratedWidth = clampWorkspaceSidebarWidth(preferences.workspaceSidebarWidth);
-      sidebarWidthRef.current = hydratedWidth;
-      setSidebarWidth(hydratedWidth);
-      writeWorkspaceSidebarWidth(hydratedWidth, accountId);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [accountId]);
-
-  React.useEffect(() => {
-    sidebarWidthRef.current = sidebarWidth;
-  }, [sidebarWidth]);
 
   React.useEffect(() => {
     const handleViewportResize = () => {
-      setSidebarWidth(previousWidth => {
-        const nextWidth = clampWorkspaceSidebarWidth(previousWidth);
-        sidebarWidthRef.current = nextWidth;
-        persistWorkspaceSidebarWidth(nextWidth, accountId);
-        return nextWidth;
-      });
+      setWorkspaceModalSize(previousSize => clampTaskDetailsModalSize(previousSize, getViewport()));
     };
 
     window.addEventListener('resize', handleViewportResize);
     return () => window.removeEventListener('resize', handleViewportResize);
-  }, [accountId]);
-
-  React.useEffect(() => () => resizeCleanupRef.current?.(), []);
+  }, [getViewport]);
 
   React.useEffect(() => {
     if (!isSidebarOpen) {
@@ -240,13 +189,6 @@ const Sidebar = () => {
     });
   };
 
-  const handleWorkspaceTitleKeyDown = (event, workspace) => {
-    if (isTextInputEvent(event)) return;
-    if (event.key !== 'F2') return;
-    event.preventDefault();
-    startWorkspaceTitleEdit(workspace);
-  };
-
   const openCreateWorkspaceDialog = React.useCallback(() => {
     setNewWorkspaceTitle('');
     setNewWorkspaceError('');
@@ -290,94 +232,51 @@ const Sidebar = () => {
     }
   }, [addWorkspace, newWorkspaceTitle]);
 
-  const mobileSharedPanelWidth = readTaskWorkbenchPanelPrefs(accountId).width;
-  const sidebarWidthStyle = isNarrowViewport
-    ? getSharedInlinePanelWidthStyle(mobileSharedPanelWidth)
-    : `${sidebarWidth}px`;
-
-  const applySidebarWidth = (nextWidth: number, persist = false) => {
-    const clampedWidth = clampWorkspaceSidebarWidth(nextWidth);
-    sidebarWidthRef.current = clampedWidth;
-    setSidebarWidth(clampedWidth);
-    if (persist) persistWorkspaceSidebarWidth(clampedWidth, accountId);
-  };
-
-  const handleResizeStart = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!isPrimaryPointerActivation(event)) return;
-    event.preventDefault();
-    event.stopPropagation();
-    resizeCleanupRef.current?.();
-
-    const startX = event.clientX;
-    const startWidth = sidebarWidthRef.current;
-    const previousCursor = document.body.style.cursor;
-    const previousUserSelect = document.body.style.userSelect;
-
-    setIsResizing(true);
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-
-    const handlePointerMove = (moveEvent: PointerEvent) => {
-      applySidebarWidth(startWidth + moveEvent.clientX - startX);
-    };
-
-    const cleanup = () => {
-      setIsResizing(false);
-      persistWorkspaceSidebarWidth(sidebarWidthRef.current, accountId);
-      document.body.style.cursor = previousCursor;
-      document.body.style.userSelect = previousUserSelect;
-      window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerup', cleanup);
-      window.removeEventListener('pointercancel', cleanup);
-      resizeCleanupRef.current = null;
-    };
-
-    resizeCleanupRef.current = cleanup;
-    window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('pointerup', cleanup);
-    window.addEventListener('pointercancel', cleanup);
-  };
-
-  const handleResizeKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-    event.preventDefault();
-    applySidebarWidth(sidebarWidth + (event.key === 'ArrowRight' ? 24 : -24), true);
-  };
-
   if (!isSidebarOpen) {
     return null;
   }
 
   return (
-    <aside
-      id="workspace-board-sidebar"
-      className={`relative z-10 h-full flex-shrink-0 overflow-hidden bg-slate-50 shadow-[1px_0_0_rgba(15,23,42,0.03)] ${isResizing ? 'transition-none' : 'transition-all duration-300 ease-in-out'}`}
-     style={{ width: sidebarWidthStyle }}
-      data-sidebar-panel="expanded"
-      data-layout-region="workspace-sidebar"
-      data-sidebar-inline="true"
-     data-panel-previewed={previewedPanel === 'workspace-sidebar' ? 'workspace-sidebar' : undefined}
-   >
-      <div
-        role="separator"
-        aria-label="調整工作區與看板側欄寬度"
-        aria-orientation="vertical"
-        aria-valuemin={MIN_WORKSPACE_SIDEBAR_WIDTH}
-        aria-valuemax={MAX_WORKSPACE_SIDEBAR_WIDTH}
-        aria-valuenow={sidebarWidth}
-        tabIndex={0}
-        onPointerDown={handleResizeStart}
-        onKeyDown={handleResizeKeyDown}
-        title="拖拉調整工作區與看板側欄寬度；方向鍵也可微調"
-        className="workspace-sidebar-resize-handle absolute right-0 top-0 z-20 h-full w-3 translate-x-0 cursor-col-resize focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-        data-sidebar-resize-handle="true"
-      />
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/35 px-4 py-6 backdrop-blur-[2px]"
+      onMouseDown={(event) => {
+        if (event.detail > 1) return;
+        if (event.target === event.currentTarget && isPrimaryPointerActivation(event)) {
+          setSidebarOpen(false);
+        }
+      }}
+      data-sidebar-backdrop="true"
+    >
+      <aside
+        id="workspace-board-sidebar"
+        role="dialog"
+        aria-modal="true"
+        aria-label="工作區與看板"
+        className="flex min-h-[420px] min-w-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl"
+        style={{
+          width: workspaceModalSize.width,
+          height: workspaceModalSize.height,
+          minWidth: workspaceModalMinimumSize.width,
+          minHeight: workspaceModalMinimumSize.height,
+          maxWidth: workspaceModalMaximumSize.width,
+          maxHeight: workspaceModalMaximumSize.height,
+          resize: 'both',
+        }}
+        onMouseDown={(event) => event.stopPropagation()}
+        data-sidebar-panel="expanded"
+        data-layout-region="workspace-sidebar"
+        data-sidebar-inline="true"
+        data-sidebar-popup="true"
+        data-sidebar-modal-dialog="true"
+        data-ui-container="workspace-sidebar"
+        data-panel-previewed={previewedPanel === 'workspace-sidebar' ? 'workspace-sidebar' : undefined}
+      >
       <div
         className={previewedPanel === 'workspace-sidebar' ? 'flex h-full w-full flex-col ring-2 ring-inset ring-primary-400/95' : 'flex h-full w-full flex-col'}
         data-panel-preview-subtree={previewedPanel === 'workspace-sidebar' ? 'workspace-sidebar' : undefined}
       >
         <div
-          className={previewedPanel === 'workspace-sidebar' ? 'relative border border-primary-500 bg-primary-50/70 px-3 py-2.5 ring-2 ring-inset ring-primary-500' : 'relative border border-slate-200/90 bg-white/90 px-3 py-2.5 shadow-[0_1px_0_rgba(15,23,42,0.06)]'}
+          className={previewedPanel === 'workspace-sidebar' ? 'relative border border-primary-500 bg-primary-50/70 px-3 py-2.5 ring-2 ring-inset ring-primary-500' : 'relative border border-slate-200/90 bg-slate-100/90 px-3 py-2.5 shadow-[0_1px_0_rgba(15,23,42,0.06)]'}
           data-sidebar-control-area="true"
           data-panel-preview-source={previewedPanel === 'workspace-sidebar' ? 'workspace-sidebar' : undefined}
         >
@@ -394,155 +293,171 @@ const Sidebar = () => {
               type="button"
               onClick={() => setSidebarOpen(false)}
               className="ml-auto inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
-              title="收合工作區與看板側欄"
-              aria-label="收合工作區與看板側欄"
+              title="關閉工作區與看板"
+              aria-label="關閉工作區與看板"
               data-sidebar-collapse-toggle="true"
             >
-              <ChevronLeft size={16} />
+              <X size={16} />
             </button>
           </div>
         </div>
 
         <div
-          className="flex-1 space-y-4 overflow-y-auto bg-slate-50/90 p-2"
+          className="min-h-0 flex-1 overflow-y-auto bg-slate-50/90 p-3"
           onContextMenu={handleSidebarContextMenu}
           data-sidebar-workspace-list="true"
         >
-          {workspaces.map((ws) => (
-            <div key={ws.id} className="space-y-1 rounded-lg" data-sidebar-workspace-group="true">
-              <div
-                className="group flex items-center justify-between gap-2 px-3 py-1.5"
-                onContextMenu={(event) => handleWorkspaceContextMenu(event, ws)}
+          <div className="space-y-3">
+            {workspaces.map((ws) => (
+              <section
+                key={ws.id}
+                className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm"
+                data-sidebar-workspace-group="true"
               >
-                {editingWorkspaceId === ws.id ? (
-                  <input
-                    value={workspaceTitleDraft}
-                    autoFocus
-                    onChange={(event) => setWorkspaceTitleDraft(event.target.value)}
-                    onBlur={() => commitWorkspaceTitleEdit(ws)}
-                    onKeyDown={(event) => {
-                      if (event.nativeEvent?.isComposing) return;
-                      if (event.key === 'Enter') {
-                        event.preventDefault();
-                        event.currentTarget.blur();
-                      }
-                      if (event.key === 'Escape') {
-                        event.preventDefault();
-                        cancelWorkspaceTitleEdit();
-                      }
-                    }}
-                    className={TITLE_INPUT_CLASS}
-                    aria-label="編輯工作區名稱"
-                    data-workspace-title-input="true"
-                  />
-                ) : (
-                  <span
-                    tabIndex={0}
-                    data-sidebar-workspace-title="true"
-                    onKeyDown={(event) => handleWorkspaceTitleKeyDown(event, ws)}
-                    className="min-w-0 flex-1 truncate rounded text-left text-xs font-bold text-slate-500 transition-colors hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                    title="右鍵開啟選單，F2 重新命名"
-                  >
-                    {ws.title}
-                  </span>
-                )}
-              </div>
-
-              <div className="relative ml-3 space-y-1 border-l border-slate-300/80 pl-3" data-sidebar-board-tree="true">
-                {ws.boards.map((board) => {
-                  const isCurrentBoard = activeBoardId === board.id;
-                  const isMainBoardActive = isCurrentBoard && (BOARD_WORKSPACE_VIEWS.includes(currentView) || isSettingsScopeView);
-                  const isEditingBoard = editingBoard?.workspaceId === ws.id && editingBoard?.boardId === board.id;
-                  const boardItemTitle = isSettingsScopeView && isCurrentBoard
-                    ? '點擊回到看板'
-                    : undefined;
-                  const handleBoardClick = () => {
-                    const switchToBoard = () => {
-                      switchBoard(ws.id, board.id);
-                      if (isNarrowViewport) setSidebarOpen(false);
-                    };
-                    if (isCurrentBoard && isMainBoardActive) {
-                      switchToBoard();
-                      return;
-                    }
-                    void guardRecordDraft(switchToBoard, {
-                      title: isCurrentBoard ? '返回看板？' : '切換看板？',
-                      message: '切換看板會離開目前紀錄；若尚未完成本機保存，請先決定是否存草稿。',
-                    });
-                  };
-
-                  return (
-                    <div
-                      key={board.id}
-                      role="button"
+                <div
+                  className="flex items-center gap-3 border-b border-slate-200 px-3 py-2.5"
+                  onContextMenu={(event) => handleWorkspaceContextMenu(event, ws)}
+                >
+                  {editingWorkspaceId === ws.id ? (
+                    <input
+                      value={workspaceTitleDraft}
+                      autoFocus
+                      onChange={(event) => setWorkspaceTitleDraft(event.target.value)}
+                      onBlur={() => commitWorkspaceTitleEdit(ws)}
+                      onKeyDown={(event) => {
+                        if (event.nativeEvent?.isComposing) return;
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          event.currentTarget.blur();
+                        }
+                        if (event.key === 'Escape') {
+                          event.preventDefault();
+                          cancelWorkspaceTitleEdit();
+                        }
+                      }}
+                      className={TITLE_INPUT_CLASS}
+                      aria-label="編輯工作區名稱"
+                      data-workspace-title-input="true"
+                    />
+                  ) : (
+                    <span
                       tabIndex={0}
-                      data-sidebar-board-row="true"
-                      data-sidebar-current-settings-project={isSettingsScopeView && isCurrentBoard ? 'true' : undefined}
-                      title={boardItemTitle}
-                      onClick={handleBoardClick}
-                      onContextMenu={(event) => handleBoardContextMenu(event, ws, board)}
+                      data-sidebar-workspace-title="true"
                       onKeyDown={(event) => {
                         if (isTextInputEvent(event)) return;
                         if (event.key === 'F2') {
                           event.preventDefault();
-                          if (canEditBoardSettings) {
-                            startBoardTitleEdit(ws, board);
-                          }
-                          return;
-                        }
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault();
-                          handleBoardClick();
+                          startWorkspaceTitleEdit(ws);
                         }
                       }}
-                      className={`group/item flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
-                        isMainBoardActive
-                          ? 'cursor-pointer bg-primary text-white shadow-md ring-1 ring-primary/20'
-                          : 'cursor-pointer text-slate-600 hover:bg-white hover:shadow-sm'
-                      }`}
+                      className="min-w-0 flex-1 truncate rounded text-left text-sm font-semibold text-slate-700 outline-none transition-colors hover:text-primary focus:ring-2 focus:ring-primary/30"
+                      title="右鍵開啟選單，F2 重新命名"
                     >
-                      {isEditingBoard ? (
-                        <input
-                          value={boardTitleDraft}
-                          autoFocus
-                          onClick={(event) => event.stopPropagation()}
-                          onChange={(event) => setBoardTitleDraft(event.target.value)}
-                          onBlur={() => commitBoardTitleEdit(ws, board)}
-                          onKeyDown={(event) => {
-                            if (event.nativeEvent?.isComposing) return;
-                            if (event.key === 'Enter') {
-                              event.preventDefault();
-                              event.currentTarget.blur();
+                      {ws.title}
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid gap-2 p-2 sm:grid-cols-2" data-sidebar-board-tree="true">
+                  {ws.boards.length ? ws.boards.map((board) => {
+                    const isCurrentBoard = activeBoardId === board.id;
+                    const isMainBoardActive = isCurrentBoard && (BOARD_WORKSPACE_VIEWS.includes(currentView) || isSettingsScopeView);
+                    const isEditingBoard = editingBoard?.workspaceId === ws.id && editingBoard?.boardId === board.id;
+                    const boardItemTitle = isSettingsScopeView && isCurrentBoard
+                      ? '點擊回到看板'
+                      : undefined;
+                    const handleBoardClick = () => {
+                      const switchToBoard = () => {
+                        switchBoard(ws.id, board.id);
+                        setSidebarOpen(false);
+                      };
+                      if (isCurrentBoard && isMainBoardActive) {
+                        switchToBoard();
+                        return;
+                      }
+                      void guardRecordDraft(switchToBoard, {
+                        title: isCurrentBoard ? '返回看板？' : '切換看板？',
+                        message: '切換看板會離開目前紀錄；若尚未完成本機保存，請先決定是否存草稿。',
+                      });
+                    };
+
+                    return (
+                      <div
+                        key={board.id}
+                        role="button"
+                        tabIndex={0}
+                        data-sidebar-board-row="true"
+                        data-sidebar-current-settings-project={isSettingsScopeView && isCurrentBoard ? 'true' : undefined}
+                        title={boardItemTitle}
+                        onClick={handleBoardClick}
+                        onContextMenu={(event) => handleBoardContextMenu(event, ws, board)}
+                        onKeyDown={(event) => {
+                          if (isTextInputEvent(event)) return;
+                          if (event.key === 'F2') {
+                            event.preventDefault();
+                            if (canEditBoardSettings) {
+                              startBoardTitleEdit(ws, board);
                             }
-                            if (event.key === 'Escape') {
-                              event.preventDefault();
-                              cancelBoardTitleEdit();
-                            }
-                          }}
-                          className={`${TITLE_INPUT_CLASS} text-sm ${isMainBoardActive ? 'text-slate-700' : ''}`}
-                          aria-label="編輯看板名稱"
-                          data-board-title-input="true"
-                        />
-                      ) : (
-                        <span
-                          data-sidebar-board-title="true"
-                          className="min-w-0 flex-1 truncate rounded text-left text-sm font-medium"
-                          title={canEditBoardSettings ? '點擊開啟看板，右鍵開啟選單，F2 重新命名' : '點擊開啟看板'}
-                        >
-                          {board.title}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+                            return;
+                          }
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            handleBoardClick();
+                          }
+                        }}
+                        className={`group/item flex min-h-[66px] w-full items-start gap-2 rounded-lg border px-3 py-2.5 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
+                          isMainBoardActive
+                            ? 'cursor-pointer border-primary bg-primary text-white shadow-md ring-1 ring-primary/20'
+                            : 'cursor-pointer border-slate-200 bg-slate-50/80 text-slate-700 hover:border-primary/30 hover:bg-white hover:shadow-sm'
+                        }`}
+                      >
+                        {isEditingBoard ? (
+                          <input
+                            value={boardTitleDraft}
+                            autoFocus
+                            onClick={(event) => event.stopPropagation()}
+                            onChange={(event) => setBoardTitleDraft(event.target.value)}
+                            onBlur={() => commitBoardTitleEdit(ws, board)}
+                            onKeyDown={(event) => {
+                              if (event.nativeEvent?.isComposing) return;
+                              if (event.key === 'Enter') {
+                                event.preventDefault();
+                                event.currentTarget.blur();
+                              }
+                              if (event.key === 'Escape') {
+                                event.preventDefault();
+                                cancelBoardTitleEdit();
+                              }
+                            }}
+                            className={`${TITLE_INPUT_CLASS} text-sm ${isMainBoardActive ? 'text-slate-700' : ''}`}
+                            aria-label="編輯看板名稱"
+                            data-board-title-input="true"
+                          />
+                        ) : (
+                          <span
+                            data-sidebar-board-title="true"
+                            className="min-w-0 flex-1 truncate rounded text-left text-sm font-medium"
+                            title={canEditBoardSettings ? '點擊開啟看板，右鍵開啟選單，F2 重新命名' : '點擊開啟看板'}
+                          >
+                            {board.title}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  }) : (
+                    <p className="col-span-full px-2 py-2 text-xs text-slate-400">
+                      此工作區尚未建立看板
+                    </p>
+                  )}
+                </div>
+              </section>
+            ))}
+          </div>
         </div>
 
       </div>
 
-      {isCreateWorkspaceOpen ? (
+        {isCreateWorkspaceOpen ? (
         <div
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 px-4 backdrop-blur-sm"
           data-workspace-create-dialog="true"
@@ -612,8 +527,9 @@ const Sidebar = () => {
             </div>
           </form>
         </div>
-      ) : null}
-    </aside>
+        ) : null}
+      </aside>
+    </div>
   );
 };
 

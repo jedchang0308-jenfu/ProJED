@@ -2062,7 +2062,7 @@ const BoardView = () => {
             )}
         >
             <div
-                className="flex-1 flex min-w-0 overflow-hidden bg-slate-100"
+                className="flex-1 flex min-w-0 gap-2 overflow-hidden bg-slate-400"
                 data-layout-region="board-shell"
             >
                 <TaskWorkbenchPanel
@@ -2070,8 +2070,9 @@ const BoardView = () => {
                     canManageTaskReference={canManageTaskReference}
                 />
                 <div
-                    className="flex min-w-0 flex-1 flex-col overflow-hidden bg-slate-100"
+                    className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-300 bg-slate-100 shadow-sm"
                     data-layout-region="board-workspace"
+                    data-ui-container="board-workspace"
                 >
                     {isRecordTaskSelectionMode && (
                         <div className="shrink-0 border-b border-blue-200 bg-blue-50 px-[10px] py-[6px]">
@@ -2127,7 +2128,7 @@ const BoardView = () => {
                     {/* 列表畫布 (Lists Canvas) */}
                     <div
                         ref={setBoardCanvasRef}
-                        className={`scroll-container mobile-pan-surface flex-1 overflow-x-auto overflow-y-hidden bg-slate-100/90 ${compactClassNames.canvas} flex gap-[12px] items-start`}
+                        className={`scroll-container mobile-pan-surface flex-1 overflow-x-auto overflow-y-hidden bg-slate-200 ${compactClassNames.canvas} flex gap-[12px] items-start`}
                         data-mobile-pan-surface="board"
                         data-kanban-mobile-surface={isMeetingRecordUnavailable ? 'true' : undefined}
                         data-kanban-view-size={effectiveViewSize}
