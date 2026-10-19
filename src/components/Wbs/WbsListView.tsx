@@ -26,6 +26,8 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
   const activeWorkspaceId = useBoardStore(s => s.activeWorkspaceId);
   const taskFilters = useTaskFilterStore(s => s.filters);
   const resetTaskFilters = useTaskFilterStore(s => s.resetFilters);
+  const taskFiltersLocked = useTaskFilterStore(s => s.controlsLocked);
+  const taskFilterWarning = useTaskFilterStore(s => s.warning);
   const dependencySelection = useBoardStore(s => s.dependencySelection);
   const setDependencySelection = useBoardStore(s => s.setDependencySelection);
   // 從全域 Store 取出顯示狀態
@@ -188,6 +190,7 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
   const nodes = useWbsStore(s => s.nodes);
   const taskLoading = useWbsStore(s => s.loading);
   const taskLoadError = useWbsStore(s => s.error);
+  const taskResultError = taskLoadError || (taskFiltersLocked ? taskFilterWarning || '篩選偏好無法載入' : null);
   const filterProjection = React.useMemo(
     () => projectTaskFilterResults(
       buildTaskFilterNodesWithTrackingReferences(Object.values(nodes), trackingReferences, boardId),
@@ -268,12 +271,12 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
         <TaskFilterResultState
           projection={filterProjection}
           loading={taskLoading}
-          error={taskLoadError}
+          error={taskResultError}
           onReset={resetTaskFilters}
           onCreate={handleCreateRootNode}
           canCreate={canCreateTask}
         />
-        {!taskLoading && !taskLoadError && (filterProjection.matchedTaskIds.size > 0 || boardTrackingReferences.length > 0) ? (
+        {!taskLoading && !taskResultError && (filterProjection.matchedTaskIds.size > 0 || boardTrackingReferences.length > 0) ? (
           <div className="relative flex flex-col overflow-hidden rounded-lg border border-border-strong bg-surface-task shadow-[0_4px_12px_rgba(15,23,42,0.05)]">
             {/* Header Column Titles (Tree Grid) */}
             <div className={`grid ${showStartDate ? 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_130px_80px]' : 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_80px]'} min-h-[32px] py-[6px] px-[10px] bg-surface-panel border-b border-border-strong text-xs font-semibold text-slate-500 sticky top-0 z-10`}>

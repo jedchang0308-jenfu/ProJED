@@ -1304,6 +1304,9 @@ const BoardView = () => {
     const taskLoadError = useWbsStore(s => s.error);
     const taskFilters = useTaskFilterStore(s => s.filters);
     const resetTaskFilters = useTaskFilterStore(s => s.resetFilters);
+    const taskFiltersLocked = useTaskFilterStore(s => s.controlsLocked);
+    const taskFilterWarning = useTaskFilterStore(s => s.warning);
+    const taskResultError = taskLoadError || (taskFiltersLocked ? taskFilterWarning || '篩選偏好無法載入' : null);
     const filterProjection = useMemo(
         () => projectTaskFilterResults(
             buildTaskFilterNodesWithTrackingReferences(Object.values(storeNodes), trackingReferences, activeBoardId || ''),
@@ -2139,11 +2142,11 @@ const BoardView = () => {
                         <TaskFilterResultState
                             projection={filterProjection}
                             loading={taskLoading}
-                            error={taskLoadError}
+                            error={taskResultError}
                             onReset={resetTaskFilters}
                             className="w-full min-w-[18rem] self-stretch"
                         />
-                        {!taskLoading && !taskLoadError && (filterProjection.matchedTaskIds.size > 0 || rootTrackingReferences.length > 0) ? <SortableContext items={boardRootRows.map(row => row.kind === 'primary' ? primaryPlacementId(row.node.id) : row.reference.id)} strategy={horizontalListSortingStrategy}>
+                        {!taskLoading && !taskResultError && (filterProjection.matchedTaskIds.size > 0 || rootTrackingReferences.length > 0) ? <SortableContext items={boardRootRows.map(row => row.kind === 'primary' ? primaryPlacementId(row.node.id) : row.reference.id)} strategy={horizontalListSortingStrategy}>
                             {boardRootRows.map(row => row.kind === 'primary' ? (
                                 <KanbanColumn key={row.node.id} nodeId={row.node.id} filterProjection={filterProjection} />
                             ) : (
@@ -2152,7 +2155,7 @@ const BoardView = () => {
                         </SortableContext> : null}
 
                         {/* 新增列表按鈕 */}
-                        {!taskLoading && !taskLoadError && (filterProjection.matchedTaskIds.size > 0 || filterProjection.totalTaskCount === 0) ? <KanbanRootDropZone
+                        {!taskLoading && !taskResultError && (filterProjection.matchedTaskIds.size > 0 || filterProjection.totalTaskCount === 0) ? <KanbanRootDropZone
                             workspaceId={activeWorkspaceId || ''}
                             boardId={activeBoardId}
                             anchorNodeId={rootNodes[rootNodes.length - 1]?.id}

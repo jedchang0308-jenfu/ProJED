@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 6,
+  "today": "2026-10-19",
+  "timezone": "Asia/Taipei",
+  "withinDays": 8,
+  "options": {
+    "people": ["person-a", "person-b", "person-c"],
+    "tags": ["tag-a", "tag-b", "tag-c"]
+  },
+  "tasks": [
+    {
+      "id": "unset-todo-unassigned-untagged",
+      "title": "採購 無日期",
+      "status": "todo",
+      "endDate": null,
+      "assigneeId": null,
+      "assigneeIds": [],
+      "collaboratorIds": [],
+      "tagIds": []
+    },
+    {
+      "id": "invalid-in-progress-collaborator-tag-a",
+      "title": "Beta INTEGRATION invalid date",
+      "status": "in_progress",
+      "endDate": "not-a-date",
+      "assigneeId": "person-a",
+      "assigneeIds": ["person-a"],
+      "collaboratorIds": ["person-b"],
+      "tagIds": ["tag-a"]
+    },
+    {
+      "id": "before-completed-owner-a-tag-b",
+      "title": "已完成的過去工作",
+      "status": "completed",
+      "endDate": "2026-10-18",
+      "assigneeId": "person-a",
+      "assigneeIds": ["person-a"],
+      "collaboratorIds": [],
+      "tagIds": ["tag-b"]
+    },
+    {
+      "id": "before-todo-midnight-minus",
+      "title": "台北午夜前",
+      "status": "todo",
+      "endDate": "2026-10-18T15:59:59Z",
+      "assigneeId": "person-b",
+      "assigneeIds": ["person-b"],
+      "collaboratorIds": [],
+      "tagIds": ["tag-a", "tag-b"]
+    },
+    {
+      "id": "today-in-progress-midnight",
+      "title": "台北午夜整點採購",
+      "status": "in_progress",
+      "endDate": "2026-10-18T16:00:00Z",
+      "assigneeId": "person-a",
+      "assigneeIds": ["person-a"],
+      "collaboratorIds": ["person-b"],
+      "tagIds": ["tag-a", "tag-c"]
+    },
+    {
+      "id": "day-8-onhold-owner-c-tag-c",
+      "title": "第八天暫緩",
+      "status": "onhold",
+      "endDate": "2026-10-27",
+      "assigneeId": "person-c",
+      "assigneeIds": ["person-c"],
+      "collaboratorIds": [],
+      "tagIds": ["tag-c"]
+    },
+    {
+      "id": "day-9-completed-future-option",
+      "title": "第九天未來選項",
+      "status": "completed",
+      "endDate": "2026-10-28",
+      "assigneeId": "person-future",
+      "assigneeIds": ["person-future"],
+      "collaboratorIds": [],
+      "tagIds": ["tag-future"]
+    },
+    {
+      "id": "day-365-todo-owner-b-tag-b",
+      "title": "第三百六十五天",
+      "status": "todo",
+      "endDate": "2027-10-19",
+      "assigneeId": "person-b",
+      "assigneeIds": ["person-b"],
+      "collaboratorIds": [],
+      "tagIds": ["tag-b"]
+    },
+    {
+      "id": "day-366-todo-owner-c-untagged",
+      "title": "第三百六十六天",
+      "status": "todo",
+      "endDate": "2027-10-20",
+      "assigneeId": "person-c",
+      "assigneeIds": ["person-c"],
+      "collaboratorIds": [],
+      "tagIds": []
+    }
+  ],
+  "expected": {
+    "dateBucketsN8": {
+      "unset": [
+        "unset-todo-unassigned-untagged",
+        "invalid-in-progress-collaborator-tag-a"
+      ],
+      "before_today": [
+        "before-completed-owner-a-tag-b",
+        "before-todo-midnight-minus"
+      ],
+      "within_days": [
+        "today-in-progress-midnight",
+        "day-8-onhold-owner-c-tag-c"
+      ],
+      "after_days": [
+        "day-9-completed-future-option",
+        "day-365-todo-owner-b-tag-b",
+        "day-366-todo-owner-c-untagged"
+      ]
+    },
+    "withinDaysN0": ["today-in-progress-midnight"],
+    "withinDaysN365": [
+      "today-in-progress-midnight",
+      "day-8-onhold-owner-c-tag-c",
+      "day-9-completed-future-option",
+      "day-365-todo-owner-b-tag-b"
+    ],
+    "afterDaysN365": ["day-366-todo-owner-c-untagged"],
+    "unassigned": ["unset-todo-unassigned-untagged"],
+    "untagged": [
+      "unset-todo-unassigned-untagged",
+      "day-366-todo-owner-c-untagged"
+    ]
+  }
+}

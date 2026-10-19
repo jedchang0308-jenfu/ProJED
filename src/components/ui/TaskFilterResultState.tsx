@@ -61,7 +61,7 @@ export const TaskFilterResultState: React.FC<TaskFilterResultStateProps> = ({
       {state === 'loading' ? <p>載入任務中…</p> : null}
       {state === 'error' ? (
         <>
-          <p>任務載入失敗</p>
+          <p>{error || '任務載入失敗'}</p>
           <Button variant="secondary" onClick={() => window.location.reload()}>重新載入</Button>
         </>
       ) : null}

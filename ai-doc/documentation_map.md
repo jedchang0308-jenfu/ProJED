@@ -1,5 +1,13 @@
 # ProJED Documentation Map
 
+## 2026-10-19：DEV-118 全選顯示與完整分類矩陣（本機實作與驗收完成／未發布）
+
+產品入口為 [DEV-118 選取矩陣](dev_task.md#dev-118-selection-matrix-20261019)，工程authority為 [SPEC-039 本輪V6定案](specs/SPEC-039-task-filter-core-and-workbench-profiles.md#dev-118-selection-matrix-v6-20261019)。統一為「勾選＝納入；預設全選；全不選＝零筆；同分類 OR、跨分類 AND」，補齊四個日期桶、無人員、無標籤、三態全選、搜尋與0～5分類計數。
+
+使用者後續明確要求dev-autopilot完成DEV-118；本輪狀態為 `V6 Implemented / Local QA-QC PASS / NOT RELEASED`。新矩陣已實作，Model 17／17、偏好恢復18／18、主UI 12組、undo／redo 2組、Calendar完整browser回歸及typecheck／build／本機隔離SQL通過；獨立QC無剩餘缺陷或必要證據缺口。完整結果、失敗保留與版本綁定見[QA-DEV-118本輪驗收](qa/QA-DEV-118-task-filter-positive-inclusion-and-shared-controls.md#dev-118-v6-local-acceptance-20261019)。既有dirty修改已整合為同一V6候選；工作樹未commit／push，未遠端migration或發布。
+
+定案採V6明確all／none／selected；V5空值轉all、明確snapshot保留selected、舊日期保留legacy-v5分支並提供明確轉換入口。Board remote／local journal與Workbench keys升6，升級CAS含updated_at保護、完整readback後清舊值、未知版不覆寫；不修改option選取來迎合暫時空清單。Board／Workbench各自ownership與DEV-062逾期警示保留。Calendar以明確V5型別／helper及control variant隔離，既存snapshot／permission／feed保持；分別驗Board／Workbench V6 parity與Calendar V5 preview／Edge parity。source基線為 `持續優化@06079ce676b638cb7370b75c8c4d9a58d06aa5c6`，本地實作／必要驗證可執行，遠端migration與發布不在本輪範圍。
+
 ## 2026-10-19：DEV-054 自用驗收精簡與 DEV-097 解除連動
 
 現行入口為 [SPEC-054](specs/SPEC-054-mobile-task-drag-precision.md)、[QA-DEV-054](qa/QA-DEV-054-mobile-task-drag-precision.md)、[QC-DEV-054](qc/QC-DEV-054-mobile-task-drag-precision.md) 與 dev_task 的 DEV-054／097 索引。依使用者指示取消雙平台固定次數／成功率與逐筆工作簿／錄影要求，改為實際常用裝置重點確認；未測實機仍未驗證，DEV-054維持驗證中，不因另一平台缺席標阻塞。保留原R01–R15，B需求由現行R／相鄰取消、edge-scroll、action／undo案例承接；移除static verifier的文件字串鎖定，同步before／child preview預期，不修改產品runtime。

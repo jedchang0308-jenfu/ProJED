@@ -21,7 +21,11 @@ const createTask = (
 
 const filterBy = (...selectedAssigneeIds: string[]) => ({
   ...createDefaultTaskFilters(),
-  selectedAssigneeIds,
+  people: {
+    mode: 'selected' as const,
+    ids: selectedAssigneeIds.filter(id => id !== '__unassigned__'),
+    includeUnassigned: selectedAssigneeIds.includes('__unassigned__'),
+  },
 });
 
 const primaryAndCollaboratorTask = createTask('primary-and-collaborator', ['primary-a'], ['collaborator-b']);
@@ -46,8 +50,8 @@ assert.equal(
 );
 assert.equal(
   matchesTaskFilters(collaboratorOnlyTask, filterBy('__unassigned__')),
-  true,
-  'a task without a primary assignee remains unassigned even when it has collaborators',
+  false,
+  'a collaborator-only task is assigned and must not match unassigned',
 );
 assert.equal(
   matchesTaskFilters(unassignedTask, filterBy('__unassigned__')),

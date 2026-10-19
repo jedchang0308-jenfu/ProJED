@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, Copy, RotateCcw, SlidersHorizontal, X } from 'lucide-react';
 import {
-  countActiveTaskFilters,
+  countActiveTaskFiltersV5,
   matchesTaskFilters,
-  normalizeTaskFilters,
-  type TaskFilterQuery,
+  normalizeTaskFiltersV5,
+  type LegacyTaskFilterQueryV5,
 } from '../features/taskFilters';
 import {
   cloneCalendarBoardFilterSnapshot,
@@ -324,7 +324,7 @@ const CalendarSubscriptionBuilderPreview: React.FC<Props> = ({
   const selectedSnapshot = selectedBoard ? boardFilters[selectedBoard.id] : undefined;
   const selectedFilters = selectedSnapshot?.filters ?? createCalendarSafeDefaultTaskFilters(currentUserId);
   const selectedDateTypes = selectedSnapshot?.date_types ?? ['due_date'];
-  const activeFilterCount = countActiveTaskFilters(selectedFilters);
+  const activeFilterCount = countActiveTaskFiltersV5(selectedFilters);
   const manageableWorkspaceSet = useMemo(() => new Set(manageableWorkspaceIds), [manageableWorkspaceIds]);
   const canManageSelectedBoard = allowAllAssignees || !selectedBoard || workspaceAliases(selectedBoard).some(id => manageableWorkspaceSet.has(id));
   const visibleAssigneeOptions = useMemo(() => {
@@ -344,7 +344,7 @@ const CalendarSubscriptionBuilderPreview: React.FC<Props> = ({
     return options;
   }, [assigneeOptions, canManageSelectedBoard, currentUserId, selectedBoard]);
 
-  const updateSelectedFilters = (nextFilters: TaskFilterQuery) => {
+  const updateSelectedFilters = (nextFilters: LegacyTaskFilterQueryV5) => {
     if (!selectedBoard) return;
     const guardedFilters = !canManageSelectedBoard && currentUserId
       ? { ...nextFilters, people: { ids: [currentUserId], includeUnassigned: false } }
@@ -353,7 +353,7 @@ const CalendarSubscriptionBuilderPreview: React.FC<Props> = ({
       ...current,
       [selectedBoard.id]: {
         ...(current[selectedBoard.id] ?? { included: true, date_types: ['due_date'], filters: createCalendarSafeDefaultTaskFilters(currentUserId) }),
-        filters: normalizeTaskFilters(guardedFilters),
+        filters: normalizeTaskFiltersV5(guardedFilters),
       },
     }));
   };
@@ -576,6 +576,7 @@ const CalendarSubscriptionBuilderPreview: React.FC<Props> = ({
                 ) : null}
 
                 <TaskConditionFilterControls
+                  variant="calendar-v5"
                   assigneeOptions={visibleAssigneeOptions}
                   value={selectedFilters}
                   tags={tags}

@@ -65,6 +65,7 @@ export interface WbsBoardState {
   // 選項與過濾狀態
   loading: boolean;
   error: string | null;
+  loadedBoardIds: string[];
   pendingPlacementNodeIds: Record<string, string>;
   /** Non-owning placements; task content remains in `nodes` only. */
   trackingReferences: TaskTrackingReference[];
@@ -876,6 +877,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
   kanbanConfigs: {},
   loading: false,
   error: null,
+  loadedBoardIds: [],
   pendingPlacementNodeIds: {},
   trackingReferences: [],
   stagedTrackingReferences: [],
@@ -919,7 +921,12 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       return acc;
     }, {} as Record<string, TaskNode>);
 
-    set({ nodes: nodesRecord });
+    const loadedBoardIds = options.scopeBoardIds
+      ? Array.from(new Set(options.preserveOutOfScope
+        ? [...currentState.loadedBoardIds, ...options.scopeBoardIds]
+        : options.scopeBoardIds))
+      : Array.from(new Set(nodesWithLocalUnplacedTasks.map(node => node.boardId).filter(Boolean)));
+    set({ nodes: nodesRecord, loadedBoardIds });
     get()._buildIndices(nodesRecord);
   },
 

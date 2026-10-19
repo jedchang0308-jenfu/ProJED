@@ -10,7 +10,7 @@ export const taskFilterChoiceBaseClass =
 
 /** Shared active/inactive treatment for every filter choice. */
 export const taskFilterChoiceActiveClass =
-  'border-primary-600 bg-primary-600 text-white shadow-[0_1px_2px_rgba(79,70,229,0.22)] ring-2 ring-primary-200/90';
+  'border-primary-200 bg-primary-100 text-primary-800 hover:border-primary-300 hover:bg-primary-200/70';
 
 export const taskFilterChoiceInactiveClass =
   'border-slate-300 bg-white text-slate-600 hover:border-primary-400 hover:bg-primary-50 hover:text-primary-700';

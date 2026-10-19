@@ -1,5 +1,210 @@
 # QA-DEV-118：任務篩選器正向包含與跨介面共用控制驗證計畫
 
+## 2026-10-19 Current V6 verification authority
+
+- 關聯 DEV：DEV-118、DEV-039、DEV-045、DEV-048、DEV-062、DEV-090
+- 工程權威：`SPEC-039` 的「全選顯示與完整分類矩陣 v6（2026-10-19）」
+- 計畫狀態：`Local implementation acceptance PASS / Independent QC PASS / NOT RELEASED`
+- 執行邊界：本地產品與直接回歸；不含正式 migration、remote apply、deploy、release 或正式資料寫入
+
+本輪驗證 Board／Workbench 的 V6 明確 `all / none / selected`、四桶日期、V5 無損相容、持久化恢復與
+真實 UI 操作。Calendar 保持 V5 query 與既有 v1～v4 subscription payload、permission、preview／feed；
+不再要求 V6 Board／Workbench 與 V5 Calendar 使用同一 query 得到相同結果。跨版本三 surface parity 已退役。
+
+判定分成三條，不互相代替：
+
+1. 同一 V6 query／source／Taipei today 下，Board 與 Workbench matched IDs 一致；hierarchy context 不增加匹配筆數。
+2. Calendar V5 preview 與既有 Edge／feed fixture identity 一致，外層 payload、權限與 token 語意不變。
+3. 正常 UI 入口實際完成選取、reload、鍵盤、零筆恢復與 scope 隔離；model／source scan／build 不算 UI 證據。
+
+<a id="dev-118-v6-local-acceptance-20261019"></a>
+
+### 本輪本機驗收結果（2026-10-19）
+
+獨立QC最終判定為本機指定範圍PASS，P0／P1／P2與必要證據缺口皆為0。完整產品矩陣維持上方SPEC authority；本節只記實際執行結果。
+
+| 層級 | 實際結果與證據 |
+|---|---|
+| Model／相容性 | V6 model 17／17；偏好migration／恢復18／18。Calendar V5舊fixture、Edge與v3 model／feed原oracle通過。 |
+| 直接回歸 | 初輪14個專用／直接verifier通過；rework後重驗受影響的migration、DEV-090、DEV-048、DEV-039；最後core67／67、parity26／26、cross-board23／23。logs：`output/qa/dev-118/v6/final-run1-group*.json`、`rework1-group1.json`、`rework1-parity-corrected.log`、`rework2-workbench-regressions.json`。 |
+| 編譯／建置／lint | `typecheck-final-run3.log`、`build-final-run3.log`與`lint-final-workbench-run3.log`通過。整批changed-source lint為0 error／13既有warning；`lint-head-baseline.log`確認HEAD同樣13 warning。建置保留原chunk／Browserslist warning。 |
+| 主介面 | `output/playwright/dev-118/v6/browser-result.json`：12組PASS，正常Board／Workbench／設定→Calendar入口、完整鍵盤、三態、N0／8／9與invalid輸入、AND／階層／五模式、scope隔離、無reload新tag、legacy轉換、unknown／invalid鎖定均通過；console:error／pageerror為0。 |
+| Undo／redo | `output/playwright/dev-118/v6/undo-result.json`：2組PASS；選中B時復原／重做A，不改B的query或選定scope；diagnostics空。 |
+| Calendar完整UI回歸 | `output/playwright/dev-118/v6/calendar-regression-result.json`：原DEV-045 verifier PASS，原斷言未改；7張圖涵蓋1440／1024／390／320、事件日期、各板獨立、排除與恢復、copy不連動、mobile Escape／focus。wrapper只隔離本任務前置storage、捕捉metadata及改截圖輸出目錄。 |
+| 視覺／視窗 | 獨立QC實際檢視主UI 9張及Calendar代表圖；1440×900／390×844無出界或不可操作控制。root另以原始1242×668正常Board入口驗證panel bottom=660、可內捲至顯示設定；`reported-viewport.log`及兩張同名圖為實際證據。 |
+| SQL | `output/qa/dev-118/v6/pg-receipt.json`：隔離PostgreSQL18＋auth stubs，default6、舊row不改、none roundtrip、updated_at CAS／競態、old／future rejection與RLS通過。只證本機SQL。 |
+
+候選綁定：`持續優化@06079ce676b638cb7370b75c8c4d9a58d06aa5c6`加dirty manifest；
+`output/qa/dev-118/v6/candidate-final-ui.json` contentHash為
+`2aaf28e231cc48207d342e8122d7aa1d687492f9d8d4b39e81c269acbc8fe859`。
+獨立QC重算42／42檔hash相符，產品／SQL snapshot 27／27亦相符。PM收尾只改4份直接文件的狀態與證據摘要，不改受測產品或測試。
+
+失敗保留與處置：
+
+- 首輪3個P1：journal落盤失敗後假synced、mixed delete journal未鎖定、Workbench錯scope選項；已修正並經獨立inline proof關閉，見`qc-round1-findings.json`與`qc-rework1-results.json`。
+- 真實UI再發現state updater內pushUndo觸發MainLayout更新錯誤，以及隔離選項未隨同scope新tag刷新；兩項均修正，正常UI／undo證據與QC source review關閉。
+- Browser run1～5保留各次失敗；錯member label、測試自行關閉Workbench、把獨立Workbench結果算進Board、把其他board結果算進selected-board parity、builder自身ready attr誤找descendant，均為具體fixture／selector／scope oracle修正，未改產品矩陣。
+- Calendar首輪two-board fixture受前序本任務storage污染；`calendar-regression-first-result.json`保留失敗，隔離同session前置資料後原verifier與原斷言通過。
+
+本輪採平衡路由：Coordinator沿用current session（名稱未獨立驗證）；Tech Lead為GPT-6 Astra xhigh；RD、QA與獨立QC為GPT-5.6 Sol high。
+專用browser PID14796及PostgreSQL PID22312已停止，55418已釋放；原4000／PID45224保留。
+資源治理session已ended、runtime與lease已release，見`runtime-cleanup.json`及`governor-session-end.json`。
+
+未執行且不宣稱通過：Supabase provider／正式migration／正式資料／部署／release／真實多裝置驗收。
+正常account A/B UI因無既有切換入口保持NOT RUN，帳號／board isolation由repository行為與store generation guard證據支持。
+本地成果保留於同一工作樹，未commit／push；舊V5結果僅作歷史相容基線。
+
+### Existing evidence reuse and oracle replacement
+
+| Evidence／tool | 本輪處理 |
+|---|---|
+| `scripts/run-playwright-code.ps1` | 沿用 task-owned session、artifact window與cleanup；不負責啟動app。 |
+| `scripts/fixtures/dev-118-task-filter-conformance.json` | 凍結為 V5／Calendar 基線；不得改 expected 來配合 V6。 |
+| `scripts/fixtures/dev-118-task-filter-v6-conformance.json` | 新 V6 truth fixture；固定 today、timezone、日期桶、缺值、未來選項與 exact IDs。 |
+| DEV-090 browser fixture | 沿用正常 shell、local-test資料、五模式、reload、帳號／看板隔離、hierarchy、zero recovery、截圖及 error sweep。 |
+| DEV-090 projection | 沿用 matched／visible／context-only、archived／orphan／cycle／cross-board gate；query改成 V6。 |
+| DEV-045 model／feed／browser | 原 V5 expected 全保留；只做明確 V5 import／variant 接線。 |
+| 舊 DEV-118 model 10 cases | 改用 V5 helper 後保留為歷史相容基線；不得當作 V6 PASS。 |
+| 舊 DEV-118 DB／Edge source scan | 只證 Calendar 舊邊界仍存在；不能證 V6、CAS、真實 UI 或 provider。 |
+| DEV-048 `未指派` oracle | 必須更新為主責與協作皆空；collaborator-only 不再命中未指派。 |
+| v5 空選＝不限、舊日期、active count | 僅在 V5／legacy-v5 路徑保留；V6 oracle 全部改用明確 mode。 |
+
+Fixture 可準備來源資料、舊偏好與注入失敗，但不可直接把案例要驗的最終 query／畫面結果寫進 store。
+核心互動必須從正常 UI 點擊完成；直接 module state 只限 loading／error／timeout 等 fault injection，且證據標示層級。
+
+### Model and projection matrix
+
+| ID | Required case | Pass oracle |
+|---|---|---|
+| QA-118-V6-M01 | V6 default、normalize兩次、strict decode | `version=6`；四組all、N8、keyword空、active count 0；冪等且錯版／混版／非法值拒絕。 |
+| QA-118-V6-M02 | status／people／tags逐組 all、selected、none | all全通過；none全不通過；selected組內OR；空selected canonical為none，不變all。 |
+| QA-118-V6-M03 | due四桶的16種subset | 每個subset為桶聯集；四桶互斥且完整，all全通過、none零筆。 |
+| QA-118-V6-M04 | N=0／8／365、N+1、Taipei跨午夜、null／invalid、completed past | inclusive邊界、台北日曆日與expected IDs exact；completed past命中before_today。 |
+| QA-118-V6-M05 | 多人／協作／無人員、雙標籤／無標籤、停用或未知ID | 主責∪協作組內OR；只有兩者皆空才無人員；tagIds空才無標籤；保存ID不被清掉。 |
+| QA-118-V6-M06 | status＋due＋people＋tags＋keyword | 跨組AND；keyword trim、英文不分大小寫且只搜title；active count 0～5按非all組計。 |
+| QA-118-V6-M07 | dynamic all vs selected snapshot | restore時即使列滿目前選項仍selected；新增ID只被all納入；normalize／options更新不升all。 |
+| QA-118-V6-M08 | projection／deferred status | Board／Workbench exact matched IDs；context-only ancestors可見但不計數；archived／orphan／cycle／跨板不洩漏。 |
+
+### Compatibility, persistence and recovery matrix
+
+| ID | Required case | Pass oracle |
+|---|---|---|
+| QA-118-V6-L01 | V5空status／people／tags與inactive due | 轉V6 all；V5空選不限不得誤變V6 none。 |
+| QA-118-V6-L02 | V5明確四status、列滿現有人員／標籤 | 轉selected並保留snapshot；future ID不自動納入。 |
+| QA-118-V6-L03 | V5 due四種組合 × completed／noncompleted × past／today／future／missing | native V5與轉換後V6 exact identity equivalent；active條件保留`legacy-v5`原值。 |
+| QA-118-V6-L04 | 過去未完成＋近期任意狀態 | legacy-v5不被展平成純日期bucket＋status；保留舊overdue分支未完成限制。 |
+| QA-118-V6-L05 | legacy date開關panel、reload、切scope、其他組編輯 | 顯示沿用舊日期；上述動作不轉換；只有明確「改用日期分類」或clear才成V6 date all/N8。 |
+| QA-118-V6-P01 | local V4／V5 cache與pending upsert／delete | 依既有V4→V5再轉V6；完整write＋canonical readback前不刪來源，delete intent不變upsert。 |
+| QA-118-V6-P02 | remote 4／5→6 upgrade | CAS帶expected version＋原updated_at；0-row重讀最新再轉，不blind overwrite。 |
+| QA-118-V6-P03 | 6→6 rapid writes／late response／auth或scope generation change | latest intent保留；舊scope response不套用；只移除已ack相同mutation ID。 |
+| QA-118-V6-P04 | timeout已提交／未提交、cache／pending write與readback fail | 先provider readback；已等價才成功，否則保留journal／raw／warning與可恢復選擇。 |
+| QA-118-V6-P05 | unknown 7、unknown低版、invalid／mixed current payload | unsupported／invalid；禁止write、reset、pending replay或fallback舊key覆寫；不可冒充default/zero。 |
+| QA-118-V6-P06 | Workbench多board／account隔離 | queries、selectedBoardId、panel prefs完整一次讀回；Board、Workbench、Calendar互不串寫。 |
+| QA-118-V6-P07 | clear group／clear all | 回V6 all；clear-all N8＋keyword空；display settings、來源看板及Workbench panel prefs不變。 |
+
+### Calendar V5 preservation matrix
+
+| ID | Required case | Pass oracle |
+|---|---|---|
+| QA-118-V6-C01 | 新Calendar draft | outer snapshot仍V4，內層為V5；safe default只選current user，date_types預設due date。 |
+| QA-118-V6-C02 | 開啟v1～v4但未save | 0 remote write、0 token regeneration；included、date_types、permission與既有preview不變。 |
+| QA-118-V6-C03 | Calendar controls操作／序列化 | `calendar-v5`空選、日期及permission disabled語意保留；serializer拒絕V6，不產生四桶／無標籤欄位。 |
+| QA-118-V6-C04 | 原V5 fixture跑browser compiler與Edge | exact task IDs／event date types一致；不修改舊expected。 |
+
+### Normal UI delivery path
+
+正常入口固定為：Board上方「過濾器」；Board開啟左側所有任務後的「過濾器」；
+設定→行事曆訂閱→建立／編輯。Direct URL、DOM injection或model結果不能取代正常入口。
+
+| ID | Action | Required evidence |
+|---|---|---|
+| QA-118-V6-U01 | 無偏好進Board與Workbench | 四組All為checked、N8、計數0、全fixture IDs可見；兩個surface各自state。 |
+| QA-118-V6-U02 | 鍵盤Tab／Shift+Tab／Space／Enter操作All與個別項，Escape關閉 | `aria-checked=true/mixed/false`正確；focus回trigger；無focus loss。 |
+| QA-118-V6-U03 | all取消一項、selected最後取消、勾上最後未選、點All | 依V6 transition；mixed不只靠顏色；selected-full短註記與future item行為正確。 |
+| QA-118-V6-U04 | 日期四桶、N0／8、invalid空白／負數／小數／366、legacy日期轉換 | exact IDs；invalid保留最後有效query且blur恢復；legacy只因明確操作轉換。 |
+| QA-118-V6-U05 | 任一組none造成零筆，再按零筆CTA／clear | 顯示真正filtered-zero；可恢復default；loading／error／unsupported不誤報零筆。 |
+| QA-118-V6-U06 | 改display後clear、reload、切Board A/B、Board/Workbench | display不變；none仍none；各board／surface scope精確恢復且不串用。account隔離由repository behavior證據承接；本地無正常account切換入口時UI維持NOT RUN。 |
+| QA-118-V6-U07 | 子命中父不命中，在Board/List/MindMap/Gantt/Calendar board modes切換 | canonical matched IDs一致；父只作context；日期視圖無日期提示不刪matched truth。 |
+| QA-118-V6-U08 | Calendar正常入口建立／編輯 | V5 controls與safe permission不變；Board／Workbench V6操作不改draft。 |
+| QA-118-V6-U09 | 1440×900與390×844同route default／mixed／zero／recovered | same-view screenshots、無overflow／裁切；console/pageerror/非預期HTTP/visible error為0。 |
+
+Browser artifact 使用 `window.__DEV118_V6_ARTIFACT`，由主流程在已登記的task-owned browser session擷取到
+`output/playwright/dev-118/v6/browser-result.json`；本QA不另開未登記session。artifact必須含主流程freeze提供的
+dirty candidate file manifest與內容hash，HEAD只作次要來源資訊，不能把未提交candidate錯綁成未變HEAD。
+其餘至少含fixture schema／counts、today／timezone、route、viewport、query payload、matched／visible／context IDs、
+scope keys、步驟結果、screenshots與diagnostics。
+模型PASS不能寫進UI case；UI未執行保持`NOT RUN`。
+
+### Required commands and directly affected regressions
+
+專用 gate 沿用既有 package scripts，不新增另一套入口：
+
+```powershell
+npm.cmd run verify:dev-118-task-filter-model
+npm.cmd run verify:dev-118-task-filter-migration
+npm.cmd run verify:dev-118-task-filter-edge
+npm.cmd run verify:dev-118-calendar-filter-db
+npm.cmd run verify:dev-118-task-filter-browser
+```
+
+直接回歸分母依實際受影響claim選測：
+
+```powershell
+npm.cmd run verify:dev-090-task-filter-contract
+npm.cmd run verify:dev-090-task-filter-projection
+npm.cmd run verify:dev-048-task-filter-collaborators
+npm.cmd run verify:dev-039-task-filter-core
+npm.cmd run verify:dev-039-filter-result-parity
+npm.cmd run verify:dev-039-task-workbench-cross-board-source
+npm.cmd run verify:dev-045-calendar-subscription-builder-preview
+npm.cmd run verify:dev-045-calendar-subscription-builder-preview-browser
+npm.cmd run verify:dev-045-calendar-subscription-v3-model
+npm.cmd run verify:dev-045-calendar-subscription-v3-feed
+npm.cmd run verify:dev-062-simplified-task-status
+npm.cmd exec tsc -- --noEmit
+```
+
+替代映射：舊DEV-090 browser的default／reload／board隔離／hierarchy／zero／mobile error sweep由
+U01、U05～U07、U09在新版正常入口承接；account隔離只由repository動態scope案例承接，沒有正常account切換入口時不記UI PASS。DEV-048 browser的人員OR、collaborator-only與Workbench parity由
+U03、U06承接；DEV-039 parity／cross-mode browser由U06～U07承接；DEV-062 browser的新版status控制與viewport
+由U01～U03、U09承接。這些舊browser不重複列為required；若新版專用案例未實際覆蓋，對應claim維持NOT RUN，
+不能以model PASS補位。Calendar builder browser保留，因逐看板date types、copy、draft、mobile與focus有獨立價值。
+
+Model／migration先行。Browser、server、build由主流程統一管理，QA test-authoring階段不自行啟動。
+Calendar DB／Edge gate只證本地舊邊界，不能宣稱authenticated provider或live feed。
+
+### V6執行過程紀錄（保留各階段事實，最終結果以上方驗收為準）
+
+`2026-10-19 / baseline HEAD 06079ce676b638cb7370b75c8c4d9a58d06aa5c6`：
+
+- 第一個有效 RED：舊V5 10例PASS後，V6 default因`version`為`undefined`而非6失敗；不是missing import／0 tests。
+- 擴充矩陣的第一輪有效 RED：共16例，14 PASS／2 FAIL；只選「未指派」或只選「無標籤」時，
+  normalizer把`selected`誤轉`none`，實際matched IDs為空。產品修正後，同一矩陣增補active count與people／tags none，
+  `verify:dev-118-task-filter-model`實跑17／17 PASS。
+- `verify:dev-118-task-filter-migration`初擴為15例時出現兩個有效RED：initial invalid V6仍送出一次pending write，
+  timeout且readback unavailable送出第二次write。修正後再加入source readiness與mutation lock consumer接線，實跑16／16 PASS：strict decoder、Calendar V5 runtime reject、V4／V5 local
+  cache與pending升級、write/readback留源、delete intent、remote updated_at CAS、衝突重讀、unsupported／invalid quarantine、
+  unknown outcome readback、scope isolation、store auth＋scope＋generation、blocked mutation lock，以及Board／Workbench task source readiness接線；
+  mutation readback遇future／invalid後的`controlsLocked`也由store套用，Board把偏好警告送入error state，優先於filtered-zero。
+- QC再發現current V6 delete journal可混入V5 `filters`／unknown field，以及current journal寫入失敗後retry可能在remote未寫時誤報同步。
+  第一輪新增delete strict案例為16 PASS／1 FAIL並保留；產品修正後加入volatile upsert／delete intent recovery與selected-scope readiness動態矩陣，
+  `verify:dev-118-task-filter-migration`最終實跑18／18 PASS。writePending持續失敗時仍維持sync-error且remote 0 write；真正補存journal後才可同步成功。
+- 直接回歸實跑：DEV-090 contract 10／10 PASS、projection 5／5 PASS、DEV-048 collaborators 7 checks PASS、
+  DEV-062 simplified status PASS、DEV-039 core 67／67 PASS、result parity 26／26 PASS、cross-board source 23／23 PASS；
+  DEV-039三個原始失敗均為V5 shape／舊helper signature／direct predicate的stale source oracle，必要rewiring後通過，非產品行為失敗。
+  Calendar v3 model曾因V2 outer `enabled` envelope被strict V5 boundary拒絕而有效失敗，修正後14／14 PASS。
+  `node --check scripts/verify-dev-118-browser.pw.js` PASS，只證語法，不是UI PASS。
+- 本機一次性 PostgreSQL 18＋auth stub receipt：`output/qa/dev-118/v6/pg-receipt.json`為PASS，證明default6、舊row
+  全欄不改、none roundtrip、updated_at stale／fresh CAS、舊client與future-version guard，以及既有DEV-090 RLS matrix。
+  此證據不是Supabase provider、正式環境、HTTP builder或UI證據。
+- Browser run1／run2失敗artifact均保留；run2已實證U01～U04b（含五模式、keyword空白、active count 5）PASS，
+  U05因測試先關閉Workbench後reload仍維持關閉而timeout，已改為由正常主介面toggle重新開啟，屬test flow修正；當時後續案例待完整重跑，最終run6已12組PASS。
+- QA authoring交接時，專用browser、Calendar builder browser、root tsc與build為NOT RUN；後續主流程已實跑通過，結果見上方本輪驗收。正常account A/B UI因無既有正常切換入口維持NOT RUN，未以model結果冒充UI。
+
+## 2026-09-11 Historical V5 plan and evidence
+
+以下舊計畫與執行紀錄只適用 V5／Calendar 相容基線；與上方V6相反的oracle均已被取代。
+
 - 關聯 DEV：DEV-118、DEV-039、DEV-045、DEV-062、DEV-090
 - 關聯 SPEC：`SPEC-039-task-filter-core-and-workbench-profiles.md`、
   `SPEC-045-calendar-subscription-filter-builder-preview.md`、

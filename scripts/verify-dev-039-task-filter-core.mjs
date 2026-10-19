@@ -74,7 +74,8 @@ assert(
     !source.types.includes('TaskWorkbenchFilterProfile') &&
     source.defaults.includes('TASK_STATUS_OPTIONS') &&
     source.defaults.includes('createDefaultTaskFilters') &&
-    source.defaults.includes('completed: true') &&
+    source.defaults.includes('version: 6') &&
+    source.defaults.includes("mode: 'all'") &&
     !source.defaults.includes('createDefaultTaskWorkbenchProfile') &&
     source.predicates.includes('matchesTaskFilters') &&
     source.predicates.includes('matchesKeywordFilter') &&
@@ -84,7 +85,7 @@ assert(
     source.describe.includes('countActiveTaskFilters') &&
     source.describe.includes('describeTaskFilters') &&
     source.storage.includes("BOARD_TASK_FILTER_STORAGE_KEY = 'projed-task-filters:v1'") &&
-    source.storage.includes('BOARD_TASK_FILTER_PREFS_VERSION = 5') &&
+    source.storage.includes('BOARD_TASK_FILTER_PREFS_VERSION = 6') &&
     (source.storage.includes('migrateLegacyDefaultTaskFilters') || source.storage.includes('migrateLegacyTaskFilterStateV4')) &&
     !source.storage.includes('TASK_WORKBENCH_FILTER_PROFILES_STORAGE_KEY') &&
     !source.storage.includes('readTaskWorkbenchProfiles') &&
@@ -145,8 +146,9 @@ assert(
     !source.boardStore.includes('selectedAssigneeIds:') &&
     !source.tagStore.includes('selectedTagIds:') &&
     (source.taskFilterStore.includes('filters: TaskFilterQuery') || source.taskFilterStore.includes('filters: TaskFilterState')) &&
-    source.taskFilterStore.includes('toggleTagFilter') &&
-    source.taskFilterStore.includes('toggleAssigneeFilter'),
+    source.taskFilterStore.includes('setQuery: filters =>') &&
+    source.taskFilterStore.includes('clearTagFilters') &&
+    source.taskFilterStore.includes('clearAssigneeFilters'),
 );
 
 assert(

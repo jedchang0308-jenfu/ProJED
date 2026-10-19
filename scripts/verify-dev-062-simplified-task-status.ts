@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import dayjs from 'dayjs';
-import { TASK_STATUS_OPTIONS, createDefaultTaskFilters } from '../src/features/taskFilters/defaults';
-import { matchesTaskFilters } from '../src/features/taskFilters/predicates';
+import { TASK_STATUS_OPTIONS, createDefaultTaskFiltersV5 } from '../src/features/taskFilters/defaults';
+import { compileLegacyTaskFilterV5 } from '../src/features/taskFilters/predicates';
 import { isTaskOverdue, normalizeManualTaskStatus } from '../src/utils/taskStatus';
 
 const repoRoot = fileURLToPath(new URL('../', import.meta.url));
@@ -39,9 +39,10 @@ assert.equal(isTaskOverdue(task('todo', '2026-08-04'), now), false, '截止日�
 assert.equal(isTaskOverdue(task('todo', '2026-08-05'), now), false, '未到截止日不得逾期');
 assert.equal(isTaskOverdue(task('todo'), now), false, '沒有截止日不得逾期');
 
-const overdueFilters = { ...createDefaultTaskFilters(), due: { includeOverdue: true, upcomingWithinDays: null } };
-assert.equal(matchesTaskFilters(task('todo', '2026-08-03'), overdueFilters), true, '逾期篩選必須命中未完成逾期任務');
-assert.equal(matchesTaskFilters(task('completed', '2026-08-03'), overdueFilters), false, '逾期篩選不得命中完成任務');
+const overdueFilters = { ...createDefaultTaskFiltersV5(), due: { includeOverdue: true, upcomingWithinDays: null } };
+const compiledOverdue = compileLegacyTaskFilterV5(overdueFilters, '2026-08-04');
+assert.equal(compiledOverdue.matches(task('todo', '2026-08-03')), true, 'V5逾期篩選必須命中未完成逾期任務');
+assert.equal(compiledOverdue.matches(task('completed', '2026-08-03')), false, 'V5逾期篩選不得命中完成任務');
 
 const details = read('src/components/TaskDetailsModal.tsx');
 const listItem = read('src/components/Wbs/WbsNodeItem.tsx');

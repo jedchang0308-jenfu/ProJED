@@ -308,6 +308,9 @@ const MindMapView: React.FC = () => {
   const getNodeLockStatus = useWbsStore(state => state.getNodeLockStatus);
   const taskFilters = useTaskFilterStore(state => state.filters);
   const resetTaskFilters = useTaskFilterStore(state => state.resetFilters);
+  const taskFiltersLocked = useTaskFilterStore(state => state.controlsLocked);
+  const taskFilterWarning = useTaskFilterStore(state => state.warning);
+  const taskResultError = taskLoadError || (taskFiltersLocked ? taskFilterWarning || '篩選偏好無法載入' : null);
   const showStartDate = useBoardStore(state => state.showStartDate);
   const setSelectedTaskId = useBoardStore(state => state.setSelectedTaskId);
   const boardMembers = useMemberStore(state => state.boardMembers);
@@ -2513,12 +2516,12 @@ const MindMapView: React.FC = () => {
         sceneStyle={sceneStyle}
         relationshipToolActive={relationshipToolActive}
         relationshipDraftFromId={relationshipDraft?.fromId || ''}
-        hasContent={!taskLoading && !taskLoadError && filterProjection.matchedTaskIds.size > 0}
+        hasContent={!taskLoading && !taskResultError && filterProjection.matchedTaskIds.size > 0}
         emptyState={(
           <TaskFilterResultState
             projection={filterProjection}
             loading={taskLoading}
-            error={taskLoadError}
+            error={taskResultError}
             onReset={resetTaskFilters}
             onCreate={handleCreateRoot}
             canCreate={canCreateTask}

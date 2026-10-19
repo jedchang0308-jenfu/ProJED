@@ -1,7 +1,7 @@
 import {
-  createDefaultTaskFilters,
-  normalizePersistedTaskFilters,
-  type TaskFilterQuery,
+  createDefaultTaskFiltersV5,
+  normalizePersistedTaskFiltersV5,
+  type LegacyTaskFilterQueryV5,
 } from '../taskFilters';
 import type {
   CalendarSubscriptionBoardFilterSnapshot,
@@ -16,7 +16,7 @@ export type CalendarFilterBoardIdentity = {
   storageWorkspaceId?: string;
 };
 
-const cloneFilters = (filters: TaskFilterQuery): TaskFilterQuery => ({
+const cloneFilters = (filters: LegacyTaskFilterQueryV5): LegacyTaskFilterQueryV5 => ({
   ...filters,
   statuses: [...filters.statuses],
   due: { ...filters.due },
@@ -33,8 +33,8 @@ const normalizeDateTypes = (
   return normalized.length > 0 ? normalized : ['due_date'];
 };
 
-export const createCalendarSafeDefaultTaskFilters = (currentUserId?: string | null): TaskFilterQuery => ({
-  ...createDefaultTaskFilters(),
+export const createCalendarSafeDefaultTaskFilters = (currentUserId?: string | null): LegacyTaskFilterQueryV5 => ({
+  ...createDefaultTaskFiltersV5(),
   people: {
     ids: currentUserId ? [currentUserId] : [],
     includeUnassigned: false,
@@ -44,8 +44,8 @@ export const createCalendarSafeDefaultTaskFilters = (currentUserId?: string | nu
 const createLegacyTaskFilters = (
   filters: CalendarSubscriptionFilters,
   currentUserId?: string | null,
-): TaskFilterQuery => {
-  if (filters.global_filter) return normalizePersistedTaskFilters(filters.global_filter);
+): LegacyTaskFilterQueryV5 => {
+  if (filters.global_filter) return normalizePersistedTaskFiltersV5(filters.global_filter);
   const selectedAssigneeIds = (() => {
     const assignee = filters.assignee ?? { type: 'me' as const };
     if (assignee.type === 'user') return assignee.user_id ? [assignee.user_id] : [];
@@ -57,7 +57,7 @@ const createLegacyTaskFilters = (
     return currentUserId ? [currentUserId] : [];
   })();
 
-  const defaults = createDefaultTaskFilters();
+  const defaults = createDefaultTaskFiltersV5();
   return {
     ...defaults,
     people: { ids: selectedAssigneeIds, includeUnassigned: filters.assignee?.type === 'selected' && filters.assignee.include_unassigned === true },
@@ -79,6 +79,12 @@ const findRecordByAlias = <T>(record: Record<string, T> | undefined, aliases: st
     if (record[alias]) return record[alias];
   }
   return undefined;
+};
+
+const normalizeLegacyBoardOverride = (override: Record<string, unknown>): LegacyTaskFilterQueryV5 => {
+  const filters = { ...override };
+  delete filters.enabled;
+  return normalizePersistedTaskFiltersV5(filters);
 };
 
 export const materializeCalendarBoardFilters = (
@@ -112,7 +118,7 @@ export const materializeCalendarBoardFilters = (
         ? {
           included: snapshot.included,
           date_types: normalizeDateTypes(snapshot.date_types ?? filters.date_types),
-          filters: cloneFilters(normalizePersistedTaskFilters(snapshot.filters)),
+          filters: cloneFilters(normalizePersistedTaskFiltersV5(snapshot.filters)),
         }
         : { included: false, date_types: ['due_date'], filters: cloneFilters(safeDefault) }];
     }
@@ -123,7 +129,7 @@ export const materializeCalendarBoardFilters = (
         ? {
           included: snapshot.included,
           date_types: normalizeDateTypes(snapshot.date_types ?? filters.date_types),
-          filters: cloneFilters(normalizePersistedTaskFilters(snapshot.filters)),
+          filters: cloneFilters(normalizePersistedTaskFiltersV5(snapshot.filters)),
         }
         : { included: false, date_types: ['due_date'], filters: cloneFilters(safeDefault) }];
     }
@@ -132,8 +138,8 @@ export const materializeCalendarBoardFilters = (
       const override = findRecordByAlias(filters.board_overrides, aliases);
       const included = projectIncluded && override?.enabled !== false;
       const effectiveFilters = override?.enabled !== false && override
-        ? normalizePersistedTaskFilters(override)
-        : normalizePersistedTaskFilters(filters.global_filter);
+        ? normalizeLegacyBoardOverride(override)
+        : normalizePersistedTaskFiltersV5(filters.global_filter);
       return [board.id, { included, date_types: [...legacyDateTypes], filters: cloneFilters(effectiveFilters) }];
     }
 
