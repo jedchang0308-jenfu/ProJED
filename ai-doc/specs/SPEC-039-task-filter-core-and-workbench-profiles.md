@@ -2,26 +2,31 @@
 
 關聯 DEV：DEV-039、DEV-090、DEV-091、DEV-118
 關聯開發點：DEV-027D 心智圖日期顯示與既有過濾器串接、DEV-028 四模式任務操作契約、DEV-036 Trello-like Workspace Governance
-狀態：Phase 1/1A Implemented + Local Automated QC Passed / Phase 1B Implemented + Local Automated QC Passed / Phase 1C Implemented + Local Automated QC Passed / Phase 2 Cross-Board Source Slice Implemented + Local Automated QC Passed / Phase 2A Drag Trigger Parity Implemented + Local Automated QC Passed / Phase 2B Production Migration and Deploy Complete / Authenticated Smoke Pending / DEV-090 Implemented + Local Automated QA-QC Passed / DEV-091 Implemented + Local Automated QA-QC Passed / DEV-118 v6 Implemented + Local QA-QC PASS + NOT RELEASED；歷史v5 Local Candidate QA-QC PASS
+狀態：Phase 1/1A Implemented + Local Automated QC Passed / Phase 1B Implemented + Local Automated QC Passed / Phase 1C Implemented + Local Automated QC Passed / Phase 2 Cross-Board Source Slice Implemented + Local Automated QC Passed / Phase 2A Drag Trigger Parity Implemented + Local Automated QC Passed / Phase 2B Production Migration and Deploy Complete / Authenticated Smoke Pending / DEV-090 Implemented + Local Automated QA-QC Passed / DEV-091 Implemented + Local Automated QA-QC Passed / DEV-118 v6 Implemented + Local Verification Passed + Production Hosting Deployed / Authenticated Feature Smoke Pending / Production Migration Permission Pending；歷史v5 Local Candidate QA-QC PASS
 
 <a id="dev-118-selection-matrix-v6-20261019"></a>
 
 ## DEV-118 Current Phase Implementation Contract：全選顯示與完整分類矩陣 v6（2026-10-19）
 
 2026-10-19 後續使用者定案：Board／Workbench 四類篩選統一採「全部＝不限」，「全部」狀態下同組其他選項也都亮；取消最後一項自動恢復不限。
-此修訂取代先前「全不選零筆／三態全選」的互動契約，已實作；本次未新增或執行測試，以下既有 Local QA-QC PASS 僅代表修訂前的候選版本。
+此修訂取代先前「全不選零筆／三態全選」的互動契約，已實作並完成本機直接驗證；正式 Hosting 已部署。authenticated feature smoke 與 production migration 仍保留為未完成的獨立證據面。
 
 文件成熟度：`RD Implementation Ready`；架構定案：`已定案`。
 Architecture Closure Review：`PASS / 2026-10-19 / P0-P1 unresolved architecture blockers = 0`。
-產品狀態：`V6 Interaction Revision Implemented / NOT VERIFIED / NOT RELEASED`；2026-10-19 修訂前候選已完成本機實作與獨立QC，後續「全部＝不限」修訂未另行驗證。原Architecture Closure保留為基線；修訂前產品驗收結果另見[QA-DEV-118本輪驗收](../qa/QA-DEV-118-task-filter-positive-inclusion-and-shared-controls.md#dev-118-v6-local-acceptance-20261019)。
+產品狀態：`V6 Interaction Revision Implemented / Local Verification PASS / Production Hosting Deployed / Authenticated Feature Smoke Pending / Production Migration Permission Pending`；原Architecture Closure保留為基線；本機與發布收據見 [QA-DEV-118 addendum](../qa/QA-DEV-118-task-filter-positive-inclusion-and-shared-controls.md#dev-118-release-addendum-20261019) 與 [REL-017](../release/REL-017-DEV-118-20261019.md)。
 來源為 [DEV-118 本輪產品矩陣](../dev_task.md#dev-118-selection-matrix-20261019)，以及 canonical worktree
-`C:/VIBE CODING/ProJED/ProJED`、branch `持續優化`、HEAD `06079ce676b638cb7370b75c8c4d9a58d06aa5c6`
-上的實際 source 與既有 dirty diff；所有實作在同一 worktree 收斂。
+`C:/VIBE CODING/ProJED/ProJED`、branch `持續優化` 的 release source commit `920b3744331d5f9b2cecc5ab45a6ffadb248efd4`；文件收尾另由 commit `544e0b1` 記錄。所有實作在同一 worktree 收斂。
 
 本節為本輪工程 authority，取代下方歷史 v5 在 Board／Workbench 的預設、選取、日期、計數、持久化與 UI 契約。
 產品矩陣仍以本輪 dev_task 段落為準；下方 2026-09-11 v5 契約與舊 QA 的 PASS 保留為歷史基線。
 `SPEC-045` 的 Calendar snapshot／permission／DB／Edge 語意保持有效；本輪只隔離其共享程式入口。
 本輪可修改既有 QA-DEV-118 與 verifier 的受影響案例，不另立 QA 文件，不以舊案例預期否定已確認的新矩陣。
+
+### 2026-10-19 Release addendum
+
+本輪 commit `920b3744331d5f9b2cecc5ab45a6ffadb248efd4` 已建立 immutable artifact `20261019143720-d403cd`，artifact tree SHA-256 為 `a79036a801155194c3da84b1741b30865c58c4db005ab89a88a82e2eb4e80342`。Firebase live release 為 `1792420743052000`、version 為 `adcd8400adce22dd`；canonical origin 的 83 個檔案已逐檔回讀並與 manifest hash 相符。
+
+本機 model／migration／direct regression、TypeScript、test build 與 targeted lint 已通過。Playwright wrapper 因 registry DNS `ENOTFOUND`，cached Chromium 因 `spawn UNKNOWN`，故 authenticated production feature smoke 尚未完成；完整 lint 的既有未修改 error 亦不納入本輪產品判定。Supabase production migration 因 connector `permission denied` 未套用，source migration 僅作 forward-only package 保留。
 
 ### 定案：v6 明確選取、舊日期保留、Calendar 版本隔離
 
