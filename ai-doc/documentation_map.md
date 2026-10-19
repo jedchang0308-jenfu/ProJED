@@ -1,5 +1,11 @@
 # ProJED Documentation Map
 
+## 2026-10-19：DEV-054 自用驗收精簡與 DEV-097 解除連動
+
+現行入口為 [SPEC-054](specs/SPEC-054-mobile-task-drag-precision.md)、[QA-DEV-054](qa/QA-DEV-054-mobile-task-drag-precision.md)、[QC-DEV-054](qc/QC-DEV-054-mobile-task-drag-precision.md) 與 dev_task 的 DEV-054／097 索引。依使用者指示取消雙平台固定次數／成功率與逐筆工作簿／錄影要求，改為實際常用裝置重點確認；未測實機仍未驗證，DEV-054維持驗證中，不因另一平台缺席標阻塞。保留原R01–R15，B需求由現行R／相鄰取消、edge-scroll、action／undo案例承接；移除static verifier的文件字串鎖定，同步before／child preview預期，不修改產品runtime。
+
+[QA-DEV-097](qa/QA-DEV-097-pwa-safe-reload-orchestration.md)／[QC-DEV-097](qc/QC-DEV-097-pwa-safe-reload-orchestration.md) 已解除DEV-054實機前置；PWA dirty owner／cancel／flush／資料保留／更新恢復及正式release gate仍有效。下方各日期為歷史紀錄，舊雙平台門檻與Blocked註記不覆蓋本段現行契約；歷史未執行不改成PASS。本次驗證結果見QA-DEV-054本次修訂記錄。
+
 ## Documentation Map Update - 2026-10-06（DEV-138 DEV-133 分支整合）
 
 本輪已完成，見 [QA-DEV-138](qa/QA-DEV-138-branch-consolidation.md) 與 [DEV-138](dev_task.md#dev-138-dev-133-guard-恢復分支整合與正式驗證後清理---2026-10-06)：[PR #7](https://github.com/jedchang0308-jenfu/ProJED/pull/7) 合併後的 source `aefb933` 已發布 artifact `20261006063124-2c064e`，82/82 canonical provenance、browser／OAuth、正常 QA 登入、限定兩筆 online／offline committed receipts 與 UI 清理 PASS。不同 owner 本機恢復不可查看原 title 或呼叫 RPC；390／726 overflow PASS。原 boundary 84/84、recovery 27/27 仍為 SIMULATION，未改稱真實帳號切換／遠端錯誤注入。

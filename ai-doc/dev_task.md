@@ -460,13 +460,13 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 阻塞 / 恢復條件：不得復活 DEV-052 或 DEV-051 parent-lock baseline；若要改 DB、production 或恢復 placed-row drag 需 Human Re-entry。
   - 證據：`SPEC-053`、`QA-DEV-053`、`QC-DEV-053`；2026-08-24 最新桌機預覽實測 rect=`120x20`、pointer=`(185,100)`、rect left=`185`／bottom=`100`，DEV-053 static 30/30、browser 10/10、TypeScript、targeted ESLint 0 error、`build:test` 通過；DEV-068 本次變更案例通過，但完整相鄰 suite 仍揭露既有來源虛線框高度 `28.09px → 32px` 差異，不歸因於 fixed 預覽縮放。未部署。
   - 計入交付：是
-- ! DEV-054 [交付點] [阻塞] [P1] [RD Rework 5 Automated QA-QC Passed / Awaiting Physical Devices] 手機任務拖拉定位精準度優化
+- ◇ DEV-054 [交付點] [驗證中] [P1] [RD Implemented / 自用裝置重點確認待補] 手機任務拖拉定位精準度優化
   - 摘要：Rework 5 修正長按計時器成立前瀏覽器已啟動文字圈選／iOS callout，以及真實 TouchEvent 被 `innerWidth <= 768` gate 誤導回桌機路徑的根因；L1、L2、L3+ 與 Workbench 未歸位任務表面現在從 touchstart 宣告 selection ownership，實際 touch 不再依 viewport 寬度分流。Workbench 保留 native pan，已歸位列仍不可拖；桌機 dnd-kit、click/right-click 與 collision 契約維持，overlay 尺寸／offset 已由 2026-08-24 使用者最新決策另行覆寫為 50%／gap=0。
   - 來源 ID：`USER-20260717-mobile-task-drag-precision`
   - 父任務：DEV-053、DEV-029、DEV-046
-  - 下一步：Automated QA-QC 已通過，實機驗證工作簿亦已備妥；連接 iPhone Safari 與 Android Chrome 後依工作簿各執行主要 50 次與 P06-P12 補充情境，兩台實機 gate 均通過後才可關閉 DEV-054。
-  - 阻塞 / 恢復條件：2026-08-14 連續三輪完成稽核均未偵測到可操作的 iPhone/iPad/Android 裝置；需提供 iPhone Safari 與 Android Chrome 實機，或回傳填妥且附錄影的驗證工作簿後恢復。不得改變桌機 approved baseline、恢復 DEV-051/052 或讓 Workbench placed row 可拖；任一實機缺席或 wrong commit > 0 不得完成。
-  - 證據：`SPEC-054`、`QA-DEV-054`、`QC-DEV-054`；2026-08-14 DEV-054 static 44/44、browser R01-R15 15/15、DEV-029 browser 41 cases、DEV-039/046 browser、DEV-053 10/10、DEV-055 16/16、DEV-067 8/8、全部指定 static regression、TypeScript、targeted ESLint（0 error）與 `build:test` 通過。R12-R15 直接證明 L1/L2/L3+ 零圈選、500ms/8px 邊界、寬觸控 viewport 與 Workbench pan/no-drag 契約。實機驗證工作簿已完成公式雙向模擬與六分頁 visual QA；本機未偵測到可操作的 iOS/Android 實體裝置，故仍不得標記完整完成。
+  - 下一步：在實際常用手機重驗原長按／定位問題及主要拖拉、action、取消與復原，簡短記錄裝置／版本／結果；自動化按現行 QA 行為對應選測，不要求另做 B/R 同義矩陣。
+  - 阻塞 / 恢復條件：2026-10-19 使用者已要求依自用情境精簡，取消雙平台固定次數／成功率、錄影工作簿及對DEV-097的連動。原 target／parent／action、取消零寫入、exactly-once、permission／ownership、undo、placed-row唯讀及最新桌機行為仍須保護；有實際失敗才停止受影響交付。自用裝置尚未確認，未測平台不標PASS。
+  - 證據：`SPEC-054`、`QA-DEV-054`、`QC-DEV-054`；歷史結果依原QC保留。2026-10-19移除文件數字鎖定、收斂B/R與過期版型預期，原15個browser案例保留；本輪RD自查46/46 static、15/15 browser、DEV-053／029各5項安全選測及未知case拒絕通過，undo wiring27/27。完整結果與首輪失敗見QA §15；未測實機不標PASS，4000及task browser已清理。
   - 計入交付：是
 - ✓ DEV-055 [交付點] [完成] [P1] [正式環境歷史已交付 / 2026-08-25 本機邊界修正未 Release] 電腦版任務拖拉落點清晰化與跨階層定位升級
   - 摘要：第一次自動化通過後，使用者 T01-T08 真實桌機操作回報「同一格定位線會飄」與「L3+ 任務被定位線推開」。RD Rework 1 在保留現有桌機 DragOverlay、8px 起手門檻與滑鼠跟手感的前提下，改為 fixed overlay-only indicator、overlay checklist append hit area、card/checklist sortable displacement freeze、同 target rect micro-retain；Workbench placed row 維持不能拖。2026-07-17 使用者重跑 T01-T08 後回報測試通過並完成 production release。2026-08-25 再修正展開 L2 standard `after` marker：命中仍用 primary geometry，垂直顯示改用完整 task scope bottom，不再切在標題與子樹之間；此最新修正僅本機驗證，未 release。
@@ -810,9 +810,9 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
     safe client 於自然邊界靜默收斂，dirty／unsafe client 才顯示最小提示。
   - 來源 ID：`USER-20260831-PWA-SAFE-RELOAD-DESIGN-CRITIQUE`
   - 父任務：DEV-041；建立於 DEV-096 的版本真值與單次 activation transaction，架構決策見 ADR-047。
-  - 下一步：補DEV-054 iOS／Android實機，或確認不納入本次release；若需正式上線，另走deployment/release gate。
+  - 下一步：DEV-054自用裝置確認不再是前置；依DEV-097自身dirty owner／cancel／flush、資料保留與更新恢復證據判定。若需正式上線，另走deployment/release gate。
   - 證據：`ADR-047`、`SPEC-041` DEV-097 addendum、`QA-DEV-097`、`QC-DEV-097`；static 23/23、真實九-owner／dual-tab／flush-cancel-failure readback browser、real-SW A→B→C two-tab convergence、DEV-028／034／041／045／047／054／069／092／095／RAG regressions、TypeScript、32-file ESLint 0 errors、`build:test`與`git diff --check` PASS。
-  - 計入交付：是（RD已實作且local automated QA／independent QC PASS；實機補充與release gate尚未完成，對完成率貢獻仍為0）
+  - 計入交付：是（原交付點保留；local automated QA／independent QC為歷史已驗範圍，正式release仍未執行，不因解除DEV-054連動直接增加完成率）
 - ◐ DEV-098 [交付點] [驗證中] [P1] [RD Implemented / Core Local QA-QC PASS / Adjacent Regression Audit PASS / Persistence Re-development Gate Pending / 未 Release] 任務明細子任務管理區
   - 摘要：在任務明細底部加入預設展開、可收合的子任務樹，與看板 L3+ 共用任務列、
     interaction controller 與 placement commit；支援編輯入口、明細導航、右鍵及桌機／手機／鍵盤拖曳。
@@ -3712,8 +3712,9 @@ frame、owner manifest缺漏、visible error／白畫面，或缺真實N→N+1�
 - Git boundary：readiness baseline固定為branch `持續優化3`、HEAD
   `3a924ae5890f958d1010beb66db4c57c9cd76e20`（相對`origin/持續優化3` ahead 15）。目前文件變更
   未提交，屬本 DEV既有工作樹；RD開工前須重讀status並保留其他未提交變更，不得自動commit／push。
-- 下一步：若納入本次release，先補DEV-054 iOS／Android實機或由產品明確確認不納入，再走
-  deployment-release-gate與production smoke。不得由本次HeadlessChrome evidence取代實機gate。
+- 下一步：2026-10-19依使用者精簡指示解除DEV-054雙平台實機前置。DEV-097仍須自身dirty owner、
+  cancel／flush、資料保留及更新恢復證據；有正式上線要求後才走deployment-release-gate與production
+  smoke。歷史HeadlessChrome證據不改稱實機PASS，也不因取消不相關門檻改稱已發布。
 
 ### 變更紀錄
 

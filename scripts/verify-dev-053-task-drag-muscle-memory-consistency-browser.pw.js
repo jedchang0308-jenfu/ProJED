@@ -1,5 +1,6 @@
 /* eslint-disable */
 async (page) => {
+  const selectedCaseIds = [...new Set((new URL(page.url()).searchParams.get('qaCases') || '').split(',').filter(Boolean))];
   const appBaseUrl = await page.evaluate(() => window.location.origin);
   const results = [];
   const diagnostics = [];
@@ -269,6 +270,7 @@ async (page) => {
   };
 
   const runCase = async (id, scenario, operation) => {
+    if (selectedCaseIds.length && !selectedCaseIds.includes(id)) return;
     const startedAt = new Date().toISOString();
     try {
       const details = await operation();
@@ -635,9 +637,16 @@ async (page) => {
     });
   }
 
+  for (const id of selectedCaseIds) {
+    if (!results.some((result) => result.id === id)) {
+      results.push({ id, scenario: 'requested case must exist and execute', result: 'FAIL', error: 'Unknown or unexecuted qaCases selection' });
+    }
+  }
   const finalFailCount = results.filter((result) => result.result !== 'PASS').length;
   const summary = {
     ok: finalFailCount === 0,
+    selectedCaseIds: selectedCaseIds.length ? selectedCaseIds : null,
+    evidenceLayer: 'browser-synthetic-touch',
     summary: { pass: results.length - finalFailCount, fail: finalFailCount },
     route: 'http://localhost:4000/?qcReset=1&qcSize=72',
     results,
@@ -645,6 +654,7 @@ async (page) => {
     networkFailures: networkFailures.slice(-30),
   };
   await page.evaluate((payload) => {
+    window.__DEV053_ARTIFACT = payload;
     localStorage.setItem('dev053-task-drag-muscle-memory-consistency-result', JSON.stringify(payload));
   }, summary).catch(() => undefined);
   console.log(JSON.stringify(summary, null, 2));

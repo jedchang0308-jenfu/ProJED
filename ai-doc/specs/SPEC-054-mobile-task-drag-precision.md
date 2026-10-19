@@ -1,12 +1,14 @@
 # SPEC-054：手機任務拖拉定位精準度優化
 
-狀態：RD Rework 5 Implemented / Automated QA-QC Passed / Physical Device Gate Pending
+狀態：RD Implemented / 自用裝置重點操作待確認；自動化結果依目前測試產物判定
 
 優先級：P1
 
-風險：Medium（多檔 UI interaction、共用拖拉契約與真機驗證；不涉及 DB / API / production）
+風險：任務錯位、重複動作及取消後寫入需阻擋；純視覺手感以實際自用裝置確認。本任務不涉及 DB / API / production。
 
-文件成熟度：Implemented Contract / Physical Gate Pending
+文件成熟度：Implemented Contract / Self-use Acceptance
+
+2026-10-19 修訂：依使用者「自用而非 SaaS」及直接精簡指示，以下自用驗收取代舊雙平台量化完成／發布門檻。保留原失敗與歷史測試結果，不將未執行的實機測試改成 PASS。DEV-097 不等待本 DEV 的實機補充；其 dirty owner、cancel／flush、資料保留及更新恢復仍依自己的驗收。
 
 是否計入產品交付完成：是
 
@@ -52,13 +54,13 @@ DEV-054 的核心方向是：**保留使用者已滿意的桌機 UI 與行為，
 - Mobile action rail 保留既有 action set，但必須同時支援「拖放到 action」與「長按放手進入 armed rail 後點擊 action」兩種一致操作。
 - 真實 `TouchEvent` 是 dedicated drag-action session 的輸入依據，不以 viewport 寬度判斷使用者正在用滑鼠或觸控；桌機 mouse 仍由既有 MouseSensor 處理，不新增 dnd-kit TouchSensor。
 - 所有允許 task long press 的 L1、L2、L3+ 與 Workbench unplaced surface，從 `touchstart` 起必須停用原生文字選取與 iOS touch callout；input、textarea、contenteditable 保留文字選取。
-- 本 DEV 必須完成真實 iOS 與 Android 實機操作驗證；未執行只能判定 `未充分驗證`。
+- 自用驗收採實際常用裝置的原失敗路徑及主要操作；不預設必須同時支援兩個手機平台，不要求固定試驗次數、成功率、逐筆工作簿或完整錄影。未使用／未測的平台標示未驗證，不能宣稱跨平台實機通過。
 
 ### 2.2 與 DEV-053 的關係
 
 - DEV-053 的架構重構、功能 gate 與 T01-T14 歷史結果維持有效，不回寫成失敗。
 - DEV-054 是 post-completion product finding 的獨立交付點，補足 DEV-053 未量測的真機定位精準度。
-- DEV-053 的 physical phone supplemental 決策只適用於 DEV-053 歷史完成門檻；DEV-054 因問題本身是實機手感，physical iOS / Android 改為 required completion gate。
+- DEV-054 保留原問題的手機手感確認，依實際自用裝置驗收；舊雙平台 required completion gate 已由本次修訂取代，不再延伸成其他任務的共同阻塞。
 - Spec Impact：`Compatible exception`。本 DEV 不恢復 DEV-051 parent-lock，不執行 archived DEV-052，也不改 placed-row no-drag 決策。
 
 ## 3. 使用者價值與成功定義
@@ -74,17 +76,17 @@ DEV-054 的核心方向是：**保留使用者已滿意的桌機 UI 與行為，
 ### 4.1 In Scope
 
 - 抽出桌機與手機共用的 canonical task drop intent resolver。
-- 手機 task target 與 action rail 都以 raw touch point 命中；preview 無論是否存在有效 target，都只以 raw point + 12px clearance 跟隨，不得被 indicator 拉離手指。
+- 手機 task target 與 action rail 都以 raw touch point 命中；preview 跟隨 raw point，不得被 indicator 拉離手指。一般預覽 clearance 12px、child candidate／armed 16px；沿現行 50% 預覽與水平 pointer gap=0，safe-area clamp 允許靠邊時調整顯示。
 - 建立 mobile target descriptor、compatible target filtering、innermost-surface ownership、ancestor fall-through blocking 與 nested target priority；不使用 nearest-target 磁吸。
 - 建立 target retain、handover hysteresis、pending candidate 與 release-time freshness contract。
 - 調整手機 preview、indicator z-order、viewport clamp 與 finger clearance。
 - 降低並平滑 horizontal / vertical edge auto-scroll，捲動後以穩定器重新解析 target。
 - 修正手機全域 touch lifecycle 不得壓制一般頂部欄／面板按鈕 native click。
 - 修正 mobile action rail button 的直接 tap command path，並保留 at-most-once terminal guard。
-- 新增 pure/static/browser verifier 與 iOS / Android 真機量化驗證。
+- 保留 static／browser verifier 與實際自用裝置重點確認；重用相鄰套件的取消、捲動及復原案例，不複製同一驗收矩陣。
 - 補上 native selection/callout、500ms/8px 邊界、寬觸控 viewport、各階層 surface 與 Workbench placed/unplaced 的啟動所有權驗證。
 - 補上 Workbench unplaced 跨 inline 分欄拖入看板的 rendered exactly-once 驗證；placed row no-drag 維持不變。
-- 保留 DEV-029 / DEV-039 / DEV-046 / DEV-053 所有仍有效回歸。
+- 保留 DEV-029／039／046／053 中受影響的回歸。文件或測試治理修改不因任務 ID 被引用就要求整包重跑；共享互動修改按 QA 的行為對應選測。
 
 ### 4.2 Out of Scope
 
@@ -115,7 +117,7 @@ DEV-054 的核心方向是：**保留使用者已滿意的桌機 UI 與行為，
 手機 preview 必須：
 
 - `pointer-events: none`。
-- 無論有無有效 task target，都以 raw point 為唯一跟隨來源；一般 board 區域內 bottom edge 位於 raw finger 上方 `12px +/- 1px`。
+- 以 raw point 為唯一跟隨來源；一般 bottom clearance 為 12px，child candidate／armed 為 16px，預覽為 50% 縮放且水平 pointer gap=0；量測須辨識 phase 及 viewport clamp，不能對所有狀態一律要求 12px。
 - Preview 不得以 target、locked rect、drop indicator 或 canonical boundary 為 anchor；target 變更只能移動 indicator，不能讓拖曳物跳離手指。
 - X / Y 軸均 clamp 在 viewport 與 safe area 內。
 - z-order 固定為 action rail > drop indicator > preview > board content。
@@ -152,15 +154,14 @@ interface TaskDropIntent {
 }
 ```
 
-`resolveTaskDropIntent(source, target, nodes)` 是 preview 與 commit 的唯一權威：
+現行 `resolveTaskDropOutcome` 與其內部 intent 計算是 preview 與 commit 的共同權威；上方型別為語意示意，實際型別沿 source：
 
-- 同父層向下移動：落在 target 後方。
-- 同父層向上移動：落在 target 前方。
-- 跨父層命中 row：沿用目前桌機契約，落在 target 前方。
+- before／after 依命中的明確 boundary／surface descriptor 及同一 resolver 計算，不只依 source 與 target 的舊相對順序推定。R03 現行 fixture 選 explicit before boundary，驗最終同 parent 且位於 target 前；不再沿用舊 moving-down 一律 after 的預期。
+- 跨父層、來源原位與無效目標沿同一 resolver 及現行 ownership／permission 規則；origin／invalid 為零寫入。
 - 命中明確 column / checklist append target：沿用桌機 append 契約。
 - invalid descendant、self、archived、permission denied 回傳 `null`。
 - 手機不得再用 `point.y > rect.top + rect.height / 2` 決定 `before / after`。
-- Committer 必須在 release 前以最新 store snapshot 重新呼叫同一 resolver。
+- Committer 必須在 release 前以最新 store snapshot 重新呼叫同一 resolver；既有 undo grouping 與 ownership／permission 檢查保留。
 
 ### 5.3 Mobile Candidate Resolution
 
@@ -245,8 +246,7 @@ interface TaskDragTargetLock {
 | 檔案 | 責任 |
 |---|---|
 | `src/components/Wbs/taskDrag/taskDropIntent.ts` | 共用 compatibility、canonical intent 與 display position pure resolver |
-| `src/components/Wbs/taskDrag/taskDragTargetAdapter.ts` | raw / intent point、innermost exact hit-test、ancestor blocking、bounded target rect、viewport clamp |
-| `src/components/Wbs/taskDrag/taskDragStability.ts` | retain region、pending candidate、handover hysteresis、release freshness pure transition |
+| `src/components/Wbs/taskDrag/taskDragTargetAdapter.ts` | raw／intent point、innermost hit-test、ancestor blocking、bounded rect、viewport clamp 及 retain／handover／freshness；不為歷史檔名另加平行 stability module |
 
 ### 6.2 必要修改檔案
 
@@ -296,9 +296,9 @@ flowchart LR
 | C Geometry + stability | B 後 | exact innermost descriptor、ancestor blocking、bounded card primary rect、core / retain / hysteresis / freshness | jitter 不翻轉；handover <= 100ms；invalid child 不命中 parent card | target 過黏、錯 target、ancestor fall-through 或 stale commit |
 | D Presenter + auto-scroll | C 後 | always finger-coupled preview、indicator z-order、3px max scroll、pan broker ownership | 320/390/430/636、tall-card、edge-scroll 與 scroll ownership通過 | preview 離開手指、scroll 跳列、pan broker 搶事件 |
 | E Integration hardening | D 後 | release、placed-row、cancel、at-most-once、scripts | DEV-054 + regressions、TS、build 通過 | double-submit、placed source、desktop drift |
-| F QA True Device Gate | E 後 | iOS / Android 各 50 次、錄影、trial sheet、QC | `QA-DEV-054` 全通過 | 缺裝置、wrong commit > 0、成功率不足 |
+| F 自用操作確認 | E 後 | 實際常用手機的原失敗情境、主要拖拉／action／取消與復原；簡短結果 | 原問題不重現且無錯寫／重複效果；未測平台如實列出 | 實際使用裝置有錯誤提交或無法恢復；不因另一平台缺席阻塞 |
 
-Current execution boundary：Slice C-E 已完成 RD rework 5；長按前原生文字圈選／iOS callout、寬觸控 viewport 誤走桌機路徑與 Workbench pan ownership 均已修正。R01-R15 automated browser、指定相鄰拖拉回歸、TypeScript、ESLint 與 test build 已通過。仍需 QA/QC 依本文件執行 iOS / Android 實機 gate；未要求 production release。
+Current execution boundary：Slice C-E 的歷史 RD rework 與自動化結果沿 §10 保留；本次只精簡文件、測試及關卡，未改產品 runtime。自用裝置確認尚未執行，不標記 DEV-054 完成；不阻擋 DEV-097 依自己的驗收前進。正式發布仍不在本次範圍。
 
 ## 9. Acceptance Criteria
 
@@ -308,7 +308,7 @@ Current execution boundary：Slice C-E 已完成 RD rework 5；長按前原生�
 - 手機命中同一 target 時，drop intent 與桌機相同，不再依 target DOM 上下半區翻轉。
 - 在舊 midpoint 上下各 10px 的至少 20 點 jitter sequence 中，locked target 與 display position 不翻轉。
 - 手指在相鄰 18px row 邊界往返至少 8 點時，retain 內不得切換；移入新 target 核心區後，indicator 在 100ms 內完成一次交接。
-- 有無有效 target 時，preview bottom 與 raw finger point 距離皆為 `12px +/- 1px`；indicator 變更不得移動 preview；target hit-test 不使用任何 preview 視覺座標。
+- Preview clearance 依 §5.1 的一般／child phase 與 safe-area 判定；indicator 變更不得移動 preview，target hit-test 不使用任何 preview 視覺座標。R03 fixture 的 child phase 驗 16px；一般 phase 仍驗 12px。
 - Innermost checklist source / invalid descendant 必須阻斷 ancestor fall-through；expanded card 的 checklist 區不可被 card position geometry 吸收。
 - Mobile source placeholder 不顯示 insertion marker；同一畫面只允許一條 live target indicator，且其 target / position 必須等於 release commit。
 - Long press drag 成立後，pan broker 不得改變 scrollTop / scrollLeft；edge auto-scroll 每 frame delta <= 3px。
@@ -317,14 +317,12 @@ Current execution boundary：Slice C-E 已完成 RD rework 5；長按前原生�
 - Action rail 各 action 只提交一次；drag-to-action release 與 armed-tap action 都必須可用且不得 double-submit。
 - Placed row 仍不能拖、不能進 rail 或產生 preview。
 
-### 9.2 Quantitative Physical Device Gate
+### 9.2 自用裝置重點確認
 
-- 至少一台實體 iPhone / iOS Safari 與一台實體 Android / Chrome，各完成 50 次指定拖拉。
-- 每台 first-release correct >= 48/50（96%）。
-- 每台 no-op <= 2/50，且 no-op 後下一次可立即操作。
-- Wrong target、wrong parent、wrong action、duplicate commit 均為 0。
-- 兩台裝置分別達標，不得用合併平均掩蓋單一平台失敗。
-- 缺實機、錄影、trial sheet、前後 parent / order 或 visible-error sweep，判定 `未充分驗證`。
+- 在實際常用裝置重驗原先失敗的長按／定位路徑，以及同欄、跨欄、checklist、自動捲動、action、取消與復原；依實際使用功能取樣，不固定次數或計算成功率。
+- 放手前可見的目標與 parent／order／action 結果一致；錯誤提交、重複效果、取消寫入仍判失敗。安全 no-op 後可立即重試，不設 no-op 配額。
+- 簡短記錄裝置／瀏覽器、測試版本、操作及結果即可；發現問題時才按診斷需要保留截圖／錄影／trace，不要求逐筆 node ID、timecode 或簽核工作簿。
+- 自用操作尚未確認時保持「驗證中／自用確認待補」；不封鎖已通過的自動化或無直接相依的 DEV-097。其他平台未測保留未驗證。
 
 ### 9.3 Architecture
 
@@ -343,21 +341,15 @@ npm.cmd run verify:dev-054-mobile-task-drag-precision
 npm.cmd run verify:dev-054-mobile-task-drag-precision-browser
 ```
 
-必跑回歸：
+依變更選測；本次治理修改至少跑 DEV-054 static／browser，並重用或執行下列具體安全案例。取消／捲動／undo 等獨立保護不因 B/R 合併而刪除：
 
 ```powershell
-npm.cmd run verify:dev-053-task-drag-muscle-memory-consistency
 npm.cmd run verify:dev-053-task-drag-muscle-memory-consistency-browser
-npm.cmd run verify:dev-029-mobile-pan-first-interactions
 npm.cmd run verify:dev-029-mobile-pan-first-interactions-browser
-npm.cmd run verify:dev-046-universal-task-surface-drag
-npm.cmd run verify:dev-046-universal-task-surface-drag-browser
-npm.cmd run verify:dev-039-task-workbench-placement-lanes
-npm.cmd run verify:dev-039-task-workbench-placement-lanes-browser
 npm.cmd run verify:dev-044-undo-coverage
-npm.cmd exec tsc -- --noEmit
-npm.cmd run build:test
 ```
+
+DEV-053 B07／B10／B13 保護 invalid／全部取消事件的零寫入、可重試與 placed-row 唯讀；DEV-029 C12／C13 保護水平／垂直 edge-scroll，C04／C07／C08 保護 destructive confirmation 與 action；DEV-044 保護 undo wiring。修改相關產品模組時另跑該模組的 focused regression、TypeScript／build；純文件或 `.mjs` 檢查器調整以 syntax／targeted tests 為主，不重建未變產品。更完整的 B01–B12 行為與現行 R cases 對應見 QA，不再要求另做同義 report。
 
 ### 10.1 Local Execution Evidence - 2026-07-17
 
@@ -389,13 +381,13 @@ npm.cmd run build:test
 - TypeScript、targeted ESLint（0 error，2 個既有 warning）、`build:test` passed；console／network error sweep 為 0。
 - Authoritative QC evidence：`ai-doc/qc/QC-DEV-054-mobile-task-drag-precision.md`。
 
-尚未完成：QA-054-P01~P12 iOS / Android 實機 trial sheet、錄影與裝置資訊。Automated QA-QC 已通過；因 physical gate 仍是本 DEV 完成條件，整體結論維持 `未充分驗證`，不得標記完成。
+歷史未執行：當時雙平台量化實機驗證未完成，該事實保留；舊次數／工作簿門檻已由 §9.2 取代。目前仍須實際自用裝置重點確認，不能把歷史未測項目寫成 PASS。
 
 ### 10.3 DEV-068 Child-intent Preview Exception - 2026-08-15
 
 - 未進入child intent的一般same-level position drag仍維持preview bottom距raw finger `12px +/- 1px`，由R03驗證。
 - 進入DEV-065完整藍框的child candidate／armed狀態，為避免來源卡遮住parent frame與ghost，來源preview改採raw finger右上方16px；右緣時左上fallback，viewport margin 8px。R05／R06已改驗證candidate phase與16px實際量測。
-- 此為`Compatible exception`：target hit-test仍只使用raw finger與innermost surface，來源preview位置不參與target resolver、indicator或commit geometry；action rail優先、pan-first、cancel與physical gate不變。
+- 此為當時的`Compatible exception`：target hit-test只使用raw finger與innermost surface，來源preview不參與target resolver／commit；現行預覽沿 §5.1 的一般／child phase 及 50% 顯示。action rail、pan-first、cancel 保護保留；實機要求已由 §9.2 更新。
 
 ## 11. Stop Conditions
 
@@ -407,17 +399,15 @@ npm.cmd run build:test
 - Action 與 move 同時提交、同 session batch count > 1，或 cancel 後殘留資源。
 - Workbench placed row 可拖、進 action rail 或產生 draggable source。
 - Workbench unplaced row 在 inline 工作台中無法命中右側看板 direct target，或放手後仍留在 `__task_workbench_unplaced__`。
-- 任一 required automated regression 失敗。
-- iOS / Android 任一缺少、first-release correct < 96%、wrong commit > 0，或證據不完整。
+- 本次變更所需的安全／回歸案例失敗；保留首個有效失敗，判明產品／測試／環境原因後修正，不因縮小驗收而忽略。
+- 自用裝置重點操作仍有錯誤提交、重複效果或無法恢復；其他平台缺席、無工作簿或未錄影本身不是失敗。
 
 ## 12. Evidence Required
 
-- Slice A 前後 desktop baseline 截圖與 drag trace。
-- Mobile jitter、handover、nested target、auto-scroll browser trace。
-- 每個 viewport 的 preview / indicator / action rail geometry 截圖。
-- Static、browser、regression、TypeScript、build command 結果。
-- iOS / Android device、OS、browser、viewport、50-trial sheet、操作錄影與前後資料。
-- QC 必須區分 `通過`、`未通過`、`未充分驗證`；不得以 synthetic touch 取代 physical gate。
+- 實際受影響案例的命令、來源／環境、selected case IDs 與結果；未變且仍有效的歷史證據可重用，不每輪重做 Slice A／完整矩陣或 TypeScript／build。
+- Browser 驗證保存 target／commit、取消零寫入／可重試、action／scroll 等對應 readback；只有案例宣稱畫面結果時保留該畫面／量測，不要求所有 viewport 各做完整 report。
+- 實際自用裝置、瀏覽器、版本與操作結果的簡短記錄；只有失敗診斷需要時再補詳細 trace／錄影。
+- 自查與歷史 QC、synthetic touch 與實機結果分層；本次 RD 自查不宣稱獨立 QC，未測平台仍未驗證。
 
 ## 13. Related Documents
 

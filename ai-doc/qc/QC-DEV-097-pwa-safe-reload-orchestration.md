@@ -1,6 +1,8 @@
 # QC-DEV-097：PWA 安全重新載入協調事實驗證
 
 狀態：`Local Independent QC PASS / Physical Device Supplemental Not Verified / Not Released`
+
+2026-10-19 RD 契約更新：依使用者指示解除 DEV-054 雙平台實機對本任務的連動；歷史 independent QC 結果與 physical 未驗證事實保留，不改寫原收據。DEV-097 的 dirty owner、cancel／flush、資料保留與更新恢復仍按自身契約保護；本段不是新一輪獨立 QC 或 release PASS。
 關聯 DEV：DEV-097 / DEV-096 / DEV-041 / DEV-034 / DEV-083
 關聯 QA：`ai-doc/qa/QA-DEV-097-pwa-safe-reload-orchestration.md`
 關聯 ADR：`ai-doc/decisions/ADR-047-pwa-per-client-reload-isolation.md`
@@ -85,8 +87,8 @@ Viewport screenshots位於 `output/playwright/dev-097`、`dev-096`及相鄰DEV�
 
 1. 首輪 DEV-054 完整批次曾因CDP touchMove抵達晚於500ms timer，造成9px false failure；不改產品8px
    threshold，將同一事件提早注入後連續兩輪15/15 PASS。此為 harness reliability correction，非產品門檻放寬。
-2. Android／iOS physical supplemental 未驗證：恢復條件是連接可識別的Android裝置（adb）與iOS測試裝置／
-   Safari通道，再重跑 `QA-DEV-054` physical gate；目前不得標記實機通過。
+2. Android／iOS physical supplemental 未驗證，保留該證據限制；不再要求先補 `QA-DEV-054` 的雙平台
+   physical gate 才能推進本任務。實際自用裝置的拖拉確認依更新後的 QA-DEV-054 處理，不冒稱已通過。
 3. 未執行 production deploy、production smoke、commit前後release artifact provenance或rollback gate；
    下一步需另走 deployment/release gate。
 
