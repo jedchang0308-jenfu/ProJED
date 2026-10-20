@@ -74,6 +74,10 @@ async (page) => {
   };
   const boardCacheKey = boardId => `projed-task-filters:v6:account:${encodeURIComponent(account.id)}:board:${encodeURIComponent(boardId)}`;
   const boardV5Key = boardId => `projed-task-filters:v5:account:${encodeURIComponent(account.id)}:board:${encodeURIComponent(boardId)}`;
+  const executionUrl = () => {
+    const current = page.url();
+    return current && !current.startsWith('about:') ? current : 'http://localhost:4000/';
+  };
 
   const seedBase = async () => {
     await page.evaluate(({ account, workspace, nodes, boardA, boardB }) => {
@@ -104,7 +108,7 @@ async (page) => {
   };
   const openBoard = async (viewport = { width: 1440, height: 900 }) => {
     await page.setViewportSize(viewport);
-    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
+    await page.goto(executionUrl(), { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
     await page.locator('#filter-menu-trigger').waitFor({ state: 'visible', timeout: 15000 });
   };
@@ -137,7 +141,7 @@ async (page) => {
 
   try {
     step = 'seed and normal board entry';
-    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
+    await page.goto(executionUrl(), { waitUntil: 'domcontentloaded' });
     await seedBase();
     await openBoard();
     let panel = await openBoardFilters();
