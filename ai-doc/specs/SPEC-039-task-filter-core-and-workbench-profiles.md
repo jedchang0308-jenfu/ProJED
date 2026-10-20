@@ -9,7 +9,7 @@
 ## DEV-118 Current Phase Implementation Contract：全選顯示與完整分類矩陣 v6（2026-10-19）
 
 2026-10-19 後續使用者定案：Board／Workbench 四類篩選統一採「全部＝不限」，「全部」狀態下同組其他選項也都亮；取消最後一項自動恢復不限。
-此修訂取代先前「全不選零筆／三態全選」的互動契約，已實作並完成本機直接驗證；正式 Hosting 已部署。authenticated feature smoke 與 production migration 仍保留為未完成的獨立證據面。
+此修訂取代先前「全不選零筆／三態全選」的互動契約，已實作並完成本機直接驗證；正式 Hosting 已部署，targeted authenticated production smoke 已通過。完整 browser matrix 與 production migration 仍保留為未完成的獨立證據面。
 
 文件成熟度：`RD Implementation Ready`；架構定案：`已定案`。
 Architecture Closure Review：`PASS / 2026-10-19 / P0-P1 unresolved architecture blockers = 0`。
@@ -26,7 +26,7 @@ Architecture Closure Review：`PASS / 2026-10-19 / P0-P1 unresolved architecture
 
 本輪 commit `920b3744331d5f9b2cecc5ab45a6ffadb248efd4` 已建立 immutable artifact `20261019143720-d403cd`，artifact tree SHA-256 為 `a79036a801155194c3da84b1741b30865c58c4db005ab89a88a82e2eb4e80342`。Firebase live release 為 `1792420743052000`、version 為 `adcd8400adce22dd`；canonical origin 的 83 個檔案已逐檔回讀並與 manifest hash 相符。
 
-本機 model／migration／direct regression、TypeScript、test build 與 targeted lint 已通過。Playwright wrapper 因 registry DNS `ENOTFOUND`，cached Chromium 因 `spawn UNKNOWN`，故 authenticated production feature smoke 尚未完成；完整 lint 的既有未修改 error 亦不納入本輪產品判定。Supabase production migration 因 connector `permission denied` 未套用，source migration 僅作 forward-only package 保留。
+本機 model／migration／direct regression、TypeScript、test build 與 targeted lint 已通過。2026-10-20 targeted authenticated production smoke 已驗證狀態分類的「全部亮起時單獨關閉」、「取消最後一項恢復全部」與 reload persistence，證據見 `output/playwright/dev-118/v7/production-browser-smoke.json`。Playwright wrapper 因 registry DNS `ENOTFOUND`，cached Chromium 因 `spawn UNKNOWN`，完整 browser matrix 尚未完成；完整 lint 的既有未修改 error 亦不納入本輪產品判定。Supabase production migration 因 connector `permission denied` 未套用，source migration 僅作 forward-only package 保留。
 
 ### 定案：v6 明確選取、舊日期保留、Calendar 版本隔離
 

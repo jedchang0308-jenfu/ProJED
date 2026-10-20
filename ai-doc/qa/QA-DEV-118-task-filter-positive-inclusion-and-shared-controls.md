@@ -4,8 +4,8 @@
 
 - 關聯 DEV：DEV-118、DEV-039、DEV-045、DEV-048、DEV-062、DEV-090
 - 工程權威：`SPEC-039` 的「全選顯示與完整分類矩陣 v6（2026-10-19）」
-- 計畫狀態：`Local implementation acceptance PASS / Independent QC PASS / Production Hosting Deployed / Authenticated Feature Smoke Pending / Production Migration Permission Pending`
-- 執行邊界：本地產品與直接回歸、immutable artifact 與 Firebase Hosting provenance；不含已被權限拒絕的正式 migration apply、authenticated production feature smoke 或正式資料寫入
+- 計畫狀態：`Local implementation acceptance PASS / Independent QC PASS / Targeted Production Browser Smoke PASS / Full Browser Matrix Pending / Production Migration Permission Pending`
+- 執行邊界：本地產品與直接回歸、immutable artifact、Firebase Hosting provenance 與 targeted authenticated browser smoke；不含已被權限拒絕的正式 migration apply、完整四分類／多裝置 browser matrix 或正式資料寫入
 
 本輪驗證 Board／Workbench 的 V6 明確 `all / none / selected`、四桶日期、V5 無損相容、持久化恢復與
 真實 UI 操作。Calendar 保持 V5 query 與既有 v1～v4 subscription payload、permission、preview／feed；
@@ -17,9 +17,9 @@
 
 後續互動修訂已在 commit `920b3744331d5f9b2cecc5ab45a6ffadb248efd4` 完成，並以 release `20261019143720-d403cd` 建立 immutable artifact。model 17/17、偏好 migration／恢復18/18、DEV-090 10/10、projection 5/5、DEV-048 7/7、DEV-039 67/67、parity 26/26、cross-board 23/23、DEV-062、TypeScript、test build 與 changed-source targeted lint（0 error／13 warnings）通過。
 
-Firebase Hosting `projed-cc78d` live release `1792420743052000`／version `adcd8400adce22dd` 已部署；canonical origin `https://projed-cc78d.web.app` 回讀 83 個檔案，逐檔 size／SHA-256 與 manifest 相符。這只證明 immutable artifact 已由正式 Hosting 提供，不等同 authenticated UI feature smoke。
+Firebase Hosting `projed-cc78d` live release `1792420743052000`／version `adcd8400adce22dd` 已部署；canonical origin `https://projed-cc78d.web.app` 回讀 83 個檔案，逐檔 size／SHA-256 與 manifest 相符。2026-10-20 targeted authenticated browser smoke 已通過狀態分類單獨關閉、取消最後一項恢復全部與 reload persistence；證據為 `output/playwright/dev-118/v7/production-browser-smoke.json`。
 
-正式 feature smoke 尚未完成：Playwright wrapper 無法解析 registry (`ENOTFOUND registry.npmjs.org`)，cached Chromium 亦回 `spawn UNKNOWN`。完整 lint 另有未修改檔案的既有 `no-useless-escape` error。Supabase production migration 的 list／read／apply connector 均回 `permission denied`，因此本輪沒有 production schema 或 business data mutation 證據。
+完整四分類／多裝置 browser matrix 尚未完成：Playwright wrapper 無法解析 registry (`ENOTFOUND registry.npmjs.org`)，cached Chromium 亦回 `spawn UNKNOWN`。完整 lint 另有未修改檔案的既有 `no-useless-escape` error。Supabase production migration 的 list／read／apply connector 均回 `permission denied`，因此本輪沒有 production schema 或 business data mutation 證據。
 
 判定分成三條，不互相代替：
 

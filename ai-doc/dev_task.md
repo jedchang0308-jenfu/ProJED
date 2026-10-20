@@ -1018,19 +1018,19 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 證據：`SPEC-117`、`ADR-049`、`QA-DEV-117`；static／browser artifacts 位於 `output/playwright/dev-117-meeting-continuity/`。
   - 計入交付：是（只有產品實作與 QA/QC 通過後才完成；文件定案不計完成）
 
-- ✓ DEV-118 [開發點] [已實作／本機驗證通過／正式 Hosting 已部署；功能 smoke pending、migration 未套用] [P2] 任務篩選器正向包含邏輯與跨介面共用架構
+- ✓ DEV-118 [開發點] [已實作／本機驗證通過／正式 Hosting 已部署／targeted production smoke PASS；migration 未套用] [P2] 任務篩選器正向包含邏輯與跨介面共用架構
   - 摘要：2026-10-19 後續改為「全部＝不限、全部狀態同組選項都亮、取消最後一項恢復全部」；同分類 OR、跨分類 AND。
     後續互動修訂已完成 model／migration／直接回歸、typecheck、test build 與變更來源 lint；完整內容見 [本輪矩陣與工程交接](#dev-118-selection-matrix-20261019)。
     2026-09-11 v5 的「未選不限」與本機 PASS 保留為舊候選基線，不取代現行 V6。
   - 來源 ID：`USER-20260910-TASK-FILTER-UI-UNIFICATION`、`USER-20260911-TASK-FILTER-LOGIC-ARCHITECTURE`。
   - 父任務：DEV-039；相容 DEV-045、DEV-062、DEV-064。
-  - 下一步：補 authenticated production feature smoke；Supabase production migration 需取得 connector 權限後依既定 migration gate 套用。
+  - 下一步：若要關閉完整 release evidence，補四分類／多裝置 browser matrix；Supabase production migration 需取得 connector 權限後依既定 migration gate 套用。
     舊日期保留 legacy-v5，明確 snapshots 不升 future-all，Calendar保持V5。
   - 證據：`TaskFilterState`／predicate／summary／v4 preference repository、Workbench v4 local prefs、
     Calendar v3 snapshot／DB validator／Edge matcher與三個 UI consumer；本輪 model 17/17、偏好 migration 18/18、
     DEV-090 10/10、DEV-090 projection 5/5、DEV-048 7/7、DEV-039 67/67、parity 26/26、cross-board 23/23、
     DEV-062、TypeScript、test build 與 targeted lint 皆通過。正式 Hosting 已部署並完成遠端 83 檔 provenance 回讀。
-  - 計入交付：是（程式與文件已提交；正式 Hosting 已部署；production migration 與 authenticated feature smoke 仍列為明確殘餘）
+  - 計入交付：是（程式與文件已提交；正式 Hosting 已部署；targeted production smoke 已通過；production migration 與完整 browser matrix 仍列為明確殘餘）
 
 - ✓ DEV-119 [開發點] [完成] [P1] [Implemented / Targeted QA-QC PASS / NOT RELEASED] OKR 內容儲存格直接編輯與自動展開／收合
   - 摘要：以 Excel／Google Sheets 肌肉記憶為基礎，OKR 任務目的 owner cell 可雙擊內容或 `F2` 就地編輯；
@@ -6191,7 +6191,8 @@ Calendar 訂閱仍維持獨立 V5 契約。顯示設定不是篩選分類，維�
 - local verification：model 17/17、偏好 migration／恢復18/18、DEV-090 10/10、projection 5/5、DEV-048 7/7、DEV-039 67/67、filter parity 26/26、cross-board 23/23；TypeScript、`npm run build:test`、變更來源 targeted ESLint 0 error／13 warnings 通過。
 - artifact：immutable release `20261019143720-d403cd`，tree SHA-256 `a79036a801155194c3da84b1741b30865c58c4db005ab89a88a82e2eb4e80342`；artifact verifier PASS。
 - production Hosting：Firebase project/site `projed-cc78d`，live release `1792420743052000`，version `adcd8400adce22dd`，canonical origin `https://projed-cc78d.web.app`；遠端 83 檔逐檔 provenance／hash 回讀 PASS。
-- 明確限制：Playwright wrapper 受 registry DNS `ENOTFOUND` 及 Chromium `spawn UNKNOWN` 阻擋，正式 authenticated feature smoke 尚未完成；完整 lint 仍被未修改的 `supabase/functions/_shared/meetingSynthesisStructure.ts:14` 既有 `no-useless-escape` error 阻擋。
+- browser smoke：2026-10-20 以既有登入 Chrome session 完成 targeted production smoke：全部亮起時單獨關閉、取消最後一項恢復全部、重新載入保留狀態；證據 `output/playwright/dev-118/v7/production-browser-smoke.json`。完整四分類／多裝置 matrix 仍待補；Playwright wrapper 受 registry DNS `ENOTFOUND` 及 Chromium `spawn UNKNOWN` 阻擋。
+- 明確限制：完整 lint 仍被未修改的 `supabase/functions/_shared/meetingSynthesisStructure.ts:14` 既有 `no-useless-escape` error 阻擋。
 - migration：`20261019092520_dev_118_task_filter_preference_default_v6.sql` 已納入 source，但 Supabase ref `knodlkxqpcqyrtgwpdst` 的 list／read／apply connector 均回 permission denied，故未宣稱 production schema 已變更。
 - 發布與 rollback 收據：[REL-017 DEV-118](release/REL-017-DEV-118-20261019.md)。
 
