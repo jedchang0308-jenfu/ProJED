@@ -187,6 +187,7 @@ async (page) => {
     await allBox(panel, 'status').click();
     await group(panel, 'due').locator('[data-task-filter-date-bucket="unset"]').click();
     await group(panel, 'due').locator('[data-task-filter-date-bucket="before_today"]').click();
+    assert(await allBox(panel, 'due').getAttribute('aria-pressed') === 'true', 'cancelling the last visible date bucket must restore unrestricted all');
     const days = panel.getByRole('spinbutton', { name: '日期分類天數 N' });
     await days.fill('0');
     assert(await days.getAttribute('aria-invalid') === 'false', 'N=0 must be accepted');

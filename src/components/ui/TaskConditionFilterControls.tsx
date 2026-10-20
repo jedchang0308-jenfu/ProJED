@@ -1,7 +1,6 @@
 import React from 'react';
 import { Search } from 'lucide-react';
 import {
-  TASK_FILTER_DATE_BUCKETS,
   TASK_STATUS_OPTIONS,
   normalizeTaskFilters,
   normalizeTaskFiltersV5,
@@ -91,6 +90,11 @@ const MatrixControls: React.FC<MatrixProps> = ({
   const change = (next: TaskFilterQuery) => { if (!disabled) onChange(normalizeTaskFilters(next)); };
   const peopleIds = Array.from(new Set([...assigneeOptions.map(option => option.id), ...value.people.ids])).sort();
   const tagIds = Array.from(new Set([...tags.map(tag => tag.id), ...value.tags.ids])).sort();
+  const dateOptions: Array<{ key: TaskFilterDateBucket; label: string }> = [
+    { key: 'unset', label: '未設定' },
+    { key: 'before_today', label: '今天以前' },
+  ];
+  const visibleDateBuckets = dateOptions.map(option => option.key);
 
   const selectAll = (group: 'statuses' | 'due' | 'people' | 'tags') => {
     if (value[group].mode === 'all') return;
@@ -109,9 +113,13 @@ const MatrixControls: React.FC<MatrixProps> = ({
 
   const toggleDueBucket = (bucket: TaskFilterDateBucket) => {
     if (value.due.mode === 'legacy-v5') return;
-    const selected = value.due.mode === 'all' ? TASK_FILTER_DATE_BUCKETS : value.due.buckets;
+    // The V6 UI intentionally exposes only the two visible date buckets.
+    // Do not implicitly select hidden compatibility buckets when leaving all;
+    // otherwise cancelling the last visible option can never restore all.
+    const selected = value.due.mode === 'all' ? visibleDateBuckets : value.due.buckets;
     const next = selected.includes(bucket) ? selected.filter(item => item !== bucket) : [...selected, bucket];
-    const mode = next.length === 0 || next.length === TASK_FILTER_DATE_BUCKETS.length ? 'all' : 'selected';
+    const visibleNext = next.filter(item => visibleDateBuckets.includes(item));
+    const mode = visibleNext.length === 0 ? 'all' : 'selected';
     change({ ...value, due: { ...value.due, mode, buckets: mode === 'selected' ? next : [] } });
   };
 
@@ -145,11 +153,6 @@ const MatrixControls: React.FC<MatrixProps> = ({
     setDaysError(false);
     if (value.due.mode !== 'legacy-v5') change({ ...value, due: { ...value.due, withinDays: nextDays } });
   };
-
-  const dateOptions: Array<{ key: TaskFilterDateBucket; label: string }> = [
-    { key: 'unset', label: '未設定' },
-    { key: 'before_today', label: '今天以前' },
-  ];
 
   const ambiguousPeople = value.people.mode === 'selected' && value.people.ids.length === peopleIds.length && value.people.includeUnassigned;
   const ambiguousTags = value.tags.mode === 'selected' && value.tags.ids.length === tagIds.length && value.tags.includeUntagged;
