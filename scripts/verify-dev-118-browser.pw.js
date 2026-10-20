@@ -117,6 +117,10 @@ async (page) => {
   };
   const group = (panel, name) => panel.locator(`[data-task-filter-group="${name}"]`);
   const allBox = (panel, name) => group(panel, name).locator('[data-task-filter-all="true"]');
+  const clearBoardFilters = async panel => {
+    const reset = panel.locator('[data-task-filter-reset="true"]');
+    if (await reset.count()) await reset.click();
+  };
   const switchBoard = async title => {
     await page.locator('[data-main-sidebar-toggle="true"]').click();
     const row = page.locator('[data-sidebar-board-row="true"]', { hasText: title });
@@ -201,7 +205,7 @@ async (page) => {
       assert(await days.inputValue() === '8', `N=${invalid || 'blank'} blur must restore last valid N=8`);
       assert(await page.locator('.kanban-task-card[data-task-id="dev118-plus8"]:visible').count() === 1, 'invalid N must preserve the last valid N=8 result');
     }
-    await panel.locator('[data-task-filter-reset="true"]').click();
+    await clearBoardFilters(panel);
     panel = await openBoardFilters();
     assert(await displayStart.getAttribute('aria-pressed') === displayAfterToggle, 'clear filters must not change display settings');
     pass('U03 All/individual transitions, compact date controls and clear/display separation');
@@ -246,7 +250,7 @@ async (page) => {
     assert(await freshWorkbenchTag.getAttribute('aria-pressed') === 'true', 'Workbench dynamic All must include the new same-scope tag');
     await liveWorkbench.locator('[data-task-workbench-filter-toggle="true"]').click();
     panel = await openBoardFilters();
-    await panel.locator('[data-task-filter-reset="true"]').click();
+    await clearBoardFilters(panel);
     panel = await openBoardFilters();
     pass('U03b saved selected-full stays selected and new options require explicit All');
 
@@ -352,7 +356,7 @@ async (page) => {
     await switchBoard('DEV-118 看板 A');
     panel = await openBoardFilters();
     assert(await panel.getByPlaceholder('搜尋任務名稱').inputValue() === '精準命中 任務', 'Board A query must restore after normal board switch');
-    await panel.locator('[data-task-filter-reset="true"]').click();
+    await clearBoardFilters(panel);
     pass('U06 board scope isolation through normal board switching');
     observations.scopeKeys = {
       accountId: account.id,
