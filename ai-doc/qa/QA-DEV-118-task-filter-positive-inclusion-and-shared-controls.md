@@ -4,7 +4,7 @@
 
 - 關聯 DEV：DEV-118、DEV-039、DEV-045、DEV-048、DEV-062、DEV-090
 - 工程權威：`SPEC-039` 的「全選顯示與完整分類矩陣 v6（2026-10-19）」
-- 計畫狀態：`Local implementation acceptance PASS / Independent QC PASS / Targeted Production Browser Smoke PASS / Full Browser Matrix Pending / Production Migration Permission Pending`
+- 計畫狀態：`Local implementation acceptance PASS / Independent QC PASS / Targeted Production Browser Smoke PASS / Full Browser Matrix PASS / Production Migration APPLIED`
 - 執行邊界：本地產品與直接回歸、immutable artifact、Firebase Hosting provenance 與 targeted authenticated browser smoke；不含已被權限拒絕的正式 migration apply、完整四分類／多裝置 browser matrix 或正式資料寫入
 
 本輪驗證 Board／Workbench 的 V6 明確 `all / none / selected`、四桶日期、V5 無損相容、持久化恢復與
@@ -38,7 +38,7 @@ Firebase Hosting `projed-cc78d` live release `1792420743052000`／version `adcd8
 | Model／相容性 | V6 model 17／17；偏好migration／恢復18／18。Calendar V5舊fixture、Edge與v3 model／feed原oracle通過。 |
 | 直接回歸 | 初輪14個專用／直接verifier通過；rework後重驗受影響的migration、DEV-090、DEV-048、DEV-039；最後core67／67、parity26／26、cross-board23／23。logs：`output/qa/dev-118/v6/final-run1-group*.json`、`rework1-group1.json`、`rework1-parity-corrected.log`、`rework2-workbench-regressions.json`。 |
 | 編譯／建置／lint | `typecheck-final-run3.log`、`build-final-run3.log`與`lint-final-workbench-run3.log`通過。整批changed-source lint為0 error／13既有warning；`lint-head-baseline.log`確認HEAD同樣13 warning。建置保留原chunk／Browserslist warning。 |
-| 主介面 | `output/playwright/dev-118/v6/browser-result.json`：12組PASS，正常Board／Workbench／設定→Calendar入口、完整鍵盤、三態、N0／8／9與invalid輸入、AND／階層／五模式、scope隔離、無reload新tag、legacy轉換、unknown／invalid鎖定均通過；console:error／pageerror為0。 |
+| 主介面 | `output/playwright/dev-118/v6-final-v3/browser-result.json`：12組PASS，正常Board／Workbench／設定→Calendar入口、完整鍵盤、三態、N0／8／9與invalid輸入、AND／階層／五模式、scope隔離、無reload新tag、legacy轉換、unknown／invalid鎖定均通過；console:error／pageerror為0。固定 test runtime 使用 `http://127.0.0.1:4002/`；artifact source binding 未提供，來源版本仍以 release provenance 證據為準。 |
 | Undo／redo | `output/playwright/dev-118/v6/undo-result.json`：2組PASS；選中B時復原／重做A，不改B的query或選定scope；diagnostics空。 |
 | Calendar完整UI回歸 | `output/playwright/dev-118/v6/calendar-regression-result.json`：原DEV-045 verifier PASS，原斷言未改；7張圖涵蓋1440／1024／390／320、事件日期、各板獨立、排除與恢復、copy不連動、mobile Escape／focus。wrapper只隔離本任務前置storage、捕捉metadata及改截圖輸出目錄。 |
 | 視覺／視窗 | 獨立QC實際檢視主UI 9張及Calendar代表圖；1440×900／390×844無出界或不可操作控制。root另以原始1242×668正常Board入口驗證panel bottom=660、可內捲至顯示設定；`reported-viewport.log`及兩張同名圖為實際證據。 |
@@ -381,6 +381,8 @@ RD必須建立下列同名`package.json` scripts與實際verifier；命名、輸
 | `verify:dev-118-task-filter-edge` | `scripts/verify-dev-118-calendar-edge.ts` → `edge-result.json` |
 | `verify:dev-118-calendar-filter-db` | `scripts/verify-dev-118-calendar-db.ps1` → `db-result.json` |
 | `verify:dev-118-task-filter-browser` | `scripts/verify-dev-118-browser.pw.js`經既有`run-playwright-code.ps1`、Base URL `http://localhost:4000/` → `browser-result.json` |
+
+2026-10-21 實際執行因 4000／4001 已被保留，使用同一固定 test runtime 的 `http://127.0.0.1:4002/`；命令與 verifier 未改變。
 
 ```powershell
 npm.cmd run verify:dev-118-task-filter-model

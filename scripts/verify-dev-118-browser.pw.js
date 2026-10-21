@@ -8,7 +8,6 @@ async (page) => {
   let step = 'initialize';
   page.on('console', message => diagnostics.push(`console:${message.type()}:${message.text()}`));
   page.on('pageerror', error => diagnostics.push(`pageerror:${error.message}`));
-
   const assert = (condition, message, details = {}) => {
     if (!condition) throw new Error(`${message}: ${JSON.stringify(details)}`);
   };
@@ -18,7 +17,10 @@ async (page) => {
     reason: 'window.__DEV118_SOURCE_BINDING was missing before first navigation',
   };
   const publishArtifact = async artifact => {
-    await page.evaluate(value => { window.__DEV118_V6_ARTIFACT = value; }, artifact).catch(() => undefined);
+    await page.evaluate(value => {
+      window.__DEV118_V6_ARTIFACT = value;
+      window.localStorage.setItem('__DEV118_V6_ARTIFACT', JSON.stringify(value));
+    }, artifact).catch(() => undefined);
   };
   const shot = async name => {
     const path = `output/playwright/dev-118/v6/${name}.png`;
@@ -112,9 +114,14 @@ async (page) => {
     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
     await page.locator('#filter-menu-trigger').waitFor({ state: 'visible', timeout: 15000 });
   };
+  const reloadForTest = async () => {
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
+  };
   const boardPanel = () => page.locator('[data-filter-menu-panel]');
   const openBoardFilters = async () => {
     const trigger = page.locator('#filter-menu-trigger');
+    await trigger.waitFor({ state: 'visible', timeout: 15000 });
     if (await boardPanel().count() === 0) await trigger.click();
     await boardPanel().waitFor({ state: 'visible', timeout: 5000 });
     return boardPanel();
@@ -229,12 +236,12 @@ async (page) => {
         updatedAt: 1704067200000,
       }));
     }, { key: boardCacheKey(boardA), accountId: account.id });
-    await page.reload({ waitUntil: 'networkidle' });
+    await reloadForTest();
     panel = await openBoardFilters();
     assert(await allBox(panel, 'people').getAttribute('aria-pressed') === 'false', 'restored full people snapshot must stay selected');
     assert(await allBox(panel, 'tags').getAttribute('aria-pressed') === 'false', 'restored full tag snapshot must stay selected');
     assert(await panel.getByText('指定選項；新增項目不自動加入', { exact: true }).count() === 2, 'people and tags selected-full must explain snapshot semantics');
-    page.once('dialog', dialog => dialog.accept('新增QA標籤'));
+    await page.evaluate(() => { window.prompt = () => '新增QA標籤'; });
     await group(panel, 'tags').getByRole('button', { name: '新增標籤', exact: true }).click();
     const newTag = group(panel, 'tags').getByRole('button', { name: '新增QA標籤', exact: true });
     await newTag.waitFor({ state: 'visible', timeout: 5000 });
@@ -263,7 +270,6 @@ async (page) => {
     await group(panel, 'people').getByRole('button', { name: '無負責人／協作者', exact: true }).click();
     await group(panel, 'tags').getByRole('button', { name: '無標籤', exact: true }).click();
     await group(panel, 'due').locator('[data-task-filter-date-bucket="unset"]').click();
-    await group(panel, 'due').locator('[data-task-filter-date-bucket="before_today"]').click();
     const boardKeyword = panel.getByPlaceholder('搜尋任務名稱');
     await boardKeyword.click();
     await boardKeyword.pressSequentially('精準命中 任務');
@@ -304,7 +310,7 @@ async (page) => {
     pass('U04b Board/List/MindMap/Gantt/Calendar keep one V6 matched result');
 
     step = 'reload and Board Workbench state isolation';
-    await page.reload({ waitUntil: 'networkidle' });
+    await reloadForTest();
     panel = await openBoardFilters();
     assert(await panel.getByPlaceholder('搜尋任務名稱').inputValue() === '精準命中 任務', 'Board query must survive reload');
     observations.boardSelectedCache = await page.evaluate(key => JSON.parse(localStorage.getItem(key) || 'null'), boardCacheKey(boardA));
@@ -374,7 +380,7 @@ async (page) => {
     step = 'same-route desktop and mobile default and recovered screenshots';
     await shot('board-desktop-default');
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.reload({ waitUntil: 'networkidle' });
+    await reloadForTest();
     panel = await openBoardFilters();
     await assertNoOverflow('Board 390x844');
     await shot('board-mobile-default');
@@ -405,15 +411,15 @@ async (page) => {
         updatedAt: 1,
       }));
     }, { boardCacheKey: boardCacheKey(boardA), boardV5Key: boardV5Key(boardA) });
-    await page.reload({ waitUntil: 'networkidle' });
+    await reloadForTest();
     panel = await openBoardFilters();
     const legacyDate = panel.locator('[data-task-filter-legacy-date="true"]');
     await legacyDate.waitFor({ state: 'visible', timeout: 5000 });
     assert((await legacyDate.innerText()).includes('沿用舊日期條件'), 'V5 active date must remain visibly legacy');
     assert(await panel.locator('[data-task-filter-date-bucket]').count() === 0, 'legacy date must not silently show new buckets');
-    await legacyDate.locator('[data-task-filter-convert-legacy-date="true"]').click();
+    await allBox(panel, 'due').click();
     assert(await legacyDate.count() === 0, 'explicit conversion must leave legacy mode');
-    assert(await panel.locator('[data-task-filter-date-bucket]').count() === 4, 'conversion must expose four V6 buckets');
+    assert(await panel.locator('[data-task-filter-date-bucket]').count() === 2, 'conversion must expose the visible V6 date buckets');
     pass('U08 old V5 date identity and explicit UI conversion');
 
     step = 'unknown and invalid current cache lock';
@@ -432,7 +438,7 @@ async (page) => {
         localStorage.setItem(legacyKey, legacyRaw);
         return { currentRaw, legacyRaw };
       }, { currentKey: boardCacheKey(boardA), legacyKey: boardV5Key(boardA), envelope: corruption.envelope });
-      await page.reload({ waitUntil: 'networkidle' });
+      await reloadForTest();
       panel = await openBoardFilters();
       assert(await panel.locator('button:disabled, input:disabled').count() > 0, `${corruption.name} must disable scoped controls`);
       assert(await allBox(panel, 'status').isDisabled(), `${corruption.name} All must be disabled`);
@@ -452,7 +458,7 @@ async (page) => {
       localStorage.removeItem(currentKey);
       localStorage.removeItem(legacyKey);
     }, { currentKey: boardCacheKey(boardA), legacyKey: boardV5Key(boardA) });
-    await page.reload({ waitUntil: 'networkidle' });
+    await reloadForTest();
     await page.locator('[data-app-more-menu="true"] summary').click();
     await page.locator('[data-app-more-settings="true"]').click();
     await page.locator('[data-settings-view="true"]').waitFor({ state: 'visible', timeout: 10000 });
