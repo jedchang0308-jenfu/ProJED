@@ -350,7 +350,6 @@ const MindMapView: React.FC = () => {
   const clipboardRef = React.useRef<MindMapClipboard | null>(null);
   const pasteQueueRef = React.useRef<Promise<void>>(Promise.resolve());
   const pasteBurstAnchorRef = React.useRef<string | null>(null);
-  const pasteBurstResetTimerRef = React.useRef<number | null>(null);
   const pasteBurstPastedRootIdsRef = React.useRef<Set<string>>(new Set());
   const [pendingPastedRootIds, setPendingPastedRootIds] = React.useState<readonly string[]>([]);
   const [localMenu, setLocalMenu] = React.useState<MindMapLocalMenuState | null>(null);
@@ -424,10 +423,6 @@ const MindMapView: React.FC = () => {
   const resetPasteBurstAnchor = React.useCallback(() => {
     pasteBurstAnchorRef.current = null;
     pasteBurstPastedRootIdsRef.current.clear();
-    if (pasteBurstResetTimerRef.current !== null) {
-      window.clearTimeout(pasteBurstResetTimerRef.current);
-      pasteBurstResetTimerRef.current = null;
-    }
   }, []);
 
   const closeLocalMenu = React.useCallback((restoreAnchorFocus = false) => {
@@ -1655,14 +1650,6 @@ const MindMapView: React.FC = () => {
       : requestedAnchorNodeId;
     if (!anchorNodeId) return;
     if (!preserveBurstAnchor) pasteBurstAnchorRef.current = anchorNodeId;
-    if (pasteBurstResetTimerRef.current !== null) {
-      window.clearTimeout(pasteBurstResetTimerRef.current);
-    }
-    pasteBurstResetTimerRef.current = window.setTimeout(() => {
-      pasteBurstAnchorRef.current = null;
-      pasteBurstPastedRootIdsRef.current.clear();
-      pasteBurstResetTimerRef.current = null;
-    }, 750);
     const runPaste = async () => {
       const currentClipboard = clipboardRef.current;
       const currentNodes = useWbsStore.getState().nodes;
@@ -1702,6 +1689,7 @@ const MindMapView: React.FC = () => {
             },
           });
           if (!reportBatchOutcome(outcome, `已貼上 ${plan.clonePlan.rootIds.length} 個任務分支。`)) return;
+          expandNode(anchor.id);
           selectMindMapPastedRoots(plan.clonePlan.rootIds);
           return;
         }
@@ -1733,6 +1721,7 @@ const MindMapView: React.FC = () => {
           },
         });
         if (!reportBatchOutcome(outcome, `已移動 ${plan.rootIds.length} 個任務分支。`)) return;
+        expandNode(anchor.id);
         setMindMapClipboard(null);
         selectMindMapPastedRoots(plan.rootIds);
       } catch (error) {
@@ -1753,6 +1742,7 @@ const MindMapView: React.FC = () => {
     closeLocalMenu,
     commitNodeBatch,
     commitNodeForestCreate,
+    expandNode,
     getNodeSide,
     localMenuSelection.anchorNodeId,
     projectionNodes,
