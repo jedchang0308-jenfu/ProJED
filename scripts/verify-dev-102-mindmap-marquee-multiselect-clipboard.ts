@@ -191,6 +191,7 @@ assert.match(source.view, /pasteQueueRef/);
 assert.match(source.view, /useWbsStore\.getState\(\)\.nodes/);
 assert.match(source.view, /selectMindMapPastedRoots/);
 assert.match(source.view, /pasteBurstAnchorRef/);
+assert.match(source.view, /resetPasteBurstAnchor/);
 assert.doesNotMatch(source.view, /setContextMenuState\(/);
 assert.match(source.node, /data-task-placement-id/);
 assert.match(source.menu, /data-mindmap-context-menu/);

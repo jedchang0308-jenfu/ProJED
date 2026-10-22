@@ -351,6 +351,7 @@ const MindMapView: React.FC = () => {
   const pasteQueueRef = React.useRef<Promise<void>>(Promise.resolve());
   const pasteBurstAnchorRef = React.useRef<string | null>(null);
   const pasteBurstResetTimerRef = React.useRef<number | null>(null);
+  const pasteBurstPastedRootIdsRef = React.useRef<Set<string>>(new Set());
   const [pendingPastedRootIds, setPendingPastedRootIds] = React.useState<readonly string[]>([]);
   const [localMenu, setLocalMenu] = React.useState<MindMapLocalMenuState | null>(null);
   const [assignmentOpen, setAssignmentOpen] = React.useState(false);
@@ -418,6 +419,15 @@ const MindMapView: React.FC = () => {
   const setMindMapClipboard = React.useCallback((next: MindMapClipboard | null) => {
     clipboardRef.current = next;
     setClipboard(next);
+  }, []);
+
+  const resetPasteBurstAnchor = React.useCallback(() => {
+    pasteBurstAnchorRef.current = null;
+    pasteBurstPastedRootIdsRef.current.clear();
+    if (pasteBurstResetTimerRef.current !== null) {
+      window.clearTimeout(pasteBurstResetTimerRef.current);
+      pasteBurstResetTimerRef.current = null;
+    }
   }, []);
 
   const closeLocalMenu = React.useCallback((restoreAnchorFocus = false) => {
@@ -872,11 +882,7 @@ const MindMapView: React.FC = () => {
     clipboardRef.current = clipboard;
   }, [clipboard]);
 
-  React.useEffect(() => () => {
-    if (pasteBurstResetTimerRef.current !== null) {
-      window.clearTimeout(pasteBurstResetTimerRef.current);
-    }
-  }, []);
+  React.useEffect(() => () => resetPasteBurstAnchor(), [resetPasteBurstAnchor]);
 
   React.useEffect(() => {
     let active = true;
@@ -1613,6 +1619,7 @@ const MindMapView: React.FC = () => {
   const handleMindMapCopy = React.useCallback((selection: MindMapClipboardSelection = localMenuSelection) => {
     const forestRootIds = normalizeMindMapForestRoots(selection.canonicalTaskIds, nodes);
     if (selection.hasTrackingProjection || forestRootIds.length === 0) return;
+    resetPasteBurstAnchor();
     setMindMapClipboard(createMindMapCopyClipboard(
       boardId,
       forestRootIds,
@@ -1621,31 +1628,39 @@ const MindMapView: React.FC = () => {
     ));
     closeLocalMenu(true);
     toast.success(`已複製 ${forestRootIds.length} 個任務分支。`);
-  }, [boardId, closeLocalMenu, dependencies, localMenuSelection, nodes, setMindMapClipboard]);
+  }, [boardId, closeLocalMenu, dependencies, localMenuSelection, nodes, resetPasteBurstAnchor, setMindMapClipboard]);
 
   const handleMindMapCut = React.useCallback((selection: MindMapClipboardSelection = localMenuSelection) => {
     const forestRootIds = normalizeMindMapForestRoots(selection.canonicalTaskIds, nodes);
     if (!canMoveTask || selection.hasTrackingProjection || forestRootIds.length === 0) return;
+    resetPasteBurstAnchor();
     setMindMapClipboard(createMindMapCutClipboard(boardId, forestRootIds, nodes));
     closeLocalMenu(true);
     toast.success(`已剪下 ${forestRootIds.length} 個任務分支；貼上前不會移動資料。`);
-  }, [boardId, canMoveTask, closeLocalMenu, localMenuSelection, nodes, setMindMapClipboard]);
+  }, [boardId, canMoveTask, closeLocalMenu, localMenuSelection, nodes, resetPasteBurstAnchor, setMindMapClipboard]);
 
   const selectMindMapPastedRoots = React.useCallback((rootIds: readonly string[]) => {
     if (rootIds.length === 0) return;
+    pasteBurstPastedRootIdsRef.current = new Set(rootIds);
     setPendingPastedRootIds([...rootIds]);
   }, []);
 
   const handleMindMapPaste = React.useCallback((anchorNodeIdOverride?: string) => {
     const requestedAnchorNodeId = anchorNodeIdOverride || localMenuSelection.anchorNodeId;
-    const anchorNodeId = pasteBurstAnchorRef.current || requestedAnchorNodeId;
+    const preserveBurstAnchor = Boolean(
+      anchorNodeIdOverride && pasteBurstPastedRootIdsRef.current.has(anchorNodeIdOverride),
+    );
+    const anchorNodeId = preserveBurstAnchor
+      ? pasteBurstAnchorRef.current || requestedAnchorNodeId
+      : requestedAnchorNodeId;
     if (!anchorNodeId) return;
-    pasteBurstAnchorRef.current = anchorNodeId;
+    if (!preserveBurstAnchor) pasteBurstAnchorRef.current = anchorNodeId;
     if (pasteBurstResetTimerRef.current !== null) {
       window.clearTimeout(pasteBurstResetTimerRef.current);
     }
     pasteBurstResetTimerRef.current = window.setTimeout(() => {
       pasteBurstAnchorRef.current = null;
+      pasteBurstPastedRootIdsRef.current.clear();
       pasteBurstResetTimerRef.current = null;
     }, 750);
     const runPaste = async () => {
@@ -1958,6 +1973,7 @@ const MindMapView: React.FC = () => {
   const handleNodeContextMenu = React.useCallback((nodeId: string, _title: string, event: React.MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
+    resetPasteBurstAnchor();
     const projected = projectionNodes[nodeId] || nodes[nodeId];
     const taskId = projected?.canonicalTaskId || nodeId;
     const placementId = getPlacementIdForNodeId(nodeId);
@@ -1976,7 +1992,7 @@ const MindMapView: React.FC = () => {
       anchorPlacementId: placementId,
       selectedPlacementIds: [...selectionStore.getSelectedPlacementIds()],
     });
-  }, [cancelMarquee, getPlacementIdForNodeId, nodes, projectionNodes, selectionStore, setSelectedTaskId, syncDev075ProbeAttributes]);
+  }, [cancelMarquee, getPlacementIdForNodeId, nodes, projectionNodes, resetPasteBurstAnchor, selectionStore, setSelectedTaskId, syncDev075ProbeAttributes]);
 
   React.useEffect(() => {
     const handleStartRelationship = (event: Event) => {
