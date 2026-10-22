@@ -1689,7 +1689,7 @@ const MindMapView: React.FC = () => {
             },
           });
           if (!reportBatchOutcome(outcome, `已貼上 ${plan.clonePlan.rootIds.length} 個任務分支。`)) return;
-          expandNode(anchor.id);
+          expandNodes([anchor.id, ...plan.clonePlan.nodes.map(node => node.id)]);
           selectMindMapPastedRoots(plan.clonePlan.rootIds);
           return;
         }
@@ -1743,6 +1743,7 @@ const MindMapView: React.FC = () => {
     commitNodeBatch,
     commitNodeForestCreate,
     expandNode,
+    expandNodes,
     getNodeSide,
     localMenuSelection.anchorNodeId,
     projectionNodes,
