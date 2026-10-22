@@ -2966,3 +2966,13 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
   }
 
 }));
+
+// The WBS store is the shared identity map for every task surface. Replacing
+// only part of the module graph during Vite Fast Refresh can leave mounted
+// consumers subscribed to different store instances: existing tasks appear in
+// both snapshots, while newly pasted tasks exist in only one. Reload the local
+// development page when this central store changes so every surface binds to
+// the same instance. Production builds do not expose import.meta.hot.
+if (import.meta.hot) {
+  import.meta.hot.accept(() => window.location.reload());
+}
