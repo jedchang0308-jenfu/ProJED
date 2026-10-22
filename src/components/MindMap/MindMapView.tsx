@@ -1950,6 +1950,9 @@ const MindMapView: React.FC = () => {
   }, [beginRelationshipDraftSelection, closeLocalMenu, createNoteRelationshipInline, finishRelationshipDraftMode, relationshipDraft, relationshipToolActive, selectNode]);
 
   const handleNodePointerPrimary = React.useCallback((nodeId: string) => {
+    // A pointer click is an explicit new paste target. End the rapid-paste
+    // burst so a newly pasted node can immediately receive another task.
+    resetPasteBurstAnchor();
     handleNodeSelect(nodeId);
     const projected = projectionNodes[nodeId] || nodes[nodeId];
     // A tracking projection may open the canonical details, but it must not
@@ -1960,7 +1963,7 @@ const MindMapView: React.FC = () => {
       setInlineTitleEditNodeId(nodeId);
       setInlineTitleEditFocusNodeId(null);
     }, MINDMAP_POINTER_QUICK_TITLE_DELAY_MS);
-  }, [canEditTask, draggedNodeId, handleNodeSelect, nodes, projectionNodes, relationshipToolActive]);
+  }, [canEditTask, draggedNodeId, handleNodeSelect, nodes, projectionNodes, relationshipToolActive, resetPasteBurstAnchor]);
 
   const handleNodeOpenDetails = React.useCallback((nodeId: string, trackingReferenceId?: string) => {
     if (relationshipToolActive || draggedNodeId) return;
