@@ -8,6 +8,9 @@ interface MindMapKeyboardEventLike {
 }
 
 type MindMapKeyboardAction =
+  | { type: 'copy-selection' }
+  | { type: 'cut-selection' }
+  | { type: 'paste-selection' }
   | { type: 'toggle-relationship-tool' }
   | { type: 'deactivate-relationship-mode' }
   | { type: 'clear-selection' }
@@ -65,6 +68,12 @@ export const getMindMapKeyboardAction = (
     // Delete remains a task command. Backspace and all other text keys stay
     // native so relationship/details inputs keep their editing semantics.
     if (!state.isQuickTitleEditing || !isMindMapForwardDeleteKey(event)) return null;
+  }
+  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && state.hasSelectedNode) {
+    const shortcutKey = event.key.toLowerCase();
+    if (shortcutKey === 'c') return { type: 'copy-selection' };
+    if (shortcutKey === 'x') return { type: 'cut-selection' };
+    if (shortcutKey === 'v') return { type: 'paste-selection' };
   }
   if (isMindMapRelationshipToolToggleKey(event)) return { type: 'toggle-relationship-tool' };
   if (hasMindMapShortcutModifier(event)) return null;

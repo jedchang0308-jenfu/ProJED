@@ -141,7 +141,7 @@ L0只能證明結構，不能單獨判定產品通過。
 ### 5.4 Clipboard／paste plan
 
 - CP01：copy只建立immutable snapshot，task count不變。
-- CP02：每次paste重新產生IDs；selected roots各加`（副本）`，descendant title不改。
+- CP02：每次paste重新產生IDs；root與descendant title保留原名稱，不加`（副本）`。
 - CP03：notes／允許欄位保存；note ID重建。
 - CP04：internal dependency改接new IDs；external dependency／relationship／tracking ref不複製。
 - CP05：copy clipboard成功paste後保留，可第二次paste且IDs不同。
@@ -153,11 +153,11 @@ L0只能證明結構，不能單獨判定產品通過。
 - CT05：成功cut paste清clipboard、select moved roots。
 - CT06：cut後只修改title／notes／assignment／date，fingerprint仍有效且paste搬移最新live內容。
 - CT07：cut後修改parent／order／archive／subtree membership，fingerprint失效並要求重新剪下。
-- PASTE01：一個root貼在child anchor後，parent正確。
-- PASTE02：多root保持相對順序並連續插入。
+- PASTE01：一個root貼到child anchor之下，parent正確。
+- PASTE02：多root保持相對順序並接在anchor既有子任務之後。
 - PASTE03：top-level root採anchor side。
-- PASTE04：copy可貼在原source後。
-- PASTE05：cut roots來自不同parents時完整移除後插入destination。
+- PASTE04：copy可貼到任一有效anchor之下。
+- PASTE05：cut roots來自不同parents時完整移除後接到anchor子任務尾端。
 - PASTE06：anchor前後既有siblings的order保持stable。
 - PASTE07：source與target相同board才允許。
 - PASTE08：anchor archived／missing／projection拒絕。
@@ -228,7 +228,7 @@ L0只能證明結構，不能單獨判定產品通過。
 - B04：在未選取task右鍵使selection收斂single，但copy clipboard仍在；paste使用該exact task作anchor。
 - B05：copy paste建立新forest、new IDs／notes／internal dependency與order正確，並選取新roots。
 - B06：換另一anchor再paste同一copy clipboard，第二forest IDs不同。
-- B07：多選cut後來源未移動、cut visual可辨識；在另一parent anchor後paste完成搬移。
+- B07：多選cut後來源未移動、cut visual可辨識；在另一parent anchor之下paste完成搬移。
 - B08：undo／redo copy、cut各一次；一個使用者動作只對應一筆undo。
 - B09：Escape取消cut後來源不變；copy clipboard不因Escape消失。
 - B09-MODE：離開mindmap mode、切換board或reload後clipboard與cut signal清除；其他mode不顯示clipboard actions。
@@ -251,7 +251,8 @@ L0只能證明結構，不能單獨判定產品通過。
 - K05：quick-title/input/IME/modal/relationship owner存在時，DEV-102 keyboard不攔截。
 - K06：cut active第一次Escape取消cut、selection仍在；第二次Escape清selection。
 - K07：copy clipboard active Escape只清selection，不清clipboard。
-- K08：multi Delete／Backspace確認數量與storage結果一致。
+- K08：選取任務後，Ctrl/Cmd+C 建立 copy clipboard、Ctrl/Cmd+X 建立 cut clipboard、Ctrl/Cmd+V 以 primary task 為 anchor 貼上；輸入框、IME、dialog與relationship label editing不攔截。
+- K09：multi Delete／Backspace確認數量與storage結果一致。
 
 ## 7. Permission、Failure 與反證 Cases
 

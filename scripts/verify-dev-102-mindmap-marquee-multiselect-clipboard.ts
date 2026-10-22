@@ -166,6 +166,7 @@ assert.equal(mindMapMenu.includes('task.duplicate'), false);
 
 const source = {
   view: read('src/components/MindMap/MindMapView.tsx'),
+  keyboard: read('src/components/MindMap/mindMapKeyboard.ts'),
   node: read('src/components/MindMap/MindMapNode.tsx'),
   menu: read('src/components/MindMap/MindMapContextMenu.tsx'),
   actionMenu: read('src/interactions/task/TaskActionMenu.tsx'),
@@ -182,6 +183,10 @@ assert.match(source.view, /getBoundingClientRect/);
 assert.match(source.view, /selectionStore\.setSelection/);
 assert.match(source.view, /MindMapContextMenu/);
 assert.match(source.view, /planMindMapCopyPasteUnder/);
+assert.match(source.keyboard, /type: 'copy-selection'/);
+assert.match(source.keyboard, /type: 'cut-selection'/);
+assert.match(source.keyboard, /type: 'paste-selection'/);
+assert.match(source.view, /handleMindMapPaste\(selectedNodeId \|\| undefined\)/);
 assert.doesNotMatch(source.view, /setContextMenuState\(/);
 assert.match(source.node, /data-task-placement-id/);
 assert.match(source.menu, /data-mindmap-context-menu/);
