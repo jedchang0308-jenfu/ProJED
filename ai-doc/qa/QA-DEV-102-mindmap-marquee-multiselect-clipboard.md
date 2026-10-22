@@ -253,6 +253,7 @@ L0只能證明結構，不能單獨判定產品通過。
 - K07：copy clipboard active Escape只清selection，不清clipboard。
 - K08：選取任務後，Ctrl/Cmd+C 建立 copy clipboard、Ctrl/Cmd+X 建立 cut clipboard、Ctrl/Cmd+V 以 primary task 為 anchor 貼上；輸入框、IME、dialog與relationship label editing不攔截。
 - K09：multi Delete／Backspace確認數量與storage結果一致。
+- K10：快速連按 Ctrl/Cmd+V 時，貼上請求依序提交；每則成功訊息對應一筆實際新增森林，不因舊快照或批次復原鎖造成假成功。
 
 ## 7. Permission、Failure 與反證 Cases
 
