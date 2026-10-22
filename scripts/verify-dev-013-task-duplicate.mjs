@@ -35,7 +35,7 @@ assertIncludes(clonePlan, 'idMap.get(dependency.fromId)', 'dependency fromId rem
 assertIncludes(clonePlan, 'idMap.get(dependency.toId)', 'dependency toId remap');
 assertIncludes(clonePlan, 'detailNotes: source.detailNotes?.map', 'detail note deep copy');
 assertIncludes(clonePlan, 'input.createNoteId()', 'new detail note ids');
-assertIncludes(clonePlan, '（副本）', 'copied root title suffix');
+assertIncludes(clonePlan, 'title: source.title,', 'copied root title preserved');
 assertIncludes(clonePlan, 'collaboratorIds: source.collaboratorIds ? [...source.collaboratorIds] : undefined', 'collaborator ids array copy');
 assertIncludes(clonePlan, 'tagIds: source.tagIds ? [...source.tagIds] : undefined', 'tag ids array copy');
 assertIncludes(clonePlan, 'order: isRoot ? rootOrder : normalizedChildOrderById.get(source.id) ?? 0', 'root insertion and normalized descendant order');

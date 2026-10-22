@@ -8,7 +8,7 @@
 - QA：QA-DEV-102
 - RD 技術主管審查：R1 `ai-doc/reports/RD-TECH-LEAD-REVIEW-DEV-102.md`；R2 `ai-doc/reports/RD-TECH-LEAD-REVIEW-DEV-102-R2.md`；R3 `ai-doc/reports/RD-TECH-LEAD-REVIEW-DEV-102-R3.md`
 - 原始需求：`USER-20260903-MINDMAP-MARQUEE-MULTISELECT-CLIPBOARD`
-- 2026-10-22 UI follow-up：可見動作名稱統一為`貼上`；預設將內容貼到選取任務之下，action ID `task.paste-after` 僅為相容識別，不代表目前的貼上位置。
+- 2026-10-22 UI follow-up：可見動作名稱統一為`貼上`；預設將內容貼到選取任務之下，複製貼上保留原任務名稱，不再自動加上「（副本）」；action ID `task.paste-after` 僅為相容識別，不代表目前的貼上位置。
 - 風險：Medium-High（selection authority、批次 mutation、階層搬移、持久化失敗補償與鍵盤／指標 owner）
 - Spec Impact：`Intentional replacement + compatible extension`
 - Implementation／QA：`Local implementation complete；static／pure／browser／rendered／regression gates PASS`
@@ -216,7 +216,7 @@ type MindMapClipboard =
 
 先從現有`duplicateNodeTree`抽出唯一的pure`buildTaskTreeClonePlan`（名稱可等價），由既有立即複製與DEV-102 clipboard paste共同呼叫。不得在mindmap command重寫第二份欄位白名單、ID remap或dependency projection。
 
-每次 paste 由共用clone plan產生全新 task／note IDs。每個 selected forest root title 加`（副本）`，descendant title不加；保留既有 subtree duplicate 所允許的 notes、tags、assignment、date、status與其他 task fields。共用plan接受injected ID／time與外部提供的integer root order，pure層不得自行以相鄰order平均值排序。
+每次 paste 由共用clone plan產生全新 task／note IDs；複製貼上保留來源根任務與子任務名稱，不自動加上「（副本）」；保留既有 subtree duplicate 所允許的 notes、tags、assignment、date、status與其他 task fields。共用plan接受injected ID／time與外部提供的integer root order，pure層不得自行以相鄰order平均值排序。
 
 - 只有兩端都位於 snapshot forest 的 dependency 才複製並改接新 IDs。
 - 指向 forest 外部的 dependency、自訂 mind-map relationship line、tracking reference 不複製。

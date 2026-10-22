@@ -358,11 +358,12 @@ async (page) => {
   await anchor.click({ button: 'right' });
   menu = page.locator('[data-mindmap-context-menu="true"]');
   await menu.waitFor({ state: 'visible' });
+  await menu.getByText('貼上', { exact: true }).waitFor({ state: 'visible' });
   await menu.locator('[data-task-action-id="task.paste-after"]').click();
   await page.waitForFunction(before => document.querySelectorAll('[data-mindmap-node]').length > before, initialCount, { timeout: 15000 });
   const afterCopyCount = await page.locator('[data-mindmap-node]').count();
   const copiedRootTitles = await page.locator('[data-mindmap-node-title$="（副本）"]').count();
-  assert(copiedRootTitles >= 1, 'copy paste must suffix cloned forest roots');
+  assert(copiedRootTitles === 0, 'copy paste must preserve the copied root title');
   const integerOrdersAfterCopy = await page.locator('[data-mindmap-node]').evaluateAll(elements => elements.every(element => Number.isSafeInteger(Number(element.getAttribute('data-mindmap-node-order')))));
   assert(integerOrdersAfterCopy, 'copy paste must leave integer node orders');
   await page.screenshot({ path: `${outputRoot}/03-copy-paste-result.png` });

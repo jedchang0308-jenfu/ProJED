@@ -274,7 +274,6 @@ const planMindMapCopyPaste = (
     createNoteId: input.createNoteId,
     createDependencyId: input.createDependencyId,
     includeInternalDependencies: true,
-    suffixRootTitles: true,
   });
   return {
     clonePlan,

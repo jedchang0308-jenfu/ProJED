@@ -86,7 +86,7 @@ const copyPlan = planMindMapCopyPasteAfter({
   createNoteId: () => `note-${idSequence += 1}`,
   createDependencyId: () => `dep-${idSequence += 1}`,
 });
-assert.equal(copyPlan.clonePlan.nodes[0].title, 'a（副本）');
+assert.equal(copyPlan.clonePlan.nodes[0].title, 'a');
 assert.equal(copyPlan.clonePlan.dependencies.length, 1);
 assert.ok(copyPlan.clonePlan.nodes.every(node => Number.isSafeInteger(node.order)));
 assert.ok(Object.values(copyPlan.updatesById).every(update => Number.isSafeInteger(update.order)));
@@ -99,7 +99,7 @@ const copyUnderPlan = planMindMapCopyPasteUnder({
   createNoteId: () => `note-under-${idSequence += 1}`,
   createDependencyId: () => `dep-under-${idSequence += 1}`,
 });
-const copyUnderRoot = copyUnderPlan.clonePlan.nodes.find(node => node.title === 'a（副本）');
+const copyUnderRoot = copyUnderPlan.clonePlan.nodes.find(node => node.title === 'a');
 assert.equal(copyUnderPlan.destinationParentId, 'b');
 assert.equal(copyUnderRoot?.parentId, 'b');
 assert.equal(copyUnderRoot?.order, 1, 'copy paste must append cloned roots under the anchor');

@@ -1342,7 +1342,6 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       createNoteId,
       createDependencyId,
       includeInternalDependencies,
-      suffixRootTitles: true,
     });
     const copiedNodes = clonePlan.nodes.map(node => normalizeTaskStatusNode(normalizeTaskAssignmentNode(node)));
     const copiedDependencies = [...clonePlan.dependencies];

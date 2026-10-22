@@ -11,7 +11,7 @@ Add a task duplicate action to the global task context menu. The action duplicat
 ## User Decision
 
 - Duplicate scope: copy the selected task subtree and copy only dependencies whose `fromId` and `toId` are both inside that subtree.
-- Title handling: append `（副本）` only to the copied root task title. Descendant task titles remain unchanged.
+- Title handling: copied root and descendant task titles retain their original names; no `（副本）` suffix is added.
 
 ## Functional Requirements
 
@@ -52,7 +52,7 @@ Add a task duplicate action to the global task context menu. The action duplicat
 ## Acceptance Criteria
 
 - Right-clicking a task exposes `複製任務`.
-- Duplicating a single task creates a sibling after the source with `（副本）`.
+- Duplicating a single task creates a sibling after the source with the original title.
 - Duplicating a multi-level task copies all visible descendants and preserves the hierarchy.
 - Copied internal dependencies point only to copied task ids.
 - External dependencies are ignored.
