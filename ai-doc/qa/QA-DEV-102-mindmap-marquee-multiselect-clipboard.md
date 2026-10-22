@@ -9,7 +9,7 @@
 
 ## 1. 驗證目標與邊界
 
-驗證桌機心智圖的矩形圈選、selection authority、專屬右鍵清單、不可用action隱藏、批次指派／封存，以及 copy／cut → paste-after forest transaction。驗證必須同時證明：
+驗證桌機心智圖的矩形圈選、selection authority、專屬右鍵清單、不可用action隱藏、批次指派／封存，以及 copy／cut → 貼上到 anchor 子層的 forest transaction。驗證必須同時證明：
 
 - 正常路徑確實可用。
 - permission、stale、cycle、projection與provider failure不會產生partial mutation或假成功。
@@ -83,7 +83,7 @@ fixture建立、測試與cleanup需有 deterministic ID與residual count。任�
 |---|---|---|
 | L01 | selection owner／identity | `MindMapView`不存在並行`useState(selectedNodeIds)`；唯一owner為擴充後private store；primary／anchor皆為placement ID且mutation只能經typed resolver取得task ID |
 | L02 | keyed notification | store依placement key訂閱，只通知effective membership symmetric difference與必要primary |
-| L03 | placement command | paste-after使用同看板forest command；未呼叫拒絕same ownership的跨ownership command |
+| L03 | placement command | 貼上到 anchor 子層時使用同看板forest command；未呼叫拒絕same ownership的跨ownership command |
 | L04 | menu presenter | MindMap使用local專屬shell且不把multi state寫入BoardContextMenuState；其他mode仍使用GlobalContextMenu |
 | L05 | unavailable rows | mindmap presenter以`hideDisabled`不mount `enabled=false` action；execution handler仍再次guard |
 | L06 | action IDs／isolation | `task.copy`／`task.cut`／`task.paste-after`為`defaultMenu:false`或等價opt-in；只由mindmap include，且mindmap profile不含`task.duplicate` |

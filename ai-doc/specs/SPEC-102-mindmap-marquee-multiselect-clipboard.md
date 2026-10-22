@@ -8,6 +8,7 @@
 - QA：QA-DEV-102
 - RD 技術主管審查：R1 `ai-doc/reports/RD-TECH-LEAD-REVIEW-DEV-102.md`；R2 `ai-doc/reports/RD-TECH-LEAD-REVIEW-DEV-102-R2.md`；R3 `ai-doc/reports/RD-TECH-LEAD-REVIEW-DEV-102-R3.md`
 - 原始需求：`USER-20260903-MINDMAP-MARQUEE-MULTISELECT-CLIPBOARD`
+- 2026-10-22 UI follow-up：可見動作名稱統一為`貼上`；預設將內容貼到選取任務之下，action ID `task.paste-after` 僅為相容識別，不代表目前的貼上位置。
 - 風險：Medium-High（selection authority、批次 mutation、階層搬移、持久化失敗補償與鍵盤／指標 owner）
 - Spec Impact：`Intentional replacement + compatible extension`
 - Implementation／QA：`Local implementation complete；static／pure／browser／rendered／regression gates PASS`
@@ -16,14 +17,14 @@
 
 心智圖模式新增 XMind 類型的桌機矩形圈選。圈選後可保留多個任務 selection，並以心智圖專屬右鍵清單執行可安全批次化的動作；不具多選語意、權限不足或風險過高的動作在呈現層直接隱藏，避免低對比 disabled row 造成誤判。command 執行層仍保留 guard，防止開單後狀態競速或繞過 UI 的 mutation。
 
-心智圖中的「複製」改為剪貼簿語意：`複製`與`剪下`都只準備來源，使用者再於任一有效任務按右鍵，選擇`貼在此任務之後`。複製在貼上前不得立即建立副本；此語意只適用心智圖，其他模式既有 `task.duplicate` 立即複製行為不變。
+心智圖中的「複製」改為剪貼簿語意：`複製`與`剪下`都只準備來源，使用者再於任一有效任務按右鍵，選擇`貼上`；預設將來源根任務放在該任務的子層。複製在貼上前不得立即建立副本；此語意只適用心智圖，其他模式既有 `task.duplicate` 立即複製行為不變。
 
 成功結果：
 
 - 空白畫布左鍵拖曳可框出矩形並選取其中任務。
 - 多選右鍵清單只顯示當下可執行的複製、剪下、指派與封存；不可用動作直接隱藏，不以低對比 disabled row 佔據清單。
 - 父子任務同時被選取時，copy／cut／archive 先正規化為不重疊 forest roots，不重複處理同一子樹。
-- 複製或剪下後，可在同看板任何有效任務後方貼上，並保留子樹、順序與一次 undo。
+- 複製或剪下後，可在同看板任何有效任務之下貼上，並保留子樹、順序與一次 undo。
 - 所有批次動作先完整驗證再寫入；失敗不得留下半套 UI 成功狀態或靜默跳過部分任務。
 
 使用思考習慣：#第一性原理、#系統描繪、#拆解問題、#可驗證性
@@ -80,7 +81,7 @@ ADR not needed。此變更不改schema、provider API、角色來源或跨模式
 - Desktop mind map 空白畫布左鍵矩形圈選與即時命中預覽。
 - 多選 selection lifecycle、primary node、visual placement 到 canonical task 去重。
 - 心智圖專屬右鍵 presenter、可執行 action matrix、看板同款標準 visual hierarchy與 execution-time guard。
-- 單一 in-app clipboard slot：copy snapshot、cut live roots、paste-after exact anchor。
+- 單一 in-app clipboard slot：copy snapshot、cut live roots、貼到 exact anchor 之下。
 - 多任務主責／協作 aggregate tri-state 與批次封存。
 - 一次 command／一次 undo、preflight、失敗補償、stale cut detection。
 - 指定效能、鍵盤、accessibility、viewport、visible-error 與回歸證據。
@@ -101,7 +102,7 @@ ADR not needed。此變更不改schema、provider API、角色來源或跨模式
 - Entry：從既有 Board mode switch 進入`心智圖`，不得建立 DEV-only route 或平行產品入口。
 - Target surface：desktop 1440×900 與 laptop 1024×768；390×844／320×568只驗現有 fallback 與 menu 無回歸，不開放 touch marquee。
 - Fixture：至少包含左右根節點、多層父子、同名任務、tracking projection、跨父節點 roots、dependency、不同權限與 200／500 visible nodes。
-- Normal flow：圈選 → 在選取任務上右鍵 → 執行批次動作；或複製／剪下 → 在任一有效任務右鍵 → 貼在此任務之後。
+- Normal flow：圈選 → 在選取任務上右鍵 → 執行批次動作；或複製／剪下 → 在任一有效任務右鍵 → 貼上到此任務之下。
 - Blank canvas 不顯示 task context menu；沒有 selection 時 task keyboard action不執行。
 
 ## 6. Selection 與 Marquee 契約
@@ -174,7 +175,7 @@ tracking projection 可以出現在selection，但v1只要多選集合命中proj
 | 新增並列／子任務 | Enabled | Hidden | 多選無唯一 parent／anchor |
 | 複製 | Enabled | Enabled | 只寫 clipboard；projection／read guard失敗則 Hidden |
 | 剪下 | Enabled | Enabled | 需全部可移動／編輯；projection則 Hidden |
-| 貼在此任務之後 | Conditional | Conditional | clipboard 非空、exact anchor有效且 preflight可判定時 enabled |
+| 貼上 | Conditional | Conditional | clipboard 非空、exact anchor有效且 preflight可判定時 enabled；預設貼到 anchor 之下 |
 | 主責／協作 | Enabled | Enabled | 全部 canonical target 需通過 assign guard；多選含projection則 Hidden |
 | 建立關係線 | Enabled | Hidden | 多選沒有唯一 relationship source |
 | 升階／降階 | Enabled | Hidden | 多選結構語意不在本版 |
@@ -183,7 +184,7 @@ tracking projection 可以出現在selection，但v1只要多選集合命中proj
 
 多選 menu header 顯示`已選取 N 個任務`；N 為 selected visual placements 數量。動作確認與結果訊息使用 canonical／affected 數量，避免 projection 去重後誤報。
 
-## 8. Clipboard 與 Paste-after 契約
+## 8. Clipboard 與貼上契約
 
 ### 8.1 Clipboard model
 
@@ -226,10 +227,10 @@ type MindMapClipboard =
 ### 8.3 Paste target 與 placement
 
 - paste anchor 是開啟 menu 的 exact `anchorPlacementId`；執行時再解析其 canonical task與placement kind，不使用最早 selection、root或模糊 current node。
-- source roots 成為 anchor 的連續 next siblings，保持 clipboard root order與各自子樹順序。
+- source roots 成為 anchor 的連續子任務，保持 clipboard root order與各自子樹順序；既有子任務之後接續新增／搬移 roots。
 - anchor 為 top-level root 時，新／移動 roots 使用相同 mind-map side；anchor 為 child 時由相同 parent／ancestor side自然決定。root side不是`TaskNode`欄位，而是`mindMapSideStorage`的board-local presentation state，必須納入同一plan、compensation與undo，不可只更新node資料。
-- cut 可將不同 parent 的 roots 一次搬到同一 destination parent；planner 先從所有原 sibling lists 移除 source roots，再於 anchor 後插入。
-- copy 可貼在原 source root 後方；cut 不可貼在任一 source root或其 descendant 之後。
+- cut 可將不同 parent 的 roots 一次搬到同一 destination parent；planner 先從所有原 sibling lists 移除 source roots，再接到 anchor 的子任務尾端。
+- copy 可貼到任一有效 anchor 之下；cut 不可貼到任一 source root或其 descendant 之下。
 - 貼上完成後 selection 只包含新建／搬移 roots，primary 為第一個貼上 root，並使 exact primary 可見；不得自動開明細或 quick-title。
 - sibling order 必須以 integer-safe complete order plan 寫入，禁止用 fractional order。planner必須列出每個source／destination sibling scope的完整before／after序列及`reindexedTaskIds`；同一scope只normalize一次，所有order被改寫的既有siblings即使未被選取也屬於affected targets。若現有共用排序 primitive 無法表達，RD 必須停止並回報 DEV-101 dependency，不得在本 DEV 靜默產生 decimal 或改 schema。
 

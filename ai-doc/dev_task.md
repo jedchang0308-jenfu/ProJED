@@ -4159,7 +4159,7 @@ child navigation，C scope rejection未通過前不得開啟 drag。
 - selection可包含多個visual placements，mutation前解析canonical IDs；copy／cut／archive把父子重疊正規化成top-most forest roots，assignment保留每個明確選取task。
 - 新增心智圖專屬context-menu presenter，但共用action catalog、permission guards、assignment normalization、archive lifecycle與store command，不fork業務邏輯。
 - multi menu可執行copy、cut、指派、封存；details、新增、relationship、升降階、tracking reference、收藏等不具批次語意的動作直接隱藏，不顯示不可點擊列或鎖定圖示。
-- copy／cut共用單一memory clipboard；在同看板任一有效exact anchor選擇`貼在此任務之後`，將forest roots連續插入為next siblings。copy可重複貼上；cut成功後清clipboard。
+- copy／cut共用單一memory clipboard；在同看板任一有效exact anchor選擇`貼上`，預設將forest roots連續插入為該 anchor 的子任務。copy可重複貼上；cut成功後清clipboard。
 - batch mutation全部preflight、await completion、零partial success、一筆undo；paste plan同時涵蓋node、所有被reindex siblings與root side overrides。cycle、stale、projection、permission、cross-board、side storage與provider failure fail closed；indeterminate在same-tab reload後仍維持target lock與readback。
 
 ### RD Work Packages（已完成）

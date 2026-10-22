@@ -168,8 +168,8 @@ import {
   createMindMapCopyClipboard,
   createMindMapCutClipboard,
   normalizeMindMapForestRoots,
-  planMindMapCopyPasteAfter,
-  planMindMapCutPasteAfter,
+  planMindMapCopyPasteUnder,
+  planMindMapCutPasteUnder,
   type MindMapClipboard,
 } from './mindMapClipboard';
 import {
@@ -1570,7 +1570,7 @@ const MindMapView: React.FC = () => {
     toast.success(`已剪下 ${localMenuForestRootIds.length} 個任務分支；貼上前不會移動資料。`);
   }, [boardId, canMoveTask, closeLocalMenu, localMenuForestRootIds, localMenuSelection.hasTrackingProjection, nodes]);
 
-  const handleMindMapPasteAfter = React.useCallback(async () => {
+  const handleMindMapPaste = React.useCallback(async () => {
     const anchorNodeId = localMenuSelection.anchorNodeId;
     const anchor = anchorNodeId ? projectionNodes[anchorNodeId] || nodes[anchorNodeId] : null;
     if (!clipboard || !anchor || anchor.isTrackingReference || clipboard.boardId !== boardId) return;
@@ -1578,7 +1578,7 @@ const MindMapView: React.FC = () => {
     try {
       if (clipboard.mode === 'copy') {
         if (!canCreateTask || (clipboard.dependencies.length > 0 && !canCreateDependency)) return;
-        const plan = planMindMapCopyPasteAfter({
+        const plan = planMindMapCopyPasteUnder({
           clipboard,
           anchorTaskId: anchor.id,
           currentNodes: nodes,
@@ -1615,7 +1615,7 @@ const MindMapView: React.FC = () => {
       }
 
       if (!canMoveTask) return;
-      const plan = planMindMapCutPasteAfter({
+      const plan = planMindMapCutPasteUnder({
         clipboard,
         anchorTaskId: anchor.id,
         nodes,
@@ -1749,7 +1749,7 @@ const MindMapView: React.FC = () => {
         handleMindMapCut();
         return;
       case 'task.paste-after':
-        await handleMindMapPasteAfter();
+        await handleMindMapPaste();
         return;
       case 'task.archive':
         await handleMindMapBatchArchive();
@@ -1765,7 +1765,7 @@ const MindMapView: React.FC = () => {
     handleMindMapBatchArchive,
     handleMindMapCopy,
     handleMindMapCut,
-    handleMindMapPasteAfter,
+    handleMindMapPaste,
     localMenuActionState.enabled,
     localMenuSelection.anchorNodeId,
     nodes,

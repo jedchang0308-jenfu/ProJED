@@ -63,7 +63,7 @@ const LABELS: Partial<Record<TaskActionId, string>> = {
   'task.duplicate': '複製任務',
   'task.copy': '複製',
   'task.cut': '剪下',
-  'task.paste-after': '貼在此任務之後',
+  'task.paste-after': '貼上',
   'task.create-tracking-reference': '建立追蹤副本',
   'task.remove-tracking-reference': '移除此處追蹤',
   'task.assign': '主責／協作',
