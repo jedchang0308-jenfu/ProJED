@@ -1721,7 +1721,7 @@ const MindMapView: React.FC = () => {
           },
         });
         if (!reportBatchOutcome(outcome, `已移動 ${plan.rootIds.length} 個任務分支。`)) return;
-        expandNode(anchor.id);
+        expandNodes([anchor.id, ...collectMindMapForestTaskIds(plan.rootIds, useWbsStore.getState().nodes)]);
         setMindMapClipboard(null);
         selectMindMapPastedRoots(plan.rootIds);
       } catch (error) {
@@ -1742,7 +1742,6 @@ const MindMapView: React.FC = () => {
     closeLocalMenu,
     commitNodeBatch,
     commitNodeForestCreate,
-    expandNode,
     expandNodes,
     getNodeSide,
     localMenuSelection.anchorNodeId,
