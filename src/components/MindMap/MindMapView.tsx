@@ -349,6 +349,9 @@ const MindMapView: React.FC = () => {
   const [clipboard, setClipboard] = React.useState<MindMapClipboard | null>(null);
   const clipboardRef = React.useRef<MindMapClipboard | null>(null);
   const pasteQueueRef = React.useRef<Promise<void>>(Promise.resolve());
+  const pasteBurstAnchorRef = React.useRef<string | null>(null);
+  const pasteBurstResetTimerRef = React.useRef<number | null>(null);
+  const [pendingPastedRootIds, setPendingPastedRootIds] = React.useState<readonly string[]>([]);
   const [localMenu, setLocalMenu] = React.useState<MindMapLocalMenuState | null>(null);
   const [assignmentOpen, setAssignmentOpen] = React.useState(false);
   const [batchRecoveryMessage, setBatchRecoveryMessage] = React.useState<string | null>(null);
@@ -856,6 +859,12 @@ const MindMapView: React.FC = () => {
     clipboardRef.current = clipboard;
   }, [clipboard]);
 
+  React.useEffect(() => () => {
+    if (pasteBurstResetTimerRef.current !== null) {
+      window.clearTimeout(pasteBurstResetTimerRef.current);
+    }
+  }, []);
+
   React.useEffect(() => {
     let active = true;
     setBatchRecoveryMessage(null);
@@ -945,6 +954,17 @@ const MindMapView: React.FC = () => {
     selectionStore.setSelection(validPlacementIds);
     syncDev075ProbeAttributes();
   }, [boardId, getNodeIdForPlacementId, nodes, projectionNodes, selectionStore, syncDev075ProbeAttributes]);
+
+  React.useEffect(() => {
+    if (pendingPastedRootIds.length === 0) return;
+    const readyRootIds = pendingPastedRootIds.filter(rootId => Boolean(projectionNodes[rootId] || nodes[rootId]));
+    if (readyRootIds.length !== pendingPastedRootIds.length) return;
+    const rootPlacements = readyRootIds.map(primaryPlacementId);
+    selectionStore.setSelection(rootPlacements, rootPlacements[0] || null);
+    syncDev075ProbeAttributes();
+    if (readyRootIds[0]) scheduleNodeFocus(readyRootIds[0]);
+    setPendingPastedRootIds([]);
+  }, [nodes, pendingPastedRootIds, projectionNodes, scheduleNodeFocus, selectionStore, syncDev075ProbeAttributes]);
 
   React.useEffect(() => {
     if (!editingRelationshipId) return;
@@ -1598,8 +1618,23 @@ const MindMapView: React.FC = () => {
     toast.success(`已剪下 ${forestRootIds.length} 個任務分支；貼上前不會移動資料。`);
   }, [boardId, canMoveTask, closeLocalMenu, localMenuSelection, nodes, setMindMapClipboard]);
 
+  const selectMindMapPastedRoots = React.useCallback((rootIds: readonly string[]) => {
+    if (rootIds.length === 0) return;
+    setPendingPastedRootIds([...rootIds]);
+  }, []);
+
   const handleMindMapPaste = React.useCallback((anchorNodeIdOverride?: string) => {
-    const anchorNodeId = anchorNodeIdOverride || localMenuSelection.anchorNodeId;
+    const requestedAnchorNodeId = anchorNodeIdOverride || localMenuSelection.anchorNodeId;
+    const anchorNodeId = pasteBurstAnchorRef.current || requestedAnchorNodeId;
+    if (!anchorNodeId) return;
+    pasteBurstAnchorRef.current = anchorNodeId;
+    if (pasteBurstResetTimerRef.current !== null) {
+      window.clearTimeout(pasteBurstResetTimerRef.current);
+    }
+    pasteBurstResetTimerRef.current = window.setTimeout(() => {
+      pasteBurstAnchorRef.current = null;
+      pasteBurstResetTimerRef.current = null;
+    }, 750);
     const runPaste = async () => {
       const currentClipboard = clipboardRef.current;
       const currentNodes = useWbsStore.getState().nodes;
@@ -1639,9 +1674,7 @@ const MindMapView: React.FC = () => {
             },
           });
           if (!reportBatchOutcome(outcome, `已貼上 ${plan.clonePlan.rootIds.length} 個任務分支。`)) return;
-          const rootPlacements = plan.clonePlan.rootIds.map(primaryPlacementId);
-          selectionStore.setSelection(rootPlacements, rootPlacements[0] || null);
-          if (plan.clonePlan.rootIds[0]) scheduleNodeFocus(plan.clonePlan.rootIds[0]);
+          selectMindMapPastedRoots(plan.clonePlan.rootIds);
           return;
         }
 
@@ -1673,9 +1706,7 @@ const MindMapView: React.FC = () => {
         });
         if (!reportBatchOutcome(outcome, `已移動 ${plan.rootIds.length} 個任務分支。`)) return;
         setMindMapClipboard(null);
-        const rootPlacements = plan.rootIds.map(primaryPlacementId);
-        selectionStore.setSelection(rootPlacements, rootPlacements[0] || null);
-        if (plan.rootIds[0]) scheduleNodeFocus(plan.rootIds[0]);
+        selectMindMapPastedRoots(plan.rootIds);
       } catch (error) {
         if (currentClipboard.mode === 'cut' && error instanceof Error && error.message.includes('剪下來源已變更')) {
           setMindMapClipboard(null);
@@ -1684,7 +1715,7 @@ const MindMapView: React.FC = () => {
       }
     };
     const queuedPaste = pasteQueueRef.current.then(runPaste, runPaste);
-    pasteQueueRef.current = queuedPaste.catch(() => undefined);
+    pasteQueueRef.current = queuedPaste.catch(() => {});
     return queuedPaste;
   }, [
     boardId,
@@ -1698,8 +1729,7 @@ const MindMapView: React.FC = () => {
     localMenuSelection.anchorNodeId,
     projectionNodes,
     reportBatchOutcome,
-    scheduleNodeFocus,
-    selectionStore,
+    selectMindMapPastedRoots,
     setMindMapClipboard,
     sideOverrides,
   ]);
