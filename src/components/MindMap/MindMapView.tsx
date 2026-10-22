@@ -678,11 +678,24 @@ const MindMapView: React.FC = () => {
     cancelPendingAnimationFrameRef(marqueeFrameRef);
     applyMarqueeFrame();
     const committed = Boolean(marqueeSessionRef.current?.active);
+    const marqueeSelectionPlacementIds = [...selectionStore.getSelectedPlacementIds()];
+    const marqueePrimaryPlacementId = selectionStore.getPrimaryPlacementId();
     marqueeSessionRef.current = null;
     hideMarqueeOverlay();
     if (committed) {
-      const primaryNodeId = getNodeIdForPlacementId(selectionStore.getPrimaryPlacementId());
-      if (primaryNodeId) scheduleNodeFocus(primaryNodeId);
+      const primaryNodeId = getNodeIdForPlacementId(marqueePrimaryPlacementId);
+      if (primaryNodeId) {
+        scheduleNodeFocus(primaryNodeId);
+        window.requestAnimationFrame(() => {
+          // Programmatic focus emits the node's normal focus-selection callback,
+          // which can collapse a marquee selection back to one node. Restore the
+          // committed range after that focus event, while respecting a new user
+          // selection made before the frame runs.
+          if (selectionStore.getPrimaryPlacementId() !== marqueePrimaryPlacementId) return;
+          selectionStore.setSelection(marqueeSelectionPlacementIds, marqueePrimaryPlacementId);
+          syncDev075ProbeAttributes();
+        });
+      }
       suppressNextSurfaceClickRef.current = true;
       event.preventDefault();
       event.stopPropagation();
@@ -694,7 +707,7 @@ const MindMapView: React.FC = () => {
     } catch {
       // Pointer ownership may already have been released by the browser.
     }
-  }, [applyMarqueeFrame, getNodeIdForPlacementId, hideMarqueeOverlay, scheduleNodeFocus, selectionStore]);
+  }, [applyMarqueeFrame, getNodeIdForPlacementId, hideMarqueeOverlay, scheduleNodeFocus, selectionStore, syncDev075ProbeAttributes]);
 
   const handleMarqueePointerCancel = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     const session = marqueeSessionRef.current;
