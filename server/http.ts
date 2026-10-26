@@ -10,6 +10,7 @@ import {
   isPrivateApiRequest,
   type TrustedSessionActorResolver,
 } from './domainReadHttp.js';
+import { createDomainWriteHttpDispatcher } from './domainWriteHttp.js';
 
 const CONTENT_TYPES: Record<string, string> = {
   '.css': 'text/css; charset=utf-8',
@@ -85,6 +86,7 @@ export function createKernelHttpServer(
 ): KernelHttpServer {
   let shuttingDown = false;
   const dispatchDomainRead = createDomainReadHttpDispatcher(config, database, options.resolveActor);
+  const dispatchDomainWrite = createDomainWriteHttpDispatcher(config, database, options.resolveActor);
   const server = createServer({
     maxHeaderSize: 16 * 1024,
     requestTimeout: config.profile.runtime.timeouts.requestMillis,
@@ -107,6 +109,13 @@ export function createKernelHttpServer(
       }
       const ready = await database.readiness(expectedMigrations);
       json(response, ready ? 200 : 503, ready ? { status: 'ok' } : { status: 'unavailable', requestId }, requestId);
+      return;
+    }
+    const domainWrite = await dispatchDomainWrite(request, requestId);
+    if (domainWrite.matched) {
+      json(response, domainWrite.status ?? 500, domainWrite.body ?? {
+        error: { code: 'DB_UNAVAILABLE', requestId, retryable: true },
+      }, requestId);
       return;
     }
     const domainRead = await dispatchDomainRead(request, requestId);

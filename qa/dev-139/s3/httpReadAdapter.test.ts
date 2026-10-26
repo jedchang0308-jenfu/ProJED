@@ -88,11 +88,12 @@ test('non-JSON denial keeps its HTTP status without inventing an auth error code
   ));
 });
 
-test('six read operations use scoped paths and preserve domain identifiers', async () => {
+test('seven read operations use scoped paths and preserve domain identifiers', async () => {
   const paths: string[] = [];
   const responses: Record<string, unknown> = {
     '/api/v1/workspaces': { data: [{ id: 'ws-legacy', title: '私人', boards: [{ id: 'board-legacy', title: '看板', dependencies: [] }] }] },
     '/api/v1/workspaces/ws-legacy/members': { data: [{ workspaceId: 'ws-legacy', userId: 'user-a', role: 'owner', status: 'active' }] },
+    '/api/v1/workspaces/ws-legacy/tags': { data: [{ id: 'tag-a', workspaceId: 'ws-legacy', name: 'Tag', color: 'green', order: 1 }] },
     '/api/v1/workspaces/ws-legacy/boards/board-legacy/members': { data: [{ workspaceId: 'ws-legacy', boardId: 'board-legacy', userId: 'guest-a', role: 'viewer' }] },
     '/api/v1/workspaces/ws-legacy/boards/board-legacy/role-permissions': { data: {
       owner: [
@@ -118,6 +119,7 @@ test('six read operations use scoped paths and preserve domain identifiers', asy
   const adapter = createHttpDomainReadAdapter(client);
   assert.equal((await adapter.listWorkspaces())[0]?.id, 'ws-legacy');
   assert.equal((await adapter.listWorkspaceMembers('ws-legacy'))[0]?.status, 'active');
+  assert.equal((await adapter.listTags('ws-legacy'))[0]?.id, 'tag-a');
   assert.equal((await adapter.listBoardMembers('ws-legacy', 'board-legacy'))[0]?.userId, 'guest-a');
   const matrix = await adapter.getBoardRolePermissions('ws-legacy', 'board-legacy');
   assert.deepEqual(matrix.admin, []);
@@ -133,8 +135,9 @@ test('resource refs are path-encoded and blank refs fail before dispatch', async
     paths.push(String(input));
     return json({ data: [] });
   }));
-  await adapter.listBoardMembers('workspace / A', 'board?#B');
-  assert.equal(paths[0], '/api/v1/workspaces/workspace%20%2F%20A/boards/board%3F%23B/members');
+  await adapter.listBoardMembers('workspace A', 'board?#B');
+  assert.equal(paths[0], '/api/v1/workspaces/workspace%20A/boards/board%3F%23B/members');
+  await assert.rejects(adapter.listTasks('workspace/A', 'board-a'), /WORKSPACE_REF/);
   await assert.rejects(adapter.listTasks('', 'board-a'), /WORKSPACE_REF/);
   await assert.rejects(adapter.listTasks('ws', '..'), /BOARD_REF/);
   assert.equal(paths.length, 1);

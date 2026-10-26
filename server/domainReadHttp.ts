@@ -17,6 +17,7 @@ export interface DomainReadHttpResult {
 type DomainReadOperation =
   | { readonly kind: 'workspaces' }
   | { readonly kind: 'workspace-members'; readonly workspaceRef: string }
+  | { readonly kind: 'tags'; readonly workspaceRef: string }
   | { readonly kind: 'board-members'; readonly workspaceRef: string; readonly boardRef: string }
   | { readonly kind: 'role-permissions'; readonly workspaceRef: string; readonly boardRef: string }
   | { readonly kind: 'tasks'; readonly workspaceRef: string; readonly boardRef: string }
@@ -52,6 +53,7 @@ function operationFor(rawUrl: string | undefined): DomainReadOperation | null {
   const workspaceRef = segment(parts[4] ?? '');
   if (!workspaceRef) return null;
   if (parts.length === 6 && parts[5] === 'members') return { kind: 'workspace-members', workspaceRef };
+  if (parts.length === 6 && parts[5] === 'tags') return { kind: 'tags', workspaceRef };
   if (parts.length !== 8 || parts[5] !== 'boards') return null;
   const boardRef = segment(parts[6] ?? '');
   if (!boardRef) return null;
@@ -100,6 +102,7 @@ export function createDomainReadHttpDispatcher(
         switch (operation.kind) {
           case 'workspaces': return repository.listWorkspaces(port);
           case 'workspace-members': return repository.listWorkspaceMembers(port, operation.workspaceRef);
+          case 'tags': return repository.listTags(port, operation.workspaceRef);
           case 'board-members': return repository.listBoardMembers(port, operation.workspaceRef, operation.boardRef);
           case 'role-permissions': return repository.getBoardRolePermissions(port, operation.workspaceRef, operation.boardRef);
           case 'tasks': return repository.listTasks(port, operation.workspaceRef, operation.boardRef);

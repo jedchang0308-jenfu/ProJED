@@ -4,20 +4,21 @@ import { KernelError } from './errors.js';
 export const COLLABORATION_ROLES = ['owner', 'admin', 'project_manager', 'member', 'viewer'] as const;
 export type CollaborationRole = typeof COLLABORATION_ROLES[number];
 
-const PERMISSION_CAPABILITIES = [
+export const PERMISSION_CAPABILITIES = [
   'read_board', 'edit_board_settings', 'move_board_between_workspaces', 'manage_board_members',
   'create_task', 'edit_task', 'move_task', 'delete_task', 'manage_task_reference', 'assign_task',
   'create_dependency', 'delete_dependency', 'read_activity', 'write_activity', 'read_audit', 'write_audit',
 ] as const;
+export type PermissionCapability = typeof PERMISSION_CAPABILITIES[number];
 const PERMISSION_SET = new Set<string>(PERMISSION_CAPABILITIES);
 const TASK_NOTE_NODE_TYPES = new Set(['root', 'paragraph', 'heading', 'list', 'listitem', 'link', 'text', 'linebreak']);
 
-interface WorkspaceIdentity {
+export interface WorkspaceIdentity {
   id: string;
   legacyWorkspaceId: string;
 }
 
-interface BoardIdentity {
+export interface BoardIdentity {
   id: string;
   legacyBoardId: string;
   tenantId: string;
@@ -89,6 +90,17 @@ export interface DomainDependency {
   offset?: number;
 }
 
+export interface DomainTaskTag {
+  id: string;
+  storageId: string;
+  workspaceId: string;
+  name: string;
+  color: 'green' | 'yellow' | 'orange' | 'red' | 'purple' | 'blue' | 'sky' | 'lime' | 'pink' | 'black' | 'gray';
+  order: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
 function notFound(): never {
   throw new KernelError('RESOURCE_NOT_FOUND', 'Resource is unavailable', 404);
 }
@@ -120,7 +132,7 @@ function validTaskNoteNode(value: unknown): boolean {
     || (Array.isArray(node.children) && node.children.every(validTaskNoteNode));
 }
 
-function validTaskDetailNotes(value: unknown): value is unknown[] {
+export function validTaskDetailNotes(value: unknown): value is unknown[] {
   return Array.isArray(value) && value.every((entry) => {
     const note = record(entry);
     if (!note || typeof note.id !== 'string' || typeof note.title !== 'string' || typeof note.content !== 'string') {
@@ -135,7 +147,7 @@ function validTaskDetailNotes(value: unknown): value is unknown[] {
   });
 }
 
-async function resolveWorkspace(
+export async function resolveWorkspace(
   port: ActorQueryPort,
   workspaceRef: string,
   requireTenantScope = false,
@@ -155,7 +167,7 @@ async function resolveWorkspace(
   return { id: result.rows[0]!.id, legacyWorkspaceId: result.rows[0]!.legacy_workspace_id };
 }
 
-async function resolveBoard(port: ActorQueryPort, workspaceRef: string, boardRef: string): Promise<BoardIdentity> {
+export async function resolveBoard(port: ActorQueryPort, workspaceRef: string, boardRef: string): Promise<BoardIdentity> {
   const workspace = await resolveWorkspace(port, workspaceRef);
   const result = await port.query<{ id: string; legacy_board_id: string; tenant_id: string }>(`
     SELECT project.id::text AS id, project.legacy_board_id, project.tenant_id::text AS tenant_id
@@ -300,7 +312,8 @@ export class DomainReadRepository {
     }>(`
       SELECT item.id::text AS storage_id, item.legacy_task_id,
              parent.legacy_task_id AS parent_legacy_id, item.title, item.detail_notes,
-             item.description, item.status, item.assignee_ids::text[], item.collaborator_ids::text[], item.tag_ids::text[],
+             item.description, item.status, item.assignee_ids::text[], item.collaborator_ids::text[],
+             COALESCE(tags.legacy_tag_ids, ARRAY[]::text[]) AS tag_ids,
              to_char(item.start_date, 'YYYY-MM-DD') AS start_date,
              to_char(item.end_date, 'YYYY-MM-DD') AS end_date,
              item.duration_locked, item.node_type, item.kanban_stage_id, item.sort_order, item.archived,
@@ -309,6 +322,15 @@ export class DomainReadRepository {
         FROM projed_core.wbs_items item
         LEFT JOIN projed_core.wbs_items parent
           ON parent.tenant_id = item.tenant_id AND parent.project_id = item.project_id AND parent.id = item.parent_id
+        LEFT JOIN LATERAL (
+          SELECT array_agg(tag.legacy_tag_id ORDER BY tag.sort_order, tag.id) AS legacy_tag_ids
+            FROM projed_core.wbs_item_tags assignment
+            JOIN projed_core.task_tags tag
+              ON tag.tenant_id = assignment.tenant_id AND tag.id = assignment.tag_id
+           WHERE assignment.tenant_id = item.tenant_id
+             AND assignment.project_id = item.project_id
+             AND assignment.item_id = item.id
+        ) tags ON true
        WHERE item.tenant_id = $1::uuid AND item.project_id = $2::uuid
        ORDER BY item.sort_order, item.created_at, item.id
     `, [board.tenantId, board.id]);
@@ -339,6 +361,31 @@ export class DomainReadRepository {
         isArchived: row.archived,
       };
     });
+  }
+
+  async listTags(port: ActorQueryPort, workspaceRef: string): Promise<DomainTaskTag[]> {
+    const workspace = await resolveWorkspace(port, workspaceRef);
+    const result = await port.query<{
+      storage_id: string; legacy_tag_id: string; name: string; color: DomainTaskTag['color'];
+      sort_order: number; created_at_ms: string; updated_at_ms: string;
+    }>(`
+      SELECT id::text AS storage_id, legacy_tag_id, name, color, sort_order,
+             floor(extract(epoch FROM created_at) * 1000)::bigint::text AS created_at_ms,
+             floor(extract(epoch FROM updated_at) * 1000)::bigint::text AS updated_at_ms
+        FROM projed_core.task_tags
+       WHERE tenant_id = $1::uuid
+       ORDER BY sort_order, id
+    `, [workspace.id]);
+    return result.rows.map(row => ({
+      id: row.legacy_tag_id,
+      storageId: row.storage_id,
+      workspaceId: workspace.legacyWorkspaceId,
+      name: row.name,
+      color: row.color,
+      order: row.sort_order,
+      createdAt: milliseconds(row.created_at_ms),
+      updatedAt: milliseconds(row.updated_at_ms),
+    }));
   }
 
   async listDependencies(port: ActorQueryPort, workspaceRef: string, boardRef: string): Promise<DomainDependency[]> {

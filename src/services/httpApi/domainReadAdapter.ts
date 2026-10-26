@@ -12,6 +12,8 @@ import {
   type MembershipStatus,
   type TaskNode,
   type TaskStatus,
+  type TaskTag,
+  type TagColor,
   type Workspace,
   type WorkspaceMember,
 } from '../../types';
@@ -21,6 +23,7 @@ import { HttpApiClient } from './httpApiClient';
 export interface ProjedDomainReadAdapter {
   listWorkspaces(signal?: AbortSignal): Promise<Workspace[]>;
   listWorkspaceMembers(workspaceRef: string, signal?: AbortSignal): Promise<WorkspaceMember[]>;
+  listTags(workspaceRef: string, signal?: AbortSignal): Promise<TaskTag[]>;
   listBoardMembers(workspaceRef: string, boardRef: string, signal?: AbortSignal): Promise<BoardMember[]>;
   getBoardRolePermissions(workspaceRef: string, boardRef: string, signal?: AbortSignal): Promise<BoardRolePermissionMatrix>;
   listTasks(workspaceRef: string, boardRef: string, signal?: AbortSignal): Promise<TaskNode[]>;
@@ -31,6 +34,7 @@ const ROLES = new Set<string>(COLLABORATION_ROLES);
 const MEMBERSHIP_STATUSES = new Set<MembershipStatus>(['active', 'invited', 'suspended']);
 const TASK_STATUSES = new Set<TaskStatus>(['todo', 'in_progress', 'delayed', 'completed', 'unsure', 'onhold']);
 const CAPABILITIES = new Set<string>(BOARD_PERMISSION_CAPABILITIES);
+const TAG_COLORS = new Set<TagColor>(['green', 'yellow', 'orange', 'red', 'purple', 'blue', 'sky', 'lime', 'pink', 'black', 'gray']);
 
 function record(value: unknown, label: string): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`HTTP_API_INVALID_${label}`);
@@ -79,13 +83,15 @@ function dataRecord(value: unknown, label: string): Record<string, unknown> {
 }
 
 function ref(value: string, label: string): string {
-  if (!value || value.trim() !== value || value === '.' || value === '..') {
+  const hasControl = Array.from(value).some(character => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127);
+  if (!value || value.trim() !== value || value === '.' || value === '..'
+      || value.includes('/') || value.includes('\\') || hasControl) {
     throw new Error(`HTTP_API_INVALID_${label}`);
   }
   return encodeURIComponent(value);
 }
 
-function dependency(value: unknown): Dependency {
+export function parseHttpDependency(value: unknown): Dependency {
   const row = record(value, 'DEPENDENCY');
   const fromSide = row.fromSide;
   const toSide = row.toSide;
@@ -106,7 +112,7 @@ function dependency(value: unknown): Dependency {
 function board(value: unknown): Board {
   const row = record(value, 'BOARD');
   if (!Array.isArray(row.dependencies)) throw new Error('HTTP_API_INVALID_BOARD_DEPENDENCIES');
-  const dependencies = row.dependencies.map(dependency);
+  const dependencies = row.dependencies.map(parseHttpDependency);
   const order = optionalNumber(row.order, 'BOARD_ORDER');
   const createdAt = optionalNumber(row.createdAt, 'BOARD_CREATED_AT');
   return {
@@ -199,7 +205,7 @@ function boardMember(value: unknown): BoardMember {
   };
 }
 
-function task(value: unknown): TaskNode {
+export function parseHttpTask(value: unknown): TaskNode {
   const row = record(value, 'TASK');
   if (typeof row.status !== 'string' || !TASK_STATUSES.has(row.status as TaskStatus)) {
     throw new Error('HTTP_API_INVALID_TASK_STATUS');
@@ -256,6 +262,26 @@ function task(value: unknown): TaskNode {
   };
 }
 
+export function parseHttpTag(value: unknown): TaskTag {
+  const row = record(value, 'TAG');
+  if (typeof row.color !== 'string' || !TAG_COLORS.has(row.color as TagColor)) {
+    throw new Error('HTTP_API_INVALID_TAG_COLOR');
+  }
+  const createdAt = optionalNumber(row.createdAt, 'TAG_CREATED_AT');
+  const updatedAt = optionalNumber(row.updatedAt, 'TAG_UPDATED_AT');
+  const order = optionalNumber(row.order, 'TAG_ORDER');
+  if (order === undefined) throw new Error('HTTP_API_INVALID_TAG_ORDER');
+  return {
+    id: stringValue(row.id, 'TAG_ID'),
+    workspaceId: stringValue(row.workspaceId, 'TAG_WORKSPACE_ID'),
+    name: stringValue(row.name, 'TAG_NAME'),
+    color: row.color as TagColor,
+    order,
+    ...(createdAt === undefined ? {} : { createdAt }),
+    ...(updatedAt === undefined ? {} : { updatedAt }),
+  };
+}
+
 function permissions(value: unknown): BoardRolePermissionMatrix {
   const source = dataRecord(value, 'ROLE_PERMISSIONS');
   const partial: Partial<BoardRolePermissionMatrix> = {};
@@ -288,6 +314,10 @@ export function createHttpDomainReadAdapter(client: HttpApiClient): ProjedDomain
       const response = await client.request<unknown>(`/api/v1/workspaces/${ref(workspaceRef, 'WORKSPACE_REF')}/members`, { signal });
       return items(response, 'WORKSPACE_MEMBERS').map(workspaceMember);
     },
+    async listTags(workspaceRef, signal) {
+      const response = await client.request<unknown>(`/api/v1/workspaces/${ref(workspaceRef, 'WORKSPACE_REF')}/tags`, { signal });
+      return items(response, 'TAGS').map(parseHttpTag);
+    },
     async listBoardMembers(workspaceRef, boardRef, signal) {
       const response = await client.request<unknown>(boardPath(workspaceRef, boardRef, 'members'), { signal });
       return items(response, 'BOARD_MEMBERS').map(boardMember);
@@ -298,11 +328,11 @@ export function createHttpDomainReadAdapter(client: HttpApiClient): ProjedDomain
     },
     async listTasks(workspaceRef, boardRef, signal) {
       const response = await client.request<unknown>(boardPath(workspaceRef, boardRef, 'tasks'), { signal });
-      return items(response, 'TASKS').map(task);
+      return items(response, 'TASKS').map(parseHttpTask);
     },
     async listDependencies(workspaceRef, boardRef, signal) {
       const response = await client.request<unknown>(boardPath(workspaceRef, boardRef, 'dependencies'), { signal });
-      return items(response, 'DEPENDENCIES').map(dependency);
+      return items(response, 'DEPENDENCIES').map(parseHttpDependency);
     },
   };
 }

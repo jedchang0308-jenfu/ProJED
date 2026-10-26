@@ -27,6 +27,10 @@
     {
       "version": "0003_domain_read_v1",
       "path": "db/migrations/0003_domain_read_v1.sql"
+    },
+    {
+      "version": "0004_domain_command_v1",
+      "path": "db/migrations/0004_domain_command_v1.sql"
     }
   ],
   "objectAllowlist": [
@@ -44,10 +48,17 @@
     "projed_core.board_role_permissions",
     "projed_core.wbs_items",
     "projed_core.wbs_dependencies",
+    "projed_core.task_tags",
+    "projed_core.wbs_item_tags",
+    "projed_core.actor_has_board_capability_v1",
+    "projed_core.actor_can_write_tags_v1",
     "projed_core.projects_tenant_legacy_uq",
     "projed_core.actor_scope_access_project_idx",
     "projed_core.wbs_items_project_legacy_uq",
-    "projed_core.wbs_dependencies_project_legacy_uq"
+    "projed_core.wbs_dependencies_project_legacy_uq",
+    "projed_core.task_tags_tenant_legacy_uq",
+    "projed_core.task_tags_tenant_order_idx",
+    "projed_core.wbs_item_tags_project_idx"
   ],
   "staticFixturePath": "qa/dev-139/s1/static",
   "runtime": {
