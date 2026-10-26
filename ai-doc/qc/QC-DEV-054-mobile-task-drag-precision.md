@@ -3,8 +3,8 @@
 關聯 DEV：DEV-054
 關聯 SPEC：`ai-doc/specs/SPEC-054-mobile-task-drag-precision.md`
 關聯 QA：`ai-doc/qa/QA-DEV-054-mobile-task-drag-precision.md`
-狀態：Automated QA-QC PASS / Blocked on Physical iOS-Android Devices / Overall 未充分驗證
-驗證日期：2026-08-14
+狀態：歷史 Automated QA-QC PASS；現行自用裝置確認待補，雙平台量化阻塞已解除
+歷史驗證日期：2026-08-14；2026-10-19 由 RD 更新契約／關卡說明，不改歷史觀測為新 QC PASS。
 
 ## 1. 結論
 
@@ -12,7 +12,7 @@
 - 使用者回報的「手機長按先圈選文字、沒有進入任務拖拉」已由 rendered browser 證據直接覆蓋；L1、L2、L3+ 與 Workbench 未歸位列在長按前即為 `user-select:none`，active long press 的 selection 與完整 context menu 均為 0。
 - 844x390 與 1024x768 觸控 viewport 都能進入專用 touch drag session，證明不再受舊 `innerWidth <= 768` gate 影響。
 - 2026-08-24 補充 QC：390x844 shared inline Workbench 中，新建未歸位任務已跨面板命中右側 `qc-card-1`，`boardId` 從 `__task_workbench_unplaced__` 更新為 `local-test-mobile-ui-board`，`terminal:complete` exactly once；placed row 仍不可拖。
-- 整體 DEV 仍判定 `未充分驗證`：SPEC 明定的 iPhone Safari 與 Android Chrome 實機 50-trial gate 尚未執行。這是 release/completion gate，不否定本輪 automated PASS。
+- 歷史雙平台實機量化驗證未執行；現行要求已由 SPEC §9.2／QA §8–§10 取代。DEV-054 保留實際自用裝置重點確認，不因另一平台缺席、無工作簿或無錄影阻塞，也不阻擋 DEV-097。未測實機不標 PASS。
 
 ## 2. 根因與修正事實
 
@@ -24,7 +24,7 @@
 | 捲動副作用 | 全域 `touch-action:none` 會破壞 Workbench native pan | 僅抑制 selection/callout；Workbench 保持 `touch-action:auto` |
 | 桌機回歸 | touch 修正可能影響 mouse dnd-kit、click/right-click | Mouse/Keyboard sensors、approved overlay 與桌機 context menu 保留，相關 browser suites 全通過 |
 
-## 3. Automated QA Matrix
+## 3. 歷史 Automated QA Matrix（以下為原執行證據）
 
 ### 3.1 DEV-054 targeted
 
@@ -71,12 +71,13 @@
 - 本輪在既有 dirty shared worktree 內執行，未覆寫無關變更、未 commit、未 push、未 deploy。
 - Browser automation 使用 Chromium CDP 合成真實 touch lifecycle，可驗證 DOM、事件、幾何與資料寫入；不能替代 Safari/Chrome 實體裝置的 callout、手指接觸面與平台事件雜訊。
 
-## 6. 尚待 Physical Gate
+## 6. 歷史實機附件與現行剩餘確認
 
 - 實機 trial workbook 已建立：`C:/Users/user/.codex/visualizations/2026/08/14/01a0005f-6eab-7ae0-87dc-69484889efab/outputs/01a0005f-6eab-7ae0-87dc-69484889efab/DEV-054-手機拖拉實機驗證表.xlsx`。工作簿含雙平台主要 50 次、P06-P12 各 66 列、下拉結果、Timecode、公式統計與裝置 gate；已通過全綠及 wrong-target 失敗雙向公式模擬、公式錯誤掃描與六分頁 visual QA。
 - 2026-08-14 本機只讀偵測結果：ADB unavailable、`idevice_id` unavailable、Windows present portable devices 無 iPhone/iPad/Android；本輪沒有可由 Codex 操作的實體裝置。
-- iPhone / iOS Safari：P01-P12、50 trials、裝置與版本資訊、錄影、trial sheet。
-- Android / Chrome：P01-P12、50 trials、裝置與版本資訊、錄影、trial sheet。
-- 每台 first-release correct 必須至少 48/50；wrong target、wrong parent、wrong action、duplicate commit 必須為 0。
+- 上述 workbook／裝置偵測是歷史附件，現行不再要求雙平台固定次數、成功率與逐筆錄影／簽核；不刪除或改寫當時未執行的事實。
+- 剩餘確認：實際常用裝置的原失敗路徑與主要拖拉／action／取消及復原，簡記版本、裝置與結果。錯誤 target／parent／action、duplicate effect 或 cancel write 仍判失敗；未測平台標未驗證。
 
-Physical gate 完成前，DEV-054 不得標記 Complete 或進入 release；目前可交付結論是「RD 修正完成且 automated QA-QC 通過，等待兩平台實機簽核」。
+目前 DEV-054 保持「驗證中／自用裝置確認待補」；本次治理修正與 RD 自查不等於新獨立 QC 或實機驗收。DEV-097 依自身驗收前進，正式發布仍需其既有 release gate。
+
+2026-10-19 RD 自查續接見 [QA §15](../qa/QA-DEV-054-mobile-task-drag-precision.md#15-2026-10-19-精簡實作與-rd-自查)：DEV-054 46/46 static、15/15 browser，DEV-053／029 各5項選測及兩個選測器負向均符合預期；原R01／R15版型預期失敗保留。此補記不改上方歷史QC的身分、版本或結果。

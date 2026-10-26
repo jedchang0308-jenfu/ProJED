@@ -1,5 +1,19 @@
 # ProJED Documentation Map
 
+## 2026-10-19：DEV-118 全選顯示與完整分類矩陣（本機實作與驗收完成／未發布）
+
+產品入口為 [DEV-118 選取矩陣](dev_task.md#dev-118-selection-matrix-20261019)，工程authority為 [SPEC-039 本輪V6定案](specs/SPEC-039-task-filter-core-and-workbench-profiles.md#dev-118-selection-matrix-v6-20261019)。統一為「勾選＝納入；預設全選；全不選＝零筆；同分類 OR、跨分類 AND」，補齊四個日期桶、無人員、無標籤、三態全選、搜尋與0～5分類計數。
+
+使用者後續明確要求dev-autopilot完成DEV-118；本輪狀態為 `V6 Implemented / Local QA-QC PASS / NOT RELEASED`。新矩陣已實作，Model 17／17、偏好恢復18／18、主UI 12組、undo／redo 2組、Calendar完整browser回歸及typecheck／build／本機隔離SQL通過；獨立QC無剩餘缺陷或必要證據缺口。完整結果、失敗保留與版本綁定見[QA-DEV-118本輪驗收](qa/QA-DEV-118-task-filter-positive-inclusion-and-shared-controls.md#dev-118-v6-local-acceptance-20261019)。既有dirty修改已整合為同一V6候選；工作樹未commit／push，未遠端migration或發布。
+
+定案採V6明確all／none／selected；V5空值轉all、明確snapshot保留selected、舊日期保留legacy-v5分支並提供明確轉換入口。Board remote／local journal與Workbench keys升6，升級CAS含updated_at保護、完整readback後清舊值、未知版不覆寫；不修改option選取來迎合暫時空清單。Board／Workbench各自ownership與DEV-062逾期警示保留。Calendar以明確V5型別／helper及control variant隔離，既存snapshot／permission／feed保持；分別驗Board／Workbench V6 parity與Calendar V5 preview／Edge parity。source基線為 `持續優化@06079ce676b638cb7370b75c8c4d9a58d06aa5c6`，本地實作／必要驗證可執行，遠端migration與發布不在本輪範圍。
+
+## 2026-10-19：DEV-054 自用驗收精簡與 DEV-097 解除連動
+
+現行入口為 [SPEC-054](specs/SPEC-054-mobile-task-drag-precision.md)、[QA-DEV-054](qa/QA-DEV-054-mobile-task-drag-precision.md)、[QC-DEV-054](qc/QC-DEV-054-mobile-task-drag-precision.md) 與 dev_task 的 DEV-054／097 索引。依使用者指示取消雙平台固定次數／成功率與逐筆工作簿／錄影要求，改為實際常用裝置重點確認；未測實機仍未驗證，DEV-054維持驗證中，不因另一平台缺席標阻塞。保留原R01–R15，B需求由現行R／相鄰取消、edge-scroll、action／undo案例承接；移除static verifier的文件字串鎖定，同步before／child preview預期，不修改產品runtime。
+
+[QA-DEV-097](qa/QA-DEV-097-pwa-safe-reload-orchestration.md)／[QC-DEV-097](qc/QC-DEV-097-pwa-safe-reload-orchestration.md) 已解除DEV-054實機前置；PWA dirty owner／cancel／flush／資料保留／更新恢復及正式release gate仍有效。下方各日期為歷史紀錄，舊雙平台門檻與Blocked註記不覆蓋本段現行契約；歷史未執行不改成PASS。本次驗證結果見QA-DEV-054本次修訂記錄。
+
 ## 2026-10-08：DEV-139 ProJED 納入 Jenfu-Platform 開發文件入口
 
 本輪規劃入口為 [DEV-139](dev_task.md#dev-139-jenfu-platform-onboarding)，唯一交接契約為 [SPEC-139 Rev6](specs/SPEC-139-projed-jenfu-platform-onboarding.md)，直接交接入口為 [§11 S1定案契約](specs/SPEC-139-projed-jenfu-platform-onboarding.md#11-架構決策與-s1-定案契約)，[§11.8技術主管審查](specs/SPEC-139-projed-jenfu-platform-onboarding.md#118-技術主管審查與最小優化)保留Rev5核心修正；既有使用者切換讀 [§6.3相容基線](specs/SPEC-139-projed-jenfu-platform-onboarding.md#63-既有使用者的切換基線)，架構決策為 [ADR-054](decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。**S1 RD Implementation Ready＋架構定案；S2／S3 RD Readiness Review**，完整整合及移轉未達實作成熟度。D1／D2已確認，DEV待排，產品實作／整合／發布未啟動；不把歷史完成段落當此次執行指令。

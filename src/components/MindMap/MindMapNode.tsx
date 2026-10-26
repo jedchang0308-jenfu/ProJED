@@ -119,7 +119,7 @@ const MindMapNodeSelectionSurface: React.FC<MindMapNodeSelectionSurfaceProps> = 
   );
 };
 
-export const MindMapNode: React.FC<MindMapNodeProps> = ({
+export const MindMapNode: React.FC<MindMapNodeProps> = React.memo(({
   node,
   childrenNodes,
   direction,
@@ -437,6 +437,6 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
       )}
     </div>
   );
-};
+});
 
 export default MindMapNode;

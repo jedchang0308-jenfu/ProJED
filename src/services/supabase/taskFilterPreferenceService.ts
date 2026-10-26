@@ -40,10 +40,11 @@ export const taskFilterPreferenceService = {
   async compareAndSet(
     accountId: string,
     projectId: string,
-    expectedVersion: 4 | 5 | null,
+    expectedVersion: 4 | 5 | 6 | null,
     filters: TaskFilterQuery,
+    expectedUpdatedAt?: string,
   ): Promise<void> {
-    const filtersPayload = { preference_version: 5, filters: filters as unknown as Json };
+    const filtersPayload = { preference_version: 6, filters: filters as unknown as Json };
     if (expectedVersion === null) {
       const { error } = await supabase.from('account_board_task_filter_preferences').insert({
         account_id: accountId,
@@ -53,19 +54,21 @@ export const taskFilterPreferenceService = {
       if (error) throw new Error('TASK_FILTER_CAS_CONFLICT:' + error.message);
       return;
     }
-    const { data, error } = await supabase
+    let query = supabase
       .from('account_board_task_filter_preferences')
       .update(filtersPayload)
       .eq('account_id', accountId)
       .eq('project_id', projectId)
-      .eq('preference_version', expectedVersion)
+      .eq('preference_version', expectedVersion);
+    if (expectedUpdatedAt !== undefined) query = query.eq('updated_at', expectedUpdatedAt);
+    const { data, error } = await query
       .select('account_id')
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!data) throw new Error('TASK_FILTER_CAS_CONFLICT:version changed');
   },
 
-  async remove(accountId: string, projectId: string, expectedVersion?: 5): Promise<void> {
+  async remove(accountId: string, projectId: string, expectedVersion?: 6): Promise<void> {
     let query = supabase
       .from('account_board_task_filter_preferences')
       .delete()

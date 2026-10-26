@@ -7,7 +7,7 @@ const ACTION_CATALOG: readonly TaskActionDefinition[] = Object.freeze([
   { id: 'task.duplicate', label: '複製任務', icon: 'copy', section: 'create', kind: 'mutation', capability: 'create' },
   { id: 'task.copy', label: '複製', icon: 'copy', section: 'clipboard', kind: 'mutation', defaultMenu: false },
   { id: 'task.cut', label: '剪下', icon: 'scissors', section: 'clipboard', kind: 'mutation', capability: 'move', defaultMenu: false },
-  { id: 'task.paste-after', label: '貼在此任務之後', icon: 'clipboard-paste', section: 'clipboard', kind: 'mutation', defaultMenu: false },
+  { id: 'task.paste-after', label: '貼上', icon: 'clipboard-paste', section: 'clipboard', kind: 'mutation', defaultMenu: false },
   { id: 'task.create-tracking-reference', label: '建立追蹤副本', icon: 'link-2', section: 'create', kind: 'mutation', capability: 'tracking-reference' },
   { id: 'task.remove-tracking-reference', label: '移除此處追蹤', icon: 'unlink', section: 'danger', kind: 'danger', capability: 'tracking-reference' },
   { id: 'task.edit-meeting-reservation', label: '預約時間', icon: 'clock-3', section: 'planning', kind: 'mutation', capability: 'meeting-reservation', defaultMenu: false },

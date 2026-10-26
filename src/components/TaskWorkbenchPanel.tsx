@@ -11,12 +11,15 @@ import { useWbsStore } from '../store/useWbsStore';
 import { useMemberStore } from '../store/useMemberStore';
 import { useTagStore } from '../store/useTagStore';
 import useQuickCaptureStore from '../store/useQuickCaptureStore';
+import useUndoStore from '../store/useUndoStore';
 import {
   createBoardAssigneeFilterOptions,
+  createTaskTagFilterOptions,
   createDefaultTaskFilters,
   countActiveTaskFilters,
   normalizeTaskFilters,
   projectTaskFilterResults,
+  resolveScopedTaskFilterOptionStatus,
   type TaskFilterQuery,
 } from '../features/taskFilters';
 import {
@@ -42,7 +45,7 @@ import {
 } from '../features/taskWorkbench/placement';
 import { isTaskWorkbenchSortableTask, listWorkbenchTasks } from '../features/taskWorkbench/source';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
-import type { InboxItem, TaskNode } from '../types';
+import type { BoardMember, InboxItem, TaskNode, TaskTag, WorkspaceMember } from '../types';
 import { isTaskPrimaryActionTarget, prepareNewTaskNaming } from '../utils/taskInteractions';
 import { useTaskInteractionBinding } from '../interactions/task/useTaskInteractionBinding';
 import { formatTaskLocation } from '../utils/taskHierarchy';
@@ -63,6 +66,7 @@ import TaskConditionFilterControls from './ui/TaskConditionFilterControls';
 import { getTaskFilterTriggerClass, taskFilterFieldClass } from './ui/taskConditionFilterStyles';
 import { getSharedInlinePanelWidthStyle } from '../features/layout/preferences';
 import { buildWorkbenchProjectionTasks } from '../features/taskTracking/model';
+import { memberService, tagService } from '../services/dataBackend';
 
 type PanelPrefs = TaskWorkbenchPanelPrefs;
 
@@ -85,6 +89,10 @@ type BoardOption = {
   boardId: string;
   path: string;
 };
+
+const NO_WORKSPACE_MEMBER_REFRESH: readonly WorkspaceMember[] = [];
+const NO_BOARD_MEMBER_REFRESH: readonly BoardMember[] = [];
+const NO_TAG_REFRESH: readonly TaskTag[] = [];
 
 const compareText = (left: string, right: string) => left.localeCompare(right, 'zh-Hant');
 
@@ -640,11 +648,15 @@ const WorkbenchFilterControls: React.FC<{
   filters: TaskFilterQuery;
   selectedBoardId: string | null;
   showContainersInAllTasks: boolean;
-  tags: ReturnType<typeof useTagStore.getState>['tags'];
+  tags: Array<{ id: string; name: string }>;
   onSelectedBoardChange: (boardId: string | null) => void;
   onShowContainersInAllTasksChange: (show: boolean) => void;
   updateFilters: (filters: TaskFilterQuery) => void;
   resetFilters: () => void;
+  disabled?: boolean;
+  warning?: string | null;
+  peopleOptionsStatus?: 'ready' | 'loading' | 'error';
+  tagOptionsStatus?: 'ready' | 'loading' | 'error';
 }> = ({
   assigneeOptions,
   boardOptions,
@@ -656,6 +668,10 @@ const WorkbenchFilterControls: React.FC<{
   onShowContainersInAllTasksChange,
   updateFilters,
   resetFilters,
+  disabled = false,
+  warning = null,
+  peopleOptionsStatus = 'ready',
+  tagOptionsStatus = 'ready',
 }) => {
   return (
     <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-3 shadow-xl" data-task-workbench-filter-panel="true">
@@ -664,6 +680,7 @@ const WorkbenchFilterControls: React.FC<{
         <button
           type="button"
           onClick={resetFilters}
+          disabled={disabled}
           className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-500 hover:border-primary/30 hover:text-primary"
           title="重設過濾器"
         >
@@ -701,11 +718,16 @@ const WorkbenchFilterControls: React.FC<{
       </section>
 
       <TaskConditionFilterControls
+        variant="matrix-v6"
         assigneeOptions={assigneeOptions}
         value={filters}
         tags={tags}
         onChange={updateFilters}
+        disabled={disabled}
+        peopleOptionsStatus={peopleOptionsStatus}
+        tagOptionsStatus={tagOptionsStatus}
       />
+      {warning ? <p className="text-xs text-amber-700" role="alert">{warning}</p> : null}
     </div>
   );
 };
@@ -731,6 +753,20 @@ const TaskWorkbenchPanel: React.FC<{
   const laneStackRef = React.useRef<HTMLDivElement>(null);
   const [selectedBoardId, setSelectedBoardId] = React.useState<string | null>(() => readTaskWorkbenchFilterPrefs(accountId).selectedBoardId);
   const [filtersByBoardId, setFiltersByBoardId] = React.useState<Record<string, TaskFilterQuery>>(() => readTaskWorkbenchFilterPrefs(accountId).filtersByBoardId);
+  const selectedBoardIdRef = React.useRef(selectedBoardId);
+  const filtersByBoardIdRef = React.useRef(filtersByBoardId);
+  const [filtersLocked, setFiltersLocked] = React.useState(() => Boolean(readTaskWorkbenchFilterPrefs(accountId).locked));
+  const [filterWarning, setFilterWarning] = React.useState<string | null>(() => readTaskWorkbenchFilterPrefs(accountId).warning ?? null);
+  const [workbenchSourceStatus, setWorkbenchSourceStatus] = React.useState<'loading' | 'ready' | 'error'>('loading');
+  const [workbenchLoadedBoardIds, setWorkbenchLoadedBoardIds] = React.useState<string[]>([]);
+  const [filterOptionSource, setFilterOptionSource] = React.useState<{
+    status: 'loading' | 'ready' | 'error';
+    workspaceId: string | null;
+    boardId: string | null;
+    workspaceMembers: WorkspaceMember[];
+    boardMembers: BoardMember[];
+    tags: TaskTag[];
+  }>({ status: 'loading', workspaceId: null, boardId: null, workspaceMembers: [], boardMembers: [], tags: [] });
   const filterToggleRef = React.useRef<HTMLButtonElement>(null);
   const filterPopoverRef = React.useRef<HTMLDivElement>(null);
   const workspaces = useBoardStore(state => state.workspaces);
@@ -742,9 +778,12 @@ const TaskWorkbenchPanel: React.FC<{
   const setNodes = useWbsStore(state => state.setNodes);
   const hydrateUnplacedTasks = useWbsStore(state => state.hydrateUnplacedTasks);
   const addNode = useWbsStore(state => state.addNode);
-  const workspaceMembers = useMemberStore(state => state.workspaceMembers);
-  const boardMembers = useMemberStore(state => state.boardMembers);
-  const tags = useTagStore(state => state.tags);
+  const activeWorkspaceMembers = useMemberStore(state => state.workspaceMembers);
+  const activeBoardMembers = useMemberStore(state => state.boardMembers);
+  const activeMembersLoadedWorkspaceId = useMemberStore(state => state.loadedWorkspaceId);
+  const activeMembersLoadedBoardId = useMemberStore(state => state.loadedBoardId);
+  const activeTags = useTagStore(state => state.tags);
+  const activeTagsLoadedWorkspaceId = useTagStore(state => state.loadedWorkspaceId);
   const inboxItems = useQuickCaptureStore(state => state.items);
   const markInboxPromoted = useQuickCaptureStore(state => state.markPromoted);
 
@@ -768,8 +807,12 @@ const TaskWorkbenchPanel: React.FC<{
     unplacedRatioRef.current = nextPanelPrefs.unplacedRatio;
     setUnplacedRatio(nextPanelPrefs.unplacedRatio);
     const filterPrefs = readTaskWorkbenchFilterPrefs(accountId);
+    selectedBoardIdRef.current = filterPrefs.selectedBoardId;
+    filtersByBoardIdRef.current = filterPrefs.filtersByBoardId;
     setSelectedBoardId(filterPrefs.selectedBoardId);
     setFiltersByBoardId(filterPrefs.filtersByBoardId);
+    setFiltersLocked(Boolean(filterPrefs.locked));
+    setFilterWarning(filterPrefs.warning ?? null);
 
     let cancelled = false;
     void hydrateAccountLayoutPreferences(accountId).then(preferences => {
@@ -805,6 +848,14 @@ const TaskWorkbenchPanel: React.FC<{
       cancelled = true;
     };
   }, [accountId]);
+
+  React.useEffect(() => {
+    selectedBoardIdRef.current = selectedBoardId;
+  }, [selectedBoardId]);
+
+  React.useEffect(() => {
+    filtersByBoardIdRef.current = filtersByBoardId;
+  }, [filtersByBoardId]);
 
   React.useEffect(() => {
     if (wasPanelOpenRef.current && !panelPrefs.open) onClosed?.();
@@ -867,6 +918,7 @@ const TaskWorkbenchPanel: React.FC<{
       event.preventDefault();
       event.stopPropagation();
       patchPanelPrefs({ filtersOpen: false });
+      window.requestAnimationFrame(() => filterToggleRef.current?.focus());
     };
 
     document.addEventListener('mousedown', handleClickOutside);
@@ -890,12 +942,16 @@ const TaskWorkbenchPanel: React.FC<{
     if (boardOptions.length === 0) return;
 
     let cancelled = false;
+    setWorkbenchSourceStatus('loading');
+    setWorkbenchLoadedBoardIds([]);
     void listWorkbenchTasks(boardOptions).then(workbenchSource => {
       if (cancelled) return;
       setNodes(workbenchSource.tasks, {
         scopeBoardIds: workbenchSource.loadedBoardIds,
         preserveOutOfScope: workbenchSource.failedBoardIds.length > 0,
       });
+      setWorkbenchLoadedBoardIds(workbenchSource.loadedBoardIds);
+      setWorkbenchSourceStatus(workbenchSource.failedBoardIds.length > 0 ? 'error' : 'ready');
     });
 
     return () => {
@@ -904,11 +960,12 @@ const TaskWorkbenchPanel: React.FC<{
   }, [boardOptions, boardScopeIds, setNodes]);
 
   React.useEffect(() => {
-    if (selectedBoardId && boardOptions.some(option => option.boardId === selectedBoardId)) return;
+    if (filtersLocked || (selectedBoardId && boardOptions.some(option => option.boardId === selectedBoardId))) return;
     const nextSelectedBoardId = activeBoardId || boardOptions[0]?.boardId || null;
+    selectedBoardIdRef.current = nextSelectedBoardId;
     setSelectedBoardId(nextSelectedBoardId);
-    writeTaskWorkbenchFilterPrefs({ selectedBoardId: nextSelectedBoardId, filtersByBoardId }, accountId);
-  }, [accountId, activeBoardId, boardOptions, filtersByBoardId, selectedBoardId]);
+    writeTaskWorkbenchFilterPrefs({ selectedBoardId: nextSelectedBoardId, filtersByBoardId: filtersByBoardIdRef.current }, accountId);
+  }, [accountId, activeBoardId, boardOptions, filtersByBoardId, filtersLocked, selectedBoardId]);
 
   const selectedFilters = React.useMemo(
     () => selectedBoardId ? (filtersByBoardId[selectedBoardId] || createDefaultTaskFilters()) : createDefaultTaskFilters(),
@@ -916,49 +973,101 @@ const TaskWorkbenchPanel: React.FC<{
   );
 
   const handleSelectedBoardChange = React.useCallback((boardId: string | null) => {
+    if (filtersLocked) return;
+    selectedBoardIdRef.current = boardId;
     setSelectedBoardId(boardId);
-    writeTaskWorkbenchFilterPrefs({ selectedBoardId: boardId, filtersByBoardId }, accountId);
-  }, [accountId, filtersByBoardId]);
+    writeTaskWorkbenchFilterPrefs({ selectedBoardId: boardId, filtersByBoardId: filtersByBoardIdRef.current }, accountId);
+  }, [accountId, filtersLocked]);
+
+  const applyFilterSnapshot = React.useCallback((boardId: string, snapshot: TaskFilterQuery) => {
+    const restored = { ...filtersByBoardIdRef.current, [boardId]: snapshot };
+    filtersByBoardIdRef.current = restored;
+    setFiltersByBoardId(restored);
+    writeTaskWorkbenchFilterPrefs({ selectedBoardId: selectedBoardIdRef.current, filtersByBoardId: restored }, accountId);
+  }, [accountId]);
 
   const updateSelectedFilters = React.useCallback((nextFilters: TaskFilterQuery) => {
-    if (!selectedBoardId) return;
-    setFiltersByBoardId(current => {
-      const currentFilters = current[selectedBoardId] || createDefaultTaskFilters();
-      const nextFiltersByBoardId = {
-        ...current,
-        [selectedBoardId]: normalizeTaskFilters({
-          ...currentFilters,
-          ...nextFilters,
-        }),
-      };
-      writeTaskWorkbenchFilterPrefs({ selectedBoardId, filtersByBoardId: nextFiltersByBoardId }, accountId);
-      return nextFiltersByBoardId;
+    if (!selectedBoardId || filtersLocked) return;
+    const currentFilters = filtersByBoardIdRef.current[selectedBoardId] || createDefaultTaskFilters();
+    const normalizedNext = normalizeTaskFilters(nextFilters);
+    if (JSON.stringify(currentFilters) === JSON.stringify(normalizedNext)) return;
+    applyFilterSnapshot(selectedBoardId, normalizedNext);
+    useUndoStore.getState().pushUndo({
+      label: '修改所有任務篩選',
+      scope: 'filter',
+      entityIds: [selectedBoardId],
+      undo: () => applyFilterSnapshot(selectedBoardId, currentFilters),
+      redo: () => applyFilterSnapshot(selectedBoardId, normalizedNext),
     });
-  }, [accountId, selectedBoardId]);
+  }, [applyFilterSnapshot, filtersLocked, selectedBoardId]);
 
   const resetSelectedFilters = React.useCallback(() => {
-    if (!selectedBoardId) return;
-    setFiltersByBoardId(current => {
-      const nextFiltersByBoardId = {
-        ...current,
-        [selectedBoardId]: createDefaultTaskFilters(),
-      };
-      writeTaskWorkbenchFilterPrefs({ selectedBoardId, filtersByBoardId: nextFiltersByBoardId }, accountId);
-      return nextFiltersByBoardId;
-    });
-  }, [accountId, selectedBoardId]);
+    if (!selectedBoardId || filtersLocked) return;
+    updateSelectedFilters(createDefaultTaskFilters());
+  }, [filtersLocked, selectedBoardId, updateSelectedFilters]);
 
   const selectedBoardActiveFilterCount = React.useMemo(() => countActiveTaskFilters(selectedFilters), [selectedFilters]);
   const selectedBoardOption = React.useMemo(
     () => boardOptions.find(option => option.boardId === selectedBoardId) || null,
     [boardOptions, selectedBoardId],
   );
+  const scopedWorkspaceMemberRefresh = selectedBoardOption
+    && activeMembersLoadedWorkspaceId === selectedBoardOption.workspaceId
+    && activeMembersLoadedBoardId === selectedBoardOption.boardId
+    ? activeWorkspaceMembers
+    : NO_WORKSPACE_MEMBER_REFRESH;
+  const scopedBoardMemberRefresh = selectedBoardOption
+    && activeMembersLoadedWorkspaceId === selectedBoardOption.workspaceId
+    && activeMembersLoadedBoardId === selectedBoardOption.boardId
+    ? activeBoardMembers
+    : NO_BOARD_MEMBER_REFRESH;
+  const scopedTagRefresh = selectedBoardOption
+    && activeTagsLoadedWorkspaceId === selectedBoardOption.workspaceId
+    ? activeTags
+    : NO_TAG_REFRESH;
+  React.useEffect(() => {
+    if (!selectedBoardOption) {
+      setFilterOptionSource({ status: 'loading', workspaceId: null, boardId: null, workspaceMembers: [], boardMembers: [], tags: [] });
+      return;
+    }
+    const { workspaceId, boardId } = selectedBoardOption;
+    let cancelled = false;
+    setFilterOptionSource({ status: 'loading', workspaceId, boardId, workspaceMembers: [], boardMembers: [], tags: [] });
+    void Promise.all([
+      memberService.listWorkspaceMembers(workspaceId),
+      memberService.listBoardMembers(workspaceId, boardId),
+      tagService.listByWorkspace(workspaceId),
+    ]).then(([workspaceMembers, boardMembers, tags]) => {
+      if (cancelled) return;
+      setFilterOptionSource({ status: 'ready', workspaceId, boardId, workspaceMembers, boardMembers, tags });
+    }).catch(error => {
+      console.error('[TaskWorkbenchPanel] filter option source load failed:', error);
+      if (cancelled) return;
+      setFilterOptionSource({ status: 'error', workspaceId, boardId, workspaceMembers: [], boardMembers: [], tags: [] });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [accountId, scopedBoardMemberRefresh, scopedTagRefresh, scopedWorkspaceMemberRefresh, selectedBoardOption]);
   const fallbackWorkspaceId = selectedBoardOption?.workspaceId || activeWorkspaceId || boardOptions[0]?.workspaceId || '';
 
   const assigneeOptions = React.useMemo(
-    () => createBoardAssigneeFilterOptions(selectedBoardId, boardMembers, nodes, workspaceMembers),
-    [boardMembers, nodes, selectedBoardId, workspaceMembers],
+    () => createBoardAssigneeFilterOptions(selectedBoardId, filterOptionSource.boardMembers, nodes, filterOptionSource.workspaceMembers, selectedFilters.people.ids),
+    [filterOptionSource.boardMembers, filterOptionSource.workspaceMembers, nodes, selectedBoardId, selectedFilters.people.ids],
   );
+  const selectedTagOptions = React.useMemo(
+    () => createTaskTagFilterOptions(selectedBoardId, filterOptionSource.tags, nodes, selectedFilters.tags.ids),
+    [filterOptionSource.tags, nodes, selectedBoardId, selectedFilters.tags.ids],
+  );
+  const selectedOptionStatus = resolveScopedTaskFilterOptionStatus({
+    selectedWorkspaceId: selectedBoardOption?.workspaceId ?? null,
+    selectedBoardId,
+    taskSourceStatus: workbenchSourceStatus,
+    loadedTaskBoardIds: workbenchLoadedBoardIds,
+    optionSourceStatus: filterOptionSource.status,
+    optionSourceWorkspaceId: filterOptionSource.workspaceId,
+    optionSourceBoardId: filterOptionSource.boardId,
+  });
   const workbenchProjectionTasks = React.useMemo(
     () => buildWorkbenchProjectionTasks(Object.values(nodes), trackingReferences, boardScopeIds),
     [boardScopeIds, nodes, trackingReferences],
@@ -1221,17 +1330,22 @@ const TaskWorkbenchPanel: React.FC<{
 
   return (
       <aside
-        className={`relative z-20 flex h-full shrink-0 flex-col bg-gradient-to-b from-slate-50 via-slate-100 to-slate-200 shadow-[4px_0_20px_rgba(15,23,42,0.12)] ${isResizing ? 'transition-none' : ''}`}
+        className={`relative z-20 flex h-full shrink-0 flex-col overflow-hidden rounded-xl border bg-slate-200 shadow-sm ${
+          previewedPanel === 'task-workbench'
+            ? 'border-primary-500 ring-2 ring-primary-400/95 shadow-[0_0_0_4px_rgba(99,102,241,0.22)]'
+            : 'border-slate-300'
+        } ${isResizing ? 'transition-none' : ''}`}
        style={{ width: panelWidthStyle }}
         data-task-workbench-panel="true"
         data-layout-region="task-command-center"
         data-task-workbench-inline="true"
+       data-ui-container="task-workbench"
        data-panel-previewed={previewedPanel === 'task-workbench' ? 'task-workbench' : undefined}
-       aria-label="全域任務平台"
+       aria-label="所有任務"
      >
         <div
           role="separator"
-          aria-label="調整全域任務平台寬度"
+          aria-label="調整所有任務寬度"
           aria-orientation="vertical"
           aria-valuemin={MIN_TASK_WORKBENCH_WIDTH}
           aria-valuemax={MAX_TASK_WORKBENCH_WIDTH}
@@ -1239,23 +1353,23 @@ const TaskWorkbenchPanel: React.FC<{
           tabIndex={0}
           onPointerDown={handleResizeStart}
           onKeyDown={handleResizeKeyDown}
-          title="拖拉調整全域任務平台寬度；方向鍵也可微調"
+          title="拖拉調整所有任務寬度；方向鍵也可微調"
           className="task-workbench-resize-handle absolute right-0 top-0 z-30 h-full w-3 cursor-col-resize focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
           data-task-workbench-resize-handle="true"
         />
         <div
-          className={previewedPanel === 'task-workbench' ? 'relative flex min-h-0 flex-1 flex-col ring-2 ring-inset ring-primary-400/95' : 'relative flex min-h-0 flex-1 flex-col'}
+          className="relative flex min-h-0 flex-1 flex-col"
           data-panel-preview-subtree={previewedPanel === 'task-workbench' ? 'task-workbench' : undefined}
         >
           <div
-            className={previewedPanel === 'task-workbench' ? 'relative border border-primary-500 bg-primary-50/70 px-3 py-2.5 ring-2 ring-inset ring-primary-500' : 'relative border border-slate-300 bg-gradient-to-r from-white via-slate-50 to-slate-100 px-3 py-2.5 shadow-[0_1px_0_rgba(15,23,42,0.08)]'}
+            className={previewedPanel === 'task-workbench' ? 'relative h-[43px] shrink-0 border border-slate-300 bg-primary-50/70 px-3 py-1' : 'relative h-[43px] shrink-0 border border-slate-300 bg-gradient-to-r from-white via-slate-50 to-slate-100 px-3 py-1 shadow-[0_1px_0_rgba(15,23,42,0.08)]'}
             data-task-workbench-filter-control-area="true"
             data-panel-preview-source={previewedPanel === 'task-workbench' ? 'task-workbench' : undefined}
           >
           <div className="flex items-center gap-2">
             <div className="min-w-0 shrink-0 px-1 py-1" data-task-command-center-title="true">
               <div className="whitespace-nowrap text-sm font-black text-slate-700">
-                全域任務平台
+                所有任務
               </div>
             </div>
             <button
@@ -1276,7 +1390,7 @@ const TaskWorkbenchPanel: React.FC<{
               type="button"
               onClick={closePanel}
               className="ml-auto inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700"
-              title="收合全域任務平台"
+              title="收合所有任務"
               data-task-workbench-collapse-toggle="true"
             >
               <ChevronLeft size={16} />
@@ -1296,11 +1410,15 @@ const TaskWorkbenchPanel: React.FC<{
                 filters={selectedFilters}
                 selectedBoardId={selectedBoardId}
                 showContainersInAllTasks={panelPrefs.showContainersInAllTasks}
-                tags={tags}
+                tags={selectedTagOptions}
                 onSelectedBoardChange={handleSelectedBoardChange}
                 onShowContainersInAllTasksChange={showContainersInAllTasks => patchPanelPrefs({ showContainersInAllTasks })}
                 updateFilters={updateSelectedFilters}
                 resetFilters={resetSelectedFilters}
+                disabled={filtersLocked}
+                warning={filterWarning}
+                peopleOptionsStatus={selectedOptionStatus}
+                tagOptionsStatus={selectedOptionStatus}
               />
             </div>
           ) : null}
@@ -1308,9 +1426,19 @@ const TaskWorkbenchPanel: React.FC<{
 
         <div
           ref={laneStackRef}
-          className="flex min-h-0 flex-1 flex-col overflow-hidden"
+          className="flex min-h-0 flex-1 flex-col overflow-hidden bg-slate-200"
           data-task-workbench-lane-stack="true"
         >
+          {filtersLocked ? (
+            <div
+              className="m-3 flex min-h-32 items-center justify-center rounded-md border border-amber-300 bg-amber-50 px-4 text-center text-sm font-semibold text-amber-800"
+              data-task-workbench-source-state="locked"
+              role="alert"
+            >
+              {filterWarning || '所有任務篩選偏好無法載入，請重新載入後再試。'}
+            </div>
+          ) : (
+          <>
           <WorkbenchUnclassifiedSection
             tasks={unplacedTasks}
             canCreateTask={canCreateTask}
@@ -1332,7 +1460,7 @@ const TaskWorkbenchPanel: React.FC<{
             onPointerDown={handleLaneResizeStart}
             onKeyDown={handleLaneResizeKeyDown}
             title="拖拉調整未歸位與已歸位高度；上下方向鍵也可微調"
-            className={`group relative z-30 flex h-3 shrink-0 touch-none cursor-row-resize items-center bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${isResizingLanes ? 'bg-primary/5' : ''}`}
+            className={`group relative z-30 flex h-3 shrink-0 touch-none cursor-row-resize items-center bg-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${isResizingLanes ? 'bg-primary/5' : ''}`}
             data-task-workbench-lane-resize-handle="true"
           >
             <span
@@ -1379,13 +1507,19 @@ const TaskWorkbenchPanel: React.FC<{
                   hierarchyDepth={getTaskHierarchyDepth(task, nodes)}
                 />
               ))}
-              {sortedPlacedTasks.length === 0 ? (
+              {workbenchSourceStatus === 'loading' ? (
+                <div className="px-1 py-1 text-sm font-semibold text-slate-500" data-task-workbench-source-state="loading">載入任務中…</div>
+              ) : workbenchSourceStatus === 'error' ? (
+                <div className="px-1 py-1 text-sm font-semibold text-amber-700" data-task-workbench-source-state="error">部分看板任務載入失敗。</div>
+              ) : sortedPlacedTasks.length === 0 ? (
                 <div className="px-1 py-1 text-sm font-semibold text-slate-500">
                   目前沒有可排序的任務。
                 </div>
               ) : null}
             </div>
           </div>
+          </>
+          )}
         </div>
 
         </div>

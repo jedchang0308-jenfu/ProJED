@@ -22,8 +22,6 @@ const files = {
   column: 'src/components/Wbs/KanbanColumn.tsx',
   workbench: 'src/components/TaskWorkbenchPanel.tsx',
   css: 'src/index.css',
-  spec: 'ai-doc/specs/SPEC-054-mobile-task-drag-precision.md',
-  qa: 'ai-doc/qa/QA-DEV-054-mobile-task-drag-precision.md',
   browser: 'scripts/verify-dev-054-mobile-task-drag-precision-browser.pw.js',
   packageJson: 'package.json',
 };
@@ -240,11 +238,6 @@ check('desktop presenter keeps its collision path while honoring the latest half
 check('DEV-054 static and browser commands are registered',
   source.packageJson.includes('"verify:dev-054-mobile-task-drag-precision"')
   && source.packageJson.includes('"verify:dev-054-mobile-task-drag-precision-browser"'));
-
-check('QA retains the required iOS and Android physical completion gate',
-  source.qa.includes('iOS') && source.qa.includes('Android')
-  && source.qa.includes('各 50') && source.qa.includes('wrong commit')
-  && source.spec.includes('required completion gate'));
 
 const failed = results.filter((result) => !result.ok);
 console.log(JSON.stringify({

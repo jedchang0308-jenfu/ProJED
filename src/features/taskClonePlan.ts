@@ -19,7 +19,6 @@ export type BuildTaskTreeClonePlanInput = Readonly<{
   createNoteId: () => string;
   createDependencyId: () => string;
   includeInternalDependencies?: boolean;
-  suffixRootTitles?: boolean;
 }>;
 
 const collectSourceForest = (
@@ -88,7 +87,7 @@ export const buildTaskTreeClonePlan = (input: BuildTaskTreeClonePlanInput): Task
       id,
       storageId: undefined,
       parentId,
-      title: isRoot && input.suffixRootTitles !== false ? `${source.title || '未命名任務'}（副本）` : source.title,
+      title: source.title,
       detailNotes: source.detailNotes?.map(note => ({ ...note, id: input.createNoteId() })),
       assigneeIds: source.assigneeIds ? [...source.assigneeIds] : undefined,
       collaboratorIds: source.collaboratorIds ? [...source.collaboratorIds] : undefined,

@@ -1,4 +1,4 @@
-import type { LegacyTaskFilterStateV4, TaskFilterQuery } from '../../features/taskFilters';
+import type { LegacyTaskFilterQueryV5, LegacyTaskFilterStateV4 } from '../../features/taskFilters';
 
 export type Json =
   | string
@@ -45,7 +45,7 @@ export type CalendarSubscriptionBoardFilterOverride = Partial<LegacyTaskFilterSt
 export type CalendarSubscriptionBoardFilterSnapshot = {
   included: boolean;
   date_types: CalendarSubscriptionDateType[];
-  filters: TaskFilterQuery;
+  filters: LegacyTaskFilterQueryV5;
 };
 export type CalendarSubscriptionLegacyBoardFilterSnapshot = {
   included: boolean;

@@ -9,7 +9,7 @@ import type {
   Json,
   TenantRole,
 } from './database.types';
-import { normalizeTaskFilters } from '../../features/taskFilters';
+import { normalizePersistedTaskFiltersV5 } from '../../features/taskFilters';
 import { configuredSupabaseUrl, isSupabaseConfigured, supabase } from './client';
 
 export type CalendarSubscription = {
@@ -219,7 +219,7 @@ const normalizeV4Filters = async (filters: CalendarSubscriptionFilters): Promise
     normalizedBoardFilters[project.id] = {
       included: snapshot.included,
       date_types: dateTypes,
-      filters: normalizeTaskFilters(snapshot.filters),
+      filters: normalizePersistedTaskFiltersV5(snapshot.filters),
     };
   });
   if (used.size !== Object.keys(boardFilters).length || !Object.values(normalizedBoardFilters).some(snapshot => snapshot.included)) {
@@ -253,8 +253,10 @@ const normalizeBoardOverrides = async (
       continue;
     }
 
+    const legacyFilters = { ...override };
+    delete legacyFilters.enabled;
     normalized[boardRef.id] = {
-      ...normalizeTaskFilters(override),
+      ...normalizePersistedTaskFiltersV5(legacyFilters),
       enabled: true,
     };
   }
@@ -285,7 +287,7 @@ const normalizeV2Filters = async (filters: CalendarSubscriptionFilters): Promise
     project_ids: resolvedProjectIds,
     assignee: normalizeAssigneeFilter(filters.assignee),
     date_types: normalizeDateTypes(filters.date_types),
-    global_filter: normalizeTaskFilters(filters.global_filter),
+    global_filter: normalizePersistedTaskFiltersV5(filters.global_filter),
     ...(Object.keys(boardOverrides).length > 0 ? { board_overrides: boardOverrides } : {}),
   };
 };
@@ -329,7 +331,7 @@ const normalizeV3Filters = async (filters: CalendarSubscriptionFilters): Promise
     normalizedBoardFilters[project.id] = {
       included: snapshot.included,
       date_types: snapshotDateTypes,
-      filters: normalizeTaskFilters(snapshot.filters),
+      filters: normalizePersistedTaskFiltersV5(snapshot.filters),
     };
   });
 

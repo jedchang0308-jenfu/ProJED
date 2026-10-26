@@ -1,5 +1,6 @@
 /* eslint-disable */
 async (page) => {
+  const selectedCaseIds = [...new Set((new URL(page.url()).searchParams.get('qaCases') || '').split(',').filter(Boolean))];
 const baseUrl = page.url().split('/').slice(0, 3).join('/');
   const diagnostics = [];
   page.on('console', (message) => diagnostics.push(`console:${message.type()}:${message.text()}`));
@@ -461,6 +462,7 @@ const baseUrl = page.url().split('/').slice(0, 3).join('/');
   };
 
   const runCase = async (id, scenario, fn) => {
+    if (selectedCaseIds.length && !selectedCaseIds.includes(id)) return;
     const startedAt = new Date().toISOString();
     try {
       const details = await fn();
@@ -1108,9 +1110,16 @@ const baseUrl = page.url().split('/').slice(0, 3).join('/');
       return { screenshotPath, taskId, modalTaskId };
     });
 
+    for (const id of selectedCaseIds) {
+      if (!results.some((result) => result.id === id)) {
+        results.push({ id, scenario: 'requested case must exist and execute', result: 'FAIL', error: 'Unknown or unexecuted qaCases selection' });
+      }
+    }
     const failCount = results.filter((result) => result.result !== 'PASS').length;
     const summary = {
       ok: failCount === 0,
+      selectedCaseIds: selectedCaseIds.length ? selectedCaseIds : null,
+      evidenceLayer: 'browser-synthetic-touch',
       summary: {
         pass: results.length - failCount,
         fail: failCount,
@@ -1120,6 +1129,7 @@ const baseUrl = page.url().split('/').slice(0, 3).join('/');
     };
 
     await page.evaluate((payload) => {
+      window.__DEV029_ARTIFACT = payload;
       localStorage.setItem('dev029-mobile-pan-operation-matrix-result', JSON.stringify(payload));
     }, summary).catch(() => undefined);
 

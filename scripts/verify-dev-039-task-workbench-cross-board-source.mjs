@@ -121,7 +121,7 @@ assert(
     source.resultProjection.includes('if (!isSameBoard(parent, boardId)) return false') &&
     source.resultProjection.includes('if (!isTaskEffectivelyVisible(node, nodesById, { boardId })) return') &&
     source.resultProjection.indexOf('if (!isTaskEffectivelyVisible(node, nodesById, { boardId })) return') <
-      source.resultProjection.indexOf('matchesTaskFilters(node, filters)'),
+      source.resultProjection.indexOf('compiled.matches(node)'),
 );
 
 assert(

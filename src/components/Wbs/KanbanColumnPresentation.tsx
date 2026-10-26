@@ -55,7 +55,7 @@ export const KanbanColumnPresentation: React.FC<KanbanColumnPresentationProps> =
   <>
     <div
       {...headerProps}
-      className={`group mobile-pan-item flex flex-col gap-1 bg-slate-50 px-[10px] py-[8px] transition-colors hover:bg-white ${headerClassName}`}
+      className={`group mobile-pan-item flex flex-col gap-1 bg-white px-[10px] py-[8px] transition-colors hover:bg-slate-50 ${headerClassName}`}
     >
       {placeholder ? (
         <div

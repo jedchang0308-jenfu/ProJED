@@ -26,6 +26,8 @@ const GanttView = () => {
     } = useBoardStore();
     const taskFilters = useTaskFilterStore(state => state.filters);
     const resetTaskFilters = useTaskFilterStore(state => state.resetFilters);
+    const taskFiltersLocked = useTaskFilterStore(state => state.controlsLocked);
+    const taskFilterWarning = useTaskFilterStore(state => state.warning);
 
     const [isTaskListOpen, setIsTaskListOpen] = useState(true);
     const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
@@ -69,6 +71,7 @@ const GanttView = () => {
     );
     const taskLoading = useWbsStore(s => s.loading);
     const taskLoadError = useWbsStore(s => s.error);
+    const taskResultError = taskLoadError || (taskFiltersLocked ? taskFilterWarning || '篩選偏好無法載入' : null);
     const filterProjection = useMemo(
         () => projectTaskFilterResults(projectionNodes, taskFilters, { boardId: activeBoardId }),
         [activeBoardId, projectionNodes, taskFilters],
@@ -212,10 +215,10 @@ const GanttView = () => {
             <TaskFilterResultState
                 projection={filterProjection}
                 loading={taskLoading}
-                error={taskLoadError}
+                error={taskResultError}
                 onReset={resetTaskFilters}
             />
-            {!taskLoading && !taskLoadError && filterProjection.matchedTaskIds.size > 0 ? <div className="flex-1 flex overflow-hidden">
+            {!taskLoading && !taskResultError && filterProjection.matchedTaskIds.size > 0 ? <div className="flex-1 flex overflow-hidden">
                 {/* Left Sidebar */}
                 <SharedTaskSidebar
                     flattenedItems={flattenedItems}

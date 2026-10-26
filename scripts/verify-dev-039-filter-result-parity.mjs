@@ -120,8 +120,11 @@ assert(
     source.assigneeOptions.includes('workspaceMemberLabels.get(assignmentId)') &&
     source.assigneeOptions.includes('member.boardId !== boardId') &&
     source.assigneeOptions.includes('node.boardId !== boardId') &&
-    source.statusFilterBar.includes('createBoardAssigneeFilterOptions(activeBoardId, boardMembers, nodes, workspaceMembers)') &&
-    source.taskWorkbench.includes('createBoardAssigneeFilterOptions(selectedBoardId, boardMembers, nodes, workspaceMembers)'),
+    source.statusFilterBar.includes('createBoardAssigneeFilterOptions(activeBoardId, boardMembers, nodes, workspaceMembers, filters.people.ids)') &&
+    source.taskWorkbench.includes('createBoardAssigneeFilterOptions(selectedBoardId, filterOptionSource.boardMembers, nodes, filterOptionSource.workspaceMembers, selectedFilters.people.ids)') &&
+    source.taskWorkbench.includes('memberService.listBoardMembers(workspaceId, boardId)') &&
+    source.taskWorkbench.includes('selectedWorkspaceId: selectedBoardOption?.workspaceId ?? null') &&
+    source.taskWorkbench.includes('optionSourceBoardId: filterOptionSource.boardId'),
 );
 
 assert(

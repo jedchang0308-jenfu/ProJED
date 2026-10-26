@@ -1,4 +1,4 @@
-import type { BoardMember, CollaborationMemberProfile, TaskNode, WorkspaceMember } from '../../types';
+import type { BoardMember, CollaborationMemberProfile, TaskNode, TaskTag, WorkspaceMember } from '../../types';
 import { getTaskAssignmentIds } from '../../utils/taskAssignments';
 
 export type TaskAssigneeFilterOption = {
@@ -31,6 +31,7 @@ export const createBoardAssigneeFilterOptions = (
   boardMembers: BoardMember[],
   nodesById: Record<string, TaskNode | null | undefined>,
   workspaceMembers: WorkspaceMember[] = [],
+  selectedIds: readonly string[] = [],
 ): TaskAssigneeFilterOption[] => {
   const labels = new Map<string, string>();
   const workspaceMemberLabels = createWorkspaceMemberLabels(workspaceMembers);
@@ -52,7 +53,26 @@ export const createBoardAssigneeFilterOptions = (
     });
   });
 
+  selectedIds.forEach(id => {
+    if (!labels.has(id)) labels.set(id, workspaceMemberLabels.get(id) || createFallbackAssigneeLabel(id));
+  });
+
   return Array.from(labels.entries())
     .map(([id, label]) => ({ id, label }))
     .sort((left, right) => left.label.localeCompare(right.label, 'zh-Hant'));
+};
+
+export const createTaskTagFilterOptions = (
+  boardId: string | null | undefined,
+  tags: Array<Pick<TaskTag, 'id' | 'name'>>,
+  nodesById: Record<string, TaskNode | null | undefined>,
+  selectedIds: readonly string[] = [],
+) => {
+  const labels = new Map(tags.map(tag => [tag.id, tag.name || tag.id]));
+  Object.values(nodesById).forEach(node => {
+    if (!node || node.isArchived || node.boardId !== boardId) return;
+    (node.tagIds ?? []).forEach(id => { if (!labels.has(id)) labels.set(id, `標籤 ${id.slice(0, 8)}`); });
+  });
+  selectedIds.forEach(id => { if (!labels.has(id)) labels.set(id, `標籤 ${id.slice(0, 8)}`); });
+  return Array.from(labels, ([id, name]) => ({ id, name })).sort((left, right) => left.name.localeCompare(right.name, 'zh-Hant'));
 };

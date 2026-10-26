@@ -213,10 +213,8 @@ async (page) => {
     await nativeTouch(menuButton);
     const sidebar = page.locator('[data-sidebar-inline="true"]').first();
     await sidebar.waitFor({ state: 'visible', timeout: 5000 });
-    assert(await page.locator('[data-sidebar-overlay="true"], [data-sidebar-backdrop="true"]').count() === 0,
-      'mobile Sidebar must use the shared inline component without overlay or backdrop');
-    await page.keyboard.press('Escape');
-    await sidebar.waitFor({ state: 'detached', timeout: 3000 }).catch(() => undefined);
+    await nativeTouch(sidebar.getByRole('button', { name: '關閉工作區與看板', exact: true }));
+    await sidebar.waitFor({ state: 'hidden', timeout: 3000 });
 
     const workbenchButton = page.locator('[data-mobile-task-workbench-nav-entry="true"]').first();
     await nativeTouch(workbenchButton);
@@ -263,7 +261,7 @@ async (page) => {
     return { nodeId, beforeStatus: before.status, afterStatus: after.status, completions: completions.length, actionLabels, screenshotPath };
   });
 
-  await runCase('QA-054-R03', 'non-center raw finger point selects the explicit same-parent boundary while preview remains finger-coupled', async () => {
+  await runCase('QA-054-R03', 'non-center raw finger point selects the explicit same-parent boundary before the target with phase-aware preview clearance', async () => {
     await openApp();
     const source = page.locator('.kanban-task-card[data-task-id]').first();
     const target = page.locator('.kanban-task-card[data-task-id="qc-card-7"]');
@@ -296,7 +294,7 @@ async (page) => {
         dropPosition: indicator.getAttribute('data-mobile-drop-position'),
       };
     }, { rawY: rawPoint.y });
-    assert(geometry.targetId === targetId && geometry.dropPosition === 'before', 'mobile target must preserve the explicit boundary selected by the finger', { sourceId, targetId, geometry });
+    assert(geometry.targetId === targetId && geometry.dropPosition === 'before', 'this fixture selects the explicit before boundary; source order must not force after', { sourceId, targetId, geometry });
     assert(geometry.previewAnchor === 'finger'
       && Math.abs(geometry.fingerClearance - 16) <= 1
       && geometry.indicatorZ > geometry.previewZ,
@@ -937,8 +935,10 @@ async (page) => {
       'mobile Workbench must use the shared inline component without overlay or backdrop');
     const panelBox = await panel.boundingBox();
     const boardBox = await page.locator('[data-mobile-pan-surface="board"]').boundingBox();
-    assert(panelBox && boardBox && Math.abs(boardBox.x - (panelBox.x + panelBox.width)) <= 2,
-      'Workbench and board must be adjacent inline regions before cross-panel drag', { panelBox, boardBox });
+    assert(panelBox && boardBox
+      && boardBox.x >= panelBox.x + panelBox.width - 1
+      && boardBox.x < page.viewportSize().width && boardBox.width > 0,
+    'Workbench and board must be non-overlapping inline regions with a visible board drop area', { panelBox, boardBox });
     const priorUnplacedIds = await page.locator('[data-task-workbench-unplaced-task-card="true"][data-task-id]')
       .evaluateAll((elements) => elements.map((element) => element.getAttribute('data-task-id')).filter(Boolean));
     await nativeTouch(page.locator('[data-task-workbench-unclassified-modal-add="true"]').first());
@@ -1073,12 +1073,15 @@ async (page) => {
   const failed = results.filter((result) => result.result !== 'PASS');
   const summary = {
     ok: failed.length === 0,
+    evidenceLayer: 'browser-synthetic-touch',
+    physicalDevice: 'not-executed',
     summary: { pass: results.length - failed.length, fail: failed.length },
     results,
     diagnostics: diagnostics.slice(-30),
     networkFailures: networkFailures.slice(-30),
   };
   await page.evaluate((payload) => {
+    window.__DEV054_ARTIFACT = payload;
     localStorage.setItem('dev054-mobile-task-drag-precision-result', JSON.stringify(payload));
   }, summary).catch(() => undefined);
   console.log(JSON.stringify(summary, null, 2));

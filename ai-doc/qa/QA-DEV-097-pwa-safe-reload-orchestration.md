@@ -1,6 +1,8 @@
 # QA-DEV-097：PWA 安全重新載入協調驗證計畫
 
 狀態：`QA Executed / Local Automated QA PASS / Independent QC PASS / Physical Device Supplemental Not Verified / Not Released`
+
+2026-10-19 範圍修訂：依使用者精簡自用關卡指示，DEV-054 的手機裝置確認不是 DEV-097 的完成／發布前置。下方 physical supplemental 未執行仍如實保留；本任務只依 PWA dirty owner、cancel／flush、資料保留、版本／cache 相容及更新恢復的實際證據判定，變更或新失敗才刷新受影響案例。解除此連動不代表 production／實機驗收，也不改既有 release gate。
 關聯 DEV：DEV-097 / DEV-096 / DEV-041 / DEV-034 / DEV-083
 關聯 SPEC：`ai-doc/specs/SPEC-041-pwa-update-notification-cache-recovery.md`
 關聯 ADR：`ai-doc/decisions/ADR-047-pwa-per-client-reload-isolation.md`

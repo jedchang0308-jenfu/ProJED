@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "taskId": "DEV-118",
+  "environment": "production",
+  "origin": "https://projed-cc78d.web.app/",
+  "observedDate": "2026-10-20",
+  "browserSurface": "Chrome extension browser",
+  "tabId": "1200850183",
+  "authentication": "existing authenticated session; no credentials entered",
+  "release": {
+    "releaseId": "20261019143720-d403cd",
+    "hostingRelease": "1792420743052000",
+    "hostingVersion": "adcd8400adce22dd",
+    "sourceCommit": "920b3744331d5f9b2cecc5ab45a6ffadb248efd4"
+  },
+  "cases": [
+    {
+      "id": "PROD-BROWSER-118-01",
+      "name": "全部亮起時點選任一狀態只關閉該項",
+      "result": "PASS",
+      "observed": "完成由 Value 0 切為 1 後四個具體狀態與全部皆亮；再點選待辦後，待辦為 Value 0，其餘進行中、暫緩、完成維持 Value 1。"
+    },
+    {
+      "id": "PROD-BROWSER-118-02",
+      "name": "取消最後一項恢復全部",
+      "result": "PASS",
+      "observed": "依序取消待辦、進行中、暫緩，再取消最後的完成；篩選器標題回到預設全部顯示，全部與四個具體狀態皆為 Value 1。"
+    },
+    {
+      "id": "PROD-BROWSER-118-03",
+      "name": "重新載入後保留選取",
+      "result": "PASS",
+      "observed": "恢復原本三項狀態選取後重新載入；重新開啟篩選器仍為待辦、進行中、暫緩 Value 1，完成 Value 0，全部 Value 0；標題為過濾1項。"
+    }
+  ],
+  "scope": "Targeted authenticated production smoke for status-category interaction and reload persistence; not a full category/device matrix.",
+  "sideEffects": "Temporary filter changes were restored to the pre-smoke state before reload verification; no task content was edited."
+}

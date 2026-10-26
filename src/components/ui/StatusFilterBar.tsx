@@ -6,7 +6,7 @@ import { useTaskFilterStore } from '../../store/useTaskFilterStore';
 import { useMemberStore } from '../../store/useMemberStore';
 import { useWbsStore } from '../../store/useWbsStore';
 import { useTagStore } from '../../store/useTagStore';
-import { countActiveTaskFilters, createBoardAssigneeFilterOptions } from '../../features/taskFilters';
+import { countActiveTaskFilters, createBoardAssigneeFilterOptions, createTaskTagFilterOptions } from '../../features/taskFilters';
 import TaskConditionFilterControls from './TaskConditionFilterControls';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 import { cn } from '../../utils/cn';
@@ -57,20 +57,50 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = ({
   const syncStatus = useTaskFilterStore(s => s.syncStatus);
   const syncWarning = useTaskFilterStore(s => s.warning);
   const hydrationStatus = useTaskFilterStore(s => s.hydrationStatus);
+  const controlsLocked = useTaskFilterStore(s => s.controlsLocked);
   const nodes = useWbsStore(s => s.nodes);
+  const taskSourceLoading = useWbsStore(s => s.loading);
+  const taskSourceError = useWbsStore(s => s.error);
+  const loadedTaskBoardIds = useWbsStore(s => s.loadedBoardIds);
   const { canEditTask } = useBoardPermissions();
   const workspaceMembers = useMemberStore(s => s.workspaceMembers);
   const boardMembers = useMemberStore(s => s.boardMembers);
+  const peopleLoading = useMemberStore(s => s.loading);
+  const peopleError = useMemberStore(s => s.error);
+  const membersLoadedWorkspaceId = useMemberStore(s => s.loadedWorkspaceId);
+  const membersLoadedBoardId = useMemberStore(s => s.loadedBoardId);
   const tags = useTagStore(s => s.tags);
+  const tagsLoading = useTagStore(s => s.loading);
+  const tagsError = useTagStore(s => s.error);
+  const tagsLoadedWorkspaceId = useTagStore(s => s.loadedWorkspaceId);
   const createTag = useTagStore(s => s.createTag);
   const assigneeOptions = React.useMemo(
-    () => createBoardAssigneeFilterOptions(activeBoardId, boardMembers, nodes, workspaceMembers),
-    [activeBoardId, boardMembers, nodes, workspaceMembers],
+    () => createBoardAssigneeFilterOptions(activeBoardId, boardMembers, nodes, workspaceMembers, filters.people.ids),
+    [activeBoardId, boardMembers, filters.people.ids, nodes, workspaceMembers],
+  );
+  const tagOptions = React.useMemo(
+    () => createTaskTagFilterOptions(activeBoardId, tags, nodes, filters.tags.ids),
+    [activeBoardId, filters.tags.ids, nodes, tags],
   );
   const activeFilterCount = countActiveTaskFilters(filters);
   const hasActiveFilter = activeFilterCount > 0;
   const hasPendingUpdate = pendingUpdateCount > 0;
   const hasSyncFailure = syncStatus === 'sync-error';
+  const taskOptionsStatus: 'ready' | 'loading' | 'error' = taskSourceError
+    ? 'error'
+    : taskSourceLoading || !activeBoardId || !loadedTaskBoardIds.includes(activeBoardId)
+      ? 'loading'
+      : 'ready';
+  const peopleOptionsStatus: 'ready' | 'loading' | 'error' = peopleError || taskOptionsStatus === 'error'
+    ? 'error'
+    : peopleLoading || taskOptionsStatus === 'loading' || membersLoadedWorkspaceId !== activeWorkspaceId || membersLoadedBoardId !== activeBoardId
+      ? 'loading'
+      : 'ready';
+  const tagOptionsStatus: 'ready' | 'loading' | 'error' = tagsError || taskOptionsStatus === 'error'
+    ? 'error'
+    : tagsLoading || taskOptionsStatus === 'loading' || tagsLoadedWorkspaceId !== activeWorkspaceId
+      ? 'loading'
+      : 'ready';
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -93,6 +123,7 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = ({
       event.preventDefault();
       event.stopPropagation();
       setIsOpen(false);
+      window.requestAnimationFrame(() => triggerRef.current?.focus());
     };
     updatePanelPosition();
     window.addEventListener('resize', updatePanelPosition);
@@ -189,23 +220,26 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = ({
           <div className="flex items-center justify-between border-b border-primary-100 bg-primary-50/70 px-3 py-2.5">
             <span className="text-xs font-bold text-slate-700">篩選條件</span>
             <span className={cn('rounded-full px-2 py-1 text-[10px] font-bold', hasActiveFilter ? 'bg-primary-600 text-white' : 'bg-white text-slate-500 ring-1 ring-slate-200')}>
-              {hasActiveFilter ? `${activeFilterCount} 項啟用` : '未啟用'}
+              {hasActiveFilter ? `過濾${activeFilterCount}項` : '預設全部顯示'}
             </span>
           </div>
-          <div className="px-3 py-3">
+          <div className="px-3 py-2">
             <TaskConditionFilterControls
+              variant="matrix-v6"
               value={filters}
               assigneeOptions={assigneeOptions}
-              tags={tags.map(tag => ({ id: tag.id, name: tag.name }))}
+              tags={tagOptions}
               onChange={setQuery}
               onClearPeople={clearAssigneeFilters}
               onClearTags={clearTagFilters}
-              disabled={hydrationStatus === 'hydrating'}
+              disabled={hydrationStatus === 'hydrating' || controlsLocked}
+              peopleOptionsStatus={peopleOptionsStatus}
+              tagOptionsStatus={tagOptionsStatus}
               tagActions={(
                 <button
                   type="button"
                   onClick={() => void handleCreateTag()}
-                  disabled={!activeWorkspaceId || !canEditTask || hydrationStatus === 'hydrating'}
+                  disabled={!activeWorkspaceId || !canEditTask || hydrationStatus === 'hydrating' || controlsLocked}
                   className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] font-semibold text-primary hover:bg-primary/5 disabled:cursor-not-allowed disabled:text-slate-300"
                 >
                   <Plus size={11} />

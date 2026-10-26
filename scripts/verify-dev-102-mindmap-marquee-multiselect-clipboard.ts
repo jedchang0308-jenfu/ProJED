@@ -15,7 +15,9 @@ import {
   getMindMapCutStructureFingerprint,
   normalizeMindMapForestRoots,
   planMindMapCopyPasteAfter,
+  planMindMapCopyPasteUnder,
   planMindMapCutPasteAfter,
+  planMindMapCutPasteUnder,
 } from '../src/components/MindMap/mindMapClipboard';
 import { resolveTaskMenu } from '../src/interactions/task/resolveTaskInteraction';
 import type { InteractionContext } from '../src/interactions/task/types';
@@ -84,10 +86,23 @@ const copyPlan = planMindMapCopyPasteAfter({
   createNoteId: () => `note-${idSequence += 1}`,
   createDependencyId: () => `dep-${idSequence += 1}`,
 });
-assert.equal(copyPlan.clonePlan.nodes[0].title, 'a（副本）');
+assert.equal(copyPlan.clonePlan.nodes[0].title, 'a');
 assert.equal(copyPlan.clonePlan.dependencies.length, 1);
 assert.ok(copyPlan.clonePlan.nodes.every(node => Number.isSafeInteger(node.order)));
 assert.ok(Object.values(copyPlan.updatesById).every(update => Number.isSafeInteger(update.order)));
+const copyUnderPlan = planMindMapCopyPasteUnder({
+  clipboard: copyClipboard,
+  anchorTaskId: 'b',
+  currentNodes: nodes,
+  now: 21,
+  createTaskId: () => `copy-under-${idSequence += 1}`,
+  createNoteId: () => `note-under-${idSequence += 1}`,
+  createDependencyId: () => `dep-under-${idSequence += 1}`,
+});
+const copyUnderRoot = copyUnderPlan.clonePlan.nodes.find(node => node.title === 'a');
+assert.equal(copyUnderPlan.destinationParentId, 'b');
+assert.equal(copyUnderRoot?.parentId, 'b');
+assert.equal(copyUnderRoot?.order, 1, 'copy paste must append cloned roots under the anchor');
 
 const cutClipboard = createMindMapCutClipboard('board-102', ['a-2', 'b'], nodes, 30);
 assert.equal(cutClipboard.sourceStructureFingerprint, getMindMapCutStructureFingerprint('board-102', ['a-2', 'b'], nodes));
@@ -101,6 +116,23 @@ const cutPlan = planMindMapCutPasteAfter({
 assert.equal(cutPlan.destinationParentId, null);
 assert.deepEqual(cutPlan.rootIds, ['a-2', 'b']);
 assert.ok(Object.values(cutPlan.updatesById).every(update => Number.isSafeInteger(update.order)));
+const cutUnderClipboard = createMindMapCutClipboard('board-102', ['a-2'], nodes, 31);
+const cutUnderPlan = planMindMapCutPasteUnder({
+  clipboard: cutUnderClipboard,
+  anchorTaskId: 'b',
+  nodes,
+  sideOverrides: { a: 'right', b: 'left' },
+  anchorSide: 'left',
+});
+assert.equal(cutUnderPlan.destinationParentId, 'b');
+assert.equal(cutUnderPlan.updatesById['a-2']?.parentId, 'b');
+assert.throws(() => planMindMapCutPasteUnder({
+  clipboard: cutUnderClipboard,
+  anchorTaskId: 'a-2',
+  nodes,
+  sideOverrides: {},
+  anchorSide: 'right',
+}), /不能貼在剪下來源或其子任務之下/);
 assert.throws(() => planMindMapCutPasteAfter({
   clipboard: cutClipboard,
   anchorTaskId: 'b-1',
@@ -134,6 +166,7 @@ assert.equal(mindMapMenu.includes('task.duplicate'), false);
 
 const source = {
   view: read('src/components/MindMap/MindMapView.tsx'),
+  keyboard: read('src/components/MindMap/mindMapKeyboard.ts'),
   node: read('src/components/MindMap/MindMapNode.tsx'),
   menu: read('src/components/MindMap/MindMapContextMenu.tsx'),
   actionMenu: read('src/interactions/task/TaskActionMenu.tsx'),
@@ -149,6 +182,16 @@ assert.match(source.view, /nodeElementRegistryRef/);
 assert.match(source.view, /getBoundingClientRect/);
 assert.match(source.view, /selectionStore\.setSelection/);
 assert.match(source.view, /MindMapContextMenu/);
+assert.match(source.view, /planMindMapCopyPasteUnder/);
+assert.match(source.keyboard, /type: 'copy-selection'/);
+assert.match(source.keyboard, /type: 'cut-selection'/);
+assert.match(source.keyboard, /type: 'paste-selection'/);
+assert.match(source.view, /handleMindMapPaste\(selectedNodeId \|\| undefined\)/);
+assert.match(source.view, /pasteQueueRef/);
+assert.match(source.view, /useWbsStore\.getState\(\)\.nodes/);
+assert.match(source.view, /selectMindMapPastedRoots/);
+assert.match(source.view, /pasteBurstAnchorRef/);
+assert.match(source.view, /resetPasteBurstAnchor/);
 assert.doesNotMatch(source.view, /setContextMenuState\(/);
 assert.match(source.node, /data-task-placement-id/);
 assert.match(source.menu, /data-mindmap-context-menu/);
@@ -161,6 +204,8 @@ assert.match(source.actionMenu, /aria-disabled/);
 assert.match(source.actionMenu, /disabledReason/);
 assert.match(source.actionMenu, /visibleActionIds/);
 assert.match(source.actionMenu, /compact/);
+assert.match(source.actionMenu, /'task\.paste-after': '貼上'/);
+assert.match(source.catalog, /id: 'task\.paste-after', label: '貼上'/);
 assert.match(source.catalog, /defaultMenu: false/);
 assert.match(source.store, /commitNodeBatch/);
 assert.match(source.store, /NodeBatchCommitStatus = 'committed' \| 'rejected' \| 'compensated' \| 'indeterminate'/);

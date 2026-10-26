@@ -65,6 +65,7 @@ export interface WbsBoardState {
   // 選項與過濾狀態
   loading: boolean;
   error: string | null;
+  loadedBoardIds: string[];
   pendingPlacementNodeIds: Record<string, string>;
   /** Non-owning placements; task content remains in `nodes` only. */
   trackingReferences: TaskTrackingReference[];
@@ -876,6 +877,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
   kanbanConfigs: {},
   loading: false,
   error: null,
+  loadedBoardIds: [],
   pendingPlacementNodeIds: {},
   trackingReferences: [],
   stagedTrackingReferences: [],
@@ -919,7 +921,12 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       return acc;
     }, {} as Record<string, TaskNode>);
 
-    set({ nodes: nodesRecord });
+    const loadedBoardIds = options.scopeBoardIds
+      ? Array.from(new Set(options.preserveOutOfScope
+        ? [...currentState.loadedBoardIds, ...options.scopeBoardIds]
+        : options.scopeBoardIds))
+      : Array.from(new Set(nodesWithLocalUnplacedTasks.map(node => node.boardId).filter(Boolean)));
+    set({ nodes: nodesRecord, loadedBoardIds });
     get()._buildIndices(nodesRecord);
   },
 
@@ -1335,7 +1342,6 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       createNoteId,
       createDependencyId,
       includeInternalDependencies,
-      suffixRootTitles: true,
     });
     const copiedNodes = clonePlan.nodes.map(node => normalizeTaskStatusNode(normalizeTaskAssignmentNode(node)));
     const copiedDependencies = [...clonePlan.dependencies];
@@ -2960,3 +2966,13 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
   }
 
 }));
+
+// The WBS store is the shared identity map for every task surface. Replacing
+// only part of the module graph during Vite Fast Refresh can leave mounted
+// consumers subscribed to different store instances: existing tasks appear in
+// both snapshots, while newly pasted tasks exist in only one. Reload the local
+// development page when this central store changes so every surface binds to
+// the same instance. Production builds do not expose import.meta.hot.
+if (import.meta.hot) {
+  import.meta.hot.accept(() => window.location.reload());
+}

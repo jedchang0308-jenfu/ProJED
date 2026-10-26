@@ -138,13 +138,18 @@ const getSiblings = (nodes: Readonly<Record<string, TaskNode>>, boardId: string,
     .sort((left, right) => left.order - right.order || left.id.localeCompare(right.id))
 );
 
-export const planMindMapCutPasteAfter = (input: Readonly<{
+type MindMapCutPastePlacement = 'after' | 'under';
+
+const planMindMapCutPaste = (
+  input: Readonly<{
   clipboard: MindMapCutClipboard;
   anchorTaskId: string;
   nodes: Readonly<Record<string, TaskNode>>;
   sideOverrides: Readonly<Record<string, MindMapDirection>>;
   anchorSide: MindMapDirection;
-}>): MindMapCutPastePlan => {
+  }>,
+  placement: MindMapCutPastePlacement,
+): MindMapCutPastePlan => {
   const { clipboard, anchorTaskId, nodes } = input;
   const anchor = nodes[anchorTaskId];
   if (!anchor || anchor.isArchived || anchor.boardId !== clipboard.boardId) throw new Error('貼上目標已失效。');
@@ -152,8 +157,10 @@ export const planMindMapCutPasteAfter = (input: Readonly<{
     throw new Error('剪下來源已變更，請重新剪下。');
   }
   const forestIds = new Set(collectMindMapForestTaskIds(clipboard.rootIds, nodes));
-  if (forestIds.has(anchorTaskId)) throw new Error('不能貼在剪下來源或其子任務之後。');
-  const destinationParentId = anchor.parentId || null;
+  if (forestIds.has(anchorTaskId)) {
+    throw new Error(`不能貼在剪下來源或其子任務之${placement === 'under' ? '下' : '後'}。`);
+  }
+  const destinationParentId = placement === 'under' ? anchorTaskId : anchor.parentId || null;
   const affectedParents = new Set<string | null>([
     destinationParentId,
     ...clipboard.rootIds.map(rootId => nodes[rootId]?.parentId || null),
@@ -165,10 +172,14 @@ export const planMindMapCutPasteAfter = (input: Readonly<{
     const rootsInScope = new Set(clipboard.rootIds.filter(rootId => (nodes[rootId]?.parentId || null) === parentId));
     let sequence = getSiblings(nodes, clipboard.boardId, parentId).filter(node => !rootsInScope.has(node.id));
     if (parentId === destinationParentId) {
-      const anchorIndex = sequence.findIndex(node => node.id === anchorTaskId);
-      if (anchorIndex < 0) throw new Error('貼上錨點不在目的層級。');
       const movingRoots = clipboard.rootIds.map(rootId => nodes[rootId]);
-      sequence = [...sequence.slice(0, anchorIndex + 1), ...movingRoots, ...sequence.slice(anchorIndex + 1)];
+      if (placement === 'under') {
+        sequence = [...sequence, ...movingRoots];
+      } else {
+        const anchorIndex = sequence.findIndex(node => node.id === anchorTaskId);
+        if (anchorIndex < 0) throw new Error('貼上錨點不在目的層級。');
+        sequence = [...sequence.slice(0, anchorIndex + 1), ...movingRoots, ...sequence.slice(anchorIndex + 1)];
+      }
     }
     sequence.forEach((node, index) => {
       if (!Number.isSafeInteger(index)) throw new Error('排序超出安全整數範圍。');
@@ -197,6 +208,22 @@ export const planMindMapCutPasteAfter = (input: Readonly<{
   };
 };
 
+export const planMindMapCutPasteAfter = (input: Readonly<{
+  clipboard: MindMapCutClipboard;
+  anchorTaskId: string;
+  nodes: Readonly<Record<string, TaskNode>>;
+  sideOverrides: Readonly<Record<string, MindMapDirection>>;
+  anchorSide: MindMapDirection;
+}>): MindMapCutPastePlan => planMindMapCutPaste(input, 'after');
+
+export const planMindMapCutPasteUnder = (input: Readonly<{
+  clipboard: MindMapCutClipboard;
+  anchorTaskId: string;
+  nodes: Readonly<Record<string, TaskNode>>;
+  sideOverrides: Readonly<Record<string, MindMapDirection>>;
+  anchorSide: MindMapDirection;
+}>): MindMapCutPastePlan => planMindMapCutPaste(input, 'under');
+
 export type MindMapCopyPastePlan = Readonly<{
   clonePlan: TaskTreeClonePlan;
   updatesById: Readonly<Record<string, Partial<TaskNode>>>;
@@ -204,7 +231,8 @@ export type MindMapCopyPastePlan = Readonly<{
   destinationParentId: string | null;
 }>;
 
-export const planMindMapCopyPasteAfter = (input: Readonly<{
+const planMindMapCopyPaste = (
+  input: Readonly<{
   clipboard: MindMapCopyClipboard;
   anchorTaskId: string;
   currentNodes: Readonly<Record<string, TaskNode>>;
@@ -212,22 +240,29 @@ export const planMindMapCopyPasteAfter = (input: Readonly<{
   createTaskId: () => string;
   createNoteId: () => string;
   createDependencyId: () => string;
-}>): MindMapCopyPastePlan => {
+  }>,
+  placement: MindMapCutPastePlacement,
+): MindMapCopyPastePlan => {
   const anchor = input.currentNodes[input.anchorTaskId];
   if (!anchor || anchor.isArchived || anchor.boardId !== input.clipboard.boardId) throw new Error('貼上目標已失效。');
-  const destinationParentId = anchor.parentId || null;
+  const destinationParentId = placement === 'under' ? anchor.id : anchor.parentId || null;
   const siblings = getSiblings(input.currentNodes, input.clipboard.boardId, destinationParentId);
   const anchorIndex = siblings.findIndex(node => node.id === anchor.id);
-  if (anchorIndex < 0) throw new Error('貼上錨點不在目的層級。');
+  if (placement === 'after' && anchorIndex < 0) throw new Error('貼上錨點不在目的層級。');
+  const firstRootOrder = placement === 'under'
+    ? siblings.reduce((maxOrder, node) => Math.max(maxOrder, node.order), -1) + 1
+    : anchorIndex + 1;
   const rootOrders = Object.fromEntries(
-    input.clipboard.rootIds.map((rootId, index) => [rootId, anchorIndex + 1 + index]),
+    input.clipboard.rootIds.map((rootId, index) => [rootId, firstRootOrder + index]),
   );
   const updatesById: Record<string, Partial<TaskNode>> = {};
-  siblings.forEach((sibling, index) => {
-    const nextOrder = index <= anchorIndex ? index : index + input.clipboard.rootIds.length;
-    if (!Number.isSafeInteger(nextOrder)) throw new Error('排序超出安全整數範圍。');
-    if (sibling.order !== nextOrder) updatesById[sibling.id] = { order: nextOrder };
-  });
+  if (placement === 'after') {
+    siblings.forEach((sibling, index) => {
+      const nextOrder = index <= anchorIndex ? index : index + input.clipboard.rootIds.length;
+      if (!Number.isSafeInteger(nextOrder)) throw new Error('排序超出安全整數範圍。');
+      if (sibling.order !== nextOrder) updatesById[sibling.id] = { order: nextOrder };
+    });
+  }
   const clonePlan = buildTaskTreeClonePlan({
     sourceRootIds: input.clipboard.rootIds,
     sourceNodes: input.clipboard.nodes,
@@ -239,7 +274,6 @@ export const planMindMapCopyPasteAfter = (input: Readonly<{
     createNoteId: input.createNoteId,
     createDependencyId: input.createDependencyId,
     includeInternalDependencies: true,
-    suffixRootTitles: true,
   });
   return {
     clonePlan,
@@ -248,3 +282,23 @@ export const planMindMapCopyPasteAfter = (input: Readonly<{
     destinationParentId,
   };
 };
+
+export const planMindMapCopyPasteAfter = (input: Readonly<{
+  clipboard: MindMapCopyClipboard;
+  anchorTaskId: string;
+  currentNodes: Readonly<Record<string, TaskNode>>;
+  now: number;
+  createTaskId: () => string;
+  createNoteId: () => string;
+  createDependencyId: () => string;
+}>): MindMapCopyPastePlan => planMindMapCopyPaste(input, 'after');
+
+export const planMindMapCopyPasteUnder = (input: Readonly<{
+  clipboard: MindMapCopyClipboard;
+  anchorTaskId: string;
+  currentNodes: Readonly<Record<string, TaskNode>>;
+  now: number;
+  createTaskId: () => string;
+  createNoteId: () => string;
+  createDependencyId: () => string;
+}>): MindMapCopyPastePlan => planMindMapCopyPaste(input, 'under');

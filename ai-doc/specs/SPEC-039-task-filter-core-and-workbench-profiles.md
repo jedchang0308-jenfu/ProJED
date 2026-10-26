@@ -2,9 +2,260 @@
 
 關聯 DEV：DEV-039、DEV-090、DEV-091、DEV-118
 關聯開發點：DEV-027D 心智圖日期顯示與既有過濾器串接、DEV-028 四模式任務操作契約、DEV-036 Trello-like Workspace Governance
-狀態：Phase 1/1A Implemented + Local Automated QC Passed / Phase 1B Implemented + Local Automated QC Passed / Phase 1C Implemented + Local Automated QC Passed / Phase 2 Cross-Board Source Slice Implemented + Local Automated QC Passed / Phase 2A Drag Trigger Parity Implemented + Local Automated QC Passed / Phase 2B Production Migration and Deploy Complete / Authenticated Smoke Pending / DEV-090 Implemented + Local Automated QA-QC Passed / DEV-091 Implemented + Local Automated QA-QC Passed / DEV-118 Local Candidate QA-QC PASS + NOT RELEASED / Authenticated DB and release gate pending
+狀態：Phase 1/1A Implemented + Local Automated QC Passed / Phase 1B Implemented + Local Automated QC Passed / Phase 1C Implemented + Local Automated QC Passed / Phase 2 Cross-Board Source Slice Implemented + Local Automated QC Passed / Phase 2A Drag Trigger Parity Implemented + Local Automated QC Passed / Phase 2B Production Migration and Deploy Complete / Authenticated Smoke Pending / DEV-090 Implemented + Local Automated QA-QC Passed / DEV-091 Implemented + Local Automated QA-QC Passed / DEV-118 v6 Implemented + Local Verification Passed + Production Hosting Deployed / Authenticated Feature Smoke Pending / Production Migration Permission Pending；歷史v5 Local Candidate QA-QC PASS
 
-## DEV-118 Current Phase Implementation Contract：正向包含式篩選與共用控制
+<a id="dev-118-selection-matrix-v6-20261019"></a>
+
+## DEV-118 Current Phase Implementation Contract：全選顯示與完整分類矩陣 v6（2026-10-19）
+
+2026-10-19 後續使用者定案：Board／Workbench 四類篩選統一採「全部＝不限」，「全部」狀態下同組其他選項也都亮；取消最後一項自動恢復不限。
+此修訂取代先前「全不選零筆／三態全選」的互動契約，已實作並完成本機直接驗證；正式 Hosting 已部署，targeted authenticated production smoke 已通過。完整 browser matrix 與 production migration 仍保留為未完成的獨立證據面。
+
+文件成熟度：`RD Implementation Ready`；架構定案：`已定案`。
+Architecture Closure Review：`PASS / 2026-10-19 / P0-P1 unresolved architecture blockers = 0`。
+產品狀態：`V6 Interaction Revision Implemented / Local Verification PASS / Production Hosting Deployed / Authenticated Feature Smoke Pending / Production Migration Permission Pending`；原Architecture Closure保留為基線；本機與發布收據見 [QA-DEV-118 addendum](../qa/QA-DEV-118-task-filter-positive-inclusion-and-shared-controls.md#dev-118-release-addendum-20261019) 與 [REL-017](../release/REL-017-DEV-118-20261019.md)。
+來源為 [DEV-118 本輪產品矩陣](../dev_task.md#dev-118-selection-matrix-20261019)，以及 canonical worktree
+`C:/VIBE CODING/ProJED/ProJED`、branch `持續優化` 的 release source commit `920b3744331d5f9b2cecc5ab45a6ffadb248efd4`；文件收尾另由 commit `544e0b1` 記錄。所有實作在同一 worktree 收斂。
+
+本節為本輪工程 authority，取代下方歷史 v5 在 Board／Workbench 的預設、選取、日期、計數、持久化與 UI 契約。
+產品矩陣仍以本輪 dev_task 段落為準；下方 2026-09-11 v5 契約與舊 QA 的 PASS 保留為歷史基線。
+`SPEC-045` 的 Calendar snapshot／permission／DB／Edge 語意保持有效；本輪只隔離其共享程式入口。
+本輪可修改既有 QA-DEV-118 與 verifier 的受影響案例，不另立 QA 文件，不以舊案例預期否定已確認的新矩陣。
+
+### 2026-10-19 Release addendum
+
+本輪 commit `920b3744331d5f9b2cecc5ab45a6ffadb248efd4` 已建立 immutable artifact `20261019143720-d403cd`，artifact tree SHA-256 為 `a79036a801155194c3da84b1741b30865c58c4db005ab89a88a82e2eb4e80342`。Firebase live release 為 `1792420743052000`、version 為 `adcd8400adce22dd`；canonical origin 的 83 個檔案已逐檔回讀並與 manifest hash 相符。
+
+本機 model／migration／direct regression、TypeScript、test build 與 targeted lint 已通過。2026-10-20 targeted authenticated production smoke 已驗證狀態分類的「全部亮起時單獨關閉」、「取消最後一項恢復全部」與 reload persistence，證據見 `output/playwright/dev-118/v7/production-browser-smoke.json`。Playwright wrapper 因 registry DNS `ENOTFOUND`，cached Chromium 因 `spawn UNKNOWN`，完整 browser matrix 尚未完成；完整 lint 的既有未修改 error 亦不納入本輪產品判定。Supabase production migration 因 connector `permission denied` 未套用，source migration 僅作 forward-only package 保留。
+
+### 定案：v6 明確選取、舊日期保留、Calendar 版本隔離
+
+1. Board／Workbench 互動採 `all / selected`；`all` 表示此分類不限，空選取自動恢復 `all`；舊 `none` 僅保留讀取相容並正規化為 `all`。
+2. 同組 OR、跨組 AND；v6 日期為互斥且完整的四桶，只讀台北日期，不讀完成狀態。
+3. 舊 v5 明確選取保存為固定 snapshot；不能因恰好選滿目前選項就升成涵蓋未來的 `all`。
+4. 舊 v5 date 啟用時原封保留為 `legacy-v5` date 分支。它仍是原 overdue OR upcoming，
+   並在 overdue 分支保留未完成限制；禁止展平成純日期桶 AND status。
+5. Calendar 維持舊 V5 query、v1～v4 subscription payload、權限與 feed。compiler 依型別版本分派，
+   controls 依明確 variant 呈現；禁止把 V6 自動轉回 V5 後存 Calendar。
+
+### 型別與 API 契約
+
+```ts
+type TaskFilterSelectionMode = 'all' | 'none' | 'selected';
+type TaskFilterDateBucket = 'unset' | 'before_today' | 'within_days' | 'after_days';
+type TaskFilterQueryV6 = {
+  version: 6;
+  statuses: { mode: TaskFilterSelectionMode; values: ManualTaskStatus[] };
+  due:
+    | { mode: TaskFilterSelectionMode; buckets: TaskFilterDateBucket[]; withinDays: number }
+    | { mode: 'legacy-v5'; includeOverdue: boolean; upcomingWithinDays: number | null };
+  people: { mode: TaskFilterSelectionMode; ids: string[]; includeUnassigned: boolean };
+  tags: { mode: TaskFilterSelectionMode; ids: string[]; includeUntagged: boolean };
+  keyword: string;
+};
+type TaskFilterQuery = TaskFilterQueryV6;
+// LegacyTaskFilterQueryV5 保留原 statuses[] / due / people / tagIds / keyword shape。
+```
+
+- `createDefaultTaskFilters()` 與 `createDefaultBoardTaskFilters()` 回相同 V6 defaults：四組 `all`、
+  arrays 空、missing flags false、`withinDays=8`、keyword 空；all 的 missing flags false 不代表排除缺值。
+- `all` 無條件通過該組；`selected` 才讀 values／ids／missing flag。
+  舊 `none`、`selected` 無選項且 missing=false 均正規化為 `all`；normalizer 不根據選項數量升成 all。
+  `all` 的 arrays、missing flags 以空／false canonical 化。固定順序、去重、trim，normalizer 須冪等。
+  `none` 仍屬已知舊 payload，嚴格 decoder 接受後轉為 `all`，不新增版本／key、不重寫遠端資料。
+- `normalizeTaskFilters()` 只處理已知 V6 runtime shape；`migrateTaskFiltersV5ToV6()` 是唯一 V5→V6 mapper。
+  `decodePersistedTaskFilters(value, version)`（名稱可按既有慣例微調）在 I/O 邊界區分 missing、valid、invalid、
+  unsupported，嚴格拒絕錯版、未知欄位、非法 mode／日期桶／status／N、錯型別及混版 payload。
+  不可先 permissive normalize 再假稱 valid；重複 ID 可 canonical 去重，不可刪除未知但有效的 ID。
+- `LegacyTaskFilterQueryV5`、`createDefaultTaskFiltersV5()`、`normalizeTaskFiltersV5()`、
+  `normalizePersistedTaskFiltersV5()` 僅供 Calendar 與舊偏好解碼；V5 helper 必須保存既有語意。
+  `migrateLegacyTaskFilterStateV4()` 仍回 V5；Board／Workbench 明確再經 V5→V6。
+- `compileTaskFilter(V6 | V5, today)` 在 domain 內分派；可抽 `compileLegacyTaskFilterV5()`。
+  V6 `legacy-v5` date 直接共用同一舊 date helper。projection／deferred status 共用 compiler，
+  不新增 Board／Workbench／Calendar 各自的 predicate。query／today 未變時重用 compiled sets，不逐 task 讀 clock。
+- 新 UI 只能產生 V6 新矩陣值；Calendar controls 只能產生 V5。資料型別禁止讓 V6 經 Calendar serializer 寫出。
+
+### 日期、選項與「全部＝不限」互動
+
+日期使用既有 `toTaipeiCalendarDate()`／`diffInTaipeiCalendarDays()`，today 由 caller 一次注入。
+無法判讀的到期日→unset；差值 <0→before_today；0≤差值≤N→within_days；差值>N→after_days。
+N 為 0～365 整數，預設8；N=0含今天，N=8含今天及後續8天。日期桶資料仍相容既有已存條件；依後續使用者要求，UI 不再列出日期區間與「以後」兩顆按鈕。
+`isTaskOverdue()` 與任務狀態生命週期不變；completed past 可由 v6 before_today 納入。
+
+N 的輸入字串是 controlled UI 暫態：有效整數才提交 query；空白、負數、小數、>365 保留最後有效 query，
+以 `aria-invalid` 與簡短錯誤提示表示，blur 恢復最後有效值。不得把 invalid 轉 all／none／null。
+修改有效 N 不改 buckets／mode；日期 all 仍全通過，舊 none 先恢復 all。clear-all 恢復 N8。
+
+每組「全部」為固定文字／尺寸的按鈕，`aria-pressed` 表示是否不限；維持 Space／Enter 與可見鍵盤焦點。
+預設為「全部」狀態，「全部」與其餘具體項目都亮，表示皆納入；部分選取時只亮已指定項目。狀態切換僅改顏色，不加減號或改變尺寸。
+all 點全部→維持 all；selected 點全部→清除該組條件並改 all。
+all 點具體項目→先取該組完整選項集合再移除該項，僅被點選項熄滅，其餘保持亮起；selected 點項目→增減該項；取消最後一項→all。
+人員／標籤完整集合包含缺值選項與已保存 IDs，並沿用來源完整就緒後才可逐項編輯的限制；日期仍保留未顯示日期桶的相容條件。
+有限完整狀態／日期桶可在明確使用者操作選滿時恢復 all；人員／標籤的具體選取保留固定 snapshot，不能因恰好選滿目前來源就涵蓋未來項目。
+舊 `legacy-v5` 日期保留原條件摘要；同一「全部」按鈕可明確解除舊日期限制，不另設第二個轉換動作。
+
+人員／標籤選項集合＝目前來源可選項 ∪ 有效來源任務引用值 ∪ query 已保存的 IDs，並永遠提供缺值選項。
+unknown label 使用既有 fallback 名稱／ID 短碼，不讀取沒有權限的 profile。主責與協作者聯集皆空才無人員；
+tagIds 真正空才無標籤。即使 ID 已停用／刪除且暫無任務引用，也保留其選取，直到使用者移除或清除。
+`App.tsx` 的 reconcile 與 store actions 不得再修剪 query；可移除無效自動清理呼叫或改為純 option 展示。
+
+options loading／error 不改 query；該動態組的逐項編輯在來源未完整就緒時 disabled。
+明確 all／clear 操作可維持可用，因不依賴列舉完整選項。
+來源恢復後維持同一選擇；新 ID 在 all 自動納入、在 selected 不自動納入。
+已保存 selected 若剛好選滿目前所有項目，「全部」仍不亮，顯示最短註記「指定選項；新增項目不自動加入」。
+不以數量判為全選；使用者可點全部明確改成動態 all。此註記只在有歧義時出現，不新增教學面板。
+
+### V5→V6 無損 mapping 與 legacy 編輯
+
+| V5 來源 | V6 結果 |
+|---|---|
+| statuses=[] | statuses all。 |
+| statuses 非空，包括明確四項全滿 | statuses selected，原值保留；restore 不升 all。 |
+| due false／null | due all，N8。 |
+| due 任一條件啟用 | due legacy-v5，保存 includeOverdue 與 upcomingWithinDays 原值。 |
+| people ids=[]、includeUnassigned=false | people all。 |
+| people 非空或 includeUnassigned=true | people selected，原 IDs／flag 保留。 |
+| 既有 dirty candidate 的 `__all_assignees__` | 按既有 matcher 的實際不限語意轉 people all；此 sentinel 不再由新 UI／serializer 產生。 |
+| tagIds=[] | tags all，包含無標籤。 |
+| tagIds 非空，包括列滿現有標籤 | tags selected、includeUntagged=false；不能擅自納入無標籤或未來標籤。 |
+| keyword | trim 後保留；compiler 沿用不分英文大小寫的名稱包含比對。 |
+
+V5 native query 與其 V6 conversion 在相同 node／today／status override 下必須 identity equivalent。
+V4 仍沿用已核准、目前 source 實際使用的 V4→V5 converter，包含歷史 all-false→不限與 collaborator-only 修正；
+本輪無損保證從該既有 V5 讀取結果起算，不能宣稱直接原始 V4 matcher 無損，亦不新增 V4 reset 政策。
+原始 local V4／V5 在 conversion 完整寫入並驗證 readback 前保留；不可只檢查版本欄位就刪原值。
+
+legacy date 在 UI 明示「沿用舊日期條件」，用原「逾期」／「今天～N天後」選取摘要顯示實際值，
+不偽裝成四桶勾選；此時日期計 active 1。其餘四組可獨立編輯且繼續與原 date AND。
+日期區提供「改用日期分類（日期不限）」：使用者明確點擊才將 date 換為 all／N8，
+之後可按新日期分類縮小；清除單一日期或清除全部也屬明確轉換。其他操作、開關浮層、日期跨日、
+切帳號／看板、reload／sync 皆不可轉換。沿用現有 filter undo 能力保存操作前值；不要把 compatibility mode
+誤當新矩陣完成，本輪無偏好與清除後的主要路徑必須完整使用 V6。
+
+### Ownership、持久化與失敗恢復
+
+| 層 | 定案契約 |
+|---|---|
+| Board state | `useTaskFilterStore` 擁有 account×board V6 query；generation／auth guard 防 stale response／mutation 套入另一 scope。 |
+| Board remote | 原 `account_board_task_filter_preferences`，顯式寫 preference_version=6；adapter expectedVersion 擴為 4\|5\|6\|null。 |
+| Board local | cache／pending／migration marker 使用新的 :v6 key；讀取舊 :v5／:v4，保留原 scope，不讀其他帳號。 |
+| Workbench | 原 component per-board state、account-scoped `projed-task-workbench-filters:v6`；保留 selectedBoardId、panel prefs、跨板來源與自己的 query。 |
+| Display | `TASK_DISPLAY_SETTINGS_VERSION=4` 與原 key 不動；無偏好預設 on，既有 false 恢復；query clear 不改 display。 |
+| Calendar | 原 subscription draft owner、V5 query 與 v1～v4 payload；不跟隨 Board／Workbench 目前 query 或 defaults。 |
+
+Board hydrate 次序：讀本機已知 cache → remote read 並先驗版 → 已知4／5先在 memory轉V6 →
+CAS升6 → 重讀 → 重播既有 pending → 最後 readback 成為 authority。無 row 是 default／expected null insert；
+pending upsert 保留其 query，pending delete 保留 delete intent，不可從空 filters 猜操作種類。
+
+升級 CAS 除 account／board／preference_version 外，必須帶初次讀取的 `updated_at` 條件；
+adapter 可新增選填 `expectedUpdatedAt` 參數，僅升級時必填。若同舊版本先被另一裝置改動，CAS 0-row→
+重讀並重新轉最新值，不把先前 snapshot 覆寫上去。正常6→6沿用既有同版本 last-write-wins，
+不新增協同編輯或通用 revision framework。舊 client 的 expected4／5 無法覆寫6。
+
+所有 retry 前檢查當前 auth／scope generation；初次讀版未完成時 query controls disabled。
+network outcome unknown 必須先 readback：upsert 已是目標6與相同 canonical query，或 delete已無row，
+才可確認成功；否則保留 journal，再依最新已知版本與仍有效 intent 重試。不要 blind retry 或刪未確認 pending。
+同一 scope rapid writes 仍保留最新 intent，只有與 acknowledged mutation ID 相同的 pending 可移除。
+clear-all 寫明確 V6 defaults；舊 pending delete 僅在已知版本升6後 delete expected6，或 readback證明無row時完成。
+
+local migration 先寫完整 target，再驗完整 canonical payload／mutation ID／kind／scope readback，再刪已遷來源；
+寫入或readback失敗保留原資料與警告。Workbench同時驗全部per-board queries與selectedBoardId；
+不因其中一組失敗就保存半份 prefs。persist 的 cache／pending 寫入失敗須回報未儲存，不能宣稱 synced。
+
+任何 current key／remote 的未知版本（不只>6）、混版或壞 payload：保留原 raw，不 fallback 到舊key覆寫，
+不寫入、不reset、不重播pending；此 scope controls disabled 並顯示版本／讀取錯誤及重試。
+若有最後有效 cache 可保留畫面並標示未同步；無有效 cache 時顯示偏好無法載入，不能冒充預設all或篩選零筆。
+Workbench遇未知／壞current key亦禁止 mount effect重存defaults，待讀取可支援版本後才解除。
+一般network fallback可保留此裝置有效選擇並重試，不能因此跨帳號取其他cache。
+
+### DB 與 Calendar 隔離邊界
+
+已核對 Board table migration：只限制 preference_version>0 與 filters JSON object，故現有表即容納6；
+本輪不新增table、RPC、RLS、grant或SQL query-shape validator。新增forward-only migration僅將欄位default設6，
+不得UPDATE既有rows；client寫6不依賴default，strict shape在既有repository/service I/O邊界驗證。
+Calendar既有strict SQL validators與Edge matcher保持原樣。migration檔用現有Supabase CLI入口產生；
+本輪只交付本地source，不執行遠端migration／資料寫入／部署。
+
+`TaskConditionFilterControls` 維持唯一共用入口，props用discriminated union：
+`variant:'matrix-v6'` 搭V6 value/onChange；`variant:'calendar-v5'` 搭V5 value/onChange。
+共用section／choice樣式可沿用，Calendar分支保留完整舊空選取／日期／permission disabled語意，
+不將新版「無標籤」、四桶或dynamic-all寫入舊snapshot。wrapper仍持有permission與save，元件不讀store／storage／service。
+
+Calendar最小接線：`features/calendarSubscriptions/filters.ts`、`CalendarSubscriptionBuilderPreview.tsx`、
+`services/supabase/calendarSubscriptionService.ts` 與 `services/supabase/database.types.ts` 改用明確V5型別/helper；
+preview仍呼叫domain V5 compiler。`CalendarSubscriptionBoardFilterSnapshot.filters` 固定V5，
+outer subscription version仍1～4。其餘Calendar檔只在typecheck證明直接依賴時調整imports／types。
+Calendar safe default依舊限current user；舊subscription開啟未儲存時零remote write、零token regeneration。
+
+### 實作 surface、順序與裁量
+
+| 順序／責任 | 現有檔案／必要修改 |
+|---|---|
+| 1 domain／fixture | `features/taskFilters/{types,defaults,storage,predicates,describe,resultProjection,index}.ts`；新v6 truth與舊v5 conformance；日期legacy helper僅一份。 |
+| 2 persistence | `features/taskFilters/preferenceRepository.ts`、`preferenceRepositoryInstance.ts`、`services/supabase/taskFilterPreferenceService.ts`、`store/useTaskFilterStore.ts`、`features/taskWorkbench/preferences.ts`；v6 keys／decoder／CAS／journal／scope guard。 |
+| 3 options／controls | `features/taskFilters/assigneeOptions.ts`、`App.tsx`、`components/ui/{TaskConditionFilterControls,StatusFilterBar}.tsx`、既有`taskConditionFilterStyles.ts`；停用query修剪，option聯集、全部不限、N暫態、legacy摘要。 |
+| 4 consumers | `components/TaskWorkbenchPanel.tsx`、`store/useWbsStore.ts`、`components/ui/TaskFilterResultState.tsx`及其直接view callers；Board／Workbench獨立state與canonical identities，loading/error優先於zero。 |
+| 5 Calendar隔離 | 上節四個Calendar接線檔；既有Edge／SQL inspect-only，測舊fixture parity與serializer shape不變。 |
+| 6 convergence | 既有DEV-118 model／migration／browser／Edge verifier、直接受影響DEV-090／048／039案例與QA文件；保留舊結果，新增本次結果。 |
+
+進場已存在8份dirty產品檔：StatusFilterBar、TaskConditionFilterControls、defaults、describe、predicates、
+preferenceRepository、storage、useTaskFilterStore。其預設四status＋overdue/upcoming8＋全人員sentinel只能算前置嘗試；
+RD應在原diff上整合取代為V6，不reset檔案、不保留第二套default、不把該dirty狀態當完整矩陣。
+命名、局部helper與樣式裁量可依repo慣例；不得自行改mode語意、legacy mapping、Calendar scope、ownership或acceptance。
+
+### 驗收、fixture 與可執行驗證
+
+本輪接受「Board／Workbench同V6 query、source、today→相同matched IDs」；Calendar單獨驗「V5 preview／Edge
+舊fixture parity＋payload／permission不變」。退役跨版本三surface同query parity要求，不能為湊齊parity改Calendar。
+hierarchy matched／visible／context-only與canonical dedupe保持；符合父不自動納入未符合子，context父不加匹配筆數。
+來源有任務且query已可用才可呈現filtered-zero；loading/error／偏好unsupported不可用零筆掩蓋。
+日期視圖缺日期不可從共同matched集合消失。active count四mode非all各1＋非空搜尋1，0～5；legacy date算1。
+
+必要fixture／失敗案例：
+
+- 新預設包含四status、missing/invalid date、completed past、today、第N天、第N+1天、N0/8/365、台北跨午夜。
+- 每組all／selected、舊none與空selected恢復all，日期桶subset、組內OR／跨組AND、多人／多標籤／missing、trim／大小寫搜尋。
+- V5日期四種組合×completed/noncompleted×past/today/future/missing 的conversion等價；
+  額外覆蓋「過去未完成＋近期任意狀態」不能展平案例、V4已核准converter歷史差異、全人員sentinel。
+- 明確四status／全部現有人員／全部現有標籤snapshot恢復仍selected；新ID不自動加入；動態分類須明確點全部才all。
+- options loading/error→ready、引用停用ID、刪除option仍保留query、all點一項只移除該項、最後取消→all、reload維持不限；缺值選項與其他具體項目依同一規則切換。
+- Board4/5→6、同舊版updated_at競態、6→6、unknown7／unknown低版／invalid shape、timeout已提交／未提交、
+  cache/pending write與readback失敗、rapid latest intent、pending delete、跨帳號／scope late response。
+- Workbench多board readback／未知key保護／panel與display獨立；Calendar舊v1～v4、safe default、permission guard、
+  v6拒絕序列化、開啟無寫入／token不變、原V5 fixture與Edge exact IDs。
+
+沿用既有 `scripts/fixtures/dev-118-task-filter-conformance.json` 的V5資料／期望，v6案例可新增具名區段或
+同目錄獨立v6 fixture，不改舊fixture來掩蓋Calendar回歸。保留非空fixture數量與exact identity asserts。
+正常UI入口：看板上方過濾器、左側所有任務過濾器、設定→行事曆訂閱建立／編輯；
+驗證全部不限、範圍標示、legacy轉換、空選取與clear恢復、display獨立、鍵盤／Escape回focus，以及390×844、1440×900。
+原320～1440佈局契約仍有效，實際視窗證據只宣稱已測尺寸；使用正式正常shell搭可重現本地fixture，
+component harness只證component層，不代替正常入口。
+
+可直接沿用命令：`npm run verify:dev-118-task-filter-model`、`npm run verify:dev-118-task-filter-migration`、
+`npm run verify:dev-118-task-filter-edge`、`npm run verify:dev-118-task-filter-browser`；實作前先更新受影響oracle。
+編譯／直接回歸：`npx tsc -p tsconfig.json --noEmit`、針對changed files的ESLint、
+`npm run verify:dev-090-task-filter-contract`、`npm run verify:dev-090-task-filter-projection`、
+`npm run verify:dev-048-task-filter-collaborators`，並依實際consumer變更選DEV-039工作台回歸。
+既有QA文件持有完整command／evidence入口；本節只補本輪必要新增分母與舊oracle替換。
+Architecture Closure階段未執行以上測試、build、server或browser；後續本機實作驗證已完成，實際版本、結果及未執行邊界見QA-DEV-118本輪驗收。
+
+### Execution Boundary、Stop 與 Release Impact Note
+
+本輪已獲准本地實作、必要測試與文件；無未決產品／架構選擇。只處理DEV-118與直接相容呼叫端，
+不修改其他DEV契約、task schema／permission、Calendar外部payload／feed、正式環境或release artifacts。
+若發現合法V5 payload不能依上述mapping維持集合、需要改ownership／permission／Calendar wire format、
+需要重設偏好或遠端資料重寫、既定entry無法驗證、或不能保留未知dirty內容，停止受影響切片並回送Tech Lead。
+測試的舊oracle與新定案相反屬本輪可更新的intentional replacement，不能直接刪案例或假PASS。
+
+Release Impact Note：新增Board偏好6與local keys6，舊client應維持newer-version-safe；新增default6的
+forward-only migration source。沒有新table／RLS／secret／provider；Calendar DB／Edge不需為本輪改版。
+正式migration、app發布及真實provider／多裝置驗收不在本輪執行範圍；本地PASS不可宣稱正式發布。
+
+## DEV-118 歷史 v5 候選契約（2026-09-11，僅作相容與既有證據基線）
+
+> 2026-10-19：本節的產品與工程變更由上方V6契約取代；本節的日期／空選取語意僅在明確V5相容路徑有效。
+> 本節架構定案與PASS不證明新矩陣完成；歷史「不得UI import legacy」與「三surface同query parity」
+> 已由上方明確版本隔離與分開parity驗收取代。以下保留當時內容與證據，不作新實作命令。
 
 文件狀態：`RD Implementation Ready / 架構定案：已定案 / Local Candidate QA-QC PASS / NOT RELEASED`
 

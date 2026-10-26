@@ -45,7 +45,7 @@ git diff --check
 | 右鍵選單顯示「複製任務」 | Pass | `GlobalContextMenu.tsx` 與 `verify:dev-013-task-duplicate` |
 | 需要 `create_task` 權限 | Pass | menu `disabled={!canCreateTask}` |
 | 子樹複製排除 archived descendants | Pass | `collectTree` exclusion verifier |
-| root 標題加上 `（副本）`，descendants 保留原標題 | Pass | store verifier |
+| root 與 descendants 保留原標題，不加 `（副本）` | Pass | store verifier |
 | detail notes 使用新 note ids | Pass | `detailNotes` deep copy verifier |
 | 只複製子樹內部依賴，外部依賴不複製 | Pass | internal dependency filter / remap verifier |
 | 缺 dependency 權限時不可 partial copy | Pass | dependency permission guard verifier |

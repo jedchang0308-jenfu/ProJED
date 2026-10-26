@@ -1,6 +1,7 @@
 import {
   BOARD_TASK_FILTER_PREFS_VERSION,
-  normalizePersistedTaskFilters,
+  decodePersistedTaskFilters,
+  normalizeTaskFilters,
   type TaskFilterQuery,
 } from '../taskFilters';
 import {
@@ -14,7 +15,8 @@ export const LEGACY_TASK_WORKBENCH_PANEL_PREFS_KEY = 'projed-task-workbench-pane
 export const TASK_WORKBENCH_PANEL_PREFS_KEY = 'projed-task-workbench-panel:v2';
 export const LEGACY_TASK_WORKBENCH_FILTER_PREFS_KEY = 'projed-task-workbench-filters:v1';
 export const LEGACY_TASK_WORKBENCH_FILTER_PREFS_V2_KEY = 'projed-task-workbench-filters:v2';
-export const TASK_WORKBENCH_FILTER_PREFS_KEY = 'projed-task-workbench-filters:v5';
+export const LEGACY_TASK_WORKBENCH_FILTER_PREFS_V5_KEY = 'projed-task-workbench-filters:v5';
+export const TASK_WORKBENCH_FILTER_PREFS_KEY = 'projed-task-workbench-filters:v6';
 const TASK_WORKBENCH_OPEN_PREFS_VERSION = 1;
 export const DEFAULT_TASK_WORKBENCH_WIDTH = 340;
 export const MIN_TASK_WORKBENCH_WIDTH = 182;
@@ -52,6 +54,8 @@ export type TaskWorkbenchPanelPrefs = {
 export type TaskWorkbenchFilterPrefs = {
   selectedBoardId: string | null;
   filtersByBoardId: Record<string, TaskFilterQuery>;
+  locked?: boolean;
+  warning?: string | null;
 };
 
 const DEFAULT_PANEL_PREFS: TaskWorkbenchPanelPrefs = {
@@ -66,6 +70,8 @@ const DEFAULT_PANEL_PREFS: TaskWorkbenchPanelPrefs = {
 const DEFAULT_FILTER_PREFS: TaskWorkbenchFilterPrefs = {
   selectedBoardId: null,
   filtersByBoardId: {},
+  locked: false,
+  warning: null,
 };
 
 export const readTaskWorkbenchPanelPrefs = (
@@ -132,49 +138,66 @@ export const readTaskWorkbenchFilterPrefs = (
   accountId: string | null | undefined,
 ): TaskWorkbenchFilterPrefs => {
   const scopedKey = getAccountScopedStorageKey(TASK_WORKBENCH_FILTER_PREFS_KEY, accountId);
-  const parsed = readStorageJson<Partial<TaskWorkbenchFilterPrefs & { version: number }>>(scopedKey);
-  if (parsed && (parsed.version === BOARD_TASK_FILTER_PREFS_VERSION || parsed.version === 4)) {
-    const filtersByBoardId = Object.entries(parsed.filtersByBoardId || {}).reduce<Record<string, TaskFilterQuery>>(
-      (acc, [boardId, filters]) => {
-        if (typeof boardId === 'string' && filters && typeof filters === 'object') {
-          acc[boardId] = normalizePersistedTaskFilters(filters);
-        }
-        return acc;
-      },
-      {},
-    );
-    return {
-      selectedBoardId: typeof parsed.selectedBoardId === 'string' ? parsed.selectedBoardId : null,
-      filtersByBoardId,
-    };
+  const readRaw = (key: string | null) => {
+    if (typeof window === 'undefined' || !key) return { exists: false, value: null as unknown, invalidJson: false };
+    const raw = window.localStorage.getItem(key);
+    if (raw === null) return { exists: false, value: null as unknown, invalidJson: false };
+    try { return { exists: true, value: JSON.parse(raw) as unknown, invalidJson: false }; } catch { return { exists: true, value: raw as unknown, invalidJson: true }; }
+  };
+  const decodeEnvelope = (value: unknown, expectedVersion: number): TaskWorkbenchFilterPrefs | null => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const parsed = value as Record<string, unknown>;
+    if (parsed.version !== expectedVersion || !parsed.filtersByBoardId || typeof parsed.filtersByBoardId !== 'object' || Array.isArray(parsed.filtersByBoardId)) return null;
+    const filtersByBoardId: Record<string, TaskFilterQuery> = {};
+    for (const [boardId, filters] of Object.entries(parsed.filtersByBoardId as Record<string, unknown>)) {
+      const decoded = decodePersistedTaskFilters(filters, expectedVersion);
+      if (!boardId || decoded.kind !== 'valid') return null;
+      filtersByBoardId[boardId] = decoded.filters;
+    }
+    if (!(parsed.selectedBoardId === null || typeof parsed.selectedBoardId === 'string')) return null;
+    return { selectedBoardId: parsed.selectedBoardId as string | null, filtersByBoardId, locked: false, warning: null };
+  };
+  const currentRaw = readRaw(scopedKey);
+  if (currentRaw.exists) {
+    const decoded = currentRaw.invalidJson ? null : decodeEnvelope(currentRaw.value, 6);
+    return decoded ?? { ...DEFAULT_FILTER_PREFS, filtersByBoardId: {}, locked: true, warning: '所有任務篩選偏好版本或格式無法讀取' };
   }
 
   const legacyScopedV2Key = getAccountScopedStorageKey(LEGACY_TASK_WORKBENCH_FILTER_PREFS_V2_KEY, accountId);
+  const legacyScopedV5Key = getAccountScopedStorageKey(LEGACY_TASK_WORKBENCH_FILTER_PREFS_V5_KEY, accountId);
   const legacyCandidates = [
+    { key: legacyScopedV5Key, value: readStorageJson<unknown>(legacyScopedV5Key), version: 5 },
     { key: legacyScopedV2Key, value: readStorageJson<Partial<TaskWorkbenchFilterPrefs>>(legacyScopedV2Key) },
     { key: LEGACY_TASK_WORKBENCH_FILTER_PREFS_V2_KEY, value: readStorageJson<Partial<TaskWorkbenchFilterPrefs>>(LEGACY_TASK_WORKBENCH_FILTER_PREFS_V2_KEY) },
     { key: LEGACY_TASK_WORKBENCH_FILTER_PREFS_KEY, value: readStorageJson<Partial<TaskWorkbenchFilterPrefs>>(LEGACY_TASK_WORKBENCH_FILTER_PREFS_KEY) },
   ];
-  const legacy = legacyCandidates.find(candidate => candidate.value)?.value;
-  if (!legacy) {
-    return {
-      selectedBoardId: DEFAULT_FILTER_PREFS.selectedBoardId,
-      filtersByBoardId: {},
-    };
+  const candidate = legacyCandidates.find(entry => entry.value);
+  const legacy = candidate?.value;
+  if (!legacy || !candidate) return { ...DEFAULT_FILTER_PREFS, filtersByBoardId: {} };
+  const legacyRecord = legacy as Partial<TaskWorkbenchFilterPrefs>;
+  if (candidate.version === 5 && (legacy as { version?: unknown }).version !== 5) {
+    return { ...DEFAULT_FILTER_PREFS, filtersByBoardId: {}, locked: true, warning: '所有任務舊版篩選偏好格式無法讀取' };
+  }
+  const migratedFilters: Record<string, TaskFilterQuery> = {};
+  for (const [boardId, filters] of Object.entries(legacyRecord.filtersByBoardId || {})) {
+    const decoded = decodePersistedTaskFilters(filters, candidate.version ?? 4);
+    if (!boardId || decoded.kind !== 'valid') {
+      return { ...DEFAULT_FILTER_PREFS, filtersByBoardId: {}, locked: true, warning: '所有任務舊版篩選偏好格式無法讀取' };
+    }
+    migratedFilters[boardId] = decoded.filters;
   }
 
   const migrated = {
     version: BOARD_TASK_FILTER_PREFS_VERSION,
-    selectedBoardId: typeof legacy.selectedBoardId === 'string' ? legacy.selectedBoardId : null,
-    filtersByBoardId: Object.entries(legacy.filtersByBoardId || {}).reduce<Record<string, TaskFilterQuery>>((acc, [boardId, filters]) => {
-      acc[boardId] = normalizePersistedTaskFilters(filters);
-      return acc;
-    }, {}),
+    selectedBoardId: typeof legacyRecord.selectedBoardId === 'string' ? legacyRecord.selectedBoardId : null,
+    filtersByBoardId: migratedFilters,
     updatedAt: Date.now(),
   };
+  let migratedAndVerified = false;
   if (writeStorageJson(scopedKey, migrated)) {
-    const readback = readStorageJson<{ version?: number }>(scopedKey);
-    if (readback?.version === BOARD_TASK_FILTER_PREFS_VERSION) {
+    const readback = decodeEnvelope(readStorageJson<unknown>(scopedKey), 6);
+    if (readback && JSON.stringify(readback.filtersByBoardId) === JSON.stringify(migrated.filtersByBoardId) && readback.selectedBoardId === migrated.selectedBoardId) {
+      migratedAndVerified = true;
       legacyCandidates.forEach(candidate => {
         if (candidate.value) removeStorageKey(candidate.key);
       });
@@ -183,19 +206,26 @@ export const readTaskWorkbenchFilterPrefs = (
   return {
     selectedBoardId: migrated.selectedBoardId,
     filtersByBoardId: migrated.filtersByBoardId,
+    locked: false,
+    warning: migratedAndVerified ? null : '所有任務篩選偏好尚未儲存到新版格式',
   };
 };
 
 export const writeTaskWorkbenchFilterPrefs = (
   prefs: TaskWorkbenchFilterPrefs,
   accountId: string | null | undefined,
-): void => {
-  writeStorageJson(getAccountScopedStorageKey(TASK_WORKBENCH_FILTER_PREFS_KEY, accountId), {
+): boolean => {
+  if (prefs.locked) return false;
+  const key = getAccountScopedStorageKey(TASK_WORKBENCH_FILTER_PREFS_KEY, accountId);
+  const payload = {
     version: BOARD_TASK_FILTER_PREFS_VERSION,
     selectedBoardId: prefs.selectedBoardId,
-    filtersByBoardId: prefs.filtersByBoardId,
+    filtersByBoardId: Object.fromEntries(Object.entries(prefs.filtersByBoardId).map(([boardId, filters]) => [boardId, normalizeTaskFilters(filters)])),
     updatedAt: Date.now(),
-  });
+  };
+  if (!writeStorageJson(key, payload)) return false;
+  const readback = readStorageJson<typeof payload>(key);
+  return readback?.version === 6 && readback.selectedBoardId === payload.selectedBoardId && JSON.stringify(readback.filtersByBoardId) === JSON.stringify(payload.filtersByBoardId);
 };
 
 export const createDefaultTaskWorkbenchPanelPrefs = (): TaskWorkbenchPanelPrefs => ({

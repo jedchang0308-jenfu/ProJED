@@ -170,6 +170,8 @@ const CalendarView = () => {
     } = useBoardStore();
     const taskFilters = useTaskFilterStore(state => state.filters);
     const resetTaskFilters = useTaskFilterStore(state => state.resetFilters);
+    const taskFiltersLocked = useTaskFilterStore(state => state.controlsLocked);
+    const taskFilterWarning = useTaskFilterStore(state => state.warning);
 
     const [isTaskListOpen, setIsTaskListOpen] = useState(true);
     const [collapsedIds, setCollapsedIds] = useState(new Set());
@@ -190,6 +192,7 @@ const CalendarView = () => {
     );
     const taskLoading = useWbsStore(s => s.loading);
     const taskLoadError = useWbsStore(s => s.error);
+    const taskResultError = taskLoadError || (taskFiltersLocked ? taskFilterWarning || '篩選偏好無法載入' : null);
     const filterProjection = useMemo(
         () => projectTaskFilterResults(projectionNodes, taskFilters, { boardId: activeBoardId }),
         [activeBoardId, projectionNodes, taskFilters],
@@ -306,12 +309,12 @@ const CalendarView = () => {
             <TaskFilterResultState
                 projection={filterProjection}
                 loading={taskLoading}
-                error={taskLoadError}
+                error={taskResultError}
                 onReset={resetTaskFilters}
             />
 
             {/* ── 主體 ── */}
-            {!taskLoading && !taskLoadError && filterProjection.matchedTaskIds.size > 0 ? <div className="flex-1 flex overflow-hidden">
+            {!taskLoading && !taskResultError && filterProjection.matchedTaskIds.size > 0 ? <div className="flex-1 flex overflow-hidden">
                 {/* 左側側邊欄 */}
                 {/* ── 左側：任務清單側邊欄（複用共用側邊欄，支援拖曳）── */}
                 <SharedTaskSidebar

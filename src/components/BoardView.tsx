@@ -1304,6 +1304,9 @@ const BoardView = () => {
     const taskLoadError = useWbsStore(s => s.error);
     const taskFilters = useTaskFilterStore(s => s.filters);
     const resetTaskFilters = useTaskFilterStore(s => s.resetFilters);
+    const taskFiltersLocked = useTaskFilterStore(s => s.controlsLocked);
+    const taskFilterWarning = useTaskFilterStore(s => s.warning);
+    const taskResultError = taskLoadError || (taskFiltersLocked ? taskFilterWarning || '篩選偏好無法載入' : null);
     const filterProjection = useMemo(
         () => projectTaskFilterResults(
             buildTaskFilterNodesWithTrackingReferences(Object.values(storeNodes), trackingReferences, activeBoardId || ''),
@@ -2062,7 +2065,7 @@ const BoardView = () => {
             )}
         >
             <div
-                className="flex-1 flex min-w-0 overflow-hidden bg-slate-100"
+                className="flex-1 flex min-w-0 gap-2 overflow-hidden bg-slate-400"
                 data-layout-region="board-shell"
             >
                 <TaskWorkbenchPanel
@@ -2070,8 +2073,9 @@ const BoardView = () => {
                     canManageTaskReference={canManageTaskReference}
                 />
                 <div
-                    className="flex min-w-0 flex-1 flex-col overflow-hidden bg-slate-100"
+                    className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-300 bg-slate-100 shadow-sm"
                     data-layout-region="board-workspace"
+                    data-ui-container="board-workspace"
                 >
                     {isRecordTaskSelectionMode && (
                         <div className="shrink-0 border-b border-blue-200 bg-blue-50 px-[10px] py-[6px]">
@@ -2127,7 +2131,7 @@ const BoardView = () => {
                     {/* 列表畫布 (Lists Canvas) */}
                     <div
                         ref={setBoardCanvasRef}
-                        className={`scroll-container mobile-pan-surface flex-1 overflow-x-auto overflow-y-hidden bg-slate-100/90 ${compactClassNames.canvas} flex gap-[12px] items-start`}
+                        className={`scroll-container mobile-pan-surface flex-1 overflow-x-auto overflow-y-hidden bg-slate-200 ${compactClassNames.canvas} flex gap-[12px] items-start`}
                         data-mobile-pan-surface="board"
                         data-kanban-mobile-surface={isMeetingRecordUnavailable ? 'true' : undefined}
                         data-kanban-view-size={effectiveViewSize}
@@ -2138,11 +2142,11 @@ const BoardView = () => {
                         <TaskFilterResultState
                             projection={filterProjection}
                             loading={taskLoading}
-                            error={taskLoadError}
+                            error={taskResultError}
                             onReset={resetTaskFilters}
                             className="w-full min-w-[18rem] self-stretch"
                         />
-                        {!taskLoading && !taskLoadError && (filterProjection.matchedTaskIds.size > 0 || rootTrackingReferences.length > 0) ? <SortableContext items={boardRootRows.map(row => row.kind === 'primary' ? primaryPlacementId(row.node.id) : row.reference.id)} strategy={horizontalListSortingStrategy}>
+                        {!taskLoading && !taskResultError && (filterProjection.matchedTaskIds.size > 0 || rootTrackingReferences.length > 0) ? <SortableContext items={boardRootRows.map(row => row.kind === 'primary' ? primaryPlacementId(row.node.id) : row.reference.id)} strategy={horizontalListSortingStrategy}>
                             {boardRootRows.map(row => row.kind === 'primary' ? (
                                 <KanbanColumn key={row.node.id} nodeId={row.node.id} filterProjection={filterProjection} />
                             ) : (
@@ -2151,7 +2155,7 @@ const BoardView = () => {
                         </SortableContext> : null}
 
                         {/* 新增列表按鈕 */}
-                        {!taskLoading && !taskLoadError && (filterProjection.matchedTaskIds.size > 0 || filterProjection.totalTaskCount === 0) ? <KanbanRootDropZone
+                        {!taskLoading && !taskResultError && (filterProjection.matchedTaskIds.size > 0 || filterProjection.totalTaskCount === 0) ? <KanbanRootDropZone
                             workspaceId={activeWorkspaceId || ''}
                             boardId={activeBoardId}
                             anchorNodeId={rootNodes[rootNodes.length - 1]?.id}

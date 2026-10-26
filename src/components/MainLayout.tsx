@@ -306,6 +306,30 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
           <button
             type="button"
+            onClick={handleToggleMobileTaskWorkbench}
+            onPointerEnter={() => handlePanelPreview('task-workbench')}
+            onPointerLeave={() => setPreviewedPanel(null)}
+            onFocus={() => handlePanelPreview('task-workbench')}
+            onBlur={() => setPreviewedPanel(null)}
+            className={cn(
+              topbarClassNames.textButton,
+              'px-2 text-xs text-primary-700 hover:text-primary-700',
+              previewedPanel === 'task-workbench' && 'z-50 border-primary-500 bg-primary-100 text-primary-800 ring-2 ring-primary-300 shadow-[0_0_0_4px_rgba(99,102,241,0.28)]',
+            )}
+            title="開啟或收合所有任務"
+            aria-label="開啟或收合所有任務"
+            data-mobile-task-workbench-nav-entry="true"
+          >
+            <span
+              aria-hidden="true"
+              className="text-[11px] font-black leading-none tracking-tight"
+              data-task-workbench-nav-label="all"
+            >
+              所有任務
+            </span>
+          </button>
+          <button
+            type="button"
             onClick={handleToggleWorkspaceSidebar}
             onPointerEnter={() => handlePanelPreview('workspace-sidebar')}
             onPointerLeave={() => setPreviewedPanel(null)}
@@ -333,30 +357,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
               className="app-board-title min-w-0 truncate text-xs font-bold text-slate-800 sm:overflow-visible sm:text-clip sm:text-sm"
             >
               {activeBoard?.title || '選擇看板'}
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={handleToggleMobileTaskWorkbench}
-            onPointerEnter={() => handlePanelPreview('task-workbench')}
-            onPointerLeave={() => setPreviewedPanel(null)}
-            onFocus={() => handlePanelPreview('task-workbench')}
-            onBlur={() => setPreviewedPanel(null)}
-            className={cn(
-              topbarClassNames.textButton,
-              'px-2 text-xs text-primary-700 hover:text-primary-700',
-              previewedPanel === 'task-workbench' && 'z-50 border-primary-500 bg-primary-100 text-primary-800 ring-2 ring-primary-300 shadow-[0_0_0_4px_rgba(99,102,241,0.28)]',
-            )}
-            title="開啟或收合所有任務"
-            aria-label="開啟或收合所有任務"
-            data-mobile-task-workbench-nav-entry="true"
-          >
-            <span
-              aria-hidden="true"
-              className="text-[11px] font-black leading-none tracking-tight"
-              data-task-workbench-nav-label="all"
-            >
-              所有任務
             </span>
           </button>
 
@@ -486,7 +486,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
       <BoardShareDialog open={isShareDialogOpen} onOpenChange={setShareDialogOpen} />
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 gap-2 overflow-hidden bg-slate-400 p-2">
         <Sidebar />
 
         {shouldRenderCrossModeTaskWorkbench ? (
