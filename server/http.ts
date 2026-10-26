@@ -5,6 +5,11 @@ import { extname, resolve, sep } from 'node:path';
 
 import type { RuntimeConfig } from './config.js';
 import type { ExpectedMigration, RuntimeDatabase } from './db.js';
+import {
+  createDomainReadHttpDispatcher,
+  isPrivateApiRequest,
+  type TrustedSessionActorResolver,
+} from './domainReadHttp.js';
 
 const CONTENT_TYPES: Record<string, string> = {
   '.css': 'text/css; charset=utf-8',
@@ -68,12 +73,18 @@ export interface KernelHttpServer {
   shutdown(): Promise<void>;
 }
 
+export interface KernelHttpOptions {
+  readonly resolveActor?: TrustedSessionActorResolver;
+}
+
 export function createKernelHttpServer(
   config: RuntimeConfig,
   database: RuntimeDatabase,
   expectedMigrations: readonly ExpectedMigration[],
+  options: KernelHttpOptions = {},
 ): KernelHttpServer {
   let shuttingDown = false;
+  const dispatchDomainRead = createDomainReadHttpDispatcher(config, database, options.resolveActor);
   const server = createServer({
     maxHeaderSize: 16 * 1024,
     requestTimeout: config.profile.runtime.timeouts.requestMillis,
@@ -96,6 +107,17 @@ export function createKernelHttpServer(
       }
       const ready = await database.readiness(expectedMigrations);
       json(response, ready ? 200 : 503, ready ? { status: 'ok' } : { status: 'unavailable', requestId }, requestId);
+      return;
+    }
+    const domainRead = await dispatchDomainRead(request, requestId);
+    if (domainRead.matched) {
+      json(response, domainRead.status ?? 500, domainRead.body ?? {
+        error: { code: 'DB_UNAVAILABLE', requestId, retryable: true },
+      }, requestId);
+      return;
+    }
+    if (isPrivateApiRequest(request.url)) {
+      json(response, 404, { error: { code: 'ENDPOINT_UNAVAILABLE', requestId, retryable: false } }, requestId);
       return;
     }
     if (serveStatic(config, request, response)) return;

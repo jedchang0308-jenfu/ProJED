@@ -135,7 +135,9 @@ try {
       'migration-apply', 'migration-idempotent', 'runtime-boundary', 'workspace-board-scope',
       'tenant-member-scope', 'board-member-scope', 'explicit-empty-permissions',
       'task-parent-mapping', 'dependency-mapping', 'private-board-deny',
-      'missing-context-deny', 'runtime-write-deny'
+      'missing-context-deny', 'runtime-write-deny', 'production-route-disabled',
+      'http-session-route', 'http-private-board-deny', 'http-missing-session-deny',
+      'http-api-no-static-fallback'
     )
   } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $evidenceDir 'result.json') -Encoding utf8
   Write-Output ("DEV139_S3_RESULT=PASS evidenceLevel=S3_DOMAIN_READ_LOCAL_ACCEPTANCE output={0}" -f $evidenceDir)

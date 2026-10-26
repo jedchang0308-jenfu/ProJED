@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import type { IncomingMessage } from 'node:http';
 
 import pg from 'pg';
 
@@ -7,6 +8,11 @@ import { runActorTransaction, type ServerActorV1 } from '../../../server/actorTr
 import { loadRuntimeConfig, sha256 } from '../../../server/config.js';
 import { RuntimeDatabase } from '../../../server/db.js';
 import { DomainReadRepository } from '../../../server/domainRead.js';
+import { createDomainReadHttpDispatcher } from '../../../server/domainReadHttp.js';
+import { KernelError } from '../../../server/errors.js';
+import { createKernelHttpServer } from '../../../server/http.js';
+import { createHttpDomainReadAdapter } from '../../../src/services/httpApi/domainReadAdapter.js';
+import { HttpApiClient, HttpApiError, type HttpApiFetch } from '../../../src/services/httpApi/httpApiClient.js';
 
 const { Client } = pg;
 const config = loadRuntimeConfig();
@@ -94,7 +100,58 @@ try {
   `, [actorA.localUserId]));
 } finally {
   await rawClient.end();
-  await database.end();
+}
+
+const disabledDispatcher = createDomainReadHttpDispatcher(config, database);
+const disabledResult = await disabledDispatcher({
+  method: 'GET', url: '/api/v1/workspaces', headers: {},
+} as IncomingMessage, 'qa-disabled');
+assert.equal(disabledResult.status, 404);
+assert.deepEqual(disabledResult.body, {
+  error: { code: 'ENDPOINT_UNAVAILABLE', requestId: 'qa-disabled', retryable: false },
+});
+
+const http = createKernelHttpServer(config, database, expected, {
+  resolveActor: async (request) => {
+    if (request.headers.cookie === '__session=qa-a') return actorA;
+    if (request.headers.cookie === '__session=qa-b') return actorB;
+    throw new KernelError('ACTOR_INVALID', 'QA session is unavailable', 401);
+  },
+});
+const address = await http.listen();
+const base = `http://${address.host}:${address.port}`;
+const fetchFor = (session: 'qa-a' | 'qa-b'): HttpApiFetch => async (input, init) => {
+  const headers = new Headers(init?.headers);
+  headers.set('cookie', `__session=${session}`);
+  return fetch(`${base}${String(input)}`, { ...init, headers });
+};
+try {
+  const httpA = createHttpDomainReadAdapter(new HttpApiClient(fetchFor('qa-a')));
+  const httpB = createHttpDomainReadAdapter(new HttpApiClient(fetchFor('qa-b')));
+  assert.deepEqual((await httpA.listWorkspaces()).map(workspace => workspace.id), ['ws-a', 'ws-b']);
+  assert.deepEqual((await httpB.listWorkspaceMembers('ws-b')).map(member => member.userId), [actorB.localUserId]);
+  assert.deepEqual((await httpA.listBoardMembers('ws-b', 'board-shared')).map(member => member.userId), [
+    actorB.localUserId, actorA.localUserId,
+  ]);
+  assert.deepEqual((await httpA.listTasks('ws-b', 'board-shared')).map(task => task.id), ['shared-parent', 'shared-child']);
+  assert.deepEqual((await httpA.listDependencies('ws-b', 'board-shared')).map(dependency => dependency.id), ['dep-shared']);
+  assert.deepEqual((await httpB.listTasks('ws-b', 'board-private')).map(task => task.title), ['B secret']);
+  assert.deepEqual((await httpA.getBoardRolePermissions('ws-b', 'board-shared')).admin, []);
+  await assert.rejects(httpA.listTasks('ws-b', 'board-private'), (error: unknown) => (
+    error instanceof HttpApiError && error.status === 404 && error.code === 'RESOURCE_NOT_FOUND'
+  ));
+
+  const missingSession = await fetch(`${base}/api/v1/workspaces`);
+  assert.equal(missingSession.status, 401);
+  assert.equal(missingSession.headers.get('cache-control'), 'no-store');
+  assert.equal((await missingSession.json() as { error: { code: string } }).error.code, 'ACTOR_INVALID');
+  const wrongMethod = await fetch(`${base}/api/v1/workspaces`, { method: 'POST' });
+  assert.equal(wrongMethod.status, 405);
+  const unknownApi = await fetch(`${base}/api/v1/session`, { headers: { cookie: '__session=qa-a' } });
+  assert.equal(unknownApi.status, 404);
+  assert.match(unknownApi.headers.get('content-type') ?? '', /^application\/json/);
+} finally {
+  await http.shutdown();
 }
 
 console.log(JSON.stringify({
@@ -102,6 +159,7 @@ console.log(JSON.stringify({
   checks: [
     'migration-boundary', 'workspace-board-scope', 'tenant-member-scope', 'board-member-scope',
     'explicit-empty-permissions', 'task-parent-mapping', 'dependency-mapping', 'private-board-deny',
-    'missing-context-deny', 'runtime-write-deny',
+    'missing-context-deny', 'runtime-write-deny', 'production-route-disabled',
+    'http-session-route', 'http-private-board-deny', 'http-missing-session-deny', 'http-api-no-static-fallback',
   ],
 }));

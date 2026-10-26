@@ -8,9 +8,9 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 ## DEV-139：ProJED 納入 Jenfu-Platform，Cloud Run／Cloud SQL 對齊並保留 Vite
 
 - 建立日期：2026-10-08（Asia/Taipei）。
-- 狀態：**開發中；S1 runtime／DB 核心、S2 consumer seam及S3 domain read foundation本地驗證 PASS**；S2 external wire與S3 routes／其餘操作仍未完成。D1／D2均已確認；產品前端切換、真身分整合、資料移轉、正式發布及切流均未啟動。
+- 狀態：**開發中；S1 runtime／DB核心、S2 consumer seam及S3 fail-closed domain read（含HTTP routes）本地驗證PASS**；S2 external wire、production resolver與S3其餘操作仍未完成。D1／D2均已確認；產品前端切換、真身分整合、資料移轉、正式發布及切流均未啟動。
 - 類型：交付點；主責：本 repo 的 DEV-139；無同專案父任務。
-- 唯一交接契約：[SPEC-139 Rev 10](specs/SPEC-139-projed-jenfu-platform-onboarding.md)；[§11 S1 定案／實作交接](specs/SPEC-139-projed-jenfu-platform-onboarding.md#11-架構決策與-s1-定案契約)；[§12 S1 實作狀態](specs/SPEC-139-projed-jenfu-platform-onboarding.md#12-s1-實作狀態2026-10-26)；[§13 S2 consumer seam](specs/SPEC-139-projed-jenfu-platform-onboarding.md#13-s2-projed-identity-consumer-seam2026-10-26)；[§14 S3 read foundation](specs/SPEC-139-projed-jenfu-platform-onboarding.md#14-s3-http-read-adapter-slice2026-10-26)；[§6.3 既有使用者切換基線](specs/SPEC-139-projed-jenfu-platform-onboarding.md#63-既有使用者的切換基線)；架構決策：[ADR-054](decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。首階段仍保留原工作區／看板／權限；kernel或資料庫搬移不能替代正常產品及既有使用者切換驗收。
+- 唯一交接契約：[SPEC-139 Rev 11](specs/SPEC-139-projed-jenfu-platform-onboarding.md)；[§11 S1 定案／實作交接](specs/SPEC-139-projed-jenfu-platform-onboarding.md#11-架構決策與-s1-定案契約)；[§12 S1 實作狀態](specs/SPEC-139-projed-jenfu-platform-onboarding.md#12-s1-實作狀態2026-10-26)；[§13 S2 consumer seam](specs/SPEC-139-projed-jenfu-platform-onboarding.md#13-s2-projed-identity-consumer-seam2026-10-26)；[§14 S3 read foundation](specs/SPEC-139-projed-jenfu-platform-onboarding.md#14-s3-http-read-adapter-slice2026-10-26)；[§6.3 既有使用者切換基線](specs/SPEC-139-projed-jenfu-platform-onboarding.md#63-既有使用者的切換基線)；架構決策：[ADR-054](decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。首階段仍保留原工作區／看板／權限；kernel或資料庫搬移不能替代正常產品及既有使用者切換驗收。
 
 ### 1. 人類決策與授權範圍
 
@@ -149,7 +149,7 @@ Rev6 歷史文件快照：SPEC-139 §6.3–§6.6 固定既有使用者保留面�
 
 2026-10-26 S1 實作進度：新增 `server/` kernel、兩份 forward-only migration、app-specific DB 邊界、runner、profile、unit／static／isolated verifier 與 package commands；未修改既有 `src/`、Vite／PWA、Supabase/Firebase config 或 release scripts。`verify:dev-139:s1` 在本機 PostgreSQL 18 的 task-owned cluster 完整通過（migration apply／idempotent、RLS、actor guard、HTTP fail-closed與清理），`build:test` 亦 PASS。COO 審視移除「本地必須另裝 PG17」的假關卡，改為本地支援 17／18、managed target 按實際 major 重驗；沒有遠端或正式 DB 操作。
 
-下一步在本repo加入需注入可信Session actor resolver的fail-closed read routes，再依日常使用主線完成workspace／board／member／permission／task／dependency／tag／invite寫入與HTTP polling；外部producer、正式移轉與切流維持原邊界。不能用synthetic actor、本地read foundation或舊Supabase PASS宣稱整合／無縫切換。
+下一步依日常使用主線完成workspace／board／member／permission／task／dependency／tag／invite寫入與HTTP polling；production resolver需等外部owner wire。正式移轉與切流維持原邊界，不能用QA Session、本地read foundation或舊Supabase PASS宣稱整合／無縫切換。
 
 ## DEV-138 DEV-133 guard 恢復、分支整合與正式驗證後清理 - 2026-10-06
 
@@ -354,11 +354,11 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 
 ## 總任務清單
 
-- ◐ DEV-139 [交付點] [開發中／S1本地PASS＋S2 seam PASS＋S3 read foundation PASS] [P1] [本地開發] ProJED 首階段基礎對齊，保留 Vite
+- ◐ DEV-139 [交付點] [開發中／S1本地PASS＋S2 seam PASS＋S3 read HTTP PASS] [P1] [本地開發] ProJED 首階段基礎對齊，保留 Vite
   - 摘要：保留原工作區／看板／權限及個人／外部協作，Cloud Run／Cloud SQL／身分對齊；原網址／PWA相容，不丟資料／重建帳號／強迫重裝，費用不大幅增加。
-  - 下一步：開發需注入可信Session actor resolver的S3 read routes，接著完成核心寫入／tag／invite及可選HTTP polling；S2真接入待Platform／OrgMaster發布ProJED／非員工wire。正式切流仍不在本地開發範圍。
+  - 下一步：完成核心寫入／tag／invite及可選HTTP polling；S2真接入與production resolver待Platform／OrgMaster發布ProJED／非員工wire。正式切流仍不在本地開發範圍。
   - 阻塞 / 恢復條件：D1／D2已確認；S2 真登入需新 owner contract／registry／Session／mapping，S3及移轉仍需完整domain、其餘操作、Hosting／舊版相容、全來源fence／delta／恢復證據；不能用S1或QA simulation替代。
-  - 證據：[SPEC-139 Rev10](specs/SPEC-139-projed-jenfu-platform-onboarding.md)、[ADR-054](decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)；S1 PostgreSQL 18 local acceptance PASS，S2 seam獨立typecheck／boundary／12項unit PASS，S3 frontend read adapter 10/10及PostgreSQL 18 domain read acceptance PASS，全app typecheck／test build PASS。production pins空集合、routes及backend selector未啟用，沒有產品／真SSO／整合／無縫切換／正式驗收PASS。
+  - 證據：[SPEC-139 Rev11](specs/SPEC-139-projed-jenfu-platform-onboarding.md)、[ADR-054](decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)；S1 PostgreSQL 18 local acceptance PASS，S2 seam獨立typecheck／boundary／12項unit PASS，S3 frontend adapter 10/10及PostgreSQL 18 domain read DB／HTTP acceptance PASS，全app typecheck／test build PASS。production pins空集合、resolver與backend selector未啟用，沒有產品／真SSO／整合／無縫切換／正式驗收PASS。
   - 計入交付：是（未來首階段基礎對齊的實際交付）；本輪文件完成不計產品完成。
 
 - ✓ DEV-138 [開發點] [已完成／正式發布、限定登入與 RPC 驗收及清理 PASS] [P1] [ProJED] DEV-133 guard 恢復、分支整合與正式驗證後清理

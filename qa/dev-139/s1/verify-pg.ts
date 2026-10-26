@@ -67,7 +67,7 @@ try {
   assert.match(await staticPage.text(), /DEV-139 S1/);
   const unknown = await fetch(`${base}/api/tasks`);
   assert.equal(unknown.status, 404);
-  assert.deepEqual((await unknown.json() as { code: string }).code, 'ENDPOINT_UNAVAILABLE');
+  assert.deepEqual((await unknown.json() as { error: { code: string } }).error.code, 'ENDPOINT_UNAVAILABLE');
   const forged = await fetch(`${base}/api/tasks`, { headers: { 'x-principal-id': actorA.principalId, cookie: 'session=fake' } });
   assert.equal(forged.status, 404);
 } finally {
