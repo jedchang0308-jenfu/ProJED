@@ -16,6 +16,8 @@
     "migrate:dev-139:s1:disposable": "node scripts/migrate-dev-139-s1.mjs",
     "verify:dev-139:s2:unit": "tsx --test qa/dev-139/s2/*.test.ts",
     "verify:dev-139:s2": "tsc -p tsconfig.server.s2.json --noEmit && npm run check:db-boundary && npm run verify:dev-139:s2:unit",
+    "verify:dev-139:s3:unit": "tsx --test qa/dev-139/s3/*.test.ts",
+    "verify:dev-139:s3": "tsc -p tsconfig.dev139.s3.json --noEmit && npm run verify:dev-139:s3:unit",
     "dev": "vite",
     "dev:local": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"& './scripts/local-test-server.ps1' start; Start-Process 'http://localhost:4000/'\"",
     "dev:local:foreground": "vite --mode test --host 127.0.0.1 --port 4000 --strictPort --open /",

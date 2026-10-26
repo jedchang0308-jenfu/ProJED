@@ -1,10 +1,10 @@
 # SPEC-139：ProJED 納入 Jenfu-Platform 的產品與技術交接契約
 
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。
-- 日期：2026-10-26（Asia/Taipei）；版本：Rev 8（S2 consumer seam）。
-- 文件狀態：**S1：Implemented／Local Acceptance PASS（PostgreSQL 18）；S2：ProJED consumer seam Implemented／External Wire Blocked；S3：RD Readiness Review**。ProJED 技術選型已固定；完整整合仍缺 owner 發布的 ProJED／非員工 wire 與 S3 domain／移轉實作，不作整體 ready 宣告。
-- 適用階段：2026-10-26 使用者已要求完成 DEV-139 開發；本版記錄 S1 runtime／DB 核心及 S2 ProJED consumer seam 的實作與本地自查。正式發布／切流、正式資料、IAM／Secret／billing 及其他 repo 不在本地開發授權內。
-- 直接交接入口：[§11 S1 定案契約](#11-架構決策與-s1-定案契約)、[§12 S1 實作狀態](#12-s1-實作狀態2026-10-26)與[§13 S2 consumer seam](#13-s2-projed-identity-consumer-seam2026-10-26)；[§11.8 技術主管審查](#118-技術主管審查與最小優化)保留 Rev5 修正理由；既有使用者切換見 [§6.3](#63-既有使用者的切換基線)。
+- 日期：2026-10-26（Asia/Taipei）；版本：Rev 9（S3 HTTP read adapter slice）。
+- 文件狀態：**S1：Implemented／Local Acceptance PASS（PostgreSQL 18）；S2：ProJED consumer seam Implemented／External Wire Blocked；S3：HTTP read adapter slice Implemented／Remaining Domain Readiness**。ProJED 技術選型已固定；完整整合仍缺 owner 發布的 ProJED／非員工 wire、server domain schema／routes、其餘操作與移轉實作，不作整體 ready 宣告。
+- 適用階段：2026-10-26 使用者已要求完成 DEV-139 開發；本版記錄 S1 runtime／DB 核心、S2 consumer seam 及 S3 首個唯讀 adapter slice 的實作與本地自查。正式發布／切流、正式資料、IAM／Secret／billing 及其他 repo 不在本地開發授權內。
+- 直接交接入口：[§11 S1 定案契約](#11-架構決策與-s1-定案契約)、[§12 S1 實作狀態](#12-s1-實作狀態2026-10-26)、[§13 S2 consumer seam](#13-s2-projed-identity-consumer-seam2026-10-26)與[§14 S3 read adapter](#14-s3-http-read-adapter-slice2026-10-26)；[§11.8 技術主管審查](#118-技術主管審查與最小優化)保留 Rev5 修正理由；既有使用者切換見 [§6.3](#63-既有使用者的切換基線)。
 - 決策來源：[DEV-139 人類決策](../dev_task.md#dev-139-jenfu-platform-onboarding)；架構取捨：[ADR-054](../decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。本文件不是其他 owner 已接受或已發布的契約。
 
 ## 1. 目的、限制與完成邊界
@@ -408,7 +408,7 @@ Rev 8 沿既有架構完成 S1，並落地 §13 的 ProJED S2 consumer seam。�
 |---|---|---|
 | S1 ProJED runtime／DB 核心 | **RD Implementation Ready＋架構定案**；§11 固定 schema／roles／policy、runtime／actor transaction、checker、migration runner、驗證入口及 source surface。沒有 provider／現有前端切換或真 SSO。 | K01–K08、T01／A10 的限定 local HTTP／DB 層；正常產品 UI 不在 S1。測試 actor 只在隔離 verifier process 內注入，不發布可自述身分的 HTTP auth。 |
 | S2 身分 producer／consumer | ProJED server-only consumer seam 已實作：只接受 verifier output、exact contract pin、有效時間／撤銷與唯一 mapping，成功只產生既有 `ServerActorV1`；production pins 空集合，QA simulation 不進 production import graph。§4.5 的 OrgMaster／Platform owner wire、非員工准入及撤銷仍待 owner。 | 本地 seam 12/12 PASS，不是 A01／A02／A03／A05／A11 或 T03／T06／T08 的真登入證據。external acceptance、既有帳號 mapping proof、相容 origin／Cookie／callback／Session state／期限與在途撤銷界線仍需收斂；其他專案開發另需其明確授權。 |
-| S3 ProJED 現有能力移轉 | §5.4 的逐操作 inventory、HTTP adapter、resource capability／guard、同步／附屬 provider，依 S1／S2 的同一可信 actor→API→DB。 | A03–A11 及 T02／T04／T05／T07／T08；逐操作 DTO／transactions／idempotency、§6 移轉與舊 client／Hosting／PWA 相容、transport／費用及正常 UI 證據。無完整替代／相容證據不能退出原 provider。 |
+| S3 ProJED 現有能力移轉 | 首個 frontend read slice 已實作同源 Cookie／no-store HTTP transport與 workspace、workspace member、board member、role matrix、task、dependency 六個 adapter；尚未加入 backend selector，不會自動 fallback 或取代現行 provider。其餘 §5.4 inventory、server domain schema／routes、resource capability／guard、同步與附屬 provider仍待。 | 本地 read adapter 10/10 PASS只證明 request／DTO seam；不是 server endpoint、actor→API→DB、A03–A11 或 T02／T04／T05／T07／T08證據。逐操作 transactions／idempotency、§6移轉與舊 client／Hosting／PWA相容、容量／費用及正常UI仍需完成；無完整替代／相容證據不能退出原 provider。 |
 
 S1 已完成本地核心；S2 已完成不依賴外部 wire 的 consumer seam，外部 producer／Session 路徑仍阻塞；S3 為 **RD Readiness Review**，沒有整體 architecture closure。S1／S2 seam 都不能宣稱正常產品 UI／SSO／整合完成。真身分依賴會阻止新登入切換與整合驗收，但不阻止獨立的 domain adapter 開發。
 
@@ -631,3 +631,11 @@ S1的transaction-local與transaction advisory lock依據：[PostgreSQL17設定�
 `qa/dev-139/s2/identityConsumer.test.ts` 的 12 項 SIMULATION 覆蓋：production empty pins／current v2 拒絕、非員工 normalized context、verifier 不可繞過、verifier transport unavailable、version／digest／issuer／audience mismatch、時間／撤銷、mapping missing／ambiguous／inactive／unavailable／transport failure、mapping 等待後到期重驗、identity／revision mismatch及 S1 actor guard。`npm run verify:dev-139:s2` 通過獨立 S2 typecheck、production import graph／DB boundary及 12/12 unit。這只證明 seam fail-closed 與內部轉換，不是 owner wire conformance、真 SSO、App Session、資料庫 mapping 或正常 UI PASS。
 
 恢復條件：人類授權對應 Jenfu-Platform／OrgMaster 專案開發後，由各 owner 發布新版本 contract／manifest、ProJED registry／callback／Session／revocation及非員工 Principal publication；ProJED 再以 exact pin、forward-only mapping migration、正常主／Quick入口及 T03／T06／T08 證據接通。未取得前維持 production pins 空集合與未知 API 404。
+
+## 14. S3 HTTP read adapter slice（2026-10-26）
+
+已新增 `src/services/httpApi/httpApiClient.ts` 與 `domainReadAdapter.ts`。Transport 只允許 canonical `/api/v1/` 相對路徑，拒絕 absolute／cross-origin／dot-segment rewrite／backslash／control character；使用 `credentials: same-origin`、`cache: no-store`、`redirect: error`，不接受 token provider或自行加 Authorization header。非 JSON／壞 JSON、network failure與穩定 error envelope分開，401／403／404即使body錯誤仍保留原HTTP status，不把錯誤轉成空資料。
+
+本 slice 固定六個唯讀操作：workspace list、workspace member list、board member list、完整 board role-permission matrix、board task list及dependency list。Resource ref逐段encode並拒絕空值／dot segment；DTO以現行 domain type fail closed，保留 legacy ID、明確空集合matrix、parent／tag／task status與dependency side。owner role仍依現行固定能力契約；wire若送空或缺少fixed owner abilities則拒絕，不靜默擴權。Task rich content重用現有Lexical allowlist validator，未知／不完整shape不進store。
+
+`npm run verify:dev-139:s3` 的獨立typecheck與 `qa/dev-139/s3/httpReadAdapter.test.ts` 10/10 PASS；全app `npx tsc --noEmit`及`npm run build:test`亦PASS（既有chunk／Browserslist警告不變）。此 adapter 尚未由 `dataBackend.ts` 選用，server仍無這六個route，沒有真Session／DB／UI網路證據；因此它只是一個可獨立回歸的frontend contract slice，不宣稱功能移轉或S3完成。下一段應先做對應 server read schema／repository／route 與actor guard，再將sync hook改成可選HTTP polling；不在endpoint不存在時啟用新backend。

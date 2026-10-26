@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node", "vite-plugin-pwa/client", "react", "react-dom"]
+  },
+  "include": [
+    "src/services/httpApi/**/*.ts",
+    "src/types/index.ts",
+    "src/interactions/task/types.ts",
+    "qa/dev-139/s3/**/*.ts"
+  ]
+}
