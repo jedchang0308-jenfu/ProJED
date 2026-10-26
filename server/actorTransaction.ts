@@ -1,0 +1,120 @@
+import type { PoolClient, QueryResultRow } from 'pg';
+
+import type { RuntimeConfig } from './config.js';
+import type { RuntimeDatabase, ScopedQuery } from './db.js';
+import { KernelError, asKernelError } from './errors.js';
+
+export interface ServerActorV1 {
+  readonly principalId: string;
+  readonly localUserId: string;
+  readonly entry: 'main' | 'quick';
+  readonly contextId: string;
+  readonly expiresAtMs: number;
+  readonly accountGuardRevision: string;
+}
+
+export interface ActorQueryPort { query: ScopedQuery }
+
+const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
+const REVISION_RE = /^[1-9][0-9]{0,18}$/;
+const MAX_BIGINT = 9_223_372_036_854_775_807n;
+
+export function validateServerActor(actor: ServerActorV1, nowMs = Date.now()): void {
+  if (typeof actor.principalId !== 'string' || actor.principalId.length < 1 || actor.principalId.length > 255
+      || !UUID_RE.test(actor.localUserId) || !UUID_RE.test(actor.contextId)
+      || (actor.entry !== 'main' && actor.entry !== 'quick')
+      || !Number.isSafeInteger(actor.expiresAtMs) || actor.expiresAtMs <= nowMs
+      || !REVISION_RE.test(actor.accountGuardRevision)
+      || BigInt(actor.accountGuardRevision) > MAX_BIGINT) {
+    throw new KernelError('ACTOR_INVALID', 'Server actor is invalid or expired', 401);
+  }
+}
+
+async function rollback(client: PoolClient): Promise<boolean> {
+  try {
+    await client.query('ROLLBACK');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function runActorTransaction<T>(
+  database: RuntimeDatabase,
+  config: RuntimeConfig,
+  actor: ServerActorV1,
+  callback: (port: ActorQueryPort) => Promise<T>,
+): Promise<T> {
+  validateServerActor(actor);
+  const deadline = performance.now() + config.profile.runtime.timeouts.transactionMillis;
+  const lease = await database.checkout();
+  const client = lease.client;
+  let transactionStarted = false;
+  let beginSent = false;
+  let commitSent = false;
+  let portClosed = false;
+  let inFlight = false;
+
+  const query: ScopedQuery = async <R extends QueryResultRow>(text: string, values: readonly unknown[] = []) => {
+    if (portClosed || performance.now() >= deadline) {
+      throw new KernelError('TRANSACTION_USAGE_INVALID', 'Transaction query port is closed or expired');
+    }
+    if (inFlight) throw new KernelError('TRANSACTION_USAGE_INVALID', 'Parallel queries are not allowed');
+    if (/\b(?:begin|commit|rollback|set\s+(?:local|session|role)|reset|discard)\b/i.test(text)) {
+      throw new KernelError('TRANSACTION_USAGE_INVALID', 'Transaction control is owned by the kernel');
+    }
+    inFlight = true;
+    try {
+      return await client.query<R>(text, [...values]);
+    } finally {
+      inFlight = false;
+    }
+  };
+
+  try {
+    validateServerActor(actor);
+    beginSent = true;
+    await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+    transactionStarted = true;
+    await client.query(`
+      SELECT set_config('projed.actor_principal_id', $1, true),
+             set_config('projed.actor_local_user_id', $2, true),
+             set_config('projed.actor_entry', $3, true),
+             set_config('projed.actor_context_id', $4, true),
+             set_config('projed.actor_guard_revision', $5, true),
+             set_config('statement_timeout', $6, true),
+             set_config('lock_timeout', $7, true),
+             set_config('idle_in_transaction_session_timeout', $8, true)
+    `, [actor.principalId, actor.localUserId, actor.entry, actor.contextId, actor.accountGuardRevision,
+      `${config.profile.runtime.timeouts.statementMillis}ms`, `${config.profile.runtime.timeouts.lockMillis}ms`,
+      `${config.profile.runtime.timeouts.idleInTransactionMillis}ms`]);
+    await client.query("SELECT pg_advisory_xact_lock_shared(hashtextextended('projed:account:' || $1, 0))", [actor.localUserId]);
+    const guard = await client.query<{ valid: boolean }>('SELECT projed_core.actor_context_valid_v1() AS valid');
+    if (guard.rows[0]?.valid !== true) throw new KernelError('ACCESS_DENIED', 'Actor is not authorized', 403);
+    const result = await callback({ query });
+    portClosed = true;
+    if (inFlight) throw new KernelError('TRANSACTION_USAGE_INVALID', 'Callback returned with an unfinished query');
+    validateServerActor(actor);
+    if (performance.now() >= deadline) throw new KernelError('TRANSACTION_USAGE_INVALID', 'Transaction deadline exceeded');
+    commitSent = true;
+    try {
+      await client.query('COMMIT');
+    } catch (error) {
+      throw new KernelError('DB_COMMIT_UNKNOWN', 'Commit result is unknown', 503, { cause: error });
+    }
+    transactionStarted = false;
+    lease.release();
+    return result;
+  } catch (error) {
+    portClosed = true;
+    if (commitSent) {
+      lease.release(true);
+      throw error instanceof KernelError && error.code === 'DB_COMMIT_UNKNOWN'
+        ? error
+        : new KernelError('DB_COMMIT_UNKNOWN', 'Commit result is unknown', 503, { cause: error });
+    }
+    const rolledBack = transactionStarted ? await rollback(client) : true;
+    lease.release((beginSent && !transactionStarted) || !rolledBack || inFlight);
+    throw asKernelError(error);
+  }
+}

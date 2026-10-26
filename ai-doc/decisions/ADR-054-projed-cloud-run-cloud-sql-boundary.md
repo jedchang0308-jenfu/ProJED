@@ -1,8 +1,8 @@
 # ADR-054：ProJED Cloud Run／Cloud SQL 與跨系統責任邊界
 
-- 日期：2026-10-08（Asia/Taipei）。
-- 修訂：Rev 6，補既有使用者的相容入口、帳號／PWA 保留與移轉驗收；相容切換尚未實作或演練。
-- 狀態：**Accepted（ProJED 技術選型與 S1 runtime／DB 核心定案）**；S1 為 RD Implementation Ready＋架構定案。S2／S3 及完整整合的外部契約未定案；本 ADR 的 Accepted 不表示其他 owner 接受或整體架構 closure。
+- 日期：2026-10-26（Asia/Taipei）。
+- 修訂：Rev 7，記錄 S1 本地實作；既有使用者相容切換尚未實作或演練。
+- 狀態：**Accepted（ProJED 技術選型與 S1 runtime／DB 核心定案）**；S1 程式與 PostgreSQL 18 本地隔離驗收 PASS。S2／S3 及完整整合的外部契約未定案；本 ADR 的 Accepted 不表示其他 owner 接受或整體架構 closure。
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。詳細交接契約：[SPEC-139](../specs/SPEC-139-projed-jenfu-platform-onboarding.md)。
 - 適用未來整合路徑；不立即取代既有 runtime，不表示其他 repo 接受新契約，也不授權程式、DB、遠端或付費操作。
 
@@ -45,7 +45,7 @@ D2 最新人類原文為「保留 ProJED 現有的工作區、看板與權限功
 7. **先相容與演練，再受控切換。** managed DDL forward-only，新舊 migration 歷史分開；verified mapping 保留原帳號 UUID、canonical IDs／權限／receipt，本機資料另驗。先準備舊入口／舊 client 相容，再演練 snapshot／delta／全來源 writer fence／reconciliation；短暫停寫完成最後核對後才啟用新唯一 writer。不能要求所有使用者同時更新、靠前端停送或按時間戳雙寫。新寫入後的回復須保留新資料；舊入口／資產處置另有恢復義務及 gate。
 8. **費用是限制，分期驗證效益。** 用可取得基線比較同等用量持續費用，列出兩入口、相容 Hosting、worker／storage／同步／SQL 容量等邊際增量與雙跑／恢復窗口支出；未能退役的費用不能算節省。沒有必須降費或有投資回收期的條件，不擅設增幅百分比。首階段驗基礎對齊與原功能相容，任務／資料串接效益在後續實際情境驗證。
 9. **首階段不擴增業務功能。** ProJED 是身分契約 consumer，Platform 提供 registry／launch／handoff；不新增任務摘要 BFF、AI-PDM project↔Board mapping、跨 app task API 或另一份 task master。跨 app 業務 ACL 預設拒絕，後續明確選定情境再補契約。
-10. **固定工程選型，分段完成替代證據。** Node 24／npm 11、node:http＋pg、PostgreSQL 17、版本 polling＋canonical reload、私有 Cloud Storage、沿原 DB claim／lease 的 bounded worker／Job；詳細決策見 SPEC-139 Rev6 §11.1。單一靜態 profile／migration manifest、wrapper attempt binding、startup catalog與ready單一SELECT分工；pool排隊只用pg FIFO，S3 polling重用coalescer而不按view開timer，內部actor只用ServerActorV1。完整 inventory、legacy ref／UUID、Session前置條件及receipt保留；真provider／原功能移轉及Hosting相容仍須S2／S3驗證。
+10. **固定工程選型，分段完成替代證據。** Node 24／npm 11、node:http＋pg；本地隔離驗證支援 PostgreSQL 17／18，managed target 按實際綁定版本重驗。同步採版本 polling＋canonical reload，檔案採私有 Cloud Storage，工作沿原 DB claim／lease 的 bounded worker／Job；詳細決策見 SPEC-139 Rev7 §11。完整 inventory、legacy ref／UUID、Session前置條件及receipt保留；真provider／原功能移轉及Hosting相容仍須S2／S3驗證。
 
 使用思考習慣：#效用理論、#限制條件、#多層次分析
 
@@ -76,4 +76,4 @@ D1／D2及本輪架構文件要求已寫入SPEC-139／DEV-139／map。Rev4自審
 
 Rev6 增補既有使用者相容基線及移轉驗收，S1 核心 source surface／命令／K01–K08 不變；S2 身分 producer／consumer 與 S3 現有能力移轉仍為 RD Readiness Review，外部非員工 wire／撤銷、全部 operation／guard／polling／provider 及相容入口／完整移轉契約未定案。A11／T07／T08 尚未執行，不能宣稱 DEV-139 全架構 closure、無縫切換已具備、正常產品 UI 或整合完成。checkpoint 等目前 gated 能力保持原狀。新登入／provider 切換必須有真身分及相容證據，不重問 D1／D2，也不擴權修改其他 repo。
 
-本輪仍只更新 ProJED 四份文件，S1 的成熟度表示可交接的契約，不構成已要求 coding／啟動 runtime。後續實作按明確本地／非正式範圍，S2／S3 需各自 prerequisite；正式 migration／release／retirement 各依原 gate。費用若明顯增加、私人內容範圍擴大、Principal 真相變更或需超出已授權專案，停止受影響動作並提出具體影響。
+2026-10-26 已依新的人類實作要求，在 ProJED 獨立工作樹建立 S1 runtime／DB kernel、migration／checker／verifier；型別、靜態契約、unit、PostgreSQL 18 task-owned isolated DB 與既有 Vite build 均通過。COO 審視後不再要求為本地 gate 額外安裝 PG17；managed target 仍依實際版本重驗。既有前端、provider 與正式 runtime 未切換。S2／S3 需各自 prerequisite；正式 migration／release／retirement 各依原 gate。

@@ -1,0 +1,56 @@
+{
+  "profileVersion": 1,
+  "appKey": "projed",
+  "kernelContractVersion": 1,
+  "environment": "disposable",
+  "database": {
+    "namePattern": "^dev139_s1_[0-9a-f]{32}$",
+    "host": "127.0.0.1",
+    "portPolicy": "task-owned-ephemeral",
+    "supportedPostgresMajors": [17, 18],
+    "schemas": ["projed_core", "projed_contract"]
+  },
+  "roles": {
+    "owner": "projed_owner_disposable",
+    "migrator": "projed_migrator_disposable",
+    "runtime": "projed_runtime_disposable"
+  },
+  "migrations": [
+    {
+      "version": "0001_runtime_boundary_v1",
+      "path": "db/migrations/0001_runtime_boundary_v1.sql"
+    },
+    {
+      "version": "0002_profile_actor_v1",
+      "path": "db/migrations/0002_profile_actor_v1.sql"
+    }
+  ],
+  "objectAllowlist": [
+    "projed_core.schema_migrations",
+    "projed_core.runtime_metadata",
+    "projed_core.profiles",
+    "projed_core.account_authorization_guards",
+    "projed_core.current_actor_user_id_v1",
+    "projed_core.actor_context_valid_v1"
+  ],
+  "staticFixturePath": "qa/dev-139/s1/static",
+  "runtime": {
+    "bindHost": "127.0.0.1",
+    "cloudRunBindHost": "0.0.0.0",
+    "pool": {
+      "max": 5,
+      "min": 0,
+      "idleTimeoutMillis": 30000,
+      "connectionTimeoutMillis": 3000,
+      "maxWaiting": 32
+    },
+    "timeouts": {
+      "requestMillis": 10000,
+      "transactionMillis": 5000,
+      "statementMillis": 2000,
+      "lockMillis": 1000,
+      "idleInTransactionMillis": 5000,
+      "shutdownMillis": 8000
+    }
+  }
+}

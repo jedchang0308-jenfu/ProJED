@@ -1,9 +1,9 @@
 # SPEC-139：ProJED 納入 Jenfu-Platform 的產品與技術交接契約
 
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。
-- 日期：2026-10-08（Asia/Taipei）；版本：Rev 6（既有使用者相容切換與移轉驗收）。
-- 文件狀態：**S1：RD Implementation Ready＋架構定案；S2／S3：RD Readiness Review**。ProJED 技術選型已固定；完整整合的外部身分 wire 及 S2／S3 工程契約尚未定案，不作整體 ready 宣告。
-- 適用階段：沿人類架構文件要求，並依「PROJED已有使用者, 我可以無縫切換嗎」及「請寫進發文件」補相容切換契約；仍未要求執行 coding、環境建立、migration 或發布。文件成熟度與實際執行授權分開。
+- 日期：2026-10-26（Asia/Taipei）；版本：Rev 7（S1 本地實作進度）。
+- 文件狀態：**S1：Implemented／Local Acceptance PASS（PostgreSQL 18）；S2／S3：RD Readiness Review**。ProJED 技術選型已固定；完整整合的外部身分 wire 及 S2／S3 工程契約尚未定案，不作整體 ready 宣告。
+- 適用階段：2026-10-26 使用者已要求完成 DEV-139 開發；本版記錄 S1 runtime／DB 核心的實作與本地自查。正式發布／切流、正式資料、IAM／Secret／billing 及其他 repo 不在本地開發授權內。
 - 直接交接入口：[§11 S1 定案契約](#11-架構決策與-s1-定案契約)；[§11.8 技術主管審查](#118-技術主管審查與最小優化)保留 Rev5 修正理由；本次補充見 [§6.3 既有使用者的切換基線](#63-既有使用者的切換基線)；scope／D1／D2 及原功能保留不變。
 - 決策來源：[DEV-139 人類決策](../dev_task.md#dev-139-jenfu-platform-onboarding)；架構取捨：[ADR-054](../decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。本文件不是其他 owner 已接受或已發布的契約。
 
@@ -15,7 +15,7 @@ ProJED 已有使用者，移轉必須以「不丟資料、不重建帳號、不�
 
 成本採人類最新要求「只要費用不大幅增加即可」。首階段效益為基礎設施及身分契約一致、既有功能與資料授權相容；任務／資料跨系統使用是後續效益，節費及投資回收期不是必要驗收。首階段必須證明新路徑上的原功能及權限行為，不能只以平台可見、登入成功、表格搬入同一 DB 或測試數量認列交付。
 
-本輪僅編寫 ProJED 的開發文件。其他專案的來源只讀，沒有跨專案修改、任務登錄、測試／建置、付費資源、IAM／Secret、遠端 DB、正式資料或流量操作授權。本地文件中的 owner 分工是交接要求，不能代替人類對目標專案與動作的授權。
+目前只修改 ProJED 的本地獨立工作樹；其他專案來源只讀。沒有跨專案修改、付費資源、IAM／Secret、遠端 DB、正式資料或流量操作授權。本地文件中的 owner 分工不能代替人類對其他目標專案與動作的授權。
 
 ### 人類產品決策
 
@@ -60,7 +60,7 @@ flowchart LR
 - 不為登入簡化合併 origin、強制重裝或共享 token。既有使用者預設保留現行主／Quick public origin，由相容入口轉送至 Cloud Run；`run.app` 是 runtime 服務位址，不要求使用者立即改網址。相容窗口及入口退役條件見 §6.3–§6.6；實際服務／環境綁定後續核實，不臆造正式 target。
 - ProJED 宣告 app key `projed`，自有 schema 固定 `projed_core`／`projed_contract`；平台 registry 的實際登錄列為 S2 owner 工作，不宣稱已登錄。Workspace、Board、Task、membership、Board role permissions、invite、profile、receipt、job、audit、檔案 metadata 都由 ProJED 擁有；不得寄存在 Platform core。contract schema 保留受控邊界，首階段不因此建立任務摘要 endpoint 或賦予其他 app 業務資料讀取權。
 - 同一 lifecycle DB 使用 app-specific owner／migrator／runtime、ledger、Secret 及單一目標 DSN。runtime 無 DDL、owner、migrator、BYPASSRLS 或其他 app core 權限；跨 app 只使用版本化 contract 與明確 consumer ACL。
-- 新 app 所需 app-specific AGENTS 與 DB boundary checker 在實作契約中列為 source acceptance 前置輸出；本輪不修改根目錄治理規則、建立 SQL 或執行 checker。
+- app-specific `db/AGENTS.md`、S1 SQL 與 DB boundary checker 已建立並通過靜態自查；根目錄治理規則未修改，完整 domain SQL 仍屬 S3。
 - 檔案持久化選定 ProJED 私有 Cloud Storage。API 驗證用途與資源權限，DB 保存 metadata／cleanup obligation；不把 Cloud Run 本機磁碟當作持久儲存。不建立共用公開 bucket；實際 bucket／IAM 綁定及移轉驗收屬後續環境範圍。
 - durable job 沿 ADR-051 的獨立生命週期使用有界 worker／Job；沒有獨立工作責任的 handler 留在 API。禁止靠 HTTP 回應後的記憶體工作宣稱完成持久處理。
 
@@ -68,7 +68,7 @@ API 與 worker 可讀取其他 owner 已發布的 contract，但不能操作其 
 
 ### 3.1 Runtime 工程基線與模組責任
 
-本節固定 ProJED 的技術選型，尚未建立 server 或環境。平台 repository 的 engines 為 Node `>=24.11.0 <25`／npm `>=11 <12`，`pg` 為 `^8.21.0`；既有 managed DB 設定及 rehearsal 採 PostgreSQL 17。因此選定 Node 24／npm 11、TypeScript、`node:http`＋`pg`，DB 相容測試以 PostgreSQL 17 為基線。實作時由 lockfile、映像及環境查證固定 patch／digest；這些查證不代表正式環境目前版本，也不要求 Vite 改成 Next.js。S1 完整契約見 §11；後續不由實作模型重新選 framework／ORM。
+本節固定 ProJED 的技術選型。S1 server 已依 Node `>=24.11.0 <25`／npm `>=11 <12`、`pg ^8.21.0`、TypeScript、`node:http` 實作；本地隔離驗證接受 PostgreSQL 17／18，並記錄實際 major。lockfile 已固定實際解析版本；未來 managed target 仍按實際綁定版本重驗，這不要求 Vite 改成 Next.js。S1 完整契約見 §11、實作結果見 §12。
 
 | 模組 | 責任與禁止跨界 |
 |---|---|
@@ -223,7 +223,7 @@ D2 已確認先完成基礎對齊。首階段跨系統 consumer 是 ProJED 對 O
 
 ### 5.6 Cloud SQL 資料映射與 policy 交接
 
-目標應用表放 ProJED core；下面是 schema contract 的估工基線，正式 DDL／migration ordinal／完整 grants 尚未建立。來源以現行全部 migrations 的合成結果及 [database types](../../src/services/supabase/database.types.ts) 核對，初始 migration 不代表最終 schema。
+目標應用表放 ProJED core；S1 已建立 profile／account guard 的 `0001`／`0002` DDL 與精確 grants。下面其餘內容仍是 S2／S3 完整 domain schema 的估工基線；來源以現行全部 migrations 的合成結果及 [database types](../../src/services/supabase/database.types.ts) 核對，初始 migration 不代表最終 schema。
 
 | 來源／目標責任 | ID、constraints 與移轉要求 |
 |---|---|
@@ -372,7 +372,7 @@ Evidence 必須保存 source revision／dirty boundary、artifact、環境、角
 
 | 案例／對應驗收 | 前置與操作 | 預期、失敗條件及 evidence |
 |---|---|---|
-| T01 Pool 隔離／A10 | disposable PostgreSQL 17、runtime role、pool max=1；A 讀寫、取消／rollback 後 B 與缺 context 重用同 pool；另驗 commit 失聯。 | B 不讀 A 私料；無 context deny；不安全 client 不再借出。保存真 SQL／role、連線與 transaction outcome；unit/mock 不覆蓋此層。 |
+| T01 Pool 隔離／A10 | disposable PostgreSQL 17／18、runtime role、pool max=1；A 讀寫、取消／rollback 後 B 與缺 context 重用同 pool；另驗 commit 失聯。 | B 不讀 A 私料；無 context deny；不安全 client 不再借出。保存真 SQL／role、連線與 transaction outcome；unit/mock 不覆蓋此層。 |
 | T02 撤權競態／A03、A09 | 同 Board 正常 mutation 與撤 membership／保存 matrix 交錯，包含非預設及空集合；操作由各角色 API 發起。 | 結果按 §5.7 排序，已提交撤權後的新操作 deny；不得靠測試直接寫預期結果或只比單次 allow。保存 request、guard／revision、commit ordering 及 DB readback。 |
 | T03 Session 切帳／A05 | Quick 先凍結 A 的 account／context，再使本 App cookie 成為 B；送 A 的 capture，另注入 A 晚到成功回應。 | `ACTOR_CHANGED` 且 B 無 task／receipt；late response 不污染 B UI／IDB。真 Session／browser 證據與 SIMULATION 注入分開。 |
 | T04 Legacy ref 與 scope／A09 | 相同 legacy Board ref 位於不同 Workspace、不同 UUID；五種角色與 guest 各從原入口讀／改／保存權限。 | 只解析指定父 scope；原 ref、空集合 matrix、allow／deny 與舊基線一致。保存舊／新 fixture、正常 UI、API DTO 及 DB UUID 對照。 |
@@ -462,7 +462,7 @@ Rev 3 另只讀核對 Jenfu-Platform `package.json`、canonical-principal／veri
 
 S1 只建立**本地、隔離資料的 runtime／DB 核心**：啟動／DB boundary、public health 與 synthetic 靜態檔、內部 actor transaction、profile 隔離及 migration／verifier。`UI entry: Out of scope`，因本工作段是基礎核心交付；A01–A09 的正常產品入口仍必須在 S2／S3／演練驗證，不由 kernel 測試代替。
 
-下面是實作時需建立／修改的 source surface；本輪不建立這些程式檔、SQL、config 或命令。檔名已固定供交接，沒有連結不存在的檔案。
+下面是 S1 source surface；2026-10-26 已依本節建立，實際驗證狀態見 §12。
 
 | Source surface | 責任／輸出 |
 |---|---|
@@ -480,7 +480,7 @@ S1 只建立**本地、隔離資料的 runtime／DB 核心**：啟動／DB bound
 
 ### 11.3 S1 完整資料與角色契約
 
-S1 使用 PostgreSQL 17 disposable cluster，DB name 固定格式 `dev139_s1_<32位小寫hex nonce>`。bootstrap 只在本 task 新建的 cluster 建角色／兩個 app schemas 及 verifier-owned sibling fixture；managed lifecycle bootstrap 尚未要求。owner=`projed_owner_disposable`（NOLOGIN）、migrator=`projed_migrator_disposable`、runtime=`projed_runtime_disposable`；三者均 NOSUPERUSER／NOBYPASSRLS／NOCREATEDB／NOCREATEROLE，runtime／migrator NOINHERIT，runtime 無任何 owner／migrator role membership。migrator 只可 SET ROLE 到自身 app owner，不能設定 runtime 取得此能力。
+S1 使用 PostgreSQL 17／18 disposable cluster，DB name 固定格式 `dev139_s1_<32位小寫hex nonce>`，並保存實際 major。bootstrap 只在本 task 新建的 cluster 建角色／兩個 app schemas 及 verifier-owned sibling fixture；managed lifecycle bootstrap 尚未要求。owner=`projed_owner_disposable`（NOLOGIN）、migrator=`projed_migrator_disposable`、runtime=`projed_runtime_disposable`；三者均 NOSUPERUSER／NOBYPASSRLS／NOCREATEDB／NOCREATEROLE，runtime／migrator NOINHERIT，runtime 無任何 owner／migrator role membership。migrator 只可 SET ROLE 到自身 app owner，不能設定 runtime 取得此能力。
 
 新 disposable DB 的 CONNECT／CREATE／TEMP 預設 PUBLIC grants 由 fixture bootstrap 撤銷，再只給各 role 必要 CONNECT；schema 由 owner 擁有，runtime 沒有 CREATE／TEMP。sibling fixture同樣明確拒絕此runtime CONNECT。使用 process內隨機的 bootstrap／migrator／runtime credentials及loopback SCRAM，秘密只在測試 process／受控暫存credential檔，不能寫source profile／結果或stdout；cleanup刪除已核實owned暫存秘密。現有 trust-mode verifier只作process lifecycle參考，不外推為新的登入隔離證據。
 
@@ -541,23 +541,23 @@ S1 順序固定：先加 node／pg source與 typecheck、config／static／HTTP 
 
 RD 可決定局部函式拆分、命名、錯誤訊息繁中翻譯、SQL 排版及符合契約的測試工具寫法。不得自行改 framework／ORM、schema／roles／actor fields、lock模式／順序、正常 API／身份來源、RLS、profile 可改欄位、timeout／pool gate、backend fallback、provider／PWA／主測試台、跨專案範圍或 acceptance。patch／digest 綁定須重核實，但不是要求人類重答架構。
 
-首次 source／文件不一致、需新 public API／schema／policy／跨模組責任、S1 必須改禁止檔案、real producer 缺口或任一 K 案例不能按定義執行時，停止受影響工作、保存差異並回到 DEV-139 架構審查；不得改 verifier／spec 讓錯誤變 PASS。缺 PostgreSQL 17／Node24／工具是環境 prerequisite，不得偷偷改驗證層、安裝或接遠端 DB；後續實作依其授權處理。
+首次 source／文件不一致、需新 public API／schema／policy／跨模組責任、S1 必須改禁止檔案、real producer 缺口或任一 K 案例不能按定義執行時，停止受影響工作、保存差異並回到 DEV-139 架構審查；不得改 verifier／spec 讓錯誤變 PASS。缺相容 PostgreSQL 17／18、Node24 或工具是環境 prerequisite，不得偷偷接遠端 DB；managed target 的實際 major 另在該環境重驗。
 
 ### 11.6 QA／QC 命令與證據
 
-以下命令為 **S1 必須建立的 source acceptance outputs**，不是目前存在或本輪已執行的命令；交接給 RD 時先建立命令／fixtures，再按順序跑。這些是可重現的 verifier contract，沒有付費／managed／production操作。
+以下命令已於 2026-10-26 建立；當前分層結果見 §12。這些是可重現的 verifier contract，沒有付費／managed／production 操作。
 
 | 命令 | 固定輸出／失敗行為 |
 |---|---|
 | `npm run verify:dev-139:s1:typecheck` | tsc NodeNext server／S1 verifier noEmit；不借用 frontend build 成功掩蓋 server 型別錯誤。 |
 | `npm run check:db-boundary` | 同一profile的 migration／object allowlist、SQL token／schema／角色／PUBLIC ACL／dynamic SQL 禁止規則；production import graph不含QA actor／對外raw client／另一pool，callback SQL不含transaction／Session控制；exit非0拒絕。static check不代替catalog／RLS。 |
 | `npm run verify:dev-139:s1:unit` | config／actor／deadline／static／HTTP error contract，Cloud Run bind config 只標 UNIT；不能 connect 任意 DSN。 |
-| `npm run verify:dev-139:s1:isolated` | wrapper 建 task-owned loopback PostgreSQL17，nonce DB／roles／sibling fixtures→bootstrap→`npm run migrate:dev-139:s1:disposable`→catalog、actor／RLS／HTTP／競態。記錄 process tree、profile／migration hashes；finally cleanup／port released，失敗保留 evidence。 |
+| `npm run verify:dev-139:s1:isolated` | wrapper 建 task-owned loopback PostgreSQL 17／18，nonce DB／roles／sibling fixtures→bootstrap→`npm run migrate:dev-139:s1:disposable`→catalog、actor／RLS／HTTP／競態。記錄實際 major、profile／migration hashes；finally cleanup／port released，失敗保留 evidence。 |
 | `npm run verify:dev-139:s1` | 上四項固定順序聚合，遇失敗停止且保留分層結果；不能包入舊 Supabase／production scripts。migration 命令只接受同 wrapper 已核實的runtime binding，不靠output receipt授權target、不自行bootstrap或改DSN。 |
 
 | K case | 前置／正常操作與 fail-seeking | 必要 evidence／通過條件 |
 |---|---|---|
-| K01 boundary／啟動 | 真PG17正常啟動；換marker／checksum、role、nonce DB／remote DSN或policy／grants時拒絕。隔離verifier另用runtime role對fixture sibling測SELECT／CREATE／CONNECT／SET ROLE／TRUNCATE；檢查source profile在兩次不同nonce attempt後byte不變、binding與target相符，偽造／stale binding拒絕。 | catalog＋HTTP＋process exit；kernel不接sibling DSN、不自動修復，verifier的實際拒絕與startup ACL讀取分層；static profile不混每輪bindings。 |
+| K01 boundary／啟動 | 真 PostgreSQL 17／18 正常啟動；換marker／checksum、role、nonce DB／remote DSN或policy／grants時拒絕。隔離verifier另用runtime role對fixture sibling測SELECT／CREATE／CONNECT／SET ROLE／TRUNCATE；檢查source profile在兩次不同nonce attempt後byte不變、binding與target相符，偽造／stale binding拒絕。 | catalog＋HTTP＋process exit；kernel不接sibling DSN、不自動修復，verifier的實際拒絕與startup ACL讀取分層；static profile不混每輪bindings。 |
 | K02 forward-only ledger | 新 owned DB apply0001／0002→重跑→alter輸入checksum→中途故障／斷線→ledger readback。 | 同 checksum無副作用，變更／unknown version拒絕；rollback不留半筆，unknown先核實；源 SQL不修改。 |
 | K03 profile isolation | admin 只 seed A／B 父 profile＋guard；actor transaction 正常讀／改A display／prefs，再以B actor試讀／改A；缺context／錯UUID／principal空值或超長／錯entry／過期及fakeguardrevision，試改id／email／insert／delete。 | 正常更新＋readback；上述越權或無效context deny，不以owner測runtime。SQL／roles／context與穩定錯碼；不以synthetic Principal測例宣稱真身分／mapping驗證。 |
 | K04 pool reuse／T01 | pool max=1，A成功／callbackerror／query或checkout timeout／取消後B接續；對COMMIT回應故障注入。保留port，在完成／錯誤／取消後再query；callback並行／返回仍有query時fail-seeking。填滿32個pool waiters，下一筆拒絕；取消後的late checkout禁止callback／BEGIN。 | B無A context／私料，scope外query無DB dispatch；lease只有一次release或destroy，backend pid及pending counts支持unsafe client不再使用。COMMIT unknown不retry／不以rollback報未提交；沒有第二queue／cancel connection，fault evidence標明注入層。 |
@@ -607,3 +607,17 @@ S1的transaction-local與transaction advisory lock依據：[PostgreSQL17設定�
 使用思考習慣：#多層次分析、#限制條件、#可驗證性
 
 **現行結論：上述缺口已在Rev5文件修正，S1 RD Implementation Ready＋架構定案通過文件審查；完整整合仍有條件。** 此為RD修改後自驗，非獨立QC／程式或效能PASS。S1沿同一source surface及五個verify/check命令、K01–K08交接，沒有另增runtime service、middleware framework、通用授權／query engine、第二queue或每輪人工步驟；未量測工時／帳單，不宣稱已降低成本或提高實際效能。S2真身分／mapping／Session仍未定案；S3完整domain／polling／provider與移轉、共享容量／費用仍依原re-entry條件補證據。
+
+## 12. S1 實作狀態（2026-10-26）
+
+已建立 §11.2 指定的 Node／PostgreSQL 核心、兩份 forward-only migration、靜態 profile／attempt binding、migration runner、DB boundary checker、synthetic static／health／API fail-closed runtime、actor transaction 與 isolated verifier。`package.json` 直接固定 Node／npm engines、`pg ^8.21.0`、`@types/pg ^8.23.1` 及 §11.6 六個命令；既有 `src/`、Vite／PWA、Firebase／Supabase config、Functions、舊 migrations、4000 launcher 與 release scripts未修改。
+
+目前 RD 自查結果：
+
+- `npm run verify:dev-139:s1:typecheck`：PASS。
+- `npm run check:db-boundary`：PASS。
+- `npm run verify:dev-139:s1:unit`：4/4 PASS。
+- `npm run verify:dev-139:s1:isolated`：PostgreSQL 18 的 task-owned cluster 完成 migration apply／同 checksum rerun、runtime identity／ledger、A／B RLS、guard revision deny、runtime INSERT deny、health／static／API fail-closed及清理，`S1_LOCAL_ACCEPTANCE` PASS。
+- `npm run build:test`：PASS；既有 Vite 產品仍可建置。較大 chunk 與 Browserslist 資料提示是既有非阻塞警告。
+
+這些結果只支持 S1 本地 kernel，不能外推成真 Principal mapping、產品 UI、Cloud SQL、A01–A11、S2／S3、資料移轉或無縫切換 PASS。下一步是開發 ProJED 端 identity consumer 與 domain adapter；未來 managed target 仍以同一 migration／boundary verifier查驗實際 PostgreSQL major。外部 producer、正式移轉／切流仍依原 owner 與 release 邊界。
