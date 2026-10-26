@@ -13,7 +13,17 @@ export interface ServerActorV1 {
   readonly accountGuardRevision: string;
 }
 
-export interface ActorQueryPort { query: ScopedQuery }
+export type BoardMutationAuthorization = 'bootstrap' | 'edit-settings' | 'manage-members' | 'configure-permissions';
+
+export interface ActorQueryPort {
+  query: ScopedQuery;
+  authorizeWorkspaceBootstrap(tenantId: string): Promise<void>;
+  authorizeBoardMutation(
+    tenantId: string,
+    projectId: string,
+    authorization: BoardMutationAuthorization,
+  ): Promise<void>;
+}
 
 const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const REVISION_RE = /^[1-9][0-9]{0,18}$/;
@@ -55,19 +65,78 @@ export async function runActorTransaction<T>(
   let portClosed = false;
   let inFlight = false;
 
-  const query: ScopedQuery = async <R extends QueryResultRow>(text: string, values: readonly unknown[] = []) => {
+  const guardedClientQuery = async <R extends QueryResultRow>(text: string, values: readonly unknown[] = []) => {
     if (portClosed || performance.now() >= deadline) {
       throw new KernelError('TRANSACTION_USAGE_INVALID', 'Transaction query port is closed or expired');
     }
     if (inFlight) throw new KernelError('TRANSACTION_USAGE_INVALID', 'Parallel queries are not allowed');
-    if (/\b(?:begin|commit|rollback|set\s+(?:local|session|role)|reset|discard)\b/i.test(text)) {
-      throw new KernelError('TRANSACTION_USAGE_INVALID', 'Transaction control is owned by the kernel');
-    }
     inFlight = true;
     try {
       return await client.query<R>(text, [...values]);
     } finally {
       inFlight = false;
+    }
+  };
+
+  const query: ScopedQuery = async <R extends QueryResultRow>(text: string, values: readonly unknown[] = []) => {
+    if (/\b(?:begin|commit|rollback|set\s+(?:local|session|role)|reset|discard)\b/i.test(text)
+        || /\bset_config\s*\(/i.test(text)) {
+      throw new KernelError('TRANSACTION_USAGE_INVALID', 'Transaction control is owned by the kernel');
+    }
+    return guardedClientQuery<R>(text, values);
+  };
+
+  const authorizeBoardMutation = async (
+    tenantId: string,
+    projectId: string,
+    authorization: BoardMutationAuthorization,
+  ): Promise<void> => {
+    if (!UUID_RE.test(tenantId) || !UUID_RE.test(projectId)) {
+      throw new KernelError('TRANSACTION_USAGE_INVALID', 'Board mutation scope is invalid');
+    }
+    const result = await guardedClientQuery<{ allowed: boolean }>(`
+      WITH authz AS (
+        SELECT CASE $3::text
+          WHEN 'bootstrap' THEN projed_core.actor_has_workspace_capability_v1($1::uuid, 'create_board')
+          WHEN 'edit-settings' THEN projed_core.actor_has_board_capability_v1($1::uuid, $2::uuid, 'edit_board_settings')
+          WHEN 'manage-members' THEN projed_core.actor_has_board_capability_v1($1::uuid, $2::uuid, 'manage_board_members')
+          WHEN 'configure-permissions' THEN projed_core.actor_can_configure_role_permissions_v1($1::uuid, $2::uuid)
+          ELSE false
+        END AS allowed
+      )
+      SELECT allowed,
+             CASE WHEN allowed
+               THEN set_config('projed.authorized_board_mutation', $1::text || '/' || $2::text, true)
+               ELSE ''
+             END AS configured
+        FROM authz
+    `, [tenantId, projectId, authorization]);
+    if (result.rows[0]?.allowed !== true) {
+      throw new KernelError('ACCESS_DENIED', 'Actor is not authorized', 403);
+    }
+  };
+
+  const authorizeWorkspaceBootstrap = async (tenantId: string): Promise<void> => {
+    if (!UUID_RE.test(tenantId)) {
+      throw new KernelError('TRANSACTION_USAGE_INVALID', 'Workspace bootstrap scope is invalid');
+    }
+    const result = await guardedClientQuery<{ allowed: boolean }>(`
+      WITH authz AS (
+        SELECT EXISTS (
+          SELECT 1 FROM projed_core.tenants tenant
+           WHERE tenant.id = $1::uuid
+             AND tenant.owner_id = projed_core.current_actor_user_id_v1()
+        ) AS allowed
+      )
+      SELECT allowed,
+             CASE WHEN allowed
+               THEN set_config('projed.authorized_workspace_bootstrap', $1::text, true)
+               ELSE ''
+             END AS configured
+        FROM authz
+    `, [tenantId]);
+    if (result.rows[0]?.allowed !== true) {
+      throw new KernelError('ACCESS_DENIED', 'Actor is not authorized', 403);
     }
   };
 
@@ -91,7 +160,7 @@ export async function runActorTransaction<T>(
     await client.query("SELECT pg_advisory_xact_lock_shared(hashtextextended('projed:account:' || $1, 0))", [actor.localUserId]);
     const guard = await client.query<{ valid: boolean }>('SELECT projed_core.actor_context_valid_v1() AS valid');
     if (guard.rows[0]?.valid !== true) throw new KernelError('ACCESS_DENIED', 'Actor is not authorized', 403);
-    const result = await callback({ query });
+    const result = await callback({ query, authorizeWorkspaceBootstrap, authorizeBoardMutation });
     portClosed = true;
     if (inFlight) throw new KernelError('TRANSACTION_USAGE_INVALID', 'Callback returned with an unfinished query');
     validateServerActor(actor);

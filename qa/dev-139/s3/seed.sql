@@ -2,13 +2,15 @@ INSERT INTO projed_core.profiles(id, email, display_name) VALUES
   ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'a@example.invalid', 'A'),
   ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'b@example.invalid', 'B'),
   ('cccccccc-cccc-4ccc-8ccc-cccccccccccc', 'c@example.invalid', 'C'),
-  ('dddddddd-dddd-4ddd-8ddd-dddddddddddd', 'd@example.invalid', 'D');
+  ('dddddddd-dddd-4ddd-8ddd-dddddddddddd', 'd@example.invalid', 'D'),
+  ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', 'e@example.invalid', 'E');
 
 INSERT INTO projed_core.account_authorization_guards(local_user_id, active, revision) VALUES
   ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', true, 1),
   ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', true, 1),
   ('cccccccc-cccc-4ccc-8ccc-cccccccccccc', true, 1),
-  ('dddddddd-dddd-4ddd-8ddd-dddddddddddd', true, 1);
+  ('dddddddd-dddd-4ddd-8ddd-dddddddddddd', true, 1),
+  ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', true, 1);
 
 INSERT INTO projed_core.tenants(id, legacy_workspace_id, title, owner_id, sort_order, created_at) VALUES
   ('11111111-1111-4111-8111-111111111111', 'ws-a', 'A workspace', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 1, '2026-01-01T00:00:00Z'),
@@ -18,6 +20,13 @@ INSERT INTO projed_core.projects(id, tenant_id, legacy_board_id, title, sort_ord
   ('21111111-1111-4111-8111-111111111111', '11111111-1111-4111-8111-111111111111', 'board-a', 'A board', 1, '2026-01-01T01:00:00Z'),
   ('22222222-2222-4222-8222-222222222222', '12222222-2222-4222-8222-222222222222', 'board-shared', 'Shared board', 1, '2026-01-02T01:00:00Z'),
   ('23333333-3333-4333-8333-333333333333', '12222222-2222-4222-8222-222222222222', 'board-private', 'Private board', 2, '2026-01-02T02:00:00Z');
+
+INSERT INTO projed_core.resource_revisions(tenant_id, project_id, revision, updated_at) VALUES
+  ('11111111-1111-4111-8111-111111111111', NULL, 1, '2026-01-01T00:00:00Z'),
+  ('11111111-1111-4111-8111-111111111111', '21111111-1111-4111-8111-111111111111', 1, '2026-01-01T01:00:00Z'),
+  ('12222222-2222-4222-8222-222222222222', NULL, 1, '2026-01-02T00:00:00Z'),
+  ('12222222-2222-4222-8222-222222222222', '22222222-2222-4222-8222-222222222222', 1, '2026-01-02T01:00:00Z'),
+  ('12222222-2222-4222-8222-222222222222', '23333333-3333-4333-8333-333333333333', 1, '2026-01-02T02:00:00Z');
 
 INSERT INTO projed_core.actor_scope_access(local_user_id, tenant_id, project_id, active, scope_revision) VALUES
   ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '11111111-1111-4111-8111-111111111111', NULL, true, 1),
@@ -32,7 +41,7 @@ INSERT INTO projed_core.tenant_members(
   ('11111111-1111-4111-8111-111111111111', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'owner', 'active', 'a@example.invalid', 'A', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'),
   ('12222222-2222-4222-8222-222222222222', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'owner', 'active', 'b@example.invalid', 'B', '2026-01-02T00:00:00Z', '2026-01-02T00:00:00Z'),
   ('12222222-2222-4222-8222-222222222222', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'viewer', 'active', 'a@example.invalid', 'A', '2026-01-02T00:01:00Z', '2026-01-02T00:01:00Z'),
-  ('12222222-2222-4222-8222-222222222222', 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', 'member', 'active', 'c@example.invalid', 'C', '2026-01-02T00:02:00Z', '2026-01-02T00:02:00Z'),
+  ('12222222-2222-4222-8222-222222222222', 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', 'project_manager', 'active', 'c@example.invalid', 'C', '2026-01-02T00:02:00Z', '2026-01-02T00:02:00Z'),
   ('12222222-2222-4222-8222-222222222222', 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', 'member', 'suspended', 'd@example.invalid', 'D', '2026-01-02T00:03:00Z', '2026-01-02T00:03:00Z');
 
 INSERT INTO projed_core.project_members(

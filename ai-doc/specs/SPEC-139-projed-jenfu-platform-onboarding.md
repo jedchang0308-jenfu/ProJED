@@ -1,10 +1,10 @@
 # SPEC-139：ProJED 納入 Jenfu-Platform 的產品與技術交接契約
 
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。
-- 日期：2026-10-26（Asia/Taipei）；版本：Rev 12（S3 domain core read／command）。
-- 文件狀態：**S1：Implemented／Local Acceptance PASS（PostgreSQL 18）；S2：ProJED consumer seam Implemented／External Wire Blocked；S3：task／dependency／tag read＋command foundation Implemented／Production Resolver Disabled**。ProJED 技術選型已固定；完整整合仍缺 owner 發布的 ProJED／非員工 wire、真Session resolver、workspace／board／member／permission／invite 等其餘操作、polling、資料移轉與產品 backend 切換，不作整體 ready 宣告。
-- 適用階段：2026-10-26 使用者已要求完成 DEV-139 開發；本版記錄 S1 runtime／DB 核心、S2 consumer seam，以及 S3 七個唯讀操作與 task／dependency／tag command 的前端adapter、資料表／RLS、server repository及fail-closed HTTP route本地驗證。正式發布／切流、正式資料、IAM／Secret／billing及其他repo不在本地開發授權內。
-- 直接交接入口：[§11 S1 定案契約](#11-架構決策與-s1-定案契約)、[§12 S1 實作狀態](#12-s1-實作狀態2026-10-26)、[§13 S2 consumer seam](#13-s2-projed-identity-consumer-seam2026-10-26)、[§14 S3 read adapter](#14-s3-http-read-adapter-slice2026-10-26)及[§15 S3 domain command](#15-s3-domain-command-w12026-10-26)；[§11.8 技術主管審查](#118-技術主管審查與最小優化)保留 Rev5 修正理由；既有使用者切換見 [§6.3](#63-既有使用者的切換基線)。
+- 日期：2026-10-27（Asia/Taipei）；版本：Rev 13（S3 collaboration command W2）。
+- 文件狀態：**S1：Implemented／Local Acceptance PASS（PostgreSQL 18）；S2：ProJED consumer seam Implemented／External Wire Blocked；S3：domain read、task／dependency／tag command及workspace／board／member／permission／invite command Implemented／Production Resolver Disabled**。ProJED 技術選型已固定；完整整合仍缺 owner 發布的 ProJED／非員工 wire、真Session resolver、其餘實際使用domain、看板跨工作區搬移、polling、資料移轉與產品 backend 切換，不作整體 ready 宣告。
+- 適用階段：2026-10-26 使用者已要求完成 DEV-139 開發；本版記錄 S1 runtime／DB 核心、S2 consumer seam，以及 S3 domain read／command與 collaboration command 的前端adapter、資料表／RLS、server repository及fail-closed HTTP route本地驗證。正式發布／切流、正式資料、IAM／Secret／billing及其他repo不在本地開發授權內。
+- 直接交接入口：[§11 S1 定案契約](#11-架構決策與-s1-定案契約)、[§12 S1 實作狀態](#12-s1-實作狀態2026-10-26)、[§13 S2 consumer seam](#13-s2-projed-identity-consumer-seam2026-10-26)、[§14 S3 read adapter](#14-s3-http-read-adapter-slice2026-10-26)、[§15 S3 domain command](#15-s3-domain-command-w12026-10-26)及[§16 S3 collaboration command](#16-s3-collaboration-command-w22026-10-27)；[§11.8 技術主管審查](#118-技術主管審查與最小優化)保留 Rev5 修正理由；既有使用者切換見 [§6.3](#63-既有使用者的切換基線)。
 - 決策來源：[DEV-139 人類決策](../dev_task.md#dev-139-jenfu-platform-onboarding)；架構取捨：[ADR-054](../decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。本文件不是其他 owner 已接受或已發布的契約。
 
 ## 1. 目的、限制與完成邊界
@@ -398,7 +398,7 @@ Evidence 必須保存 source revision／dirty boundary、artifact、環境、角
 
 Rev 8 沿既有架構完成 S1，並落地 §13 的 ProJED S2 consumer seam。現行外部契約仍只有 employee-required 的 handoff v2／platform-auth v1，且 audience／app registry 沒有 `projed`；因此 production pin set 保持空集合，所有真 handoff fail closed。這不是把 S2 標為整合完成：Platform／OrgMaster owner wire、callback、App Session、mapping schema 與真正常登入仍未發布或驗證。
 
-下一個可獨立開發工作段是 S3 的 fail-closed read route composition：只接受由上層注入的可信 Session actor resolver，並以同一 actor transaction 呼叫現有 repository。沒有 resolver 的 production composition 保持404；正常產品接入及登入切換仍須S2 owner wire。不得用QA simulation、S1 synthetic actor或任意header／body取代真Session。
+S3 fail-closed read／write route及 collaboration command 已完成本地實作：只接受由上層注入的可信 Session actor resolver，並以同一 actor transaction 呼叫 repository。沒有 resolver 的 production composition 保持404；正常產品接入及登入切換仍須S2 owner wire。不得用QA simulation、S1 synthetic actor或任意header／body取代真Session。
 
 ### 9.1 三個工作段及目前成熟度
 
@@ -408,11 +408,11 @@ Rev 8 沿既有架構完成 S1，並落地 §13 的 ProJED S2 consumer seam。�
 |---|---|---|
 | S1 ProJED runtime／DB 核心 | **RD Implementation Ready＋架構定案**；§11 固定 schema／roles／policy、runtime／actor transaction、checker、migration runner、驗證入口及 source surface。沒有 provider／現有前端切換或真 SSO。 | K01–K08、T01／A10 的限定 local HTTP／DB 層；正常產品 UI 不在 S1。測試 actor 只在隔離 verifier process 內注入，不發布可自述身分的 HTTP auth。 |
 | S2 身分 producer／consumer | ProJED server-only consumer seam 已實作：只接受 verifier output、exact contract pin、有效時間／撤銷與唯一 mapping，成功只產生既有 `ServerActorV1`；production pins 空集合，QA simulation 不進 production import graph。§4.5 的 OrgMaster／Platform owner wire、非員工准入及撤銷仍待 owner。 | 本地 seam 12/12 PASS，不是 A01／A02／A03／A05／A11 或 T03／T06／T08 的真登入證據。external acceptance、既有帳號 mapping proof、相容 origin／Cookie／callback／Session state／期限與在途撤銷界線仍需收斂；其他專案開發另需其明確授權。 |
-| S3 ProJED 現有能力移轉 | 七個frontend read operations，以及 task／dependency／tag command adapters、`0003_domain_read_v1`＋`0004_domain_command_v1`、scope／capability RLS、server repository與route composition已實作；S3 disposable PostgreSQL驗證tenant-only member不取得Board、suspended member拒絕、顯式空權限、legacy ID／parent／dependency／tag mapping、原子batch rollback、缺actor deny、production resolver absent 404及同源HTTP read／write。backend selector／產品polling未啟用，不會自動fallback或取代現行provider。 | 本地adapter 13/13與DB／HTTP domain-core acceptance只證明bounded foundation；QA cookie-to-actor mapping不進production graph，不是真Session或A03–A11／T02／T04／T05／T07／T08證據。workspace／board／member／permission／invite command、實際使用中的record／activity／backup／tracking surfaces、§6資料匯入／移轉與舊client／Hosting／PWA相容、容量／費用及正常UI仍需完成；無完整替代／相容證據不能退出原provider。 |
+| S3 ProJED 現有能力移轉 | 七個frontend read operations、task／dependency／tag command，以及workspace／board／member／permission／invite command、resource revision與HTTP adapters已實作；`0003`～`0005`以scope／capability RLS、同一actor transaction及fail-closed route保護。S3 disposable PostgreSQL驗證tenant-only member不取得Board、suspended member拒絕、顯式空權限、owner不可變、邀請一次性／撤銷、外部成員精確撤權、原子batch rollback、production resolver absent 404及同源HTTP read／write。backend selector／產品polling未啟用，不會自動fallback或取代現行provider。 | 本地adapter與DB／HTTP collaboration-core acceptance只證明bounded foundation；QA cookie-to-actor mapping不進production graph，不是真Session或A03–A11／T02／T04／T05／T07／T08證據。看板跨workspace搬移、實際使用中的record／activity／backup／tracking surfaces、polling scheduler、§6資料匯入／移轉與舊client／Hosting／PWA相容、容量／費用及正常UI仍需完成；無完整替代／相容證據不能退出原provider。 |
 
 S1 已完成本地核心；S2 已完成不依賴外部 wire 的 consumer seam，外部 producer／Session 路徑仍阻塞；S3 為 **RD Readiness Review**，沒有整體 architecture closure。S1／S2 seam 都不能宣稱正常產品 UI／SSO／整合完成。真身分依賴會阻止新登入切換與整合驗收，但不阻止獨立的 domain adapter 開發。
 
-S2／S3 的 readiness 缺口：已發布 owner wire／consumer ACL／非員工及在途撤銷契約；全部 operation DTO／scope guard／polling cursor／provider qualification；資料演練的合成 schema／verified mapping／delta／全來源 fence／reconciliation／舊 PWA 恢復；Hosting／各 public origin Session／Cookie／callback／artifact 相容；共享容量及可歸屬費用證據。沒有未決產品 D1／D2；這些是具體工程／owner 依賴，不要求人類重新選相同方案。
+S2／S3 的 readiness 缺口：已發布 owner wire／consumer ACL／非員工及在途撤銷契約；剩餘operation DTO／scope guard、polling consumer及provider qualification；資料演練的合成 schema／verified mapping／delta／全來源 fence／reconciliation／舊 PWA 恢復；Hosting／各 public origin Session／Cookie／callback／artifact 相容；共享容量及可歸屬費用證據。沒有未決產品 D1／D2；這些是具體工程／owner 依賴，不要求人類重新選相同方案。
 
 後續 capsule：
 
@@ -654,4 +654,18 @@ S1的transaction-local與transaction advisory lock依據：[PostgreSQL17設定�
 
 本地驗證另覆蓋tenant-only一般成員零Board、suspended project member零Board、明確空capability不套預設值、跨Board parent拒絕、標籤整組清空、多人assignment正規化、batch rollback、日期／dependency constraint、Board成員無capability寫入拒絕、project-scope tag definition拒絕、父任務刪除後子任務保留，以及HTTP capability／cross-site deny。這是 disposable 新目標schema；`0003.wbs_items.tag_ids`不是現行Supabase資料的自動轉換來源。真正資料匯入必須從舊`task_tags`／`wbs_item_tags`及task資料建立catalog與assignment reconciliation，完成前禁止切換writer或宣稱標籤已保留。
 
-下一個可獨立工作段是workspace／board／member／permission／invite command與其scope revision，再補實際使用中的record／activity／backup／tracking、polling及可選`dataBackend` selector。真Session resolver、正常UI、資料匯入／writer fence與發布仍受既有外部owner及§6 gate限制。
+workspace／board／member／permission／invite command與resource revision已在§16完成。下一個可獨立工作段是盤點並補齊實際使用中的record／activity／backup／tracking、看板跨工作區搬移與polling consumer；`dataBackend` selector只在新路徑的必要表面足夠且能fail closed後接入。真Session resolver、正常UI、資料匯入／writer fence與發布仍受既有外部owner及§6 gate限制。
+
+## 16. S3 collaboration command W2（2026-10-27）
+
+`0005_collaboration_command_v1.sql`、`server/collaborationWrite.ts`／`collaborationRead.ts`／`collaborationWriteHttp.ts`及`src/services/httpApi/collaborationAdapter.ts`完成日常Workspace建立／改名／刪除、Board建立／改名／排序／刪除、Board成員授予／改角色／移除、完整五角色權限矩陣，以及邀請列出／建立／撤銷／接受。Board建立在同一交易建立建立者membership、精確scope、resource revision及五個permission rows；不新增通用policy engine、event bus、完整Workspace成員管理或排程邀請清理器。
+
+W2以現行UI capability為單一產品契約：有效`project_manager`可建立Board；邀請支援`admin / project_manager / member / viewer`且拒絕owner／未知角色。這修正舊Supabase policy與UI的不一致，不把舊拒絕行為當成要保留的功能。既有owner不能被降權或移除；非owner仍可依原UI升為owner，沒有自行加入單一owner或owner transfer workflow。純Board manager可在kernel核准的精確Board context內加入既有active Workspace成員及刪除其可管理的Board，但不取得一般Workspace成員列表或tenant管理權。完整permission matrix保留明確空集合，未知capability拒絕。
+
+邀請token只以SHA-256雜湊保存，email正規化、期限受限，且同Board／email最多一張pending；接受只信任server actor的profile，不採用client送來的userId／email／displayName，也不能把既有suspended Workspace anchor重新啟用。邀請列本身保存穩定Workspace／Board ref，因此接受後回傳不依賴受邀角色是否有`read_board`。目前S2外部wire尚未發布verified email claim，故production resolver仍停用；本地QA profile只證明命令語意，不代表外部邀請真接入完成。
+
+`resource_revisions`是受權scope的polling／canonical reload訊號，不是授權來源。Task／dependency／tag及本節協作命令都在同一交易遞增對應revision；每個API請求仍以當下membership／capability判斷。移除外部Board成員會停用該精確project scope並遞增其scope revision，新請求立即拒絕；不撤銷Principal、tenant-wide scope或其私人Workspace。重新加入會重新啟用精確scope，不重建帳號。
+
+`npm run verify:dev-139:s3`通過frontend typecheck／13項既有adapter unit、DB static boundary、server typecheck及PostgreSQL 18 task-owned isolated acceptance。新增驗證涵蓋Workspace／Board命令、project-manager建板、五角色矩陣原子建立、owner不可變、邀請role／email／hash／一次性／撤銷、外部成員撤權與私人資料保留、resource revision、HTTP collaboration命令、client identity claim忽略及production collaboration route在讀body／碰DB前404。這是`S3_COLLABORATION_CORE_LOCAL_ACCEPTANCE`，不是獨立QC、真Session、正常產品UI或正式環境證據。
+
+看板跨Workspace搬移仍是D2原功能保留的一部分，但涉及tasks／dependencies／tags、membership／permission／invite、documents／activity／audit等全Board資料，不在W2用單欄位更新假裝完成；它與其餘實際使用domain、polling consumer及產品backend切換仍須在正式切換前完成。

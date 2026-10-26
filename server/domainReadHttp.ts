@@ -1,6 +1,7 @@
 import type { IncomingMessage } from 'node:http';
 
 import { runActorTransaction, type ServerActorV1 } from './actorTransaction.js';
+import { CollaborationReadRepository } from './collaborationRead.js';
 import type { RuntimeConfig } from './config.js';
 import type { RuntimeDatabase } from './db.js';
 import { DomainReadRepository } from './domainRead.js';
@@ -16,12 +17,14 @@ export interface DomainReadHttpResult {
 
 type DomainReadOperation =
   | { readonly kind: 'workspaces' }
+  | { readonly kind: 'scope-revisions' }
   | { readonly kind: 'workspace-members'; readonly workspaceRef: string }
   | { readonly kind: 'tags'; readonly workspaceRef: string }
   | { readonly kind: 'board-members'; readonly workspaceRef: string; readonly boardRef: string }
   | { readonly kind: 'role-permissions'; readonly workspaceRef: string; readonly boardRef: string }
   | { readonly kind: 'tasks'; readonly workspaceRef: string; readonly boardRef: string }
-  | { readonly kind: 'dependencies'; readonly workspaceRef: string; readonly boardRef: string };
+  | { readonly kind: 'dependencies'; readonly workspaceRef: string; readonly boardRef: string }
+  | { readonly kind: 'invites'; readonly workspaceRef: string; readonly boardRef: string };
 
 function hasControlCharacter(value: string): boolean {
   return Array.from(value).some((character) => {
@@ -48,6 +51,7 @@ function operationFor(rawUrl: string | undefined): DomainReadOperation | null {
     return null;
   }
   if (rawUrl === '/api/v1/workspaces') return { kind: 'workspaces' };
+  if (rawUrl === '/api/v1/scope-revisions') return { kind: 'scope-revisions' };
   const parts = rawUrl.split('/');
   if (parts[0] !== '' || parts[1] !== 'api' || parts[2] !== 'v1' || parts[3] !== 'workspaces') return null;
   const workspaceRef = segment(parts[4] ?? '');
@@ -62,6 +66,7 @@ function operationFor(rawUrl: string | undefined): DomainReadOperation | null {
     case 'role-permissions': return { kind: 'role-permissions', workspaceRef, boardRef };
     case 'tasks': return { kind: 'tasks', workspaceRef, boardRef };
     case 'dependencies': return { kind: 'dependencies', workspaceRef, boardRef };
+    case 'invites': return { kind: 'invites', workspaceRef, boardRef };
     default: return null;
   }
 }
@@ -86,6 +91,7 @@ export function createDomainReadHttpDispatcher(
   database: RuntimeDatabase,
   resolveActor?: TrustedSessionActorResolver,
   repository = new DomainReadRepository(),
+  collaborationRepository = new CollaborationReadRepository(),
 ) {
   return async (request: IncomingMessage, requestId: string): Promise<DomainReadHttpResult> => {
     const operation = operationFor(request.url);
@@ -101,12 +107,14 @@ export function createDomainReadHttpDispatcher(
       const data = await runActorTransaction(database, config, actor, async (port) => {
         switch (operation.kind) {
           case 'workspaces': return repository.listWorkspaces(port);
+          case 'scope-revisions': return collaborationRepository.listResourceRevisions(port);
           case 'workspace-members': return repository.listWorkspaceMembers(port, operation.workspaceRef);
           case 'tags': return repository.listTags(port, operation.workspaceRef);
           case 'board-members': return repository.listBoardMembers(port, operation.workspaceRef, operation.boardRef);
           case 'role-permissions': return repository.getBoardRolePermissions(port, operation.workspaceRef, operation.boardRef);
           case 'tasks': return repository.listTasks(port, operation.workspaceRef, operation.boardRef);
           case 'dependencies': return repository.listDependencies(port, operation.workspaceRef, operation.boardRef);
+          case 'invites': return collaborationRepository.listPendingInvites(port, operation.workspaceRef, operation.boardRef);
         }
       });
       return { matched: true, status: 200, body: { data } };

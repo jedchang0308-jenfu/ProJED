@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import type { IncomingMessage } from 'node:http';
 
 import pg from 'pg';
 
 import { runActorTransaction, type ServerActorV1 } from '../../../server/actorTransaction.js';
+import { CollaborationReadRepository } from '../../../server/collaborationRead.js';
+import { CollaborationWriteRepository } from '../../../server/collaborationWrite.js';
 import { loadRuntimeConfig, sha256 } from '../../../server/config.js';
 import { RuntimeDatabase } from '../../../server/db.js';
 import { DomainReadRepository } from '../../../server/domainRead.js';
@@ -15,7 +18,9 @@ import { KernelError } from '../../../server/errors.js';
 import { createKernelHttpServer } from '../../../server/http.js';
 import { createHttpDomainReadAdapter } from '../../../src/services/httpApi/domainReadAdapter.js';
 import { createHttpDomainWriteAdapter } from '../../../src/services/httpApi/domainWriteAdapter.js';
+import { createHttpCollaborationAdapter } from '../../../src/services/httpApi/collaborationAdapter.js';
 import { HttpApiClient, HttpApiError, type HttpApiFetch } from '../../../src/services/httpApi/httpApiClient.js';
+import { createCollaborationWriteHttpDispatcher } from '../../../server/collaborationWriteHttp.js';
 
 const { Client } = pg;
 const config = loadRuntimeConfig();
@@ -23,6 +28,8 @@ const expected = config.profile.migrations.map(({ version, path }) => ({ version
 const database = new RuntimeDatabase(config);
 const repository = new DomainReadRepository();
 const commands = new DomainWriteRepository(repository);
+const collaborationReads = new CollaborationReadRepository();
+const collaborationCommands = new CollaborationWriteRepository(repository);
 await database.assertRuntimeBoundary(expected);
 
 const actorA: ServerActorV1 = {
@@ -50,6 +57,12 @@ const actorD: ServerActorV1 = {
   principalId: 'principal:d',
   localUserId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
   contextId: '54444444-4444-4444-8444-444444444444',
+};
+const actorE: ServerActorV1 = {
+  ...actorA,
+  principalId: 'principal:e',
+  localUserId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+  contextId: '55555555-5555-4555-8555-555555555555',
 };
 
 const aWorkspaces = await runActorTransaction(database, config, actorA, port => repository.listWorkspaces(port));
@@ -195,6 +208,214 @@ const privateTasks = await runActorTransaction(database, config, actorB, port =>
 ));
 assert.deepEqual(privateTasks.map(task => task.title), ['B secret']);
 
+const initialRevisions = await runActorTransaction(database, config, actorB, port => (
+  collaborationReads.listResourceRevisions(port)
+));
+assert.equal(initialRevisions.some(item => item.workspaceId === 'ws-b' && item.boardId === 'board-shared'), true);
+
+const eWorkspace = await runActorTransaction(database, config, actorE, port => (
+  collaborationCommands.createWorkspace(port, { title: 'E personal' })
+));
+assert.equal(eWorkspace.title, 'E personal');
+assert.equal((await runActorTransaction(database, config, actorE, port => (
+  repository.listWorkspaceMembers(port, eWorkspace.id)
+))).length, 1);
+const eBoard = await runActorTransaction(database, config, actorE, port => (
+  collaborationCommands.createBoard(port, eWorkspace.id, { title: 'E private board' })
+));
+assert.equal(eBoard.title, 'E private board');
+assert.deepEqual(
+  Object.keys(await runActorTransaction(database, config, actorE, port => (
+    repository.getBoardRolePermissions(port, eWorkspace.id, eBoard.id)
+  ))).sort(),
+  ['admin', 'member', 'owner', 'project_manager', 'viewer'],
+);
+
+const cBoard = await runActorTransaction(database, config, actorC, port => (
+  collaborationCommands.createBoard(port, 'ws-b', { title: 'C managed board' })
+));
+assert.equal(cBoard.title, 'C managed board');
+assert.equal((await runActorTransaction(database, config, actorC, port => (
+  collaborationCommands.updateBoard(port, 'ws-b', cBoard.id, { title: 'C renamed board', order: 4 })
+))).title, 'C renamed board');
+await runActorTransaction(database, config, actorC, port => collaborationCommands.deleteBoard(port, 'ws-b', cBoard.id));
+
+const matrixUpdate = { ...matrix, admin: [] };
+const updatedMatrix = await runActorTransaction(database, config, actorB, port => (
+  collaborationCommands.updateRolePermissions(port, 'ws-b', 'board-shared', matrixUpdate)
+));
+assert.deepEqual(updatedMatrix.admin, []);
+await assert.rejects(
+  runActorTransaction(database, config, actorB, port => collaborationCommands.updateRolePermissions(
+    port, 'ws-b', 'board-shared', { ...matrixUpdate, viewer: ['unknown'] },
+  )),
+  (error: unknown) => (error as { code?: string }).code === 'DOMAIN_DATA_INVALID',
+);
+await assert.rejects(
+  runActorTransaction(database, config, actorB, port => collaborationCommands.upsertBoardMember(
+    port, 'ws-b', 'board-shared', actorB.localUserId, 'member',
+  )),
+  (error: unknown) => (error as { code?: string }).code === 'ACCESS_DENIED',
+);
+await assert.rejects(
+  runActorTransaction(database, config, actorB, port => collaborationCommands.removeBoardMember(
+    port, 'ws-b', 'board-shared', actorB.localUserId,
+  )),
+  (error: unknown) => (error as { code?: string }).code === 'ACCESS_DENIED',
+);
+
+const inviteToken = 'dev139-e-invite-token-0001';
+const inviteHash = createHash('sha256').update(inviteToken).digest('hex');
+const eInvite = await runActorTransaction(database, config, actorB, port => collaborationCommands.createInvite(
+  port, 'ws-b', 'board-shared', {
+    email: ' E@EXAMPLE.INVALID ', tokenHash: inviteHash,
+    expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000, defaultRole: 'viewer',
+  },
+));
+assert.equal(eInvite.email, 'e@example.invalid');
+assert.equal(eInvite.defaultRole, 'viewer');
+assert.deepEqual((await runActorTransaction(database, config, actorB, port => (
+  collaborationReads.listPendingInvites(port, 'ws-b', 'board-shared')
+))).map(invite => invite.id), [eInvite.id]);
+await assert.rejects(
+  runActorTransaction(database, config, actorA, port => collaborationCommands.acceptInvite(port, inviteToken)),
+  (error: unknown) => (error as { code?: string }).code === 'RESOURCE_NOT_FOUND',
+);
+await assert.rejects(
+  runActorTransaction(database, config, actorB, port => collaborationCommands.createInvite(
+    port, 'ws-b', 'board-shared', {
+      email: 'e@example.invalid', tokenHash: createHash('sha256').update('duplicate-token-0002').digest('hex'),
+      expiresAt: Date.now() + 60_000, defaultRole: 'member',
+    },
+  )),
+  (error: unknown) => (error as { code?: string }).code === 'DOMAIN_DATA_INVALID',
+);
+await assert.rejects(
+  runActorTransaction(database, config, actorB, port => collaborationCommands.createInvite(
+    port, 'ws-b', 'board-shared', {
+      email: 'owner@example.invalid', tokenHash: createHash('sha256').update('owner-token-0000003').digest('hex'),
+      expiresAt: Date.now() + 60_000, defaultRole: 'owner',
+    },
+  )),
+  (error: unknown) => (error as { code?: string }).code === 'DOMAIN_DATA_INVALID',
+);
+await assert.rejects(
+  runActorTransaction(database, config, actorA, port => collaborationCommands.createInvite(
+    port, 'ws-b', 'board-shared', {
+      email: 'nobody@example.invalid', tokenHash: createHash('sha256').update('viewer-denied-token').digest('hex'),
+      expiresAt: Date.now() + 60_000, defaultRole: 'member',
+    },
+  )),
+  (error: unknown) => (error as { code?: string }).code === 'ACCESS_DENIED',
+);
+
+const expiringInviteToken = 'dev139-expiring-token-0006';
+const expiringInvite = await runActorTransaction(database, config, actorB, port => collaborationCommands.createInvite(
+  port, 'ws-b', 'board-shared', {
+    email: 'a@example.invalid', tokenHash: createHash('sha256').update(expiringInviteToken).digest('hex'),
+    expiresAt: Date.now() + 1_000, defaultRole: 'viewer',
+  },
+));
+await new Promise(resolve => setTimeout(resolve, 1_200));
+await assert.rejects(
+  runActorTransaction(database, config, actorA, port => collaborationCommands.acceptInvite(port, expiringInviteToken)),
+  (error: unknown) => (error as { code?: string }).code === 'RESOURCE_NOT_FOUND',
+);
+await runActorTransaction(database, config, actorB, port => collaborationCommands.revokeInvite(
+  port, 'ws-b', 'board-shared', expiringInvite.id,
+));
+
+const suspendedInviteToken = 'dev139-suspended-token-0007';
+const suspendedInvite = await runActorTransaction(database, config, actorB, port => collaborationCommands.createInvite(
+  port, 'ws-b', 'board-shared', {
+    email: 'd@example.invalid', tokenHash: createHash('sha256').update(suspendedInviteToken).digest('hex'),
+    expiresAt: Date.now() + 60_000, defaultRole: 'viewer',
+  },
+));
+await assert.rejects(
+  runActorTransaction(database, config, actorD, port => collaborationCommands.acceptInvite(port, suspendedInviteToken)),
+  (error: unknown) => (error as { code?: string }).code === 'ACCESS_DENIED',
+);
+await runActorTransaction(database, config, actorB, port => collaborationCommands.revokeInvite(
+  port, 'ws-b', 'board-shared', suspendedInvite.id,
+));
+
+const acceptedInvite = await runActorTransaction(database, config, actorE, port => (
+  collaborationCommands.acceptInvite(port, inviteToken)
+));
+assert.equal(acceptedInvite.status, 'accepted');
+assert.equal((await runActorTransaction(database, config, actorE, port => (
+  repository.listTasks(port, 'ws-b', 'board-shared')
+))).length > 0, true);
+await assert.rejects(
+  runActorTransaction(database, config, actorE, port => collaborationCommands.acceptInvite(port, inviteToken)),
+  (error: unknown) => (error as { code?: string }).code === 'RESOURCE_NOT_FOUND',
+);
+await assert.rejects(
+  runActorTransaction(database, config, actorE, port => repository.listWorkspaceMembers(port, 'ws-b')),
+  (error: unknown) => (error as { code?: string }).code === 'RESOURCE_NOT_FOUND',
+);
+
+const cInviteToken = 'dev139-c-revoke-token-0004';
+const cInvite = await runActorTransaction(database, config, actorB, port => collaborationCommands.createInvite(
+  port, 'ws-b', 'board-shared', {
+    email: 'c@example.invalid', tokenHash: createHash('sha256').update(cInviteToken).digest('hex'),
+    expiresAt: Date.now() + 60_000, defaultRole: 'admin',
+  },
+));
+await runActorTransaction(database, config, actorB, port => collaborationCommands.revokeInvite(
+  port, 'ws-b', 'board-shared', cInvite.id,
+));
+await assert.rejects(
+  runActorTransaction(database, config, actorC, port => collaborationCommands.acceptInvite(port, cInviteToken)),
+  (error: unknown) => (error as { code?: string }).code === 'RESOURCE_NOT_FOUND',
+);
+
+await runActorTransaction(database, config, actorB, port => collaborationCommands.removeBoardMember(
+  port, 'ws-b', 'board-shared', actorE.localUserId,
+));
+await assert.rejects(
+  runActorTransaction(database, config, actorE, port => repository.listTasks(port, 'ws-b', 'board-shared')),
+  (error: unknown) => (error as { code?: string }).code === 'RESOURCE_NOT_FOUND',
+);
+const eWorkspacesAfterRemoval = await runActorTransaction(database, config, actorE, port => repository.listWorkspaces(port));
+assert.equal(eWorkspacesAfterRemoval.some(workspace => workspace.id === 'ws-b'), false);
+assert.equal(eWorkspacesAfterRemoval
+  .some(workspace => workspace.id === eWorkspace.id && workspace.boards.some(board => board.id === eBoard.id)), true);
+assert.deepEqual(await runActorTransaction(database, config, actorE, async port => (
+  (await port.query<{ active: boolean }>(`
+    SELECT active FROM projed_core.actor_scope_access
+     WHERE local_user_id = projed_core.current_actor_user_id_v1()
+       AND tenant_id = '12222222-2222-4222-8222-222222222222'::uuid
+       AND project_id = '22222222-2222-4222-8222-222222222222'::uuid
+  `)).rows.map(row => row.active)
+)), [false]);
+await runActorTransaction(database, config, actorB, port => collaborationCommands.upsertBoardMember(
+  port, 'ws-b', 'board-shared', actorE.localUserId, 'viewer',
+));
+assert.equal((await runActorTransaction(database, config, actorE, port => (
+  repository.listTasks(port, 'ws-b', 'board-shared')
+))).length > 0, true);
+await runActorTransaction(database, config, actorB, port => collaborationCommands.removeBoardMember(
+  port, 'ws-b', 'board-shared', actorE.localUserId,
+));
+const boardManagerBoard = await runActorTransaction(database, config, actorB, port => (
+  collaborationCommands.createBoard(port, 'ws-b', { title: 'Board manager scope' })
+));
+await runActorTransaction(database, config, actorB, port => collaborationCommands.upsertBoardMember(
+  port, 'ws-b', boardManagerBoard.id, actorA.localUserId, 'admin',
+));
+assert.equal((await runActorTransaction(database, config, actorA, port => collaborationCommands.upsertBoardMember(
+  port, 'ws-b', boardManagerBoard.id, actorE.localUserId, 'viewer',
+))).userId, actorE.localUserId);
+await runActorTransaction(database, config, actorA, port => collaborationCommands.deleteBoard(
+  port, 'ws-b', boardManagerBoard.id,
+));
+assert.equal((await runActorTransaction(database, config, actorB, port => repository.listWorkspaces(port)))
+  .find(workspace => workspace.id === 'ws-b')?.boards.some(board => board.id === boardManagerBoard.id), false);
+assert.equal((await runActorTransaction(database, config, actorB, port => collaborationReads.listResourceRevisions(port)))
+  .find(item => item.workspaceId === 'ws-b' && item.boardId === 'board-shared')?.revision !== '1', true);
+
 const rawClient = new Client({ connectionString: config.databaseUrl });
 await rawClient.connect();
 try {
@@ -222,17 +443,27 @@ const disabledWrite = await disabledWriteDispatcher({
   headers: { 'content-type': 'application/json' }, resume() {},
 } as unknown as IncomingMessage, 'qa-write-disabled');
 assert.equal(disabledWrite.status, 404);
+let disabledCollaborationResumed = false;
+const disabledCollaborationDispatcher = createCollaborationWriteHttpDispatcher(config, database);
+const disabledCollaboration = await disabledCollaborationDispatcher({
+  method: 'POST', url: '/api/v1/invites:accept', headers: { 'content-type': 'application/json' },
+  resume() { disabledCollaborationResumed = true; },
+} as unknown as IncomingMessage, 'qa-collaboration-disabled');
+assert.equal(disabledCollaboration.status, 404);
+assert.equal(disabledCollaborationResumed, true);
 
 const http = createKernelHttpServer(config, database, expected, {
   resolveActor: async (request) => {
     if (request.headers.cookie === '__session=qa-a') return actorA;
     if (request.headers.cookie === '__session=qa-b') return actorB;
+    if (request.headers.cookie === '__session=qa-c') return actorC;
+    if (request.headers.cookie === '__session=qa-e') return actorE;
     throw new KernelError('ACTOR_INVALID', 'QA session is unavailable', 401);
   },
 });
 const address = await http.listen();
 const base = `http://${address.host}:${address.port}`;
-const fetchFor = (session: 'qa-a' | 'qa-b'): HttpApiFetch => async (input, init) => {
+const fetchFor = (session: 'qa-a' | 'qa-b' | 'qa-c' | 'qa-e'): HttpApiFetch => async (input, init) => {
   const headers = new Headers(init?.headers);
   headers.set('cookie', `__session=${session}`);
   return fetch(`${base}${String(input)}`, { ...init, headers });
@@ -240,11 +471,15 @@ const fetchFor = (session: 'qa-a' | 'qa-b'): HttpApiFetch => async (input, init)
 try {
   const httpA = createHttpDomainReadAdapter(new HttpApiClient(fetchFor('qa-a')));
   const httpB = createHttpDomainReadAdapter(new HttpApiClient(fetchFor('qa-b')));
+  const httpE = createHttpDomainReadAdapter(new HttpApiClient(fetchFor('qa-e')));
   const writeA = createHttpDomainWriteAdapter(new HttpApiClient(fetchFor('qa-a')));
   const writeB = createHttpDomainWriteAdapter(new HttpApiClient(fetchFor('qa-b')));
+  const collaborationB = createHttpCollaborationAdapter(new HttpApiClient(fetchFor('qa-b')));
+  const collaborationC = createHttpCollaborationAdapter(new HttpApiClient(fetchFor('qa-c')));
+  const collaborationE = createHttpCollaborationAdapter(new HttpApiClient(fetchFor('qa-e')));
   assert.deepEqual((await httpA.listWorkspaces()).map(workspace => workspace.id), ['ws-a', 'ws-b']);
   assert.deepEqual((await httpB.listWorkspaceMembers('ws-b')).map(member => member.userId), [
-    actorB.localUserId, actorA.localUserId, actorC.localUserId, actorD.localUserId,
+    actorB.localUserId, actorA.localUserId, actorC.localUserId, actorD.localUserId, actorE.localUserId,
   ]);
   assert.deepEqual((await httpA.listBoardMembers('ws-b', 'board-shared')).map(member => member.userId), [
     actorB.localUserId, actorA.localUserId, actorD.localUserId,
@@ -287,11 +522,39 @@ try {
     'HTTP updated',
   );
 
+  const httpManagedBoard = await collaborationC.createBoard('ws-b', 'HTTP managed board');
+  assert.equal(httpManagedBoard.title, 'HTTP managed board');
+  assert.equal((await collaborationC.updateBoard('ws-b', httpManagedBoard.id, { title: 'HTTP renamed board' })).title, 'HTTP renamed board');
+  await collaborationC.deleteBoard('ws-b', httpManagedBoard.id);
+  const httpInviteToken = 'dev139-http-e-token-0005';
+  const httpInvite = await collaborationB.createInvite('ws-b', 'board-shared', {
+    email: 'e@example.invalid',
+    tokenHash: createHash('sha256').update(httpInviteToken).digest('hex'),
+    expiresAt: Date.now() + 60_000,
+    defaultRole: 'admin',
+  });
+  assert.equal((await collaborationB.listPendingInvites('ws-b', 'board-shared'))[0]?.id, httpInvite.id);
+  const httpAccepted = await collaborationE.acceptInvite({
+    token: httpInviteToken,
+    userId: actorA.localUserId,
+    email: 'forged@example.invalid',
+    displayName: 'Forged',
+  });
+  assert.equal(httpAccepted.defaultRole, 'admin');
+  assert.equal((await httpB.listBoardMembers('ws-b', 'board-shared'))
+    .find(member => member.userId === actorE.localUserId)?.role, 'admin');
+  await collaborationB.removeBoardMember('ws-b', 'board-shared', actorE.localUserId);
+  assert.equal((await httpE.listWorkspaces()).some(workspace => workspace.id === 'ws-b'), false);
+  assert.equal((await collaborationE.listResourceRevisions())
+    .some(item => item.workspaceId === 'ws-b' && item.boardId === 'board-shared'), false);
+  assert.equal((await collaborationB.listResourceRevisions())
+    .some(item => item.workspaceId === 'ws-b' && item.boardId === 'board-shared'), true);
+
   const missingSession = await fetch(`${base}/api/v1/workspaces`);
   assert.equal(missingSession.status, 401);
   assert.equal(missingSession.headers.get('cache-control'), 'no-store');
   assert.equal((await missingSession.json() as { error: { code: string } }).error.code, 'ACTOR_INVALID');
-  const wrongMethod = await fetch(`${base}/api/v1/workspaces`, { method: 'POST' });
+  const wrongMethod = await fetch(`${base}/api/v1/workspaces`, { method: 'PUT' });
   assert.equal(wrongMethod.status, 405);
   const unknownApi = await fetch(`${base}/api/v1/session`, { headers: { cookie: '__session=qa-a' } });
   assert.equal(unknownApi.status, 404);
@@ -311,7 +574,13 @@ console.log(JSON.stringify({
     'board-capability-write-deny', 'board-scope-tag-definition-deny',
     'task-delete-parent-detach-and-dependency-cascade',
     'missing-context-deny', 'runtime-write-deny', 'production-route-disabled', 'production-write-disabled',
+    'production-collaboration-disabled',
     'http-session-route', 'http-private-board-deny', 'http-missing-session-deny', 'http-api-no-static-fallback',
     'http-domain-write', 'http-capability-deny', 'http-cross-site-deny',
+    'workspace-board-command', 'project-manager-create-board', 'five-role-matrix-atomic',
+    'board-only-manager-add-and-delete', 'owner-immutable',
+    'invite-role-email-hash-expiry-suspension-one-time-revoke',
+    'external-board-scope-private-retention', 'resource-revision',
+    'http-collaboration-command', 'client-identity-claims-ignored',
   ],
 }));

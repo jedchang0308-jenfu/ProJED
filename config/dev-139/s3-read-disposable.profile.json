@@ -31,6 +31,10 @@
     {
       "version": "0004_domain_command_v1",
       "path": "db/migrations/0004_domain_command_v1.sql"
+    },
+    {
+      "version": "0005_collaboration_command_v1",
+      "path": "db/migrations/0005_collaboration_command_v1.sql"
     }
   ],
   "objectAllowlist": [
@@ -52,13 +56,22 @@
     "projed_core.wbs_item_tags",
     "projed_core.actor_has_board_capability_v1",
     "projed_core.actor_can_write_tags_v1",
+    "projed_core.resource_revisions",
+    "projed_core.board_invites",
+    "projed_core.actor_has_workspace_capability_v1",
+    "projed_core.actor_can_configure_role_permissions_v1",
+    "projed_core.board_mutation_context_valid_v1",
+    "projed_core.workspace_bootstrap_context_valid_v1",
+    "projed_core.actor_can_bump_revision_v1",
     "projed_core.projects_tenant_legacy_uq",
     "projed_core.actor_scope_access_project_idx",
     "projed_core.wbs_items_project_legacy_uq",
     "projed_core.wbs_dependencies_project_legacy_uq",
     "projed_core.task_tags_tenant_legacy_uq",
     "projed_core.task_tags_tenant_order_idx",
-    "projed_core.wbs_item_tags_project_idx"
+    "projed_core.wbs_item_tags_project_idx",
+    "projed_core.board_invites_pending_email_uq",
+    "projed_core.board_invites_project_status_idx"
   ],
   "staticFixturePath": "qa/dev-139/s1/static",
   "runtime": {

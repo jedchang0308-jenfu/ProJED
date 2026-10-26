@@ -156,11 +156,8 @@ export async function resolveWorkspace(
     SELECT tenant.id::text AS id, tenant.legacy_workspace_id
       FROM projed_core.tenants tenant
      WHERE (tenant.id::text = $1 OR tenant.legacy_workspace_id = $1)
-       AND ($2::boolean = false OR EXISTS (
-         SELECT 1 FROM projed_core.actor_scope_access access
-          WHERE access.local_user_id = projed_core.current_actor_user_id_v1()
-            AND access.tenant_id = tenant.id AND access.project_id IS NULL AND access.active
-       ))
+       AND ($2::boolean = false
+         OR projed_core.actor_has_workspace_capability_v1(tenant.id, 'manage_workspace_members'))
      LIMIT 2
   `, [workspaceRef, requireTenantScope]);
   if (result.rows.length !== 1) notFound();

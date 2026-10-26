@@ -109,7 +109,7 @@ export function parseHttpDependency(value: unknown): Dependency {
   };
 }
 
-function board(value: unknown): Board {
+export function parseHttpBoard(value: unknown): Board {
   const row = record(value, 'BOARD');
   if (!Array.isArray(row.dependencies)) throw new Error('HTTP_API_INVALID_BOARD_DEPENDENCIES');
   const dependencies = row.dependencies.map(parseHttpDependency);
@@ -124,7 +124,7 @@ function board(value: unknown): Board {
   };
 }
 
-function workspace(value: unknown): Workspace {
+export function parseHttpWorkspace(value: unknown): Workspace {
   const row = record(value, 'WORKSPACE');
   if (!Array.isArray(row.boards)) throw new Error('HTTP_API_INVALID_WORKSPACE_BOARDS');
   const order = optionalNumber(row.order, 'WORKSPACE_ORDER');
@@ -134,7 +134,7 @@ function workspace(value: unknown): Workspace {
   return {
     id: stringValue(row.id, 'WORKSPACE_ID'),
     title: stringValue(row.title, 'WORKSPACE_TITLE'),
-    boards: row.boards.map(board),
+    boards: row.boards.map(parseHttpBoard),
     ...(ownerId === undefined ? {} : { ownerId }),
     ...(members === undefined ? {} : { members }),
     ...(order === undefined ? {} : { order }),
@@ -191,7 +191,7 @@ function workspaceMember(value: unknown): WorkspaceMember {
   };
 }
 
-function boardMember(value: unknown): BoardMember {
+export function parseHttpBoardMember(value: unknown): BoardMember {
   const parsed = memberBase(value);
   const boardId = stringValue(parsed.row.boardId, 'MEMBER_BOARD_ID');
   return {
@@ -282,7 +282,7 @@ export function parseHttpTag(value: unknown): TaskTag {
   };
 }
 
-function permissions(value: unknown): BoardRolePermissionMatrix {
+export function parseHttpRolePermissions(value: unknown): BoardRolePermissionMatrix {
   const source = dataRecord(value, 'ROLE_PERMISSIONS');
   const partial: Partial<BoardRolePermissionMatrix> = {};
   const fixedOwner = createDefaultBoardRolePermissionMatrix().owner;
@@ -308,7 +308,7 @@ export function createHttpDomainReadAdapter(client: HttpApiClient): ProjedDomain
   return {
     async listWorkspaces(signal) {
       const response = await client.request<unknown>('/api/v1/workspaces', { signal });
-      return items(response, 'WORKSPACES').map(workspace);
+      return items(response, 'WORKSPACES').map(parseHttpWorkspace);
     },
     async listWorkspaceMembers(workspaceRef, signal) {
       const response = await client.request<unknown>(`/api/v1/workspaces/${ref(workspaceRef, 'WORKSPACE_REF')}/members`, { signal });
@@ -320,11 +320,11 @@ export function createHttpDomainReadAdapter(client: HttpApiClient): ProjedDomain
     },
     async listBoardMembers(workspaceRef, boardRef, signal) {
       const response = await client.request<unknown>(boardPath(workspaceRef, boardRef, 'members'), { signal });
-      return items(response, 'BOARD_MEMBERS').map(boardMember);
+      return items(response, 'BOARD_MEMBERS').map(parseHttpBoardMember);
     },
     async getBoardRolePermissions(workspaceRef, boardRef, signal) {
       const response = await client.request<unknown>(boardPath(workspaceRef, boardRef, 'role-permissions'), { signal });
-      return permissions(response);
+      return parseHttpRolePermissions(response);
     },
     async listTasks(workspaceRef, boardRef, signal) {
       const response = await client.request<unknown>(boardPath(workspaceRef, boardRef, 'tasks'), { signal });

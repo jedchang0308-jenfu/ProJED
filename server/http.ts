@@ -5,6 +5,7 @@ import { extname, resolve, sep } from 'node:path';
 
 import type { RuntimeConfig } from './config.js';
 import type { ExpectedMigration, RuntimeDatabase } from './db.js';
+import { createCollaborationWriteHttpDispatcher } from './collaborationWriteHttp.js';
 import {
   createDomainReadHttpDispatcher,
   isPrivateApiRequest,
@@ -85,6 +86,7 @@ export function createKernelHttpServer(
   options: KernelHttpOptions = {},
 ): KernelHttpServer {
   let shuttingDown = false;
+  const dispatchCollaborationWrite = createCollaborationWriteHttpDispatcher(config, database, options.resolveActor);
   const dispatchDomainRead = createDomainReadHttpDispatcher(config, database, options.resolveActor);
   const dispatchDomainWrite = createDomainWriteHttpDispatcher(config, database, options.resolveActor);
   const server = createServer({
@@ -109,6 +111,13 @@ export function createKernelHttpServer(
       }
       const ready = await database.readiness(expectedMigrations);
       json(response, ready ? 200 : 503, ready ? { status: 'ok' } : { status: 'unavailable', requestId }, requestId);
+      return;
+    }
+    const collaborationWrite = await dispatchCollaborationWrite(request, requestId);
+    if (collaborationWrite.matched) {
+      json(response, collaborationWrite.status ?? 500, collaborationWrite.body ?? {
+        error: { code: 'DB_UNAVAILABLE', requestId, retryable: true },
+      }, requestId);
       return;
     }
     const domainWrite = await dispatchDomainWrite(request, requestId);

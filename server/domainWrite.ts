@@ -117,6 +117,16 @@ async function assertCanWriteTags(port: ActorQueryPort, tenantId: string): Promi
   if (result.rows[0]?.allowed !== true) throw new KernelError('ACCESS_DENIED', 'Actor is not authorized', 403);
 }
 
+async function bumpRevision(port: ActorQueryPort, tenantId: string, projectId: string | null): Promise<void> {
+  const result = await port.query(`
+    UPDATE projed_core.resource_revisions
+       SET revision = revision + 1, updated_at = now()
+     WHERE tenant_id = $1::uuid AND project_id IS NOT DISTINCT FROM $2::uuid
+       AND revision < 9223372036854775807
+  `, [tenantId, projectId]);
+  if (result.rowCount !== 1) throw new KernelError('DB_BOUNDARY_INVALID', 'Resource revision is unavailable', 503);
+}
+
 async function resolveTaskId(port: ActorQueryPort, board: BoardIdentity, taskRef: string): Promise<string> {
   const result = await port.query<{ id: string }>(`
     SELECT id::text AS id
@@ -265,6 +275,7 @@ export class DomainWriteRepository {
       input.nodeType ?? null, input.kanbanStageId ?? null, input.order, input.isArchived ?? false,
     ]);
     await setTaskTags(port, board, storageId, input.tagIds ?? []);
+    await bumpRevision(port, board.tenantId, board.id);
     const created = (await this.readRepository.listTasks(port, workspaceRef, boardRef)).find(task => task.id === input.id);
     if (!created) notFound();
     return created;
@@ -372,6 +383,7 @@ export class DomainWriteRepository {
     if (hasOwn(updates, 'tagIds')) {
       await setTaskTags(port, board, taskId, referenceList(updates.tagIds ?? [], 'tagIds'));
     }
+    if (keys.length > 0) await bumpRevision(port, board.tenantId, board.id);
     const updated = (await this.readRepository.listTasks(port, workspaceRef, boardRef)).find(task => task.storageId === taskId);
     if (!updated) notFound();
     return updated;
@@ -401,6 +413,7 @@ export class DomainWriteRepository {
        WHERE tenant_id = $1::uuid AND project_id = $2::uuid AND id = $3::uuid
     `, [board.tenantId, board.id, taskId]);
     if (result.rowCount !== 1) notFound();
+    await bumpRevision(port, board.tenantId, board.id);
   }
 
   async createTag(port: ActorQueryPort, workspaceRef: string, input: DomainTaskTagCreate): Promise<DomainTaskTag> {
@@ -418,6 +431,7 @@ export class DomainWriteRepository {
       INSERT INTO projed_core.task_tags(id, tenant_id, legacy_tag_id, name, color, sort_order)
       VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6)
     `, [storageId, workspace.id, input.id, input.name, input.color, input.order]);
+    await bumpRevision(port, workspace.id, null);
     const created = (await this.readRepository.listTags(port, workspaceRef)).find(tag => tag.storageId === storageId);
     if (!created) notFound();
     return created;
@@ -453,6 +467,7 @@ export class DomainWriteRepository {
          WHERE tenant_id = $1::uuid AND (id::text = $2 OR legacy_tag_id = $2)
       `, values);
       if (result.rowCount !== 1) notFound();
+      await bumpRevision(port, workspace.id, null);
     }
     const updated = (await this.readRepository.listTags(port, workspaceRef)).find(tag => tag.id === tagRef || tag.storageId === tagRef);
     if (!updated) notFound();
@@ -467,6 +482,7 @@ export class DomainWriteRepository {
        WHERE tenant_id = $1::uuid AND (id::text = $2 OR legacy_tag_id = $2)
     `, [workspace.id, reference(tagRef, 'tag reference')]);
     if (result.rowCount !== 1) notFound();
+    await bumpRevision(port, workspace.id, null);
   }
 
   async setTaskTags(
@@ -481,6 +497,7 @@ export class DomainWriteRepository {
     await assertCapability(port, board, 'edit_task');
     const taskId = await resolveTaskId(port, board, taskRef);
     await setTaskTags(port, board, taskId, checkedTagRefs);
+    await bumpRevision(port, board.tenantId, board.id);
     const updated = (await this.readRepository.listTasks(port, workspaceRef, boardRef)).find(task => task.storageId === taskId);
     if (!updated) notFound();
     return updated;
@@ -512,6 +529,7 @@ export class DomainWriteRepository {
         from_id = EXCLUDED.from_id, from_side = EXCLUDED.from_side,
         to_id = EXCLUDED.to_id, to_side = EXCLUDED.to_side, offset_value = EXCLUDED.offset_value
     `, [storageId, board.tenantId, board.id, externalId, fromId, input.fromSide, toId, input.toSide, input.offset ?? 0]);
+    await bumpRevision(port, board.tenantId, board.id);
     const dependency = (await this.readRepository.listDependencies(port, workspaceRef, boardRef)).find(item => item.id === externalId);
     if (!dependency) notFound();
     return dependency;
@@ -574,6 +592,7 @@ export class DomainWriteRepository {
            AND (id::text = $3 OR legacy_dependency_id = $3)
       `, values);
       if (result.rowCount !== 1) notFound();
+      await bumpRevision(port, board.tenantId, board.id);
     }
     const updated = (await this.readRepository.listDependencies(port, workspaceRef, boardRef))
       .find(item => item.id === current.legacy_dependency_id);
@@ -595,5 +614,6 @@ export class DomainWriteRepository {
          AND (id::text = $3 OR legacy_dependency_id = $3)
     `, [board.tenantId, board.id, reference(dependencyRef, 'dependency reference')]);
     if (result.rowCount !== 1) notFound();
+    await bumpRevision(port, board.tenantId, board.id);
   }
 }

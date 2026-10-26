@@ -8,9 +8,9 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 ## DEV-139：ProJED 納入 Jenfu-Platform，Cloud Run／Cloud SQL 對齊並保留 Vite
 
 - 建立日期：2026-10-08（Asia/Taipei）。
-- 狀態：**開發中；S1 runtime／DB核心、S2 consumer seam及S3 task／dependency／tag domain core（read＋command）本地驗證PASS**；S2 external wire、production resolver與S3 workspace／board／member／permission／invite等其餘操作仍未完成。D1／D2均已確認；產品前端切換、真身分整合、資料移轉、正式發布及切流均未啟動。
+- 狀態：**開發中；S1 runtime／DB核心、S2 consumer seam、S3 domain core及collaboration command W2本地驗證PASS**；S2 external wire、production resolver、其餘實際使用domain、看板跨workspace搬移、polling及產品backend切換仍未完成。D1／D2均已確認；真身分整合、資料移轉、正式發布及切流均未啟動。
 - 類型：交付點；主責：本 repo 的 DEV-139；無同專案父任務。
-- 唯一交接契約：[SPEC-139 Rev 12](specs/SPEC-139-projed-jenfu-platform-onboarding.md)；[§11 S1 定案／實作交接](specs/SPEC-139-projed-jenfu-platform-onboarding.md#11-架構決策與-s1-定案契約)；[§12 S1 實作狀態](specs/SPEC-139-projed-jenfu-platform-onboarding.md#12-s1-實作狀態2026-10-26)；[§13 S2 consumer seam](specs/SPEC-139-projed-jenfu-platform-onboarding.md#13-s2-projed-identity-consumer-seam2026-10-26)；[§14 S3 read foundation](specs/SPEC-139-projed-jenfu-platform-onboarding.md#14-s3-http-read-adapter-slice2026-10-26)；[§15 S3 domain command](specs/SPEC-139-projed-jenfu-platform-onboarding.md#15-s3-domain-command-w12026-10-26)；[§6.3 既有使用者切換基線](specs/SPEC-139-projed-jenfu-platform-onboarding.md#63-既有使用者的切換基線)；架構決策：[ADR-054](decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。首階段仍保留原工作區／看板／權限；kernel或資料庫搬移不能替代正常產品及既有使用者切換驗收。
+- 唯一交接契約：[SPEC-139 Rev 13](specs/SPEC-139-projed-jenfu-platform-onboarding.md)；[§11 S1 定案／實作交接](specs/SPEC-139-projed-jenfu-platform-onboarding.md#11-架構決策與-s1-定案契約)；[§12 S1 實作狀態](specs/SPEC-139-projed-jenfu-platform-onboarding.md#12-s1-實作狀態2026-10-26)；[§13 S2 consumer seam](specs/SPEC-139-projed-jenfu-platform-onboarding.md#13-s2-projed-identity-consumer-seam2026-10-26)；[§14 S3 read foundation](specs/SPEC-139-projed-jenfu-platform-onboarding.md#14-s3-http-read-adapter-slice2026-10-26)；[§15 S3 domain command](specs/SPEC-139-projed-jenfu-platform-onboarding.md#15-s3-domain-command-w12026-10-26)；[§16 S3 collaboration command](specs/SPEC-139-projed-jenfu-platform-onboarding.md#16-s3-collaboration-command-w22026-10-27)；[§6.3 既有使用者切換基線](specs/SPEC-139-projed-jenfu-platform-onboarding.md#63-既有使用者的切換基線)；架構決策：[ADR-054](decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。首階段仍保留原工作區／看板／權限；kernel或資料庫搬移不能替代正常產品及既有使用者切換驗收。
 
 ### 1. 人類決策與授權範圍
 
@@ -354,11 +354,11 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 
 ## 總任務清單
 
-- ◐ DEV-139 [交付點] [開發中／S1本地PASS＋S2 seam PASS＋S3 domain core PASS] [P1] [本地開發] ProJED 首階段基礎對齊，保留 Vite
+- ◐ DEV-139 [交付點] [開發中／S1本地PASS＋S2 seam PASS＋S3 collaboration core PASS] [P1] [本地開發] ProJED 首階段基礎對齊，保留 Vite
   - 摘要：保留原工作區／看板／權限及個人／外部協作，Cloud Run／Cloud SQL／身分對齊；原網址／PWA相容，不丟資料／重建帳號／強迫重裝，費用不大幅增加。
-  - 下一步：完成核心寫入／tag／invite及可選HTTP polling；S2真接入與production resolver待Platform／OrgMaster發布ProJED／非員工wire。正式切流仍不在本地開發範圍。
-  - 阻塞 / 恢復條件：D1／D2已確認；S2 真登入需新 owner contract／registry／Session／mapping，S3及移轉仍需workspace／board／member／permission／invite、polling、其餘實際使用domain、Hosting／舊版相容、全來源fence／delta／恢復證據；不能用S1或QA simulation替代。
-  - 證據：[SPEC-139 Rev12](specs/SPEC-139-projed-jenfu-platform-onboarding.md)、[ADR-054](decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)；S1 PostgreSQL 18 local acceptance PASS，S2 seam獨立typecheck／boundary／12項unit PASS，S3 frontend read／write adapter 13/13及PostgreSQL 18 domain core DB／HTTP acceptance PASS。production pins空集合、resolver與backend selector未啟用，沒有產品／真SSO／資料匯入／整合／無縫切換／正式驗收PASS。
+  - 下一步：補實際使用中的record／activity／backup／tracking、看板跨workspace搬移、polling consumer及可回復的`dataBackend` selector；S2真接入與production resolver待Platform／OrgMaster發布ProJED／非員工wire。正式切流仍不在本地開發範圍。
+  - 阻塞 / 恢復條件：D1／D2已確認；S2 真登入需新 owner contract／registry／Session／mapping。Workspace／Board／member／permission／invite core已完成；移轉仍需剩餘domain、polling、Hosting／舊版相容、全來源fence／delta／恢復證據，不能用本地QA simulation替代。
+  - 證據：[SPEC-139 Rev13](specs/SPEC-139-projed-jenfu-platform-onboarding.md)、[ADR-054](decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)；S1 PostgreSQL 18 local acceptance PASS，S2 seam獨立typecheck／boundary／12項unit PASS，S3 frontend既有adapter 13/13及PostgreSQL 18 collaboration core DB／HTTP acceptance PASS，證據層級`S3_COLLABORATION_CORE_LOCAL_ACCEPTANCE`。production pins空集合、resolver與backend selector未啟用，沒有產品／真SSO／資料匯入／整合／無縫切換／正式驗收PASS。
   - 計入交付：是（未來首階段基礎對齊的實際交付）；本輪文件完成不計產品完成。
 
 - ✓ DEV-138 [開發點] [已完成／正式發布、限定登入與 RPC 驗收及清理 PASS] [P1] [ProJED] DEV-133 guard 恢復、分支整合與正式驗證後清理

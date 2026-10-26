@@ -124,7 +124,7 @@ try {
   New-Item -ItemType Directory -Path $evidenceDir -Force | Out-Null
   [ordered]@{
     status = 'PASS'
-    evidenceLevel = 'S3_DOMAIN_READ_LOCAL_ACCEPTANCE'
+    evidenceLevel = 'S3_COLLABORATION_CORE_LOCAL_ACCEPTANCE'
     postgres = $versionText
     node = (& node --version) -join ''
     databaseName = $databaseName
@@ -141,13 +141,18 @@ try {
       'board-capability-write-deny', 'board-scope-tag-definition-deny',
       'task-delete-parent-detach-and-dependency-cascade',
       'missing-context-deny', 'runtime-write-deny', 'production-route-disabled',
-      'production-write-disabled',
+      'production-write-disabled', 'production-collaboration-disabled',
       'http-session-route', 'http-private-board-deny', 'http-missing-session-deny',
       'http-api-no-static-fallback', 'http-domain-write', 'http-capability-deny',
-      'http-cross-site-deny'
+      'http-cross-site-deny',
+      'workspace-board-command', 'project-manager-create-board', 'five-role-matrix-atomic',
+      'board-only-manager-add-and-delete', 'owner-immutable',
+      'invite-role-email-hash-expiry-suspension-one-time-revoke',
+      'external-board-scope-private-retention', 'resource-revision',
+      'http-collaboration-command', 'client-identity-claims-ignored'
     )
   } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $evidenceDir 'result.json') -Encoding utf8
-  Write-Output ("DEV139_S3_RESULT=PASS evidenceLevel=S3_DOMAIN_CORE_LOCAL_ACCEPTANCE output={0}" -f $evidenceDir)
+  Write-Output ("DEV139_S3_RESULT=PASS evidenceLevel=S3_COLLABORATION_CORE_LOCAL_ACCEPTANCE output={0}" -f $evidenceDir)
 }
 finally {
   Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue

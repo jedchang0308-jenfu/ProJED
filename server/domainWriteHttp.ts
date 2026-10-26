@@ -109,7 +109,7 @@ function errorResult(error: unknown, requestId: string): DomainWriteHttpResult {
   };
 }
 
-function sameOrigin(request: IncomingMessage): boolean {
+export function isSameOriginWrite(request: IncomingMessage): boolean {
   const fetchSite = request.headers['sec-fetch-site'];
   if (fetchSite === 'cross-site') return false;
   const origin = request.headers.origin;
@@ -123,7 +123,7 @@ function sameOrigin(request: IncomingMessage): boolean {
   }
 }
 
-async function jsonBody(request: IncomingMessage): Promise<Record<string, unknown>> {
+export async function readJsonBody(request: IncomingMessage): Promise<Record<string, unknown>> {
   const contentType = request.headers['content-type'] ?? '';
   if (typeof contentType !== 'string' || !/^application\/json(?:\s*;|$)/i.test(contentType)) {
     throw new KernelError('DOMAIN_DATA_INVALID', 'JSON request body is required', 415);
@@ -173,13 +173,13 @@ export function createDomainWriteHttpDispatcher(
       request.resume();
       return { matched: true, status: 404, body: { error: { code: 'ENDPOINT_UNAVAILABLE', requestId, retryable: false } } };
     }
-    if (!sameOrigin(request)) {
+    if (!isSameOriginWrite(request)) {
       request.resume();
       return { matched: true, status: 403, body: { error: { code: 'ACCESS_DENIED', requestId, retryable: false } } };
     }
     try {
       const actor = await resolveActor(request);
-      const body = request.method === 'DELETE' ? {} : await jsonBody(request);
+      const body = request.method === 'DELETE' ? {} : await readJsonBody(request);
       const data = await runActorTransaction(database, config, actor, async (port) => {
         switch (operation.kind) {
           case 'task-create': return repository.createTask(port, operation.workspaceRef, operation.boardRef, body as unknown as DomainTaskCreate);
