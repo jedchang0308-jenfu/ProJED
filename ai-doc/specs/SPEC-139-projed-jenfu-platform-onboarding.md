@@ -1,9 +1,9 @@
 # SPEC-139：ProJED 納入 Jenfu-Platform 的產品與技術交接契約
 
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。
-- 日期：2026-10-26（Asia/Taipei）；版本：Rev 9（S3 HTTP read adapter slice）。
-- 文件狀態：**S1：Implemented／Local Acceptance PASS（PostgreSQL 18）；S2：ProJED consumer seam Implemented／External Wire Blocked；S3：HTTP read adapter slice Implemented／Remaining Domain Readiness**。ProJED 技術選型已固定；完整整合仍缺 owner 發布的 ProJED／非員工 wire、server domain schema／routes、其餘操作與移轉實作，不作整體 ready 宣告。
-- 適用階段：2026-10-26 使用者已要求完成 DEV-139 開發；本版記錄 S1 runtime／DB 核心、S2 consumer seam 及 S3 首個唯讀 adapter slice 的實作與本地自查。正式發布／切流、正式資料、IAM／Secret／billing 及其他 repo 不在本地開發授權內。
+- 日期：2026-10-26（Asia/Taipei）；版本：Rev 10（S3 domain read foundation）。
+- 文件狀態：**S1：Implemented／Local Acceptance PASS（PostgreSQL 18）；S2：ProJED consumer seam Implemented／External Wire Blocked；S3：HTTP read adapter＋server read schema／repository Implemented／Remaining Routes and Domain Operations**。ProJED 技術選型已固定；完整整合仍缺 owner 發布的 ProJED／非員工 wire、可信 Session routes、其餘寫入／同步／移轉實作，不作整體 ready 宣告。
+- 適用階段：2026-10-26 使用者已要求完成 DEV-139 開發；本版記錄 S1 runtime／DB 核心、S2 consumer seam，以及 S3 六個唯讀操作的前端 adapter、資料表／RLS及 server repository 本地驗證。正式發布／切流、正式資料、IAM／Secret／billing 及其他 repo 不在本地開發授權內。
 - 直接交接入口：[§11 S1 定案契約](#11-架構決策與-s1-定案契約)、[§12 S1 實作狀態](#12-s1-實作狀態2026-10-26)、[§13 S2 consumer seam](#13-s2-projed-identity-consumer-seam2026-10-26)與[§14 S3 read adapter](#14-s3-http-read-adapter-slice2026-10-26)；[§11.8 技術主管審查](#118-技術主管審查與最小優化)保留 Rev5 修正理由；既有使用者切換見 [§6.3](#63-既有使用者的切換基線)。
 - 決策來源：[DEV-139 人類決策](../dev_task.md#dev-139-jenfu-platform-onboarding)；架構取捨：[ADR-054](../decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。本文件不是其他 owner 已接受或已發布的契約。
 
@@ -398,7 +398,7 @@ Evidence 必須保存 source revision／dirty boundary、artifact、環境、角
 
 Rev 8 沿既有架構完成 S1，並落地 §13 的 ProJED S2 consumer seam。現行外部契約仍只有 employee-required 的 handoff v2／platform-auth v1，且 audience／app registry 沒有 `projed`；因此 production pin set 保持空集合，所有真 handoff fail closed。這不是把 S2 標為整合完成：Platform／OrgMaster owner wire、callback、App Session、mapping schema 與真正常登入仍未發布或驗證。
 
-下一個可獨立開發工作段是 S3 的 provider-neutral domain transport／adapter；它可以先以注入的可信 actor 做本地契約測試，但正常產品接入及登入切換仍須 S2 owner wire。不得用 QA simulation、S1 synthetic actor 或任意 header／body 取代真 Session。
+下一個可獨立開發工作段是 S3 的 fail-closed read route composition：只接受由上層注入的可信 Session actor resolver，並以同一 actor transaction 呼叫現有 repository。沒有 resolver 的 production composition 保持404；正常產品接入及登入切換仍須S2 owner wire。不得用QA simulation、S1 synthetic actor或任意header／body取代真Session。
 
 ### 9.1 三個工作段及目前成熟度
 
@@ -408,7 +408,7 @@ Rev 8 沿既有架構完成 S1，並落地 §13 的 ProJED S2 consumer seam。�
 |---|---|---|
 | S1 ProJED runtime／DB 核心 | **RD Implementation Ready＋架構定案**；§11 固定 schema／roles／policy、runtime／actor transaction、checker、migration runner、驗證入口及 source surface。沒有 provider／現有前端切換或真 SSO。 | K01–K08、T01／A10 的限定 local HTTP／DB 層；正常產品 UI 不在 S1。測試 actor 只在隔離 verifier process 內注入，不發布可自述身分的 HTTP auth。 |
 | S2 身分 producer／consumer | ProJED server-only consumer seam 已實作：只接受 verifier output、exact contract pin、有效時間／撤銷與唯一 mapping，成功只產生既有 `ServerActorV1`；production pins 空集合，QA simulation 不進 production import graph。§4.5 的 OrgMaster／Platform owner wire、非員工准入及撤銷仍待 owner。 | 本地 seam 12/12 PASS，不是 A01／A02／A03／A05／A11 或 T03／T06／T08 的真登入證據。external acceptance、既有帳號 mapping proof、相容 origin／Cookie／callback／Session state／期限與在途撤銷界線仍需收斂；其他專案開發另需其明確授權。 |
-| S3 ProJED 現有能力移轉 | 首個 frontend read slice 已實作同源 Cookie／no-store HTTP transport與 workspace、workspace member、board member、role matrix、task、dependency 六個 adapter；尚未加入 backend selector，不會自動 fallback 或取代現行 provider。其餘 §5.4 inventory、server domain schema／routes、resource capability／guard、同步與附屬 provider仍待。 | 本地 read adapter 10/10 PASS只證明 request／DTO seam；不是 server endpoint、actor→API→DB、A03–A11 或 T02／T04／T05／T07／T08證據。逐操作 transactions／idempotency、§6移轉與舊 client／Hosting／PWA相容、容量／費用及正常UI仍需完成；無完整替代／相容證據不能退出原 provider。 |
+| S3 ProJED 現有能力移轉 | 六個 frontend read adapters 及對應 `0003_domain_read_v1`、RLS／SELECT-only runtime、server repository 已實作；S3 disposable PostgreSQL 驗證 project-only／tenant scope、顯式空權限、legacy ID／parent／dependency mapping、缺 actor deny及runtime write deny。尚未開可信 Session route、backend selector或產品 polling，不會自動 fallback或取代現行 provider。 | 本地 adapter 10/10與DB read acceptance只證明 bounded read foundation；不是正常 server endpoint、真 actor→API→DB、A03–A11或T02／T04／T05／T07／T08證據。workspace／board／task／dependency／member／permission寫入、tag／invite及實際使用中的record／activity／backup／tracking surfaces、§6移轉與舊client／Hosting／PWA相容、容量／費用及正常UI仍需完成；無完整替代／相容證據不能退出原provider。 |
 
 S1 已完成本地核心；S2 已完成不依賴外部 wire 的 consumer seam，外部 producer／Session 路徑仍阻塞；S3 為 **RD Readiness Review**，沒有整體 architecture closure。S1／S2 seam 都不能宣稱正常產品 UI／SSO／整合完成。真身分依賴會阻止新登入切換與整合驗收，但不阻止獨立的 domain adapter 開發。
 
@@ -638,4 +638,8 @@ S1的transaction-local與transaction advisory lock依據：[PostgreSQL17設定�
 
 本 slice 固定六個唯讀操作：workspace list、workspace member list、board member list、完整 board role-permission matrix、board task list及dependency list。Resource ref逐段encode並拒絕空值／dot segment；DTO以現行 domain type fail closed，保留 legacy ID、明確空集合matrix、parent／tag／task status與dependency side。owner role仍依現行固定能力契約；wire若送空或缺少fixed owner abilities則拒絕，不靜默擴權。Task rich content重用現有Lexical allowlist validator，未知／不完整shape不進store。
 
-`npm run verify:dev-139:s3` 的獨立typecheck與 `qa/dev-139/s3/httpReadAdapter.test.ts` 10/10 PASS；全app `npx tsc --noEmit`及`npm run build:test`亦PASS（既有chunk／Browserslist警告不變）。此 adapter 尚未由 `dataBackend.ts` 選用，server仍無這六個route，沒有真Session／DB／UI網路證據；因此它只是一個可獨立回歸的frontend contract slice，不宣稱功能移轉或S3完成。下一段應先做對應 server read schema／repository／route 與actor guard，再將sync hook改成可選HTTP polling；不在endpoint不存在時啟用新backend。
+`0003_domain_read_v1.sql` 已新增 tenant／project、actor scope projection、workspace／board membership、role matrix、task及dependency read model；所有含資源資料的表皆 FORCE RLS，runtime 只有 SELECT，tenant member另要求tenant-level scope，project-only actor不能讀取同workspace其他board。legacy ID保持API相容；UUID arrays拒絕NULL element，浮點排序／offset拒絕NaN及Infinity；server輸出前再驗permission matrix與task note shape。`DomainReadRepository`只接受既有transaction-scoped `ActorQueryPort`，不自行建立actor或持有pool。
+
+`npm run verify:dev-139:s3` 已通過adapter typecheck／10項unit、DB static boundary、server typecheck及PostgreSQL 18 task-owned isolated acceptance。isolated verifier涵蓋migration apply／同checksum rerun、A/B tenant＋project scope、workspace／board member、顯式空permission、task parent／dependency mapping、private board 404、missing context零資料及runtime write deny；完成後停止task-owned PostgreSQL並清除temp directory。全app `npx tsc --noEmit`及`npm run build:test`亦PASS（既有chunk／Browserslist警告不變）。第一次live migration因schema-qualified index name在PostgreSQL回報syntax error，修正成table同schema index name後重跑通過，原始失敗未改寫。
+
+此 foundation 尚未由 `dataBackend.ts` 選用，production server也不開這六個route；因外部wire／App Session未發布，不能以synthetic actor、header或body加入可自述身分的HTTP入口。因此沒有真Session／UI網路證據，不宣稱S3或整體功能移轉完成。下一段是注入可信Session actor resolver的fail-closed route composition與HTTP整合驗證；default production composition在resolver不存在時仍404。之後才接可選HTTP polling與逐項寫入，不在endpoint或身分前置不存在時啟用新backend。

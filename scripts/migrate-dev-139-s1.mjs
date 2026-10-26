@@ -6,23 +6,41 @@ import { resolve } from 'node:path';
 import pg from 'pg';
 
 const { Client } = pg;
-const canonicalProfilePath = resolve('config/dev-139/s1-disposable.profile.json');
-const profilePath = resolve(process.env.PROJED_SOURCE_PROFILE || canonicalProfilePath);
-if (profilePath !== canonicalProfilePath) throw new Error('Only the source-controlled DEV-139 S1 profile is accepted');
+const profileContracts = new Map([
+  [resolve('config/dev-139/s1-disposable.profile.json'), {
+    name: 's1',
+    namePattern: '^dev139_s1_[0-9a-f]{32}$',
+    migrationPaths: [
+      'db/migrations/0001_runtime_boundary_v1.sql',
+      'db/migrations/0002_profile_actor_v1.sql',
+    ],
+  }],
+  [resolve('config/dev-139/s3-read-disposable.profile.json'), {
+    name: 's3-read',
+    namePattern: '^dev139_s3_[0-9a-f]{32}$',
+    migrationPaths: [
+      'db/migrations/0001_runtime_boundary_v1.sql',
+      'db/migrations/0002_profile_actor_v1.sql',
+      'db/migrations/0003_domain_read_v1.sql',
+    ],
+  }],
+]);
+const defaultProfilePath = resolve('config/dev-139/s1-disposable.profile.json');
+const profilePath = resolve(process.env.PROJED_SOURCE_PROFILE || defaultProfilePath);
+const profileContract = profileContracts.get(profilePath);
+if (!profileContract) throw new Error('Only source-controlled DEV-139 disposable profiles are accepted');
 const profileBytes = readFileSync(profilePath);
 const profile = JSON.parse(profileBytes.toString('utf8'));
-const expectedMigrationPaths = [
-  'db/migrations/0001_runtime_boundary_v1.sql',
-  'db/migrations/0002_profile_actor_v1.sql',
-];
+const expectedMigrationPaths = profileContract.migrationPaths;
 if (profile.profileVersion !== 1 || profile.appKey !== 'projed' || profile.kernelContractVersion !== 1
     || profile.environment !== 'disposable' || profile.database?.host !== '127.0.0.1'
+    || profile.database?.namePattern !== profileContract.namePattern
     || profile.database?.supportedPostgresMajors?.join('|') !== '17|18'
     || profile.roles?.owner !== 'projed_owner_disposable'
     || profile.roles?.migrator !== 'projed_migrator_disposable'
     || profile.roles?.runtime !== 'projed_runtime_disposable'
     || profile.migrations?.map(({ path }) => path).join('|') !== expectedMigrationPaths.join('|')) {
-  throw new Error('DEV-139 S1 profile contract mismatch');
+  throw new Error('DEV-139 profile contract mismatch');
 }
 const boundaryCheck = spawnSync(process.execPath, ['scripts/check-db-boundary.mjs'], {
   cwd: process.cwd(),
@@ -57,14 +75,14 @@ const migrations = profile.migrations.map(({ version, path }) => {
   return { version, sql: sql.toString('utf8'), checksum };
 });
 
-const client = new Client({ connectionString, application_name: 'projed-dev139-s1-migrator' });
+const client = new Client({ connectionString, application_name: `projed-dev139-${profileContract.name}-migrator` });
 await client.connect();
 try {
   const identity = await client.query('SELECT current_database() AS database_name, current_user AS role_name');
   if (identity.rows[0]?.database_name !== binding.databaseName || identity.rows[0]?.role_name !== profile.roles.migrator) {
     throw new Error('Migrator identity mismatch');
   }
-  await client.query('SELECT pg_advisory_lock(hashtextextended($1, 0))', ['projed:migration:s1']);
+  await client.query('SELECT pg_advisory_lock(hashtextextended($1, 0))', ['projed:migration:dev139']);
   for (let index = 0; index < migrations.length; index += 1) {
     const migration = migrations[index];
     await client.query('BEGIN');

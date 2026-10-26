@@ -59,7 +59,17 @@ export interface RuntimeConfig {
 }
 
 const SHA256_RE = /^[a-f0-9]{64}$/;
-const DATABASE_NAME_RE = /^dev139_s1_[a-f0-9]{32}$/;
+const PROFILE_MIGRATION_PATHS = new Map<string, readonly string[]>([
+  ['^dev139_s1_[0-9a-f]{32}$', [
+    'db/migrations/0001_runtime_boundary_v1.sql',
+    'db/migrations/0002_profile_actor_v1.sql',
+  ]],
+  ['^dev139_s3_[0-9a-f]{32}$', [
+    'db/migrations/0001_runtime_boundary_v1.sql',
+    'db/migrations/0002_profile_actor_v1.sql',
+    'db/migrations/0003_domain_read_v1.sql',
+  ]],
+]);
 
 export function sha256(bytes: string | Buffer): string {
   return createHash('sha256').update(bytes).digest('hex');
@@ -88,8 +98,8 @@ export function loadSourceProfile(path: string): { profile: SourceProfile; sha25
       || value.kernelContractVersion !== 1 || value.environment !== 'disposable') {
     throw new KernelError('CONFIG_INVALID', 'Unsupported source profile identity');
   }
-  if (value.database?.namePattern !== '^dev139_s1_[0-9a-f]{32}$'
-      || value.database?.host !== '127.0.0.1'
+  const expectedMigrationPaths = PROFILE_MIGRATION_PATHS.get(value.database?.namePattern);
+  if (!expectedMigrationPaths || value.database?.host !== '127.0.0.1'
       || value.database?.supportedPostgresMajors?.join('|') !== '17|18'
       || value.database?.schemas?.join('|') !== 'projed_core|projed_contract') {
     throw new KernelError('CONFIG_INVALID', 'Unexpected disposable database contract');
@@ -99,9 +109,10 @@ export function loadSourceProfile(path: string): { profile: SourceProfile; sha25
       || value.roles?.runtime !== 'projed_runtime_disposable') {
     throw new KernelError('CONFIG_INVALID', 'Unexpected database roles');
   }
-  if (!Array.isArray(value.migrations) || value.migrations.length !== 2
-      || new Set(value.migrations.map(({ path: migrationPath }) => migrationPath)).size !== 2) {
-    throw new KernelError('CONFIG_INVALID', 'Exactly two ordered migrations are required');
+  if (!Array.isArray(value.migrations)
+      || value.migrations.map(({ path: migrationPath }) => migrationPath).join('|') !== expectedMigrationPaths.join('|')
+      || new Set(value.migrations.map(({ path: migrationPath }) => migrationPath)).size !== expectedMigrationPaths.length) {
+    throw new KernelError('CONFIG_INVALID', 'Ordered migrations do not match the selected DEV-139 profile');
   }
   positiveInteger(value.runtime?.pool?.max, 'runtime.pool.max');
   positiveInteger(value.runtime?.pool?.maxWaiting, 'runtime.pool.maxWaiting');
@@ -110,12 +121,12 @@ export function loadSourceProfile(path: string): { profile: SourceProfile; sha25
 }
 
 export function validateRuntimeBinding(binding: RuntimeBinding, profile: SourceProfile, profileHash: string): void {
-  if (!DATABASE_NAME_RE.test(binding.databaseName)
+  if (!new RegExp(profile.database.namePattern).test(binding.databaseName)
       || positiveInteger(binding.databasePort, 'binding.databasePort') > 65535
       || binding.runtimeRole !== profile.roles.runtime
       || binding.profileSha256 !== profileHash
       || !SHA256_RE.test(binding.staticFixtureSha256)) {
-    throw new KernelError('CONFIG_INVALID', 'Runtime binding does not match the S1 profile');
+    throw new KernelError('CONFIG_INVALID', 'Runtime binding does not match the DEV-139 profile');
   }
   for (const migration of profile.migrations) {
     if (!SHA256_RE.test(binding.migrationSha256?.[migration.path] ?? '')) {
@@ -146,7 +157,7 @@ export function validateRuntimeDatabaseUrl(raw: string, binding: RuntimeBinding)
 }
 
 export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): RuntimeConfig {
-  if (env.PROJED_ENV !== 'disposable') throw new KernelError('CONFIG_INVALID', 'S1 only accepts PROJED_ENV=disposable');
+  if (env.PROJED_ENV !== 'disposable') throw new KernelError('CONFIG_INVALID', 'DEV-139 only accepts PROJED_ENV=disposable');
   const entry = env.PROJED_APP_ENTRY;
   if (entry !== 'main' && entry !== 'quick') throw new KernelError('CONFIG_INVALID', 'PROJED_APP_ENTRY must be main or quick');
   const profilePath = resolve(env.PROJED_SOURCE_PROFILE ?? 'config/dev-139/s1-disposable.profile.json');

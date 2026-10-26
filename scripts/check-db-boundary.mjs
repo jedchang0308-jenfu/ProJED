@@ -2,9 +2,20 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve, relative, sep } from 'node:path';
 
 const root = process.cwd();
-const profilePath = resolve(root, process.env.DEV139_PROFILE || 'config/dev-139/s1-disposable.profile.json');
+const profilePath = resolve(root, process.argv[2] || process.env.DEV139_PROFILE || 'config/dev-139/s1-disposable.profile.json');
 const failures = [];
 const checks = [];
+const profileContracts = new Map([
+  ['^dev139_s1_[0-9a-f]{32}$', [
+    'db/migrations/0001_runtime_boundary_v1.sql',
+    'db/migrations/0002_profile_actor_v1.sql',
+  ]],
+  ['^dev139_s3_[0-9a-f]{32}$', [
+    'db/migrations/0001_runtime_boundary_v1.sql',
+    'db/migrations/0002_profile_actor_v1.sql',
+    'db/migrations/0003_domain_read_v1.sql',
+  ]],
+]);
 
 function fail(message) {
   failures.push(message);
@@ -55,14 +66,17 @@ if (profile) {
   if (profile.appKey !== 'projed') fail('profile appKey must be projed');
   if (profile.environment !== 'disposable') fail('profile environment must be disposable');
   if (profile.database?.host !== '127.0.0.1') fail('profile database host must be loopback');
-  if (profile.database?.namePattern !== '^dev139_s1_[0-9a-f]{32}$') fail('profile database name pattern drifted');
+  const expectedMigrationPaths = profileContracts.get(profile.database?.namePattern);
+  if (!expectedMigrationPaths) fail('profile database name pattern drifted');
   if (profile.database?.supportedPostgresMajors?.join('|') !== '17|18') fail('profile supported PostgreSQL majors must be 17 and 18');
   if (profile.database?.schemas?.join('|') !== 'projed_core|projed_contract') fail('profile schema order drifted');
   if (profile.roles?.runtime === profile.roles?.owner || profile.roles?.runtime === profile.roles?.migrator) {
     fail('runtime role must be distinct from owner and migrator');
   }
-  if (!Array.isArray(profile.migrations) || profile.migrations.length !== 2) {
-    fail('profile must list exactly the two S1 migrations');
+  if (!Array.isArray(profile.migrations)
+      || !expectedMigrationPaths
+      || profile.migrations.map(({ path }) => path).join('|') !== expectedMigrationPaths.join('|')) {
+    fail('profile ordered migrations do not match its DEV-139 contract');
   }
   if (!Array.isArray(profile.objectAllowlist) || profile.objectAllowlist.length === 0) {
     fail('profile object allowlist is empty');
