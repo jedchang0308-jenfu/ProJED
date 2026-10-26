@@ -14,6 +14,18 @@
 
 [QA-DEV-097](qa/QA-DEV-097-pwa-safe-reload-orchestration.md)／[QC-DEV-097](qc/QC-DEV-097-pwa-safe-reload-orchestration.md) 已解除DEV-054實機前置；PWA dirty owner／cancel／flush／資料保留／更新恢復及正式release gate仍有效。下方各日期為歷史紀錄，舊雙平台門檻與Blocked註記不覆蓋本段現行契約；歷史未執行不改成PASS。本次驗證結果見QA-DEV-054本次修訂記錄。
 
+## 2026-10-08：DEV-139 ProJED 納入 Jenfu-Platform 開發文件入口
+
+本輪規劃入口為 [DEV-139](dev_task.md#dev-139-jenfu-platform-onboarding)，唯一交接契約為 [SPEC-139 Rev6](specs/SPEC-139-projed-jenfu-platform-onboarding.md)，直接交接入口為 [§11 S1定案契約](specs/SPEC-139-projed-jenfu-platform-onboarding.md#11-架構決策與-s1-定案契約)，[§11.8技術主管審查](specs/SPEC-139-projed-jenfu-platform-onboarding.md#118-技術主管審查與最小優化)保留Rev5核心修正；既有使用者切換讀 [§6.3相容基線](specs/SPEC-139-projed-jenfu-platform-onboarding.md#63-既有使用者的切換基線)，架構決策為 [ADR-054](decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。**S1 RD Implementation Ready＋架構定案；S2／S3 RD Readiness Review**，完整整合及移轉未達實作成熟度。D1／D2已確認，DEV待排，產品實作／整合／發布未啟動；不把歷史完成段落當此次執行指令。
+
+人類已選 **Cloud Run＋Cloud SQL 完整對齊，保留 Vite**，保留個人與外部協作，成本採 **只要費用不大幅增加即可**。D1 已確認由 OrgMaster 登錄個人／外部最小 Principal／登入來源，私人內容仍由 ProJED 隔離。D2 最新決策為 **保留現有工作區、看板與權限功能，先雲端架構、資料庫及身分契約對齊**。SPEC-139 §4.4／A09 保留原 ID、membership、五種角色、每 Board 非預設／空集合權限、繼承及邀請／撤權；其餘資料／API／Session／PWA／移轉與驗收沿同一規格，不另建 QA 文件。
+
+Rev6將人類「已有使用者」的切換評估寫入同四文件：以不丟資料、不重建帳號、不改權限、不強迫重裝為目標，優先保留既有主／Quick public origin與PWA，由相容Hosting轉送Cloud Run。各App預留正常重新登入，停寫時間由演練量測再確認；零重登／零停寫未承諾。§6.3–§6.6固定Cookie／callback／route／artifact驗證、verified mapping、全來源writer fence／delta／reconciliation、晚回網恢復及有界退役；A06原origin升級與新增A11／T07／T08尚未執行。
+
+Rev5已審查的Node24／npm11、node:http＋pg、PostgreSQL17、projed_core／projed_contract、polling／canonical reload、私有Cloud Storage、lease／job、scoped query port／pool FIFO／profile／binding／health及唯一ServerActorV1保留；Rev6不改S1 §11.2–§11.6的source surface／命令／K01–K08。S2／S3仍讀§4.5、§5.4–§5.7、§6、§8.1及§9.1補真owner、domain／相容入口／移轉／費用／共享容量證據。文件自驗不代表正常產品UI、真SSO、無縫切換、效能或費用PASS；本輪只改ProJED四文件。
+
+目前 [DEV-083 發布契約](specs/SPEC-083-production-release-environment-integrity.md)、[ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md) 與 [SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md) 繼續約束現有runtime。保留Hosting舊入口是規劃中的Compatible exception，修正立即換run.app public origin假設，維持雙origin／各App Session／local-first／私人scope及pipeline ownership；不改正式backend／hosting或歷史驗收。ADR-054為Accepted，只涵蓋ProJED選型與S1核心，不代表外部owner接受／完整整合定案。Platform摘要／AI-PDM連結仍Future Phase Captured / Not Requested，待基礎相容證據及人類實際業務串接要求再進入，不作S1 blocker或效益PASS。
+
 ## Documentation Map Update - 2026-10-06（DEV-138 DEV-133 分支整合）
 
 本輪已完成，見 [QA-DEV-138](qa/QA-DEV-138-branch-consolidation.md) 與 [DEV-138](dev_task.md#dev-138-dev-133-guard-恢復分支整合與正式驗證後清理---2026-10-06)：[PR #7](https://github.com/jedchang0308-jenfu/ProJED/pull/7) 合併後的 source `aefb933` 已發布 artifact `20261006063124-2c064e`，82/82 canonical provenance、browser／OAuth、正常 QA 登入、限定兩筆 online／offline committed receipts 與 UI 清理 PASS。不同 owner 本機恢復不可查看原 title 或呼叫 RPC；390／726 overflow PASS。原 boundary 84/84、recovery 27/27 仍為 SIMULATION，未改稱真實帳號切換／遠端錯誤注入。
