@@ -1,10 +1,10 @@
 # SPEC-139：ProJED 納入 Jenfu-Platform 的產品與技術交接契約
 
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。
-- 日期：2026-10-26（Asia/Taipei）；版本：Rev 7（S1 本地實作進度）。
-- 文件狀態：**S1：Implemented／Local Acceptance PASS（PostgreSQL 18）；S2／S3：RD Readiness Review**。ProJED 技術選型已固定；完整整合的外部身分 wire 及 S2／S3 工程契約尚未定案，不作整體 ready 宣告。
-- 適用階段：2026-10-26 使用者已要求完成 DEV-139 開發；本版記錄 S1 runtime／DB 核心的實作與本地自查。正式發布／切流、正式資料、IAM／Secret／billing 及其他 repo 不在本地開發授權內。
-- 直接交接入口：[§11 S1 定案契約](#11-架構決策與-s1-定案契約)；[§11.8 技術主管審查](#118-技術主管審查與最小優化)保留 Rev5 修正理由；本次補充見 [§6.3 既有使用者的切換基線](#63-既有使用者的切換基線)；scope／D1／D2 及原功能保留不變。
+- 日期：2026-10-26（Asia/Taipei）；版本：Rev 8（S2 consumer seam）。
+- 文件狀態：**S1：Implemented／Local Acceptance PASS（PostgreSQL 18）；S2：ProJED consumer seam Implemented／External Wire Blocked；S3：RD Readiness Review**。ProJED 技術選型已固定；完整整合仍缺 owner 發布的 ProJED／非員工 wire 與 S3 domain／移轉實作，不作整體 ready 宣告。
+- 適用階段：2026-10-26 使用者已要求完成 DEV-139 開發；本版記錄 S1 runtime／DB 核心及 S2 ProJED consumer seam 的實作與本地自查。正式發布／切流、正式資料、IAM／Secret／billing 及其他 repo 不在本地開發授權內。
+- 直接交接入口：[§11 S1 定案契約](#11-架構決策與-s1-定案契約)、[§12 S1 實作狀態](#12-s1-實作狀態2026-10-26)與[§13 S2 consumer seam](#13-s2-projed-identity-consumer-seam2026-10-26)；[§11.8 技術主管審查](#118-技術主管審查與最小優化)保留 Rev5 修正理由；既有使用者切換見 [§6.3](#63-既有使用者的切換基線)。
 - 決策來源：[DEV-139 人類決策](../dev_task.md#dev-139-jenfu-platform-onboarding)；架構取捨：[ADR-054](../decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。本文件不是其他 owner 已接受或已發布的契約。
 
 ## 1. 目的、限制與完成邊界
@@ -396,9 +396,9 @@ Evidence 必須保存 source revision／dirty boundary、artifact、環境、角
 
 現行引用為 `JENFU/DEV-010`、`JENFU/DEV-012`、`JENFU/DEV-015` 與 `ORGMASTER/DEV-057` 的既有契約；不是此次工作的 native DEV。ProJED 跨專案 project key 尚未核實，先用 canonical repo／DEV-139／slice 描述來源，正式跨專案登錄時核對。
 
-Rev 6 沿 Rev5 已審查的 ProJED 技術選型與 S1 交接核心，補 §6.3–§6.6 既有使用者相容切換及 A11／T07／T08；S1 的 source surface／命令／K01–K08 不變。S1 達 RD Implementation Ready＋架構定案的範圍仍限 §11 本地 runtime／DB 核心。S2／S3、完整移轉與整合仍未達實作成熟度；外部 wire、完整 domain／相容入口 contract、費用／共享容量／恢復及新路徑 QA 未驗證，不表示其他 owner 接受、產品 PASS、無縫切換已具備或 release ready。
+Rev 8 沿既有架構完成 S1，並落地 §13 的 ProJED S2 consumer seam。現行外部契約仍只有 employee-required 的 handoff v2／platform-auth v1，且 audience／app registry 沒有 `projed`；因此 production pin set 保持空集合，所有真 handoff fail closed。這不是把 S2 標為整合完成：Platform／OrgMaster owner wire、callback、App Session、mapping schema 與真正常登入仍未發布或驗證。
 
-下一個可交接的實作工作段是 S1；本輪只準備該交接，未執行 coding。S2 的外部 owner contract 可繼續在文件授權內查證；真 consumer 接入需完整 producer／Session 契約及相應專案授權。S3 正常功能移轉必須有同一可信 actor→API→DB 路徑及原功能基線，不能用 S1 測試 actor 代替。
+下一個可獨立開發工作段是 S3 的 provider-neutral domain transport／adapter；它可以先以注入的可信 actor 做本地契約測試，但正常產品接入及登入切換仍須 S2 owner wire。不得用 QA simulation、S1 synthetic actor 或任意 header／body 取代真 Session。
 
 ### 9.1 三個工作段及目前成熟度
 
@@ -407,10 +407,10 @@ Rev 6 沿 Rev5 已審查的 ProJED 技術選型與 S1 交接核心，補 §6.3�
 | Slice／owner | 估工輸出與依賴 | 驗收邊界／實作前仍需補齊 |
 |---|---|---|
 | S1 ProJED runtime／DB 核心 | **RD Implementation Ready＋架構定案**；§11 固定 schema／roles／policy、runtime／actor transaction、checker、migration runner、驗證入口及 source surface。沒有 provider／現有前端切換或真 SSO。 | K01–K08、T01／A10 的限定 local HTTP／DB 層；正常產品 UI 不在 S1。測試 actor 只在隔離 verifier process 內注入，不發布可自述身分的 HTTP auth。 |
-| S2 身分 producer／consumer | §4.5 的 OrgMaster／Platform owner wire、非員工准入及撤銷可獨立收斂；ProJED mapping／各 App Session／CSRF 與 context precondition 的 consumer 接入依 S1。 | A01／A02／A03／A05／A11、T03／T06／T08 的真正常登入及拒絕；外部 acceptance、既有帳號 mapping proof、相容 origin／Cookie／callback／Session state／期限與在途撤銷界線均需收斂。其他專案開發另需其明確授權。 |
+| S2 身分 producer／consumer | ProJED server-only consumer seam 已實作：只接受 verifier output、exact contract pin、有效時間／撤銷與唯一 mapping，成功只產生既有 `ServerActorV1`；production pins 空集合，QA simulation 不進 production import graph。§4.5 的 OrgMaster／Platform owner wire、非員工准入及撤銷仍待 owner。 | 本地 seam 12/12 PASS，不是 A01／A02／A03／A05／A11 或 T03／T06／T08 的真登入證據。external acceptance、既有帳號 mapping proof、相容 origin／Cookie／callback／Session state／期限與在途撤銷界線仍需收斂；其他專案開發另需其明確授權。 |
 | S3 ProJED 現有能力移轉 | §5.4 的逐操作 inventory、HTTP adapter、resource capability／guard、同步／附屬 provider，依 S1／S2 的同一可信 actor→API→DB。 | A03–A11 及 T02／T04／T05／T07／T08；逐操作 DTO／transactions／idempotency、§6 移轉與舊 client／Hosting／PWA 相容、transport／費用及正常 UI 證據。無完整替代／相容證據不能退出原 provider。 |
 
-S1 已有完整可交 RD 的定案契約；S2／S3 為 **RD Readiness Review**，沒有整體 architecture closure。S1 不等待業務串接或 external wire 的發布，也不能宣稱正常產品 UI／SSO／整合完成。S2 的真身分依賴不阻止 S1 文件完成，會阻止新登入切換與整合驗收。
+S1 已完成本地核心；S2 已完成不依賴外部 wire 的 consumer seam，外部 producer／Session 路徑仍阻塞；S3 為 **RD Readiness Review**，沒有整體 architecture closure。S1／S2 seam 都不能宣稱正常產品 UI／SSO／整合完成。真身分依賴會阻止新登入切換與整合驗收，但不阻止獨立的 domain adapter 開發。
 
 S2／S3 的 readiness 缺口：已發布 owner wire／consumer ACL／非員工及在途撤銷契約；全部 operation DTO／scope guard／polling cursor／provider qualification；資料演練的合成 schema／verified mapping／delta／全來源 fence／reconciliation／舊 PWA 恢復；Hosting／各 public origin Session／Cookie／callback／artifact 相容；共享容量及可歸屬費用證據。沒有未決產品 D1／D2；這些是具體工程／owner 依賴，不要求人類重新選相同方案。
 
@@ -620,4 +620,14 @@ S1的transaction-local與transaction advisory lock依據：[PostgreSQL17設定�
 - `npm run verify:dev-139:s1:isolated`：PostgreSQL 18 的 task-owned cluster 完成 migration apply／同 checksum rerun、runtime identity／ledger、A／B RLS、guard revision deny、runtime INSERT deny、health／static／API fail-closed及清理，`S1_LOCAL_ACCEPTANCE` PASS。
 - `npm run build:test`：PASS；既有 Vite 產品仍可建置。較大 chunk 與 Browserslist 資料提示是既有非阻塞警告。
 
-這些結果只支持 S1 本地 kernel，不能外推成真 Principal mapping、產品 UI、Cloud SQL、A01–A11、S2／S3、資料移轉或無縫切換 PASS。下一步是開發 ProJED 端 identity consumer 與 domain adapter；未來 managed target 仍以同一 migration／boundary verifier查驗實際 PostgreSQL major。外部 producer、正式移轉／切流仍依原 owner 與 release 邊界。
+這些結果只支持 S1 本地 kernel，不能外推成真 Principal mapping、產品 UI、Cloud SQL、A01–A11、S2／S3、資料移轉或無縫切換 PASS。下一個獨立工作段是 S3 domain adapter；未來 managed target 仍以同一 migration／boundary verifier查驗實際 PostgreSQL major。外部 producer、正式移轉／切流仍依原 owner 與 release 邊界。
+
+## 13. S2 ProJED identity consumer seam（2026-10-26）
+
+外部 owner 的現行 source contract 已再核對：`jenfu.sso-handoff.v2` 只允許 `orgmaster / ai-pdm` 且要求 `employeeId`；`jenfu.platform-auth.v1` 亦沒有 `projed` appId 且要求 Employee；OrgMaster 沒有非員工外部協作者 Principal publication。現行 v2 不可原地放寬或冒充 ProJED wire。
+
+本 repo 已新增 `server/identityConsumer.ts`，只提供 server-only seam：raw input 必須先經注入的 `TrustedIdentityVerifier`，再核對 exact contract version／manifest digest／issuer／`projed` audience、到期／撤銷／current-state期限及唯一 mapping；成功只回既有 `ServerActorV1`，actor 到期取 handoff、來源 Session 與 current-state 三者最早值。mapping missing／ambiguous／inactive／unavailable 分別 fail closed，不用 email 建立 profile，也不自動建立 owner。production pin set 刻意為空，因此現行所有 handoff 均拒絕；HTTP callback、cookie、Session store、mapping DDL及任何登入 route 都沒有開啟。
+
+`qa/dev-139/s2/identityConsumer.test.ts` 的 12 項 SIMULATION 覆蓋：production empty pins／current v2 拒絕、非員工 normalized context、verifier 不可繞過、verifier transport unavailable、version／digest／issuer／audience mismatch、時間／撤銷、mapping missing／ambiguous／inactive／unavailable／transport failure、mapping 等待後到期重驗、identity／revision mismatch及 S1 actor guard。`npm run verify:dev-139:s2` 通過獨立 S2 typecheck、production import graph／DB boundary及 12/12 unit。這只證明 seam fail-closed 與內部轉換，不是 owner wire conformance、真 SSO、App Session、資料庫 mapping 或正常 UI PASS。
+
+恢復條件：人類授權對應 Jenfu-Platform／OrgMaster 專案開發後，由各 owner 發布新版本 contract／manifest、ProJED registry／callback／Session／revocation及非員工 Principal publication；ProJED 再以 exact pin、forward-only mapping migration、正常主／Quick入口及 T03／T06／T08 證據接通。未取得前維持 production pins 空集合與未知 API 404。
