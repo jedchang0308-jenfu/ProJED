@@ -1,6 +1,6 @@
 # SPEC-054：手機任務拖拉定位精準度優化
 
-狀態：RD Implemented / 自用裝置重點操作待確認；自動化結果依目前測試產物判定
+狀態：RD Development Complete / Local Static + Browser PASS / 自用裝置驗收待確認
 
 優先級：P1
 
@@ -10,7 +10,7 @@
 
 2026-10-19 修訂：依使用者「自用而非 SaaS」及直接精簡指示，以下自用驗收取代舊雙平台量化完成／發布門檻。保留原失敗與歷史測試結果，不將未執行的實機測試改成 PASS。DEV-097 不等待本 DEV 的實機補充；其 dirty owner、cancel／flush、資料保留及更新恢復仍依自己的驗收。
 
-是否計入產品交付完成：是
+實作交付：完成；自用裝置驗收：待確認；正式發布：不在本任務範圍
 
 來源 ID：`USER-20260717-mobile-task-drag-precision`
 
@@ -102,7 +102,7 @@ DEV-054 的核心方向是：**保留使用者已滿意的桌機 UI 與行為，
 
 ### 5.1 Raw Point、Intent Point 與 Preview
 
-初始工程常數如下；RD 可在 QA 證據支持下微調，但不得取消相同防護目的：
+目前工程常數如下；static verifier 檢查安全界限，實際數值由 browser 行為驗證。RD 可在 QA 證據支持下微調，但不得取消相同防護目的：
 
 | 常數 | 初始值 | 契約 |
 |---|---:|---|
@@ -136,6 +136,8 @@ type TaskDropSurfaceKind =
   | 'checklist-row'
   | 'column-drop'
   | 'checklist-drop'
+  | 'root-drop'
+  | 'task-title-child'
   | 'workbench-unplaced-row'
   | 'workbench-placed-lane';
 
@@ -298,9 +300,11 @@ flowchart LR
 | E Integration hardening | D 後 | release、placed-row、cancel、at-most-once、scripts | DEV-054 + regressions、TS、build 通過 | double-submit、placed source、desktop drift |
 | F 自用操作確認 | E 後 | 實際常用手機的原失敗情境、主要拖拉／action／取消與復原；簡短結果 | 原問題不重現且無錯寫／重複效果；未測平台如實列出 | 實際使用裝置有錯誤提交或無法恢復；不因另一平台缺席阻塞 |
 
-Current execution boundary：Slice C-E 的歷史 RD rework 與自動化結果沿 §10 保留；本次只精簡文件、測試及關卡，未改產品 runtime。自用裝置確認尚未執行，不標記 DEV-054 完成；不阻擋 DEV-097 依自己的驗收前進。正式發布仍不在本次範圍。
+Current execution boundary：Slice A-E 的產品實作已完成，2026-10-26 於目前分支重跑 46/46 static、15/15 browser 通過。Slice F 是開發後的自用裝置驗收；尚未執行時只保留該層待確認，不撤銷 RD 開發完成，也不阻擋 DEV-097。正式發布仍不在本次範圍。
 
 ## 9. Acceptance Criteria
+
+§9.1 與 §9.3 是 RD 開發完成條件；§9.2 是自用裝置驗收。兩者分開記錄，synthetic touch PASS 不冒稱實機 PASS，實機尚未確認也不把已完成的 RD 開發改回未完成。
 
 ### 9.1 Product Behavior
 
@@ -322,7 +326,7 @@ Current execution boundary：Slice C-E 的歷史 RD rework 與自動化結果沿
 - 在實際常用裝置重驗原先失敗的長按／定位路徑，以及同欄、跨欄、checklist、自動捲動、action、取消與復原；依實際使用功能取樣，不固定次數或計算成功率。
 - 放手前可見的目標與 parent／order／action 結果一致；錯誤提交、重複效果、取消寫入仍判失敗。安全 no-op 後可立即重試，不設 no-op 配額。
 - 簡短記錄裝置／瀏覽器、測試版本、操作及結果即可；發現問題時才按診斷需要保留截圖／錄影／trace，不要求逐筆 node ID、timecode 或簽核工作簿。
-- 自用操作尚未確認時保持「驗證中／自用確認待補」；不封鎖已通過的自動化或無直接相依的 DEV-097。其他平台未測保留未驗證。
+- 自用操作尚未確認時保持「RD 開發完成／自用驗收待確認」；不封鎖已通過的自動化或無直接相依的 DEV-097。其他平台未測保留未驗證。
 
 ### 9.3 Architecture
 
@@ -381,7 +385,7 @@ DEV-053 B07／B10／B13 保護 invalid／全部取消事件的零寫入、可重
 - TypeScript、targeted ESLint（0 error，2 個既有 warning）、`build:test` passed；console／network error sweep 為 0。
 - Authoritative QC evidence：`ai-doc/qc/QC-DEV-054-mobile-task-drag-precision.md`。
 
-歷史未執行：當時雙平台量化實機驗證未完成，該事實保留；舊次數／工作簿門檻已由 §9.2 取代。目前仍須實際自用裝置重點確認，不能把歷史未測項目寫成 PASS。
+歷史未執行：當時雙平台量化實機驗證未完成，該事實保留；舊次數／工作簿門檻已由 §9.2 取代。實際自用裝置仍待確認，但不是 RD 開發完成的新增前置；不能把歷史未測項目寫成實機 PASS。
 
 ### 10.3 DEV-068 Child-intent Preview Exception - 2026-08-15
 

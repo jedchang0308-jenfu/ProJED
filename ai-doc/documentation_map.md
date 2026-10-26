@@ -8,11 +8,11 @@
 
 定案採V6明確all／none／selected；V5空值轉all、明確snapshot保留selected、舊日期保留legacy-v5分支並提供明確轉換入口。Board remote／local journal與Workbench keys升6，升級CAS含updated_at保護、完整readback後清舊值、未知版不覆寫；不修改option選取來迎合暫時空清單。Board／Workbench各自ownership與DEV-062逾期警示保留。Calendar以明確V5型別／helper及control variant隔離，既存snapshot／permission／feed保持；分別驗Board／Workbench V6 parity與Calendar V5 preview／Edge parity。source基線為 `持續優化@06079ce676b638cb7370b75c8c4d9a58d06aa5c6`，本地實作／必要驗證可執行，遠端migration與發布不在本輪範圍。
 
-## 2026-10-19：DEV-054 自用驗收精簡與 DEV-097 解除連動
+## 2026-10-26：DEV-054 開發完成、自用驗收分層與 DEV-097 解除連動
 
-現行入口為 [SPEC-054](specs/SPEC-054-mobile-task-drag-precision.md)、[QA-DEV-054](qa/QA-DEV-054-mobile-task-drag-precision.md)、[QC-DEV-054](qc/QC-DEV-054-mobile-task-drag-precision.md) 與 dev_task 的 DEV-054／097 索引。依使用者指示取消雙平台固定次數／成功率與逐筆工作簿／錄影要求，改為實際常用裝置重點確認；未測實機仍未驗證，DEV-054維持驗證中，不因另一平台缺席標阻塞。保留原R01–R15，B需求由現行R／相鄰取消、edge-scroll、action／undo案例承接；移除static verifier的文件字串鎖定，同步before／child preview預期，不修改產品runtime。
+現行入口為 [SPEC-054](specs/SPEC-054-mobile-task-drag-precision.md)、[QA-DEV-054](qa/QA-DEV-054-mobile-task-drag-precision.md)、[QC-DEV-054](qc/QC-DEV-054-mobile-task-drag-precision.md) 與 dev_task 的 DEV-054／097 索引。DEV-054 已完成 RD 開發；2026-10-26 於目前分支重跑 46/46 static、R01–R15 browser 15/15、console／network error 0。實際常用手機另列自用驗收待確認，未測實機不標 PASS，也不把未使用平台變成開發阻塞。
 
-[QA-DEV-097](qa/QA-DEV-097-pwa-safe-reload-orchestration.md)／[QC-DEV-097](qc/QC-DEV-097-pwa-safe-reload-orchestration.md) 已解除DEV-054實機前置；PWA dirty owner／cancel／flush／資料保留／更新恢復及正式release gate仍有效。下方各日期為歷史紀錄，舊雙平台門檻與Blocked註記不覆蓋本段現行契約；歷史未執行不改成PASS。本次驗證結果見QA-DEV-054本次修訂記錄。
+[QA-DEV-097](qa/QA-DEV-097-pwa-safe-reload-orchestration.md)／[QC-DEV-097](qc/QC-DEV-097-pwa-safe-reload-orchestration.md) 已解除 DEV-054 實機前置；PWA dirty owner／cancel／flush、資料保留、更新恢復及正式 release gate 仍有效。下方各日期為歷史快照，舊雙平台門檻與 Blocked 註記不覆蓋本段現行契約；歷史未執行不改成 PASS。本次 fresh 結果見 [QA §16](qa/QA-DEV-054-mobile-task-drag-precision.md#16-2026-10-26-rd-開發完成重驗)。
 
 ## 2026-10-08：DEV-139 ProJED 納入 Jenfu-Platform 開發文件入口
 
@@ -1500,8 +1500,8 @@ Spec Impact：對 DEV-054 為 `Compatible hardening`；不改 raw-finger、canon
 |---|---|---|---|
 | `ai-doc/specs/SPEC-054-mobile-task-drag-precision.md` | Rework 5 Implemented / Automated QA-QC Passed / Physical Pending | DEV-054 | 新增原生 selection/callout ownership、width-independent touch session 與 Workbench pan boundary。 |
 | `ai-doc/qa/QA-DEV-054-mobile-task-drag-precision.md` | Automated QA 15/15 + regressions PASS / Physical Pending | DEV-054 | R12-R15 與擴充回歸涵蓋 L1/L2/L3+、gesture threshold、wide touch、Workbench。 |
-| `ai-doc/qc/QC-DEV-054-mobile-task-drag-precision.md` | Automated QA-QC PASS / Overall 未充分驗證 | DEV-054 | 記錄 44/44 static、15/15 browser、完整相鄰回歸、zero-tolerance 與 physical gate 邊界。 |
-| `ai-doc/dev_task.md` | DEV-054 Blocked / Awaiting Physical Devices | DEV-054 | RD 與 automated QA-QC 完成；連續三輪未偵測到實機，iOS/Android 各 50 trials 前不標記 Complete。 |
+| `ai-doc/qc/QC-DEV-054-mobile-task-drag-precision.md` | 歷史快照：Automated QA-QC PASS / Overall 未充分驗證 | DEV-054 | 當時記錄 45/45 static、15/15 browser、完整相鄰回歸、zero-tolerance 與舊 physical gate；現行狀態以上方 2026-10-26 入口為準。 |
+| `ai-doc/dev_task.md` | 歷史快照：DEV-054 Blocked / Awaiting Physical Devices | DEV-054 | 當時尚以 iOS/Android 各 50 trials 為完成門檻；此門檻已被 2026-10-19 自用契約取代。 |
 
 ## Documentation Map Update - 2026-08-14（看板任務拖曳升級為 L1 列表）
 
@@ -1762,17 +1762,17 @@ PM 治理註記：DEV-055 為新交付點且計入完成率。第一次自動化
 
 ## Documentation Map Update - 2026-07-17（手機任務拖拉定位精準度）
 
-使用者操作回饋：DEV-054 第四次模擬手機證明 Rework 3 的 preview-to-indicator docking 讓拖曳物跳離手指，且 checklist source 在 innermost target 無效後會 fall through 到 expanded parent card。R10 已用 `636x764` 重現。RD rework 4 改為 preview 永遠跟 raw finger、exact innermost ownership、invalid ancestor blocking、bounded card primary rect，並移除 nearest-target 磁吸。使用者已於 2026-07-17 以原失敗路徑重驗通過；DEV-053 歷史完成證據與桌機 frozen baseline 維持，physical gate 仍不可省略。
+使用者操作回饋：DEV-054 第四次模擬手機證明 Rework 3 的 preview-to-indicator docking 讓拖曳物跳離手指，且 checklist source 在 innermost target 無效後會 fall through 到 expanded parent card。R10 已用 `636x764` 重現。RD rework 4 改為 preview 永遠跟 raw finger、exact innermost ownership、invalid ancestor blocking、bounded card primary rect，並移除 nearest-target 磁吸。使用者已於 2026-07-17 以原失敗路徑重驗通過；DEV-053 歷史完成證據與桌機 frozen baseline 維持。當時 physical gate 規則保留為歷史，現已由上方 2026-10-26 現行入口取代。
 
-### DEV-054：手機任務拖拉定位精準度優化（RD Rework 4 Implemented / Automated Browser + User Revalidation Passed / Physical Gate Pending）
+### DEV-054 歷史快照：手機任務拖拉定位精準度優化（RD Rework 4 Implemented / Automated Browser + User Revalidation Passed / Physical Gate Pending）
 
 | 文件 | 狀態 | 關聯 DEV | 說明 |
 |---|---|---|---|
 | `ai-doc/specs/SPEC-054-mobile-task-drag-precision.md` | RD Rework 4 Implemented / Automated Browser + User Revalidation Passed / Physical Gate Pending | DEV-054 / DEV-053 / DEV-029 / DEV-046 | 保留 desktop approved baseline；preview 永遠跟 raw finger；target 採 innermost exact hit、ancestor blocking、bounded card primary geometry；retain 外 direct handover；mobile source placeholder 不畫 marker；pan / edge-scroll 契約維持。 |
-| `ai-doc/qa/QA-DEV-054-mobile-task-drag-precision.md` | RD Rework 4 Automated + User Revalidation Passed / Full Matrix + Physical Not Executed | DEV-054 | 四次使用者失敗與修正證據均保留；DEV-054 static 34/34、browser R01-R10，R06 驗證 bounded card primary，R10 驗證 `636x764` ancestor blocking、finger coupling、zero write。使用者原失敗路徑已重驗通過；B01-B12 與 iOS / Android 各 50 trials 仍為 required。 |
-| `ai-doc/dev_task.md` | DEV-054 Verifying / P1 / Physical Gate Required | DEV-054 | RD rework、browser 與使用者原路徑重驗已通過；physical device gate 與 QC report 通過前不得標記完成。 |
+| `ai-doc/qa/QA-DEV-054-mobile-task-drag-precision.md` | 歷史：RD Rework 4 Automated + User Revalidation Passed / Full Matrix + Physical Not Executed | DEV-054 | 四次使用者失敗與修正證據均保留；當時 DEV-054 static 34/34、browser R01-R10，且 B01-B12 與雙平台 trials 尚為 required；現已被自用契約取代。 |
+| `ai-doc/dev_task.md` | 歷史：DEV-054 Verifying / P1 / Physical Gate Required | DEV-054 | 當時 physical device gate 與 QC report 是完成前置；現行狀態以上方 2026-10-26 入口為準。 |
 
-PM 治理註記：Spec Impact=`Compatible exception`。DEV-054 不回寫 DEV-053 QC 歷史結果；使用者原失敗路徑已重驗通過，但 physical iOS / Android 任一未通過，仍不得宣稱手機定位精準度或完整肌肉記憶一致性已完成。Workbench placed row 仍不能拖；desktop drag UI 仍以使用者核准的 DragOverlay / threshold / click-right-click 為 baseline。DEV-055 Rework 1 後 user revalidation 已通過，桌機升級本機完成；仍未 production deploy。
+PM 歷史治理註記：Spec Impact=`Compatible exception`。當時 physical iOS / Android 任一未通過即不得宣稱完整驗收；此舊門檻已被自用契約取代，但未測平台仍不能標示實機 PASS。Workbench placed row 仍不能拖；desktop drag UI 仍以使用者核准的 DragOverlay / threshold / click-right-click 為 baseline。DEV-055 Rework 1 後 user revalidation 已通過，桌機升級本機完成；仍未 production deploy。
 
 ## Documentation Map Update - 2026-07-17（任務拖拉肌肉記憶一致化）
 

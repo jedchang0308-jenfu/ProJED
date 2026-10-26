@@ -613,14 +613,14 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 阻塞 / 恢復條件：不得復活 DEV-052 或 DEV-051 parent-lock baseline；若要改 DB、production 或恢復 placed-row drag 需 Human Re-entry。
   - 證據：`SPEC-053`、`QA-DEV-053`、`QC-DEV-053`；2026-08-24 最新桌機預覽實測 rect=`120x20`、pointer=`(185,100)`、rect left=`185`／bottom=`100`，DEV-053 static 30/30、browser 10/10、TypeScript、targeted ESLint 0 error、`build:test` 通過；DEV-068 本次變更案例通過，但完整相鄰 suite 仍揭露既有來源虛線框高度 `28.09px → 32px` 差異，不歸因於 fixed 預覽縮放。未部署。
   - 計入交付：是
-- ◇ DEV-054 [交付點] [驗證中] [P1] [RD Implemented / 自用裝置重點確認待補] 手機任務拖拉定位精準度優化
+- ✓ DEV-054 [交付點] [開發完成] [P1] [RD Development Complete / Local Automated PASS / 自用裝置驗收待確認] 手機任務拖拉定位精準度優化
   - 摘要：Rework 5 修正長按計時器成立前瀏覽器已啟動文字圈選／iOS callout，以及真實 TouchEvent 被 `innerWidth <= 768` gate 誤導回桌機路徑的根因；L1、L2、L3+ 與 Workbench 未歸位任務表面現在從 touchstart 宣告 selection ownership，實際 touch 不再依 viewport 寬度分流。Workbench 保留 native pan，已歸位列仍不可拖；桌機 dnd-kit、click/right-click 與 collision 契約維持，overlay 尺寸／offset 已由 2026-08-24 使用者最新決策另行覆寫為 50%／gap=0。
   - 來源 ID：`USER-20260717-mobile-task-drag-precision`
   - 父任務：DEV-053、DEV-029、DEV-046
-  - 下一步：在實際常用手機重驗原長按／定位問題及主要拖拉、action、取消與復原，簡短記錄裝置／版本／結果；自動化按現行 QA 行為對應選測，不要求另做 B/R 同義矩陣。
-  - 阻塞 / 恢復條件：2026-10-19 使用者已要求依自用情境精簡，取消雙平台固定次數／成功率、錄影工作簿及對DEV-097的連動。原 target／parent／action、取消零寫入、exactly-once、permission／ownership、undo、placed-row唯讀及最新桌機行為仍須保護；有實際失敗才停止受影響交付。自用裝置尚未確認，未測平台不標PASS。
-  - 證據：`SPEC-054`、`QA-DEV-054`、`QC-DEV-054`；歷史結果依原QC保留。2026-10-19移除文件數字鎖定、收斂B/R與過期版型預期，原15個browser案例保留；本輪RD自查46/46 static、15/15 browser、DEV-053／029各5項安全選測及未知case拒絕通過，undo wiring27/27。完整結果與首輪失敗見QA §15；未測實機不標PASS，4000及task browser已清理。
-  - 計入交付：是
+  - 下一步：在實際常用手機做自用驗收，重驗原長按／定位問題及主要拖拉、action、取消與復原，簡短記錄裝置／版本／結果；若需正式發布，另走 release gate。
+  - 阻塞 / 恢復條件：2026-10-19 已取消雙平台固定次數／成功率、錄影工作簿及對 DEV-097 的連動。RD 開發完成不等待未使用平台；原 target／parent／action、取消零寫入、exactly-once、permission／ownership、undo、placed-row唯讀及最新桌機行為仍須保護，實際失敗才重開受影響開發。
+  - 證據：`SPEC-054`、`QA-DEV-054`、`QC-DEV-054`；歷史結果依原 QC 保留。2026-10-26 於 `codex/projed-independent-dev@7950038` fresh rerun：46/46 static、R01–R15 browser 15/15、console／network error 0，invalid release 零寫入、action／Workbench exactly-once 與 placed-row no-drag 均通過；結果見 QA §16。未測實機不標 PASS，本輪不冒稱獨立 QC 或正式發布。
+  - 計入交付：是（RD 開發完成；自用裝置驗收與正式發布分層保留）
 - ✓ DEV-055 [交付點] [完成] [P1] [正式環境歷史已交付 / 2026-08-25 本機邊界修正未 Release] 電腦版任務拖拉落點清晰化與跨階層定位升級
   - 摘要：第一次自動化通過後，使用者 T01-T08 真實桌機操作回報「同一格定位線會飄」與「L3+ 任務被定位線推開」。RD Rework 1 在保留現有桌機 DragOverlay、8px 起手門檻與滑鼠跟手感的前提下，改為 fixed overlay-only indicator、overlay checklist append hit area、card/checklist sortable displacement freeze、同 target rect micro-retain；Workbench placed row 維持不能拖。2026-07-17 使用者重跑 T01-T08 後回報測試通過並完成 production release。2026-08-25 再修正展開 L2 standard `after` marker：命中仍用 primary geometry，垂直顯示改用完整 task scope bottom，不再切在標題與子樹之間；此最新修正僅本機驗證，未 release。
   - 來源 ID：`USER-20260717-desktop-task-drag-target-clarity`
