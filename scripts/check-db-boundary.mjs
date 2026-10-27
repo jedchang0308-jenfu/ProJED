@@ -18,6 +18,7 @@ const profileContracts = new Map([
     'db/migrations/0005_collaboration_command_v1.sql',
     'db/migrations/0006_record_activity_v1.sql',
     'db/migrations/0007_board_transfer_v1.sql',
+    'db/migrations/0008_unplaced_quick_capture_v1.sql',
   ]],
 ]);
 

@@ -26,6 +26,9 @@ import { createHttpSessionAdapter } from '../../../src/services/httpApi/sessionA
 import { HttpApiClient, HttpApiError, type HttpApiFetch } from '../../../src/services/httpApi/httpApiClient.js';
 import { createCollaborationWriteHttpDispatcher } from '../../../server/collaborationWriteHttp.js';
 import { createSessionHttpDispatcher } from '../../../server/sessionHttp.js';
+import { createQuickTaskHttpDispatcher } from '../../../server/quickTaskHttp.js';
+import { createHttpQuickTaskAdapter } from '../../../src/services/httpApi/quickTaskAdapter.js';
+import type { QuickCaptureRecord } from '../../../src/features/quickTaskCapture/model.js';
 
 const { Client } = pg;
 const config = loadRuntimeConfig();
@@ -51,6 +54,11 @@ const actorB: ServerActorV1 = {
   principalId: 'principal:b',
   localUserId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
   contextId: '52222222-2222-4222-8222-222222222222',
+};
+const actorBQuick: ServerActorV1 = {
+  ...actorB,
+  entry: 'quick',
+  contextId: '56666666-6666-4666-8666-666666666666',
 };
 const actorC: ServerActorV1 = {
   ...actorA,
@@ -559,12 +567,21 @@ const disabledSession = await disabledSessionDispatcher({
   method: 'GET', url: '/api/v1/session', headers: {},
 } as IncomingMessage, 'qa-session-disabled');
 assert.equal(disabledSession.status, 404);
+let disabledQuickResumed = false;
+const disabledQuickDispatcher = createQuickTaskHttpDispatcher(config, database);
+const disabledQuick = await disabledQuickDispatcher({
+  method: 'POST', url: '/api/v1/quick-tasks', headers: { 'content-type': 'application/json' },
+  resume() { disabledQuickResumed = true; },
+} as unknown as IncomingMessage, 'qa-quick-disabled');
+assert.equal(disabledQuick.status, 404);
+assert.equal(disabledQuickResumed, true);
 
 let destroyedSessionCount = 0;
 const http = createKernelHttpServer(config, database, expected, {
   resolveActor: async (request) => {
     if (request.headers.cookie === '__session=qa-a') return actorA;
     if (request.headers.cookie === '__session=qa-b') return actorB;
+    if (request.headers.cookie === '__session=qa-b-quick') return actorBQuick;
     if (request.headers.cookie === '__session=qa-c') return actorC;
     if (request.headers.cookie === '__session=qa-e') return actorE;
     throw new KernelError('ACTOR_INVALID', 'QA session is unavailable', 401);
@@ -573,7 +590,7 @@ const http = createKernelHttpServer(config, database, expected, {
 });
 const address = await http.listen();
 const base = `http://${address.host}:${address.port}`;
-const fetchFor = (session: 'qa-a' | 'qa-b' | 'qa-c' | 'qa-e'): HttpApiFetch => async (input, init) => {
+const fetchFor = (session: 'qa-a' | 'qa-b' | 'qa-b-quick' | 'qa-c' | 'qa-e'): HttpApiFetch => async (input, init) => {
   const headers = new Headers(init?.headers);
   headers.set('cookie', `__session=${session}`);
   headers.set('origin', base);
@@ -591,6 +608,7 @@ try {
   const recordsB = createHttpRecordActivityAdapter(new HttpApiClient(fetchFor('qa-b')));
   const recordsA = createHttpRecordActivityAdapter(new HttpApiClient(fetchFor('qa-a')));
   const sessionB = createHttpSessionAdapter(new HttpApiClient(fetchFor('qa-b')));
+  const quickB = createHttpQuickTaskAdapter(new HttpApiClient(fetchFor('qa-b-quick')));
   const sessionProfile = await sessionB.getSession();
   assert.equal(sessionProfile.uid, actorB.localUserId);
   assert.equal(sessionProfile.email, 'b@example.invalid');
@@ -602,6 +620,74 @@ try {
     body: JSON.stringify({ displayName: 'Forged without origin' }),
   });
   assert.equal(missingProfileOrigin.status, 403);
+  const mainEntryQuickWrite = await fetch(`${base}/api/v1/quick-tasks`, {
+    method: 'POST',
+    headers: { cookie: '__session=qa-b', origin: base, 'content-type': 'application/json' },
+    body: JSON.stringify({
+      captureId: 'task_workbench_unplaced_80000000-0000-4000-8000-000000000000',
+      title: 'Wrong entry',
+      workspaceHint: null,
+    }),
+  });
+  assert.equal(mainEntryQuickWrite.status, 403);
+  const quickCapture: QuickCaptureRecord = {
+    schemaVersion: 1,
+    captureId: 'task_workbench_unplaced_81111111-1111-4111-8111-111111111111',
+    accountId: actorB.localUserId,
+    title: 'HTTP quick capture',
+    workspaceHint: 'ws-b',
+    clientCreatedAt: Date.now(),
+    updatedAt: Date.now(),
+    state: 'pending',
+    attemptCount: 0,
+    nextAttemptAt: null,
+    lastErrorCode: null,
+    leaseId: null,
+    leaseExpiresAt: null,
+    claimIntent: null,
+  };
+  const quickReceipt = await quickB.create(quickCapture, new AbortController().signal);
+  assert.equal(quickReceipt.created, true);
+  assert.equal(quickReceipt.ownerId, actorB.localUserId);
+  const replayedQuickReceipt = await quickB.create(quickCapture, new AbortController().signal);
+  assert.equal(replayedQuickReceipt.created, false);
+  assert.equal(replayedQuickReceipt.committedAt, quickReceipt.committedAt);
+  const quickRowsB = await runActorTransaction(database, config, actorB, port => port.query<{
+    legacy_task_id: string; workspace_legacy_id: string; title: string;
+  }>(`
+    SELECT legacy_task_id, workspace_legacy_id, task->>'title' AS title
+      FROM projed_core.unplaced_tasks ORDER BY sort_order
+  `));
+  assert.deepEqual(quickRowsB.rows, [{
+    legacy_task_id: quickCapture.captureId,
+    workspace_legacy_id: 'ws-b',
+    title: quickCapture.title,
+  }]);
+  const quickRowsA = await runActorTransaction(database, config, actorA, port => port.query<{ count: string }>(`
+    SELECT count(*)::text AS count FROM projed_core.unplaced_tasks
+  `));
+  assert.equal(quickRowsA.rows[0]?.count, '0');
+  const quickConflict = await fetch(`${base}/api/v1/quick-tasks`, {
+    method: 'POST',
+    headers: { cookie: '__session=qa-b-quick', origin: base, 'content-type': 'application/json' },
+    body: JSON.stringify({
+      captureId: quickCapture.captureId,
+      title: 'Different title',
+      workspaceHint: null,
+    }),
+  });
+  assert.equal(quickConflict.status, 409);
+  assert.equal((await quickConflict.json() as { error: { code: string } }).error.code, 'QUICK_TASK_IDEMPOTENCY_CONFLICT');
+  const quickCrossSite = await fetch(`${base}/api/v1/quick-tasks`, {
+    method: 'POST',
+    headers: { cookie: '__session=qa-b-quick', origin: 'https://evil.invalid', 'content-type': 'application/json' },
+    body: JSON.stringify({
+      captureId: 'task_workbench_unplaced_82222222-2222-4222-8222-222222222222',
+      title: 'Cross-site forged',
+      workspaceHint: null,
+    }),
+  });
+  assert.equal(quickCrossSite.status, 403);
   assert.deepEqual((await httpA.listWorkspaces()).map(workspace => workspace.id), ['ws-a', 'ws-b']);
   assert.deepEqual((await httpB.listWorkspaceMembers('ws-b')).map(member => member.userId), [
     actorB.localUserId, actorA.localUserId, actorC.localUserId, actorD.localUserId, actorE.localUserId,
@@ -810,7 +896,7 @@ console.log(JSON.stringify({
     'board-capability-write-deny', 'board-scope-tag-definition-deny',
     'task-delete-parent-detach-and-dependency-cascade',
     'missing-context-deny', 'runtime-write-deny', 'production-route-disabled', 'production-write-disabled',
-    'production-collaboration-disabled',
+    'production-collaboration-disabled', 'production-quick-task-disabled',
     'http-session-route', 'http-private-board-deny', 'http-missing-session-deny', 'http-api-no-static-fallback',
     'http-domain-write', 'http-capability-deny', 'http-origin-bound-write-deny',
     'workspace-board-command', 'project-manager-create-board', 'five-role-matrix-atomic',
@@ -821,6 +907,7 @@ console.log(JSON.stringify({
     'record-private-and-project-read', 'record-link-atomic-upsert-and-archive',
     'activity-read-write-capability', 'workspace-activity-audit-capability', 'audit-write-capability',
     'production-record-activity-disabled', 'http-record-activity',
+    'http-quick-task-idempotency-owner-isolation-and-origin-deny',
     'http-board-transfer-preview-confirmation-rollback-data-permission-and-revision-continuity',
   ],
 }));

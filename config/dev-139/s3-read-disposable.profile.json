@@ -43,6 +43,10 @@
     {
       "version": "0007_board_transfer_v1",
       "path": "db/migrations/0007_board_transfer_v1.sql"
+    },
+    {
+      "version": "0008_unplaced_quick_capture_v1",
+      "path": "db/migrations/0008_unplaced_quick_capture_v1.sql"
     }
   ],
   "objectAllowlist": [
@@ -95,7 +99,10 @@
     "projed_core.activity_events_project_time_idx",
     "projed_core.audit_logs_tenant_time_idx",
     "projed_core.board_transfer_source_context_valid_v1",
-    "projed_core.board_transfer_target_context_valid_v1"
+    "projed_core.board_transfer_target_context_valid_v1",
+    "projed_core.unplaced_tasks",
+    "projed_core.unplaced_tasks_owner_order_idx",
+    "projed_core.quick_task_capture_receipts"
   ],
   "staticFixturePath": "qa/dev-139/s1/static",
   "runtime": {

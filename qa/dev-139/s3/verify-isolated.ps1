@@ -153,6 +153,7 @@ try {
       'record-private-and-project-read', 'record-link-atomic-upsert-and-archive',
       'activity-read-write-capability', 'workspace-activity-audit-capability', 'audit-write-capability',
       'production-record-activity-disabled', 'http-record-activity',
+      'production-quick-task-disabled', 'http-quick-task-idempotency-owner-isolation-and-origin-deny',
       'http-board-transfer-preview-confirmation-rollback-data-permission-and-revision-continuity'
     )
   } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $evidenceDir 'result.json') -Encoding utf8
