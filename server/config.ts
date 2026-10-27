@@ -56,6 +56,7 @@ export interface RuntimeConfig {
   bindingPath: string;
   binding: RuntimeBinding;
   staticRoot: string;
+  publicAppUrl?: string;
 }
 
 const SHA256_RE = /^[a-f0-9]{64}$/;
@@ -77,6 +78,7 @@ const PROFILE_MIGRATION_PATHS = new Map<string, readonly string[]>([
     'db/migrations/0010_task_tracking_reference_v1.sql',
     'db/migrations/0011_board_backup_import_v1.sql',
     'db/migrations/0012_account_preferences_v1.sql',
+    'db/migrations/0013_calendar_subscriptions_v1.sql',
   ]],
 ]);
 
@@ -182,9 +184,21 @@ export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): Runtime
   const host = env.PROJED_RUNTIME_MODE === 'cloud-run-config'
     ? loaded.profile.runtime.cloudRunBindHost
     : loaded.profile.runtime.bindHost;
+  let publicAppUrl: string | undefined;
+  if (env.PROJED_PUBLIC_APP_URL?.trim()) {
+    let parsed: URL;
+    try { parsed = new URL(env.PROJED_PUBLIC_APP_URL.trim()); }
+    catch (error) { throw new KernelError('CONFIG_INVALID', 'PROJED_PUBLIC_APP_URL is invalid', 500, { cause: error }); }
+    if ((parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(parsed.hostname)))
+        || parsed.username || parsed.password || parsed.search || parsed.hash) {
+      throw new KernelError('CONFIG_INVALID', 'PROJED_PUBLIC_APP_URL is outside the allowed origin contract');
+    }
+    publicAppUrl = parsed.toString().replace(/\/$/, '');
+  }
   return {
     env: 'disposable', entry, host, port, databaseUrl, profilePath,
     profile: loaded.profile, bindingPath, binding,
     staticRoot: realpathSync(resolve(loaded.profile.staticFixturePath)),
+    ...(publicAppUrl ? { publicAppUrl } : {}),
   };
 }

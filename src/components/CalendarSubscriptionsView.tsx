@@ -41,6 +41,7 @@ import CalendarSubscriptionBuilderPreview, {
 } from './CalendarSubscriptionBuilderPreview';
 
 const ADMIN_ROLES = new Set(['owner', 'admin', 'project_manager']);
+const isCalendarRemoteBackend = isSupabaseBackend || isHttpBackend;
 
 const emptyFilters = (
   workspaceId?: string,
@@ -554,7 +555,7 @@ const CalendarSubscriptionsView: React.FC = () => {
   }, [members, user]);
 
   const loadSubscriptions = async () => {
-    if (!isSupabaseBackend) return;
+    if (!isCalendarRemoteBackend) return;
     setIsLoading(true);
     try {
       const [nextSubscriptions, nextWorkspaceRefs, nextBoardRefs] = await Promise.all([
@@ -585,7 +586,7 @@ const CalendarSubscriptionsView: React.FC = () => {
   }, [activeBoard?.id, activeWorkspace?.id, editingId]);
 
   useEffect(() => {
-    if (!isSupabaseBackend || effectiveMemberWorkspaceIds.length === 0) {
+    if (!isCalendarRemoteBackend || effectiveMemberWorkspaceIds.length === 0) {
       setMembers([]);
       return;
     }
@@ -777,7 +778,7 @@ const CalendarSubscriptionsView: React.FC = () => {
               ? '訂閱條件尚未完整。'
               : undefined;
 
-  if (!isSupabaseBackend) {
+  if (!isCalendarRemoteBackend) {
     return (
       <div
         className="h-full overflow-auto bg-slate-50 p-4 sm:p-6"
@@ -785,20 +786,6 @@ const CalendarSubscriptionsView: React.FC = () => {
         data-pwa-calendar-state={localPreviewDirty || isDeleting ? 'dirty' : 'safe'}
       >
         <div className="mx-auto flex max-w-3xl flex-col gap-4">
-          {isHttpBackend && (
-            <section
-              className="border border-amber-200 bg-amber-50 p-4"
-              data-calendar-subscription-backend-supported="false"
-            >
-              <div className="flex items-center gap-2 text-sm font-bold text-amber-900">
-                <ShieldAlert size={16} />
-                行事曆訂閱暫不可用
-              </div>
-              <p className="mt-2 text-sm text-amber-800">
-                目前雲端後端尚未提供訂閱 API；此模式不會連到舊 Supabase，也不會建立或更新訂閱連結。
-              </p>
-            </section>
-          )}
           {isLocalTestBackend && (
             <section
               className="border border-slate-200 bg-white p-4"

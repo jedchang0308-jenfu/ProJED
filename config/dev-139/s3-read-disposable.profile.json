@@ -63,6 +63,10 @@
     {
       "version": "0012_account_preferences_v1",
       "path": "db/migrations/0012_account_preferences_v1.sql"
+    },
+    {
+      "version": "0013_calendar_subscriptions_v1",
+      "path": "db/migrations/0013_calendar_subscriptions_v1.sql"
     }
   ],
   "objectAllowlist": [
@@ -130,7 +134,9 @@
     "projed_core.task_tracking_reference_operations",
     "projed_core.backup_import_executions",
     "projed_core.account_board_task_filter_preferences",
-    "projed_core.account_board_task_filter_preferences_project_idx"
+    "projed_core.account_board_task_filter_preferences_project_idx",
+    "projed_core.calendar_subscriptions",
+    "projed_core.calendar_subscriptions_owner_created_idx"
   ],
   "staticFixturePath": "qa/dev-139/s1/static",
   "runtime": {

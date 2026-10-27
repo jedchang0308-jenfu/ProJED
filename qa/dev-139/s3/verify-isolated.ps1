@@ -159,7 +159,8 @@ try {
       'http-tracking-reference-subtree-staging-idempotency-derived-read-and-unplaced-guard',
       'http-board-transfer-preview-confirmation-rollback-data-permission-and-revision-continuity',
       'http-backup-copy-replace-stale-rollback-idempotency-rls-and-origin',
-      'http-account-layout-and-task-filter-preferences-cas-rls-and-origin'
+      'http-account-layout-and-task-filter-preferences-cas-rls-and-origin',
+      'http-calendar-subscription-hash-only-owner-origin-legacy-pagination-lifecycle-feed-and-revocation'
     )
   } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $evidenceDir 'result.json') -Encoding utf8
   Write-Output ("DEV139_S3_RESULT=PASS evidenceLevel=S3_DOMAIN_CORE_LOCAL_ACCEPTANCE output={0}" -f $evidenceDir)

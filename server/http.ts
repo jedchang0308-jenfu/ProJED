@@ -6,6 +6,7 @@ import { extname, resolve, sep } from 'node:path';
 import type { RuntimeConfig } from './config.js';
 import type { ExpectedMigration, RuntimeDatabase } from './db.js';
 import { createBackupHttpDispatcher } from './backupHttp.js';
+import { createCalendarHttpDispatcher } from './calendarHttp.js';
 import { createPreferencesHttpDispatcher } from './preferencesHttp.js';
 import { createCollaborationWriteHttpDispatcher } from './collaborationWriteHttp.js';
 import {
@@ -41,6 +42,16 @@ function json(response: ServerResponse, status: number, value: unknown, requestI
     'x-request-id': requestId,
   });
   response.end(JSON.stringify(value));
+}
+
+function text(response: ServerResponse, status: number, value: string, contentType: string, requestId: string): void {
+  response.writeHead(status, {
+    'content-type': contentType,
+    'cache-control': 'no-store',
+    'x-content-type-options': 'nosniff',
+    'x-request-id': requestId,
+  });
+  response.end(value);
 }
 
 function inside(root: string, candidate: string): boolean {
@@ -102,6 +113,7 @@ export function createKernelHttpServer(
   const dispatchTaskTracking = createTaskTrackingHttpDispatcher(config, database, options.resolveActor);
   const dispatchBackup = createBackupHttpDispatcher(config, database, options.resolveActor);
   const dispatchPreferences = createPreferencesHttpDispatcher(config, database, options.resolveActor);
+  const dispatchCalendar = createCalendarHttpDispatcher(config, database, options.resolveActor);
   const dispatchDomainRead = createDomainReadHttpDispatcher(config, database, options.resolveActor);
   const dispatchDomainWrite = createDomainWriteHttpDispatcher(config, database, options.resolveActor);
   const server = createServer({
@@ -126,6 +138,17 @@ export function createKernelHttpServer(
       }
       const ready = await database.readiness(expectedMigrations);
       json(response, ready ? 200 : 503, ready ? { status: 'ok' } : { status: 'unavailable', requestId }, requestId);
+      return;
+    }
+    const calendar = await dispatchCalendar(request, requestId);
+    if (calendar.matched) {
+      if (calendar.text !== undefined) {
+        text(response, calendar.status ?? 500, calendar.text, calendar.contentType ?? 'text/plain; charset=utf-8', requestId);
+      } else {
+        json(response, calendar.status ?? 500, calendar.body ?? {
+          error: { code: 'DB_UNAVAILABLE', requestId, retryable: true },
+        }, requestId);
+      }
       return;
     }
     const session = await dispatchSession(request, requestId);

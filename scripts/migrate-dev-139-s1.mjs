@@ -31,6 +31,7 @@ const profileContracts = new Map([
       'db/migrations/0010_task_tracking_reference_v1.sql',
       'db/migrations/0011_board_backup_import_v1.sql',
       'db/migrations/0012_account_preferences_v1.sql',
+      'db/migrations/0013_calendar_subscriptions_v1.sql',
     ],
   }],
 ]);

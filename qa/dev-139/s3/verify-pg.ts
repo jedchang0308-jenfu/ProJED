@@ -32,10 +32,12 @@ import { createHttpTaskWorkbenchAdapter } from '../../../src/services/httpApi/ta
 import { createHttpTaskTrackingAdapter } from '../../../src/services/httpApi/taskTrackingAdapter.js';
 import { createHttpBackupAdapter } from '../../../src/services/httpApi/backupAdapter.js';
 import { createHttpPreferencesAdapter } from '../../../src/services/httpApi/preferencesAdapter.js';
+import { createHttpCalendarAdapter } from '../../../src/services/httpApi/calendarAdapter.js';
 import { createBackupPackage } from '../../../src/features/backup/package.js';
 import { BackupError } from '../../../src/features/backup/types.js';
 import { TaskTrackingError } from '../../../src/features/taskTracking/errors.js';
 import { createPreferencesHttpDispatcher } from '../../../server/preferencesHttp.js';
+import { createCalendarHttpDispatcher } from '../../../server/calendarHttp.js';
 import type { QuickCaptureRecord } from '../../../src/features/quickTaskCapture/model.js';
 import type { MoveTaskSubtreeCommand } from '../../../src/features/taskWorkbench/taskPlacementCommand.js';
 import type { BoardRolePermissionMatrix } from '../../../src/types/index.js';
@@ -547,13 +549,14 @@ try {
          'unplaced_tasks', 'task_workbench_placement_operations',
          'task_tracking_references', 'task_tracking_reference_staging',
          'task_tracking_reference_operations', 'backup_import_executions',
-         'account_board_task_filter_preferences'
+         'account_board_task_filter_preferences', 'calendar_subscriptions'
        )
      ORDER BY c.relname
   `);
   assert.deepEqual(taskWorkbenchRls.rows, [
     { relname: 'account_board_task_filter_preferences', relrowsecurity: true, relforcerowsecurity: true },
     { relname: 'backup_import_executions', relrowsecurity: true, relforcerowsecurity: true },
+    { relname: 'calendar_subscriptions', relrowsecurity: true, relforcerowsecurity: true },
     { relname: 'task_tracking_reference_operations', relrowsecurity: true, relforcerowsecurity: true },
     { relname: 'task_tracking_reference_staging', relrowsecurity: true, relforcerowsecurity: true },
     { relname: 'task_tracking_references', relrowsecurity: true, relforcerowsecurity: true },
@@ -616,6 +619,11 @@ const disabledPreferences = await disabledPreferencesDispatcher({
   method: 'GET', url: '/api/v1/preferences/layout', headers: {}, resume() {},
 } as unknown as IncomingMessage, 'qa-preferences-disabled');
 assert.equal(disabledPreferences.status, 404);
+const disabledCalendarDispatcher = createCalendarHttpDispatcher(config, database);
+const disabledCalendar = await disabledCalendarDispatcher({
+  method: 'GET', url: '/api/v1/calendar-subscriptions', headers: {}, resume() {},
+} as unknown as IncomingMessage, 'qa-calendar-disabled');
+assert.equal(disabledCalendar.status, 404);
 await runActorTransaction(database, config, actorB, port => port.query(`
   UPDATE projed_core.profiles
      SET ui_preferences = '{"other":{"kept":true},"layout":{"taskWorkbenchWidth":340,"futureField":"ignored"}}'::jsonb
@@ -669,6 +677,8 @@ try {
   const trackingB = createHttpTaskTrackingAdapter(clientFor('qa-b', actorB));
   const preferencesB = createHttpPreferencesAdapter(clientFor('qa-b', actorB));
   const preferencesC = createHttpPreferencesAdapter(clientFor('qa-c', actorC));
+  const calendarA = createHttpCalendarAdapter(clientFor('qa-a', actorA), httpA);
+  const calendarC = createHttpCalendarAdapter(clientFor('qa-c', actorC), createHttpDomainReadAdapter(clientFor('qa-c', actorC)));
   const staleActorClient = clientFor('qa-b', actorA);
   const staleActorRead = createHttpDomainReadAdapter(staleActorClient);
   const staleActorWrite = createHttpDomainWriteAdapter(staleActorClient);
@@ -741,6 +751,158 @@ try {
   });
   assert.equal(missingPreferenceOrigin.status, 403);
   assert.equal((await preferencesB.readLayout()).workspaceSidebarWidth, 320);
+  const calendarRefs = await calendarA.listBoardRefs(['ws-b']);
+  assert.equal(calendarRefs.some(board => board.appBoardId === 'board-shared'), true);
+  await writeB.createTask('ws-b', 'board-shared', {
+    id: 'calendar-feed-task', workspaceId: 'ws-b', boardId: 'board-shared', parentId: null,
+    title: 'Calendar feed visible', status: 'todo', assigneeIds: [actorA.localUserId], collaboratorIds: [],
+    tagIds: [], startDate: '2026-10-27', endDate: '2026-10-28', nodeType: 'task', order: 7,
+  });
+  const calendarScope = await runActorTransaction(database, config, actorA, port => port.query<{
+    tenant_id: string; project_id: string;
+  }>(`
+    SELECT tenant.id::text AS tenant_id, project.id::text AS project_id
+      FROM projed_core.tenants tenant
+      JOIN projed_core.projects project ON project.tenant_id = tenant.id
+     WHERE tenant.legacy_workspace_id = 'ws-b' AND project.legacy_board_id = 'board-shared'
+  `));
+  const calendarTenantId = calendarScope.rows[0]?.tenant_id;
+  const calendarProjectId = calendarScope.rows[0]?.project_id;
+  assert.ok(calendarTenantId && calendarProjectId);
+  const calendarInput = {
+    name: 'A calendar',
+    filters: {
+      version: 4 as const,
+      v4_scope_type: 'per_board_filter_snapshot' as const,
+      workspace_ids: ['ws-b'],
+      project_ids: ['board-shared'],
+      board_filters: {
+        'board-shared': {
+          included: true,
+          date_types: ['due_date' as const],
+          filters: {
+            statuses: ['todo'],
+            due: { includeOverdue: false, upcomingWithinDays: null },
+            people: { ids: [actorA.localUserId], includeUnassigned: false },
+            tagIds: [], keyword: '',
+          },
+        },
+      },
+    },
+  };
+  const missingCalendarOrigin = await fetch(`${base}/api/v1/calendar-subscriptions`, {
+    method: 'POST',
+    headers: { cookie: '__session=qa-a', 'content-type': 'application/json' },
+    body: JSON.stringify(calendarInput),
+  });
+  assert.equal(missingCalendarOrigin.status, 403);
+  assert.deepEqual(await calendarA.list(), []);
+  const createdCalendar = await calendarA.create(calendarInput);
+  assert.equal(createdCalendar.subscription.name, 'A calendar');
+  assert.equal((createdCalendar.subscription as unknown as { tokenHash?: unknown }).tokenHash, undefined);
+  const token = /\/([^/]+)\.ics$/u.exec(createdCalendar.feedUrl)?.[1];
+  assert.ok(token);
+  const tokenHash = createHash('sha256').update(token).digest('hex');
+  const storedCalendarSecret = await runActorTransaction(database, config, actorA, port => port.query<{
+    token_hash: string; filters_json: unknown;
+  }>(`SELECT token_hash, filters_json FROM projed_core.calendar_subscriptions WHERE id = $1::uuid`, [createdCalendar.subscription.id]));
+  assert.equal(storedCalendarSecret.rows[0]?.token_hash, tokenHash);
+  assert.equal(JSON.stringify(storedCalendarSecret.rows[0]).includes(token), false);
+  assert.deepEqual(await calendarC.list(), []);
+  await assert.rejects(calendarC.delete(createdCalendar.subscription.id), (error: unknown) => (
+    error instanceof HttpApiError && error.status === 404
+  ));
+  const calendarListResponse = await fetch(`${base}/api/v1/calendar-subscriptions`, { headers: {
+    cookie: '__session=qa-a',
+    'x-projed-expected-account-id': actorA.localUserId,
+    'x-projed-expected-context-id': actorA.contextId,
+  } });
+  const calendarListText = await calendarListResponse.text();
+  assert.equal(calendarListResponse.status, 200);
+  assert.equal(calendarListText.includes(tokenHash), false);
+  assert.equal(calendarListText.includes(token), false);
+  await runActorTransaction(database, config, actorB, port => port.query(`
+    INSERT INTO projed_core.wbs_items(
+      id, tenant_id, project_id, legacy_task_id, parent_id, title, detail_notes, description,
+      status, assignee_ids, collaborator_ids, tag_ids, start_date, end_date, duration_locked,
+      node_type, kanban_stage_id, sort_order, archived, created_at, updated_at
+    )
+    SELECT md5('dev139-calendar-noise-' || sequence)::uuid, $1::uuid, $2::uuid,
+           'calendar-noise-' || sequence, NULL, 'Calendar noise ' || sequence, '[]'::jsonb, NULL,
+           'completed', ARRAY[$3::uuid], '{}'::uuid[], '{}'::uuid[], NULL, DATE '2026-10-28', NULL,
+           'task', NULL, 1000 + sequence, false, now(),
+           TIMESTAMPTZ '2099-01-01 00:00:00+00' + sequence * INTERVAL '1 millisecond'
+      FROM generate_series(1, 1001) AS sequence
+  `, [calendarTenantId, calendarProjectId, actorA.localUserId]));
+  const feedUrl = new URL(createdCalendar.feedUrl, base);
+  const initialFeed = await fetch(feedUrl);
+  assert.equal(initialFeed.status, 200);
+  assert.equal(initialFeed.headers.get('cache-control'), 'no-store');
+  assert.match(initialFeed.headers.get('content-type') ?? '', /^text\/calendar/u);
+  assert.match(await initialFeed.text(), /Calendar feed visible/u);
+  await runActorTransaction(database, config, actorB, port => port.query(`
+    DELETE FROM projed_core.wbs_items
+     WHERE tenant_id = $1::uuid AND project_id = $2::uuid AND legacy_task_id LIKE 'calendar-noise-%'
+  `, [calendarTenantId, calendarProjectId]));
+  const legacyStatusFilter = {
+    todo: true, in_progress: true, delayed: true, completed: false, unsure: true, onhold: true,
+  };
+  const legacyCalendarFilters: Array<{ version: string; value: Record<string, unknown> }> = [
+    { version: 'v1', value: {
+      scope_type: 'board', workspace_ids: [calendarTenantId], project_ids: [calendarProjectId],
+      assignee: { type: 'me' }, date_types: ['due_date'],
+    } },
+    { version: 'v2', value: {
+      version: 2, v2_scope_type: 'all_accessible_boards_snapshot', scope_type: 'custom',
+      workspace_ids: [calendarTenantId], project_ids: [calendarProjectId], assignee: { type: 'me' },
+      date_types: ['due_date'], global_filter: {
+        statusFilters: legacyStatusFilter, dueWithinDays: null,
+        selectedAssigneeIds: [actorA.localUserId], selectedTagIds: [], keyword: '',
+      }, board_overrides: {},
+    } },
+    { version: 'v3', value: {
+      version: 3, v3_scope_type: 'per_board_filter_snapshot',
+      workspace_ids: [calendarTenantId], project_ids: [calendarProjectId],
+      board_filters: { [calendarProjectId]: {
+        included: true, date_types: ['due_date'], filters: {
+          statusFilters: legacyStatusFilter, dueWithinDays: null,
+          selectedAssigneeIds: [actorA.localUserId], selectedTagIds: [], keyword: '',
+        },
+      } },
+    } },
+  ];
+  for (let index = 0; index < legacyCalendarFilters.length; index += 1) {
+    const fixture = legacyCalendarFilters[index]!;
+    const legacyToken = Buffer.alloc(32, index + 1).toString('base64url');
+    const legacyTokenHash = createHash('sha256').update(legacyToken).digest('hex');
+    await runActorTransaction(database, config, actorA, port => port.query(`
+      INSERT INTO projed_core.calendar_subscriptions(id, owner_user_id, name, token_hash, filters_json)
+      VALUES (md5($1)::uuid, projed_core.current_actor_user_id_v1(), $1, $2, $3::jsonb)
+    `, [`dev139-calendar-${fixture.version}`, legacyTokenHash, JSON.stringify(fixture.value)]));
+    const legacyFeed = await fetch(new URL(`/api/v1/calendar-feeds/${legacyToken}.ics`, base));
+    assert.equal(legacyFeed.status, 200);
+    assert.match(await legacyFeed.text(), /Calendar feed visible/u);
+  }
+  await runActorTransaction(database, config, actorA, port => port.query(`
+    DELETE FROM projed_core.calendar_subscriptions
+     WHERE owner_user_id = projed_core.current_actor_user_id_v1() AND name LIKE 'dev139-calendar-v%'
+  `));
+  await collaborationB.updateRolePermissions('ws-b', 'board-shared', { ...matrixUpdate, member: [] });
+  const revokedFeed = await fetch(feedUrl);
+  assert.equal(revokedFeed.status, 200);
+  assert.equal((await revokedFeed.text()).includes('Calendar feed visible'), false);
+  await collaborationB.updateRolePermissions('ws-b', 'board-shared', matrixUpdate);
+  await calendarA.setActive(createdCalendar.subscription.id, false);
+  assert.equal((await fetch(feedUrl)).status, 410);
+  await calendarA.setActive(createdCalendar.subscription.id, true);
+  assert.equal((await fetch(feedUrl)).status, 200);
+  const rotatedFeedUrl = new URL(await calendarA.rotate(createdCalendar.subscription.id), base);
+  assert.equal((await fetch(feedUrl)).status, 404);
+  assert.equal((await fetch(rotatedFeedUrl)).status, 200);
+  assert.deepEqual((await calendarA.list())[0]?.filters, createdCalendar.subscription.filters);
+  await calendarA.delete(createdCalendar.subscription.id);
+  assert.equal((await fetch(rotatedFeedUrl)).status, 404);
+  await writeB.deleteTask('ws-b', 'board-shared', 'calendar-feed-task');
   await assert.rejects(
     staleActorRead.listWorkspaces(),
     (error: unknown) => error instanceof HttpApiError
@@ -1500,5 +1662,6 @@ console.log(JSON.stringify({
     'http-board-transfer-preview-confirmation-rollback-data-permission-and-revision-continuity',
     'http-backup-copy-replace-stale-rollback-idempotency-rls-and-origin',
     'http-account-layout-and-task-filter-preferences-cas-rls-and-origin',
+    'http-calendar-subscription-hash-only-owner-origin-legacy-pagination-lifecycle-feed-and-revocation',
   ],
 }));

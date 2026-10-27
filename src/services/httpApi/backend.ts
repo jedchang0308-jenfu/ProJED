@@ -9,6 +9,7 @@ import { createHttpTaskWorkbenchAdapter } from './taskWorkbenchAdapter';
 import { createHttpTaskTrackingAdapter } from './taskTrackingAdapter';
 import { createHttpBackupAdapter } from './backupAdapter';
 import { createHttpPreferencesAdapter } from './preferencesAdapter';
+import { createHttpCalendarAdapter } from './calendarAdapter';
 
 export const httpApiClient = new HttpApiClient();
 export const httpDomainReadService = createHttpDomainReadAdapter(httpApiClient);
@@ -21,3 +22,4 @@ export const httpTaskWorkbenchService = createHttpTaskWorkbenchAdapter(httpApiCl
 export const httpTaskTrackingService = createHttpTaskTrackingAdapter(httpApiClient);
 export const httpBackupService = createHttpBackupAdapter(httpApiClient);
 export const httpPreferencesService = createHttpPreferencesAdapter(httpApiClient);
+export const httpCalendarService = createHttpCalendarAdapter(httpApiClient, httpDomainReadService);
