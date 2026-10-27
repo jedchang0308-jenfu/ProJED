@@ -4,24 +4,22 @@ import { resolve } from 'node:path';
 
 import pg, { type Client } from 'pg';
 
+import {
+  loadSourceProfile,
+  sha256,
+  validateRuntimeBinding,
+  validateRuntimeDatabaseUrl,
+  type RuntimeBinding,
+  type SourceProfile,
+} from '../server/config.js';
+import {
+  validateSupabaseSourceBinding,
+  validateSupabaseSourceUrl,
+  type SupabaseSourceBindingV1,
+} from './dev139-supabase-source-contract.js';
+
 type Mode = 'plan' | 'apply' | 'reconcile';
 type Row = Record<string, unknown>;
-
-type Profile = {
-  profileVersion: number;
-  appKey: string;
-  environment: string;
-  database: { namePattern: string; host: string };
-  roles: { owner: string; migrator: string; importer: string; runtime: string };
-  migrations: Array<{ version: string; path: string }>;
-};
-
-type Binding = {
-  databaseName: string;
-  databasePort: number;
-  profileSha256: string;
-  migrationSha256: Record<string, string>;
-};
 
 type TableSpec = {
   target: string;
@@ -341,10 +339,6 @@ function digest(value: unknown): string {
   return createHash('sha256').update(canonical(value)).digest('hex');
 }
 
-function digestBytes(value: NodeJS.ArrayBufferView): string {
-  return createHash('sha256').update(value).digest('hex');
-}
-
 function snapshotSummary(snapshot: ReadonlyMap<string, readonly Row[]>) {
   return Object.fromEntries([...snapshot.entries()].map(([name, rows]) => [name, {
     count: rows.length,
@@ -425,22 +419,42 @@ async function insertSnapshot(client: Client, snapshot: ReadonlyMap<string, read
   }
 }
 
-function readJson<T>(path: string): { value: T; bytes: Buffer } {
+function readJson<T>(path: string): T {
   const bytes = readFileSync(resolve(path));
-  return { value: JSON.parse(bytes.toString('utf8')) as T, bytes };
+  return JSON.parse(bytes.toString('utf8')) as T;
 }
 
-function validateUrl(raw: string, binding: Binding, expectedUser?: string): string {
+function validateDisposableSourceUrl(raw: string, binding: RuntimeBinding): string {
   const url = new URL(raw);
   if (!['postgres:', 'postgresql:'].includes(url.protocol) || url.hostname !== '127.0.0.1'
       || Number(url.port || '5432') !== binding.databasePort || url.search || url.hash
-      || (expectedUser && decodeURIComponent(url.username) !== expectedUser)) {
-    throw Object.assign(new Error('Database URL is outside the disposable migration binding'), { code: 'BINDING_INVALID' });
+      || url.password.length === 0) {
+    throw Object.assign(new Error('Source URL is outside the disposable migration binding'), { code: 'BINDING_INVALID' });
   }
   return raw;
 }
 
-async function validateTarget(client: Client, profile: Profile, binding: Binding): Promise<void> {
+async function validateSource(
+  client: Client,
+  expected?: SupabaseSourceBindingV1,
+): Promise<void> {
+  const identity = await client.query<{
+    database_name: string; role_name: string; read_only: boolean; isolation_level: string;
+  }>(`
+    SELECT current_database() AS database_name, current_user AS role_name,
+           current_setting('transaction_read_only') = 'on' AS read_only,
+           current_setting('transaction_isolation') AS isolation_level
+  `);
+  const row = identity.rows[0];
+  if (!row || !row.read_only || row.isolation_level !== 'repeatable read'
+      || (expected && (row.database_name !== expected.databaseName || row.role_name !== expected.readerRole))) {
+    throw Object.assign(new Error('Source snapshot identity or transaction boundary mismatch'), {
+      code: 'SOURCE_IDENTITY_INVALID',
+    });
+  }
+}
+
+async function validateTarget(client: Client, profile: SourceProfile, binding: RuntimeBinding): Promise<void> {
   const identity = await client.query<{
     database_name: string; role_name: string; is_superuser: boolean; bypass_rls: boolean;
   }>(`
@@ -467,33 +481,51 @@ async function main(): Promise<void> {
   if (mode !== 'plan' && mode !== 'apply' && mode !== 'reconcile') {
     throw Object.assign(new Error('Mode must be plan, apply or reconcile'), { code: 'MODE_INVALID' });
   }
-  const profilePath = process.env.PROJED_SOURCE_PROFILE ?? 'config/dev-139/s3-read-disposable.profile.json';
+  const targetOption = process.argv[3] ?? '--target=disposable';
+  if (process.argv.length > 4 || (targetOption !== '--target=disposable' && targetOption !== '--target=managed')) {
+    throw Object.assign(new Error('Target option must be --target=disposable or --target=managed'), { code: 'MODE_INVALID' });
+  }
+  const managed = targetOption === '--target=managed';
+  const expectedProfilePath = resolve(managed
+    ? 'config/dev-139/s3-managed.profile.json'
+    : 'config/dev-139/s3-read-disposable.profile.json');
+  const profilePath = resolve(process.env.PROJED_SOURCE_PROFILE ?? expectedProfilePath);
+  if (profilePath !== expectedProfilePath) {
+    throw Object.assign(new Error('Migration profile is outside the selected target contract'), { code: 'BINDING_INVALID' });
+  }
   const bindingPath = process.env.PROJED_RUNTIME_BINDING_FILE;
+  const sourceBindingPath = process.env.PROJED_MIGRATION_SOURCE_BINDING_FILE;
   const sourceRaw = process.env.PROJED_MIGRATION_SOURCE_DATABASE_URL;
   const targetRaw = process.env.PROJED_MIGRATION_TARGET_DATABASE_URL;
-  if (!bindingPath || !sourceRaw || !targetRaw) {
+  if (!bindingPath || !sourceRaw || !targetRaw || (managed ? !sourceBindingPath : Boolean(sourceBindingPath))) {
     throw Object.assign(new Error('Migration environment is incomplete'), { code: 'CONFIG_INCOMPLETE' });
   }
-  const loadedProfile = readJson<Profile>(profilePath);
-  const binding = readJson<Binding>(bindingPath).value;
-  const profile = loadedProfile.value;
-  if (profile.profileVersion !== 1 || profile.appKey !== 'projed' || profile.environment !== 'disposable'
-      || profile.database.host !== '127.0.0.1' || profile.roles.importer !== 'projed_importer_disposable'
-      || binding.profileSha256 !== digestBytes(loadedProfile.bytes)
-      || !new RegExp(profile.database.namePattern).test(binding.databaseName)
-      || profile.migrations.some(migration => (
-        binding.migrationSha256[migration.path] !== digestBytes(readFileSync(resolve(migration.path)))
-      ))) {
-    throw Object.assign(new Error('Source-controlled migration binding mismatch'), { code: 'BINDING_INVALID' });
+  const loadedProfile = loadSourceProfile(profilePath);
+  const profile = loadedProfile.profile;
+  const binding = readJson<RuntimeBinding>(bindingPath);
+  validateRuntimeBinding(binding, profile, loadedProfile.sha256);
+  if (profile.migrations.some(migration => (
+    binding.migrationSha256[migration.path] !== sha256(readFileSync(resolve(migration.path)))
+  ))) {
+    throw Object.assign(new Error('Migration source bytes do not match the runtime binding'), { code: 'BINDING_INVALID' });
   }
-  const sourceUrl = validateUrl(sourceRaw, binding);
-  const targetUrl = validateUrl(targetRaw, binding, profile.roles.importer);
+  const sourceBinding = managed
+    ? validateSupabaseSourceBinding(readJson<SupabaseSourceBindingV1>(sourceBindingPath!))
+    : undefined;
+  const sourceUrl = sourceBinding
+    ? validateSupabaseSourceUrl(sourceRaw, sourceBinding)
+    : validateDisposableSourceUrl(sourceRaw, binding);
+  const targetUrl = validateRuntimeDatabaseUrl(targetRaw, {
+    ...binding,
+    runtimeRole: profile.roles.importer,
+  }).toString();
   const source = new PgClient({ connectionString: sourceUrl, application_name: 'projed-dev139-source-snapshot' });
   const target = new PgClient({ connectionString: targetUrl, application_name: `projed-dev139-${mode}` });
   await Promise.all([source.connect(), target.connect()]);
   try {
     await source.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
     await source.query("SET LOCAL TIME ZONE 'UTC'");
+    await validateSource(source, sourceBinding);
     await target.query(mode === 'apply' ? 'BEGIN ISOLATION LEVEL SERIALIZABLE' : 'BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
     await target.query("SET LOCAL TIME ZONE 'UTC'");
     if (mode === 'apply') await target.query("SELECT pg_advisory_xact_lock(hashtextextended('projed:dev139:initial-snapshot-import', 0))");

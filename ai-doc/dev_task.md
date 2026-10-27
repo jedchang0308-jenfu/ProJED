@@ -8,9 +8,9 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 ## DEV-139：ProJED 納入 Jenfu-Platform，Cloud Run／Cloud SQL 對齊並保留 Vite
 
 - 建立日期：2026-10-08（Asia/Taipei）。
-- 狀態：**開發中；S1 runtime／DB核心、S2 consumer seam及S3 W1–W16本地驗證PASS**；W16已補單一managed Cloud Run候選、Cloud SQL socket binding、HTTP build／nonroot image recipe、Main／Quick靜態路由及Hosting rewrite候選生成器。S2 external wire、production resolver、真資料plan／未承接domain、Docker runtime、雲端資源／相容入口部署及正常產品UI證據仍未完成。D1／D2均已確認；真身分整合、正式發布及切流均未啟動。
+- 狀態：**開發中；S1 runtime／DB核心、S2 consumer seam及S3 W1–W17本地驗證PASS**；W16已補單一managed Cloud Run候選，W17已補exact Supabase來源binding與managed Cloud SQL snapshot plan／apply／reconcile連線契約。S2 external wire、production resolver、真資料plan／未承接domain、Docker runtime、雲端資源／相容入口部署及正常產品UI證據仍未完成。D1／D2均已確認；真身分整合、正式發布及切流均未啟動。
 - 類型：交付點；主責：本 repo 的 DEV-139；無同專案父任務。
-- 唯一交接契約：[SPEC-139 Rev 27](specs/SPEC-139-projed-jenfu-platform-onboarding.md)；核心實作讀[§11 S1定案](specs/SPEC-139-projed-jenfu-platform-onboarding.md#11-架構決策與-s1-定案契約)、[§13 S2 consumer seam](specs/SPEC-139-projed-jenfu-platform-onboarding.md#13-s2-projed-identity-consumer-seam2026-10-26)、[§28 Data Migration](specs/SPEC-139-projed-jenfu-platform-onboarding.md#28-s3-data-migration-rehearsal-w142026-10-27)、[§29 Legacy Calendar URL](specs/SPEC-139-projed-jenfu-platform-onboarding.md#29-s3-legacy-calendar-url-compatibility-w152026-10-27)、[§30 Managed Cloud Run Candidate](specs/SPEC-139-projed-jenfu-platform-onboarding.md#30-s3-managed-cloud-run-candidate-w162026-10-27)及[§6.3既有使用者切換基線](specs/SPEC-139-projed-jenfu-platform-onboarding.md#63-既有使用者切換基線)；架構決策：[ADR-054](decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。首階段仍保留原工作區／看板／權限；kernel、container candidate或資料庫搬移不能替代正常產品及既有使用者切換驗收。
+- 唯一交接契約：[SPEC-139 Rev 28](specs/SPEC-139-projed-jenfu-platform-onboarding.md)；核心實作讀[§11 S1定案](specs/SPEC-139-projed-jenfu-platform-onboarding.md#11-架構決策與-s1-定案契約)、[§13 S2 consumer seam](specs/SPEC-139-projed-jenfu-platform-onboarding.md#13-s2-projed-identity-consumer-seam2026-10-26)、[§28 Data Migration](specs/SPEC-139-projed-jenfu-platform-onboarding.md#28-s3-data-migration-rehearsal-w142026-10-27)、[§29 Legacy Calendar URL](specs/SPEC-139-projed-jenfu-platform-onboarding.md#29-s3-legacy-calendar-url-compatibility-w152026-10-27)、[§30 Managed Cloud Run Candidate](specs/SPEC-139-projed-jenfu-platform-onboarding.md#30-s3-managed-cloud-run-candidate-w162026-10-27)、[§31 Managed Snapshot Connection](specs/SPEC-139-projed-jenfu-platform-onboarding.md#31-s3-managed-snapshot-connection-w172026-10-27)及[§6.3既有使用者切換基線](specs/SPEC-139-projed-jenfu-platform-onboarding.md#63-既有使用者切換基線)；架構決策：[ADR-054](decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。首階段仍保留原工作區／看板／權限；kernel、container candidate、connection contract或資料庫搬移不能替代正常產品及既有使用者切換驗收。
 
 ### 1. 人類決策與授權範圍
 
@@ -149,7 +149,7 @@ Rev6 歷史文件快照：SPEC-139 §6.3–§6.6 固定既有使用者保留面�
 
 2026-10-26 S1 實作進度：新增 `server/` kernel、兩份 forward-only migration、app-specific DB 邊界、runner、profile、unit／static／isolated verifier 與 package commands；未修改既有 `src/`、Vite／PWA、Supabase/Firebase config 或 release scripts。`verify:dev-139:s1` 在本機 PostgreSQL 18 的 task-owned cluster 完整通過（migration apply／idempotent、RLS、actor guard、HTTP fail-closed與清理），`build:test` 亦 PASS。COO 審視移除「本地必須另裝 PG17」的假關卡，改為本地支援 17／18、managed target 按實際 major 重驗；沒有遠端或正式 DB 操作。
 
-S3 W1–W16已完成既有domain與HTTP產品接線、一次性full-snapshot資料移轉演練、Calendar舊URL代理，以及單一managed Cloud Run／Cloud SQL socket候選。W16以一個runtime服務Main／Quick兩個既有public origin，避免第二服務與pool；HTTP build、nonroot image recipe、靜態／SPA路由、managed binding與Hosting候選生成器已本地驗證。Docker daemon不可用，故container執行記為NOT_RUN；未建立雲端資源或修改live Hosting。下一步是核實真資料／未承接domain、外部Session owner wire與正式release資源；正式writer fence、apply／reconcile、流量切換及rollback仍維持release邊界，不能用QA Session、synthetic DB、未部署代理或Dockerfile靜態檢查宣稱整合／無縫切換。
+S3 W1–W17已完成既有domain與HTTP產品接線、一次性full-snapshot資料移轉演練、Calendar舊URL代理、單一managed Cloud Run候選，以及Supabase direct／session來源到Cloud SQL Unix socket目標的exact連線契約。來源強制verify-full＋CA hash及read-only repeatable-read，目標只接受專用importer；未保存credential或raw snapshot。Docker daemon不可用，container執行仍記為NOT_RUN；未連正式來源／目標、建立雲端資源或修改live Hosting。下一步是核實真資料／未承接domain、外部Session owner wire與正式release資源；writer fence、真apply／reconcile、流量切換及rollback維持release邊界。
 
 ## DEV-138 DEV-133 guard 恢復、分支整合與正式驗證後清理 - 2026-10-06
 
@@ -354,11 +354,11 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 
 ## 總任務清單
 
-- ◐ DEV-139 [交付點] [開發中／S1本地PASS＋S2 seam PASS＋S3 W16 PASS] [P1] [本地開發] ProJED 首階段基礎對齊，保留 Vite
+- ◐ DEV-139 [交付點] [開發中／S1本地PASS＋S2 seam PASS＋S3 W17 PASS] [P1] [本地開發] ProJED 首階段基礎對齊，保留 Vite
   - 摘要：保留原工作區／看板／權限及個人／外部協作，Cloud Run／Cloud SQL／身分對齊；原網址／PWA相容，不丟資料／重建帳號／強迫重裝，費用不大幅增加。
-  - 下一步：以W14 plan盤點真資料並處理非空未承接domain，依W16候選建立正式Cloud Run／Cloud SQL／Hosting綁定並驗證舊origin／PWA相容。S2真接入與production resolver待Platform／OrgMaster發布ProJED／非員工wire；正式切流仍不在本地開發範圍。
+  - 下一步：以W17 managed plan盤點真資料並處理非空未承接domain，依W16候選建立正式Cloud Run／Cloud SQL／Hosting綁定並驗證舊origin／PWA相容。S2真接入與production resolver待Platform／OrgMaster發布ProJED／非員工wire；正式切流仍不在本地開發範圍。
   - 阻塞 / 恢復條件：D1／D2已確認；S2真登入需新owner contract／registry／Session／mapping。Workspace／Board／member／permission／invite／record／activity、polling、Board跨Workspace搬移、舊provider fail-closed、Quick outbox、Workbench雙向原子placement、Task Tracking、交易式Backup／Import、帳號偏好、Calendar subscription／ICS feed及支援domain的full-snapshot rehearsal已完成本地核心；正式移轉仍需Inbox／RAG／會議／Storage實際資料處理、Calendar原URL／hash保留、Hosting／舊版相容、全來源fence與恢復證據，不能用本地QA simulation替代。
-  - 證據：[SPEC-139 Rev27](specs/SPEC-139-projed-jenfu-platform-onboarding.md)、[ADR-054](decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)；S1 PostgreSQL 18 local acceptance PASS，S2 seam 12/12 PASS，S3 48/48 frontend unit及PostgreSQL 18 domain acceptance PASS，最新bundle為`output/qa/dev-139/s3/20261027T044618Z-2d9252db`。W14 migration rehearsal bundle為`output/qa/dev-139/migration/20261027T042302Z-cfb138a3`；W15 legacy Calendar proxy PASS。W16 `verify:dev-139:managed-static`、S1 unit 8/8、server typecheck、targeted ESLint、Cloud Run artifact／Main＋Quick hash／compiled managed config及Hosting config verifier PASS；實際HTTP build PASS，Docker因daemon不可用標示`NOT_RUN`。production pins空集合、resolver未接真owner wire，沒有正常產品UI／真SSO／正式資料匯入／已部署相容入口／無縫切換／正式驗收PASS。
+  - 證據：[SPEC-139 Rev28](specs/SPEC-139-projed-jenfu-platform-onboarding.md)、[ADR-054](decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)；S1 PostgreSQL 18 local acceptance PASS，S2 seam 12/12 PASS，S3 48/48 frontend unit及PostgreSQL 18 domain acceptance PASS，最新bundle為`output/qa/dev-139/s3/20261027T044618Z-2d9252db`。W15 legacy Calendar proxy PASS；W16 managed／artifact／Hosting驗證PASS且Docker標示`NOT_RUN`。W17 migration connection 2/2、全專案TypeScript、targeted ESLint及完整snapshot rehearsal PASS，最新migration bundle為`output/qa/dev-139/migration/20261027T050306Z-f11d93b3`。production pins空集合、resolver未接真owner wire，沒有正常產品UI／真SSO／正式資料匯入／已部署相容入口／無縫切換／正式驗收PASS。
   - 計入交付：是（未來首階段基礎對齊的實際交付）；本輪文件完成不計產品完成。
 
 - ✓ DEV-138 [開發點] [已完成／正式發布、限定登入與 RPC 驗收及清理 PASS] [P1] [ProJED] DEV-133 guard 恢復、分支整合與正式驗證後清理

@@ -1,7 +1,7 @@
 # ADR-054：ProJED Cloud Run／Cloud SQL 與跨系統責任邊界
 
 - 日期：2026-10-26（Asia/Taipei）。
-- 修訂：Rev 8，記錄 W16 單一 managed Cloud Run 候選；既有使用者相容切換尚未執行。
+- 修訂：Rev 9，記錄 W17 managed snapshot 連線契約；既有使用者相容切換尚未執行。
 - 狀態：**Accepted（ProJED 技術選型與 S1 runtime／DB 核心定案）**；S1 程式與 PostgreSQL 18 本地隔離驗收 PASS。S2／S3 及完整整合的外部契約未定案；本 ADR 的 Accepted 不表示其他 owner 接受或整體架構 closure。
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。詳細交接契約：[SPEC-139](../specs/SPEC-139-projed-jenfu-platform-onboarding.md)。
 - 適用未來整合路徑；不立即取代既有 runtime，不表示其他 repo 接受新契約，也不授權程式、DB、遠端或付費操作。
@@ -34,7 +34,7 @@ D2 最新人類原文為「保留 ProJED 現有的工作區、看板與權限功
 
 ## Chosen Rule
 
-人類已要求「升級到架構確定」與 rd-tech-lead 審視並優化，並要求把既有使用者切換評估寫入文件。下列 ProJED 架構規則固定，現行契約為 SPEC-139 Rev27；D1 publisher 與 D2 首階段範圍不變。人類選定方向及本 repo 決策不表示外部 owner wire／程式已接受或發布：
+人類已要求「升級到架構確定」與 rd-tech-lead 審視並優化，並要求把既有使用者切換評估寫入文件。下列 ProJED 架構規則固定，現行契約為 SPEC-139 Rev28；D1 publisher 與 D2 首階段範圍不變。人類選定方向及本 repo 決策不表示外部 owner wire／程式已接受或發布：
 
 1. **共用 infrastructure，業務權威獨立。** ProJED 自有 repo、runtime、release、`projed_core / projed_contract`、ledger 及 lifecycle-specific 角色；app key 宣告為 `projed`，平台實際登錄屬 S2。其他 app 只用受控 contract。
 2. **保留前端，新增必要 server 邊界。** Vite產物由Node HTTP runtime提供，browser經自有API；不讓DB runtime role／DSN或provider Secret進前端。主／Quick既有兩個public origin與manifest identity保留，相容Hosting把兩邊的`/api/**`轉送至同一個ProJED Cloud Run runtime，同一套server業務實作、各origin Session；可信`main / quick`由Session actor決定，不由Host或forwarded header決定。run.app不直接成為既有使用者必換的新網址；原主origin的Quick相容入口沿原Session，不另造帳號狀態或跨origin token bridge。
@@ -42,7 +42,7 @@ D2 最新人類原文為「保留 ProJED 現有的工作區、看板與權限功
 4. **保留本地權限，分層銜接身分。** OrgMaster 現有公司角色／scope 契約持續作公司資格權威；ProJED 保留 Workspace／Board membership、五種角色、每 Board 已設定的能力矩陣與繼承、邀請及撤權行為。非預設或空集合權限不重設為 default。離職／公司撤權不直接停用個人 Principal；公司管理角色、入口可見或 SSO 不改派 Workspace／Board owner，也不授予私人存取。
 5. **API 與 DB 共守範圍。** server 每請求核實 current identity／grant，自有交易內重驗 resource；DB policy 使用可信且交易區域的 actor context，同 client transaction、transaction advisory lock＋guard revision 及固定 scope 排序，runtime 不是 owner/BYPASSRLS。交易核心只交出 scoped query port，db.ts 獨占 pool／lease cleanup；closed port 不得再 dispatch，COMMIT unknown 不由 rollback 或自動 retry 偽裝成功。S1 只驗 account／profile，缺 context／跨 scope 拒絕；其他 scope 的完整命令在 S3 收斂。
 6. **保留現有 durable 語意。** Quick immutable owner／captureId、明確認領、receipt replay；AI source／lease／budget／projection／cleanup；檔案私有存取與已知 qualification gate 保留。同步通知不成為第二資料權威。
-7. **先相容與演練，再受控切換。** managed DDL forward-only，新舊 migration 歷史分開；verified mapping 保留原帳號 UUID、canonical IDs／權限／receipt，本機資料另驗。先準備舊入口／舊 client 相容，再演練 snapshot／delta／全來源 writer fence／reconciliation；短暫停寫完成最後核對後才啟用新唯一 writer。不能要求所有使用者同時更新、靠前端停送或按時間戳雙寫。新寫入後的回復須保留新資料；舊入口／資產處置另有恢復義務及 gate。
+7. **先相容與演練，再受控切換。** managed DDL forward-only，新舊 migration 歷史分開；verified mapping 保留原帳號 UUID、canonical IDs／權限／receipt，本機資料另驗。先準備舊入口／舊 client 相容，再做全來源 writer fence、單一一致性full snapshot及exact reconciliation；不建delta／雙寫平台。正式來源只接受綁定的Supabase direct或5432 session endpoint、verify-full CA及read-only repeatable-read，目標只接受Cloud SQL Unix socket與專用importer。短暫停寫完成最後核對後才啟用新唯一writer；新寫入後的回復須保留新資料。
 8. **費用是限制，分期驗證效益。** 用可取得基線比較同等用量持續費用，列出兩入口、相容 Hosting、worker／storage／同步／SQL 容量等邊際增量與雙跑／恢復窗口支出；未能退役的費用不能算節省。沒有必須降費或有投資回收期的條件，不擅設增幅百分比。首階段驗基礎對齊與原功能相容，任務／資料串接效益在後續實際情境驗證。
 9. **首階段不擴增業務功能。** ProJED 是身分契約 consumer，Platform 提供 registry／launch／handoff；不新增任務摘要 BFF、AI-PDM project↔Board mapping、跨 app task API 或另一份 task master。跨 app 業務 ACL 預設拒絕，後續明確選定情境再補契約。
 10. **固定工程選型，分段完成替代證據。** Node 24／npm 11、node:http＋pg；本地隔離驗證支援 PostgreSQL 17／18，managed target 按實際綁定版本重驗。同步採版本 polling＋canonical reload，檔案採私有 Cloud Storage，工作沿原 DB claim／lease 的 bounded worker／Job；詳細決策見 SPEC-139 Rev7 §11。完整 inventory、legacy ref／UUID、Session前置條件及receipt保留；真provider／原功能移轉及Hosting相容仍須S2／S3驗證。
