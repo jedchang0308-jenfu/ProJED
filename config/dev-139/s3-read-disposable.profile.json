@@ -13,6 +13,7 @@
   "roles": {
     "owner": "projed_owner_disposable",
     "migrator": "projed_migrator_disposable",
+    "importer": "projed_importer_disposable",
     "runtime": "projed_runtime_disposable"
   },
   "migrations": [
@@ -67,6 +68,10 @@
     {
       "version": "0013_calendar_subscriptions_v1",
       "path": "db/migrations/0013_calendar_subscriptions_v1.sql"
+    },
+    {
+      "version": "0014_snapshot_importer_v1",
+      "path": "db/migrations/0014_snapshot_importer_v1.sql"
     }
   ],
   "objectAllowlist": [

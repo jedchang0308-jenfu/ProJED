@@ -32,6 +32,7 @@ const profileContracts = new Map([
       'db/migrations/0011_board_backup_import_v1.sql',
       'db/migrations/0012_account_preferences_v1.sql',
       'db/migrations/0013_calendar_subscriptions_v1.sql',
+      'db/migrations/0014_snapshot_importer_v1.sql',
     ],
   }],
 ]);
@@ -48,6 +49,7 @@ if (profile.profileVersion !== 1 || profile.appKey !== 'projed' || profile.kerne
     || profile.database?.supportedPostgresMajors?.join('|') !== '17|18'
     || profile.roles?.owner !== 'projed_owner_disposable'
     || profile.roles?.migrator !== 'projed_migrator_disposable'
+    || profile.roles?.importer !== 'projed_importer_disposable'
     || profile.roles?.runtime !== 'projed_runtime_disposable'
     || profile.migrations?.map(({ path }) => path).join('|') !== expectedMigrationPaths.join('|')) {
   throw new Error('DEV-139 profile contract mismatch');

@@ -24,6 +24,7 @@ const profileContracts = new Map([
     'db/migrations/0011_board_backup_import_v1.sql',
     'db/migrations/0012_account_preferences_v1.sql',
     'db/migrations/0013_calendar_subscriptions_v1.sql',
+    'db/migrations/0014_snapshot_importer_v1.sql',
   ]],
 ]);
 
@@ -80,8 +81,8 @@ if (profile) {
   if (!expectedMigrationPaths) fail('profile database name pattern drifted');
   if (profile.database?.supportedPostgresMajors?.join('|') !== '17|18') fail('profile supported PostgreSQL majors must be 17 and 18');
   if (profile.database?.schemas?.join('|') !== 'projed_core|projed_contract') fail('profile schema order drifted');
-  if (profile.roles?.runtime === profile.roles?.owner || profile.roles?.runtime === profile.roles?.migrator) {
-    fail('runtime role must be distinct from owner and migrator');
+  if (new Set([profile.roles?.owner, profile.roles?.migrator, profile.roles?.importer, profile.roles?.runtime]).size !== 4) {
+    fail('owner, migrator, importer and runtime roles must be distinct');
   }
   if (!Array.isArray(profile.migrations)
       || !expectedMigrationPaths

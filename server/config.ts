@@ -17,7 +17,7 @@ export interface SourceProfile {
     supportedPostgresMajors: readonly number[];
     schemas: readonly string[];
   };
-  roles: { owner: string; migrator: string; runtime: string };
+  roles: { owner: string; migrator: string; importer: string; runtime: string };
   migrations: readonly { version: string; path: string }[];
   objectAllowlist: readonly string[];
   staticFixturePath: string;
@@ -79,6 +79,7 @@ const PROFILE_MIGRATION_PATHS = new Map<string, readonly string[]>([
     'db/migrations/0011_board_backup_import_v1.sql',
     'db/migrations/0012_account_preferences_v1.sql',
     'db/migrations/0013_calendar_subscriptions_v1.sql',
+    'db/migrations/0014_snapshot_importer_v1.sql',
   ]],
 ]);
 
@@ -117,6 +118,7 @@ export function loadSourceProfile(path: string): { profile: SourceProfile; sha25
   }
   if (value.roles?.owner !== 'projed_owner_disposable'
       || value.roles?.migrator !== 'projed_migrator_disposable'
+      || value.roles?.importer !== 'projed_importer_disposable'
       || value.roles?.runtime !== 'projed_runtime_disposable') {
     throw new KernelError('CONFIG_INVALID', 'Unexpected database roles');
   }

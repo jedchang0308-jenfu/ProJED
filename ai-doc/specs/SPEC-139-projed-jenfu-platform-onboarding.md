@@ -1,9 +1,9 @@
 # SPEC-139：ProJED 納入 Jenfu-Platform 的產品與技術交接契約
 
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。
-- 日期：2026-10-27（Asia/Taipei）；版本：Rev 24（S3 Calendar Subscription W13）。
+- 日期：2026-10-27（Asia/Taipei）；版本：Rev 25（S3 Data Migration Rehearsal W14）。
 - 文件狀態：**S1：Implemented／Local Acceptance PASS（PostgreSQL 18）；S2：ProJED consumer seam Implemented／External Wire Blocked；S3：domain core、collaboration、record／activity、HTTP產品接線、看板跨工作區搬移、舊provider邊界、Quick Task、Task Workbench、Task Tracking、Backup／Import、帳號偏好、Calendar subscription管理／ICS feed及全私有API actor/context CAS Implemented／Production Resolver Disabled**。ProJED 技術選型已固定；完整整合仍缺 owner 發布的 ProJED／非員工 wire、真Session resolver、資料移轉、相容入口及正常產品UI證據，不作整體 ready 宣告。
-- 適用階段：2026-10-26 使用者已要求完成 DEV-139 開發；本版記錄 S1 runtime／DB 核心、S2 consumer seam，以及 S3 domain／collaboration／record／activity、opaque Session產品入口、HTTP backend selector、單一revision polling scheduler、Board transfer、legacy provider fail-closed邊界、Quick Task outbox同步、Task Workbench雙向原子放置、Task Tracking reference持久化、Backup／Import交易式替代、帳號偏好同步與Calendar subscription／ICS feed替代的本地驗證。正式發布／切流、正式資料、IAM／Secret／billing及其他repo不在本地開發授權內。
+- 適用階段：2026-10-26 使用者已要求完成 DEV-139 開發；本版記錄 S1 runtime／DB 核心、S2 consumer seam，以及 S3 domain／collaboration／record／activity、opaque Session產品入口、HTTP backend selector、單一revision polling scheduler、Board transfer、legacy provider fail-closed邊界、Quick Task outbox同步、Task Workbench雙向原子放置、Task Tracking reference持久化、Backup／Import交易式替代、帳號偏好、Calendar subscription／ICS feed替代與一次性full-snapshot資料移轉演練的本地驗證。正式發布／切流、正式資料、IAM／Secret／billing及其他repo不在本地開發授權內。
 - 直接交接入口：[§11 S1 定案契約](#11-架構決策與-s1-定案契約)、[§12 S1 實作狀態](#12-s1-實作狀態2026-10-26)、[§13 S2 consumer seam](#13-s2-projed-identity-consumer-seam2026-10-26)、[§14 S3 read adapter](#14-s3-http-read-adapter-slice2026-10-26)、[§15 S3 domain command](#15-s3-domain-command-w12026-10-26)、[§16 S3 collaboration command](#16-s3-collaboration-command-w22026-10-27)、[§17 S3 record／activity](#17-s3-recordactivity-w32026-10-27)、[§18 S3 HTTP product wiring](#18-s3-http-product-wiring-w42026-10-27)、[§19 S3 Board transfer](#19-s3-board-transfer-w52026-10-27)、[§20 S3 legacy provider boundary](#20-s3-legacy-provider-boundary-w62026-10-27)、[§21 S3 Quick Task](#21-s3-quick-task-w72026-10-27)、[§22 S3 Task Workbench](#22-s3-task-workbench-w82026-10-27)、[§23 S3 Actor CAS](#23-s3-actor-context-cas-w92026-10-27)、[§24 S3 Task Tracking](#24-s3-task-tracking-w102026-10-27)、[§25 S3 Backup／Import](#25-s3-backupimport-w112026-10-27)、[§26 S3 Account Preferences](#26-s3-account-preferences-w122026-10-27)及[§27 S3 Calendar Subscription](#27-s3-calendar-subscription-w132026-10-27)；[§11.8 技術主管審查](#118-技術主管審查與最小優化)保留 Rev5 修正理由；既有使用者切換見 [§6.3](#63-既有使用者的切換基線)。
 - 決策來源：[DEV-139 人類決策](../dev_task.md#dev-139-jenfu-platform-onboarding)；架構取捨：[ADR-054](../decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。本文件不是其他 owner 已接受或已發布的契約。
 
@@ -259,8 +259,8 @@ Quick 沿 [現行 invoker RPC](../../supabase/migrations/20261001090000_dev_133_
 
 1. 建立 schema／table／function／policy／extension、Workspace／Board membership／權限設定、檔案／feed／連結、Auth mapping、job／receipt 的完整 inventory，核對來源實際狀態；migration 檔名不等於 live inventory。
 2. 舊 Supabase migration 歷史不改寫。新 Cloud SQL managed DDL 採 ProJED 自有 forward-only migration 與獨立 ledger；shared extensions／foundation 不由 app 搶 ownership。
-3. 先以 synthetic／核准 sanitized fixture 演練完整轉換；逐 domain 檢查 count、ID／FK、scope、人工內容／checksum、receipt 與檔案可讀性，保存可重放 reconciliation 差異。
-4. 正式切換前必須有單一 writer authority 與可驗證 fence；初始 snapshot／delta／最後停寫邊界及在途 job 由後續 migration 契約固定。不得新舊雙寫後靠時間戳猜勝者。
+3. 先以 synthetic／核准 sanitized fixture 演練完整轉換；目標必須是空白candidate DB，以一個repeatable-read來源snapshot及單一目標交易逐domain檢查count、ID／FK、scope、人工內容／checksum與receipt，完全一致才commit。
+4. 本自用系統不建立連續雙寫、CDC或delta平台。正式切換先以可驗證fence停止舊庫全部業務寫入及在途job，再從同一一致性snapshot做一次完整搬移與reconciliation；任一未承接domain或差異即不開放新writer。
 5. 新路徑已有寫入後，回復必須說明新資料如何保留、舊 binary 是否可讀、job／receipt 是否仍單一；僅切回 DNS／舊網站不是完整恢復。禁止 destructive/down migration 或手改正式 row。
 
 ### 6.2 Browser 本機資料
@@ -284,7 +284,7 @@ Server 搬移與 browser storage 恢復分開驗收。IndexedDB、Session、SW �
 | 帳號與登入 | 已核實的原登入身分對應既有 localUserId，使用者不重新註冊或重新建立工作區；Google 登入選同一帳號仍須驗 provider binding chain，不能只看 email。各 App 預留切換時一次正常重新登入，不承諾舊 Supabase Session 自動變成 Platform Session；日後到期／撤銷沿原規則。歧義隔離、資料保留並有恢復入口，不顯示為新空帳號。 |
 | 網址與安裝 | repository 正式主入口為 `https://projed-cc78d.web.app`；SPEC-133 §3 的獨立 Quick 為 `https://projed-cc78d.firebaseapp.com/quick-task/`，另保留主 origin 的 `/quick-task/` 相容入口。這是現行來源基線而非本輪 live readback／新發布 target；沿原 manifest id／start_url／scope 與 SW 更新保護，不要求換 origin 或重裝。 |
 | 離線草稿與待送任務 | 在原 browser profile／安裝儲存中保留 known owner、unbound、captureId／hash、人工正文及 pending／failed 狀態；登入、升級或切帳不清空或自動認領。恢復後只以原 key 核實／補送到本人新路徑，結果不明先查 receipt。 |
-| 停寫與可恢復性 | 可設計短暫停寫完成最後 delta／核對，但時長由演練量測、可接受窗口在正式 re-entry 確認；不先承諾零停機或固定分鐘數。停寫／登入失效有就地狀態與重試入口，草稿保留，不把錯誤當空資料或成功。 |
+| 停寫與可恢復性 | 以短暫停寫完成一致性full snapshot／核對，不另建delta平台；時長由正式資料plan與演練量測，可接受窗口在正式 re-entry 確認，不先承諾零停機或固定分鐘數。停寫／登入失效有就地狀態與重試入口，草稿保留，不把錯誤當空資料或成功。 |
 
 不以「所有使用者必須同時更新」作為切換前提。離線舊版回來、舊 SW 繼續供應 bundle、持有舊 Supabase Session 的直接寫入及在途 worker 都須由 server authority 保護；只發布新版前端不能保證舊庫已停止寫入。
 
@@ -304,8 +304,8 @@ Server 搬移與 browser storage 恢復分開驗收。IndexedDB、Session、SW �
 | 設計階段 | 業務寫入權威 | 使用者保護與下一狀態條件 |
 |---|---|---|
 | 盤點與相容準備 | 舊庫唯一 writer；目標尚未接正式寫入。 | 核對登入／origin／已安裝版本／本機與 server inventory；準備舊站相容更新、verified mapping、就地停寫／恢復入口。未上線使用者的未知狀態不能算已完成。 |
-| 隔離演練 | 正式權威不變；目標只用 synthetic／核准 sanitized fixture。 | 先具 S2 真身份與 S3 原功能替代契約；演練 snapshot／有界 delta、各角色與檔案／receipt reconciliation、舊版／離線恢復、writer fence 及新寫入後的恢復。 |
-| 最後停寫與核對 | 舊庫所有納入範圍的寫入已 server-fenced；新庫尚未開放業務寫入。 | 直接 SDK／RPC／Functions／worker／在途 job 都有可核實界線；固定最後 delta／來源水位並完成核對。任一未解差異不開放新 writer；使用者可保留本機草稿及待送 key。 |
+| 隔離演練 | 正式權威不變；目標只用 synthetic／核准 sanitized fixture。 | W14已驗單次full snapshot→空白candidate、整批rollback、count／digest reconciliation及未承接domain拒絕；正式身份、檔案／Storage、舊版／離線恢復與writer fence仍分開驗證。 |
+| 最後停寫與核對 | 舊庫所有納入範圍的寫入已 server-fenced；新庫尚未開放業務寫入。 | 直接 SDK／RPC／Functions／worker／在途 job 都有可核實界線；在fence後取得唯一full snapshot並完成核對。任一未解差異不開放新 writer；使用者可保留本機草稿及待送 key。 |
 | 啟用新路徑 | 新庫唯一 writer；舊庫維持 fence。 | 同一可信 Principal→mapping→Session→API→DB 路徑可用後，原網址／PWA 進新版；原 ID／key 補送及 receipt readback。新寫入後恢復須保存新資料與單一 job／receipt，不能只切回舊網站。 |
 | 保留恢復與退役評估 | 新庫仍唯一 writer；舊入口只提供已驗證的相容／恢復。 | 已知未同步及歧義帳號逐項處理，保留核身後恢復義務。窗口到期不等於所有離線裝置已恢復，不自動刪本機資料／舊資產；入口或資源退役另需證據與對應人類主要動作授權。 |
 
@@ -313,9 +313,9 @@ Server 搬移與 browser storage 恢復分開驗收。IndexedDB、Session、SW �
 
 ### 6.6 移轉 readiness 與恢復條件
 
-本節是移轉相容契約與驗收基線，**尚非移轉 RD Implementation Ready／Release Ready**，不擴張 S1 核心定案範圍。S2 尚須發布非員工 wire／admission／revocation、verified legacy mapping proof、各入口 Session／Cookie／callback 與取消／切帳契約；S3 尚須完整 domain adapter、舊版 API／SW／IDB 相容、全部寫入來源 fence、source 水位／delta／reconciliation／檔案與 job 恢復及 Hosting 路由／artifact 契約。
+W14已使「受支援DB domain的一次性full-snapshot搬移」達到本地RD rehearsal PASS，但整體仍非 Release Ready。S2尚須發布非員工wire／admission／revocation、verified legacy mapping proof、各入口Session／Cookie／callback與取消／切帳契約；正式切換尚須核對未承接的Inbox、RAG、會議／Storage資料，完成舊版API／SW／IDB相容、全部寫入來源fence、檔案與job恢復及Hosting路由／artifact契約。
 
-下一次移轉演練準備時，在同一 DEV 補可重現 fixture／命令與恢復證據，按 A06／A09／A11、T07／T08 驗正常使用者路徑；正式切換另確認可接受停寫／恢復窗口、成本與環境／資源主要動作範圍。沒有新的 PWA 重裝、資料揭露或零重登需求；若日後要求換 public origin、立即移除 Hosting、零停寫或另造 Session bridge，先回架構／產品影響審查。
+正式資料plan時沿W14命令只輸出table count／digest與阻擋domain，不落地含正文或email的snapshot檔；先處理實際非空的未承接domain，再按A06／A09／A11、T07／T08驗正常使用者路徑。正式切換另確認可接受停寫／恢復窗口、成本與環境／資源主要動作範圍。沒有新的PWA重裝、資料揭露或零重登需求；若日後要求換public origin、立即移除Hosting、零停寫或另造Session bridge，先回架構／產品影響審查。
 
 ## 7. 費用、容量與相容限制
 
@@ -345,7 +345,7 @@ Fixture 採 synthetic 私人 A／B、公司 C1／C2、guest G、Workspace／Boar
 | A08 已可用附屬功能 | 由既有會議草稿、知識／檔案及行事曆入口執行現行可用操作。 | 人工正文、來源、費用及清理責任保留；失敗可重試，未資格功能仍 gated。新外部 provider dispatch 未驗不算 PASS。 | 原功能所需 UI／API／DB／Storage／真 provider；按實際層列結果。 |
 | A09 工作區／看板／權限相容 | 五種角色各從既有 Sidebar／看板設定／分享及成員入口，依凍結基線建立／切換／改名／受控移動、保存 Board 權限並重載；用相同隔離 fixture 對照移轉前後 allow／deny。 | ID、歸屬、membership、非預設／空集合 matrix 及 Workspace 繼承一致；有權操作仍可用，無權操作仍拒絕。Board guest 不看到其他 Board，公司 admin 不變成私人 owner；不得增減既有業務權限。 | 舊／新 source 與 fixture、正常 UI、API、DB mapping／policy／role-permissions readback；不需 Platform 摘要或 AI-PDM UI。 |
 | A10 DB 與運作邊界 | 隔離 PostgreSQL 驗 policy／pool actor cleanup，核准非正式環境驗各入口 startup、角色與觀測。 | 無 context／跨 core／跨 lifecycle DB／runtime DDL deny；兩入口與全部 workers 計入容量，backup/restore 可證明。 | Disposable 真 PostgreSQL 與 managed nonprod 分層；正式放行另需 Production 證據。 |
-| A11 既有使用者切換 | 公司／個人／外部使用者從原書籤、主 PWA、獨立 Quick 及同 origin 相容入口重新開啟；完成需要的正常登入，再讀原 Board／Task、修改並重載；加入舊版離線回網、mapping 歧義與停寫中送出。 | 不重註冊／重建資料／改權限／強迫重裝；原 ID 與 allow／deny 一致。各 origin 可選不同帳號，原 owner pending 不錯送；停寫不清空或誤報成功，解除後同 key 唯一讀回。登入／mapping 失敗有恢復入口，不出現假空帳號或循環重登。 | 同 browser profile 舊／新 artifact、正常 UI→真 Session／API→DB／receipt、Hosting／cache trace、fence／delta reconciliation、停寫量測；SIMULATION 與實體安裝證據分列。 |
+| A11 既有使用者切換 | 公司／個人／外部使用者從原書籤、主 PWA、獨立 Quick 及同 origin 相容入口重新開啟；完成需要的正常登入，再讀原 Board／Task、修改並重載；加入舊版離線回網、mapping 歧義與停寫中送出。 | 不重註冊／重建資料／改權限／強迫重裝；原 ID 與 allow／deny 一致。各 origin 可選不同帳號，原 owner pending 不錯送；停寫不清空或誤報成功，解除後同 key 唯一讀回。登入／mapping 失敗有恢復入口，不出現假空帳號或循環重登。 | 同 browser profile 舊／新 artifact、正常 UI→真 Session／API→DB／receipt、Hosting／cache trace、writer fence後full-snapshot reconciliation與停寫量測；SIMULATION 與實體安裝證據分列。 |
 
 所有 UI 案例覆蓋正常、載入、空白、錯誤／拒絕、窄版與鍵盤。viewport 以既有 ProJED 主／Quick 適用基線檢查，至少包含 390px 窄版及桌面；量測 overflow、焦點與可見內容。使用者取消的 Android 實體裝置 gate 不因 provider 變更自行恢復；窄版 browser 不能冒稱實體 PWA PASS。
 
@@ -378,7 +378,7 @@ Evidence 必須保存 source revision／dirty boundary、artifact、環境、角
 | T04 Legacy ref 與 scope／A09 | 相同 legacy Board ref 位於不同 Workspace、不同 UUID；五種角色與 guest 各從原入口讀／改／保存權限。 | 只解析指定父 scope；原 ref、空集合 matrix、allow／deny 與舊基線一致。保存舊／新 fixture、正常 UI、API DTO 及 DB UUID 對照。 |
 | T05 Quick unknown outcome／A04、A05 | 正常 Quick submit 後在 DB commit／HTTP 回應間中斷；同 key 重送，再改名／移動／刪 task 後 replay；另送異 title。 | 同 key 唯一 receipt、原 hash／owner／時間、replay 不重建；異內容 409。UI／IDB、實際 commit／receipt 證據；注入的位置及限制明示。 |
 | T06 依賴與安全邊界／A01、A02、A10 | 真 producer 資格通過後，用無 Employee 的個人、wrong audience、失效 state／mapping、錯 DSN／owner role、API 未知 route／private SW cache 查驗。 | producer 不可確認為可辨識錯誤且無寫入，非員工正常入口可用；錯角色／DB 啟動拒絕，API 不回 SPA／私人快取。保存 owner wire 版本及 HTTP／DB／cache evidence。 |
-| T07 Writer fence／A06、A11 | 隔離來源／目標與舊 client artifact，從真舊 SDK／RPC／Functions 及受控 worker 在 fence 前後寫入；包含在途提交、最後 delta 與 target 啟用後同 key 重送。 | 切換前僅 source 寫、停寫兩側不接受業務寫、啟用後僅 target 寫；source 水位與 reconciliation 可核對，無缺漏／雙 effect。已提交 target 資料可按既定恢復契約保留。保存真舊請求／job、拒絕／commit 順序、delta／receipt 及停寫量測；fixture 不能直接 seed 預期 target 結果。 |
+| T07 Writer fence／A06、A11 | 隔離來源／目標與舊client artifact，從真舊SDK／RPC／Functions及受控worker在fence前後寫入；包含在途提交、fence後full snapshot與target啟用後同key重送。 | 切換前僅source寫、停寫兩側不接受業務寫、啟用後僅target寫；source snapshot與reconciliation可核對，無缺漏／雙effect。已提交target資料可按既定恢復契約保留。保存真舊請求／job、拒絕／commit順序、snapshot／receipt及停寫量測；fixture不能直接seed預期target結果。 |
 | T08 Hosting／Session 相容／A01、A02、A05、A11 | 真 producer／核准非正式 Hosting→Cloud Run 路徑具備後，從相容主／Quick origin 正常登入、取消、切帳及重開；驗同 origin Quick、錯 callback／forged host、CDN／SW 舊 bundle 與依賴失效。 | 相容 Cookie 到 server 且綁 exact public origin／entry／actor；各 App Session 分開，錯 origin／actor 拒絕。HTML／API revision 相容、API 非 SPA、私人 no-store；無登入循環／跨帳號／假空資料。保存正常 UI、Cookie attributes 的去秘密摘要、路由／artifact／cache／Session／DB 證據；localhost mock 或 direct run.app 不覆蓋此層。 |
 
 現有 `npm run dev:local` 與 `scripts/local-test-server.ps1` 是 ProJED 固定 4000 入口，且目前跑 Vite `--mode test`；它本身不證明新 Node API／Cloud SQL 已接入。未來整合驗證在同一入口下依明確 test profile 接入新 API，source acceptance 要核實 profile、代理／同源路徑、actor 及 DB。不得覆蓋使用者的主測試台、清除未知 4000 process 或另留常駐 localhost；需要隔離 server／DB／browser 時記錄 task owner／PID tree／loopback port／cleanup，完畢核實 port released。
@@ -408,16 +408,16 @@ S3 fail-closed read／write route及 collaboration command 已完成本地實作
 |---|---|---|
 | S1 ProJED runtime／DB 核心 | **RD Implementation Ready＋架構定案**；§11 固定 schema／roles／policy、runtime／actor transaction、checker、migration runner、驗證入口及 source surface。沒有 provider／現有前端切換或真 SSO。 | K01–K08、T01／A10 的限定 local HTTP／DB 層；正常產品 UI 不在 S1。測試 actor 只在隔離 verifier process 內注入，不發布可自述身分的 HTTP auth。 |
 | S2 身分 producer／consumer | ProJED server-only consumer seam 已實作：只接受 verifier output、exact contract pin、有效時間／撤銷與唯一 mapping，成功只產生既有 `ServerActorV1`；production pins 空集合，QA simulation 不進 production import graph。§4.5 的 OrgMaster／Platform owner wire、非員工准入及撤銷仍待 owner。 | 本地 seam 12/12 PASS，不是 A01／A02／A03／A05／A11 或 T03／T06／T08 的真登入證據。external acceptance、既有帳號 mapping proof、相容 origin／Cookie／callback／Session state／期限與在途撤銷界線仍需收斂；其他專案開發另需其明確授權。 |
-| S3 ProJED 現有能力移轉 | frontend read／write、workspace／board／member／permission／invite、record／activity、resource revision、明確HTTP backend、單一polling scheduler、Board跨Workspace搬移、Quick／Workbench、Task Tracking、Backup／Import及帳號版面／看板篩選偏好已實作；`0003`～`0012`以scope／capability RLS、同一actor transaction、冪等receipt及fail-closed route保護。disposable PostgreSQL驗證tenant-only member不取得Board、suspended member拒絕、顯式空權限、owner不可變、邀請一次性／撤銷、原子batch／transfer／import rollback、追蹤投影、偏好帳號／看板隔離、production resolver absent 404及同源HTTP read／write。 | 本地adapter與DB／HTTP acceptance只證明bounded foundation；QA cookie-to-actor mapping不進production graph，不是真Session或A03–A11／T02／T04／T05／T07／T08證據。Calendar、RAG／會議音訊provider替代、§6資料匯入／移轉與舊client／Hosting／PWA相容、容量／費用及正常UI仍需完成；無完整替代／相容證據不能退出原provider。 |
+| S3 ProJED 現有能力移轉 | frontend read／write、workspace／board／member／permission／invite、record／activity、resource revision、明確HTTP backend、單一polling scheduler、Board跨Workspace搬移、Quick／Workbench、Task Tracking、Backup／Import、帳號偏好、Calendar subscription／ICS feed及W14 full-snapshot rehearsal已實作；`0003`～`0014`以scope／capability RLS、同一actor transaction、冪等receipt、專用importer及fail-closed route保護。disposable PostgreSQL另驗空白candidate單交易搬移、rollback、digest reconcile、非空目標／未承接domain／漂移拒絕。 | 本地adapter與DB／HTTP acceptance只證明bounded foundation；QA cookie-to-actor mapping不進production graph，不是真Session或A03–A11／T02／T04／T05／T07／T08證據。RAG／會議音訊／Inbox與Storage尚未承接；正式資料plan、writer fence、舊client／Hosting／PWA相容、容量／費用及正常UI仍需完成，不能退出原provider。 |
 
-S1 已完成本地核心；S2 已完成不依賴外部 wire 的 consumer seam，外部 producer／Session 路徑仍阻塞；S3 W1–W13 的 bounded slices 已本地實作及驗證，但沒有整體 architecture closure。S1／S2 seam及S3 QA Session都不能宣稱正常產品 UI／SSO／整合完成。真身分依賴會阻止新登入切換與整合驗收，但不阻止獨立的 domain adapter 開發。
+S1 已完成本地核心；S2 已完成不依賴外部wire的consumer seam，外部producer／Session路徑仍阻塞；S3 W1–W14的bounded slices已本地實作及驗證，但沒有整體architecture closure。S1／S2 seam、S3 QA Session與synthetic migration fixture都不能宣稱正常產品UI／SSO／正式資料或整合完成。真身分依賴會阻止新登入切換與整合驗收。
 
-S2／S3 的 readiness 缺口：已發布 owner wire／consumer ACL／非員工及在途撤銷契約；Calendar與仍需保留的provider替代；資料演練的合成 schema／verified mapping／delta／全來源 fence／reconciliation／舊 PWA 恢復；Hosting／各 public origin Session／Cookie／callback／artifact 相容；共享容量及可歸屬費用證據。沒有未決產品 D1／D2；這些是具體工程／owner 依賴，不要求人類重新選相同方案。
+S2／S3 的 readiness 缺口：已發布owner wire／consumer ACL／非員工及在途撤銷契約；真資料plan與verified mapping；Inbox、RAG、會議／Storage等未承接domain的處置；全來源fence、舊PWA恢復、Hosting／各public origin Session／Cookie／callback／artifact相容；共享容量及可歸屬費用證據。沒有未決產品D1／D2；這些是具體工程／owner依賴，不要求人類重新選相同方案。
 
 後續 capsule：
 
 1. **首階段基礎對齊的非正式實作**：補到 RD Implementation Ready，再在明確專案／本地或非正式範圍內實作 runtime／API、schemas／roles、identity consumer、同步與檔案替代；以 A01–A05／A07–A10 驗原功能與權限，不新增業務串接 UI。
-2. **資料／PWA 演練**：完整 migration、verified mapping、全來源 writer fence、delta／reconciliation、匯入 proof／CAS、Hosting／舊 client 相容、容量／恢復與 rollback compatibility 定案；用隔離資料與真 browser 正常舊入口驗 A06／A09／A11、T07／T08 並量測停寫，不複製正式私資料。
+2. **資料／PWA 演練**：W14已完成支援domain的本地full-snapshot／rollback／reconciliation；後續只補真資料plan、verified mapping、未承接domain、全來源writer fence、Hosting／舊client相容、容量／恢復與rollback compatibility，並用真browser正常舊入口驗A06／A09／A11、T07／T08及量測停寫，不複製正式私資料。
 3. **正式切換／退役**：另有明確正式主要動作與資源範圍，確認可接受停寫／恢復窗口，沿 app-owned release gate 完成真身份→API→DB／storage readback、恢復與觀察；保持單一 writer 與既有 public origin 相容，舊站／DB／Hosting／Billing 處置另有退役 gate。
 4. **跨 app 業務使用情境**：基礎對齊有相容證據且人類要求任務／資料串接後，依 §5.3 固定 consumer、最小欄位、授權及正常 UI 驗收；本輪不建立新 DEV 或任務摘要／專案連結實作。
 
@@ -454,7 +454,7 @@ Rev 3 另只讀核對 Jenfu-Platform `package.json`、canonical-principal／veri
 | Policy／交易 | trusted transaction-local context、account／resource guard revision、transaction advisory locks、同一 client；runtime 無 owner／BYPASSRLS。S1 只定案 account／profile 核心，Board membership／matrix 的全部 command 在 S3 補契約。 |
 | 同步 | 版本 polling＋canonical reload；同一 canonical task，通知不含私人正文。S3 每個可見 App／account／context 只有一個 polling scheduler，合併 workspace index 與 active Board 的受權 scope 檢查；view 不另建 timer／連線。重用 [coalescedAsyncRefresh](../../src/utils/coalescedAsyncRefresh.ts) 的 single-flight／trailing-run 語意，version 未變不重載正文。5 秒 active interval、hidden pause、focus／reconnect 補讀及 10 秒正常週期收斂仍是 S3 驗收目標；cursor／guard、連線與費用需真證據，不套舊三 app PASS。 |
 | 檔案／工作 | 私有 Cloud Storage；上傳 intent、hash／bytes／purpose／owner 與完成驗證由 ProJED 擁有，讀取走受權 API或原相同上限的短效 URL。沿 ADR-051 的 DB claim／lease、bounded worker／Job、費用與 cleanup；未資格功能不啟用，不新增通用 queue。 |
-| 移轉／本機恢復 | 優先保留既有 public origin／PWA，由相容入口轉至 Cloud Run；source snapshot＋有界 delta＋全來源單一 writer fence、不可變 reconciliation，沿 §6.3–§6.6。若換 origin 另驗 export／import／claim、server 核實來源／目的帳號 proof、原 ID／CAS。Cookie／callback、route／artifact、proof／bundle／恢復格式在 S2／S3／演練補齊，未完成前保留可恢復入口。 |
+| 移轉／本機恢復 | 優先保留既有public origin／PWA，由相容入口轉至Cloud Run；先全來源writer fence，再以單一一致性full snapshot匯入空白candidate並做不可變reconciliation，沿§6.3–§6.6，不新增delta／雙寫平台。若換origin另驗export／import／claim、server核實來源／目的帳號proof、原ID／CAS。Cookie／callback、route／artifact、proof／bundle／恢復格式在S2／S3／演練補齊，未完成前保留可恢復入口。 |
 
 費用限制仍是「不大幅增加」，不把未查證的帳單、第四 app capacity、PITR／恢復或外部 owner acceptance 寫成已通過。kernel 的局部開發不依賴付費 tier 決策；新登入／移轉／managed 環境驗收則須各自 evidence。
 
@@ -620,7 +620,7 @@ S1的transaction-local與transaction advisory lock依據：[PostgreSQL17設定�
 - `npm run verify:dev-139:s1:isolated`：PostgreSQL 18 的 task-owned cluster 完成 migration apply／同 checksum rerun、runtime identity／ledger、A／B RLS、guard revision deny、runtime INSERT deny、health／static／API fail-closed及清理，`S1_LOCAL_ACCEPTANCE` PASS。
 - `npm run build:test`：PASS；既有 Vite 產品仍可建置。較大 chunk 與 Browserslist 資料提示是既有非阻塞警告。
 
-這些結果只支持 S1 本地 kernel，不能外推成真 Principal mapping、產品 UI、Cloud SQL、A01–A11、S2／S3、資料移轉或無縫切換 PASS。下一個獨立工作段是 S3 domain adapter；未來 managed target 仍以同一 migration／boundary verifier查驗實際 PostgreSQL major。外部 producer、正式移轉／切流仍依原 owner 與 release 邊界。
+這些結果只支持S1本地kernel，不能外推成真Principal mapping、產品UI、Cloud SQL、A01–A11、S2／S3、正式資料移轉或無縫切換PASS。後續S2／S3與W14狀態分別見§13–§28；未來managed target仍以同一migration／boundary verifier查驗實際PostgreSQL major。外部producer、正式移轉／切流仍依原owner與release邊界。
 
 ## 13. S2 ProJED identity consumer seam（2026-10-26）
 
@@ -654,7 +654,7 @@ S1的transaction-local與transaction advisory lock依據：[PostgreSQL17設定�
 
 本地驗證另覆蓋tenant-only一般成員零Board、suspended project member零Board、明確空capability不套預設值、跨Board parent拒絕、標籤整組清空、多人assignment正規化、batch rollback、日期／dependency constraint、Board成員無capability寫入拒絕、project-scope tag definition拒絕、父任務刪除後子任務保留，以及HTTP capability／cross-site deny。這是 disposable 新目標schema；`0003.wbs_items.tag_ids`不是現行Supabase資料的自動轉換來源。真正資料匯入必須從舊`task_tags`／`wbs_item_tags`及task資料建立catalog與assignment reconciliation，完成前禁止切換writer或宣稱標籤已保留。
 
-workspace／board／member／permission／invite command與resource revision已在§16完成。下一個可獨立工作段是盤點並補齊實際使用中的record／activity／backup／tracking、看板跨工作區搬移與polling consumer；`dataBackend` selector只在新路徑的必要表面足夠且能fail closed後接入。真Session resolver、正常UI、資料匯入／writer fence與發布仍受既有外部owner及§6 gate限制。
+workspace／board／member／permission／invite command與resource revision已在§16完成；後續record／activity、Board transfer、Quick／Workbench、Tracking、Backup、偏好、Calendar與migration rehearsal狀態見§17–§28。真Session resolver、正常UI、正式資料inventory／writer fence與發布仍受既有外部owner及§6 gate限制。
 
 ## 16. S3 collaboration command W2（2026-10-27）
 
@@ -767,3 +767,15 @@ HTTP adapter提供`GET/PATCH /api/v1/preferences/layout`及`GET/PUT/DELETE /api/
 公開`GET /api/v1/calendar-feeds/{token}.ics`使用32-byte隨機bearer token；DB只保存SHA-256 hash，list／update不回傳hash或原token，只有create／rotate顯示一次新URL。Feed先以token hash找出owner，再用現行guard revision建立ServerActorV1，第二個actor transaction重鎖同一subscription id＋hash，並由既有Board RLS／capability重新判斷目前可見資料；停用回410，輪替／刪除使舊token回404，撤銷Board權限後不再輸出該板任務。回應為`text/calendar`且`Cache-Control: no-store`；若設定`PROJED_PUBLIC_APP_URL`才附任務連結。正式平台仍須遮蔽含bearer token的URL path access log。
 
 既有外部Calendar client只有原URL，token hash無法反推出token。因此切流必須保留舊feed origin/path（或在同path代理到新backend）並搬移原hash、filters、owner mapping；若做不到，就必須由使用者重新產生並更新外部訂閱，不能宣稱無縫。這是資料移轉／release條件，不在本地開發中偽造完成。本slice沒有新增token服務、scheduler、event bus、object storage或簽核層。驗證通過S3 frontend 48/48、server TypeScript、targeted ESLint、DB static boundary、HTTP test build、Calendar ICS、DEV-037、DEV-045 v3 model／feed／builder、DEV-090／091、DEV-118及DEV-121回歸；PostgreSQL 18 task-owned isolated acceptance實際套用0001–0013兩次並驗證FORCE RLS、owner隔離、缺Origin拒絕、hash-only、1,001筆較新非匹配資料後仍能分頁找到舊匹配任務、搬入v1／v2／v3 filters仍可產生feed，以及權限撤銷、停用、輪替、刪除即時失效，bundle為`output/qa/dev-139/s3/20261027T040546Z-7fcc0c97`，證據層級仍是`S3_DOMAIN_CORE_LOCAL_ACCEPTANCE`。這不是真Jenfu Session、正常產品UI、正式資料移轉、舊URL代理、Cloud Run／Cloud SQL發布或切流證據。
+
+## 28. S3 Data Migration Rehearsal W14（2026-10-27）
+
+`0014_snapshot_importer_v1.sql`與`scripts/dev139-data-migration.ts`完成支援domain的一次性資料搬移演練。流程只有`plan／apply／reconcile`：來源以單一`REPEATABLE READ READ ONLY`交易直接讀取，資料只在process記憶體內轉換，不產生含email、正文或token的snapshot檔；目標必須是已套用精確migration ledger的空白candidate DB。`apply`取得transaction advisory lock，以一個`SERIALIZABLE`交易批次INSERT，逐table count／SHA-256及整體snapshot digest完全一致才COMMIT，任一constraint、FK、漂移或連線不確定都rollback。輸出與evidence只含count、digest及阻擋domain，不含原始列。
+
+專用`projed_importer_disposable`不是owner、migrator或runtime，禁止superuser／BYPASSRLS／DDL／UPDATE／DELETE，只對25個映射表有SELECT＋INSERT。來源UUID、Workspace／Board／Task／tag／dependency legacy ref及Calendar token hash保留；nullable legacy ref以原UUID文字補值，assignee欄位合併去重，Quick receipt bytea hash轉hex，tracking reference只搬非primary placement。`actor_scope_access`與`resource_revisions`由來源membership／Workspace／Board導出；`account_authorization_guards`刻意不匯入，必須等真Principal mapping與Session wire核實後另行啟用，不能因搬完資料自動取得登入權。
+
+`plan`會在任何未承接資料存在時拒絕apply，包括Inbox、documents／RAG／LLM、meeting capture／analysis／private projection、tracking staging、未完成Workbench／Tracking／Backup receipt、RAG-enabled record、缺owner／tenant／entity／createdBy及無法精確表示的sort order。這些不是靜默略過清單；正式來源若非空，須先定義保留／轉換或維持原provider，否則不能切流。會議音訊Storage不在DB snapshot內，也不得因DB count一致宣稱已搬移。
+
+`qa/dev-139/migration/verify-isolated.ps1`在task-owned PostgreSQL 18同時建立synthetic source與空白target，驗證正常plan、失敗注入後整筆rollback、完整apply、exact reconcile、第二次apply因target非空拒絕、Inbox非空拒絕、目標row漂移偵測、guard保持0筆，以及importer只有SELECT／INSERT。結果`DEV139_LOCAL_SNAPSHOT_MIGRATION_REHEARSAL` PASS，bundle為`output/qa/dev-139/migration/20261027T042302Z-cfb138a3`，snapshot ID為`4da5a3c42e8503f81a67afa67d1a4f8882bed5d3f7a2c8b62e8a4967e5e0e9f2`。加入`0014`後另重跑S3 48/48 frontend、migration apply／idempotency及完整PostgreSQL domain acceptance PASS，bundle為`output/qa/dev-139/s3/20261027T042723Z-8247f729`。
+
+此W14依自用系統規模移除連續雙寫、CDC、delta服務、migration registry與額外簽核層；正式流程改為「舊writer fence→一致性full snapshot→空白candidate單交易apply／reconcile→切流」。目前CLI只接受task-owned loopback binding，證據是synthetic local rehearsal，不是真Supabase inventory、正式Cloud SQL或正式資料搬移。進入正式切流前仍需外部owner發布ProJED／非員工Session契約、核實真Principal mapping、處理實際未承接domain、建立managed binding與一次性importer credential、驗舊origin／PWA／Calendar path及遮蔽access log；credential撤銷、流量切換與rollback屬release責任，不在本地W14冒稱完成。

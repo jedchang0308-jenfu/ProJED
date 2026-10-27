@@ -36,6 +36,7 @@ $listener.Stop()
 
 $adminPassword = ([guid]::NewGuid().ToString('N'))
 $migratorPassword = ([guid]::NewGuid().ToString('N'))
+$importerPassword = ([guid]::NewGuid().ToString('N'))
 $runtimePassword = ([guid]::NewGuid().ToString('N'))
 
 function Invoke-PgTool([string]$Name, [string[]]$Arguments) {
@@ -69,7 +70,7 @@ try {
   New-Item -ItemType Directory -Path $tempRoot -ErrorAction Stop | Out-Null
   [IO.File]::WriteAllText($pwFile, $adminPassword, [Text.UTF8Encoding]::new($false))
   $bootstrapSql = [IO.File]::ReadAllText((Join-Path $projectRoot 'qa/dev-139/s1/bootstrap.sql'))
-  $bootstrapSql = $bootstrapSql.Replace('__MIGRATOR_PASSWORD__', $migratorPassword).Replace('__RUNTIME_PASSWORD__', $runtimePassword)
+  $bootstrapSql = $bootstrapSql.Replace('__MIGRATOR_PASSWORD__', $migratorPassword).Replace('__IMPORTER_PASSWORD__', $importerPassword).Replace('__RUNTIME_PASSWORD__', $runtimePassword)
   [IO.File]::WriteAllText($bootstrapRuntime, $bootstrapSql, [Text.UTF8Encoding]::new($false))
   Invoke-PgTool 'initdb.exe' @('-D', $dataPath, '-U', 'postgres', '--auth-local=trust', '--auth-host=scram-sha-256', '--pwfile', $pwFile, '--encoding=UTF8', '--no-locale')
   Invoke-PgTool 'pg_ctl.exe' @('-D', $dataPath, '-l', $logPath, '-o', "-h 127.0.0.1 -p $port", '-w', 'start')
@@ -79,7 +80,7 @@ try {
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-f', $bootstrapRuntime)
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-c', "CREATE DATABASE $databaseName OWNER projed_owner_disposable")
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $databaseName, '-v', 'ON_ERROR_STOP=1', '-c', "REVOKE CREATE, TEMP ON DATABASE $databaseName FROM PUBLIC")
-  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $databaseName, '-v', 'ON_ERROR_STOP=1', '-c', "GRANT CONNECT ON DATABASE $databaseName TO projed_migrator_disposable, projed_runtime_disposable")
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $databaseName, '-v', 'ON_ERROR_STOP=1', '-c', "GRANT CONNECT ON DATABASE $databaseName TO projed_migrator_disposable, projed_importer_disposable, projed_runtime_disposable")
 
   $profileHash = Get-Sha256 -Path $profilePath
   $migrationHashes = [ordered]@{}
