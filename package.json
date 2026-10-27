@@ -19,6 +19,7 @@
     "migrate:dev-139:data:apply": "tsx scripts/dev139-data-migration.ts apply",
     "verify:dev-139:data:reconcile": "tsx scripts/dev139-data-migration.ts reconcile",
     "verify:dev-139:migration:isolated": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File qa/dev-139/migration/verify-isolated.ps1",
+    "verify:dev-139:calendar-legacy-proxy": "node scripts/verify-dev-139-calendar-legacy-proxy.mjs",
     "verify:dev-139:s2:unit": "tsx --test qa/dev-139/s2/*.test.ts",
     "verify:dev-139:s2": "tsc -p tsconfig.server.s2.json --noEmit && npm run check:db-boundary && npm run verify:dev-139:s2:unit",
     "verify:dev-139:s3:unit": "tsx --test qa/dev-139/s3/*.test.ts",

@@ -46,7 +46,7 @@ assert(
     source.service.includes("v2_scope_type: 'all_accessible_boards_snapshot'") &&
     source.service.includes("version: 2") &&
     source.service.includes("scope_type: 'custom'") &&
-    source.service.includes('normalizeTaskFilters(filters.global_filter)') &&
+    source.service.includes('normalizePersistedTaskFiltersV5(filters.global_filter)') &&
     source.service.includes('normalizeBoardOverrides') &&
     source.service.includes('看板條件不屬於此訂閱範圍'),
 );
@@ -56,7 +56,7 @@ assert(
   source.conversion.includes("filters.version === 2 || filters.v2_scope_type === 'all_accessible_boards_snapshot'") &&
     source.conversion.includes('findRecordByAlias(filters.board_overrides, aliases)') &&
     source.conversion.includes('override?.enabled !== false') &&
-    source.conversion.includes('normalizeTaskFilters(filters.global_filter)') &&
+    source.conversion.includes('normalizePersistedTaskFiltersV5(filters.global_filter)') &&
     source.conversion.includes('date_types: [...legacyDateTypes]'),
 );
 
@@ -64,7 +64,7 @@ assert(
   'Database type contract exposes v2 filter fields',
   source.databaseTypes.includes('CalendarSubscriptionV2ScopeType') &&
     source.databaseTypes.includes('CalendarSubscriptionBoardFilterOverride') &&
-    source.databaseTypes.includes('global_filter?: TaskFilterState;') &&
+    source.databaseTypes.includes('global_filter?: LegacyTaskFilterStateV4;') &&
     source.databaseTypes.includes('board_overrides?: Record<string, CalendarSubscriptionBoardFilterOverride>;'),
 );
 
