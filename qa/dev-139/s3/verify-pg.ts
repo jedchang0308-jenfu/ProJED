@@ -31,9 +31,11 @@ import { createHttpQuickTaskAdapter } from '../../../src/services/httpApi/quickT
 import { createHttpTaskWorkbenchAdapter } from '../../../src/services/httpApi/taskWorkbenchAdapter.js';
 import { createHttpTaskTrackingAdapter } from '../../../src/services/httpApi/taskTrackingAdapter.js';
 import { createHttpBackupAdapter } from '../../../src/services/httpApi/backupAdapter.js';
+import { createHttpPreferencesAdapter } from '../../../src/services/httpApi/preferencesAdapter.js';
 import { createBackupPackage } from '../../../src/features/backup/package.js';
 import { BackupError } from '../../../src/features/backup/types.js';
 import { TaskTrackingError } from '../../../src/features/taskTracking/errors.js';
+import { createPreferencesHttpDispatcher } from '../../../server/preferencesHttp.js';
 import type { QuickCaptureRecord } from '../../../src/features/quickTaskCapture/model.js';
 import type { MoveTaskSubtreeCommand } from '../../../src/features/taskWorkbench/taskPlacementCommand.js';
 import type { BoardRolePermissionMatrix } from '../../../src/types/index.js';
@@ -544,11 +546,13 @@ try {
        AND c.relname IN (
          'unplaced_tasks', 'task_workbench_placement_operations',
          'task_tracking_references', 'task_tracking_reference_staging',
-         'task_tracking_reference_operations', 'backup_import_executions'
+         'task_tracking_reference_operations', 'backup_import_executions',
+         'account_board_task_filter_preferences'
        )
      ORDER BY c.relname
   `);
   assert.deepEqual(taskWorkbenchRls.rows, [
+    { relname: 'account_board_task_filter_preferences', relrowsecurity: true, relforcerowsecurity: true },
     { relname: 'backup_import_executions', relrowsecurity: true, relforcerowsecurity: true },
     { relname: 'task_tracking_reference_operations', relrowsecurity: true, relforcerowsecurity: true },
     { relname: 'task_tracking_reference_staging', relrowsecurity: true, relforcerowsecurity: true },
@@ -607,6 +611,16 @@ const disabledQuick = await disabledQuickDispatcher({
 } as unknown as IncomingMessage, 'qa-quick-disabled');
 assert.equal(disabledQuick.status, 404);
 assert.equal(disabledQuickResumed, true);
+const disabledPreferencesDispatcher = createPreferencesHttpDispatcher(config, database);
+const disabledPreferences = await disabledPreferencesDispatcher({
+  method: 'GET', url: '/api/v1/preferences/layout', headers: {}, resume() {},
+} as unknown as IncomingMessage, 'qa-preferences-disabled');
+assert.equal(disabledPreferences.status, 404);
+await runActorTransaction(database, config, actorB, port => port.query(`
+  UPDATE projed_core.profiles
+     SET ui_preferences = '{"other":{"kept":true},"layout":{"taskWorkbenchWidth":340,"futureField":"ignored"}}'::jsonb
+   WHERE id = projed_core.current_actor_user_id_v1()
+`));
 
 let destroyedSessionCount = 0;
 const http = createKernelHttpServer(config, database, expected, {
@@ -653,6 +667,8 @@ try {
   const taskWorkbenchBRaw = createHttpTaskWorkbenchAdapter(clientFor('qa-b', actorB));
   const trackingA = createHttpTaskTrackingAdapter(clientFor('qa-a', actorA));
   const trackingB = createHttpTaskTrackingAdapter(clientFor('qa-b', actorB));
+  const preferencesB = createHttpPreferencesAdapter(clientFor('qa-b', actorB));
+  const preferencesC = createHttpPreferencesAdapter(clientFor('qa-c', actorC));
   const staleActorClient = clientFor('qa-b', actorA);
   const staleActorRead = createHttpDomainReadAdapter(staleActorClient);
   const staleActorWrite = createHttpDomainWriteAdapter(staleActorClient);
@@ -676,6 +692,55 @@ try {
   assert.equal(sessionProfile.authContextId, actorB.contextId);
   assert.equal(sessionProfile.entry, 'main');
   assert.equal((await sessionB.updateDisplayName('B HTTP')).displayName, 'B HTTP');
+  assert.deepEqual(await preferencesB.readLayout(), { taskWorkbenchWidth: 340 });
+  assert.deepEqual(await preferencesB.updateLayout({
+    workspaceSidebarWidth: 320,
+    taskWorkbenchUnplacedRatio: 0.42,
+    goalCollapsedColumns: ['status', 'assignee'],
+  }), {
+    workspaceSidebarWidth: 320,
+    taskWorkbenchWidth: 340,
+    taskWorkbenchUnplacedRatio: 0.42,
+    goalCollapsedColumns: ['status', 'assignee'],
+  });
+  const storedUiPreferences = await runActorTransaction(database, config, actorB, port => (
+    port.query<{ ui_preferences: unknown }>(`SELECT ui_preferences FROM projed_core.profiles
+      WHERE id = projed_core.current_actor_user_id_v1()`)
+  ));
+  assert.deepEqual((storedUiPreferences.rows[0]?.ui_preferences as { other?: unknown }).other, { kept: true });
+  const filterV6 = {
+    version: 6 as const,
+    statuses: { mode: 'all' as const, values: [] },
+    due: { mode: 'all' as const, buckets: [], withinDays: 7 },
+    people: { mode: 'all' as const, ids: [], includeUnassigned: false },
+    tags: { mode: 'all' as const, ids: [], includeUntagged: false },
+    keyword: '',
+  };
+  assert.equal(await preferencesB.readTaskFilter('board-private'), null);
+  await preferencesB.compareAndSetTaskFilter('board-private', null, filterV6);
+  const createdFilterPreference = await preferencesB.readTaskFilter('board-private');
+  assert.equal(createdFilterPreference?.accountId, actorB.localUserId);
+  assert.equal(createdFilterPreference?.projectId, 'board-private');
+  assert.equal(createdFilterPreference?.preferenceVersion, 6);
+  await assert.rejects(
+    preferencesB.compareAndSetTaskFilter('board-private', null, filterV6),
+    (error: unknown) => error instanceof HttpApiError && error.code === 'REVISION_CONFLICT',
+  );
+  await preferencesB.compareAndSetTaskFilter('board-private', 6, { ...filterV6, keyword: 'updated' });
+  assert.equal((await preferencesB.readTaskFilter('board-private'))?.filters
+    && ((await preferencesB.readTaskFilter('board-private'))!.filters as { keyword?: unknown }).keyword, 'updated');
+  await assert.rejects(
+    preferencesC.readTaskFilter('board-private'),
+    (error: unknown) => error instanceof HttpApiError && error.code === 'RESOURCE_NOT_FOUND',
+  );
+  await preferencesB.removeTaskFilter('board-private', 6);
+  assert.equal(await preferencesB.readTaskFilter('board-private'), null);
+  const missingPreferenceOrigin = await fetch(`${base}/api/v1/preferences/layout`, {
+    method: 'PATCH', headers: { cookie: '__session=qa-b', 'content-type': 'application/json' },
+    body: JSON.stringify({ updates: { workspaceSidebarWidth: 340 } }),
+  });
+  assert.equal(missingPreferenceOrigin.status, 403);
+  assert.equal((await preferencesB.readLayout()).workspaceSidebarWidth, 320);
   await assert.rejects(
     staleActorRead.listWorkspaces(),
     (error: unknown) => error instanceof HttpApiError
@@ -1434,5 +1499,6 @@ console.log(JSON.stringify({
     'http-tracking-reference-subtree-staging-idempotency-derived-read-and-unplaced-guard',
     'http-board-transfer-preview-confirmation-rollback-data-permission-and-revision-continuity',
     'http-backup-copy-replace-stale-rollback-idempotency-rls-and-origin',
+    'http-account-layout-and-task-filter-preferences-cas-rls-and-origin',
   ],
 }));

@@ -6,6 +6,7 @@ import { extname, resolve, sep } from 'node:path';
 import type { RuntimeConfig } from './config.js';
 import type { ExpectedMigration, RuntimeDatabase } from './db.js';
 import { createBackupHttpDispatcher } from './backupHttp.js';
+import { createPreferencesHttpDispatcher } from './preferencesHttp.js';
 import { createCollaborationWriteHttpDispatcher } from './collaborationWriteHttp.js';
 import {
   createDomainReadHttpDispatcher,
@@ -100,6 +101,7 @@ export function createKernelHttpServer(
   const dispatchTaskWorkbench = createTaskWorkbenchHttpDispatcher(config, database, options.resolveActor);
   const dispatchTaskTracking = createTaskTrackingHttpDispatcher(config, database, options.resolveActor);
   const dispatchBackup = createBackupHttpDispatcher(config, database, options.resolveActor);
+  const dispatchPreferences = createPreferencesHttpDispatcher(config, database, options.resolveActor);
   const dispatchDomainRead = createDomainReadHttpDispatcher(config, database, options.resolveActor);
   const dispatchDomainWrite = createDomainWriteHttpDispatcher(config, database, options.resolveActor);
   const server = createServer({
@@ -129,6 +131,13 @@ export function createKernelHttpServer(
     const session = await dispatchSession(request, requestId);
     if (session.matched) {
       json(response, session.status ?? 500, session.body ?? {
+        error: { code: 'DB_UNAVAILABLE', requestId, retryable: true },
+      }, requestId);
+      return;
+    }
+    const preferences = await dispatchPreferences(request, requestId);
+    if (preferences.matched) {
+      json(response, preferences.status ?? 500, preferences.body ?? {
         error: { code: 'DB_UNAVAILABLE', requestId, retryable: true },
       }, requestId);
       return;

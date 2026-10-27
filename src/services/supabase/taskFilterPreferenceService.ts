@@ -1,5 +1,7 @@
 import type { TaskFilterQuery } from '../../features/taskFilters';
-import { isSupabaseBackend } from '../dataBackend';
+import { isHttpBackend, isSupabaseBackend } from '../dataBackend';
+import { httpPreferencesService } from '../httpApi/backend';
+import { HttpApiError } from '../httpApi/httpApiClient';
 import { isSupabaseConfigured, supabase } from './client';
 import type { Json } from './database.types';
 
@@ -12,12 +14,13 @@ export type TaskFilterPreferenceRemoteRow = {
   updatedAt: string;
 };
 
-export const shouldUseRemoteTaskFilterPreferences = () => isSupabaseBackend && isSupabaseConfigured;
+export const shouldUseRemoteTaskFilterPreferences = () => isHttpBackend || (isSupabaseBackend && isSupabaseConfigured);
 
 export const taskFilterPreferenceService = {
   enabled: shouldUseRemoteTaskFilterPreferences(),
 
   async read(accountId: string, projectId: string): Promise<TaskFilterPreferenceRemoteRow | null> {
+    if (isHttpBackend) return httpPreferencesService.readTaskFilter(projectId);
     const { data, error } = await supabase
       .from('account_board_task_filter_preferences')
       .select('account_id, project_id, preference_version, filters, created_at, updated_at')
@@ -44,6 +47,17 @@ export const taskFilterPreferenceService = {
     filters: TaskFilterQuery,
     expectedUpdatedAt?: string,
   ): Promise<void> {
+    if (isHttpBackend) {
+      try {
+        await httpPreferencesService.compareAndSetTaskFilter(projectId, expectedVersion, filters, expectedUpdatedAt);
+      } catch (error) {
+        if (error instanceof HttpApiError && error.code === 'REVISION_CONFLICT') {
+          throw new Error('TASK_FILTER_CAS_CONFLICT:version changed');
+        }
+        throw error;
+      }
+      return;
+    }
     const filtersPayload = { preference_version: 6, filters: filters as unknown as Json };
     if (expectedVersion === null) {
       const { error } = await supabase.from('account_board_task_filter_preferences').insert({
@@ -69,6 +83,17 @@ export const taskFilterPreferenceService = {
   },
 
   async remove(accountId: string, projectId: string, expectedVersion?: 6): Promise<void> {
+    if (isHttpBackend) {
+      try {
+        await httpPreferencesService.removeTaskFilter(projectId, expectedVersion);
+      } catch (error) {
+        if (error instanceof HttpApiError && error.code === 'REVISION_CONFLICT') {
+          throw new Error('TASK_FILTER_CAS_CONFLICT:version changed');
+        }
+        throw error;
+      }
+      return;
+    }
     let query = supabase
       .from('account_board_task_filter_preferences')
       .delete()

@@ -8,6 +8,7 @@ import { createHttpQuickTaskAdapter } from './quickTaskAdapter';
 import { createHttpTaskWorkbenchAdapter } from './taskWorkbenchAdapter';
 import { createHttpTaskTrackingAdapter } from './taskTrackingAdapter';
 import { createHttpBackupAdapter } from './backupAdapter';
+import { createHttpPreferencesAdapter } from './preferencesAdapter';
 
 export const httpApiClient = new HttpApiClient();
 export const httpDomainReadService = createHttpDomainReadAdapter(httpApiClient);
@@ -19,3 +20,4 @@ export const httpQuickTaskService = createHttpQuickTaskAdapter(httpApiClient);
 export const httpTaskWorkbenchService = createHttpTaskWorkbenchAdapter(httpApiClient);
 export const httpTaskTrackingService = createHttpTaskTrackingAdapter(httpApiClient);
 export const httpBackupService = createHttpBackupAdapter(httpApiClient);
+export const httpPreferencesService = createHttpPreferencesAdapter(httpApiClient);
