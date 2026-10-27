@@ -1,8 +1,8 @@
 # ADR-054：ProJED Cloud Run／Cloud SQL 與跨系統責任邊界
 
 - 日期：2026-10-26（Asia/Taipei）。
-- 修訂：Rev 9，記錄 W17 managed snapshot 連線契約；既有使用者相容切換尚未執行。
-- 狀態：**Accepted（ProJED 技術選型與 S1 runtime／DB 核心定案）**；S1 程式與 PostgreSQL 18 本地隔離驗收 PASS。S2／S3 及完整整合的外部契約未定案；本 ADR 的 Accepted 不表示其他 owner 接受或整體架構 closure。
+- 修訂：Rev 10，記錄 W18 本 repo 開發收斂；既有使用者相容切換尚未執行。
+- 狀態：**Accepted（ProJED 技術選型與本 repo 開發完成）**；S1、S2 consumer seam及S3 W1–W18本地驗收PASS。外部Session wire、真資料及release仍未完成；本 ADR 的Accepted不表示其他owner接受、無縫切換或production closure。
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。詳細交接契約：[SPEC-139](../specs/SPEC-139-projed-jenfu-platform-onboarding.md)。
 - 適用未來整合路徑；不立即取代既有 runtime，不表示其他 repo 接受新契約，也不授權程式、DB、遠端或付費操作。
 
@@ -34,7 +34,7 @@ D2 最新人類原文為「保留 ProJED 現有的工作區、看板與權限功
 
 ## Chosen Rule
 
-人類已要求「升級到架構確定」與 rd-tech-lead 審視並優化，並要求把既有使用者切換評估寫入文件。下列 ProJED 架構規則固定，現行契約為 SPEC-139 Rev28；D1 publisher 與 D2 首階段範圍不變。人類選定方向及本 repo 決策不表示外部 owner wire／程式已接受或發布：
+人類已要求「升級到架構確定」與 rd-tech-lead 審視並優化，並要求把既有使用者切換評估寫入文件。下列 ProJED 架構規則固定，現行契約為 SPEC-139 Rev29；D1 publisher 與 D2 首階段範圍不變。人類選定方向及本 repo 決策不表示外部 owner wire／程式已接受或發布：
 
 1. **共用 infrastructure，業務權威獨立。** ProJED 自有 repo、runtime、release、`projed_core / projed_contract`、ledger 及 lifecycle-specific 角色；app key 宣告為 `projed`，平台實際登錄屬 S2。其他 app 只用受控 contract。
 2. **保留前端，新增必要 server 邊界。** Vite產物由Node HTTP runtime提供，browser經自有API；不讓DB runtime role／DSN或provider Secret進前端。主／Quick既有兩個public origin與manifest identity保留，相容Hosting把兩邊的`/api/**`轉送至同一個ProJED Cloud Run runtime，同一套server業務實作、各origin Session；可信`main / quick`由Session actor決定，不由Host或forwarded header決定。run.app不直接成為既有使用者必換的新網址；原主origin的Quick相容入口沿原Session，不另造帳號狀態或跨origin token bridge。
@@ -74,6 +74,6 @@ Rev6 的既有網址相容是 **Compatible exception**：相容期保留 Hosting
 
 D1／D2及本輪架構文件要求已寫入SPEC-139／DEV-139／map。Rev4自審的callback／取消／設定責任缺口已由Rev5修正；S1完成技術主管文件審查，維持RD Implementation Ready＋架構定案，詳細契約及五項審查發現見SPEC-139 §11／§11.8。同一八案補fail-seeking，沒有另加runtime、框架、queue或人工步驟；未量測工時、帳單或容量，不宣稱實際效能／費用改善。此為RD修改後自驗，不是產品或獨立QC PASS。
 
-Rev6 增補既有使用者相容基線及移轉驗收，S1 核心 source surface／命令／K01–K08 不變；S2 身分 producer／consumer 與 S3 現有能力移轉仍為 RD Readiness Review，外部非員工 wire／撤銷、全部 operation／guard／polling／provider 及相容入口／完整移轉契約未定案。A11／T07／T08 尚未執行，不能宣稱 DEV-139 全架構 closure、無縫切換已具備、正常產品 UI 或整合完成。checkpoint 等目前 gated 能力保持原狀。新登入／provider 切換必須有真身分及相容證據，不重問 D1／D2，也不擴權修改其他 repo。
+Rev29／W18完成本repo importer fail-closed、漏資料blocker及QA Session下正常HTTP產品UI／reload煙霧；這使ProJED本地開發可收斂，但不把QA actor改稱真身分。外部非員工wire／撤銷、真Principal mapping、真資料未承接domain、container／雲端與相容入口、A11／T07／T08正式切換證據仍待owner與release工作，不能宣稱無縫切換或整體整合完成。checkpoint等目前gated能力保持原狀；新登入／provider切換必須有真身分及相容證據，不重問D1／D2，也不擴權修改其他repo。
 
 2026-10-26 已依新的人類實作要求，在 ProJED 獨立工作樹建立 S1 runtime／DB kernel、migration／checker／verifier；型別、靜態契約、unit、PostgreSQL 18 task-owned isolated DB 與既有 Vite build 均通過。COO 審視後不再要求為本地 gate 額外安裝 PG17；managed target 仍依實際版本重驗。既有前端、provider 與正式 runtime 未切換。S2／S3 需各自 prerequisite；正式 migration／release／retirement 各依原 gate。

@@ -173,6 +173,18 @@ CREATE TABLE public.audit_logs (
   after_data jsonb,
   created_at timestamptz NOT NULL
 );
+CREATE TABLE public.llm_access_logs (
+  id uuid PRIMARY KEY,
+  tenant_id uuid NOT NULL,
+  project_id uuid,
+  actor_id uuid,
+  provider text NOT NULL,
+  model text,
+  prompt_hash text,
+  retrieved_chunk_ids uuid[] NOT NULL,
+  response_metadata jsonb NOT NULL,
+  created_at timestamptz NOT NULL
+);
 CREATE TABLE public.task_workbench_unplaced_items (
   owner_id uuid NOT NULL,
   id text NOT NULL,
@@ -187,6 +199,11 @@ CREATE TABLE private.quick_task_capture_receipts (
   capture_id text NOT NULL,
   title_hash bytea NOT NULL,
   committed_at timestamptz NOT NULL
+);
+CREATE TABLE private.quick_task_oauth_clients (
+  client_id text PRIMARY KEY,
+  enabled boolean NOT NULL,
+  created_at timestamptz NOT NULL
 );
 CREATE TABLE public.task_workbench_placement_operations (
   owner_id uuid NOT NULL,

@@ -139,6 +139,23 @@ try {
   $env:PROJED_MIGRATION_SOURCE_DATABASE_URL = "postgresql://postgres:${encodedAdmin}@127.0.0.1:$port/$sourceDatabase"
   $env:PROJED_MIGRATION_TARGET_DATABASE_URL = "postgresql://projed_importer_disposable:${encodedImporter}@127.0.0.1:$port/$targetDatabase"
 
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-c', 'ALTER ROLE projed_importer_disposable CREATEDB')
+  $createDatabaseRole = Invoke-DataMode -Mode 'plan' -ExpectedExitCodes @(1)
+  if ($createDatabaseRole.status -ne 'FAIL' -or $createDatabaseRole.code -ne 'IMPORTER_IDENTITY_INVALID') {
+    throw 'DEV-139 importer CREATEDB capability was not rejected.'
+  }
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-c', 'ALTER ROLE projed_importer_disposable NOCREATEDB CREATEROLE')
+  $createRole = Invoke-DataMode -Mode 'plan' -ExpectedExitCodes @(1)
+  if ($createRole.status -ne 'FAIL' -or $createRole.code -ne 'IMPORTER_IDENTITY_INVALID') {
+    throw 'DEV-139 importer CREATEROLE capability was not rejected.'
+  }
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-c', 'ALTER ROLE projed_importer_disposable NOCREATEROLE; GRANT projed_owner_disposable TO projed_importer_disposable')
+  $ownerMembership = Invoke-DataMode -Mode 'plan' -ExpectedExitCodes @(1)
+  if ($ownerMembership.status -ne 'FAIL' -or $ownerMembership.code -ne 'IMPORTER_IDENTITY_INVALID') {
+    throw 'DEV-139 importer owner-role membership was not rejected.'
+  }
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-c', 'REVOKE projed_owner_disposable FROM projed_importer_disposable')
+
   $plan = Invoke-DataMode -Mode 'plan' -ExpectedExitCodes @(0)
   if ($plan.status -ne 'PASS' -or $plan.matches -ne $false -or $plan.tables.profiles.count -ne 2) {
     throw 'DEV-139 migration plan result was not the expected empty-target plan.'
@@ -169,6 +186,20 @@ try {
     throw 'DEV-139 unsupported source domain was not reported as a blocker.'
   }
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'DELETE FROM public.inbox_items')
+
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "INSERT INTO public.llm_access_logs VALUES ('01234567-1234-4234-8234-123456789011', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', '11111111-1111-4111-8111-111111111111', 'fixture', NULL, NULL, ARRAY[]::uuid[], '{}', '2026-01-02T00:00:00Z')")
+  $llmLogs = Invoke-DataMode -Mode 'plan' -ExpectedExitCodes @(2)
+  if ($llmLogs.status -ne 'BLOCKED' -or 'public.llm_access_logs' -notin @($llmLogs.blockers.domain)) {
+    throw 'DEV-139 LLM access logs were not reported as an unsupported source domain.'
+  }
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'DELETE FROM public.llm_access_logs')
+
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "INSERT INTO private.quick_task_oauth_clients VALUES ('quick-client', true, '2026-01-02T00:00:00Z')")
+  $quickOauthClients = Invoke-DataMode -Mode 'plan' -ExpectedExitCodes @(2)
+  if ($quickOauthClients.status -ne 'BLOCKED' -or 'private.quick_task_oauth_clients' -notin @($quickOauthClients.blockers.domain)) {
+    throw 'DEV-139 quick-task OAuth clients were not reported as an unsupported source domain.'
+  }
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'DELETE FROM private.quick_task_oauth_clients')
 
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $targetDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "UPDATE projed_core.profiles SET display_name = 'Drifted' WHERE id = '11111111-1111-4111-8111-111111111111'")
   $drift = Invoke-DataMode -Mode 'reconcile' -ExpectedExitCodes @(1)
@@ -201,6 +232,8 @@ try {
     checks = @(
       'empty-target-plan', 'single-transaction-rollback', 'full-snapshot-apply',
       'exact-digest-reconcile', 'non-empty-target-reject', 'unsupported-domain-reject',
+      'importer-createdb-reject', 'importer-createrole-reject', 'importer-owner-membership-reject',
+      'llm-access-log-reject', 'quick-oauth-client-reject',
       'target-drift-detect', 'identity-guards-not-imported', 'importer-select-insert-only'
     )
   } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $evidenceDir 'result.json') -Encoding utf8

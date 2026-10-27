@@ -290,6 +290,7 @@ const TABLES: readonly TableSpec[] = [
 ];
 
 const BLOCKERS = [
+  ['public.llm_access_logs', ''],
   ['public.documents', ''],
   ['public.document_versions', ''],
   ['public.document_chunks', ''],
@@ -312,6 +313,7 @@ const BLOCKERS = [
   ['public.task_workbench_placement_operations', "WHERE status <> 'committed' OR result IS NULL"],
   ['public.task_tracking_reference_operations', "WHERE status <> 'committed' OR request_hash !~ '^[0-9a-f]{64}$' OR result IS NULL"],
   ['private.backup_import_executions', "WHERE status <> 'succeeded' OR result IS NULL"],
+  ['private.quick_task_oauth_clients', ''],
   ['public.knowledge_records', 'WHERE rag_enabled'],
   ['public.tenants', 'WHERE owner_id IS NULL'],
   ['public.activity_events', 'WHERE entity_table IS NULL'],
@@ -456,15 +458,31 @@ async function validateSource(
 
 async function validateTarget(client: Client, profile: SourceProfile, binding: RuntimeBinding): Promise<void> {
   const identity = await client.query<{
-    database_name: string; role_name: string; is_superuser: boolean; bypass_rls: boolean;
+    database_name: string;
+    role_name: string;
+    is_superuser: boolean;
+    bypass_rls: boolean;
+    can_create_database: boolean;
+    can_create_role: boolean;
+    can_replicate: boolean;
+    has_protected_membership: boolean;
   }>(`
     SELECT current_database() AS database_name, current_user AS role_name,
-           role.rolsuper AS is_superuser, role.rolbypassrls AS bypass_rls
+           role.rolsuper AS is_superuser, role.rolbypassrls AS bypass_rls,
+           role.rolcreatedb AS can_create_database, role.rolcreaterole AS can_create_role,
+           role.rolreplication AS can_replicate,
+           EXISTS (
+             SELECT 1
+               FROM pg_catalog.pg_roles protected_role
+              WHERE protected_role.rolname = ANY($1::text[])
+                AND pg_catalog.pg_has_role(current_user, protected_role.oid, 'MEMBER')
+           ) AS has_protected_membership
       FROM pg_catalog.pg_roles role WHERE role.rolname = current_user
-  `);
+  `, [[profile.roles.owner, profile.roles.migrator, profile.roles.runtime]]);
   const row = identity.rows[0];
   if (!row || row.database_name !== binding.databaseName || row.role_name !== profile.roles.importer
-      || row.is_superuser || row.bypass_rls) {
+      || row.is_superuser || row.bypass_rls || row.can_create_database || row.can_create_role
+      || row.can_replicate || row.has_protected_membership) {
     throw Object.assign(new Error('Importer identity mismatch'), { code: 'IMPORTER_IDENTITY_INVALID' });
   }
   const ledger = await client.query<{ version: string; checksum: string }>(

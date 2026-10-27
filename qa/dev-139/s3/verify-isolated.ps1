@@ -100,6 +100,10 @@ try {
   }
   [IO.File]::WriteAllText($bindingPath, ($binding | ConvertTo-Json -Depth 5), [Text.UTF8Encoding]::new($false))
 
+  $env:PROJED_RELEASE_ID = "dev139-local-ui-$($nonce.Substring(0,8))"
+  npm.cmd run build:dev-139:cloud-run
+  if ($LASTEXITCODE -ne 0) { throw 'DEV-139 HTTP frontend candidate build failed' }
+
   $encodedMigrator = [Uri]::EscapeDataString($migratorPassword)
   $encodedRuntime = [Uri]::EscapeDataString($runtimePassword)
   $env:PROJED_SOURCE_PROFILE = $profilePath
@@ -116,6 +120,7 @@ try {
   $env:PROJED_ENV = 'disposable'
   $env:PROJED_APP_ENTRY = 'main'
   $env:PROJED_DATABASE_URL = "postgresql://projed_runtime_disposable:${encodedRuntime}@127.0.0.1:$port/$databaseName"
+  $env:PROJED_DEV139_BROWSER_SMOKE = '1'
   $env:PORT = '0'
   npx.cmd tsx qa/dev-139/s3/verify-pg.ts
   if ($LASTEXITCODE -ne 0) { throw 'DEV-139 S3 PostgreSQL verifier failed' }
@@ -162,6 +167,7 @@ try {
       'http-backup-copy-replace-stale-rollback-idempotency-rls-and-origin',
       'http-account-layout-and-task-filter-preferences-cas-rls-and-origin',
       'http-calendar-subscription-hash-only-owner-origin-legacy-pagination-lifecycle-feed-and-revocation'
+      'http-normal-product-ui-and-reload'
     )
   } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $evidenceDir 'result.json') -Encoding utf8
   Write-Output ("DEV139_S3_RESULT=PASS evidenceLevel=S3_DOMAIN_CORE_LOCAL_ACCEPTANCE output={0}" -f $evidenceDir)
@@ -170,6 +176,8 @@ finally {
   Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
   Remove-Item Env:PROJED_MIGRATOR_DATABASE_URL -ErrorAction SilentlyContinue
   Remove-Item Env:PROJED_DATABASE_URL -ErrorAction SilentlyContinue
+  Remove-Item Env:PROJED_DEV139_BROWSER_SMOKE -ErrorAction SilentlyContinue
+  Remove-Item Env:PROJED_RELEASE_ID -ErrorAction SilentlyContinue
   $cleanupSafe = -not $started
   if ($started) {
     & (Join-Path $PostgresBin 'pg_ctl.exe') -D $dataPath -m fast -w stop | Out-Null

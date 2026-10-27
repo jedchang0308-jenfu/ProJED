@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import type { IncomingMessage } from 'node:http';
+import { resolve } from 'node:path';
 
 import pg from 'pg';
 
@@ -52,6 +54,23 @@ const collaborationReads = new CollaborationReadRepository();
 const collaborationCommands = new CollaborationWriteRepository(repository);
 const recordActivity = new RecordActivityRepository();
 await database.assertRuntimeBoundary(expected);
+
+const runBrowserSmoke = (baseUrl: string): Promise<void> => new Promise((done, reject) => {
+  const child = spawn('powershell.exe', [
+    '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'scripts/run-playwright-code.ps1',
+    '-SessionPrefix', 'dev139-http-ui',
+    '-Filename', 'qa/dev-139/s3/http-ui-smoke.pw.js',
+    '-OutputDirectory', 'output/playwright/dev-139-http-ui',
+    '-BaseUrl', baseUrl,
+    '-ArtifactWindowKey', '__DEV139_HTTP_UI_ARTIFACT',
+    '-ArtifactPath', 'output/playwright/dev-139-http-ui/result.json',
+  ], { cwd: process.cwd(), stdio: 'inherit' });
+  child.once('error', reject);
+  child.once('exit', code => {
+    if (code === 0) done();
+    else reject(new Error(`DEV-139 HTTP UI smoke exited with code ${String(code)}`));
+  });
+});
 
 const actorA: ServerActorV1 = {
   principalId: 'principal:a',
@@ -631,7 +650,10 @@ await runActorTransaction(database, config, actorB, port => port.query(`
 `));
 
 let destroyedSessionCount = 0;
-const http = createKernelHttpServer(config, database, expected, {
+const httpConfig = process.env.PROJED_DEV139_BROWSER_SMOKE === '1'
+  ? { ...config, staticRoot: resolve('dist') }
+  : config;
+const http = createKernelHttpServer(httpConfig, database, expected, {
   resolveActor: async (request) => {
     if (request.headers.cookie === '__session=qa-a') return actorA;
     if (request.headers.cookie === '__session=qa-b') return actorB;
@@ -659,6 +681,23 @@ const clientFor = (
   return client;
 };
 try {
+  if (process.env.PROJED_DEV139_BROWSER_SMOKE === '1') {
+    await runBrowserSmoke(base);
+    await runActorTransaction(database, config, actorB, async port => {
+      await port.query(`
+        UPDATE projed_core.profiles
+           SET ui_preferences = '{"other":{"kept":true},"layout":{"taskWorkbenchWidth":340}}'::jsonb
+         WHERE id = projed_core.current_actor_user_id_v1()
+      `);
+      await port.query(`
+        DELETE FROM projed_core.account_board_task_filter_preferences preference
+         USING projed_core.projects project
+         WHERE preference.account_id = projed_core.current_actor_user_id_v1()
+           AND project.id = preference.project_id
+           AND project.legacy_board_id = 'board-shared'
+      `);
+    });
+  }
   const httpA = createHttpDomainReadAdapter(clientFor('qa-a', actorA));
   const httpB = createHttpDomainReadAdapter(clientFor('qa-b', actorB));
   const httpE = createHttpDomainReadAdapter(clientFor('qa-e', actorE));
@@ -1663,5 +1702,6 @@ console.log(JSON.stringify({
     'http-backup-copy-replace-stale-rollback-idempotency-rls-and-origin',
     'http-account-layout-and-task-filter-preferences-cas-rls-and-origin',
     'http-calendar-subscription-hash-only-owner-origin-legacy-pagination-lifecycle-feed-and-revocation',
+    ...(process.env.PROJED_DEV139_BROWSER_SMOKE === '1' ? ['http-normal-product-ui-and-reload'] : []),
   ],
 }));
