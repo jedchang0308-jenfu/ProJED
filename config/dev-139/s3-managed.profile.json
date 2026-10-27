@@ -1,0 +1,166 @@
+{
+  "profileVersion": 1,
+  "appKey": "projed",
+  "kernelContractVersion": 1,
+  "environment": "managed",
+  "database": {
+    "namePattern": "^projed$",
+    "host": "cloud-sql-unix",
+    "portPolicy": "cloud-sql-unix-socket",
+    "supportedPostgresMajors": [17, 18],
+    "schemas": ["projed_core", "projed_contract"]
+  },
+  "roles": {
+    "owner": "projed_owner_disposable",
+    "migrator": "projed_migrator_disposable",
+    "importer": "projed_importer_disposable",
+    "runtime": "projed_runtime_disposable"
+  },
+  "migrations": [
+    {
+      "version": "0001_runtime_boundary_v1",
+      "path": "db/migrations/0001_runtime_boundary_v1.sql"
+    },
+    {
+      "version": "0002_profile_actor_v1",
+      "path": "db/migrations/0002_profile_actor_v1.sql"
+    },
+    {
+      "version": "0003_domain_read_v1",
+      "path": "db/migrations/0003_domain_read_v1.sql"
+    },
+    {
+      "version": "0004_domain_command_v1",
+      "path": "db/migrations/0004_domain_command_v1.sql"
+    },
+    {
+      "version": "0005_collaboration_command_v1",
+      "path": "db/migrations/0005_collaboration_command_v1.sql"
+    },
+    {
+      "version": "0006_record_activity_v1",
+      "path": "db/migrations/0006_record_activity_v1.sql"
+    },
+    {
+      "version": "0007_board_transfer_v1",
+      "path": "db/migrations/0007_board_transfer_v1.sql"
+    },
+    {
+      "version": "0008_unplaced_quick_capture_v1",
+      "path": "db/migrations/0008_unplaced_quick_capture_v1.sql"
+    },
+    {
+      "version": "0009_task_workbench_placement_v1",
+      "path": "db/migrations/0009_task_workbench_placement_v1.sql"
+    },
+    {
+      "version": "0010_task_tracking_reference_v1",
+      "path": "db/migrations/0010_task_tracking_reference_v1.sql"
+    },
+    {
+      "version": "0011_board_backup_import_v1",
+      "path": "db/migrations/0011_board_backup_import_v1.sql"
+    },
+    {
+      "version": "0012_account_preferences_v1",
+      "path": "db/migrations/0012_account_preferences_v1.sql"
+    },
+    {
+      "version": "0013_calendar_subscriptions_v1",
+      "path": "db/migrations/0013_calendar_subscriptions_v1.sql"
+    },
+    {
+      "version": "0014_snapshot_importer_v1",
+      "path": "db/migrations/0014_snapshot_importer_v1.sql"
+    }
+  ],
+  "objectAllowlist": [
+    "projed_core.schema_migrations",
+    "projed_core.runtime_metadata",
+    "projed_core.profiles",
+    "projed_core.account_authorization_guards",
+    "projed_core.current_actor_user_id_v1",
+    "projed_core.actor_context_valid_v1",
+    "projed_core.tenants",
+    "projed_core.projects",
+    "projed_core.actor_scope_access",
+    "projed_core.tenant_members",
+    "projed_core.project_members",
+    "projed_core.board_role_permissions",
+    "projed_core.wbs_items",
+    "projed_core.wbs_dependencies",
+    "projed_core.task_tags",
+    "projed_core.wbs_item_tags",
+    "projed_core.actor_has_board_capability_v1",
+    "projed_core.actor_can_write_tags_v1",
+    "projed_core.resource_revisions",
+    "projed_core.board_invites",
+    "projed_core.actor_has_workspace_capability_v1",
+    "projed_core.actor_can_configure_role_permissions_v1",
+    "projed_core.board_mutation_context_valid_v1",
+    "projed_core.workspace_bootstrap_context_valid_v1",
+    "projed_core.actor_can_bump_revision_v1",
+    "projed_core.projects_tenant_legacy_uq",
+    "projed_core.actor_scope_access_project_idx",
+    "projed_core.wbs_items_project_legacy_uq",
+    "projed_core.wbs_dependencies_project_legacy_uq",
+    "projed_core.task_tags_tenant_legacy_uq",
+    "projed_core.task_tags_tenant_order_idx",
+    "projed_core.wbs_item_tags_project_idx",
+    "projed_core.board_invites_pending_email_uq",
+    "projed_core.board_invites_project_status_idx",
+    "projed_core.knowledge_records",
+    "projed_core.record_task_links",
+    "projed_core.activity_events",
+    "projed_core.audit_logs",
+    "projed_core.actor_can_read_record_v1",
+    "projed_core.actor_can_write_record_v1",
+    "projed_core.knowledge_records_project_status_idx",
+    "projed_core.knowledge_records_project_legacy_uq",
+    "projed_core.knowledge_records_recorded_by_idx",
+    "projed_core.record_task_links_item_idx",
+    "projed_core.record_task_links_record_idx",
+    "projed_core.activity_events_tenant_time_idx",
+    "projed_core.activity_events_project_time_idx",
+    "projed_core.audit_logs_tenant_time_idx",
+    "projed_core.board_transfer_source_context_valid_v1",
+    "projed_core.board_transfer_target_context_valid_v1",
+    "projed_core.unplaced_tasks",
+    "projed_core.unplaced_tasks_owner_order_idx",
+    "projed_core.quick_task_capture_receipts",
+    "projed_core.task_workbench_placement_operations",
+    "projed_core.task_placement_context_valid_v1",
+    "projed_core.task_tracking_references",
+    "projed_core.task_tracking_references_target_idx",
+    "projed_core.task_tracking_references_task_idx",
+    "projed_core.task_tracking_references_active_scope_uq",
+    "projed_core.task_tracking_reference_staging",
+    "projed_core.task_tracking_reference_staging_owner_idx",
+    "projed_core.task_tracking_reference_operations",
+    "projed_core.backup_import_executions",
+    "projed_core.account_board_task_filter_preferences",
+    "projed_core.account_board_task_filter_preferences_project_idx",
+    "projed_core.calendar_subscriptions",
+    "projed_core.calendar_subscriptions_owner_created_idx"
+  ],
+  "staticFixturePath": "dist",
+  "runtime": {
+    "bindHost": "127.0.0.1",
+    "cloudRunBindHost": "0.0.0.0",
+    "pool": {
+      "max": 5,
+      "min": 0,
+      "idleTimeoutMillis": 30000,
+      "connectionTimeoutMillis": 3000,
+      "maxWaiting": 32
+    },
+    "timeouts": {
+      "requestMillis": 10000,
+      "transactionMillis": 5000,
+      "statementMillis": 2000,
+      "lockMillis": 1000,
+      "idleInTransactionMillis": 5000,
+      "shutdownMillis": 8000
+    }
+  }
+}

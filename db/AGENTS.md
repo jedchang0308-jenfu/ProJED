@@ -5,10 +5,12 @@
 ## 所有權與執行責任
 
 - `projed_owner_disposable` 擁有本 app 的 schema、table、function 與 policy；runtime 不可成為 owner、BYPASSRLS 或取得 owner membership。
-- `projed_migrator_disposable` 只在已核實的 disposable binding 內執行本目錄的有序 migration；不建立 managed database、foundation role、Secret 或其他 app 的物件。
+- `projed_migrator_disposable` 只在已核實的 DEV-139 disposable 或 managed binding 內執行本目錄的有序 migration；不建立 database、foundation role、Secret 或其他 app 的物件。
 - `projed_importer_disposable` 只在 runtime 尚未開放業務寫入的空白 candidate DB 執行一次性、單交易 full-snapshot import／reconciliation；不得執行 DDL、UPDATE、DELETE 或成為 owner／BYPASSRLS，正式 credential 由 foundation／release 邊界另行建立與撤銷。
 - `projed_runtime_disposable` 只取得 profile／guard 的精確查詢與受限欄位更新權；不執行 DDL、插入／刪除 profile、修改 guard／ledger／metadata 或跨 app 查詢。
 - migration 必須可重複核對 checksum；相同版本及 bytes 只能 no-op，版本／checksum 漂移、缺號或未知檔案必須拒絕。禁止 down migration 與修改既有 SQL。
+
+既有 migration 已將四個專用角色 ID 固定為 `_disposable` 後綴。為維持 checksum 與 forward-only 原則，managed profile 仍沿用這些 app 專用角色 ID；後綴是歷史名稱，不代表可繞過 managed binding。若未來更名，須新增 migration 完成 ownership／grant／policy 轉移，不得改寫 `0001`～`0014`。
 
 ## SQL 邊界
 

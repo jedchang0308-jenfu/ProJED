@@ -5,15 +5,16 @@ import { resolve } from 'node:path';
 import { KernelError } from './errors.js';
 
 export type AppEntry = 'main' | 'quick';
+export type RuntimeEnvironment = 'disposable' | 'managed';
 
 export interface SourceProfile {
   profileVersion: 1;
   appKey: 'projed';
   kernelContractVersion: 1;
-  environment: 'disposable';
+  environment: RuntimeEnvironment;
   database: {
     namePattern: string;
-    host: '127.0.0.1';
+    host: '127.0.0.1' | 'cloud-sql-unix';
     supportedPostgresMajors: readonly number[];
     schemas: readonly string[];
   };
@@ -40,13 +41,15 @@ export interface RuntimeBinding {
   databaseName: string;
   databasePort: number;
   runtimeRole: string;
+  connectionMode?: 'loopback' | 'cloud-sql-unix';
+  cloudSqlInstance?: string;
   profileSha256: string;
   migrationSha256: Record<string, string>;
   staticFixtureSha256: string;
 }
 
 export interface RuntimeConfig {
-  env: 'disposable';
+  env: RuntimeEnvironment;
   entry: AppEntry;
   host: '127.0.0.1' | '0.0.0.0';
   port: number;
@@ -60,12 +63,29 @@ export interface RuntimeConfig {
 }
 
 const SHA256_RE = /^[a-f0-9]{64}$/;
+const CLOUD_SQL_INSTANCE_RE = /^[a-z][a-z0-9-]{5,29}:[a-z0-9-]+:[a-z][a-z0-9-]{0,97}$/;
 const PROFILE_MIGRATION_PATHS = new Map<string, readonly string[]>([
   ['^dev139_s1_[0-9a-f]{32}$', [
     'db/migrations/0001_runtime_boundary_v1.sql',
     'db/migrations/0002_profile_actor_v1.sql',
   ]],
   ['^dev139_s3_[0-9a-f]{32}$', [
+    'db/migrations/0001_runtime_boundary_v1.sql',
+    'db/migrations/0002_profile_actor_v1.sql',
+    'db/migrations/0003_domain_read_v1.sql',
+    'db/migrations/0004_domain_command_v1.sql',
+    'db/migrations/0005_collaboration_command_v1.sql',
+    'db/migrations/0006_record_activity_v1.sql',
+    'db/migrations/0007_board_transfer_v1.sql',
+    'db/migrations/0008_unplaced_quick_capture_v1.sql',
+    'db/migrations/0009_task_workbench_placement_v1.sql',
+    'db/migrations/0010_task_tracking_reference_v1.sql',
+    'db/migrations/0011_board_backup_import_v1.sql',
+    'db/migrations/0012_account_preferences_v1.sql',
+    'db/migrations/0013_calendar_subscriptions_v1.sql',
+    'db/migrations/0014_snapshot_importer_v1.sql',
+  ]],
+  ['^projed$', [
     'db/migrations/0001_runtime_boundary_v1.sql',
     'db/migrations/0002_profile_actor_v1.sql',
     'db/migrations/0003_domain_read_v1.sql',
@@ -107,14 +127,16 @@ export function loadSourceProfile(path: string): { profile: SourceProfile; sha25
   const absolutePath = resolve(path);
   const { value, bytes } = readJson<SourceProfile>(absolutePath);
   if (value.profileVersion !== 1 || value.appKey !== 'projed'
-      || value.kernelContractVersion !== 1 || value.environment !== 'disposable') {
+      || value.kernelContractVersion !== 1
+      || (value.environment !== 'disposable' && value.environment !== 'managed')) {
     throw new KernelError('CONFIG_INVALID', 'Unsupported source profile identity');
   }
   const expectedMigrationPaths = PROFILE_MIGRATION_PATHS.get(value.database?.namePattern);
-  if (!expectedMigrationPaths || value.database?.host !== '127.0.0.1'
+  const expectedHost = value.environment === 'managed' ? 'cloud-sql-unix' : '127.0.0.1';
+  if (!expectedMigrationPaths || value.database?.host !== expectedHost
       || value.database?.supportedPostgresMajors?.join('|') !== '17|18'
       || value.database?.schemas?.join('|') !== 'projed_core|projed_contract') {
-    throw new KernelError('CONFIG_INVALID', 'Unexpected disposable database contract');
+    throw new KernelError('CONFIG_INVALID', 'Unexpected database contract');
   }
   if (value.roles?.owner !== 'projed_owner_disposable'
       || value.roles?.migrator !== 'projed_migrator_disposable'
@@ -134,9 +156,20 @@ export function loadSourceProfile(path: string): { profile: SourceProfile; sha25
 }
 
 export function validateRuntimeBinding(binding: RuntimeBinding, profile: SourceProfile, profileHash: string): void {
-  if (!new RegExp(profile.database.namePattern).test(binding.databaseName)
+  const allowedKeys = new Set([
+    'databaseName', 'databasePort', 'runtimeRole', 'connectionMode', 'cloudSqlInstance',
+    'profileSha256', 'migrationSha256', 'staticFixtureSha256',
+  ]);
+  const expectedConnectionMode = profile.environment === 'managed' ? 'cloud-sql-unix' : 'loopback';
+  const connectionMode = binding.connectionMode ?? 'loopback';
+  if (Object.keys(binding).some(key => !allowedKeys.has(key))
+      || !new RegExp(profile.database.namePattern).test(binding.databaseName)
       || positiveInteger(binding.databasePort, 'binding.databasePort') > 65535
       || binding.runtimeRole !== profile.roles.runtime
+      || connectionMode !== expectedConnectionMode
+      || (connectionMode === 'cloud-sql-unix'
+        ? !CLOUD_SQL_INSTANCE_RE.test(binding.cloudSqlInstance ?? '')
+        : binding.cloudSqlInstance !== undefined)
       || binding.profileSha256 !== profileHash
       || !SHA256_RE.test(binding.staticFixtureSha256)) {
     throw new KernelError('CONFIG_INVALID', 'Runtime binding does not match the DEV-139 profile');
@@ -158,32 +191,87 @@ export function validateRuntimeDatabaseUrl(raw: string, binding: RuntimeBinding)
   } catch (error) {
     throw new KernelError('CONFIG_INVALID', 'PROJED_DATABASE_URL is invalid', 500, { cause: error });
   }
-  if (!['postgres:', 'postgresql:'].includes(url.protocol)
-      || url.hostname !== '127.0.0.1'
+  const baseInvalid = !['postgres:', 'postgresql:'].includes(url.protocol)
+    || decodeURIComponent(url.pathname.slice(1)) !== binding.databaseName
+    || decodeURIComponent(url.username) !== binding.runtimeRole
+    || url.hash !== '';
+  const connectionMode = binding.connectionMode ?? 'loopback';
+  const queryKeys = [...url.searchParams.keys()];
+  const connectionInvalid = connectionMode === 'cloud-sql-unix'
+    ? url.hostname !== 'localhost'
+      || (url.port !== '' && Number(url.port) !== binding.databasePort)
+      || queryKeys.length !== 1
+      || queryKeys[0] !== 'host'
+      || url.searchParams.get('host') !== `/cloudsql/${binding.cloudSqlInstance}`
+    : url.hostname !== '127.0.0.1'
       || Number(url.port || '5432') !== binding.databasePort
-      || decodeURIComponent(url.pathname.slice(1)) !== binding.databaseName
-      || decodeURIComponent(url.username) !== binding.runtimeRole
-      || url.search !== '' || url.hash !== '') {
-    throw new KernelError('CONFIG_INVALID', 'Database URL is outside the owned disposable binding');
+      || url.search !== '';
+  if (baseInvalid || connectionInvalid) {
+    throw new KernelError('CONFIG_INVALID', 'Database URL is outside the owned runtime binding');
   }
   return url;
 }
 
+export function validateStaticRoot(profile: SourceProfile, binding: RuntimeBinding): string {
+  let staticRoot: string;
+  try {
+    staticRoot = realpathSync(resolve(profile.staticFixturePath));
+    if (profile.environment === 'managed') {
+      const metadataBytes = readFileSync(resolve(staticRoot, 'dev139-cloud-run-meta.json'));
+      if (sha256(metadataBytes) !== binding.staticFixtureSha256) throw new Error('metadata hash mismatch');
+      const metadata = JSON.parse(metadataBytes.toString('utf8')) as Record<string, unknown>;
+      if (metadata.schemaVersion !== 1 || metadata.backend !== 'http'
+          || typeof metadata.releaseId !== 'string' || !/^[A-Za-z0-9._-]{1,96}$/.test(metadata.releaseId)
+          || metadata.entrySha256 !== sha256(readFileSync(resolve(staticRoot, 'index.html')))
+          || metadata.quickEntrySha256 !== sha256(readFileSync(resolve(staticRoot, 'quick-task/index.html')))) {
+        throw new Error('static entry hash mismatch');
+      }
+    } else {
+      const entry = readFileSync(resolve(staticRoot, 'index.html'));
+      if (sha256(entry) !== binding.staticFixtureSha256) throw new Error('hash mismatch');
+    }
+  } catch (error) {
+    throw new KernelError('CONFIG_INVALID', 'Static artifact does not match the runtime binding', 500, { cause: error });
+  }
+  return staticRoot;
+}
+
 export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): RuntimeConfig {
-  if (env.PROJED_ENV !== 'disposable') throw new KernelError('CONFIG_INVALID', 'DEV-139 only accepts PROJED_ENV=disposable');
+  if (env.PROJED_ENV !== 'disposable' && env.PROJED_ENV !== 'managed') {
+    throw new KernelError('CONFIG_INVALID', 'PROJED_ENV must be disposable or managed');
+  }
+  const runtimeEnvironment = env.PROJED_ENV;
   const entry = env.PROJED_APP_ENTRY;
   if (entry !== 'main' && entry !== 'quick') throw new KernelError('CONFIG_INVALID', 'PROJED_APP_ENTRY must be main or quick');
-  const profilePath = resolve(env.PROJED_SOURCE_PROFILE ?? 'config/dev-139/s1-disposable.profile.json');
+  const profilePath = resolve(env.PROJED_SOURCE_PROFILE
+    ?? (runtimeEnvironment === 'managed'
+      ? 'config/dev-139/s3-managed.profile.json'
+      : 'config/dev-139/s1-disposable.profile.json'));
   const loaded = loadSourceProfile(profilePath);
-  if (!env.PROJED_RUNTIME_BINDING_FILE) throw new KernelError('CONFIG_INVALID', 'PROJED_RUNTIME_BINDING_FILE is required');
-  const bindingPath = resolve(env.PROJED_RUNTIME_BINDING_FILE);
-  const binding = readJson<RuntimeBinding>(bindingPath).value;
+  if (loaded.profile.environment !== runtimeEnvironment) {
+    throw new KernelError('CONFIG_INVALID', 'Runtime environment does not match the source profile');
+  }
+  const bindingFile = env.PROJED_RUNTIME_BINDING_FILE?.trim();
+  const bindingJson = env.PROJED_RUNTIME_BINDING_JSON?.trim();
+  if (Boolean(bindingFile) === Boolean(bindingJson)) {
+    throw new KernelError('CONFIG_INVALID', 'Provide exactly one runtime binding source');
+  }
+  let bindingPath: string;
+  let binding: RuntimeBinding;
+  if (bindingFile) {
+    bindingPath = resolve(bindingFile);
+    binding = readJson<RuntimeBinding>(bindingPath).value;
+  } else {
+    bindingPath = '<inline>';
+    try { binding = JSON.parse(bindingJson ?? '') as RuntimeBinding; }
+    catch (error) { throw new KernelError('CONFIG_INVALID', 'Cannot read inline runtime binding', 500, { cause: error }); }
+  }
   validateRuntimeBinding(binding, loaded.profile, loaded.sha256);
   const databaseUrl = env.PROJED_DATABASE_URL ?? '';
   validateRuntimeDatabaseUrl(databaseUrl, binding);
   const port = env.PORT === undefined ? 0 : Number(env.PORT);
   if (!Number.isInteger(port) || port < 0 || port > 65535) throw new KernelError('CONFIG_INVALID', 'PORT is invalid');
-  const host = env.PROJED_RUNTIME_MODE === 'cloud-run-config'
+  const host = runtimeEnvironment === 'managed' || env.PROJED_RUNTIME_MODE === 'cloud-run-config'
     ? loaded.profile.runtime.cloudRunBindHost
     : loaded.profile.runtime.bindHost;
   let publicAppUrl: string | undefined;
@@ -198,9 +286,9 @@ export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): Runtime
     publicAppUrl = parsed.toString().replace(/\/$/, '');
   }
   return {
-    env: 'disposable', entry, host, port, databaseUrl, profilePath,
+    env: runtimeEnvironment, entry, host, port, databaseUrl, profilePath,
     profile: loaded.profile, bindingPath, binding,
-    staticRoot: realpathSync(resolve(loaded.profile.staticFixturePath)),
+    staticRoot: validateStaticRoot(loaded.profile, binding),
     ...(publicAppUrl ? { publicAppUrl } : {}),
   };
 }

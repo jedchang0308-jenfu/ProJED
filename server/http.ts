@@ -59,23 +59,36 @@ function inside(root: string, candidate: string): boolean {
   return candidate === root || candidate.startsWith(prefix);
 }
 
+function resolveStaticFile(root: string, relative: string): string | null {
+  try {
+    const path = realpathSync(resolve(root, relative));
+    return inside(root, path) && statSync(path).isFile() ? path : null;
+  } catch {
+    return null;
+  }
+}
+
 function serveStatic(config: RuntimeConfig, request: IncomingMessage, response: ServerResponse): boolean {
   if (request.method !== 'GET' && request.method !== 'HEAD') return false;
   let relative: string;
   try {
     const url = new URL(request.url ?? '/', 'http://127.0.0.1');
-    relative = url.pathname === '/' ? 'index.html' : decodeURIComponent(url.pathname.slice(1));
+    relative = decodeURIComponent(url.pathname.slice(1));
   } catch {
     return false;
   }
-  if (relative.includes('\0') || relative.split('/').includes('..')) return false;
-  let path: string;
-  try {
-    path = realpathSync(resolve(config.staticRoot, relative));
-    if (!inside(config.staticRoot, path) || !statSync(path).isFile()) return false;
-  } catch {
-    return false;
+  if (relative.includes('\0') || relative.includes('\\') || relative.split('/').includes('..')) return false;
+  const exactCandidates = relative.length === 0
+    ? [config.entry === 'quick' ? 'quick-task/index.html' : 'index.html']
+    : [relative, ...(relative.endsWith('/') ? [`${relative}index.html`] : [])];
+  let path = exactCandidates.map(candidate => resolveStaticFile(config.staticRoot, candidate)).find(Boolean) ?? null;
+  if (!path && extname(relative) === '' && !relative.startsWith('assets/')) {
+    const fallback = config.entry === 'quick' || relative === 'quick-task' || relative.startsWith('quick-task/')
+      ? 'quick-task/index.html'
+      : 'index.html';
+    path = resolveStaticFile(config.staticRoot, fallback);
   }
+  if (!path) return false;
   const extension = extname(path).toLowerCase();
   const immutable = /[.-][a-f0-9]{8,}[.-]/i.test(path);
   response.writeHead(200, {

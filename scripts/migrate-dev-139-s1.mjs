@@ -9,6 +9,8 @@ const { Client } = pg;
 const profileContracts = new Map([
   [resolve('config/dev-139/s1-disposable.profile.json'), {
     name: 's1',
+    environment: 'disposable',
+    host: '127.0.0.1',
     namePattern: '^dev139_s1_[0-9a-f]{32}$',
     migrationPaths: [
       'db/migrations/0001_runtime_boundary_v1.sql',
@@ -17,7 +19,31 @@ const profileContracts = new Map([
   }],
   [resolve('config/dev-139/s3-read-disposable.profile.json'), {
     name: 's3-read',
+    environment: 'disposable',
+    host: '127.0.0.1',
     namePattern: '^dev139_s3_[0-9a-f]{32}$',
+    migrationPaths: [
+      'db/migrations/0001_runtime_boundary_v1.sql',
+      'db/migrations/0002_profile_actor_v1.sql',
+      'db/migrations/0003_domain_read_v1.sql',
+      'db/migrations/0004_domain_command_v1.sql',
+      'db/migrations/0005_collaboration_command_v1.sql',
+      'db/migrations/0006_record_activity_v1.sql',
+      'db/migrations/0007_board_transfer_v1.sql',
+      'db/migrations/0008_unplaced_quick_capture_v1.sql',
+      'db/migrations/0009_task_workbench_placement_v1.sql',
+      'db/migrations/0010_task_tracking_reference_v1.sql',
+      'db/migrations/0011_board_backup_import_v1.sql',
+      'db/migrations/0012_account_preferences_v1.sql',
+      'db/migrations/0013_calendar_subscriptions_v1.sql',
+      'db/migrations/0014_snapshot_importer_v1.sql',
+    ],
+  }],
+  [resolve('config/dev-139/s3-managed.profile.json'), {
+    name: 's3-managed',
+    environment: 'managed',
+    host: 'cloud-sql-unix',
+    namePattern: '^projed$',
     migrationPaths: [
       'db/migrations/0001_runtime_boundary_v1.sql',
       'db/migrations/0002_profile_actor_v1.sql',
@@ -37,14 +63,17 @@ const profileContracts = new Map([
   }],
 ]);
 const defaultProfilePath = resolve('config/dev-139/s1-disposable.profile.json');
-const profilePath = resolve(process.env.PROJED_SOURCE_PROFILE || defaultProfilePath);
+const profileOption = process.argv.find(argument => argument.startsWith('--profile='))?.slice('--profile='.length);
+if (profileOption && profileOption !== 'managed') throw new Error('Unsupported migration profile option');
+const profilePath = resolve(process.env.PROJED_SOURCE_PROFILE
+  || (profileOption === 'managed' ? 'config/dev-139/s3-managed.profile.json' : defaultProfilePath));
 const profileContract = profileContracts.get(profilePath);
-if (!profileContract) throw new Error('Only source-controlled DEV-139 disposable profiles are accepted');
+if (!profileContract) throw new Error('Only source-controlled DEV-139 profiles are accepted');
 const profileBytes = readFileSync(profilePath);
 const profile = JSON.parse(profileBytes.toString('utf8'));
 const expectedMigrationPaths = profileContract.migrationPaths;
 if (profile.profileVersion !== 1 || profile.appKey !== 'projed' || profile.kernelContractVersion !== 1
-    || profile.environment !== 'disposable' || profile.database?.host !== '127.0.0.1'
+    || profile.environment !== profileContract.environment || profile.database?.host !== profileContract.host
     || profile.database?.namePattern !== profileContract.namePattern
     || profile.database?.supportedPostgresMajors?.join('|') !== '17|18'
     || profile.roles?.owner !== 'projed_owner_disposable'
@@ -66,13 +95,26 @@ const binding = JSON.parse(readFileSync(resolve(bindingPath), 'utf8'));
 const connectionString = process.env.PROJED_MIGRATOR_DATABASE_URL;
 if (!connectionString) throw new Error('PROJED_MIGRATOR_DATABASE_URL is required');
 const url = new URL(connectionString);
-if (!['postgres:', 'postgresql:'].includes(url.protocol)
+const queryKeys = [...url.searchParams.keys()];
+const baseInvalid = !['postgres:', 'postgresql:'].includes(url.protocol)
+  || decodeURIComponent(url.pathname.slice(1)) !== binding.databaseName
+  || decodeURIComponent(url.username) !== profile.roles.migrator
+  || url.hash;
+const connectionMode = binding.connectionMode ?? 'loopback';
+const connectionInvalid = profile.environment === 'managed'
+  ? connectionMode !== 'cloud-sql-unix'
+    || !/^[a-z][a-z0-9-]{5,29}:[a-z0-9-]+:[a-z][a-z0-9-]{0,97}$/.test(binding.cloudSqlInstance ?? '')
+    || url.hostname !== 'localhost'
+    || (url.port !== '' && Number(url.port) !== binding.databasePort)
+    || queryKeys.length !== 1
+    || queryKeys[0] !== 'host'
+    || url.searchParams.get('host') !== `/cloudsql/${binding.cloudSqlInstance}`
+  : connectionMode !== 'loopback' || binding.cloudSqlInstance !== undefined
     || url.hostname !== '127.0.0.1'
     || Number(url.port || '5432') !== binding.databasePort
-    || decodeURIComponent(url.pathname.slice(1)) !== binding.databaseName
-    || decodeURIComponent(url.username) !== profile.roles.migrator
-    || url.search || url.hash) {
-  throw new Error('Migrator URL is outside the owned disposable binding');
+    || url.search;
+if (baseInvalid || connectionInvalid) {
+  throw new Error('Migrator URL is outside the owned runtime binding');
 }
 
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');

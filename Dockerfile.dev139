@@ -1,0 +1,24 @@
+ARG NODE_IMAGE=node:24.12.0-bookworm-slim
+
+FROM ${NODE_IMAGE} AS build
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --ignore-scripts
+COPY . .
+ARG PROJED_RELEASE_ID
+RUN PROJED_RELEASE_ID="${PROJED_RELEASE_ID}" npm run build:dev-139:cloud-run
+
+FROM ${NODE_IMAGE} AS runtime
+ENV NODE_ENV=production \
+    PROJED_ENV=managed \
+    PROJED_SOURCE_PROFILE=config/dev-139/s3-managed.profile.json \
+    PROJED_APP_ENTRY=main
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
+COPY --from=build --chown=node:node /app/dist ./dist
+COPY --from=build --chown=node:node /app/dist-server ./dist-server
+COPY --from=build --chown=node:node /app/config/dev-139/s3-managed.profile.json ./config/dev-139/s3-managed.profile.json
+COPY --from=build --chown=node:node /app/db/migrations ./db/migrations
+USER node
+CMD ["node", "dist-server/index.js"]

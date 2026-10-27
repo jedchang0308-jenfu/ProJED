@@ -1,7 +1,7 @@
 # ADR-054：ProJED Cloud Run／Cloud SQL 與跨系統責任邊界
 
 - 日期：2026-10-26（Asia/Taipei）。
-- 修訂：Rev 7，記錄 S1 本地實作；既有使用者相容切換尚未實作或演練。
+- 修訂：Rev 8，記錄 W16 單一 managed Cloud Run 候選；既有使用者相容切換尚未執行。
 - 狀態：**Accepted（ProJED 技術選型與 S1 runtime／DB 核心定案）**；S1 程式與 PostgreSQL 18 本地隔離驗收 PASS。S2／S3 及完整整合的外部契約未定案；本 ADR 的 Accepted 不表示其他 owner 接受或整體架構 closure。
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。詳細交接契約：[SPEC-139](../specs/SPEC-139-projed-jenfu-platform-onboarding.md)。
 - 適用未來整合路徑；不立即取代既有 runtime，不表示其他 repo 接受新契約，也不授權程式、DB、遠端或付費操作。
@@ -34,10 +34,10 @@ D2 最新人類原文為「保留 ProJED 現有的工作區、看板與權限功
 
 ## Chosen Rule
 
-人類已要求「升級到架構確定」與 rd-tech-lead 審視並優化，本輪再要求把既有使用者切換評估寫入文件。下列 ProJED 架構規則固定，現行契約為 SPEC-139 Rev6 §6／§11，Rev5 的 S1 審查沿 §11.8 保留；D1 publisher 與 D2 首階段範圍不變。人類選定方向及本 repo 決策不表示外部 owner wire／程式已接受或發布：
+人類已要求「升級到架構確定」與 rd-tech-lead 審視並優化，並要求把既有使用者切換評估寫入文件。下列 ProJED 架構規則固定，現行契約為 SPEC-139 Rev27；D1 publisher 與 D2 首階段範圍不變。人類選定方向及本 repo 決策不表示外部 owner wire／程式已接受或發布：
 
 1. **共用 infrastructure，業務權威獨立。** ProJED 自有 repo、runtime、release、`projed_core / projed_contract`、ledger 及 lifecycle-specific 角色；app key 宣告為 `projed`，平台實際登錄屬 S2。其他 app 只用受控 contract。
-2. **保留前端，新增必要 server 邊界。** Vite 產物由 Node HTTP runtime 提供，browser 經自有 API；不讓 DB runtime role／DSN 或 provider Secret 進前端。主／Quick 的既有兩個 public origin 與 manifest identity 保留，相容 Hosting 轉送至兩個自有 Cloud Run 入口，同一套 server 業務實作、各 origin Session；run.app 不直接成為既有使用者必換的新網址。原主 origin 的 Quick 相容入口沿原 Session，不另造帳號狀態或跨 origin token bridge。
+2. **保留前端，新增必要 server 邊界。** Vite產物由Node HTTP runtime提供，browser經自有API；不讓DB runtime role／DSN或provider Secret進前端。主／Quick既有兩個public origin與manifest identity保留，相容Hosting把兩邊的`/api/**`轉送至同一個ProJED Cloud Run runtime，同一套server業務實作、各origin Session；可信`main / quick`由Session actor決定，不由Host或forwarded header決定。run.app不直接成為既有使用者必換的新網址；原主origin的Quick相容入口沿原Session，不另造帳號狀態或跨origin token bridge。
 3. **OrgMaster 最小身分與 ProJED 本地 UUID 分工。** OrgMaster 發布個人／外部最小 Principal／登入來源及必要安全 metadata，不存私人內容；Platform 處理登入／Session／revocation。verified Principal 決定安全主體；既有 local UUID 保留外鍵／receipt，provider proof／受控 mapping 才可連結。不用 email、Employee 或 UID fallback，不造假 Employee。
 4. **保留本地權限，分層銜接身分。** OrgMaster 現有公司角色／scope 契約持續作公司資格權威；ProJED 保留 Workspace／Board membership、五種角色、每 Board 已設定的能力矩陣與繼承、邀請及撤權行為。非預設或空集合權限不重設為 default。離職／公司撤權不直接停用個人 Principal；公司管理角色、入口可見或 SSO 不改派 Workspace／Board owner，也不授予私人存取。
 5. **API 與 DB 共守範圍。** server 每請求核實 current identity／grant，自有交易內重驗 resource；DB policy 使用可信且交易區域的 actor context，同 client transaction、transaction advisory lock＋guard revision 及固定 scope 排序，runtime 不是 owner/BYPASSRLS。交易核心只交出 scoped query port，db.ts 獨占 pool／lease cleanup；closed port 不得再 dispatch，COMMIT unknown 不由 rollback 或自動 retry 偽裝成功。S1 只驗 account／profile，缺 context／跨 scope 拒絕；其他 scope 的完整命令在 S3 收斂。
@@ -54,7 +54,7 @@ D2 最新人類原文為「保留 ProJED 現有的工作區、看板與權限功
 - 可保留既有前端與個人／外部協作，平台納入方式符合獨立 app 邊界。
 - Supabase 的 Auth／API／RPC／policy／Realtime／Functions／Storage 能力需逐項接替，新增 server 開發及維運責任；這些必須算入估工與費用，不能描述成單純搬 DB。
 - 保留既有兩個 public origin 可降低本機／安裝變動，但不自動延續 Supabase Session；Principal mapping 與本機 owner／receipt 仍須可恢復且驗證。Hosting Cookie 轉送限制、callback、同 origin Quick Session、靜態 rewrite 優先序及 artifact／cache 相容增加必要驗證責任，不能以 direct run.app 成功、全面 redirect 或重裝取代。
-- 加入共用 SQL 擴大共同故障／維護影響，第四 app 需要重新計算 effective revisions／pools 與恢復證據，不能套用舊三 app PASS。
+- 加入共用SQL擴大共同故障／維護影響，第四app需要重新計算effective revisions／pool與恢復證據，不能套用舊三app PASS；Main／Quick共用單一ProJED runtime與pool，避免為入口差異倍增服務與成本。
 - D1 已採集中最小身分，OrgMaster／Platform 需增加非員工 publication／admission 與分層撤銷的新版本；不建立 ProJED 的平行 Principal publisher 或公司角色權威。這些是外部 owner 交接需求，尚未取得跨專案開發權。
 - D2 已將首階段限定為基礎對齊，既有工作區／看板／權限是必要驗收而非重設目標；不發布跨 app 業務 consumer manifest，也不宣稱任務串接效益已交付。後續 consumer、欄位與資料揭露依 SPEC-139 §5.3 的恢復條件再收斂。
 

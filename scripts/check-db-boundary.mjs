@@ -26,6 +26,22 @@ const profileContracts = new Map([
     'db/migrations/0013_calendar_subscriptions_v1.sql',
     'db/migrations/0014_snapshot_importer_v1.sql',
   ]],
+  ['^projed$', [
+    'db/migrations/0001_runtime_boundary_v1.sql',
+    'db/migrations/0002_profile_actor_v1.sql',
+    'db/migrations/0003_domain_read_v1.sql',
+    'db/migrations/0004_domain_command_v1.sql',
+    'db/migrations/0005_collaboration_command_v1.sql',
+    'db/migrations/0006_record_activity_v1.sql',
+    'db/migrations/0007_board_transfer_v1.sql',
+    'db/migrations/0008_unplaced_quick_capture_v1.sql',
+    'db/migrations/0009_task_workbench_placement_v1.sql',
+    'db/migrations/0010_task_tracking_reference_v1.sql',
+    'db/migrations/0011_board_backup_import_v1.sql',
+    'db/migrations/0012_account_preferences_v1.sql',
+    'db/migrations/0013_calendar_subscriptions_v1.sql',
+    'db/migrations/0014_snapshot_importer_v1.sql',
+  ]],
 ]);
 
 function fail(message) {
@@ -75,8 +91,11 @@ if (profile) {
   }
   assertNoForbiddenProfileKeys(profile);
   if (profile.appKey !== 'projed') fail('profile appKey must be projed');
-  if (profile.environment !== 'disposable') fail('profile environment must be disposable');
-  if (profile.database?.host !== '127.0.0.1') fail('profile database host must be loopback');
+  if (profile.environment !== 'disposable' && profile.environment !== 'managed') {
+    fail('profile environment must be disposable or managed');
+  }
+  const expectedHost = profile.environment === 'managed' ? 'cloud-sql-unix' : '127.0.0.1';
+  if (profile.database?.host !== expectedHost) fail('profile database host does not match its environment');
   const expectedMigrationPaths = profileContracts.get(profile.database?.namePattern);
   if (!expectedMigrationPaths) fail('profile database name pattern drifted');
   if (profile.database?.supportedPostgresMajors?.join('|') !== '17|18') fail('profile supported PostgreSQL majors must be 17 and 18');
