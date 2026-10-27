@@ -13,6 +13,7 @@ import {
 } from './domainReadHttp.js';
 import { createDomainWriteHttpDispatcher } from './domainWriteHttp.js';
 import { createRecordActivityHttpDispatcher } from './recordActivityHttp.js';
+import { createSessionHttpDispatcher, type TrustedSessionDestroyer } from './sessionHttp.js';
 
 const CONTENT_TYPES: Record<string, string> = {
   '.css': 'text/css; charset=utf-8',
@@ -78,6 +79,7 @@ export interface KernelHttpServer {
 
 export interface KernelHttpOptions {
   readonly resolveActor?: TrustedSessionActorResolver;
+  readonly destroySession?: TrustedSessionDestroyer;
 }
 
 export function createKernelHttpServer(
@@ -87,6 +89,7 @@ export function createKernelHttpServer(
   options: KernelHttpOptions = {},
 ): KernelHttpServer {
   let shuttingDown = false;
+  const dispatchSession = createSessionHttpDispatcher(config, database, options.resolveActor, options.destroySession);
   const dispatchCollaborationWrite = createCollaborationWriteHttpDispatcher(config, database, options.resolveActor);
   const dispatchRecordActivity = createRecordActivityHttpDispatcher(config, database, options.resolveActor);
   const dispatchDomainRead = createDomainReadHttpDispatcher(config, database, options.resolveActor);
@@ -113,6 +116,13 @@ export function createKernelHttpServer(
       }
       const ready = await database.readiness(expectedMigrations);
       json(response, ready ? 200 : 503, ready ? { status: 'ok' } : { status: 'unavailable', requestId }, requestId);
+      return;
+    }
+    const session = await dispatchSession(request, requestId);
+    if (session.matched) {
+      json(response, session.status ?? 500, session.body ?? {
+        error: { code: 'DB_UNAVAILABLE', requestId, retryable: true },
+      }, requestId);
       return;
     }
     const collaborationWrite = await dispatchCollaborationWrite(request, requestId);

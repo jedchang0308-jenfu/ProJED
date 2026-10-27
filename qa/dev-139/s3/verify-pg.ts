@@ -22,8 +22,10 @@ import { createHttpDomainReadAdapter } from '../../../src/services/httpApi/domai
 import { createHttpDomainWriteAdapter } from '../../../src/services/httpApi/domainWriteAdapter.js';
 import { createHttpCollaborationAdapter } from '../../../src/services/httpApi/collaborationAdapter.js';
 import { createHttpRecordActivityAdapter } from '../../../src/services/httpApi/recordActivityAdapter.js';
+import { createHttpSessionAdapter } from '../../../src/services/httpApi/sessionAdapter.js';
 import { HttpApiClient, HttpApiError, type HttpApiFetch } from '../../../src/services/httpApi/httpApiClient.js';
 import { createCollaborationWriteHttpDispatcher } from '../../../server/collaborationWriteHttp.js';
+import { createSessionHttpDispatcher } from '../../../server/sessionHttp.js';
 
 const { Client } = pg;
 const config = loadRuntimeConfig();
@@ -552,7 +554,13 @@ const disabledRecord = await disabledRecordDispatcher({
   headers: { 'content-type': 'application/json' }, resume() {},
 } as unknown as IncomingMessage, 'qa-record-disabled');
 assert.equal(disabledRecord.status, 404);
+const disabledSessionDispatcher = createSessionHttpDispatcher(config, database);
+const disabledSession = await disabledSessionDispatcher({
+  method: 'GET', url: '/api/v1/session', headers: {},
+} as IncomingMessage, 'qa-session-disabled');
+assert.equal(disabledSession.status, 404);
 
+let destroyedSessionCount = 0;
 const http = createKernelHttpServer(config, database, expected, {
   resolveActor: async (request) => {
     if (request.headers.cookie === '__session=qa-a') return actorA;
@@ -561,6 +569,7 @@ const http = createKernelHttpServer(config, database, expected, {
     if (request.headers.cookie === '__session=qa-e') return actorE;
     throw new KernelError('ACTOR_INVALID', 'QA session is unavailable', 401);
   },
+  destroySession: async () => { destroyedSessionCount += 1; },
 });
 const address = await http.listen();
 const base = `http://${address.host}:${address.port}`;
@@ -581,6 +590,18 @@ try {
   const collaborationE = createHttpCollaborationAdapter(new HttpApiClient(fetchFor('qa-e')));
   const recordsB = createHttpRecordActivityAdapter(new HttpApiClient(fetchFor('qa-b')));
   const recordsA = createHttpRecordActivityAdapter(new HttpApiClient(fetchFor('qa-a')));
+  const sessionB = createHttpSessionAdapter(new HttpApiClient(fetchFor('qa-b')));
+  const sessionProfile = await sessionB.getSession();
+  assert.equal(sessionProfile.uid, actorB.localUserId);
+  assert.equal(sessionProfile.email, 'b@example.invalid');
+  assert.equal(sessionProfile.authContextId, actorB.contextId);
+  assert.equal(sessionProfile.entry, 'main');
+  assert.equal((await sessionB.updateDisplayName('B HTTP')).displayName, 'B HTTP');
+  const missingProfileOrigin = await fetch(`${base}/api/v1/session/profile`, {
+    method: 'PATCH', headers: { cookie: '__session=qa-b', 'content-type': 'application/json' },
+    body: JSON.stringify({ displayName: 'Forged without origin' }),
+  });
+  assert.equal(missingProfileOrigin.status, 403);
   assert.deepEqual((await httpA.listWorkspaces()).map(workspace => workspace.id), ['ws-a', 'ws-b']);
   assert.deepEqual((await httpB.listWorkspaceMembers('ws-b')).map(member => member.userId), [
     actorB.localUserId, actorA.localUserId, actorC.localUserId, actorD.localUserId, actorE.localUserId,
@@ -700,7 +721,9 @@ try {
   assert.equal((await missingSession.json() as { error: { code: string } }).error.code, 'ACTOR_INVALID');
   const wrongMethod = await fetch(`${base}/api/v1/workspaces`, { method: 'PUT' });
   assert.equal(wrongMethod.status, 405);
-  const unknownApi = await fetch(`${base}/api/v1/session`, { headers: { cookie: '__session=qa-a' } });
+  await sessionB.logout();
+  assert.equal(destroyedSessionCount, 1);
+  const unknownApi = await fetch(`${base}/api/v1/not-supported`, { headers: { cookie: '__session=qa-a' } });
   assert.equal(unknownApi.status, 404);
   assert.match(unknownApi.headers.get('content-type') ?? '', /^application\/json/);
 } finally {

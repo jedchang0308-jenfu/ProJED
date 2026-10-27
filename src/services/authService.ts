@@ -11,7 +11,9 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import type { FirestoreUser } from '../types';
-import { isLocalTestBackend, isSupabaseBackend } from './dataBackend';
+import { isHttpBackend, isLocalTestBackend, isSupabaseBackend } from './dataBackend';
+import { httpSessionService } from './httpApi/backend';
+import { HttpApiError } from './httpApi/httpApiClient';
 import { isSupabaseConfigured, supabase } from './supabase/client';
 import { BOARD_INVITE_TOKEN_PARAM } from '../utils/boardInviteToken';
 import { emitProfileUpdated } from '../utils/profileEvents';
@@ -250,6 +252,12 @@ const updateCurrentUserDisplayName = async (displayName: string): Promise<Firest
     return updatedUser;
   }
 
+  if (isHttpBackend) {
+    const updatedUser = await httpSessionService.updateDisplayName(normalizedDisplayName);
+    emitProfileUpdated(updatedUser);
+    return updatedUser;
+  }
+
   if (isSupabaseBackend) {
     requireSupabaseAuth();
 
@@ -313,6 +321,17 @@ export const authService = {
       return signInWithLocalTestUser();
     }
 
+    if (isHttpBackend) {
+      try {
+        return await httpSessionService.getSession();
+      } catch (error) {
+        if (error instanceof HttpApiError && (error.status === 401 || error.status === 404)) {
+          throw new Error('尚未取得 Jenfu-Platform 登入工作階段，請先由平台入口開啟 ProJED。');
+        }
+        throw error;
+      }
+    }
+
     if (isEmbeddedAuthBlocked()) {
       throw new Error('此內嵌瀏覽器無法使用 Google 登入。請改用 Chrome 或 Safari 開啟 ProJED。');
     }
@@ -365,6 +384,15 @@ export const authService = {
       return getLocalTestSession();
     }
 
+    if (isHttpBackend) {
+      try {
+        return await httpSessionService.getSession();
+      } catch (error) {
+        if (error instanceof HttpApiError && (error.status === 401 || error.status === 404)) return null;
+        throw error;
+      }
+    }
+
     if (isSupabaseBackend) {
       if (!isSupabaseConfigured) return null;
 
@@ -381,6 +409,11 @@ export const authService = {
   signOut: async (): Promise<void> => {
     if (isLocalTestAuth()) {
       localStorage.removeItem(LOCAL_TEST_SESSION_KEY);
+      return;
+    }
+
+    if (isHttpBackend) {
+      await httpSessionService.logout();
       return;
     }
 
@@ -401,6 +434,20 @@ export const authService = {
     if (isLocalTestAuth()) {
       callback(getLocalTestSession());
       return () => undefined;
+    }
+
+    if (isHttpBackend) {
+      let subscribed = true;
+      httpSessionService.getSession()
+        .then(user => { if (subscribed) callback(user); })
+        .catch(error => {
+          if (!subscribed) return;
+          if (!(error instanceof HttpApiError && (error.status === 401 || error.status === 404))) {
+            console.error('[authService] HTTP session read failed:', error);
+          }
+          callback(null);
+        });
+      return () => { subscribed = false; };
     }
 
     if (isSupabaseBackend) {
