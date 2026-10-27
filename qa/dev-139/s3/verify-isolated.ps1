@@ -154,6 +154,9 @@ try {
       'activity-read-write-capability', 'workspace-activity-audit-capability', 'audit-write-capability',
       'production-record-activity-disabled', 'http-record-activity',
       'production-quick-task-disabled', 'http-quick-task-idempotency-owner-isolation-and-origin-deny',
+      'http-workbench-owner-crud-entry-isolation-and-atomic-bidirectional-placement',
+      'http-workbench-permission-partial-subtree-idempotency-linked-rollback-and-origin-deny',
+      'http-tracking-reference-subtree-staging-idempotency-derived-read-and-unplaced-guard',
       'http-board-transfer-preview-confirmation-rollback-data-permission-and-revision-continuity'
     )
   } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $evidenceDir 'result.json') -Encoding utf8

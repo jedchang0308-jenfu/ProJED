@@ -29,6 +29,8 @@ import { createSessionHttpDispatcher } from '../../../server/sessionHttp.js';
 import { createQuickTaskHttpDispatcher } from '../../../server/quickTaskHttp.js';
 import { createHttpQuickTaskAdapter } from '../../../src/services/httpApi/quickTaskAdapter.js';
 import { createHttpTaskWorkbenchAdapter } from '../../../src/services/httpApi/taskWorkbenchAdapter.js';
+import { createHttpTaskTrackingAdapter } from '../../../src/services/httpApi/taskTrackingAdapter.js';
+import { TaskTrackingError } from '../../../src/features/taskTracking/errors.js';
 import type { QuickCaptureRecord } from '../../../src/features/quickTaskCapture/model.js';
 import type { MoveTaskSubtreeCommand } from '../../../src/features/taskWorkbench/taskPlacementCommand.js';
 import type { BoardRolePermissionMatrix } from '../../../src/types/index.js';
@@ -536,10 +538,17 @@ try {
       FROM pg_catalog.pg_class c
       JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
      WHERE n.nspname = 'projed_core'
-       AND c.relname IN ('unplaced_tasks', 'task_workbench_placement_operations')
+       AND c.relname IN (
+         'unplaced_tasks', 'task_workbench_placement_operations',
+         'task_tracking_references', 'task_tracking_reference_staging',
+         'task_tracking_reference_operations'
+       )
      ORDER BY c.relname
   `);
   assert.deepEqual(taskWorkbenchRls.rows, [
+    { relname: 'task_tracking_reference_operations', relrowsecurity: true, relforcerowsecurity: true },
+    { relname: 'task_tracking_reference_staging', relrowsecurity: true, relforcerowsecurity: true },
+    { relname: 'task_tracking_references', relrowsecurity: true, relforcerowsecurity: true },
     { relname: 'task_workbench_placement_operations', relrowsecurity: true, relforcerowsecurity: true },
     { relname: 'unplaced_tasks', relrowsecurity: true, relforcerowsecurity: true },
   ]);
@@ -638,6 +647,8 @@ try {
   const quickB = createHttpQuickTaskAdapter(clientFor('qa-b-quick', actorBQuick));
   const taskWorkbenchARaw = createHttpTaskWorkbenchAdapter(clientFor('qa-a', actorA));
   const taskWorkbenchBRaw = createHttpTaskWorkbenchAdapter(clientFor('qa-b', actorB));
+  const trackingA = createHttpTaskTrackingAdapter(clientFor('qa-a', actorA));
+  const trackingB = createHttpTaskTrackingAdapter(clientFor('qa-b', actorB));
   const staleActorClient = clientFor('qa-b', actorA);
   const staleActorRead = createHttpDomainReadAdapter(staleActorClient);
   const staleActorWrite = createHttpDomainWriteAdapter(staleActorClient);
@@ -1082,6 +1093,141 @@ try {
     'ws-b', 'board-shared', 'shared-child', { includeArchived: true },
   )).some(record => record.id === httpRecord.id && record.status === 'archived'), true);
 
+  assert.deepEqual(await trackingB.getCapability(), { supported: true });
+  await collaborationB.updateRolePermissions('ws-b', 'board-shared', {
+    ...matrixUpdate,
+    member: [...matrixUpdate.member, 'manage_task_reference'],
+  });
+  const rootReferenceInput = {
+    operationId: '91000000-0000-4000-8000-000000000001',
+    sourcePlacementId: 'primary:shared-parent',
+    clientPlatform: 'web' as const,
+  };
+  const rootReference = await trackingA.create('ws-b', rootReferenceInput);
+  assert.equal(rootReference.taskId, 'shared-parent');
+  assert.equal(rootReference.boardId, 'board-shared');
+  assert.deepEqual(await trackingA.create('ws-b', rootReferenceInput), rootReference);
+  await collaborationB.updateRolePermissions('ws-b', 'board-shared', matrixUpdate);
+  await assert.rejects(
+    trackingA.create('ws-b', rootReferenceInput),
+    (error: unknown) => error instanceof TaskTrackingError && error.code === 'PERMISSION_DENIED',
+  );
+  await assert.rejects(
+    trackingB.create('ws-b', {
+      ...rootReferenceInput,
+      sourcePlacementId: 'primary:shared-child',
+    }),
+    (error: unknown) => error instanceof TaskTrackingError && error.code === 'OPERATION_ID_CONFLICT',
+  );
+  const childReference = await trackingB.create('ws-b', {
+    operationId: '91000000-0000-4000-8000-000000000002',
+    sourcePlacementId: 'primary:shared-child',
+    clientPlatform: 'web',
+  });
+  const nestedChildReference = await trackingB.move('ws-b', {
+    operationId: '91000000-0000-4000-8000-000000000003',
+    sourcePlacementId: childReference.id,
+    expectedRevision: childReference.revision,
+    targetBoardId: 'board-shared',
+    targetParentPlacementId: rootReference.id,
+    position: 'append',
+    clientPlatform: 'web',
+  });
+  assert.equal(nestedChildReference.parentPlacementId, rootReference.id);
+  const stagedReference = await trackingB.stage('ws-b', {
+    operationId: '91000000-0000-4000-8000-000000000004',
+    sourcePlacementId: rootReference.id,
+    expectedRevision: rootReference.revision,
+    clientPlatform: 'web',
+  });
+  assert.equal(stagedReference.referenceId, rootReference.id);
+  assert.equal((await trackingB.listByWorkspace('ws-b')).some(item => item.id === rootReference.id), false);
+  assert.deepEqual((await trackingB.listStagedByWorkspace('ws-b')).map(item => item.referenceId), [rootReference.id]);
+  const placedReference = await trackingB.placeStaged('ws-b', {
+    operationId: '91000000-0000-4000-8000-000000000005',
+    sourcePlacementId: rootReference.id,
+    expectedRevision: stagedReference.revision,
+    targetBoardId: 'board-shared',
+    targetParentPlacementId: null,
+    position: 'append',
+    clientPlatform: 'web',
+  });
+  assert.equal(placedReference.id, rootReference.id);
+  const nestedAfterPlace = (await trackingB.listByWorkspace('ws-b')).find(item => item.id === childReference.id);
+  assert.equal(nestedAfterPlace?.parentPlacementId, rootReference.id);
+  await trackingB.remove('ws-b', {
+    operationId: '91000000-0000-4000-8000-000000000006',
+    sourcePlacementId: rootReference.id,
+    expectedRevision: placedReference.revision,
+    clientPlatform: 'web',
+  });
+  assert.equal((await trackingB.listByWorkspace('ws-b')).some(item => item.id === rootReference.id), false);
+  const restoredReference = await trackingB.restore('ws-b', {
+    operationId: '91000000-0000-4000-8000-000000000007',
+    sourcePlacementId: rootReference.id,
+    expectedRevision: placedReference.revision + 1,
+    clientPlatform: 'web',
+  });
+  assert.equal(restoredReference.id, rootReference.id);
+  assert.equal((await trackingB.listByWorkspace('ws-b')).filter(item => (
+    item.id === rootReference.id || item.id === childReference.id
+  )).length, 2);
+
+  const privateReference = await trackingB.create('ws-b', {
+    operationId: '91000000-0000-4000-8000-000000000008',
+    sourcePlacementId: 'primary:private-task',
+    clientPlatform: 'web',
+  });
+  const sharedPrivateReference = await trackingB.move('ws-b', {
+    operationId: '91000000-0000-4000-8000-000000000009',
+    sourcePlacementId: privateReference.id,
+    expectedRevision: privateReference.revision,
+    targetBoardId: 'board-shared',
+    targetParentPlacementId: null,
+    position: 'append',
+    clientPlatform: 'web',
+  });
+  const visibleToViewer = await trackingA.listByWorkspace('ws-b');
+  assert.equal(visibleToViewer.some(item => item.id === sharedPrivateReference.id), true);
+  const derivedPrivateTask = await trackingA.listCanonicalTasksByIds?.('ws-b', ['private-task']);
+  assert.deepEqual(derivedPrivateTask?.map(task => [task.id, task.title, task.boardId]), [
+    ['private-task', 'B secret', 'board-private'],
+  ]);
+  await assert.rejects(
+    trackingA.create('ws-b', {
+      operationId: '91000000-0000-4000-8000-00000000000a',
+      sourcePlacementId: 'primary:shared-parent',
+      clientPlatform: 'web',
+    }),
+    (error: unknown) => error instanceof TaskTrackingError && error.code === 'PERMISSION_DENIED',
+  );
+  await collaborationB.updateRolePermissions('ws-b', 'board-shared', {
+    ...matrixUpdate,
+    member: ['manage_task_reference'],
+  });
+  await trackingA.remove('ws-b', {
+    operationId: '91000000-0000-4000-8000-00000000000b',
+    sourcePlacementId: sharedPrivateReference.id,
+    expectedRevision: sharedPrivateReference.revision,
+    clientPlatform: 'web',
+  });
+  await collaborationB.updateRolePermissions('ws-b', 'board-shared', matrixUpdate);
+  await assert.rejects(
+    taskWorkbenchB.place({
+      commandVersion: 2,
+      operationId: 'placement_v2_tracking_reference_blocked',
+      rootTaskId: 'shared-parent',
+      expectedSubtreeIds: ['shared-parent', 'shared-child', 'http-task'],
+      source: { kind: 'board', workspaceId: 'ws-b', boardId: 'board-shared' },
+      destination: {
+        ownership: { kind: 'account_unplaced' }, parentId: null, anchorTaskId: null, position: 'append',
+      },
+      clientPlatform: 'desktop',
+    }),
+    (error: unknown) => error instanceof HttpApiError
+      && error.status === 409 && error.code === 'TRACKING_REFERENCE_BLOCKS_UNPLACED',
+  );
+
   const transferTarget = await collaborationB.createWorkspace('HTTP transfer target');
   const targetEquivalentTag = await writeB.createTag(transferTarget.id, {
     id: 'target-http-tag', workspaceId: transferTarget.id,
@@ -1121,6 +1267,10 @@ try {
     transferredTasks.find(task => task.id === 'http-task')?.tagIds,
     [targetEquivalentTag.id],
   );
+  const transferredReferences = await trackingB.listByWorkspace(transferTarget.id);
+  assert.equal(transferredReferences.some(item => item.id === rootReference.id), true);
+  assert.equal(transferredReferences.some(item => item.id === childReference.id), true);
+  assert.equal(transferredReferences.some(item => item.id === sharedPrivateReference.id), false);
   assert.deepEqual(
     (await httpB.listBoardMembers(transferTarget.id, 'board-shared')).map(member => member.userId),
     [actorB.localUserId],
@@ -1191,6 +1341,7 @@ console.log(JSON.stringify({
     'http-quick-task-idempotency-owner-isolation-and-origin-deny',
     'http-workbench-owner-crud-entry-isolation-and-atomic-bidirectional-placement',
     'http-workbench-permission-partial-subtree-idempotency-linked-rollback-and-origin-deny',
+    'http-tracking-reference-subtree-staging-idempotency-derived-read-and-unplaced-guard',
     'http-board-transfer-preview-confirmation-rollback-data-permission-and-revision-continuity',
   ],
 }));

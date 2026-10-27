@@ -752,6 +752,20 @@ export class TaskWorkbenchRepository {
       throw new KernelError('DB_BOUNDARY_INVALID', 'Task placement source identity is incomplete', 409);
     }
     const storageIds = storage.rows.map(row => row.id);
+    const trackingReferences = await port.query<{ blocked: boolean }>(`
+      SELECT EXISTS (
+        SELECT 1 FROM projed_core.task_tracking_references
+         WHERE tenant_id = $1::uuid AND task_project_id = $2::uuid
+           AND task_id = ANY($3::uuid[])
+      ) AS blocked
+    `, [source.tenantId, source.id, storageIds]);
+    if (trackingReferences.rows[0]?.blocked) {
+      throw new KernelError(
+        'TRACKING_REFERENCE_BLOCKS_UNPLACED',
+        'Tasks with tracking references cannot be moved to unplaced storage',
+        409,
+      );
+    }
     const references = await port.query<{ blocked: boolean }>(`
       SELECT EXISTS (
         SELECT 1 FROM projed_core.wbs_dependencies

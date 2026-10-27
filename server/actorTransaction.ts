@@ -29,6 +29,7 @@ export interface ActorQueryPort {
     projectId: string,
     direction: 'to_board' | 'to_unplaced',
   ): Promise<void>;
+  authorizeTaskTrackingDerivedRead(tenantId: string): Promise<void>;
 }
 
 const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
@@ -198,6 +199,29 @@ export async function runActorTransaction<T>(
     }
   };
 
+  const authorizeTaskTrackingDerivedRead = async (tenantId: string): Promise<void> => {
+    if (!UUID_RE.test(tenantId)) {
+      throw new KernelError('TRANSACTION_USAGE_INVALID', 'Tracking derived-read scope is invalid');
+    }
+    const result = await guardedClientQuery<{ allowed: boolean }>(`
+      WITH authz AS (
+        SELECT EXISTS (
+          SELECT 1 FROM projed_core.tenant_members member
+           WHERE member.tenant_id = $1::uuid
+             AND member.user_id = projed_core.current_actor_user_id_v1()
+             AND member.status = 'active'
+        ) AND projed_core.actor_context_valid_v1() AS allowed
+      )
+      SELECT allowed,
+             CASE WHEN allowed THEN set_config('projed.authorized_tracking_derived_read', $1::text, true)
+               ELSE '' END AS configured
+        FROM authz
+    `, [tenantId]);
+    if (result.rows[0]?.allowed !== true) {
+      throw new KernelError('ACCESS_DENIED', 'Actor is not authorized', 403);
+    }
+  };
+
   try {
     validateServerActor(actor);
     beginSent = true;
@@ -224,6 +248,7 @@ export async function runActorTransaction<T>(
       authorizeBoardMutation,
       authorizeBoardTransfer,
       authorizeTaskPlacement,
+      authorizeTaskTrackingDerivedRead,
     });
     portClosed = true;
     if (inFlight) throw new KernelError('TRANSACTION_USAGE_INVALID', 'Callback returned with an unfinished query');

@@ -634,6 +634,7 @@ export class CollaborationWriteRepository {
     const counts = await port.query<{
       target_active_members: string; preserved_members: string; removed_members: string;
       tasks: string; dependencies: string; tags_to_map: string; records: string; pending_invites: string;
+      cross_board_tracking_references: string;
     }>(`
       SELECT
         (SELECT count(*)::text FROM projed_core.tenant_members
@@ -657,12 +658,26 @@ export class CollaborationWriteRepository {
         (SELECT count(*)::text FROM projed_core.knowledge_records
           WHERE tenant_id = $1::uuid AND project_id = $2::uuid) AS records,
         (SELECT count(*)::text FROM projed_core.board_invites
-          WHERE tenant_id = $1::uuid AND project_id = $2::uuid AND status = 'pending') AS pending_invites
+          WHERE tenant_id = $1::uuid AND project_id = $2::uuid AND status = 'pending') AS pending_invites,
+        (SELECT count(*)::text FROM projed_core.task_tracking_references reference
+          WHERE reference.tenant_id = $1::uuid
+            AND (reference.task_project_id = $2::uuid OR reference.target_project_id = $2::uuid)
+            AND reference.task_project_id <> reference.target_project_id
+            AND (
+              reference.removed_at IS NULL
+              OR EXISTS (
+                SELECT 1 FROM projed_core.task_tracking_reference_staging staging
+                 WHERE staging.tenant_id = reference.tenant_id
+                   AND reference.id = ANY(staging.subtree_ids)
+              )
+            )) AS cross_board_tracking_references
     `, [board.tenantId, board.id, target.id]);
     const count = counts.rows[0]!;
     return {
-      blocked: false,
-      reasons: [],
+      blocked: Number(count.cross_board_tracking_references) > 0,
+      reasons: Number(count.cross_board_tracking_references) > 0
+        ? ['cross_board_tracking_references_must_be_removed_or_staged_in_same_board']
+        : [],
       sourceWorkspaceId: board.legacyWorkspaceId,
       sourceWorkspaceTitle: row.source_title,
       targetWorkspaceId: target.legacyWorkspaceId,
@@ -801,6 +816,18 @@ export class CollaborationWriteRepository {
     if (!transferContext.rows[0]?.source_valid || !transferContext.rows[0]?.target_valid) {
       throw new KernelError('DB_BOUNDARY_INVALID', 'Board transfer context is unavailable', 503);
     }
+    await port.query(`
+      DELETE FROM projed_core.task_tracking_references reference
+       WHERE reference.tenant_id = $1::uuid
+         AND (reference.task_project_id = $2::uuid OR reference.target_project_id = $2::uuid)
+         AND reference.task_project_id <> reference.target_project_id
+         AND reference.removed_at IS NOT NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM projed_core.task_tracking_reference_staging staging
+            WHERE staging.tenant_id = reference.tenant_id
+              AND reference.id = ANY(staging.subtree_ids)
+         )
+    `, [board.tenantId, board.id]);
     const moved = await (async () => {
       try {
         return await port.query(`

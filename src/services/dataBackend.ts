@@ -64,6 +64,7 @@ import {
   httpDomainReadService,
   httpDomainWriteService,
   httpRecordActivityService,
+  httpTaskTrackingService,
 } from './httpApi/backend';
 import {
   isHttpBackend,
@@ -98,6 +99,8 @@ const unsupportedTaskTrackingReferenceService: TrackingReferenceService = {
 export const getTaskTrackingReferenceService = (getTasks: () => readonly TaskNode[] = () => []) => (
   isLocalTestBackend
     ? createLocalTaskTrackingReferenceService(getTasks)
+    : isHttpBackend
+      ? httpTaskTrackingService
     : isSupabaseBackend
       ? supabaseTaskTrackingReferenceService
       : unsupportedTaskTrackingReferenceService

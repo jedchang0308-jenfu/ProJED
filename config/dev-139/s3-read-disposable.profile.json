@@ -51,6 +51,10 @@
     {
       "version": "0009_task_workbench_placement_v1",
       "path": "db/migrations/0009_task_workbench_placement_v1.sql"
+    },
+    {
+      "version": "0010_task_tracking_reference_v1",
+      "path": "db/migrations/0010_task_tracking_reference_v1.sql"
     }
   ],
   "objectAllowlist": [
@@ -108,7 +112,14 @@
     "projed_core.unplaced_tasks_owner_order_idx",
     "projed_core.quick_task_capture_receipts",
     "projed_core.task_workbench_placement_operations",
-    "projed_core.task_placement_context_valid_v1"
+    "projed_core.task_placement_context_valid_v1",
+    "projed_core.task_tracking_references",
+    "projed_core.task_tracking_references_target_idx",
+    "projed_core.task_tracking_references_task_idx",
+    "projed_core.task_tracking_references_active_scope_uq",
+    "projed_core.task_tracking_reference_staging",
+    "projed_core.task_tracking_reference_staging_owner_idx",
+    "projed_core.task_tracking_reference_operations"
   ],
   "staticFixturePath": "qa/dev-139/s1/static",
   "runtime": {

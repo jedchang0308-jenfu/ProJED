@@ -16,6 +16,7 @@ import { createRecordActivityHttpDispatcher } from './recordActivityHttp.js';
 import { createQuickTaskHttpDispatcher } from './quickTaskHttp.js';
 import { createSessionHttpDispatcher, type TrustedSessionDestroyer } from './sessionHttp.js';
 import { createTaskWorkbenchHttpDispatcher } from './taskWorkbenchHttp.js';
+import { createTaskTrackingHttpDispatcher } from './taskTrackingHttp.js';
 
 const CONTENT_TYPES: Record<string, string> = {
   '.css': 'text/css; charset=utf-8',
@@ -96,6 +97,7 @@ export function createKernelHttpServer(
   const dispatchRecordActivity = createRecordActivityHttpDispatcher(config, database, options.resolveActor);
   const dispatchQuickTask = createQuickTaskHttpDispatcher(config, database, options.resolveActor);
   const dispatchTaskWorkbench = createTaskWorkbenchHttpDispatcher(config, database, options.resolveActor);
+  const dispatchTaskTracking = createTaskTrackingHttpDispatcher(config, database, options.resolveActor);
   const dispatchDomainRead = createDomainReadHttpDispatcher(config, database, options.resolveActor);
   const dispatchDomainWrite = createDomainWriteHttpDispatcher(config, database, options.resolveActor);
   const server = createServer({
@@ -146,6 +148,13 @@ export function createKernelHttpServer(
     const taskWorkbench = await dispatchTaskWorkbench(request, requestId);
     if (taskWorkbench.matched) {
       json(response, taskWorkbench.status ?? 500, taskWorkbench.body ?? {
+        error: { code: 'DB_UNAVAILABLE', requestId, retryable: true },
+      }, requestId);
+      return;
+    }
+    const taskTracking = await dispatchTaskTracking(request, requestId);
+    if (taskTracking.matched) {
+      json(response, taskTracking.status ?? 500, taskTracking.body ?? {
         error: { code: 'DB_UNAVAILABLE', requestId, retryable: true },
       }, requestId);
       return;
