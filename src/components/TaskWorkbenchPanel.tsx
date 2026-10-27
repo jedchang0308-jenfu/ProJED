@@ -37,10 +37,12 @@ import {
 } from '../features/taskWorkbench/preferences';
 import { TaskPlacementPendingIndicator } from './Wbs/taskDrag/TaskPlacementPendingIndicator';
 import {
+  claimUnboundTaskWorkbenchUnplacedTasks,
   createNewUnplacedTaskNode,
   createUnplacedTaskNodeFromInboxItem,
   isTaskWorkbenchUnplacedTask,
   loadTaskWorkbenchUnplacedTasks,
+  readUnboundTaskWorkbenchUnplacedTasks,
   TASK_WORKBENCH_UNPLACED_BOARD_ID,
 } from '../features/taskWorkbench/placement';
 import { isTaskWorkbenchSortableTask, listWorkbenchTasks } from '../features/taskWorkbench/source';
@@ -758,6 +760,8 @@ const TaskWorkbenchPanel: React.FC<{
   const [filtersLocked, setFiltersLocked] = React.useState(() => Boolean(readTaskWorkbenchFilterPrefs(accountId).locked));
   const [filterWarning, setFilterWarning] = React.useState<string | null>(() => readTaskWorkbenchFilterPrefs(accountId).warning ?? null);
   const [workbenchSourceStatus, setWorkbenchSourceStatus] = React.useState<'loading' | 'ready' | 'error'>('loading');
+  const [unboundTaskCount, setUnboundTaskCount] = React.useState(() => readUnboundTaskWorkbenchUnplacedTasks().length);
+  const [unboundClaimStatus, setUnboundClaimStatus] = React.useState<'idle' | 'claiming' | 'error'>('idle');
   const [workbenchLoadedBoardIds, setWorkbenchLoadedBoardIds] = React.useState<string[]>([]);
   const [filterOptionSource, setFilterOptionSource] = React.useState<{
     status: 'loading' | 'ready' | 'error';
@@ -813,6 +817,8 @@ const TaskWorkbenchPanel: React.FC<{
     setFiltersByBoardId(filterPrefs.filtersByBoardId);
     setFiltersLocked(Boolean(filterPrefs.locked));
     setFilterWarning(filterPrefs.warning ?? null);
+    setUnboundTaskCount(readUnboundTaskWorkbenchUnplacedTasks().length);
+    setUnboundClaimStatus('idle');
 
     let cancelled = false;
     void hydrateAccountLayoutPreferences(accountId).then(preferences => {
@@ -1186,6 +1192,20 @@ const TaskWorkbenchPanel: React.FC<{
     prepareNewTaskNaming(newTask.id);
   }, [addNode, canCreateTask, fallbackWorkspaceId, nextUnplacedOrder]);
 
+  const handleClaimUnboundTasks = React.useCallback(async () => {
+    if (!accountId || unboundClaimStatus === 'claiming') return;
+    setUnboundClaimStatus('claiming');
+    try {
+      const claimed = await claimUnboundTaskWorkbenchUnplacedTasks(accountId);
+      hydrateUnplacedTasks(claimed);
+      setUnboundTaskCount(0);
+      setUnboundClaimStatus('idle');
+    } catch (error) {
+      console.error('[TaskWorkbenchPanel] unbound task claim failed:', error);
+      setUnboundClaimStatus('error');
+    }
+  }, [accountId, hydrateUnplacedTasks, unboundClaimStatus]);
+
   const { setNodeRef: setPlacedBoardLaneRef, isOver: isPlacedBoardLaneOver } = useDroppable({
     id: `task-workbench-placed-board-lane-${selectedBoardId || 'none'}`,
     disabled: (!canMoveTask && !canManageTaskReference) || !selectedBoardOption,
@@ -1439,6 +1459,28 @@ const TaskWorkbenchPanel: React.FC<{
             </div>
           ) : (
           <>
+          {accountId && unboundTaskCount > 0 ? (
+            <div
+              className="mx-3 mt-2 flex shrink-0 items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs font-semibold text-amber-900"
+              data-task-workbench-unbound-recovery="true"
+              role={unboundClaimStatus === 'error' ? 'alert' : 'status'}
+            >
+              <span className="min-w-0 flex-1">
+                {unboundClaimStatus === 'error'
+                  ? '舊版未綁定任務仍保留在此裝置，尚未歸入目前帳號。'
+                  : `此裝置有 ${unboundTaskCount} 筆舊版未綁定任務。`}
+              </span>
+              <button
+                type="button"
+                onClick={() => { void handleClaimUnboundTasks(); }}
+                disabled={unboundClaimStatus === 'claiming'}
+                className="shrink-0 rounded border border-amber-500 bg-white px-2 py-1 text-xs font-bold text-amber-900 disabled:cursor-wait disabled:opacity-60"
+                data-task-workbench-unbound-claim="true"
+              >
+                {unboundClaimStatus === 'claiming' ? '歸入中…' : '歸入目前帳號'}
+              </button>
+            </div>
+          ) : null}
           <WorkbenchUnclassifiedSection
             tasks={unplacedTasks}
             canCreateTask={canCreateTask}

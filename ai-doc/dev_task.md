@@ -149,7 +149,7 @@ Rev6 歷史文件快照：SPEC-139 §6.3–§6.6 固定既有使用者保留面�
 
 2026-10-26 S1 實作進度：新增 `server/` kernel、兩份 forward-only migration、app-specific DB 邊界、runner、profile、unit／static／isolated verifier 與 package commands；未修改既有 `src/`、Vite／PWA、Supabase/Firebase config 或 release scripts。`verify:dev-139:s1` 在本機 PostgreSQL 18 的 task-owned cluster 完整通過（migration apply／idempotent、RLS、actor guard、HTTP fail-closed與清理），`build:test` 亦 PASS。COO 審視移除「本地必須另裝 PG17」的假關卡，改為本地支援 17／18、managed target 按實際 major 重驗；沒有遠端或正式 DB 操作。
 
-S3 W1／W2／W3已完成task／dependency／tag、workspace／board／member／permission／invite、scope revision及record／activity／audit的新DB／HTTP資料面。Luna只讀盤點確認最大剩餘缺口是產品仍未使用HTTP adapters；下一步直接完成明確HTTP backend與scope-revision polling consumer，再補Board transfer及Quick／placement／tracking／backup／preferences／calendar等仍啟用表面。production resolver需等外部owner wire。正式移轉與切流維持原邊界，不能用QA Session、本地domain foundation或舊Supabase PASS宣稱整合／無縫切換。
+S3 W1–W8已完成task／dependency／tag、workspace／board／member／permission／invite、scope revision、record／activity／audit、HTTP產品接線、Board transfer、舊provider fail-closed、Quick Task及Task Workbench雙向原子placement。Workbench list／write全部帶actor-context CAS；未綁定本機資料只可明確認領，版本合併保留最新值。下一步盤點並收斂仍屬首階段保留範圍的preferences／calendar／tracking／backup與資料移轉／相容入口；production resolver仍需外部owner wire。正式移轉與切流維持原邊界，不能用QA Session、本地domain foundation或舊Supabase PASS宣稱整合／無縫切換。
 
 ## DEV-138 DEV-133 guard 恢復、分支整合與正式驗證後清理 - 2026-10-06
 
@@ -354,11 +354,11 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 
 ## 總任務清單
 
-- ◐ DEV-139 [交付點] [開發中／S1本地PASS＋S2 seam PASS＋S3 W7 PASS] [P1] [本地開發] ProJED 首階段基礎對齊，保留 Vite
+- ◐ DEV-139 [交付點] [開發中／S1本地PASS＋S2 seam PASS＋S3 W8 PASS] [P1] [本地開發] ProJED 首階段基礎對齊，保留 Vite
   - 摘要：保留原工作區／看板／權限及個人／外部協作，Cloud Run／Cloud SQL／身分對齊；原網址／PWA相容，不丟資料／重建帳號／強迫重裝，費用不大幅增加。
-  - 下一步：補Task Workbench未歸位清單的HTTP持久化與跨未歸位／Board的原子placement；S2真接入與production resolver待Platform／OrgMaster發布ProJED／非員工wire。正式切流仍不在本地開發範圍。
-  - 阻塞 / 恢復條件：D1／D2已確認；S2 真登入需新 owner contract／registry／Session／mapping。Workspace／Board／member／permission／invite／record／activity、polling、Board跨Workspace搬移、舊provider fail-closed及Quick outbox同步已完成本地核心；移轉仍需Workbench placement、Hosting／舊版相容、全來源fence／delta／恢復證據，不能用本地QA simulation替代。
-  - 證據：[SPEC-139 Rev18](specs/SPEC-139-projed-jenfu-platform-onboarding.md)、[ADR-054](decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)；S1 PostgreSQL 18 local acceptance PASS，S2 seam獨立typecheck／boundary／12項unit PASS，S3 28/28 frontend unit、HTTP test build及PostgreSQL 18 domain／collaboration／record／activity／Board transfer／Quick Task DB／HTTP acceptance PASS，證據層級`S3_DOMAIN_CORE_LOCAL_ACCEPTANCE`，最新DB bundle `output/qa/dev-139/s3/20261027T013524Z-cac3da62`。production pins空集合、resolver未接真owner wire，沒有正常產品UI／真SSO／正式資料匯入／無縫切換／正式驗收PASS。
+  - 下一步：盤點並收斂HTTP模式下仍屬首階段保留範圍的preferences／calendar／tracking／backup，再準備資料移轉與相容入口；S2真接入與production resolver待Platform／OrgMaster發布ProJED／非員工wire。正式切流仍不在本地開發範圍。
+  - 阻塞 / 恢復條件：D1／D2已確認；S2 真登入需新 owner contract／registry／Session／mapping。Workspace／Board／member／permission／invite／record／activity、polling、Board跨Workspace搬移、舊provider fail-closed、Quick outbox同步及Workbench雙向原子placement已完成本地核心；移轉仍需inbox關聯處理、Hosting／舊版相容、全來源fence／delta／恢復證據，不能用本地QA simulation替代。
+  - 證據：[SPEC-139 Rev19](specs/SPEC-139-projed-jenfu-platform-onboarding.md)、[ADR-054](decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)；S1 PostgreSQL 18 local acceptance PASS，S2 seam獨立typecheck／boundary／12項unit PASS，S3 33/33 frontend unit、HTTP test build、DEV-089 scope 1000次／transaction 28/28及PostgreSQL 18 domain／collaboration／record／activity／Board transfer／Quick Task／Task Workbench DB／HTTP acceptance PASS，證據層級`S3_DOMAIN_CORE_LOCAL_ACCEPTANCE`，最新DB bundle `output/qa/dev-139/s3/20261027T021950Z-ec53c1a6`。production pins空集合、resolver未接真owner wire，沒有正常產品UI／真SSO／正式資料匯入／無縫切換／正式驗收PASS。
   - 計入交付：是（未來首階段基礎對齊的實際交付）；本輪文件完成不計產品完成。
 
 - ✓ DEV-138 [開發點] [已完成／正式發布、限定登入與 RPC 驗收及清理 PASS] [P1] [ProJED] DEV-133 guard 恢復、分支整合與正式驗證後清理

@@ -4,6 +4,10 @@ export interface HttpApiRequestOptions {
   readonly method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   readonly body?: unknown;
   readonly signal?: AbortSignal;
+  readonly expectedActor?: {
+    readonly accountId: string;
+    readonly contextId: string;
+  };
 }
 
 export class HttpApiError extends Error {
@@ -95,6 +99,10 @@ export class HttpApiClient {
       throw new HttpApiError('INVALID_REQUEST', 0, null, false);
     }
     const headers = new Headers({ accept: 'application/json' });
+    if (options.expectedActor) {
+      headers.set('x-projed-expected-account-id', options.expectedActor.accountId);
+      headers.set('x-projed-expected-context-id', options.expectedActor.contextId);
+    }
     let body: string | undefined;
     if (options.body !== undefined) {
       headers.set('content-type', 'application/json; charset=utf-8');

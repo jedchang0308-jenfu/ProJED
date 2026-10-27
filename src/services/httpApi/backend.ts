@@ -5,6 +5,7 @@ import { HttpApiClient } from './httpApiClient';
 import { createHttpRecordActivityAdapter } from './recordActivityAdapter';
 import { createHttpSessionAdapter } from './sessionAdapter';
 import { createHttpQuickTaskAdapter } from './quickTaskAdapter';
+import { createHttpTaskWorkbenchAdapter } from './taskWorkbenchAdapter';
 
 export const httpApiClient = new HttpApiClient();
 export const httpDomainReadService = createHttpDomainReadAdapter(httpApiClient);
@@ -13,3 +14,4 @@ export const httpCollaborationService = createHttpCollaborationAdapter(httpApiCl
 export const httpRecordActivityService = createHttpRecordActivityAdapter(httpApiClient);
 export const httpSessionService = createHttpSessionAdapter(httpApiClient);
 export const httpQuickTaskService = createHttpQuickTaskAdapter(httpApiClient);
+export const httpTaskWorkbenchService = createHttpTaskWorkbenchAdapter(httpApiClient);

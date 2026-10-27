@@ -9,6 +9,9 @@
   },
   "include": [
     "src/services/httpApi/**/*.ts",
+    "src/features/taskWorkbench/placementModel.ts",
+    "src/features/taskWorkbench/taskPlacementCommand.ts",
+    "src/vite-env.d.ts",
     "src/types/index.ts",
     "src/interactions/task/types.ts",
     "qa/dev-139/s3/**/*.ts"

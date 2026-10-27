@@ -28,7 +28,10 @@ import { createCollaborationWriteHttpDispatcher } from '../../../server/collabor
 import { createSessionHttpDispatcher } from '../../../server/sessionHttp.js';
 import { createQuickTaskHttpDispatcher } from '../../../server/quickTaskHttp.js';
 import { createHttpQuickTaskAdapter } from '../../../src/services/httpApi/quickTaskAdapter.js';
+import { createHttpTaskWorkbenchAdapter } from '../../../src/services/httpApi/taskWorkbenchAdapter.js';
 import type { QuickCaptureRecord } from '../../../src/features/quickTaskCapture/model.js';
+import type { MoveTaskSubtreeCommand } from '../../../src/features/taskWorkbench/taskPlacementCommand.js';
+import type { BoardRolePermissionMatrix } from '../../../src/types/index.js';
 
 const { Client } = pg;
 const config = loadRuntimeConfig();
@@ -254,7 +257,7 @@ assert.equal((await runActorTransaction(database, config, actorC, port => (
 ))).title, 'C renamed board');
 await runActorTransaction(database, config, actorC, port => collaborationCommands.deleteBoard(port, 'ws-b', cBoard.id));
 
-const matrixUpdate = { ...matrix, admin: [] };
+const matrixUpdate = { ...matrix, admin: [] } as BoardRolePermissionMatrix;
 const updatedMatrix = await runActorTransaction(database, config, actorB, port => (
   collaborationCommands.updateRolePermissions(port, 'ws-b', 'board-shared', matrixUpdate)
 ));
@@ -524,6 +527,22 @@ assert.equal(auditCount.rows[0]?.count, '2');
 const rawClient = new Client({ connectionString: config.databaseUrl });
 await rawClient.connect();
 try {
+  const taskWorkbenchRls = await rawClient.query<{
+    relname: string;
+    relrowsecurity: boolean;
+    relforcerowsecurity: boolean;
+  }>(`
+    SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity
+      FROM pg_catalog.pg_class c
+      JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+     WHERE n.nspname = 'projed_core'
+       AND c.relname IN ('unplaced_tasks', 'task_workbench_placement_operations')
+     ORDER BY c.relname
+  `);
+  assert.deepEqual(taskWorkbenchRls.rows, [
+    { relname: 'task_workbench_placement_operations', relrowsecurity: true, relforcerowsecurity: true },
+    { relname: 'unplaced_tasks', relrowsecurity: true, relforcerowsecurity: true },
+  ]);
   const withoutContext = await rawClient.query('SELECT legacy_workspace_id FROM projed_core.tenants');
   assert.equal(withoutContext.rowCount, 0);
   await assert.rejects(rawClient.query(`
@@ -609,6 +628,22 @@ try {
   const recordsA = createHttpRecordActivityAdapter(new HttpApiClient(fetchFor('qa-a')));
   const sessionB = createHttpSessionAdapter(new HttpApiClient(fetchFor('qa-b')));
   const quickB = createHttpQuickTaskAdapter(new HttpApiClient(fetchFor('qa-b-quick')));
+  const taskWorkbenchARaw = createHttpTaskWorkbenchAdapter(new HttpApiClient(fetchFor('qa-a')));
+  const taskWorkbenchBRaw = createHttpTaskWorkbenchAdapter(new HttpApiClient(fetchFor('qa-b')));
+  const taskWorkbenchAActor = { accountId: actorA.localUserId, contextId: actorA.contextId };
+  const taskWorkbenchBActor = { accountId: actorB.localUserId, contextId: actorB.contextId };
+  const taskWorkbenchA = {
+    list: () => taskWorkbenchARaw.list(taskWorkbenchAActor),
+    upsert: (task: Parameters<typeof taskWorkbenchARaw.upsert>[0]) => taskWorkbenchARaw.upsert(task, taskWorkbenchAActor),
+    remove: (taskId: string) => taskWorkbenchARaw.remove(taskId, taskWorkbenchAActor),
+    place: (command: MoveTaskSubtreeCommand) => taskWorkbenchARaw.place(command, taskWorkbenchAActor),
+  };
+  const taskWorkbenchB = {
+    list: () => taskWorkbenchBRaw.list(taskWorkbenchBActor),
+    upsert: (task: Parameters<typeof taskWorkbenchBRaw.upsert>[0]) => taskWorkbenchBRaw.upsert(task, taskWorkbenchBActor),
+    remove: (taskId: string) => taskWorkbenchBRaw.remove(taskId, taskWorkbenchBActor),
+    place: (command: MoveTaskSubtreeCommand) => taskWorkbenchBRaw.place(command, taskWorkbenchBActor),
+  };
   const sessionProfile = await sessionB.getSession();
   assert.equal(sessionProfile.uid, actorB.localUserId);
   assert.equal(sessionProfile.email, 'b@example.invalid');
@@ -688,6 +723,138 @@ try {
     }),
   });
   assert.equal(quickCrossSite.status, 403);
+  const quickEntryWorkbenchRead = await fetch(`${base}/api/v1/task-workbench/unplaced`, {
+    headers: { cookie: '__session=qa-b-quick' },
+  });
+  assert.equal(quickEntryWorkbenchRead.status, 403);
+  const unplacedRoot = {
+    id: 'placement-root', workspaceId: 'ws-b', boardId: '__task_workbench_unplaced__', parentId: null,
+    title: 'Placement root', detailNotes: [], status: 'todo' as const,
+    assigneeIds: [actorB.localUserId], collaboratorIds: [], tagIds: [], nodeType: 'group' as const,
+    order: 1, createdAt: Date.now(), updatedAt: Date.now(), isArchived: false,
+  };
+  const unplacedChild = {
+    ...unplacedRoot,
+    id: 'placement-child', parentId: unplacedRoot.id, title: 'Placement child',
+    nodeType: 'task' as const, order: 0.5,
+  };
+  await assert.rejects(
+    taskWorkbenchBRaw.upsert(unplacedRoot, taskWorkbenchAActor),
+    (error: unknown) => error instanceof HttpApiError
+      && error.status === 409 && error.code === 'ACTOR_CHANGED',
+  );
+  await assert.rejects(
+    taskWorkbenchBRaw.list(taskWorkbenchAActor),
+    (error: unknown) => error instanceof HttpApiError
+      && error.status === 409 && error.code === 'ACTOR_CHANGED',
+  );
+  assert.deepEqual((await taskWorkbenchB.list()).map(task => task.id), [quickCapture.captureId]);
+  await taskWorkbenchB.upsert(unplacedRoot);
+  await taskWorkbenchB.upsert(unplacedChild);
+  const stagedUnplaced = await taskWorkbenchB.list();
+  assert.deepEqual(stagedUnplaced.map(task => task.id).sort(), [
+    quickCapture.captureId, unplacedRoot.id, unplacedChild.id,
+  ].sort());
+  assert.equal(stagedUnplaced.find(task => task.id === unplacedChild.id)?.parentId, unplacedRoot.id);
+  assert.equal(stagedUnplaced.find(task => task.id === unplacedChild.id)?.order, 0.5);
+  await assert.rejects(
+    taskWorkbenchB.upsert({ ...unplacedRoot, parentId: unplacedChild.id }),
+    (error: unknown) => error instanceof HttpApiError
+      && error.status === 400 && error.code === 'DOMAIN_DATA_INVALID',
+  );
+  await assert.rejects(
+    taskWorkbenchB.upsert({ ...unplacedRoot, id: 'placement-archived', isArchived: true }),
+    (error: unknown) => error instanceof HttpApiError
+      && error.status === 400 && error.code === 'DOMAIN_DATA_INVALID',
+  );
+  assert.deepEqual(await taskWorkbenchA.list(), []);
+  await assert.rejects(
+    taskWorkbenchA.place({
+      commandVersion: 2,
+      operationId: 'placement_v2_viewer_denied',
+      rootTaskId: 'shared-parent',
+      expectedSubtreeIds: ['shared-parent', 'shared-child'],
+      source: { kind: 'board', workspaceId: 'ws-b', boardId: 'board-shared' },
+      destination: {
+        ownership: { kind: 'account_unplaced' }, parentId: null, anchorTaskId: null, position: 'append',
+      },
+      clientPlatform: 'desktop',
+    }),
+    (error: unknown) => error instanceof HttpApiError
+      && error.status === 403 && error.code === 'ACCESS_DENIED',
+  );
+  const toBoardCommand: MoveTaskSubtreeCommand = {
+    commandVersion: 2,
+    operationId: 'placement_v2_http_to_board',
+    rootTaskId: unplacedRoot.id,
+    expectedSubtreeIds: [unplacedRoot.id, unplacedChild.id],
+    source: { kind: 'account_unplaced' },
+    destination: {
+      ownership: { kind: 'board', workspaceId: 'ws-b', boardId: 'board-private' },
+      parentId: null,
+      anchorTaskId: 'private-task',
+      position: 'before',
+    },
+    clientPlatform: 'desktop',
+  };
+  await assert.rejects(
+    taskWorkbenchB.place({ ...toBoardCommand, operationId: 'placement_v2_partial', expectedSubtreeIds: [unplacedRoot.id] }),
+    (error: unknown) => error instanceof HttpApiError
+      && error.status === 400 && error.code === 'DOMAIN_DATA_INVALID',
+  );
+  assert.equal((await taskWorkbenchB.list()).some(task => task.id === unplacedChild.id), true);
+  const toBoard = await taskWorkbenchB.place(toBoardCommand);
+  assert.deepEqual(toBoard.movedTaskIds, [unplacedRoot.id, unplacedChild.id]);
+  assert.equal(toBoard.activityLoggedRemotely, true);
+  const placedBoardTasks = new Map((await httpB.listTasks('ws-b', 'board-private')).map(task => [task.id, task]));
+  assert.deepEqual([...placedBoardTasks.keys()].sort(), [unplacedRoot.id, unplacedChild.id, 'private-task'].sort());
+  assert.deepEqual(
+    [placedBoardTasks.get(unplacedRoot.id)?.parentId, placedBoardTasks.get(unplacedRoot.id)?.order],
+    [null, 0],
+  );
+  assert.deepEqual(
+    [placedBoardTasks.get(unplacedChild.id)?.parentId, placedBoardTasks.get(unplacedChild.id)?.order],
+    [unplacedRoot.id, 0.5],
+  );
+  assert.deepEqual([placedBoardTasks.get('private-task')?.parentId, placedBoardTasks.get('private-task')?.order], [null, 1]);
+  assert.deepEqual(await taskWorkbenchB.place(toBoardCommand), toBoard);
+  await assert.rejects(
+    taskWorkbenchB.place({
+      ...toBoardCommand,
+      destination: { ...toBoardCommand.destination, anchorTaskId: null, position: 'append' },
+    }),
+    (error: unknown) => error instanceof HttpApiError
+      && error.status === 409 && error.code === 'TASK_PLACEMENT_IDEMPOTENCY_CONFLICT',
+  );
+  const crossSitePlacement = await fetch(`${base}/api/v1/task-workbench/placements`, {
+    method: 'POST',
+    headers: { cookie: '__session=qa-b', origin: 'https://evil.invalid', 'content-type': 'application/json' },
+    body: JSON.stringify({ ...toBoardCommand, operationId: 'placement_v2_cross_site' }),
+  });
+  assert.equal(crossSitePlacement.status, 403);
+  const toUnplacedCommand: MoveTaskSubtreeCommand = {
+    commandVersion: 2,
+    operationId: 'placement_v2_http_to_unplaced',
+    rootTaskId: unplacedRoot.id,
+    expectedSubtreeIds: [unplacedRoot.id, unplacedChild.id],
+    source: { kind: 'board', workspaceId: 'ws-b', boardId: 'board-private' },
+    destination: {
+      ownership: { kind: 'account_unplaced' },
+      parentId: null,
+      anchorTaskId: null,
+      position: 'append',
+    },
+    clientPlatform: 'mobile',
+  };
+  const toUnplaced = await taskWorkbenchB.place(toUnplacedCommand);
+  assert.equal(toUnplaced.direction, 'to_unplaced');
+  assert.deepEqual((await httpB.listTasks('ws-b', 'board-private')).map(task => task.id), ['private-task']);
+  const returnedUnplaced = new Map((await taskWorkbenchB.list()).map(task => [task.id, task]));
+  assert.deepEqual([...returnedUnplaced.keys()].sort(), [quickCapture.captureId, unplacedRoot.id, unplacedChild.id].sort());
+  assert.equal(returnedUnplaced.get(quickCapture.captureId)?.parentId, null);
+  assert.equal(returnedUnplaced.get(unplacedRoot.id)?.parentId, null);
+  assert.equal(returnedUnplaced.get(unplacedChild.id)?.parentId, unplacedRoot.id);
+  assert.equal(returnedUnplaced.get(unplacedChild.id)?.order, 0.5);
   assert.deepEqual((await httpA.listWorkspaces()).map(workspace => workspace.id), ['ws-a', 'ws-b']);
   assert.deepEqual((await httpB.listWorkspaceMembers('ws-b')).map(member => member.userId), [
     actorB.localUserId, actorA.localUserId, actorC.localUserId, actorD.localUserId, actorE.localUserId,
@@ -715,9 +882,73 @@ try {
   });
   assert.deepEqual(httpTask.tagIds, ['http-tag']);
   assert.equal((await writeB.updateTask('ws-b', 'board-shared', 'http-task', { title: 'HTTP updated' })).title, 'HTTP updated');
+  await writeB.createTask('ws-b', 'board-shared', {
+    id: 'archived-placement-task', workspaceId: 'ws-b', boardId: 'board-shared', parentId: null,
+    title: 'Archived placement task', status: 'todo', assigneeIds: [actorB.localUserId], collaboratorIds: [],
+    tagIds: [], nodeType: 'task', order: 8, isArchived: true,
+  });
+  await assert.rejects(
+    taskWorkbenchB.place({
+      commandVersion: 2,
+      operationId: 'placement_v2_archived_rejected',
+      rootTaskId: 'archived-placement-task',
+      expectedSubtreeIds: ['archived-placement-task'],
+      source: { kind: 'board', workspaceId: 'ws-b', boardId: 'board-shared' },
+      destination: {
+        ownership: { kind: 'account_unplaced' }, parentId: null, anchorTaskId: null, position: 'append',
+      },
+      clientPlatform: 'desktop',
+    }),
+    (error: unknown) => error instanceof HttpApiError
+      && error.status === 400 && error.code === 'DOMAIN_DATA_INVALID',
+  );
+  await writeB.deleteTask('ws-b', 'board-shared', 'archived-placement-task');
   assert.equal((await writeB.createDependency('ws-b', 'board-shared', {
     fromId: 'shared-child', fromSide: 'end', toId: 'http-task', toSide: 'start', offset: 0,
   })).toId, 'http-task');
+  await assert.rejects(
+    taskWorkbenchB.place({
+      commandVersion: 2,
+      operationId: 'placement_v2_linked_rollback',
+      rootTaskId: 'http-task',
+      expectedSubtreeIds: ['http-task'],
+      source: { kind: 'board', workspaceId: 'ws-b', boardId: 'board-shared' },
+      destination: {
+        ownership: { kind: 'account_unplaced' }, parentId: null, anchorTaskId: null, position: 'append',
+      },
+      clientPlatform: 'desktop',
+    }),
+    (error: unknown) => error instanceof HttpApiError
+      && error.status === 409 && error.code === 'TASK_PLACEMENT_LINKED',
+  );
+  assert.equal((await httpB.listTasks('ws-b', 'board-shared')).some(task => task.id === 'http-task'), true);
+  await writeB.createTask('ws-b', 'board-shared', {
+    id: 'replay-revocation-task', workspaceId: 'ws-b', boardId: 'board-shared', parentId: null,
+    title: 'Replay revocation task', status: 'todo', assigneeIds: [actorB.localUserId], collaboratorIds: [],
+    tagIds: [], nodeType: 'task', order: 9, isArchived: false,
+  });
+  await collaborationB.updateRolePermissions('ws-b', 'board-shared', {
+    ...matrixUpdate,
+    member: [...matrixUpdate.member, 'move_task'],
+  });
+  const revokedReplayCommand: MoveTaskSubtreeCommand = {
+    commandVersion: 2,
+    operationId: 'placement_v2_revoked_replay',
+    rootTaskId: 'replay-revocation-task',
+    expectedSubtreeIds: ['replay-revocation-task'],
+    source: { kind: 'board', workspaceId: 'ws-b', boardId: 'board-shared' },
+    destination: {
+      ownership: { kind: 'account_unplaced' }, parentId: null, anchorTaskId: null, position: 'append',
+    },
+    clientPlatform: 'desktop',
+  };
+  assert.equal((await taskWorkbenchA.place(revokedReplayCommand)).status, 'committed');
+  await collaborationB.updateRolePermissions('ws-b', 'board-shared', matrixUpdate);
+  await assert.rejects(
+    taskWorkbenchA.place(revokedReplayCommand),
+    (error: unknown) => error instanceof HttpApiError
+      && error.status === 403 && error.code === 'ACCESS_DENIED',
+  );
   await assert.rejects(
     writeA.updateTask('ws-b', 'board-shared', 'http-task', { title: 'Viewer forged' }),
     (error: unknown) => error instanceof HttpApiError && error.status === 403 && error.code === 'ACCESS_DENIED',
@@ -772,11 +1003,36 @@ try {
   assert.equal((await collaborationB.listResourceRevisions())
     .some(item => item.workspaceId === 'ws-b' && item.boardId === 'board-shared'), true);
 
+  await writeB.createTask('ws-b', 'board-shared', {
+    id: 'record-linked-placement-task', workspaceId: 'ws-b', boardId: 'board-shared', parentId: null,
+    title: 'Record linked placement task', status: 'todo', assigneeIds: [actorB.localUserId], collaboratorIds: [],
+    tagIds: [], nodeType: 'task', order: 10, isArchived: false,
+  });
   const httpRecord = await recordsB.upsertRecord('ws-b', 'board-shared', {
     type: 'meeting', title: 'HTTP meeting', content: 'HTTP body', status: 'draft',
-    visibility: 'project', occurredAt: Date.now(), taskLinks: [{ nodeId: 'shared-child', role: 'related' }],
+    visibility: 'project', occurredAt: Date.now(), taskLinks: [{ nodeId: 'record-linked-placement-task', role: 'related' }],
   });
   assert.equal(httpRecord.title, 'HTTP meeting');
+  await assert.rejects(
+    taskWorkbenchB.place({
+      commandVersion: 2,
+      operationId: 'placement_v2_record_linked_rollback',
+      rootTaskId: 'record-linked-placement-task',
+      expectedSubtreeIds: ['record-linked-placement-task'],
+      source: { kind: 'board', workspaceId: 'ws-b', boardId: 'board-shared' },
+      destination: {
+        ownership: { kind: 'account_unplaced' }, parentId: null, anchorTaskId: null, position: 'append',
+      },
+      clientPlatform: 'desktop',
+    }),
+    (error: unknown) => error instanceof HttpApiError
+      && error.status === 409 && error.code === 'TASK_PLACEMENT_LINKED',
+  );
+  await recordsB.upsertRecord('ws-b', 'board-shared', {
+    id: httpRecord.id, type: 'meeting', title: 'HTTP meeting', content: 'HTTP body', status: 'draft',
+    visibility: 'project', occurredAt: Date.now(), taskLinks: [{ nodeId: 'shared-child', role: 'related' }],
+  });
+  await writeB.deleteTask('ws-b', 'board-shared', 'record-linked-placement-task');
   const largeHttpRecord = await recordsB.upsertRecord('ws-b', 'board-shared', {
     type: 'meeting', title: 'HTTP large meeting', content: 'x'.repeat(70 * 1024), status: 'draft',
     visibility: 'private', occurredAt: Date.now(), taskLinks: [],
@@ -908,6 +1164,8 @@ console.log(JSON.stringify({
     'activity-read-write-capability', 'workspace-activity-audit-capability', 'audit-write-capability',
     'production-record-activity-disabled', 'http-record-activity',
     'http-quick-task-idempotency-owner-isolation-and-origin-deny',
+    'http-workbench-owner-crud-entry-isolation-and-atomic-bidirectional-placement',
+    'http-workbench-permission-partial-subtree-idempotency-linked-rollback-and-origin-deny',
     'http-board-transfer-preview-confirmation-rollback-data-permission-and-revision-continuity',
   ],
 }));
