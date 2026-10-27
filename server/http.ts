@@ -5,6 +5,7 @@ import { extname, resolve, sep } from 'node:path';
 
 import type { RuntimeConfig } from './config.js';
 import type { ExpectedMigration, RuntimeDatabase } from './db.js';
+import { createBackupHttpDispatcher } from './backupHttp.js';
 import { createCollaborationWriteHttpDispatcher } from './collaborationWriteHttp.js';
 import {
   createDomainReadHttpDispatcher,
@@ -98,6 +99,7 @@ export function createKernelHttpServer(
   const dispatchQuickTask = createQuickTaskHttpDispatcher(config, database, options.resolveActor);
   const dispatchTaskWorkbench = createTaskWorkbenchHttpDispatcher(config, database, options.resolveActor);
   const dispatchTaskTracking = createTaskTrackingHttpDispatcher(config, database, options.resolveActor);
+  const dispatchBackup = createBackupHttpDispatcher(config, database, options.resolveActor);
   const dispatchDomainRead = createDomainReadHttpDispatcher(config, database, options.resolveActor);
   const dispatchDomainWrite = createDomainWriteHttpDispatcher(config, database, options.resolveActor);
   const server = createServer({
@@ -155,6 +157,13 @@ export function createKernelHttpServer(
     const taskTracking = await dispatchTaskTracking(request, requestId);
     if (taskTracking.matched) {
       json(response, taskTracking.status ?? 500, taskTracking.body ?? {
+        error: { code: 'DB_UNAVAILABLE', requestId, retryable: true },
+      }, requestId);
+      return;
+    }
+    const backup = await dispatchBackup(request, requestId);
+    if (backup.matched) {
+      json(response, backup.status ?? 500, backup.body ?? {
         error: { code: 'DB_UNAVAILABLE', requestId, retryable: true },
       }, requestId);
       return;

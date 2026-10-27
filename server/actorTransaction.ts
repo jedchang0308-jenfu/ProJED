@@ -30,6 +30,7 @@ export interface ActorQueryPort {
     direction: 'to_board' | 'to_unplaced',
   ): Promise<void>;
   authorizeTaskTrackingDerivedRead(tenantId: string): Promise<void>;
+  authorizeBackupGuard(tenantId: string, projectId: string): Promise<void>;
 }
 
 const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
@@ -222,6 +223,26 @@ export async function runActorTransaction<T>(
     }
   };
 
+  const authorizeBackupGuard = async (tenantId: string, projectId: string): Promise<void> => {
+    if (!UUID_RE.test(tenantId) || !UUID_RE.test(projectId)) {
+      throw new KernelError('TRANSACTION_USAGE_INVALID', 'Backup guard scope is invalid');
+    }
+    const result = await guardedClientQuery<{ allowed: boolean }>(`
+      WITH authz AS (
+        SELECT projed_core.actor_has_board_capability_v1($1::uuid, $2::uuid, 'delete_task')
+          AND projed_core.actor_context_valid_v1() AS allowed
+      )
+      SELECT allowed,
+             CASE WHEN allowed THEN set_config(
+               'projed.authorized_backup_guard', $1::text || '/' || $2::text, true
+             ) ELSE '' END AS configured
+        FROM authz
+    `, [tenantId, projectId]);
+    if (result.rows[0]?.allowed !== true) {
+      throw new KernelError('ACCESS_DENIED', 'Actor is not authorized', 403);
+    }
+  };
+
   try {
     validateServerActor(actor);
     beginSent = true;
@@ -249,6 +270,7 @@ export async function runActorTransaction<T>(
       authorizeBoardTransfer,
       authorizeTaskPlacement,
       authorizeTaskTrackingDerivedRead,
+      authorizeBackupGuard,
     });
     portClosed = true;
     if (inFlight) throw new KernelError('TRANSACTION_USAGE_INVALID', 'Callback returned with an unfinished query');

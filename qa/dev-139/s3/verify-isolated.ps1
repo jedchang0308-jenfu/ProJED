@@ -157,7 +157,8 @@ try {
       'http-workbench-owner-crud-entry-isolation-and-atomic-bidirectional-placement',
       'http-workbench-permission-partial-subtree-idempotency-linked-rollback-and-origin-deny',
       'http-tracking-reference-subtree-staging-idempotency-derived-read-and-unplaced-guard',
-      'http-board-transfer-preview-confirmation-rollback-data-permission-and-revision-continuity'
+      'http-board-transfer-preview-confirmation-rollback-data-permission-and-revision-continuity',
+      'http-backup-copy-replace-stale-rollback-idempotency-rls-and-origin'
     )
   } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $evidenceDir 'result.json') -Encoding utf8
   Write-Output ("DEV139_S3_RESULT=PASS evidenceLevel=S3_DOMAIN_CORE_LOCAL_ACCEPTANCE output={0}" -f $evidenceDir)

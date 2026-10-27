@@ -65,6 +65,7 @@ import {
   httpDomainWriteService,
   httpRecordActivityService,
   httpTaskTrackingService,
+  httpBackupService,
 } from './httpApi/backend';
 import {
   isHttpBackend,
@@ -123,6 +124,8 @@ const unsupportedBackupBackend: BackupBackendAdapter = {
 
 export const backupBackendService: BackupBackendAdapter = isLocalTestBackend
   ? localTestBackupService
+  : isHttpBackend
+    ? httpBackupService
   : isSupabaseBackend
     ? supabaseBackupService
     : unsupportedBackupBackend;

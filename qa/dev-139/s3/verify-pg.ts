@@ -30,6 +30,9 @@ import { createQuickTaskHttpDispatcher } from '../../../server/quickTaskHttp.js'
 import { createHttpQuickTaskAdapter } from '../../../src/services/httpApi/quickTaskAdapter.js';
 import { createHttpTaskWorkbenchAdapter } from '../../../src/services/httpApi/taskWorkbenchAdapter.js';
 import { createHttpTaskTrackingAdapter } from '../../../src/services/httpApi/taskTrackingAdapter.js';
+import { createHttpBackupAdapter } from '../../../src/services/httpApi/backupAdapter.js';
+import { createBackupPackage } from '../../../src/features/backup/package.js';
+import { BackupError } from '../../../src/features/backup/types.js';
 import { TaskTrackingError } from '../../../src/features/taskTracking/errors.js';
 import type { QuickCaptureRecord } from '../../../src/features/quickTaskCapture/model.js';
 import type { MoveTaskSubtreeCommand } from '../../../src/features/taskWorkbench/taskPlacementCommand.js';
@@ -541,11 +544,12 @@ try {
        AND c.relname IN (
          'unplaced_tasks', 'task_workbench_placement_operations',
          'task_tracking_references', 'task_tracking_reference_staging',
-         'task_tracking_reference_operations'
+         'task_tracking_reference_operations', 'backup_import_executions'
        )
      ORDER BY c.relname
   `);
   assert.deepEqual(taskWorkbenchRls.rows, [
+    { relname: 'backup_import_executions', relrowsecurity: true, relforcerowsecurity: true },
     { relname: 'task_tracking_reference_operations', relrowsecurity: true, relforcerowsecurity: true },
     { relname: 'task_tracking_reference_staging', relrowsecurity: true, relforcerowsecurity: true },
     { relname: 'task_tracking_references', relrowsecurity: true, relforcerowsecurity: true },
@@ -1301,6 +1305,92 @@ try {
     item.workspaceId === transferTarget.id && item.boardId === 'board-shared'
   )), true);
 
+  const backupA = createHttpBackupAdapter(clientFor('qa-a', actorA));
+  const backupC = createHttpBackupAdapter(clientFor('qa-c', actorC));
+  const sourcePackage = await createBackupPackage(
+    await backupA.readBoardSource('ws-a', 'board-a'),
+    'http',
+    'dev139-w11',
+  );
+  const tamperedPackage = structuredClone(sourcePackage);
+  tamperedPackage.payload.board.title = `${tamperedPackage.payload.board.title} tampered`;
+  await assert.rejects(
+    backupA.planImport({
+      package: tamperedPackage,
+      mode: 'copy_to_new_board',
+      target: { workspaceId: 'ws-a', workspaceTitle: 'A', boardTitle: tamperedPackage.payload.board.title },
+    }),
+    (error: unknown) => error instanceof BackupError && error.code === 'CHECKSUM_MISMATCH',
+  );
+  const deniedPlan = await backupC.planImport({
+    package: sourcePackage,
+    mode: 'copy_to_new_board',
+    target: { workspaceId: 'ws-a', workspaceTitle: 'A', boardTitle: sourcePackage.payload.board.title },
+  });
+  assert.equal(deniedPlan.allowed, false);
+  assert.equal(deniedPlan.blockers.some(blocker => blocker.code === 'PERMISSION_DENIED'), true);
+  const copyPlan = await backupA.planImport({
+    package: sourcePackage,
+    mode: 'copy_to_new_board',
+    target: { workspaceId: 'ws-a', workspaceTitle: 'A', boardTitle: sourcePackage.payload.board.title },
+  });
+  assert.equal(copyPlan.allowed, true);
+  const copyResult = await backupA.executeImport({
+    package: sourcePackage,
+    plan: copyPlan,
+    newBoardTitle: 'DEV-139 backup copy',
+  });
+  assert.equal(copyResult.idempotentReplay, false);
+  assert.equal(copyResult.targetBoardTitle, 'DEV-139 backup copy');
+  assert.equal((await backupA.readBoardSource('ws-a', copyResult.targetBoardId)).tasks.length, sourcePackage.payload.tasks.length);
+  assert.equal(await backupA.readBoardFingerprint('ws-a', copyResult.targetBoardId), copyResult.postWriteFingerprint);
+  const replayedCopy = await backupA.executeImport({
+    package: sourcePackage,
+    plan: copyPlan,
+    newBoardTitle: 'DEV-139 backup copy',
+  });
+  assert.equal(replayedCopy.idempotentReplay, true);
+  assert.equal(replayedCopy.targetBoardId, copyResult.targetBoardId);
+  await assert.rejects(
+    backupA.executeImport({ package: sourcePackage, plan: copyPlan, newBoardTitle: 'Changed replay title' }),
+    (error: unknown) => error instanceof BackupError && error.code === 'IMPORT_ROLLED_BACK',
+  );
+
+  const staleReplacePlan = await backupA.planImport({
+    package: sourcePackage,
+    mode: 'replace_current_board',
+    target: { workspaceId: 'ws-a', workspaceTitle: 'A', boardId: 'board-a', boardTitle: sourcePackage.payload.board.title },
+  });
+  assert.equal(staleReplacePlan.allowed, true);
+  await writeA.createTask('ws-a', 'board-a', {
+    id: 'backup-stale-change', workspaceId: 'ws-a', boardId: 'board-a', parentId: null,
+    title: 'Must survive stale plan', status: 'todo', order: 999,
+    assigneeIds: [], collaboratorIds: [], tagIds: [],
+  });
+  await assert.rejects(
+    backupA.executeImport({ package: sourcePackage, plan: staleReplacePlan }),
+    (error: unknown) => error instanceof BackupError && error.code === 'TARGET_CHANGED',
+  );
+  assert.equal((await backupA.readBoardSource('ws-a', 'board-a')).tasks.some(task => task.id === 'backup-stale-change'), true);
+  const replacePlan = await backupA.planImport({
+    package: sourcePackage,
+    mode: 'replace_current_board',
+    target: { workspaceId: 'ws-a', workspaceTitle: 'A', boardId: 'board-a', boardTitle: sourcePackage.payload.board.title },
+  });
+  assert.equal(replacePlan.allowed, true);
+  assert.equal(replacePlan.counts.delete, 1);
+  const replaceResult = await backupA.executeImport({ package: sourcePackage, plan: replacePlan });
+  assert.equal(replaceResult.idempotentReplay, false);
+  assert.equal((await backupA.readBoardSource('ws-a', 'board-a')).tasks.some(task => task.id === 'backup-stale-change'), false);
+  assert.equal(await backupA.readBoardFingerprint('ws-a', 'board-a'), replaceResult.postWriteFingerprint);
+  assert.equal((await backupA.executeImport({ package: sourcePackage, plan: replacePlan })).idempotentReplay, true);
+  const missingBackupOrigin = await fetch(`${base}/api/v1/backup/import/plan`, {
+    method: 'POST',
+    headers: { cookie: '__session=qa-a', 'content-type': 'application/json' },
+    body: JSON.stringify({ package: sourcePackage, mode: 'copy_to_new_board', target: copyPlan.target }),
+  });
+  assert.equal(missingBackupOrigin.status, 403);
+
   const missingSession = await fetch(`${base}/api/v1/workspaces`);
   assert.equal(missingSession.status, 401);
   assert.equal(missingSession.headers.get('cache-control'), 'no-store');
@@ -1343,5 +1433,6 @@ console.log(JSON.stringify({
     'http-workbench-permission-partial-subtree-idempotency-linked-rollback-and-origin-deny',
     'http-tracking-reference-subtree-staging-idempotency-derived-read-and-unplaced-guard',
     'http-board-transfer-preview-confirmation-rollback-data-permission-and-revision-continuity',
+    'http-backup-copy-replace-stale-rollback-idempotency-rls-and-origin',
   ],
 }));

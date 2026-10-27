@@ -21,7 +21,6 @@ import {
   type BackupPackageV2,
 } from '../features/backup';
 import { backupBackendService } from '../services/dataBackend';
-import { isHttpBackend } from '../services/backendMode';
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
 import { useTagStore } from '../store/useTagStore';
@@ -146,12 +145,6 @@ const BackupSettings: React.FC = () => {
   }, [activeWorkspaceId, targetWorkspaceId]);
 
   useEffect(() => {
-    if (isHttpBackend) {
-      setExportResults([]);
-      setExportError('');
-      setExportLoading(false);
-      return;
-    }
     if (!sourceValue || selectedExportTargets.length === 0) {
       setExportResults([]);
       return;
@@ -221,16 +214,14 @@ const BackupSettings: React.FC = () => {
   );
   const targetWorkspace = workspaces.find(workspace => workspace.id === targetWorkspaceId);
   const canBuildPlan = Boolean(
-    !isHttpBackend
-    && inspection
+    inspection
     && targetWorkspace
     && (mode === 'copy_to_new_board' ? newBoardTitle.trim() : replaceCompatible)
     && !planLoading
     && !executeLoading
   );
   const canExecute = Boolean(
-    !isHttpBackend
-    && plan?.allowed
+    plan?.allowed
     && !executeLoading
     && (mode === 'copy_to_new_board' || confirmation === plan.confirmationPhrase)
   );
@@ -390,15 +381,6 @@ const BackupSettings: React.FC = () => {
         </button>
       </div>
 
-      {isHttpBackend && (
-        <div
-          className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
-          data-backup-backend-supported="false"
-        >
-          目前雲端後端可在本機檢查備份檔完整性，但尚未支援從雲端建立備份或執行匯入；此模式不會退回舊資料來源。
-        </div>
-      )}
-
       <div className="grid xl:grid-cols-2">
         <section className="border-b border-slate-200 p-4 xl:border-b-0 xl:border-r" data-backup-export-panel="true">
           <div className="flex items-center gap-2">
@@ -410,7 +392,6 @@ const BackupSettings: React.FC = () => {
             id="backup-source-board"
             value={sourceValue}
             onChange={event => setSourceValue(event.target.value)}
-            disabled={isHttpBackend}
             className="mt-1 h-10 w-full border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15"
             data-backup-source-board-select="true"
           >
