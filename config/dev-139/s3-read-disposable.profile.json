@@ -39,6 +39,10 @@
     {
       "version": "0006_record_activity_v1",
       "path": "db/migrations/0006_record_activity_v1.sql"
+    },
+    {
+      "version": "0007_board_transfer_v1",
+      "path": "db/migrations/0007_board_transfer_v1.sql"
     }
   ],
   "objectAllowlist": [
@@ -89,7 +93,9 @@
     "projed_core.record_task_links_record_idx",
     "projed_core.activity_events_tenant_time_idx",
     "projed_core.activity_events_project_time_idx",
-    "projed_core.audit_logs_tenant_time_idx"
+    "projed_core.audit_logs_tenant_time_idx",
+    "projed_core.board_transfer_source_context_valid_v1",
+    "projed_core.board_transfer_target_context_valid_v1"
   ],
   "staticFixturePath": "qa/dev-139/s1/static",
   "runtime": {

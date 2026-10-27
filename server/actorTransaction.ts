@@ -23,6 +23,7 @@ export interface ActorQueryPort {
     projectId: string,
     authorization: BoardMutationAuthorization,
   ): Promise<void>;
+  authorizeBoardTransfer(sourceTenantId: string, projectId: string, targetTenantId: string): Promise<void>;
 }
 
 const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
@@ -140,6 +141,34 @@ export async function runActorTransaction<T>(
     }
   };
 
+  const authorizeBoardTransfer = async (
+    sourceTenantId: string,
+    projectId: string,
+    targetTenantId: string,
+  ): Promise<void> => {
+    if (![sourceTenantId, projectId, targetTenantId].every(value => UUID_RE.test(value))
+        || sourceTenantId === targetTenantId) {
+      throw new KernelError('TRANSACTION_USAGE_INVALID', 'Board transfer scope is invalid');
+    }
+    const result = await guardedClientQuery<{ allowed: boolean }>(`
+      WITH authz AS (
+        SELECT projed_core.actor_has_board_capability_v1($1::uuid, $2::uuid, 'move_board_between_workspaces')
+          AND projed_core.actor_has_workspace_capability_v1($3::uuid, 'manage_workspace_settings') AS allowed
+      )
+      SELECT allowed,
+             CASE WHEN allowed THEN set_config(
+               'projed.authorized_board_mutation', $1::text || '/' || $2::text, true
+             ) ELSE '' END AS board_configured,
+             CASE WHEN allowed THEN set_config(
+               'projed.authorized_board_transfer', $1::text || '/' || $2::text || '/' || $3::text, true
+             ) ELSE '' END AS transfer_configured
+        FROM authz
+    `, [sourceTenantId, projectId, targetTenantId]);
+    if (result.rows[0]?.allowed !== true) {
+      throw new KernelError('ACCESS_DENIED', 'Actor is not authorized', 403);
+    }
+  };
+
   try {
     validateServerActor(actor);
     beginSent = true;
@@ -160,7 +189,7 @@ export async function runActorTransaction<T>(
     await client.query("SELECT pg_advisory_xact_lock_shared(hashtextextended('projed:account:' || $1, 0))", [actor.localUserId]);
     const guard = await client.query<{ valid: boolean }>('SELECT projed_core.actor_context_valid_v1() AS valid');
     if (guard.rows[0]?.valid !== true) throw new KernelError('ACCESS_DENIED', 'Actor is not authorized', 403);
-    const result = await callback({ query, authorizeWorkspaceBootstrap, authorizeBoardMutation });
+    const result = await callback({ query, authorizeWorkspaceBootstrap, authorizeBoardMutation, authorizeBoardTransfer });
     portClosed = true;
     if (inFlight) throw new KernelError('TRANSACTION_USAGE_INVALID', 'Callback returned with an unfinished query');
     validateServerActor(actor);

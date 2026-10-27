@@ -5,6 +5,7 @@ import type {
   BoardInviteCreateInput,
   BoardMember,
   BoardRolePermissionMatrix,
+  BoardWorkspaceTransferPreview,
   CollaborationRole,
   Workspace,
 } from '../../types';
@@ -30,6 +31,19 @@ export interface ProjedCollaborationAdapter {
   createBoard(workspaceRef: string, title?: string, signal?: AbortSignal): Promise<Board>;
   updateBoard(workspaceRef: string, boardRef: string, updates: Pick<Partial<Board>, 'title' | 'order'>, signal?: AbortSignal): Promise<Board>;
   deleteBoard(workspaceRef: string, boardRef: string, signal?: AbortSignal): Promise<void>;
+  previewBoardTransfer(
+    workspaceRef: string,
+    boardRef: string,
+    targetWorkspaceId: string,
+    signal?: AbortSignal,
+  ): Promise<BoardWorkspaceTransferPreview>;
+  moveBoardToWorkspace(
+    workspaceRef: string,
+    boardRef: string,
+    targetWorkspaceId: string,
+    expectedBoardTitle: string,
+    signal?: AbortSignal,
+  ): Promise<BoardWorkspaceTransferPreview>;
   upsertBoardMember(
     workspaceRef: string,
     boardRef: string,
@@ -120,6 +134,25 @@ function parseRevision(value: unknown): ResourceRevision {
   return row as unknown as ResourceRevision;
 }
 
+function parseBoardTransferPreview(value: unknown): BoardWorkspaceTransferPreview {
+  const row = record(value, 'BOARD_TRANSFER');
+  const counts = record(row.counts, 'BOARD_TRANSFER_COUNTS');
+  if (typeof row.blocked !== 'boolean' || !Array.isArray(row.reasons)
+      || row.reasons.some(reason => typeof reason !== 'string')
+      || typeof row.sourceWorkspaceId !== 'string' || row.sourceWorkspaceId === ''
+      || typeof row.targetWorkspaceId !== 'string' || row.targetWorkspaceId === ''
+      || typeof row.boardId !== 'string' || row.boardId === ''
+      || typeof row.boardTitle !== 'string' || row.boardTitle === '') {
+    throw new Error('HTTP_API_INVALID_BOARD_TRANSFER');
+  }
+  for (const value of Object.values(counts)) {
+    if (!Number.isSafeInteger(value) || Number(value) < 0) {
+      throw new Error('HTTP_API_INVALID_BOARD_TRANSFER_COUNTS');
+    }
+  }
+  return row as unknown as BoardWorkspaceTransferPreview;
+}
+
 function sparseUpdate(value: Record<string, unknown>, fields: readonly string[]): Record<string, unknown> {
   return Object.fromEntries(fields.filter(field => hasOwn(value, field)).map(field => [field, value[field]]));
 }
@@ -155,6 +188,18 @@ export function createHttpCollaborationAdapter(client: HttpApiClient): ProjedCol
     },
     async deleteBoard(workspaceRef, boardRef, signal) {
       await client.request<unknown>(boardPath(workspaceRef, boardRef), { method: 'DELETE', signal });
+    },
+    async previewBoardTransfer(workspaceRef, boardRef, targetWorkspaceId, signal) {
+      const response = await client.request<unknown>(boardPath(workspaceRef, boardRef, 'transfer:preview'), {
+        method: 'POST', body: { targetWorkspaceId }, signal,
+      });
+      return parseBoardTransferPreview(data(response, 'BOARD_TRANSFER_PREVIEW'));
+    },
+    async moveBoardToWorkspace(workspaceRef, boardRef, targetWorkspaceId, expectedBoardTitle, signal) {
+      const response = await client.request<unknown>(boardPath(workspaceRef, boardRef, 'transfer'), {
+        method: 'POST', body: { targetWorkspaceId, expectedBoardTitle }, signal,
+      });
+      return parseBoardTransferPreview(data(response, 'BOARD_TRANSFER'));
     },
     async upsertBoardMember(workspaceRef, boardRef, userId, role, signal) {
       const response = await client.request<unknown>(boardPath(

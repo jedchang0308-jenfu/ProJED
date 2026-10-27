@@ -5,6 +5,7 @@ import {
   CollaborationWriteRepository,
   type BoardCreateInput,
   type BoardInviteCreate,
+  type BoardTransferInput,
   type BoardUpdateInput,
   type WorkspaceCreateInput,
   type WorkspaceUpdateInput,
@@ -26,6 +27,7 @@ type Operation =
   | { kind: 'workspace-create' }
   | { kind: 'workspace-update' | 'workspace-delete' | 'board-create'; workspaceRef: string }
   | { kind: 'board-update' | 'board-delete' | 'permissions-update' | 'invite-create'; workspaceRef: string; boardRef: string }
+  | { kind: 'board-transfer-preview' | 'board-transfer'; workspaceRef: string; boardRef: string }
   | { kind: 'member-upsert' | 'member-delete'; workspaceRef: string; boardRef: string; itemRef: string }
   | { kind: 'invite-revoke'; workspaceRef: string; boardRef: string; itemRef: string }
   | { kind: 'invite-accept' };
@@ -75,6 +77,12 @@ function operationFor(rawUrl: string | undefined, method: string | undefined): O
   if (parts.length === 8 && parts[7] === 'invites' && method === 'POST') {
     return { kind: 'invite-create', workspaceRef, boardRef };
   }
+  if (parts.length === 8 && parts[7] === 'transfer:preview' && method === 'POST') {
+    return { kind: 'board-transfer-preview', workspaceRef, boardRef };
+  }
+  if (parts.length === 8 && parts[7] === 'transfer' && method === 'POST') {
+    return { kind: 'board-transfer', workspaceRef, boardRef };
+  }
   const itemRef = segment(parts[8] ?? '');
   if (!itemRef || parts.length !== 9) return null;
   if (parts[7] === 'members') {
@@ -98,7 +106,7 @@ function isCollaborationShape(rawUrl: string | undefined): boolean {
   if (parts.length === 6) return true;
   if (!segment(parts[6] ?? '')) return false;
   if (parts.length === 7) return true;
-  if (!['members', 'role-permissions', 'invites'].includes(parts[7] ?? '')) return false;
+  if (!['members', 'role-permissions', 'invites', 'transfer:preview', 'transfer'].includes(parts[7] ?? '')) return false;
   return parts.length === 8 || (parts.length === 9 && Boolean(segment(parts[8] ?? '')));
 }
 
@@ -148,6 +156,17 @@ export function createCollaborationWriteHttpDispatcher(
           case 'board-create': return repository.createBoard(port, operation.workspaceRef, body as BoardCreateInput);
           case 'board-update': return repository.updateBoard(port, operation.workspaceRef, operation.boardRef, body as BoardUpdateInput);
           case 'board-delete': return repository.deleteBoard(port, operation.workspaceRef, operation.boardRef);
+          case 'board-transfer-preview': {
+            if (typeof body.targetWorkspaceId !== 'string') {
+              throw new KernelError('DOMAIN_DATA_INVALID', 'targetWorkspaceId is required', 400);
+            }
+            return repository.previewBoardTransfer(
+              port, operation.workspaceRef, operation.boardRef, body.targetWorkspaceId,
+            );
+          }
+          case 'board-transfer': return repository.moveBoardToWorkspace(
+            port, operation.workspaceRef, operation.boardRef, body as unknown as BoardTransferInput,
+          );
           case 'member-upsert': {
             if (typeof body.role !== 'string') throw new KernelError('DOMAIN_DATA_INVALID', 'role is required', 400);
             return repository.upsertBoardMember(

@@ -152,7 +152,8 @@ try {
       'http-collaboration-command', 'client-identity-claims-ignored',
       'record-private-and-project-read', 'record-link-atomic-upsert-and-archive',
       'activity-read-write-capability', 'workspace-activity-audit-capability', 'audit-write-capability',
-      'production-record-activity-disabled', 'http-record-activity'
+      'production-record-activity-disabled', 'http-record-activity',
+      'http-board-transfer-preview-confirmation-rollback-data-permission-and-revision-continuity'
     )
   } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $evidenceDir 'result.json') -Encoding utf8
   Write-Output ("DEV139_S3_RESULT=PASS evidenceLevel=S3_DOMAIN_CORE_LOCAL_ACCEPTANCE output={0}" -f $evidenceDir)

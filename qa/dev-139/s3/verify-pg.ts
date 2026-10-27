@@ -715,6 +715,75 @@ try {
     'ws-b', 'board-shared', 'shared-child', { includeArchived: true },
   )).some(record => record.id === httpRecord.id && record.status === 'archived'), true);
 
+  const transferTarget = await collaborationB.createWorkspace('HTTP transfer target');
+  const targetEquivalentTag = await writeB.createTag(transferTarget.id, {
+    id: 'target-http-tag', workspaceId: transferTarget.id,
+    name: 'HTTP tag', color: 'purple', order: 1,
+  });
+  const transferInvite = await collaborationB.createInvite('ws-b', 'board-shared', {
+    email: 'transfer-pending@example.invalid',
+    tokenHash: createHash('sha256').update('dev139-transfer-pending-token').digest('hex'),
+    expiresAt: Date.now() + 60_000,
+    defaultRole: 'member',
+  });
+  assert.equal(transferInvite.status, 'pending');
+  const transferPreview = await collaborationB.previewBoardTransfer('ws-b', 'board-shared', transferTarget.id);
+  assert.equal(transferPreview.blocked, false);
+  assert.equal(transferPreview.counts.preservedMembers, 1);
+  assert.equal(transferPreview.counts.removedMembers, 2);
+  assert.equal(transferPreview.counts.pendingInvitesToRevoke, 1);
+  assert.equal(transferPreview.counts.tasks, 3);
+  assert.equal(transferPreview.counts.records, 4);
+  await assert.rejects(
+    collaborationB.moveBoardToWorkspace('ws-b', 'board-shared', transferTarget.id, 'Wrong title'),
+    (error: unknown) => error instanceof HttpApiError && error.status === 409 && error.code === 'DOMAIN_DATA_INVALID',
+  );
+  assert.equal((await httpB.listTasks('ws-b', 'board-shared')).some(task => task.id === 'http-task'), true);
+  const transferResult = await collaborationB.moveBoardToWorkspace(
+    'ws-b', 'board-shared', transferTarget.id, transferPreview.boardTitle,
+  );
+  assert.equal(transferResult.counts.revokedInvites, 1);
+  assert.equal((transferResult.counts.remappedTags ?? 0) >= 1, true);
+  await assert.rejects(
+    httpB.listTasks('ws-b', 'board-shared'),
+    (error: unknown) => error instanceof HttpApiError && error.status === 404 && error.code === 'RESOURCE_NOT_FOUND',
+  );
+  const transferredTasks = await httpB.listTasks(transferTarget.id, 'board-shared');
+  assert.deepEqual(transferredTasks.map(task => task.id), ['shared-parent', 'shared-child', 'http-task']);
+  assert.deepEqual(
+    transferredTasks.find(task => task.id === 'http-task')?.tagIds,
+    [targetEquivalentTag.id],
+  );
+  assert.deepEqual(
+    (await httpB.listBoardMembers(transferTarget.id, 'board-shared')).map(member => member.userId),
+    [actorB.localUserId],
+  );
+  assert.equal((await recordsB.listRecords(transferTarget.id, 'board-shared')).length, 2);
+  assert.equal((await recordsB.listRecordsByTask(
+    transferTarget.id, 'board-shared', 'shared-child', { includeArchived: true },
+  )).some(record => record.id === httpRecord.id && record.status === 'archived'), true);
+  const movedRecordCount = await runActorTransaction(database, config, actorB, async port => {
+    const result = await port.query<{ count: string }>(`
+      SELECT count(*)::text AS count
+        FROM projed_core.knowledge_records record
+        JOIN projed_core.projects project
+          ON project.tenant_id = record.tenant_id AND project.id = record.project_id
+        JOIN projed_core.tenants tenant ON tenant.id = project.tenant_id
+       WHERE tenant.legacy_workspace_id = $1 AND project.legacy_board_id = $2
+    `, [transferTarget.id, 'board-shared']);
+    return Number(result.rows[0]!.count);
+  });
+  assert.equal(movedRecordCount, 4);
+  assert.equal((await recordsB.listActivity({
+    workspaceId: transferTarget.id, boardId: 'board-shared', scope: 'board',
+    startedAt: 0, endedAt: Date.now() + 1_000, eventTypes: ['project_workspace_transferred'],
+  })).length, 1);
+  const postTransferRevisions = await collaborationB.listResourceRevisions();
+  assert.equal(postTransferRevisions.some(item => item.workspaceId === 'ws-b' && item.boardId === 'board-shared'), false);
+  assert.equal(postTransferRevisions.some(item => (
+    item.workspaceId === transferTarget.id && item.boardId === 'board-shared'
+  )), true);
+
   const missingSession = await fetch(`${base}/api/v1/workspaces`);
   assert.equal(missingSession.status, 401);
   assert.equal(missingSession.headers.get('cache-control'), 'no-store');
@@ -752,5 +821,6 @@ console.log(JSON.stringify({
     'record-private-and-project-read', 'record-link-atomic-upsert-and-archive',
     'activity-read-write-capability', 'workspace-activity-audit-capability', 'audit-write-capability',
     'production-record-activity-disabled', 'http-record-activity',
+    'http-board-transfer-preview-confirmation-rollback-data-permission-and-revision-continuity',
   ],
 }));

@@ -71,6 +71,7 @@ const PROFILE_MIGRATION_PATHS = new Map<string, readonly string[]>([
     'db/migrations/0004_domain_command_v1.sql',
     'db/migrations/0005_collaboration_command_v1.sql',
     'db/migrations/0006_record_activity_v1.sql',
+    'db/migrations/0007_board_transfer_v1.sql',
   ]],
 ]);
 

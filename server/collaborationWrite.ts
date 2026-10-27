@@ -42,6 +42,33 @@ export interface WorkspaceCreateInput { title?: string }
 export interface WorkspaceUpdateInput { title?: string; order?: number | null }
 export interface BoardCreateInput { title?: string }
 export interface BoardUpdateInput { title?: string; order?: number | null }
+export interface BoardTransferInput { targetWorkspaceId: string; expectedBoardTitle: string }
+export interface BoardTransferPreview {
+  blocked: boolean;
+  reasons: string[];
+  sourceWorkspaceId: string;
+  sourceWorkspaceTitle: string | null;
+  targetWorkspaceId: string;
+  targetWorkspaceTitle: string | null;
+  boardId: string;
+  boardTitle: string;
+  transferLocked: false;
+  counts: {
+    targetActiveMembers: number;
+    preservedMembers: number;
+    removedMembers: number;
+    tasks: number;
+    dependencies: number;
+    tagsToMap: number;
+    documents: 0;
+    records: number;
+    pendingInvitesToRevoke: number;
+    ragDocumentsToResync: 0;
+    revokedInvites?: number;
+    remappedTags?: number;
+    ragJobsCreated?: 0;
+  };
+}
 export interface BoardInviteCreate {
   email: string;
   tokenHash: string;
@@ -184,6 +211,10 @@ export class CollaborationWriteRepository {
         tenant_id, user_id, role, status, member_email, member_display_name
       ) VALUES ($1::uuid, $2::uuid, 'owner', 'active', $3, $4)
     `, [id, profile.id, profile.email, profile.displayName]);
+    await port.query(`
+      INSERT INTO projed_core.actor_scope_access(local_user_id, tenant_id, project_id, active, scope_revision)
+      VALUES ($1::uuid, $2::uuid, NULL, true, 1)
+    `, [profile.id, id]);
     await port.query(`
       INSERT INTO projed_core.resource_revisions(tenant_id, project_id) VALUES ($1::uuid, NULL)
     `, [id]);
@@ -544,6 +575,328 @@ export class CollaborationWriteRepository {
     if (accepted.rowCount !== 1) invalid('Invite is no longer pending', 409);
     await bumpRevision(port, invite.tenant_id, invite.project_id);
     return this.getInvite(port, invite.id);
+  }
+
+  async previewBoardTransfer(
+    port: ActorQueryPort,
+    workspaceRef: string,
+    boardRef: string,
+    targetWorkspaceRef: string,
+  ): Promise<BoardTransferPreview> {
+    if (typeof targetWorkspaceRef !== 'string' || targetWorkspaceRef.trim() === '') {
+      invalid('targetWorkspaceId is invalid');
+    }
+    const board = await resolveBoard(port, workspaceRef, boardRef);
+    const target = await resolveWorkspace(port, targetWorkspaceRef);
+    const identity = await port.query<{
+      source_title: string; target_title: string; board_title: string;
+      source_manager: boolean; target_admin: boolean;
+    }>(`
+      SELECT source.title AS source_title, target.title AS target_title, project.title AS board_title,
+             projed_core.actor_has_board_capability_v1(
+               source.id, project.id, 'move_board_between_workspaces'
+             ) AS source_manager,
+             projed_core.actor_has_workspace_capability_v1(
+               target.id, 'manage_workspace_settings'
+             ) AS target_admin
+        FROM projed_core.projects project
+        JOIN projed_core.tenants source ON source.id = project.tenant_id
+        JOIN projed_core.tenants target ON target.id = $3::uuid
+       WHERE source.id = $1::uuid AND project.id = $2::uuid
+    `, [board.tenantId, board.id, target.id]);
+    if (identity.rows.length !== 1) notFound();
+    const row = identity.rows[0]!;
+    const reasons: string[] = [];
+    if (board.tenantId === target.id) reasons.push('source_and_target_are_same');
+    if (!row.source_manager) reasons.push('source_project_manager_required');
+    if (!row.target_admin) reasons.push('target_workspace_admin_required');
+
+    if (reasons.length > 0) {
+      return {
+        blocked: true,
+        reasons,
+        sourceWorkspaceId: board.legacyWorkspaceId,
+        sourceWorkspaceTitle: row.source_title,
+        targetWorkspaceId: target.legacyWorkspaceId,
+        targetWorkspaceTitle: row.target_title,
+        boardId: board.legacyBoardId,
+        boardTitle: row.board_title,
+        transferLocked: false,
+        counts: {
+          targetActiveMembers: 0, preservedMembers: 0, removedMembers: 0,
+          tasks: 0, dependencies: 0, tagsToMap: 0, documents: 0, records: 0,
+          pendingInvitesToRevoke: 0, ragDocumentsToResync: 0,
+        },
+      };
+    }
+
+    await port.authorizeBoardTransfer(board.tenantId, board.id, target.id);
+    const counts = await port.query<{
+      target_active_members: string; preserved_members: string; removed_members: string;
+      tasks: string; dependencies: string; tags_to_map: string; records: string; pending_invites: string;
+    }>(`
+      SELECT
+        (SELECT count(*)::text FROM projed_core.tenant_members
+          WHERE tenant_id = $3::uuid AND status = 'active') AS target_active_members,
+        (SELECT count(*)::text FROM projed_core.project_members member
+          WHERE member.tenant_id = $1::uuid AND member.project_id = $2::uuid
+            AND EXISTS (SELECT 1 FROM projed_core.tenant_members target_member
+              WHERE target_member.tenant_id = $3::uuid AND target_member.user_id = member.user_id
+                AND target_member.status = 'active')) AS preserved_members,
+        (SELECT count(*)::text FROM projed_core.project_members member
+          WHERE member.tenant_id = $1::uuid AND member.project_id = $2::uuid
+            AND NOT EXISTS (SELECT 1 FROM projed_core.tenant_members target_member
+              WHERE target_member.tenant_id = $3::uuid AND target_member.user_id = member.user_id
+                AND target_member.status = 'active')) AS removed_members,
+        (SELECT count(*)::text FROM projed_core.wbs_items
+          WHERE tenant_id = $1::uuid AND project_id = $2::uuid) AS tasks,
+        (SELECT count(*)::text FROM projed_core.wbs_dependencies
+          WHERE tenant_id = $1::uuid AND project_id = $2::uuid) AS dependencies,
+        (SELECT count(DISTINCT tag_id)::text FROM projed_core.wbs_item_tags
+          WHERE tenant_id = $1::uuid AND project_id = $2::uuid) AS tags_to_map,
+        (SELECT count(*)::text FROM projed_core.knowledge_records
+          WHERE tenant_id = $1::uuid AND project_id = $2::uuid) AS records,
+        (SELECT count(*)::text FROM projed_core.board_invites
+          WHERE tenant_id = $1::uuid AND project_id = $2::uuid AND status = 'pending') AS pending_invites
+    `, [board.tenantId, board.id, target.id]);
+    const count = counts.rows[0]!;
+    return {
+      blocked: false,
+      reasons: [],
+      sourceWorkspaceId: board.legacyWorkspaceId,
+      sourceWorkspaceTitle: row.source_title,
+      targetWorkspaceId: target.legacyWorkspaceId,
+      targetWorkspaceTitle: row.target_title,
+      boardId: board.legacyBoardId,
+      boardTitle: row.board_title,
+      transferLocked: false,
+      counts: {
+        targetActiveMembers: Number(count.target_active_members),
+        preservedMembers: Number(count.preserved_members),
+        removedMembers: Number(count.removed_members),
+        tasks: Number(count.tasks),
+        dependencies: Number(count.dependencies),
+        tagsToMap: Number(count.tags_to_map),
+        documents: 0,
+        records: Number(count.records),
+        pendingInvitesToRevoke: Number(count.pending_invites),
+        ragDocumentsToResync: 0,
+      },
+    };
+  }
+
+  async moveBoardToWorkspace(
+    port: ActorQueryPort,
+    workspaceRef: string,
+    boardRef: string,
+    input: BoardTransferInput,
+  ): Promise<BoardTransferPreview> {
+    if (!isRecord(input) || Object.keys(input).some(key => !['targetWorkspaceId', 'expectedBoardTitle'].includes(key))
+        || typeof input.targetWorkspaceId !== 'string' || typeof input.expectedBoardTitle !== 'string') {
+      invalid('board transfer input is invalid');
+    }
+    const preview = await this.previewBoardTransfer(port, workspaceRef, boardRef, input.targetWorkspaceId);
+    if (preview.blocked) throw new KernelError('ACCESS_DENIED', 'Board transfer is not authorized', 403);
+    const board = await resolveBoard(port, workspaceRef, boardRef);
+    const target = await resolveWorkspace(port, input.targetWorkspaceId);
+    await port.authorizeBoardTransfer(board.tenantId, board.id, target.id);
+    const locked = await port.query<{ title: string }>(`
+      SELECT title FROM projed_core.projects
+       WHERE tenant_id = $1::uuid AND id = $2::uuid
+       FOR UPDATE
+    `, [board.tenantId, board.id]);
+    if (locked.rows.length !== 1) notFound();
+    if (locked.rows[0]!.title !== input.expectedBoardTitle) {
+      invalid('Board title confirmation does not match', 409);
+    }
+
+    const profile = await currentProfile(port);
+    const targetMembership = await port.query<{
+      role: CollaborationRole; member_email: string | null; member_display_name: string | null;
+    }>(`
+      SELECT role, member_email, member_display_name
+        FROM projed_core.tenant_members
+       WHERE tenant_id = $1::uuid AND user_id = $2::uuid AND status = 'active'
+    `, [target.id, profile.id]);
+    if (targetMembership.rows.length !== 1 || !['owner', 'admin'].includes(targetMembership.rows[0]!.role)) {
+      throw new KernelError('ACCESS_DENIED', 'Actor is not authorized', 403);
+    }
+
+    const assignments = await port.query<{
+      item_id: string; tag_id: string; legacy_tag_id: string; name: string; color: string; sort_order: number;
+    }>(`
+      SELECT assignment.item_id::text AS item_id, tag.id::text AS tag_id,
+             tag.legacy_tag_id, tag.name, tag.color, tag.sort_order
+        FROM projed_core.wbs_item_tags assignment
+        JOIN projed_core.task_tags tag
+          ON tag.tenant_id = assignment.tenant_id AND tag.id = assignment.tag_id
+       WHERE assignment.tenant_id = $1::uuid AND assignment.project_id = $2::uuid
+       ORDER BY tag.sort_order, tag.id, assignment.item_id
+    `, [board.tenantId, board.id]);
+    const targetTags = await port.query<{
+      id: string; legacy_tag_id: string; name: string; color: string;
+    }>(`
+      SELECT id::text AS id, legacy_tag_id, name, color
+        FROM projed_core.task_tags WHERE tenant_id = $1::uuid
+    `, [target.id]);
+    const targetByLegacy = new Map(targetTags.rows.map(tag => [tag.legacy_tag_id, tag]));
+    const targetBySemantic = new Map(targetTags.rows.map(tag => [`${tag.name.toLowerCase()}\u0000${tag.color}`, tag]));
+    const usedLegacyIds = new Set(targetTags.rows.map(tag => tag.legacy_tag_id));
+    const tagMap = new Map<string, string>();
+    for (const sourceTag of new Map(assignments.rows.map(row => [row.tag_id, row])).values()) {
+      const semanticKey = `${sourceTag.name.toLowerCase()}\u0000${sourceTag.color}`;
+      const exact = targetByLegacy.get(sourceTag.legacy_tag_id);
+      const semantic = targetBySemantic.get(semanticKey);
+      if (exact && exact.name === sourceTag.name && exact.color === sourceTag.color) {
+        tagMap.set(sourceTag.tag_id, exact.id);
+        continue;
+      }
+      if (semantic) {
+        tagMap.set(sourceTag.tag_id, semantic.id);
+        continue;
+      }
+      let legacyTagId = sourceTag.legacy_tag_id;
+      while (usedLegacyIds.has(legacyTagId)) {
+        legacyTagId = `${sourceTag.legacy_tag_id.slice(0, 210)}-moved-${randomUUID().slice(0, 8)}`;
+      }
+      const targetTagId = randomUUID();
+      await port.query(`
+        INSERT INTO projed_core.task_tags(id, tenant_id, legacy_tag_id, name, color, sort_order)
+        VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6)
+      `, [targetTagId, target.id, legacyTagId, sourceTag.name, sourceTag.color, sourceTag.sort_order]);
+      usedLegacyIds.add(legacyTagId);
+      targetBySemantic.set(semanticKey, {
+        id: targetTagId, legacy_tag_id: legacyTagId, name: sourceTag.name, color: sourceTag.color,
+      });
+      tagMap.set(sourceTag.tag_id, targetTagId);
+    }
+
+    await port.query(`
+      DELETE FROM projed_core.wbs_item_tags
+       WHERE tenant_id = $1::uuid AND project_id = $2::uuid
+    `, [board.tenantId, board.id]);
+    await port.query(`
+      DELETE FROM projed_core.actor_scope_access access
+       WHERE access.tenant_id = $1::uuid AND access.project_id = $2::uuid
+         AND NOT EXISTS (SELECT 1 FROM projed_core.tenant_members target_member
+           WHERE target_member.tenant_id = $3::uuid AND target_member.user_id = access.local_user_id
+             AND target_member.status = 'active')
+    `, [board.tenantId, board.id, target.id]);
+    await port.query(`
+      DELETE FROM projed_core.project_members member
+       WHERE member.tenant_id = $1::uuid AND member.project_id = $2::uuid
+         AND NOT EXISTS (SELECT 1 FROM projed_core.tenant_members target_member
+           WHERE target_member.tenant_id = $3::uuid AND target_member.user_id = member.user_id
+             AND target_member.status = 'active')
+    `, [board.tenantId, board.id, target.id]);
+    const revoked = await port.query(`
+      UPDATE projed_core.board_invites
+         SET status = 'revoked', revoked_at = now(), updated_at = now()
+       WHERE tenant_id = $1::uuid AND project_id = $2::uuid AND status = 'pending'
+    `, [board.tenantId, board.id]);
+    const transferContext = await port.query<{ source_valid: boolean; target_valid: boolean }>(`
+      SELECT projed_core.board_transfer_source_context_valid_v1($1::uuid, $2::uuid) AS source_valid,
+             projed_core.board_transfer_target_context_valid_v1($3::uuid, $2::uuid) AS target_valid
+    `, [board.tenantId, board.id, target.id]);
+    if (!transferContext.rows[0]?.source_valid || !transferContext.rows[0]?.target_valid) {
+      throw new KernelError('DB_BOUNDARY_INVALID', 'Board transfer context is unavailable', 503);
+    }
+    const moved = await (async () => {
+      try {
+        return await port.query(`
+          UPDATE projed_core.projects
+             SET tenant_id = $3::uuid, sort_order = extract(epoch FROM clock_timestamp()) * 1000, updated_at = now()
+           WHERE tenant_id = $1::uuid AND id = $2::uuid
+        `, [board.tenantId, board.id, target.id]);
+      } catch (error) {
+        if ((error as { code?: string; constraint?: string }).code === '23505'
+            && (error as { constraint?: string }).constraint === 'projects_tenant_legacy_uq') {
+          invalid('Target workspace already contains this board identifier', 409);
+        }
+        throw error;
+      }
+    })();
+    if (moved.rowCount !== 1) throw new KernelError('ACCESS_DENIED', 'Board transfer is not authorized', 403);
+    await port.query(`
+      UPDATE projed_core.board_invites
+         SET legacy_workspace_id = $3, updated_at = now()
+       WHERE tenant_id = $1::uuid AND project_id = $2::uuid
+    `, [target.id, board.id, target.legacyWorkspaceId]);
+
+    const managers = await port.query(`
+      SELECT 1 FROM projed_core.project_members
+       WHERE tenant_id = $1::uuid AND project_id = $2::uuid AND role IN ('owner', 'admin', 'project_manager')
+       LIMIT 1
+    `, [target.id, board.id]);
+    if (managers.rows.length === 0) {
+      const member = targetMembership.rows[0]!;
+      await port.query(`
+        INSERT INTO projed_core.project_members(
+          tenant_id, project_id, user_id, role, member_email, member_display_name
+        ) VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6)
+        ON CONFLICT (project_id, user_id) DO UPDATE
+          SET tenant_id = EXCLUDED.tenant_id, role = EXCLUDED.role,
+              member_email = EXCLUDED.member_email, member_display_name = EXCLUDED.member_display_name,
+              updated_at = now()
+      `, [target.id, board.id, profile.id, member.role, member.member_email, member.member_display_name]);
+    }
+    await port.query(`
+      INSERT INTO projed_core.actor_scope_access(local_user_id, tenant_id, project_id, active, scope_revision)
+      VALUES ($1::uuid, $2::uuid, $3::uuid, true, 1)
+      ON CONFLICT (local_user_id, tenant_id, project_id) DO UPDATE
+        SET active = true, scope_revision = projed_core.actor_scope_access.scope_revision + 1,
+            updated_at = now()
+    `, [profile.id, target.id, board.id]);
+    for (const assignment of assignments.rows) {
+      const targetTagId = tagMap.get(assignment.tag_id);
+      if (!targetTagId) throw new KernelError('DB_BOUNDARY_INVALID', 'Tag mapping is unavailable', 503);
+      await port.query(`
+        INSERT INTO projed_core.wbs_item_tags(tenant_id, project_id, item_id, tag_id)
+        VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid)
+        ON CONFLICT DO NOTHING
+      `, [target.id, board.id, assignment.item_id, targetTagId]);
+    }
+
+    await port.query(`
+      INSERT INTO projed_core.activity_events(
+        id, tenant_id, project_id, actor_id, event_type, entity_table, entity_id, entity_ref, payload
+      ) VALUES (
+        $1::uuid, $2::uuid, $3::uuid, projed_core.current_actor_user_id_v1(),
+        'project_workspace_transferred', 'projects', $3::uuid, $4,
+        jsonb_build_object('sourceWorkspaceId', $5::text, 'targetWorkspaceId', $6::text)
+      )
+    `, [randomUUID(), target.id, board.id, board.legacyBoardId, board.legacyWorkspaceId, target.legacyWorkspaceId]);
+    await port.query(`
+      INSERT INTO projed_core.audit_logs(
+        id, tenant_id, project_id, actor_id, action, entity_table, entity_id, entity_ref, before_data, after_data
+      ) VALUES (
+        $1::uuid, $2::uuid, NULL, projed_core.current_actor_user_id_v1(),
+        'project_workspace_transferred_out', 'projects', $3::uuid, $4,
+        jsonb_build_object('workspaceId', $5::text), jsonb_build_object('workspaceId', $6::text)
+      ), (
+        $7::uuid, $8::uuid, $3::uuid, projed_core.current_actor_user_id_v1(),
+        'project_workspace_transferred_in', 'projects', $3::uuid, $4,
+        jsonb_build_object('workspaceId', $5::text), jsonb_build_object('workspaceId', $6::text)
+      )
+    `, [
+      randomUUID(), board.tenantId, board.id, board.legacyBoardId,
+      board.legacyWorkspaceId, target.legacyWorkspaceId, randomUUID(), target.id,
+    ]);
+    await bumpRevision(port, board.tenantId, null);
+    await bumpRevision(port, target.id, null);
+    await bumpRevision(port, target.id, board.id);
+
+    return {
+      ...preview,
+      sourceWorkspaceTitle: preview.sourceWorkspaceTitle,
+      targetWorkspaceId: target.legacyWorkspaceId,
+      counts: {
+        ...preview.counts,
+        revokedInvites: revoked.rowCount ?? 0,
+        remappedTags: tagMap.size,
+        ragJobsCreated: 0,
+      },
+    };
   }
 
   private async getInvite(port: ActorQueryPort, inviteId: string): Promise<DomainBoardInvite> {

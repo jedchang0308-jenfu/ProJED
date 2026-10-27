@@ -272,7 +272,9 @@ export const boardService = {
     boardId: string,
     targetWorkspaceId: string
   ): Promise<BoardWorkspaceTransferPreview> => {
-    if (isHttpBackend) return rejectHttpUnsupported('board workspace transfer preview');
+    if (isHttpBackend) {
+      return httpCollaborationService.previewBoardTransfer(workspaceId, boardId, targetWorkspaceId);
+    }
     if (isLocalTestBackend) {
       return localTestBoardService.previewWorkspaceTransfer(workspaceId, boardId, targetWorkspaceId);
     }
@@ -288,7 +290,11 @@ export const boardService = {
     targetWorkspaceId: string,
     expectedBoardTitle: string
   ): Promise<BoardWorkspaceTransferPreview> => {
-    if (isHttpBackend) return rejectHttpUnsupported('board workspace transfer');
+    if (isHttpBackend) {
+      return httpCollaborationService.moveBoardToWorkspace(
+        workspaceId, boardId, targetWorkspaceId, expectedBoardTitle,
+      );
+    }
     if (isLocalTestBackend) {
       return localTestBoardService.moveToWorkspace(workspaceId, boardId, targetWorkspaceId, expectedBoardTitle);
     }

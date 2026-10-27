@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { createHttpCollaborationAdapter } from '../../../src/services/httpApi/collaborationAdapter';
 import { createHttpDomainWriteAdapter } from '../../../src/services/httpApi/domainWriteAdapter';
 import { HttpApiClient } from '../../../src/services/httpApi/httpApiClient';
 import type { TaskNode } from '../../../src/types';
@@ -76,4 +77,32 @@ test('write adapter encodes resource refs before dispatch', async () => {
   await assert.rejects(adapter.updateTask('workspace/A', 'board-a', 'task-a', { title: 'No' }), /WORKSPACE_REF/);
   await assert.rejects(adapter.deleteTask('', 'board-a', 'task-a'), /WORKSPACE_REF/);
   assert.equal(paths.length, 1);
+});
+
+test('board transfer adapter uses explicit preview and confirmed move commands', async () => {
+  const captures: Array<{ path: string; init?: RequestInit }> = [];
+  const preview = {
+    blocked: false, reasons: [], sourceWorkspaceId: 'ws-a', sourceWorkspaceTitle: 'A',
+    targetWorkspaceId: 'ws-b', targetWorkspaceTitle: 'B', boardId: 'board-a', boardTitle: 'Board',
+    transferLocked: false,
+    counts: {
+      targetActiveMembers: 1, preservedMembers: 1, removedMembers: 0, tasks: 2,
+      dependencies: 1, tagsToMap: 1, documents: 0, records: 1,
+      pendingInvitesToRevoke: 0, ragDocumentsToResync: 0,
+    },
+  };
+  const adapter = createHttpCollaborationAdapter(new HttpApiClient(async (input, init) => {
+    captures.push({ path: String(input), init });
+    return json({ data: preview });
+  }));
+  assert.equal((await adapter.previewBoardTransfer('ws-a', 'board-a', 'ws-b')).counts.tasks, 2);
+  assert.equal((await adapter.moveBoardToWorkspace('ws-a', 'board-a', 'ws-b', 'Board')).boardTitle, 'Board');
+  assert.deepEqual(captures.map(item => [item.init?.method, item.path]), [
+    ['POST', '/api/v1/workspaces/ws-a/boards/board-a/transfer:preview'],
+    ['POST', '/api/v1/workspaces/ws-a/boards/board-a/transfer'],
+  ]);
+  assert.deepEqual(JSON.parse(String(captures[0]?.init?.body)), { targetWorkspaceId: 'ws-b' });
+  assert.deepEqual(JSON.parse(String(captures[1]?.init?.body)), {
+    targetWorkspaceId: 'ws-b', expectedBoardTitle: 'Board',
+  });
 });
