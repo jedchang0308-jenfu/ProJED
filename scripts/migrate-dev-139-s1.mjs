@@ -24,6 +24,7 @@ const profileContracts = new Map([
       'db/migrations/0003_domain_read_v1.sql',
       'db/migrations/0004_domain_command_v1.sql',
       'db/migrations/0005_collaboration_command_v1.sql',
+      'db/migrations/0006_record_activity_v1.sql',
     ],
   }],
 ]);

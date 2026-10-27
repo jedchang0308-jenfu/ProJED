@@ -124,7 +124,7 @@ try {
   New-Item -ItemType Directory -Path $evidenceDir -Force | Out-Null
   [ordered]@{
     status = 'PASS'
-    evidenceLevel = 'S3_COLLABORATION_CORE_LOCAL_ACCEPTANCE'
+    evidenceLevel = 'S3_DOMAIN_CORE_LOCAL_ACCEPTANCE'
     postgres = $versionText
     node = (& node --version) -join ''
     databaseName = $databaseName
@@ -144,15 +144,18 @@ try {
       'production-write-disabled', 'production-collaboration-disabled',
       'http-session-route', 'http-private-board-deny', 'http-missing-session-deny',
       'http-api-no-static-fallback', 'http-domain-write', 'http-capability-deny',
-      'http-cross-site-deny',
+      'http-origin-bound-write-deny',
       'workspace-board-command', 'project-manager-create-board', 'five-role-matrix-atomic',
       'board-only-manager-add-and-delete', 'owner-immutable',
       'invite-role-email-hash-expiry-suspension-one-time-revoke',
       'external-board-scope-private-retention', 'resource-revision',
-      'http-collaboration-command', 'client-identity-claims-ignored'
+      'http-collaboration-command', 'client-identity-claims-ignored',
+      'record-private-and-project-read', 'record-link-atomic-upsert-and-archive',
+      'activity-read-write-capability', 'workspace-activity-audit-capability', 'audit-write-capability',
+      'production-record-activity-disabled', 'http-record-activity'
     )
   } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $evidenceDir 'result.json') -Encoding utf8
-  Write-Output ("DEV139_S3_RESULT=PASS evidenceLevel=S3_COLLABORATION_CORE_LOCAL_ACCEPTANCE output={0}" -f $evidenceDir)
+  Write-Output ("DEV139_S3_RESULT=PASS evidenceLevel=S3_DOMAIN_CORE_LOCAL_ACCEPTANCE output={0}" -f $evidenceDir)
 }
 finally {
   Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue

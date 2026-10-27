@@ -12,6 +12,7 @@ import {
   type TrustedSessionActorResolver,
 } from './domainReadHttp.js';
 import { createDomainWriteHttpDispatcher } from './domainWriteHttp.js';
+import { createRecordActivityHttpDispatcher } from './recordActivityHttp.js';
 
 const CONTENT_TYPES: Record<string, string> = {
   '.css': 'text/css; charset=utf-8',
@@ -87,6 +88,7 @@ export function createKernelHttpServer(
 ): KernelHttpServer {
   let shuttingDown = false;
   const dispatchCollaborationWrite = createCollaborationWriteHttpDispatcher(config, database, options.resolveActor);
+  const dispatchRecordActivity = createRecordActivityHttpDispatcher(config, database, options.resolveActor);
   const dispatchDomainRead = createDomainReadHttpDispatcher(config, database, options.resolveActor);
   const dispatchDomainWrite = createDomainWriteHttpDispatcher(config, database, options.resolveActor);
   const server = createServer({
@@ -116,6 +118,13 @@ export function createKernelHttpServer(
     const collaborationWrite = await dispatchCollaborationWrite(request, requestId);
     if (collaborationWrite.matched) {
       json(response, collaborationWrite.status ?? 500, collaborationWrite.body ?? {
+        error: { code: 'DB_UNAVAILABLE', requestId, retryable: true },
+      }, requestId);
+      return;
+    }
+    const recordActivity = await dispatchRecordActivity(request, requestId);
+    if (recordActivity.matched) {
+      json(response, recordActivity.status ?? 500, recordActivity.body ?? {
         error: { code: 'DB_UNAVAILABLE', requestId, retryable: true },
       }, requestId);
       return;

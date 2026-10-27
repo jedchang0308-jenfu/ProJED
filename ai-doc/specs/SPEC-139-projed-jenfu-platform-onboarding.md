@@ -1,10 +1,10 @@
 # SPEC-139：ProJED 納入 Jenfu-Platform 的產品與技術交接契約
 
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。
-- 日期：2026-10-27（Asia/Taipei）；版本：Rev 13（S3 collaboration command W2）。
-- 文件狀態：**S1：Implemented／Local Acceptance PASS（PostgreSQL 18）；S2：ProJED consumer seam Implemented／External Wire Blocked；S3：domain read、task／dependency／tag command及workspace／board／member／permission／invite command Implemented／Production Resolver Disabled**。ProJED 技術選型已固定；完整整合仍缺 owner 發布的 ProJED／非員工 wire、真Session resolver、其餘實際使用domain、看板跨工作區搬移、polling、資料移轉與產品 backend 切換，不作整體 ready 宣告。
-- 適用階段：2026-10-26 使用者已要求完成 DEV-139 開發；本版記錄 S1 runtime／DB 核心、S2 consumer seam，以及 S3 domain read／command與 collaboration command 的前端adapter、資料表／RLS、server repository及fail-closed HTTP route本地驗證。正式發布／切流、正式資料、IAM／Secret／billing及其他repo不在本地開發授權內。
-- 直接交接入口：[§11 S1 定案契約](#11-架構決策與-s1-定案契約)、[§12 S1 實作狀態](#12-s1-實作狀態2026-10-26)、[§13 S2 consumer seam](#13-s2-projed-identity-consumer-seam2026-10-26)、[§14 S3 read adapter](#14-s3-http-read-adapter-slice2026-10-26)、[§15 S3 domain command](#15-s3-domain-command-w12026-10-26)及[§16 S3 collaboration command](#16-s3-collaboration-command-w22026-10-27)；[§11.8 技術主管審查](#118-技術主管審查與最小優化)保留 Rev5 修正理由；既有使用者切換見 [§6.3](#63-既有使用者的切換基線)。
+- 日期：2026-10-27（Asia/Taipei）；版本：Rev 14（S3 record／activity W3）。
+- 文件狀態：**S1：Implemented／Local Acceptance PASS（PostgreSQL 18）；S2：ProJED consumer seam Implemented／External Wire Blocked；S3：domain core、collaboration及record／activity資料面 Implemented／Production Resolver Disabled**。ProJED 技術選型已固定；完整整合仍缺 owner 發布的 ProJED／非員工 wire、真Session resolver、產品HTTP backend接線、其餘實際使用domain、看板跨工作區搬移、polling與資料移轉，不作整體 ready 宣告。
+- 適用階段：2026-10-26 使用者已要求完成 DEV-139 開發；本版記錄 S1 runtime／DB 核心、S2 consumer seam，以及 S3 domain／collaboration／record／activity 的前端adapter、資料表／RLS、server repository及fail-closed HTTP route本地驗證。正式發布／切流、正式資料、IAM／Secret／billing及其他repo不在本地開發授權內。
+- 直接交接入口：[§11 S1 定案契約](#11-架構決策與-s1-定案契約)、[§12 S1 實作狀態](#12-s1-實作狀態2026-10-26)、[§13 S2 consumer seam](#13-s2-projed-identity-consumer-seam2026-10-26)、[§14 S3 read adapter](#14-s3-http-read-adapter-slice2026-10-26)、[§15 S3 domain command](#15-s3-domain-command-w12026-10-26)、[§16 S3 collaboration command](#16-s3-collaboration-command-w22026-10-27)及[§17 S3 record／activity](#17-s3-recordactivity-w32026-10-27)；[§11.8 技術主管審查](#118-技術主管審查與最小優化)保留 Rev5 修正理由；既有使用者切換見 [§6.3](#63-既有使用者的切換基線)。
 - 決策來源：[DEV-139 人類決策](../dev_task.md#dev-139-jenfu-platform-onboarding)；架構取捨：[ADR-054](../decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。本文件不是其他 owner 已接受或已發布的契約。
 
 ## 1. 目的、限制與完成邊界
@@ -669,3 +669,13 @@ W2以現行UI capability為單一產品契約：有效`project_manager`可建立
 `npm run verify:dev-139:s3`通過frontend typecheck／13項既有adapter unit、DB static boundary、server typecheck及PostgreSQL 18 task-owned isolated acceptance。新增驗證涵蓋Workspace／Board命令、project-manager建板、五角色矩陣原子建立、owner不可變、邀請role／email／hash／一次性／撤銷、外部成員撤權與私人資料保留、resource revision、HTTP collaboration命令、client identity claim忽略及production collaboration route在讀body／碰DB前404。這是`S3_COLLABORATION_CORE_LOCAL_ACCEPTANCE`，不是獨立QC、真Session、正常產品UI或正式環境證據。
 
 看板跨Workspace搬移仍是D2原功能保留的一部分，但涉及tasks／dependencies／tags、membership／permission／invite、documents／activity／audit等全Board資料，不在W2用單欄位更新假裝完成；它與其餘實際使用domain、polling consumer及產品backend切換仍須在正式切換前完成。
+
+## 17. S3 record／activity W3（2026-10-27）
+
+`0006_record_activity_v1.sql`、`server/recordActivity.ts`／`recordActivityHttp.ts`及`src/services/httpApi/recordActivityAdapter.ts`完成目前Records／會議畫面實際使用的knowledge record、task link、activity及audit資料面。Record支援Board清單、Task關聯清單、原子upsert／link整組替換與archive；先通過Board scope後，private再限建立者／記錄者讀寫，project／tenant沿現行語意仍須具Board讀寫能力。撤銷Board scope會保留私人row但Board route回404，不新增繞過撤權的out-of-scope私人讀取端點；公司管理員不因管理身分取得private內容。Task link以同Board複合FK拒絕跨Board關聯，archive保留link供明確`includeArchived`歷史讀回。Runtime create把`recordedBy`固定為當次actor，更新不接受client改寫；歷史owner在受控migration保留。RAG在新路徑固定`false`且沒有document／job side effect，保留既有「record成功、provider功能可維持gated」邊界，不順便建立新的AI worker或供應商依賴。
+
+Activity沿`read_activity／write_activity`，workspace activity限具tenant scope的有效成員，Board事件依完整permission matrix；workspace audit限owner／admin，Board audit依`read_audit／write_audit`。普通runtime沒有任意SQL、DDL或PUBLIC權限。相容用audit endpoint只保存server-attributed app event，client不能指定actor，但它本身不證明對應business mutation已提交；權威mutation／receipt仍須由各server command同交易產生。record與activity mutation同交易遞增相應Workspace／Board resource revision；revision只作polling訊號，不能替代RLS。
+
+HTTP route沿相同opaque Session resolver；所有write缺`Origin`、跨scheme或跨host都拒絕，其他domain JSON維持64 KiB。Record request上限為32 MiB、content上限為4 Mi code units，讓最差JSON escaping仍落在目前Node HTTP/1 Cloud Run的32 MiB request限制內；資料移轉須先盤點更大legacy record，不得截斷。[Cloud Run官方限制](https://docs.cloud.google.com/run/quotas#request_limits) Production resolver absent仍在讀body／碰DB前404。client只能送domain payload，actor仍由server context決定。
+
+PostgreSQL 18 task-owned isolated acceptance已覆蓋private／project read差異、viewer寫入拒絕、record link原子保存、archive與歷史讀回、activity capability、audit write、HTTP record／activity adapter及production route fail-closed，證據層級更新為`S3_DOMAIN_CORE_LOCAL_ACCEPTANCE`。這仍不是產品已切換：Luna只讀盤點確認HTTP adapters尚未接入`dataBackend.ts`，現行UI仍走Firebase／Supabase／local-test；下一切片直接完成明確HTTP backend及scope-revision polling consumer，再補Board transfer、Quick／placement／tracking／backup／preferences／calendar等仍啟用表面。S2 external wire、真Session及正式資料仍維持既有阻塞／授權邊界。

@@ -14,7 +14,8 @@ import {
 import type { TrustedSessionActorResolver } from './domainReadHttp.js';
 import { asKernelError, KernelError } from './errors.js';
 
-const MAX_BODY_BYTES = 64 * 1024;
+const DEFAULT_MAX_BODY_BYTES = 64 * 1024;
+export const MAX_RECORD_BODY_BYTES = 32 * 1024 * 1024;
 
 export interface DomainWriteHttpResult {
   readonly matched: boolean;
@@ -114,22 +115,32 @@ export function isSameOriginWrite(request: IncomingMessage): boolean {
   if (fetchSite === 'cross-site') return false;
   const origin = request.headers.origin;
   const host = request.headers.host;
-  if (typeof origin !== 'string') return true;
-  if (typeof host !== 'string') return false;
+  if (typeof origin !== 'string' || typeof host !== 'string') return false;
+  const forwardedProtocol = request.headers['x-forwarded-proto'];
+  if (Array.isArray(forwardedProtocol) || (typeof forwardedProtocol === 'string' && forwardedProtocol.includes(','))) {
+    return false;
+  }
+  const protocol = typeof forwardedProtocol === 'string'
+    ? forwardedProtocol.trim().toLowerCase()
+    : ((request.socket as { encrypted?: boolean } | undefined)?.encrypted ? 'https' : 'http');
+  if (protocol !== 'http' && protocol !== 'https') return false;
   try {
-    return new URL(origin).host.toLowerCase() === host.toLowerCase();
+    return new URL(origin).origin.toLowerCase() === new URL(`${protocol}://${host}`).origin.toLowerCase();
   } catch {
     return false;
   }
 }
 
-export async function readJsonBody(request: IncomingMessage): Promise<Record<string, unknown>> {
+export async function readJsonBody(
+  request: IncomingMessage,
+  maximumBytes = DEFAULT_MAX_BODY_BYTES,
+): Promise<Record<string, unknown>> {
   const contentType = request.headers['content-type'] ?? '';
   if (typeof contentType !== 'string' || !/^application\/json(?:\s*;|$)/i.test(contentType)) {
     throw new KernelError('DOMAIN_DATA_INVALID', 'JSON request body is required', 415);
   }
   const declared = Number(request.headers['content-length'] ?? 0);
-  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
+  if (Number.isFinite(declared) && declared > maximumBytes) {
     request.resume();
     throw new KernelError('DOMAIN_DATA_INVALID', 'Request body is too large', 413);
   }
@@ -139,7 +150,7 @@ export async function readJsonBody(request: IncomingMessage): Promise<Record<str
   for await (const chunk of request) {
     const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     size += bytes.length;
-    if (size > MAX_BODY_BYTES) tooLarge = true;
+    if (size > maximumBytes) tooLarge = true;
     else chunks.push(bytes);
   }
   if (tooLarge) throw new KernelError('DOMAIN_DATA_INVALID', 'Request body is too large', 413);

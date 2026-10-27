@@ -35,6 +35,10 @@
     {
       "version": "0005_collaboration_command_v1",
       "path": "db/migrations/0005_collaboration_command_v1.sql"
+    },
+    {
+      "version": "0006_record_activity_v1",
+      "path": "db/migrations/0006_record_activity_v1.sql"
     }
   ],
   "objectAllowlist": [
@@ -71,7 +75,21 @@
     "projed_core.task_tags_tenant_order_idx",
     "projed_core.wbs_item_tags_project_idx",
     "projed_core.board_invites_pending_email_uq",
-    "projed_core.board_invites_project_status_idx"
+    "projed_core.board_invites_project_status_idx",
+    "projed_core.knowledge_records",
+    "projed_core.record_task_links",
+    "projed_core.activity_events",
+    "projed_core.audit_logs",
+    "projed_core.actor_can_read_record_v1",
+    "projed_core.actor_can_write_record_v1",
+    "projed_core.knowledge_records_project_status_idx",
+    "projed_core.knowledge_records_project_legacy_uq",
+    "projed_core.knowledge_records_recorded_by_idx",
+    "projed_core.record_task_links_item_idx",
+    "projed_core.record_task_links_record_idx",
+    "projed_core.activity_events_tenant_time_idx",
+    "projed_core.activity_events_project_time_idx",
+    "projed_core.audit_logs_tenant_time_idx"
   ],
   "staticFixturePath": "qa/dev-139/s1/static",
   "runtime": {

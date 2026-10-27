@@ -16,9 +16,12 @@ import { createDomainReadHttpDispatcher } from '../../../server/domainReadHttp.j
 import { createDomainWriteHttpDispatcher } from '../../../server/domainWriteHttp.js';
 import { KernelError } from '../../../server/errors.js';
 import { createKernelHttpServer } from '../../../server/http.js';
+import { RecordActivityRepository } from '../../../server/recordActivity.js';
+import { createRecordActivityHttpDispatcher } from '../../../server/recordActivityHttp.js';
 import { createHttpDomainReadAdapter } from '../../../src/services/httpApi/domainReadAdapter.js';
 import { createHttpDomainWriteAdapter } from '../../../src/services/httpApi/domainWriteAdapter.js';
 import { createHttpCollaborationAdapter } from '../../../src/services/httpApi/collaborationAdapter.js';
+import { createHttpRecordActivityAdapter } from '../../../src/services/httpApi/recordActivityAdapter.js';
 import { HttpApiClient, HttpApiError, type HttpApiFetch } from '../../../src/services/httpApi/httpApiClient.js';
 import { createCollaborationWriteHttpDispatcher } from '../../../server/collaborationWriteHttp.js';
 
@@ -30,6 +33,7 @@ const repository = new DomainReadRepository();
 const commands = new DomainWriteRepository(repository);
 const collaborationReads = new CollaborationReadRepository();
 const collaborationCommands = new CollaborationWriteRepository(repository);
+const recordActivity = new RecordActivityRepository();
 await database.assertRuntimeBoundary(expected);
 
 const actorA: ServerActorV1 = {
@@ -416,6 +420,97 @@ assert.equal((await runActorTransaction(database, config, actorB, port => reposi
 assert.equal((await runActorTransaction(database, config, actorB, port => collaborationReads.listResourceRevisions(port)))
   .find(item => item.workspaceId === 'ws-b' && item.boardId === 'board-shared')?.revision !== '1', true);
 
+const privateRecord = await runActorTransaction(database, config, actorB, port => recordActivity.upsertRecord(
+  port, 'ws-b', 'board-shared', {
+    id: 'private-meeting', type: 'meeting', title: 'Private meeting', content: 'Private body',
+    status: 'draft', visibility: 'private', occurredAt: Date.now(), metadata: { owner: 'b' },
+    taskLinks: [{ nodeId: 'shared-parent', role: 'main' }],
+  },
+));
+assert.equal(privateRecord.id, 'private-meeting');
+assert.equal(privateRecord.ragEnabled, false);
+assert.deepEqual(privateRecord.taskLinks.map(link => [link.nodeId, link.role]), [['shared-parent', 'main']]);
+const projectRecord = await runActorTransaction(database, config, actorB, port => recordActivity.upsertRecord(
+  port, 'ws-b', 'board-shared', {
+    id: 'project-work-log', type: 'work_log', title: 'Project work', content: 'Shared body',
+    status: 'published', visibility: 'project', startedAt: Date.now() - 1_000, endedAt: Date.now(),
+    taskLinks: [{ nodeId: 'shared-parent', role: 'related' }],
+  },
+));
+assert.equal(projectRecord.id, 'project-work-log');
+assert.deepEqual(
+  (await runActorTransaction(database, config, actorA, port => recordActivity.listRecords(
+    port, 'ws-b', 'board-shared',
+  ))).map(record => record.id),
+  ['project-work-log'],
+);
+await assert.rejects(
+  runActorTransaction(database, config, actorA, port => recordActivity.upsertRecord(
+    port, 'ws-b', 'board-shared', {
+      id: 'viewer-record', type: 'meeting', title: 'Denied', content: '', status: 'draft',
+      visibility: 'project', occurredAt: Date.now(), taskLinks: [],
+    },
+  )),
+  (error: unknown) => (error as { code?: string }).code === 'ACCESS_DENIED',
+);
+await runActorTransaction(database, config, actorB, port => recordActivity.archiveRecord(
+  port, 'ws-b', 'board-shared', 'project-work-log',
+));
+assert.deepEqual(
+  (await runActorTransaction(database, config, actorB, port => recordActivity.listRecords(
+    port, 'ws-b', 'board-shared',
+  ))).map(record => record.id),
+  ['private-meeting'],
+);
+assert.deepEqual(
+  (await runActorTransaction(database, config, actorB, port => recordActivity.listRecordsByTask(
+    port, 'ws-b', 'board-shared', 'shared-parent', true,
+  ))).map(record => record.id).sort(),
+  ['private-meeting', 'project-work-log'],
+);
+
+const activityStart = Date.now() - 1_000;
+await runActorTransaction(database, config, actorB, port => recordActivity.logActivity(port, {
+  workspaceId: 'ws-b', boardId: 'board-shared', eventType: 'task_collected',
+  entityTable: 'wbs_items', entityId: 'shared-parent', payload: { title: 'Shared parent' },
+}));
+const activities = await runActorTransaction(database, config, actorB, port => recordActivity.listActivity(port, {
+  workspaceId: 'ws-b', boardId: 'board-shared', scope: 'board',
+  startedAt: activityStart, endedAt: Date.now() + 1_000, eventTypes: ['task_collected'],
+}));
+assert.deepEqual(activities.map(event => [event.eventType, event.entityId]), [['task_collected', 'shared-parent']]);
+assert.deepEqual(await runActorTransaction(database, config, actorA, port => recordActivity.listActivity(port, {
+  workspaceId: 'ws-b', boardId: 'board-shared', scope: 'board',
+  startedAt: activityStart, endedAt: Date.now() + 1_000,
+})), []);
+await runActorTransaction(database, config, actorB, port => recordActivity.logActivity(port, {
+  workspaceId: 'ws-b', boardId: null, eventType: 'task_created',
+  entityTable: 'wbs_items', entityId: 'workspace-event', payload: { source: 'workspace' },
+}));
+assert.equal((await runActorTransaction(database, config, actorC, port => recordActivity.listActivity(port, {
+  workspaceId: 'ws-b', scope: 'workspace', startedAt: activityStart, endedAt: Date.now() + 1_000,
+}))).some(event => event.entityId === 'workspace-event'), true);
+await runActorTransaction(database, config, actorB, port => recordActivity.logAudit(port, {
+  workspaceId: 'ws-b', boardId: null, action: 'workspace_deleted', entityTable: 'tenants', entityId: 'ws-b',
+  beforeData: { state: 'active' }, afterData: null,
+}));
+await assert.rejects(
+  runActorTransaction(database, config, actorC, port => recordActivity.logAudit(port, {
+    workspaceId: 'ws-b', boardId: null, action: 'workspace_deleted', entityTable: 'tenants', entityId: 'ws-b',
+  })),
+  (error: unknown) => (error as { code?: string }).code === 'ACCESS_DENIED',
+);
+await runActorTransaction(database, config, actorB, port => recordActivity.logAudit(port, {
+  workspaceId: 'ws-b', boardId: 'board-shared', action: 'member_role_changed',
+  entityTable: 'project_members', entityId: actorA.localUserId,
+  beforeData: { role: 'viewer' }, afterData: { role: 'viewer' },
+}));
+const auditCount = await runActorTransaction(database, config, actorB, port => (
+  port.query<{ count: string }>(`SELECT count(*)::text AS count FROM projed_core.audit_logs
+    WHERE tenant_id = '12222222-2222-4222-8222-222222222222'::uuid`)
+));
+assert.equal(auditCount.rows[0]?.count, '2');
+
 const rawClient = new Client({ connectionString: config.databaseUrl });
 await rawClient.connect();
 try {
@@ -451,6 +546,12 @@ const disabledCollaboration = await disabledCollaborationDispatcher({
 } as unknown as IncomingMessage, 'qa-collaboration-disabled');
 assert.equal(disabledCollaboration.status, 404);
 assert.equal(disabledCollaborationResumed, true);
+const disabledRecordDispatcher = createRecordActivityHttpDispatcher(config, database);
+const disabledRecord = await disabledRecordDispatcher({
+  method: 'POST', url: '/api/v1/workspaces/ws-b/boards/board-shared/records',
+  headers: { 'content-type': 'application/json' }, resume() {},
+} as unknown as IncomingMessage, 'qa-record-disabled');
+assert.equal(disabledRecord.status, 404);
 
 const http = createKernelHttpServer(config, database, expected, {
   resolveActor: async (request) => {
@@ -466,6 +567,7 @@ const base = `http://${address.host}:${address.port}`;
 const fetchFor = (session: 'qa-a' | 'qa-b' | 'qa-c' | 'qa-e'): HttpApiFetch => async (input, init) => {
   const headers = new Headers(init?.headers);
   headers.set('cookie', `__session=${session}`);
+  headers.set('origin', base);
   return fetch(`${base}${String(input)}`, { ...init, headers });
 };
 try {
@@ -477,6 +579,8 @@ try {
   const collaborationB = createHttpCollaborationAdapter(new HttpApiClient(fetchFor('qa-b')));
   const collaborationC = createHttpCollaborationAdapter(new HttpApiClient(fetchFor('qa-c')));
   const collaborationE = createHttpCollaborationAdapter(new HttpApiClient(fetchFor('qa-e')));
+  const recordsB = createHttpRecordActivityAdapter(new HttpApiClient(fetchFor('qa-b')));
+  const recordsA = createHttpRecordActivityAdapter(new HttpApiClient(fetchFor('qa-a')));
   assert.deepEqual((await httpA.listWorkspaces()).map(workspace => workspace.id), ['ws-a', 'ws-b']);
   assert.deepEqual((await httpB.listWorkspaceMembers('ws-b')).map(member => member.userId), [
     actorB.localUserId, actorA.localUserId, actorC.localUserId, actorD.localUserId, actorE.localUserId,
@@ -517,6 +621,17 @@ try {
     body: JSON.stringify({ title: 'Cross-site forged' }),
   });
   assert.equal(crossSite.status, 403);
+  const missingOrigin = await fetch(`${base}/api/v1/workspaces/ws-b/boards/board-shared/tasks/http-task`, {
+    method: 'PATCH', headers: { cookie: '__session=qa-b', 'content-type': 'application/json' },
+    body: JSON.stringify({ title: 'Missing origin forged' }),
+  });
+  assert.equal(missingOrigin.status, 403);
+  const wrongScheme = await fetch(`${base}/api/v1/workspaces/ws-b/boards/board-shared/tasks/http-task`, {
+    method: 'PATCH',
+    headers: { cookie: '__session=qa-b', origin: base.replace('http://', 'https://'), 'content-type': 'application/json' },
+    body: JSON.stringify({ title: 'Wrong scheme forged' }),
+  });
+  assert.equal(wrongScheme.status, 403);
   assert.equal(
     (await httpB.listTasks('ws-b', 'board-shared')).find(task => task.id === 'http-task')?.title,
     'HTTP updated',
@@ -550,6 +665,35 @@ try {
   assert.equal((await collaborationB.listResourceRevisions())
     .some(item => item.workspaceId === 'ws-b' && item.boardId === 'board-shared'), true);
 
+  const httpRecord = await recordsB.upsertRecord('ws-b', 'board-shared', {
+    type: 'meeting', title: 'HTTP meeting', content: 'HTTP body', status: 'draft',
+    visibility: 'project', occurredAt: Date.now(), taskLinks: [{ nodeId: 'shared-child', role: 'related' }],
+  });
+  assert.equal(httpRecord.title, 'HTTP meeting');
+  const largeHttpRecord = await recordsB.upsertRecord('ws-b', 'board-shared', {
+    type: 'meeting', title: 'HTTP large meeting', content: 'x'.repeat(70 * 1024), status: 'draft',
+    visibility: 'private', occurredAt: Date.now(), taskLinks: [],
+  });
+  assert.equal(largeHttpRecord.content.length, 70 * 1024);
+  assert.equal((await recordsA.listRecords('ws-b', 'board-shared')).some(record => record.id === httpRecord.id), true);
+  const updatedHttpRecord = await recordsB.upsertRecord('ws-b', 'board-shared', {
+    id: httpRecord.id, type: 'meeting', title: 'HTTP updated meeting', content: 'HTTP body', status: 'published',
+    visibility: 'project', occurredAt: Date.now(), taskLinks: [{ nodeId: 'shared-child', role: 'decision' }],
+  });
+  assert.equal(updatedHttpRecord.title, 'HTTP updated meeting');
+  await recordsB.logActivity({
+    workspaceId: 'ws-b', boardId: 'board-shared', eventType: 'task_status_changed',
+    entityTable: 'wbs_items', entityId: 'shared-child', payload: { status: 'completed' },
+  });
+  assert.equal((await recordsB.listActivity({
+    workspaceId: 'ws-b', boardId: 'board-shared', scope: 'board',
+    startedAt: 0, endedAt: Date.now() + 1_000, eventTypes: ['task_status_changed'],
+  })).some(event => event.entityId === 'shared-child'), true);
+  await recordsB.archiveRecord('ws-b', 'board-shared', httpRecord.id);
+  assert.equal((await recordsB.listRecordsByTask(
+    'ws-b', 'board-shared', 'shared-child', { includeArchived: true },
+  )).some(record => record.id === httpRecord.id && record.status === 'archived'), true);
+
   const missingSession = await fetch(`${base}/api/v1/workspaces`);
   assert.equal(missingSession.status, 401);
   assert.equal(missingSession.headers.get('cache-control'), 'no-store');
@@ -576,11 +720,14 @@ console.log(JSON.stringify({
     'missing-context-deny', 'runtime-write-deny', 'production-route-disabled', 'production-write-disabled',
     'production-collaboration-disabled',
     'http-session-route', 'http-private-board-deny', 'http-missing-session-deny', 'http-api-no-static-fallback',
-    'http-domain-write', 'http-capability-deny', 'http-cross-site-deny',
+    'http-domain-write', 'http-capability-deny', 'http-origin-bound-write-deny',
     'workspace-board-command', 'project-manager-create-board', 'five-role-matrix-atomic',
     'board-only-manager-add-and-delete', 'owner-immutable',
     'invite-role-email-hash-expiry-suspension-one-time-revoke',
     'external-board-scope-private-retention', 'resource-revision',
     'http-collaboration-command', 'client-identity-claims-ignored',
+    'record-private-and-project-read', 'record-link-atomic-upsert-and-archive',
+    'activity-read-write-capability', 'workspace-activity-audit-capability', 'audit-write-capability',
+    'production-record-activity-disabled', 'http-record-activity',
   ],
 }));
