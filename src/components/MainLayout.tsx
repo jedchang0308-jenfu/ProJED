@@ -43,6 +43,7 @@ import {
 import { useWbsStore } from '../store/useWbsStore';
 import { useTaskFilterStore } from '../store/useTaskFilterStore';
 import { clearTaskSelection } from '../utils/taskInteractions';
+import { isHttpBackend } from '../services/backendMode';
 import TaskDescriptionHoverCard from './TaskDescriptionHoverCard';
 import TaskWorkbenchPanel from './TaskWorkbenchPanel';
 import { getHostModeFromView, TaskInteractionScope } from '../interactions/task/TaskInteractionScope';
@@ -453,15 +454,21 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         >
           <button
             type="button"
-            onClick={toggleRagPanel}
+            onClick={isHttpBackend ? undefined : toggleRagPanel}
+            disabled={isHttpBackend}
             className={cn(
               'btn-outline flex h-7 shrink-0 px-2 text-xs sm:h-8 sm:px-3 sm:text-sm',
               topbarClassNames.textButton,
-              isRagOpen ? 'border-blue-400 bg-blue-50 text-blue-600' : 'hover:border-blue-400 hover:text-blue-600',
+              isHttpBackend
+                ? 'cursor-not-allowed border-slate-200 text-slate-400'
+                : isRagOpen
+                  ? 'border-blue-400 bg-blue-50 text-blue-600'
+                  : 'hover:border-blue-400 hover:text-blue-600',
             )}
-            title="問AI"
-            aria-label="問AI"
+            title={isHttpBackend ? '專案智慧助理正在移轉，暫不查詢舊資料來源' : '問AI'}
+            aria-label={isHttpBackend ? '問AI（目前後端暫不支援）' : '問AI'}
             data-ai-analysis-open="true"
+            data-ai-analysis-supported={isHttpBackend ? 'false' : 'true'}
           >
             <Sparkles size={14} className={isRagOpen ? 'text-blue-500' : 'text-slate-400'} />
             <span>問AI</span>

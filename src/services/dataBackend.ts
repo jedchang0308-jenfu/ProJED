@@ -65,22 +65,19 @@ import {
   httpDomainWriteService,
   httpRecordActivityService,
 } from './httpApi/backend';
+import {
+  isHttpBackend,
+  isLocalTestBackend,
+  isSupabaseBackend,
+} from './backendMode';
 
-export type DataBackend = 'firebase' | 'supabase' | 'local-test' | 'http';
-
-const configuredBackend = import.meta.env.VITE_DATA_BACKEND as DataBackend | undefined;
-
-export const dataBackend: DataBackend =
-  configuredBackend === 'http'
-    ? 'http'
-    : configuredBackend === 'local-test'
-    ? 'local-test'
-    : configuredBackend === 'supabase'
-      ? 'supabase'
-      : 'firebase';
-export const isSupabaseBackend = dataBackend === 'supabase';
-export const isLocalTestBackend = dataBackend === 'local-test';
-export const isHttpBackend = dataBackend === 'http';
+export {
+  dataBackend,
+  isHttpBackend,
+  isLocalTestBackend,
+  isSupabaseBackend,
+  type DataBackend,
+} from './backendMode';
 
 const rejectHttpUnsupported = <T>(operation: string): Promise<T> =>
   Promise.reject(new Error(`HTTP backend does not support ${operation}.`));

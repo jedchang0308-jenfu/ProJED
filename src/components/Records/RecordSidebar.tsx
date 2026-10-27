@@ -11,6 +11,7 @@ import { useRecordDraftGuard } from '../../hooks/useRecordDraftGuard';
 import { useMeetingDraftDiscard } from '../../hooks/useMeetingDraftDiscard';
 import { useMeetingRecordAvailability } from '../../utils/meetingRecordAvailability';
 import { eventLogService } from '../../services/dataBackend';
+import { isHttpBackend } from '../../services/backendMode';
 import { synthesizeMeetingRecord } from '../../services/meetingSynthesisService';
 import { getMeetingRecordActionState, getMeetingWorkflowStepActions, getRecordDraftSignature, type MeetingWorkflowStepAction } from '../../utils/meetingRecordWorkflow';
 import { getRecordComposerVariant } from '../../utils/recordComposerVariant';
@@ -1389,7 +1390,7 @@ const RecordSidebar: React.FC = () => {
                     onRunAi={() => void handleSynthesizeMeetingDraft()}
                     onPublish={() => handleSave('published')}
                   />
-                  {isLiveMeeting && isDev123MeetingTaskResolutionEnabled ? (
+                  {isLiveMeeting && isDev123MeetingTaskResolutionEnabled && !isHttpBackend ? (
                     <>
                       <div className="mt-2">
                         <MeetingRecordingControls
@@ -1408,6 +1409,14 @@ const RecordSidebar: React.FC = () => {
                         onResolvedTaskLinksChange={handleMeetingResolvedTaskLinksChange}
                       />
                     </>
+                  ) : isLiveMeeting && isDev123MeetingTaskResolutionEnabled && isHttpBackend ? (
+                    <div
+                      className="mt-2 border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800"
+                      role="status"
+                      data-meeting-audio-backend-supported="false"
+                    >
+                      會議文字草稿仍可使用；錄音、音訊上傳與任務配對正在移轉，這個後端暫不連到舊資料來源。
+                    </div>
                   ) : null}
                   {isLiveMeeting && shouldShowMeetingRecoveryStatus ? (
                     <div

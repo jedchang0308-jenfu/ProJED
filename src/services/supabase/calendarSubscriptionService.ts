@@ -10,6 +10,7 @@ import type {
   TenantRole,
 } from './database.types';
 import { normalizePersistedTaskFiltersV5 } from '../../features/taskFilters';
+import { BackendFeatureUnavailableError, isSupabaseBackend } from '../backendMode';
 import { configuredSupabaseUrl, isSupabaseConfigured, supabase } from './client';
 
 export type CalendarSubscription = {
@@ -61,6 +62,9 @@ const TOKEN_BYTES = 32;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const requireSupabase = () => {
+  if (!isSupabaseBackend) {
+    throw new BackendFeatureUnavailableError('行事曆訂閱');
+  }
   if (!isSupabaseConfigured) {
     throw new Error('尚未設定 Supabase。請設定 VITE_SUPABASE_URL 與 VITE_SUPABASE_ANON_KEY。');
   }

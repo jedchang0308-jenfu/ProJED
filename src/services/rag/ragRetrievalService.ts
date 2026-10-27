@@ -1,4 +1,5 @@
 import { supabase } from '../supabase/client';
+import { requireLegacyProviderFeature } from '../backendMode';
 import type { RagRetrievalRequest, RagRetrievalResponse } from './ragContract';
 
 const RAG_RETRIEVAL_TIMEOUT_MS = 45000;
@@ -24,6 +25,15 @@ const isTimeoutLikeError = (error: unknown) => {
 export const queryProjectKnowledge = async (
   request: RagRetrievalRequest
 ): Promise<RagRetrievalResponse> => {
+  try {
+    requireLegacyProviderFeature('專案智慧助理');
+  } catch {
+    throw new RagRetrievalError(
+      '專案智慧助理尚未接到目前的雲端後端，已停止舊資料來源查詢。',
+      'BACKEND_UNSUPPORTED',
+      501,
+    );
+  }
   const { data, error } = await supabase.functions.invoke<RagRetrievalResponse>(
     'match_project_knowledge',
     {

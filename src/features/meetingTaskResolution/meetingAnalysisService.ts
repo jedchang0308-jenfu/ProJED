@@ -1,4 +1,5 @@
 import { supabase } from '../../services/supabase/client';
+import { requireLegacyProviderFeature } from '../../services/backendMode';
 import type {
   MeetingCaptureProgress,
   MeetingPointerInterval,
@@ -8,6 +9,7 @@ import type {
 type ControlResponse<T> = { data: T | null; error: Error | null };
 
 const invoke = async <T>(operation: string, payload: Record<string, unknown>): Promise<T> => {
+  requireLegacyProviderFeature('會議錄音與音訊分析');
   const response = await supabase.functions.invoke('meeting_capture_control', {
     body: { operation, ...payload },
   });
