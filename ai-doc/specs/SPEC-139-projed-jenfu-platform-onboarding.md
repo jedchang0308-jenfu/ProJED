@@ -1,10 +1,10 @@
 # SPEC-139：ProJED 納入 Jenfu-Platform 的產品與技術交接契約
 
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。
-- 日期：2026-10-27（Asia/Taipei）；版本：Rev 19（S3 Task Workbench W8）。
-- 文件狀態：**S1：Implemented／Local Acceptance PASS（PostgreSQL 18）；S2：ProJED consumer seam Implemented／External Wire Blocked；S3：domain core、collaboration、record／activity、HTTP產品接線、看板跨工作區搬移、舊provider邊界、Quick Task同步及Task Workbench持久化／原子放置 Implemented／Production Resolver Disabled**。ProJED 技術選型已固定；完整整合仍缺 owner 發布的 ProJED／非員工 wire、真Session resolver、資料移轉、相容入口及正常產品UI證據，不作整體 ready 宣告。
+- 日期：2026-10-27（Asia/Taipei）；版本：Rev 20（S3 Actor CAS W9）。
+- 文件狀態：**S1：Implemented／Local Acceptance PASS（PostgreSQL 18）；S2：ProJED consumer seam Implemented／External Wire Blocked；S3：domain core、collaboration、record／activity、HTTP產品接線、看板跨工作區搬移、舊provider邊界、Quick Task、Task Workbench及全私有API actor/context CAS Implemented／Production Resolver Disabled**。ProJED 技術選型已固定；完整整合仍缺 owner 發布的 ProJED／非員工 wire、真Session resolver、tracking／backup／calendar／偏好替代、資料移轉、相容入口及正常產品UI證據，不作整體 ready 宣告。
 - 適用階段：2026-10-26 使用者已要求完成 DEV-139 開發；本版記錄 S1 runtime／DB 核心、S2 consumer seam，以及 S3 domain／collaboration／record／activity、opaque Session產品入口、HTTP backend selector、單一revision polling scheduler、Board transfer、legacy provider fail-closed邊界、Quick Task outbox同步與Task Workbench雙向原子放置的本地驗證。正式發布／切流、正式資料、IAM／Secret／billing及其他repo不在本地開發授權內。
-- 直接交接入口：[§11 S1 定案契約](#11-架構決策與-s1-定案契約)、[§12 S1 實作狀態](#12-s1-實作狀態2026-10-26)、[§13 S2 consumer seam](#13-s2-projed-identity-consumer-seam2026-10-26)、[§14 S3 read adapter](#14-s3-http-read-adapter-slice2026-10-26)、[§15 S3 domain command](#15-s3-domain-command-w12026-10-26)、[§16 S3 collaboration command](#16-s3-collaboration-command-w22026-10-27)、[§17 S3 record／activity](#17-s3-recordactivity-w32026-10-27)、[§18 S3 HTTP product wiring](#18-s3-http-product-wiring-w42026-10-27)、[§19 S3 Board transfer](#19-s3-board-transfer-w52026-10-27)、[§20 S3 legacy provider boundary](#20-s3-legacy-provider-boundary-w62026-10-27)、[§21 S3 Quick Task](#21-s3-quick-task-w72026-10-27)及[§22 S3 Task Workbench](#22-s3-task-workbench-w82026-10-27)；[§11.8 技術主管審查](#118-技術主管審查與最小優化)保留 Rev5 修正理由；既有使用者切換見 [§6.3](#63-既有使用者的切換基線)。
+- 直接交接入口：[§11 S1 定案契約](#11-架構決策與-s1-定案契約)、[§12 S1 實作狀態](#12-s1-實作狀態2026-10-26)、[§13 S2 consumer seam](#13-s2-projed-identity-consumer-seam2026-10-26)、[§14 S3 read adapter](#14-s3-http-read-adapter-slice2026-10-26)、[§15 S3 domain command](#15-s3-domain-command-w12026-10-26)、[§16 S3 collaboration command](#16-s3-collaboration-command-w22026-10-27)、[§17 S3 record／activity](#17-s3-recordactivity-w32026-10-27)、[§18 S3 HTTP product wiring](#18-s3-http-product-wiring-w42026-10-27)、[§19 S3 Board transfer](#19-s3-board-transfer-w52026-10-27)、[§20 S3 legacy provider boundary](#20-s3-legacy-provider-boundary-w62026-10-27)、[§21 S3 Quick Task](#21-s3-quick-task-w72026-10-27)、[§22 S3 Task Workbench](#22-s3-task-workbench-w82026-10-27)及[§23 S3 Actor CAS](#23-s3-actor-context-cas-w92026-10-27)；[§11.8 技術主管審查](#118-技術主管審查與最小優化)保留 Rev5 修正理由；既有使用者切換見 [§6.3](#63-既有使用者的切換基線)。
 - 決策來源：[DEV-139 人類決策](../dev_task.md#dev-139-jenfu-platform-onboarding)；架構取捨：[ADR-054](../decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。本文件不是其他 owner 已接受或已發布的契約。
 
 ## 1. 目的、限制與完成邊界
@@ -727,3 +727,11 @@ Quick Task保留既有IndexedDB outbox、離線先記下、帳號claim、lease�
 本地驗證通過S3 frontend 33/33、server／全app TypeScript、targeted ESLint零error、HTTP test build、DEV-089 scope 1000次及placement transaction 28/28。PostgreSQL 18 task-owned isolated acceptance實際套用0001–0009兩次並驗證migration idempotency、兩張Workbench表ENABLE＋FORCE RLS catalog、owner隔離、錯entry／actor-context切換拒絕、小數排序、cycle／封存／partial subtree拒絕、雙向placement、idempotency、重放撤權拒絕，以及dependency／record link rollback；最新bundle為`output/qa/dev-139/s3/20261027T021950Z-ec53c1a6`。
 
 此證據只支持本地synthetic資料與opaque QA Session。舊Supabase `inbox_items.promoted_task_node_id`在新schema沒有對應Inbox表，正式資料移轉須先盤點並以可核對的mapping保留或重建該關聯；完成前不得宣稱Quick／Workbench歷史資料已全量相容。真Jenfu Session、正常瀏覽器UI、資料匯入、Hosting／PWA相容及正式切流仍未驗證。
+
+## 23. S3 Actor／Context CAS W9（2026-10-27）
+
+§5.5 的共通前置條件已由WorkBench專用保護擴到所有私有HTTP read／mutation。`GET /api/v1/session`仍是唯一不要求expected actor的Session discovery；成功後同一`HttpApiClient`綁定server回傳的`localUserId／authContextId`，後續domain、collaboration、record／activity、Quick、Workbench、profile update及logout自動送兩個非秘密precondition header。server先由opaque cookie解析可信actor，再以共用helper核對；缺值或任一不一致回`409 ACTOR_CHANGED`，不讀body、不進業務交易，也不把header當認證或授權來源。Session discovery失敗會清掉client綁定；成功登出後亦清除。
+
+此修正不新增CSRF framework、token storage、第二Session狀態或每操作人工確認；既有exact Origin／same-site cookie與DB權限仍分層成立。Quick與Workbench保留各自更早凍結的account/context，其他即時私有請求則使用本App最近一次成功Session discovery綁定；若cookie在兩次請求間切換，舊綁定會使server拒絕，要求重新取得Session後再由上層決定是否重送。
+
+本地驗證通過S3 frontend 34/34、server／全app TypeScript、targeted ESLint、HTTP test build、DB static boundary及PostgreSQL 18隔離驗證。真PG／HTTP案例另以B cookie配A expected actor分別嘗試workspace read與task write，均回`ACTOR_CHANGED`且未改資料；Session profile／logout與Quick adapter單元測試核對header綁定。最新bundle為`output/qa/dev-139/s3/20261027T022618Z-f163c745`。這仍不是外部owner wire、真Session provider或正常UI換帳證據。

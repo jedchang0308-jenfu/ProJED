@@ -44,15 +44,25 @@ function parseSession(value: unknown): HttpSessionProfile {
 export function createHttpSessionAdapter(client: HttpApiClient): ProjedSessionAdapter {
   return {
     async getSession(signal) {
-      return parseSession(await client.request<unknown>('/api/v1/session', { signal }));
+      try {
+        const session = parseSession(await client.request<unknown>('/api/v1/session', { signal }));
+        client.bindExpectedActor({ accountId: session.uid, contextId: session.authContextId });
+        return session;
+      } catch (error) {
+        client.clearExpectedActor();
+        throw error;
+      }
     },
     async updateDisplayName(displayName, signal) {
-      return parseSession(await client.request<unknown>('/api/v1/session/profile', {
+      const session = parseSession(await client.request<unknown>('/api/v1/session/profile', {
         method: 'PATCH', body: { displayName }, signal,
       }));
+      client.bindExpectedActor({ accountId: session.uid, contextId: session.authContextId });
+      return session;
     },
     async logout(signal) {
       await client.request<unknown>('/api/v1/session/logout', { method: 'POST', signal });
+      client.clearExpectedActor();
     },
   };
 }

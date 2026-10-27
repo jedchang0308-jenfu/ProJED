@@ -1,12 +1,13 @@
 import type { IncomingMessage } from 'node:http';
 
-import { runActorTransaction, type ServerActorV1 } from './actorTransaction.js';
+import { runActorTransaction } from './actorTransaction.js';
 import type { RuntimeConfig } from './config.js';
 import type { RuntimeDatabase } from './db.js';
 import type { TrustedSessionActorResolver } from './domainReadHttp.js';
 import { asKernelError, KernelError } from './errors.js';
 import { isSameOriginWrite, readJsonBody } from './domainWriteHttp.js';
 import { TaskWorkbenchRepository } from './taskWorkbench.js';
+import { assertExpectedActor } from './expectedActorHttp.js';
 
 export interface TaskWorkbenchHttpResult {
   readonly matched: boolean;
@@ -37,15 +38,6 @@ function taskPath(url: URL): string | null {
     return decoded && !decoded.includes('/') && !decoded.includes('\\') ? decoded : null;
   } catch {
     return null;
-  }
-}
-
-function assertExpectedActor(request: IncomingMessage, actor: ServerActorV1): void {
-  const expectedAccountId = request.headers['x-projed-expected-account-id'];
-  const expectedContextId = request.headers['x-projed-expected-context-id'];
-  if (typeof expectedAccountId !== 'string' || typeof expectedContextId !== 'string'
-      || expectedAccountId !== actor.localUserId || expectedContextId !== actor.contextId) {
-    throw new KernelError('ACTOR_CHANGED', 'Session actor changed before task workbench request', 409);
   }
 }
 

@@ -7,16 +7,13 @@ import type {
   TaskPlacementCanonicalNode,
 } from '../../features/taskWorkbench/taskPlacementCommand';
 import { parseHttpTask } from './domainReadAdapter';
-import { HttpApiClient } from './httpApiClient';
+import { HttpApiClient, type HttpExpectedActor } from './httpApiClient';
 
 export type HttpTaskWorkbenchPlacementResult = MoveTaskSubtreeResult & {
   activityLoggedRemotely: true;
 };
 
-export type HttpExpectedActor = {
-  accountId: string;
-  contextId: string;
-};
+export type { HttpExpectedActor } from './httpApiClient';
 
 function object(value: unknown, label: string): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`HTTP_API_INVALID_${label}`);

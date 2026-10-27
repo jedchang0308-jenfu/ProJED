@@ -5,6 +5,7 @@ import type { RuntimeConfig } from './config.js';
 import type { RuntimeDatabase } from './db.js';
 import type { TrustedSessionActorResolver } from './domainReadHttp.js';
 import { asKernelError, KernelError } from './errors.js';
+import { assertExpectedActor } from './expectedActorHttp.js';
 import { isSameOriginWrite, readJsonBody } from './domainWriteHttp.js';
 
 export type TrustedSessionDestroyer = (request: IncomingMessage) => Promise<void>;
@@ -106,12 +107,14 @@ export function createSessionHttpDispatcher(
       return { matched: true, status: 403, body: { error: { code: 'ACCESS_DENIED', requestId, retryable: false } } };
     }
     try {
+      const actor = await resolveActor(request);
       if (isLogout) {
+        assertExpectedActor(request, actor);
         await destroySession!(request);
         return { matched: true, status: 200, body: { data: null } };
       }
-      const actor = await resolveActor(request);
       if (isRead) return { matched: true, status: 200, body: { data: await readProfile(database, config, actor) } };
+      assertExpectedActor(request, actor);
       const body = await readJsonBody(request);
       if (Object.keys(body).some(key => key !== 'displayName')
           || typeof body.displayName !== 'string'

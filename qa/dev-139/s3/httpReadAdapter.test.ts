@@ -25,6 +25,20 @@ test('transport uses only same-origin cookie requests with private caching disab
   assert.equal(new Headers(captured.init?.headers).get('authorization'), null);
 });
 
+test('transport freezes the bound actor on private API requests but not session discovery', async () => {
+  const captures: RequestInit[] = [];
+  const client = new HttpApiClient(async (_input, init) => {
+    captures.push(init ?? {});
+    return json({ data: [] });
+  });
+  client.bindExpectedActor({ accountId: 'user-a', contextId: 'context-a' });
+  await client.request('/api/v1/session');
+  await client.request('/api/v1/workspaces');
+  assert.equal(new Headers(captures[0]?.headers).get('x-projed-expected-account-id'), null);
+  assert.equal(new Headers(captures[1]?.headers).get('x-projed-expected-account-id'), 'user-a');
+  assert.equal(new Headers(captures[1]?.headers).get('x-projed-expected-context-id'), 'context-a');
+});
+
 test('transport rejects absolute, cross-origin and non-v1 paths before fetch', async () => {
   let calls = 0;
   const client = new HttpApiClient(async () => { calls += 1; return json({}); });

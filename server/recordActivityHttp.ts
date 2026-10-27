@@ -5,6 +5,7 @@ import type { RuntimeConfig } from './config.js';
 import type { RuntimeDatabase } from './db.js';
 import type { TrustedSessionActorResolver } from './domainReadHttp.js';
 import { asKernelError, KernelError } from './errors.js';
+import { assertExpectedActor } from './expectedActorHttp.js';
 import {
   RecordActivityRepository,
   type DomainActivityEventInput,
@@ -172,6 +173,7 @@ export function createRecordActivityHttpDispatcher(
     }
     try {
       const actor = await resolveActor(request);
+      assertExpectedActor(request, actor);
       const body = request.method === 'GET' || request.method === 'DELETE'
         ? {}
         : await readJsonBody(

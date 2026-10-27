@@ -5,6 +5,7 @@ import type { RuntimeConfig } from './config.js';
 import type { RuntimeDatabase } from './db.js';
 import type { TrustedSessionActorResolver } from './domainReadHttp.js';
 import { asKernelError, KernelError } from './errors.js';
+import { assertExpectedActor } from './expectedActorHttp.js';
 import { isSameOriginWrite, readJsonBody } from './domainWriteHttp.js';
 import { QuickTaskRepository, type QuickTaskCreateInput } from './quickTask.js';
 
@@ -55,6 +56,7 @@ export function createQuickTaskHttpDispatcher(
         request.resume();
         throw new KernelError('ACCESS_DENIED', 'Quick task Session entry is required', 403);
       }
+      assertExpectedActor(request, actor);
       const body = await readJsonBody(request);
       const keys = Object.keys(body).sort().join('|');
       if (keys !== 'captureId|title|workspaceHint') {

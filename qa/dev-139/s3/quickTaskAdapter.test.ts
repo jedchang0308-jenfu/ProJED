@@ -24,7 +24,7 @@ const capture: QuickCaptureRecord = {
 
 test('quick task HTTP adapter uses same-origin Session and preserves the compact receipt', async () => {
   const requests: Array<{ path: string; init?: RequestInit }> = [];
-  const adapter = createHttpQuickTaskAdapter(new HttpApiClient(async (input, init) => {
+  const client = new HttpApiClient(async (input, init) => {
     requests.push({ path: String(input), init });
     return new Response(JSON.stringify({ data: {
       status: 'committed',
@@ -34,7 +34,9 @@ test('quick task HTTP adapter uses same-origin Session and preserves the compact
       created: true,
       committedAt: 1,
     } }), { status: 201, headers: { 'content-type': 'application/json' } });
-  }));
+  });
+  client.bindExpectedActor({ accountId: capture.accountId!, contextId: 'quick-context-1' });
+  const adapter = createHttpQuickTaskAdapter(client);
   const result = await adapter.create(capture, new AbortController().signal);
   assert.equal(result.created, true);
   assert.deepEqual(requests.map(request => [request.init?.method, request.path]), [
@@ -47,6 +49,8 @@ test('quick task HTTP adapter uses same-origin Session and preserves the compact
   });
   const headers = new Headers(requests[0]?.init?.headers);
   assert.equal(headers.get('authorization'), null);
+  assert.equal(headers.get('x-projed-expected-account-id'), capture.accountId);
+  assert.equal(headers.get('x-projed-expected-context-id'), 'quick-context-1');
   assert.equal(requests[0]?.init?.credentials, 'same-origin');
   assert.equal(requests[0]?.init?.cache, 'no-store');
 });

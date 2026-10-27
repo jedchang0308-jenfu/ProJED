@@ -615,21 +615,32 @@ const fetchFor = (session: 'qa-a' | 'qa-b' | 'qa-b-quick' | 'qa-c' | 'qa-e'): Ht
   headers.set('origin', base);
   return fetch(`${base}${String(input)}`, { ...init, headers });
 };
+const clientFor = (
+  session: 'qa-a' | 'qa-b' | 'qa-b-quick' | 'qa-c' | 'qa-e',
+  actor: ServerActorV1,
+) => {
+  const client = new HttpApiClient(fetchFor(session));
+  client.bindExpectedActor({ accountId: actor.localUserId, contextId: actor.contextId });
+  return client;
+};
 try {
-  const httpA = createHttpDomainReadAdapter(new HttpApiClient(fetchFor('qa-a')));
-  const httpB = createHttpDomainReadAdapter(new HttpApiClient(fetchFor('qa-b')));
-  const httpE = createHttpDomainReadAdapter(new HttpApiClient(fetchFor('qa-e')));
-  const writeA = createHttpDomainWriteAdapter(new HttpApiClient(fetchFor('qa-a')));
-  const writeB = createHttpDomainWriteAdapter(new HttpApiClient(fetchFor('qa-b')));
-  const collaborationB = createHttpCollaborationAdapter(new HttpApiClient(fetchFor('qa-b')));
-  const collaborationC = createHttpCollaborationAdapter(new HttpApiClient(fetchFor('qa-c')));
-  const collaborationE = createHttpCollaborationAdapter(new HttpApiClient(fetchFor('qa-e')));
-  const recordsB = createHttpRecordActivityAdapter(new HttpApiClient(fetchFor('qa-b')));
-  const recordsA = createHttpRecordActivityAdapter(new HttpApiClient(fetchFor('qa-a')));
-  const sessionB = createHttpSessionAdapter(new HttpApiClient(fetchFor('qa-b')));
-  const quickB = createHttpQuickTaskAdapter(new HttpApiClient(fetchFor('qa-b-quick')));
-  const taskWorkbenchARaw = createHttpTaskWorkbenchAdapter(new HttpApiClient(fetchFor('qa-a')));
-  const taskWorkbenchBRaw = createHttpTaskWorkbenchAdapter(new HttpApiClient(fetchFor('qa-b')));
+  const httpA = createHttpDomainReadAdapter(clientFor('qa-a', actorA));
+  const httpB = createHttpDomainReadAdapter(clientFor('qa-b', actorB));
+  const httpE = createHttpDomainReadAdapter(clientFor('qa-e', actorE));
+  const writeA = createHttpDomainWriteAdapter(clientFor('qa-a', actorA));
+  const writeB = createHttpDomainWriteAdapter(clientFor('qa-b', actorB));
+  const collaborationB = createHttpCollaborationAdapter(clientFor('qa-b', actorB));
+  const collaborationC = createHttpCollaborationAdapter(clientFor('qa-c', actorC));
+  const collaborationE = createHttpCollaborationAdapter(clientFor('qa-e', actorE));
+  const recordsB = createHttpRecordActivityAdapter(clientFor('qa-b', actorB));
+  const recordsA = createHttpRecordActivityAdapter(clientFor('qa-a', actorA));
+  const sessionB = createHttpSessionAdapter(clientFor('qa-b', actorB));
+  const quickB = createHttpQuickTaskAdapter(clientFor('qa-b-quick', actorBQuick));
+  const taskWorkbenchARaw = createHttpTaskWorkbenchAdapter(clientFor('qa-a', actorA));
+  const taskWorkbenchBRaw = createHttpTaskWorkbenchAdapter(clientFor('qa-b', actorB));
+  const staleActorClient = clientFor('qa-b', actorA);
+  const staleActorRead = createHttpDomainReadAdapter(staleActorClient);
+  const staleActorWrite = createHttpDomainWriteAdapter(staleActorClient);
   const taskWorkbenchAActor = { accountId: actorA.localUserId, contextId: actorA.contextId };
   const taskWorkbenchBActor = { accountId: actorB.localUserId, contextId: actorB.contextId };
   const taskWorkbenchA = {
@@ -650,6 +661,16 @@ try {
   assert.equal(sessionProfile.authContextId, actorB.contextId);
   assert.equal(sessionProfile.entry, 'main');
   assert.equal((await sessionB.updateDisplayName('B HTTP')).displayName, 'B HTTP');
+  await assert.rejects(
+    staleActorRead.listWorkspaces(),
+    (error: unknown) => error instanceof HttpApiError
+      && error.status === 409 && error.code === 'ACTOR_CHANGED',
+  );
+  await assert.rejects(
+    staleActorWrite.updateTask('ws-b', 'board-shared', 'shared-child', { title: 'Wrong actor write' }),
+    (error: unknown) => error instanceof HttpApiError
+      && error.status === 409 && error.code === 'ACTOR_CHANGED',
+  );
   const missingProfileOrigin = await fetch(`${base}/api/v1/session/profile`, {
     method: 'PATCH', headers: { cookie: '__session=qa-b', 'content-type': 'application/json' },
     body: JSON.stringify({ displayName: 'Forged without origin' }),
@@ -704,7 +725,11 @@ try {
   assert.equal(quickRowsA.rows[0]?.count, '0');
   const quickConflict = await fetch(`${base}/api/v1/quick-tasks`, {
     method: 'POST',
-    headers: { cookie: '__session=qa-b-quick', origin: base, 'content-type': 'application/json' },
+    headers: {
+      cookie: '__session=qa-b-quick', origin: base, 'content-type': 'application/json',
+      'x-projed-expected-account-id': actorBQuick.localUserId,
+      'x-projed-expected-context-id': actorBQuick.contextId,
+    },
     body: JSON.stringify({
       captureId: quickCapture.captureId,
       title: 'Different title',

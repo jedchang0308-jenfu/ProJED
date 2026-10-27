@@ -6,6 +6,7 @@ import type { RuntimeConfig } from './config.js';
 import type { RuntimeDatabase } from './db.js';
 import { DomainReadRepository } from './domainRead.js';
 import { asKernelError } from './errors.js';
+import { assertExpectedActor } from './expectedActorHttp.js';
 
 export type TrustedSessionActorResolver = (request: IncomingMessage) => Promise<ServerActorV1>;
 
@@ -104,6 +105,7 @@ export function createDomainReadHttpDispatcher(
     }
     try {
       const actor = await resolveActor(request);
+      assertExpectedActor(request, actor);
       const data = await runActorTransaction(database, config, actor, async (port) => {
         switch (operation.kind) {
           case 'workspaces': return repository.listWorkspaces(port);

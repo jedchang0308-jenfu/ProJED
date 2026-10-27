@@ -16,6 +16,7 @@ import type { CollaborationRole } from './domainRead.js';
 import type { TrustedSessionActorResolver } from './domainReadHttp.js';
 import { isSameOriginWrite, readJsonBody } from './domainWriteHttp.js';
 import { asKernelError, KernelError } from './errors.js';
+import { assertExpectedActor } from './expectedActorHttp.js';
 
 export interface CollaborationWriteHttpResult {
   readonly matched: boolean;
@@ -147,6 +148,7 @@ export function createCollaborationWriteHttpDispatcher(
     }
     try {
       const actor = await resolveActor(request);
+      assertExpectedActor(request, actor);
       const body = request.method === 'DELETE' ? {} : await readJsonBody(request);
       const data = await runActorTransaction(database, config, actor, async (port) => {
         switch (operation.kind) {

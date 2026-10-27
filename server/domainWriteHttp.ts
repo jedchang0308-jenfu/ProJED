@@ -13,6 +13,7 @@ import {
 } from './domainWrite.js';
 import type { TrustedSessionActorResolver } from './domainReadHttp.js';
 import { asKernelError, KernelError } from './errors.js';
+import { assertExpectedActor } from './expectedActorHttp.js';
 
 const DEFAULT_MAX_BODY_BYTES = 64 * 1024;
 export const MAX_RECORD_BODY_BYTES = 32 * 1024 * 1024;
@@ -190,6 +191,7 @@ export function createDomainWriteHttpDispatcher(
     }
     try {
       const actor = await resolveActor(request);
+      assertExpectedActor(request, actor);
       const body = request.method === 'DELETE' ? {} : await readJsonBody(request);
       const data = await runActorTransaction(database, config, actor, async (port) => {
         switch (operation.kind) {

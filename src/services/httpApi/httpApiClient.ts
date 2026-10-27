@@ -1,13 +1,15 @@
 export type HttpApiFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
+export type HttpExpectedActor = {
+  readonly accountId: string;
+  readonly contextId: string;
+};
+
 export interface HttpApiRequestOptions {
   readonly method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   readonly body?: unknown;
   readonly signal?: AbortSignal;
-  readonly expectedActor?: {
-    readonly accountId: string;
-    readonly contextId: string;
-  };
+  readonly expectedActor?: HttpExpectedActor;
 }
 
 export class HttpApiError extends Error {
@@ -90,7 +92,17 @@ function errorFromResponse(response: Response, payload: unknown): HttpApiError {
 }
 
 export class HttpApiClient {
+  private expectedActor: HttpExpectedActor | null = null;
+
   constructor(private readonly fetcher: HttpApiFetch = globalThis.fetch.bind(globalThis)) {}
+
+  bindExpectedActor(expectedActor: HttpExpectedActor): void {
+    this.expectedActor = { ...expectedActor };
+  }
+
+  clearExpectedActor(): void {
+    this.expectedActor = null;
+  }
 
   async request<T>(path: string, options: HttpApiRequestOptions = {}): Promise<T> {
     const url = checkedApiPath(path);
@@ -99,9 +111,11 @@ export class HttpApiClient {
       throw new HttpApiError('INVALID_REQUEST', 0, null, false);
     }
     const headers = new Headers({ accept: 'application/json' });
-    if (options.expectedActor) {
-      headers.set('x-projed-expected-account-id', options.expectedActor.accountId);
-      headers.set('x-projed-expected-context-id', options.expectedActor.contextId);
+    const expectedActor = options.expectedActor
+      ?? (method === 'GET' && url === '/api/v1/session' ? null : this.expectedActor);
+    if (expectedActor) {
+      headers.set('x-projed-expected-account-id', expectedActor.accountId);
+      headers.set('x-projed-expected-context-id', expectedActor.contextId);
     }
     let body: string | undefined;
     if (options.body !== undefined) {

@@ -6,10 +6,13 @@ import { createHttpSessionAdapter } from '../../../src/services/httpApi/sessionA
 
 const future = Date.now() + 60_000;
 
-test('session adapter uses same-origin session endpoints and parses the profile', async () => {
-  const calls: Array<{ path: string; method: string; body?: string }> = [];
+test('session adapter binds mutations to the session actor and parses the profile', async () => {
+  const calls: Array<{ path: string; method: string; body?: string; headers: Headers }> = [];
   const fetcher: HttpApiFetch = async (input, init) => {
-    calls.push({ path: String(input), method: init?.method ?? 'GET', body: init?.body as string | undefined });
+    calls.push({
+      path: String(input), method: init?.method ?? 'GET', body: init?.body as string | undefined,
+      headers: new Headers(init?.headers),
+    });
     return Response.json({ data: {
       localUserId: 'user-1', email: 'user@example.invalid', displayName: 'User', createdAt: 1,
       expiresAt: future, authContextId: 'context-1', entry: 'main',
@@ -27,6 +30,11 @@ test('session adapter uses same-origin session endpoints and parses the profile'
     ['POST', '/api/v1/session/logout'],
   ]);
   assert.deepEqual(JSON.parse(calls[1]!.body!), { displayName: 'Renamed' });
+  assert.equal(calls[0]!.headers.get('x-projed-expected-account-id'), null);
+  for (const call of calls.slice(1)) {
+    assert.equal(call.headers.get('x-projed-expected-account-id'), 'user-1');
+    assert.equal(call.headers.get('x-projed-expected-context-id'), 'context-1');
+  }
 });
 
 test('session adapter rejects expired or malformed server identity', async () => {
