@@ -66,8 +66,8 @@ try {
     });
     const preview = await commands.previewBoardTransfer(port, sourceWorkspace, sourceBoard, target.id);
     assert.equal(preview.blocked, false);
-    assert.equal(preview.counts.documents, 2, 'preview counts only the actor-visible root documents');
-    assert.equal(preview.counts.ragDocumentsToResync, 2);
+    assert.equal(preview.counts.documents, 3, 'preview includes the newly enabled published mirror and the actor-visible documents');
+    assert.equal(preview.counts.ragDocumentsToResync, 3);
     await commands.moveBoardToWorkspace(port, sourceWorkspace, sourceBoard, {
       targetWorkspaceId: target.id, expectedBoardTitle: preview.boardTitle,
     });
