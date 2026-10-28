@@ -29,7 +29,7 @@ export interface DomainWorkspace {
   id: string;
   title: string;
   boards: Array<{ id: string; title: string; dependencies: []; order?: number; createdAt: number }>;
-  ownerId: string;
+  ownerId?: string;
   order?: number;
   createdAt: number;
 }
@@ -185,7 +185,7 @@ export async function resolveBoard(port: ActorQueryPort, workspaceRef: string, b
 export class DomainReadRepository {
   async listWorkspaces(port: ActorQueryPort): Promise<DomainWorkspace[]> {
     const tenants = await port.query<{
-      id: string; legacy_workspace_id: string; title: string; owner_id: string;
+      id: string; legacy_workspace_id: string; title: string; owner_id: string | null;
       sort_order: number | null; created_at_ms: string;
     }>(`
       SELECT id::text AS id, legacy_workspace_id, title, owner_id::text AS owner_id,
@@ -219,7 +219,7 @@ export class DomainReadRepository {
       id: tenant.legacy_workspace_id,
       title: tenant.title,
       boards: boardsByTenant.get(tenant.id) ?? [],
-      ownerId: tenant.owner_id,
+      ...(tenant.owner_id === null ? {} : { ownerId: tenant.owner_id }),
       ...(optionalNumber(tenant.sort_order) === undefined ? {} : { order: tenant.sort_order! }),
       createdAt: milliseconds(tenant.created_at_ms),
     }));

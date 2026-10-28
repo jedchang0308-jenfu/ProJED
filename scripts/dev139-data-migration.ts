@@ -32,10 +32,30 @@ type TableSpec = {
 
 const { Client: PgClient } = pg;
 const UUID_PATTERN = "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$";
-const JSON_COLUMNS = new Set([
-  'ui_preferences', 'detail_notes', 'command', 'result', 'metadata', 'payload',
-  'before_data', 'after_data', 'task', 'filters', 'filters_json',
-]);
+// Preserve PostgreSQL JSON separately from SQL NULL. The default pg parser
+// collapses JSON literal null and SQL NULL to the same JS value, and its
+// parameter encoder otherwise treats JSON strings as unquoted SQL text.
+// Keep the database's jsonb text, including arbitrary-precision numbers; do
+// not round-trip it through JSON.parse/JS number during copy or reconciliation.
+class SnapshotJson {
+  constructor(readonly text: string) {}
+}
+const snapshotTypes = {
+  getTypeParser: ((oid: number, format = 'text') => {
+    if ((oid === 114 || oid === 3802) && format === 'text') {
+      return (raw: string) => new SnapshotJson(raw);
+    }
+    // pg's Date parser truncates PostgreSQL microseconds to milliseconds.
+    // Both transactions use UTC/ISO output, so native date/timestamp text is
+    // stable for reconciliation and preserves precision when inserted again.
+    if ((oid === 1082 || oid === 1114 || oid === 1184) && format === 'text') {
+      return (raw: string) => raw;
+    }
+    return format === 'binary'
+      ? pg.types.getTypeParser(oid, 'binary')
+      : pg.types.getTypeParser(oid, 'text');
+  }) as typeof pg.types.getTypeParser,
+};
 
 const table = (
   target: string,
@@ -202,6 +222,14 @@ const TABLES: readonly TableSpec[] = [
            before_data, after_data, created_at
       FROM public.audit_logs ORDER BY tenant_id, created_at, id
   `),
+  table('llm_access_logs', 'public.llm_access_logs', [
+    'id', 'tenant_id', 'project_id', 'actor_id', 'provider', 'model', 'prompt_hash',
+    'retrieved_chunk_ids', 'response_metadata', 'created_at',
+  ], `
+    SELECT id, tenant_id, project_id, actor_id, provider, model, prompt_hash,
+           retrieved_chunk_ids, response_metadata, created_at
+      FROM public.llm_access_logs ORDER BY tenant_id, created_at, id
+  `),
   table('unplaced_tasks', 'public.task_workbench_unplaced_items', ['owner_id', 'legacy_task_id', 'workspace_legacy_id', 'task', 'sort_order', 'created_at', 'updated_at'], `
     SELECT owner_id, id AS legacy_task_id, workspace_id AS workspace_legacy_id, task,
            sort_order::float8 AS sort_order, created_at, updated_at
@@ -293,7 +321,7 @@ const TABLES: readonly TableSpec[] = [
 ];
 
 const BLOCKERS = [
-  ['public.llm_access_logs', ''],
+  ['public.llm_access_logs', 'WHERE project_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.projects project WHERE project.id = public.llm_access_logs.project_id AND project.tenant_id = public.llm_access_logs.tenant_id)'],
   ['public.documents', ''],
   ['public.document_versions', ''],
   ['public.document_chunks', ''],
@@ -318,7 +346,7 @@ const BLOCKERS = [
   ['private.backup_import_executions', "WHERE status <> 'succeeded' OR result IS NULL"],
   ['private.quick_task_oauth_clients', ''],
   ['public.knowledge_records', 'WHERE rag_enabled'],
-  ['public.tenants', 'WHERE owner_id IS NULL'],
+  ['public.tenants', "WHERE owner_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.tenant_members member WHERE member.tenant_id = public.tenants.id AND member.user_id = public.tenants.owner_id AND member.status::text = 'active')"],
   ['public.activity_events', 'WHERE entity_table IS NULL'],
   ['public.audit_logs', 'WHERE tenant_id IS NULL OR entity_table IS NULL'],
   ['public.wbs_item_placements', "WHERE placement_kind = 'tracking_reference' AND created_by IS NULL"],
@@ -356,6 +384,7 @@ export function findUnclassifiedSourceRelations(
 }
 
 function canonical(value: unknown): string {
+  if (value instanceof SnapshotJson) return `json:${value.text}`;
   if (value instanceof Date) return JSON.stringify(value.toISOString());
   if (Buffer.isBuffer(value)) return JSON.stringify(value.toString('hex'));
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
@@ -483,9 +512,7 @@ async function insertSnapshot(client: Client, snapshot: ReadonlyMap<string, read
       const values: unknown[] = [];
       const tuples = batch.map((row, rowIndex) => `(${spec.columns.map((column, columnIndex) => {
         const value = row[column];
-        values.push(JSON_COLUMNS.has(column) && value !== null && typeof value === 'object'
-          ? JSON.stringify(value)
-          : value);
+        values.push(value instanceof SnapshotJson ? value.text : value);
         return `$${rowIndex * spec.columns.length + columnIndex + 1}`;
       }).join(', ')})`);
       try {
@@ -622,12 +649,13 @@ async function main(): Promise<void> {
     ...binding,
     runtimeRole: profile.roles.importer,
   }).toString();
-  const source = new PgClient({ connectionString: sourceUrl, application_name: 'projed-dev139-source-snapshot' });
-  const target = new PgClient({ connectionString: targetUrl, application_name: `projed-dev139-${mode}` });
+  const source = new PgClient({ connectionString: sourceUrl, application_name: 'projed-dev139-source-snapshot', types: snapshotTypes });
+  const target = new PgClient({ connectionString: targetUrl, application_name: `projed-dev139-${mode}`, types: snapshotTypes });
   await Promise.all([source.connect(), target.connect()]);
   try {
     await source.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
     await source.query("SET LOCAL TIME ZONE 'UTC'");
+    await source.query("SET LOCAL DateStyle = 'ISO, YMD'");
     await validateSource(source, sourceBinding);
     const blockers = await sourceBlockers(source);
     if (blockers.length > 0) {
@@ -639,6 +667,7 @@ async function main(): Promise<void> {
 
     await target.query(mode === 'apply' ? 'BEGIN ISOLATION LEVEL SERIALIZABLE' : 'BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
     await target.query("SET LOCAL TIME ZONE 'UTC'");
+    await target.query("SET LOCAL DateStyle = 'ISO, YMD'");
     if (mode === 'apply') await target.query("SELECT pg_advisory_xact_lock(hashtextextended('projed:dev139:initial-snapshot-import', 0))");
     await validateTarget(target, profile, binding);
     const sourceSnapshot = await readSource(source);

@@ -295,10 +295,12 @@ INSERT INTO public.profiles VALUES
   ('11111111-1111-4111-8111-111111111111', 'owner@example.test', 'Owner', 'legacy', 'owner-1', '{"theme":"dark"}', '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z'),
   ('22222222-2222-4222-8222-222222222222', 'guest@example.test', 'Guest', NULL, NULL, '{}', '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z');
 INSERT INTO public.tenants VALUES
-  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Workspace', NULL, '11111111-1111-4111-8111-111111111111', '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z');
+  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Workspace', NULL, '11111111-1111-4111-8111-111111111111', '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z'),
+  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa9', 'Unowned original workspace', 'orphan-ws', NULL, '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z');
 INSERT INTO public.projects VALUES
   ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Main board', NULL, 10, '11111111-1111-4111-8111-111111111111', '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z'),
-  ('cccccccc-cccc-4ccc-8ccc-cccccccccccc', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Reference board', 'board-ref', 20, '11111111-1111-4111-8111-111111111111', '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z');
+  ('cccccccc-cccc-4ccc-8ccc-cccccccccccc', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Reference board', 'board-ref', 20, '11111111-1111-4111-8111-111111111111', '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z'),
+  ('cccccccc-cccc-4ccc-8ccc-ccccccccccc9', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa9', 'Unowned original board', 'orphan-board', 30, NULL, '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z');
 INSERT INTO public.tenant_members VALUES
   ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '11111111-1111-4111-8111-111111111111', 'owner', 'active', '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z'),
   ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '22222222-2222-4222-8222-222222222222', 'viewer', 'active', '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z');
@@ -314,7 +316,8 @@ INSERT INTO public.task_tags VALUES
   ('dddddddd-dddd-4ddd-8ddd-dddddddddddd', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', NULL, 'Important', 'red', 1, '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z');
 INSERT INTO public.wbs_items VALUES
   ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', NULL, NULL, 'Parent task', '[]', 'Parent detail', 'in_progress', '11111111-1111-4111-8111-111111111111', ARRAY['22222222-2222-4222-8222-222222222222']::uuid[], ARRAY[]::uuid[], '2026-01-01', '2026-01-05', false, 'task', 'doing', 1, 0, ARRAY[]::uuid[], false, '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z'),
-  ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee2', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1', 'task-child', 'Child task', '[]', NULL, 'todo', NULL, ARRAY[]::uuid[], ARRAY[]::uuid[], NULL, NULL, false, 'task', NULL, 2, 1, ARRAY['eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1']::uuid[], false, '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z');
+  ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee2', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1', 'task-child', 'Child task', '[]', NULL, 'todo', NULL, ARRAY[]::uuid[], ARRAY[]::uuid[], NULL, NULL, false, 'task', NULL, 2, 1, ARRAY['eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1']::uuid[], false, '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z'),
+  ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee9', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa9', 'cccccccc-cccc-4ccc-8ccc-ccccccccccc9', NULL, 'orphan-task', 'Retained original task', '[]', 'Unowned data must not be discarded', 'todo', NULL, ARRAY[]::uuid[], ARRAY[]::uuid[], NULL, NULL, false, 'task', NULL, 1, 0, ARRAY[]::uuid[], false, '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z');
 INSERT INTO public.wbs_item_tags VALUES
   ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1', 'dddddddd-dddd-4ddd-8ddd-dddddddddddd');
 INSERT INTO public.wbs_dependencies VALUES
@@ -329,6 +332,12 @@ INSERT INTO public.activity_events VALUES
   ('45678901-1234-4234-8234-123456789004', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', '11111111-1111-4111-8111-111111111111', 'task.updated', 'wbs_items', 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1', '{"field":"title"}', '2026-01-02T00:00:00Z');
 INSERT INTO public.audit_logs VALUES
   ('56789012-1234-4234-8234-123456789005', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '11111111-1111-4111-8111-111111111111', 'task.update', 'wbs_items', 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1', '{"title":"Old"}', '{"title":"Parent task"}', '2026-01-02T00:00:00Z');
+INSERT INTO public.llm_access_logs VALUES
+  ('01234567-1234-4234-8234-123456789011', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', '11111111-1111-4111-8111-111111111111', 'google', 'fixture-model', 'original-prompt-hash', ARRAY['01234567-1234-4234-8234-123456789099']::uuid[], '{"resultCount":1,"usage":{"inputTokens":7}}', '2026-01-02T00:00:00Z'),
+  ('01234567-1234-4234-8234-123456789012', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', NULL, '22222222-2222-4222-8222-222222222222', 'legacy', NULL, NULL, ARRAY[]::uuid[], '["legacy",{"tokens":2}]', '2026-01-03T00:00:00Z'),
+  ('01234567-1234-4234-8234-123456789013', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', NULL, NULL, 'legacy-service', NULL, NULL, ARRAY[]::uuid[], '9007199254740993.1234567890123456789', '2026-01-04T00:00:00.123456Z'),
+  ('01234567-1234-4234-8234-123456789017', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', NULL, NULL, 'legacy-string', NULL, NULL, ARRAY[]::uuid[], '"scalar metadata"', '2026-01-05T00:00:00Z'),
+  ('01234567-1234-4234-8234-123456789018', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', NULL, NULL, 'legacy-json-null', NULL, NULL, ARRAY[]::uuid[], 'null'::jsonb, '2026-01-06T00:00:00Z');
 INSERT INTO public.task_workbench_unplaced_items VALUES
   ('11111111-1111-4111-8111-111111111111', 'unplaced-1', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '{"id":"unplaced-1","title":"Unplaced"}', 1, '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z');
 INSERT INTO private.quick_task_capture_receipts VALUES

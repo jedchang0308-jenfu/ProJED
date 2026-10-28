@@ -37,6 +37,8 @@ const profileContracts = new Map([
       'db/migrations/0012_account_preferences_v1.sql',
       'db/migrations/0013_calendar_subscriptions_v1.sql',
       'db/migrations/0014_snapshot_importer_v1.sql',
+      'db/migrations/0015_llm_access_log_retention_v1.sql',
+      'db/migrations/0016_workspace_lifecycle_compatibility_v1.sql',
     ],
   }],
   [resolve('config/dev-139/s3-managed.profile.json'), {
@@ -59,6 +61,8 @@ const profileContracts = new Map([
       'db/migrations/0012_account_preferences_v1.sql',
       'db/migrations/0013_calendar_subscriptions_v1.sql',
       'db/migrations/0014_snapshot_importer_v1.sql',
+      'db/migrations/0015_llm_access_log_retention_v1.sql',
+      'db/migrations/0016_workspace_lifecycle_compatibility_v1.sql',
     ],
   }],
 ]);

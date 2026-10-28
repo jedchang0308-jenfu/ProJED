@@ -34,7 +34,7 @@ D2 最新人類原文為「保留 ProJED 現有的工作區、看板與權限功
 
 ## Chosen Rule
 
-2026-10-28續行修正：人類已要求完成外部接線、正式資料及發布；最新契約為SPEC-139 Rev30 §33。managed database固定既有`jenfu-platform-prod / asia-east1 / jenfu-platform-prod-pg / jenfu_prod`，不是另建`projed` DB。原Hosting project為`projed-cc78d`，run rewrite只提供serviceId／region，因此唯一新ProJED runtime規劃放在同project／asia-east1的`projed-prod`，以受控跨project身分連共用SQL；不增加第二個edge proxy。新runtime／release服務帳號、app Secret與SQL grant尚待其新責任權限確認，舊`projed-ai-backend`與現有身分不覆寫。其他W18／Rev10文字保留為local切片歷史，不縮減本次完整目標。
+2026-10-28續行修正：人類已要求完成外部接線、正式資料及發布；最新契約為SPEC-139 Rev31 §33–§34。managed database固定既有`jenfu-platform-prod / asia-east1 / jenfu-platform-prod-pg / jenfu_prod`，不是另建`projed` DB。原Hosting project為`projed-cc78d`，run rewrite只提供serviceId／region，因此唯一新ProJED runtime規劃放在同project／asia-east1的`projed-prod`，以受控跨project身分連共用SQL；不增加第二個edge proxy。新runtime／release服務帳號、app Secret與SQL grant尚待其新責任權限確認，舊`projed-ai-backend`與現有身分不覆寫。W20以forward-only migration直接保留LLM log及NULL-owner工作區，不另加人工處置或owner指派門檻，資料／權限保護照舊；架構決策未變。其他W18／Rev10文字保留為local切片歷史，不縮減本次完整目標。
 
 人類已要求「升級到架構確定」與 rd-tech-lead 審視並優化，並要求把既有使用者切換評估寫入文件。下列 ProJED 架構規則固定，現行契約為 SPEC-139 Rev29；D1 publisher 與 D2 首階段範圍不變。人類選定方向及本 repo 決策不表示外部 owner wire／程式已接受或發布：
 

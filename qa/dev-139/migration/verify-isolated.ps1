@@ -31,6 +31,7 @@ $pwFile = Join-Path $tempRoot 'bootstrap.pw'
 $bootstrapRuntime = Join-Path $tempRoot 'bootstrap-runtime.sql'
 $bindingPath = Join-Path $tempRoot 'binding.json'
 $started = $false
+$retentionFailures = @()
 
 $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
 $listener.Start()
@@ -129,6 +130,7 @@ try {
   $encodedAdmin = [Uri]::EscapeDataString($adminPassword)
   $encodedMigrator = [Uri]::EscapeDataString($migratorPassword)
   $encodedImporter = [Uri]::EscapeDataString($importerPassword)
+  $encodedRuntime = [Uri]::EscapeDataString($runtimePassword)
   $env:PROJED_SOURCE_PROFILE = $profilePath
   $env:PROJED_RUNTIME_BINDING_FILE = $bindingPath
   $env:PROJED_MIGRATOR_DATABASE_URL = "postgresql://projed_migrator_disposable:${encodedMigrator}@127.0.0.1:$port/$targetDatabase"
@@ -157,9 +159,25 @@ try {
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-c', 'REVOKE projed_owner_disposable FROM projed_importer_disposable')
 
   $plan = Invoke-DataMode -Mode 'plan' -ExpectedExitCodes @(0)
-  if ($plan.status -ne 'PASS' -or $plan.matches -ne $false -or $plan.tables.profiles.count -ne 2) {
+  if ($plan.status -ne 'PASS' -or $plan.matches -ne $false -or $plan.tables.profiles.count -ne 2 -or $plan.tables.llm_access_logs.count -ne 5) {
     throw 'DEV-139 migration plan result was not the expected empty-target plan.'
   }
+
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "UPDATE public.tenants SET owner_id = '11111111-1111-4111-8111-111111111111' WHERE id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa9'")
+  $unconfirmedOwner = Invoke-DataMode -Mode 'apply' -ExpectedExitCodes @(2)
+  if ($unconfirmedOwner.status -ne 'BLOCKED' -or -not (@($unconfirmedOwner.blockers.domain) -like 'public.tenants WHERE owner_id IS NOT NULL*')) {
+    throw 'DEV-139 imported owner without active source membership was not blocked.'
+  }
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "UPDATE public.tenants SET owner_id = NULL WHERE id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa9'")
+
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "INSERT INTO public.tenants VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2', 'QA mismatch workspace', NULL, '11111111-1111-4111-8111-111111111111', now(), now()); UPDATE public.llm_access_logs SET tenant_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2' WHERE id = '01234567-1234-4234-8234-123456789011'")
+  $llmMismatch = Invoke-DataMode -Mode 'apply' -ExpectedExitCodes @(2)
+  if ($llmMismatch.status -ne 'BLOCKED' -or -not (@($llmMismatch.blockers.domain) -like 'public.llm_access_logs WHERE*')) {
+    throw 'DEV-139 mismatched LLM log workspace/project was not blocked before target writes.'
+  }
+  $llmMismatchTargetCount = Invoke-PgScalar -Database $targetDatabase -Sql 'SELECT count(*) FROM projed_core.profiles'
+  if ($llmMismatchTargetCount -ne '0') { throw 'DEV-139 LLM scope preflight wrote target rows.' }
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "UPDATE public.llm_access_logs SET tenant_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' WHERE id = '01234567-1234-4234-8234-123456789011'; DELETE FROM public.tenants WHERE id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2'")
 
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'CREATE TABLE public.dev139_unknown_empty_source (id uuid)')
   $unknownEmptyPlan = Invoke-DataMode -Mode 'plan' -ExpectedExitCodes @(2)
@@ -219,12 +237,12 @@ try {
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'ALTER EXTENSION plpgsql DROP TABLE public.dev139_extension_owned_source')
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'DROP TABLE public.dev139_extension_owned_source')
 
-  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "UPDATE public.task_tags SET color = 'invalid-color'")
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "UPDATE public.task_workbench_unplaced_items SET task = '[]'::jsonb")
   $rollback = Invoke-DataMode -Mode 'apply' -ExpectedExitCodes @(1)
   if ($rollback.status -ne 'FAIL') { throw 'DEV-139 injected apply failure was not rejected.' }
-  $rollbackCount = Invoke-PgScalar -Database $targetDatabase -Sql 'SELECT (SELECT count(*) FROM projed_core.profiles) + (SELECT count(*) FROM projed_core.tenants)'
+  $rollbackCount = Invoke-PgScalar -Database $targetDatabase -Sql 'SELECT (SELECT count(*) FROM projed_core.profiles) + (SELECT count(*) FROM projed_core.tenants) + (SELECT count(*) FROM projed_core.llm_access_logs)'
   if ($rollbackCount -ne '0') { throw 'DEV-139 failed import left partial target rows.' }
-  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "UPDATE public.task_tags SET color = 'red'")
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "UPDATE public.task_workbench_unplaced_items SET task = jsonb_build_object('id', 'unplaced-1', 'title', 'Unplaced')")
 
   $apply = Invoke-DataMode -Mode 'apply' -ExpectedExitCodes @(0)
   if ($apply.status -ne 'PASS' -or $apply.matches -ne $true) { throw 'DEV-139 migration apply did not reconcile before commit.' }
@@ -232,6 +250,22 @@ try {
   if ($reconcile.status -ne 'PASS' -or $reconcile.matches -ne $true -or $reconcile.snapshotId -ne $apply.snapshotId) {
     throw 'DEV-139 post-commit reconciliation failed.'
   }
+  foreach ($retentionCheck in @('llm-access-retention.sql', 'workspace-lifecycle.sql')) {
+    try {
+      # Each file owns a connection-local BEGIN/ROLLBACK; a failed psql closes
+      # that transaction, so independent readback/negative cases remain safe.
+      Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $targetDatabase, '-v', 'ON_ERROR_STOP=1', '-f', "qa/dev-139/migration/$retentionCheck")
+    } catch {
+      $retentionFailures += "${retentionCheck}: $($_.Exception.Message)"
+      Write-Warning "DEV-139 retention check failed: $retentionCheck; collecting independent results."
+    }
+  }
+  $env:PROJED_ENV = 'disposable'
+  $env:PROJED_APP_ENTRY = 'main'
+  $env:PROJED_DATABASE_URL = "postgresql://projed_runtime_disposable:${encodedRuntime}@127.0.0.1:$port/$targetDatabase"
+  $env:PROJED_QA_TARGET_ADMIN_URL = "postgresql://postgres:${encodedAdmin}@127.0.0.1:$port/$targetDatabase"
+  & npx.cmd tsx qa/dev-139/migration/workspace-transfer-retention.ts
+  if ($LASTEXITCODE -ne 0) { $retentionFailures += 'workspace-transfer-retention.ts: product command verification failed' }
 
   $secondApply = Invoke-DataMode -Mode 'apply' -ExpectedExitCodes @(2)
   if ($secondApply.status -ne 'BLOCKED' -or 'target:not_empty' -notin @($secondApply.blockers.domain)) {
@@ -244,13 +278,6 @@ try {
     throw 'DEV-139 unsupported source domain was not reported as a blocker.'
   }
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'DELETE FROM public.inbox_items')
-
-  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "INSERT INTO public.llm_access_logs VALUES ('01234567-1234-4234-8234-123456789011', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', '11111111-1111-4111-8111-111111111111', 'fixture', NULL, NULL, ARRAY[]::uuid[], '{}', '2026-01-02T00:00:00Z')")
-  $llmLogs = Invoke-DataMode -Mode 'plan' -ExpectedExitCodes @(2)
-  if ($llmLogs.status -ne 'BLOCKED' -or 'public.llm_access_logs' -notin @($llmLogs.blockers.domain)) {
-    throw 'DEV-139 LLM access logs were not reported as an unsupported source domain.'
-  }
-  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'DELETE FROM public.llm_access_logs')
 
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "INSERT INTO private.quick_task_oauth_clients VALUES ('quick-client', true, '2026-01-02T00:00:00Z')")
   $quickOauthClients = Invoke-DataMode -Mode 'plan' -ExpectedExitCodes @(2)
@@ -265,6 +292,19 @@ try {
     throw 'DEV-139 target drift was not rejected by reconciliation.'
   }
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $targetDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "UPDATE projed_core.profiles SET display_name = 'Owner' WHERE id = '11111111-1111-4111-8111-111111111111'")
+  # The two values below collapse under JS number/Date conversion. Reconcile
+  # must still detect either change without adding a separate release gate.
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $targetDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "UPDATE projed_core.llm_access_logs SET response_metadata = '9007199254740993.1234567890123456788'::jsonb WHERE id = '01234567-1234-4234-8234-123456789013'")
+  $numericDrift = Invoke-DataMode -Mode 'reconcile' -ExpectedExitCodes @(1)
+  if ($numericDrift.status -ne 'FAIL' -or $numericDrift.code -ne 'RECONCILIATION_MISMATCH') {
+    throw 'DEV-139 arbitrary-precision JSON numeric drift was not rejected.'
+  }
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $targetDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "UPDATE projed_core.llm_access_logs SET response_metadata = '9007199254740993.1234567890123456789'::jsonb, created_at = '2026-01-04T00:00:00.123457Z'::timestamptz WHERE id = '01234567-1234-4234-8234-123456789013'")
+  $microsecondDrift = Invoke-DataMode -Mode 'reconcile' -ExpectedExitCodes @(1)
+  if ($microsecondDrift.status -ne 'FAIL' -or $microsecondDrift.code -ne 'RECONCILIATION_MISMATCH') {
+    throw 'DEV-139 sub-millisecond timestamp drift was not rejected.'
+  }
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $targetDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "UPDATE projed_core.llm_access_logs SET created_at = '2026-01-04T00:00:00.123456Z'::timestamptz WHERE id = '01234567-1234-4234-8234-123456789013'")
   $finalReconcile = Invoke-DataMode -Mode 'reconcile' -ExpectedExitCodes @(0)
   if ($finalReconcile.status -ne 'PASS' -or $finalReconcile.matches -ne $true) {
     throw 'DEV-139 reconciliation did not recover after the isolated drift was restored.'
@@ -272,6 +312,7 @@ try {
 
   $boundary = Invoke-PgScalar -Database $targetDatabase -Sql "SELECT (SELECT count(*) FROM projed_core.account_authorization_guards) || ':' || has_table_privilege('projed_importer_disposable', 'projed_core.profiles', 'SELECT') || ':' || has_table_privilege('projed_importer_disposable', 'projed_core.profiles', 'INSERT') || ':' || has_table_privilege('projed_importer_disposable', 'projed_core.profiles', 'UPDATE') || ':' || has_table_privilege('projed_importer_disposable', 'projed_core.profiles', 'DELETE')"
   if ($boundary -ne '0:true:true:false:false') { throw "DEV-139 importer or identity-guard boundary mismatch: $boundary" }
+  if ($retentionFailures.Count -gt 0) { throw "DEV-139 retention verification failed: $($retentionFailures -join '; ')" }
 
   $attempt = (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ') + "-$($nonce.Substring(0,8))"
   $evidenceDir = Join-Path $projectRoot "output/qa/dev-139/migration/$attempt"
@@ -294,7 +335,15 @@ try {
       'materialized-view-source-block', 'extension-owned-relation-skip',
       'exact-digest-reconcile', 'non-empty-target-reject', 'unsupported-domain-reject',
       'importer-createdb-reject', 'importer-createrole-reject', 'importer-owner-membership-reject',
-      'llm-access-log-reject', 'quick-oauth-client-reject',
+      'llm-log-exact-retention', 'llm-log-scope-mismatch-reject',
+      'llm-log-actor-rls', 'llm-log-immutable-runtime', 'llm-log-transfer-and-delete',
+      'llm-json-scalar-and-json-null-preserved', 'normal-board-transfer-command',
+      'json-numeric-precision-retained-and-drift-rejected',
+      'timestamp-microseconds-retained-and-drift-rejected',
+      'orphan-workspace-exact-retention', 'orphan-workspace-zero-access',
+      'unconfirmed-source-owner-reject', 'workspace-owner-delete-set-null',
+      'board-preferences-workspace-transfer',
+      'quick-oauth-client-reject',
       'target-drift-detect', 'identity-guards-not-imported', 'importer-select-insert-only'
     )
   } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $evidenceDir 'result.json') -Encoding utf8
@@ -307,6 +356,10 @@ finally {
   Remove-Item Env:PROJED_MIGRATION_TARGET_DATABASE_URL -ErrorAction SilentlyContinue
   Remove-Item Env:PROJED_SOURCE_PROFILE -ErrorAction SilentlyContinue
   Remove-Item Env:PROJED_RUNTIME_BINDING_FILE -ErrorAction SilentlyContinue
+  Remove-Item Env:PROJED_ENV -ErrorAction SilentlyContinue
+  Remove-Item Env:PROJED_APP_ENTRY -ErrorAction SilentlyContinue
+  Remove-Item Env:PROJED_DATABASE_URL -ErrorAction SilentlyContinue
+  Remove-Item Env:PROJED_QA_TARGET_ADMIN_URL -ErrorAction SilentlyContinue
   $cleanupSafe = -not $started
   if ($started) {
     & (Join-Path $PostgresBin 'pg_ctl.exe') -D $dataPath -m fast -w stop | Out-Null

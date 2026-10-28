@@ -73,6 +73,14 @@
     {
       "version": "0014_snapshot_importer_v1",
       "path": "db/migrations/0014_snapshot_importer_v1.sql"
+    },
+    {
+      "version": "0015_llm_access_log_retention_v1",
+      "path": "db/migrations/0015_llm_access_log_retention_v1.sql"
+    },
+    {
+      "version": "0016_workspace_lifecycle_compatibility_v1",
+      "path": "db/migrations/0016_workspace_lifecycle_compatibility_v1.sql"
     }
   ],
   "objectAllowlist": [
@@ -142,7 +150,11 @@
     "projed_core.account_board_task_filter_preferences",
     "projed_core.account_board_task_filter_preferences_project_idx",
     "projed_core.calendar_subscriptions",
-    "projed_core.calendar_subscriptions_owner_created_idx"
+    "projed_core.calendar_subscriptions_owner_created_idx",
+    "projed_core.llm_access_logs",
+    "projed_core.llm_access_logs_tenant_actor_time_idx",
+    "projed_core.llm_access_logs_project_idx",
+    "projed_core.llm_access_logs_actor_idx"
   ],
   "staticFixturePath": "dist",
   "runtime": {
