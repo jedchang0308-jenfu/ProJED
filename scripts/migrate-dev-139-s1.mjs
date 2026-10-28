@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import pg from 'pg';
+import { S1_MIGRATION_PATHS, S3_MIGRATION_PATHS } from './lib/dev139-migration-paths.mjs';
 
 const { Client } = pg;
 const profileContracts = new Map([
@@ -12,60 +13,21 @@ const profileContracts = new Map([
     environment: 'disposable',
     host: '127.0.0.1',
     namePattern: '^dev139_s1_[0-9a-f]{32}$',
-    migrationPaths: [
-      'db/migrations/0001_runtime_boundary_v1.sql',
-      'db/migrations/0002_profile_actor_v1.sql',
-    ],
+    migrationPaths: S1_MIGRATION_PATHS,
   }],
   [resolve('config/dev-139/s3-read-disposable.profile.json'), {
     name: 's3-read',
     environment: 'disposable',
     host: '127.0.0.1',
     namePattern: '^dev139_s3_[0-9a-f]{32}$',
-    migrationPaths: [
-      'db/migrations/0001_runtime_boundary_v1.sql',
-      'db/migrations/0002_profile_actor_v1.sql',
-      'db/migrations/0003_domain_read_v1.sql',
-      'db/migrations/0004_domain_command_v1.sql',
-      'db/migrations/0005_collaboration_command_v1.sql',
-      'db/migrations/0006_record_activity_v1.sql',
-      'db/migrations/0007_board_transfer_v1.sql',
-      'db/migrations/0008_unplaced_quick_capture_v1.sql',
-      'db/migrations/0009_task_workbench_placement_v1.sql',
-      'db/migrations/0010_task_tracking_reference_v1.sql',
-      'db/migrations/0011_board_backup_import_v1.sql',
-      'db/migrations/0012_account_preferences_v1.sql',
-      'db/migrations/0013_calendar_subscriptions_v1.sql',
-      'db/migrations/0014_snapshot_importer_v1.sql',
-      'db/migrations/0015_llm_access_log_retention_v1.sql',
-      'db/migrations/0016_workspace_lifecycle_compatibility_v1.sql',
-      'db/migrations/0017_document_source_retention_v1.sql',
-    ],
+    migrationPaths: S3_MIGRATION_PATHS,
   }],
   [resolve('config/dev-139/s3-managed.profile.json'), {
     name: 's3-managed',
     environment: 'managed',
     host: 'cloud-sql-unix',
     namePattern: '^jenfu_prod$',
-    migrationPaths: [
-      'db/migrations/0001_runtime_boundary_v1.sql',
-      'db/migrations/0002_profile_actor_v1.sql',
-      'db/migrations/0003_domain_read_v1.sql',
-      'db/migrations/0004_domain_command_v1.sql',
-      'db/migrations/0005_collaboration_command_v1.sql',
-      'db/migrations/0006_record_activity_v1.sql',
-      'db/migrations/0007_board_transfer_v1.sql',
-      'db/migrations/0008_unplaced_quick_capture_v1.sql',
-      'db/migrations/0009_task_workbench_placement_v1.sql',
-      'db/migrations/0010_task_tracking_reference_v1.sql',
-      'db/migrations/0011_board_backup_import_v1.sql',
-      'db/migrations/0012_account_preferences_v1.sql',
-      'db/migrations/0013_calendar_subscriptions_v1.sql',
-      'db/migrations/0014_snapshot_importer_v1.sql',
-      'db/migrations/0015_llm_access_log_retention_v1.sql',
-      'db/migrations/0016_workspace_lifecycle_compatibility_v1.sql',
-      'db/migrations/0017_document_source_retention_v1.sql',
-    ],
+    migrationPaths: S3_MIGRATION_PATHS,
   }],
 ]);
 const defaultProfilePath = resolve('config/dev-139/s1-disposable.profile.json');

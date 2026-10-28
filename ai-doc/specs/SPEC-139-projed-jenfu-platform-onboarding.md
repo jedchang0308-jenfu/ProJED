@@ -668,6 +668,8 @@ Main 正常登入與 Quick 現在使用所在 origin 的 `/api/v1/session/login`
 
 本版 native Session／移轉案例已加入原 S3／migration wrappers。本機容量預檢仍 BLOCKED（相同 2 GiB request），沒有執行本版 0018–0020 的 PostgreSQL 驗證；遠端替代入口已建立，結果待實際執行，舊 bundle 不升格。移轉收據已將過期的 `identity-guards-not-imported` 改為 source-derived guard 及停用／刪除／缺來源使用者的 prewrite 拒絕，名稱與實際檢查一致。source／unit／型別不能代表正常 browser、真 Firebase／OIDC、Hosting 或正式資料驗收。
 
+首次遠端 [run 40763175328](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40763175328)（`78e0995`）：完整 lockfile 安裝後原 server／S2 與 frontend 型別、三組 unit、三種 boundary 均 PASS；兩個隔離 PostgreSQL 17 cluster 均在 DDL 前被 runner 仍停在 0017 的重複清單拒絕，native 驗收未通過。已將 checker／runner 的五份清單合併到同一唯讀 allowlist，仍精確限定來源路徑與順序；runtime 的獨立 ledger／profile 驗證不變。artifact checker 也改為比對 managed profile 的全部 migration path→checksum，移除過期固定 17 份的門檻。三個 profile 的 preconnect 檢查通過，缺少／重排／未知 migration 的三個負例均拒絕且未連 DB；修正後 native 結果待重跑，不覆寫首次失敗。
+
 剩餘身分功能仍計入完成分母：Platform 尚無 OAuth error/cancel callback wire，本地取消 endpoint 不等於正常取消返回 UI；新 Google／外部使用者首次建立本地 profile／guard 尚未實作，不能把目前八位舊使用者映射當成全部使用者範圍。OrgMaster 043／Platform 015 的 forward-only source 修正用於移除 Employee active 與私人登入的不當耦合，尚待 owner release packaging／native／CI；不要求舊 ProJED receipt 才能首次准入，但仍核對不可變 provider owner、禁止停用 admission 自動重啟，不另造 personal Principal 或重綁 provider pair。其餘功能／資料、雲端、writer fence、切流及 release 仍計入原完成分母。
 
 ## 14. S3 HTTP read adapter slice（2026-10-26）

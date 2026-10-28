@@ -36,7 +36,10 @@ const binding = JSON.parse(run([
   'scripts/create-dev139-managed-binding.mjs',
   '--instance=jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg',
 ]));
-assert.equal(Object.keys(binding.migrationSha256).length, 17);
+const managedProfile = JSON.parse(readFileSync('config/dev-139/s3-managed.profile.json', 'utf8'));
+assert.deepEqual(binding.migrationSha256, Object.fromEntries(managedProfile.migrations.map(({ path }) => [
+  path, createHash('sha256').update(readFileSync(path)).digest('hex'),
+])));
 assert.equal(binding.databaseName, 'jenfu_prod');
 assert.equal(binding.cloudSqlInstance, 'jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg');
 assert.equal(Object.keys(binding).some(key => /password|secret|credential/i.test(key)), false);

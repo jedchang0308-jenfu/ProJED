@@ -15,6 +15,7 @@ on:
       - scripts/migrate-dev-139-s1.mjs
       - scripts/dev139-*.ts
       - scripts/lib/dev139-*.ts
+      - scripts/lib/dev139-*.mjs
       - tsconfig*.json
       - package.json
       - package-lock.json
