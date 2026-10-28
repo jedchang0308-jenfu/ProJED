@@ -189,10 +189,16 @@ export async function verifyAppSessionsPostgres(database: RuntimeDatabase, confi
     port=>commands.acceptInvite(port,freshEmailToken));
   assert.equal(acceptedFreshInvite.status,'accepted');
   assert.equal(acceptedFreshInvite.email,'fresh@example.invalid');
-  const invitedMembers=await runActorTransaction(database,config,refreshedActor,
+  const invitedMembers=await runActorTransaction(database,config,employeeActor,
     port=>reads.listWorkspaceMembers(port,inviteWorkspace.id));
   assert.deepEqual(invitedMembers.filter(member=>member.userId===owner.localUserId).map(member=>member.profile.email),
     ['fresh@example.invalid'],'The refreshed email is accepted through the real invite and RLS path');
+  await assert.rejects(runActorTransaction(database,config,refreshedActor,
+    port=>reads.listWorkspaceMembers(port,inviteWorkspace.id)),
+    (error: unknown)=>error instanceof KernelError && error.code==='RESOURCE_NOT_FOUND',
+    'A board invitation must not grant workspace member-management access');
+  assert.deepEqual(await runActorTransaction(database,config,refreshedActor,
+    port=>reads.listTasks(port,inviteWorkspace.id,inviteBoard.id)),[]);
   assert.equal((await runActorTransaction(database,config,refreshedActor,port=>reads.listWorkspaces(port)))
     .some(item=>item.id===inviteWorkspace.id),true);
 
