@@ -64,9 +64,11 @@ async function claimNext(run:RagTransactionRunner,scope:RagIndexScope,limit:numb
             AND c.document_id=document.id AND c.document_version_id=version.id)
           AND NOT EXISTS(SELECT 1 FROM projed_core.rag_sync_jobs busy WHERE busy.tenant_id=document.tenant_id
             AND busy.source_document_id=document.id AND busy.status='running' AND busy.lease_expires_at>clock_timestamp()
+            AND busy.provider='google' AND busy.target_store_id IS NULL
             AND (busy.document_version_id=version.id OR busy.document_version_id IS NULL))
           AND NOT EXISTS(SELECT 1 FROM projed_core.rag_sync_jobs terminal WHERE terminal.tenant_id=document.tenant_id
             AND terminal.source_document_id=document.id AND terminal.status='failed' AND terminal.attempt_count>=3
+            AND terminal.provider='google' AND terminal.target_store_id IS NULL
             AND terminal.document_version_id=version.id AND terminal.content_hash=document.content_hash)
           AND (EXISTS(SELECT 1 FROM projed_core.document_chunks c WHERE c.tenant_id=document.tenant_id
             AND c.document_id=document.id AND c.document_version_id=version.id AND NOT EXISTS(
@@ -74,8 +76,10 @@ async function claimNext(run:RagTransactionRunner,scope:RagIndexScope,limit:numb
                 AND e.provider='google' AND e.model=$3 AND e.dimensions=3072 AND e.content_hash=document.content_hash))
             OR EXISTS(SELECT 1 FROM projed_core.rag_sync_jobs j WHERE j.tenant_id=document.tenant_id
               AND j.source_document_id=document.id AND j.status IN('pending','running','failed')
+              AND j.provider='google' AND j.target_store_id IS NULL
               AND (j.document_version_id=version.id OR j.document_version_id IS NULL)
-              AND (j.content_hash=document.content_hash OR j.content_hash IS NULL)))
+              AND (j.content_hash=document.content_hash OR j.content_hash IS NULL)
+              AND (j.metadata->>'contentHash' IS NULL OR j.metadata->>'contentHash'=document.content_hash)))
         ORDER BY document.updated_at,document.id LIMIT 1
       `,[scope.tenantId,scope.projectId,MODEL]);
       const row=document.rows[0];if(!row)return null;
@@ -84,7 +88,7 @@ async function claimNext(run:RagTransactionRunner,scope:RagIndexScope,limit:numb
       if(gate.rows[0]?.acquired!==true)return null;
       const jobs=await port.query<{id:string}>(`
         SELECT id::text FROM projed_core.rag_sync_jobs WHERE tenant_id=$1::uuid AND source_document_id=$2::uuid
-          AND provider='google' AND target_store_id IS NULL AND status IN('pending','running','failed','synced')
+          AND provider='google' AND target_store_id IS NULL AND status IN('pending','running','failed')
           AND attempt_count<3 AND (lease_expires_at IS NULL OR lease_expires_at<=clock_timestamp())
           AND (document_version_id=$3::uuid OR document_version_id IS NULL)
           AND (content_hash=$4 OR content_hash IS NULL)
@@ -103,6 +107,7 @@ async function claimNext(run:RagTransactionRunner,scope:RagIndexScope,limit:numb
       if(current.rows.length!==1)return null;
       const busy=await port.query(`SELECT id FROM projed_core.rag_sync_jobs
         WHERE tenant_id=$1::uuid AND source_document_id=$2::uuid AND status='running'
+          AND provider='google' AND target_store_id IS NULL
           AND lease_expires_at>clock_timestamp() AND (document_version_id=$3::uuid OR document_version_id IS NULL)`,
       [scope.tenantId,row.id,row.version_id]);
       if(busy.rows.length)return null;

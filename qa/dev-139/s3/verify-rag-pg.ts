@@ -367,6 +367,24 @@ export async function verifyRagPostgres(database: RuntimeDatabase, config: Runti
     assert.ok(firstState.jobs.some(job => job.status === 'synced' && job.lease === null
       && job.versionId === firstState.versions[0]!.id && job.hash === firstState.documentHash));
 
+    // Imported documents can have several jobs. A pending duplicate must not
+    // reopen the earlier complete job or pay to embed current chunks again.
+    const duplicateJobId = randomUUID();
+    await runActorTransaction(database, config, ownerLogin.actor, async port => {
+      await port.authorizeRagJobMutation(ownerScope.workspaceId, firstState.pointer!, duplicateJobId, opaqueHash());
+      await port.query(`INSERT INTO projed_core.rag_sync_jobs
+        (id,tenant_id,provider,target_store_id,source_document_id,document_version_id,content_hash,status,metadata)
+        VALUES($1::uuid,$2::uuid,'google',NULL,$3::uuid,$4::uuid,$5,'pending','{}'::jsonb)`,
+      [duplicateJobId,ownerScope.workspaceId,firstState.pointer,firstState.versions[0]!.id,firstState.documentHash]);
+    });
+    const beforeDuplicate = provider.counts.embed;
+    assert.equal((await ownerRag.query(request(ownerScope, ownerScope.boardId, 'find the published marker again'))).answer,
+      'synthetic-rag-answer');
+    assert.equal(provider.counts.embed, beforeDuplicate + 1, 'Only the new query needs embedding');
+    const deduplicated = await readRecordSnapshot(database, config, ownerLogin.actor, ownerScope, published.id);
+    assert.ok(deduplicated.jobs.some(job => job.id === duplicateJobId && job.status === 'synced' && job.lease === null));
+    assert.ok(deduplicated.jobs.every(job => job.status === 'synced'));
+
     const editedText = `RAG_EDITED_MARKER_${randomUUID()} revised content has a different hash.`;
     await saveRecord(database, config, ownerLogin.actor, ownerScope, {
       ...recordBase, id: published.id, title: published.title, content: editedText,
