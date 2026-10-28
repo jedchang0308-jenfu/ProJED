@@ -82,6 +82,21 @@ async function claimNext(run:RagTransactionRunner,scope:RagIndexScope,limit:numb
       const gate=await port.query<{acquired:boolean}>(`SELECT pg_try_advisory_xact_lock(
         hashtextextended('projed:rag-document:'||$1,0)) AS acquired`,[row.id]);
       if(gate.rows[0]?.acquired!==true)return null;
+      const jobs=await port.query<{id:string}>(`
+        SELECT id::text FROM projed_core.rag_sync_jobs WHERE tenant_id=$1::uuid AND source_document_id=$2::uuid
+          AND provider='google' AND target_store_id IS NULL AND status IN('pending','running','failed','synced')
+          AND attempt_count<3 AND (lease_expires_at IS NULL OR lease_expires_at<=clock_timestamp())
+          AND (document_version_id=$3::uuid OR document_version_id IS NULL)
+          AND (content_hash=$4 OR content_hash IS NULL)
+          AND (metadata->>'contentHash' IS NULL OR metadata->>'contentHash'=$4)
+        ORDER BY created_at,id LIMIT 1
+      `,[scope.tenantId,row.id,row.version_id,row.content_hash]);
+      const jobId=jobs.rows[0]?.id??randomUUID();
+      const token=randomBytes(32).toString('hex');
+      const claim:Claim={jobId,documentId:row.id,versionId:row.version_id,contentHash:row.content_hash,token,chunks:[]};
+      await port.authorizeRagJobMutation(scope.tenantId,row.id,jobId,token);
+      // SELECT FOR SHARE also needs an UPDATE USING policy. The exact scope
+      // allows only this lock; its WITH CHECK false never permits a document edit.
       const current=await port.query(`SELECT id FROM projed_core.documents
         WHERE tenant_id=$1::uuid AND id=$2::uuid AND rag_enabled AND content_hash=$3 FOR SHARE`,
       [scope.tenantId,row.id,row.content_hash]);
@@ -91,20 +106,6 @@ async function claimNext(run:RagTransactionRunner,scope:RagIndexScope,limit:numb
           AND lease_expires_at>clock_timestamp() AND (document_version_id=$3::uuid OR document_version_id IS NULL)`,
       [scope.tenantId,row.id,row.version_id]);
       if(busy.rows.length)return null;
-      const jobs=await port.query<{id:string}>(`
-        SELECT id::text FROM projed_core.rag_sync_jobs WHERE tenant_id=$1::uuid AND source_document_id=$2::uuid
-          AND provider='google' AND target_store_id IS NULL AND status IN('pending','running','failed','synced')
-          AND attempt_count<3 AND (lease_expires_at IS NULL OR lease_expires_at<=clock_timestamp())
-          AND (document_version_id=$3::uuid OR document_version_id IS NULL)
-          AND (content_hash=$4 OR content_hash IS NULL)
-          AND (metadata->>'contentHash' IS NULL OR metadata->>'contentHash'=$4)
-        ORDER BY created_at,id LIMIT 1 FOR UPDATE SKIP LOCKED
-      `,[scope.tenantId,row.id,row.version_id,row.content_hash]);
-      const jobId=jobs.rows[0]?.id??randomUUID();
-      const token=randomBytes(32).toString('hex');
-      const claim:Claim={jobId,documentId:row.id,versionId:row.version_id,contentHash:row.content_hash,token,chunks:[]};
-      proposed.claim=claim;
-      await port.authorizeRagJobMutation(scope.tenantId,row.id,jobId,token);
       if(!jobs.rows[0]) await port.query(`
         INSERT INTO projed_core.rag_sync_jobs(id,tenant_id,provider,target_store_id,source_document_id,
           document_version_id,content_hash,status,metadata)
@@ -120,6 +121,7 @@ async function claimNext(run:RagTransactionRunner,scope:RagIndexScope,limit:numb
         RETURNING id
       `,[scope.tenantId,jobId,token,row.version_id,row.content_hash]);
       if(acquired.rowCount!==1)return null;
+      proposed.claim=claim;
       claim.chunks=await readClaimChunks(port,scope,claim,limit);
       return claim;
     });
@@ -140,11 +142,11 @@ async function settle(
   try {
     await run(async port=>{
       // Follow mirror's document -> job lock order; never hold a DB lease while embedding.
+      await readClaimChunks(port,scope,claim,1);
       const document=await port.query(`SELECT id FROM projed_core.documents
         WHERE tenant_id=$1::uuid AND id=$2::uuid AND content_hash=$3 AND rag_enabled FOR SHARE`,
       [scope.tenantId,claim.documentId,claim.contentHash]);
       if(document.rows.length!==1)stale();
-      await readClaimChunks(port,scope,claim,1);
       const locked=await port.query(`SELECT id FROM projed_core.rag_sync_jobs
         WHERE tenant_id=$1::uuid AND id=$2::uuid AND status='running' AND lease_token=$3
           AND lease_expires_at>clock_timestamp() FOR UPDATE`,[scope.tenantId,claim.jobId,claim.token]);

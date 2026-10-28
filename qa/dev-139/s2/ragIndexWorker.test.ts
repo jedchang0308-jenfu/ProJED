@@ -50,7 +50,7 @@ function fakeWorkerPort() {
       rows = [{ id: DOCUMENT_ID }];
     } else if (/SELECT id FROM projed_core\.rag_sync_jobs/u.test(statement) && /FOR UPDATE/u.test(statement)) {
       rows = [{ id: JOB_ID }];
-    } else if (/SELECT id::text FROM projed_core\.rag_sync_jobs/u.test(statement) && /FOR UPDATE SKIP LOCKED/u.test(statement)) {
+    } else if (/SELECT id::text FROM projed_core\.rag_sync_jobs/u.test(statement)) {
       counts.claimRowLocks += 1;
       rows = [{ id: JOB_ID }];
     } else if (/SELECT job\.id FROM projed_core\.rag_sync_jobs/u.test(statement)) {

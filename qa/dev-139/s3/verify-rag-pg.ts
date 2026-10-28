@@ -498,6 +498,14 @@ export async function verifyRagPostgres(database: RuntimeDatabase, config: Runti
       RETURNING id
     `, [ownerScope.workspaceId, syncedJob.id]));
     assert.equal(unauthorizedJobUpdate.rowCount, 0, 'A normal actor without a document/job lease cannot mutate job provenance');
+    await assert.rejects(runActorTransaction(database, config, ownerLogin.actor, async port => {
+      await port.authorizeRagJobMutation(ownerScope.workspaceId, firstState.pointer!, syncedJob.id, 'a'.repeat(64));
+      const lock = await port.query(`SELECT id FROM projed_core.documents
+        WHERE tenant_id=$1::uuid AND id=$2::uuid FOR SHARE`, [ownerScope.workspaceId, firstState.pointer]);
+      assert.equal(lock.rows.length, 1, 'The worker scope must allow locking an already visible document');
+      await port.query(`UPDATE projed_core.documents SET title='forged through worker lock'
+        WHERE tenant_id=$1::uuid AND id=$2::uuid`, [ownerScope.workspaceId, firstState.pointer]);
+    }), error => hasSqlState(error, '42501'));
     await assert.rejects(runActorTransaction(database, config, ownerLogin.actor, port => port.query(`
       UPDATE projed_core.documents SET source_id=$3::uuid
        WHERE tenant_id=$1::uuid AND id=$2::uuid

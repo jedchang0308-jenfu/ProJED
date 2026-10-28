@@ -94,6 +94,57 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+-- A version FK detach must retain the same job identity and state while the
+-- deleted version's chunks and vectors cascade. All changes roll back here.
+SAVEPOINT rag_job_version_detach;
+INSERT INTO projed_core.rag_sync_jobs(
+  id, tenant_id, provider, target_store_id, source_document_id,
+  document_version_id, content_hash, status, metadata
+) VALUES (
+  'd4000000-0000-4000-8000-000000000006',
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'google', NULL,
+  'd0000000-0000-4000-8000-000000000001',
+  'd1000000-0000-4000-8000-000000000001',
+  'fixture-version-shared-v1', 'pending', '{"case":"version-detach-retention"}'::jsonb
+);
+DELETE FROM projed_core.document_versions
+ WHERE id = 'd1000000-0000-4000-8000-000000000001';
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM projed_core.rag_sync_jobs
+     WHERE id = 'd4000000-0000-4000-8000-000000000006'
+       AND tenant_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+       AND source_document_id = 'd0000000-0000-4000-8000-000000000001'
+       AND document_version_id IS NULL
+       AND content_hash = 'fixture-version-shared-v1'
+       AND status = 'pending'
+       AND metadata = '{"case":"version-detach-retention"}'::jsonb
+  ) OR EXISTS (SELECT 1 FROM projed_core.document_versions
+                 WHERE id = 'd1000000-0000-4000-8000-000000000001')
+    OR EXISTS (SELECT 1 FROM projed_core.document_chunks
+                WHERE id = 'd2000000-0000-4000-8000-000000000001')
+    OR EXISTS (SELECT 1 FROM projed_core.document_embeddings
+                WHERE id = 'd3000000-0000-4000-8000-000000000001')
+    OR NOT EXISTS (SELECT 1 FROM projed_core.documents
+                    WHERE id = 'd0000000-0000-4000-8000-000000000001') THEN
+    RAISE EXCEPTION 'version deletion did not detach only the job version pointer and cascade its children';
+  END IF;
+END $$;
+ROLLBACK TO SAVEPOINT rag_job_version_detach;
+RELEASE SAVEPOINT rag_job_version_detach;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM projed_core.rag_sync_jobs
+              WHERE id = 'd4000000-0000-4000-8000-000000000006')
+    OR NOT EXISTS (SELECT 1 FROM projed_core.document_versions
+                    WHERE id = 'd1000000-0000-4000-8000-000000000001')
+    OR NOT EXISTS (SELECT 1 FROM projed_core.document_chunks
+                    WHERE id = 'd2000000-0000-4000-8000-000000000001')
+    OR NOT EXISTS (SELECT 1 FROM projed_core.document_embeddings
+                    WHERE id = 'd3000000-0000-4000-8000-000000000001') THEN
+    RAISE EXCEPTION 'version detach savepoint did not restore the retained job and vector state';
+  END IF;
+END $$;
+
 SAVEPOINT mirror_source_document_delete;
 DELETE FROM projed_core.documents
  WHERE id = 'd0000000-0000-4000-8000-000000000004';

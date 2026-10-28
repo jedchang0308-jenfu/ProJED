@@ -112,6 +112,10 @@
     {
       "version": "0024_rag_record_lifecycle_v1",
       "path": "db/migrations/0024_rag_record_lifecycle_v1.sql"
+    },
+    {
+      "version": "0025_rag_lock_and_fk_compatibility_v1",
+      "path": "db/migrations/0025_rag_lock_and_fk_compatibility_v1.sql"
     }
   ],
   "objectAllowlist": [

@@ -357,7 +357,7 @@ export async function readLiveRagSnapshot(port: ActorQueryPort, scope: RagScope)
              dependency.legacy_dependency_id, dependency.from_side, dependency.to_side,
              dependency.offset_value, from_item.legacy_task_id AS from_task_id,
              to_item.legacy_task_id AS to_task_id,
-             dependency.created_at, board.created_at AS board_created_at
+             board.created_at AS board_created_at
         FROM projed_core.wbs_dependencies dependency
         JOIN visible_boards board ON board.id = dependency.project_id
         JOIN projed_core.wbs_items from_item
@@ -367,7 +367,7 @@ export async function readLiveRagSnapshot(port: ActorQueryPort, scope: RagScope)
           ON to_item.tenant_id = dependency.tenant_id AND to_item.project_id = dependency.project_id
          AND to_item.id = dependency.to_id AND NOT to_item.archived
        WHERE dependency.tenant_id = $1::uuid
-       ORDER BY board.sort_order NULLS LAST, board.created_at, board.id, dependency.created_at, dependency.id
+       ORDER BY board.sort_order NULLS LAST, board.created_at, board.id, dependency.id
        LIMIT 201
     ),
     member_candidates AS MATERIALIZED (
@@ -418,9 +418,9 @@ export async function readLiveRagSnapshot(port: ActorQueryPort, scope: RagScope)
                'toSide', dependency.to_side,
                'offset', dependency.offset_value
              ) ORDER BY dependency.board_sort_order NULLS LAST, dependency.board_created_at,
-                      dependency.legacy_board_id, dependency.created_at, dependency.id)
+                      dependency.legacy_board_id, dependency.id)
                FROM (SELECT * FROM dependency_candidates ORDER BY board_sort_order NULLS LAST,
-                     board_created_at, legacy_board_id, created_at, id LIMIT 200) dependency
+                     board_created_at, legacy_board_id, id LIMIT 200) dependency
            ), '[]'::jsonb) AS dependencies,
            COALESCE((
              SELECT jsonb_agg(jsonb_build_object(
