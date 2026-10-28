@@ -18,6 +18,12 @@ import {
   validateSupabaseSourceUrl,
   type SupabaseSourceBindingV1,
 } from './dev139-supabase-source-contract.js';
+import {
+  projectGoogleIdentityProofs,
+  validateGoogleIdentitySourceColumns,
+  type GoogleIdentityColumnContractRow,
+  type GoogleIdentitySourceRow,
+} from './lib/dev139-google-identity-proof.js';
 
 type Mode = 'plan' | 'apply' | 'reconcile';
 type Row = Record<string, unknown>;
@@ -28,6 +34,7 @@ type TableSpec = {
   columns: readonly string[];
   sourceSql: string;
   transform?: (row: Row) => Row;
+  project?: (rows: readonly Row[], priorSnapshot: ReadonlyMap<string, readonly Row[]>) => Row[];
 };
 
 const { Client: PgClient } = pg;
@@ -73,6 +80,28 @@ const TABLES: readonly TableSpec[] = [
            COALESCE(ui_preferences, '{}'::jsonb) AS ui_preferences, created_at, updated_at
       FROM public.profiles ORDER BY id
   `),
+  // This exact Supabase-managed auth projection is inventoried explicitly; do not scan all auth-schema objects.
+  // Keep it after profiles so user_id is checked against the same read-only source snapshot.
+  {
+    target: 'google_identity_proofs',
+    sourceRelation: 'auth.identities',
+    columns: ['google_subject', 'local_user_id'],
+    sourceSql: `
+      SELECT provider_id AS google_subject,
+             user_id::text AS local_user_id,
+             jsonb_typeof(identity_data) AS identity_data_type,
+             identity_data ? 'sub' AS identity_data_has_sub,
+             jsonb_typeof(identity_data -> 'sub') AS identity_data_sub_type,
+             identity_data ->> 'sub' AS identity_data_sub
+        FROM auth.identities
+       WHERE provider = 'google'
+       ORDER BY provider_id, user_id
+    `,
+    project: (rows, priorSnapshot) => projectGoogleIdentityProofs(
+      rows as unknown as readonly GoogleIdentitySourceRow[],
+      new Set((priorSnapshot.get('profiles') ?? []).map(profile => String(profile.id))),
+    ),
+  },
   table('tenants', 'public.tenants', ['id', 'legacy_workspace_id', 'title', 'owner_id', 'sort_order', 'created_at', 'updated_at'], `
     SELECT id, COALESCE(NULLIF(legacy_workspace_id, ''), id::text) AS legacy_workspace_id,
            name AS title, owner_id, NULL::float8 AS sort_order, created_at, updated_at
@@ -455,8 +484,10 @@ function snapshotId(snapshot: ReadonlyMap<string, readonly Row[]>): string {
 async function readSource(client: Client): Promise<Map<string, Row[]>> {
   const result = new Map<string, Row[]>();
   for (const spec of TABLES) {
-    const rows = (await client.query<Row>(spec.sourceSql)).rows;
-    const transformed = spec.transform ? rows.map(spec.transform) : rows;
+    const sourceRows = (await client.query<Row>(spec.sourceSql)).rows;
+    const transformed = spec.project
+      ? spec.project(sourceRows, result)
+      : spec.transform ? sourceRows.map(spec.transform) : sourceRows;
     const missingColumn = transformed.flatMap(row => spec.columns.filter(column => !(column in row)))[0];
     if (missingColumn) {
       throw Object.assign(new Error(`Source projection missing ${spec.target}.${missingColumn}`), {
@@ -466,6 +497,25 @@ async function readSource(client: Client): Promise<Map<string, Row[]>> {
     result.set(spec.target, transformed);
   }
   return result;
+}
+
+async function validateGoogleIdentitySourceSchema(client: Client): Promise<void> {
+  const result = await client.query<GoogleIdentityColumnContractRow>(`
+    SELECT relation.relkind::text AS relation_kind,
+           attribute.attname AS column_name,
+           pg_catalog.format_type(attribute.atttypid, attribute.atttypmod) AS data_type
+      FROM pg_catalog.pg_class relation
+      JOIN pg_catalog.pg_namespace relation_namespace
+        ON relation_namespace.oid = relation.relnamespace
+      LEFT JOIN pg_catalog.pg_attribute attribute
+        ON attribute.attrelid = relation.oid
+       AND attribute.attnum > 0
+       AND NOT attribute.attisdropped
+     WHERE relation_namespace.nspname = 'auth'
+       AND relation.relname = 'identities'
+     ORDER BY attribute.attnum
+  `);
+  validateGoogleIdentitySourceColumns(result.rows);
 }
 
 async function readTarget(client: Client): Promise<Map<string, Row[]>> {
@@ -705,6 +755,7 @@ async function main(): Promise<void> {
     // This setting does not grant permission to bypass a row security policy.
     await source.query('SET LOCAL row_security = off');
     await validateSource(source, sourceBinding);
+    await validateGoogleIdentitySourceSchema(source);
     const { blockers, emptySourceRelations } = await sourcePreflight(source);
     if (blockers.length > 0) {
       await source.query('ROLLBACK');

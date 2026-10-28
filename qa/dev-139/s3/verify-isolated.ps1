@@ -141,6 +141,7 @@ try {
     profileSha256 = $profileHash
     migrationSha256 = $migrationHashes
     checks = @(
+      'google-proof-rls-original-uuid-read-only-and-guard-denial'
       'migration-apply', 'migration-idempotent', 'runtime-boundary', 'workspace-board-scope',
       'tenant-member-scope', 'board-member-scope', 'explicit-empty-permissions',
       'task-parent-mapping', 'dependency-mapping', 'private-board-deny',

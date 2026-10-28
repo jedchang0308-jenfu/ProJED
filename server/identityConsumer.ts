@@ -24,6 +24,8 @@ export interface ProducerVerifiedIdentity {
   readonly identityIssuer: string;
   readonly identitySubject: string;
   readonly principalId: string;
+  readonly principalKind: 'employee' | 'personal';
+  readonly googleSubject: string;
   readonly employeeId: string | null;
   readonly authEpoch: number;
   readonly authenticatedAtMs: number;
@@ -44,6 +46,7 @@ export interface ActivePrincipalMapping {
   readonly principalId: string;
   readonly identityIssuer: string;
   readonly identitySubject: string;
+  readonly googleSubject: string;
   readonly mappingRevision: string;
   readonly localUserId: string;
   readonly accountGuardRevision: string;
@@ -55,7 +58,7 @@ export type PrincipalMappingResult =
 
 export interface PrincipalMappingResolver {
   resolve(identity: Pick<ProducerVerifiedIdentity,
-  'principalId' | 'identityIssuer' | 'identitySubject' | 'mappingRevision'>): Promise<PrincipalMappingResult>;
+  'principalId' | 'identityIssuer' | 'identitySubject' | 'googleSubject' | 'mappingRevision'>): Promise<PrincipalMappingResult>;
 }
 
 export interface IdentityConsumerDependencies {
@@ -66,9 +69,8 @@ export interface IdentityConsumerDependencies {
   readonly createContextId?: () => string;
 }
 
-// No external owner has published a ProJED/non-employee wire contract yet.
-// Keeping the production pin set empty makes every attempted handoff fail
-// closed until a reviewed version and manifest digest are deliberately added.
+// Owner v4 source exists, but formal publication and consumer acceptance are
+// pending. Source/CI evidence does not activate a production contract pin.
 export const CURRENT_PRODUCTION_IDENTITY_PINS: readonly IdentityContractPin[] = Object.freeze([]);
 
 const SHA256_RE = /^[a-f0-9]{64}$/;
@@ -76,7 +78,8 @@ const REVISION_RE = /^[1-9][0-9]{0,18}$/;
 const MAX_BIGINT = 9_223_372_036_854_775_807n;
 
 function text(value: unknown, maximum = 255): value is string {
-  return typeof value === 'string' && value.length >= 1 && value.length <= maximum && value.trim() === value;
+  return typeof value === 'string' && value.length >= 1 && value.length <= maximum && value.trim() === value
+    && !/[\u0000-\u001f\u007f]/u.test(value);
 }
 
 function revision(value: unknown): value is string {
@@ -92,6 +95,9 @@ function validateNormalizedIdentity(identity: ProducerVerifiedIdentity, nowMs: n
   if (!text(identity.contractVersion) || !SHA256_RE.test(identity.manifestSha256)
       || !text(identity.issuer) || !text(identity.audience) || !text(identity.identityIssuer)
       || !text(identity.identitySubject) || !text(identity.principalId) || !employeeValid
+      || !text(identity.googleSubject)
+      || (identity.principalKind !== 'employee' && identity.principalKind !== 'personal')
+      || (identity.principalKind === 'personal' ? identity.employeeId !== null : identity.employeeId === null)
       || !Number.isSafeInteger(identity.authEpoch) || identity.authEpoch < 0
       || !timestamp(identity.authenticatedAtMs) || !timestamp(identity.issuedAtMs)
       || !timestamp(identity.sourceSessionExpiresAtMs) || !timestamp(identity.expiresAtMs)
@@ -133,13 +139,21 @@ export class IdentityConsumer {
   }
 
   async consume(input: unknown, entry: AppEntry): Promise<ServerActorV1> {
+    return (await this.consumeVerified(input, entry)).actor;
+  }
+
+  /** Retains the single-use verification result for subsequent Session creation. */
+  async consumeVerified(input: unknown, entry: AppEntry): Promise<{
+    readonly actor: ServerActorV1;
+    readonly identity: ProducerVerifiedIdentity;
+  }> {
     if (this.#dependencies.pins.length === 0) {
       throw new KernelError('IDENTITY_CONTRACT_UNAVAILABLE', 'No ProJED identity contract is published', 503);
     }
 
     let identity: ProducerVerifiedIdentity;
     try {
-      identity = await this.#dependencies.verifier.verify(input);
+      identity = Object.freeze({ ...await this.#dependencies.verifier.verify(input) });
     } catch (error) {
       if (error instanceof KernelError
           && (error.code === 'IDENTITY_INVALID'
@@ -158,6 +172,7 @@ export class IdentityConsumer {
         principalId: identity.principalId,
         identityIssuer: identity.identityIssuer,
         identitySubject: identity.identitySubject,
+        googleSubject: identity.googleSubject,
         mappingRevision: identity.mappingRevision,
       });
     } catch (error) {
@@ -167,6 +182,7 @@ export class IdentityConsumer {
     if (mapping.principalId !== identity.principalId
         || mapping.identityIssuer !== identity.identityIssuer
         || mapping.identitySubject !== identity.identitySubject
+        || mapping.googleSubject !== identity.googleSubject
         || mapping.mappingRevision !== identity.mappingRevision) {
       throw new KernelError('IDENTITY_MAPPING_CONFLICT', 'Principal mapping does not match verified identity', 409);
     }
@@ -187,6 +203,6 @@ export class IdentityConsumer {
       accountGuardRevision: mapping.accountGuardRevision,
     };
     validateServerActor(actor, actorNowMs);
-    return Object.freeze(actor);
+    return Object.freeze({ actor: Object.freeze(actor), identity: Object.freeze({ ...identity }) });
   }
 }

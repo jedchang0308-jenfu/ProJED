@@ -1,7 +1,7 @@
 # ADR-054：ProJED Cloud Run／Cloud SQL 與跨系統責任邊界
 
 - 日期：2026-10-26（Asia/Taipei）。
-- 修訂：Rev 13，移除已完成 S1 的重複人工出口與過期授權描述，現行交接以 SPEC-139 Rev37 為準；managed目標仍對齊共用jenfu_prod，保留舊Hosting同project的單一runtime；既有使用者切換尚未執行。
+- 修訂：Rev 13，移除已完成 S1 的重複人工出口與過期授權描述，現行交接以 SPEC-139 為準；managed目標仍對齊共用jenfu_prod，保留舊Hosting同project的單一runtime；既有使用者切換尚未執行。
 - 狀態：**Accepted（ProJED 技術選型與本 repo 開發完成）**；S1、S2 consumer seam及S3 W1–W18本地驗收PASS。Platform Session／handoff source 已有 draft PR／CI 及 LOCAL_SIMULATION PostgreSQL 證據，但真 Firebase／OIDC、ProJED Session wire、真資料及 release 仍未完成；本 ADR 的Accepted不表示其他owner接受、無縫切換或production closure。
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。詳細交接契約：[SPEC-139](../specs/SPEC-139-projed-jenfu-platform-onboarding.md)。
 - 適用未來整合路徑；不立即取代既有 runtime，不表示其他 repo 接受新契約，也不授權程式、DB、遠端或付費操作。
@@ -34,11 +34,11 @@ D2 最新人類原文為「保留 ProJED 現有的工作區、看板與權限功
 
 ## Chosen Rule
 
-2026-10-29 續行修正：人類已要求完成外部接線、正式資料及發布；現行契約為 SPEC-139 Rev37，選測與開發出口見 §8.1／§11.5，整合進度與分層證據只在 §33–§37 維護。W22／W23 source、PR／CI 與本地模擬不代表真 Firebase／OIDC、ProJED opaque Session／既有 UUID proof 或正式整合完成；工作區／看板權限仍由 ProJED 控制。W18／Rev10 為 local 切片歷史，W20／W21 資料保留也不代表 RAG／會議等剩餘功能完成，不縮減完整目標。
+2026-10-29 續行修正：人類已要求完成外部接線、正式資料及發布；現行契約為 SPEC-139，選測與開發出口見 §8.1／§11.5，整合進度與分層證據只在 §33–§37 維護。W22／W23 source、PR／CI 與本地模擬不代表真 Firebase／OIDC、ProJED opaque Session／既有 UUID proof 或正式整合完成；工作區／看板權限仍由 ProJED 控制。W18／Rev10 為 local 切片歷史，W20／W21 資料保留也不代表 RAG／會議等剩餘功能完成，不縮減完整目標。
 
 managed database 固定既有 `jenfu-platform-prod / asia-east1 / jenfu-platform-prod-pg / jenfu_prod`，不是另建 `projed` DB。原 Hosting project 為 `projed-cc78d`，唯一新 runtime 規劃為同 project／asia-east1 的 `projed-prod`，以受控跨 project 身分連共用 SQL，不增加第二個 edge proxy。新 runtime／release 服務帳號、app Secret 與 SQL grant 尚待新責任權限確認；舊 `projed-ai-backend` 與現有身分不覆寫。此項精簡不執行正式資料、流量或權限變更。
 
-人類已要求「升級到架構確定」與 rd-tech-lead 審視並優化，並要求把既有使用者切換評估寫入文件。下列 ProJED 架構規則固定，現行契約為 SPEC-139 Rev37；D1 publisher 與 D2 首階段範圍不變。已完成 S1 的固定順序與人工 freeze／QC／Spec Drift 不作後續開發前置，沿 SPEC §9／§11.5 的授權、選測與啟用界線續行；required CI、DB checker 與正式發布保護仍有效。人類選定方向及本 repo 決策不表示外部 owner wire／程式已接受或發布：
+人類已要求「升級到架構確定」與 rd-tech-lead 審視並優化，並要求把既有使用者切換評估寫入文件。下列 ProJED 架構規則固定，現行契約為 SPEC-139；D1 publisher 與 D2 首階段範圍不變。已完成 S1 的固定順序與人工 freeze／QC／Spec Drift 不作後續開發前置，沿 SPEC §9／§11.5 的授權、選測與啟用界線續行；required CI、DB checker 與正式發布保護仍有效。人類選定方向及本 repo 決策不表示外部 owner wire／程式已接受或發布：
 
 1. **共用 infrastructure，業務權威獨立。** ProJED 自有 repo、runtime、release、`projed_core / projed_contract`、ledger 及 lifecycle-specific 角色；app key 宣告為 `projed`，平台實際登錄屬 S2。其他 app 只用受控 contract。
 2. **保留前端，新增必要 server 邊界。** Vite產物由Node HTTP runtime提供，browser經自有API；不讓DB runtime role／DSN或provider Secret進前端。主／Quick既有兩個public origin與manifest identity保留，相容Hosting把兩邊的`/api/**`轉送至同一個ProJED Cloud Run runtime，同一套server業務實作、各origin Session；可信`main / quick`由Session actor決定，不由Host或forwarded header決定。run.app不直接成為既有使用者必換的新網址；原主origin的Quick相容入口沿原Session，不另造帳號狀態或跨origin token bridge。

@@ -84,6 +84,10 @@
     {
       "version": "0017_document_source_retention_v1",
       "path": "db/migrations/0017_document_source_retention_v1.sql"
+    },
+    {
+      "version": "0018_google_identity_proof_v1",
+      "path": "db/migrations/0018_google_identity_proof_v1.sql"
     }
   ],
   "objectAllowlist": [
@@ -171,7 +175,8 @@
     "projed_core.document_embeddings_chunk_idx",
     "projed_core.rag_sync_jobs_document_idx",
     "projed_core.external_rag_objects_document_idx",
-    "projed_core.knowledge_records_source_document_idx"
+    "projed_core.knowledge_records_source_document_idx",
+    "projed_core.google_identity_proofs"
   ],
   "staticFixturePath": "qa/dev-139/s1/static",
   "runtime": {

@@ -1,4 +1,13 @@
 CREATE SCHEMA private;
+CREATE SCHEMA auth;
+
+CREATE TABLE auth.identities (
+  id uuid PRIMARY KEY,
+  provider text NOT NULL,
+  user_id uuid NOT NULL,
+  provider_id text NOT NULL,
+  identity_data jsonb NOT NULL
+);
 
 CREATE TABLE public.profiles (
   id uuid PRIMARY KEY,
@@ -294,6 +303,9 @@ CREATE TABLE public.inbox_items (id uuid PRIMARY KEY);
 INSERT INTO public.profiles VALUES
   ('11111111-1111-4111-8111-111111111111', 'owner@example.test', 'Owner', 'legacy', 'owner-1', '{"theme":"dark"}', '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z'),
   ('22222222-2222-4222-8222-222222222222', 'guest@example.test', 'Guest', NULL, NULL, '{}', '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z');
+INSERT INTO auth.identities VALUES
+  ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1', 'google', '11111111-1111-4111-8111-111111111111', 'synthetic-google-subject-owner', '{"sub":"synthetic-google-subject-owner"}'),
+  ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee2', 'github', '22222222-2222-4222-8222-222222222222', 'synthetic-non-google-subject', '{"sub":"synthetic-non-google-subject"}');
 INSERT INTO public.tenants VALUES
   ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Workspace', NULL, '11111111-1111-4111-8111-111111111111', '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z'),
   ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa9', 'Unowned original workspace', 'orphan-ws', NULL, '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z');

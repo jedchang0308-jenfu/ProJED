@@ -38,6 +38,7 @@ import { createHttpCalendarAdapter } from '../../../src/services/httpApi/calenda
 import { createBackupPackage } from '../../../src/features/backup/package.js';
 import { BackupError } from '../../../src/features/backup/types.js';
 import { TaskTrackingError } from '../../../src/features/taskTracking/errors.js';
+import { verifyGoogleMappingsPostgres } from '../s2/verify-mappings-pg.js';
 import { createPreferencesHttpDispatcher } from '../../../server/preferencesHttp.js';
 import { createCalendarHttpDispatcher } from '../../../server/calendarHttp.js';
 import type { QuickCaptureRecord } from '../../../src/features/quickTaskCapture/model.js';
@@ -54,6 +55,7 @@ const collaborationReads = new CollaborationReadRepository();
 const collaborationCommands = new CollaborationWriteRepository(repository);
 const recordActivity = new RecordActivityRepository();
 await database.assertRuntimeBoundary(expected);
+await verifyGoogleMappingsPostgres(database);
 
 const runBrowserSmoke = (baseUrl: string): Promise<void> => new Promise((done, reject) => {
   const child = spawn('powershell.exe', [
@@ -1675,7 +1677,8 @@ try {
 console.log(JSON.stringify({
   status: 'PASS',
   checks: [
-    'migration-boundary', 'workspace-board-scope', 'tenant-member-scope', 'board-member-scope',
+    'migration-boundary', 'google-proof-rls-original-uuid-read-only-and-guard-denial',
+    'workspace-board-scope', 'tenant-member-scope', 'board-member-scope',
     'tenant-scope-does-not-imply-board-read', 'suspended-member-deny',
     'explicit-empty-permissions', 'task-parent-mapping', 'dependency-mapping', 'private-board-deny',
     'tag-authority', 'task-command', 'assignment-normalization', 'dependency-command',

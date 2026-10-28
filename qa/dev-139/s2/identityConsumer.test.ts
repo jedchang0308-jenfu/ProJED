@@ -28,6 +28,8 @@ function identity(overrides: Partial<ProducerVerifiedIdentity> = {}): ProducerVe
     identityIssuer: 'https://identity.simulation.invalid/provider',
     identitySubject: 'subject-a',
     principalId: 'principal-a',
+    principalKind: 'personal',
+    googleSubject: 'google-a',
     employeeId: null,
     authEpoch: 7,
     authenticatedAtMs: NOW - 60_000,
@@ -48,6 +50,7 @@ function mapping(overrides: Partial<Extract<PrincipalMappingResult, { status: 'a
     identityIssuer: 'https://identity.simulation.invalid/provider',
     identitySubject: 'subject-a',
     mappingRevision: '12',
+    googleSubject: 'google-a',
     localUserId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     accountGuardRevision: '3',
     ...overrides,
@@ -180,6 +183,27 @@ test('identity state is rechecked after mapping resolution before an actor is re
 test('mapping identity and revision must match the verified producer result', async () => {
   await expectCode(consumer({ mapped: mapping({ principalId: 'principal-b' }) }).consume({}, 'main'), 'IDENTITY_MAPPING_CONFLICT');
   await expectCode(consumer({ mapped: mapping({ mappingRevision: '13' }) }).consume({}, 'main'), 'IDENTITY_MAPPING_CONFLICT');
+  await expectCode(consumer({ mapped: mapping({ googleSubject: 'google-b' }) }).consume({}, 'main'), 'IDENTITY_MAPPING_CONFLICT');
+});
+
+test('consumeVerified retains one immutable verification result without replaying the code', async () => {
+  let calls = 0;
+  const original = identity();
+  const subject = consumer({ verifier: { verify: async () => { calls += 1; return original; } } });
+  const result = await subject.consumeVerified({ code: 'one-use-fixture' }, 'main');
+  assert.equal(calls, 1);
+  assert.equal(result.identity.googleSubject, 'google-a');
+  assert.equal(result.actor.localUserId, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+  assert.equal(Object.isFrozen(result.identity), true);
+  assert.notEqual(result.identity, original);
+});
+
+test('verified kind, Employee and Google ID must form a consistent identity', async () => {
+  for (const change of [
+    { googleSubject: '' }, { googleSubject: 'bad\nsubject' },
+    { principalKind: 'personal' as const, employeeId: 'fake-employee' },
+    { principalKind: 'employee' as const, employeeId: null },
+  ]) await expectCode(consumer({ verified: identity(change) }).consume({}, 'main'), 'IDENTITY_INVALID');
 });
 
 test('invalid local UUID or guard revision is rejected by the S1 actor kernel', async () => {

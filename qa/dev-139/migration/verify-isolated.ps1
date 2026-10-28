@@ -164,7 +164,8 @@ try {
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-c', 'REVOKE projed_owner_disposable FROM projed_importer_disposable')
 
   $plan = Invoke-DataMode -Mode 'plan' -ExpectedExitCodes @(0)
-  if ($plan.status -ne 'PASS' -or $plan.matches -ne $false -or $plan.tables.profiles.count -ne 2 -or $plan.tables.llm_access_logs.count -ne 5) {
+  if ($plan.status -ne 'PASS' -or $plan.matches -ne $false -or $plan.tables.profiles.count -ne 2 -or
+      $plan.tables.google_identity_proofs.count -ne 1 -or $plan.tables.llm_access_logs.count -ne 5) {
     throw 'DEV-139 migration plan result was not the expected empty-target plan.'
   }
 
@@ -178,7 +179,7 @@ try {
     if ($scopeMismatch.status -ne 'BLOCKED' -or -not (@($scopeMismatch.blockers.domain) -like "public.$sourceDomain WHERE*")) {
       throw "DEV-139 source document scope mismatch was not blocked: $sourceDomain"
     }
-    $scopeTargetCount = Invoke-PgScalar -Database $targetDatabase -Sql 'SELECT (SELECT count(*) FROM projed_core.profiles) + (SELECT count(*) FROM projed_core.documents)'
+    $scopeTargetCount = Invoke-PgScalar -Database $targetDatabase -Sql 'SELECT (SELECT count(*) FROM projed_core.profiles) + (SELECT count(*) FROM projed_core.google_identity_proofs) + (SELECT count(*) FROM projed_core.documents)'
     if ($scopeTargetCount -ne '0') { throw 'DEV-139 document scope preflight wrote target rows.' }
     Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "UPDATE public.$sourceDomain SET tenant_id = '$scopeTenant'::uuid WHERE id = '$scopeRowId'::uuid")
   }
@@ -202,7 +203,7 @@ try {
   if ($llmMismatch.status -ne 'BLOCKED' -or -not (@($llmMismatch.blockers.domain) -like 'public.llm_access_logs WHERE*')) {
     throw 'DEV-139 mismatched LLM log workspace/project was not blocked before target writes.'
   }
-  $llmMismatchTargetCount = Invoke-PgScalar -Database $targetDatabase -Sql 'SELECT count(*) FROM projed_core.profiles'
+  $llmMismatchTargetCount = Invoke-PgScalar -Database $targetDatabase -Sql 'SELECT (SELECT count(*) FROM projed_core.profiles) + (SELECT count(*) FROM projed_core.google_identity_proofs)'
   if ($llmMismatchTargetCount -ne '0') { throw 'DEV-139 LLM scope preflight wrote target rows.' }
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "UPDATE public.llm_access_logs SET tenant_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' WHERE id = '01234567-1234-4234-8234-123456789011'; DELETE FROM public.tenants WHERE id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2'")
 
@@ -223,7 +224,7 @@ try {
   if ($unknownPopulatedApply.status -ne 'BLOCKED' -or $unknownEmptyDomain -notin @($unknownPopulatedApply.blockers.domain)) {
     throw 'DEV-139 apply did not reject unknown populated data before target writes.'
   }
-  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "CREATE ROLE projed_source_reader_disposable LOGIN PASSWORD '$readerPassword'; GRANT USAGE ON SCHEMA public, private TO projed_source_reader_disposable; GRANT SELECT ON ALL TABLES IN SCHEMA public, private TO projed_source_reader_disposable; ALTER TABLE public.dev139_unknown_empty_source ENABLE ROW LEVEL SECURITY; CREATE POLICY hide_rows ON public.dev139_unknown_empty_source FOR SELECT USING (false)")
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "CREATE ROLE projed_source_reader_disposable LOGIN PASSWORD '$readerPassword'; GRANT CONNECT ON DATABASE $sourceDatabase TO projed_source_reader_disposable; GRANT USAGE ON SCHEMA public, private, auth TO projed_source_reader_disposable; GRANT SELECT ON ALL TABLES IN SCHEMA public, private TO projed_source_reader_disposable; GRANT SELECT ON auth.identities TO projed_source_reader_disposable; ALTER TABLE public.dev139_unknown_empty_source ENABLE ROW LEVEL SECURITY; CREATE POLICY hide_rows ON public.dev139_unknown_empty_source FOR SELECT USING (false)")
   $encodedReader = [Uri]::EscapeDataString($readerPassword)
   try {
     $env:PROJED_MIGRATION_SOURCE_DATABASE_URL = "postgresql://projed_source_reader_disposable:${encodedReader}@127.0.0.1:$port/$sourceDatabase"
@@ -234,9 +235,75 @@ try {
   } finally {
     $env:PROJED_MIGRATION_SOURCE_DATABASE_URL = "postgresql://postgres:${encodedAdmin}@127.0.0.1:$port/$sourceDatabase"
   }
-  $unknownEmptyTargetCount = Invoke-PgScalar -Database $targetDatabase -Sql 'SELECT (SELECT count(*) FROM projed_core.profiles) + (SELECT count(*) FROM projed_core.tenants)'
+  $unknownEmptyTargetCount = Invoke-PgScalar -Database $targetDatabase -Sql 'SELECT (SELECT count(*) FROM projed_core.profiles) + (SELECT count(*) FROM projed_core.google_identity_proofs) + (SELECT count(*) FROM projed_core.tenants)'
   if ($unknownEmptyTargetCount -ne '0') { throw 'DEV-139 unknown source relation preflight wrote target rows.' }
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'TRUNCATE TABLE public.dev139_unknown_empty_source; ALTER TABLE public.dev139_unknown_empty_source DISABLE ROW LEVEL SECURITY')
+
+  $encodedReader = [Uri]::EscapeDataString($readerPassword)
+  try {
+    $env:PROJED_MIGRATION_SOURCE_DATABASE_URL = "postgresql://projed_source_reader_disposable:${encodedReader}@127.0.0.1:$port/$sourceDatabase"
+    $identityPlan = Invoke-DataMode -Mode 'plan' -ExpectedExitCodes @(0)
+    $identityPlanJson = $identityPlan | ConvertTo-Json -Depth 8 -Compress
+    if ($identityPlan.status -ne 'PASS' -or $identityPlan.tables.google_identity_proofs.count -ne 1 -or
+        $identityPlanJson.Contains('synthetic-google-subject-owner') -or
+        $identityPlanJson.Contains('11111111-1111-4111-8111-111111111111')) {
+      throw 'DEV-139 Google identity projection count or privacy boundary mismatch.'
+    }
+
+    try {
+      Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "UPDATE auth.identities SET identity_data = jsonb_build_object('sub', 'different-google-subject') WHERE id = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1'")
+      $wrongSub = Invoke-DataMode -Mode 'apply' -ExpectedExitCodes @(1)
+      if ($wrongSub.status -ne 'FAIL' -or $wrongSub.code -ne 'SOURCE_GOOGLE_IDENTITY_SUB_MISMATCH') {
+        throw 'DEV-139 Google identity sub mismatch was not rejected.'
+      }
+    } finally {
+      Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "UPDATE auth.identities SET identity_data = jsonb_build_object('sub', 'synthetic-google-subject-owner') WHERE id = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1'")
+    }
+
+    try {
+      Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "INSERT INTO auth.identities VALUES ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee3', 'google', '22222222-2222-4222-8222-222222222222', 'synthetic-google-subject-owner', jsonb_build_object('sub', 'synthetic-google-subject-owner'))")
+      $ambiguousIdentity = Invoke-DataMode -Mode 'apply' -ExpectedExitCodes @(1)
+      if ($ambiguousIdentity.status -ne 'FAIL' -or $ambiguousIdentity.code -ne 'SOURCE_GOOGLE_IDENTITY_AMBIGUOUS') {
+        throw 'DEV-139 Google subject mapped to multiple profile UUIDs was not rejected.'
+      }
+    } finally {
+      Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "DELETE FROM auth.identities WHERE id = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee3'")
+    }
+
+    try {
+      Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "INSERT INTO auth.identities VALUES ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee4', 'google', '33333333-3333-4333-8333-333333333333', 'synthetic-orphan-subject', jsonb_build_object('sub', 'synthetic-orphan-subject'))")
+      $orphanIdentity = Invoke-DataMode -Mode 'apply' -ExpectedExitCodes @(1)
+      if ($orphanIdentity.status -ne 'FAIL' -or $orphanIdentity.code -ne 'SOURCE_GOOGLE_IDENTITY_ORPHAN') {
+        throw 'DEV-139 orphan Google identity was not rejected.'
+      }
+    } finally {
+      Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "DELETE FROM auth.identities WHERE id = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee4'")
+    }
+
+    Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'ALTER TABLE auth.identities RENAME TO identities_missing_probe')
+    try {
+      $missingIdentitySchema = Invoke-DataMode -Mode 'apply' -ExpectedExitCodes @(1)
+      if ($missingIdentitySchema.status -ne 'FAIL' -or $missingIdentitySchema.code -ne 'SOURCE_GOOGLE_IDENTITY_SCHEMA_INVALID') {
+        throw 'DEV-139 missing auth.identities schema was not rejected.'
+      }
+    } finally {
+      Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'ALTER TABLE auth.identities_missing_probe RENAME TO identities')
+    }
+
+    Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'REVOKE SELECT ON auth.identities FROM projed_source_reader_disposable')
+    try {
+      $identityPermission = Invoke-DataMode -Mode 'apply' -ExpectedExitCodes @(1)
+      if ($identityPermission.status -ne 'FAIL' -or $identityPermission.code -ne '42501') {
+        throw 'DEV-139 auth.identities permission failure did not retain generic PostgreSQL code 42501.'
+      }
+    } finally {
+      Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'GRANT SELECT ON auth.identities TO projed_source_reader_disposable')
+    }
+  } finally {
+    $env:PROJED_MIGRATION_SOURCE_DATABASE_URL = "postgresql://postgres:${encodedAdmin}@127.0.0.1:$port/$sourceDatabase"
+  }
+  $identityNegativeTargetCount = Invoke-PgScalar -Database $targetDatabase -Sql 'SELECT (SELECT count(*) FROM projed_core.profiles) + (SELECT count(*) FROM projed_core.google_identity_proofs)'
+  if ($identityNegativeTargetCount -ne '0') { throw 'DEV-139 invalid Google identity proofs wrote target rows.' }
 
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'CREATE VIEW public.dev139_non_authority_view AS SELECT 1::integer AS id')
   $viewPlan = Invoke-DataMode -Mode 'plan' -ExpectedExitCodes @(0)
@@ -287,7 +354,7 @@ try {
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "UPDATE public.task_workbench_unplaced_items SET task = '[]'::jsonb")
   $rollback = Invoke-DataMode -Mode 'apply' -ExpectedExitCodes @(1)
   if ($rollback.status -ne 'FAIL') { throw 'DEV-139 injected apply failure was not rejected.' }
-  $rollbackCount = Invoke-PgScalar -Database $targetDatabase -Sql 'SELECT (SELECT count(*) FROM projed_core.profiles) + (SELECT count(*) FROM projed_core.tenants) + (SELECT count(*) FROM projed_core.llm_access_logs)'
+  $rollbackCount = Invoke-PgScalar -Database $targetDatabase -Sql 'SELECT (SELECT count(*) FROM projed_core.profiles) + (SELECT count(*) FROM projed_core.google_identity_proofs) + (SELECT count(*) FROM projed_core.tenants) + (SELECT count(*) FROM projed_core.llm_access_logs)'
   if ($rollbackCount -ne '0') { throw 'DEV-139 failed import left partial target rows.' }
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "UPDATE public.task_workbench_unplaced_items SET task = jsonb_build_object('id', 'unplaced-1', 'title', 'Unplaced')")
 
@@ -366,8 +433,10 @@ try {
     throw 'DEV-139 reconciliation did not recover after the isolated drift was restored.'
   }
 
-  $boundary = Invoke-PgScalar -Database $targetDatabase -Sql "SELECT (SELECT count(*) FROM projed_core.account_authorization_guards) || ':' || has_table_privilege('projed_importer_disposable', 'projed_core.profiles', 'SELECT') || ':' || has_table_privilege('projed_importer_disposable', 'projed_core.profiles', 'INSERT') || ':' || has_table_privilege('projed_importer_disposable', 'projed_core.profiles', 'UPDATE') || ':' || has_table_privilege('projed_importer_disposable', 'projed_core.profiles', 'DELETE')"
-  if ($boundary -ne '0:true:true:false:false') { throw "DEV-139 importer or identity-guard boundary mismatch: $boundary" }
+  $boundary = Invoke-PgScalar -Database $targetDatabase -Sql "SELECT (SELECT count(*) FROM projed_core.account_authorization_guards) || ':' || has_table_privilege('projed_importer_disposable', 'projed_core.profiles', 'SELECT') || ':' || has_table_privilege('projed_importer_disposable', 'projed_core.profiles', 'INSERT') || ':' || has_table_privilege('projed_importer_disposable', 'projed_core.profiles', 'UPDATE') || ':' || has_table_privilege('projed_importer_disposable', 'projed_core.profiles', 'DELETE') || ':' || has_table_privilege('projed_importer_disposable', 'projed_core.google_identity_proofs', 'SELECT') || ':' || has_table_privilege('projed_importer_disposable', 'projed_core.google_identity_proofs', 'INSERT') || ':' || has_table_privilege('projed_importer_disposable', 'projed_core.google_identity_proofs', 'UPDATE') || ':' || has_table_privilege('projed_importer_disposable', 'projed_core.google_identity_proofs', 'DELETE')"
+  if ($boundary -ne '0:true:true:false:false:true:true:false:false') { throw "DEV-139 importer or identity-guard boundary mismatch: $boundary" }
+  $profileBindings = Invoke-PgScalar -Database $targetDatabase -Sql "SELECT (SELECT count(*) FROM projed_core.profiles WHERE id = '11111111-1111-4111-8111-111111111111' AND external_auth_provider = 'legacy' AND external_auth_id = 'owner-1') || ':' || (SELECT count(*) FROM projed_core.profiles WHERE id = '22222222-2222-4222-8222-222222222222' AND external_auth_provider IS NULL AND external_auth_id IS NULL) || ':' || (SELECT count(*) FROM projed_core.google_identity_proofs WHERE google_subject = 'synthetic-google-subject-owner' AND local_user_id = '11111111-1111-4111-8111-111111111111')"
+  if ($profileBindings -ne '1:1:1') { throw 'DEV-139 Google proof changed profile auth fields or failed to retain the UUID mapping.' }
   if ($retentionFailures.Count -gt 0) { throw "DEV-139 retention verification failed: $($retentionFailures -join '; ')" }
 
   $attempt = (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ') + "-$($nonce.Substring(0,8))"
@@ -392,6 +461,9 @@ try {
       'empty-inheritance-child-diagnostic', 'ordinary-inheritance-child-block', 'plain-view-non-authority-skip',
       'materialized-view-source-block', 'extension-owned-relation-skip',
       'exact-digest-reconcile', 'non-empty-target-reject', 'unsupported-domain-reject',
+      'google-proof-snapshot-projection', 'google-proof-output-hashes-only',
+      'google-subject-conflict-prewrite-reject', 'google-proof-orphan-prewrite-reject',
+      'google-proof-schema-and-permission-fail-closed', 'google-proof-preserves-profile-auth-state',
       'importer-createdb-reject', 'importer-createrole-reject', 'importer-owner-membership-reject',
       'llm-log-exact-retention', 'llm-log-scope-mismatch-reject',
       'llm-log-actor-rls', 'llm-log-immutable-runtime', 'llm-log-transfer-and-delete',

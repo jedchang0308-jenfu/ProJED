@@ -12,6 +12,17 @@ INSERT INTO projed_core.account_authorization_guards(local_user_id, active, revi
   ('dddddddd-dddd-4ddd-8ddd-dddddddddddd', true, 1),
   ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', true, 1);
 
+-- Separate identity fixtures: no business memberships or fabricated activation.
+INSERT INTO projed_core.profiles(id) VALUES
+  ('ffffffff-ffff-4fff-8fff-ffffffffffff'), ('99999999-9999-4999-8999-999999999999');
+INSERT INTO projed_core.account_authorization_guards(local_user_id, active, revision)
+  VALUES ('99999999-9999-4999-8999-999999999999', false, 1);
+INSERT INTO projed_core.google_identity_proofs(google_subject,local_user_id) VALUES
+  ('synthetic-google-a','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'),
+  ('synthetic-google-b','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'),
+  ('synthetic-google-no-guard','ffffffff-ffff-4fff-8fff-ffffffffffff'),
+  ('synthetic-google-inactive','99999999-9999-4999-8999-999999999999');
+
 INSERT INTO projed_core.tenants(id, legacy_workspace_id, title, owner_id, sort_order, created_at) VALUES
   ('11111111-1111-4111-8111-111111111111', 'ws-a', 'A workspace', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 1, '2026-01-01T00:00:00Z'),
   ('12222222-2222-4222-8222-222222222222', 'ws-b', 'B workspace', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 2, '2026-01-02T00:00:00Z');
