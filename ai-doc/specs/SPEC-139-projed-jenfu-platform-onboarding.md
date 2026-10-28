@@ -1,9 +1,9 @@
 # SPEC-139：ProJED 納入 Jenfu-Platform 的產品與技術交接契約
 
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。
-- 日期：2026-10-29（Asia/Taipei）；版本：Rev 36（保留 Rev35 選測精簡；新增 W23 Platform ProJED Session／handoff source 證據，不縮小完整交付範圍）。
+- 日期：2026-10-29（Asia/Taipei）；版本：Rev 37（移除已完成 S1 的重複人工審查出口，區分本地開發與正式啟用前置；保留選測、安全與完整交付範圍）。
 - 文件狀態：**整合與發布續行中；W22 OrgMaster publisher 與 W23 Platform Session／handoff source 均有 draft PR／required CI PASS，隔離驗證 PASS；Production Resolver Disabled；未 Release**。Firebase／OIDC 真身分與完整 Session 部署、RAG／會議等剩餘實作、正式資料處置、雲端 readback、舊入口、writer fence、切流及正式發布仍計入完成分母。W22 owner source 見 [§36](#36-orgmaster-minimum-principal-publication-w222026-10-29)，W23 Platform source 與驗證邊界見 [§37](#37-platform-projed-session-and-handoff-w232026-10-29)；W21 承接六類文件／同步資料與精度保護見 [§35](#35-document-source-retention-w212026-10-28)；W20 資料保留見 §34，具體資源與待確認的新權限仍見 §33。本輪未寫正式資料、切流或變更 IAM／Secret／credential／billing。
-- 適用階段：2026-10-26 使用者已要求完成 DEV-139 開發；本版記錄 S1 runtime／DB 核心、S2 consumer seam，以及 S3 domain／collaboration／record／activity、opaque Session產品入口、HTTP backend selector、單一revision polling scheduler、Board transfer、legacy provider fail-closed邊界、Quick Task outbox同步、Task Workbench雙向原子放置、Task Tracking reference持久化、Backup／Import交易式替代、帳號偏好、Calendar subscription／ICS feed替代、一次性full-snapshot資料移轉演練、舊Calendar URL相容代理、managed候選、migration fail-closed強化及正常產品UI煙霧的本地驗證。正式發布／切流、正式資料、IAM／Secret／billing及其他repo不在本地開發授權內。
+- 適用階段：S1–S3 本地切片歷史見 §12–§32；2026-10-28 續行授權見 [DEV-139 人類決策與授權範圍](../dev_task.md#1-人類決策與授權範圍)，涵蓋 ProJED／OrgMaster／Jenfu-Platform 的 source 整合工作。正式整合與發布仍是完整目標，不以本地切片完成替代；新責任權限依 §33 處理。本次定期審視只精簡文件與驗證流程，不執行正式資料寫入、切流或 IAM／Secret／credential／billing 變更。
 - 直接交接入口：[§11 S1 定案契約](#11-架構決策與-s1-定案契約)、[§12 S1 實作狀態](#12-s1-實作狀態2026-10-26)、[§13 S2 consumer seam](#13-s2-projed-identity-consumer-seam2026-10-26)、[§14 S3 read adapter](#14-s3-http-read-adapter-slice2026-10-26)、[§15 S3 domain command](#15-s3-domain-command-w12026-10-26)、[§16 S3 collaboration command](#16-s3-collaboration-command-w22026-10-27)、[§17 S3 record／activity](#17-s3-recordactivity-w32026-10-27)、[§18 S3 HTTP product wiring](#18-s3-http-product-wiring-w42026-10-27)、[§19 S3 Board transfer](#19-s3-board-transfer-w52026-10-27)、[§20 S3 legacy provider boundary](#20-s3-legacy-provider-boundary-w62026-10-27)、[§21 S3 Quick Task](#21-s3-quick-task-w72026-10-27)、[§22 S3 Task Workbench](#22-s3-task-workbench-w82026-10-27)、[§23 S3 Actor CAS](#23-s3-actor-context-cas-w92026-10-27)、[§24 S3 Task Tracking](#24-s3-task-tracking-w102026-10-27)、[§25 S3 Backup／Import](#25-s3-backupimport-w112026-10-27)、[§26 S3 Account Preferences](#26-s3-account-preferences-w122026-10-27)、[§27 S3 Calendar Subscription](#27-s3-calendar-subscription-w132026-10-27)及[§32 本地開發收斂](#32-s3-local-development-closure-w182026-10-27)；[§11.8 技術主管審查](#118-技術主管審查與最小優化)保留 Rev5 修正理由；既有使用者切換見 [§6.3](#63-既有使用者的切換基線)。
 - 決策來源：[DEV-139 人類決策](../dev_task.md#dev-139-jenfu-platform-onboarding)；架構取捨：[ADR-054](../decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。本文件不是其他 owner 已接受或已發布的契約。
 
@@ -368,7 +368,7 @@ Evidence 必須保存 source revision／dirty boundary、artifact、環境、角
 
 ### 8.1 工程驗證案例與固定本地入口
 
-以下把新增工程契約對應回 A01–A11；沒有另增產品功能或把 simulation 升格。每個 verifier 在實作 slice 建立後才有可執行命令，現階段名稱／命令未存在，不能認列執行或 PASS。
+T01–T08 是對應 A01–A11 的完整工程驗收案例；現有分層命令已在 package.json 建立，包含 S1、S2、S3、migration 與 Hosting／artifact 檢查。各命令只證明實際覆蓋的層；真身分、正式資料、Hosting、writer fence 等未覆蓋部分仍須相應證據，不因本地 PASS 認列完成，也不要求另造一套 verifier 名稱或人工證明。
 
 | 案例／對應驗收 | 前置與操作 | 預期、失敗條件及 evidence |
 |---|---|---|
@@ -391,32 +391,32 @@ Evidence 必須保存 source revision／dirty boundary、artifact、環境、角
 
 ## 9. Owner 依賴、分期與實作前出口
 
-| Owner | 此次需交接的能力 | 進入實作前的條件 |
+| Owner | 此次需交接的能力 | 開發與正式啟用的條件 |
 |---|---|---|
-| ProJED | 自有 runtime／API、Principal mapping、原工作區／看板／權限相容、業務 policy、資料／PWA／provider 移轉及正常入口驗收。 | D1／D2 已確認；本地實作要求；對應 slice 完整工程契約與 app-specific DB checker。 |
-| Jenfu-Platform | ProJED registry／入口、版本化 handoff／Session／revocation、共用 foundation／capacity；首階段沒有任務摘要／業務 BFF。 | 人類明確授權此專案與對應動作；owner 本地 native DEV、身分 producer／consumer manifest 及相容證據。 |
-| OrgMaster | D1 已固定非員工最小 Principal／provider publication，加上現有公司角色／scope 與必要准入契約；不存私人任務內容。 | 人類明確授權此專案與動作；owner 決定 native DEV／受控 slice，不把舊 DEV-057 自動重新派工。 |
+| ProJED | 自有 runtime／API、Principal mapping、原工作區／看板／權限相容、業務 policy、資料／PWA／provider 移轉及正常入口驗收。 | D1／D2 已確認；在既有授權內續行 source、測試與隔離演練。真登入啟用仍須已發布的 owner 契約、可信 mapping、current-state 與對應相容證據；未具備時保持 production resolver 關閉。 |
+| Jenfu-Platform | ProJED registry／入口、版本化 handoff／Session／revocation、共用 foundation／capacity；首階段沒有任務摘要／業務 BFF。 | 已有 DEV-007 source slice，進度見 §37；未正式發布不阻擋隔離 consumer 開發，但不能啟用正式 wire 或把模擬當真登入。共用資源的新權限仍受 §33 限制。 |
+| OrgMaster | D1 已固定非員工最小 Principal／provider publication，加上現有公司角色／scope 與必要准入契約；不存私人任務內容。 | 已沿既有 DEV-057 開發最小 publisher，進度見 §36–§37；沿用該 owner 任務，不另設 native ID／重新立案或人工作證前置。正式發布與新權限依其 owner 契約及 §33。 |
 | 後續業務 consumer | Platform 摘要／AI-PDM 連結等尚未要求，不加入首階段估工或驗收。既有身分 consumer 僅作 wire 相容性盤點。 | 人類另決業務情境；各受影響 repo 自有 native DEV／明確開發範圍；不要求無影響 app 重發。 |
 
-現行引用為 `JENFU/DEV-010`、`JENFU/DEV-012`、`JENFU/DEV-015` 與 `ORGMASTER/DEV-057` 的既有契約；不是此次工作的 native DEV。ProJED 跨專案 project key 尚未核實，先用 canonical repo／DEV-139／slice 描述來源，正式跨專案登錄時核對。
+此次 owner source 沿用 Jenfu-Platform DEV-007 與 OrgMaster DEV-057；`JENFU/DEV-010`、`JENFU/DEV-012`、`JENFU/DEV-015` 仍是基礎契約引用。跨專案以 canonical repo／native DEV／slice 辨識來源；未核實的 project key 不另成為本地開發門檻。
 
-Rev 8 沿既有架構完成 S1，並落地 §13 的 ProJED S2 consumer seam。現行外部契約仍只有 employee-required 的 handoff v2／platform-auth v1，且 audience／app registry 沒有 `projed`；因此 production pin set 保持空集合，所有真 handoff fail closed。這不是把 S2 標為整合完成：Platform／OrgMaster owner wire、callback、App Session、mapping schema 與真正常登入仍未發布或驗證。
+Rev 8 的 employee-only／無 ProJED audience 是當時基線。現行 owner source 已增加最小 Principal publication、ProJED Session v3／handoff v4，實際 source／CI 與尚未發布的邊界以 §36–§37 為準；不再把舊契約缺口當作所有後續 source 工作的停止條件。production pin set 仍空集合，真 handoff fail closed；callback、App Session、mapping 與真正常登入仍須完成驗證，不因 source／CI 通過而標為整合完成。
 
 S3 fail-closed read／write route及 collaboration command 已完成本地實作：只接受由上層注入的可信 Session actor resolver，並以同一 actor transaction 呼叫 repository。沒有 resolver 的 production composition 保持404；正常產品接入及登入切換仍須S2 owner wire。不得用QA simulation、S1 synthetic actor或任意header／body取代真Session。
 
 ### 9.1 三個工作段及目前成熟度
 
-使用同一 DEV-139 的估工工作段，沒有建立其他 repo 的 native task。分段是讓依賴可查證；文件準備不能當作已取得實作授權，也不讓測試替身繞過身分契約。
+沿用同一 DEV-139 與 §9 列出的 owner native task；分段用於辨識依賴與證據範圍，不增設逐段核准。授權以人類原始指示及直接索引為準；文件準備、測試替身或本地 PASS 均不擴張正式權限或繞過身分契約。
 
 | Slice／owner | 估工輸出與依賴 | 驗收邊界／實作前仍需補齊 |
 |---|---|---|
 | S1 ProJED runtime／DB 核心 | **RD Implementation Ready＋架構定案**；§11 固定 schema／roles／policy、runtime／actor transaction、checker、migration runner、驗證入口及 source surface。沒有 provider／現有前端切換或真 SSO。 | K01–K08、T01／A10 的限定 local HTTP／DB 層；正常產品 UI 不在 S1。測試 actor 只在隔離 verifier process 內注入，不發布可自述身分的 HTTP auth。 |
-| S2 身分 producer／consumer | ProJED server-only consumer seam 已實作：只接受 verifier output、exact contract pin、有效時間／撤銷與唯一 mapping，成功只產生既有 `ServerActorV1`；production pins 空集合，QA simulation 不進 production import graph。§4.5 的 OrgMaster／Platform owner wire、非員工准入及撤銷仍待 owner。 | 本地 seam 12/12 PASS，不是 A01／A02／A03／A05／A11 或 T03／T06／T08 的真登入證據。external acceptance、既有帳號 mapping proof、相容 origin／Cookie／callback／Session state／期限與在途撤銷界線仍需收斂；其他專案開發另需其明確授權。 |
+| S2 身分 producer／consumer | ProJED server-only consumer seam 已實作：只接受 verifier output、exact contract pin、有效時間／撤銷與唯一 mapping，成功只產生既有 `ServerActorV1`；production pins 空集合，QA simulation 不進 production import graph。OrgMaster／Platform owner source 見 §36–§37，可在既有授權內續行隔離整合。 | 本地 seam 12/12 PASS，不是 A01／A02／A03／A05／A11 或 T03／T06／T08 的真登入證據。正式 owner publication／consumer ACL、既有帳號 mapping proof、相容 origin／Cookie／callback／Session state／期限與在途撤銷仍須驗證；新權限與正式動作不由 source 授權推定。 |
 | S3 ProJED 現有能力移轉 | frontend read／write、workspace／board／member／permission／invite、record／activity、resource revision、明確HTTP backend、單一polling scheduler、Board跨Workspace搬移、Quick／Workbench、Task Tracking、Backup／Import、帳號偏好、Calendar subscription／ICS feed、W14 full-snapshot rehearsal及W15舊Calendar URL代理已實作；`0003`～`0014`以scope／capability RLS、同一actor transaction、冪等receipt、專用importer及fail-closed route保護。disposable PostgreSQL另驗空白candidate單交易搬移、rollback、digest reconcile、非空目標／未承接domain／漂移拒絕。 | 本地adapter與DB／HTTP acceptance只證明bounded foundation；W18已用QA actor完成正常HTTP產品UI／reload煙霧，但cookie-to-actor mapping不進production graph，不是真Session或A03–A11／T02／T04／T05／T07／T08證據。RAG／會議音訊／Inbox與Storage尚未承接；正式資料plan、writer fence、舊client／Hosting／PWA相容部署、容量／費用及真Session／正式入口UI仍需完成，不能退出原provider。 |
 
-S1 已完成本地核心；S2 已完成不依賴外部wire的consumer seam，外部producer／Session路徑仍阻塞；S3 W1–W18的bounded slices已本地實作及驗證。本地QA Session已驅動編譯後Vite artifact、真HTTP API及隔離PostgreSQL完成正常產品UI煙霧，但這不是真Platform SSO／既有帳號mapping或正式環境證據。synthetic migration fixture、managed連線契約、未部署相容代理與未執行Docker container仍不能宣稱正式資料、無縫切換或整合完成。
+S1 已完成本地核心；S2 consumer seam 與 §36–§37 owner source 可在隔離環境續行整合，真 producer／Session 尚未完成部署驗證；S3 W1–W18的bounded slices已本地實作及驗證。本地QA Session已驅動編譯後Vite artifact、真HTTP API及隔離PostgreSQL完成正常產品UI煙霧，但這不是真Platform SSO／既有帳號mapping或正式環境證據。synthetic migration fixture、managed連線契約、未部署相容代理與未執行Docker container仍不能宣稱正式資料、無縫切換或整合完成。
 
-S2／S3 的 readiness 缺口：已發布owner wire／consumer ACL／非員工及在途撤銷契約；真資料plan與verified mapping；Inbox、RAG、會議／Storage等未承接domain的處置；全來源fence、舊PWA恢復、Hosting／各public origin Session／Cookie／callback／artifact相容；共享容量及可歸屬費用證據。沒有未決產品D1／D2；這些是具體工程／owner依賴，不要求人類重新選相同方案。
+S2／S3 正式啟用的 readiness 缺口：已發布owner wire／consumer ACL／非員工及在途撤銷契約；真資料plan與verified mapping；Inbox、RAG、會議／Storage等未承接domain的處置；全來源fence、舊PWA恢復、Hosting／各public origin Session／Cookie／callback／artifact相容；共享容量及可歸屬費用證據。沒有未決產品D1／D2；依賴只限制相應啟用／正式動作，不阻擋安全且獨立的 source／測試工作，也不要求人類重新選相同方案。
 
 後續 capsule：
 
@@ -541,11 +541,11 @@ HTTP request deadline=10 秒、URL／header／body 有明確上限（URL 8 KiB�
 
 ### 11.5 實作順序、裁量與回送條件
 
-S1 順序固定：先加 node／pg source與 typecheck、config／static／HTTP contract tests→disposable bootstrap／manifest／checker／兩 migration→pool／actor transaction→K01–K08 真 PG 與 HTTP verifier→針對結果修正→source freeze／QC／Spec Drift Check。所有新命令先建立，再進相應驗證；沒有執行過的命令不能補寫 PASS。
+S1 初次建立的 source、bootstrap／checker、pool／actor transaction 與 K01–K08 已完成，見 §12；當時的固定開發順序不再作為後續每次修改的前置。後續按受影響的行為與風險選測，重用仍有效的證據；不另要求一次人工 source freeze、QC 簽核或 Spec Drift Check 才能續行本地開發。既有 required CI、DB checker 與正式發布執行器仍有效，未執行的驗證不得補寫 PASS。
 
-RD 可決定局部函式拆分、命名、錯誤訊息繁中翻譯、SQL 排版及符合契約的測試工具寫法。不得自行改 framework／ORM、schema／roles／actor fields、lock模式／順序、正常 API／身份來源、RLS、profile 可改欄位、timeout／pool gate、backend fallback、provider／PWA／主測試台、跨專案範圍或 acceptance。patch／digest 綁定須重核實，但不是要求人類重答架構。
+RD 可在已授權 DEV-139 內補齊必要 API、forward-only schema／policy、mapping／Session 與其測試，並同步更新受影響契約及 checker，不因涉及 schema 或跨模組就重新要求架構核准。既定 framework／ORM、身分權威、私人隔離、actor／lock 安全、原功能與驗收分母仍須維持；新專案／環境／責任、IAM／Secret／credential／billing、正式資料／切流與破壞性操作仍按人類授權邊界處理，本次審視不執行這些操作。patch／digest 綁定須重核實，但不是要求人類重答架構。
 
-首次 source／文件不一致、需新 public API／schema／policy／跨模組責任、S1 必須改禁止檔案、real producer 缺口或任一 K 案例不能按定義執行時，停止受影響工作、保存差異並回到 DEV-139 架構審查；不得改 verifier／spec 讓錯誤變 PASS。缺相容 PostgreSQL 17／18、Node24 或工具是環境 prerequisite，不得偷偷接遠端 DB；managed target 的實際 major 另在該環境重驗。
+source／文件不一致由同一成果負責人在本切片修正並驗證；只有實際需要改變人類已定成果、安全邊界或新增未授權責任時，才停止受影響動作並釐清，安全且獨立的工作繼續。驗證失敗保存原結果；不得只改 oracle／spec 把失敗轉成 PASS。real producer 或工具缺口只阻擋依賴它的案例，不能拿替身宣稱真登入；缺 PostgreSQL 17／18、Node24 或工具時不得偷偷接遠端 DB，managed target 的實際 major 另在該環境重驗。
 
 ### 11.6 QA／QC 命令與證據
 
