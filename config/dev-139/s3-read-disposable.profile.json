@@ -104,6 +104,10 @@
     {
       "version": "0022_first_login_registration_v1",
       "path": "db/migrations/0022_first_login_registration_v1.sql"
+    },
+    {
+      "version": "0023_verified_login_email_v1",
+      "path": "db/migrations/0023_verified_login_email_v1.sql"
     }
   ],
   "objectAllowlist": [
@@ -198,7 +202,8 @@
     "projed_core.app_login_intent_transition_v1",
     "projed_core.app_session_revoke_v1",
     "projed_core.login_intents_active_old_session_v1",
-    "projed_core.registration_scope_valid_v1"
+    "projed_core.registration_scope_valid_v1",
+    "projed_core.profile_verified_email_update_v1"
   ],
   "staticFixturePath": "qa/dev-139/s1/static",
   "runtime": {

@@ -249,6 +249,17 @@ export class PostgresAppSessionStore implements AppSessionStore {
       await client.query(`SELECT set_config('projed.actor_principal_id',$1,true),set_config('projed.actor_entry',$2,true),
         set_config('projed.actor_context_id',$3,true),set_config('projed.actor_guard_revision',$4,true)`,
       [proof.principalId,intent.entry,input.contextId,mapped.accountGuardRevision]);
+      if (proof.verifiedEmail !== undefined) {
+        await client.query(`SELECT set_config('projed.verified_google_subject',$1,true),
+          set_config('projed.actor_local_user_id',$2,true),
+          set_config('projed.registration_user_id',$2,true),
+          set_config('projed.registration_email',$3,true),
+          set_config('projed.registration_claim_hash',$4,true)`,
+        [proof.googleSubject,mapped.localUserId,proof.verifiedEmail,input.claimHash]);
+        await client.query(`UPDATE projed_core.profiles
+          SET email=$2,updated_at=now()
+          WHERE id=$1::uuid AND email IS DISTINCT FROM $2`,[mapped.localUserId,proof.verifiedEmail]);
+      }
       if (intent.oldSessionHash !== null) {
         await client.query("SELECT set_config('projed.session_token_hash',$1,true)",[intent.oldSessionHash]);
         const revoked = await client.query(`UPDATE projed_core.app_sessions SET revoked_at_ms=$2::bigint

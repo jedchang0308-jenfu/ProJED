@@ -82,7 +82,7 @@ interface HarnessOptions {
   readonly oldSessionIdentity?: ProducerVerifiedIdentity;
   readonly mapStatus?: 'active' | 'missing' | 'inactive' | 'ambiguous' | 'unavailable';
   readonly guardExists?: boolean;
-  readonly failOperation?: 'intent-select' | 'guard-insert';
+  readonly failOperation?: 'intent-select' | 'guard-insert' | 'email-refresh';
   readonly failCommit?: boolean;
   readonly failRollback?: boolean;
   readonly oldSessionRevokedAtMs?: number | null;
@@ -137,6 +137,9 @@ function harness(options: HarnessOptions = {}) {
       if (normalized === 'ROLLBACK' && options.failRollback) throw new Error('simulated rollback failure');
       if (options.failOperation === 'guard-insert' && /INSERT INTO projed_core\.account_authorization_guards/u.test(normalized)) {
         throw new Error('simulated guard insert failure');
+      }
+      if (options.failOperation === 'email-refresh' && /UPDATE projed_core\.profiles\s+SET email/u.test(normalized)) {
+        throw new Error('simulated verified email refresh failure');
       }
       if (/SELECT .*FROM projed_core\.app_login_intents/u.test(normalized)) {
         if (options.failOperation === 'intent-select') throw new Error('simulated operation query failure');
@@ -329,8 +332,9 @@ test('a new start after an unknown begin cancels orphan intents before inserting
 });
 
 test('successful completion consumes the claim and revokes the old session in one transaction', async () => {
-  const db = harness();
-  const input = completeInput();
+  const proof = identity({ verifiedEmail: 'updated@example.test' });
+  const db = harness({ identity: proof });
+  const input = completeInput({ identity: proof });
   const session = await db.store.complete(input);
   const sql = completeQueries(db.queries);
   const beginIndex = sql.findIndex((statement) => statement.startsWith('BEGIN ISOLATION LEVEL READ COMMITTED'));
@@ -340,13 +344,15 @@ test('successful completion consumes the claim and revokes the old session in on
     && /SELECT .*FROM projed_core\.app_login_intents.*FOR UPDATE/u.test(statement));
   const googleLockIndex = sql.findIndex((statement) => /pg_advisory_xact_lock\(hashtextextended\('projed:google-subject:'/u.test(statement));
   const accountLockIndex = sql.findIndex((statement) => /pg_advisory_xact_lock_shared\(hashtextextended\('projed:account:'/u.test(statement));
+  const emailRefreshIndex = sql.findIndex((statement) => /UPDATE projed_core\.profiles\s+SET email/u.test(statement));
   const revokeIndex = sql.findIndex((statement) => /UPDATE projed_core\.app_sessions/u.test(statement));
   const insertIndex = sql.findIndex((statement) => /INSERT INTO projed_core\.app_sessions/u.test(statement));
   const consumeIndex = sql.findIndex((statement) => /UPDATE projed_core\.app_login_intents/u.test(statement));
   const commitIndex = sql.findIndex((statement) => statement === 'COMMIT');
   assert.ok(beginIndex >= 0 && beginIndex < initialIntentReadIndex);
   assert.ok(initialIntentReadIndex < oldSessionLockIndex && oldSessionLockIndex < lockedIntentIndex);
-  assert.ok(lockedIntentIndex < googleLockIndex && googleLockIndex < accountLockIndex && accountLockIndex < revokeIndex);
+  assert.ok(lockedIntentIndex < googleLockIndex && googleLockIndex < accountLockIndex);
+  assert.ok(accountLockIndex < emailRefreshIndex && emailRefreshIndex < revokeIndex);
   assert.ok(revokeIndex < insertIndex && insertIndex < consumeIndex && consumeIndex < commitIndex);
   assert.equal(sql.filter((statement) => statement === 'COMMIT').length, 1);
   assert.equal(db.checkouts, 1);
@@ -360,6 +366,35 @@ test('successful completion consumes the claim and revokes the old session in on
   assert.ok(insert);
   assert.equal(insert.values[5], CONTEXT_ID);
   assert.equal(insert.values[8], input.identity.sourceSessionExpiresAtMs);
+  const refresh = db.queries[emailRefreshIndex]!;
+  assert.deepEqual(refresh.values, [LOCAL_USER_ID, proof.verifiedEmail]);
+  assert.match(refresh.sql, /WHERE id=\$1::uuid AND email IS DISTINCT FROM \$2/u);
+  assert.doesNotMatch(refresh.sql, /RETURNING/u);
+  const registration = db.queries.find(({ sql: statement }) => statement.includes("set_config('projed.registration_user_id'"));
+  assert.ok(registration);
+  assert.deepEqual(registration.values, [proof.googleSubject, LOCAL_USER_ID, proof.verifiedEmail, CLAIM_HASH]);
+});
+
+test('legacy verified identities without an email skip profile email refresh', async () => {
+  const proof = identity();
+  const db = harness({ identity: proof });
+  await db.store.complete(completeInput({ identity: proof }));
+  assert.equal(completeQueries(db.queries).some((statement) => /UPDATE projed_core\.profiles\s+SET email/u.test(statement)), false);
+});
+
+test('verified email refresh failure rolls back before old-session revoke or intent consume', async () => {
+  const proof = identity({ verifiedEmail: 'fresh@example.test' });
+  const db = harness({ identity: proof, failOperation: 'email-refresh' });
+  await expectKernelCode(db.store.complete(completeInput({ identity: proof })), 'IDENTITY_STATE_UNAVAILABLE');
+
+  const sql = completeQueries(db.queries);
+  assert.equal(sql.filter((statement) => /UPDATE projed_core\.profiles\s+SET email/u.test(statement)).length, 1);
+  assert.equal(sql.some((statement) => /UPDATE projed_core\.app_sessions/u.test(statement)), false);
+  assert.equal(sql.some((statement) => /INSERT INTO projed_core\.app_sessions/u.test(statement)), false);
+  assert.equal(sql.some((statement) => /UPDATE projed_core\.app_login_intents SET status='consumed'/u.test(statement)), false);
+  assert.equal(sql.includes('COMMIT'), false);
+  assert.equal(sql.includes('ROLLBACK'), true);
+  assert.deepEqual(db.releases, [false]);
 });
 
 test('first login creates a profile, Google proof, active guard and Session for personal and employee admissions', async () => {

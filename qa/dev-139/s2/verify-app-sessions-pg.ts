@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
-import { randomBytes,randomUUID } from 'node:crypto';
+import { createHash,randomBytes,randomUUID } from 'node:crypto';
 import type { RuntimeDatabase } from '../../../server/db.js';
 import type { RuntimeConfig } from '../../../server/config.js';
 import { runActorTransaction, type ServerActorV1 } from '../../../server/actorTransaction.js';
 import { DomainReadRepository } from '../../../server/domainRead.js';
+import { CollaborationReadRepository } from '../../../server/collaborationRead.js';
 import { CollaborationWriteRepository } from '../../../server/collaborationWrite.js';
 import { GooglePrincipalMappingResolver } from '../../../server/principalMappings.js';
 import type { CompleteLoginInput, StoredLoginIntent } from '../../../server/appSessionStore.js';
@@ -118,6 +119,7 @@ export async function verifyAppSessionsPostgres(database: RuntimeDatabase, confi
     entry:owner.entry,contextId:owner.contextId,accountGuardRevision:owner.accountGuardRevision,
     expiresAtMs:owner.expiresAtMs};
   const reads=new DomainReadRepository();
+  const collaborationReads=new CollaborationReadRepository();
   const commands=new CollaborationWriteRepository(reads);
   assert.deepEqual(await runActorTransaction(database,config,actor,port=>reads.listWorkspaces(port)),[]);
   const workspace=await runActorTransaction(database,config,actor,port=>commands.createWorkspace(port,{title:'First login personal workspace'}));
@@ -130,6 +132,125 @@ export async function verifyAppSessionsPostgres(database: RuntimeDatabase, confi
   assert.deepEqual(await runActorTransaction(database,config,employeeActor,port=>reads.listWorkspaces(port)),[]);
   await assert.rejects(runActorTransaction(database,config,employeeActor,port=>reads.listTasks(port,workspace.id,board.id)),
     (error: unknown)=>error instanceof KernelError && error.code==='RESOURCE_NOT_FOUND');
+
+  const {verifiedEmail:initialEmail,...originalGoogleProof}=personalProof;
+  const refreshedProof={...personalProof,verifiedEmail:'fresh@example.invalid'};
+  const {verifiedEmail:refreshedEmail,...sameGoogleProof}=refreshedProof;
+  assert.equal(initialEmail,'a@example.invalid');
+  assert.equal(refreshedEmail,'fresh@example.invalid');
+  assert.deepEqual(sameGoogleProof,originalGoogleProof,'The second login changes only the verified email');
+  const refreshedInput=await prepare(refreshedProof);
+  const refreshed=await store.complete(refreshedInput);
+  assert.equal(refreshed.localUserId,owner.localUserId,'Verified email refresh must retain the existing profile UUID');
+  assert.equal(refreshed.accountGuardRevision,owner.accountGuardRevision,'Verified email refresh must not recreate or advance the guard');
+  assert.equal(refreshed.identity.googleSubject,owner.identity.googleSubject);
+  assert.notEqual(refreshed.contextId,owner.contextId);
+  const refreshedMapping=await resolver.resolve(refreshedProof);
+  assert.equal(refreshedMapping.status,'active');
+  if(refreshedMapping.status==='active') assert.equal(refreshedMapping.localUserId,owner.localUserId);
+  const refreshedActor: ServerActorV1={principalId:refreshed.identity.principalId,localUserId:refreshed.localUserId,
+    entry:refreshed.entry,contextId:refreshed.contextId,accountGuardRevision:refreshed.accountGuardRevision,
+    expiresAtMs:refreshed.expiresAtMs};
+  const refreshedProfile=await runActorTransaction(database,config,refreshedActor,port=>port.query<{id:string;email:string|null}>(`
+    SELECT id::text AS id,email FROM projed_core.profiles WHERE id=$1::uuid
+  `,[owner.localUserId]));
+  assert.deepEqual(refreshedProfile.rows,[{id:owner.localUserId,email:'fresh@example.invalid'}]);
+
+  // Keep invite/RLS effects on these fresh fixture accounts, not imported seed A/B.
+  const inviteWorkspace=await runActorTransaction(database,config,employeeActor,
+    port=>commands.createWorkspace(port,{title:'Verified email invitation workspace'}));
+  const inviteBoard=await runActorTransaction(database,config,employeeActor,
+    port=>commands.createBoard(port,inviteWorkspace.id,{title:'Verified email invitation board'}));
+  const oldEmailToken=randomBytes(32).toString('base64url');
+  const freshEmailToken=randomBytes(32).toString('base64url');
+  const inviteExpiresAt=Date.now()+60*60*1000;
+  const oldEmailInvite=await runActorTransaction(database,config,employeeActor,port=>commands.createInvite(
+    port,inviteWorkspace.id,inviteBoard.id,{email:'a@example.invalid',
+      tokenHash:createHash('sha256').update(oldEmailToken).digest('hex'),expiresAt:inviteExpiresAt,defaultRole:'member'}));
+  const freshEmailInvite=await runActorTransaction(database,config,employeeActor,port=>commands.createInvite(
+    port,inviteWorkspace.id,inviteBoard.id,{email:'fresh@example.invalid',
+      tokenHash:createHash('sha256').update(freshEmailToken).digest('hex'),expiresAt:inviteExpiresAt,defaultRole:'member'}));
+  assert.equal(oldEmailInvite.status,'pending');
+  assert.equal(freshEmailInvite.status,'pending');
+  const invitesBeforeAccept=await runActorTransaction(database,config,employeeActor,
+    port=>collaborationReads.listPendingInvites(port,inviteWorkspace.id,inviteBoard.id));
+  assert.deepEqual(invitesBeforeAccept.map(item=>item.email).sort(),['a@example.invalid','fresh@example.invalid']);
+  assert.equal((await runActorTransaction(database,config,refreshedActor,port=>reads.listWorkspaces(port)))
+    .some(item=>item.id===inviteWorkspace.id),false,'New account must not see inviter workspace before accepting an invite');
+  await assert.rejects(
+    runActorTransaction(database,config,refreshedActor,port=>commands.acceptInvite(port,oldEmailToken)),
+    (error: unknown)=>error instanceof KernelError && error.code==='RESOURCE_NOT_FOUND' && error.httpStatus===404,
+    'The old email invite must be hidden by recipient RLS after verified email refresh',
+  );
+  assert.deepEqual((await runActorTransaction(database,config,employeeActor,
+    port=>collaborationReads.listPendingInvites(port,inviteWorkspace.id,inviteBoard.id))).map(item=>item.email).sort(),
+  ['a@example.invalid','fresh@example.invalid'],'The rejected old-email invite remains pending');
+  const acceptedFreshInvite=await runActorTransaction(database,config,refreshedActor,
+    port=>commands.acceptInvite(port,freshEmailToken));
+  assert.equal(acceptedFreshInvite.status,'accepted');
+  assert.equal(acceptedFreshInvite.email,'fresh@example.invalid');
+  const invitedMembers=await runActorTransaction(database,config,refreshedActor,
+    port=>reads.listWorkspaceMembers(port,inviteWorkspace.id));
+  assert.deepEqual(invitedMembers.filter(member=>member.userId===owner.localUserId).map(member=>member.profile.email),
+    ['fresh@example.invalid'],'The refreshed email is accepted through the real invite and RLS path');
+  assert.equal((await runActorTransaction(database,config,refreshedActor,port=>reads.listWorkspaces(port)))
+    .some(item=>item.id===inviteWorkspace.id),true);
+
+  await assert.rejects(
+    runActorTransaction(database,config,refreshedActor,port=>port.query(`
+      UPDATE projed_core.profiles SET email='unverified-change@example.invalid' WHERE id=$1::uuid
+    `,[owner.localUserId])),
+    (error: unknown)=>error instanceof KernelError && (error.cause as {code?:string}|undefined)?.code==='42501',
+    'An authorized actor without registration scope cannot change profile email',
+  );
+  const displayUpdate=await runActorTransaction(database,config,refreshedActor,port=>port.query<{
+    email:string|null;display_name:string|null;
+  }>(`UPDATE projed_core.profiles SET display_name='Updated through actor scope',updated_at=now()
+      WHERE id=$1::uuid RETURNING email,display_name`,[owner.localUserId]));
+  assert.deepEqual(displayUpdate.rows,[{email:'fresh@example.invalid',display_name:'Updated through actor scope'}],
+    'Existing actor-scoped display-name updates remain available');
+
+  const existingGoogleRegistration=intent();
+  const existingGoogleClaim=opaqueHash();
+  await store.begin(existingGoogleRegistration);
+  assert.equal((await store.claim(existingGoogleRegistration.tokenHash,existingGoogleRegistration.stateHash,
+    existingGoogleClaim,Date.now())).status,'processing');
+  const attemptedLocalUserId=randomUUID();
+  const attemptedRegistrationEmail='existing-google-a-reuse@example.invalid';
+  const registrationLease=await database.checkout();
+  let registrationRollbackConfirmed=false;
+  try {
+    await registrationLease.client.query('BEGIN');
+    await registrationLease.client.query(`SELECT set_config('projed.login_token_hash',$1,true),
+      set_config('projed.verified_google_subject',$2,true),set_config('projed.actor_local_user_id',$3,true),
+      set_config('projed.actor_principal_id',$4,true),set_config('projed.actor_entry',$5,true),
+      set_config('projed.actor_context_id',$6,true),set_config('projed.actor_guard_revision',$7,true),
+      set_config('projed.registration_user_id',$3,true),set_config('projed.registration_email',$8,true),
+      set_config('projed.registration_claim_hash',$9,true)`,[
+      existingGoogleRegistration.tokenHash,'synthetic-google-a',attemptedLocalUserId,'principal:a','main',randomUUID(),'1',
+      attemptedRegistrationEmail,existingGoogleClaim]);
+    const validRegistration=await registrationLease.client.query(`
+      SELECT projed_core.current_actor_user_id_v1()::text AS actor_id,
+        projed_core.registration_scope_valid_v1() AS valid,
+        (SELECT local_user_id::text FROM projed_core.google_identity_proofs
+          WHERE google_subject='synthetic-google-a') AS existing_user_id
+    `);
+    assert.deepEqual(validRegistration.rows,[{actor_id:attemptedLocalUserId,valid:true,
+      existing_user_id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'}],
+    'The insert attempt has an exact actor/registration UUID, email, existing provider proof, and live processing claim');
+    await assert.rejects(registrationLease.client.query(`
+      INSERT INTO projed_core.profiles(id,email,display_name) VALUES($1::uuid,$2,$2)
+    `,[attemptedLocalUserId,attemptedRegistrationEmail]),
+    (error: unknown)=>(error as {code?:string}).code==='42501',
+    '0022 first-registration policy must reject rebinding an existing Google proof');
+  } finally {
+    try {
+      await registrationLease.client.query('ROLLBACK');
+      registrationRollbackConfirmed=true;
+    } catch { /* Destroy the client when the transaction state cannot be confirmed. */ }
+    registrationLease.release(!registrationRollbackConfirmed);
+    await store.cancel(existingGoogleRegistration.tokenHash,ORIGIN,Date.now());
+  }
 
   const cancelledNew=await prepare(newIdentity('personal',`cancelled-new-${randomUUID()}`));
   await store.cancel(cancelledNew.tokenHash,ORIGIN,Date.now());

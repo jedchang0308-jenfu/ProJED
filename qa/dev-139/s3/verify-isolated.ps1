@@ -124,8 +124,17 @@ try {
   $env:PROJED_DATABASE_URL = "postgresql://projed_runtime_disposable:${encodedRuntime}@127.0.0.1:$port/$databaseName"
   $env:PROJED_DEV139_BROWSER_SMOKE = if ($DatabaseOnly) { '0' } else { '1' }
   $env:PORT = '0'
-  npx.cmd tsx qa/dev-139/s3/verify-pg.ts
-  if ($LASTEXITCODE -ne 0) { throw 'DEV-139 S3 PostgreSQL verifier failed' }
+  $verifierLines = @(& npx.cmd tsx qa/dev-139/s3/verify-pg.ts)
+  $verifierExitCode = $LASTEXITCODE
+  $verifierLines | ForEach-Object { Write-Output $_ }
+  if ($verifierExitCode -ne 0) { throw 'DEV-139 S3 PostgreSQL verifier failed' }
+  # The verifier owns its executed checks. Do not maintain a second case list
+  # here: new product regressions otherwise disappear from the saved receipt.
+  $verifierResult = $verifierLines[-1] | ConvertFrom-Json
+  if ($verifierResult.status -cne 'PASS' -or $verifierResult.checks -isnot [array] -or
+      @($verifierResult.checks).Count -eq 0) {
+    throw 'DEV-139 S3 PostgreSQL verifier result is invalid'
+  }
 
   $attempt = (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ') + "-$($nonce.Substring(0,8))"
   $evidenceDir = Join-Path $projectRoot "output/qa/dev-139/s3/$attempt"
@@ -140,40 +149,7 @@ try {
     port = $port
     profileSha256 = $profileHash
     migrationSha256 = $migrationHashes
-    checks = @(
-      'google-proof-rls-original-uuid-read-only-and-guard-denial'
-      'app-session-store-atomic-cancel-rotation-replay-rls'
-      'migration-apply', 'migration-idempotent', 'runtime-boundary', 'workspace-board-scope',
-      'tenant-member-scope', 'board-member-scope', 'explicit-empty-permissions',
-      'task-parent-mapping', 'dependency-mapping', 'private-board-deny',
-      'tenant-scope-does-not-imply-board-read', 'suspended-member-deny',
-      'tag-authority', 'task-command', 'assignment-normalization', 'dependency-command',
-      'empty-tag-replacement', 'batch-rollback', 'date-and-dependency-constraints',
-      'board-capability-write-deny', 'board-scope-tag-definition-deny',
-      'task-delete-parent-detach-and-dependency-cascade',
-      'missing-context-deny', 'runtime-write-deny', 'production-route-disabled',
-      'production-write-disabled', 'production-collaboration-disabled',
-      'http-session-route', 'http-private-board-deny', 'http-missing-session-deny',
-      'http-api-no-static-fallback', 'http-domain-write', 'http-capability-deny',
-      'http-origin-bound-write-deny',
-      'workspace-board-command', 'project-manager-create-board', 'five-role-matrix-atomic',
-      'board-only-manager-add-and-delete', 'owner-immutable',
-      'invite-role-email-hash-expiry-suspension-one-time-revoke',
-      'external-board-scope-private-retention', 'resource-revision',
-      'http-collaboration-command', 'client-identity-claims-ignored',
-      'record-private-and-project-read', 'record-link-atomic-upsert-and-archive',
-      'activity-read-write-capability', 'workspace-activity-audit-capability', 'audit-write-capability',
-      'production-record-activity-disabled', 'http-record-activity',
-      'production-quick-task-disabled', 'http-quick-task-idempotency-owner-isolation-and-origin-deny',
-      'http-workbench-owner-crud-entry-isolation-and-atomic-bidirectional-placement',
-      'http-workbench-permission-partial-subtree-idempotency-linked-rollback-and-origin-deny',
-      'http-tracking-reference-subtree-staging-idempotency-derived-read-and-unplaced-guard',
-      'http-board-transfer-preview-confirmation-rollback-data-permission-and-revision-continuity',
-      'http-backup-copy-replace-stale-rollback-idempotency-rls-and-origin',
-      'http-account-layout-and-task-filter-preferences-cas-rls-and-origin',
-      'http-calendar-subscription-hash-only-owner-origin-legacy-pagination-lifecycle-feed-and-revocation'
-      if (-not $DatabaseOnly) { 'http-normal-product-ui-and-reload' }
-    )
+    checks = @('migration-apply', 'migration-idempotent') + @($verifierResult.checks)
   } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $evidenceDir 'result.json') -Encoding utf8
   Write-Output ("DEV139_S3_RESULT=PASS databaseOnly={0} output={1}" -f [bool]$DatabaseOnly, $evidenceDir)
 }

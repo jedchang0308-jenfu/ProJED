@@ -1724,6 +1724,7 @@ console.log(JSON.stringify({
     'migration-boundary', 'google-proof-rls-original-uuid-read-only-and-guard-denial',
     'app-session-store-atomic-cancel-rotation-replay-rls',
     'first-login-personal-external-employee-concurrency-original-uuid-and-private-workspace',
+    'verified-login-email-refresh-invite-qualification-and-unscoped-update-denial',
     'workspace-board-scope', 'tenant-member-scope', 'board-member-scope',
     'tenant-scope-does-not-imply-board-read', 'suspended-member-deny',
     'explicit-empty-permissions', 'task-parent-mapping', 'dependency-mapping', 'private-board-deny',
