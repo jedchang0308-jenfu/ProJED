@@ -439,8 +439,46 @@ const BLOCKERS = [
   ['public.task_tracking_reference_operations', "WHERE status <> 'committed' OR request_hash !~ '^[0-9a-f]{64}$' OR result IS NULL"],
   ['private.backup_import_executions', "WHERE status <> 'succeeded' OR result IS NULL"],
   ['private.quick_task_oauth_clients', ''],
-  ['public.knowledge_records', 'WHERE rag_enabled'],
-  ['public.knowledge_records', 'WHERE source_document_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.documents document WHERE document.id = public.knowledge_records.source_document_id AND document.tenant_id = public.knowledge_records.tenant_id)'],
+  ['public.knowledge_records', "WHERE rag_enabled AND (status::text <> 'published' OR visibility::text = 'private' OR source_document_id IS NULL)"],
+  ['public.knowledge_records', `WHERE source_document_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM public.documents document
+     WHERE document.id = public.knowledge_records.source_document_id
+       AND document.tenant_id = public.knowledge_records.tenant_id
+       AND document.project_id = public.knowledge_records.project_id
+       AND document.source_table = 'knowledge_records'
+       AND document.source_id = public.knowledge_records.id
+       AND document.source_type::text = CASE public.knowledge_records.record_type::text
+         WHEN 'meeting' THEN 'meeting_note'
+         WHEN 'work_log' THEN 'work_log'
+         ELSE ''
+       END
+       AND (
+         (NOT document.rag_enabled AND NOT public.knowledge_records.rag_enabled)
+         OR (
+           document.visibility::text = public.knowledge_records.visibility::text
+           AND document.rag_enabled = public.knowledge_records.rag_enabled
+         )
+       )
+  )`],
+  ['public.documents', `WHERE source_table = 'knowledge_records' AND NOT EXISTS (
+    SELECT 1 FROM public.knowledge_records record
+     WHERE record.id = public.documents.source_id
+       AND record.tenant_id = public.documents.tenant_id
+       AND record.project_id = public.documents.project_id
+       AND record.source_document_id = public.documents.id
+       AND public.documents.source_type::text = CASE record.record_type::text
+         WHEN 'meeting' THEN 'meeting_note'
+         WHEN 'work_log' THEN 'work_log'
+         ELSE ''
+       END
+       AND (
+         (NOT public.documents.rag_enabled AND NOT record.rag_enabled)
+         OR (
+           public.documents.visibility::text = record.visibility::text
+           AND public.documents.rag_enabled = record.rag_enabled
+         )
+       )
+  )`],
   ['public.tenants', "WHERE owner_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.tenant_members member WHERE member.tenant_id = public.tenants.id AND member.user_id = public.tenants.owner_id AND member.status::text = 'active')"],
   ['public.activity_events', 'WHERE entity_table IS NULL'],
   ['public.audit_logs', 'WHERE tenant_id IS NULL OR entity_table IS NULL'],

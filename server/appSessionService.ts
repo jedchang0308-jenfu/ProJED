@@ -595,7 +595,8 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
     return null;
   };
 
-  const resolveRequest = (request: IncomingMessage): Promise<ResolvedSession> => {
+  const resolveRequest = (request: IncomingMessage, refresh = false): Promise<ResolvedSession> => {
+    if (refresh) requestResolutions.delete(request);
     const cached = requestResolutions.get(request);
     if (cached) return cached;
     const pending = (async () => {
@@ -613,7 +614,9 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
     return pending;
   };
 
-  const resolveActor = async (request: IncomingMessage): Promise<ServerActorV1> => (await resolveRequest(request)).actor;
+  const resolveActor = async (
+    request: IncomingMessage, options?: { readonly refresh?: boolean },
+  ): Promise<ServerActorV1> => (await resolveRequest(request,options?.refresh)).actor;
 
   const resolveSessionInfo = async (request: IncomingMessage, actor: ServerActorV1) => {
     const resolved = await resolveRequest(request);

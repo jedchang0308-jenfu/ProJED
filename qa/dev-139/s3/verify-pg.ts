@@ -40,6 +40,7 @@ import { BackupError } from '../../../src/features/backup/types.js';
 import { TaskTrackingError } from '../../../src/features/taskTracking/errors.js';
 import { verifyGoogleMappingsPostgres } from '../s2/verify-mappings-pg.js';
 import { verifyAppSessionsPostgres } from '../s2/verify-app-sessions-pg.js';
+import {verifyRagPostgres} from './verify-rag-pg.js';
 import { createPreferencesHttpDispatcher } from '../../../server/preferencesHttp.js';
 import { createCalendarHttpDispatcher } from '../../../server/calendarHttp.js';
 import { buildCalendarFeed } from '../../../server/calendar.js';
@@ -59,6 +60,7 @@ const recordActivity = new RecordActivityRepository();
 await database.assertRuntimeBoundary(expected);
 await verifyGoogleMappingsPostgres(database);
 await verifyAppSessionsPostgres(database,config);
+await verifyRagPostgres(database,config);
 
 const runBrowserSmoke = (baseUrl: string): Promise<void> => new Promise((done, reject) => {
   const child = spawn('powershell.exe', [
@@ -1725,6 +1727,7 @@ console.log(JSON.stringify({
     'app-session-store-atomic-cancel-rotation-replay-rls',
     'first-login-personal-external-employee-concurrency-original-uuid-and-private-workspace',
     'verified-login-email-refresh-invite-qualification-and-unscoped-update-denial',
+    'rag-record-mirror-index-consumer-current-retrieval-private-denial-and-supersession',
     'workspace-board-scope', 'tenant-member-scope', 'board-member-scope',
     'tenant-scope-does-not-imply-board-read', 'suspended-member-deny',
     'explicit-empty-permissions', 'task-parent-mapping', 'dependency-mapping', 'private-board-deny',

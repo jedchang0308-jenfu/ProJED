@@ -25,6 +25,8 @@ import {
 } from './sessionHttp.js';
 import { createTaskWorkbenchHttpDispatcher } from './taskWorkbenchHttp.js';
 import { createTaskTrackingHttpDispatcher } from './taskTrackingHttp.js';
+import {createRagHttpDispatcher} from './ragHttp.js';
+import type {RagProvider} from './geminiRagProvider.js';
 
 const CONTENT_TYPES: Record<string, string> = {
   '.css': 'text/css; charset=utf-8',
@@ -64,6 +66,7 @@ function json(
   requestId: string,
   headers?: Readonly<Record<string, string>>,
 ): void {
+  if(response.destroyed||response.writableEnded)return;
   response.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
     'cache-control': 'no-store',
@@ -136,6 +139,7 @@ export interface KernelHttpServer {
 }
 
 export interface KernelHttpOptions {
+  readonly ragProvider?:RagProvider;
   readonly resolveActor?: TrustedSessionActorResolver;
   readonly destroySession?: TrustedSessionDestroyer;
   readonly resolveSessionInfo?: TrustedSessionInfoResolver;
@@ -195,6 +199,7 @@ export function createKernelHttpServer(
   const dispatchCalendar = createCalendarHttpDispatcher(config, database, options.resolveActor);
   const dispatchDomainRead = createDomainReadHttpDispatcher(config, database, options.resolveActor);
   const dispatchDomainWrite = createDomainWriteHttpDispatcher(config, database, options.resolveActor);
+  const dispatchRag = createRagHttpDispatcher(config,database,options.resolveActor,options.ragProvider);
   const server = createServer({
     maxHeaderSize: 16 * 1024,
     requestTimeout: config.profile.runtime.timeouts.requestMillis,
@@ -265,6 +270,8 @@ export function createKernelHttpServer(
       }, requestId);
       return;
     }
+    const rag=await dispatchRag(request,requestId);
+    if(rag.matched){json(response,rag.status??500,rag.body,requestId);return;}
     const collaborationWrite = await dispatchCollaborationWrite(request, requestId);
     if (collaborationWrite.matched) {
       json(response, collaborationWrite.status ?? 500, collaborationWrite.body ?? {

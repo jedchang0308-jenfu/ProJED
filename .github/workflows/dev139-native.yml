@@ -50,7 +50,10 @@ jobs:
         run: npx tsc -p tsconfig.server.s2.json --noEmit
       - name: Frontend typecheck
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
-        run: npx tsc -p tsconfig.json --noEmit
+        run: |
+          npx tsc -p tsconfig.json --noEmit
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npx tsc -p tsconfig.dev139.s3.json --noEmit
       - name: S2 unit tests
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         run: npm run verify:dev-139:s2:unit

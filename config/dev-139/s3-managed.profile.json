@@ -109,6 +109,10 @@
     {
       "version": "0023_verified_login_email_v1",
       "path": "db/migrations/0023_verified_login_email_v1.sql"
+    },
+    {
+      "version": "0024_rag_record_lifecycle_v1",
+      "path": "db/migrations/0024_rag_record_lifecycle_v1.sql"
     }
   ],
   "objectAllowlist": [
@@ -204,7 +208,13 @@
     "projed_core.app_session_revoke_v1",
     "projed_core.login_intents_active_old_session_v1",
     "projed_core.registration_scope_valid_v1",
-    "projed_core.profile_verified_email_update_v1"
+    "projed_core.profile_verified_email_update_v1",
+    "projed_core.rag_record_write_scope_v1",
+    "projed_core.rag_embedding_worker_row_scope_v1",
+    "projed_core.rag_embedding_worker_scope_v1",
+    "projed_core.rag_sync_job_update_guard_v1",
+    "projed_core.rag_sync_jobs_claim_v1",
+    "projed_core.rag_sync_jobs_version_v1"
   ],
   "staticFixturePath": "dist",
   "runtime": {

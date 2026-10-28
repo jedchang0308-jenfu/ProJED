@@ -855,6 +855,28 @@ test('Session requests reread current state once per request and preserve stored
   assert.equal(f.counts().mappingReadCount, beforeMapping);
 });
 
+test('long AI requests explicitly refresh the same Session and reject state drift after provider work', async () => {
+  const f = fixture();
+  const login = await start(f);
+  const callback = await f.service.dispatchAuth(callbackRequest(MAIN_ORIGIN, cookieValue(login),
+    authorizationFrom(login).searchParams.get('state')!), 'long-request-login');
+  const ongoing = request('POST','/api/v1/workspaces/ws/rag:query', {
+    host:host(MAIN_ORIGIN),cookie:cookieValue(callback),
+  });
+  const before = await f.service.resolveActor(ongoing);
+  f.setNow(f.now()+11_000);
+  assert.equal(await f.service.resolveActor(ongoing),before);
+  assert.ok(before.expiresAtMs<=f.now());
+  const refreshed = await f.service.resolveActor(ongoing,{refresh:true});
+  assert.equal(refreshed.localUserId,before.localUserId);
+  assert.equal(refreshed.contextId,before.contextId);
+  assert.ok(refreshed.expiresAtMs>f.now());
+  assert.equal(f.counts().stateReadCount,2);
+  f.setState(stateFor(identityAt(f.now(),{authEpoch:f.identity().authEpoch+1}),f.now()));
+  await assert.rejects(f.service.resolveActor(ongoing,{refresh:true}),
+    (error: unknown)=>error instanceof KernelError && error.code==='IDENTITY_INVALID');
+});
+
 test('wrong-origin prior Session stays untouched while confirmed revoked or missing rows clear for re-login', async () => {
   const f = fixture();
   const sessionToken = Buffer.alloc(32, 77).toString('base64url');

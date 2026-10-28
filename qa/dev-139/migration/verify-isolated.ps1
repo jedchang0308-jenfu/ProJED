@@ -75,6 +75,51 @@ function Invoke-DataMode([string]$Mode, [int[]]$ExpectedExitCodes) {
   return ($jsonLine.ToString() | ConvertFrom-Json)
 }
 
+function Assert-RagPreflightBlocked([string]$MutationSql, [string]$RestoreSql, [string]$ExpectedDomainPrefix) {
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', $MutationSql)
+  try {
+    $result = Invoke-DataMode -Mode 'apply' -ExpectedExitCodes @(2)
+    $matchingDomains = @($result.blockers.domain | Where-Object { $_.StartsWith($ExpectedDomainPrefix, [System.StringComparison]::Ordinal) })
+    if ($result.status -ne 'BLOCKED' -or $matchingDomains.Count -eq 0) {
+      throw "DEV-139 invalid RAG source state was not blocked: $ExpectedDomainPrefix"
+    }
+    $targetCount = Invoke-PgScalar -Database $targetDatabase -Sql 'SELECT (SELECT count(*) FROM projed_core.profiles) + (SELECT count(*) FROM projed_core.google_identity_proofs) + (SELECT count(*) FROM projed_core.account_authorization_guards) + (SELECT count(*) FROM projed_core.documents) + (SELECT count(*) FROM projed_core.knowledge_records) + (SELECT count(*) FROM projed_core.rag_sync_jobs)'
+    if ($targetCount -ne '0') { throw 'DEV-139 invalid RAG source preflight wrote target rows.' }
+  }
+  finally {
+    Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', $RestoreSql)
+  }
+}
+
+function Assert-RagDisabledLegacyMirrorAllowed() {
+  $mutationSql = @'
+UPDATE public.knowledge_records
+   SET rag_enabled = false
+ WHERE id = '23456789-1234-4234-8234-123456789002';
+UPDATE public.documents
+   SET rag_enabled = false, visibility = 'private'
+ WHERE id = 'd0000000-0000-4000-8000-000000000004';
+'@
+  try {
+    Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', $mutationSql)
+    $result = Invoke-DataMode -Mode 'plan' -ExpectedExitCodes @(0)
+    if ($result.status -ne 'PASS') {
+      throw 'DEV-139 disabled legacy mirror with stale visibility was incorrectly blocked.'
+    }
+  }
+  finally {
+    $restoreSql = @'
+UPDATE public.knowledge_records
+   SET rag_enabled = true
+ WHERE id = '23456789-1234-4234-8234-123456789002';
+UPDATE public.documents
+   SET rag_enabled = true, visibility = 'project'
+ WHERE id = 'd0000000-0000-4000-8000-000000000004';
+'@
+    Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', $restoreSql)
+  }
+}
+
 function Test-PortOpen([int]$TargetPort) {
   $client = [Net.Sockets.TcpClient]::new()
   try {
@@ -163,10 +208,32 @@ try {
   }
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-c', 'REVOKE projed_owner_disposable FROM projed_importer_disposable')
 
+  # Keep one synthetic, fully linked published RAG record in the positive source
+  # snapshot. Its mirror/latest version share the exact current source hash.
+  $ragSourceSetupSql = @'
+UPDATE public.knowledge_records
+   SET rag_enabled = true
+ WHERE id = '23456789-1234-4234-8234-123456789002';
+UPDATE public.documents
+   SET rag_enabled = true,
+       content_hash = 'fixture-hash-mirror-v1',
+       metadata = '{"kind":"mirror","source_rag_enabled":true}'::jsonb
+ WHERE id = 'd0000000-0000-4000-8000-000000000004';
+UPDATE public.document_versions
+   SET content_hash = 'fixture-hash-mirror-v1'
+ WHERE id = 'd1000000-0000-4000-8000-000000000005';
+'@
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', $ragSourceSetupSql)
+  $sourceRagEligible = Invoke-PgScalar -Database $sourceDatabase -Sql "SELECT count(*) FROM public.knowledge_records record JOIN public.documents document ON document.id = record.source_document_id AND document.tenant_id = record.tenant_id AND document.project_id = record.project_id AND document.source_table = 'knowledge_records' AND document.source_id = record.id AND document.source_type = 'meeting_note' AND document.visibility = record.visibility AND document.rag_enabled = record.rag_enabled JOIN public.document_versions version ON version.tenant_id = document.tenant_id AND version.document_id = document.id AND version.content_hash = document.content_hash JOIN public.document_chunks chunk ON chunk.tenant_id = document.tenant_id AND chunk.document_id = document.id AND chunk.document_version_id = version.id WHERE record.id = '23456789-1234-4234-8234-123456789002' AND record.status = 'published' AND record.visibility <> 'private' AND record.rag_enabled AND document.rag_enabled AND version.id = (SELECT latest.id FROM public.document_versions latest WHERE latest.tenant_id = document.tenant_id AND latest.document_id = document.id ORDER BY latest.version DESC LIMIT 1)"
+  if ($sourceRagEligible -ne '1') { throw 'DEV-139 valid published RAG source fixture was not fully linked.' }
+
+  Assert-RagDisabledLegacyMirrorAllowed
+
   $plan = Invoke-DataMode -Mode 'plan' -ExpectedExitCodes @(0)
   if ($plan.status -ne 'PASS' -or $plan.matches -ne $false -or $plan.tables.profiles.count -ne 2 -or
-      $plan.tables.google_identity_proofs.count -ne 1 -or $plan.tables.llm_access_logs.count -ne 5) {
-    throw 'DEV-139 migration plan result was not the expected empty-target plan.'
+      $plan.tables.google_identity_proofs.count -ne 1 -or $plan.tables.llm_access_logs.count -ne 5 -or
+      $plan.tables.documents.count -ne 4 -or $plan.tables.knowledge_records.count -ne 1) {
+    throw 'DEV-139 migration plan did not accept the valid linked published RAG source.'
   }
 
   foreach ($sourceDomain in @('documents', 'document_versions', 'document_chunks', 'document_embeddings', 'rag_sync_jobs', 'external_rag_objects')) {
@@ -183,13 +250,26 @@ try {
     if ($scopeTargetCount -ne '0') { throw 'DEV-139 document scope preflight wrote target rows.' }
     Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "UPDATE public.$sourceDomain SET tenant_id = '$scopeTenant'::uuid WHERE id = '$scopeRowId'::uuid")
   }
-  # Corpus retention is not proof of the future indexing/retrieval runtime.
-  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'UPDATE public.knowledge_records SET rag_enabled = true')
-  $ragRuntimeMissing = Invoke-DataMode -Mode 'apply' -ExpectedExitCodes @(2)
-  if ($ragRuntimeMissing.status -ne 'BLOCKED' -or 'public.knowledge_records WHERE rag_enabled' -notin @($ragRuntimeMissing.blockers.domain)) {
-    throw 'DEV-139 active record RAG was unblocked before its runtime replacement.'
-  }
-  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'UPDATE public.knowledge_records SET rag_enabled = false')
+  Assert-RagPreflightBlocked `
+    -MutationSql "UPDATE public.knowledge_records SET status = 'draft' WHERE id = '23456789-1234-4234-8234-123456789002'" `
+    -RestoreSql "UPDATE public.knowledge_records SET status = 'published' WHERE id = '23456789-1234-4234-8234-123456789002'" `
+    -ExpectedDomainPrefix 'public.knowledge_records WHERE rag_enabled AND'
+  Assert-RagPreflightBlocked `
+    -MutationSql "UPDATE public.knowledge_records SET visibility = 'private' WHERE id = '23456789-1234-4234-8234-123456789002'" `
+    -RestoreSql "UPDATE public.knowledge_records SET visibility = 'project' WHERE id = '23456789-1234-4234-8234-123456789002'" `
+    -ExpectedDomainPrefix 'public.knowledge_records WHERE rag_enabled AND'
+  Assert-RagPreflightBlocked `
+    -MutationSql "UPDATE public.knowledge_records SET source_document_id = NULL WHERE id = '23456789-1234-4234-8234-123456789002'" `
+    -RestoreSql "UPDATE public.knowledge_records SET source_document_id = 'd0000000-0000-4000-8000-000000000004' WHERE id = '23456789-1234-4234-8234-123456789002'" `
+    -ExpectedDomainPrefix 'public.knowledge_records WHERE rag_enabled AND'
+  Assert-RagPreflightBlocked `
+    -MutationSql "UPDATE public.documents SET source_id = '23456789-1234-4234-8234-123456789099' WHERE id = 'd0000000-0000-4000-8000-000000000004'" `
+    -RestoreSql "UPDATE public.documents SET source_id = '23456789-1234-4234-8234-123456789002' WHERE id = 'd0000000-0000-4000-8000-000000000004'" `
+    -ExpectedDomainPrefix 'public.knowledge_records WHERE source_document_id IS NOT NULL'
+  Assert-RagPreflightBlocked `
+    -MutationSql "UPDATE public.documents SET rag_enabled = false WHERE id = 'd0000000-0000-4000-8000-000000000004'" `
+    -RestoreSql "UPDATE public.documents SET rag_enabled = true WHERE id = 'd0000000-0000-4000-8000-000000000004'" `
+    -ExpectedDomainPrefix 'public.knowledge_records WHERE source_document_id IS NOT NULL'
 
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "UPDATE public.tenants SET owner_id = '11111111-1111-4111-8111-111111111111' WHERE id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa9'")
   $unconfirmedOwner = Invoke-DataMode -Mode 'apply' -ExpectedExitCodes @(2)
@@ -423,6 +503,8 @@ try {
   if ($reconcile.status -ne 'PASS' -or $reconcile.matches -ne $true -or $reconcile.snapshotId -ne $apply.snapshotId) {
     throw 'DEV-139 post-commit reconciliation failed.'
   }
+  $targetRagEligible = Invoke-PgScalar -Database $targetDatabase -Sql "SELECT count(*) FROM projed_core.knowledge_records record JOIN projed_core.documents document ON document.id = record.source_document_id AND document.tenant_id = record.tenant_id AND document.project_id = record.project_id AND document.source_table = 'knowledge_records' AND document.source_id = record.id AND document.source_type = 'meeting_note' AND document.visibility = record.visibility AND document.rag_enabled = record.rag_enabled JOIN projed_core.document_versions version ON version.tenant_id = document.tenant_id AND version.document_id = document.id AND version.content_hash = document.content_hash JOIN projed_core.document_chunks chunk ON chunk.tenant_id = document.tenant_id AND chunk.document_id = document.id AND chunk.document_version_id = version.id WHERE record.id = '23456789-1234-4234-8234-123456789002' AND record.status = 'published' AND record.visibility <> 'private' AND record.rag_enabled AND document.rag_enabled AND version.id = (SELECT latest.id FROM projed_core.document_versions latest WHERE latest.tenant_id = document.tenant_id AND latest.document_id = document.id ORDER BY latest.version DESC LIMIT 1)"
+  if ($targetRagEligible -ne '1') { throw 'DEV-139 apply/reconcile did not retain the valid published RAG source.' }
   $importedGuardBindings = Invoke-PgScalar -Database $targetDatabase -Sql "SELECT (SELECT count(*) FROM projed_core.account_authorization_guards) || ':' || (SELECT count(*) FROM projed_core.account_authorization_guards guard JOIN projed_core.google_identity_proofs proof USING (local_user_id) JOIN projed_core.profiles profile ON profile.id = guard.local_user_id WHERE guard.local_user_id = '11111111-1111-4111-8111-111111111111' AND guard.active AND guard.revision = 1 AND guard.updated_at = profile.updated_at) || ':' || (SELECT count(*) FROM projed_core.account_authorization_guards WHERE local_user_id = '22222222-2222-4222-8222-222222222222')"
   if ($importedGuardBindings -ne '1:1:0') { throw "DEV-139 source account guard projection mismatch: $importedGuardBindings" }
   foreach ($retentionCheck in @('llm-access-retention.sql', 'workspace-lifecycle.sql', 'document-retention.sql')) {

@@ -8,7 +8,9 @@ import { DomainReadRepository } from './domainRead.js';
 import { asKernelError } from './errors.js';
 import { assertExpectedActor } from './expectedActorHttp.js';
 
-export type TrustedSessionActorResolver = (request: IncomingMessage) => Promise<ServerActorV1>;
+export type TrustedSessionActorResolver = (
+  request: IncomingMessage, options?: { readonly refresh?: boolean },
+) => Promise<ServerActorV1>;
 
 export interface DomainReadHttpResult {
   readonly matched: boolean;

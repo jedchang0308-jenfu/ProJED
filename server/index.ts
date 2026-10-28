@@ -4,6 +4,7 @@ import { loadRuntimeConfig, sha256 } from './config.js';
 import { RuntimeDatabase, type ExpectedMigration } from './db.js';
 import { createKernelHttpServer } from './http.js';
 import { createRuntimeSessionAuth } from './runtimeSessionAuth.js';
+import {createGeminiRagProvider} from './geminiRagProvider.js';
 
 async function main(): Promise<void> {
   const config = loadRuntimeConfig();
@@ -14,7 +15,10 @@ async function main(): Promise<void> {
   });
   const database = new RuntimeDatabase(config);
   await database.assertRuntimeBoundary(expectedMigrations);
-  const http = createKernelHttpServer(config, database, expectedMigrations, createRuntimeSessionAuth(config, database));
+  const http = createKernelHttpServer(config, database, expectedMigrations, {
+    ...createRuntimeSessionAuth(config,database),
+    ragProvider:process.env.GEMINI_API_KEY?createGeminiRagProvider({apiKey:process.env.GEMINI_API_KEY}):undefined,
+  });
   const address = await http.listen();
   console.log(JSON.stringify({ event: 'projed_kernel_ready', entry: config.entry, host: address.host, port: address.port }));
 

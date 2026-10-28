@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { ActorQueryPort } from './actorTransaction.js';
 import { resolveBoard, resolveWorkspace, type BoardIdentity } from './domainRead.js';
 import { KernelError } from './errors.js';
+import { reconcileKnowledgeRecordMirror } from './knowledgeRecordRagMirror.js';
 
 const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const RECORD_TYPES = new Set(['meeting', 'work_log']);
@@ -412,10 +413,10 @@ export class RecordActivityRepository {
     if (requestedId !== undefined) {
       const existing = await port.query<{ id: string }>(UUID_RE.test(requestedId) ? `
         SELECT id::text FROM projed_core.knowledge_records
-         WHERE tenant_id = $1::uuid AND project_id = $2::uuid AND id = $3::uuid
+         WHERE tenant_id = $1::uuid AND project_id = $2::uuid AND id = $3::uuid FOR UPDATE
       ` : `
         SELECT id::text FROM projed_core.knowledge_records
-         WHERE tenant_id = $1::uuid AND project_id = $2::uuid AND legacy_record_id = $3
+         WHERE tenant_id = $1::uuid AND project_id = $2::uuid AND legacy_record_id = $3 FOR UPDATE
       `, [board.tenantId, board.id, requestedId]);
       internalId = existing.rows[0]?.id;
     }
@@ -451,7 +452,7 @@ export class RecordActivityRepository {
            SET record_type = $4, title = $5, content = $6, participants_text = $7,
                occurred_at = $8::timestamptz, started_at = $9::timestamptz, ended_at = $10::timestamptz,
                 status = $11, visibility = $12, rag_enabled = false,
-                source_document_id = NULL, metadata = $13::jsonb, updated_by = $14::uuid, updated_at = now()
+                metadata = $13::jsonb, updated_by = $14::uuid, updated_at = now()
          WHERE tenant_id = $1::uuid AND project_id = $2::uuid AND id = $3::uuid
       `, [board.tenantId, board.id, internalId, input.type, input.title, input.content,
         input.participantsText ?? null, validated.occurredAt, validated.startedAt, validated.endedAt,
@@ -487,9 +488,10 @@ export class RecordActivityRepository {
         ) VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::uuid, $6, $7::uuid)
       `, [randomUUID(), board.tenantId, board.id, internalId, link.id, link.role, actorId]);
     }
+    if (!internalId) invalid('Knowledge record identity is unavailable', 503);
+    await reconcileKnowledgeRecordMirror(port, {tenantId:board.tenantId,projectId:board.id,recordId:internalId});
     await bumpRevision(port, board.tenantId, board.id);
 
-    if (!internalId) invalid('Knowledge record identity is unavailable', 503);
     const records = await this.listRecordsByInternalId(port, board, workspaceRef, boardRef, internalId);
     const saved = records[0];
     if (!saved) notFound();
@@ -502,11 +504,12 @@ export class RecordActivityRepository {
     const actor = await port.query<{ id: string }>('SELECT projed_core.current_actor_user_id_v1()::text AS id');
     const result = await port.query(`
       UPDATE projed_core.knowledge_records
-         SET status = 'archived', rag_enabled = false, source_document_id = NULL,
+         SET status = 'archived', rag_enabled = false,
              updated_by = $4::uuid, updated_at = now()
        WHERE tenant_id = $1::uuid AND project_id = $2::uuid AND id = $3::uuid
     `, [board.tenantId, board.id, internalId, actor.rows[0]?.id]);
     if (result.rowCount !== 1) notFound();
+    await reconcileKnowledgeRecordMirror(port, {tenantId:board.tenantId,projectId:board.id,recordId:internalId});
     await bumpRevision(port, board.tenantId, board.id);
   }
 

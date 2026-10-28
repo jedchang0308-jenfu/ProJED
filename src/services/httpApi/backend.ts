@@ -10,6 +10,7 @@ import { createHttpTaskTrackingAdapter } from './taskTrackingAdapter';
 import { createHttpBackupAdapter } from './backupAdapter';
 import { createHttpPreferencesAdapter } from './preferencesAdapter';
 import { createHttpCalendarAdapter } from './calendarAdapter';
+import { createHttpRagAdapter } from './ragAdapter';
 
 export const httpApiClient = new HttpApiClient();
 export const httpDomainReadService = createHttpDomainReadAdapter(httpApiClient);
@@ -23,3 +24,4 @@ export const httpTaskTrackingService = createHttpTaskTrackingAdapter(httpApiClie
 export const httpBackupService = createHttpBackupAdapter(httpApiClient);
 export const httpPreferencesService = createHttpPreferencesAdapter(httpApiClient);
 export const httpCalendarService = createHttpCalendarAdapter(httpApiClient, httpDomainReadService);
+export const httpRagService = createHttpRagAdapter(httpApiClient);

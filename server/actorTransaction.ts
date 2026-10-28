@@ -31,6 +31,8 @@ export interface ActorQueryPort {
   ): Promise<void>;
   authorizeTaskTrackingDerivedRead(tenantId: string): Promise<void>;
   authorizeBackupGuard(tenantId: string, projectId: string): Promise<void>;
+  authorizeRecordRagMutation(tenantId: string, projectId: string, recordId: string): Promise<void>;
+  authorizeRagJobMutation(tenantId: string, documentId: string, jobId: string, claimToken?: string): Promise<void>;
 }
 
 const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
@@ -62,7 +64,12 @@ export async function runActorTransaction<T>(
   config: RuntimeConfig,
   actor: ServerActorV1,
   callback: (port: ActorQueryPort) => Promise<T>,
+  options: { readonly signal?: AbortSignal } = {},
 ): Promise<T> {
+  const checkCancellation = () => {
+    if (options.signal?.aborted) throw new KernelError('TRANSACTION_USAGE_INVALID','Operation was cancelled',409);
+  };
+  checkCancellation();
   validateServerActor(actor);
   const deadline = performance.now() + config.profile.runtime.timeouts.transactionMillis;
   const lease = await database.checkout();
@@ -74,6 +81,7 @@ export async function runActorTransaction<T>(
   let inFlight = false;
 
   const guardedClientQuery = async <R extends QueryResultRow>(text: string, values: readonly unknown[] = []) => {
+    checkCancellation();
     if (portClosed || performance.now() >= deadline) {
       throw new KernelError('TRANSACTION_USAGE_INVALID', 'Transaction query port is closed or expired');
     }
@@ -243,7 +251,40 @@ export async function runActorTransaction<T>(
     }
   };
 
+  const authorizeRecordRagMutation = async (tenantId: string, projectId: string, recordId: string): Promise<void> => {
+    if (![tenantId, projectId, recordId].every(value => UUID_RE.test(value))) {
+      throw new KernelError('TRANSACTION_USAGE_INVALID', 'Record index scope is invalid');
+    }
+    const allowed = await guardedClientQuery<{ allowed: boolean }>(`
+      SELECT projed_core.actor_can_write_record_v1(tenant_id,project_id,visibility,created_by,recorded_by) AS allowed
+        FROM projed_core.knowledge_records WHERE tenant_id=$1::uuid AND project_id=$2::uuid AND id=$3::uuid
+    `, [tenantId,projectId,recordId]);
+    if (allowed.rows.length !== 1 || allowed.rows[0]?.allowed !== true) {
+      throw new KernelError('ACCESS_DENIED', 'Record index source is not writable', 403);
+    }
+    await guardedClientQuery(`SELECT set_config('projed.rag_record_id',$1,true),
+      set_config('projed.rag_document_id','',true),set_config('projed.rag_job_id','',true),
+      set_config('projed.rag_job_claim','',true)`, [recordId]);
+  };
+
+  const authorizeRagJobMutation = async (
+    tenantId: string, documentId: string, jobId: string, claimToken?: string,
+  ): Promise<void> => {
+    if (![tenantId,documentId,jobId].every(value => UUID_RE.test(value))
+        || (claimToken !== undefined && !/^[a-f0-9]{64}$/u.test(claimToken))) {
+      throw new KernelError('TRANSACTION_USAGE_INVALID', 'Index job scope is invalid');
+    }
+    const visible = await guardedClientQuery<{ id: string }>(`
+      SELECT id::text FROM projed_core.documents WHERE tenant_id=$1::uuid AND id=$2::uuid
+    `, [tenantId,documentId]);
+    if (visible.rows.length !== 1) throw new KernelError('ACCESS_DENIED', 'Index source is not available', 403);
+    await guardedClientQuery(`SELECT set_config('projed.rag_document_id',$1,true),
+      set_config('projed.rag_job_id',$2,true),set_config('projed.rag_job_claim',$3,true)`,
+    [documentId,jobId,claimToken ?? '']);
+  };
+
   try {
+    checkCancellation();
     validateServerActor(actor);
     beginSent = true;
     await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
@@ -271,10 +312,13 @@ export async function runActorTransaction<T>(
       authorizeTaskPlacement,
       authorizeTaskTrackingDerivedRead,
       authorizeBackupGuard,
+      authorizeRecordRagMutation,
+      authorizeRagJobMutation,
     });
     portClosed = true;
     if (inFlight) throw new KernelError('TRANSACTION_USAGE_INVALID', 'Callback returned with an unfinished query');
     validateServerActor(actor);
+    checkCancellation();
     if (performance.now() >= deadline) throw new KernelError('TRANSACTION_USAGE_INVALID', 'Transaction deadline exceeded');
     commitSent = true;
     try {
