@@ -34,9 +34,11 @@ assert.equal(meta.quickEntrySha256, createHash('sha256').update(readFileSync('di
 
 const binding = JSON.parse(run([
   'scripts/create-dev139-managed-binding.mjs',
-  '--instance=jenfu-prod:asia-east1:projed',
+  '--instance=jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg',
 ]));
 assert.equal(Object.keys(binding.migrationSha256).length, 14);
+assert.equal(binding.databaseName, 'jenfu_prod');
+assert.equal(binding.cloudSqlInstance, 'jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg');
 assert.equal(Object.keys(binding).some(key => /password|secret|credential/i.test(key)), false);
 assert.equal(binding.staticFixtureSha256, createHash('sha256').update(readFileSync('dist/dev139-cloud-run-meta.json')).digest('hex'));
 
@@ -45,7 +47,7 @@ const config = loadRuntimeConfig({
   PROJED_ENV: 'managed',
   PROJED_APP_ENTRY: 'main',
   PROJED_RUNTIME_BINDING_JSON: JSON.stringify(binding),
-  PROJED_DATABASE_URL: `postgresql://${binding.runtimeRole}:not-a-secret@localhost/projed?host=%2Fcloudsql%2Fjenfu-prod%3Aasia-east1%3Aprojed`,
+  PROJED_DATABASE_URL: `postgresql://${binding.runtimeRole}:not-a-secret@localhost/jenfu_prod?host=%2Fcloudsql%2Fjenfu-platform-prod%3Aasia-east1%3Ajenfu-platform-prod-pg`,
   PROJED_PUBLIC_APP_URL: 'https://projed.example.com',
   PORT: '8080',
 });

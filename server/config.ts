@@ -15,6 +15,7 @@ export interface SourceProfile {
   database: {
     namePattern: string;
     host: '127.0.0.1' | 'cloud-sql-unix';
+    cloudSqlInstance?: string;
     supportedPostgresMajors: readonly number[];
     schemas: readonly string[];
   };
@@ -85,7 +86,7 @@ const PROFILE_MIGRATION_PATHS = new Map<string, readonly string[]>([
     'db/migrations/0013_calendar_subscriptions_v1.sql',
     'db/migrations/0014_snapshot_importer_v1.sql',
   ]],
-  ['^projed$', [
+  ['^jenfu_prod$', [
     'db/migrations/0001_runtime_boundary_v1.sql',
     'db/migrations/0002_profile_actor_v1.sql',
     'db/migrations/0003_domain_read_v1.sql',
@@ -135,7 +136,10 @@ export function loadSourceProfile(path: string): { profile: SourceProfile; sha25
   const expectedHost = value.environment === 'managed' ? 'cloud-sql-unix' : '127.0.0.1';
   if (!expectedMigrationPaths || value.database?.host !== expectedHost
       || value.database?.supportedPostgresMajors?.join('|') !== '17|18'
-      || value.database?.schemas?.join('|') !== 'projed_core|projed_contract') {
+      || value.database?.schemas?.join('|') !== 'projed_core|projed_contract'
+      || (value.environment === 'managed'
+        ? value.database.cloudSqlInstance !== 'jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg'
+        : value.database.cloudSqlInstance !== undefined)) {
     throw new KernelError('CONFIG_INVALID', 'Unexpected database contract');
   }
   if (value.roles?.owner !== 'projed_owner_disposable'
@@ -169,6 +173,7 @@ export function validateRuntimeBinding(binding: RuntimeBinding, profile: SourceP
       || connectionMode !== expectedConnectionMode
       || (connectionMode === 'cloud-sql-unix'
         ? !CLOUD_SQL_INSTANCE_RE.test(binding.cloudSqlInstance ?? '')
+          || binding.cloudSqlInstance !== profile.database.cloudSqlInstance
         : binding.cloudSqlInstance !== undefined)
       || binding.profileSha256 !== profileHash
       || !SHA256_RE.test(binding.staticFixtureSha256)) {

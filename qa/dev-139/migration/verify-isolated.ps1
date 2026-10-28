@@ -161,6 +161,64 @@ try {
     throw 'DEV-139 migration plan result was not the expected empty-target plan.'
   }
 
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'CREATE TABLE public.dev139_unknown_empty_source (id uuid)')
+  $unknownEmptyPlan = Invoke-DataMode -Mode 'plan' -ExpectedExitCodes @(2)
+  $unknownEmptyDomain = 'UNKNOWN_SOURCE_RELATION "public"."dev139_unknown_empty_source"'
+  $unknownEmptyBlocker = @($unknownEmptyPlan.blockers | Where-Object { $_.domain -eq $unknownEmptyDomain }) | Select-Object -First 1
+  if ($unknownEmptyPlan.status -ne 'BLOCKED' -or -not $unknownEmptyBlocker -or $unknownEmptyBlocker.count -ne 0) {
+    throw 'DEV-139 empty unknown app table was not reported as a zero-row source blocker.'
+  }
+  $unknownEmptyApply = Invoke-DataMode -Mode 'apply' -ExpectedExitCodes @(2)
+  if ($unknownEmptyApply.status -ne 'BLOCKED' -or -not (@($unknownEmptyApply.blockers.domain) -contains $unknownEmptyDomain)) {
+    throw 'DEV-139 apply did not stop at the read-only source catalog preflight for an empty unknown app table.'
+  }
+  $unknownEmptyTargetCount = Invoke-PgScalar -Database $targetDatabase -Sql 'SELECT (SELECT count(*) FROM projed_core.profiles) + (SELECT count(*) FROM projed_core.tenants)'
+  if ($unknownEmptyTargetCount -ne '0') { throw 'DEV-139 unknown source relation preflight wrote target rows.' }
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'DROP TABLE public.dev139_unknown_empty_source')
+
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'CREATE VIEW public.dev139_non_authority_view AS SELECT 1::integer AS id')
+  $viewPlan = Invoke-DataMode -Mode 'plan' -ExpectedExitCodes @(0)
+  if ($viewPlan.status -ne 'PASS') { throw 'DEV-139 plain derived view incorrectly blocked the source catalog plan.' }
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'DROP VIEW public.dev139_non_authority_view')
+
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'CREATE TABLE public.dev139_unknown_partitioned_source (id integer) PARTITION BY RANGE (id); CREATE TABLE public.dev139_unknown_partitioned_source_0 PARTITION OF public.dev139_unknown_partitioned_source FOR VALUES FROM (0) TO (10); INSERT INTO public.dev139_unknown_partitioned_source VALUES (1)')
+  $unknownPartitionPlan = Invoke-DataMode -Mode 'plan' -ExpectedExitCodes @(2)
+  $unknownPartitionDomain = 'UNKNOWN_SOURCE_RELATION "public"."dev139_unknown_partitioned_source"'
+  $unknownPartitionBlocker = @($unknownPartitionPlan.blockers | Where-Object { $_.domain -eq $unknownPartitionDomain }) | Select-Object -First 1
+  $unknownPartitionChildDomain = 'UNKNOWN_SOURCE_RELATION "public"."dev139_unknown_partitioned_source_0"'
+  if ($unknownPartitionPlan.status -ne 'BLOCKED' -or -not $unknownPartitionBlocker -or
+      $unknownPartitionBlocker.count -ne 1 -or
+      @($unknownPartitionPlan.blockers.domain) -contains $unknownPartitionChildDomain) {
+    throw 'DEV-139 unknown partitioned source relation was missed or its child was counted as a separate authority.'
+  }
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'DROP TABLE public.dev139_unknown_partitioned_source CASCADE')
+
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'CREATE TABLE public.dev139_inherited_profiles (extra_data text) INHERITS (public.profiles)')
+  $unknownInheritedPlan = Invoke-DataMode -Mode 'plan' -ExpectedExitCodes @(2)
+  $unknownInheritedDomain = 'UNKNOWN_SOURCE_RELATION "public"."dev139_inherited_profiles"'
+  $unknownInheritedBlocker = @($unknownInheritedPlan.blockers | Where-Object { $_.domain -eq $unknownInheritedDomain }) | Select-Object -First 1
+  if ($unknownInheritedPlan.status -ne 'BLOCKED' -or -not $unknownInheritedBlocker -or $unknownInheritedBlocker.count -ne 0) {
+    throw 'DEV-139 ordinary INHERITS child of a classified source table was not independently classified.'
+  }
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'DROP TABLE public.dev139_inherited_profiles')
+
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'CREATE MATERIALIZED VIEW public.dev139_unknown_materialized_source AS SELECT 1::integer AS id')
+  $unknownMaterializedPlan = Invoke-DataMode -Mode 'plan' -ExpectedExitCodes @(2)
+  if ($unknownMaterializedPlan.status -ne 'BLOCKED' -or
+      'UNKNOWN_SOURCE_RELATION "public"."dev139_unknown_materialized_source"' -notin @($unknownMaterializedPlan.blockers.domain)) {
+    throw 'DEV-139 unknown materialized view was not treated as stored source data.'
+  }
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'DROP MATERIALIZED VIEW public.dev139_unknown_materialized_source')
+
+  $plpgsqlInstalled = Invoke-PgScalar -Database $sourceDatabase -Sql "SELECT count(*) FROM pg_catalog.pg_extension WHERE extname = 'plpgsql'"
+  if ($plpgsqlInstalled -ne '1') { throw 'DEV-139 extension-owned relation fixture requires the built-in plpgsql extension.' }
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'CREATE TABLE public.dev139_extension_owned_source (id integer)')
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'ALTER EXTENSION plpgsql ADD TABLE public.dev139_extension_owned_source')
+  $extensionOwnedPlan = Invoke-DataMode -Mode 'plan' -ExpectedExitCodes @(0)
+  if ($extensionOwnedPlan.status -ne 'PASS') { throw 'DEV-139 extension-owned source relation was incorrectly reported as an unknown app table.' }
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'ALTER EXTENSION plpgsql DROP TABLE public.dev139_extension_owned_source')
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'DROP TABLE public.dev139_extension_owned_source')
+
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "UPDATE public.task_tags SET color = 'invalid-color'")
   $rollback = Invoke-DataMode -Mode 'apply' -ExpectedExitCodes @(1)
   if ($rollback.status -ne 'FAIL') { throw 'DEV-139 injected apply failure was not rejected.' }
@@ -231,6 +289,9 @@ try {
     tables = $finalReconcile.tables
     checks = @(
       'empty-target-plan', 'single-transaction-rollback', 'full-snapshot-apply',
+      'unknown-empty-relation-block', 'unknown-partitioned-relation-block',
+      'ordinary-inheritance-child-block', 'plain-view-non-authority-skip',
+      'materialized-view-source-block', 'extension-owned-relation-skip',
       'exact-digest-reconcile', 'non-empty-target-reject', 'unsupported-domain-reject',
       'importer-createdb-reject', 'importer-createrole-reject', 'importer-owner-membership-reject',
       'llm-access-log-reject', 'quick-oauth-client-reject',

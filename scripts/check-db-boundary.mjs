@@ -26,7 +26,7 @@ const profileContracts = new Map([
     'db/migrations/0013_calendar_subscriptions_v1.sql',
     'db/migrations/0014_snapshot_importer_v1.sql',
   ]],
-  ['^projed$', [
+  ['^jenfu_prod$', [
     'db/migrations/0001_runtime_boundary_v1.sql',
     'db/migrations/0002_profile_actor_v1.sql',
     'db/migrations/0003_domain_read_v1.sql',
@@ -96,6 +96,11 @@ if (profile) {
   }
   const expectedHost = profile.environment === 'managed' ? 'cloud-sql-unix' : '127.0.0.1';
   if (profile.database?.host !== expectedHost) fail('profile database host does not match its environment');
+  if (profile.environment === 'managed'
+    ? profile.database?.cloudSqlInstance !== 'jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg'
+    : profile.database?.cloudSqlInstance !== undefined) {
+    fail('profile Cloud SQL instance does not match its environment');
+  }
   const expectedMigrationPaths = profileContracts.get(profile.database?.namePattern);
   if (!expectedMigrationPaths) fail('profile database name pattern drifted');
   if (profile.database?.supportedPostgresMajors?.join('|') !== '17|18') fail('profile supported PostgreSQL majors must be 17 and 18');

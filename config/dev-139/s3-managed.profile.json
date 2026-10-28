@@ -4,8 +4,9 @@
   "kernelContractVersion": 1,
   "environment": "managed",
   "database": {
-    "namePattern": "^projed$",
+    "namePattern": "^jenfu_prod$",
     "host": "cloud-sql-unix",
+    "cloudSqlInstance": "jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg",
     "portPolicy": "cloud-sql-unix-socket",
     "supportedPostgresMajors": [17, 18],
     "schemas": ["projed_core", "projed_contract"]

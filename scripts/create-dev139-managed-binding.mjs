@@ -13,19 +13,20 @@ const options = Object.fromEntries(process.argv.slice(2).map(argument => {
 
 const instance = options.instance ?? '';
 if (!INSTANCE_RE.test(instance)) throw new Error('A valid --instance=project:region:instance is required');
-if (options.database && options.database !== 'projed') throw new Error('Managed database name must be projed');
+if (options.database && options.database !== 'jenfu_prod') throw new Error('Managed database name must be jenfu_prod');
 
 const profilePath = resolve('config/dev-139/s3-managed.profile.json');
 const profileBytes = readFileSync(profilePath);
 const profile = JSON.parse(profileBytes.toString('utf8'));
 if (profile.profileVersion !== 1 || profile.appKey !== 'projed' || profile.environment !== 'managed'
-    || profile.database?.namePattern !== '^projed$' || profile.database?.host !== 'cloud-sql-unix'
+    || profile.database?.namePattern !== '^jenfu_prod$' || profile.database?.host !== 'cloud-sql-unix'
     || profile.roles?.runtime !== 'projed_runtime_disposable') {
   throw new Error('Managed profile contract mismatch');
 }
+if (instance !== profile.database.cloudSqlInstance) throw new Error('Managed Cloud SQL instance must match the source profile');
 
 const binding = {
-  databaseName: 'projed',
+  databaseName: 'jenfu_prod',
   databasePort: 5432,
   runtimeRole: profile.roles.runtime,
   connectionMode: 'cloud-sql-unix',

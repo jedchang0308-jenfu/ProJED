@@ -43,5 +43,6 @@ test('session source permits only port 5432 pooler with a project-scoped role', 
   assert.equal(binding.connectionMode, 'session');
   assert.throws(() => validateSupabaseSourceBinding({ ...binding, port: 6543 }), /contract/);
   assert.throws(() => validateSupabaseSourceBinding({ ...binding, readerRole: 'snapshot_reader' }), /project ref/);
+  assert.throws(() => validateSupabaseSourceBinding({ ...binding, readerRole: undefined }), /contract/);
   assert.throws(() => validateSupabaseSourceBinding({ ...binding, unexpected: true }), /unknown field/);
 });

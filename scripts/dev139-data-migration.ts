@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import pg, { type Client } from 'pg';
 
@@ -23,6 +24,7 @@ type Row = Record<string, unknown>;
 
 type TableSpec = {
   target: string;
+  sourceRelation: string;
   columns: readonly string[];
   sourceSql: string;
   transform?: (row: Row) => Row;
@@ -37,30 +39,31 @@ const JSON_COLUMNS = new Set([
 
 const table = (
   target: string,
+  sourceRelation: string,
   columns: readonly string[],
   sourceSql: string,
   transform?: (row: Row) => Row,
-): TableSpec => ({ target, columns, sourceSql, ...(transform ? { transform } : {}) });
+): TableSpec => ({ target, sourceRelation, columns, sourceSql, ...(transform ? { transform } : {}) });
 
 const TABLES: readonly TableSpec[] = [
-  table('profiles', [
+  table('profiles', 'public.profiles', [
     'id', 'email', 'display_name', 'external_auth_provider', 'external_auth_id', 'ui_preferences', 'created_at', 'updated_at',
   ], `
     SELECT id, email, display_name, external_auth_provider, external_auth_id,
            COALESCE(ui_preferences, '{}'::jsonb) AS ui_preferences, created_at, updated_at
       FROM public.profiles ORDER BY id
   `),
-  table('tenants', ['id', 'legacy_workspace_id', 'title', 'owner_id', 'sort_order', 'created_at', 'updated_at'], `
+  table('tenants', 'public.tenants', ['id', 'legacy_workspace_id', 'title', 'owner_id', 'sort_order', 'created_at', 'updated_at'], `
     SELECT id, COALESCE(NULLIF(legacy_workspace_id, ''), id::text) AS legacy_workspace_id,
            name AS title, owner_id, NULL::float8 AS sort_order, created_at, updated_at
       FROM public.tenants ORDER BY id
   `),
-  table('projects', ['id', 'tenant_id', 'legacy_board_id', 'title', 'sort_order', 'created_by', 'created_at', 'updated_at'], `
+  table('projects', 'public.projects', ['id', 'tenant_id', 'legacy_board_id', 'title', 'sort_order', 'created_by', 'created_at', 'updated_at'], `
     SELECT id, tenant_id, COALESCE(NULLIF(legacy_board_id, ''), id::text) AS legacy_board_id,
            name AS title, sort_order::float8 AS sort_order, created_by, created_at, updated_at
       FROM public.projects ORDER BY tenant_id, id
   `),
-  table('tenant_members', [
+  table('tenant_members', 'public.tenant_members', [
     'tenant_id', 'user_id', 'role', 'status', 'member_email', 'member_display_name', 'created_at', 'updated_at',
   ], `
     SELECT member.tenant_id, member.user_id, member.role::text, member.status::text,
@@ -70,7 +73,7 @@ const TABLES: readonly TableSpec[] = [
       JOIN public.profiles profile ON profile.id = member.user_id
      ORDER BY member.tenant_id, member.user_id
   `),
-  table('project_members', [
+  table('project_members', 'public.project_members', [
     'tenant_id', 'project_id', 'user_id', 'role', 'member_email', 'member_display_name', 'created_at', 'updated_at',
   ], `
     SELECT member.tenant_id, member.project_id, member.user_id, member.role::text,
@@ -80,11 +83,11 @@ const TABLES: readonly TableSpec[] = [
       JOIN public.profiles profile ON profile.id = member.user_id
      ORDER BY member.project_id, member.user_id
   `),
-  table('board_role_permissions', ['tenant_id', 'project_id', 'role', 'capabilities', 'updated_at'], `
+  table('board_role_permissions', 'public.board_role_permissions', ['tenant_id', 'project_id', 'role', 'capabilities', 'updated_at'], `
     SELECT tenant_id, project_id, role::text, capabilities::text[], updated_at
       FROM public.board_role_permissions ORDER BY project_id, role
   `),
-  table('actor_scope_access', ['local_user_id', 'tenant_id', 'project_id', 'active', 'scope_revision', 'updated_at'], `
+  table('actor_scope_access', 'public.tenant_members', ['local_user_id', 'tenant_id', 'project_id', 'active', 'scope_revision', 'updated_at'], `
     SELECT member.user_id AS local_user_id, member.tenant_id, NULL::uuid AS project_id,
            member.status::text = 'active' AS active, 1::bigint AS scope_revision, member.updated_at
       FROM public.tenant_members member
@@ -96,7 +99,7 @@ const TABLES: readonly TableSpec[] = [
         ON tenant_member.tenant_id = member.tenant_id AND tenant_member.user_id = member.user_id
      ORDER BY tenant_id, local_user_id, project_id NULLS FIRST
   `),
-  table('resource_revisions', ['tenant_id', 'project_id', 'revision', 'updated_at'], `
+  table('resource_revisions', 'public.tenants', ['tenant_id', 'project_id', 'revision', 'updated_at'], `
     SELECT tenant.id AS tenant_id, NULL::uuid AS project_id, 1::bigint AS revision, tenant.updated_at
       FROM public.tenants tenant
     UNION ALL
@@ -104,12 +107,12 @@ const TABLES: readonly TableSpec[] = [
       FROM public.projects project
      ORDER BY tenant_id, project_id NULLS FIRST
   `),
-  table('task_tags', ['id', 'tenant_id', 'legacy_tag_id', 'name', 'color', 'sort_order', 'created_at', 'updated_at'], `
+  table('task_tags', 'public.task_tags', ['id', 'tenant_id', 'legacy_tag_id', 'name', 'color', 'sort_order', 'created_at', 'updated_at'], `
     SELECT id, tenant_id, COALESCE(NULLIF(legacy_tag_id, ''), id::text) AS legacy_tag_id,
            name, color, sort_order::float8 AS sort_order, created_at, updated_at
       FROM public.task_tags ORDER BY tenant_id, id
   `),
-  table('wbs_items', [
+  table('wbs_items', 'public.wbs_items', [
     'id', 'tenant_id', 'project_id', 'legacy_task_id', 'parent_id', 'title', 'detail_notes', 'description',
     'status', 'assignee_ids', 'collaborator_ids', 'tag_ids', 'start_date', 'end_date', 'duration_locked',
     'node_type', 'kanban_stage_id', 'sort_order', 'archived', 'created_at', 'updated_at',
@@ -134,11 +137,11 @@ const TABLES: readonly TableSpec[] = [
       FROM public.wbs_items item
      ORDER BY item.depth, item.path, item.id
   `),
-  table('wbs_item_tags', ['tenant_id', 'project_id', 'item_id', 'tag_id'], `
+  table('wbs_item_tags', 'public.wbs_item_tags', ['tenant_id', 'project_id', 'item_id', 'tag_id'], `
     SELECT tenant_id, project_id, item_id, tag_id
       FROM public.wbs_item_tags ORDER BY project_id, item_id, tag_id
   `),
-  table('wbs_dependencies', [
+  table('wbs_dependencies', 'public.wbs_dependencies', [
     'id', 'tenant_id', 'project_id', 'legacy_dependency_id', 'from_id', 'from_side', 'to_id', 'to_side', 'offset_value',
   ], `
     SELECT id, tenant_id, project_id,
@@ -147,7 +150,7 @@ const TABLES: readonly TableSpec[] = [
            offset_days::float8 AS offset_value
       FROM public.wbs_dependencies ORDER BY project_id, id
   `),
-  table('board_invites', [
+  table('board_invites', 'public.board_invites', [
     'id', 'tenant_id', 'project_id', 'legacy_workspace_id', 'legacy_board_id', 'email', 'invited_by',
     'status', 'default_role', 'token_hash', 'expires_at', 'accepted_at', 'revoked_at', 'created_at', 'updated_at',
   ], `
@@ -162,7 +165,7 @@ const TABLES: readonly TableSpec[] = [
       JOIN public.projects project ON project.id = invite.project_id AND project.tenant_id = invite.tenant_id
      ORDER BY invite.id
   `),
-  table('knowledge_records', [
+  table('knowledge_records', 'public.knowledge_records', [
     'id', 'tenant_id', 'project_id', 'legacy_record_id', 'record_type', 'title', 'content', 'participants_text',
     'occurred_at', 'started_at', 'ended_at', 'recorded_by', 'status', 'visibility', 'rag_enabled',
     'source_document_id', 'metadata', 'created_by', 'updated_by', 'created_at', 'updated_at',
@@ -174,13 +177,13 @@ const TABLES: readonly TableSpec[] = [
            created_by, updated_by, created_at, updated_at
       FROM public.knowledge_records ORDER BY project_id, id
   `),
-  table('record_task_links', [
+  table('record_task_links', 'public.record_task_links', [
     'id', 'tenant_id', 'project_id', 'record_id', 'item_id', 'role', 'created_by', 'created_at',
   ], `
     SELECT id, tenant_id, project_id, record_id, item_id, role::text, created_by, created_at
       FROM public.record_task_links ORDER BY record_id, item_id, role
   `),
-  table('activity_events', [
+  table('activity_events', 'public.activity_events', [
     'id', 'tenant_id', 'project_id', 'actor_id', 'event_type', 'entity_table', 'entity_id', 'entity_ref', 'payload', 'created_at',
   ], `
     SELECT id, tenant_id, project_id, actor_id, event_type, entity_table,
@@ -189,7 +192,7 @@ const TABLES: readonly TableSpec[] = [
            COALESCE(payload, '{}'::jsonb) AS payload, created_at
       FROM public.activity_events ORDER BY tenant_id, created_at, id
   `),
-  table('audit_logs', [
+  table('audit_logs', 'public.audit_logs', [
     'id', 'tenant_id', 'project_id', 'actor_id', 'action', 'entity_table', 'entity_id', 'entity_ref',
     'before_data', 'after_data', 'created_at',
   ], `
@@ -199,16 +202,16 @@ const TABLES: readonly TableSpec[] = [
            before_data, after_data, created_at
       FROM public.audit_logs ORDER BY tenant_id, created_at, id
   `),
-  table('unplaced_tasks', ['owner_id', 'legacy_task_id', 'workspace_legacy_id', 'task', 'sort_order', 'created_at', 'updated_at'], `
+  table('unplaced_tasks', 'public.task_workbench_unplaced_items', ['owner_id', 'legacy_task_id', 'workspace_legacy_id', 'task', 'sort_order', 'created_at', 'updated_at'], `
     SELECT owner_id, id AS legacy_task_id, workspace_id AS workspace_legacy_id, task,
            sort_order::float8 AS sort_order, created_at, updated_at
       FROM public.task_workbench_unplaced_items ORDER BY owner_id, id
   `),
-  table('quick_task_capture_receipts', ['owner_id', 'capture_id', 'title_hash', 'committed_at'], `
+  table('quick_task_capture_receipts', 'private.quick_task_capture_receipts', ['owner_id', 'capture_id', 'title_hash', 'committed_at'], `
     SELECT owner_id, capture_id, encode(title_hash, 'hex') AS title_hash, committed_at
       FROM private.quick_task_capture_receipts ORDER BY owner_id, capture_id
   `),
-  table('task_workbench_placement_operations', ['owner_id', 'operation_id', 'command', 'result', 'created_at', 'updated_at'], `
+  table('task_workbench_placement_operations', 'public.task_workbench_placement_operations', ['owner_id', 'operation_id', 'command', 'result', 'created_at', 'updated_at'], `
     SELECT owner_id, operation_id,
            jsonb_build_object(
              'legacy', true, 'direction', direction, 'rootTaskId', root_task_id, 'taskIds', task_ids,
@@ -222,7 +225,7 @@ const TABLES: readonly TableSpec[] = [
            result, created_at, updated_at
       FROM public.task_workbench_placement_operations ORDER BY owner_id, operation_id
   `),
-  table('task_tracking_references', [
+  table('task_tracking_references', 'public.wbs_item_placements', [
     'id', 'tenant_id', 'task_project_id', 'task_id', 'target_project_id', 'parent_placement_id',
     'sort_order', 'kanban_stage_id', 'revision', 'created_by', 'removed_by', 'removed_at', 'created_at', 'updated_at',
   ], `
@@ -236,7 +239,7 @@ const TABLES: readonly TableSpec[] = [
      WHERE placement.placement_kind = 'tracking_reference'
      ORDER BY placement.tenant_id, placement.id
   `),
-  table('task_tracking_reference_operations', [
+  table('task_tracking_reference_operations', 'public.task_tracking_reference_operations', [
     'tenant_id', 'operation_id', 'actor_id', 'request_hash', 'result', 'created_at', 'updated_at',
   ], `
     SELECT tenant_id, operation_id, actor_id, request_hash, result,
@@ -253,7 +256,7 @@ const TABLES: readonly TableSpec[] = [
     created_at: row.created_at,
     updated_at: row.updated_at,
   })),
-  table('backup_import_executions', [
+  table('backup_import_executions', 'private.backup_import_executions', [
     'tenant_id', 'execution_id', 'actor_id', 'request_hash', 'result', 'created_at', 'updated_at',
   ], `
     SELECT tenant_id, execution_id, actor_id, package_id, import_mode, target_project_id,
@@ -270,7 +273,7 @@ const TABLES: readonly TableSpec[] = [
     created_at: row.created_at,
     updated_at: row.updated_at,
   })),
-  table('account_board_task_filter_preferences', [
+  table('account_board_task_filter_preferences', 'public.account_board_task_filter_preferences', [
     'account_id', 'tenant_id', 'project_id', 'preference_version', 'filters', 'created_at', 'updated_at',
   ], `
     SELECT preference.account_id, project.tenant_id, preference.project_id,
@@ -279,7 +282,7 @@ const TABLES: readonly TableSpec[] = [
       JOIN public.projects project ON project.id = preference.project_id
      ORDER BY preference.account_id, preference.project_id
   `),
-  table('calendar_subscriptions', [
+  table('calendar_subscriptions', 'public.calendar_subscriptions', [
     'id', 'owner_user_id', 'name', 'token_hash', 'filters_json', 'is_active', 'expires_at',
     'last_accessed_at', 'created_at', 'updated_at',
   ], `
@@ -325,6 +328,32 @@ const BLOCKERS = [
   ['public.task_workbench_unplaced_items', 'WHERE abs(sort_order::numeric) > 9007199254740991'],
   ['public.wbs_item_placements', 'WHERE abs(sort_order::numeric) > 9007199254740991'],
 ] as const;
+
+const APP_SOURCE_SCHEMAS = ['public', 'private'] as const;
+const APP_SOURCE_RELATION_KINDS = new Set(['r', 'p', 'm', 'f']);
+const CLASSIFIED_SOURCE_RELATIONS = new Set([
+  ...TABLES.map(({ sourceRelation }) => sourceRelation),
+  ...BLOCKERS.map(([relation]) => relation),
+]);
+
+export interface SourceCatalogRelation {
+  readonly schema_name: string;
+  readonly relation_name: string;
+  readonly relation_kind: string;
+  readonly extension_owned: boolean;
+}
+
+export function findUnclassifiedSourceRelations(
+  relations: readonly SourceCatalogRelation[],
+  classifiedRelations: ReadonlySet<string> = CLASSIFIED_SOURCE_RELATIONS,
+): readonly SourceCatalogRelation[] {
+  return relations.filter((relation) => (
+    APP_SOURCE_SCHEMAS.includes(relation.schema_name as (typeof APP_SOURCE_SCHEMAS)[number])
+      && APP_SOURCE_RELATION_KINDS.has(relation.relation_kind)
+      && !relation.extension_owned
+      && !classifiedRelations.has(`${relation.schema_name}.${relation.relation_name}`)
+  ));
+}
 
 function canonical(value: unknown): string {
   if (value instanceof Date) return JSON.stringify(value.toISOString());
@@ -379,8 +408,64 @@ async function readTarget(client: Client): Promise<Map<string, Row[]>> {
   return result;
 }
 
+async function readSourceRelationCatalog(client: Client): Promise<readonly SourceCatalogRelation[]> {
+  const result = await client.query<SourceCatalogRelation>(`
+    SELECT relation_namespace.nspname AS schema_name,
+           source_relation.relname AS relation_name,
+           source_relation.relkind::text AS relation_kind,
+           EXISTS (
+             SELECT 1
+               FROM pg_catalog.pg_depend extension_dependency
+              WHERE extension_dependency.classid = 'pg_catalog.pg_class'::regclass
+                AND extension_dependency.objid = source_relation.oid
+                AND extension_dependency.deptype = 'e'
+           ) AS extension_owned
+      FROM pg_catalog.pg_class source_relation
+      JOIN pg_catalog.pg_namespace relation_namespace
+        ON relation_namespace.oid = source_relation.relnamespace
+     WHERE relation_namespace.nspname = ANY($1::text[])
+       AND source_relation.relkind IN ('r', 'p', 'm', 'f')
+       -- Declarative partition children are covered by their root; regular INHERITS children need their own classification.
+       AND NOT EXISTS (
+         SELECT 1
+           FROM pg_catalog.pg_inherits partition_edge
+           JOIN pg_catalog.pg_class parent_relation
+             ON parent_relation.oid = partition_edge.inhparent
+           JOIN pg_catalog.pg_namespace parent_namespace
+             ON parent_namespace.oid = parent_relation.relnamespace
+          WHERE source_relation.relispartition
+            AND partition_edge.inhrelid = source_relation.oid
+            AND parent_namespace.nspname = ANY($1::text[])
+       )
+     ORDER BY relation_namespace.nspname, source_relation.relname
+  `, [APP_SOURCE_SCHEMAS]);
+  return result.rows;
+}
+
+function quoteIdentifier(identifier: string): string {
+  return `"${identifier.replaceAll('"', '""')}"`;
+}
+
+function quoteRelation(schema: string, relation: string): string {
+  return `${quoteIdentifier(schema)}.${quoteIdentifier(relation)}`;
+}
+
 async function sourceBlockers(client: Client) {
-  const found: Array<{ domain: string; count: number }> = [];
+  const found: Array<{ domain: string; count: number | null }> = [];
+  const catalog = await readSourceRelationCatalog(client);
+  for (const relation of findUnclassifiedSourceRelations(catalog)) {
+    // Counts are safe metadata only; do not SELECT any unknown relation rows.
+    // Foreign tables may invoke an external FDW, so identify them without reading them.
+    const count = relation.relation_kind === 'f'
+      ? null
+      : (await client.query<{ count: number }>(
+        `SELECT count(*)::int AS count FROM ${quoteRelation(relation.schema_name, relation.relation_name)}`,
+      )).rows[0]?.count ?? 0;
+    found.push({
+      domain: `UNKNOWN_SOURCE_RELATION ${quoteRelation(relation.schema_name, relation.relation_name)}`,
+      count,
+    });
+  }
   for (const [relation, where] of BLOCKERS) {
     const exists = await client.query<{ relation: string | null }>('SELECT to_regclass($1) AS relation', [relation]);
     if (!exists.rows[0]?.relation) continue;
@@ -544,11 +629,18 @@ async function main(): Promise<void> {
     await source.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
     await source.query("SET LOCAL TIME ZONE 'UTC'");
     await validateSource(source, sourceBinding);
+    const blockers = await sourceBlockers(source);
+    if (blockers.length > 0) {
+      await source.query('ROLLBACK');
+      console.log(JSON.stringify({ status: 'BLOCKED', mode, blockers }));
+      process.exitCode = 2;
+      return;
+    }
+
     await target.query(mode === 'apply' ? 'BEGIN ISOLATION LEVEL SERIALIZABLE' : 'BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
     await target.query("SET LOCAL TIME ZONE 'UTC'");
     if (mode === 'apply') await target.query("SELECT pg_advisory_xact_lock(hashtextextended('projed:dev139:initial-snapshot-import', 0))");
     await validateTarget(target, profile, binding);
-    const blockers = await sourceBlockers(source);
     const sourceSnapshot = await readSource(source);
     const before = await readTarget(target);
     const targetCount = [...before.values()].reduce((sum, rows) => sum + rows.length, 0);
@@ -588,11 +680,13 @@ async function main(): Promise<void> {
   }
 }
 
-try {
-  await main();
-} catch (error) {
-  const code = typeof error === 'object' && error && 'code' in error && typeof error.code === 'string'
-    ? error.code : 'MIGRATION_FAILED';
-  console.error(JSON.stringify({ status: 'FAIL', code }));
-  process.exitCode = 1;
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  try {
+    await main();
+  } catch (error) {
+    const code = typeof error === 'object' && error && 'code' in error && typeof error.code === 'string'
+      ? error.code : 'MIGRATION_FAILED';
+    console.error(JSON.stringify({ status: 'FAIL', code }));
+    process.exitCode = 1;
+  }
 }

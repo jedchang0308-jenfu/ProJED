@@ -44,7 +44,7 @@ export function validateSupabaseSourceBinding(value: unknown): SupabaseSourceBin
       || !DNS_RE.test(binding.hostname)
       || binding.port !== 5432
       || !DATABASE_RE.test(binding.databaseName ?? '')
-      || !ROLE_RE.test(binding.readerRole ?? '')
+      || typeof binding.readerRole !== 'string' || !ROLE_RE.test(binding.readerRole)
       || binding.sslMode !== 'verify-full'
       || !SHA256_RE.test(binding.sslRootCertSha256 ?? '')) {
     fail('Source binding does not match the Supabase migration contract');

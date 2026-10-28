@@ -43,7 +43,7 @@ const profileContracts = new Map([
     name: 's3-managed',
     environment: 'managed',
     host: 'cloud-sql-unix',
-    namePattern: '^projed$',
+    namePattern: '^jenfu_prod$',
     migrationPaths: [
       'db/migrations/0001_runtime_boundary_v1.sql',
       'db/migrations/0002_profile_actor_v1.sql',
@@ -104,6 +104,7 @@ const connectionMode = binding.connectionMode ?? 'loopback';
 const connectionInvalid = profile.environment === 'managed'
   ? connectionMode !== 'cloud-sql-unix'
     || !/^[a-z][a-z0-9-]{5,29}:[a-z0-9-]+:[a-z][a-z0-9-]{0,97}$/.test(binding.cloudSqlInstance ?? '')
+    || binding.cloudSqlInstance !== profile.database.cloudSqlInstance
     || url.hostname !== 'localhost'
     || (url.port !== '' && Number(url.port) !== binding.databasePort)
     || queryKeys.length !== 1

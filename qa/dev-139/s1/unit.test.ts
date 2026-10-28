@@ -53,27 +53,33 @@ test('remote, wrong role, options and stale profile bindings are rejected', () =
 
 test('managed profile accepts only its exact Cloud SQL unix socket binding', () => {
   const binding: RuntimeBinding = {
-    databaseName: 'projed',
+    databaseName: 'jenfu_prod',
     databasePort: 5432,
     runtimeRole: managed.profile.roles.runtime,
     connectionMode: 'cloud-sql-unix',
-    cloudSqlInstance: 'jenfu-prod:asia-east1:projed',
+    cloudSqlInstance: 'jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg',
     profileSha256: managed.sha256,
     migrationSha256: Object.fromEntries(managed.profile.migrations.map(({ path }) => [path, sha256(readFileSync(path))])),
     staticFixtureSha256: '0'.repeat(64),
   };
   validateRuntimeBinding(binding, managed.profile, managed.sha256);
   const url = validateRuntimeDatabaseUrl(
-    `postgresql://${binding.runtimeRole}:secret@localhost/projed?host=%2Fcloudsql%2Fjenfu-prod%3Aasia-east1%3Aprojed`,
+    `postgresql://${binding.runtimeRole}:secret@localhost/jenfu_prod?host=%2Fcloudsql%2Fjenfu-platform-prod%3Aasia-east1%3Ajenfu-platform-prod-pg`,
     binding,
   );
-  assert.equal(url.searchParams.get('host'), '/cloudsql/jenfu-prod:asia-east1:projed');
+  assert.equal(url.searchParams.get('host'), '/cloudsql/jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg');
   for (const value of [
-    `postgresql://${binding.runtimeRole}:secret@10.0.0.2/projed?host=%2Fcloudsql%2Fjenfu-prod%3Aasia-east1%3Aprojed`,
-    `postgresql://${binding.runtimeRole}:secret@localhost/projed?host=%2Fcloudsql%2Fother%3Aasia-east1%3Aprojed`,
-    `postgresql://${binding.runtimeRole}:secret@localhost/projed?host=%2Fcloudsql%2Fjenfu-prod%3Aasia-east1%3Aprojed&options=-csearch_path%3Dpublic`,
+    `postgresql://${binding.runtimeRole}:secret@10.0.0.2/jenfu_prod?host=%2Fcloudsql%2Fjenfu-platform-prod%3Aasia-east1%3Ajenfu-platform-prod-pg`,
+    `postgresql://${binding.runtimeRole}:secret@localhost/jenfu_prod?host=%2Fcloudsql%2Fother%3Aasia-east1%3Aprojed`,
+    `postgresql://${binding.runtimeRole}:secret@localhost/jenfu_prod?host=%2Fcloudsql%2Fjenfu-platform-prod%3Aasia-east1%3Ajenfu-platform-prod-pg&options=-csearch_path%3Dpublic`,
+    `postgresql://${binding.runtimeRole}:secret@localhost/projed?host=%2Fcloudsql%2Fjenfu-platform-prod%3Aasia-east1%3Ajenfu-platform-prod-pg`,
   ]) assert.throws(() => validateRuntimeDatabaseUrl(value, binding), /outside/);
   assert.throws(() => validateRuntimeBinding({ ...binding, cloudSqlInstance: '../socket' }, managed.profile, managed.sha256));
+  for (const cloudSqlInstance of ['jenfu-prod:asia-east1:projed', 'other-prod:asia-east1:jenfu-platform-prod-pg']) {
+    assert.throws(() => validateRuntimeBinding({ ...binding, cloudSqlInstance }, managed.profile, managed.sha256));
+  }
+  assert.throws(() => validateRuntimeBinding({ ...binding, databaseName: 'projed' }, managed.profile, managed.sha256));
+  assert.throws(() => validateRuntimeBinding({ ...binding, databaseName: 'jenfu_dev' }, managed.profile, managed.sha256));
 });
 
 test('static entry bytes are bound to runtime startup', () => {
@@ -97,8 +103,8 @@ test('managed startup binds the artifact metadata and both application shells', 
   }, null, 2)}\n`;
   writeFileSync(resolve(root, 'dev139-cloud-run-meta.json'), metadata);
   const binding: RuntimeBinding = {
-    databaseName: 'projed', databasePort: 5432, runtimeRole: profile.roles.runtime,
-    connectionMode: 'cloud-sql-unix', cloudSqlInstance: 'jenfu-prod:asia-east1:projed',
+    databaseName: 'jenfu_prod', databasePort: 5432, runtimeRole: profile.roles.runtime,
+    connectionMode: 'cloud-sql-unix', cloudSqlInstance: 'jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg',
     profileSha256: managed.sha256, migrationSha256: {}, staticFixtureSha256: sha256(metadata),
   };
   try {

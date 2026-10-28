@@ -8,11 +8,13 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 ## DEV-139：ProJED 納入 Jenfu-Platform，Cloud Run／Cloud SQL 對齊並保留 Vite
 
 - 建立日期：2026-10-08（Asia/Taipei）。
-- 狀態：**本 repo 開發完成／Local Acceptance PASS／External Wire Blocked／未 Release**；S1、S2 consumer seam及S3 W1–W18均已實作。W18補齊importer高權限拒絕、`llm_access_logs`／Quick OAuth client漏資料blocker及正常HTTP產品UI＋reload煙霧。外部owner Session wire、真Principal mapping、真資料plan／未承接domain處置、Docker／雲端及相容入口readback、正式發布與切流仍未完成，不能視為整體整合或無縫切換PASS。
+- 狀態：**整合與正式發布續行中／W18 本地切片 PASS／未 Release**。人類要求繼續完成外部 OrgMaster／Platform 真 Session、正式資料處置、雲端 readback、舊入口、writer fence、切流及正式發布；這些仍計入完成分母。W19 已恢復獨立工作樹、完成正式來源與雲端唯讀盤點，修正 managed 共用 DB 目標並補來源 catalog 漏表阻擋；最新證據與待確認的新 IAM／Secret 範圍見 [SPEC-139 §33](specs/SPEC-139-projed-jenfu-platform-onboarding.md#33-integration-continuation-w192026-10-28)。
 - 類型：交付點；主責：本 repo 的 DEV-139；無同專案父任務。
-- 唯一交接契約：[SPEC-139 Rev 29](specs/SPEC-139-projed-jenfu-platform-onboarding.md)；核心實作讀[§11 S1定案](specs/SPEC-139-projed-jenfu-platform-onboarding.md#11-架構決策與-s1-定案契約)、[§13 S2 consumer seam](specs/SPEC-139-projed-jenfu-platform-onboarding.md#13-s2-projed-identity-consumer-seam2026-10-26)、[§28 Data Migration](specs/SPEC-139-projed-jenfu-platform-onboarding.md#28-s3-data-migration-rehearsal-w142026-10-27)、[§29 Legacy Calendar URL](specs/SPEC-139-projed-jenfu-platform-onboarding.md#29-s3-legacy-calendar-url-compatibility-w152026-10-27)、[§30 Managed Cloud Run Candidate](specs/SPEC-139-projed-jenfu-platform-onboarding.md#30-s3-managed-cloud-run-candidate-w162026-10-27)、[§31 Managed Snapshot Connection](specs/SPEC-139-projed-jenfu-platform-onboarding.md#31-s3-managed-snapshot-connection-w172026-10-27)、[§32 Local Development Closure](specs/SPEC-139-projed-jenfu-platform-onboarding.md#32-s3-local-development-closure-w182026-10-27)及[§6.3既有使用者切換基線](specs/SPEC-139-projed-jenfu-platform-onboarding.md#63-既有使用者切換基線)；架構決策：[ADR-054](decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。本地正常UI煙霧不能替代真Session、正式資料及既有使用者切換驗收。
+- 唯一交接契約：[SPEC-139 Rev30](specs/SPEC-139-projed-jenfu-platform-onboarding.md)；核心實作讀[§11 S1定案](specs/SPEC-139-projed-jenfu-platform-onboarding.md#11-架構決策與-s1-定案契約)、[§13 S2 consumer seam](specs/SPEC-139-projed-jenfu-platform-onboarding.md#13-s2-projed-identity-consumer-seam2026-10-26)、[§28 Data Migration](specs/SPEC-139-projed-jenfu-platform-onboarding.md#28-s3-data-migration-rehearsal-w142026-10-27)、[§29 Legacy Calendar URL](specs/SPEC-139-projed-jenfu-platform-onboarding.md#29-s3-legacy-calendar-url-compatibility-w152026-10-27)、[§30 Managed Cloud Run Candidate](specs/SPEC-139-projed-jenfu-platform-onboarding.md#30-s3-managed-cloud-run-candidate-w162026-10-27)、[§31 Managed Snapshot Connection](specs/SPEC-139-projed-jenfu-platform-onboarding.md#31-s3-managed-snapshot-connection-w172026-10-27)、[§32 Local Development Closure](specs/SPEC-139-projed-jenfu-platform-onboarding.md#32-s3-local-development-closure-w182026-10-27)及[§6.3既有使用者切換基線](specs/SPEC-139-projed-jenfu-platform-onboarding.md#63-既有使用者切換基線)；架構決策：[ADR-054](decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。本地正常UI煙霧不能替代真Session、正式資料及既有使用者切換驗收。
 
 ### 1. 人類決策與授權範圍
+
+2026-10-28 最新人類指示：選取前述全部外部／正式剩餘項目並要求「請繼續執行直到完成」，簡單與查核交由 `gpt-6-luna` xhigh 併行。此要求擴展 W18 的本地切片目標，ProJED／OrgMaster／Jenfu-Platform 真接線、正式移轉與發布均須完成後才結案。下列 2026-10-26 的本地範圍與未授權描述是歷史界線；新建 IAM／Secret／credential、shared foundation grant 與費用擴張仍依人類全域規範確認。具體新責任與安全的獨立工作見 SPEC §33，不重問 D1／D2。
 
 | 日期 | 人類原始訊息 | 本任務採用的決策 |
 |---|---|---|
@@ -108,7 +110,7 @@ D1／D2及首階段保留範圍均已確認，沒有需要人類重答的產品�
 
 ### 7. 分期 capsule 與恢復條件
 
-ProJED本repo的本地實作已完成；下表第一、二列為Completed Local Slice，其餘維持 **Future／External or Release Phase**。正式資料、遠端資源與切流仍未授權；沿同一DEV／SPEC交接，不另建重複QA或release文件。
+ProJED W18本地切片維持Completed Local Slice；2026-10-28人類已要求後續外部接線、正式移轉及發布，以下其餘工作段已進入續行範圍，不再以Future／Not Requested排除。新的foundation／credential權限仍見SPEC §33；沿同一DEV／SPEC交接，不另建重複QA或release文件。
 
 | 後續階段 | 目的與邊界 | 主要依賴／驗收方向 | 重新進入條件 |
 |---|---|---|---|
@@ -354,12 +356,12 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 
 ## 總任務清單
 
-- ✓ DEV-139 [交付點] [本repo開發完成／Local Acceptance PASS／External Wire Blocked／未Release] [P1] [本地開發] ProJED 首階段基礎對齊，保留 Vite
+- → DEV-139 [交付點] [整合／正式發布續行中／未Release] [P1] [W19] ProJED 首階段基礎對齊，保留 Vite
   - 摘要：保留原工作區／看板／權限及個人／外部協作，Cloud Run／Cloud SQL／身分對齊；原網址／PWA相容，不丟資料／重建帳號／強迫重裝，費用不大幅增加。
-  - 下一步：進入外部整合／release re-entry；以managed plan盤點真資料並處理非空未承接domain，建立正式Cloud Run／Cloud SQL／Hosting綁定並驗證舊origin／PWA相容。S2真接入與production resolver待Platform／OrgMaster發布ProJED／非員工wire；未取得相應專案／正式環境授權前不執行切流。
+  - 下一步：完成OrgMaster／Platform非員工新wire、逐帳號proof與ProJED真Session，再承接正式資料、舊入口／PWA、writer fence及發布。已查證新runtime規劃為projed-cc78d／asia-east1／projed-prod，共用SQL目標jenfu-platform-prod／jenfu-platform-prod-pg／jenfu_prod；具體新增IAM／Secret及app角色權限待確認，詳SPEC §33。
   - 阻塞 / 恢復條件：D1／D2已確認；S2真登入需新owner contract／registry／Session／mapping。Workspace／Board／member／permission／invite／record／activity、polling、Board跨Workspace搬移、舊provider fail-closed、Quick outbox、Workbench雙向原子placement、Task Tracking、交易式Backup／Import、帳號偏好、Calendar subscription／ICS feed、支援domain的full-snapshot rehearsal及正常HTTP產品UI煙霧已完成本地核心；正式移轉仍需Inbox／RAG／會議／Storage／LLM log／Quick OAuth client的實際資料處理、Hosting／舊版相容、全來源fence與恢復證據，不能用本地QA actor替代。
-  - 證據：[SPEC-139 Rev29](specs/SPEC-139-projed-jenfu-platform-onboarding.md)、[ADR-054 Rev10](decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)；S1 PostgreSQL 18 local acceptance PASS，S2 seam 12/12 PASS，S3 48/48 frontend unit、PostgreSQL 18 domain acceptance及正常HTTP UI／reload煙霧PASS，最新bundle為`output/qa/dev-139/s3/20261027T051912Z-a498749a`。W16 managed／artifact／Hosting驗證PASS且Docker標示`NOT_RUN`；W17 connection 2/2；W18 importer權限與漏資料fail-closed rehearsal PASS，最新migration bundle為`output/qa/dev-139/migration/20261027T051001Z-8692c8be`。production pins空集合、resolver未接真owner wire，沒有真SSO／正式資料匯入／已部署相容入口／無縫切換／正式驗收PASS。
-  - 計入交付：是；本repo已完成，外部整合與正式release不計入本地PASS。
+  - 證據：[SPEC-139 Rev30](specs/SPEC-139-projed-jenfu-platform-onboarding.md)、[ADR-054 Rev11](decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)；S1 PostgreSQL 18 local acceptance PASS，S2 seam 12/12 PASS，S3 48/48 frontend unit、PostgreSQL 18 domain acceptance及正常HTTP UI／reload煙霧PASS，最新bundle為`output/qa/dev-139/s3/20261027T051912Z-a498749a`。W16 managed／artifact／Hosting驗證PASS且Docker標示`NOT_RUN`；W17 connection 2/2；W18 importer權限與漏資料fail-closed rehearsal PASS，最新migration bundle為`output/qa/dev-139/migration/20261027T051001Z-8692c8be`。production pins空集合、resolver未接真owner wire，沒有真SSO／正式資料匯入／已部署相容入口／無縫切換／正式驗收PASS。
+  - 計入交付：W18本地切片保留原證據；本次完整整合與正式發布未完成，不以該切片代替新目標完成。
 
 - ✓ DEV-138 [開發點] [已完成／正式發布、限定登入與 RPC 驗收及清理 PASS] [P1] [ProJED] DEV-133 guard 恢復、分支整合與正式驗證後清理
   - 摘要：以 DEV-133 Rev12 已合併基線為歷史依據，恢復有效 guard、整合既有分支，完成正式驗證後再清理；不新增產品交付數。
