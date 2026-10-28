@@ -42,6 +42,7 @@ import { verifyGoogleMappingsPostgres } from '../s2/verify-mappings-pg.js';
 import { verifyAppSessionsPostgres } from '../s2/verify-app-sessions-pg.js';
 import { createPreferencesHttpDispatcher } from '../../../server/preferencesHttp.js';
 import { createCalendarHttpDispatcher } from '../../../server/calendarHttp.js';
+import { buildCalendarFeed } from '../../../server/calendar.js';
 import type { QuickCaptureRecord } from '../../../src/features/quickTaskCapture/model.js';
 import type { MoveTaskSubtreeCommand } from '../../../src/features/taskWorkbench/taskPlacementCommand.js';
 import type { BoardRolePermissionMatrix } from '../../../src/types/index.js';
@@ -888,6 +889,10 @@ try {
   }
   const feedUrl = new URL(createdCalendar.feedUrl, base);
   const initialFeed = await fetch(feedUrl);
+  // A public feed deliberately hides its internal error. On this isolated
+  // synthetic fixture only, surface the underlying failure without logging the
+  // bearer URL/token; a successful probe never changes the failed HTTP result.
+  if (initialFeed.status !== 200) await buildCalendarFeed(database, config, tokenHash);
   assert.equal(initialFeed.status, 200);
   assert.equal(initialFeed.headers.get('cache-control'), 'no-store');
   assert.match(initialFeed.headers.get('content-type') ?? '', /^text\/calendar/u);
