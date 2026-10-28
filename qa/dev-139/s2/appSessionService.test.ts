@@ -364,7 +364,7 @@ function callbackQueryRequest(
   cookie: string,
   entries: readonly (readonly [string, string])[],
 ): IncomingMessage {
-  const query = new URLSearchParams(entries.map(([name, value]) => [name, value]));
+  const query = new URLSearchParams(entries.map(([name, value]): [string, string] => [name, value]));
   return request('GET', `/api/auth/jenfu-sso/callback?${query}`, {
     host: host(publicOrigin),
     cookie,
