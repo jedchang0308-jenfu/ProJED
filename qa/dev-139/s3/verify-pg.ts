@@ -864,7 +864,14 @@ try {
   assert.equal(calendarListResponse.status, 200);
   assert.equal(calendarListText.includes(tokenHash), false);
   assert.equal(calendarListText.includes(token), false);
-  await runActorTransaction(database, config, actorB, port => port.query(`
+  // This fixture must exceed the feed's 1000-row limit. Seed it in bounded
+  // runtime transactions so host speed does not turn fixture setup into a
+  // synthetic 1001-row mutation benchmark; production timeouts/RLS stay intact.
+  const calendarNoiseBatches = Array.from({ length: 11 }, (_, index) => ({
+    first: index * 100 + 1, last: Math.min(index * 100 + 100, 1001),
+  }));
+  for (const batch of calendarNoiseBatches) {
+    const inserted = await runActorTransaction(database, config, actorB, port => port.query(`
     INSERT INTO projed_core.wbs_items(
       id, tenant_id, project_id, legacy_task_id, parent_id, title, detail_notes, description,
       status, assignee_ids, collaborator_ids, tag_ids, start_date, end_date, duration_locked,
@@ -875,18 +882,24 @@ try {
            'completed', ARRAY[$3::uuid], '{}'::uuid[], '{}'::uuid[], NULL, DATE '2026-10-28', NULL,
            'task', NULL, 1000 + sequence, false, now(),
            TIMESTAMPTZ '2099-01-01 00:00:00+00' + sequence * INTERVAL '1 millisecond'
-      FROM generate_series(1, 1001) AS sequence
-  `, [calendarTenantId, calendarProjectId, actorA.localUserId]));
+      FROM generate_series($4::integer, $5::integer) AS sequence
+    `, [calendarTenantId, calendarProjectId, actorA.localUserId, batch.first, batch.last]));
+    assert.equal(inserted.rowCount, batch.last - batch.first + 1);
+  }
   const feedUrl = new URL(createdCalendar.feedUrl, base);
   const initialFeed = await fetch(feedUrl);
   assert.equal(initialFeed.status, 200);
   assert.equal(initialFeed.headers.get('cache-control'), 'no-store');
   assert.match(initialFeed.headers.get('content-type') ?? '', /^text\/calendar/u);
   assert.match(await initialFeed.text(), /Calendar feed visible/u);
-  await runActorTransaction(database, config, actorB, port => port.query(`
-    DELETE FROM projed_core.wbs_items
-     WHERE tenant_id = $1::uuid AND project_id = $2::uuid AND legacy_task_id LIKE 'calendar-noise-%'
-  `, [calendarTenantId, calendarProjectId]));
+  for (const batch of calendarNoiseBatches) {
+    const refs = Array.from({ length: batch.last - batch.first + 1 }, (_, index) => `calendar-noise-${batch.first + index}`);
+    const removed = await runActorTransaction(database, config, actorB, port => port.query(`
+      DELETE FROM projed_core.wbs_items
+       WHERE tenant_id = $1::uuid AND project_id = $2::uuid AND legacy_task_id = ANY($3::text[])
+    `, [calendarTenantId, calendarProjectId, refs]));
+    assert.equal(removed.rowCount, refs.length);
+  }
   const legacyStatusFilter = {
     todo: true, in_progress: true, delayed: true, completed: false, unsure: true, onhold: true,
   };
