@@ -563,8 +563,13 @@ export async function verifyRagPostgres(database: RuntimeDatabase, config: Runti
       throw error;
     }
     barrier.release();
+    // Current RLS can hide the archived document before the claim check runs.
+    // Both denial paths must prevent generation and leave no late vector write.
     await assert.rejects(racedQuery,
-      error => error instanceof HttpApiError && error.status === 409 && error.code === 'RAG_INDEX_STALE');
+      error => error instanceof HttpApiError && (
+        (error.status === 403 && error.code === 'ACCESS_DENIED')
+        || (error.status === 409 && error.code === 'RAG_INDEX_STALE')
+      ));
     assert.equal(provider.counts.generate, beforeRaceGenerate,
       'A stale archive race must fail before answer generation');
     const finalRaceState = await readRecordSnapshot(database, config, ownerLogin.actor, ownerScope, raceRecord.id);

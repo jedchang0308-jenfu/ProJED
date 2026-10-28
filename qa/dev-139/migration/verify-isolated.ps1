@@ -217,7 +217,7 @@ UPDATE public.knowledge_records
 UPDATE public.documents
    SET rag_enabled = true,
        content_hash = 'fixture-hash-mirror-v1',
-       metadata = '{"kind":"mirror","source_rag_enabled":true}'::jsonb
+       metadata = jsonb_build_object('kind','mirror','source_rag_enabled',true)
  WHERE id = 'd0000000-0000-4000-8000-000000000004';
 UPDATE public.document_versions
    SET content_hash = 'fixture-hash-mirror-v1'
