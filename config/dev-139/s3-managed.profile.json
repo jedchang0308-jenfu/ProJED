@@ -97,6 +97,10 @@
     {
       "version": "0020_snapshot_account_guards_v1",
       "path": "db/migrations/0020_snapshot_account_guards_v1.sql"
+    },
+    {
+      "version": "0021_safe_actor_context_v1",
+      "path": "db/migrations/0021_safe_actor_context_v1.sql"
     }
   ],
   "objectAllowlist": [

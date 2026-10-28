@@ -25,4 +25,5 @@ export const S3_MIGRATION_PATHS = Object.freeze([
   'db/migrations/0018_google_identity_proof_v1.sql',
   'db/migrations/0019_app_sessions_v1.sql',
   'db/migrations/0020_snapshot_account_guards_v1.sql',
+  'db/migrations/0021_safe_actor_context_v1.sql',
 ]);

@@ -81,6 +81,20 @@ export async function verifyAppSessionsPostgres(database: RuntimeDatabase): Prom
 
   const lease=await database.checkout();
   try {
+    assert.equal((await lease.client.query('SELECT projed_core.actor_context_valid_v1() AS valid')).rows[0].valid,false);
+    await lease.client.query('BEGIN');
+    await lease.client.query(`SELECT set_config('projed.actor_local_user_id',$1,true),
+      set_config('projed.actor_principal_id','principal:a',true),set_config('projed.actor_entry','main',true),
+      set_config('projed.actor_context_id',$2,true)`,['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',randomUUID()]);
+    for (const revision of ['', '0', '-1', '1e3', 'not-a-number', '9223372036854775808', '99999999999999999999']) {
+      await lease.client.query("SELECT set_config('projed.actor_guard_revision',$1,true)",[revision]);
+      assert.equal((await lease.client.query('SELECT projed_core.actor_context_valid_v1() AS valid')).rows[0].valid,false);
+      assert.equal((await lease.client.query('SELECT * FROM projed_core.profiles')).rowCount,0);
+    }
+    await lease.client.query("SELECT set_config('projed.actor_guard_revision','1',true)");
+    assert.equal((await lease.client.query('SELECT projed_core.actor_context_valid_v1() AS valid')).rows[0].valid,true);
+    await lease.client.query('ROLLBACK');
+    assert.equal((await lease.client.query('SELECT projed_core.actor_context_valid_v1() AS valid')).rows[0].valid,false);
     assert.equal((await lease.client.query('SELECT * FROM projed_core.app_sessions')).rowCount,0);
     assert.equal((await lease.client.query('SELECT * FROM projed_core.app_login_intents')).rowCount,0);
     await lease.client.query('BEGIN');
