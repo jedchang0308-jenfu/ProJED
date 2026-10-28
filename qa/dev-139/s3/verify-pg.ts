@@ -979,6 +979,7 @@ try {
     body: JSON.stringify({ displayName: 'Forged without origin' }),
   });
   assert.equal(missingProfileOrigin.status, 403);
+  const sameOriginMainCaptureId = 'task_workbench_unplaced_80000000-0000-4000-8000-000000000000';
   const sameOriginMainQuickWrite = await fetch(`${base}/api/v1/quick-tasks`, {
     method: 'POST',
     headers: {
@@ -987,7 +988,7 @@ try {
       'x-projed-expected-context-id': actorA.contextId,
     },
     body: JSON.stringify({
-      captureId: 'task_workbench_unplaced_80000000-0000-4000-8000-000000000000',
+      captureId: sameOriginMainCaptureId,
       title: 'Same-origin main Session quick capture',
       workspaceHint: null,
     }),
@@ -1043,10 +1044,12 @@ try {
     workspace_legacy_id: 'ws-b',
     title: quickCapture.title,
   }]);
-  const quickRowsA = await runActorTransaction(database, config, actorA, port => port.query<{ count: string }>(`
-    SELECT count(*)::text AS count FROM projed_core.unplaced_tasks
+  const quickRowsA = await runActorTransaction(database, config, actorA, port => port.query<{ legacy_task_id: string; title: string }>(`
+    SELECT legacy_task_id, task->>'title' AS title FROM projed_core.unplaced_tasks ORDER BY legacy_task_id
   `));
-  assert.equal(quickRowsA.rows[0]?.count, '0');
+  assert.deepEqual(quickRowsA.rows, [{
+    legacy_task_id: sameOriginMainCaptureId, title: 'Same-origin main Session quick capture',
+  }]);
   const quickConflict = await fetch(`${base}/api/v1/quick-tasks`, {
     method: 'POST',
     headers: {
@@ -1116,7 +1119,7 @@ try {
     (error: unknown) => error instanceof HttpApiError
       && error.status === 400 && error.code === 'DOMAIN_DATA_INVALID',
   );
-  assert.deepEqual(await taskWorkbenchA.list(), []);
+  assert.deepEqual((await taskWorkbenchA.list()).map(task => task.id), [sameOriginMainCaptureId]);
   await assert.rejects(
     taskWorkbenchA.place({
       commandVersion: 2,
