@@ -521,8 +521,9 @@ function quoteRelation(schema: string, relation: string): string {
   return `${quoteIdentifier(schema)}.${quoteIdentifier(relation)}`;
 }
 
-async function sourceBlockers(client: Client) {
+async function sourcePreflight(client: Client) {
   const found: Array<{ domain: string; count: number | null }> = [];
+  const emptySourceRelations: Array<{ domain: string; count: 0 }> = [];
   const catalog = await readSourceRelationCatalog(client);
   for (const relation of findUnclassifiedSourceRelations(catalog)) {
     // Counts are safe metadata only; do not SELECT any unknown relation rows.
@@ -532,10 +533,11 @@ async function sourceBlockers(client: Client) {
       : (await client.query<{ count: number }>(
         `SELECT count(*)::int AS count FROM ${quoteRelation(relation.schema_name, relation.relation_name)}`,
       )).rows[0]?.count ?? 0;
-    found.push({
-      domain: `UNKNOWN_SOURCE_RELATION ${quoteRelation(relation.schema_name, relation.relation_name)}`,
-      count,
-    });
+    const domain = `UNKNOWN_SOURCE_RELATION ${quoteRelation(relation.schema_name, relation.relation_name)}`;
+    // An actually empty relation has no snapshot data to lose. Keep its name
+    // in diagnostics; populated or unreadable/foreign relations still stop.
+    if (count === 0) emptySourceRelations.push({ domain, count });
+    else found.push({ domain, count });
   }
   for (const [relation, where] of BLOCKERS) {
     const exists = await client.query<{ relation: string | null }>('SELECT to_regclass($1) AS relation', [relation]);
@@ -543,7 +545,7 @@ async function sourceBlockers(client: Client) {
     const count = await client.query<{ count: number }>(`SELECT count(*)::int AS count FROM ${relation} ${where}`);
     if ((count.rows[0]?.count ?? 0) > 0) found.push({ domain: `${relation}${where ? ` ${where}` : ''}`, count: count.rows[0]!.count });
   }
-  return found;
+  return { blockers: found, emptySourceRelations };
 }
 
 async function insertSnapshot(client: Client, snapshot: ReadonlyMap<string, readonly Row[]>): Promise<void> {
@@ -699,11 +701,14 @@ async function main(): Promise<void> {
     await source.query("SET LOCAL TIME ZONE 'UTC'");
     await source.query("SET LOCAL DateStyle = 'ISO, YMD'");
     await source.query('SET LOCAL extra_float_digits = 3');
+    // Fail rather than mistake rows hidden by RLS for an empty/full snapshot.
+    // This setting does not grant permission to bypass a row security policy.
+    await source.query('SET LOCAL row_security = off');
     await validateSource(source, sourceBinding);
-    const blockers = await sourceBlockers(source);
+    const { blockers, emptySourceRelations } = await sourcePreflight(source);
     if (blockers.length > 0) {
       await source.query('ROLLBACK');
-      console.log(JSON.stringify({ status: 'BLOCKED', mode, blockers }));
+      console.log(JSON.stringify({ status: 'BLOCKED', mode, blockers, emptySourceRelations }));
       process.exitCode = 2;
       return;
     }
@@ -725,7 +730,7 @@ async function main(): Promise<void> {
       await source.query('ROLLBACK');
       console.log(JSON.stringify({
         status: 'BLOCKED', mode, snapshotId: snapshotId(sourceSnapshot),
-        tables: snapshotSummary(sourceSnapshot), blockers,
+        tables: snapshotSummary(sourceSnapshot), blockers, emptySourceRelations,
       }));
       process.exitCode = 2;
       return;
@@ -742,7 +747,7 @@ async function main(): Promise<void> {
     await source.query('ROLLBACK');
     console.log(JSON.stringify({
       status: 'PASS', mode, snapshotId: sourceDigest, targetSnapshotId: targetDigest,
-      matches, tables: snapshotSummary(sourceSnapshot),
+      matches, tables: snapshotSummary(sourceSnapshot), emptySourceRelations,
     }));
   } catch (error) {
     try { await target.query('ROLLBACK'); } catch { /* connection may already be closed */ }

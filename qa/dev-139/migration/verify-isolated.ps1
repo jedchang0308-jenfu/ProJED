@@ -42,6 +42,7 @@ $adminPassword = ([guid]::NewGuid().ToString('N'))
 $migratorPassword = ([guid]::NewGuid().ToString('N'))
 $importerPassword = ([guid]::NewGuid().ToString('N'))
 $runtimePassword = ([guid]::NewGuid().ToString('N'))
+$readerPassword = ([guid]::NewGuid().ToString('N'))
 
 function Invoke-PgTool([string]$Name, [string[]]$Arguments) {
   $tool = Join-Path $PostgresBin $Name
@@ -206,19 +207,36 @@ try {
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "UPDATE public.llm_access_logs SET tenant_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' WHERE id = '01234567-1234-4234-8234-123456789011'; DELETE FROM public.tenants WHERE id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2'")
 
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'CREATE TABLE public.dev139_unknown_empty_source (id uuid)')
-  $unknownEmptyPlan = Invoke-DataMode -Mode 'plan' -ExpectedExitCodes @(2)
+  $unknownEmptyPlan = Invoke-DataMode -Mode 'plan' -ExpectedExitCodes @(0)
   $unknownEmptyDomain = 'UNKNOWN_SOURCE_RELATION "public"."dev139_unknown_empty_source"'
-  $unknownEmptyBlocker = @($unknownEmptyPlan.blockers | Where-Object { $_.domain -eq $unknownEmptyDomain }) | Select-Object -First 1
-  if ($unknownEmptyPlan.status -ne 'BLOCKED' -or -not $unknownEmptyBlocker -or $unknownEmptyBlocker.count -ne 0) {
-    throw 'DEV-139 empty unknown app table was not reported as a zero-row source blocker.'
+  $unknownEmptyDiagnostic = @($unknownEmptyPlan.emptySourceRelations | Where-Object { $_.domain -eq $unknownEmptyDomain }) | Select-Object -First 1
+  if ($unknownEmptyPlan.status -ne 'PASS' -or -not $unknownEmptyDiagnostic -or $unknownEmptyDiagnostic.count -ne 0) {
+    throw 'DEV-139 truly empty unknown app table did not remain a non-blocking diagnostic.'
   }
-  $unknownEmptyApply = Invoke-DataMode -Mode 'apply' -ExpectedExitCodes @(2)
-  if ($unknownEmptyApply.status -ne 'BLOCKED' -or -not (@($unknownEmptyApply.blockers.domain) -contains $unknownEmptyDomain)) {
-    throw 'DEV-139 apply did not stop at the read-only source catalog preflight for an empty unknown app table.'
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "INSERT INTO public.dev139_unknown_empty_source VALUES ('01234567-1234-4234-8234-123456789099')")
+  $unknownPopulatedPlan = Invoke-DataMode -Mode 'plan' -ExpectedExitCodes @(2)
+  $unknownPopulatedBlocker = @($unknownPopulatedPlan.blockers | Where-Object { $_.domain -eq $unknownEmptyDomain }) | Select-Object -First 1
+  if ($unknownPopulatedPlan.status -ne 'BLOCKED' -or -not $unknownPopulatedBlocker -or $unknownPopulatedBlocker.count -ne 1) {
+    throw 'DEV-139 populated unknown table was not blocked on a fresh snapshot.'
+  }
+  $unknownPopulatedApply = Invoke-DataMode -Mode 'apply' -ExpectedExitCodes @(2)
+  if ($unknownPopulatedApply.status -ne 'BLOCKED' -or $unknownEmptyDomain -notin @($unknownPopulatedApply.blockers.domain)) {
+    throw 'DEV-139 apply did not reject unknown populated data before target writes.'
+  }
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "CREATE ROLE projed_source_reader_disposable LOGIN PASSWORD '$readerPassword'; GRANT USAGE ON SCHEMA public, private TO projed_source_reader_disposable; GRANT SELECT ON ALL TABLES IN SCHEMA public, private TO projed_source_reader_disposable; ALTER TABLE public.dev139_unknown_empty_source ENABLE ROW LEVEL SECURITY; CREATE POLICY hide_rows ON public.dev139_unknown_empty_source FOR SELECT USING (false)")
+  $encodedReader = [Uri]::EscapeDataString($readerPassword)
+  try {
+    $env:PROJED_MIGRATION_SOURCE_DATABASE_URL = "postgresql://projed_source_reader_disposable:${encodedReader}@127.0.0.1:$port/$sourceDatabase"
+    $hiddenRowsApply = Invoke-DataMode -Mode 'apply' -ExpectedExitCodes @(1)
+    if ($hiddenRowsApply.status -ne 'FAIL' -or $hiddenRowsApply.code -ne '42501') {
+      throw 'DEV-139 RLS-hidden populated relation was incorrectly accepted as empty.'
+    }
+  } finally {
+    $env:PROJED_MIGRATION_SOURCE_DATABASE_URL = "postgresql://postgres:${encodedAdmin}@127.0.0.1:$port/$sourceDatabase"
   }
   $unknownEmptyTargetCount = Invoke-PgScalar -Database $targetDatabase -Sql 'SELECT (SELECT count(*) FROM projed_core.profiles) + (SELECT count(*) FROM projed_core.tenants)'
   if ($unknownEmptyTargetCount -ne '0') { throw 'DEV-139 unknown source relation preflight wrote target rows.' }
-  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'DROP TABLE public.dev139_unknown_empty_source')
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'TRUNCATE TABLE public.dev139_unknown_empty_source; ALTER TABLE public.dev139_unknown_empty_source DISABLE ROW LEVEL SECURITY')
 
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'CREATE VIEW public.dev139_non_authority_view AS SELECT 1::integer AS id')
   $viewPlan = Invoke-DataMode -Mode 'plan' -ExpectedExitCodes @(0)
@@ -238,10 +256,13 @@ try {
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'DROP TABLE public.dev139_unknown_partitioned_source CASCADE')
 
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'CREATE TABLE public.dev139_inherited_profiles (extra_data text) INHERITS (public.profiles)')
+  $unknownInheritedEmptyPlan = Invoke-DataMode -Mode 'plan' -ExpectedExitCodes @(0)
+  if ($unknownInheritedEmptyPlan.status -ne 'PASS') { throw 'DEV-139 empty ordinary inheritance child incorrectly blocked migration.' }
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "INSERT INTO public.dev139_inherited_profiles SELECT profiles.*, 'unclassified child data' FROM ONLY public.profiles LIMIT 1")
   $unknownInheritedPlan = Invoke-DataMode -Mode 'plan' -ExpectedExitCodes @(2)
   $unknownInheritedDomain = 'UNKNOWN_SOURCE_RELATION "public"."dev139_inherited_profiles"'
   $unknownInheritedBlocker = @($unknownInheritedPlan.blockers | Where-Object { $_.domain -eq $unknownInheritedDomain }) | Select-Object -First 1
-  if ($unknownInheritedPlan.status -ne 'BLOCKED' -or -not $unknownInheritedBlocker -or $unknownInheritedBlocker.count -ne 0) {
+  if ($unknownInheritedPlan.status -ne 'BLOCKED' -or -not $unknownInheritedBlocker -or $unknownInheritedBlocker.count -ne 1) {
     throw 'DEV-139 ordinary INHERITS child of a classified source table was not independently classified.'
   }
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'DROP TABLE public.dev139_inherited_profiles')
@@ -271,7 +292,10 @@ try {
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "UPDATE public.task_workbench_unplaced_items SET task = jsonb_build_object('id', 'unplaced-1', 'title', 'Unplaced')")
 
   $apply = Invoke-DataMode -Mode 'apply' -ExpectedExitCodes @(0)
-  if ($apply.status -ne 'PASS' -or $apply.matches -ne $true) { throw 'DEV-139 migration apply did not reconcile before commit.' }
+  if ($apply.status -ne 'PASS' -or $apply.matches -ne $true -or
+      $unknownEmptyDomain -notin @($apply.emptySourceRelations.domain)) {
+    throw 'DEV-139 migration apply did not reconcile with the empty unknown relation retained as a diagnostic.'
+  }
   $reconcile = Invoke-DataMode -Mode 'reconcile' -ExpectedExitCodes @(0)
   if ($reconcile.status -ne 'PASS' -or $reconcile.matches -ne $true -or $reconcile.snapshotId -ne $apply.snapshotId) {
     throw 'DEV-139 post-commit reconciliation failed.'
@@ -360,10 +384,12 @@ try {
     migrationSha256 = $migrationHashes
     snapshotId = $finalReconcile.snapshotId
     tables = $finalReconcile.tables
+    emptySourceRelations = $finalReconcile.emptySourceRelations
     checks = @(
       'empty-target-plan', 'single-transaction-rollback', 'full-snapshot-apply',
-      'unknown-empty-relation-block', 'unknown-partitioned-relation-block',
-      'ordinary-inheritance-child-block', 'plain-view-non-authority-skip',
+      'unknown-empty-relation-diagnostic', 'unknown-populated-relation-block',
+      'rls-hidden-source-reject', 'unknown-partitioned-relation-block',
+      'empty-inheritance-child-diagnostic', 'ordinary-inheritance-child-block', 'plain-view-non-authority-skip',
       'materialized-view-source-block', 'extension-owned-relation-skip',
       'exact-digest-reconcile', 'non-empty-target-reject', 'unsupported-domain-reject',
       'importer-createdb-reject', 'importer-createrole-reject', 'importer-owner-membership-reject',
