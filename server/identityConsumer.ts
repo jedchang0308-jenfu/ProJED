@@ -27,6 +27,8 @@ export interface ProducerVerifiedIdentity {
   readonly principalKind: 'employee' | 'personal';
   readonly googleSubject: string;
   readonly employeeId: string | null;
+  /** Normalized owner-v4 email; absent on legacy synthetic/persisted proofs. */
+  readonly verifiedEmail?: string;
   readonly authEpoch: number;
   readonly authenticatedAtMs: number;
   readonly revokedBeforeMs: number | null;
@@ -82,6 +84,10 @@ function text(value: unknown, maximum = 255): value is string {
     && !/[\u0000-\u001f\u007f]/u.test(value);
 }
 
+function email(value: unknown): value is string {
+  return text(value, 320) && /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(value);
+}
+
 function revision(value: unknown): value is string {
   return typeof value === 'string' && REVISION_RE.test(value) && BigInt(value) <= MAX_BIGINT;
 }
@@ -94,11 +100,13 @@ export function validateNormalizedIdentity(identity: ProducerVerifiedIdentity, n
   if (!identity || typeof identity !== 'object' || Array.isArray(identity)) {
     throw new KernelError('IDENTITY_INVALID', 'Verified identity is invalid', 401);
   }
+  const hasVerifiedEmail = Object.prototype.hasOwnProperty.call(identity, 'verifiedEmail');
   const employeeValid = identity.employeeId === null || text(identity.employeeId);
   if (!text(identity.contractVersion) || !SHA256_RE.test(identity.manifestSha256)
       || !text(identity.issuer) || !text(identity.audience) || !text(identity.identityIssuer)
       || !text(identity.identitySubject) || !text(identity.principalId) || !employeeValid
       || !text(identity.googleSubject)
+      || (hasVerifiedEmail && !email(identity.verifiedEmail))
       || (identity.principalKind !== 'employee' && identity.principalKind !== 'personal')
       || (identity.principalKind === 'personal' ? identity.employeeId !== null : identity.employeeId === null)
       || !Number.isSafeInteger(identity.authEpoch) || identity.authEpoch < 0

@@ -143,6 +143,15 @@ test('expired, future-issued and revoked identity states are rejected', async ()
   }
 });
 
+test('optional verified email uses the owner-v4 email shape and length', async () => {
+  for (const verifiedEmail of ['', 'not-an-email', ' person@example.test', 'x'.repeat(313) + '@example.test']) {
+    await expectCode(
+      consumer({ verified: identity({ verifiedEmail }) }).consume({}, 'main'),
+      'IDENTITY_INVALID',
+    );
+  }
+});
+
 test('missing or ambiguous mapping fails closed without creating a local owner', async () => {
   for (const status of ['missing', 'ambiguous'] as const) {
     await expectCode(consumer({ mapped: { status } }).consume({}, 'main'), 'IDENTITY_MAPPING_CONFLICT');

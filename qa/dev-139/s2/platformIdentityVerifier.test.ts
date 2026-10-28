@@ -53,7 +53,7 @@ function wire(overrides: Record<string, unknown> = {}): Record<string, unknown> 
     },
     authentication: {
       authenticatedAt: '2026-10-29T11:50:00.000Z',
-      email: 'person@example.test',
+      email: 'Person@Example.Test',
       emailVerified: true,
       signInProvider: 'google.com',
       secondFactor: null,
@@ -176,6 +176,7 @@ test('one exchange and one state read produce a retained verified result through
   assert.equal(result.identity.principalKind, 'personal');
   assert.equal(result.identity.employeeId, null);
   assert.equal(result.identity.googleSubject, 'google-sub-456');
+  assert.equal(result.identity.verifiedEmail, 'person@example.test');
   assert.equal(result.identity.authEpoch, 7);
   assert.equal(result.identity.mappingRevision, '14');
   assert.equal(result.identity.expiresAtMs, Date.parse('2026-10-29T12:00:30.000Z'));

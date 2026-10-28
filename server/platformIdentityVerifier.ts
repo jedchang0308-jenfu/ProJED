@@ -169,6 +169,7 @@ export function createPlatformIdentityVerifier(
         principalKind: handoff.identity.principalKind,
         googleSubject: handoff.identity.googleSubject,
         employeeId: handoff.identity.employeeId,
+        verifiedEmail: handoff.authentication.email.trim().toLowerCase(),
         authEpoch: verifiedState.state.authEpoch,
         authenticatedAtMs,
         revokedBeforeMs,

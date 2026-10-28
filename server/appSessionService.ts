@@ -37,13 +37,19 @@ import type {
 const LOGIN_PATH = '/api/v1/session/login';
 const CANCEL_PATH = '/api/v1/session/login/cancel';
 const CALLBACK_PATH = '/api/auth/jenfu-sso/callback';
-const CALLBACK_QUERY_KEYS = ['code', 'state', 'iss'] as const;
-const IDENTITY_FIELDS: readonly (keyof ProducerVerifiedIdentity)[] = [
+const CALLBACK_QUERY_KEYS = ['code', 'error', 'state', 'iss'] as const;
+const CALLBACK_SUCCESS_QUERY_KEYS = ['code', 'state', 'iss'] as const;
+const CALLBACK_CANCEL_QUERY_KEYS = ['error', 'state', 'iss'] as const;
+type ParsedCallback =
+  | { readonly kind: 'success'; readonly code: string; readonly state: string; readonly issuer: string }
+  | { readonly kind: 'cancel'; readonly state: string; readonly issuer: string };
+const IDENTITY_BASE_FIELDS = [
   'contractVersion', 'manifestSha256', 'issuer', 'audience', 'identityIssuer', 'identitySubject',
   'principalId', 'principalKind', 'googleSubject', 'employeeId', 'authEpoch', 'authenticatedAtMs',
   'revokedBeforeMs', 'sourceSessionExpiresAtMs', 'issuedAtMs', 'expiresAtMs', 'currentStateExpiresAtMs',
   'mappingRevision',
-];
+] as const;
+const IDENTITY_FIELDS: readonly (keyof ProducerVerifiedIdentity)[] = [...IDENTITY_BASE_FIELDS, 'verifiedEmail'];
 const LOGIN_TTL_MS = 5 * 60 * 1000;
 const SHA256_RE = /^[a-f0-9]{64}$/u;
 const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/u;
@@ -181,20 +187,19 @@ function pinMatches(pin: IdentityContractPin, binding: PlatformHandoffBinding): 
 }
 
 function identityShape(value: unknown, binding: PlatformHandoffBinding): value is ProducerVerifiedIdentity {
-  const keys = [
-    'contractVersion', 'manifestSha256', 'issuer', 'audience', 'identityIssuer', 'identitySubject',
-    'principalId', 'principalKind', 'googleSubject', 'employeeId', 'authEpoch', 'authenticatedAtMs',
-    'revokedBeforeMs', 'sourceSessionExpiresAtMs', 'issuedAtMs', 'expiresAtMs', 'currentStateExpiresAtMs',
-    'mappingRevision',
-  ] as const;
+  const hasVerifiedEmail = isRecord(value) && Object.prototype.hasOwnProperty.call(value, 'verifiedEmail');
+  const keys = hasVerifiedEmail ? IDENTITY_FIELDS : IDENTITY_BASE_FIELDS;
   if (!exactKeys(value, keys)) return false;
   const employeeIdValid = value.employeeId === null || text(value.employeeId);
+  const verifiedEmailValid = !hasVerifiedEmail || (text(value.verifiedEmail, 320)
+    && /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(value.verifiedEmail));
   const revisionValid = typeof value.mappingRevision === 'string' && REVISION_RE.test(value.mappingRevision)
     && BigInt(value.mappingRevision) <= MAX_INT64;
   return value.contractVersion === binding.contractVersion && value.manifestSha256 === binding.manifestSha256
     && value.issuer === binding.issuer && value.audience === binding.audience
     && text(value.identityIssuer) && text(value.identitySubject) && text(value.principalId)
     && text(value.googleSubject) && employeeIdValid
+    && verifiedEmailValid
     && (value.principalKind === 'personal' ? value.employeeId === null : value.principalKind === 'employee' && value.employeeId !== null)
     && Number.isSafeInteger(value.authEpoch) && Number(value.authEpoch) >= 0
     && Number.isSafeInteger(value.authenticatedAtMs) && Number(value.authenticatedAtMs) >= 0
@@ -803,30 +808,42 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
     return response(200, requestId, { data: { authorizationUrl: authorizationUrlValue } }, { 'set-cookie': cookie });
   };
 
-  const parseCallback = (request: IncomingMessage): { code: string; state: string; issuer: string } => {
+  const parseCallback = (request: IncomingMessage): ParsedCallback => {
     const target = requestTarget(request);
     const raw = request.url;
     if (!target || target.pathname !== CALLBACK_PATH || typeof raw !== 'string'
         || raw.slice(0, raw.indexOf('?') < 0 ? raw.length : raw.indexOf('?')) !== CALLBACK_PATH
         || !target.search || Buffer.byteLength(raw, 'utf8') > 8 * 1024) invalidSession();
     const rawQuery = target.search.slice(1).split('&');
-    if (rawQuery.length !== CALLBACK_QUERY_KEYS.length
-        || rawQuery.some((part) => {
-          const equals = part.indexOf('=');
-          return equals <= 0 || !CALLBACK_QUERY_KEYS.includes(part.slice(0, equals) as typeof CALLBACK_QUERY_KEYS[number]);
-        })
-        || new Set(rawQuery.map((part) => part.slice(0, part.indexOf('=')))).size !== CALLBACK_QUERY_KEYS.length) {
+    const rawKeys = rawQuery.map((part) => {
+      const equals = part.indexOf('=');
+      if (equals <= 0) invalidSession();
+      const key = part.slice(0, equals);
+      if (!CALLBACK_QUERY_KEYS.includes(key as typeof CALLBACK_QUERY_KEYS[number])) invalidSession();
+      return key;
+    });
+    const successShape = rawKeys.length === CALLBACK_SUCCESS_QUERY_KEYS.length
+      && CALLBACK_SUCCESS_QUERY_KEYS.every((key) => rawKeys.includes(key));
+    const cancelShape = rawKeys.length === CALLBACK_CANCEL_QUERY_KEYS.length
+      && CALLBACK_CANCEL_QUERY_KEYS.every((key) => rawKeys.includes(key));
+    if ((!successShape && !cancelShape) || new Set(rawKeys).size !== rawKeys.length) {
       invalidSession();
     }
     const params = target.searchParams;
     const codeValues = params.getAll('code');
+    const errorValues = params.getAll('error');
     const stateValues = params.getAll('state');
     const issuerValues = params.getAll('iss');
-    if (codeValues.length !== 1 || stateValues.length !== 1 || issuerValues.length !== 1
-        || !validOpaque(codeValues[0]) || !validOpaque(stateValues[0]) || issuerValues[0] !== binding.issuer) {
+    if (stateValues.length !== 1 || issuerValues.length !== 1
+        || !validOpaque(stateValues[0]) || issuerValues[0] !== binding.issuer) {
       invalidSession();
     }
-    return { code: codeValues[0]!, state: stateValues[0]!, issuer: issuerValues[0]! };
+    if (successShape) {
+      if (codeValues.length !== 1 || errorValues.length !== 0 || !validOpaque(codeValues[0])) invalidSession();
+      return { kind: 'success', code: codeValues[0]!, state: stateValues[0]!, issuer: issuerValues[0]! };
+    }
+    if (errorValues.length !== 1 || codeValues.length !== 0 || errorValues[0] !== 'access_denied') invalidSession();
+    return { kind: 'cancel', state: stateValues[0]!, issuer: issuerValues[0]! };
   };
 
   const callback = async (request: IncomingMessage, requestId: string): Promise<AuthDispatchResult> => {
@@ -861,15 +878,72 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
       if (recovered) return recovered;
       conflict();
     }
-    if (intent.status !== 'pending' || intent.claimHash !== null || intent.completedSessionHash !== null
-        || intent.expiresAtMs <= currentNowMs
-        || publicOrigin !== originByEntry[intent.entry]
-        || !intent.codeVerifier || !validOpaque(intent.codeVerifier)) invalidSession();
     try {
       if (validateReturnPath(intent.returnPath, intent.publicOrigin) !== intent.returnPath) invalidSession();
     } catch {
       invalidSession();
     }
+    if (parsed.kind === 'cancel') {
+      if (intent.status !== 'pending' && intent.status !== 'processing' && intent.status !== 'cancelled') conflict();
+      let cancelled: StoredLoginIntent | null;
+      try {
+        cancelled = await cancelIntent(tokens.loginToken!, publicOrigin, intent.oldSessionHash, currentNowMs, false);
+      } catch (error) {
+        if (!(error instanceof KernelError) || (error.code !== 'ACTOR_CHANGED' && error.code !== 'DB_COMMIT_UNKNOWN')) throw error;
+        let latest: StoredLoginIntent | null;
+        try {
+          latest = await options.store.readLogin(tokenHash);
+        } catch (readbackError) {
+          identityInvalidOrUnavailable(readbackError);
+        }
+        if (!latest || !validIntentShape(latest) || !safeEqual(latest.tokenHash, tokenHash)
+            || !safeEqual(latest.stateHash, intent.stateHash) || latest.entry !== intent.entry
+            || latest.publicOrigin !== intent.publicOrigin || latest.oldSessionHash !== intent.oldSessionHash) throw error;
+        if (latest.status === 'consumed') {
+          const recovered = await consumedIntentRecovery(latest, tokens, publicOrigin, requestId);
+          if (recovered) return recovered;
+          conflict();
+        }
+        if (latest.status !== 'cancelled') throw error;
+        cancelled = latest;
+      }
+      if (!cancelled || !validIntentShape(cancelled) || cancelled.status !== 'cancelled'
+          || !safeEqual(cancelled.tokenHash, tokenHash) || !safeEqual(cancelled.stateHash, intent.stateHash)
+          || cancelled.entry !== intent.entry || cancelled.publicOrigin !== intent.publicOrigin
+          || cancelled.oldSessionHash !== intent.oldSessionHash) conflict();
+
+      const cookieNowMs = nowFrom(now);
+      let cookie: string;
+      if (tokens.sessionToken) {
+        const session = await readSessionMetadata(tokens.sessionToken, publicOrigin);
+        const effectiveExpiry = session
+          ? Math.min(session.expiresAtMs, session.identity.sourceSessionExpiresAtMs)
+          : 0;
+        if (!session || session.revokedAtMs !== null || session.entry !== intent.entry || effectiveExpiry - cookieNowMs < 1_000) {
+          cookie = clearSessionCookie({ environment, publicOrigin });
+        } else {
+          cookie = setSessionCookie({
+            environment,
+            publicOrigin,
+            sessionToken: tokens.sessionToken,
+            expiresAtMs: session.expiresAtMs,
+            sourceSessionExpiresAtMs: session.identity.sourceSessionExpiresAtMs,
+            nowMs: cookieNowMs,
+          });
+        }
+      } else {
+        cookie = clearSessionCookie({ environment, publicOrigin });
+      }
+      return response(303, requestId, { data: null }, {
+        location: `${intent.publicOrigin}${intent.returnPath}`,
+        'set-cookie': cookie,
+        'referrer-policy': 'no-referrer',
+      });
+    }
+    if (intent.status !== 'pending' || intent.claimHash !== null || intent.completedSessionHash !== null
+        || intent.expiresAtMs <= currentNowMs
+        || publicOrigin !== originByEntry[intent.entry]
+        || !intent.codeVerifier || !validOpaque(intent.codeVerifier)) invalidSession();
 
     const claimHash = hash(opaque());
     let claimed: StoredLoginIntent;

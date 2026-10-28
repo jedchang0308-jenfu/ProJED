@@ -82,6 +82,7 @@ class FakeAppSessionStore implements AppSessionStore {
   readonly calls: string[] = [];
   claimUnknownAfterCommit = false;
   completeUnknownAfterCommit = false;
+  cancelRaceToConsumed = false;
 
   async begin(intent: StoredLoginIntent): Promise<void> {
     this.calls.push('begin');
@@ -122,8 +123,20 @@ class FakeAppSessionStore implements AppSessionStore {
     this.calls.push('cancel');
     const intent = this.intents.get(tokenHash);
     if (!intent || intent.publicOrigin !== publicOrigin) return null;
+    if (this.cancelRaceToConsumed) {
+      this.cancelRaceToConsumed = false;
+      const consumed = {
+        ...intent,
+        status: 'consumed' as const,
+        claimHash: null,
+        codeVerifier: null,
+        completedSessionHash: 'f'.repeat(64),
+      };
+      this.intents.set(tokenHash, consumed);
+      return { ...consumed };
+    }
     if (intent.status === 'pending' || intent.status === 'processing') {
-      const cancelled = { ...intent, status: 'cancelled' as const };
+      const cancelled = { ...intent, status: 'cancelled' as const, claimHash: null, codeVerifier: null };
       this.intents.set(tokenHash, cancelled);
       return { ...cancelled };
     }
@@ -343,11 +356,23 @@ function loginRequest(
 }
 
 function callbackRequest(publicOrigin: string, cookie: string, state: string, issuer = ISSUER): IncomingMessage {
-  const query = new URLSearchParams([['code', CODE], ['state', state], ['iss', issuer]]);
+  return callbackQueryRequest(publicOrigin, cookie, [['code', CODE], ['state', state], ['iss', issuer]]);
+}
+
+function callbackQueryRequest(
+  publicOrigin: string,
+  cookie: string,
+  entries: readonly (readonly [string, string])[],
+): IncomingMessage {
+  const query = new URLSearchParams(entries.map(([name, value]) => [name, value]));
   return request('GET', `/api/auth/jenfu-sso/callback?${query}`, {
     host: host(publicOrigin),
     cookie,
   });
+}
+
+function callbackCancelRequest(publicOrigin: string, cookie: string, state: string, issuer = ISSUER): IncomingMessage {
+  return callbackQueryRequest(publicOrigin, cookie, [['error', 'access_denied'], ['state', state], ['iss', issuer]]);
 }
 
 function logoutRequest(publicOrigin: string, cookie: string): IncomingMessage {
@@ -442,6 +467,141 @@ test('personal login creates exact authorize URL and one callback yields an eigh
   assert.equal(replay.status, 409);
   assert.match(replay.headers?.['set-cookie'] ?? '', /^__session=;/u);
   assert.equal(f.counts().producerCallCount, 1);
+});
+
+test('owner-v4 verified email survives Session shape and unknown-completion readback', async () => {
+  const f = fixture();
+  f.setIdentity(identityAt(f.now(), { verifiedEmail: 'person@example.test' }));
+  f.store.completeUnknownAfterCommit = true;
+  const login = await start(f);
+  const authorize = authorizationFrom(login);
+  const callback = await f.service.dispatchAuth(
+    callbackRequest(MAIN_ORIGIN, cookieValue(login), authorize.searchParams.get('state')!),
+    'verified-email-callback',
+  );
+
+  assert.equal(callback.status, 303);
+  const sessionToken = tokensFromCookie(cookieValue(callback)).sessionToken;
+  assert.ok(sessionToken);
+  assert.equal(f.store.sessions.get(digest(sessionToken))?.identity.verifiedEmail, 'person@example.test');
+  assert.equal(f.counts().producerCallCount, 1);
+});
+
+test('broker access_denied callback cancels the pending intent and returns to the exact app path', async () => {
+  const f = fixture();
+  const login = await start(f, 'main', undefined, '/boards?view=mine');
+  const authorize = authorizationFrom(login);
+  const intent = intentFrom(f, cookieValue(login));
+  const before = f.counts();
+
+  const cancelled = await f.service.dispatchAuth(
+    callbackCancelRequest(MAIN_ORIGIN, cookieValue(login), authorize.searchParams.get('state')!),
+    'cancel-callback',
+  );
+
+  assert.equal(cancelled.status, 303);
+  assert.equal(cancelled.headers?.location, `${MAIN_ORIGIN}/boards?view=mine`);
+  assert.match(cancelled.headers?.['set-cookie'] ?? '', /^__session=;/u);
+  assert.equal(f.store.intents.get(intent.tokenHash)?.status, 'cancelled');
+  assert.ok(f.store.calls.includes('cancel'));
+  assert.deepEqual(f.counts(), before);
+});
+
+test('broker access_denied callback cancels a processing intent before it can complete', async () => {
+  const f = fixture();
+  const login = await start(f);
+  const authorize = authorizationFrom(login);
+  const intent = intentFrom(f, cookieValue(login));
+  const claimHash = digest('in-flight-callback');
+  const processing = await f.store.claim(intent.tokenHash, intent.stateHash, claimHash, f.now());
+  assert.equal(processing.status, 'processing');
+
+  const cancelled = await f.service.dispatchAuth(
+    callbackCancelRequest(MAIN_ORIGIN, cookieValue(login), authorize.searchParams.get('state')!),
+    'cancel-processing-callback',
+  );
+
+  assert.equal(cancelled.status, 303);
+  const stored = f.store.intents.get(intent.tokenHash);
+  assert.equal(stored?.status, 'cancelled');
+  assert.equal(stored?.claimHash, null);
+  assert.equal(stored?.codeVerifier, null);
+  assert.equal(f.store.calls.filter((call) => call === 'cancel').length, 1);
+  assert.equal(f.store.calls.includes('complete'), false);
+  assert.equal(f.counts().producerCallCount, 0);
+});
+
+test('broker cancellation preserves a valid existing Session without checking current account state', async () => {
+  const f = fixture();
+  const oldToken = Buffer.alloc(32, 121).toString('base64url');
+  const oldSession: StoredAppSession = {
+    tokenHash: digest(oldToken), publicOrigin: MAIN_ORIGIN, entry: 'main', localUserId: USER_ID,
+    contextId: CONTEXT_ID, accountGuardRevision: '3', identity: f.identity(),
+    expiresAtMs: f.now() + 60 * 60 * 1000, revokedAtMs: null,
+  };
+  f.store.seedSession(oldSession);
+  const login = await start(f, 'main', `__session=${oldToken}`, '/tasks');
+  const authorize = authorizationFrom(login);
+  const intent = intentFrom(f, cookieValue(login));
+  const before = f.counts();
+
+  const cancelled = await f.service.dispatchAuth(
+    callbackCancelRequest(MAIN_ORIGIN, cookieValue(login), authorize.searchParams.get('state')!),
+    'cancel-existing-session',
+  );
+
+  assert.equal(cancelled.status, 303);
+  assert.equal(cancelled.headers?.location, `${MAIN_ORIGIN}/tasks`);
+  const returnedTokens = tokensFromCookie(cookieValue(cancelled));
+  assert.equal(returnedTokens.sessionToken, oldToken);
+  assert.equal(returnedTokens.loginToken, undefined);
+  assert.equal(f.store.sessions.get(intent.oldSessionHash!)?.revokedAtMs, null);
+  assert.equal(f.store.intents.get(intent.tokenHash)?.status, 'cancelled');
+  assert.deepEqual(f.counts(), before);
+});
+
+test('broker cancellation accepts only exact access_denied callback keys and issuer', async () => {
+  const invalidCaseNames = ['unknown error', 'mixed success and cancel', 'duplicate state', 'extra field', 'wrong issuer'];
+  for (const [index, name] of invalidCaseNames.entries()) {
+    const f = fixture();
+    const login = await start(f);
+    const authorize = authorizationFrom(login);
+    const state = authorize.searchParams.get('state')!;
+    const invalidQueries: ReadonlyArray<ReadonlyArray<readonly [string, string]>> = [
+      [['error', 'consent_required'], ['state', state], ['iss', ISSUER]],
+      [['error', 'access_denied'], ['code', CODE], ['state', state], ['iss', ISSUER]],
+      [['error', 'access_denied'], ['state', state], ['state', state], ['iss', ISSUER]],
+      [['error', 'access_denied'], ['state', state], ['iss', ISSUER], ['extra', 'value']],
+      [['error', 'access_denied'], ['state', state], ['iss', `${ISSUER}/wrong`]],
+    ];
+    const rejected = await f.service.dispatchAuth(
+      callbackQueryRequest(MAIN_ORIGIN, cookieValue(login), invalidQueries[index]!),
+      `invalid-cancel-${index}`,
+    );
+    assert.equal(rejected.status, 401, name);
+    assert.equal(f.store.intents.get(intentFrom(f, cookieValue(login)).tokenHash)?.status, 'pending', name);
+    assert.equal(f.store.calls.includes('cancel'), false, name);
+    assert.equal(f.counts().producerCallCount, 0, name);
+  }
+});
+
+test('cancellation race with a consumed intent uses consumed recovery and never reports cancel success', async () => {
+  const f = fixture();
+  const login = await start(f);
+  const authorize = authorizationFrom(login);
+  const intent = intentFrom(f, cookieValue(login));
+  f.store.cancelRaceToConsumed = true;
+
+  const result = await f.service.dispatchAuth(
+    callbackCancelRequest(MAIN_ORIGIN, cookieValue(login), authorize.searchParams.get('state')!),
+    'cancel-consumed-race',
+  );
+
+  assert.equal(result.status, 409);
+  assert.match(result.headers?.['set-cookie'] ?? '', /^__session=;/u);
+  assert.equal(result.headers?.location, undefined);
+  assert.equal(f.store.intents.get(intent.tokenHash)?.status, 'consumed');
+  assert.equal(f.counts().producerCallCount, 0);
 });
 
 test('claim and complete commit-unknown readbacks resume once without retry or duplicate exchange', async () => {
