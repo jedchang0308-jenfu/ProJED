@@ -60,10 +60,10 @@ export interface BoardTransferPreview {
     tasks: number;
     dependencies: number;
     tagsToMap: number;
-    documents: 0;
+    documents: number;
     records: number;
     pendingInvitesToRevoke: number;
-    ragDocumentsToResync: 0;
+    ragDocumentsToResync: number;
     revokedInvites?: number;
     remappedTags?: number;
     ragJobsCreated?: 0;
@@ -634,6 +634,7 @@ export class CollaborationWriteRepository {
     const counts = await port.query<{
       target_active_members: string; preserved_members: string; removed_members: string;
       tasks: string; dependencies: string; tags_to_map: string; records: string; pending_invites: string;
+      documents: string; rag_documents: string;
       cross_board_tracking_references: string;
     }>(`
       SELECT
@@ -657,6 +658,10 @@ export class CollaborationWriteRepository {
           WHERE tenant_id = $1::uuid AND project_id = $2::uuid) AS tags_to_map,
         (SELECT count(*)::text FROM projed_core.knowledge_records
           WHERE tenant_id = $1::uuid AND project_id = $2::uuid) AS records,
+        (SELECT count(*)::text FROM projed_core.documents
+          WHERE tenant_id = $1::uuid AND project_id = $2::uuid) AS documents,
+        (SELECT count(*)::text FROM projed_core.documents
+          WHERE tenant_id = $1::uuid AND project_id = $2::uuid AND rag_enabled) AS rag_documents,
         (SELECT count(*)::text FROM projed_core.board_invites
           WHERE tenant_id = $1::uuid AND project_id = $2::uuid AND status = 'pending') AS pending_invites,
         (SELECT count(*)::text FROM projed_core.task_tracking_references reference
@@ -692,10 +697,10 @@ export class CollaborationWriteRepository {
         tasks: Number(count.tasks),
         dependencies: Number(count.dependencies),
         tagsToMap: Number(count.tags_to_map),
-        documents: 0,
+        documents: Number(count.documents),
         records: Number(count.records),
         pendingInvitesToRevoke: Number(count.pending_invites),
-        ragDocumentsToResync: 0,
+        ragDocumentsToResync: Number(count.rag_documents),
       },
     };
   }

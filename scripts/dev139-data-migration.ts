@@ -185,6 +185,47 @@ const TABLES: readonly TableSpec[] = [
       JOIN public.projects project ON project.id = invite.project_id AND project.tenant_id = invite.tenant_id
      ORDER BY invite.id
   `),
+  table('documents', 'public.documents', [
+    'id', 'tenant_id', 'project_id', 'source_type', 'source_table', 'source_id', 'title',
+    'content_hash', 'visibility', 'rag_enabled', 'metadata', 'created_by', 'updated_by', 'created_at', 'updated_at',
+  ], `
+    SELECT id, tenant_id, project_id, source_type::text, source_table, source_id, title,
+           content_hash, visibility::text, rag_enabled, metadata, created_by, updated_by, created_at, updated_at
+      FROM public.documents ORDER BY tenant_id, id
+  `),
+  table('document_versions', 'public.document_versions', [
+    'id', 'tenant_id', 'document_id', 'version', 'content', 'content_hash', 'metadata', 'created_at',
+  ], `
+    SELECT id, tenant_id, document_id, version, content, content_hash, metadata, created_at
+      FROM public.document_versions ORDER BY document_id, version, id
+  `),
+  table('document_chunks', 'public.document_chunks', [
+    'id', 'tenant_id', 'document_id', 'document_version_id', 'chunk_index', 'content', 'token_count', 'metadata', 'created_at',
+  ], `
+    SELECT id, tenant_id, document_id, document_version_id, chunk_index, content, token_count, metadata, created_at
+      FROM public.document_chunks ORDER BY document_id, document_version_id, chunk_index, id
+  `),
+  table('document_embeddings', 'public.document_embeddings', [
+    'id', 'tenant_id', 'chunk_id', 'provider', 'model', 'dimensions', 'embedding', 'content_hash', 'created_at',
+  ], `
+    SELECT id, tenant_id, chunk_id, provider, model, dimensions,
+           embedding::real[] AS embedding, content_hash, created_at
+      FROM public.document_embeddings ORDER BY chunk_id, provider, model, dimensions, id
+  `),
+  table('rag_sync_jobs', 'public.rag_sync_jobs', [
+    'id', 'tenant_id', 'provider', 'target_store_id', 'source_document_id', 'status',
+    'last_synced_at', 'error', 'metadata', 'created_at', 'updated_at',
+  ], `
+    SELECT id, tenant_id, provider, target_store_id, source_document_id, status::text,
+           last_synced_at, error, metadata, created_at, updated_at
+      FROM public.rag_sync_jobs ORDER BY tenant_id, id
+  `),
+  table('external_rag_objects', 'public.external_rag_objects', [
+    'id', 'tenant_id', 'provider', 'document_id', 'external_object_id', 'metadata', 'created_at', 'updated_at',
+  ], `
+    SELECT id, tenant_id, provider, document_id, external_object_id, metadata, created_at, updated_at
+      FROM public.external_rag_objects ORDER BY tenant_id, id
+  `),
   table('knowledge_records', 'public.knowledge_records', [
     'id', 'tenant_id', 'project_id', 'legacy_record_id', 'record_type', 'title', 'content', 'participants_text',
     'occurred_at', 'started_at', 'ended_at', 'recorded_by', 'status', 'visibility', 'rag_enabled',
@@ -322,12 +363,12 @@ const TABLES: readonly TableSpec[] = [
 
 const BLOCKERS = [
   ['public.llm_access_logs', 'WHERE project_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.projects project WHERE project.id = public.llm_access_logs.project_id AND project.tenant_id = public.llm_access_logs.tenant_id)'],
-  ['public.documents', ''],
-  ['public.document_versions', ''],
-  ['public.document_chunks', ''],
-  ['public.document_embeddings', ''],
-  ['public.rag_sync_jobs', ''],
-  ['public.external_rag_objects', ''],
+  ['public.documents', 'WHERE project_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.projects project WHERE project.id = public.documents.project_id AND project.tenant_id = public.documents.tenant_id)'],
+  ['public.document_versions', 'WHERE NOT EXISTS (SELECT 1 FROM public.documents document WHERE document.id = public.document_versions.document_id AND document.tenant_id = public.document_versions.tenant_id)'],
+  ['public.document_chunks', 'WHERE NOT EXISTS (SELECT 1 FROM public.documents document WHERE document.id = public.document_chunks.document_id AND document.tenant_id = public.document_chunks.tenant_id) OR (document_version_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.document_versions version WHERE version.id = public.document_chunks.document_version_id AND version.document_id = public.document_chunks.document_id AND version.tenant_id = public.document_chunks.tenant_id))'],
+  ['public.document_embeddings', 'WHERE NOT EXISTS (SELECT 1 FROM public.document_chunks chunk WHERE chunk.id = public.document_embeddings.chunk_id AND chunk.tenant_id = public.document_embeddings.tenant_id)'],
+  ['public.rag_sync_jobs', 'WHERE source_document_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.documents document WHERE document.id = public.rag_sync_jobs.source_document_id AND document.tenant_id = public.rag_sync_jobs.tenant_id)'],
+  ['public.external_rag_objects', 'WHERE NOT EXISTS (SELECT 1 FROM public.documents document WHERE document.id = public.external_rag_objects.document_id AND document.tenant_id = public.external_rag_objects.tenant_id)'],
   ['public.inbox_items', ''],
   ['public.meeting_capture_sessions', ''],
   ['public.meeting_capture_segments', ''],
@@ -346,6 +387,7 @@ const BLOCKERS = [
   ['private.backup_import_executions', "WHERE status <> 'succeeded' OR result IS NULL"],
   ['private.quick_task_oauth_clients', ''],
   ['public.knowledge_records', 'WHERE rag_enabled'],
+  ['public.knowledge_records', 'WHERE source_document_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.documents document WHERE document.id = public.knowledge_records.source_document_id AND document.tenant_id = public.knowledge_records.tenant_id)'],
   ['public.tenants', "WHERE owner_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.tenant_members member WHERE member.tenant_id = public.tenants.id AND member.user_id = public.tenants.owner_id AND member.status::text = 'active')"],
   ['public.activity_events', 'WHERE entity_table IS NULL'],
   ['public.audit_logs', 'WHERE tenant_id IS NULL OR entity_table IS NULL'],
@@ -656,6 +698,7 @@ async function main(): Promise<void> {
     await source.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
     await source.query("SET LOCAL TIME ZONE 'UTC'");
     await source.query("SET LOCAL DateStyle = 'ISO, YMD'");
+    await source.query('SET LOCAL extra_float_digits = 3');
     await validateSource(source, sourceBinding);
     const blockers = await sourceBlockers(source);
     if (blockers.length > 0) {
@@ -668,6 +711,7 @@ async function main(): Promise<void> {
     await target.query(mode === 'apply' ? 'BEGIN ISOLATION LEVEL SERIALIZABLE' : 'BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
     await target.query("SET LOCAL TIME ZONE 'UTC'");
     await target.query("SET LOCAL DateStyle = 'ISO, YMD'");
+    await target.query('SET LOCAL extra_float_digits = 3');
     if (mode === 'apply') await target.query("SELECT pg_advisory_xact_lock(hashtextextended('projed:dev139:initial-snapshot-import', 0))");
     await validateTarget(target, profile, binding);
     const sourceSnapshot = await readSource(source);

@@ -55,6 +55,8 @@ try {
     });
     const preview = await commands.previewBoardTransfer(port, sourceWorkspace, sourceBoard, target.id);
     assert.equal(preview.blocked, false);
+    assert.equal(preview.counts.documents, 2, 'preview counts only the actor-visible root documents');
+    assert.equal(preview.counts.ragDocumentsToResync, 2);
     await commands.moveBoardToWorkspace(port, sourceWorkspace, sourceBoard, {
       targetWorkspaceId: target.id, expectedBoardTitle: preview.boardTitle,
     });
@@ -74,6 +76,27 @@ try {
     assert.equal(preferences.rows[0]!.tenant_id, target.id);
     assert.deepEqual(preferences.rows[0]!.filters, { status: ['todo'] });
     assert.equal(preferences.rows[0]!.preference_version, 6);
+    const corpus = await port.query<{ tenant_id: string; original_metadata: boolean; original_time: boolean; children: boolean }>(`
+      SELECT document.tenant_id::text,
+             document.metadata = '9007199254740993.1234567890123456789'::jsonb AS original_metadata,
+             document.created_at = '2026-02-01T10:11:12.123456Z'::timestamptz AS original_time,
+             EXISTS (SELECT 1 FROM projed_core.document_versions version
+               JOIN projed_core.document_chunks chunk ON chunk.document_version_id = version.id
+               JOIN projed_core.document_embeddings embedding ON embedding.chunk_id = chunk.id
+              WHERE version.id = 'd1000000-0000-4000-8000-000000000001'
+                AND version.document_id = document.id
+                AND version.tenant_id = document.tenant_id
+                AND chunk.tenant_id = document.tenant_id
+                AND embedding.tenant_id = document.tenant_id
+                AND cardinality(embedding.embedding) = 3072) AS children
+        FROM projed_core.documents document
+       WHERE document.id = 'd0000000-0000-4000-8000-000000000001'
+    `);
+    assert.equal(corpus.rows.length, 1);
+    assert.equal(corpus.rows[0]!.tenant_id, target.id);
+    assert.equal(corpus.rows[0]!.original_metadata, true);
+    assert.equal(corpus.rows[0]!.original_time, true);
+    assert.equal(corpus.rows[0]!.children, true);
     throw rollback;
   }), error => error === rollback);
   const original = await admin.query<{ tenant_id: string }>(`
@@ -83,7 +106,8 @@ try {
   assert.equal(original.rows[0]!.tenant_id, sourceWorkspace);
   console.log(JSON.stringify({ status: 'PASS', evidenceLevel: 'DEV139_LOCAL_PRODUCT_COMMAND_RETENTION',
     checks: ['normal-reference-removal', 'normal-workspace-create', 'normal-board-transfer',
-      'llm-log-scope-and-evidence-retained', 'account-preferences-retained', 'transaction-rollback'] }));
+      'llm-log-scope-and-evidence-retained', 'account-preferences-retained',
+      'document-preview-and-cascade-retained', 'transaction-rollback'] }));
 } finally {
   await database.end();
   try { await admin.query('DELETE FROM projed_core.account_authorization_guards WHERE local_user_id = $1::uuid', [actor.localUserId]); }

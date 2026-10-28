@@ -81,6 +81,10 @@
     {
       "version": "0016_workspace_lifecycle_compatibility_v1",
       "path": "db/migrations/0016_workspace_lifecycle_compatibility_v1.sql"
+    },
+    {
+      "version": "0017_document_source_retention_v1",
+      "path": "db/migrations/0017_document_source_retention_v1.sql"
     }
   ],
   "objectAllowlist": [
@@ -154,7 +158,21 @@
     "projed_core.llm_access_logs",
     "projed_core.llm_access_logs_tenant_actor_time_idx",
     "projed_core.llm_access_logs_project_idx",
-    "projed_core.llm_access_logs_actor_idx"
+    "projed_core.llm_access_logs_actor_idx",
+    "projed_core.documents",
+    "projed_core.document_versions",
+    "projed_core.document_chunks",
+    "projed_core.document_embeddings",
+    "projed_core.rag_sync_jobs",
+    "projed_core.external_rag_objects",
+    "projed_core.documents_project_idx",
+    "projed_core.documents_created_by_idx",
+    "projed_core.documents_updated_by_idx",
+    "projed_core.document_chunks_version_idx",
+    "projed_core.document_embeddings_chunk_idx",
+    "projed_core.rag_sync_jobs_document_idx",
+    "projed_core.external_rag_objects_document_idx",
+    "projed_core.knowledge_records_source_document_idx"
   ],
   "staticFixturePath": "dist",
   "runtime": {

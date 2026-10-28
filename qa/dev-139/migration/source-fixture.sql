@@ -354,3 +354,122 @@ INSERT INTO public.account_board_task_filter_preferences VALUES
   ('11111111-1111-4111-8111-111111111111', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 6, '{"status":["todo"]}', '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z');
 INSERT INTO public.calendar_subscriptions VALUES
   ('90123456-1234-4234-8234-123456789009', '11111111-1111-4111-8111-111111111111', 'Main calendar', repeat('c', 64), '{"workspace_ids":["aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"],"date_types":["start"]}', true, NULL, NULL, '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z');
+
+-- Synthetic document-source retention fixture. The real[] embedding mirrors
+-- pgvector's float32 components without requiring an extension in the fixture.
+CREATE TABLE public.documents (
+  id uuid PRIMARY KEY,
+  tenant_id uuid NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
+  project_id uuid REFERENCES public.projects(id) ON DELETE CASCADE,
+  source_type text NOT NULL,
+  source_table text,
+  source_id uuid,
+  title text NOT NULL,
+  content_hash text,
+  visibility text NOT NULL,
+  rag_enabled boolean NOT NULL,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  updated_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL,
+  updated_at timestamptz NOT NULL,
+  UNIQUE (tenant_id, id)
+);
+CREATE TABLE public.document_versions (
+  id uuid PRIMARY KEY,
+  tenant_id uuid NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
+  document_id uuid NOT NULL REFERENCES public.documents(id) ON DELETE CASCADE,
+  version integer NOT NULL,
+  content text NOT NULL,
+  content_hash text NOT NULL,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL,
+  UNIQUE (document_id, version)
+);
+CREATE TABLE public.document_chunks (
+  id uuid PRIMARY KEY,
+  tenant_id uuid NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
+  document_id uuid NOT NULL REFERENCES public.documents(id) ON DELETE CASCADE,
+  document_version_id uuid REFERENCES public.document_versions(id) ON DELETE CASCADE,
+  chunk_index integer NOT NULL,
+  content text NOT NULL,
+  token_count integer,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL,
+  UNIQUE (document_id, document_version_id, chunk_index)
+);
+CREATE TABLE public.document_embeddings (
+  id uuid PRIMARY KEY,
+  tenant_id uuid NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
+  chunk_id uuid NOT NULL REFERENCES public.document_chunks(id) ON DELETE CASCADE,
+  provider text NOT NULL,
+  model text NOT NULL,
+  dimensions integer NOT NULL,
+  embedding real[] NOT NULL,
+  content_hash text,
+  created_at timestamptz NOT NULL,
+  UNIQUE (chunk_id, provider, model, dimensions),
+  CHECK (array_ndims(embedding) = 1 AND cardinality(embedding) = dimensions)
+);
+CREATE TABLE public.rag_sync_jobs (
+  id uuid PRIMARY KEY,
+  tenant_id uuid NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
+  provider text NOT NULL,
+  target_store_id text,
+  source_document_id uuid REFERENCES public.documents(id) ON DELETE CASCADE,
+  status text NOT NULL,
+  last_synced_at timestamptz,
+  error text,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL,
+  updated_at timestamptz NOT NULL
+);
+CREATE TABLE public.external_rag_objects (
+  id uuid PRIMARY KEY,
+  tenant_id uuid NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
+  provider text NOT NULL,
+  document_id uuid NOT NULL REFERENCES public.documents(id) ON DELETE CASCADE,
+  external_object_id text NOT NULL,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL,
+  updated_at timestamptz NOT NULL,
+  UNIQUE (provider, external_object_id)
+);
+
+INSERT INTO public.documents VALUES
+  ('d0000000-0000-4000-8000-000000000001', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'manual', NULL, NULL, 'Synthetic shared board document', 'fixture-hash-shared-v1', 'project', true, '9007199254740993.1234567890123456789'::jsonb, '11111111-1111-4111-8111-111111111111', '11111111-1111-4111-8111-111111111111', '2026-02-01T10:11:12.123456Z', '2026-02-01T10:11:12.654321Z'),
+  ('d0000000-0000-4000-8000-000000000002', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', 'manual', NULL, NULL, 'Synthetic other board document', 'fixture-hash-other-v1', 'project', true, 'null'::jsonb, '11111111-1111-4111-8111-111111111111', '11111111-1111-4111-8111-111111111111', '2026-02-02T10:11:12.123456Z', '2026-02-02T10:11:12.654321Z'),
+  ('d0000000-0000-4000-8000-000000000003', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'manual', NULL, NULL, 'Synthetic private document', 'fixture-hash-private-v1', 'private', true, '"private document scalar"'::jsonb, '11111111-1111-4111-8111-111111111111', '11111111-1111-4111-8111-111111111111', '2026-02-03T10:11:12.123456Z', '2026-02-03T10:11:12.654321Z'),
+  ('d0000000-0000-4000-8000-000000000004', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'meeting_note', 'knowledge_records', '23456789-1234-4234-8234-123456789002', 'Synthetic disabled knowledge mirror', 'fixture-hash-mirror-v1', 'project', true, '{"kind":"mirror","source_rag_enabled":false}'::jsonb, '11111111-1111-4111-8111-111111111111', '11111111-1111-4111-8111-111111111111', '2026-02-04T10:11:12.123456Z', '2026-02-04T10:11:12.654321Z');
+UPDATE public.knowledge_records
+   SET source_document_id = 'd0000000-0000-4000-8000-000000000004'
+ WHERE id = '23456789-1234-4234-8234-123456789002';
+
+INSERT INTO public.document_versions VALUES
+  ('d1000000-0000-4000-8000-000000000001', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'd0000000-0000-4000-8000-000000000001', 1, 'Synthetic shared document version one.', 'fixture-version-shared-v1', '9007199254740993.1234567890123456789'::jsonb, '2026-02-05T10:11:12.123456Z'),
+  ('d1000000-0000-4000-8000-000000000002', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'd0000000-0000-4000-8000-000000000001', 2, 'Synthetic shared document version two.', 'fixture-version-shared-v2', 'null'::jsonb, '2026-02-05T10:11:13.123456Z'),
+  ('d1000000-0000-4000-8000-000000000003', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'd0000000-0000-4000-8000-000000000002', 1, 'Synthetic other board version.', 'fixture-version-other-v1', '"version scalar"'::jsonb, '2026-02-06T10:11:12.123456Z'),
+  ('d1000000-0000-4000-8000-000000000004', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'd0000000-0000-4000-8000-000000000003', 1, 'Synthetic private version.', 'fixture-version-private-v1', '{"section":1}'::jsonb, '2026-02-07T10:11:12.123456Z'),
+  ('d1000000-0000-4000-8000-000000000005', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'd0000000-0000-4000-8000-000000000004', 1, 'Synthetic hidden mirror version.', 'fixture-version-mirror-v1', '12345678901234567890.123456789'::jsonb, '2026-02-08T10:11:12.123456Z');
+
+INSERT INTO public.document_chunks VALUES
+  ('d2000000-0000-4000-8000-000000000001', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'd0000000-0000-4000-8000-000000000001', 'd1000000-0000-4000-8000-000000000001', 0, 'Synthetic shared version one chunk.', 7, '"chunk scalar"'::jsonb, '2026-02-09T10:11:12.123456Z'),
+  ('d2000000-0000-4000-8000-000000000002', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'd0000000-0000-4000-8000-000000000001', 'd1000000-0000-4000-8000-000000000002', 0, 'Synthetic shared version two chunk.', 8, 'null'::jsonb, '2026-02-09T10:11:13.123456Z'),
+  ('d2000000-0000-4000-8000-000000000003', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'd0000000-0000-4000-8000-000000000002', 'd1000000-0000-4000-8000-000000000003', 0, 'Synthetic other board chunk.', 9, '9007199254740993.1234567890123456789'::jsonb, '2026-02-10T10:11:12.123456Z'),
+  ('d2000000-0000-4000-8000-000000000004', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'd0000000-0000-4000-8000-000000000003', 'd1000000-0000-4000-8000-000000000004', 0, 'Synthetic private chunk.', 10, '{"kind":"private"}'::jsonb, '2026-02-11T10:11:12.123456Z'),
+  ('d2000000-0000-4000-8000-000000000005', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'd0000000-0000-4000-8000-000000000004', 'd1000000-0000-4000-8000-000000000005', 0, 'Synthetic hidden mirror chunk.', 11, 'null'::jsonb, '2026-02-12T10:11:12.123456Z');
+
+INSERT INTO public.document_embeddings VALUES
+  ('d3000000-0000-4000-8000-000000000001', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'd2000000-0000-4000-8000-000000000001', 'google', 'gemini-embedding-001', 3072, ARRAY[0.125::real, -0.5::real, 3.1415927::real] || array_fill(0::real, ARRAY[3069]), 'fixture-embedding-shared', '2026-02-13T10:11:12.123456Z'),
+  ('d3000000-0000-4000-8000-000000000002', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'd2000000-0000-4000-8000-000000000003', 'google', 'gemini-embedding-001', 3072, ARRAY[-0.25::real, 0.75::real, 1.5::real] || array_fill(0::real, ARRAY[3069]), 'fixture-embedding-other', '2026-02-13T10:11:13.123456Z');
+
+INSERT INTO public.rag_sync_jobs VALUES
+  ('d4000000-0000-4000-8000-000000000001', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'google', 'fixture-store-main', 'd0000000-0000-4000-8000-000000000001', 'pending', NULL, NULL, '9007199254740993.1234567890123456789'::jsonb, '2026-02-14T10:11:12.123456Z', '2026-02-14T10:11:13.123456Z'),
+  ('d4000000-0000-4000-8000-000000000002', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'google', 'fixture-store-main', 'd0000000-0000-4000-8000-000000000001', 'running', NULL, NULL, '"running scalar"'::jsonb, '2026-02-14T10:11:14.123456Z', '2026-02-14T10:11:15.123456Z'),
+  ('d4000000-0000-4000-8000-000000000003', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'google', 'fixture-store-other', 'd0000000-0000-4000-8000-000000000002', 'synced', '2026-02-14T10:11:16.123456Z', NULL, 'null'::jsonb, '2026-02-14T10:11:16.123456Z', '2026-02-14T10:11:17.123456Z'),
+  ('d4000000-0000-4000-8000-000000000004', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'google', 'fixture-store-private', 'd0000000-0000-4000-8000-000000000003', 'failed', NULL, 'synthetic fixture failure; no credentials', '{"attempt":2}'::jsonb, '2026-02-14T10:11:18.123456Z', '2026-02-14T10:11:19.123456Z'),
+  ('d4000000-0000-4000-8000-000000000005', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'google', NULL, NULL, 'deleted', '2026-02-14T10:11:20.123456Z', NULL, '12345678901234567890.123456789'::jsonb, '2026-02-14T10:11:20.123456Z', '2026-02-14T10:11:21.123456Z');
+
+INSERT INTO public.external_rag_objects VALUES
+  ('d5000000-0000-4000-8000-000000000001', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'google', 'd0000000-0000-4000-8000-000000000001', 'fixture-provider-object-main-001', 'null'::jsonb, '2026-02-15T10:11:12.123456Z', '2026-02-15T10:11:13.123456Z'),
+  ('d5000000-0000-4000-8000-000000000002', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'google', 'd0000000-0000-4000-8000-000000000002', 'fixture-provider-object-other-002', '"external object scalar"'::jsonb, '2026-02-15T10:11:14.123456Z', '2026-02-15T10:11:15.123456Z');

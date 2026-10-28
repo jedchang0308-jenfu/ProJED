@@ -109,6 +109,10 @@ try {
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-f', $bootstrapRuntime)
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-c', "CREATE DATABASE $targetDatabase OWNER projed_owner_disposable")
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-c', "CREATE DATABASE $sourceDatabase OWNER postgres")
+  # The actual Supabase source uses 0; force distinct lossy defaults on both
+  # disposable DBs so the driver must pin precise float text output itself.
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-c', "ALTER DATABASE $sourceDatabase SET extra_float_digits = 0")
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-c', "ALTER DATABASE $targetDatabase SET extra_float_digits = -1")
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $targetDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "REVOKE CREATE, TEMP ON DATABASE $targetDatabase FROM PUBLIC")
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $targetDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "GRANT CONNECT ON DATABASE $targetDatabase TO projed_migrator_disposable, projed_importer_disposable, projed_runtime_disposable")
 
@@ -162,6 +166,28 @@ try {
   if ($plan.status -ne 'PASS' -or $plan.matches -ne $false -or $plan.tables.profiles.count -ne 2 -or $plan.tables.llm_access_logs.count -ne 5) {
     throw 'DEV-139 migration plan result was not the expected empty-target plan.'
   }
+
+  foreach ($sourceDomain in @('documents', 'document_versions', 'document_chunks', 'document_embeddings', 'rag_sync_jobs', 'external_rag_objects')) {
+    $condition = if ($sourceDomain -eq 'documents') { 'WHERE project_id IS NOT NULL' } elseif ($sourceDomain -eq 'rag_sync_jobs') { 'WHERE source_document_id IS NOT NULL' } else { '' }
+    $scopeRowId = Invoke-PgScalar -Database $sourceDatabase -Sql "SELECT id::text FROM public.$sourceDomain $condition ORDER BY id LIMIT 1"
+    if (-not $scopeRowId) { throw "DEV-139 document scope fixture missing: $sourceDomain" }
+    $scopeTenant = Invoke-PgScalar -Database $sourceDatabase -Sql "SELECT tenant_id::text FROM public.$sourceDomain WHERE id = '$scopeRowId'::uuid"
+    Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "UPDATE public.$sourceDomain SET tenant_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa9' WHERE id = '$scopeRowId'::uuid")
+    $scopeMismatch = Invoke-DataMode -Mode 'apply' -ExpectedExitCodes @(2)
+    if ($scopeMismatch.status -ne 'BLOCKED' -or -not (@($scopeMismatch.blockers.domain) -like "public.$sourceDomain WHERE*")) {
+      throw "DEV-139 source document scope mismatch was not blocked: $sourceDomain"
+    }
+    $scopeTargetCount = Invoke-PgScalar -Database $targetDatabase -Sql 'SELECT (SELECT count(*) FROM projed_core.profiles) + (SELECT count(*) FROM projed_core.documents)'
+    if ($scopeTargetCount -ne '0') { throw 'DEV-139 document scope preflight wrote target rows.' }
+    Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "UPDATE public.$sourceDomain SET tenant_id = '$scopeTenant'::uuid WHERE id = '$scopeRowId'::uuid")
+  }
+  # Corpus retention is not proof of the future indexing/retrieval runtime.
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'UPDATE public.knowledge_records SET rag_enabled = true')
+  $ragRuntimeMissing = Invoke-DataMode -Mode 'apply' -ExpectedExitCodes @(2)
+  if ($ragRuntimeMissing.status -ne 'BLOCKED' -or 'public.knowledge_records WHERE rag_enabled' -notin @($ragRuntimeMissing.blockers.domain)) {
+    throw 'DEV-139 active record RAG was unblocked before its runtime replacement.'
+  }
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'UPDATE public.knowledge_records SET rag_enabled = false')
 
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "UPDATE public.tenants SET owner_id = '11111111-1111-4111-8111-111111111111' WHERE id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa9'")
   $unconfirmedOwner = Invoke-DataMode -Mode 'apply' -ExpectedExitCodes @(2)
@@ -250,7 +276,7 @@ try {
   if ($reconcile.status -ne 'PASS' -or $reconcile.matches -ne $true -or $reconcile.snapshotId -ne $apply.snapshotId) {
     throw 'DEV-139 post-commit reconciliation failed.'
   }
-  foreach ($retentionCheck in @('llm-access-retention.sql', 'workspace-lifecycle.sql')) {
+  foreach ($retentionCheck in @('llm-access-retention.sql', 'workspace-lifecycle.sql', 'document-retention.sql')) {
     try {
       # Each file owns a connection-local BEGIN/ROLLBACK; a failed psql closes
       # that transaction, so independent readback/negative cases remain safe.
@@ -305,6 +331,12 @@ try {
     throw 'DEV-139 sub-millisecond timestamp drift was not rejected.'
   }
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $targetDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "UPDATE projed_core.llm_access_logs SET created_at = '2026-01-04T00:00:00.123456Z'::timestamptz WHERE id = '01234567-1234-4234-8234-123456789013'")
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $targetDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "UPDATE projed_core.document_embeddings SET embedding[3] = '3.1415925'::real WHERE id = 'd3000000-0000-4000-8000-000000000001'")
+  $floatDrift = Invoke-DataMode -Mode 'reconcile' -ExpectedExitCodes @(1)
+  if ($floatDrift.status -ne 'FAIL' -or $floatDrift.code -ne 'RECONCILIATION_MISMATCH') {
+    throw 'DEV-139 float32 drift below rounded text precision was not rejected.'
+  }
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $targetDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "UPDATE projed_core.document_embeddings SET embedding[3] = '3.1415927'::real WHERE id = 'd3000000-0000-4000-8000-000000000001'")
   $finalReconcile = Invoke-DataMode -Mode 'reconcile' -ExpectedExitCodes @(0)
   if ($finalReconcile.status -ne 'PASS' -or $finalReconcile.matches -ne $true) {
     throw 'DEV-139 reconciliation did not recover after the isolated drift was restored.'
@@ -343,6 +375,10 @@ try {
       'orphan-workspace-exact-retention', 'orphan-workspace-zero-access',
       'unconfirmed-source-owner-reject', 'workspace-owner-delete-set-null',
       'board-preferences-workspace-transfer',
+      'document-corpus-and-sync-state-retention', 'document-private-and-board-rls',
+      'document-scope-preflight-zero-write', 'float32-embedding-retention',
+      'float-output-precision-pinned-and-drift-rejected',
+      'record-rag-runtime-still-blocked',
       'quick-oauth-client-reject',
       'target-drift-detect', 'identity-guards-not-imported', 'importer-select-insert-only'
     )

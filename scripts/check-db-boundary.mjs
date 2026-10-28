@@ -27,6 +27,7 @@ const profileContracts = new Map([
     'db/migrations/0014_snapshot_importer_v1.sql',
     'db/migrations/0015_llm_access_log_retention_v1.sql',
     'db/migrations/0016_workspace_lifecycle_compatibility_v1.sql',
+    'db/migrations/0017_document_source_retention_v1.sql',
   ]],
   ['^jenfu_prod$', [
     'db/migrations/0001_runtime_boundary_v1.sql',
@@ -45,6 +46,7 @@ const profileContracts = new Map([
     'db/migrations/0014_snapshot_importer_v1.sql',
     'db/migrations/0015_llm_access_log_retention_v1.sql',
     'db/migrations/0016_workspace_lifecycle_compatibility_v1.sql',
+    'db/migrations/0017_document_source_retention_v1.sql',
   ]],
 ]);
 

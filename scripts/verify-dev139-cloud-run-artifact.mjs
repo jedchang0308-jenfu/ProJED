@@ -36,7 +36,7 @@ const binding = JSON.parse(run([
   'scripts/create-dev139-managed-binding.mjs',
   '--instance=jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg',
 ]));
-assert.equal(Object.keys(binding.migrationSha256).length, 16);
+assert.equal(Object.keys(binding.migrationSha256).length, 17);
 assert.equal(binding.databaseName, 'jenfu_prod');
 assert.equal(binding.cloudSqlInstance, 'jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg');
 assert.equal(Object.keys(binding).some(key => /password|secret|credential/i.test(key)), false);
