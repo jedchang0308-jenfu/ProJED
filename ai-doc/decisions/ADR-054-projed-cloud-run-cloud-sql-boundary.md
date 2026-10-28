@@ -1,8 +1,8 @@
 # ADR-054：ProJED Cloud Run／Cloud SQL 與跨系統責任邊界
 
 - 日期：2026-10-26（Asia/Taipei）。
-- 修訂：Rev 11，W19整合與正式發布續行；managed目標對齊共用jenfu_prod，保留舊Hosting同project的單一runtime；既有使用者切換尚未執行。
-- 狀態：**Accepted（ProJED 技術選型與本 repo 開發完成）**；S1、S2 consumer seam及S3 W1–W18本地驗收PASS。外部Session wire、真資料及release仍未完成；本 ADR 的Accepted不表示其他owner接受、無縫切換或production closure。
+- 修訂：Rev 12，W23 更新外部 owner source／本地模擬證據；managed目標仍對齊共用jenfu_prod，保留舊Hosting同project的單一runtime；既有使用者切換尚未執行。
+- 狀態：**Accepted（ProJED 技術選型與本 repo 開發完成）**；S1、S2 consumer seam及S3 W1–W18本地驗收PASS。Platform Session／handoff source 已有 draft PR／CI 及 LOCAL_SIMULATION PostgreSQL 證據，但真 Firebase／OIDC、ProJED Session wire、真資料及 release 仍未完成；本 ADR 的Accepted不表示其他owner接受、無縫切換或production closure。
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。詳細交接契約：[SPEC-139](../specs/SPEC-139-projed-jenfu-platform-onboarding.md)。
 - 適用未來整合路徑；不立即取代既有 runtime，不表示其他 repo 接受新契約，也不授權程式、DB、遠端或付費操作。
 
@@ -34,7 +34,7 @@ D2 最新人類原文為「保留 ProJED 現有的工作區、看板與權限功
 
 ## Chosen Rule
 
-2026-10-28續行修正：人類已要求完成外部接線、正式資料及發布；最新契約為SPEC-139 Rev35；選測精簡見 §8.1，整合進度見 §33–§36；Rev33 精簡來源未知空表門檻，W22 新增 OrgMaster 最小 Principal publisher source 與 App-scoped admission，不授 ProJED business grant；工作區／看板權限仍由 ProJED 控制，既有架構決策不變。managed database固定既有`jenfu-platform-prod / asia-east1 / jenfu-platform-prod-pg / jenfu_prod`，不是另建`projed` DB。原Hosting project為`projed-cc78d`，run rewrite只提供serviceId／region，因此唯一新ProJED runtime規劃放在同project／asia-east1的`projed-prod`，以受控跨project身分連共用SQL；不增加第二個edge proxy。新runtime／release服務帳號、app Secret與SQL grant尚待其新責任權限確認，舊`projed-ai-backend`與現有身分不覆寫。W20以forward-only migration直接保留LLM log及NULL-owner工作區，不另加人工處置或owner指派門檻，資料／權限保護照舊；架構決策未變。W21文件 corpus 六表保留的本地 bundle `output/qa/dev-139/migration/20261028T153841Z-5a19aca2` 為32 projections、17 migrations、39 checks PASS；這不代表RAG indexing／retrieval／record editing或整體發布完成。其他W18／Rev10文字保留為local切片歷史，不縮減本次完整目標。
+2026-10-29續行修正：人類已要求完成外部接線、正式資料及發布；最新契約為SPEC-139 Rev36；選測精簡見 §8.1，整合進度見 §33–§37；Rev33 精簡來源未知空表門檻，W22 OrgMaster 新增最小 Principal publisher／App-scoped admission，不授 ProJED business grant；W23 Platform source 增加個人 Session v3 與 handoff v4，主／Quick callback、epoch／mapping revision 與舊 Employee 契約保持分離。W23 PR／CI 與本地 PostgreSQL 模擬不代表已部署真 Firebase／OIDC 或 ProJED 真 Session；ProJED opaque Session／既有 UUID proof 尚未接上。工作區／看板權限仍由 ProJED 控制，既有架構決策不變。managed database固定既有`jenfu-platform-prod / asia-east1 / jenfu-platform-prod-pg / jenfu_prod`，不是另建`projed` DB。原Hosting project為`projed-cc78d`，run rewrite只提供serviceId／region，因此唯一新ProJED runtime規劃放在同project／asia-east1的`projed-prod`，以受控跨project身分連共用SQL；不增加第二個edge proxy。新runtime／release服務帳號、app Secret與SQL grant尚待其新責任權限確認，舊`projed-ai-backend`與現有身分不覆寫。W20以forward-only migration直接保留LLM log及NULL-owner工作區，不另加人工處置或owner指派門檻，資料／權限保護照舊；架構決策未變。W21文件 corpus 六表保留的本地 bundle `output/qa/dev-139/migration/20261028T153841Z-5a19aca2` 為32 projections、17 migrations、39 checks PASS；這不代表RAG indexing／retrieval／record editing或整體發布完成。其他W18／Rev10文字保留為local切片歷史，不縮減本次完整目標。
 
 人類已要求「升級到架構確定」與 rd-tech-lead 審視並優化，並要求把既有使用者切換評估寫入文件。下列 ProJED 架構規則固定，現行契約為 SPEC-139 Rev29；D1 publisher 與 D2 首階段範圍不變。人類選定方向及本 repo 決策不表示外部 owner wire／程式已接受或發布：
 
