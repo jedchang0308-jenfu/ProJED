@@ -153,11 +153,8 @@ export class IdentityConsumer {
     return (await this.consumeVerified(input, entry)).actor;
   }
 
-  /** Retains the single-use verification result for subsequent Session creation. */
-  async consumeVerified(input: unknown, entry: AppEntry): Promise<{
-    readonly actor: ServerActorV1;
-    readonly identity: ProducerVerifiedIdentity;
-  }> {
+  /** Verifies one owner proof without requiring or resolving a local account mapping. */
+  async verifyIdentity(input: unknown): Promise<ProducerVerifiedIdentity> {
     if (this.#dependencies.pins.length === 0) {
       throw new KernelError('IDENTITY_CONTRACT_UNAVAILABLE', 'No ProJED identity contract is published', 503);
     }
@@ -176,6 +173,15 @@ export class IdentityConsumer {
     const nowMs = this.#dependencies.now?.() ?? Date.now();
     validateNormalizedIdentity(identity, nowMs);
     assertPinned(identity, this.#dependencies.pins);
+    return identity;
+  }
+
+  /** Retains the single-use verification result for subsequent Session creation. */
+  async consumeVerified(input: unknown, entry: AppEntry): Promise<{
+    readonly actor: ServerActorV1;
+    readonly identity: ProducerVerifiedIdentity;
+  }> {
+    const identity = await this.verifyIdentity(input);
 
     let mapping: PrincipalMappingResult;
     try {

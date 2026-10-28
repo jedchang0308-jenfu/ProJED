@@ -1,6 +1,7 @@
 import type { PoolClient, QueryResultRow } from 'pg';
+import { randomUUID } from 'node:crypto';
 
-import { validateServerActor } from './actorTransaction.js';
+import { validateServerActor, type ServerActorV1 } from './actorTransaction.js';
 import type { AppSessionStore, CompleteLoginInput, LoginIntentStatus, StoredAppSession, StoredLoginIntent } from './appSessionStore.js';
 import type { RuntimeDatabase } from './db.js';
 import { KernelError } from './errors.js';
@@ -68,7 +69,7 @@ function session(row: QueryResultRow): StoredAppSession {
 const LOGIN_COLUMNS = 'token_hash,state_hash,entry,public_origin,return_path,old_session_hash,code_verifier,status,claim_hash,completed_session_hash,expires_at_ms::text';
 const SESSION_COLUMNS = 'token_hash,public_origin,entry,local_user_id::text,google_subject,context_id::text,account_guard_revision::text,identity,expires_at_ms::text,revoked_at_ms::text';
 
-/** Durable state machine on the existing runtime pool; no bootstrap or retries. */
+/** Durable state machine on the existing runtime pool; bootstrap is transaction-bound. */
 export class PostgresAppSessionStore implements AppSessionStore {
   readonly #now: () => number;
   constructor(readonly database: RuntimeDatabase, options: { now?: () => number } = {}) {
@@ -180,10 +181,9 @@ export class PostgresAppSessionStore implements AppSessionStore {
 
   async complete(input: CompleteLoginInput): Promise<StoredAppSession> {
     hash(input.stateHash); hash(input.claimHash); hash(input.sessionTokenHash);
-    if (!UUID.test(input.contextId)) conflict();
-    const proof = Object.freeze({ ...input.verified.identity });
+    if (!UUID.test(input.contextId) || (input.entry !== 'main' && input.entry !== 'quick')) conflict();
+    const proof = Object.freeze({ ...input.identity });
     validateNormalizedIdentity(proof,this.#now());
-    validateServerActor(input.verified.actor,this.#now());
     return this.#transaction(input.tokenHash,null,false,async client => {
       const initial = await client.query(`SELECT ${LOGIN_COLUMNS} FROM projed_core.app_login_intents
         WHERE token_hash=$1 AND state_hash=$2`,[input.tokenHash,input.stateHash]);
@@ -205,11 +205,47 @@ export class PostgresAppSessionStore implements AppSessionStore {
       if (current.rows.length !== 1) conflict();
       const intent = login(current.rows[0]!);
       if (intent.status !== 'processing' || intent.claimHash !== input.claimHash || intent.expiresAtMs <= this.#now()
-          || intent.entry !== input.verified.actor.entry || input.sessionTokenHash === intent.oldSessionHash) conflict();
-      const mapped = await resolveGoogleMappingInTransaction(client,proof);
+          || intent.entry !== input.entry || input.sessionTokenHash === intent.oldSessionHash
+          || first.entry !== intent.entry || first.publicOrigin !== intent.publicOrigin
+          || first.oldSessionHash !== intent.oldSessionHash) conflict();
+
+      // Serialize first-login enrollment by the immutable provider subject. Under
+      // READ COMMITTED, the next proof lookup sees a concurrent winner's commit.
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended('projed:google-subject:' || $1, 0))",
+        [proof.googleSubject]);
+      let mapped = await resolveGoogleMappingInTransaction(client,proof);
+      if (mapped.status === 'missing') {
+        if (!proof.verifiedEmail) {
+          throw new KernelError('ACCESS_DENIED','First login requires a verified email',403);
+        }
+        const localUserId = randomUUID();
+        await client.query(`SELECT set_config('projed.verified_google_subject',$1,true),
+          set_config('projed.actor_local_user_id',$2,true),
+          set_config('projed.registration_user_id',$2,true),
+          set_config('projed.registration_email',$3,true),
+          set_config('projed.registration_claim_hash',$4,true)`,
+        [proof.googleSubject,localUserId,proof.verifiedEmail,input.claimHash]);
+        await client.query(`INSERT INTO projed_core.profiles (id,email,display_name)
+          VALUES($1::uuid,$2,$2)`,[localUserId,proof.verifiedEmail]);
+        await client.query(`INSERT INTO projed_core.google_identity_proofs (google_subject,local_user_id)
+          VALUES($1,$2::uuid)`,[proof.googleSubject,localUserId]);
+        await client.query(`INSERT INTO projed_core.account_authorization_guards
+          (local_user_id,active,revision) VALUES($1::uuid,true,1)`,[localUserId]);
+        mapped = await resolveGoogleMappingInTransaction(client,proof);
+      }
       if (mapped.status !== 'active') throw new KernelError('ACCESS_DENIED','Original account mapping is unavailable',403);
-      if (mapped.localUserId !== input.verified.actor.localUserId || mapped.accountGuardRevision !== input.verified.actor.accountGuardRevision
-          || proof.principalId !== input.verified.actor.principalId) conflict();
+      if (mapped.principalId !== proof.principalId || mapped.identityIssuer !== proof.identityIssuer
+          || mapped.identitySubject !== proof.identitySubject || mapped.googleSubject !== proof.googleSubject
+          || mapped.mappingRevision !== proof.mappingRevision) conflict();
+      const actor: ServerActorV1 = Object.freeze({
+        principalId: proof.principalId,
+        localUserId: mapped.localUserId,
+        entry: intent.entry,
+        contextId: input.contextId,
+        expiresAtMs: Math.min(proof.expiresAtMs,proof.sourceSessionExpiresAtMs,proof.currentStateExpiresAtMs),
+        accountGuardRevision: mapped.accountGuardRevision,
+      });
+      validateServerActor(actor,this.#now());
       await client.query(`SELECT set_config('projed.actor_principal_id',$1,true),set_config('projed.actor_entry',$2,true),
         set_config('projed.actor_context_id',$3,true),set_config('projed.actor_guard_revision',$4,true)`,
       [proof.principalId,intent.entry,input.contextId,mapped.accountGuardRevision]);
@@ -231,7 +267,7 @@ export class PostgresAppSessionStore implements AppSessionStore {
         WHERE token_hash=$1 AND claim_hash=$3 AND status='processing'`,[input.tokenHash,input.sessionTokenHash,input.claimHash]);
       if (consumed.rowCount !== 1 || result.rows.length !== 1 || intent.expiresAtMs <= this.#now()) conflict();
       validateNormalizedIdentity(proof,this.#now());
-      validateServerActor(input.verified.actor,this.#now());
+      validateServerActor(actor,this.#now());
       return session(result.rows[0]!);
     });
   }

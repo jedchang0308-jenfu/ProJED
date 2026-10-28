@@ -83,6 +83,8 @@ class FakeAppSessionStore implements AppSessionStore {
   claimUnknownAfterCommit = false;
   completeUnknownAfterCommit = false;
   cancelRaceToConsumed = false;
+  localUserId = USER_ID;
+  guardRevision = '3';
 
   async begin(intent: StoredLoginIntent): Promise<void> {
     this.calls.push('begin');
@@ -170,11 +172,11 @@ class FakeAppSessionStore implements AppSessionStore {
       tokenHash: input.sessionTokenHash,
       publicOrigin: intent.publicOrigin,
       entry: intent.entry,
-      localUserId: input.verified.actor.localUserId,
+      localUserId: this.localUserId,
       contextId: input.contextId,
-      accountGuardRevision: input.verified.actor.accountGuardRevision,
-      identity: input.verified.identity,
-      expiresAtMs: input.verified.identity.sourceSessionExpiresAtMs,
+      accountGuardRevision: this.guardRevision,
+      identity: input.identity,
+      expiresAtMs: input.identity.sourceSessionExpiresAtMs,
       revokedAtMs: null,
     });
     this.sessions.set(session.tokenHash, session);
@@ -246,8 +248,8 @@ function fixture(input: { pins?: readonly IdentityContractPin[]; origins?: { mai
         identitySubject: identity.identitySubject,
         googleSubject: identity.googleSubject,
         mappingRevision: identity.mappingRevision,
-        localUserId: USER_ID,
-        accountGuardRevision: '3',
+        localUserId: store.localUserId,
+        accountGuardRevision: store.guardRevision,
       };
     },
   };
@@ -263,10 +265,6 @@ function fixture(input: { pins?: readonly IdentityContractPin[]; origins?: { mai
     },
     mappings,
     now: () => nowMs,
-    createContextId: () => {
-      contextCallCount += 1;
-      return CONTEXT_ID;
-    },
   });
   const states = {
     async readCurrent(key: { identityIssuer: string; identitySubject: string; principalId: string }) {
@@ -290,6 +288,10 @@ function fixture(input: { pins?: readonly IdentityContractPin[]; origins?: { mai
     origins,
     environment: 'test',
     now: () => nowMs,
+    createContextId: () => {
+      contextCallCount += 1;
+      return CONTEXT_ID;
+    },
   });
 
   return {
@@ -485,6 +487,54 @@ test('owner-v4 verified email survives Session shape and unknown-completion read
   assert.ok(sessionToken);
   assert.equal(f.store.sessions.get(digest(sessionToken))?.identity.verifiedEmail, 'person@example.test');
   assert.equal(f.counts().producerCallCount, 1);
+});
+
+test('first login resolves its actual new UUID only after atomic completion, including a lost commit response', async () => {
+  const f = fixture();
+  f.setIdentity(identityAt(f.now(), { verifiedEmail: 'first@example.test' }));
+  f.store.localUserId = '11111111-1111-4111-8111-111111111113';
+  f.store.guardRevision = '1';
+  f.store.completeUnknownAfterCommit = true;
+  const complete = f.store.complete.bind(f.store);
+  f.store.complete = async input => {
+    assert.equal(f.counts().mappingReadCount, 0);
+    assert.equal(Object.hasOwn(input, 'verified'), false);
+    assert.deepEqual(input.identity, f.identity());
+    return complete(input);
+  };
+  const login = await start(f);
+  const callback = await f.service.dispatchAuth(callbackRequest(MAIN_ORIGIN, cookieValue(login),
+    authorizationFrom(login).searchParams.get('state')!), 'first-login-lost-response');
+  assert.equal(callback.status, 303);
+  const token = tokensFromCookie(cookieValue(callback)).sessionToken!;
+  assert.equal(f.store.sessions.get(digest(token))?.localUserId, f.store.localUserId);
+  assert.equal(f.counts().mappingReadCount, 1);
+  assert.equal(f.counts().producerCallCount, 1);
+  assert.equal(f.store.calls.filter(call => call === 'complete').length, 1);
+});
+
+test('unknown completion never issues a cookie for absent or mismatched Session/account readback', async () => {
+  for (const mismatch of ['absent', 'uuid', 'guard', 'context', 'identity'] as const) {
+    const f = fixture();
+    const complete = f.store.complete.bind(f.store);
+    f.store.complete = async input => {
+      if (mismatch === 'absent') throw new KernelError('DB_COMMIT_UNKNOWN', 'No committed result', 503);
+      const row = await complete(input);
+      const change = mismatch === 'uuid' ? { localUserId: '11111111-1111-4111-8111-111111111114' }
+        : mismatch === 'guard' ? { accountGuardRevision: '4' }
+        : mismatch === 'context' ? { contextId: '11111111-1111-4111-8111-111111111115' }
+        : { identity: { ...row.identity, googleSubject: 'different-google-subject' } };
+      f.store.sessions.set(row.tokenHash, { ...row, ...change });
+      throw new KernelError('DB_COMMIT_UNKNOWN', 'Lost response', 503);
+    };
+    const login = await start(f);
+    const callback = await f.service.dispatchAuth(callbackRequest(MAIN_ORIGIN, cookieValue(login),
+      authorizationFrom(login).searchParams.get('state')!), `unknown-${mismatch}`);
+    assert.equal(callback.status, 503, mismatch);
+    assert.equal(callback.headers?.['set-cookie'], undefined, mismatch);
+    assert.equal(f.counts().producerCallCount, 1, mismatch);
+    assert.equal(f.store.calls.filter(call => call === 'complete').length, mismatch === 'absent' ? 0 : 1, mismatch);
+  }
 });
 
 test('broker access_denied callback cancels the pending intent and returns to the exact app path', async () => {

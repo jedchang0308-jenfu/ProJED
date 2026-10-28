@@ -1,5 +1,5 @@
 import { Buffer } from 'node:buffer';
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 
 import { validateServerActor, type ServerActorV1 } from './actorTransaction.js';
@@ -60,7 +60,7 @@ const URL_SENTINEL = 'http://projed.invalid';
 
 export interface AppSessionServiceOptions {
   readonly store: AppSessionStore;
-  readonly consumer: Pick<IdentityConsumer, 'consumeVerified'>;
+  readonly consumer: Pick<IdentityConsumer, 'verifyIdentity'>;
   readonly states: Pick<PlatformPrincipalStateReader, 'readCurrent'>;
   readonly mappings: PrincipalMappingResolver;
   readonly binding: PlatformHandoffBinding;
@@ -68,6 +68,7 @@ export interface AppSessionServiceOptions {
   readonly origins: Readonly<{ main: string; quick: string }>;
   readonly environment: SessionCookieEnvironment;
   readonly now?: () => number;
+  readonly createContextId?: () => string;
 }
 
 type AuthDispatchResult = {
@@ -454,13 +455,14 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
       || typeof options.store.claim !== 'function' || typeof options.store.cancel !== 'function'
       || typeof options.store.reject !== 'function' || typeof options.store.complete !== 'function'
       || typeof options.store.readSession !== 'function' || typeof options.store.revokeSession !== 'function'
-      || !options.consumer || typeof options.consumer.consumeVerified !== 'function'
+      || !options.consumer || typeof options.consumer.verifyIdentity !== 'function'
       || !options.states || typeof options.states.readCurrent !== 'function'
       || !options.mappings || typeof options.mappings.resolve !== 'function'
       || !validBinding(options.binding, options.environment)
       || !Array.isArray(options.pins)
       || (options.environment !== 'production' && options.environment !== 'development' && options.environment !== 'test')
       || (options.now !== undefined && typeof options.now !== 'function')
+      || (options.createContextId !== undefined && typeof options.createContextId !== 'function')
       || !exactKeys(options.origins, ['main', 'quick'])
       || !validPublicOrigin(options.origins.main, options.environment)
       || !validPublicOrigin(options.origins.quick, options.environment)) {
@@ -976,13 +978,13 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
         || claimed.publicOrigin !== intent.publicOrigin || claimed.entry !== intent.entry
         || claimed.oldSessionHash !== intent.oldSessionHash || claimed.codeVerifier !== intent.codeVerifier) conflict();
 
-    let verified: Awaited<ReturnType<IdentityConsumer['consumeVerified']>>;
+    let verified: ProducerVerifiedIdentity;
     try {
-      verified = await options.consumer.consumeVerified({
+      verified = await options.consumer.verifyIdentity({
         entry: claimed.entry,
         code: parsed.code,
         codeVerifier: claimed.codeVerifier,
-      }, claimed.entry);
+      });
     } catch (error) {
       try {
         await options.store.reject(tokenHash, claimHash);
@@ -992,10 +994,8 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
       identityInvalidOrUnavailable(error);
     }
     const completeNowMs = nowFrom(now);
-    if (!verified || !isRecord(verified) || !verified.actor || !identityShape(verified.identity, binding)
-        || verified.actor.entry !== claimed.entry || verified.actor.principalId !== verified.identity.principalId
-        || verified.actor.expiresAtMs <= completeNowMs || verified.identity.sourceSessionExpiresAtMs <= completeNowMs
-        || verified.identity.currentStateExpiresAtMs <= completeNowMs) {
+    if (!identityShape(verified, binding) || verified.expiresAtMs <= completeNowMs
+        || verified.sourceSessionExpiresAtMs <= completeNowMs || verified.currentStateExpiresAtMs <= completeNowMs) {
       try {
         await options.store.reject(tokenHash, claimHash);
       } catch {
@@ -1003,7 +1003,8 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
       }
       invalidSession();
     }
-    validateServerActor(verified.actor, completeNowMs);
+    const contextId = options.createContextId?.() ?? randomUUID();
+    if (!UUID_RE.test(contextId)) unavailable();
     const sessionToken = opaque();
     let completed: StoredAppSession;
     try {
@@ -1012,8 +1013,9 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
         stateHash: intent.stateHash,
         claimHash,
         sessionTokenHash: hash(sessionToken),
-        contextId: verified.actor.contextId,
-        verified,
+        contextId,
+        identity: verified,
+        entry: claimed.entry,
         nowMs: completeNowMs,
       });
     } catch (error) {
@@ -1040,12 +1042,10 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
           || !validStoredSessionShape(completedSession, binding)
           || !safeEqual(completedSession.tokenHash, hash(sessionToken)) || completedSession.revokedAtMs !== null
           || completedSession.publicOrigin !== intent.publicOrigin || completedSession.entry !== intent.entry
-          || completedSession.localUserId !== verified.actor.localUserId
-          || completedSession.contextId !== verified.actor.contextId
-          || completedSession.accountGuardRevision !== verified.actor.accountGuardRevision
-          || !sameIdentity(completedSession.identity, verified.identity)
+          || completedSession.contextId !== contextId
+          || !sameIdentity(completedSession.identity, verified)
           || completedSession.expiresAtMs <= readbackNowMs
-          || completedSession.expiresAtMs > verified.identity.sourceSessionExpiresAtMs) {
+          || completedSession.expiresAtMs > verified.sourceSessionExpiresAtMs) {
         identityInvalidOrUnavailable(error);
       }
       completed = completedSession;
@@ -1053,11 +1053,25 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
     if (!validStoredSessionShape(completed, binding)
         || !safeEqual(completed.tokenHash, hash(sessionToken))
         || completed.publicOrigin !== intent.publicOrigin || completed.entry !== intent.entry
-        || completed.localUserId !== verified.actor.localUserId || completed.contextId !== verified.actor.contextId
-        || completed.accountGuardRevision !== verified.actor.accountGuardRevision
-        || !sameIdentity(completed.identity, verified.identity)
+        || completed.contextId !== contextId
+        || !sameIdentity(completed.identity, verified)
         || completed.expiresAtMs <= completeNowMs
-        || completed.expiresAtMs > verified.identity.sourceSessionExpiresAtMs) unavailable();
+        || completed.expiresAtMs > verified.sourceSessionExpiresAtMs) unavailable();
+    // Resolve the canonical account after the atomic completion. A first login
+    // has no local UUID before that transaction; unknown commits only read back
+    // the exact intent/Session and mapping, never replay the exchange or writes.
+    const mapped = mappingForSession(verified, await options.mappings.resolve({
+      principalId: verified.principalId, identityIssuer: verified.identityIssuer,
+      identitySubject: verified.identitySubject, googleSubject: verified.googleSubject,
+      mappingRevision: verified.mappingRevision,
+    }));
+    if (completed.localUserId !== mapped.localUserId
+        || completed.accountGuardRevision !== mapped.accountGuardRevision) unavailable();
+    validateServerActor({
+      principalId: verified.principalId, localUserId: mapped.localUserId, entry: claimed.entry,
+      contextId, accountGuardRevision: mapped.accountGuardRevision,
+      expiresAtMs: Math.min(verified.expiresAtMs, verified.sourceSessionExpiresAtMs, verified.currentStateExpiresAtMs),
+    }, nowFrom(now));
     const cookieNowMs = nowFrom(now);
     if (completed.expiresAtMs <= cookieNowMs) invalidSession();
     const cookie = setSessionCookie({
@@ -1065,7 +1079,7 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
       publicOrigin: completed.publicOrigin,
       sessionToken,
       expiresAtMs: completed.expiresAtMs,
-      sourceSessionExpiresAtMs: verified.identity.sourceSessionExpiresAtMs,
+      sourceSessionExpiresAtMs: verified.sourceSessionExpiresAtMs,
       nowMs: cookieNowMs,
     });
     return response(303, requestId, { data: null }, {

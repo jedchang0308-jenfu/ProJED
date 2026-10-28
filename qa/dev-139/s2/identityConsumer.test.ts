@@ -104,6 +104,59 @@ test('QA-only simulated nonemployee identity resolves to a bounded server actor'
   assert.equal(Object.isFrozen(actor), true);
 });
 
+test('verifyIdentity validates and freezes one owner proof without resolving a local mapping', async () => {
+  let verifierCalls = 0;
+  let mappingCalls = 0;
+  const original = identity();
+  const subject = new IdentityConsumer({
+    pins: [PIN],
+    verifier: { verify: async () => { verifierCalls += 1; return original; } },
+    mappings: { resolve: async () => { mappingCalls += 1; return mapping(); } },
+    now: () => NOW,
+  });
+
+  const verified = await subject.verifyIdentity({ opaqueHandoff: 'single-use-proof' });
+
+  assert.equal(verifierCalls, 1);
+  assert.equal(mappingCalls, 0);
+  assert.equal(verified.googleSubject, 'google-a');
+  assert.equal(Object.isFrozen(verified), true);
+  assert.notEqual(verified, original);
+});
+
+test('verifyIdentity keeps empty-pin, invalid-proof, expiry and exact-pin failures fail-closed', async () => {
+  const cases: Array<{
+    readonly pins: readonly IdentityContractPin[];
+    readonly verified: ProducerVerifiedIdentity;
+    readonly code: string;
+    readonly verifierCalls: number;
+  }> = [
+    { pins: [], verified: identity(), code: 'IDENTITY_CONTRACT_UNAVAILABLE', verifierCalls: 0 },
+    { pins: [PIN], verified: identity({ googleSubject: '' }), code: 'IDENTITY_INVALID', verifierCalls: 1 },
+    { pins: [PIN], verified: identity({ expiresAtMs: NOW }), code: 'IDENTITY_INVALID', verifierCalls: 1 },
+    {
+      pins: [{ ...PIN, manifestSha256: 'b'.repeat(64) }],
+      verified: identity(),
+      code: 'IDENTITY_CONTRACT_UNAVAILABLE',
+      verifierCalls: 1,
+    },
+  ];
+
+  for (const scenario of cases) {
+    let verifierCalls = 0;
+    let mappingCalls = 0;
+    const subject = new IdentityConsumer({
+      pins: scenario.pins,
+      verifier: { verify: async () => { verifierCalls += 1; return scenario.verified; } },
+      mappings: { resolve: async () => { mappingCalls += 1; return mapping(); } },
+      now: () => NOW,
+    });
+    await expectCode(subject.verifyIdentity({ opaqueHandoff: 'proof' }), scenario.code);
+    assert.equal(verifierCalls, scenario.verifierCalls);
+    assert.equal(mappingCalls, 0);
+  }
+});
+
 test('wire verification cannot be bypassed by a forged normalized-looking payload', async () => {
   const subject = consumer({
     verifier: {

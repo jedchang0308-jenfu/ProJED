@@ -58,7 +58,7 @@ const collaborationCommands = new CollaborationWriteRepository(repository);
 const recordActivity = new RecordActivityRepository();
 await database.assertRuntimeBoundary(expected);
 await verifyGoogleMappingsPostgres(database);
-await verifyAppSessionsPostgres(database);
+await verifyAppSessionsPostgres(database,config);
 
 const runBrowserSmoke = (baseUrl: string): Promise<void> => new Promise((done, reject) => {
   const child = spawn('powershell.exe', [
@@ -1723,6 +1723,7 @@ console.log(JSON.stringify({
   checks: [
     'migration-boundary', 'google-proof-rls-original-uuid-read-only-and-guard-denial',
     'app-session-store-atomic-cancel-rotation-replay-rls',
+    'first-login-personal-external-employee-concurrency-original-uuid-and-private-workspace',
     'workspace-board-scope', 'tenant-member-scope', 'board-member-scope',
     'tenant-scope-does-not-imply-board-read', 'suspended-member-deny',
     'explicit-empty-permissions', 'task-parent-mapping', 'dependency-mapping', 'private-board-deny',

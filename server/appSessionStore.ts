@@ -1,4 +1,3 @@
-import type { ServerActorV1 } from './actorTransaction.js';
 import type { AppEntry } from './config.js';
 import type { ProducerVerifiedIdentity } from './identityConsumer.js';
 
@@ -36,8 +35,9 @@ export interface CompleteLoginInput {
   readonly stateHash: string;
   readonly claimHash: string;
   readonly sessionTokenHash: string;
+  readonly entry: AppEntry;
   readonly contextId: string;
-  readonly verified: Readonly<{ actor: ServerActorV1; identity: ProducerVerifiedIdentity }>;
+  readonly identity: ProducerVerifiedIdentity;
   readonly nowMs: number;
 }
 

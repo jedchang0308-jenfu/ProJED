@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import { randomBytes,randomUUID } from 'node:crypto';
 import type { RuntimeDatabase } from '../../../server/db.js';
+import type { RuntimeConfig } from '../../../server/config.js';
+import { runActorTransaction, type ServerActorV1 } from '../../../server/actorTransaction.js';
+import { DomainReadRepository } from '../../../server/domainRead.js';
+import { CollaborationWriteRepository } from '../../../server/collaborationWrite.js';
+import { GooglePrincipalMappingResolver } from '../../../server/principalMappings.js';
 import type { CompleteLoginInput, StoredLoginIntent } from '../../../server/appSessionStore.js';
 import { PostgresAppSessionStore } from '../../../server/postgresAppSessionStore.js';
 import type { ProducerVerifiedIdentity } from '../../../server/identityConsumer.js';
@@ -15,7 +20,6 @@ function intent(oldSessionHash: string | null=null): StoredLoginIntent {
 }
 function complete(row: StoredLoginIntent,claimHash: string,who: 'a'|'b'='a'): CompleteLoginInput {
   const now=Date.now();
-  const localUserId=who==='a'?'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa':'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
   const identity: ProducerVerifiedIdentity={
     contractVersion:'jenfu.sso-handoff.v4',manifestSha256:'c5471fa9686566cf2ecb42f6f78f52eed5188e36bcfd8208609a96fc0f829e6a',
     issuer:'https://platform.example.invalid/api/sso',audience:'projed',identityIssuer:'https://securetoken.google.com/local-test',
@@ -25,15 +29,14 @@ function complete(row: StoredLoginIntent,claimHash: string,who: 'a'|'b'='a'): Co
     sourceSessionExpiresAtMs:now+8*60*60*1000,mappingRevision:'12',
   };
   return { tokenHash:row.tokenHash,stateHash:row.stateHash,claimHash,sessionTokenHash:opaqueHash(),contextId:randomUUID(),
-    verified:{ identity,actor:{principalId:identity.principalId,localUserId,entry:row.entry,contextId:randomUUID(),
-      expiresAtMs:now+10_000,accountGuardRevision:'1'} },nowMs:now };
+    identity,entry:row.entry,nowMs:now };
 }
 function denied(action: Promise<unknown>) {
   return assert.rejects(action,(error: unknown)=>error instanceof KernelError && (error.httpStatus===409||error.httpStatus===403));
 }
 
 /** True local SQL/roles, with synthetic owner identity proof; not real SSO. */
-export async function verifyAppSessionsPostgres(database: RuntimeDatabase): Promise<void> {
+export async function verifyAppSessionsPostgres(database: RuntimeDatabase, config: RuntimeConfig): Promise<void> {
   const store=new PostgresAppSessionStore(database);
   const first=intent();
   await store.begin(first);
@@ -42,7 +45,8 @@ export async function verifyAppSessionsPostgres(database: RuntimeDatabase): Prom
   const input=complete(first,claimHash);
   const created=await store.complete(input);
   assert.equal(created.contextId,input.contextId);
-  assert.equal(created.expiresAtMs,input.verified.identity.sourceSessionExpiresAtMs);
+  assert.equal(created.expiresAtMs,input.identity.sourceSessionExpiresAtMs);
+  assert.equal(created.localUserId,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
   assert.equal((await store.readSession(created.tokenHash))?.contextId,input.contextId);
   assert.equal((await store.readLogin(first.tokenHash))?.status,'consumed');
   assert.equal((await store.readLogin(first.tokenHash))?.codeVerifier,null);
@@ -79,6 +83,89 @@ export async function verifyAppSessionsPostgres(database: RuntimeDatabase): Prom
   assert.equal((await store.readLogin(orphan.tokenHash))?.status,'cancelled');
   assert.equal((await store.readLogin(retry.tokenHash))?.status,'pending');
 
+  // First logins use the same transaction/state machine as existing accounts.
+  // These are synthetic verified owner proofs, not a Firebase/OIDC acceptance.
+  const newIdentity = (kind: 'personal'|'employee', subject: string): ProducerVerifiedIdentity => ({
+    ...complete(intent(),opaqueHash()).identity,
+    googleSubject:subject, identitySubject:`firebase-${subject}`, principalId:`principal:${subject}`,
+    principalKind:kind, employeeId:kind==='employee'?'synthetic-new-employee':null,
+    verifiedEmail:'a@example.invalid', // Deliberately matches another account; never a mapping key.
+  });
+  const prepare = async (proof: ProducerVerifiedIdentity) => {
+    const row=intent(); const claim=opaqueHash();
+    await store.begin(row); await store.claim(row.tokenHash,row.stateHash,claim,Date.now());
+    return {...complete(row,claim),identity:proof};
+  };
+  const subject=`first-personal-${randomUUID()}`;
+  const personalProof=newIdentity('personal',subject);
+  const concurrentInputs=await Promise.all([prepare(personalProof),prepare(personalProof)]);
+  const concurrent=await Promise.all(concurrentInputs.map(item=>store.complete(item)));
+  assert.equal(concurrent[0]!.localUserId,concurrent[1]!.localUserId);
+  assert.notEqual(concurrent[0]!.localUserId,created.localUserId);
+  assert.notEqual(concurrent[0]!.contextId,concurrent[1]!.contextId);
+  assert.equal(concurrent[0]!.accountGuardRevision,'1');
+  for (const item of concurrentInputs) assert.equal((await store.readLogin(item.tokenHash))?.status,'consumed');
+  const resolver=new GooglePrincipalMappingResolver(database);
+  const personalMapping=await resolver.resolve(personalProof);
+  assert.equal(personalMapping.status,'active');
+  const employee=await store.complete(await prepare(newIdentity('employee',`first-employee-${randomUUID()}`)));
+  const external=await store.complete(await prepare(newIdentity('personal',`first-external-${randomUUID()}`)));
+  assert.notEqual(employee.localUserId,concurrent[0]!.localUserId);
+  assert.notEqual(external.localUserId,concurrent[0]!.localUserId);
+  assert.notEqual(external.localUserId,employee.localUserId);
+  const owner=concurrent[0]!;
+  const actor: ServerActorV1={principalId:owner.identity.principalId,localUserId:owner.localUserId,
+    entry:owner.entry,contextId:owner.contextId,accountGuardRevision:owner.accountGuardRevision,
+    expiresAtMs:owner.expiresAtMs};
+  const reads=new DomainReadRepository();
+  const commands=new CollaborationWriteRepository(reads);
+  assert.deepEqual(await runActorTransaction(database,config,actor,port=>reads.listWorkspaces(port)),[]);
+  const workspace=await runActorTransaction(database,config,actor,port=>commands.createWorkspace(port,{title:'First login personal workspace'}));
+  const board=await runActorTransaction(database,config,actor,port=>commands.createBoard(port,workspace.id,{title:'First login private board'}));
+  assert.equal(board.title,'First login private board');
+  assert.deepEqual((await runActorTransaction(database,config,actor,port=>reads.listWorkspaceMembers(port,workspace.id)))
+    .map(member=>member.userId),[owner.localUserId]);
+  const employeeActor={...actor,principalId:employee.identity.principalId,localUserId:employee.localUserId,
+    contextId:employee.contextId,accountGuardRevision:employee.accountGuardRevision};
+  assert.deepEqual(await runActorTransaction(database,config,employeeActor,port=>reads.listWorkspaces(port)),[]);
+  await assert.rejects(runActorTransaction(database,config,employeeActor,port=>reads.listTasks(port,workspace.id,board.id)),
+    (error: unknown)=>error instanceof KernelError && error.code==='RESOURCE_NOT_FOUND');
+
+  const cancelledNew=await prepare(newIdentity('personal',`cancelled-new-${randomUUID()}`));
+  await store.cancel(cancelledNew.tokenHash,ORIGIN,Date.now());
+  await denied(store.complete(cancelledNew));
+  assert.deepEqual(await resolver.resolve(cancelledNew.identity),{status:'missing'});
+  assert.equal(await store.readSession(cancelledNew.sessionTokenHash),null);
+  // A real duplicate Session PK fails after registration and old-Session revoke.
+  // PostgreSQL must roll all those writes back, retaining the original Session.
+  const rollbackIntent=intent(second.tokenHash);
+  const rollbackClaim=opaqueHash();
+  await store.begin(rollbackIntent);
+  await store.claim(rollbackIntent.tokenHash,rollbackIntent.stateHash,rollbackClaim,Date.now());
+  const rollbackInput={...complete(rollbackIntent,rollbackClaim),sessionTokenHash:created.tokenHash,
+    identity:newIdentity('personal',`rollback-new-${randomUUID()}`)};
+  await denied(store.complete(rollbackInput));
+  assert.deepEqual(await resolver.resolve(rollbackInput.identity),{status:'missing'});
+  assert.equal((await store.readLogin(rollbackIntent.tokenHash))?.status,'processing');
+  assert.equal((await store.readSession(second.tokenHash))?.revokedAtMs,null);
+  for (const googleSubject of ['synthetic-google-no-guard','synthetic-google-inactive']) {
+    const deniedInput=await prepare({...newIdentity('personal',googleSubject)});
+    await denied(store.complete(deniedInput));
+    assert.deepEqual(await resolver.resolve(deniedInput.identity),{status:'inactive'});
+    assert.equal(await store.readSession(deniedInput.sessionTokenHash),null);
+  }
+  const missingEmail=await prepare(newIdentity('personal',`no-email-${randomUUID()}`));
+  const {verifiedEmail: _email,...withoutEmail}=missingEmail.identity;
+  await assert.rejects(store.complete({...missingEmail,identity:withoutEmail}),error=>error instanceof KernelError);
+  assert.deepEqual(await resolver.resolve(missingEmail.identity),{status:'missing'});
+  const oneProofLease=await database.checkout();
+  try {
+    await oneProofLease.client.query('BEGIN');
+    await oneProofLease.client.query("SELECT set_config('projed.verified_google_subject',$1,true)",[subject]);
+    assert.equal((await oneProofLease.client.query('SELECT * FROM projed_core.google_identity_proofs WHERE google_subject=$1',[subject])).rowCount,1);
+    await oneProofLease.client.query('ROLLBACK');
+  } finally {oneProofLease.release();}
+
   const lease=await database.checkout();
   try {
     assert.equal((await lease.client.query('SELECT projed_core.actor_context_valid_v1() AS valid')).rows[0].valid,false);
@@ -97,6 +184,12 @@ export async function verifyAppSessionsPostgres(database: RuntimeDatabase): Prom
     assert.equal((await lease.client.query('SELECT projed_core.actor_context_valid_v1() AS valid')).rows[0].valid,false);
     assert.equal((await lease.client.query('SELECT * FROM projed_core.app_sessions')).rowCount,0);
     assert.equal((await lease.client.query('SELECT * FROM projed_core.app_login_intents')).rowCount,0);
+    assert.equal((await lease.client.query('SELECT projed_core.registration_scope_valid_v1() AS valid')).rows[0].valid,false);
+    for (const sql of [
+      "INSERT INTO projed_core.profiles(id,email,display_name) VALUES('11111111-1111-4111-8111-111111111112','untrusted@example.invalid','untrusted')",
+      "INSERT INTO projed_core.google_identity_proofs(google_subject,local_user_id) VALUES('untrusted','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')",
+      "INSERT INTO projed_core.account_authorization_guards(local_user_id,active,revision) VALUES('11111111-1111-4111-8111-111111111112',true,1)",
+    ]) await assert.rejects(lease.client.query(sql),(error: unknown)=>(error as {code?:string}).code==='42501');
     await lease.client.query('BEGIN');
     await lease.client.query("SELECT set_config('projed.session_token_hash',$1,true)",[second.tokenHash]);
     await assert.rejects(lease.client.query("UPDATE projed_core.app_sessions SET identity='{}'::jsonb WHERE token_hash=$1",[second.tokenHash]),

@@ -6,13 +6,16 @@ export async function verifyGoogleMappingsPostgres(database: RuntimeDatabase): P
   const lease = await database.checkout();
   try {
     assert.equal((await lease.client.query('SELECT * FROM projed_core.google_identity_proofs')).rowCount, 0);
-    const acl = (await lease.client.query<{ runtime_write: boolean; importer_update: boolean; forced: boolean }>(`
+    const acl = (await lease.client.query<{ runtime_write: boolean; registration_insert: boolean; importer_update: boolean; forced: boolean }>(`
       SELECT has_table_privilege(current_user,'projed_core.google_identity_proofs','INSERT,UPDATE,DELETE') AS runtime_write,
+             has_column_privilege(current_user,'projed_core.google_identity_proofs','google_subject','INSERT')
+               AND has_column_privilege(current_user,'projed_core.google_identity_proofs','local_user_id','INSERT') AS registration_insert,
              has_table_privilege('projed_importer_disposable','projed_core.google_identity_proofs','UPDATE,DELETE') AS importer_update,
              (SELECT relrowsecurity AND relforcerowsecurity FROM pg_class
                WHERE oid='projed_core.google_identity_proofs'::regclass) AS forced
     `)).rows[0]!;
     assert.equal(acl.runtime_write, false);
+    assert.equal(acl.registration_insert, true);
     assert.equal(acl.importer_update, false);
     assert.equal(acl.forced, true);
     await lease.client.query('BEGIN');

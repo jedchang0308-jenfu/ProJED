@@ -92,6 +92,7 @@ const PROFILE_MIGRATION_PATHS = new Map<string, readonly string[]>([
     'db/migrations/0019_app_sessions_v1.sql',
     'db/migrations/0020_snapshot_account_guards_v1.sql',
     'db/migrations/0021_safe_actor_context_v1.sql',
+    'db/migrations/0022_first_login_registration_v1.sql',
   ]],
   ['^jenfu_prod$', [
     'db/migrations/0001_runtime_boundary_v1.sql',
@@ -115,6 +116,7 @@ const PROFILE_MIGRATION_PATHS = new Map<string, readonly string[]>([
     'db/migrations/0019_app_sessions_v1.sql',
     'db/migrations/0020_snapshot_account_guards_v1.sql',
     'db/migrations/0021_safe_actor_context_v1.sql',
+    'db/migrations/0022_first_login_registration_v1.sql',
   ]],
 ]);
 

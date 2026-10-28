@@ -101,6 +101,10 @@
     {
       "version": "0021_safe_actor_context_v1",
       "path": "db/migrations/0021_safe_actor_context_v1.sql"
+    },
+    {
+      "version": "0022_first_login_registration_v1",
+      "path": "db/migrations/0022_first_login_registration_v1.sql"
     }
   ],
   "objectAllowlist": [
@@ -194,7 +198,8 @@
     "projed_core.app_sessions",
     "projed_core.app_login_intent_transition_v1",
     "projed_core.app_session_revoke_v1",
-    "projed_core.login_intents_active_old_session_v1"
+    "projed_core.login_intents_active_old_session_v1",
+    "projed_core.registration_scope_valid_v1"
   ],
   "staticFixturePath": "dist",
   "runtime": {
