@@ -37,6 +37,7 @@
     "verify:dev-139:cloud-run-artifact": "node scripts/verify-dev139-cloud-run-artifact.mjs",
     "verify:dev-139:hosting-config": "node scripts/verify-dev139-hosting-config.mjs",
     "verify:dev-139:s3:isolated": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File qa/dev-139/s3/verify-isolated.ps1",
+    "verify:dev-139:s3:db:isolated": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File qa/dev-139/s3/verify-isolated.ps1 -DatabaseOnly",
     "verify:dev-139:s3": "npm run verify:dev-139:s3:frontend && npm run verify:dev-139:s3:db-static && npm run verify:dev-139:s1:typecheck && npm run verify:dev-139:s3:isolated",
     "dev": "vite",
     "dev:local": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"& './scripts/local-test-server.ps1' start; Start-Process 'http://localhost:4000/'\"",

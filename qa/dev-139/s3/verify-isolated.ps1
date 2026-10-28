@@ -1,4 +1,4 @@
-param([string]$PostgresBin = '')
+param([string]$PostgresBin = '', [switch]$DatabaseOnly)
 
 $ErrorActionPreference = 'Stop'
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
@@ -100,9 +100,11 @@ try {
   }
   [IO.File]::WriteAllText($bindingPath, ($binding | ConvertTo-Json -Depth 5), [Text.UTF8Encoding]::new($false))
 
-  $env:PROJED_RELEASE_ID = "dev139-local-ui-$($nonce.Substring(0,8))"
-  npm.cmd run build:dev-139:cloud-run
-  if ($LASTEXITCODE -ne 0) { throw 'DEV-139 HTTP frontend candidate build failed' }
+  if (-not $DatabaseOnly) {
+    $env:PROJED_RELEASE_ID = "dev139-local-ui-$($nonce.Substring(0,8))"
+    npm.cmd run build:dev-139:cloud-run
+    if ($LASTEXITCODE -ne 0) { throw 'DEV-139 HTTP frontend candidate build failed' }
+  }
 
   $encodedMigrator = [Uri]::EscapeDataString($migratorPassword)
   $encodedRuntime = [Uri]::EscapeDataString($runtimePassword)
@@ -120,7 +122,7 @@ try {
   $env:PROJED_ENV = 'disposable'
   $env:PROJED_APP_ENTRY = 'main'
   $env:PROJED_DATABASE_URL = "postgresql://projed_runtime_disposable:${encodedRuntime}@127.0.0.1:$port/$databaseName"
-  $env:PROJED_DEV139_BROWSER_SMOKE = '1'
+  $env:PROJED_DEV139_BROWSER_SMOKE = if ($DatabaseOnly) { '0' } else { '1' }
   $env:PORT = '0'
   npx.cmd tsx qa/dev-139/s3/verify-pg.ts
   if ($LASTEXITCODE -ne 0) { throw 'DEV-139 S3 PostgreSQL verifier failed' }
@@ -130,7 +132,8 @@ try {
   New-Item -ItemType Directory -Path $evidenceDir -Force | Out-Null
   [ordered]@{
     status = 'PASS'
-    evidenceLevel = 'S3_DOMAIN_CORE_LOCAL_ACCEPTANCE'
+    evidenceLevel = if ($DatabaseOnly) { 'S3_DOMAIN_HTTP_DB_LOCAL_ACCEPTANCE' } else { 'S3_DOMAIN_CORE_LOCAL_ACCEPTANCE' }
+    browserSmoke = if ($DatabaseOnly) { 'NOT_RUN' } else { 'PASS' }
     postgres = $versionText
     node = (& node --version) -join ''
     databaseName = $databaseName
@@ -167,10 +170,10 @@ try {
       'http-backup-copy-replace-stale-rollback-idempotency-rls-and-origin',
       'http-account-layout-and-task-filter-preferences-cas-rls-and-origin',
       'http-calendar-subscription-hash-only-owner-origin-legacy-pagination-lifecycle-feed-and-revocation'
-      'http-normal-product-ui-and-reload'
+      if (-not $DatabaseOnly) { 'http-normal-product-ui-and-reload' }
     )
   } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $evidenceDir 'result.json') -Encoding utf8
-  Write-Output ("DEV139_S3_RESULT=PASS evidenceLevel=S3_DOMAIN_CORE_LOCAL_ACCEPTANCE output={0}" -f $evidenceDir)
+  Write-Output ("DEV139_S3_RESULT=PASS databaseOnly={0} output={1}" -f [bool]$DatabaseOnly, $evidenceDir)
 }
 finally {
   Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
