@@ -90,7 +90,10 @@ function timestamp(value: unknown): value is number {
   return Number.isSafeInteger(value) && Number(value) >= 0;
 }
 
-function validateNormalizedIdentity(identity: ProducerVerifiedIdentity, nowMs: number): void {
+export function validateNormalizedIdentity(identity: ProducerVerifiedIdentity, nowMs: number): void {
+  if (!identity || typeof identity !== 'object' || Array.isArray(identity)) {
+    throw new KernelError('IDENTITY_INVALID', 'Verified identity is invalid', 401);
+  }
   const employeeValid = identity.employeeId === null || text(identity.employeeId);
   if (!text(identity.contractVersion) || !SHA256_RE.test(identity.manifestSha256)
       || !text(identity.issuer) || !text(identity.audience) || !text(identity.identityIssuer)

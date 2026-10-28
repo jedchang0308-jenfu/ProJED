@@ -17,7 +17,12 @@ import {
 import { createDomainWriteHttpDispatcher } from './domainWriteHttp.js';
 import { createRecordActivityHttpDispatcher } from './recordActivityHttp.js';
 import { createQuickTaskHttpDispatcher } from './quickTaskHttp.js';
-import { createSessionHttpDispatcher, type TrustedSessionDestroyer } from './sessionHttp.js';
+import {
+  createSessionHttpDispatcher,
+  type TrustedSessionDestroyer,
+  type TrustedSessionLogoutIdentityResolver,
+  type TrustedSessionInfoResolver,
+} from './sessionHttp.js';
 import { createTaskWorkbenchHttpDispatcher } from './taskWorkbenchHttp.js';
 import { createTaskTrackingHttpDispatcher } from './taskTrackingHttp.js';
 
@@ -35,11 +40,35 @@ function idFor(request: IncomingMessage): string {
   return typeof value === 'string' && /^[A-Za-z0-9._-]{1,128}$/.test(value) ? value : randomUUID();
 }
 
-function json(response: ServerResponse, status: number, value: unknown, requestId: string): void {
+function safeResponseHeaders(headers?: Readonly<Record<string, string>>): Record<string, string> {
+  const safeHeaders: Record<string, string> = {};
+  const allowed = new Set(['set-cookie', 'location', 'referrer-policy']);
+  const seen = new Set<string>();
+  for (const [rawName, value] of Object.entries(headers ?? {})) {
+    const name = rawName.toLowerCase();
+    if (!allowed.has(name)) continue;
+    if (seen.has(name) || typeof value !== 'string' || value.length > 8192 || /[\u0000-\u001f\u007f]/.test(value)) {
+      throw new Error('Invalid response header');
+    }
+    if (name === 'location' && /[\r\n]/.test(value)) throw new Error('Invalid redirect');
+    seen.add(name);
+    safeHeaders[name] = value;
+  }
+  return safeHeaders;
+}
+
+function json(
+  response: ServerResponse,
+  status: number,
+  value: unknown,
+  requestId: string,
+  headers?: Readonly<Record<string, string>>,
+): void {
   response.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
     'cache-control': 'no-store',
     'x-request-id': requestId,
+    ...safeResponseHeaders(headers),
   });
   response.end(JSON.stringify(value));
 }
@@ -109,6 +138,40 @@ export interface KernelHttpServer {
 export interface KernelHttpOptions {
   readonly resolveActor?: TrustedSessionActorResolver;
   readonly destroySession?: TrustedSessionDestroyer;
+  readonly resolveSessionInfo?: TrustedSessionInfoResolver;
+  readonly resolveLogoutIdentity?: TrustedSessionLogoutIdentityResolver;
+  readonly dispatchAuth?: (
+    request: IncomingMessage,
+    requestId: string,
+  ) => Promise<{
+    matched: boolean;
+    status?: number;
+    body?: unknown;
+    headers?: Readonly<Record<string, string>>;
+  }>;
+}
+
+function writeAuthResult(
+  response: ServerResponse,
+  result: { status?: number; body?: unknown; headers?: Readonly<Record<string, string>> },
+  requestId: string,
+): void {
+  const status = result.status ?? 200;
+  if (!Number.isInteger(status) || status < 200 || status > 599 || [204, 205, 304].includes(status)) {
+    throw new Error('Invalid auth response status');
+  }
+  const body = JSON.stringify(result.body ?? null);
+  response.writeHead(status, {
+    'content-type': 'application/json; charset=utf-8',
+    'cache-control': 'no-store',
+    'x-request-id': requestId,
+    ...safeResponseHeaders(result.headers),
+  });
+  response.end(body);
+}
+
+function authUnavailable(response: ServerResponse, requestId: string): void {
+  json(response, 503, { error: { code: 'AUTH_UNAVAILABLE', requestId, retryable: true } }, requestId);
 }
 
 export function createKernelHttpServer(
@@ -118,7 +181,10 @@ export function createKernelHttpServer(
   options: KernelHttpOptions = {},
 ): KernelHttpServer {
   let shuttingDown = false;
-  const dispatchSession = createSessionHttpDispatcher(config, database, options.resolveActor, options.destroySession);
+  const dispatchSession = createSessionHttpDispatcher(
+    config, database, options.resolveActor, options.destroySession, options.resolveSessionInfo,
+    options.resolveLogoutIdentity,
+  );
   const dispatchCollaborationWrite = createCollaborationWriteHttpDispatcher(config, database, options.resolveActor);
   const dispatchRecordActivity = createRecordActivityHttpDispatcher(config, database, options.resolveActor);
   const dispatchQuickTask = createQuickTaskHttpDispatcher(config, database, options.resolveActor);
@@ -164,11 +230,32 @@ export function createKernelHttpServer(
       }
       return;
     }
+    if (options.dispatchAuth) {
+      try {
+        const auth = await options.dispatchAuth(request, requestId);
+        if (!auth || typeof auth.matched !== 'boolean') throw new Error('Invalid auth dispatcher result');
+        if (auth.matched) {
+          try {
+            writeAuthResult(response, auth, requestId);
+          } catch {
+            authUnavailable(response, requestId);
+          }
+          return;
+        }
+      } catch {
+        authUnavailable(response, requestId);
+        return;
+      }
+    }
     const session = await dispatchSession(request, requestId);
     if (session.matched) {
-      json(response, session.status ?? 500, session.body ?? {
-        error: { code: 'DB_UNAVAILABLE', requestId, retryable: true },
-      }, requestId);
+      try {
+        json(response, session.status ?? 500, session.body ?? {
+          error: { code: 'DB_UNAVAILABLE', requestId, retryable: true },
+        }, requestId, session.headers);
+      } catch {
+        authUnavailable(response, requestId);
+      }
       return;
     }
     const preferences = await dispatchPreferences(request, requestId);

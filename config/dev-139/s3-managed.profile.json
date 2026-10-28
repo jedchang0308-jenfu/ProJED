@@ -89,6 +89,14 @@
     {
       "version": "0018_google_identity_proof_v1",
       "path": "db/migrations/0018_google_identity_proof_v1.sql"
+    },
+    {
+      "version": "0019_app_sessions_v1",
+      "path": "db/migrations/0019_app_sessions_v1.sql"
+    },
+    {
+      "version": "0020_snapshot_account_guards_v1",
+      "path": "db/migrations/0020_snapshot_account_guards_v1.sql"
     }
   ],
   "objectAllowlist": [
@@ -177,7 +185,12 @@
     "projed_core.rag_sync_jobs_document_idx",
     "projed_core.external_rag_objects_document_idx",
     "projed_core.knowledge_records_source_document_idx",
-    "projed_core.google_identity_proofs"
+    "projed_core.google_identity_proofs",
+    "projed_core.app_login_intents",
+    "projed_core.app_sessions",
+    "projed_core.app_login_intent_transition_v1",
+    "projed_core.app_session_revoke_v1",
+    "projed_core.login_intents_active_old_session_v1"
   ],
   "staticFixturePath": "dist",
   "runtime": {

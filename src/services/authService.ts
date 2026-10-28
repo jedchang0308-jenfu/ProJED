@@ -326,7 +326,10 @@ export const authService = {
         return await httpSessionService.getSession();
       } catch (error) {
         if (error instanceof HttpApiError && (error.status === 401 || error.status === 404)) {
-          throw new Error('尚未取得 Jenfu-Platform 登入工作階段，請先由平台入口開啟 ProJED。');
+          const returnPath = `${window.location.pathname}${window.location.search}`;
+          const authorizationUrl = await httpSessionService.startLogin('main', returnPath);
+          window.location.assign(authorizationUrl);
+          return null;
         }
         throw error;
       }

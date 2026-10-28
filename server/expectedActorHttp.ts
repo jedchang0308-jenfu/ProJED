@@ -3,7 +3,10 @@ import type { IncomingMessage } from 'node:http';
 import type { ServerActorV1 } from './actorTransaction.js';
 import { KernelError } from './errors.js';
 
-export function assertExpectedActor(request: IncomingMessage, actor: ServerActorV1): void {
+export function assertExpectedActor(
+  request: IncomingMessage,
+  actor: Pick<ServerActorV1, 'localUserId' | 'contextId'>,
+): void {
   const expectedAccountId = request.headers['x-projed-expected-account-id'];
   const expectedContextId = request.headers['x-projed-expected-context-id'];
   if (typeof expectedAccountId !== 'string' || typeof expectedContextId !== 'string'

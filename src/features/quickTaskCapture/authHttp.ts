@@ -1,7 +1,7 @@
 import type { QuickAuthSnapshot } from './contract';
 import { httpSessionService } from '../../services/httpApi/backend';
 import { HttpApiError } from '../../services/httpApi/httpApiClient';
-import { getWorkbenchUrl } from './origins';
+import { isQuickProductionOrigin } from './origins';
 import { getQuickAuthContext, saveQuickAuthContext } from './outbox';
 import type { QuickAuthContext } from './model';
 
@@ -94,10 +94,6 @@ export const loadQuickSession = async (): Promise<QuickAuthSnapshot | null> => {
   try {
     const profile = await httpSessionService.getSession();
     if (!isCurrent()) return staleResult();
-    if (profile.entry !== 'quick') {
-      sessionLoadState = 'unauthenticated';
-      return setCachedSession(null, null);
-    }
     const identity = sessionIdentity(profile.authContextId);
     const context = await getQuickAuthContext();
     if (!isCurrent()) return staleResult();
@@ -172,7 +168,7 @@ export const verifyQuickSessionState = async (expected: QuickAuthSnapshot): Prom
     const profile = await withDeadline(httpSessionService.getSession(), Date.now() + 15_000);
     if (stale()) return { status: 'stale', snapshot: null };
     const identity = sessionIdentity(profile.authContextId);
-    if (profile.entry !== 'quick' || profile.uid !== expected.accountId || identity !== expected.accessToken) {
+    if (profile.uid !== expected.accountId || identity !== expected.accessToken) {
       return { status: 'stale', snapshot: null };
     }
     const current = await getQuickAuthContext();
@@ -235,8 +231,13 @@ export const signOutQuickSession = async () => {
 };
 
 export const startQuickGoogleSignIn = async (redirectTo: string) => {
-  void redirectTo;
-  window.location.assign(getWorkbenchUrl(window.location.origin));
+  const origin = window.location.origin;
+  const target = new URL(redirectTo, origin);
+  if (target.origin !== origin || target.hash) throw new Error('LOGIN_RETURN_PATH_INVALID');
+  const returnPath = `${target.pathname}${target.search}`;
+  const entry = isQuickProductionOrigin(origin) ? 'quick' : 'main';
+  const authorizationUrl = await httpSessionService.startLogin(entry, returnPath);
+  window.location.assign(authorizationUrl);
 };
 export const completeQuickOAuthCallback = async () => undefined;
 export const consumeQuickOAuthClaimIntent = () => null;

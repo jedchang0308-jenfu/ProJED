@@ -24,6 +24,13 @@ import {
   type GoogleIdentityColumnContractRow,
   type GoogleIdentitySourceRow,
 } from './lib/dev139-google-identity-proof.js';
+import {
+  projectAccountAuthorizationGuards,
+  validateAuthUserSourceColumns,
+  type AccountGuardProofRow,
+  type AccountGuardSourceRow,
+  type AuthUserSourceColumnContractRow,
+} from './lib/dev139-account-guard-projection.js';
 
 type Mode = 'plan' | 'apply' | 'reconcile';
 type Row = Record<string, unknown>;
@@ -100,6 +107,23 @@ const TABLES: readonly TableSpec[] = [
     project: (rows, priorSnapshot) => projectGoogleIdentityProofs(
       rows as unknown as readonly GoogleIdentitySourceRow[],
       new Set((priorSnapshot.get('profiles') ?? []).map(profile => String(profile.id))),
+    ),
+  },
+  {
+    target: 'account_authorization_guards',
+    sourceRelation: 'auth.users',
+    columns: ['local_user_id', 'active', 'revision', 'updated_at'],
+    sourceSql: `
+      SELECT DISTINCT profile.id::text AS local_user_id, profile.updated_at
+        FROM public.profiles profile
+        JOIN auth.identities identity
+          ON identity.user_id = profile.id AND identity.provider = 'google'
+        JOIN auth.users source_user ON source_user.id = profile.id
+       ORDER BY local_user_id
+    `,
+    project: (rows, priorSnapshot) => projectAccountAuthorizationGuards(
+      rows as unknown as readonly AccountGuardSourceRow[],
+      (priorSnapshot.get('google_identity_proofs') ?? []) as readonly AccountGuardProofRow[],
     ),
   },
   table('tenants', 'public.tenants', ['id', 'legacy_workspace_id', 'title', 'owner_id', 'sort_order', 'created_at', 'updated_at'], `
@@ -518,6 +542,28 @@ async function validateGoogleIdentitySourceSchema(client: Client): Promise<void>
   validateGoogleIdentitySourceColumns(result.rows);
 }
 
+async function validateAuthUserSourceSchema(client: Client): Promise<void> {
+  const result = await client.query<AuthUserSourceColumnContractRow>(`
+    SELECT relation.relkind::text AS relation_kind,
+           attribute.attname AS column_name,
+           pg_catalog.format_type(attribute.atttypid, attribute.atttypmod) AS data_type,
+           pg_catalog.has_schema_privilege(current_user, relation_namespace.oid, 'USAGE') AS schema_usage,
+           pg_catalog.has_column_privilege(current_user, 'auth.users', attribute.attname, 'SELECT') AS column_select
+      FROM pg_catalog.pg_class relation
+      JOIN pg_catalog.pg_namespace relation_namespace
+        ON relation_namespace.oid = relation.relnamespace
+      JOIN pg_catalog.pg_attribute attribute
+        ON attribute.attrelid = relation.oid
+       AND attribute.attnum > 0
+       AND NOT attribute.attisdropped
+     WHERE relation_namespace.nspname = 'auth'
+       AND relation.relname = 'users'
+       AND attribute.attname = ANY($1::text[])
+     ORDER BY attribute.attnum
+  `, [['id', 'banned_until', 'deleted_at']]);
+  validateAuthUserSourceColumns(result.rows);
+}
+
 async function readTarget(client: Client): Promise<Map<string, Row[]>> {
   const result = new Map<string, Row[]>();
   for (const spec of TABLES) {
@@ -574,6 +620,23 @@ function quoteRelation(schema: string, relation: string): string {
 async function sourcePreflight(client: Client) {
   const found: Array<{ domain: string; count: number | null }> = [];
   const emptySourceRelations: Array<{ domain: string; count: 0 }> = [];
+  const disabledGoogleUsers = await client.query<{ count: number }>(`
+    SELECT count(*)::int AS count
+      FROM (
+        SELECT DISTINCT profile.id AS local_user_id
+          FROM auth.identities identity
+          JOIN public.profiles profile ON profile.id = identity.user_id
+         WHERE identity.provider = 'google'
+      ) google_profiles
+      LEFT JOIN auth.users source_user ON source_user.id = google_profiles.local_user_id
+     WHERE source_user.id IS NULL
+        OR source_user.deleted_at IS NOT NULL
+        OR source_user.banned_until > transaction_timestamp()
+  `);
+  const disabledGoogleUserCount = disabledGoogleUsers.rows[0]?.count ?? 0;
+  if (disabledGoogleUserCount > 0) {
+    found.push({ domain: 'auth.users.google_identity_account_unavailable', count: disabledGoogleUserCount });
+  }
   const catalog = await readSourceRelationCatalog(client);
   for (const relation of findUnclassifiedSourceRelations(catalog)) {
     // Counts are safe metadata only; do not SELECT any unknown relation rows.
@@ -756,6 +819,7 @@ async function main(): Promise<void> {
     await source.query('SET LOCAL row_security = off');
     await validateSource(source, sourceBinding);
     await validateGoogleIdentitySourceSchema(source);
+    await validateAuthUserSourceSchema(source);
     const { blockers, emptySourceRelations } = await sourcePreflight(source);
     if (blockers.length > 0) {
       await source.query('ROLLBACK');

@@ -8,12 +8,20 @@ import { asKernelError, KernelError } from './errors.js';
 import { assertExpectedActor } from './expectedActorHttp.js';
 import { isSameOriginWrite, readJsonBody } from './domainWriteHttp.js';
 
-export type TrustedSessionDestroyer = (request: IncomingMessage) => Promise<void>;
+export type TrustedSessionDestroyer = (request: IncomingMessage) => Promise<void | { readonly clearCookie: string }>;
+export type TrustedSessionLogoutIdentityResolver = (
+  request: IncomingMessage,
+) => Promise<Pick<ServerActorV1, 'localUserId' | 'contextId'>>;
+export type TrustedSessionInfoResolver = (
+  request: IncomingMessage,
+  actor: ServerActorV1,
+) => Promise<{ expiresAtMs: number }>;
 
 export interface SessionHttpResult {
   readonly matched: boolean;
   readonly status?: number;
   readonly body?: unknown;
+  readonly headers?: Readonly<Record<string, string>>;
 }
 
 type SessionProfileRow = {
@@ -38,7 +46,7 @@ function errorResult(error: unknown, requestId: string): SessionHttpResult {
   };
 }
 
-function profileData(row: SessionProfileRow, actor: ServerActorV1) {
+function profileData(row: SessionProfileRow, actor: ServerActorV1, expiresAtMs = actor.expiresAtMs) {
   const createdAt = Number(row.created_at_ms);
   if (!Number.isSafeInteger(createdAt) || createdAt < 0) {
     throw new KernelError('DOMAIN_DATA_INVALID', 'Stored profile timestamp is invalid', 503);
@@ -48,7 +56,7 @@ function profileData(row: SessionProfileRow, actor: ServerActorV1) {
     email: row.email,
     displayName: row.display_name,
     createdAt,
-    expiresAt: actor.expiresAtMs,
+    expiresAt: expiresAtMs,
     authContextId: actor.contextId,
     entry: actor.entry,
   };
@@ -59,6 +67,7 @@ async function readProfile(
   config: RuntimeConfig,
   actor: ServerActorV1,
   displayName?: string,
+  expiresAtMs = actor.expiresAtMs,
 ) {
   return runActorTransaction(database, config, actor, async (port) => {
     const result = displayName === undefined
@@ -76,7 +85,7 @@ async function readProfile(
                  floor(extract(epoch FROM created_at) * 1000)::bigint::text AS created_at_ms
         `, [displayName]);
     if (result.rows.length !== 1) throw new KernelError('ACTOR_INVALID', 'Session profile is unavailable', 401);
-    return profileData(result.rows[0]!, actor);
+    return profileData(result.rows[0]!, actor, expiresAtMs);
   });
 }
 
@@ -85,6 +94,8 @@ export function createSessionHttpDispatcher(
   database: RuntimeDatabase,
   resolveActor?: TrustedSessionActorResolver,
   destroySession?: TrustedSessionDestroyer,
+  resolveSessionInfo?: TrustedSessionInfoResolver,
+  resolveLogoutIdentity?: TrustedSessionLogoutIdentityResolver,
 ) {
   return async (request: IncomingMessage, requestId: string): Promise<SessionHttpResult> => {
     const isRead = request.url === '/api/v1/session' && request.method === 'GET';
@@ -98,7 +109,8 @@ export function createSessionHttpDispatcher(
         ? { matched: true, status: 405, body: { error: { code: 'METHOD_NOT_ALLOWED', requestId, retryable: false } } }
         : { matched: false };
     }
-    if (!resolveActor || (isLogout && !destroySession)) {
+    if ((isLogout && !destroySession) || (!isLogout && !resolveActor)
+        || (isLogout && !resolveLogoutIdentity && !resolveActor)) {
       if (request.method !== 'GET') request.resume();
       return { matched: true, status: 404, body: { error: { code: 'ENDPOINT_UNAVAILABLE', requestId, retryable: false } } };
     }
@@ -107,13 +119,32 @@ export function createSessionHttpDispatcher(
       return { matched: true, status: 403, body: { error: { code: 'ACCESS_DENIED', requestId, retryable: false } } };
     }
     try {
-      const actor = await resolveActor(request);
       if (isLogout) {
-        assertExpectedActor(request, actor);
-        await destroySession!(request);
-        return { matched: true, status: 200, body: { data: null } };
+        const logoutIdentity = resolveLogoutIdentity
+          ? await resolveLogoutIdentity(request)
+          : await resolveActor!(request);
+        assertExpectedActor(request, logoutIdentity);
+        const destroyed = await destroySession!(request);
+        return {
+          matched: true,
+          status: 200,
+          body: { data: null },
+          ...(destroyed ? { headers: { 'set-cookie': destroyed.clearCookie } } : {}),
+        };
       }
-      if (isRead) return { matched: true, status: 200, body: { data: await readProfile(database, config, actor) } };
+      const actor = await resolveActor!(request);
+      if (isRead) {
+        const sessionInfo = resolveSessionInfo ? await resolveSessionInfo(request, actor) : undefined;
+        const expiresAtMs = sessionInfo?.expiresAtMs ?? actor.expiresAtMs;
+        if (!Number.isSafeInteger(expiresAtMs) || expiresAtMs <= Date.now()) {
+          throw new KernelError('ACTOR_INVALID', 'Session is invalid or expired', 401);
+        }
+        return {
+          matched: true,
+          status: 200,
+          body: { data: await readProfile(database, config, actor, undefined, expiresAtMs) },
+        };
+      }
       assertExpectedActor(request, actor);
       const body = await readJsonBody(request);
       if (Object.keys(body).some(key => key !== 'displayName')
@@ -122,10 +153,15 @@ export function createSessionHttpDispatcher(
           || body.displayName.length > 120) {
         throw new KernelError('DOMAIN_DATA_INVALID', 'displayName is invalid', 400);
       }
+      const sessionInfo = resolveSessionInfo ? await resolveSessionInfo(request, actor) : undefined;
+      const expiresAtMs = sessionInfo?.expiresAtMs ?? actor.expiresAtMs;
+      if (!Number.isSafeInteger(expiresAtMs) || expiresAtMs <= Date.now()) {
+        throw new KernelError('ACTOR_INVALID', 'Session is invalid or expired', 401);
+      }
       return {
         matched: true,
         status: 200,
-        body: { data: await readProfile(database, config, actor, body.displayName.trim()) },
+        body: { data: await readProfile(database, config, actor, body.displayName.trim(), expiresAtMs) },
       };
     } catch (error) {
       return errorResult(error, requestId);

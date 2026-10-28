@@ -8,8 +8,8 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 ## DEV-139：ProJED 納入 Jenfu-Platform，Cloud Run／Cloud SQL 對齊並保留 Vite
 
 - 建立日期：2026-10-08（Asia/Taipei）。
-- 狀態：**整合與正式發布續行中／W22 OrgMaster、W23 Platform owner source 有 draft PR／required CI PASS／未 Release**。真 Session、既有 UUID mapping、完整功能與資料、雲端 readback、Hosting／舊入口、writer fence、切流及正式發布仍計入完成分母。現況與分層證據統一見 SPEC §33–§37，本索引不另複製 source SHA／測試數／CI 狀態；本地或 source PASS 不代表正式驗收。
-- 選測與流程精簡（2026-10-29）：S3 DB／HTTP 可獨立於前端建置／browser 執行；已完成 S1 的固定順序、人工 freeze／QC／Spec Drift 及重複架構核准不再作續行前置。命令、授權與啟用界線見 [SPEC §8.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#81-工程驗證案例與固定本地入口)、§9／§11.5；原 required CI、安全與全部交付範圍保留，不新增 required gate。
+- 狀態：**整合與正式發布續行中／owner source draft PR 基線 CI PASS，新版 Session／owner 私人使用修正待驗證／未 Release**。真 Session、既有 UUID mapping、完整功能與資料、雲端 readback、Hosting／舊入口、writer fence、切流及正式發布仍計入完成分母。現況與分層證據統一見 [SPEC §13.2](specs/SPEC-139-projed-jenfu-platform-onboarding.md#132-持久-session正常入口與-guard-匯入-source2026-10-29)及 §33–§37，本索引不另複製 source SHA／測試數／CI 狀態；本地或 source PASS 不代表正式驗收。
+- 選測與流程精簡（2026-10-29）：S3 DB／HTTP 可獨立於前端建置／browser 執行，亦可沿既有腳本使用遠端隔離 CI，無須等待本機容量例外。已完成 S1 的固定順序、人工 freeze／QC／Spec Drift 及重複架構核准不再作續行前置。命令、授權與啟用界線見 [SPEC §8.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#81-工程驗證案例與固定本地入口)、§9／§11.5；原 required CI、安全與全部交付範圍保留，不新增 required gate。
 - 類型：交付點；主責：本 repo 的 DEV-139；無同專案父任務。
 - 唯一交接契約：[SPEC-139](specs/SPEC-139-projed-jenfu-platform-onboarding.md)；核心實作讀[§11 S1定案](specs/SPEC-139-projed-jenfu-platform-onboarding.md#11-架構決策與-s1-定案契約)、[§13 S2 consumer seam](specs/SPEC-139-projed-jenfu-platform-onboarding.md#13-s2-projed-identity-consumer-seam2026-10-26)、[§28 Data Migration](specs/SPEC-139-projed-jenfu-platform-onboarding.md#28-s3-data-migration-rehearsal-w142026-10-27)、[§29 Legacy Calendar URL](specs/SPEC-139-projed-jenfu-platform-onboarding.md#29-s3-legacy-calendar-url-compatibility-w152026-10-27)、[§30 Managed Cloud Run Candidate](specs/SPEC-139-projed-jenfu-platform-onboarding.md#30-s3-managed-cloud-run-candidate-w162026-10-27)、[§31 Managed Snapshot Connection](specs/SPEC-139-projed-jenfu-platform-onboarding.md#31-s3-managed-snapshot-connection-w172026-10-27)、[§32 Local Development Closure](specs/SPEC-139-projed-jenfu-platform-onboarding.md#32-s3-local-development-closure-w182026-10-27)及[§6.3既有使用者切換基線](specs/SPEC-139-projed-jenfu-platform-onboarding.md#63-既有使用者切換基線)；架構決策：[ADR-054](decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。本地正常UI煙霧不能替代真Session、正式資料及既有使用者切換驗收。
 
@@ -34,7 +34,7 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
 2026-10-26 使用者已明確要求「完成 DEV-139 開發」，授權在 `projed-independent-dev` 工作樹實作、測試及更新本任務文件；正式發布／切流、正式資料、IAM／Secret／credential／billing 與其他 repo 仍不在範圍。先完成 ProJED 可獨立交付的 S1 與後續本 repo adapter；Jenfu-Platform、OrgMaster 的 producer 變更須另有其專案範圍，不能以本任務文件替代。
 
-本次選定方案不構成跨專案開發、付費資源建立、IAM／Secret／登入設定變更、遠端 migration、正式資料搬移、切流、退役或 Billing unlink 授權。後續需依人類訊息確認明確專案、主要動作及環境／資源範圍；已確認的方案方向與個人／外部協作需求持續有效，不因文件升級或機器綁定更新重問相同決策。
+上述方案選擇本身在 2026-10-08 尚不構成實作或正式操作授權；目前續行範圍以本節開頭的 2026-10-28 人類要求及 SPEC §33 為準，不以這段歷史敘述重新阻擋已授權的跨專案 source／測試／CI。新 IAM／Secret／credential、shared foundation grant、費用擴張及未涵蓋的不可逆動作仍需對應授權；已確認的方向與個人／外部協作需求不因文件或機器綁定更新重問。
 
 ### 2. 真正問題與使用者價值
 

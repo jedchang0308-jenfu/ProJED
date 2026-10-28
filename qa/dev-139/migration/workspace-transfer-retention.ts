@@ -30,6 +30,7 @@ const actor: ServerActorV1 = {
   entry: 'main', contextId: randomUUID(), expiresAtMs: Date.now() + 60_000,
   accountGuardRevision: '1',
 };
+let createdAccountGuard = false;
 const sourceWorkspace = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const sourceBoard = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const rollback = new KernelError('TRANSACTION_USAGE_INVALID', 'QA rollback after assertions', 409);
@@ -39,8 +40,18 @@ try {
   await database.assertRuntimeBoundary(config.profile.migrations.map(({ version, path }) => ({
     version, checksum: sha256(readFileSync(path)),
   })));
-  await admin.query(`INSERT INTO projed_core.account_authorization_guards(local_user_id, active, revision)
-    VALUES ($1::uuid, true, 1)`, [actor.localUserId]);
+  const guardInsert = await admin.query<{ local_user_id: string }>(`INSERT INTO projed_core.account_authorization_guards(local_user_id, active, revision)
+    VALUES ($1::uuid, true, 1) ON CONFLICT (local_user_id) DO NOTHING RETURNING local_user_id::text`, [actor.localUserId]);
+  createdAccountGuard = guardInsert.rowCount === 1;
+  if (!createdAccountGuard) {
+    const existingGuard = await admin.query<{ active: boolean; revision: string }>(
+      'SELECT active, revision::text FROM projed_core.account_authorization_guards WHERE local_user_id = $1::uuid',
+      [actor.localUserId],
+    );
+    if (existingGuard.rows.length !== 1 || existingGuard.rows[0]!.active !== true || existingGuard.rows[0]!.revision !== '1') {
+      throw new Error('Existing owner account guard is not active at revision one');
+    }
+  }
 
   await assert.rejects(runActorTransaction(database, config, actor, async port => {
     const workspaces = await new DomainReadRepository().listWorkspaces(port);
@@ -110,6 +121,10 @@ try {
       'document-preview-and-cascade-retained', 'transaction-rollback'] }));
 } finally {
   await database.end();
-  try { await admin.query('DELETE FROM projed_core.account_authorization_guards WHERE local_user_id = $1::uuid', [actor.localUserId]); }
+  try {
+    if (createdAccountGuard) {
+      await admin.query('DELETE FROM projed_core.account_authorization_guards WHERE local_user_id = $1::uuid', [actor.localUserId]);
+    }
+  }
   finally { await admin.end(); }
 }

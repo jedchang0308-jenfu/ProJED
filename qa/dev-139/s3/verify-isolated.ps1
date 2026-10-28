@@ -142,6 +142,7 @@ try {
     migrationSha256 = $migrationHashes
     checks = @(
       'google-proof-rls-original-uuid-read-only-and-guard-denial'
+      'app-session-store-atomic-cancel-rotation-replay-rls'
       'migration-apply', 'migration-idempotent', 'runtime-boundary', 'workspace-board-scope',
       'tenant-member-scope', 'board-member-scope', 'explicit-empty-permissions',
       'task-parent-mapping', 'dependency-mapping', 'private-board-deny',

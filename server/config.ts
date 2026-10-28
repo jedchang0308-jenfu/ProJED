@@ -89,6 +89,8 @@ const PROFILE_MIGRATION_PATHS = new Map<string, readonly string[]>([
     'db/migrations/0016_workspace_lifecycle_compatibility_v1.sql',
     'db/migrations/0017_document_source_retention_v1.sql',
     'db/migrations/0018_google_identity_proof_v1.sql',
+    'db/migrations/0019_app_sessions_v1.sql',
+    'db/migrations/0020_snapshot_account_guards_v1.sql',
   ]],
   ['^jenfu_prod$', [
     'db/migrations/0001_runtime_boundary_v1.sql',
@@ -109,6 +111,8 @@ const PROFILE_MIGRATION_PATHS = new Map<string, readonly string[]>([
     'db/migrations/0016_workspace_lifecycle_compatibility_v1.sql',
     'db/migrations/0017_document_source_retention_v1.sql',
     'db/migrations/0018_google_identity_proof_v1.sql',
+    'db/migrations/0019_app_sessions_v1.sql',
+    'db/migrations/0020_snapshot_account_guards_v1.sql',
   ]],
 ]);
 

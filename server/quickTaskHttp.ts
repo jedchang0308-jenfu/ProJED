@@ -52,10 +52,6 @@ export function createQuickTaskHttpDispatcher(
     }
     try {
       const actor = await resolveActor(request);
-      if (actor.entry !== 'quick') {
-        request.resume();
-        throw new KernelError('ACCESS_DENIED', 'Quick task Session entry is required', 403);
-      }
       assertExpectedActor(request, actor);
       const body = await readJsonBody(request);
       const keys = Object.keys(body).sort().join('|');

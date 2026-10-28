@@ -39,6 +39,7 @@ import { createBackupPackage } from '../../../src/features/backup/package.js';
 import { BackupError } from '../../../src/features/backup/types.js';
 import { TaskTrackingError } from '../../../src/features/taskTracking/errors.js';
 import { verifyGoogleMappingsPostgres } from '../s2/verify-mappings-pg.js';
+import { verifyAppSessionsPostgres } from '../s2/verify-app-sessions-pg.js';
 import { createPreferencesHttpDispatcher } from '../../../server/preferencesHttp.js';
 import { createCalendarHttpDispatcher } from '../../../server/calendarHttp.js';
 import type { QuickCaptureRecord } from '../../../src/features/quickTaskCapture/model.js';
@@ -56,6 +57,7 @@ const collaborationCommands = new CollaborationWriteRepository(repository);
 const recordActivity = new RecordActivityRepository();
 await database.assertRuntimeBoundary(expected);
 await verifyGoogleMappingsPostgres(database);
+await verifyAppSessionsPostgres(database);
 
 const runBrowserSmoke = (baseUrl: string): Promise<void> => new Promise((done, reject) => {
   const child = spawn('powershell.exe', [
@@ -959,16 +961,37 @@ try {
     body: JSON.stringify({ displayName: 'Forged without origin' }),
   });
   assert.equal(missingProfileOrigin.status, 403);
-  const mainEntryQuickWrite = await fetch(`${base}/api/v1/quick-tasks`, {
+  const sameOriginMainQuickWrite = await fetch(`${base}/api/v1/quick-tasks`, {
     method: 'POST',
-    headers: { cookie: '__session=qa-b', origin: base, 'content-type': 'application/json' },
+    headers: {
+      cookie: '__session=qa-a', origin: base, 'content-type': 'application/json',
+      'x-projed-expected-account-id': actorA.localUserId,
+      'x-projed-expected-context-id': actorA.contextId,
+    },
     body: JSON.stringify({
       captureId: 'task_workbench_unplaced_80000000-0000-4000-8000-000000000000',
-      title: 'Wrong entry',
+      title: 'Same-origin main Session quick capture',
       workspaceHint: null,
     }),
   });
-  assert.equal(mainEntryQuickWrite.status, 403);
+  assert.equal(sameOriginMainQuickWrite.status, 201);
+  const sameOriginMainQuickReceipt = await sameOriginMainQuickWrite.json() as { data: { ownerId: string } };
+  assert.equal(sameOriginMainQuickReceipt.data.ownerId, actorA.localUserId);
+  const mismatchedQuickActor = await fetch(`${base}/api/v1/quick-tasks`, {
+    method: 'POST',
+    headers: {
+      cookie: '__session=qa-a', origin: base, 'content-type': 'application/json',
+      'x-projed-expected-account-id': actorB.localUserId,
+      'x-projed-expected-context-id': actorB.contextId,
+    },
+    body: JSON.stringify({
+      captureId: 'task_workbench_unplaced_80000000-0000-4000-8000-000000000001',
+      title: 'Mismatched Quick actor',
+      workspaceHint: null,
+    }),
+  });
+  assert.equal(mismatchedQuickActor.status, 409);
+  assert.equal((await mismatchedQuickActor.json() as { error: { code: string } }).error.code, 'ACTOR_CHANGED');
   const quickCapture: QuickCaptureRecord = {
     schemaVersion: 1,
     captureId: 'task_workbench_unplaced_81111111-1111-4111-8111-111111111111',
@@ -1678,6 +1701,7 @@ console.log(JSON.stringify({
   status: 'PASS',
   checks: [
     'migration-boundary', 'google-proof-rls-original-uuid-read-only-and-guard-denial',
+    'app-session-store-atomic-cancel-rotation-replay-rls',
     'workspace-board-scope', 'tenant-member-scope', 'board-member-scope',
     'tenant-scope-does-not-imply-board-read', 'suspended-member-deny',
     'explicit-empty-permissions', 'task-parent-mapping', 'dependency-mapping', 'private-board-deny',

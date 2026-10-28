@@ -21,7 +21,17 @@ DO $$ BEGIN
   END IF;
 END $$;
 INSERT INTO projed_core.account_authorization_guards(local_user_id, active, revision)
-VALUES ('11111111-1111-4111-8111-111111111111', true, 1);
+VALUES ('11111111-1111-4111-8111-111111111111', true, 1)
+ON CONFLICT (local_user_id) DO NOTHING;
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM projed_core.account_authorization_guards
+     WHERE local_user_id = '11111111-1111-4111-8111-111111111111'
+       AND active IS TRUE AND revision = 1
+  ) THEN
+    RAISE EXCEPTION 'Owner account guard is not active at revision one';
+  END IF;
+END $$;
 SET LOCAL ROLE projed_runtime_disposable;
 SELECT set_config('projed.actor_principal_id', 'qa-owner-only', true),
        set_config('projed.actor_local_user_id', '11111111-1111-4111-8111-111111111111', true),

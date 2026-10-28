@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { loadRuntimeConfig, sha256 } from './config.js';
 import { RuntimeDatabase, type ExpectedMigration } from './db.js';
 import { createKernelHttpServer } from './http.js';
+import { createRuntimeSessionAuth } from './runtimeSessionAuth.js';
 
 async function main(): Promise<void> {
   const config = loadRuntimeConfig();
@@ -13,7 +14,7 @@ async function main(): Promise<void> {
   });
   const database = new RuntimeDatabase(config);
   await database.assertRuntimeBoundary(expectedMigrations);
-  const http = createKernelHttpServer(config, database, expectedMigrations);
+  const http = createKernelHttpServer(config, database, expectedMigrations, createRuntimeSessionAuth(config, database));
   const address = await http.listen();
   console.log(JSON.stringify({ event: 'projed_kernel_ready', entry: config.entry, host: address.host, port: address.port }));
 

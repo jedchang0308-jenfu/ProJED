@@ -164,7 +164,17 @@ END $$;
 
 INSERT INTO projed_core.account_authorization_guards(local_user_id, active, revision)
 VALUES ('11111111-1111-4111-8111-111111111111', true, 1),
-       ('22222222-2222-4222-8222-222222222222', true, 1);
+       ('22222222-2222-4222-8222-222222222222', true, 1)
+ON CONFLICT (local_user_id) DO NOTHING;
+DO $$ BEGIN
+  IF EXISTS (
+    SELECT 1 FROM projed_core.account_authorization_guards
+     WHERE local_user_id IN ('11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222')
+       AND (active IS DISTINCT FROM true OR revision <> 1)
+  ) THEN
+    RAISE EXCEPTION 'Existing account guard is not active at revision one';
+  END IF;
+END $$;
 
 SET LOCAL ROLE projed_runtime_disposable;
 -- A new psql connection has no actor GUCs. Do not fabricate an invalid bigint

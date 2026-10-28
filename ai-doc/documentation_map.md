@@ -16,6 +16,8 @@
 
 ## 2026-10-08：DEV-139 ProJED 納入 Jenfu-Platform 開發文件入口
 
+目前持久 Session／正常登入／來源 guard 與未完成的身分功能見 [SPEC §13.2](specs/SPEC-139-projed-jenfu-platform-onboarding.md#132-持久-session正常入口與-guard-匯入-source2026-10-29)。本機容量不足可使用 [§8.1 遠端隔離入口](specs/SPEC-139-projed-jenfu-platform-onboarding.md#81-工程驗證案例與固定本地入口)，沿用原 PostgreSQL／HTTP 與移轉腳本；不要求容量例外或新增人工審查。下列 W18 為歷史證據，不代表新版 migration／真登入／正式發布已完成。
+
 2026-10-29 選測與流程精簡：S3 DB／HTTP 可單獨執行，原完整驗證入口保留；已完成 S1 的固定順序與人工 freeze／QC／Spec Drift 不再作續行前置。命令與分層收據見 [SPEC §8.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#81-工程驗證案例與固定本地入口)，開發／啟用及授權界線見 §9／§11.5；未縮減身分／資料／功能相容驗收，不新增 required gate。
 
 2026-10-29 現行狀態：**整合與正式發布續行中；W22 OrgMaster 與 W23 Platform owner source 有 draft PR／required CI PASS，未 Release**。最新 source／CI／本地 receipt 與各自適用範圍統一見 SPEC §33–§37，不在索引重複逐筆綁定。真 Firebase／OIDC、ProJED opaque Session／既有 UUID proof、剩餘功能與資料、雲端 readback、Hosting／舊入口、writer fence、切流、恢復及正式發布仍計入完整分母；W18 為本地歷史切片，不能代替整合驗收。 ProJED 新增的 v4 verifier／current state、原 UUID proof 移轉與 Cookie source 見 [SPEC §13.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#131-v4-verifier-與既有帳號-proof-source2026-10-29)；本版 native PostgreSQL 驗證尚待容量條件，不視為已接通真登入。
