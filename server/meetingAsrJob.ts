@@ -10,6 +10,9 @@ import {runMeetingAsrHost} from './meetingAsrHost.js';
 import {createPostgresMeetingAsrControl,createPostgresMeetingAsrRepository} from './meetingAsrRepository.js';
 import {CURRENT_MEETING_ASR_BINDING} from './meetingAsrRuntimeBinding.js';
 import {runMeetingAsrUnit} from './meetingAsrWorker.js';
+import {runMeetingDiscussionHost} from './meetingDiscussionHost.js';
+import {createPostgresMeetingDiscussionControl,createPostgresMeetingDiscussionRepository} from './meetingDiscussionRepository.js';
+import {runMeetingDiscussionUnit} from './meetingDiscussionWorker.js';
 import {createRuntimeSessionAuth} from './runtimeSessionAuth.js';
 import {createServiceAccessTokenProvider} from './serviceAccessToken.js';
 import {awaitDatabaseStartup} from './startup.js';
@@ -60,8 +63,15 @@ export async function meetingAsrJobMain(args:readonly string[]=process.argv.slic
         return runMeetingAsrUnit({...media,repository:repository(runId)},signal);
       },
     },controller.signal);
-    console.log(JSON.stringify({event:'projed_meeting_asr_job_finished',dispatchEnabled,...summary}));
-    if(summary.failures>0)process.exitCode=1;
+    const discussionControl=createPostgresMeetingDiscussionControl({database,config});
+    const discussion=await runMeetingDiscussionHost({...discussionControl,
+      ...(auth.resolveMeetingRunActor?{originalSessionResolver:auth.resolveMeetingRunActor}:{}),
+      runUnit:(runId,signal)=>runMeetingDiscussionUnit({
+        repository:createPostgresMeetingDiscussionRepository({runId,database,config,resolveActor}),
+      },signal),
+    },controller.signal);
+    console.log(JSON.stringify({event:'projed_meeting_asr_job_finished',dispatchEnabled,...summary,discussion}));
+    if(summary.failures>0||discussion.failures>0)process.exitCode=1;
   }finally{
     clearTimeout(timer);process.removeListener('SIGTERM',stop);process.removeListener('SIGINT',stop);
     await database.end();

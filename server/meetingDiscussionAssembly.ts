@@ -82,7 +82,7 @@ function overlapPrefix(words:readonly AlignedWord[],previous:NonNullable<Meeting
   const inOverlap=(word:AsrWord)=>word.start_ms>=start&&word.end_ms<=end;
   const tail=previous.tailWords.filter(inOverlap);
   const prefix:AlignedWord[]=[];for(const word of words){if(!inOverlap(word.word))break;prefix.push(word);}
-  const same=(left:AsrWord,right:AsrWord)=>fold(left.text)===fold(right.text)
+  const same=(left:AsrWord,right:AsrWord)=>left.text===right.text
     &&(Math.max(left.start_ms,right.start_ms)<Math.min(left.end_ms,right.end_ms)
       ||(left.start_ms===right.start_ms&&left.end_ms===right.end_ms));
   if(!prefix.length)return 0;

@@ -14,6 +14,10 @@ import { createKernelHttpServer } from '../../../server/http.js';
 import type { MeetingAudioStorage } from '../../../server/meetingAudioStorage.js';
 import { createPostgresMeetingAsrControl, createPostgresMeetingAsrRepository } from '../../../server/meetingAsrRepository.js';
 import type { MeetingAsrClaim, MeetingAsrTranscriptUnit } from '../../../server/meetingAsrWorker.js';
+import { assembleMeetingDiscussionSource } from '../../../server/meetingDiscussionAssembly.js';
+import { createPostgresMeetingDiscussionRepository, parseMeetingDiscussionClaim, parseMeetingDiscussionProgress,
+  parseMeetingDiscussionReadProgress, parseMeetingDiscussionSourceInput } from '../../../server/meetingDiscussionRepository.js';
+import type { MeetingDiscussionBatch, MeetingDiscussionClaim } from '../../../server/meetingDiscussionWorker.js';
 import { PostgresAppSessionStore } from '../../../server/postgresAppSessionStore.js';
 import { MeetingUploadRepository } from '../../../server/meetingUpload.js';
 import { createHttpCollaborationAdapter } from '../../../src/services/httpApi/collaborationAdapter.js';
@@ -1369,7 +1373,7 @@ export async function verifyMeetingUploadPostgres(
     const successFixture=await createSettlementFixture('checkpoint-success');
     const successToken=randomUUID();
     await verifyAsrSessionBinding(database,config,admin,owner,outsider,successFixture.recordId,
-      successFixture.captureId,successFixture.runId,async(actor)=>{
+      successFixture.captureId,successFixture.runId,async(actor,otherActor)=>{
         const successPrepared=record(await prepareSettlementFixture(successFixture,actor),'checkpoint success preparation');
         assert.equal(successPrepared.state,'queued');assert.equal(successPrepared.reservedTwdMicros,'96000');
         assert.deepEqual(await readBudget(admin,month),{
@@ -1423,23 +1427,227 @@ export async function verifyMeetingUploadPostgres(
         assert.deepEqual(await readBudget(admin,month),{
           limit_twd_micros:DEFAULT_BUDGET_MICROS,reserved_twd_micros:'0',spent_twd_micros:'48000',
         },'recognized replay does not double charge the same unit');
+
+        const discussionClaim=(sessionActor:ServerActorV1,token:string)=>runActorTransaction(database,config,sessionActor,
+          async port=>{
+            await port.authorizeMeetingCaptureMutation(successFixture.recordId,successFixture.captureId);
+            const result=await port.query<{claim:unknown}>(
+              'SELECT projed_core.claim_meeting_discussion_source_v1($1::uuid,$2::uuid) AS claim',
+              [successFixture.runId,token]);
+            assert.equal(result.rowCount,1);
+            return result.rows[0]?.claim===null?null:parseMeetingDiscussionClaim(
+              result.rows[0]?.claim,successFixture.runId,token);
+          });
+        const discussionSource=(sessionActor:ServerActorV1,claim:MeetingDiscussionClaim)=>runActorTransaction(
+          database,config,sessionActor,async port=>{
+            await port.authorizeMeetingCaptureMutation(successFixture.recordId,successFixture.captureId);
+            const result=await port.query<{source:unknown}>(
+              'SELECT projed_core.read_meeting_discussion_source_v1($1::uuid,$2::uuid) AS source',
+              [successFixture.runId,claim.leaseToken]);
+            assert.equal(result.rowCount,1);
+            return result.rows[0]?.source===null?null:parseMeetingDiscussionSourceInput(result.rows[0]?.source);
+          });
+        const discussionRead=(sessionActor:ServerActorV1,claim:MeetingDiscussionClaim,batch:MeetingDiscussionBatch)=>
+          runActorTransaction(database,config,sessionActor,async port=>{
+            await port.authorizeMeetingCaptureMutation(successFixture.recordId,successFixture.captureId);
+            const result=await port.query<{progress:unknown}>(
+              'SELECT projed_core.read_meeting_discussion_batch_v1($1::uuid,$2::uuid,$3::jsonb) AS progress',
+              [successFixture.runId,claim.leaseToken,JSON.stringify(batch)]);
+            assert.equal(result.rowCount,1);
+            return parseMeetingDiscussionReadProgress(result.rows[0]?.progress);
+          });
+        const discussionAppend=(sessionActor:ServerActorV1,claim:MeetingDiscussionClaim,batch:MeetingDiscussionBatch)=>
+          runActorTransaction(database,config,sessionActor,async port=>{
+            await port.authorizeMeetingCaptureMutation(successFixture.recordId,successFixture.captureId);
+            const result=await port.query<{progress:unknown}>(
+              'SELECT projed_core.append_meeting_discussion_batch_v1($1::uuid,$2::uuid,$3::jsonb) AS progress',
+              [successFixture.runId,claim.leaseToken,JSON.stringify(batch)]);
+            assert.equal(result.rowCount,1);
+            return result.rows[0]?.progress===null?null:parseMeetingDiscussionProgress(result.rows[0]?.progress);
+          });
+        const discussionState=async()=>{
+          const result=await admin.query<{run:unknown;transcript_count:number;checkpoint_count:number}>(`
+            SELECT to_jsonb(run) AS run,
+              (SELECT count(*)::integer FROM projed_core.meeting_transcript_segments segment
+                WHERE segment.producer_run_id=run.id) AS transcript_count,
+              (SELECT count(*)::integer FROM projed_core.meeting_asr_unit_results checkpoint
+                WHERE checkpoint.run_id=run.id) AS checkpoint_count
+            FROM projed_core.meeting_analysis_runs run WHERE run.id=$1::uuid
+          `,[successFixture.runId]);
+          assert.equal(result.rowCount,1);
+          return result.rows[0]!;
+        };
+        const discussionPrivateState=async()=>{
+          const result=await admin.query<{record:unknown;capture:unknown;source_segments:unknown;
+            transcript_segments:unknown;checkpoints:unknown}>(`
+            SELECT to_jsonb(record_row) AS record,to_jsonb(capture) AS capture,
+              coalesce((SELECT jsonb_agg(to_jsonb(source) ORDER BY source.segment_index)
+                FROM projed_core.meeting_capture_segments source WHERE source.capture_id=capture.id),'[]'::jsonb) AS source_segments,
+              coalesce((SELECT jsonb_agg(to_jsonb(segment) ORDER BY segment.segment_index)
+                FROM projed_core.meeting_transcript_segments segment WHERE segment.producer_run_id=$2::uuid),'[]'::jsonb) AS transcript_segments,
+              coalesce((SELECT jsonb_agg(to_jsonb(checkpoint) ORDER BY checkpoint.unit_index)
+                FROM projed_core.meeting_asr_unit_results checkpoint WHERE checkpoint.run_id=$2::uuid),'[]'::jsonb) AS checkpoints
+            FROM projed_core.knowledge_records record_row
+            JOIN projed_core.meeting_capture_sessions capture ON capture.record_id=record_row.id
+            WHERE record_row.id=$1::uuid AND capture.id=$3::uuid
+          `,[successFixture.recordId,successFixture.runId,successFixture.captureId]);
+          assert.equal(result.rowCount,1);
+          return { ...result.rows[0]!,usage:await readUsageRows(admin,successFixture.captureId),
+            pool:await readUnitPool(successFixture.runId,successToken),budget:await readBudget(admin,month) };
+        };
+        const discussionTokens=[randomUUID(),randomUUID()];
+        const racedClaims=await Promise.all(discussionTokens.map(token=>discussionClaim(actor,token)));
+        assert.equal(racedClaims.filter(value=>value!==null).length,1,
+          'only one concurrent discussion claim owns the run lease');
+        const firstDiscussionClaim=racedClaims.find((value):value is MeetingDiscussionClaim=>value!==null)!;
+        assert.deepEqual(await discussionClaim(actor,firstDiscussionClaim.leaseToken),firstDiscussionClaim,
+          'the exact discussion claim token replays its current lease');
+        const firstSource=await discussionSource(actor,firstDiscussionClaim);
+        assert.ok(firstSource,'the live bound Session reads source only from the verified ASR checkpoint');
+        const makeDiscussionBatch=(claim:MeetingDiscussionClaim,sourceInput:NonNullable<typeof firstSource>):MeetingDiscussionBatch=>{
+          const segments=Array.from(assembleMeetingDiscussionSource(sourceInput.input));
+          const prefix=segments[0]?.wordOffsets[0]?.source_word_index??sourceInput.totalSourceWords;
+          return {sourceId:sourceInput.input.source.id,sourceIndex:claim.sourceIndex,
+            sourceFirstSegmentIndex:claim.sourceFirstSegmentIndex,expectedNextSegmentIndex:claim.nextSegmentIndex,
+            deduplicatedPrefixWords:prefix,sourceDone:true,segments};
+        };
+        const firstDiscussionBatch=makeDiscussionBatch(firstDiscussionClaim,firstSource);
+        assert.equal(firstDiscussionBatch.segments.length,1,'the synthetic checkpoint assembles one discussion draft');
+        const initialDiscussionState=await discussionState();
+        const wrongSourceBatch={...firstDiscussionBatch,sourceId:randomUUID()};
+        assert.equal(await discussionRead(actor,firstDiscussionClaim,wrongSourceBatch),'stale',
+          'readback rejects an unknown source id without changing the run');
+        assert.equal(await discussionAppend(actor,firstDiscussionClaim,wrongSourceBatch),null,
+          'append rejects an unknown source id without converting it into a draft');
+        const firstSegment=firstDiscussionBatch.segments[0]!;
+        const firstWord=firstSegment.wordOffsets[0]!;
+        const wrongWordBatch:MeetingDiscussionBatch={...firstDiscussionBatch,segments:[{
+          ...firstSegment,wordOffsets:[{...firstWord,source_word_index:firstWord.source_word_index+1}],
+        }]};
+        await assert.rejects(discussionAppend(actor,firstDiscussionClaim,wrongWordBatch),error=>
+          error instanceof KernelError&&error.cause!==null&&typeof error.cause==='object'
+            &&'code' in error.cause&&error.cause.code==='42501',
+        'a valid live claim cannot append a word outside the canonical checkpoint');
+        assert.deepEqual(await discussionState(),initialDiscussionState,
+          'invalid source and word attempts leave the lease, cursor, transcript and checkpoint unchanged');
+        await assert.rejects(discussionClaim(otherActor,randomUUID()),error=>
+          error instanceof KernelError&&error.cause!==null&&typeof error.cause==='object'
+            &&'code' in error.cause&&error.cause.code==='42501',
+        'a different valid Session cannot claim a run bound to the original Session');
+        assert.deepEqual(await discussionState(),initialDiscussionState,
+          'a wrong Session cannot mutate the discussion lease or draft');
+
+        const sessionBeforeRevoke=await admin.query<{revoked_at_ms:string|null}>(`
+          SELECT revoked_at_ms::text FROM projed_core.app_sessions
+          WHERE context_id=$1::uuid AND local_user_id=$2::uuid
+        `,[actor.contextId,actor.localUserId]);
+        assert.equal(sessionBeforeRevoke.rowCount,1);
+        assert.equal(sessionBeforeRevoke.rows[0]?.revoked_at_ms,null);
+        try{
+          const revokedAppend=await runActorTransaction(database,config,actor,async port=>{
+            await port.authorizeMeetingCaptureMutation(successFixture.recordId,successFixture.captureId);
+            const sessionUpdate=await admin.query(`UPDATE projed_core.app_sessions SET revoked_at_ms=$3::bigint
+              WHERE context_id=$1::uuid AND local_user_id=$2::uuid AND revoked_at_ms IS NULL`,
+            [actor.contextId,actor.localUserId,Date.now()]);
+            assert.equal(sessionUpdate.rowCount,1,'revocation changes only the bound synthetic Session');
+            const result=await port.query<{progress:unknown}>(
+              'SELECT projed_core.append_meeting_discussion_batch_v1($1::uuid,$2::uuid,$3::jsonb) AS progress',
+              [successFixture.runId,firstDiscussionClaim.leaseToken,JSON.stringify(firstDiscussionBatch)]);
+            assert.equal(result.rowCount,1);
+            return result.rows[0]?.progress===null?null:parseMeetingDiscussionProgress(result.rows[0]?.progress);
+          });
+          assert.equal(revokedAppend,null,'a revoked bound Session makes the database append readback stale');
+        }finally{
+          const restored=await admin.query<{context_id:string}>(`
+            UPDATE projed_core.app_sessions SET revoked_at_ms=$3::bigint
+            WHERE context_id=$1::uuid AND local_user_id=$2::uuid RETURNING context_id::text
+          `,[actor.contextId,actor.localUserId,sessionBeforeRevoke.rows[0]?.revoked_at_ms]);
+          assert.equal(restored.rowCount,1,'the exact synthetic Session revocation is restored');
+        }
+        assert.deepEqual(await discussionState(),initialDiscussionState,
+          'revoked Session rejection leaves the discussion run unchanged');
+
+        const expiredLease=await admin.query<{lease_token:string}>(`
+          UPDATE projed_core.meeting_analysis_runs SET lease_expires_at=clock_timestamp()-interval '1 second'
+          WHERE id=$1::uuid AND state='running' AND lease_token=$2::uuid AND lease_expires_at>clock_timestamp()
+          RETURNING lease_token::text
+        `,[successFixture.runId,firstDiscussionClaim.leaseToken]);
+        assert.equal(expiredLease.rowCount,1,'only this fixture lease is expired');
+        const expiredDiscussionState=await discussionState();
+        assert.equal(await discussionRead(actor,firstDiscussionClaim,firstDiscussionBatch),'stale',
+          'expired lease is stale on readback');
+        assert.equal(await discussionAppend(actor,firstDiscussionClaim,firstDiscussionBatch),null,
+          'expired lease cannot append a discussion draft');
+        assert.deepEqual(await discussionState(),expiredDiscussionState,
+          'expired lease rejection leaves all discussion rows and cursor unchanged');
+        const reclaimedToken=randomUUID();
+        const reclaimed=await discussionClaim(actor,reclaimedToken);
+        assert.ok(reclaimed,'the same source can be reclaimed after the exact lease expires');
+        const reclaimedSource=await discussionSource(actor,reclaimed);
+        assert.ok(reclaimedSource);
+        const reclaimedBatch=makeDiscussionBatch(reclaimed,reclaimedSource);
+        const beforeStaleReplay=await discussionState();
+        assert.equal(await discussionAppend(actor,firstDiscussionClaim,firstDiscussionBatch),null,
+          'the previous claim token stays stale after another token reclaims the source');
+        assert.deepEqual(await discussionState(),beforeStaleReplay,
+          'stale-token append does not change the new lease or draft');
+
+        const discussionRepository=createPostgresMeetingDiscussionRepository({runId:successFixture.runId,database,config,
+          resolveActor:async runId=>{
+            assert.equal(runId,successFixture.runId);
+            return actor;
+          }});
+        const privateBeforeMetadataFinish=await discussionPrivateState();
+        assert.equal(await discussionRepository.finish(reclaimed,'yield'),true,
+          'repository metadata maintenance yields an exact discussion lease without resolving a different actor');
+        assert.deepEqual(await discussionPrivateState(),privateBeforeMetadataFinish,
+          'metadata-only finish leaves record, capture, source, checkpoint, transcript, usage and budget unchanged');
+        const yieldedState=await discussionState();
+        assert.equal(record(yieldedState.run,'yielded discussion run').state,'queued');
+        assert.equal(record(yieldedState.run,'yielded discussion run').lease_token,null);
+        const finalClaim=await discussionRepository.claim();
+        assert.ok(finalClaim,'the yielded draft can be reclaimed by the still-bound Session');
+        const finalSource=await discussionRepository.loadSource(finalClaim);
+        assert.ok(finalSource);
+        const finalBatch=makeDiscussionBatch(finalClaim,finalSource);
+        assert.deepEqual(finalBatch,reclaimedBatch,'replay assembles the same exact source checkpoint payload');
+        assert.equal(await discussionRepository.readProgress(finalClaim,finalBatch),'not_committed',
+          'readback distinguishes the uncommitted batch before its first write');
+        const appended=await discussionRepository.append(finalClaim,finalBatch);
+        assert.ok(appended?.done,'the exact checkpoint words complete this one-source draft');
+        assert.deepEqual(await discussionRepository.readProgress(finalClaim,finalBatch),appended,
+          'readback recognizes the committed exact payload');
+        assert.deepEqual(await discussionRepository.append(finalClaim,finalBatch),appended,
+          'an exact duplicate append replays progress without inserting a second segment');
+        const changedPayload:MeetingDiscussionBatch={...finalBatch,segments:[{
+          ...finalBatch.segments[0]!,sourceHash:'f'.repeat(64),
+        }]};
+        assert.equal(await discussionRepository.readProgress(finalClaim,changedPayload),'stale',
+          'readback rejects a different payload for the same segment index');
+        assert.deepEqual(await readBudget(admin,month),{
+          limit_twd_micros:DEFAULT_BUDGET_MICROS,reserved_twd_micros:'0',spent_twd_micros:'48000',
+        },'discussion persistence does not reserve or spend speech budget');
       });
     const successState=await admin.query<{
       run_state:string;resume_stage:string;attempt_count:number;capture_state:string;
       active_transcript_revision_id:string|null;transcript_segments:number;checkpoint_count:number;
+      assembly_done:boolean;resolution_count:number;
     }>(`
       SELECT run.state AS run_state,run.resume_stage,run.attempt_count,capture.state AS capture_state,
         capture.active_transcript_revision_id::text,
         (SELECT count(*)::integer FROM projed_core.meeting_transcript_segments segment WHERE segment.capture_id=capture.id) AS transcript_segments,
-        (SELECT count(*)::integer FROM projed_core.meeting_asr_unit_results result WHERE result.run_id=run.id) AS checkpoint_count
+        (SELECT count(*)::integer FROM projed_core.meeting_asr_unit_results result WHERE result.run_id=run.id) AS checkpoint_count,
+        run.stage_cursor#>>'{assembly,done}'='true' AS assembly_done,
+        (SELECT count(*)::integer FROM projed_core.meeting_segment_resolutions resolution
+          WHERE resolution.capture_id=capture.id) AS resolution_count
       FROM projed_core.meeting_analysis_runs run
       JOIN projed_core.meeting_capture_sessions capture ON capture.id=run.capture_id WHERE run.id=$1::uuid
     `,[successFixture.runId]);
     assert.equal(successState.rowCount,1);
     assert.deepEqual(successState.rows[0],{
       run_state:'queued',resume_stage:'retrieve',attempt_count:1,capture_state:'queued',
-      active_transcript_revision_id:null,transcript_segments:0,checkpoint_count:1,
-    },'ASR checkpoint waits at retrieve and does not activate a transcript or final segment');
+      active_transcript_revision_id:null,transcript_segments:1,checkpoint_count:1,assembly_done:true,resolution_count:0,
+    },'ASR checkpoint plus discussion draft stays queued and inactive without review resolutions');
     assert.deepEqual(await readBudget(admin,month),{
       limit_twd_micros:DEFAULT_BUDGET_MICROS,reserved_twd_micros:'0',spent_twd_micros:'48000',
     });

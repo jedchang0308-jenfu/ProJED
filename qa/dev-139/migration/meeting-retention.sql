@@ -273,6 +273,10 @@ BEGIN
         'reserved_twd_micros','usage_state','outcome','dispatch_state','asr_operation_token','asr_manifest'
       ]::text[]
       WHEN 'projed_core.meeting_ai_budget_months' THEN ARRAY['budget_month']::text[]
+      WHEN 'projed_core.meeting_transcript_segments' THEN ARRAY[
+        'id','capture_id','transcript_revision_id','producer_run_id','segment_index','source_audio_ranges',
+        'start_offset_ms','end_offset_ms','raw_text','normalized_text','word_offsets','source_hash'
+      ]::text[]
       WHEN 'projed_core.meeting_task_match_results' THEN ARRAY[
         'id','resolution_id','task_id','ai_suggestion_version','decision','decision_source',
         'corrected_by','corrected_at','capture_id','tenant_id','project_id'
@@ -420,6 +424,15 @@ BEGIN
     'projed_core.recover_meeting_asr_unit_v1(uuid,uuid)',
     'projed_core.meeting_asr_abandon_guard_v1()',
     'projed_core.abandon_meeting_asr_run_v1(uuid,text)',
+    'projed_core.meeting_discussion_scope_v1(uuid,uuid)',
+    'projed_core.meeting_discussion_live_v1(uuid)',
+    'projed_core.meeting_discussion_guard_v1()',
+    'projed_core.claim_meeting_discussion_source_v1(uuid,uuid)',
+    'projed_core.read_meeting_discussion_source_v1(uuid,uuid)',
+    'projed_core.read_meeting_discussion_batch_v1(uuid,uuid,jsonb)',
+    'projed_core.append_meeting_discussion_batch_v1(uuid,uuid,jsonb)',
+    'projed_core.finish_meeting_discussion_work_v1(uuid,uuid,text)',
+    'projed_core.scan_meeting_discussion_work_v1(integer)',
     'projed_core.meeting_review_scope_v1(uuid)',
     'projed_core.meeting_projection_scope_v1(uuid,uuid)'
   ] LOOP

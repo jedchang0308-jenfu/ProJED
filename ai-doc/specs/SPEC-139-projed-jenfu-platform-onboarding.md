@@ -1,7 +1,7 @@
 # SPEC-139：ProJED 納入 Jenfu-Platform 的產品與技術交接契約
 
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。
-- 日期：2026-10-29（Asia/Taipei）；版本：Rev 71（discussion assembly核心／來源定位回聽已通過隔離 CI；持久化與完整交付續行）。
+- 日期：2026-10-29（Asia/Taipei）；版本：Rev 72（discussion持久化／有界host候選；原生與OCI驗證待本版CI）。
 - 文件狀態：**整合與發布續行中；W22 OrgMaster publisher 與 W23 Platform Session／handoff source 均有 draft PR／required CI PASS，隔離驗證 PASS；Production Resolver Disabled；未 Release**。Firebase／OIDC 真身分與完整 Session 部署、RAG／文字會議真 provider 資格、錄音管線與剩餘資料處置、雲端 readback、舊入口、writer fence、切流及正式發布仍計入完成分母。W22 owner source 見 [§36](#36-orgmaster-minimum-principal-publication-w222026-10-29)，W23 Platform source 與驗證邊界見 [§37](#37-platform-projed-session-and-handoff-w232026-10-29)；W21 承接六類文件／同步資料與精度保護見 [§35](#35-document-source-retention-w212026-10-28)；W20 資料保留見 §34，具體資源與待確認的新權限仍見 §33。本輪未寫正式資料、切流或變更 IAM／Secret／credential／billing。
 - 適用階段：S1–S3 本地切片歷史見 §12–§32；2026-10-28 續行授權見 [DEV-139 人類決策與授權範圍](../dev_task.md#1-人類決策與授權範圍)，涵蓋 ProJED／OrgMaster／Jenfu-Platform 的 source 整合工作。正式整合與發布仍是完整目標，不以本地切片完成替代；新責任權限依 §33 處理。定期審視不是續行或發布的 required gate；本輪未執行正式資料寫入、切流或 IAM／Secret／credential／billing 變更。
 - 直接交接入口：[§11 S1 定案契約](#11-架構決策與-s1-定案契約)、[§12 S1 實作狀態](#12-s1-實作狀態2026-10-26)、[§13 S2 consumer seam](#13-s2-projed-identity-consumer-seam2026-10-26)、[§14 S3 read adapter](#14-s3-http-read-adapter-slice2026-10-26)、[§15 S3 domain command](#15-s3-domain-command-w12026-10-26)、[§16 S3 collaboration command](#16-s3-collaboration-command-w22026-10-27)、[§17 S3 record／activity](#17-s3-recordactivity-w32026-10-27)、[§18 S3 HTTP product wiring](#18-s3-http-product-wiring-w42026-10-27)、[§19 S3 Board transfer](#19-s3-board-transfer-w52026-10-27)、[§20 S3 legacy provider boundary](#20-s3-legacy-provider-boundary-w62026-10-27)、[§21 S3 Quick Task](#21-s3-quick-task-w72026-10-27)、[§22 S3 Task Workbench](#22-s3-task-workbench-w82026-10-27)、[§23 S3 Actor CAS](#23-s3-actor-context-cas-w92026-10-27)、[§24 S3 Task Tracking](#24-s3-task-tracking-w102026-10-27)、[§25 S3 Backup／Import](#25-s3-backupimport-w112026-10-27)、[§26 S3 Account Preferences](#26-s3-account-preferences-w122026-10-27)、[§27 S3 Calendar Subscription](#27-s3-calendar-subscription-w132026-10-27)及[§32 本地開發收斂](#32-s3-local-development-closure-w182026-10-27)；[§11.8 技術主管審查](#118-技術主管審查與最小優化)保留 Rev5 修正理由；既有使用者切換見 [§6.3](#63-既有使用者的切換基線)。
@@ -1350,6 +1350,16 @@ Focused review 另修正新service的預設路由說明、OCI失敗診斷也遮�
 目標DB已有run queue／source version／lease／usage／cleanup與transcript表，但0001–0033尚未授ASR worker claim／dispatch／settle／transcript INSERT，HTTP錄音caller亦未接齊。沿原run與nonce／token責任補forward-only0034及後續worker migration／接線，不另建通用queue。先完成安全source／合成媒體測試，再由真provider、普通使用入口與資料／費用／取消／清理讀回證據驗收；本節與W35的369 unit／15 OCI均不代表ASR完成。
 
 ## 51. Owner foundation qualification and ASR components（W36–W37，2026-10-29）
+
+### Discussion persistence 與有界 host（0039）
+
+`0039`沿既有run／revision／lease與原main AppSession，從private ASR checkpoint組裝discussion草稿；不另建queue／service／scheduler。每個來源以最多16段一批原子新增transcript與cursor，每unit最多8批，沿150秒lease與10秒headroom。Canonical source-wide字詞、時間、來源SHA／generation與完整coverage須一致；原Session、權限、source、deadline或lease失效即停止私人寫入。重疊去重只接受literal文字及唯一時間對應，大小寫／字寬差異保留字詞；NFKC仍只用於raw alignment。
+
+草稿沿既有revision／segment唯一索引append-only，runtime只增精確12欄INSERT；已提交批次須以同內容讀回，不以cursor移動猜成功。Unknown commit先唯讀查核，證明未提交且lease仍有效才允許一次相同payload重送。換lease後舊token不得改寫，續跑重算後核對既存邊界hash／word cursor；Session失效不轉maintenance寫私人內容。Scan與exact-token finish僅處理run metadata，保留capture／checkpoint／usage／budget。原0001–0038 SQL不改。
+
+現有ASR Job在同一10分鐘取消signal內接discussion host，每輪最多20筆metadata／4個source unit。私人工作由原Session resolver啟用，與付費ASR資格分開；Session契約未發布仍只做metadata。完成assembly後run仍queued／retrieve，active revision、capture與resolution不變；matching／compose／publisher尚須完成，不能顯示整場analysis ready。原workspace／看板／權限及正式資料／切流發布範圍不縮減，無新增required gate。
+
+本機509 unit（S2 346／S3 122／migration14／release27）、strict app／S2／S3／jobs同版本宣告overlay與affected lint PASS。既有native upload helper新增實際repository factory、claim競爭／重播、wrong source／word／Session、撤銷、expired／stale lease、metadata-only finish及完成草稿仍inactive／budget不變；尚待本版遠端PostgreSQL／OCI結果。一次本機migration rehearsal在SQL仍更新時，以`BINDING_INVALID`停止於source-preflight（expected exit 2、actual 1），catalog oracle未執行、不列PASS；nonce `c0ae0b81df5a4d72a31d07d4ecf2832e` 的temp root與postgres process已核對不存在，原port未記錄，不猜值。後續PG／OCI只用現有遠端CI；沒有正式資料、IAM／Secret／credential／billing或provider操作。
 
 ### 現行 ASR host 與回收候選（0038）
 

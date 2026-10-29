@@ -267,6 +267,17 @@ test('retains words when overlap geometry is mismatched, interrupted by a gap, o
   assert.equal(Array.from(assembleMeetingDiscussionSource(ambiguous)).reduce((count,item)=>count+item.wordOffsets.length,0),1);
 });
 
+test('case or width differences never authorize overlap word deletion',()=>{
+  for(const text of ['Same','ｓａｍｅ']){
+    const input=laterSourceInput({overlapMs:500,gapBeforeMs:0,previousTail:[
+      {text,start_ms:9_500,end_ms:9_600,source_audio_segment_id:SOURCE_ID,source_word_index:0},
+    ]});
+    const segments=Array.from(assembleMeetingDiscussionSource(input));
+    assert.equal(segments.flatMap(segment=>segment.wordOffsets).length,2);
+    assert.equal(segments[0]?.wordOffsets[0]?.source_word_index,0);
+  }
+});
+
 test('keeps source timeline gaps and legal empty speech without invented timestamps',()=>{
   const gapInput=laterSourceInput({overlapMs:0,gapBeforeMs:1_000,startOffsetMs:11_000,endOffsetMs:21_000,
     rawText:'gap',words:[{text:'gap',start_ms:11_000,end_ms:11_200}]});

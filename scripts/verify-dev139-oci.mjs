@@ -307,6 +307,7 @@ try {
   assert.deepEqual(JSON.parse(asrMaintenanceLines[0]), {
     event: 'projed_meeting_asr_job_finished', dispatchEnabled: false, scanned: 0, units: 0,
     recovered: 0, abandoned: 0, deferred: 0, failures: 0, errors: {},
+    discussion: { scanned: 0, units: 0, completed: 0, sources: 0, abandoned: 0, deferred: 0, failures: 0, errors: {} },
   });
   docker(['exec', pgName, 'sed', '-i', '1d', '/var/lib/postgresql/data/pg_hba.conf']);
   docker(['exec', '--user', 'postgres', pgName, 'pg_ctl', 'reload', '-D', '/var/lib/postgresql/data']);

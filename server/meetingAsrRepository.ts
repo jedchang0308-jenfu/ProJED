@@ -223,3 +223,5 @@ export function createPostgresMeetingAsrRepository(options:{readonly runId:strin
     accounting:operation=>accountingTransaction(database,config,operation),
   });
 }
+
+export {accountingTransaction as runMeetingMaintenanceTransaction};

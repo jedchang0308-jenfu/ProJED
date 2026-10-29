@@ -174,6 +174,10 @@
     {
       "version": "0038_meeting_asr_control_v1",
       "path": "db/migrations/0038_meeting_asr_control_v1.sql"
+    },
+    {
+      "version": "0039_meeting_discussion_persistence_v1",
+      "path": "db/migrations/0039_meeting_discussion_persistence_v1.sql"
     }
   ],
   "objectAllowlist": [
@@ -330,7 +334,16 @@
     "projed_core.scan_meeting_asr_work_v1",
     "projed_core.recover_meeting_asr_unit_v1",
     "projed_core.meeting_asr_abandon_guard_v1",
-    "projed_core.abandon_meeting_asr_run_v1"
+    "projed_core.abandon_meeting_asr_run_v1",
+    "projed_core.meeting_discussion_scope_v1",
+    "projed_core.meeting_discussion_live_v1",
+    "projed_core.meeting_discussion_guard_v1",
+    "projed_core.claim_meeting_discussion_source_v1",
+    "projed_core.read_meeting_discussion_source_v1",
+    "projed_core.read_meeting_discussion_batch_v1",
+    "projed_core.append_meeting_discussion_batch_v1",
+    "projed_core.finish_meeting_discussion_work_v1",
+    "projed_core.scan_meeting_discussion_work_v1"
   ],
   "staticFixturePath": "qa/dev-139/s1/static",
   "runtime": {
