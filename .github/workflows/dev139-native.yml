@@ -6,6 +6,9 @@ on:
     branches: [codex/projed-independent-dev]
     paths:
       - .github/workflows/dev139-native.yml
+      - Dockerfile.dev139
+      - .dockerignore
+      - vite.config.ts
       - server/**
       - shared/**
       - src/**
@@ -14,6 +17,9 @@ on:
       - qa/dev-139/**
       - scripts/check-db-boundary.mjs
       - scripts/migrate-dev-139-s1.mjs
+      - scripts/build-dev139-cloud-run.mjs
+      - scripts/verify-dev139-cloud-run-artifact.mjs
+      - scripts/create-dev139-managed-binding.mjs
       - scripts/dev139-*.ts
       - scripts/lib/dev139-*.ts
       - scripts/lib/dev139-*.mjs
@@ -73,6 +79,11 @@ jobs:
       - name: Managed source boundary
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         run: npm run verify:dev-139:managed-static
+      - name: Compiled Cloud Run candidate artifact
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        # Existing verifier compiles server + Vite and checks emitted entry,
+        # static hashes and managed binding. It never runs Docker or connects DB.
+        run: npm run verify:dev-139:cloud-run-artifact
       # Both wrappers create and clean up their own nonce cluster. They use the
       # image's binaries, never its shared database/service or cloud credentials.
       - name: PostgreSQL Session and domain HTTP regressions

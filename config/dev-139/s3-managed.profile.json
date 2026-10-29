@@ -8,8 +8,14 @@
     "host": "cloud-sql-unix",
     "cloudSqlInstance": "jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg",
     "portPolicy": "cloud-sql-unix-socket",
-    "supportedPostgresMajors": [17, 18],
-    "schemas": ["projed_core", "projed_contract"]
+    "supportedPostgresMajors": [
+      17,
+      18
+    ],
+    "schemas": [
+      "projed_core",
+      "projed_contract"
+    ]
   },
   "roles": {
     "owner": "projed_owner_disposable",
@@ -117,6 +123,10 @@
     {
       "version": "0025_rag_lock_and_fk_compatibility_v1",
       "path": "db/migrations/0025_rag_lock_and_fk_compatibility_v1.sql"
+    },
+    {
+      "version": "0026_meeting_source_retention_v1",
+      "path": "db/migrations/0026_meeting_source_retention_v1.sql"
     }
   ],
   "objectAllowlist": [
@@ -218,7 +228,18 @@
     "projed_core.rag_embedding_worker_scope_v1",
     "projed_core.rag_sync_job_update_guard_v1",
     "projed_core.rag_sync_jobs_claim_v1",
-    "projed_core.rag_sync_jobs_version_v1"
+    "projed_core.rag_sync_jobs_version_v1",
+    "projed_core.meeting_capture_sessions",
+    "projed_core.meeting_capture_segments",
+    "projed_core.meeting_pointer_intervals",
+    "projed_core.meeting_analysis_runs",
+    "projed_core.meeting_transcript_segments",
+    "projed_core.meeting_segment_resolutions",
+    "projed_core.meeting_task_match_results",
+    "projed_core.meeting_draft_projections",
+    "projed_core.meeting_artifact_cleanup",
+    "projed_core.meeting_ai_budget_months",
+    "projed_core.meeting_ai_usage_attempts"
   ],
   "staticFixturePath": "dist",
   "runtime": {

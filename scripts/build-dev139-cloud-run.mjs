@@ -45,7 +45,7 @@ try {
 
   const index = readFileSync(resolve('dist/index.html'));
   const quick = readFileSync(resolve('dist/quick-task/index.html'));
-  const serverEntry = resolve('dist-server/index.js');
+  const serverEntry = resolve('dist-server/server/index.js');
   if (!statSync(serverEntry).isFile()) throw new Error('Compiled server entry is missing');
 
   const walk = directory => readdirSync(directory, { withFileTypes: true }).flatMap(entry => {

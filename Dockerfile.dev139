@@ -21,4 +21,4 @@ COPY --from=build --chown=node:node /app/dist-server ./dist-server
 COPY --from=build --chown=node:node /app/config/dev-139/s3-managed.profile.json ./config/dev-139/s3-managed.profile.json
 COPY --from=build --chown=node:node /app/db/migrations ./db/migrations
 USER node
-CMD ["node", "dist-server/index.js"]
+CMD ["node", "dist-server/server/index.js"]

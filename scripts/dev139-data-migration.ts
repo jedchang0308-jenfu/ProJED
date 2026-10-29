@@ -412,9 +412,164 @@ const TABLES: readonly TableSpec[] = [
            last_accessed_at, created_at, updated_at
       FROM public.calendar_subscriptions ORDER BY owner_user_id, id
   `),
+  table('meeting_capture_sessions', 'public.meeting_capture_sessions', [
+    'id', 'tenant_id', 'project_id', 'record_id', 'created_by',
+    'idempotency_key', 'state', 'epoch_manifest', 'last_progress_at', 'stopped_at',
+    'audio_expires_at', 'source_version', 'audio_manifest_hash', 'pointer_manifest_hash', 'source_completeness',
+    'pointer_loss', 'review_revision', 'active_transcript_revision_id', 'created_at', 'updated_at',
+    'started_at', 'stopped_reason', 'source_frozen_at', 'source_parent_version', 'final_pointer_sequence',
+    'source_gaps'
+  ], `
+    SELECT source.id, source.tenant_id, source.project_id, source.record_id,
+           source.created_by, source.idempotency_key, source.state, source.epoch_manifest,
+           source.last_progress_at, source.stopped_at, source.audio_expires_at, source.source_version,
+           source.audio_manifest_hash, source.pointer_manifest_hash, source.source_completeness, source.pointer_loss,
+           source.review_revision, source.active_transcript_revision_id, source.created_at, source.updated_at,
+           source.started_at, source.stopped_reason, source.source_frozen_at, source.source_parent_version,
+           source.final_pointer_sequence, source.source_gaps
+      FROM public.meeting_capture_sessions source
+     ORDER BY source.id
+  `),
+  table('meeting_capture_segments', 'public.meeting_capture_segments', [
+    'id', 'capture_id', 'segment_index', 'epoch', 'start_offset_ms',
+    'end_offset_ms', 'overlap_ms', 'gap_before_ms', 'object_path', 'mime',
+    'bytes', 'sha256', 'upload_state', 'created_at', 'updated_at', 'source_version',
+    'reservation_key', 'upload_token_expires_at', 'verified_at', 'last_error'
+  ], `
+    SELECT source.id, source.capture_id, source.segment_index, source.epoch,
+           source.start_offset_ms, source.end_offset_ms, source.overlap_ms, source.gap_before_ms,
+           source.object_path, source.mime, source.bytes, source.sha256, source.upload_state,
+           source.created_at, source.updated_at, source.source_version, source.reservation_key,
+           source.upload_token_expires_at, source.verified_at, source.last_error
+      FROM public.meeting_capture_segments source
+     ORDER BY source.id
+  `),
+  table('meeting_pointer_intervals', 'public.meeting_pointer_intervals', [
+    'id', 'capture_id', 'clock_epoch', 'sequence', 'canonical_task_id',
+    'surface_kind', 'started_offset_ms', 'ended_offset_ms', 'visible', 'termination_reason',
+    'batch_key', 'batch_digest', 'created_at', 'tenant_id', 'project_id'
+  ], `
+    SELECT source.id, source.capture_id, source.clock_epoch, source.sequence,
+           source.canonical_task_id, source.surface_kind, source.started_offset_ms, source.ended_offset_ms,
+           source.visible, source.termination_reason, source.batch_key, source.batch_digest,
+           source.created_at, capture.tenant_id, capture.project_id
+      FROM public.meeting_pointer_intervals source
+      JOIN public.meeting_capture_sessions capture ON capture.id = source.capture_id
+     ORDER BY source.id
+  `),
+  table('meeting_analysis_runs', 'public.meeting_analysis_runs', [
+    'id', 'capture_id', 'source_version', 'request_key', 'transcript_revision_id',
+    'config_version', 'state', 'resume_stage', 'stage_cursor', 'attempt_count',
+    'next_attempt_at', 'lease_token', 'lease_expires_at', 'upload_completed_at', 'deadline_at',
+    'budget_month', 'reserved_twd_micros', 'actual_twd_micros', 'error_code', 'overdue_at',
+    'created_at', 'updated_at', 'provider_mode', 'cleanup_pending', 'manual_retry_count'
+  ], `
+    SELECT source.id, source.capture_id, source.source_version, source.request_key,
+           source.transcript_revision_id, source.config_version, source.state, source.resume_stage,
+           source.stage_cursor, source.attempt_count, source.next_attempt_at, source.lease_token,
+           source.lease_expires_at, source.upload_completed_at, source.deadline_at, source.budget_month,
+           source.reserved_twd_micros, source.actual_twd_micros, source.error_code, source.overdue_at,
+           source.created_at, source.updated_at, source.provider_mode, source.cleanup_pending,
+           source.manual_retry_count
+      FROM public.meeting_analysis_runs source
+     ORDER BY source.id
+  `),
+  table('meeting_transcript_segments', 'public.meeting_transcript_segments', [
+    'id', 'capture_id', 'transcript_revision_id', 'producer_run_id', 'segment_index',
+    'source_audio_ranges', 'start_offset_ms', 'end_offset_ms', 'raw_text', 'normalized_text',
+    'word_offsets', 'source_hash', 'created_at'
+  ], `
+    SELECT source.id, source.capture_id, source.transcript_revision_id, source.producer_run_id,
+           source.segment_index, source.source_audio_ranges, source.start_offset_ms, source.end_offset_ms,
+           source.raw_text, source.normalized_text, source.word_offsets, source.source_hash,
+           source.created_at
+      FROM public.meeting_transcript_segments source
+     ORDER BY source.id
+  `),
+  table('meeting_segment_resolutions', 'public.meeting_segment_resolutions', [
+    'id', 'capture_id', 'transcript_segment_id', 'candidate_snapshot', 'latest_run_id',
+    'resolution_state', 'revision', 'human_reviewed', 'human_empty_decision', 'protected_source_ranges',
+    'config_version', 'created_at', 'updated_at'
+  ], `
+    SELECT source.id, source.capture_id, source.transcript_segment_id, source.candidate_snapshot,
+           source.latest_run_id, source.resolution_state, source.revision, source.human_reviewed,
+           source.human_empty_decision, source.protected_source_ranges, source.config_version, source.created_at,
+           source.updated_at
+      FROM public.meeting_segment_resolutions source
+     ORDER BY source.id
+  `),
+  table('meeting_task_match_results', 'public.meeting_task_match_results', [
+    'id', 'resolution_id', 'task_id', 'quote_range', 'semantic_score',
+    'pointer_feature', 'ai_suggestion_version', 'decision', 'decision_source', 'corrected_by',
+    'corrected_at', 'created_at', 'updated_at', 'capture_id', 'tenant_id',
+    'project_id'
+  ], `
+    SELECT source.id, source.resolution_id, source.task_id, source.quote_range,
+           source.semantic_score, source.pointer_feature, source.ai_suggestion_version, source.decision,
+           source.decision_source, source.corrected_by, source.corrected_at, source.created_at,
+           source.updated_at, capture.id AS capture_id, capture.tenant_id, capture.project_id
+      FROM public.meeting_task_match_results source
+      JOIN public.meeting_segment_resolutions resolution ON resolution.id = source.resolution_id
+      JOIN public.meeting_capture_sessions capture ON capture.id = resolution.capture_id
+     ORDER BY source.id
+  `),
+  table('meeting_draft_projections', 'private.meeting_draft_projections', [
+    'record_id', 'capture_id', 'applied_run_id', 'applied_review_revision', 'last_request_key',
+    'payload_hash', 'block_markers', 'manual_link_set', 'auto_link_set', 'record_version',
+    'updated_at'
+  ], `
+    SELECT source.record_id, source.capture_id, source.applied_run_id, source.applied_review_revision,
+           source.last_request_key, source.payload_hash, source.block_markers, source.manual_link_set,
+           source.auto_link_set, source.record_version, source.updated_at
+      FROM private.meeting_draft_projections source
+     ORDER BY source.record_id
+  `),
+  table('meeting_artifact_cleanup', 'private.meeting_artifact_cleanup', [
+    'obligation_id', 'capture_id', 'run_id', 'attempt_id', 'kind',
+    'object_locator', 'display_name', 'external_file_id', 'state', 'lease_token',
+    'lease_expires_at', 'upload_token_expires_at', 'due_at', 'last_verified_at', 'attempts',
+    'error_code', 'created_at', 'updated_at'
+  ], `
+    SELECT source.obligation_id, source.capture_id, source.run_id, source.attempt_id,
+           source.kind, source.object_locator, source.display_name, source.external_file_id,
+           source.state, source.lease_token, source.lease_expires_at, source.upload_token_expires_at,
+           source.due_at, source.last_verified_at, source.attempts, source.error_code,
+           source.created_at, source.updated_at
+      FROM private.meeting_artifact_cleanup source
+     ORDER BY source.obligation_id
+  `),
+  table('meeting_ai_budget_months', 'private.meeting_ai_budget_months', [
+    'budget_month', 'limit_twd_micros', 'reserved_twd_micros', 'spent_twd_micros', 'updated_at'
+  ], `
+    SELECT source.budget_month, source.limit_twd_micros, source.reserved_twd_micros, source.spent_twd_micros,
+           source.updated_at
+      FROM private.meeting_ai_budget_months source
+     ORDER BY source.budget_month
+  `),
+  table('meeting_ai_usage_attempts', 'private.meeting_ai_usage_attempts', [
+    'attempt_id', 'capture_id', 'run_id', 'unit_identity', 'dispatch_month',
+    'provider', 'model', 'price_version', 'reserved_twd_micros', 'actual_twd_micros',
+    'usage_state', 'outcome', 'created_at', 'updated_at'
+  ], `
+    SELECT source.attempt_id, source.capture_id, source.run_id, source.unit_identity,
+           source.dispatch_month, source.provider, source.model, source.price_version,
+           source.reserved_twd_micros, source.actual_twd_micros, source.usage_state, source.outcome,
+           source.created_at, source.updated_at
+      FROM private.meeting_ai_usage_attempts source
+     ORDER BY source.attempt_id
+  `),
 ];
 
 const BLOCKERS = [
+  ['public.meeting_capture_sessions', 'WHERE NOT EXISTS (SELECT 1 FROM public.knowledge_records record WHERE record.id = public.meeting_capture_sessions.record_id AND record.tenant_id = public.meeting_capture_sessions.tenant_id AND record.project_id = public.meeting_capture_sessions.project_id)'],
+  ['public.meeting_capture_segments', 'WHERE NOT EXISTS (SELECT 1 FROM public.meeting_capture_sessions capture WHERE capture.id = public.meeting_capture_segments.capture_id)'],
+  ['public.meeting_pointer_intervals', 'WHERE NOT EXISTS (SELECT 1 FROM public.meeting_capture_sessions capture JOIN public.wbs_items task ON task.id = public.meeting_pointer_intervals.canonical_task_id AND task.tenant_id = capture.tenant_id AND task.project_id = capture.project_id WHERE capture.id = public.meeting_pointer_intervals.capture_id)'],
+  ['public.meeting_analysis_runs', 'WHERE NOT EXISTS (SELECT 1 FROM public.meeting_capture_sessions capture WHERE capture.id = public.meeting_analysis_runs.capture_id)'],
+  ['public.meeting_transcript_segments', 'WHERE NOT EXISTS (SELECT 1 FROM public.meeting_analysis_runs run WHERE run.id = public.meeting_transcript_segments.producer_run_id AND run.capture_id = public.meeting_transcript_segments.capture_id)'],
+  ['public.meeting_segment_resolutions', 'WHERE NOT EXISTS (SELECT 1 FROM public.meeting_transcript_segments transcript WHERE transcript.id = public.meeting_segment_resolutions.transcript_segment_id AND transcript.capture_id = public.meeting_segment_resolutions.capture_id) OR (latest_run_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.meeting_analysis_runs run WHERE run.id = public.meeting_segment_resolutions.latest_run_id AND run.capture_id = public.meeting_segment_resolutions.capture_id))'],
+  ['public.meeting_task_match_results', 'WHERE NOT EXISTS (SELECT 1 FROM public.meeting_segment_resolutions resolution JOIN public.meeting_capture_sessions capture ON capture.id = resolution.capture_id JOIN public.wbs_items task ON task.id = public.meeting_task_match_results.task_id AND task.tenant_id = capture.tenant_id AND task.project_id = capture.project_id WHERE resolution.id = public.meeting_task_match_results.resolution_id)'],
+  ['private.meeting_draft_projections', 'WHERE NOT EXISTS (SELECT 1 FROM public.meeting_capture_sessions capture WHERE capture.id = private.meeting_draft_projections.capture_id AND capture.record_id = private.meeting_draft_projections.record_id) OR (applied_run_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.meeting_analysis_runs run WHERE run.id = private.meeting_draft_projections.applied_run_id AND run.capture_id = private.meeting_draft_projections.capture_id))'],
+  ['private.meeting_artifact_cleanup', 'WHERE (capture_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.meeting_capture_sessions capture WHERE capture.id = private.meeting_artifact_cleanup.capture_id)) OR (run_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.meeting_analysis_runs run WHERE run.id = private.meeting_artifact_cleanup.run_id AND (private.meeting_artifact_cleanup.capture_id IS NULL OR run.capture_id = private.meeting_artifact_cleanup.capture_id)))'],
   ['public.llm_access_logs', 'WHERE project_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.projects project WHERE project.id = public.llm_access_logs.project_id AND project.tenant_id = public.llm_access_logs.tenant_id)'],
   ['public.documents', 'WHERE project_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.projects project WHERE project.id = public.documents.project_id AND project.tenant_id = public.documents.tenant_id)'],
   ['public.document_versions', 'WHERE NOT EXISTS (SELECT 1 FROM public.documents document WHERE document.id = public.document_versions.document_id AND document.tenant_id = public.document_versions.tenant_id)'],
@@ -423,17 +578,6 @@ const BLOCKERS = [
   ['public.rag_sync_jobs', 'WHERE source_document_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.documents document WHERE document.id = public.rag_sync_jobs.source_document_id AND document.tenant_id = public.rag_sync_jobs.tenant_id)'],
   ['public.external_rag_objects', 'WHERE NOT EXISTS (SELECT 1 FROM public.documents document WHERE document.id = public.external_rag_objects.document_id AND document.tenant_id = public.external_rag_objects.tenant_id)'],
   ['public.inbox_items', ''],
-  ['public.meeting_capture_sessions', ''],
-  ['public.meeting_capture_segments', ''],
-  ['public.meeting_pointer_intervals', ''],
-  ['public.meeting_analysis_runs', ''],
-  ['public.meeting_transcript_segments', ''],
-  ['public.meeting_segment_resolutions', ''],
-  ['public.meeting_task_match_results', ''],
-  ['private.meeting_draft_projections', ''],
-  ['private.meeting_artifact_cleanup', ''],
-  ['private.meeting_ai_budget_months', ''],
-  ['private.meeting_ai_usage_attempts', ''],
   ['public.task_tracking_reference_staging', ''],
   ['public.task_workbench_placement_operations', "WHERE status <> 'committed' OR result IS NULL"],
   ['public.task_tracking_reference_operations', "WHERE status <> 'committed' OR request_hash !~ '^[0-9a-f]{64}$' OR result IS NULL"],

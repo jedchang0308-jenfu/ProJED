@@ -30,4 +30,5 @@ export const S3_MIGRATION_PATHS = Object.freeze([
   'db/migrations/0023_verified_login_email_v1.sql',
   'db/migrations/0024_rag_record_lifecycle_v1.sql',
   'db/migrations/0025_rag_lock_and_fk_compatibility_v1.sql',
+  'db/migrations/0026_meeting_source_retention_v1.sql',
 ]);

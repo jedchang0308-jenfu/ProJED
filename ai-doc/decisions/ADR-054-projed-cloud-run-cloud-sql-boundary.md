@@ -34,7 +34,7 @@ D2 最新人類原文為「保留 ProJED 現有的工作區、看板與權限功
 
 ## Chosen Rule
 
-2026-10-29 續行修正：人類已要求完成外部接線、正式資料及發布；現行契約為 SPEC-139，選測與開發出口見 §8.1／§11.5，整合進度與分層證據只在 §33–§39 維護。W22／W23 source、PR／CI 與本地模擬不代表真 Firebase／OIDC、ProJED opaque Session／既有 UUID proof 或正式整合完成；工作區／看板權限仍由 ProJED 控制。W18／Rev10 為 local 切片歷史，W20／W21 資料保留也不代表 RAG／會議等剩餘功能完成，不縮減完整目標。
+2026-10-29 續行修正：人類已要求完成外部接線、正式資料及發布；現行契約為 SPEC-139，選測與開發出口見 §8.1／§11.5，整合進度與分層證據只在 §33–§40 維護。W22／W23 source、PR／CI 與本地模擬不代表真 Firebase／OIDC、ProJED opaque Session／既有 UUID proof 或正式整合完成；工作區／看板權限仍由 ProJED 控制。W18／Rev10 為 local 切片歷史，W20／W21 資料保留也不代表 RAG／會議等剩餘功能完成，不縮減完整目標。
 
 managed database 固定既有 `jenfu-platform-prod / asia-east1 / jenfu-platform-prod-pg / jenfu_prod`，不是另建 `projed` DB。原 Hosting project 為 `projed-cc78d`，唯一新 runtime 規劃為同 project／asia-east1 的 `projed-prod`，以受控跨 project 身分連共用 SQL，不增加第二個 edge proxy。新 runtime／release 服務帳號、app Secret 與 SQL grant 尚待新責任權限確認；舊 `projed-ai-backend` 與現有身分不覆寫。此項精簡不執行正式資料、流量或權限變更。
 

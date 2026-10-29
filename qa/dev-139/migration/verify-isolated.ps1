@@ -75,16 +75,16 @@ function Invoke-DataMode([string]$Mode, [int[]]$ExpectedExitCodes) {
   return ($jsonLine.ToString() | ConvertFrom-Json)
 }
 
-function Assert-RagPreflightBlocked([string]$MutationSql, [string]$RestoreSql, [string]$ExpectedDomainPrefix) {
+function Assert-SourcePreflightBlocked([string]$MutationSql, [string]$RestoreSql, [string]$ExpectedDomainPrefix) {
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', $MutationSql)
   try {
     $result = Invoke-DataMode -Mode 'apply' -ExpectedExitCodes @(2)
     $matchingDomains = @($result.blockers.domain | Where-Object { $_.StartsWith($ExpectedDomainPrefix, [System.StringComparison]::Ordinal) })
     if ($result.status -ne 'BLOCKED' -or $matchingDomains.Count -eq 0) {
-      throw "DEV-139 invalid RAG source state was not blocked: $ExpectedDomainPrefix"
+      throw "DEV-139 invalid source state was not blocked: $ExpectedDomainPrefix"
     }
-    $targetCount = Invoke-PgScalar -Database $targetDatabase -Sql 'SELECT (SELECT count(*) FROM projed_core.profiles) + (SELECT count(*) FROM projed_core.google_identity_proofs) + (SELECT count(*) FROM projed_core.account_authorization_guards) + (SELECT count(*) FROM projed_core.documents) + (SELECT count(*) FROM projed_core.knowledge_records) + (SELECT count(*) FROM projed_core.rag_sync_jobs)'
-    if ($targetCount -ne '0') { throw 'DEV-139 invalid RAG source preflight wrote target rows.' }
+    $targetCount = Invoke-PgScalar -Database $targetDatabase -Sql 'SELECT (SELECT count(*) FROM projed_core.profiles) + (SELECT count(*) FROM projed_core.google_identity_proofs) + (SELECT count(*) FROM projed_core.account_authorization_guards) + (SELECT count(*) FROM projed_core.documents) + (SELECT count(*) FROM projed_core.knowledge_records) + (SELECT count(*) FROM projed_core.rag_sync_jobs) + (SELECT count(*) FROM projed_core.meeting_capture_sessions) + (SELECT count(*) FROM projed_core.meeting_capture_segments) + (SELECT count(*) FROM projed_core.meeting_pointer_intervals) + (SELECT count(*) FROM projed_core.meeting_analysis_runs) + (SELECT count(*) FROM projed_core.meeting_transcript_segments) + (SELECT count(*) FROM projed_core.meeting_segment_resolutions) + (SELECT count(*) FROM projed_core.meeting_task_match_results) + (SELECT count(*) FROM projed_core.meeting_draft_projections) + (SELECT count(*) FROM projed_core.meeting_artifact_cleanup) + (SELECT count(*) FROM projed_core.meeting_ai_budget_months) + (SELECT count(*) FROM projed_core.meeting_ai_usage_attempts)'
+    if ($targetCount -ne '0') { throw 'DEV-139 invalid source preflight wrote target rows.' }
   }
   finally {
     Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', $RestoreSql)
@@ -187,6 +187,7 @@ try {
   npm.cmd run migrate:dev-139:s3:disposable
   if ($LASTEXITCODE -ne 0) { throw 'DEV-139 target schema migration failed.' }
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-f', 'qa/dev-139/migration/source-fixture.sql')
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-f', 'qa/dev-139/migration/meeting-source-fixture.sql')
 
   $env:PROJED_MIGRATION_SOURCE_DATABASE_URL = "postgresql://postgres:${encodedAdmin}@127.0.0.1:$port/$sourceDatabase"
   $env:PROJED_MIGRATION_TARGET_DATABASE_URL = "postgresql://projed_importer_disposable:${encodedImporter}@127.0.0.1:$port/$targetDatabase"
@@ -229,6 +230,29 @@ UPDATE public.document_versions
 
   Assert-RagDisabledLegacyMirrorAllowed
 
+  # These are valid single-column source FKs with invalid combined scope.
+  # Check before import so derived scope joins can never silently discard rows.
+  Assert-SourcePreflightBlocked `
+    -MutationSql "UPDATE public.meeting_capture_sessions SET project_id = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' WHERE id = 'a1234567-1234-4234-8234-123456789001'" `
+    -RestoreSql "UPDATE public.meeting_capture_sessions SET project_id = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' WHERE id = 'a1234567-1234-4234-8234-123456789001'" `
+    -ExpectedDomainPrefix 'public.meeting_capture_sessions WHERE'
+  Assert-SourcePreflightBlocked `
+    -MutationSql "UPDATE public.meeting_pointer_intervals SET canonical_task_id = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee9' WHERE id = 'a3234567-1234-4234-8234-123456789001'" `
+    -RestoreSql "UPDATE public.meeting_pointer_intervals SET canonical_task_id = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1' WHERE id = 'a3234567-1234-4234-8234-123456789001'" `
+    -ExpectedDomainPrefix 'public.meeting_pointer_intervals WHERE'
+  Assert-SourcePreflightBlocked `
+    -MutationSql "UPDATE public.meeting_transcript_segments SET producer_run_id = 'a4234567-1234-4234-8234-123456789002' WHERE id = 'a5234567-1234-4234-8234-123456789001'" `
+    -RestoreSql "UPDATE public.meeting_transcript_segments SET producer_run_id = 'a4234567-1234-4234-8234-123456789001' WHERE id = 'a5234567-1234-4234-8234-123456789001'" `
+    -ExpectedDomainPrefix 'public.meeting_transcript_segments WHERE'
+  Assert-SourcePreflightBlocked `
+    -MutationSql "UPDATE public.meeting_segment_resolutions SET latest_run_id = 'a4234567-1234-4234-8234-123456789002' WHERE id = 'a6234567-1234-4234-8234-123456789001'" `
+    -RestoreSql "UPDATE public.meeting_segment_resolutions SET latest_run_id = 'a4234567-1234-4234-8234-123456789001' WHERE id = 'a6234567-1234-4234-8234-123456789001'" `
+    -ExpectedDomainPrefix 'public.meeting_segment_resolutions WHERE'
+  Assert-SourcePreflightBlocked `
+    -MutationSql "UPDATE private.meeting_draft_projections SET applied_run_id = 'a4234567-1234-4234-8234-123456789002' WHERE record_id = '23456789-1234-4234-8234-123456789002'" `
+    -RestoreSql "UPDATE private.meeting_draft_projections SET applied_run_id = 'a4234567-1234-4234-8234-123456789001' WHERE record_id = '23456789-1234-4234-8234-123456789002'" `
+    -ExpectedDomainPrefix 'private.meeting_draft_projections WHERE'
+
   $plan = Invoke-DataMode -Mode 'plan' -ExpectedExitCodes @(0)
   if ($plan.status -ne 'PASS' -or $plan.matches -ne $false -or $plan.tables.profiles.count -ne 2 -or
       $plan.tables.google_identity_proofs.count -ne 1 -or $plan.tables.llm_access_logs.count -ne 5 -or
@@ -250,23 +274,23 @@ UPDATE public.document_versions
     if ($scopeTargetCount -ne '0') { throw 'DEV-139 document scope preflight wrote target rows.' }
     Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "UPDATE public.$sourceDomain SET tenant_id = '$scopeTenant'::uuid WHERE id = '$scopeRowId'::uuid")
   }
-  Assert-RagPreflightBlocked `
+  Assert-SourcePreflightBlocked `
     -MutationSql "UPDATE public.knowledge_records SET status = 'draft' WHERE id = '23456789-1234-4234-8234-123456789002'" `
     -RestoreSql "UPDATE public.knowledge_records SET status = 'published' WHERE id = '23456789-1234-4234-8234-123456789002'" `
     -ExpectedDomainPrefix 'public.knowledge_records WHERE rag_enabled AND'
-  Assert-RagPreflightBlocked `
+  Assert-SourcePreflightBlocked `
     -MutationSql "UPDATE public.knowledge_records SET visibility = 'private' WHERE id = '23456789-1234-4234-8234-123456789002'" `
     -RestoreSql "UPDATE public.knowledge_records SET visibility = 'project' WHERE id = '23456789-1234-4234-8234-123456789002'" `
     -ExpectedDomainPrefix 'public.knowledge_records WHERE rag_enabled AND'
-  Assert-RagPreflightBlocked `
+  Assert-SourcePreflightBlocked `
     -MutationSql "UPDATE public.knowledge_records SET source_document_id = NULL WHERE id = '23456789-1234-4234-8234-123456789002'" `
     -RestoreSql "UPDATE public.knowledge_records SET source_document_id = 'd0000000-0000-4000-8000-000000000004' WHERE id = '23456789-1234-4234-8234-123456789002'" `
     -ExpectedDomainPrefix 'public.knowledge_records WHERE rag_enabled AND'
-  Assert-RagPreflightBlocked `
+  Assert-SourcePreflightBlocked `
     -MutationSql "UPDATE public.documents SET source_id = '23456789-1234-4234-8234-123456789099' WHERE id = 'd0000000-0000-4000-8000-000000000004'" `
     -RestoreSql "UPDATE public.documents SET source_id = '23456789-1234-4234-8234-123456789002' WHERE id = 'd0000000-0000-4000-8000-000000000004'" `
     -ExpectedDomainPrefix 'public.knowledge_records WHERE source_document_id IS NOT NULL'
-  Assert-RagPreflightBlocked `
+  Assert-SourcePreflightBlocked `
     -MutationSql "UPDATE public.documents SET rag_enabled = false WHERE id = 'd0000000-0000-4000-8000-000000000004'" `
     -RestoreSql "UPDATE public.documents SET rag_enabled = true WHERE id = 'd0000000-0000-4000-8000-000000000004'" `
     -ExpectedDomainPrefix 'public.knowledge_records WHERE source_document_id IS NOT NULL'
@@ -507,7 +531,7 @@ UPDATE public.document_versions
   if ($targetRagEligible -ne '1') { throw 'DEV-139 apply/reconcile did not retain the valid published RAG source.' }
   $importedGuardBindings = Invoke-PgScalar -Database $targetDatabase -Sql "SELECT (SELECT count(*) FROM projed_core.account_authorization_guards) || ':' || (SELECT count(*) FROM projed_core.account_authorization_guards guard JOIN projed_core.google_identity_proofs proof USING (local_user_id) JOIN projed_core.profiles profile ON profile.id = guard.local_user_id WHERE guard.local_user_id = '11111111-1111-4111-8111-111111111111' AND guard.active AND guard.revision = 1 AND guard.updated_at = profile.updated_at) || ':' || (SELECT count(*) FROM projed_core.account_authorization_guards WHERE local_user_id = '22222222-2222-4222-8222-222222222222')"
   if ($importedGuardBindings -ne '1:1:0') { throw "DEV-139 source account guard projection mismatch: $importedGuardBindings" }
-  foreach ($retentionCheck in @('llm-access-retention.sql', 'workspace-lifecycle.sql', 'document-retention.sql')) {
+  foreach ($retentionCheck in @('llm-access-retention.sql', 'workspace-lifecycle.sql', 'document-retention.sql', 'meeting-retention.sql')) {
     try {
       # Each file owns a connection-local BEGIN/ROLLBACK; a failed psql closes
       # that transaction, so independent readback/negative cases remain safe.
@@ -623,6 +647,12 @@ UPDATE public.document_versions
       'record-rag-invalid-state-and-provenance-prewrite-reject',
       'record-rag-disabled-legacy-visibility-compatible',
       'document-version-fk-detach-and-rollback',
+      'meeting-source-review-projection-and-ledger-retention',
+      'meeting-capture-board-preflight-zero-write',
+      'meeting-transcript-producer-and-review-scope-preflight-zero-write',
+      'meeting-raw-source-and-global-ledger-runtime-deny',
+      'meeting-bigint-numeric-json-and-microsecond-retention',
+      'meeting-cleanup-detach-and-usage-orphan-retention',
       'quick-oauth-client-reject',
       'target-drift-detect', 'source-derived-active-account-guards',
       'disabled-deleted-missing-source-user-prewrite-reject',

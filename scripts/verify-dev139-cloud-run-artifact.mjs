@@ -20,11 +20,11 @@ assert.match(dockerfile, /node:24\.12\.0-bookworm-slim/);
 assert.match(dockerfile, /npm run build:dev-139:cloud-run/);
 assert.match(dockerfile, /npm ci --omit=dev --ignore-scripts/);
 assert.match(dockerfile, /USER node/);
-assert.match(dockerfile, /CMD \["node", "dist-server\/index\.js"\]/);
+assert.match(dockerfile, /CMD \["node", "dist-server\/server\/index\.js"\]/);
 assert.doesNotMatch(dockerfile, /PROJED_DATABASE_URL|PROJED_RUNTIME_BINDING_JSON|password|secret/i);
 for (const entry of ['.git', 'node_modules', 'dist', 'output', '.env.*']) assert.match(dockerignore, new RegExp(`^${entry.replace('.', '\\.')}\r?$`, 'm'));
 
-for (const path of ['dist/index.html', 'dist/quick-task/index.html', 'dist/dev139-cloud-run-meta.json', 'dist-server/index.js']) {
+for (const path of ['dist/index.html', 'dist/quick-task/index.html', 'dist/dev139-cloud-run-meta.json', 'dist-server/server/index.js']) {
   assert.equal(statSync(resolve(path)).isFile(), true, `missing ${path}`);
 }
 const meta = JSON.parse(readFileSync('dist/dev139-cloud-run-meta.json', 'utf8'));
@@ -45,7 +45,12 @@ assert.equal(binding.cloudSqlInstance, 'jenfu-platform-prod:asia-east1:jenfu-pla
 assert.equal(Object.keys(binding).some(key => /password|secret|credential/i.test(key)), false);
 assert.equal(binding.staticFixtureSha256, createHash('sha256').update(readFileSync('dist/dev139-cloud-run-meta.json')).digest('hex'));
 
-const { loadRuntimeConfig } = await import(`../dist-server/config.js?verify=${Date.now()}`);
+const { loadRuntimeConfig } = await import(`../dist-server/server/config.js?verify=${Date.now()}`);
+// Import the emitted meeting entry without booting the HTTP server or a pool.
+// Its shared/src dependencies must resolve in the packaged Node ESM layout.
+const meetingModule = await import('../dist-server/server/meetingSynthesis.js');
+assert.equal(typeof meetingModule.parseMeetingSynthesisRequest, 'function');
+assert.equal(typeof meetingModule.completeMeetingSynthesis, 'function');
 const config = loadRuntimeConfig({
   PROJED_ENV: 'managed',
   PROJED_APP_ENTRY: 'main',
