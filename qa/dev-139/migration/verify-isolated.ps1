@@ -653,6 +653,7 @@ UPDATE public.document_versions
       'meeting-raw-source-and-global-ledger-runtime-deny',
       'meeting-bigint-numeric-json-and-microsecond-retention',
       'meeting-cleanup-detach-and-usage-orphan-retention',
+      'meeting-board-cascade-and-independent-reference-delete-denial',
       'quick-oauth-client-reject',
       'target-drift-detect', 'source-derived-active-account-guards',
       'disabled-deleted-missing-source-user-prewrite-reject',

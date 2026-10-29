@@ -373,6 +373,30 @@ BEGIN
   END;
 END $$;
 
+-- Independent referenced objects cannot be deleted. This is distinct from a
+-- whole Board cascade, which the existing LLM/document/product checks exercise.
+DO $$
+DECLARE v_constraint text;
+BEGIN
+  BEGIN
+    DELETE FROM projed_core.wbs_items
+     WHERE id = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1';
+    RAISE EXCEPTION 'deleting a task with retained meeting evidence was accepted';
+  EXCEPTION WHEN foreign_key_violation THEN
+    GET STACKED DIAGNOSTICS v_constraint = CONSTRAINT_NAME;
+    IF v_constraint NOT IN (
+      'meeting_pointer_intervals_tenant_id_project_id_canonical_t_fkey',
+      'meeting_task_match_results_tenant_id_project_id_task_id_fkey'
+    ) THEN RAISE; END IF;
+  END;
+  BEGIN
+    DELETE FROM projed_core.meeting_analysis_runs
+     WHERE id = 'a4234567-1234-4234-8234-123456789001';
+    RAISE EXCEPTION 'deleting a run with retained transcript/review was accepted';
+  EXCEPTION WHEN foreign_key_violation THEN NULL;
+  END;
+END $$;
+
 -- Deleting a parent may detach cleanup references, but must not discard either
 -- the storage/provider obligation or usage ledger rows. The savepoint restores
 -- the original imported snapshot before the final rollback.

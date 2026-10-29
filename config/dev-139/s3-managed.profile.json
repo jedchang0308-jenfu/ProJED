@@ -127,6 +127,10 @@
     {
       "version": "0026_meeting_source_retention_v1",
       "path": "db/migrations/0026_meeting_source_retention_v1.sql"
+    },
+    {
+      "version": "0027_meeting_cascade_compatibility_v1",
+      "path": "db/migrations/0027_meeting_cascade_compatibility_v1.sql"
     }
   ],
   "objectAllowlist": [
