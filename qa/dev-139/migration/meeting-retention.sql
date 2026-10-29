@@ -2,6 +2,9 @@
 -- prove RLS/grants, same-capture/board foreign keys, and cleanup retention.
 -- All temporary inserts, role probes, and deletes roll back at the end.
 BEGIN;
+-- This file checks explicit integrity failures immediately; the separate
+-- meeting-reference-commit helper proves the default commit-time behavior.
+SET CONSTRAINTS ALL IMMEDIATE;
 
 DO $$
 BEGIN

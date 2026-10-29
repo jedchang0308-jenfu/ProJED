@@ -545,6 +545,8 @@ UPDATE public.document_versions
   $env:PROJED_APP_ENTRY = 'main'
   $env:PROJED_DATABASE_URL = "postgresql://projed_runtime_disposable:${encodedRuntime}@127.0.0.1:$port/$targetDatabase"
   $env:PROJED_QA_TARGET_ADMIN_URL = "postgresql://postgres:${encodedAdmin}@127.0.0.1:$port/$targetDatabase"
+  & npx.cmd tsx qa/dev-139/migration/meeting-reference-commit.ts
+  if ($LASTEXITCODE -ne 0) { $retentionFailures += 'meeting-reference-commit.ts: commit integrity or owned cleanup failed' }
   & npx.cmd tsx qa/dev-139/migration/workspace-transfer-retention.ts
   if ($LASTEXITCODE -ne 0) { $retentionFailures += 'workspace-transfer-retention.ts: product command verification failed' }
 

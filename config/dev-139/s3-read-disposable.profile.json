@@ -130,6 +130,10 @@
     {
       "version": "0027_meeting_cascade_compatibility_v1",
       "path": "db/migrations/0027_meeting_cascade_compatibility_v1.sql"
+    },
+    {
+      "version": "0028_meeting_atomic_cascade_v1",
+      "path": "db/migrations/0028_meeting_atomic_cascade_v1.sql"
     }
   ],
   "objectAllowlist": [

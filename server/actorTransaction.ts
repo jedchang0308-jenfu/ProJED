@@ -77,6 +77,7 @@ export async function runActorTransaction<T>(
   let transactionStarted = false;
   let beginSent = false;
   let commitSent = false;
+  let confirmedCommitRejection: KernelError | undefined;
   let portClosed = false;
   let inFlight = false;
 
@@ -324,6 +325,14 @@ export async function runActorTransaction<T>(
     try {
       await client.query('COMMIT');
     } catch (error) {
+      const sqlState = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
+      // A server constraint error confirms that COMMIT rolled the transaction
+      // back. It must not turn an invalid delete into an ambiguous/retryable
+      // write. Transport failures and other unclassified results stay unknown.
+      if (typeof sqlState === 'string' && /^23[0-9A-Z]{3}$/u.test(sqlState)) {
+        confirmedCommitRejection = new KernelError('DOMAIN_DATA_INVALID', 'Transaction violates data constraints', 409, { cause: error });
+        throw confirmedCommitRejection;
+      }
       throw new KernelError('DB_COMMIT_UNKNOWN', 'Commit result is unknown', 503, { cause: error });
     }
     transactionStarted = false;
@@ -333,6 +342,7 @@ export async function runActorTransaction<T>(
     portClosed = true;
     if (commitSent) {
       lease.release(true);
+      if (confirmedCommitRejection && error === confirmedCommitRejection) throw confirmedCommitRejection;
       throw error instanceof KernelError && error.code === 'DB_COMMIT_UNKNOWN'
         ? error
         : new KernelError('DB_COMMIT_UNKNOWN', 'Commit result is unknown', 503, { cause: error });
