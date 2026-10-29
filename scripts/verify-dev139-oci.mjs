@@ -33,8 +33,8 @@ const containers = new Set();
 const volumes = new Set();
 const images = new Set();
 const checks = [];
-const secrets = Array.from({ length: 4 }, () => randomBytes(24).toString('hex'));
-const [adminPassword, migratorPassword, importerPassword, runtimePassword] = secrets;
+const secrets = Array.from({ length: 5 }, () => randomBytes(24).toString('hex'));
+const [adminPassword, migratorPassword, importerPassword, runtimePassword, runtimeIamToken] = secrets;
 let binding;
 let imageId;
 let jobsImageId;
@@ -234,7 +234,7 @@ try {
     'node', '-e', 'setInterval(()=>{},3600000)']);
   const fixtureNetwork = `container:${networkName}`;
   createContainer(metadataName, ['--read-only', '--user', '0', '--cap-drop', 'ALL',
-    '--cap-add', 'NET_BIND_SERVICE', '--env', `FIXTURE_TOKEN=${migratorPassword}`, jobsImage,
+    '--cap-add', 'NET_BIND_SERVICE', '--env', `FIXTURE_TOKEN=${runtimeIamToken}`, jobsImage,
     'node', '--input-type=module', '-e', `
       import {createServer} from 'node:http';
       createServer((q,s)=>{
@@ -270,7 +270,8 @@ try {
     ALTER ROLE projed_importer_disposable NOLOGIN;
     ALTER ROLE projed_runtime_disposable NOLOGIN;
     ${Object.entries(binding.iamLogins).map(([purpose, login]) => `
-      CREATE ROLE "${login}" LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;
+      CREATE ROLE "${login}" LOGIN ${purpose === 'runtime' ? `PASSWORD '${runtimeIamToken}'` : ''}
+        NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;
       GRANT projed_${purpose}_disposable TO "${login}";
       GRANT CONNECT ON DATABASE jenfu_prod TO "${login}";
     `).join('\n')}`);
@@ -287,6 +288,29 @@ try {
   assert.equal(appliedMigrationCount, Object.keys(binding.migrationSha256).length);
   assert.equal(pgSql(`SELECT rolname || ':' || rolsuper || ':' || rolbypassrls FROM pg_roles WHERE rolname='projed_runtime_disposable';`), 'projed_runtime_disposable:false:false');
   passed('isolated-unix-socket-full-migration-and-idempotent-replay');
+
+  // Require a metadata-issued fixture token for the exact runtime IAM-shaped
+  // login on its Unix socket; ordinary test traffic keeps the host trust rule.
+  docker(['exec', pgName, 'sed', '-i', `1ilocal jenfu_prod "${binding.iamLogins.runtime}" scram-sha-256`,
+    '/var/lib/postgresql/data/pg_hba.conf']);
+  docker(['exec', '--user', 'postgres', pgName, 'pg_ctl', 'reload', '-D', '/var/lib/postgresql/data']);
+  const asrMaintenance = runOwnedContainer('asr-job-maintenance', ['--read-only', '--tmpfs', '/tmp:rw,noexec,nosuid,size=16m',
+    ...socketMount, ...bindingMount(),
+    '--env', 'PROJED_ENV=managed', '--env', 'PROJED_APP_ENTRY=main',
+    '--env', 'PROJED_RUNTIME_BINDING_FILE=/verification/binding.json',
+    '--env', `PROJED_DATABASE_URL=postgresql://${encodeURIComponent(binding.iamLogins.runtime)}@localhost/jenfu_prod?host=${encodeURIComponent(socketPath)}`,
+    '--env', 'PROJED_MEETING_AUDIO_BUCKET=unqualified-fixture-bucket',
+    asrImage], { network: fixtureNetwork, timeout: 90_000 });
+  assert.equal(asrMaintenance.status, 0, asrMaintenance.stderr);
+  const asrMaintenanceLines = asrMaintenance.stdout.trim().split(/\r?\n/u);
+  assert.equal(asrMaintenanceLines.length, 1);
+  assert.deepEqual(JSON.parse(asrMaintenanceLines[0]), {
+    event: 'projed_meeting_asr_job_finished', dispatchEnabled: false, scanned: 0, units: 0,
+    recovered: 0, abandoned: 0, deferred: 0, failures: 0, errors: {},
+  });
+  docker(['exec', pgName, 'sed', '-i', '1d', '/var/lib/postgresql/data/pg_hba.conf']);
+  docker(['exec', '--user', 'postgres', pgName, 'pg_ctl', 'reload', '-D', '/var/lib/postgresql/data']);
+  passed('asr-job-default-cmd-runtime-iam-maintenance-without-provider-or-http-listener');
 
   runOwnedContainer('iam-role-pairs', ['--read-only', ...socketMount, ...bindingMount(), jobsImage,
     'node', '--input-type=module', '-e', `
