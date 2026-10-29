@@ -17,10 +17,11 @@ import type { MeetingAsrClaim, MeetingAsrTranscriptUnit } from '../../../server/
 import { assembleMeetingDiscussionSource } from '../../../server/meetingDiscussionAssembly.js';
 import { createPostgresMeetingDiscussionRepository, parseMeetingDiscussionClaim, parseMeetingDiscussionProgress,
   parseMeetingDiscussionReadProgress, parseMeetingDiscussionSourceInput } from '../../../server/meetingDiscussionRepository.js';
-import type { MeetingDiscussionBatch, MeetingDiscussionClaim } from '../../../server/meetingDiscussionWorker.js';
+import {runMeetingDiscussionUnit,type MeetingDiscussionBatch,type MeetingDiscussionClaim} from '../../../server/meetingDiscussionWorker.js';
 import { PostgresAppSessionStore } from '../../../server/postgresAppSessionStore.js';
 import { MeetingUploadRepository } from '../../../server/meetingUpload.js';
 import {verifyMeetingTaskReadPostgres} from './verify-meeting-task-read-pg.js';
+import {verifyMeetingLlmPostgres} from './verify-meeting-llm-pg.js';
 import { createHttpCollaborationAdapter } from '../../../src/services/httpApi/collaborationAdapter.js';
 import { createHttpDomainReadAdapter } from '../../../src/services/httpApi/domainReadAdapter.js';
 import { createHttpDomainWriteAdapter } from '../../../src/services/httpApi/domainWriteAdapter.js';
@@ -1993,6 +1994,30 @@ export async function verifyMeetingUploadPostgres(
     assert.deepEqual(runtimeControlGrants.rows[0],{run_table_update:false,usage_table_update:false,budget_table_update:false,
       run_created_update:false,usage_created_update:false,budget_limit_update:false},
     '0038 control and lock-only policies do not grant runtime broader UPDATE privileges');
+
+    // Start the downstream fixture after the independent ASR budget assertions.
+    // It owns a new record/capture but uses the normal original-Session bind,
+    // ASR settlement and discussion repository, not a forged ready cursor.
+    const llmFixture=await createSettlementFixture('downstream-llm');
+    await verifyAsrSessionBinding(database,config,admin,owner,outsider,llmFixture.recordId,
+      llmFixture.captureId,llmFixture.runId,async actor=>{
+        const prepared=record(await prepareSettlementFixture(llmFixture,actor),'LLM fixture ASR preparation');
+        assert.equal(prepared.state,'queued');
+        const token=randomUUID();assert.ok(await claimSettlementUnit(llmFixture,actor,token));
+        assert.equal(await markSettlementDispatch(llmFixture,actor,token),true);
+        const recognized=record(await settleUnit(actor,llmFixture.runId,token,
+          recognizedPayloadFor(llmFixture.dispatchPayload,llmFixture.sourceSegmentId)),'LLM fixture ASR checkpoint');
+        assert.equal(recognized.published,true);assert.equal(recognized.asrComplete,true);
+        const discussion=createPostgresMeetingDiscussionRepository({runId:llmFixture.runId,database,config,
+          resolveActor:async runId=>{assert.equal(runId,llmFixture.runId);return actor;}});
+        const progress=await runMeetingDiscussionUnit({repository:discussion},new AbortController().signal);
+        assert.equal(progress.state,'source_complete');
+        assert.equal(progress.assemblyComplete,true,'the LLM fixture owns a real complete discussion draft');
+        const cleanupKeys=await admin.query<{attempt_id:string}>(`SELECT 'storage:'||capture_id::text||':v'||source_version::text
+          ||':segment:'||segment_index::text AS attempt_id FROM projed_core.meeting_capture_segments WHERE capture_id=$1::uuid`,[llmFixture.captureId]);
+        for(const row of cleanupKeys.rows)cleanupAttemptIds.add(row.attempt_id);
+        await verifyMeetingLlmPostgres(database,config,admin,actor,outsider,llmFixture.runId,llmFixture.captureId);
+      });
   } catch (error) {
     failed = true;
     failure = error;

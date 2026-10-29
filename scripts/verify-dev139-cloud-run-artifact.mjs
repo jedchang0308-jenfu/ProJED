@@ -62,6 +62,9 @@ const { loadRuntimeConfig } = await import(`../dist-server/server/config.js?veri
 const meetingModule = await import('../dist-server/server/meetingSynthesis.js');
 assert.equal(typeof meetingModule.parseMeetingSynthesisRequest, 'function');
 assert.equal(typeof meetingModule.completeMeetingSynthesis, 'function');
+const meetingLlmModule = await import('../dist-server/server/meetingLlmRepository.js');
+assert.equal(typeof meetingLlmModule.createPostgresMeetingLlmRepository, 'function');
+assert.equal(typeof meetingLlmModule.prepareMeetingLlmUnit, 'function');
 // Import the compiled snapshot driver without selecting a mode or connecting DB.
 const migrationModule = await import('../dist-jobs/scripts/dev139-data-migration.js');
 assert.equal(typeof migrationModule.findUnclassifiedSourceRelations, 'function');

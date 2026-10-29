@@ -44,4 +44,5 @@ export const S3_MIGRATION_PATHS = Object.freeze([
   'db/migrations/0037_meeting_asr_settlement_v1.sql',
   'db/migrations/0038_meeting_asr_control_v1.sql',
   'db/migrations/0039_meeting_discussion_persistence_v1.sql',
+  'db/migrations/0040_meeting_llm_units_v1.sql',
 ]);

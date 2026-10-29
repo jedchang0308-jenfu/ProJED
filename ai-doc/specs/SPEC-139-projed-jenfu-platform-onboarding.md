@@ -1,7 +1,7 @@
 # SPEC-139：ProJED 納入 Jenfu-Platform 的產品與技術交接契約
 
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。
-- 日期：2026-10-30（Asia/Taipei）；版本：Rev 73（task-only retrieval／matching／有界compose核心及Cloud LLM transport；durable LLM與完整交付續行）。
+- 日期：2026-10-30（Asia/Taipei）；版本：Rev 74（LLM unit私有checkpoint／獨立預留結算候選；完整pipeline及正式交付續行）。
 - 文件狀態：**整合與發布續行中；W22 OrgMaster publisher 與 W23 Platform Session／handoff source 均有 draft PR／required CI PASS，隔離驗證 PASS；Production Resolver Disabled；未 Release**。Firebase／OIDC 真身分與完整 Session 部署、RAG／文字會議真 provider 資格、錄音管線與剩餘資料處置、雲端 readback、舊入口、writer fence、切流及正式發布仍計入完成分母。W22 owner source 見 [§36](#36-orgmaster-minimum-principal-publication-w222026-10-29)，W23 Platform source 與驗證邊界見 [§37](#37-platform-projed-session-and-handoff-w232026-10-29)；W21 承接六類文件／同步資料與精度保護見 [§35](#35-document-source-retention-w212026-10-28)；W20 資料保留見 §34，具體資源與待確認的新權限仍見 §33。本輪未寫正式資料、切流或變更 IAM／Secret／credential／billing。
 - 適用階段：S1–S3 本地切片歷史見 §12–§32；2026-10-28 續行授權見 [DEV-139 人類決策與授權範圍](../dev_task.md#1-人類決策與授權範圍)，涵蓋 ProJED／OrgMaster／Jenfu-Platform 的 source 整合工作。正式整合與發布仍是完整目標，不以本地切片完成替代；新責任權限依 §33 處理。定期審視不是續行或發布的 required gate；本輪未執行正式資料寫入、切流或 IAM／Secret／credential／billing 變更。
 - 直接交接入口：[§11 S1 定案契約](#11-架構決策與-s1-定案契約)、[§12 S1 實作狀態](#12-s1-實作狀態2026-10-26)、[§13 S2 consumer seam](#13-s2-projed-identity-consumer-seam2026-10-26)、[§14 S3 read adapter](#14-s3-http-read-adapter-slice2026-10-26)、[§15 S3 domain command](#15-s3-domain-command-w12026-10-26)、[§16 S3 collaboration command](#16-s3-collaboration-command-w22026-10-27)、[§17 S3 record／activity](#17-s3-recordactivity-w32026-10-27)、[§18 S3 HTTP product wiring](#18-s3-http-product-wiring-w42026-10-27)、[§19 S3 Board transfer](#19-s3-board-transfer-w52026-10-27)、[§20 S3 legacy provider boundary](#20-s3-legacy-provider-boundary-w62026-10-27)、[§21 S3 Quick Task](#21-s3-quick-task-w72026-10-27)、[§22 S3 Task Workbench](#22-s3-task-workbench-w82026-10-27)、[§23 S3 Actor CAS](#23-s3-actor-context-cas-w92026-10-27)、[§24 S3 Task Tracking](#24-s3-task-tracking-w102026-10-27)、[§25 S3 Backup／Import](#25-s3-backupimport-w112026-10-27)、[§26 S3 Account Preferences](#26-s3-account-preferences-w122026-10-27)、[§27 S3 Calendar Subscription](#27-s3-calendar-subscription-w132026-10-27)及[§32 本地開發收斂](#32-s3-local-development-closure-w182026-10-27)；[§11.8 技術主管審查](#118-技術主管審查與最小優化)保留 Rev5 修正理由；既有使用者切換見 [§6.3](#63-既有使用者的切換基線)。
@@ -1354,6 +1354,20 @@ Focused review 另修正新service的預設路由說明、OCI失敗診斷也遮�
 目標DB已有run queue／source version／lease／usage／cleanup與transcript表，但0001–0033尚未授ASR worker claim／dispatch／settle／transcript INSERT，HTTP錄音caller亦未接齊。沿原run與nonce／token責任補forward-only0034及後續worker migration／接線，不另建通用queue。先完成安全source／合成媒體測試，再由真provider、普通使用入口與資料／費用／取消／清理讀回證據驗收；本節與W35的369 unit／15 OCI均不代表ASR完成。
 
 ## 51. Owner foundation qualification and ASR components（W36–W37，2026-10-29）
+
+### 下游LLM unit持久化與費用隔離（0040，2026-10-30候選）
+
+新增forward-only`0040_meeting_llm_units_v1`，原0001–0039 bytes不改。沿既有run的150秒lease與原main AppSession，為retrieve／match／compose保存FORCE RLS、runtime append-only的私有input／result checkpoint；run cursor及usage manifest只放stage／unit key／input hash／attempt／租約與數值帳務資訊。無actor的scan／readback／recovery不讀私人內容；run／usage policy以exact run/token metadata scope分開，不讓policy互查形成RLS遞迴。Checkpoint隨owned capture/run cascade，無FK的usage仍保留其原UUID及費用責任。
+
+每次claim、dispatch、完成結果存放都重新解析原Session；matching重驗live WBS selected snapshots及相鄰discussion，compose依當前原文與已驗私有child結果重建plan／childHash。已取消、過期、失權、錯source或舊lease只准結算自己attempt，不寫私人結果、不動新lease。未知claim／COMMIT不換token重領；同token先讀事實收據，不能因觀察不明重新POST。Known pending逾期可在原Session仍有效時續行一次，最多兩個attempt按run＋stage＋unitKey計，不因input hash改變重設；metadata的舊期限也不能回收仍有效的真run lease。
+
+費用沿既有Asia/Taipei月NT1000帳本，LLM逐attempt獨立預留，不使用Speech pool／token。依[Cloud標準Global定價](https://cloud.google.com/model-garden/pricing)，3.5 Flash input／response與reasoning採1.50／9.00 USD每百萬tokens及既有40 TWD/USD buffer；保守預留完整context，再對candidate／thought各給一份完整65536 output allowance，向上取NT111。這是單次暫時reservation，已知結果按實際回報tokens的60／360 microTWD估算結算並釋放未用額，不是每次固定費用或invoice；無cache折扣假設。Embedding的Cloud表未定義count單位，以目前800 codepoint query的UTF8 bytes、2048-token上限及可驗billable-character count的較大值估上界，最多4096 count／6 microTWD，預留30000 microTWD；不偷換Developer API單位。未知結果保留預留、停止該run新的付費stage。實際project pricing／零留存資格仍未完成，新增程式不因此啟用付費派送。
+
+`meetingLlmRepository`把provider前後檢查及private checkpoint放在同一actor transaction，費用結算才可在actor前置失效時轉metadata-only；fallback去除result正文、保留數值usage與限定provider識別。已進SQL或COMMIT的失敗不轉第二個交易。SQL也拒絕manifest NULL、透過completed.code把正文存到帳務欄、未知usage欄位及超界計價。原取消／ASR guard只對新精確LLM phase交給新guard，不擴大一般DML；deadline finish僅終止無lease的下游metadata，不會建立ready／resolution或覆寫人工資料。
+
+本機S2 404項、S2／S3 strict同版本PG宣告overlay、affected lint及兩S3 boundary PASS。首個boundary failure為未同步0040 ordered-path contract，已在原兩處path list追加；native helper初次typecheck誤引用callback內的`makeDiscussionBatch`，已改用正常`runMeetingDiscussionUnit`而非複製組裝邏輯。新PG helper在既有upload驗證最後，以另一筆正常ASR／assembly fixture及同Session下的nonce cloned run驗claim/replay、原Session／RLS／source拒絕、費用exactly-once、真租約回收、跨hash兩次上限、取消及metadata-only，保留舊獨立預算斷言；只寫碼與typecheck，實際40-migration native／OCI仍待本版遠端CI，不拿下列39份收據代替。未在本機啟DB／Docker或呼叫provider，也不新增required gate。
+
+完整retrieve／matching／compose worker／host及finalizer尚須接線；目前只有持久化與accounting seam，沒有宣稱真ASR、正常browser或分析完成。實際零留存／OrgMaster與Platform真Session、既有使用者及資料、完整foundation migration window、Cloud Run／SQL／Storage／Hosting／舊入口、writer fence／reconcile／恢復／切流與正式發布繼續計入DEV-139。
 
 ### Task-only retrieval、matching 與 bounded compose 核心（2026-10-30）
 

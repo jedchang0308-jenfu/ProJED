@@ -178,6 +178,10 @@
     {
       "version": "0039_meeting_discussion_persistence_v1",
       "path": "db/migrations/0039_meeting_discussion_persistence_v1.sql"
+    },
+    {
+      "version": "0040_meeting_llm_units_v1",
+      "path": "db/migrations/0040_meeting_llm_units_v1.sql"
     }
   ],
   "objectAllowlist": [
@@ -343,7 +347,19 @@
     "projed_core.read_meeting_discussion_batch_v1",
     "projed_core.append_meeting_discussion_batch_v1",
     "projed_core.finish_meeting_discussion_work_v1",
-    "projed_core.scan_meeting_discussion_work_v1"
+    "projed_core.scan_meeting_discussion_work_v1",
+    "projed_core.meeting_usage_llm_token_v1",
+    "projed_core.meeting_llm_unit_checkpoints",
+    "projed_core.meeting_llm_private_scope_v1",
+    "projed_core.meeting_llm_live_v1",
+    "projed_core.meeting_llm_guard_v1",
+    "projed_core.claim_meeting_llm_unit_v1",
+    "projed_core.mark_meeting_llm_dispatch_v1",
+    "projed_core.meeting_llm_charge_v1",
+    "projed_core.settle_meeting_llm_unit_v1",
+    "projed_core.scan_meeting_llm_work_v1",
+    "projed_core.recover_meeting_llm_unit_v1",
+    "projed_core.finish_meeting_llm_work_v1"
   ],
   "staticFixturePath": "qa/dev-139/s1/static",
   "runtime": {
