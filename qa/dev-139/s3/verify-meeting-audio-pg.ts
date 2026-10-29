@@ -376,10 +376,12 @@ export async function verifyMeetingAudioPostgres(
     const normalAudit = await admin.query<{
       upload_state: string; source_version: number; segment_sha256: string; segment_generation: string | null;
       cleanup_generation: string | null; upload_outcome: string | null; upload_bytes: string | null;
+      exact_upload_expiry:boolean;
     }>(`
       SELECT segment.upload_state,segment.source_version,segment.sha256 AS segment_sha256,
         segment.storage_generation AS segment_generation,obligation.storage_generation AS cleanup_generation,
-        obligation.upload_outcome,obligation.upload_bytes::text
+        obligation.upload_outcome,obligation.upload_bytes::text,
+        segment.upload_token_expires_at=obligation.upload_token_expires_at AS exact_upload_expiry
       FROM projed_core.meeting_capture_segments segment
       JOIN projed_core.meeting_artifact_cleanup obligation
         ON obligation.capture_id=segment.capture_id
@@ -392,6 +394,7 @@ export async function verifyMeetingAudioPostgres(
       segment_sha256: createHash('sha256').update(normalBytes).digest('hex'),
       segment_generation: STORAGE_GENERATION, cleanup_generation: STORAGE_GENERATION,
       upload_outcome: 'uploaded', upload_bytes: String(normalBytes.byteLength),
+      exact_upload_expiry:true,
     }]);
     const unchangedDownload = await get('qa-meeting-audio-owner', owner, normal.uploadUrl, recordId);
     assert.equal(unchangedDownload.status, 200);

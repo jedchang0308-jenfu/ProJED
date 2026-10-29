@@ -114,11 +114,14 @@ export class MeetingAudioService {
         [segmentId,id,input.segmentIndex,input.epoch,input.startOffsetMs,input.endOffsetMs,input.overlapMs,input.gapBeforeMs,
           key,input.mime,input.bytes,version,input.reservationKey]);
         segment=inserted.rows[0]!;
-        await port.query(`INSERT INTO projed_core.meeting_artifact_cleanup
+        const obligation=await port.query(`INSERT INTO projed_core.meeting_artifact_cleanup
           (obligation_id,capture_id,attempt_id,kind,object_locator,state,upload_token_expires_at,due_at,storage_backend)
-          VALUES($1::uuid,$2::uuid,$3,'storage',$4,'pending',$5,
-            greatest(coalesce($6::timestamptz,now()+interval '7 days'),$5::timestamptz),'gcs')`,
-        [randomUUID(),id,attempt(segment),key,segment.upload_token_expires_at,capture.audio_expires_at]);
+          SELECT $1::uuid,segment.capture_id,$2,'storage',segment.object_path,'pending',segment.upload_token_expires_at,
+            greatest(coalesce(capture.audio_expires_at,now()+interval '7 days'),segment.upload_token_expires_at),'gcs'
+          FROM projed_core.meeting_capture_segments segment
+          JOIN projed_core.meeting_capture_sessions capture ON capture.id=segment.capture_id
+          WHERE segment.id=$3::uuid`,[randomUUID(),attempt(segment),segment.id]);
+        if(obligation.rowCount!==1)conflict();
       }
       return {segmentId:segment.id,sourceVersion:version,segmentIndex:segment.segment_index,path:segment.object_path,
         uploadUrl:`/api/v1/meeting-audio/${segment.id}`,token:null,signedUrl:null,
@@ -150,10 +153,14 @@ export class MeetingAudioService {
         sha256=$3,upload_state='uploading',upload_token_expires_at=now()+interval '2 hours',updated_at=now()
         WHERE id=$1::uuid RETURNING *`,[id,upload.bytes,upload.sha256]);
       segment=updated.rows[0]!;
-      const claimed=await port.query(`UPDATE projed_core.meeting_artifact_cleanup SET upload_operation_token=$2::uuid,
+      const claimed=await port.query(`UPDATE projed_core.meeting_artifact_cleanup AS obligation SET upload_operation_token=$2::uuid,
         upload_outcome='pending',upload_sha256=$3,upload_bytes=$4::bigint,storage_generation=NULL,
-        upload_token_expires_at=$5,due_at=greatest(coalesce($6::timestamptz,now()+interval '7 days'),$5::timestamptz),updated_at=now()
-        WHERE attempt_id=$1 AND kind='storage'`,[attempt(segment),token,upload.sha256,upload.bytes,segment.upload_token_expires_at,capture.audio_expires_at]);
+        upload_token_expires_at=segment.upload_token_expires_at,
+        due_at=greatest(obligation.due_at,coalesce(capture.audio_expires_at,now()+interval '7 days'),segment.upload_token_expires_at),updated_at=now()
+        FROM projed_core.meeting_capture_segments segment
+        JOIN projed_core.meeting_capture_sessions capture ON capture.id=segment.capture_id
+        WHERE obligation.attempt_id=$1 AND obligation.kind='storage' AND segment.id=$5::uuid
+          AND segment.capture_id=obligation.capture_id`,[attempt(segment),token,upload.sha256,upload.bytes,segment.id]);
       if(claimed.rowCount!==1)conflict();return {segment,token,shouldUpload:true};
     },{signal});}catch(error){
       if(newToken&&error instanceof KernelError&&error.code==='DB_COMMIT_UNKNOWN'){
