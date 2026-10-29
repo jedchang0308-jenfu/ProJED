@@ -12,6 +12,7 @@ import { createHttpPreferencesAdapter } from './preferencesAdapter';
 import { createHttpCalendarAdapter } from './calendarAdapter';
 import { createHttpRagAdapter } from './ragAdapter';
 import { createHttpMeetingSynthesisAdapter } from './meetingSynthesisAdapter';
+import { createHttpMeetingAudioAdapter } from './meetingAudioAdapter';
 
 export const httpApiClient = new HttpApiClient();
 export const httpDomainReadService = createHttpDomainReadAdapter(httpApiClient);
@@ -27,3 +28,4 @@ export const httpPreferencesService = createHttpPreferencesAdapter(httpApiClient
 export const httpCalendarService = createHttpCalendarAdapter(httpApiClient, httpDomainReadService);
 export const httpRagService = createHttpRagAdapter(httpApiClient);
 export const httpMeetingSynthesisService = createHttpMeetingSynthesisAdapter(httpApiClient);
+export const httpMeetingAudioService = createHttpMeetingAudioAdapter(httpApiClient);

@@ -276,4 +276,3 @@ test('rejects malformed, unordered, out-of-range, and oversized provider replies
   const oversized = provider(async () => response('x'.repeat(512 * 1024 + 1)));
   await assert.rejects(oversized.transcribe({ pcm16le: PCM }), isProviderError('ASR_PROVIDER_INVALID_RESPONSE'));
 });
-

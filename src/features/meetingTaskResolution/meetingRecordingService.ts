@@ -56,8 +56,25 @@ export type MeetingAudioUploadMetadata = Omit<MeetingAudioReservationInput, 'seg
 };
 
 export interface MeetingRecordingDependencies {
-  invoke<T>(operation: string, payload: Record<string, unknown>): Promise<T>;
-  uploadToSignedUrl(
+  invoke<T>(operation: string, payload: Record<string, unknown>, signal?: AbortSignal): Promise<T>;
+  reserveAudio?(
+    captureId: string,
+    payload: MeetingAudioReservationInput,
+    expectedSourceVersion: number | undefined,
+    signal?: AbortSignal,
+  ): Promise<MeetingAudioReservation>;
+  verifyAudio?(
+    captureId: string,
+    segmentIndex: number,
+    expectedSourceVersion: number | undefined,
+    signal?: AbortSignal,
+  ): Promise<MeetingAudioVerification>;
+  uploadReservedAudio?(
+    reservation: MeetingAudioReservation,
+    blob: Blob,
+    signal?: AbortSignal,
+  ): Promise<void>;
+  uploadToSignedUrl?(
     path: string,
     token: string,
     blob: Blob,
@@ -111,7 +128,7 @@ export interface ScopedMeetingRecordingService {
     audioManifest?: unknown[];
   }): Promise<{ state: string; runId: string | null; sourceVersion: number; sourceComplete?: boolean }>;
   reserveSegment(captureId: string, payload: MeetingAudioReservationInput): Promise<MeetingAudioReservation>;
-  verifySegment(captureId: string, segmentIndex: number): Promise<MeetingAudioVerification>;
+  verifySegment(captureId: string, segmentIndex: number, expectedSourceVersion?: number): Promise<MeetingAudioVerification>;
   uploadSegment(
     captureId: string,
     segmentIndex: number,
@@ -213,16 +230,24 @@ export function createMeetingRecordingService(
   };
 
   const invoke = <T>(operation: string, payload: Record<string, unknown>): Promise<T> => (
-    awaitCurrent(() => dependencies.invoke<T>(operation, payload))
+    awaitCurrent(() => dependencies.invoke<T>(operation, payload, signal))
   );
 
-  const reserveSegment = (captureId: string, payload: MeetingAudioReservationInput): Promise<MeetingAudioReservation> => (
-    invoke('reserve-segment', { captureId, ...payload })
-  );
+  const reserveSegment = (
+    captureId: string,
+    payload: MeetingAudioReservationInput,
+    expectedSourceVersion?: number,
+  ): Promise<MeetingAudioReservation> => dependencies.reserveAudio
+    ? awaitCurrent(() => dependencies.reserveAudio!(captureId, payload, expectedSourceVersion, signal))
+    : invoke('reserve-segment', { captureId, ...payload });
 
-  const verifySegment = (captureId: string, segmentIndex: number): Promise<MeetingAudioVerification> => (
-    invoke('verify-segment', { captureId, segmentIndex })
-  );
+  const verifySegment = (
+    captureId: string,
+    segmentIndex: number,
+    expectedSourceVersion?: number,
+  ): Promise<MeetingAudioVerification> => dependencies.verifyAudio
+    ? awaitCurrent(() => dependencies.verifyAudio!(captureId, segmentIndex, expectedSourceVersion, signal))
+    : invoke('verify-segment', { captureId, segmentIndex });
 
   return {
     begin: payload => invoke('begin', { ...payload }),
@@ -249,7 +274,7 @@ export function createMeetingRecordingService(
         mime,
         bytes: blob.size,
         ...reservationMetadata,
-      });
+      }, expectedSourceVersion);
       // reserveSegment checks after the invoke resolves; keep this explicit at
       // the point where the next, non-cancellable storage request would begin.
       assertActive();
@@ -262,17 +287,26 @@ export function createMeetingRecordingService(
         return { ...reservation, sha256: localSha256, bytes: blob.size };
       }
 
-      if (!reservation.token) throw new Error('Audio upload token is missing');
       assertActive();
-      const uploaded = await awaitCurrent(() => dependencies.uploadToSignedUrl(
-        reservation.path,
-        reservation.token!,
-        blob,
-        { contentType: mime },
-      ));
-      if (uploaded.error) throw uploaded.error;
+      if (dependencies.uploadReservedAudio) {
+        await awaitCurrent(() => dependencies.uploadReservedAudio!(reservation, blob, signal));
+      } else {
+        if (!reservation.token) throw new Error('Audio upload token is missing');
+        if (!dependencies.uploadToSignedUrl) throw new Error('Audio upload is unavailable');
+        const uploaded = await awaitCurrent(() => dependencies.uploadToSignedUrl!(
+          reservation.path,
+          reservation.token!,
+          blob,
+          { contentType: mime },
+        ));
+        if (uploaded.error) throw uploaded.error;
+      }
 
-      const verification = await verifySegment(captureId, segmentIndex);
+      const verification = await verifySegment(
+        captureId,
+        segmentIndex,
+        expectedSourceVersion ?? reservation.sourceVersion,
+      );
       assertVerificationMatches(
         verification,
         reservation,

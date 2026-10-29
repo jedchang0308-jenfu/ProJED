@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import dayjs from 'dayjs';
-import { eventLogService, isSupabaseBackend, recordService } from '../services/dataBackend';
+import { eventLogService, isHttpBackend, isSupabaseBackend, recordService } from '../services/dataBackend';
 import { meetingAnalysisService } from '../features/meetingTaskResolution/meetingAnalysisService';
 import { synthesizeMeetingRecord } from '../services/meetingSynthesisService';
 import useAuthStore from './useAuthStore';
@@ -1485,7 +1485,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
         ? resolutionMetadataRecord.captureId
         : null;
       let saved: EditableKnowledgeRecord;
-      if (isSupabaseBackend && draft.type === 'meeting' && captureId) {
+      if ((isSupabaseBackend || isHttpBackend) && draft.type === 'meeting' && captureId) {
         await meetingAnalysisService.saveProjection({
           tenantId: activeWorkspaceId,
           projectId: activeBoardId,

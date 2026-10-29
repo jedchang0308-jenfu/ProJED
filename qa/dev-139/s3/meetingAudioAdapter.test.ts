@@ -257,6 +257,7 @@ test('reserve validates scoped IDs and upload URL, sends expected version, and n
     segmentId: SEGMENT_ID,
     sourceVersion: SOURCE_VERSION,
     segmentIndex: SEGMENT_INDEX,
+    path: `${TENANT_ID}/${PROJECT_ID}/${RECORD_ID}/${CAPTURE_ID}/v${SOURCE_VERSION}/${SEGMENT_INDEX}.webm`,
     uploadUrl: AUDIO_PATH,
     expiresAt: reservation.expiresAt,
     uploadState: 'pending',
@@ -367,6 +368,7 @@ test('upload and verify parse the scoped data.segment DTO and preserve one-shot 
     bytes: BODY.size,
     sha256: SHA256,
     uploadState: 'verified',
+    objectPath: `${TENANT_ID}/${PROJECT_ID}/${RECORD_ID}/${CAPTURE_ID}/v${SOURCE_VERSION}/${SEGMENT_INDEX}.webm`,
   });
   assert.equal(calls[0]?.path, AUDIO_PATH);
   assert.equal(calls[0]?.init?.body, BODY);

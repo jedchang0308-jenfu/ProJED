@@ -33,6 +33,7 @@ export interface MeetingAudioReservation {
   readonly segmentId: string;
   readonly sourceVersion: number;
   readonly segmentIndex: number;
+  readonly path: string;
   readonly uploadUrl: string;
   readonly expiresAt: number;
   readonly uploadState: 'pending' | 'uploading' | 'verified';
@@ -64,6 +65,7 @@ export interface MeetingAudioSegment {
   readonly bytes: number;
   readonly sha256: string;
   readonly uploadState: 'verified';
+  readonly objectPath: string;
 }
 
 export interface HttpMeetingAudioAdapter {
@@ -242,6 +244,7 @@ function parseSegment(value: unknown, expected: { sourceVersion: number; capture
     bytes: Number(segment.bytes),
     sha256: segment.sha256,
     uploadState: 'verified',
+    objectPath: segment.object_path as string,
   };
 }
 
@@ -270,6 +273,7 @@ export function createHttpMeetingAudioAdapter(client: HttpApiClient): HttpMeetin
         segmentId: data.segmentId,
         sourceVersion: input.expectedSourceVersion,
         segmentIndex: input.segmentIndex,
+        path: data.path as string,
         uploadUrl: data.uploadUrl,
         expiresAt: Number(data.expiresAt),
         uploadState: data.uploadState,

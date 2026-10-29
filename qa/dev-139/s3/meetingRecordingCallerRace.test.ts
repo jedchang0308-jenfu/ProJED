@@ -731,6 +731,41 @@ test('pause, resume, and stop preserve source version, continue pointer sequence
   } finally { browser.restore(); }
 });
 
+test('awaiting budget is reported without claiming the analysis job was queued', async () => {
+  const component = await componentPromise;
+  resetFixture();
+  const browser = installBrowserStubs();
+  try {
+    const scope = makeScope('a');
+    let currentScope = scope;
+    const stream = makeStream('stream-awaiting-budget');
+    fixture.getUserMedia = async () => stream;
+    fixture.service.begin = async () => ({ captureId: 'capture-a', state: 'recording', sourceVersion: 7, startedAt: '' });
+    fixture.service.completeUpload = async () => ({
+      state: 'awaiting_budget', runId: 'run-a', sourceVersion: 7, sourceComplete: true,
+    });
+
+    const runner = createHarness(component);
+    const props = propsFor(scope, () => currentScope, {
+      onCaptureStarted: captureId => { currentScope = { ...scope, captureId }; },
+    });
+    runner.render(props);
+    click(startButton(runner.tree));
+    await settle(runner, props);
+    const recorder = fixture.mediaRecorderInstances[0]!;
+    recorder.emitData([1, 2, 3]);
+    const stopButton = findElements(runner.tree, item => item.type === 'button' && item.props['data-meeting-recording-stop'] === true)[0];
+    click(stopButton);
+    recorder.emitStop();
+    await settle(runner, props);
+
+    const message = textContent(runner.tree);
+    assert.match(message, /預算尚未可用，分析未排入佇列/u);
+    assert.doesNotMatch(message, /分析工作已排入佇列/u);
+    runner.unmount();
+  } finally { browser.restore(); }
+});
+
 test('unknown and failed segment uploads are not retried or removed from the scoped outbox', async () => {
   const component = await componentPromise;
   for (const failure of [new Error('upload outcome unknown'), Object.assign(new Error('confirmed upload failure'), { code: 'MEETING_STORAGE_REJECTED' })]) {

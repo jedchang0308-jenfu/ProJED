@@ -482,7 +482,13 @@ const MeetingRecordingControls: React.FC<Props> = ({ tenantId, projectId, scope,
       if (!active(run)) return;
       setIsRecording(false);
       setIsPaused(false);
-      setMessage(completion.sourceComplete === false ? '已停止；來源不完整，未排入付費分析。' : '已停止收音，分析工作已排入佇列。');
+      setMessage(completion.sourceComplete === false
+        ? '已停止；來源不完整，未排入付費分析。'
+        : completion.state === 'queued'
+          ? '已停止收音，分析工作已排入佇列。'
+          : completion.state === 'awaiting_budget'
+            ? '已停止收音；預算尚未可用，分析未排入佇列。'
+            : '已停止收音；分析狀態尚未確認。');
     } catch (error) {
       if (active(run)) { setMessage(error instanceof Error ? error.message : String(error)); await settleCaptureAfterError(run); }
     } finally { if (active(run)) setIsWorking(false); }

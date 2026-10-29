@@ -181,6 +181,56 @@ test('normal upload remains reserve, signed upload, then verify', async () => {
   assert.equal(receipt.bytes, blob.size);
 });
 
+test('passwordless HTTP upload keeps reserve, authenticated PUT, and verify under the frozen source scope', async () => {
+  const operations: string[] = [];
+  const controller = new AbortController();
+  const blob = new Blob([new Uint8Array([21, 22, 23])], { type: 'audio/webm' });
+  const sha256 = await digest(blob);
+  const service = createMeetingRecordingService({
+    async invoke<T>(operation: string): Promise<T> {
+      operations.push(`control:${operation}`);
+      return {} as T;
+    },
+    async reserveAudio(captureId, payload, expectedSourceVersion, signal) {
+      operations.push('reserve');
+      assert.equal(captureId, 'capture-http');
+      assert.equal(payload.segmentIndex, 2);
+      assert.equal(expectedSourceVersion, 9);
+      assert.equal(signal, controller.signal);
+      return pendingReservation({
+        segmentId: 'segment-http', path: 'private/http/capture/v9/2.webm', sourceVersion: 9,
+        segmentIndex: 2, token: null, uploadState: 'pending',
+      });
+    },
+    async uploadReservedAudio(reservation, uploadedBlob, signal) {
+      operations.push('authenticated-put');
+      assert.equal(reservation.token, null);
+      assert.equal(uploadedBlob, blob);
+      assert.equal(signal, controller.signal);
+    },
+    async verifyAudio(captureId, segmentIndex, expectedSourceVersion, signal) {
+      operations.push('verify');
+      assert.equal(captureId, 'capture-http');
+      assert.equal(segmentIndex, 2);
+      assert.equal(expectedSourceVersion, 9);
+      assert.equal(signal, controller.signal);
+      return {
+        segment: {
+          id: 'segment-http', segment_index: 2, source_version: 9, bytes: blob.size,
+          sha256, upload_state: 'verified', object_path: 'private/http/capture/v9/2.webm',
+        },
+      };
+    },
+  }, () => true, controller.signal);
+
+  const receipt = await service.uploadSegment('capture-http', 2, blob, { expectedSourceVersion: 9 });
+  assert.deepEqual(operations, ['reserve', 'authenticated-put', 'verify']);
+  assert.equal(receipt.token, null);
+  assert.equal(receipt.path, 'private/http/capture/v9/2.webm');
+  assert.equal(receipt.sha256, sha256);
+  assert.equal(receipt.bytes, blob.size);
+});
+
 test('capture mutations carry their frozen expected source version unchanged', async () => {
   const calls: Array<{ operation: string; payload: Record<string, unknown> }> = [];
   const service = createMeetingRecordingService(dependencies({
