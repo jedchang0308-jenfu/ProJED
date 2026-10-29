@@ -1553,9 +1553,9 @@ export async function verifyMeetingUploadPostgres(
       assert.equal(result.rowCount,1);return result.rows[0]!;
     };
 
+    const pendingRecoveryBudgetBefore=await readBudget(admin,month);
     const pendingRecoveryFixture=await createSettlementFixture('control-expired-pending');
     const pendingRecoveryToken=randomUUID();
-    const pendingRecoveryBudgetBefore=await readBudget(admin,month);
     await verifyAsrSessionBinding(database,config,admin,owner,outsider,pendingRecoveryFixture.recordId,
       pendingRecoveryFixture.captureId,pendingRecoveryFixture.runId,async(actor)=>{
         const prepared=record(await prepareSettlementFixture(pendingRecoveryFixture,actor),'control pending recovery preparation');
@@ -1616,9 +1616,9 @@ export async function verifyMeetingUploadPostgres(
     assertBudgetDelta(pendingRecoveryBudgetBefore,await readBudget(admin,month),48_000n,0n,
       'known not-sent recovery leaves only the undispatched pool remainder reserved');
 
+    const dispatchedRecoveryBudgetBefore=await readBudget(admin,month);
     const dispatchedRecoveryFixture=await createSettlementFixture('control-expired-dispatched');
     const dispatchedRecoveryToken=randomUUID();
-    const dispatchedRecoveryBudgetBefore=await readBudget(admin,month);
     await verifyAsrSessionBinding(database,config,admin,owner,outsider,dispatchedRecoveryFixture.recordId,
       dispatchedRecoveryFixture.captureId,dispatchedRecoveryFixture.runId,async(actor)=>{
         const prepared=record(await prepareSettlementFixture(dispatchedRecoveryFixture,actor),'control dispatched recovery preparation');
@@ -1647,9 +1647,9 @@ export async function verifyMeetingUploadPostgres(
     assertBudgetDelta(dispatchedRecoveryBudgetBefore,await readBudget(admin,month),48_000n,0n,
       'unknown dispatched recovery retains its unit hold and releases only unused pool funds');
 
+    const activeLeaseBudgetBefore=await readBudget(admin,month);
     const activeLeaseFixture=await createSettlementFixture('control-stale-active-lease');
     const activeLeaseToken=randomUUID();
-    const activeLeaseBudgetBefore=await readBudget(admin,month);
     let activeLeaseBudgetAfterPrepare:Awaited<ReturnType<typeof readBudget>>=null;
     await verifyAsrSessionBinding(database,config,admin,owner,outsider,activeLeaseFixture.recordId,
       activeLeaseFixture.captureId,activeLeaseFixture.runId,async(actor)=>{
@@ -1680,8 +1680,8 @@ export async function verifyMeetingUploadPostgres(
     assert.deepEqual(await readBudget(admin,month),activeLeaseBudgetAfterPrepare,
       'fresh-lease recovery and stale-scan abandon do not refund active reservations');
 
-    const lostSessionFixture=await createSettlementFixture('control-lost-session-abandon');
     const lostSessionBudgetBefore=await readBudget(admin,month);
+    const lostSessionFixture=await createSettlementFixture('control-lost-session-abandon');
     await verifyAsrSessionBinding(database,config,admin,owner,outsider,lostSessionFixture.recordId,
       lostSessionFixture.captureId,lostSessionFixture.runId,async(actor)=>{
         const prepared=record(await prepareSettlementFixture(lostSessionFixture,actor),'lost Session queue preparation');
@@ -1728,8 +1728,8 @@ export async function verifyMeetingUploadPostgres(
     assert.deepEqual(abandonGucRestore.after,abandonGucRestore.before,
     'abandon restores each caller transaction-local GUC');
 
-    const orphanPoolFixture=await createSettlementFixture('control-orphan-pool');
     const orphanBudgetBefore=await readBudget(admin,month);
+    const orphanPoolFixture=await createSettlementFixture('control-orphan-pool');
     await verifyAsrSessionBinding(database,config,admin,owner,outsider,orphanPoolFixture.recordId,
       orphanPoolFixture.captureId,orphanPoolFixture.runId,async actor=>{
         const prepared=record(await prepareSettlementFixture(orphanPoolFixture,actor),'orphan pool preparation');
