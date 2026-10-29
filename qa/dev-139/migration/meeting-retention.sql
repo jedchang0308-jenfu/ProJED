@@ -270,7 +270,7 @@ BEGIN
       ]::text[]
       WHEN 'projed_core.meeting_ai_usage_attempts' THEN ARRAY[
         'attempt_id','capture_id','run_id','unit_identity','dispatch_month','provider','model','price_version',
-        'reserved_twd_micros','usage_state','outcome','dispatch_state'
+        'reserved_twd_micros','usage_state','outcome','dispatch_state','asr_operation_token','asr_manifest'
       ]::text[]
       WHEN 'projed_core.meeting_ai_budget_months' THEN ARRAY['budget_month']::text[]
       WHEN 'projed_core.meeting_task_match_results' THEN ARRAY[
@@ -298,10 +298,12 @@ BEGIN
       ]::text[]
       WHEN 'projed_core.meeting_analysis_runs' THEN ARRAY[
         'state','error_code','lease_token','lease_expires_at','updated_at','authorization_context_id',
-        'provider_mode','config_version','transcript_revision_id','stage_cursor','budget_month','reserved_twd_micros'
+        'provider_mode','config_version','transcript_revision_id','stage_cursor','budget_month','reserved_twd_micros',
+        'attempt_count'
       ]::text[]
       WHEN 'projed_core.meeting_ai_usage_attempts' THEN ARRAY[
-        'actual_twd_micros','usage_state','outcome','updated_at'
+        'actual_twd_micros','usage_state','outcome','updated_at','dispatch_state','asr_manifest',
+        'asr_remaining_twd_micros'
       ]::text[]
       WHEN 'projed_core.meeting_ai_budget_months' THEN ARRAY[
         'reserved_twd_micros','updated_at'
@@ -326,7 +328,8 @@ BEGIN
       ]::text[]
       WHEN 'projed_core.meeting_ai_usage_attempts' THEN ARRAY[
         'attempt_id','capture_id','run_id','unit_identity','dispatch_month','provider','model','price_version',
-        'reserved_twd_micros','usage_state','outcome','dispatch_state','actual_twd_micros'
+        'reserved_twd_micros','usage_state','outcome','dispatch_state','actual_twd_micros',
+        'asr_operation_token','asr_manifest','asr_remaining_twd_micros'
       ]::text[]
       WHEN 'projed_core.meeting_ai_budget_months' THEN ARRAY[
         'budget_month','limit_twd_micros','reserved_twd_micros','spent_twd_micros'
@@ -401,6 +404,12 @@ BEGIN
     'projed_core.meeting_asr_prepare_budget_scope_v1(date)',
     'projed_core.meeting_asr_prepare_budget_guard_v1()',
     'projed_core.prepare_meeting_cloud_speech_v1(uuid)',
+    'projed_core.meeting_asr_work_scope_v1(uuid,uuid)',
+    'projed_core.meeting_asr_run_live_v1(uuid)',
+    'projed_core.meeting_asr_claim_run_guard_v1()',
+    'projed_core.meeting_asr_usage_work_guard_v1()',
+    'projed_core.claim_meeting_asr_unit_v1(uuid,uuid)',
+    'projed_core.mark_meeting_asr_dispatch_v1(uuid,uuid,jsonb)',
     'projed_core.meeting_review_scope_v1(uuid)',
     'projed_core.meeting_projection_scope_v1(uuid,uuid)'
   ] LOOP

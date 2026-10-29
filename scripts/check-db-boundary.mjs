@@ -116,20 +116,45 @@ for (const migration of migrationEntries) {
     [/security\s+definer\b/, 'SECURITY DEFINER'],
     [/\bauth\.uid\s*\(/, 'auth.uid()'],
     [/\bexecute\s+(?:format\s*\(|immediate\b)/, 'dynamic SQL'],
-    [/\bcreate\s+(?:table|function|index|sequence|schema)\s+(?:if\s+not\s+exists\s+)?public\./, 'public object'],
+    [/\bcreate\s+(?:unique\s+)?(?:table|function|index|sequence|schema)\s+(?:if\s+not\s+exists\s+)?public\./, 'public object'],
     [/\b(?:from|join|update|into|references)\s+auth\./, 'auth schema reference']
   ];
   for (const [pattern, label] of forbidden) {
     if (pattern.test(normalized)) fail(`${migration.path}: forbidden ${label}`);
   }
   const statements = normalized.split(';').map((statement) => statement.trim()).filter(Boolean);
+  const migrationSequence = /^([0-9]{4})_/.exec(migration.version)?.[1];
+  const enforceIndexAllowlist = migrationSequence !== undefined && Number(migrationSequence) >= 36;
   for (const statement of statements) {
-    const objectMatch = statement.match(/\b(?:create|alter|drop)\s+(?:table|function|index|sequence|view)\s+(?:if\s+not\s+exists\s+)?([a-z0-9_]+\.[a-z0-9_]+)/i);
-    if (objectMatch && !profile.objectAllowlist.includes(objectMatch[1])) {
-      fail(`${migration.path}: object outside allowlist: ${objectMatch[1]}`);
-    }
-    if (/\b(?:create|alter|drop)\s+(?:table|function|index|sequence|view)\s+(?:if\s+not\s+exists\s+)?[a-z0-9_]+\./i.test(statement) && !/\bprojed_(?:core|contract)\./i.test(statement)) {
-      fail(`${migration.path}: qualified object is outside app schemas`);
+    if (/^create\s+(?:unique\s+)?index\b/i.test(statement)) {
+      const indexMatch = statement.match(/^create\s+(?:unique\s+)?index\s+(?:concurrently\s+)?(?:if\s+not\s+exists\s+)?(?:(?:([a-z0-9_]+)\.)?([a-z0-9_]+))\s+on\s+(?:only\s+)?(?:(?:([a-z0-9_]+)\.)?([a-z0-9_]+))/i);
+      if (!indexMatch) {
+        fail(`${migration.path}: cannot classify index creation`);
+      } else {
+        const [, indexSchema, indexName, tableSchema] = indexMatch;
+        const objectSchema = indexSchema || tableSchema;
+        if (!tableSchema || !objectSchema || (indexSchema && indexSchema !== tableSchema)) {
+          fail(`${migration.path}: index and target table must resolve to the same explicit app schema`);
+        }
+        const objectName = objectSchema ? `${objectSchema}.${indexName}` : null;
+        // Frozen migrations before 0036 do not enumerate every index in their
+        // profile allowlists. New indexes from 0036 onward must be listed.
+        if (objectName && enforceIndexAllowlist && !profile.objectAllowlist.includes(objectName)) {
+          fail(`${migration.path}: object outside allowlist: ${objectName}`);
+        }
+        if (!['projed_core', 'projed_contract'].includes(tableSchema || '')
+            || !['projed_core', 'projed_contract'].includes(objectSchema || '')) {
+          fail(`${migration.path}: index target is outside app schemas`);
+        }
+      }
+    } else {
+      const objectMatch = statement.match(/\b(?:create\s+|alter\s+|drop\s+)(?:table|function|index|sequence|view)\s+(?:if\s+not\s+exists\s+)?([a-z0-9_]+\.[a-z0-9_]+)/i);
+      if (objectMatch && !profile.objectAllowlist.includes(objectMatch[1])) {
+        fail(`${migration.path}: object outside allowlist: ${objectMatch[1]}`);
+      }
+      if (/\b(?:create\s+|alter\s+|drop\s+)(?:table|function|index|sequence|view)\s+(?:if\s+not\s+exists\s+)?[a-z0-9_]+\./i.test(statement) && !/\bprojed_(?:core|contract)\./i.test(statement)) {
+        fail(`${migration.path}: qualified object is outside app schemas`);
+      }
     }
   }
   ok(`migration ${migration.version}`);

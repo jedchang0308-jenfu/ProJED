@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   estimateGoogleCloudSpeechV1Cost,
+  estimateSuccessfulGoogleCloudSpeechV1Charge,
   GOOGLE_CLOUD_SPEECH_V1_BILLING_GRANULARITY_SECONDS,
   GOOGLE_CLOUD_SPEECH_V1_FX_RESERVE_TWD_PER_USD,
   GOOGLE_CLOUD_SPEECH_V1_MAX_ATTEMPTS_PER_UNIT,
@@ -11,6 +12,45 @@ import {
   GOOGLE_CLOUD_SPEECH_V1_USD_MICROS_PER_MINUTE,
   parseGoogleCloudSpeechV1BilledTime,
 } from '../../../server/googleCloudSpeechPricing.js';
+
+test('estimates a successful silent response from exact PCM upper bound when billed time is omitted', () => {
+  const estimate = estimateSuccessfulGoogleCloudSpeechV1Charge({ pcmSamples16k: 16_001n });
+
+  assert.deepEqual(estimate, {
+    microTwd: 32_000n,
+    billedSeconds: 2n,
+    source: 'validated_pcm_upper_bound',
+    classification: 'budget_estimate_not_invoice',
+  });
+});
+
+test('requires a positive exact PCM sample count within the provider chunk limit', () => {
+  for (const pcmSamples16k of [0n, GOOGLE_CLOUD_SPEECH_V1_MAX_CHUNK_SAMPLES + 1n]) {
+    assert.throws(() => estimateSuccessfulGoogleCloudSpeechV1Charge({ pcmSamples16k }), /pricing input is invalid/u);
+  }
+});
+
+test('uses validated provider billed time and rejects metadata above exact PCM upper bound', () => {
+  const estimate = estimateSuccessfulGoogleCloudSpeechV1Charge({
+    pcmSamples16k: 34_000n,
+    billedTime: '2.5s',
+  });
+
+  assert.deepEqual(estimate, {
+    microTwd: 48_000n,
+    billedSeconds: 3n,
+    source: 'provider_metadata',
+    classification: 'budget_estimate_not_invoice',
+  });
+  assert.throws(() => estimateSuccessfulGoogleCloudSpeechV1Charge({
+    pcmSamples16k: 34_000n,
+    billedTime: '4s',
+  }), /billed-time metadata is invalid/u);
+  assert.throws(() => estimateSuccessfulGoogleCloudSpeechV1Charge({
+    pcmSamples16k: 34_000n,
+    billedTime: null as never,
+  }), /billed-time metadata is invalid/u);
+});
 
 test('pins the V1 no-data-logging price, one-second request rounding, FX reserve, and no-free allowance', () => {
   assert.equal(GOOGLE_CLOUD_SPEECH_V1_PRICE_VERSION,

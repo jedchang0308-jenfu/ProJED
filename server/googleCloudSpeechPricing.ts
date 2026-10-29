@@ -63,6 +63,20 @@ export interface GoogleCloudSpeechV1PricingEstimate {
   };
 }
 
+export interface SuccessfulGoogleCloudSpeechV1ChargeInput {
+  /** Exact mono 16 kHz PCM samples sent in one successful V1 Recognize request. */
+  readonly pcmSamples16k: bigint;
+  /** Optional totalBilledTime from that successful response. */
+  readonly billedTime?: string;
+}
+
+export interface SuccessfulGoogleCloudSpeechV1ChargeEstimate {
+  readonly microTwd: bigint;
+  readonly billedSeconds: bigint;
+  readonly source: 'provider_metadata' | 'validated_pcm_upper_bound';
+  readonly classification: 'budget_estimate_not_invoice';
+}
+
 function invalidInput(): never {
   throw new TypeError('Cloud Speech V1 pricing input is invalid');
 }
@@ -101,6 +115,35 @@ export function parseGoogleCloudSpeechV1BilledTime(value: unknown): bigint | nul
     invalidBilledTime();
   }
   return ceilDiv(totalNanos, NANOSECONDS_PER_SECOND);
+}
+
+/**
+ * Estimate the budget charge for one successful V1 Recognize result. Missing
+ * totalBilledTime falls back to the upper bound from the exact mono PCM samples
+ * sent in that request; callers must not use this for an unknown/failed request.
+ */
+export function estimateSuccessfulGoogleCloudSpeechV1Charge(
+  input: SuccessfulGoogleCloudSpeechV1ChargeInput,
+): SuccessfulGoogleCloudSpeechV1ChargeEstimate {
+  if (!isRecord(input) || !hasOnlyKeys(input, ['pcmSamples16k', 'billedTime'])
+      || typeof input.pcmSamples16k !== 'bigint' || input.pcmSamples16k < 1n
+      || input.pcmSamples16k > GOOGLE_CLOUD_SPEECH_V1_MAX_CHUNK_SAMPLES) invalidInput();
+
+  const pcmUpperBoundSeconds = ceilDiv(input.pcmSamples16k, GOOGLE_CLOUD_SPEECH_V1_SAMPLE_RATE_HZ);
+  const hasBilledTime = Object.hasOwn(input, 'billedTime') && input.billedTime !== undefined;
+  if (hasBilledTime && typeof input.billedTime !== 'string') invalidBilledTime();
+  const providerBilledSeconds = hasBilledTime
+    ? parseGoogleCloudSpeechV1BilledTime(input.billedTime)
+    : null;
+  if (providerBilledSeconds !== null && providerBilledSeconds > pcmUpperBoundSeconds) invalidBilledTime();
+
+  const billedSeconds = providerBilledSeconds ?? pcmUpperBoundSeconds;
+  return {
+    microTwd: billedSeconds * MICRO_TWD_PER_BILLED_SECOND,
+    billedSeconds,
+    source: providerBilledSeconds === null ? 'validated_pcm_upper_bound' : 'provider_metadata',
+    classification: 'budget_estimate_not_invoice',
+  };
 }
 
 function validateInput(input: GoogleCloudSpeechV1PricingInput): GoogleCloudSpeechV1PricingChunk[] {

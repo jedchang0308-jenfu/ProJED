@@ -328,7 +328,7 @@ async function assertLedgerCounts(admin: pg.Client, captureId: string, runs: num
 /** Uses nonce-owned Session/proof fixtures; never a browser bearer or provider. */
 async function verifyAsrSessionBinding(database:RuntimeDatabase,config:RuntimeConfig,admin:pg.Client,
   owner:ServerActorV1,outsider:ServerActorV1,recordId:string,captureId:string,runId:string,
-  onBound?:(actor:ServerActorV1)=>Promise<void>):Promise<void>{
+  onBound?:(actor:ServerActorV1,otherActor:ServerActorV1)=>Promise<void>):Promise<void>{
   const sessionDatabase=new RuntimeDatabase({...config,profile:{...config.profile,runtime:{...config.profile.runtime,
     pool:{...config.profile.runtime.pool,max:1}}}});
   const store=new PostgresAppSessionStore(sessionDatabase),contextId=randomUUID(),otherContextId=randomUUID();
@@ -365,7 +365,7 @@ async function verifyAsrSessionBinding(database:RuntimeDatabase,config:RuntimeCo
     }
     assert.equal(await bind(boundActor),contextId);
     assert.equal(await bind(boundActor),contextId,'the same context can replay without creating another authorization');
-    await onBound?.(boundActor);
+    await onBound?.(boundActor,otherActor);
     const session=await store.readMeetingRunSession(runId);
     assert.equal(session?.contextId,contextId);assert.equal(session?.localUserId,owner.localUserId);
     assert.equal(session?.identity.googleSubject,subject);
@@ -1023,6 +1023,123 @@ export async function verifyMeetingUploadPostgres(
       expectedSourceVersion:1,reason:'qa-asr-reservation-cleanup'}),'ASR queued cancellation');
     assert.equal(asrCancelled.state,'cancelled');
     assert.equal((await readBudget(admin,month))?.reserved_twd_micros,'0','cancellation refunds only the pending Cloud Speech pool');
+
+    const dispatchRecordId=await createPrivateMeeting(database,config,owner,workspace.id,board.id,'DEV-139 ASR dispatch fixture');
+    const dispatchCaptureId=await beginAndStopCapture(post,ownerClient,workspace.id,board.id,dispatchRecordId);
+    captureIds.push(dispatchCaptureId);
+    const dispatchManifest=await seedSegments(admin,{tenantId:workspace.id,projectId:board.id,recordId:dispatchRecordId,
+      captureId:dispatchCaptureId,segments:[{segmentIndex:0,epoch:0,bytes:128,startOffsetMs:0,endOffsetMs:100,
+        overlapMs:0,gapBeforeMs:0,mime:'audio/webm',sha256:'b'.repeat(64),uploadState:'verified'}],
+      onCleanupAttempt:id=>cleanupAttemptIds.add(id)});
+    const dispatchBody=completionBody(dispatchCaptureId,dispatchManifest,'cloud-speech-dispatch');
+    const dispatchRunId=String(responseData(await post(ownerClient,dispatchBody),'ASR dispatch source completion').runId);
+    assert.match(dispatchRunId,/^[a-f0-9-]{36}$/u);
+
+    const readDispatchLedger=async(token:string)=>{
+      const result=await admin.query<{unit_reserved:string;unit_dispatch:string|null;pool_reserved:string;pool_remaining:string|null}>(`
+        SELECT unit.reserved_twd_micros::text AS unit_reserved,unit.dispatch_state AS unit_dispatch,
+          pool.reserved_twd_micros::text AS pool_reserved,pool.asr_remaining_twd_micros::text AS pool_remaining
+        FROM projed_core.meeting_ai_usage_attempts unit
+        JOIN projed_core.meeting_ai_usage_attempts pool ON pool.attempt_id=unit.run_id::text||':cloud-speech:pool'
+        WHERE unit.run_id=$1::uuid AND unit.asr_operation_token=$2::uuid
+      `,[dispatchRunId,token]);
+      assert.equal(result.rowCount,1,'the operation token identifies one reserved ASR unit');
+      return result.rows[0]!;
+    };
+    const claimUnit=(actor:ServerActorV1,token:string)=>runActorTransaction(database,config,actor,async port=>{
+      await port.authorizeMeetingCaptureMutation(dispatchRecordId,dispatchCaptureId);
+      const result=await port.query<{claim:unknown}>(
+        'SELECT projed_core.claim_meeting_asr_unit_v1($1::uuid,$2::uuid) AS claim',[dispatchRunId,token]);
+      return result.rows[0]?.claim??null;
+    });
+    const markUnit=(actor:ServerActorV1,token:string,payload:JsonObject)=>runActorTransaction(database,config,actor,async port=>{
+      await port.authorizeMeetingCaptureMutation(dispatchRecordId,dispatchCaptureId);
+      const result=await port.query<{marked:boolean}>(
+        'SELECT projed_core.mark_meeting_asr_dispatch_v1($1::uuid,$2::uuid,$3::jsonb) AS marked',
+        [dispatchRunId,token,JSON.stringify(payload)]);
+      return result.rows[0]?.marked===true;
+    });
+    const exactDispatchPayload:JsonObject={chunkIndex:0,chunkCount:1,startSample:0,endSample:1600,
+      decodedSha256:'b'.repeat(64),startOffsetMs:0,endOffsetMs:100};
+    assert.deepEqual(Object.keys(exactDispatchPayload).sort(),
+      ['chunkIndex','chunkCount','decodedSha256','endOffsetMs','endSample','startOffsetMs','startSample']);
+    let dispatchToken='';let boundDispatchActor:ServerActorV1|undefined;
+    await verifyAsrSessionBinding(database,config,admin,owner,outsider,dispatchRecordId,dispatchCaptureId,dispatchRunId,
+      async(actor,otherActor)=>{
+        const prepare=()=>runActorTransaction(database,config,actor,port=>
+          new MeetingUploadRepository({cloudSpeech:true}).execute(port,dispatchBody));
+        const prepared=record(await prepare(),'ASR dispatch source preparation');
+        assert.equal(prepared.state,'queued');assert.equal(prepared.reservedTwdMicros,'96000');
+        assert.equal(prepared.providerMode,'cloud-speech-v1');
+        assert.equal((await readBudget(admin,month))?.reserved_twd_micros,'96000',
+          'preparing this independent source reserves one Cloud Speech pool');
+        const proposedTokens=[randomUUID(),randomUUID()];
+        const claimRace=await Promise.all(proposedTokens.map(async token=>({token,claim:await claimUnit(actor,token)})));
+        const successfulClaims=claimRace.filter(result=>result.claim!==null);
+        assert.equal(successfulClaims.length,1,'two independent claim transactions produce exactly one winner');
+        const winner=successfulClaims[0]!;const token=winner.token;dispatchToken=token;boundDispatchActor=actor;
+        const firstValue=winner.claim;
+        assert.ok(firstValue,'the exact bound owner Session can claim the first ASR unit');
+        const first=record(firstValue,'ASR unit claim');
+        assert.equal(first.runId,dispatchRunId);assert.equal(first.captureId,dispatchCaptureId);
+        assert.equal(first.sourceVersion,1);assert.equal(first.leaseToken,token);assert.equal(first.chunkIndex,0);
+        const claimedSource=record(first.source,'ASR claim source');
+        assert.equal(claimedSource.startOffsetMs,0);assert.equal(claimedSource.sha256,'b'.repeat(64));
+        assert.equal(typeof claimedSource.id,'string');
+        const afterClaim=await readDispatchLedger(token);
+        assert.equal(afterClaim.unit_reserved,'48000');assert.equal(afterClaim.unit_dispatch,'pending');
+        assert.equal(afterClaim.pool_reserved,'96000');assert.equal(afterClaim.pool_remaining,'48000');
+        assert.equal((await readBudget(admin,month))?.reserved_twd_micros,'96000',
+          'allocating a unit moves the pool remainder without changing monthly reserved funds');
+        assert.deepEqual(await claimUnit(actor,token),first,'same-token claim replay returns the same lease and allocation');
+        assert.deepEqual(await readDispatchLedger(token),afterClaim,'same-token replay leaves unit and pool balances unchanged');
+        assert.equal((await readBudget(admin,month))?.reserved_twd_micros,'96000');
+        assert.equal(await claimUnit(actor,randomUUID()),null,'a competing claim token cannot take the running lease');
+
+        assert.equal(await markUnit(otherActor,token,exactDispatchPayload),false,
+          'a different stored Session for the same owner cannot dispatch the bound run');
+        assert.equal(await markUnit(actor,randomUUID(),exactDispatchPayload),false,
+          'a token other than the current claim cannot dispatch the unit');
+        assert.equal((await readDispatchLedger(token)).unit_dispatch,'pending','denied dispatch attempts leave the unit pending');
+        const sourceId=String(claimedSource.id);
+        const tamperedSource=await admin.query<{id:string}>(`
+          UPDATE projed_core.meeting_capture_segments SET sha256=$3
+          WHERE id=$1::uuid AND capture_id=$2::uuid AND sha256=$4 RETURNING id::text
+        `,[sourceId,dispatchCaptureId,'c'.repeat(64),'b'.repeat(64)]);
+        assert.equal(tamperedSource.rowCount,1,'only this synthetic verified source was tampered');
+        let dispatchAfterSourceTamper:boolean|undefined;
+        try{
+          dispatchAfterSourceTamper=await markUnit(actor,token,exactDispatchPayload);
+        }finally{
+          const restoredSource=await admin.query<{id:string}>(`
+            UPDATE projed_core.meeting_capture_segments SET sha256=$3
+            WHERE id=$1::uuid AND capture_id=$2::uuid AND sha256=$4 RETURNING id::text
+          `,[sourceId,dispatchCaptureId,'b'.repeat(64),'c'.repeat(64)]);
+          assert.equal(restoredSource.rowCount,1,'the synthetic source SHA is restored even after a dispatch assertion failure');
+        }
+        assert.equal(dispatchAfterSourceTamper,false,'dispatch revalidates the frozen source hash immediately before marking');
+        assert.equal((await readDispatchLedger(token)).unit_dispatch,'pending');
+        assert.equal(await markUnit(actor,token,exactDispatchPayload),true,'the exact seven-field payload marks paid intent');
+        assert.equal(await markUnit(actor,token,exactDispatchPayload),true,'an exact dispatch replay is idempotent');
+        const changedPayload={...exactDispatchPayload,decodedSha256:'c'.repeat(64)};
+        assert.equal(await markUnit(actor,token,changedPayload),false,'a changed dispatch manifest cannot replay');
+        assert.equal((await readDispatchLedger(token)).unit_dispatch,'dispatched');
+        assert.equal((await readBudget(admin,month))?.reserved_twd_micros,'96000');
+        assert.equal(claimRace.filter(result=>result.token!==token&&result.claim===null).length,1,
+          'the losing competing token remains unclaimed');
+      });
+
+    assert.ok(boundDispatchActor,'the Session helper supplied the exact run-bound actor context');
+    assert.equal(await markUnit(boundDispatchActor,dispatchToken,exactDispatchPayload),false,
+      'dispatch is denied after the bound Session is revoked and physically deleted');
+    assert.equal((await readDispatchLedger(dispatchToken)).unit_dispatch,'dispatched',
+      'post-deletion denial preserves the already-dispatched in-flight intent');
+    const dispatchCancelled=responseData(await post(ownerClient,{operation:'cancel',captureId:dispatchCaptureId,
+      expectedSourceVersion:1,reason:'qa-asr-after-dispatch-cancel'}),'ASR dispatched parent cancellation');
+    assert.equal(dispatchCancelled.state,'cancelled');
+    assert.equal((await readBudget(admin,month))?.reserved_twd_micros,'96000',
+      'parent cancellation leaves the dispatched pool reservation in flight');
+    assert.equal((await readDispatchLedger(dispatchToken)).unit_dispatch,'dispatched');
   } catch (error) {
     failed = true;
     failure = error;

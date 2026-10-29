@@ -58,7 +58,7 @@ export interface MeetingAsrRepository {
   markDispatch(claim:MeetingAsrClaim,unit:Omit<MeetingAsrTranscriptUnit,'rawText'|'wordOffsets'|'sourceHash'>):Promise<boolean>;
   /** Read back this exact claim after an unknown COMMIT; never acquire another. */
   readDispatch(claim:MeetingAsrClaim):Promise<'authorized'|'not_authorized'>;
-  /** Missing billed time holds the reservation and blocks further paid units, including valid silence. */
+  /** A successful response may settle from exact PCM duration; no response remains usage-unknown. */
   settle(claim:MeetingAsrClaim,result:MeetingAsrSettlement):Promise<'published'|'accounted_only'>;
 }
 

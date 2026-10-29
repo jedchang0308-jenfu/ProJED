@@ -168,6 +168,10 @@
     {
       "version": "0035_meeting_cloud_speech_reservation_v1",
       "path": "db/migrations/0035_meeting_cloud_speech_reservation_v1.sql"
+    },
+    {
+      "version": "0036_meeting_asr_claim_dispatch_v1",
+      "path": "db/migrations/0036_meeting_asr_claim_dispatch_v1.sql"
     }
   ],
   "objectAllowlist": [
@@ -306,7 +310,14 @@
     "projed_core.meeting_asr_prepare_run_guard_v1",
     "projed_core.meeting_asr_prepare_budget_scope_v1",
     "projed_core.meeting_asr_prepare_budget_guard_v1",
-    "projed_core.prepare_meeting_cloud_speech_v1"
+    "projed_core.prepare_meeting_cloud_speech_v1",
+    "projed_core.meeting_usage_asr_operation_token_v1",
+    "projed_core.meeting_asr_work_scope_v1",
+    "projed_core.meeting_asr_run_live_v1",
+    "projed_core.meeting_asr_claim_run_guard_v1",
+    "projed_core.meeting_asr_usage_work_guard_v1",
+    "projed_core.claim_meeting_asr_unit_v1",
+    "projed_core.mark_meeting_asr_dispatch_v1"
   ],
   "staticFixturePath": "dist",
   "runtime": {
