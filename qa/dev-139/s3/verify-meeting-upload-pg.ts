@@ -773,7 +773,7 @@ export async function verifyMeetingUploadPostgres(
         segmentIndex: 2, epoch: 0, bytes: 0, startOffsetMs: 200, endOffsetMs: 201,
         overlapMs: 0, gapBeforeMs: 0, mime: 'audio/webm', reservationKey: `qa-frozen-${randomUUID()}`,
       }),
-      error => requireHttpError(error, 'REVISION_CONFLICT', 409),
+      error => requireHttpError(error, 'MEETING_STORAGE_CONFLICT', 409),
     );
     await assert.rejects(
       post(ownerClient, {
@@ -818,6 +818,28 @@ export async function verifyMeetingUploadPostgres(
       });
     }
 
+    const expiredRecordId = await createPrivateMeeting(
+      database, config, owner, workspace.id, board.id, 'DEV-139 expired completion fixture',
+    );
+    const expiredCaptureId = await beginAndStopCapture(post, ownerClient, workspace.id, board.id, expiredRecordId);
+    captureIds.push(expiredCaptureId);
+    const expiredManifest = await seedSegments(admin, {
+      tenantId: workspace.id, projectId: board.id, recordId: expiredRecordId, captureId: expiredCaptureId,
+      segments: [{ segmentIndex: 0, epoch: 0, bytes: 64, startOffsetMs: 0, endOffsetMs: 100,
+        overlapMs: 0, gapBeforeMs: 0, mime: 'audio/webm', sha256: 'f'.repeat(64), uploadState: 'verified' }],
+      onCleanupAttempt: attemptId => cleanupAttemptIds.add(attemptId),
+    });
+    await admin.query(`UPDATE projed_core.meeting_capture_sessions
+      SET audio_expires_at=clock_timestamp()-interval '1 second' WHERE id=$1::uuid`, [expiredCaptureId]);
+    const expiredBefore = await captureState(admin, expiredCaptureId);
+    await assert.rejects(post(ownerClient, completionBody(expiredCaptureId, expiredManifest, 'expired')),
+      error => requireHttpError(error, 'REVISION_CONFLICT', 409));
+    assert.deepEqual(await captureState(admin, expiredCaptureId), expiredBefore,
+      'expiry denial cannot freeze the source or create a run or usage');
+    assert.deepEqual(await readBudget(admin, month), {
+      limit_twd_micros: DEFAULT_BUDGET_MICROS, reserved_twd_micros: RESERVED_BUDGET_MICROS, spent_twd_micros: '0',
+    }, 'expiry denial cannot reserve more money');
+
     const cancelled = responseData(await post(ownerClient, {
       operation: 'cancel', captureId: completeCaptureId, expectedSourceVersion: 1, reason: 'qa-queued-upload-cancel',
     }), 'queued upload run cancel');
@@ -843,6 +865,16 @@ export async function verifyMeetingUploadPostgres(
       reserved_twd_micros: '0',
       spent_twd_micros: '0',
     }, 'the undispatched reservation is refunded once; replay does not refund again');
+    const cancelledBefore = await captureState(admin, completeCaptureId);
+    const cancelledUsageBefore = await readUsageRows(admin, completeCaptureId);
+    await assert.rejects(post(ownerClient, completeBody),
+      error => requireHttpError(error, 'REVISION_CONFLICT', 409));
+    assert.deepEqual(await captureState(admin, completeCaptureId), cancelledBefore,
+      'completion after cancellation cannot revive or rewrite the source');
+    assert.deepEqual(await readUsageRows(admin, completeCaptureId), cancelledUsageBefore);
+    assert.deepEqual(await readBudget(admin, month), {
+      limit_twd_micros: DEFAULT_BUDGET_MICROS, reserved_twd_micros: '0', spent_twd_micros: '0',
+    }, 'completion after cancellation cannot reserve the refunded money again');
   } catch (error) {
     failed = true;
     failure = error;
