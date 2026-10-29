@@ -18,6 +18,8 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 - 類型：交付點；主責：本 repo 的 DEV-139；無同專案父任務。
 - 唯一交接契約：[SPEC-139](specs/SPEC-139-projed-jenfu-platform-onboarding.md)；核心實作讀[§11 S1定案](specs/SPEC-139-projed-jenfu-platform-onboarding.md#11-架構決策與-s1-定案契約)、[§13 S2 consumer seam](specs/SPEC-139-projed-jenfu-platform-onboarding.md#13-s2-projed-identity-consumer-seam2026-10-26)、[§28 Data Migration](specs/SPEC-139-projed-jenfu-platform-onboarding.md#28-s3-data-migration-rehearsal-w142026-10-27)、[§29 Legacy Calendar URL](specs/SPEC-139-projed-jenfu-platform-onboarding.md#29-s3-legacy-calendar-url-compatibility-w152026-10-27)、[§30 Managed Cloud Run Candidate](specs/SPEC-139-projed-jenfu-platform-onboarding.md#30-s3-managed-cloud-run-candidate-w162026-10-27)、[§31 Managed Snapshot Connection](specs/SPEC-139-projed-jenfu-platform-onboarding.md#31-s3-managed-snapshot-connection-w172026-10-27)、[§32 Local Development Closure](specs/SPEC-139-projed-jenfu-platform-onboarding.md#32-s3-local-development-closure-w182026-10-27)及[§6.3既有使用者切換基線](specs/SPEC-139-projed-jenfu-platform-onboarding.md#63-既有使用者切換基線)；架構決策：[ADR-054](decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。本地正常UI煙霧不能替代真Session、正式資料及既有使用者切換驗收。
 
+- 真ASR本次交付：2026-10-29人類確認「本次同時完成真 ASR」；DEV-139承接既有DEV-123錄音管線的真轉錄、worker／cleanup與正常UI接線及實測，不再列後續或待答；fake worker／文字合成結果不代表ASR完成。
+
 ### 1. 人類決策與授權範圍
 
 2026-10-28 最新人類指示：選取前述全部外部／正式剩餘項目並要求「請繼續執行直到完成」，簡單與查核交由 `gpt-6-luna` xhigh 併行。此要求擴展 W18 的本地切片目標，ProJED／OrgMaster／Jenfu-Platform 真接線、正式移轉與發布均須完成後才結案。下列 2026-10-26 的本地範圍與未授權描述是歷史界線；新建 IAM／Secret／credential、shared foundation grant 與費用擴張仍依人類全域規範確認。具體新責任與安全的獨立工作見 SPEC §33，不重問 D1／D2。
@@ -36,6 +38,7 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 | 2026-10-08 | 「升級到架構確定」 | Rev 4 固定 ProJED 技術選型，補 S1 完整實作交接與 Architecture Closure Review；S1 架構定案，S2／S3及整體整合保留真外部／domain契約門檻。這次仍是文件型工作，不執行 coding／遠端操作。 |
 | 2026-10-08 | 指定 rd-tech-lead：「審視並優化亞購」 | 依本任務語境審視並優化架構文件，Rev5修正Rev4交接缺口，保留Cloud Run／Cloud SQL、Vite、D1／D2及費用條件；只更新本repo四文件，不進產品實作或擴張外部開發。 |
 | 2026-10-08 | 「PROJED已有使用者, 我可以無縫切換嗎」；評估後「請寫進發文件」 | Rev6 將既有使用者相容切換寫入同四份文件：保留原網址／PWA、原帳號資料／ID／權限與待同步內容，先相容與演練，再單一 writer 切換。預留正常重新登入與經演練確認的短暫停寫；零重登／零停寫未承諾，實際窗口及正式切換未授權。 |
+| 2026-10-29 | 「本次同時完成真 ASR」 | 真ASR與完整錄音管線納入DEV-139本次交付及驗收；沿用DEV-123／ADR-051產品語意，不以fake worker或文字transcript替代真provider結果。 |
 
 2026-10-26 使用者已明確要求「完成 DEV-139 開發」，授權在 `projed-independent-dev` 工作樹實作、測試及更新本任務文件；正式發布／切流、正式資料、IAM／Secret／credential／billing 與其他 repo 仍不在範圍。先完成 ProJED 可獨立交付的 S1 與後續本 repo adapter；Jenfu-Platform、OrgMaster 的 producer 變更須另有其專案範圍，不能以本任務文件替代。
 
@@ -7488,6 +7491,8 @@ Hosted HTTPS historical evidence（2026-09-16）：乾淨candidate build id `bui
 使用思考習慣：#第一性原理、#系統描繪、#可驗證性
 
 ## DEV-123：會議任務辨識與滑鼠停留輔助連結
+
+2026-10-29 人類確認真ASR納入本次[DEV-139](#dev-139-jenfu-platform-onboarding)完整交付；本節保留產品來源與歷史證據，真ASR／worker／cleanup的當前實作與驗收以SPEC-139為準，尚未宣稱完成。
 
 - 狀態：架構已定案；`Production Backend Deployed / Hosted Synthetic PASS / Frontend Feature-Gated / Provider Qualification Gate Pending`。
 - 類型：交付點候選，P2初排；control plane 已落地正式環境，但產品入口仍因 Provider Gate 關閉，不計完整功能完成。

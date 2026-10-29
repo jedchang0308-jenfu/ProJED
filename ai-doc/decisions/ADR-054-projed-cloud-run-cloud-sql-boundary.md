@@ -1,8 +1,8 @@
 # ADR-054：ProJED Cloud Run／Cloud SQL 與跨系統責任邊界
 
-- 日期：2026-10-26（Asia/Taipei）。
-- 修訂：Rev 13，移除已完成 S1 的重複人工出口與過期授權描述，現行交接以 SPEC-139 為準；managed目標仍對齊共用jenfu_prod，保留舊Hosting同project的單一runtime；既有使用者切換尚未執行。
-- 狀態：**Accepted（ProJED 技術選型與本 repo 開發完成）**；S1、S2 consumer seam及S3 W1–W18本地驗收PASS。Platform Session／handoff source 已有 draft PR／CI 及 LOCAL_SIMULATION PostgreSQL 證據，但真 Firebase／OIDC、ProJED Session wire、真資料及 release 仍未完成；本 ADR 的Accepted不表示其他owner接受、無縫切換或production closure。
+- 日期：2026-10-29（Asia/Taipei）。
+- 修訂：Rev 14，補齊已選Cloud Run／shared SQL的private route與lifecycle IAM責任；source進度與資格只見SPEC-139，未授權或執行新foundation／traffic。
+- 狀態：**Accepted（ProJED 技術選型；完整整合續行）**；S1、S2 consumer seam及S3 W1–W18本地驗收PASS。Platform Session／handoff source 已有 draft PR／CI 及 LOCAL_SIMULATION PostgreSQL 證據，但真 Firebase／OIDC、ProJED Session wire、真資料及 release 仍未完成；本 ADR 的Accepted不表示其他owner接受、無縫切換或production closure。
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。詳細交接契約：[SPEC-139](../specs/SPEC-139-projed-jenfu-platform-onboarding.md)。
 - 適用未來整合路徑；不立即取代既有 runtime，不表示其他 repo 接受新契約，也不授權程式、DB、遠端或付費操作。
 
@@ -34,7 +34,12 @@ D2 最新人類原文為「保留 ProJED 現有的工作區、看板與權限功
 
 ## Chosen Rule
 
-2026-10-29 續行修正：人類已要求完成外部接線、正式資料及發布；現行契約為 SPEC-139，選測與開發出口見 §8.1／§11.5，整合進度與分層證據只在 §33–§40 維護。W22／W23 source、PR／CI 與本地模擬不代表真 Firebase／OIDC、ProJED opaque Session／既有 UUID proof 或正式整合完成；工作區／看板權限仍由 ProJED 控制。W18／Rev10 為 local 切片歷史，W20／W21 資料保留也不代表 RAG／會議等剩餘功能完成，不縮減完整目標。
+2026-10-29 private route具體化沿[SPEC §49](../specs/SPEC-139-projed-jenfu-platform-onboarding.md#49-cloud-run-create-renderer-and-source-secret-bundlew352026-10-29)：ProJED仍在projed-cc78d保留單一runtime與既有Hosting origins；jenfu-platform-prod作既有SQL VPC的Shared VPC host候選，Direct VPC使用其asia-east1 runtime subnet與PRIVATE_RANGES_ONLY。私有SQL不開public IP，不新增NAT／SQL instance，公開Google／Supabase連線沿Cloud Run一般外送。這是同organization下可實施的source方案，尚未啟用Shared VPC、attach project、授權subnet或qualified真route；實際foundation與費用責任依既有授權邊界處理。
+
+Runtime／migrator／importer採三個獨立IAM login及既有NOLOGIN app角色；runtime經private IAM proxy，Jobs走Cloud SQL socket與metadata短期token。Platform只provision中立roles／lifecycle ACL；ProJED自己的有序migration建立app schema與ledger，不由Platform接管業務資料。首次0001所需database CREATE只暫授app owner，成功或失敗後均由owner步驟撤銷並讀回；不改寫既有SQL、不將role／Secret或跨app權限合併為共用release identity。Source renderer、隔離驗證及此ADR均非正式grant或部署證據。
+
+
+2026-10-29 續行修正：人類已要求完成外部接線、正式資料及發布；現行契約為 SPEC-139，選測與開發出口見 §8.1／§11.5，整合進度與分層證據只在 §33及後續實作節維護。W22／W23 source、PR／CI 與本地模擬不代表真 Firebase／OIDC、ProJED opaque Session／既有 UUID proof 或正式整合完成；工作區／看板權限仍由 ProJED 控制。W18／Rev10 為 local 切片歷史，W20／W21 資料保留也不代表 RAG／會議等剩餘功能完成，不縮減完整目標。
 
 managed database 固定既有 `jenfu-platform-prod / asia-east1 / jenfu-platform-prod-pg / jenfu_prod`，不是另建 `projed` DB。原 Hosting project 為 `projed-cc78d`，唯一新 runtime 規劃為同 project／asia-east1 的 `projed-prod`，以受控跨 project 身分連共用 SQL，不增加第二個 edge proxy。新 runtime／release 服務帳號、app Secret 與 SQL grant 尚待新責任權限確認；舊 `projed-ai-backend` 與現有身分不覆寫。此項精簡不執行正式資料、流量或權限變更。
 
