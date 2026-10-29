@@ -1,0 +1,318 @@
+import assert from 'node:assert/strict';
+import { randomBytes } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
+
+// Actual OCI qualification runs on the disposable Linux CI host. Never start
+// Docker or consume the developer's constrained Windows disk through this path.
+if (process.platform !== 'linux' || process.env.GITHUB_ACTIONS !== 'true') {
+  throw new Error('DEV-139 OCI verification requires the disposable Linux GitHub Actions runner');
+}
+
+const nonce = randomBytes(12).toString('hex');
+const label = 'projed.dev139.oci-attempt';
+const prefix = `dev139-oci-${nonce}`;
+const toolsImage = `${prefix}:build`;
+const runtimeImage = `${prefix}:runtime`;
+const postgresImage = 'postgres:17.11-bookworm';
+const instance = 'jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg';
+const socketPath = `/cloudsql/${instance}`;
+const socketVolume = `${prefix}-socket`;
+const pgName = `${prefix}-pg`;
+const appName = `${prefix}-app`;
+const temp = mkdtempSync(join(tmpdir(), `${prefix}-`));
+const containers = new Set();
+const volumes = new Set();
+const images = new Set();
+const checks = [];
+const secrets = Array.from({ length: 4 }, () => randomBytes(24).toString('hex'));
+const [adminPassword, migratorPassword, importerPassword, runtimePassword] = secrets;
+let binding;
+let imageId;
+let postgresVersion;
+let firstFailure;
+const cleanupFailures = [];
+const diagnostics = [];
+
+function sanitize(value) {
+  return secrets.reduce((text, secret) => text.replaceAll(secret, '[disposable-password]'), String(value));
+}
+
+function docker(args, { input, env = {}, timeout = 90_000, allowFailure = false } = {}) {
+  const result = spawnSync('docker', args, {
+    input, env: { ...process.env, ...env }, encoding: 'utf8', timeout,
+    maxBuffer: 32 * 1024 * 1024,
+  });
+  if (!allowFailure && (result.error || result.status !== 0)) {
+    // Arguments can contain throwaway credentials; only expose sanitized output.
+    throw new Error(sanitize(`Docker ${args[0]} failed (${result.status ?? result.error?.code}):\n${result.stdout?.slice(-4000) ?? ''}\n${result.stderr?.slice(-8000) ?? ''}`));
+  }
+  return result;
+}
+
+function passed(name) {
+  checks.push(name);
+  console.log(JSON.stringify({ check: name, status: 'PASS' }));
+}
+
+function createContainer(name, args) {
+  // Cleanup still inspects the random label before removing a created resource.
+  containers.add(name);
+  docker(['create', '--name', name, '--label', `${label}=${nonce}`, '--network', 'none', ...args]);
+  docker(['start', name]);
+}
+
+function runOwnedContainer(suffix, args, options) {
+  const name = `${prefix}-${suffix}`;
+  containers.add(name);
+  return docker(['run', '--rm', '--name', name, '--label', `${label}=${nonce}`, '--network', 'none', ...args], options);
+}
+
+function inspect(name) {
+  return JSON.parse(docker(['inspect', name]).stdout)[0];
+}
+
+async function waitFor(label, probe, attempts = 40) {
+  for (let i = 0; i < attempts; i += 1) {
+    if (probe()) return;
+    await delay(500);
+  }
+  throw new Error(`Timed out waiting for ${label}`);
+}
+
+function pgSql(sql) {
+  return docker(['exec', '-i', pgName, 'psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1',
+    '-h', socketPath, '-U', 'postgres', '-d', 'jenfu_prod'], { input: sql }).stdout.trim();
+}
+
+function appProbe(code) {
+  return docker(['exec', appName, 'node', '--input-type=module', '-e', code]);
+}
+
+function bindingMount(path = join(temp, 'binding.json')) {
+  return ['--mount', `type=bind,src=${path},dst=/verification/binding.json,readonly`];
+}
+
+const socketMount = ['--mount', `type=volume,src=${socketVolume},dst=${socketPath},readonly`];
+
+try {
+  // No registry push, cloud credentials, provider calls or deployed resources.
+  docker(['build', '--platform', 'linux/amd64', '--target', 'build', '--label', `${label}=${nonce}`,
+    '--build-arg', `PROJED_RELEASE_ID=${prefix}`, '-f', 'Dockerfile.dev139', '-t', toolsImage, '.'], { timeout: 600_000 });
+  images.add(toolsImage);
+  docker(['build', '--platform', 'linux/amd64', '--label', `${label}=${nonce}`,
+    '--build-arg', `PROJED_RELEASE_ID=${prefix}`, '-f', 'Dockerfile.dev139', '-t', runtimeImage, '.'], { timeout: 600_000 });
+  images.add(runtimeImage);
+  const image = JSON.parse(docker(['image', 'inspect', runtimeImage]).stdout)[0];
+  imageId = image.Id;
+  assert.equal(image.Os, 'linux');
+  assert.equal(image.Architecture, 'amd64');
+  assert.equal(image.Config.User, 'node');
+  assert.deepEqual(image.Config.Cmd, ['node', 'dist-server/server/index.js']);
+  passed('actual-linux-amd64-nonroot-runtime-image');
+
+  binding = JSON.parse(runOwnedContainer('binding', [toolsImage,
+    'node', 'scripts/create-dev139-managed-binding.mjs', `--instance=${instance}`]).stdout);
+  writeFileSync(join(temp, 'binding.json'), JSON.stringify(binding), { mode: 0o444 });
+  const runtimeEnv = [
+    'PROJED_RUNTIME_BINDING_FILE=/verification/binding.json',
+    `PROJED_DATABASE_URL=postgresql://projed_runtime_disposable:${runtimePassword}@localhost/jenfu_prod?host=${encodeURIComponent(socketPath)}`,
+    'PROJED_PUBLIC_APP_URL=https://projed.example.invalid', 'PORT=8080',
+  ].join('\n');
+  writeFileSync(join(temp, 'runtime.env'), `${runtimeEnv}\n`, { mode: 0o600 });
+  writeFileSync(join(temp, 'migrator.env'), [
+    'PROJED_SOURCE_PROFILE=config/dev-139/s3-managed.profile.json',
+    'PROJED_RUNTIME_BINDING_FILE=/verification/binding.json',
+    `PROJED_MIGRATOR_DATABASE_URL=postgresql://projed_migrator_disposable:${migratorPassword}@localhost/jenfu_prod?host=${encodeURIComponent(socketPath)}`, '',
+  ].join('\n'), { mode: 0o600 });
+
+  docker(['volume', 'create', '--label', `${label}=${nonce}`, socketVolume]);
+  volumes.add(socketVolume);
+  // PostgreSQL writes the socket as its own OS user; runtime only connects to it.
+  runOwnedContainer('prepare', ['--mount', `type=volume,src=${socketVolume},dst=/sockets`,
+    '--entrypoint', 'sh', postgresImage, '-c', 'chown postgres:postgres /sockets && chmod 0755 /sockets']);
+  createContainer(pgName, ['--env', `POSTGRES_PASSWORD=${adminPassword}`, '--env', `PGHOST=${socketPath}`,
+    '--mount', `type=volume,src=${socketVolume},dst=${socketPath}`, postgresImage,
+    'postgres', '-c', 'listen_addresses=', '-c', `unix_socket_directories=${socketPath}`]);
+  await waitFor('isolated PostgreSQL final server', () => {
+    const logs = docker(['logs', pgName]);
+    return `${logs.stdout}${logs.stderr}`.includes('PostgreSQL init process complete; ready for start up.')
+      && docker(['exec', pgName, 'pg_isready', '-h', socketPath, '-U', 'postgres'], { allowFailure: true }).status === 0;
+  });
+  const bootstrap = readFileSync('qa/dev-139/s1/bootstrap.sql', 'utf8')
+    .replaceAll('__MIGRATOR_PASSWORD__', migratorPassword)
+    .replaceAll('__IMPORTER_PASSWORD__', importerPassword)
+    .replaceAll('__RUNTIME_PASSWORD__', runtimePassword);
+  docker(['exec', '-i', pgName, 'psql', '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-h', socketPath,
+    '-U', 'postgres', '-d', 'postgres'], { input: `${bootstrap}\nCREATE DATABASE jenfu_prod OWNER projed_owner_disposable;\n` });
+  pgSql('REVOKE CREATE, TEMP ON DATABASE jenfu_prod FROM PUBLIC; GRANT CONNECT ON DATABASE jenfu_prod TO projed_migrator_disposable, projed_importer_disposable, projed_runtime_disposable;');
+  postgresVersion = pgSql('SHOW server_version;');
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const output = runOwnedContainer(`migration-${attempt}`, [...socketMount, ...bindingMount(),
+      '--env-file', join(temp, 'migrator.env'), toolsImage,
+      'node', 'scripts/migrate-dev-139-s1.mjs', '--profile=managed']).stdout.trim().split(/\r?\n/);
+    const result = JSON.parse(output.at(-1));
+    assert.equal(result.status, 'PASS');
+    assert.equal(result.migrations.length, Object.keys(binding.migrationSha256).length);
+  }
+  assert.equal(pgSql(`SELECT count(*) FROM projed_core.schema_migrations;`), String(Object.keys(binding.migrationSha256).length));
+  assert.equal(pgSql(`SELECT rolname || ':' || rolsuper || ':' || rolbypassrls FROM pg_roles WHERE rolname='projed_runtime_disposable';`), 'projed_runtime_disposable:false:false');
+  passed('isolated-unix-socket-full-migration-and-idempotent-replay');
+
+  const runtimeArgs = ['--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
+    ...socketMount, ...bindingMount(), '--env-file', join(temp, 'runtime.env'), runtimeImage];
+  createContainer(appName, runtimeArgs);
+  await waitFor('compiled HTTP entry', () => docker(['exec', appName, 'node', '--input-type=module', '-e',
+    "const r=await fetch('http://127.0.0.1:8080/health/ready',{signal:AbortSignal.timeout(4000)});process.exit(r.status===200?0:1)"], { allowFailure: true }).status === 0);
+  appProbe(String.raw`
+    import assert from 'node:assert/strict';
+    import { readFileSync } from 'node:fs';
+    import { createHash } from 'node:crypto';
+    const sha = bytes => createHash('sha256').update(bytes).digest('hex');
+    assert.notEqual(process.getuid(), 0);
+    const binding = JSON.parse(readFileSync('/verification/binding.json'));
+    const metaBytes = readFileSync('dist/dev139-cloud-run-meta.json');
+    assert.equal(sha(metaBytes), binding.staticFixtureSha256);
+    const meta = JSON.parse(metaBytes);
+    assert.equal(meta.releaseId, ${JSON.stringify(prefix)});
+    for (const [path, expected] of [['/', meta.entrySha256], ['/quick-task/', meta.quickEntrySha256]]) {
+      const response = await fetch('http://127.0.0.1:8080'+path);
+      assert.equal(response.status, 200);
+      assert.match(response.headers.get('content-type'), /text\/html/);
+      assert.equal(response.headers.get('cache-control'), 'no-cache');
+      const bytes = Buffer.from(await response.arrayBuffer());
+      assert.equal(sha(bytes), expected);
+      const assets = [...bytes.toString().matchAll(/(?:src|href)="(\/assets\/[^\"]+\.(?:js|css))"/g)].map(m=>m[1]);
+      assert.ok(assets.some(asset=>asset.endsWith('.js')));
+      for (const asset of assets) {
+        const r = await fetch('http://127.0.0.1:8080'+asset);
+        assert.equal(r.status, 200);
+        assert.equal(sha(Buffer.from(await r.arrayBuffer())), sha(readFileSync('dist'+asset)));
+      }
+    }
+    for (const path of ['/health/live','/health/ready']) {
+      const response = await fetch('http://127.0.0.1:8080'+path);
+      assert.equal(response.status, 200);
+      assert.deepEqual(await response.json(), {status:'ok'});
+    }
+    for (const path of ['/api/v1/session','/api/v1/workspaces','/api/auth/jenfu-sso/login','/api/not-a-route']) {
+      const response = await fetch('http://127.0.0.1:8080'+path);
+      assert.equal(response.status, 404);
+      assert.equal(response.headers.get('cache-control'), 'no-store');
+      assert.equal((await response.json()).error.code, 'ENDPOINT_UNAVAILABLE');
+      assert.equal(response.headers.get('set-cookie'), null);
+    }
+  `);
+  passed('compiled-entry-real-main-quick-and-asset-hashes');
+  passed('unpublished-session-and-private-api-fail-closed');
+
+  // A malformed binding must fail before the server advertises readiness.
+  const invalidBinding = { ...binding, staticFixtureSha256: '0'.repeat(64) };
+  writeFileSync(join(temp, 'invalid-binding.json'), JSON.stringify(invalidBinding), { mode: 0o444 });
+  const invalidName = `${prefix}-invalid`;
+  createContainer(invalidName, ['--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
+    ...socketMount, ...bindingMount(join(temp, 'invalid-binding.json')),
+    '--env-file', join(temp, 'runtime.env'), runtimeImage]);
+  assert.equal(docker(['wait', invalidName], { timeout: 20_000 }).stdout.trim(), '1');
+  const invalidLogs = docker(['logs', invalidName]);
+  assert.match(`${invalidLogs.stdout}${invalidLogs.stderr}`, /"event":"projed_kernel_start_failed","code":"CONFIG_INVALID"/);
+  assert.doesNotMatch(`${invalidLogs.stdout}${invalidLogs.stderr}`, /projed_kernel_ready/);
+  passed('wrong-artifact-binding-refuses-startup');
+
+  const version = Object.keys(binding.migrationSha256).at(-1).split('/').at(-1).replace(/\.sql$/, '');
+  pgSql(`UPDATE projed_core.schema_migrations SET checksum=repeat('0',64) WHERE version='${version}';`);
+  appProbe(`import assert from 'node:assert/strict'; const r=await fetch('http://127.0.0.1:8080/health/ready'); assert.equal(r.status,503); assert.equal((await r.json()).status,'unavailable');`);
+  pgSql(`UPDATE projed_core.schema_migrations SET checksum='${binding.migrationSha256[`db/migrations/${version}.sql`]}' WHERE version='${version}';`);
+  appProbe(`import assert from 'node:assert/strict'; assert.equal((await fetch('http://127.0.0.1:8080/health/ready')).status,200);`);
+  passed('readiness-rejects-ledger-drift-and-recovers');
+
+  docker(['stop', '--time', '15', pgName]);
+  assert.equal(inspect(pgName).State.Running, false);
+  appProbe(`
+    import assert from 'node:assert/strict';
+    for(let i=0;i<2;i++) {
+      const r=await fetch('http://127.0.0.1:8080/health/ready',{signal:AbortSignal.timeout(6000)});
+      assert.equal(r.status,503); assert.equal((await r.json()).status,'unavailable');
+    }
+    assert.equal((await fetch('http://127.0.0.1:8080/health/live')).status,200);
+  `);
+  assert.equal(inspect(appName).State.Running, true);
+  docker(['start', pgName]);
+  await waitFor('readiness after database recovery', () => docker(['exec', appName, 'node', '--input-type=module', '-e',
+    "const r=await fetch('http://127.0.0.1:8080/health/ready',{signal:AbortSignal.timeout(6000)});process.exit(r.status===200?0:1)"], { allowFailure: true }).status === 0);
+  passed('database-outage-returns-503-without-process-crash-and-recovers');
+
+  docker(['kill', '--signal', 'SIGTERM', appName]);
+  assert.equal(docker(['wait', appName], { timeout: 15_000 }).stdout.trim(), '0');
+  const events = docker(['logs', appName]);
+  const eventLines = `${events.stdout}${events.stderr}`.trim().split(/\r?\n/).map(line => JSON.parse(line));
+  assert.ok(eventLines.some(value => value.event === 'projed_kernel_ready' && value.host === '0.0.0.0' && value.port === 8080));
+  assert.ok(eventLines.some(value => value.event === 'projed_kernel_stopped' && value.signal === 'SIGTERM'));
+  assert.ok(!eventLines.some(value => /start_failed|shutdown_failed/.test(value.event)));
+  assert.equal(inspect(appName).State.Running, false);
+  passed('cloud-run-port-and-graceful-sigterm');
+} catch (error) {
+  firstFailure = error;
+  for (const name of containers) {
+    const state = docker(['inspect', name], { allowFailure: true });
+    if (state.status !== 0) continue;
+    const container = JSON.parse(state.stdout)[0];
+    if (container.Config.Labels[label] !== nonce) continue;
+    const logs = docker(['logs', name], { allowFailure: true });
+    diagnostics.push({ name, state: container.State.Status, exitCode: container.State.ExitCode,
+      logs: sanitize(`${logs.stdout ?? ''}${logs.stderr ?? ''}`).slice(-8000) });
+  }
+} finally {
+  for (const name of containers) {
+    try {
+      const result = docker(['inspect', name], { allowFailure: true });
+      if (result.status !== 0) continue;
+      assert.equal(JSON.parse(result.stdout)[0].Config.Labels[label], nonce);
+      docker(['rm', '--force', '--volumes', name]);
+      assert.notEqual(docker(['inspect', name], { allowFailure: true }).status, 0);
+    } catch (error) { cleanupFailures.push(error); }
+  }
+  for (const name of volumes) {
+    try {
+      assert.equal(JSON.parse(docker(['volume', 'inspect', name]).stdout)[0].Labels[label], nonce);
+      docker(['volume', 'rm', name]);
+      assert.notEqual(docker(['volume', 'inspect', name], { allowFailure: true }).status, 0);
+    } catch (error) { cleanupFailures.push(error); }
+  }
+  for (const name of images) {
+    try {
+      assert.equal(JSON.parse(docker(['image', 'inspect', name]).stdout)[0].Config.Labels[label], nonce);
+      docker(['image', 'rm', name]);
+    } catch (error) { cleanupFailures.push(error); }
+  }
+  // Only this mkdtemp directory; no global Docker or filesystem pruning.
+  try {
+    chmodSync(temp, 0o700);
+    rmSync(temp, { recursive: true });
+  } catch (error) { cleanupFailures.push(error); }
+}
+
+if (!firstFailure && cleanupFailures.length === 0) passed('owned-container-socket-volume-and-credential-cleanup');
+const status = firstFailure || cleanupFailures.length ? 'FAIL' : 'PASS';
+const result = {
+  status, evidenceLevel: 'ISOLATED_LINUX_OCI_UNIX_SOCKET',
+  sourceSha: process.env.GITHUB_SHA, releaseId: prefix, imageId,
+  postgres: postgresVersion, migrationCount: binding ? Object.keys(binding.migrationSha256).length : 0,
+  profileSha256: binding?.profileSha256, migrationSha256: binding?.migrationSha256,
+  staticFixtureSha256: binding?.staticFixtureSha256, checks,
+  dockerExecution: status, browserSmoke: 'NOT_RUN', productionIdentity: 'NOT_RUN',
+  cloudSqlReadback: 'NOT_RUN', registryPush: 'NOT_RUN', productionRelease: 'NOT_RUN',
+  ...(firstFailure ? { failure: sanitize(firstFailure.message) } : {}),
+  ...(diagnostics.length ? { diagnostics } : {}),
+  ...(cleanupFailures.length ? { cleanupFailures: cleanupFailures.map(error => sanitize(error.message)) } : {}),
+};
+const output = resolve('output/qa/dev-139/oci', prefix);
+mkdirSync(output, { recursive: true });
+writeFileSync(join(output, 'result.json'), `${JSON.stringify(result, null, 2)}\n`);
+console.log(JSON.stringify({ status, evidenceLevel: result.evidenceLevel, checks: checks.length }));
+if (status !== 'PASS') {
+  throw new AggregateError([...(firstFailure ? [firstFailure] : []), ...cleanupFailures], 'DEV-139 isolated OCI verification failed');
+}

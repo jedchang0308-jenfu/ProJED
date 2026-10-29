@@ -107,8 +107,10 @@ export class RuntimeDatabase {
   }
 
   async readiness(expected: readonly ExpectedMigration[]): Promise<boolean> {
-    const lease = await this.checkout();
+    let lease: DatabaseLease | undefined;
+    let releaseAttempted = false;
     try {
+      lease = await this.checkout();
       const result = await lease.client.query<{ ok: boolean }>(`
         SELECT current_database() = $1
           AND current_user = $2
@@ -128,10 +130,18 @@ export class RuntimeDatabase {
         this.#config.binding.runtimeRole,
         JSON.stringify(expected.map(({ version, checksum }) => [version, checksum])),
       ]);
+      releaseAttempted = true;
       lease.release();
       return result.rows[0]?.ok === true;
     } catch {
-      lease.release(true);
+      if (lease && !releaseAttempted) {
+        releaseAttempted = true;
+        try {
+          lease.release(true);
+        } catch {
+          // Readiness must remain a boolean even when lease cleanup fails.
+        }
+      }
       return false;
     }
   }
