@@ -362,7 +362,8 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 
 ## 總任務清單
 
-- → DEV-139 [交付點] [整合／正式發布續行中／未Release] [P1] [W28] ProJED 首階段基礎對齊，保留 Vite
+- → DEV-139 [交付點] [整合／正式發布續行中／未Release] [P1] [W29] ProJED 首階段基礎對齊，保留 Vite
+  - W29：錄音 caller 凍結原 scope 與每段 bytes，outbox 綁 owner／record／capture／sourceVersion，舊列保留不猜配；HTTP 錄音仍停用，完整分析／清理／正式整合續行。自查與受測收據見 SPEC-139 §43。
   - 摘要：保留原工作區／看板／權限及個人／外部協作，Cloud Run／Cloud SQL／身分對齊；原網址／PWA相容，不丟資料／重建帳號／強迫重裝，費用不大幅增加。
   - 下一步：本 repo 已補 v4 exchange／current-state verifier、Google subject→原 UUID 的移轉 projection／唯讀 resolver 與 Cookie 元件，source／限制見 SPEC §13.1；先完成本版 0018／移轉的 native PostgreSQL 驗證，再接持久 Session、nonce／主／Quick callback、guard 初始化及正常入口。OrgMaster／Platform PR187／157 的 source 不等於正式 Firebase／OIDC；其餘資料、Hosting／PWA、全來源 writer fence、雲端 readback、切流及正式發布仍需完成。新 runtime／release IAM、Secret、shared foundation grant 與費用責任仍見 SPEC §33。
   - 阻塞 / 恢復條件：D1／D2已確認；Platform 014 仍是 `CANDIDATE_UNAPPLIED`，Firebase／OIDC 為 `LOCAL_SIMULATION`；ProJED 本 repo 尚未接入真 verifier、既有 UUID 帳號 proof、opaque Session 與兩個 callback。Workspace／Board／member／permission／invite／record／activity、polling、Board跨Workspace搬移、舊provider fail-closed、Quick outbox、Workbench雙向原子placement、Task Tracking、交易式Backup／Import、帳號偏好、Calendar subscription／ICS feed、full-snapshot rehearsal及正常HTTP產品UI煙霧已完成本地核心；W20 LLM log／NULL-owner與W21六表文件 corpus 已支援保留，不再因資料非空要求全面人工處置。正式資料仍需處理Inbox、RAG indexing／retrieval／record editing（`knowledge_records.rag_enabled` blocker保留）、meeting ledger／cleanup／budget／usage、Storage及來源仍存在時的Quick OAuth client，並執行正式來源plan／apply／reconcile；Hosting／舊版相容、全來源writer fence與恢復證據也未完成。不能用本地QA actor替代真Session或正式驗收。

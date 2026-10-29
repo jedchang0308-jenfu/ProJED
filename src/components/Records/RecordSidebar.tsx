@@ -718,6 +718,19 @@ const RecordSidebar: React.FC = () => {
       draftSignature: getRecordDraftSignature(currentDraft) ?? '',
     };
   };
+  const meetingRecordingScope = {
+    accountId: user?.uid ?? null, authContextId: authContextIdForPreview,
+    tenantId: activeWorkspaceId, projectId: activeBoardId,
+    recordId: draft?.id ?? null, captureId: meetingCaptureIdForDraft(draft),
+  };
+  const readCurrentMeetingRecordingScope = () => {
+    const current = readCurrentMeetingReviewBinding();
+    return {
+      accountId: current.accountId, authContextId: current.authContextId,
+      tenantId: current.workspaceId, projectId: current.boardId,
+      recordId: current.recordId, captureId: current.captureId,
+    };
+  };
   const projectChangePreviewSource = React.useMemo<ProjectChangePreviewSource>(() => ({
     draftId: draft?.id ?? null,
     draftSignature: draftSignatureForPreview,
@@ -1054,11 +1067,12 @@ const RecordSidebar: React.FC = () => {
   };
 
   const handleMeetingCaptureStarted = (captureId: string) => {
-    if (!draft || draft.type !== 'meeting') return;
-    const currentResolution = draft.metadata?.meetingTaskResolution;
+    const currentDraft = useRecordStore.getState().draft;
+    if (!currentDraft || currentDraft.type !== 'meeting' || currentDraft.id !== draft?.id) return;
+    const currentResolution = currentDraft.metadata?.meetingTaskResolution;
     updateDraft({
       metadata: {
-        ...(draft.metadata ?? {}),
+        ...(currentDraft.metadata ?? {}),
         meetingTaskResolution: {
           ...(currentResolution && typeof currentResolution === 'object' && !Array.isArray(currentResolution) ? currentResolution : {}),
           captureId,
@@ -1521,6 +1535,8 @@ const RecordSidebar: React.FC = () => {
                         <MeetingRecordingControls
                           tenantId={activeWorkspaceId}
                           projectId={activeBoardId}
+                          scope={meetingRecordingScope}
+                          readCurrentScope={readCurrentMeetingRecordingScope}
                           initialCaptureId={meetingTaskResolutionCaptureId}
                           onEnsureSaved={handleEnsureMeetingSaved}
                           onCaptureStarted={handleMeetingCaptureStarted}
