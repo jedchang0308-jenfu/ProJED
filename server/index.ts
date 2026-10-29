@@ -5,6 +5,7 @@ import { RuntimeDatabase, type ExpectedMigration } from './db.js';
 import { createKernelHttpServer } from './http.js';
 import { createRuntimeSessionAuth } from './runtimeSessionAuth.js';
 import {createGeminiRagProvider} from './geminiRagProvider.js';
+import {parseMeetingSynthesisModel} from './meetingSynthesisHttp.js';
 
 async function main(): Promise<void> {
   const config = loadRuntimeConfig();
@@ -18,6 +19,7 @@ async function main(): Promise<void> {
   const http = createKernelHttpServer(config, database, expectedMigrations, {
     ...createRuntimeSessionAuth(config,database),
     ragProvider:process.env.GEMINI_API_KEY?createGeminiRagProvider({apiKey:process.env.GEMINI_API_KEY}):undefined,
+    meetingSynthesisModel:parseMeetingSynthesisModel(process.env.GEMINI_MEETING_SYNTHESIS_MODEL),
   });
   const address = await http.listen();
   console.log(JSON.stringify({ event: 'projed_kernel_ready', entry: config.entry, host: address.host, port: address.port }));

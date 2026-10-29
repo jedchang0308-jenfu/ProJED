@@ -96,6 +96,34 @@ test('provider quota, unavailable and gateway timeout responses are safe and nev
   }
 });
 
+test('meeting generation uses JSON mode and an unavailable model is distinct from transient failures', async () => {
+  let calls=0;
+  const provider=createGeminiRagProvider({apiKey:API_KEY,fetcher:async(_input,init)=>{
+    calls+=1;
+    assert.deepEqual(JSON.parse(String(init?.body)).generationConfig,{responseMimeType:'application/json',temperature:0.2});
+    return new Response('private provider detail',{status:404});
+  }});
+  await assert.rejects(provider.generate({model:'gemini-3.5-flash',prompt:'meeting source',responseMimeType:'application/json',temperature:0.2}),hasCode('RAG_MODEL_UNAVAILABLE'));
+  assert.equal(calls,1);
+  await assert.rejects(provider.generate({model:'gemini-3.5-flash',prompt:'meeting source',temperature:Number.NaN}),hasCode('DOMAIN_DATA_INVALID'));
+  assert.equal(calls,1);
+});
+
+test('invalid generation credentials or parameters are not model fallback signals', async () => {
+  for(const scenario of [
+    {message:'API key not valid. Please pass a valid API key.',code:'RAG_PROVIDER_UNAVAILABLE'},
+    {message:'Malformed generation parameters.',code:'RAG_PROVIDER_UNAVAILABLE'},
+    {message:'Model gemini-example is not supported for generateContent.',code:'RAG_MODEL_UNAVAILABLE'},
+  ]){
+    let calls=0;
+    const provider=createGeminiRagProvider({apiKey:API_KEY,fetcher:async()=>{
+      calls+=1;return json({error:{status:'INVALID_ARGUMENT',message:scenario.message}},{status:400});
+    }});
+    await assert.rejects(provider.generate({model:'gemini-3.5-flash',prompt:'meeting source'}),hasCode(scenario.code));
+    assert.equal(calls,1);
+  }
+});
+
 test('redirect, malformed, oversized and invalid provider responses fail closed without leaking bodies', async () => {
   const scenarios: Array<{ response: () => Response; code: string }> = [
     { response: () => new Response('private redirect body', { status: 302, headers: { location: 'https://evil.invalid/' } }), code: 'RAG_PROVIDER_UNAVAILABLE' },

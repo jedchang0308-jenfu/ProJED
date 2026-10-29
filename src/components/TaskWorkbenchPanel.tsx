@@ -36,6 +36,7 @@ import {
   type TaskWorkbenchPanelPrefs,
 } from '../features/taskWorkbench/preferences';
 import { TaskPlacementPendingIndicator } from './Wbs/taskDrag/TaskPlacementPendingIndicator';
+import { selectOwnedLegacyInboxItems } from '../features/taskWorkbench/legacyInboxMigration';
 import {
   claimUnboundTaskWorkbenchUnplacedTasks,
   createNewUnplacedTaskNode,
@@ -47,7 +48,7 @@ import {
 } from '../features/taskWorkbench/placement';
 import { isTaskWorkbenchSortableTask, listWorkbenchTasks } from '../features/taskWorkbench/source';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
-import type { BoardMember, InboxItem, TaskNode, TaskTag, WorkspaceMember } from '../types';
+import type { BoardMember, TaskNode, TaskTag, WorkspaceMember } from '../types';
 import { isTaskPrimaryActionTarget, prepareNewTaskNaming } from '../utils/taskInteractions';
 import { useTaskInteractionBinding } from '../interactions/task/useTaskInteractionBinding';
 import { formatTaskLocation } from '../utils/taskHierarchy';
@@ -140,10 +141,6 @@ const getTaskHierarchyDepth = (task: TaskNode, nodesById: Record<string, TaskNod
 
   return Math.min(depth, 6);
 };
-
-const getUnclassifiedItems = (items: InboxItem[]) => items
-  .filter(item => item.captureStatus === 'untriaged' && !item.promotedTaskNodeId)
-  .sort((left, right) => right.createdAt - left.createdAt);
 
 const WorkbenchUnclassifiedSection: React.FC<{
   tasks: TaskNode[];
@@ -1151,12 +1148,12 @@ const TaskWorkbenchPanel: React.FC<{
     let cancelled = false;
     const hydrate = async () => {
       const storedTasks = await loadTaskWorkbenchUnplacedTasks(accountId);
-      if (cancelled) return;
+      if (cancelled || (useAuthStore.getState().user?.uid ?? null) !== accountId) return;
       hydrateUnplacedTasks(storedTasks);
 
       if (!fallbackWorkspaceId) return;
 
-      const legacyItems = getUnclassifiedItems(inboxItems);
+      const legacyItems = selectOwnedLegacyInboxItems(inboxItems, accountId);
       const existingNodes = useWbsStore.getState().nodes;
       const existingIds = new Set(Object.keys(existingNodes));
       const hydratedTasks: TaskNode[] = [];

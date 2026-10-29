@@ -27,6 +27,7 @@ import { createTaskWorkbenchHttpDispatcher } from './taskWorkbenchHttp.js';
 import { createTaskTrackingHttpDispatcher } from './taskTrackingHttp.js';
 import {createRagHttpDispatcher} from './ragHttp.js';
 import type {RagProvider} from './geminiRagProvider.js';
+import {createMeetingSynthesisHttpDispatcher,type MeetingSynthesisModel,type MeetingSynthesisProvider} from './meetingSynthesisHttp.js';
 
 const CONTENT_TYPES: Record<string, string> = {
   '.css': 'text/css; charset=utf-8',
@@ -140,6 +141,8 @@ export interface KernelHttpServer {
 
 export interface KernelHttpOptions {
   readonly ragProvider?:RagProvider;
+  readonly meetingSynthesisProvider?:MeetingSynthesisProvider;
+  readonly meetingSynthesisModel?:MeetingSynthesisModel;
   readonly resolveActor?: TrustedSessionActorResolver;
   readonly destroySession?: TrustedSessionDestroyer;
   readonly resolveSessionInfo?: TrustedSessionInfoResolver;
@@ -200,6 +203,8 @@ export function createKernelHttpServer(
   const dispatchDomainRead = createDomainReadHttpDispatcher(config, database, options.resolveActor);
   const dispatchDomainWrite = createDomainWriteHttpDispatcher(config, database, options.resolveActor);
   const dispatchRag = createRagHttpDispatcher(config,database,options.resolveActor,options.ragProvider);
+  const dispatchMeetingSynthesis=createMeetingSynthesisHttpDispatcher(config,database,options.resolveActor,
+    options.meetingSynthesisProvider??options.ragProvider,options.meetingSynthesisModel);
   const server = createServer({
     maxHeaderSize: 16 * 1024,
     requestTimeout: config.profile.runtime.timeouts.requestMillis,
@@ -272,6 +277,8 @@ export function createKernelHttpServer(
     }
     const rag=await dispatchRag(request,requestId);
     if(rag.matched){json(response,rag.status??500,rag.body,requestId);return;}
+    const synthesis=await dispatchMeetingSynthesis(request,requestId);
+    if(synthesis.matched){json(response,synthesis.status??500,synthesis.body,requestId);return;}
     const collaborationWrite = await dispatchCollaborationWrite(request, requestId);
     if (collaborationWrite.matched) {
       json(response, collaborationWrite.status ?? 500, collaborationWrite.body ?? {

@@ -19,6 +19,7 @@ export class HttpApiError extends Error {
     readonly requestId: string | null,
     readonly retryable: boolean,
     readonly retryAfterMs?: number,
+    readonly details?: unknown,
   ) {
     super(code);
     this.name = 'HttpApiError';
@@ -73,22 +74,22 @@ function errorFromResponse(response: Response, payload: unknown): HttpApiError {
   const candidate = payload && typeof payload === 'object'
     ? (payload as { error?: unknown }).error
     : null;
-  const details = candidate && typeof candidate === 'object'
+  const errorDetails = candidate && typeof candidate === 'object'
     ? candidate as Record<string, unknown>
     : {};
-  const code = typeof details.code === 'string' && ERROR_CODE_RE.test(details.code)
-    ? details.code
+  const code = typeof errorDetails.code === 'string' && ERROR_CODE_RE.test(errorDetails.code)
+    ? errorDetails.code
     : 'HTTP_REQUEST_FAILED';
-  const requestId = typeof details.requestId === 'string' && details.requestId.length <= 128
-    ? details.requestId
+  const requestId = typeof errorDetails.requestId === 'string' && errorDetails.requestId.length <= 128
+    ? errorDetails.requestId
     : response.headers.get('x-request-id');
-  const retryable = typeof details.retryable === 'boolean'
-    ? details.retryable
+  const retryable = typeof errorDetails.retryable === 'boolean'
+    ? errorDetails.retryable
     : response.status === 429 || response.status >= 500;
-  const retryAfterMs = Number.isSafeInteger(details.retryAfterMs) && Number(details.retryAfterMs) >= 0
-    ? Number(details.retryAfterMs)
+  const retryAfterMs = Number.isSafeInteger(errorDetails.retryAfterMs) && Number(errorDetails.retryAfterMs) >= 0
+    ? Number(errorDetails.retryAfterMs)
     : undefined;
-  return new HttpApiError(code, response.status, requestId, retryable, retryAfterMs);
+  return new HttpApiError(code, response.status, requestId, retryable, retryAfterMs, errorDetails.details);
 }
 
 export class HttpApiClient {

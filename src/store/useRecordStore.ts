@@ -143,8 +143,17 @@ export const createRecordScopeKey = (workspaceId: string, boardId: string): stri
 );
 
 let recordListRequestSequence = 0;
+let meetingSynthesisRequestSequence = 0;
 
 const activeBoardIdForMeeting = () => useBoardStore.getState().activeBoardId;
+
+const currentMeetingAuthScope = () => {
+  const user = useAuthStore.getState().user;
+  const authContextId = user && 'authContextId' in user && typeof user.authContextId === 'string'
+    ? user.authContextId
+    : null;
+  return { accountId: user?.uid ?? null, authContextId };
+};
 
 const upsertRecordWithIntegrity = async (
   workspaceId: string,
@@ -807,6 +816,8 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
 
   updateDraft: (updates) => set(state => {
     if (!state.draft) return {};
+    const cancelSynthesis = state.meetingSynthesisStatus === 'synthesizing';
+    if (cancelSynthesis) meetingSynthesisRequestSequence += 1;
     const previousContent = state.draft.content;
     const nextDraft = typeof updates.content === 'string'
       ? syncDraftContentLinks({ ...state.draft, ...updates }, updates.content)
@@ -830,7 +841,18 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
         };
       }
     }
-    return { draft: reconciledDraft, lastSaveFeedback: null };
+    const cancelProjectImport = state.meetingProjectImportStatus === 'loading'
+      && getRecordDraftSignature(state.draft) !== getRecordDraftSignature(reconciledDraft);
+    return {
+      draft: reconciledDraft,
+      lastSaveFeedback: null,
+      ...(cancelSynthesis ? resetMeetingSynthesisState : {}),
+      ...(cancelProjectImport ? {
+        meetingProjectImportRequestId: state.meetingProjectImportRequestId + 1,
+        meetingProjectImportStatus: 'idle' as const,
+        meetingProjectImportMessage: null,
+      } : {}),
+    };
   }),
 
   setContentCursorOffset: (offset) => set({ contentCursorOffset: offset }),
@@ -852,6 +874,8 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
     }
     const requestId = initial.meetingProjectImportRequestId + 1;
     const clickedAt = Date.now();
+    const draftSignature = getRecordDraftSignature(draft);
+    const authScope = currentMeetingAuthScope();
     set({
       meetingProjectImportRequestId: requestId,
       meetingProjectImportStatus: 'loading',
@@ -861,12 +885,34 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
 
     const isCurrentRequest = () => {
       const current = get();
-      return current.meetingProjectImportRequestId === requestId && current.draft?.id === draft.id && current.isMeetingMode;
+      const board = useBoardStore.getState();
+      const auth = currentMeetingAuthScope();
+      return current.meetingProjectImportRequestId === requestId
+        && current.draft?.id === draft.id
+        && getRecordDraftSignature(current.draft) === draftSignature
+        && current.isMeetingMode
+        && auth.accountId === authScope.accountId
+        && auth.authContextId === authScope.authContextId
+        && board.activeWorkspaceId === activeWorkspaceId
+        && board.activeBoardId === activeBoardId;
+    };
+
+    const stopIfStale = () => {
+      if (isCurrentRequest()) return false;
+      set(current => current.meetingProjectImportRequestId === requestId
+        && current.meetingProjectImportStatus === 'loading'
+        ? {
+          meetingProjectImportRequestId: requestId + 1,
+          meetingProjectImportStatus: 'idle',
+          meetingProjectImportMessage: null,
+        }
+        : current);
+      return true;
     };
 
     try {
       const records = await recordService.listByProject(activeWorkspaceId, activeBoardId);
-      if (!isCurrentRequest()) return false;
+      if (stopIfStale()) return false;
       set({ records });
       const window = resolveMeetingProjectChangeImportWindow({
         draftOccurredAt: draft.occurredAt,
@@ -884,7 +930,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
         endedAt: window.rangeEndedAt,
         eventTypes: PROJECT_CHANGE_EVENT_TYPES,
       }));
-      if (!isCurrentRequest()) return false;
+      if (stopIfStale()) return false;
       const currentDraft = get().draft;
       if (!currentDraft || currentDraft.type !== 'meeting') return false;
       const parsed = parseMeetingProjectChangeImportMetadata(currentDraft.metadata, activeBoardId);
@@ -898,8 +944,8 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
         currentDraft.title || '專案變化紀錄',
         deltaEvents,
         options.nodes ?? {},
-      ));
-      if (!isCurrentRequest()) return false;
+      ), { workspaceId: activeWorkspaceId, boardId: activeBoardId });
+      if (stopIfStale()) return false;
       const latestDraft = get().draft;
       if (!latestDraft || latestDraft.type !== 'meeting' || latestDraft.status === 'published') return false;
       const importedBlock = wrapProjectChangeImportContent(result.content);
@@ -927,7 +973,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
         },
       };
       set(current => {
-        if (current.meetingProjectImportRequestId !== requestId || current.draft?.id !== draft.id) return current;
+        if (!isCurrentRequest() || current.meetingProjectImportRequestId !== requestId || current.draft?.id !== draft.id) return current;
         const nextDraft = syncDraftContentLinks({ ...current.draft!, metadata: nextMetadata }, nextContent);
         return {
           draft: nextDraft,
@@ -939,7 +985,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       });
       return true;
     } catch (error) {
-      if (!isCurrentRequest()) return false;
+      if (stopIfStale()) return false;
       const message = error instanceof MeetingProjectChangeImportError || error instanceof Error
         ? error.message
         : String(error);
@@ -1232,7 +1278,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
   }),
 
   synthesizeMeetingDraft: async (nodes = {}) => {
-    const { draft, meetingActivities } = get();
+    const { draft, meetingActivities, isMeetingMode } = get();
     if (!draft || draft.type !== 'meeting' || draft.status !== 'draft') {
       set({ error: '目前沒有可統整的會議草稿。' });
       return false;
@@ -1242,9 +1288,35 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       return false;
     }
 
+    const requestId = ++meetingSynthesisRequestSequence;
+    const { activeWorkspaceId, activeBoardId } = useBoardStore.getState();
+    const authScope = currentMeetingAuthScope();
+    const draftSignature = getRecordDraftSignature(draft);
+    const isCurrentRequest = () => {
+      const current = get();
+      const board = useBoardStore.getState();
+      const auth = currentMeetingAuthScope();
+      return requestId === meetingSynthesisRequestSequence
+        && current.draft?.id === draft.id
+        && getRecordDraftSignature(current.draft) === draftSignature
+        && current.meetingActivities === meetingActivities
+        && current.isMeetingMode === isMeetingMode
+        && auth.accountId === authScope.accountId
+        && auth.authContextId === authScope.authContextId
+        && board.activeWorkspaceId === activeWorkspaceId
+        && board.activeBoardId === activeBoardId;
+    };
+    const stopIfStale = () => {
+      if (isCurrentRequest()) return false;
+      if (requestId === meetingSynthesisRequestSequence) {
+        set(current => current.meetingSynthesisStatus === 'synthesizing'
+          ? { ...resetMeetingSynthesisState }
+          : current);
+      }
+      return true;
+    };
     const preservedDraft: RecordDraft = { ...draft, status: 'draft' };
     set({
-      saving: true,
       draft: preservedDraft,
       meetingSynthesisStatus: 'synthesizing',
       meetingSynthesisError: null,
@@ -1256,9 +1328,12 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
 
     try {
       const synthesisSourceDraft = getMeetingSynthesisSourceDraft(preservedDraft);
+      if (stopIfStale()) return false;
       const result = await synthesizeMeetingRecord(
         createMeetingSynthesisInput(synthesisSourceDraft, meetingActivities, nodes),
+        { workspaceId: activeWorkspaceId, boardId: activeBoardId },
       );
+      if (stopIfStale()) return false;
       const mergedContent = mergeHumanDraftWithAiSynthesis(result.content, synthesisSourceDraft.content);
       const mergeViolations = getMeetingSynthesisMergeViolations(result.content, mergedContent);
       if (mergeViolations.length > 0) {
@@ -1292,14 +1367,12 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
         },
         mergedContent,
       );
-      const activeBoardId = useBoardStore.getState().activeBoardId;
       const aiIntegratedDraft = activeBoardId && nextDraft.type === 'meeting'
         ? { ...nextDraft, metadata: markMeetingProjectChangeImportAiIntegrated(nextDraft.metadata, activeBoardId) }
         : nextDraft;
       const nextLiveRuntime = rebaseMeetingLiveProjectionAnchors(get().meetingLiveCaptureRuntime, mergedContent);
 
       set({
-        saving: false,
         draft: aiIntegratedDraft,
         meetingLiveCaptureRuntime: nextLiveRuntime,
         contentCursorOffset: mergedContent.length,
@@ -1311,10 +1384,9 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       });
       return true;
     } catch (error) {
+      if (stopIfStale()) return false;
       const message = error instanceof Error ? error.message : String(error);
       set({
-        saving: false,
-        draft: preservedDraft,
         meetingSynthesisStatus: 'error',
         meetingSynthesisError: message,
         error: null,

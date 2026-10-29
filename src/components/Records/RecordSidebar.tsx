@@ -16,6 +16,12 @@ import { synthesizeMeetingRecord } from '../../services/meetingSynthesisService'
 import { getMeetingRecordActionState, getMeetingWorkflowStepActions, getRecordDraftSignature, type MeetingWorkflowStepAction } from '../../utils/meetingRecordWorkflow';
 import { getRecordComposerVariant } from '../../utils/recordComposerVariant';
 import { PROJECT_CHANGE_EVENT_TYPES, createProjectChangeSynthesisInput, wrapProjectChangeImportContent, type ProjectChangeScope } from '../../utils/projectChangeImport';
+import {
+  isProjectChangePreviewForCurrentSource,
+  ProjectChangePreviewRequestGate,
+  projectChangePreviewSourceKey,
+  type ProjectChangePreviewSource,
+} from './projectChangePreviewRequest';
 import { cn } from '../../utils/cn';
 import RecordContentEditor from './RecordContentEditor';
 import { TaskDescriptionIndicator } from '../TaskDescriptionIndicator';
@@ -482,6 +488,7 @@ type ProjectChangeImportState = {
   previewContent: string;
   eventCount: number;
   message: string | null;
+  sourceKey: string | null;
 };
 
 const createInitialProjectChangeImportState = (): ProjectChangeImportState => ({
@@ -494,6 +501,7 @@ const createInitialProjectChangeImportState = (): ProjectChangeImportState => ({
   previewContent: '',
   eventCount: 0,
   message: null,
+  sourceKey: null,
 });
 
 const ProjectChangeImportPanel: React.FC<{
@@ -629,6 +637,7 @@ const RecordSidebar: React.FC = () => {
   const [isLinkedTasksOpen, setIsLinkedTasksOpen] = React.useState(false);
   const [isProjectImportExpanded, setIsProjectImportExpanded] = React.useState(false);
   const [projectChangeImport, setProjectChangeImport] = React.useState(createInitialProjectChangeImportState);
+  const projectChangePreviewGateRef = React.useRef<ProjectChangePreviewRequestGate | null>(null);
   const sidebarWidthRef = React.useRef(sidebarWidth);
   const resizeCleanupRef = React.useRef<(() => void) | null>(null);
   const composerScrollRef = React.useRef<HTMLDivElement | null>(null);
@@ -650,6 +659,44 @@ const RecordSidebar: React.FC = () => {
   const closePanel = useRecordStore(state => state.closePanel);
   const togglePanelCollapsed = useRecordStore(state => state.togglePanelCollapsed);
   const updateDraft = useRecordStore(state => state.updateDraft);
+  const draftSignatureForPreview = getRecordDraftSignature(draft);
+  const authContextIdForPreview = user && 'authContextId' in user && typeof user.authContextId === 'string'
+    ? user.authContextId
+    : null;
+  const projectChangePreviewSource = React.useMemo<ProjectChangePreviewSource>(() => ({
+    draftId: draft?.id ?? null,
+    draftSignature: draftSignatureForPreview,
+    accountId: user?.uid ?? null,
+    authContextId: authContextIdForPreview,
+    workspaceId: activeWorkspaceId,
+    boardId: activeBoardId,
+  }), [
+    draft?.id,
+    draftSignatureForPreview,
+    user?.uid,
+    authContextIdForPreview,
+    activeWorkspaceId,
+    activeBoardId,
+  ]);
+  if (!projectChangePreviewGateRef.current) {
+    projectChangePreviewGateRef.current = new ProjectChangePreviewRequestGate(projectChangePreviewSource);
+  }
+  const readCurrentProjectChangePreviewSource = (): ProjectChangePreviewSource => {
+    const currentDraft = useRecordStore.getState().draft;
+    const currentUser = useAuthStore.getState().user;
+    const currentAuthContextId = currentUser && 'authContextId' in currentUser && typeof currentUser.authContextId === 'string'
+      ? currentUser.authContextId
+      : null;
+    const board = useBoardStore.getState();
+    return {
+      draftId: currentDraft?.id ?? null,
+      draftSignature: getRecordDraftSignature(currentDraft),
+      accountId: currentUser?.uid ?? null,
+      authContextId: currentAuthContextId,
+      workspaceId: board.activeWorkspaceId,
+      boardId: board.activeBoardId,
+    };
+  };
   const handleMeetingReviewRevisionChange = React.useCallback((reviewRevision: number) => {
     const currentDraft = useRecordStore.getState().draft;
     if (!currentDraft || currentDraft.type !== 'meeting') return;
@@ -820,6 +867,13 @@ const RecordSidebar: React.FC = () => {
     setIsLinkedTasksOpen(false);
     window.requestAnimationFrame(() => composerScrollRef.current?.scrollTo({ top: 0, behavior: 'auto' }));
   }, [draft?.id]);
+
+  React.useEffect(() => {
+    const gate = projectChangePreviewGateRef.current;
+    if (!gate) return;
+    const transition = gate.reconcileSource(projectChangePreviewSource, projectChangeImport);
+    if (transition.changed) setProjectChangeImport(transition.state);
+  }, [projectChangePreviewSource, projectChangeImport]);
 
   if (!isPanelOpen || (isMeetingMode && isMeetingRecordUnavailable)) return null;
 
@@ -1025,7 +1079,16 @@ const RecordSidebar: React.FC = () => {
   };
 
   const handleProjectChangePreview = async () => {
-    if (!activeWorkspaceId || !draft) {
+    const gate = projectChangePreviewGateRef.current;
+    if (!gate) return;
+    const requestId = gate.begin(projectChangePreviewSource);
+    const requestSourceKey = projectChangePreviewSourceKey(projectChangePreviewSource);
+    const workspaceId = activeWorkspaceId;
+    const boardId = activeBoardId;
+    const sourceDraft = draft;
+    const isCurrentRequest = () => gate.isCurrent(requestId, readCurrentProjectChangePreviewSource());
+
+    if (!workspaceId || !sourceDraft) {
       setProjectChangeImport(state => ({
         ...state,
         status: 'error',
@@ -1051,13 +1114,14 @@ const RecordSidebar: React.FC = () => {
       previewContent: '',
       eventCount: 0,
       message: '正在整理指定範圍內的專案變化。',
+      sourceKey: requestSourceKey,
     }));
 
     try {
       const events = await withProjectChangeImportTimeout(
         eventLogService.listActivity({
-          workspaceId: activeWorkspaceId,
-          boardId: activeBoardId,
+          workspaceId,
+          boardId,
           scope: projectChangeImport.scope,
           startedAt,
           endedAt,
@@ -1065,6 +1129,7 @@ const RecordSidebar: React.FC = () => {
         }),
         '讀取專案變化逾時，請確認正式環境連線後重試；也可以縮短日期範圍再整理。',
       );
+      if (!isCurrentRequest()) return;
 
       if (events.length === 0) {
         setProjectChangeImport(state => ({
@@ -1073,56 +1138,68 @@ const RecordSidebar: React.FC = () => {
           previewContent: '',
           eventCount: 0,
           message: '這個時間範圍內沒有可匯入的任務變化。',
+          sourceKey: null,
         }));
         return;
       }
 
       const result = await withProjectChangeImportTimeout(
         synthesizeMeetingRecord(createProjectChangeSynthesisInput(
-          draft.title || '專案變化紀錄',
+          sourceDraft.title || '專案變化紀錄',
           events,
           nodes,
           activitySummaryResolvers,
-        )),
+        ), { workspaceId, boardId }),
         '整理專案變化逾時，請稍後重試；也可以縮短日期範圍或先手動撰寫紀錄。',
       );
+      if (!isCurrentRequest()) return;
       setProjectChangeImport(state => ({
         ...state,
         status: 'ready',
         previewContent: result.content,
         eventCount: events.length,
         message: `已整理 ${events.length} 筆任務變化。確認後可插入紀錄內容。`,
+        sourceKey: requestSourceKey,
       }));
     } catch (error) {
+      if (!isCurrentRequest()) return;
       setProjectChangeImport(state => ({
         ...state,
         status: 'error',
         previewContent: '',
         eventCount: 0,
         message: error instanceof Error ? error.message : String(error),
+        sourceKey: null,
       }));
     }
   };
 
   const handleInsertProjectChanges = () => {
-    if (!draft || !projectChangeImport.previewContent.trim()) return;
+    if (!draft || !projectChangeImport.previewContent.trim()
+        || !isProjectChangePreviewForCurrentSource(projectChangeImport.sourceKey, readCurrentProjectChangePreviewSource())) return;
+    projectChangePreviewGateRef.current?.cancel();
     const projectChangeBlock = wrapProjectChangeImportContent(projectChangeImport.previewContent);
     const nextContent = [draft.content.trim(), projectChangeBlock]
       .filter(Boolean)
       .join('\n\n');
     updateDraft({ content: nextContent });
     setContentCursorOffset(nextContent.length);
+    const insertedSource = readCurrentProjectChangePreviewSource();
+    projectChangePreviewGateRef.current?.markInserted(insertedSource);
+    const insertedSourceKey = projectChangePreviewSourceKey(insertedSource);
     setProjectChangeImport(state => ({
       ...state,
       dismissedDraftId: draft.id ?? null,
       status: 'ready',
       stepState: 'inserted',
       message: `已插入 ${state.eventCount} 筆專案變化整理，請繼續撰寫。`,
+      sourceKey: insertedSourceKey,
     }));
     setIsProjectImportExpanded(false);
   };
 
   const handleSkipProjectChanges = () => {
+    projectChangePreviewGateRef.current?.cancel();
     setProjectChangeImport(state => ({
       ...state,
       dismissedDraftId: draft?.id ?? null,
@@ -1131,6 +1208,7 @@ const RecordSidebar: React.FC = () => {
       previewContent: '',
       eventCount: 0,
       message: null,
+      sourceKey: null,
     }));
     setIsProjectImportExpanded(false);
   };
@@ -1139,15 +1217,19 @@ const RecordSidebar: React.FC = () => {
     <ProjectChangeImportPanel
       state={projectChangeImport}
       disabled={!activeWorkspaceId || (projectChangeImport.scope === 'board' && !activeBoardId) || saving || isSynthesizing}
-      onChange={updates => setProjectChangeImport(state => ({
-        ...state,
-        ...updates,
-        status: 'idle',
-        stepState: 'pending',
-        previewContent: '',
-        eventCount: 0,
-        message: null,
-      }))}
+      onChange={updates => {
+        projectChangePreviewGateRef.current?.cancel();
+        setProjectChangeImport(state => ({
+          ...state,
+          ...updates,
+          status: 'idle',
+          stepState: 'pending',
+          previewContent: '',
+          eventCount: 0,
+          message: null,
+          sourceKey: null,
+        }));
+      }}
       onPreview={() => void handleProjectChangePreview()}
       onInsert={handleInsertProjectChanges}
       onSkip={handleSkipProjectChanges}

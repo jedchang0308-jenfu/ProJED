@@ -3,7 +3,8 @@ import { KernelError } from './errors.js';
 export interface RagProvider {
   embed(content: string, signal?: AbortSignal): Promise<number[]>;
   generate(
-    input: { model: 'gemini-3.1-flash-lite' | 'gemini-3.5-flash'; prompt: string },
+    input: { model: 'gemini-3.1-flash-lite' | 'gemini-3.5-flash'; prompt: string;
+      responseMimeType?: 'application/json'; temperature?: number },
     signal?: AbortSignal,
   ): Promise<string>;
 }
@@ -15,6 +16,7 @@ export interface GeminiRagProviderOptions {
 
 type RagProviderErrorCode =
   | 'RAG_PROVIDER_UNAVAILABLE'
+  | 'RAG_MODEL_UNAVAILABLE'
   | 'RAG_PROVIDER_INVALID_RESPONSE'
   | 'RAG_TIMEOUT'
   | 'RAG_QUOTA_EXCEEDED';
@@ -152,7 +154,7 @@ export function createGeminiRagProvider({ apiKey, fetcher = globalThis.fetch.bin
     throw new KernelError('CONFIG_INVALID', 'RAG provider configuration is incomplete', 503);
   }
 
-  const post = async (url: string, body: Record<string, unknown>, signal: AbortSignal): Promise<unknown> => {
+  const post = async (url: string, body: Record<string, unknown>, signal: AbortSignal, generation = false): Promise<unknown> => {
     let response: Response;
     try {
       response = await fetcher(url, {
@@ -178,6 +180,18 @@ export function createGeminiRagProvider({ apiKey, fetcher = globalThis.fetch.bin
     if (response.status === 429) throw quotaError();
     if (response.status === 503) throw unavailable();
     if (response.status === 504) throw timeoutError();
+    if (generation && response.status === 404) {
+      throw providerError('RAG_MODEL_UNAVAILABLE', 'Generation model is unavailable', 502);
+    }
+    if (generation && response.status === 400) {
+      const payload=await readBoundedJson(response).catch(()=>null);
+      const message=isRecord(payload)&&isRecord(payload.error)&&typeof payload.error.message==='string'
+        ?payload.error.message:'';
+      if (/\bmodel\b|\bmodels\//iu.test(message)
+          && /not\s+(?:found|supported|available)|unsupported|does\s+not\s+exist/iu.test(message)) {
+        throw providerError('RAG_MODEL_UNAVAILABLE','Generation model is unavailable',502);
+      }
+    }
     if (!response.ok) throw unavailable();
 
     try {
@@ -207,13 +221,20 @@ export function createGeminiRagProvider({ apiKey, fetcher = globalThis.fetch.bin
       }, EMBED_TIMEOUT_MS, signal);
     },
 
-    async generate({ model, prompt }, signal) {
+    async generate({ model, prompt, responseMimeType, temperature }, signal) {
       if (model !== 'gemini-3.1-flash-lite' && model !== 'gemini-3.5-flash') throw invalidRequest();
       validateInput(prompt, MAX_GENERATE_PROMPT_CHARS);
+      if ((responseMimeType !== undefined && responseMimeType !== 'application/json')
+          || (temperature !== undefined && (!Number.isFinite(temperature) || temperature < 0 || temperature > 2))) {
+        throw invalidRequest();
+      }
       return withDeadline(async requestSignal => {
         const payload = await post(`${API_BASE}/${model}:generateContent`, {
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        }, requestSignal);
+          ...(responseMimeType !== undefined || temperature !== undefined
+            ? {generationConfig: {...(responseMimeType ? {responseMimeType} : {}),
+              ...(temperature !== undefined ? {temperature} : {})}} : {}),
+        }, requestSignal, true);
         if (!isRecord(payload) || !Array.isArray(payload.candidates) || !isRecord(payload.candidates[0])) {
           throw invalidResponse();
         }

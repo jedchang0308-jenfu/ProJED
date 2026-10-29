@@ -41,6 +41,7 @@ import { TaskTrackingError } from '../../../src/features/taskTracking/errors.js'
 import { verifyGoogleMappingsPostgres } from '../s2/verify-mappings-pg.js';
 import { verifyAppSessionsPostgres } from '../s2/verify-app-sessions-pg.js';
 import {verifyRagPostgres} from './verify-rag-pg.js';
+import {verifyMeetingSynthesisPostgres} from './verify-meeting-synthesis-pg.js';
 import { createPreferencesHttpDispatcher } from '../../../server/preferencesHttp.js';
 import { createCalendarHttpDispatcher } from '../../../server/calendarHttp.js';
 import { buildCalendarFeed } from '../../../server/calendar.js';
@@ -117,6 +118,7 @@ const actorE: ServerActorV1 = {
   contextId: '55555555-5555-4555-8555-555555555555',
 };
 
+await verifyMeetingSynthesisPostgres(database,config,actorB,actorA,actorD);
 const aWorkspaces = await runActorTransaction(database, config, actorA, port => repository.listWorkspaces(port));
 assert.deepEqual(aWorkspaces.map(workspace => workspace.id), ['ws-a', 'ws-b']);
 assert.deepEqual(aWorkspaces.find(workspace => workspace.id === 'ws-b')?.boards.map(board => board.id), ['board-shared']);
@@ -1728,6 +1730,7 @@ console.log(JSON.stringify({
     'first-login-personal-external-employee-concurrency-original-uuid-and-private-workspace',
     'verified-login-email-refresh-invite-qualification-and-unscoped-update-denial',
     'rag-record-mirror-index-consumer-current-retrieval-private-denial-and-supersession',
+    'meeting-text-synthesis-current-scope-quality-model-fallback-and-stale-reply-denial',
     'workspace-board-scope', 'tenant-member-scope', 'board-member-scope',
     'tenant-scope-does-not-imply-board-read', 'suspended-member-deny',
     'explicit-empty-permissions', 'task-parent-mapping', 'dependency-mapping', 'private-board-deny',
