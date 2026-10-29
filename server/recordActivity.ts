@@ -319,7 +319,7 @@ async function resolveTaskInternalId(port: ActorQueryPort, board: BoardIdentity,
   return result.rows[0]!.id;
 }
 
-async function bumpRevision(port: ActorQueryPort, tenantId: string, projectId: string | null): Promise<void> {
+export async function bumpRecordActivityRevision(port: ActorQueryPort, tenantId: string, projectId: string | null): Promise<void> {
   const result = await port.query(`
     UPDATE projed_core.resource_revisions
        SET revision = revision + 1, updated_at = now()
@@ -361,6 +361,14 @@ function validateRecordInput(input: DomainKnowledgeRecordInput): {
 }
 
 export class RecordActivityRepository {
+  async getRecord(port: ActorQueryPort, workspaceRef: string, boardRef: string, recordRef: string): Promise<DomainKnowledgeRecord> {
+    const board=await resolveBoard(port,workspaceRef,boardRef);
+    const id=await resolveRecordInternalId(port,board,recordRef);
+    const result=await this.listRecordsByInternalId(port,board,workspaceRef,boardRef,id);
+    if(!result[0])notFound();
+    return result[0];
+  }
+
   async listRecords(port: ActorQueryPort, workspaceRef: string, boardRef: string): Promise<DomainKnowledgeRecord[]> {
     const board = await resolveBoard(port, workspaceRef, boardRef);
     const result = await port.query<RecordRow>(`${RECORD_SELECT}
@@ -490,7 +498,7 @@ export class RecordActivityRepository {
     }
     if (!internalId) invalid('Knowledge record identity is unavailable', 503);
     await reconcileKnowledgeRecordMirror(port, {tenantId:board.tenantId,projectId:board.id,recordId:internalId});
-    await bumpRevision(port, board.tenantId, board.id);
+    await bumpRecordActivityRevision(port, board.tenantId, board.id);
 
     const records = await this.listRecordsByInternalId(port, board, workspaceRef, boardRef, internalId);
     const saved = records[0];
@@ -510,7 +518,7 @@ export class RecordActivityRepository {
     `, [board.tenantId, board.id, internalId, actor.rows[0]?.id]);
     if (result.rowCount !== 1) notFound();
     await reconcileKnowledgeRecordMirror(port, {tenantId:board.tenantId,projectId:board.id,recordId:internalId});
-    await bumpRevision(port, board.tenantId, board.id);
+    await bumpRecordActivityRevision(port, board.tenantId, board.id);
   }
 
   private async listRecordsByInternalId(
@@ -554,7 +562,7 @@ export class RecordActivityRepository {
     `, [id, workspace.id, board?.id ?? null, actor.rows[0]?.id, input.eventType, input.entityTable,
       entityRef && UUID_RE.test(entityRef) ? entityRef : null, entityRef, JSON.stringify(payload)]);
     if (result.rowCount !== 1) invalid('Activity event could not be created', 503);
-    await bumpRevision(port, workspace.id, board?.id ?? null);
+    await bumpRecordActivityRevision(port, workspace.id, board?.id ?? null);
     return {
       id,
       workspaceId: input.workspaceId,

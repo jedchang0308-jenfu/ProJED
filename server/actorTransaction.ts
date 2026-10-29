@@ -35,6 +35,8 @@ export interface ActorQueryPort {
   authorizeRagJobMutation(tenantId: string, documentId: string, jobId: string, claimToken?: string): Promise<void>;
   authorizeMeetingCaptureMutation(recordId: string, captureId: string): Promise<void>;
   authorizeMeetingAudioMutation(captureId: string, segmentId: string, phase: 'reserve' | 'claim' | 'verify'): Promise<void>;
+  authorizeMeetingReviewMutation(captureId: string, resolutionId: string): Promise<void>;
+  authorizeMeetingProjectionMutation(recordId: string, captureId: string): Promise<void>;
 }
 
 const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
@@ -310,6 +312,24 @@ export async function runActorTransaction<T>(
       WHERE current_setting('projed.meeting_capture_id',true)=$3`, [segmentId,phase,captureId]);
   };
 
+  const authorizeMeetingReviewMutation = async (captureId: string, resolutionId: string): Promise<void> => {
+    if (![captureId,resolutionId].every(value => UUID_RE.test(value))) {
+      throw new KernelError('TRANSACTION_USAGE_INVALID','Meeting review scope is invalid');
+    }
+    const result=await guardedClientQuery(`SELECT set_config('projed.meeting_resolution_id',$1,true)
+      WHERE current_setting('projed.meeting_capture_id',true)=$2`,[resolutionId,captureId]);
+    if(result.rows.length!==1)throw new KernelError('TRANSACTION_USAGE_INVALID','Meeting capture scope is not authorized');
+  };
+  const authorizeMeetingProjectionMutation = async (recordId: string, captureId: string): Promise<void> => {
+    if (![recordId,captureId].every(value => UUID_RE.test(value))) {
+      throw new KernelError('TRANSACTION_USAGE_INVALID','Meeting projection scope is invalid');
+    }
+    const result=await guardedClientQuery(`SELECT set_config('projed.meeting_projection_record_id',$1,true)
+      WHERE current_setting('projed.meeting_capture_id',true)=$2
+        AND current_setting('projed.meeting_record_id',true)=$1`,[recordId,captureId]);
+    if(result.rows.length!==1)throw new KernelError('TRANSACTION_USAGE_INVALID','Meeting record scope is not authorized');
+  };
+
   try {
     checkCancellation();
     validateServerActor(actor);
@@ -347,6 +367,7 @@ export async function runActorTransaction<T>(
       authorizeRagJobMutation,
       authorizeMeetingCaptureMutation,
       authorizeMeetingAudioMutation,
+      authorizeMeetingReviewMutation, authorizeMeetingProjectionMutation,
     });
     portClosed = true;
     if (inFlight) throw new KernelError('TRANSACTION_USAGE_INVALID', 'Callback returned with an unfinished query');

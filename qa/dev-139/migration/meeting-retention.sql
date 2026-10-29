@@ -273,13 +273,21 @@ BEGIN
         'reserved_twd_micros','usage_state','outcome','dispatch_state'
       ]::text[]
       WHEN 'projed_core.meeting_ai_budget_months' THEN ARRAY['budget_month']::text[]
+      WHEN 'projed_core.meeting_task_match_results' THEN ARRAY[
+        'id','resolution_id','task_id','ai_suggestion_version','decision','decision_source',
+        'corrected_by','corrected_at','capture_id','tenant_id','project_id'
+      ]::text[]
+      WHEN 'projed_core.meeting_draft_projections' THEN ARRAY[
+        'record_id','capture_id','applied_review_revision','last_request_key','payload_hash',
+        'manual_link_set','auto_link_set','record_version','updated_at'
+      ]::text[]
       ELSE ARRAY[]::text[]
     END;
     v_expected_update := CASE v_name
       WHEN 'projed_core.meeting_capture_sessions' THEN ARRAY[
         'state','epoch_manifest','last_progress_at','stopped_at','audio_expires_at','source_version',
         'audio_manifest_hash','pointer_manifest_hash','source_completeness','pointer_loss','updated_at',
-        'stopped_reason','source_frozen_at','source_parent_version','final_pointer_sequence','source_gaps'
+        'stopped_reason','source_frozen_at','source_parent_version','final_pointer_sequence','source_gaps','review_revision'
       ]::text[]
       WHEN 'projed_core.meeting_capture_segments' THEN ARRAY[
         'bytes','sha256','upload_state','upload_token_expires_at','last_error','verified_at','storage_generation','updated_at'
@@ -296,6 +304,16 @@ BEGIN
       ]::text[]
       WHEN 'projed_core.meeting_ai_budget_months' THEN ARRAY[
         'reserved_twd_micros','updated_at'
+      ]::text[]
+      WHEN 'projed_core.meeting_segment_resolutions' THEN ARRAY[
+        'resolution_state','revision','human_reviewed','human_empty_decision','updated_at'
+      ]::text[]
+      WHEN 'projed_core.meeting_task_match_results' THEN ARRAY[
+        'decision','decision_source','corrected_by','corrected_at','updated_at'
+      ]::text[]
+      WHEN 'projed_core.meeting_draft_projections' THEN ARRAY[
+        'capture_id','applied_review_revision','last_request_key','payload_hash',
+        'manual_link_set','auto_link_set','record_version','updated_at'
       ]::text[]
       ELSE ARRAY[]::text[]
     END;
@@ -316,7 +334,8 @@ BEGIN
     END;
 
     FOREACH v_privilege IN ARRAY ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER'] LOOP
-      v_expected_privilege := v_privilege = 'SELECT' AND v_expected_table_select;
+      v_expected_privilege := (v_privilege = 'SELECT' AND v_expected_table_select)
+        OR (v_privilege = 'DELETE' AND v_name='projed_core.meeting_task_match_results');
       IF has_table_privilege('projed_runtime_disposable', v_relation, v_privilege)
            IS DISTINCT FROM v_expected_privilege THEN
         RAISE EXCEPTION 'runtime table-level % grant differs from exact policy on %', v_privilege, v_name;
@@ -373,7 +392,9 @@ BEGIN
     'projed_core.meeting_upload_budget_scope_v1(date)',
     'projed_core.meeting_upload_run_scope_v1(uuid,uuid)',
     'projed_core.meeting_budget_upload_guard_v1()',
-    'projed_core.complete_meeting_upload_v1(uuid,integer,jsonb,text,text,text)'
+    'projed_core.complete_meeting_upload_v1(uuid,integer,jsonb,text,text,text)',
+    'projed_core.meeting_review_scope_v1(uuid)',
+    'projed_core.meeting_projection_scope_v1(uuid,uuid)'
   ] LOOP
     v_function_oid := to_regprocedure(v_function);
     IF v_function_oid IS NULL THEN RAISE EXCEPTION 'missing runtime meeting helper: %', v_function; END IF;
@@ -439,7 +460,9 @@ SELECT set_config('projed.actor_principal_id','',true),
        set_config('projed.meeting_upload_phase','',true),
        set_config('projed.meeting_upload_token','',true),
        set_config('projed.meeting_upload_run_id','',true),
-       set_config('projed.meeting_upload_budget_month','',true);
+       set_config('projed.meeting_upload_budget_month','',true),
+       set_config('projed.meeting_resolution_id','',true),
+       set_config('projed.meeting_projection_record_id','',true);
 DO $$
 DECLARE v_rows bigint;
 BEGIN
@@ -470,7 +493,10 @@ BEGIN
      OR projed_core.meeting_upload_scope_v1('a1234567-1234-4234-8234-123456789001') IS TRUE
      OR projed_core.meeting_upload_budget_scope_v1('2026-04-01'::date) IS TRUE
      OR projed_core.meeting_upload_run_scope_v1(
-       'a1234567-1234-4234-8234-123456789001','b1234567-1234-4234-8234-123456789001') IS TRUE THEN
+       'a1234567-1234-4234-8234-123456789001','b1234567-1234-4234-8234-123456789001') IS TRUE
+     OR projed_core.meeting_review_scope_v1('a6234567-1234-4234-8234-123456789001') IS TRUE
+     OR projed_core.meeting_projection_scope_v1(
+       '23456789-1234-4234-8234-123456789002','a1234567-1234-4234-8234-123456789001') IS TRUE THEN
     RAISE EXCEPTION 'meeting helper accepted missing actor/purpose scope';
   END IF;
 

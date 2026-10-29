@@ -3,11 +3,12 @@ import { runActorTransaction } from './actorTransaction.js';
 import type { RuntimeConfig } from './config.js';
 import type { RuntimeDatabase } from './db.js';
 import type { TrustedSessionActorResolver } from './domainReadHttp.js';
-import { isSameOriginWrite, readJsonBody } from './domainWriteHttp.js';
+import { isSameOriginWrite, MAX_RECORD_BODY_BYTES, readJsonBody } from './domainWriteHttp.js';
 import { asKernelError, KernelError } from './errors.js';
 import { assertExpectedActor } from './expectedActorHttp.js';
 import { MeetingCaptureRepository } from './meetingCapture.js';
 import { MeetingUploadRepository } from './meetingUpload.js';
+import { MeetingReviewRepository } from './meetingReview.js';
 import { MeetingAudioService } from './meetingAudio.js';
 import { currentMeetingActor } from './meetingAudioHttp.js';
 import type { MeetingAudioStorage } from './meetingAudioStorage.js';
@@ -15,6 +16,7 @@ import type { MeetingAudioStorage } from './meetingAudioStorage.js';
 export function createMeetingCaptureHttpDispatcher(config:RuntimeConfig,database:RuntimeDatabase,resolveActor?:TrustedSessionActorResolver,storage?:MeetingAudioStorage){
   const repository=new MeetingCaptureRepository();
   const uploads=new MeetingUploadRepository();
+  const reviews=new MeetingReviewRepository();
   const audio=storage?new MeetingAudioService(database,config,storage):undefined;
   return async(request:IncomingMessage,requestId:string)=>{
     if(request.url!=='/api/v1/meeting-control')return {matched:false};
@@ -25,7 +27,7 @@ export function createMeetingCaptureHttpDispatcher(config:RuntimeConfig,database
     const timer=setTimeout(cancel,29_000);timer.unref();
     request.once('aborted',cancel);request.socket?.once('close',cancel);
     try{
-      const body=await readJsonBody(request,2*1024*1024);
+      const body=await readJsonBody(request,MAX_RECORD_BODY_BYTES);
       const actor=await resolveActor(request,{refresh:true});assertExpectedActor(request,actor);
       if(actor.entry!=='main')throw new KernelError('ACCESS_DENIED','Meeting capture requires the main application',403);
       const currentActor=currentMeetingActor(request,actor,resolveActor,controller.signal);
@@ -34,6 +36,8 @@ export function createMeetingCaptureHttpDispatcher(config:RuntimeConfig,database
         if(!audio)throw new KernelError('MEETING_STORAGE_UNAVAILABLE','Meeting audio storage is unavailable',503);
         result=body.operation==='reserve-segment'?await audio.reserve(actor,body,controller.signal)
           :await audio.verify(currentActor,body,controller.signal);
+      }else if(['review','decide-match','save-projection'].includes(String(body.operation))){
+        result=await runActorTransaction(database,config,actor,port=>reviews.execute(port,body),{signal:controller.signal});
       }else if(body.operation==='complete-upload'){
         result=await runActorTransaction(database,config,actor,port=>uploads.execute(port,body),{signal:controller.signal});
       }else result=await runActorTransaction(database,config,actor,port=>repository.execute(port,body),{signal:controller.signal});

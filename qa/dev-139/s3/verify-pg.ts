@@ -46,6 +46,7 @@ import { verifyActorSerializationPostgres } from './verify-actor-serialization-p
 import { verifyMeetingCapturePostgres } from './verify-meeting-capture-pg.js';
 import { verifyMeetingAudioPostgres } from './verify-meeting-audio-pg.js';
 import { verifyMeetingUploadPostgres } from './verify-meeting-upload-pg.js';
+import { verifyMeetingReviewPostgres } from './verify-meeting-review-pg.js';
 import { createPreferencesHttpDispatcher } from '../../../server/preferencesHttp.js';
 import { createCalendarHttpDispatcher } from '../../../server/calendarHttp.js';
 import { buildCalendarFeed } from '../../../server/calendar.js';
@@ -137,6 +138,7 @@ await verifyMeetingSynthesisPostgres(database,config,actorB,actorA,actorD);
 await runIndependent('meeting-capture',()=>verifyMeetingCapturePostgres(database,config,actorB,actorA,actorD));
 await runIndependent('meeting-audio',()=>verifyMeetingAudioPostgres(database,config,actorB,actorA,actorD));
 await runIndependent('meeting-upload',()=>verifyMeetingUploadPostgres(database,config,actorB,actorA,actorD));
+await runIndependent('meeting-review',()=>verifyMeetingReviewPostgres(database,config,actorB,actorA,actorD));
 const aWorkspaces = await runActorTransaction(database, config, actorA, port => repository.listWorkspaces(port));
 assert.deepEqual(aWorkspaces.map(workspace => workspace.id), ['ws-a', 'ws-b']);
 assert.deepEqual(aWorkspaces.find(workspace => workspace.id === 'ws-b')?.boards.map(board => board.id), ['board-shared']);
@@ -1754,6 +1756,7 @@ console.log(JSON.stringify({
     'meeting-capture-http-source-clock-pointer-private-cancel-atomic-refund-and-cleanup',
     'meeting-audio-private-proxy-generation-readback-cancel-parent-delete-and-cleanup-proof',
     'meeting-upload-source-freeze-once-reservation-budget-private-replay-and-atomic-rollback',
+    'meeting-human-review-source-version-cas-private-decisions-projection-and-atomic-rollback',
     'workspace-board-scope', 'tenant-member-scope', 'board-member-scope',
     'tenant-scope-does-not-imply-board-read', 'suspended-member-deny',
     'explicit-empty-permissions', 'task-parent-mapping', 'dependency-mapping', 'private-board-deny',
