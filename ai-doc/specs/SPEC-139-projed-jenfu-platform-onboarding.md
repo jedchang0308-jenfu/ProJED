@@ -1371,7 +1371,9 @@ Focused review 另修正新service的預設路由說明、OCI失敗診斷也遮�
 
 `meetingLlmWorker`候選已補單次retrieve／match／compose的claim→dispatch→provider→private settlement；沒有在network I/O期間持有actor transaction。Dispatch COMMIT未知只以read-only確認原token，settlement COMMIT未知先讀同token的事實收據，查無才將同payload重送一次，不重送provider。Readback若是recovery先存的unknown／未發布收據，照實回報，不把本機結果當已存；只有實際private checkpoint可供後續使用。原Session／source／current WBS與lease的發布判定仍由repository及SQL執行。Generation的已知usage即使內容無法解析也入帳；embedding向量不可用時保留已驗數值usage作unusable結算，缺失／非法用量仍unknown保留預留。Worker不做多餘countTokens模型請求，也不偽造free branch的provider dispatch。新增driver unit11項與provider focused11項PASS；新增native路徑以真repository／SQL配synthetic transport驗結果及費用，尚待CI，不是真provider或ZDR證據。
 
-以上候選完整S2 416項、S2及S3 strict同版本PG宣告overlay、affected lint與script syntax PASS；worker test首次S2檢查的stage type錯誤匯入及空字串聯集已修，不以只含S3的overlay充作S2通過。下一版native尚未通過。
+以上候選完整S2 416項、S2及S3 strict同版本PG宣告overlay、affected lint與script syntax PASS；worker test首次S2檢查的stage type錯誤匯入及空字串聯集已修，不以只含S3的overlay充作S2通過。`50c0f01c38e07e612570dd5040a25117b63aff62`的[CI40927243819](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40927243819)579 unit（416／122／14／27）、型別／三boundary／compiled artifact、snapshot60及OCI18／40 migrations PASS。已讀回 artifacts `12920024499`（migration/20261029T180910Z-f230a7d6）與`12920338300`（dev139-oci-e13705fbf03d13a02c563765），owned cleanup PASS。Domain的LLM helper及真driver／SQL案例已走到最後，隨後外層Session fixture在取消capture後錯誤仍期待worker Session可讀而失敗（`verifyAsrSessionBinding`，undefined≠context UUID）；已改該callback明確期待terminal查詢NULL，不改正式Session／取消guard。Domain整批仍未PASS，須受影響重驗；獨立snapshot與OCI成功不擴算正常browser／Google provider／正式環境。
+
+另補`readMeetingTaskRagCoverage`：重用同一fresh document／完整chunks／目前task proof SQL，以NULL參數略過score，不造dummy vector、不呼叫provider或重建索引；僅回覆coverage，供後續selector在沒有有效index時直接走lexical／pointer。原positive-vector排序維持；unit7項與新native complete／incomplete coverage案例已補，native待CI。
 
 仍須接免provider的no-index／no-candidate／empty／single-leaf持久進度、當前來源的next-unit selector、結果讀取、bounded host及finalizer；不把既有core或單次driver算成完整分析。實際零留存／OrgMaster與Platform真Session、既有使用者及資料、完整foundation migration window、Cloud Run／SQL／Storage／Hosting／舊入口、writer fence／reconcile／恢復／切流與正式發布繼續計入DEV-139。
 

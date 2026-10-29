@@ -6,7 +6,7 @@ import {runActorTransaction,type ServerActorV1} from '../../../server/actorTrans
 import {RuntimeDatabase} from '../../../server/db.js';
 import {KernelError} from '../../../server/errors.js';
 import {createMeetingTaskCandidateSnapshot,type MeetingTaskCandidateSnapshot} from '../../../server/meetingTaskCandidates.js';
-import {readCurrentMeetingTaskSnapshots,readMeetingTaskPointerSignals,readMeetingTaskRagMatches,readMeetingTaskSources,
+import {readCurrentMeetingTaskSnapshots,readMeetingTaskPointerSignals,readMeetingTaskRagCoverage,readMeetingTaskRagMatches,readMeetingTaskSources,
   scoreMeetingTaskLexical,type MeetingTaskRagSource} from '../../../server/meetingTaskRead.js';
 import type {MeetingTaskCandidateScope} from '../../../server/meetingTaskCandidates.js';
 import {CollaborationWriteRepository} from '../../../server/collaborationWrite.js';
@@ -208,6 +208,9 @@ export async function verifyMeetingTaskReadPostgres(database:RuntimeDatabase,con
   const readMatches=(readActor:ServerActorV1,ragSources:readonly MeetingTaskRagSource[]=live.ragSources)=>
     runActorTransaction(database,config,readActor,port=>readMeetingTaskRagMatches(port,scope,ragSources,queryVector));
   const baseline=await readMatches(actor);
+  const readCoverage=()=>runActorTransaction(database,config,actor,port=>readMeetingTaskRagCoverage(port,scope,live.ragSources));
+  assert.deepEqual(await readCoverage(),{totalTasks:8,indexedTasks:8,incomplete:false},
+    'coverage-only SQL verifies the same complete index without a query embedding or ranking signals');
   assert.deepEqual({totalTasks:baseline.totalTasks,indexedTasks:baseline.indexedTasks,incomplete:baseline.incomplete},
     {totalTasks:8,indexedTasks:8,incomplete:false},'all eight exact current documents have complete embedding coverage');
   const expectedTopSix=eligible.map(task=>task.id).sort((left,right)=>scoresByTask.get(right)!-scoresByTask.get(left)!).slice(0,6);
@@ -333,6 +336,8 @@ export async function verifyMeetingTaskReadPostgres(database:RuntimeDatabase,con
   const afterMissingEmbedding=await readMatches(actor);
   assert.equal(afterMissingEmbedding.indexedTasks,5,'a document with one unembedded current chunk is incomplete');
   assert.equal(afterMissingEmbedding.incomplete,true);
+  assert.deepEqual(await readCoverage(),{totalTasks:8,indexedTasks:5,incomplete:true},
+    'coverage-only SQL retains exact current-document and complete-chunk checks');
   assert.equal(afterMissingEmbedding.signals.some(signal=>signal.taskId===eligible[2]!.id),false);
 
   const fourthSource=live.ragSources.find(source=>source.taskId===eligible[3]!.id)!;

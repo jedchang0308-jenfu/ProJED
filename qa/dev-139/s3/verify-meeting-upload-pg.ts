@@ -2017,7 +2017,7 @@ export async function verifyMeetingUploadPostgres(
           ||':segment:'||segment_index::text AS attempt_id FROM projed_core.meeting_capture_segments WHERE capture_id=$1::uuid`,[llmFixture.captureId]);
         for(const row of cleanupKeys.rows)cleanupAttemptIds.add(row.attempt_id);
         await verifyMeetingLlmPostgres(database,config,admin,actor,outsider,llmFixture.runId,llmFixture.captureId);
-      });
+      },false); // The helper's final capture cancellation retires this run's worker Session lookup.
   } catch (error) {
     failed = true;
     failure = error;

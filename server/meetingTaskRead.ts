@@ -21,6 +21,9 @@ export interface MeetingTaskRagMatches {
   readonly signals:readonly MeetingTaskCandidateSignal[];
   readonly totalTasks:number;readonly indexedTasks:number;readonly incomplete:boolean;
 }
+export interface MeetingTaskRagCoverage {
+  readonly totalTasks:number;readonly indexedTasks:number;readonly incomplete:boolean;
+}
 
 const TASK_TAGS_SQL=`LEFT JOIN LATERAL (
   SELECT array_agg(tag.name ORDER BY tag.sort_order,tag.id) AS names
@@ -138,14 +141,11 @@ export function scoreMeetingTaskLexical(text:string,tasks:readonly MeetingTaskCa
   });
 }
 
-/** Exact-current task-only retrieval. SQL ranks every eligible chunk before
- * taking the six best tasks; no project rebuild or pre-ranking row limit. */
-export async function readMeetingTaskRagMatches(port:ActorQueryPort,scope:MeetingTaskCandidateScope,
-  sources:readonly MeetingTaskRagSource[],vector:readonly number[]):Promise<MeetingTaskRagMatches>{
+/** Shared exact-current coverage query. A null vector retains the same freshness
+ * checks while making the scored CTE empty, without a synthetic embedding. */
+async function readMeetingTaskRag(port:ActorQueryPort,scope:MeetingTaskCandidateScope,
+  sources:readonly MeetingTaskRagSource[],vector:readonly number[]|null):Promise<MeetingTaskRagMatches>{
   scopeIds(scope);
-  if(!Array.isArray(vector)||vector.length!==3072||vector.some(value=>!Number.isFinite(value)))invalid();
-  const rounded=vector.map(Math.fround);
-  if(rounded.some(value=>!Number.isFinite(value))||rounded.every(value=>value===0))invalid();
   const seen=new Set<string>();
   const corpus=sources.map(source=>{
     requireUuid(source.taskId,'taskId');
@@ -215,12 +215,13 @@ export async function readMeetingTaskRagMatches(port:ActorQueryPort,scope:Meetin
             sqrt(sum(stored.value::double precision*stored.value::double precision)),0))) AS score
           FROM unnest($4::real[]) WITH ORDINALITY query(value,position)
           JOIN unnest(embedding.embedding) WITH ORDINALITY stored(value,position) USING(position)) cosine
+      WHERE $4::real[] IS NOT NULL
     ), ranked AS (SELECT task_id,max(score) AS score FROM scored_chunks WHERE score>0 GROUP BY task_id),
     bounded AS (SELECT task_id,score FROM ranked ORDER BY score DESC,task_id LIMIT 6),
     coverage AS (SELECT(SELECT count(*)::integer FROM task_scope) AS total_tasks,
       (SELECT count(DISTINCT task_id)::integer FROM indexed_documents) AS indexed_tasks)
     SELECT coverage.*,bounded.task_id::text,bounded.score FROM coverage LEFT JOIN bounded ON true
-      ORDER BY bounded.score DESC NULLS LAST,bounded.task_id`,[...scopeIds(scope),JSON.stringify(corpus),rounded]);
+      ORDER BY bounded.score DESC NULLS LAST,bounded.task_id`,[...scopeIds(scope),JSON.stringify(corpus),vector]);
   const first=result.rows[0];
   if(!first||!Number.isSafeInteger(first.total_tasks)||!Number.isSafeInteger(first.indexed_tasks)
     ||first.total_tasks<0||first.indexed_tasks<0||first.indexed_tasks>first.total_tasks||result.rows.length>6)boundary();
@@ -232,6 +233,25 @@ export async function readMeetingTaskRagMatches(port:ActorQueryPort,scope:Meetin
     return [{taskId:row.task_id,score:row.score}];
   });
   return {signals,totalTasks:first.total_tasks,indexedTasks:first.indexed_tasks,incomplete:first.indexed_tasks<first.total_tasks};
+}
+
+/** Exact-current task-only retrieval. SQL ranks every eligible chunk before
+ * taking the six best tasks; no project rebuild or pre-ranking row limit. */
+export async function readMeetingTaskRagMatches(port:ActorQueryPort,scope:MeetingTaskCandidateScope,
+  sources:readonly MeetingTaskRagSource[],vector:readonly number[]):Promise<MeetingTaskRagMatches>{
+  if(!Array.isArray(vector)||vector.length!==3072||vector.some(value=>!Number.isFinite(value)))invalid();
+  const rounded=vector.map(Math.fround);
+  if(rounded.some(value=>!Number.isFinite(value))||rounded.every(value=>value===0))invalid();
+  return readMeetingTaskRag(port,scope,sources,rounded);
+}
+
+/** Reports freshness/index coverage using the same source and chunk checks as
+ * vector ranking, without constructing or sending an embedding vector. */
+export async function readMeetingTaskRagCoverage(port:ActorQueryPort,scope:MeetingTaskCandidateScope,
+  sources:readonly MeetingTaskRagSource[]):Promise<MeetingTaskRagCoverage>{
+  const result=await readMeetingTaskRag(port,scope,sources,null);
+  if(result.signals.length!==0)boundary();
+  return {totalTasks:result.totalTasks,indexedTasks:result.indexedTasks,incomplete:result.incomplete};
 }
 
 export async function readMeetingTaskPointerSignals(port:ActorQueryPort,input:{scope:MeetingTaskCandidateScope;

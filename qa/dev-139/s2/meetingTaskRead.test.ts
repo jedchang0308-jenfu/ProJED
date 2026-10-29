@@ -5,7 +5,7 @@ import type {QueryResult,QueryResultRow} from 'pg';
 import type {ActorQueryPort} from '../../../server/actorTransaction.js';
 import type {ScopedQuery} from '../../../server/db.js';
 import {KernelError} from '../../../server/errors.js';
-import {readMeetingTaskRagMatches,readMeetingTaskSources,scoreMeetingTaskLexical,
+import {readMeetingTaskRagCoverage,readMeetingTaskRagMatches,readMeetingTaskSources,scoreMeetingTaskLexical,
   type MeetingTaskRagSource} from '../../../server/meetingTaskRead.js';
 import type {MeetingTaskCandidateScope,MeetingTaskCandidateSource} from '../../../server/meetingTaskCandidates.js';
 
@@ -13,6 +13,7 @@ const TENANT_ID='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const PROJECT_ID='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const SCOPE:MeetingTaskCandidateScope={tenantId:TENANT_ID,projectId:PROJECT_ID};
 const HASH='a'.repeat(64);
+const TASK_ID='55555555-5555-4555-8555-555555555555';
 
 type QueryHandler=(sql:string,values:readonly unknown[])=>readonly QueryResultRow[]|Promise<readonly QueryResultRow[]>;
 
@@ -37,6 +38,9 @@ function row(id:string,overrides:Partial<QueryResultRow>={}):QueryResultRow{
     status:'completed',start_date:null,end_date:null,node_type:'task',archived:false,
     updated_at:'2026-10-29T08:00:00.000Z',tag_names:[],task_state_hash:HASH,...overrides};
 }
+
+function ragSource():MeetingTaskRagSource{return {taskId:TASK_ID,content:'current task',contentHash:'fnv1a32:1234abcd',
+  taskStateHash:HASH,indexedContentLength:12};}
 
 test('lexical ranking recognizes Chinese and English terms and normalizes full-width codes without mutating raw inputs',()=>{
   const chinese=task('11111111-1111-4111-8111-111111111111',{title:'防水泵浦',taskCode:'C-1'});
@@ -91,6 +95,47 @@ test('invalid RAG vectors are rejected before any database read',async()=>{
   }
 });
 
+test('RAG coverage uses the shared fresh index query without a vector or ranking signals',async()=>{
+  const fake=port(sql=>sql.includes('actor_has_board_capability_v1')?[{allowed:true}]:[
+    {total_tasks:4,indexed_tasks:3,task_id:null,score:null},
+  ]);
+
+  const result=await readMeetingTaskRagCoverage(fake.port,SCOPE,[ragSource()]);
+
+  assert.deepEqual(result,{totalTasks:4,indexedTasks:3,incomplete:true});
+  assert.deepEqual(fake.calls[1]?.values,[TENANT_ID,PROJECT_ID,JSON.stringify([{
+    task_id:TASK_ID,content:'current task',content_hash:'fnv1a32:1234abcd',task_state_hash:HASH,indexed_content_length:12,
+  }]),null]);
+  assert.match(fake.calls[1]?.sql??'',/WHERE \$4::real\[\] IS NOT NULL/u);
+  assert.match(fake.calls[1]?.sql??'',/fresh_documents AS MATERIALIZED/u);
+  assert.match(fake.calls[1]?.sql??'',/indexed_documents AS MATERIALIZED/u);
+  assert.equal('signals' in result,false);
+});
+
+test('positive-vector RAG ranking still returns the existing bounded score path',async()=>{
+  const fake=port(sql=>sql.includes('actor_has_board_capability_v1')?[{allowed:true}]:[
+    {total_tasks:4,indexed_tasks:3,task_id:TASK_ID,score:0.75},
+  ]);
+  const vector=Array<number>(3072).fill(0);vector[0]=0.123456789;
+
+  const result=await readMeetingTaskRagMatches(fake.port,SCOPE,[ragSource()],vector);
+
+  assert.deepEqual(result,{signals:[{taskId:TASK_ID,score:0.75}],totalTasks:4,indexedTasks:3,incomplete:true});
+  assert.deepEqual(fake.calls[1]?.values?.[3],vector.map(Math.fround));
+  assert.match(fake.calls[1]?.sql??'',/WHERE score>0 GROUP BY task_id/u);
+  assert.match(fake.calls[1]?.sql??'',/LIMIT 6/u);
+});
+
+test('malformed RAG coverage rows are rejected at the database boundary',async()=>{
+  const fake=port(sql=>sql.includes('actor_has_board_capability_v1')?[{allowed:true}]:[
+    {total_tasks:1,indexed_tasks:2,task_id:null,score:null},
+  ]);
+
+  await assert.rejects(readMeetingTaskRagCoverage(fake.port,SCOPE,[]),error=>
+    error instanceof KernelError&&error.code==='DB_BOUNDARY_INVALID');
+  assert.equal(fake.calls.length,2);
+});
+
 test('source and RAG reads stop at denied board authority before reading task data',async()=>{
   const denied=()=>port(sql=>{
     if(sql.includes('actor_has_board_capability_v1'))return [{allowed:false}];
@@ -101,8 +146,7 @@ test('source and RAG reads stop at denied board authority before reading task da
     error instanceof KernelError&&error.code==='ACCESS_DENIED');
   assert.equal(sourcePort.calls.length,1);
 
-  const source:MeetingTaskRagSource={taskId:'55555555-5555-4555-8555-555555555555',content:'current task',
-    contentHash:'fnv1a32:1234abcd',taskStateHash:HASH,indexedContentLength:12};
+  const source=ragSource();
   const ragPort=denied();
   const vector=Array<number>(3072).fill(0);vector[0]=1;
   await assert.rejects(readMeetingTaskRagMatches(ragPort.port,SCOPE,[source],vector),error=>
