@@ -217,9 +217,13 @@ export class MeetingAudioService {
       }
       if(generation)await settleMeetingAudioWrite(this.database,this.config,prepared.token,'uploaded',generation);
     }
-    await currentActor();
-    const object=await this.storage.read(prepared.segment.object_path,signal);
-    return this.finish(currentActor,prepared,object,signal);
+    // Recheck record permission/state as well as Session before retrieving the
+    // object. A successful late write still settles its cleanup proof above.
+    const readable=await this.prepare(await currentActor(),id,version,signal);
+    if(readable.token!==prepared.token)conflict();
+    if(readable.segment.upload_state==='verified')return {segment:segmentDto(readable.segment)};
+    const object=await this.storage.read(readable.segment.object_path,signal);
+    return this.finish(currentActor,readable,object,signal);
   }
 
   async verify(currentActor:CurrentActor,body:Record<string,unknown>,signal:AbortSignal){

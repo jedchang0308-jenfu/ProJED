@@ -481,9 +481,11 @@ export async function verifyMeetingAudioPostgres(
       operation: 'cancel', captureId, expectedSourceVersion: 1, reason: 'qa-audio-cancel-during-upload',
     }), 'cancel during storage upload');
     assert.equal(cancel.state, 'cancelled');
+    const readsAtCancel=fake.readCount();
     gate.release();
     const delayedResponse = await delayedPutPromise;
     assert.equal(delayedResponse.status, 409, 'a late storage success cannot verify a cancelled segment');
+    assert.equal(fake.readCount(),readsAtCancel,'cancelled scope cannot retrieve the late object');
 
     const delayedAttemptId = `storage:${captureId}:v1:segment:3`;
     parentDeleteAttemptId = delayedAttemptId;
@@ -522,10 +524,12 @@ export async function verifyMeetingAudioPostgres(
     parentDeleteAttemptId=`storage:${parentCaptureId}:v1:segment:4`;
 
     await ownerCollaboration.deleteWorkspace(workspace.id);
+    const readsAtDelete=fake.readCount();
     workspaceIds.splice(workspaceIds.indexOf(workspace.id), 1);
     parentGate.release();
     const parentResponse=await parentPut;
     assert.equal(parentResponse.status,404,'late upload cannot recreate a deleted segment or record');
+    assert.equal(fake.readCount(),readsAtDelete,'deleted scope cannot retrieve the late object');
     const afterParentDelete = await admin.query<{
       capture_id: string | null; state: string; upload_outcome: string | null; storage_generation: string | null;
       upload_operation_token: string | null;
