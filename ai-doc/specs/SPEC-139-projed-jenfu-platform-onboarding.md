@@ -1361,6 +1361,8 @@ Focused review 另修正新service的預設路由說明、OCI失敗診斷也遮�
 
 本機509 unit（S2 346／S3 122／migration14／release27）、strict app／S2／S3／jobs同版本宣告overlay與affected lint PASS。既有native upload helper新增實際repository factory、claim競爭／重播、wrong source／word／Session、撤銷、expired／stale lease、metadata-only finish及完成草稿仍inactive／budget不變；尚待本版遠端PostgreSQL／OCI結果。一次本機migration rehearsal在SQL仍更新時，以`BINDING_INVALID`停止於source-preflight（expected exit 2、actual 1），catalog oracle未執行、不列PASS；nonce `c0ae0b81df5a4d72a31d07d4ecf2832e` 的temp root與postgres process已核對不存在，原port未記錄，不猜值。後續PG／OCI只用現有遠端CI；沒有正式資料、IAM／Secret／credential／billing或provider操作。
 
+Source `4b9e9b76d22e9da39a9f6f068dc647d105d1d0f5` 的 [CI40899598294](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40899598294)整體FAIL：domain upload helper的新Session撤銷案例在cleanup嘗試還原已提交的撤銷，觸發既有`app_session_revoke_v1`不可逆保護（23514）。此為fixture錯誤，不削弱guard；改在同一admin fixture交易中以真runtime role與已驗有效scope先驗not_committed，再撤銷並驗append拒絕，最後rollback整個交易，不反轉已提交Session。成功factory append與後段案例在首輪仍未執行，不列PASS。獨立原lockfile型別／509unit／三boundary／compiled artifact、PG17.11 snapshot60及OCI18／39 migrations通過；artifacts `12909735538`（migration/20261029T151937Z-2a39a0ec）與 `12908487226`（dev139-oci-64878bb795339f876e82f4f1）已讀回。僅修native harness，0039 SQL與正式Session語意不變，完整修復source續跑同一既有CI。
+
 ### 現行 ASR host 與回收候選（0038）
 
 `meetingAsrJob.ts` 使用 managed main 的 runtime IAM／Unix socket 與既有 Session resolver，不開 HTTP port、不借 migrator／importer、不複製使用者 cookie。每次掃描最多20筆 metadata、派送最多4個 unit，整次有10分鐘期限；每 unit 在150秒 lease結束前10秒中斷storage／decoder／provider I/O，留下獨立帳務結算時間。掃描順序每分鐘輪轉，暫時不可用的前頁不永久遮住其他工作。程序停止後不領新 unit，已送出結果照原 token 結算，未知 COMMIT 不在同程序重領／重送。

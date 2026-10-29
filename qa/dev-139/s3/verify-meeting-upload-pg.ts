@@ -1543,27 +1543,46 @@ export async function verifyMeetingUploadPostgres(
         `,[actor.contextId,actor.localUserId]);
         assert.equal(sessionBeforeRevoke.rowCount,1);
         assert.equal(sessionBeforeRevoke.rows[0]?.revoked_at_ms,null);
+        // Committed revocation is intentionally irreversible. Exercise the SQL
+        // runtime boundary in one rolled-back fixture transaction, never undo
+        // a committed Session or weaken its trigger for test cleanup.
+        await admin.query('BEGIN');
         try{
-          const revokedAppend=await runActorTransaction(database,config,actor,async port=>{
-            await port.authorizeMeetingCaptureMutation(successFixture.recordId,successFixture.captureId);
-            const sessionUpdate=await admin.query(`UPDATE projed_core.app_sessions SET revoked_at_ms=$3::bigint
-              WHERE context_id=$1::uuid AND local_user_id=$2::uuid AND revoked_at_ms IS NULL`,
-            [actor.contextId,actor.localUserId,Date.now()]);
-            assert.equal(sessionUpdate.rowCount,1,'revocation changes only the bound synthetic Session');
-            const result=await port.query<{progress:unknown}>(
-              'SELECT projed_core.append_meeting_discussion_batch_v1($1::uuid,$2::uuid,$3::jsonb) AS progress',
-              [successFixture.runId,firstDiscussionClaim.leaseToken,JSON.stringify(firstDiscussionBatch)]);
-            assert.equal(result.rowCount,1);
-            return result.rows[0]?.progress===null?null:parseMeetingDiscussionProgress(result.rows[0]?.progress);
-          });
-          assert.equal(revokedAppend,null,'a revoked bound Session makes the database append readback stale');
-        }finally{
-          const restored=await admin.query<{context_id:string}>(`
-            UPDATE projed_core.app_sessions SET revoked_at_ms=$3::bigint
-            WHERE context_id=$1::uuid AND local_user_id=$2::uuid RETURNING context_id::text
-          `,[actor.contextId,actor.localUserId,sessionBeforeRevoke.rows[0]?.revoked_at_ms]);
-          assert.equal(restored.rowCount,1,'the exact synthetic Session revocation is restored');
+          await admin.query('SET LOCAL ROLE projed_runtime_disposable');
+          await admin.query(`SELECT set_config('projed.actor_principal_id',$1,true),
+            set_config('projed.actor_local_user_id',$2,true),set_config('projed.actor_entry',$3,true),
+            set_config('projed.actor_context_id',$4,true),set_config('projed.actor_guard_revision',$5,true),
+            set_config('projed.meeting_record_id',$6,true),set_config('projed.meeting_capture_id',$7,true)`,
+          [actor.principalId,actor.localUserId,actor.entry,actor.contextId,actor.accountGuardRevision,
+            successFixture.recordId,successFixture.captureId]);
+          const runtimeContext=await admin.query<{role:string;mutable:boolean}>(`SELECT current_user::text AS role,
+            projed_core.meeting_capture_mutable_v1($1::uuid) AS mutable`,[successFixture.captureId]);
+          assert.deepEqual(runtimeContext.rows,[{role:'projed_runtime_disposable',mutable:true}]);
+          const beforeRevoke=await admin.query<{progress:unknown}>(
+            'SELECT projed_core.read_meeting_discussion_batch_v1($1::uuid,$2::uuid,$3::jsonb) AS progress',
+            [successFixture.runId,firstDiscussionClaim.leaseToken,JSON.stringify(firstDiscussionBatch)]);
+          assert.equal(beforeRevoke.rows[0]?.progress,'not_committed','the fixture has a live, writable batch before revocation');
+          await admin.query('SET LOCAL ROLE NONE');
+          const sessionUpdate=await admin.query(`UPDATE projed_core.app_sessions SET revoked_at_ms=$3::bigint
+            WHERE context_id=$1::uuid AND local_user_id=$2::uuid AND revoked_at_ms IS NULL`,
+          [actor.contextId,actor.localUserId,Date.now()]);
+          assert.equal(sessionUpdate.rowCount,1,'revocation changes only the bound synthetic Session');
+          await admin.query('SET LOCAL ROLE projed_runtime_disposable');
+          const revokedAppend=await admin.query<{progress:unknown}>(
+            'SELECT projed_core.append_meeting_discussion_batch_v1($1::uuid,$2::uuid,$3::jsonb) AS progress',
+            [successFixture.runId,firstDiscussionClaim.leaseToken,JSON.stringify(firstDiscussionBatch)]);
+          assert.equal(revokedAppend.rowCount,1);
+          assert.equal(revokedAppend.rows[0]?.progress,null,'a revoked bound Session rejects the previously writable batch');
+        }catch(error){
+          try{await admin.query('ROLLBACK');}
+          catch(cleanupError){throw new AggregateError([error,cleanupError],'Revocation fixture and rollback both failed');}
+          throw error;
         }
+        await admin.query('ROLLBACK');
+        assert.deepEqual((await admin.query<{revoked_at_ms:string|null}>(`SELECT revoked_at_ms::text
+          FROM projed_core.app_sessions WHERE context_id=$1::uuid AND local_user_id=$2::uuid`,
+        [actor.contextId,actor.localUserId])).rows,sessionBeforeRevoke.rows,
+        'rollback leaves the original committed Session unchanged');
         assert.deepEqual(await discussionState(),initialDiscussionState,
           'revoked Session rejection leaves the discussion run unchanged');
 
