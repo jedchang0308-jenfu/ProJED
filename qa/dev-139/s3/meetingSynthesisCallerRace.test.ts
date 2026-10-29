@@ -46,25 +46,30 @@ type CallerFixture = {
   undoStore: ReturnType<typeof createFixtureStore<Record<string, unknown>>>;
   memberStore: ReturnType<typeof createFixtureStore<Record<string, unknown>>>;
   tagStore: ReturnType<typeof createFixtureStore<Record<string, unknown>>>;
-  recordService: { listByProject: (...args: unknown[]) => Promise<unknown[]> };
+  recordService: {
+    listByProject: (...args: unknown[]) => Promise<unknown[]>;
+    upsert: (...args: unknown[]) => Promise<unknown>;
+  };
   eventLogService: { listActivity: (...args: unknown[]) => Promise<unknown[]> };
   synthesize: (...args: unknown[]) => Promise<Record<string, unknown>>;
+  saveProjection: (payload: Record<string, unknown>) => Promise<unknown>;
 };
 
 const fixture: CallerFixture = {
   authStore: createFixtureStore<{ user: Record<string, unknown> | null }>({ user: { uid: 'actor-a', authContextId: 'context-a' } }),
   boardStore: createFixtureStore<{ activeWorkspaceId: string | null; activeBoardId: string | null }>({ activeWorkspaceId: 'workspace-a', activeBoardId: 'board-a' }),
-  undoStore: createFixtureStore({}),
+  undoStore: createFixtureStore({ pushUndo: () => undefined }),
   memberStore: createFixtureStore({}),
   tagStore: createFixtureStore({}),
-  recordService: { listByProject: async () => [] },
+  recordService: { listByProject: async () => [], upsert: async () => null },
   eventLogService: { listActivity: async () => [] },
   synthesize: async () => ({}),
+  saveProjection: async () => ({}),
 };
 
 (globalThis as unknown as Record<string, unknown>).__DEV139_MEETING_CALLER_FIXTURE__ = fixture;
 
-async function loadRecordStore() {
+async function loadRecordStore(isHttpBackend = false) {
   const root = process.cwd();
   const virtualModules = new Map<string, string>([
     ['zustand', `
@@ -87,6 +92,7 @@ async function loadRecordStore() {
     ['dataBackend', `
       const f = globalThis.__DEV139_MEETING_CALLER_FIXTURE__;
       export const eventLogService = f.eventLogService;
+      export const isHttpBackend = ${isHttpBackend};
       export const isSupabaseBackend = false;
       export const recordService = f.recordService;
     `],
@@ -98,7 +104,12 @@ async function loadRecordStore() {
     ['useUndoStore', `export default globalThis.__DEV139_MEETING_CALLER_FIXTURE__.undoStore;`],
     ['useMemberStore', `export const useMemberStore = globalThis.__DEV139_MEETING_CALLER_FIXTURE__.memberStore;`],
     ['useTagStore', `export const useTagStore = globalThis.__DEV139_MEETING_CALLER_FIXTURE__.tagStore;`],
-    ['meetingAnalysisService', `export const meetingAnalysisService = {};`],
+    ['meetingAnalysisService', `
+      const f = globalThis.__DEV139_MEETING_CALLER_FIXTURE__;
+      export const meetingAnalysisService = {
+        saveProjection: (...args) => f.saveProjection(...args),
+      };
+    `],
     ['meetingRecordAvailability', `export const isMeetingRecordUnavailable = () => false;`],
   ]);
   const result = await build({
@@ -136,12 +147,14 @@ async function loadRecordStore() {
   return (await import(`data:text/javascript;base64,${encoded}`)).default as {
     getState: () => {
       draft: unknown;
+      error: string | null;
       saving: boolean;
       meetingSynthesisStatus: string;
       meetingProjectImportStatus: string;
       meetingProjectImportRequestId: number;
       synthesizeMeetingDraft: () => Promise<boolean>;
       importMeetingProjectChanges: () => Promise<boolean>;
+      saveDraft: () => Promise<unknown>;
       updateDraft: (updates: { content: string }) => void;
     };
     setState: (patch: Record<string, unknown>) => void;
@@ -203,6 +216,57 @@ function setMeetingFixtureState(store: Awaited<typeof recordStorePromise>, conte
     meetingProjectImportRequestId: 0,
   });
 }
+
+test('HTTP meeting draft save uses projection CAS instead of ordinary record upsert', async () => {
+  const store = await loadRecordStore(true);
+  setMeetingFixtureState(store);
+  const originalSaveProjection = fixture.saveProjection;
+  const originalUpsert = fixture.recordService.upsert;
+  const originalListByProject = fixture.recordService.listByProject;
+  const previousUpdatedAt = Date.UTC(2026, 9, 15, 12, 0, 0);
+  const draft = store.getState().draft as Record<string, unknown>;
+  const previousRecord = {
+    ...draft,
+    workspaceId: 'workspace-a',
+    boardId: 'board-a',
+    updatedAt: previousUpdatedAt,
+  };
+  const refreshedRecord = { ...previousRecord, content: '已儲存會議內容。', updatedAt: previousUpdatedAt + 1000 };
+  const projectionCalls: Record<string, unknown>[] = [];
+  let upsertCalls = 0;
+  try {
+    fixture.saveProjection = async payload => { projectionCalls.push(payload); return {}; };
+    fixture.recordService.upsert = async () => { upsertCalls += 1; throw new Error('ordinary upsert must not run'); };
+    fixture.recordService.listByProject = async (workspaceId, boardId) => {
+      assert.equal(workspaceId, 'workspace-a');
+      assert.equal(boardId, 'board-a');
+      return [refreshedRecord];
+    };
+    store.setState({
+      records: [previousRecord],
+      draft: {
+        ...draft,
+        metadata: {
+          meetingTaskResolution: { captureId: 'capture-a', reviewRevision: 18 },
+        },
+      },
+    });
+
+    const saved = await store.getState().saveDraft();
+    assert.ok(saved, String(store.getState().error));
+    assert.equal(upsertCalls, 0);
+    assert.equal(projectionCalls.length, 1);
+    assert.equal(projectionCalls[0]?.captureId, 'capture-a');
+    assert.equal(projectionCalls[0]?.expectedRecordUpdatedAt, new Date(previousUpdatedAt).toISOString());
+    assert.equal(projectionCalls[0]?.expectedReviewRevision, 18);
+    assert.match(String(projectionCalls[0]?.requestKey), /^projection:meeting-a:/u);
+    assert.equal((saved as { id: string }).id, 'meeting-a');
+  } finally {
+    fixture.saveProjection = originalSaveProjection;
+    fixture.recordService.upsert = originalUpsert;
+    fixture.recordService.listByProject = originalListByProject;
+  }
+});
 
 test('meeting synthesis applies a valid deferred response and status alone keeps save and publish busy', async () => {
   const store = await recordStorePromise;
