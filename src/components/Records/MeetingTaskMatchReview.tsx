@@ -116,6 +116,8 @@ const MeetingTaskMatchReview: React.FC<Props> = ({
       const source = active.audio.src;
       active.audio.onended = null;
       active.audio.onerror = null;
+      active.audio.onloadedmetadata = null;
+      active.audio.ontimeupdate = null;
       active.audio.pause();
       active.audio.removeAttribute('src');
       active.audio.load();
@@ -249,21 +251,47 @@ const MeetingTaskMatchReview: React.FC<Props> = ({
       }
       const audio = new Audio(playback.url);
       audioRef.current = { audio, token };
+      const sourceStart = segment.audioSourceStartOffsetMs;
+      const hasClip = typeof sourceStart === 'number' && Number.isFinite(sourceStart)
+        && Number.isFinite(segment.startOffsetMs) && Number.isFinite(segment.endOffsetMs)
+        && segment.endOffsetMs > segment.startOffsetMs;
+      const clipStart = hasClip ? Math.max(0, (segment.startOffsetMs - sourceStart) / 1000) : 0;
+      const clipEnd = hasClip ? (segment.endOffsetMs - sourceStart) / 1000 : undefined;
+      const currentAudio = () => gate.isCurrent(token, requestScope) && audioRef.current?.audio === audio;
       audio.onended = () => {
-        if (!gate.isCurrent(token, requestScope)) return;
+        if (!currentAudio()) return;
         stopAudioRef.current();
       };
-      audio.onerror = () => {
-        if (!gate.isCurrent(token, requestScope)) return;
+      const playbackFailed = () => {
+        if (!currentAudio()) return;
         stopAudioRef.current();
         setReviewView(previous => gate.isCurrent(token, requestScope)
           ? { ...previous, scopeKey: token.scopeKey, error: '原音目前無法播放，請重新取得短效連結。' }
           : previous);
       };
+      audio.onerror = playbackFailed;
+      const seekToSegment = () => {
+        if (!currentAudio() || !hasClip) return;
+        try {
+          if (clipEnd === undefined || clipEnd <= clipStart
+            || (Number.isFinite(audio.duration) && clipStart >= audio.duration)) {
+            playbackFailed();
+            return;
+          }
+          audio.currentTime = clipStart;
+        } catch { playbackFailed(); }
+      };
+      audio.onloadedmetadata = seekToSegment;
+      audio.ontimeupdate = () => {
+        if (currentAudio() && clipEnd !== undefined && audio.currentTime >= clipEnd) stopAudioRef.current();
+      };
+      if (audio.readyState >= 1) seekToSegment();
+      if (!currentAudio()) return;
       await audio.play();
-      if (!gate.isCurrent(token, requestScope)) stopAudioRef.current(false);
+      if (!gate.isCurrent(token, requestScope) && audioRef.current?.audio === audio) stopAudioRef.current(false);
     } catch (cause) {
       if (gate.isCurrent(token, requestScope)) {
+        if (audioRef.current?.token.requestId === token.requestId) stopAudioRef.current();
         setPlaybackRequest(previous => previous?.token.requestId === token.requestId ? null : previous);
         setReviewView(previous => gate.isCurrent(token, requestScope)
           ? { ...previous, scopeKey: token.scopeKey, error: cause instanceof Error ? cause.message : String(cause) }

@@ -64,6 +64,8 @@ export type MeetingTaskCandidate = {
 export type MeetingReviewSegment = {
   segmentId: string;
   audioSegmentId?: string | null;
+  audioSourceStartOffsetMs?: number | null;
+  audioSourceEndOffsetMs?: number | null;
   transcriptRevisionId: string;
   text: string;
   startOffsetMs: number;

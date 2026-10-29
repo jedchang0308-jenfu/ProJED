@@ -23,7 +23,7 @@ type JsonObject = Record<string, unknown>;
 
 interface ReviewSeedMatch {
   readonly taskId: string;
-  readonly quoteRange: { readonly start: number; readonly end: number } | null;
+  readonly quoteRange: { readonly fromWord: number; readonly toWord: number } | null;
   readonly semanticScore: number | null;
   readonly pointerFeature: number | null;
   readonly decision?: 'suggested' | 'accepted' | 'rejected';
@@ -42,6 +42,9 @@ interface SeededCapture {
   readonly sourceVersion: number;
   readonly activeRevisionId: string | null;
   readonly activeRunId: string;
+  readonly sourceAudioSegmentId: string;
+  readonly sourceAudioEndOffsetMs: number;
+  readonly overlappingAudioDecoySegmentId: string | null;
   readonly segments: readonly ReviewSeedSegment[];
 }
 
@@ -157,6 +160,7 @@ async function seedCapture(
     readonly sourceCompleteness?: 'complete' | 'partial';
     readonly activeTranscriptRevisionId?: string | null;
     readonly runState?: 'ready' | 'failed_retryable';
+    readonly includeOverlappingAudioDecoy?: boolean;
   },
 ): Promise<SeededCapture> {
   const activeRevisionId = input.activeTranscriptRevisionId === undefined
@@ -165,11 +169,19 @@ async function seedCapture(
   const activeRunId = randomUUID();
   const historyRevisionId = randomUUID();
   const historyRunId = randomUUID();
+  const sourceAudioSegmentId = randomUUID();
+  const historyAudioSegmentId = randomUUID();
+  const overlappingAudioDecoySegmentId = input.includeOverlappingAudioDecoy ? randomUUID() : null;
+  const sourceAudioEndOffsetMs = Math.max(80, input.segments.length * 100);
+  const sourceWordIndices = new Map<string, number>();
   const seeded: SeededCapture = {
     captureId: input.captureId,
     sourceVersion: input.sourceVersion,
     activeRevisionId,
     activeRunId,
+    sourceAudioSegmentId,
+    sourceAudioEndOffsetMs,
+    overlappingAudioDecoySegmentId,
     segments: input.segments,
   };
   await admin.query('BEGIN');
@@ -187,6 +199,29 @@ async function seedCapture(
       createHash('sha256').update(`audio:${input.captureId}`).digest('hex'),
       createHash('sha256').update(`pointer:${input.captureId}`).digest('hex')]);
 
+    const insertAudioSegment = async (
+      id: string, sourceVersion: number, segmentIndex: number, endOffsetMs: number,
+    ) => {
+      await admin.query(`
+        INSERT INTO projed_core.meeting_capture_segments
+          (id,capture_id,segment_index,epoch,start_offset_ms,end_offset_ms,overlap_ms,gap_before_ms,
+           object_path,mime,bytes,sha256,upload_state,source_version,reservation_key,
+           upload_token_expires_at,verified_at,storage_backend,storage_generation)
+        VALUES($1::uuid,$2::uuid,$3,0,0,$4::bigint,0,0,$5,'audio/webm',1,$6,'verified',$7,$8,
+          now()+interval '2 hours',now(),'gcs','1')
+      `, [id, input.captureId, segmentIndex, endOffsetMs,
+        `qa-meeting-review/${input.captureId}/${id}`,
+        createHash('sha256').update(id).digest('hex'), sourceVersion, `qa-meeting-review-${id}`]);
+    };
+    const sourceSegmentIndex = input.includeOverlappingAudioDecoy ? 1 : 0;
+    if (overlappingAudioDecoySegmentId) {
+      await insertAudioSegment(overlappingAudioDecoySegmentId, input.sourceVersion, 0, sourceAudioEndOffsetMs + 200);
+    }
+    await insertAudioSegment(sourceAudioSegmentId, input.sourceVersion, sourceSegmentIndex, sourceAudioEndOffsetMs);
+    if (input.includeHistory) {
+      await insertAudioSegment(historyAudioSegmentId, input.sourceVersion - 1, 0, 80);
+    }
+
     const insertRun = async (id: string, version: number, revisionId: string, label: string) => {
       await admin.query(`
         INSERT INTO projed_core.meeting_analysis_runs
@@ -197,15 +232,27 @@ async function seedCapture(
         label === 'active' ? input.runState ?? 'ready' : 'ready']);
     };
     const insertTranscript = async (
-      id: string, revisionId: string, runId: string, segmentIndex: number, text: string,
+      id: string, revisionId: string, runId: string, segmentIndex: number, text: string, audioSegmentId: string,
     ) => {
+      const startOffsetMs = segmentIndex * 100;
+      const endOffsetMs = startOffsetMs + 80;
+      const tokens = text.match(/\S+/gu) ?? [];
+      const firstSourceWordIndex = sourceWordIndices.get(audioSegmentId) ?? 0;
+      const wordOffsets = tokens.map((token, index) => ({
+        text: token,
+        start_ms: startOffsetMs + Math.floor(index * 80 / tokens.length),
+        end_ms: startOffsetMs + Math.floor((index + 1) * 80 / tokens.length),
+        source_audio_segment_id: audioSegmentId,
+        source_word_index: firstSourceWordIndex + index,
+      }));
+      sourceWordIndices.set(audioSegmentId, firstSourceWordIndex + wordOffsets.length);
       await admin.query(`
         INSERT INTO projed_core.meeting_transcript_segments
           (id,capture_id,transcript_revision_id,producer_run_id,segment_index,start_offset_ms,end_offset_ms,
-           raw_text,normalized_text,source_hash)
-        VALUES($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5,$6,$7,$8,$8,$9)
-      `, [id, input.captureId, revisionId, runId, segmentIndex, segmentIndex * 100,
-        segmentIndex * 100 + 80, text, createHash('sha256').update(text).digest('hex')]);
+           raw_text,normalized_text,word_offsets,source_hash)
+        VALUES($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5,$6,$7,$8,$8,$9::jsonb,$10)
+      `, [id, input.captureId, revisionId, runId, segmentIndex, startOffsetMs,
+        endOffsetMs, text, JSON.stringify(wordOffsets), createHash('sha256').update(text).digest('hex')]);
     };
     const insertResolution = async (
       segment: ReviewSeedSegment, transcriptSegmentId: string, runId: string, history = false,
@@ -236,7 +283,7 @@ async function seedCapture(
     await insertRun(activeRunId, input.sourceVersion, currentTranscriptRevisionId, 'active');
     for (let index = 0; index < input.segments.length; index += 1) {
       const segment = input.segments[index]!;
-      await insertTranscript(segment.id, currentTranscriptRevisionId, activeRunId, index, segment.text);
+      await insertTranscript(segment.id, currentTranscriptRevisionId, activeRunId, index, segment.text, sourceAudioSegmentId);
       await insertResolution(segment, segment.id, activeRunId);
     }
 
@@ -249,7 +296,8 @@ async function seedCapture(
         text: `historical-only-${input.captureId}`,
         matches: [],
       };
-      await insertTranscript(historicalSegmentId, historyRevisionId, historyRunId, 0, historicalSegment.text);
+      await insertTranscript(historicalSegmentId, historyRevisionId, historyRunId, 0,
+        historicalSegment.text, historyAudioSegmentId);
       await insertResolution(historicalSegment, historicalSegmentId, historyRunId, true);
     }
     await admin.query('COMMIT');
@@ -561,29 +609,38 @@ export async function verifyMeetingReviewPostgres(
     const projectCaptureId = randomUUID();
     const reviewSegments: ReviewSeedSegment[] = [
       { id: randomUUID(), resolutionId: resolutionIds.semantic, text: 'current semantic review segment', matches: [
-        { taskId: semanticTask.internalId, quoteRange: { start: 0, end: 12 }, semanticScore: 0.91, pointerFeature: 0 },
-        { taskId: rejectedTask.internalId, quoteRange: { start: 12, end: 24 }, semanticScore: 0.81, pointerFeature: 0 },
+        { taskId: semanticTask.internalId, quoteRange: { fromWord: 0, toWord: 1 }, semanticScore: 0.91, pointerFeature: 0 },
+        { taskId: rejectedTask.internalId, quoteRange: { fromWord: 2, toWord: 3 }, semanticScore: 0.81, pointerFeature: 0 },
         { taskId: pointerTask.internalId, quoteRange: null, semanticScore: 0, pointerFeature: 0.9 },
       ] },
       { id: randomUUID(), resolutionId: resolutionIds.pointer, text: 'current pointer-only review segment', matches: [
         { taskId: pointerTask.internalId, quoteRange: null, semanticScore: 0, pointerFeature: 0.9 },
       ] },
       { id: randomUUID(), resolutionId: resolutionIds.replace, text: 'current replacement review segment', matches: [
-        { taskId: oldReplacementTask.internalId, quoteRange: { start: 0, end: 8 }, semanticScore: 0.72, pointerFeature: 0 },
+        { taskId: oldReplacementTask.internalId, quoteRange: { fromWord: 0, toWord: 1 }, semanticScore: 0.72, pointerFeature: 0 },
       ] },
       { id: randomUUID(), resolutionId: resolutionIds.clear, text: 'current clear-all review segment', matches: [
-        { taskId: rejectedTask.internalId, quoteRange: { start: 1, end: 7 }, semanticScore: 0.55, pointerFeature: 0 },
+        { taskId: rejectedTask.internalId, quoteRange: { fromWord: 1, toWord: 2 }, semanticScore: 0.55, pointerFeature: 0 },
       ] },
       { id: randomUUID(), resolutionId: resolutionIds.concurrent, text: 'current CAS review segment', matches: [
-        { taskId: concurrentTaskA.internalId, quoteRange: { start: 0, end: 6 }, semanticScore: 0.62, pointerFeature: 0 },
-        { taskId: concurrentTaskB.internalId, quoteRange: { start: 6, end: 12 }, semanticScore: 0.61, pointerFeature: 0 },
+        { taskId: concurrentTaskA.internalId, quoteRange: { fromWord: 0, toWord: 1 }, semanticScore: 0.62, pointerFeature: 0 },
+        { taskId: concurrentTaskB.internalId, quoteRange: { fromWord: 2, toWord: 3 }, semanticScore: 0.61, pointerFeature: 0 },
       ] },
       { id: randomUUID(), resolutionId: resolutionIds.rollback, text: 'current rollback review segment', matches: [
-        { taskId: semanticTask.internalId, quoteRange: { start: 0, end: 10 }, semanticScore: 0.7, pointerFeature: 0 },
+        { taskId: semanticTask.internalId, quoteRange: { fromWord: 0, toWord: 2 }, semanticScore: 0.7, pointerFeature: 0 },
       ] },
     ];
     const projectCapture = await seedCapture(admin, tenantScope, projectRecord.id, owner.localUserId,
-      { captureId: projectCaptureId, sourceVersion: 2, segments: reviewSegments, includeHistory: true });
+      { captureId: projectCaptureId, sourceVersion: 2, segments: reviewSegments, includeHistory: true,
+        includeOverlappingAudioDecoy: true });
+    assert.ok(projectCapture.overlappingAudioDecoySegmentId);
+    const multiSourceOffset = await admin.query(`
+      UPDATE projed_core.meeting_transcript_segments
+      SET word_offsets=jsonb_set(jsonb_set(word_offsets,'{3,source_audio_segment_id}',to_jsonb($2::text)),
+        '{3,source_word_index}','0'::jsonb)
+      WHERE id=$1::uuid
+    `, [reviewSegments[1]!.id, projectCapture.overlappingAudioDecoySegmentId]);
+    assert.equal(multiSourceOffset.rowCount, 1, 'the legacy multi-source fixture must retain its word source anchors');
 
     const privateCaptureId = randomUUID();
     await seedCapture(admin, tenantScope, privateRecord.id, owner.localUserId, {
@@ -608,7 +665,7 @@ export async function verifyMeetingReviewPostgres(
       includeHistory: false,
       segments: [{
         id: randomUUID(), resolutionId: partialResolutionId, text: `partial-unpublished-${partialCaptureId}`,
-        matches: [{ taskId: semanticTask.internalId, quoteRange: { start: 0, end: 8 }, semanticScore: 0.88,
+        matches: [{ taskId: semanticTask.internalId, quoteRange: { fromWord: 0, toWord: 0 }, semanticScore: 0.88,
           pointerFeature: 0, decision: 'accepted', decisionSource: 'ai' }],
       }],
     });
@@ -660,9 +717,78 @@ export async function verifyMeetingReviewPostgres(
       'historical transcript rows remain stored but are not mixed into current review');
     const semanticReviewSegment = currentSegments.find(item => record(item, 'review segment').resolutionId === resolutionIds.semantic);
     assert.ok(semanticReviewSegment);
-    const semanticCandidates = record(semanticReviewSegment, 'semantic segment').candidates;
+    const semanticReview = record(semanticReviewSegment, 'semantic segment');
+    const semanticOffsets = semanticReview.wordOffsets;
+    assert.ok(Array.isArray(semanticOffsets));
+    assert.deepEqual(semanticOffsets.map(offset => record(offset, 'word offset').text),
+      ['current', 'semantic', 'review', 'segment']);
+    const returnedWords = semanticOffsets.map(offset => record(offset, 'word offset'));
+    assert.deepEqual(returnedWords.map(offset => offset.source_audio_segment_id),
+      Array.from({ length: returnedWords.length }, () => projectCapture.sourceAudioSegmentId));
+    assert.deepEqual(returnedWords.map(offset => offset.source_word_index), [0, 1, 2, 3]);
+    assert.ok(returnedWords.every(offset => typeof offset.start_ms === 'number' && Number.isFinite(offset.start_ms)
+      && typeof offset.end_ms === 'number' && Number.isFinite(offset.end_ms) && offset.end_ms > offset.start_ms),
+    'review roundtrips finite anchored word offsets');
+    assert.equal(semanticReview.audioSegmentId, projectCapture.sourceAudioSegmentId,
+      'an explicit word source anchor wins over the earlier overlapping verified audio segment');
+    assert.equal(semanticReview.audioSourceStartOffsetMs, 0);
+    assert.equal(semanticReview.audioSourceEndOffsetMs, projectCapture.sourceAudioEndOffsetMs,
+      'returned playback bounds belong to the explicitly anchored source row');
+    const multiSourceReviewSegment = currentSegments.find(item => record(item, 'review segment').resolutionId === resolutionIds.pointer);
+    assert.ok(multiSourceReviewSegment);
+    const multiSourceReview = record(multiSourceReviewSegment, 'multi-source review segment');
+    assert.equal(multiSourceReview.audioSegmentId, projectCapture.overlappingAudioDecoySegmentId,
+      'a legacy multi-source segment retains its time-overlap playback fallback');
+    assert.equal(multiSourceReview.audioSourceStartOffsetMs, 0);
+    assert.equal(multiSourceReview.audioSourceEndOffsetMs, projectCapture.sourceAudioEndOffsetMs + 200);
+    let exactSourcePurged = false;
+    try {
+      const purged = await admin.query(`
+        UPDATE projed_core.meeting_capture_segments SET upload_state='purged'
+        WHERE id=$1::uuid AND capture_id=$2::uuid AND source_version=$3 AND upload_state='verified'
+      `, [projectCapture.sourceAudioSegmentId, projectCapture.captureId, projectCapture.sourceVersion]);
+      exactSourcePurged = purged.rowCount === 1;
+      assert.equal(purged.rowCount, 1, 'the synthetic exact audio source must be purged exactly once');
+      const decoy = await admin.query<{ upload_state: string }>(`
+        SELECT upload_state FROM projed_core.meeting_capture_segments
+        WHERE id=$1::uuid AND capture_id=$2::uuid AND source_version=$3
+      `, [projectCapture.overlappingAudioDecoySegmentId, projectCapture.captureId, projectCapture.sourceVersion]);
+      assert.equal(decoy.rowCount, 1);
+      assert.equal(decoy.rows[0]?.upload_state, 'verified', 'the overlapping decoy remains verified');
+      const missingExactSourceView = await review(ownerClient, projectCapture.captureId, projectCapture.sourceVersion);
+      const missingExactSourceSegments = missingExactSourceView.segments;
+      assert.ok(Array.isArray(missingExactSourceSegments));
+      const missingExactSourceSegment = missingExactSourceSegments.find(
+        item => record(item, 'review segment').resolutionId === resolutionIds.semantic,
+      );
+      assert.ok(missingExactSourceSegment);
+      const missingExactSourceReview = record(missingExactSourceSegment, 'missing exact source review segment');
+      assert.equal(missingExactSourceReview.audioSegmentId, null,
+        'a missing explicit source anchor must not fall back to a different verified overlapping file');
+      assert.equal(missingExactSourceReview.audioSourceStartOffsetMs, null);
+      assert.equal(missingExactSourceReview.audioSourceEndOffsetMs, null);
+    } finally {
+      if (exactSourcePurged) {
+        const restored = await admin.query(`
+          UPDATE projed_core.meeting_capture_segments SET upload_state='verified'
+          WHERE id=$1::uuid AND capture_id=$2::uuid AND source_version=$3 AND upload_state='purged'
+        `, [projectCapture.sourceAudioSegmentId, projectCapture.captureId, projectCapture.sourceVersion]);
+        assert.equal(restored.rowCount, 1, 'the synthetic exact audio source must be restored exactly once');
+      }
+    }
+    const semanticCandidates = semanticReview.candidates;
     assert.ok(Array.isArray(semanticCandidates));
     assert.ok(semanticCandidates.some(candidate => record(candidate, 'candidate').source === 'pointer'));
+    const semanticQuoteCandidate = semanticCandidates.map(candidate => record(candidate, 'candidate'))
+      .find(candidate => candidate.taskId === semanticTask.id);
+    assert.ok(semanticQuoteCandidate);
+    const semanticQuote = record(semanticQuoteCandidate.quoteRange, 'semantic quote range');
+    assert.deepEqual(semanticQuote, { fromWord: 0, toWord: 1 });
+    assert.ok(Number.isFinite(semanticQuote.fromWord) && Number.isFinite(semanticQuote.toWord)
+      && Number.isInteger(semanticQuote.fromWord) && Number.isInteger(semanticQuote.toWord)
+      && Number(semanticQuote.fromWord) >= 0 && Number(semanticQuote.fromWord) <= Number(semanticQuote.toWord)
+      && Number(semanticQuote.toWord) < returnedWords.length,
+    'review roundtrips an inclusive local word quote inside the segment anchors');
     await expectHttpError(review(ownerClient, projectCapture.captureId, 1).then(value => value), 'REVISION_CONFLICT', 409);
 
     let successfulDecisionCount = 0;

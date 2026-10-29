@@ -55,7 +55,7 @@ function exactArray(value:unknown,maxLength:number):unknown[]{
   return items;
 }
 
-function normalizeTranscript(input:unknown):MeetingAsrTranscriptUnit{
+export function normalizeMeetingAsrTranscriptUnit(input:unknown):MeetingAsrTranscriptUnit{
   const value=exactRecord(input,TRANSCRIPT_KEYS,TRANSCRIPT_KEYS);
   const dispatch:MeetingAsrDispatchUnit=validateMeetingAsrDispatchInput({
     chunkIndex:value.chunkIndex,
@@ -106,7 +106,7 @@ function normalize(value:unknown):NormalizedMeetingAsrSettlement{
     ['kind','transcript','totalBilledTime','providerRequestId','code'],['kind']);
   if(record.kind==='recognized'){
     if(!Object.hasOwn(record,'transcript')||Object.hasOwn(record,'code'))invalid();
-    const transcript=normalizeTranscript(record.transcript);
+    const transcript=normalizeMeetingAsrTranscriptUnit(record.transcript);
     const billedTime=record.totalBilledTime;
     const requestId=record.providerRequestId;
     if(billedTime!==undefined&&typeof billedTime!=='string')invalid();

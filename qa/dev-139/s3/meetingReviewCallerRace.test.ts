@@ -310,18 +310,24 @@ function installBrowserStubs() {
   };
   class FakeAudio {
     static instances: FakeAudio[] = [];
+    static playResults: Promise<void>[] = [];
     src: string;
     paused = true;
     pauseCalls = 0;
     playCalls = 0;
+    currentTime = 0;
+    duration = 300;
+    readyState = 0;
     onended: (() => void) | null = null;
     onerror: (() => void) | null = null;
+    onloadedmetadata: (() => void) | null = null;
+    ontimeupdate: (() => void) | null = null;
     constructor(src: string) {
       this.src = src;
       FakeAudio.instances.push(this);
     }
     pause() { this.pauseCalls += 1; this.paused = true; }
-    play() { this.playCalls += 1; this.paused = false; return Promise.resolve(); }
+    play() { this.playCalls += 1; this.paused = false; return FakeAudio.playResults.shift() ?? Promise.resolve(); }
     removeAttribute(name: string) { if (name === 'src') this.src = ''; }
     load() {}
   }
@@ -513,6 +519,80 @@ test('playback URLs from a former scope never start audio and active audio is st
   } finally {
     browser.restore();
   }
+});
+
+test('late play completion from an old scope cannot stop the current audio', async () => {
+  const component = await componentPromise;
+  const browser = installBrowserStubs();
+  try {
+    const oldPlay = deferred<void>();
+    browser.FakeAudio.playResults.push(oldPlay.promise);
+    const service: ServiceFixture = {
+      review: async captureId => reviewResult(captureId, `review ${captureId}`, { audioSegmentId: `audio-${captureId}` }),
+      decideMatch: async () => ({}),
+      playbackUrl: async (_recordId, segmentId) => ({ segmentId, url: `https://audio.test/${segmentId}`, expiresAt: Date.now() + 5000 }),
+    };
+    const runner = createHarness(component, service);
+    const first = props();
+    const second = props({captureId:'capture-b',recordId:'record-b',accountId:'actor-b',authContextId:'context-b',scopeGeneration:1});
+    runner.render(first);
+    await settle(runner, first);
+    click(findElements(runner.tree, item => item.type === 'button' && String(item.props['aria-label']).startsWith('播放 '))[0]);
+    await settle(runner, first);
+    runner.render(second);
+    await settle(runner, second);
+    click(findElements(runner.tree, item => item.type === 'button' && String(item.props['aria-label']).startsWith('播放 '))[0]);
+    await settle(runner, second);
+    const current = browser.FakeAudio.instances[1]!;
+    assert.equal(current.paused, false);
+    oldPlay.resolve();
+    await settle(runner, second);
+    assert.equal(current.paused, false);
+    assert.equal(current.src, 'https://audio.test/audio-capture-b');
+    assert.equal(browser.FakeAudio.instances[0]!.paused, true);
+    runner.unmount();
+  } finally { browser.restore(); }
+});
+
+test('playback seeks inside the anchored source and stops at the discussion end', async () => {
+  const component = await componentPromise;
+  const browser = installBrowserStubs();
+  try {
+    const service: ServiceFixture = {
+      review: async captureId => {
+        const result = reviewResult(captureId, 'anchored discussion', { audioSegmentId: 'audio-source' });
+        Object.assign(result.segments[0]!, { startOffsetMs: 150_000, endOffsetMs: 151_200,
+          audioSourceStartOffsetMs: 100_000, audioSourceEndOffsetMs: 200_000 });
+        return result;
+      },
+      decideMatch: async () => ({}),
+      playbackUrl: async (_recordId, segmentId) => ({ segmentId, url: 'https://audio.test/anchored', expiresAt: Date.now() + 5000 }),
+    };
+    const runner = createHarness(component, service);
+    const scope = props();
+    runner.render(scope);
+    await settle(runner, scope);
+    click(findElements(runner.tree, item => item.type === 'button' && String(item.props['aria-label']).startsWith('播放 '))[0]);
+    await settle(runner, scope);
+    const audio = browser.FakeAudio.instances[0]!;
+    assert.equal(audio.currentTime, 0);
+    const oldMetadataHandler = audio.onloadedmetadata!;
+    audio.onloadedmetadata?.();
+    assert.equal(audio.currentTime, 50, 'capture time is rebased onto this audio file, not the meeting origin');
+    audio.currentTime = 51.19;
+    audio.ontimeupdate?.();
+    assert.equal(audio.paused, false);
+    audio.currentTime = 51.2;
+    audio.ontimeupdate?.();
+    assert.equal(audio.paused, true);
+    assert.equal(audio.src, '');
+    assert.equal(audio.onloadedmetadata, null);
+    assert.equal(audio.ontimeupdate, null);
+    audio.currentTime = 7;
+    oldMetadataHandler();
+    assert.equal(audio.currentTime, 7, 'a late event cannot seek an audio element after its ownership ended');
+    runner.unmount();
+  } finally { browser.restore(); }
 });
 
 test('unmount invalidates a pending review before its callback can apply', async () => {

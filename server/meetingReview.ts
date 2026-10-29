@@ -21,6 +21,15 @@ function safeCounter(value:unknown):number {
   if((typeof value!=='string'&&typeof value!=='number')||!/^\d+$/u.test(String(value)))conflict();
   const result=Number(value);if(!Number.isSafeInteger(result)||result<0)conflict();return result;
 }
+function explicitAudioSourceId(value:unknown):string|null|undefined {
+  if(!Array.isArray(value)||value.length===0)return undefined;
+  const ids=value.map(word=>word&&typeof word==='object'&&!Array.isArray(word)
+    ? (word as Record<string,unknown>).source_audio_segment_id : undefined);
+  const populated=ids.filter(id=>id!==undefined&&id!==null&&id!=='');
+  if(populated.length===0)return undefined;
+  if(populated.length!==ids.length||populated.some(id=>typeof id!=='string'||id!==populated[0]))return undefined;
+  return populated[0] as string;
+}
 async function captureFor(port:ActorQueryPort,id:string,version?:number,write=false):Promise<Capture>{
   const read=()=>port.query<Capture>(`SELECT capture.id::text,capture.record_id::text,capture.tenant_id::text,
     capture.project_id::text,capture.state,capture.source_version,capture.review_revision::text,
@@ -101,9 +110,15 @@ export class MeetingReviewRepository {
       segments:transcript.rows.map(segment=>{
         const resolution=byTranscript.get(segment.id);
         const start=safeCounter(segment.start_offset_ms),end=safeCounter(segment.end_offset_ms);
+        const anchorId=explicitAudioSourceId(segment.word_offsets);
+        const source=anchorId===undefined
+          ? audio.rows.find(row=>safeCounter(row.end_offset_ms)>start&&safeCounter(row.start_offset_ms)<end)??null
+          : anchorId===null?null:audio.rows.find(row=>row.id===anchorId)??null;
         return {segmentId:segment.id,transcriptRevisionId:segment.transcript_revision_id,text:segment.raw_text,
           startOffsetMs:start,endOffsetMs:end,wordOffsets:segment.word_offsets,
-          audioSegmentId:audio.rows.find(row=>safeCounter(row.end_offset_ms)>start&&safeCounter(row.start_offset_ms)<end)?.id??null,
+          audioSegmentId:source?.id??null,
+          audioSourceStartOffsetMs:source?safeCounter(source.start_offset_ms):null,
+          audioSourceEndOffsetMs:source?safeCounter(source.end_offset_ms):null,
           resolutionId:resolution?.id??null,resolutionRevision:resolution?safeCounter(resolution.revision):0,
           decision:resolution?.resolution_state??'pending',humanReviewed:resolution?.human_reviewed??false,
           humanEmptyDecision:resolution?.human_empty_decision??false,
