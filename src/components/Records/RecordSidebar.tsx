@@ -22,6 +22,12 @@ import {
   projectChangePreviewSourceKey,
   type ProjectChangePreviewSource,
 } from './projectChangePreviewRequest';
+import {
+  matchesMeetingReviewCallbackBinding,
+  meetingReviewScopeKey,
+  type CurrentMeetingReviewBinding,
+  type MeetingReviewCallbackBinding,
+} from './meetingReviewRequestGate';
 import { cn } from '../../utils/cn';
 import RecordContentEditor from './RecordContentEditor';
 import { TaskDescriptionIndicator } from '../TaskDescriptionIndicator';
@@ -72,6 +78,14 @@ const fromTextDateTime = (value: string) => {
   return parsed.isValid() && parsed.year() === year && parsed.month() === month - 1 && parsed.date() === day && parsed.hour() === hour && parsed.minute() === minute
     ? parsed.valueOf()
     : undefined;
+};
+
+const meetingCaptureIdForDraft = (draft: { metadata?: Record<string, unknown> | null } | null) => {
+  const resolution = draft?.metadata?.meetingTaskResolution;
+  return resolution && typeof resolution === 'object' && !Array.isArray(resolution)
+    && typeof (resolution as Record<string, unknown>).captureId === 'string'
+    ? String((resolution as Record<string, unknown>).captureId)
+    : null;
 };
 
 const RecordTextDateTimeInput: React.FC<{
@@ -663,6 +677,47 @@ const RecordSidebar: React.FC = () => {
   const authContextIdForPreview = user && 'authContextId' in user && typeof user.authContextId === 'string'
     ? user.authContextId
     : null;
+  const meetingReviewScope = {
+    accountId: user?.uid ?? null,
+    authContextId: authContextIdForPreview,
+    workspaceId: activeWorkspaceId,
+    boardId: activeBoardId,
+    recordId: draft?.id ?? null,
+    captureId: meetingCaptureIdForDraft(draft),
+  };
+  const meetingReviewScopeIdentity = meetingReviewScopeKey({ ...meetingReviewScope, scopeGeneration: 0 });
+  const meetingReviewScopeGenerationRef = React.useRef({ key: meetingReviewScopeIdentity, generation: 0 });
+  if (meetingReviewScopeGenerationRef.current.key !== meetingReviewScopeIdentity) {
+    meetingReviewScopeGenerationRef.current = {
+      key: meetingReviewScopeIdentity,
+      generation: meetingReviewScopeGenerationRef.current.generation + 1,
+    };
+  }
+  const meetingReviewScopeGeneration = meetingReviewScopeGenerationRef.current.generation;
+  const readCurrentMeetingReviewBinding = (): CurrentMeetingReviewBinding => {
+    const currentDraft = useRecordStore.getState().draft;
+    const currentUser = useAuthStore.getState().user;
+    const currentAuthContextId = currentUser && 'authContextId' in currentUser && typeof currentUser.authContextId === 'string'
+      ? currentUser.authContextId
+      : null;
+    const board = useBoardStore.getState();
+    const currentScope = {
+      accountId: currentUser?.uid ?? null,
+      authContextId: currentAuthContextId,
+      workspaceId: board.activeWorkspaceId,
+      boardId: board.activeBoardId,
+      recordId: currentDraft?.id ?? null,
+      captureId: meetingCaptureIdForDraft(currentDraft),
+    };
+    const currentIdentity = meetingReviewScopeKey({ ...currentScope, scopeGeneration: 0 });
+    return {
+      ...currentScope,
+      scopeGeneration: meetingReviewScopeGenerationRef.current.key === currentIdentity
+        ? meetingReviewScopeGenerationRef.current.generation
+        : -1,
+      draftSignature: getRecordDraftSignature(currentDraft) ?? '',
+    };
+  };
   const projectChangePreviewSource = React.useMemo<ProjectChangePreviewSource>(() => ({
     draftId: draft?.id ?? null,
     draftSignature: draftSignatureForPreview,
@@ -697,31 +752,20 @@ const RecordSidebar: React.FC = () => {
       boardId: board.activeBoardId,
     };
   };
-  const handleMeetingReviewRevisionChange = React.useCallback((reviewRevision: number) => {
-    const currentDraft = useRecordStore.getState().draft;
-    if (!currentDraft || currentDraft.type !== 'meeting') return;
-    const currentResolution = currentDraft.metadata?.meetingTaskResolution;
-    const currentRevision = currentResolution && typeof currentResolution === 'object' && !Array.isArray(currentResolution)
-      ? (currentResolution as Record<string, unknown>).reviewRevision
-      : undefined;
-    if (currentRevision === reviewRevision) return;
-    updateDraft({
-      metadata: {
-        ...(currentDraft.metadata ?? {}),
-        meetingTaskResolution: {
-          ...(currentResolution && typeof currentResolution === 'object' && !Array.isArray(currentResolution) ? currentResolution : {}),
-          reviewRevision,
-        },
-      },
-    });
-  }, [updateDraft]);
-  const handleMeetingResolvedTaskLinksChange = React.useCallback((acceptedTaskIds: string[], manuallyResolvedTaskIds: string[]) => {
+  const handleMeetingReviewApplied = React.useCallback((
+    reviewRevision: number,
+    acceptedTaskIds: string[],
+    manuallyResolvedTaskIds: string[],
+    binding: MeetingReviewCallbackBinding,
+  ) => {
+    if (!matchesMeetingReviewCallbackBinding(binding, readCurrentMeetingReviewBinding())) return;
     const currentDraft = useRecordStore.getState().draft;
     if (!currentDraft || currentDraft.type !== 'meeting') return;
     const currentResolution = currentDraft.metadata?.meetingTaskResolution;
     const resolution = currentResolution && typeof currentResolution === 'object' && !Array.isArray(currentResolution)
       ? currentResolution as Record<string, unknown>
       : {};
+    const currentRevision = typeof resolution.reviewRevision === 'number' ? resolution.reviewRevision : undefined;
     const previousAutoLinkSet = Array.isArray(resolution.autoLinkSet)
       ? resolution.autoLinkSet.filter((item): item is string => typeof item === 'string')
       : [];
@@ -742,7 +786,8 @@ const RecordSidebar: React.FC = () => {
     const sameLinks = currentDraft.taskLinks.length === nextTaskLinks.length
       && currentDraft.taskLinks.every((link, index) => link.nodeId === nextTaskLinks[index]?.nodeId && link.role === nextTaskLinks[index]?.role);
     const sameIds = (left: string[], right: string[]) => left.length === right.length && left.every((id, index) => id === right[index]);
-    if (sameLinks
+    if (currentRevision === reviewRevision
+      && sameLinks
       && sameIds(previousAutoLinkSet, nextAutoLinkSet)
       && sameIds(previousManualLinkSet, nextManualLinkSet)
       && sameIds(previousResolutionLinkSet, nextResolutionLinkSet)) return;
@@ -752,6 +797,7 @@ const RecordSidebar: React.FC = () => {
         ...(currentDraft.metadata ?? {}),
         meetingTaskResolution: {
           ...resolution,
+          reviewRevision,
           autoLinkSet: nextAutoLinkSet,
           manualLinkSet: nextManualLinkSet,
           resolutionLinkSet: nextResolutionLinkSet,
@@ -880,10 +926,7 @@ const RecordSidebar: React.FC = () => {
   const composerVariant = getRecordComposerVariant(draft, isMeetingMode);
   const isLiveMeeting = composerVariant === 'live-meeting';
   const isWorkLog = composerVariant === 'work-log';
-  const meetingTaskResolutionCaptureId = isLiveMeeting && draft?.metadata?.meetingTaskResolution && typeof draft.metadata.meetingTaskResolution === 'object' && !Array.isArray(draft.metadata.meetingTaskResolution)
-    && typeof (draft.metadata.meetingTaskResolution as Record<string, unknown>).captureId === 'string'
-    ? String((draft.metadata.meetingTaskResolution as Record<string, unknown>).captureId)
-    : null;
+  const meetingTaskResolutionCaptureId = isLiveMeeting ? meetingCaptureIdForDraft(draft) : null;
   const selectedLinks = draft?.taskLinks || [];
   const isSynthesizing = meetingSynthesisStatus === 'synthesizing';
   const isMeetingWorkflow = draft?.type === 'meeting';
@@ -1486,9 +1529,14 @@ const RecordSidebar: React.FC = () => {
                       <MeetingTaskMatchReview
                         captureId={meetingTaskResolutionCaptureId}
                         recordId={draft?.id ?? null}
+                        accountId={user?.uid ?? null}
+                        authContextId={authContextIdForPreview}
+                        workspaceId={activeWorkspaceId}
+                        boardId={activeBoardId}
+                        scopeGeneration={meetingReviewScopeGeneration}
+                        draftSignature={draftSignatureForPreview ?? ''}
                         taskOptions={meetingTaskOptions}
-                        onReviewRevisionChange={handleMeetingReviewRevisionChange}
-                        onResolvedTaskLinksChange={handleMeetingResolvedTaskLinksChange}
+                        onReviewApplied={handleMeetingReviewApplied}
                       />
                     </>
                   ) : isLiveMeeting && isDev123MeetingTaskResolutionEnabled && isHttpBackend ? (

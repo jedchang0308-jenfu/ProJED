@@ -137,3 +137,39 @@ test('successful COMMIT returns the callback result and safely releases the leas
   assert.equal(commitCount(fake.statements), 1);
   assert.deepEqual(fake.releases, [false]);
 });
+
+test('callback query port blocks bare SET statements but allows UPDATE SET clauses', async () => {
+  const forbiddenStatements = [
+    "SET projed.meeting_ledger_phase='cancel'",
+    "/* caller comment */ SET projed.meeting_ledger_phase='cancel'",
+    "SELECT 1; SET projed.meeting_ledger_phase='cancel'",
+  ];
+
+  for (const statement of forbiddenStatements) {
+    const fake = fakeDatabase('success');
+    let callbackCount = 0;
+
+    await assert.rejects(
+      runActorTransaction(fake.database, config, actor, async port => {
+        callbackCount += 1;
+        await port.query(statement);
+        return 'must-not-return';
+      }),
+      errorWith('TRANSACTION_USAGE_INVALID', 500),
+    );
+
+    assert.equal(callbackCount, 1);
+    assert.equal(fake.statements.includes(statement), false, `forbidden SQL was sent: ${statement}`);
+    assert.equal(commitCount(fake.statements), 0);
+  }
+
+  const fake = fakeDatabase('success');
+  const update = 'UPDATE projed_core.meeting_analysis_runs SET state = $1 WHERE id = $2';
+  const result = await runActorTransaction(fake.database, config, actor, async port => (
+    port.query(update, ['cancelled', 'a4234567-1234-4234-8234-123456789001'])
+  ));
+
+  assert.deepEqual(result.rows, []);
+  assert.equal(fake.statements.includes(update), true);
+  assert.equal(commitCount(fake.statements), 1);
+});

@@ -16,6 +16,8 @@
 
 ## 2026-10-08：DEV-139 ProJED 納入 Jenfu-Platform 開發文件入口
 
+會議 capture 控制、取消退款與 review scope 保護的本版 source／驗證界線見 [SPEC §41](specs/SPEC-139-projed-jenfu-platform-onboarding.md#41-meeting-capture-control-w272026-10-29)；未以此取代錄音全功能、真身分或正式發布驗收。
+
 目前持久 Session／正常登入／來源 guard 與未完成的身分功能見 [SPEC §13.2](specs/SPEC-139-projed-jenfu-platform-onboarding.md#132-持久-session正常入口與-guard-匯入-source2026-10-29)。本機容量不足可使用 [§8.1 遠端隔離入口](specs/SPEC-139-projed-jenfu-platform-onboarding.md#81-工程驗證案例與固定本地入口)，沿用原 PostgreSQL／HTTP 與移轉腳本；不要求容量例外或新增人工審查。下列 W18 為歷史證據，不代表新版 migration／真登入／正式發布已完成。
 
 2026-10-29 選測與流程精簡：S3 DB／HTTP 可單獨執行，原完整驗證入口保留；已完成 S1 的固定順序與人工 freeze／QC／Spec Drift 不再作續行前置。命令與分層收據見 [SPEC §8.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#81-工程驗證案例與固定本地入口)，開發／啟用及授權界線見 §9／§11.5；未縮減身分／資料／功能相容驗收，不新增 required gate。

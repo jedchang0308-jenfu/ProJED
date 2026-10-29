@@ -2,14 +2,48 @@ import React from 'react';
 import { Check, ChevronDown, Loader2, Play, RotateCcw, X } from 'lucide-react';
 import type { MeetingReviewSegment } from '../../features/meetingTaskResolution/meetingAnalysisContract';
 import { meetingAnalysisService } from '../../features/meetingTaskResolution/meetingAnalysisService';
+import {
+  MeetingReviewRequestGate,
+  meetingReviewScopeKey,
+  type MeetingReviewCallbackBinding,
+  type MeetingReviewScope,
+} from './meetingReviewRequestGate';
 
 type Props = {
   captureId: string | null;
   recordId: string | null;
+  accountId: string | null;
+  authContextId: string | null;
+  workspaceId: string | null;
+  boardId: string | null;
+  scopeGeneration: number;
+  draftSignature: string;
   taskOptions?: Array<{ id: string; title: string; nodeType?: string }>;
-  onReviewRevisionChange?: (revision: number) => void;
-  onResolvedTaskLinksChange?: (acceptedTaskIds: string[], manuallyResolvedTaskIds: string[]) => void;
+  onReviewApplied?: (
+    reviewRevision: number,
+    acceptedTaskIds: string[],
+    manuallyResolvedTaskIds: string[],
+    binding: MeetingReviewCallbackBinding,
+  ) => void;
 };
+
+type ReviewViewState = {
+  scopeKey: string;
+  segments: MeetingReviewSegment[];
+  state: string;
+  reviewRevision: number;
+  loading: boolean;
+  error: string | null;
+};
+
+const emptyReviewView = (scopeKey: string, loading = false): ReviewViewState => ({
+  scopeKey,
+  segments: [],
+  state: 'idle',
+  reviewRevision: 0,
+  loading,
+  error: null,
+});
 
 const formatOffset = (offsetMs: number) => {
   const seconds = Math.max(0, Math.floor(offsetMs / 1000));
@@ -19,34 +53,96 @@ const formatOffset = (offsetMs: number) => {
 const MeetingTaskMatchReview: React.FC<Props> = ({
   captureId,
   recordId,
+  accountId,
+  authContextId,
+  workspaceId,
+  boardId,
+  scopeGeneration,
+  draftSignature,
   taskOptions = [],
-  onReviewRevisionChange,
-  onResolvedTaskLinksChange,
+  onReviewApplied,
 }) => {
-  const [segments, setSegments] = React.useState<MeetingReviewSegment[]>([]);
-  const [state, setState] = React.useState<string>('idle');
-  const [reviewRevision, setReviewRevision] = React.useState(0);
-  const [loading, setLoading] = React.useState(false);
-  const [busyResolutionId, setBusyResolutionId] = React.useState<string | null>(null);
-  const [error, setError] = React.useState<string | null>(null);
+  const scope: MeetingReviewScope = {
+    accountId,
+    authContextId,
+    workspaceId,
+    boardId,
+    recordId,
+    captureId,
+    scopeGeneration,
+  };
+  const scopeKey = meetingReviewScopeKey(scope);
+  const gateRef = React.useRef<MeetingReviewRequestGate | null>(null);
+  if (!gateRef.current) gateRef.current = new MeetingReviewRequestGate();
+  const gate = gateRef.current;
+  gate.reconcile(scope);
+
+  const [reviewView, setReviewView] = React.useState<ReviewViewState>(() => emptyReviewView(scopeKey));
+  const [busyRequest, setBusyRequest] = React.useState<{
+    resolutionId: string;
+    token: ReturnType<MeetingReviewRequestGate['begin']>;
+  } | null>(null);
+  const [playbackRequest, setPlaybackRequest] = React.useState<{
+    segmentId: string;
+    token: ReturnType<MeetingReviewRequestGate['begin']>;
+  } | null>(null);
   const [selectedTaskIds, setSelectedTaskIds] = React.useState<Record<string, string>>({});
-  const [playingSegmentId, setPlayingSegmentId] = React.useState<string | null>(null);
-  const audioRef = React.useRef<HTMLAudioElement | null>(null);
+  const audioRef = React.useRef<{
+    audio: HTMLAudioElement;
+    token: ReturnType<MeetingReviewRequestGate['begin']>;
+  } | null>(null);
+  const loadRef = React.useRef<() => Promise<void>>(async () => {});
+  const stopAudioRef = React.useRef<(clearPlaybackState?: boolean) => void>(() => {});
 
-  React.useEffect(() => () => {
-    audioRef.current?.pause();
+  const currentReview = reviewView.scopeKey === scopeKey
+    ? reviewView
+    : emptyReviewView(scopeKey, Boolean(captureId));
+  const segments = currentReview.segments;
+  const state = currentReview.state;
+  const reviewRevision = currentReview.reviewRevision;
+  const loading = currentReview.loading;
+  const error = currentReview.error;
+  const busyResolutionId = busyRequest && gate.isCurrent(busyRequest.token, scope)
+    ? busyRequest.resolutionId
+    : null;
+  const playingSegmentId = playbackRequest && gate.isCurrent(playbackRequest.token, scope)
+    ? playbackRequest.segmentId
+    : null;
+
+  const stopAudio = (clearPlaybackState = true) => {
+    const active = audioRef.current;
     audioRef.current = null;
-  }, []);
+    if (active) {
+      const source = active.audio.src;
+      active.audio.onended = null;
+      active.audio.onerror = null;
+      active.audio.pause();
+      active.audio.removeAttribute('src');
+      active.audio.load();
+      if (source.startsWith('blob:')) URL.revokeObjectURL(source);
+    }
+    if (clearPlaybackState) setPlaybackRequest(null);
+  };
+  stopAudioRef.current = stopAudio;
 
-  const load = React.useCallback(async () => {
+  const load = async () => {
     if (!captureId) return;
-    setLoading(true);
+    const requestScope = scope;
+    const token = gate.begin(requestScope, 'review');
+    setReviewView(previous => {
+      if (!gate.isCurrent(token, requestScope)) return previous;
+      const base = previous.scopeKey === token.scopeKey ? previous : emptyReviewView(token.scopeKey);
+      return { ...base, loading: true, error: null };
+    });
     try {
       const result = await meetingAnalysisService.review(captureId);
-      setSegments(result.segments);
-      setState(result.state);
-      setReviewRevision(result.reviewRevision);
-      onReviewRevisionChange?.(result.reviewRevision);
+      if (result.captureId !== requestScope.captureId || !gate.isCurrent(token, requestScope)) return;
+      const callbackBinding: MeetingReviewCallbackBinding = {
+        ...requestScope,
+        draftSignature,
+        requestGeneration: token.generation,
+        requestId: token.requestId,
+      };
       const acceptedTaskIds = Array.from(new Set(
         result.segments.flatMap(segment => segment.candidates
           .filter(candidate => candidate.decision === 'accepted')
@@ -57,65 +153,122 @@ const MeetingTaskMatchReview: React.FC<Props> = ({
           .filter(candidate => candidate.decision === 'accepted' && candidate.source === 'human')
           .map(candidate => candidate.taskId)),
       ));
-      onResolvedTaskLinksChange?.(acceptedTaskIds, manuallyResolvedTaskIds);
-      setError(null);
+      setReviewView(previous => gate.isCurrent(token, requestScope)
+        ? {
+          scopeKey: token.scopeKey,
+          segments: result.segments,
+          state: result.state,
+          reviewRevision: result.reviewRevision,
+          loading: true,
+          error: null,
+        }
+        : previous);
+      if (gate.isCurrent(token, requestScope)) {
+        onReviewApplied?.(result.reviewRevision, acceptedTaskIds, manuallyResolvedTaskIds, callbackBinding);
+      }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      if (gate.isCurrent(token, requestScope)) {
+        setReviewView(previous => gate.isCurrent(token, requestScope)
+          ? { ...previous, scopeKey: token.scopeKey, error: cause instanceof Error ? cause.message : String(cause) }
+          : previous);
+      }
     } finally {
-      setLoading(false);
+      if (gate.isCurrent(token, requestScope)) {
+        setReviewView(previous => gate.isCurrent(token, requestScope)
+          ? { ...previous, scopeKey: token.scopeKey, loading: false }
+          : previous);
+      }
     }
-  }, [captureId, onReviewRevisionChange, onResolvedTaskLinksChange]);
+  };
+  loadRef.current = load;
 
+  React.useLayoutEffect(() => {
+    stopAudioRef.current(false);
+    setReviewView(emptyReviewView(scopeKey, Boolean(captureId)));
+    setBusyRequest(null);
+    setPlaybackRequest(null);
+    setSelectedTaskIds({});
+    if (captureId) void loadRef.current();
+    return () => {
+      gate.cancelPending();
+      stopAudioRef.current(false);
+    };
+  }, [scopeKey, captureId, gate]);
+
+  React.useEffect(() => () => {
+    gate.cancelPending();
+    stopAudioRef.current(false);
+  }, [gate]);
+
+  const pollMillis = state === 'ready' ? 10000 : 4000;
   React.useEffect(() => {
-    if (!captureId) {
-      setSegments([]);
-      setState('idle');
-      setError(null);
-      setSelectedTaskIds({});
-      return undefined;
-    }
-    void load();
-    const timer = window.setInterval(() => void load(), state === 'ready' ? 10000 : 4000);
+    if (!captureId) return undefined;
+    const timer = window.setInterval(() => void loadRef.current(), pollMillis);
     return () => window.clearInterval(timer);
-  }, [captureId, load, state]);
+  }, [scopeKey, captureId, pollMillis]);
 
   const decide = async (
     segment: MeetingReviewSegment,
     operations: Array<{ action: 'accept' | 'reject' | 'add' | 'replace' | 'clear-all'; taskId?: string }>,
   ) => {
     if (!segment.resolutionId) return;
-    setBusyResolutionId(segment.resolutionId);
+    const requestScope = scope;
+    const token = gate.begin(requestScope, `decision:${segment.resolutionId}`);
+    setBusyRequest({ resolutionId: segment.resolutionId, token });
     try {
       await meetingAnalysisService.decideMatch({
         resolutionId: segment.resolutionId,
         expectedResolutionRevision: segment.resolutionRevision,
         operations,
       });
-      await load();
+      if (gate.isCurrent(token, requestScope)) await loadRef.current();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      if (gate.isCurrent(token, requestScope)) {
+        setReviewView(previous => gate.isCurrent(token, requestScope)
+          ? { ...previous, scopeKey: token.scopeKey, error: cause instanceof Error ? cause.message : String(cause) }
+          : previous);
+      }
     } finally {
-      setBusyResolutionId(null);
+      if (gate.isCurrent(token, requestScope)) {
+        setBusyRequest(previous => previous?.token.requestId === token.requestId ? null : previous);
+      }
     }
   };
 
   const playSource = async (segment: MeetingReviewSegment) => {
     if (!recordId || !segment.audioSegmentId) return;
-    audioRef.current?.pause();
-    setPlayingSegmentId(segment.segmentId);
+    const requestScope = scope;
+    const token = gate.begin(requestScope, 'playback');
+    stopAudioRef.current();
+    setPlaybackRequest({ segmentId: segment.segmentId, token });
     try {
       const playback = await meetingAnalysisService.playbackUrl(recordId, segment.audioSegmentId);
+      if (playback.segmentId !== segment.audioSegmentId || !gate.isCurrent(token, requestScope)) {
+        if (playback.url.startsWith('blob:')) URL.revokeObjectURL(playback.url);
+        return;
+      }
       const audio = new Audio(playback.url);
-      audioRef.current = audio;
-      audio.onended = () => setPlayingSegmentId(null);
+      audioRef.current = { audio, token };
+      audio.onended = () => {
+        if (!gate.isCurrent(token, requestScope)) return;
+        stopAudioRef.current();
+      };
       audio.onerror = () => {
-        setPlayingSegmentId(null);
-        setError('原音目前無法播放，請重新取得短效連結。');
+        if (!gate.isCurrent(token, requestScope)) return;
+        stopAudioRef.current();
+        setReviewView(previous => gate.isCurrent(token, requestScope)
+          ? { ...previous, scopeKey: token.scopeKey, error: '原音目前無法播放，請重新取得短效連結。' }
+          : previous);
       };
       await audio.play();
+      if (!gate.isCurrent(token, requestScope)) stopAudioRef.current(false);
     } catch (cause) {
-      setPlayingSegmentId(null);
-      setError(cause instanceof Error ? cause.message : String(cause));
+      if (gate.isCurrent(token, requestScope)) {
+        setPlaybackRequest(previous => previous?.token.requestId === token.requestId ? null : previous);
+        setReviewView(previous => gate.isCurrent(token, requestScope)
+          ? { ...previous, scopeKey: token.scopeKey, error: cause instanceof Error ? cause.message : String(cause) }
+          : previous);
+      }
     }
   };
 

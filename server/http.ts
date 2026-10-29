@@ -28,6 +28,7 @@ import { createTaskTrackingHttpDispatcher } from './taskTrackingHttp.js';
 import {createRagHttpDispatcher} from './ragHttp.js';
 import type {RagProvider} from './geminiRagProvider.js';
 import {createMeetingSynthesisHttpDispatcher,type MeetingSynthesisModel,type MeetingSynthesisProvider} from './meetingSynthesisHttp.js';
+import { createMeetingCaptureHttpDispatcher } from './meetingCaptureHttp.js';
 
 const CONTENT_TYPES: Record<string, string> = {
   '.css': 'text/css; charset=utf-8',
@@ -50,7 +51,8 @@ function safeResponseHeaders(headers?: Readonly<Record<string, string>>): Record
   for (const [rawName, value] of Object.entries(headers ?? {})) {
     const name = rawName.toLowerCase();
     if (!allowed.has(name)) continue;
-    if (seen.has(name) || typeof value !== 'string' || value.length > 8192 || /[\u0000-\u001f\u007f]/.test(value)) {
+    if (seen.has(name) || typeof value !== 'string' || value.length > 8192
+        || Array.from(value).some(character => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)) {
       throw new Error('Invalid response header');
     }
     if (name === 'location' && /[\r\n]/.test(value)) throw new Error('Invalid redirect');
@@ -205,6 +207,7 @@ export function createKernelHttpServer(
   const dispatchRag = createRagHttpDispatcher(config,database,options.resolveActor,options.ragProvider);
   const dispatchMeetingSynthesis=createMeetingSynthesisHttpDispatcher(config,database,options.resolveActor,
     options.meetingSynthesisProvider??options.ragProvider,options.meetingSynthesisModel);
+  const dispatchMeetingCapture = createMeetingCaptureHttpDispatcher(config, database, options.resolveActor);
   const server = createServer({
     maxHeaderSize: 16 * 1024,
     requestTimeout: config.profile.runtime.timeouts.requestMillis,
@@ -279,6 +282,8 @@ export function createKernelHttpServer(
     if(rag.matched){json(response,rag.status??500,rag.body,requestId);return;}
     const synthesis=await dispatchMeetingSynthesis(request,requestId);
     if(synthesis.matched){json(response,synthesis.status??500,synthesis.body,requestId);return;}
+    const capture = await dispatchMeetingCapture(request, requestId);
+    if(capture.matched){json(response,capture.status??500,capture.body,requestId);return;}
     const collaborationWrite = await dispatchCollaborationWrite(request, requestId);
     if (collaborationWrite.matched) {
       json(response, collaborationWrite.status ?? 500, collaborationWrite.body ?? {

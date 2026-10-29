@@ -99,6 +99,7 @@ const PROFILE_MIGRATION_PATHS = new Map<string, readonly string[]>([
     'db/migrations/0026_meeting_source_retention_v1.sql',
     'db/migrations/0027_meeting_cascade_compatibility_v1.sql',
     'db/migrations/0028_meeting_atomic_cascade_v1.sql',
+    'db/migrations/0029_meeting_capture_runtime_v1.sql',
   ]],
   ['^jenfu_prod$', [
     'db/migrations/0001_runtime_boundary_v1.sql',
@@ -129,6 +130,7 @@ const PROFILE_MIGRATION_PATHS = new Map<string, readonly string[]>([
     'db/migrations/0026_meeting_source_retention_v1.sql',
     'db/migrations/0027_meeting_cascade_compatibility_v1.sql',
     'db/migrations/0028_meeting_atomic_cascade_v1.sql',
+    'db/migrations/0029_meeting_capture_runtime_v1.sql',
   ]],
 ]);
 

@@ -33,6 +33,7 @@ export interface ActorQueryPort {
   authorizeBackupGuard(tenantId: string, projectId: string): Promise<void>;
   authorizeRecordRagMutation(tenantId: string, projectId: string, recordId: string): Promise<void>;
   authorizeRagJobMutation(tenantId: string, documentId: string, jobId: string, claimToken?: string): Promise<void>;
+  authorizeMeetingCaptureMutation(recordId: string, captureId: string): Promise<void>;
 }
 
 const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
@@ -97,7 +98,8 @@ export async function runActorTransaction<T>(
 
   const query: ScopedQuery = async <R extends QueryResultRow>(text: string, values: readonly unknown[] = []) => {
     if (/\b(?:begin|commit|rollback|set\s+(?:local|session|role)|reset|discard)\b/i.test(text)
-        || /\bset_config\s*\(/i.test(text)) {
+        || /\bset_config\s*\(/i.test(text)
+        || /(?:^|;)\s*(?:(?:--[^\r\n]*(?:\r?\n|$)|\/\*[\s\S]*?\*\/)\s*)*set\b/iu.test(text)) {
       throw new KernelError('TRANSACTION_USAGE_INVALID', 'Transaction control is owned by the kernel');
     }
     return guardedClientQuery<R>(text, values);
@@ -284,6 +286,20 @@ export async function runActorTransaction<T>(
     [documentId,jobId,claimToken ?? '']);
   };
 
+  const authorizeMeetingCaptureMutation = async (recordId: string, captureId: string): Promise<void> => {
+    if (![recordId, captureId].every(value => UUID_RE.test(value))) {
+      throw new KernelError('TRANSACTION_USAGE_INVALID', 'Meeting mutation scope is invalid');
+    }
+    const record = await guardedClientQuery<{ allowed: boolean }>(`SELECT
+      projed_core.actor_can_write_record_v1(tenant_id,project_id,visibility,created_by,recorded_by) AS allowed
+      FROM projed_core.knowledge_records WHERE id=$1::uuid AND record_type='meeting' FOR UPDATE`, [recordId]);
+    if (record.rows.length !== 1 || record.rows[0]?.allowed !== true) {
+      throw new KernelError('RESOURCE_NOT_FOUND', 'Meeting record is unavailable', 404);
+    }
+    await guardedClientQuery(`SELECT set_config('projed.meeting_record_id',$1,true),
+      set_config('projed.meeting_capture_id',$2,true)`, [recordId, captureId]);
+  };
+
   try {
     checkCancellation();
     validateServerActor(actor);
@@ -302,6 +318,10 @@ export async function runActorTransaction<T>(
     `, [actor.principalId, actor.localUserId, actor.entry, actor.contextId, actor.accountGuardRevision,
       `${config.profile.runtime.timeouts.statementMillis}ms`, `${config.profile.runtime.timeouts.lockMillis}ms`,
       `${config.profile.runtime.timeouts.idleInTransactionMillis}ms`]);
+    // One app lock gives the internal app a clear order for record/privacy,
+    // membership and Board changes, including callers outside HTTP dispatch.
+    // Provider/storage work stays outside these short transactions.
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended('projed:runtime-transaction:v1', 0))");
     await client.query("SELECT pg_advisory_xact_lock_shared(hashtextextended('projed:account:' || $1, 0))", [actor.localUserId]);
     const guard = await client.query<{ valid: boolean }>('SELECT projed_core.actor_context_valid_v1() AS valid');
     if (guard.rows[0]?.valid !== true) throw new KernelError('ACCESS_DENIED', 'Actor is not authorized', 403);
@@ -315,6 +335,7 @@ export async function runActorTransaction<T>(
       authorizeBackupGuard,
       authorizeRecordRagMutation,
       authorizeRagJobMutation,
+      authorizeMeetingCaptureMutation,
     });
     portClosed = true;
     if (inFlight) throw new KernelError('TRANSACTION_USAGE_INVALID', 'Callback returned with an unfinished query');

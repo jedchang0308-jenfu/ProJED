@@ -189,7 +189,8 @@ BEGIN
 END $$;
 
 -- Every retained table is FORCE RLS. The one-time importer gets only SELECT
--- and INSERT; runtime, PUBLIC, and the migration role get no table data access.
+-- and INSERT. Runtime receives the 0029 column grants, while each meeting
+-- policy still requires actor and operation scope; PUBLIC and migrator stay closed.
 DO $$
 DECLARE
   v_name text;
@@ -197,6 +198,15 @@ DECLARE
   v_rls boolean;
   v_force boolean;
   v_privilege text;
+  v_column text;
+  v_columns text[];
+  v_expected_insert text[];
+  v_expected_update text[];
+  v_expected_select text[];
+  v_expected_table_select boolean;
+  v_expected_privilege boolean;
+  v_function text;
+  v_function_oid regprocedure;
 BEGIN
   FOREACH v_name IN ARRAY ARRAY[
     'projed_core.meeting_capture_sessions',
@@ -227,14 +237,92 @@ BEGIN
         RAISE EXCEPTION 'snapshot importer has forbidden % privilege on %', v_privilege, v_name;
       END IF;
     END LOOP;
+
+    v_expected_table_select := v_name = ANY (ARRAY[
+      'projed_core.meeting_capture_sessions',
+      'projed_core.meeting_capture_segments',
+      'projed_core.meeting_pointer_intervals',
+      'projed_core.meeting_analysis_runs',
+      'projed_core.meeting_transcript_segments',
+      'projed_core.meeting_segment_resolutions',
+      'projed_core.meeting_task_match_results',
+      'projed_core.meeting_draft_projections'
+    ]::text[]);
+    v_expected_insert := CASE v_name
+      WHEN 'projed_core.meeting_capture_sessions' THEN ARRAY[
+        'id','tenant_id','project_id','record_id','created_by','idempotency_key','state','last_progress_at','started_at'
+      ]::text[]
+      WHEN 'projed_core.meeting_pointer_intervals' THEN ARRAY[
+        'id','capture_id','clock_epoch','sequence','canonical_task_id','surface_kind','started_offset_ms',
+        'ended_offset_ms','visible','termination_reason','batch_key','batch_digest','tenant_id','project_id'
+      ]::text[]
+      WHEN 'projed_core.meeting_artifact_cleanup' THEN ARRAY[
+        'obligation_id','capture_id','attempt_id','kind','object_locator','state',
+        'upload_token_expires_at','due_at','storage_backend'
+      ]::text[]
+      ELSE ARRAY[]::text[]
+    END;
+    v_expected_update := CASE v_name
+      WHEN 'projed_core.meeting_capture_sessions' THEN ARRAY[
+        'state','epoch_manifest','last_progress_at','stopped_at','audio_expires_at','source_version',
+        'audio_manifest_hash','pointer_manifest_hash','source_completeness','pointer_loss','updated_at',
+        'stopped_reason','source_frozen_at','source_parent_version','final_pointer_sequence','source_gaps'
+      ]::text[]
+      WHEN 'projed_core.meeting_analysis_runs' THEN ARRAY[
+        'state','error_code','lease_token','lease_expires_at','updated_at'
+      ]::text[]
+      WHEN 'projed_core.meeting_ai_usage_attempts' THEN ARRAY[
+        'actual_twd_micros','usage_state','outcome','updated_at'
+      ]::text[]
+      WHEN 'projed_core.meeting_ai_budget_months' THEN ARRAY[
+        'reserved_twd_micros','updated_at'
+      ]::text[]
+      ELSE ARRAY[]::text[]
+    END;
+    v_expected_select := CASE v_name
+      WHEN 'projed_core.meeting_artifact_cleanup' THEN ARRAY[
+        'obligation_id','capture_id','attempt_id','kind','due_at','upload_token_expires_at'
+      ]::text[]
+      WHEN 'projed_core.meeting_ai_usage_attempts' THEN ARRAY[
+        'attempt_id','capture_id','run_id','dispatch_month','reserved_twd_micros','usage_state','dispatch_state'
+      ]::text[]
+      WHEN 'projed_core.meeting_ai_budget_months' THEN ARRAY[
+        'budget_month','reserved_twd_micros'
+      ]::text[]
+      ELSE ARRAY[]::text[]
+    END;
+
     FOREACH v_privilege IN ARRAY ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER'] LOOP
-      IF has_table_privilege('projed_runtime_disposable', v_relation, v_privilege) THEN
-        RAISE EXCEPTION 'runtime has forbidden % privilege on %', v_privilege, v_name;
+      v_expected_privilege := v_privilege = 'SELECT' AND v_expected_table_select;
+      IF has_table_privilege('projed_runtime_disposable', v_relation, v_privilege)
+           IS DISTINCT FROM v_expected_privilege THEN
+        RAISE EXCEPTION 'runtime table-level % grant differs from exact policy on %', v_privilege, v_name;
       END IF;
       IF has_table_privilege('projed_migrator_disposable', v_relation, v_privilege) THEN
         RAISE EXCEPTION 'migration role has unexpected % privilege on %', v_privilege, v_name;
       END IF;
     END LOOP;
+
+    SELECT array_agg(attribute.attname::text ORDER BY attribute.attnum)
+      INTO v_columns
+      FROM pg_attribute AS attribute
+     WHERE attribute.attrelid = v_relation AND attribute.attnum > 0 AND NOT attribute.attisdropped;
+    FOREACH v_column IN ARRAY v_columns LOOP
+      IF has_column_privilege('projed_runtime_disposable', v_relation, v_column, 'INSERT')
+           IS DISTINCT FROM (v_column = ANY(v_expected_insert)) THEN
+        RAISE EXCEPTION 'runtime INSERT column grant differs from exact policy on %.%', v_name, v_column;
+      END IF;
+      IF has_column_privilege('projed_runtime_disposable', v_relation, v_column, 'UPDATE')
+           IS DISTINCT FROM (v_column = ANY(v_expected_update)) THEN
+        RAISE EXCEPTION 'runtime UPDATE column grant differs from exact policy on %.%', v_name, v_column;
+      END IF;
+      IF NOT v_expected_table_select
+         AND has_column_privilege('projed_runtime_disposable', v_relation, v_column, 'SELECT')
+           IS DISTINCT FROM (v_column = ANY(v_expected_select)) THEN
+        RAISE EXCEPTION 'runtime SELECT column grant differs from exact policy on %.%', v_name, v_column;
+      END IF;
+    END LOOP;
+
     IF EXISTS (
       SELECT 1
         FROM pg_class c
@@ -243,6 +331,31 @@ BEGIN
          AND acl.grantee = 0::oid
     ) THEN
       RAISE EXCEPTION 'PUBLIC has a table privilege on %', v_name;
+    END IF;
+  END LOOP;
+
+  FOREACH v_function IN ARRAY ARRAY[
+    'projed_core.meeting_mutation_scope_v1(uuid,uuid)',
+    'projed_core.meeting_capture_visible_v1(uuid)',
+    'projed_core.meeting_capture_mutable_v1(uuid)',
+    'projed_core.meeting_run_cancel_guard_v1()',
+    'projed_core.meeting_cancel_ledger_scope_v1(uuid)',
+    'projed_core.cancel_meeting_capture_v1(uuid,integer,text)'
+  ] LOOP
+    v_function_oid := to_regprocedure(v_function);
+    IF v_function_oid IS NULL THEN RAISE EXCEPTION 'missing runtime meeting helper: %', v_function; END IF;
+    IF NOT has_function_privilege('projed_runtime_disposable', v_function_oid, 'EXECUTE')
+       OR has_function_privilege('projed_importer_disposable', v_function_oid, 'EXECUTE')
+       OR has_function_privilege('projed_migrator_disposable', v_function_oid, 'EXECUTE') THEN
+      RAISE EXCEPTION 'runtime meeting helper EXECUTE grants are not exact: %', v_function;
+    END IF;
+    IF EXISTS (
+      SELECT 1
+        FROM pg_proc AS proc
+        CROSS JOIN LATERAL aclexplode(COALESCE(proc.proacl, acldefault('f', proc.proowner))) acl
+       WHERE proc.oid = v_function_oid AND acl.grantee = 0::oid
+    ) THEN
+      RAISE EXCEPTION 'PUBLIC has EXECUTE on runtime meeting helper: %', v_function;
     END IF;
   END LOOP;
 END $$;
@@ -275,21 +388,114 @@ BEGIN
 END $$;
 RESET ROLE;
 
--- Runtime receives neither SELECT nor DML on raw meeting or global ledger rows.
+-- Runtime grants are narrow, but actor and purpose scopes are required for
+-- visibility and mutation. With no actor or cancellation purpose, all source
+-- rows remain hidden and scoped writes are rejected or affect zero rows.
 SET LOCAL ROLE projed_runtime_disposable;
+SELECT set_config('projed.actor_principal_id','',true),
+       set_config('projed.actor_local_user_id','',true),
+       set_config('projed.actor_entry','',true),
+       set_config('projed.actor_context_id','',true),
+       set_config('projed.actor_guard_revision','',true),
+       set_config('projed.meeting_record_id','',true),
+       set_config('projed.meeting_capture_id','',true),
+       set_config('projed.meeting_ledger_phase','',true),
+       set_config('projed.meeting_refund_month','',true);
 DO $$
+DECLARE v_rows bigint;
 BEGIN
+  IF EXISTS (SELECT id FROM projed_core.meeting_capture_sessions)
+     OR EXISTS (SELECT id FROM projed_core.meeting_capture_segments)
+     OR EXISTS (SELECT id FROM projed_core.meeting_pointer_intervals)
+     OR EXISTS (SELECT id FROM projed_core.meeting_analysis_runs)
+     OR EXISTS (SELECT id FROM projed_core.meeting_transcript_segments)
+     OR EXISTS (SELECT id FROM projed_core.meeting_segment_resolutions)
+     OR EXISTS (SELECT id FROM projed_core.meeting_task_match_results)
+     OR EXISTS (SELECT record_id FROM projed_core.meeting_draft_projections)
+     OR EXISTS (SELECT obligation_id FROM projed_core.meeting_artifact_cleanup)
+     OR EXISTS (SELECT budget_month FROM projed_core.meeting_ai_budget_months)
+     OR EXISTS (SELECT attempt_id FROM projed_core.meeting_ai_usage_attempts) THEN
+    RAISE EXCEPTION 'runtime can see meeting source or ledger rows without actor/purpose scope';
+  END IF;
+
+  IF projed_core.meeting_mutation_scope_v1(
+       '23456789-1234-4234-8234-123456789002', 'a1234567-1234-4234-8234-123456789001') IS TRUE
+     OR projed_core.meeting_capture_visible_v1('a1234567-1234-4234-8234-123456789001') IS TRUE
+     OR projed_core.meeting_capture_mutable_v1('a1234567-1234-4234-8234-123456789001') IS TRUE
+     OR projed_core.meeting_cancel_ledger_scope_v1('a1234567-1234-4234-8234-123456789001') IS TRUE THEN
+    RAISE EXCEPTION 'meeting helper accepted missing actor/purpose scope';
+  END IF;
+
   BEGIN
-    PERFORM 1 FROM projed_core.meeting_capture_sessions LIMIT 1;
-    RAISE EXCEPTION 'runtime SELECT on raw meeting capture was accepted';
+    PERFORM projed_core.cancel_meeting_capture_v1(
+      'a1234567-1234-4234-8234-123456789001', 7, 'scope-negative'
+    );
+    RAISE EXCEPTION 'runtime cancelled a capture without actor/purpose scope';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
+
   BEGIN
-    INSERT INTO projed_core.meeting_ai_budget_months (budget_month)
-    VALUES ('2026-05-01');
-    RAISE EXCEPTION 'runtime INSERT on meeting budget ledger was accepted';
+    INSERT INTO projed_core.meeting_capture_sessions (
+      id,tenant_id,project_id,record_id,created_by,idempotency_key,state,last_progress_at,started_at
+    ) VALUES (
+      'a1234567-1234-4234-8234-123456789091',
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      '23456789-1234-4234-8234-123456789002',
+      '11111111-1111-4111-8111-111111111111',
+      'runtime-without-actor', 'recording', now(), now()
+    );
+    RAISE EXCEPTION 'runtime inserted a capture without actor scope';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
+
+  BEGIN
+    INSERT INTO projed_core.meeting_pointer_intervals (
+      id,capture_id,clock_epoch,sequence,canonical_task_id,surface_kind,
+      started_offset_ms,ended_offset_ms,visible,termination_reason,
+      batch_key,batch_digest,tenant_id,project_id
+    ) VALUES (
+      'a3234567-1234-4234-8234-123456789091',
+      'a1234567-1234-4234-8234-123456789001', 0, 999,
+      'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1','task-row',1,2,true,'scope-negative',
+      'runtime-without-actor',repeat('d',64),
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+    );
+    RAISE EXCEPTION 'runtime inserted a pointer without actor scope';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+
+  BEGIN
+    INSERT INTO projed_core.meeting_artifact_cleanup (
+      obligation_id,attempt_id,kind,object_locator,state,due_at
+    ) VALUES (
+      'a9234567-1234-4234-8234-123456789091',
+      'runtime-without-cancel-purpose','storage','synthetic/scope-negative','pending',now()
+    );
+    RAISE EXCEPTION 'runtime inserted cleanup without cancellation purpose';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+
+  UPDATE projed_core.meeting_capture_sessions SET state='recording',updated_at=now()
+   WHERE id='a1234567-1234-4234-8234-123456789001';
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  IF v_rows <> 0 THEN RAISE EXCEPTION 'runtime updated capture without actor scope'; END IF;
+
+  UPDATE projed_core.meeting_analysis_runs SET state='cancelled',error_code='scope-negative',updated_at=now()
+   WHERE id='a4234567-1234-4234-8234-123456789001';
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  IF v_rows <> 0 THEN RAISE EXCEPTION 'runtime updated analysis run without cancellation purpose'; END IF;
+
+  UPDATE projed_core.meeting_ai_usage_attempts
+     SET actual_twd_micros=0,usage_state='known',outcome='scope-negative',updated_at=now()
+   WHERE attempt_id='synthetic-attempt-reserved';
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  IF v_rows <> 0 THEN RAISE EXCEPTION 'runtime updated usage ledger without cancellation purpose'; END IF;
+
+  UPDATE projed_core.meeting_ai_budget_months SET reserved_twd_micros=0,updated_at=now()
+   WHERE budget_month='2026-03-01';
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  IF v_rows <> 0 THEN RAISE EXCEPTION 'runtime updated budget ledger without cancellation purpose'; END IF;
 END $$;
 RESET ROLE;
 

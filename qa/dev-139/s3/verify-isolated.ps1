@@ -122,6 +122,9 @@ try {
   $env:PROJED_ENV = 'disposable'
   $env:PROJED_APP_ENTRY = 'main'
   $env:PROJED_DATABASE_URL = "postgresql://projed_runtime_disposable:${encodedRuntime}@127.0.0.1:$port/$databaseName"
+  # Fixture-only administrative access, bound to this nonce database. The
+  # verifier never logs this value; the runtime still uses its restricted role.
+  $env:PROJED_QA_MEETING_ADMIN_URL = "postgresql://postgres:${adminPassword}@127.0.0.1:$port/$databaseName"
   $env:PROJED_DEV139_BROWSER_SMOKE = if ($DatabaseOnly) { '0' } else { '1' }
   $env:PORT = '0'
   $verifierLines = @(& npx.cmd tsx qa/dev-139/s3/verify-pg.ts)
@@ -157,6 +160,7 @@ finally {
   Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
   Remove-Item Env:PROJED_MIGRATOR_DATABASE_URL -ErrorAction SilentlyContinue
   Remove-Item Env:PROJED_DATABASE_URL -ErrorAction SilentlyContinue
+  Remove-Item Env:PROJED_QA_MEETING_ADMIN_URL -ErrorAction SilentlyContinue
   Remove-Item Env:PROJED_DEV139_BROWSER_SMOKE -ErrorAction SilentlyContinue
   Remove-Item Env:PROJED_RELEASE_ID -ErrorAction SilentlyContinue
   $cleanupSafe = -not $started

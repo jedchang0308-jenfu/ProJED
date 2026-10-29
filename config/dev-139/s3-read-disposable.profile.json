@@ -134,6 +134,10 @@
     {
       "version": "0028_meeting_atomic_cascade_v1",
       "path": "db/migrations/0028_meeting_atomic_cascade_v1.sql"
+    },
+    {
+      "version": "0029_meeting_capture_runtime_v1",
+      "path": "db/migrations/0029_meeting_capture_runtime_v1.sql"
     }
   ],
   "objectAllowlist": [
@@ -246,7 +250,13 @@
     "projed_core.meeting_draft_projections",
     "projed_core.meeting_artifact_cleanup",
     "projed_core.meeting_ai_budget_months",
-    "projed_core.meeting_ai_usage_attempts"
+    "projed_core.meeting_ai_usage_attempts",
+    "projed_core.meeting_mutation_scope_v1",
+    "projed_core.meeting_capture_visible_v1",
+    "projed_core.meeting_capture_mutable_v1",
+    "projed_core.meeting_run_cancel_guard_v1",
+    "projed_core.meeting_cancel_ledger_scope_v1",
+    "projed_core.cancel_meeting_capture_v1"
   ],
   "staticFixturePath": "qa/dev-139/s1/static",
   "runtime": {

@@ -15,6 +15,7 @@
 - `0025` 以 exact `rag_document_id`、啟用文件及有效 actor context 提供 worker row-lock policy；`WITH CHECK (false)` 不新增 document UPDATE 路徑，也不放寬既有 SELECT。job guard 僅在 owner 執行的巢狀 FK trigger 且 row 僅有 tenant cascade 或 `document_version_id` 非空轉 NULL 時略過；runtime 仍無 tenant／provenance 欄位 UPDATE 權限。
 - `0026` 保留原會議 capture／segment／pointer／run／transcript／review／projection 及 cleanup／budget／usage 的 11 類資料；僅授一次性 importer SELECT／INSERT，runtime 無直接讀寫。衍生 scope 綁定原 capture／record／Board，轉錄與 review 綁同 capture；清理義務在父項刪除後保留原 SET NULL，usage 保留原無 FK 的歷史 UUID。金額為原 bigint 微元，numeric／JSON／timestamp 精度不經 JS number 轉換；本 migration 不啟用錄音 worker 或付費 provider。
 - `0027`／`0028` 將會議內六個 task／producer-run／review／projection 引用改為 NO ACTION DEFERRABLE INITIALLY DEFERRED，於 transaction commit 核對；多層 Board／record cascade 可原子完成，仍有引用的獨立 task／run／capture 刪除不可提交。其他 FK／唯一約束、RLS／grants 及 cleanup SET NULL 不變。
+- `0029` 提供 meeting editor／private-record 範圍內的 capture 讀取與受控 mutation。record／capture scope 只由交易核心重新授權後設定；取消以同一 invoker 交易處理 capture、run、cleanup obligation 與未送出的預留款。退款必須同時有 reserved、明確 pending 與 cancelled-before-dispatch；running、failed_retryable、unknown 或 legacy NULL 不退款，預算失衡整筆回滾。新增 nullable storage backend／dispatch state 不猜配或回填來源；沒有啟用付費 worker、全域 ledger API 或實際物件刪除。
 - migration 必須可重複核對 checksum；相同版本及 bytes 只能 no-op，版本／checksum 漂移、缺號或未知檔案必須拒絕。禁止 down migration 與修改既有 SQL。
 
 既有 migration 已將四個專用角色 ID 固定為 `_disposable` 後綴。為維持 checksum 與 forward-only 原則，managed profile 仍沿用這些 app 專用角色 ID；後綴是歷史名稱，不代表可繞過 managed binding。若未來更名，須新增 migration 完成 ownership／grant／policy 轉移，不得改寫 `0001`～`0014`。
