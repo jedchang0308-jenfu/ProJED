@@ -20,10 +20,11 @@ function text(value: unknown, max: number): string {
   if(typeof value!=='string'||!value.trim()||value.length>max||/[\p{Cc}]/u.test(value))invalid('Meeting text field is invalid');
   return value.trim();
 }
-function counter(value: unknown): number {
-  if(typeof value!=='number'&&(typeof value!=='string'||!/^\d+$/u.test(value)))invalid('Meeting counter is invalid');
+function counter(value: unknown, min = 0): number {
+  const integerText = min < 0 ? /^-?\d+$/u : /^\d+$/u;
+  if(typeof value!=='number'&&(typeof value!=='string'||!integerText.test(value)))invalid('Meeting counter is invalid');
   const parsed=Number(value);
-  if(!Number.isSafeInteger(parsed)||parsed<0)conflict('Meeting counter cannot be represented by this client');
+  if(!Number.isSafeInteger(parsed)||parsed<min)conflict('Meeting counter cannot be represented by this client');
   return parsed;
 }
 function progress(row: CaptureRow) {
@@ -31,7 +32,7 @@ function progress(row: CaptureRow) {
     lastProgressAt:row.last_progress_at?.getTime()??null,stoppedAt:row.stopped_at?.getTime()??null,
     audioExpiresAt:row.audio_expires_at?.getTime()??null,reviewRevision:counter(row.review_revision),
     pointerLoss:row.pointer_loss,sourceCompleteness:row.source_completeness,
-    finalPointerSequence:row.final_pointer_sequence===null?null:counter(row.final_pointer_sequence),
+    finalPointerSequence:row.final_pointer_sequence===null?null:counter(row.final_pointer_sequence,-1),
     sourceGaps:row.source_gaps};
 }
 
@@ -109,7 +110,7 @@ export class MeetingCaptureRepository {
       const oldGaps=normalizeSourceGaps(capture.source_gaps);
       if(gaps.length<oldGaps.length||oldGaps.some((gap,index)=>JSON.stringify(gap)!==JSON.stringify(gaps[index])))
         conflict('Meeting stop cannot remove source gaps');
-      const sequence=body.finalPointerSequence==null?capture.final_pointer_sequence:counter(body.finalPointerSequence);
+      const sequence=body.finalPointerSequence==null?capture.final_pointer_sequence:counter(body.finalPointerSequence,-1);
       if(capture.final_pointer_sequence!==null&&sequence!==null&&BigInt(sequence)<BigInt(capture.final_pointer_sequence))
         conflict('Meeting pointer sequence cannot rewind');
       if(body.pointerLoss!==undefined&&typeof body.pointerLoss!=='boolean')invalid('pointerLoss must be boolean');

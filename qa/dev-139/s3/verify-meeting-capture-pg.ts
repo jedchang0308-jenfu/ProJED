@@ -206,7 +206,7 @@ async function readFinanceAfterCancel(admin: pg.Client, fixture: FinanceFixture,
     SELECT attempt_id,usage_state,dispatch_state,actual_twd_micros::text,outcome
       FROM projed_core.meeting_ai_usage_attempts
      WHERE attempt_id=ANY($1::text[]) ORDER BY attempt_id
-  `, [[fixture.reservedAttemptId, fixture.unknownAttemptId, fixture.legacyAttemptId]]);
+  `, [[fixture.reservedAttemptId, fixture.unknownAttemptId, fixture.legacyAttemptId, fixture.retryablePendingAttemptId]]);
   assert.equal(usage.rowCount, 4);
   const usageById = new Map(usage.rows.map(row => [row.attempt_id, row]));
   assert.deepEqual(usageById.get(fixture.reservedAttemptId), {
@@ -467,6 +467,23 @@ export async function verifyMeetingCapturePostgres(
       error => requireHttpError(error, 'REVISION_CONFLICT', 409),
     );
 
+    const emptyStopStartedAt = Date.now();
+    const forgedEmptyStop = Date.UTC(2001, 0, 1);
+    const stoppedWithoutPointers = responseData(await post(ownerClient, {
+      operation: 'stop', captureId, expectedSourceVersion: 1, stoppedAt: forgedEmptyStop,
+      pointerLoss: false, epochManifest: epochOne, finalPointerSequence: -1, gaps: [], reason: 'qa-stop-empty',
+    }), 'capture stop with empty pointer sentinel');
+    const emptyStopFinishedAt = Date.now();
+    assert.equal(stoppedWithoutPointers.state, 'stopped');
+    assert.equal(stoppedWithoutPointers.finalPointerSequence, -1);
+    assert.ok(typeof stoppedWithoutPointers.stoppedAt === 'number');
+    assert.ok(Number(stoppedWithoutPointers.stoppedAt) >= emptyStopStartedAt - 60_000
+      && Number(stoppedWithoutPointers.stoppedAt) <= emptyStopFinishedAt + 60_000,
+    'empty-pointer stop time is server anchored');
+    assert.notEqual(stoppedWithoutPointers.stoppedAt, forgedEmptyStop);
+    assert.equal(Number(stoppedWithoutPointers.audioExpiresAt) - Number(stoppedWithoutPointers.stoppedAt),
+      7 * 24 * 60 * 60 * 1000);
+
     const pointerIntervals = [{
       captureId,
       clockEpoch: 1,
@@ -516,6 +533,10 @@ export async function verifyMeetingCapturePostgres(
     assert.ok(Number(stopped.stoppedAt) >= stopStartedAt - 60_000
       && Number(stopped.stoppedAt) <= stopFinishedAt + 60_000, 'stop time is server anchored');
     assert.notEqual(stopped.stoppedAt, forgedClientStop);
+    assert.equal(stopped.stoppedAt, stoppedWithoutPointers.stoppedAt,
+      'a second stop must preserve the first server-anchored stop time');
+    assert.equal(stopped.audioExpiresAt, stoppedWithoutPointers.audioExpiresAt,
+      'a second stop must not extend the original audio retention');
     assert.equal(Number(stopped.audioExpiresAt) - Number(stopped.stoppedAt), 7 * 24 * 60 * 60 * 1000);
 
     if (admin) {
