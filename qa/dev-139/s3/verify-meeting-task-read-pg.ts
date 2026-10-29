@@ -193,6 +193,16 @@ export async function verifyMeetingTaskReadPostgres(database:RuntimeDatabase,con
   });
   assert.equal(ragRows.size,8);
 
+  const decimalCoverageTask=eligible[0]!;
+  const decimalCoverageRows=ragRows.get(decimalCoverageTask.id)!;
+  const decimalCoverageLength=live.ragSources.find(source=>source.taskId===decimalCoverageTask.id)!.indexedContentLength;
+  const decimalCoverageMetadata=await admin.query(`UPDATE projed_core.document_chunks SET metadata=jsonb_set(
+    jsonb_set(metadata,'{startChar}','0.0'::jsonb,true),'{endChar}',($4::text||'.0')::jsonb,true)
+    WHERE id=$1::uuid AND document_id=$2::uuid AND document_version_id=$3::uuid AND chunk_index=0 RETURNING id::text`,
+  [decimalCoverageRows.chunkId,decimalCoverageRows.documentId,decimalCoverageRows.versionId,String(decimalCoverageLength)]);
+  assert.equal(decimalCoverageMetadata.rowCount,1,
+    'integral JSON numbers with a decimal scale remain valid chunk range metadata');
+
   const queryVector=Array<number>(EMBEDDING_DIMENSIONS).fill(0);
   queryVector[0]=1;
   const readMatches=(readActor:ServerActorV1,ragSources:readonly MeetingTaskRagSource[]=live.ragSources)=>

@@ -153,27 +153,50 @@ export function createMeetingComposePlan(input:{readonly configVersion:string;re
   return Object.freeze({configVersion,empty:false,leaves:Object.freeze(leaves),nodes:Object.freeze(nodes),sourceIds,final});
 }
 
-function validateComposeResult(plan:MeetingComposePlan,reference:MeetingComposeReference,result:MeetingComposeResult):void{
+function validateComposeResult(plan:MeetingComposePlan,reference:MeetingComposeReference,result:MeetingComposeResult,
+  expectedChildHash:string):void{
   if(!result||typeof result!=='object'||result.nodeId!==reference.id||result.configVersion!==plan.configVersion
       ||!sameStrings(result.sourceIds,reference.sourceIds)||typeof result.childHash!=='string'||!SHA256.test(result.childHash)
-      ||typeof result.hash!=='string'||!SHA256.test(result.hash))invalid();
+      ||result.childHash!==expectedChildHash||typeof result.hash!=='string'||!SHA256.test(result.hash))invalid();
   validateSummary(result.summary);
   if(result.hash!==hashJson({configVersion:result.configVersion,childHash:result.childHash,
     summary:result.summary,sourceIds:result.sourceIds}))invalid();
 }
 
-function resolveChild(plan:MeetingComposePlan,reference:MeetingComposeReference,
-  results:ReadonlyMap<string,MeetingComposeResult>):ComposeChildValue{
-  if(reference.kind==='source'){
-    const leaf=plan.leaves[reference.leafIndex];
-    if(!leaf||reference.sourceIds.length!==1||reference.sourceIds[0]!==leaf.sourceId)invalid();
-    return {id:reference.id,summary:leaf.summary,sourceIds:reference.sourceIds,
-      hash:hashJson({configVersion:plan.configVersion,kind:'source',sourceId:leaf.sourceId,summary:leaf.summary})};
-  }
+function resolveSource(plan:MeetingComposePlan,reference:Extract<MeetingComposeReference,{kind:'source'}>):ComposeChildValue{
+  const leaf=plan.leaves[reference.leafIndex];
+  if(!leaf||reference.sourceIds.length!==1||reference.sourceIds[0]!==leaf.sourceId)invalid();
+  return {id:reference.id,summary:leaf.summary,sourceIds:reference.sourceIds,
+    hash:hashJson({configVersion:plan.configVersion,kind:'source',sourceId:leaf.sourceId,summary:leaf.summary})};
+}
+
+function resolveNodeResult(plan:MeetingComposePlan,reference:Extract<MeetingComposeReference,{kind:'node'}>,
+  nodes:ReadonlyMap<string,MeetingComposeNode>,results:ReadonlyMap<string,MeetingComposeResult>,
+  validated:Map<string,ComposeChildValue>):ComposeChildValue{
+  const cached=validated.get(reference.id);
+  if(cached)return cached;
+  const node=nodes.get(reference.id);
   const result=results.get(reference.id);
-  if(!result)invalid();
-  validateComposeResult(plan,reference,result);
-  return {id:reference.id,summary:result.summary,sourceIds:result.sourceIds,hash:result.hash};
+  if(!node||!result)invalid();
+  const children=node.children.map(child=>child.kind==='source'
+    ?resolveSource(plan,child):resolveNodeResult(plan,child,nodes,results,validated));
+  const flattened=children.flatMap(child=>child.sourceIds);
+  if(new Set(flattened).size!==flattened.length||!sameStrings(flattened,node.sourceIds))invalid();
+  const expectedChildHash=hashJson({configVersion:plan.configVersion,nodeId:node.id,
+    children:children.map(({id,summary,sourceIds,hash})=>({id,summary,sourceIds,hash}))});
+  validateComposeResult(plan,reference,result,expectedChildHash);
+  const resolved={id:reference.id,summary:result.summary,sourceIds:result.sourceIds,hash:result.hash};
+  validated.set(reference.id,resolved);
+  return resolved;
+}
+
+function resolveChild(plan:MeetingComposePlan,reference:MeetingComposeReference,
+  nodes:ReadonlyMap<string,MeetingComposeNode>,results:ReadonlyMap<string,MeetingComposeResult>,
+  validated:Map<string,ComposeChildValue>):ComposeChildValue{
+  if(reference.kind==='source'){
+    return resolveSource(plan,reference);
+  }
+  return resolveNodeResult(plan,reference,nodes,results,validated);
 }
 
 /** Build one provider prompt from only this node's bounded direct children. This does not prove semantic truth. */
@@ -182,7 +205,9 @@ export function buildMeetingComposePrompt(plan:MeetingComposePlan,nodeId:string,
   if(!plan||plan.empty||typeof nodeId!=='string'||!results||typeof results.get!=='function')invalid();
   const node=plan.nodes.find(candidate=>candidate.id===nodeId);
   if(!node||node.children.length>MAX_COMPOSE_CHILDREN)invalid();
-  const children=node.children.map(reference=>resolveChild(plan,reference,results));
+  const nodes=new Map(plan.nodes.map(candidate=>[candidate.id,candidate]));
+  const validated=new Map<string,ComposeChildValue>();
+  const children=node.children.map(reference=>resolveChild(plan,reference,nodes,results,validated));
   const flattened=children.flatMap(child=>child.sourceIds);
   if(new Set(flattened).size!==flattened.length||!sameStrings(flattened,node.sourceIds))invalid();
   const childHash=hashJson({configVersion:plan.configVersion,nodeId:node.id,

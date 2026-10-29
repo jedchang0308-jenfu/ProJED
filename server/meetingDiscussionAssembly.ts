@@ -49,24 +49,29 @@ function punctuationOnly(text:string):boolean{return /^[\s\p{P}]*$/u.test(text);
 
 /** Match real provider words to raw text. Only whitespace/punctuation may be
  * unanchored; a missing word fails instead of inventing a time or dropping text. */
-function align(unit:MeetingAsrTranscriptUnit,sourceWordBase:number):AlignedWord[]{
-  if(unit.wordOffsets.length===0){if(unit.rawText!=='')invalid();return [];}
+export function alignMeetingWordText(rawText:string,words:readonly Pick<AsrWord,'text'>[]):readonly {start:number;end:number}[]{
+  if(words.length===0){if(rawText!=='')invalid();return [];}
   const starts:number[]=[],ends:number[]=[];let normalized='';
-  for(const grapheme of new Intl.Segmenter('und',{granularity:'grapheme'}).segment(unit.rawText)){
+  for(const grapheme of new Intl.Segmenter('und',{granularity:'grapheme'}).segment(rawText)){
     const text=fold(grapheme.segment);normalized+=text;
     for(let index=0;index<text.length;index++){starts.push(grapheme.index);ends.push(grapheme.index+grapheme.segment.length);}
   }
   const matches:{start:number;end:number}[]=[];let cursor=0,previousRawEnd=0;
-  for(const word of unit.wordOffsets){
+  for(const word of words){
     const token=fold(word.text);if(token.length===0)invalid();
     const found=normalized.indexOf(token,cursor);if(found<0)invalid();
     const last=found+token.length-1,start=starts[found],end=ends[last];
     if(start===undefined||end===undefined||start<previousRawEnd
       ||(found>0&&starts[found-1]===start)||(last+1<starts.length&&starts[last+1]===starts[last])
-      ||!punctuationOnly(unit.rawText.slice(previousRawEnd,start)))invalid();
+      ||!punctuationOnly(rawText.slice(previousRawEnd,start)))invalid();
     matches.push({start,end});cursor=last+1;previousRawEnd=end;
   }
-  if(!punctuationOnly(unit.rawText.slice(previousRawEnd)))invalid();
+  if(!punctuationOnly(rawText.slice(previousRawEnd)))invalid();
+  return matches;
+}
+
+function align(unit:MeetingAsrTranscriptUnit,sourceWordBase:number):AlignedWord[]{
+  const matches=alignMeetingWordText(unit.rawText,unit.wordOffsets);
   return unit.wordOffsets.map((word,index)=>{
     const raw=unit.rawText.slice(index===0?0:matches[index]!.start,matches[index+1]?.start??unit.rawText.length);
     if(Array.from(raw).length>MAX_DISCUSSION_CHARACTERS||Math.ceil(word.end_ms)-Math.floor(word.start_ms)>MAX_DISCUSSION_MS)invalid();

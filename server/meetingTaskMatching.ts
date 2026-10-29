@@ -1,5 +1,5 @@
 import {KernelError} from './errors.js';
-import {meetingDiscussionContext,type MeetingDiscussionSegment} from './meetingDiscussionAssembly.js';
+import {alignMeetingWordText,meetingDiscussionContext,type MeetingDiscussionSegment} from './meetingDiscussionAssembly.js';
 import type {MeetingTaskCandidateSnapshot} from './meetingTaskCandidates.js';
 
 /**
@@ -100,6 +100,9 @@ function validateDiscussion(discussion:MeetingDiscussionSegment):void{
     if(previous!==undefined&&word.source_word_index<=previous)invalidInput();
     previousBySource.set(word.source_audio_segment_id,word.source_word_index);
   }
+  // Reuse ASR's literal alignment. Every quote word must occur in this raw
+  // discussion; consuming non-overlapping graphemes also bounds word count.
+  alignMeetingWordText(discussion.rawText,discussion.wordOffsets);
 
   for(const range of discussion.sourceAudioRanges){
     if(!isDiscussionAudioRange(range))invalidInput();

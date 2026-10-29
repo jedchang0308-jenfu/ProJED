@@ -178,11 +178,11 @@ export async function readMeetingTaskRagMatches(port:ActorQueryPort,scope:Meetin
         CASE WHEN jsonb_typeof(chunk.metadata->'startChar')='number' THEN
           CASE WHEN(chunk.metadata->>'startChar')::numeric BETWEEN 0 AND 2147483647
             AND trunc((chunk.metadata->>'startChar')::numeric)=(chunk.metadata->>'startChar')::numeric
-            THEN(chunk.metadata->>'startChar')::bigint END END AS start_char,
+            THEN((chunk.metadata->>'startChar')::numeric)::bigint END END AS start_char,
         CASE WHEN jsonb_typeof(chunk.metadata->'endChar')='number' THEN
           CASE WHEN(chunk.metadata->>'endChar')::numeric BETWEEN 0 AND 2147483647
             AND trunc((chunk.metadata->>'endChar')::numeric)=(chunk.metadata->>'endChar')::numeric
-            THEN(chunk.metadata->>'endChar')::bigint END END AS end_char
+            THEN((chunk.metadata->>'endChar')::numeric)::bigint END END AS end_char
         FROM fresh_documents document JOIN projed_core.document_chunks chunk ON chunk.tenant_id=$1::uuid
           AND chunk.document_id=document.document_id AND chunk.document_version_id=document.version_id
     ), ordered_ranges AS MATERIALIZED (

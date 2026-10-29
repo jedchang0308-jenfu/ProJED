@@ -50,6 +50,19 @@ test('9 leaves merge through bounded nodes and preserve tail coverage determinis
   assert.equal(result?.hash,runPlan(replay).get(replay.final!.id)?.hash);
 });
 
+test('intermediate results from an earlier plan are rejected when a same-ID leaf summary changes',()=>{
+  const priorPlan=createMeetingComposePlan({configVersion:CONFIG,leaves:leaves(9)});
+  const priorResults=runPlan(priorPlan);
+  const changedLeaves=leaves(9);
+  changedLeaves[0]={...changedLeaves[0]!,summary:'Updated discussion under the same source ID'};
+  const currentPlan=createMeetingComposePlan({configVersion:CONFIG,leaves:changedLeaves});
+
+  assert.deepEqual(currentPlan.sourceIds,priorPlan.sourceIds);
+  assert.equal(currentPlan.configVersion,priorPlan.configVersion);
+  assert.throws(()=>buildMeetingComposePrompt(currentPlan,currentPlan.final!.id,priorResults),
+    'a stale intermediate child hash cannot carry an earlier summary into the current plan');
+});
+
 test('65 leaves terminate through fanout-eight levels without dropping the final source',()=>{
   const input=leaves(65),plan=createMeetingComposePlan({configVersion:CONFIG,leaves:input});
   assert.ok(plan.nodes.length>1);

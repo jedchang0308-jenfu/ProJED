@@ -83,6 +83,31 @@ test('quote indexes are local to the discussion, not the source-wide word indexe
   expectProviderInvalid(()=>parseMeetingTaskMatchResponse(sourceWide,input));
 });
 
+test('rejects word anchors that do not align with the original raw discussion text',()=>{
+  const badDiscussion=discussion({rawText:'不要合併API；保留',normalizedText:'不要合併API；保留'});
+  assert.throws(()=>buildMeetingTaskMatchPrompt({discussion:badDiscussion,candidates:[candidate(TASK_ONE,'Task')]}),
+    error=>error instanceof KernelError&&error.code==='DOMAIN_DATA_INVALID');
+});
+
+test('rejects more word anchors than the bounded 800-character raw discussion can support',()=>{
+  const rawText='a'.repeat(800);
+  const wordOffsets=Array.from({length:801},(_,index)=>({text:'a',start_ms:1000+index,end_ms:1001+index,
+    source_audio_segment_id:SOURCE_ID,source_word_index:40+index}));
+  const longAnchors=discussion({rawText,normalizedText:rawText,startOffsetMs:1000,endOffsetMs:1801,wordOffsets,
+    sourceAudioRanges:[{source_audio_segment_id:SOURCE_ID,from_word:40,to_word:840,start_ms:1000,end_ms:1801}]});
+  assert.throws(()=>buildMeetingTaskMatchPrompt({discussion:longAnchors,candidates:[candidate(TASK_ONE,'Task')]}),
+    error=>error instanceof KernelError&&error.code==='DOMAIN_DATA_INVALID');
+});
+
+test('accepts NFKC-equivalent combining text while preserving the original raw text in the prompt',()=>{
+  const rawText='Ａ\u0301';
+  const sourceAlignedDiscussion=discussion({rawText,normalizedText:'á',startOffsetMs:1000,endOffsetMs:1100,
+    wordOffsets:[{text:'á',start_ms:1000,end_ms:1100,source_audio_segment_id:SOURCE_ID,source_word_index:40}],
+    sourceAudioRanges:[{source_audio_segment_id:SOURCE_ID,from_word:40,to_word:40,start_ms:1000,end_ms:1100}]});
+  const prompt=buildMeetingTaskMatchPrompt({discussion:sourceAlignedDiscussion,candidates:[candidate(TASK_ONE,'Task')]});
+  assert.ok(prompt.includes(`"rawText":${JSON.stringify(rawText)}`));
+});
+
 test('an empty result is valid even when candidate retrieval returned no candidates',()=>{
   const input={discussion:discussion(),candidates:[]};
   assert.deepEqual(parseMeetingTaskMatchResponse('[]',input),[]);
