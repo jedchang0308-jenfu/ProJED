@@ -118,6 +118,27 @@ test('provider distinguishes a proven pre-dispatch auth failure from unknown pai
   }
 });
 
+test('only a sent 5xx provider rejection with proven unbilled status releases unknown usage',async()=>{
+  const cases=[
+    {status:500,sent:true,unknown:false,settlement:'rejected_unbilled',result:'rejected_unbilled'},
+    {status:503,sent:true,unknown:false,settlement:'rejected_unbilled',result:'rejected_unbilled'},
+    {status:599,sent:true,unknown:false,settlement:'rejected_unbilled',result:'rejected_unbilled'},
+    {status:503,sent:true,unknown:true,settlement:'usage_unknown',result:'usage_unknown'},
+    {status:401,sent:true,unknown:false,settlement:'usage_unknown',result:'usage_unknown'},
+    {status:undefined,sent:true,unknown:false,settlement:'usage_unknown',result:'usage_unknown'},
+    {status:503,sent:false,unknown:false,settlement:'not_sent',result:'not_dispatched'},
+  ] as const;
+  for(const item of cases){
+    const f=fixture();let posts=0;
+    const deps={...f.deps,provider:{async transcribe(){posts++;f.events.push('POST');
+      throw new GoogleCloudSpeechProviderError('ASR_PROVIDER_REJECTED','PRIVATE',item.sent,item.unknown,item.status);}}};
+    assert.equal((await runMeetingAsrUnit(deps,f.controller.signal)).state,item.result);
+    assert.equal(posts,1);assert.equal(f.events.filter(event=>event==='POST').length,1);
+    assert.equal(f.settlements[0]?.kind,item.settlement);
+    assert.equal(f.settlements[0]?.code,'ASR_PROVIDER_REJECTED');
+  }
+});
+
 test('response arriving after cancellation is retained for accounting-only settlement',async()=>{
   const f=fixture();const transcribe=f.deps.provider.transcribe;
   const deps={...f.deps,provider:{async transcribe(...args:Parameters<typeof transcribe>){const result=await transcribe(...args);f.cancel();return result;}}};

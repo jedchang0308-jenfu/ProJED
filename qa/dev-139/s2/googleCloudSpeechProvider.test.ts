@@ -224,19 +224,20 @@ test('cancellation and transport errors after dispatch remain unknown and are ne
   assert.equal(fetchCalls, 2);
 });
 
-test('preserves provider HTTP status without returning provider error body and never retries', async () => {
+test('preserves provider HTTP status and distinguishes free server errors from conservative 4xx outcomes', async () => {
   const privateBody = 'sensitive transcript and credential-like response text';
-  for (const status of [401, 403, 429, 503]) {
+  for (const status of [401, 403, 429, 500, 503, 599]) {
     let fetchCalls = 0;
     const subject = provider(async () => {
       fetchCalls += 1;
       return response(privateBody, status);
     });
+    const usageUnknown = status < 500 || status > 599;
     await assert.rejects(subject.transcribe({ pcm16le: PCM }), (error: unknown) => {
       assert.ok(isProviderError('ASR_PROVIDER_REJECTED')(error));
       assert.equal(error.httpStatus, status);
       assert.equal(error.requestSent, true);
-      assert.equal(error.usageUnknown, true);
+      assert.equal(error.usageUnknown, usageUnknown);
       assert.equal(error.message.includes(privateBody), false);
       return true;
     });

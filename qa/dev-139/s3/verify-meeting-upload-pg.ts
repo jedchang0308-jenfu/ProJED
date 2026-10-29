@@ -13,6 +13,7 @@ import { KernelError } from '../../../server/errors.js';
 import { createKernelHttpServer } from '../../../server/http.js';
 import type { MeetingAudioStorage } from '../../../server/meetingAudioStorage.js';
 import { PostgresAppSessionStore } from '../../../server/postgresAppSessionStore.js';
+import { MeetingUploadRepository } from '../../../server/meetingUpload.js';
 import { createHttpCollaborationAdapter } from '../../../src/services/httpApi/collaborationAdapter.js';
 import { createHttpDomainReadAdapter } from '../../../src/services/httpApi/domainReadAdapter.js';
 import { createHttpDomainWriteAdapter } from '../../../src/services/httpApi/domainWriteAdapter.js';
@@ -326,7 +327,8 @@ async function assertLedgerCounts(admin: pg.Client, captureId: string, runs: num
 /** Disposable PostgreSQL + real local HTTP regression for verified upload completion. */
 /** Uses nonce-owned Session/proof fixtures; never a browser bearer or provider. */
 async function verifyAsrSessionBinding(database:RuntimeDatabase,config:RuntimeConfig,admin:pg.Client,
-  owner:ServerActorV1,outsider:ServerActorV1,recordId:string,captureId:string,runId:string):Promise<void>{
+  owner:ServerActorV1,outsider:ServerActorV1,recordId:string,captureId:string,runId:string,
+  onBound?:(actor:ServerActorV1)=>Promise<void>):Promise<void>{
   const sessionDatabase=new RuntimeDatabase({...config,profile:{...config.profile,runtime:{...config.profile.runtime,
     pool:{...config.profile.runtime.pool,max:1}}}});
   const store=new PostgresAppSessionStore(sessionDatabase),contextId=randomUUID(),otherContextId=randomUUID();
@@ -363,6 +365,7 @@ async function verifyAsrSessionBinding(database:RuntimeDatabase,config:RuntimeCo
     }
     assert.equal(await bind(boundActor),contextId);
     assert.equal(await bind(boundActor),contextId,'the same context can replay without creating another authorization');
+    await onBound?.(boundActor);
     const session=await store.readMeetingRunSession(runId);
     assert.equal(session?.contextId,contextId);assert.equal(session?.localUserId,owner.localUserId);
     assert.equal(session?.identity.googleSubject,subject);
@@ -581,7 +584,14 @@ export async function verifyMeetingUploadPostgres(
     assert.equal(awaitingReplay.state, 'awaiting_budget');
     assert.equal(awaitingReplay.idempotent, true);
     await assertLedgerCounts(admin, budgetCaptureId, 1, 0);
-    await verifyAsrSessionBinding(database,config,admin,owner,outsider,budgetMeetingId,budgetCaptureId,awaitingRunId);
+    await verifyAsrSessionBinding(database,config,admin,owner,outsider,budgetMeetingId,budgetCaptureId,awaitingRunId,async actor=>{
+      const prepared=record(await runActorTransaction(database,config,actor,port=>
+        new MeetingUploadRepository({cloudSpeech:true}).execute(port,budgetBody)),'ASR awaiting-budget receipt');
+      assert.equal(prepared.state,'awaiting_budget');assert.equal(prepared.reservedTwdMicros,'0');
+      assert.equal(prepared.providerMode,'cloud-speech-v1');
+      assert.deepEqual(await readUsageRows(admin,budgetCaptureId),[]);
+      assert.equal((await readBudget(admin,month))?.reserved_twd_micros,PREEXHAUSTED_BUDGET_MICROS);
+    });
     const lowBudgetCancel = responseData(await post(ownerClient, {
       operation: 'cancel', captureId: budgetCaptureId, expectedSourceVersion: 1, reason: 'qa-budget-cleanup',
     }), 'awaiting-budget cleanup cancellation');
@@ -955,6 +965,64 @@ export async function verifyMeetingUploadPostgres(
     assert.deepEqual(await readBudget(admin, month), {
       limit_twd_micros: DEFAULT_BUDGET_MICROS, reserved_twd_micros: '0', spent_twd_micros: '0',
     }, 'completion after cancellation cannot reserve the refunded money again');
+
+    const asrRecordId=await createPrivateMeeting(database,config,owner,workspace.id,board.id,'DEV-139 Cloud Speech reservation fixture');
+    const asrCaptureId=await beginAndStopCapture(post,ownerClient,workspace.id,board.id,asrRecordId);
+    captureIds.push(asrCaptureId);
+    const asrManifest=await seedSegments(admin,{tenantId:workspace.id,projectId:board.id,recordId:asrRecordId,captureId:asrCaptureId,
+      segments:[{segmentIndex:0,epoch:0,bytes:128,startOffsetMs:0,endOffsetMs:100,overlapMs:0,gapBeforeMs:0,
+        mime:'audio/webm',sha256:'a'.repeat(64),uploadState:'verified'}],onCleanupAttempt:id=>cleanupAttemptIds.add(id)});
+    const asrBody=completionBody(asrCaptureId,asrManifest,'cloud-speech-reservation');
+    const asrRunId=String(responseData(await post(ownerClient,asrBody),'ASR source completion').runId);
+    assert.match(asrRunId,/^[a-f0-9-]{36}$/u);
+    await verifyAsrSessionBinding(database,config,admin,owner,outsider,asrRecordId,asrCaptureId,asrRunId,async actor=>{
+      const prepare=()=>runActorTransaction(database,config,actor,port=>new MeetingUploadRepository({cloudSpeech:true}).execute(port,asrBody));
+      const before=await captureState(admin,asrCaptureId);
+      await admin.query('UPDATE projed_core.meeting_ai_usage_attempts SET dispatch_state=NULL WHERE attempt_id=$1',[`${asrRunId}:0`]);
+      await assert.rejects(prepare(),error=>error instanceof KernelError&&error.cause!==null
+        &&typeof error.cause==='object'&&'code' in error.cause&&error.cause.code==='42501');
+      assert.equal((await readBudget(admin,month))?.reserved_twd_micros,RESERVED_BUDGET_MICROS,
+        'legacy unknown dispatch cannot release or replace its reservation');
+      assert.deepEqual(await captureState(admin,asrCaptureId),before);
+      await admin.query(`UPDATE projed_core.meeting_ai_usage_attempts SET dispatch_state='pending' WHERE attempt_id=$1`,[`${asrRunId}:0`]);
+      const constraint=`qa_asr_pool_${randomUUID().replaceAll('-','')}`;
+      await admin.query(`ALTER TABLE projed_core.meeting_ai_usage_attempts ADD CONSTRAINT ${constraint}
+        CHECK(attempt_id<>'${asrRunId}:cloud-speech:pool')`);
+      let fault:unknown;
+      try{await assert.rejects(prepare(),error=>error instanceof KernelError&&error.cause!==null
+          &&typeof error.cause==='object'&&'code' in error.cause&&error.cause.code==='23514'
+          &&'constraint' in error.cause&&error.cause.constraint===constraint);
+        assert.deepEqual(await captureState(admin,asrCaptureId),before);
+        assert.equal((await readBudget(admin,month))?.reserved_twd_micros,RESERVED_BUDGET_MICROS);
+        assert.equal((await readUsageRows(admin,asrCaptureId)).length,1,'failed pool INSERT rolls back legacy refund and run upgrade');
+      }catch(error){fault=error;}
+      try{await admin.query(`ALTER TABLE projed_core.meeting_ai_usage_attempts DROP CONSTRAINT ${constraint}`);}
+      catch(error){throw new AggregateError(fault?[fault,error]:[error],'ASR fault constraint cleanup failed');}
+      if(fault)throw fault;
+      const prepared=record(await prepare(),'ASR prepared source');
+      assert.equal(prepared.state,'queued');assert.equal(prepared.reservedTwdMicros,'96000');
+      assert.equal(prepared.providerMode,'cloud-speech-v1');
+      assert.equal((await readBudget(admin,month))?.reserved_twd_micros,'96000');
+      const usages=await readUsageRows(admin,asrCaptureId);
+      assert.equal(usages.length,2);
+      const legacy=usages.find(row=>row.attempt_id===`${asrRunId}:0`)!;
+      assert.equal(legacy.actual_twd_micros,'0');assert.equal(legacy.usage_state,'known');
+      assert.equal(legacy.outcome,'superseded_before_dispatch');
+      const pool=usages.find(row=>row.attempt_id===`${asrRunId}:cloud-speech:pool`)!;
+      assert.equal(pool.reserved_twd_micros,'96000');assert.equal(pool.usage_state,'reserved');
+      const replay=record(await prepare(),'ASR reservation replay');
+      assert.equal(replay.idempotent,true);assert.equal(replay.runId,asrRunId);
+      assert.equal((await readBudget(admin,month))?.reserved_twd_micros,'96000');
+      assert.deepEqual(await readUsageRows(admin,asrCaptureId),usages,'replay creates no new attempt or reservation');
+      await assert.rejects(runActorTransaction(database,config,actor,async port=>{
+        await port.authorizeMeetingCaptureMutation(asrRecordId,asrCaptureId);
+        await port.query('UPDATE projed_core.meeting_ai_budget_months SET limit_twd_micros=2000000000');
+      }));
+    });
+    const asrCancelled=responseData(await post(ownerClient,{operation:'cancel',captureId:asrCaptureId,
+      expectedSourceVersion:1,reason:'qa-asr-reservation-cleanup'}),'ASR queued cancellation');
+    assert.equal(asrCancelled.state,'cancelled');
+    assert.equal((await readBudget(admin,month))?.reserved_twd_micros,'0','cancellation refunds only the pending Cloud Speech pool');
   } catch (error) {
     failed = true;
     failure = error;
@@ -1001,6 +1069,7 @@ export async function verifyMeetingUploadPostgres(
             { limit_twd_micros: PREEXHAUSTED_BUDGET_MICROS, reserved_twd_micros: PREEXHAUSTED_BUDGET_MICROS, spent_twd_micros: '0' },
             { limit_twd_micros: DEFAULT_BUDGET_MICROS, reserved_twd_micros: '0', spent_twd_micros: '0' },
             { limit_twd_micros: DEFAULT_BUDGET_MICROS, reserved_twd_micros: RESERVED_BUDGET_MICROS, spent_twd_micros: '0' },
+            { limit_twd_micros: DEFAULT_BUDGET_MICROS, reserved_twd_micros: '96000', spent_twd_micros: '0' },
           ];
           assert.ok(allowedOwnedStates.some(state =>
             state.limit_twd_micros === balance.limit_twd_micros

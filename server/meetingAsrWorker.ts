@@ -42,6 +42,7 @@ export type MeetingAsrSettlement =
   | {readonly kind:'recognized';readonly transcript:MeetingAsrTranscriptUnit;
       readonly totalBilledTime?:string;readonly providerRequestId?:string}
   | {readonly kind:'not_sent';readonly code:string}
+  | {readonly kind:'rejected_unbilled';readonly code:'ASR_PROVIDER_REJECTED'}
   | {readonly kind:'usage_unknown';readonly code:string};
 
 /**
@@ -71,7 +72,7 @@ export interface MeetingAsrWorkerDependencies {
 
 export type MeetingAsrUnitResult =
   | {readonly state:'idle'}
-  | {readonly state:'published'|'accounted_only'|'not_dispatched'|'usage_unknown';readonly attemptId:string};
+  | {readonly state:'published'|'accounted_only'|'not_dispatched'|'rejected_unbilled'|'usage_unknown';readonly attemptId:string};
 
 function invalid():never{throw new KernelError('DOMAIN_DATA_INVALID','Meeting ASR claim is invalid',409);}
 function interrupted():KernelError{return new KernelError('TRANSACTION_USAGE_INVALID','Meeting ASR unit was interrupted',409);}
@@ -164,11 +165,18 @@ export async function runMeetingAsrUnit(deps:MeetingAsrWorkerDependencies,signal
       ...(response.requestId===undefined?{}:{providerRequestId:response.requestId})};
   }catch(error){
     const knownNotSent=!providerInvoked||(error instanceof GoogleCloudSpeechProviderError&&!error.requestSent);
-    settlement={kind:knownNotSent?'not_sent':'usage_unknown',code:safeCode(error)};
+    const knownUnbilledServerReject=error instanceof GoogleCloudSpeechProviderError
+      &&error.code==='ASR_PROVIDER_REJECTED'&&error.requestSent&&error.usageUnknown===false
+      &&typeof error.httpStatus==='number'&&error.httpStatus>=500&&error.httpStatus<=599;
+    if(knownNotSent)settlement={kind:'not_sent',code:safeCode(error)};
+    else if(knownUnbilledServerReject)settlement={kind:'rejected_unbilled',code:'ASR_PROVIDER_REJECTED'};
+    else settlement={kind:'usage_unknown',code:safeCode(error)};
   }
   // No cancellation signal is passed here: an already-paid attempt still needs
   // isolated accounting. A failed settlement is surfaced, never a second POST.
   const settled=await deps.repository.settle(claim,settlement);
-  return {state:settlement.kind==='usage_unknown'?'usage_unknown':settlement.kind==='not_sent'?'not_dispatched':settled,
-    attemptId:claim.attemptId};
+  const state=settlement.kind==='usage_unknown'?'usage_unknown'
+    :settlement.kind==='not_sent'?'not_dispatched'
+      :settlement.kind==='rejected_unbilled'?'rejected_unbilled':settled;
+  return {state,attemptId:claim.attemptId};
 }

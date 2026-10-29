@@ -15,6 +15,13 @@ export function fetchManagedJobToken(fetchImpl?: typeof fetch): Promise<string>;
 export function managedJobConnectionOptions(raw: string, binding: ManagedBinding, purpose: ManagedPurpose, token: string): {
   host: string; port: number; database: string; user: string; password: string; ssl: false;
 };
+export function managedRuntimeJobConnectionOptions(
+  raw: string,
+  binding: ManagedBinding,
+  tokenProvider?: () => Promise<string>,
+): {
+  host: string; port: number; database: string; user: string; password: () => Promise<string>; ssl: false;
+};
 export function prepareManagedDatabaseSession(client: {
   query(text: string, values?: unknown[]): Promise<{ rows: Record<string, unknown>[] }>;
 }, binding: ManagedBinding, purpose: ManagedPurpose): Promise<void>;

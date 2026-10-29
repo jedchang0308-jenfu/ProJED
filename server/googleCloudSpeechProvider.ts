@@ -372,11 +372,14 @@ export function createGoogleCloudSpeechProvider({
 
         if (!response.ok) {
           void response.body?.cancel().catch(() => undefined);
+          // Cloud Speech pricing excludes server-error responses. Keep 4xx and
+          // nonstandard statuses conservative because their billing outcome is unknown.
+          const serverErrorIsUnbilled = response.status >= 500 && response.status <= 599;
           throw providerError(
             'ASR_PROVIDER_REJECTED',
             'Speech recognition provider rejected the request',
             true,
-            true,
+            !serverErrorIsUnbilled,
             response.status,
           );
         }

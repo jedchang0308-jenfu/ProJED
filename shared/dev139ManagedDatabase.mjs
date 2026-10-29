@@ -42,7 +42,7 @@ function assertBinding(binding) {
 }
 
 /** Runtime uses the private IAM proxy's TCP port; one-off Jobs use its socket. */
-export function validateManagedDatabaseUrl(raw, binding, purpose) {
+function parseManagedDatabaseUrl(raw, binding, purpose) {
   assertPurpose(purpose);
   assertBinding(binding);
   let url;
@@ -53,6 +53,15 @@ export function validateManagedDatabaseUrl(raw, binding, purpose) {
         || url.password !== '' || url.hash !== ''
         || decodeURIComponent(url.pathname.slice(1)) !== binding.databaseName
         || Number(url.port || '5432') !== MANAGED_DATABASE.databasePort) throw new Error();
+  } catch {
+    // Never retain a URL parser error whose input can contain credentials.
+    fail('CONFIG_INVALID', 'Managed database URL is outside its lifecycle binding');
+  }
+  return url;
+}
+
+function assertManagedDatabaseTransport(url, binding, purpose) {
+  try {
     if (purpose === 'runtime') {
       if (url.hostname !== '127.0.0.1' || url.search !== '') throw new Error();
     } else if (url.hostname !== 'localhost'
@@ -62,6 +71,11 @@ export function validateManagedDatabaseUrl(raw, binding, purpose) {
     // Never retain a URL parser error whose input can contain credentials.
     fail('CONFIG_INVALID', 'Managed database URL is outside its lifecycle binding');
   }
+}
+
+export function validateManagedDatabaseUrl(raw, binding, purpose) {
+  const url = parseManagedDatabaseUrl(raw, binding, purpose);
+  assertManagedDatabaseTransport(url, binding, purpose);
   return url;
 }
 
@@ -100,13 +114,49 @@ export async function fetchManagedJobToken(fetchImpl = globalThis.fetch) {
 export function managedJobConnectionOptions(raw, binding, purpose, token) {
   if (purpose !== 'migrator' && purpose !== 'importer') fail('CONFIG_INVALID', 'Only Jobs use an explicit IAM token');
   const url = validateManagedDatabaseUrl(raw, binding, purpose);
-  if (typeof token !== 'string' || token.length < 20 || token.length > 8192 || /[\s\p{Cc}]/u.test(token)) {
-    fail('DB_AUTH_UNAVAILABLE', 'Managed database authentication is unavailable');
-  }
+  assertManagedDatabaseToken(token);
   // Do not combine password with connectionString: pg parses an empty URL
   // password over that value. These explicit options keep the token ephemeral.
   return { host: url.searchParams.get('host'), port: MANAGED_DATABASE.databasePort,
     database: binding.databaseName, user: binding.iamLogins[purpose], password: token, ssl: false };
+}
+
+function assertManagedDatabaseToken(token) {
+  if (typeof token !== 'string' || token.length < 20 || token.length > 8192 || /[\s\p{Cc}]/u.test(token)) {
+    fail('DB_AUTH_UNAVAILABLE', 'Managed database authentication is unavailable');
+  }
+}
+
+function validateManagedRuntimeJobDatabaseUrl(raw, binding) {
+  const url = parseManagedDatabaseUrl(raw, binding, 'runtime');
+  try {
+    if (url.hostname !== 'localhost'
+        || [...url.searchParams.keys()].join('|') !== 'host'
+        || url.searchParams.get('host') !== `/cloudsql/${binding.cloudSqlInstance}`) throw new Error();
+  } catch {
+    fail('CONFIG_INVALID', 'Managed database URL is outside its lifecycle binding');
+  }
+  return url;
+}
+
+/** Runtime-only background Jobs use the pinned Cloud SQL socket and a fresh metadata token per connection. */
+export function managedRuntimeJobConnectionOptions(raw, binding, tokenProvider = fetchManagedJobToken) {
+  if (typeof tokenProvider !== 'function') fail('DB_AUTH_UNAVAILABLE', 'Managed database authentication is unavailable');
+  const url = validateManagedRuntimeJobDatabaseUrl(raw, binding);
+  return {
+    host: url.searchParams.get('host'), port: MANAGED_DATABASE.databasePort,
+    database: binding.databaseName, user: binding.iamLogins.runtime,
+    password: async () => {
+      try {
+        const token = await tokenProvider();
+        assertManagedDatabaseToken(token);
+        return token;
+      } catch {
+        fail('DB_AUTH_UNAVAILABLE', 'Managed database authentication is unavailable');
+      }
+    },
+    ssl: false,
+  };
 }
 
 const ROLE_SQL = Object.freeze({

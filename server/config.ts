@@ -104,6 +104,7 @@ const S3_RUNTIME_MIGRATION_PATHS:readonly string[] = [
   'db/migrations/0032_meeting_upload_completion_v1.sql',
   'db/migrations/0033_meeting_human_review_v1.sql',
   'db/migrations/0034_meeting_asr_session_binding_v1.sql',
+  'db/migrations/0035_meeting_cloud_speech_reservation_v1.sql',
 ];
 const PROFILE_MIGRATION_PATHS = new Map<string, readonly string[]>([
   ['^dev139_s1_[0-9a-f]{32}$', [

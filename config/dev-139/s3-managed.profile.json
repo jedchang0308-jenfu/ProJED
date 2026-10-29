@@ -164,6 +164,10 @@
     {
       "version": "0034_meeting_asr_session_binding_v1",
       "path": "db/migrations/0034_meeting_asr_session_binding_v1.sql"
+    },
+    {
+      "version": "0035_meeting_cloud_speech_reservation_v1",
+      "path": "db/migrations/0035_meeting_cloud_speech_reservation_v1.sql"
     }
   ],
   "objectAllowlist": [
@@ -296,7 +300,13 @@
     "projed_core.complete_meeting_upload_v1",
     "projed_core.meeting_review_scope_v1",
     "projed_core.meeting_projection_scope_v1",
-    "projed_core.bind_meeting_asr_session_v1"
+    "projed_core.bind_meeting_asr_session_v1",
+    "projed_core.meeting_cloud_speech_reservation_v1",
+    "projed_core.meeting_asr_prepare_scope_v1",
+    "projed_core.meeting_asr_prepare_run_guard_v1",
+    "projed_core.meeting_asr_prepare_budget_scope_v1",
+    "projed_core.meeting_asr_prepare_budget_guard_v1",
+    "projed_core.prepare_meeting_cloud_speech_v1"
   ],
   "staticFixturePath": "dist",
   "runtime": {

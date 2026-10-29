@@ -8,6 +8,7 @@ import {
   assertManagedIamLogins,
   fetchManagedJobToken,
   managedJobConnectionOptions,
+  managedRuntimeJobConnectionOptions,
   prepareManagedDatabaseSession,
   validateManagedDatabaseUrl,
 } from '../../../shared/dev139ManagedDatabase.mjs';
@@ -28,6 +29,13 @@ function urlFor(purpose) {
   const host = purpose === 'runtime' ? '127.0.0.1' : 'localhost';
   const url = new URL(`postgresql://${login}@${host}:${BINDING.databasePort}/${BINDING.databaseName}`);
   if (purpose !== 'runtime') url.searchParams.set('host', `/cloudsql/${BINDING.cloudSqlInstance}`);
+  return url.toString();
+}
+
+function runtimeJobUrl() {
+  const login = encodeURIComponent(BINDING.iamLogins.runtime);
+  const url = new URL(`postgresql://${login}@localhost:${BINDING.databasePort}/${BINDING.databaseName}`);
+  url.searchParams.set('host', `/cloudsql/${BINDING.cloudSqlInstance}`);
   return url.toString();
 }
 
@@ -209,6 +217,81 @@ test('managed Job connection options keep IAM token out of the connection string
   });
   assert.throws(() => managedJobConnectionOptions(urlFor('importer'), BINDING, 'importer', 'invalid token'), {
     code: 'DB_AUTH_UNAVAILABLE',
+  });
+});
+
+test('managed runtime Job options bind the exact Cloud SQL socket and refresh metadata auth per connection', async () => {
+  const issued = ['runtime-job-token-one-123456', 'runtime-job-token-two-123456'];
+  let calls = 0;
+  const options = managedRuntimeJobConnectionOptions(runtimeJobUrl(), BINDING, async () => issued[calls++]);
+  assert.deepEqual({ ...options, password: 'callback' }, {
+    host: `/cloudsql/${BINDING.cloudSqlInstance}`,
+    port: BINDING.databasePort,
+    database: BINDING.databaseName,
+    user: BINDING.iamLogins.runtime,
+    password: 'callback',
+    ssl: false,
+  });
+  assert.equal(typeof options.password, 'function');
+  assert.equal(JSON.stringify(options).includes(issued[0]), false);
+  assert.equal(await options.password(), issued[0]);
+  assert.equal(await options.password(), issued[1]);
+  assert.equal(calls, 2, 'each new pg Client receives a fresh metadata token');
+
+  const invalidProvider = managedRuntimeJobConnectionOptions(runtimeJobUrl(), BINDING, async () => 'private-marker');
+  await assert.rejects(invalidProvider.password(), error => {
+    assert.equal(error.code, 'DB_AUTH_UNAVAILABLE');
+    assert.equal(error.message, 'Managed database authentication is unavailable');
+    assert.doesNotMatch(error.message, /private-marker/u);
+    return true;
+  });
+  const rejectedProvider = managedRuntimeJobConnectionOptions(runtimeJobUrl(), BINDING, async () => {
+    throw new Error('private-marker-token');
+  });
+  await assert.rejects(rejectedProvider.password(), error => {
+    assert.equal(error.code, 'DB_AUTH_UNAVAILABLE');
+    assert.equal(error.message, 'Managed database authentication is unavailable');
+    assert.doesNotMatch(error.message, /private-marker-token/u);
+    return true;
+  });
+});
+
+test('managed runtime Job options reject passwords, loopback, foreign targets, and extra URL purposes', () => {
+  const invalidUrls = [
+    urlFor('runtime'),
+    runtimeJobUrl().replace('localhost', '127.0.0.1'),
+    runtimeJobUrl().replace(BINDING.databaseName, 'other_database'),
+  ];
+  const wrongLogin = new URL(runtimeJobUrl());
+  wrongLogin.username = 'another-login';
+  invalidUrls.push(wrongLogin.toString());
+  const foreignSocket = new URL(runtimeJobUrl());
+  foreignSocket.searchParams.set('host', '/cloudsql/other-project:region:instance');
+  invalidUrls.push(foreignSocket.toString());
+  const passwordUrl = new URL(runtimeJobUrl());
+  passwordUrl.password = 'private-marker';
+  invalidUrls.push(passwordUrl.toString());
+  const extraUrl = new URL(runtimeJobUrl());
+  extraUrl.searchParams.set('sslmode', 'require');
+  invalidUrls.push(extraUrl.toString());
+  const duplicateHost = new URL(runtimeJobUrl());
+  duplicateHost.searchParams.append('host', `/cloudsql/${BINDING.cloudSqlInstance}`);
+  invalidUrls.push(duplicateHost.toString());
+
+  for (const raw of invalidUrls) {
+    assert.throws(() => managedRuntimeJobConnectionOptions(raw, BINDING, async () => JOB_TOKEN), {
+      code: 'CONFIG_INVALID',
+    });
+  }
+  assert.throws(() => managedRuntimeJobConnectionOptions(runtimeJobUrl(), { ...BINDING,
+    cloudSqlInstance: 'other-project:region:instance' }, async () => JOB_TOKEN), { code: 'CONFIG_INVALID' });
+  assert.throws(() => managedRuntimeJobConnectionOptions(runtimeJobUrl(), BINDING, 'migrator'), {
+    code: 'DB_AUTH_UNAVAILABLE',
+  });
+
+  assert.throws(() => validateManagedDatabaseUrl(runtimeJobUrl(), BINDING, 'runtime'), { code: 'CONFIG_INVALID' });
+  assert.throws(() => managedJobConnectionOptions(runtimeJobUrl(), BINDING, 'runtime', JOB_TOKEN), {
+    code: 'CONFIG_INVALID',
   });
 });
 

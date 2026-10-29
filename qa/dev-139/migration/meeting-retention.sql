@@ -297,7 +297,8 @@ BEGIN
         'upload_token_expires_at','due_at','updated_at'
       ]::text[]
       WHEN 'projed_core.meeting_analysis_runs' THEN ARRAY[
-        'state','error_code','lease_token','lease_expires_at','updated_at','authorization_context_id'
+        'state','error_code','lease_token','lease_expires_at','updated_at','authorization_context_id',
+        'provider_mode','config_version','transcript_revision_id','stage_cursor','budget_month','reserved_twd_micros'
       ]::text[]
       WHEN 'projed_core.meeting_ai_usage_attempts' THEN ARRAY[
         'actual_twd_micros','usage_state','outcome','updated_at'
@@ -325,7 +326,7 @@ BEGIN
       ]::text[]
       WHEN 'projed_core.meeting_ai_usage_attempts' THEN ARRAY[
         'attempt_id','capture_id','run_id','unit_identity','dispatch_month','provider','model','price_version',
-        'reserved_twd_micros','usage_state','outcome','dispatch_state'
+        'reserved_twd_micros','usage_state','outcome','dispatch_state','actual_twd_micros'
       ]::text[]
       WHEN 'projed_core.meeting_ai_budget_months' THEN ARRAY[
         'budget_month','limit_twd_micros','reserved_twd_micros','spent_twd_micros'
@@ -394,6 +395,12 @@ BEGIN
     'projed_core.meeting_budget_upload_guard_v1()',
     'projed_core.complete_meeting_upload_v1(uuid,integer,jsonb,text,text,text)',
     'projed_core.bind_meeting_asr_session_v1(uuid)',
+    'projed_core.meeting_cloud_speech_reservation_v1(uuid)',
+    'projed_core.meeting_asr_prepare_scope_v1(uuid,uuid)',
+    'projed_core.meeting_asr_prepare_run_guard_v1()',
+    'projed_core.meeting_asr_prepare_budget_scope_v1(date)',
+    'projed_core.meeting_asr_prepare_budget_guard_v1()',
+    'projed_core.prepare_meeting_cloud_speech_v1(uuid)',
     'projed_core.meeting_review_scope_v1(uuid)',
     'projed_core.meeting_projection_scope_v1(uuid,uuid)'
   ] LOOP
