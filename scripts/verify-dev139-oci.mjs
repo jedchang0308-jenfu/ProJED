@@ -134,9 +134,11 @@ try {
   // PostgreSQL writes the socket as its own OS user; runtime only connects to it.
   runOwnedContainer('prepare', ['--mount', `type=volume,src=${socketVolume},dst=/sockets`,
     '--entrypoint', 'sh', postgresImage, '-c', 'chown postgres:postgres /sockets && chmod 0755 /sockets']);
-  createContainer(pgName, ['--env', `POSTGRES_PASSWORD=${adminPassword}`, '--env', `PGHOST=${socketPath}`,
+  createContainer(pgName, ['--env', `POSTGRES_PASSWORD=${adminPassword}`,
     '--mount', `type=volume,src=${socketVolume},dst=${socketPath}`, postgresImage,
-    'postgres', '-c', 'listen_addresses=', '-c', `unix_socket_directories=${socketPath}`]);
+    // The official entrypoint initializes through /var/run/postgresql. Keep that
+    // private in-container socket as well as the explicitly shared test socket.
+    'postgres', '-c', 'listen_addresses=', '-c', `unix_socket_directories=/var/run/postgresql,${socketPath}`]);
   await waitFor('isolated PostgreSQL final server', () => {
     const logs = docker(['logs', pgName]);
     return `${logs.stdout}${logs.stderr}`.includes('PostgreSQL init process complete; ready for start up.')
