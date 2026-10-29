@@ -767,9 +767,13 @@ export async function verifyMeetingReviewPostgres(
       SELECT decision,count(*)::text AS count FROM projed_core.meeting_task_match_results
        WHERE resolution_id=$1::uuid GROUP BY decision
     `, [resolutionIds.concurrent]);
-    assert.equal(concurrentRows.rowCount, 1);
-    assert.equal(concurrentRows.rows[0]!.decision, 'accepted');
-    assert.equal(concurrentRows.rows[0]!.count, '1');
+    assert.equal(concurrentRows.rowCount, 2, 'the untouched candidate remains suggested');
+    assert.deepEqual(new Map(concurrentRows.rows.map(row => [row.decision, row.count])),
+      new Map([['accepted', '1'], ['suggested', '1']]),
+      'only the winning CAS changes its candidate; the stale request cannot accept the other one');
+    const concurrentRevision = await admin.query<{ revision: string }>(
+      'SELECT revision::text FROM projed_core.meeting_segment_resolutions WHERE id=$1::uuid', [resolutionIds.concurrent]);
+    assert.equal(concurrentRevision.rows[0]?.revision, '1');
 
     const initialRecord = await recordSnapshot(admin, projectRecord.id);
     assert.equal(initialRecord.status, 'draft');
