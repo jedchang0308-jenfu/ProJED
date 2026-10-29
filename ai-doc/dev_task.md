@@ -102,12 +102,12 @@ UI 驗收沿既有工作入口檢查載入、空白、錯誤、拒絕、窄版�
 
 | 後續相依 | 已知缺口 | 重新進入規劃／實作的條件 |
 |---|---|---|
-| 非員工身分 producer 相依 | D1 已確認 OrgMaster 登錄最小 Principal／登入來源；現行 handoff v2 仍要求 employeeId 且不含 ProJED。 | 以新版本收斂非員工 publication／admission／Session／撤銷；公司資格與私人資料隔離。人類決策已固定，external producer 尚未接受／實作／驗證，不重問 D1。 |
+| 非員工身分 producer 相依 | D1 已確認；OrgMaster publisher 與 Platform Session／handoff 的現行 source、隔離證據及待發布範圍見 SPEC §36–§37。 | 續行真身分／Session 整合與 owner publication；公司資格與私人資料隔離維持，不以舊 handoff v2 或歷史未實作描述阻擋已授權開發。 |
 | 費用增幅、容量與恢復界線 | 已確認費用不大幅增加即可；實際費用增量、第四 app 容量及恢復成本尚未查證。 | 以簡要基線呈現持續費用增量與一次性／雙跑費用，確認容量及恢復／停機要求；明顯增費或調整共用 tier／付費資源時說明影響並依既有授權與成本決策邊界處理，不以必須降費或有回收期作為門檻。 |
 | 既有入口／Session／outbox 與移轉 | 不同origin不能共用IndexedDB；保留origin也不會自動延續Supabase Session。Hosting Cookie／callback／artifact、舊client／worker fence及真資料未承接domain尚待處理。 | 沿SPEC-139 §6.3–§6.6固定verified mapping、各App Session、原origin升級／恢復、全來源單一writer及fence後full snapshot核對；A06／A09／A11／T07／T08演練後確認停寫／恢復窗口，不清草稿、不自動改綁。 |
-| 跨專案執行範圍 | ProJED本repo開發已授權並完成；其他參與專案尚未為此次onboarding配置native DEV。 | 人類明確指定外部目標專案與主要動作；各owner完整讀適用AGENTS、核對status／HEAD／索引並登錄自己的native DEV，跨專案project key核實後建立限定來源引用。 |
+| 跨專案執行範圍 | 本節 §1 已列 ProJED／OrgMaster／Jenfu-Platform 的續行授權；各 owner 既有 native 任務與接線見 SPEC §36–§37。 | 沿各專案現有任務與隔離分支續行，不重建任務或重問同範圍授權；新 foundation／credential 等責任依 SPEC §33 處理。 |
 
-D1／D2及首階段保留範圍均已確認，沒有需要人類重答的產品決策。S1、S2 consumer seam及S3 W1–W18的本repo契約與實作已收斂；剩餘是外部producer／Session wire、真mapping、真資料與release／費用／容量證據，由相應owner及正式環境工作處理。RD裁量與不得修改的決策沿SPEC-139 §11.5，不要求人類重複核准命名／局部寫法。
+D1／D2及首階段保留範圍均已確認，沒有需要人類重答的產品決策。W18 為已完成的本地切片；後續完整功能、外部接線及正式交付仍續行，現況統一見 SPEC §13.3、§33–§39。RD 裁量沿 SPEC §11.5，不要求人類重複核准命名、局部寫法或同範圍開發。
 
 ### 7. 分期 capsule 與恢復條件
 
@@ -118,19 +118,19 @@ ProJED W18本地切片維持Completed Local Slice；2026-10-28人類已要求後
 | S1 runtime／DB 核心（Completed Local Slice） | Node 24／`node:http`＋`pg`、app-owned schemas、migration ledger、actor transaction、health／static fail-closed 與 isolated verifier 已落地。 | aggregate、unit 4/4、PostgreSQL 18 task-owned isolated DB 及既有 Vite build PASS。 | 只代表本地 kernel；managed target 另按實際 PostgreSQL major 重驗。 |
 | 首階段基礎對齊（Completed Local Slice） | 保留Vite與原工作區／看板／權限，自有API、schema／role／migration邊界、身分consumer及必要provider替代路徑已落地。 | S3 48/48 frontend unit、PostgreSQL 18 domain acceptance、migration rehearsal及正常HTTP UI／reload smoke PASS。 | 只代表ProJED本repo；真Session、正式資料與雲端release另行進入。 |
 | 資料與 PWA 移轉演練 | 驗證持久／檔案／本機資料mapping、冪等、既有入口／Cookie／callback／舊版相容、恢復與共用容量。 | W14已驗支援DB domain的空白candidate full snapshot、rollback與digest；仍需真資料未承接domain、全來源writer fence、檔案／outbox／receipt reconciliation及停寫量測。 | S2真wire與相容入口可運作；正式資料plan無未解阻擋，不得以synthetic rehearsal替代。 |
-| 正式切換與舊資產處置 | 原網址／PWA 相容、最後停寫核對與單一 writer 切換，保留晚回網恢復；退役另依 gate。 | 另有正式專案／資源與主要動作授權、可接受停寫／恢復窗口、release gate、backup／restore、費用／觀察、新資料保留與退役證據。 | 明確 release 型要求後才準備可執行 artifacts；本文件不提供正式 target／命令，不因窗口或七日清理規則自動退役。 |
+| 正式切換與舊資產處置 | 原網址／PWA 相容、最後停寫核對與單一 writer 切換，保留晚回網恢復；退役另依既有保護。 | 正式交付已列整體目標；具體資源、新責任與未決權限見 SPEC §33，仍須滿足 release、backup／restore、新資料保留及停寫／恢復界線。 | 可續行 source／artifact 準備；正式操作依現行授權及執行器處理。本次定期審視不切流、不寫正式資料、不變更 IAM／Secret／credential／billing，也不自動退役服務。 |
 | 後續跨 app 業務串接 | Platform 摘要／AI-PDM 專案看板連結等不在首階段；保存任務／資料整合目標，暫不建立新 DEV。 | owner／consumer、最小欄位、資料揭露及正常 UI→contract→ProJED API／DB 驗收，私人內容預設不外送。 | 基礎對齊已有功能／權限相容證據，且人類另要求情境及涉及專案的開發範圍；依 SPEC-139 §5.3 補契約。 |
 
 ### 8. 參與 owner 與現行契約關係
 
 | 專案／owner | 既有相關契約，只作相依引用 | 此次 onboarding 預期責任／本輪狀態 |
 |---|---|---|
-| ProJED（本 repo） | 本地 DEV-139／SPEC-139／ADR-054；SPEC-036、ADR-050／053、ADR-051、DEV-083 發布完整性。 | 主責交接契約、業務資料／API／角色能力、provider／PWA 移轉與整合驗收；本 repo 開發完成，外部wire與release待辦。 |
-| Jenfu-Platform | `JENFU/DEV-010` onboarding／DB 邊界、`JENFU/DEV-012` 現行入口／owner release、`JENFU/DEV-015` Principal／SSO／session。 | Portal registry／launch、SSO consumer 範圍及共用 foundation／capacity 相依；沒有為 ProJED 建立新 native task 或修改此 repo。 |
-| OrgMaster | `ORGMASTER/DEV-057` 相關 identity／grant producer 契約。 | D1 已確認最小非員工 Principal／provider 登錄方向，另有公司准入／角色／scope 及撤權相依；須獲明確開發範圍並由本地索引決定 native DEV，未預派原 DEV 作此次 onboarding。 |
+| ProJED（本 repo） | DEV-139／SPEC-139／ADR-054；SPEC-036、ADR-050／053、ADR-051、DEV-083 發布完整性。 | 主責業務資料／API／權限、provider／PWA 移轉與整合驗收；W18 只代表本地切片，完整交付現況見 SPEC §13.3、§33–§39。 |
+| Jenfu-Platform | `Jenfu-Platform/DEV-007` ProJED Session／handoff 接線；既有 onboarding／foundation 契約仍依 owner 管理。 | Portal／SSO consumer、current state 及共用 foundation／capacity；現行 source、隔離證據與正式缺口見 SPEC §37，不在本表複製版本狀態。 |
+| OrgMaster | `OrgMaster/DEV-057` minimum Principal publisher／admission。 | 最小非員工 Principal／provider 登錄、公司准入及撤權；現行 source、隔離證據與待 publication 範圍見 SPEC §36。 |
 | 其他既有 consumer | 只在共用 wire／catalog／foundation 的影響範圍實際改變時評估。 | 相容性影響需查證；不預設必須修改、重發或重開其他 app 的既有完成任務。 |
 
-外部契約盤點來源為 `C:/VIBE CODING/Jenfu-Platform/AGENTS.md`、其 DEV-010／012／015 direct specs，以及 `contracts/jenfu-sso-handoff/v2/handoff.schema.json`。這些既有 DEV 已有自己的狀態及範圍，不能當成此次 ProJED native task，也不因引用而取得修改權。
+初始外部契約盤點使用舊 handoff v2；現行 owner 接線及版本以 SPEC §36–§37 的來源引用為準。引用不等於正式發布或擴張權限；各 owner 的任務、原有功能與隔離分支仍由其原生契約管理。
 
 Spec Impact 分類：Cloud Run／Cloud SQL 目標是 **Intentional replacement（已確認方向，尚未切換）**。目前 [DEV-083 正式契約](specs/SPEC-083-production-release-environment-integrity.md)、[ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md) 與 [SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md) 仍約束既有 runtime；本 brief 不立即改寫其 provider／origin／Session 規則。新路徑工程契約具備時，須明列受控取代範圍及相容窗口。SPEC-036 協作／資料隔離、ADR-050 local-first／outbox 與 ADR-051 pipeline ownership 原則保留。
 

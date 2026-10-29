@@ -15,8 +15,8 @@ import { createHttpMeetingSynthesisAdapter } from '../../../src/services/httpApi
 import { HttpApiClient, HttpApiError, type HttpApiFetch } from '../../../src/services/httpApi/httpApiClient.js';
 import { createHttpSessionAdapter } from '../../../src/services/httpApi/sessionAdapter.js';
 import {
-  buildDeterministicMeetingSynthesis,
   MEETING_SYNTHESIS_CONTRACT_VERSION,
+  validateMeetingSynthesisOutput,
   type MeetingSynthesisInput,
 } from '../../../src/utils/meetingRecordSynthesis.js';
 
@@ -109,12 +109,25 @@ export async function verifyMeetingSynthesisPostgres(
     occurredAt: Date.now(),
     requiredContractVersion: MEETING_SYNTHESIS_CONTRACT_VERSION,
   };
-  const deterministic = buildDeterministicMeetingSynthesis(synthesisInput);
-  assert.equal(deterministic.quality.passed, true, 'synthetic fixture must satisfy the local quality oracle');
+  // The local fallback repeats source prose; a synthetic provider success must
+  // satisfy the unchanged provider quality oracle, including deduplication.
+  const providerFixture = {
+    content: [
+      '1. 本次會議總結',
+      '- 已確認會議決議，後續依討論結果安排追蹤工作。',
+      '',
+      '2. 任務討論與結論',
+      `2.1 @[會議追蹤](task:${taskId})`,
+      '確認會議追蹤的討論結果，依照會議約定整理後續安排。',
+    ].join('\n'),
+    linkedTaskIds: [taskId],
+  };
+  assert.equal(validateMeetingSynthesisOutput(synthesisInput, providerFixture).passed, true,
+    'synthetic fixture must satisfy the local quality oracle');
   const validProviderOutput = JSON.stringify({
-    content: deterministic.content,
+    content: providerFixture.content,
     warnings: ['此為 synthetic provider 測試輸出。'],
-    linkedTaskIds: deterministic.linkedTaskIds,
+    linkedTaskIds: providerFixture.linkedTaskIds,
   });
 
   const provider = {
@@ -154,9 +167,9 @@ export async function verifyMeetingSynthesisPostgres(
       if (currentMode === 'invalid-json') return '{invalid json';
       if (currentMode === 'unknown-task') {
         return JSON.stringify({
-          content: `${deterministic.content}\n\n2.99 @[陌生任務](task:${randomUUID()})\n根據會議記錄確認後續處理方式。`,
+          content: `${providerFixture.content}\n\n2.99 @[陌生任務](task:${randomUUID()})\n根據會議記錄確認後續處理方式。`,
           warnings: [],
-          linkedTaskIds: deterministic.linkedTaskIds,
+          linkedTaskIds: providerFixture.linkedTaskIds,
         });
       }
       if (currentMode === 'quality-failure') {
