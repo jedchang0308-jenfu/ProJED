@@ -12,6 +12,8 @@ import { resolveBoard } from '../../../server/domainRead.js';
 import { KernelError } from '../../../server/errors.js';
 import { createKernelHttpServer } from '../../../server/http.js';
 import type { MeetingAudioStorage } from '../../../server/meetingAudioStorage.js';
+import { createPostgresMeetingAsrRepository } from '../../../server/meetingAsrRepository.js';
+import type { MeetingAsrClaim, MeetingAsrTranscriptUnit } from '../../../server/meetingAsrWorker.js';
 import { PostgresAppSessionStore } from '../../../server/postgresAppSessionStore.js';
 import { MeetingUploadRepository } from '../../../server/meetingUpload.js';
 import { createHttpCollaborationAdapter } from '../../../src/services/httpApi/collaborationAdapter.js';
@@ -1072,7 +1074,8 @@ export async function verifyMeetingUploadPostgres(
       });
     const exactDispatchPayload:JsonObject={chunkIndex:0,chunkCount:1,startSample:0,endSample:1600,
       decodedSha256:'b'.repeat(64),startOffsetMs:0,endOffsetMs:100};
-    let dispatchToken='';let boundDispatchActor:ServerActorV1|undefined;let dispatchSourceId='';
+    let dispatchToken='';let dispatchClaim:MeetingAsrClaim|undefined;
+    let boundDispatchActor:ServerActorV1|undefined;let dispatchSourceId='';
     await verifyAsrSessionBinding(database,config,admin,owner,outsider,dispatchRecordId,dispatchCaptureId,dispatchRunId,
       async(actor,otherActor)=>{
         const prepare=()=>runActorTransaction(database,config,actor,port=>
@@ -1092,6 +1095,7 @@ export async function verifyMeetingUploadPostgres(
         const first=record(firstValue,'ASR unit claim');
         assert.equal(first.runId,dispatchRunId);assert.equal(first.captureId,dispatchCaptureId);
         assert.equal(first.sourceVersion,1);assert.equal(first.leaseToken,token);assert.equal(first.chunkIndex,0);
+        dispatchClaim=firstValue as MeetingAsrClaim;
         const claimedSource=record(first.source,'ASR claim source');
         assert.equal(claimedSource.startOffsetMs,0);assert.equal(claimedSource.sha256,'b'.repeat(64));
         assert.equal(typeof claimedSource.id,'string');
@@ -1246,8 +1250,24 @@ export async function verifyMeetingUploadPostgres(
     };
 
     assert.ok(boundDispatchActor,'the dispatched-cancel fixture retains its original bound actor context');
+    assert.ok(dispatchClaim,'the exact winning claim remains available for settlement');
+    const cancelledPayload=recognizedPayloadFor(exactDispatchPayload,dispatchSourceId);
+    const cancelledTranscript=record(cancelledPayload.transcript,'cancelled recognized transcript') as unknown as MeetingAsrTranscriptUnit;
+    const sessionStore=new PostgresAppSessionStore(database);
+    const accountingRepository=createPostgresMeetingAsrRepository({runId:dispatchRunId,database,config,
+      resolveActor:async runId=>{
+        assert.equal(runId,dispatchRunId);
+        assert.equal(await sessionStore.readMeetingRunSession(runId),null,
+          'the original Session is physically deleted and cancelled run is no longer worker-readable');
+        throw new KernelError('IDENTITY_INVALID','Synthetic native fixture has no active business Session');
+      }});
+    assert.equal(await accountingRepository.settle(dispatchClaim,{kind:'recognized',transcript:cancelledTranscript}),
+      'accounted_only','the real repository settles the cancelled result through an actor-free transaction');
+    assert.deepEqual(await readBudget(admin,month),{
+      limit_twd_micros:DEFAULT_BUDGET_MICROS,reserved_twd_micros:'0',spent_twd_micros:'16000',
+    },'accounting-only repository transaction persists charge and releases the cancelled pool');
     const cancelledReceipt=record(await settleUnit(boundDispatchActor,dispatchRunId,dispatchToken,
-      recognizedPayloadFor(exactDispatchPayload,dispatchSourceId)),'late recognized settlement after cancellation');
+      cancelledPayload),'late recognized settlement after cancellation');
     assert.equal(cancelledReceipt.published,false,'cancellation prevents late transcript publication');
     assert.equal(cancelledReceipt.asrComplete,false);
     assert.equal(await countCheckpoints(dispatchRunId),0,'cancelled source creates no ASR checkpoint');

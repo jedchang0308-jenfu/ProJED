@@ -299,14 +299,14 @@ BEGIN
       WHEN 'projed_core.meeting_analysis_runs' THEN ARRAY[
         'state','error_code','lease_token','lease_expires_at','updated_at','authorization_context_id',
         'provider_mode','config_version','transcript_revision_id','stage_cursor','budget_month','reserved_twd_micros',
-        'attempt_count'
+        'attempt_count','actual_twd_micros','next_attempt_at','resume_stage'
       ]::text[]
       WHEN 'projed_core.meeting_ai_usage_attempts' THEN ARRAY[
         'actual_twd_micros','usage_state','outcome','updated_at','dispatch_state','asr_manifest',
         'asr_remaining_twd_micros'
       ]::text[]
       WHEN 'projed_core.meeting_ai_budget_months' THEN ARRAY[
-        'reserved_twd_micros','updated_at'
+        'reserved_twd_micros','spent_twd_micros','updated_at'
       ]::text[]
       WHEN 'projed_core.meeting_segment_resolutions' THEN ARRAY[
         'resolution_state','revision','human_reviewed','human_empty_decision','updated_at'
