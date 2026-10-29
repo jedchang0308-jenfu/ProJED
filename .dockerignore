@@ -5,6 +5,7 @@
 node_modules
 dist
 dist-server
+dist-jobs
 output
 outputs
 logs

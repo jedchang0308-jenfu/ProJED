@@ -21,6 +21,7 @@ on:
       - scripts/verify-dev139-cloud-run-artifact.mjs
       - scripts/verify-dev139-oci.mjs
       - scripts/create-dev139-managed-binding.mjs
+      - scripts/run-dev139-managed-job.mjs
       - scripts/dev139-*.ts
       - scripts/lib/dev139-*.ts
       - scripts/lib/dev139-*.mjs
@@ -71,6 +72,9 @@ jobs:
       - name: Migration unit tests
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         run: npx tsx --test qa/dev-139/migration/*.test.ts
+      - name: Managed job entry and binding unit tests
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: npm run verify:dev-139:release-unit
       - name: Kernel boundary
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         run: npm run check:db-boundary

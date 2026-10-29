@@ -22,3 +22,22 @@ COPY --from=build --chown=node:node /app/config/dev-139/s3-managed.profile.json 
 COPY --from=build --chown=node:node /app/db/migrations ./db/migrations
 USER node
 CMD ["node", "dist-server/server/index.js"]
+
+# One-off migration/import commands use the same profile, SQL and frontend
+# artifact as runtime, with production dependencies and a compiled importer.
+# Keep the existing source-boundary checker; it inspects these raw sources and
+# never executes them as the business runtime.
+FROM runtime AS managed-jobs
+COPY --from=build --chown=node:node /app/dist-jobs ./dist-jobs
+COPY --from=build --chown=node:node /app/server ./server
+COPY --from=build --chown=node:node /app/src ./src
+COPY --from=build --chown=node:node /app/shared ./shared
+COPY --from=build --chown=node:node /app/scripts/lib/dev139-managed-binding.mjs /app/scripts/lib/dev139-migration-paths.mjs ./scripts/lib/
+COPY --from=build --chown=node:node /app/scripts/check-db-boundary.mjs ./scripts/check-db-boundary.mjs
+COPY --from=build --chown=node:node /app/scripts/migrate-dev-139-s1.mjs ./scripts/migrate-dev-139-s1.mjs
+COPY --from=build --chown=node:node /app/scripts/create-dev139-managed-binding.mjs ./scripts/create-dev139-managed-binding.mjs
+COPY --from=build --chown=node:node /app/scripts/run-dev139-managed-job.mjs ./scripts/run-dev139-managed-job.mjs
+CMD ["node", "scripts/run-dev139-managed-job.mjs"]
+
+# A normal build still produces the web runtime. Jobs require an explicit target.
+FROM runtime AS final

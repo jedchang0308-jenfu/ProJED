@@ -36,6 +36,7 @@
     "verify:dev-139:managed-static": "node scripts/check-db-boundary.mjs config/dev-139/s3-managed.profile.json",
     "verify:dev-139:cloud-run-artifact": "node scripts/verify-dev139-cloud-run-artifact.mjs",
     "verify:dev-139:oci": "node scripts/verify-dev139-oci.mjs",
+    "verify:dev-139:release-unit": "node --test qa/dev-139/release/*.test.mjs",
     "verify:dev-139:hosting-config": "node scripts/verify-dev139-hosting-config.mjs",
     "verify:dev-139:s3:isolated": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File qa/dev-139/s3/verify-isolated.ps1",
     "verify:dev-139:s3:db:isolated": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File qa/dev-139/s3/verify-isolated.ps1 -DatabaseOnly",

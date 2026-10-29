@@ -41,6 +41,7 @@ try {
     VITE_SUPABASE_TEST_PASSWORD: '',
   });
   run(process.execPath, [resolve('node_modules/typescript/bin/tsc'), '-p', 'tsconfig.server.build.json'], childEnv);
+  run(process.execPath, [resolve('node_modules/typescript/bin/tsc'), '-p', 'tsconfig.dev139.jobs.build.json'], childEnv);
   run(process.execPath, [resolve('node_modules/vite/bin/vite.js'), 'build', '--mode', 'production', '--outDir', 'dist', '--emptyOutDir'], childEnv);
 
   const index = readFileSync(resolve('dist/index.html'));

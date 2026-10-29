@@ -17,6 +17,7 @@ const label = 'projed.dev139.oci-attempt';
 const prefix = `dev139-oci-${nonce}`;
 const toolsImage = `${prefix}:build`;
 const runtimeImage = `${prefix}:runtime`;
+const jobsImage = `${prefix}:jobs`;
 const postgresImage = 'postgres:17.11-bookworm';
 const instance = 'jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg';
 const socketPath = `/cloudsql/${instance}`;
@@ -32,6 +33,7 @@ const secrets = Array.from({ length: 4 }, () => randomBytes(24).toString('hex'))
 const [adminPassword, migratorPassword, importerPassword, runtimePassword] = secrets;
 let binding;
 let imageId;
+let jobsImageId;
 let postgresVersion;
 let appliedMigrationCount = 0;
 let firstFailure;
@@ -128,8 +130,23 @@ try {
   assert.deepEqual(image.Config.Cmd, ['node', 'dist-server/server/index.js']);
   passed('actual-linux-amd64-nonroot-runtime-image');
 
-  binding = JSON.parse(runOwnedContainer('binding', [toolsImage,
+  docker(['build', '--platform', 'linux/amd64', '--target', 'managed-jobs', '--label', `${label}=${nonce}`,
+    '--build-arg', `PROJED_RELEASE_ID=${prefix}`, '-f', 'Dockerfile.dev139', '-t', jobsImage, '.'], { timeout: 600_000 });
+  images.add(jobsImage);
+  const jobImage = JSON.parse(docker(['image', 'inspect', jobsImage]).stdout)[0];
+  jobsImageId = jobImage.Id;
+  assert.equal(jobImage.Os, 'linux');
+  assert.equal(jobImage.Architecture, 'amd64');
+  assert.equal(jobImage.Config.User, 'node');
+  assert.deepEqual(jobImage.Config.Cmd, ['node', 'scripts/run-dev139-managed-job.mjs']);
+  passed('actual-nonroot-managed-jobs-image');
+
+  const originalBinding = JSON.parse(runOwnedContainer('binding-cli', [toolsImage,
     'node', 'scripts/create-dev139-managed-binding.mjs', `--instance=${instance}`]).stdout);
+  binding = JSON.parse(runOwnedContainer('binding-job', ['--read-only', '--tmpfs', '/tmp:rw,noexec,nosuid,size=16m',
+    jobsImage, 'node', 'scripts/run-dev139-managed-job.mjs', 'binding']).stdout);
+  assert.deepEqual(binding, originalBinding);
+  passed('job-and-runtime-build-artifact-binding-match');
   writeFileSync(join(temp, 'binding.json'), JSON.stringify(binding), { mode: 0o444 });
   const runtimeEnv = [
     'PROJED_RUNTIME_BINDING_FILE=/verification/binding.json',
@@ -138,8 +155,6 @@ try {
   ].join('\n');
   writeFileSync(join(temp, 'runtime.env'), `${runtimeEnv}\n`, { mode: 0o600 });
   writeFileSync(join(temp, 'migrator.env'), [
-    'PROJED_SOURCE_PROFILE=config/dev-139/s3-managed.profile.json',
-    'PROJED_RUNTIME_BINDING_FILE=/verification/binding.json',
     `PROJED_MIGRATOR_DATABASE_URL=postgresql://projed_migrator_disposable:${migratorPassword}@localhost/jenfu_prod?host=${encodeURIComponent(socketPath)}`, '',
   ].join('\n'), { mode: 0o600 });
 
@@ -167,9 +182,9 @@ try {
   pgSql('REVOKE CREATE, TEMP ON DATABASE jenfu_prod FROM PUBLIC; GRANT CONNECT ON DATABASE jenfu_prod TO projed_migrator_disposable, projed_importer_disposable, projed_runtime_disposable;');
   postgresVersion = pgSql('SHOW server_version;');
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    const output = runOwnedContainer(`migration-${attempt}`, [...socketMount, ...bindingMount(),
-      '--env-file', join(temp, 'migrator.env'), toolsImage,
-      'node', 'scripts/migrate-dev-139-s1.mjs', '--profile=managed']).stdout.trim().split(/\r?\n/);
+    const output = runOwnedContainer(`migration-${attempt}`, ['--read-only', '--tmpfs', '/tmp:rw,noexec,nosuid,size=16m',
+      ...socketMount, '--env-file', join(temp, 'migrator.env'), jobsImage,
+      'node', 'scripts/run-dev139-managed-job.mjs', 'migrate']).stdout.trim().split(/\r?\n/);
     const result = JSON.parse(output.at(-1));
     assert.equal(result.status, 'PASS');
     assert.equal(result.migrations.length, Object.keys(binding.migrationSha256).length);
@@ -178,6 +193,22 @@ try {
   assert.equal(appliedMigrationCount, Object.keys(binding.migrationSha256).length);
   assert.equal(pgSql(`SELECT rolname || ':' || rolsuper || ':' || rolbypassrls FROM pg_roles WHERE rolname='projed_runtime_disposable';`), 'projed_runtime_disposable:false:false');
   passed('isolated-unix-socket-full-migration-and-idempotent-replay');
+
+  // Load the emitted importer in the actual production-dependency image. Missing
+  // source inputs must stop before attempting a source or target connection.
+  runOwnedContainer('compiled-importer', ['--read-only', jobsImage, 'node', '--input-type=module', '-e',
+    "const m=await import('./dist-jobs/scripts/dev139-data-migration.js');if(typeof m.findUnclassifiedSourceRelations!=='function')process.exit(1);"]);
+  for (const mode of ['migrate', 'plan', 'apply', 'reconcile']) {
+    const result = runOwnedContainer(`missing-env-${mode}`, ['--read-only', jobsImage,
+      'node', 'scripts/run-dev139-managed-job.mjs', mode], { allowFailure: true });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Required managed Job environment is missing/);
+  }
+  const invalidMode = runOwnedContainer('invalid-mode', ['--read-only', jobsImage,
+    'node', 'scripts/run-dev139-managed-job.mjs', 'apply', 'extra'], { allowFailure: true });
+  assert.equal(invalidMode.status, 1);
+  assert.match(invalidMode.stderr, /Exactly one managed Job mode is required/);
+  passed('compiled-importer-loads-and-job-rejects-incomplete-or-extra-inputs');
 
   const runtimeArgs = ['--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
     ...socketMount, ...bindingMount(), '--env-file', join(temp, 'runtime.env'), runtimeImage];
@@ -319,7 +350,7 @@ if (!firstFailure && cleanupFailures.length === 0) passed('owned-container-socke
 const status = firstFailure || cleanupFailures.length ? 'FAIL' : 'PASS';
 const result = {
   status, evidenceLevel: 'ISOLATED_LINUX_OCI_UNIX_SOCKET',
-  sourceSha: process.env.GITHUB_SHA, releaseId: prefix, imageId,
+  sourceSha: process.env.GITHUB_SHA, releaseId: prefix, imageId, jobsImageId,
   postgres: postgresVersion, migrationCount: appliedMigrationCount,
   expectedMigrationCount: binding ? Object.keys(binding.migrationSha256).length : 0,
   profileSha256: binding?.profileSha256, migrationSha256: binding?.migrationSha256,

@@ -24,7 +24,8 @@ assert.match(dockerfile, /CMD \["node", "dist-server\/server\/index\.js"\]/);
 assert.doesNotMatch(dockerfile, /PROJED_DATABASE_URL|PROJED_RUNTIME_BINDING_JSON|password|secret/i);
 for (const entry of ['.git', 'node_modules', 'dist', 'output', '.env.*']) assert.match(dockerignore, new RegExp(`^${entry.replace('.', '\\.')}\r?$`, 'm'));
 
-for (const path of ['dist/index.html', 'dist/quick-task/index.html', 'dist/dev139-cloud-run-meta.json', 'dist-server/server/index.js']) {
+for (const path of ['dist/index.html', 'dist/quick-task/index.html', 'dist/dev139-cloud-run-meta.json',
+  'dist-server/server/index.js', 'dist-jobs/scripts/dev139-data-migration.js']) {
   assert.equal(statSync(resolve(path)).isFile(), true, `missing ${path}`);
 }
 const meta = JSON.parse(readFileSync('dist/dev139-cloud-run-meta.json', 'utf8'));
@@ -51,6 +52,9 @@ const { loadRuntimeConfig } = await import(`../dist-server/server/config.js?veri
 const meetingModule = await import('../dist-server/server/meetingSynthesis.js');
 assert.equal(typeof meetingModule.parseMeetingSynthesisRequest, 'function');
 assert.equal(typeof meetingModule.completeMeetingSynthesis, 'function');
+// Import the compiled snapshot driver without selecting a mode or connecting DB.
+const migrationModule = await import('../dist-jobs/scripts/dev139-data-migration.js');
+assert.equal(typeof migrationModule.findUnclassifiedSourceRelations, 'function');
 const config = loadRuntimeConfig({
   PROJED_ENV: 'managed',
   PROJED_APP_ENTRY: 'main',
