@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -264,6 +264,37 @@ try {
   assert.match(invalidMode.stderr, /Exactly one managed Job mode is required/);
   passed('compiled-importer-loads-and-job-rejects-incomplete-or-extra-inputs');
 
+  // Exercise the mounted Secret format with synthetic credentials and CA only.
+  // A deliberately invalid target must stop the compiled child before either
+  // source or target connects. The isolated namespace has no external route.
+  const sourceCa = '-----BEGIN CERTIFICATE-----\nfixture-only-root\n-----END CERTIFICATE-----\n';
+  const sourcePassword = randomBytes(24).toString('hex');
+  secrets.push(sourcePassword, sourceCa, 'fixture-only-root');
+  const sourceBundle = {
+    bundleVersion: 1,
+    sourceBinding: { bindingVersion: 1, provider: 'supabase-postgres', projectRef: 'knodlkxqpcqyrtgwpdst',
+      connectionMode: 'direct', hostname: 'db.knodlkxqpcqyrtgwpdst.supabase.co', port: 5432,
+      databaseName: 'postgres', readerRole: 'fixture_reader', sslMode: 'verify-full',
+      sslRootCertSha256: createHash('sha256').update(sourceCa).digest('hex') },
+    databaseUrl: `postgresql://fixture_reader:${sourcePassword}@db.knodlkxqpcqyrtgwpdst.supabase.co:5432/postgres?sslmode=verify-full&sslrootcert=%2Fcaller%2Fca.pem`,
+    sslRootCertPem: sourceCa,
+  };
+  const sourceBundlePath = join(temp, 'source-bundle.json');
+  writeFileSync(sourceBundlePath, JSON.stringify(sourceBundle), { mode: 0o444 });
+  const sourceResult = runOwnedContainer('source-bundle-child', ['--read-only',
+    '--tmpfs', '/tmp:rw,noexec,nosuid,size=16m',
+    '--mount', `type=bind,src=${sourceBundlePath},dst=/verification/source-bundle.json,readonly`,
+    '--env', 'PROJED_MIGRATION_SOURCE_BUNDLE_FILE=/verification/source-bundle.json',
+    '--env', 'PROJED_MIGRATION_TARGET_DATABASE_URL=postgresql://wrong-lifecycle@localhost/jenfu_prod',
+    jobsImage, 'node', 'scripts/run-dev139-managed-job.mjs', 'plan'],
+  { network: fixtureNetwork, allowFailure: true });
+  assert.equal(sourceResult.status, 1);
+  assert.match(sourceResult.stderr, /CONFIG_INVALID/);
+  assert.ok(!`${sourceResult.stdout}${sourceResult.stderr}`.includes(sourcePassword));
+  assert.ok(!`${sourceResult.stdout}${sourceResult.stderr}`.includes(sourceBundle.databaseUrl));
+  assert.ok(!`${sourceResult.stdout}${sourceResult.stderr}`.includes('fixture-only-root'));
+  passed('mounted-source-bundle-materializes-and-rejects-invalid-target-without-leaking');
+
   const runtimeArgs = ['--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
     ...socketMount, ...bindingMount(), '--env-file', join(temp, 'runtime.env'), runtimeImage];
   createContainer(appName, runtimeArgs, fixtureNetwork);
@@ -421,6 +452,7 @@ const result = {
   staticFixtureSha256: binding?.staticFixtureSha256, checks,
   dockerExecution: status, browserSmoke: 'NOT_RUN', productionIdentity: 'NOT_RUN',
   metadataProvider: 'FIXTURE_ONLY', cloudIamAuthentication: 'NOT_RUN', proxyAuthentication: 'NOT_RUN',
+  sourceSupabaseAuthentication: 'NOT_RUN',
   cloudSqlReadback: 'NOT_RUN', registryPush: 'NOT_RUN', productionRelease: 'NOT_RUN',
   ...(firstFailure ? { failure: sanitize(firstFailure.message) } : {}),
   ...(diagnostics.length ? { diagnostics } : {}),

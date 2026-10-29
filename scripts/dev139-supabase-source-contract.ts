@@ -58,6 +58,16 @@ export function validateSupabaseSourceBinding(value: unknown): SupabaseSourceBin
   return Object.freeze(binding as unknown as SupabaseSourceBindingV1);
 }
 
+export function deriveSupabaseSourceDatabaseRole(binding: SupabaseSourceBindingV1): string {
+  if (binding.connectionMode === 'direct') return binding.readerRole;
+
+  const poolerSuffix = `.${binding.projectRef}`;
+  if (!binding.readerRole.endsWith(poolerSuffix)) fail('Session pooler reader role does not match the project ref');
+  const databaseRole = binding.readerRole.slice(0, -poolerSuffix.length);
+  if (!databaseRole) fail('Session pooler reader role has no database role');
+  return databaseRole;
+}
+
 export function validateSupabaseSourceUrl(raw: string, binding: SupabaseSourceBindingV1): string {
   let url: URL;
   try { url = new URL(raw); }

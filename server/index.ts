@@ -4,6 +4,7 @@ import { loadRuntimeConfig, sha256 } from './config.js';
 import { RuntimeDatabase, type ExpectedMigration } from './db.js';
 import { createKernelHttpServer } from './http.js';
 import { createRuntimeSessionAuth } from './runtimeSessionAuth.js';
+import { awaitDatabaseStartup } from './startup.js';
 import {createGeminiRagProvider} from './geminiRagProvider.js';
 import {parseMeetingSynthesisModel} from './meetingSynthesisHttp.js';
 import {createGcsMeetingAudioStorage} from './meetingAudioStorage.js';
@@ -17,7 +18,9 @@ async function main(): Promise<void> {
     return { version, checksum };
   });
   const database = new RuntimeDatabase(config);
-  await database.assertRuntimeBoundary(expectedMigrations);
+  await awaitDatabaseStartup(() => database.assertRuntimeBoundary(expectedMigrations), {
+    onWait: info => console.log(JSON.stringify({ event: 'projed_kernel_database_startup_wait', ...info })),
+  });
   const http = createKernelHttpServer(config, database, expectedMigrations, {
     ...createRuntimeSessionAuth(config,database),
     ragProvider:process.env.GEMINI_API_KEY?createGeminiRagProvider({apiKey:process.env.GEMINI_API_KEY}):undefined,

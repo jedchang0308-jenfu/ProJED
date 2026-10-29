@@ -22,6 +22,7 @@ import {
 
 const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const BINDING_CLI = resolve(PROJECT_ROOT, 'scripts/create-dev139-managed-binding.mjs');
+const MANAGED_JOB_CLI = resolve(PROJECT_ROOT, 'scripts/run-dev139-managed-job.mjs');
 const INSTANCE = 'jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg';
 const IAM_LOGINS = {
   runtime: 'projed-prod-runtime@projed-cc78d.iam',
@@ -32,8 +33,7 @@ const IAM_LOGINS = {
 function makeEnvironment(overrides = {}) {
   return {
     PROJED_MIGRATOR_DATABASE_URL: 'postgresql://projed-prod-migrator%40projed-cc78d.iam@localhost/jenfu_prod?host=%2Fcloudsql%2Fjenfu-platform-prod%3Aasia-east1%3Ajenfu-platform-prod-pg',
-    PROJED_MIGRATION_SOURCE_BINDING_FILE: '/secrets/source-binding.json',
-    PROJED_MIGRATION_SOURCE_DATABASE_URL: 'postgresql://reader:secret-source@db.example.test/postgres?sslmode=verify-full',
+    PROJED_MIGRATION_SOURCE_BUNDLE_FILE: '/secrets/source/bundle.json',
     PROJED_MIGRATION_TARGET_DATABASE_URL: 'postgresql://projed-prod-importer%40projed-cc78d.iam@localhost/jenfu_prod?host=%2Fcloudsql%2Fjenfu-platform-prod%3Aasia-east1%3Ajenfu-platform-prod-pg',
     ...overrides,
   };
@@ -181,7 +181,9 @@ test('managed Job mode selection maps only the five supported modes to the exist
   assert.deepEqual(selectManagedJobExecution(['binding'], {}, 'node'), {
     mode: 'binding', requiredEnvironment: [], command: null, args: [],
   });
-  assert.deepEqual(selectManagedJobExecution(['migrate'], environment, 'node'), {
+  assert.deepEqual(selectManagedJobExecution(['migrate'], {
+    PROJED_MIGRATOR_DATABASE_URL: environment.PROJED_MIGRATOR_DATABASE_URL,
+  }, 'node'), {
     mode: 'migrate', requiredEnvironment: ['PROJED_MIGRATOR_DATABASE_URL'],
     command: 'node', args: ['scripts/migrate-dev-139-s1.mjs', '--profile=managed'],
   });
@@ -189,8 +191,7 @@ test('managed Job mode selection maps only the five supported modes to the exist
     assert.deepEqual(selectManagedJobExecution([mode], environment, 'node'), {
       mode,
       requiredEnvironment: [
-        'PROJED_MIGRATION_SOURCE_BINDING_FILE',
-        'PROJED_MIGRATION_SOURCE_DATABASE_URL',
+        'PROJED_MIGRATION_SOURCE_BUNDLE_FILE',
         'PROJED_MIGRATION_TARGET_DATABASE_URL',
       ],
       command: 'node', args: ['dist-jobs/scripts/dev139-data-migration.js', mode, '--target=managed'],
@@ -204,47 +205,98 @@ test('managed Job mode selection maps only the five supported modes to the exist
 
 test('managed Job rejects mode-specific missing credentials before child selection', () => {
   assert.throws(() => selectManagedJobExecution(['migrate'], {}, 'node'), /PROJED_MIGRATOR_DATABASE_URL/u);
-  assert.throws(() => selectManagedJobExecution(['plan'], {}, 'node'), /PROJED_MIGRATION_SOURCE_BINDING_FILE/u);
+  assert.throws(() => selectManagedJobExecution(['plan'], {}, 'node'), /PROJED_MIGRATION_SOURCE_BUNDLE_FILE/u);
   assert.throws(() => selectManagedJobExecution(['apply'], {
-    PROJED_MIGRATION_SOURCE_BINDING_FILE: '/source-binding.json',
-    PROJED_MIGRATION_SOURCE_DATABASE_URL: 'postgresql://reader:secret@source/postgres',
+    PROJED_MIGRATION_SOURCE_BUNDLE_FILE: '/secrets/source/bundle.json',
   }, 'node'), /PROJED_MIGRATION_TARGET_DATABASE_URL/u);
   assert.deepEqual(selectManagedJobExecution(['binding'], {}, 'node').requiredEnvironment, []);
 });
 
-test('managed Job child environment keeps only mode-required DSNs and overrides profile and binding', () => {
+test('managed Job rejects legacy source environment mixing and withholds source credentials from binding and migrate', () => {
+  for (const name of ['PROJED_MIGRATION_SOURCE_BINDING_FILE', 'PROJED_MIGRATION_SOURCE_DATABASE_URL']) {
+    assert.throws(() => selectManagedJobExecution(['plan'], makeEnvironment({ [name]: 'legacy-secret' }), 'node'), /Legacy source environment is not accepted/u);
+    assert.throws(() => selectManagedJobExecution(['migrate'], {
+      PROJED_MIGRATOR_DATABASE_URL: 'postgresql://projed-prod-migrator%40projed-cc78d.iam@localhost/jenfu_prod',
+      [name]: 'legacy-secret',
+    }, 'node'), /Legacy source environment is not accepted/u);
+  }
+
+  assert.throws(() => selectManagedJobExecution(['binding'], {
+    PROJED_MIGRATION_SOURCE_BUNDLE_FILE: '/secrets/source/bundle.json',
+  }, 'node'), /Source bundle credentials are not accepted/u);
+  assert.throws(() => selectManagedJobExecution(['migrate'], {
+    PROJED_MIGRATOR_DATABASE_URL: 'postgresql://projed-prod-migrator%40projed-cc78d.iam@localhost/jenfu_prod',
+    PROJED_MIGRATION_SOURCE_BUNDLE_FILE: '/secrets/source/bundle.json',
+  }, 'node'), /Source bundle credentials are not accepted/u);
+});
+
+test('managed Job child environment materializes only the required source files and DSN', () => {
   const environment = makeEnvironment({
     PROJED_DATABASE_URL: 'postgresql://projed-prod-runtime%40projed-cc78d.iam@127.0.0.1:5432/jenfu_prod',
   });
   const plan = selectManagedJobExecution(['plan'], environment, 'node');
+  const sourceBundle = {
+    sourceBindingPath: '/tmp/job/source-binding.json',
+    sourceCaPath: '/tmp/job/source-ca.pem',
+    sourceDatabaseUrl: 'postgresql://reader:source-secret@db.knodlkxqpcqyrtgwpdst.supabase.co:5432/postgres?sslmode=verify-full&sslrootcert=%2Ftmp%2Fjob%2Fsource-ca.pem',
+  };
   const childEnvironment = createManagedJobChildEnvironment(
     environment,
     plan,
     '/app/config/dev-139/s3-managed.profile.json',
     '/tmp/job/runtime-binding.json',
+    sourceBundle,
   );
 
   assert.equal(childEnvironment.PROJED_DATABASE_URL, undefined);
   assert.equal(childEnvironment.PROJED_MIGRATOR_DATABASE_URL, undefined);
-  assert.equal(childEnvironment.PROJED_MIGRATION_SOURCE_BINDING_FILE, '/secrets/source-binding.json');
-  assert.equal(childEnvironment.PROJED_MIGRATION_SOURCE_DATABASE_URL, environment.PROJED_MIGRATION_SOURCE_DATABASE_URL);
+  assert.equal(childEnvironment.PROJED_MIGRATION_SOURCE_BUNDLE_FILE, undefined);
+  assert.equal(childEnvironment.PROJED_MIGRATION_SOURCE_BINDING_FILE, sourceBundle.sourceBindingPath);
+  assert.equal(childEnvironment.PROJED_MIGRATION_SOURCE_DATABASE_URL, sourceBundle.sourceDatabaseUrl);
   assert.equal(childEnvironment.PROJED_MIGRATION_TARGET_DATABASE_URL, environment.PROJED_MIGRATION_TARGET_DATABASE_URL);
   assert.equal(childEnvironment.PROJED_SOURCE_PROFILE, '/app/config/dev-139/s3-managed.profile.json');
   assert.equal(childEnvironment.PROJED_RUNTIME_BINDING_FILE, '/tmp/job/runtime-binding.json');
 });
 
-test('managed Job redaction removes exact DSNs and URL credentials and bounds diagnostics', () => {
+test('managed Job redaction uses materialized child DSN and bounds diagnostics', () => {
   const environment = makeEnvironment();
+  const sourceDatabaseUrl = 'postgresql://reader:source-secret@db.knodlkxqpcqyrtgwpdst.supabase.co:5432/postgres?sslmode=verify-full&sslrootcert=%2Ftmp%2Fsource-ca.pem';
+  const childEnvironment = createManagedJobChildEnvironment(
+    environment,
+    selectManagedJobExecution(['plan'], environment, 'node'),
+    '/app/config/dev-139/s3-managed.profile.json',
+    '/tmp/job/runtime-binding.json',
+    { sourceBindingPath: '/tmp/job/source-binding.json', sourceDatabaseUrl },
+  );
   const output = [
-    `migration failed for ${environment.PROJED_MIGRATION_SOURCE_DATABASE_URL}`,
-    'credentials secret-source and reader were rejected',
+    `migration failed for ${childEnvironment.PROJED_MIGRATION_SOURCE_DATABASE_URL}`,
+    'credentials source-secret and reader were rejected',
   ].join('\n');
-  const redacted = redactSensitiveOutput(output, environment);
-  assert.doesNotMatch(redacted, /PROJED_MIGRATION_SOURCE_DATABASE_URL|secret-source|reader|db\.example\.test/u);
+  const redacted = redactSensitiveOutput(output, childEnvironment);
+  assert.doesNotMatch(redacted, /PROJED_MIGRATION_SOURCE_DATABASE_URL|source-secret|reader|knodlkxqpcqyrtgwpdst|source-ca\.pem/u);
   assert.match(redacted, /migration failed/u);
   assert.match(redacted, /were rejected/u);
 
-  const bounded = redactSensitiveOutput(`${output}\n${'x'.repeat(1000)}`, environment, 160);
+  const bounded = redactSensitiveOutput(`${output}\n${'x'.repeat(1000)}`, childEnvironment, 160);
   assert.equal(bounded.length, 160);
   assert.match(bounded, /managed Job output truncated/u);
+});
+
+test('managed Job CLI rejects missing source bundle without echoing credentials', () => {
+  const environment = { ...process.env };
+  for (const name of [
+    'PROJED_MIGRATION_SOURCE_BUNDLE_FILE',
+    'PROJED_MIGRATION_SOURCE_BINDING_FILE',
+    'PROJED_MIGRATION_SOURCE_DATABASE_URL',
+    'PROJED_MIGRATION_TARGET_DATABASE_URL',
+  ]) delete environment[name];
+  environment.PROJED_MIGRATION_TARGET_DATABASE_URL = 'postgresql://reader:cli-secret@target.example.test/postgres';
+  const result = spawnSync(process.execPath, [MANAGED_JOB_CLI, 'apply'], {
+    cwd: PROJECT_ROOT,
+    encoding: 'utf8',
+    env: environment,
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /PROJED_MIGRATION_SOURCE_BUNDLE_FILE/u);
+  assert.doesNotMatch(result.stderr, /cli-secret|target\.example\.test/u);
 });

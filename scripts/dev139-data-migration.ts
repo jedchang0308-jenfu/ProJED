@@ -19,6 +19,7 @@ import {
   type SourceProfile,
 } from '../server/config.js';
 import {
+  deriveSupabaseSourceDatabaseRole,
   validateSupabaseSourceBinding,
   validateSupabaseSourceUrl,
   type SupabaseSourceBindingV1,
@@ -892,7 +893,7 @@ function validateDisposableSourceUrl(raw: string, binding: RuntimeBinding): stri
   return raw;
 }
 
-async function validateSource(
+export async function validateSource(
   client: Client,
   expected?: SupabaseSourceBindingV1,
 ): Promise<void> {
@@ -904,8 +905,9 @@ async function validateSource(
            current_setting('transaction_isolation') AS isolation_level
   `);
   const row = identity.rows[0];
+  const expectedRole = expected ? deriveSupabaseSourceDatabaseRole(expected) : undefined;
   if (!row || !row.read_only || row.isolation_level !== 'repeatable read'
-      || (expected && (row.database_name !== expected.databaseName || row.role_name !== expected.readerRole))) {
+      || (expected && (row.database_name !== expected.databaseName || row.role_name !== expectedRole))) {
     throw Object.assign(new Error('Source snapshot identity or transaction boundary mismatch'), {
       code: 'SOURCE_IDENTITY_INVALID',
     });

@@ -21,6 +21,7 @@ on:
       - scripts/verify-dev139-cloud-run-artifact.mjs
       - scripts/verify-dev139-oci.mjs
       - scripts/create-dev139-managed-binding.mjs
+      - scripts/create-dev139-cloud-run-plan.mjs
       - scripts/run-dev139-managed-job.mjs
       - scripts/dev139-*.ts
       - scripts/lib/dev139-*.ts

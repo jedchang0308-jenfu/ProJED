@@ -17,6 +17,7 @@
     "migrate:dev-139:s3:disposable": "node scripts/migrate-dev-139-s1.mjs",
     "migrate:dev-139:s3:managed": "node scripts/migrate-dev-139-s1.mjs --profile=managed",
     "create:dev-139:managed-binding": "node scripts/create-dev139-managed-binding.mjs",
+    "create:dev-139:cloud-run-plan": "node scripts/create-dev139-cloud-run-plan.mjs",
     "create:dev-139:hosting-config": "node scripts/create-dev139-hosting-config.mjs",
     "migrate:dev-139:data:plan": "tsx scripts/dev139-data-migration.ts plan",
     "migrate:dev-139:data:apply": "tsx scripts/dev139-data-migration.ts apply",
