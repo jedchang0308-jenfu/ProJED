@@ -264,6 +264,15 @@ BEGIN
         'obligation_id','capture_id','attempt_id','kind','object_locator','state',
         'upload_token_expires_at','due_at','storage_backend'
       ]::text[]
+      WHEN 'projed_core.meeting_analysis_runs' THEN ARRAY[
+        'id','capture_id','source_version','request_key','config_version','state','resume_stage',
+        'upload_completed_at','deadline_at','budget_month','provider_mode','reserved_twd_micros'
+      ]::text[]
+      WHEN 'projed_core.meeting_ai_usage_attempts' THEN ARRAY[
+        'attempt_id','capture_id','run_id','unit_identity','dispatch_month','provider','model','price_version',
+        'reserved_twd_micros','usage_state','outcome','dispatch_state'
+      ]::text[]
+      WHEN 'projed_core.meeting_ai_budget_months' THEN ARRAY['budget_month']::text[]
       ELSE ARRAY[]::text[]
     END;
     v_expected_update := CASE v_name
@@ -297,10 +306,11 @@ BEGIN
         'storage_generation','upload_sha256','upload_bytes'
       ]::text[]
       WHEN 'projed_core.meeting_ai_usage_attempts' THEN ARRAY[
-        'attempt_id','capture_id','run_id','dispatch_month','reserved_twd_micros','usage_state','dispatch_state'
+        'attempt_id','capture_id','run_id','unit_identity','dispatch_month','provider','model','price_version',
+        'reserved_twd_micros','usage_state','outcome','dispatch_state'
       ]::text[]
       WHEN 'projed_core.meeting_ai_budget_months' THEN ARRAY[
-        'budget_month','reserved_twd_micros'
+        'budget_month','limit_twd_micros','reserved_twd_micros','spent_twd_micros'
       ]::text[]
       ELSE ARRAY[]::text[]
     END;
@@ -358,7 +368,12 @@ BEGIN
     'projed_core.meeting_audio_cleanup_scope_v1(uuid,text)',
     'projed_core.meeting_audio_settlement_scope_v1(uuid)',
     'projed_core.meeting_audio_proof_guard_v1()',
-    'projed_core.meeting_audio_anchor_retention_v1()'
+    'projed_core.meeting_audio_anchor_retention_v1()',
+    'projed_core.meeting_upload_scope_v1(uuid)',
+    'projed_core.meeting_upload_budget_scope_v1(date)',
+    'projed_core.meeting_upload_run_scope_v1(uuid,uuid)',
+    'projed_core.meeting_budget_upload_guard_v1()',
+    'projed_core.complete_meeting_upload_v1(uuid,integer,jsonb,text,text,text)'
   ] LOOP
     v_function_oid := to_regprocedure(v_function);
     IF v_function_oid IS NULL THEN RAISE EXCEPTION 'missing runtime meeting helper: %', v_function; END IF;
@@ -422,7 +437,9 @@ SELECT set_config('projed.actor_principal_id','',true),
        set_config('projed.meeting_audio_segment_id','',true),
        set_config('projed.meeting_audio_phase','',true),
        set_config('projed.meeting_upload_phase','',true),
-       set_config('projed.meeting_upload_token','',true);
+       set_config('projed.meeting_upload_token','',true),
+       set_config('projed.meeting_upload_run_id','',true),
+       set_config('projed.meeting_upload_budget_month','',true);
 DO $$
 DECLARE v_rows bigint;
 BEGIN
@@ -449,7 +466,11 @@ BEGIN
        'a1234567-1234-4234-8234-123456789001','a2234567-1234-4234-8234-123456789001') IS TRUE
      OR projed_core.meeting_audio_cleanup_scope_v1(
        'a1234567-1234-4234-8234-123456789001','storage:a1234567-1234-4234-8234-123456789001:v7:segment:0') IS TRUE
-     OR projed_core.meeting_audio_settlement_scope_v1('a9234567-1234-4234-8234-123456789009') IS TRUE THEN
+     OR projed_core.meeting_audio_settlement_scope_v1('a9234567-1234-4234-8234-123456789009') IS TRUE
+     OR projed_core.meeting_upload_scope_v1('a1234567-1234-4234-8234-123456789001') IS TRUE
+     OR projed_core.meeting_upload_budget_scope_v1('2026-04-01'::date) IS TRUE
+     OR projed_core.meeting_upload_run_scope_v1(
+       'a1234567-1234-4234-8234-123456789001','b1234567-1234-4234-8234-123456789001') IS TRUE THEN
     RAISE EXCEPTION 'meeting helper accepted missing actor/purpose scope';
   END IF;
 
@@ -458,6 +479,14 @@ BEGIN
       'a1234567-1234-4234-8234-123456789001', 7, 'scope-negative'
     );
     RAISE EXCEPTION 'runtime cancelled a capture without actor/purpose scope';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+
+  BEGIN
+    PERFORM projed_core.complete_meeting_upload_v1(
+      'a1234567-1234-4234-8234-123456789001', 7, '[]'::jsonb, repeat('a',64), repeat('b',64), 'missing'
+    );
+    RAISE EXCEPTION 'runtime completed a meeting upload without actor/purpose scope';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
 

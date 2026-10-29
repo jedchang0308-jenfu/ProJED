@@ -7,12 +7,14 @@ import { isSameOriginWrite, readJsonBody } from './domainWriteHttp.js';
 import { asKernelError, KernelError } from './errors.js';
 import { assertExpectedActor } from './expectedActorHttp.js';
 import { MeetingCaptureRepository } from './meetingCapture.js';
+import { MeetingUploadRepository } from './meetingUpload.js';
 import { MeetingAudioService } from './meetingAudio.js';
 import { currentMeetingActor } from './meetingAudioHttp.js';
 import type { MeetingAudioStorage } from './meetingAudioStorage.js';
 
 export function createMeetingCaptureHttpDispatcher(config:RuntimeConfig,database:RuntimeDatabase,resolveActor?:TrustedSessionActorResolver,storage?:MeetingAudioStorage){
   const repository=new MeetingCaptureRepository();
+  const uploads=new MeetingUploadRepository();
   const audio=storage?new MeetingAudioService(database,config,storage):undefined;
   return async(request:IncomingMessage,requestId:string)=>{
     if(request.url!=='/api/v1/meeting-control')return {matched:false};
@@ -32,6 +34,8 @@ export function createMeetingCaptureHttpDispatcher(config:RuntimeConfig,database
         if(!audio)throw new KernelError('MEETING_STORAGE_UNAVAILABLE','Meeting audio storage is unavailable',503);
         result=body.operation==='reserve-segment'?await audio.reserve(actor,body,controller.signal)
           :await audio.verify(currentActor,body,controller.signal);
+      }else if(body.operation==='complete-upload'){
+        result=await runActorTransaction(database,config,actor,port=>uploads.execute(port,body),{signal:controller.signal});
       }else result=await runActorTransaction(database,config,actor,port=>repository.execute(port,body),{signal:controller.signal});
       return {matched:true,status:200,body:{data:result}};
     }catch(error){

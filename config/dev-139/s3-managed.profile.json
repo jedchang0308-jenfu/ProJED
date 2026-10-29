@@ -147,6 +147,10 @@
     {
       "version": "0031_meeting_audio_transport_v1",
       "path": "db/migrations/0031_meeting_audio_transport_v1.sql"
+    },
+    {
+      "version": "0032_meeting_upload_completion_v1",
+      "path": "db/migrations/0032_meeting_upload_completion_v1.sql"
     }
   ],
   "objectAllowlist": [
@@ -271,7 +275,12 @@
     "projed_core.meeting_audio_cleanup_scope_v1",
     "projed_core.meeting_audio_settlement_scope_v1",
     "projed_core.meeting_audio_proof_guard_v1",
-    "projed_core.meeting_audio_anchor_retention_v1"
+    "projed_core.meeting_audio_anchor_retention_v1",
+    "projed_core.meeting_upload_scope_v1",
+    "projed_core.meeting_upload_budget_scope_v1",
+    "projed_core.meeting_upload_run_scope_v1",
+    "projed_core.meeting_budget_upload_guard_v1",
+    "projed_core.complete_meeting_upload_v1"
   ],
   "staticFixturePath": "dist",
   "runtime": {
