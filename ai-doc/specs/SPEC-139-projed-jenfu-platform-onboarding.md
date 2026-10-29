@@ -1143,3 +1143,6 @@ review／decision／playback 將 account、auth context、Workspace、Board、re
 
 
 第三個 native CI [`40804488769`](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40804488769)（source `bf631db`）已完成 cancel／replay 與三類 run 狀態讀回；usage readback 查詢漏帶新增的 failed_retryable attempt ID，造成 3≠4，保留為失敗並補回原查核對象，不改預期四筆或狀態 oracle。原退款額度、private 拒絕及後續案例仍待整體成功收據。續版亦保留舊 API 的 finalPointerSequence=-1 空集合語意，並驗 stopped 仍能收 pointer、第二次 stop 不改首次 server anchor／七天期限；review revision 及其他 counter 仍限制非負 safe integer。
+
+
+控制面 source `da494b742e3db143b45946264680520e8e038d5a` 的 [CI 40805053863](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40805053863) 已全部成功，包含取消／重播、原退款與 unknown／legacy／failed_retryable 保留、私人拒絕、空 pointer sentinel 與停止期限，以及原 domain／移轉回歸。續版只擴充同一 native fixture：從自己的 pending segment 實際建立並讀回唯一 GCS cleanup obligation（不早於 upload token 到期）；先製造自己 budget 餘額不足，驗整筆取消 rollback、run／usage／新 obligation 無部分提交，再恢復原預留款正常取消。這兩項補驗尚待新版 CI，不以 da494b7 收據替代；未新增執行器或 required gate。

@@ -32,6 +32,10 @@ interface FinanceFixture {
   readonly legacyAttemptId: string;
   readonly retryablePendingAttemptId: string;
   readonly cleanupObligationId: string;
+  readonly storageSegmentId: string;
+  readonly storageCleanupAttemptId: string;
+  readonly storageObjectPath: string;
+  readonly storageReservationKey: string;
   readonly queuedReserve: string;
   readonly runningReserve: string;
   readonly legacyReserve: string;
@@ -112,6 +116,16 @@ async function seedFinanceFixture(
   }
   if (!budgetMonth) throw new Error('MEETING_FINANCE_MONTH_COLLISION');
 
+  const captureResult = await admin.query<{ tenant_id: string; project_id: string; record_id: string }>(`
+    SELECT tenant_id::text,project_id::text,record_id::text
+      FROM projed_core.meeting_capture_sessions WHERE id=$1::uuid
+  `, [captureId]);
+  assert.equal(captureResult.rowCount, 1, 'the cleanup fixture must use its own capture scope');
+  const captureScope = captureResult.rows[0];
+  assert.ok(captureScope, 'the cleanup fixture capture must exist');
+  const storageObjectPath = `${captureScope.tenant_id}/${captureScope.project_id}/${captureScope.record_id}/${captureId}/v1/0.webm`;
+  const storageCleanupAttemptId = `storage:${captureId}:v1:segment:0`;
+
   const fixture: FinanceFixture = {
     budgetMonth,
     budgetLimit: (9_000_000_000_000_000_000n - BigInt(randomBytes(6).readUIntBE(0, 6))).toString(),
@@ -123,6 +137,10 @@ async function seedFinanceFixture(
     legacyAttemptId: `qa-meeting-capture-legacy-${randomUUID()}`,
     retryablePendingAttemptId: `qa-meeting-capture-retryable-pending-${randomUUID()}`,
     cleanupObligationId: randomUUID(),
+    storageSegmentId: randomUUID(),
+    storageCleanupAttemptId,
+    storageObjectPath,
+    storageReservationKey: `qa-meeting-capture-reservation-${randomUUID()}`,
     queuedReserve,
     runningReserve,
     legacyReserve,
@@ -143,6 +161,21 @@ async function seedFinanceFixture(
     `, [fixture.budgetMonth, fixture.budgetLimit, fixture.totalReserve]);
     if (budget.rowCount !== 1) throw new Error('MEETING_FINANCE_MONTH_COLLISION');
     onBudgetInserted?.();
+
+    const priorStorageCleanup = await admin.query(`
+      SELECT 1 FROM projed_core.meeting_artifact_cleanup
+       WHERE attempt_id=$1
+    `, [fixture.storageCleanupAttemptId]);
+    assert.equal(priorStorageCleanup.rowCount, 0, 'the storage obligation must be created by cancellation');
+    const segment = await admin.query<{ id: string }>(`
+      INSERT INTO projed_core.meeting_capture_segments
+        (id,capture_id,segment_index,epoch,start_offset_ms,end_offset_ms,object_path,mime,bytes,
+         upload_state,source_version,reservation_key,upload_token_expires_at,storage_backend)
+      VALUES($1::uuid,$2::uuid,0,0,0,100,$3,'audio/webm',0,'pending',1,$4,now()+interval '2 hours','gcs')
+      RETURNING id::text
+    `, [fixture.storageSegmentId, captureId, fixture.storageObjectPath, fixture.storageReservationKey]);
+    assert.equal(segment.rowCount, 1);
+    assert.equal(segment.rows[0]?.id, fixture.storageSegmentId);
 
     const createdAt = new Date().toISOString();
     await admin.query(`
@@ -258,6 +291,50 @@ async function readFinanceAfterCancel(admin: pg.Client, fixture: FinanceFixture,
     run_id: fixture.queuedRunId,
     state: 'pending',
   });
+
+  const storageCleanup = await admin.query<{
+    attempt_id: string;
+    capture_id: string | null;
+    kind: string;
+    object_locator: string | null;
+    state: string;
+    storage_backend: string | null;
+    upload_token_expires_at: Date | null;
+    due_at: Date;
+    segment_id: string | null;
+    segment_object_path: string | null;
+    segment_upload_state: string | null;
+    segment_storage_backend: string | null;
+    segment_upload_token_expires_at: Date | null;
+  }>(`
+    SELECT obligation.attempt_id,obligation.capture_id::text,obligation.kind,obligation.object_locator,
+      obligation.state,obligation.storage_backend,obligation.upload_token_expires_at,obligation.due_at,
+      segment.id::text AS segment_id,segment.object_path AS segment_object_path,
+      segment.upload_state AS segment_upload_state,segment.storage_backend AS segment_storage_backend,
+      segment.upload_token_expires_at AS segment_upload_token_expires_at
+      FROM projed_core.meeting_artifact_cleanup obligation
+      LEFT JOIN projed_core.meeting_capture_segments segment
+        ON segment.capture_id=obligation.capture_id AND segment.id=$2::uuid
+     WHERE obligation.attempt_id=$1
+  `, [fixture.storageCleanupAttemptId, fixture.storageSegmentId]);
+  assert.equal(storageCleanup.rowCount, 1, 'cancelling a pending segment creates one cleanup obligation');
+  const generated = storageCleanup.rows[0];
+  assert.ok(generated, 'the generated storage cleanup obligation must be readable');
+  assert.equal(generated.attempt_id, fixture.storageCleanupAttemptId);
+  assert.equal(generated.capture_id, captureId);
+  assert.equal(generated.kind, 'storage');
+  assert.equal(generated.object_locator, fixture.storageObjectPath);
+  assert.equal(generated.state, 'pending');
+  assert.equal(generated.storage_backend, 'gcs');
+  assert.equal(generated.segment_id, fixture.storageSegmentId);
+  assert.equal(generated.segment_object_path, fixture.storageObjectPath);
+  assert.equal(generated.segment_upload_state, 'pending');
+  assert.equal(generated.segment_storage_backend, 'gcs');
+  assert.ok(generated.upload_token_expires_at instanceof Date);
+  assert.ok(generated.segment_upload_token_expires_at instanceof Date);
+  assert.equal(generated.upload_token_expires_at.getTime(), generated.segment_upload_token_expires_at.getTime());
+  assert.ok(generated.due_at.getTime() >= generated.upload_token_expires_at.getTime(),
+    'cleanup must wait until the pending upload token expires');
 }
 
 async function cleanupFinanceFixture(admin: pg.Client, fixture: FinanceFixture, budgetWasInserted: boolean): Promise<void> {
@@ -266,6 +343,10 @@ async function cleanupFinanceFixture(admin: pg.Client, fixture: FinanceFixture, 
   try {
     await admin.query('DELETE FROM projed_core.meeting_artifact_cleanup WHERE obligation_id=$1::uuid',
       [fixture.cleanupObligationId]);
+    await admin.query('DELETE FROM projed_core.meeting_artifact_cleanup WHERE attempt_id=$1 AND kind=\'storage\'',
+      [fixture.storageCleanupAttemptId]);
+    await admin.query('DELETE FROM projed_core.meeting_capture_segments WHERE id=$1::uuid',
+      [fixture.storageSegmentId]);
     await admin.query('DELETE FROM projed_core.meeting_ai_usage_attempts WHERE attempt_id=ANY($1::text[])',
       [[fixture.reservedAttemptId, fixture.unknownAttemptId, fixture.legacyAttemptId, fixture.retryablePendingAttemptId]]);
     await admin.query('DELETE FROM projed_core.meeting_analysis_runs WHERE id=ANY($1::uuid[])',
@@ -546,6 +627,29 @@ export async function verifyMeetingCapturePostgres(
         fixture => { financeFixture = fixture; },
         () => { financeBudgetInserted = true; },
       );
+      // An inconsistent ledger must reject the entire cancellation, including
+      // earlier run changes and the newly generated cleanup obligation.
+      const fixture=financeFixture;
+      await admin.query(`UPDATE projed_core.meeting_ai_budget_months SET reserved_twd_micros=0
+        WHERE budget_month=$1::date AND limit_twd_micros=$2::bigint`,[fixture.budgetMonth,fixture.budgetLimit]);
+      await assert.rejects(post(ownerClient,{
+        operation:'cancel',captureId,expectedSourceVersion:1,reason:'qa-ledger-rollback',
+      }),error=>requireHttpError(error,'DB_UNAVAILABLE',503));
+      const afterRollback=await admin.query<{state:string;runs_unchanged:boolean;cleanup_absent:boolean;usage_unchanged:boolean}>(`
+        SELECT capture.state,
+          (SELECT count(*)=3 FROM projed_core.meeting_analysis_runs WHERE id=ANY($2::uuid[])
+            AND state IN ('queued','running','failed_retryable')) AS runs_unchanged,
+          NOT EXISTS(SELECT 1 FROM projed_core.meeting_artifact_cleanup
+            WHERE attempt_id=$3 AND kind='storage') AS cleanup_absent,
+          (SELECT count(*)=3 FROM projed_core.meeting_ai_usage_attempts WHERE attempt_id=ANY($4::text[])
+            AND usage_state='reserved' AND actual_twd_micros IS NULL) AS usage_unchanged
+        FROM projed_core.meeting_capture_sessions capture WHERE capture.id=$1::uuid`,
+      [captureId,[fixture.queuedRunId,fixture.runningRunId,fixture.retryableRunId],fixture.storageCleanupAttemptId,
+        [fixture.reservedAttemptId,fixture.legacyAttemptId,fixture.retryablePendingAttemptId]]);
+      assert.deepEqual(afterRollback.rows,[{state:'stopped',runs_unchanged:true,cleanup_absent:true,usage_unchanged:true}]);
+      await admin.query(`UPDATE projed_core.meeting_ai_budget_months SET reserved_twd_micros=$3::bigint
+        WHERE budget_month=$1::date AND limit_twd_micros=$2::bigint`,
+      [fixture.budgetMonth,fixture.budgetLimit,fixture.totalReserve]);
     }
     const cancelled = responseData(await post(ownerClient, {
       operation: 'cancel', captureId, expectedSourceVersion: 1, reason: 'qa-native-cancel',
