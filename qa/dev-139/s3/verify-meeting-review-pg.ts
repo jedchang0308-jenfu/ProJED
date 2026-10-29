@@ -833,12 +833,18 @@ export async function verifyMeetingReviewPostgres(
       assert.equal(projectedLinkMap.get(`${autoTask.id}/related`), true, 'accepted current suggestions join projection links');
     }
     assert.equal(projectedLinkMap.get(`${oldReplacementTask.id}/related`), undefined);
-    const concurrentAccepted = concurrentRows.rows[0]!.count === '1'
-      ? (await admin.query<{ task_id: string }>(`SELECT task_id::text FROM projed_core.meeting_task_match_results WHERE resolution_id=$1::uuid`, [resolutionIds.concurrent])).rows[0]!.task_id
-      : '';
-    const concurrentLegacyId = concurrentAccepted === concurrentTaskA.internalId ? concurrentTaskA.id : concurrentTaskB.id;
+    const concurrentAccepted = await admin.query<{ task_id: string }>(`
+      SELECT task_id::text FROM projed_core.meeting_task_match_results
+      WHERE resolution_id=$1::uuid AND decision='accepted'`, [resolutionIds.concurrent]);
+    assert.equal(concurrentAccepted.rowCount, 1);
+    const concurrentWinner = concurrentAccepted.rows[0]!.task_id;
+    assert.ok([concurrentTaskA.internalId, concurrentTaskB.internalId].includes(concurrentWinner));
+    const concurrentLegacyId = concurrentWinner === concurrentTaskA.internalId ? concurrentTaskA.id : concurrentTaskB.id;
+    const untouchedLegacyId = concurrentWinner === concurrentTaskA.internalId ? concurrentTaskB.id : concurrentTaskA.id;
     assert.equal(projectedLinkMap.get(`${concurrentLegacyId}/related`), true,
       'the one winning concurrent decision is included in the projected record');
+    assert.equal(projectedLinkMap.get(`${untouchedLegacyId}/related`), undefined,
+      'the untouched suggested candidate is not projected as an accepted link');
 
     const savedRag = await ragSnapshot(admin, projectRecord.id);
     assert.equal(savedSnapshot.rag_enabled, true);
