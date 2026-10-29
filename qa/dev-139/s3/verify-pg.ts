@@ -90,7 +90,9 @@ const actorA: ServerActorV1 = {
   localUserId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   entry: 'main',
   contextId: '51111111-1111-4111-8111-111111111111',
-  expiresAtMs: Date.now() + 60_000,
+  // Shared synthetic actors cover this bounded CI suite. Production actors
+  // retain their short live-verifier horizon; expiry rejection has its own cases.
+  expiresAtMs: Date.now() + 20 * 60_000,
   accountGuardRevision: '1',
 };
 const actorB: ServerActorV1 = {
