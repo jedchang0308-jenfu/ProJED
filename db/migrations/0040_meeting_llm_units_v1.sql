@@ -479,8 +479,8 @@ BEGIN
       IF NOT(usage ? key_name) AND key_name IN('candidateTokens','thoughtTokens') THEN value:=0;
       ELSIF jsonb_typeof(usage->key_name) IS DISTINCT FROM 'number' THEN RETURN NULL;
       ELSE value:=(usage->>key_name)::numeric;END IF;
-      IF value<0 OR trunc(value)<>value OR value>CASE WHEN key_name='promptTokens' THEN 1048576
-        WHEN key_name='totalTokens' THEN 1179648 ELSE 65536 END THEN RETURN NULL;END IF;
+      IF value<0 OR trunc(value)<>value OR value>(CASE WHEN key_name='promptTokens' THEN 1048576
+        WHEN key_name='totalTokens' THEN 1179648 ELSE 65536 END) THEN RETURN NULL;END IF;
       values_map:=values_map||jsonb_build_object(key_name,value::bigint);
     END LOOP;
     prompt_value:=(values_map->>'promptTokens')::bigint;candidate_value:=(values_map->>'candidateTokens')::bigint;
