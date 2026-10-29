@@ -72,8 +72,8 @@ BEGIN
       OR NEW.state NOT IN('queued','awaiting_budget')
       OR NEW.stage_cursor<>jsonb_build_object('asr',jsonb_build_object('segmentIndex',0,'chunkIndex',0,'unitIndex',0,'attempt',0))
       OR NEW.budget_month<>date_trunc('month',now() AT TIME ZONE 'Asia/Taipei')::date
-      OR NEW.reserved_twd_micros<>CASE WHEN NEW.state='queued'
-        THEN projed_core.meeting_cloud_speech_reservation_v1(NEW.capture_id) ELSE 0 END
+      OR NEW.reserved_twd_micros<>(CASE WHEN NEW.state='queued'
+        THEN projed_core.meeting_cloud_speech_reservation_v1(NEW.capture_id) ELSE 0 END)
       OR NOT((OLD.provider_mode='gemini' AND OLD.config_version='dev-123.v1'
           AND OLD.transcript_revision_id IS NULL AND OLD.stage_cursor='{}'::jsonb AND OLD.attempt_count=0)
         OR(OLD.provider_mode='cloud-speech-v1' AND OLD.config_version='dev139.cloud-speech.v1'
