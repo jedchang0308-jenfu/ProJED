@@ -3,7 +3,7 @@ import { requireAudioMime, requireUuid } from './meetingCaptureInput.js';
 
 const MAX_SOURCE_VERSION = 2_147_483_647;
 const MAX_SEGMENT_INDEX = 4095;
-const MAX_AUDIO_SEGMENT_BYTES = 10 * 1024 * 1024;
+export const MAX_AUDIO_SEGMENT_BYTES = 10 * 1024 * 1024;
 const MAX_RESERVATION_KEY_LENGTH = 180;
 const CONTROL_CHAR_RE = /[\p{Cc}]/u;
 const INTEGER_TEXT_RE = /^\d+$/u;

@@ -39,5 +39,14 @@ COPY --from=build --chown=node:node /app/scripts/create-dev139-managed-binding.m
 COPY --from=build --chown=node:node /app/scripts/run-dev139-managed-job.mjs ./scripts/run-dev139-managed-job.mjs
 CMD ["node", "scripts/run-dev139-managed-job.mjs"]
 
+# Audio decoding has a separate image layer; ordinary web/migration images do
+# not acquire a media toolchain. This is not yet an ASR worker entrypoint.
+FROM runtime AS media-runtime
+USER root
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+USER node
+
 # A normal build still produces the web runtime. Jobs require an explicit target.
 FROM runtime AS final

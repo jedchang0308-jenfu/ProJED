@@ -14,11 +14,12 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 - Managed Job artifact／wrapper migration與必要回歸已通過；正式foundation差距見 [SPEC §47](specs/SPEC-139-projed-jenfu-platform-onboarding.md#47-managed-job-artifact-and-real-foundation-gapsw332026-10-29)；私有SQL的VPC route、lifecycle IAM登入與owner bootstrap尚未接齊，原Unix socket／direct-role candidate不得當作正式可部署證明。
 - Managed IAM登入與固定app-role guard程式／隔離驗證已通過，見 [SPEC §48](specs/SPEC-139-projed-jenfu-platform-onboarding.md#48-managed-iam-login-and-app-role-contextw342026-10-29)；isolated IAM-shaped session與真Cloud IAM／proxy／network證據分開，正式發布分母不變。
 - Cloud Run create renderer、source Secret bundle、pooler角色核對與啟動連線容錯已通過隔離CI，見 [SPEC §49](specs/SPEC-139-projed-jenfu-platform-onboarding.md#49-cloud-run-create-renderer-and-source-secret-bundlew352026-10-29)；僅產生IAM保護的service／Job建立請求。Shared VPC、正式IAM／Secret與owner bootstrap仍未apply，原Session／資料／切流及發布分母保留。
+- Platform owner roles／CREATE window已通過原生PG17與必要CI；ASR記憶體解碼／Google Cloud同步provider元件已實作，見[SPEC §51](specs/SPEC-139-projed-jenfu-platform-onboarding.md#51-owner-foundation-qualification-and-asr-componentsw36w372026-10-29)。真codec／ASR worker／正常錄音UI／真provider與正式基礎環境仍續行，不以fixture PASS結案。
 - 選測與流程精簡（2026-10-29）：S3 DB／HTTP 可獨立於前端建置／browser 執行，亦可沿既有腳本使用遠端隔離 CI，無須等待本機容量例外。已完成 S1 的固定順序、人工 freeze／QC／Spec Drift 及重複架構核准不再作續行前置。命令、授權與啟用界線見 [SPEC §8.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#81-工程驗證案例與固定本地入口)、§9／§11.5；原 required CI、安全與全部交付範圍保留，不新增 required gate。
 - 類型：交付點；主責：本 repo 的 DEV-139；無同專案父任務。
 - 唯一交接契約：[SPEC-139](specs/SPEC-139-projed-jenfu-platform-onboarding.md)；核心實作讀[§11 S1定案](specs/SPEC-139-projed-jenfu-platform-onboarding.md#11-架構決策與-s1-定案契約)、[§13 S2 consumer seam](specs/SPEC-139-projed-jenfu-platform-onboarding.md#13-s2-projed-identity-consumer-seam2026-10-26)、[§28 Data Migration](specs/SPEC-139-projed-jenfu-platform-onboarding.md#28-s3-data-migration-rehearsal-w142026-10-27)、[§29 Legacy Calendar URL](specs/SPEC-139-projed-jenfu-platform-onboarding.md#29-s3-legacy-calendar-url-compatibility-w152026-10-27)、[§30 Managed Cloud Run Candidate](specs/SPEC-139-projed-jenfu-platform-onboarding.md#30-s3-managed-cloud-run-candidate-w162026-10-27)、[§31 Managed Snapshot Connection](specs/SPEC-139-projed-jenfu-platform-onboarding.md#31-s3-managed-snapshot-connection-w172026-10-27)、[§32 Local Development Closure](specs/SPEC-139-projed-jenfu-platform-onboarding.md#32-s3-local-development-closure-w182026-10-27)及[§6.3既有使用者切換基線](specs/SPEC-139-projed-jenfu-platform-onboarding.md#63-既有使用者切換基線)；架構決策：[ADR-054](decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。本地正常UI煙霧不能替代真Session、正式資料及既有使用者切換驗收。
 
-- 真ASR本次交付：2026-10-29人類確認「本次同時完成真 ASR」；DEV-139承接既有DEV-123錄音管線的真轉錄、worker／cleanup與正常UI接線及實測，不再列後續或待答；fake worker／文字合成結果不代表ASR完成。
+- 真ASR本次交付：2026-10-29人類確認「本次同時完成真 ASR」；DEV-139承接既有DEV-123錄音管線的真轉錄、worker／cleanup與正常UI接線及實測，不再列後續或待答；同日確認供應商零留存、採符合條件的Google Cloud路徑。fake worker／文字合成結果不代表ASR完成。
 
 ### 1. 人類決策與授權範圍
 
@@ -39,6 +40,7 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 | 2026-10-08 | 指定 rd-tech-lead：「審視並優化亞購」 | 依本任務語境審視並優化架構文件，Rev5修正Rev4交接缺口，保留Cloud Run／Cloud SQL、Vite、D1／D2及費用條件；只更新本repo四文件，不進產品實作或擴張外部開發。 |
 | 2026-10-08 | 「PROJED已有使用者, 我可以無縫切換嗎」；評估後「請寫進發文件」 | Rev6 將既有使用者相容切換寫入同四份文件：保留原網址／PWA、原帳號資料／ID／權限與待同步內容，先相容與演練，再單一 writer 切換。預留正常重新登入與經演練確認的短暫停寫；零重登／零停寫未承諾，實際窗口及正式切換未授權。 |
 | 2026-10-29 | 「本次同時完成真 ASR」 | 真ASR與完整錄音管線納入DEV-139本次交付及驗收；沿用DEV-123／ADR-051產品語意，不以fake worker或文字transcript替代真provider結果。 |
+| 2026-10-29 | 「維持零留存，採可符合條件的 Google Cloud 路徑（建議）」 | 真ASR保持供應商內容零留存條件，改評估符合條件的Google Cloud處理路徑；不接受付費Gemini Developer API的防濫用內容留存，不以store=false或刪Files假稱符合。 |
 
 2026-10-26 使用者已明確要求「完成 DEV-139 開發」，授權在 `projed-independent-dev` 工作樹實作、測試及更新本任務文件；正式發布／切流、正式資料、IAM／Secret／credential／billing 與其他 repo 仍不在範圍。先完成 ProJED 可獨立交付的 S1 與後續本 repo adapter；Jenfu-Platform、OrgMaster 的 producer 變更須另有其專案範圍，不能以本任務文件替代。
 

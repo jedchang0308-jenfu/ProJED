@@ -18,6 +18,7 @@ const prefix = `dev139-oci-${nonce}`;
 const toolsImage = `${prefix}:build`;
 const runtimeImage = `${prefix}:runtime`;
 const jobsImage = `${prefix}:jobs`;
+const mediaImage = `${prefix}:media`;
 const postgresImage = 'postgres:17.11-bookworm';
 const instance = 'jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg';
 const socketPath = `/cloudsql/${instance}`;
@@ -36,6 +37,8 @@ const [adminPassword, migratorPassword, importerPassword, runtimePassword] = sec
 let binding;
 let imageId;
 let jobsImageId;
+let mediaImageId;
+let mediaProof;
 let postgresVersion;
 let appliedMigrationCount = 0;
 let firstFailure;
@@ -397,6 +400,62 @@ try {
   assert.ok(!eventLines.some(value => /start_failed|shutdown_failed/.test(value.event)));
   assert.equal(inspect(appName).State.Running, false);
   passed('cloud-run-port-and-graceful-sigterm');
+
+  // Codec qualification is independent of the database checks above. Use only
+  // generated tone audio, a read-only owned container, and no network/credentials.
+  docker(['build', '--platform', 'linux/amd64', '--target', 'media-runtime', '--label', `${label}=${nonce}`,
+    '--build-arg', `PROJED_RELEASE_ID=${prefix}`, '-f', 'Dockerfile.dev139', '-t', mediaImage, '.'], { timeout: 600_000 });
+  images.add(mediaImage);
+  mediaImageId = inspect(mediaImage).Id;
+  const codecResult = runOwnedContainer('media-codecs', ['--read-only', '--cap-drop', 'ALL',
+    '--security-opt', 'no-new-privileges', mediaImage, 'node', '--input-type=module', '-e', String.raw`
+    import assert from 'node:assert/strict';
+    import {spawnSync} from 'node:child_process';
+    import {decodeMeetingAudioToPcm,splitMeetingPcm} from './dist-server/server/meetingAudioPcm.js';
+    assert.notEqual(process.getuid(),0);
+    const durationMs=52125, sampleRate=16000, samples=durationMs*16;
+    const pcm=Buffer.alloc(samples*2);
+    for(let i=0;i<samples;i++)pcm.writeInt16LE(Math.round(Math.sin(i*2*Math.PI*440/sampleRate)*2000),i*2);
+    const wav=Buffer.alloc(44+pcm.length);
+    wav.write('RIFF');wav.writeUInt32LE(wav.length-8,4);wav.write('WAVEfmt ',8);
+    wav.writeUInt32LE(16,16);wav.writeUInt16LE(1,20);wav.writeUInt16LE(1,22);
+    wav.writeUInt32LE(sampleRate,24);wav.writeUInt32LE(sampleRate*2,28);
+    wav.writeUInt16LE(2,32);wav.writeUInt16LE(16,34);wav.write('data',36);
+    wav.writeUInt32LE(pcm.length,40);pcm.copy(wav,44);
+    const version=spawnSync('/usr/bin/ffmpeg',['-version'],{encoding:'utf8'});
+    assert.equal(version.status,0);
+    const results=[];
+    for(const [mime,args] of [
+      ['audio/wav',null],
+      ['audio/webm',['-c:a','libopus','-f','webm']],
+      ['audio/ogg',['-c:a','libopus','-f','ogg']],
+      ['audio/mpeg',['-c:a','libmp3lame','-f','mp3']],
+      ['audio/mp4',['-c:a','aac','-movflags','frag_keyframe+empty_moov','-f','mp4']],
+    ]){
+      let bytes=wav;
+      if(args){
+        const encoded=spawnSync('/usr/bin/ffmpeg',['-hide_banner','-loglevel','error','-nostdin',
+          '-protocol_whitelist','pipe','-i','pipe:0','-vn',...args,'pipe:1'],
+          {input:wav,maxBuffer:4*1024*1024,timeout:30000,env:{PATH:'/usr/bin:/bin',LANG:'C'}});
+        assert.equal(encoded.status,0,'Synthetic codec encoding failed: '+mime);
+        bytes=encoded.stdout;
+      }
+      const decoded=await decodeMeetingAudioToPcm({bytes,mimeType:mime,expectedDurationMs:durationMs});
+      assert.ok(Math.abs(decoded.length/2-samples)<=4096,'Unexpected codec duration: '+mime);
+      if(mime==='audio/wav')assert.deepEqual(decoded,pcm);
+      const chunks=splitMeetingPcm(decoded);
+      assert.equal(chunks.length,2);
+      assert.ok(chunks.every(chunk=>chunk.endSample-chunk.startSample<=800000));
+      assert.equal(chunks.reduce((sum,chunk)=>sum+chunk.bytes.length,0),decoded.length);
+      results.push({mime,inputBytes:bytes.length,outputSamples:decoded.length/2,
+        chunkSamples:chunks.map(chunk=>chunk.endSample-chunk.startSample)});
+    }
+    console.log(JSON.stringify({ffmpeg:version.stdout.split('\n')[0],fixtures:results,
+      source:'GENERATED_TONE_ONLY',provider:'NOT_RUN',cloud:'NOT_RUN'}));
+  `]);
+  mediaProof = JSON.parse(codecResult.stdout.trim());
+  assert.equal(mediaProof.fixtures.length, 5);
+  passed('actual-nonroot-five-audio-formats-decoding-and-sample-chunking');
 } catch (error) {
   firstFailure = error;
   for (const name of [...containers].reverse()) {
@@ -445,7 +504,7 @@ if (!firstFailure && cleanupFailures.length === 0) passed('owned-container-socke
 const status = firstFailure || cleanupFailures.length ? 'FAIL' : 'PASS';
 const result = {
   status, evidenceLevel: 'ISOLATED_LINUX_OCI_IAM_SHAPED_POSTGRES',
-  sourceSha: process.env.GITHUB_SHA, releaseId: prefix, imageId, jobsImageId,
+  sourceSha: process.env.GITHUB_SHA, releaseId: prefix, imageId, jobsImageId, mediaImageId, mediaProof,
   postgres: postgresVersion, migrationCount: appliedMigrationCount,
   expectedMigrationCount: binding ? Object.keys(binding.migrationSha256).length : 0,
   profileSha256: binding?.profileSha256, migrationSha256: binding?.migrationSha256,
@@ -453,6 +512,7 @@ const result = {
   dockerExecution: status, browserSmoke: 'NOT_RUN', productionIdentity: 'NOT_RUN',
   metadataProvider: 'FIXTURE_ONLY', cloudIamAuthentication: 'NOT_RUN', proxyAuthentication: 'NOT_RUN',
   sourceSupabaseAuthentication: 'NOT_RUN',
+  speechProviderAuthentication: 'NOT_RUN', speechRecognition: 'NOT_RUN',
   cloudSqlReadback: 'NOT_RUN', registryPush: 'NOT_RUN', productionRelease: 'NOT_RUN',
   ...(firstFailure ? { failure: sanitize(firstFailure.message) } : {}),
   ...(diagnostics.length ? { diagnostics } : {}),
