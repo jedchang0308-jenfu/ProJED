@@ -1061,8 +1061,6 @@ export async function verifyMeetingUploadPostgres(
     });
     const exactDispatchPayload:JsonObject={chunkIndex:0,chunkCount:1,startSample:0,endSample:1600,
       decodedSha256:'b'.repeat(64),startOffsetMs:0,endOffsetMs:100};
-    assert.deepEqual(Object.keys(exactDispatchPayload).sort(),
-      ['chunkIndex','chunkCount','decodedSha256','endOffsetMs','endSample','startOffsetMs','startSample']);
     let dispatchToken='';let boundDispatchActor:ServerActorV1|undefined;
     await verifyAsrSessionBinding(database,config,admin,owner,outsider,dispatchRecordId,dispatchCaptureId,dispatchRunId,
       async(actor,otherActor)=>{
