@@ -49,6 +49,24 @@ const FIELDS: Readonly<Record<string,readonly string[]>>={
 };
 
 export class MeetingCaptureRepository {
+  private async status(port:ActorQueryPort,capture:CaptureRow):Promise<unknown>{
+    if(!['queued','running','awaiting_budget','failed_retryable'].includes(capture.state))return progress(capture);
+    const latest=await port.query<{state:string}>(`SELECT state FROM projed_core.meeting_analysis_runs
+      WHERE capture_id=$1::uuid AND source_version=$2 ORDER BY created_at DESC,id DESC LIMIT 1`,
+    [capture.id,capture.source_version]);
+    if(latest.rows[0]?.state!=='failed_terminal')return progress(capture);
+    // A revoked background actor may close only its costs/run metadata. Once
+    // the owner returns, use this fresh actor's existing mutation authority to
+    // reconcile the visible state and free the stale active-capture slot.
+    await port.authorizeMeetingCaptureMutation(capture.record_id,capture.id);
+    const updated=await port.query<CaptureRow>(`UPDATE projed_core.meeting_capture_sessions SET state='failed_terminal',updated_at=now()
+      WHERE id=$1::uuid AND source_version=$2 AND state IN('queued','running','awaiting_budget','failed_retryable')
+        AND (SELECT state FROM projed_core.meeting_analysis_runs WHERE capture_id=$1::uuid AND source_version=$2
+          ORDER BY created_at DESC,id DESC LIMIT 1)='failed_terminal'
+      RETURNING *`,[capture.id,capture.source_version]);
+    return progress(updated.rows[0]??capture);
+  }
+
   async execute(port: ActorQueryPort, body: Record<string,unknown>): Promise<unknown> {
     const operation=body.operation;
     if(typeof operation!=='string'||!Object.hasOwn(FIELDS,operation))
@@ -59,7 +77,7 @@ export class MeetingCaptureRepository {
     const id=requireUuid(body.captureId,'captureId');
     const visible=await port.query<CaptureRow>('SELECT * FROM projed_core.meeting_capture_sessions WHERE id=$1::uuid',[id]);
     if(visible.rows.length!==1)missing();
-    if(operation==='status')return progress(visible.rows[0]!);
+    if(operation==='status')return this.status(port,visible.rows[0]!);
     await port.authorizeMeetingCaptureMutation(visible.rows[0]!.record_id,id);
     const locked=await port.query<CaptureRow>('SELECT * FROM projed_core.meeting_capture_sessions WHERE id=$1::uuid FOR UPDATE',[id]);
     const capture=locked.rows[0];if(!capture)missing();

@@ -166,6 +166,10 @@
     {
       "version": "0036_meeting_asr_claim_dispatch_v1",
       "path": "db/migrations/0036_meeting_asr_claim_dispatch_v1.sql"
+    },
+    {
+      "version": "0037_meeting_asr_settlement_v1",
+      "path": "db/migrations/0037_meeting_asr_settlement_v1.sql"
     }
   ],
   "objectAllowlist": [
@@ -311,7 +315,13 @@
     "projed_core.meeting_asr_claim_run_guard_v1",
     "projed_core.meeting_asr_usage_work_guard_v1",
     "projed_core.claim_meeting_asr_unit_v1",
-    "projed_core.mark_meeting_asr_dispatch_v1"
+    "projed_core.mark_meeting_asr_dispatch_v1",
+    "projed_core.meeting_asr_unit_results",
+    "projed_core.meeting_asr_settle_scope_v1",
+    "projed_core.meeting_asr_settle_run_scope_v1",
+    "projed_core.meeting_asr_settlement_guard_v1",
+    "projed_core.settle_meeting_asr_unit_v1",
+    "projed_core.read_meeting_asr_dispatch_v1"
   ],
   "staticFixturePath": "qa/dev-139/s1/static",
   "runtime": {

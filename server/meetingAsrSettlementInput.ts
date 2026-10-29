@@ -72,7 +72,9 @@ function normalizeTranscript(input:unknown):MeetingAsrTranscriptUnit{
       ||typeof rawText!=='string'||rawText.includes('\0')||rawText.length>MAX_RAW_TEXT_CODE_UNITS)invalid();
 
   const wordValues=exactArray(value.wordOffsets,MAX_WORDS);
+  if(rawText.length>0&&wordValues.length===0)invalid();
   const wordOffsets:MeetingAsrTranscriptUnit['wordOffsets'][number][]=[];
+  let previousStartMs=-1;
   for(let index=0;index<wordValues.length;index++){
     const word=exactRecord(wordValues[index],WORD_KEYS,WORD_KEYS);
     const text=word.text;
@@ -84,9 +86,11 @@ function normalizeTranscript(input:unknown):MeetingAsrTranscriptUnit{
     if(typeof start!=='number'||!Number.isFinite(start)||start<0||start>MAX_SAFE_TIME
         ||typeof end!=='number'||!Number.isFinite(end)||end<start||end>MAX_SAFE_TIME
         ||start<dispatch.startOffsetMs||end>dispatch.endOffsetMs
+        ||start<previousStartMs-0.000001
         ||typeof segmentId!=='string'||!UUID_RE.test(segmentId)
         ||!Number.isSafeInteger(sourceWordIndex)||sourceWordIndex!==index)invalid();
     wordOffsets.push({text,start_ms:start,end_ms:end,source_audio_segment_id:segmentId,source_word_index:index});
+    previousStartMs=start;
   }
 
   return {

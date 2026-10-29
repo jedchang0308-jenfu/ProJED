@@ -328,7 +328,8 @@ async function assertLedgerCounts(admin: pg.Client, captureId: string, runs: num
 /** Uses nonce-owned Session/proof fixtures; never a browser bearer or provider. */
 async function verifyAsrSessionBinding(database:RuntimeDatabase,config:RuntimeConfig,admin:pg.Client,
   owner:ServerActorV1,outsider:ServerActorV1,recordId:string,captureId:string,runId:string,
-  onBound?:(actor:ServerActorV1,otherActor:ServerActorV1)=>Promise<void>):Promise<void>{
+  onBound?:(actor:ServerActorV1,otherActor:ServerActorV1)=>Promise<void>,
+  sessionReadableAfterCallback=true):Promise<void>{
   const sessionDatabase=new RuntimeDatabase({...config,profile:{...config.profile,runtime:{...config.profile.runtime,
     pool:{...config.profile.runtime.pool,max:1}}}});
   const store=new PostgresAppSessionStore(sessionDatabase),contextId=randomUUID(),otherContextId=randomUUID();
@@ -367,12 +368,14 @@ async function verifyAsrSessionBinding(database:RuntimeDatabase,config:RuntimeCo
     assert.equal(await bind(boundActor),contextId,'the same context can replay without creating another authorization');
     await onBound?.(boundActor,otherActor);
     const session=await store.readMeetingRunSession(runId);
-    assert.equal(session?.contextId,contextId);assert.equal(session?.localUserId,owner.localUserId);
-    assert.equal(session?.identity.googleSubject,subject);
+    if(sessionReadableAfterCallback){
+      assert.equal(session?.contextId,contextId);assert.equal(session?.localUserId,owner.localUserId);
+      assert.equal(session?.identity.googleSubject,subject);
+    }else assert.equal(session,null,'terminal ASR runs no longer resolve a worker Session');
     assert.equal(await store.readMeetingRunSession(randomUUID()),null,'another run cannot borrow the authorized Session');
     await assert.rejects(bind(otherActor),deny,'even a valid second Session cannot rebind the run');
     await assert.rejects(bind(outsider),'another account cannot bind this private source');
-    assert.equal((await store.readMeetingRunSession(runId))?.contextId,contextId);
+    assert.equal((await store.readMeetingRunSession(runId))?.contextId,sessionReadableAfterCallback?contextId:undefined);
     // A metadata-only worker lookup must not leave a business actor on a pooled connection.
     const lease=await sessionDatabase.checkout();
     try{
@@ -1059,9 +1062,17 @@ export async function verifyMeetingUploadPostgres(
         [dispatchRunId,token,JSON.stringify(payload)]);
       return result.rows[0]?.marked===true;
     });
+    const readDispatch=(actor:ServerActorV1,token:string,payload:JsonObject)=>runActorTransaction(
+      database,config,actor,async port=>{
+        await port.authorizeMeetingCaptureMutation(dispatchRecordId,dispatchCaptureId);
+        const result=await port.query<{eligible:boolean}>(
+          'SELECT projed_core.read_meeting_asr_dispatch_v1($1::uuid,$2::uuid,$3::jsonb) AS eligible',
+          [dispatchRunId,token,JSON.stringify(payload)]);
+        return result.rows[0]?.eligible===true;
+      });
     const exactDispatchPayload:JsonObject={chunkIndex:0,chunkCount:1,startSample:0,endSample:1600,
       decodedSha256:'b'.repeat(64),startOffsetMs:0,endOffsetMs:100};
-    let dispatchToken='';let boundDispatchActor:ServerActorV1|undefined;
+    let dispatchToken='';let boundDispatchActor:ServerActorV1|undefined;let dispatchSourceId='';
     await verifyAsrSessionBinding(database,config,admin,owner,outsider,dispatchRecordId,dispatchCaptureId,dispatchRunId,
       async(actor,otherActor)=>{
         const prepare=()=>runActorTransaction(database,config,actor,port=>
@@ -1084,6 +1095,7 @@ export async function verifyMeetingUploadPostgres(
         const claimedSource=record(first.source,'ASR claim source');
         assert.equal(claimedSource.startOffsetMs,0);assert.equal(claimedSource.sha256,'b'.repeat(64));
         assert.equal(typeof claimedSource.id,'string');
+        dispatchSourceId=String(claimedSource.id);
         const afterClaim=await readDispatchLedger(token);
         assert.equal(afterClaim.unit_reserved,'48000');assert.equal(afterClaim.unit_dispatch,'pending');
         assert.equal(afterClaim.pool_reserved,'96000');assert.equal(afterClaim.pool_remaining,'48000');
@@ -1119,9 +1131,18 @@ export async function verifyMeetingUploadPostgres(
         assert.equal((await readDispatchLedger(token)).unit_dispatch,'pending');
         assert.equal(await markUnit(actor,token,exactDispatchPayload),true,'the exact seven-field payload marks paid intent');
         assert.equal(await markUnit(actor,token,exactDispatchPayload),true,'an exact dispatch replay is idempotent');
+        const ledgerBeforeRead=await readDispatchLedger(token);
+        const budgetBeforeRead=await readBudget(admin,month);
+        assert.equal(await readDispatch(actor,token,exactDispatchPayload),true,
+          'readback confirms the exact dispatched token and frozen payload');
+        assert.equal(await readDispatch(actor,randomUUID(),exactDispatchPayload),false,
+          'readback rejects a token other than the dispatched operation');
         const changedPayload={...exactDispatchPayload,decodedSha256:'c'.repeat(64)};
         assert.equal(await markUnit(actor,token,changedPayload),false,'a changed dispatch manifest cannot replay');
+        assert.equal(await readDispatch(actor,token,changedPayload),false,'readback rejects a changed dispatch payload');
         assert.equal((await readDispatchLedger(token)).unit_dispatch,'dispatched');
+        assert.deepEqual(await readDispatchLedger(token),ledgerBeforeRead,'dispatch readback leaves usage and pool ledgers unchanged');
+        assert.deepEqual(await readBudget(admin,month),budgetBeforeRead,'dispatch readback does not change reserved budget');
         assert.equal((await readBudget(admin,month))?.reserved_twd_micros,'96000');
         assert.equal(claimRace.filter(result=>result.token!==token&&result.claim===null).length,1,
           'the losing competing token remains unclaimed');
@@ -1130,6 +1151,14 @@ export async function verifyMeetingUploadPostgres(
     assert.ok(boundDispatchActor,'the Session helper supplied the exact run-bound actor context');
     assert.equal(await markUnit(boundDispatchActor,dispatchToken,exactDispatchPayload),false,
       'dispatch is denied after the bound Session is revoked and physically deleted');
+    const revokedDispatchLedger=await readDispatchLedger(dispatchToken);
+    const revokedDispatchBudget=await readBudget(admin,month);
+    assert.equal(await readDispatch(boundDispatchActor,dispatchToken,exactDispatchPayload),false,
+      'dispatch readback is false after the bound Session is revoked and physically deleted');
+    assert.deepEqual(await readDispatchLedger(dispatchToken),revokedDispatchLedger,
+      'post-revocation dispatch readback does not alter unit or pool accounting');
+    assert.deepEqual(await readBudget(admin,month),revokedDispatchBudget,
+      'post-revocation dispatch readback leaves the in-flight reservation unchanged');
     assert.equal((await readDispatchLedger(dispatchToken)).unit_dispatch,'dispatched',
       'post-deletion denial preserves the already-dispatched in-flight intent');
     const dispatchCancelled=responseData(await post(ownerClient,{operation:'cancel',captureId:dispatchCaptureId,
@@ -1138,6 +1167,348 @@ export async function verifyMeetingUploadPostgres(
     assert.equal((await readBudget(admin,month))?.reserved_twd_micros,'96000',
       'parent cancellation leaves the dispatched pool reservation in flight');
     assert.equal((await readDispatchLedger(dispatchToken)).unit_dispatch,'dispatched');
+
+    const settleUnit=(actor:ServerActorV1,runId:string,token:string,payload:JsonObject)=>runActorTransaction(
+      database,config,actor,async port=>{
+        const visible=await port.query<{record_id:string;capture_id:string}>(`
+          SELECT capture.record_id::text,capture.id::text AS capture_id
+          FROM projed_core.meeting_analysis_runs run
+          JOIN projed_core.meeting_capture_sessions capture ON capture.id=run.capture_id
+          WHERE run.id=$1::uuid
+        `,[runId]);
+        assert.ok(visible.rowCount===0||visible.rowCount===1,'a visible ASR run resolves at most one owning capture');
+        if(visible.rows[0])await port.authorizeMeetingCaptureMutation(visible.rows[0].record_id,visible.rows[0].capture_id);
+        const result=await port.query<{receipt:unknown}>(
+          'SELECT projed_core.settle_meeting_asr_unit_v1($1::uuid,$2::uuid,$3::jsonb) AS receipt',
+          [runId,token,JSON.stringify(payload)]);
+        return result.rows[0]?.receipt??null;
+      });
+    const readUnitPool=async(runId:string,token:string)=>{
+      const result=await admin.query<{
+        unit_reserved:string;unit_actual:string|null;unit_state:string;unit_dispatch:string|null;
+        unit_outcome:string|null;pool_state:string;pool_remaining:string|null;pool_outcome:string|null;
+      }>(`
+        SELECT unit.reserved_twd_micros::text AS unit_reserved,unit.actual_twd_micros::text AS unit_actual,
+          unit.usage_state AS unit_state,unit.dispatch_state AS unit_dispatch,unit.outcome AS unit_outcome,
+          pool.usage_state AS pool_state,pool.asr_remaining_twd_micros::text AS pool_remaining,pool.outcome AS pool_outcome
+        FROM projed_core.meeting_ai_usage_attempts unit
+        JOIN projed_core.meeting_ai_usage_attempts pool ON pool.attempt_id=unit.run_id::text||':cloud-speech:pool'
+        WHERE unit.run_id=$1::uuid AND unit.asr_operation_token=$2::uuid
+      `,[runId,token]);
+      assert.equal(result.rowCount,1,'the run token and its pool identify exactly one settlement ledger');
+      return result.rows[0]!;
+    };
+    const createSettlementFixture=async(label:string)=>{
+      const recordId=await createPrivateMeeting(database,config,owner,workspace.id,board.id,`DEV-139 ASR ${label} fixture`);
+      const captureId=await beginAndStopCapture(post,ownerClient,workspace.id,board.id,recordId);
+      captureIds.push(captureId);
+      const manifest=await seedSegments(admin,{tenantId:workspace.id,projectId:board.id,recordId,captureId,
+        segments:[{segmentIndex:0,epoch:0,bytes:128,startOffsetMs:0,endOffsetMs:100,
+          overlapMs:0,gapBeforeMs:0,mime:'audio/webm',sha256:'b'.repeat(64),uploadState:'verified'}],
+        onCleanupAttempt:id=>cleanupAttemptIds.add(id)});
+      const source=await admin.query<{id:string}>(`SELECT id::text FROM projed_core.meeting_capture_segments
+        WHERE capture_id=$1::uuid AND source_version=1 AND segment_index=0 AND upload_state='verified'`,[captureId]);
+      assert.equal(source.rowCount,1,'each settlement fixture owns exactly one verified source segment');
+      const body=completionBody(captureId,manifest,`cloud-speech-${label}-${randomUUID()}`);
+      const runId=String(responseData(await post(ownerClient,body),`ASR ${label} source completion`).runId);
+      assert.match(runId,/^[a-f0-9-]{36}$/u);
+      return {recordId,captureId,sourceSegmentId:source.rows[0]!.id,manifest,body,runId,
+        dispatchPayload:{chunkIndex:0,chunkCount:1,startSample:0,endSample:1600,
+          decodedSha256:'b'.repeat(64),startOffsetMs:0,endOffsetMs:100} satisfies JsonObject};
+    };
+    const prepareSettlementFixture=(fixture:Awaited<ReturnType<typeof createSettlementFixture>>,actor:ServerActorV1)=>
+      runActorTransaction(database,config,actor,port=>new MeetingUploadRepository({cloudSpeech:true}).execute(port,fixture.body));
+    const claimSettlementUnit=(fixture:Awaited<ReturnType<typeof createSettlementFixture>>,
+      actor:ServerActorV1,token:string)=>runActorTransaction(database,config,actor,async port=>{
+        await port.authorizeMeetingCaptureMutation(fixture.recordId,fixture.captureId);
+        const result=await port.query<{claim:unknown}>(
+          'SELECT projed_core.claim_meeting_asr_unit_v1($1::uuid,$2::uuid) AS claim',[fixture.runId,token]);
+        return result.rows[0]?.claim??null;
+      });
+    const markSettlementDispatch=(fixture:Awaited<ReturnType<typeof createSettlementFixture>>,
+      actor:ServerActorV1,token:string)=>runActorTransaction(database,config,actor,async port=>{
+        await port.authorizeMeetingCaptureMutation(fixture.recordId,fixture.captureId);
+        const result=await port.query<{marked:boolean}>(
+          'SELECT projed_core.mark_meeting_asr_dispatch_v1($1::uuid,$2::uuid,$3::jsonb) AS marked',
+          [fixture.runId,token,JSON.stringify(fixture.dispatchPayload)]);
+        return result.rows[0]?.marked===true;
+      });
+    const recognizedPayloadFor=(dispatchPayload:JsonObject,sourceSegmentId:string):JsonObject=>({
+      kind:'recognized',transcript:{...dispatchPayload,sourceHash:'d'.repeat(64),rawText:'測試',wordOffsets:[{
+        text:'測試',start_ms:0,end_ms:100,source_audio_segment_id:sourceSegmentId,source_word_index:0,
+      }]},
+      chargeMicros:'16000',chargeSource:'validated_pcm_upper_bound',
+    });
+    const countCheckpoints=async(runId:string)=>{
+      const result=await admin.query<{count:number}>(
+        'SELECT count(*)::integer AS count FROM projed_core.meeting_asr_unit_results WHERE run_id=$1::uuid',[runId]);
+      return result.rows[0]?.count??-1;
+    };
+
+    assert.ok(boundDispatchActor,'the dispatched-cancel fixture retains its original bound actor context');
+    const cancelledReceipt=record(await settleUnit(boundDispatchActor,dispatchRunId,dispatchToken,
+      recognizedPayloadFor(exactDispatchPayload,dispatchSourceId)),'late recognized settlement after cancellation');
+    assert.equal(cancelledReceipt.published,false,'cancellation prevents late transcript publication');
+    assert.equal(cancelledReceipt.asrComplete,false);
+    assert.equal(await countCheckpoints(dispatchRunId),0,'cancelled source creates no ASR checkpoint');
+    assert.deepEqual(await readBudget(admin,month),{
+      limit_twd_micros:DEFAULT_BUDGET_MICROS,reserved_twd_micros:'0',spent_twd_micros:'16000',
+    },'late recognized usage is charged while the cancelled pool reservation is released');
+    const cancelledLedger=await readUnitPool(dispatchRunId,dispatchToken);
+    assert.equal(cancelledLedger.unit_state,'known');assert.equal(cancelledLedger.unit_actual,'16000');
+    assert.equal(cancelledLedger.unit_dispatch,'dispatched');
+    assert.equal(cancelledLedger.pool_state,'known');assert.equal(cancelledLedger.pool_remaining,'0');
+
+    const revokedFixture=await createSettlementFixture('revoked-owner-account-only');
+    const revokedToken=randomUUID();
+    await verifyAsrSessionBinding(database,config,admin,owner,outsider,revokedFixture.recordId,
+      revokedFixture.captureId,revokedFixture.runId,async(actor)=>{
+        const prepared=record(await prepareSettlementFixture(revokedFixture,actor),'revoked owner settlement preparation');
+        assert.equal(prepared.state,'queued');assert.equal(prepared.reservedTwdMicros,'96000');
+        assert.ok(await claimSettlementUnit(revokedFixture,actor,revokedToken));
+        assert.equal(await markSettlementDispatch(revokedFixture,actor,revokedToken),true);
+      });
+    const beforeRevokedSettlement=await admin.query<{
+      run_state:string;capture_state:string;source_version:number;source_completeness:string;
+      active_transcript_revision_id:string|null;verified_sources:number;transcript_segments:number;checkpoint_count:number;
+    }>(`
+      SELECT run.state AS run_state,capture.state AS capture_state,capture.source_version,capture.source_completeness,
+        capture.active_transcript_revision_id::text,
+        (SELECT count(*)::integer FROM projed_core.meeting_capture_segments source
+          WHERE source.capture_id=capture.id AND source.source_version=capture.source_version
+            AND source.upload_state='verified') AS verified_sources,
+        (SELECT count(*)::integer FROM projed_core.meeting_transcript_segments segment WHERE segment.capture_id=capture.id) AS transcript_segments,
+        (SELECT count(*)::integer FROM projed_core.meeting_asr_unit_results result WHERE result.run_id=run.id) AS checkpoint_count
+      FROM projed_core.meeting_analysis_runs run
+      JOIN projed_core.meeting_capture_sessions capture ON capture.id=run.capture_id WHERE run.id=$1::uuid
+    `,[revokedFixture.runId]);
+    assert.deepEqual(beforeRevokedSettlement.rows[0],{
+      run_state:'running',capture_state:'queued',source_version:1,source_completeness:'complete',
+      active_transcript_revision_id:null,verified_sources:1,transcript_segments:0,checkpoint_count:0,
+    },'Session revocation alone has not cancelled or rewritten the frozen capture');
+    const revokedReceipt=record(await settleUnit(owner,revokedFixture.runId,revokedToken,
+      recognizedPayloadFor(revokedFixture.dispatchPayload,revokedFixture.sourceSegmentId)),
+      'recognized result after bound Session deletion');
+    assert.equal(revokedReceipt.published,false,'a replacement owner context cannot publish for the revoked run Session');
+    assert.equal(revokedReceipt.asrComplete,false);
+    const afterRevokedSettlement=await admin.query<{
+      run_state:string;capture_state:string;error_code:string|null;source_version:number;source_completeness:string;
+      active_transcript_revision_id:string|null;verified_sources:number;transcript_segments:number;checkpoint_count:number;
+    }>(`
+      SELECT run.state AS run_state,capture.state AS capture_state,run.error_code,capture.source_version,capture.source_completeness,
+        capture.active_transcript_revision_id::text,
+        (SELECT count(*)::integer FROM projed_core.meeting_capture_segments source
+          WHERE source.capture_id=capture.id AND source.source_version=capture.source_version
+            AND source.upload_state='verified') AS verified_sources,
+        (SELECT count(*)::integer FROM projed_core.meeting_transcript_segments segment WHERE segment.capture_id=capture.id) AS transcript_segments,
+        (SELECT count(*)::integer FROM projed_core.meeting_asr_unit_results result WHERE result.run_id=run.id) AS checkpoint_count
+      FROM projed_core.meeting_analysis_runs run
+      JOIN projed_core.meeting_capture_sessions capture ON capture.id=run.capture_id WHERE run.id=$1::uuid
+    `,[revokedFixture.runId]);
+    assert.deepEqual(afterRevokedSettlement.rows[0],{
+      run_state:'failed_terminal',capture_state:'queued',error_code:'ASR_RESULT_NOT_PUBLISHED',source_version:1,
+      source_completeness:'complete',active_transcript_revision_id:null,verified_sources:1,
+      transcript_segments:0,checkpoint_count:0,
+    },'accounting-only settlement fails the run while preserving capture state, frozen source and empty transcript');
+    assert.deepEqual(await readBudget(admin,month),{
+      limit_twd_micros:DEFAULT_BUDGET_MICROS,reserved_twd_micros:'0',spent_twd_micros:'32000',
+    },'revoked-session recognized usage is charged but cannot publish');
+    const sourceBeforeOwnerStatus=await admin.query<{
+      id:string;sha256:string;storage_generation:string;start_offset_ms:string;end_offset_ms:string;bytes:string;mime:string;
+    }>(`SELECT id::text,sha256,storage_generation,start_offset_ms::text,end_offset_ms::text,bytes::text,mime
+      FROM projed_core.meeting_capture_segments WHERE capture_id=$1::uuid AND source_version=1`,[revokedFixture.captureId]);
+    assert.equal(sourceBeforeOwnerStatus.rowCount,1);
+    const ownerStatus=responseData(await post(ownerClient,{operation:'status',captureId:revokedFixture.captureId}),
+      'owner status reconciliation after terminal ASR settlement');
+    assert.equal(ownerStatus.state,'failed_terminal');assert.equal(ownerStatus.sourceVersion,1);
+    const afterOwnerStatus=await admin.query<{
+      capture_state:string;source_version:number;source_completeness:string;
+      active_transcript_revision_id:string|null;verified_sources:number;transcript_segments:number;checkpoint_count:number;
+    }>(`
+      SELECT capture.state AS capture_state,capture.source_version,capture.source_completeness,
+        capture.active_transcript_revision_id::text,
+        (SELECT count(*)::integer FROM projed_core.meeting_capture_segments source
+          WHERE source.capture_id=capture.id AND source.source_version=capture.source_version
+            AND source.upload_state='verified') AS verified_sources,
+        (SELECT count(*)::integer FROM projed_core.meeting_transcript_segments segment WHERE segment.capture_id=capture.id) AS transcript_segments,
+        (SELECT count(*)::integer FROM projed_core.meeting_asr_unit_results result WHERE result.run_id=run.id) AS checkpoint_count
+      FROM projed_core.meeting_analysis_runs run
+      JOIN projed_core.meeting_capture_sessions capture ON capture.id=run.capture_id WHERE run.id=$1::uuid
+    `,[revokedFixture.runId]);
+    assert.deepEqual(afterOwnerStatus.rows[0],{
+      capture_state:'failed_terminal',source_version:1,source_completeness:'complete',
+      active_transcript_revision_id:null,verified_sources:1,transcript_segments:0,checkpoint_count:0,
+    },'owner status closes the stale active-capture slot without changing source or transcript content');
+    const sourceAfterOwnerStatus=await admin.query<{
+      id:string;sha256:string;storage_generation:string;start_offset_ms:string;end_offset_ms:string;bytes:string;mime:string;
+    }>(`SELECT id::text,sha256,storage_generation,start_offset_ms::text,end_offset_ms::text,bytes::text,mime
+      FROM projed_core.meeting_capture_segments WHERE capture_id=$1::uuid AND source_version=1`,[revokedFixture.captureId]);
+    assert.deepEqual(sourceAfterOwnerStatus.rows,sourceBeforeOwnerStatus.rows,
+      'owner status preserves verified source identity, hash, generation, duration and media type');
+
+    const successFixture=await createSettlementFixture('checkpoint-success');
+    const successToken=randomUUID();
+    await verifyAsrSessionBinding(database,config,admin,owner,outsider,successFixture.recordId,
+      successFixture.captureId,successFixture.runId,async(actor)=>{
+        const successPrepared=record(await prepareSettlementFixture(successFixture,actor),'checkpoint success preparation');
+        assert.equal(successPrepared.state,'queued');assert.equal(successPrepared.reservedTwdMicros,'96000');
+        assert.deepEqual(await readBudget(admin,month),{
+          limit_twd_micros:DEFAULT_BUDGET_MICROS,reserved_twd_micros:'96000',spent_twd_micros:'32000',
+        });
+        const claim=record(await claimSettlementUnit(successFixture,actor,successToken),'checkpoint success claim');
+        assert.equal(claim.leaseToken,successToken);
+        assert.equal(await markSettlementDispatch(successFixture,actor,successToken),true);
+        const payload=recognizedPayloadFor(successFixture.dispatchPayload,successFixture.sourceSegmentId);
+        const transcript=record(payload.transcript,'recognized test transcript');
+        assert.ok(Array.isArray(transcript.wordOffsets)&&transcript.wordOffsets.length===1);
+        const validWord=record(transcript.wordOffsets[0],'recognized source word');
+        const wrongSourceWordPayload:JsonObject={...payload,transcript:{...transcript,wordOffsets:[{
+          ...validWord,source_audio_segment_id:randomUUID(),
+        }]}};
+        const ledgerBeforeInvalidWord=await readUnitPool(successFixture.runId,successToken);
+        const budgetBeforeInvalidWord=await readBudget(admin,month);
+        await assert.rejects(settleUnit(actor,successFixture.runId,successToken,wrongSourceWordPayload),error=>
+          error instanceof KernelError&&error.cause!==null&&typeof error.cause==='object'
+            &&'code' in error.cause&&error.cause.code==='42501',
+        'settlement rejects a transcript word anchored to another source segment');
+        assert.equal(await countCheckpoints(successFixture.runId),0,'a wrong source word cannot create a checkpoint');
+        assert.deepEqual(await readUnitPool(successFixture.runId,successToken),ledgerBeforeInvalidWord,
+          'a wrong source word rolls back unit and pool settlement changes');
+        assert.deepEqual(await readBudget(admin,month),budgetBeforeInvalidWord,
+          'a wrong source word cannot charge or release reserved budget');
+        const first=record(await settleUnit(actor,successFixture.runId,successToken,payload),'recognized checkpoint settlement');
+        assert.equal(first.kind,'recognized');assert.equal(first.published,true);assert.equal(first.asrComplete,true);
+        assert.equal(first.nextState,'queued');assert.equal(first.nextStage,'retrieve');
+        const firstCursor=record(first.nextCursor,'completed ASR cursor');
+        assert.deepEqual(firstCursor,{asr:{done:true,segmentIndex:0,chunkIndex:0,unitIndex:0,attempt:0}});
+        const checkpointBefore=await admin.query<{attempt_id:string;created_at:string;result:unknown}>(`
+          SELECT attempt_id,created_at::text,result FROM projed_core.meeting_asr_unit_results WHERE run_id=$1::uuid
+        `,[successFixture.runId]);
+        assert.equal(checkpointBefore.rowCount,1);
+        assert.deepEqual(checkpointBefore.rows[0]?.result,record(payload.transcript,'expected checkpoint transcript'));
+        assert.deepEqual(record(await settleUnit(actor,successFixture.runId,successToken,payload),
+          'recognized checkpoint idempotent replay'),first,'same token and payload returns the original settlement receipt');
+        const checkpointAfter=await admin.query<{attempt_id:string;created_at:string;result:unknown}>(`
+          SELECT attempt_id,created_at::text,result FROM projed_core.meeting_asr_unit_results WHERE run_id=$1::uuid
+        `,[successFixture.runId]);
+        assert.deepEqual(checkpointAfter.rows,checkpointBefore.rows,'settlement replay does not rewrite or duplicate the checkpoint');
+        const checkpointCountBeforeFurtherClaim=await countCheckpoints(successFixture.runId);
+        const budgetBeforeFurtherClaim=await readBudget(admin,month);
+        assert.equal(await claimSettlementUnit(successFixture,actor,randomUUID()),null,
+          'a completed ASR cursor at retrieve cannot claim another paid ASR unit');
+        assert.equal(await countCheckpoints(successFixture.runId),checkpointCountBeforeFurtherClaim,
+          'a rejected post-ASR claim leaves the checkpoint unchanged');
+        assert.deepEqual(await readBudget(admin,month),budgetBeforeFurtherClaim,
+          'a rejected post-ASR claim does not reserve additional budget');
+        assert.deepEqual(await readBudget(admin,month),{
+          limit_twd_micros:DEFAULT_BUDGET_MICROS,reserved_twd_micros:'0',spent_twd_micros:'48000',
+        },'recognized replay does not double charge the same unit');
+      });
+    const successState=await admin.query<{
+      run_state:string;resume_stage:string;attempt_count:number;capture_state:string;
+      active_transcript_revision_id:string|null;transcript_segments:number;checkpoint_count:number;
+    }>(`
+      SELECT run.state AS run_state,run.resume_stage,run.attempt_count,capture.state AS capture_state,
+        capture.active_transcript_revision_id::text,
+        (SELECT count(*)::integer FROM projed_core.meeting_transcript_segments segment WHERE segment.capture_id=capture.id) AS transcript_segments,
+        (SELECT count(*)::integer FROM projed_core.meeting_asr_unit_results result WHERE result.run_id=run.id) AS checkpoint_count
+      FROM projed_core.meeting_analysis_runs run
+      JOIN projed_core.meeting_capture_sessions capture ON capture.id=run.capture_id WHERE run.id=$1::uuid
+    `,[successFixture.runId]);
+    assert.equal(successState.rowCount,1);
+    assert.deepEqual(successState.rows[0],{
+      run_state:'queued',resume_stage:'retrieve',attempt_count:1,capture_state:'queued',
+      active_transcript_revision_id:null,transcript_segments:0,checkpoint_count:1,
+    },'ASR checkpoint waits at retrieve and does not activate a transcript or final segment');
+    assert.deepEqual(await readBudget(admin,month),{
+      limit_twd_micros:DEFAULT_BUDGET_MICROS,reserved_twd_micros:'0',spent_twd_micros:'48000',
+    });
+    const checkpointCountBeforeSourceDelete=await countCheckpoints(successFixture.runId);
+    assert.equal(checkpointCountBeforeSourceDelete,1);
+    const usageBeforeSourceDelete=await readUsageRows(admin,successFixture.captureId);
+    const unitPoolBeforeSourceDelete=await readUnitPool(successFixture.runId,successToken);
+    const budgetBeforeSourceDelete=await readBudget(admin,month);
+    const deletedSource=await admin.query<{id:string}>(`
+      DELETE FROM projed_core.meeting_capture_segments WHERE id=$1::uuid AND capture_id=$2::uuid RETURNING id::text
+    `,[successFixture.sourceSegmentId,successFixture.captureId]);
+    assert.equal(deletedSource.rowCount,1,'only the nonce-owned successful source segment is deleted');
+    assert.equal(await countCheckpoints(successFixture.runId),0,
+      'deleting the successful source segment cascades its content checkpoint');
+    assert.deepEqual(await readUsageRows(admin,successFixture.captureId),usageBeforeSourceDelete,
+      'source deletion retains the independently settled usage ledger');
+    assert.deepEqual(await readUnitPool(successFixture.runId,successToken),unitPoolBeforeSourceDelete,
+      'source deletion retains settled unit and pool accounting');
+    assert.deepEqual(await readBudget(admin,month),budgetBeforeSourceDelete,
+      'source deletion does not alter spent or reserved budget');
+
+    const unknownFixture=await createSettlementFixture('unknown-usage');
+    const unknownToken=randomUUID();
+    await verifyAsrSessionBinding(database,config,admin,owner,outsider,unknownFixture.recordId,
+      unknownFixture.captureId,unknownFixture.runId,async(actor)=>{
+        const unknownPrepared=record(await prepareSettlementFixture(unknownFixture,actor),'unknown usage preparation');
+        assert.equal(unknownPrepared.state,'queued');assert.equal(unknownPrepared.reservedTwdMicros,'96000');
+        assert.ok(await claimSettlementUnit(unknownFixture,actor,unknownToken));
+        assert.equal(await markSettlementDispatch(unknownFixture,actor,unknownToken),true);
+        const payload:JsonObject={kind:'usage_unknown',code:'ASR_REQUEST_TIMEOUT'};
+        const first=record(await settleUnit(actor,unknownFixture.runId,unknownToken,payload),'unknown usage settlement');
+        assert.equal(first.kind,'usage_unknown');assert.equal(first.published,false);assert.equal(first.asrComplete,false);
+        assert.equal(first.nextState,'failed_terminal');
+        assert.deepEqual(record(await settleUnit(actor,unknownFixture.runId,unknownToken,payload),
+          'unknown usage idempotent replay'),first,'unknown settlement replay is stable');
+      },false);
+    assert.equal(await countCheckpoints(unknownFixture.runId),0,'unknown usage never stores transcript content');
+    const unknownLedger=await readUnitPool(unknownFixture.runId,unknownToken);
+    assert.equal(unknownLedger.unit_state,'unknown');assert.equal(unknownLedger.unit_actual,null);
+    assert.equal(unknownLedger.unit_outcome,'ASR_REQUEST_TIMEOUT');assert.equal(unknownLedger.unit_dispatch,'dispatched');
+    assert.equal(unknownLedger.pool_state,'known');assert.equal(unknownLedger.pool_remaining,'0');
+    assert.equal(unknownLedger.pool_outcome,'asr_pool_released');
+    assert.deepEqual(await readBudget(admin,month),{
+      limit_twd_micros:DEFAULT_BUDGET_MICROS,reserved_twd_micros:'48000',spent_twd_micros:'48000',
+    },'unknown dispatched usage holds its unit reservation and releases unused pool funds');
+    const unknownState=await admin.query<{run_state:string;capture_state:string;error_code:string|null}>(`
+      SELECT run.state AS run_state,capture.state AS capture_state,run.error_code
+      FROM projed_core.meeting_analysis_runs run
+      JOIN projed_core.meeting_capture_sessions capture ON capture.id=run.capture_id WHERE run.id=$1::uuid
+    `,[unknownFixture.runId]);
+    assert.deepEqual(unknownState.rows[0],{
+      run_state:'failed_terminal',capture_state:'failed_terminal',error_code:'ASR_USAGE_UNKNOWN',
+    });
+
+    const expiredFixture=await createSettlementFixture('expired-pending');
+    const expiredToken=randomUUID();
+    await verifyAsrSessionBinding(database,config,admin,owner,outsider,expiredFixture.recordId,
+      expiredFixture.captureId,expiredFixture.runId,async(actor)=>{
+        const expiredPrepared=record(await prepareSettlementFixture(expiredFixture,actor),'expired pending preparation');
+        assert.equal(expiredPrepared.state,'queued');assert.equal(expiredPrepared.reservedTwdMicros,'96000');
+        assert.ok(await claimSettlementUnit(expiredFixture,actor,expiredToken));
+        const expiredLease=await admin.query<{id:string}>(`
+          UPDATE projed_core.meeting_analysis_runs SET lease_expires_at=clock_timestamp()-interval '1 second'
+          WHERE id=$1::uuid AND lease_token=$2::uuid AND state='running' RETURNING id::text
+        `,[expiredFixture.runId,expiredToken]);
+        assert.equal(expiredLease.rowCount,1,'only the synthetic pending unit lease is expired');
+        const payload:JsonObject={kind:'not_sent',code:'ASR_LEASE_EXPIRED'};
+        const receipt=record(await settleUnit(actor,expiredFixture.runId,expiredToken,payload),'expired pending settlement');
+        assert.equal(receipt.kind,'not_sent');assert.equal(receipt.published,false);
+        assert.equal(receipt.nextState,'queued');
+        assert.equal(await countCheckpoints(expiredFixture.runId),0,'expired pending lease has no provider result');
+      });
+    const expiredState=await admin.query<{
+      run_state:string;stage_cursor:unknown;attempt_count:number;lease_token:string|null;
+    }>(`SELECT state AS run_state,stage_cursor,attempt_count,lease_token::text FROM projed_core.meeting_analysis_runs WHERE id=$1::uuid`,
+    [expiredFixture.runId]);
+    assert.equal(expiredState.rowCount,1);
+    assert.equal(expiredState.rows[0]?.run_state,'queued');
+    assert.equal(expiredState.rows[0]?.attempt_count,1);
+    assert.equal(expiredState.rows[0]?.lease_token,null);
+    assert.deepEqual(record(expiredState.rows[0]?.stage_cursor,'expired pending retry cursor'),
+      {asr:{segmentIndex:0,chunkIndex:0,unitIndex:0,attempt:1}});
+    const expiredLedger=await readUnitPool(expiredFixture.runId,expiredToken);
+    assert.equal(expiredLedger.unit_state,'known');assert.equal(expiredLedger.unit_actual,'0');
+    assert.equal(expiredLedger.unit_dispatch,'pending');assert.equal(expiredLedger.unit_outcome,'ASR_LEASE_EXPIRED');
+    assert.equal(expiredLedger.pool_state,'reserved');assert.equal(expiredLedger.pool_remaining,'48000');
+    assert.deepEqual(await readBudget(admin,month),{
+      limit_twd_micros:DEFAULT_BUDGET_MICROS,reserved_twd_micros:'96000',spent_twd_micros:'48000',
+    },'expired not-sent attempt releases the unit while leaving existing pool remainder reserved');
   } catch (error) {
     failed = true;
     failure = error;
@@ -1157,6 +1528,7 @@ export async function verifyMeetingUploadPostgres(
             await admin.query(`DELETE FROM projed_core.meeting_artifact_cleanup
               WHERE kind='storage' AND attempt_id=ANY($1::text[])`, [attempts]);
           }
+          await admin.query('DELETE FROM projed_core.meeting_asr_unit_results WHERE capture_id=ANY($1::uuid[])', [ownCaptures]);
           await admin.query('DELETE FROM projed_core.meeting_ai_usage_attempts WHERE capture_id=ANY($1::uuid[])', [ownCaptures]);
           await admin.query('DELETE FROM projed_core.meeting_analysis_runs WHERE capture_id=ANY($1::uuid[])', [ownCaptures]);
         }
@@ -1174,27 +1546,23 @@ export async function verifyMeetingUploadPostgres(
           SELECT limit_twd_micros::text,reserved_twd_micros::text,spent_twd_micros::text
           FROM projed_core.meeting_ai_budget_months WHERE budget_month=$1::date
         `, [ownedBudgetMonth]);
+        const remainingLedger=await admin.query<{usage_count:number;run_count:number}>(`
+          SELECT (SELECT count(*)::integer FROM projed_core.meeting_ai_usage_attempts WHERE dispatch_month=$1::date) AS usage_count,
+            (SELECT count(*)::integer FROM projed_core.meeting_analysis_runs WHERE budget_month=$1::date) AS run_count
+        `, [ownedBudgetMonth]);
+        assert.deepEqual(remainingLedger.rows[0],{usage_count:0,run_count:0},
+          'refusing cleanup while any same-month usage or run remains');
         if (remaining.rowCount === 0) {
           // An earlier cleanup path already removed the helper-owned row.
         } else {
           assert.equal(remaining.rowCount, 1);
           const balance = remaining.rows[0];
           assert.ok(balance);
-          const allowedOwnedStates = [
-            { limit_twd_micros: PREEXHAUSTED_BUDGET_MICROS, reserved_twd_micros: PREEXHAUSTED_BUDGET_MICROS, spent_twd_micros: '0' },
-            { limit_twd_micros: DEFAULT_BUDGET_MICROS, reserved_twd_micros: '0', spent_twd_micros: '0' },
-            { limit_twd_micros: DEFAULT_BUDGET_MICROS, reserved_twd_micros: RESERVED_BUDGET_MICROS, spent_twd_micros: '0' },
-            { limit_twd_micros: DEFAULT_BUDGET_MICROS, reserved_twd_micros: '96000', spent_twd_micros: '0' },
-          ];
-          assert.ok(allowedOwnedStates.some(state =>
-            state.limit_twd_micros === balance.limit_twd_micros
-              && state.reserved_twd_micros === balance.reserved_twd_micros
-              && state.spent_twd_micros === balance.spent_twd_micros),
-          'refusing to delete a current-month budget row outside this helper’s known disposable states');
-          const remainingRuns = await admin.query<{ count: number }>(`
-            SELECT count(*)::integer AS count FROM projed_core.meeting_analysis_runs WHERE budget_month=$1::date
-          `, [ownedBudgetMonth]);
-          assert.equal(remainingRuns.rows[0]?.count, 0, 'all helper-owned runs must be removed before budget cleanup');
+          const limit=BigInt(balance.limit_twd_micros),reserved=BigInt(balance.reserved_twd_micros),spent=BigInt(balance.spent_twd_micros);
+          assert.ok(limit===BigInt(DEFAULT_BUDGET_MICROS)||limit===BigInt(PREEXHAUSTED_BUDGET_MICROS),
+            'refusing to delete a budget row whose limit is outside this helper’s owned states');
+          assert.ok(reserved>=0n&&spent>=0n&&reserved+spent<=limit,
+            'refusing to delete an invalid current-month budget balance');
           const deleted = await admin.query(`
             DELETE FROM projed_core.meeting_ai_budget_months WHERE budget_month=$1::date
             RETURNING budget_month

@@ -410,6 +410,11 @@ BEGIN
     'projed_core.meeting_asr_usage_work_guard_v1()',
     'projed_core.claim_meeting_asr_unit_v1(uuid,uuid)',
     'projed_core.mark_meeting_asr_dispatch_v1(uuid,uuid,jsonb)',
+    'projed_core.meeting_asr_settle_scope_v1(uuid,uuid,text)',
+    'projed_core.meeting_asr_settle_run_scope_v1(uuid)',
+    'projed_core.meeting_asr_settlement_guard_v1()',
+    'projed_core.settle_meeting_asr_unit_v1(uuid,uuid,jsonb)',
+    'projed_core.read_meeting_asr_dispatch_v1(uuid,uuid,jsonb)',
     'projed_core.meeting_review_scope_v1(uuid)',
     'projed_core.meeting_projection_scope_v1(uuid,uuid)'
   ] LOOP
@@ -429,6 +434,91 @@ BEGIN
       RAISE EXCEPTION 'PUBLIC has EXECUTE on runtime meeting helper: %', v_function;
     END IF;
   END LOOP;
+END $$;
+
+-- The ASR unit table is a runtime-only intermediate checkpoint, not an importer
+-- projection or a final transcript table.
+DO $$
+DECLARE
+  v_relation regclass := to_regclass('projed_core.meeting_asr_unit_results');
+  v_rls boolean;
+  v_force boolean;
+  v_privilege text;
+  v_column text;
+  v_columns text[];
+  v_expected_insert text[] := ARRAY[
+    'attempt_id','capture_id','run_id','source_version','unit_index','source_segment_id','chunk_index','result'
+  ]::text[];
+  v_role text;
+BEGIN
+  IF v_relation IS NULL THEN RAISE EXCEPTION 'missing ASR unit checkpoint table'; END IF;
+  SELECT relrowsecurity, relforcerowsecurity INTO v_rls, v_force
+    FROM pg_class WHERE oid = v_relation;
+  IF v_rls IS DISTINCT FROM true OR v_force IS DISTINCT FROM true THEN
+    RAISE EXCEPTION 'ASR unit checkpoint is not FORCE RLS';
+  END IF;
+  IF (SELECT count(*) FROM pg_policy WHERE polrelid=v_relation)<>2
+     OR NOT EXISTS (
+       SELECT 1 FROM pg_policy p
+        WHERE p.polrelid=v_relation AND p.polname='meeting_asr_checkpoint_read_v1'
+          AND p.polcmd='r' AND p.polroles=ARRAY[(SELECT oid FROM pg_roles WHERE rolname='projed_runtime_disposable')]::oid[]
+          AND p.polqual IS NOT NULL
+     )
+     OR NOT EXISTS (
+       SELECT 1 FROM pg_policy p
+        WHERE p.polrelid=v_relation AND p.polname='meeting_asr_checkpoint_insert_v1'
+          AND p.polcmd='a' AND p.polroles=ARRAY[(SELECT oid FROM pg_roles WHERE rolname='projed_runtime_disposable')]::oid[]
+          AND p.polwithcheck IS NOT NULL
+     ) THEN
+    RAISE EXCEPTION 'ASR unit checkpoint RLS policies are not exact';
+  END IF;
+
+  FOREACH v_privilege IN ARRAY ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER'] LOOP
+    IF has_table_privilege('projed_runtime_disposable',v_relation,v_privilege)
+         IS DISTINCT FROM (v_privilege='SELECT') THEN
+      RAISE EXCEPTION 'runtime table-level % grant differs on ASR unit checkpoint',v_privilege;
+    END IF;
+    FOREACH v_role IN ARRAY ARRAY['projed_importer_disposable','projed_migrator_disposable'] LOOP
+      IF has_table_privilege(v_role,v_relation,v_privilege) THEN
+        RAISE EXCEPTION '% has forbidden table-level % on ASR unit checkpoint',v_role,v_privilege;
+      END IF;
+    END LOOP;
+  END LOOP;
+
+  SELECT array_agg(attribute.attname::text ORDER BY attribute.attnum)
+    INTO v_columns
+    FROM pg_attribute AS attribute
+   WHERE attribute.attrelid=v_relation AND attribute.attnum>0 AND NOT attribute.attisdropped;
+  FOREACH v_column IN ARRAY v_columns LOOP
+    IF has_column_privilege('projed_runtime_disposable',v_relation,v_column,'SELECT') IS DISTINCT FROM true
+       OR has_column_privilege('projed_runtime_disposable',v_relation,v_column,'INSERT')
+         IS DISTINCT FROM (v_column=ANY(v_expected_insert))
+       OR has_column_privilege('projed_runtime_disposable',v_relation,v_column,'UPDATE') THEN
+      RAISE EXCEPTION 'runtime column grants differ on ASR unit checkpoint column %',v_column;
+    END IF;
+    FOREACH v_role IN ARRAY ARRAY['projed_importer_disposable','projed_migrator_disposable'] LOOP
+      IF has_column_privilege(v_role,v_relation,v_column,'SELECT')
+         OR has_column_privilege(v_role,v_relation,v_column,'INSERT')
+         OR has_column_privilege(v_role,v_relation,v_column,'UPDATE') THEN
+        RAISE EXCEPTION '% has forbidden column privilege on ASR unit checkpoint column %',v_role,v_column;
+      END IF;
+    END LOOP;
+  END LOOP;
+
+  IF EXISTS (
+    SELECT 1
+      FROM pg_class c
+      CROSS JOIN LATERAL aclexplode(COALESCE(c.relacl,acldefault('r',c.relowner))) acl
+     WHERE c.oid=v_relation AND acl.grantee=0::oid
+  ) OR EXISTS (
+    SELECT 1
+      FROM pg_attribute attribute
+      CROSS JOIN LATERAL aclexplode(attribute.attacl) acl
+     WHERE attribute.attrelid=v_relation AND attribute.attnum>0 AND NOT attribute.attisdropped
+       AND attribute.attacl IS NOT NULL AND acl.grantee=0::oid
+  ) THEN
+    RAISE EXCEPTION 'PUBLIC has a privilege on ASR unit checkpoint';
+  END IF;
 END $$;
 
 -- Exercise the importer's read/insert path and prove update/delete are denied.

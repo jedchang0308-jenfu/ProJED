@@ -15,16 +15,23 @@ function transcript(overrides:Partial<MeetingAsrTranscriptUnit>={}):MeetingAsrTr
   };
 }
 
+function word(overrides:Partial<MeetingAsrTranscriptUnit['wordOffsets'][number]>={}){
+  return {text:'word',start_ms:10_000,end_ms:10_000.5,source_audio_segment_id:SEGMENT_ID,source_word_index:0,...overrides};
+}
+
 function expectInvalid(value:unknown):void{
   assert.throws(()=>normalizeMeetingAsrSettlementInput(value as MeetingAsrSettlement),error=>
     error instanceof KernelError&&error.code==='DOMAIN_DATA_INVALID'&&error.httpStatus===409);
 }
 
 test('recognized settlement keeps JSON-safe transcript and exact charge metadata only',()=>{
-  const input={kind:'recognized' as const,transcript:transcript({rawText:'recognized text'}),
+  const sourceTranscript=transcript({rawText:'recognized text',wordOffsets:[
+    word({text:'recognized'}),word({text:'text',start_ms:10_000.5,end_ms:10_001,source_word_index:1}),
+  ]});
+  const input={kind:'recognized' as const,transcript:sourceTranscript,
     totalBilledTime:'1s',providerRequestId:'123456789'};
   const normalized=normalizeMeetingAsrSettlementInput(input);
-  assert.deepEqual(normalized,{kind:'recognized',transcript:input.transcript,chargeMicros:'16000',chargeSource:'provider_metadata'});
+  assert.deepEqual(normalized,{kind:'recognized',transcript:sourceTranscript,chargeMicros:'16000',chargeSource:'provider_metadata'});
   assert.equal(Object.hasOwn(normalized,'providerRequestId'),false);
   assert.deepEqual(JSON.parse(JSON.stringify(normalized)),normalized);
 });
@@ -46,6 +53,35 @@ test('preserves fractional millisecond word offsets and allows silence words',()
   assert.equal(normalized.kind,'recognized');
   if(normalized.kind!=='recognized')return;
   assert.deepEqual(normalized.transcript.wordOffsets,item.wordOffsets);
+});
+
+test('accepts provider word-start ordering within the one-microsecond tolerance without rounding',()=>{
+  const item=transcript({rawText:'first second',wordOffsets:[
+    word({text:'first',start_ms:10_000.5,end_ms:10_000.75}),
+    word({text:'second',start_ms:10_000.4999995,end_ms:10_000.4999995,source_word_index:1}),
+  ]});
+  const normalized=normalizeMeetingAsrSettlementInput({kind:'recognized',transcript:item});
+  assert.equal(normalized.kind,'recognized');
+  if(normalized.kind!=='recognized')return;
+  const secondWord=normalized.transcript.wordOffsets[1];
+  assert.ok(secondWord);
+  assert.equal(secondWord.start_ms,10_000.4999995);
+  assert.equal(secondWord.end_ms,10_000.4999995);
+});
+
+test('rejects genuinely reversed provider word starts and missing anchors for nonempty text',()=>{
+  const reversed=transcript({rawText:'first second',wordOffsets:[
+    word({text:'first',start_ms:10_000.75,end_ms:10_000.875}),
+    word({text:'second',start_ms:10_000.5,end_ms:10_000.625,source_word_index:1}),
+  ]});
+  expectInvalid({kind:'recognized',transcript:reversed});
+  expectInvalid({kind:'recognized',transcript:transcript({rawText:'nonempty but unanchored'})});
+});
+
+test('accepts a successful silence transcript with no word anchors',()=>{
+  const normalized=normalizeMeetingAsrSettlementInput({kind:'recognized',transcript:transcript({rawText:'',wordOffsets:[]})});
+  assert.equal(normalized.kind,'recognized');
+  if(normalized.kind==='recognized')assert.deepEqual(normalized.transcript.wordOffsets,[]);
 });
 
 test('normalizes failure outcomes to kind and bounded safe code',()=>{
@@ -77,8 +113,8 @@ test('rejects malformed dispatch metadata, transcript text/hash and billed durat
   for(const item of [
     transcript({decodedSha256:SHA.toUpperCase()}),
     transcript({sourceHash:'g'.repeat(64)}),
-    transcript({rawText:'bad\0text'}),
-    transcript({rawText:'x'.repeat(128_001)}),
+    transcript({rawText:'bad\0text',wordOffsets:[word()]}),
+    transcript({rawText:'x'.repeat(128_001),wordOffsets:[word()]}),
     transcript({endOffsetMs:11_000}),
   ])expectInvalid({kind:'recognized',transcript:item});
   expectInvalid({kind:'recognized',transcript:transcript(),totalBilledTime:'3s'});
@@ -105,10 +141,10 @@ test('enforces exact transcript and word shapes, bounds and sequential source wo
 
 test('matches provider UTF-16 text and word limits without reducing accepted payload size',()=>{
   const maximumRawText='😀'.repeat(64_000);
-  const normalized=normalizeMeetingAsrSettlementInput({kind:'recognized',transcript:transcript({rawText:maximumRawText})});
+  const normalized=normalizeMeetingAsrSettlementInput({kind:'recognized',transcript:transcript({rawText:maximumRawText,wordOffsets:[word({text:'😀'})]})});
   assert.equal(normalized.kind,'recognized');
   if(normalized.kind==='recognized')assert.equal(normalized.transcript.rawText.length,128_000);
-  expectInvalid({kind:'recognized',transcript:transcript({rawText:`${maximumRawText}x`})});
+  expectInvalid({kind:'recognized',transcript:transcript({rawText:`${maximumRawText}x`,wordOffsets:[word({text:'😀'})]})});
   assert.doesNotThrow(()=>normalizeMeetingAsrSettlementInput({kind:'recognized',transcript:transcript({
     wordOffsets:[{text:'😀'.repeat(500),start_ms:10_000,end_ms:10_000,
       source_audio_segment_id:SEGMENT_ID,source_word_index:0}],

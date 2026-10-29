@@ -123,3 +123,21 @@ test('source timing binds global offsets and metadata duration plus two-second s
     metadataDurationMs: 52_125,
   }));
 });
+
+test('source timing rejects a short final chunk that omits most of the decoded audio', () => {
+  const sourceStartMs = 120_000;
+  const shortSingleChunk: MeetingAsrDispatchUnit = {
+    chunkIndex: 0,
+    chunkCount: 1,
+    startSample: 0,
+    endSample: 800_000,
+    decodedSha256: SHA,
+    startOffsetMs: sourceStartMs,
+    endOffsetMs: sourceStartMs + 50_000,
+  };
+
+  expectInvalid(() => validateMeetingAsrDispatchInput(shortSingleChunk, {
+    startOffsetMs: sourceStartMs,
+    metadataDurationMs: 300_000,
+  }));
+});

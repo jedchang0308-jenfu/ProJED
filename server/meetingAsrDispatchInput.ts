@@ -102,6 +102,8 @@ export function validateMeetingAsrDispatchInput(
     if (source !== undefined) {
       const timing = sourceTimingValues(source);
       if (Number(endSample) > (timing.metadataDurationMs + DURATION_SLACK_MS) * SAMPLES_PER_MS) invalid();
+      if (Number(chunkIndex) === Number(chunkCount) - 1
+          && Number(endSample) < Math.max(0, timing.metadataDurationMs - DURATION_SLACK_MS) * SAMPLES_PER_MS) invalid();
       const expectedStartOffsetMs = timing.startOffsetMs + Number(startSample) / SAMPLES_PER_MS;
       const expectedEndOffsetMs = Math.ceil(timing.startOffsetMs + Number(endSample) / SAMPLES_PER_MS);
       if (!Number.isSafeInteger(expectedStartOffsetMs) || !Number.isSafeInteger(expectedEndOffsetMs)
