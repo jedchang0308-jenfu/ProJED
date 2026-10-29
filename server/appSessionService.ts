@@ -504,9 +504,8 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
     return stored;
   };
 
-  const readStoredSession = async (sessionToken: string, publicOrigin: string): Promise<ResolvedSession> => {
+  const actorForSession = async (stored: StoredAppSession): Promise<ServerActorV1> => {
     const nowMs = nowFrom(now);
-    const stored = await readSessionMetadata(sessionToken, publicOrigin);
     if (!stored || stored.revokedAtMs !== null
         || stored.expiresAtMs <= nowMs || stored.identity.sourceSessionExpiresAtMs <= nowMs
     ) {
@@ -554,13 +553,35 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
       accountGuardRevision: stored.accountGuardRevision,
     });
     validateServerActor(actor, actorNowMs);
+    return actor;
+  };
+
+  const readStoredSession = async (sessionToken: string, publicOrigin: string): Promise<ResolvedSession> => {
+    const stored = await readSessionMetadata(sessionToken, publicOrigin);
+    if (!stored) invalidSession();
     return Object.freeze({
-      actor,
+      actor: await actorForSession(stored),
       session: stored,
       sessionToken,
       publicOrigin,
       expiresAtMs: stored.expiresAtMs,
     });
+  };
+
+  /** Uses the original Session's horizon/revocation and the same live verifier as HTTP. */
+  const resolveMeetingRunActor = async (runId: string): Promise<ServerActorV1> => {
+    if (!UUID_RE.test(runId)) invalidSession();
+    if (!contractPinned || !pins.some(pin => pinMatches(pin,binding))) {
+      throw new KernelError('IDENTITY_CONTRACT_UNAVAILABLE','No ProJED identity contract is pinned',503);
+    }
+    if (!options.store.readMeetingRunSession) unavailable();
+    let stored: StoredAppSession | null;
+    try { stored = await options.store.readMeetingRunSession(runId); }
+    catch (error) { identityInvalidOrUnavailable(error); }
+    if (!stored || !validStoredSessionShape(stored,binding) || stored.entry !== 'main'
+        || stored.publicOrigin !== originByEntry.main
+        || stored.expiresAtMs > stored.identity.sourceSessionExpiresAtMs) invalidSession();
+    return actorForSession(stored);
   };
 
   const consumedIntentRecovery = async (
@@ -1200,5 +1221,5 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
     return { clearCookie: clearSessionCookie({ environment, publicOrigin: resolved.publicOrigin }) };
   };
 
-  return Object.freeze({ dispatchAuth, resolveActor, resolveSessionInfo, resolveLogoutIdentity, destroySession });
+  return Object.freeze({ dispatchAuth, resolveActor, resolveMeetingRunActor, resolveSessionInfo, resolveLogoutIdentity, destroySession });
 }

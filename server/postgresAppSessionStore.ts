@@ -291,6 +291,23 @@ export class PostgresAppSessionStore implements AppSessionStore {
     });
   }
 
+  /** Server-only exact-run lookup. No cookie/bearer is accepted or reconstructed. */
+  async readMeetingRunSession(runId: string): Promise<StoredAppSession | null> {
+    if (!UUID.test(runId)) conflict();
+    return this.#transaction(null,null,true,async client => {
+      await client.query("SELECT set_config('projed.meeting_asr_run_id',$1,true)",[runId]);
+      const result=await client.query(`SELECT ${SESSION_COLUMNS.split(',').map(column=>`session.${column}`).join(',')}
+        FROM projed_core.app_sessions session
+        JOIN projed_core.meeting_analysis_runs run ON run.authorization_context_id=session.context_id
+        WHERE run.id=$1::uuid AND run.state IN ('queued','running','awaiting_budget','failed_retryable')
+          AND run.deadline_at>clock_timestamp() AND session.entry='main'
+          AND session.revoked_at_ms IS NULL
+          AND session.expires_at_ms>extract(epoch FROM clock_timestamp())*1000`,[runId]);
+      if(result.rows.length>1)unavailable();
+      return result.rows[0]?session(result.rows[0]):null;
+    });
+  }
+
   async revokeSession(tokenHash: string,publicOrigin: string,nowMs: number): Promise<boolean> {
     return this.#transaction(null,tokenHash,false,async client => {
       const revoked = await client.query(`UPDATE projed_core.app_sessions SET revoked_at_ms=$3::bigint

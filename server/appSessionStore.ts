@@ -49,5 +49,7 @@ export interface AppSessionStore {
   reject(tokenHash: string, claimHash: string): Promise<void>;
   complete(input: CompleteLoginInput): Promise<StoredAppSession>;
   readSession(tokenHash: string): Promise<StoredAppSession | null>;
+  /** Optional until the ASR migration/host is present; server-only exact-run lookup. */
+  readMeetingRunSession?(runId: string): Promise<StoredAppSession | null>;
   revokeSession(tokenHash: string, publicOrigin: string, nowMs: number): Promise<boolean>;
 }

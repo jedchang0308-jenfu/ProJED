@@ -12,6 +12,7 @@ import { resolveBoard } from '../../../server/domainRead.js';
 import { KernelError } from '../../../server/errors.js';
 import { createKernelHttpServer } from '../../../server/http.js';
 import type { MeetingAudioStorage } from '../../../server/meetingAudioStorage.js';
+import { PostgresAppSessionStore } from '../../../server/postgresAppSessionStore.js';
 import { createHttpCollaborationAdapter } from '../../../src/services/httpApi/collaborationAdapter.js';
 import { createHttpDomainReadAdapter } from '../../../src/services/httpApi/domainReadAdapter.js';
 import { createHttpDomainWriteAdapter } from '../../../src/services/httpApi/domainWriteAdapter.js';
@@ -323,6 +324,84 @@ async function assertLedgerCounts(admin: pg.Client, captureId: string, runs: num
 }
 
 /** Disposable PostgreSQL + real local HTTP regression for verified upload completion. */
+/** Uses nonce-owned Session/proof fixtures; never a browser bearer or provider. */
+async function verifyAsrSessionBinding(database:RuntimeDatabase,config:RuntimeConfig,admin:pg.Client,
+  owner:ServerActorV1,outsider:ServerActorV1,recordId:string,captureId:string,runId:string):Promise<void>{
+  const sessionDatabase=new RuntimeDatabase({...config,profile:{...config.profile,runtime:{...config.profile.runtime,
+    pool:{...config.profile.runtime.pool,max:1}}}});
+  const store=new PostgresAppSessionStore(sessionDatabase),contextId=randomUUID(),otherContextId=randomUUID();
+  const subject=`qa-asr-session-${randomUUID()}`,hashes=[digest(randomUUID()),digest(randomUUID())];
+  const boundActor={...owner,contextId},otherActor={...owner,contextId:otherContextId};
+  let proofCreated=false;
+  let failed=false,failure:unknown;
+  const cleanupErrors:unknown[]=[];
+  const deny=(error:unknown):boolean=>error instanceof KernelError
+    &&error.cause!==null&&typeof error.cause==='object'&&'code' in error.cause&&error.cause.code==='42501';
+  const bind=(actor:ServerActorV1)=>runActorTransaction(database,config,actor,async port=>{
+    await port.authorizeMeetingCaptureMutation(recordId,captureId);
+    return (await port.query<{context:string}>(`SELECT projed_core.bind_meeting_asr_session_v1($1::uuid)::text AS context`,[runId])).rows[0]!.context;
+  });
+  try{
+    const initialLease=await sessionDatabase.checkout();let metadataPid:number;
+    try{metadataPid=(await initialLease.client.query<{pid:number}>('SELECT pg_backend_pid() AS pid')).rows[0]!.pid;}
+    finally{initialLease.release();}
+    assert.equal(await store.readMeetingRunSession(runId),null,'an unbound run grants no Session metadata read');
+    await assert.rejects(bind(boundActor),deny,'a synthetic actor context without a stored Session cannot bind');
+    await admin.query('INSERT INTO projed_core.google_identity_proofs(google_subject,local_user_id) VALUES($1,$2::uuid)',
+      [subject,owner.localUserId]);proofCreated=true;
+    const now=Date.now(),sourceExpiry=now+8*60*60*1000;
+    const identity={contractVersion:'jenfu.sso-handoff.v4',audience:'projed',manifestSha256:'a'.repeat(64),
+      issuer:'http://127.0.0.1:4300/api/sso',identityIssuer:'https://accounts.google.com',identitySubject:subject,
+      googleSubject:subject,principalId:owner.principalId,principalKind:'personal',employeeId:null,
+      authEpoch:1,authenticatedAtMs:now-30_000,revokedBeforeMs:null,sourceSessionExpiresAtMs:sourceExpiry,
+      issuedAtMs:now-1000,expiresAtMs:now+60_000,currentStateExpiresAtMs:now+10_000,mappingRevision:'1'};
+    for(const [index,context] of [contextId,otherContextId].entries()){
+      await admin.query(`INSERT INTO projed_core.app_sessions(token_hash,public_origin,entry,local_user_id,
+        google_subject,context_id,account_guard_revision,identity,expires_at_ms)
+        VALUES($1,'http://127.0.0.1:4100','main',$2::uuid,$3,$4::uuid,$5::bigint,$6::jsonb,$7::bigint)`,
+      [hashes[index],owner.localUserId,subject,context,owner.accountGuardRevision,JSON.stringify(identity),sourceExpiry]);
+    }
+    assert.equal(await bind(boundActor),contextId);
+    assert.equal(await bind(boundActor),contextId,'the same context can replay without creating another authorization');
+    const session=await store.readMeetingRunSession(runId);
+    assert.equal(session?.contextId,contextId);assert.equal(session?.localUserId,owner.localUserId);
+    assert.equal(session?.identity.googleSubject,subject);
+    assert.equal(await store.readMeetingRunSession(randomUUID()),null,'another run cannot borrow the authorized Session');
+    await assert.rejects(bind(otherActor),deny,'even a valid second Session cannot rebind the run');
+    await assert.rejects(bind(outsider),'another account cannot bind this private source');
+    assert.equal((await store.readMeetingRunSession(runId))?.contextId,contextId);
+    // A metadata-only worker lookup must not leave a business actor on a pooled connection.
+    const lease=await sessionDatabase.checkout();
+    try{
+      const state=(await lease.client.query<{pid:number;scope:string|null}>(`SELECT pg_backend_pid() AS pid,
+        current_setting('projed.meeting_asr_run_id',true) AS scope`)).rows[0]!;
+      assert.equal(state.pid,metadataPid,'singleton test pool must reuse the actual metadata connection');
+      assert.ok(state.scope===null||state.scope==='','ASR run context must not survive the read transaction');
+      const rows=await lease.client.query('SELECT id FROM projed_core.knowledge_records WHERE id=$1::uuid',[recordId]);
+      assert.equal(rows.rowCount,0);
+    }finally{lease.release();}
+    await admin.query('UPDATE projed_core.app_sessions SET revoked_at_ms=$2::bigint WHERE token_hash=$1',[hashes[0],Date.now()]);
+    assert.equal(await store.readMeetingRunSession(runId),null,'local logout stops background Session resolution');
+    assert.equal((await admin.query<{context:string}>(`SELECT authorization_context_id::text AS context
+      FROM projed_core.meeting_analysis_runs WHERE id=$1::uuid`,[runId])).rows[0]?.context,contextId,
+    'revocation never switches to another Session');
+    await admin.query('DELETE FROM projed_core.app_sessions WHERE token_hash=$1',[hashes[0]]);
+    assert.equal(await store.readMeetingRunSession(runId),null);
+    await assert.rejects(bind(otherActor),deny,'physical Session cleanup must not reopen run authorization');
+  }catch(error){failed=true;failure=error;}
+  finally{
+    try{await admin.query('DELETE FROM projed_core.app_sessions WHERE token_hash=ANY($1::text[])',[hashes]);}
+    catch(error){cleanupErrors.push(error);}
+    if(proofCreated){
+      try{await admin.query('DELETE FROM projed_core.google_identity_proofs WHERE google_subject=$1',[subject]);}
+      catch(error){cleanupErrors.push(error);}
+    }
+    try{await sessionDatabase.end();}catch(error){cleanupErrors.push(error);}
+  }
+  if(failed&&cleanupErrors.length===0)throw failure;
+  if(failed||cleanupErrors.length>0)throw new AggregateError(failed?[failure,...cleanupErrors]:cleanupErrors,'ASR Session fixture validation or cleanup failed');
+}
+
 export async function verifyMeetingUploadPostgres(
   database: RuntimeDatabase,
   config: RuntimeConfig,
@@ -502,6 +581,7 @@ export async function verifyMeetingUploadPostgres(
     assert.equal(awaitingReplay.state, 'awaiting_budget');
     assert.equal(awaitingReplay.idempotent, true);
     await assertLedgerCounts(admin, budgetCaptureId, 1, 0);
+    await verifyAsrSessionBinding(database,config,admin,owner,outsider,budgetMeetingId,budgetCaptureId,awaitingRunId);
     const lowBudgetCancel = responseData(await post(ownerClient, {
       operation: 'cancel', captureId: budgetCaptureId, expectedSourceVersion: 1, reason: 'qa-budget-cleanup',
     }), 'awaiting-budget cleanup cancellation');

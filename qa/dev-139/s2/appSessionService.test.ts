@@ -200,6 +200,12 @@ class FakeAppSessionStore implements AppSessionStore {
     return session ? { ...session } : null;
   }
 
+  readonly meetingRuns = new Map<string, StoredAppSession>();
+  async readMeetingRunSession(runId: string): Promise<StoredAppSession | null> {
+    this.calls.push('readMeetingRunSession');
+    return this.meetingRuns.get(runId) ?? null;
+  }
+
   async revokeSession(tokenHash: string, publicOrigin: string, nowMs: number): Promise<boolean> {
     this.calls.push('revokeSession');
     const session = this.sessions.get(tokenHash);
@@ -1105,4 +1111,55 @@ test('empty production pins expose 404 without store or producer access', async 
   assert.equal(result.status, 404);
   assert.equal(f.store.calls.length, 0);
   assert.equal(f.counts().producerCallCount, 0);
+});
+
+test('ASR run uses its bound main Session with fresh state after handoff expiry, without a bearer exchange', async () => {
+  const f=fixture(),runId='10000000-0000-4000-8000-000000000001';
+  f.store.meetingRuns.set(runId,{tokenHash:'f'.repeat(64),publicOrigin:MAIN_ORIGIN,entry:'main',
+    localUserId:USER_ID,contextId:CONTEXT_ID,accountGuardRevision:f.store.guardRevision,
+    identity:f.identity(),expiresAtMs:f.identity().sourceSessionExpiresAtMs,revokedAtMs:null});
+  f.setNow(f.now()+120_000);
+  const actor=await f.service.resolveMeetingRunActor(runId);
+  assert.equal(actor.contextId,CONTEXT_ID);assert.equal(actor.localUserId,USER_ID);
+  assert.equal(actor.expiresAtMs,f.now()+10_000);
+  assert.equal(f.counts().producerCallCount,0);assert.equal(f.counts().stateReadCount,1);
+  assert.equal(f.counts().mappingReadCount,1);
+  await assert.rejects(f.service.resolveMeetingRunActor('10000000-0000-4000-8000-000000000002'));
+});
+
+test('ASR bound Session rejects revocation, expiry, wrong entry and a changed account guard',async()=>{
+  for(const variant of ['revoked','expired','quick','guard'] as const){
+    const f=fixture(),runId='10000000-0000-4000-8000-000000000001';
+    f.store.meetingRuns.set(runId,{tokenHash:'f'.repeat(64),publicOrigin:variant==='quick'?QUICK_ORIGIN:MAIN_ORIGIN,
+      entry:variant==='quick'?'quick':'main',localUserId:USER_ID,contextId:CONTEXT_ID,
+      accountGuardRevision:f.store.guardRevision,identity:f.identity(),
+      expiresAtMs:variant==='expired'?f.now()-1:f.identity().sourceSessionExpiresAtMs,
+      revokedAtMs:variant==='revoked'?f.now():null});
+    if(variant==='guard')f.store.guardRevision='2';
+    await assert.rejects(f.service.resolveMeetingRunActor(runId));
+    assert.equal(f.counts().producerCallCount,0);
+  }
+});
+
+test('ASR bound Session fails closed on current Principal drift, stale state or state outage',async()=>{
+  for(const variant of ['epoch','mapping','stale','unavailable'] as const){
+    const f=fixture(),runId='10000000-0000-4000-8000-000000000001';
+    f.store.meetingRuns.set(runId,{tokenHash:'f'.repeat(64),publicOrigin:MAIN_ORIGIN,entry:'main',
+      localUserId:USER_ID,contextId:CONTEXT_ID,accountGuardRevision:f.store.guardRevision,
+      identity:f.identity(),expiresAtMs:f.identity().sourceSessionExpiresAtMs,revokedAtMs:null});
+    const state=stateFor(f.identity(),f.now());
+    f.setState({...state,...(variant==='epoch'?{authEpoch:state.authEpoch+1}:{}),
+      ...(variant==='mapping'?{mappingRevision:'8'}:{}),
+      ...(variant==='stale'?{readAt:new Date(f.now()-10_001).toISOString()}:{})});
+    if(variant==='unavailable')f.setStateUnavailable(true);
+    await assert.rejects(f.service.resolveMeetingRunActor(runId));
+    assert.equal(f.counts().producerCallCount,0);
+  }
+});
+
+test('ASR exact-run lookup requires pinned identity contract before touching storage',async()=>{
+  const f=fixture({pins:[]});
+  await assert.rejects(f.service.resolveMeetingRunActor('10000000-0000-4000-8000-000000000001'),
+    error=>error instanceof KernelError&&error.code==='IDENTITY_CONTRACT_UNAVAILABLE');
+  assert.equal(f.store.calls.includes('readMeetingRunSession'),false);
 });
