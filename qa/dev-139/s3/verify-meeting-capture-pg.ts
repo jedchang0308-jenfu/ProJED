@@ -150,7 +150,6 @@ async function seedFinanceFixture(
         (id,capture_id,source_version,request_key,config_version,state,budget_month,
          reserved_twd_micros,provider_mode,created_at,updated_at)
       VALUES
-      VALUES
         ($1::uuid,$4::uuid,1,$5,'qa-capture-cancel-v1','queued',$6::date,$7::bigint,'fake',$10::timestamptz,$10::timestamptz),
         ($2::uuid,$4::uuid,1,$8,'qa-capture-cancel-v1','running',$6::date,$9::bigint,'fake',$10::timestamptz,$10::timestamptz),
         ($3::uuid,$4::uuid,1,$11,'qa-capture-cancel-v1','failed_retryable',$6::date,$12::bigint,'fake',$10::timestamptz,$10::timestamptz)
@@ -584,9 +583,10 @@ export async function verifyMeetingCapturePostgres(
     if (serverStarted) {
       try { await server.shutdown(); }
       catch (error) { cleanupErrors.push(error); }
+    } else {
+      try { await httpDatabase.end(); }
+      catch (error) { cleanupErrors.push(error); }
     }
-    try { await httpDatabase.end(); }
-    catch (error) { cleanupErrors.push(error); }
     if (admin) {
       try { await admin.end(); }
       catch (error) { cleanupErrors.push(error); }

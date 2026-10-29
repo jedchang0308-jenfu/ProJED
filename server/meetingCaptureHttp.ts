@@ -25,6 +25,12 @@ export function createMeetingCaptureHttpDispatcher(config:RuntimeConfig,database
       return {matched:true,status:200,body:{data:result}};
     }catch(error){
       const safe=asKernelError(error);
+      if(safe.httpStatus>=500){
+        const cause=safe.cause;
+        const sqlState=cause&&typeof cause==='object'&&'code' in cause&&typeof cause.code==='string'
+          &&/^[0-9A-Z]{5}$/u.test(cause.code)?cause.code:undefined;
+        console.error(JSON.stringify({event:'meeting_capture_failed',requestId,code:safe.code,sqlState}));
+      }
       return {matched:true,status:safe.httpStatus,body:{error:{code:safe.code,requestId,retryable:safe.httpStatus>=500}}};
     }finally{request.removeListener('aborted',cancel);request.socket?.removeListener('close',cancel);}
   };
