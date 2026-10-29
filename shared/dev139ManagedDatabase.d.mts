@@ -11,6 +11,7 @@ export const MANAGED_DATABASE: Readonly<{
 }>;
 export function assertManagedIamLogins(value: unknown): asserts value is ManagedIamLogins;
 export function validateManagedDatabaseUrl(raw: string, binding: ManagedBinding, purpose: ManagedPurpose): URL;
+export function validateManagedRuntimeJobDatabaseUrl(raw: string, binding: ManagedBinding): URL;
 export function fetchManagedJobToken(fetchImpl?: typeof fetch): Promise<string>;
 export function managedJobConnectionOptions(raw: string, binding: ManagedBinding, purpose: ManagedPurpose, token: string): {
   host: string; port: number; database: string; user: string; password: string; ssl: false;

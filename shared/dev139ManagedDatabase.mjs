@@ -127,7 +127,7 @@ function assertManagedDatabaseToken(token) {
   }
 }
 
-function validateManagedRuntimeJobDatabaseUrl(raw, binding) {
+export function validateManagedRuntimeJobDatabaseUrl(raw, binding) {
   const url = parseManagedDatabaseUrl(raw, binding, 'runtime');
   try {
     if (url.hostname !== 'localhost'

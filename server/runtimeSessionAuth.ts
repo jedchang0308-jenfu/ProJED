@@ -14,6 +14,10 @@ import { GooglePrincipalMappingResolver } from './principalMappings.js';
 import { createServiceIdentityTokenProvider } from './serviceIdentityToken.js';
 
 function configError(): never { throw new KernelError('CONFIG_INVALID','Published Session configuration is incomplete',503); }
+type RuntimeSessionAuthOptions = KernelHttpOptions & {
+  readonly resolveMeetingRunActor?: ReturnType<typeof createAppSessionService>['resolveMeetingRunActor'];
+};
+
 function origin(value: string | undefined): string {
   if (!value) configError();
   try {
@@ -28,7 +32,7 @@ export function createRuntimeSessionAuth(
   config: RuntimeConfig,
   database: RuntimeDatabase,
   env: NodeJS.ProcessEnv = process.env,
-): KernelHttpOptions {
+): RuntimeSessionAuthOptions {
   if (CURRENT_PRODUCTION_IDENTITY_PINS.length === 0) return {};
   if (config.env !== 'managed') configError();
   const brokerOrigin = origin(env.PROJED_SSO_BROKER_ORIGIN);
@@ -75,5 +79,5 @@ export function createRuntimeSessionAuth(
   });
   return { dispatchAuth:auth.dispatchAuth,resolveActor:auth.resolveActor,
     resolveSessionInfo:auth.resolveSessionInfo,resolveLogoutIdentity:auth.resolveLogoutIdentity,
-    destroySession:auth.destroySession };
+    destroySession:auth.destroySession,resolveMeetingRunActor:auth.resolveMeetingRunActor };
 }

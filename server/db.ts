@@ -2,7 +2,12 @@ import { Pool, type PoolClient, type QueryResult, type QueryResultRow } from 'pg
 
 import type { RuntimeConfig } from './config.js';
 import { KernelError } from './errors.js';
-import { prepareManagedDatabaseSession } from '../shared/dev139ManagedDatabase.mjs';
+import { managedRuntimeJobConnectionOptions, prepareManagedDatabaseSession } from '../shared/dev139ManagedDatabase.mjs';
+
+export interface RuntimeDatabaseOptions {
+  /** Test seam for the managed Job's per-connection metadata token callback. */
+  readonly managedJobTokenProvider?: () => Promise<string>;
+}
 
 export interface DatabaseLease {
   readonly client: PoolClient;
@@ -24,10 +29,25 @@ export class RuntimeDatabase {
   readonly #config: RuntimeConfig;
   #closed = false;
 
-  constructor(config: RuntimeConfig) {
+  constructor(config: RuntimeConfig, options: RuntimeDatabaseOptions = {}) {
+    if (!options || typeof options !== 'object' || Array.isArray(options)
+        || Object.keys(options).some(key => key !== 'managedJobTokenProvider')
+        || (Object.hasOwn(options, 'managedJobTokenProvider')
+          && typeof options.managedJobTokenProvider !== 'function')) {
+      throw new KernelError('CONFIG_INVALID', 'Runtime database options are invalid');
+    }
+    if (options.managedJobTokenProvider !== undefined && config.managedJobTransport !== true) {
+      throw new KernelError('CONFIG_INVALID', 'Managed Job token provider requires the managed Job transport');
+    }
+    if (config.managedJobTransport === true && (config.env !== 'managed' || config.entry !== 'main')) {
+      throw new KernelError('CONFIG_INVALID', 'Managed Job transport requires the managed main entry');
+    }
     this.#config = config;
+    const connectionOptions = config.managedJobTransport === true
+      ? managedRuntimeJobConnectionOptions(config.databaseUrl, config.binding, options.managedJobTokenProvider)
+      : { connectionString: config.databaseUrl };
     this.#pool = new Pool({
-      connectionString: config.databaseUrl,
+      ...connectionOptions,
       max: config.profile.runtime.pool.max,
       min: config.profile.runtime.pool.min,
       idleTimeoutMillis: config.profile.runtime.pool.idleTimeoutMillis,
@@ -51,6 +71,9 @@ export class RuntimeDatabase {
     try {
       client = await this.#pool.connect();
     } catch (error) {
+      if (this.#config.managedJobTransport === true
+          && typeof error === 'object' && error !== null
+          && 'code' in error && error.code === 'DB_AUTH_UNAVAILABLE') throw error;
       throw new KernelError('DB_UNAVAILABLE', 'Database checkout failed', 503, { cause: error });
     }
     if (this.#closed) {

@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 
 import { KernelError } from './errors.js';
 import { assertManagedIamLogins, MANAGED_DATABASE, validateManagedDatabaseUrl,
-  type ManagedIamLogins, type ManagedPurpose } from '../shared/dev139ManagedDatabase.mjs';
+  validateManagedRuntimeJobDatabaseUrl, type ManagedIamLogins, type ManagedPurpose } from '../shared/dev139ManagedDatabase.mjs';
 
 export type AppEntry = 'main' | 'quick';
 export type RuntimeEnvironment = 'disposable' | 'managed';
@@ -64,7 +64,13 @@ export interface RuntimeConfig {
   bindingPath: string;
   binding: RuntimeBinding;
   staticRoot: string;
+  managedJobTransport?: true;
   publicAppUrl?: string;
+}
+
+export interface RuntimeConfigLoadOptions {
+  /** Program-only opt-in for the managed main-entry Job Unix socket transport. */
+  readonly managedJob?: boolean;
 }
 
 const SHA256_RE = /^[a-f0-9]{64}$/;
@@ -265,13 +271,25 @@ export function validateStaticRoot(profile: SourceProfile, binding: RuntimeBindi
   return staticRoot;
 }
 
-export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): RuntimeConfig {
+export function loadRuntimeConfig(
+  env: NodeJS.ProcessEnv = process.env,
+  options: RuntimeConfigLoadOptions = {},
+): RuntimeConfig {
+  if (!options || typeof options !== 'object' || Array.isArray(options)
+      || Object.keys(options).some(key => key !== 'managedJob')
+      || (Object.hasOwn(options, 'managedJob') && typeof options.managedJob !== 'boolean')) {
+    throw new KernelError('CONFIG_INVALID', 'Runtime config options are invalid');
+  }
+  const managedJobTransport = options.managedJob === true;
   if (env.PROJED_ENV !== 'disposable' && env.PROJED_ENV !== 'managed') {
     throw new KernelError('CONFIG_INVALID', 'PROJED_ENV must be disposable or managed');
   }
   const runtimeEnvironment = env.PROJED_ENV;
   const entry = env.PROJED_APP_ENTRY;
   if (entry !== 'main' && entry !== 'quick') throw new KernelError('CONFIG_INVALID', 'PROJED_APP_ENTRY must be main or quick');
+  if (managedJobTransport && (runtimeEnvironment !== 'managed' || entry !== 'main')) {
+    throw new KernelError('CONFIG_INVALID', 'Managed Job transport requires the managed main entry');
+  }
   const profilePath = resolve(env.PROJED_SOURCE_PROFILE
     ?? (runtimeEnvironment === 'managed'
       ? 'config/dev-139/s3-managed.profile.json'
@@ -297,7 +315,12 @@ export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): Runtime
   }
   validateRuntimeBinding(binding, loaded.profile, loaded.sha256);
   const databaseUrl = env.PROJED_DATABASE_URL ?? '';
-  validateRuntimeDatabaseUrl(databaseUrl, binding);
+  if (managedJobTransport) {
+    try { validateManagedRuntimeJobDatabaseUrl(databaseUrl, binding); }
+    catch { throw new KernelError('CONFIG_INVALID', 'Database URL is outside its managed Job binding'); }
+  } else {
+    validateRuntimeDatabaseUrl(databaseUrl, binding);
+  }
   const port = env.PORT === undefined ? 0 : Number(env.PORT);
   if (!Number.isInteger(port) || port < 0 || port > 65535) throw new KernelError('CONFIG_INVALID', 'PORT is invalid');
   const host = runtimeEnvironment === 'managed' || env.PROJED_RUNTIME_MODE === 'cloud-run-config'
@@ -318,6 +341,7 @@ export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): Runtime
     env: runtimeEnvironment, entry, host, port, databaseUrl, profilePath,
     profile: loaded.profile, bindingPath, binding,
     staticRoot: validateStaticRoot(loaded.profile, binding),
+    ...(managedJobTransport ? { managedJobTransport: true as const } : {}),
     ...(publicAppUrl ? { publicAppUrl } : {}),
   };
 }
