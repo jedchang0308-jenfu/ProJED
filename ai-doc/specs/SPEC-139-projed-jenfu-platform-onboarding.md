@@ -1,7 +1,7 @@
 # SPEC-139：ProJED 納入 Jenfu-Platform 的產品與技術交接契約
 
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。
-- 日期：2026-10-29（Asia/Taipei）；版本：Rev 72（discussion持久化／有界host已通過隔離CI；完整整合與發布續行）。
+- 日期：2026-10-30（Asia/Taipei）；版本：Rev 73（task-only retrieval／matching／有界compose核心候選；durable LLM與完整交付續行）。
 - 文件狀態：**整合與發布續行中；W22 OrgMaster publisher 與 W23 Platform Session／handoff source 均有 draft PR／required CI PASS，隔離驗證 PASS；Production Resolver Disabled；未 Release**。Firebase／OIDC 真身分與完整 Session 部署、RAG／文字會議真 provider 資格、錄音管線與剩餘資料處置、雲端 readback、舊入口、writer fence、切流及正式發布仍計入完成分母。W22 owner source 見 [§36](#36-orgmaster-minimum-principal-publication-w222026-10-29)，W23 Platform source 與驗證邊界見 [§37](#37-platform-projed-session-and-handoff-w232026-10-29)；W21 承接六類文件／同步資料與精度保護見 [§35](#35-document-source-retention-w212026-10-28)；W20 資料保留見 §34，具體資源與待確認的新權限仍見 §33。本輪未寫正式資料、切流或變更 IAM／Secret／credential／billing。
 - 適用階段：S1–S3 本地切片歷史見 §12–§32；2026-10-28 續行授權見 [DEV-139 人類決策與授權範圍](../dev_task.md#1-人類決策與授權範圍)，涵蓋 ProJED／OrgMaster／Jenfu-Platform 的 source 整合工作。正式整合與發布仍是完整目標，不以本地切片完成替代；新責任權限依 §33 處理。定期審視不是續行或發布的 required gate；本輪未執行正式資料寫入、切流或 IAM／Secret／credential／billing 變更。
 - 直接交接入口：[§11 S1 定案契約](#11-架構決策與-s1-定案契約)、[§12 S1 實作狀態](#12-s1-實作狀態2026-10-26)、[§13 S2 consumer seam](#13-s2-projed-identity-consumer-seam2026-10-26)、[§14 S3 read adapter](#14-s3-http-read-adapter-slice2026-10-26)、[§15 S3 domain command](#15-s3-domain-command-w12026-10-26)、[§16 S3 collaboration command](#16-s3-collaboration-command-w22026-10-27)、[§17 S3 record／activity](#17-s3-recordactivity-w32026-10-27)、[§18 S3 HTTP product wiring](#18-s3-http-product-wiring-w42026-10-27)、[§19 S3 Board transfer](#19-s3-board-transfer-w52026-10-27)、[§20 S3 legacy provider boundary](#20-s3-legacy-provider-boundary-w62026-10-27)、[§21 S3 Quick Task](#21-s3-quick-task-w72026-10-27)、[§22 S3 Task Workbench](#22-s3-task-workbench-w82026-10-27)、[§23 S3 Actor CAS](#23-s3-actor-context-cas-w92026-10-27)、[§24 S3 Task Tracking](#24-s3-task-tracking-w102026-10-27)、[§25 S3 Backup／Import](#25-s3-backupimport-w112026-10-27)、[§26 S3 Account Preferences](#26-s3-account-preferences-w122026-10-27)、[§27 S3 Calendar Subscription](#27-s3-calendar-subscription-w132026-10-27)及[§32 本地開發收斂](#32-s3-local-development-closure-w182026-10-27)；[§11.8 技術主管審查](#118-技術主管審查與最小優化)保留 Rev5 修正理由；既有使用者切換見 [§6.3](#63-既有使用者的切換基線)。
@@ -1352,6 +1352,20 @@ Focused review 另修正新service的預設路由說明、OCI失敗診斷也遮�
 目標DB已有run queue／source version／lease／usage／cleanup與transcript表，但0001–0033尚未授ASR worker claim／dispatch／settle／transcript INSERT，HTTP錄音caller亦未接齊。沿原run與nonce／token責任補forward-only0034及後續worker migration／接線，不另建通用queue。先完成安全source／合成媒體測試，再由真provider、普通使用入口與資料／費用／取消／清理讀回證據驗收；本節與W35的369 unit／15 OCI均不代表ASR完成。
 
 ## 51. Owner foundation qualification and ASR components（W36–W37，2026-10-29）
+
+### Task-only retrieval、matching 與 bounded compose 核心（2026-10-30）
+
+`meetingTaskRead`只讀目前actor可讀的同tenant／project有效task／milestone，保留legacy NULL task與completed狀態，排除group／archived／其他看板。WBS canonical文字與歷史FNV hash抽至`shared/wbsRagSource`供原client index與server共用；chunk normalize亦共用並保留UTF-16 offsets，原索引文字／hash不變，不重建整個專案。RAG的`contentHash`仍是原格式；candidate的`sourceHash`則採目前WBS row＋tags的DB SHA256，snapshot再綁定送模型的文字、path、updatedAt及source hash。
+
+Task-only檢索只接受Google／gemini-embedding-001／3072維的current版本。除hash外必須比對完整canonical內容、目前task state、連續chunk index／extent從0覆蓋到尾及全部current chunk向量，最後才在完整合格corpus按cosine排序取top6；缺／舊索引只標incomplete並用文字／pointer降級，不偷偷補索引。`readCurrentMeetingTaskSnapshots`重新讀取目前來源並比對snapshot，可識別parent path改名而child timestamp／index內容未變的情況；後續provider回覆存放須在同一個重新授權的actor transaction使用此重驗，不能只比child updatedAt或FNV hash。
+
+純候選核心先live scope filter，再合併lexical4／RAG6／pointer2並以未用文字候選補滿12，分數同值按canonical UUID穩定排序；代碼只作完整boundary比對，不將`T-12`／`T-123`共同前綴當命中。每個model candidate文字最多800 Unicode code points。Matching prompt只以本discussion的原文及local zero-based inclusive word quote作證據，前後400字脈絡不能當本段引文；解析拒絕unknown欄位／任務／越界quote與重複task。`related`／`decision`／`action`只是關係分類，evidenceScore仍是未校準的model訊號，不授權改task或自動接受。
+
+Compose plan以fanout8形成穩定merge tree，每個子摘要／輸出最多2000 Unicode code points；provider只看該node至多8個direct child摘要，回覆需覆蓋相同unique child IDs，無關排列不作拒絕理由。完整有序leaf coverage與hash由server沿已驗child結果重建，不要求模型在根節點回抄整場UUID，亦不把完整transcript塞入舊同步合成endpoint。Empty／single leaf明確處理，不製造空摘要；coverage只證來源與輸入完整性，parser不宣稱能證明語意真實。
+
+本機S2 375／S3 122、strict app／S2／S3同版本宣告overlay、affected lint及S3 source boundary PASS。新增native helper仍在既有meeting-upload檢查內，用同一nonce workspace的獨立board驗八個task完整排序、latest stale／同宣告hash異內容、連續overlap／缺口／缺尾、missing embedding、舊state與ancestor path失效、outsider及錯source version拒絕；只有隔離fixture，未傳provider內容，實際PG結果待本版遠端CI。原0001–0039 SQL／grants不改，不新增required gate；尚未接durable retrieve-query／match／compose的預留、派送、結算／checkpoint與finalizer，也沒有把目前core／synthetic結果認列成真ASR或analysis ready。原零留存、人工優先、private資料、migration／writer fence／正式切流發布分母全部保留。
+
+後續LLM的向量、候選、回覆與摘要checkpoint沿editor-only私有儲存隔離；run cursor只留進度／ID／hash，不能讓無actor的metadata掃描或費用結算讀到私人內容。Provider前後重驗selected snapshot及原Session，和同交易的結果存放一起完成，人工resolution／正文與links仍由既有review／CAS路徑維護。
 
 ### Discussion persistence 與有界 host（0039）
 

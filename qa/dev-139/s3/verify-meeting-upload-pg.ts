@@ -20,6 +20,7 @@ import { createPostgresMeetingDiscussionRepository, parseMeetingDiscussionClaim,
 import type { MeetingDiscussionBatch, MeetingDiscussionClaim } from '../../../server/meetingDiscussionWorker.js';
 import { PostgresAppSessionStore } from '../../../server/postgresAppSessionStore.js';
 import { MeetingUploadRepository } from '../../../server/meetingUpload.js';
+import {verifyMeetingTaskReadPostgres} from './verify-meeting-task-read-pg.js';
 import { createHttpCollaborationAdapter } from '../../../src/services/httpApi/collaborationAdapter.js';
 import { createHttpDomainReadAdapter } from '../../../src/services/httpApi/domainReadAdapter.js';
 import { createHttpDomainWriteAdapter } from '../../../src/services/httpApi/domainWriteAdapter.js';
@@ -1646,6 +1647,7 @@ export async function verifyMeetingUploadPostgres(
         assert.deepEqual(await readBudget(admin,month),{
           limit_twd_micros:DEFAULT_BUDGET_MICROS,reserved_twd_micros:'0',spent_twd_micros:'48000',
         },'discussion persistence does not reserve or spend speech budget');
+        await verifyMeetingTaskReadPostgres(database,config,admin,actor,outsider,successFixture.captureId);
       });
     const successState=await admin.query<{
       run_state:string;resume_stage:string;attempt_count:number;capture_state:string;
