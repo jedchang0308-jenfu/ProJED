@@ -120,9 +120,19 @@ const actorE: ServerActorV1 = {
   contextId: '55555555-5555-4555-8555-555555555555',
 };
 
-await verifyActorSerializationPostgres(database,config,actorA,actorB);
+// These helpers create/clean their own fixtures. A failure must remain a
+// failure, but must not suppress the independent existing domain regressions.
+const independentFailures: unknown[] = [];
+async function runIndependent(name:string,verify:()=>Promise<void>):Promise<void>{
+  try{await verify();}catch(error){
+    independentFailures.push(error);
+    console.error(`DEV139_NATIVE_INDEPENDENT_FAILURE=${name}`);
+    console.error(error);
+  }
+}
+await runIndependent('actor-serialization',()=>verifyActorSerializationPostgres(database,config,actorA,actorB));
 await verifyMeetingSynthesisPostgres(database,config,actorB,actorA,actorD);
-await verifyMeetingCapturePostgres(database,config,actorB,actorA,actorD);
+await runIndependent('meeting-capture',()=>verifyMeetingCapturePostgres(database,config,actorB,actorA,actorD));
 const aWorkspaces = await runActorTransaction(database, config, actorA, port => repository.listWorkspaces(port));
 assert.deepEqual(aWorkspaces.map(workspace => workspace.id), ['ws-a', 'ws-b']);
 assert.deepEqual(aWorkspaces.find(workspace => workspace.id === 'ws-b')?.boards.map(board => board.id), ['board-shared']);
@@ -1726,6 +1736,7 @@ try {
   await http.shutdown();
 }
 
+if(independentFailures.length)throw new AggregateError(independentFailures,'Independent native regressions failed');
 console.log(JSON.stringify({
   status: 'PASS',
   checks: [

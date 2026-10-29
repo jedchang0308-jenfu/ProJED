@@ -81,7 +81,7 @@ export async function verifyActorSerializationPostgres(
   assert.equal(config.env, 'disposable', 'actor serialization requires a disposable profile');
   assert.equal(config.profile.environment, 'disposable', 'actor serialization profile must be disposable');
   assert.equal(config.profile.database.host, '127.0.0.1', 'actor serialization must use loopback PostgreSQL');
-  assert.equal(config.binding.connectionMode, 'loopback', 'actor serialization must use a loopback binding');
+  assert.equal(config.binding.connectionMode ?? 'loopback', 'loopback', 'actor serialization must use a loopback binding');
   assert.match(config.binding.databaseName, /^dev139_s3_[0-9a-f]{32}$/u, 'actor serialization database must be task-disposable');
   assert.ok(config.profile.runtime.pool.max >= 3, 'actor serialization requires three runtime pool leases');
   assert.notEqual(actorA.localUserId, actorB.localUserId, 'actors must belong to different accounts');

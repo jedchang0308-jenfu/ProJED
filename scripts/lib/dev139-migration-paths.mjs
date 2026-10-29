@@ -34,4 +34,5 @@ export const S3_MIGRATION_PATHS = Object.freeze([
   'db/migrations/0027_meeting_cascade_compatibility_v1.sql',
   'db/migrations/0028_meeting_atomic_cascade_v1.sql',
   'db/migrations/0029_meeting_capture_runtime_v1.sql',
+  'db/migrations/0030_meeting_legacy_task_pointer_v1.sql',
 ]);

@@ -138,6 +138,10 @@
     {
       "version": "0029_meeting_capture_runtime_v1",
       "path": "db/migrations/0029_meeting_capture_runtime_v1.sql"
+    },
+    {
+      "version": "0030_meeting_legacy_task_pointer_v1",
+      "path": "db/migrations/0030_meeting_legacy_task_pointer_v1.sql"
     }
   ],
   "objectAllowlist": [
