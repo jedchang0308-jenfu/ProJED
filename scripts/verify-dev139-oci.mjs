@@ -33,6 +33,7 @@ const [adminPassword, migratorPassword, importerPassword, runtimePassword] = sec
 let binding;
 let imageId;
 let postgresVersion;
+let appliedMigrationCount = 0;
 let firstFailure;
 const cleanupFailures = [];
 const diagnostics = [];
@@ -73,6 +74,19 @@ function runOwnedContainer(suffix, args, options) {
 
 function inspect(name) {
   return JSON.parse(docker(['inspect', name]).stdout)[0];
+}
+
+function inspectResource(kind, name) {
+  const result = docker([kind, 'inspect', name], { allowFailure: true });
+  if (!result.error && result.status === 0) return JSON.parse(result.stdout)[0];
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const notFound = new RegExp(`^(?:Error(?: response from daemon)?: )?No such (?:object|${kind}): ${escaped}$`, 'i');
+  const missingVolume = new RegExp(`^Error response from daemon: get ${escaped}: no such volume$`, 'i');
+  if (!result.error && result.status === 1 && ['', '[]'].includes(result.stdout.trim())
+      && (notFound.test(result.stderr.trim()) || (kind === 'volume' && missingVolume.test(result.stderr.trim())))) {
+    return undefined;
+  }
+  throw new Error(sanitize(`Cannot verify ${kind} ${name}: ${result.error?.code ?? result.status} ${result.stderr}`));
 }
 
 async function waitFor(label, probe, attempts = 40) {
@@ -160,7 +174,8 @@ try {
     assert.equal(result.status, 'PASS');
     assert.equal(result.migrations.length, Object.keys(binding.migrationSha256).length);
   }
-  assert.equal(pgSql(`SELECT count(*) FROM projed_core.schema_migrations;`), String(Object.keys(binding.migrationSha256).length));
+  appliedMigrationCount = Number(pgSql(`SELECT count(*) FROM projed_core.schema_migrations;`));
+  assert.equal(appliedMigrationCount, Object.keys(binding.migrationSha256).length);
   assert.equal(pgSql(`SELECT rolname || ':' || rolsuper || ':' || rolbypassrls FROM pg_roles WHERE rolname='projed_runtime_disposable';`), 'projed_runtime_disposable:false:false');
   passed('isolated-unix-socket-full-migration-and-idempotent-replay');
 
@@ -259,35 +274,38 @@ try {
 } catch (error) {
   firstFailure = error;
   for (const name of containers) {
-    const state = docker(['inspect', name], { allowFailure: true });
-    if (state.status !== 0) continue;
-    const container = JSON.parse(state.stdout)[0];
-    if (container.Config.Labels[label] !== nonce) continue;
-    const logs = docker(['logs', name], { allowFailure: true });
-    diagnostics.push({ name, state: container.State.Status, exitCode: container.State.ExitCode,
-      logs: sanitize(`${logs.stdout ?? ''}${logs.stderr ?? ''}`).slice(-8000) });
+    try {
+      const container = inspectResource('container', name);
+      if (!container || container.Config.Labels[label] !== nonce) continue;
+      const logs = docker(['logs', name], { allowFailure: true });
+      diagnostics.push({ name, state: container.State.Status, exitCode: container.State.ExitCode,
+        logs: sanitize(`${logs.stdout ?? ''}${logs.stderr ?? ''}`).slice(-8000) });
+    } catch (diagnosticError) {
+      diagnostics.push({ name, unavailable: sanitize(diagnosticError.message) });
+    }
   }
 } finally {
   for (const name of containers) {
     try {
-      const result = docker(['inspect', name], { allowFailure: true });
-      if (result.status !== 0) continue;
-      assert.equal(JSON.parse(result.stdout)[0].Config.Labels[label], nonce);
+      const container = inspectResource('container', name);
+      if (!container) continue;
+      assert.equal(container.Config.Labels[label], nonce);
       docker(['rm', '--force', '--volumes', name]);
-      assert.notEqual(docker(['inspect', name], { allowFailure: true }).status, 0);
+      assert.equal(inspectResource('container', name), undefined);
     } catch (error) { cleanupFailures.push(error); }
   }
   for (const name of volumes) {
     try {
-      assert.equal(JSON.parse(docker(['volume', 'inspect', name]).stdout)[0].Labels[label], nonce);
+      assert.equal(inspectResource('volume', name)?.Labels[label], nonce);
       docker(['volume', 'rm', name]);
-      assert.notEqual(docker(['volume', 'inspect', name], { allowFailure: true }).status, 0);
+      assert.equal(inspectResource('volume', name), undefined);
     } catch (error) { cleanupFailures.push(error); }
   }
   for (const name of images) {
     try {
-      assert.equal(JSON.parse(docker(['image', 'inspect', name]).stdout)[0].Config.Labels[label], nonce);
+      assert.equal(inspectResource('image', name)?.Config.Labels[label], nonce);
       docker(['image', 'rm', name]);
+      assert.equal(inspectResource('image', name), undefined);
     } catch (error) { cleanupFailures.push(error); }
   }
   // Only this mkdtemp directory; no global Docker or filesystem pruning.
@@ -302,7 +320,8 @@ const status = firstFailure || cleanupFailures.length ? 'FAIL' : 'PASS';
 const result = {
   status, evidenceLevel: 'ISOLATED_LINUX_OCI_UNIX_SOCKET',
   sourceSha: process.env.GITHUB_SHA, releaseId: prefix, imageId,
-  postgres: postgresVersion, migrationCount: binding ? Object.keys(binding.migrationSha256).length : 0,
+  postgres: postgresVersion, migrationCount: appliedMigrationCount,
+  expectedMigrationCount: binding ? Object.keys(binding.migrationSha256).length : 0,
   profileSha256: binding?.profileSha256, migrationSha256: binding?.migrationSha256,
   staticFixtureSha256: binding?.staticFixtureSha256, checks,
   dockerExecution: status, browserSmoke: 'NOT_RUN', productionIdentity: 'NOT_RUN',
