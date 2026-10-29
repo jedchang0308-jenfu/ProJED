@@ -297,7 +297,7 @@ BEGIN
         'upload_token_expires_at','due_at','updated_at'
       ]::text[]
       WHEN 'projed_core.meeting_analysis_runs' THEN ARRAY[
-        'state','error_code','lease_token','lease_expires_at','updated_at'
+        'state','error_code','lease_token','lease_expires_at','updated_at','authorization_context_id'
       ]::text[]
       WHEN 'projed_core.meeting_ai_usage_attempts' THEN ARRAY[
         'actual_twd_micros','usage_state','outcome','updated_at'
@@ -393,6 +393,7 @@ BEGIN
     'projed_core.meeting_upload_run_scope_v1(uuid,uuid)',
     'projed_core.meeting_budget_upload_guard_v1()',
     'projed_core.complete_meeting_upload_v1(uuid,integer,jsonb,text,text,text)',
+    'projed_core.bind_meeting_asr_session_v1(uuid)',
     'projed_core.meeting_review_scope_v1(uuid)',
     'projed_core.meeting_projection_scope_v1(uuid,uuid)'
   ] LOOP
