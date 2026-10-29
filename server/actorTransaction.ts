@@ -34,6 +34,7 @@ export interface ActorQueryPort {
   authorizeRecordRagMutation(tenantId: string, projectId: string, recordId: string): Promise<void>;
   authorizeRagJobMutation(tenantId: string, documentId: string, jobId: string, claimToken?: string): Promise<void>;
   authorizeMeetingCaptureMutation(recordId: string, captureId: string): Promise<void>;
+  authorizeMeetingAudioMutation(captureId: string, segmentId: string, phase: 'reserve' | 'claim' | 'verify'): Promise<void>;
 }
 
 const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
@@ -300,6 +301,15 @@ export async function runActorTransaction<T>(
       set_config('projed.meeting_capture_id',$2,true)`, [recordId, captureId]);
   };
 
+  const authorizeMeetingAudioMutation = async (captureId: string, segmentId: string, phase: 'reserve' | 'claim' | 'verify'): Promise<void> => {
+    if (![captureId, segmentId].every(value => UUID_RE.test(value)) || !['reserve','claim','verify'].includes(phase)) {
+      throw new KernelError('TRANSACTION_USAGE_INVALID', 'Meeting audio scope is invalid');
+    }
+    await guardedClientQuery(`SELECT set_config('projed.meeting_audio_segment_id',$1,true),
+      set_config('projed.meeting_audio_phase',$2,true)
+      WHERE current_setting('projed.meeting_capture_id',true)=$3`, [segmentId,phase,captureId]);
+  };
+
   try {
     checkCancellation();
     validateServerActor(actor);
@@ -336,6 +346,7 @@ export async function runActorTransaction<T>(
       authorizeRecordRagMutation,
       authorizeRagJobMutation,
       authorizeMeetingCaptureMutation,
+      authorizeMeetingAudioMutation,
     });
     portClosed = true;
     if (inFlight) throw new KernelError('TRANSACTION_USAGE_INVALID', 'Callback returned with an unfinished query');

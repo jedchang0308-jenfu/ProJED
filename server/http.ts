@@ -29,6 +29,8 @@ import {createRagHttpDispatcher} from './ragHttp.js';
 import type {RagProvider} from './geminiRagProvider.js';
 import {createMeetingSynthesisHttpDispatcher,type MeetingSynthesisModel,type MeetingSynthesisProvider} from './meetingSynthesisHttp.js';
 import { createMeetingCaptureHttpDispatcher } from './meetingCaptureHttp.js';
+import { createMeetingAudioHttpDispatcher } from './meetingAudioHttp.js';
+import type { MeetingAudioStorage } from './meetingAudioStorage.js';
 
 const CONTENT_TYPES: Record<string, string> = {
   '.css': 'text/css; charset=utf-8',
@@ -142,6 +144,7 @@ export interface KernelHttpServer {
 }
 
 export interface KernelHttpOptions {
+  readonly meetingAudioStorage?:MeetingAudioStorage;
   readonly ragProvider?:RagProvider;
   readonly meetingSynthesisProvider?:MeetingSynthesisProvider;
   readonly meetingSynthesisModel?:MeetingSynthesisModel;
@@ -207,7 +210,8 @@ export function createKernelHttpServer(
   const dispatchRag = createRagHttpDispatcher(config,database,options.resolveActor,options.ragProvider);
   const dispatchMeetingSynthesis=createMeetingSynthesisHttpDispatcher(config,database,options.resolveActor,
     options.meetingSynthesisProvider??options.ragProvider,options.meetingSynthesisModel);
-  const dispatchMeetingCapture = createMeetingCaptureHttpDispatcher(config, database, options.resolveActor);
+  const dispatchMeetingCapture = createMeetingCaptureHttpDispatcher(config, database, options.resolveActor,options.meetingAudioStorage);
+  const dispatchMeetingAudio = createMeetingAudioHttpDispatcher(config,database,options.resolveActor,options.meetingAudioStorage);
   const server = createServer({
     maxHeaderSize: 16 * 1024,
     requestTimeout: config.profile.runtime.timeouts.requestMillis,
@@ -284,6 +288,17 @@ export function createKernelHttpServer(
     if(synthesis.matched){json(response,synthesis.status??500,synthesis.body,requestId);return;}
     const capture = await dispatchMeetingCapture(request, requestId);
     if(capture.matched){json(response,capture.status??500,capture.body,requestId);return;}
+    const audio = await dispatchMeetingAudio(request,requestId);
+    if(audio.matched){
+      if(audio.audio){
+        if(response.destroyed||response.writableEnded)return;
+        response.writeHead(audio.status??200,{'content-type':audio.audio.mime,'cache-control':'no-store',
+          'content-length':String(audio.audio.bytes.byteLength),'x-content-type-options':'nosniff',
+          'x-projed-expires-at':String(audio.audio.expiresAt),'x-request-id':requestId});
+        response.end(Buffer.from(audio.audio.bytes));
+      }else json(response,audio.status??500,audio.body,requestId);
+      return;
+    }
     const collaborationWrite = await dispatchCollaborationWrite(request, requestId);
     if (collaborationWrite.matched) {
       json(response, collaborationWrite.status ?? 500, collaborationWrite.body ?? {

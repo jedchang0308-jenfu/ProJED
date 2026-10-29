@@ -252,6 +252,10 @@ BEGIN
       WHEN 'projed_core.meeting_capture_sessions' THEN ARRAY[
         'id','tenant_id','project_id','record_id','created_by','idempotency_key','state','last_progress_at','started_at'
       ]::text[]
+      WHEN 'projed_core.meeting_capture_segments' THEN ARRAY[
+        'id','capture_id','segment_index','epoch','start_offset_ms','end_offset_ms','overlap_ms','gap_before_ms',
+        'object_path','mime','bytes','source_version','reservation_key','upload_token_expires_at','storage_backend'
+      ]::text[]
       WHEN 'projed_core.meeting_pointer_intervals' THEN ARRAY[
         'id','capture_id','clock_epoch','sequence','canonical_task_id','surface_kind','started_offset_ms',
         'ended_offset_ms','visible','termination_reason','batch_key','batch_digest','tenant_id','project_id'
@@ -268,6 +272,13 @@ BEGIN
         'audio_manifest_hash','pointer_manifest_hash','source_completeness','pointer_loss','updated_at',
         'stopped_reason','source_frozen_at','source_parent_version','final_pointer_sequence','source_gaps'
       ]::text[]
+      WHEN 'projed_core.meeting_capture_segments' THEN ARRAY[
+        'bytes','sha256','upload_state','upload_token_expires_at','last_error','verified_at','storage_generation','updated_at'
+      ]::text[]
+      WHEN 'projed_core.meeting_artifact_cleanup' THEN ARRAY[
+        'upload_operation_token','upload_outcome','storage_generation','upload_sha256','upload_bytes',
+        'upload_token_expires_at','due_at','updated_at'
+      ]::text[]
       WHEN 'projed_core.meeting_analysis_runs' THEN ARRAY[
         'state','error_code','lease_token','lease_expires_at','updated_at'
       ]::text[]
@@ -281,7 +292,9 @@ BEGIN
     END;
     v_expected_select := CASE v_name
       WHEN 'projed_core.meeting_artifact_cleanup' THEN ARRAY[
-        'obligation_id','capture_id','attempt_id','kind','due_at','upload_token_expires_at'
+        'obligation_id','capture_id','attempt_id','kind','due_at','upload_token_expires_at',
+        'state','object_locator','storage_backend','upload_operation_token','upload_outcome',
+        'storage_generation','upload_sha256','upload_bytes'
       ]::text[]
       WHEN 'projed_core.meeting_ai_usage_attempts' THEN ARRAY[
         'attempt_id','capture_id','run_id','dispatch_month','reserved_twd_micros','usage_state','dispatch_state'
@@ -340,7 +353,12 @@ BEGIN
     'projed_core.meeting_capture_mutable_v1(uuid)',
     'projed_core.meeting_run_cancel_guard_v1()',
     'projed_core.meeting_cancel_ledger_scope_v1(uuid)',
-    'projed_core.cancel_meeting_capture_v1(uuid,integer,text)'
+    'projed_core.cancel_meeting_capture_v1(uuid,integer,text)',
+    'projed_core.meeting_audio_scope_v1(uuid,uuid)',
+    'projed_core.meeting_audio_cleanup_scope_v1(uuid,text)',
+    'projed_core.meeting_audio_settlement_scope_v1(uuid)',
+    'projed_core.meeting_audio_proof_guard_v1()',
+    'projed_core.meeting_audio_anchor_retention_v1()'
   ] LOOP
     v_function_oid := to_regprocedure(v_function);
     IF v_function_oid IS NULL THEN RAISE EXCEPTION 'missing runtime meeting helper: %', v_function; END IF;
@@ -400,7 +418,11 @@ SELECT set_config('projed.actor_principal_id','',true),
        set_config('projed.meeting_record_id','',true),
        set_config('projed.meeting_capture_id','',true),
        set_config('projed.meeting_ledger_phase','',true),
-       set_config('projed.meeting_refund_month','',true);
+       set_config('projed.meeting_refund_month','',true),
+       set_config('projed.meeting_audio_segment_id','',true),
+       set_config('projed.meeting_audio_phase','',true),
+       set_config('projed.meeting_upload_phase','',true),
+       set_config('projed.meeting_upload_token','',true);
 DO $$
 DECLARE v_rows bigint;
 BEGIN
@@ -422,7 +444,12 @@ BEGIN
        '23456789-1234-4234-8234-123456789002', 'a1234567-1234-4234-8234-123456789001') IS TRUE
      OR projed_core.meeting_capture_visible_v1('a1234567-1234-4234-8234-123456789001') IS TRUE
      OR projed_core.meeting_capture_mutable_v1('a1234567-1234-4234-8234-123456789001') IS TRUE
-     OR projed_core.meeting_cancel_ledger_scope_v1('a1234567-1234-4234-8234-123456789001') IS TRUE THEN
+     OR projed_core.meeting_cancel_ledger_scope_v1('a1234567-1234-4234-8234-123456789001') IS TRUE
+     OR projed_core.meeting_audio_scope_v1(
+       'a1234567-1234-4234-8234-123456789001','a2234567-1234-4234-8234-123456789001') IS TRUE
+     OR projed_core.meeting_audio_cleanup_scope_v1(
+       'a1234567-1234-4234-8234-123456789001','storage:a1234567-1234-4234-8234-123456789001:v7:segment:0') IS TRUE
+     OR projed_core.meeting_audio_settlement_scope_v1('a9234567-1234-4234-8234-123456789009') IS TRUE THEN
     RAISE EXCEPTION 'meeting helper accepted missing actor/purpose scope';
   END IF;
 
@@ -431,6 +458,20 @@ BEGIN
       'a1234567-1234-4234-8234-123456789001', 7, 'scope-negative'
     );
     RAISE EXCEPTION 'runtime cancelled a capture without actor/purpose scope';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+
+  BEGIN
+    INSERT INTO projed_core.meeting_capture_segments (
+      id,capture_id,segment_index,epoch,start_offset_ms,end_offset_ms,object_path,mime,bytes,
+      source_version,reservation_key,upload_token_expires_at,storage_backend
+    ) VALUES (
+      'a2234567-1234-4234-8234-123456789091',
+      'a1234567-1234-4234-8234-123456789001',91,0,0,1,
+      'synthetic/meeting/a1234567/v7/segment-091.webm','audio/webm',0,7,
+      'runtime-without-audio-purpose',now()+interval '2 hours','gcs'
+    );
+    RAISE EXCEPTION 'runtime inserted an audio segment without actor/purpose scope';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
 
@@ -496,6 +537,16 @@ BEGIN
    WHERE budget_month='2026-03-01';
   GET DIAGNOSTICS v_rows = ROW_COUNT;
   IF v_rows <> 0 THEN RAISE EXCEPTION 'runtime updated budget ledger without cancellation purpose'; END IF;
+
+  UPDATE projed_core.meeting_capture_segments SET upload_state='uploading',updated_at=now()
+   WHERE id='a2234567-1234-4234-8234-123456789001';
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  IF v_rows <> 0 THEN RAISE EXCEPTION 'runtime updated audio segment without actor/purpose scope'; END IF;
+
+  UPDATE projed_core.meeting_artifact_cleanup SET upload_outcome='pending',updated_at=now()
+   WHERE obligation_id='a9234567-1234-4234-8234-123456789002';
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  IF v_rows <> 0 THEN RAISE EXCEPTION 'runtime updated audio cleanup without actor/purpose scope'; END IF;
 END $$;
 RESET ROLE;
 

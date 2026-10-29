@@ -115,7 +115,7 @@ export class MeetingCaptureRepository {
         conflict('Meeting pointer sequence cannot rewind');
       if(body.pointerLoss!==undefined&&typeof body.pointerLoss!=='boolean')invalid('pointerLoss must be boolean');
       await port.query(`UPDATE projed_core.meeting_capture_sessions SET state='stopped',
-        stopped_at=coalesce(stopped_at,now()),audio_expires_at=coalesce(stopped_at,now())+interval '7 days',
+        stopped_at=coalesce(stopped_at,now()),audio_expires_at=coalesce(audio_expires_at,coalesce(stopped_at,now())+interval '7 days'),
         epoch_manifest=$2::jsonb,source_gaps=$3::jsonb,final_pointer_sequence=$4::bigint,
         pointer_loss=pointer_loss OR $5::boolean,stopped_reason=$6,last_progress_at=now(),updated_at=now()
         WHERE id=$1::uuid`,[id,JSON.stringify(epochs),JSON.stringify(gaps),sequence,

@@ -101,6 +101,7 @@ const PROFILE_MIGRATION_PATHS = new Map<string, readonly string[]>([
     'db/migrations/0028_meeting_atomic_cascade_v1.sql',
     'db/migrations/0029_meeting_capture_runtime_v1.sql',
     'db/migrations/0030_meeting_legacy_task_pointer_v1.sql',
+    'db/migrations/0031_meeting_audio_transport_v1.sql',
   ]],
   ['^jenfu_prod$', [
     'db/migrations/0001_runtime_boundary_v1.sql',

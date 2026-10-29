@@ -258,8 +258,12 @@ export function createGcsMeetingAudioStorage(options: GcsMeetingAudioStorageOpti
       if (!(bytes instanceof Uint8Array) || bytes.byteLength === 0 || bytes.byteLength > MAX_AUDIO_BYTES) {
         throw inputError('Meeting audio size is invalid');
       }
-      checkAbort(signal);
-      const token = await accessToken(signal);
+      if(signal?.aborted)throw new KernelError('MEETING_STORAGE_NOT_SENT','Meeting audio upload was not sent',503);
+      let token:string;
+      try{token=await accessToken(signal);}catch{
+        throw new KernelError('MEETING_STORAGE_NOT_SENT','Meeting audio upload was not sent',503);
+      }
+      if(signal?.aborted)throw new KernelError('MEETING_STORAGE_NOT_SENT','Meeting audio upload was not sent',503);
       const url = new URL(`${STORAGE_API}/upload/storage/v1/b/${encodeURIComponent(bucket)}/o`);
       url.searchParams.set('uploadType', 'media');
       url.searchParams.set('name', key);
@@ -280,6 +284,8 @@ export function createGcsMeetingAudioStorage(options: GcsMeetingAudioStorageOpti
       }
       if (!response.ok) {
         await cancelBody(response);
+        if(response.status>=400&&response.status<500)
+          throw new KernelError('MEETING_STORAGE_REJECTED','Meeting audio upload was rejected',503);
         throw storageError('Meeting audio upload is unavailable');
       }
       const metadata = parseMetadata(await readJsonBody(response), key);

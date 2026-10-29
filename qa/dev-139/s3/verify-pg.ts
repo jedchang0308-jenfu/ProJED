@@ -44,6 +44,7 @@ import {verifyRagPostgres} from './verify-rag-pg.js';
 import {verifyMeetingSynthesisPostgres} from './verify-meeting-synthesis-pg.js';
 import { verifyActorSerializationPostgres } from './verify-actor-serialization-pg.js';
 import { verifyMeetingCapturePostgres } from './verify-meeting-capture-pg.js';
+import { verifyMeetingAudioPostgres } from './verify-meeting-audio-pg.js';
 import { createPreferencesHttpDispatcher } from '../../../server/preferencesHttp.js';
 import { createCalendarHttpDispatcher } from '../../../server/calendarHttp.js';
 import { buildCalendarFeed } from '../../../server/calendar.js';
@@ -133,6 +134,7 @@ async function runIndependent(name:string,verify:()=>Promise<void>):Promise<void
 await runIndependent('actor-serialization',()=>verifyActorSerializationPostgres(database,config,actorA,actorB));
 await verifyMeetingSynthesisPostgres(database,config,actorB,actorA,actorD);
 await runIndependent('meeting-capture',()=>verifyMeetingCapturePostgres(database,config,actorB,actorA,actorD));
+await runIndependent('meeting-audio',()=>verifyMeetingAudioPostgres(database,config,actorB,actorA,actorD));
 const aWorkspaces = await runActorTransaction(database, config, actorA, port => repository.listWorkspaces(port));
 assert.deepEqual(aWorkspaces.map(workspace => workspace.id), ['ws-a', 'ws-b']);
 assert.deepEqual(aWorkspaces.find(workspace => workspace.id === 'ws-b')?.boards.map(board => board.id), ['board-shared']);
@@ -1748,6 +1750,7 @@ console.log(JSON.stringify({
     'meeting-text-synthesis-current-scope-quality-model-fallback-and-stale-reply-denial',
     'actor-transaction-cross-account-serialization-native-advisory-wait',
     'meeting-capture-http-source-clock-pointer-private-cancel-atomic-refund-and-cleanup',
+    'meeting-audio-private-proxy-generation-readback-cancel-parent-delete-and-cleanup-proof',
     'workspace-board-scope', 'tenant-member-scope', 'board-member-scope',
     'tenant-scope-does-not-imply-board-read', 'suspended-member-deny',
     'explicit-empty-permissions', 'task-parent-mapping', 'dependency-mapping', 'private-board-deny',

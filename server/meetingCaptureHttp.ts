@@ -7,21 +7,32 @@ import { isSameOriginWrite, readJsonBody } from './domainWriteHttp.js';
 import { asKernelError, KernelError } from './errors.js';
 import { assertExpectedActor } from './expectedActorHttp.js';
 import { MeetingCaptureRepository } from './meetingCapture.js';
+import { MeetingAudioService } from './meetingAudio.js';
+import { currentMeetingActor } from './meetingAudioHttp.js';
+import type { MeetingAudioStorage } from './meetingAudioStorage.js';
 
-export function createMeetingCaptureHttpDispatcher(config:RuntimeConfig,database:RuntimeDatabase,resolveActor?:TrustedSessionActorResolver){
+export function createMeetingCaptureHttpDispatcher(config:RuntimeConfig,database:RuntimeDatabase,resolveActor?:TrustedSessionActorResolver,storage?:MeetingAudioStorage){
   const repository=new MeetingCaptureRepository();
+  const audio=storage?new MeetingAudioService(database,config,storage):undefined;
   return async(request:IncomingMessage,requestId:string)=>{
     if(request.url!=='/api/v1/meeting-control')return {matched:false};
     if(!resolveActor){request.resume();return {matched:true,status:404,body:{error:{code:'ENDPOINT_UNAVAILABLE',requestId,retryable:false}}};}
     if(request.method!=='POST'){request.resume();return {matched:true,status:405,body:{error:{code:'METHOD_NOT_ALLOWED',requestId,retryable:false}}};}
     if(!isSameOriginWrite(request)){request.resume();return {matched:true,status:403,body:{error:{code:'ACCESS_DENIED',requestId,retryable:false}}};}
     const controller=new AbortController(),cancel=()=>controller.abort();
+    const timer=setTimeout(cancel,29_000);timer.unref();
     request.once('aborted',cancel);request.socket?.once('close',cancel);
     try{
       const body=await readJsonBody(request,2*1024*1024);
       const actor=await resolveActor(request,{refresh:true});assertExpectedActor(request,actor);
       if(actor.entry!=='main')throw new KernelError('ACCESS_DENIED','Meeting capture requires the main application',403);
-      const result=await runActorTransaction(database,config,actor,port=>repository.execute(port,body),{signal:controller.signal});
+      const currentActor=currentMeetingActor(request,actor,resolveActor,controller.signal);
+      let result:unknown;
+      if(body.operation==='reserve-segment'||body.operation==='verify-segment'){
+        if(!audio)throw new KernelError('MEETING_STORAGE_UNAVAILABLE','Meeting audio storage is unavailable',503);
+        result=body.operation==='reserve-segment'?await audio.reserve(actor,body,controller.signal)
+          :await audio.verify(currentActor,body,controller.signal);
+      }else result=await runActorTransaction(database,config,actor,port=>repository.execute(port,body),{signal:controller.signal});
       return {matched:true,status:200,body:{data:result}};
     }catch(error){
       const safe=asKernelError(error);
@@ -32,6 +43,6 @@ export function createMeetingCaptureHttpDispatcher(config:RuntimeConfig,database
         console.error(JSON.stringify({event:'meeting_capture_failed',requestId,code:safe.code,sqlState}));
       }
       return {matched:true,status:safe.httpStatus,body:{error:{code:safe.code,requestId,retryable:safe.httpStatus>=500}}};
-    }finally{request.removeListener('aborted',cancel);request.socket?.removeListener('close',cancel);}
+    }finally{clearTimeout(timer);request.removeListener('aborted',cancel);request.socket?.removeListener('close',cancel);}
   };
 }

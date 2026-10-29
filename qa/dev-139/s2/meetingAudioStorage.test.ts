@@ -213,7 +213,7 @@ test('pre-aborted calls avoid credentials and fetch, and network errors are reda
   const aborted = new AbortController();
   aborted.abort();
   const preAborted = harness(() => new Response(null, { status: 200 }));
-  await assert.rejects(preAborted.storage.upload(key, new Uint8Array([1]), 'audio/webm', aborted.signal), isKernelCode('MEETING_STORAGE_UNAVAILABLE'));
+  await assert.rejects(preAborted.storage.upload(key, new Uint8Array([1]), 'audio/webm', aborted.signal), isKernelCode('MEETING_STORAGE_NOT_SENT'));
   assert.equal(preAborted.tokenCalls(), 0);
   assert.equal(preAborted.calls.length, 0);
 
@@ -251,4 +251,25 @@ test('pre-aborted calls avoid credentials and fetch, and network errors are reda
     });
     assert.equal(calls.length, 1);
   });
+});
+
+test('upload distinguishes confirmed rejection from an unknown remote outcome without retry',async(t)=>{
+  for(const [status,code] of [[403,'MEETING_STORAGE_REJECTED'],[429,'MEETING_STORAGE_REJECTED'],[503,'MEETING_STORAGE_UNAVAILABLE']] as const){
+    await t.test(String(status),async()=>{
+      const {storage,calls}=harness(()=>new Response(`private ${tokenValue}`,{status}));
+      await assert.rejects(storage.upload(key,new Uint8Array([1]),'audio/webm'),error=>{
+        assert.ok(error instanceof KernelError);assert.equal(error.code,code);
+        assert.equal(error.message.includes(tokenValue),false);return true;
+      });
+      assert.equal(calls.length,1);
+    });
+  }
+});
+
+test('metadata credential failure proves the upload was not sent',async()=>{
+  let calls=0;
+  const storage=createGcsMeetingAudioStorage({bucket,getAccessToken:async()=>{throw new Error(tokenValue);},
+    fetchImpl:async()=>{calls++;return metadataResponse();}});
+  await assert.rejects(storage.upload(key,new Uint8Array([1]),'audio/webm'),isKernelCode('MEETING_STORAGE_NOT_SENT'));
+  assert.equal(calls,0);
 });

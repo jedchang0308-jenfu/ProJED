@@ -143,6 +143,10 @@
     {
       "version": "0030_meeting_legacy_task_pointer_v1",
       "path": "db/migrations/0030_meeting_legacy_task_pointer_v1.sql"
+    },
+    {
+      "version": "0031_meeting_audio_transport_v1",
+      "path": "db/migrations/0031_meeting_audio_transport_v1.sql"
     }
   ],
   "objectAllowlist": [
@@ -261,7 +265,13 @@
     "projed_core.meeting_capture_mutable_v1",
     "projed_core.meeting_run_cancel_guard_v1",
     "projed_core.meeting_cancel_ledger_scope_v1",
-    "projed_core.cancel_meeting_capture_v1"
+    "projed_core.cancel_meeting_capture_v1",
+    "projed_core.meeting_audio_operation_token_v1",
+    "projed_core.meeting_audio_scope_v1",
+    "projed_core.meeting_audio_cleanup_scope_v1",
+    "projed_core.meeting_audio_settlement_scope_v1",
+    "projed_core.meeting_audio_proof_guard_v1",
+    "projed_core.meeting_audio_anchor_retention_v1"
   ],
   "staticFixturePath": "dist",
   "runtime": {
