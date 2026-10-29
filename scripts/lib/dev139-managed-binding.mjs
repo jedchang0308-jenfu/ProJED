@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { MANAGED_DATABASE, assertManagedIamLogins } from '../../shared/dev139ManagedDatabase.mjs';
 
 const INSTANCE_RE = /^[a-z][a-z0-9-]{5,29}:[a-z0-9-]+:[a-z][a-z0-9-]{0,97}$/;
 const ALLOWED_OPTIONS = new Set(['instance', 'database', 'output']);
@@ -39,13 +40,15 @@ export function createManagedBinding({
   staticFixtureBytes,
 }) {
   if (!INSTANCE_RE.test(instance ?? '')) throw new Error('A valid --instance=project:region:instance is required');
-  if (database && database !== 'jenfu_prod') throw new Error('Managed database name must be jenfu_prod');
+  if (database && database !== MANAGED_DATABASE.databaseName) throw new Error(`Managed database name must be ${MANAGED_DATABASE.databaseName}`);
+  assertManagedIamLogins(profile.database?.iamLogins);
   if (profile.profileVersion !== 1 || profile.appKey !== 'projed' || profile.environment !== 'managed'
-      || profile.database?.namePattern !== '^jenfu_prod$' || profile.database?.host !== 'cloud-sql-unix'
-      || profile.roles?.runtime !== 'projed_runtime_disposable') {
+      || profile.database?.namePattern !== `^${MANAGED_DATABASE.databaseName}$` || profile.database?.host !== MANAGED_DATABASE.host
+      || profile.database?.cloudSqlInstance !== MANAGED_DATABASE.cloudSqlInstance
+      || profile.roles?.runtime !== MANAGED_DATABASE.roles.runtime) {
     throw new Error('Managed profile contract mismatch');
   }
-  if (instance !== profile.database.cloudSqlInstance) throw new Error('Managed Cloud SQL instance must match the source profile');
+  if (instance !== MANAGED_DATABASE.cloudSqlInstance) throw new Error('Managed Cloud SQL instance must match the source profile');
 
   const migrationSha256 = Object.fromEntries(profile.migrations.map(({ path }) => {
     const migrationBytes = migrationBytesByPath instanceof Map
@@ -56,11 +59,12 @@ export function createManagedBinding({
   }));
 
   return {
-    databaseName: 'jenfu_prod',
-    databasePort: 5432,
-    runtimeRole: profile.roles.runtime,
-    connectionMode: 'cloud-sql-unix',
+    databaseName: MANAGED_DATABASE.databaseName,
+    databasePort: MANAGED_DATABASE.databasePort,
+    runtimeRole: MANAGED_DATABASE.roles.runtime,
+    connectionMode: MANAGED_DATABASE.host,
     cloudSqlInstance: instance,
+    iamLogins: profile.database.iamLogins,
     profileSha256: sha256(profileBytes),
     migrationSha256,
     staticFixtureSha256: sha256(staticFixtureBytes),

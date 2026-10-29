@@ -38,11 +38,19 @@ const binding = JSON.parse(run([
   '--instance=jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg',
 ]));
 const managedProfile = JSON.parse(readFileSync('config/dev-139/s3-managed.profile.json', 'utf8'));
+assert.equal(managedProfile.database.host, 'cloud-sql-iam');
+assert.deepEqual(managedProfile.database.iamLogins, {
+  runtime: 'projed-prod-runtime@projed-cc78d.iam',
+  migrator: 'projed-prod-migrator@projed-cc78d.iam',
+  importer: 'projed-prod-importer@projed-cc78d.iam',
+});
 assert.deepEqual(binding.migrationSha256, Object.fromEntries(managedProfile.migrations.map(({ path }) => [
   path, createHash('sha256').update(readFileSync(path)).digest('hex'),
 ])));
 assert.equal(binding.databaseName, 'jenfu_prod');
 assert.equal(binding.cloudSqlInstance, 'jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg');
+assert.equal(binding.connectionMode, 'cloud-sql-iam');
+assert.deepEqual(binding.iamLogins, managedProfile.database.iamLogins);
 assert.equal(Object.keys(binding).some(key => /password|secret|credential/i.test(key)), false);
 assert.equal(binding.staticFixtureSha256, createHash('sha256').update(readFileSync('dist/dev139-cloud-run-meta.json')).digest('hex'));
 
@@ -59,7 +67,7 @@ const config = loadRuntimeConfig({
   PROJED_ENV: 'managed',
   PROJED_APP_ENTRY: 'main',
   PROJED_RUNTIME_BINDING_JSON: JSON.stringify(binding),
-  PROJED_DATABASE_URL: `postgresql://${binding.runtimeRole}:not-a-secret@localhost/jenfu_prod?host=%2Fcloudsql%2Fjenfu-platform-prod%3Aasia-east1%3Ajenfu-platform-prod-pg`,
+  PROJED_DATABASE_URL: `postgresql://${encodeURIComponent(binding.iamLogins.runtime)}@127.0.0.1:5432/jenfu_prod`,
   PROJED_PUBLIC_APP_URL: 'https://projed.example.com',
   PORT: '8080',
 });

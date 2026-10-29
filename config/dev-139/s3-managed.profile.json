@@ -5,9 +5,14 @@
   "environment": "managed",
   "database": {
     "namePattern": "^jenfu_prod$",
-    "host": "cloud-sql-unix",
+    "host": "cloud-sql-iam",
     "cloudSqlInstance": "jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg",
-    "portPolicy": "cloud-sql-unix-socket",
+    "portPolicy": "lifecycle-iam",
+    "iamLogins": {
+      "runtime": "projed-prod-runtime@projed-cc78d.iam",
+      "migrator": "projed-prod-migrator@projed-cc78d.iam",
+      "importer": "projed-prod-importer@projed-cc78d.iam"
+    },
     "supportedPostgresMajors": [
       17,
       18

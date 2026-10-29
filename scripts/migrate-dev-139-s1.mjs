@@ -4,6 +4,13 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import pg from 'pg';
+import {
+  assertManagedIamLogins,
+  fetchManagedJobToken,
+  managedJobConnectionOptions,
+  prepareManagedDatabaseSession,
+  validateManagedDatabaseUrl,
+} from '../shared/dev139ManagedDatabase.mjs';
 import { S1_MIGRATION_PATHS, S3_MIGRATION_PATHS } from './lib/dev139-migration-paths.mjs';
 
 const { Client } = pg;
@@ -25,7 +32,7 @@ const profileContracts = new Map([
   [resolve('config/dev-139/s3-managed.profile.json'), {
     name: 's3-managed',
     environment: 'managed',
-    host: 'cloud-sql-unix',
+    host: 'cloud-sql-iam',
     namePattern: '^jenfu_prod$',
     migrationPaths: S3_MIGRATION_PATHS,
   }],
@@ -51,6 +58,7 @@ if (profile.profileVersion !== 1 || profile.appKey !== 'projed' || profile.kerne
     || profile.migrations?.map(({ path }) => path).join('|') !== expectedMigrationPaths.join('|')) {
   throw new Error('DEV-139 profile contract mismatch');
 }
+if (profileContract.environment === 'managed') assertManagedIamLogins(profile.database.iamLogins);
 const boundaryCheck = spawnSync(process.execPath, ['scripts/check-db-boundary.mjs'], {
   cwd: process.cwd(),
   env: { ...process.env, DEV139_PROFILE: profilePath },
@@ -62,28 +70,28 @@ if (!bindingPath) throw new Error('PROJED_RUNTIME_BINDING_FILE is required');
 const binding = JSON.parse(readFileSync(resolve(bindingPath), 'utf8'));
 const connectionString = process.env.PROJED_MIGRATOR_DATABASE_URL;
 if (!connectionString) throw new Error('PROJED_MIGRATOR_DATABASE_URL is required');
-const url = new URL(connectionString);
-const queryKeys = [...url.searchParams.keys()];
-const baseInvalid = !['postgres:', 'postgresql:'].includes(url.protocol)
-  || decodeURIComponent(url.pathname.slice(1)) !== binding.databaseName
-  || decodeURIComponent(url.username) !== profile.roles.migrator
-  || url.hash;
-const connectionMode = binding.connectionMode ?? 'loopback';
-const connectionInvalid = profile.environment === 'managed'
-  ? connectionMode !== 'cloud-sql-unix'
-    || !/^[a-z][a-z0-9-]{5,29}:[a-z0-9-]+:[a-z][a-z0-9-]{0,97}$/.test(binding.cloudSqlInstance ?? '')
-    || binding.cloudSqlInstance !== profile.database.cloudSqlInstance
-    || url.hostname !== 'localhost'
-    || (url.port !== '' && Number(url.port) !== binding.databasePort)
-    || queryKeys.length !== 1
-    || queryKeys[0] !== 'host'
-    || url.searchParams.get('host') !== `/cloudsql/${binding.cloudSqlInstance}`
-  : connectionMode !== 'loopback' || binding.cloudSqlInstance !== undefined
+const managed = profileContract.environment === 'managed';
+const migrationBinding = binding;
+if (managed) {
+  if (profile.database.cloudSqlInstance !== binding.cloudSqlInstance) {
+    throw new Error('Managed database binding does not match the source profile');
+  }
+  assertManagedIamLogins(binding.iamLogins);
+  validateManagedDatabaseUrl(connectionString, migrationBinding, 'migrator');
+} else {
+  const url = new URL(connectionString);
+  const connectionMode = binding.connectionMode ?? 'loopback';
+  const baseInvalid = !['postgres:', 'postgresql:'].includes(url.protocol)
+    || decodeURIComponent(url.pathname.slice(1)) !== binding.databaseName
+    || decodeURIComponent(url.username) !== profile.roles.migrator
+    || url.hash;
+  const connectionInvalid = connectionMode !== 'loopback' || binding.cloudSqlInstance !== undefined
     || url.hostname !== '127.0.0.1'
     || Number(url.port || '5432') !== binding.databasePort
     || url.search;
-if (baseInvalid || connectionInvalid) {
-  throw new Error('Migrator URL is outside the owned runtime binding');
+  if (baseInvalid || connectionInvalid) {
+    throw new Error('Migrator URL is outside the owned runtime binding');
+  }
 }
 
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -98,9 +106,19 @@ const migrations = profile.migrations.map(({ version, path }) => {
   return { version, sql: sql.toString('utf8'), checksum };
 });
 
-const client = new Client({ connectionString, application_name: `projed-dev139-${profileContract.name}-migrator` });
-await client.connect();
+let client;
 try {
+  if (managed) {
+    const token = await fetchManagedJobToken();
+    client = new Client({
+      ...managedJobConnectionOptions(connectionString, migrationBinding, 'migrator', token),
+      application_name: `projed-dev139-${profileContract.name}-migrator`,
+    });
+  } else {
+    client = new Client({ connectionString, application_name: `projed-dev139-${profileContract.name}-migrator` });
+  }
+  await client.connect();
+  if (managed) await prepareManagedDatabaseSession(client, migrationBinding, 'migrator');
   const identity = await client.query('SELECT current_database() AS database_name, current_user AS role_name');
   if (identity.rows[0]?.database_name !== binding.databaseName || identity.rows[0]?.role_name !== profile.roles.migrator) {
     throw new Error('Migrator identity mismatch');
@@ -137,14 +155,41 @@ try {
       throw error;
     }
   }
-  await client.query(`SET ROLE ${profile.roles.owner}`);
-  const finalLedger = await client.query('SELECT version, checksum FROM projed_core.schema_migrations ORDER BY version');
-  await client.query('RESET ROLE');
+  let finalLedger;
+  if (managed) {
+    await client.query('BEGIN');
+    try {
+      await client.query(`SET LOCAL ROLE ${profile.roles.owner}`);
+      finalLedger = await client.query('SELECT version, checksum FROM projed_core.schema_migrations ORDER BY version');
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
+  } else {
+    await client.query(`SET ROLE ${profile.roles.owner}`);
+    finalLedger = await client.query('SELECT version, checksum FROM projed_core.schema_migrations ORDER BY version');
+    await client.query('RESET ROLE');
+  }
   if (finalLedger.rows.length !== migrations.length
       || finalLedger.rows.some((row, index) => row.version !== migrations[index].version || row.checksum !== migrations[index].checksum)) {
     throw new Error('Final migration ledger mismatch');
   }
   console.log(JSON.stringify({ status: 'PASS', migrations: migrations.map(({ version, checksum }) => ({ version, checksum })) }));
+} catch (error) {
+  if (!managed) throw error;
+  const code = typeof error === 'object' && error && 'code' in error
+    && typeof error.code === 'string' && /^[A-Z0-9_]+$/.test(error.code)
+    ? error.code : 'MIGRATION_FAILED';
+  console.error(JSON.stringify({ status: 'FAIL', code }));
+  process.exitCode = 1;
 } finally {
-  await client.end();
+  if (client) {
+    try {
+      await client.end();
+    } catch {
+      console.error(JSON.stringify({ status: 'FAIL', code: 'MIGRATION_CLIENT_CLEANUP_FAILED' }));
+      process.exitCode = 1;
+    }
+  }
 }

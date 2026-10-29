@@ -5,8 +5,9 @@
     "rootDir": ".",
     "outDir": "dist-server",
     "sourceMap": true,
-    "declaration": false
+    "declaration": false,
+    "allowJs": true
   },
-  "include": ["server/**/*.ts"],
+  "include": ["server/**/*.ts", "shared/dev139ManagedDatabase.mjs"],
   "exclude": ["qa", "node_modules"]
 }

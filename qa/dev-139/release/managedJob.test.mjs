@@ -23,13 +23,18 @@ import {
 const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const BINDING_CLI = resolve(PROJECT_ROOT, 'scripts/create-dev139-managed-binding.mjs');
 const INSTANCE = 'jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg';
+const IAM_LOGINS = {
+  runtime: 'projed-prod-runtime@projed-cc78d.iam',
+  migrator: 'projed-prod-migrator@projed-cc78d.iam',
+  importer: 'projed-prod-importer@projed-cc78d.iam',
+};
 
 function makeEnvironment(overrides = {}) {
   return {
-    PROJED_MIGRATOR_DATABASE_URL: 'postgresql://migrator:secret-migrator@localhost/jenfu_prod?host=%2Fcloudsql%2Finstance',
+    PROJED_MIGRATOR_DATABASE_URL: 'postgresql://projed-prod-migrator%40projed-cc78d.iam@localhost/jenfu_prod?host=%2Fcloudsql%2Fjenfu-platform-prod%3Aasia-east1%3Ajenfu-platform-prod-pg',
     PROJED_MIGRATION_SOURCE_BINDING_FILE: '/secrets/source-binding.json',
     PROJED_MIGRATION_SOURCE_DATABASE_URL: 'postgresql://reader:secret-source@db.example.test/postgres?sslmode=verify-full',
-    PROJED_MIGRATION_TARGET_DATABASE_URL: 'postgresql://importer:secret-target@localhost/jenfu_prod?host=%2Fcloudsql%2Finstance',
+    PROJED_MIGRATION_TARGET_DATABASE_URL: 'postgresql://projed-prod-importer%40projed-cc78d.iam@localhost/jenfu_prod?host=%2Fcloudsql%2Fjenfu-platform-prod%3Aasia-east1%3Ajenfu-platform-prod-pg',
     ...overrides,
   };
 }
@@ -41,8 +46,10 @@ function makeProfile() {
     environment: 'managed',
     database: {
       namePattern: '^jenfu_prod$',
-      host: 'cloud-sql-unix',
+      host: 'cloud-sql-iam',
       cloudSqlInstance: INSTANCE,
+      portPolicy: 'lifecycle-iam',
+      iamLogins: IAM_LOGINS,
     },
     roles: { runtime: 'projed_runtime_disposable' },
     migrations: [{ path: 'db/migrations/0001_runtime_boundary_v1.sql' }],
@@ -80,14 +87,15 @@ test('managed binding builder keeps the CLI binding fields and hashes its suppli
 
   assert.deepEqual(Object.keys(binding), [
     'databaseName', 'databasePort', 'runtimeRole', 'connectionMode', 'cloudSqlInstance',
-    'profileSha256', 'migrationSha256', 'staticFixtureSha256',
+    'iamLogins', 'profileSha256', 'migrationSha256', 'staticFixtureSha256',
   ]);
   assert.deepEqual(binding, {
     databaseName: 'jenfu_prod',
     databasePort: 5432,
     runtimeRole: 'projed_runtime_disposable',
-    connectionMode: 'cloud-sql-unix',
+    connectionMode: 'cloud-sql-iam',
     cloudSqlInstance: INSTANCE,
+    iamLogins: IAM_LOGINS,
     profileSha256: createHash('sha256').update(profileBytes).digest('hex'),
     migrationSha256: {
       [profile.migrations[0].path]: createHash('sha256').update(migrationBytes).digest('hex'),
@@ -95,6 +103,30 @@ test('managed binding builder keeps the CLI binding fields and hashes its suppli
     staticFixtureSha256: createHash('sha256').update(fixtureBytes).digest('hex'),
   });
   assert.equal(serializeManagedBinding(binding).endsWith('\n'), true);
+});
+
+test('managed binding builder rejects unix mode and malformed IAM login maps', () => {
+  const baseProfile = makeProfile();
+  const input = {
+    instance: INSTANCE,
+    profileBytes: Buffer.from('{"profile":"fixture"}\n'),
+    migrationBytesByPath: { [baseProfile.migrations[0].path]: Buffer.from('SELECT 1;\n') },
+    staticFixtureBytes: Buffer.from('{"status":"PASS"}\n'),
+  };
+  const invalidProfiles = [
+    { ...baseProfile, database: { ...baseProfile.database, host: 'cloud-sql-unix' } },
+    ...Object.keys(IAM_LOGINS).map((purpose) => ({
+      ...baseProfile,
+      database: { ...baseProfile.database, iamLogins: {
+        ...IAM_LOGINS, [purpose]: IAM_LOGINS[purpose].replace('projed-cc78d', 'other-project'),
+      } },
+    })),
+    { ...baseProfile, database: { ...baseProfile.database, iamLogins: {
+      ...IAM_LOGINS, operator: 'projed-prod-operator@projed-cc78d.iam',
+    } } },
+  ];
+
+  for (const profile of invalidProfiles) assert.throws(() => createManagedBinding({ ...input, profile }));
 });
 
 test('managed binding CLI preserves legal stdout and output-file behavior, and rejects unknown keys', () => {
@@ -181,7 +213,9 @@ test('managed Job rejects mode-specific missing credentials before child selecti
 });
 
 test('managed Job child environment keeps only mode-required DSNs and overrides profile and binding', () => {
-  const environment = makeEnvironment({ PROJED_DATABASE_URL: 'postgresql://runtime:secret@runtime/db' });
+  const environment = makeEnvironment({
+    PROJED_DATABASE_URL: 'postgresql://projed-prod-runtime%40projed-cc78d.iam@127.0.0.1:5432/jenfu_prod',
+  });
   const plan = selectManagedJobExecution(['plan'], environment, 'node');
   const childEnvironment = createManagedJobChildEnvironment(
     environment,

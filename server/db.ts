@@ -2,6 +2,7 @@ import { Pool, type PoolClient, type QueryResult, type QueryResultRow } from 'pg
 
 import type { RuntimeConfig } from './config.js';
 import { KernelError } from './errors.js';
+import { prepareManagedDatabaseSession } from '../shared/dev139ManagedDatabase.mjs';
 
 export interface DatabaseLease {
   readonly client: PoolClient;
@@ -55,6 +56,17 @@ export class RuntimeDatabase {
     if (this.#closed) {
       client.release(true);
       throw new KernelError('DB_UNAVAILABLE', 'Database is shutting down', 503);
+    }
+    if (this.#config.env === 'managed') {
+      try { await prepareManagedDatabaseSession(client, this.#config.binding, 'runtime'); }
+      catch {
+        client.release(true);
+        throw new KernelError('DB_BOUNDARY_INVALID', 'Managed database session was rejected', 503);
+      }
+      if (this.#closed) {
+        client.release(true);
+        throw new KernelError('DB_UNAVAILABLE', 'Database is shutting down', 503);
+      }
     }
     let released = false;
     return {

@@ -3,6 +3,6 @@
   "compilerOptions": {
     "outDir": "dist-jobs"
   },
-  "include": ["scripts/dev139-data-migration.ts"],
+  "include": ["scripts/dev139-data-migration.ts", "shared/dev139ManagedDatabase.mjs"],
   "exclude": ["qa", "node_modules"]
 }

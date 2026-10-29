@@ -3,6 +3,8 @@ import { readFileSync, realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { KernelError } from './errors.js';
+import { assertManagedIamLogins, MANAGED_DATABASE, validateManagedDatabaseUrl,
+  type ManagedIamLogins, type ManagedPurpose } from '../shared/dev139ManagedDatabase.mjs';
 
 export type AppEntry = 'main' | 'quick';
 export type RuntimeEnvironment = 'disposable' | 'managed';
@@ -14,8 +16,9 @@ export interface SourceProfile {
   environment: RuntimeEnvironment;
   database: {
     namePattern: string;
-    host: '127.0.0.1' | 'cloud-sql-unix';
+    host: '127.0.0.1' | 'cloud-sql-iam';
     cloudSqlInstance?: string;
+    iamLogins?: ManagedIamLogins;
     supportedPostgresMajors: readonly number[];
     schemas: readonly string[];
   };
@@ -42,8 +45,9 @@ export interface RuntimeBinding {
   databaseName: string;
   databasePort: number;
   runtimeRole: string;
-  connectionMode?: 'loopback' | 'cloud-sql-unix';
+  connectionMode?: 'loopback' | 'cloud-sql-iam';
   cloudSqlInstance?: string;
+  iamLogins?: ManagedIamLogins;
   profileSha256: string;
   migrationSha256: Record<string, string>;
   staticFixtureSha256: string;
@@ -138,7 +142,7 @@ export function loadSourceProfile(path: string): { profile: SourceProfile; sha25
     throw new KernelError('CONFIG_INVALID', 'Unsupported source profile identity');
   }
   const expectedMigrationPaths = PROFILE_MIGRATION_PATHS.get(value.database?.namePattern);
-  const expectedHost = value.environment === 'managed' ? 'cloud-sql-unix' : '127.0.0.1';
+  const expectedHost = value.environment === 'managed' ? MANAGED_DATABASE.host : '127.0.0.1';
   if (!expectedMigrationPaths || value.database?.host !== expectedHost
       || value.database?.supportedPostgresMajors?.join('|') !== '17|18'
       || value.database?.schemas?.join('|') !== 'projed_core|projed_contract'
@@ -146,6 +150,12 @@ export function loadSourceProfile(path: string): { profile: SourceProfile; sha25
         ? value.database.cloudSqlInstance !== 'jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg'
         : value.database.cloudSqlInstance !== undefined)) {
     throw new KernelError('CONFIG_INVALID', 'Unexpected database contract');
+  }
+  if (value.environment === 'managed') {
+    try { assertManagedIamLogins(value.database.iamLogins); }
+    catch { throw new KernelError('CONFIG_INVALID', 'Managed profile has an invalid lifecycle identity'); }
+  } else if (value.database.iamLogins !== undefined) {
+    throw new KernelError('CONFIG_INVALID', 'Disposable profile cannot select a managed identity');
   }
   if (value.roles?.owner !== 'projed_owner_disposable'
       || value.roles?.migrator !== 'projed_migrator_disposable'
@@ -166,23 +176,32 @@ export function loadSourceProfile(path: string): { profile: SourceProfile; sha25
 
 export function validateRuntimeBinding(binding: RuntimeBinding, profile: SourceProfile, profileHash: string): void {
   const allowedKeys = new Set([
-    'databaseName', 'databasePort', 'runtimeRole', 'connectionMode', 'cloudSqlInstance',
+    'databaseName', 'databasePort', 'runtimeRole', 'connectionMode', 'cloudSqlInstance', 'iamLogins',
     'profileSha256', 'migrationSha256', 'staticFixtureSha256',
   ]);
-  const expectedConnectionMode = profile.environment === 'managed' ? 'cloud-sql-unix' : 'loopback';
+  const expectedConnectionMode = profile.environment === 'managed' ? MANAGED_DATABASE.host : 'loopback';
   const connectionMode = binding.connectionMode ?? 'loopback';
   if (Object.keys(binding).some(key => !allowedKeys.has(key))
       || !new RegExp(profile.database.namePattern).test(binding.databaseName)
       || positiveInteger(binding.databasePort, 'binding.databasePort') > 65535
       || binding.runtimeRole !== profile.roles.runtime
       || connectionMode !== expectedConnectionMode
-      || (connectionMode === 'cloud-sql-unix'
+      || (connectionMode === MANAGED_DATABASE.host
         ? !CLOUD_SQL_INSTANCE_RE.test(binding.cloudSqlInstance ?? '')
           || binding.cloudSqlInstance !== profile.database.cloudSqlInstance
         : binding.cloudSqlInstance !== undefined)
       || binding.profileSha256 !== profileHash
       || !SHA256_RE.test(binding.staticFixtureSha256)) {
     throw new KernelError('CONFIG_INVALID', 'Runtime binding does not match the DEV-139 profile');
+  }
+  if (profile.environment === 'managed') {
+    try { assertManagedIamLogins(binding.iamLogins); }
+    catch { throw new KernelError('CONFIG_INVALID', 'Managed binding has an invalid lifecycle identity'); }
+    if (binding.databasePort !== MANAGED_DATABASE.databasePort) {
+      throw new KernelError('CONFIG_INVALID', 'Managed database port must match the private proxy');
+    }
+  } else if (binding.iamLogins !== undefined) {
+    throw new KernelError('CONFIG_INVALID', 'Disposable binding cannot select a managed identity');
   }
   for (const migration of profile.migrations) {
     if (!SHA256_RE.test(binding.migrationSha256?.[migration.path] ?? '')) {
@@ -194,7 +213,11 @@ export function validateRuntimeBinding(binding: RuntimeBinding, profile: SourceP
   }
 }
 
-export function validateRuntimeDatabaseUrl(raw: string, binding: RuntimeBinding): URL {
+export function validateRuntimeDatabaseUrl(raw: string, binding: RuntimeBinding, purpose: ManagedPurpose = 'runtime'): URL {
+  if (binding.connectionMode === MANAGED_DATABASE.host) {
+    try { return validateManagedDatabaseUrl(raw, binding, purpose); }
+    catch { throw new KernelError('CONFIG_INVALID', 'Database URL is outside its managed lifecycle binding'); }
+  }
   let url: URL;
   try {
     url = new URL(raw);
@@ -206,14 +229,7 @@ export function validateRuntimeDatabaseUrl(raw: string, binding: RuntimeBinding)
     || decodeURIComponent(url.username) !== binding.runtimeRole
     || url.hash !== '';
   const connectionMode = binding.connectionMode ?? 'loopback';
-  const queryKeys = [...url.searchParams.keys()];
-  const connectionInvalid = connectionMode === 'cloud-sql-unix'
-    ? url.hostname !== 'localhost'
-      || (url.port !== '' && Number(url.port) !== binding.databasePort)
-      || queryKeys.length !== 1
-      || queryKeys[0] !== 'host'
-      || url.searchParams.get('host') !== `/cloudsql/${binding.cloudSqlInstance}`
-    : url.hostname !== '127.0.0.1'
+  const connectionInvalid = connectionMode !== 'loopback' || url.hostname !== '127.0.0.1'
       || Number(url.port || '5432') !== binding.databasePort
       || url.search !== '';
   if (baseInvalid || connectionInvalid) {

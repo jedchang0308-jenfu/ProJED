@@ -4,6 +4,11 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import pg, { type Client } from 'pg';
+import {
+  fetchManagedJobToken,
+  managedJobConnectionOptions,
+  prepareManagedDatabaseSession,
+} from '../shared/dev139ManagedDatabase.mjs';
 
 import {
   loadSourceProfile,
@@ -984,14 +989,21 @@ async function main(): Promise<void> {
   const sourceUrl = sourceBinding
     ? validateSupabaseSourceUrl(sourceRaw, sourceBinding)
     : validateDisposableSourceUrl(sourceRaw, binding);
-  const targetUrl = validateRuntimeDatabaseUrl(targetRaw, {
+  const targetBinding = managed ? binding : {
     ...binding,
     runtimeRole: profile.roles.importer,
-  }).toString();
+  };
+  const targetUrl = managed
+    ? validateRuntimeDatabaseUrl(targetRaw, targetBinding, 'importer').toString()
+    : validateRuntimeDatabaseUrl(targetRaw, targetBinding).toString();
+  const targetOptions = managed
+    ? managedJobConnectionOptions(targetRaw, targetBinding, 'importer', await fetchManagedJobToken())
+    : { connectionString: targetUrl };
   const source = new PgClient({ connectionString: sourceUrl, application_name: 'projed-dev139-source-snapshot', types: snapshotTypes });
-  const target = new PgClient({ connectionString: targetUrl, application_name: `projed-dev139-${mode}`, types: snapshotTypes });
-  await Promise.all([source.connect(), target.connect()]);
+  const target = new PgClient({ ...targetOptions, application_name: `projed-dev139-${mode}`, types: snapshotTypes });
   try {
+    await Promise.all([source.connect(), target.connect()]);
+    if (managed) await prepareManagedDatabaseSession(target, targetBinding, 'importer');
     await source.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
     await source.query("SET LOCAL TIME ZONE 'UTC'");
     await source.query("SET LOCAL DateStyle = 'ISO, YMD'");

@@ -23,6 +23,8 @@ const instance = 'jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg';
 const socketPath = `/cloudsql/${instance}`;
 const socketVolume = `${prefix}-socket`;
 const pgName = `${prefix}-pg`;
+const networkName = `${prefix}-network`;
+const metadataName = `${prefix}-metadata-fixture`;
 const appName = `${prefix}-app`;
 const temp = mkdtempSync(join(tmpdir(), `${prefix}-`));
 const containers = new Set();
@@ -61,17 +63,18 @@ function passed(name) {
   console.log(JSON.stringify({ check: name, status: 'PASS' }));
 }
 
-function createContainer(name, args) {
+function createContainer(name, args, network = 'none') {
   // Cleanup still inspects the random label before removing a created resource.
   containers.add(name);
-  docker(['create', '--name', name, '--label', `${label}=${nonce}`, '--network', 'none', ...args]);
+  docker(['create', '--name', name, '--label', `${label}=${nonce}`, '--network', network, ...args]);
   docker(['start', name]);
 }
 
 function runOwnedContainer(suffix, args, options) {
   const name = `${prefix}-${suffix}`;
   containers.add(name);
-  return docker(['run', '--rm', '--name', name, '--label', `${label}=${nonce}`, '--network', 'none', ...args], options);
+  const { network = 'none', ...runOptions } = options ?? {};
+  return docker(['run', '--rm', '--name', name, '--label', `${label}=${nonce}`, '--network', network, ...args], runOptions);
 }
 
 function inspect(name) {
@@ -150,12 +153,12 @@ try {
   writeFileSync(join(temp, 'binding.json'), JSON.stringify(binding), { mode: 0o444 });
   const runtimeEnv = [
     'PROJED_RUNTIME_BINDING_FILE=/verification/binding.json',
-    `PROJED_DATABASE_URL=postgresql://projed_runtime_disposable:${runtimePassword}@localhost/jenfu_prod?host=${encodeURIComponent(socketPath)}`,
+    `PROJED_DATABASE_URL=postgresql://${encodeURIComponent(binding.iamLogins.runtime)}@127.0.0.1:5432/jenfu_prod`,
     'PROJED_PUBLIC_APP_URL=https://projed.example.invalid', 'PORT=8080',
   ].join('\n');
   writeFileSync(join(temp, 'runtime.env'), `${runtimeEnv}\n`, { mode: 0o600 });
   writeFileSync(join(temp, 'migrator.env'), [
-    `PROJED_MIGRATOR_DATABASE_URL=postgresql://projed_migrator_disposable:${migratorPassword}@localhost/jenfu_prod?host=${encodeURIComponent(socketPath)}`, '',
+    `PROJED_MIGRATOR_DATABASE_URL=postgresql://${encodeURIComponent(binding.iamLogins.migrator)}@localhost/jenfu_prod?host=${encodeURIComponent(socketPath)}`, '',
   ].join('\n'), { mode: 0o600 });
 
   docker(['volume', 'create', '--label', `${label}=${nonce}`, socketVolume]);
@@ -163,11 +166,32 @@ try {
   // PostgreSQL writes the socket as its own OS user; runtime only connects to it.
   runOwnedContainer('prepare', ['--mount', `type=volume,src=${socketVolume},dst=/sockets`,
     '--entrypoint', 'sh', postgresImage, '-c', 'chown postgres:postgres /sockets && chmod 0755 /sockets']);
+  // Keep this owned network namespace alive during PostgreSQL stop/restart.
+  // It has only loopback, no published ports and no route to Google metadata.
+  createContainer(networkName, ['--read-only', '--cap-drop', 'ALL',
+    '--add-host', 'metadata.google.internal:127.0.0.1', runtimeImage,
+    'node', '-e', 'setInterval(()=>{},3600000)']);
+  const fixtureNetwork = `container:${networkName}`;
+  createContainer(metadataName, ['--read-only', '--user', '0', '--cap-drop', 'ALL',
+    '--cap-add', 'NET_BIND_SERVICE', '--env', `FIXTURE_TOKEN=${migratorPassword}`, jobsImage,
+    'node', '--input-type=module', '-e', `
+      import {createServer} from 'node:http';
+      createServer((q,s)=>{
+        const ok=q.url==='/computeMetadata/v1/instance/service-accounts/default/token'&&q.headers['metadata-flavor']==='Google';
+        s.writeHead(ok?200:404,{'content-type':'application/json'});
+        s.end(JSON.stringify(ok?{access_token:process.env.FIXTURE_TOKEN,token_type:'Bearer',expires_in:3600}:{error:'fixture-only'}));
+      }).listen(80,'0.0.0.0');
+    `], fixtureNetwork);
+  await waitFor('fixture-only metadata response', () => docker(['exec', metadataName, 'node', '-e',
+    "fetch('http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token',{headers:{'Metadata-Flavor':'Google'}}).then(r=>process.exit(r.status===200?0:1)).catch(()=>process.exit(1))"], { allowFailure: true }).status === 0);
   createContainer(pgName, ['--env', `POSTGRES_PASSWORD=${adminPassword}`,
+    // Trust is confined to this nonce-owned, loopback-only fixture. This is not
+    // a Google IAM authenticator or a real Cloud SQL Auth Proxy qualification.
+    '--env', 'POSTGRES_INITDB_ARGS=--auth-host=trust',
     '--mount', `type=volume,src=${socketVolume},dst=${socketPath}`, postgresImage,
     // The official entrypoint initializes through /var/run/postgresql. Keep that
     // private in-container socket as well as the explicitly shared test socket.
-    'postgres', '-c', 'listen_addresses=', '-c', `unix_socket_directories=/var/run/postgresql,${socketPath}`]);
+    'postgres', '-c', 'listen_addresses=127.0.0.1', '-c', `unix_socket_directories=/var/run/postgresql,${socketPath}`], fixtureNetwork);
   await waitFor('isolated PostgreSQL final server', () => {
     const logs = docker(['logs', pgName]);
     return `${logs.stdout}${logs.stderr}`.includes('PostgreSQL init process complete; ready for start up.')
@@ -178,13 +202,22 @@ try {
     .replaceAll('__IMPORTER_PASSWORD__', importerPassword)
     .replaceAll('__RUNTIME_PASSWORD__', runtimePassword);
   docker(['exec', '-i', pgName, 'psql', '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-h', socketPath,
-    '-U', 'postgres', '-d', 'postgres'], { input: `${bootstrap}\nCREATE DATABASE jenfu_prod OWNER projed_owner_disposable;\n` });
-  pgSql('REVOKE CREATE, TEMP ON DATABASE jenfu_prod FROM PUBLIC; GRANT CONNECT ON DATABASE jenfu_prod TO projed_migrator_disposable, projed_importer_disposable, projed_runtime_disposable;');
+    '-U', 'postgres', '-d', 'postgres'], { input: `${bootstrap}\nCREATE DATABASE jenfu_prod;\n` });
+  pgSql(`REVOKE ALL ON DATABASE jenfu_prod FROM PUBLIC;
+    GRANT CREATE ON DATABASE jenfu_prod TO projed_owner_disposable;
+    ALTER ROLE projed_migrator_disposable NOLOGIN;
+    ALTER ROLE projed_importer_disposable NOLOGIN;
+    ALTER ROLE projed_runtime_disposable NOLOGIN;
+    ${Object.entries(binding.iamLogins).map(([purpose, login]) => `
+      CREATE ROLE "${login}" LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;
+      GRANT projed_${purpose}_disposable TO "${login}";
+      GRANT CONNECT ON DATABASE jenfu_prod TO "${login}";
+    `).join('\n')}`);
   postgresVersion = pgSql('SHOW server_version;');
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const output = runOwnedContainer(`migration-${attempt}`, ['--read-only', '--tmpfs', '/tmp:rw,noexec,nosuid,size=16m',
       ...socketMount, '--env-file', join(temp, 'migrator.env'), jobsImage,
-      'node', 'scripts/run-dev139-managed-job.mjs', 'migrate']).stdout.trim().split(/\r?\n/);
+      'node', 'scripts/run-dev139-managed-job.mjs', 'migrate'], { network: fixtureNetwork }).stdout.trim().split(/\r?\n/);
     const result = JSON.parse(output.at(-1));
     assert.equal(result.status, 'PASS');
     assert.equal(result.migrations.length, Object.keys(binding.migrationSha256).length);
@@ -193,6 +226,27 @@ try {
   assert.equal(appliedMigrationCount, Object.keys(binding.migrationSha256).length);
   assert.equal(pgSql(`SELECT rolname || ':' || rolsuper || ':' || rolbypassrls FROM pg_roles WHERE rolname='projed_runtime_disposable';`), 'projed_runtime_disposable:false:false');
   passed('isolated-unix-socket-full-migration-and-idempotent-replay');
+
+  runOwnedContainer('iam-role-pairs', ['--read-only', ...socketMount, ...bindingMount(), jobsImage,
+    'node', '--input-type=module', '-e', `
+      import assert from 'node:assert/strict'; import {readFileSync} from 'node:fs'; import pg from 'pg';
+      import {prepareManagedDatabaseSession,MANAGED_DATABASE} from './shared/dev139ManagedDatabase.mjs';
+      const b=JSON.parse(readFileSync('/verification/binding.json'));
+      for(const purpose of ['runtime','migrator','importer']) {
+        const c=new pg.Client({host:${JSON.stringify(socketPath)},database:'jenfu_prod',user:b.iamLogins[purpose],ssl:false});
+        await c.connect(); try {
+          await prepareManagedDatabaseSession(c,b,purpose);
+          const r=(await c.query('SELECT session_user::text AS login, current_user::text AS role')).rows[0];
+          assert.equal(r.login,b.iamLogins[purpose]); assert.equal(r.role,MANAGED_DATABASE.roles[purpose]);
+        } finally {await c.end();}
+      }
+      const wrong=new pg.Client({host:${JSON.stringify(socketPath)},database:'jenfu_prod',user:b.iamLogins.importer,ssl:false});
+      await wrong.connect(); try {
+        await assert.rejects(prepareManagedDatabaseSession(wrong,b,'runtime'),e=>e.code==='DB_BOUNDARY_INVALID');
+        assert.equal((await wrong.query('SELECT current_user::text AS role')).rows[0].role,b.iamLogins.importer);
+      } finally {await wrong.end();}
+    `], { network: fixtureNetwork });
+  passed('iam-shaped-session-user-and-exact-app-role-pairs');
 
   // Load the emitted importer in the actual production-dependency image. Missing
   // source inputs must stop before attempting a source or target connection.
@@ -212,7 +266,7 @@ try {
 
   const runtimeArgs = ['--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
     ...socketMount, ...bindingMount(), '--env-file', join(temp, 'runtime.env'), runtimeImage];
-  createContainer(appName, runtimeArgs);
+  createContainer(appName, runtimeArgs, fixtureNetwork);
   await waitFor('compiled HTTP entry', () => docker(['exec', appName, 'node', '--input-type=module', '-e',
     "const r=await fetch('http://127.0.0.1:8080/health/ready',{signal:AbortSignal.timeout(4000)});process.exit(r.status===200?0:1)"], { allowFailure: true }).status === 0);
   appProbe(String.raw`
@@ -256,6 +310,16 @@ try {
   `);
   passed('compiled-entry-real-main-quick-and-asset-hashes');
   passed('unpublished-session-and-private-api-fail-closed');
+
+  pgSql(`GRANT projed_owner_disposable TO "${binding.iamLogins.runtime}";`);
+  appProbe("import assert from 'node:assert/strict';assert.equal((await fetch('http://127.0.0.1:8080/health/ready')).status,503);");
+  pgSql(`REVOKE projed_owner_disposable FROM "${binding.iamLogins.runtime}";
+    CREATE SCHEMA fixture_sibling_core;
+    GRANT CREATE ON SCHEMA fixture_sibling_core TO "${binding.iamLogins.runtime}";`);
+  appProbe("import assert from 'node:assert/strict';assert.equal((await fetch('http://127.0.0.1:8080/health/ready')).status,503);");
+  pgSql(`REVOKE CREATE ON SCHEMA fixture_sibling_core FROM "${binding.iamLogins.runtime}"; DROP SCHEMA fixture_sibling_core;`);
+  appProbe("import assert from 'node:assert/strict';assert.equal((await fetch('http://127.0.0.1:8080/health/ready')).status,200);");
+  passed('iam-session-rejects-owner-and-sibling-create-grants');
 
   // A malformed binding must fail before the server advertises readiness.
   const invalidBinding = { ...binding, staticFixtureSha256: '0'.repeat(64) };
@@ -304,7 +368,7 @@ try {
   passed('cloud-run-port-and-graceful-sigterm');
 } catch (error) {
   firstFailure = error;
-  for (const name of containers) {
+  for (const name of [...containers].reverse()) {
     try {
       const container = inspectResource('container', name);
       if (!container || container.Config.Labels[label] !== nonce) continue;
@@ -316,7 +380,7 @@ try {
     }
   }
 } finally {
-  for (const name of containers) {
+  for (const name of [...containers].reverse()) {
     try {
       const container = inspectResource('container', name);
       if (!container) continue;
@@ -349,13 +413,14 @@ try {
 if (!firstFailure && cleanupFailures.length === 0) passed('owned-container-socket-volume-and-credential-cleanup');
 const status = firstFailure || cleanupFailures.length ? 'FAIL' : 'PASS';
 const result = {
-  status, evidenceLevel: 'ISOLATED_LINUX_OCI_UNIX_SOCKET',
+  status, evidenceLevel: 'ISOLATED_LINUX_OCI_IAM_SHAPED_POSTGRES',
   sourceSha: process.env.GITHUB_SHA, releaseId: prefix, imageId, jobsImageId,
   postgres: postgresVersion, migrationCount: appliedMigrationCount,
   expectedMigrationCount: binding ? Object.keys(binding.migrationSha256).length : 0,
   profileSha256: binding?.profileSha256, migrationSha256: binding?.migrationSha256,
   staticFixtureSha256: binding?.staticFixtureSha256, checks,
   dockerExecution: status, browserSmoke: 'NOT_RUN', productionIdentity: 'NOT_RUN',
+  metadataProvider: 'FIXTURE_ONLY', cloudIamAuthentication: 'NOT_RUN', proxyAuthentication: 'NOT_RUN',
   cloudSqlReadback: 'NOT_RUN', registryPush: 'NOT_RUN', productionRelease: 'NOT_RUN',
   ...(firstFailure ? { failure: sanitize(firstFailure.message) } : {}),
   ...(diagnostics.length ? { diagnostics } : {}),

@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve, relative, sep } from 'node:path';
 import { S1_MIGRATION_PATHS, S3_MIGRATION_PATHS } from './lib/dev139-migration-paths.mjs';
+import { MANAGED_DATABASE, assertManagedIamLogins } from '../shared/dev139ManagedDatabase.mjs';
 
 const root = process.cwd();
 const profilePath = resolve(root, process.argv[2] || process.env.DEV139_PROFILE || 'config/dev-139/s1-disposable.profile.json');
@@ -62,12 +63,22 @@ if (profile) {
   if (profile.environment !== 'disposable' && profile.environment !== 'managed') {
     fail('profile environment must be disposable or managed');
   }
-  const expectedHost = profile.environment === 'managed' ? 'cloud-sql-unix' : '127.0.0.1';
+  const expectedHost = profile.environment === 'managed' ? MANAGED_DATABASE.host : '127.0.0.1';
   if (profile.database?.host !== expectedHost) fail('profile database host does not match its environment');
   if (profile.environment === 'managed'
-    ? profile.database?.cloudSqlInstance !== 'jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg'
+    ? profile.database?.cloudSqlInstance !== MANAGED_DATABASE.cloudSqlInstance
     : profile.database?.cloudSqlInstance !== undefined) {
     fail('profile Cloud SQL instance does not match its environment');
+  }
+  if (profile.environment === 'managed') {
+    try {
+      assertManagedIamLogins(profile.database?.iamLogins);
+      ok('managed IAM login identities');
+    } catch (error) {
+      fail(`managed IAM login contract mismatch: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  } else if (profile.database?.iamLogins !== undefined) {
+    fail('disposable profile must not define managed IAM login identities');
   }
   const expectedMigrationPaths = profileContracts.get(profile.database?.namePattern);
   if (!expectedMigrationPaths) fail('profile database name pattern drifted');
