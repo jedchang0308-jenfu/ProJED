@@ -4,10 +4,13 @@ import type {QueryResult,QueryResultRow} from 'pg';
 
 import type {ActorQueryPort} from '../../../server/actorTransaction.js';
 import {KernelError} from '../../../server/errors.js';
-import {MeetingAsrDatabaseRepository,type MeetingAsrTransactions} from '../../../server/meetingAsrRepository.js';
+import {createPostgresMeetingAsrControl,MeetingAsrDatabaseRepository,parseMeetingAsrWork,
+  type MeetingAsrTransactions} from '../../../server/meetingAsrRepository.js';
 import type {ScopedQuery} from '../../../server/db.js';
 import type {MeetingAsrClaim,MeetingAsrSettlement} from '../../../server/meetingAsrWorker.js';
 import type {MeetingAsrDispatchUnit} from '../../../server/meetingAsrDispatchInput.js';
+import type {RuntimeConfig} from '../../../server/config.js';
+import type {RuntimeDatabase} from '../../../server/db.js';
 
 const RUN_ID='11111111-1111-4111-8111-111111111111';
 const OTHER_RUN_ID='12121212-1212-4121-8121-121212121212';
@@ -127,6 +130,25 @@ function oneCall(calls:readonly RecordedQuery[],rpc:string):RecordedQuery{
   const call=matches[0];
   assert.ok(call);
   return call;
+}
+
+interface ControlCall {readonly sql:string;readonly values:readonly unknown[]}
+function controlHarness(handler:(call:ControlCall)=>QueryResultRow){
+  const calls:ControlCall[]=[];let releases=0;
+  const client={async query(sql:string,values:readonly unknown[]=[]){
+    const call={sql,values:[...values]};calls.push(call);
+    const row=handler(call);return {rows:[row],rowCount:1};
+  }};
+  const database={async checkout(){return {client,release(){releases++;}};}} as unknown as RuntimeDatabase;
+  const config={profile:{runtime:{timeouts:{transactionMillis:5000,statementMillis:2000,lockMillis:1000,
+    idleInTransactionMillis:5000}}}} as unknown as RuntimeConfig;
+  return {calls,database,config,get releases(){return releases;}};
+}
+
+function oneControlCall(calls:readonly ControlCall[],rpc:string):ControlCall{
+  const matches=calls.filter(call=>call.sql.includes(rpc));
+  assert.equal(matches.length,1,`expected one ${rpc} call`);
+  const call=matches[0];assert.ok(call);return call;
 }
 
 test('claim uses one generated token for the exact repository run',async()=>{
@@ -326,4 +348,100 @@ test('recognized settlement sends normalized anchors and string charge to the ex
   assert.equal(payload.chargeSource,'provider_metadata');
   assert.deepEqual(payload.transcript.wordOffsets,[{text:'hello',start_ms:SOURCE_START_MS,end_ms:SOURCE_START_MS+0.5,
     source_audio_segment_id:SOURCE_ID,source_word_index:0}]);
+});
+
+test('recovery RPC uses only the exact run and operation token and returns SQL not-sent/unknown decisions',async()=>{
+  for(const kind of ['not_sent','usage_unknown'] as const){
+    const h=harness();
+    h.actorHandler=call=>{
+      assert.ok(call.sql.includes('recover_meeting_asr_unit_v1'));
+      return {receipt:{recovered:true,kind,retryScheduled:kind==='not_sent'}};
+    };
+    const repository=new MeetingAsrDatabaseRepository(RUN_ID,h.transactions);
+
+    const recovery=await repository.recoverExpired(TOKEN);
+
+    assert.deepEqual(recovery,{recovered:true,kind,retryScheduled:kind==='not_sent'});
+    const call=oneCall(h.calls,'recover_meeting_asr_unit_v1');
+    assert.match(call.sql,/recover_meeting_asr_unit_v1\(\$1::uuid,\$2::uuid\)/u);
+    assert.deepEqual(call.values,[RUN_ID,TOKEN],'recovery is bound to the original run and token without a caller key');
+    assert.equal(h.calls.length,1);
+    assert.equal(h.calls.some(item=>/claim_meeting_asr_unit|mark_meeting_asr_dispatch|settle_meeting_asr_unit/u.test(item.sql)),false);
+  }
+});
+
+test('recovery falls back to accounting only when the actor transaction fails before callback entry',async()=>{
+  const h=harness();
+  h.actorPlans.push({kind:'before',error:new KernelError('ACCESS_DENIED','original actor is no longer available',403)});
+  h.accountingHandler=()=>({receipt:{recovered:true,kind:'usage_unknown',retryScheduled:false}});
+  const repository=new MeetingAsrDatabaseRepository(RUN_ID,h.transactions);
+
+  const recovery=await repository.recoverExpired(TOKEN);
+
+  assert.deepEqual(recovery,{recovered:true,kind:'usage_unknown',retryScheduled:false});
+  assert.equal(h.actorCalls,1);
+  assert.equal(h.accountingCalls,1);
+  assert.equal(h.calls.length,1);
+  const call=oneCall(h.calls,'recover_meeting_asr_unit_v1');
+  assert.equal(call.scope,'accounting');
+  assert.deepEqual(call.values,[RUN_ID,TOKEN]);
+});
+
+test('recovery callback errors and uncertain COMMIT never retry through accounting',async()=>{
+  const scenarios:[string,QueryHandler,ActorPlan][]=[
+    ['actor callback authorization error',()=>{throw new KernelError('ACCESS_DENIED','callback entered',403);},{kind:'normal'}],
+    ['COMMIT unknown',()=>({receipt:{recovered:true,kind:'not_sent',retryScheduled:true}}),
+      {kind:'after',error:new KernelError('DB_COMMIT_UNKNOWN','recovery acknowledgement lost',503)}],
+  ];
+  for(const [label,handler,plan] of scenarios){
+    const h=harness();h.actorHandler=handler;h.actorPlans.push(plan);
+    const repository=new MeetingAsrDatabaseRepository(RUN_ID,h.transactions);
+    const expected=plan.kind==='after'&&plan.error instanceof KernelError?plan.error.code:'ACCESS_DENIED';
+
+    await assert.rejects(repository.recoverExpired(TOKEN),errorCode(expected),label);
+
+    assert.equal(h.actorCalls,1,label);
+    assert.equal(h.accountingCalls,0,label);
+    assert.equal(h.calls.length,1,label);
+    assert.deepEqual(oneCall(h.calls,'recover_meeting_asr_unit_v1').values,[RUN_ID,TOKEN],label);
+  }
+});
+
+test('ASR work metadata parser rejects extra content, duplicate runs, and malformed operation tokens',()=>{
+  const queued={kind:'queued',runId:RUN_ID,deadlineExpired:false,budgetMonthCurrent:true};
+  const recovery={kind:'recover_unit',runId:OTHER_RUN_ID,operationToken:TOKEN};
+  assert.deepEqual(parseMeetingAsrWork([queued,recovery,{kind:'recover_pool',runId:CAPTURE_ID}],3),[
+    queued,recovery,{kind:'recover_pool',runId:CAPTURE_ID},
+  ]);
+  assert.throws(()=>parseMeetingAsrWork([{...queued,transcript:'private words'}],1),errorCode('DB_BOUNDARY_INVALID'));
+  assert.throws(()=>parseMeetingAsrWork([queued,{kind:'recover_pool',runId:RUN_ID}],2),errorCode('DB_BOUNDARY_INVALID'));
+  assert.throws(()=>parseMeetingAsrWork([{kind:'recover_unit',runId:RUN_ID,operationToken:'bad-token'}],1),
+    errorCode('DOMAIN_DATA_INVALID'));
+  assert.throws(()=>parseMeetingAsrWork([queued],0),errorCode('DB_BOUNDARY_INVALID'));
+});
+
+test('metadata control scan is bounded and sends no source or caller identity to its RPC',async()=>{
+  const work=[{kind:'recover_unit',runId:RUN_ID,operationToken:TOKEN}];
+  const h=controlHarness(call=>call.sql.includes('scan_meeting_asr_work_v1')?{work}:{ok:true});
+  const control=createPostgresMeetingAsrControl({database:h.database,config:h.config});
+
+  const result=await control.scan(3);
+
+  assert.deepEqual(result,work);
+  const call=oneControlCall(h.calls,'scan_meeting_asr_work_v1');
+  assert.deepEqual(call.values,[3]);
+  assert.equal(call.sql.includes('scan_meeting_asr_work_v1($1::integer)'),true);
+  assert.equal(h.releases,1);
+});
+
+test('metadata control abandons only the requested run with the fixed reason RPC arguments',async()=>{
+  const h=controlHarness(call=>call.sql.includes('abandon_meeting_asr_run_v1')?{changed:true}:{ok:true});
+  const control=createPostgresMeetingAsrControl({database:h.database,config:h.config});
+
+  assert.equal(await control.abandon(RUN_ID,'ASR_DEADLINE_EXPIRED'),true);
+
+  const call=oneControlCall(h.calls,'abandon_meeting_asr_run_v1');
+  assert.deepEqual(call.values,[RUN_ID,'ASR_DEADLINE_EXPIRED']);
+  assert.equal(call.sql.includes('abandon_meeting_asr_run_v1($1::uuid,$2::text)'),true);
+  assert.equal(h.releases,1);
 });

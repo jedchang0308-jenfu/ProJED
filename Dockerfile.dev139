@@ -40,13 +40,17 @@ COPY --from=build --chown=node:node /app/scripts/run-dev139-managed-job.mjs ./sc
 CMD ["node", "scripts/run-dev139-managed-job.mjs"]
 
 # Audio decoding has a separate image layer; ordinary web/migration images do
-# not acquire a media toolchain. This is not yet an ASR worker entrypoint.
+# not acquire a media toolchain. Only the explicit ASR target inherits it.
 FROM runtime AS media-runtime
 USER root
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 USER node
+
+# Durable ASR execution is an explicit one-off target and carries ffmpeg.
+FROM media-runtime AS asr-job
+CMD ["node", "dist-server/server/meetingAsrJob.js"]
 
 # A normal build still produces the web runtime. Jobs require an explicit target.
 FROM runtime AS final

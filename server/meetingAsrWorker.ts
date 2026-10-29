@@ -77,6 +77,33 @@ export type MeetingAsrUnitResult =
 function invalid():never{throw new KernelError('DOMAIN_DATA_INVALID','Meeting ASR claim is invalid',409);}
 function interrupted():KernelError{return new KernelError('TRANSACTION_USAGE_INVALID','Meeting ASR unit was interrupted',409);}
 function hash(bytes:Uint8Array|string):string{return createHash('sha256').update(bytes).digest('hex');}
+const SETTLEMENT_HEADROOM_MS=10_000;
+
+function leaseAbortScope(parent:AbortSignal,leaseExpiresAtMs:number,now:()=>number){
+  const controller=new AbortController();
+  const deadlineMs=leaseExpiresAtMs-SETTLEMENT_HEADROOM_MS;
+  const abortFromParent=()=>controller.abort();
+  if(parent.aborted)controller.abort();
+  else parent.addEventListener('abort',abortFromParent,{once:true});
+  const remainingMs=deadlineMs-now();
+  let timer:NodeJS.Timeout|undefined;
+  if(!controller.signal.aborted){
+    if(remainingMs<=0)controller.abort();
+    else timer=setTimeout(()=>controller.abort(),remainingMs);
+  }
+  return {
+    signal:controller.signal,
+    active(){
+      if(now()>=deadlineMs&&!controller.signal.aborted)controller.abort();
+      if(controller.signal.aborted)throw interrupted();
+    },
+    dispose(){
+      if(timer)clearTimeout(timer);
+      parent.removeEventListener('abort',abortFromParent);
+    },
+  };
+}
+
 function validateClaim(claim:MeetingAsrClaim):void{
   for(const id of [claim.runId,claim.captureId,claim.leaseToken,claim.source.id,claim.source.tenantId,
     claim.source.projectId,claim.source.recordId])requireUuid(id,'ASR identity');
@@ -131,52 +158,56 @@ export async function runMeetingAsrUnit(deps:MeetingAsrWorkerDependencies,signal
   const claim=await deps.repository.claimNext();if(!claim)return {state:'idle'};
   validateClaim(claim);
   const now=deps.now??Date.now;
-  const active=()=>{if(signal.aborted||now()>=claim.leaseExpiresAtMs)throw interrupted();};
+  const lease=leaseAbortScope(signal,claim.leaseExpiresAtMs,now);
+  const active=()=>lease.active();
   let providerInvoked=false;
   let settlement:MeetingAsrSettlement;
   try{
-    active();
-    const audio=await deps.storage.read(claim.source.objectPath,signal);
-    active();
-    if(audio.generation!==claim.source.generation||audio.size!==claim.source.bytes
-      ||audio.bytes.byteLength!==claim.source.bytes||audio.contentType.toLowerCase()!==claim.source.mime.toLowerCase()
-      ||hash(audio.bytes)!==claim.source.sha256)throw new KernelError('MEETING_STORAGE_CONFLICT','Meeting ASR source changed',409);
-    const pcm=await (deps.decode??decodeMeetingAudioToPcm)({bytes:audio.bytes,mimeType:audio.contentType,
-      expectedDurationMs:claim.source.endOffsetMs-claim.source.startOffsetMs,signal});
-    active();
-    const chunks=splitMeetingPcm(pcm),chunk=chunks[claim.chunkIndex];if(!chunk)invalid();
-    const draft=resultFor(claim,pcm,{transcript:'',words:[]});
-    const {rawText:_text,wordOffsets:_words,sourceHash:_source,...dispatch}=draft;
-    void _text;void _words;void _source;
-    let authorized:boolean;
-    try{authorized=await deps.repository.markDispatch(claim,dispatch);}
-    catch(error){
-      if(!(error instanceof KernelError)||error.code!=='DB_COMMIT_UNKNOWN')throw error;
-      authorized=await deps.repository.readDispatch(claim)==='authorized';
+    try{
+      active();
+      const audio=await deps.storage.read(claim.source.objectPath,lease.signal);
+      active();
+      if(audio.generation!==claim.source.generation||audio.size!==claim.source.bytes
+        ||audio.bytes.byteLength!==claim.source.bytes||audio.contentType.toLowerCase()!==claim.source.mime.toLowerCase()
+        ||hash(audio.bytes)!==claim.source.sha256)throw new KernelError('MEETING_STORAGE_CONFLICT','Meeting ASR source changed',409);
+      const pcm=await (deps.decode??decodeMeetingAudioToPcm)({bytes:audio.bytes,mimeType:audio.contentType,
+        expectedDurationMs:claim.source.endOffsetMs-claim.source.startOffsetMs,signal:lease.signal});
+      active();
+      const chunks=splitMeetingPcm(pcm),chunk=chunks[claim.chunkIndex];if(!chunk)invalid();
+      const draft=resultFor(claim,pcm,{transcript:'',words:[]});
+      const {rawText:_text,wordOffsets:_words,sourceHash:_source,...dispatch}=draft;
+      void _text;void _words;void _source;
+      let authorized:boolean;
+      try{authorized=await deps.repository.markDispatch(claim,dispatch);}
+      catch(error){
+        if(!(error instanceof KernelError)||error.code!=='DB_COMMIT_UNKNOWN')throw error;
+        authorized=await deps.repository.readDispatch(claim)==='authorized';
+      }
+      if(!authorized)return {state:'not_dispatched',attemptId:claim.attemptId};
+      active();
+      providerInvoked=true;
+      const response=await deps.provider.transcribe({pcm16le:chunk.bytes,signal:lease.signal});
+      // Even after cancellation, preserve the factual response/usage for the
+      // repository's accounting-only path. It must reauthorize publication.
+      settlement={kind:'recognized',transcript:resultFor(claim,pcm,response),
+        ...(response.totalBilledTime===undefined?{}:{totalBilledTime:response.totalBilledTime}),
+        ...(response.requestId===undefined?{}:{providerRequestId:response.requestId})};
+    }catch(error){
+      const knownNotSent=!providerInvoked||(error instanceof GoogleCloudSpeechProviderError&&!error.requestSent);
+      const knownUnbilledServerReject=error instanceof GoogleCloudSpeechProviderError
+        &&error.code==='ASR_PROVIDER_REJECTED'&&error.requestSent&&error.usageUnknown===false
+        &&typeof error.httpStatus==='number'&&error.httpStatus>=500&&error.httpStatus<=599;
+      if(knownNotSent)settlement={kind:'not_sent',code:safeCode(error)};
+      else if(knownUnbilledServerReject)settlement={kind:'rejected_unbilled',code:'ASR_PROVIDER_REJECTED'};
+      else settlement={kind:'usage_unknown',code:safeCode(error)};
     }
-    if(!authorized)return {state:'not_dispatched',attemptId:claim.attemptId};
-    active();
-    providerInvoked=true;
-    const response=await deps.provider.transcribe({pcm16le:chunk.bytes,signal});
-    // Even after cancellation, preserve the factual response/usage for the
-    // repository's accounting-only path. It must reauthorize publication.
-    settlement={kind:'recognized',transcript:resultFor(claim,pcm,response),
-      ...(response.totalBilledTime===undefined?{}:{totalBilledTime:response.totalBilledTime}),
-      ...(response.requestId===undefined?{}:{providerRequestId:response.requestId})};
-  }catch(error){
-    const knownNotSent=!providerInvoked||(error instanceof GoogleCloudSpeechProviderError&&!error.requestSent);
-    const knownUnbilledServerReject=error instanceof GoogleCloudSpeechProviderError
-      &&error.code==='ASR_PROVIDER_REJECTED'&&error.requestSent&&error.usageUnknown===false
-      &&typeof error.httpStatus==='number'&&error.httpStatus>=500&&error.httpStatus<=599;
-    if(knownNotSent)settlement={kind:'not_sent',code:safeCode(error)};
-    else if(knownUnbilledServerReject)settlement={kind:'rejected_unbilled',code:'ASR_PROVIDER_REJECTED'};
-    else settlement={kind:'usage_unknown',code:safeCode(error)};
+    // Settlement deliberately does not inherit the lease/caller abort signal.
+    const settled=await deps.repository.settle(claim,settlement);
+    const state=settlement.kind==='usage_unknown'?'usage_unknown'
+      :settlement.kind==='not_sent'?'not_dispatched'
+        :settlement.kind==='rejected_unbilled'?'rejected_unbilled':settled;
+    return {state,attemptId:claim.attemptId};
+  }finally{
+    lease.dispose();
   }
-  // No cancellation signal is passed here: an already-paid attempt still needs
-  // isolated accounting. A failed settlement is surfaced, never a second POST.
-  const settled=await deps.repository.settle(claim,settlement);
-  const state=settlement.kind==='usage_unknown'?'usage_unknown'
-    :settlement.kind==='not_sent'?'not_dispatched'
-      :settlement.kind==='rejected_unbilled'?'rejected_unbilled':settled;
-  return {state,attemptId:claim.attemptId};
 }

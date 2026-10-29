@@ -329,7 +329,7 @@ BEGIN
       WHEN 'projed_core.meeting_ai_usage_attempts' THEN ARRAY[
         'attempt_id','capture_id','run_id','unit_identity','dispatch_month','provider','model','price_version',
         'reserved_twd_micros','usage_state','outcome','dispatch_state','actual_twd_micros',
-        'asr_operation_token','asr_manifest','asr_remaining_twd_micros'
+        'asr_operation_token','asr_manifest','asr_remaining_twd_micros','created_at'
       ]::text[]
       WHEN 'projed_core.meeting_ai_budget_months' THEN ARRAY[
         'budget_month','limit_twd_micros','reserved_twd_micros','spent_twd_micros'
@@ -415,6 +415,11 @@ BEGIN
     'projed_core.meeting_asr_settlement_guard_v1()',
     'projed_core.settle_meeting_asr_unit_v1(uuid,uuid,jsonb)',
     'projed_core.read_meeting_asr_dispatch_v1(uuid,uuid,jsonb)',
+    'projed_core.meeting_asr_control_scope_v1(uuid)',
+    'projed_core.scan_meeting_asr_work_v1(integer)',
+    'projed_core.recover_meeting_asr_unit_v1(uuid,uuid)',
+    'projed_core.meeting_asr_abandon_guard_v1()',
+    'projed_core.abandon_meeting_asr_run_v1(uuid,text)',
     'projed_core.meeting_review_scope_v1(uuid)',
     'projed_core.meeting_projection_scope_v1(uuid,uuid)'
   ] LOOP

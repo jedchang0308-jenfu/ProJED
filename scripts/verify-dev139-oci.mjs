@@ -19,6 +19,7 @@ const toolsImage = `${prefix}:build`;
 const runtimeImage = `${prefix}:runtime`;
 const jobsImage = `${prefix}:jobs`;
 const mediaImage = `${prefix}:media`;
+const asrImage = `${prefix}:asr-job`;
 const postgresImage = 'postgres:17.11-bookworm';
 const instance = 'jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg';
 const socketPath = `/cloudsql/${instance}`;
@@ -38,6 +39,7 @@ let binding;
 let imageId;
 let jobsImageId;
 let mediaImageId;
+let asrImageId;
 let mediaProof;
 let postgresVersion;
 let appliedMigrationCount = 0;
@@ -146,6 +148,62 @@ try {
   assert.equal(jobImage.Config.User, 'node');
   assert.deepEqual(jobImage.Config.Cmd, ['node', 'scripts/run-dev139-managed-job.mjs']);
   passed('actual-nonroot-managed-jobs-image');
+
+  docker(['build', '--platform', 'linux/amd64', '--target', 'asr-job', '--label', `${label}=${nonce}`,
+    '--build-arg', `PROJED_RELEASE_ID=${prefix}`, '-f', 'Dockerfile.dev139', '-t', asrImage, '.'], { timeout: 600_000 });
+  images.add(asrImage);
+  const asrJobImage = JSON.parse(docker(['image', 'inspect', asrImage]).stdout)[0];
+  asrImageId = asrJobImage.Id;
+  assert.equal(asrJobImage.Os, 'linux');
+  assert.equal(asrJobImage.Architecture, 'amd64');
+  assert.equal(asrJobImage.Config.User, 'node');
+  assert.deepEqual(asrJobImage.Config.Cmd, ['node', 'dist-server/server/meetingAsrJob.js']);
+  const asrRuntimeProbe = runOwnedContainer('asr-job-runtime-probe', ['--read-only', '--cap-drop', 'ALL',
+    '--security-opt', 'no-new-privileges', asrImage, 'node', '--input-type=module', '-e', String.raw`
+      import assert from 'node:assert/strict';
+      import {existsSync} from 'node:fs';
+      import {spawnSync} from 'node:child_process';
+      assert.notEqual(process.getuid(),0);
+      assert.equal(existsSync('dist-server/server/meetingAsrJob.js'),true);
+      const ffmpeg=spawnSync('/usr/bin/ffmpeg',['-version'],{encoding:'utf8',timeout:30000,
+        env:{PATH:'/usr/bin:/bin',LANG:'C'}});
+      assert.equal(ffmpeg.status,0);
+      console.log(JSON.stringify({module:'present',ffmpeg:ffmpeg.stdout.split('\n')[0],user:process.getuid()}));
+    `]);
+  assert.equal(JSON.parse(asrRuntimeProbe.stdout.trim()).module, 'present');
+
+  const asrEgressGuard = join(temp, 'asr-check-only-egress-guard.mjs');
+  writeFileSync(asrEgressGuard, `
+    import net from 'node:net';
+    const blocked = kind => {
+      process.stderr.write('DEV139_ASR_CHECK_EGRESS_ATTEMPT:' + kind + '\\n');
+      throw new Error('DEV139_ASR_CHECK_EGRESS_BLOCKED');
+    };
+    globalThis.fetch = async () => blocked('fetch');
+    net.Socket.prototype.connect = function () { return blocked('socket'); };
+  `, { mode: 0o444 });
+  // Docker run arguments replace CMD, so invoke the inspected entry explicitly.
+  const asrCheckOnly = runOwnedContainer('asr-job-check-only', ['--read-only', '--cap-drop', 'ALL',
+    '--security-opt', 'no-new-privileges', '--mount',
+    `type=bind,src=${asrEgressGuard},dst=/verification/asr-check-only-egress-guard.mjs,readonly`,
+    '--env', 'NODE_OPTIONS=--import=/verification/asr-check-only-egress-guard.mjs',
+    '--env', 'PROJED_ENV=managed', '--env', 'PROJED_APP_ENTRY=main',
+    '--env', 'PROJED_DATABASE_URL=not-a-postgresql-url',
+    '--env', 'PROJED_RUNTIME_BINDING_FILE=/verification/missing-runtime-binding.json',
+    '--env', 'PROJED_MEETING_AUDIO_BUCKET=unqualified-fixture-bucket',
+    '--env', 'GOOGLE_APPLICATION_CREDENTIALS=/verification/missing-provider-credentials.json',
+    '--env', 'GOOGLE_CLOUD_PROJECT=fixture-unqualified-project',
+    asrImage, 'node', 'dist-server/server/meetingAsrJob.js', '--check-only'], { network: 'none', allowFailure: true });
+  assert.equal(asrCheckOnly.status, 0, asrCheckOnly.stderr);
+  const asrCheckLines = asrCheckOnly.stdout.trim().split(/\r?\n/u);
+  assert.equal(asrCheckLines.length, 1);
+  assert.deepEqual(JSON.parse(asrCheckLines[0]), {
+    event: 'projed_meeting_asr_job_check', status: 'CHECK_ONLY', providerDispatch: 'DISABLED',
+    sessionContract: 'UNPUBLISHED', runtime: 'NOT_CONNECTED', provider: 'NOT_RUN',
+  });
+  assert.doesNotMatch(`${asrCheckOnly.stdout}${asrCheckOnly.stderr}`, /DEV139_ASR_CHECK_EGRESS_ATTEMPT/u,
+    'check-only never opens metadata/provider fetches or database sockets');
+  passed('actual-nonroot-asr-job-image-cmd-module-ffmpeg-and-offline-check-only');
 
   const originalBinding = JSON.parse(runOwnedContainer('binding-cli', [toolsImage,
     'node', 'scripts/create-dev139-managed-binding.mjs', `--instance=${instance}`]).stdout);
@@ -504,7 +562,7 @@ if (!firstFailure && cleanupFailures.length === 0) passed('owned-container-socke
 const status = firstFailure || cleanupFailures.length ? 'FAIL' : 'PASS';
 const result = {
   status, evidenceLevel: 'ISOLATED_LINUX_OCI_IAM_SHAPED_POSTGRES',
-  sourceSha: process.env.GITHUB_SHA, releaseId: prefix, imageId, jobsImageId, mediaImageId, mediaProof,
+  sourceSha: process.env.GITHUB_SHA, releaseId: prefix, imageId, jobsImageId, asrImageId, mediaImageId, mediaProof,
   postgres: postgresVersion, migrationCount: appliedMigrationCount,
   expectedMigrationCount: binding ? Object.keys(binding.migrationSha256).length : 0,
   profileSha256: binding?.profileSha256, migrationSha256: binding?.migrationSha256,

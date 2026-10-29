@@ -37,6 +37,12 @@ function fixture(){
     expire:()=>{now=200_000;},cancel:()=>{cancelled=true;controller.abort();}};
 }
 
+function realLeaseDeps(f:ReturnType<typeof fixture>,activeWindowMs=80){
+  const claim={...f.claim,leaseExpiresAtMs:Date.now()+10_000+activeWindowMs};
+  f.repository.claimNext=async()=>{f.events.push('claim');return claim;};
+  return {...f.deps,now:Date.now};
+}
+
 test('verified source produces one paid chunk with original sample coverage and absolute word times',async()=>{
   const f=fixture();assert.equal((await runMeetingAsrUnit(f.deps,f.controller.signal)).state,'published');
   assert.deepEqual(f.events,['claim','read','decode','mark','POST','settle']);assert.equal(f.sends(),1);
@@ -74,11 +80,65 @@ test('no work and caller cancellation before claim perform no paid or database w
 
 test('cancellation during decode and lease expiry before dispatch preserve a proven unsent outcome',async()=>{
   for(const interrupt of ['cancel','expire'] as const){
-    const f=fixture();const deps={...f.deps,async decode(){f[interrupt]();return new Uint8Array(834_000*2);}};
+    const f=fixture();let decodeSignal:AbortSignal|undefined;
+    const deps={...f.deps,async decode(input:Parameters<NonNullable<MeetingAsrWorkerDependencies['decode']>>[0]){
+      decodeSignal=input.signal;f[interrupt]();return new Uint8Array(834_000*2);}};
     assert.equal((await runMeetingAsrUnit(deps,f.controller.signal)).state,'not_dispatched');
     assert.equal(f.sends(),0);assert.equal(f.events.includes('mark'),false);
     assert.equal(f.settlements[0]?.kind,'not_sent');
+    assert.equal(decodeSignal?.aborted,true);
   }
+});
+
+test('lease already inside settlement headroom skips storage and settles known not-sent',async()=>{
+  const f=fixture();const deps=realLeaseDeps(f,0);
+
+  assert.equal((await runMeetingAsrUnit(deps,f.controller.signal)).state,'not_dispatched');
+
+  assert.deepEqual(f.events,['claim','settle']);
+  assert.equal(f.sends(),0);
+  assert.deepEqual(f.settlements,[{kind:'not_sent',code:'TRANSACTION_USAGE_INVALID'}]);
+});
+
+test('lease headroom aborts a hanging storage read before any provider request',async()=>{
+  const f=fixture();let storageSignal:AbortSignal|undefined;
+  const deps={...realLeaseDeps(f),storage:{
+    async read(_key:string,signal?:AbortSignal){
+      f.events.push('read');storageSignal=signal;
+      assert.ok(signal);assert.notEqual(signal,f.controller.signal);
+      return new Promise<never>((_resolve,reject)=>{
+        const abort=()=>reject(new KernelError('MEETING_STORAGE_UNAVAILABLE','synthetic read aborted',503));
+        if(signal.aborted)abort();else signal.addEventListener('abort',abort,{once:true});
+      });
+    },
+  }};
+
+  assert.equal((await runMeetingAsrUnit(deps,f.controller.signal)).state,'not_dispatched');
+
+  assert.deepEqual(f.events,['claim','read','settle']);
+  assert.equal(storageSignal?.aborted,true);
+  assert.equal(f.sends(),0);
+  assert.equal(f.settlements[0]?.kind,'not_sent');
+});
+
+test('lease headroom aborts an in-flight provider request and settles usage unknown once',async()=>{
+  const f=fixture();let providerSignal:AbortSignal|undefined;let posts=0;
+  const deps={...realLeaseDeps(f),provider:{async transcribe(input:Parameters<typeof f.deps.provider.transcribe>[0]){
+    const signal=input.signal;assert.ok(signal);
+    f.events.push('POST');posts++;providerSignal=signal;
+    assert.notEqual(signal,f.controller.signal);
+    return new Promise<never>((_resolve,reject)=>{
+      const abort=()=>reject(new GoogleCloudSpeechProviderError('ASR_REQUEST_ABORTED','synthetic request aborted',true,true));
+      if(signal.aborted)abort();else signal.addEventListener('abort',abort,{once:true});
+    });
+  }}};
+
+  assert.equal((await runMeetingAsrUnit(deps,f.controller.signal)).state,'usage_unknown');
+
+  assert.deepEqual(f.events,['claim','read','decode','mark','POST','settle']);
+  assert.equal(providerSignal?.aborted,true);
+  assert.equal(posts,1);
+  assert.deepEqual(f.settlements,[{kind:'usage_unknown',code:'ASR_REQUEST_ABORTED'}]);
 });
 
 test('current authorization/budget/source rejection after decode never calls provider',async()=>{

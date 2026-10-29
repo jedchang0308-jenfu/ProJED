@@ -1,7 +1,7 @@
 # SPEC-139：ProJED 納入 Jenfu-Platform 的產品與技術交接契約
 
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。
-- 日期：2026-10-29（Asia/Taipei）；版本：Rev 69（0037 ASR結算／private checkpoint／SQL repository CI PASS；最終討論／候選、host與真provider資格續行）。
+- 日期：2026-10-29（Asia/Taipei）；版本：Rev 70（0038 bounded ASR host／回收候選；0037 已通過 CI，真 provider 與完整交付續行）。
 - 文件狀態：**整合與發布續行中；W22 OrgMaster publisher 與 W23 Platform Session／handoff source 均有 draft PR／required CI PASS，隔離驗證 PASS；Production Resolver Disabled；未 Release**。Firebase／OIDC 真身分與完整 Session 部署、RAG／文字會議真 provider 資格、錄音管線與剩餘資料處置、雲端 readback、舊入口、writer fence、切流及正式發布仍計入完成分母。W22 owner source 見 [§36](#36-orgmaster-minimum-principal-publication-w222026-10-29)，W23 Platform source 與驗證邊界見 [§37](#37-platform-projed-session-and-handoff-w232026-10-29)；W21 承接六類文件／同步資料與精度保護見 [§35](#35-document-source-retention-w212026-10-28)；W20 資料保留見 §34，具體資源與待確認的新權限仍見 §33。本輪未寫正式資料、切流或變更 IAM／Secret／credential／billing。
 - 適用階段：S1–S3 本地切片歷史見 §12–§32；2026-10-28 續行授權見 [DEV-139 人類決策與授權範圍](../dev_task.md#1-人類決策與授權範圍)，涵蓋 ProJED／OrgMaster／Jenfu-Platform 的 source 整合工作。正式整合與發布仍是完整目標，不以本地切片完成替代；新責任權限依 §33 處理。定期審視不是續行或發布的 required gate；本輪未執行正式資料寫入、切流或 IAM／Secret／credential／billing 變更。
 - 直接交接入口：[§11 S1 定案契約](#11-架構決策與-s1-定案契約)、[§12 S1 實作狀態](#12-s1-實作狀態2026-10-26)、[§13 S2 consumer seam](#13-s2-projed-identity-consumer-seam2026-10-26)、[§14 S3 read adapter](#14-s3-http-read-adapter-slice2026-10-26)、[§15 S3 domain command](#15-s3-domain-command-w12026-10-26)、[§16 S3 collaboration command](#16-s3-collaboration-command-w22026-10-27)、[§17 S3 record／activity](#17-s3-recordactivity-w32026-10-27)、[§18 S3 HTTP product wiring](#18-s3-http-product-wiring-w42026-10-27)、[§19 S3 Board transfer](#19-s3-board-transfer-w52026-10-27)、[§20 S3 legacy provider boundary](#20-s3-legacy-provider-boundary-w62026-10-27)、[§21 S3 Quick Task](#21-s3-quick-task-w72026-10-27)、[§22 S3 Task Workbench](#22-s3-task-workbench-w82026-10-27)、[§23 S3 Actor CAS](#23-s3-actor-context-cas-w92026-10-27)、[§24 S3 Task Tracking](#24-s3-task-tracking-w102026-10-27)、[§25 S3 Backup／Import](#25-s3-backupimport-w112026-10-27)、[§26 S3 Account Preferences](#26-s3-account-preferences-w122026-10-27)、[§27 S3 Calendar Subscription](#27-s3-calendar-subscription-w132026-10-27)及[§32 本地開發收斂](#32-s3-local-development-closure-w182026-10-27)；[§11.8 技術主管審查](#118-技術主管審查與最小優化)保留 Rev5 修正理由；既有使用者切換見 [§6.3](#63-既有使用者的切換基線)。
@@ -1348,6 +1348,16 @@ Focused review 另修正新service的預設路由說明、OCI失敗診斷也遮�
 目標DB已有run queue／source version／lease／usage／cleanup與transcript表，但0001–0033尚未授ASR worker claim／dispatch／settle／transcript INSERT，HTTP錄音caller亦未接齊。沿原run與nonce／token責任補forward-only0034及後續worker migration／接線，不另建通用queue。先完成安全source／合成媒體測試，再由真provider、普通使用入口與資料／費用／取消／清理讀回證據驗收；本節與W35的369 unit／15 OCI均不代表ASR完成。
 
 ## 51. Owner foundation qualification and ASR components（W36–W37，2026-10-29）
+
+### 現行 ASR host 與回收候選（0038）
+
+`meetingAsrJob.ts` 使用 managed main 的 runtime IAM／Unix socket 與既有 Session resolver，不開 HTTP port、不借 migrator／importer、不複製使用者 cookie。每次掃描最多20筆 metadata、派送最多4個 unit，整次有10分鐘期限；每 unit 在150秒 lease結束前10秒中斷storage／decoder／provider I/O，留下獨立帳務結算時間。掃描順序每分鐘輪轉，暫時不可用的前頁不永久遮住其他工作。程序停止後不領新 unit，已送出結果照原 token 結算，未知 COMMIT 不在同程序重領／重送。
+
+Forward-only `0038_meeting_asr_control_v1` 在同一 app transaction lock 內重讀 run／unit／pool：過期 pending 才能按未送出清算，已 dispatched 只可記 usage unknown；未到期或新的 lease 不受 stale scan影響。原 Session仍有效且0037重試條件成立時可排第二attempt；Session無效只改run／ledger metadata，不寫private checkpoint／capture。Tokenless pool僅釋放未分配餘額，餘額歸零且replay不再退款；owner status沿既有0037規則修復terminal capture佔位。新增helper均invoker／固定search_path／非PUBLIC、runtime-only，沒有新queue或一般ledger API，0001–0037 bytes保持不變。
+
+專用 `asr-job` image繼承既有media layer，普通web預設仍為`final`。`--check-only` 在config／credential／DB載入前回報CHECK_ONLY、runtime NOT_CONNECTED及provider NOT_RUN；既有OCI verifier將實跑compiled entry、ffmpeg與egress trap，不將check-only當provider通過。`CURRENT_MEETING_ASR_BINDING`目前NULL，Production identity pins仍空；正式project的API／data-logging／bucket資格尚未完成時，新音訊派送停用，但安全的逾期／費用回收不因此停用。暫時性identity state／DB失敗不當作Session撤銷。
+
+本機466 unit（S2 305／S3 120／migration14／release27）、S2／S3 strict同版本宣告overlay、受影響lint與兩S3 boundary PASS。新增原生PG recovery案例與OCI entry候選待同一既有CI；上一個完整qualified source與歷史失敗見本節下方0037收據。最終discussion≤30秒／800字、來源詞索引重編、RAG／matching／resolution／publisher、cleanup、真provider與正常入口、外部Session與既有資料、雲端／舊origin／writer fence／切流發布仍計入DEV-139完成分母；不增加required gate。
 
 Platform DEV-007 source `a4268b68a054ed95b99198a9f822abf340ef4ce7` 的 [Source QC40841930197](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/40841930197)及[native40841924869](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/40841924869)均PASS。Neutral005／006只處理ProJED專用roles／membership／CONNECT與初次owner database CREATE window；migrator→owner正常DDL鏈保留，runtime／importer不入owner。SQL接受可SET實際DB owner、或operator非effective owner且有direct CREATE／CONNECT grant option兩條路徑；未知路徑拒絕。006先提交撤CREATE及catalog讀回，再寫ledger；metadata失敗不會回滾已完成撤權。同SQL checksum的重播保留原合法ledger source，不為無關GitSHA重建歷史。
 

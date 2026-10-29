@@ -21,11 +21,13 @@ assert.match(dockerfile, /npm run build:dev-139:cloud-run/);
 assert.match(dockerfile, /npm ci --omit=dev --ignore-scripts/);
 assert.match(dockerfile, /USER node/);
 assert.match(dockerfile, /CMD \["node", "dist-server\/server\/index\.js"\]/);
+assert.match(dockerfile, /FROM media-runtime AS asr-job\s+CMD \["node", "dist-server\/server\/meetingAsrJob\.js"\]/);
+assert.match(dockerfile, /FROM runtime AS final/);
 assert.doesNotMatch(dockerfile, /PROJED_DATABASE_URL|PROJED_RUNTIME_BINDING_JSON|password|secret/i);
 for (const entry of ['.git', 'node_modules', 'dist', 'output', '.env.*']) assert.match(dockerignore, new RegExp(`^${entry.replace('.', '\\.')}\r?$`, 'm'));
 
 for (const path of ['dist/index.html', 'dist/quick-task/index.html', 'dist/dev139-cloud-run-meta.json',
-  'dist-server/server/index.js', 'dist-jobs/scripts/dev139-data-migration.js']) {
+  'dist-server/server/index.js', 'dist-server/server/meetingAsrJob.js', 'dist-jobs/scripts/dev139-data-migration.js']) {
   assert.equal(statSync(resolve(path)).isFile(), true, `missing ${path}`);
 }
 const meta = JSON.parse(readFileSync('dist/dev139-cloud-run-meta.json', 'utf8'));

@@ -7,6 +7,7 @@ import {asKernelError,KernelError} from './errors.js';
 import {validateMeetingAsrDispatchInput,type MeetingAsrDispatchUnit} from './meetingAsrDispatchInput.js';
 import {normalizeMeetingAsrSettlementInput,type NormalizedMeetingAsrSettlement} from './meetingAsrSettlementInput.js';
 import type {MeetingAsrClaim,MeetingAsrRepository,MeetingAsrSettlement} from './meetingAsrWorker.js';
+import type {MeetingAsrRecovery,MeetingAsrAbandonReason,MeetingAsrWork} from './meetingAsrHost.js';
 import {requireUuid} from './meetingCaptureInput.js';
 
 export interface MeetingAsrTransactions {
@@ -112,6 +113,66 @@ export class MeetingAsrDatabaseRepository implements MeetingAsrRepository {
       return 'accounted_only';
     }
   }
+  async recoverExpired(operationToken:string):Promise<MeetingAsrRecovery>{
+    requireUuid(operationToken,'operationToken');
+    const recover=async(query:ScopedQuery):Promise<MeetingAsrRecovery>=>{
+      const result=await query<{receipt:unknown}>(
+        'SELECT projed_core.recover_meeting_asr_unit_v1($1::uuid,$2::uuid) AS receipt',[this.#runId,operationToken]);
+      const receipt=result.rows[0]?.receipt;
+      if(result.rows.length!==1||!receipt||typeof receipt!=='object'||Array.isArray(receipt)
+        ||!('recovered' in receipt)||typeof receipt.recovered!=='boolean'
+        ||!('kind' in receipt)||!(receipt.kind===null||receipt.kind==='not_sent'||receipt.kind==='usage_unknown')
+        ||!('retryScheduled' in receipt)||typeof receipt.retryScheduled!=='boolean'
+        ||receipt.recovered!==(receipt.kind!==null)||(!receipt.recovered&&receipt.retryScheduled))invalid();
+      return {recovered:receipt.recovered,kind:receipt.kind,retryScheduled:receipt.retryScheduled};
+    };
+    let entered=false;
+    try{return await this.transactions.actor(port=>{entered=true;return recover(port.query);});}
+    catch(error){if(entered||!actorUnavailable(error))throw error;return this.transactions.accounting(recover);}
+  }
+}
+
+export function parseMeetingAsrWork(value:unknown,maxItems:number):readonly MeetingAsrWork[]{
+  if(!Number.isInteger(maxItems)||maxItems<1||maxItems>20||!Array.isArray(value)||value.length>maxItems)invalid();
+  const seen=new Set<string>();
+  return value.map((item:unknown)=>{
+    if(!item||typeof item!=='object'||Array.isArray(item)||!('runId' in item)||typeof item.runId!=='string'
+      ||!('kind' in item))invalid();
+    const runId=requireUuid(item.runId,'runId');if(seen.has(runId))invalid();seen.add(runId);
+    if(item.kind==='queued'){
+      if(Object.keys(item).sort().join('|')!=='budgetMonthCurrent|deadlineExpired|kind|runId'
+        ||!('deadlineExpired' in item)||typeof item.deadlineExpired!=='boolean'
+        ||!('budgetMonthCurrent' in item)||typeof item.budgetMonthCurrent!=='boolean')invalid();
+      return {kind:'queued',runId,deadlineExpired:item.deadlineExpired,budgetMonthCurrent:item.budgetMonthCurrent};
+    }
+    if(item.kind==='recover_unit'){
+      if(Object.keys(item).sort().join('|')!=='kind|operationToken|runId'
+        ||!('operationToken' in item)||typeof item.operationToken!=='string')invalid();
+      return {kind:'recover_unit',runId,operationToken:requireUuid(item.operationToken,'operationToken')};
+    }
+    if(item.kind!=='recover_pool'||Object.keys(item).sort().join('|')!=='kind|runId')invalid();
+    return {kind:'recover_pool',runId};
+  });
+}
+
+/** Metadata-only maintenance does not manufacture a business actor. */
+export function createPostgresMeetingAsrControl(options:{readonly database:RuntimeDatabase;readonly config:RuntimeConfig}){
+  const {database,config}=options;
+  return {
+    scan:async(maxItems:number):Promise<readonly MeetingAsrWork[]>=>accountingTransaction(database,config,async query=>{
+      if(!Number.isInteger(maxItems)||maxItems<1||maxItems>20)invalid();
+      const result=await query<{work:unknown}>('SELECT projed_core.scan_meeting_asr_work_v1($1::integer) AS work',[maxItems]);
+      if(result.rows.length!==1)invalid();return parseMeetingAsrWork(result.rows[0]?.work,maxItems);
+    }),
+    abandon:async(runId:string,reason:MeetingAsrAbandonReason):Promise<boolean>=>{
+      requireUuid(runId,'runId');
+      return accountingTransaction(database,config,async query=>{
+        const result=await query<{changed:boolean}>(
+          'SELECT projed_core.abandon_meeting_asr_run_v1($1::uuid,$2::text) AS changed',[runId,reason]);
+        if(result.rows.length!==1||typeof result.rows[0]?.changed!=='boolean')invalid();return result.rows[0].changed;
+      });
+    },
+  };
 }
 
 async function accountingTransaction<T>(database:RuntimeDatabase,config:RuntimeConfig,

@@ -12,7 +12,7 @@ import { resolveBoard } from '../../../server/domainRead.js';
 import { KernelError } from '../../../server/errors.js';
 import { createKernelHttpServer } from '../../../server/http.js';
 import type { MeetingAudioStorage } from '../../../server/meetingAudioStorage.js';
-import { createPostgresMeetingAsrRepository } from '../../../server/meetingAsrRepository.js';
+import { createPostgresMeetingAsrControl, createPostgresMeetingAsrRepository } from '../../../server/meetingAsrRepository.js';
 import type { MeetingAsrClaim, MeetingAsrTranscriptUnit } from '../../../server/meetingAsrWorker.js';
 import { PostgresAppSessionStore } from '../../../server/postgresAppSessionStore.js';
 import { MeetingUploadRepository } from '../../../server/meetingUpload.js';
@@ -1529,6 +1529,241 @@ export async function verifyMeetingUploadPostgres(
     assert.deepEqual(await readBudget(admin,month),{
       limit_twd_micros:DEFAULT_BUDGET_MICROS,reserved_twd_micros:'96000',spent_twd_micros:'48000',
     },'expired not-sent attempt releases the unit while leaving existing pool remainder reserved');
+
+    const asrControl=createPostgresMeetingAsrControl({database,config});
+    const assertBudgetDelta=(before:Awaited<ReturnType<typeof readBudget>>,after:Awaited<ReturnType<typeof readBudget>>,
+      reservedDelta:bigint,spentDelta:bigint,label:string)=>{
+      assert.ok(before&&after,`${label}: the owned budget row remains present`);
+      assert.equal(BigInt(after.reserved_twd_micros)-BigInt(before.reserved_twd_micros),reservedDelta,
+        `${label}: only the expected reservation delta is applied`);
+      assert.equal(BigInt(after.spent_twd_micros)-BigInt(before.spent_twd_micros),spentDelta,
+        `${label}: only the expected spend delta is applied`);
+    };
+    const readCaptureContentState=async(captureId:string)=>{
+      const result=await admin.query<{
+        state:string;active_transcript_revision_id:string|null;source_proof:unknown;transcript_count:number;checkpoint_count:number;
+      }>(`SELECT capture.state,capture.active_transcript_revision_id::text,
+        (SELECT coalesce(jsonb_agg(jsonb_build_object('id',source.id,'sha256',source.sha256,
+          'generation',source.storage_generation,'startMs',source.start_offset_ms,'endMs',source.end_offset_ms,
+          'bytes',source.bytes,'mime',source.mime) ORDER BY source.segment_index),'[]'::jsonb)
+          FROM projed_core.meeting_capture_segments source WHERE source.capture_id=capture.id AND source.source_version=1) AS source_proof,
+        (SELECT count(*)::integer FROM projed_core.meeting_transcript_segments transcript WHERE transcript.capture_id=capture.id) AS transcript_count,
+        (SELECT count(*)::integer FROM projed_core.meeting_asr_unit_results checkpoint WHERE checkpoint.capture_id=capture.id) AS checkpoint_count
+        FROM projed_core.meeting_capture_sessions capture WHERE capture.id=$1::uuid`,[captureId]);
+      assert.equal(result.rowCount,1);return result.rows[0]!;
+    };
+
+    const pendingRecoveryFixture=await createSettlementFixture('control-expired-pending');
+    const pendingRecoveryToken=randomUUID();
+    const pendingRecoveryBudgetBefore=await readBudget(admin,month);
+    await verifyAsrSessionBinding(database,config,admin,owner,outsider,pendingRecoveryFixture.recordId,
+      pendingRecoveryFixture.captureId,pendingRecoveryFixture.runId,async(actor)=>{
+        const prepared=record(await prepareSettlementFixture(pendingRecoveryFixture,actor),'control pending recovery preparation');
+        assert.equal(prepared.state,'queued');
+        assert.ok(await claimSettlementUnit(pendingRecoveryFixture,actor,pendingRecoveryToken));
+        const expired=await admin.query<{id:string}>(`UPDATE projed_core.meeting_analysis_runs
+          SET lease_expires_at=clock_timestamp()-interval '1 second'
+          WHERE id=$1::uuid AND lease_token=$2::uuid AND state='running' RETURNING id::text`,
+        [pendingRecoveryFixture.runId,pendingRecoveryToken]);
+        assert.equal(expired.rowCount,1,'only the owned pending lease is expired');
+        const scanned=await asrControl.scan(20);
+        const candidates=scanned.filter(item=>item.runId===pendingRecoveryFixture.runId);
+        assert.deepEqual(candidates,[{kind:'recover_unit',runId:pendingRecoveryFixture.runId,operationToken:pendingRecoveryToken}],
+          'scan returns only the recovery kind, exact run id and opaque operation token for an expired unit');
+        for(const item of scanned){
+          assert.ok(!('sourcePath' in item)&&!('objectPath' in item)&&!('rawText' in item)&&!('transcript' in item),
+            'scan never returns private source paths or transcript content');
+        }
+        await runActorTransaction(database,config,actor,async port=>{
+          const before=(await port.query<{phase:string}>(
+            `SELECT coalesce(current_setting('projed.meeting_asr_phase',true),'') AS phase`)).rows[0];
+          await port.query('SELECT projed_core.scan_meeting_asr_work_v1(20)');
+          const after=(await port.query<{phase:string}>(
+            `SELECT coalesce(current_setting('projed.meeting_asr_phase',true),'') AS phase`)).rows[0];
+          assert.deepEqual(after,before,'scan restores its previous transaction-local phase');
+        });
+        const repository=createPostgresMeetingAsrRepository({runId:pendingRecoveryFixture.runId,database,config,
+          resolveActor:async()=>actor});
+        assert.deepEqual(await repository.recoverExpired(pendingRecoveryToken),
+          {recovered:true,kind:'not_sent',retryScheduled:true},
+          'expired pending recovery is resolved as known not-sent and schedules the bounded retry');
+        const restoreRecoveryGucs=await runActorTransaction(database,config,actor,async port=>{
+          const before=(await port.query<{phase:string;run_id:string;token:string;verified:string}>(`
+            SELECT coalesce(current_setting('projed.meeting_asr_phase',true),'') AS phase,
+              coalesce(current_setting('projed.meeting_asr_run_id',true),'') AS run_id,
+              coalesce(current_setting('projed.meeting_asr_token',true),'') AS token,
+              coalesce(current_setting('projed.meeting_asr_verified_token',true),'') AS verified`)).rows[0];
+          const result=await port.query<{receipt:unknown}>(
+            'SELECT projed_core.recover_meeting_asr_unit_v1($1::uuid,$2::uuid) AS receipt',
+            [pendingRecoveryFixture.runId,pendingRecoveryToken]);
+          const after=(await port.query<{phase:string;run_id:string;token:string;verified:string}>(`
+            SELECT coalesce(current_setting('projed.meeting_asr_phase',true),'') AS phase,
+              coalesce(current_setting('projed.meeting_asr_run_id',true),'') AS run_id,
+              coalesce(current_setting('projed.meeting_asr_token',true),'') AS token,
+              coalesce(current_setting('projed.meeting_asr_verified_token',true),'') AS verified`)).rows[0];
+          return {receipt:result.rows[0]?.receipt,before,after};
+        });
+        assert.deepEqual(record(restoreRecoveryGucs.receipt,'replayed pending recovery receipt'),
+          {recovered:false,kind:null,retryScheduled:false},'a settled token is not settled twice');
+        assert.deepEqual(restoreRecoveryGucs.after,restoreRecoveryGucs.before,
+          'recovery restores all prior transaction-local GUCs');
+      });
+    const pendingRecoveryLedger=await readUnitPool(pendingRecoveryFixture.runId,pendingRecoveryToken);
+    assert.equal(pendingRecoveryLedger.unit_state,'known');assert.equal(pendingRecoveryLedger.unit_actual,'0');
+    assert.equal(pendingRecoveryLedger.unit_dispatch,'pending');assert.equal(pendingRecoveryLedger.pool_state,'reserved');
+    assert.equal(pendingRecoveryLedger.unit_reserved,'48000');assert.equal(pendingRecoveryLedger.pool_remaining,'48000');
+    assert.equal(await countCheckpoints(pendingRecoveryFixture.runId),0,'recovery of a pending request publishes no checkpoint');
+    assertBudgetDelta(pendingRecoveryBudgetBefore,await readBudget(admin,month),48_000n,0n,
+      'known not-sent recovery leaves only the undispatched pool remainder reserved');
+
+    const dispatchedRecoveryFixture=await createSettlementFixture('control-expired-dispatched');
+    const dispatchedRecoveryToken=randomUUID();
+    const dispatchedRecoveryBudgetBefore=await readBudget(admin,month);
+    await verifyAsrSessionBinding(database,config,admin,owner,outsider,dispatchedRecoveryFixture.recordId,
+      dispatchedRecoveryFixture.captureId,dispatchedRecoveryFixture.runId,async(actor)=>{
+        const prepared=record(await prepareSettlementFixture(dispatchedRecoveryFixture,actor),'control dispatched recovery preparation');
+        assert.equal(prepared.state,'queued');
+        assert.ok(await claimSettlementUnit(dispatchedRecoveryFixture,actor,dispatchedRecoveryToken));
+        assert.equal(await markSettlementDispatch(dispatchedRecoveryFixture,actor,dispatchedRecoveryToken),true);
+        const expired=await admin.query<{id:string}>(`UPDATE projed_core.meeting_analysis_runs
+          SET lease_expires_at=clock_timestamp()-interval '1 second'
+          WHERE id=$1::uuid AND lease_token=$2::uuid AND state='running' RETURNING id::text`,
+        [dispatchedRecoveryFixture.runId,dispatchedRecoveryToken]);
+        assert.equal(expired.rowCount,1,'only the owned dispatched lease is expired');
+        const repository=createPostgresMeetingAsrRepository({runId:dispatchedRecoveryFixture.runId,database,config,
+          resolveActor:async()=>actor});
+        assert.deepEqual(await repository.recoverExpired(dispatchedRecoveryToken),
+          {recovered:true,kind:'usage_unknown',retryScheduled:false},
+          'persisted dispatched state recovers only as unknown usage and is never resent');
+        assert.equal(await claimSettlementUnit(dispatchedRecoveryFixture,actor,randomUUID()),null,
+          'an unknown dispatched operation cannot acquire a second paid token');
+      },false);
+    const dispatchedRecoveryLedger=await readUnitPool(dispatchedRecoveryFixture.runId,dispatchedRecoveryToken);
+    assert.equal(dispatchedRecoveryLedger.unit_state,'unknown');assert.equal(dispatchedRecoveryLedger.unit_actual,null);
+    assert.equal(dispatchedRecoveryLedger.unit_dispatch,'dispatched');assert.equal(dispatchedRecoveryLedger.pool_state,'known');
+    assert.equal(dispatchedRecoveryLedger.unit_reserved,'48000');
+    assert.equal(dispatchedRecoveryLedger.pool_remaining,'0');assert.equal(dispatchedRecoveryLedger.pool_outcome,'asr_pool_released');
+    assert.equal(await countCheckpoints(dispatchedRecoveryFixture.runId),0,'recovery never publishes a dispatched unknown result');
+    assertBudgetDelta(dispatchedRecoveryBudgetBefore,await readBudget(admin,month),48_000n,0n,
+      'unknown dispatched recovery retains its unit hold and releases only unused pool funds');
+
+    const activeLeaseFixture=await createSettlementFixture('control-stale-active-lease');
+    const activeLeaseToken=randomUUID();
+    const activeLeaseBudgetBefore=await readBudget(admin,month);
+    let activeLeaseBudgetAfterPrepare:Awaited<ReturnType<typeof readBudget>>=null;
+    await verifyAsrSessionBinding(database,config,admin,owner,outsider,activeLeaseFixture.recordId,
+      activeLeaseFixture.captureId,activeLeaseFixture.runId,async(actor)=>{
+        const prepared=record(await prepareSettlementFixture(activeLeaseFixture,actor),'active lease preparation');
+        assert.equal(prepared.state,'queued');
+        activeLeaseBudgetAfterPrepare=await readBudget(admin,month);
+        assertBudgetDelta(activeLeaseBudgetBefore,activeLeaseBudgetAfterPrepare,96_000n,0n,
+          'active fixture creates one original cost pool');
+        const staleScan=await asrControl.scan(20);
+        assert.ok(staleScan.some(item=>item.kind==='queued'&&item.runId===activeLeaseFixture.runId),
+          'the host may scan this queued run before another worker claims it');
+        assert.ok(await claimSettlementUnit(activeLeaseFixture,actor,activeLeaseToken));
+        const repository=createPostgresMeetingAsrRepository({runId:activeLeaseFixture.runId,database,config,
+          resolveActor:async()=>actor});
+        assert.deepEqual(await repository.recoverExpired(activeLeaseToken),
+          {recovered:false,kind:null,retryScheduled:false},'recovery rechecks and defers a fresh lease');
+        assert.equal(await asrControl.abandon(activeLeaseFixture.runId,'ASR_SESSION_UNAVAILABLE'),false,
+          'an old queued scan cannot abandon a run that is now actively leased');
+      });
+    assert.ok(activeLeaseBudgetAfterPrepare,'the active fixture retained its budget snapshot');
+    const activeLeaseState=await admin.query<{state:string;lease_token:string|null;usage_state:string;dispatch_state:string}>(`
+      SELECT run.state,run.lease_token::text,unit.usage_state,unit.dispatch_state
+      FROM projed_core.meeting_analysis_runs run JOIN projed_core.meeting_ai_usage_attempts unit
+        ON unit.run_id=run.id AND unit.asr_operation_token=$2::uuid WHERE run.id=$1::uuid`,
+    [activeLeaseFixture.runId,activeLeaseToken]);
+    assert.deepEqual(activeLeaseState.rows[0],{state:'running',lease_token:activeLeaseToken,
+      usage_state:'reserved',dispatch_state:'pending'},'stale control requests preserve the live unit lease');
+    assert.deepEqual(await readBudget(admin,month),activeLeaseBudgetAfterPrepare,
+      'fresh-lease recovery and stale-scan abandon do not refund active reservations');
+
+    const lostSessionFixture=await createSettlementFixture('control-lost-session-abandon');
+    const lostSessionBudgetBefore=await readBudget(admin,month);
+    await verifyAsrSessionBinding(database,config,admin,owner,outsider,lostSessionFixture.recordId,
+      lostSessionFixture.captureId,lostSessionFixture.runId,async(actor)=>{
+        const prepared=record(await prepareSettlementFixture(lostSessionFixture,actor),'lost Session queue preparation');
+        assert.equal(prepared.state,'queued');
+        const scanned=await asrControl.scan(20);
+        assert.deepEqual(scanned.filter(item=>item.runId===lostSessionFixture.runId),[
+          {kind:'queued',runId:lostSessionFixture.runId,deadlineExpired:false,budgetMonthCurrent:true},
+        ],'queued scan exposes only dispatch metadata, without source path or content');
+      });
+    const lostSessionContentBefore=await readCaptureContentState(lostSessionFixture.captureId);
+    assert.equal(await asrControl.abandon(lostSessionFixture.runId,'ASR_SESSION_UNAVAILABLE'),true,
+      'a queued run whose original Session is gone can release its tokenless pool');
+    const abandonedPool=await admin.query<{usage_state:string;actual_twd_micros:string|null;outcome:string|null;remaining:string|null}>(`
+      SELECT usage_state,actual_twd_micros::text,outcome,asr_remaining_twd_micros::text AS remaining
+      FROM projed_core.meeting_ai_usage_attempts WHERE attempt_id=$1::text||':cloud-speech:pool'`,
+    [lostSessionFixture.runId]);
+    assert.deepEqual(abandonedPool.rows[0],{usage_state:'known',actual_twd_micros:'0',
+      outcome:'asr_pool_abandoned',remaining:'0'},'abandon settles only the exact tokenless pool remainder');
+    assertBudgetDelta(lostSessionBudgetBefore,await readBudget(admin,month),0n,0n,
+      'queued abandon returns its full pool reservation');
+    assert.deepEqual(await readCaptureContentState(lostSessionFixture.captureId),lostSessionContentBefore,
+      'background abandon leaves capture state, verified source and transcript content unchanged');
+    assert.equal(await asrControl.abandon(lostSessionFixture.runId,'ASR_SESSION_UNAVAILABLE'),false,
+      'pool abandonment replay is a no-op');
+    const abandonGucRestore=await runActorTransaction(database,config,owner,async port=>{
+      const before=(await port.query<{phase:string;run_id:string;verified_run:string;reason:string;month:string}>(`
+        SELECT coalesce(current_setting('projed.meeting_asr_phase',true),'') AS phase,
+          coalesce(current_setting('projed.meeting_asr_run_id',true),'') AS run_id,
+          coalesce(current_setting('projed.meeting_asr_verified_pool_run',true),'') AS verified_run,
+          coalesce(current_setting('projed.meeting_asr_abandon_reason',true),'') AS reason,
+          coalesce(current_setting('projed.meeting_asr_abandon_month',true),'') AS month`)).rows[0];
+      const replay=await port.query<{changed:boolean}>(
+        'SELECT projed_core.abandon_meeting_asr_run_v1($1::uuid,$2::text) AS changed',
+        [lostSessionFixture.runId,'ASR_SESSION_UNAVAILABLE']);
+      const after=(await port.query<{phase:string;run_id:string;verified_run:string;reason:string;month:string}>(`
+        SELECT coalesce(current_setting('projed.meeting_asr_phase',true),'') AS phase,
+          coalesce(current_setting('projed.meeting_asr_run_id',true),'') AS run_id,
+          coalesce(current_setting('projed.meeting_asr_verified_pool_run',true),'') AS verified_run,
+          coalesce(current_setting('projed.meeting_asr_abandon_reason',true),'') AS reason,
+          coalesce(current_setting('projed.meeting_asr_abandon_month',true),'') AS month`)).rows[0];
+      return {changed:replay.rows[0]?.changed,before,after};
+    });
+    assert.equal(abandonGucRestore.changed,false,'abandon replay remains idempotent inside an actor transaction');
+    assert.deepEqual(abandonGucRestore.after,abandonGucRestore.before,
+    'abandon restores each caller transaction-local GUC');
+
+    const orphanPoolFixture=await createSettlementFixture('control-orphan-pool');
+    const orphanBudgetBefore=await readBudget(admin,month);
+    await verifyAsrSessionBinding(database,config,admin,owner,outsider,orphanPoolFixture.recordId,
+      orphanPoolFixture.captureId,orphanPoolFixture.runId,async actor=>{
+        const prepared=record(await prepareSettlementFixture(orphanPoolFixture,actor),'orphan pool preparation');
+        assert.equal(prepared.state,'queued');
+      });
+    const removedRun=await admin.query<{id:string}>(`DELETE FROM projed_core.meeting_analysis_runs
+      WHERE id=$1::uuid RETURNING id::text`,[orphanPoolFixture.runId]);
+    assert.equal(removedRun.rowCount,1,'only the nonce-owned fixture run becomes orphaned');
+    const orphanScan=(await asrControl.scan(20)).filter(item=>item.runId===orphanPoolFixture.runId);
+    assert.deepEqual(orphanScan,[{kind:'recover_pool',runId:orphanPoolFixture.runId}],
+      'orphan pool scan returns metadata only and omits unit tokens');
+    assert.equal(await asrControl.abandon(orphanPoolFixture.runId,'ASR_SOURCE_UNAVAILABLE'),true,
+      'a pool with no parent run can still release its own reserved amount');
+    assert.equal(await asrControl.abandon(orphanPoolFixture.runId,'ASR_SOURCE_UNAVAILABLE'),false,
+      'an orphan pool release cannot be applied twice');
+    const orphanPool=await admin.query<{usage_state:string;outcome:string|null;remaining:string|null}>(`
+      SELECT usage_state,outcome,asr_remaining_twd_micros::text AS remaining FROM projed_core.meeting_ai_usage_attempts
+      WHERE attempt_id=$1::text||':cloud-speech:pool'`,[orphanPoolFixture.runId]);
+    assert.deepEqual(orphanPool.rows[0],{usage_state:'known',outcome:'asr_pool_abandoned',remaining:'0'});
+    assertBudgetDelta(orphanBudgetBefore,await readBudget(admin,month),0n,0n,
+      'orphan pool recovery releases only its original reservation');
+
+    const runtimeControlGrants=await admin.query<{
+      run_table_update:boolean;usage_table_update:boolean;budget_table_update:boolean;
+      run_created_update:boolean;usage_created_update:boolean;budget_limit_update:boolean;
+    }>(`SELECT has_table_privilege('projed_runtime_disposable','projed_core.meeting_analysis_runs','UPDATE') AS run_table_update,
+      has_table_privilege('projed_runtime_disposable','projed_core.meeting_ai_usage_attempts','UPDATE') AS usage_table_update,
+      has_table_privilege('projed_runtime_disposable','projed_core.meeting_ai_budget_months','UPDATE') AS budget_table_update,
+      has_column_privilege('projed_runtime_disposable','projed_core.meeting_analysis_runs','created_at','UPDATE') AS run_created_update,
+      has_column_privilege('projed_runtime_disposable','projed_core.meeting_ai_usage_attempts','created_at','UPDATE') AS usage_created_update,
+      has_column_privilege('projed_runtime_disposable','projed_core.meeting_ai_budget_months','limit_twd_micros','UPDATE') AS budget_limit_update`);
+    assert.deepEqual(runtimeControlGrants.rows[0],{run_table_update:false,usage_table_update:false,budget_table_update:false,
+      run_created_update:false,usage_created_update:false,budget_limit_update:false},
+    '0038 control and lock-only policies do not grant runtime broader UPDATE privileges');
   } catch (error) {
     failed = true;
     failure = error;
