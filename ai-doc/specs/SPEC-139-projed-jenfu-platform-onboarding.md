@@ -1367,7 +1367,13 @@ Focused review 另修正新service的預設路由說明、OCI失敗診斷也遮�
 
 本機S2 404項、S2／S3 strict同版本PG宣告overlay、affected lint及兩S3 boundary PASS。首個boundary failure為未同步0040 ordered-path contract，已在原兩處path list追加；native helper初次typecheck誤引用callback內的`makeDiscussionBatch`，已改用正常`runMeetingDiscussionUnit`而非複製組裝邏輯。新PG helper在既有upload驗證最後，以另一筆正常ASR／assembly fixture及同Session下的nonce cloned run驗claim/replay、原Session／RLS／source拒絕、費用exactly-once、真租約回收、跨hash兩次上限、取消及metadata-only，保留舊獨立預算斷言。首版`379ad5b4a2679008564d6a4a9d533ccaa3822c9f`的[CI40924356439](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40924356439)單元567項（404／122／14／27）、型別、三boundary及compiled artifact PASS；Windows domain／snapshot及Linux OCI均在0040載入遇到`42601 syntax error at end of input`，下游native案例未執行，不算獨立產品失敗或PASS。修正PL/pgSQL `IF`比較內未括起的`CASE`表達式後，仍須遠端40-migration native／OCI重驗，不拿下列39份收據代替。未在本機啟DB／Docker或呼叫provider，也不新增required gate。
 
-完整retrieve／matching／compose worker／host及finalizer尚須接線；目前只有持久化與accounting seam，沒有宣稱真ASR、正常browser或分析完成。實際零留存／OrgMaster與Platform真Session、既有使用者及資料、完整foundation migration window、Cloud Run／SQL／Storage／Hosting／舊入口、writer fence／reconcile／恢復／切流與正式發布繼續計入DEV-139。
+第二版`aec4c9a05c42cba29dde08b357e47e30b04a7509`的[CI40925498936](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40925498936)已通過同567 unit、型別／三boundary／compiled artifact與Linux OCI18／40 migrations；artifact `12919419731`（`dev139-oci-3885c8c9bc4e68629afea4bb`）已讀回，owned cleanup PASS，metadata provider仍是FIXTURE_ONLY，其餘正式IAM／Speech／Session／browser／Cloud SQL／release均NOT_RUN。Windows domain首次在LLM claim遇到`42501 permission denied for table meeting_ai_budget_months`：新函式的`SELECT *`讀取了既有column grant未開放的`updated_at`；snapshot獨立遇到新LLM column grant未同步舊exact oracle。已將新usage／budget查詢改為既有允許欄位的精確投影、不增加grants，並在原retention loop同步新欄位、private checkpoint及helper；native須重驗，不以OCI可載入代替行為通過。
+
+`meetingLlmWorker`候選已補單次retrieve／match／compose的claim→dispatch→provider→private settlement；沒有在network I/O期間持有actor transaction。Dispatch COMMIT未知只以read-only確認原token，settlement COMMIT未知先讀同token的事實收據，查無才將同payload重送一次，不重送provider。Readback若是recovery先存的unknown／未發布收據，照實回報，不把本機結果當已存；只有實際private checkpoint可供後續使用。原Session／source／current WBS與lease的發布判定仍由repository及SQL執行。Generation的已知usage即使內容無法解析也入帳；embedding向量不可用時保留已驗數值usage作unusable結算，缺失／非法用量仍unknown保留預留。Worker不做多餘countTokens模型請求，也不偽造free branch的provider dispatch。新增driver unit11項與provider focused11項PASS；新增native路徑以真repository／SQL配synthetic transport驗結果及費用，尚待CI，不是真provider或ZDR證據。
+
+以上候選完整S2 416項、S2及S3 strict同版本PG宣告overlay、affected lint與script syntax PASS；worker test首次S2檢查的stage type錯誤匯入及空字串聯集已修，不以只含S3的overlay充作S2通過。下一版native尚未通過。
+
+仍須接免provider的no-index／no-candidate／empty／single-leaf持久進度、當前來源的next-unit selector、結果讀取、bounded host及finalizer；不把既有core或單次driver算成完整分析。實際零留存／OrgMaster與Platform真Session、既有使用者及資料、完整foundation migration window、Cloud Run／SQL／Storage／Hosting／舊入口、writer fence／reconcile／恢復／切流與正式發布繼續計入DEV-139。
 
 ### Task-only retrieval、matching 與 bounded compose 核心（2026-10-30）
 

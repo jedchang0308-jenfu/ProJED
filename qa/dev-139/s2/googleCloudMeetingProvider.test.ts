@@ -18,9 +18,10 @@ function jsonResponse(value:unknown,status=200,headers:Record<string,string>={'c
 }
 
 function embeddingWire(overrides:{readonly values?:readonly unknown[];readonly truncated?:unknown;
-  readonly metadata?:unknown}={}):unknown{
-  return {predictions:[{embeddings:{values:overrides.values??Array<number>(3072).fill(.25),statistics:{truncated:overrides.truncated??false,
-    token_count:12}}}],...(overrides.metadata===undefined?{}:{metadata:overrides.metadata})};
+  readonly metadata?:unknown;readonly statistics?:unknown}={}):unknown{
+  const statistics=Object.hasOwn(overrides,'statistics')?overrides.statistics:{truncated:overrides.truncated??false,token_count:12};
+  return {predictions:[{embeddings:{values:overrides.values??Array<number>(3072).fill(.25),statistics}}],
+    ...(overrides.metadata===undefined?{}:{metadata:overrides.metadata})};
 }
 
 function generationWire(overrides:Record<string,unknown>={}):unknown{
@@ -105,19 +106,43 @@ test('uses the fixed OAuth endpoints and one POST with the expected request bodi
   });
 });
 
-test('rejects truncated, wrong-sized, non-finite and zero embeddings after one sent request',async()=>{
+test('preserves validated usage when sent embedding output is unusable',async()=>{
   const cases:unknown[]=[
-    embeddingWire({truncated:true}),
-    embeddingWire({values:Array<number>(3071).fill(.25)}),
-    embeddingWire({values:Array<number>(3072).fill(.25).map((value,index)=>index===17?Number.NaN:value)}),
-    embeddingWire({values:Array<number>(3072).fill(0)}),
-    embeddingWire({values:Array<number>(3072).fill(1e-100)}),
+    embeddingWire({truncated:true,metadata:{billableCharacterCount:9}}),
+    embeddingWire({values:Array<number>(3071).fill(.25),metadata:{billableCharacterCount:9}}),
+    embeddingWire({values:Array<number>(3072).fill(.25).map((value,index)=>index===17?Number.NaN:value),metadata:{billableCharacterCount:9}}),
+    embeddingWire({values:Array<number>(3072).fill(0),metadata:{billableCharacterCount:9}}),
+    embeddingWire({values:Array<number>(3072).fill(1e-100),metadata:{billableCharacterCount:9}}),
+  ];
+  for(const wire of cases){
+    const fake=scriptedFetch([()=>jsonResponse(wire)]);
+    await assert.rejects(provider(fake.fetchImpl).embedQuery({text:'query'}),error=>{
+      assert.ok(providerFailure('LLM_PROVIDER_INVALID_RESPONSE',true,200)(error));
+      assert.equal((error as MeetingCloudProviderError).usageUnknown,false);
+      assert.deepEqual((error as MeetingCloudProviderError).embeddingUsage,
+        {tokenCount:12,billableCharacterCount:9});
+      return true;
+    });
+    assert.equal(fake.requests.length,1);
+  }
+});
+
+test('missing or invalid embedding usage remains unknown even with a malformed vector',async()=>{
+  const cases:unknown[]=[
+    embeddingWire({values:Array<number>(3071).fill(.25),statistics:{truncated:false}}),
+    embeddingWire({values:Array<number>(3071).fill(.25),statistics:{truncated:false,token_count:0}}),
+    embeddingWire({values:Array<number>(3071).fill(.25),statistics:{truncated:false,token_count:2049}}),
+    embeddingWire({values:Array<number>(3071).fill(.25),statistics:{truncated:false,token_count:12.5}}),
+    embeddingWire({values:Array<number>(3071).fill(.25),metadata:{billableCharacterCount:'9'}}),
+    embeddingWire({values:Array<number>(3071).fill(.25),metadata:{billableCharacterCount:4097}}),
+    embeddingWire({values:Array<number>(3071).fill(.25),metadata:'malformed'}),
   ];
   for(const wire of cases){
     const fake=scriptedFetch([()=>jsonResponse(wire)]);
     await assert.rejects(provider(fake.fetchImpl).embedQuery({text:'query'}),error=>{
       assert.ok(providerFailure('LLM_PROVIDER_INVALID_RESPONSE',true,200)(error));
       assert.equal((error as MeetingCloudProviderError).usageUnknown,true);
+      assert.equal((error as MeetingCloudProviderError).embeddingUsage,undefined);
       return true;
     });
     assert.equal(fake.requests.length,1);

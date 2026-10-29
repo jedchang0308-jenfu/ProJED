@@ -48,7 +48,7 @@ function boundedJson(text:string):Record<string,unknown>{
   let value:unknown;try{value=JSON.parse(text);}catch{badInput();}
   if(!record(value))badInput();return value;
 }
-function envelope(unit:MeetingLlmPreparedUnit):MeetingLlmEnvelope{
+export function readMeetingLlmEnvelope(unit:MeetingLlmPreparedUnit):MeetingLlmEnvelope{
   if(!unit||!['retrieve','match','compose'].includes(unit.stage)||typeof unit.unitKey!=='string'
     ||!(/^[a-z0-9:-]{1,96}$/u.test(unit.unitKey))||typeof unit.inputHash!=='string'||typeof unit.inputText!=='string'
     ||!HASH.test(unit.inputHash)||hash(unit.inputText)!==unit.inputHash)badInput();
@@ -58,6 +58,7 @@ function envelope(unit:MeetingLlmPreparedUnit):MeetingLlmEnvelope{
   requireUuid(value.transcriptRevisionId,'transcriptRevisionId');
   return value as unknown as MeetingLlmEnvelope;
 }
+const envelope=readMeetingLlmEnvelope;
 export function prepareMeetingLlmUnit(stage:MeetingLlmStage,unitKey:string,input:MeetingLlmEnvelope):MeetingLlmPreparedUnit{
   let inputText:string;try{inputText=JSON.stringify(input);}catch{badInput();}
   const unit={stage,unitKey,inputHash:hash(inputText),inputText};envelope(unit);

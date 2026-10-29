@@ -29,6 +29,10 @@ export interface MeetingCloudEmbedding {
   /** Metadata, not an invoice or an assumed pricing unit. */
   readonly billableCharacterCount:number|null;
 }
+export interface MeetingCloudEmbeddingUsage {
+  readonly tokenCount:number;
+  readonly billableCharacterCount:number|null;
+}
 export interface MeetingCloudGenerationInput {
   readonly prompt:string;
   readonly maxOutputTokens:number;
@@ -44,11 +48,12 @@ export type MeetingCloudProviderErrorCode='LLM_INVALID_INPUT'|'LLM_AUTH_UNAVAILA
 export class MeetingCloudProviderError extends Error {
   /** requestSent means dispatch was attempted and may have reached Google;
    * only httpStatus demonstrates that a provider response was received. */
-  constructor(readonly code:MeetingCloudProviderErrorCode,readonly requestSent:boolean,readonly httpStatus?:number){
+  constructor(readonly code:MeetingCloudProviderErrorCode,readonly requestSent:boolean,readonly httpStatus?:number,
+    readonly embeddingUsage?:MeetingCloudEmbeddingUsage){
     super('Meeting Cloud provider operation failed');this.name='MeetingCloudProviderError';
   }
   /** A sent request is never retried/refunded merely from its HTTP failure. */
-  get usageUnknown():boolean{return this.requestSent;}
+  get usageUnknown():boolean{return this.requestSent&&this.embeddingUsage===undefined;}
 }
 export interface GoogleCloudMeetingProviderOptions {
   readonly getAccessToken:()=>Promise<string>;
@@ -59,7 +64,9 @@ export interface GoogleCloudMeetingProviderOptions {
 function record(value:unknown):value is Record<string,unknown>{return value!==null&&typeof value==='object'&&!Array.isArray(value);}
 function integer(value:unknown):value is number{return typeof value==='number'&&Number.isSafeInteger(value)&&value>=0;}
 function wellFormed(value:string):boolean{return Buffer.from(value,'utf8').toString('utf8')===value;}
-function fail(code:MeetingCloudProviderErrorCode,sent:boolean,status?:number):never{throw new MeetingCloudProviderError(code,sent,status);}
+function fail(code:MeetingCloudProviderErrorCode,sent:boolean,status?:number,embeddingUsage?:MeetingCloudEmbeddingUsage):never{
+  throw new MeetingCloudProviderError(code,sent,status,embeddingUsage);
+}
 function textInput(value:string,maxBytes:number):void{
   if(typeof value!=='string'||!value.trim()||Buffer.byteLength(value,'utf8')>maxBytes
     ||!wellFormed(value))fail('LLM_INVALID_INPUT',false);
@@ -110,22 +117,31 @@ function generationResult(wire:unknown):MeetingCloudGeneration{
   if(!text.trim()||!wellFormed(text)||Buffer.byteLength(text,'utf8')>64*1024||usage.candidateTokens<1)return unusable;
   return {outcome:'generated',text,usage,responseId,modelVersion};
 }
+function embeddingUsage(wire:Record<string,unknown>,statistics:unknown):MeetingCloudEmbeddingUsage|null{
+  if(!record(statistics)||!integer(statistics.token_count)||statistics.token_count<1||statistics.token_count>2048)return null;
+  let billableCharacterCount:number|null=null;
+  if(wire.metadata!==undefined&&wire.metadata!==null){
+    if(!record(wire.metadata))return null;
+    const value=wire.metadata.billableCharacterCount;
+    if(value!==undefined&&value!==null){
+      if(!integer(value)||value>4096)return null;
+      billableCharacterCount=value;
+    }
+  }
+  return {tokenCount:statistics.token_count,billableCharacterCount};
+}
 function embeddingResult(wire:unknown):MeetingCloudEmbedding{
   if(!record(wire)||!Array.isArray(wire.predictions)||wire.predictions.length!==1)fail('LLM_PROVIDER_INVALID_RESPONSE',true,200);
   const prediction=wire.predictions[0];
   if(!record(prediction)||!record(prediction.embeddings))fail('LLM_PROVIDER_INVALID_RESPONSE',true,200);
   const {values,statistics}=prediction.embeddings;
+  const usage=embeddingUsage(wire,statistics);
+  if(!usage)fail('LLM_PROVIDER_INVALID_RESPONSE',true,200);
   if(!Array.isArray(values)||values.length!==3072||values.some(value=>typeof value!=='number'||!Number.isFinite(value))
-    ||!record(statistics)||statistics.truncated!==false||!integer(statistics.token_count)
-    ||statistics.token_count<1||statistics.token_count>2048)fail('LLM_PROVIDER_INVALID_RESPONSE',true,200);
+    ||!record(statistics)||statistics.truncated!==false)fail('LLM_PROVIDER_INVALID_RESPONSE',true,200,usage);
   const rounded=(values as number[]).map(Math.fround);
-  if(rounded.some(value=>!Number.isFinite(value))||rounded.every(value=>value===0))fail('LLM_PROVIDER_INVALID_RESPONSE',true,200);
-  let billableCharacterCount:number|null=null;
-  if(record(wire.metadata)&&wire.metadata.billableCharacterCount!==undefined){
-    if(!integer(wire.metadata.billableCharacterCount))fail('LLM_PROVIDER_INVALID_RESPONSE',true,200);
-    billableCharacterCount=wire.metadata.billableCharacterCount;
-  }
-  return {values:rounded,tokenCount:statistics.token_count,billableCharacterCount};
+  if(rounded.some(value=>!Number.isFinite(value))||rounded.every(value=>value===0))fail('LLM_PROVIDER_INVALID_RESPONSE',true,200,usage);
+  return {values:rounded,...usage};
 }
 
 /** No SDK retry, redirect, alternate model or endpoint. Each method makes at

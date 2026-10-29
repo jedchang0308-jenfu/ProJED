@@ -13,6 +13,7 @@ import {createPostgresMeetingLlmRepository,prepareMeetingLlmUnit,type MeetingLlm
   from '../../../server/meetingLlmRepository.js';
 import {MEETING_LLM_CONFIG_VERSION,meetingLlmCharge,type MeetingLlmStage,type MeetingLlmUsage}
   from '../../../server/meetingLlmPricing.js';
+import {runMeetingLlmUnit} from '../../../server/meetingLlmWorker.js';
 
 type DiscussionInput={
   segmentIndex:number;rawText:string;normalizedText:string;startOffsetMs:number;endOffsetMs:number;
@@ -207,6 +208,7 @@ export async function verifyMeetingLlmPostgres(database:RuntimeDatabase,config:R
   assert.equal(claim.stage,'retrieve');assert.equal(claim.unitKey,positive.segmentId);assert.equal(claim.inputHash,unit.inputHash);
   const admitted=object(await directClaimReplay(positive,claim,unit),'same-token claim replay');
   assert.equal(admitted.status,'claimed');assert.equal(admitted.leaseToken,claim.leaseToken);
+  assert.equal(admitted.inputHash,unit.inputHash);assert.equal(admitted.inputText,unit.inputText);
   assert.equal(admitted.attemptId,claim.attemptId,'same operation token replays the existing reservation');
   assert.equal(await positiveRepository.claim(unit),null,'a competing repository token cannot claim a running unit');
   const reserved=await ledgerState(positive.runId,claim.leaseToken);
@@ -493,6 +495,25 @@ export async function verifyMeetingLlmPostgres(database:RuntimeDatabase,config:R
     'SELECT projed_core.meeting_llm_charge_v1($1::text,$2::jsonb,$3::integer)::text AS charge',
     ['compose',JSON.stringify({promptTokens:10,candidateTokens:2,thoughtTokens:3,totalTokens:14}),0]));
   assert.equal(invalidCharge.rows[0]?.charge,null,'an inconsistent token total is not billable');
+
+  // Exercise the actual paid-unit driver against the real repository. Only the
+  // external transport is synthetic; no Google request or credential is used.
+  const workerFixture=await cloneRun(),workerBudgetBefore=await budgetState();let workerProviderCalls=0;
+  const workerVector=Array<number>(3072).fill(.25);
+  const workerResult=await runMeetingLlmUnit({repository:repository(workerFixture),provider:{
+    async embedQuery(){workerProviderCalls++;return {values:workerVector,tokenCount:12,billableCharacterCount:null};},
+    async generateJson(){throw new Error('unexpected synthetic generation');},
+    async countTokens(){throw new Error('unexpected token-count request');},
+  }},makeUnit(workerFixture),new AbortController().signal);
+  assert.equal(workerProviderCalls,1);assert.equal(workerResult.state,'settled');
+  assert.ok(workerResult.state==='settled'&&workerResult.receipt.published);
+  const workerStored=await admin.query<{payload_text:string}>(`SELECT payload_text FROM projed_core.meeting_llm_unit_checkpoints
+    WHERE run_id=$1::uuid AND slot='result'`,[workerFixture.runId]);
+  assert.equal(workerStored.rowCount,1);assert.deepEqual(JSON.parse(workerStored.rows[0]!.payload_text),{embedding:workerVector});
+  const workerBudgetAfter=await budgetState();
+  assert.equal(workerBudgetAfter.reserved_twd_micros,workerBudgetBefore.reserved_twd_micros);
+  assert.equal(BigInt(workerBudgetAfter.spent_twd_micros)-BigInt(workerBudgetBefore.spent_twd_micros),
+    meetingLlmCharge('retrieve',{tokenCount:12,billableCharacterCount:null},Buffer.byteLength(workerFixture.queryText,'utf8')));
 
   // Expired queue work is surfaced as metadata and finished without reading or
   // writing a private unit. The only mutated row is this synthetic clone.

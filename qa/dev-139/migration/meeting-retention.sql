@@ -189,8 +189,9 @@ BEGIN
 END $$;
 
 -- Every retained table is FORCE RLS. The one-time importer gets only SELECT
--- and INSERT. Runtime receives the 0029 column grants, while each meeting
--- policy still requires actor and operation scope; PUBLIC and migrator stay closed.
+-- and INSERT on the imported snapshot; private LLM checkpoints remain runtime-only.
+-- Runtime receives exact column/table grants while scoped policies apply; PUBLIC
+-- and migrator stay closed.
 DO $$
 DECLARE
   v_name text;
@@ -219,7 +220,8 @@ BEGIN
     'projed_core.meeting_draft_projections',
     'projed_core.meeting_artifact_cleanup',
     'projed_core.meeting_ai_budget_months',
-    'projed_core.meeting_ai_usage_attempts'
+    'projed_core.meeting_ai_usage_attempts',
+    'projed_core.meeting_llm_unit_checkpoints'
   ] LOOP
     v_relation := to_regclass(v_name);
     IF v_relation IS NULL THEN RAISE EXCEPTION 'missing retained meeting table: %', v_name; END IF;
@@ -228,7 +230,25 @@ BEGIN
     IF v_rls IS DISTINCT FROM true OR v_force IS DISTINCT FROM true THEN
       RAISE EXCEPTION 'meeting table is not FORCE RLS: %', v_name;
     END IF;
-    IF NOT has_table_privilege('projed_importer_disposable', v_relation, 'SELECT')
+    IF v_name='projed_core.meeting_llm_unit_checkpoints' AND (
+      (SELECT count(*) FROM pg_policy WHERE polrelid=v_relation)<>2
+      OR NOT EXISTS (
+        SELECT 1 FROM pg_policy p WHERE p.polrelid=v_relation AND p.polname='meeting_llm_private_read_v1'
+          AND p.polcmd='r' AND p.polroles=ARRAY[(SELECT oid FROM pg_roles WHERE rolname='projed_runtime_disposable')]::oid[]
+          AND p.polqual IS NOT NULL
+      )
+      OR NOT EXISTS (
+        SELECT 1 FROM pg_policy p WHERE p.polrelid=v_relation AND p.polname='meeting_llm_private_insert_v1'
+          AND p.polcmd='a' AND p.polroles=ARRAY[(SELECT oid FROM pg_roles WHERE rolname='projed_runtime_disposable')]::oid[]
+          AND p.polwithcheck IS NOT NULL
+      )
+    ) THEN RAISE EXCEPTION 'private LLM checkpoint RLS policies are not exact'; END IF;
+    IF v_name='projed_core.meeting_llm_unit_checkpoints' THEN
+      IF has_table_privilege('projed_importer_disposable',v_relation,'SELECT')
+         OR has_table_privilege('projed_importer_disposable',v_relation,'INSERT') THEN
+        RAISE EXCEPTION 'snapshot importer has access to private LLM checkpoints';
+      END IF;
+    ELSIF NOT has_table_privilege('projed_importer_disposable', v_relation, 'SELECT')
        OR NOT has_table_privilege('projed_importer_disposable', v_relation, 'INSERT') THEN
       RAISE EXCEPTION 'snapshot importer lacks SELECT/INSERT on %', v_name;
     END IF;
@@ -246,7 +266,8 @@ BEGIN
       'projed_core.meeting_transcript_segments',
       'projed_core.meeting_segment_resolutions',
       'projed_core.meeting_task_match_results',
-      'projed_core.meeting_draft_projections'
+      'projed_core.meeting_draft_projections',
+      'projed_core.meeting_llm_unit_checkpoints'
     ]::text[]);
     v_expected_insert := CASE v_name
       WHEN 'projed_core.meeting_capture_sessions' THEN ARRAY[
@@ -270,7 +291,12 @@ BEGIN
       ]::text[]
       WHEN 'projed_core.meeting_ai_usage_attempts' THEN ARRAY[
         'attempt_id','capture_id','run_id','unit_identity','dispatch_month','provider','model','price_version',
-        'reserved_twd_micros','usage_state','outcome','dispatch_state','asr_operation_token','asr_manifest'
+        'reserved_twd_micros','usage_state','outcome','dispatch_state','asr_operation_token','asr_manifest',
+        'llm_operation_token','llm_manifest'
+      ]::text[]
+      WHEN 'projed_core.meeting_llm_unit_checkpoints' THEN ARRAY[
+        'id','capture_id','run_id','source_version','transcript_revision_id','stage','unit_key','input_hash',
+        'slot','attempt_id','payload_text','payload_hash'
       ]::text[]
       WHEN 'projed_core.meeting_ai_budget_months' THEN ARRAY['budget_month']::text[]
       WHEN 'projed_core.meeting_transcript_segments' THEN ARRAY[
@@ -307,7 +333,7 @@ BEGIN
       ]::text[]
       WHEN 'projed_core.meeting_ai_usage_attempts' THEN ARRAY[
         'actual_twd_micros','usage_state','outcome','updated_at','dispatch_state','asr_manifest',
-        'asr_remaining_twd_micros'
+        'asr_remaining_twd_micros','llm_manifest'
       ]::text[]
       WHEN 'projed_core.meeting_ai_budget_months' THEN ARRAY[
         'reserved_twd_micros','spent_twd_micros','updated_at'
@@ -333,7 +359,7 @@ BEGIN
       WHEN 'projed_core.meeting_ai_usage_attempts' THEN ARRAY[
         'attempt_id','capture_id','run_id','unit_identity','dispatch_month','provider','model','price_version',
         'reserved_twd_micros','usage_state','outcome','dispatch_state','actual_twd_micros',
-        'asr_operation_token','asr_manifest','asr_remaining_twd_micros','created_at'
+        'asr_operation_token','asr_manifest','asr_remaining_twd_micros','llm_operation_token','llm_manifest','created_at'
       ]::text[]
       WHEN 'projed_core.meeting_ai_budget_months' THEN ARRAY[
         'budget_month','limit_twd_micros','reserved_twd_micros','spent_twd_micros'
@@ -365,6 +391,12 @@ BEGIN
       IF has_column_privilege('projed_runtime_disposable', v_relation, v_column, 'UPDATE')
            IS DISTINCT FROM (v_column = ANY(v_expected_update)) THEN
         RAISE EXCEPTION 'runtime UPDATE column grant differs from exact policy on %.%', v_name, v_column;
+      END IF;
+      IF v_name='projed_core.meeting_llm_unit_checkpoints'
+         AND (has_column_privilege('projed_importer_disposable',v_relation,v_column,'SELECT')
+           OR has_column_privilege('projed_importer_disposable',v_relation,v_column,'INSERT')
+           OR has_column_privilege('projed_importer_disposable',v_relation,v_column,'UPDATE')) THEN
+        RAISE EXCEPTION 'snapshot importer has column access to private LLM checkpoint %.%',v_name,v_column;
       END IF;
       IF NOT v_expected_table_select
          AND has_column_privilege('projed_runtime_disposable', v_relation, v_column, 'SELECT')
@@ -433,6 +465,16 @@ BEGIN
     'projed_core.append_meeting_discussion_batch_v1(uuid,uuid,jsonb)',
     'projed_core.finish_meeting_discussion_work_v1(uuid,uuid,text)',
     'projed_core.scan_meeting_discussion_work_v1(integer)',
+    'projed_core.meeting_llm_private_scope_v1(uuid,uuid)',
+    'projed_core.meeting_llm_live_v1(uuid)',
+    'projed_core.meeting_llm_guard_v1()',
+    'projed_core.claim_meeting_llm_unit_v1(uuid,uuid,jsonb)',
+    'projed_core.mark_meeting_llm_dispatch_v1(uuid,uuid,text,boolean)',
+    'projed_core.meeting_llm_charge_v1(text,jsonb,integer)',
+    'projed_core.settle_meeting_llm_unit_v1(uuid,uuid,jsonb)',
+    'projed_core.scan_meeting_llm_work_v1(integer)',
+    'projed_core.recover_meeting_llm_unit_v1(uuid,uuid,boolean)',
+    'projed_core.finish_meeting_llm_work_v1(uuid,text)',
     'projed_core.meeting_review_scope_v1(uuid)',
     'projed_core.meeting_projection_scope_v1(uuid,uuid)'
   ] LOOP

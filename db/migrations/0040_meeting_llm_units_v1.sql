@@ -124,7 +124,7 @@ CREATE POLICY meeting_llm_budget_update_v1 ON projed_core.meeting_ai_budget_mont
 
 CREATE FUNCTION projed_core.meeting_llm_guard_v1()
 RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,projed_core AS $$
-DECLARE phase text:=current_setting('projed.llm_phase',true);expected jsonb;delta bigint;usage projed_core.meeting_ai_usage_attempts;
+DECLARE phase text:=current_setting('projed.llm_phase',true);expected jsonb;delta bigint;usage record;
   receipt jsonb;stage_value text;amount bigint;
 BEGIN
   IF current_user<>'projed_runtime_disposable' THEN RETURN NEW; END IF;
@@ -218,7 +218,9 @@ BEGIN
           OR NOT projed_core.meeting_llm_live_v1(nullif(current_setting('projed.llm_run_id',true),'')::uuid)
         THEN RAISE EXCEPTION 'MEETING_LLM_BUDGET_INVALID' USING ERRCODE='42501'; END IF;
       ELSIF phase='settle' THEN
-        SELECT * INTO STRICT usage FROM projed_core.meeting_ai_usage_attempts
+        SELECT attempt_id,capture_id,run_id,unit_identity,dispatch_month,provider,model,price_version,
+      reserved_twd_micros,actual_twd_micros,usage_state,outcome,created_at,dispatch_state,asr_remaining_twd_micros,
+      asr_operation_token,asr_manifest,llm_operation_token,llm_manifest INTO STRICT usage FROM projed_core.meeting_ai_usage_attempts
           WHERE llm_operation_token::text=current_setting('projed.llm_token',true) AND run_id::text=current_setting('projed.llm_run_id',true);
         receipt:=nullif(current_setting('projed.llm_receipt',true),'')::jsonb;
         delta:=CASE WHEN receipt->>'kind'='usage_unknown' THEN 0 ELSE usage.reserved_twd_micros END;
@@ -282,7 +284,7 @@ CREATE TRIGGER meeting_asr_settlement_budget_guard_v1 BEFORE UPDATE ON projed_co
 
 CREATE FUNCTION projed_core.claim_meeting_llm_unit_v1(target_run uuid,proposed_token uuid,unit jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,projed_core AS $$
-DECLARE run projed_core.meeting_analysis_runs;budget projed_core.meeting_ai_budget_months;usage projed_core.meeting_ai_usage_attempts;
+DECLARE run projed_core.meeting_analysis_runs;budget record;usage record;
   checkpoint projed_core.meeting_llm_unit_checkpoints;source projed_core.meeting_transcript_segments;
   stage_value text;unit_key_value text;input_hash_value text;wire text;input jsonb;body jsonb;manifest jsonb;expected jsonb;
   month_value date;amount bigint;attempt_value integer;attempt_key text;identity_value text;expires timestamptz;query_bytes integer:=0;
@@ -344,7 +346,9 @@ BEGIN
       OR octet_length(body->>'prompt') NOT BETWEEN 1 AND 131072)
     THEN RAISE EXCEPTION 'MEETING_LLM_INPUT_INVALID' USING ERRCODE='42501'; END IF;
     IF run.state='running' AND run.lease_token=proposed_token AND run.lease_expires_at>clock_timestamp() THEN
-      SELECT * INTO usage FROM projed_core.meeting_ai_usage_attempts WHERE run_id=run.id AND llm_operation_token=proposed_token
+      SELECT attempt_id,capture_id,run_id,unit_identity,dispatch_month,provider,model,price_version,
+      reserved_twd_micros,actual_twd_micros,usage_state,outcome,created_at,dispatch_state,asr_remaining_twd_micros,
+      asr_operation_token,asr_manifest,llm_operation_token,llm_manifest INTO usage FROM projed_core.meeting_ai_usage_attempts WHERE run_id=run.id AND llm_operation_token=proposed_token
         AND usage_state='reserved' AND llm_manifest->>'inputHash'=input_hash_value AND llm_manifest->>'stage'=stage_value
         AND llm_manifest->>'unitKey'=unit_key_value;
       IF FOUND AND EXISTS(SELECT 1 FROM projed_core.meeting_llm_unit_checkpoints WHERE run_id=run.id AND stage=stage_value
@@ -369,7 +373,8 @@ BEGIN
         amount:=CASE WHEN stage_value='retrieve' THEN 30000 ELSE 111000000 END;
         PERFORM set_config('projed.llm_verified_token',proposed_token::text,true),set_config('projed.llm_month',month_value::text,true);
         INSERT INTO projed_core.meeting_ai_budget_months(budget_month) VALUES(month_value) ON CONFLICT(budget_month) DO NOTHING;
-        SELECT * INTO STRICT budget FROM projed_core.meeting_ai_budget_months WHERE budget_month=month_value FOR UPDATE;
+        SELECT budget_month,limit_twd_micros,reserved_twd_micros,spent_twd_micros
+          INTO STRICT budget FROM projed_core.meeting_ai_budget_months WHERE budget_month=month_value FOR UPDATE;
         IF budget.reserved_twd_micros<0 OR budget.spent_twd_micros<0 OR budget.limit_twd_micros<0
         THEN RAISE EXCEPTION 'MEETING_LLM_BUDGET_INVALID' USING ERRCODE='42501'; END IF;
         IF budget.reserved_twd_micros::numeric+budget.spent_twd_micros::numeric+amount>least(budget.limit_twd_micros,1000000000) THEN
@@ -429,7 +434,7 @@ $$;
 
 CREATE FUNCTION projed_core.mark_meeting_llm_dispatch_v1(target_run uuid,token uuid,input_hash_value text,read_only boolean DEFAULT false)
 RETURNS boolean LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,projed_core AS $$
-DECLARE run projed_core.meeting_analysis_runs;usage projed_core.meeting_ai_usage_attempts;result boolean:=false;prior jsonb;key_name text;
+DECLARE run projed_core.meeting_analysis_runs;usage record;result boolean:=false;prior jsonb;key_name text;
   keys text[]:=ARRAY['projed.llm_phase','projed.llm_run_id','projed.llm_token','projed.llm_verified_token','projed.llm_expected_usage'];
 BEGIN
   IF target_run IS NULL OR token IS NULL OR input_hash_value IS NULL OR input_hash_value !~ '^[a-f0-9]{64}$' OR read_only IS NULL THEN RETURN false;END IF;
@@ -439,7 +444,9 @@ BEGIN
     set_config('projed.llm_token',token::text,true),set_config('projed.llm_verified_token','',true);
   SELECT * INTO run FROM projed_core.meeting_analysis_runs WHERE id=target_run;
   IF FOUND AND projed_core.meeting_llm_live_v1(run.id) AND run.state='running' AND run.lease_token=token AND run.lease_expires_at>clock_timestamp() THEN
-    SELECT * INTO usage FROM projed_core.meeting_ai_usage_attempts WHERE run_id=target_run AND llm_operation_token=token;
+    SELECT attempt_id,capture_id,run_id,unit_identity,dispatch_month,provider,model,price_version,
+      reserved_twd_micros,actual_twd_micros,usage_state,outcome,created_at,dispatch_state,asr_remaining_twd_micros,
+      asr_operation_token,asr_manifest,llm_operation_token,llm_manifest INTO usage FROM projed_core.meeting_ai_usage_attempts WHERE run_id=target_run AND llm_operation_token=token;
     IF FOUND AND usage.usage_state='reserved' AND usage.llm_manifest->>'inputHash'=input_hash_value
       AND usage.dispatch_month=date_trunc('month',now() AT TIME ZONE 'Asia/Taipei')::date THEN
       PERFORM set_config('projed.llm_verified_token',token::text,true);
@@ -499,7 +506,7 @@ $$;
 
 CREATE FUNCTION projed_core.settle_meeting_llm_unit_v1(target_run uuid,token uuid,payload jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,projed_core AS $$
-DECLARE usage projed_core.meeting_ai_usage_attempts;run projed_core.meeting_analysis_runs;budget projed_core.meeting_ai_budget_months;
+DECLARE usage record;run projed_core.meeting_analysis_runs;budget record;
   checkpoint projed_core.meeting_llm_unit_checkpoints;kind_value text;code_value text;wire text;result_hash text;request_hash text;
   charge bigint;released bigint;receipt jsonb;expected jsonb;published boolean:=false;can_publish boolean:=false;actor_live boolean:=false;
   next_state text;next_error text;next_time timestamptz;next_actual bigint;checkpoint_id uuid;result jsonb;
@@ -523,7 +530,9 @@ BEGIN
   PERFORM pg_advisory_xact_lock(hashtextextended('projed:runtime-transaction:v1',0));
   PERFORM set_config('projed.llm_phase','settle',true),set_config('projed.llm_run_id',target_run::text,true),
     set_config('projed.llm_token',token::text,true),set_config('projed.llm_verified_token','',true);
-  SELECT * INTO usage FROM projed_core.meeting_ai_usage_attempts WHERE run_id=target_run AND llm_operation_token=token FOR UPDATE;
+  SELECT attempt_id,capture_id,run_id,unit_identity,dispatch_month,provider,model,price_version,
+      reserved_twd_micros,actual_twd_micros,usage_state,outcome,created_at,dispatch_state,asr_remaining_twd_micros,
+      asr_operation_token,asr_manifest,llm_operation_token,llm_manifest INTO usage FROM projed_core.meeting_ai_usage_attempts WHERE run_id=target_run AND llm_operation_token=token FOR UPDATE;
   IF FOUND THEN
     PERFORM set_config('projed.llm_verified_token',token::text,true),set_config('projed.llm_month',usage.dispatch_month::text,true);
     IF usage.usage_state IN('known','unknown') THEN
@@ -585,7 +594,8 @@ BEGIN
         'resultHash',result_hash,'costBasis','budget_estimate_not_invoice','usage',payload->'usage',
         'modelVersion',payload->>'modelVersion','responseId',payload->>'responseId');
       PERFORM set_config('projed.llm_receipt',receipt::text,true);
-      SELECT * INTO STRICT budget FROM projed_core.meeting_ai_budget_months WHERE budget_month=usage.dispatch_month FOR UPDATE;
+      SELECT budget_month,limit_twd_micros,reserved_twd_micros,spent_twd_micros
+          INTO STRICT budget FROM projed_core.meeting_ai_budget_months WHERE budget_month=usage.dispatch_month FOR UPDATE;
       released:=CASE WHEN kind_value='usage_unknown' THEN 0 ELSE usage.reserved_twd_micros END;
       IF budget.reserved_twd_micros<released OR budget.spent_twd_micros<0
       THEN RAISE EXCEPTION 'MEETING_LLM_BUDGET_INVALID' USING ERRCODE='42501';END IF;
@@ -653,14 +663,16 @@ $$;
 
 CREATE FUNCTION projed_core.recover_meeting_llm_unit_v1(target_run uuid,token uuid,read_only boolean DEFAULT false)
 RETURNS jsonb LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,projed_core AS $$
-DECLARE prior jsonb;key_name text;usage projed_core.meeting_ai_usage_attempts;run projed_core.meeting_analysis_runs;kind_value text;receipt jsonb;
+DECLARE prior jsonb;key_name text;usage record;run projed_core.meeting_analysis_runs;kind_value text;receipt jsonb;
   keys text[]:=ARRAY['projed.llm_phase','projed.llm_run_id','projed.llm_token'];
 BEGIN
   IF target_run IS NULL OR token IS NULL OR read_only IS NULL THEN RETURN NULL;END IF;
   SELECT jsonb_object_agg(settings.key_name,current_setting(settings.key_name,true)) INTO prior FROM unnest(keys) settings(key_name);
   PERFORM pg_advisory_xact_lock(hashtextextended('projed:runtime-transaction:v1',0));
   PERFORM set_config('projed.llm_phase','read',true),set_config('projed.llm_run_id',target_run::text,true),set_config('projed.llm_token',token::text,true);
-  SELECT * INTO usage FROM projed_core.meeting_ai_usage_attempts WHERE run_id=target_run AND llm_operation_token=token;
+  SELECT attempt_id,capture_id,run_id,unit_identity,dispatch_month,provider,model,price_version,
+      reserved_twd_micros,actual_twd_micros,usage_state,outcome,created_at,dispatch_state,asr_remaining_twd_micros,
+      asr_operation_token,asr_manifest,llm_operation_token,llm_manifest INTO usage FROM projed_core.meeting_ai_usage_attempts WHERE run_id=target_run AND llm_operation_token=token;
   IF FOUND AND usage.usage_state IN('known','unknown') THEN receipt:=usage.llm_manifest->'settlement';
   ELSIF FOUND AND NOT read_only AND usage.usage_state='reserved' THEN
     SELECT * INTO run FROM projed_core.meeting_analysis_runs WHERE id=target_run;
