@@ -2012,7 +2012,9 @@ export async function verifyMeetingUploadPostgres(
           }
           await admin.query('DELETE FROM projed_core.meeting_asr_unit_results WHERE capture_id=ANY($1::uuid[])', [ownCaptures]);
           await admin.query('DELETE FROM projed_core.meeting_ai_usage_attempts WHERE capture_id=ANY($1::uuid[])', [ownCaptures]);
-          await admin.query('DELETE FROM projed_core.meeting_analysis_runs WHERE capture_id=ANY($1::uuid[])', [ownCaptures]);
+          // Workspace deletion below atomically cascades the owned capture,
+          // transcript and run. A standalone run delete must retain its FK
+          // rejection once a real discussion draft references that producer.
         }
       } catch (error) {
         cleanupErrors.push(error);

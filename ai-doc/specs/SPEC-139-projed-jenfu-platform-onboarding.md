@@ -1363,6 +1363,8 @@ Focused review 另修正新service的預設路由說明、OCI失敗診斷也遮�
 
 Source `4b9e9b76d22e9da39a9f6f068dc647d105d1d0f5` 的 [CI40899598294](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40899598294)整體FAIL：domain upload helper的新Session撤銷案例在cleanup嘗試還原已提交的撤銷，觸發既有`app_session_revoke_v1`不可逆保護（23514）。此為fixture錯誤，不削弱guard；改在同一admin fixture交易中以真runtime role與已驗有效scope先驗not_committed，再撤銷並驗append拒絕，最後rollback整個交易，不反轉已提交Session。成功factory append與後段案例在首輪仍未執行，不列PASS。獨立原lockfile型別／509unit／三boundary／compiled artifact、PG17.11 snapshot60及OCI18／39 migrations通過；artifacts `12909735538`（migration/20261029T151937Z-2a39a0ec）與 `12908487226`（dev139-oci-64878bb795339f876e82f4f1）已讀回。僅修native harness，0039 SQL與正式Session語意不變，完整修復source續跑同一既有CI。
 
+Source `f6a317482f29458b667ce8b739860d010057fdf4` 的 [CI40901292375](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40901292375)仍整體FAIL，與前輪撤銷fixture失敗獨立：新claim／拒絕／真repository append與readback／草稿inactive斷言已走完，舊cleanup卻先單獨刪除producer run，觸發transcript外鍵23503。保留此FK，刪除多餘的單獨run DELETE，改沿既有workspace原子cascade清理capture／transcript／run；未放寬RLS、取消或資料完整性。獨立509 unit／原lockfile型別／三boundary／compiled artifact、snapshot60與OCI18／39 migrations仍PASS。Artifacts `12909603251`（migration/20261029T152944Z-cfdbabfb）及`12909612701`（dev139-oci-10a121fe32b8f3bb0aec64c1）已讀回；metadata為fixture，cloud IAM／真ASR／release NOT_RUN。整組domain驗證仍未PASS，修正同一native helper後續跑，不把功能斷言已走完當整體通過。
+
 ### 現行 ASR host 與回收候選（0038）
 
 `meetingAsrJob.ts` 使用 managed main 的 runtime IAM／Unix socket 與既有 Session resolver，不開 HTTP port、不借 migrator／importer、不複製使用者 cookie。每次掃描最多20筆 metadata、派送最多4個 unit，整次有10分鐘期限；每 unit 在150秒 lease結束前10秒中斷storage／decoder／provider I/O，留下獨立帳務結算時間。掃描順序每分鐘輪轉，暫時不可用的前頁不永久遮住其他工作。程序停止後不領新 unit，已送出結果照原 token 結算，未知 COMMIT 不在同程序重領／重送。
