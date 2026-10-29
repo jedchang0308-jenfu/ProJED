@@ -808,4 +808,3 @@ function textContent(node: unknown): string {
   };
   return visit(node);
 }
-
