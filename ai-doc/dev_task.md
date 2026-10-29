@@ -363,7 +363,7 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 ## 總任務清單
 
 - → DEV-139 [交付點] [整合／正式發布續行中／未Release] [P1] [W30] ProJED 首階段基礎對齊，保留 Vite
-  - W30：complete-upload 核對真 verified segment、來源凍結與單次 run／pending 預留採原子交易；重播不重留款，不足回 awaiting_budget，未啟用 worker／HTTP 錄音或 provider。原生／snapshot 驗證續行，見 SPEC-139 §44。
+  - W30：complete-upload 核對真 verified segment、來源凍結與單次 run／pending 預留採原子交易；重播不重留款，不足回 awaiting_budget，未啟用 worker／HTTP 錄音或 provider。source fed1f9e／CI 40818685810 已通過325項 unit、32-migration／S3 70 checks、snapshot60／45；收據見 SPEC-139 §44，完整管線／正式整合仍續行。
   - W29：錄音 caller 凍結原 scope 與每段 bytes，outbox 綁 owner／record／capture／sourceVersion，舊列保留不猜配；HTTP 錄音仍停用，完整分析／清理／正式整合續行。source 82dc77a／CI 40815746209 已通過319項 unit、31-migration native 與 snapshot；受測收據見 SPEC-139 §43，真身分／正式移轉／切流未完成。
   - 摘要：保留原工作區／看板／權限及個人／外部協作，Cloud Run／Cloud SQL／身分對齊；原網址／PWA相容，不丟資料／重建帳號／強迫重裝，費用不大幅增加。
   - 下一步：本 repo 已補 v4 exchange／current-state verifier、Google subject→原 UUID 的移轉 projection／唯讀 resolver 與 Cookie 元件，source／限制見 SPEC §13.1；先完成本版 0018／移轉的 native PostgreSQL 驗證，再接持久 Session、nonce／主／Quick callback、guard 初始化及正常入口。OrgMaster／Platform PR187／157 的 source 不等於正式 Firebase／OIDC；其餘資料、Hosting／PWA、全來源 writer fence、雲端 readback、切流及正式發布仍需完成。新 runtime／release IAM、Secret、shared foundation grant 與費用責任仍見 SPEC §33。
