@@ -1,7 +1,7 @@
 # SPEC-139：ProJED 納入 Jenfu-Platform 的產品與技術交接契約
 
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。
-- 日期：2026-10-30（Asia/Taipei）；版本：Rev 77（階段編排／免模型分支／背景與發布通過隔離驗證；零留存資格及正式交付續行）。
+- 日期：2026-10-31（Asia/Taipei）；版本：Rev 78（音訊到期清理與unknown generation保護候選；零留存資格及正式交付續行）。
 - 文件狀態：**整合與發布續行中；W22 OrgMaster publisher 與 W23 Platform Session／handoff source 均有 draft PR／required CI PASS，隔離驗證 PASS；Production Resolver Disabled；未 Release**。Firebase／OIDC 真身分與完整 Session 部署、RAG／文字會議真 provider 資格、錄音管線與剩餘資料處置、雲端 readback、舊入口、writer fence、切流及正式發布仍計入完成分母。W22 owner source 見 [§36](#36-orgmaster-minimum-principal-publication-w222026-10-29)，W23 Platform source 與驗證邊界見 [§37](#37-platform-projed-session-and-handoff-w232026-10-29)；W21 承接六類文件／同步資料與精度保護見 [§35](#35-document-source-retention-w212026-10-28)；W20 資料保留見 §34，具體資源與待確認的新權限仍見 §33。本輪未寫正式資料、切流或變更 IAM／Secret／credential／billing。
 - 適用階段：S1–S3 本地切片歷史見 §12–§32；2026-10-28 續行授權見 [DEV-139 人類決策與授權範圍](../dev_task.md#1-人類決策與授權範圍)，涵蓋 ProJED／OrgMaster／Jenfu-Platform 的 source 整合工作。正式整合與發布仍是完整目標，不以本地切片完成替代；新責任權限依 §33 處理。定期審視不是續行或發布的 required gate；本輪未執行正式資料寫入、切流或 IAM／Secret／credential／billing 變更。
 - 直接交接入口：[§11 S1 定案契約](#11-架構決策與-s1-定案契約)、[§12 S1 實作狀態](#12-s1-實作狀態2026-10-26)、[§13 S2 consumer seam](#13-s2-projed-identity-consumer-seam2026-10-26)、[§14 S3 read adapter](#14-s3-http-read-adapter-slice2026-10-26)、[§15 S3 domain command](#15-s3-domain-command-w12026-10-26)、[§16 S3 collaboration command](#16-s3-collaboration-command-w22026-10-27)、[§17 S3 record／activity](#17-s3-recordactivity-w32026-10-27)、[§18 S3 HTTP product wiring](#18-s3-http-product-wiring-w42026-10-27)、[§19 S3 Board transfer](#19-s3-board-transfer-w52026-10-27)、[§20 S3 legacy provider boundary](#20-s3-legacy-provider-boundary-w62026-10-27)、[§21 S3 Quick Task](#21-s3-quick-task-w72026-10-27)、[§22 S3 Task Workbench](#22-s3-task-workbench-w82026-10-27)、[§23 S3 Actor CAS](#23-s3-actor-context-cas-w92026-10-27)、[§24 S3 Task Tracking](#24-s3-task-tracking-w102026-10-27)、[§25 S3 Backup／Import](#25-s3-backupimport-w112026-10-27)、[§26 S3 Account Preferences](#26-s3-account-preferences-w122026-10-27)、[§27 S3 Calendar Subscription](#27-s3-calendar-subscription-w132026-10-27)及[§32 本地開發收斂](#32-s3-local-development-closure-w182026-10-27)；[§11.8 技術主管審查](#118-技術主管審查與最小優化)保留 Rev5 修正理由；既有使用者切換見 [§6.3](#63-既有使用者的切換基線)。
@@ -1354,6 +1354,18 @@ Focused review 另修正新service的預設路由說明、OCI失敗診斷也遮�
 目標DB已有run queue／source version／lease／usage／cleanup與transcript表，但0001–0033尚未授ASR worker claim／dispatch／settle／transcript INSERT，HTTP錄音caller亦未接齊。沿原run與nonce／token責任補forward-only0034及後續worker migration／接線，不另建通用queue。先完成安全source／合成媒體測試，再由真provider、普通使用入口與資料／費用／取消／清理讀回證據驗收；本節與W35的369 unit／15 OCI均不代表ASR完成。
 
 ## 51. Owner foundation qualification and ASR components（W36–W37，2026-10-29）
+
+### 音訊清理接線（0042／Rev78，2026-10-31候選）
+
+沿既有`meeting_artifact_cleanup`及15分鐘recovery Job補上GCS purge，不新增queue或required gate。`0042`只開metadata scan、150秒lease claim與exact-token finish；沒有原Session也可處理自己的到期義務，但不能讀record正文／transcript／LLM checkpoint。RPC短期purpose只讀capture生命週期，排除created／recording／paused及未到期audio／upload期限。Capture刪除前保存stop／cancel／delete適用七天錨點至原due，FK SET NULL後仍保留義務。既有已detached的GCS義務無法還原完整生命週期，migration保守延長七天；歷史NULL或Supabase backend不自動指派GCS。這不是對正式物件執行刪除。
+
+Storage增加有界、可指定generation的metadata probe；只有404可證該generation不存在，403／5xx／timeout不能當missing。Known generation不碰replacement；unknown upload只有actual bytes、SHA、size及同generation均符合原proof才可刪該generation。沒有upload token的明確未送出與已有token但missing分開；後者仍unknown，不假報quiescent。每unit最多一次generation-fenced DELETE，結果未知先probe exact generation，不盲重送；只有明確missing才結清deleted。未完成hash驗證的generation一律不保存成upload proof，SQL亦禁止unknown／conflict升級generation，防止後續Job誤刪。Metadata finish獨立於caller abort，仍須未過lease及原token。
+
+清理host在既有analysis Job內先跑一次，最多20個scan／4個unit，與後續ASR／discussion／LLM共用600秒截止與150秒headroom。Storage qualification缺失時不claim；不把使用者重新登入當作purge前提。Failure／unknown留15分鐘backoff，其他獨立義務繼續；logs只含aggregate數量及固定錯誤碼。真正GCS bucket的soft-delete／versioning及精確權限仍須資格化，不能用一般GET404推定實體物件已永久移除。
+
+本機S2 494項PASS（含generation信任提升修正）、S2／S3 strict同版本PG宣告overlay、affected lint與兩份42-migration static profile PASS。新增native cases沿isolated資料與synthetic storage驗時限、lease／stale token、actor拒絕、unknown不升級、錯hash／replacement不刪、parent-delete錨點及private-body拒絕；實際native／OCI結果待本版CI。先前完整41份基線仍為下節`f69b73c...`；不以unit／static成功宣稱42份已資格化。
+
+本次gcloud唯讀已恢復，無須沿用先前重新登入阻塞。精確project `projed-cc78d` 目前Run／Storage／Artifact Registry／Secret Manager API已啟用，Compute／SQL Admin／Speech／Vertex AI／Scheduler未啟用。asia-east1只有既有`projed-ai-backend`，沒有Job；專案bucket清單僅`run-sources-projed-cc78d-asia-east1`，不是音訊桶，且有七天soft delete。本輪未查runtime env，不能據此排除跨project bucket；沒有以它或fixture冒充合格audio bucket。Cloud LLM cache／abuse／logging與真provider品質仍UNKNOWN，三份binding仍未發布。後續需具名audio bucket、API／IAM／network及owner foundation執行包的明確授權；目前只讀盤點，沒有變更資源、正式資料或traffic。
 
 ### 階段編排與原子發布（0041／Rev75–77，2026-10-30已通過隔離驗證）
 

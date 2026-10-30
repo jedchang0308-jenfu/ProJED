@@ -40,6 +40,13 @@ export interface MeetingAudioStorage {
   delete(key: string, generation: string, signal?: AbortSignal): Promise<void>;
 }
 
+export interface MeetingAudioCleanupStorage extends Pick<MeetingAudioStorage, 'read' | 'delete'> {
+  probe(key: string, generation?: string, signal?: AbortSignal): Promise<
+    | { kind: 'missing' }
+    | { kind: 'present'; generation: string; size: number; contentType: string }
+  >;
+}
+
 export interface GcsMeetingAudioStorageOptions {
   bucket: string;
   getAccessToken: () => Promise<string>;
@@ -227,7 +234,9 @@ function requestInit(token: string, signal?: AbortSignal, extraHeaders?: Record<
   };
 }
 
-export function createGcsMeetingAudioStorage(options: GcsMeetingAudioStorageOptions): MeetingAudioStorage {
+export function createGcsMeetingAudioStorage(
+  options: GcsMeetingAudioStorageOptions,
+): MeetingAudioStorage & MeetingAudioCleanupStorage {
   const bucket = validateBucket(options.bucket);
   if (typeof options.getAccessToken !== 'function') throw configError();
   const fetcher = options.fetchImpl ?? fetch;
@@ -346,6 +355,40 @@ export function createGcsMeetingAudioStorage(options: GcsMeetingAudioStorageOpti
         contentType: metadata.contentType,
         generation: metadata.generation,
         size: metadata.size,
+      };
+    },
+
+    async probe(key, generation, signal) {
+      assertKey(key);
+      checkAbort(signal);
+      const exactGeneration = generation === undefined ? undefined : parseGeneration(generation);
+      const token = await accessToken(signal);
+      checkAbort(signal);
+      const url = objectUrl(bucket, key);
+      if (exactGeneration !== undefined) url.searchParams.set('generation', exactGeneration);
+      const response = await performFetch(url, requestInit(token, signal));
+      if (response.status === 404) {
+        await cancelBody(response);
+        return { kind: 'missing' };
+      }
+      if (!response.ok) {
+        await cancelBody(response);
+        throw storageError('Meeting audio metadata is unavailable');
+      }
+
+      const value = await readJsonBody(response);
+      if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        throw storageError('Meeting audio metadata is unavailable');
+      }
+      const record = value as Record<string, unknown>;
+      if (record.bucket !== bucket) throw storageError('Meeting audio metadata is unavailable');
+      const metadata = parseMetadata(record, key);
+      if (exactGeneration !== undefined && metadata.generation !== exactGeneration) throw conflictError();
+      return {
+        kind: 'present',
+        generation: metadata.generation,
+        size: metadata.size,
+        contentType: metadata.contentType,
       };
     },
 

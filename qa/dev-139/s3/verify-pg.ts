@@ -45,6 +45,7 @@ import {verifyMeetingSynthesisPostgres} from './verify-meeting-synthesis-pg.js';
 import { verifyActorSerializationPostgres } from './verify-actor-serialization-pg.js';
 import { verifyMeetingCapturePostgres } from './verify-meeting-capture-pg.js';
 import { verifyMeetingAudioPostgres } from './verify-meeting-audio-pg.js';
+import { verifyMeetingAudioCleanupPostgres } from './verify-meeting-audio-cleanup-pg.js';
 import { verifyMeetingUploadPostgres } from './verify-meeting-upload-pg.js';
 import { verifyMeetingReviewPostgres } from './verify-meeting-review-pg.js';
 import { createPreferencesHttpDispatcher } from '../../../server/preferencesHttp.js';
@@ -139,6 +140,7 @@ await runIndependent('actor-serialization',()=>verifyActorSerializationPostgres(
 await verifyMeetingSynthesisPostgres(database,config,actorB,actorA,actorD);
 await runIndependent('meeting-capture',()=>verifyMeetingCapturePostgres(database,config,actorB,actorA,actorD));
 await runIndependent('meeting-audio',()=>verifyMeetingAudioPostgres(database,config,actorB,actorA,actorD));
+await runIndependent('meeting-audio-cleanup',()=>verifyMeetingAudioCleanupPostgres(database,config,actorB,actorD));
 await runIndependent('meeting-upload',()=>verifyMeetingUploadPostgres(database,config,actorB,actorA,actorD));
 await runIndependent('meeting-review',()=>verifyMeetingReviewPostgres(database,config,actorB,actorA,actorD));
 const aWorkspaces = await runActorTransaction(database, config, actorA, port => repository.listWorkspaces(port));
@@ -1757,6 +1759,7 @@ console.log(JSON.stringify({
     'actor-transaction-cross-account-serialization-native-advisory-wait',
     'meeting-capture-http-source-clock-pointer-private-cancel-atomic-refund-and-cleanup',
     'meeting-audio-private-proxy-generation-readback-cancel-parent-delete-and-cleanup-proof',
+    'meeting-audio-cleanup-retention-lease-generation-and-no-private-content',
     'meeting-upload-source-freeze-once-reservation-budget-private-replay-and-atomic-rollback',
     'meeting-human-review-source-version-cas-private-decisions-projection-and-atomic-rollback',
     'workspace-board-scope', 'tenant-member-scope', 'board-member-scope',

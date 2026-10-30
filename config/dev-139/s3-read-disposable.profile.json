@@ -186,6 +186,10 @@
     {
       "version": "0041_meeting_analysis_publication_v1",
       "path": "db/migrations/0041_meeting_analysis_publication_v1.sql"
+    },
+    {
+      "version": "0042_meeting_audio_cleanup_v1",
+      "path": "db/migrations/0042_meeting_audio_cleanup_v1.sql"
     }
   ],
   "objectAllowlist": [
@@ -366,7 +370,13 @@
     "projed_core.finish_meeting_llm_work_v1",
     "projed_core.meeting_analysis_write_guard_v1",
     "projed_core.commit_meeting_local_match_v1",
-    "projed_core.publish_meeting_analysis_v1"
+    "projed_core.publish_meeting_analysis_v1",
+    "projed_core.meeting_audio_cleanup_due_v1",
+    "projed_core.meeting_audio_cleanup_guard_v1",
+    "projed_core.meeting_audio_cleanup_detach_v1",
+    "projed_core.scan_meeting_audio_cleanup_v1",
+    "projed_core.claim_meeting_audio_cleanup_v1",
+    "projed_core.finish_meeting_audio_cleanup_v1"
   ],
   "staticFixturePath": "qa/dev-139/s1/static",
   "runtime": {
