@@ -17,6 +17,7 @@ const CURRENT_TRANSCRIPT=`run.source_version=capture.source_version
   AND transcript.transcript_revision_id=capture.active_transcript_revision_id`;
 function missing():never {throw new KernelError('RESOURCE_NOT_FOUND','Meeting review is unavailable',404);}
 function conflict():never {throw new KernelError('REVISION_CONFLICT','Meeting source, review or draft changed',409);}
+function invalidSummary():never {throw new KernelError('DB_BOUNDARY_INVALID','Published meeting summary is invalid',503);}
 function safeCounter(value:unknown):number {
   if((typeof value!=='string'&&typeof value!=='number')||!/^\d+$/u.test(String(value)))conflict();
   const result=Number(value);if(!Number.isSafeInteger(result)||result<0)conflict();return result;
@@ -91,6 +92,24 @@ export class MeetingReviewRepository {
     const audio=await port.query<{id:string;start_offset_ms:string;end_offset_ms:string}>(`SELECT id::text,
       start_offset_ms::text,end_offset_ms::text FROM projed_core.meeting_capture_segments
       WHERE capture_id=$1::uuid AND source_version=$2 AND upload_state='verified' ORDER BY segment_index,id`,[capture.id,capture.source_version]);
+    const published=await port.query<{summary_type:string|null;summary:string|null}>(`SELECT
+      jsonb_typeof(checkpoint.payload_text::jsonb->'summary') AS summary_type,checkpoint.payload_text::jsonb->>'summary' AS summary
+      FROM projed_core.meeting_llm_unit_checkpoints checkpoint
+      JOIN projed_core.meeting_analysis_runs run ON run.id=checkpoint.run_id AND run.capture_id=checkpoint.capture_id
+        AND run.source_version=checkpoint.source_version AND run.transcript_revision_id=checkpoint.transcript_revision_id
+      WHERE checkpoint.capture_id=$1::uuid AND checkpoint.source_version=$2 AND checkpoint.transcript_revision_id=$3::uuid
+        AND checkpoint.stage='compose' AND checkpoint.unit_key='final' AND checkpoint.slot='result'
+        AND checkpoint.attempt_id=('publication:'||run.id::text) AND run.state='ready'
+      ORDER BY run.updated_at DESC,checkpoint.created_at DESC,checkpoint.id DESC LIMIT 1`,
+    [capture.id,capture.source_version,capture.active_transcript_revision_id]);
+    const publishedRow=published.rows[0];let summary:string|null=null;
+    if(published.rows.length>1)invalidSummary();
+    if(publishedRow){
+      if(publishedRow.summary_type==='null'&&publishedRow.summary===null)summary=null;
+      else if(publishedRow.summary_type==='string'&&typeof publishedRow.summary==='string'
+        &&Array.from(publishedRow.summary).length<=2000)summary=publishedRow.summary;
+      else invalidSummary();
+    }
     const taskRows=matches.rows.length?await port.query<{id:string;parent_id:string|null;title:string}>(`
       SELECT id::text,parent_id::text,title FROM projed_core.wbs_items
       WHERE tenant_id=$1::uuid AND project_id=$2::uuid`,[capture.tenant_id,capture.project_id]):{rows:[]};
@@ -105,7 +124,7 @@ export class MeetingReviewRepository {
       return path.join('/');
     };
     const byTranscript=new Map(resolutions.rows.map(row=>[row.transcript_segment_id,row]));
-    return {captureId:capture.id,recordId:capture.record_id,state:capture.state,sourceVersion:capture.source_version,
+    return {captureId:capture.id,recordId:capture.record_id,state:capture.state,sourceVersion:capture.source_version,summary,
       recordUpdatedAt:capture.record_updated_at,reviewRevision:safeCounter(capture.review_revision),
       segments:transcript.rows.map(segment=>{
         const resolution=byTranscript.get(segment.id);

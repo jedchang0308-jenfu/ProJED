@@ -1,7 +1,7 @@
 # SPEC-139：ProJED 納入 Jenfu-Platform 的產品與技術交接契約
 
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。
-- 日期：2026-10-30（Asia/Taipei）；版本：Rev 74（LLM unit私有checkpoint／獨立預留結算候選；完整pipeline及正式交付續行）。
+- 日期：2026-10-30（Asia/Taipei）；版本：Rev 75（階段選擇／免模型分支／背景host與原子發布候選；真provider與正式交付續行）。
 - 文件狀態：**整合與發布續行中；W22 OrgMaster publisher 與 W23 Platform Session／handoff source 均有 draft PR／required CI PASS，隔離驗證 PASS；Production Resolver Disabled；未 Release**。Firebase／OIDC 真身分與完整 Session 部署、RAG／文字會議真 provider 資格、錄音管線與剩餘資料處置、雲端 readback、舊入口、writer fence、切流及正式發布仍計入完成分母。W22 owner source 見 [§36](#36-orgmaster-minimum-principal-publication-w222026-10-29)，W23 Platform source 與驗證邊界見 [§37](#37-platform-projed-session-and-handoff-w232026-10-29)；W21 承接六類文件／同步資料與精度保護見 [§35](#35-document-source-retention-w212026-10-28)；W20 資料保留見 §34，具體資源與待確認的新權限仍見 §33。本輪未寫正式資料、切流或變更 IAM／Secret／credential／billing。
 - 適用階段：S1–S3 本地切片歷史見 §12–§32；2026-10-28 續行授權見 [DEV-139 人類決策與授權範圍](../dev_task.md#1-人類決策與授權範圍)，涵蓋 ProJED／OrgMaster／Jenfu-Platform 的 source 整合工作。正式整合與發布仍是完整目標，不以本地切片完成替代；新責任權限依 §33 處理。定期審視不是續行或發布的 required gate；本輪未執行正式資料寫入、切流或 IAM／Secret／credential／billing 變更。
 - 直接交接入口：[§11 S1 定案契約](#11-架構決策與-s1-定案契約)、[§12 S1 實作狀態](#12-s1-實作狀態2026-10-26)、[§13 S2 consumer seam](#13-s2-projed-identity-consumer-seam2026-10-26)、[§14 S3 read adapter](#14-s3-http-read-adapter-slice2026-10-26)、[§15 S3 domain command](#15-s3-domain-command-w12026-10-26)、[§16 S3 collaboration command](#16-s3-collaboration-command-w22026-10-27)、[§17 S3 record／activity](#17-s3-recordactivity-w32026-10-27)、[§18 S3 HTTP product wiring](#18-s3-http-product-wiring-w42026-10-27)、[§19 S3 Board transfer](#19-s3-board-transfer-w52026-10-27)、[§20 S3 legacy provider boundary](#20-s3-legacy-provider-boundary-w62026-10-27)、[§21 S3 Quick Task](#21-s3-quick-task-w72026-10-27)、[§22 S3 Task Workbench](#22-s3-task-workbench-w82026-10-27)、[§23 S3 Actor CAS](#23-s3-actor-context-cas-w92026-10-27)、[§24 S3 Task Tracking](#24-s3-task-tracking-w102026-10-27)、[§25 S3 Backup／Import](#25-s3-backupimport-w112026-10-27)、[§26 S3 Account Preferences](#26-s3-account-preferences-w122026-10-27)、[§27 S3 Calendar Subscription](#27-s3-calendar-subscription-w132026-10-27)及[§32 本地開發收斂](#32-s3-local-development-closure-w182026-10-27)；[§11.8 技術主管審查](#118-技術主管審查與最小優化)保留 Rev5 修正理由；既有使用者切換見 [§6.3](#63-既有使用者的切換基線)。
@@ -1355,7 +1355,23 @@ Focused review 另修正新service的預設路由說明、OCI失敗診斷也遮�
 
 ## 51. Owner foundation qualification and ASR components（W36–W37，2026-10-29）
 
-### 下游LLM unit持久化與費用隔離（0040，2026-10-30候選）
+### 階段編排與原子發布（0041／Rev75，2026-10-30候選）
+
+`meetingLlmPlan`在原Session的actor transaction讀取目前run／discussion、實際private input/result hash與live WBS。沒有有效current index就使用lexical／pointer，不為取得空結果而呼叫embedding；候選為空時只保存固定`{"matches":[]}`本機進度，不造provider dispatch、usage或費用。空來源直接完成空結果；單discussion沿用原文；多discussion依既有fanout8 plan逐節點compose。只有實際checkpoint可供重用，matching snapshot、當前prompt或compose childHash改變時不能拿舊結果宣稱完成。完成plan攜帶實際input/result hash proofs，並非以處理步數或記憶體輸出當ready。
+
+新增forward-only`0041_meeting_analysis_publication_v1`；0001–0040已資格化bytes保持原樣。本機進度與publisher各有窄INSERT/RPC範圍。Publisher與當前WBS重查放在同一actor/write transaction，核對原Session／來源、完整discussion及compose coverage、已存proofs與已知費用後，才原子寫入review、切active revision及run/capture ready。所有AI關聯維持suggested／needs_review，不依未校準分數自動接受；model relation保留於candidate snapshot。已有human-reviewed、clear-all或protected ranges的resolution完整保留；不更新record正文、標題、metadata或人工projection。
+
+最終摘要仍在FORCE RLS、append-only的private `compose/final` checkpoint，不放run cursor、scan或費用manifest。原Session以外的使用者只可依目前record既有權限讀取已發布、仍為active來源的摘要；其他unit input/result不因發布放寬。正常review回傳nullable summary，舊資料沒有摘要時為null，非法型別拒絕；既有review介面加唯讀摘要，不自動填寫或覆寫人工draft。
+
+查核同時修正手動會議合成的舊呼叫路徑：HTTP不再將meeting provider缺失轉給Developer API RAG provider；production僅以同一份已資格化Cloud LLM binding建立adapter，固定3.5 Flash且只有一次JSON generation。原預設3.5不可用時切3.1的行為已取消，避免切往未列入本次資格的模型；native原案例改驗單次失敗／不新增成功audit，正常owner／reader、取消、權限與品質案例保留。這是既有零留存要求的落實，非用縮小驗收範圍遮掩未完成。其他RAG功能沒有變更。
+
+`meetingLlmPipeline`在真正local／publish寫入交易內重跑planner；paid unit離開交易後才進既有單次worker。`meetingLlmHost`每輪最多20項metadata／4個private步驟，unknown SQL／COMMIT不在同輪重送；temporary identity／DB故障不當成撤銷。Managed Job正常CMD接ASR→discussion→LLM，後段沿整個Job的600秒截止保留150秒headroom，metadata recovery／deadline finish與付費資格分開。LLM資格獨立於Speech，`CURRENT_MEETING_LLM_BINDING`仍為null；未以env值或fixture宣稱實際零留存已成立。正式Job建立、事件觸發／恢復排程、音訊清理、真provider／Session與正常browser、cloud readback及切流發布仍須完成，不以source接線取代實際運作。
+
+上一版完整基線為`9be3187a523f37bf5c1109a79cd046d31902f628`的[CI40928475291](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40928475291)，兩jobs SUCCESS。原lockfile型別、unit／三boundary／compiled artifact、PG17.11 domain71／snapshot60、40份migration及OCI18 PASS。已讀回 artifacts `12921287871`（s3/20261029T181527Z-a7f80457、migration/20261029T181648Z-2b80d1fb）及`12920229850`（dev139-oci-28fdd3c5506550c894feedd0），owned cleanup PASS；provider metadata是FIXTURE_ONLY，正式IAM／Speech／Cloud SQL／Session／browser／release仍NOT_RUN。
+
+本Rev75新增planner／host、summary parser／caller回歸與41份migration的native publication案例；真DB fixture沿正常ASR／discussion建立，synthetic transport只提供有界回應。案例包含兩段retrieve→match→compose→publish、current WBS變更後只重做matching並重用獨立embedding／compose、零模型的空來源／單葉略過compose、無候選local不動ledger、缺proof／未知費用阻擋、取消後不發布、human clear-all／protected保留、summary RLS與record完全不變。完整本機S2 442項及S3 122項PASS，strict同版本PG宣告overlay／frontend檢查亦已過；新native／OCI結果仍待本版CI，不拿40份基線代替。本機曾因新增proofs欄位的舊empty oracle與pipeline union narrowing未同步而失敗，已在原案例修正；沒有改舊SQL或增加required gate。
+
+### 下游LLM unit持久化與費用隔離（0040，2026-10-30已通過隔離驗證）
 
 新增forward-only`0040_meeting_llm_units_v1`，原0001–0039 bytes不改。沿既有run的150秒lease與原main AppSession，為retrieve／match／compose保存FORCE RLS、runtime append-only的私有input／result checkpoint；run cursor及usage manifest只放stage／unit key／input hash／attempt／租約與數值帳務資訊。無actor的scan／readback／recovery不讀私人內容；run／usage policy以exact run/token metadata scope分開，不讓policy互查形成RLS遞迴。Checkpoint隨owned capture/run cascade，無FK的usage仍保留其原UUID及費用責任。
 
@@ -1375,7 +1391,7 @@ Focused review 另修正新service的預設路由說明、OCI失敗診斷也遮�
 
 另補`readMeetingTaskRagCoverage`：重用同一fresh document／完整chunks／目前task proof SQL，以NULL參數略過score，不造dummy vector、不呼叫provider或重建索引；僅回覆coverage，供後續selector在沒有有效index時直接走lexical／pointer。原positive-vector排序維持；unit7項與新native complete／incomplete coverage案例已補，native待CI。
 
-仍須接免provider的no-index／no-candidate／empty／single-leaf持久進度、當前來源的next-unit selector、結果讀取、bounded host及finalizer；不把既有core或單次driver算成完整分析。實際零留存／OrgMaster與Platform真Session、既有使用者及資料、完整foundation migration window、Cloud Run／SQL／Storage／Hosting／舊入口、writer fence／reconcile／恢復／切流與正式發布繼續計入DEV-139。
+0040當時尚缺的selector／免provider分支／bounded host／finalizer，已由上方Rev75候選接續，不把單次driver或未驗新候選算成完整分析。實際零留存／OrgMaster與Platform真Session、既有使用者及資料、完整foundation migration window、Cloud Run／SQL／Storage／Hosting／舊入口、writer fence／reconcile／恢復／切流與正式發布繼續計入DEV-139。
 
 ### Task-only retrieval、matching 與 bounded compose 核心（2026-10-30）
 

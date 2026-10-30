@@ -10,9 +10,7 @@ import {
 } from '../../services/httpApi/backend';
 import { HttpApiError } from '../../services/httpApi/httpApiClient';
 import type { MeetingAudioSegment as HttpMeetingAudioSegment } from '../../services/httpApi/meetingAudioAdapter';
-import type {
-  MeetingReviewSegment,
-} from './meetingAnalysisContract';
+import { readMeetingReviewSummary, type MeetingReviewResponse } from './meetingAnalysisContract';
 import {
   createMeetingRecordingService,
   type MeetingAudioReservation,
@@ -179,12 +177,13 @@ export const meetingAnalysisService = {
   cancel: (captureId: string, expectedSourceVersion: number, reason?: string) => invokeLegacyOrHttp<{
     captureId: string; state: string; sourceVersion: number;
   }>('cancel', { captureId, expectedSourceVersion, reason }),
-  review: (captureId: string) => invokeLegacyOrHttp<{
-    captureId: string;
-    state: string;
-    reviewRevision: number;
-    segments: MeetingReviewSegment[];
-  }>('review', { captureId }),
+  review: async (captureId: string): Promise<MeetingReviewResponse> => {
+    const response = await invokeLegacyOrHttp<unknown>('review', { captureId });
+    let summary: string | null;
+    try { summary = readMeetingReviewSummary(response); }
+    catch { invalidMeetingControlResponse(); }
+    return { ...(response as Record<string, unknown>), summary } as unknown as MeetingReviewResponse;
+  },
   decideMatch: (payload: {
     resolutionId: string;
     expectedResolutionRevision: number;

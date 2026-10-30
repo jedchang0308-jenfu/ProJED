@@ -67,6 +67,12 @@ assert.equal(typeof meetingLlmModule.createPostgresMeetingLlmRepository, 'functi
 assert.equal(typeof meetingLlmModule.prepareMeetingLlmUnit, 'function');
 const meetingLlmWorkerModule = await import('../dist-server/server/meetingLlmWorker.js');
 assert.equal(typeof meetingLlmWorkerModule.runMeetingLlmUnit, 'function');
+const meetingLlmPlanModule = await import('../dist-server/server/meetingLlmPlan.js');
+const meetingLlmPipelineModule = await import('../dist-server/server/meetingLlmPipeline.js');
+const meetingLlmHostModule = await import('../dist-server/server/meetingLlmHost.js');
+assert.equal(typeof meetingLlmPlanModule.createPostgresMeetingLlmPlanner, 'function');
+assert.equal(typeof meetingLlmPipelineModule.createPostgresMeetingLlmPipeline, 'function');
+assert.equal(typeof meetingLlmHostModule.runMeetingLlmHost, 'function');
 // Import the compiled snapshot driver without selecting a mode or connecting DB.
 const migrationModule = await import('../dist-jobs/scripts/dev139-data-migration.js');
 assert.equal(typeof migrationModule.findUnclassifiedSourceRelations, 'function');

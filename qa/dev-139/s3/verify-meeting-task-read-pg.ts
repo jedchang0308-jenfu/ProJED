@@ -64,7 +64,7 @@ async function inAdminTransaction<T>(admin:pg.Client,work:()=>Promise<T>):Promis
   }
 }
 
-async function insertTask(admin:pg.Client,tenantId:string,projectId:string,task:FixtureTask):Promise<void>{
+export async function insertTask(admin:pg.Client,tenantId:string,projectId:string,task:FixtureTask):Promise<void>{
   const inserted=await admin.query(`INSERT INTO projed_core.wbs_items
     (id,tenant_id,project_id,legacy_task_id,parent_id,title,description,detail_notes,status,sort_order,node_type,archived)
     VALUES($1::uuid,$2::uuid,$3::uuid,$4,$5::uuid,$6,$7,'[]'::jsonb,$8,$9::double precision,$10,$11)`
@@ -73,7 +73,7 @@ async function insertTask(admin:pg.Client,tenantId:string,projectId:string,task:
   assert.equal(inserted.rowCount,1,`synthetic task ${task.legacyId} is inserted once`);
 }
 
-async function seedCurrentDocument(admin:pg.Client,tenantId:string,projectId:string,
+export async function seedCurrentDocument(admin:pg.Client,tenantId:string,projectId:string,
   task:{readonly id:string;readonly title:string},source:MeetingTaskRagSource,score:number):Promise<RagFixtureRows>{
   const rows={documentId:randomUUID(),versionId:randomUUID(),chunkId:randomUUID(),embeddingId:randomUUID(),source};
   const document=await admin.query(`INSERT INTO projed_core.documents

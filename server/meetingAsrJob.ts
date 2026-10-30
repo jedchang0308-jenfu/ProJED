@@ -4,6 +4,7 @@ import {loadRuntimeConfig,sha256} from './config.js';
 import {RuntimeDatabase,type ExpectedMigration} from './db.js';
 import {KernelError} from './errors.js';
 import {CURRENT_PRODUCTION_IDENTITY_PINS} from './identityConsumer.js';
+import {createGoogleCloudMeetingProvider} from './googleCloudMeetingProvider.js';
 import {createGoogleCloudSpeechProvider} from './googleCloudSpeechProvider.js';
 import {createGcsMeetingAudioStorage} from './meetingAudioStorage.js';
 import {runMeetingAsrHost} from './meetingAsrHost.js';
@@ -13,6 +14,10 @@ import {runMeetingAsrUnit} from './meetingAsrWorker.js';
 import {runMeetingDiscussionHost} from './meetingDiscussionHost.js';
 import {createPostgresMeetingDiscussionControl,createPostgresMeetingDiscussionRepository} from './meetingDiscussionRepository.js';
 import {runMeetingDiscussionUnit} from './meetingDiscussionWorker.js';
+import {runMeetingLlmHost} from './meetingLlmHost.js';
+import {createPostgresMeetingLlmControl,createPostgresMeetingLlmPipeline} from './meetingLlmPipeline.js';
+import {createPostgresMeetingLlmRepository} from './meetingLlmRepository.js';
+import {CURRENT_MEETING_LLM_BINDING,hasQualifiedMeetingLlmBinding} from './meetingLlmRuntimeBinding.js';
 import {createRuntimeSessionAuth} from './runtimeSessionAuth.js';
 import {createServiceAccessTokenProvider} from './serviceAccessToken.js';
 import {awaitDatabaseStartup} from './startup.js';
@@ -21,6 +26,7 @@ import {awaitDatabaseStartup} from './startup.js';
 export function meetingAsrJobCheck(){
   return {event:'projed_meeting_asr_job_check',status:'CHECK_ONLY',
     providerDispatch:CURRENT_MEETING_ASR_BINDING===null?'DISABLED':'QUALIFICATION_BOUND',
+    llmDispatch:!hasQualifiedMeetingLlmBinding(CURRENT_MEETING_LLM_BINDING)||CURRENT_PRODUCTION_IDENTITY_PINS.length===0?'DISABLED':'QUALIFICATION_BOUND',
     sessionContract:CURRENT_PRODUCTION_IDENTITY_PINS.length===0?'UNPUBLISHED':'PINNED',
     runtime:'NOT_CONNECTED',provider:'NOT_RUN'} as const;
 }
@@ -28,6 +34,7 @@ export function meetingAsrJobCheck(){
 export async function meetingAsrJobMain(args:readonly string[]=process.argv.slice(2)):Promise<void>{
   if(args.length===1&&args[0]==='--check-only'){console.log(JSON.stringify(meetingAsrJobCheck()));return;}
   if(args.length!==0)throw new KernelError('CONFIG_INVALID','ASR Job arguments are invalid');
+  const jobDeadlineAtMs=Date.now()+600_000;
   const config=loadRuntimeConfig(process.env,{managedJob:true});
   if(config.env!=='managed'||config.entry!=='main')throw new KernelError('CONFIG_INVALID','ASR Job requires managed main transport');
   const expected:ExpectedMigration[]=config.profile.migrations.map(({version,path})=>{
@@ -37,7 +44,7 @@ export async function meetingAsrJobMain(args:readonly string[]=process.argv.slic
   });
   const database=new RuntimeDatabase(config),controller=new AbortController();
   const stop=()=>controller.abort();
-  const timer=setTimeout(stop,600_000);timer.unref();
+  const timer=setTimeout(stop,Math.max(0,jobDeadlineAtMs-Date.now()));timer.unref();
   process.once('SIGTERM',stop);process.once('SIGINT',stop);
   try{
     await awaitDatabaseStartup(()=>database.assertRuntimeBoundary(expected));
@@ -70,8 +77,17 @@ export async function meetingAsrJobMain(args:readonly string[]=process.argv.slic
         repository:createPostgresMeetingDiscussionRepository({runId,database,config,resolveActor}),
       },signal),
     },controller.signal);
-    console.log(JSON.stringify({event:'projed_meeting_asr_job_finished',dispatchEnabled,...summary,discussion}));
-    if(summary.failures>0||discussion.failures>0)process.exitCode=1;
+    const llmBinding=CURRENT_MEETING_LLM_BINDING;
+    const llmDispatchEnabled=hasQualifiedMeetingLlmBinding(llmBinding)&&typeof auth.resolveMeetingRunActor==='function';
+    const llmProvider=llmDispatchEnabled?createGoogleCloudMeetingProvider({getAccessToken:createServiceAccessTokenProvider()}):null;
+    const llmControl=createPostgresMeetingLlmControl({database,config});
+    const llm=await runMeetingLlmHost({...llmControl,privateWorkEnabled:typeof auth.resolveMeetingRunActor==='function',
+      deadlineAtMs:jobDeadlineAtMs,
+      recover:(runId,token)=>createPostgresMeetingLlmRepository({runId,database,config,resolveActor}).recover(token),
+      runNext:(runId,signal)=>createPostgresMeetingLlmPipeline({runId,database,config,resolveActor})(llmProvider,signal),
+    },controller.signal);
+    console.log(JSON.stringify({event:'projed_meeting_asr_job_finished',dispatchEnabled,llmDispatchEnabled,...summary,discussion,llm}));
+    if(summary.failures>0||discussion.failures>0||llm.failures>0)process.exitCode=1;
   }finally{
     clearTimeout(timer);process.removeListener('SIGTERM',stop);process.removeListener('SIGINT',stop);
     await database.end();

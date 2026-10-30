@@ -209,7 +209,7 @@ export function createKernelHttpServer(
   const dispatchDomainWrite = createDomainWriteHttpDispatcher(config, database, options.resolveActor);
   const dispatchRag = createRagHttpDispatcher(config,database,options.resolveActor,options.ragProvider);
   const dispatchMeetingSynthesis=createMeetingSynthesisHttpDispatcher(config,database,options.resolveActor,
-    options.meetingSynthesisProvider??options.ragProvider,options.meetingSynthesisModel);
+    options.meetingSynthesisProvider,options.meetingSynthesisModel??'gemini-3.5-flash');
   const dispatchMeetingCapture = createMeetingCaptureHttpDispatcher(config, database, options.resolveActor,options.meetingAudioStorage);
   const dispatchMeetingAudio = createMeetingAudioHttpDispatcher(config,database,options.resolveActor,options.meetingAudioStorage);
   const server = createServer({

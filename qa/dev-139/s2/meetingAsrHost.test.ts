@@ -31,11 +31,12 @@ function dependencies(overrides:Partial<MeetingAsrHostDependencies>={}):MeetingA
 
 test('Job check-only reports status without connecting runtime or calling provider',()=>{
   const result=meetingAsrJobCheck();
-  assert.deepEqual(Object.keys(result).sort(),['event','provider','providerDispatch','runtime','sessionContract','status']);
+  assert.deepEqual(Object.keys(result).sort(),['event','llmDispatch','provider','providerDispatch','runtime','sessionContract','status']);
   assert.equal(result.event,'projed_meeting_asr_job_check');
   assert.equal(result.status,'CHECK_ONLY');
   assert.equal(result.runtime,'NOT_CONNECTED');
   assert.equal(result.provider,'NOT_RUN');
+  assert.equal(result.llmDispatch,'DISABLED');
   assert.ok(result.providerDispatch==='DISABLED'||result.providerDispatch==='QUALIFICATION_BOUND');
   assert.ok(result.sessionContract==='UNPUBLISHED'||result.sessionContract==='PINNED');
 });

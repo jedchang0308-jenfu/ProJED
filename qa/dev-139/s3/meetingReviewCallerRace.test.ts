@@ -36,6 +36,7 @@ type ReviewResult = {
   captureId: string;
   state: string;
   reviewRevision: number;
+  summary: string | null;
   segments: Array<Record<string, any>>;
 };
 
@@ -263,11 +264,12 @@ const props = (overrides: Partial<Props> = {}): Props => ({
 const reviewResult = (
   captureId: string,
   text: string,
-  options: { audioSegmentId?: string | null; resolutionId?: string; taskId?: string } = {},
+  options: { audioSegmentId?: string | null; resolutionId?: string; taskId?: string; summary?: string | null } = {},
 ): ReviewResult => ({
   captureId,
   state: 'ready',
   reviewRevision: 4,
+  summary: options.summary === undefined ? '本次會議摘要' : options.summary,
   segments: [{
     segmentId: `segment-${captureId}`,
     audioSegmentId: options.audioSegmentId ?? null,
@@ -395,9 +397,11 @@ test('scope change ignores an older review failure and only current review updat
     assert.equal(findElements(runner.tree, item => item.type === 'button' && item.props['aria-label'] === '重新整理辨識任務')[0]?.props.disabled, true);
     assert.equal(applied.length, 0);
 
-    second.resolve(reviewResult('capture-b', '目前 capture 的 review'));
+    second.resolve(reviewResult('capture-b', '目前 capture 的 review', { summary: '目前 capture 的摘要' }));
     await settle(runner, { ...actorB, onReviewApplied: callback });
     assert.match(textContent(runner.tree), /目前 capture 的 review/);
+    const summary = findElements(runner.tree, item => item.props['data-meeting-review-summary'] === 'true')[0];
+    assert.equal(textContent(summary), '摘要：目前 capture 的摘要');
     assert.equal(applied.length, 1);
     assert.equal(applied[0]?.accountId, 'actor-b');
     runner.unmount();

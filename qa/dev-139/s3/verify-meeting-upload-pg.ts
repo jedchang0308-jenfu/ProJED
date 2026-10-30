@@ -22,6 +22,8 @@ import { PostgresAppSessionStore } from '../../../server/postgresAppSessionStore
 import { MeetingUploadRepository } from '../../../server/meetingUpload.js';
 import {verifyMeetingTaskReadPostgres} from './verify-meeting-task-read-pg.js';
 import {verifyMeetingLlmPostgres} from './verify-meeting-llm-pg.js';
+import {verifyMeetingPublicationPostgres} from './verify-meeting-publication-pg.js';
+import {createPostgresMeetingLlmPipeline} from '../../../server/meetingLlmPipeline.js';
 import { createHttpCollaborationAdapter } from '../../../src/services/httpApi/collaborationAdapter.js';
 import { createHttpDomainReadAdapter } from '../../../src/services/httpApi/domainReadAdapter.js';
 import { createHttpDomainWriteAdapter } from '../../../src/services/httpApi/domainWriteAdapter.js';
@@ -2018,6 +2020,79 @@ export async function verifyMeetingUploadPostgres(
         for(const row of cleanupKeys.rows)cleanupAttemptIds.add(row.attempt_id);
         await verifyMeetingLlmPostgres(database,config,admin,actor,outsider,llmFixture.runId,llmFixture.captureId);
       },false); // The helper's final capture cancellation retires this run's worker Session lookup.
+
+    // Publication owns separate captures: successful activation and cancellation
+    // cannot contaminate the already verified LLM/ASR fixtures above.
+    const withPublicationFixture=async(label:string,mode:'single'|'empty'|'multi',operation:(fixture:Awaited<ReturnType<typeof createSettlementFixture>>,
+      actor:ServerActorV1,otherActor:ServerActorV1)=>Promise<void>)=>{
+      const fixture=await createSettlementFixture(label);
+      await verifyAsrSessionBinding(database,config,admin,owner,outsider,fixture.recordId,fixture.captureId,fixture.runId,async(actor,otherActor)=>{
+        assert.equal(record(await prepareSettlementFixture(fixture,actor),'publication ASR preparation').state,'queued');
+        const token=randomUUID();assert.ok(await claimSettlementUnit(fixture,actor,token));
+        assert.equal(await markSettlementDispatch(fixture,actor,token),true);
+        const payload=recognizedPayloadFor(fixture.dispatchPayload,fixture.sourceSegmentId);
+        if(mode==='empty')payload.transcript={...record(payload.transcript,'empty ASR transcript'),rawText:'',wordOffsets:[],sourceHash:'e'.repeat(64)};
+        if(mode==='multi'){
+          const word='測試'.repeat(200);
+          payload.transcript={...record(payload.transcript,'multi-discussion ASR transcript'),rawText:word.repeat(3),sourceHash:'f'.repeat(64),
+            wordOffsets:Array.from({length:3},(_,index)=>({text:word,start_ms:index*100,end_ms:(index+1)*100,
+              source_audio_segment_id:fixture.sourceSegmentId,source_word_index:index}))};
+        }
+        const recognized=record(await settleUnit(actor,fixture.runId,token,payload),'publication ASR checkpoint');
+        assert.equal(recognized.published,true);assert.equal(recognized.asrComplete,true);
+        const progress=await runMeetingDiscussionUnit({repository:createPostgresMeetingDiscussionRepository({runId:fixture.runId,database,config,
+          resolveActor:async()=>actor})},new AbortController().signal);
+        assert.equal(progress.assemblyComplete,true);
+        const cleanupKeys=await admin.query<{attempt_id:string}>(`SELECT 'storage:'||capture_id::text||':v'||source_version::text
+          ||':segment:'||segment_index::text AS attempt_id FROM projed_core.meeting_capture_segments WHERE capture_id=$1::uuid`,[fixture.captureId]);
+        for(const row of cleanupKeys.rows)cleanupAttemptIds.add(row.attempt_id);
+        await operation(fixture,actor,otherActor);
+      },false);
+    };
+    await withPublicationFixture('publication-full','multi',(fixture,actor,otherActor)=>
+      verifyMeetingPublicationPostgres(database,config,admin,actor,otherActor,outsider,fixture.runId,fixture.captureId));
+    await withPublicationFixture('publication-empty','empty',async(fixture,actor)=>{
+      const result=await createPostgresMeetingLlmPipeline({runId:fixture.runId,database,config,resolveActor:async()=>actor})(null,new AbortController().signal);
+      assert.deepEqual(result,{state:'published'},'empty recognized source publishes without any LLM provider');
+      const rows=await admin.query<{state:string;active_transcript_revision_id:string|null;segments:number;summary:unknown}>(`SELECT capture.state,
+        capture.active_transcript_revision_id::text,(SELECT count(*)::integer FROM projed_core.meeting_transcript_segments WHERE capture_id=capture.id) AS segments,
+        (SELECT payload_text::jsonb FROM projed_core.meeting_llm_unit_checkpoints WHERE run_id=$2::uuid AND unit_key='final' AND slot='result') AS summary
+        FROM projed_core.meeting_capture_sessions capture WHERE capture.id=$1::uuid`,[fixture.captureId,fixture.runId]);
+      assert.equal(rows.rows[0]?.state,'ready');assert.ok(rows.rows[0]?.active_transcript_revision_id);
+      assert.equal(rows.rows[0]?.segments,0);assert.deepEqual(rows.rows[0]?.summary,{summary:null});
+    });
+    await withPublicationFixture('publication-single','single',async(fixture,actor)=>{
+      let generationCalls=0;
+      const provider={async countTokens(){throw new Error('unexpected countTokens');},
+        async embedQuery(){return {values:Array<number>(3072).fill(.25),tokenCount:12,billableCharacterCount:null};},
+        async generateJson(input:{prompt:string}){
+          assert.ok(input.prompt.includes('currentDiscussion'),'one leaf never calls compose');generationCalls++;
+          return {outcome:'generated' as const,text:'[]',usage:{promptTokens:12,candidateTokens:2,thoughtTokens:0,totalTokens:14,cachedTokens:0},
+            modelVersion:'gemini-3.5-flash-001',responseId:'qa-single-match'};
+        }};
+      const next=createPostgresMeetingLlmPipeline({runId:fixture.runId,database,config,resolveActor:async()=>actor});
+      let published=false;
+      for(let step=0;step<5;step++)if((await next(provider,new AbortController().signal)).state==='published'){published=true;break;}
+      assert.equal(published,true,'one discussion completes without composing an artificial summary');assert.ok(generationCalls<=1);
+      const summary=await admin.query<{payload_text:string}>(`SELECT payload_text FROM projed_core.meeting_llm_unit_checkpoints
+        WHERE run_id=$1::uuid AND unit_key='final' AND slot='result'`,[fixture.runId]);
+      assert.deepEqual(JSON.parse(summary.rows[0]!.payload_text),{summary:'測試'});
+    });
+    await withPublicationFixture('publication-cancel','single',async(fixture,actor)=>{
+      await runActorTransaction(database,config,actor,async port=>{
+        await port.authorizeMeetingCaptureMutation(fixture.recordId,fixture.captureId);
+        await port.query('SELECT projed_core.cancel_meeting_capture_v1($1::uuid,1,\'qa-publication-cancel\')',[fixture.captureId]);
+        const rejected=await port.query<{saved:boolean}>('SELECT projed_core.publish_meeting_analysis_v1($1::uuid,$2::jsonb) AS saved',
+          [fixture.runId,JSON.stringify({sourceVersion:1,transcriptRevisionId:randomUUID(),summary:null,discussions:[],proofs:[]})]);
+        assert.equal(rejected.rows[0]?.saved,false,'normal cancellation prevents final publication');
+      });
+      const result=await createPostgresMeetingLlmPipeline({runId:fixture.runId,database,config,resolveActor:async()=>actor})(null,new AbortController().signal);
+      assert.deepEqual(result,{state:'idle'});
+      const rows=await admin.query<{state:string;active_transcript_revision_id:string|null;published:number}>(`SELECT state,active_transcript_revision_id::text,
+        (SELECT count(*)::integer FROM projed_core.meeting_llm_unit_checkpoints WHERE run_id=$2::uuid AND unit_key='final') AS published
+        FROM projed_core.meeting_capture_sessions WHERE id=$1::uuid`,[fixture.captureId,fixture.runId]);
+      assert.deepEqual(rows.rows[0],{state:'cancelled',active_transcript_revision_id:null,published:0});
+    });
   } catch (error) {
     failed = true;
     failure = error;

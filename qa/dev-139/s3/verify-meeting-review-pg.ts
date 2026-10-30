@@ -672,6 +672,7 @@ export async function verifyMeetingReviewPostgres(
 
     const privateOwnerView = await review(ownerClient, privateCaptureId, 2);
     assert.equal(privateOwnerView.recordId, privateRecord.id);
+    assert.equal(privateOwnerView.summary, null, 'legacy source without a published summary returns null');
     assert.equal(Array.isArray(privateOwnerView.segments), true);
     await expectHttpError(review(readerClient, privateCaptureId, 2).then(value => value), 'RESOURCE_NOT_FOUND', 404);
     await expectHttpError(review(outsiderClient, privateCaptureId, 2).then(value => value), 'RESOURCE_NOT_FOUND', 404);
@@ -705,6 +706,7 @@ export async function verifyMeetingReviewPostgres(
     assert.equal(initialView.captureId, projectCapture.captureId);
     assert.equal(initialView.recordId, projectRecord.id);
     assert.equal(initialView.sourceVersion, 2);
+    assert.equal(initialView.summary, null, 'imported review source without a summary remains null');
     assert.equal(initialView.reviewRevision, 0);
     assert.equal(typeof initialView.recordUpdatedAt, 'string');
     assert.match(String(initialView.recordUpdatedAt), /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/u);

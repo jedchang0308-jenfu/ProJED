@@ -231,7 +231,7 @@ BEGIN
       RAISE EXCEPTION 'meeting table is not FORCE RLS: %', v_name;
     END IF;
     IF v_name='projed_core.meeting_llm_unit_checkpoints' AND (
-      (SELECT count(*) FROM pg_policy WHERE polrelid=v_relation)<>2
+      (SELECT count(*) FROM pg_policy WHERE polrelid=v_relation)<>5
       OR NOT EXISTS (
         SELECT 1 FROM pg_policy p WHERE p.polrelid=v_relation AND p.polname='meeting_llm_private_read_v1'
           AND p.polcmd='r' AND p.polroles=ARRAY[(SELECT oid FROM pg_roles WHERE rolname='projed_runtime_disposable')]::oid[]
@@ -241,6 +241,21 @@ BEGIN
         SELECT 1 FROM pg_policy p WHERE p.polrelid=v_relation AND p.polname='meeting_llm_private_insert_v1'
           AND p.polcmd='a' AND p.polroles=ARRAY[(SELECT oid FROM pg_roles WHERE rolname='projed_runtime_disposable')]::oid[]
           AND p.polwithcheck IS NOT NULL
+      )
+      OR NOT EXISTS (
+        SELECT 1 FROM pg_policy p WHERE p.polrelid=v_relation AND p.polname='meeting_analysis_local_insert_v1'
+          AND p.polcmd='a' AND p.polroles=ARRAY[(SELECT oid FROM pg_roles WHERE rolname='projed_runtime_disposable')]::oid[]
+          AND p.polwithcheck IS NOT NULL
+      )
+      OR NOT EXISTS (
+        SELECT 1 FROM pg_policy p WHERE p.polrelid=v_relation AND p.polname='meeting_analysis_final_insert_v1'
+          AND p.polcmd='a' AND p.polroles=ARRAY[(SELECT oid FROM pg_roles WHERE rolname='projed_runtime_disposable')]::oid[]
+          AND p.polwithcheck IS NOT NULL
+      )
+      OR NOT EXISTS (
+        SELECT 1 FROM pg_policy p WHERE p.polrelid=v_relation AND p.polname='meeting_published_summary_read_v1'
+          AND p.polcmd='r' AND p.polroles=ARRAY[(SELECT oid FROM pg_roles WHERE rolname='projed_runtime_disposable')]::oid[]
+          AND p.polqual IS NOT NULL
       )
     ) THEN RAISE EXCEPTION 'private LLM checkpoint RLS policies are not exact'; END IF;
     IF v_name='projed_core.meeting_llm_unit_checkpoints' THEN
@@ -304,8 +319,11 @@ BEGIN
         'start_offset_ms','end_offset_ms','raw_text','normalized_text','word_offsets','source_hash'
       ]::text[]
       WHEN 'projed_core.meeting_task_match_results' THEN ARRAY[
-        'id','resolution_id','task_id','ai_suggestion_version','decision','decision_source',
+        'id','resolution_id','task_id','quote_range','semantic_score','pointer_feature','ai_suggestion_version','decision','decision_source',
         'corrected_by','corrected_at','capture_id','tenant_id','project_id'
+      ]::text[]
+      WHEN 'projed_core.meeting_segment_resolutions' THEN ARRAY[
+        'id','capture_id','transcript_segment_id','candidate_snapshot','latest_run_id','resolution_state','config_version'
       ]::text[]
       WHEN 'projed_core.meeting_draft_projections' THEN ARRAY[
         'record_id','capture_id','applied_review_revision','last_request_key','payload_hash',
@@ -317,7 +335,8 @@ BEGIN
       WHEN 'projed_core.meeting_capture_sessions' THEN ARRAY[
         'state','epoch_manifest','last_progress_at','stopped_at','audio_expires_at','source_version',
         'audio_manifest_hash','pointer_manifest_hash','source_completeness','pointer_loss','updated_at',
-        'stopped_reason','source_frozen_at','source_parent_version','final_pointer_sequence','source_gaps','review_revision'
+        'stopped_reason','source_frozen_at','source_parent_version','final_pointer_sequence','source_gaps','review_revision',
+        'active_transcript_revision_id'
       ]::text[]
       WHEN 'projed_core.meeting_capture_segments' THEN ARRAY[
         'bytes','sha256','upload_state','upload_token_expires_at','last_error','verified_at','storage_generation','updated_at'
@@ -475,6 +494,9 @@ BEGIN
     'projed_core.scan_meeting_llm_work_v1(integer)',
     'projed_core.recover_meeting_llm_unit_v1(uuid,uuid,boolean)',
     'projed_core.finish_meeting_llm_work_v1(uuid,text)',
+    'projed_core.meeting_analysis_write_guard_v1()',
+    'projed_core.commit_meeting_local_match_v1(uuid,jsonb)',
+    'projed_core.publish_meeting_analysis_v1(uuid,jsonb)',
     'projed_core.meeting_review_scope_v1(uuid)',
     'projed_core.meeting_projection_scope_v1(uuid,uuid)'
   ] LOOP

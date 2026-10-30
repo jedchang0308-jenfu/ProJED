@@ -30,6 +30,7 @@ type Props = {
 type ReviewViewState = {
   scopeKey: string;
   segments: MeetingReviewSegment[];
+  summary: string | null;
   state: string;
   reviewRevision: number;
   loading: boolean;
@@ -39,6 +40,7 @@ type ReviewViewState = {
 const emptyReviewView = (scopeKey: string, loading = false): ReviewViewState => ({
   scopeKey,
   segments: [],
+  summary: null,
   state: 'idle',
   reviewRevision: 0,
   loading,
@@ -159,6 +161,7 @@ const MeetingTaskMatchReview: React.FC<Props> = ({
         ? {
           scopeKey: token.scopeKey,
           segments: result.segments,
+          summary: result.summary,
           state: result.state,
           reviewRevision: result.reviewRevision,
           loading: true,
@@ -328,6 +331,11 @@ const MeetingTaskMatchReview: React.FC<Props> = ({
       </div>
 
       {error ? <div role="alert" className="mt-2 rounded bg-rose-50 px-2 py-1 text-[10px] text-rose-700">{error}</div> : null}
+      {currentReview.summary ? (
+        <p data-meeting-review-summary="true" className="mt-2 whitespace-pre-wrap break-words text-[11px] leading-5 text-slate-600">
+          <span className="font-medium text-slate-500">摘要：</span>{currentReview.summary}
+        </p>
+      ) : null}
       {!loading && state !== 'ready' && segments.length === 0 ? (
         <div className="mt-2 text-[10px] leading-4 text-slate-500">完成上傳後會在這裡顯示原句、候選任務與人工決定。</div>
       ) : null}

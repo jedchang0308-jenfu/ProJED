@@ -23,7 +23,7 @@ import {
 type SessionLabel = 'qa-meeting-owner' | 'qa-meeting-reader' | 'qa-meeting-outsider';
 type ProviderMode =
   | 'valid'
-  | 'fallback'
+  | 'model-unavailable'
   | 'quota'
   | 'unavailable'
   | 'invalid-json'
@@ -109,8 +109,8 @@ export async function verifyMeetingSynthesisPostgres(
     occurredAt: Date.now(),
     requiredContractVersion: MEETING_SYNTHESIS_CONTRACT_VERSION,
   };
-  // The local fallback repeats source prose; a synthetic provider success must
-  // satisfy the unchanged provider quality oracle, including deduplication.
+  // A synthetic provider success must satisfy the unchanged provider quality
+  // oracle, including deduplication.
   const providerFixture = {
     content: [
       '1. 本次會議總結',
@@ -155,7 +155,7 @@ export async function verifyMeetingSynthesisPostgres(
         currentMode.returned?.();
         return validProviderOutput;
       }
-      if (currentMode === 'fallback' && request.model === 'gemini-3.5-flash') {
+      if (currentMode === 'model-unavailable' && request.model === 'gemini-3.5-flash') {
         throw new KernelError('RAG_MODEL_UNAVAILABLE', 'synthetic model unavailable', 503);
       }
       if (currentMode === 'quota') {
@@ -362,16 +362,16 @@ export async function verifyMeetingSynthesisPostgres(
     assert.equal(readerResult.quality.passed, true);
 
     let callsBefore = providerCalls.length;
-    mode = 'fallback';
-    const fallbackResult = await ownerSynthesis.synthesize(synthesisInput, {
-      workspaceId: workspace.id,
-      boardId: board.id,
-    });
-    assert.equal(fallbackResult.model, 'gemini-3.1-flash-lite');
-    assert.deepEqual(providerCalls.slice(callsBefore).map(call => call.model), [
-      'gemini-3.5-flash',
-      'gemini-3.1-flash-lite',
-    ]);
+    const modelUnavailableAuditStart = (await auditRows(owner, workspace.id, board.id)).length;
+    mode = 'model-unavailable';
+    await assert.rejects(
+      ownerSynthesis.synthesize(synthesisInput, { workspaceId: workspace.id, boardId: board.id }),
+      error => requireHttpError(error, 'RAG_MODEL_UNAVAILABLE', 503),
+    );
+    assert.deepEqual(providerCalls.slice(callsBefore).map(call => call.model), ['gemini-3.5-flash'],
+      'unavailable primary model must not trigger an alternate-model request');
+    assert.equal((await auditRows(owner, workspace.id, board.id)).length, modelUnavailableAuditStart,
+      'a failed synthesis cannot write a success audit row');
 
     for (const failure of [
       { mode: 'quota' as const, status: 429, code: 'RAG_QUOTA_EXCEEDED' },
@@ -510,8 +510,8 @@ export async function verifyMeetingSynthesisPostgres(
     assert.equal(finalCounts.recordCount, baseline.recordCount, 'synthesis must not create or change record rows');
     const ownerAuditRows = await auditRows(owner, workspace.id, board.id);
     const readerAuditRows = await auditRows(reader, workspace.id, board.id);
-    assert.equal(ownerAuditRows.length, ownerAuditBaseline + 2,
-      'owner synthesis and model fallback success should be audited');
+    assert.equal(ownerAuditRows.length, ownerAuditBaseline + 1,
+      'only the successful owner synthesis should be audited');
     assert.equal(readerAuditRows.length, 1,
       'only the reader successful synthesis should have a project audit row');
     for (const row of [...ownerAuditRows, ...readerAuditRows]) {

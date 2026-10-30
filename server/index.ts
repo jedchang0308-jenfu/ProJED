@@ -6,9 +6,10 @@ import { createKernelHttpServer } from './http.js';
 import { createRuntimeSessionAuth } from './runtimeSessionAuth.js';
 import { awaitDatabaseStartup } from './startup.js';
 import {createGeminiRagProvider} from './geminiRagProvider.js';
-import {parseMeetingSynthesisModel} from './meetingSynthesisHttp.js';
 import {createGcsMeetingAudioStorage} from './meetingAudioStorage.js';
 import {createServiceAccessTokenProvider} from './serviceAccessToken.js';
+import {CURRENT_MEETING_LLM_BINDING} from './meetingLlmRuntimeBinding.js';
+import {createQualifiedMeetingSynthesisProvider} from './meetingSynthesisCloudProvider.js';
 
 async function main(): Promise<void> {
   const config = loadRuntimeConfig();
@@ -21,10 +22,14 @@ async function main(): Promise<void> {
   await awaitDatabaseStartup(() => database.assertRuntimeBoundary(expectedMigrations), {
     onWait: info => console.log(JSON.stringify({ event: 'projed_kernel_database_startup_wait', ...info })),
   });
+  const meetingSynthesisProvider = CURRENT_MEETING_LLM_BINDING === null ? undefined
+    : createQualifiedMeetingSynthesisProvider({binding:CURRENT_MEETING_LLM_BINDING,
+      getAccessToken:createServiceAccessTokenProvider()});
   const http = createKernelHttpServer(config, database, expectedMigrations, {
     ...createRuntimeSessionAuth(config,database),
     ragProvider:process.env.GEMINI_API_KEY?createGeminiRagProvider({apiKey:process.env.GEMINI_API_KEY}):undefined,
-    meetingSynthesisModel:parseMeetingSynthesisModel(process.env.GEMINI_MEETING_SYNTHESIS_MODEL),
+    meetingSynthesisProvider,
+    meetingSynthesisModel:'gemini-3.5-flash',
     meetingAudioStorage:process.env.PROJED_MEETING_AUDIO_BUCKET?createGcsMeetingAudioStorage({
       bucket:process.env.PROJED_MEETING_AUDIO_BUCKET,getAccessToken:createServiceAccessTokenProvider(),
     }):undefined,

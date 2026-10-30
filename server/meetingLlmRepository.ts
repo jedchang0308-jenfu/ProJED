@@ -199,11 +199,17 @@ export class MeetingLlmDatabaseRepository {
   }
 }
 
-/** Each private operation resolves the original run's current Session again. */
-export function createPostgresMeetingLlmRepository(options:{readonly runId:string;readonly database:RuntimeDatabase;
-  readonly config:RuntimeConfig;readonly resolveActor:(runId:string)=>Promise<ServerActorV1>}):MeetingLlmDatabaseRepository{
+export interface MeetingLlmPostgresOptions {
+  readonly runId:string;
+  readonly database:RuntimeDatabase;
+  readonly config:RuntimeConfig;
+  readonly resolveActor:(runId:string)=>Promise<ServerActorV1>;
+}
+
+/** Each private transaction resolves the original run's current Session again. */
+export function createPostgresMeetingLlmTransactions(options:MeetingLlmPostgresOptions):MeetingLlmTransactions{
   const {runId,database,config,resolveActor}=options;
-  return new MeetingLlmDatabaseRepository(runId,{
+  return {
     actor:async operation=>{
       const actor=await resolveActor(runId);
       return runActorTransaction(database,config,actor,async port=>{
@@ -216,5 +222,10 @@ export function createPostgresMeetingLlmRepository(options:{readonly runId:strin
       });
     },
     accounting:operation=>runMeetingMaintenanceTransaction(database,config,operation),
-  });
+  };
+}
+
+/** Each private repository operation resolves the original run's current Session again. */
+export function createPostgresMeetingLlmRepository(options:MeetingLlmPostgresOptions):MeetingLlmDatabaseRepository{
+  return new MeetingLlmDatabaseRepository(options.runId,createPostgresMeetingLlmTransactions(options));
 }

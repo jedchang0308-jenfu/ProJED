@@ -78,28 +78,12 @@ export function createMeetingSynthesisHttpDispatcher(
       // The source is a user-authored draft snapshot. This endpoint retrieves no
       // private record/task bodies and performs no record or task mutation.
       const prompt=buildMeetingSynthesisPrompt(source.input);
-      const models:MeetingSynthesisModel[]=configuredModel?[configuredModel]:['gemini-3.5-flash','gemini-3.1-flash-lite'];
-      let output:string|undefined,model:MeetingSynthesisModel=models[0]!;
-      const warnings:string[]=[];
+      const model:MeetingSynthesisModel=configuredModel??'gemini-3.5-flash';
       phase='generation';
-      for(let index=0;index<models.length;index++){
-        model=models[index]!;
-        await authorize();
-        try{
-          output=await provider.generate({model,prompt,responseMimeType:'application/json',temperature:0.2},controller.signal);
-          break;
-        }catch(error){
-          if(error instanceof KernelError&&error.code==='RAG_MODEL_UNAVAILABLE'&&models[index+1]){
-            warnings.push(`模型 ${model} 不可用，已改用 ${models[index+1]}。`);
-            continue;
-          }
-          throw error;
-        }
-      }
-      if(output===undefined)throw new KernelError('EMPTY_SYNTHESIS','Meeting provider returned no draft',502);
+      await authorize();
+      const output=await provider.generate({model,prompt,responseMimeType:'application/json',temperature:0.2},controller.signal);
       phase='quality';
       const result=completeMeetingSynthesis(source,output,{runId:randomUUID(),model});
-      result.warnings=[...warnings,...result.warnings];
       phase='response-revalidation';
       const actor=await currentActor();
       await runActorTransaction(database,config,actor,async port=>{
