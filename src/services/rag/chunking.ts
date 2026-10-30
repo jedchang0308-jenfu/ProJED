@@ -4,6 +4,7 @@ import {
   type RagChunkDraft,
   type RagCitation,
 } from './ragContract';
+import { normalizeRagChunkContent as normalizeContent } from '../../../shared/ragChunkContent.js';
 
 export interface ChunkTextOptions {
   tenantId: string;
@@ -14,13 +15,6 @@ export interface ChunkTextOptions {
   targetChars?: number;
   overlapChars?: number;
 }
-
-const normalizeContent = (content: string): string =>
-  content
-    .replace(/\r\n/g, '\n')
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
 
 export const estimateTokenCount = (content: string): number => {
   const normalized = normalizeContent(content);

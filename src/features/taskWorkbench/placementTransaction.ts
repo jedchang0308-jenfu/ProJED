@@ -1,5 +1,7 @@
 import type { TaskNode } from '../../types';
-import { isSupabaseBackend, nodeService } from '../../services/dataBackend';
+import { isHttpBackend, isSupabaseBackend, nodeService } from '../../services/dataBackend';
+import { httpTaskWorkbenchService } from '../../services/httpApi/backend';
+import { httpSessionService } from '../../services/httpApi/backend';
 import { supabaseTaskWorkbenchPlacementService } from '../../services/supabase/taskWorkbenchUnplacedService';
 import {
   isTaskWorkbenchUnplacedTask,
@@ -193,9 +195,31 @@ export const persistTaskWorkbenchPlacementCommand = async ({
 }: TaskWorkbenchPlacementCommandTransaction): Promise<TaskWorkbenchPlacementCommandResult> => {
   await applyPlacementTestFault();
 
-  if (!isSupabaseBackend) {
+  if (!isSupabaseBackend && !isHttpBackend) {
     const result = await persistFallbackPlacement(command, nodesRecord, accountId);
     return { ...result, activityLoggedRemotely: false };
+  }
+  if (isHttpBackend) {
+    if (!accountId) throw new Error('Authenticated account is required to move global workbench tasks.');
+    const session = await httpSessionService.getSession();
+    if (session.entry !== 'main' || session.uid !== accountId) {
+      throw new Error('TASK_WORKBENCH_ACTOR_CHANGED');
+    }
+    const expectedActor = { accountId: session.uid, contextId: session.authContextId };
+    let result: TaskWorkbenchPlacementCommandResult;
+    try {
+      result = await httpTaskWorkbenchService.place(command, expectedActor);
+    } catch (error) {
+      if (!isRetryablePlacementError(error)) throw error;
+      try {
+        result = await httpTaskWorkbenchService.place(command, expectedActor);
+      } catch (retryError) {
+        if (!isRetryablePlacementError(retryError)) throw retryError;
+        throw new TaskPlacementOutcomeUnknownError(retryError);
+      }
+    }
+    syncUnplacedLocalCache(result, nodesRecord, accountId);
+    return result;
   }
   if (!accountId) throw new Error('Authenticated account is required to move global workbench tasks.');
 

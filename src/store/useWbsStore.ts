@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import dayjs from 'dayjs';
 import type { ActivityEventType, Dependency, KanbanViewConfig, TaskNode, TaskStatus } from '../types';
-import { isSupabaseBackend, nodeService, dependencyService, workspaceService, boardService, tagService, eventLogService } from '../services/dataBackend';
+import { isHttpBackend, isSupabaseBackend, nodeService, dependencyService, workspaceService, boardService, tagService, eventLogService } from '../services/dataBackend';
 import useUndoStore from './useUndoStore';
 import useBoardStore from './useBoardStore';
 import useRecordStore from './useRecordStore';
@@ -300,7 +300,7 @@ const mergeLocalUnplacedTasksForSetNodes = (
 
   [
     ...Object.values(currentNodes).filter(isTaskWorkbenchUnplacedTask),
-    ...(isSupabaseBackend ? [] : readTaskWorkbenchUnplacedTasks()),
+    ...(isSupabaseBackend || isHttpBackend ? [] : readTaskWorkbenchUnplacedTasks()),
   ].forEach(task => {
     if (task.isArchived || mergedNodes.has(task.id)) return;
     mergedNodes.set(task.id, task);

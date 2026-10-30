@@ -1,0 +1,401 @@
+{
+  "profileVersion": 1,
+  "appKey": "projed",
+  "kernelContractVersion": 1,
+  "environment": "disposable",
+  "database": {
+    "namePattern": "^dev139_s3_[0-9a-f]{32}$",
+    "host": "127.0.0.1",
+    "portPolicy": "task-owned-ephemeral",
+    "supportedPostgresMajors": [
+      17,
+      18
+    ],
+    "schemas": [
+      "projed_core",
+      "projed_contract"
+    ]
+  },
+  "roles": {
+    "owner": "projed_owner_disposable",
+    "migrator": "projed_migrator_disposable",
+    "importer": "projed_importer_disposable",
+    "runtime": "projed_runtime_disposable"
+  },
+  "migrations": [
+    {
+      "version": "0001_runtime_boundary_v1",
+      "path": "db/migrations/0001_runtime_boundary_v1.sql"
+    },
+    {
+      "version": "0002_profile_actor_v1",
+      "path": "db/migrations/0002_profile_actor_v1.sql"
+    },
+    {
+      "version": "0003_domain_read_v1",
+      "path": "db/migrations/0003_domain_read_v1.sql"
+    },
+    {
+      "version": "0004_domain_command_v1",
+      "path": "db/migrations/0004_domain_command_v1.sql"
+    },
+    {
+      "version": "0005_collaboration_command_v1",
+      "path": "db/migrations/0005_collaboration_command_v1.sql"
+    },
+    {
+      "version": "0006_record_activity_v1",
+      "path": "db/migrations/0006_record_activity_v1.sql"
+    },
+    {
+      "version": "0007_board_transfer_v1",
+      "path": "db/migrations/0007_board_transfer_v1.sql"
+    },
+    {
+      "version": "0008_unplaced_quick_capture_v1",
+      "path": "db/migrations/0008_unplaced_quick_capture_v1.sql"
+    },
+    {
+      "version": "0009_task_workbench_placement_v1",
+      "path": "db/migrations/0009_task_workbench_placement_v1.sql"
+    },
+    {
+      "version": "0010_task_tracking_reference_v1",
+      "path": "db/migrations/0010_task_tracking_reference_v1.sql"
+    },
+    {
+      "version": "0011_board_backup_import_v1",
+      "path": "db/migrations/0011_board_backup_import_v1.sql"
+    },
+    {
+      "version": "0012_account_preferences_v1",
+      "path": "db/migrations/0012_account_preferences_v1.sql"
+    },
+    {
+      "version": "0013_calendar_subscriptions_v1",
+      "path": "db/migrations/0013_calendar_subscriptions_v1.sql"
+    },
+    {
+      "version": "0014_snapshot_importer_v1",
+      "path": "db/migrations/0014_snapshot_importer_v1.sql"
+    },
+    {
+      "version": "0015_llm_access_log_retention_v1",
+      "path": "db/migrations/0015_llm_access_log_retention_v1.sql"
+    },
+    {
+      "version": "0016_workspace_lifecycle_compatibility_v1",
+      "path": "db/migrations/0016_workspace_lifecycle_compatibility_v1.sql"
+    },
+    {
+      "version": "0017_document_source_retention_v1",
+      "path": "db/migrations/0017_document_source_retention_v1.sql"
+    },
+    {
+      "version": "0018_google_identity_proof_v1",
+      "path": "db/migrations/0018_google_identity_proof_v1.sql"
+    },
+    {
+      "version": "0019_app_sessions_v1",
+      "path": "db/migrations/0019_app_sessions_v1.sql"
+    },
+    {
+      "version": "0020_snapshot_account_guards_v1",
+      "path": "db/migrations/0020_snapshot_account_guards_v1.sql"
+    },
+    {
+      "version": "0021_safe_actor_context_v1",
+      "path": "db/migrations/0021_safe_actor_context_v1.sql"
+    },
+    {
+      "version": "0022_first_login_registration_v1",
+      "path": "db/migrations/0022_first_login_registration_v1.sql"
+    },
+    {
+      "version": "0023_verified_login_email_v1",
+      "path": "db/migrations/0023_verified_login_email_v1.sql"
+    },
+    {
+      "version": "0024_rag_record_lifecycle_v1",
+      "path": "db/migrations/0024_rag_record_lifecycle_v1.sql"
+    },
+    {
+      "version": "0025_rag_lock_and_fk_compatibility_v1",
+      "path": "db/migrations/0025_rag_lock_and_fk_compatibility_v1.sql"
+    },
+    {
+      "version": "0026_meeting_source_retention_v1",
+      "path": "db/migrations/0026_meeting_source_retention_v1.sql"
+    },
+    {
+      "version": "0027_meeting_cascade_compatibility_v1",
+      "path": "db/migrations/0027_meeting_cascade_compatibility_v1.sql"
+    },
+    {
+      "version": "0028_meeting_atomic_cascade_v1",
+      "path": "db/migrations/0028_meeting_atomic_cascade_v1.sql"
+    },
+    {
+      "version": "0029_meeting_capture_runtime_v1",
+      "path": "db/migrations/0029_meeting_capture_runtime_v1.sql"
+    },
+    {
+      "version": "0030_meeting_legacy_task_pointer_v1",
+      "path": "db/migrations/0030_meeting_legacy_task_pointer_v1.sql"
+    },
+    {
+      "version": "0031_meeting_audio_transport_v1",
+      "path": "db/migrations/0031_meeting_audio_transport_v1.sql"
+    },
+    {
+      "version": "0032_meeting_upload_completion_v1",
+      "path": "db/migrations/0032_meeting_upload_completion_v1.sql"
+    },
+    {
+      "version": "0033_meeting_human_review_v1",
+      "path": "db/migrations/0033_meeting_human_review_v1.sql"
+    },
+    {
+      "version": "0034_meeting_asr_session_binding_v1",
+      "path": "db/migrations/0034_meeting_asr_session_binding_v1.sql"
+    },
+    {
+      "version": "0035_meeting_cloud_speech_reservation_v1",
+      "path": "db/migrations/0035_meeting_cloud_speech_reservation_v1.sql"
+    },
+    {
+      "version": "0036_meeting_asr_claim_dispatch_v1",
+      "path": "db/migrations/0036_meeting_asr_claim_dispatch_v1.sql"
+    },
+    {
+      "version": "0037_meeting_asr_settlement_v1",
+      "path": "db/migrations/0037_meeting_asr_settlement_v1.sql"
+    },
+    {
+      "version": "0038_meeting_asr_control_v1",
+      "path": "db/migrations/0038_meeting_asr_control_v1.sql"
+    },
+    {
+      "version": "0039_meeting_discussion_persistence_v1",
+      "path": "db/migrations/0039_meeting_discussion_persistence_v1.sql"
+    },
+    {
+      "version": "0040_meeting_llm_units_v1",
+      "path": "db/migrations/0040_meeting_llm_units_v1.sql"
+    },
+    {
+      "version": "0041_meeting_analysis_publication_v1",
+      "path": "db/migrations/0041_meeting_analysis_publication_v1.sql"
+    },
+    {
+      "version": "0042_meeting_audio_cleanup_v1",
+      "path": "db/migrations/0042_meeting_audio_cleanup_v1.sql"
+    }
+  ],
+  "objectAllowlist": [
+    "projed_core.schema_migrations",
+    "projed_core.runtime_metadata",
+    "projed_core.profiles",
+    "projed_core.account_authorization_guards",
+    "projed_core.current_actor_user_id_v1",
+    "projed_core.actor_context_valid_v1",
+    "projed_core.tenants",
+    "projed_core.projects",
+    "projed_core.actor_scope_access",
+    "projed_core.tenant_members",
+    "projed_core.project_members",
+    "projed_core.board_role_permissions",
+    "projed_core.wbs_items",
+    "projed_core.wbs_dependencies",
+    "projed_core.task_tags",
+    "projed_core.wbs_item_tags",
+    "projed_core.actor_has_board_capability_v1",
+    "projed_core.actor_can_write_tags_v1",
+    "projed_core.resource_revisions",
+    "projed_core.board_invites",
+    "projed_core.actor_has_workspace_capability_v1",
+    "projed_core.actor_can_configure_role_permissions_v1",
+    "projed_core.board_mutation_context_valid_v1",
+    "projed_core.workspace_bootstrap_context_valid_v1",
+    "projed_core.actor_can_bump_revision_v1",
+    "projed_core.projects_tenant_legacy_uq",
+    "projed_core.actor_scope_access_project_idx",
+    "projed_core.wbs_items_project_legacy_uq",
+    "projed_core.wbs_dependencies_project_legacy_uq",
+    "projed_core.task_tags_tenant_legacy_uq",
+    "projed_core.task_tags_tenant_order_idx",
+    "projed_core.wbs_item_tags_project_idx",
+    "projed_core.board_invites_pending_email_uq",
+    "projed_core.board_invites_project_status_idx",
+    "projed_core.knowledge_records",
+    "projed_core.record_task_links",
+    "projed_core.activity_events",
+    "projed_core.audit_logs",
+    "projed_core.actor_can_read_record_v1",
+    "projed_core.actor_can_write_record_v1",
+    "projed_core.knowledge_records_project_status_idx",
+    "projed_core.knowledge_records_project_legacy_uq",
+    "projed_core.knowledge_records_recorded_by_idx",
+    "projed_core.record_task_links_item_idx",
+    "projed_core.record_task_links_record_idx",
+    "projed_core.activity_events_tenant_time_idx",
+    "projed_core.activity_events_project_time_idx",
+    "projed_core.audit_logs_tenant_time_idx",
+    "projed_core.board_transfer_source_context_valid_v1",
+    "projed_core.board_transfer_target_context_valid_v1",
+    "projed_core.unplaced_tasks",
+    "projed_core.unplaced_tasks_owner_order_idx",
+    "projed_core.quick_task_capture_receipts",
+    "projed_core.task_workbench_placement_operations",
+    "projed_core.task_placement_context_valid_v1",
+    "projed_core.task_tracking_references",
+    "projed_core.task_tracking_references_target_idx",
+    "projed_core.task_tracking_references_task_idx",
+    "projed_core.task_tracking_references_active_scope_uq",
+    "projed_core.task_tracking_reference_staging",
+    "projed_core.task_tracking_reference_staging_owner_idx",
+    "projed_core.task_tracking_reference_operations",
+    "projed_core.backup_import_executions",
+    "projed_core.account_board_task_filter_preferences",
+    "projed_core.account_board_task_filter_preferences_project_idx",
+    "projed_core.calendar_subscriptions",
+    "projed_core.calendar_subscriptions_owner_created_idx",
+    "projed_core.llm_access_logs",
+    "projed_core.llm_access_logs_tenant_actor_time_idx",
+    "projed_core.llm_access_logs_project_idx",
+    "projed_core.llm_access_logs_actor_idx",
+    "projed_core.documents",
+    "projed_core.document_versions",
+    "projed_core.document_chunks",
+    "projed_core.document_embeddings",
+    "projed_core.rag_sync_jobs",
+    "projed_core.external_rag_objects",
+    "projed_core.documents_project_idx",
+    "projed_core.documents_created_by_idx",
+    "projed_core.documents_updated_by_idx",
+    "projed_core.document_chunks_version_idx",
+    "projed_core.document_embeddings_chunk_idx",
+    "projed_core.rag_sync_jobs_document_idx",
+    "projed_core.external_rag_objects_document_idx",
+    "projed_core.knowledge_records_source_document_idx",
+    "projed_core.google_identity_proofs",
+    "projed_core.app_login_intents",
+    "projed_core.app_sessions",
+    "projed_core.app_login_intent_transition_v1",
+    "projed_core.app_session_revoke_v1",
+    "projed_core.login_intents_active_old_session_v1",
+    "projed_core.registration_scope_valid_v1",
+    "projed_core.profile_verified_email_update_v1",
+    "projed_core.rag_record_write_scope_v1",
+    "projed_core.rag_embedding_worker_row_scope_v1",
+    "projed_core.rag_embedding_worker_scope_v1",
+    "projed_core.rag_sync_job_update_guard_v1",
+    "projed_core.rag_sync_jobs_claim_v1",
+    "projed_core.rag_sync_jobs_version_v1",
+    "projed_core.meeting_capture_sessions",
+    "projed_core.meeting_capture_segments",
+    "projed_core.meeting_pointer_intervals",
+    "projed_core.meeting_analysis_runs",
+    "projed_core.meeting_transcript_segments",
+    "projed_core.meeting_segment_resolutions",
+    "projed_core.meeting_task_match_results",
+    "projed_core.meeting_draft_projections",
+    "projed_core.meeting_artifact_cleanup",
+    "projed_core.meeting_ai_budget_months",
+    "projed_core.meeting_ai_usage_attempts",
+    "projed_core.meeting_mutation_scope_v1",
+    "projed_core.meeting_capture_visible_v1",
+    "projed_core.meeting_capture_mutable_v1",
+    "projed_core.meeting_run_cancel_guard_v1",
+    "projed_core.meeting_cancel_ledger_scope_v1",
+    "projed_core.cancel_meeting_capture_v1",
+    "projed_core.meeting_audio_operation_token_v1",
+    "projed_core.meeting_audio_scope_v1",
+    "projed_core.meeting_audio_cleanup_scope_v1",
+    "projed_core.meeting_audio_settlement_scope_v1",
+    "projed_core.meeting_audio_proof_guard_v1",
+    "projed_core.meeting_audio_anchor_retention_v1",
+    "projed_core.meeting_upload_scope_v1",
+    "projed_core.meeting_upload_budget_scope_v1",
+    "projed_core.meeting_upload_run_scope_v1",
+    "projed_core.meeting_budget_upload_guard_v1",
+    "projed_core.complete_meeting_upload_v1",
+    "projed_core.meeting_review_scope_v1",
+    "projed_core.meeting_projection_scope_v1",
+    "projed_core.bind_meeting_asr_session_v1",
+    "projed_core.meeting_cloud_speech_reservation_v1",
+    "projed_core.meeting_asr_prepare_scope_v1",
+    "projed_core.meeting_asr_prepare_run_guard_v1",
+    "projed_core.meeting_asr_prepare_budget_scope_v1",
+    "projed_core.meeting_asr_prepare_budget_guard_v1",
+    "projed_core.prepare_meeting_cloud_speech_v1",
+    "projed_core.meeting_usage_asr_operation_token_v1",
+    "projed_core.meeting_asr_work_scope_v1",
+    "projed_core.meeting_asr_run_live_v1",
+    "projed_core.meeting_asr_claim_run_guard_v1",
+    "projed_core.meeting_asr_usage_work_guard_v1",
+    "projed_core.claim_meeting_asr_unit_v1",
+    "projed_core.mark_meeting_asr_dispatch_v1",
+    "projed_core.meeting_asr_unit_results",
+    "projed_core.meeting_asr_settle_scope_v1",
+    "projed_core.meeting_asr_settle_run_scope_v1",
+    "projed_core.meeting_asr_settlement_guard_v1",
+    "projed_core.settle_meeting_asr_unit_v1",
+    "projed_core.read_meeting_asr_dispatch_v1",
+    "projed_core.meeting_asr_control_scope_v1",
+    "projed_core.scan_meeting_asr_work_v1",
+    "projed_core.recover_meeting_asr_unit_v1",
+    "projed_core.meeting_asr_abandon_guard_v1",
+    "projed_core.abandon_meeting_asr_run_v1",
+    "projed_core.meeting_discussion_scope_v1",
+    "projed_core.meeting_discussion_live_v1",
+    "projed_core.meeting_discussion_guard_v1",
+    "projed_core.claim_meeting_discussion_source_v1",
+    "projed_core.read_meeting_discussion_source_v1",
+    "projed_core.read_meeting_discussion_batch_v1",
+    "projed_core.append_meeting_discussion_batch_v1",
+    "projed_core.finish_meeting_discussion_work_v1",
+    "projed_core.scan_meeting_discussion_work_v1",
+    "projed_core.meeting_usage_llm_token_v1",
+    "projed_core.meeting_llm_unit_checkpoints",
+    "projed_core.meeting_llm_private_scope_v1",
+    "projed_core.meeting_llm_live_v1",
+    "projed_core.meeting_llm_guard_v1",
+    "projed_core.claim_meeting_llm_unit_v1",
+    "projed_core.mark_meeting_llm_dispatch_v1",
+    "projed_core.meeting_llm_charge_v1",
+    "projed_core.settle_meeting_llm_unit_v1",
+    "projed_core.scan_meeting_llm_work_v1",
+    "projed_core.recover_meeting_llm_unit_v1",
+    "projed_core.finish_meeting_llm_work_v1",
+    "projed_core.meeting_analysis_write_guard_v1",
+    "projed_core.commit_meeting_local_match_v1",
+    "projed_core.publish_meeting_analysis_v1",
+    "projed_core.meeting_audio_cleanup_due_v1",
+    "projed_core.meeting_audio_cleanup_guard_v1",
+    "projed_core.meeting_audio_cleanup_detach_v1",
+    "projed_core.scan_meeting_audio_cleanup_v1",
+    "projed_core.claim_meeting_audio_cleanup_v1",
+    "projed_core.finish_meeting_audio_cleanup_v1"
+  ],
+  "staticFixturePath": "qa/dev-139/s1/static",
+  "runtime": {
+    "bindHost": "127.0.0.1",
+    "cloudRunBindHost": "0.0.0.0",
+    "pool": {
+      "max": 5,
+      "min": 0,
+      "idleTimeoutMillis": 30000,
+      "connectionTimeoutMillis": 3000,
+      "maxWaiting": 32
+    },
+    "timeouts": {
+      "requestMillis": 10000,
+      "transactionMillis": 5000,
+      "statementMillis": 2000,
+      "lockMillis": 1000,
+      "idleInTransactionMillis": 5000,
+      "shutdownMillis": 8000
+    }
+  }
+}

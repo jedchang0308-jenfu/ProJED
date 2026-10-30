@@ -59,19 +59,30 @@ import { createLocalTaskTrackingReferenceService } from '../features/taskTrackin
 import type { TrackingReferenceService } from '../features/taskTracking/types';
 import { TaskTrackingError } from '../features/taskTracking/errors';
 import { supabaseTaskTrackingReferenceService } from './supabase/taskTrackingReferenceService';
+import {
+  httpCollaborationService,
+  httpDomainReadService,
+  httpDomainWriteService,
+  httpRecordActivityService,
+  httpTaskTrackingService,
+  httpBackupService,
+} from './httpApi/backend';
+import {
+  isHttpBackend,
+  isLocalTestBackend,
+  isSupabaseBackend,
+} from './backendMode';
 
-export type DataBackend = 'firebase' | 'supabase' | 'local-test';
+export {
+  dataBackend,
+  isHttpBackend,
+  isLocalTestBackend,
+  isSupabaseBackend,
+  type DataBackend,
+} from './backendMode';
 
-const configuredBackend = import.meta.env.VITE_DATA_BACKEND as DataBackend | undefined;
-
-export const dataBackend: DataBackend =
-  configuredBackend === 'local-test'
-    ? 'local-test'
-    : configuredBackend === 'supabase'
-      ? 'supabase'
-      : 'firebase';
-export const isSupabaseBackend = dataBackend === 'supabase';
-export const isLocalTestBackend = dataBackend === 'local-test';
+const rejectHttpUnsupported = <T>(operation: string): Promise<T> =>
+  Promise.reject(new Error(`HTTP backend does not support ${operation}.`));
 
 const unsupportedTaskTrackingReferenceService: TrackingReferenceService = {
   getCapability: async () => ({ supported: false, reason: 'backend_unsupported' }),
@@ -89,6 +100,8 @@ const unsupportedTaskTrackingReferenceService: TrackingReferenceService = {
 export const getTaskTrackingReferenceService = (getTasks: () => readonly TaskNode[] = () => []) => (
   isLocalTestBackend
     ? createLocalTaskTrackingReferenceService(getTasks)
+    : isHttpBackend
+      ? httpTaskTrackingService
     : isSupabaseBackend
       ? supabaseTaskTrackingReferenceService
       : unsupportedTaskTrackingReferenceService
@@ -111,6 +124,8 @@ const unsupportedBackupBackend: BackupBackendAdapter = {
 
 export const backupBackendService: BackupBackendAdapter = isLocalTestBackend
   ? localTestBackupService
+  : isHttpBackend
+    ? httpBackupService
   : isSupabaseBackend
     ? supabaseBackupService
     : unsupportedBackupBackend;
@@ -150,9 +165,9 @@ const writeFallbackRolePermissions = (
 };
 
 const logAuditBestEffort = async (entry: Omit<AuditLogEntry, 'id' | 'actorId' | 'createdAt'>) => {
-  if (!isSupabaseBackend) return;
+  if (!isSupabaseBackend && !isHttpBackend) return;
   try {
-    await supabaseEventLogService.logAudit(entry);
+    await (isHttpBackend ? httpRecordActivityService.logAudit(entry) : supabaseEventLogService.logAudit(entry));
   } catch (error) {
     console.warn('[auditLog] Failed to write collaboration audit event:', error);
   }
@@ -160,21 +175,27 @@ const logAuditBestEffort = async (entry: Omit<AuditLogEntry, 'id' | 'actorId' | 
 
 export const workspaceService = {
   create: (userId: string, title?: string): Promise<Workspace> =>
-    isLocalTestBackend
+    isHttpBackend
+      ? httpCollaborationService.createWorkspace(title)
+      : isLocalTestBackend
       ? localTestWorkspaceService.create(title)
       : isSupabaseBackend
       ? supabaseWorkspaceService.create(title)
       : firestoreWorkspaceService.create(userId, title),
 
   restore: (workspace: Workspace): Promise<void> =>
-    isLocalTestBackend
+    isHttpBackend
+      ? rejectHttpUnsupported('workspace restore')
+      : isLocalTestBackend
       ? localTestWorkspaceService.restore(workspace)
       : isSupabaseBackend
       ? supabaseWorkspaceService.restore(workspace)
       : firestoreWorkspaceService.restore(workspace),
 
   update: (workspaceId: string, updates: Partial<Workspace>): Promise<void> =>
-    isLocalTestBackend
+    isHttpBackend
+      ? httpCollaborationService.updateWorkspace(workspaceId, updates).then(() => undefined)
+      : isLocalTestBackend
       ? localTestWorkspaceService.update(workspaceId, updates)
       : isSupabaseBackend
       ? supabaseWorkspaceService.update(workspaceId, updates)
@@ -190,7 +211,9 @@ export const workspaceService = {
       afterData: null,
     });
 
-    return isLocalTestBackend
+    return isHttpBackend
+      ? httpCollaborationService.deleteWorkspace(workspaceId)
+      : isLocalTestBackend
       ? localTestWorkspaceService.delete(workspaceId)
       : isSupabaseBackend
       ? supabaseWorkspaceService.delete(workspaceId)
@@ -201,21 +224,27 @@ export const workspaceService = {
 
 export const boardService = {
   create: (workspaceId: string, title?: string): Promise<Board> =>
-    isLocalTestBackend
+    isHttpBackend
+      ? httpCollaborationService.createBoard(workspaceId, title)
+      : isLocalTestBackend
       ? localTestBoardService.create(workspaceId, title)
       : isSupabaseBackend
       ? supabaseBoardService.create(workspaceId, title)
       : firestoreBoardService.create(workspaceId, title),
 
   restore: (workspaceId: string, board: Board): Promise<void> =>
-    isLocalTestBackend
+    isHttpBackend
+      ? rejectHttpUnsupported('board restore')
+      : isLocalTestBackend
       ? localTestBoardService.restore(workspaceId, board)
       : isSupabaseBackend
       ? supabaseBoardService.restore(workspaceId, board)
       : firestoreBoardService.restore(workspaceId, board),
 
   update: (workspaceId: string, boardId: string, updates: Partial<Board>): Promise<void> =>
-    isLocalTestBackend
+    isHttpBackend
+      ? httpCollaborationService.updateBoard(workspaceId, boardId, updates).then(() => undefined)
+      : isLocalTestBackend
       ? localTestBoardService.update(workspaceId, boardId, updates)
       : isSupabaseBackend
       ? supabaseBoardService.update(workspaceId, boardId, updates)
@@ -232,7 +261,9 @@ export const boardService = {
       afterData: null,
     });
 
-    return isLocalTestBackend
+    return isHttpBackend
+      ? httpCollaborationService.deleteBoard(workspaceId, boardId)
+      : isLocalTestBackend
       ? localTestBoardService.delete(workspaceId, boardId)
       : isSupabaseBackend
       ? supabaseBoardService.delete(workspaceId, boardId)
@@ -244,6 +275,9 @@ export const boardService = {
     boardId: string,
     targetWorkspaceId: string
   ): Promise<BoardWorkspaceTransferPreview> => {
+    if (isHttpBackend) {
+      return httpCollaborationService.previewBoardTransfer(workspaceId, boardId, targetWorkspaceId);
+    }
     if (isLocalTestBackend) {
       return localTestBoardService.previewWorkspaceTransfer(workspaceId, boardId, targetWorkspaceId);
     }
@@ -259,6 +293,11 @@ export const boardService = {
     targetWorkspaceId: string,
     expectedBoardTitle: string
   ): Promise<BoardWorkspaceTransferPreview> => {
+    if (isHttpBackend) {
+      return httpCollaborationService.moveBoardToWorkspace(
+        workspaceId, boardId, targetWorkspaceId, expectedBoardTitle,
+      );
+    }
     if (isLocalTestBackend) {
       return localTestBoardService.moveToWorkspace(workspaceId, boardId, targetWorkspaceId, expectedBoardTitle);
     }
@@ -271,21 +310,27 @@ export const boardService = {
 
 export const memberService = {
   listWorkspaceMembers: (workspaceId: string): Promise<WorkspaceMember[]> =>
-    isLocalTestBackend
+    isHttpBackend
+      ? httpDomainReadService.listWorkspaceMembers(workspaceId)
+      : isLocalTestBackend
       ? localTestMemberService.listWorkspaceMembers(workspaceId)
       : isSupabaseBackend
       ? supabaseMemberService.listWorkspaceMembers(workspaceId)
       : firestoreMemberService.listWorkspaceMembers(workspaceId),
 
   listBoardMembers: (workspaceId: string, boardId: string): Promise<BoardMember[]> =>
-    isLocalTestBackend
+    isHttpBackend
+      ? httpDomainReadService.listBoardMembers(workspaceId, boardId)
+      : isLocalTestBackend
       ? localTestMemberService.listBoardMembers(workspaceId, boardId)
       : isSupabaseBackend
       ? supabaseMemberService.listBoardMembers(workspaceId, boardId)
       : firestoreMemberService.listBoardMembers(workspaceId, boardId),
 
   getBoardRolePermissions: async (workspaceId: string, boardId: string): Promise<BoardRolePermissionMatrix> =>
-    isLocalTestBackend
+    isHttpBackend
+      ? httpDomainReadService.getBoardRolePermissions(workspaceId, boardId)
+      : isLocalTestBackend
       ? localTestMemberService.getBoardRolePermissions(workspaceId, boardId)
       : isSupabaseBackend
       ? supabaseMemberService.getBoardRolePermissions(workspaceId, boardId)
@@ -296,7 +341,9 @@ export const memberService = {
     boardId: string,
     permissions: BoardRolePermissionMatrix
   ): Promise<void> =>
-    isLocalTestBackend
+    isHttpBackend
+      ? httpCollaborationService.updateRolePermissions(workspaceId, boardId, permissions).then(() => undefined)
+      : isLocalTestBackend
       ? localTestMemberService.updateBoardRolePermissions(workspaceId, boardId, permissions)
       : isSupabaseBackend
       ? supabaseMemberService.updateBoardRolePermissions(workspaceId, boardId, permissions)
@@ -338,14 +385,18 @@ export const memberService = {
   },
 
   upsertBoardMember: (workspaceId: string, boardId: string, userId: string, role: BoardMember['role']): Promise<void> =>
-    isLocalTestBackend
+    isHttpBackend
+      ? httpCollaborationService.upsertBoardMember(workspaceId, boardId, userId, role).then(() => undefined)
+      : isLocalTestBackend
       ? localTestMemberService.upsertBoardMember(workspaceId, boardId, userId, role)
       : isSupabaseBackend
       ? supabaseMemberService.upsertBoardMember(workspaceId, boardId, userId, role)
       : Promise.resolve(),
 
   removeBoardMember: (workspaceId: string, boardId: string, userId: string): Promise<void> =>
-    isLocalTestBackend
+    isHttpBackend
+      ? httpCollaborationService.removeBoardMember(workspaceId, boardId, userId)
+      : isLocalTestBackend
       ? localTestMemberService.removeBoardMember(workspaceId, boardId, userId)
       : isSupabaseBackend
       ? supabaseMemberService.removeBoardMember(workspaceId, boardId, userId)
@@ -354,28 +405,36 @@ export const memberService = {
 
 export const boardInviteService = {
   listPending: (workspaceId: string, boardId: string) =>
-    isLocalTestBackend
+    isHttpBackend
+      ? httpCollaborationService.listPendingInvites(workspaceId, boardId)
+      : isLocalTestBackend
       ? localTestBoardInviteService.listPending(workspaceId, boardId)
       : isSupabaseBackend
       ? supabaseBoardInviteService.listPending(workspaceId, boardId)
       : Promise.resolve([]),
 
   create: (workspaceId: string, boardId: string, input: BoardInviteCreateInput) =>
-    isLocalTestBackend
+    isHttpBackend
+      ? httpCollaborationService.createInvite(workspaceId, boardId, input)
+      : isLocalTestBackend
       ? localTestBoardInviteService.create(workspaceId, boardId, input)
       : isSupabaseBackend
       ? supabaseBoardInviteService.create(workspaceId, boardId, input)
       : Promise.reject(new Error('Board email invites are only available with the Supabase backend.')),
 
   revoke: (workspaceId: string, boardId: string, inviteId: string) =>
-    isLocalTestBackend
+    isHttpBackend
+      ? httpCollaborationService.revokeInvite(workspaceId, boardId, inviteId)
+      : isLocalTestBackend
       ? localTestBoardInviteService.revoke(workspaceId, boardId, inviteId)
       : isSupabaseBackend
       ? supabaseBoardInviteService.revoke(workspaceId, boardId, inviteId)
       : Promise.reject(new Error('Board email invites are only available with the Supabase backend.')),
 
   accept: (input: BoardInviteAcceptInput) =>
-    isLocalTestBackend
+    isHttpBackend
+      ? httpCollaborationService.acceptInvite(input)
+      : isLocalTestBackend
       ? localTestBoardInviteService.accept(input)
       : isSupabaseBackend
       ? supabaseBoardInviteService.accept(input)
@@ -384,28 +443,36 @@ export const boardInviteService = {
 
 export const nodeService = {
   listByProject: (workspaceId: string, boardId: string): Promise<TaskNode[]> =>
-    isLocalTestBackend
+    isHttpBackend
+      ? httpDomainReadService.listTasks(workspaceId, boardId)
+      : isLocalTestBackend
       ? localTestNodeService.listByProject(workspaceId, boardId)
       : isSupabaseBackend
       ? supabaseNodeService.listByProject(workspaceId, boardId)
       : firestoreNodeService.listByProject(workspaceId, boardId),
 
   create: (workspaceId: string, boardId: string, node: TaskNode): Promise<void | TaskNode> =>
-    isLocalTestBackend
+    isHttpBackend
+      ? httpDomainWriteService.createTask(workspaceId, boardId, node)
+      : isLocalTestBackend
       ? localTestNodeService.create(workspaceId, boardId, node)
       : isSupabaseBackend
       ? supabaseNodeService.create(workspaceId, boardId, node)
       : firestoreNodeService.create(workspaceId, boardId, node),
 
   update: (workspaceId: string, boardId: string, nodeId: string, updates: Partial<TaskNode>): Promise<void> =>
-    isLocalTestBackend
+    isHttpBackend
+      ? httpDomainWriteService.updateTask(workspaceId, boardId, nodeId, updates).then(() => undefined)
+      : isLocalTestBackend
       ? localTestNodeService.update(workspaceId, boardId, nodeId, updates)
       : isSupabaseBackend
       ? supabaseNodeService.update(workspaceId, boardId, nodeId, updates)
       : firestoreNodeService.update(workspaceId, boardId, nodeId, updates),
 
   delete: (workspaceId: string, boardId: string, nodeId: string): Promise<void> =>
-    isLocalTestBackend
+    isHttpBackend
+      ? httpDomainWriteService.deleteTask(workspaceId, boardId, nodeId)
+      : isLocalTestBackend
       ? localTestNodeService.delete(workspaceId, boardId, nodeId)
       : isSupabaseBackend
       ? supabaseNodeService.delete(workspaceId, boardId, nodeId)
@@ -416,7 +483,9 @@ export const nodeService = {
     boardId: string,
     updates: { id: string; data: Partial<TaskNode> }[]
   ): Promise<void> =>
-    isLocalTestBackend
+    isHttpBackend
+      ? httpDomainWriteService.batchUpdateTasks(workspaceId, boardId, updates).then(() => undefined)
+      : isLocalTestBackend
       ? localTestNodeService.batchUpdate(workspaceId, boardId, updates)
       : isSupabaseBackend
       ? supabaseNodeService.batchUpdate(workspaceId, boardId, updates)
@@ -424,6 +493,7 @@ export const nodeService = {
 
   /** Delete all nodes in a project, then create all provided nodes. For import/overwrite flows. */
   replaceAllByProject: async (workspaceId: string, boardId: string, nodes: TaskNode[]): Promise<void> => {
+    if (isHttpBackend) return rejectHttpUnsupported('transactional task replacement');
     if (isLocalTestBackend) {
       await localTestNodeService.replaceAllByProject(workspaceId, boardId, nodes);
       return;
@@ -467,28 +537,36 @@ export const nodeService = {
 
 export const dependencyService = {
   create: (workspaceId: string, boardId: string, dependency: Omit<Dependency, 'id'>): Promise<Dependency> =>
-    isLocalTestBackend
+    isHttpBackend
+      ? httpDomainWriteService.createDependency(workspaceId, boardId, dependency)
+      : isLocalTestBackend
       ? localTestDependencyService.create(workspaceId, boardId, dependency)
       : isSupabaseBackend
       ? supabaseDependencyService.create(workspaceId, boardId, dependency)
       : firestoreDependencyService.create(workspaceId, boardId, dependency),
 
   set: (workspaceId: string, boardId: string, dependency: Dependency): Promise<Dependency> =>
-    isLocalTestBackend
+    isHttpBackend
+      ? httpDomainWriteService.setDependency(workspaceId, boardId, dependency)
+      : isLocalTestBackend
       ? localTestDependencyService.set(workspaceId, boardId, dependency)
       : isSupabaseBackend
       ? supabaseDependencyService.set(workspaceId, boardId, dependency)
       : firestoreDependencyService.set(workspaceId, boardId, dependency),
 
   update: (workspaceId: string, boardId: string, dependencyId: string, updates: Partial<Dependency>): Promise<void> =>
-    isLocalTestBackend
+    isHttpBackend
+      ? httpDomainWriteService.updateDependency(workspaceId, boardId, dependencyId, updates).then(() => undefined)
+      : isLocalTestBackend
       ? localTestDependencyService.update(workspaceId, boardId, dependencyId, updates)
       : isSupabaseBackend
       ? supabaseDependencyService.update(workspaceId, boardId, dependencyId, updates)
       : firestoreDependencyService.update(workspaceId, boardId, dependencyId, updates),
 
   delete: (workspaceId: string, boardId: string, dependencyId: string): Promise<void> =>
-    isLocalTestBackend
+    isHttpBackend
+      ? httpDomainWriteService.deleteDependency(workspaceId, boardId, dependencyId)
+      : isLocalTestBackend
       ? localTestDependencyService.delete(workspaceId, boardId, dependencyId)
       : isSupabaseBackend
       ? supabaseDependencyService.delete(workspaceId, boardId, dependencyId)
@@ -497,35 +575,45 @@ export const dependencyService = {
 
 export const tagService = {
   listByWorkspace: (workspaceId: string): Promise<TaskTag[]> =>
-    isLocalTestBackend
+    isHttpBackend
+      ? httpDomainReadService.listTags(workspaceId)
+      : isLocalTestBackend
       ? localTestTagService.listByWorkspace(workspaceId)
       : isSupabaseBackend
       ? supabaseTagService.listByWorkspace(workspaceId)
       : firestoreTagService.listByWorkspace(workspaceId),
 
   create: (workspaceId: string, tag: TaskTag): Promise<TaskTag> =>
-    isLocalTestBackend
+    isHttpBackend
+      ? httpDomainWriteService.createTag(workspaceId, tag)
+      : isLocalTestBackend
       ? localTestTagService.create(workspaceId, tag)
       : isSupabaseBackend
       ? supabaseTagService.create(workspaceId, tag)
       : firestoreTagService.create(workspaceId, tag),
 
   update: (workspaceId: string, tagId: string, updates: Partial<TaskTag>): Promise<void> =>
-    isLocalTestBackend
+    isHttpBackend
+      ? httpDomainWriteService.updateTag(workspaceId, tagId, updates).then(() => undefined)
+      : isLocalTestBackend
       ? localTestTagService.update(workspaceId, tagId, updates)
       : isSupabaseBackend
       ? supabaseTagService.update(workspaceId, tagId, updates)
       : firestoreTagService.update(workspaceId, tagId, updates),
 
   delete: (workspaceId: string, tagId: string): Promise<void> =>
-    isLocalTestBackend
+    isHttpBackend
+      ? httpDomainWriteService.deleteTag(workspaceId, tagId)
+      : isLocalTestBackend
       ? localTestTagService.delete(workspaceId, tagId)
       : isSupabaseBackend
       ? supabaseTagService.delete(workspaceId, tagId)
       : firestoreTagService.delete(workspaceId, tagId),
 
   setNodeTags: (workspaceId: string, boardId: string, nodeId: string, tagIds: string[]): Promise<void> =>
-    isLocalTestBackend
+    isHttpBackend
+      ? httpDomainWriteService.setTaskTags(workspaceId, boardId, nodeId, tagIds).then(() => undefined)
+      : isLocalTestBackend
       ? localTestTagService.setNodeTags(workspaceId, boardId, nodeId, tagIds)
       : isSupabaseBackend
       ? supabaseTagService.setNodeTags(workspaceId, boardId, nodeId, tagIds)
@@ -534,7 +622,9 @@ export const tagService = {
 
 export const recordService = {
   listByProject: (workspaceId: string, boardId: string): Promise<EditableKnowledgeRecord[]> =>
-    (isLocalTestBackend
+    (isHttpBackend
+      ? httpRecordActivityService.listRecords(workspaceId, boardId)
+      : isLocalTestBackend
       ? localTestRecordService.listByProject(workspaceId, boardId)
       : isSupabaseBackend
       ? supabaseRecordService.listByProject(workspaceId, boardId)
@@ -546,14 +636,18 @@ export const recordService = {
     nodeId: string,
     options: { includeArchived?: boolean } = {},
   ): Promise<EditableKnowledgeRecord[]> =>
-    (isLocalTestBackend
+    (isHttpBackend
+      ? httpRecordActivityService.listRecordsByTask(workspaceId, boardId, nodeId, options)
+      : isLocalTestBackend
       ? localTestRecordService.listByNode(workspaceId, boardId, nodeId, options)
       : isSupabaseBackend
       ? supabaseRecordService.listByNode(workspaceId, boardId, nodeId, options)
       : firestoreRecordService.listByNode(workspaceId, boardId, nodeId, options)),
 
   upsert: (workspaceId: string, boardId: string, input: KnowledgeRecordInput): Promise<EditableKnowledgeRecord> =>
-    isLocalTestBackend
+    isHttpBackend
+      ? httpRecordActivityService.upsertRecord(workspaceId, boardId, input)
+      : isLocalTestBackend
       ? localTestRecordService.upsert(workspaceId, boardId, input)
       : isSupabaseBackend
       ? supabaseRecordService.upsert(workspaceId, boardId, input)
@@ -567,7 +661,9 @@ export const recordService = {
   },
 
   delete: (workspaceId: string, boardId: string, recordId: string): Promise<void> =>
-    isLocalTestBackend
+    isHttpBackend
+      ? httpRecordActivityService.archiveRecord(workspaceId, boardId, recordId)
+      : isLocalTestBackend
       ? localTestRecordService.delete(workspaceId, boardId, recordId)
       : isSupabaseBackend
       ? supabaseRecordService.delete(workspaceId, boardId, recordId)
@@ -576,19 +672,27 @@ export const recordService = {
 
 export const eventLogService = {
   logActivity: (event: Omit<ActivityEvent, 'id' | 'actorId' | 'createdAt'>): Promise<void> =>
-    isLocalTestBackend
+    isHttpBackend
+      ? httpRecordActivityService.logActivity(event)
+      : isLocalTestBackend
       ? localTestEventLogService.logActivity(event)
       : isSupabaseBackend
         ? supabaseEventLogService.logActivity(event)
         : Promise.resolve(),
 
   listActivity: (query: ActivityEventListQuery): Promise<ActivityEvent[]> =>
-    isLocalTestBackend
+    isHttpBackend
+      ? httpRecordActivityService.listActivity(query)
+      : isLocalTestBackend
       ? localTestEventLogService.listActivity(query)
       : isSupabaseBackend
         ? supabaseEventLogService.listActivity(query)
         : Promise.resolve([]),
 
   logAudit: (entry: Omit<AuditLogEntry, 'id' | 'actorId' | 'createdAt'>): Promise<void> =>
-    isSupabaseBackend ? supabaseEventLogService.logAudit(entry) : Promise.resolve(),
+    isHttpBackend
+      ? httpRecordActivityService.logAudit(entry)
+      : isSupabaseBackend
+        ? supabaseEventLogService.logAudit(entry)
+        : Promise.resolve(),
 };

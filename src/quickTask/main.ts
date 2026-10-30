@@ -17,6 +17,7 @@ import { installQuickReloadSafety } from '../features/quickTaskCapture/reloadSaf
 import { installQuickInstallGuide } from '../features/quickTaskCapture/install';
 import { getWorkbenchUrl } from '../features/quickTaskCapture/origins';
 import { installAppIconRefresh } from '../services/appIconService';
+import { isHttpBackend } from '../services/backendMode';
 
 installAppIconRefresh('quick-task');
 
@@ -77,7 +78,9 @@ let pageActive = true;
 let pendingClaim: { captureId: string; nonceHash: string; accountId: string; email: string | null; authEpoch: number; contextRevision: number } | null = null;
 
 const getAuthApi = () => {
-  authApiPromise ??= import('../features/quickTaskCapture/auth');
+  authApiPromise ??= isHttpBackend
+    ? import('../features/quickTaskCapture/authHttp') as Promise<QuickAuthApi>
+    : import('../features/quickTaskCapture/auth');
   return authApiPromise;
 };
 
@@ -197,7 +200,7 @@ const verifyAndFlush = async (expected: NonNullable<typeof authSnapshot>) => {
     const verified = verification.snapshot;
     authRetryCount = 0;
     setAuthStatus(`此快速 App 已登入：${verified.email ?? 'ProJED 帳號'}`, false, true);
-    const authFailed = await flushQuickTaskOutbox(verified, (captureId, state) => {
+    const authFailed = await flushQuickTaskOutbox(verified, auth, (captureId, state) => {
       if (authSnapshot?.accountId === verified.accountId && authSnapshot.authEpoch === verified.authEpoch
         && state === 'synced' && currentRecord?.captureId === captureId) {
         currentRecord = { ...currentRecord, state: 'synced' };

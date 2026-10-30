@@ -1,5 +1,5 @@
 import type { SerializedEditorState } from 'lexical';
-import type { TaskDetailNote, TaskDetailNoteRichContent, TaskNode } from '../types';
+import type { TaskDetailNote, TaskDetailNoteRichContent, TaskNode } from '../types/index.js';
 
 export const TASK_NOTE_RICH_CONTENT_SCHEMA = 'task-note.lexical-v1' as const;
 
@@ -357,8 +357,8 @@ export const buildTaskPurposeUpdates = (
   const firstNoteUnchanged = nextNotes.length === latestNotes.length
     && nextNotes.every((note, index) => {
       const current = latestNotes[index];
-      return Boolean(current)
-        && note.id === current.id
+      if (!current) return false;
+      return note.id === current.id
         && note.title === current.title
         && note.content === current.content
         && areTaskNoteRichContentsEqual(note.richContent, current.richContent);

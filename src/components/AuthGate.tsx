@@ -20,7 +20,7 @@ import {
   LOCAL_TEST_ACCOUNTS,
   LOCAL_TEST_SELECTED_ACCOUNT_KEY,
 } from '../services/authService';
-import { isLocalTestBackend, isSupabaseBackend } from '../services/dataBackend';
+import { isHttpBackend, isLocalTestBackend, isSupabaseBackend } from '../services/dataBackend';
 import { seedLocalTestEnvironment } from '../utils/localTestEnvironment';
 import { BOARD_INVITE_TOKEN_PARAM } from '../utils/boardInviteToken';
 import { refreshPwaReloadSafety, setPwaReloadReadiness } from '../services/pwaReloadSafety';
@@ -130,7 +130,7 @@ export default function AuthGate({ children }: AuthGateProps) {
 
     if (migrationState !== 'idle') return;
 
-    if (isSupabaseBackend) {
+    if (isSupabaseBackend || isHttpBackend) {
       setMigrationState('done');
       return;
     }
@@ -204,7 +204,7 @@ export default function AuthGate({ children }: AuthGateProps) {
           )}
 
           {/* 內建瀏覽器警告 */}
-          {isInApp && (
+          {isInApp && !isHttpBackend && (
             <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 mb-6 relative overflow-hidden text-left shadow-lg shadow-yellow-500/10">
               <div className="absolute top-0 left-0 w-1 h-full bg-yellow-400"></div>
               <h3 className="text-yellow-400 font-bold mb-2 flex items-center gap-2">
@@ -250,13 +250,18 @@ export default function AuthGate({ children }: AuthGateProps) {
           {/* Login button */}
           <button
             onClick={isLocalTestMode ? handleLocalTestSignIn : signInWithGoogle}
-            disabled={(shouldAutoTestLogin && loading) || isInApp}
+            disabled={(shouldAutoTestLogin && loading) || (isInApp && !isHttpBackend)}
             className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-50 text-gray-800 font-medium rounded-xl px-6 py-3.5 transition-all duration-200 hover:shadow-lg hover:shadow-white/10 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500 disabled:hover:shadow-none disabled:active:scale-100"
           >
             {isLocalTestMode ? (
               <>
                 <span className="text-lg">T</span>
                 使用固定測試環境
+              </>
+            ) : isHttpBackend ? (
+              <>
+                <span className="text-lg">J</span>
+                檢查 Jenfu-Platform 登入
               </>
             ) : isLocalSupabasePasswordMode ? (
               <>

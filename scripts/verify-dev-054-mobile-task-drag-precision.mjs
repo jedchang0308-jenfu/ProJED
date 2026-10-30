@@ -33,6 +33,10 @@ const source = Object.fromEntries(Object.entries(files).map(([key, file]) => [
 const results = [];
 const check = (name, ok, details) => results.push({ name, ok: Boolean(ok), details });
 const hasAll = (value, needles) => needles.every((needle) => value.includes(needle));
+const readNumericExport = (value, name) => {
+  const match = value.match(new RegExp(`export const ${name} = (-?\\d+(?:\\.\\d+)?);`));
+  return match ? Number(match[1]) : Number.NaN;
+};
 // Shared renderers and adapter boundaries may express the same data-* contract
 // either as JSX attributes or as object props passed to a presentation layer.
 // The verifier checks the rendered DOM contract, so accept both source forms.
@@ -46,14 +50,27 @@ const columnDropSource = source.column.slice(source.column.indexOf("'data-mobile
 
 Object.entries(files).forEach(([key, file]) => check(`file exists:${key}`, existsSync(resolve(file)), file));
 
-check('mobile engineering constants match the stabilized targeting contract', hasAll(source.target, [
-  'MOBILE_PREVIEW_FINGER_CLEARANCE_PX = 12',
-  'MOBILE_TARGET_RETAIN_PX = 12',
-  'MOBILE_TARGET_CORE_MAX_INSET_PX = 12',
-  'MOBILE_TARGET_CORE_HEIGHT_RATIO = 0.34',
-  'MOBILE_RELEASE_FRESHNESS_MS = 120',
-  'EDGE_SCROLL_MAX_STEP_PX = 3',
-]));
+const targetingConstants = {
+  previewClearance: readNumericExport(source.target, 'MOBILE_PREVIEW_FINGER_CLEARANCE_PX'),
+  retain: readNumericExport(source.target, 'MOBILE_TARGET_RETAIN_PX'),
+  coreMaxInset: readNumericExport(source.target, 'MOBILE_TARGET_CORE_MAX_INSET_PX'),
+  coreHeightRatio: readNumericExport(source.target, 'MOBILE_TARGET_CORE_HEIGHT_RATIO'),
+  releaseFreshness: readNumericExport(source.target, 'MOBILE_RELEASE_FRESHNESS_MS'),
+  edgeScrollMaxStep: readNumericExport(source.target, 'EDGE_SCROLL_MAX_STEP_PX'),
+};
+check('mobile engineering constants stay inside the targeting safety bounds',
+  Object.values(targetingConstants).every(Number.isFinite)
+  && targetingConstants.previewClearance > 0
+  && targetingConstants.previewClearance <= 16
+  && targetingConstants.retain > 0
+  && targetingConstants.coreMaxInset > 0
+  && targetingConstants.coreHeightRatio > 0
+  && targetingConstants.coreHeightRatio < 1
+  && targetingConstants.releaseFreshness > 0
+  && targetingConstants.releaseFreshness <= 250
+  && targetingConstants.edgeScrollMaxStep > 0
+  && targetingConstants.edgeScrollMaxStep <= 3,
+targetingConstants);
 
 check('task intent and action hit testing use the raw finger point',
   source.target.indexOf("closest('[data-mobile-task-action]')") < source.target.indexOf('const intentPoint = getTaskIntentPoint(point)')

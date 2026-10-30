@@ -1,0 +1,132 @@
+name: DEV-139 isolated validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/projed-independent-dev]
+    paths:
+      - .github/workflows/dev139-native.yml
+      - Dockerfile.dev139
+      - .dockerignore
+      - vite.config.ts
+      - server/**
+      - shared/**
+      - src/**
+      - db/**
+      - config/dev-139/**
+      - qa/dev-139/**
+      - scripts/check-db-boundary.mjs
+      - scripts/migrate-dev-139-s1.mjs
+      - scripts/build-dev139-cloud-run.mjs
+      - scripts/verify-dev139-cloud-run-artifact.mjs
+      - scripts/verify-dev139-oci.mjs
+      - scripts/create-dev139-managed-binding.mjs
+      - scripts/create-dev139-cloud-run-plan.mjs
+      - scripts/run-dev139-managed-job.mjs
+      - scripts/dev139-*.ts
+      - scripts/lib/dev139-*.ts
+      - scripts/lib/dev139-*.mjs
+      - tsconfig*.json
+      - package.json
+      - package-lock.json
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dev139-isolated-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  isolated:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Install locked dependencies
+        id: dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Server and S2 typecheck
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: npx tsc -p tsconfig.server.s2.json --noEmit
+      - name: Frontend typecheck
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: |
+          npx tsc -p tsconfig.json --noEmit
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npx tsc -p tsconfig.dev139.s3.json --noEmit
+      - name: S2 unit tests
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: npm run verify:dev-139:s2:unit
+      - name: S3 unit tests
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: npm run verify:dev-139:s3:unit
+      - name: Migration unit tests
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: npx tsx --test qa/dev-139/migration/*.test.ts
+      - name: Managed job entry and binding unit tests
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: npm run verify:dev-139:release-unit
+      - name: Kernel boundary
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: npm run check:db-boundary
+      - name: Disposable boundary
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: npm run verify:dev-139:s3:db-static
+      - name: Managed source boundary
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: npm run verify:dev-139:managed-static
+      - name: Compiled Cloud Run candidate artifact
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        # Existing verifier compiles server + Vite and checks emitted entry,
+        # static hashes and managed binding. It never runs Docker or connects DB.
+        run: npm run verify:dev-139:cloud-run-artifact
+      # Both wrappers create and clean up their own nonce cluster. They use the
+      # image's binaries, never its shared database/service or cloud credentials.
+      - name: PostgreSQL Session and domain HTTP regressions
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: '& ./qa/dev-139/s3/verify-isolated.ps1 -DatabaseOnly -PostgresBin $env:PGBIN'
+      - name: PostgreSQL snapshot migration rehearsal
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: '& ./qa/dev-139/migration/verify-isolated.ps1 -PostgresBin $env:PGBIN'
+      - name: Retain sanitized results
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: dev139-isolated-results
+          path: output/qa/dev-139/**/result.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+  oci:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Actual Linux runtime image and isolated Unix socket
+        # Builds the real Dockerfile, bootstraps only nonce-owned containers and
+        # tests managed-shaped socket configuration. No cloud credentials/push.
+        run: node scripts/verify-dev139-oci.mjs
+      - name: Retain sanitized OCI result
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: dev139-isolated-oci-result
+          path: output/qa/dev-139/oci/**/result.json
+          if-no-files-found: ignore
+          retention-days: 7

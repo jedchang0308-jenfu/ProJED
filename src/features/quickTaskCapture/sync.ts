@@ -5,8 +5,20 @@ import {
   getQuickAuthContext,
   prepareQuickCapturesForSync,
 } from './outbox';
-import { classifyQuickSyncError } from './model';
+import { classifyQuickSyncError, type QuickAuthContext } from './model';
 import { createQuickUnplacedTask, type QuickAuthSnapshot } from '../../services/supabase/quickTaskCaptureService';
+
+export type QuickTaskAuthGuard = {
+  getQuickAuthSnapshot(): QuickAuthSnapshot | null;
+};
+
+export const isQuickSyncAllowed = (
+  latest: QuickAuthSnapshot | null,
+  auth: QuickAuthSnapshot,
+  context: QuickAuthContext | undefined,
+) => latest?.accountId === auth.accountId && latest.authEpoch === auth.authEpoch
+  && context?.bindingAllowed && context.accountId === auth.accountId
+  && context.revision === auth.contextRevision && context.projectRef === auth.contextProjectRef;
 
 const parseRetryAfter = (value: unknown) => {
   if (typeof value !== 'string' || !value.trim()) return 0;
@@ -16,14 +28,15 @@ const parseRetryAfter = (value: unknown) => {
   return Number.isFinite(date) ? Math.max(0, Math.min(15 * 60_000, date - Date.now())) : 0;
 };
 
-export const flushQuickTaskOutbox = async (auth: QuickAuthSnapshot, onProgress?: (captureId: string, state: string) => void) => {
-  const authApi = await import('./auth');
+export const flushQuickTaskOutbox = async (
+  auth: QuickAuthSnapshot,
+  authApi: QuickTaskAuthGuard,
+  onProgress?: (captureId: string, state: string) => void,
+) => {
   const allowed = async () => {
     const context = await getQuickAuthContext();
     const latest = authApi.getQuickAuthSnapshot();
-    return latest?.accountId === auth.accountId && latest.authEpoch === auth.authEpoch
-      && context?.bindingAllowed && context.accountId === auth.accountId
-      && context.revision === auth.contextRevision && context.projectRef === auth.contextProjectRef;
+    return isQuickSyncAllowed(latest, auth, context);
   };
   if (!await allowed()) return false;
   await prepareQuickCapturesForSync(auth.accountId);
