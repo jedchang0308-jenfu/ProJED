@@ -10,18 +10,23 @@ $$;
 -- Capture rows contain lifecycle metadata, never transcript or record bodies.
 -- Only the RPC's short-lived purpose can read them without a business actor.
 CREATE POLICY meeting_audio_cleanup_capture_read_v1 ON projed_core.meeting_capture_sessions
-  FOR SELECT TO projed_runtime_disposable USING(current_setting('projed.audio_cleanup_phase',true) IN('scan','claim','finish'));
+  FOR SELECT TO projed_runtime_disposable USING(coalesce(current_setting('projed.actor_local_user_id',true),'')=''
+    AND(current_setting('projed.audio_cleanup_phase',true)='scan'
+      OR(current_setting('projed.audio_cleanup_phase',true)='claim'
+        AND id::text=current_setting('projed.audio_cleanup_capture',true))));
 CREATE POLICY meeting_audio_cleanup_maintenance_read_v1 ON projed_core.meeting_artifact_cleanup
   FOR SELECT TO projed_runtime_disposable USING(kind='storage' AND storage_backend='gcs'
-    AND(current_setting('projed.audio_cleanup_phase',true)='scan'
-      OR(obligation_id::text=current_setting('projed.audio_cleanup_id',true)
-        AND current_setting('projed.audio_cleanup_phase',true) IN('claim','finish'))
+    AND((coalesce(current_setting('projed.actor_local_user_id',true),'')=''
+      AND(current_setting('projed.audio_cleanup_phase',true)='scan'
+        OR(obligation_id::text=current_setting('projed.audio_cleanup_id',true)
+          AND current_setting('projed.audio_cleanup_phase',true) IN('claim','finish'))))
       OR(capture_id::text=current_setting('projed.audio_cleanup_capture',true)
         AND current_setting('projed.audio_cleanup_phase',true)='anchor' AND pg_trigger_depth()>0)));
 CREATE POLICY meeting_audio_cleanup_maintenance_update_v1 ON projed_core.meeting_artifact_cleanup
   FOR UPDATE TO projed_runtime_disposable
   USING(kind='storage' AND storage_backend='gcs'
-    AND((obligation_id::text=current_setting('projed.audio_cleanup_id',true)
+    AND((coalesce(current_setting('projed.actor_local_user_id',true),'')=''
+      AND obligation_id::text=current_setting('projed.audio_cleanup_id',true)
       AND current_setting('projed.audio_cleanup_phase',true) IN('claim','finish'))
       OR(capture_id::text=current_setting('projed.audio_cleanup_capture',true)
         AND current_setting('projed.audio_cleanup_phase',true)='anchor' AND pg_trigger_depth()>0)))
@@ -139,7 +144,7 @@ $$;
 CREATE FUNCTION projed_core.claim_meeting_audio_cleanup_v1(target_id uuid,token uuid)
 RETURNS jsonb LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,projed_core AS $$
 DECLARE item record;prior jsonb;key_name text;expected jsonb;lease_until timestamptz;result jsonb;
-  keys text[]:=ARRAY['projed.audio_cleanup_phase','projed.audio_cleanup_id','projed.audio_cleanup_token','projed.audio_cleanup_expected'];
+  keys text[]:=ARRAY['projed.audio_cleanup_phase','projed.audio_cleanup_id','projed.audio_cleanup_token','projed.audio_cleanup_expected','projed.audio_cleanup_capture'];
 BEGIN
   IF target_id IS NULL OR token IS NULL OR coalesce(current_setting('projed.actor_local_user_id',true),'')<>''
   THEN RAISE EXCEPTION 'AUDIO_CLEANUP_CLAIM_INVALID' USING ERRCODE='42501';END IF;
@@ -151,7 +156,9 @@ BEGIN
     upload_token_expires_at,due_at,attempts,error_code,storage_backend,upload_operation_token,upload_outcome,
     storage_generation,upload_sha256,upload_bytes,last_verified_at INTO item
     FROM projed_core.meeting_artifact_cleanup WHERE obligation_id=target_id FOR UPDATE;
-  IF FOUND AND item.state<>'deleted' AND(item.lease_expires_at IS NULL OR item.lease_expires_at<=clock_timestamp()
+  IF FOUND THEN
+    PERFORM set_config('projed.audio_cleanup_capture',coalesce(item.capture_id::text,''),true);
+  IF item.state<>'deleted' AND(item.lease_expires_at IS NULL OR item.lease_expires_at<=clock_timestamp()
       OR(item.state='deleting' AND item.lease_token=token))
     AND projed_core.meeting_audio_cleanup_due_v1(item.capture_id,item.due_at,item.upload_token_expires_at)
     AND item.object_locator ~ '^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/){4}v[1-9][0-9]*/(0|[1-9][0-9]*)\.(webm|ogg|m4a|mp3|wav)$'
@@ -173,6 +180,7 @@ BEGIN
       'leaseExpiresAtMs',floor(extract(epoch FROM item.lease_expires_at)*1000)::bigint,'key',item.object_locator,
       'generation',item.storage_generation,'uploadOperationToken',item.upload_operation_token,
       'sha256',item.upload_sha256,'bytes',item.upload_bytes,'uploadOutcome',item.upload_outcome);
+  END IF;
   END IF;
   FOREACH key_name IN ARRAY keys LOOP PERFORM set_config(key_name,coalesce(prior->>key_name,''),true);END LOOP;
   RETURN result;

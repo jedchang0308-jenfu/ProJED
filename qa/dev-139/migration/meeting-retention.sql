@@ -343,7 +343,8 @@ BEGIN
       ]::text[]
       WHEN 'projed_core.meeting_artifact_cleanup' THEN ARRAY[
         'upload_operation_token','upload_outcome','storage_generation','upload_sha256','upload_bytes',
-        'upload_token_expires_at','due_at','updated_at'
+        'upload_token_expires_at','due_at','updated_at','state','lease_token','lease_expires_at',
+        'attempts','error_code','last_verified_at'
       ]::text[]
       WHEN 'projed_core.meeting_analysis_runs' THEN ARRAY[
         'state','error_code','lease_token','lease_expires_at','updated_at','authorization_context_id',
@@ -373,7 +374,8 @@ BEGIN
       WHEN 'projed_core.meeting_artifact_cleanup' THEN ARRAY[
         'obligation_id','capture_id','attempt_id','kind','due_at','upload_token_expires_at',
         'state','object_locator','storage_backend','upload_operation_token','upload_outcome',
-        'storage_generation','upload_sha256','upload_bytes'
+        'storage_generation','upload_sha256','upload_bytes','lease_token','lease_expires_at',
+        'attempts','error_code','last_verified_at','updated_at'
       ]::text[]
       WHEN 'projed_core.meeting_ai_usage_attempts' THEN ARRAY[
         'attempt_id','capture_id','run_id','unit_identity','dispatch_month','provider','model','price_version',

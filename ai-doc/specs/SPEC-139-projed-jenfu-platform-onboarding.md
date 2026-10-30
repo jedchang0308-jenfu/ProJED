@@ -1365,6 +1365,10 @@ Storage增加有界、可指定generation的metadata probe；只有404可證該g
 
 本機S2 494項PASS（含generation信任提升修正）、S2／S3 strict同版本PG宣告overlay、affected lint與兩份42-migration static profile PASS。新增native cases沿isolated資料與synthetic storage驗時限、lease／stale token、actor拒絕、unknown不升級、錯hash／replacement不刪、parent-delete錨點及private-body拒絕；實際native／OCI結果待本版CI。先前完整41份基線仍為下節`f69b73c...`；不以unit／static成功宣稱42份已資格化。
 
+並行source審查另收緊候選0042的maintenance RLS：scan／claim／finish必須沒有business actor，claim只可讀exact obligation的parent capture，finish不授capture讀取；anchor仍由parent-delete trigger維護。正常actor query port原已拒絕`set_config`，本次是SQL邊界的防禦補強，沒有證據顯示HTTP client能設定maintenance purpose。Native加direct runtime policy負例及purpose／capture GUC恢復，避免只驗RPC拒絕卻未覆蓋policy；未改0001–0041。
+
+首輪source `13b85d5f85351253814553057fb07af8d578b1a3` 的 [CI41097032163](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/41097032163)整體FAIL。658 unit、原lockfile型別／三boundary／compiled artifact及OCI18／42 migrations PASS；已讀回artifact `12996073831`（dev139-oci-1485b0174701843d5700eff6），精確source、Docker execution及owned cleanup check均PASS，metadataProvider仍FIXTURE_ONLY。Native cleanup功能斷言走完後，catalog roles把PG `name[]`當作`text[]`比較而FAIL；獨立snapshot另在既有retention oracle未列0042必要cleanup欄位grant時FAIL。現將catalog query明確轉text[]，同步兩份精確column oracle，保留table-wide／DELETE／importer拒絕及功能斷言。兩項有效失敗均保留，沒有domain／snapshot成功result artifact；修正版native／OCI尚待同版CI，不以OCI成功替代完整資格。
+
 本次gcloud唯讀已恢復，無須沿用先前重新登入阻塞。精確project `projed-cc78d` 目前Run／Storage／Artifact Registry／Secret Manager API已啟用，Compute／SQL Admin／Speech／Vertex AI／Scheduler未啟用。asia-east1只有既有`projed-ai-backend`，沒有Job；專案bucket清單僅`run-sources-projed-cc78d-asia-east1`，不是音訊桶，且有七天soft delete。本輪未查runtime env，不能據此排除跨project bucket；沒有以它或fixture冒充合格audio bucket。Cloud LLM cache／abuse／logging與真provider品質仍UNKNOWN，三份binding仍未發布。後續需具名audio bucket、API／IAM／network及owner foundation執行包的明確授權；目前只讀盤點，沒有變更資源、正式資料或traffic。
 
 ### 階段編排與原子發布（0041／Rev75–77，2026-10-30已通過隔離驗證）

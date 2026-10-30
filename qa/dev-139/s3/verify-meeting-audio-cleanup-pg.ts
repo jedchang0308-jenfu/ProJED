@@ -176,7 +176,7 @@ async function verifyCatalog(database: RuntimeDatabase, config: RuntimeConfig): 
 
     const policies = await lease.client.query<{ polname: string; polcmd: string; roles: string[] }>(`
       SELECT p.polname,p.polcmd,
-        ARRAY(SELECT r.rolname FROM unnest(p.polroles) role_id(oid)
+        ARRAY(SELECT r.rolname::text FROM unnest(p.polroles) role_id(oid)
           JOIN pg_catalog.pg_roles r ON r.oid=role_id.oid ORDER BY r.rolname) AS roles
       FROM pg_catalog.pg_policy p
       JOIN pg_catalog.pg_class c ON c.oid=p.polrelid
@@ -196,8 +196,8 @@ async function verifyCatalog(database: RuntimeDatabase, config: RuntimeConfig): 
 
     const privileges = await lease.client.query<{ privilege: string; columns: string[] }>(`
       SELECT permission.privilege,
-        coalesce(array_agg(a.attname ORDER BY a.attname) FILTER (WHERE has_column_privilege(current_user,c.oid,a.attnum,permission.privilege)),
-          ARRAY[]::name[]) AS columns
+        coalesce(array_agg(a.attname::text ORDER BY a.attname) FILTER (WHERE has_column_privilege(current_user,c.oid,a.attnum,permission.privilege)),
+          ARRAY[]::text[]) AS columns
       FROM pg_catalog.pg_class c
       JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
       JOIN pg_catalog.pg_attribute a ON a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped
@@ -429,11 +429,40 @@ export async function verifyMeetingAudioCleanupPostgres(
     const lease = await database.checkout();
     try {
       await lease.client.query('BEGIN');
+      // Exercise the RLS directly as well as the actor RPC rejection above.
+      // The normal actor query port already rejects set_config; purpose alone
+      // must still never widen an already-bound actor's metadata visibility.
+      for (const phase of ['scan', 'claim', 'finish']) {
+        await lease.client.query(`SELECT set_config('projed.actor_local_user_id',$1,true),
+          set_config('projed.audio_cleanup_phase',$2,true),set_config('projed.audio_cleanup_id',$3,true),
+          set_config('projed.audio_cleanup_capture',$4,true)`, [outsider.localUserId, phase, known.id, knownCaptureId]);
+        const visible = await lease.client.query<{ captures: string; obligations: string }>(`
+          SELECT (SELECT count(*)::text FROM projed_core.meeting_capture_sessions WHERE id=$1::uuid) AS captures,
+            (SELECT count(*)::text FROM projed_core.meeting_artifact_cleanup WHERE obligation_id=$2::uuid) AS obligations
+        `, [knownCaptureId, known.id]);
+        assert.deepEqual(visible.rows, [{ captures: '0', obligations: '0' }],
+          `cleanup ${phase} purpose cannot widen an already-bound actor's metadata access`);
+      }
+      await lease.client.query(`SELECT set_config('projed.actor_local_user_id','',true),
+        set_config('projed.audio_cleanup_phase','claim',true),set_config('projed.audio_cleanup_capture',$1,true)`, [knownCaptureId]);
+      const exactCapture = await lease.client.query<{ id: string }>(`
+        SELECT id::text FROM projed_core.meeting_capture_sessions WHERE id=ANY($1::uuid[]) ORDER BY id
+      `, [[knownCaptureId, wrongHashCaptureId]]);
+      assert.deepEqual(exactCapture.rows, [{ id: knownCaptureId }], 'claim reads only the exact obligation parent capture');
+      await lease.client.query("SELECT set_config('projed.audio_cleanup_phase','finish',true)");
+      const finishCapture = await lease.client.query<{ count: string }>(
+        'SELECT count(*)::text FROM projed_core.meeting_capture_sessions WHERE id=$1::uuid', [knownCaptureId],
+      );
+      assert.deepEqual(finishCapture.rows, [{ count: '0' }], 'metadata finish needs no parent capture read permission');
+      await lease.client.query('ROLLBACK');
+
+      await lease.client.query('BEGIN');
       await lease.client.query(`SELECT
         set_config('projed.actor_local_user_id','',true),
         set_config('projed.audio_cleanup_phase','caller-sentinel',true),
         set_config('projed.audio_cleanup_id','caller-id',true),
         set_config('projed.audio_cleanup_token','caller-token',true),
+        set_config('projed.audio_cleanup_capture','caller-capture',true),
         set_config('projed.audio_cleanup_expected','{"state":"caller"}',true)`);
       await lease.client.query('SELECT projed_core.scan_meeting_audio_cleanup_v1(20)');
       const activeClaim = await lease.client.query<{ value: unknown }>(
@@ -445,16 +474,17 @@ export async function verifyMeetingAudioCleanupPostgres(
         [randomUUID(), randomUUID()],
       );
       const context = await lease.client.query<{
-        phase: string; id: string; token: string; expected: string; private_records: string; private_checkpoints: string;
+        phase: string; id: string; token: string; capture: string; expected: string; private_records: string; private_checkpoints: string;
       }>(`
         SELECT current_setting('projed.audio_cleanup_phase',true) AS phase,
           current_setting('projed.audio_cleanup_id',true) AS id,
           current_setting('projed.audio_cleanup_token',true) AS token,
+          current_setting('projed.audio_cleanup_capture',true) AS capture,
           current_setting('projed.audio_cleanup_expected',true) AS expected,
           (SELECT count(*)::text FROM projed_core.knowledge_records) AS private_records,
           (SELECT count(*)::text FROM projed_core.meeting_llm_unit_checkpoints) AS private_checkpoints
       `);
-      assert.deepEqual(context.rows, [{ phase: 'caller-sentinel', id: 'caller-id', token: 'caller-token',
+      assert.deepEqual(context.rows, [{ phase: 'caller-sentinel', id: 'caller-id', token: 'caller-token', capture: 'caller-capture',
         expected: '{"state":"caller"}', private_records: '0', private_checkpoints: '0' }],
       'maintenance RPCs restore caller context and leave private record/checkpoint reads unavailable');
       await lease.client.query('ROLLBACK');
