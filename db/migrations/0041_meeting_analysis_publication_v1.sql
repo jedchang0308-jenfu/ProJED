@@ -1,3 +1,135 @@
+-- Preserve 0040 settlement behavior while using PostgreSQL-safe 1..256 length validation.
+
+CREATE OR REPLACE FUNCTION projed_core.settle_meeting_llm_unit_v1(target_run uuid,token uuid,payload jsonb)
+RETURNS jsonb LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,projed_core AS $$
+DECLARE usage record;run projed_core.meeting_analysis_runs;budget record;
+  checkpoint projed_core.meeting_llm_unit_checkpoints;kind_value text;code_value text;wire text;result_hash text;request_hash text;
+  charge bigint;released bigint;receipt jsonb;expected jsonb;published boolean:=false;can_publish boolean:=false;actor_live boolean:=false;
+  next_state text;next_error text;next_time timestamptz;next_actual bigint;checkpoint_id uuid;result jsonb;
+  prior jsonb;key_name text;
+  keys text[]:=ARRAY['projed.llm_phase','projed.llm_run_id','projed.llm_token','projed.llm_verified_token','projed.llm_month',
+    'projed.llm_expected_run','projed.llm_expected_usage','projed.llm_expected_budget','projed.llm_expected_checkpoint','projed.llm_receipt'];
+BEGIN
+  IF target_run IS NULL OR token IS NULL OR payload IS NULL OR jsonb_typeof(payload)<>'object'
+    OR payload-ARRAY['kind','code','usage','resultText','modelVersion','responseId']<>'{}'::jsonb
+  THEN RAISE EXCEPTION 'MEETING_LLM_SETTLEMENT_INVALID' USING ERRCODE='42501';END IF;
+  kind_value:=payload->>'kind';code_value:=payload->>'code';
+  IF kind_value IS NULL OR kind_value NOT IN('completed','unusable','not_sent','usage_unknown')
+    OR(kind_value<>'completed' AND(code_value IS NULL OR code_value !~ '^LLM_[A-Z0-9_]{1,80}$'))
+    OR(kind_value<>'completed' AND payload ? 'resultText')
+    OR(kind_value='completed' AND payload ? 'code')
+    OR(kind_value IN('not_sent','usage_unknown') AND(payload ? 'usage' OR payload ? 'modelVersion' OR payload ? 'responseId'))
+    OR(payload ? 'responseId' AND(coalesce(char_length(payload->>'responseId'),0) NOT BETWEEN 1 AND 256
+      OR coalesce(payload->>'responseId','') !~ '^[a-zA-Z0-9._:/=-]+$'))
+  THEN RAISE EXCEPTION 'MEETING_LLM_SETTLEMENT_INVALID' USING ERRCODE='42501';END IF;
+  request_hash:=encode(sha256(convert_to(payload::text,'UTF8')),'hex');
+  SELECT jsonb_object_agg(settings.key_name,current_setting(settings.key_name,true)) INTO prior FROM unnest(keys) settings(key_name);
+  PERFORM pg_advisory_xact_lock(hashtextextended('projed:runtime-transaction:v1',0));
+  PERFORM set_config('projed.llm_phase','settle',true),set_config('projed.llm_run_id',target_run::text,true),
+    set_config('projed.llm_token',token::text,true),set_config('projed.llm_verified_token','',true);
+  SELECT attempt_id,capture_id,run_id,unit_identity,dispatch_month,provider,model,price_version,
+      reserved_twd_micros,actual_twd_micros,usage_state,outcome,created_at,dispatch_state,asr_remaining_twd_micros,
+      asr_operation_token,asr_manifest,llm_operation_token,llm_manifest INTO usage FROM projed_core.meeting_ai_usage_attempts WHERE run_id=target_run AND llm_operation_token=token FOR UPDATE;
+  IF FOUND THEN
+    PERFORM set_config('projed.llm_verified_token',token::text,true),set_config('projed.llm_month',usage.dispatch_month::text,true);
+    IF usage.usage_state IN('known','unknown') THEN
+      IF usage.llm_manifest->'settlement' IS NOT NULL THEN
+        IF usage.llm_manifest#>>'{settlement,requestHash}' IS DISTINCT FROM request_hash THEN
+          RAISE EXCEPTION 'MEETING_LLM_SETTLEMENT_CONFLICT' USING ERRCODE='42501';END IF;
+        result:=usage.llm_manifest->'settlement';
+      ELSIF usage.usage_state='known' AND usage.actual_twd_micros=0 AND usage.outcome='cancelled_before_dispatch' AND kind_value='not_sent' THEN
+        result:=jsonb_build_object('kind','not_sent','published',false,'chargeMicros',0,'requestHash',request_hash,'costBasis','budget_estimate_not_invoice');
+      ELSE RAISE EXCEPTION 'MEETING_LLM_SETTLEMENT_CONFLICT' USING ERRCODE='42501';END IF;
+    ELSIF usage.usage_state='reserved' THEN
+      IF kind_value IN('completed','unusable') THEN
+        IF jsonb_typeof(payload->'usage') IS DISTINCT FROM 'object'
+          OR((usage.llm_manifest->>'stage'='retrieve') AND(payload->'usage')-ARRAY['tokenCount','billableCharacterCount']<>'{}'::jsonb)
+          OR((usage.llm_manifest->>'stage'<>'retrieve') AND(payload->'usage')-ARRAY['promptTokens','candidateTokens','thoughtTokens','totalTokens','cachedTokens']<>'{}'::jsonb)
+          OR((usage.llm_manifest->>'stage'<>'retrieve') AND coalesce(payload->>'modelVersion','') !~ '^gemini-3\.5-flash(-[0-9]{3})?$')
+          OR((usage.llm_manifest->>'stage'='retrieve') AND payload ? 'modelVersion'
+            AND payload->>'modelVersion' IS DISTINCT FROM 'gemini-embedding-001')
+          OR(kind_value='completed' AND coalesce(payload#>>'{usage,cachedTokens}','0')::numeric<>0)
+        THEN RAISE EXCEPTION 'MEETING_LLM_USAGE_INVALID' USING ERRCODE='42501';END IF;
+      END IF;
+      IF kind_value<>'not_sent' AND usage.dispatch_state IS DISTINCT FROM 'dispatched'
+      THEN RAISE EXCEPTION 'MEETING_LLM_RESPONSE_BEFORE_DISPATCH' USING ERRCODE='42501';END IF;
+      charge:=CASE WHEN kind_value='not_sent' THEN 0 WHEN kind_value='usage_unknown' THEN NULL
+        ELSE projed_core.meeting_llm_charge_v1(usage.llm_manifest->>'stage',payload->'usage',(usage.llm_manifest->>'queryUtf8Bytes')::integer) END;
+      IF kind_value IN('completed','unusable') AND charge IS NULL THEN
+        RAISE EXCEPTION 'MEETING_LLM_USAGE_INVALID' USING ERRCODE='42501';END IF;
+      IF charge<0 OR charge>usage.reserved_twd_micros THEN RAISE EXCEPTION 'MEETING_LLM_USAGE_INVALID' USING ERRCODE='42501';END IF;
+      SELECT * INTO run FROM projed_core.meeting_analysis_runs WHERE id=target_run FOR UPDATE;
+      actor_live:=FOUND AND run.state='running' AND run.lease_token=token AND projed_core.meeting_llm_live_v1(target_run);
+      can_publish:=actor_live AND run.lease_expires_at>clock_timestamp();
+      IF kind_value='completed' THEN
+        wire:=payload->>'resultText';
+        IF wire IS NULL OR octet_length(wire) NOT BETWEEN 2 AND 1048576 OR jsonb_typeof(wire::jsonb)<>'object'
+        THEN RAISE EXCEPTION 'MEETING_LLM_RESULT_INVALID' USING ERRCODE='42501';END IF;
+        result_hash:=encode(sha256(convert_to(wire,'UTF8')),'hex');
+        IF can_publish THEN
+          SELECT * INTO checkpoint FROM projed_core.meeting_llm_unit_checkpoints WHERE run_id=run.id
+            AND stage=usage.llm_manifest->>'stage' AND unit_key=usage.llm_manifest->>'unitKey'
+            AND input_hash=usage.llm_manifest->>'inputHash' AND slot='result';
+          IF FOUND THEN
+            IF checkpoint.payload_text<>wire OR checkpoint.attempt_id<>usage.attempt_id THEN
+              RAISE EXCEPTION 'MEETING_LLM_RESULT_CONFLICT' USING ERRCODE='42501';END IF;
+          ELSE
+            checkpoint_id:=gen_random_uuid();
+            expected:=jsonb_build_object('id',checkpoint_id,'capture_id',run.capture_id,'run_id',run.id,'source_version',run.source_version,
+              'transcript_revision_id',run.transcript_revision_id,'stage',usage.llm_manifest->>'stage','unit_key',usage.llm_manifest->>'unitKey',
+              'input_hash',usage.llm_manifest->>'inputHash','slot','result','attempt_id',usage.attempt_id,'payload_text',wire,'payload_hash',result_hash);
+            PERFORM set_config('projed.llm_expected_checkpoint',expected::text,true);
+            INSERT INTO projed_core.meeting_llm_unit_checkpoints(id,capture_id,run_id,source_version,transcript_revision_id,stage,unit_key,
+              input_hash,slot,attempt_id,payload_text,payload_hash)
+              VALUES(checkpoint_id,run.capture_id,run.id,run.source_version,run.transcript_revision_id,usage.llm_manifest->>'stage',
+                usage.llm_manifest->>'unitKey',usage.llm_manifest->>'inputHash','result',usage.attempt_id,wire,result_hash);
+          END IF;
+          published:=true;
+        END IF;
+      END IF;
+      receipt:=jsonb_build_object('kind',kind_value,'published',published,'chargeMicros',charge,'requestHash',request_hash,
+        'resultHash',result_hash,'costBasis','budget_estimate_not_invoice','usage',payload->'usage',
+        'modelVersion',payload->>'modelVersion','responseId',payload->>'responseId');
+      PERFORM set_config('projed.llm_receipt',receipt::text,true);
+      SELECT budget_month,limit_twd_micros,reserved_twd_micros,spent_twd_micros
+          INTO STRICT budget FROM projed_core.meeting_ai_budget_months WHERE budget_month=usage.dispatch_month FOR UPDATE;
+      released:=CASE WHEN kind_value='usage_unknown' THEN 0 ELSE usage.reserved_twd_micros END;
+      IF budget.reserved_twd_micros<released OR budget.spent_twd_micros<0
+      THEN RAISE EXCEPTION 'MEETING_LLM_BUDGET_INVALID' USING ERRCODE='42501';END IF;
+      expected:=(to_jsonb(budget)-'updated_at')||jsonb_build_object('reserved_twd_micros',budget.reserved_twd_micros-released,
+        'spent_twd_micros',budget.spent_twd_micros+coalesce(charge,0));
+      PERFORM set_config('projed.llm_expected_budget',expected::text,true);
+      UPDATE projed_core.meeting_ai_budget_months SET reserved_twd_micros=reserved_twd_micros-released,
+        spent_twd_micros=spent_twd_micros+coalesce(charge,0),updated_at=now() WHERE budget_month=usage.dispatch_month;
+      expected:=(to_jsonb(usage)-ARRAY['created_at','updated_at'])||jsonb_build_object('actual_twd_micros',charge,
+        'usage_state',CASE WHEN kind_value='usage_unknown' THEN 'unknown' ELSE 'known' END,
+        'outcome',coalesce(code_value,kind_value),'llm_manifest',usage.llm_manifest||jsonb_build_object('settlement',receipt));
+      PERFORM set_config('projed.llm_expected_usage',expected::text,true);
+      UPDATE projed_core.meeting_ai_usage_attempts SET actual_twd_micros=charge,
+        usage_state=CASE WHEN kind_value='usage_unknown' THEN 'unknown' ELSE 'known' END,outcome=coalesce(code_value,kind_value),
+        llm_manifest=usage.llm_manifest||jsonb_build_object('settlement',receipt),updated_at=now() WHERE attempt_id=usage.attempt_id;
+      -- A stale token can settle only its own ledger row, never a newer lease.
+      IF run.id IS NOT NULL AND run.state='running' AND run.lease_token=token THEN
+        next_state:=CASE WHEN published THEN 'queued'
+          WHEN kind_value='not_sent' AND actor_live AND(usage.llm_manifest->>'attempt')::integer<2 THEN 'queued'
+          ELSE 'failed_terminal' END;
+        next_error:=CASE WHEN published THEN NULL ELSE coalesce(code_value,'LLM_RESULT_NOT_COMMITTED') END;
+        next_time:=CASE WHEN next_state='queued' THEN clock_timestamp() ELSE run.next_attempt_at END;
+        next_actual:=CASE WHEN charge IS NULL THEN run.actual_twd_micros ELSE coalesce(run.actual_twd_micros,0)+charge END;
+        expected:=(to_jsonb(run)-'updated_at')||jsonb_build_object('state',next_state,'lease_token',NULL,'lease_expires_at',NULL,
+          'next_attempt_at',next_time,'actual_twd_micros',next_actual,'error_code',next_error);
+        PERFORM set_config('projed.llm_expected_run',expected::text,true);
+        UPDATE projed_core.meeting_analysis_runs SET state=next_state,lease_token=NULL,lease_expires_at=NULL,
+          next_attempt_at=next_time,actual_twd_micros=next_actual,error_code=next_error,updated_at=now() WHERE id=run.id;
+      END IF;
+      result:=receipt;
+    END IF;
+  END IF;
+  FOREACH key_name IN ARRAY keys LOOP PERFORM set_config(key_name,coalesce(prior->>key_name,''),true);END LOOP;
+  RETURN result;
+END;
+$$;
+
 -- No-provider progress and the final atomic handoff to existing human review.
 -- Provider payloads/summary remain private checkpoints, never run/scan metadata.
 CREATE FUNCTION projed_core.meeting_analysis_write_guard_v1()

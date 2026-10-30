@@ -86,7 +86,7 @@ function testProvider(calls:{embeddings:number;generations:number;matchGeneratio
           quote:{fromWord:0,toWord:0},relation:'related',evidenceScore:0.8}]);
       }
       return {outcome:'generated',text,usage:{promptTokens:12,candidateTokens:2,thoughtTokens:0,totalTokens:14,cachedTokens:0},
-        responseId:`qa-synthetic:${calls.generations}`,modelVersion:'gemini-3.5-flash-001'};
+        responseId:calls.generations===1?'a'.repeat(256):`qa-synthetic:${calls.generations}`,modelVersion:'gemini-3.5-flash-001'};
     },
   };
 }
@@ -200,6 +200,21 @@ export async function verifyMeetingPublicationPostgres(database:RuntimeDatabase,
       [runId,JSON.stringify(unit)]);
     assert.equal(result.rowCount,1);return result.rows[0]?.saved===true;
   });
+  const responseIdProbe=(responseId:unknown)=>withAuthorizedActor(actor,async port=>{
+    const live=await port.query<{live:boolean}>('SELECT projed_core.meeting_llm_live_v1($1::uuid) AS live',[runId]);
+    assert.equal(live.rows[0]?.live,true,'the original bound Session sees the live source before responseId validation');
+    const result=await port.query<{receipt:unknown}>('SELECT projed_core.settle_meeting_llm_unit_v1($1::uuid,$2::uuid,$3::jsonb) AS receipt',
+      [runId,randomUUID(),JSON.stringify({kind:'unusable',code:'LLM_OUTPUT_INVALID',
+        usage:{promptTokens:1,candidateTokens:0,thoughtTokens:0,totalTokens:1,cachedTokens:0},
+        modelVersion:'gemini-3.5-flash-001',responseId})]);
+    assert.equal(result.rowCount,1);return result.rows[0]!.receipt;
+  });
+  await assert.rejects(responseIdProbe('x'.repeat(257)),deny42501,'a 257-character responseId is rejected');
+  await assert.rejects(responseIdProbe('qa*synthetic'),deny42501,'responseId characters outside the exact allowlist are rejected');
+  await assert.rejects(responseIdProbe(null),deny42501,'a null responseId is rejected');
+  await assert.rejects(responseIdProbe(''),deny42501,'an empty responseId is rejected');
+  assert.equal(await responseIdProbe('a'.repeat(256)),null,
+    'a legal 256-character responseId passes validation when its synthetic token has no usage row');
   const wrongSource={...source.discussion,sourceHash:source.discussion.sourceHash==='a'.repeat(64)?'b'.repeat(64):'a'.repeat(64)};
   const wrongPrompt=buildMeetingTaskMatchPrompt({discussion:wrongSource,candidates:[]});
   const wrongSourceUnit=prepareMeetingLlmUnit('match',source.segment_id,{...localEnvelope,
@@ -248,6 +263,9 @@ export async function verifyMeetingPublicationPostgres(database:RuntimeDatabase,
   assert.equal(fakeCalls.embeddings,2,'two indexed discussions use two paid retrieval embeddings');
   assert.equal(fakeCalls.generations,3,'two matches and one compose use exactly three paid generations');
   assert.equal(fakeCalls.matchGenerations,2);assert.equal(fakeCalls.composeGenerations,1);
+  const maxResponseId=await admin.query<{count:number}>(`SELECT count(*)::integer AS count FROM projed_core.meeting_ai_usage_attempts
+    WHERE run_id=$1::uuid AND llm_manifest#>>'{settlement,responseId}'=$2`,[runId,'a'.repeat(256)]);
+  assert.equal(maxResponseId.rows[0]?.count,1,'a real native positive settlement accepts and retains exactly 256 legal characters');
   for(const discussion of complete.discussions){
     assert.equal(discussion.matches.length,1);
     assert.equal(discussion.matches[0]?.candidateTaskId,discussion.candidates[0]?.taskId);

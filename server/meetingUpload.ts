@@ -34,6 +34,14 @@ export class MeetingUploadRepository {
         if(receipt.sourceComplete===true){
           if(typeof receipt.runId!=='string'||receipt.runId.trim().length===0||typeof receipt.idempotent!=='boolean')
             throw new KernelError('DB_UNAVAILABLE','Meeting run receipt is invalid',503);
+          if(receipt.idempotent){
+            const deadline=await port.query<{expired:unknown}>(`SELECT (deadline_at<=clock_timestamp()) AS expired
+              FROM projed_core.meeting_analysis_runs WHERE id=$1::uuid`,[receipt.runId]);
+            if(deadline.rows.length!==1||typeof deadline.rows[0]?.expired!=='boolean')
+              throw new KernelError('DB_UNAVAILABLE','Meeting run deadline metadata is unavailable',503);
+            if(deadline.rows[0].expired)
+              throw new KernelError('REVISION_CONFLICT','Meeting ASR deadline has passed',409);
+          }
           const prepared=await port.query<{data:Record<string,unknown>}>(
             'SELECT projed_core.prepare_meeting_cloud_speech_v1($1::uuid) AS data',[receipt.runId]);
           if(prepared.rows.length!==1||!prepared.rows[0]?.data)

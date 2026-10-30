@@ -38,7 +38,9 @@ function requestFor(body:Record<string,unknown>,headers:Record<string,string>={}
 }
 
 function fakeDatabase(options:{readonly sourceComplete?:boolean;readonly completion?:Record<string,unknown>;
-  readonly prepared?:Record<string,unknown>;readonly commitFailure?:boolean}={}):{
+  readonly prepared?:Record<string,unknown>;readonly commitFailure?:boolean;readonly expired?:boolean;
+  readonly missingRunMetadata?:boolean;readonly invalidRunMetadata?:boolean;
+  readonly prepareError?:{readonly code:string;readonly message:string}}={}):{
   readonly database:RuntimeDatabase;readonly statements:{readonly text:string;readonly values:readonly unknown[]}[];readonly checkoutCount:()=>number;
 }{
   const statements:{text:string;values:readonly unknown[]}[]=[];let checkouts=0;
@@ -51,7 +53,12 @@ function fakeDatabase(options:{readonly sourceComplete?:boolean;readonly complet
     if(text.includes('complete_meeting_upload_v1'))return {rows:[{data:options.completion??{
       sourceComplete:options.sourceComplete??true,runId,idempotent:false,
     }}]};
-    if(text.includes('prepare_meeting_cloud_speech_v1'))return {rows:[{data:options.prepared??{runId,state:'queued',idempotent:false}}]};
+    if(text.includes('deadline_at<=clock_timestamp()')&&text.includes('meeting_analysis_runs'))
+      return {rows:options.missingRunMetadata?[]:[{expired:options.invalidRunMetadata?'false':options.expired??false}]};
+    if(text.includes('prepare_meeting_cloud_speech_v1')){
+      if(options.prepareError)throw Object.assign(new Error(options.prepareError.message),{code:options.prepareError.code});
+      return {rows:[{data:options.prepared??{runId,state:'queued',idempotent:false}}]};
+    }
     return {rows:[]};
   }};
   const database={async checkout(){checkouts++;return {client,release(){}};}} as unknown as RuntimeDatabase;
@@ -120,6 +127,8 @@ test('qualified complete-upload prepares Speech in the original actor transactio
   ]);
   assert.deepEqual(fake.statements[prepare]!.values,[runId],'prepare receives the SQL-bound run, not a copied Session identity');
   assert.deepEqual(result.body,{data:{sourceComplete:true,runId,idempotent:false,state:'queued',providerMode:'cloud-speech-v1'}});
+  assert.equal(fake.statements.some(statement=>statement.text.includes('deadline_at<=clock_timestamp()')),false,
+    'fresh completion avoids the replay-only metadata read');
 });
 
 test('legacy upload remains an explicit default dispatcher seam',async()=>{
@@ -156,6 +165,7 @@ test('fresh committed upload wakes the job once while replay and non-runs do not
   const replayed=await replayDispatcher(requestFor(uploadBody()),'replayed-upload');
   assert.equal(replayed.status,200);
   assert.equal(replayCalls,0,'completion idempotency survives the prepare receipt merge');
+  assert.equal(replay.statements.some(statement=>statement.text.includes('deadline_at<=clock_timestamp()')),true);
   assert.deepEqual(replayed.body,{data:{sourceComplete:true,runId,idempotent:true,state:'queued',providerMode:'cloud-speech-v1'}});
 
   const incomplete=fakeDatabase({sourceComplete:false});let incompleteCalls=0;
@@ -219,4 +229,47 @@ test('unknown commit never dispatches and uncertain wake-up preserves the comple
     assert.deepEqual(event,{event:'meeting_upload_job_dispatch',kind:'error'});
     assert.equal(JSON.stringify(event).includes('private-operation-detail'),false);
   }finally{console.error=originalError;}
+});
+
+test('expired replay conflicts before Cloud prepare; invalid metadata and prepare guards stay unavailable',async()=>{
+  const replayReceipt={sourceComplete:true,runId,idempotent:true};
+  const expired=fakeDatabase({completion:replayReceipt,expired:true});let expiredJobs=0;
+  const expiredDispatcher=createMeetingCaptureHttpDispatcher(config,expired.database,async()=>actor,undefined,
+    createQualifiedMeetingUploadRepository(binding,binding.audioBucket),{async run(){
+      expiredJobs++;return {kind:'accepted',operationName:'unused'};
+    }});
+  const result=await expiredDispatcher(requestFor(uploadBody()),'expired-replay');
+  assert.equal(result.status,409);
+  assert.deepEqual(result.body,{error:{code:'REVISION_CONFLICT',requestId:'expired-replay',retryable:false}});
+  assert.equal(expiredJobs,0,'expired replay does not wake the Job');
+  assert.equal(expired.statements.some(statement=>statement.text.includes('prepare_meeting_cloud_speech_v1')),false);
+  assert.equal(expired.statements.some(statement=>statement.text==='COMMIT'),false);
+  assert.equal(expired.statements.some(statement=>statement.text==='ROLLBACK'),true,'the actor transaction is rolled back');
+
+  const missing=fakeDatabase({completion:replayReceipt,missingRunMetadata:true});
+  const missingDispatcher=createMeetingCaptureHttpDispatcher(config,missing.database,async()=>actor,undefined,
+    createQualifiedMeetingUploadRepository(binding,binding.audioBucket));
+  const missingResult=await missingDispatcher(requestFor(uploadBody()),'missing-replay-metadata');
+  assert.equal(missingResult.status,503);
+  assert.equal((missingResult.body as {error:{code:string}}).error.code,'DB_UNAVAILABLE');
+  assert.equal(missing.statements.some(statement=>statement.text.includes('prepare_meeting_cloud_speech_v1')),false);
+
+  const invalidMetadata=fakeDatabase({completion:replayReceipt,invalidRunMetadata:true});
+  const invalidMetadataDispatcher=createMeetingCaptureHttpDispatcher(config,invalidMetadata.database,async()=>actor,undefined,
+    createQualifiedMeetingUploadRepository(binding,binding.audioBucket));
+  const invalidResult=await invalidMetadataDispatcher(requestFor(uploadBody()),'invalid-replay-metadata');
+  assert.equal(invalidResult.status,503);
+  assert.equal((invalidResult.body as {error:{code:string}}).error.code,'DB_UNAVAILABLE');
+  assert.equal(invalidMetadata.statements.some(statement=>statement.text.includes('prepare_meeting_cloud_speech_v1')),false);
+
+  // 0035 can emit the same code/message from its real UPDATE trigger guard.
+  // When the read-only check says not expired, that guard must remain 503.
+  const guarded=fakeDatabase({completion:replayReceipt,expired:false,
+    prepareError:{code:'42501',message:'MEETING_ASR_PREPARATION_INVALID'}});
+  const guardedDispatcher=createMeetingCaptureHttpDispatcher(config,guarded.database,async()=>actor,undefined,
+    createQualifiedMeetingUploadRepository(binding,binding.audioBucket));
+  const guardedResult=await guardedDispatcher(requestFor(uploadBody()),'prepare-guard-denied');
+  assert.equal(guardedResult.status,503);
+  assert.equal((guardedResult.body as {error:{code:string}}).error.code,'DB_UNAVAILABLE');
+  assert.equal(guarded.statements.some(statement=>statement.text==='ROLLBACK'),true);
 });
