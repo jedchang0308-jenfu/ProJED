@@ -29,6 +29,8 @@ import {createRagHttpDispatcher} from './ragHttp.js';
 import type {RagProvider} from './geminiRagProvider.js';
 import {createMeetingSynthesisHttpDispatcher,type MeetingSynthesisModel,type MeetingSynthesisProvider} from './meetingSynthesisHttp.js';
 import { createMeetingCaptureHttpDispatcher } from './meetingCaptureHttp.js';
+import type {MeetingUploadRepository} from './meetingUpload.js';
+import type {createMeetingJobDispatcher} from './meetingJobDispatch.js';
 import { createMeetingAudioHttpDispatcher } from './meetingAudioHttp.js';
 import type { MeetingAudioStorage } from './meetingAudioStorage.js';
 
@@ -144,6 +146,8 @@ export interface KernelHttpServer {
 }
 
 export interface KernelHttpOptions {
+  readonly meetingUploads?:MeetingUploadRepository|null;
+  readonly meetingJobDispatcher?:ReturnType<typeof createMeetingJobDispatcher>;
   readonly meetingAudioStorage?:MeetingAudioStorage;
   readonly ragProvider?:RagProvider;
   readonly meetingSynthesisProvider?:MeetingSynthesisProvider;
@@ -210,7 +214,8 @@ export function createKernelHttpServer(
   const dispatchRag = createRagHttpDispatcher(config,database,options.resolveActor,options.ragProvider);
   const dispatchMeetingSynthesis=createMeetingSynthesisHttpDispatcher(config,database,options.resolveActor,
     options.meetingSynthesisProvider,options.meetingSynthesisModel??'gemini-3.5-flash');
-  const dispatchMeetingCapture = createMeetingCaptureHttpDispatcher(config, database, options.resolveActor,options.meetingAudioStorage);
+  const dispatchMeetingCapture = createMeetingCaptureHttpDispatcher(config, database, options.resolveActor,
+    options.meetingAudioStorage,options.meetingUploads,options.meetingJobDispatcher);
   const dispatchMeetingAudio = createMeetingAudioHttpDispatcher(config,database,options.resolveActor,options.meetingAudioStorage);
   const server = createServer({
     maxHeaderSize: 16 * 1024,

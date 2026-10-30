@@ -189,6 +189,9 @@ export async function verifyMeetingPublicationPostgres(database:RuntimeDatabase,
   const localEnvelope:MeetingLlmEnvelope={configVersion:MEETING_LLM_CONFIG_VERSION,sourceVersion:source.source_version,
     transcriptRevisionId:source.transcript_revision_id,body:{discussion:source.discussion,candidates:[],prompt:localPrompt}};
   const localUnit=prepareMeetingLlmUnit('match',source.segment_id,localEnvelope);
+  const originalLive=await withAuthorizedActor(actor,port=>port.query<{live:boolean}>(
+    'SELECT projed_core.meeting_llm_live_v1($1::uuid) AS live',[runId]));
+  assert.equal(originalLive.rows[0]?.live,true,'local rejection cases start with the real original Session and a live source');
   const localBudgetBefore=await getBudget();
   const localUsageBefore=beforeState.usage_count;
   const commitLocal=(who:ServerActorV1,unit:MeetingLlmPreparedUnit,authorized=true)=>runActorTransaction(database,config,who,async port=>{

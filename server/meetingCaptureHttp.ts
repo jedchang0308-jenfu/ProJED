@@ -8,14 +8,27 @@ import { asKernelError, KernelError } from './errors.js';
 import { assertExpectedActor } from './expectedActorHttp.js';
 import { MeetingCaptureRepository } from './meetingCapture.js';
 import { MeetingUploadRepository } from './meetingUpload.js';
+import type { MeetingJobDispatchResult } from './meetingJobDispatch.js';
 import { MeetingReviewRepository } from './meetingReview.js';
 import { MeetingAudioService } from './meetingAudio.js';
 import { currentMeetingActor } from './meetingAudioHttp.js';
 import type { MeetingAudioStorage } from './meetingAudioStorage.js';
 
-export function createMeetingCaptureHttpDispatcher(config:RuntimeConfig,database:RuntimeDatabase,resolveActor?:TrustedSessionActorResolver,storage?:MeetingAudioStorage){
+export interface MeetingCaptureJobDispatcher {
+  run(signal?:AbortSignal):Promise<MeetingJobDispatchResult>;
+}
+
+function isNewCompleteUpload(value:unknown):value is {readonly sourceComplete:true;readonly runId:string;readonly idempotent:false}{
+  if(value===null||typeof value!=='object'||Array.isArray(value))return false;
+  const receipt=value as Record<string,unknown>;
+  return receipt.sourceComplete===true&&typeof receipt.runId==='string'&&receipt.runId.trim().length>0
+    &&receipt.idempotent===false;
+}
+
+export function createMeetingCaptureHttpDispatcher(config:RuntimeConfig,database:RuntimeDatabase,resolveActor?:TrustedSessionActorResolver,
+  storage?:MeetingAudioStorage,uploads:MeetingUploadRepository|null=new MeetingUploadRepository(),
+  meetingJobDispatcher?:MeetingCaptureJobDispatcher){
   const repository=new MeetingCaptureRepository();
-  const uploads=new MeetingUploadRepository();
   const reviews=new MeetingReviewRepository();
   const audio=storage?new MeetingAudioService(database,config,storage):undefined;
   return async(request:IncomingMessage,requestId:string)=>{
@@ -39,7 +52,19 @@ export function createMeetingCaptureHttpDispatcher(config:RuntimeConfig,database
       }else if(['review','decide-match','save-projection'].includes(String(body.operation))){
         result=await runActorTransaction(database,config,actor,port=>reviews.execute(port,body),{signal:controller.signal});
       }else if(body.operation==='complete-upload'){
+        if(uploads===null)throw new KernelError('ASR_PROVIDER_UNQUALIFIED','Meeting ASR provider is not qualified',503);
         result=await runActorTransaction(database,config,actor,port=>uploads.execute(port,body),{signal:controller.signal});
+        // The transaction promise resolves only after COMMIT is acknowledged.
+        // Dispatch is a best-effort wake-up; the durable queue remains the
+        // recovery path when the request is replayed or invocation is unknown.
+        if(meetingJobDispatcher&&isNewCompleteUpload(result)){
+          try{
+            const dispatch=await meetingJobDispatcher.run(controller.signal);
+            if(dispatch.kind!=='accepted')console.error(JSON.stringify({event:'meeting_upload_job_dispatch',kind:dispatch.kind}));
+          }catch{
+            console.error(JSON.stringify({event:'meeting_upload_job_dispatch',kind:'error'}));
+          }
+        }
       }else result=await runActorTransaction(database,config,actor,port=>repository.execute(port,body),{signal:controller.signal});
       return {matched:true,status:200,body:{data:result}};
     }catch(error){

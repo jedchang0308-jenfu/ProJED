@@ -136,7 +136,10 @@ BEGIN
   input:=wire::jsonb;
   SELECT jsonb_object_agg(settings.key_name,current_setting(settings.key_name,true)) INTO prior FROM unnest(keys) settings(key_name);
   PERFORM pg_advisory_xact_lock(hashtextextended('projed:runtime-transaction:v1',0));
-  SELECT * INTO run FROM projed_core.meeting_analysis_runs WHERE id=target_run FOR UPDATE;
+  -- All runtime mutations share the app transaction lock above. This local
+  -- operation never updates the run; FOR UPDATE would incorrectly require an
+  -- unrelated UPDATE policy and hide an otherwise readable live source.
+  SELECT * INTO run FROM projed_core.meeting_analysis_runs WHERE id=target_run;
   IF NOT FOUND OR NOT projed_core.meeting_llm_live_v1(target_run) OR run.state NOT IN('queued','awaiting_budget')
     OR run.lease_token IS NOT NULL OR run.lease_expires_at IS NOT NULL
   THEN RETURN false;END IF;
@@ -191,7 +194,9 @@ BEGIN
   THEN RAISE EXCEPTION 'MEETING_PUBLICATION_INVALID' USING ERRCODE='42501';END IF;
   SELECT jsonb_object_agg(settings.key_name,current_setting(settings.key_name,true)) INTO prior FROM unnest(keys) settings(key_name);
   PERFORM pg_advisory_xact_lock(hashtextextended('projed:runtime-transaction:v1',0));
-  SELECT * INTO run FROM projed_core.meeting_analysis_runs WHERE id=target_run FOR UPDATE;
+  -- Serialize through the existing app lock without requiring UPDATE authority
+  -- before this function establishes its exact publication phase below.
+  SELECT * INTO run FROM projed_core.meeting_analysis_runs WHERE id=target_run;
   IF NOT FOUND OR NOT projed_core.meeting_llm_live_v1(target_run) OR run.state NOT IN('queued','awaiting_budget')
     OR run.lease_token IS NOT NULL OR run.lease_expires_at IS NOT NULL OR run.cleanup_pending
   THEN RETURN false;END IF;

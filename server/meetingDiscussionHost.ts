@@ -21,6 +21,7 @@ export interface MeetingDiscussionHostDependencies {
   readonly finishScanned:(runId:string,operationToken:string|null,reason:MeetingDiscussionScannedFinishReason)=>Promise<boolean>;
   readonly runUnit:(runId:string,signal:AbortSignal)=>Promise<MeetingDiscussionUnitResult>;
   readonly now?:()=>number;
+  readonly deadlineAtMs?:number;
 }
 
 export interface MeetingDiscussionHostSummary {
@@ -102,7 +103,7 @@ export async function runMeetingDiscussionHost(deps:MeetingDiscussionHostDepende
     recordFailure(summary,new KernelError('DB_BOUNDARY_INVALID','Meeting discussion host clock is invalid',503));
     return summary;
   }
-  const deadline=startedAt+MAX_ROUND_MS;
+  const deadline=Math.min(startedAt+MAX_ROUND_MS,deps.deadlineAtMs??Infinity);
 
   let scanned:readonly MeetingDiscussionScannedWork[];
   try{

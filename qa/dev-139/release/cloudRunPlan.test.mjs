@@ -32,6 +32,8 @@ function makeInput(overrides = {}) {
     sourceRevision: SOURCE_REVISION,
     runtimeImage: `${CLOUD_RUN_TARGET.repository}/projed-prod@sha256:${IMAGE_DIGEST}`,
     jobsImage: `${CLOUD_RUN_TARGET.repository}/projed-prod-jobs@sha256:${IMAGE_DIGEST}`,
+    analysisImage: `${CLOUD_RUN_TARGET.repository}/projed-prod-asr-job@sha256:${IMAGE_DIGEST}`,
+    audioBucket: 'projed-meeting-audio',
     binding: makeBinding(),
     sourceBundleVersion: '1',
     ...overrides,
@@ -99,6 +101,7 @@ test('renderer fixes the typed target and emits IAM-only, private-network create
   assert.equal(runtimeEnvironment.PROJED_RUNTIME_BINDING_JSON, JSON.stringify(input.binding));
   assert.equal(runtimeEnvironment.PROJED_DATABASE_URL, 'postgresql://projed-prod-runtime%40projed-cc78d.iam@127.0.0.1:5432/jenfu_prod');
   assert.equal(runtimeEnvironment.PROJED_SOURCE_PROFILE, 'config/dev-139/s3-managed.profile.json');
+  assert.equal(runtimeEnvironment.PROJED_MEETING_AUDIO_BUCKET, input.audioBucket);
   assert.equal(Object.keys(runtimeEnvironment).some((key) => /SOURCE.*(DATABASE|BUNDLE)|DATABASE.*SOURCE|SECRET|TOKEN|PASSWORD|CREDENTIAL|PROVIDER/u.test(key)), false);
   assert.match(proxy.image, /@sha256:[a-f0-9]{64}$/u);
   assert.ok(proxy.args.includes('--private-ip'));
@@ -118,8 +121,8 @@ test('renderer fixes the typed target and emits IAM-only, private-network create
     { email: 'projed-prod-importer@projed-cc78d.iam.gserviceaccount.com', databaseLogin: MANAGED_DATABASE.iamLogins.importer },
   ]);
 
-  assert.deepEqual(Object.keys(plan.jobs), ['migrate', 'plan', 'apply', 'reconcile']);
-  for (const [mode, job] of Object.entries(plan.jobs)) {
+  assert.deepEqual(Object.keys(plan.jobs), ['migrate', 'plan', 'apply', 'reconcile', 'analysis']);
+  for (const [mode, job] of Object.entries(plan.jobs).filter(([mode]) => mode !== 'analysis')) {
     assert.equal(job.template.taskCount, 1);
     assert.equal(job.template.parallelism, 1);
     assert.equal(job.template.template.maxRetries, 0);
@@ -150,11 +153,80 @@ test('renderer fixes the typed target and emits IAM-only, private-network create
     assert.equal(importer.volumes[1].secret.items.some(({ version }) => version === 'latest'), false);
   }
 
-  assert.equal(plan.requests.length, 5);
-  assert.ok(plan.requests.every(({ method, url }) => method === 'POST' && url.startsWith('https://run.googleapis.com/v2/')));
+  const analysis = plan.jobs.analysis.template;
+  const analysisTask = analysis.template;
+  const [analysisContainer] = analysisTask.containers;
+  assert.equal(plan.jobs.analysis.name, 'projects/projed-cc78d/locations/asia-east1/jobs/projed-meeting-analysis');
+  assert.equal(analysis.taskCount, 1);
+  assert.equal(analysis.parallelism, 1);
+  assert.equal(analysisTask.serviceAccount, 'projed-prod-runtime@projed-cc78d.iam.gserviceaccount.com');
+  assert.equal(analysisTask.maxRetries, 0);
+  assert.equal(analysisTask.timeout, '600s');
+  assert.deepEqual(analysisTask.vpcAccess, plan.service.template.vpcAccess);
+  assert.deepEqual(analysisTask.volumes, [{ name: 'cloudsql',
+    cloudSqlInstance: { instances: [MANAGED_DATABASE.cloudSqlInstance] } }]);
+  assert.equal(analysisContainer.image, input.analysisImage);
+  assert.equal('command' in analysisContainer, false);
+  assert.equal('args' in analysisContainer, false);
+  assert.deepEqual(analysisContainer.volumeMounts, [{ name: 'cloudsql', mountPath: '/cloudsql' }]);
+  const analysisEnvironment = envMap(analysisContainer);
+  assert.equal(analysisEnvironment.PROJED_ENV, 'managed');
+  assert.equal(analysisEnvironment.PROJED_APP_ENTRY, 'main');
+  assert.equal(analysisEnvironment.PROJED_SOURCE_PROFILE, 'config/dev-139/s3-managed.profile.json');
+  assert.equal(analysisEnvironment.PROJED_RUNTIME_BINDING_JSON, JSON.stringify(input.binding));
+  assert.equal(analysisEnvironment.PROJED_DATABASE_URL,
+    'postgresql://projed-prod-runtime%40projed-cc78d.iam@localhost/jenfu_prod?host=%2Fcloudsql%2Fjenfu-platform-prod%3Aasia-east1%3Ajenfu-platform-prod-pg');
+  assert.equal(analysisEnvironment.PROJED_MEETING_AUDIO_BUCKET, input.audioBucket);
+
+  assert.equal(plan.scheduler.name,
+    'projects/projed-cc78d/locations/asia-east1/jobs/projed-meeting-analysis-recovery');
+  assert.equal(plan.scheduler.schedule, '*/15 * * * *');
+  assert.equal(plan.scheduler.timeZone, 'Asia/Taipei');
+  assert.deepEqual(plan.scheduler.retryConfig, { retryCount: 0 });
+  assert.deepEqual(plan.scheduler.httpTarget, {
+    uri: 'https://run.googleapis.com/v2/projects/projed-cc78d/locations/asia-east1/jobs/projed-meeting-analysis:run',
+    httpMethod: 'POST', headers: { 'Content-Type': 'application/json' }, body: 'e30=',
+    oauthToken: {
+      serviceAccountEmail: 'projed-prod-meeting-scheduler@projed-cc78d.iam.gserviceaccount.com',
+      scope: 'https://www.googleapis.com/auth/cloud-platform',
+    },
+  });
+  assert.equal('oidcToken' in plan.scheduler.httpTarget, false);
+
+  assert.deepEqual(plan.foundation.enableApis[0].services, [
+    'run.googleapis.com', 'compute.googleapis.com', 'sqladmin.googleapis.com', 'cloudbuild.googleapis.com',
+    'artifactregistry.googleapis.com', 'secretmanager.googleapis.com', 'cloudscheduler.googleapis.com',
+  ]);
+  assert.deepEqual(plan.foundation.schedulerServiceAccount, {
+    email: 'projed-prod-meeting-scheduler@projed-cc78d.iam.gserviceaccount.com',
+    databaseLogin: null, databaseIamRoles: [], databaseGrants: [],
+  });
+  assert.equal(plan.foundation.sqlIamUsers.some(({ serviceAccount }) =>
+    serviceAccount === plan.foundation.schedulerServiceAccount.email), false);
+  assert.equal('customRoles' in plan.foundation, false);
+  assert.deepEqual(plan.foundation.iamBindings.filter(({ role }) => role === 'roles/run.invoker'), [
+    { resource: plan.jobs.analysis.name,
+      member: 'serviceAccount:projed-prod-runtime@projed-cc78d.iam.gserviceaccount.com', role: 'roles/run.invoker' },
+    { resource: plan.jobs.analysis.name,
+      member: 'serviceAccount:projed-prod-meeting-scheduler@projed-cc78d.iam.gserviceaccount.com', role: 'roles/run.invoker' },
+  ]);
+  assert.equal(plan.foundation.iamBindings.some(({ resource, role }) =>
+    role === 'roles/run.invoker' && resource !== plan.jobs.analysis.name), false);
+  assert.ok(plan.foundation.operatorRequirements.serviceAccountUserOn.includes(
+    plan.foundation.schedulerServiceAccount.email));
+  assert.deepEqual(plan.foundation.operatorRequirements.cloudSchedulerPermissions,
+    ['cloudscheduler.jobs.create', 'cloudscheduler.jobs.get']);
+
+  assert.equal(plan.requests.length, 7);
+  assert.ok(plan.requests.slice(0, 6).every(({ method, url }) =>
+    method === 'POST' && url.startsWith('https://run.googleapis.com/v2/')));
+  assert.deepEqual(plan.requests[6], {
+    method: 'POST', url: 'https://cloudscheduler.googleapis.com/v1/projects/projed-cc78d/locations/asia-east1/jobs',
+    body: plan.scheduler,
+  });
   assert.equal(plan.requests[0].body, plan.service);
-  assert.deepEqual(plan.requests.slice(1).map(({ body }) => body), Object.values(plan.jobs));
-  assert.equal(plan.requests.some(({ url }) => /hosting|traffic|setIamPolicy|secrets\//iu.test(url)), false);
+  assert.deepEqual(plan.requests.slice(1, 6).map(({ body }) => body), Object.values(plan.jobs));
+  assert.equal(plan.requests.some(({ url }) => /hosting|traffic|setIamPolicy|secrets\/|runWithOverrides/iu.test(url)), false);
 });
 
 test('renderer rejects mutable, misplaced, and malformed image references', () => {
@@ -168,6 +240,15 @@ test('renderer rejects mutable, misplaced, and malformed image references', () =
 
   for (const runtimeImage of invalidReferences) assertInvalid(makeInput({ runtimeImage }));
   for (const jobsImage of invalidReferences) assertInvalid(makeInput({ jobsImage }));
+  for (const analysisImage of invalidReferences) assertInvalid(makeInput({ analysisImage }));
+  assertInvalid(makeInput({ analysisImage: `${CLOUD_RUN_TARGET.repository}/projed-prod@sha256:${IMAGE_DIGEST}` }));
+});
+
+test('renderer rejects invalid audio bucket names and Cloud Build source buckets', () => {
+  for (const audioBucket of ['', 'ab', 'UPPERCASE', 'run-sources', 'run-sources-projed-123',
+    '192.168.1.10', 'goog-audio', 'audio-google-recordings', 'x'.repeat(64), 'audio..recordings']) {
+    assertInvalid(makeInput({ audioBucket }));
+  }
 });
 
 test('renderer rejects invalid revisions, release identifiers, secret versions, bindings, and caller overrides', () => {

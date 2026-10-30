@@ -16,6 +16,7 @@ export interface MeetingAsrHostDependencies {
   readonly abandon:(runId:string,reason:MeetingAsrAbandonReason)=>Promise<boolean>;
   readonly runUnit:(runId:string,signal:AbortSignal)=>Promise<MeetingAsrUnitResult>;
   readonly now?:()=>number;
+  readonly deadlineAtMs?:number;
 }
 export interface MeetingAsrHostSummary {
   scanned:number;units:number;recovered:number;abandoned:number;deferred:number;failures:number;
@@ -35,7 +36,7 @@ function permanentActorFailure(error:unknown):MeetingAsrAbandonReason|undefined{
 export async function runMeetingAsrHost(deps:MeetingAsrHostDependencies,signal:AbortSignal):Promise<MeetingAsrHostSummary>{
   const summary:MeetingAsrHostSummary={scanned:0,units:0,recovered:0,abandoned:0,deferred:0,failures:0,errors:{}};
   if(signal.aborted)return summary;
-  const now=deps.now??Date.now,deadline=now()+600_000;
+  const now=deps.now??Date.now,deadline=Math.min(now()+600_000,deps.deadlineAtMs??Infinity);
   const work=await deps.scan(20);summary.scanned=work.length;
   for(const item of work){
     if(signal.aborted||now()>=deadline){summary.deferred++;continue;}

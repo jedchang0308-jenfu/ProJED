@@ -306,9 +306,11 @@ try {
   const asrMaintenanceLines = asrMaintenance.stdout.trim().split(/\r?\n/u);
   assert.equal(asrMaintenanceLines.length, 1);
   assert.deepEqual(JSON.parse(asrMaintenanceLines[0]), {
-    event: 'projed_meeting_asr_job_finished', dispatchEnabled: false, scanned: 0, units: 0,
-    recovered: 0, abandoned: 0, deferred: 0, failures: 0, errors: {},
+    event: 'projed_meeting_asr_job_finished', dispatchEnabled: false, llmDispatchEnabled: false, rounds: 1,
+    asr: { scanned: 0, units: 0, recovered: 0, abandoned: 0, deferred: 0, failures: 0, errors: {} },
     discussion: { scanned: 0, units: 0, completed: 0, sources: 0, abandoned: 0, deferred: 0, failures: 0, errors: {} },
+    llm: { scanned: 0, units: 0, recovered: 0, published: 0, local: 0, abandoned: 0, deferred: 0, failures: 0, errors: {} },
+    deferredRuns: 0, failures: 0,
   });
   docker(['exec', pgName, 'sed', '-i', '1d', '/var/lib/postgresql/data/pg_hba.conf']);
   docker(['exec', '--user', 'postgres', pgName, 'pg_ctl', 'reload', '-D', '/var/lib/postgresql/data']);

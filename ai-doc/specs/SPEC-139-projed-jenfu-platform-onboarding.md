@@ -1,7 +1,7 @@
 # SPEC-139：ProJED 納入 Jenfu-Platform 的產品與技術交接契約
 
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。
-- 日期：2026-10-30（Asia/Taipei）；版本：Rev 75（階段選擇／免模型分支／背景host與原子發布候選；真provider與正式交付續行）。
+- 日期：2026-10-30（Asia/Taipei）；版本：Rev 76（上傳後背景啟動／同Job續跑與恢復排程候選；零留存資格及正式交付續行）。
 - 文件狀態：**整合與發布續行中；W22 OrgMaster publisher 與 W23 Platform Session／handoff source 均有 draft PR／required CI PASS，隔離驗證 PASS；Production Resolver Disabled；未 Release**。Firebase／OIDC 真身分與完整 Session 部署、RAG／文字會議真 provider 資格、錄音管線與剩餘資料處置、雲端 readback、舊入口、writer fence、切流及正式發布仍計入完成分母。W22 owner source 見 [§36](#36-orgmaster-minimum-principal-publication-w222026-10-29)，W23 Platform source 與驗證邊界見 [§37](#37-platform-projed-session-and-handoff-w232026-10-29)；W21 承接六類文件／同步資料與精度保護見 [§35](#35-document-source-retention-w212026-10-28)；W20 資料保留見 §34，具體資源與待確認的新權限仍見 §33。本輪未寫正式資料、切流或變更 IAM／Secret／credential／billing。
 - 適用階段：S1–S3 本地切片歷史見 §12–§32；2026-10-28 續行授權見 [DEV-139 人類決策與授權範圍](../dev_task.md#1-人類決策與授權範圍)，涵蓋 ProJED／OrgMaster／Jenfu-Platform 的 source 整合工作。正式整合與發布仍是完整目標，不以本地切片完成替代；新責任權限依 §33 處理。定期審視不是續行或發布的 required gate；本輪未執行正式資料寫入、切流或 IAM／Secret／credential／billing 變更。
 - 直接交接入口：[§11 S1 定案契約](#11-架構決策與-s1-定案契約)、[§12 S1 實作狀態](#12-s1-實作狀態2026-10-26)、[§13 S2 consumer seam](#13-s2-projed-identity-consumer-seam2026-10-26)、[§14 S3 read adapter](#14-s3-http-read-adapter-slice2026-10-26)、[§15 S3 domain command](#15-s3-domain-command-w12026-10-26)、[§16 S3 collaboration command](#16-s3-collaboration-command-w22026-10-27)、[§17 S3 record／activity](#17-s3-recordactivity-w32026-10-27)、[§18 S3 HTTP product wiring](#18-s3-http-product-wiring-w42026-10-27)、[§19 S3 Board transfer](#19-s3-board-transfer-w52026-10-27)、[§20 S3 legacy provider boundary](#20-s3-legacy-provider-boundary-w62026-10-27)、[§21 S3 Quick Task](#21-s3-quick-task-w72026-10-27)、[§22 S3 Task Workbench](#22-s3-task-workbench-w82026-10-27)、[§23 S3 Actor CAS](#23-s3-actor-context-cas-w92026-10-27)、[§24 S3 Task Tracking](#24-s3-task-tracking-w102026-10-27)、[§25 S3 Backup／Import](#25-s3-backupimport-w112026-10-27)、[§26 S3 Account Preferences](#26-s3-account-preferences-w122026-10-27)、[§27 S3 Calendar Subscription](#27-s3-calendar-subscription-w132026-10-27)及[§32 本地開發收斂](#32-s3-local-development-closure-w182026-10-27)；[§11.8 技術主管審查](#118-技術主管審查與最小優化)保留 Rev5 修正理由；既有使用者切換見 [§6.3](#63-既有使用者的切換基線)。
@@ -1315,7 +1315,7 @@ OCI artifact `12878865460`／`dev139-oci-2c265dadeb87c584c7e1ff5e/result.json` �
 
 ## 49. Cloud Run create renderer and source Secret bundle（W35，2026-10-29）
 
-新增 `npm run create:dev-139:cloud-run-plan -- --input=<file> [--output=<file>]`。輸入只含 releaseId、40字元 sourceRevision、固定 ProJED Artifact Registry 路徑的 runtime／jobs manifest digest、同映像產生的 managed binding 與數字型 sourceBundleVersion；拒絕 mutable tag、latest、其他 target 與任意 env override。程式只輸出一個 IAM 保護的 `projed-prod` service、四個單 task／maxRetries=0 的 migrate／plan／apply／reconcile Job，以及具名 foundation 需求；五個 REST request 均為 create，不能覆寫既有服務或自動執行 Job。Renderer 不證明輸入 digest／binding 的來源，也不取代既有 artifact／release 驗證；尚無 registry push、provider apply 或 traffic activation。
+新增 `npm run create:dev-139:cloud-run-plan -- --input=<file> [--output=<file>]`。輸入包含 releaseId、40字元 sourceRevision、固定 ProJED Artifact Registry 路徑的 runtime／jobs／analysis manifest digest、同映像產生的 managed binding、音訊 bucket 與數字型 sourceBundleVersion；拒絕 mutable tag、latest、其他 target 與任意 env override。程式只輸出 IAM 保護的 `projed-prod` service、四個 migrate／plan／apply／reconcile Job、獨立 `projed-meeting-analysis` Job，以及每15分鐘的 recovery Scheduler與具名 foundation 需求；七個 REST request 均為 create，不能覆寫既有服務。Scheduler建立後會定期呼叫固定Job，因此屬待核准的雲端執行責任；純renderer不會執行任何請求。Renderer不證明輸入digest／binding來源，也不取代artifact／release驗證；尚無registry push、provider apply、排程啟用或traffic activation。
 
 Runtime 使用獨立 lifecycle SA、已釘 digest 的 Cloud SQL Proxy sidecar（private-ip／auto-iam-authn／lazy-refresh），只接本 container group 的 loopback。Job 沿既有 Cloud SQL volume 與短期 metadata token，不新增 connector SDK 或持久 SQL 密碼。Runtime 不掛來源 Secret；migrator 不取得 importer 的來源憑證。Source bundle Secret 固定 `projed-prod-migration-source` 並釘數字版本，只授 importer 讀取；正式建立、寫入版本與 grant 尚未執行。此 foundation candidate 建立後，其新 service 立即以100% latest-ready 路由並要求 IAM invocation；renderer 明列這個初始狀態（[Cloud Run v2 Service API](https://docs.cloud.google.com/run/docs/reference/rest/v2/projects.locations.services)）。真 Session／production pin、匿名 invocation及 Hosting 曝光留待正式相容發布，不會變更既有服務／Hosting traffic，也不以新 run.app 可達宣稱原入口完成。
 
@@ -1355,7 +1355,7 @@ Focused review 另修正新service的預設路由說明、OCI失敗診斷也遮�
 
 ## 51. Owner foundation qualification and ASR components（W36–W37，2026-10-29）
 
-### 階段編排與原子發布（0041／Rev75，2026-10-30候選）
+### 階段編排與原子發布（0041／Rev75–76，2026-10-30候選）
 
 `meetingLlmPlan`在原Session的actor transaction讀取目前run／discussion、實際private input/result hash與live WBS。沒有有效current index就使用lexical／pointer，不為取得空結果而呼叫embedding；候選為空時只保存固定`{"matches":[]}`本機進度，不造provider dispatch、usage或費用。空來源直接完成空結果；單discussion沿用原文；多discussion依既有fanout8 plan逐節點compose。只有實際checkpoint可供重用，matching snapshot、當前prompt或compose childHash改變時不能拿舊結果宣稱完成。完成plan攜帶實際input/result hash proofs，並非以處理步數或記憶體輸出當ready。
 
@@ -1365,13 +1365,19 @@ Focused review 另修正新service的預設路由說明、OCI失敗診斷也遮�
 
 查核同時修正手動會議合成的舊呼叫路徑：HTTP不再將meeting provider缺失轉給Developer API RAG provider；production僅以同一份已資格化Cloud LLM binding建立adapter，固定3.5 Flash且只有一次JSON generation。原預設3.5不可用時切3.1的行為已取消，避免切往未列入本次資格的模型；native原案例改驗單次失敗／不新增成功audit，正常owner／reader、取消、權限與品質案例保留。這是既有零留存要求的落實，非用縮小驗收範圍遮掩未完成。其他RAG功能沒有變更。
 
-`meetingLlmPipeline`在真正local／publish寫入交易內重跑planner；paid unit離開交易後才進既有單次worker。`meetingLlmHost`每輪最多20項metadata／4個private步驟，unknown SQL／COMMIT不在同輪重送；temporary identity／DB故障不當成撤銷。Managed Job正常CMD接ASR→discussion→LLM，後段沿整個Job的600秒截止保留150秒headroom，metadata recovery／deadline finish與付費資格分開。LLM資格獨立於Speech，`CURRENT_MEETING_LLM_BINDING`仍為null；未以env值或fixture宣稱實際零留存已成立。正式Job建立、事件觸發／恢復排程、音訊清理、真provider／Session與正常browser、cloud readback及切流發布仍須完成，不以source接線取代實際運作。
+`meetingLlmPipeline`在真正local／publish寫入交易內重跑planner；paid unit離開交易後才進既有單次worker。各host每輪最多20項metadata／4個private步驟，temporary identity／DB故障不當成撤銷。Managed Job正常CMD由`meetingBackgroundHost`接ASR→discussion→LLM；只有已提交的來源／checkpoint進度才續跑下一輪，所有phase共用原600秒截止並保留150秒派送headroom。失敗、unknown或只完成metadata recovery的run，本Job內不得再進private work；其他獨立run繼續。沒有進度立即結束，不做timer polling、遞迴jobs.run或provider重送。LLM為null仍可執行免模型分支及有完整證據的publisher。各輪真實計數累加，log只有metadata，不含來源文字或身分。
+
+Production HTTP明確注入已資格化Cloud Speech upload repository；binding／bucket不符回503 `ASR_PROVIDER_UNQUALIFIED`，不建立舊fake queue。新上傳與prepare仍在同一原Session交易，prepare不複製身分。COMMIT確認後才以獨立Job binding呼叫固定`jobs.run`一次，POST空`{}`、無overrides，5秒涵蓋token與回應；unknown不重送，durable queue由後續排程恢復。Completion原始idempotent位元不可被prepare回執覆蓋，replay不再觸發Job。未確認COMMIT不派送。Job呼叫能力與Speech／LLM零留存資格分開，三份binding目前均未發布，不以env或fixture啟用真provider。
+
+Analysis Job用專用asr-job不可變映像與既有CMD，runtime SA／IAM socket／私網，taskCount=parallelism=1、maxRetries=0、timeout=600s。恢復排程每15分鐘、OAuth專用無DB權限的Scheduler SA、retryCount=0；web runtime與Scheduler各僅綁固定Job的內建`roles/run.invoker`，無cancel／overrides或project-wide權限，避免新增custom role管理（[官方角色權限](https://docs.cloud.google.com/run/docs/reference/iam/roles#cloud_run_invoker)）。此頻率以立即啟動為主、恢復為輔，降低空轉執行；實際費用仍待專案資格化，不宣稱帳單已符合。正式Job／排程／IAM建立、音訊清理、真provider／Session、browser、cloud readback與切流發布仍須完成。
 
 上一版完整基線為`9be3187a523f37bf5c1109a79cd046d31902f628`的[CI40928475291](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40928475291)，兩jobs SUCCESS。原lockfile型別、unit／三boundary／compiled artifact、PG17.11 domain71／snapshot60、40份migration及OCI18 PASS。已讀回 artifacts `12921287871`（s3/20261029T181527Z-a7f80457、migration/20261029T181648Z-2b80d1fb）及`12920229850`（dev139-oci-28fdd3c5506550c894feedd0），owned cleanup PASS；provider metadata是FIXTURE_ONLY，正式IAM／Speech／Cloud SQL／Session／browser／release仍NOT_RUN。
 
 本Rev75新增planner／host、summary parser／caller回歸與41份migration的native publication案例；真DB fixture沿正常ASR／discussion建立，synthetic transport只提供有界回應。案例包含兩段retrieve→match→compose→publish、current WBS變更後只重做matching並重用獨立embedding／compose、零模型的空來源／單葉略過compose、無候選local不動ledger、缺proof／未知費用阻擋、取消後不發布、human clear-all／protected保留、summary RLS與record完全不變。完整本機S2 442項及S3 122項PASS，strict同版本PG宣告overlay／frontend檢查亦已過；新native／OCI結果仍待本版CI，不拿40份基線代替。本機曾因新增proofs欄位的舊empty oracle與pipeline union narrowing未同步而失敗，已在原案例修正；沒有改舊SQL或增加required gate。
 
 首版`b57c566ba1abc3ae260a0b6b6a5f0a793dedb1d6`的[CI40985662364](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40985662364)605 unit（442／122／14／27）、原lockfile型別／三boundary／compiled artifact及41份snapshot60 PASS。Domain在進入publication前的合成ASR fixture被0037的word時間上界正確拒絕（`42501 MEETING_ASR_SETTLEMENT_INVALID`）：原三詞固定0–300ms超過該PCM unit實際範圍，已改依已驗dispatch起訖等分，不改ASR guard或SQL。OCI獨立因check-only exact oracle漏列新增`llmDispatch:DISABLED`而失敗，已同步同一欄位；後續原生／容器案例仍須同版重驗，兩個失敗均保留。
+
+續版`6bf9a5784fb260302bedff1faf292893177ca264`的[CI40986644955](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40986644955)仍FAIL，獨立snapshot及unit／型別／boundary／compiled artifact通過。Domain進入local負例後揭露0041的真實RLS缺陷：在設publication phase之前`SELECT run FOR UPDATE`會被UPDATE policy隱藏，正常回false而未檢查source。候選0041改在既有全域app transaction advisory lock內做普通SELECT；local無run UPDATE，publisher實際UPDATE仍須精確phase／RLS／guard，沒有增grant或放寬拒絕。Native先斷言原Session source live，再保持錯source必須42501。OCI獨立因maintenance exact oracle仍漏LLM輸出而失敗，已同步目前累加shape。Rev76的focused背景／上傳／派送與release純測試已通過，完整原生結果待本版CI，不把先前40份基線或DDL成功當成publication PASS。
 
 ### 下游LLM unit持久化與費用隔離（0040，2026-10-30已通過隔離驗證）
 

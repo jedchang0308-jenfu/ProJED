@@ -10,6 +10,10 @@ import {createGcsMeetingAudioStorage} from './meetingAudioStorage.js';
 import {createServiceAccessTokenProvider} from './serviceAccessToken.js';
 import {CURRENT_MEETING_LLM_BINDING} from './meetingLlmRuntimeBinding.js';
 import {createQualifiedMeetingSynthesisProvider} from './meetingSynthesisCloudProvider.js';
+import {CURRENT_MEETING_ASR_BINDING} from './meetingAsrRuntimeBinding.js';
+import {createQualifiedMeetingUploadRepository} from './meetingUpload.js';
+import {CURRENT_MEETING_JOB_BINDING} from './meetingJobRuntimeBinding.js';
+import {createMeetingJobDispatcher} from './meetingJobDispatch.js';
 
 async function main(): Promise<void> {
   const config = loadRuntimeConfig();
@@ -30,6 +34,9 @@ async function main(): Promise<void> {
     ragProvider:process.env.GEMINI_API_KEY?createGeminiRagProvider({apiKey:process.env.GEMINI_API_KEY}):undefined,
     meetingSynthesisProvider,
     meetingSynthesisModel:'gemini-3.5-flash',
+    meetingUploads:createQualifiedMeetingUploadRepository(CURRENT_MEETING_ASR_BINDING,process.env.PROJED_MEETING_AUDIO_BUCKET),
+    meetingJobDispatcher:CURRENT_MEETING_JOB_BINDING===null?undefined
+      :createMeetingJobDispatcher(CURRENT_MEETING_JOB_BINDING,{getAccessToken:createServiceAccessTokenProvider()}),
     meetingAudioStorage:process.env.PROJED_MEETING_AUDIO_BUCKET?createGcsMeetingAudioStorage({
       bucket:process.env.PROJED_MEETING_AUDIO_BUCKET,getAccessToken:createServiceAccessTokenProvider(),
     }):undefined,

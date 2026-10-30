@@ -1,9 +1,11 @@
-import { MANAGED_DATABASE, assertManagedIamLogins, validateManagedDatabaseUrl } from '../../shared/dev139ManagedDatabase.mjs';
+import { MANAGED_DATABASE, assertManagedIamLogins, validateManagedDatabaseUrl,
+  validateManagedRuntimeJobDatabaseUrl } from '../../shared/dev139ManagedDatabase.mjs';
 import { S3_MIGRATION_PATHS } from './dev139-migration-paths.mjs';
 
 export const CLOUD_RUN_TARGET = Object.freeze({
   project: 'projed-cc78d', projectNumber: '967362299895', organization: '361825816000',
-  region: 'asia-east1', service: 'projed-prod',
+  region: 'asia-east1', service: 'projed-prod', analysisJob: 'projed-meeting-analysis',
+  recoveryScheduler: 'projed-meeting-analysis-recovery',
   publicOrigin: 'https://projed-cc78d.web.app',
   repository: 'asia-east1-docker.pkg.dev/projed-cc78d/cloud-run-source-deploy',
   hostProject: 'jenfu-platform-prod', sqlInstance: 'jenfu-platform-prod-pg',
@@ -14,7 +16,8 @@ export const CLOUD_RUN_TARGET = Object.freeze({
 });
 
 const SHA256 = /^[a-f0-9]{64}$/;
-const INPUT_KEYS = ['binding', 'jobsImage', 'releaseId', 'runtimeImage', 'sourceBundleVersion', 'sourceRevision'];
+const INPUT_KEYS = ['analysisImage', 'audioBucket', 'binding', 'jobsImage', 'releaseId', 'runtimeImage',
+  'sourceBundleVersion', 'sourceRevision'];
 const BINDING_KEYS = ['cloudSqlInstance', 'connectionMode', 'databaseName', 'databasePort', 'iamLogins',
   'migrationSha256', 'profileSha256', 'runtimeRole', 'staticFixtureSha256'];
 function invalid() { throw Object.assign(new Error('Cloud Run render inputs are outside the ProJED contract'), { code: 'CLOUD_RUN_INPUT_INVALID' }); }
@@ -26,12 +29,25 @@ function immutableImage(image, suffix) {
   const prefix = `${CLOUD_RUN_TARGET.repository}/${suffix}@sha256:`;
   if (typeof image !== 'string' || !image.startsWith(prefix) || !SHA256.test(image.slice(prefix.length))) invalid();
 }
+function validAudioBucket(bucket) {
+  if (typeof bucket !== 'string' || bucket.length < 3 || bucket.length > 222
+      || !/^[a-z0-9][a-z0-9._-]*[a-z0-9]$/u.test(bucket)
+      || bucket.startsWith('goog') || /google|g00gle/u.test(bucket)
+      || /^run-sources(?:-|$)/u.test(bucket) || /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/u.test(bucket)) return false;
+  return bucket.split('.').every(part => part.length > 0 && part.length <= 63);
+}
 function account(purpose) { return `projed-prod-${purpose}@${CLOUD_RUN_TARGET.project}.iam.gserviceaccount.com`; }
 function databaseUrl(binding, purpose) {
   const login = encodeURIComponent(binding.iamLogins[purpose]);
   return purpose === 'runtime'
     ? `postgresql://${login}@127.0.0.1:5432/${binding.databaseName}`
     : `postgresql://${login}@localhost/${binding.databaseName}?host=${encodeURIComponent(`/cloudsql/${binding.cloudSqlInstance}`)}`;
+}
+function runtimeJobDatabaseUrl(binding) {
+  const login = encodeURIComponent(binding.iamLogins.runtime);
+  const raw = `postgresql://${login}@localhost/${binding.databaseName}?host=${encodeURIComponent(`/cloudsql/${binding.cloudSqlInstance}`)}`;
+  try { validateManagedRuntimeJobDatabaseUrl(raw, binding); } catch { invalid(); }
+  return raw;
 }
 function vpcAccess() {
   return { egress: 'PRIVATE_RANGES_ONLY', networkInterfaces: [{ network: CLOUD_RUN_TARGET.network, subnetwork: CLOUD_RUN_TARGET.subnet }] };
@@ -43,12 +59,14 @@ function env(name, value) { return { name, value }; }
  * verify source, grants, route and existing resources before any mutation. */
 export function renderProjedCloudRun(input) {
   exactKeys(input, INPUT_KEYS);
-  const { binding, runtimeImage, jobsImage, releaseId, sourceRevision, sourceBundleVersion } = input;
+  const { binding, runtimeImage, jobsImage, analysisImage, audioBucket, releaseId, sourceRevision, sourceBundleVersion } = input;
   if (typeof releaseId !== 'string' || !/^[a-z][a-z0-9-]{0,40}$/.test(releaseId)
       || typeof sourceRevision !== 'string' || !/^[a-f0-9]{40}$/.test(sourceRevision)
       || typeof sourceBundleVersion !== 'string' || !/^[1-9][0-9]{0,9}$/.test(sourceBundleVersion)) invalid();
   immutableImage(runtimeImage, 'projed-prod');
   immutableImage(jobsImage, 'projed-prod-jobs');
+  immutableImage(analysisImage, 'projed-prod-asr-job');
+  if (!validAudioBucket(audioBucket)) invalid();
   exactKeys(binding, BINDING_KEYS);
   try {
     assertManagedIamLogins(binding.iamLogins);
@@ -82,6 +100,7 @@ export function renderProjedCloudRun(input) {
             env('PROJED_SOURCE_PROFILE', 'config/dev-139/s3-managed.profile.json'),
             env('PROJED_RUNTIME_BINDING_JSON', JSON.stringify(binding)),
             env('PROJED_DATABASE_URL', databaseUrl(binding, 'runtime')),
+            env('PROJED_MEETING_AUDIO_BUCKET', audioBucket),
             env('PROJED_PUBLIC_APP_URL', target.publicOrigin)],
           resources: { limits: { cpu: '1', memory: '512Mi' }, cpuIdle: true, startupCpuBoost: true },
           startupProbe: { initialDelaySeconds: 0, timeoutSeconds: 2, periodSeconds: 5, failureThreshold: 36,
@@ -127,15 +146,56 @@ export function renderProjedCloudRun(input) {
     };
   }
 
+  const analysisJob = `${parent}/jobs/${target.analysisJob}`;
+  const meetingSchedulerAccount = account('meeting-scheduler');
+  const schedulerName = `${parent}/jobs/${target.recoveryScheduler}`;
+  jobs.analysis = {
+    name: analysisJob, labels,
+    template: { taskCount: 1, parallelism: 1, template: {
+      serviceAccount: account('runtime'), executionEnvironment: 'EXECUTION_ENVIRONMENT_GEN2',
+      maxRetries: 0, timeout: '600s', vpcAccess: vpcAccess(),
+      volumes: [{ name: 'cloudsql', cloudSqlInstance: { instances: [binding.cloudSqlInstance] } }],
+      containers: [{ name: 'projed-analysis', image: analysisImage,
+        env: [env('PROJED_ENV', 'managed'), env('PROJED_APP_ENTRY', 'main'),
+          env('PROJED_SOURCE_PROFILE', 'config/dev-139/s3-managed.profile.json'),
+          env('PROJED_RUNTIME_BINDING_JSON', JSON.stringify(binding)),
+          env('PROJED_DATABASE_URL', runtimeJobDatabaseUrl(binding)),
+          env('PROJED_MEETING_AUDIO_BUCKET', audioBucket)],
+        volumeMounts: [{ name: 'cloudsql', mountPath: '/cloudsql' }],
+        resources: { limits: { cpu: '1', memory: '512Mi' } } }],
+    } },
+  };
+
+  const scheduler = {
+    name: schedulerName,
+    schedule: '*/15 * * * *',
+    timeZone: 'Asia/Taipei',
+    retryConfig: { retryCount: 0 },
+    httpTarget: {
+      uri: `https://run.googleapis.com/v2/${analysisJob}:run`,
+      httpMethod: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: 'e30=',
+      oauthToken: {
+        serviceAccountEmail: meetingSchedulerAccount,
+        scope: 'https://www.googleapis.com/auth/cloud-platform',
+      },
+    },
+  };
+
   const serviceAgent = `serviceAccount:service-${target.projectNumber}@serverless-robot-prod.iam.gserviceaccount.com`;
   const sqlCondition = { title: 'projed-exact-sql-instance', expression:
     `resource.type == 'sqladmin.googleapis.com/Instance' && resource.name == 'projects/${target.hostProject}/instances/${target.sqlInstance}'` };
   const foundation = {
     organization: target.organization,
     enableApis: [{ project: target.project, services: ['run.googleapis.com', 'compute.googleapis.com',
-      'sqladmin.googleapis.com', 'cloudbuild.googleapis.com', 'artifactregistry.googleapis.com', 'secretmanager.googleapis.com'] }],
+      'sqladmin.googleapis.com', 'cloudbuild.googleapis.com', 'artifactregistry.googleapis.com', 'secretmanager.googleapis.com',
+      'cloudscheduler.googleapis.com'] }],
     sharedVpc: { hostProject: target.hostProject, serviceProject: target.project, network: target.network, subnet: target.subnet },
     serviceAccounts: ['runtime', 'migrator', 'importer'].map(purpose => ({ email: account(purpose), databaseLogin: binding.iamLogins[purpose] })),
+    schedulerServiceAccount: {
+      email: meetingSchedulerAccount, databaseLogin: null, databaseIamRoles: [], databaseGrants: [],
+    },
     iamBindings: [
       { resource: `projects/${target.hostProject}`, member: serviceAgent, role: 'roles/compute.networkViewer' },
       { resource: target.subnet, member: serviceAgent, role: 'roles/compute.networkUser' },
@@ -143,6 +203,10 @@ export function renderProjedCloudRun(input) {
         .map(role => ({ resource: `projects/${target.hostProject}`, member: `serviceAccount:${account(purpose)}`, role, condition: sqlCondition }))),
       { resource: `projects/${target.project}/secrets/${target.sourceBundleSecret}`,
         member: `serviceAccount:${account('importer')}`, role: 'roles/secretmanager.secretAccessor' },
+      { resource: analysisJob, member: `serviceAccount:${account('runtime')}`,
+        role: 'roles/run.invoker' },
+      { resource: analysisJob, member: `serviceAccount:${meetingSchedulerAccount}`,
+        role: 'roles/run.invoker' },
     ],
     sqlIamUsers: ['runtime', 'migrator', 'importer'].map(purpose => ({
       project: target.hostProject, instance: target.sqlInstance, type: 'CLOUD_IAM_SERVICE_ACCOUNT',
@@ -154,11 +218,13 @@ export function renderProjedCloudRun(input) {
     operatorRequirements: {
       // Requirements for the authenticated operator, not automatic grants to an
       // arbitrary principal or a new owner/editor role.
-      serviceAccountUserOn: ['runtime', 'migrator', 'importer'].map(account),
+      serviceAccountUserOn: ['runtime', 'migrator', 'importer', 'meeting-scheduler'].map(account),
       artifactReaderOn: `projects/${target.project}/locations/${target.region}/repositories/cloud-run-source-deploy`,
       cloudRunProject: target.project,
       cloudRunPermissions: ['run.services.create', 'run.services.get', 'run.jobs.create',
         'run.jobs.get', 'run.jobs.run', 'run.executions.get', 'run.operations.get'],
+      cloudSchedulerPermissions: ['cloudscheduler.jobs.create', 'cloudscheduler.jobs.get'],
+      cloudSchedulerProject: target.project,
       sharedVpcAdministration: { organization: target.organization,
         projects: [target.hostProject, target.project], requiresExistingAuthorizedAdministrator: true },
       apiEnableProjects: [target.project],
@@ -170,6 +236,7 @@ export function renderProjedCloudRun(input) {
     { method: 'POST', url: `https://run.googleapis.com/v2/${parent}/services?serviceId=${target.service}`, body: service },
     ...Object.values(jobs).map(job => ({ method: 'POST',
       url: `https://run.googleapis.com/v2/${parent}/jobs?jobId=${job.name.split('/').at(-1)}`, body: job })),
+    { method: 'POST', url: `https://cloudscheduler.googleapis.com/v1/${parent}/jobs`, body: scheduler },
   ];
-  return { renderOnly: true, sourceRevision, releaseId, service, jobs, foundation, requests };
+  return { renderOnly: true, sourceRevision, releaseId, service, jobs, scheduler, foundation, requests };
 }
