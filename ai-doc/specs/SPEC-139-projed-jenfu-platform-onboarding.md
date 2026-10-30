@@ -1371,6 +1371,8 @@ Focused review 另修正新service的預設路由說明、OCI失敗診斷也遮�
 
 本Rev75新增planner／host、summary parser／caller回歸與41份migration的native publication案例；真DB fixture沿正常ASR／discussion建立，synthetic transport只提供有界回應。案例包含兩段retrieve→match→compose→publish、current WBS變更後只重做matching並重用獨立embedding／compose、零模型的空來源／單葉略過compose、無候選local不動ledger、缺proof／未知費用阻擋、取消後不發布、human clear-all／protected保留、summary RLS與record完全不變。完整本機S2 442項及S3 122項PASS，strict同版本PG宣告overlay／frontend檢查亦已過；新native／OCI結果仍待本版CI，不拿40份基線代替。本機曾因新增proofs欄位的舊empty oracle與pipeline union narrowing未同步而失敗，已在原案例修正；沒有改舊SQL或增加required gate。
 
+首版`b57c566ba1abc3ae260a0b6b6a5f0a793dedb1d6`的[CI40985662364](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40985662364)605 unit（442／122／14／27）、原lockfile型別／三boundary／compiled artifact及41份snapshot60 PASS。Domain在進入publication前的合成ASR fixture被0037的word時間上界正確拒絕（`42501 MEETING_ASR_SETTLEMENT_INVALID`）：原三詞固定0–300ms超過該PCM unit實際範圍，已改依已驗dispatch起訖等分，不改ASR guard或SQL。OCI獨立因check-only exact oracle漏列新增`llmDispatch:DISABLED`而失敗，已同步同一欄位；後續原生／容器案例仍須同版重驗，兩個失敗均保留。
+
 ### 下游LLM unit持久化與費用隔離（0040，2026-10-30已通過隔離驗證）
 
 新增forward-only`0040_meeting_llm_units_v1`，原0001–0039 bytes不改。沿既有run的150秒lease與原main AppSession，為retrieve／match／compose保存FORCE RLS、runtime append-only的私有input／result checkpoint；run cursor及usage manifest只放stage／unit key／input hash／attempt／租約與數值帳務資訊。無actor的scan／readback／recovery不讀私人內容；run／usage policy以exact run/token metadata scope分開，不讓policy互查形成RLS遞迴。Checkpoint隨owned capture/run cascade，無FK的usage仍保留其原UUID及費用責任。

@@ -199,6 +199,7 @@ try {
   assert.equal(asrCheckLines.length, 1);
   assert.deepEqual(JSON.parse(asrCheckLines[0]), {
     event: 'projed_meeting_asr_job_check', status: 'CHECK_ONLY', providerDispatch: 'DISABLED',
+    llmDispatch: 'DISABLED',
     sessionContract: 'UNPUBLISHED', runtime: 'NOT_CONNECTED', provider: 'NOT_RUN',
   });
   assert.doesNotMatch(`${asrCheckOnly.stdout}${asrCheckOnly.stderr}`, /DEV139_ASR_CHECK_EGRESS_ATTEMPT/u,

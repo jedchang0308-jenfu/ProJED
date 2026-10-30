@@ -2034,8 +2034,12 @@ export async function verifyMeetingUploadPostgres(
         if(mode==='empty')payload.transcript={...record(payload.transcript,'empty ASR transcript'),rawText:'',wordOffsets:[],sourceHash:'e'.repeat(64)};
         if(mode==='multi'){
           const word='測試'.repeat(200);
-          payload.transcript={...record(payload.transcript,'multi-discussion ASR transcript'),rawText:word.repeat(3),sourceHash:'f'.repeat(64),
-            wordOffsets:Array.from({length:3},(_,index)=>({text:word,start_ms:index*100,end_ms:(index+1)*100,
+          const transcript=record(payload.transcript,'multi-discussion ASR transcript');
+          const start=Number(transcript.startOffsetMs),end=Number(transcript.endOffsetMs);
+          assert.ok(Number.isSafeInteger(start)&&Number.isSafeInteger(end)&&end-start>=3);
+          payload.transcript={...transcript,rawText:word.repeat(3),sourceHash:'f'.repeat(64),
+            wordOffsets:Array.from({length:3},(_,index)=>({text:word,start_ms:start+Math.floor((end-start)*index/3),
+              end_ms:index===2?end:start+Math.floor((end-start)*(index+1)/3),
               source_audio_segment_id:fixture.sourceSegmentId,source_word_index:index}))};
         }
         const recognized=record(await settleUnit(actor,fixture.runId,token,payload),'publication ASR checkpoint');
