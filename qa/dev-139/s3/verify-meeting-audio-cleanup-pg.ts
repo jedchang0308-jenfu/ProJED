@@ -66,7 +66,6 @@ const EXPECTED_COLUMN_PRIVILEGES: Readonly<Record<string, readonly string[]>> = 
     'state', 'updated_at', 'upload_bytes', 'upload_operation_token', 'upload_outcome', 'upload_sha256',
     'upload_token_expires_at', 'storage_generation',
   ].sort(),
-  DELETE: [],
 };
 
 function adminUrlFor(config: RuntimeConfig): URL {
@@ -201,11 +200,12 @@ async function verifyCatalog(database: RuntimeDatabase, config: RuntimeConfig): 
       FROM pg_catalog.pg_class c
       JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
       JOIN pg_catalog.pg_attribute a ON a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped
-      CROSS JOIN (VALUES('SELECT'),('INSERT'),('UPDATE'),('DELETE')) permission(privilege)
+      CROSS JOIN (VALUES('SELECT'),('INSERT'),('UPDATE')) permission(privilege)
       WHERE n.nspname='projed_core' AND c.relname='meeting_artifact_cleanup'
       GROUP BY permission.privilege
       ORDER BY permission.privilege
     `);
+    assert.deepEqual(privileges.rows.map(row => row.privilege), ['INSERT', 'SELECT', 'UPDATE']);
     for (const privilege of privileges.rows) {
       assert.deepEqual(privilege.columns, EXPECTED_COLUMN_PRIVILEGES[privilege.privilege],
         `runtime ${privilege.privilege} columns must match the existing source contract`);
