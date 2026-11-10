@@ -511,8 +511,8 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 證據：`SPEC-026`、`QA-DEV-026`
   - 計入交付：是
 - ✓ DEV-027 [交付點] [完成] [P2] [本機已驗證] Xmind-like 心智圖模式
-  - 摘要：交付心智圖模式與後續互動改善。
-  - 證據：`SPEC-027`、`QA/QC-DEV-027`
+  - 摘要：交付心智圖模式與後續互動改善；2026-11-10 修正任務提升至父階後新增子任務造成階層回彈，改以整數同階順序保存。
+  - 證據：`SPEC-027`、`QA/QC-DEV-027`；修正含於 session commit `a87733f`，正式發布狀態記錄於 DEV-073。
   - 計入交付：是
 - ◇ DEV-028 [交付點] [驗證中] [P1] [本機 QC 通過 / 選取生命週期增補待人工補證] 四模式任務操作契約
   - 摘要：原跨模式任務操作一致性已完成；本輪依使用者回饋增補選取生命週期，詳情關閉、ESC、空白點擊與切換檢視後不得殘留選取框，心智圖清除後不得自動回選根節點。
@@ -767,12 +767,13 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 證據：`SPEC-072`、`QA-DEV-072`、DEV-072 static/browser verifier、DEV-028 regression、TypeScript、`build:test`。
   - 計入交付：否
 - ✓ DEV-073 [開發點] [完成] [P1] [RD Implemented / Local QA-QC PASS / 未 Release] 心智圖 XMind 式快速命名
-  - 摘要：只有心智圖新增任務後或細滑鼠單擊既有任務會進入節點快速命名；可直接打字，按一次 Enter 只保存並離開、不新增任務，按一次 Tab 即保存並新增子任務。其他模式維持原本進入任務明細 title edit；心智圖雙擊與右鍵仍開任務明細。
+  - 摘要：只有心智圖新增任務後或細滑鼠單擊既有任務會進入節點快速命名；Enter 只保存並離開，Tab 保存並新增子任務。快速命名時 Delete／Backspace 編輯文字而不封存任務；長草稿可擴張節點並帶動連線。其他模式維持原 title edit。
   - 來源 ID：`USER-20260818-TASK-TITLE-EDIT-DEFAULTS`
   - 父任務：DEV-028、DEV-071、DEV-070
-  - 下一步：若要正式交付，依既有 release gate 另行驗證；本輪不含 deploy／release。
+  - 下一步：使用者在 Firebase CLI 重新驗證既有帳號後，以已封存 manifest 執行 direct release；不重建 artifact。
   - 阻塞 / 恢復條件：若新增／單擊入口未 focus title、Enter 誤新增任務、Tab 建立層級錯誤、IME 組字誤新增、單擊開 modal、雙擊被 quick-title 攔截、右鍵入口錯誤或權限／relationship／觸控邊界漂移，回 RD 修正 MindMap host adapter。
-  - 證據：`SPEC-073`、`QA-DEV-073`、DEV-073 static/browser verifier、DEV-028 static regression、TypeScript、`build:test`。
+  - 證據：`SPEC-073`、`QA-DEV-073`、DEV-073 static/browser verifier、DEV-028 static regression、TypeScript、`build:test`；sealed artifact `20261110091307-66cb3f` 綁定 `a87733f` 且 verifier PASS，正式站前版 `20261022092907-c1b4bf`。
+  - 發布阻塞：Firebase CLI 回報憑證失效；`hosting:channel:list` 在任何 provider 寫入前失敗，尚未建立 direct receipt，也未部署。重新驗證後使用 `output/release/dev-083/20261110091307-66cb3f/manifest.json`。
   - 計入交付：否
 - ✓ DEV-074 [開發點] [完成] [P1] [RD Implemented / QA-QC PASS / 未 Release] 心智圖單一 Scene 座標系重構
   - 摘要：將心智圖節點、階層連線、關係線與互動 overlay 收斂到同一 world coordinate scene，
@@ -1951,7 +1952,7 @@ Rework 4 的真正需求不是新增手機編輯能力模組，而是移除裝�
 - DEV-073 static verifier：PASS；非心智圖 shared details naming、心智圖 quick-title continuation、IME guard、fine/coarse pointer split、click arbitration、double-click／menu wiring 均符合契約。
 - DEV-073 browser verifier：PASS；1440x900、0 console error；toolbar 建立後可直接輸入，Enter 一次保存並離開且不建立新任務，Tab 一次保存並建立子任務；細滑鼠單擊進入 quick-title、Escape 取消草稿，快速雙擊仍開正確明細，快速切換節點只由最新 selection 進入命名；quick-title 不滿版、反白透明、輸入層不攔 pointer 且節點仍 draggable。
 - DEV-028 static regression：45/45 PASS；TypeScript：PASS；`build:test`：PASS。
-- Execution Boundary：本輪未執行 merge、deploy 或 release；保留既有 dirty worktree。
+- Execution Boundary：程式與 SPEC 已由 `a87733f` 快轉合併並推送至 local／remote `main`；release manifest 已驗證，但 Firebase CLI 憑證失效使 direct release 尚未開始，沒有正式寫入。為保留 manifest 綁定的絕對 artifact 路徑，暫留 task-owned worktree `outputs/projed-release-worktree-a87733f`；DEV-073 負責，待正式 release 歷史資產退役且必要 receipt 已保留後再清理。
 
 ## DEV-074：心智圖單一 Scene 座標系重構
 
