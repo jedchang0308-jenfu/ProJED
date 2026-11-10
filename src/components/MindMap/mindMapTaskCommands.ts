@@ -4,10 +4,6 @@ import {
   getInsertOrder,
   getSiblingNodes,
 } from './mindMapTree';
-import {
-  collectMindMapDescendantIds,
-  getNextSelectionAfterDelete,
-} from './mindMapSelection';
 
 export const DEFAULT_MINDMAP_TASK_TITLE = '新任務';
 
@@ -36,26 +32,10 @@ interface MindMapChildTaskCreatePlanInput {
   getChildren: (nodeId: string) => TaskNode[];
 }
 
-interface MindMapArchiveTaskPlanInput {
-  selectedNodeId: string | null;
-  nodes: Record<string, TaskNode>;
-  parentNodesIndex: Record<string, string[]>;
-  boardId: string;
-  rootNodes: TaskNode[];
-  getChildren: (nodeId: string) => TaskNode[];
-}
-
 interface MindMapTaskCreatePlan {
   parentId: string | null;
   order: number;
   inheritRootSideFromId?: string;
-}
-
-interface MindMapArchiveTaskPlan {
-  selected: TaskNode;
-  descendantIds: string[];
-  deletingIds: Set<string>;
-  nextSelectionId: string | null;
 }
 
 export const createMindMapTaskNode = ({
@@ -121,27 +101,5 @@ export const getMindMapChildTaskCreatePlan = ({
   return {
     parentId: selected.id,
     order: getNextMindMapChildOrder(getChildren(selected.id)),
-  };
-};
-
-export const getMindMapArchiveTaskPlan = ({
-  selectedNodeId,
-  nodes,
-  parentNodesIndex,
-  boardId,
-  rootNodes,
-  getChildren,
-}: MindMapArchiveTaskPlanInput): MindMapArchiveTaskPlan | null => {
-  if (!selectedNodeId) return null;
-  const selected = nodes[selectedNodeId];
-  if (!selected) return null;
-  const descendantIds = collectMindMapDescendantIds(selected.id, getChildren);
-  const deletingIds = new Set([selected.id, ...descendantIds]);
-  const siblings = getSiblingNodes(nodes, parentNodesIndex, selected.parentId, boardId);
-  return {
-    selected,
-    descendantIds,
-    deletingIds,
-    nextSelectionId: getNextSelectionAfterDelete(selected, siblings, nodes, rootNodes, deletingIds),
   };
 };

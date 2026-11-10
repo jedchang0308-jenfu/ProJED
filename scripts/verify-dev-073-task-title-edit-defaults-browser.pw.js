@@ -119,7 +119,7 @@ async (page) => {
     };
   });
   assert(toolbarQuickTitleMetrics.inputWidth >= toolbarQuickTitleMetrics.measuredTextWidth, 'CJK quick-title text must fit without clipping when a task enters naming', toolbarQuickTitleMetrics);
-  assert(Math.abs(toolbarQuickTitleMetrics.inputWidth - toolbarQuickTitleMetrics.anchorWidth) <= 1, 'quick-title input must overlay the original title slot instead of changing node layout', toolbarQuickTitleMetrics);
+  assert(Math.abs(toolbarQuickTitleMetrics.inputWidth - toolbarQuickTitleMetrics.anchorWidth) <= 1, 'quick-title input must overlay the title slot', toolbarQuickTitleMetrics);
 
   const toolbarTaskId = await quickTitleNode.getAttribute('data-mindmap-node');
   let visibleNodeCount = await page.locator('[data-mindmap-node]').count();
@@ -172,8 +172,7 @@ async (page) => {
   await quickTitleInput.press('Escape');
   assert(await node.getAttribute('data-mindmap-node-title') === originalNodeTitle, 'Escape must cancel the click-started title draft');
 
-  // Typing from the focused node enters the editor only after the first character,
-  // preserving the XMind armed state for navigation and deletion.
+  // Typing from the focused node enters the editor only after the first character.
   await node.click();
   await quickTitleInput.waitFor({ state: 'visible', timeout: 10000 });
   await page.waitForTimeout(350);
@@ -195,7 +194,40 @@ async (page) => {
   await page.waitForTimeout(350);
   assert(await page.evaluate((nodeId) => document.activeElement?.getAttribute('data-mindmap-node') === nodeId, continuedChildId), 'child quick naming must retain node focus after delayed click');
 
-  // Delete is a task command even while the XMind-like quick naming input has focus.
+  // The draft resizes the node and moves the parent-to-child connector.
+  const originalTitle = await parentWithChild.getAttribute('data-mindmap-node-title');
+  const originalWidth = await parentWithChild.evaluate(element => element.offsetWidth);
+  await parentWithChild.click();
+  await quickTitleInput.waitFor({ state: 'visible', timeout: 10000 });
+  const longDraft = '心智圖全形標題　Mixed text  '.repeat(9).trimEnd();
+  const waitForTitleWidthAndConnector = (draft, minimumWidth) => page.waitForFunction(({ draft, minimumWidth, parentId, childId }) => {
+    const node = document.querySelector(`[data-mindmap-node="${parentId}"]`);
+    const input = node?.querySelector('[data-mindmap-quick-title-input]');
+    const text = node?.querySelector('[data-mindmap-quick-title-layout-anchor]')?.firstChild;
+    const connector = document.querySelector(`[data-mindmap-connector-path][data-from-node-id="${parentId}"][data-to-node-id="${childId}"]`);
+    if (!node || input?.value !== draft || text?.textContent !== draft || !connector) return false;
+    const range = document.createRange();
+    range.selectNodeContents(text);
+    const bounds = node.getBoundingClientRect();
+    const matrix = connector.getScreenCTM();
+    if (!matrix) return false;
+    const from = connector.getPointAtLength(0).matrixTransform(matrix);
+    const edge = connector.dataset.direction === 'left' ? bounds.left : bounds.right;
+    return input.getBoundingClientRect().width >= range.getBoundingClientRect().width &&
+      node.offsetWidth >= minimumWidth && Math.abs(from.x - edge) < 2;
+  }, { draft, minimumWidth, parentId: toolbarTaskId, childId: continuedChildId }, { timeout: 6000 });
+  await quickTitleInput.fill(longDraft);
+  const readingWidthLimit = await parentWithChild.evaluate(element => parseFloat(getComputedStyle(element).getPropertyValue('--mindmap-node-max-width')));
+  await waitForTitleWidthAndConnector(longDraft, readingWidthLimit + 1);
+  const expandedWidth = await parentWithChild.evaluate(element => element.offsetWidth);
+  await quickTitleInput.fill('短名');
+  await waitForTitleWidthAndConnector('短名', 0);
+  assert(await parentWithChild.evaluate(element => element.offsetWidth) < expandedWidth, 'shortening the draft must let the node shrink again');
+  await quickTitleInput.press('Escape');
+  assert(await parentWithChild.getAttribute('data-mindmap-node-title') === originalTitle, 'cancelling a resized title draft must retain the saved title');
+  assert(await parentWithChild.evaluate(element => element.offsetWidth) === originalWidth, 'cancelling must restore the saved node width');
+
+  // Deleting the last character must leave the task and its editor in place.
   if (await createRootButton.count()) {
     await createRootButton.click();
   } else {
@@ -207,10 +239,39 @@ async (page) => {
   const deleteWhileQuickNamingId = await quickTitleNode.getAttribute('data-mindmap-node');
   const nodeCountBeforeQuickDelete = await page.locator('[data-mindmap-node]').count();
   assert(Boolean(deleteWhileQuickNamingId), 'quick naming delete fixture must expose a task id');
+  const deletionFixture = page.locator(`[data-mindmap-node="${deleteWhileQuickNamingId}"]`);
+  await quickTitleInput.fill('甲乙');
+  await quickTitleInput.press('Home');
   await quickTitleInput.press('Delete');
-  await page.locator(`[data-mindmap-node="${deleteWhileQuickNamingId}"]`).waitFor({ state: 'hidden', timeout: 10000 });
+  assert(await quickTitleInput.inputValue() === '乙', 'Delete must remove the character after the caret');
+  await quickTitleInput.press('Delete');
+  await quickTitleInput.press('Delete');
+  assert(await quickTitleInput.inputValue() === '', 'Delete on the last character and on an empty title must keep editing active');
+  await quickTitleInput.press('A');
+  await quickTitleInput.press('Backspace');
+  assert(await quickTitleInput.inputValue() === '', 'Backspace must also edit the title');
+  assert(await deletionFixture.isVisible() && await page.locator('[data-mindmap-node]').count() === nodeCountBeforeQuickDelete, 'editing keys must preserve the task');
+  await quickTitleInput.press('Escape');
+
+  await deletionFixture.click();
+  await quickTitleInput.waitFor({ state: 'visible', timeout: 10000 });
+  await page.keyboard.press('Delete');
+  await page.keyboard.press('Backspace');
+  assert(await deletionFixture.isVisible(), 'armed quick naming must protect the task with focus still on its node');
+  await deletionFixture.press('x');
+  await page.waitForFunction(() => document.activeElement?.getAttribute('data-mindmap-quick-title-input') === 'true');
+  assert(await quickTitleInput.inputValue() === 'x', 'typing from the armed node must still replace its title');
+  await quickTitleInput.press('Home');
+  await quickTitleInput.press('Delete');
+  await quickTitleInput.press('y');
+  await quickTitleInput.press('z');
+  assert(await quickTitleInput.inputValue() === 'yz', 'after clearing an existing task title, native typing must continue in the same editor');
+  await quickTitleInput.press('Escape');
+  await quickTitleInput.waitFor({ state: 'hidden', timeout: 10000 });
+  await deletionFixture.press('Delete');
+  await deletionFixture.waitFor({ state: 'hidden', timeout: 10000 });
   await page.waitForFunction(expected => document.querySelectorAll('[data-mindmap-node]').length === expected, nodeCountBeforeQuickDelete - 1);
-  assert(await details.count() === 0, 'quick naming Delete must not open task details');
+  assert(await details.count() === 0, 'Delete outside quick naming must archive the task without opening details');
 
   // The short single-click delay preserves double click as the explicit full-details entry.
   await node.dblclick();

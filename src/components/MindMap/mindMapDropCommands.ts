@@ -1,8 +1,6 @@
 import type { TaskNode } from '../../types';
 import type { MindMapDirection, MindMapDropMode } from './MindMapNode';
 import {
-  getInsertOrder,
-  getSiblingNodes,
   wouldCreateMindMapCycle,
   type SideOverrides,
 } from './mindMapTree';
@@ -19,20 +17,18 @@ interface MindMapDropMoveUpdate {
   parentId: string | null;
   order: number;
   rootSide?: MindMapDirection;
-  expandNodeId?: string;
 }
 
 type MindMapNodeDropResult =
   | { type: 'blocked'; reason: MindMapNodeDropBlockedReason }
-  | { type: 'move'; update: MindMapDropMoveUpdate };
+  | { type: 'move'; update: MindMapDropMoveUpdate & { expandNodeId: string } }
+  | { type: 'reorder'; nodeId: string; anchorId: string; position: 'before' | 'after'; rootSide?: MindMapDirection };
 
 interface MindMapNodeDropResultInput {
-  boardId: string;
   draggedNodeId: string;
   mode: MindMapDropMode;
   target: TaskNode;
   nodes: Record<string, TaskNode>;
-  parentNodesIndex: Record<string, string[]>;
   getChildren: (nodeId: string) => TaskNode[];
   getNodeSide: (nodeId: string) => MindMapDirection;
 }
@@ -53,12 +49,10 @@ interface MindMapSideDropUpdateInput {
 }
 
 export const getMindMapNodeDropResult = ({
-  boardId,
   draggedNodeId,
   mode,
   target,
   nodes,
-  parentNodesIndex,
   getChildren,
   getNodeSide,
 }: MindMapNodeDropResultInput): MindMapNodeDropResult => {
@@ -84,16 +78,12 @@ export const getMindMapNodeDropResult = ({
     return { type: 'blocked', reason: 'hierarchy-cycle' };
   }
 
-  const siblings = getSiblingNodes(nodes, parentNodesIndex, nextParentId, boardId)
-    .filter(node => node.id !== draggedNodeId);
   return {
-    type: 'move',
-    update: {
-      nodeId: draggedNodeId,
-      parentId: nextParentId,
-      order: getInsertOrder(siblings, target.id, mode),
-      rootSide: nextParentId ? undefined : getNodeSide(target.id),
-    },
+    type: 'reorder',
+    nodeId: draggedNodeId,
+    anchorId: target.id,
+    position: mode,
+    rootSide: nextParentId ? undefined : getNodeSide(target.id),
   };
 };
 

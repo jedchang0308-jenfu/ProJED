@@ -31,6 +31,8 @@ import { useTaskPlacementPermissions } from '../hooks/useTaskPlacementPermission
 import { getReferenceSubtree, PRIMARY_PLACEMENT_PREFIX, primaryPlacementId } from '../features/taskTracking/model';
 import { requestTaskDetailsNavigation, useTaskDetailsNavigation } from './taskDetailsNavigation';
 import { createBlankTaskNode } from '../features/taskCreation/createBlankTaskNode';
+import { isTaskWorkbenchUnplacedTask } from '../features/taskWorkbench/placement';
+import { buildTaskSiblingMoveUpdates } from './Wbs/taskDrag/taskMoveUpdateNormalization';
 import useRecordStore from '../store/useRecordStore';
 import {
   getMeetingTaskReservationValue,
@@ -587,12 +589,18 @@ export const GlobalContextMenu: React.FC = () => {
     const parentNode = state.nodes[node.parentId];
     if (!parentNode) return;
 
-    updateNode(node.id, {
-      parentId: parentNode.parentId,
-      order: parentNode.order + 0.1,
-    });
-
+    const updates = buildTaskSiblingMoveUpdates(node.id, parentNode.id, 'after', state.nodes);
     closeContextMenu();
+    if (!updates) {
+      toast.error('找不到可移動的上層位置。');
+      return;
+    }
+    if (isTaskWorkbenchUnplacedTask(node)) {
+      state.batchUpdateNodes(updates, { label: '往上一階' });
+      return;
+    }
+    const outcome = await state.commitNodeBatch(updates, { label: '往上一階', recoveryKind: 'move' });
+    if (outcome.status !== 'committed') toast.error(outcome.error || '任務升階未完成。');
   };
 
   const handleMoveDown = async () => {

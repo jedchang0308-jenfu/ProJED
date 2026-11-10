@@ -572,8 +572,7 @@ check(
     mindMapNode.includes('cancelTitleEdit(true);') &&
     mindMapNode.includes('autoFocusTitleInput?: boolean;') &&
     mindMapNode.includes('if (!autoFocusTitleInput) return;') &&
-    mindMapNode.includes('onTitleEditDelete?: (nodeId: string) => void;') &&
-    mindMapNode.includes('onTitleEditDelete?.(node.id)') &&
+    !mindMapNode.includes('onTitleEditDelete') &&
     mindMapNode.includes('onChange={(event) => setTitleDraft(event.target.value)}') &&
     mindMapNode.includes('data-mindmap-quick-title-input="true"') &&
     !mindMapNode.includes('setEditingTitle'),
@@ -623,7 +622,7 @@ check(
       'getMindMapNodeElement(mapContentRef.current, nodeId)',
       'getMindMapCenterElement(document)',
       'getMindMapCenterElement(mapContentRef.current)',
-      'MINDMAP_CONTENT_BOUNDS_SELECTOR',
+      'getMindMapCenterElement(surface)',
       'getMindMapNodeId(targetElement)',
     ].every(token => view.includes(token)) &&
     !view.includes('getMindMapNodeSelector') &&
@@ -704,11 +703,9 @@ check(
 
 check(
   'Mind map user-facing messages are centralized outside the view component',
-  view.includes("import { MINDMAP_MESSAGES, getMindMapArchiveTaskConfirmMessage } from './mindMapMessages'") &&
+  view.includes("import { MINDMAP_MESSAGES } from './mindMapMessages'") &&
     [
       'MINDMAP_MESSAGES.noCreateTaskPermission',
-      'MINDMAP_MESSAGES.noArchiveTaskPermission',
-      'getMindMapArchiveTaskConfirmMessage(plan.selected.title || DEFAULT_MINDMAP_TASK_TITLE, plan.descendantIds.length)',
       'MINDMAP_MESSAGES.noEditRelationshipPermission',
       'MINDMAP_MESSAGES.relationshipSelfLinkBlocked',
       'MINDMAP_MESSAGES.dragWouldCreateChildCycle',
@@ -720,12 +717,10 @@ check(
       "selectBoardPrompt: '請先選擇一個看板'",
       "noCreateTaskPermission: '目前沒有新增任務權限'",
       "noEditTaskPermission: '目前沒有編輯任務權限'",
-      "noArchiveTaskPermission: '目前沒有封存任務權限'",
       "noEditRelationshipPermission: '目前沒有編輯關聯線權限'",
       "relationshipSelfLinkBlocked: '關聯線不能連到同一個任務'",
       "dragWouldCreateChildCycle: '不能把任務拖到自己的子任務底下'",
       "dragWouldCreateHierarchyCycle: '這個拖曳會造成階層循環'",
-      'export const getMindMapArchiveTaskConfirmMessage',
     ].every(token => messages.includes(token)) &&
     [
       '目前沒有新增任務權限',
@@ -1134,9 +1129,8 @@ check(
   view.includes("from './mindMapKeyboard'") &&
     [
       'export const isMindMapTextEditingTarget',
-      'export const isMindMapQuickTitleEditingTarget',
       'export const isMindMapDeleteKey',
-      'export const isMindMapForwardDeleteKey',
+      'if (state.isEditingText) return null;',
       'export const isMindMapSpaceKey',
       'export const isMindMapRelationshipLabelEditKey',
       'export const isMindMapRelationshipToolToggleKey',
@@ -1160,7 +1154,7 @@ check(
     [
       'getMindMapKeyboardAction(event, {',
       'isMindMapTextEditingTarget(event.target)',
-      'isQuickTitleEditing: isMindMapQuickTitleEditingTarget(event.target)',
+      'inlineTitleEditNodeId && !isEditingText && isMindMapDeleteKey(event)',
       'isMindMapRelationshipLabelEditKey(event)',
       'isMindMapDeleteKey(event)',
       "action.type === 'toggle-relationship-tool'",
@@ -1291,9 +1285,7 @@ check(
     taskCommands.includes('export const createMindMapTaskNode') &&
     taskCommands.includes('export const getMindMapSiblingTaskCreatePlan') &&
     taskCommands.includes('export const getMindMapChildTaskCreatePlan') &&
-    taskCommands.includes('export const getMindMapArchiveTaskPlan') &&
     taskCommands.includes('getNextMindMapChildOrder(getChildren(selected.id))') &&
-    taskCommands.includes('getNextSelectionAfterDelete(selected, siblings, nodes, rootNodes, deletingIds)') &&
     view.includes('const node = createMindMapTaskNode({') &&
     view.includes('getCommittedMindMapTitle(title)') &&
     view.includes('createSiblingForNode(selectedNodeId);') &&
@@ -1356,15 +1348,16 @@ check(
 
 check(
   'ResizeObserver lifecycle is not coupled to connector or relationship path state updates',
-    dev074SceneContract || (view.includes('const observer = new ResizeObserver(() => {') &&
-    view.includes('const nodesToObserve = Array.from(surface.querySelectorAll(MINDMAP_CONTENT_BOUNDS_SELECTOR));') &&
-    view.includes('nodesToObserve.forEach(element => observer.observe(element));') &&
-    view.includes('}, [recomputeConnectors, rootNodes.length]);') &&
+    view.includes('const observer = new ResizeObserver(() => {') &&
+    view.includes('nodeElementRegistryRef.current.forEach(element => observer.observe(element));') &&
+    view.includes('observer?.observe(element)') &&
+    view.includes('observer?.unobserve(previousElement)') &&
+    view.includes('}, [cancelMarquee, markGeometryDirty, rootNodes.length]);') &&
     !view.includes('handleMindMapScroll') &&
     !view.includes('connectorPaths.length,') &&
     !view.includes('relationshipPaths.length, recomputeConnectors') &&
     !view.includes('connectorPaths.length') &&
-    !view.includes('relationshipPaths.length')),
+    !view.includes('relationshipPaths.length'),
 );
 
 check(
@@ -1480,12 +1473,7 @@ check(
 );
 
 check(
-  'Keyboard selection and delete-after-focus state transitions are isolated from the view component',
-  [
-      'export const collectMindMapDescendantIds',
-      'export const getNextSelectionAfterDelete',
-      'previousSibling?.id || parentCandidate?.id || nextSibling?.id || fallbackRoot?.id || null',
-    ].every(token => selection.includes(token)) &&
+  'Keyboard navigation remains independent of DOM queries and task archiving uses the selection command',
     [
       'export const buildMindMapNavigationIndex',
       'export const getMindMapHorizontalSelection',
@@ -1501,8 +1489,7 @@ check(
       'useSyncExternalStore',
       'listenersByNodeId',
     ].every(token => selectionStore.includes(token)) &&
-    taskCommands.includes('collectMindMapDescendantIds(selected.id, getChildren)') &&
-    taskCommands.includes('getNextSelectionAfterDelete(selected, siblings, nodes, rootNodes, deletingIds)') &&
+    view.includes('void archivePlacementSelection(selectedPlacementIds);') &&
     view.includes('getMindMapVerticalSelection(') &&
     view.includes('getMindMapHorizontalSelection(') &&
     view.includes('const selectedNodeId = selectionStore.getSelectedNodeId();') &&
@@ -1515,8 +1502,6 @@ check(
     !navigation.includes('querySelector') &&
     !view.includes("querySelectorAll<HTMLElement>('[data-mindmap-node]')") &&
     !selection.includes("querySelectorAll<HTMLElement>('[data-mindmap-node]')") &&
-    !view.includes('collectMindMapDescendantIds(selected.id, getChildren)') &&
-    !view.includes('getNextSelectionAfterDelete(selected, siblings, nodes, rootNodes, deletingIds)') &&
     !view.includes('const previousSibling = siblings') &&
     !view.includes('const parentCandidate = selected.parentId') &&
     !view.includes('const nextSelectionId = previousSibling?.id || parentCandidate?.id'),

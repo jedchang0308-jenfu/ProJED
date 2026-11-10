@@ -2,10 +2,14 @@ import type { TaskNode } from '../../../types';
 import type { BatchNodeUpdates } from '../../../store/useWbsStore';
 import {
   getPlacementScopeKey,
+  getTaskOwnershipRef,
   getTaskPlacementScope,
+  taskBelongsToOwnership,
 } from '../../../features/taskWorkbench/taskPlacementCommand';
 import {
   buildTaskParentIndex,
+  getTaskMoveOrderingPlan,
+  isValidTaskDropIntent,
   type TaskDropIntent,
   type TaskMoveOrderingPlan,
 } from './taskDropIntent';
@@ -76,5 +80,31 @@ export const normalizeTaskMoveUpdates = (
     nodeType: intent.nodeType,
     updatedAt: Date.now(),
   };
+  return updates;
+};
+
+export const buildTaskSiblingMoveUpdates = (
+  nodeId: string,
+  anchorId: string,
+  position: 'before' | 'after',
+  nodes: Record<string, TaskNode>,
+): BatchNodeUpdates | null => {
+  const node = nodes[nodeId];
+  const anchor = nodes[anchorId];
+  if (!node || !anchor || node.id === anchor.id || node.isArchived || anchor.isArchived
+    || !taskBelongsToOwnership(anchor, getTaskOwnershipRef(node))) return null;
+
+  const intent: TaskDropIntent = {
+    parentId: anchor.parentId || null,
+    order: anchor.order,
+    displayPosition: position,
+  };
+  if (!isValidTaskDropIntent(nodeId, intent, nodes)) return null;
+  const move = getTaskMoveOrderingPlan(node, anchor, intent, nodes);
+  if (!move) return null;
+  if (move.isOriginOrder) return {};
+  const updates = normalizeTaskMoveUpdates(nodeId, intent, nodes, move.ordering);
+  // A move writes only the hierarchy fields. The provider supplies timestamps.
+  delete updates[nodeId].updatedAt;
   return updates;
 };

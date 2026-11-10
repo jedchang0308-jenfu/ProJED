@@ -120,7 +120,7 @@ export type CommitNodeBatchOptions = {
   label?: string;
   mergeKey?: string;
   timeoutMs?: number;
-  recoveryKind?: 'copy-paste' | 'cut-paste' | 'assign' | 'archive' | 'undo' | 'redo';
+  recoveryKind?: 'copy-paste' | 'cut-paste' | 'move' | 'assign' | 'archive' | 'undo' | 'redo';
   presentation?: Readonly<{
     commit: () => Promise<void>;
     compensate: () => Promise<void>;
@@ -707,7 +707,7 @@ type NodeBatchRecoveryDescriptor = Readonly<{
   operationId: string;
   workspaceId: string;
   boardId: string;
-  kind: 'copy-paste' | 'cut-paste' | 'assign' | 'archive' | 'undo' | 'redo';
+  kind: NonNullable<CommitNodeBatchOptions['recoveryKind']>;
   createdAt: number;
   targetIds: readonly string[];
   expectedBeforeFingerprint: string;

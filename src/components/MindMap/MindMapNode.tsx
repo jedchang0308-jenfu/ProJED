@@ -44,7 +44,6 @@ interface MindMapNodeProps {
   onTitleEditCommit?: (nodeId: string, title: string, restoreNodeFocus?: boolean) => void;
   onTitleEditContinue?: (nodeId: string, title: string, intent: MindMapQuickCreateIntent) => void;
   onTitleEditCancel?: (nodeId: string, restoreNodeFocus?: boolean) => void;
-  onTitleEditDelete?: (nodeId: string) => void;
   onSelect: (nodeId: string) => void;
   onPointerPrimary: (nodeId: string) => void;
   onOpenDetails: (nodeId: string, trackingReferenceId?: string) => void;
@@ -139,7 +138,6 @@ export const MindMapNode: React.FC<MindMapNodeProps> = React.memo(({
   onTitleEditCommit,
   onTitleEditContinue,
   onTitleEditCancel,
-  onTitleEditDelete,
   onSelect,
   onPointerPrimary,
   onOpenDetails,
@@ -202,7 +200,7 @@ export const MindMapNode: React.FC<MindMapNodeProps> = React.memo(({
     onTitleEditCancel?.(node.id, restoreNodeFocus);
   }, [node.id, onTitleEditCancel]);
 
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     if (!isTitleEditing) return;
     titleEditActionHandledRef.current = false;
     setTitleDraft(nodeTitleRef.current);
@@ -255,13 +253,7 @@ export const MindMapNode: React.FC<MindMapNodeProps> = React.memo(({
             void interactionBinding.dispatch('pointer.primary');
           }}
           onKeyDown={(event) => {
-            if (event.nativeEvent.isComposing || !isTitleEditing || autoFocusTitleInput) return;
-            if (event.key === 'Delete' || event.key === 'Backspace') {
-              event.preventDefault();
-              event.stopPropagation();
-              onTitleEditDelete?.(node.id);
-              return;
-            }
+            if (event.target !== event.currentTarget || event.nativeEvent.isComposing || !isTitleEditing || autoFocusTitleInput) return;
             if (event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey) return;
             event.preventDefault();
             event.stopPropagation();
@@ -300,7 +292,7 @@ export const MindMapNode: React.FC<MindMapNodeProps> = React.memo(({
           onDragOver={(event) => onDragOverNode(event, node.id)}
           onDrop={(event) => onDropOnNode(event, node.id)}
           data-touch-tap-guard="true"
-          className={`mobile-pan-item relative z-50 flex min-h-[var(--mindmap-node-min-height)] max-w-[var(--mindmap-node-max-width)] items-center gap-[calc(var(--mindmap-node-gap)*0.3)] rounded-[var(--mindmap-node-radius)] border bg-white px-[var(--mindmap-node-pad-x)] py-[var(--mindmap-node-pad-y)] text-[length:var(--mindmap-node-font-size)] font-semibold text-slate-700 shadow-[0_10px_22px_rgba(15,23,42,0.08)] outline-none transition-colors ${isLeft ? 'flex-row-reverse' : ''} ${(isTrackingReference ? canManageTaskReference : canMoveTask) && !isCoarsePointer ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${isTrackingReference ? 'border-2 border-dashed border-violet-300 bg-violet-50/40' : ''} ${isCutPending ? 'opacity-45 saturate-50' : ''} ${getDropClasses(dropTarget, node.id)}`}
+          className={`mobile-pan-item relative z-50 flex min-h-[var(--mindmap-node-min-height)] items-center gap-[calc(var(--mindmap-node-gap)*0.3)] rounded-[var(--mindmap-node-radius)] border bg-white px-[var(--mindmap-node-pad-x)] py-[var(--mindmap-node-pad-y)] text-[length:var(--mindmap-node-font-size)] font-semibold text-slate-700 shadow-[0_10px_22px_rgba(15,23,42,0.08)] outline-none transition-colors ${isTitleEditing ? 'shrink-0' : 'max-w-[var(--mindmap-node-max-width)]'} ${isLeft ? 'flex-row-reverse' : ''} ${(isTrackingReference ? canManageTaskReference : canMoveTask) && !isCoarsePointer ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${isTrackingReference ? 'border-2 border-dashed border-violet-300 bg-violet-50/40' : ''} ${isCutPending ? 'opacity-45 saturate-50' : ''} ${getDropClasses(dropTarget, node.id)}`}
         >
           <span className={`flex min-w-0 flex-col ${isLeft ? 'items-end' : 'items-start'}`}>
             <span
@@ -312,10 +304,10 @@ export const MindMapNode: React.FC<MindMapNodeProps> = React.memo(({
                 <>
                   <span
                     aria-hidden="true"
-                    className="invisible block max-w-full truncate whitespace-nowrap"
+                    className="invisible block min-w-[1ch] whitespace-pre px-px"
                     data-mindmap-quick-title-layout-anchor="true"
                   >
-                    {node.title || '未命名任務'}
+                    {titleDraft.replace(/[\r\n]/g, '') || '\u00a0'}
                   </span>
                   <input
                     ref={titleInputRef}
@@ -343,14 +335,6 @@ export const MindMapNode: React.FC<MindMapNodeProps> = React.memo(({
                         event.preventDefault();
                         event.stopPropagation();
                         cancelTitleEdit(true);
-                      } else if (event.key === 'Delete') {
-                        // The quick naming input is intentionally focused for
-                        // XMind-style typing, but Delete is a task command,
-                        // not text editing. Handle it at the input boundary so
-                        // native text deletion and bubbling races cannot win.
-                        event.preventDefault();
-                        event.stopPropagation();
-                        onTitleEditDelete?.(node.id);
                       }
                     }}
                     aria-label="快速命名任務"

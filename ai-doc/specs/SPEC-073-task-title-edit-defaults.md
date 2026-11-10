@@ -19,10 +19,11 @@
 ### 2.1 心智圖 post-create
 
 - 心智圖 toolbar 新增、鍵盤 `Enter`（既有選取狀態下建立同階）、`Tab`（子任務）建立成功後，將新節點設為 selected，並以視覺上接近節點文字的 quick-title input 接收直接輸入。
-- quick-title input 自動取得焦點並選取現有標題，但選取反白需視覺隱藏；節點原有標題槽保留在版面流中，輸入框以 absolute overlay 覆蓋該槽，不得因進入命名而放大／縮窄節點或裁切中文／全形標題，也不得撐滿節點。節點外層仍保持 `draggable=true`，輸入層不得攔截指標拖曳。
+- quick-title input 自動取得焦點並選取現有標題，但選取反白需視覺隱藏。標題槽以目前草稿的單行文字寬度排版，輸入框覆蓋該槽，節點與連線隨草稿寬度調整。編輯時顯示完整標題，節點外層保持 `draggable=true`，輸入層不攔截指標拖曳。
 - `Enter` 保存目前名稱並離開 quick-title；不得建立同階或其他新任務，也不得開啟任務明細。
 - `Tab` 保存目前名稱、建立目前任務的子任務並讓新任務繼續快速命名；不先執行「離開編輯」步驟。
 - blur 保存並離開快速命名；`Escape` 取消目前草稿並離開，不新增任務。
+- 快速命名期間，`Delete` 與 `Backspace` 只交給已聚焦的文字輸入框，即使名稱刪至空白也不得封存任務。細滑鼠單擊啟動快速命名後，若焦點仍在節點上，這兩鍵暫不執行任何動作。離開命名後可在選取的節點上使用原本的封存快捷鍵。
 - IME composition 期間的 Enter 保留給輸入法，不得觸發保存或新增。
 - 提交沿用 `getCommittedMindMapTitle` 的 trim／空值 fallback 與既有 `updateNode` 權限邊界。
 - 建立後 `TaskDetailsModal` 數量必須為 0；雙擊／右鍵明細入口仍開啟正確任務。
@@ -60,7 +61,7 @@
 - AC-073-007：清單、看板、甘特、Workbench、Shared Sidebar 等非心智圖新增後仍進入既有詳情 title edit；不得出現 mindmap quick-title marker。
 - AC-073-008：relationship、唯讀、coarse pointer、drag 與跨模式既有 regression 不回歸。
 - AC-073-009：quick-title 視覺貼合節點文字，不滿版、不顯示反白；節點在 quick-title 狀態仍 `draggable=true`，輸入層 `pointer-events=none`。
-- AC-073-010：既有任務或新增的中文／全形標題進入 quick-title 後，節點 bounding box 必須與進入前相同，僅增加 selected outline；標題文字不得被輸入框裁切，1440x900、1024x768 與 390x844 均成立。
+- AC-073-010：心智圖可使用的桌面與窄視窗中，輸入中文／全形等較長標題時，節點須超過閱讀狀態的寬度上限以容納完整草稿，連線端點須跟隨節點邊緣。縮短文字或取消編輯時，節點依當前顯示文字重新排版。
 
 ## 5. Failure recovery
 

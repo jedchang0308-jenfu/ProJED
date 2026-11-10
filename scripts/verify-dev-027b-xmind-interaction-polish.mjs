@@ -39,7 +39,6 @@ const mindMapDrag = read(files.mindMapDrag);
 const mindMapGeometry = read(files.mindMapGeometry);
 const mindMapOverlayPaths = read(files.mindMapOverlayPaths);
 const mindMapPan = read(files.mindMapPan);
-const mindMapSelection = read(files.mindMapSelection);
 const mindMapViewport = read(files.mindMapViewport);
 const mindMapZoom = read(files.mindMapZoom);
 const mindMapKeyboard = read(files.mindMapKeyboard);
@@ -86,13 +85,10 @@ assert(
 );
 
 assert(
-  'Deleting a branch preserves Xmind-style nearest-task focus',
-  mindMapSelection.includes('export const getNextSelectionAfterDelete') &&
-    mindMapSelection.includes('previousSibling?.id || parentCandidate?.id || nextSibling?.id || fallbackRoot?.id || null') &&
-    (mindMapView.includes('getMindMapArchiveTaskPlan({ selectedNodeId, nodes, parentNodesIndex, boardId, rootNodes, getChildren })') ||
-      mindMapView.includes('getMindMapArchiveTaskPlan({ selectedNodeId: targetNodeId, nodes, parentNodesIndex, boardId, rootNodes, getChildren })')) &&
-    mindMapView.includes('selectNode(plan.nextSelectionId)') &&
-    !mindMapView.includes('setSelectedNodeId(null);\n    setEditingNodeId(null);'),
+  'Deleting a selected branch uses the archive command outside quick naming',
+  mindMapView.includes('inlineTitleEditNodeId && !isEditingText && isMindMapDeleteKey(event)') &&
+    mindMapView.includes('void archivePlacementSelection(selectedPlacementIds);') &&
+    mindMapView.includes("recoveryKind: 'archive'"),
 );
 
 assert(
