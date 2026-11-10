@@ -766,14 +766,14 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 阻塞 / 恢復條件：若任一模式出現不同預設、Enter 執行錯誤按鈕、prompt 游標被攔截或按鍵穿透底層模式，回 RD 修正 `GlobalDialog` 共用契約，不在模式元件增加分支。
   - 證據：`SPEC-072`、`QA-DEV-072`、DEV-072 static/browser verifier、DEV-028 regression、TypeScript、`build:test`。
   - 計入交付：否
-- ✓ DEV-073 [開發點] [完成] [P1] [RD Implemented / Local QA-QC PASS / 未 Release] 心智圖 XMind 式快速命名
+- ✓ DEV-073 [開發點] [完成] [P1] [RD Implemented / Local QA-QC PASS / Published / Feature Smoke Pending] 心智圖 XMind 式快速命名
   - 摘要：只有心智圖新增任務後或細滑鼠單擊既有任務會進入節點快速命名；Enter 只保存並離開，Tab 保存並新增子任務。快速命名時 Delete／Backspace 編輯文字而不封存任務；長草稿可擴張節點並帶動連線。其他模式維持原 title edit。
   - 來源 ID：`USER-20260818-TASK-TITLE-EDIT-DEFAULTS`
   - 父任務：DEV-028、DEV-071、DEV-070
-  - 下一步：使用者在 Firebase CLI 重新驗證既有帳號後，以已封存 manifest 執行 direct release；不重建 artifact。
+  - 下一步：若要將 DEV-073 標記為正式驗收完成，需以不修改正式業務資料的方式補上心智圖功能層 production smoke；完成後依 DEV-083 使用 `--verify-only` 更新收據。
   - 阻塞 / 恢復條件：若新增／單擊入口未 focus title、Enter 誤新增任務、Tab 建立層級錯誤、IME 組字誤新增、單擊開 modal、雙擊被 quick-title 攔截、右鍵入口錯誤或權限／relationship／觸控邊界漂移，回 RD 修正 MindMap host adapter。
   - 證據：`SPEC-073`、`QA-DEV-073`、DEV-073 static/browser verifier、DEV-028 static regression、TypeScript、`build:test`；sealed artifact `20261110091307-66cb3f` 綁定 `a87733f` 且 verifier PASS，正式站前版 `20261022092907-c1b4bf`。
-  - 發布阻塞：Firebase CLI 回報憑證失效；`hosting:channel:list` 在任何 provider 寫入前失敗，尚未建立 direct receipt，也未部署。重新驗證後使用 `output/release/dev-083/20261110091307-66cb3f/manifest.json`。
+  - 發布結果：sealed artifact `20261110091307-66cb3f` 已部署至 Firebase Hosting live，release-meta readback 綁定 source `a87733ff018d597be7a6a004a454b524912da388`；direct receipt `published:true`，但 `complete:false`／`feature-pending`。部署前 live release `20261022092907-c1b4bf` 保存在 receipt 作為 recovery 版本。通用瀏覽器 smoke 不當作本功能驗收；尚無 production feature-specific smoke，且未在正式資料新增或修改任務。
   - 計入交付：否
 - ✓ DEV-074 [開發點] [完成] [P1] [RD Implemented / QA-QC PASS / 未 Release] 心智圖單一 Scene 座標系重構
   - 摘要：將心智圖節點、階層連線、關係線與互動 overlay 收斂到同一 world coordinate scene，
@@ -1952,7 +1952,7 @@ Rework 4 的真正需求不是新增手機編輯能力模組，而是移除裝�
 - DEV-073 static verifier：PASS；非心智圖 shared details naming、心智圖 quick-title continuation、IME guard、fine/coarse pointer split、click arbitration、double-click／menu wiring 均符合契約。
 - DEV-073 browser verifier：PASS；1440x900、0 console error；toolbar 建立後可直接輸入，Enter 一次保存並離開且不建立新任務，Tab 一次保存並建立子任務；細滑鼠單擊進入 quick-title、Escape 取消草稿，快速雙擊仍開正確明細，快速切換節點只由最新 selection 進入命名；quick-title 不滿版、反白透明、輸入層不攔 pointer 且節點仍 draggable。
 - DEV-028 static regression：45/45 PASS；TypeScript：PASS；`build:test`：PASS。
-- Execution Boundary：程式與 SPEC 已由 `a87733f` 快轉合併並推送至 local／remote `main`；release manifest 已驗證，但 Firebase CLI 憑證失效使 direct release 尚未開始，沒有正式寫入。為保留 manifest 綁定的絕對 artifact 路徑，暫留 task-owned worktree `outputs/projed-release-worktree-a87733f`；DEV-073 負責，待正式 release 歷史資產退役且必要 receipt 已保留後再清理。
+- Execution Boundary：程式與 SPEC 已由 `a87733f` 合併並推送至 local／remote `main`；sealed artifact `20261110091307-66cb3f` verifier PASS，已部署至 Firebase Hosting live 並讀回相同 release id/source commit。direct receipt 為 `published:true`、`complete:false`／`feature-pending`；尚未執行 production feature-specific smoke，不宣稱正式功能驗收完成。為保留 manifest 綁定的絕對 artifact 路徑，暫留 task-owned worktree `outputs/projed-release-worktree-a87733f`；DEV-073 負責，待正式 release 歷史資產退役且必要 receipt 已保留後再清理。
 
 ## DEV-074：心智圖單一 Scene 座標系重構
 

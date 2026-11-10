@@ -4,7 +4,7 @@
 - 需求來源：`USER-20260818-TASK-TITLE-EDIT-DEFAULTS`
 - 規格：`SPEC-073-task-title-edit-defaults.md`
 - 測試類型：心智圖 post-create／fine-pointer quick naming、Enter／Tab 提交邊界、Delete／Backspace 編輯保護、草稿寬度與連線重排、雙擊仲裁、非心智圖負向回歸
-- 執行邊界：local runtime；不含 deploy、release 或正式資料操作
+- QA 執行範圍：local runtime 的功能案例；正式發布與 production data 操作分列於 §5，不以發布結果代替本地功能驗證
 
 ## 1. FMEA
 
@@ -67,4 +67,4 @@ npm.cmd run build:test
 
 ## 5. Release boundary
 
-本地驗證 PASS 不等於正式驗收。程式 commit `a87733f` 已合併並推送至 local／remote `main`；sealed artifact `20261110091307-66cb3f` verifier PASS。Firebase CLI 憑證失效，direct release 在讀取 Hosting live channel 時停止，正式站尚未寫入，feature-specific production smoke 仍待完成。重新驗證既有 CLI 帳號後，直接使用既有 manifest，不重建；若 direct receipt 已建立，依 DEV-083 規定 readback 後用 `--verify-only`。若單擊未進入 quick-title、雙擊失效、stale timer 改錯節點、Enter 誤建立任務、Tab parent 錯誤、一次建立多個任務、IME Enter 誤觸、任一非心智圖／coarse pointer 出現 quick-title，或心智圖新增／單擊開啟 modal，立即停止並回 RD 修正 surface adapter，不以測試例外掩蓋行為漂移。
+本地驗證 PASS 不等於正式功能驗收。程式 commit `a87733f` 已合併並推送至 local／remote `main`；sealed artifact `20261110091307-66cb3f` verifier PASS，已部署至 Firebase Hosting live，`release-meta.json` 讀回同一 release id 與 source commit。direct receipt `published:true`、`complete:false`／`feature-pending`；尚未執行 production feature-specific smoke，亦未修改正式任務資料。通用瀏覽器煙霧檢查不能替代本功能驗收；若要完成 DEV-073 正式驗收，需另以不改正式業務資料的方式覆蓋階層移動、Delete／Backspace 編輯保護、長草稿寬度與連線重排，再依 DEV-083 用 `--verify-only` 更新收據。若單擊未進入 quick-title、雙擊失效、stale timer 改錯節點、Enter 誤建立任務、Tab parent 錯誤、一次建立多個任務、IME Enter 誤觸、任一非心智圖／coarse pointer 出現 quick-title，或心智圖新增／單擊開啟 modal，立即停止並回 RD 修正 surface adapter，不以測試例外掩蓋行為漂移。
