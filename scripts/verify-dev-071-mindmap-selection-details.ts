@@ -47,7 +47,7 @@ assert.ok(nodeSource.includes("interactionBinding.dispatch('pointer.double')"));
 assert.ok(nodeSource.includes('data-mindmap-inline-title-input="true"'));
 const mindMapViewSource = read('src/components/MindMap/MindMapView.tsx');
 assert.equal((mindMapViewSource.match(/openDetailsForNaming/g) || []).length, 0);
-assert.ok(mindMapViewSource.includes('createTask(plan.parentId, plan.order, DEFAULT_MINDMAP_TASK_TITLE)'));
+assert.ok(mindMapViewSource.includes('createTask(plan.parentId, plan.anchorId)'));
 assert.ok(mindMapViewSource.includes('setInlineTitleEditNodeId(node.id)'));
 assert.ok(menuSource.includes("'task.open-details': '開啟明細'"));
 assert.ok(globalMenuSource.includes("case 'task.open-details':"));

@@ -37,6 +37,7 @@ import type { ActivityEventRow, BoardInviteRow, BoardRolePermissionRow, Document
 import { hashBoardInviteToken } from '../../utils/boardInviteToken';
 import { RAG_EMBEDDING_PROVIDER } from '../rag/ragContract';
 import { MeetingDraftCheckpointError } from '../meetingDraftRecoveryService';
+import type { BoardTaskOrderCommand, BoardTaskOrderResult } from '../../features/taskCreation/boardTaskOrder';
 import {
   getTaskAssigneeIds,
   normalizeTaskAssignmentSelection,
@@ -848,14 +849,27 @@ export const supabaseMemberService = {
     boardId: string,
     userId: string
   ): Promise<CurrentBoardAccess> => {
-    const [workspaceMembers, boardMembers, rolePermissions] = await Promise.all([
+    const tenantId = await resolveWorkspaceId(workspaceId);
+    const projectId = await resolveProjectId(tenantId, boardId);
+    const [workspaceMembers, boardMembers, rolePermissions, writeCapabilities] = await Promise.all([
       supabaseMemberService.listWorkspaceMembers(workspaceId),
       supabaseMemberService.listBoardMembers(workspaceId, boardId),
       supabaseMemberService.getBoardRolePermissions(workspaceId, boardId),
+      supabase.rpc('get_board_task_write_capabilities_v1', { p_tenant_id: tenantId, p_project_id: projectId }),
     ]);
+    assertNoError(writeCapabilities.error);
     const workspaceRole = workspaceMembers.find(member => member.userId === userId && member.status === 'active')?.role;
     const boardRole = boardMembers.find(member => member.userId === userId)?.role;
-    return buildCurrentBoardAccess(workspaceId, boardId, workspaceRole, boardRole, rolePermissions);
+    const access = buildCurrentBoardAccess(workspaceId, boardId, workspaceRole, boardRole, rolePermissions);
+    const taskWrites = ['create_task', 'edit_task', 'move_task', 'delete_task'] as const;
+    const authoritative = new Set(writeCapabilities.data ?? []);
+    return {
+      ...access,
+      capabilities: [
+        ...access.capabilities.filter(capability => !taskWrites.some(write => write === capability)),
+        ...taskWrites.filter(capability => authoritative.has(capability)),
+      ],
+    };
   },
 
   upsertBoardMember: async (
@@ -1089,6 +1103,31 @@ export const supabaseBoardInviteService = {
 };
 
 export const supabaseNodeService = {
+  commitBoardOrder: async (command: BoardTaskOrderCommand): Promise<BoardTaskOrderResult> => {
+    requireSupabase();
+    const tenantId = await resolveWorkspaceId(command.workspaceId);
+    const projectId = await resolveProjectId(tenantId, command.boardId);
+    const { data, error } = await supabase.rpc('commit_board_task_order_v1', {
+      p_tenant_id: tenantId,
+      p_project_id: projectId,
+      p_operation: command.kind,
+      p_task_id: command.kind === 'create' ? command.node.id : command.taskId,
+      p_parent_id: command.destination.parentId,
+      p_anchor_id: command.destination.anchorId ?? null,
+      p_position: command.destination.position,
+      p_source_parent_id: command.kind === 'move' ? command.sourceParentId : null,
+      p_title: command.kind === 'create' ? command.node.title : null,
+      p_item_type: command.kind === 'create' ? command.node.nodeType ?? 'task' : null,
+      p_reopen_parent: command.kind === 'create' && Boolean(command.reopenParent),
+      p_protected_task_ids: [...command.protectedTaskIds],
+    });
+    if (error?.code === '42501') throw new Error('沒有權限變更此看板的任務。');
+    if (error?.code === '55000') throw new Error('前一筆操作仍待確認，暫時無法變更重疊任務。');
+    assertNoError(error);
+    if (!data || !Array.isArray((data as BoardTaskOrderResult).nodes)) throw new Error('資料庫未回傳已確認的任務。');
+    return data as BoardTaskOrderResult;
+  },
+
   listByProject: async (workspaceId: string, boardId: string): Promise<TaskNode[]> => {
     requireSupabase();
     const tenantId = await resolveWorkspaceId(workspaceId);

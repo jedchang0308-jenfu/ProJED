@@ -1,10 +1,8 @@
 import type { TaskNode } from '../../types';
-import type { MindMapDirection, MindMapDropMode } from './MindMapNode';
+import type { MindMapDirection } from './MindMapNode';
 
 type PositionedTaskNode = TaskNode & { mindMapSide?: MindMapDirection };
 export type SideOverrides = Record<string, MindMapDirection>;
-
-const getParentKey = (parentId: string | null) => parentId || 'root';
 
 const sortTasks = (tasks: TaskNode[]) => [...tasks].sort((a, b) => a.order - b.order);
 
@@ -19,32 +17,6 @@ const getIndexedTasks = (
     if (node && node.boardId === boardId && !node.isArchived) deduped.set(node.id, node);
   });
   return Array.from(deduped.values());
-};
-
-export const getSiblingNodes = (
-  nodes: Record<string, TaskNode>,
-  parentNodesIndex: Record<string, string[]>,
-  parentId: string | null,
-  boardId: string,
-) =>
-  sortTasks(
-    getIndexedTasks(nodes, parentNodesIndex[getParentKey(parentId)] || [], boardId),
-  );
-
-export const getInsertOrder = (
-  siblings: TaskNode[],
-  targetId: string,
-  mode: Extract<MindMapDropMode, 'before' | 'after'>,
-) => {
-  const targetIndex = siblings.findIndex(node => node.id === targetId);
-  if (targetIndex < 0) return siblings.length;
-  const target = siblings[targetIndex];
-  if (mode === 'before') {
-    const previous = siblings[targetIndex - 1];
-    return previous ? (previous.order + target.order) / 2 : target.order - 1;
-  }
-  const next = siblings[targetIndex + 1];
-  return next ? (target.order + next.order) / 2 : target.order + 1;
 };
 
 export const getMindMapRootNodes = (

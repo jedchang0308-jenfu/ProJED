@@ -12,7 +12,7 @@ const mindMapGeometry = read('src/components/MindMap/mindMapGeometry.ts');
 
 assert.ok(profiles.includes("'task.post-create': 'task.open-details-for-naming'"), 'non-mindmap modes must retain the shared details naming action');
 assert.equal((mindMapView.match(/openDetailsForNaming/g) || []).length, 0, 'mindmap post-create paths must not expose a naming exception');
-assert.ok(mindMapView.includes('createTask(plan.parentId, plan.order, DEFAULT_MINDMAP_TASK_TITLE)'), 'mindmap keyboard creation must use the mindmap post-create adapter');
+assert.ok(mindMapView.includes('createTask(plan.parentId, plan.anchorId)') && mindMapView.includes('await createOrderedBoardTask(node, anchorId)'), 'mindmap naming must follow confirmed board task creation');
 assert.ok(mindMapView.includes('setInlineTitleEditNodeId(node.id)'), 'mindmap post-create must request inline title edit');
 assert.ok(mindMapNode.includes('data-mindmap-inline-title-input="true"'), 'mindmap post-create must expose an inline title input');
 assert.ok(mindMapNode.includes('data-mindmap-quick-title-input="true"'), 'mindmap post-create must expose XMind-like quick naming');

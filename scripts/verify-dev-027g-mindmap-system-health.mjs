@@ -1226,8 +1226,6 @@ check(
       'const sortTasks =',
       'const matchesMindMapFilters =',
       'const getIndexedTasks =',
-      'export const getSiblingNodes',
-      'export const getInsertOrder',
       'export const getMindMapRootNodes',
       'export const getMindMapChildren',
       'export const getMindMapRootAncestorId',
@@ -1285,13 +1283,13 @@ check(
     taskCommands.includes('export const createMindMapTaskNode') &&
     taskCommands.includes('export const getMindMapSiblingTaskCreatePlan') &&
     taskCommands.includes('export const getMindMapChildTaskCreatePlan') &&
-    taskCommands.includes('getNextMindMapChildOrder(getChildren(selected.id))') &&
+    taskCommands.includes('anchorId: selected.id') &&
     view.includes('const node = createMindMapTaskNode({') &&
     view.includes('getCommittedMindMapTitle(title)') &&
     view.includes('createSiblingForNode(selectedNodeId);') &&
     view.includes('createChildForNode(selectedNodeId);') &&
-    dropCommands.includes('getNextMindMapSideRootOrder(sameSideRoots, rootNodes.length + 1)') &&
-    dropCommands.includes('getNextMindMapRootOrder(rootNodes.filter(node => node.id !== draggedNodeId))') &&
+    view.includes('await createOrderedBoardTask(node, anchorId)') &&
+    dropCommands.includes('anchorId: sameSideRoots[sameSideRoots.length - 1]?.id') &&
     !view.includes('const createSibling = React.useCallback') &&
     !view.includes('const createChild = React.useCallback'),
 );
@@ -1308,10 +1306,10 @@ check(
       'rootSide: nextParentId ? undefined : getNodeSide(target.id)',
       "rootSide: sideOverrides[draggedNodeId] ? undefined : 'right'",
       'const finalDirection = previewDirection || direction',
-      'getNextMindMapSideRootOrder(sameSideRoots, rootNodes.length + 1)',
+      'anchorId: sameSideRoots[sameSideRoots.length - 1]?.id',
     ].every(token => dropCommands.includes(token)) &&
     view.includes('const result = getMindMapNodeDropResult({') &&
-    view.includes('const update = getMindMapCenterDropUpdate({ draggedNodeId, rootNodes, sideOverrides });') &&
+    view.includes('const update = getMindMapCenterDropUpdate({ draggedNodeId, sideOverrides });') &&
     view.includes('const update = getMindMapSideDropUpdate({') &&
     view.includes("result.reason === 'child-cycle'") &&
     !view.includes('const nextParentId = target.parentId || null') &&

@@ -131,7 +131,7 @@ async (page) => {
     window.__projedTaskTrackingTestFault = { operation, failNext: true, message };
   }, { operation, message });
   const runCase = async (id, expected, flow) => {
-    if (archiveOnly && !/^B18[ABC]-/.test(id)) {
+    if (archiveOnly && !/^B18[A-F]-/.test(id)) {
       cases.push({ id, status: 'NOT_RUN', expected });
       return;
     }
@@ -340,16 +340,75 @@ async (page) => {
     });
     await create();
     await page.getByText(/新增任務失敗：/).last().waitFor({ state: 'visible' });
-    if ((await readNodes())['p-task-d'].order !== 3 || await task('p-task-b').count() !== 1
-      || await page.locator('[data-mindmap-node-title="新任務"]').count()) throw new Error('failed insert left an unsaved task or failed to make space');
+    if ((await readNodes())['p-task-d'].order !== 2 || await task('p-task-b').count() !== 1
+      || await page.locator('[data-mindmap-node-title="新任務"]').count()) throw new Error('failed insert left a node or shifted its sibling');
     await create();
     await page.locator('[data-mindmap-node-title="新任務"]').waitFor({ state: 'visible' });
     const persisted = await readNodes();
     const createdId = Object.keys(persisted).find(id => !before.includes(id));
-    if (!createdId || persisted[createdId].order !== 2 || persisted['p-task-d'].order !== 3) {
+    if (!createdId || !Number.isInteger(persisted[createdId].order)
+      || !(persisted['p-task-b'].order < persisted[createdId].order && persisted[createdId].order < persisted['p-task-d'].order)) {
       throw new Error('the stored insertion order must place the new task between the existing siblings');
     }
-    return { insertedAt: persisted[createdId].order, nextSiblingOrder: persisted['p-task-d'].order, failedCreateLeftNoNode: true };
+    return { insertedAt: persisted[createdId].order, nextSiblingOrder: persisted['p-task-d'].order, failedCreateRolledBack: true };
+  });
+
+  const switchMode = async mode => {
+    await page.locator('[data-mode-switcher-trigger="true"]').click();
+    await page.locator('[data-mode-switcher-value="' + mode + '"]').click();
+  };
+  const rowIn = (surface, id) => page.locator('[data-task-drag-surface-kind="' + surface + '"][data-task-id="' + id + '"]').first();
+
+  await runCase('B18D-global-menu-order-transaction', 'global context menu inserts a persisted sibling before opening naming', async () => {
+    await seed({ references: [] });
+    await switchMode('list');
+    await rowIn('wbs-list-row', 'p-task-b').click({ button: 'right' });
+    const menu = page.locator('[data-global-context-menu="true"]');
+    await menu.locator('[data-task-action-id="task.create-sibling"]').click();
+    await details().waitFor({ state: 'visible' });
+    const id = await details().getAttribute('data-task-id');
+    const saved = await readNodes();
+    if (!saved[id] || saved[id].parentId !== 'p-col-a' || !(saved['p-task-b'].order < saved[id].order && saved[id].order < saved['p-task-d'].order)) {
+      throw new Error('global context menu did not persist the requested position');
+    }
+    return { savedBeforeNaming: true, order: saved[id].order };
+  });
+
+  await runCase('B18E-wbs-order-transaction', 'WBS list swaps canonical siblings and retains their stored order after reload', async () => {
+    await seed({ references: [] });
+    await switchMode('list');
+    const first = rowIn('wbs-list-row', 'p-task-b');
+    const second = rowIn('wbs-list-row', 'p-task-d');
+    await first.waitFor({ state: 'visible' });
+    await drag(first, second);
+    await page.waitForFunction(() => {
+      const tasks = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
+      return tasks['p-task-d'].order < tasks['p-task-b'].order;
+    }, null, { timeout: 5000 });
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await first.waitFor({ state: 'visible' });
+    const boxes = await Promise.all([first.boundingBox(), second.boundingBox()]);
+    if (!boxes[0] || !boxes[1] || boxes[1].y >= boxes[0].y) throw new Error('WBS ordering did not survive reload');
+    return { swapPersistedAndReloaded: true };
+  });
+
+  await runCase('B18F-sidebar-order-transaction', 'shared sidebar swaps siblings and appends a new root through the same transaction', async () => {
+    await seed({ references: [] });
+    await switchMode('gantt');
+    const first = rowIn('shared-sidebar-row', 'p-task-b');
+    const second = rowIn('shared-sidebar-row', 'p-task-d');
+    await first.waitFor({ state: 'visible' });
+    await drag(first, second);
+    await page.waitForFunction(() => {
+      const tasks = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
+      return tasks['p-task-d'].order < tasks['p-task-b'].order;
+    }, null, { timeout: 5000 });
+    await page.getByRole('button', { name: '新增頂層任務' }).first().click();
+    await details().waitFor({ state: 'visible' });
+    const id = await details().getAttribute('data-task-id');
+    const saved = await readNodes();
+    if (!saved[id] || saved[id].parentId !== null || saved[id].order <= saved['p-col-a'].order) throw new Error('sidebar root did not persist at the end');
+    return { swapPersisted: true, rootSavedBeforeNaming: true };
   });
 
   await runCase('B19-desktop-pointer-dnd-parity', 'pointer drag reorders and appends tracking placement while canonical drag keeps its own command route; failure retains source', async () => {

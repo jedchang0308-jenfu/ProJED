@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import dayjs from 'dayjs';
 import type { ActivityEventType, Dependency, KanbanViewConfig, TaskNode, TaskStatus } from '../types';
-import { isSupabaseBackend, nodeService, dependencyService, workspaceService, boardService, tagService, eventLogService } from '../services/dataBackend';
+import { isSupabaseBackend, nodeService, dependencyService, workspaceService, boardService, tagService, eventLogService, memberService } from '../services/dataBackend';
 import useUndoStore from './useUndoStore';
 import useBoardStore from './useBoardStore';
 import useRecordStore from './useRecordStore';
@@ -44,6 +44,7 @@ import type {
   TaskTrackingReferenceCapability,
 } from '../features/taskTracking/types';
 import { buildTaskTreeClonePlan } from '../features/taskClonePlan';
+import { compareBoardTaskOrder, type BoardTaskOrderDestination, type BoardTaskOrderIntent } from '../features/taskCreation/boardTaskOrder';
 
 /**
  * WbsStore 狀態定義
@@ -120,7 +121,6 @@ export type CommitNodeBatchOptions = {
   label?: string;
   mergeKey?: string;
   timeoutMs?: number;
-  skipUndo?: boolean;
   recoveryKind?: 'copy-paste' | 'cut-paste' | 'move' | 'assign' | 'archive' | 'undo' | 'redo';
   presentation?: Readonly<{
     commit: () => Promise<void>;
@@ -161,7 +161,8 @@ export interface WbsBoardActions {
   /**
    * 新增單一任務節點
    */
-  addNode: (node: TaskNode, options?: { persistFirst?: boolean }) => void | Promise<void>;
+  addNode: (node: TaskNode) => void;
+  commitBoardTaskOrder: (intent: BoardTaskOrderIntent) => Promise<TaskNode>;
 
   /**
    * 更新任務節點 (部分欄位)
@@ -720,6 +721,7 @@ type NodeBatchRecoveryDescriptor = Readonly<{
 }>;
 
 const pendingArchiveWrites = new Set<string>();
+const pendingBoardTaskOrders = new Set<string>();
 const getArchiveRecoveryPrefix = (boardId: string) => `projed.mindmap.archive-recovery.v1.${encodeURIComponent(boardId)}:`;
 const getNodeBatchRecoveryKey = (boardId: string, archiveTaskId?: string) => archiveTaskId
   ? getArchiveRecoveryPrefix(boardId) + archiveTaskId
@@ -780,6 +782,28 @@ const getBlockingBatchRecovery = (boardId: string, archiveTaskId?: string) => {
     return 'corrupt';
   }
   return null;
+};
+
+const listBoardOrderProtectedTasks = (boardId: string) => {
+  try {
+    const scopes = [undefined, ...listArchiveRecoveryIds(boardId)];
+    if (scopes.some(id => hasCorruptNodeBatchRecovery(boardId, id))) return ['*'];
+    return scopes.flatMap(id => [...(readNodeBatchRecovery(boardId, id)?.targetIds || [])]);
+  } catch {
+    return ['*'];
+  }
+};
+
+const getBoardOrderUndoDestination = (
+  node: TaskNode, destination: BoardTaskOrderDestination, nodes: Record<string, TaskNode>,
+): BoardTaskOrderDestination => {
+  if (destination.position === 'swap') return destination;
+  const siblings = Object.values(nodes).filter(other => !other.isArchived && other.workspaceId === node.workspaceId
+    && other.boardId === node.boardId && other.parentId === node.parentId).sort(compareBoardTaskOrder);
+  const next = siblings[siblings.findIndex(other => other.id === node.id) + 1];
+  return next
+    ? { parentId: node.parentId, position: 'before', anchorId: next.id }
+    : { parentId: node.parentId, position: 'append' };
 };
 
 const writeNodeBatchRecovery = (descriptor: NodeBatchRecoveryDescriptor) => {
@@ -1271,7 +1295,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     get()._buildIndices(nextNodes);
   },
 
-  addNode: (node, { persistFirst = false } = {}) => {
+  addNode: (node) => {
     const normalizedNode = normalizeTaskStatusNode(normalizeTaskAssignmentNode(node));
     const publishNode = () => {
       const updatedNodes = { ...get().nodes, [normalizedNode.id]: normalizedNode };
@@ -1280,10 +1304,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       useUndoStore.getState().pushUndo({
         label: '新增任務',
         undo: () => get().archiveNode(normalizedNode.id),
-        redo: () => {
-          if (persistFirst) get().updateNode(normalizedNode.id, { isArchived: false });
-          else get().addNode(normalizedNode);
-        },
+        redo: () => get().addNode(normalizedNode),
       });
     };
 
@@ -1305,14 +1326,6 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       await commitMeetingTaskMutation(null, normalizedNode, ['title', 'status', 'description', 'detailNotes', 'startDate', 'endDate', 'isDurationLocked', 'assigneeIds', 'assigneeId', 'collaboratorIds', 'tagIds', 'isArchived'], `task-create-${normalizedNode.id}-${Date.now().toString(36)}`);
     };
 
-    if (persistFirst) {
-      const userId = useAuthStore.getState().user?.uid;
-      return nodeService.create(normalizedNode.workspaceId, normalizedNode.boardId, normalizedNode).then(() => {
-        if (useAuthStore.getState().user?.uid !== userId) return;
-        publishNode();
-        void recordCreation();
-      });
-    }
     publishNode();
 
     // 同步寫入資料來源；未歸位任務是工作台本機位置，不寫入假看板路徑。
@@ -1328,6 +1341,86 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
          ).catch(error => {
           console.error('[wbsStore] Failed to persist created task before activity logging:', error);
         });
+    }
+  },
+
+  commitBoardTaskOrder: async (intent) => {
+    const { workspaceId, boardId } = intent;
+    const userId = useAuthStore.getState().user?.uid;
+    if (!workspaceId || !boardId || !userId) throw new Error('無法確認任務看板或登入狀態。');
+    const id = intent.kind === 'create' ? intent.node.id : intent.taskId;
+    const scope = JSON.stringify([userId, workspaceId, boardId]);
+    if (pendingBoardTaskOrders.has(scope)) throw new Error('看板排序正在儲存。');
+    pendingBoardTaskOrders.add(scope);
+    try {
+      const beforeNodes = get().nodes;
+      const previous = beforeNodes[id];
+      const undoDestination = intent.kind === 'move' && previous
+        ? getBoardOrderUndoDestination(previous, intent.destination, beforeNodes) : null;
+      const activeAccess = useMemberStore.getState().currentBoardAccess;
+      const cachedAccess = activeAccess?.workspaceId === workspaceId && activeAccess.boardId === boardId ? activeAccess : null;
+      const access = isSupabaseBackend ? cachedAccess : await memberService.getCurrentBoardAccess(workspaceId, boardId, userId);
+      if (!isSupabaseBackend && !access?.capabilities.includes(intent.kind === 'create' ? 'create_task' : 'move_task')) {
+        throw new Error('沒有權限變更此看板的任務。');
+      }
+      if (useAuthStore.getState().user?.uid !== userId) throw new Error('登入狀態已變更。');
+      const result = await nodeService.commitBoardOrder({
+        ...intent,
+        protectedTaskIds: listBoardOrderProtectedTasks(boardId),
+      }, Boolean(access?.capabilities.includes('edit_task')));
+      const canonical = result.nodes.find(node => node.id === id);
+      if (!canonical) throw new Error('資料庫未回傳已確認的任務。');
+      if (useAuthStore.getState().user?.uid !== userId) throw new Error('登入狀態已變更。');
+      const nextNodes = { ...get().nodes };
+      for (const patch of result.nodes) {
+        const node = intent.kind === 'create' && patch.id === id ? intent.node : nextNodes[patch.id];
+        if (!node || node.workspaceId !== workspaceId || node.boardId !== boardId) continue;
+        nextNodes[patch.id] = { ...node, ...patch };
+      }
+      const task = nextNodes[id];
+      if (!task || task.workspaceId !== workspaceId || task.boardId !== boardId) {
+        throw new Error('任務已儲存，請重新載入看板。');
+      }
+      set({ nodes: nextNodes });
+      get()._buildIndices(nextNodes);
+
+      const operationId = createUpdateNodeOperationId();
+      if (intent.kind === 'create') {
+        logTaskActivity(task, 'task_created', { after: { parentId: task.parentId, order: task.order, status: task.status } });
+        void commitMeetingTaskMutation(null, task, ['title', 'status', 'detailNotes'], operationId);
+      } else if (previous) {
+        buildTaskUpdateActivities(previous, task, { parentId: task.parentId, order: task.order }).forEach(event => {
+          logTaskActivity(task, event.eventType, event.payload);
+        });
+        void commitMeetingTaskMutation(previous, task, ['parentId', 'order'], operationId);
+      }
+      if (result.reopenedParent && task.parentId) {
+        const parent = nextNodes[task.parentId];
+        const priorParent = beforeNodes[task.parentId];
+        if (parent && priorParent) {
+          buildTaskUpdateActivities(priorParent, parent, { status: parent.status }).forEach(event => logTaskActivity(parent, event.eventType, event.payload));
+          void commitMeetingTaskMutation(priorParent, parent, ['status'], `${operationId}:parent`);
+        }
+      }
+      if (intent.kind === 'create' && access?.capabilities.includes('delete_task')) {
+        const setArchiveState = async (isArchived: boolean) => {
+          const outcome = await get().commitNodeBatch({ [id]: { isArchived } }, { recoveryKind: isArchived ? 'archive' : 'undo' });
+          if (outcome.status !== 'committed') throw new Error(outcome.error || '無法復原新增任務。');
+        };
+        useUndoStore.getState().pushUndo({
+          label: '新增任務', entityIds: [id],
+          undo: () => setArchiveState(true), redo: () => setArchiveState(false),
+        });
+      } else if (intent.kind === 'move' && previous && undoDestination) {
+        useUndoStore.getState().pushUndo({
+          label: '移動任務位置', entityIds: [id],
+          undo: async () => { await get().commitBoardTaskOrder({ ...intent, destination: undoDestination, sourceParentId: task.parentId }); },
+          redo: async () => { await get().commitBoardTaskOrder(intent); },
+        });
+      }
+      return task;
+    } finally {
+      pendingBoardTaskOrders.delete(scope);
     }
   },
 
@@ -1804,7 +1897,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       }
       clearNodeBatchRecovery(descriptor.boardId, descriptor.operationId, archiveTaskId);
       options.presentation?.onCommitted?.();
-      if (!options.skipUndo && !useUndoStore.getState().isApplying) {
+      if (!useUndoStore.getState().isApplying) {
         const label = options.label || (affectedTaskIds.length > 1 ? '批次修改任務' : '修改任務');
         useUndoStore.getState().pushUndo({
           label,

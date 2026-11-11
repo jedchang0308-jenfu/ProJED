@@ -4,19 +4,14 @@ import {
   wouldCreateMindMapCycle,
   type SideOverrides,
 } from './mindMapTree';
-import {
-  getNextMindMapChildOrder,
-  getNextMindMapRootOrder,
-  getNextMindMapSideRootOrder,
-} from './mindMapTaskCommands';
 
 type MindMapNodeDropBlockedReason = 'child-cycle' | 'hierarchy-cycle';
 
 interface MindMapDropMoveUpdate {
   nodeId: string;
   parentId: string | null;
-  order: number;
   rootSide?: MindMapDirection;
+  anchorId?: string;
 }
 
 type MindMapNodeDropResult =
@@ -29,13 +24,11 @@ interface MindMapNodeDropResultInput {
   mode: MindMapDropMode;
   target: TaskNode;
   nodes: Record<string, TaskNode>;
-  getChildren: (nodeId: string) => TaskNode[];
   getNodeSide: (nodeId: string) => MindMapDirection;
 }
 
 interface MindMapCenterDropUpdateInput {
   draggedNodeId: string;
-  rootNodes: TaskNode[];
   sideOverrides: SideOverrides;
 }
 
@@ -53,7 +46,6 @@ export const getMindMapNodeDropResult = ({
   mode,
   target,
   nodes,
-  getChildren,
   getNodeSide,
 }: MindMapNodeDropResultInput): MindMapNodeDropResult => {
   if (mode === 'child') {
@@ -61,13 +53,11 @@ export const getMindMapNodeDropResult = ({
       return { type: 'blocked', reason: 'child-cycle' };
     }
 
-    const children = getChildren(target.id).filter(child => child.id !== draggedNodeId);
     return {
       type: 'move',
       update: {
         nodeId: draggedNodeId,
         parentId: target.id,
-        order: getNextMindMapChildOrder(children),
         expandNodeId: target.id,
       },
     };
@@ -89,12 +79,10 @@ export const getMindMapNodeDropResult = ({
 
 export const getMindMapCenterDropUpdate = ({
   draggedNodeId,
-  rootNodes,
   sideOverrides,
 }: MindMapCenterDropUpdateInput): MindMapDropMoveUpdate => ({
   nodeId: draggedNodeId,
   parentId: null,
-  order: getNextMindMapRootOrder(rootNodes.filter(node => node.id !== draggedNodeId)),
   rootSide: sideOverrides[draggedNodeId] ? undefined : 'right',
 });
 
@@ -108,12 +96,12 @@ export const getMindMapSideDropUpdate = ({
 }: MindMapSideDropUpdateInput): MindMapDropMoveUpdate => {
   const finalDirection = previewDirection || direction;
   const sameSideRoots = rootNodes.filter(
-    node => node.id !== draggedNodeId && (sideOverrides[node.id] || getNodeSide(node.id)) === finalDirection,
+    node => node.id !== draggedNodeId && !node.isTrackingReference && (sideOverrides[node.id] || getNodeSide(node.id)) === finalDirection,
   );
   return {
     nodeId: draggedNodeId,
     parentId: null,
-    order: getNextMindMapSideRootOrder(sameSideRoots, rootNodes.length + 1),
+    anchorId: sameSideRoots[sameSideRoots.length - 1]?.id,
     rootSide: finalDirection,
   };
 };

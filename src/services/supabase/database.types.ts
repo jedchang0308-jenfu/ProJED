@@ -476,6 +476,18 @@ export interface Database {
     };
     Views: Record<string, never>;
     Functions: {
+      get_board_task_write_capabilities_v1: {
+        Args: { p_tenant_id: string; p_project_id: string };
+        Returns: string[];
+      };
+      commit_board_task_order_v1: {
+        Args: {
+          p_tenant_id: string; p_project_id: string; p_operation: string; p_task_id: string;
+          p_parent_id: string | null; p_anchor_id: string | null; p_position: string; p_source_parent_id: string | null;
+          p_title: string | null; p_item_type: string | null; p_reopen_parent: boolean; p_protected_task_ids: string[];
+        };
+        Returns: Json;
+      };
       create_tenant_with_owner: {
         Args: { tenant_name: string };
         Returns: TenantRow;

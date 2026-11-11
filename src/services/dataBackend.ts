@@ -59,6 +59,7 @@ import { createLocalTaskTrackingReferenceService } from '../features/taskTrackin
 import type { TrackingReferenceService } from '../features/taskTracking/types';
 import { TaskTrackingError } from '../features/taskTracking/errors';
 import { supabaseTaskTrackingReferenceService } from './supabase/taskTrackingReferenceService';
+import type { BoardTaskOrderCommand, BoardTaskOrderResult } from '../features/taskCreation/boardTaskOrder';
 
 export type DataBackend = 'firebase' | 'supabase' | 'local-test';
 
@@ -383,6 +384,13 @@ export const boardInviteService = {
 };
 
 export const nodeService = {
+  commitBoardOrder: (command: BoardTaskOrderCommand, canEdit: boolean): Promise<BoardTaskOrderResult> =>
+    isLocalTestBackend
+      ? localTestNodeService.commitBoardOrder(command, canEdit)
+      : isSupabaseBackend
+      ? supabaseNodeService.commitBoardOrder(command)
+      : firestoreNodeService.commitBoardOrder(command, canEdit),
+
   listByProject: (workspaceId: string, boardId: string): Promise<TaskNode[]> =>
     isLocalTestBackend
       ? localTestNodeService.listByProject(workspaceId, boardId)

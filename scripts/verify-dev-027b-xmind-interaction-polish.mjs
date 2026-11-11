@@ -93,7 +93,8 @@ assert(
 
 assert(
   'Enter sibling inherits side and inserts after selected',
-  mindMapView.includes('getMindMapSiblingTaskCreatePlan({ nodeId, nodes, parentNodesIndex, boardId })') &&
+  mindMapView.includes('getMindMapSiblingTaskCreatePlan({ nodeId, nodes, boardId })') &&
+    mindMapView.includes('createOrderedBoardTask(node, anchorId)') &&
     mindMapView.includes('updateRootSide(created.id, getNodeSide(plan.inheritRootSideFromId))') &&
     mindMapView.includes('createSiblingForNode') &&
     mindMapView.includes('createChildForNode'),

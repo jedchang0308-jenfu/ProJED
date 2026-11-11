@@ -60,7 +60,7 @@ import {
   getMindMapNodeDropResult,
   getMindMapSideDropUpdate,
 } from './mindMapDropCommands';
-import { buildTaskSiblingMoveUpdates } from '../Wbs/taskDrag/taskMoveUpdateNormalization';
+import { createOrderedBoardTask, moveOrderedBoardTask } from '../../features/taskCreation/boardTaskOrderActions';
 import {
   MINDMAP_NODE_DIRECTION_ATTRIBUTE,
   getMindMapCenterElement,
@@ -129,7 +129,6 @@ import {
   getMindMapChildTaskCreatePlan,
   getCommittedMindMapTitle,
   getMindMapSiblingTaskCreatePlan,
-  getNextMindMapRootOrder,
 } from './mindMapTaskCommands';
 import {
   buildMindMapNavigationIndex,
@@ -288,7 +287,6 @@ const MindMapView: React.FC = () => {
   const trackingReferences = useWbsStore(state => state.trackingReferences);
   const taskLoading = useWbsStore(state => state.loading);
   const taskLoadError = useWbsStore(state => state.error);
-  const parentNodesIndex = useWbsStore(state => state.parentNodesIndex);
   const projectionTasks = React.useMemo(
     () => buildExpandedProjectionTasks(Object.values(nodes), trackingReferences, activeBoardId || ''),
     [activeBoardId, nodes, trackingReferences],
@@ -304,7 +302,6 @@ const MindMapView: React.FC = () => {
     () => buildProjectionParentIndex(projectionTasks),
     [projectionTasks],
   );
-  const addNode = useWbsStore(state => state.addNode);
   const updateNode = useWbsStore(state => state.updateNode);
   const moveTrackingReference = useWbsStore(state => state.moveTrackingReference);
   const commitNodeBatch = useWbsStore(state => state.commitNodeBatch);
@@ -1238,9 +1235,8 @@ const MindMapView: React.FC = () => {
 
   const createTask = React.useCallback(async (
     parentId: string | null,
-    order: number,
+    anchorId?: string,
     title = DEFAULT_MINDMAP_TASK_TITLE,
-    siblingOrderUpdates: Record<string, { order: number }> = {},
   ) => {
     if (!canCreateTask || !activeWorkspaceId || !boardId) {
       toast.warning(MINDMAP_MESSAGES.noCreateTaskPermission);
@@ -1253,28 +1249,16 @@ const MindMapView: React.FC = () => {
       boardId,
       parentId,
       title,
-      order,
+      order: 0,
     });
     const userId = useAuthStore.getState().user?.uid;
     const isCurrentBoard = () => useBoardStore.getState().activeBoardId === boardId
       && useAuthStore.getState().user?.uid === userId;
     creatingTaskRef.current = true;
     try {
-      if (Object.keys(siblingOrderUpdates).length > 0) {
-        if (!canMoveTask) {
-          toast.warning('相鄰任務的排序已無空位，需要搬移任務權限才能插入。');
-          return null;
-        }
-        const outcome = await commitNodeBatch(siblingOrderUpdates, { recoveryKind: 'move', skipUndo: true });
-        if (outcome.status !== 'committed') {
-          if (outcome.status === 'indeterminate') setBatchRecoveryMessage(outcome.error || '排序結果尚待確認。');
-          toast.error(outcome.error || '無法調整任務排序。');
-          return null;
-        }
-      }
       if (!isCurrentBoard()) return null;
-      await addNode(node, { persistFirst: true });
-      if (!isCurrentBoard()) return null;
+      const created = await createOrderedBoardTask(node, anchorId);
+      if (!created || !isCurrentBoard()) return null;
       selectNode(node.id);
       const expansionPath = getMindMapExpansionPath(nodes, parentId, boardId);
       expandNodes([...expansionPath, node.id]);
@@ -1282,18 +1266,15 @@ const MindMapView: React.FC = () => {
         setInlineTitleEditNodeId(node.id);
         setInlineTitleEditFocusNodeId(node.id);
       }
-      return node;
-    } catch (error) {
-      toast.error(error instanceof Error ? `新增任務失敗：${error.message}` : '新增任務失敗。');
-      return null;
+      return created;
     } finally {
       creatingTaskRef.current = false;
     }
-  }, [activeWorkspaceId, addNode, boardId, canCreateTask, canEditTask, canMoveTask, commitNodeBatch, expandNodes, nodes, selectNode]);
+  }, [activeWorkspaceId, boardId, canCreateTask, canEditTask, expandNodes, nodes, selectNode]);
 
   const handleCreateRoot = React.useCallback(() => {
-    return createTask(null, getNextMindMapRootOrder(rootNodes));
-  }, [createTask, rootNodes]);
+    return createTask(null);
+  }, [createTask]);
 
   const getMindMapContentBounds = React.useCallback(() => {
     const content = mapContentRef.current;
@@ -1460,22 +1441,22 @@ const MindMapView: React.FC = () => {
 
   const createSiblingForNode = React.useCallback(async (nodeId: string | null) => {
     if (!nodeId) return handleCreateRoot();
-    const plan = getMindMapSiblingTaskCreatePlan({ nodeId, nodes, parentNodesIndex, boardId });
+    const plan = getMindMapSiblingTaskCreatePlan({ nodeId, nodes, boardId });
     if (!plan) return null;
-    const created = await createTask(plan.parentId, plan.order, DEFAULT_MINDMAP_TASK_TITLE, plan.siblingOrderUpdates);
+    const created = await createTask(plan.parentId, plan.anchorId);
     if (created && plan.inheritRootSideFromId) {
       updateRootSide(created.id, getNodeSide(plan.inheritRootSideFromId));
     }
     return created;
-  }, [boardId, createTask, getNodeSide, handleCreateRoot, nodes, parentNodesIndex, updateRootSide]);
+  }, [boardId, createTask, getNodeSide, handleCreateRoot, nodes, updateRootSide]);
 
   const createChildForNode = React.useCallback((nodeId: string | null) => {
     if (!nodeId) return handleCreateRoot();
-    const plan = getMindMapChildTaskCreatePlan({ nodeId, nodes, getChildren });
+    const plan = getMindMapChildTaskCreatePlan({ nodeId, nodes });
     return plan
-      ? createTask(plan.parentId, plan.order, DEFAULT_MINDMAP_TASK_TITLE)
+      ? createTask(plan.parentId)
       : null;
-  }, [createTask, getChildren, handleCreateRoot, nodes]);
+  }, [createTask, handleCreateRoot, nodes]);
 
   const continueInlineTitleEdit = React.useCallback((
     nodeId: string,
@@ -1671,15 +1652,14 @@ const MindMapView: React.FC = () => {
     nodeId: string,
     anchorId: string,
     position: 'before' | 'after',
-    label = '移動任務位置',
   ) => {
-    const updates = buildTaskSiblingMoveUpdates(nodeId, anchorId, position, useWbsStore.getState().nodes);
-    if (!updates) {
+    const anchor = useWbsStore.getState().nodes[anchorId];
+    if (!anchor || anchor.boardId !== boardId) {
       toast.error('找不到可移動的同階位置。');
       return false;
     }
-    return reportBatchOutcome(await commitNodeBatch(updates, { label, recoveryKind: 'move' }));
-  }, [commitNodeBatch, reportBatchOutcome]);
+    return moveOrderedBoardTask(nodeId, { parentId: anchor.parentId, anchorId, position });
+  }, [boardId]);
 
   const handleMindMapCopy = React.useCallback((selection: MindMapClipboardSelection = localMenuSelection) => {
     const forestRootIds = normalizeMindMapForestRoots(selection.canonicalTaskIds, nodes);
@@ -1903,7 +1883,7 @@ const MindMapView: React.FC = () => {
       case 'task.promote': {
         closeLocalMenu(false);
         const parentId = anchorNodeId && useWbsStore.getState().nodes[anchorNodeId]?.parentId;
-        if (anchorNodeId && parentId) await commitMindMapSiblingMove(anchorNodeId, parentId, 'after', '往上一階');
+        if (anchorNodeId && parentId) await commitMindMapSiblingMove(anchorNodeId, parentId, 'after');
         return;
       }
       case 'task.create-relationship':
@@ -2522,7 +2502,6 @@ const MindMapView: React.FC = () => {
       mode,
       target,
       nodes,
-      getChildren,
       getNodeSide,
     });
     if (result.type === 'blocked') {
@@ -2536,12 +2515,13 @@ const MindMapView: React.FC = () => {
       return;
     } else {
       const { update } = result;
-      updateNode(update.nodeId, { parentId: update.parentId, order: update.order });
-      expandNode(update.expandNodeId);
+      if (await moveOrderedBoardTask(update.nodeId, { parentId: update.parentId, position: 'append' })) {
+        expandNode(update.expandNodeId);
+      }
     }
 
     clearDragState();
-  }, [boardId, canManageTaskReference, canMoveTask, clearDragState, commitMindMapSiblingMove, draggedNodeId, dropTarget, expandNode, getChildren, getNodeSide, moveTrackingReference, nodes, projectionNodes, updateNode, updateRootSide]);
+  }, [boardId, canManageTaskReference, canMoveTask, clearDragState, commitMindMapSiblingMove, draggedNodeId, dropTarget, expandNode, getNodeSide, moveTrackingReference, nodes, projectionNodes, updateRootSide]);
 
   const handleDropOnCenter = React.useCallback((event: React.DragEvent<HTMLDivElement>) => {
     if ((!canMoveTask && !canManageTaskReference) || !draggedNodeId) return;
@@ -2561,11 +2541,12 @@ const MindMapView: React.FC = () => {
       return;
     }
     if (!canMoveTask) return;
-    const update = getMindMapCenterDropUpdate({ draggedNodeId, rootNodes, sideOverrides });
-    updateNode(update.nodeId, { parentId: update.parentId, order: update.order });
-    if (update.rootSide) updateRootSide(update.nodeId, update.rootSide);
+    const update = getMindMapCenterDropUpdate({ draggedNodeId, sideOverrides });
     clearDragState();
-  }, [boardId, canManageTaskReference, canMoveTask, clearDragState, draggedNodeId, moveTrackingReference, nodes, projectionNodes, rootNodes, sideOverrides, updateNode, updateRootSide]);
+    void moveOrderedBoardTask(update.nodeId, { parentId: update.parentId, position: 'append' }).then(moved => {
+      if (moved && update.rootSide) updateRootSide(update.nodeId, update.rootSide);
+    });
+  }, [boardId, canManageTaskReference, canMoveTask, clearDragState, draggedNodeId, moveTrackingReference, nodes, projectionNodes, sideOverrides, updateRootSide]);
 
   const handleDragOverCenter = React.useCallback((event: React.DragEvent<HTMLDivElement>) => {
     if ((!canMoveTask && !canManageTaskReference) || !draggedNodeId) return;
@@ -2620,10 +2601,13 @@ const MindMapView: React.FC = () => {
       sideOverrides,
       getNodeSide,
     });
-    if (update.rootSide) updateRootSide(update.nodeId, update.rootSide);
-    updateNode(update.nodeId, { parentId: update.parentId, order: update.order });
     clearDragState();
-  }, [boardId, canManageTaskReference, canMoveTask, clearDragState, dragPreview, draggedNodeId, getNodeSide, moveTrackingReference, nodes, projectionNodes, rootNodes, sideOverrides, updateNode, updateRootSide]);
+    void moveOrderedBoardTask(update.nodeId, update.anchorId
+      ? { parentId: null, position: 'after', anchorId: update.anchorId }
+      : { parentId: null, position: 'append' }).then(moved => {
+      if (moved && update.rootSide) updateRootSide(update.nodeId, update.rootSide);
+    });
+  }, [boardId, canManageTaskReference, canMoveTask, clearDragState, dragPreview, draggedNodeId, getNodeSide, moveTrackingReference, nodes, projectionNodes, rootNodes, sideOverrides, updateRootSide]);
 
   const handleNodeDragStart = React.useCallback((nodeId: string, event: React.DragEvent<HTMLDivElement>) => {
     closeLocalMenu(false);

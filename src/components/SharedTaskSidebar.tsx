@@ -13,6 +13,7 @@ import { useTaskInteractionBinding } from '../interactions/task/useTaskInteracti
 import { primaryPlacementId } from '../features/taskTracking/model';
 import { TaskDescriptionIndicator } from './TaskDescriptionIndicator';
 import { createBlankTaskNode } from '../features/taskCreation/createBlankTaskNode';
+import { createOrderedBoardTask, moveOrderedBoardTask } from '../features/taskCreation/boardTaskOrderActions';
 
 type SharedTaskSidebarSurface = 'gantt' | 'calendar';
 
@@ -171,31 +172,11 @@ const SharedTaskSidebar = ({
     rowHeight = COMPACT_DIMENSIONS.taskRowHeight
 }: SharedTaskSidebarProps) => {
     const { activeWorkspaceId, activeBoardId } = useBoardStore();
-    const addNode = useWbsStore(s => s.addNode);
-    const batchUpdateNodes = useWbsStore(s => s.batchUpdateNodes);
     const { canCreateTask, canMoveTask, canManageTaskReference } = useBoardPermissions();
     const moveTrackingReference = useWbsStore(s => s.moveTrackingReference);
 
     const sensors = useDragSensors();
     const [activeSortableItem, setActiveSortableItem] = useState(null);
-
-    const wouldCreateCycle = (draggedId: string, nextParentId: string | null) => {
-        if (!nextParentId) return false;
-        if (draggedId === nextParentId) return true;
-
-        const nodes = useWbsStore.getState().nodes;
-        const visited = new Set<string>([draggedId]);
-        let current: string | null = nextParentId;
-
-        while (current) {
-            if (current === draggedId) return true;
-            if (visited.has(current)) return true;
-            visited.add(current);
-            current = nodes[current]?.parentId || null;
-        }
-
-        return false;
-    };
 
     const handleSortableDragEnd = (event: any) => {
         const { active, over } = event;
@@ -220,26 +201,14 @@ const SharedTaskSidebar = ({
             });
             return;
         }
-        if (!canMoveTask) return;
-
-        if (activeItem.parentId === overItem.parentId) {
-            // 同層級交換順序
-            const tempOrder = activeItem.order;
-            batchUpdateNodes({
-                [activeItem.id]: { order: overItem.order },
-                [overItem.id]: { order: tempOrder },
-            }, { label: '重排任務', mergeKey: `sidebar-reorder:${activeItem.id}` });
-        } else {
-            // 跨層級移動
-            const nextParentId = overItem.parentId || null;
-            if (wouldCreateCycle(activeItem.id, nextParentId)) return;
-            batchUpdateNodes({
-                [activeItem.id]: { parentId: nextParentId, order: overItem.order + 0.5 },
-            }, { label: '移動任務位置', mergeKey: `sidebar-move:${activeItem.id}` });
-        }
+        if (!canMoveTask || overItem.isTrackingReference) return;
+        void moveOrderedBoardTask(activeItem.id, {
+            parentId: overItem.parentId ?? null, anchorId: overItem.id,
+            position: activeItem.parentId === overItem.parentId ? 'swap' : 'after',
+        });
     };
 
-    const handleAddList = () => {
+    const handleAddList = async () => {
         if (!canCreateTask) return;
         if (activeWorkspaceId && activeBoardId) {
             const newNode = createBlankTaskNode({
@@ -248,14 +217,13 @@ const SharedTaskSidebar = ({
                 boardId: activeBoardId,
                 parentId: null,
                 nodeType: 'group',
-                order: flattenedItems.length,
+                order: 0,
             });
-            addNode(newNode);
-            prepareNewTaskNaming(newNode.id);
+            if (await createOrderedBoardTask(newNode)) prepareNewTaskNaming(newNode.id);
         }
     };
 
-    const handleAddChild = (item: any) => {
+    const handleAddChild = async (item: any) => {
         if (!canCreateTask) return;
         if (activeWorkspaceId && activeBoardId) {
             const newNode = createBlankTaskNode({
@@ -264,10 +232,10 @@ const SharedTaskSidebar = ({
                 boardId: activeBoardId,
                 parentId: item.id,
                 nodeType: 'task',
-                order: 999, // default to end
+                order: 0,
             });
+            if (!await createOrderedBoardTask(newNode)) return;
             if (collapsedIds.has(item.id)) toggleCollapse(item.id);
-            addNode(newNode);
             prepareNewTaskNaming(newNode.id);
         }
     };
