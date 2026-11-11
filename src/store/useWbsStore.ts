@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import dayjs from 'dayjs';
 import type { ActivityEventType, Dependency, KanbanViewConfig, TaskNode, TaskStatus } from '../types';
-import { isSupabaseBackend, nodeService, dependencyService, workspaceService, boardService, tagService, eventLogService } from '../services/dataBackend';
+import { isSupabaseBackend, nodeService, dependencyService, workspaceService, boardService, tagService, eventLogService, memberService } from '../services/dataBackend';
 import useUndoStore from './useUndoStore';
 import useBoardStore from './useBoardStore';
 import useRecordStore from './useRecordStore';
@@ -44,6 +44,7 @@ import type {
   TaskTrackingReferenceCapability,
 } from '../features/taskTracking/types';
 import { buildTaskTreeClonePlan } from '../features/taskClonePlan';
+import { compareBoardTaskOrder, type BoardTaskOrderDestination, type BoardTaskOrderIntent } from '../features/taskCreation/boardTaskOrder';
 
 /**
  * WbsStore 狀態定義
@@ -107,13 +108,14 @@ export type BatchUpdateNodesOptions = {
   persistenceOrder?: 'parallel' | 'root-first' | 'leaves-first';
 };
 
-export type NodeBatchCommitStatus = 'committed' | 'rejected' | 'compensated' | 'indeterminate';
+export type NodeBatchCommitStatus = 'committed' | 'rejected' | 'compensated' | 'reconciled' | 'indeterminate';
 
 export type NodeBatchCommitOutcome = Readonly<{
   status: NodeBatchCommitStatus;
   operationId: string;
   affectedTaskIds: readonly string[];
   error?: string;
+  retryable?: boolean;
 }>;
 
 export type CommitNodeBatchOptions = {
@@ -161,6 +163,7 @@ export interface WbsBoardActions {
    * 新增單一任務節點
    */
   addNode: (node: TaskNode) => void;
+  commitBoardTaskOrder: (intent: BoardTaskOrderIntent) => Promise<TaskNode>;
 
   /**
    * 更新任務節點 (部分欄位)
@@ -716,9 +719,37 @@ type NodeBatchRecoveryDescriptor = Readonly<{
   expectedPresentationAfterFingerprint?: string;
   phase: 'persisting' | 'compensating' | 'indeterminate';
   archiveTaskId?: string;
+  archiveStateOnly?: boolean;
 }>;
 
-const pendingArchiveWrites = new Set<string>();
+const pendingBatchOperations = new Set<string>();
+const pendingBatchWrites = new Set<string>();
+// After a reload we no longer have the old request handle. Give a recent
+// journal time to settle before accepting a mixed database snapshot.
+const mixedRecoveryGraceMs = 60_000;
+const undatedRecoveryObservedAt = new Map<string, number>();
+
+const withPendingBatchWork = async <T>(
+  pending: Set<string>,
+  operationId: string,
+  run: () => Promise<T>,
+): Promise<T> => {
+  pending.add(operationId);
+  try {
+    return await run();
+  } finally {
+    pending.delete(operationId);
+  }
+};
+
+const trackBatchOperation = <Args extends unknown[]>(
+  prefix: string,
+  run: (operationId: string, ...args: Args) => Promise<NodeBatchCommitOutcome>,
+) => (...args: Args) => {
+  const operationId = `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  return withPendingBatchWork(pendingBatchOperations, operationId, () => run(operationId, ...args));
+};
+const pendingBoardTaskOrders = new Set<string>();
 const getArchiveRecoveryPrefix = (boardId: string) => `projed.mindmap.archive-recovery.v1.${encodeURIComponent(boardId)}:`;
 const getNodeBatchRecoveryKey = (boardId: string, archiveTaskId?: string) => archiveTaskId
   ? getArchiveRecoveryPrefix(boardId) + archiveTaskId
@@ -781,6 +812,28 @@ const getBlockingBatchRecovery = (boardId: string, archiveTaskId?: string) => {
   return null;
 };
 
+const listBoardOrderProtectedTasks = (boardId: string) => {
+  try {
+    const scopes = [undefined, ...listArchiveRecoveryIds(boardId)];
+    if (scopes.some(id => hasCorruptNodeBatchRecovery(boardId, id))) return ['*'];
+    return scopes.flatMap(id => [...(readNodeBatchRecovery(boardId, id)?.targetIds || [])]);
+  } catch {
+    return ['*'];
+  }
+};
+
+const getBoardOrderUndoDestination = (
+  node: TaskNode, destination: BoardTaskOrderDestination, nodes: Record<string, TaskNode>,
+): BoardTaskOrderDestination => {
+  if (destination.position === 'swap') return destination;
+  const siblings = Object.values(nodes).filter(other => !other.isArchived && other.workspaceId === node.workspaceId
+    && other.boardId === node.boardId && other.parentId === node.parentId).sort(compareBoardTaskOrder);
+  const next = siblings[siblings.findIndex(other => other.id === node.id) + 1];
+  return next
+    ? { parentId: node.parentId, position: 'before', anchorId: next.id }
+    : { parentId: node.parentId, position: 'append' };
+};
+
 const writeNodeBatchRecovery = (descriptor: NodeBatchRecoveryDescriptor) => {
   if (typeof window === 'undefined') return true;
   const key = getNodeBatchRecoveryKey(descriptor.boardId, descriptor.archiveTaskId);
@@ -803,6 +856,7 @@ const clearNodeBatchRecovery = (boardId: string, operationId: string, archiveTas
   const current = readNodeBatchRecovery(boardId, archiveTaskId);
   if (current?.operationId === operationId) {
     window.sessionStorage.removeItem(getNodeBatchRecoveryKey(boardId, archiveTaskId));
+    undatedRecoveryObservedAt.delete(operationId);
   }
 };
 
@@ -844,11 +898,11 @@ const hashRecoveryValue = (value: unknown) => {
 const getNodeBatchRecoveryFingerprint = (
   nodes: Readonly<Record<string, TaskNode>>,
   targetIds: readonly string[],
-  archiveTaskId?: string,
+  archiveStateOnly?: boolean,
 ) => hashRecoveryValue(
   [...targetIds]
     .sort((left, right) => left.localeCompare(right))
-    .map(id => [id, archiveTaskId && nodes[id] ? { isArchived: Boolean(nodes[id].isArchived) } : getRecoveryTaskShape(nodes[id])]),
+    .map(id => [id, archiveStateOnly && nodes[id] ? { isArchived: Boolean(nodes[id].isArchived) } : getRecoveryTaskShape(nodes[id])]),
 );
 
 const applyBatchPatchesToSnapshot = (
@@ -866,7 +920,7 @@ const getBatchConvergence = (
   nodes: Record<string, TaskNode>,
   descriptor: NodeBatchRecoveryDescriptor,
 ) => {
-  const fingerprint = getNodeBatchRecoveryFingerprint(nodes, descriptor.targetIds, descriptor.archiveTaskId);
+  const fingerprint = getNodeBatchRecoveryFingerprint(nodes, descriptor.targetIds, descriptor.archiveStateOnly || Boolean(descriptor.archiveTaskId));
   // A legacy archive batch sets the flag on every target. Other task fields
   // can change independently before recovery reads the board again.
   if (descriptor.kind === 'archive'
@@ -907,6 +961,24 @@ const withNodeBatchTimeout = async (promise: Promise<void>, timeoutMs: number) =
     ]);
   } finally {
     if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+  }
+};
+
+const readBatchBoard = async (workspaceId: string, boardId: string): Promise<TaskNode[]> => {
+  const controller = new AbortController();
+  let timer: number | undefined;
+  try {
+    return await Promise.race([
+      nodeService.listByProject(workspaceId, boardId, controller.signal),
+      new Promise<never>((_, reject) => {
+        timer = window.setTimeout(() => {
+          controller.abort();
+          reject(new Error('確認操作結果逾時。'));
+        }, 8_000);
+      }),
+    ]);
+  } finally {
+    window.clearTimeout(timer);
   }
 };
 
@@ -1271,12 +1343,17 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
   },
 
   addNode: (node) => {
-    const state = get();
     const normalizedNode = normalizeTaskStatusNode(normalizeTaskAssignmentNode(node));
-    // 使用 Immutable 更新 nodes
-    const updatedNodes = { ...state.nodes, [normalizedNode.id]: normalizedNode };
-    set({ nodes: updatedNodes });
-    get()._buildIndices(updatedNodes);
+    const publishNode = () => {
+      const updatedNodes = { ...get().nodes, [normalizedNode.id]: normalizedNode };
+      set({ nodes: updatedNodes });
+      get()._buildIndices(updatedNodes);
+      useUndoStore.getState().pushUndo({
+        label: '新增任務',
+        undo: () => get().archiveNode(normalizedNode.id),
+        redo: () => get().addNode(normalizedNode),
+      });
+    };
 
     const isUnplacedTask = isTaskWorkbenchUnplacedTask(normalizedNode);
     const creationActivityPayload = {
@@ -1291,6 +1368,12 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
         order: normalizedNode.order,
       },
     };
+    const recordCreation = async () => {
+      logTaskActivity(normalizedNode, 'task_created', creationActivityPayload);
+      await commitMeetingTaskMutation(null, normalizedNode, ['title', 'status', 'description', 'detailNotes', 'startDate', 'endDate', 'isDurationLocked', 'assigneeIds', 'assigneeId', 'collaboratorIds', 'tagIds', 'isArchived'], `task-create-${normalizedNode.id}-${Date.now().toString(36)}`);
+    };
+
+    publishNode();
 
     // 同步寫入資料來源；未歸位任務是工作台本機位置，不寫入假看板路徑。
     if (isUnplacedTask) {
@@ -1301,21 +1384,91 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
         const boardId = normalizedNode.boardId;
          void persistTaskCreationBeforeActivity(
            () => nodeService.create(workspaceId, boardId, normalizedNode),
-           async () => {
-             logTaskActivity(normalizedNode, 'task_created', creationActivityPayload);
-             await commitMeetingTaskMutation(null, normalizedNode, ['title', 'status', 'description', 'detailNotes', 'startDate', 'endDate', 'isDurationLocked', 'assigneeIds', 'assigneeId', 'collaboratorIds', 'tagIds', 'isArchived'], `task-create-${normalizedNode.id}-${Date.now().toString(36)}`);
-           },
+           recordCreation,
          ).catch(error => {
           console.error('[wbsStore] Failed to persist created task before activity logging:', error);
         });
     }
+  },
 
-    // 紀錄上一步
-    useUndoStore.getState().pushUndo({
-        label: '新增任務',
-        undo: () => get().archiveNode(normalizedNode.id),
-        redo: () => get().addNode(normalizedNode),
-    });
+  commitBoardTaskOrder: async (intent) => {
+    const { workspaceId, boardId } = intent;
+    const userId = useAuthStore.getState().user?.uid;
+    if (!workspaceId || !boardId || !userId) throw new Error('無法確認任務看板或登入狀態。');
+    const id = intent.kind === 'create' ? intent.node.id : intent.taskId;
+    const scope = JSON.stringify([userId, workspaceId, boardId]);
+    if (pendingBoardTaskOrders.has(scope)) throw new Error('看板排序正在儲存。');
+    pendingBoardTaskOrders.add(scope);
+    try {
+      const beforeNodes = get().nodes;
+      const previous = beforeNodes[id];
+      const undoDestination = intent.kind === 'move' && previous
+        ? getBoardOrderUndoDestination(previous, intent.destination, beforeNodes) : null;
+      const activeAccess = useMemberStore.getState().currentBoardAccess;
+      const cachedAccess = activeAccess?.workspaceId === workspaceId && activeAccess.boardId === boardId ? activeAccess : null;
+      const access = isSupabaseBackend ? cachedAccess : await memberService.getCurrentBoardAccess(workspaceId, boardId, userId);
+      if (!isSupabaseBackend && !access?.capabilities.includes(intent.kind === 'create' ? 'create_task' : 'move_task')) {
+        throw new Error('沒有權限變更此看板的任務。');
+      }
+      if (useAuthStore.getState().user?.uid !== userId) throw new Error('登入狀態已變更。');
+      const result = await nodeService.commitBoardOrder({
+        ...intent,
+        protectedTaskIds: listBoardOrderProtectedTasks(boardId),
+      }, Boolean(access?.capabilities.includes('edit_task')));
+      const canonical = result.nodes.find(node => node.id === id);
+      if (!canonical) throw new Error('資料庫未回傳已確認的任務。');
+      if (useAuthStore.getState().user?.uid !== userId) throw new Error('登入狀態已變更。');
+      const nextNodes = { ...get().nodes };
+      for (const patch of result.nodes) {
+        const node = intent.kind === 'create' && patch.id === id ? intent.node : nextNodes[patch.id];
+        if (!node || node.workspaceId !== workspaceId || node.boardId !== boardId) continue;
+        nextNodes[patch.id] = { ...node, ...patch };
+      }
+      const task = nextNodes[id];
+      if (!task || task.workspaceId !== workspaceId || task.boardId !== boardId) {
+        throw new Error('任務已儲存，請重新載入看板。');
+      }
+      set({ nodes: nextNodes });
+      get()._buildIndices(nextNodes);
+
+      const operationId = createUpdateNodeOperationId();
+      if (intent.kind === 'create') {
+        logTaskActivity(task, 'task_created', { after: { parentId: task.parentId, order: task.order, status: task.status } });
+        void commitMeetingTaskMutation(null, task, ['title', 'status', 'detailNotes'], operationId);
+      } else if (previous) {
+        buildTaskUpdateActivities(previous, task, { parentId: task.parentId, order: task.order }).forEach(event => {
+          logTaskActivity(task, event.eventType, event.payload);
+        });
+        void commitMeetingTaskMutation(previous, task, ['parentId', 'order'], operationId);
+      }
+      if (result.reopenedParent && task.parentId) {
+        const parent = nextNodes[task.parentId];
+        const priorParent = beforeNodes[task.parentId];
+        if (parent && priorParent) {
+          buildTaskUpdateActivities(priorParent, parent, { status: parent.status }).forEach(event => logTaskActivity(parent, event.eventType, event.payload));
+          void commitMeetingTaskMutation(priorParent, parent, ['status'], `${operationId}:parent`);
+        }
+      }
+      if (intent.kind === 'create' && access?.capabilities.includes('delete_task')) {
+        const setArchiveState = async (isArchived: boolean) => {
+          const outcome = await get().commitNodeBatch({ [id]: { isArchived } }, { recoveryKind: isArchived ? 'archive' : 'undo' });
+          if (outcome.status !== 'committed') throw new Error(outcome.error || '無法復原新增任務。');
+        };
+        useUndoStore.getState().pushUndo({
+          label: '新增任務', entityIds: [id],
+          undo: () => setArchiveState(true), redo: () => setArchiveState(false),
+        });
+      } else if (intent.kind === 'move' && previous && undoDestination) {
+        useUndoStore.getState().pushUndo({
+          label: '移動任務位置', entityIds: [id],
+          undo: async () => { await get().commitBoardTaskOrder({ ...intent, destination: undoDestination, sourceParentId: task.parentId }); },
+          redo: async () => { await get().commitBoardTaskOrder(intent); },
+        });
+      }
+      return task;
+    } finally {
+      pendingBoardTaskOrders.delete(scope);
+    }
   },
 
   duplicateNodeTree: async (id, options = {}) => {
@@ -1637,8 +1790,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     });
   },
 
-  commitNodeBatch: async (updatesById, options = {}) => {
-    const operationId = `node-batch-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  commitNodeBatch: trackBatchOperation<Parameters<WbsStore['commitNodeBatch']>>('node-batch', async (operationId, updatesById, options = {}) => {
     const state = get();
     const beforePatches: BatchNodeUpdates = {};
     const afterPatches: BatchNodeUpdates = {};
@@ -1668,12 +1820,12 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     ))) {
       return { status: 'rejected', operationId, affectedTaskIds, error: '批次任務必須位於同一看板。' };
     }
-    const singleArchive = affectedTaskIds.length === 1 && !options.presentation
-      && typeof afterPatches[affectedTaskIds[0]].isArchived === 'boolean'
-      && Object.keys(afterPatches[affectedTaskIds[0]]).length === 1;
-    const archiveTaskId = singleArchive ? affectedTaskIds[0] : undefined;
-    if (archiveTaskId) {
-      beforePatches[archiveTaskId].isArchived = Boolean(beforeNodes[archiveTaskId].isArchived);
+    const archiveStateOnly = !options.presentation && affectedTaskIds.every(id =>
+      typeof afterPatches[id].isArchived === 'boolean' && Object.keys(afterPatches[id]).length === 1,
+    );
+    const archiveTaskId = archiveStateOnly && affectedTaskIds.length === 1 ? affectedTaskIds[0] : undefined;
+    if (archiveStateOnly) {
+      affectedTaskIds.forEach(id => { beforePatches[id].isArchived = Boolean(beforeNodes[id].isArchived); });
     }
     const recoveryBlock = getBlockingBatchRecovery(firstNode.boardId, archiveTaskId);
     if (recoveryBlock === 'corrupt') {
@@ -1708,11 +1860,12 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       createdAt: Date.now(),
       targetIds: affectedTaskIds,
       archiveTaskId,
-      expectedBeforeFingerprint: getNodeBatchRecoveryFingerprint(state.nodes, affectedTaskIds, archiveTaskId),
+      archiveStateOnly,
+      expectedBeforeFingerprint: getNodeBatchRecoveryFingerprint(state.nodes, affectedTaskIds, archiveStateOnly),
       expectedAfterFingerprint: getNodeBatchRecoveryFingerprint(
         applyBatchPatchesToSnapshot(state.nodes, afterPatches),
         affectedTaskIds,
-        archiveTaskId,
+        archiveStateOnly,
       ),
       expectedPresentationBeforeFingerprint: options.presentation?.beforeFingerprint,
       expectedPresentationAfterFingerprint: options.presentation?.afterFingerprint,
@@ -1744,20 +1897,15 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       }
     }
 
-    const persist = async (patches: BatchNodeUpdates) => {
-      if (archiveTaskId) pendingArchiveWrites.add(operationId);
-      try {
-        await nodeService.batchUpdate(
-          descriptor.workspaceId,
-          descriptor.boardId,
-          Object.entries(patches).map(([id, data]) => ({ id, data })),
-        );
-      } finally {
-        if (archiveTaskId) pendingArchiveWrites.delete(operationId);
-      }
-    };
+    const persist = (patches: BatchNodeUpdates) => withPendingBatchWork(pendingBatchWrites, operationId, () => (
+      nodeService.batchUpdate(
+        descriptor.workspaceId,
+        descriptor.boardId,
+        Object.entries(patches).map(([id, data]) => ({ id, data })),
+      )
+    ));
     const readRemoteNodes = async () => Object.fromEntries(
-      (await nodeService.listByProject(descriptor.workspaceId, descriptor.boardId)).map(node => [node.id, node]),
+      (await readBatchBoard(descriptor.workspaceId, descriptor.boardId)).map(node => [node.id, node]),
     ) as Record<string, TaskNode>;
     const applyCommittedPatches = (patches: BatchNodeUpdates) => {
       const current = get();
@@ -1777,6 +1925,10 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     const finalizeCommitted = async () => {
       applyCommittedPatches(afterPatches);
       const committedNodes = get().nodes;
+      // The canonical task write is already confirmed. Recording ancillary
+      // activity must not keep this task locked while those requests finish.
+      clearNodeBatchRecovery(descriptor.boardId, descriptor.operationId, archiveTaskId);
+      options.presentation?.onCommitted?.();
       for (const id of affectedTaskIds) {
         const beforeNode = beforeNodes[id];
         const afterNode = committedNodes[id];
@@ -1789,8 +1941,6 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
           deleteCalendarEventBestEffort(id);
         }
       }
-      clearNodeBatchRecovery(descriptor.boardId, descriptor.operationId, archiveTaskId);
-      options.presentation?.onCommitted?.();
       if (!useUndoStore.getState().isApplying) {
         const label = options.label || (affectedTaskIds.length > 1 ? '批次修改任務' : '修改任務');
         useUndoStore.getState().pushUndo({
@@ -1895,7 +2045,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
           return { status: 'committed', operationId, affectedTaskIds };
         }
       } catch {
-        // Keep the descriptor. A reload can converge it without guessing.
+        // Keep the descriptor for authoritative recovery.
       }
       writeNodeBatchRecoveryPhase(descriptor, 'indeterminate');
       return { status: 'indeterminate', operationId, affectedTaskIds, error: '批次儲存逾時，結果尚待確認。' };
@@ -1903,10 +2053,9 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
 
     await finalizeCommitted();
     return { status: 'committed', operationId, affectedTaskIds };
-  },
+  }),
 
-  commitNodeForestCreate: async (input) => {
-    const operationId = `node-forest-create-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  commitNodeForestCreate: trackBatchOperation<Parameters<WbsStore['commitNodeForestCreate']>>('node-forest-create', async (operationId, input) => {
     const plannedNodes = input.nodes.map(node => normalizeTaskStatusNode(normalizeTaskAssignmentNode({ ...node })));
     const plannedDependencies = [...(input.dependencies || [])];
     const createdTaskIds = plannedNodes.map(node => node.id);
@@ -2086,24 +2235,26 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
               expectedPresentationAfterFingerprint: descriptor.expectedPresentationBeforeFingerprint,
               phase: 'persisting',
             };
-            if (!writeNodeBatchRecovery(undoDescriptor)) throw new Error('無法建立復原操作紀錄。');
-            try {
-              await input.presentation?.compensate();
-              await persistRemove();
-              applyRemovedState();
-              input.presentation?.onCompensated?.();
-              clearNodeBatchRecovery(firstNode.boardId, undoDescriptor.operationId);
-            } catch (error) {
+            await withPendingBatchWork(pendingBatchOperations, undoDescriptor.operationId, async () => {
+              if (!writeNodeBatchRecovery(undoDescriptor)) throw new Error('無法建立復原操作紀錄。');
               try {
-                writeNodeBatchRecoveryPhase(undoDescriptor, 'compensating');
-                await input.presentation?.commit();
-                await persistCreate();
+                await input.presentation?.compensate();
+                await persistRemove();
+                applyRemovedState();
+                input.presentation?.onCompensated?.();
                 clearNodeBatchRecovery(firstNode.boardId, undoDescriptor.operationId);
-              } catch {
-                try { writeNodeBatchRecoveryPhase(undoDescriptor, 'indeterminate'); } catch { /* keep lock */ }
+              } catch (error) {
+                try {
+                  writeNodeBatchRecoveryPhase(undoDescriptor, 'compensating');
+                  await input.presentation?.commit();
+                  await persistCreate();
+                  clearNodeBatchRecovery(firstNode.boardId, undoDescriptor.operationId);
+                } catch {
+                  try { writeNodeBatchRecoveryPhase(undoDescriptor, 'indeterminate'); } catch { /* keep lock */ }
+                }
+                throw error;
               }
-              throw error;
-            }
+            });
           },
           redo: async () => {
             const outcome = await get().commitNodeForestCreate(input);
@@ -2114,15 +2265,13 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     };
 
     try {
-      const result = await withNodeBatchTimeout(persistCreate(), input.timeoutMs ?? 8_000);
+      const write = withPendingBatchWork(pendingBatchWrites, operationId, persistCreate);
+      const result = await withNodeBatchTimeout(write, input.timeoutMs ?? 8_000);
       if (result === 'timeout') {
-        const remoteNodes = Object.fromEntries(
-          (await nodeService.listByProject(firstNode.workspaceId, firstNode.boardId)).map(node => [node.id, node]),
-        ) as Record<string, TaskNode>;
-        if (getBatchConvergence(remoteNodes, descriptor) !== 'after') {
-          writeNodeBatchRecoveryPhase(descriptor, 'indeterminate');
-          return { status: 'indeterminate', operationId, affectedTaskIds, error: '貼上逾時，結果尚待確認。' };
-        }
+        // The create loop may still be writing nodes or dependencies.
+        // Hand off confirmation without starting compensation concurrently.
+        try { writeNodeBatchRecoveryPhase(descriptor, 'indeterminate'); } catch { /* keep the existing journal */ }
+        return { status: 'indeterminate', operationId, affectedTaskIds, error: '貼上逾時，結果尚待確認。' };
       }
       await finalizeCommitted();
       return { status: 'committed', operationId, affectedTaskIds };
@@ -2163,9 +2312,10 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
         };
       }
     }
-  },
+  }),
 
   recoverNodeBatch: async (boardId) => {
+    const actorId = useAuthStore.getState().user?.uid;
     const corruptOutcome = (): NodeBatchCommitOutcome => ({
       status: 'indeterminate',
       operationId: `corrupt-recovery-${boardId}`,
@@ -2182,48 +2332,66 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     const recover = async (archiveTaskId?: string): Promise<NodeBatchCommitOutcome | null> => {
       const descriptor = readNodeBatchRecovery(boardId, archiveTaskId);
       if (!descriptor) return hasCorruptNodeBatchRecovery(boardId, archiveTaskId) ? corruptOutcome() : null;
-      const outcome = (status: NodeBatchCommitStatus, error?: string): NodeBatchCommitOutcome => ({
+      const outcome = (status: NodeBatchCommitStatus, error?: string, retryable?: boolean): NodeBatchCommitOutcome => ({
         status,
         operationId: descriptor.operationId,
         affectedTaskIds: descriptor.targetIds,
         error,
+        retryable,
       });
-      if (pendingArchiveWrites.has(descriptor.operationId)) {
-        return outcome('indeterminate', '封存仍在處理中。');
+      const stillChecking = () => outcome('indeterminate', '正在確認前一筆操作結果…', true);
+      if (pendingBatchOperations.has(descriptor.operationId)) {
+        return stillChecking();
       }
       try {
         let read = boardReads.get(descriptor.workspaceId);
         if (!read) {
-          read = nodeService.listByProject(descriptor.workspaceId, descriptor.boardId);
+          read = readBatchBoard(descriptor.workspaceId, descriptor.boardId);
           boardReads.set(descriptor.workspaceId, read);
         }
         const remoteNodes = Object.fromEntries(
           (await read).map(node => [node.id, node]),
         ) as Record<string, TaskNode>;
         const convergence = getBatchConvergence(remoteNodes, descriptor);
-        if (readNodeBatchRecovery(boardId, archiveTaskId)?.operationId !== descriptor.operationId) return null;
-        if (convergence === 'after') {
-          const current = get();
-          const nextNodes = { ...current.nodes };
-          descriptor.targetIds.forEach(id => {
-            if (remoteNodes[id]) nextNodes[id] = remoteNodes[id];
-          });
-          set({ nodes: nextNodes });
-          get()._buildIndices(nextNodes);
-          clearNodeBatchRecovery(boardId, descriptor.operationId, archiveTaskId);
-          return outcome('committed');
+        if (useAuthStore.getState().user?.uid !== actorId
+          || readNodeBatchRecovery(boardId, archiveTaskId)?.operationId !== descriptor.operationId) return null;
+        // A detached request may still write. A matching before-state is
+        // conclusive only after the request settles. Archive-only writes can
+        // be confirmed by the persisted flags even if the response was lost.
+        const confirmedArchive = convergence === 'after' && descriptor.phase === 'indeterminate'
+          && (descriptor.archiveStateOnly || descriptor.archiveTaskId || descriptor.kind === 'archive');
+        if (pendingBatchWrites.has(descriptor.operationId) && !confirmedArchive) return stillChecking();
+        if (convergence === 'mixed') {
+          const now = Date.now();
+          let startedAt = descriptor.createdAt;
+          if (!Number.isFinite(startedAt) || startedAt > now) {
+            startedAt = undatedRecoveryObservedAt.get(descriptor.operationId) ?? now;
+            undatedRecoveryObservedAt.set(descriptor.operationId, startedAt);
+          }
+          if (now - startedAt < mixedRecoveryGraceMs) {
+            return outcome('indeterminate', '批次資料與已知前後指紋皆不一致，涉及的任務仍待確認。', true);
+          }
         }
-        if (convergence === 'before') {
-          clearNodeBatchRecovery(boardId, descriptor.operationId, archiveTaskId);
-          return outcome('rejected');
-        }
-        return outcome('indeterminate', '批次資料與已知前後指紋皆不一致，涉及的任務仍待確認。');
-      } catch (error) {
-        return outcome('indeterminate', error instanceof Error ? error.message : '無法確認前一筆批次結果。');
+
+        // A stale mixed journal cannot establish which original writes won.
+        // Display the confirmed rows and retire the obsolete lock without
+        // replaying the operation or reporting it as committed.
+        const nextNodes = { ...get().nodes };
+        descriptor.targetIds.forEach(id => {
+          if (remoteNodes[id]) nextNodes[id] = remoteNodes[id];
+          else if (nextNodes[id]?.boardId === descriptor.boardId) delete nextNodes[id];
+        });
+        set({ nodes: nextNodes });
+        get()._buildIndices(nextNodes);
+        clearNodeBatchRecovery(boardId, descriptor.operationId, archiveTaskId);
+        return outcome(convergence === 'after' ? 'committed' : convergence === 'before' ? 'rejected' : 'reconciled');
+      } catch {
+        return outcome('indeterminate', '暫時無法讀取操作結果，系統會自動重試。', true);
       }
     };
     const outcomes = await Promise.all([recover(), ...archiveTaskIds.map(recover)]);
     return outcomes.find(outcome => outcome?.status === 'indeterminate')
+      || outcomes.find(outcome => outcome?.status === 'reconciled')
       || outcomes.find(outcome => outcome !== null)
       || null;
   },

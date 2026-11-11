@@ -40,7 +40,7 @@ interface MindMapNodeProps {
   canMoveTask: boolean;
   canManageTaskReference?: boolean;
   isTitleEditing?: boolean;
-  autoFocusTitleInput?: boolean;
+  initialTitleText?: string;
   onTitleEditCommit?: (nodeId: string, title: string, restoreNodeFocus?: boolean) => void;
   onTitleEditContinue?: (nodeId: string, title: string, intent: MindMapQuickCreateIntent) => void;
   onTitleEditCancel?: (nodeId: string, restoreNodeFocus?: boolean) => void;
@@ -134,7 +134,7 @@ export const MindMapNode: React.FC<MindMapNodeProps> = React.memo(({
   canMoveTask,
   canManageTaskReference = false,
   isTitleEditing = false,
-  autoFocusTitleInput = true,
+  initialTitleText,
   onTitleEditCommit,
   onTitleEditContinue,
   onTitleEditCancel,
@@ -203,13 +203,13 @@ export const MindMapNode: React.FC<MindMapNodeProps> = React.memo(({
   React.useLayoutEffect(() => {
     if (!isTitleEditing) return;
     titleEditActionHandledRef.current = false;
-    setTitleDraft(nodeTitleRef.current);
-    if (!autoFocusTitleInput) return;
-    window.requestAnimationFrame(() => {
-      titleInputRef.current?.focus();
-      titleInputRef.current?.select();
-    });
-  }, [autoFocusTitleInput, isTitleEditing, node.id]);
+    setTitleDraft(initialTitleText ?? nodeTitleRef.current);
+    const input = titleInputRef.current;
+    if (!input) return;
+    input.focus({ preventScroll: true });
+    if (initialTitleText === undefined) input.select();
+    else input.setSelectionRange(initialTitleText.length, initialTitleText.length);
+  }, [initialTitleText, isTitleEditing, node.id]);
   return (
     <div
       className={`flex items-center gap-[var(--mindmap-node-gap)] ${isLeft ? 'flex-row-reverse text-right' : 'text-left'}`}
@@ -251,17 +251,6 @@ export const MindMapNode: React.FC<MindMapNodeProps> = React.memo(({
           onClick={(event) => {
             event.stopPropagation();
             void interactionBinding.dispatch('pointer.primary');
-          }}
-          onKeyDown={(event) => {
-            if (event.target !== event.currentTarget || event.nativeEvent.isComposing || !isTitleEditing || autoFocusTitleInput) return;
-            if (event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey) return;
-            event.preventDefault();
-            event.stopPropagation();
-            setTitleDraft(event.key);
-            window.requestAnimationFrame(() => {
-              titleInputRef.current?.focus();
-              titleInputRef.current?.setSelectionRange(1, 1);
-            });
           }}
           onDoubleClick={(event) => {
             event.stopPropagation();

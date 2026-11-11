@@ -31,6 +31,7 @@ import {
 import type { TaskNode, TaskStatus } from '../types';
 import { taskStatusTitleClass } from './ui/taskStatusStyles';
 import { TaskHierarchyIndentedRow } from './Wbs/TaskHierarchyIndentedRow';
+import { taskViewFrameClassName } from './ui/compactTokens';
 import MeetingQuickNoteRows from './TaskNotes/MeetingQuickNoteRows';
 import { useTaskPlacementController } from './Wbs/useTaskPlacementController';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
@@ -1215,13 +1216,13 @@ const GoalView: React.FC<GoalViewProps> = ({ boardId }) => {
   }, [goalSession, sourceIsVisible]);
 
   if (!boardId) {
-    return <div className="flex h-full items-center justify-center p-6 text-sm text-slate-500" data-goal-view="true">請先選擇看板。</div>;
+    return <div className={`flex h-full items-center justify-center p-6 text-sm text-slate-500 ${taskViewFrameClassName}`} data-goal-view="true">請先選擇看板。</div>;
   }
   if (taskLoading) {
-    return <div className="flex h-full items-center justify-center gap-2 p-6 text-sm text-slate-500" data-goal-view="true"><Loader2 size={16} className="animate-spin" />載入任務中...</div>;
+    return <div className={`flex h-full items-center justify-center gap-2 p-6 text-sm text-slate-500 ${taskViewFrameClassName}`} data-goal-view="true"><Loader2 size={16} className="animate-spin" />載入任務中...</div>;
   }
   if (taskError) {
-    return <div role="alert" className="m-6 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700" data-goal-view="true">任務載入失敗：{taskError}</div>;
+    return <div role="alert" className="m-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 shadow-sm" data-goal-view="true">任務載入失敗：{taskError}</div>;
   }
 
   const hasNoTasks = filterProjection.totalTaskCount === 0;
@@ -1231,7 +1232,7 @@ const GoalView: React.FC<GoalViewProps> = ({ boardId }) => {
     ? (goalChildIsArmed ? goalDropPreview.childTreePreview : goalDropPreview.standardTreePreview)
     : null;
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-auto bg-slate-50" data-goal-view="true" data-goal-record-state={meetingStatus}>
+    <div className={`flex h-full min-h-0 flex-col overflow-auto bg-slate-50 ${taskViewFrameClassName}`} data-goal-view="true" data-goal-record-state={meetingStatus}>
       {meetingStatus === 'error' ? <div role="alert" className="mx-3 mb-3 flex items-center justify-between gap-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 sm:mx-5"><span>會議紀錄載入失敗，暫不顯示舊資料。</span><button type="button" onClick={retryMeeting} className="shrink-0 font-semibold underline">重試</button></div> : null}
       {meetingStatus === 'partial' ? <div role="status" className="mx-3 mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 sm:mx-5" data-goal-record-warning="partial">部分會議紀錄無法辨識，已略過不可靠內容。</div> : null}
       {hasNoTasks ? <div className="mx-3 flex min-h-[220px] items-center justify-center rounded-md border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500 sm:mx-5">目前沒有任務</div> : hasNoFilteredTasks ? (

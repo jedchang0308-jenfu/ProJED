@@ -24,6 +24,7 @@ const VIEW_STORAGE_KEY = 'projed-last-view';
 const WS_STORAGE_KEY = 'projed-last-ws';
 const BOARD_STORAGE_KEY = 'projed-last-board';
 const MODAL_STORAGE_KEY = 'projed-last-modal';
+const BOARD_TASK_VIEWS = new Set<ViewMode>(['list', 'mindmap', 'board', 'goal', 'gantt', 'calendar']);
 
 const getDefaultDisplaySettings = () => ({
     showDependencies: createDefaultTaskDisplaySettings().showDependencies,
@@ -345,20 +346,21 @@ const useBoardStore = create<BoardStore>()(
         },
 
         switchBoard: (workspaceId, boardId) => {
-            const { workspaces } = get();
+            const { workspaces, currentView } = get();
             const ws = workspaces.find(w => w.id === workspaceId);
             const board = ws?.boards.find(b => b.id === boardId);
             // Optimistic rows use a local-only id until Supabase returns the
             // canonical project id. Never route the app into a board that the
             // backend cannot resolve yet, even if the pending row is clicked.
             if (board && !board.id.startsWith('b_')) {
+                const nextView = BOARD_TASK_VIEWS.has(currentView) ? currentView : 'board';
                 safeSetItem(WS_STORAGE_KEY, workspaceId);
                 safeSetItem(BOARD_STORAGE_KEY, boardId);
-                safeSetItem(VIEW_STORAGE_KEY, 'board');
+                safeSetItem(VIEW_STORAGE_KEY, nextView);
                 set({
                     activeWorkspaceId: workspaceId,
                     activeBoardId: boardId,
-                    currentView: 'board',
+                    currentView: nextView,
                 });
             }
         },

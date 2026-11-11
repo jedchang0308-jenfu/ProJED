@@ -24,7 +24,7 @@ import { useMemberStore } from '../store/useMemberStore';
 import { KanbanColumn } from './Wbs/KanbanColumn';
 import { KanbanRootDropZone } from './Wbs/KanbanRootDropZone';
 import TaskWorkbenchPanel from './TaskWorkbenchPanel';
-import { compactClassNames } from './ui/compactTokens';
+import { compactClassNames, taskViewFrameClassName } from './ui/compactTokens';
 import { projectTaskFilterResults } from '../features/taskFilters';
 import { useTaskFilterStore } from '../store/useTaskFilterStore';
 import { TaskFilterResultState } from './ui/TaskFilterResultState';
@@ -2073,7 +2073,7 @@ const BoardView = () => {
                     canManageTaskReference={canManageTaskReference}
                 />
                 <div
-                    className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-300 bg-slate-100 shadow-sm"
+                    className={`flex min-w-0 flex-1 flex-col overflow-hidden bg-slate-100 ${taskViewFrameClassName}`}
                     data-layout-region="board-workspace"
                     data-ui-container="board-workspace"
                 >

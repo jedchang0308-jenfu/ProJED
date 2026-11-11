@@ -128,10 +128,18 @@ async (page) => {
   };
 
   const startMeeting = async () => {
-    const start = page.getByRole('button', { name: '新增會議記錄' });
+    const moreMenu = page.locator('[data-app-more-menu="true"]');
+    await moreMenu.locator('summary').click();
+    const start = page.locator('[data-app-more-meeting-record="true"]');
     await start.waitFor({ state: 'visible', timeout: 10000 });
     await start.click();
-    await page.locator('[data-record-workflow-kind="meeting"]').waitFor({ state: 'visible', timeout: 10000 });
+    const meetingWorkflow = page.locator('[data-record-workflow-kind="meeting"]');
+    try {
+      await meetingWorkflow.waitFor({ state: 'visible', timeout: 10000 });
+    } catch {
+      const state = await page.locator('body').innerText();
+      throw new Error(`meeting workflow did not open after menu action: ${state.slice(0, 1200)}`);
+    }
     await page.waitForTimeout(180);
   };
 
@@ -163,10 +171,7 @@ async (page) => {
     return mark ? [{ value: mark.getAttribute('data-meeting-task-reservation-value'), text: mark.textContent?.trim(), hasIcon: Boolean(mark.querySelector('[data-meeting-task-reservation-icon="true"]')), isIntegratedToken: mark.getAttribute('data-meeting-task-reservation-token') === 'true' }] : [];
   });
   const setReservation = async (placementId, value, kind) => {
-    const menu = await openMenu(placementId, kind);
-    const action = menu.locator('[data-task-action-id="task.edit-meeting-reservation"]');
-    await action.waitFor({ state: 'visible', timeout: 5000 });
-    await action.click();
+    await openMenu(placementId, kind);
     const input = page.locator('[data-meeting-reservation-input="true"]');
     await input.waitFor({ state: 'visible', timeout: 5000 });
     const focused = await input.evaluate(element => document.activeElement === element);
@@ -273,7 +278,6 @@ async (page) => {
 
   await runCase('ROT-105-04', 'Invalid value stays in the same menu; Escape, outside click and scroll cancel without mutation.', async () => {
     const menu = await openMenu('primary:task-l2');
-    await menu.locator('[data-task-action-id="task.edit-meeting-reservation"]').click();
     const input = page.locator('[data-meeting-reservation-input="true"]');
     await input.fill('0');
     await input.press('Enter');
@@ -283,8 +287,7 @@ async (page) => {
     await input.press('Escape');
     await page.waitForTimeout(180);
     if (await page.locator('[data-global-context-menu="true"]').isVisible().catch(() => false)) throw new Error('Escape did not close reservation editor menu');
-    const outsideMenu = await openMenu('primary:task-l2');
-    await outsideMenu.locator('[data-task-action-id="task.edit-meeting-reservation"]').click();
+    await openMenu('primary:task-l2');
     await page.locator('[data-meeting-reservation-input="true"]').fill('21');
     await page.waitForTimeout(800);
     await page.mouse.click(8, 8);
@@ -292,8 +295,7 @@ async (page) => {
     if (await page.locator('[data-global-context-menu="true"]').isVisible().catch(() => false)) throw new Error('outside click did not close reservation menu');
     const afterOutside = await directMarkValues('primary:task-l2');
     if (JSON.stringify(afterOutside) !== JSON.stringify([{ value: '15', text: '15', hasIcon: false, isIntegratedToken: true }])) throw new Error(`outside click mutated reservation: ${JSON.stringify(afterOutside)}`);
-    const scrollMenu = await openMenu('primary:task-l2');
-    await scrollMenu.locator('[data-task-action-id="task.edit-meeting-reservation"]').click();
+    await openMenu('primary:task-l2');
     await page.locator('[data-meeting-reservation-input="true"]').fill('22');
     await page.evaluate(() => {
       window.scrollTo(0, 1);
@@ -340,6 +342,7 @@ async (page) => {
       appendedMeetingActivityIds: [],
     };
     await writeFixture({ userId: 'local-test-member', recovery });
+    await page.locator('[data-meeting-draft-recovery-restore]').click();
     await page.locator('[data-record-workflow-kind="meeting"]').waitFor({ state: 'visible', timeout: 10000 });
     await frame('primary:task-l2').scrollIntoViewIfNeeded();
     const l2Marks = await directMarkValues('primary:task-l2');

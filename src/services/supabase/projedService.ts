@@ -37,6 +37,7 @@ import type { ActivityEventRow, BoardInviteRow, BoardRolePermissionRow, Document
 import { hashBoardInviteToken } from '../../utils/boardInviteToken';
 import { RAG_EMBEDDING_PROVIDER } from '../rag/ragContract';
 import { MeetingDraftCheckpointError } from '../meetingDraftRecoveryService';
+import type { BoardTaskOrderCommand, BoardTaskOrderResult } from '../../features/taskCreation/boardTaskOrder';
 import {
   getTaskAssigneeIds,
   normalizeTaskAssignmentSelection,
@@ -848,14 +849,27 @@ export const supabaseMemberService = {
     boardId: string,
     userId: string
   ): Promise<CurrentBoardAccess> => {
-    const [workspaceMembers, boardMembers, rolePermissions] = await Promise.all([
+    const tenantId = await resolveWorkspaceId(workspaceId);
+    const projectId = await resolveProjectId(tenantId, boardId);
+    const [workspaceMembers, boardMembers, rolePermissions, writeCapabilities] = await Promise.all([
       supabaseMemberService.listWorkspaceMembers(workspaceId),
       supabaseMemberService.listBoardMembers(workspaceId, boardId),
       supabaseMemberService.getBoardRolePermissions(workspaceId, boardId),
+      supabase.rpc('get_board_task_write_capabilities_v1', { p_tenant_id: tenantId, p_project_id: projectId }),
     ]);
+    assertNoError(writeCapabilities.error);
     const workspaceRole = workspaceMembers.find(member => member.userId === userId && member.status === 'active')?.role;
     const boardRole = boardMembers.find(member => member.userId === userId)?.role;
-    return buildCurrentBoardAccess(workspaceId, boardId, workspaceRole, boardRole, rolePermissions);
+    const access = buildCurrentBoardAccess(workspaceId, boardId, workspaceRole, boardRole, rolePermissions);
+    const taskWrites = ['create_task', 'edit_task', 'move_task', 'delete_task'] as const;
+    const authoritative = new Set(writeCapabilities.data ?? []);
+    return {
+      ...access,
+      capabilities: [
+        ...access.capabilities.filter(capability => !taskWrites.some(write => write === capability)),
+        ...taskWrites.filter(capability => authoritative.has(capability)),
+      ],
+    };
   },
 
   upsertBoardMember: async (
@@ -1089,32 +1103,79 @@ export const supabaseBoardInviteService = {
 };
 
 export const supabaseNodeService = {
-  listByProject: async (workspaceId: string, boardId: string): Promise<TaskNode[]> => {
+  commitBoardOrder: async (command: BoardTaskOrderCommand): Promise<BoardTaskOrderResult> => {
+    requireSupabase();
+    const tenantId = await resolveWorkspaceId(command.workspaceId);
+    const projectId = await resolveProjectId(tenantId, command.boardId);
+    const { data, error } = await supabase.rpc('commit_board_task_order_v1', {
+      p_tenant_id: tenantId,
+      p_project_id: projectId,
+      p_operation: command.kind,
+      p_task_id: command.kind === 'create' ? command.node.id : command.taskId,
+      p_parent_id: command.destination.parentId,
+      p_anchor_id: command.destination.anchorId ?? null,
+      p_position: command.destination.position,
+      p_source_parent_id: command.kind === 'move' ? command.sourceParentId : null,
+      p_title: command.kind === 'create' ? command.node.title : null,
+      p_item_type: command.kind === 'create' ? command.node.nodeType ?? 'task' : null,
+      p_reopen_parent: command.kind === 'create' && Boolean(command.reopenParent),
+      p_protected_task_ids: [...command.protectedTaskIds],
+    });
+    if (error?.code === '42501') throw new Error('沒有權限變更此看板的任務。');
+    if (error?.code === '55000') throw new Error('前一筆操作仍待確認，暫時無法變更重疊任務。');
+    assertNoError(error);
+    if (!data || !Array.isArray((data as BoardTaskOrderResult).nodes)) throw new Error('資料庫未回傳已確認的任務。');
+    return data as BoardTaskOrderResult;
+  },
+
+  listByProject: async (workspaceId: string, boardId: string, signal?: AbortSignal): Promise<TaskNode[]> => {
     requireSupabase();
     const tenantId = await resolveWorkspaceId(workspaceId);
     const projectId = await resolveProjectId(tenantId, boardId);
-    const { data, error } = await supabase
-      .from('wbs_items')
-      .select('*')
-      .eq('tenant_id', tenantId)
-      .eq('project_id', projectId)
-      .order('sort_order', { ascending: true });
-    assertNoError(error);
-    const nodeIdByDbId = new Map((data ?? []).map(item => [item.id, legacyOrId(item.id, item.legacy_node_id)]));
+    const readItems = (count?: 'exact') => supabase.from('wbs_items')
+      .select('*', { count }).eq('tenant_id', tenantId).eq('project_id', projectId);
+    let items: WbsItemRow[];
+    if (signal) {
+      // Recovery uses absence as evidence. Check full board read access and
+      // count all rows so an RLS-filtered or truncated result cannot unlock it.
+      const access = await supabase.from('projects').select('id')
+        .eq('tenant_id', tenantId).eq('id', projectId).abortSignal(signal).single();
+      assertNoError(access.error);
+      if (!access.data) throw new Error('無法確認看板讀取權限。');
+      const rows = new Map<string, WbsItemRow>();
+      let expectedCount: number | null = null;
+      do {
+        const page = await readItems('exact').order('id')
+          .range(rows.size, rows.size + 499).abortSignal(signal);
+        assertNoError(page.error);
+        if (page.count === null || (expectedCount !== null && expectedCount !== page.count)) {
+          throw new Error('確認期間看板資料已變更。');
+        }
+        expectedCount = page.count;
+        for (const item of page.data ?? []) {
+          if (rows.has(item.id)) throw new Error('確認期間看板資料已變更。');
+          rows.set(item.id, item);
+        }
+        if (!page.data?.length && rows.size < expectedCount) throw new Error('未讀取完整看板資料。');
+      } while (rows.size < expectedCount);
+      if (rows.size !== expectedCount) throw new Error('未讀取完整看板資料。');
+      items = [...rows.values()];
+    } else {
+      const result = await readItems().order('sort_order', { ascending: true });
+      assertNoError(result.error);
+      items = result.data ?? [];
+    }
+    const nodeIdByDbId = new Map(items.map(item => [item.id, legacyOrId(item.id, item.legacy_node_id)]));
 
     let tagRows: TaskTagRow[] = [];
     let assignmentRows: WbsItemTagAssignment[] = [];
     try {
+      const tagQuery = supabase.from('task_tags').select('*').eq('tenant_id', tenantId);
+      const assignmentQuery = supabase.from('wbs_item_tags').select('item_id,tag_id')
+        .eq('tenant_id', tenantId).eq('project_id', projectId);
       const [tagResult, assignmentResult] = await Promise.all([
-        supabase
-          .from('task_tags')
-          .select('*')
-          .eq('tenant_id', tenantId),
-        supabase
-          .from('wbs_item_tags')
-          .select('item_id,tag_id')
-          .eq('tenant_id', tenantId)
-          .eq('project_id', projectId),
+        signal ? tagQuery.abortSignal(signal) : tagQuery,
+        signal ? assignmentQuery.abortSignal(signal) : assignmentQuery,
       ]);
       const tagsUnavailable = assertNoTagTableError(tagResult.error) || assertNoTagTableError(assignmentResult.error);
       if (!tagsUnavailable) {
@@ -1133,7 +1194,7 @@ export const supabaseNodeService = {
       tagIdsByItemId.set(assignment.item_id, [...(tagIdsByItemId.get(assignment.item_id) || []), tagId]);
     });
 
-    return (data ?? []).map(item => mapWbsItemToTaskNode(
+    return items.map(item => mapWbsItemToTaskNode(
       item,
       nodeIdByDbId,
       workspaceId,
@@ -1231,11 +1292,14 @@ export const supabaseNodeService = {
     updates: { id: string; data: Partial<TaskNode> }[]
   ): Promise<void> => {
     requireSupabase();
-    await Promise.all(
+    const results = await Promise.allSettled(
       updates.map(({ id, data }) =>
         supabaseNodeService.update(workspaceId, boardId, id, data)
       )
     );
+    // Recovery must wait for every write, including siblings of a rejected write.
+    const failure = results.find(result => result.status === 'rejected');
+    if (failure) throw failure.reason;
   },
 
   deleteAllByProject: async (workspaceId: string, boardId: string): Promise<void> => {

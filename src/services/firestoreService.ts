@@ -4,6 +4,7 @@ import {
 } from 'firebase/firestore';
 import type { Workspace, Board, BoardMember, Dependency, EditableKnowledgeRecord, KnowledgeRecord, KnowledgeRecordInput, MeetingDraftCheckpointInput, MeetingDraftCheckpointResult, TaskNode, TaskTag, WorkspaceMember } from '../types';
 import { MeetingDraftCheckpointError } from './meetingDraftRecoveryService';
+import { projectBoardTaskOrder, type BoardTaskOrderCommand } from '../features/taskCreation/boardTaskOrder';
 
 // ==========================
 // Helper: 處理 undefined 轉 deleteField()
@@ -165,6 +166,20 @@ export const dependencyService = {
 // Node (WBS) Service
 // ==========================
 export const nodeService = {
+  commitBoardOrder: async (command: BoardTaskOrderCommand, canEdit: boolean) => {
+    const db = requireFirebaseDb();
+    const { workspaceId, boardId } = command;
+    const result = projectBoardTaskOrder(command, await nodeService.listByProject(workspaceId, boardId), canEdit);
+    const batch = writeBatch(db);
+    for (const patch of result.nodes) {
+      const ref = doc(db, 'workspaces', workspaceId, 'boards', boardId, 'nodes', patch.id);
+      if (command.kind === 'create' && command.node.id === patch.id) batch.set(ref, { ...command.node, ...patch });
+      else batch.update(ref, sanitizeUpdates(patch));
+    }
+    await batch.commit();
+    return result;
+  },
+
   listByProject: async (wsId: string, bId: string): Promise<TaskNode[]> => {
     const db = requireFirebaseDb();
     const snapshot = await getDocs(collection(db, 'workspaces', wsId, 'boards', bId, 'nodes'));

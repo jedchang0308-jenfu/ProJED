@@ -53,7 +53,7 @@ const STATUS_STYLES = {
 
 import SharedTaskSidebar from './SharedTaskSidebar';
 import { ViewToolbar } from './ui/ViewToolbar';
-import { COMPACT_DIMENSIONS, compactClassNames, compactIconButtonClass } from './ui/compactTokens';
+import { COMPACT_DIMENSIONS, compactClassNames, compactIconButtonClass, taskViewFrameClassName } from './ui/compactTokens';
 import { BAR_HEIGHT } from './Gantt/utils';
 import { useCoarsePointer } from '../hooks/useCoarsePointer';
 import { normalizeManualTaskStatus } from '../utils/taskStatus';
@@ -283,7 +283,7 @@ const CalendarView = () => {
 
     // ── 渲染 ──────────────────────────────────────────────
     return (
-        <div className="flex-1 flex flex-col bg-slate-50 overflow-hidden">
+        <div className={`flex-1 flex flex-col bg-slate-50 overflow-hidden ${taskViewFrameClassName}`}>
             <ViewToolbar
                 rightControls={(
                     <>

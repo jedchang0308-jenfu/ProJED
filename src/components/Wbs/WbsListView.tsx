@@ -7,7 +7,7 @@ import type { TaskNode } from '../../types';
 import useDialogStore from '../../store/useDialogStore';
 import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core';
 import { useDragSensors } from '../../hooks/useDragSensors';
-import { compactClassNames } from '../ui/compactTokens';
+import { compactClassNames, taskViewFrameClassName } from '../ui/compactTokens';
 import { projectTaskFilterResults } from '../../features/taskFilters';
 import { useTaskFilterStore } from '../../store/useTaskFilterStore';
 import { TaskFilterResultState } from '../ui/TaskFilterResultState';
@@ -17,6 +17,7 @@ import type { TaskTrackingReference } from '../../features/taskTracking/types';
 import { buildTaskFilterNodesWithTrackingReferences, primaryPlacementId } from '../../features/taskTracking/model';
 import { buildTaskPlacementTreeRows, TaskPlacementTree } from './TaskPlacementTree';
 import { createBlankTaskNode } from '../../features/taskCreation/createBlankTaskNode';
+import { createOrderedBoardTask, moveOrderedBoardTask } from '../../features/taskCreation/boardTaskOrderActions';
 
 interface WbsListViewProps {
   boardId: string;
@@ -33,30 +34,12 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
   // 從全域 Store 取出顯示狀態
   const showDependencies = useBoardStore(s => s.showDependencies);
   const showStartDate = useBoardStore(s => s.showStartDate);
-  const { dependencies, addDependency, removeDependency, updateDependency, addNode, batchUpdateNodes, trackingReferences, moveTrackingReference } = useWbsStore();
+  const { dependencies, addDependency, removeDependency, updateDependency, trackingReferences, moveTrackingReference } = useWbsStore();
   const { canCreateTask, canMoveTask, canManageTaskReference, canCreateDependency } = useBoardPermissions();
 
   // DnD 狀態
   const sensors = useDragSensors();
   const [activeSortableItem, setActiveSortableItem] = useState<TaskNode | null>(null);
-
-  const wouldCreateCycle = (draggedId: string, nextParentId: string | null) => {
-      if (!nextParentId) return false;
-      if (draggedId === nextParentId) return true;
-
-      const nodes = useWbsStore.getState().nodes;
-      const visited = new Set<string>([draggedId]);
-      let current: string | null = nextParentId;
-
-      while (current) {
-          if (current === draggedId) return true;
-          if (visited.has(current)) return true;
-          visited.add(current);
-          current = nodes[current]?.parentId || null;
-      }
-
-      return false;
-  };
 
   const handleDragEnd = (event: any) => {
       const { active, over } = event;
@@ -83,23 +66,11 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
 
       const activeItem = active.data.current?.item;
       const overItem = over.data.current?.item;
-      if (!activeItem || !overItem) return;
-
-      if (activeItem.parentId === overItem.parentId) {
-          // 同層級交換順序
-          const tempOrder = activeItem.order;
-          batchUpdateNodes({
-              [activeItem.id]: { order: overItem.order },
-              [overItem.id]: { order: tempOrder },
-          }, { label: '重排任務', mergeKey: `reorder:${activeItem.id}` });
-      } else {
-          // 跨層級移動
-          const nextParentId = overItem.parentId || null;
-          if (wouldCreateCycle(activeItem.id, nextParentId)) return;
-          batchUpdateNodes({
-              [activeItem.id]: { parentId: nextParentId, order: overItem.order + 0.5 },
-          }, { label: '移動任務位置', mergeKey: `move:${activeItem.id}` });
-      }
+      if (!canMoveTask || !activeItem || !overItem || over.data.current?.trackingReference) return;
+      void moveOrderedBoardTask(activeItem.id, {
+        parentId: overItem.parentId ?? null, anchorId: overItem.id,
+        position: activeItem.parentId === overItem.parentId ? 'swap' : 'after',
+      });
   };
 
   // 監聽 ESC 取消依賴選取
@@ -219,7 +190,7 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
     parentPlacementId: null,
   }), [rootNodes, boardTrackingReferences, nodes]);
 
-  const handleCreateRootNode = () => {
+  const handleCreateRootNode = async () => {
     if (!canCreateTask) return;
     const newNode = createBlankTaskNode({
       id: 'node_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 5),
@@ -227,15 +198,14 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
       boardId: boardId,
       parentId: null, // 頂層節點沒有 parentId
       nodeType: 'group', // 預設頂層可能為群組，若不要也可以設定為 task
-      order: rootNodes.length,
+      order: 0,
     });
-    addNode(newNode);
-    prepareNewTaskNaming(newNode.id);
+    if (await createOrderedBoardTask(newNode)) prepareNewTaskNaming(newNode.id);
   };
 
   return (
     <WbsDependencyContext.Provider value={dependencyContextValue}>
-      <div className="flex flex-col w-full h-full bg-white overflow-hidden relative">
+      <div className={`relative flex h-full w-full flex-col overflow-hidden bg-white ${taskViewFrameClassName}`}>
         
 
         {/* 依賴選單 Modal 已經移除，統一由右鍵選單進入選取模式 */}

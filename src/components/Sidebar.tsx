@@ -405,10 +405,10 @@ const Sidebar = () => {
                             handleBoardClick();
                           }
                         }}
-                        className={`group/item flex min-h-[66px] w-full items-start gap-2 rounded-lg border px-3 py-2.5 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
-                          isMainBoardActive
-                            ? 'cursor-pointer border-primary bg-primary text-white shadow-md ring-1 ring-primary/20'
-                            : 'cursor-pointer border-slate-200 bg-slate-50/80 text-slate-700 hover:border-primary/30 hover:bg-white hover:shadow-sm'
+                        className={`group/item flex min-h-[66px] w-3/5 items-center justify-center gap-2 rounded-lg border bg-primary-600 px-3 py-2.5 text-center text-white transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
+                          isCurrentBoard
+                            ? 'cursor-pointer border-yellow-300 shadow-[0_0_8px_2px_rgba(250,204,21,0.62),0_0_20px_5px_rgba(250,204,21,0.32)] ring-2 ring-yellow-300/90 hover:bg-primary-600'
+                            : 'cursor-pointer border-primary-700 hover:border-primary-500 hover:bg-primary-700 hover:shadow-sm'
                         }`}
                       >
                         {isEditingBoard ? (
@@ -429,14 +429,14 @@ const Sidebar = () => {
                                 cancelBoardTitleEdit();
                               }
                             }}
-                            className={`${TITLE_INPUT_CLASS} text-sm ${isMainBoardActive ? 'text-slate-700' : ''}`}
+                            className={`${TITLE_INPUT_CLASS} text-sm text-slate-700`}
                             aria-label="編輯看板名稱"
                             data-board-title-input="true"
                           />
                         ) : (
                           <span
                             data-sidebar-board-title="true"
-                            className="min-w-0 flex-1 truncate rounded text-left text-sm font-medium"
+                            className="min-w-0 w-full truncate rounded text-center text-sm font-medium"
                             title={canEditBoardSettings ? '點擊開啟看板，右鍵開啟選單，F2 重新命名' : '點擊開啟看板'}
                           >
                             {board.title}

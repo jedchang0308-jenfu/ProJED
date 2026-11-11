@@ -1,4 +1,5 @@
 import React from 'react';
+import { flushSync } from 'react-dom';
 import useBoardStore from '../../store/useBoardStore';
 import { useWbsStore } from '../../store/useWbsStore';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
@@ -31,8 +32,10 @@ import MindMapRelationshipOverlay from './MindMapRelationshipOverlay';
 import MindMapRootLayout from './MindMapRootLayout';
 import MindMapRelationshipStyleLayer from './MindMapRelationshipStyleLayer';
 import MindMapToolbar from './MindMapToolbar';
+import { taskViewFrameClassName } from '../ui/compactTokens';
 import MindMapContextMenu, { type MindMapContextMenuState } from './MindMapContextMenu';
 import MindMapBatchAssignmentPicker from './MindMapBatchAssignmentPicker';
+import { useMindMapBatchRecovery } from './useMindMapBatchRecovery';
 import { isPrimaryPointerActivation } from '../../interactions/pointerActivation';
 import {
   createInsertionPreview as createDragInsertionPreview,
@@ -60,7 +63,7 @@ import {
   getMindMapNodeDropResult,
   getMindMapSideDropUpdate,
 } from './mindMapDropCommands';
-import { buildTaskSiblingMoveUpdates } from '../Wbs/taskDrag/taskMoveUpdateNormalization';
+import { createOrderedBoardTask, moveOrderedBoardTask } from '../../features/taskCreation/boardTaskOrderActions';
 import {
   MINDMAP_NODE_DIRECTION_ATTRIBUTE,
   getMindMapCenterElement,
@@ -81,7 +84,6 @@ import {
 } from './mindMapGeometry';
 import {
   cancelPendingAnimationFrameRef,
-  clearPendingTimeoutRef,
   scheduleCoalescedAnimationFrame,
 } from './mindMapFrameScheduler';
 import {
@@ -94,6 +96,7 @@ import {
 import { buildMindMapOverlayPaths } from './mindMapOverlayPaths';
 import {
   getMindMapKeyboardAction,
+  getMindMapTitleTyping,
   isMindMapDeleteKey,
   isMindMapRelationshipLabelEditKey,
   isMindMapTextEditingTarget,
@@ -129,7 +132,6 @@ import {
   getMindMapChildTaskCreatePlan,
   getCommittedMindMapTitle,
   getMindMapSiblingTaskCreatePlan,
-  getNextMindMapRootOrder,
 } from './mindMapTaskCommands';
 import {
   buildMindMapNavigationIndex,
@@ -272,7 +274,6 @@ type MindMapGeometryDirtyReason =
   | 'relationship-edit'
   | 'viewport-layout';
 
-const MINDMAP_POINTER_QUICK_TITLE_DELAY_MS = 240;
 const isDev075ProbeEnabled = () => {
   if (typeof window === 'undefined') return false;
   const phase = new URLSearchParams(window.location.search).get('dev075Phase');
@@ -288,7 +289,6 @@ const MindMapView: React.FC = () => {
   const trackingReferences = useWbsStore(state => state.trackingReferences);
   const taskLoading = useWbsStore(state => state.loading);
   const taskLoadError = useWbsStore(state => state.error);
-  const parentNodesIndex = useWbsStore(state => state.parentNodesIndex);
   const projectionTasks = React.useMemo(
     () => buildExpandedProjectionTasks(Object.values(nodes), trackingReferences, activeBoardId || ''),
     [activeBoardId, nodes, trackingReferences],
@@ -304,12 +304,10 @@ const MindMapView: React.FC = () => {
     () => buildProjectionParentIndex(projectionTasks),
     [projectionTasks],
   );
-  const addNode = useWbsStore(state => state.addNode);
   const updateNode = useWbsStore(state => state.updateNode);
   const moveTrackingReference = useWbsStore(state => state.moveTrackingReference);
   const commitNodeBatch = useWbsStore(state => state.commitNodeBatch);
   const commitNodeForestCreate = useWbsStore(state => state.commitNodeForestCreate);
-  const recoverNodeBatch = useWbsStore(state => state.recoverNodeBatch);
   const getNodeLockStatus = useWbsStore(state => state.getNodeLockStatus);
   const taskFilters = useTaskFilterStore(state => state.filters);
   const resetTaskFilters = useTaskFilterStore(state => state.resetFilters);
@@ -324,8 +322,7 @@ const MindMapView: React.FC = () => {
 
   const [selectionStore] = React.useState<MindMapSelectionStore>(() => createMindMapSelectionStore());
   const dev075ProbeEnabled = React.useMemo(() => isDev075ProbeEnabled(), []);
-  const [inlineTitleEditNodeId, setInlineTitleEditNodeId] = React.useState<string | null>(null);
-  const [inlineTitleEditFocusNodeId, setInlineTitleEditFocusNodeId] = React.useState<string | null>(null);
+  const [inlineTitleEdit, setInlineTitleEdit] = React.useState<{ nodeId: string; initialText?: string } | null>(null);
   const [expandedNodeIds, setExpandedNodeIds] = React.useState<Set<string>>(() => new Set());
   const [draggedNodeId, setDraggedNodeId] = React.useState<string | null>(null);
   const [dropTarget, setDropTarget] = React.useState<MindMapDropTarget | null>(null);
@@ -354,7 +351,7 @@ const MindMapView: React.FC = () => {
   const [pendingPastedRootIds, setPendingPastedRootIds] = React.useState<readonly string[]>([]);
   const [localMenu, setLocalMenu] = React.useState<MindMapLocalMenuState | null>(null);
   const [assignmentOpen, setAssignmentOpen] = React.useState(false);
-  const [batchRecoveryMessage, setBatchRecoveryMessage] = React.useState<string | null>(null);
+  const creatingTaskRef = React.useRef(false);
   const mindMapViewRef = React.useRef<HTMLDivElement>(null);
   const mapSurfaceRef = React.useRef<HTMLDivElement>(null);
   const mapStageRef = React.useRef<HTMLDivElement>(null);
@@ -374,7 +371,6 @@ const MindMapView: React.FC = () => {
   const middleMousePanFrameRef = React.useRef<number | null>(null);
   const zoomLabelRef = React.useRef<HTMLSpanElement>(null);
   const zoomLevelRef = React.useRef(zoomLevel);
-  const pointerQuickTitleTimerRef = React.useRef<number | null>(null);
   const autoCenteredBoardRef = React.useRef<string | null>(null);
   const selectionBoardRef = React.useRef<string | null>(null);
   const initialSelectionBoardRef = React.useRef<string | null>(null);
@@ -406,6 +402,7 @@ const MindMapView: React.FC = () => {
   }, []);
 
   const boardId = activeBoardId || '';
+  const { message: batchRecoveryMessage, request: requestBatchRecovery } = useMindMapBatchRecovery(boardId);
 
   const getPlacementIdForNodeId = React.useCallback((nodeId: string) => (
     projectionNodes[nodeId]?.trackingReferenceId || primaryPlacementId(nodeId)
@@ -544,32 +541,25 @@ const MindMapView: React.FC = () => {
   }, [clearRelationshipHover, clearRelationshipPointerDrag, clearSelectedRelationship, finishRelationshipDraftMode]);
 
   const selectRelationship = React.useCallback((relationshipId: string) => {
-    clearPendingTimeoutRef(pointerQuickTitleTimerRef);
     cancelPendingNodeFocus();
-    setInlineTitleEditNodeId(null);
-    setInlineTitleEditFocusNodeId(null);
+    setInlineTitleEdit(null);
     setSelectedRelationshipId(relationshipId);
     selectionStore.setSelectedNodeId(null);
     syncDev075ProbeAttributes();
   }, [cancelPendingNodeFocus, selectionStore, syncDev075ProbeAttributes]);
 
-  const cancelPointerQuickTitleRequest = React.useCallback(() => {
-    clearPendingTimeoutRef(pointerQuickTitleTimerRef);
-  }, []);
-
   const selectNode = React.useCallback((nodeId: string | null) => {
     // Keep the inline editor alive when the newly-created node receives focus
     // and re-dispatches selection. Selecting a different node still exits edit
     // mode so the editor never remains attached to a stale task.
-    cancelPointerQuickTitleRequest();
-    setInlineTitleEditNodeId(editingNodeId => editingNodeId && editingNodeId !== nodeId ? null : editingNodeId);
+    setInlineTitleEdit(edit => edit?.nodeId === nodeId ? edit : null);
     const placementId = nodeId ? getPlacementIdForNodeId(nodeId) : null;
     const change = selectionStore.setSelectedNodeId(placementId);
     syncDev075ProbeAttributes();
     if (change.changed && nodeId) scheduleNodeFocus(nodeId);
     if (change.changed && !nodeId) cancelPendingNodeFocus();
     setSelectedRelationshipId(null);
-  }, [cancelPendingNodeFocus, cancelPointerQuickTitleRequest, getPlacementIdForNodeId, scheduleNodeFocus, selectionStore, syncDev075ProbeAttributes]);
+  }, [cancelPendingNodeFocus, getPlacementIdForNodeId, scheduleNodeFocus, selectionStore, syncDev075ProbeAttributes]);
 
   const hideMarqueeOverlay = React.useCallback(() => {
     const overlay = marqueeOverlayRef.current;
@@ -624,7 +614,7 @@ const MindMapView: React.FC = () => {
       || relationshipToolActive
       || relationshipPointerDrag
       || draggedNodeId
-      || inlineTitleEditNodeId
+      || inlineTitleEdit
       || useDialogStore.getState().isOpen
     ) return;
     const target = event.target instanceof Element ? event.target : null;
@@ -669,7 +659,7 @@ const MindMapView: React.FC = () => {
       // Synthetic QA pointer events and older browsers may not own an active pointer.
       // The window-level cancel paths still make the marquee session safe to unwind.
     }
-  }, [cancelMarquee, closeLocalMenu, draggedNodeId, getPlacementIdForNodeId, inlineTitleEditNodeId, relationshipPointerDrag, relationshipToolActive, selectionStore]);
+  }, [cancelMarquee, closeLocalMenu, draggedNodeId, getPlacementIdForNodeId, inlineTitleEdit, relationshipPointerDrag, relationshipToolActive, selectionStore]);
 
   const handleMarqueePointerMove = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     const session = marqueeSessionRef.current;
@@ -729,14 +719,12 @@ const MindMapView: React.FC = () => {
     if (canEditTask) {
       updateNode(nodeId, { title: getCommittedMindMapTitle(title) });
     }
-    setInlineTitleEditNodeId(null);
-    setInlineTitleEditFocusNodeId(null);
+    setInlineTitleEdit(null);
     if (restoreNodeFocus) scheduleNodeFocus(nodeId);
   }, [canEditTask, scheduleNodeFocus, updateNode]);
 
   const cancelInlineTitleEdit = React.useCallback((nodeId: string, restoreNodeFocus = false) => {
-    setInlineTitleEditNodeId(null);
-    setInlineTitleEditFocusNodeId(null);
+    setInlineTitleEdit(null);
     if (restoreNodeFocus) scheduleNodeFocus(nodeId);
   }, [scheduleNodeFocus]);
 
@@ -787,7 +775,6 @@ const MindMapView: React.FC = () => {
   }, [zoomLevel]);
 
   React.useEffect(() => () => {
-    clearPendingTimeoutRef(pointerQuickTitleTimerRef);
     cancelPendingAnimationFrameRef(zoomIntentFrameRef);
     cancelPendingAnimationFrameRef(connectorRecomputeFrameRef);
     cancelPendingAnimationFrameRef(marqueeFrameRef);
@@ -869,8 +856,7 @@ const MindMapView: React.FC = () => {
   React.useEffect(() => {
     if (selectionBoardRef.current === boardId) return;
     selectionBoardRef.current = boardId;
-    setInlineTitleEditNodeId(null);
-    setInlineTitleEditFocusNodeId(null);
+    setInlineTitleEdit(null);
     selectNode(null);
     setMindMapClipboard(null);
     closeLocalMenu(false);
@@ -883,31 +869,6 @@ const MindMapView: React.FC = () => {
   }, [clipboard]);
 
   React.useEffect(() => () => resetPasteBurstAnchor(), [resetPasteBurstAnchor]);
-
-  React.useEffect(() => {
-    let active = true;
-    setBatchRecoveryMessage(null);
-    if (!boardId) return undefined;
-    try {
-      if (window.sessionStorage.getItem(`projed.mindmap.batch-recovery.v1.${boardId}`)) {
-        setBatchRecoveryMessage('正在確認前一筆批次操作結果…');
-      }
-    } catch {
-      setBatchRecoveryMessage('無法讀取批次復原狀態，已暫停新的批次操作。');
-    }
-    void recoverNodeBatch(boardId).then(outcome => {
-      if (!active || !outcome) return;
-      if (outcome.status === 'indeterminate') {
-        setBatchRecoveryMessage(outcome.error || '前一筆批次操作結果未確認，已暫停新的批次操作。');
-      } else if (outcome.status === 'compensated') {
-        toast.warning('已還原前一筆未完成的批次操作。');
-        setBatchRecoveryMessage(null);
-      } else {
-        setBatchRecoveryMessage(null);
-      }
-    });
-    return () => { active = false; };
-  }, [boardId, recoverNodeBatch]);
 
   React.useEffect(() => {
     if (!boardId || rootNodes.length === 0 || initialSelectionBoardRef.current === boardId) return;
@@ -1235,37 +1196,47 @@ const MindMapView: React.FC = () => {
     return () => window.removeEventListener('dragover', handleWindowDragOver);
   }, [draggedNodeId, getCurrentCoordinateMapper]);
 
-  const createTask = React.useCallback((
+  const createTask = React.useCallback(async (
     parentId: string | null,
-    order: number,
+    anchorId?: string,
     title = DEFAULT_MINDMAP_TASK_TITLE,
   ) => {
     if (!canCreateTask || !activeWorkspaceId || !boardId) {
       toast.warning(MINDMAP_MESSAGES.noCreateTaskPermission);
       return null;
     }
+    if (creatingTaskRef.current) return null;
 
     const node = createMindMapTaskNode({
       workspaceId: activeWorkspaceId,
       boardId,
       parentId,
       title,
-      order,
+      order: 0,
     });
-    addNode(node);
-    selectNode(node.id);
-    const expansionPath = getMindMapExpansionPath(nodes, parentId, boardId);
-    expandNodes([...expansionPath, node.id]);
-    if (canEditTask) {
-      setInlineTitleEditNodeId(node.id);
-      setInlineTitleEditFocusNodeId(node.id);
+    const userId = useAuthStore.getState().user?.uid;
+    const isCurrentBoard = () => useBoardStore.getState().activeBoardId === boardId
+      && useAuthStore.getState().user?.uid === userId;
+    creatingTaskRef.current = true;
+    try {
+      if (!isCurrentBoard()) return null;
+      const created = await createOrderedBoardTask(node, anchorId);
+      if (!created || !isCurrentBoard()) return null;
+      selectNode(node.id);
+      const expansionPath = getMindMapExpansionPath(nodes, parentId, boardId);
+      expandNodes([...expansionPath, node.id]);
+      if (canEditTask) {
+        setInlineTitleEdit({ nodeId: node.id });
+      }
+      return created;
+    } finally {
+      creatingTaskRef.current = false;
     }
-    return node;
-  }, [activeWorkspaceId, addNode, boardId, canCreateTask, canEditTask, expandNodes, nodes, selectNode]);
+  }, [activeWorkspaceId, boardId, canCreateTask, canEditTask, expandNodes, nodes, selectNode]);
 
   const handleCreateRoot = React.useCallback(() => {
-    createTask(null, getNextMindMapRootOrder(rootNodes));
-  }, [createTask, rootNodes]);
+    return createTask(null);
+  }, [createTask]);
 
   const getMindMapContentBounds = React.useCallback(() => {
     const content = mapContentRef.current;
@@ -1430,24 +1401,24 @@ const MindMapView: React.FC = () => {
     };
   }, [boardId, centerMindMapContent, markGeometryDirty, rootNodes]);
 
-  const createSiblingForNode = React.useCallback((nodeId: string | null) => {
+  const createSiblingForNode = React.useCallback(async (nodeId: string | null) => {
     if (!nodeId) return handleCreateRoot();
-    const plan = getMindMapSiblingTaskCreatePlan({ nodeId, nodes, parentNodesIndex, boardId });
+    const plan = getMindMapSiblingTaskCreatePlan({ nodeId, nodes, boardId });
     if (!plan) return null;
-    const created = createTask(plan.parentId, plan.order, DEFAULT_MINDMAP_TASK_TITLE);
+    const created = await createTask(plan.parentId, plan.anchorId);
     if (created && plan.inheritRootSideFromId) {
       updateRootSide(created.id, getNodeSide(plan.inheritRootSideFromId));
     }
     return created;
-  }, [boardId, createTask, getNodeSide, handleCreateRoot, nodes, parentNodesIndex, updateRootSide]);
+  }, [boardId, createTask, getNodeSide, handleCreateRoot, nodes, updateRootSide]);
 
   const createChildForNode = React.useCallback((nodeId: string | null) => {
     if (!nodeId) return handleCreateRoot();
-    const plan = getMindMapChildTaskCreatePlan({ nodeId, nodes, getChildren });
+    const plan = getMindMapChildTaskCreatePlan({ nodeId, nodes });
     return plan
-      ? createTask(plan.parentId, plan.order, DEFAULT_MINDMAP_TASK_TITLE)
+      ? createTask(plan.parentId)
       : null;
-  }, [createTask, getChildren, handleCreateRoot, nodes]);
+  }, [createTask, handleCreateRoot, nodes]);
 
   const continueInlineTitleEdit = React.useCallback((
     nodeId: string,
@@ -1455,18 +1426,13 @@ const MindMapView: React.FC = () => {
     intent: MindMapQuickCreateIntent,
   ) => {
     if (!canEditTask) {
-      setInlineTitleEditNodeId(null);
-      setInlineTitleEditFocusNodeId(null);
+      setInlineTitleEdit(null);
       return;
     }
     updateNode(nodeId, { title: getCommittedMindMapTitle(title) });
-    const created = intent === 'child'
-      ? createChildForNode(nodeId)
-      : createSiblingForNode(nodeId);
-    if (!created) {
-      setInlineTitleEditNodeId(null);
-      setInlineTitleEditFocusNodeId(null);
-    }
+    setInlineTitleEdit(null);
+    if (intent === 'child') void createChildForNode(nodeId);
+    else void createSiblingForNode(nodeId);
   }, [canEditTask, createChildForNode, createSiblingForNode, updateNode]);
 
   const localMenuSelection = React.useMemo(() => {
@@ -1627,34 +1593,32 @@ const MindMapView: React.FC = () => {
   const reportBatchOutcome = React.useCallback((
     outcome: Awaited<ReturnType<typeof commitNodeBatch>>,
     successMessage?: string,
+    recoveryBoardId = boardId,
   ) => {
     if (outcome.status === 'committed') {
       if (successMessage) toast.success(successMessage);
       return true;
     }
     if (outcome.status === 'indeterminate') {
-      const message = outcome.error || '操作結果未確認，已暫停相同批次操作。';
-      setBatchRecoveryMessage(message);
-      toast.error(message);
+      requestBatchRecovery(recoveryBoardId, outcome.error);
       return false;
     }
     toast.error(outcome.error || (outcome.status === 'compensated' ? '操作失敗，已還原原狀。' : '操作未完成。'));
     return false;
-  }, []);
+  }, [boardId, requestBatchRecovery]);
 
   const commitMindMapSiblingMove = React.useCallback(async (
     nodeId: string,
     anchorId: string,
     position: 'before' | 'after',
-    label = '移動任務位置',
   ) => {
-    const updates = buildTaskSiblingMoveUpdates(nodeId, anchorId, position, useWbsStore.getState().nodes);
-    if (!updates) {
+    const anchor = useWbsStore.getState().nodes[anchorId];
+    if (!anchor || anchor.boardId !== boardId) {
       toast.error('找不到可移動的同階位置。');
       return false;
     }
-    return reportBatchOutcome(await commitNodeBatch(updates, { label, recoveryKind: 'move' }));
-  }, [commitNodeBatch, reportBatchOutcome]);
+    return moveOrderedBoardTask(nodeId, { parentId: anchor.parentId, anchorId, position });
+  }, [boardId]);
 
   const handleMindMapCopy = React.useCallback((selection: MindMapClipboardSelection = localMenuSelection) => {
     const forestRootIds = normalizeMindMapForestRoots(selection.canonicalTaskIds, nodes);
@@ -1834,7 +1798,7 @@ const MindMapView: React.FC = () => {
       Object.fromEntries(taskIds.map(id => [id, { isArchived: true }])),
       { label: '批次封存任務', recoveryKind: 'archive' },
     );
-    if (!reportBatchOutcome(outcome, `已封存 ${taskIds.length} 個任務。`)) return false;
+    if (!reportBatchOutcome(outcome, `已封存 ${taskIds.length} 個任務。`, source.boardId)) return false;
     setMindMapClipboard(clipboard?.mode === 'cut' ? null : clipboard);
     selectionStore.setSelection([]);
     closeLocalMenu(false);
@@ -1878,7 +1842,7 @@ const MindMapView: React.FC = () => {
       case 'task.promote': {
         closeLocalMenu(false);
         const parentId = anchorNodeId && useWbsStore.getState().nodes[anchorNodeId]?.parentId;
-        if (anchorNodeId && parentId) await commitMindMapSiblingMove(anchorNodeId, parentId, 'after', '往上一階');
+        if (anchorNodeId && parentId) await commitMindMapSiblingMove(anchorNodeId, parentId, 'after');
         return;
       }
       case 'task.create-relationship':
@@ -2009,16 +1973,7 @@ const MindMapView: React.FC = () => {
     // burst so a newly pasted node can immediately receive another task.
     resetPasteBurstAnchor();
     handleNodeSelect(nodeId);
-    const projected = projectionNodes[nodeId] || nodes[nodeId];
-    // A tracking projection may open the canonical details, but it must not
-    // enter inline editing because the reference has no local task content.
-    if (!canEditTask || projected?.isTrackingReference || relationshipToolActive || draggedNodeId) return;
-    pointerQuickTitleTimerRef.current = window.setTimeout(() => {
-      pointerQuickTitleTimerRef.current = null;
-      setInlineTitleEditNodeId(nodeId);
-      setInlineTitleEditFocusNodeId(null);
-    }, MINDMAP_POINTER_QUICK_TITLE_DELAY_MS);
-  }, [canEditTask, draggedNodeId, handleNodeSelect, nodes, projectionNodes, relationshipToolActive, resetPasteBurstAnchor]);
+  }, [handleNodeSelect, resetPasteBurstAnchor]);
 
   const handleNodeOpenDetails = React.useCallback((nodeId: string, trackingReferenceId?: string) => {
     if (relationshipToolActive || draggedNodeId) return;
@@ -2056,8 +2011,7 @@ const MindMapView: React.FC = () => {
     const handleStartRelationship = (event: Event) => {
       const taskId = (event as CustomEvent<{ taskId?: string }>).detail?.taskId;
       if (!canEditTask || !taskId || !nodes[taskId]) return;
-      setInlineTitleEditNodeId(null);
-      setInlineTitleEditFocusNodeId(null);
+      setInlineTitleEdit(null);
       clearSelectedRelationship();
       beginRelationshipDraftSelectionWithCleanup(taskId);
       setRelationshipToolActive(true);
@@ -2224,7 +2178,7 @@ const MindMapView: React.FC = () => {
   React.useEffect(() => {
     if (!selectedRelationshipId) return undefined;
     const handleRelationshipWindowKeyDown = (event: KeyboardEvent) => {
-      if (isMindMapTextEditingTarget(event.target)) return;
+      if (event.isComposing || isMindMapTextEditingTarget(event.target)) return;
       if (event.key === 'Escape') {
         event.preventDefault();
         event.stopPropagation();
@@ -2258,14 +2212,32 @@ const MindMapView: React.FC = () => {
       event.nativeEvent.stopImmediatePropagation?.();
     };
     const isEditingText = isMindMapTextEditingTarget(event.target);
-    // Pointer quick naming starts before the title input has keyboard focus.
-    if (inlineTitleEditNodeId && !isEditingText && isMindMapDeleteKey(event)) {
+    // Keep task shortcuts out of an active title edit even if focus is in transit.
+    if (inlineTitleEdit && !isEditingText && isMindMapDeleteKey(event)) {
       consumeMindMapKeyboardEvent();
       return;
     }
     const selectedNodeId = getNodeIdForPlacementId(selectionStore.getPrimaryPlacementId());
     const selectedPlacementIds = selectionStore.getSelectedPlacementIds();
     const hasMultiSelection = selectedPlacementIds.length > 1;
+    const selectedNode = selectedNodeId ? projectionNodes[selectedNodeId] || nodes[selectedNodeId] : null;
+    const typing = !isEditingText && !inlineTitleEdit ? getMindMapTitleTyping(event.nativeEvent) : null;
+    if (typing && !hasMultiSelection && selectedNode
+      && !selectedNode.isTrackingReference && canEditTask && !relationshipToolActive
+      && !selectedRelationshipId && !draggedNodeId
+      && (event.target === event.currentTarget || event.target === nodeElementRegistryRef.current.get(selectedNode.id))) {
+      cancelPendingNodeFocus();
+      if (typing.composing) {
+        // Mount and focus the input before the browser handles the composition key.
+        event.stopPropagation();
+        flushSync(() => setInlineTitleEdit({ nodeId: selectedNode.id, initialText: '' }));
+      } else {
+        consumeMindMapKeyboardEvent();
+        setInlineTitleEdit({ nodeId: selectedNode.id, initialText: typing.text });
+      }
+      return;
+    }
+    if (event.nativeEvent.isComposing) return;
     const action = getMindMapKeyboardAction(event, {
       isEditingText,
       hasSelectedNode: Boolean(selectedNodeId),
@@ -2386,10 +2358,12 @@ const MindMapView: React.FC = () => {
 
     if (action.type === 'archive-selected-node' && selectedNodeId) {
       consumeMindMapKeyboardEvent();
-      void archivePlacementSelection(selectedPlacementIds);
+      if (!event.repeat) void archivePlacementSelection(selectedPlacementIds);
     }
   }, [
     archivePlacementSelection,
+    canEditTask,
+    cancelPendingNodeFocus,
     clipboard,
     closeLocalMenu,
     deactivateRelationshipMode,
@@ -2404,9 +2378,11 @@ const MindMapView: React.FC = () => {
     handleMindMapCopy,
     handleMindMapCut,
     handleMindMapPaste,
-    inlineTitleEditNodeId,
+    draggedNodeId,
+    inlineTitleEdit,
     navigationIndex,
     nodes,
+    projectionNodes,
     relationshipDraft,
     relationshipPointerDrag,
     relationshipToolActive,
@@ -2497,7 +2473,6 @@ const MindMapView: React.FC = () => {
       mode,
       target,
       nodes,
-      getChildren,
       getNodeSide,
     });
     if (result.type === 'blocked') {
@@ -2511,12 +2486,13 @@ const MindMapView: React.FC = () => {
       return;
     } else {
       const { update } = result;
-      updateNode(update.nodeId, { parentId: update.parentId, order: update.order });
-      expandNode(update.expandNodeId);
+      if (await moveOrderedBoardTask(update.nodeId, { parentId: update.parentId, position: 'append' })) {
+        expandNode(update.expandNodeId);
+      }
     }
 
     clearDragState();
-  }, [boardId, canManageTaskReference, canMoveTask, clearDragState, commitMindMapSiblingMove, draggedNodeId, dropTarget, expandNode, getChildren, getNodeSide, moveTrackingReference, nodes, projectionNodes, updateNode, updateRootSide]);
+  }, [boardId, canManageTaskReference, canMoveTask, clearDragState, commitMindMapSiblingMove, draggedNodeId, dropTarget, expandNode, getNodeSide, moveTrackingReference, nodes, projectionNodes, updateRootSide]);
 
   const handleDropOnCenter = React.useCallback((event: React.DragEvent<HTMLDivElement>) => {
     if ((!canMoveTask && !canManageTaskReference) || !draggedNodeId) return;
@@ -2536,11 +2512,12 @@ const MindMapView: React.FC = () => {
       return;
     }
     if (!canMoveTask) return;
-    const update = getMindMapCenterDropUpdate({ draggedNodeId, rootNodes, sideOverrides });
-    updateNode(update.nodeId, { parentId: update.parentId, order: update.order });
-    if (update.rootSide) updateRootSide(update.nodeId, update.rootSide);
+    const update = getMindMapCenterDropUpdate({ draggedNodeId, sideOverrides });
     clearDragState();
-  }, [boardId, canManageTaskReference, canMoveTask, clearDragState, draggedNodeId, moveTrackingReference, nodes, projectionNodes, rootNodes, sideOverrides, updateNode, updateRootSide]);
+    void moveOrderedBoardTask(update.nodeId, { parentId: update.parentId, position: 'append' }).then(moved => {
+      if (moved && update.rootSide) updateRootSide(update.nodeId, update.rootSide);
+    });
+  }, [boardId, canManageTaskReference, canMoveTask, clearDragState, draggedNodeId, moveTrackingReference, nodes, projectionNodes, sideOverrides, updateRootSide]);
 
   const handleDragOverCenter = React.useCallback((event: React.DragEvent<HTMLDivElement>) => {
     if ((!canMoveTask && !canManageTaskReference) || !draggedNodeId) return;
@@ -2595,10 +2572,13 @@ const MindMapView: React.FC = () => {
       sideOverrides,
       getNodeSide,
     });
-    if (update.rootSide) updateRootSide(update.nodeId, update.rootSide);
-    updateNode(update.nodeId, { parentId: update.parentId, order: update.order });
     clearDragState();
-  }, [boardId, canManageTaskReference, canMoveTask, clearDragState, dragPreview, draggedNodeId, getNodeSide, moveTrackingReference, nodes, projectionNodes, rootNodes, sideOverrides, updateNode, updateRootSide]);
+    void moveOrderedBoardTask(update.nodeId, update.anchorId
+      ? { parentId: null, position: 'after', anchorId: update.anchorId }
+      : { parentId: null, position: 'append' }).then(moved => {
+      if (moved && update.rootSide) updateRootSide(update.nodeId, update.rootSide);
+    });
+  }, [boardId, canManageTaskReference, canMoveTask, clearDragState, dragPreview, draggedNodeId, getNodeSide, moveTrackingReference, nodes, projectionNodes, rootNodes, sideOverrides, updateRootSide]);
 
   const handleNodeDragStart = React.useCallback((nodeId: string, event: React.DragEvent<HTMLDivElement>) => {
     closeLocalMenu(false);
@@ -2636,8 +2616,8 @@ const MindMapView: React.FC = () => {
       dateLockStatus={dateLockStatusByTaskId.get(node.canonicalTaskId || node.id)}
       canMoveTask={canMoveTask || canManageTaskReference}
       canManageTaskReference={canManageTaskReference}
-      isTitleEditing={inlineTitleEditNodeId === node.id}
-      autoFocusTitleInput={inlineTitleEditFocusNodeId === node.id}
+      isTitleEditing={inlineTitleEdit?.nodeId === node.id}
+      initialTitleText={inlineTitleEdit?.nodeId === node.id ? inlineTitleEdit.initialText : undefined}
       onTitleEditCommit={commitInlineTitleEdit}
       onTitleEditContinue={continueInlineTitleEdit}
       onTitleEditCancel={cancelInlineTitleEdit}
@@ -2677,8 +2657,7 @@ const MindMapView: React.FC = () => {
     handleNodeOpenDetails,
     handleNodePointerPrimary,
     handleNodeSelect,
-    inlineTitleEditFocusNodeId,
-    inlineTitleEditNodeId,
+    inlineTitleEdit,
     relationshipToolActive,
     selectionStore,
     showStartDate,
@@ -2687,14 +2666,14 @@ const MindMapView: React.FC = () => {
 
   if (!activeBoard) {
     return (
-      <div className="flex h-full items-center justify-center bg-white text-sm text-slate-500">
+      <div className={`flex h-full items-center justify-center bg-white text-sm text-slate-500 ${taskViewFrameClassName}`}>
         {MINDMAP_MESSAGES.selectBoardPrompt}
       </div>
     );
   }
 
   return (
-    <div ref={mindMapViewRef} className="flex h-full flex-col overflow-hidden bg-white" data-mindmap-view onKeyDown={handleKeyDown} tabIndex={-1}>
+    <div ref={mindMapViewRef} className={`flex h-full flex-col overflow-hidden bg-white ${taskViewFrameClassName}`} data-mindmap-view onKeyDown={handleKeyDown} tabIndex={-1}>
       <MindMapToolbar
         isReadOnly={isReadOnly}
         canEditTask={canEditTask}

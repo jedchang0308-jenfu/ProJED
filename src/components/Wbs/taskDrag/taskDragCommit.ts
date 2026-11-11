@@ -31,6 +31,8 @@ import {
 } from './desktopTaskDropPreview';
 import { primaryPlacementId } from '../../../features/taskTracking/model';
 import { createBlankTaskNode } from '../../../features/taskCreation/createBlankTaskNode';
+import { createOrderedBoardTask, moveOrderedBoardTask } from '../../../features/taskCreation/boardTaskOrderActions';
+import { isTaskWorkbenchUnplacedTask } from '../../../features/taskWorkbench/placement';
 export { buildTaskSubtreePlacementUpdates } from './taskSubtreePlacement';
 
 export { buildTaskParentIndex, getTaskAppendOrder, isValidTaskDropIntent } from './taskDropIntent';
@@ -456,19 +458,6 @@ export const commitDesktopTaskDrag = async ({
 const createTaskNodeId = () =>
   `node_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 
-const getSiblingInsertOrderAfter = (sourceNode: TaskNode, nodesRecord: Record<string, TaskNode>) => {
-  const siblings = Object.values(nodesRecord)
-    .filter((node) => node && !node.isArchived
-      && (node.parentId || null) === (sourceNode.parentId || null)
-      && node.boardId === sourceNode.boardId)
-    .sort((left, right) => (left.order ?? 0) - (right.order ?? 0));
-  const index = siblings.findIndex((node) => node.id === sourceNode.id);
-  const nextSibling = index >= 0 ? siblings[index + 1] : null;
-  return nextSibling
-    ? ((sourceNode.order ?? 0) + (nextSibling.order ?? 0)) / 2
-    : (sourceNode.order ?? 0) + 1;
-};
-
 const reopenCompletedTaskForInsert = (node: TaskNode | null | undefined, dependencies: TaskDragCommitDependencies) => {
   if (!node || node.status !== 'completed') return;
   if (!dependencies.canEditTask) {
@@ -504,24 +493,24 @@ export const commitTaskDragAction = async ({
 
   if (action === 'add-sibling') {
     if (!dependencies.canCreateTask) return noOp('create-permission-denied');
-    const parentNode = node.parentId ? state.nodes[node.parentId] : null;
-    reopenCompletedTaskForInsert(parentNode, dependencies);
     const newNode = createBlankTaskNode({
       id: createTaskNodeId(),
       workspaceId: node.workspaceId || dependencies.activeWorkspaceId || '',
       boardId: node.boardId || dependencies.activeBoardId || '',
       parentId: node.parentId || null,
       nodeType: node.parentId ? 'task' : (node.nodeType || 'task'),
-      order: getSiblingInsertOrderAfter(node, state.nodes),
+      order: Math.floor(node.order) + 1,
     });
-    dependencies.addNode(newNode);
+    if (isTaskWorkbenchUnplacedTask(node)) {
+      reopenCompletedTaskForInsert(node.parentId ? state.nodes[node.parentId] : null, dependencies);
+      dependencies.addNode(newNode);
+    } else if (!await createOrderedBoardTask(newNode, node.id, true)) return failed('sibling-create-failed');
     prepareNewTaskNaming(newNode.id);
     return committed('sibling-created');
   }
 
   if (action === 'add-child') {
     if (!dependencies.canCreateTask) return noOp('create-permission-denied');
-    reopenCompletedTaskForInsert(node, dependencies);
     const newNode = createBlankTaskNode({
       id: createTaskNodeId(),
       workspaceId: node.workspaceId || dependencies.activeWorkspaceId || '',
@@ -530,7 +519,10 @@ export const commitTaskDragAction = async ({
       nodeType: 'task',
       order: getTaskAppendOrder(node.id, undefined, state.nodes),
     });
-    dependencies.addNode(newNode);
+    if (isTaskWorkbenchUnplacedTask(node)) {
+      reopenCompletedTaskForInsert(node, dependencies);
+      dependencies.addNode(newNode);
+    } else if (!await createOrderedBoardTask(newNode, undefined, true)) return failed('child-create-failed');
     prepareNewTaskNaming(newNode.id);
     return committed('child-created');
   }
@@ -722,6 +714,11 @@ export const commitTaskDragObservation = async ({
       placementFailureToast(error, '歸位失敗，任務已保留在未歸位。');
       return failed('placement-persistence-failed');
     }
+  } else if (observation.source.kind === 'wbs-list-row' && !isTaskWorkbenchUnplacedTask(draggedNode)) {
+    const moved = await moveOrderedBoardTask(draggedNode.id, intent.displayPosition === 'append'
+      ? { parentId: intent.parentId, position: 'append' }
+      : { parentId: intent.parentId, position: intent.displayPosition, anchorId: targetNode.id });
+    if (!moved) return failed('board-order-persistence-failed');
   } else {
     const updates = normalizeTaskMoveUpdates(draggedNode.id, intent, state.nodes);
     dependencies.batchUpdateNodes(updates, {

@@ -108,8 +108,8 @@ export function ModeSwitcher<T extends string>({
         data-mode-switcher-trigger="true"
         className={cn(
           topbarClassNames.textButton,
-          'px-[10px] text-xs hover:border-primary/30 hover:bg-primary/5 hover:text-primary focus:ring-primary/30',
-          isOpen && 'border-primary/35 bg-primary/10 text-primary shadow-sm ring-1 ring-primary/15',
+          'px-[10px] hover:border-primary/30 hover:bg-primary/5 hover:text-slate-600 focus:ring-primary/30',
+          isOpen && 'border-primary/35 bg-primary/10 shadow-sm ring-1 ring-primary/15',
         )}
       >
         <span data-mode-switcher-label="view">視角</span>

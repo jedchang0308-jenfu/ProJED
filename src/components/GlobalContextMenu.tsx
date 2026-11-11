@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { AlertTriangle, ArrowRightLeft, Plus, Trash2, Pencil, LayoutDashboard, X } from 'lucide-react';
+import { AlertTriangle, ArrowRightLeft, Clock3, Plus, Trash2, Pencil, LayoutDashboard, X } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
 import { useMemberStore } from '../store/useMemberStore';
@@ -33,6 +33,7 @@ import { requestTaskDetailsNavigation, useTaskDetailsNavigation } from './taskDe
 import { createBlankTaskNode } from '../features/taskCreation/createBlankTaskNode';
 import { isTaskWorkbenchUnplacedTask } from '../features/taskWorkbench/placement';
 import { buildTaskSiblingMoveUpdates } from './Wbs/taskDrag/taskMoveUpdateNormalization';
+import { createOrderedBoardTask, moveOrderedBoardTask } from '../features/taskCreation/boardTaskOrderActions';
 import useRecordStore from '../store/useRecordStore';
 import {
   getMeetingTaskReservationValue,
@@ -100,7 +101,6 @@ export const GlobalContextMenu: React.FC = () => {
   const [transferBoardTarget, setTransferBoardTarget] = useState(null);
   const [isAssigneeMenuOpen, setIsAssigneeMenuOpen] = useState(false);
   const [isDeletingWorkspace, setIsDeletingWorkspace] = useState(false);
-  const [reservationEditorKey, setReservationEditorKey] = useState<string | null>(null);
   const [reservationInput, setReservationInput] = useState('');
   const [reservationError, setReservationError] = useState<string | null>(null);
   const reservationInputRef = useRef<HTMLInputElement | null>(null);
@@ -136,7 +136,7 @@ export const GlobalContextMenu: React.FC = () => {
     && currentNode.boardId === activeBoardId,
   );
   const currentReservationValue = getMeetingTaskReservationValue(meetingDraft?.metadata, currentNode?.id || '');
-  const isReservationEditorOpen = Boolean(reservationEditorKey && reservationEditorKey === reservationContextKey);
+  const isReservationEditorOpen = Boolean(contextMenuState?.isOpen && canEditMeetingReservation && reservationContextKey);
   const taskMenuInteractionContext: InteractionContext | null = isTaskMenu && contextMenuState?.kind === 'task'
     ? {
       interactionId: contextMenuState.interactionId || 'legacy-context-menu',
@@ -273,7 +273,6 @@ export const GlobalContextMenu: React.FC = () => {
 
   useEffect(() => {
     if (!contextMenuState?.isOpen || contextMenuState.kind !== 'task') {
-      setReservationEditorKey(null);
       setReservationError(null);
     }
   }, [contextMenuState?.isOpen, contextMenuState?.kind, contextMenuState?.nodeId, contextMenuState?.surfaceId, contextMenuState?.interactionId]);
@@ -295,7 +294,6 @@ export const GlobalContextMenu: React.FC = () => {
   }, [currentReservationValue, isReservationEditorOpen, reservationContextKey]);
 
   const cancelReservationEditor = () => {
-    setReservationEditorKey(null);
     setReservationError(null);
     closeContextMenu({ preserveTaskSelection: true });
   };
@@ -329,38 +327,42 @@ export const GlobalContextMenu: React.FC = () => {
   };
 
   const meetingReservationEditor = isReservationEditorOpen ? (
-    <div className="px-2.5 py-1.5" data-meeting-reservation-editor="true">
-      <input
-        ref={reservationInputRef}
-        type="text"
-        inputMode="numeric"
-        pattern="[0-9]*"
-        maxLength={3}
-        value={reservationInput}
-        onChange={(event) => {
-          setReservationInput(event.target.value);
-          setReservationError(null);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === 'Escape') {
-            event.preventDefault();
-            event.stopPropagation();
-            cancelReservationEditor();
-            return;
-          }
-          if (event.key === 'Enter') {
-            if (event.nativeEvent.isComposing || event.isComposing || event.keyCode === 229) return;
-            event.preventDefault();
-            event.stopPropagation();
-            commitReservation();
-          }
-        }}
-        aria-label="預約時間"
-        aria-invalid={reservationError ? 'true' : 'false'}
-        aria-describedby={reservationError ? 'meeting-reservation-error' : undefined}
-        className="w-full rounded border border-indigo-300 bg-white px-2 py-1 text-sm text-slate-800 outline-none ring-indigo-200 focus:ring-2"
-        data-meeting-reservation-input="true"
-      />
+    <div className="px-3 py-1.5" data-meeting-reservation-editor="true">
+      <div className="flex min-h-9 items-center gap-2.5">
+        <Clock3 size={14} aria-hidden="true" className="flex-shrink-0 text-indigo-500" />
+        <input
+          ref={reservationInputRef}
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          maxLength={3}
+          value={reservationInput}
+          onChange={(event) => {
+            setReservationInput(event.target.value);
+            setReservationError(null);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              event.stopPropagation();
+              cancelReservationEditor();
+              return;
+            }
+            if (event.key === 'Enter') {
+              if (event.nativeEvent.isComposing || event.isComposing || event.keyCode === 229) return;
+              event.preventDefault();
+              event.stopPropagation();
+              commitReservation();
+            }
+          }}
+          aria-label="預約時間"
+          aria-invalid={reservationError ? 'true' : 'false'}
+          aria-describedby={reservationError ? 'meeting-reservation-error' : undefined}
+          placeholder="預約時間"
+          className="min-w-0 flex-1 rounded border border-indigo-300 bg-white px-2 py-1 text-sm text-slate-800 outline-none ring-indigo-200 focus:ring-2"
+          data-meeting-reservation-input="true"
+        />
+      </div>
       {reservationError ? (
         <p id="meeting-reservation-error" role="alert" className="mt-1 text-[11px] leading-4 text-rose-600">
           {reservationError}
@@ -484,15 +486,13 @@ export const GlobalContextMenu: React.FC = () => {
     closeContextMenu({ preserveTaskSelection: Boolean(detailsNodeId) });
   };
 
-  const handleAddChild = () => {
+  const handleAddChild = async () => {
     if (!canCreateTask) return;
     if (!contextMenuState) return;
 
     const state = useWbsStore.getState();
     const node = state.nodes[contextMenuState.nodeId];
     if (!node) return;
-
-    reopenCompletedTaskForInsert(node);
 
     const childrenIds = state.parentNodesIndex[contextMenuState.nodeId] || [];
     const newNode = createBlankTaskNode({
@@ -504,12 +504,17 @@ export const GlobalContextMenu: React.FC = () => {
       order: childrenIds.length,
     });
 
-    addNode(newNode);
-    prepareNewTaskNaming(newNode.id);
     closeContextMenu({ preserveTaskSelection: true });
+    if (isTaskWorkbenchUnplacedTask(node)) {
+      reopenCompletedTaskForInsert(node);
+      addNode(newNode);
+    } else {
+      if (!await createOrderedBoardTask(newNode, undefined, true)) return;
+    }
+    prepareNewTaskNaming(newNode.id);
   };
 
-  const handleAddSibling = () => {
+  const handleAddSibling = async () => {
     if (!canCreateTask) return;
     if (!contextMenuState) return;
 
@@ -517,30 +522,23 @@ export const GlobalContextMenu: React.FC = () => {
     const node = state.nodes[contextMenuState.nodeId];
     if (!node) return;
 
-    const parentNode = node.parentId ? state.nodes[node.parentId] : null;
-    reopenCompletedTaskForInsert(parentNode);
-
-    const siblings = (state.parentNodesIndex[node.parentId || 'root'] || [])
-      .map(id => state.nodes[id])
-      .filter(Boolean)
-      .filter(sibling => sibling.boardId === node.boardId)
-      .sort((a, b) => a.order - b.order);
-    const currentIndex = siblings.findIndex(sibling => sibling.id === node.id);
-    const nextSibling = currentIndex >= 0 ? siblings[currentIndex + 1] : null;
-    const order = nextSibling ? (node.order + nextSibling.order) / 2 : node.order + 1;
-
     const newNode = createBlankTaskNode({
       id: `node_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
       workspaceId: node.workspaceId,
       boardId: node.boardId,
       parentId: node.parentId || null,
       nodeType: node.parentId ? 'task' : (node.nodeType || 'task'),
-      order,
+      order: Math.floor(node.order) + 1,
     });
 
-    addNode(newNode);
-    prepareNewTaskNaming(newNode.id);
     closeContextMenu({ preserveTaskSelection: true });
+    if (isTaskWorkbenchUnplacedTask(node)) {
+      reopenCompletedTaskForInsert(node.parentId ? state.nodes[node.parentId] : null);
+      addNode(newNode);
+    } else {
+      if (!await createOrderedBoardTask(newNode, node.id, true)) return;
+    }
+    prepareNewTaskNaming(newNode.id);
   };
 
   const handleMoveUp = async () => {
@@ -589,18 +587,14 @@ export const GlobalContextMenu: React.FC = () => {
     const parentNode = state.nodes[node.parentId];
     if (!parentNode) return;
 
-    const updates = buildTaskSiblingMoveUpdates(node.id, parentNode.id, 'after', state.nodes);
     closeContextMenu();
-    if (!updates) {
-      toast.error('找不到可移動的上層位置。');
-      return;
-    }
     if (isTaskWorkbenchUnplacedTask(node)) {
+      const updates = buildTaskSiblingMoveUpdates(node.id, parentNode.id, 'after', state.nodes);
+      if (!updates) return;
       state.batchUpdateNodes(updates, { label: '往上一階' });
       return;
     }
-    const outcome = await state.commitNodeBatch(updates, { label: '往上一階', recoveryKind: 'move' });
-    if (outcome.status !== 'committed') toast.error(outcome.error || '任務升階未完成。');
+    await moveOrderedBoardTask(node.id, { parentId: parentNode.parentId, anchorId: parentNode.id, position: 'after' });
   };
 
   const handleMoveDown = async () => {
@@ -656,7 +650,7 @@ export const GlobalContextMenu: React.FC = () => {
 
     const siblings = (state.parentNodesIndex[node.parentId || 'root'] || [])
       .map(id => state.nodes[id])
-      .filter(Boolean)
+      .filter(sibling => sibling && !sibling.isArchived && sibling.boardId === node.boardId && sibling.workspaceId === node.workspaceId)
       .sort((a, b) => a.order - b.order);
 
     const currentIndex = siblings.findIndex(s => s.id === node.id);
@@ -681,12 +675,12 @@ export const GlobalContextMenu: React.FC = () => {
       ? Math.max(...newSiblings.map(id => state.nodes[id]?.order || 0))
       : 0;
 
-    updateNode(node.id, {
-      parentId: newParentId,
-      order: maxOrder + 1,
-    });
-
     closeContextMenu();
+    if (isTaskWorkbenchUnplacedTask(node)) {
+      updateNode(node.id, { parentId: newParentId, order: maxOrder + 1 });
+    } else {
+      await moveOrderedBoardTask(node.id, { parentId: newParentId, position: 'append' });
+    }
   };
 
   const handleDuplicate = async () => {
@@ -783,9 +777,6 @@ export const GlobalContextMenu: React.FC = () => {
       case 'task.create-tracking-reference': return handleCreateTrackingReference();
       case 'task.remove-tracking-reference': return handleRemoveTrackingReference();
       case 'task.edit-meeting-reservation':
-        if (!canEditMeetingReservation || !reservationContextKey) return;
-        setReservationEditorKey(reservationContextKey);
-        setReservationError(null);
         return;
       case 'task.dependency-start': return enterDependencyMode('start');
       case 'task.dependency-end': return enterDependencyMode('end');
@@ -1074,11 +1065,10 @@ export const GlobalContextMenu: React.FC = () => {
             });
             setSelectedTaskId(taskId);
           }}
-          onCreateChild={(parentId) => {
+          onCreateChild={async (parentId) => {
             const state = useWbsStore.getState();
             const parentNode = state.nodes[parentId];
             if (!parentNode) return;
-            reopenCompletedTaskForInsert(parentNode);
             const childrenIds = state.parentNodesIndex[parentId] || [];
             const newNode = createBlankTaskNode({
               id: `node_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
@@ -1088,7 +1078,10 @@ export const GlobalContextMenu: React.FC = () => {
               nodeType: 'task',
               order: childrenIds.length,
             });
-            addNode(newNode);
+            if (isTaskWorkbenchUnplacedTask(parentNode)) {
+              reopenCompletedTaskForInsert(parentNode);
+              addNode(newNode);
+            } else if (!await createOrderedBoardTask(newNode, undefined, true)) return;
             useBoardStore.getState().setPendingTitleEditNodeId(newNode.id);
             detailsNavigation.push({
               taskId: newNode.id,

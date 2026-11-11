@@ -344,15 +344,10 @@ check(
 );
 
 check(
-  'Timer and animation-frame cleanup helpers are centralized while local frame loops stay explicit',
-  dev074SceneContract || (frameScheduler.includes('export const clearPendingTimeoutRef =') &&
-    frameScheduler.includes('window.clearTimeout(timerRef.current);') &&
-    frameScheduler.includes('timerRef.current = null;') &&
-    frameScheduler.includes('export const cancelPendingAnimationFrameRef =') &&
+  'Animation-frame cleanup helpers are centralized while local frame loops stay explicit',
+  dev074SceneContract || (frameScheduler.includes('export const cancelPendingAnimationFrameRef =') &&
     frameScheduler.includes('window.cancelAnimationFrame(frameRef.current);') &&
     frameScheduler.includes('frameRef.current = null;') &&
-    view.includes('clearPendingTimeoutRef(zoomPreviewCommitTimerRef);') &&
-    view.includes('clearPendingTimeoutRef(zoomSuppressReleaseTimerRef);') &&
     view.includes('scheduleCoalescedAnimationFrame(zoomPreviewFrameRef, () => {') &&
     view.includes('cancelPendingAnimationFrameRef(zoomPreviewFrameRef);') &&
     view.includes('cancelPendingAnimationFrameRef(middleMousePanFrameRef);') &&
@@ -557,7 +552,7 @@ check(
   'Node title edit cleanup and post-keyboard focus intent are centralized for commit and cancellation flows',
   view.includes('const commitInlineTitleEdit = React.useCallback((nodeId: string, title: string, restoreNodeFocus = false) => {') &&
     view.includes('const cancelInlineTitleEdit = React.useCallback((nodeId: string, restoreNodeFocus = false) => {') &&
-    view.includes('setInlineTitleEditNodeId(null);') &&
+    view.includes('setInlineTitleEdit(null);') &&
     view.includes('if (restoreNodeFocus) scheduleNodeFocus(nodeId);') &&
     view.includes('onTitleEditCancel={cancelInlineTitleEdit}') &&
     view.includes('onTitleEditCommit={commitInlineTitleEdit}'),
@@ -570,8 +565,8 @@ check(
     mindMapNode.includes('onTitleEditCancel?: (nodeId: string, restoreNodeFocus?: boolean) => void;') &&
     mindMapNode.includes('commitTitleEdit(true);') &&
     mindMapNode.includes('cancelTitleEdit(true);') &&
-    mindMapNode.includes('autoFocusTitleInput?: boolean;') &&
-    mindMapNode.includes('if (!autoFocusTitleInput) return;') &&
+    mindMapNode.includes('initialTitleText?: string;') &&
+    mindMapNode.includes('input.focus({ preventScroll: true });') &&
     !mindMapNode.includes('onTitleEditDelete') &&
     mindMapNode.includes('onChange={(event) => setTitleDraft(event.target.value)}') &&
     mindMapNode.includes('data-mindmap-quick-title-input="true"') &&
@@ -1154,7 +1149,7 @@ check(
     [
       'getMindMapKeyboardAction(event, {',
       'isMindMapTextEditingTarget(event.target)',
-      'inlineTitleEditNodeId && !isEditingText && isMindMapDeleteKey(event)',
+      'inlineTitleEdit && !isEditingText && isMindMapDeleteKey(event)',
       'isMindMapRelationshipLabelEditKey(event)',
       'isMindMapDeleteKey(event)',
       "action.type === 'toggle-relationship-tool'",
@@ -1226,8 +1221,6 @@ check(
       'const sortTasks =',
       'const matchesMindMapFilters =',
       'const getIndexedTasks =',
-      'export const getSiblingNodes',
-      'export const getInsertOrder',
       'export const getMindMapRootNodes',
       'export const getMindMapChildren',
       'export const getMindMapRootAncestorId',
@@ -1285,13 +1278,13 @@ check(
     taskCommands.includes('export const createMindMapTaskNode') &&
     taskCommands.includes('export const getMindMapSiblingTaskCreatePlan') &&
     taskCommands.includes('export const getMindMapChildTaskCreatePlan') &&
-    taskCommands.includes('getNextMindMapChildOrder(getChildren(selected.id))') &&
+    taskCommands.includes('anchorId: selected.id') &&
     view.includes('const node = createMindMapTaskNode({') &&
     view.includes('getCommittedMindMapTitle(title)') &&
     view.includes('createSiblingForNode(selectedNodeId);') &&
     view.includes('createChildForNode(selectedNodeId);') &&
-    dropCommands.includes('getNextMindMapSideRootOrder(sameSideRoots, rootNodes.length + 1)') &&
-    dropCommands.includes('getNextMindMapRootOrder(rootNodes.filter(node => node.id !== draggedNodeId))') &&
+    view.includes('await createOrderedBoardTask(node, anchorId)') &&
+    dropCommands.includes('anchorId: sameSideRoots[sameSideRoots.length - 1]?.id') &&
     !view.includes('const createSibling = React.useCallback') &&
     !view.includes('const createChild = React.useCallback'),
 );
@@ -1308,10 +1301,10 @@ check(
       'rootSide: nextParentId ? undefined : getNodeSide(target.id)',
       "rootSide: sideOverrides[draggedNodeId] ? undefined : 'right'",
       'const finalDirection = previewDirection || direction',
-      'getNextMindMapSideRootOrder(sameSideRoots, rootNodes.length + 1)',
+      'anchorId: sameSideRoots[sameSideRoots.length - 1]?.id',
     ].every(token => dropCommands.includes(token)) &&
     view.includes('const result = getMindMapNodeDropResult({') &&
-    view.includes('const update = getMindMapCenterDropUpdate({ draggedNodeId, rootNodes, sideOverrides });') &&
+    view.includes('const update = getMindMapCenterDropUpdate({ draggedNodeId, sideOverrides });') &&
     view.includes('const update = getMindMapSideDropUpdate({') &&
     view.includes("result.reason === 'child-cycle'") &&
     !view.includes('const nextParentId = target.parentId || null') &&

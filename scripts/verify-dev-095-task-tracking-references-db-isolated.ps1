@@ -1,3 +1,4 @@
+param([switch]$BoardOrderOnly)
 $ErrorActionPreference = 'Stop'
 
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
@@ -6,7 +7,7 @@ $migrationPath = Join-Path $projectRoot 'supabase\migrations\20260828100000_dev_
 $bootstrapPath = Join-Path $projectRoot 'scripts\verify-dev-095-task-tracking-references-db-bootstrap.sql'
 $matrixPath = Join-Path $projectRoot 'scripts\verify-dev-095-task-tracking-references-db-matrix.sql'
 $performancePath = Join-Path $projectRoot 'scripts\verify-dev-095-task-tracking-references-db-performance.sql'
-$artifactPath = Join-Path $outputDirectory 'db-isolated-result.json'
+$artifactPath = Join-Path $outputDirectory $(if ($BoardOrderOnly) { 'board-task-order-db-result.json' } else { 'db-isolated-result.json' })
 $postgresBin = Split-Path -Parent (Get-Command initdb.exe -ErrorAction Stop).Source
 $tempRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath())
 $runtimeName = "projed-dev095-postgres-$([guid]::NewGuid().ToString('N'))"
@@ -52,6 +53,14 @@ try {
   $started = $true
   Write-Output 'DB_STAGE=createdb'
   Invoke-PgTool createdb.exe @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', $database)
+  if ($BoardOrderOnly) {
+    $orderMatrix = Join-Path $projectRoot 'scripts\verify-board-task-order.sql'
+    $orderOutput = Invoke-PgTool psql.exe -Capture @('-X', '-A', '-t', '-v', 'ON_ERROR_STOP=1', '-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $database, '-f', $bootstrapPath, '-f', $migrationPath, '-f', $orderMatrix)
+    if ($orderOutput -notmatch 'BOARD_TASK_ORDER_DB=PASS') { throw 'Board order transaction matrix did not finish.' }
+    $result = [pscustomobject]@{ status = 'passed'; passed = $true; environment = 'isolated PostgreSQL'; runtimeCleanup = 'pending' }
+    Write-Output 'BOARD_TASK_ORDER_DB=PASS'
+    return
+  }
   Write-Output 'DB_STAGE=bootstrap'
   Invoke-PgTool psql.exe @('-X', '-v', 'ON_ERROR_STOP=1', '-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $database, '-f', $bootstrapPath)
   Write-Output 'DB_STAGE=migration'

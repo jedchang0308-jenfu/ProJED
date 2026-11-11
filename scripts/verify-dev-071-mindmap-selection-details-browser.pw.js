@@ -41,13 +41,14 @@ async (page) => {
   await node.click();
   const modal = page.locator('[data-task-details-modal="true"]');
   const quickTitleInput = page.locator('[data-mindmap-quick-title-input="true"]');
-  await quickTitleInput.waitFor({ state: 'visible', timeout: 10000 });
   assert(await modal.count() === 0, 'mindmap single click must not open details');
-  assert(await node.locator('[data-mindmap-inline-title-input="true"]').count() === 1, 'DEV-073 must extend mindmap selection with quick naming');
+  assert(await quickTitleInput.count() === 0, 'mindmap single click must keep task shortcuts active');
   assert(
     await page.locator(`[data-mindmap-node="${taskId}"][aria-selected="true"]`).count() === 1,
     'mindmap single click must select the node',
   );
+  await page.keyboard.press('x');
+  await quickTitleInput.waitFor({ state: 'visible', timeout: 10000 });
   await quickTitleInput.press('Escape');
 
   await node.press('Tab');
@@ -61,8 +62,6 @@ async (page) => {
   assert(await inlineTitleInput.count() === 0, 'inline title Enter must commit and leave quick naming without creating another task');
 
   await node.click();
-  await quickTitleInput.waitFor({ state: 'visible', timeout: 10000 });
-  await quickTitleInput.press('Escape');
   await node.press('Enter');
   await inlineTitleInput.waitFor({ state: 'visible', timeout: 10000 });
   assert(await modal.count() === 0, 'mindmap Enter insertion must not open details');
@@ -97,7 +96,7 @@ async (page) => {
     status: 'PASS',
     mindmap: {
       taskId,
-      singleClick: 'select + DEV-073 quick-title',
+      singleClick: 'select; typing starts quick-title',
       doubleClick: 'open-details',
       contextMenuOpenDetails: true,
     },

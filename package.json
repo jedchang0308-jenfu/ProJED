@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:local": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"& './scripts/local-test-server.ps1' start; Start-Process 'http://localhost:1040/'\"",
-    "dev:local:foreground": "vite --mode test --host 127.0.0.1 --port 1040 --strictPort --open /",
+    "dev:local": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"& './scripts/local-test-server.ps1' start; Start-Process 'microsoft-edge:http://localhost:1040/'\"",
+    "dev:local:foreground": "vite --mode test --host 127.0.0.1 --port 1040 --strictPort",
     "dev:test": "vite --mode test --host 127.0.0.1 --port 1040",
     "dev:test:server": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/local-test-server.ps1 start",
     "dev:test:watch": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/local-test-server.ps1 watch",

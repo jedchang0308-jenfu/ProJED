@@ -1,9 +1,5 @@
 import type { TaskNode } from '../../types';
 import { createBlankTaskNode } from '../../features/taskCreation/createBlankTaskNode';
-import {
-  getInsertOrder,
-  getSiblingNodes,
-} from './mindMapTree';
 
 export const DEFAULT_MINDMAP_TASK_TITLE = '新任務';
 
@@ -22,20 +18,18 @@ interface CreateMindMapTaskNodeOptions {
 interface MindMapSiblingTaskCreatePlanInput {
   nodeId: string | null;
   nodes: Record<string, TaskNode>;
-  parentNodesIndex: Record<string, string[]>;
   boardId: string;
 }
 
 interface MindMapChildTaskCreatePlanInput {
   nodeId: string | null;
   nodes: Record<string, TaskNode>;
-  getChildren: (nodeId: string) => TaskNode[];
 }
 
 interface MindMapTaskCreatePlan {
   parentId: string | null;
-  order: number;
   inheritRootSideFromId?: string;
+  anchorId?: string;
 }
 
 export const createMindMapTaskNode = ({
@@ -59,33 +53,17 @@ export const createMindMapTaskNode = ({
 export const getCommittedMindMapTitle = (title: string) =>
   title.trim() || DEFAULT_MINDMAP_TASK_TITLE;
 
-export const getNextMindMapRootOrder = (rootNodes: TaskNode[]) =>
-  rootNodes.length > 0 ? Math.max(...rootNodes.map(node => node.order)) + 1 : 0;
-
-export const getNextMindMapChildOrder = (children: TaskNode[]) =>
-  children.length > 0 ? Math.max(...children.map(node => node.order)) + 1 : 0;
-
-export const getNextMindMapSideRootOrder = (
-  sameSideRoots: TaskNode[],
-  fallbackOrder: number,
-) =>
-  sameSideRoots.length > 0
-    ? Math.max(...sameSideRoots.map(node => node.order)) + 1
-    : fallbackOrder;
-
 export const getMindMapSiblingTaskCreatePlan = ({
   nodeId,
   nodes,
-  parentNodesIndex,
   boardId,
 }: MindMapSiblingTaskCreatePlanInput): MindMapTaskCreatePlan | null => {
   if (!nodeId) return null;
   const selected = nodes[nodeId];
-  if (!selected) return null;
-  const siblings = getSiblingNodes(nodes, parentNodesIndex, selected.parentId, boardId);
+  if (!selected || selected.boardId !== boardId || selected.isArchived) return null;
   return {
     parentId: selected.parentId || null,
-    order: getInsertOrder(siblings, selected.id, 'after'),
+    anchorId: selected.id,
     inheritRootSideFromId: selected.parentId ? undefined : selected.id,
   };
 };
@@ -93,13 +71,11 @@ export const getMindMapSiblingTaskCreatePlan = ({
 export const getMindMapChildTaskCreatePlan = ({
   nodeId,
   nodes,
-  getChildren,
 }: MindMapChildTaskCreatePlanInput): MindMapTaskCreatePlan | null => {
   if (!nodeId) return null;
   const selected = nodes[nodeId];
-  if (!selected) return null;
+  if (!selected || selected.isArchived) return null;
   return {
     parentId: selected.id,
-    order: getNextMindMapChildOrder(getChildren(selected.id)),
   };
 };

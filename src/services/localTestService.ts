@@ -22,6 +22,7 @@ import {
 import { hashBoardInviteToken } from '../utils/boardInviteToken';
 import { getLocalTestProfileOverride } from './localTestProfileService';
 import { MeetingDraftCheckpointError } from './meetingDraftRecoveryService';
+import { projectBoardTaskOrder, type BoardTaskOrderCommand } from '../features/taskCreation/boardTaskOrder';
 
 const WORKSPACES_KEY = 'projed-local-test.workspaces';
 const NODES_KEY = 'projed-local-test.nodes';
@@ -730,6 +731,21 @@ export const localTestBoardService = {
 };
 
 export const localTestNodeService = {
+  commitBoardOrder: async (command: BoardTaskOrderCommand, canEdit: boolean) => {
+    const nodes = readNodes();
+    const result = projectBoardTaskOrder(command, Object.values(nodes), canEdit);
+    if (command.kind === 'create' && consumeSecondTaskNodeCreateFault()) {
+      throw new Error('local-test injected second task create rejection');
+    }
+    if (consumeTaskNodeFault('batch-once')) throw new Error('測試故障：任務排序儲存失敗。');
+    for (const patch of result.nodes) {
+      const node = command.kind === 'create' && command.node.id === patch.id ? command.node : nodes[patch.id];
+      nodes[patch.id] = { ...node, ...patch };
+    }
+    writeNodes(nodes);
+    return result;
+  },
+
   listByProject: async (workspaceId: string, boardId: string): Promise<TaskNode[]> => {
     if (consumeTaskPersistenceReadbackFault('unavailable-once')) {
       throw new Error('local-test injected persistence readback unavailability');
