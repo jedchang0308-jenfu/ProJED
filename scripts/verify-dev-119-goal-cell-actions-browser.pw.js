@@ -10,7 +10,7 @@ async (page) => {
     fixtureIds: ['G119-LEGACY', 'G119-SPAN', 'G119-LONG-MEETING'],
     mutationCounts: { task: 0, record: 0, taskLink: 0 },
     cases: [], browserErrors: [], httpFailures: [], screenshots: [],
-    runtime: { port: 4000, reused: true, ownerPid: null, cleaned: false, portReleased: false },
+    runtime: { port: 1040, reused: true, ownerPid: null, cleaned: false, portReleased: false },
   };
   const failures = [];
   const record = (id, ok, details = {}) => { result.cases.push({ id, ok, details }); if (!ok) failures.push(id); };
@@ -41,7 +41,7 @@ async (page) => {
 
   const seed = async (width = 1298) => {
     await page.setViewportSize({ width, height: 698 });
-    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:1040/', { waitUntil: 'domcontentloaded' });
     await page.evaluate(({ account, workspace, nodes, meetingRecord }) => {
       localStorage.clear(); sessionStorage.clear();
       localStorage.setItem('projed-local-test.selected-account', account.id);

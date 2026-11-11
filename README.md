@@ -22,9 +22,9 @@ npm run preview
 npm run lint
 ```
 
-The fixed local browser test environment is available at `http://localhost:4000/`.
+The fixed local browser test environment is available at `http://localhost:1040/`.
 Use `npm run dev:local` to start or reuse the managed Vite test server. The server
-binds to loopback for local-only access; `localhost:4000` is the canonical URL for
+binds to loopback for local-only access; `localhost:1040` is the canonical URL for
 browser tests, auth callbacks, and local QA evidence.
 
 ### Docker-free daily workflow

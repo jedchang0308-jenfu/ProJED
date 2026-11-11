@@ -3,7 +3,7 @@ param(
   [ValidateSet("start", "watch", "stop", "restart", "status", "install", "uninstall")]
   [string]$Action = "start",
   [string]$HostName = "127.0.0.1",
-  [int]$Port = 4000
+  [int]$Port = 1040
 )
 
 $ErrorActionPreference = "Stop"

@@ -14,8 +14,8 @@ async (page) => {
     screenshots: [],
     browserErrors: [],
     httpFailures: [],
-    cleanup: { runtime: 'matching pre-existing localhost:4000', action: 'reused; not stopped' },
-    runtime: { port: 4000, reused: true, cleaned: false, portReleased: false },
+    cleanup: { runtime: 'matching pre-existing localhost:1040', action: 'reused; not stopped' },
+    runtime: { port: 1040, reused: true, cleaned: false, portReleased: false },
   };
   const failures = [];
   const dialogs = [];
@@ -59,7 +59,7 @@ async (page) => {
 
   const seed = async (width = 1440, height = 900) => {
     await page.setViewportSize({ width, height });
-    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:1040/', { waitUntil: 'domcontentloaded' });
     await page.evaluate(({ account, workspace, nodes, meetingRecord }) => {
       localStorage.clear(); sessionStorage.clear();
       localStorage.setItem('projed-local-test.selected-account', account.id);

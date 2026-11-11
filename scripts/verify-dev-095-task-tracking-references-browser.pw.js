@@ -1,6 +1,6 @@
 /* eslint-disable */
 async (page) => {
-  const BASE_URL = 'http://localhost:4000/';
+  const BASE_URL = 'http://localhost:1040/';
   const OUTPUT_DIR = 'output/playwright/dev-095';
   const diagnostics = [];
   const cases = [];

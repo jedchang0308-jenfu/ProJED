@@ -1,7 +1,7 @@
 /* eslint-disable */
 async (page) => {
   const OUTPUT_DIR = process.env.PROJED_PLAYWRIGHT_OUTPUT_DIR || 'output/playwright/dev-107-record-sidebar-layout';
-  const BASE_URL = page.url().match(/^https?:\/\/[^/]+/)?.[0] || 'http://localhost:4000';
+  const BASE_URL = page.url().match(/^https?:\/\/[^/]+/)?.[0] || 'http://localhost:1040';
   const TARGET_TITLE = 'DEV-107 既有會議草稿排版驗證';
   const diagnostics = [];
   const httpFailures = [];

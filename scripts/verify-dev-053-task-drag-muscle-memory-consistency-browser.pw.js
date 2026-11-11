@@ -648,7 +648,7 @@ async (page) => {
     selectedCaseIds: selectedCaseIds.length ? selectedCaseIds : null,
     evidenceLayer: 'browser-synthetic-touch',
     summary: { pass: results.length - finalFailCount, fail: finalFailCount },
-    route: 'http://localhost:4000/?qcReset=1&qcSize=72',
+    route: 'http://localhost:1040/?qcReset=1&qcSize=72',
     results,
     diagnostics: diagnostics.slice(-30),
     networkFailures: networkFailures.slice(-30),

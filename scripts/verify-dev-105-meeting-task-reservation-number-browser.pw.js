@@ -1,7 +1,7 @@
 /* eslint-disable */
 async (page) => {
   const OUTPUT_DIR = 'output/playwright/dev-105';
-  const BASE_URL = page.url().match(/^https?:\/\/[^/]+/)?.[0] || 'http://localhost:4000';
+  const BASE_URL = page.url().match(/^https?:\/\/[^/]+/)?.[0] || 'http://localhost:1040';
   const diagnostics = [];
   const httpFailures = [];
   const cases = [];

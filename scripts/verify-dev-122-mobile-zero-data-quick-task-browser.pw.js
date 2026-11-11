@@ -1,7 +1,7 @@
 /* eslint-disable */
 async (page) => {
   const outputDir = 'output/playwright/dev-122-mobile-zero-data-quick-task';
-  const result = { devId: 'DEV-122', status: 'FAIL', caseSet: 'local-smoke-v2', sourceRevision: 'working-tree', buildId: 'unknown', actorAlias: 'DEV122-QUICK-A', fixtureVersion: 'DEV122-QUICK-V1', platform: 'Chromium', route: '/quick-task/', viewport: { width: 390, height: 844 }, cases: [], screenshots: [], browserErrors: [], httpFailures: [], businessRequests: [], runtime: { port: 4000, reused: true, cleaned: false, portReleased: false } };
+  const result = { devId: 'DEV-122', status: 'FAIL', caseSet: 'local-smoke-v2', sourceRevision: 'working-tree', buildId: 'unknown', actorAlias: 'DEV122-QUICK-A', fixtureVersion: 'DEV122-QUICK-V1', platform: 'Chromium', route: '/quick-task/', viewport: { width: 390, height: 844 }, cases: [], screenshots: [], browserErrors: [], httpFailures: [], businessRequests: [], runtime: { port: 1040, reused: true, cleaned: false, portReleased: false } };
   const fail = [];
   const record = (id, ok, details = {}) => { result.cases.push({ id, sourceRevision: result.sourceRevision, buildId: result.buildId, actorAlias: result.actorAlias, fixtureVersion: result.fixtureVersion, route: result.route, viewport: result.viewport, platform: result.platform, expected: true, actual: ok, status: ok ? 'PASS' : 'FAIL', details }); if (!ok) fail.push(id); };
   page.on('console', msg => { if (msg.type() === 'error' && !msg.text().includes('favicon')) result.browserErrors.push(msg.text()); });
@@ -17,7 +17,7 @@ async (page) => {
       Object.defineProperty(window, 'webkitSpeechRecognition', { configurable: true, writable: true, value: undefined });
     });
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('http://localhost:4000/quick-task/', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:1040/quick-task/', { waitUntil: 'networkidle' });
     await page.evaluate(async () => {
       await new Promise((resolve, reject) => {
         const request = indexedDB.deleteDatabase('projed-quick-task-v1');
@@ -133,13 +133,13 @@ async (page) => {
         await mainHeld;
         await route.continue();
       });
-      const delayedNavigation = delayedPage.goto('http://localhost:4000/quick-task/', { waitUntil: 'domcontentloaded' });
+      const delayedNavigation = delayedPage.goto('http://localhost:1040/quick-task/', { waitUntil: 'domcontentloaded' });
       const delayedTitle = delayedPage.getByRole('textbox', { name: '任務名稱' });
       await delayedTitle.waitFor({ state: 'visible' });
       await delayedTitle.fill('延遲載入仍保留');
       await delayedTitle.press('Enter', { noWaitAfter: true });
       await delayedPage.waitForTimeout(100);
-      record('SM10', await delayedPage.url() === 'http://localhost:4000/quick-task/'
+      record('SM10', await delayedPage.url() === 'http://localhost:1040/quick-task/'
         && await delayedTitle.inputValue() === '延遲載入仍保留'
         && await delayedPage.getByRole('button', { name: '建立' }).isDisabled(), { url: await delayedPage.url(), title: await delayedTitle.inputValue() });
       releaseMain();
@@ -212,7 +212,7 @@ async (page) => {
     const installPage = await page.context().newPage();
     try {
       await installPage.setViewportSize({ width: 1440, height: 900 });
-      await installPage.goto('http://localhost:4000/quick-task/?install=1', { waitUntil: 'domcontentloaded' });
+      await installPage.goto('http://localhost:1040/quick-task/?install=1', { waitUntil: 'domcontentloaded' });
       const installGuide = installPage.locator('[data-quick-install="true"]');
       await installGuide.waitFor({ state: 'visible' });
       const titleOnInstall = installPage.getByRole('textbox', { name: '任務名稱' });
@@ -245,7 +245,7 @@ async (page) => {
           Object.defineProperty(navigator, 'userAgent', { configurable: true, get: () => 'Mozilla/5.0 (Linux; Android 15; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36' });
         });
         await androidInstallPage.setViewportSize({ width: 390, height: 844 });
-        await androidInstallPage.goto('http://localhost:4000/quick-task/?install=1', { waitUntil: 'domcontentloaded' });
+        await androidInstallPage.goto('http://localhost:1040/quick-task/?install=1', { waitUntil: 'domcontentloaded' });
         const androidGuide = androidInstallPage.locator('[data-quick-install="true"]');
         await androidGuide.waitFor({ state: 'visible' });
         androidGuideVisible = (await androidGuide.innerText()).includes('選「安裝應用程式」');
@@ -269,7 +269,7 @@ async (page) => {
           Object.defineProperty(navigator, 'maxTouchPoints', { configurable: true, get: () => 5 });
         });
         await iosInstallPage.setViewportSize({ width: 390, height: 844 });
-        await iosInstallPage.goto('http://localhost:4000/quick-task/?install=1', { waitUntil: 'domcontentloaded' });
+        await iosInstallPage.goto('http://localhost:1040/quick-task/?install=1', { waitUntil: 'domcontentloaded' });
         const iosGuide = iosInstallPage.locator('[data-quick-install="true"]');
         await iosGuide.waitFor({ state: 'visible' });
         record('SM15', await iosGuide.getByText('加入手機主畫面').isVisible() && await iosInstallPage.getByRole('textbox', { name: '任務名稱' }).isVisible(), {

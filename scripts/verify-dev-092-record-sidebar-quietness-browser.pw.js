@@ -35,7 +35,7 @@ async (page) => {
 
   const openMeetingRecord = async (viewport) => {
     await page.setViewportSize(viewport);
-    await page.goto('http://localhost:4000/', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:1040/', { waitUntil: 'networkidle' });
     if (await page.locator('button', { hasText: '使用固定測試環境' }).count()) {
       await page.locator('button', { hasText: '使用固定測試環境' }).click();
     }

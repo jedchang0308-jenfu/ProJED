@@ -17,7 +17,7 @@ async (page) => {
     return page.locator('[data-record-composer-shell]').last();
   };
 
-  await page.goto('http://localhost:4000/', { waitUntil: 'networkidle' });
+  await page.goto('http://localhost:1040/', { waitUntil: 'networkidle' });
   await page.setViewportSize({ width: 1365, height: 768 });
 
   if (await page.locator('button', { hasText: '使用固定測試環境' }).count()) {

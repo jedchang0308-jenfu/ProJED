@@ -8,7 +8,7 @@ async (page) => {
     screenshots: [],
     browserErrors: [],
     httpFailures: [],
-    runtime: { port: 4000, reused: true, cleaned: false, portReleased: false, routeMocked: true },
+    runtime: { port: 1040, reused: true, cleaned: false, portReleased: false, routeMocked: true },
   };
   const failures = [];
   const operations = [];
@@ -207,7 +207,7 @@ async (page) => {
 
   try {
     await page.setViewportSize({ width: 1280, height: 900 });
-    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:1040/', { waitUntil: 'domcontentloaded' });
     const loginButton = page.getByRole('button', { name: /使用固定測試環境/ }).first();
     if (await loginButton.count() && await loginButton.isVisible().catch(() => false)) {
       await loginButton.click();

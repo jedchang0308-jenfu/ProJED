@@ -40,7 +40,7 @@ async (page) => {
     return result;
   };
 
-  await page.goto('http://localhost:4000/?dev097=browser', { waitUntil: 'domcontentloaded' });
+  await page.goto('http://localhost:1040/?dev097=browser', { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => Boolean(window.__projedPwaUpdateTest), null, { timeout: 15000 });
   await page.waitForFunction(() => Boolean(window.__projedPwaReloadSafetyTest), null, { timeout: 15000 });
   await page.waitForTimeout(500);
@@ -153,7 +153,7 @@ async (page) => {
     if (message.type() === 'error') secondDiagnostics.push(`console:error:${message.text()}`);
   });
   secondPage.on('pageerror', error => secondDiagnostics.push(`pageerror:${error.message}`));
-  await secondPage.goto('http://localhost:4000/?dev097=owner-second-tab', { waitUntil: 'domcontentloaded' });
+  await secondPage.goto('http://localhost:1040/?dev097=owner-second-tab', { waitUntil: 'domcontentloaded' });
   await secondPage.locator('[data-app-main="true"]').waitFor({ state: 'visible', timeout: 15000 });
   await secondPage.waitForFunction(() => window.__projedPwaReloadSafetyTest?.getSnapshot().state === 'safe', null, { timeout: 15000 });
   const secondBaseline = await getSafety(secondPage);
