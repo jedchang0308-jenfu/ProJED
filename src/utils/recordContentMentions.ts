@@ -1,24 +1,13 @@
 import type { RecordTaskLinkRole } from '../types';
+import { serializeTaskMention, TASK_MENTION_PATTERN } from './recordTaskMentionSyntax';
+
+export { serializeTaskMention, TASK_MENTION_PATTERN } from './recordTaskMentionSyntax';
 
 export type RecordContentSegment =
   | { type: 'text'; text: string }
   | { type: 'task'; nodeId: string; title: string; raw: string };
 
 export type DraftTaskLink = { nodeId: string; role: RecordTaskLinkRole };
-
-export const TASK_MENTION_PATTERN = /@\[([^\]]+)\]\(task:([^)]+)\)/g;
-
-const normalizeTitle = (title: string) =>
-  title
-    .replace(/[\r\n]/g, ' ')
-    .replace(/\[/g, ' ')
-    .replace(/]/g, ' ')
-    .replace(/[()]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim() || 'Untitled task';
-
-export const serializeTaskMention = (nodeId: string, title: string) =>
-  `@[${normalizeTitle(title)}](task:${nodeId})`;
 
 export const parseRecordContentMentions = (content: string): RecordContentSegment[] => {
   const segments: RecordContentSegment[] = [];

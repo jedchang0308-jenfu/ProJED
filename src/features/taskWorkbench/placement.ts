@@ -1,15 +1,35 @@
 import type { InboxItem, TaskNode } from '../../types';
-import { isSupabaseBackend } from '../../services/dataBackend';
+import { isHttpBackend, isSupabaseBackend } from '../../services/dataBackend';
+import { httpSessionService, httpTaskWorkbenchService } from '../../services/httpApi/backend';
+import type { HttpExpectedActor } from '../../services/httpApi/taskWorkbenchAdapter';
 import { supabaseTaskWorkbenchUnplacedService } from '../../services/supabase/taskWorkbenchUnplacedService';
 import { createBlankTaskNode } from '../taskCreation/createBlankTaskNode';
 import {
   normalizeTaskWorkbenchUnplacedTask,
   TASK_WORKBENCH_UNPLACED_BOARD_ID,
 } from './placementModel';
+import {
+  clearTaskWorkbenchUnplacedLocalCaches,
+  indexLatestTaskWorkbenchTasks,
+  readTaskWorkbenchUnplacedTasks,
+  readUnboundTaskWorkbenchUnplacedTasks,
+  removeTaskWorkbenchUnplacedTask,
+  upsertTaskWorkbenchUnplacedTask,
+  writeTaskWorkbenchUnplacedTasks,
+} from './placementLocalStorage';
 
 export { normalizeTaskWorkbenchUnplacedTask, TASK_WORKBENCH_UNPLACED_BOARD_ID } from './placementModel';
-export const TASK_WORKBENCH_UNPLACED_STORAGE_KEY = 'projed-task-workbench-unplaced-tasks:v1';
-export const TASK_WORKBENCH_UNPLACED_ACCOUNT_STORAGE_KEY = `${TASK_WORKBENCH_UNPLACED_STORAGE_KEY}:account`;
+export {
+  clearTaskWorkbenchUnplacedLocalCaches,
+  indexLatestTaskWorkbenchTasks,
+  readTaskWorkbenchUnplacedTasks,
+  readUnboundTaskWorkbenchUnplacedTasks,
+  removeTaskWorkbenchUnplacedTask,
+  TASK_WORKBENCH_UNPLACED_ACCOUNT_STORAGE_KEY,
+  TASK_WORKBENCH_UNPLACED_STORAGE_KEY,
+  upsertTaskWorkbenchUnplacedTask,
+  writeTaskWorkbenchUnplacedTasks,
+} from './placementLocalStorage';
 
 const UNPLACED_TASK_ID_PREFIX = 'task_workbench_unplaced_';
 
@@ -22,65 +42,6 @@ export const isTaskWorkbenchUnplacedTaskId = (taskId: string | null | undefined)
 export const isTaskWorkbenchUnplacedTask = (task: Pick<TaskNode, 'boardId'> | null | undefined) =>
   task?.boardId === TASK_WORKBENCH_UNPLACED_BOARD_ID;
 
-const parseStoredTaskWorkbenchUnplacedTasks = (stored: string | null): TaskNode[] => {
-  if (!stored) return [];
-  try {
-    const parsed = JSON.parse(stored);
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter((item): item is TaskNode => Boolean(item?.id && item?.workspaceId))
-      .map(item => normalizeTaskWorkbenchUnplacedTask(item));
-  } catch {
-    return [];
-  }
-};
-
-const getAccountStorageKey = (accountId: string | null | undefined) => (
-  accountId ? `${TASK_WORKBENCH_UNPLACED_ACCOUNT_STORAGE_KEY}:${encodeURIComponent(accountId)}` : null
-);
-
-export const readTaskWorkbenchUnplacedTasks = (accountId?: string | null): TaskNode[] => {
-  if (typeof window === 'undefined') return [];
-  const merged = new Map<string, TaskNode>();
-  parseStoredTaskWorkbenchUnplacedTasks(window.localStorage.getItem(TASK_WORKBENCH_UNPLACED_STORAGE_KEY))
-    .forEach(task => merged.set(task.id, task));
-  const accountKey = getAccountStorageKey(accountId);
-  if (accountKey) {
-    parseStoredTaskWorkbenchUnplacedTasks(window.localStorage.getItem(accountKey))
-      .forEach(task => merged.set(task.id, task));
-  }
-  return Array.from(merged.values());
-};
-
-export const writeTaskWorkbenchUnplacedTasks = (tasks: TaskNode[], accountId?: string | null) => {
-  if (typeof window === 'undefined') return;
-  const normalized = tasks
-    .filter(task => !task.isArchived)
-    .map(task => normalizeTaskWorkbenchUnplacedTask(task))
-    .sort((left, right) => (left.order ?? 0) - (right.order ?? 0));
-  const storageKey = getAccountStorageKey(accountId) || TASK_WORKBENCH_UNPLACED_STORAGE_KEY;
-  window.localStorage.setItem(storageKey, JSON.stringify(normalized));
-};
-
-export const clearTaskWorkbenchUnplacedLocalCaches = (accountId?: string | null) => {
-  if (typeof window === 'undefined') return;
-  window.localStorage.removeItem(TASK_WORKBENCH_UNPLACED_STORAGE_KEY);
-  const accountKey = getAccountStorageKey(accountId);
-  if (accountKey) window.localStorage.removeItem(accountKey);
-};
-
-export const upsertTaskWorkbenchUnplacedTask = (task: TaskNode, accountId?: string | null) => {
-  const normalized = {
-    ...normalizeTaskWorkbenchUnplacedTask(task),
-    updatedAt: Date.now(),
-  };
-  const current = readTaskWorkbenchUnplacedTasks(accountId);
-  writeTaskWorkbenchUnplacedTasks([
-    ...current.filter(item => item.id !== normalized.id),
-    normalized,
-  ], accountId);
-};
-
 export const persistTaskWorkbenchUnplacedTask = async (
   task: TaskNode,
   accountId: string | null | undefined,
@@ -90,19 +51,13 @@ export const persistTaskWorkbenchUnplacedTask = async (
     updatedAt: Date.now(),
   };
   upsertTaskWorkbenchUnplacedTask(normalized, accountId);
-  if (!isSupabaseBackend || !accountId) return;
+  if (!accountId || (!isHttpBackend && !isSupabaseBackend)) return;
   try {
-    await supabaseTaskWorkbenchUnplacedService.upsert(normalized, accountId);
+    if (isHttpBackend) await httpTaskWorkbenchService.upsert(normalized, await getHttpExpectedActor(accountId));
+    else await supabaseTaskWorkbenchUnplacedService.upsert(normalized, accountId!);
   } catch (error) {
     console.warn('[taskWorkbench] Failed to persist unplaced task remotely; local fallback retained.', error);
   }
-};
-
-export const removeTaskWorkbenchUnplacedTask = (taskId: string, accountId?: string | null) => {
-  writeTaskWorkbenchUnplacedTasks(
-    readTaskWorkbenchUnplacedTasks(accountId).filter(task => task.id !== taskId),
-    accountId,
-  );
 };
 
 export const persistRemoveTaskWorkbenchUnplacedTask = async (
@@ -111,9 +66,10 @@ export const persistRemoveTaskWorkbenchUnplacedTask = async (
 ): Promise<void> => {
   const previousTasks = readTaskWorkbenchUnplacedTasks(accountId);
   removeTaskWorkbenchUnplacedTask(taskId, accountId);
-  if (!isSupabaseBackend || !accountId) return;
+  if (!accountId || (!isHttpBackend && !isSupabaseBackend)) return;
   try {
-    await supabaseTaskWorkbenchUnplacedService.remove(taskId);
+    if (isHttpBackend) await httpTaskWorkbenchService.remove(taskId, await getHttpExpectedActor(accountId));
+    else await supabaseTaskWorkbenchUnplacedService.remove(taskId);
   } catch (error) {
     const previousTask = previousTasks.find(task => task.id === taskId);
     if (previousTask) upsertTaskWorkbenchUnplacedTask(previousTask, accountId);
@@ -131,14 +87,51 @@ const sortTaskWorkbenchUnplacedTasks = (tasks: TaskNode[]) => [...tasks]
 
 const getTaskTimestamp = (task: TaskNode) => task.updatedAt ?? task.createdAt ?? 0;
 
+const getHttpExpectedActor = async (accountId: string): Promise<HttpExpectedActor> => {
+  const session = await httpSessionService.getSession();
+  if (session.entry !== 'main' || session.uid !== accountId) {
+    throw new Error('TASK_WORKBENCH_ACTOR_CHANGED');
+  }
+  return { accountId: session.uid, contextId: session.authContextId };
+};
+
+export const claimUnboundTaskWorkbenchUnplacedTasks = async (accountId: string): Promise<TaskNode[]> => {
+  const unboundTasks = readUnboundTaskWorkbenchUnplacedTasks();
+  if (unboundTasks.length === 0) return loadTaskWorkbenchUnplacedTasks(accountId);
+
+  const expectedActor = isHttpBackend ? await getHttpExpectedActor(accountId) : null;
+  const remoteTasks = isHttpBackend
+    ? await httpTaskWorkbenchService.list(expectedActor!)
+    : isSupabaseBackend
+      ? await supabaseTaskWorkbenchUnplacedService.list()
+      : [];
+  const merged = indexLatestTaskWorkbenchTasks(remoteTasks, readTaskWorkbenchUnplacedTasks(accountId));
+
+  for (const task of unboundTasks) {
+    const existing = merged.get(task.id);
+    if (existing && getTaskTimestamp(existing) >= getTaskTimestamp(task)) continue;
+    if (isHttpBackend) await httpTaskWorkbenchService.upsert(task, expectedActor!);
+    else if (isSupabaseBackend) await supabaseTaskWorkbenchUnplacedService.upsert(task, accountId);
+    merged.set(task.id, task);
+  }
+
+  const claimed = sortTaskWorkbenchUnplacedTasks(Array.from(merged.values()));
+  writeTaskWorkbenchUnplacedTasks(claimed, accountId);
+  clearTaskWorkbenchUnplacedLocalCaches(null);
+  return claimed;
+};
+
 export const loadTaskWorkbenchUnplacedTasks = async (
   accountId: string | null | undefined,
 ): Promise<TaskNode[]> => {
   const localTasks = readTaskWorkbenchUnplacedTasks(accountId);
-  if (!isSupabaseBackend || !accountId) return sortTaskWorkbenchUnplacedTasks(localTasks);
+  if (!accountId || (!isHttpBackend && !isSupabaseBackend)) return sortTaskWorkbenchUnplacedTasks(localTasks);
 
   try {
-    const remoteTasks = await supabaseTaskWorkbenchUnplacedService.list();
+    const expectedActor = isHttpBackend ? await getHttpExpectedActor(accountId) : null;
+    const remoteTasks = isHttpBackend
+      ? await httpTaskWorkbenchService.list(expectedActor!)
+      : await supabaseTaskWorkbenchUnplacedService.list();
     const merged = new Map(remoteTasks.map(task => [task.id, task]));
     let migrationFailed = false;
 
@@ -147,7 +140,8 @@ export const loadTaskWorkbenchUnplacedTasks = async (
       const remoteTask = merged.get(localTask.id);
       if (!remoteTask || getTaskTimestamp(localTask) > getTaskTimestamp(remoteTask)) {
         try {
-          await supabaseTaskWorkbenchUnplacedService.upsert(localTask, accountId);
+          if (isHttpBackend) await httpTaskWorkbenchService.upsert(localTask, expectedActor!);
+          else await supabaseTaskWorkbenchUnplacedService.upsert(localTask, accountId!);
           merged.set(localTask.id, localTask);
         } catch (error) {
           migrationFailed = true;

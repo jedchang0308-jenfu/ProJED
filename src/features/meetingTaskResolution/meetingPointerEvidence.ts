@@ -11,6 +11,7 @@ export type MeetingPointerObserver = {
 
 type PointerObserverOptions = {
   captureId: string;
+  initialSequence?: number;
   now?: () => number;
   getCaptureOffsetMs: () => number;
   getClockEpoch: () => number;
@@ -20,6 +21,7 @@ type PointerObserverOptions = {
 
 export const attachMeetingPointerObserver = ({
   captureId,
+  initialSequence = 0,
   now = () => performance.now(),
   getCaptureOffsetMs,
   getClockEpoch,
@@ -27,7 +29,7 @@ export const attachMeetingPointerObserver = ({
   onFlush,
 }: PointerObserverOptions): MeetingPointerObserver => {
   let current: { taskId: string; surfaceKind: string; surface: Element; startedAt: number; startedOffsetMs: number } | null = null;
-  let sequence = 0;
+  let sequence = initialSequence;
   const pending: MeetingPointerInterval[] = [];
 
   const finish = (terminationReason: string) => {

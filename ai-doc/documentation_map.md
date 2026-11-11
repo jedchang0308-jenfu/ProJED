@@ -8,23 +8,33 @@
 
 定案採V6明確all／none／selected；V5空值轉all、明確snapshot保留selected、舊日期保留legacy-v5分支並提供明確轉換入口。Board remote／local journal與Workbench keys升6，升級CAS含updated_at保護、完整readback後清舊值、未知版不覆寫；不修改option選取來迎合暫時空清單。Board／Workbench各自ownership與DEV-062逾期警示保留。Calendar以明確V5型別／helper及control variant隔離，既存snapshot／permission／feed保持；分別驗Board／Workbench V6 parity與Calendar V5 preview／Edge parity。source基線為 `持續優化@06079ce676b638cb7370b75c8c4d9a58d06aa5c6`，本地實作／必要驗證可執行，遠端migration與發布不在本輪範圍。
 
-## 2026-10-19：DEV-054 自用驗收精簡與 DEV-097 解除連動
+## 2026-10-26：DEV-054 開發完成、自用驗收分層與 DEV-097 解除連動
 
-現行入口為 [SPEC-054](specs/SPEC-054-mobile-task-drag-precision.md)、[QA-DEV-054](qa/QA-DEV-054-mobile-task-drag-precision.md)、[QC-DEV-054](qc/QC-DEV-054-mobile-task-drag-precision.md) 與 dev_task 的 DEV-054／097 索引。依使用者指示取消雙平台固定次數／成功率與逐筆工作簿／錄影要求，改為實際常用裝置重點確認；未測實機仍未驗證，DEV-054維持驗證中，不因另一平台缺席標阻塞。保留原R01–R15，B需求由現行R／相鄰取消、edge-scroll、action／undo案例承接；移除static verifier的文件字串鎖定，同步before／child preview預期，不修改產品runtime。
+現行入口為 [SPEC-054](specs/SPEC-054-mobile-task-drag-precision.md)、[QA-DEV-054](qa/QA-DEV-054-mobile-task-drag-precision.md)、[QC-DEV-054](qc/QC-DEV-054-mobile-task-drag-precision.md) 與 dev_task 的 DEV-054／097 索引。DEV-054 已完成 RD 開發；2026-10-26 於目前分支重跑 46/46 static、R01–R15 browser 15/15、console／network error 0。實際常用手機另列自用驗收待確認，未測實機不標 PASS，也不把未使用平台變成開發阻塞。
 
-[QA-DEV-097](qa/QA-DEV-097-pwa-safe-reload-orchestration.md)／[QC-DEV-097](qc/QC-DEV-097-pwa-safe-reload-orchestration.md) 已解除DEV-054實機前置；PWA dirty owner／cancel／flush／資料保留／更新恢復及正式release gate仍有效。下方各日期為歷史紀錄，舊雙平台門檻與Blocked註記不覆蓋本段現行契約；歷史未執行不改成PASS。本次驗證結果見QA-DEV-054本次修訂記錄。
+[QA-DEV-097](qa/QA-DEV-097-pwa-safe-reload-orchestration.md)／[QC-DEV-097](qc/QC-DEV-097-pwa-safe-reload-orchestration.md) 已解除 DEV-054 實機前置；PWA dirty owner／cancel／flush、資料保留、更新恢復及正式 release gate 仍有效。下方各日期為歷史快照，舊雙平台門檻與 Blocked 註記不覆蓋本段現行契約；歷史未執行不改成 PASS。本次 fresh 結果見 [QA §16](qa/QA-DEV-054-mobile-task-drag-precision.md#16-2026-10-26-rd-開發完成重驗)。
 
 ## 2026-10-08：DEV-139 ProJED 納入 Jenfu-Platform 開發文件入口
 
-本輪規劃入口為 [DEV-139](dev_task.md#dev-139-jenfu-platform-onboarding)，唯一交接契約為 [SPEC-139 Rev6](specs/SPEC-139-projed-jenfu-platform-onboarding.md)，直接交接入口為 [§11 S1定案契約](specs/SPEC-139-projed-jenfu-platform-onboarding.md#11-架構決策與-s1-定案契約)，[§11.8技術主管審查](specs/SPEC-139-projed-jenfu-platform-onboarding.md#118-技術主管審查與最小優化)保留Rev5核心修正；既有使用者切換讀 [§6.3相容基線](specs/SPEC-139-projed-jenfu-platform-onboarding.md#63-既有使用者的切換基線)，架構決策為 [ADR-054](decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。**S1 RD Implementation Ready＋架構定案；S2／S3 RD Readiness Review**，完整整合及移轉未達實作成熟度。D1／D2已確認，DEV待排，產品實作／整合／發布未啟動；不把歷史完成段落當此次執行指令。
+音訊同源 proxy、未知寫入 readback 與跨取消／刪除清理 proof 的現行 source／驗證界線見 [SPEC §42](specs/SPEC-139-projed-jenfu-platform-onboarding.md#42-meeting-audio-transport-w282026-10-29)；完整錄音 UI／worker／cleanup 與正式接線仍計入交付。
+
+會議 capture 控制、取消退款與 review scope 保護的本版 source／驗證界線見 [SPEC §41](specs/SPEC-139-projed-jenfu-platform-onboarding.md#41-meeting-capture-control-w272026-10-29)；未以此取代錄音全功能、真身分或正式發布驗收。
+
+目前持久 Session／正常登入／來源 guard 與未完成的身分功能見 [SPEC §13.2](specs/SPEC-139-projed-jenfu-platform-onboarding.md#132-持久-session正常入口與-guard-匯入-source2026-10-29)。本機容量不足可使用 [§8.1 遠端隔離入口](specs/SPEC-139-projed-jenfu-platform-onboarding.md#81-工程驗證案例與固定本地入口)，沿用原 PostgreSQL／HTTP 與移轉腳本；不要求容量例外或新增人工審查。下列 W18 為歷史證據，不代表新版 migration／真登入／正式發布已完成。
+
+2026-10-29 選測與流程精簡：S3 DB／HTTP 可單獨執行，原完整驗證入口保留；已完成 S1 的固定順序與人工 freeze／QC／Spec Drift 不再作續行前置。命令與分層收據見 [SPEC §8.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#81-工程驗證案例與固定本地入口)，開發／啟用及授權界線見 §9／§11.5；未縮減身分／資料／功能相容驗收，不新增 required gate。
+
+2026-10-29 現行狀態：**整合與正式發布續行中，未 Release**。最新身分／Session 的分層證據見 [SPEC §13.3](specs/SPEC-139-projed-jenfu-platform-onboarding.md#133-首次登入註冊與既有帳號相容2026-10-29)及 §36–§37；本輪 RAG mirror／索引 consumer／HTTP retrieval 與移轉 blocker 精簡見 [§38](specs/SPEC-139-projed-jenfu-platform-onboarding.md#38-record-rag-lifecycle-and-retrieval-w242026-10-29)，RAG source／25-migration 隔離 CI 已通過；文字會議 AI／舊 Inbox 帳號隔離進度見 [§39](specs/SPEC-139-projed-jenfu-platform-onboarding.md#39-meeting-text-synthesis-and-legacy-inbox-isolation-w252026-10-29)，本版隔離 CI 已通過，真 provider 資格與正式驗證仍未完成。11 類會議資料、原子 cascade 與 compiled artifact 的現行隔離結果見 [§40](specs/SPEC-139-projed-jenfu-platform-onboarding.md#40-meeting-source-retention-and-compiled-artifact-w262026-10-29)。索引不複製每版 SHA／測試數，也不以本機容量預檢或 W18 歷史證據代替目前隔離結果。真 Firebase／OIDC、原使用者 proof、剩餘功能與資料、雲端、Hosting／舊入口、writer fence、切流及正式發布仍計入完整分母。
+
+目前入口為 [DEV-139](dev_task.md#dev-139-jenfu-platform-onboarding)，唯一交接契約為 [SPEC-139](specs/SPEC-139-projed-jenfu-platform-onboarding.md)。首次登入同交易註冊與驗證進度見 [§13.3](specs/SPEC-139-projed-jenfu-platform-onboarding.md#133-首次登入註冊與既有帳號相容2026-10-29)；此 source 不代表正式帳號或啟用。核心交接讀[§11 S1定案契約](specs/SPEC-139-projed-jenfu-platform-onboarding.md#11-架構決策與-s1-定案契約)、[§13 S2 consumer seam](specs/SPEC-139-projed-jenfu-platform-onboarding.md#13-s2-projed-identity-consumer-seam2026-10-26)、[§28 Data Migration](specs/SPEC-139-projed-jenfu-platform-onboarding.md#28-s3-data-migration-rehearsal-w142026-10-27)、[§29 Legacy Calendar URL](specs/SPEC-139-projed-jenfu-platform-onboarding.md#29-s3-legacy-calendar-url-compatibility-w152026-10-27)、[§30 Managed Cloud Run Candidate](specs/SPEC-139-projed-jenfu-platform-onboarding.md#30-s3-managed-cloud-run-candidate-w162026-10-27)、[§31 Managed Snapshot Connection](specs/SPEC-139-projed-jenfu-platform-onboarding.md#31-s3-managed-snapshot-connection-w172026-10-27)、[§32 Local Development Closure](specs/SPEC-139-projed-jenfu-platform-onboarding.md#32-s3-local-development-closure-w182026-10-27)、[§36 OrgMaster publication](specs/SPEC-139-projed-jenfu-platform-onboarding.md#36-orgmaster-minimum-principal-publication-w222026-10-29)、[§37 Platform Session／handoff](specs/SPEC-139-projed-jenfu-platform-onboarding.md#37-platform-projed-session-and-handoff-w232026-10-29)及[§6.3相容基線](specs/SPEC-139-projed-jenfu-platform-onboarding.md#63-既有使用者切換基線)，架構決策為[ADR-054](decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。**W18歷史切片：S1本地隔離PASS，S2 consumer seam 12/12 PASS／external wire blocked，S3 W1–W18本地PASS，含48/48 frontend unit、PostgreSQL 18 domain acceptance、full-snapshot rehearsal、舊Calendar代理、managed候選、exact來源／目標契約及正常HTTP產品UI＋reload煙霧；production resolver仍停用。** 真 Firebase／OIDC、ProJED opaque Session／既有 UUID proof、真資料blocker處置、Docker／雲端及相容入口readback、正式來源／目標與發布未完成，不把local seam、QA actor、synthetic fixture或未部署代理當整合證據。
 
 人類已選 **Cloud Run＋Cloud SQL 完整對齊，保留 Vite**，保留個人與外部協作，成本採 **只要費用不大幅增加即可**。D1 已確認由 OrgMaster 登錄個人／外部最小 Principal／登入來源，私人內容仍由 ProJED 隔離。D2 最新決策為 **保留現有工作區、看板與權限功能，先雲端架構、資料庫及身分契約對齊**。SPEC-139 §4.4／A09 保留原 ID、membership、五種角色、每 Board 非預設／空集合權限、繼承及邀請／撤權；其餘資料／API／Session／PWA／移轉與驗收沿同一規格，不另建 QA 文件。
 
-Rev6將人類「已有使用者」的切換評估寫入同四文件：以不丟資料、不重建帳號、不改權限、不強迫重裝為目標，優先保留既有主／Quick public origin與PWA，由相容Hosting轉送Cloud Run。各App預留正常重新登入，停寫時間由演練量測再確認；零重登／零停寫未承諾。§6.3–§6.6固定Cookie／callback／route／artifact驗證、verified mapping、全來源writer fence／delta／reconciliation、晚回網恢復及有界退役；A06原origin升級與新增A11／T07／T08尚未執行。
+Rev6將人類「已有使用者」的切換評估寫入同四文件：以不丟資料、不重建帳號、不改權限、不強迫重裝為目標，優先保留既有主／Quick public origin與PWA，由相容Hosting轉送Cloud Run。各App預留正常重新登入，停寫時間由演練量測再確認；零重登／零停寫未承諾。Rev25將移轉收斂為writer fence後單次full snapshot／reconciliation；Rev26補舊Calendar URL代理；Rev27補單一managed候選；Rev28補Supabase→Cloud SQL exact snapshot連線；Rev29補importer管理權限拒絕、漏資料blocker與正常HTTP產品UI煙霧。沒有建立雙寫／CDC／delta平台或新簽核層。Cookie／callback、container／雲端、晚回網恢復及真入口仍待驗。
 
-Rev5已審查的Node24／npm11、node:http＋pg、PostgreSQL17、projed_core／projed_contract、polling／canonical reload、私有Cloud Storage、lease／job、scoped query port／pool FIFO／profile／binding／health及唯一ServerActorV1保留；Rev6不改S1 §11.2–§11.6的source surface／命令／K01–K08。S2／S3仍讀§4.5、§5.4–§5.7、§6、§8.1及§9.1補真owner、domain／相容入口／移轉／費用／共享容量證據。文件自驗不代表正常產品UI、真SSO、無縫切換、效能或費用PASS；本輪只改ProJED四文件。
+Node24／npm11、node:http＋pg、PostgreSQL 17／18 local contract、projed_core／projed_contract、scoped query port／profile／binding／health及唯一ServerActorV1已落地。S2 server-only consumer seam要求exact producer與唯一mapping；production pins空集合。W14完成空白candidate full-snapshot單交易apply／reconcile；W15補舊Calendar URL代理；W16補managed runtime／artifact／Hosting候選；W17補exact Supabase來源與managed Cloud SQL importer；W18確保importer無管理能力／app role membership，`llm_access_logs`與Quick OAuth client非空時停止，並以QA Session完成編譯artifact→HTTP API→PostgreSQL的正常UI／reload smoke。沒有新增第二Cloud Run服務、snapshot檔、雙寫、CDC、delta服務、registry或簽核層。S2真owner wire、Docker及雲端runtime、舊origin／PWA部署、真資料plan／未承接domain、writer fence、費用／容量證據仍讀§4.5、§6、§8.1、§9.1及§28–§32；本地UI證據不代表真SSO、無縫切換、效能或費用PASS。
 
-目前 [DEV-083 發布契約](specs/SPEC-083-production-release-environment-integrity.md)、[ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md) 與 [SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md) 繼續約束現有runtime。保留Hosting舊入口是規劃中的Compatible exception，修正立即換run.app public origin假設，維持雙origin／各App Session／local-first／私人scope及pipeline ownership；不改正式backend／hosting或歷史驗收。ADR-054為Accepted，只涵蓋ProJED選型與S1核心，不代表外部owner接受／完整整合定案。Platform摘要／AI-PDM連結仍Future Phase Captured / Not Requested，待基礎相容證據及人類實際業務串接要求再進入，不作S1 blocker或效益PASS。
+目前 [DEV-083 發布契約](specs/SPEC-083-production-release-environment-integrity.md)、[ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md) 與 [SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md) 繼續約束現有runtime。保留Hosting舊入口是規劃中的Compatible exception，修正立即換run.app public origin假設，維持雙origin／各App Session／local-first／私人scope及pipeline ownership；不改正式backend／hosting或歷史驗收。ADR-054為Accepted，涵蓋ProJED選型與本repo本地開發收斂，不代表外部owner接受、真身分／正式入口接線或完整整合定案。Platform摘要／AI-PDM連結仍Future Phase Captured / Not Requested，待基礎相容證據及人類實際業務串接要求再進入，不作目前開發完成的blocker或效益PASS。
 
 ## Documentation Map Update - 2026-10-06（DEV-138 DEV-133 分支整合）
 
@@ -1500,8 +1510,8 @@ Spec Impact：對 DEV-054 為 `Compatible hardening`；不改 raw-finger、canon
 |---|---|---|---|
 | `ai-doc/specs/SPEC-054-mobile-task-drag-precision.md` | Rework 5 Implemented / Automated QA-QC Passed / Physical Pending | DEV-054 | 新增原生 selection/callout ownership、width-independent touch session 與 Workbench pan boundary。 |
 | `ai-doc/qa/QA-DEV-054-mobile-task-drag-precision.md` | Automated QA 15/15 + regressions PASS / Physical Pending | DEV-054 | R12-R15 與擴充回歸涵蓋 L1/L2/L3+、gesture threshold、wide touch、Workbench。 |
-| `ai-doc/qc/QC-DEV-054-mobile-task-drag-precision.md` | Automated QA-QC PASS / Overall 未充分驗證 | DEV-054 | 記錄 44/44 static、15/15 browser、完整相鄰回歸、zero-tolerance 與 physical gate 邊界。 |
-| `ai-doc/dev_task.md` | DEV-054 Blocked / Awaiting Physical Devices | DEV-054 | RD 與 automated QA-QC 完成；連續三輪未偵測到實機，iOS/Android 各 50 trials 前不標記 Complete。 |
+| `ai-doc/qc/QC-DEV-054-mobile-task-drag-precision.md` | 歷史快照：Automated QA-QC PASS / Overall 未充分驗證 | DEV-054 | 當時記錄 45/45 static、15/15 browser、完整相鄰回歸、zero-tolerance 與舊 physical gate；現行狀態以上方 2026-10-26 入口為準。 |
+| `ai-doc/dev_task.md` | 歷史快照：DEV-054 Blocked / Awaiting Physical Devices | DEV-054 | 當時尚以 iOS/Android 各 50 trials 為完成門檻；此門檻已被 2026-10-19 自用契約取代。 |
 
 ## Documentation Map Update - 2026-08-14（看板任務拖曳升級為 L1 列表）
 
@@ -1762,17 +1772,17 @@ PM 治理註記：DEV-055 為新交付點且計入完成率。第一次自動化
 
 ## Documentation Map Update - 2026-07-17（手機任務拖拉定位精準度）
 
-使用者操作回饋：DEV-054 第四次模擬手機證明 Rework 3 的 preview-to-indicator docking 讓拖曳物跳離手指，且 checklist source 在 innermost target 無效後會 fall through 到 expanded parent card。R10 已用 `636x764` 重現。RD rework 4 改為 preview 永遠跟 raw finger、exact innermost ownership、invalid ancestor blocking、bounded card primary rect，並移除 nearest-target 磁吸。使用者已於 2026-07-17 以原失敗路徑重驗通過；DEV-053 歷史完成證據與桌機 frozen baseline 維持，physical gate 仍不可省略。
+使用者操作回饋：DEV-054 第四次模擬手機證明 Rework 3 的 preview-to-indicator docking 讓拖曳物跳離手指，且 checklist source 在 innermost target 無效後會 fall through 到 expanded parent card。R10 已用 `636x764` 重現。RD rework 4 改為 preview 永遠跟 raw finger、exact innermost ownership、invalid ancestor blocking、bounded card primary rect，並移除 nearest-target 磁吸。使用者已於 2026-07-17 以原失敗路徑重驗通過；DEV-053 歷史完成證據與桌機 frozen baseline 維持。當時 physical gate 規則保留為歷史，現已由上方 2026-10-26 現行入口取代。
 
-### DEV-054：手機任務拖拉定位精準度優化（RD Rework 4 Implemented / Automated Browser + User Revalidation Passed / Physical Gate Pending）
+### DEV-054 歷史快照：手機任務拖拉定位精準度優化（RD Rework 4 Implemented / Automated Browser + User Revalidation Passed / Physical Gate Pending）
 
 | 文件 | 狀態 | 關聯 DEV | 說明 |
 |---|---|---|---|
 | `ai-doc/specs/SPEC-054-mobile-task-drag-precision.md` | RD Rework 4 Implemented / Automated Browser + User Revalidation Passed / Physical Gate Pending | DEV-054 / DEV-053 / DEV-029 / DEV-046 | 保留 desktop approved baseline；preview 永遠跟 raw finger；target 採 innermost exact hit、ancestor blocking、bounded card primary geometry；retain 外 direct handover；mobile source placeholder 不畫 marker；pan / edge-scroll 契約維持。 |
-| `ai-doc/qa/QA-DEV-054-mobile-task-drag-precision.md` | RD Rework 4 Automated + User Revalidation Passed / Full Matrix + Physical Not Executed | DEV-054 | 四次使用者失敗與修正證據均保留；DEV-054 static 34/34、browser R01-R10，R06 驗證 bounded card primary，R10 驗證 `636x764` ancestor blocking、finger coupling、zero write。使用者原失敗路徑已重驗通過；B01-B12 與 iOS / Android 各 50 trials 仍為 required。 |
-| `ai-doc/dev_task.md` | DEV-054 Verifying / P1 / Physical Gate Required | DEV-054 | RD rework、browser 與使用者原路徑重驗已通過；physical device gate 與 QC report 通過前不得標記完成。 |
+| `ai-doc/qa/QA-DEV-054-mobile-task-drag-precision.md` | 歷史：RD Rework 4 Automated + User Revalidation Passed / Full Matrix + Physical Not Executed | DEV-054 | 四次使用者失敗與修正證據均保留；當時 DEV-054 static 34/34、browser R01-R10，且 B01-B12 與雙平台 trials 尚為 required；現已被自用契約取代。 |
+| `ai-doc/dev_task.md` | 歷史：DEV-054 Verifying / P1 / Physical Gate Required | DEV-054 | 當時 physical device gate 與 QC report 是完成前置；現行狀態以上方 2026-10-26 入口為準。 |
 
-PM 治理註記：Spec Impact=`Compatible exception`。DEV-054 不回寫 DEV-053 QC 歷史結果；使用者原失敗路徑已重驗通過，但 physical iOS / Android 任一未通過，仍不得宣稱手機定位精準度或完整肌肉記憶一致性已完成。Workbench placed row 仍不能拖；desktop drag UI 仍以使用者核准的 DragOverlay / threshold / click-right-click 為 baseline。DEV-055 Rework 1 後 user revalidation 已通過，桌機升級本機完成；仍未 production deploy。
+PM 歷史治理註記：Spec Impact=`Compatible exception`。當時 physical iOS / Android 任一未通過即不得宣稱完整驗收；此舊門檻已被自用契約取代，但未測平台仍不能標示實機 PASS。Workbench placed row 仍不能拖；desktop drag UI 仍以使用者核准的 DragOverlay / threshold / click-right-click 為 baseline。DEV-055 Rework 1 後 user revalidation 已通過，桌機升級本機完成；仍未 production deploy。
 
 ## Documentation Map Update - 2026-07-17（任務拖拉肌肉記憶一致化）
 

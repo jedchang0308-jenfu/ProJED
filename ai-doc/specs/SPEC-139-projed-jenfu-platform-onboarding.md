@@ -1,10 +1,10 @@
 # SPEC-139：ProJED 納入 Jenfu-Platform 的產品與技術交接契約
 
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。
-- 日期：2026-10-08（Asia/Taipei）；版本：Rev 6（既有使用者相容切換與移轉驗收）。
-- 文件狀態：**S1：RD Implementation Ready＋架構定案；S2／S3：RD Readiness Review**。ProJED 技術選型已固定；完整整合的外部身分 wire 及 S2／S3 工程契約尚未定案，不作整體 ready 宣告。
-- 適用階段：沿人類架構文件要求，並依「PROJED已有使用者, 我可以無縫切換嗎」及「請寫進發文件」補相容切換契約；仍未要求執行 coding、環境建立、migration 或發布。文件成熟度與實際執行授權分開。
-- 直接交接入口：[§11 S1 定案契約](#11-架構決策與-s1-定案契約)；[§11.8 技術主管審查](#118-技術主管審查與最小優化)保留 Rev5 修正理由；本次補充見 [§6.3 既有使用者的切換基線](#63-既有使用者的切換基線)；scope／D1／D2 及原功能保留不變。
+- 日期：2026-10-31（Asia/Taipei）；版本：Rev 78（音訊到期清理與unknown generation保護通過隔離驗證；零留存資格及正式交付續行）。
+- 文件狀態：**整合與發布續行中；W22 OrgMaster publisher 與 W23 Platform Session／handoff source 均有 draft PR／required CI PASS，隔離驗證 PASS；Production Resolver Disabled；未 Release**。Firebase／OIDC 真身分與完整 Session 部署、RAG／文字會議真 provider 資格、錄音管線與剩餘資料處置、雲端 readback、舊入口、writer fence、切流及正式發布仍計入完成分母。W22 owner source 見 [§36](#36-orgmaster-minimum-principal-publication-w222026-10-29)，W23 Platform source 與驗證邊界見 [§37](#37-platform-projed-session-and-handoff-w232026-10-29)；W21 承接六類文件／同步資料與精度保護見 [§35](#35-document-source-retention-w212026-10-28)；W20 資料保留見 §34，具體資源與待確認的新權限仍見 §33。本輪未寫正式資料、切流或變更 IAM／Secret／credential／billing。
+- 適用階段：S1–S3 本地切片歷史見 §12–§32；2026-10-28 續行授權見 [DEV-139 人類決策與授權範圍](../dev_task.md#1-人類決策與授權範圍)，涵蓋 ProJED／OrgMaster／Jenfu-Platform 的 source 整合工作。正式整合與發布仍是完整目標，不以本地切片完成替代；新責任權限依 §33 處理。定期審視不是續行或發布的 required gate；本輪未執行正式資料寫入、切流或 IAM／Secret／credential／billing 變更。
+- 直接交接入口：[§11 S1 定案契約](#11-架構決策與-s1-定案契約)、[§12 S1 實作狀態](#12-s1-實作狀態2026-10-26)、[§13 S2 consumer seam](#13-s2-projed-identity-consumer-seam2026-10-26)、[§14 S3 read adapter](#14-s3-http-read-adapter-slice2026-10-26)、[§15 S3 domain command](#15-s3-domain-command-w12026-10-26)、[§16 S3 collaboration command](#16-s3-collaboration-command-w22026-10-27)、[§17 S3 record／activity](#17-s3-recordactivity-w32026-10-27)、[§18 S3 HTTP product wiring](#18-s3-http-product-wiring-w42026-10-27)、[§19 S3 Board transfer](#19-s3-board-transfer-w52026-10-27)、[§20 S3 legacy provider boundary](#20-s3-legacy-provider-boundary-w62026-10-27)、[§21 S3 Quick Task](#21-s3-quick-task-w72026-10-27)、[§22 S3 Task Workbench](#22-s3-task-workbench-w82026-10-27)、[§23 S3 Actor CAS](#23-s3-actor-context-cas-w92026-10-27)、[§24 S3 Task Tracking](#24-s3-task-tracking-w102026-10-27)、[§25 S3 Backup／Import](#25-s3-backupimport-w112026-10-27)、[§26 S3 Account Preferences](#26-s3-account-preferences-w122026-10-27)、[§27 S3 Calendar Subscription](#27-s3-calendar-subscription-w132026-10-27)及[§32 本地開發收斂](#32-s3-local-development-closure-w182026-10-27)；[§11.8 技術主管審查](#118-技術主管審查與最小優化)保留 Rev5 修正理由；既有使用者切換見 [§6.3](#63-既有使用者的切換基線)。
 - 決策來源：[DEV-139 人類決策](../dev_task.md#dev-139-jenfu-platform-onboarding)；架構取捨：[ADR-054](../decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。本文件不是其他 owner 已接受或已發布的契約。
 
 ## 1. 目的、限制與完成邊界
@@ -15,7 +15,7 @@ ProJED 已有使用者，移轉必須以「不丟資料、不重建帳號、不�
 
 成本採人類最新要求「只要費用不大幅增加即可」。首階段效益為基礎設施及身分契約一致、既有功能與資料授權相容；任務／資料跨系統使用是後續效益，節費及投資回收期不是必要驗收。首階段必須證明新路徑上的原功能及權限行為，不能只以平台可見、登入成功、表格搬入同一 DB 或測試數量認列交付。
 
-本輪僅編寫 ProJED 的開發文件。其他專案的來源只讀，沒有跨專案修改、任務登錄、測試／建置、付費資源、IAM／Secret、遠端 DB、正式資料或流量操作授權。本地文件中的 owner 分工是交接要求，不能代替人類對目標專案與動作的授權。
+2026-10-28 人類選取前述剩餘工作並要求「請繼續執行直到完成」，已將 ProJED／OrgMaster／Jenfu-Platform 真接線與正式移轉／發布納入本次目標；先前僅本地開發的敘述保留為 W18 歷史範圍，不再用它縮減新目標。新建 IAM／Secret／credential、共用 foundation grant 與費用擴張依人類全域協作規範另確認；§33 列出已查證的具體範圍。其他 repo 的既有修改仍保留，跨 repo 實作沿各自 native DEV 與隔離分支，不把本文件當外部 owner acceptance。
 
 ### 人類產品決策
 
@@ -25,6 +25,8 @@ ProJED 已有使用者，移轉必須以「不丟資料、不重建帳號、不�
 |---|---|---|
 | D1 | 個人／外部帳號的最小登入識別統一登錄於 OrgMaster；Principal publisher、准入及撤銷分層。 | **Human Confirmed**：回答「接受統一登錄最小身分資料（建議）」；私人內容留在 ProJED，登錄不授予公司管理員私人存取權。 |
 | D2 | 首階段交付範圍與原功能保留；決定此次不新增跨 app 業務使用情境。 | **Human Confirmed**：原文「保留 ProJED 現有的工作區、看板與權限功能，先處理雲端架構、資料庫和身分契約的對齊」。先前選項中較接近 2C，但以原文為準；Platform 任務摘要與 AI-PDM 專案／看板連結均延後。 |
+
+2026-10-29 人類補充「本次同時完成真 ASR」：DEV-139 的本次完成條件包括真正音訊轉錄、既有錄音UI／worker／cleanup接線及provider實測；不再留待DEV-123後續，也不把fake worker／文字造transcript當完成。DEV-123／ADR-051仍是既有產品語意來源，DEV-139負責同批實作／驗收。保留權限、source version、預算與取消／未知結果保護；新IAM／Secret／credential／billing等責任仍依本任務既有界線處理，安全的source工作續行。
 
 工程命名、局部程式寫法與驗證工具由 RD 決定。D1 固定最小身分資料歸屬，D2 固定首階段基礎對齊及原功能保留；兩者不構成產品實作、跨專案開發或正式環境操作授權。後續跨 app 任務情境另有 re-entry trigger，不再作本階段待決門檻。
 
@@ -56,11 +58,11 @@ flowchart LR
   Worker[既有有界 job 與 cleanup] --> Core
 ```
 
-- 主程式的基礎部署單位為 Vite 靜態檔＋Node API 的 ProJED Cloud Run 服務。既有獨立 Quick PWA origin／manifest identity 依 ADR-053 保留；估工基線包含主程式與 Quick 兩個 ProJED 自有 Cloud Run 入口、同一套 server 業務實作及各自同源 Session/API。這是兩個入口，不新增另一套業務資料權威或 app key。
+- 基礎部署單位為 Vite 靜態檔＋Node API 的單一 ProJED Cloud Run 服務。既有主程式與獨立 Quick PWA 的兩個 public origin／manifest identity 依 ADR-053 保留，皆由各自 Hosting 前門將 `/api/**` 轉送至同一 runtime；可信 `main / quick` entry 由未來簽發的 App Session actor 決定，不由 Host／forwarded header 決定。兩個 public origin 不等於兩個 runtime，也不新增另一套業務資料權威或 app key。
 - 不為登入簡化合併 origin、強制重裝或共享 token。既有使用者預設保留現行主／Quick public origin，由相容入口轉送至 Cloud Run；`run.app` 是 runtime 服務位址，不要求使用者立即改網址。相容窗口及入口退役條件見 §6.3–§6.6；實際服務／環境綁定後續核實，不臆造正式 target。
 - ProJED 宣告 app key `projed`，自有 schema 固定 `projed_core`／`projed_contract`；平台 registry 的實際登錄列為 S2 owner 工作，不宣稱已登錄。Workspace、Board、Task、membership、Board role permissions、invite、profile、receipt、job、audit、檔案 metadata 都由 ProJED 擁有；不得寄存在 Platform core。contract schema 保留受控邊界，首階段不因此建立任務摘要 endpoint 或賦予其他 app 業務資料讀取權。
 - 同一 lifecycle DB 使用 app-specific owner／migrator／runtime、ledger、Secret 及單一目標 DSN。runtime 無 DDL、owner、migrator、BYPASSRLS 或其他 app core 權限；跨 app 只使用版本化 contract 與明確 consumer ACL。
-- 新 app 所需 app-specific AGENTS 與 DB boundary checker 在實作契約中列為 source acceptance 前置輸出；本輪不修改根目錄治理規則、建立 SQL 或執行 checker。
+- app-specific `db/AGENTS.md`、S1 SQL 與 DB boundary checker 已建立並通過靜態自查；根目錄治理規則未修改，完整 domain SQL 仍屬 S3。
 - 檔案持久化選定 ProJED 私有 Cloud Storage。API 驗證用途與資源權限，DB 保存 metadata／cleanup obligation；不把 Cloud Run 本機磁碟當作持久儲存。不建立共用公開 bucket；實際 bucket／IAM 綁定及移轉驗收屬後續環境範圍。
 - durable job 沿 ADR-051 的獨立生命週期使用有界 worker／Job；沒有獨立工作責任的 handler 留在 API。禁止靠 HTTP 回應後的記憶體工作宣稱完成持久處理。
 
@@ -68,11 +70,11 @@ API 與 worker 可讀取其他 owner 已發布的 contract，但不能操作其 
 
 ### 3.1 Runtime 工程基線與模組責任
 
-本節固定 ProJED 的技術選型，尚未建立 server 或環境。平台 repository 的 engines 為 Node `>=24.11.0 <25`／npm `>=11 <12`，`pg` 為 `^8.21.0`；既有 managed DB 設定及 rehearsal 採 PostgreSQL 17。因此選定 Node 24／npm 11、TypeScript、`node:http`＋`pg`，DB 相容測試以 PostgreSQL 17 為基線。實作時由 lockfile、映像及環境查證固定 patch／digest；這些查證不代表正式環境目前版本，也不要求 Vite 改成 Next.js。S1 完整契約見 §11；後續不由實作模型重新選 framework／ORM。
+本節固定 ProJED 的技術選型。S1 server 已依 Node `>=24.11.0 <25`／npm `>=11 <12`、`pg ^8.21.0`、TypeScript、`node:http` 實作；本地隔離驗證接受 PostgreSQL 17／18，並記錄實際 major。lockfile 已固定實際解析版本；未來 managed target 仍按實際綁定版本重驗，這不要求 Vite 改成 Next.js。S1 完整契約見 §11、實作結果見 §12。
 
 | 模組 | 責任與禁止跨界 |
 |---|---|
-| HTTP／靜態入口 | 同一套 server 程式，按主／Quick entry 設定提供各自產物及同源 `/api/`。Cloud Run 依 `PORT` 監聽 `0.0.0.0`，本地驗證只綁 loopback；API 404／錯誤不得落入 SPA fallback。檔案路徑只限產物根目錄，禁止 traversal。 |
+| HTTP／靜態入口 | 單一 server 程式與 runtime提供主／Quick shell及同源 `/api/`；各 public origin 的 Session仍獨立。Cloud Run依`PORT`監聽`0.0.0.0`，本地驗證只綁loopback；API 404／錯誤不得落入SPA fallback。檔案路徑只限產物根目錄，禁止traversal；Host／forwarded header不能決定可信entry或授權。 |
 | Session／identity adapter | 核實受控 handoff、current state、mapping，產生 server-owned actor；瀏覽器 header／JSON 不能直接建構 actor。未發布 producer 只可作標明 SIMULATION 的測試替身，不能接正式入口。 |
 | Domain service／repository | 服務行為、capability、scope 與自有交易；frontend adapter 保留既有 DTO。不得暴露任意 table／RPC／SQL tunnel。 |
 | Pool／migration | 每 process 一個有界 pool；runtime DSN 與 migrator credentials 分離。啟動只驗角色、DB identity、schema／ledger 相容及設定，不自動 migrate 或修復 grants。 |
@@ -223,7 +225,7 @@ D2 已確認先完成基礎對齊。首階段跨系統 consumer 是 ProJED 對 O
 
 ### 5.6 Cloud SQL 資料映射與 policy 交接
 
-目標應用表放 ProJED core；下面是 schema contract 的估工基線，正式 DDL／migration ordinal／完整 grants 尚未建立。來源以現行全部 migrations 的合成結果及 [database types](../../src/services/supabase/database.types.ts) 核對，初始 migration 不代表最終 schema。
+目標應用表放 ProJED core；S1 已建立 profile／account guard 的 `0001`／`0002` DDL 與精確 grants。下面其餘內容仍是 S2／S3 完整 domain schema 的估工基線；來源以現行全部 migrations 的合成結果及 [database types](../../src/services/supabase/database.types.ts) 核對，初始 migration 不代表最終 schema。
 
 | 來源／目標責任 | ID、constraints 與移轉要求 |
 |---|---|
@@ -243,9 +245,9 @@ membership／scope 查詢及 legacy lookup 的索引與唯一約束按實際 que
 
 每次自有交易從 pool checkout **同一 client** 執行 BEGIN、actor／scope 的 transaction-local 設定、授權／寫入／receipt／audit 與 COMMIT 或 ROLLBACK，不能用多次 `pool.query` 拼交易。context 只由可信 Session adapter 產生，以參數化 `set_config(..., true)` 設定；policy 缺值／無效值拒絕，不接受 browser 任意指定 context。回滾、取消、commit 失聯都要歸還或銷毀不安全 client，下一位 actor 不繼承前次狀態。這層保護針對可信 server 的查詢失誤，不能宣稱可抵禦已取得 runtime Secret 的任意 SQL 操作者。
 
-本地撤權採 **transaction advisory lock＋guard revision**：保護查詢／一般業務寫入取得對應 scope 的 shared lock，撤權／membership／matrix／scope 轉移取得 exclusive lock，再重讀 guard 與權限；需要 exclusive 時一開始就取得，不在同一交易升級 shared。鎖 key 含 `projed` namespace，依 account、Workspace、Board、資源及 canonical ID 排序，去重後逐一取得；hash 碰撞只允許多等候，不能使授權成功。跨 Workspace move 鎖來源／目的並整體原子提交；所有改變該 scope 授權的命令必須走同一排序，不能繞過 guard。
+本地撤權採 **transaction advisory lock＋guard revision**。自用規模目前以單一 app transaction mutex `projed:runtime-transaction:v1` 排序所有 `runActorTransaction` callback，再取得既有 account shared lock，以下一個 statement 重讀 guard 與當下權限。membership、matrix、record privacy 與跨 Workspace move 均走相同核心，不再要求尚未實作的多層 scope lock set 或 shared→exclusive 升級。外部 provider／storage network 不得放在這些短交易內；既有 lock／statement／transaction timeout 保留，沒有量測的平行吞吐效益不作承諾。若真實使用出現鎖競爭，再按具體資料流拆 scope，不先建立通用鎖管理框架。
 
-先完成鎖定及授權的在途交易可以排在撤權前；撤權已提交後才取得 lock 的交易必須按新 revision／權限拒絕。S1 固定 account guard／profile 查詢的完整契約於 §11；Workspace／Board guard 與所有 domain command 的完整實作契約仍屬 S3，不把 account-only 驗證外推為 Board 撤權 PASS。
+先完成鎖定及授權的在途交易可以排在撤權前；撤權已提交後才取得 lock 的交易必須按新 revision／權限拒絕。S1 account guard 的外部 admin mutation 仍須取得相同 account exclusive lock；S3 的本地命令沿 app mutex。原 account-only 證據不外推成 Board 撤權 PASS；本版以 native 兩帳號實際等待與既有命令回歸驗證本地排序，見 §41。
 
 外部 Principal／公司准入的撤銷無法和 ProJED DB 假造跨 owner 原子性。每次保護請求核實 current state，寫入前按 producer 的 epoch／barrier 契約重驗；版本／到期失效或 producer unavailable 不寫入。owner 必須交付在途請求及撤銷可觀察生效界線，尚未收斂時不能宣稱零窗口或沿用歷史 allow cache。
 
@@ -259,8 +261,8 @@ Quick 沿 [現行 invoker RPC](../../supabase/migrations/20261001090000_dev_133_
 
 1. 建立 schema／table／function／policy／extension、Workspace／Board membership／權限設定、檔案／feed／連結、Auth mapping、job／receipt 的完整 inventory，核對來源實際狀態；migration 檔名不等於 live inventory。
 2. 舊 Supabase migration 歷史不改寫。新 Cloud SQL managed DDL 採 ProJED 自有 forward-only migration 與獨立 ledger；shared extensions／foundation 不由 app 搶 ownership。
-3. 先以 synthetic／核准 sanitized fixture 演練完整轉換；逐 domain 檢查 count、ID／FK、scope、人工內容／checksum、receipt 與檔案可讀性，保存可重放 reconciliation 差異。
-4. 正式切換前必須有單一 writer authority 與可驗證 fence；初始 snapshot／delta／最後停寫邊界及在途 job 由後續 migration 契約固定。不得新舊雙寫後靠時間戳猜勝者。
+3. 先以 synthetic／核准 sanitized fixture 演練完整轉換；目標必須是空白candidate DB，以一個repeatable-read來源snapshot及單一目標交易逐domain檢查count、ID／FK、scope、人工內容／checksum與receipt，完全一致才commit。
+4. 本自用系統不建立連續雙寫、CDC或delta平台。正式切換先以可驗證fence停止舊庫全部業務寫入及在途job，再從同一一致性snapshot做一次完整搬移與reconciliation；任一未承接domain或差異即不開放新writer。
 5. 新路徑已有寫入後，回復必須說明新資料如何保留、舊 binary 是否可讀、job／receipt 是否仍單一；僅切回 DNS／舊網站不是完整恢復。禁止 destructive/down migration 或手改正式 row。
 
 ### 6.2 Browser 本機資料
@@ -284,7 +286,7 @@ Server 搬移與 browser storage 恢復分開驗收。IndexedDB、Session、SW �
 | 帳號與登入 | 已核實的原登入身分對應既有 localUserId，使用者不重新註冊或重新建立工作區；Google 登入選同一帳號仍須驗 provider binding chain，不能只看 email。各 App 預留切換時一次正常重新登入，不承諾舊 Supabase Session 自動變成 Platform Session；日後到期／撤銷沿原規則。歧義隔離、資料保留並有恢復入口，不顯示為新空帳號。 |
 | 網址與安裝 | repository 正式主入口為 `https://projed-cc78d.web.app`；SPEC-133 §3 的獨立 Quick 為 `https://projed-cc78d.firebaseapp.com/quick-task/`，另保留主 origin 的 `/quick-task/` 相容入口。這是現行來源基線而非本輪 live readback／新發布 target；沿原 manifest id／start_url／scope 與 SW 更新保護，不要求換 origin 或重裝。 |
 | 離線草稿與待送任務 | 在原 browser profile／安裝儲存中保留 known owner、unbound、captureId／hash、人工正文及 pending／failed 狀態；登入、升級或切帳不清空或自動認領。恢復後只以原 key 核實／補送到本人新路徑，結果不明先查 receipt。 |
-| 停寫與可恢復性 | 可設計短暫停寫完成最後 delta／核對，但時長由演練量測、可接受窗口在正式 re-entry 確認；不先承諾零停機或固定分鐘數。停寫／登入失效有就地狀態與重試入口，草稿保留，不把錯誤當空資料或成功。 |
+| 停寫與可恢復性 | 以短暫停寫完成一致性full snapshot／核對，不另建delta平台；時長由正式資料plan與演練量測，可接受窗口在正式 re-entry 確認，不先承諾零停機或固定分鐘數。停寫／登入失效有就地狀態與重試入口，草稿保留，不把錯誤當空資料或成功。 |
 
 不以「所有使用者必須同時更新」作為切換前提。離線舊版回來、舊 SW 繼續供應 bundle、持有舊 Supabase Session 的直接寫入及在途 worker 都須由 server authority 保護；只發布新版前端不能保證舊庫已停止寫入。
 
@@ -293,7 +295,7 @@ Server 搬移與 browser storage 恢復分開驗收。IndexedDB、Session、SW �
 - 開發設計基線為既有 Firebase Hosting public origin→受控 rewrite→ProJED Cloud Run runtime／自有 API→Cloud SQL。主／Quick 仍共用同一套業務實作、各 origin Session 及唯一資料權威；Hosting 只保留入口／路由責任，不新增認證 broker、token bridge、task master 或舊庫雙寫。
 - Firebase 官方支援 Hosting URL rewrite 至 Cloud Run；這支持過渡路徑可設計，不證明本案環境已可轉送。Hosting site／Cloud Run 的 project、region、服務路由、網路／發布權責及費用須實際核對；不推定現行站點可直接轉送到任意另一個 GCP project。[官方路由依據](https://firebase.google.com/docs/hosting/full-config#direct-requests-to-a-cloud-run-container)
 - Hosting 轉送 Cookie 一般只保留 `__session`。S2 必須收斂相容入口的 cookie／state／callback 契約並驗證；不得把既有 cookie 名稱直接套用後宣稱成功，也不能改用前端 bearer／跨 origin 複製來繞過限制。HttpOnly／Secure、exact public origin、CSRF／Origin、期限／撤銷及 `no-store` 保護沿 §4.2，不信任任意 forwarded host／return URL。[官方 Cookie 限制](https://firebase.google.com/docs/hosting/manage-cache#using_cookies)
-- 主 origin 的 `/quick-task/` 相容入口沿該 origin 的 Session；獨立 Quick origin 可登入另一帳號。S2／S3 需固定 public origin／app entry／runtime route 的對應，不能因兩個 Cloud Run 服務或同名 Cookie 新增第三套帳號狀態、共享跨 origin Session 或自動切帳。
+- 主 origin 的 `/quick-task/` 相容入口沿該 origin 的 Session；獨立 Quick origin可登入另一帳號。S2／S3需固定public origin／app entry／Session actor的對應；兩個origin共用runtime也不能新增第三套帳號狀態、共享跨origin Session或自動切帳。
 - Hosting 靜態檔優先於 rewrite，且現行 `firebase.json` 有 Quick／SPA fallback。S3 必須核對實際命中順序、HTML／SW／manifest／assets 與 API 的同一 artifact／相容 revision；API／登入錯誤不能回 SPA 200，私人 API／Session／callback 不被 CDN 或 SW 快取。舊版不相容時保存本機內容並引導更新／恢復，不能靜默送入另一個帳號。[官方 rewrite 規則](https://firebase.google.com/docs/hosting/full-config#configure-rewrites)
 - 保留 Hosting 是有界相容責任，不取消 Cloud Run／Cloud SQL 對齊方向。其流量、發布與保留費用納入 §7；未驗證舊使用者恢復與替代入口前，不能把 Hosting／舊站已停止的支出算為節省，也不能先做 Billing unlink 或退役。
 
@@ -304,8 +306,8 @@ Server 搬移與 browser storage 恢復分開驗收。IndexedDB、Session、SW �
 | 設計階段 | 業務寫入權威 | 使用者保護與下一狀態條件 |
 |---|---|---|
 | 盤點與相容準備 | 舊庫唯一 writer；目標尚未接正式寫入。 | 核對登入／origin／已安裝版本／本機與 server inventory；準備舊站相容更新、verified mapping、就地停寫／恢復入口。未上線使用者的未知狀態不能算已完成。 |
-| 隔離演練 | 正式權威不變；目標只用 synthetic／核准 sanitized fixture。 | 先具 S2 真身份與 S3 原功能替代契約；演練 snapshot／有界 delta、各角色與檔案／receipt reconciliation、舊版／離線恢復、writer fence 及新寫入後的恢復。 |
-| 最後停寫與核對 | 舊庫所有納入範圍的寫入已 server-fenced；新庫尚未開放業務寫入。 | 直接 SDK／RPC／Functions／worker／在途 job 都有可核實界線；固定最後 delta／來源水位並完成核對。任一未解差異不開放新 writer；使用者可保留本機草稿及待送 key。 |
+| 隔離演練 | 正式權威不變；目標只用 synthetic／核准 sanitized fixture。 | W14已驗單次full snapshot→空白candidate、整批rollback、count／digest reconciliation及未承接domain拒絕；正式身份、檔案／Storage、舊版／離線恢復與writer fence仍分開驗證。 |
+| 最後停寫與核對 | 舊庫所有納入範圍的寫入已 server-fenced；新庫尚未開放業務寫入。 | 直接 SDK／RPC／Functions／worker／在途 job 都有可核實界線；在fence後取得唯一full snapshot並完成核對。任一未解差異不開放新 writer；使用者可保留本機草稿及待送 key。 |
 | 啟用新路徑 | 新庫唯一 writer；舊庫維持 fence。 | 同一可信 Principal→mapping→Session→API→DB 路徑可用後，原網址／PWA 進新版；原 ID／key 補送及 receipt readback。新寫入後恢復須保存新資料與單一 job／receipt，不能只切回舊網站。 |
 | 保留恢復與退役評估 | 新庫仍唯一 writer；舊入口只提供已驗證的相容／恢復。 | 已知未同步及歧義帳號逐項處理，保留核身後恢復義務。窗口到期不等於所有離線裝置已恢復，不自動刪本機資料／舊資產；入口或資源退役另需證據與對應人類主要動作授權。 |
 
@@ -313,9 +315,9 @@ Server 搬移與 browser storage 恢復分開驗收。IndexedDB、Session、SW �
 
 ### 6.6 移轉 readiness 與恢復條件
 
-本節是移轉相容契約與驗收基線，**尚非移轉 RD Implementation Ready／Release Ready**，不擴張 S1 核心定案範圍。S2 尚須發布非員工 wire／admission／revocation、verified legacy mapping proof、各入口 Session／Cookie／callback 與取消／切帳契約；S3 尚須完整 domain adapter、舊版 API／SW／IDB 相容、全部寫入來源 fence、source 水位／delta／reconciliation／檔案與 job 恢復及 Hosting 路由／artifact 契約。
+W14已使「受支援DB domain的一次性full-snapshot搬移」達到本地RD rehearsal PASS，但整體仍非 Release Ready。S2尚須發布非員工wire／admission／revocation、verified legacy mapping proof、各入口Session／Cookie／callback與取消／切帳契約；正式切換尚須核對未承接的Inbox、RAG、會議／Storage資料，完成舊版API／SW／IDB相容、全部寫入來源fence、檔案與job恢復及Hosting路由／artifact契約。
 
-下一次移轉演練準備時，在同一 DEV 補可重現 fixture／命令與恢復證據，按 A06／A09／A11、T07／T08 驗正常使用者路徑；正式切換另確認可接受停寫／恢復窗口、成本與環境／資源主要動作範圍。沒有新的 PWA 重裝、資料揭露或零重登需求；若日後要求換 public origin、立即移除 Hosting、零停寫或另造 Session bridge，先回架構／產品影響審查。
+正式資料plan時沿W14命令只輸出table count／digest與阻擋domain，不落地含正文或email的snapshot檔；先處理實際非空的未承接domain，再按A06／A09／A11、T07／T08驗正常使用者路徑。正式切換另確認可接受停寫／恢復窗口、成本與環境／資源主要動作範圍。沒有新的PWA重裝、資料揭露或零重登需求；若日後要求換public origin、立即移除Hosting、零停寫或另造Session bridge，先回架構／產品影響審查。
 
 ## 7. 費用、容量與相容限制
 
@@ -345,9 +347,9 @@ Fixture 採 synthetic 私人 A／B、公司 C1／C2、guest G、Workspace／Boar
 | A08 已可用附屬功能 | 由既有會議草稿、知識／檔案及行事曆入口執行現行可用操作。 | 人工正文、來源、費用及清理責任保留；失敗可重試，未資格功能仍 gated。新外部 provider dispatch 未驗不算 PASS。 | 原功能所需 UI／API／DB／Storage／真 provider；按實際層列結果。 |
 | A09 工作區／看板／權限相容 | 五種角色各從既有 Sidebar／看板設定／分享及成員入口，依凍結基線建立／切換／改名／受控移動、保存 Board 權限並重載；用相同隔離 fixture 對照移轉前後 allow／deny。 | ID、歸屬、membership、非預設／空集合 matrix 及 Workspace 繼承一致；有權操作仍可用，無權操作仍拒絕。Board guest 不看到其他 Board，公司 admin 不變成私人 owner；不得增減既有業務權限。 | 舊／新 source 與 fixture、正常 UI、API、DB mapping／policy／role-permissions readback；不需 Platform 摘要或 AI-PDM UI。 |
 | A10 DB 與運作邊界 | 隔離 PostgreSQL 驗 policy／pool actor cleanup，核准非正式環境驗各入口 startup、角色與觀測。 | 無 context／跨 core／跨 lifecycle DB／runtime DDL deny；兩入口與全部 workers 計入容量，backup/restore 可證明。 | Disposable 真 PostgreSQL 與 managed nonprod 分層；正式放行另需 Production 證據。 |
-| A11 既有使用者切換 | 公司／個人／外部使用者從原書籤、主 PWA、獨立 Quick 及同 origin 相容入口重新開啟；完成需要的正常登入，再讀原 Board／Task、修改並重載；加入舊版離線回網、mapping 歧義與停寫中送出。 | 不重註冊／重建資料／改權限／強迫重裝；原 ID 與 allow／deny 一致。各 origin 可選不同帳號，原 owner pending 不錯送；停寫不清空或誤報成功，解除後同 key 唯一讀回。登入／mapping 失敗有恢復入口，不出現假空帳號或循環重登。 | 同 browser profile 舊／新 artifact、正常 UI→真 Session／API→DB／receipt、Hosting／cache trace、fence／delta reconciliation、停寫量測；SIMULATION 與實體安裝證據分列。 |
+| A11 既有使用者切換 | 公司／個人／外部使用者從原書籤、主 PWA、獨立 Quick 及同 origin 相容入口重新開啟；完成需要的正常登入，再讀原 Board／Task、修改並重載；加入舊版離線回網、mapping 歧義與停寫中送出。 | 不重註冊／重建資料／改權限／強迫重裝；原 ID 與 allow／deny 一致。各 origin 可選不同帳號，原 owner pending 不錯送；停寫不清空或誤報成功，解除後同 key 唯一讀回。登入／mapping 失敗有恢復入口，不出現假空帳號或循環重登。 | 同 browser profile 舊／新 artifact、正常 UI→真 Session／API→DB／receipt、Hosting／cache trace、writer fence後full-snapshot reconciliation與停寫量測；SIMULATION 與實體安裝證據分列。 |
 
-所有 UI 案例覆蓋正常、載入、空白、錯誤／拒絕、窄版與鍵盤。viewport 以既有 ProJED 主／Quick 適用基線檢查，至少包含 390px 窄版及桌面；量測 overflow、焦點與可見內容。使用者取消的 Android 實體裝置 gate 不因 provider 變更自行恢復；窄版 browser 不能冒稱實體 PWA PASS。
+受影響的 UI 流程覆蓋正常、載入、空白及錯誤／拒絕；版面或互動改變時，依既有主／Quick 基線檢查 390px 窄版、桌面、overflow、焦點與鍵盤操作，不要求 A01–A11 每列重複排列相同的版面／輸入組合。未受影響且仍有效的證據可重用；純文件／SQL 修改不因 HEAD 改變就重跑全部 UI。身分、資料、權限或舊入口行為受影響時仍驗相應 A／T 案例；使用者取消的 Android 實體裝置 gate 不自行恢復，窄版 browser 不能冒稱實體 PWA PASS。
 
 ### 主要失效風險與停止條件
 
@@ -368,56 +370,62 @@ Evidence 必須保存 source revision／dirty boundary、artifact、環境、角
 
 ### 8.1 工程驗證案例與固定本地入口
 
-以下把新增工程契約對應回 A01–A11；沒有另增產品功能或把 simulation 升格。每個 verifier 在實作 slice 建立後才有可執行命令，現階段名稱／命令未存在，不能認列執行或 PASS。
+T01–T08 是對應 A01–A11 的完整工程驗收案例；現有分層命令已在 package.json 建立，包含 S1、S2、S3、migration 與 Hosting／artifact 檢查。各命令只證明實際覆蓋的層；真身分、正式資料、Hosting、writer fence 等未覆蓋部分仍須相應證據，不因本地 PASS 認列完成，也不要求另造一套 verifier 名稱或人工證明。
 
 | 案例／對應驗收 | 前置與操作 | 預期、失敗條件及 evidence |
 |---|---|---|
-| T01 Pool 隔離／A10 | disposable PostgreSQL 17、runtime role、pool max=1；A 讀寫、取消／rollback 後 B 與缺 context 重用同 pool；另驗 commit 失聯。 | B 不讀 A 私料；無 context deny；不安全 client 不再借出。保存真 SQL／role、連線與 transaction outcome；unit/mock 不覆蓋此層。 |
+| T01 Pool 隔離／A10 | disposable PostgreSQL 17／18、runtime role、pool max=1；A 讀寫、取消／rollback 後 B 與缺 context 重用同 pool；另驗 commit 失聯。 | B 不讀 A 私料；無 context deny；不安全 client 不再借出。保存真 SQL／role、連線與 transaction outcome；unit/mock 不覆蓋此層。 |
 | T02 撤權競態／A03、A09 | 同 Board 正常 mutation 與撤 membership／保存 matrix 交錯，包含非預設及空集合；操作由各角色 API 發起。 | 結果按 §5.7 排序，已提交撤權後的新操作 deny；不得靠測試直接寫預期結果或只比單次 allow。保存 request、guard／revision、commit ordering 及 DB readback。 |
 | T03 Session 切帳／A05 | Quick 先凍結 A 的 account／context，再使本 App cookie 成為 B；送 A 的 capture，另注入 A 晚到成功回應。 | `ACTOR_CHANGED` 且 B 無 task／receipt；late response 不污染 B UI／IDB。真 Session／browser 證據與 SIMULATION 注入分開。 |
 | T04 Legacy ref 與 scope／A09 | 相同 legacy Board ref 位於不同 Workspace、不同 UUID；五種角色與 guest 各從原入口讀／改／保存權限。 | 只解析指定父 scope；原 ref、空集合 matrix、allow／deny 與舊基線一致。保存舊／新 fixture、正常 UI、API DTO 及 DB UUID 對照。 |
 | T05 Quick unknown outcome／A04、A05 | 正常 Quick submit 後在 DB commit／HTTP 回應間中斷；同 key 重送，再改名／移動／刪 task 後 replay；另送異 title。 | 同 key 唯一 receipt、原 hash／owner／時間、replay 不重建；異內容 409。UI／IDB、實際 commit／receipt 證據；注入的位置及限制明示。 |
 | T06 依賴與安全邊界／A01、A02、A10 | 真 producer 資格通過後，用無 Employee 的個人、wrong audience、失效 state／mapping、錯 DSN／owner role、API 未知 route／private SW cache 查驗。 | producer 不可確認為可辨識錯誤且無寫入，非員工正常入口可用；錯角色／DB 啟動拒絕，API 不回 SPA／私人快取。保存 owner wire 版本及 HTTP／DB／cache evidence。 |
-| T07 Writer fence／A06、A11 | 隔離來源／目標與舊 client artifact，從真舊 SDK／RPC／Functions 及受控 worker 在 fence 前後寫入；包含在途提交、最後 delta 與 target 啟用後同 key 重送。 | 切換前僅 source 寫、停寫兩側不接受業務寫、啟用後僅 target 寫；source 水位與 reconciliation 可核對，無缺漏／雙 effect。已提交 target 資料可按既定恢復契約保留。保存真舊請求／job、拒絕／commit 順序、delta／receipt 及停寫量測；fixture 不能直接 seed 預期 target 結果。 |
+| T07 Writer fence／A06、A11 | 隔離來源／目標與舊client artifact，從真舊SDK／RPC／Functions及受控worker在fence前後寫入；包含在途提交、fence後full snapshot與target啟用後同key重送。 | 切換前僅source寫、停寫兩側不接受業務寫、啟用後僅target寫；source snapshot與reconciliation可核對，無缺漏／雙effect。已提交target資料可按既定恢復契約保留。保存真舊請求／job、拒絕／commit順序、snapshot／receipt及停寫量測；fixture不能直接seed預期target結果。 |
 | T08 Hosting／Session 相容／A01、A02、A05、A11 | 真 producer／核准非正式 Hosting→Cloud Run 路徑具備後，從相容主／Quick origin 正常登入、取消、切帳及重開；驗同 origin Quick、錯 callback／forged host、CDN／SW 舊 bundle 與依賴失效。 | 相容 Cookie 到 server 且綁 exact public origin／entry／actor；各 App Session 分開，錯 origin／actor 拒絕。HTML／API revision 相容、API 非 SPA、私人 no-store；無登入循環／跨帳號／假空資料。保存正常 UI、Cookie attributes 的去秘密摘要、路由／artifact／cache／Session／DB 證據；localhost mock 或 direct run.app 不覆蓋此層。 |
 
 現有 `npm run dev:local` 與 `scripts/local-test-server.ps1` 是 ProJED 固定 4000 入口，且目前跑 Vite `--mode test`；它本身不證明新 Node API／Cloud SQL 已接入。未來整合驗證在同一入口下依明確 test profile 接入新 API，source acceptance 要核實 profile、代理／同源路徑、actor 及 DB。不得覆蓋使用者的主測試台、清除未知 4000 process 或另留常駐 localhost；需要隔離 server／DB／browser 時記錄 task owner／PID tree／loopback port／cleanup，完畢核實 port released。
 
 本地 verifier 僅測授權的 disposable fixture，不自動連 managed／production DSN。單元、真 PostgreSQL、正常 browser／API、managed nonprod 與真 external producer 的結果分層；任一所需命令、環境或契約不可得時標未充分驗證／阻塞及恢復條件，不能把舊 Supabase PASS 或 checker mock 當新 stack PASS。
 
+2026-10-29 選測精簡：`npm run verify:dev-139:s3:db:isolated` 使用同一 S3 wrapper 的 `-DatabaseOnly`，套用相同有序 migrations、seed、runtime boundary、RLS、權限／工作區／看板與 HTTP／receipt 回歸；不建前端、不啟 browser。收據明列 `S3_DOMAIN_HTTP_DB_LOCAL_ACCEPTANCE`、`browserSmoke=NOT_RUN`，不列 UI check。原 `verify:dev-139:s3:isolated`／`verify:dev-139:s3` 仍包含建置及正常產品 UI／reload。只改 DB／server 時可選前者並重用未受影響的 UI 證據；前端或真 Session 接線仍需對應 UI／身分驗證，A01–A11、T01–T08 與完整交付分母不變。這是既有驗證的選測入口，不是新增 required gate。
+
+本次 RD 自查的 PostgreSQL 18.4 收據為 `output/qa/dev-139/s3/20261028T174743Z-7dfb04fe/result.json`：0001–0017 套用及同 checksum 重跑、DB／HTTP 共 60 checks PASS；`browserSmoke=NOT_RUN` 且 checks 不含 UI。task-owned PostgreSQL、HTTP 已停止，port 54436 已釋放，nonce 暫存目錄已移除；沒有重建前端或接觸正式環境。此結果只支持本地 DB／HTTP 層，未宣稱真 Session、完整 UI 或整體交付完成。
+
+遠端替代入口為 [DEV-139 isolated validation](../../.github/workflows/dev139-native.yml)：只在此開發分支相關 source 變更或手動 dispatch 時，使用 GitHub hosted Windows runner 執行原 S3 `-DatabaseOnly` 與 migration wrapper。兩者各建 nonce PostgreSQL cluster／隨機 credential 並自行清理，不讀正式 Secrets、不連 managed DB；其餘獨立型別／unit／boundary 檢查不因另一項失敗整批取消。只保存去秘密的 `result.json` 七天。此入口提供本機容量不足時的驗證途徑，不要求先取得本機容量例外、不更改 branch protection／required checks，也不把本次 COO 審視設成 gate；結果仍只支持實際執行的合成 fixture／DB／HTTP 層。
+
 ## 9. Owner 依賴、分期與實作前出口
 
-| Owner | 此次需交接的能力 | 進入實作前的條件 |
+| Owner | 此次需交接的能力 | 開發與正式啟用的條件 |
 |---|---|---|
-| ProJED | 自有 runtime／API、Principal mapping、原工作區／看板／權限相容、業務 policy、資料／PWA／provider 移轉及正常入口驗收。 | D1／D2 已確認；本地實作要求；對應 slice 完整工程契約與 app-specific DB checker。 |
-| Jenfu-Platform | ProJED registry／入口、版本化 handoff／Session／revocation、共用 foundation／capacity；首階段沒有任務摘要／業務 BFF。 | 人類明確授權此專案與對應動作；owner 本地 native DEV、身分 producer／consumer manifest 及相容證據。 |
-| OrgMaster | D1 已固定非員工最小 Principal／provider publication，加上現有公司角色／scope 與必要准入契約；不存私人任務內容。 | 人類明確授權此專案與動作；owner 決定 native DEV／受控 slice，不把舊 DEV-057 自動重新派工。 |
+| ProJED | 自有 runtime／API、Principal mapping、原工作區／看板／權限相容、業務 policy、資料／PWA／provider 移轉及正常入口驗收。 | D1／D2 已確認；在既有授權內續行 source、測試與隔離演練。真登入啟用仍須已發布的 owner 契約、可信 mapping、current-state 與對應相容證據；未具備時保持 production resolver 關閉。 |
+| Jenfu-Platform | ProJED registry／入口、版本化 handoff／Session／revocation、共用 foundation／capacity；首階段沒有任務摘要／業務 BFF。 | 已有 DEV-007 source slice，進度見 §37；未正式發布不阻擋隔離 consumer 開發，但不能啟用正式 wire 或把模擬當真登入。共用資源的新權限仍受 §33 限制。 |
+| OrgMaster | D1 已固定非員工最小 Principal／provider publication，加上現有公司角色／scope 與必要准入契約；不存私人任務內容。 | 已沿既有 DEV-057 開發最小 publisher，進度見 §36–§37；沿用該 owner 任務，不另設 native ID／重新立案或人工作證前置。正式發布與新權限依其 owner 契約及 §33。 |
 | 後續業務 consumer | Platform 摘要／AI-PDM 連結等尚未要求，不加入首階段估工或驗收。既有身分 consumer 僅作 wire 相容性盤點。 | 人類另決業務情境；各受影響 repo 自有 native DEV／明確開發範圍；不要求無影響 app 重發。 |
 
-現行引用為 `JENFU/DEV-010`、`JENFU/DEV-012`、`JENFU/DEV-015` 與 `ORGMASTER/DEV-057` 的既有契約；不是此次工作的 native DEV。ProJED 跨專案 project key 尚未核實，先用 canonical repo／DEV-139／slice 描述來源，正式跨專案登錄時核對。
+此次 owner source 沿用 Jenfu-Platform DEV-007 與 OrgMaster DEV-057；`JENFU/DEV-010`、`JENFU/DEV-012`、`JENFU/DEV-015` 仍是基礎契約引用。跨專案以 canonical repo／native DEV／slice 辨識來源；未核實的 project key 不另成為本地開發門檻。
 
-Rev 6 沿 Rev5 已審查的 ProJED 技術選型與 S1 交接核心，補 §6.3–§6.6 既有使用者相容切換及 A11／T07／T08；S1 的 source surface／命令／K01–K08 不變。S1 達 RD Implementation Ready＋架構定案的範圍仍限 §11 本地 runtime／DB 核心。S2／S3、完整移轉與整合仍未達實作成熟度；外部 wire、完整 domain／相容入口 contract、費用／共享容量／恢復及新路徑 QA 未驗證，不表示其他 owner 接受、產品 PASS、無縫切換已具備或 release ready。
+Rev 8 的 employee-only／無 ProJED audience 是當時基線。現行 owner source 已增加最小 Principal publication、ProJED Session v3／handoff v4，實際 source／CI 與尚未發布的邊界以 §36–§37 為準；不再把舊契約缺口當作所有後續 source 工作的停止條件。production pin set 仍空集合，真 handoff fail closed；callback、App Session、mapping 與真正常登入仍須完成驗證，不因 source／CI 通過而標為整合完成。
 
-下一個可交接的實作工作段是 S1；本輪只準備該交接，未執行 coding。S2 的外部 owner contract 可繼續在文件授權內查證；真 consumer 接入需完整 producer／Session 契約及相應專案授權。S3 正常功能移轉必須有同一可信 actor→API→DB 路徑及原功能基線，不能用 S1 測試 actor 代替。
+S3 fail-closed read／write route及 collaboration command 已完成本地實作：只接受由上層注入的可信 Session actor resolver，並以同一 actor transaction 呼叫 repository。沒有 resolver 的 production composition 保持404；正常產品接入及登入切換仍須S2 owner wire。不得用QA simulation、S1 synthetic actor或任意header／body取代真Session。
 
 ### 9.1 三個工作段及目前成熟度
 
-使用同一 DEV-139 的估工工作段，沒有建立其他 repo 的 native task。分段是讓依賴可查證；文件準備不能當作已取得實作授權，也不讓測試替身繞過身分契約。
+沿用同一 DEV-139 與 §9 列出的 owner native task；分段用於辨識依賴與證據範圍，不增設逐段核准。授權以人類原始指示及直接索引為準；文件準備、測試替身或本地 PASS 均不擴張正式權限或繞過身分契約。
 
 | Slice／owner | 估工輸出與依賴 | 驗收邊界／實作前仍需補齊 |
 |---|---|---|
 | S1 ProJED runtime／DB 核心 | **RD Implementation Ready＋架構定案**；§11 固定 schema／roles／policy、runtime／actor transaction、checker、migration runner、驗證入口及 source surface。沒有 provider／現有前端切換或真 SSO。 | K01–K08、T01／A10 的限定 local HTTP／DB 層；正常產品 UI 不在 S1。測試 actor 只在隔離 verifier process 內注入，不發布可自述身分的 HTTP auth。 |
-| S2 身分 producer／consumer | §4.5 的 OrgMaster／Platform owner wire、非員工准入及撤銷可獨立收斂；ProJED mapping／各 App Session／CSRF 與 context precondition 的 consumer 接入依 S1。 | A01／A02／A03／A05／A11、T03／T06／T08 的真正常登入及拒絕；外部 acceptance、既有帳號 mapping proof、相容 origin／Cookie／callback／Session state／期限與在途撤銷界線均需收斂。其他專案開發另需其明確授權。 |
-| S3 ProJED 現有能力移轉 | §5.4 的逐操作 inventory、HTTP adapter、resource capability／guard、同步／附屬 provider，依 S1／S2 的同一可信 actor→API→DB。 | A03–A11 及 T02／T04／T05／T07／T08；逐操作 DTO／transactions／idempotency、§6 移轉與舊 client／Hosting／PWA 相容、transport／費用及正常 UI 證據。無完整替代／相容證據不能退出原 provider。 |
+| S2 身分 producer／consumer | ProJED server-only consumer seam 已實作：只接受 verifier output、exact contract pin、有效時間／撤銷與唯一 mapping，成功只產生既有 `ServerActorV1`；production pins 空集合，QA simulation 不進 production import graph。OrgMaster／Platform owner source 見 §36–§37，可在既有授權內續行隔離整合。 | 本地 seam 12/12 PASS，不是 A01／A02／A03／A05／A11 或 T03／T06／T08 的真登入證據。正式 owner publication／consumer ACL、既有帳號 mapping proof、相容 origin／Cookie／callback／Session state／期限與在途撤銷仍須驗證；新權限與正式動作不由 source 授權推定。 |
+| S3 ProJED 現有能力移轉 | frontend read／write、workspace／board／member／permission／invite、record／activity、resource revision、明確HTTP backend、單一polling scheduler、Board跨Workspace搬移、Quick／Workbench、Task Tracking、Backup／Import、帳號偏好、Calendar subscription／ICS feed、W14 full-snapshot rehearsal及W15舊Calendar URL代理已實作；`0003`～`0014`以scope／capability RLS、同一actor transaction、冪等receipt、專用importer及fail-closed route保護。disposable PostgreSQL另驗空白candidate單交易搬移、rollback、digest reconcile、非空目標／未承接domain／漂移拒絕。 | 本地adapter與DB／HTTP acceptance只證明bounded foundation；W18已用QA actor完成正常HTTP產品UI／reload煙霧，但cookie-to-actor mapping不進production graph，不是真Session或A03–A11／T02／T04／T05／T07／T08證據。RAG／會議音訊／Inbox與Storage尚未承接；正式資料plan、writer fence、舊client／Hosting／PWA相容部署、容量／費用及真Session／正式入口UI仍需完成，不能退出原provider。 |
 
-S1 已有完整可交 RD 的定案契約；S2／S3 為 **RD Readiness Review**，沒有整體 architecture closure。S1 不等待業務串接或 external wire 的發布，也不能宣稱正常產品 UI／SSO／整合完成。S2 的真身分依賴不阻止 S1 文件完成，會阻止新登入切換與整合驗收。
+S1 已完成本地核心；S2 consumer seam 與 §36–§37 owner source 可在隔離環境續行整合，真 producer／Session 尚未完成部署驗證；S3 W1–W18的bounded slices已本地實作及驗證。本地QA Session已驅動編譯後Vite artifact、真HTTP API及隔離PostgreSQL完成正常產品UI煙霧，但這不是真Platform SSO／既有帳號mapping或正式環境證據。synthetic migration fixture、managed連線契約、未部署相容代理與未執行Docker container仍不能宣稱正式資料、無縫切換或整合完成。
 
-S2／S3 的 readiness 缺口：已發布 owner wire／consumer ACL／非員工及在途撤銷契約；全部 operation DTO／scope guard／polling cursor／provider qualification；資料演練的合成 schema／verified mapping／delta／全來源 fence／reconciliation／舊 PWA 恢復；Hosting／各 public origin Session／Cookie／callback／artifact 相容；共享容量及可歸屬費用證據。沒有未決產品 D1／D2；這些是具體工程／owner 依賴，不要求人類重新選相同方案。
+S2／S3 正式啟用的 readiness 缺口：已發布owner wire／consumer ACL／非員工及在途撤銷契約；真資料plan與verified mapping；Inbox、RAG、會議／Storage等未承接domain的處置；全來源fence、舊PWA恢復、Hosting／各public origin Session／Cookie／callback／artifact相容；共享容量及可歸屬費用證據。沒有未決產品D1／D2；依賴只限制相應啟用／正式動作，不阻擋安全且獨立的 source／測試工作，也不要求人類重新選相同方案。
 
 後續 capsule：
 
 1. **首階段基礎對齊的非正式實作**：補到 RD Implementation Ready，再在明確專案／本地或非正式範圍內實作 runtime／API、schemas／roles、identity consumer、同步與檔案替代；以 A01–A05／A07–A10 驗原功能與權限，不新增業務串接 UI。
-2. **資料／PWA 演練**：完整 migration、verified mapping、全來源 writer fence、delta／reconciliation、匯入 proof／CAS、Hosting／舊 client 相容、容量／恢復與 rollback compatibility 定案；用隔離資料與真 browser 正常舊入口驗 A06／A09／A11、T07／T08 並量測停寫，不複製正式私資料。
+2. **資料／PWA 演練**：W14已完成支援domain的本地full-snapshot／rollback／reconciliation，W15已準備Calendar舊URL代理；後續只補真資料plan、verified mapping、未承接domain、全來源writer fence、Hosting／舊client相容部署、容量／恢復與rollback compatibility，並用真browser正常舊入口驗A06／A09／A11、T07／T08及量測停寫，不複製正式私資料。
 3. **正式切換／退役**：另有明確正式主要動作與資源範圍，確認可接受停寫／恢復窗口，沿 app-owned release gate 完成真身份→API→DB／storage readback、恢復與觀察；保持單一 writer 與既有 public origin 相容，舊站／DB／Hosting／Billing 處置另有退役 gate。
 4. **跨 app 業務使用情境**：基礎對齊有相容證據且人類要求任務／資料串接後，依 §5.3 固定 consumer、最小欄位、授權及正常 UI 驗收；本輪不建立新 DEV 或任務摘要／專案連結實作。
 
@@ -448,13 +456,13 @@ Rev 3 另只讀核對 Jenfu-Platform `package.json`、canonical-principal／veri
 
 | 決策 | 定案內容／相容限制 |
 |---|---|
-| Runtime／前端 | Node 24／npm 11、TypeScript、node:http＋pg；兩個 Cloud Run 入口使用同套 server，entry=`main / quick`，各自同源 Session。保留 React／Vite／Zustand，不引進 ORM 或另一套 frontend runtime。 |
+| Runtime／前端 | Node 24／npm 11、TypeScript、node:http＋pg；單一 Cloud Run runtime提供主／Quick shell與API，兩個既有public origin仍維持各自同源Session。可信entry由Session actor決定，不由Host header決定。保留React／Vite／Zustand，不引進ORM、第二runtime或另一套frontend runtime。 |
 | DB ownership | app key=`projed`；`projed_core / projed_contract`、lifecycle-specific owner／migrator／runtime、ledger 與單一 DSN。foundation 提供 DB／角色／schema bootstrap；app runner 只管自己的 forward-only DDL。 |
 | 身分與權限 | OrgMaster 最小 Principal publisher、Platform handoff／Session／current state、ProJED 本地 UUID mapping／resource capability。S2 trusted adapter 產生 §11.4 唯一內部 `ServerActorV1`，不另建平行 VerifiedActor／identity master，也不讓 DB 或 browser 自行決定 Principal。實際非員工 wire 未發布，S2 保持 gate。 |
 | Policy／交易 | trusted transaction-local context、account／resource guard revision、transaction advisory locks、同一 client；runtime 無 owner／BYPASSRLS。S1 只定案 account／profile 核心，Board membership／matrix 的全部 command 在 S3 補契約。 |
 | 同步 | 版本 polling＋canonical reload；同一 canonical task，通知不含私人正文。S3 每個可見 App／account／context 只有一個 polling scheduler，合併 workspace index 與 active Board 的受權 scope 檢查；view 不另建 timer／連線。重用 [coalescedAsyncRefresh](../../src/utils/coalescedAsyncRefresh.ts) 的 single-flight／trailing-run 語意，version 未變不重載正文。5 秒 active interval、hidden pause、focus／reconnect 補讀及 10 秒正常週期收斂仍是 S3 驗收目標；cursor／guard、連線與費用需真證據，不套舊三 app PASS。 |
 | 檔案／工作 | 私有 Cloud Storage；上傳 intent、hash／bytes／purpose／owner 與完成驗證由 ProJED 擁有，讀取走受權 API或原相同上限的短效 URL。沿 ADR-051 的 DB claim／lease、bounded worker／Job、費用與 cleanup；未資格功能不啟用，不新增通用 queue。 |
-| 移轉／本機恢復 | 優先保留既有 public origin／PWA，由相容入口轉至 Cloud Run；source snapshot＋有界 delta＋全來源單一 writer fence、不可變 reconciliation，沿 §6.3–§6.6。若換 origin 另驗 export／import／claim、server 核實來源／目的帳號 proof、原 ID／CAS。Cookie／callback、route／artifact、proof／bundle／恢復格式在 S2／S3／演練補齊，未完成前保留可恢復入口。 |
+| 移轉／本機恢復 | 優先保留既有public origin／PWA，由相容入口轉至Cloud Run；先全來源writer fence，再以單一一致性full snapshot匯入空白candidate並做不可變reconciliation，沿§6.3–§6.6，不新增delta／雙寫平台。若換origin另驗export／import／claim、server核實來源／目的帳號proof、原ID／CAS。Cookie／callback、route／artifact、proof／bundle／恢復格式在S2／S3／演練補齊，未完成前保留可恢復入口。 |
 
 費用限制仍是「不大幅增加」，不把未查證的帳單、第四 app capacity、PITR／恢復或外部 owner acceptance 寫成已通過。kernel 的局部開發不依賴付費 tier 決策；新登入／移轉／managed 環境驗收則須各自 evidence。
 
@@ -462,7 +470,7 @@ Rev 3 另只讀核對 Jenfu-Platform `package.json`、canonical-principal／veri
 
 S1 只建立**本地、隔離資料的 runtime／DB 核心**：啟動／DB boundary、public health 與 synthetic 靜態檔、內部 actor transaction、profile 隔離及 migration／verifier。`UI entry: Out of scope`，因本工作段是基礎核心交付；A01–A09 的正常產品入口仍必須在 S2／S3／演練驗證，不由 kernel 測試代替。
 
-下面是實作時需建立／修改的 source surface；本輪不建立這些程式檔、SQL、config 或命令。檔名已固定供交接，沒有連結不存在的檔案。
+下面是 S1 source surface；2026-10-26 已依本節建立，實際驗證狀態見 §12。
 
 | Source surface | 責任／輸出 |
 |---|---|
@@ -480,7 +488,7 @@ S1 只建立**本地、隔離資料的 runtime／DB 核心**：啟動／DB bound
 
 ### 11.3 S1 完整資料與角色契約
 
-S1 使用 PostgreSQL 17 disposable cluster，DB name 固定格式 `dev139_s1_<32位小寫hex nonce>`。bootstrap 只在本 task 新建的 cluster 建角色／兩個 app schemas 及 verifier-owned sibling fixture；managed lifecycle bootstrap 尚未要求。owner=`projed_owner_disposable`（NOLOGIN）、migrator=`projed_migrator_disposable`、runtime=`projed_runtime_disposable`；三者均 NOSUPERUSER／NOBYPASSRLS／NOCREATEDB／NOCREATEROLE，runtime／migrator NOINHERIT，runtime 無任何 owner／migrator role membership。migrator 只可 SET ROLE 到自身 app owner，不能設定 runtime 取得此能力。
+S1 使用 PostgreSQL 17／18 disposable cluster，DB name 固定格式 `dev139_s1_<32位小寫hex nonce>`，並保存實際 major。bootstrap 只在本 task 新建的 cluster 建角色／兩個 app schemas 及 verifier-owned sibling fixture；managed lifecycle bootstrap 尚未要求。owner=`projed_owner_disposable`（NOLOGIN）、migrator=`projed_migrator_disposable`、runtime=`projed_runtime_disposable`；三者均 NOSUPERUSER／NOBYPASSRLS／NOCREATEDB／NOCREATEROLE，runtime／migrator NOINHERIT，runtime 無任何 owner／migrator role membership。migrator 只可 SET ROLE 到自身 app owner，不能設定 runtime 取得此能力。
 
 新 disposable DB 的 CONNECT／CREATE／TEMP 預設 PUBLIC grants 由 fixture bootstrap 撤銷，再只給各 role 必要 CONNECT；schema 由 owner 擁有，runtime 沒有 CREATE／TEMP。sibling fixture同樣明確拒絕此runtime CONNECT。使用 process內隨機的 bootstrap／migrator／runtime credentials及loopback SCRAM，秘密只在測試 process／受控暫存credential檔，不能寫source profile／結果或stdout；cleanup刪除已核實owned暫存秘密。現有 trust-mode verifier只作process lifecycle參考，不外推為新的登入隔離證據。
 
@@ -537,27 +545,27 @@ HTTP request deadline=10 秒、URL／header／body 有明確上限（URL 8 KiB�
 
 ### 11.5 實作順序、裁量與回送條件
 
-S1 順序固定：先加 node／pg source與 typecheck、config／static／HTTP contract tests→disposable bootstrap／manifest／checker／兩 migration→pool／actor transaction→K01–K08 真 PG 與 HTTP verifier→針對結果修正→source freeze／QC／Spec Drift Check。所有新命令先建立，再進相應驗證；沒有執行過的命令不能補寫 PASS。
+S1 初次建立的 source、bootstrap／checker、pool／actor transaction 與 K01–K08 已完成，見 §12；當時的固定開發順序不再作為後續每次修改的前置。後續按受影響的行為與風險選測，重用仍有效的證據；不另要求一次人工 source freeze、QC 簽核或 Spec Drift Check 才能續行本地開發。 任務索引的跨專案相依與 owner 表已改指向 §36–§37，移除「尚無 native 任務／須重新指定同範圍開發」及「發布要求前不得準備 artifact」的過期前置；未新增 executor、簽核或 required gate。既有 required CI、DB checker 與正式發布執行器仍有效，未執行的驗證不得補寫 PASS。
 
-RD 可決定局部函式拆分、命名、錯誤訊息繁中翻譯、SQL 排版及符合契約的測試工具寫法。不得自行改 framework／ORM、schema／roles／actor fields、lock模式／順序、正常 API／身份來源、RLS、profile 可改欄位、timeout／pool gate、backend fallback、provider／PWA／主測試台、跨專案範圍或 acceptance。patch／digest 綁定須重核實，但不是要求人類重答架構。
+RD 可在已授權 DEV-139 內補齊必要 API、forward-only schema／policy、mapping／Session 與其測試，並同步更新受影響契約及 checker，不因涉及 schema 或跨模組就重新要求架構核准。既定 framework／ORM、身分權威、私人隔離、actor／lock 安全、原功能與驗收分母仍須維持；新專案／環境／責任、IAM／Secret／credential／billing、正式資料／切流與破壞性操作仍按人類授權邊界處理，本次審視不執行這些操作。patch／digest 綁定須重核實，但不是要求人類重答架構。
 
-首次 source／文件不一致、需新 public API／schema／policy／跨模組責任、S1 必須改禁止檔案、real producer 缺口或任一 K 案例不能按定義執行時，停止受影響工作、保存差異並回到 DEV-139 架構審查；不得改 verifier／spec 讓錯誤變 PASS。缺 PostgreSQL 17／Node24／工具是環境 prerequisite，不得偷偷改驗證層、安裝或接遠端 DB；後續實作依其授權處理。
+source／文件不一致由同一成果負責人在本切片修正並驗證；只有實際需要改變人類已定成果、安全邊界或新增未授權責任時，才停止受影響動作並釐清，安全且獨立的工作繼續。驗證失敗保存原結果；不得只改 oracle／spec 把失敗轉成 PASS。real producer 或工具缺口只阻擋依賴它的案例，不能拿替身宣稱真登入；缺 PostgreSQL 17／18、Node24 或工具時不得偷偷接遠端 DB，managed target 的實際 major 另在該環境重驗。
 
 ### 11.6 QA／QC 命令與證據
 
-以下命令為 **S1 必須建立的 source acceptance outputs**，不是目前存在或本輪已執行的命令；交接給 RD 時先建立命令／fixtures，再按順序跑。這些是可重現的 verifier contract，沒有付費／managed／production操作。
+以下命令已於 2026-10-26 建立；當前分層結果見 §12。這些是可重現的 verifier contract，沒有付費／managed／production 操作。
 
 | 命令 | 固定輸出／失敗行為 |
 |---|---|
 | `npm run verify:dev-139:s1:typecheck` | tsc NodeNext server／S1 verifier noEmit；不借用 frontend build 成功掩蓋 server 型別錯誤。 |
 | `npm run check:db-boundary` | 同一profile的 migration／object allowlist、SQL token／schema／角色／PUBLIC ACL／dynamic SQL 禁止規則；production import graph不含QA actor／對外raw client／另一pool，callback SQL不含transaction／Session控制；exit非0拒絕。static check不代替catalog／RLS。 |
 | `npm run verify:dev-139:s1:unit` | config／actor／deadline／static／HTTP error contract，Cloud Run bind config 只標 UNIT；不能 connect 任意 DSN。 |
-| `npm run verify:dev-139:s1:isolated` | wrapper 建 task-owned loopback PostgreSQL17，nonce DB／roles／sibling fixtures→bootstrap→`npm run migrate:dev-139:s1:disposable`→catalog、actor／RLS／HTTP／競態。記錄 process tree、profile／migration hashes；finally cleanup／port released，失敗保留 evidence。 |
-| `npm run verify:dev-139:s1` | 上四項固定順序聚合，遇失敗停止且保留分層結果；不能包入舊 Supabase／production scripts。migration 命令只接受同 wrapper 已核實的runtime binding，不靠output receipt授權target、不自行bootstrap或改DSN。 |
+| `npm run verify:dev-139:s1:isolated` | wrapper 建 task-owned loopback PostgreSQL 17／18，nonce DB／roles／sibling fixtures→bootstrap→`npm run migrate:dev-139:s1:disposable`→catalog、actor／RLS／HTTP／競態。記錄實際 major、profile／migration hashes；finally cleanup／port released，失敗保留 evidence。 |
+| `npm run verify:dev-139:s1` | 上四項固定順序聚合，失敗回非零並保留分層結果；聚合命令短路後，安全且獨立的檢查可由各自入口繼續收集，失敗前提所依賴的操作標阻塞，不以續跑忽略必要失敗。不能包入舊 Supabase／production scripts；migration 只接受同 wrapper 已核實的 runtime binding，不靠 output receipt 授權 target、不自行 bootstrap 或改 DSN。 |
 
 | K case | 前置／正常操作與 fail-seeking | 必要 evidence／通過條件 |
 |---|---|---|
-| K01 boundary／啟動 | 真PG17正常啟動；換marker／checksum、role、nonce DB／remote DSN或policy／grants時拒絕。隔離verifier另用runtime role對fixture sibling測SELECT／CREATE／CONNECT／SET ROLE／TRUNCATE；檢查source profile在兩次不同nonce attempt後byte不變、binding與target相符，偽造／stale binding拒絕。 | catalog＋HTTP＋process exit；kernel不接sibling DSN、不自動修復，verifier的實際拒絕與startup ACL讀取分層；static profile不混每輪bindings。 |
+| K01 boundary／啟動 | 真 PostgreSQL 17／18 正常啟動；換marker／checksum、role、nonce DB／remote DSN或policy／grants時拒絕。隔離verifier另用runtime role對fixture sibling測SELECT／CREATE／CONNECT／SET ROLE／TRUNCATE；檢查source profile在兩次不同nonce attempt後byte不變、binding與target相符，偽造／stale binding拒絕。 | catalog＋HTTP＋process exit；kernel不接sibling DSN、不自動修復，verifier的實際拒絕與startup ACL讀取分層；static profile不混每輪bindings。 |
 | K02 forward-only ledger | 新 owned DB apply0001／0002→重跑→alter輸入checksum→中途故障／斷線→ledger readback。 | 同 checksum無副作用，變更／unknown version拒絕；rollback不留半筆，unknown先核實；源 SQL不修改。 |
 | K03 profile isolation | admin 只 seed A／B 父 profile＋guard；actor transaction 正常讀／改A display／prefs，再以B actor試讀／改A；缺context／錯UUID／principal空值或超長／錯entry／過期及fakeguardrevision，試改id／email／insert／delete。 | 正常更新＋readback；上述越權或無效context deny，不以owner測runtime。SQL／roles／context與穩定錯碼；不以synthetic Principal測例宣稱真身分／mapping驗證。 |
 | K04 pool reuse／T01 | pool max=1，A成功／callbackerror／query或checkout timeout／取消後B接續；對COMMIT回應故障注入。保留port，在完成／錯誤／取消後再query；callback並行／返回仍有query時fail-seeking。填滿32個pool waiters，下一筆拒絕；取消後的late checkout禁止callback／BEGIN。 | B無A context／私料，scope外query無DB dispatch；lease只有一次release或destroy，backend pid及pending counts支持unsafe client不再使用。COMMIT unknown不retry／不以rollback報未提交；沒有第二queue／cancel connection，fault evidence標明注入層。 |
@@ -566,7 +574,7 @@ RD 可決定局部函式拆分、命名、錯誤訊息繁中翻譯、SQL 排版�
 | K07 source compatibility | 比對禁止source的bytes／既有命令，掃production import graph與bundle；兩entry的kernel配置使用相同artifact。 | src／Vite／PWA／launcher／release／Supabase歷史原樣；沒有QA actor／DB Secret進frontend。僅證明未變範圍，不代替UI回歸PASS。 |
 | K08 shutdown／cleanup | 在callback／等待pool時關閉task Node，處理late checkout／query rejection，再停止verified task PostgreSQL tree。 | 8秒內停止新請求、所有port closed／lease有唯一cleanup outcome，沒有late BEGIN／COMMIT或double release；只清taskowned資源、Node／PG ports released及owned秘密刪除，保存cleanupreceipt。 |
 
-每次結果至少含 ProJED HEAD／dirty boundary、涉及source／profile／artifact／migrationSHA、PG／Node版本、實際DB／role／port／PID owner、actor fixture來源、K ID／操作／期望／實際／outcome及cleanup。output不含credential、真人私人資料或任務正文。K03的預期更新由runtime actor callback產生，不能在case前直接seed該結果；需要source改動的失敗先回RD，freeze後再QC。S1證據不外推成A01–A09、managed Cloud SQL、真SSO或Production PASS。
+每次結果至少含 ProJED HEAD／dirty boundary、涉及source／profile／artifact／migrationSHA、PG／Node版本、實際DB／role／port／PID owner、actor fixture來源、K ID／操作／期望／實際／outcome及cleanup。output不含credential、真人私人資料或任務正文。K03的預期更新由runtime actor callback產生，不能在case前直接seed該結果；source 修正後只刷新受影響的驗證，不另要求人工 freeze／QC 簽核；專案原有 required CI 與正式發布執行器維持。S1證據不外推成A01–A09、managed Cloud SQL、真SSO或Production PASS。
 
 ### 11.7 Rev4 Architecture Closure Review（歷史自審；現行結論見 §11.8）
 
@@ -607,3 +615,963 @@ S1的transaction-local與transaction advisory lock依據：[PostgreSQL17設定�
 使用思考習慣：#多層次分析、#限制條件、#可驗證性
 
 **現行結論：上述缺口已在Rev5文件修正，S1 RD Implementation Ready＋架構定案通過文件審查；完整整合仍有條件。** 此為RD修改後自驗，非獨立QC／程式或效能PASS。S1沿同一source surface及五個verify/check命令、K01–K08交接，沒有另增runtime service、middleware framework、通用授權／query engine、第二queue或每輪人工步驟；未量測工時／帳單，不宣稱已降低成本或提高實際效能。S2真身分／mapping／Session仍未定案；S3完整domain／polling／provider與移轉、共享容量／費用仍依原re-entry條件補證據。
+
+## 12. S1 實作狀態（2026-10-26）
+
+已建立 §11.2 指定的 Node／PostgreSQL 核心、兩份 forward-only migration、靜態 profile／attempt binding、migration runner、DB boundary checker、synthetic static／health／API fail-closed runtime、actor transaction 與 isolated verifier。`package.json` 直接固定 Node／npm engines、`pg ^8.21.0`、`@types/pg ^8.23.1` 及 §11.6 六個命令；既有 `src/`、Vite／PWA、Firebase／Supabase config、Functions、舊 migrations、4000 launcher 與 release scripts未修改。
+
+目前 RD 自查結果：
+
+- `npm run verify:dev-139:s1:typecheck`：PASS。
+- `npm run check:db-boundary`：PASS。
+- `npm run verify:dev-139:s1:unit`：4/4 PASS。
+- `npm run verify:dev-139:s1:isolated`：PostgreSQL 18 的 task-owned cluster 完成 migration apply／同 checksum rerun、runtime identity／ledger、A／B RLS、guard revision deny、runtime INSERT deny、health／static／API fail-closed及清理，`S1_LOCAL_ACCEPTANCE` PASS。
+- `npm run build:test`：PASS；既有 Vite 產品仍可建置。較大 chunk 與 Browserslist 資料提示是既有非阻塞警告。
+
+這些結果只支持S1本地kernel，不能外推成真Principal mapping、產品UI、Cloud SQL、A01–A11、S2／S3、正式資料移轉或無縫切換PASS。後續S2／S3與W14狀態分別見§13–§28；未來managed target仍以同一migration／boundary verifier查驗實際PostgreSQL major。外部producer、正式移轉／切流仍依原owner與release邊界。
+
+## 13. S2 ProJED identity consumer seam（2026-10-26）
+
+2026-10-26 的基線只有 employee-required handoff v2／platform-auth v1，不能原地放寬或冒充 ProJED wire。現行 owner candidate source 已更新為 §36–§37 的最小 Principal publication、ProJED Session v3／handoff v4；source、正式 publication 與 ProJED 啟用分開認列。
+
+本 repo 已新增 `server/identityConsumer.ts`，只提供 server-only seam：raw input 必須先經注入的 `TrustedIdentityVerifier`，再核對 exact contract version／manifest digest／issuer／`projed` audience、到期／撤銷／current-state期限及唯一 mapping；成功只回既有 `ServerActorV1`，actor 到期取 handoff、來源 Session 與 current-state 三者最早值。mapping missing／ambiguous／inactive／unavailable 分別 fail closed，不用 email 建立 profile，也不自動建立 owner。production pin set 刻意為空，因此現行所有 handoff 均拒絕；HTTP callback、cookie、Session store、mapping DDL及任何登入 route 都沒有開啟。
+
+`qa/dev-139/s2/identityConsumer.test.ts` 的 12 項 SIMULATION 覆蓋：production empty pins／current v2 拒絕、非員工 normalized context、verifier 不可繞過、verifier transport unavailable、version／digest／issuer／audience mismatch、時間／撤銷、mapping missing／ambiguous／inactive／unavailable／transport failure、mapping 等待後到期重驗、identity／revision mismatch及 S1 actor guard。`npm run verify:dev-139:s2` 通過獨立 S2 typecheck、production import graph／DB boundary及 12/12 unit。這只證明 seam fail-closed 與內部轉換，不是 owner wire conformance、真 SSO、App Session、資料庫 mapping 或正常 UI PASS。
+
+正式啟用條件：owner 發布對應 contract／manifest、registry／callback／Session／revocation 與非員工 Principal publication；ProJED 完成 exact pin、既有 UUID proof、Session store、正常主／Quick入口及 T03／T06／T08 驗證。source 開發沿 §9 既有授權續行；上述啟用條件未具備前維持 production pins 空集合與未知 API 404。
+
+### 13.1 v4 verifier 與既有帳號 proof source（2026-10-29）
+
+- `platformHandoff.ts` 以單次 server-to-server PKCE exchange 讀 v4，固定 `/api/sso/token`、ProJED client 與設定的主／Quick exact `/api/auth/jenfu-sso/callback`；拒絕 redirect、錯 issuer／audience、非 Google proof 及不一致的期限／kind／Employee，不自動重試一次性 code。manifest digest 是部署綁定，不是假稱 wire response 含 hash。
+- `platformPrincipalState.ts` 綁定 owner 014 的 11 欄 `read_projed_principal_state_v1`。每次呼叫重新讀取、不做 positive cache；零／多列、過舊讀取、identity／Google／kind／Employee／revision／epoch／barrier 漂移拒絕。owner wire 沒有 `publishedAt`，不虛構該欄。`readCurrent` 可供後續 Session 每請求使用，不要求重放已到期的 60 秒 handoff。
+- `platformIdentityVerifier.ts` 串接一次 exchange、一次 current-state read 與既有 `IdentityConsumer`。normalized identity 保留 Google subject／principal kind；mapping 必須回傳相同 Google proof。`consumeVerified` 保留同一次驗證的 immutable result，Session 建立不得為取得 metadata 再消耗一次 code。首次 actor 的短效期限不等於 App Session TTL；後者仍須綁原來源 Session 到期並逐請求重驗。
+- forward-only `0018_google_identity_proof_v1` 保留 `google_subject → local_user_id`。migration driver 在相同唯讀 repeatable-read snapshot，以 [Supabase 身分契約](https://supabase.com/docs/guides/auth/identities) 的 OAuth `provider_id`／`user_id` 取得原 UUID；有 `identity_data.sub` 時須一致，不使用 email 或 user metadata 填值。proof 作第 33 個 projection 參與原單交易 import／reconcile；無 Google proof 的 profile 保留但不自動綁定。schema／permission、重複 subject、孤兒及 sub 衝突 fail closed，輸出只含 count／digest。
+- `GooglePrincipalMappingResolver` 使用既有 runtime pool、唯讀交易與 transaction-local verified Google scope 查 proof，再檢查原 account guard；缺 guard 或 inactive 均拒絕，不自行啟用、不 INSERT profile／guard、不授 Workspace／Board 權限。新 proof table FORCE RLS，runtime 只有限定 SELECT，importer 只有 SELECT／INSERT。`sessionCookies.ts` 只從 native request cookie 讀 opaque token，使用 Hosting 的 `__session`；pending nonce 可與舊 Session 共存，取消不清除舊 Session。它尚未接入 HTTP callback／持久 Session store。
+
+本輪 source 自查與限制：S2 unit 50/50、migration unit 10/10、disposable／managed static boundary 與兩份 PowerShell wrapper parse PASS。正常 `tsc -p tsconfig.server.s2.json` 因共享安裝缺少已宣告的 `@types/pg` 而未通過；本地另以 task temp tsconfig 指向已存在、相同版本 `@types/pg 8.23.1` 的 ESM declaration，server／S2／migration driver 與單元測試 strict typecheck PASS，沒有放寬 strict 或修改共享安裝。首輪 cookie 回歸有一例仍使用 Web Request 假 fixture，修正為 native request 後才通過，不改寫首輪失敗。新增 native mapping／migration cases 已加入原 wrapper，但容量預檢 `dev139-google-proof-native-20261029`（2 GiB reservation）為 BLOCKED，尚未執行本版 PostgreSQL 驗證，不沿用 17-migration 的舊 PASS 冒稱 0018 已驗。production pins、正式 DB／資料、IAM／Secret／credential／billing 及流量均未變；真 Firebase／OIDC、原 8 位使用者的逐帳號 proof、guard 初始化、opaque Session store／nonce callback 與正常入口仍未完成。
+
+### 13.2 持久 Session、正常入口與 guard 匯入 source（2026-10-29）
+
+`0019_app_sessions_v1`、`PostgresAppSessionStore` 與 `appSessionService.ts` 已接成 server-owned intent／Session 路徑。state、browser nonce 與 Session token 各為獨立隨機值，DB 只保存其 hash；PKCE verifier 只在私有 intent 保存至 terminal transition，成功／取消／拒絕時清除。callback 僅接受 owner 實際成功 wire 的 `code/state/iss`，綁定原 origin／entry／return path、一次性 claim、原 UUID mapping 與 account guard。取消先提交時不能建立 Session；完成先提交的取消回 409，不假報已取消。替換舊 Session 按 old Session→intent 鎖順序，原子撤銷舊 token、建立新 context／token 與消耗 intent；revoke 0 row 拒絕。新的 start 可沿舊 cookie 清除先前未知提交／過期的孤兒 intent，不另造清理簽核。
+
+claim／complete 的 COMMIT 結果不明時不重送 SQL 或再次 exchange code，只讀回查本次 claim／state／new-token／context／identity／期限的精確綁定；無法確認仍 fail closed。每個私人 request 重新讀 owner state／mapping，不跨 request 快取；相同 request 的 actor／Session info 共用一次解析。actor 最多使用 10 秒 current-state lease，contextId 沿持久 Session，不每次重建；對前端回報的 `expiresAt` 是 App Session 原來源期限，不能拿 60 秒 handoff 或短效 actor lease 代替。
+
+登入初始化、取消與本地登出只管理呼叫者 cookie 所指的本地 Session metadata，不以舊帳號仍有私人讀取資格為前置。登出仍檢查固定 origin、CSRF 及 expected account／context，僅在撤銷 exactly one row 後清 cookie，避免晚到的舊帳號登出清除新帳號；確認過期／revoked 的 cookie 可清除後重新登入，無法確認狀態不清。一般私人 GET／mutation 的最新身分、guard 與 resource 授權未放寬。
+
+`server/index.ts` 已透過 `runtimeSessionAuth.ts` 組合真 store、v4 exchange、current-state reader、mapping resolver 與 HTTP ports。Cloud Run 的 service ID token 使用固定 Google metadata identity endpoint、exact broker audience、bounded timeout／body，不借用 access token或環境中的任意 token；依據為 [Cloud Run service identity](https://docs.cloud.google.com/run/docs/securing/service-identity)。server-only 設定見 `.env.example`。production pins 仍為空；環境 flag 不能啟用 unpublished contract，沒有正式 metadata／OIDC 呼叫證據。
+
+Main 正常登入與 Quick 現在使用所在 origin 的 `/api/v1/session/login`，回跳保持同源。獨立 Quick 保留自己的 Session；Main origin 的相容 Quick 沿 Main Session。Quick command 移除與此決策矛盾的 entry-only 拒絕，但仍須 trusted Session、same-origin、expected actor、原 owner／capability 與交易驗證。新增的 HTTP header port 只傳 `Set-Cookie/Location/Referrer-Policy`，私人回應維持 no-store。
+
+`0020_snapshot_account_guards_v1` 讓受控 importer 在同一來源快照匯入已證明 Google→原 UUID 的 guard（active、revision=1），採原 profile.updated_at；沒有 Google proof 的 profile 不猜配。runtime 不新增 guard／profile，也不能啟用 inactive guard。來源 Auth 使用者缺失、停用或刪除時在 target 寫入前以 count／domain 阻擋，不能丟失安全狀態後自動啟用；目前 projection 共 34 個、有序 migration 共 21 份。測試 fixture 重用已匯入的 guard，不暫刪／重設時間以迎合舊測例。
+
+來源現況證據僅為唯讀 aggregate：2026-10-28 19:45:15 UTC，在 Supabase `knodlkxqpcqyrtgwpdst` 的單一 repeatable-read read-only transaction 核對 profiles=8、Auth users=8、Google identities=8、covered profiles=8，無 Google profile／孤兒／無效 subject／重複 subject／disabled Google users 均為 0；另唯讀 catalog 已核實 identity 與 source-user 欄位型別。沒有下載 UUID 對照、帳號內容、token 或密碼，沒有正式寫入；實際搬移仍須由受控 driver 的同一 snapshot proof／reconcile 完成。
+
+本版 source 驗證：S2 85/85、migration unit 13/13、S3 unit 53/53、前端型別與 managed／disposable 21 份 migration 的 boundary PASS。共用本機 dependencies 缺已宣告的 `@types/pg`，server／S2／migration 嚴格型別檢查使用 task-owned 暫存設定指向已存在的同版 8.23.1 declarations，未放寬 production tsconfig；不把它記成原始 aggregate 命令 PASS。下列遠端 CI 以 lockfile 完整安裝後，已通過原 server／S2 型別命令，CI 不依賴本機 overlay。
+
+本版 native Session／移轉案例已加入原 S3／migration wrappers。本機容量預檢仍 BLOCKED（相同 2 GiB request），未在本機啟動本版 cluster；遠端結果分列如下，舊 bundle 不升格。移轉收據已將過期的 `identity-guards-not-imported` 改為 source-derived guard 及停用／刪除／缺來源使用者的 prewrite 拒絕，名稱與實際檢查一致。source／unit／型別不能代表正常 browser、真 Firebase／OIDC、Hosting 或正式資料驗收。
+
+首次遠端 [run 40763175328](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40763175328)（`78e0995`）：完整 lockfile 安裝後原 server／S2 與 frontend 型別、三組 unit、三種 boundary 均 PASS；兩個隔離 PostgreSQL 17 cluster 均在 DDL 前被 runner 仍停在 0017 的重複清單拒絕，native 驗收未通過。已將 checker／runner 的重複清單合併到共用唯讀 allowlist，仍精確限定來源路徑與順序；runtime 的獨立 ledger／profile 驗證不變。artifact checker 也改為比對 managed profile 的全部 migration path→checksum，移除過期固定 17 份的門檻。三個 profile 的 preconnect 檢查通過，缺少／重排／未知 migration 的三個負例均拒絕且未連 DB；不覆寫首次失敗。
+
+第二輪 [run 40763873903](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40763873903)（`1f74040`）：PostgreSQL 17.11 的 20 份 migration／34 個 projection、full-snapshot／rollback／reconcile 與 50 個移轉 checks PASS；artifact 為 `migration/20261028T203312Z-b7e415a1/result.json`。S3 已通過新 Google mapping／App Session native helper，之後在行事曆 setup 的單筆 `INSERT … generate_series(1,1001)` 觸發 `57014 statement_timeout`，整組 S3 仍為 FAIL。此 fixture 用於驗證篩選在 feed 的 1000 筆 limit 前執行，並非 1001 筆 mutation 的產品性能門檻；已改為每批最多 100 筆的原 runtime actor transaction，逐批核對建置／清理 row count，仍保留全部 1001 筆與原 feed 斷言，不調 production timeout／RLS／query。待本輪 S3 重驗，不把已通過的移轉演練改寫成失敗或正式驗收。
+
+後續 [run 40764826246](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40764826246) 已越過分批 fixture，但 feed 回 500；[診斷 run 40765522001](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40765522001) 定位為 `resolveCalendarFeedActor` 讀 subscription 時，`actor_context_valid_v1` 的 query startup 將已清除的空字串 revision 轉成 bigint，SQLSTATE=`22P02`。這不是已證實的 feed page 效能問題。新增 `0021_safe_actor_context_v1`，以同名 STABLE／SECURITY INVOKER helper 先在 PL/pgSQL 驗形狀及範圍，再執行含 typed revision 的 guard query；原 ACL、active／revision 判定、pool／timeout 與前 20 份 migration bytes 均保留。native helper 補空白／負值／非整數／超界 revision 的零私人列拒絕、合法 context 及 rollback 後同連線拒絕；source 型別／21 份 boundary 已通過，native 修正待重驗。既有移轉 PASS 保留其實際版本，S3 未通過前仍不得升格。
+
+[run 40766511074](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40766511074)（`6b30525`）已通過 0021 的 malformed／rollback context native 案例、行事曆正常 feed／原 1001 筆篩選及 21 份 migration 移轉演練。S3 隨後在舊 oracle「A 的 unplaced 必須空集合」失敗：同輪已合法由 Main 同 origin Quick 建立 A 的一筆資料。已同步改為精確查核 A 只看得到自己的該筆 capture／title，及 Workbench 相同 ID，仍拒絕 B 的資料與 mismatched-actor capture；不以放寬為任意筆數或刪除正常入口來迎合空集合。完整 S3 待重驗，未標 PASS。
+
+**最新隔離結果：[run 40767127061](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40767127061)，source `3bd5a2a1dcfb7878cd755683d79462f9e39ecbf7`，整組 CI PASS。** PostgreSQL 17.11 已套用／核對全部 21 份 migration：S3 Session／domain HTTP 62 checks PASS（`s3/20261028T205438Z-77cbbd3c/result.json`，`browserSmoke=NOT_RUN`）；34 個 projection、full-snapshot／rollback／reconcile 與移轉 50 checks PASS（`migration/20261028T205539Z-28789656/result.json`）。原 server／S2 與前端型別、S2 85／S3 53／migration 13 unit、三種 boundary 全通過；另本機以同版 pg declaration overlay 完成 S3 嚴格型別，暫存設定已清理。兩份收據由同 run artifact `12850093670` 核實，wrapper 完成自有 cluster／port 清理；沒有在本機低容量條件下啟動 DB。後續純文件與索引更新可重用此 source 證據，不因 HEAD 改變重跑全部。這些結果仍是合成身分的 DB／HTTP 與資料演練，不是 browser、真 Firebase／OIDC、Hosting／Cloud SQL 或正式資料驗收；新使用者／取消返回與 owner publication 的未完成範圍不變。
+
+本輪取消返回 source：Platform 登入頁新增「返回 ProJED」，先取消自己的暫存 intent，僅 204 才導向固定 `/api/sso/authorize/cancel`；broker 沿原六參數及 main／Quick exact callback allowlist 回傳 `error=access_denied,state,iss`。ProJED 只接受這個精確取消 shape 或原成功 `code,state,iss`，核對 cookie／state／issuer／origin／entry／舊 Session，取消 intent 後回到原本地 path並保留有效舊 Session；完成先贏時沿已完成 recovery，不能假報取消。未知 commit 只回查原 intent，不重新 exchange／complete。S2 全部 92/92 與原嚴格型別（本機同版 pg declaration overlay）PASS；這是 source／unit，不是正常 browser 或真 broker 驗收。
+
+新版 source `e61e045` 的 [CI 40770806874](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40770806874) 已通過全部 unit、21 份 migration 的 S3／移轉 native 與其餘 boundary，但 Server/S2 typecheck 拒絕測試 query builder 的 `string[][]`（Node 型別要求 iterable tuple）。已明確標註 `[string,string]`，不修改 runtime parser／權限或放寬型別；整組 CI 在修正後結果確認前仍不得標 PASS。
+
+v4 原本已驗證的 email 現由 verifier 正規化為 optional `verifiedEmail`，validator／Session proof/readback 比對已接入；既有無該欄位的合成／持久 proof 仍相容。它不作 Principal／UUID mapping key，也不自行建立帳號。新 Google 使用者（含個人、外部與員工）的首次本地 profile／proof／guard bootstrap 仍待實作；不能以目前八位舊使用者或限定 personal kind 縮減原首次登入能力。
+
+OrgMaster 043／Platform 015 的 forward-only source 修正用於移除 Employee active 與私人登入的不當耦合，owner 發布包已接入對應 suffix／receipt／recovery；native／required CI 按各 PR 與受測來源查核，尚未 formal publication。它不要求舊 ProJED receipt 才能首次准入，仍核對不可變 provider owner、拒絕 disabled admission 自動重啟，不另造 personal Principal 或重綁 pair。其餘功能／資料、雲端、writer fence、切流及 release 仍計入原完成分母。
+
+### 13.3 首次登入註冊與既有帳號相容（2026-10-29）
+
+callback 改用 `IdentityConsumer.verifyIdentity` 單次驗 owner proof、時間與 exact pin，不先要求本地帳號存在；既有 `consumeVerified` 的唯讀 mapping／actor seam 保留。`PostgresAppSessionStore.complete` 在 old Session→intent→Google subject→account 的鎖序下，先核對仍有效的 processing claim，再解析 canonical mapping。active 沿用原 UUID；只有 Google proof 完全不存在、且 owner v4 帶已驗證 email 時，才於同一交易建立新 UUID 的 profile、Google proof、active revision 1 guard、Session 並消耗 intent。個人／外部與 Employee 均可首次註冊，不要求公司任用；既有 proof 的 guard 缺列或 inactive、ambiguous 或 unavailable 一律拒絕，不自動啟用、不依 email 合併或授予工作區／看板權限。
+
+forward-only `0022_first_login_registration_v1` 僅增上述精確 INSERT 欄位與 RLS，綁定 transaction-local server scope、未過期 claim、新 UUID 與尚無 proof 的 Google subject；profile→proof→guard 不用 RETURNING／ON CONFLICT。原有 FORCE RLS、profile 編輯授權、proof／guard 不可更新／刪除與 owner 分工保留。22版的前21份SQL不改寫，原34個snapshot projection不變。這是app-owned schema source，不建立新IAM／credential或更改foundation。
+
+同Google subject的並行首次登入在鎖後重查並沿用第一筆已提交UUID；不同subject即使email相同也保持不同UUID。取消先勝不能建立帳號或Session。COMMIT不明只讀回本次consumed intent、新token／context／identity與canonical mapping，不重做exchange／complete；缺列或任何綁定不符不發cookie。22版 `faa7256006de9832a7e395e7d20f775744b8cfae` 已通過 [CI `40776231350`](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40776231350)：完整lockfile安裝的原server／S2與frontend型別、S2 101／S3 53／migration13項unit、三種boundary、PostgreSQL Session／domain HTTP與full-snapshot 50項移轉checks PASS。artifact `12855765106` 的兩份result保留各自profile／22份migration hashes與34個projection；browserSmoke為NOT_RUN。本機未啟動PostgreSQL，未以task type overlay替代遠端原命令。
+
+該次native執行已涵蓋personal／external／Employee首登、同subject並行、同email不合併、原UUID、無email／inactive／missing guard拒絕、取消後零Session／proof、新帳號私人工作區／看板及跨帳拒絕，並以真Session PK衝突驗證profile／proof／guard／舊Session revoke全交易回滾。首次收據仍使用wrapper舊62項宣告清單，未列出verifier新增的首登標籤；現行wrapper改為採用成功verifier的實際checks，加上自己執行的migration apply／idempotency，刪除第二份手工清單，不新增數量門檻或required gate。舊收據不改寫，新wrapper待後續CI查證。
+
+另依舊Supabase登入／邀請資料流查證：既有登入會同步verified email，Cloud路徑若只存Session proof卻不更新profile，邀請handler與RLS會沿用舊email。新增forward-only `0023_verified_login_email_v1`，只增 `UPDATE(email)` 欄位權限，invoker trigger要求同一processing claim、原Google proof→UUID及精確verified email，否則42501；無實際email變更及原display name／偏好更新不增加登入claim前置。store在建立canonical actor後、Session／intent提交前同步email；不按email找人、不改UUID／guard／membership。兩個S3 profile與清單目前為23份，前22份SQL不改。自查S2 103/103、原task-owned strict type overlay、三種boundary及PowerShell parse／結果傳遞檢查PASS。native source另補同UUID email更新、新email邀請接受／舊email隱藏、普通actor不能任改email、display name仍可改，以及有效claim重用既有Google proof的profile INSERT拒絕。原22版PASS不代替email／邀請與新wrapper驗證；23版實際結果見下段。
+
+23版首次 [run `40777760725`](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40777760725) 綁定 `5df66a0`：型別、unit與boundary通過，S3在新email邀請已接受後，測例以看板受邀者呼叫工作區成員管理讀取，被既有權限正確以404拒絕；不是email／UUID更新失敗。已修正由工作區owner核對新成員email，並明確斷言受邀者可讀受邀看板、仍不能管理工作區成員，不放寬產品權限。快照移轉安全獨立續跑並通過，原S3失敗保留。
+
+修正後 [CI `40778320450`](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40778320450) 綁定 executable source `c4bf25b76d456a75d161ffd03f390c7cc6213257` 全部成功：完整lockfile安裝的原server／S2與frontend型別、S2 103／S3 53／migration13項unit、三種boundary、PostgreSQL 17.11 的23份migration／64項Session與domain HTTP checks及50項full-snapshot移轉checks。artifact `12855383687` 的 `s3/20261028T221549Z-d772b08e/result.json` 已從verifier採入首登與email／邀請兩個標籤；`migration/20261028T221651Z-a7caf582/result.json` 核對34個projection。兩份收據均PASS；browserSmoke仍為NOT_RUN。這次COO修正移除一份手工案例清單，沒有新增required gate；後續僅文件更新，不使未變的執行來源證據失效。
+
+production pins仍為空；真Google／Firebase／服務OIDC、原8位正式使用者、Hosting／PWA、未承接domain與正式移轉／發布仍在原完成分母。
+
+## 14. S3 HTTP read adapter slice（2026-10-26）
+
+已新增 `src/services/httpApi/httpApiClient.ts` 與 `domainReadAdapter.ts`。Transport 只允許 canonical `/api/v1/` 相對路徑，拒絕 absolute／cross-origin／dot-segment rewrite／backslash／control character；使用 `credentials: same-origin`、`cache: no-store`、`redirect: error`，不接受 token provider或自行加 Authorization header。非 JSON／壞 JSON、network failure與穩定 error envelope分開，401／403／404即使body錯誤仍保留原HTTP status，不把錯誤轉成空資料。
+
+本 slice 固定七個唯讀操作：workspace list、workspace member list、workspace tag list、board member list、完整 board role-permission matrix、board task list及dependency list。Resource ref逐段encode並拒絕空值／dot segment／slash／backslash／control character；DTO以現行 domain type fail closed，保留 legacy ID、明確空集合matrix、parent／tag／task status與dependency side。owner role仍依現行固定能力契約；wire若送空或缺少fixed owner abilities則拒絕，不靜默擴權。Task rich content重用現有Lexical allowlist validator，未知／不完整shape不進store。
+
+`0003_domain_read_v1.sql` 已新增 tenant／project、actor scope projection、workspace／board membership、role matrix、task及dependency read model；所有含資源資料的表皆 FORCE RLS，runtime 只有 SELECT，tenant member另要求tenant-level scope，project-only actor不能讀取同workspace其他board。legacy ID保持API相容；UUID arrays拒絕NULL element，浮點排序／offset拒絕NaN及Infinity；server輸出前再驗permission matrix與task note shape。`DomainReadRepository`只接受既有transaction-scoped `ActorQueryPort`，不自行建立actor或持有pool。
+
+`npm run verify:dev-139:s3` 已通過adapter typecheck／13項unit、DB static boundary、server typecheck及PostgreSQL 18 task-owned isolated acceptance。isolated verifier涵蓋migration apply／同checksum rerun、tenant／project scope、workspace／board member、顯式空permission、task parent／dependency／tag mapping、private board 404、missing context零資料、runtime write deny、production resolver absent 404、QA-only opaque Session下HTTP read／write、缺Session 401、錯method 405、跨站寫入403及未知API不落入static fallback；完成後停止task-owned PostgreSQL並清除temp directory。全app `npx tsc --noEmit`及`npm run build:test`亦PASS（既有chunk／Browserslist警告不變）。第一次live migration因schema-qualified index name在PostgreSQL回報syntax error，修正成table同schema index name後重跑通過，原始失敗未改寫。
+
+此 foundation 尚未由`dataBackend.ts`選用。`server/domainReadHttp.ts`／`domainWriteHttp.ts`只接受注入的`TrustedSessionActorResolver`輸出，沒有從header／body自行建立actor；raw path逐段解析，所有`/api/*`未知路徑回JSON 404而不落入SPA。外部wire／App Session尚未發布，production composition刻意不注入resolver，故domain route保持404。沒有真Session／正常UI證據，不宣稱S3或整體功能移轉完成。
+
+## 15. S3 domain command W1（2026-10-26）
+
+`0004_domain_command_v1.sql`、`server/domainWrite.ts`／`domainWriteHttp.ts`及`src/services/httpApi/domainWriteAdapter.ts`完成日常核心 task／dependency／tag command。Task支援create、欄位型patch、原子batch update、delete及整組tag assignment；dependency支援create／set、patch及delete；workspace tag支援CRUD。每次HTTP command只使用同一`runActorTransaction`，batch任一項失敗整批rollback；沒有引入command bus、event sourcing、通用policy engine或SaaS多租戶控制面。
+
+授權由兩層共同保護：RLS固定actor resource scope及最低capability，server依欄位／動作精確要求`create_task`、`edit_task`、`move_task`、`assign_task`、`delete_task`、`create_dependency`或`delete_dependency`。Tenant scope本身不再隱含所有Board的`read_board`；suspended membership即使scope投影尚在亦拒絕。workspace共用tag definition只允許有效tenant-level非viewer管理，project-only外部協作者只能在已授權Board指派既有tag，不能刪除跨Board共用定義。runtime grant限實際insert／update欄位，仍無owner／BYPASSRLS／DDL。
+
+資料完整性固定同Board parent／dependency endpoint、日期順序、dependency同端自迴圈拒絕、多人主責與協作者去重、assignment限有效Board member、tag assignment以`task_tags`＋`wbs_item_tags`為唯一權威。刪除父任務沿既有行為將子任務`parent_id`設NULL；dependency及tag assignment cascade清理。HTTP command要求JSON且限制64 KiB，拒絕cross-site Origin／Sec-Fetch-Site；production未注入resolver時在讀body或觸發DB前404。
+
+本地驗證另覆蓋tenant-only一般成員零Board、suspended project member零Board、明確空capability不套預設值、跨Board parent拒絕、標籤整組清空、多人assignment正規化、batch rollback、日期／dependency constraint、Board成員無capability寫入拒絕、project-scope tag definition拒絕、父任務刪除後子任務保留，以及HTTP capability／cross-site deny。這是 disposable 新目標schema；`0003.wbs_items.tag_ids`不是現行Supabase資料的自動轉換來源。真正資料匯入必須從舊`task_tags`／`wbs_item_tags`及task資料建立catalog與assignment reconciliation，完成前禁止切換writer或宣稱標籤已保留。
+
+workspace／board／member／permission／invite command與resource revision已在§16完成；後續record／activity、Board transfer、Quick／Workbench、Tracking、Backup、偏好、Calendar與migration rehearsal狀態見§17–§28。真Session resolver、正常UI、正式資料inventory／writer fence與發布仍受既有外部owner及§6 gate限制。
+
+## 16. S3 collaboration command W2（2026-10-27）
+
+`0005_collaboration_command_v1.sql`、`server/collaborationWrite.ts`／`collaborationRead.ts`／`collaborationWriteHttp.ts`及`src/services/httpApi/collaborationAdapter.ts`完成日常Workspace建立／改名／刪除、Board建立／改名／排序／刪除、Board成員授予／改角色／移除、完整五角色權限矩陣，以及邀請列出／建立／撤銷／接受。Board建立在同一交易建立建立者membership、精確scope、resource revision及五個permission rows；不新增通用policy engine、event bus、完整Workspace成員管理或排程邀請清理器。
+
+W2以現行UI capability為單一產品契約：有效`project_manager`可建立Board；邀請支援`admin / project_manager / member / viewer`且拒絕owner／未知角色。這修正舊Supabase policy與UI的不一致，不把舊拒絕行為當成要保留的功能。既有owner不能被降權或移除；非owner仍可依原UI升為owner，沒有自行加入單一owner或owner transfer workflow。純Board manager可在kernel核准的精確Board context內加入既有active Workspace成員及刪除其可管理的Board，但不取得一般Workspace成員列表或tenant管理權。完整permission matrix保留明確空集合，未知capability拒絕。
+
+邀請token只以SHA-256雜湊保存，email正規化、期限受限，且同Board／email最多一張pending；接受只信任server actor的profile，不採用client送來的userId／email／displayName，也不能把既有suspended Workspace anchor重新啟用。邀請列本身保存穩定Workspace／Board ref，因此接受後回傳不依賴受邀角色是否有`read_board`。目前S2外部wire尚未發布verified email claim，故production resolver仍停用；本地QA profile只證明命令語意，不代表外部邀請真接入完成。
+
+`resource_revisions`是受權scope的polling／canonical reload訊號，不是授權來源。Task／dependency／tag及本節協作命令都在同一交易遞增對應revision；每個API請求仍以當下membership／capability判斷。移除外部Board成員會停用該精確project scope並遞增其scope revision，新請求立即拒絕；不撤銷Principal、tenant-wide scope或其私人Workspace。重新加入會重新啟用精確scope，不重建帳號。
+
+`npm run verify:dev-139:s3`通過frontend typecheck／13項既有adapter unit、DB static boundary、server typecheck及PostgreSQL 18 task-owned isolated acceptance。新增驗證涵蓋Workspace／Board命令、project-manager建板、五角色矩陣原子建立、owner不可變、邀請role／email／hash／一次性／撤銷、外部成員撤權與私人資料保留、resource revision、HTTP collaboration命令、client identity claim忽略及production collaboration route在讀body／碰DB前404。這是`S3_COLLABORATION_CORE_LOCAL_ACCEPTANCE`，不是獨立QC、真Session、正常產品UI或正式環境證據。
+
+看板跨Workspace搬移在W2刻意未用單欄位更新假裝完成；其完整交易已於§19 W5補齊。W2本身的bounded acceptance範圍不因此改寫為當時已完成。
+
+## 17. S3 record／activity W3（2026-10-27）
+
+`0006_record_activity_v1.sql`、`server/recordActivity.ts`／`recordActivityHttp.ts`及`src/services/httpApi/recordActivityAdapter.ts`完成目前Records／會議畫面實際使用的knowledge record、task link、activity及audit資料面。Record支援Board清單、Task關聯清單、原子upsert／link整組替換與archive；先通過Board scope後，private再限建立者／記錄者讀寫，project／tenant沿現行語意仍須具Board讀寫能力。撤銷Board scope會保留私人row但Board route回404，不新增繞過撤權的out-of-scope私人讀取端點；公司管理員不因管理身分取得private內容。Task link以同Board複合FK拒絕跨Board關聯，archive保留link供明確`includeArchived`歷史讀回。Runtime create把`recordedBy`固定為當次actor，更新不接受client改寫；歷史owner在受控migration保留。RAG在新路徑固定`false`且沒有document／job side effect，保留既有「record成功、provider功能可維持gated」邊界，不順便建立新的AI worker或供應商依賴。
+
+Activity沿`read_activity／write_activity`，workspace activity限具tenant scope的有效成員，Board事件依完整permission matrix；workspace audit限owner／admin，Board audit依`read_audit／write_audit`。普通runtime沒有任意SQL、DDL或PUBLIC權限。相容用audit endpoint只保存server-attributed app event，client不能指定actor，但它本身不證明對應business mutation已提交；權威mutation／receipt仍須由各server command同交易產生。record與activity mutation同交易遞增相應Workspace／Board resource revision；revision只作polling訊號，不能替代RLS。
+
+HTTP route沿相同opaque Session resolver；所有write缺`Origin`、跨scheme或跨host都拒絕，其他domain JSON維持64 KiB。Record request上限為32 MiB、content上限為4 Mi code units，讓最差JSON escaping仍落在目前Node HTTP/1 Cloud Run的32 MiB request限制內；資料移轉須先盤點更大legacy record，不得截斷。[Cloud Run官方限制](https://docs.cloud.google.com/run/quotas#request_limits) Production resolver absent仍在讀body／碰DB前404。client只能送domain payload，actor仍由server context決定。
+
+PostgreSQL 18 task-owned isolated acceptance已覆蓋private／project read差異、viewer寫入拒絕、record link原子保存、archive與歷史讀回、activity capability、audit write、HTTP record／activity adapter及production route fail-closed，證據層級更新為`S3_DOMAIN_CORE_LOCAL_ACCEPTANCE`。W3完成時Luna只讀盤點仍確認adapters未接產品；該缺口已由§18 W4接線及polling consumer收斂，Board transfer再由§19 W5完成。Quick／placement／tracking／backup／preferences／calendar等分期表面，以及S2 external wire、真Session及正式資料仍維持既有阻塞／授權邊界。
+
+## 18. S3 HTTP product wiring W4（2026-10-27）
+
+`VITE_DATA_BACKEND=http`已成為明確第四種backend，不再落入Firebase預設分支。Workspace／Board／member／permission／invite、Task／dependency／tag、record／activity日常方法逐項連到同源HTTP adapter；client傳入的`userId`及invite identity欄位不作Session actor。尚未有原子HTTP能力的workspace／Board restore、Board跨Workspace搬移及整批Task replacement明確拒絕，不退回Firebase／Supabase、localStorage、逐筆寫入或空資料。Tracking與backup仍沿既有capability／unsupported邊界，未偽裝成已移轉。
+
+新增`GET /api/v1/session`、`PATCH /api/v1/session/profile`及`POST /api/v1/session/logout`的server seam與前端adapter。profile只可讀寫當次server-owned actor；顯示名稱寫入要求同源Origin。resolver或logout destroyer未注入時route在讀body／碰DB前404；production composition仍未注入外部wire。HTTP auth模式只檢查既有opaque app Session，不啟動Firebase／Supabase OAuth，也不從email自建帳號；外部owner wire完成前，登入畫面會明確要求由Jenfu-Platform入口取得Session。
+
+`useHttpSync`為每個已登入App context建立單一5秒revision scheduler：hidden頁面不poll，focus／online／重新可見立即補讀；revision未變不重載正文。初次或受權revision變更時先重讀Workspace index，再只刷新active scope的Task、dependency、record、member、permission及tag；撤權造成revision不可見時重讀Workspace index並清除失效active Board。任何讀取失敗保留可辨識錯誤，不把空陣列或stale資料冒充同步成功。這仍是polling／canonical reload，不新增SSE、WebSocket、Redis、event bus或第二套狀態權威。
+
+本地自查：HTTP adapter unit 21/21、全app TypeScript、變更檔targeted ESLint、`VITE_DATA_BACKEND=http` test build及PostgreSQL 18 task-owned isolated acceptance PASS；Session route涵蓋profile讀寫、缺Origin拒絕、logout destroyer及production-disabled 404。證據`output/qa/dev-139/s3/20261027T005340Z-1dfba4d3`只支持本地W4接線與kernel，不是真Jenfu Session、正常瀏覽器UI、雙client 10秒收斂、Cloud Run／Cloud SQL、資料移轉或正式切流。
+
+## 19. S3 Board transfer W5（2026-10-27）
+
+`0007_board_transfer_v1.sql`、`ActorQueryPort.authorizeBoardTransfer`、collaboration repository／HTTP route及前端adapter完成既有Board跨Workspace預覽與確認搬移。Server同時要求來源Board的`move_board_between_workspaces`與目的Workspace的`manage_workspace_settings`；目標相同、來源能力不足或目的管理權不足皆fail closed。搬移前以目前Board title作精確確認，錯誤確認在同一交易rollback；browser只送目標Workspace與確認文字，不能指定actor或繞過Session。
+
+搬移保持同一Board storage／legacy ID及role-permission matrix，透過複合FK `ON UPDATE CASCADE`在單一交易移動Task、dependency、record／link、activity／audit、invite與resource revision。只保留目的Workspace仍為active member的Board成員；pending invite撤銷。來源tag assignment先移除，再依目的Workspace同名／同色tag映射或建立新的目的tag後重建，不把來源Workspace共用tag本體跨租戶搬走。目的端若沒有管理角色，使用當次已驗證的目的Workspace owner／admin作Board manager；來源與目的Workspace及目的Board revision均遞增，並寫入server-attributed activity／audit。此slice也補正新建Workspace原先缺少tenant-level actor scope的問題，否則建立後續tag／Board等命令會回404。
+
+RLS沒有放寬為runtime任意改tenant：transfer context只由server在同一actor transaction核准並綁定精確source tenant／project／target tenant；runtime仍無owner、BYPASSRLS或任意DDL。為讓PostgreSQL在parent key更新的`WITH CHECK`階段看見同一精確目標row，另有只接受該transfer context的project read policy；其餘Board仍不可見。資料庫不含舊Supabase `documents`／RAG job表，preview如實回`documents=0`、`ragDocumentsToResync=0`，不虛構文件移轉完成。
+
+PostgreSQL 18 task-owned isolated acceptance已實際驗證migration apply／idempotency、HTTP preview、title mismatch rollback、三筆Task與四筆record continuity、dependency／tag remap、Board member移除、pending invite撤銷、activity及source／target revision。22/22 adapter／polling單元測試另核對兩個明確POST route與payload；最新證據為`output/qa/dev-139/s3/20261027T011702Z-033066d3`。這是本地synthetic資料與opaque QA Session證據，不是真資料匯入、正常產品UI、Cloud SQL、正式Session或切流證據。
+
+## 20. S3 legacy provider boundary W6（2026-10-27）
+
+HTTP模式已對仍未移轉的舊provider能力fail closed。RAG查詢在Supabase Function前由共用backend mode gate拒絕，頂列入口顯示不可用；會議文字草稿與本機規則整理保留，但錄音、音訊上傳、分析、任務配對及輪詢UI不掛載，service也在Function／Storage前拒絕。Calendar除既有畫面分支外，service現在要求實際backend為Supabase，即使環境仍留有Supabase URL／key，HTTP模式也不能直接操作舊資料表。
+
+Backup維持既有unsupported adapter與application service邊界；HTTP畫面不再自動讀取後端建立備份，建立與匯入操作停用並說明不會退回舊來源。本機選檔與checksum／schema完整性檢查保留，因其不存取雲端或寫入資料。此slice沒有新增替代AI、Calendar或Backup服務，也沒有加入通用capability registry、queue或事件系統；Quick Task與Task Workbench持久化仍由後續slice處理。
+
+本地自查為S3 frontend 24/24、全app TypeScript、變更檔targeted ESLint零error，以及`VITE_DATA_BACKEND=http` test build PASS；targeted ESLint保留一項既有MainLayout effect warning，建置保留既有chunk size及Browserslist資料警告。W6未改DB或server kernel，因此沿用未受影響的W5 PostgreSQL 18證據`output/qa/dev-139/s3/20261027T011702Z-033066d3`，未重跑與本slice無關的isolated DB。以上不是真provider、正常瀏覽器UI、正式Session、Cloud Run／Cloud SQL或切流證據。
+
+## 21. S3 Quick Task W7（2026-10-27）
+
+Quick Task保留既有IndexedDB outbox、離線先記下、帳號claim、lease、重試與compact receipt語意；HTTP模式只替換身分與遠端提交邊界。Quick頁以同源`GET /api/v1/session`驗證server-owned actor及`entry=quick`，local auth context只保存帳號與非秘密`authContextId`綁定，不持有或送出Jenfu bearer token；登出沿用`POST /api/v1/session/logout`。outbox flush由Quick頁傳入實際選用的auth adapter，不再暗中載入Supabase auth cache。舊provider projectRef只會被新HTTP context取代，不會按email或猜測映射既有capture owner；原帳號capture仍保留待人工以已驗證mapping處理。目前無Session時登入按鈕回到主程式／Jenfu入口，不在Quick頁另起Google OAuth或第二套帳號系統。
+
+新增同源`POST /api/v1/quick-tasks`與`0008_unplaced_quick_capture_v1.sql`。Route只接受`entry=quick`；Client只送`captureId`、title與可選workspace hint，owner完全由trusted Session決定。同一actor transaction以owner advisory lock序列化排序，先查不可變`quick_task_capture_receipts`，再原子建立account-owned `unplaced_tasks`與receipt；同capture／同title重送回`created=false`，不同title回409且不增生任務。兩表FORCE RLS只允許目前有效actor讀寫自己的資料，receipt沒有runtime update／delete權限。這不是把Supabase RPC照搬進Cloud SQL，也沒有新增queue、background worker或通用事件框架。
+
+本地自查為S3 frontend 28/28、全app與server TypeScript、targeted ESLint零error、HTTP test build及PostgreSQL 18隔離驗證PASS；單元測試另固定selected auth adapter guard，不允許HTTP snapshot被舊provider cache誤拒。隔離驗證包含migration apply／idempotency、production resolver未注入時404、錯誤Session entry拒絕、同源Quick Session建立、receipt replay、owner隔離、idempotency conflict與cross-site拒絕。當時bundle為`output/qa/dev-139/s3/20261027T013524Z-cac3da62`。尚未驗證真Jenfu Session、實際Quick瀏覽器離線／重連、正式Cloud SQL或資料移轉；Task Workbench缺口已由§22 W8收斂。
+
+## 22. S3 Task Workbench W8（2026-10-27）
+
+`0009_task_workbench_placement_v1.sql`、`server/taskWorkbench.ts`／`taskWorkbenchHttp.ts`及`src/services/httpApi/taskWorkbenchAdapter.ts`完成未歸位任務的account-owned持久化，以及未歸位↔Board的單一DB交易搬移。搬移只接受完整且順序一致的實際subtree，最多200節點；server重新核對來源、目的parent／anchor、封存狀態、cycle與精確`move_task`能力。任務、dependency及record link會在同一交易檢查；仍被dependency或record引用的Board task不得移出，任一失敗全部rollback。排序保留合法小數，不以整數化破壞既有中點排序。
+
+每次placement以owner-scoped operation ledger提供immutable idempotency：同operation／同payload重放先重新核對目前來源與目的Board權限，再回既有結果；不同payload回409。未歸位CRUD與ledger皆FORCE RLS，runtime只獲必要欄位／操作。HTTP list、upsert、delete與placement全部要求主程式Session，且把前端剛讀到的account／auth context當成CAS precondition；cookie若在兩次請求間切帳，server回`ACTOR_CHANGED`，不把另一帳號資料併入原帳號local cache。
+
+舊的未綁定localStorage資料不會自動歸入任何帳號；工作台只顯示數量與「歸入目前帳號」明確操作。認領成功才刪除未綁定副本，失敗保留；遠端、帳號本機與未綁定同ID版本一律保留最新timestamp，平手優先既有遠端／帳號值，避免較舊副本覆寫。一般未歸位編輯仍先保留帳號本機副本；遠端失敗不清本機，下次載入以較新timestamp重送，這是既有local-first恢復而非第二資料權威。
+
+本地驗證通過S3 frontend 33/33、server／全app TypeScript、targeted ESLint零error、HTTP test build、DEV-089 scope 1000次及placement transaction 28/28。PostgreSQL 18 task-owned isolated acceptance實際套用0001–0009兩次並驗證migration idempotency、兩張Workbench表ENABLE＋FORCE RLS catalog、owner隔離、錯entry／actor-context切換拒絕、小數排序、cycle／封存／partial subtree拒絕、雙向placement、idempotency、重放撤權拒絕，以及dependency／record link rollback；最新bundle為`output/qa/dev-139/s3/20261027T021950Z-ec53c1a6`。
+
+此證據只支持本地synthetic資料與opaque QA Session。舊Supabase `inbox_items.promoted_task_node_id`在新schema沒有對應Inbox表，正式資料移轉須先盤點並以可核對的mapping保留或重建該關聯；完成前不得宣稱Quick／Workbench歷史資料已全量相容。真Jenfu Session、正常瀏覽器UI、資料匯入、Hosting／PWA相容及正式切流仍未驗證。
+
+## 23. S3 Actor／Context CAS W9（2026-10-27）
+
+§5.5 的共通前置條件已由WorkBench專用保護擴到所有私有HTTP read／mutation。`GET /api/v1/session`仍是唯一不要求expected actor的Session discovery；成功後同一`HttpApiClient`綁定server回傳的`localUserId／authContextId`，後續domain、collaboration、record／activity、Quick、Workbench、profile update及logout自動送兩個非秘密precondition header。server先由opaque cookie解析可信actor，再以共用helper核對；缺值或任一不一致回`409 ACTOR_CHANGED`，不讀body、不進業務交易，也不把header當認證或授權來源。Session discovery失敗會清掉client綁定；成功登出後亦清除。
+
+此修正不新增CSRF framework、token storage、第二Session狀態或每操作人工確認；既有exact Origin／same-site cookie與DB權限仍分層成立。Quick與Workbench保留各自更早凍結的account/context，其他即時私有請求則使用本App最近一次成功Session discovery綁定；若cookie在兩次請求間切換，舊綁定會使server拒絕，要求重新取得Session後再由上層決定是否重送。
+
+本地驗證通過S3 frontend 34/34、server／全app TypeScript、targeted ESLint、HTTP test build、DB static boundary及PostgreSQL 18隔離驗證。真PG／HTTP案例另以B cookie配A expected actor分別嘗試workspace read與task write，均回`ACTOR_CHANGED`且未改資料；Session profile／logout與Quick adapter單元測試核對header綁定。最新bundle為`output/qa/dev-139/s3/20261027T022618Z-f163c745`。這仍不是外部owner wire、真Session provider或正常UI換帳證據。
+
+## 24. S3 Task Tracking W10（2026-10-27）
+
+`0010_task_tracking_reference_v1.sql`、`server/taskTracking.ts`／`taskTrackingHttp.ts`與HTTP adapter完成追蹤副本的Cloud SQL持久化。Reference只保存placement，標題、狀態、日期、標籤及階層內容仍以canonical task為唯一資料來源；HTTP模式支援list、canonical task hydration、create／move／stage／place-staged／remove／restore，且整棵placement subtree最多200筆，以revision、精確subtree及operation ID防止舊畫面、部分搬移或不確定重送破壞資料。
+
+所有mutation在單一actor transaction內重新核對來源／目標`manage_task_reference`、parent／anchor、cycle、duplicate與目前revision；冪等重播亦重新授權，不把舊receipt當持續權限。RLS只讓讀者看可讀目標副本；derived-read session setting僅允許由可見reference取得私有來源的canonical task、必要祖先及tag，不授予來源Board一般讀權。只有管理權、沒有`read_board`的目標角色仍能管理reference；排序以實際相鄰值的中點或尾端+1計算，沒有可表示間距才回衝突。Board→未歸位會阻擋仍有reference的subtree；Board跨Workspace保留同板reference、拒絕active／staged跨板reference，並在同交易清理已移除的跨板tombstone。
+
+本slice沒有新增通用事件系統、RPC框架、第二套Auth、跨服務同步或額外核准文件。驗證通過S3 frontend 38/38、server／全app TypeScript、targeted ESLint、HTTP test build、DB static boundary、DEV-095 model／interaction／backup／cross-mode與DEV-100 staging回歸；PostgreSQL 18 task-owned isolated acceptance實際套用0001–0010兩次，並驗證FORCE RLS、subtree staging、冪等衝突與撤權重播、derived private-source read、manage-only mutation、未歸位guard及Board transfer。最新bundle為`output/qa/dev-139/s3/20261027T025755Z-eea21ec4`，證據層級仍是`S3_DOMAIN_CORE_LOCAL_ACCEPTANCE`；尚未代表正常產品UI、真Jenfu Session、正式Cloud SQL、資料移轉或切流。
+
+## 25. S3 Backup／Import W11（2026-10-27）
+
+`0011_board_backup_import_v1.sql`、`server/backup.ts`／`backupHttp.ts`與HTTP adapter把既有V2／V3看板備份流程接到Cloud SQL。HTTP模式支援讀取Board source／fingerprint、建立copy或replace預覽，以及執行匯入；設定畫面重新啟用既有inspect-first流程、replace前下載目前Board備份及精確名稱確認，不退回Supabase或逐筆browser mutation。V2持續只接受primary task資料；V3保存同Board tracking placement。Payload有10 MiB檔案、10,000 tasks／references與30,000 dependencies上限，並核對checksum、manifest、父子／依賴／追蹤父位置循環與package外引用。
+
+執行固定在單一actor transaction完成重新授權、target fingerprint CAS、advisory lock、idempotency receipt、Board／Task／tag／dependency／tracking寫入及readback fingerprint。Copy建立新Board與來源ID mapping；replace保留Board identity、members與settings，沿目前storage ID更新同ID task，對將刪除且仍被record link或外部tracking reference引用的task fail closed。Backup guard只可由交易核心在重新確認`delete_task`與actor context後設定精確tenant／Board的transaction-local scope；generic read API不因備份RLS取得額外可見性。相同execution／相同request安全重播，不同request拒絕；commit結果未知映射為`COMMIT_UNKNOWN`，UI不自動重送。
+
+本slice未新增scheduler、object storage、加密服務、通用匯入框架或額外簽核。驗證通過S3 frontend 44/44、server TypeScript、DB static boundary、DEV-047 package contract 30/30、model 15/15、local transaction 9/9、DEV-095 backup 4/4、targeted ESLint零error及HTTP test build。PostgreSQL 18 task-owned isolated acceptance實際套用0001–0011兩次，驗證copy／replace、stale target rollback、checksum tamper、跨actor deny、record／tracking blocker、冪等衝突、FORCE RLS與同源POST；最新bundle為`output/qa/dev-139/s3/20261027T032531Z-3ce92109`，證據層級仍是`S3_DOMAIN_CORE_LOCAL_ACCEPTANCE`。這不是正常產品UI、真Jenfu Session、正式Cloud SQL、歷史資料移轉或切流證據。
+
+## 26. S3 Account Preferences W12（2026-10-27）
+
+`0012_account_preferences_v1.sql`與`server/preferencesHttp.ts`把帳號版面偏好及每看板任務篩選接到Cloud SQL。版面沿用`profiles.ui_preferences`，GET／PATCH只讀寫目前Session actor的`layout`，保留其他profile JSON欄位；只接受workspace sidebar寬度、Workbench寬度／未配置比例與Goal收合欄位。現有本機legacy偏好、即時cache與失敗fallback仍保留。每看板篩選由`account_board_task_filter_preferences`保存個人V6查詢；FORCE RLS同時要求row account等於目前actor、有效context及目前仍具該Board的`read_board`，撤權後即不可讀寫。
+
+HTTP adapter提供`GET/PATCH /api/v1/preferences/layout`及`GET/PUT/DELETE /api/v1/preferences/task-filters/{boardRef}`；全部私有route核對expected actor，write要求同源Origin且只允許Main Session。Client仍使用既有local cache／pending journal、遠端讀回與未知版本鎖定；V4／V5升V6時以格式版本與`updated_at`做CAS，V6同版寫入維持既有last-write-wins，不誇稱為逐次revision CAS。Server不接受client account ID；Board ref若在目前actor可見範圍不是唯一結果即fail closed。
+
+本slice沒有新增偏好中心、背景同步器、通用設定registry或新簽核。驗證通過S3 frontend 46/46、server／frontend TypeScript、DB static boundary、DEV-090 contract 10/10、DEV-118 model 17/17、migration 18/18、Calendar edge 6/6、DEV-091 layout 16/16、DEV-121 static 28/28、targeted ESLint零error及HTTP test build。PostgreSQL 18 task-owned isolated acceptance實際套用0001–0012兩次，驗證profile其他JSON保留、task-filter建立／讀回／更新／刪除、衝突、無權Board拒絕、FORCE RLS、production resolver absent及缺Origin不寫入；最新bundle為`output/qa/dev-139/s3/20261027T033548Z-76347c1b`。這不是Calendar subscription替代、真Jenfu Session、正常產品UI、正式資料移轉或切流證據。
+
+## 27. S3 Calendar Subscription W13（2026-10-27）
+
+`0013_calendar_subscriptions_v1.sql`、`server/calendar*.ts`與HTTP adapter把既有Calendar subscription管理及公開ICS feed接到Cloud SQL。Main Session提供list／create／update／enable／disable／rotate／delete與可見Workspace／Board／member references；所有管理write要求同源Origin並核對expected actor。新建與編輯只接受完整v4逐看板快照，server將legacy ref正規化為內部UUID，核對每板`read_board`、所選成員仍有效；跨使用者、無人員或含未指派等廣範圍另要求該板`manage_board_members`。讀取既有資料時保留v1–v4解析相容，不在背景改寫舊列。
+
+公開`GET /api/v1/calendar-feeds/{token}.ics`使用32-byte隨機bearer token；DB只保存SHA-256 hash，list／update不回傳hash或原token，只有create／rotate顯示一次新URL。Feed先以token hash找出owner，再用現行guard revision建立ServerActorV1，第二個actor transaction重鎖同一subscription id＋hash，並由既有Board RLS／capability重新判斷目前可見資料；停用回410，輪替／刪除使舊token回404，撤銷Board權限後不再輸出該板任務。回應為`text/calendar`且`Cache-Control: no-store`；若設定`PROJED_PUBLIC_APP_URL`才附任務連結。正式平台仍須遮蔽含bearer token的URL path access log。
+
+既有外部Calendar client只有原URL，token hash無法反推出token。因此切流必須保留舊feed origin/path（或在同path代理到新backend）並搬移原hash、filters、owner mapping；若做不到，就必須由使用者重新產生並更新外部訂閱，不能宣稱無縫。這是資料移轉／release條件，不在本地開發中偽造完成。本slice沒有新增token服務、scheduler、event bus、object storage或簽核層。驗證通過S3 frontend 48/48、server TypeScript、targeted ESLint、DB static boundary、HTTP test build、Calendar ICS、DEV-037、DEV-045 v3 model／feed／builder、DEV-090／091、DEV-118及DEV-121回歸；PostgreSQL 18 task-owned isolated acceptance實際套用0001–0013兩次並驗證FORCE RLS、owner隔離、缺Origin拒絕、hash-only、1,001筆較新非匹配資料後仍能分頁找到舊匹配任務、搬入v1／v2／v3 filters仍可產生feed，以及權限撤銷、停用、輪替、刪除即時失效，bundle為`output/qa/dev-139/s3/20261027T040546Z-7fcc0c97`，證據層級仍是`S3_DOMAIN_CORE_LOCAL_ACCEPTANCE`。這不是真Jenfu Session、正常產品UI、正式資料移轉、舊URL代理、Cloud Run／Cloud SQL發布或切流證據。
+
+## 28. S3 Data Migration Rehearsal W14（2026-10-27）
+
+`0014_snapshot_importer_v1.sql`與`scripts/dev139-data-migration.ts`完成支援domain的一次性資料搬移演練。流程只有`plan／apply／reconcile`：來源以單一`REPEATABLE READ READ ONLY`交易直接讀取，資料只在process記憶體內轉換，不產生含email、正文或token的snapshot檔；目標必須是已套用精確migration ledger的空白candidate DB。`apply`取得transaction advisory lock，以一個`SERIALIZABLE`交易批次INSERT，逐table count／SHA-256及整體snapshot digest完全一致才COMMIT，任一constraint、FK、漂移或連線不確定都rollback。輸出與evidence只含count、digest及阻擋domain，不含原始列。
+
+專用`projed_importer_disposable`不是owner、migrator或runtime，禁止superuser／BYPASSRLS／DDL／UPDATE／DELETE，只對25個映射表有SELECT＋INSERT。來源UUID、Workspace／Board／Task／tag／dependency legacy ref及Calendar token hash保留；nullable legacy ref以原UUID文字補值，assignee欄位合併去重，Quick receipt bytea hash轉hex，tracking reference只搬非primary placement。`actor_scope_access`與`resource_revisions`由來源membership／Workspace／Board導出；`account_authorization_guards`刻意不匯入，必須等真Principal mapping與Session wire核實後另行啟用，不能因搬完資料自動取得登入權。
+
+`plan`會在任何未承接資料存在時拒絕apply，包括Inbox、documents／RAG／LLM、meeting capture／analysis／private projection、tracking staging、未完成Workbench／Tracking／Backup receipt、RAG-enabled record、缺owner／tenant／entity／createdBy及無法精確表示的sort order。這些不是靜默略過清單；正式來源若非空，須先定義保留／轉換或維持原provider，否則不能切流。會議音訊Storage不在DB snapshot內，也不得因DB count一致宣稱已搬移。
+
+`qa/dev-139/migration/verify-isolated.ps1`在task-owned PostgreSQL 18同時建立synthetic source與空白target，驗證正常plan、失敗注入後整筆rollback、完整apply、exact reconcile、第二次apply因target非空拒絕、Inbox非空拒絕、目標row漂移偵測、guard保持0筆，以及importer只有SELECT／INSERT。結果`DEV139_LOCAL_SNAPSHOT_MIGRATION_REHEARSAL` PASS，bundle為`output/qa/dev-139/migration/20261027T042302Z-cfb138a3`，snapshot ID為`4da5a3c42e8503f81a67afa67d1a4f8882bed5d3f7a2c8b62e8a4967e5e0e9f2`。加入`0014`後另重跑S3 48/48 frontend、migration apply／idempotency及完整PostgreSQL domain acceptance PASS，bundle為`output/qa/dev-139/s3/20261027T042723Z-8247f729`。
+
+此W14依自用系統規模移除連續雙寫、CDC、delta服務、migration registry與額外簽核層；正式流程改為「舊writer fence→一致性full snapshot→空白candidate單交易apply／reconcile→切流」。W14當時CLI只接受task-owned loopback binding，證據是synthetic local rehearsal；W17已補managed來源／目標連線契約，但仍不是真Supabase inventory、正式Cloud SQL或正式資料搬移。進入正式切流前仍需外部owner發布ProJED／非員工Session契約、核實真Principal mapping、處理實際未承接domain、建立一次性credential、驗舊origin／PWA與遮蔽access log；credential撤銷、流量切換與rollback屬release責任，不在本地證據中冒稱完成。
+
+## 29. S3 Legacy Calendar URL Compatibility W15（2026-10-27）
+
+`supabase/functions/calendar-feed/compatibilityProxy.mjs`讓既有外部Calendar client可繼續使用原Supabase Edge URL。部署設定`PROJED_CALENDAR_FEED_PROXY_ORIGIN`未提供時完全沿用原Cloud SQL尚未切換前的Supabase查詢；提供時只接受不含userinfo、path、query或fragment的固定HTTPS origin，並將合法43字元base64url token轉送到`/api/v1/calendar-feeds/{token}.ics`。目的地不取自Host、forwarded header或request query，不傳送cookie、Authorization或Supabase key；fetch禁止redirect、10秒逾時、不重試，且代理啟用後任何錯誤都不回退舊資料庫。
+
+代理只保留200 ICS、404與410語意；其他status、網路錯誤、逾時、錯誤Content-Type或不安全設定統一回503。所有回應保留CORS及`Cache-Control: no-store`，只輸出安全的Content-Type與固定文字，不轉送Location、Set-Cookie或上游錯誤內容。Supabase高權限client改為legacy分支才延遲建立，因此proxy-only部署不再需要舊資料庫credential。程式不記錄token或含token的URL；Edge及Cloud Run平台access log遮蔽仍是部署查核，不能由本機unit替代。
+
+`npm run verify:dev-139:calendar-legacy-proxy`已驗未設定時零fetch、固定目標與最小header、畸形token／不安全origin在fetch前拒絕、200／404／410／3xx／5xx、錯誤Content-Type、逾時、no-store、無敏感header轉送、錯誤內容不洩token，以及proxy先於legacy hash／DB且module load不建立Supabase client。DEV-045 v2靜態verifier同步改讀目前`normalizePersistedTaskFiltersV5`／legacy V4 storage型別，21/21通過，並由既有v3 model的14/14行為案例確認v1–v3 materialization；沒有刪除v2 oracle。這只證明本repo相容程式；尚未部署Edge設定、核對Cloud Run invoker／平台log、搬入真token hash／owner／filters或以既有Calendar client讀取正式feed。
+
+W15沒有建立第二套token服務、redirect allowlist、proxy registry、雙寫或額外簽核。它只消除Calendar舊URL需要使用者重新設定的本repo程式缺口；整體單一writer仍以W14的全來源fence為準，舊前端、RPC、Function、worker與離線outbox不能因feed代理可用而繼續寫入。W15當時尚缺的managed runtime及正式來源／目標連線準備由W16／W17補齊本repo候選；外部Session、真資料未承接domain、正式writer fence／apply／reconcile／流量切換與rollback readback仍未執行。
+
+## 30. S3 Managed Cloud Run Candidate W16（2026-10-27）
+
+W16把先前只有loopback的kernel收斂為可建置、可綁定但尚未發布的Cloud Run候選。`config/dev-139/s3-managed.profile.json`固定managed環境、Cloud SQL Unix socket模式、14份不可變migration、靜態產物根目錄與相同API allowlist；runtime binding只能由檔案或單一非秘密`PROJED_RUNTIME_BINDING_JSON`提供，必須精確綁定`project:region:instance`、database、legacy-named app role、migration checksum與Cloud Run artifact metadata hash。startup再由metadata核對Main／Quick兩份HTML hash。DSN只接受`localhost`及唯一`host=/cloudsql/{exact instance}`選項；額外query option、TCP IP、錯socket、錯database／role或任一入口漂移都在listen前拒絕。既有`_disposable`角色名稱是已發布migration內的識別字，不代表managed環境；本輪未改歷史SQL，未為改名新增沒有資料安全效益的migration。
+
+`build:dev-139:cloud-run`以隔離環境強制`VITE_DATA_BACKEND=http`建置Vite及server，拒絕production bundle殘留舊Supabase origin，並產生含release／backend／index hash的metadata。`Dockerfile.dev139`採Node 24 multi-stage build、production dependencies與非root `node`，只帶`dist`、`dist-server`、managed profile及migrations，不烘入binding或credential。首次實際建置揭露TypeScript 6未明示`rootDir`而失敗；補上`server` root後重跑PASS，原失敗不改寫。Docker client存在但daemon不可用，因此本輪只完成artifact／Dockerfile靜態與compiled config載入驗證，明確記為`dockerExecution=NOT_RUN`，不是container runtime PASS。
+
+HTTP runtime新增受限靜態檔與SPA fallback：`/`依設定提供Main或Quick shell，`/quick-task`及其巢狀路由提供Quick shell，已存在asset正常回傳；缺asset、任何`/api/**`、反斜線、NUL及dot traversal都不落入SPA。`verify:dev-139:cloud-run-artifact`實際重建候選、核對metadata／Main／Quick hash、建立14 migration的managed binding，並以compiled `dist-server/config.js`驗證`0.0.0.0:8080`與精確Cloud SQL socket；`verify:dev-139:managed-static`、S1 unit 8/8、server typecheck、targeted ESLint及完整S3 PostgreSQL 18 acceptance均PASS，最新S3 bundle為`output/qa/dev-139/s3/20261027T044618Z-2d9252db`。
+
+相容入口採單一Cloud Run服務，不為Main／Quick另開第二服務與第二連線池。`create:dev-139:hosting-config`從目前`firebase.json`產生候選設定，只在既有rewrite之前加入`/api{,/**}`到明確service／region，保留Main／Quick靜態Hosting／SPA規則與headers且不直接修改live config；Cloud Run image仍帶同源artifact供direct smoke與可逆fallback，但既有public origin的靜態檔不多繞一層runtime。若現行API路徑已有owner即拒絕。兩個既有Firebase Hosting public origin可服務同一site設定並轉送同一runtime，但可信`main / quick`仍必須來自未來簽發的Session actor，不以Host／`x-forwarded-*`／`x-fh-*`作授權來源。此設計沿Firebase官方的Hosting rewrite／Cloud Run與Cookie限制收斂；路由能力不等於本案project、region、invoker、Cookie、cache或費用已驗證。[Hosting](https://firebase.google.com/docs/hosting/)／[Cloud Run rewrite](https://firebase.google.com/docs/hosting/cloud-run)／[Cookie與cache](https://firebase.google.com/docs/hosting/manage-cache)
+
+W16沒有啟動Docker Desktop、連接Cloud SQL、建立雲端資源、改IAM／Secret／billing、修改正式Hosting或執行切流。仍需外部owner提供真ProJED／非員工Session wire；正式階段另需建立Cloud Run／Cloud SQL與最小credential、核實legacy source及未承接domain、執行writer fence／snapshot apply／reconcile、部署Calendar代理與access-log遮蔽、完成真入口／PWA／rollback readback。這些release責任不可由本地candidate或synthetic DB證據取代。
+
+## 31. S3 Managed Snapshot Connection W17（2026-10-27）
+
+W17補齊W14只接受同一loopback binding的本repo缺口。`scripts/dev139-data-migration.ts`保留原`plan／apply／reconcile`及disposable預設，另接受明確`--target=managed`；managed target固定使用W16的source-controlled profile、14份migration與binding，目標URL只接受exact Cloud SQL Unix socket及`projed_importer_disposable`，不允許TCP別名、額外query option、runtime／owner／migrator role。來源與目標binding分開；來源密碼只存在執行當下的`PROJED_MIGRATION_SOURCE_DATABASE_URL`，不寫入binding、stdout或evidence。
+
+`create:dev-139:supabase-source-binding`只產生非秘密Supabase來源描述：project ref、從Dashboard Connect複製的exact host／database／reader role、direct或session模式，以及CA SHA-256。direct只接受`db.{projectRef}.supabase.co:5432`；IPv4執行端可用`*.pooler.supabase.com:5432`的session mode，且role必須帶相同project ref。transaction pooler 6543拒絕，避免把長時間`REPEATABLE READ READ ONLY`快照放進不必要的transaction-pooling路徑。來源DSN只接受`sslmode=verify-full`及絕對`sslrootcert`，連線前核對CA檔hash；BEGIN後再讀回current database／role、read-only及repeatable-read，任一不符即停止。Supabase官方亦將migration／backup導向direct connection，IPv4限制時才用session mode，並說明`verify-full`需CA及hostname驗證。[連線方式](https://supabase.com/docs/guides/database/connecting-to-postgres)／[SSL模式](https://supabase.com/docs/guides/platform/ssl-enforcement)
+
+本地驗證新增`verify:dev-139:migration:connections` 2/2，涵蓋direct／session exact binding、project-ref角色、5432、verify-full、CA漂移、未知欄位及錯host拒絕；全專案TypeScript與targeted ESLint PASS。完整disposable snapshot rehearsal重跑PASS，仍驗單交易rollback／apply、exact reconciliation、target非空、未承接domain、target drift、identity guard不匯入及importer SELECT＋INSERT only；最新bundle為`output/qa/dev-139/migration/20261027T050306Z-f11d93b3`。這是本地等價行為與managed連線契約證據，沒有連正式Supabase或Cloud SQL，也沒有讀取真資料。
+
+W17未新增dump檔、staging bucket、雙寫、CDC、delta service、credential store或人工簽核。正式release仍須由owner建立／撤銷來源reader與目標importer credential、確認CA與實際endpoint、先完成所有舊writer fence，再執行真`plan→apply→reconcile`及流量／rollback readback；若真資料出現§28 blocker，必須先處理該domain，不能以此連線能力跳過。
+
+## 32. S3 Local Development Closure W18（2026-10-27）
+
+W18依最終只讀稽核修正兩個本地P1，沒有新增治理層。managed snapshot的target preflight除既有database／importer identity、superuser及BYPASSRLS外，現在也拒絕`CREATEDB`、`CREATEROLE`、replication及對owner／migrator／runtime的role membership；避免專用importer仍可`SET ROLE`或繼承管理能力。隔離演練逐一注入CREATEDB、CREATEROLE及owner membership，三者均以`IMPORTER_IDENTITY_INVALID`停止。
+
+來源inventory補上`public.llm_access_logs`與`private.quick_task_oauth_clients`。兩者目前沒有已定案的Cloud SQL保留／轉換／退役路徑，因此採最低成本fail-closed：表為空時不阻擋，存在任何資料即在plan列出精確domain並停止，不允許snapshot顯示PASS卻靜默漏資料。完整PostgreSQL 18演練包含單交易rollback／apply／exact reconcile、非空target、既有未承接domain、上述兩類新blocker、target drift、identity guard不匯入及importer SELECT＋INSERT only，最新結果為`output/qa/dev-139/migration/20261027T051001Z-8692c8be`。
+
+`verify:dev-139:s3`現在於task-owned PostgreSQL、編譯後`VITE_DATA_BACKEND=http` Vite artifact及同一Node HTTP server中，以QA專用opaque Session執行一個最小正常產品UI煙霧：載入`B workspace`／`Shared board`／`Shared parent`、確認授權看板導覽、所選看板不顯示private-board task，重載後資料仍在，且實際經`/api/v1/session`、workspace及task API；console／page／same-origin HTTP錯誤為0。產品自動寫入的layout／filter偏好在案例後精確還原，避免污染其後API驗證。最新S3結果為`output/qa/dev-139/s3/20261027T051912Z-a498749a`，browser artifact為`output/playwright/dev-139-http-ui/result.json`；此證據只代表本地QA actor，不代替真Platform Session或既有使用者切換。
+
+因此DEV-139在ProJED repo內的已授權開發範圍收斂為完成。尚未完成者是外部owner wire與release責任：OrgMaster／Jenfu-Platform非員工publication／admission／Session、真Principal mapping，真Supabase inventory及blocker資料處置，Cloud Run／Cloud SQL／Hosting／Calendar代理的container與雲端readback、writer fence、真apply／reconcile、流量與rollback。Docker daemon本輪仍不可用，`dockerExecution=NOT_RUN`保留為環境／release證據缺口，不是未修正的本repo程式缺陷；不得以本地closure冒稱整體整合或正式發布。
+
+## 33. Integration Continuation W19（2026-10-28）
+
+人類要求繼續完成 §32 所列全部剩餘項目，並指定簡單與查核工作由 `gpt-6-luna` xhigh 併行。目標維持真接線、完整資料、相容入口與正式發布，不再以本 repo 的 W18 完成作為整體終點。原工作樹已不存在檔案，但 Git branch／`575d461` 完整；本輪用同 branch 恢復獨立工作樹，主工作區既有 dirty 修改未搬移或覆寫。
+
+### 33.1 已查證的現況與資料缺口
+
+正式來源是既有 Supabase `knodlkxqpcqyrtgwpdst`。2026-10-28 14:33:38 UTC 以 MCP 執行單一唯讀 aggregate SQL，沒有下載私人正文、token 或密碼，也沒有修改正式資料：
+
+| 來源事實 | 實際結果與下一步 |
+|---|---|
+| 帳號與既有登入證據 | profiles 8；Google identity 8，subject 全部非空且唯一、涵蓋全部 profiles。profile 的 external provider pair 目前全空；後續用已核實 auth identity → Google subject → 新 publisher Principal 的受控 proof 保留原 UUID，不用 email 猜測，不自動建立虛假 Employee。此 aggregate 仍未證明跨 provider 的逐帳號 mapping。 |
+| 任務與未承接文件 | wbs_items 638；documents 7、versions 8、chunks 11、rag_sync_jobs 8、RAG-enabled records 7。必須承接原內容與狀態，不能清空或將 rag_enabled 關閉來取得 PASS。 |
+| 稽核、費用與清理 | llm_access_logs 4；meeting_artifact_cleanup／meeting_ai_budget_months／meeting_ai_usage_attempts 各 1。需保留 ledger／cleanup 語意，不把紀錄當可刪除 fixture。 |
+| 無 owner 的既有工作區 | 9 個 tenants 的 owner_id 為 NULL，且無 tenant membership。保留原 ID／資料，先釐清引用與既有可見性；不得自動指定目前登入者、刪除或擴權。 |
+| Storage | 當次 storage.objects aggregate 無列；只代表此時間 DB inventory，尚未形成正式切換 snapshot 或所有外部檔案的完整證據。 |
+| private table ACL | list_tables 的通用 RLS 警示另以 pg_catalog／has_table_privilege 核實：五個未開 RLS 的 private tables 對 anon／authenticated 均無 SELECT／寫入權；未依警示擅自改正式 RLS。 |
+
+OrgMaster 與 Platform 的唯讀 source audit 均證明現有 active mapping／admission 依賴有效 Employee；Platform v2 僅 OrgMaster／AI-PDM，v3 僅 FMS，沒有 ProJED audience，不能以放寬舊欄位代替新 wire。Platform 原 DEV-007 的 re-entry 已由本次人類整合要求觸發；實作前沿該 owner 的 native 索引收斂，OrgMaster 另沿其直接任務入口選 native slice。當次查核沒有修改其他 repo。
+
+### 33.2 已完成的程式修正
+
+managed profile、runtime validator、DB checker、migration runner、binding generator 與其正負測試，已從獨立 `projed` DB 改綁既有共用 `jenfu_prod`，符合原共用 DB／app schema 架構。這是未部署設定修正；`0001`～`0014` bytes 與既有角色識別字不改，沒有建立新 database。舊 `projed`／非正式 `jenfu_dev` binding 明確拒絕。
+
+managed profile也固定唯一instance `jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg`；runtime、binding generator與migration runner均核對此值。正向測試使用實際目標，格式正確但錯project／舊instance的binding仍拒絕，不只比較URL與binding兩者是否自洽。
+
+snapshot preflight 由同一來源 read-only repeatable-read transaction 查實際 `public`／`private` catalog，再比對受支援 projection 與既有 domain blockers。Rev33 移除「未分類 relation 即使零筆也阻擋」的門檻：實際 count=0 的持久 relation 僅列入 `emptySourceRelations` 診斷，不要求人工刪表／分類後才可繼續；非空未知 table、partition root、普通 inheritance child 及 materialized view 仍阻擋。foreign table 不觸發 FDW、count 為 null 且維持阻擋；無法計數／讀取時報錯，不推定為空。來源設定 transaction-local `row_security=off`，若 reader 會被 RLS 過濾，查詢直接失敗，避免隱藏資料被誤認為零筆；此設定不授予 BYPASSRLS 或放寬 ACL（[PostgreSQL 說明](https://www.postgresql.org/docs/18/runtime-config-client.html#GUC-ROW-SECURITY)）。普通 view 由底層持久 relation 承接，extension-owned relation 排除。來源阻擋時不讀業務 snapshot、不開始 target transaction 或取得 apply lock；診斷只報名稱／count，不輸出正文。每次 plan／apply／reconcile 都重新檢查當次 snapshot，不能把舊 plan 的零筆結果當作 apply 資格；正式 writer fence 與資料完整性契約不變。
+
+### 33.3 下一個雲端執行範圍與待確認權限
+
+本節保留W19資源提案；2026-10-29已查到private-only SQL與lifecycle IAM登入差距，現行前置及修正方向以[§47](#47-managed-job-artifact-and-real-foundation-gapsw332026-10-29)為準。下述direct-role DSN／共用release identity不是已接受或可套用的正式解法，不按舊文字建立密碼Secret或擴張grant。
+
+`gcloud` 當次讀回：`jenfu-platform-prod / asia-east1 / jenfu-platform-prod-pg` 為 PostgreSQL 17、RUNNABLE，已有 `jenfu_prod`；平台專案沒有 ProJED runtime／service account／Secret／Artifact Registry repo。原 Firebase project `projed-cc78d` 已啟用 Cloud Run、Artifact Registry、Secret Manager，已有 `cloud-run-source-deploy` repo、`cr-build`／`cr-runtime`，以及現有 `projed-ai-backend`；不重用或覆寫該 AI runtime 的身分／Secret。原專案當次僅見 `AI_API_KEY` Secret。
+
+為保留既有 Hosting origin，唯一新業務 runtime 預定為 `projed-cc78d / asia-east1 / projed-prod`，Cloud SQL 仍用 `jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg / jenfu_prod`。Firebase run rewrite 只提供 serviceId／region，安裝中的 firebase-tools `lib/hosting/runTags.js` 也以 Hosting project 解析 Cloud Run resource；不能把平台專案同名 service 當既有 Hosting 已可轉送。此方案不加第二個 edge proxy，與 [Firebase Hosting rewrite](https://firebase.google.com/docs/hosting/full-config#direct_requests_to_a_cloud_run_container) 的設定形狀一致；跨專案 SQL 連線仍須新 grant 與實際 readback。
+
+待人類確認的是新增的 foundation／credential 責任：在 `projed-cc78d` 建立 `projed-prod-runtime` 與 `projed-prod-release` 專用服務帳號、必要的 app-scoped DB connection Secrets（runtime／migrator／一次性 importer 分離）；只授予自身 Secret 讀取、映像與 Job／runtime 所需權限，並在 `jenfu-platform-prod` 授予指定身分的 Cloud SQL 連線及 ProJED schema／角色存取。沿原角色與 forward-only bootstrap／migration 交付，不直接手改正式業務資料、不授 sibling core、owner/editor 或 billing account 權限。實際 Secret 值不進文件／前端／輸出，一次性 importer 依 release 流程撤銷；不新增 SQL instance、共享 tier 或 billing account。
+
+具名Secret規劃為`projed-cc78d`內的`projed-prod-database-url`、`projed-prod-migrator-database-url`及一次性的`projed-prod-importer-database-url`；runtime帳號只讀第一個，release帳號按migration／import Job需要讀後兩個。使用既有`cloud-run-source-deploy`映像repository的ProJED路徑，不為此另建repository。具名權限確認不包含Owner／Editor、sibling core、billing account、共享SQL tier調整或服務刪除。
+
+正式切流仍依序完成新非員工 wire、逐帳號 proof、未承接 domain、舊 client／PWA 相容、全來源 writer fence、backup／restore、snapshot apply／exact reconcile 及正常入口驗證。新 writer 啟用前後的回復分開處理，不能用舊 DB 覆蓋新寫入。這是人類已要求的發布工作，其實際前置缺口與新 IAM／Secret 權限不可由本地 synthetic PASS 取代。
+
+### 33.4 本輪驗證與環境邊界
+
+2026-10-29 COO 抽查的針對性自查：PostgreSQL 18.4 隔離演練 `output/qa/dev-139/migration/20261028T163124Z-762899fb/result.json` 通過 42 項檢查、17 個既有 migrations、32 個 snapshot projections；snapshot ID 與 W21 相同。空未知表保留時 plan／apply／reconcile 可通過且留下診斷；後續 snapshot 插入資料即阻擋，RLS 隱藏資料在 apply 前以 42501 拒絕且 target 維持零筆。普通 inheritance child 的空／非空判定、原 rollback／reconcile、精度、私有資料／權限與正常 Board 搬移回歸均保留；task PostgreSQL 已停止、port／暫存目錄由 wrapper 核實清理。migration connection／catalog unit 4/4、managed static boundary、受影響 ESLint 及針對性 TypeScript 通過；TypeScript 明確解析既有 OrgMaster 安裝的 `@types/pg`，不是 lockfile 完整 build。這是本地 RD 自查，不代表真 Session、正式資料／雲端驗收或獨立 QC；本次抽查不加入 required gate。下列 W19 收據保留當時結果，不要求重新補歷史證據。
+
+`verify:dev-139:s1:unit` 8/8、migration connection／catalog unit 4/4、managed-static、hosting-config及受影響ESLint通過。PostgreSQL 18.4隔離snapshot rehearsal通過，結果為`output/qa/dev-139/migration/20261028T143857Z-ff6d2133/result.json`，含unknown空表／partition／普通inheritance child／materialized view阻擋、真extension-owned table排除、apply零寫入、原rollback／reconcile與importer拒絕。第一輪wrapper因Windows PowerShell 5的跨行`-or`語法解析失敗，修正後才執行DB案例；原失敗未改寫。
+
+恢復工作樹時沒有原node_modules。完整dependency install被容量preflight阻擋，未安裝／清理；本輪透過本工作樹junction唯讀重用主工作區已安裝套件，實際pg為8.20.0（lock為8.21.0）、@types/node為25.2.2（lock為24.0.0），正式artifact需按lock重建驗證。一般server typecheck因該共享安裝缺@types/pg未通過；本地針對性typecheck以現有Platform安裝的@types/pg 8.23.1明確解析（沒有寫入其他repo），發現並修正source binding readerRole缺少型別收斂，追加缺值拒絕案例後零diagnostic。此結果不冒稱lockfile完整建置PASS。Docker daemon仍未運作；未提交雲端build或部署、未修改正式資料／IAM／Secret／流量。
+
+## 34. Legacy Data Retention W20（2026-10-28）
+
+本輪將兩個原本需要人工處置的全面阻擋，改為可直接保留的既有資料形狀；不新增審查 gate、人工 owner 指派或另一套資料狀態。§32／§33 保留當時的 W18／W19 結果，現行規則以下列實作為準。
+
+- `0015_llm_access_log_retention_v1.sql` 與 snapshot projection 承接 `llm_access_logs` 全部十個來源欄位，包括 NULL actor／project、chunk IDs、原始 metadata 與時間。非空本身不再阻擋；只有既有 project 與 tenant 不一致時於唯讀 preflight 拒絕，target 零寫入。FORCE RLS 要求可信 actor 及現行工作區讀取權；不能讀其他 actor 的紀錄，runtime 無 UPDATE／DELETE，importer 維持 SELECT／INSERT。此為紀錄保留，不宣稱 RAG／文件 HTTP 功能已完成。
+- `0016_workspace_lifecycle_compatibility_v1.sql` 保留來源允許的 NULL owner 與 owner 刪除後 SET NULL；不刪除工作區／看板／任務，不補 owner、membership 或 scope。無 membership 的舊資料仍不可見，runtime 不得認領或建立無 owner 工作區；DTO 省略空 owner。NULL owner 不再需要人工釐清／指派後才可匯入。非 NULL owner 卻缺有效來源 membership 仍拒絕，避免新 bootstrap 路徑擴權。
+- 同一 migration 修正正常看板跨工作區搬移：帳號篩選的 composite FK 隨 project scope CASCADE；moving actor 的 scope refresh 只在 kernel 已驗證的 target transfer context 下允許。使用既有 repository 的 remove reference → preview → move 流程驗證，不放寬一般 actor scope 更新、tag、member 或 tracking 約束。
+- snapshot driver 保留 PostgreSQL JSON／JSONB 原文字並區分 SQL NULL，不經 JS number；date／timestamp 以 UTC、ISO 文字保留微秒，不經 JS Date。既有 apply／reconcile 同時檢查 JSON string、JSON literal null、任意精度數值與微秒，不另建核准或證據流程。測例確認長小數最後一位與同毫秒內一微秒的 target 漂移均回 `RECONCILIATION_MISMATCH`。
+
+驗證通過：PostgreSQL 18.4 隔離 rehearsal（0001–0016）、單交易失敗全回滾、exact reconcile、未授權／撤權拒絕、無 owner 資料與零擴權、看板搬移保留 log／偏好及 rollback；結果為 `output/qa/dev-139/migration/20261028T151116Z-3198a550/result.json`，snapshot ID `1d16a25e8ac592ef20c80741b9687d00c29394a1b105c484a3f49b4a79e84f04`。task-owned PostgreSQL 已停止且暫存目錄已移除。S1 unit 8/8、S3 unit 48/48、migration connection／catalog unit 4/4、managed static 16 份 migration、受影響 ESLint 及 diff check 通過。針對性 TypeScript 沿 §33.4 明確借用既有 @types/pg，零 diagnostic；不是 lockfile 完整 build 或獨立 QC。
+
+原失敗保留：初版搬移測例發現偏好 FK 阻擋；改走正常產品 command 後，又發現 cascade 後 actor scope upsert 的 RLS 拒絕，均由 0016 修正。中間手寫 SQL 搬移未遵循 member／tag／tracking 前提、及 helper 缺 `expectedSubtreeIds` 屬測例輸入問題，已改用實際 command／正確參數，未鬆綁產品約束。複審發現 JSON 數值與 timestamp 精度損失後才補保真及 drift 負例；舊整秒 fixture 的 PASS 不作此項證據。
+
+目前已支援的 LLM log／NULL-owner 工作區無須額外人工清理門檻；正式來源 plan／apply／reconcile 仍待執行。Inbox、文件／RAG、會議 ledger／cleanup、Storage、Quick OAuth client 等尚未承接資料，以及真 Session／舊入口／writer fence／雲端與發布仍按其實際缺口處理，不以刪資料、關功能或本地 synthetic PASS 縮減交付。
+
+## 35. Document Source Retention W21（2026-10-28）
+
+### 35.1 文件資料與權限承接
+
+本節描述 W21 當時的資料保留切片；現行 runtime 的 record mirror／worker 權限由 §38 與 0024／0025 延伸，不再把下列歷史 read-only 狀態當成目前 RAG 的實作限制。
+
+`0017_document_source_retention_v1.sql` 與既有 snapshot driver 承接 `documents`、`document_versions`、`document_chunks`、`document_embeddings`、`rag_sync_jobs`、`external_rag_objects`。原 ID、正文、版本／chunk 關聯、provider object ID、JSON、微秒、model／dimension 及 job 狀態均保留；不重建文件、不重設 failed／running 為 pending，也不在匯入時呼叫 provider。S3／managed profile 為 17 份有序 migration，S1 仍只有 0001／0002；不改既有 migration bytes。
+
+六類表的全面非空阻擋改為具體 tenant／project／document／version／chunk 不一致的唯讀 preflight；任一不一致仍在 target 零寫入時停止。target 使用同 app composite FK／cascade 防止跨工作區關聯，全部 FORCE RLS 並撤銷 PUBLIC；record 的 source_document_id 補回來源既有的刪文件 SET NULL 行為，保留 record 本身，並檢查同 tenant reference。runtime 僅可 SELECT 四類文件資料，私人文件只授原作者／更新者，project 文件重驗目前看板能力；knowledge-record mirror 必須對應原 published、RAG-enabled record 及其 source_document_id、tenant／project，並遵守原 record 權限。版本、分段與 embedding 只能沿可見 parent 讀取。runtime 沒有 corpus 寫入，也沒有 job／external-object 存取；一次性 importer 保持 SELECT／INSERT，未因此變成 worker 或 owner。
+
+來源 pgvector(3072) 保存 float32 component；此保留切片轉為原生 `real[]`，保留相同 3072 個有限、非 NULL component 與原 model／dimension 欄位。投影在來源 DB 用原生 `embedding::real[]` cast，driver 傳遞 array，不重新計算 embedding 或混用 model，也不在共享 DB 安裝 extension。來源當次實際為 pgvector 0.8.0、`extra_float_digits=0`；此設定會將 real／float8 文字截短，故 source／target transaction 都固定 `extra_float_digits=3`，再按相同精確表示 reconcile。[PostgreSQL 官方說明](https://www.postgresql.org/docs/current/datatype-numeric.html#DATATYPE-FLOAT)及[pgvector cast 定義](https://github.com/pgvector/pgvector/blob/master/sql/vector.sql)支持此資料型別與輸出責任。這是資料保留契約，沒有宣稱 ANN index／檢索效能或 RAG 功能完成；若實際效能需要 index，另以 forward-only 變更承接。
+
+正常看板搬移的 preview 現讀取受既有 RLS 限制的可見文件／RAG 文件數，不再固定回 0；隱藏私人資料不因 aggregate 放寬。文件及其 child、job／external mapping 的工作區隨 project 關聯 cascade，既有產品 command 的資料保留另做回歸。
+
+2026-10-28 當次 Supabase 唯讀 catalog／aggregate 查核：documents 7、versions 8、chunks 11、embeddings 0、sync jobs 8、external objects 0；六類關聯及 record-document scope mismatch 均為 0。未下載私人正文／provider 憑證，也未寫正式資料。另在同來源以純 SELECT 合成 3072 維向量：default 0 下 stored component 正確但文字 roundtrip 為 false；transaction 設為 3 後原生 cast／文字 roundtrip 都為 true。這是實際 extension 上的合成值證據，不是正式 embedding 資料搬移或切流 snapshot。
+
+### 35.2 未完成的責任
+
+W21 當時的 `knowledge_records WHERE rag_enabled` blocker 與 `CHECK (NOT rag_enabled)` 用來防止尚無索引／檢索路徑時切換；現行 source 由 §38 的 0024 與精確 preflight 取代。本版 native 尚未通過前不宣稱該功能已交付；不能僅憑 corpus 保留、文件修訂或靜態 PASS 解除驗收責任。來源會議 cleanup／budget／usage 各一筆的語意亦未以搬表宣稱完成：cleanup 的 capture／run FK 父資料、storage／provider 刪除責任、月度 reserved／spent／unknown counters 與 usage settlement 均須一起承接，不能重算 counters 或假裝 provider 已清除。既有 meeting provider qualification 的 Pending 不改為 PASS。
+
+真 Session 的下一步沿各 owner 原生入口實作：OrgMaster DEV-057 的非員工 publisher／admission（現有 Employee 契約保留），Platform DEV-007 的 app onboarding 重入及 ProJED 新版本 audience，再接 ProJED verifier／mapping／opaque Session。當次唯讀 source 查核可用基線為 OrgMaster `origin/master@4e6744adc28f99590e629f1b35ad62a69fe7cb26`、Platform `main@1ffd6ec93be60ad0d97c5a77e3c4978c74686471`；兩邊都仍要求 Employee，沒有已發布的 ProJED 非員工 wire。OrgMaster DEV-058／060 的 dirty publisher／auth 檔案須保留，後續在獨立工作樹協調整合，不覆寫或把 dirty 本身視為永久阻擋。這些是現況與後續工程工作，不是 owner 已接受契約或新的人工簽核。
+
+### 35.3 驗證與失敗保留
+
+最新完整 PostgreSQL 18.4 rehearsal 為 `output/qa/dev-139/migration/20261028T153841Z-5a19aca2/result.json`：32 個 snapshot projection、0001–0017、39 項既有／針對性檢查通過，snapshot ID `7f40c564707f396a96f1c29dec150237589940f216ac74a0ef4abcd25e73762d`。其中六類合成 corpus counts 為 4／5／5／2／5／2；包含全欄位 digest、正文／版本保留、source scope 不符零寫入、私人及未授權看板／mirror／子資料拒絕、撤權即隱藏、不可寫入、finite embedding／FK 拒絕、record mirror 刪除 SET NULL、刪板／工作區 cascade、正常 repository command 搬移後保留文件／版本／chunk／embedding 與原時間／JSON，最後回滾。source DB default 0、target default -1 刻意不同，driver 的精確設定仍可 apply／reconcile；3.1415927→3.1415925 的 float32 漂移會拒絕，還原後再通過。task PostgreSQL／暫存資源已清理。
+
+第一輪 SQL 的無 actor 測例錯把 guard revision 設為空字串，觸發既有 bigint 解析拒絕；其他獨立回歸與真 command 已繼續收集，沒有把該次標為 PASS。測例改用新 connection 的真正未設定 actor 後通過，沒有鬆綁 actor 驗證。原 `20261028T153459Z-c73dd593` PASS 僅證明一般輸出設定下的 corpus 保留；後續來源原生浮點查核發現 default 0 的精度問題，才加入兩端精確輸出及漂移負例，以上述最新 bundle 為現行證據。
+
+S1 unit 8/8、migration connection／catalog unit 4/4、S3 unit 48/48、managed static、受影響 ESLint 及針對性 TypeScript 通過；TypeScript 仍沿 §33.4 使用既有外部 @types/pg，未宣稱 lockfile 完整 build、Docker／雲端驗收或獨立 QC。最初 counts 型別仍為 literal 0 的兩個 diagnostic 已隨實際 count 修為 number；資料型別與必要回歸保留，不新增 required gate 或人工報表。
+
+## 36. OrgMaster Minimum Principal Publication W22（2026-10-29）
+
+OrgMaster 依既有 DEV-057，在獨立工作樹 `C:/VIBE CODING/.worktrees/OrgMaster/dev057-projed-principals-20261028` 完成最小 publisher source，commit `a9a6e675644cf0eceada2f75d55e53863c409912`，已推送 [draft PR 187](https://github.com/jedchang0308-jenfu/OrgMaster/pull/187)。這是來源開發與本地驗證，不是正式 owner wire 已發布。
+
+- 新 contract `orgmaster.projed-principal.v1`／`POST /api/internal/projed-principals/v1`：既有服務 caller OIDC 驗證後，由 OrgMaster 重新驗 Firebase ID token／Google subject，body 不能指定 Principal／issuer／Employee，email 不作 mapping key。回傳 exact provider pair、Google subject、穩定 Principal、kind、nullable Employee、int64 mapping revision 與發布時間；schema 見 [owner source](https://github.com/jedchang0308-jenfu/OrgMaster/blob/a9a6e675644cf0eceada2f75d55e53863c409912/contracts/projed-principal/v1/publication.schema.json)。
+- 新 forward-only `041` 保留 Employee v1／舊 lifecycle 寫入，另以 immutable v2 owner／provider-pair reservation 擋跨 Principal 重綁；舊 writer 的 ON CONFLICT 與 managed guard 填值路徑同樣受保護。個人／外部 Principal 不建假 Employee、不授業務角色；已停用的 Employee pair 不繞道自動變 personal。
+- App-scoped ProJED admission 不等於 Workspace／Board 業務權限。Platform 可讀 `orgmaster_contract.v_projed_principal_admissions_v1` 決定 ProJED 身分准入／入口；私人與既有協作權限仍由 ProJED 自有 membership／permission 控制，不另加公司角色指派作個人使用前置。
+- writer 在同一 statement／transaction 核對實際 `SESSION_USER`、既有 workload provider／owner 與專用 publication purpose permission，無 runtime 直接 core DML。相同 request＋proof 重播同一 receipt；異 proof 或過期 mapping revision 拒絕，不存 raw token／email 或私人任務內容。
+
+本地驗證：unit／repository／API／server composition／舊 auth 共 54/54、fixture helper 14/14、TypeScript、前端／server build、staged DB boundary PASS（build 保留既有 chunk-size warning）。原生 PostgreSQL 18 checks PASS，owner bundle=`output/qa/dev-057/projed-principal/2026-10-28T16-39-12-377Z-3b64190a/result.json`，先建 31 OrgMaster＋11 Platform fixture，再補齊未修改的 OrgMaster 032–040 並套 041；cleanup 全部成功。舊 17-check bundle、source-byte drift 與 runtime core-read 42501 失敗保留在 owner DEV-057，不改寫為 PASS。
+
+下一步是 Platform DEV-007 接入此 publication／current admission、個人 Principal epoch、ProJED 專用新版 Session／handoff，再接本 repo verifier／既有使用者 proof／opaque Session。Platform 已從最新 `origin/main@a861bde73b82f858b8bece0eb60e4d97a0428069` 建立獨立 `codex/dev007-projed-session` 工作樹 `C:/VIBE CODING/.worktrees/Jenfu-Platform/dev007-projed-session-20261029`；保留 DEV-021 的 013 loopback callback 與既有 v2／v3 consumer，不放寬舊 Employee／audience。
+
+Platform consumer source 已提交 `fb49bc02c6786634d7ad0a2ca56d928fcfb4529c`：新增 exact contract parser、server-to-server publication client 與 current admission reader。73/73 本地 unit（新 contract 18／client 15／reader 16＋舊 client 24）及全專案 TypeScript PASS；首輪漏匯入版本 constant 與型別收斂失敗修正後才通過。這些元件尚未接 runtime／Session；DEV-007 已從 Future Capsule 重入，直接契約為該 repo `ai-doc/specs/DEV-007-projed-onboarding.md`，014 與 Session v3／handoff v4 仍待實作。
+
+上述為首版 source 歷史。現行 OrgMaster package 已沿既有 owner flow append 041／042／043 至 41 entries，保留前 38 entries 與原 041／042 bytes；runner 僅接受 exact ledger prefix 38／39／40／41。source `9cf402276689d30df120ff822341215dcf8a0ebf` required CI `40775539127` 成功，consumer-owned native 21/21 PASS，含 inactive Employee 既有 Google pair 首次新 Firebase admission。首次19/21的 fixture lookup 與第二次20/21的 requestId 失敗保留；詳見 owner DEV-057。正式 tool image、owner migration／publication 與真 Firebase／OIDC 未完成；不以這些 source 結果啟用 ProJED production pins。
+
+## 37. Platform ProJED Session and Handoff W23（2026-10-29）
+
+Platform DEV-007 在 draft [PR 157](https://github.com/jedchang0308-jenfu/Jenfu-Platform/pull/157) 提交 ProJED 個人登入、Session v3 與 handoff v4 source，backend commit `5743e7395f633b8b2bb9623d13862456e9b21069`；required CI run `40742718562` 成功。OrgMaster DEV-057 的 042 source 為 `5d4cf716c006e2372b3f8e98b0899acdcc82389a`，draft [PR 187](https://github.com/jedchang0308-jenfu/OrgMaster/pull/187) required CI run `40742218639` 成功。兩個 PR／CI 都是 source 證據，不代表已發布或已連真 Firebase／OIDC。
+
+- Platform 新 consumer 讀取 OrgMaster publication 與 current admission／epoch；v4 handoff aggregate manifest 為 `c5471fa9686566cf2ecb42f6f78f52eed5188e36bcfd8208609a96fc0f829e6a`，canonical state contract 為 `platform_contract.read_projed_principal_state_v1(text,text,text)`。014 package source `96acb191` 的 required CI `40745023043` 已成功；目前 package 已包含 015，完整現行證據見下段。state manifest 的 `CANDIDATE_UNAPPLIED` 指正式 schema 尚未套用，不能解讀成未執行隔離 native 測試。
+- Session v3 支援 `employeeId=null` 個人 Principal，驗證已映射 Google proof、current admission／mapping revision 與 auth epoch；主站與 Quick 使用各自 exact callback。v4 handoff 綁定來源 Session、當次 callback、PKCE 與 mapping revision。已消耗結果可依相同證據 recovery，錯帳號拒絕；取消或 epoch／mapping 漂移阻止 App Session，pair 限流在 publication 前拒絕且不建新 admission；取消時跨 owner 的最小 Principal publication 可能已完成，不承諾跨系統回滾，仍不得產生 App Session 或私人資料寫入，舊 Session／handoff 版本仍維持既有 Employee 契約。ProJED business grant 仍由 workspace／board membership 與 permission 決定。
+- Platform auth／app unit 436 項 PASS；一般 unit run 有 11 項 PostgreSQL 專用案例按設計 skip。隔離原生 bundle `C:/VIBE CODING/.worktrees/Jenfu-Platform/dev007-projed-session-20261029/output/dev-007/postgres/2026-10-28T18-06-03.014Z-6087acd7/` 的 `result.json` 為 `LOCAL_SYNTHETIC_POSTGRES_ONLY`、`production=false`、18/18 checks PASS；`source-flow.json` 為 6/6 ProJED flow PASS；`legacy-login.json` 為 5/5 舊登入交易 PASS。該 bundle 記錄 `sourceRevision=fb49bc02c6786634d7ad0a2ca56d928fcfb4529c`，並確認測試 source hashes 未變；不得把該較早的本地測試 revision 冒稱為 PR 157 commit。cleanup 收據的 client、cluster、port、temporary path 與 confinement 欄位全為 true。
+- 驗證涵蓋 personal null Employee、舊 Portal cookie 隔離、epoch invalidation、一次性 handoff／replay 拒絕、Quick 獨立 callback、owner HTTP 中取消、mapping revision 漂移拒絕，以及 rate-limit 在 publication 前拒絕並釋放 intent。這些 PG 測試使用合成 identity ports／本地 OrgMaster HTTP；Firebase／OIDC 仍是 `LOCAL_SIMULATION`，CI/build 不是已部署真身分證據。
+
+現行 Platform source `b814e616f6af844802fcd12ee9677302e234aa87` 的 required [Source QC `40775654619`](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/40775654619) 與 joint [native `40775644662`](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/40775644662) 均成功；native 綁定 OrgMaster `9cf4022`，Platform 24/24、OrgMaster 21/21 PASS，含真本地 HTTP source-flow、015 Employee private initializer／新 Firebase pair barrier、舊登入與 cleanup。Firebase／OIDC 仍為模擬；前兩次 fixture 失敗保留於 owner 規格。015 的 frozen legacy alias digest／ledger 不擴張到新 v2-only pair，state 重用不重設非零 epoch。Platform owner profile／runner／receipt／abort recovery 已擴至15 entries，舊 receipts 仍按自身來源驗證；部署順序為 OrgMaster 041／042／043 → Platform 014／015 → 對應 runtime。這些 source 套件尚無正式 immutable runner image 或 owner DDL／publication。
+
+ProJED 自有 opaque Session、主／Quick callback、Google→原 UUID proof 與逐 request current-state 的 source 已接線，首次登入 source／新版 native 進度見 §13.3；真身分、原 8 位正式使用者逐帳號 mapping、未承接 domain、Cloud Run／SQL readback、Hosting／PWA、全來源 writer fence、正式移轉、切流、恢復與 release 仍計入原完成分母。Production pins 維持空集合；本輪沒有新增 required gate，未執行正式 DDL、IAM／Secret 或 traffic change。
+
+## 38. Record RAG Lifecycle and Retrieval W24（2026-10-29）
+
+### 38.1 原行為與最小接線
+
+本輪 source 唯讀聚合顯示有 7 份啟用文件／對應 published records、11 個 chunks 與 8 個 pending Google jobs；不是空白功能，不能用保留資料表或關閉 RAG 代替承接。HTTP backend 現沿既有前端 RAG service 接 `POST /api/v1/workspaces/:workspaceRef/rag:query`，保留 workspace／board scope、回答及來源引用形狀，沒有 legacy provider 回退或新的登入權威。
+
+`RecordActivityRepository` 與 `knowledgeRecordRagMirror.ts` 在同一 actor transaction 儲存 record、source pointer、document、append-only version、2800 字分段與 pending job。只有 published／non-private record 可啟用；同內容／visibility 與完整目前分段重用既有版本及工作，不因重存重付 provider 費用。新編輯使用帶版本標記的 SHA-256，既有來源 hash／vectors 先原樣保留，未修改資料不全量重算。改為 private／draft／archived 時停用 mirror、使待處理工作失效並清除本地 current chunks／vectors，保留 pointer／歷史 versions；不假報已刪除外部 provider 物件。
+
+沿既有 runtime、資料庫和 `GEMINI_API_KEY` 使用 `gemini-embedding-001`／3072 維，[模型文件](https://ai.google.dev/gemini-api/docs/embeddings)可查既有模型規格。本次不另建服務帳號、queue、vector database 或 extension；key 僅 server 讀取，正式 Secret／provider 資格仍須在原責任邊界完成。查詢採 RLS 可見資料的完整 cosine 排序後才取 top count；本輪小型 corpus 沒有 ANN 或商業擴展要求，也沒有已量測的正式效能承諾。
+
+### 38.2 資料、權限與可恢復邊界
+
+0024 以 published／non-private lifecycle check 取代全面 `NOT rag_enabled`，保留 private 安全限制；移轉 preflight 只拒絕不合法啟用或來源關聯，不要求合法 RAG 資料先人工清空。record mirror 寫入限 exact persisted record scope 及目前寫入資格；一般讀取維持 0017 的 source pointer／目前 record 權限，不因維護 mirror 取得一般私人讀取。Source document 刪除仍可沿既有 FK SET NULL，不以強制非空 pointer 破壞既有 cascade／恢復。
+
+普通查詢有界消費目前可讀的持久 jobs，每次最多索引 16 chunks、同時最多 4 個 provider 呼叫；工作以 exact document／current version/hash／隨機 claim 與短 lease 綁定。成功分段可在後續查詢續做，不能只因任意一批成功就將整份文件標為 synced。連續失敗最多 3 次，成功的部分進度重設失敗計數；provider 不自動重送，COMMIT 不明只回查同一 claim／已寫分段，不再次付費索引。尚未完成索引時，回答明示資料未完整可查。
+
+Provider 網路呼叫在資料庫交易外；查詢、索引結果寫回、答案送出前重新解析目前 Session／owner state／mapping 及來源資格。改版、撤權、封存或取消後不接受舊 claim 的晚到寫入／回答；一般 actor 不可偽造 job、來源 provenance 或任意 vector 寫入。Embedding DML 只允許目前未過期 claim、目前 chunk／version/hash 與 Google 3072 維；其他 app、external-object DML、IAM／Secret／billing 均不擴張。
+
+### 38.3 驗證範圍與尚未完成
+
+本版 focused source／unit 與 strict 型別檢查已加入既有 S2／S3 入口；原隔離流程新增 RAG 正常查詢、編輯去重、private／draft／archive、board-only guest、越權零 provider 呼叫、索引中封存、分段續做及 raw actor 偽造拒絕。原 full-snapshot rehearsal 以合法 published mirror 驗 plan／apply／reconcile，另保留不合法狀態 target 零寫入、精度、FK／cascade、權限與 rollback。沒有增加 required gate、人工報表或 COO 簽核。
+
+**現行 25-migration native 已通過，精確受測版本與收據見本節末段**；新增 helper 使用真隔離 PostgreSQL／HTTP，但身分與 Gemini 仍是 synthetic fixture，不是真 Firebase／OIDC 或 provider qualification。遠端 lockfile typecheck／native receipt 另依實際結果記錄，不沿用 23-migration PASS。真身分、正式 provider／Secret／雲端及原使用者／入口、meeting capture／worker／budget／cleanup、Inbox、Storage、Quick OAuth、writer fence／正式移轉／切流／恢復及 release 仍屬完整完成分母；本節不縮減驗收。
+
+首次 [CI 40784672992](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40784672992)（`08e4abc7d52fb0efb5e89b02a39f523715371e16`）完整 lockfile 原型別命令、S2 131／S3 58／migration 13 項 unit、三種 boundary 與 24 份 migration apply／idempotency 通過；S3 首次 RAG HTTP 回 `DB_UNAVAILABLE`，移轉則在最初 importer 身分負例前被不一致的舊 fixture 擋下，兩組 native 均 FAIL，沒有合格 result receipt。已修正 live snapshot 對不存在 dependency.created_at 的引用，將 fixture 初始雙方停用並維持後續合法啟用／非法狀態負例；這些 source 修正尚不能把首輪 FAIL 改為 PASS。
+
+同一資料流檢查另發現 worker 在設 scope 前使用 FOR SHARE／job FOR UPDATE，會受既有 UPDATE RLS 拒絕；[PostgreSQL 17 policy 規則](https://www.postgresql.org/docs/17/sql-createpolicy.html)明確包含這些 row-lock 命令。worker 現先設定 exact scope，以同一文件 advisory lock 防止重複 claim，再按 document→job 順序鎖定。新增 forward-only `0025_rag_lock_and_fk_compatibility_v1` 的文件 lock policy 使用 `WITH CHECK(false)`，只允許對已可讀文件鎖定、不新增修改權限；另只略過 owner 的巢狀 FK 所造成、其餘欄位完全相同的 tenant cascade／version pointer SET NULL，保留原工作與移轉／恢復語意，不改已提交的 0024 bytes。已加 worker lock 不能寫文件、version detach 與 savepoint 還原回歸；provider／SQL 失敗僅記錄安全 phase、錯碼及 SQLSTATE，不記 query、SQL、身分或原始 provider 回應。
+
+第二輪 [CI 40785729079](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40785729079)（`7af085e4d83b9b71c56f1fbcea2ef809594e8f7f`）的 25 migrations apply／idempotency、RAG 正常查詢／編輯／停用／guest／續做及偽造拒絕已走過；S3 最後的索引中封存案例得到 `403 ACCESS_DENIED`，舊 oracle 只接受 `409 RAG_INDEX_STALE` 而 FAIL。現行 RLS 可先隱藏來源，兩種安全拒絕都合法；測試改驗這兩個明確拒絕碼，繼續要求零回答生成、零晚到向量、原 pointer 及 superseded／清 lease。未改 runtime 或把任意錯誤視為通過。獨立移轉在 Windows PowerShell 將 psql -c 的 fixture JSON 雙引號移除而 FAIL，現以 jsonb_build_object 建立相同合成資料；不調權限或略過 apply/reconcile。首輪與第二輪 FAIL 仍保留，下一輪只在實際通過後記錄收據。
+
+第三輪 [CI 40786113196](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40786113196)（`ddf9c1dc4834d1b68bf1ac8f8007afb6bbc38e4e`）S3 65 checks PASS（artifact `12860150199`）；獨立 snapshot 已通過資料／精度及 SQL retention，正常搬移 fixture 仍以 2 份文件為 oracle，合法 published mirror 加入後實際為 3 而 FAIL。已同步 counts=3 並保留實際正常搬移、FK 與 rollback 驗證，不降低驗收。修正後 `b95a1625993a4d795de134030fca840028d585de` 的 [CI 40786590083](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40786590083) 全部成功；原始三輪失敗不改寫。
+
+舊來源可對同一文件保留多個 pending／synced 工作。consumer 現只選目前 Google／無外部 store 的未完成工作，版本／hash／legacy metadata 必須與目前來源相符；不因另一個 pending 工作就重新開啟已完整 synced 的工作。新增真隔離 HTTP 回歸：插入相同目前版本的第二個 pending job，查詢後兩個 job 均 synced，既有 vectors 重用、僅新的問題做一次 embedding。這取代以歷史工作狀態阻擋有效查詢的行為，不刪除歷史工作或額外重付索引費用。
+
+**現行 executable `7b5320999e05b26375a1dc3451cd3e3253ae8ada` 的 [CI 40787289331](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40787289331) 全部成功**：完整 lockfile 的原 server/S2、frontend 與 S3 strict 型別命令，S2 131／S3 58／migration 13 項 unit，三種 boundary，PostgreSQL 17.11／Node v24.22.1 的 25 份 migration apply／idempotency、S3 65 checks 與 full-snapshot 53 checks／34 projections 均 PASS。artifact `12859947245` 的 `s3/20261028T232815Z-036bbb2b/result.json` 與 `migration/20261028T232924Z-5363deaf/result.json` 已核對，均綁定 25 份 migration；S3 browserSmoke=NOT_RUN。新增 RAG source／測試 ESLint 與本地 task overlay 型別 PASS；較廣檔案 lint 曾回報既有 appSession/http 控制字元 validator 的 no-control-regex，沒有將整個 repo lint 記為 PASS。本輪只驗 RD source／真隔離 SQL與HTTP、合成 identity／provider；真 Gemini、Firebase／OIDC、provider cleanup、正式 data／Cloud／Hosting／切流／release 仍未驗收。Production identity pins 維持空集合，未操作正式資料或 IAM／Secret／credential／billing／traffic，COO 審視不成為 required gate。
+
+## 39. Meeting Text Synthesis and Legacy Inbox Isolation W25（2026-10-29）
+
+### 39.1 原功能接線與授權邊界
+
+原 Supabase `synthesize_meeting_record` 會進行會議文字 AI 整理；先前 HTTP backend 落入一般非 Supabase 分支，會靜默改成本機規則。本輪 `meetingSynthesisService` 明確接 `POST /api/v1/workspaces/:workspaceRef/boards/:boardRef/meeting:synthesize`，三個原有草稿／專案變化 caller 均提供目前 scope。這是文字草稿整理；不把 DEV-123 尚待 qualification 的音訊轉錄冒稱已完成。
+
+請求只接受原 `meeting-synthesis-v2` 輸入，沿原 title／participants／raw content／task／activity 上限、去重、低價值活動篩除、完整任務路徑修復及內容品質規則。純 mention syntax 與結構修復共用同一實作，舊 helper 路徑保留轉匯；server 與 frontend 各自驗 output。新 server 保留原文換行，避免兩個完整 task path 變成同一行而失去直接證據。provider 不合格的 JSON、未知 task／不完整內容不回傳合格草稿，不自行執行任務操作。
+
+沿既有 `GEMINI_API_KEY` 與原 `gemini-3.5-flash`→`gemini-3.1-flash-lite` 選擇：只在明確 model unavailable 時嘗試下一模型；400 憑證／參數錯誤不誤分類成 model fallback（[官方錯誤與重送說明](https://ai.google.dev/gemini-api/docs/troubleshooting)）。401／quota／暫時不可用／未知結果不自動重送。server-only `GEMINI_MEETING_SYNTHESIS_MODEL` 可釘定其中一個模型，釘定時不再 fallback。JSON generationConfig 沿 [Gemini structured output](https://ai.google.dev/gemini-api/docs/structured-output) 介面；正式 key、model／provider qualification 尚未完成。本機 30 秒或 server 明確 timeout 可沿原功能回傳有提示的 deterministic 草稿；caller 取消、授權或其他 provider 失敗不假回退，也不轉打舊 Supabase。
+
+server 先驗 same-origin／expected account-context、目前 Session 與精確 board 的 `read_board`；來源是使用者提交的草稿 snapshot，不以 client task list 當成可讀其他私人資料或變更 task 的權限。此 endpoint 不抓取私人 record／task 正文、不寫 record 或 task，只在回覆前再次驗 Session／mapping／resource，記錄本 actor 的 project-scoped prompt hash／安全執行統計。真正儲存仍走原 record 授權與 link 完整性。網路在交易外，取消後不追加成功寫入；回覆來源、帳號／context、看板或原文 signature 漂移就失效。前端丟棄晚到結果並只結束自己的 loading generation，不覆寫新草稿／新請求，手動插入的步驟狀態仍保留。
+
+### 39.2 Inbox、OAuth 與來源 inventory 的實際範圍
+
+2026-10-29 再次用單一 read-only repeatable-read aggregate 核對既有正式來源：`public.inbox_items=0`、`storage.objects=0`；各 meeting capture／segment／pointer／run／transcript／resolution／match／draft-projection 表均 0，cleanup／budget-month／usage-attempt 各 1。catalog 明確顯示 `private.quick_task_oauth_clients` 不存在；首次直接引用該 optional relation 的 aggregate 以 42P01 失敗後，改以 catalog 列出實際 relation 再查 counts，沒有把缺表偽稱為零列，也沒有正式資料寫入。
+
+source 查核證實目前正常 Quick Task 使用帳號 outbox→未歸位 task；沒有前端呼叫舊 `inbox_items` 或 `promote_inbox_item_to_task` 的路徑。舊 localStorage Inbox 仍有向工作台收斂的入口，但原來不比對 createdBy，可能將另一帳號內容自動歸戶；現在只接受 createdBy 精確等於目前穩定 accountId 的 untriaged／未 promoted 項目，await 後再核對目前登入帳號。未知、未綁定與別帳號資料留在原 key，不刪除、不猜配、不送 API。新 Quick Task／工作台的正常 HTTP 功能及原 owner isolation 沿既有回歸，不另建未存在的 Cloud Inbox API。
+
+上述現況不等於完成正式 snapshot、舊 client fence 或 Storage 搬移。若舊 Inbox／OAuth relation 出現非空資料，既有 importer blocker 仍要求明確承接，不能漏掉；舊 RPC client_id 邊界不塞進新 opaque Session。音訊 capture／worker／review／projection、private ledger 的完整保留與清理責任仍未承接，不能由父表零列推定三筆 server ledger 可刪除，也不開啟目前未 qualified 的音訊 paid provider。
+
+### 39.3 驗證與剩餘分母
+
+本輪 source 自查：S2／S3 unit 與新增 provider 錯誤分類 focused case PASS；含原 helper compatibility、input／path／quality、HTTP adapter、真 store deferred response、切帳／context／看板／手動編輯／過期 catch、timeout／caller abort 及舊 Inbox 所有權行為。server/S2 與 frontend／S3 strict 檢查通過；本機 pg 型別仍沿既有 task overlay 借用相同版本 declaration，不放寬 source tsconfig 或裝共享依賴。新 helper/server 的 esbuild memory-only bundle、受影響新檔 ESLint 與 static boundaries 已自查；不是正式 container／browser 或 provider qualification。
+
+新增原 S3 native helper，沿正常 HTTP／runtime RLS 建立並清理本測試的 workspace／board：驗 owner／board-only reader、零 task／record 寫入、安全 audit、未授權與錯 scope／origin／expected actor、model fallback、quota／不可用不重送、品質拒絕、網路中撤權與 context 漂移的晚回覆拒絕。首輪 executable `bcecabc9305b226015849e3b3c1b783d9f5539a5` 的 [CI 40791770726](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40791770726) 中，原 lockfile 型別、unit、boundary 與獨立 full-snapshot 53 checks 通過；S3 首個有效失敗是新增 synthetic success fixture 使用本地 deterministic fallback，重複敘述被既有 `DUPLICATE_NARRATIVE` oracle 拒絕。現已改為合乎原品質契約的 synthetic provider 輸出，未放寬 oracle；修正版結果見下段。合成 provider 不冒稱真 Gemini。production pins、原完成分母與 §33 新 foundation 權限界線維持，沒有新增 required gate 或人工簽核。
+
+**現行 executable `53604df4a30c93732270301557468ed53ae98d39` 的 [CI 40792424932](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40792424932) 全部成功**：完整 lockfile 的原 server/S2、frontend 與 S3 strict 型別命令，S2 141／S3 72／migration 13 項 unit、三種 boundary；PostgreSQL 17.11／Node v24.22.1 的 25 份 migration apply／idempotency、S3 66 checks 與 full-snapshot 53 checks／34 projections 均 PASS。artifact `12862392319` 的 `s3/20261029T001340Z-a9f12149/result.json` 與 `migration/20261029T001435Z-e6955b03/result.json` 已核對；browserSmoke=NOT_RUN，provider／identity 仍為合成。新版 helper 的取消案例觀察 server abort 後才釋放晚回 provider，成功 audit 筆數不增加；撤權與 context 漂移同樣不產生成功 audit。沒有執行正式資料、IAM／Secret／credential／billing 或 traffic 操作。
+
+## 40. Meeting Source Retention and Compiled Artifact W26（2026-10-29）
+
+### 40.1 原會議資料與復原責任
+
+原 importer 將七張 public meeting 表及四張 private projection／cleanup／budget／usage 表全部列為非空 blocker；即使 capture 已刪除，獨立清理義務與用量／預算紀錄仍須保留。0026 承接全部 11 類最終來源欄位，包含 paused、source freeze／version、reservation、review、lease／retry 與 provider_mode。原 ID、人工決策、原稿／逐字稿、未知用量、清理狀態及時間均保留，不補造父列、結算費用或假報已清理。usage 的 capture／run 是來源本來沒有 FK 的歷史 UUID；不因父項不存在而丟棄或補造父項。
+
+capture 綁原 record 的 tenant／project；pointer 與 match 的 scope 從 capture 衍生並以 composite FK 綁同 Board 的 task。transcript 的 producer、resolution 的 transcript／latest run、projection 的 record／applied run 綁同 capture。cleanup 保留 nullable capture／run 與原 SET NULL；新增 pair FK 只在刪 run 時清 run_id，不連帶抹掉仍存在的 capture 關聯。金額維持 bigint TWD micros；numeric 與 JSONB 維持原精度，時間維持 microseconds，沒有經 JS number／Date 截斷。
+
+十一張表均 FORCE RLS、撤銷 PUBLIC，僅既有一次性 importer 有 SELECT／INSERT；runtime 不取得原始音訊／逐字稿或全域費用／清理 ledger 的直接讀寫。snapshot 仍在同一 read-only repeatable-read source 與單一 target 交易內做精確 reconciliation；全面非空 blocker 改為實際 record／capture／run／Board 關聯不符的 preflight。衍生 scope 的 join 在讀取前先核對來源，不能靜默漏列。target 不一致仍 rollback，原 importer／帳號映射／私人隔離與前 25 份 SQL 不改寫。
+
+本輪只讀既有 Supabase catalog 的欄位／型別／約束，與原 DEV-123 三份 DDL 合成結果核對；沒有下載正式原稿、音訊、Secret 或改寫正式列。§39 的列數是該次快照基線，不能當正式 fence 後的新 snapshot。原 schema 的 cleanup SET NULL 與 usage 無 FK 保留，不把 server ledger 當可刪除 fixture。
+
+### 40.2 可編譯與載入的 production artifact
+
+新 meeting server 會匯入共用的 src/utils／shared 純模組；原 build 的 rootDir=server 無法包含這些輸入。tsconfig 改以 repo root 編譯，統一輸出 dist-server/server/index.js／config.js，同步 Docker CMD、builder 與原 artifact verifier。verifier 實際匯入 emitted meeting module，核對 Node ESM 共用模組可解析，且只載入設定、不啟 server／DB pool。既有遠端隔離 workflow 執行原 artifact verifier，涵蓋完整 lockfile 的 server emit、Vite build、主／Quick 入口 hash、managed migration binding 與無舊 Supabase origin；它取代額外的 production noEmit 重複編譯，不是新增正式放行關卡。Docker／provider／Cloud SQL 連線仍各需實際證據。
+
+### 40.3 本版驗證與剩餘範圍
+
+本地 S2 141／S3 72／migration 13 項 unit、source 型別 overlay、三種 static boundary 與 PowerShell parse 已自查；overlay 仍只借用既有同版 pg declaration，不改 lockfile／strict，也不宣稱完整 production build。原 migration wrapper 加入合法的 11 類 source fixture、錯 scope 零寫入、原值／NULL／精度、runtime 拒絕與 cleanup detach／usage orphan 的回歸；首輪 26-migration 結果與修正版見下段，不沿用 25-migration PASS。
+
+資料承接不等於音訊 HTTP 控制面、worker、Storage 或正式清理已接線。原 paid provider qualification 未通過即維持拒絕；原 capture／review 的可用範圍仍須按真 artifact 查證，不以舊 QA gated 標記假設整個功能從未可用。文字草稿與 §39 AI 接線保留；真身分／既有 UUID、真 provider、音訊控制與清理責任、Cloud Run／SQL／Hosting、writer fence、正式移轉／恢復、切流與 release 仍計入完整目標。Production identity pins 維持空集合；本輪未執行正式資料、IAM／Secret／credential／billing 或 traffic 操作。
+
+首輪 executable `5e9ea8b0f0b98e36e6500d53a289c30a5825b7d6` 的 [CI 40794482497](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40794482497) 中，原 lockfile 型別／unit／boundary、compiled artifact 與 S3 PostgreSQL／HTTP 已通過；snapshot 的新 meeting retention 與獨立案例繼續執行，整體仍 FAIL。第一個有效失敗是舊 LLM retention 的正常 Board delete 在 cascade 中被 pointer→task RESTRICT 過早拒絕；document retention 在相同共因下也失敗，兩者均保留，沒有略過或改 oracle。
+
+forward-only 0027 將 meeting 內的 task／producer-run／review／projection 六個相關 FK 改為 NO ACTION NOT DEFERRABLE：讓同一 Board／record 刪除命令完成整個 cascade，再於 statement 結束核對；仍有引用的獨立 task／run delete 必須拒絕，caller 不能延後到 transaction commit。前 26 份 SQL bytes 不改寫，scope／唯一約束、cleanup SET NULL、RLS、grants 與 source preflight 不放寬。時序依 [PostgreSQL 17 constraint 契約](https://www.postgresql.org/docs/17/sql-createtable.html)；實際相容性仍由同版 native 重驗，不以文件推論記 PASS。新增負例同時驗單獨刪除被引用 task／run 拒絕；舊 LLM／document 與正常 product transfer 回歸保留。第二輪結果見下段。
+
+本輪 gcloud 唯讀現況與 §33 相符：專用 runtime／release SA、projed-prod 與 projed-prod* Secrets 尚無；原 AI runtime、AI_API_KEY、既有映像 repo 及共用 PostgreSQL 17／jenfu_prod 仍存在。僅讀 metadata／IAM policy，不讀 Secret 版本內容或 token；cr-build／既有 repo 存在不等於已證明可免新 IAM push 映像。本輪不建立這些資源，不重用原 AI runtime 的身分或 Secret。
+
+第二輪 executable `dbb15ae6b9b1e4d36dc34ce09c1d46acaf79e045` 的 [CI 40795674391](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40795674391) 中，compiled artifact、S3 PostgreSQL／HTTP 與其他獨立結果仍通過；兩個 Board delete 回歸仍在 nested RI cascade 內被 pointer→task 的 statement-local 檢查拒絕。0027 的假設不足，不能用一份通用文件推論 native 已通過。
+
+現行 forward-only 0028 將這六個 NO ACTION FK 改為 DEFERRABLE INITIALLY DEFERRED，於交易 commit 確認無跨 scope／孤立引用；不是放棄 FK 或刪除會議證據。snapshot driver 及 domain transaction 必須成功 commit 才能回成功，故失敗仍整筆回滾。原 retention SQL 明確切 immediate 驗 FK 負例；共用 actor transaction 將 server-confirmed class 23 COMMIT 拒絕映為既有 `DOMAIN_DATA_INVALID`／409，銷毀 lease 且不重送，不誤標未知結果。網路中斷及其他尚未分類錯誤仍為 `DB_COMMIT_UNKNOWN`；新增四項 focused unit 驗真 callback／COMMIT 次數、失敗不回結果與 lease disposal。另以 exact disposable binding 的獨立 native helper，建立並清理自己的會議 fixture，實際驗 task／run／capture 的非法刪除 COMMIT 拒絕及完整 Board cascade COMMIT 成功。前 27 份 SQL 不改寫，原 LLM／document／product regressions 保留。**28-migration 修正版已通過，精確版本與收據見下段。**
+
+**W26 executable `2e09dbb6b1ba7ed3f90f4f8e4aaecedc7b230bb6` 的 [CI 40797847954](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40797847954) 全部成功**：完整 lockfile 的原 server/S2、frontend 與 S3 strict 型別命令，S2 145／S3 72／migration 13 項 unit，三種 boundary；compiled artifact 完成 server emit／Vite build、emitted meeting module 載入、主／Quick hash 與 managed binding。PostgreSQL 17.11／Node v24.22.1 套用並核對 28 份 migration，S3 66 checks 與 full-snapshot 60 checks／45 projections PASS，包含 11 類 meeting 的 18 筆合成來源。新 native helper 的八項 check 證明 task／run／capture 刪除在 COMMIT 以 23503 拒絕、失敗後原 fixture 完整、正常 Board cascade COMMIT 成功及自建 fixture 清理完成；原 LLM／document／正常 product transfer 回歸也通過。
+
+artifact `12864871506` 的 `s3/20261029T010454Z-a787e45a/result.json` 與 `migration/20261029T010617Z-7f757dcb/result.json` 已核對，均綁定 28 份 SQL。S3 browserSmoke=NOT_RUN，artifact verifier dockerExecution=NOT_RUN；本輪使用遠端 task-owned PostgreSQL，沒有啟動本機 DB 或套用容量風險例外。此證據只支持 source／編譯與隔離 SQL／HTTP，不冒稱 Docker image、真 Google／Firebase／Gemini、正式 Cloud Run／SQL／資料或獨立 QC 驗收。正式 runtime／SA／Secrets、音訊 HTTP 控制面與 provider／Storage／cleanup 接線及完整切流／release 分母維持。
+
+
+## 41. Meeting Capture Control W27（2026-10-29）
+
+### 41.1 受控 API 與交易邊界
+
+新增同源、Main Session 與 expected actor 綁定的 `POST /api/v1/meeting-control`，提供 begin／status／progress／pause／resume／stop／append-pointer／cancel／revise-source。mutation 必須帶當前 source version；同 record／key 的 begin 回原 capture，其他 active capture 衝突拒絕。epoch 歷史、pointer sequence／batch digest 不可倒退或換批覆寫，pointer 批次以兩次 SQL 完成；stop 以 server 時間為起點保留七天，不接受 client 延長保留期。私有會議仍只按原 record 權限授權，不因同 Board editor 身分可見。
+
+forward-only `0029` 只開精確 RLS／column grants。cancel 的 capture、run、cleanup obligation 與預算退款在同一交易完成；只有明確 pending、仍 reserved 且確定尚未 dispatch 的 attempt 可退，重送不重退。running／failed_retryable、unknown 及 legacy NULL 的用量保持原值；預算餘額不足或 ledger 缺列整筆 rollback。舊資料沒有 dispatch／storage backend 證據時保持 NULL，清理端不得猜後端或刪除物件。這不代表新分析 worker、清理執行器或舊來源 retirement 已完成。
+
+### 41.2 音訊與 review caller 保護
+
+加入可注入的 private GCS audio port：固定 API host／canonical object path、10 MiB segment 上限、create-only generation precondition、generation-bound 讀取與刪除、不自動重試、bounded response 及錯誤遮蔽。generation precondition 與讀取參數依 [GCS insert](https://docs.cloud.google.com/storage/docs/json_api/v1/objects/insert)、[get](https://docs.cloud.google.com/storage/docs/json_api/v1/objects/get)及 [delete](https://docs.cloud.google.com/storage/docs/json_api/v1/objects/delete)官方規格核對；這版只有 fake-fetch 驗證，沒有正式 bucket、metadata credential 接線、物件上傳／播放 HTTP proxy 或 provider 存取；不能將 source bucket 當成音訊 bucket。後續音訊採同源代理，不為 browser signed URL 另外要求 CORS 或 signer 權限。
+
+review／decision／playback 將 account、auth context、Workspace、Board、record、capture 與 generation 綁定原請求；切換 scope／卸載忽略舊 success、error 及 finally，停止 audio 並釋放物件 URL。review 寫回 draft 前再次核對原 signature，保留同草稿的人工編輯。HTTP UI 錄音仍未啟用，文字草稿／文字 synthesis 沿既有路徑；錄音分析、上傳、review decision／projection 全功能仍計入完整交付，不能把本控制面切片當錄音移轉完成。
+
+### 41.3 驗證與交付狀態
+
+新增 native capture HTTP fixture，使用自己建立的 Workspace／Board／private draft，並只在 exact nonce disposable DB 以 fixture admin 建立自己的 usage／budget／cleanup rows；取消退款、unknown／legacy 不退款、重播與跨 editor 拒絕都由實際 HTTP／SQL readback 驗證。另一 native helper 觀察不同帳號交易在 advisory lock 的實際等待；原 11 類保留／FK／完整 snapshot 回歸仍保留。這些沿既有 CI 執行，不新增 required gate。本版 native CI 已通過，精確 source 與收據見下方最終結果；本地 source typecheck、fake-fetch 與 component harness 不代表正式身分／資料／雲端或獨立 QC。
+
+
+本版首個 native CI [`40803354384`](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40803354384)（source `9d55b58`）保留為失敗：serialization helper 將合法省略的 connectionMode 當成錯誤，尚未進入 capture HTTP 與其後 domain 驗證；既有 config 契約省略時為 loopback，修正 helper 沿相同契約。獨立 full-snapshot 演練仍完成，artifact `12867595054` 的 `migration/20261029T015847Z-b3616277/result.json` 為 PASS，套用29份 migration、60 checks；不拿這份收據替代未執行的 HTTP 案例。續修同時保留一般任務的 NULL node_type 語意：現有 createTask 可以產生 NULL，前端沿 task 解讀，因此 forward-only `0030` 讓 pointer 接受 NULL ordinary task，仍拒 group／archived／異 Board。新 helper 失敗會收集後繼續安全且獨立的舊 domain 回歸，最後整體仍 FAIL，不隱藏錯誤或產生 PASS 收據。
+
+
+第二個 native CI [`40803914365`](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40803914365)（source `c1e0e18`）證明兩帳號 advisory wait、capture begin／epoch／pointer／stop 已執行，但新 finance fixture 的重複 VALUES 造成 42601，清理也重複呼叫 pool.end。已修這兩處 helper；取消退款與後續拒絕仍須重驗。安全的既有 domain 回歸繼續完成後，驗證器按保存的失敗回 FAIL；獨立30-migration full snapshot 仍 PASS。HTTP 5xx 只記 request ID、穩定 code 與 SQLSTATE，不記 SQL、原始列或 credential，以便追查實際下一個失敗。
+
+
+第三個 native CI [`40804488769`](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40804488769)（source `bf631db`）已完成 cancel／replay 與三類 run 狀態讀回；usage readback 查詢漏帶新增的 failed_retryable attempt ID，造成 3≠4，保留為失敗並補回原查核對象，不改預期四筆或狀態 oracle。原退款額度、private 拒絕及後續案例仍待整體成功收據。續版亦保留舊 API 的 finalPointerSequence=-1 空集合語意，並驗 stopped 仍能收 pointer、第二次 stop 不改首次 server anchor／七天期限；review revision 及其他 counter 仍限制非負 safe integer。
+
+
+控制面 source `da494b742e3db143b45946264680520e8e038d5a` 的 [CI 40805053863](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40805053863) 已全部成功，包含取消／重播、原退款與 unknown／legacy／failed_retryable 保留、私人拒絕、空 pointer sentinel 與停止期限，以及原 domain／移轉回歸。續版只擴充同一 native fixture：從自己的 pending segment 實際建立並讀回唯一 GCS cleanup obligation（不早於 upload token 到期）；先製造自己 budget 餘額不足，驗整筆取消 rollback、run／usage／新 obligation 無部分提交，再恢復原預留款正常取消。這兩項補驗已由下方新版 CI 驗證，不以 da494b7 收據替代；未新增執行器或 required gate。
+
+
+**W27 最終受測 source `22c7bcce3ac67f0563dc2e4bba5db5addf4a96ad` 的 [CI 40805657744](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40805657744) 全部成功。** 原 lockfile 的 server／S2、frontend／S3 型別，S2 172／S3 77／migration 13 項 unit、三種 boundary 與 compiled artifact 均 PASS。PostgreSQL 17.11／Node 24.22.1 的 30 份 migration、S3 68 checks 與 full-snapshot 60 checks／45 projections PASS。新 native fixture 實際證明預算不足時先前的 capture／run／usage／新 cleanup 寫入全部 rollback，恢復自己預留款後正常取消只退 explicit pending；running、failed_retryable、unknown、legacy NULL 保留，cancel 重播不重退。新建的 pending GCS segment 只產生一個相同 locator／backend 的 cleanup obligation，due_at 不早於 upload token 期限，原 obligation 也保留；均不執行物件刪除。預期的失衡案例只記安全 SQLSTATE P0001。
+
+artifact `12867324321` 的 `s3/20261029T022208Z-e4049a37/result.json` 與 `migration/20261029T022322Z-fd92d6f1/result.json` 已讀回，均為 PASS 並綁定30份 SQL。browserSmoke=NOT_RUN、dockerExecution=NOT_RUN；GCS 為 fake-fetch／SQL fixture，identity／provider 仍非正式資格。後續文件提交只刷新本節／直接索引與 db 授權說明，未變 executable inputs 時重用此證據。本輪未啟動本機 PostgreSQL、未使用容量風險例外，也未操作正式資料、IAM／Secret／credential／billing 或 traffic。HTTP 音訊上傳／播放、分析 worker、review decision／projection、新 dispatch marker 的原子寫入及 cleanup 執行器仍須接齊；真 Session、既有使用者 proof、正式資料／雲端／舊入口、writer fence、切流及發布仍計入完整目標，Production Resolver Disabled／未 Release。
+
+
+## 42. Meeting Audio Transport W28（2026-10-29）
+
+新增同源 `PUT/GET /api/v1/meeting-audio/{segmentId}` 與 control 的 reserve-segment／verify-segment。PUT 只接受既有 Session、expected actor、source version 與原 reservation 的 MIME／size；server 從 DB scope 組 canonical path，整段 body 上限10 MiB，不接受 client 指定 bucket／object generation／遠端 URL。GCS create-only 網路放在交易外，SHA／bytes 由 server 先保存，只有實際 readback 相符且 fresh actor／record／version／capture state／retention 仍有效才能標 verified。GET 要求 record binding，讀回後再次授權與核 generation／SHA，輸出 no-store binary；前端 transport 取 Blob，之後以本機 object URL 播放，沒有公開或短效 GCS URL。
+
+forward-only `0031` 沿既有 cleanup obligation 保存不可猜的 server operation token、expected bytes／SHA、outcome 與 string generation，不另造通用 ledger。Token 不回傳 browser；只授 server-held token 的精確 settlement purpose 更新該 obligation，不能更新 segment、global budget 或其他 obligation。故取消／撤權／parent delete 後晚到成功仍能留下清理 proof，業務 verified 寫回必須拒絕。Unknown／pending 不再 POST，只做 readback；明確未送出／4xx 拒絕才可在重新授權後重 claim／更新兩小時 reservation。Claim COMMIT 不明且尚未呼叫 storage 時，只在 exact-token readback 後記 locally known not-sent，不把未知結果當已上傳。程序在 claim 與 provider 呼叫之間死亡而又沒有 readable object 時仍保留 unknown obligation／本機 outbox，不宣稱已清理或自動完成。
+
+舊來源的 purge 只按兩小時 due_at，可能早於七天音訊期限；取消後 signed URL 又可能晚到。新 reservation 的 cleanup due 不早於已有 server retention anchor（尚未 stop 時先保守預留七天）與 upload deadline，stop trigger 同交易推進到正式 audio_expires_at，保留既有更晚 obligation；重複 stop 不改既有停止時間／期限。過期 upload token 不阻止已有 operation 的 readback，但新 provider 寫入仍受目前 capture／保留期限制。Unknown remote write 不能只因 lease／本地 timeout 到期就宣稱 quiescent／deleted；實際 cleanup runner 仍待接線，必須保留此界線並拒猜 legacy NULL backend。
+
+Runtime composition 只在設定獨立 `PROJED_MEETING_AUDIO_BUCKET` 時建立 GCS port；沒有預設 source bucket、Secret 或其他 runtime 身分。OAuth access token 使用 Cloud Run 固定 metadata `/service-accounts/default/token`，與 SSO OIDC identity token 分開；有界 JSON／總 timeout、Bearer／expires_in 檢查、60秒提前刷新與單程序 singleflight/cache。這些依 [Cloud Run service identity](https://docs.cloud.google.com/run/docs/securing/service-identity)與 [REST authentication](https://docs.cloud.google.com/docs/authentication/rest)核對；僅 fake-fetch測試，未取得正式 token 或新增 bucket／IAM。
+
+新增前端 reserve／binary upload／verify／playback adapter，沿單一 app HttpApiClient 與 frozen expected actor；錯誤不自動重送，Blob 回來後再核目前 account/context，拒 remote／signed URL 與任何 operation token。此版尚未接通完整錄音產品流程：既有 HTTP UI gate 不開啟，complete-upload、analysis worker、review decision／projection、錄音 caller scope／IndexedDB outbox 整合與實際 cleanup runner 仍需完成；不把 transport 或合成 bytes 當完整錄音可用。Production Resolver Disabled／未 Release，正式身分、既有使用者、資料／雲端／相容入口、writer fence、切流及發布仍保留在完整目標。
+
+本版沿原 CI 增補 native audio fixture：原生 HTTP／restricted runtime／private draft／fake GCS map，檢查不重送 unknown、lost reply readback、取消與 parent delete 期間晚到不寫 verified而保留 cleanup proof、七天 anchor 與 token 過期後恢復。Fake provider／合成 byte、unit／strict overlay 不代表真 GCS、音訊 codec／browser、真 Principal 或正式驗收；完整 native CI 已由下方最終收據驗證，不新增 required gate。
+
+
+首個 W28 CI [`40811308552`](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40811308552)（source `6a8412b`）保留兩個獨立失敗：compiled artifact 的 managed runtime migration registry 漏加0031，與新 audio reserve 的42501拒絕；原型別／unit／boundary及獨立31-migration snapshot演練仍完成，整體 FAIL。Runtime 兩份相同的 S3 path arrays 已收斂為單一常數供 disposable／managed 使用，不再各自漏改；CLI／profile的 exact binding檢查保留。Reserve／claim 的期限先前經 pg Date→JS毫秒→DB往返，會破壞 policy 所要求的微秒精確相等；現改同一 SQL 從 segment／capture 取用期限並寫 obligation，沒有放寬 equality／RLS。Native readback 同時比對兩表完整 timestamp 相等，修正版仍待重驗，前31份SQL bytes不改。
+
+
+Source `e024924988d39427453cb04a5c1815264fa06dc1` 的 [CI 40812192557](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40812192557) 已全部成功，包含 managed artifact、31份 migration 與 audio HTTP／snapshot。這證明兩份 runtime registry 與 SQL 原值期限修正後仍保留精確 RLS。續版再將 upload ACK 後的 readback 前置條件由只有 fresh Session，補為 fresh record／capture／version／retention scope；取消或 parent delete 已生效時，僅清算既有 cleanup proof，不再讀 object body。Native 會比對兩個競態前後的 storage read counter，續版已由下方獨立收據驗證，不以 e024924 代替新行為驗證。
+
+
+**W28 最終受測 source `34ff1371f76e3be9b3b382b8ea8bc85ed16f86da` 的 [CI 40813196530](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40813196530) 全部成功。** 原 lockfile 的 server／S2、frontend／S3 strict 型別、S2 189／S3 91／migration 13項 unit、三種 boundary 與 compiled artifact 均 PASS；PostgreSQL 17.11／Node 24.22.1 套用31份 migration，S3 69 checks 與 full-snapshot 60 checks／45 projections PASS。
+
+Native audio fixture 走真 HTTP→restricted runtime→PostgreSQL 與 fake GCS map：normal PUT／GET 的 bytes／SHA與超過 JS safe integer 的 generation 字串一致，claim期限在兩表保持微秒精確相等；同內容重播及並行 PUT不重送 provider POST，不同 body／MIME拒絕；lost reply／unknown 僅以 readback恢復，舊 upload期限過期不妨礙確認已寫物件。Private同 Board editor／outsider、wrong actor／origin皆拒絕。Stop後 cleanup不早於七天anchor；取消與 parent delete期間晚到只清算原 proof，segment／timestamp不變、未verified／未重建，而且兩個已失效scope的storage read counter都沒有增加。原account／Workspace／Board／permission、W27退款與rollback、資料精度／FK／snapshot回歸保留。
+
+artifact `12870968944` 的 `s3/20261029T034046Z-90187e43/result.json` 與 `migration/20261029T034202Z-0bb9e6f2/result.json` 已讀回，PASS且各自綁31份SQL。browserSmoke=NOT_RUN、dockerExecution=NOT_RUN；音訊為合成byte，GCS／metadata／identity／provider均不是正式資格。後續文件提交只刷新規格／直接索引與db授權文字，executable inputs未變時重用此證據。本輪未啟動本機DB，未取得正式token、建立bucket或操作正式資料／IAM／Secret／credential／billing／traffic。
+
+完整目標仍含 recorder caller的 frozen account/context／record/capture/sourceVersion、IndexedDB outbox owner與歷史無provenance資料保留／復原、complete-upload、analysis／review／projection、cleanup runner、真身分／既有使用者／provider、Docker image及雲端／正式移轉／相容入口／writer fence／切流／發布。舊recorder的非同步onstop會讀可變refs與當下全域Session，舊outbox又只帶capture key；接線時不能替歷史row猜owner或用最新sourceVersion背書。HTTP錄音gate繼續關閉，待完整流程完成才開；本節source／隔離PASS不縮減原驗收分母，未Release。
+
+
+## 43. Recording Caller and Owned Outbox W29（2026-10-29）
+
+沿用既有會議收音、暫停／繼續、停止及明確續傳流程，補上切帳、換 Session／工作區／看板／草稿／capture 與卸載的生命週期保護。RecordSidebar 從目前 stores 讀取實際 scope；每次開始／復原建立獨立 fence，失效即不可復活。begin 回覆只能同步發布自己的 capture；麥克風權限或 begin 晚到時停止本次取得的 stream，不更新新草稿。capture-start callback 以當前 store 的同一草稿 metadata 合併，保留 begin 等待期間的修改；每個 capture 保存獨立時間、manifest、pending promises 與來源版本，每個 MediaRecorder 保存自己的 chunks／index／epoch／停止時間；舊 onstop 不讀新 recorder 的可變 refs。暫停後 pointer sequence 接續，停止時凍結音訊時間，不把網路等待算進錄音。
+
+IndexedDB 原 database／stores 不刪除或搬移；新列 key 與 metadata 同時綁 account、workspace、Board、record、capture、sourceVersion。所有 segment／pointer put、list、delete 都要求 exact scope，寫入／刪除以 transaction complete 才回成功；abort 拒絕並關閉 connection。歷史 schema-1 列缺 owner／version 時保留原資料，不能歸戶給目前帳號、以新 status version 代填或自動清除。晚到 onstop 可將已取得的 bytes 封存到原 owner scope，但不發後續網路、不刪 outbox、不更新已卸載或新 scope 的 UI。只在可確認同 account／record／capture／原 sourceVersion 時提供明確續傳；已變版資料保留，不挪到新版。
+
+錄音 service 抽為可注入純 factory，既有 Supabase adapter 保留 feature gate／review／decision 行為。progress／pause／resume／append-pointer 都傳原 sourceVersion，不從新 status 代填；每個 invoke 前後，以及 reserve→hash→storage→verify 的各步都核對原操作與 abort；已送出的 Supabase request 不能宣稱被取消，但失效後不再發下一步或接受結果。Reserve 的版本／index 與原 binding 不符即在 storage 前拒絕；normal／alreadyVerified 收據都須與本地 bytes／SHA 及 reservation 的 segment／version／path 相符，才能確認上傳並刪本機副本。未知或失敗不自動重送，未確認副本保留。
+
+本輪針對性自查涵蓋真正 React callbacks 的 late microphone／begin、舊 finally、新／舊 recorder 分段、卸載後只封存、版本不同不續傳，並驗正常暫停／繼續／停止與失敗保留；service 與 IDB 交易各有 focused race／abort／provenance 負例。DEV-123 舊靜態 smoke 因 refs 改為 per-capture state 而失敗，已同步檢查位置；同時將過期的 review callback 名稱與 HTTP gate 斷言對齊現行契約，未移除資料／權限／來源保護。本地完整 frontend strict 型別、S3 strict overlay、S3 117 項 unit、DEV-123 純契約 smoke 與 diff-check 均 PASS。W29 source `9fe00482b5d4186f905b9f63fc47ec78655713a0` 的 [CI 40815695236](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40815695236) 已全部成功：原 lockfile server／frontend strict 型別、S2 189／S3 117／migration 13 項 unit（共319項）、三種 boundary、compiled Cloud Run candidate／managed binding，以及 PostgreSQL 17.11／Node 24.22.1 的31份 migration、S3 69 checks、snapshot 60 checks／45 projections 均 PASS。artifact `12872855783` 已讀回 `s3/20261029T040725Z-a1367e39/result.json` 與 `migration/20261029T040833Z-d8d7e9b8/result.json`，均 PASS。最終受測 source `82dc77ac320637c9e62b5280fb6d4b2a25e0b091` 只移除測試檔尾空白，其 [CI 40815746209](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40815746209) 亦全部成功；artifact `12872267620` 已讀回 `s3/20261029T041132Z-8d93ef76/result.json` 與 `migration/20261029T041228Z-e3424679/result.json`，同為31份 migration、69／60 checks、45 projections PASS。上述兩次 CI 均已包含 W29 caller 測試；後續文件提交不改受測 executable。
+
+本輪沒有 SQL／grant／migration、正式資料、provider／metadata 呼叫或本機 DB／browser runtime。HTTP 錄音仍停用；這是完整接線的前置產品實作，尚不代表 Cloud SQL 音訊分析功能完成。complete-upload、analysis worker／review／projection、cleanup runner、begin 未知結果復原、真身分／既有使用者／provider、Docker／雲端／正式移轉／舊入口／writer fence／切流／發布仍計入同一 DEV-139 完成分母，未 Release；未新增 required gate。
+
+
+下一個 Cloud SQL complete-upload 切片沿用 [原 handler](../../supabase/functions/meeting_capture_control/index.ts) 與 [最終 timeline SQL](../../supabase/migrations/20260915133000_dev_123_manifest_timeline_integrity.sql)：同一交易核對 editor／record／版本／期限及已 verified 音訊 bytes／SHA／path／MIME／timeline，再凍結來源、以 source-vN 唯一鍵建 run 與一次預算預留。Partial／missing 不建 run；已凍結只接受相同來源 hash 重播。原 pointer hash 僅是 client 提交且保存的值，不能宣稱已有 server 重新計算的完整性證據；awaiting_budget 亦不能假報已排程。原非 fake worker 仍以 PROVIDER_QUALIFICATION_REQUIRED 拒絕，排 run 不等於完成 provider dispatch。新 runtime 需沿既有 pending／unknown 退款邊界，不更改前31份 SQL 或新增人工治理關卡。
+
+
+## 44. Meeting Upload Completion W30（2026-10-29）
+
+Cloud SQL `/api/v1/meeting-control` 加入 complete-upload。Main Session／expected actor／同源要求沿原入口；normalizer 拒絕 client 指定 provider／actor／budget，以原 capture 與 sourceVersion、opaque manifest hashes 及音訊 manifest 入交易。原 API 的 camel／snake timeline alias 保留；本地 segmentId／uploadState 不是已上傳的證明，真正依資料庫 verified row 的 bytes／SHA／path／MIME／epoch／offset／gap／overlap 逐欄核對。Complete 必須從0連續覆蓋該版本全部 segment，已知 pending／unknown 不能靜默略去。Partial／missing 可只封存目前可確認的子集合，不建分析工作。
+
+Forward-only 0032 沿既有 editor／private record 與交易核心鎖，在同一交易凍結來源、以 source-vN 唯一鍵建立 run、決定 queued／awaiting_budget 並保留第一次費用。相同完整來源與相同兩 hash 重播回原 run，不再碰預算或更新 deadline；改版、不同 hash／timeline／bytes／SHA、過期或取消都拒絕。使用原 server Asia/Taipei 月份、1,000,000,000 TWD micros 預設月額度與10,000,000 micros 首次預留，沿用來源的整數單位及 metadata，並非新增計費或 SaaS 配額。不足時 run/capture awaiting_budget、reserved=0，不造 usage attempt，也不把重播當重新排程。
+
+Runtime grant 限 exact completion purpose、current month 與新 run；budget INSERT 只給 month、UPDATE trigger 只允許固定10,000,000增額，原額度／已花費／負值或失衡不可被完成流程改寫。Usage 只可為該 run:0 建 pending/reserved，來源 capture／run／月份綁定不猜配；未提供一般 ledger 查詢、provider dispatch 或 worker 權限。Source freeze、run、usage 與 budget 任何一步失敗都整筆 rollback，unknown COMMIT 沿既有保護，不自動建立另一 attempt。原 cancellation 仍只退明確未送出的 pending 預留，未知／in-flight 不退款。
+
+Pointer hash 沿原來源作保存與重播對照，沒有宣稱 server 重新計算 pointer 完整性。provider_mode／model／price_version 沿舊來源的預留標記；不表示該模型目前可用、完成 provider qualification 或已發送付費請求。HTTP 錄音 UI 仍關閉，analysis／review／projection、cleanup runner、begin 未知結果復原、真身分／既有使用者／provider、Docker／雲端／正式資料／舊入口／writer fence／切流與發布均仍在 DEV-139 完成分母。
+
+本輪 server／S2 與 S3 strict overlay、S2 195 項 unit、三項 static boundary 及 diff-check 已通過；32-migration native HTTP、once／不足預算／故障原子回滾及 snapshot 的同版實際結果已由下方最終收據驗證。前31份 SQL bytes 不改，沒有正式資料寫入、IAM／Secret／credential／billing、provider 呼叫或新增 required gate。
+
+
+首輪 source `b368a54d4151f6d8557c6a22a931f9c7505a84a4` 的 [CI 40818252072](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40818252072) 整體 FAIL；full lockfile 型別／unit／三項 boundary／compiled artifact 與獨立32-migration snapshot均完成，snapshot artifact `12873144027` 的 `migration/20261029T043435Z-4bd68e10/result.json` 為60 checks／45 projections PASS。第一個有效失敗在新 native fixture 的凍結後 reserve 負例：既有 audio endpoint 按 W28 契約回 MEETING_STORAGE_CONFLICT／409，而 fixture 誤期待 capture endpoint 的 REVISION_CONFLICT／409。只對齊該既有 code，HTTP409拒絕、zero storage calls與資料不變的斷言保留，沒有放寬行為或改32份SQL。另補過期與取消後 complete 不凍結／不復活／不再預留的直接負例；新版 native結果另行驗證，不以首輪snapshot或前版收據代替。
+
+
+**W30 最終受測 source `fed1f9e1219658f17a9e4b13441a4110e3c0078a` 的 [CI 40818685810](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40818685810) 全部成功。** 原 lockfile 的 server／frontend strict 型別、S2 195／S3 117／migration 13項 unit（共325）、三項 boundary、compiled Cloud Run candidate／managed binding PASS；PostgreSQL 17.11／Node 24.22.1 套用32份 migration，S3 70 checks與snapshot 60 checks／45 projections PASS。
+
+本版 native 以真 HTTP／restricted runtime／PostgreSQL 驗證 completion；verified音訊／GCS proof由 nonce admin fixture 預置，音訊 transport 則由同批原 W28 native fixture驗證，並非真 provider／瀏覽器錄音。案例證明 pending段不能漏列、partial／missing不建run、同一index欄位不符拒絕、純陣列反序仍可完成、並行與重播只建一組run／usage及一次預留、預算不足不建usage或假排程、原private／origin／actor拒絕、凍結後 reserve／progress／pointer不寫，以及取消只退pending一次。Usage INSERT故障注入後，budget／run／來源凍結整筆rollback，移除自己trigger再正常重試成功；過期與取消後complete亦拒絕，不復活或再留款。
+
+artifact `12873996244` 已讀回 `s3/20261029T043924Z-bf734ca8/result.json` 與 `migration/20261029T044039Z-30a26da7/result.json`，兩者均PASS並綁32份SQL。首輪FAIL保留於上段，32份SQL bytes沒有在提交後改寫。browserSmoke=NOT_RUN、dockerExecution=NOT_RUN；後續文件提交不改受測executable。本輪未啟動本機DB／browser，未操作正式資料、IAM／Secret／credential／billing／traffic或呼叫真provider。完整管線／真Session／既有使用者／provider、雲端／正式移轉／舊入口／writer fence／切流與發布仍續行，未Release，未新增required gate。
+
+
+## 45. Human Review and Draft Projection W31（2026-10-29）
+
+沿舊來源 review／decide-match／save-projection 接上 Cloud SQL 的 meeting-control；Main Session、expected actor、同源與私人 editor scope 沿原入口，不採 client tenant／project 作授權。Review 只呈現目前 source version／非空 active transcript，保留歷史與未啟用的部分結果於 DB，不將其當成目前已完成的來源。舊worker可能先留部分 transcript再失敗，故active revision為NULL時回空清單、對具體未啟用resolution決策回404，不猜選任一版本；未來worker切換active revision須同交易推進review revision，讓同一CAS亦涵蓋結果發布。回傳原 segments／candidate shape、目前 sourceVersion 及可直接重送的 recordUpdatedAt 微秒 token；不得經 JS Date 轉成毫秒再當 CAS。既有 task legacy ref、NULL node_type 一般任務、pointer-only 證據及 explicit human add 的語意保留。
+
+Decide 必須提供 sourceVersion 與 resolution revision，依輸入順序原子執行 accept／reject／add／replace／clear-all；accept 必須已有候選，只有 pointer 的候選不能直接接受，但人工 add／replace 可明確指定任務。任務必須在同 Board、未 archived 且非 group。結果只更新 human decision／corrected actor／resolution與capture review revision，不改 transcript、原 suggestion score／quote 或人工稿。整批操作任何一項錯誤均 rollback；重播舊 revision 會拒絕，不覆寫新決定。
+
+Projection 限同一 record／capture／sourceVersion，以原始 recordUpdatedAt 與 review revision 作必要 CAS，維持來源只從 draft 開始；可明確存成 draft／published／archived。只修改傳入的 title／content／status／metadata，不重寫 visibility、owner、occurred／started／ended 原值；避免通用 record upsert 的毫秒輸入破壞既有時間精度。taskLinks 解析同 Board canonical／legacy ref，保留使用者指定 role，補入 server-owned accepted links，不以 pointer 自動接受或覆寫人工內容。Accepted links 亦限目前來源，過期或異 Board 的 accepted task 不靜默丟棄。
+
+同 requestKey／payload／capture 的 replay 回目前 saved record，不重寫、增加版本或重新製作 mirror；同 key 不同 payload 拒絕。新投影在同一 actor transaction 寫 record／links／projection bookkeeping，再沿既有 reconcileKnowledgeRecordMirror 及 resource revision 更新；任一步失敗都 rollback。33只授 exact purpose 的 human match／resolution／projection 欄位，舊32份 SQL bytes 不改，無新表、index、worker或全域 ledger 權限。
+
+舊 Edge worker 的 non-fake 分支沒有真正轉錄音訊，fake 分支從現有文字造測試 transcript；不能將其當 ASR 完成。真實 transcription、worker claim／dispatch／未知結果與費用結算、cleanup、begin 未知結果復原、完整 HTTP 錄音 UI、真身分／既有使用者／provider、雲端／正式資料／writer fence／舊入口／切流與發布仍計入 DEV-139 完整分母。這輪先完成後續轉錄結果所需的人工處理路徑，不變更正式資料或另增人工作業／required gate。
+
+Input focused 8項、S2共203項unit、server／S2與S3 strict型別、三項static boundary及diff-check已通過；本版33-migration／native HTTP／projection故障rollback／snapshot結果已由下方同版CI收據驗證。HTTP錄音UI仍停用，未Release；未呼叫真provider或執行正式資料／IAM／Secret／credential／billing／traffic變更。
+
+
+首輪 source `68a3dfc9cc41c96d9b755410044e02616773dda5` 的 [CI 40821776480](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40821776480) 整體FAIL，型別／unit／三項boundary／compiled artifact與獨立33-migration snapshot均完成；artifact `12874333733` 的 `migration/20261029T051242Z-5f49e468/result.json` 為60checks／45projections PASS。第一個有效失敗是 native concurrent fixture要求只有一列decision，但原 add 語意會保留未操作候選：actual是accepted及suggested各一列。修正該oracle為兩列各一、resolution revision只增1，仍要求並行一勝一409，不以刪除未選候選通過測試；33份SQL及實作不改。後續projection／deferred rollback尚待續版同版native結果，不沿用snapshot替代全體成功。
+
+
+續版 `9c8b2461ef318c96ef87b13f041b0b3bdc2f0442` 的 [CI 40822200994](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40822200994) 仍FAIL，獨立snapshot亦完成。前述併行CAS負例已通過，後續投影oracle卻以未篩選的首列候選作勝者，沿用了「只剩一列」的同一錯誤假設；actual projected link不存在於該錯選候選。現改由DB decision=accepted精確查一列、核對勝者帶入且未操作suggested候選不帶入，產品程式與33份SQL不改。兩次首個有效失敗均保留；新版結果另驗，不假稱既有snapshot可替代尚未完成的deferred COMMIT rollback。
+
+
+**W31 最終受測 source `5da37e794474cfa2e83445f1c6db7b538aebfbc1` 的 [CI 40822736839](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40822736839) 全部成功。** 原lockfile server／frontend strict型別、S2 203／S3 117／migration 13項unit（共333）、三項boundary、compiled Cloud Run candidate／managed binding PASS。PostgreSQL17.11／Node24.22.1 套用33份migration，S3 71checks、snapshot60checks／45projections PASS；artifact `12874863260` 已讀回 `s3/20261029T052213Z-cd290c4e/result.json` 及 `migration/20261029T052323Z-d7747179/result.json`，兩者均PASS並綁33份SQL。
+
+Native證明private same-Board member／outsider拒絕，舊來源及activeNULL半成品保留但不作current；人工accept／reject／add／replace／clear-all、pointer-only guard、legacy ref、跨Board／group／archived拒絕、multiop rollback與併行CAS均通過。投影保留人工內容／metadata／role及原時間／visibility／owner，補入且只補accepted連結，完整微秒／review CAS、same-key replay／不同payload衝突、published後拒新寫入、RAG mirror／resource revision同步與deferred COMMIT故障後record／links／projection／RAG／revision全rollback均通過。前兩次fixture錯誤仍保留上述FAIL收據，產品實作與33份SQL bytes在首輪提交後沒有改寫；後續文件提交不改受測executable。browserSmoke=NOT_RUN、dockerExecution=NOT_RUN，尚非正式身分／provider／發布證據。
+
+2026-10-29正式metadata唯讀再確認：ProJED `asia-east1` 仍只有原 `projed-ai-backend`／`00004-8tv` 100% traffic；目標projed-prod、projed-prod-runtime／release SA及projed-prod前綴Secret仍無，音訊bucket未配置。只有run-sources bucket（不得當audio）；root直接讀原始JSON確認uniform_bucket_level_access=true、public_access_prevention=inherited，不依空的camel-case欄位推論未設定，也不宣稱物件公開／私有狀態已qualified。共享jenfu-platform-prod-pg仍RUNNABLE／POSTGRES_17；沒有連入DB。OrgMaster PR187仍open draft／HEAD46f6a3c，Platform PR157仍open draft／HEAD2124457，source QC綠燈不是正式契約publication或真Session proof。本輪未操作雲端設定、IAM、Secret版本、正式資料或traffic。
+
+範圍查核另確認[REL-003](../release/REL-003-DEV-123-20260917.md)曾開放正式錄音入口作validation，但明列fake worker及真provider未qualification；[ADR-051](../decisions/ADR-051-projed-owned-meeting-analysis-pipeline.md)也未證明ASR已存在。不能將「補做真ASR」描述成「搬遷曾正式可用的ASR」，也不能由當時build flag推斷目前live flag。當時提出是否讓真ASR續DEV-123或併入本次的範圍選項；2026-10-29人類已明確選擇本次同時完成，現行驗收包含真ASR，不再列待答。這項查核不新增required gate。
+
+
+## 46. Actual Linux OCI runtime qualification（W32，2026-10-29）
+
+已補上先前 dockerExecution=NOT_RUN 的實際映像驗證，沿原 isolated workflow 增加 Linux OCI job，未新增人工或 required gate。`RuntimeDatabase.readiness` 的 checkout 原在 try 外，DB 連線拒絕會使 HTTP async handler rejection；現一併納入 false 路徑，正常 release／失敗 destroy 已取得的 lease 一次。4 項 focused unit及真容器的 DB 停止／恢復驗證均 PASS。
+
+`scripts/verify-dev139-oci.mjs` 在 disposable Linux CI 建置真 `Dockerfile.dev139` 的 linux/amd64 build/runtime image；以同次 image 產物生成 binding，在 nonce-owned、network=none、無 TCP listener 的 PostgreSQL17容器套33份migration並重跑驗冪等。runtime 使用 node 非root、read-only filesystem、production dependencies與compiled entry；實測 main／Quick HTML與asset hashes、錯誤static binding啟動拒絕、ledger漂移ready=503／恢復、DB中斷ready=503且live=200／DB恢復ready=200，以及SIGTERM exit=0。Production pins仍空，session／private API須404 ENDPOINT_UNAVAILABLE；這是未發布入口的安全拒絕，不能稱為真Session驗證。
+
+Binding以容器內實際profile／SQL／static metadata bytes為準；本次33份SQL與profile hash另核對同commit Git blobs相符。Windows工作目錄可能因CRLF與Linux OCI bytes不同，不能把Windows本機binding移植為Linux映像的proof；正式migration／runtime執行包須沿同一immutable image產物綁定，不改寫已提交SQL或正規化後掩蓋漂移。這沿既有exact checksum責任，未增加人工簽核。
+
+**最終受測 source `12bb7230284323e8f02f4e820796ac182dcede3a` 的 [CI40825183016](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40825183016) 兩個jobs全部成功。** 原lockfile server／frontend strict型別、S2 207／S3 117／migration13（共337）unit、三boundary與compiled artifact PASS；Windows PostgreSQL17.11／Node24.22.1 native71checks、snapshot60checks及33份migration PASS。artifact `12876700794` 已讀回 `s3/20261029T055005Z-a849ba12/result.json` 與 `migration/20261029T055118Z-ca8075eb/result.json`。OCI artifact `12876611221`／`dev139-oci-5036a0015b72557a4fb00d8e/result.json` 為PASS，9checks、實際與expected migration count均33；image `sha256:8874bad29879d377f8005b42d63898151c24f1d2c02343f6bb416ad499c0e631` 僅為本次隔離產物，沒有registry push或正式部署。
+
+首個有效失敗保留：[CI40824511064](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40824511064)／source `836ed78`／artifact `12876271308` 的OCI init exit=2，因官方entrypoint的psql固定走`/var/run/postgresql`而harness僅開shared socket；該輪獨立Windows job仍完成PASS。改為保留容器內預設socket及exact shared socket後，[CI40824778316](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40824778316)兩jobs成功；Luna續查再修正cleanup僅接受精確具名NotFound，daemon／context／transport錯誤不假報已清除。最終收據已覆蓋這個差異，歷史FAIL不覆寫。
+
+自建container／socket volume／image tags依nonce label核對後清除，暫存credential檔清除；沒有廣域prune、正式資料、雲端設定或IAM／Secret／credential／billing變更，也沒有啟動Windows本機DB。browserSmoke、真Session、Cloud SQL readback、registry push與production release仍為NOT_RUN；合成managed-shaped Unix socket不是正式Cloud SQL。所有已提交migration bytes保留。
+
+後續直接補§33.3的ProJED專用foundation／release執行包，目前仍缺精確app-scoped IAM／Secret／service-job動作，不能以本節PASS宣稱正式接線完成。完整HTTP錄音／清理、真使用者proof、provider資格、Hosting／舊入口、writer fence、正式apply／reconcile／recovery、切流及release仍按原分母續行。當時的ASR範圍問題已由2026-10-29人類「本次同時完成真 ASR」解決：納入本次完整驗收，不另增查核gate。
+
+
+## 47. Managed Job artifact and real foundation gaps（W33，2026-10-29）
+
+本輪將正式migration／import所需程式裝入明確的`Dockerfile.dev139 --target managed-jobs`，預設build仍是web runtime，不會意外改成Job。Importer以TypeScript預先編譯成`dist-jobs`，Job使用production dependencies／非root，保留現有migration runner與source-boundary checker；沒有重做snapshot、加入第二套migration邏輯或新required gate。
+
+`run-dev139-managed-job.mjs`只接受`binding|migrate|plan|apply|reconcile`一個positional mode，缺必要來源／credential或多餘參數在子行程前拒絕；binding來自Job自己實際profile／SQL／static artifact bytes，寫入自己暫存目錄並清理。Child只保留該mode需要的DSN，不傳runtime DSN；診斷遮蔽DSN／password，SIGTERM轉送child且中斷結果不當成功、不自動重送未知寫入。`binding`不連DB。原CLI與Job共用pure binding helper，合法stdout／output-file行為保留，未知／重複選項拒絕。7項focused unit、jobs strict no-emit overlay與affected lint PASS；實際Job image／compiled importer／wrapper migration與既有regression由下列最終CI核實。
+
+**新查證的真正式差距取代§30／§33.3當時的可達性假設，並未改變Cloud Run＋Cloud SQL／原origin的目標：**
+
+- 2026-10-29只讀instance metadata：目標仍POSTGRES_17／RUNNABLE，`ipv4Enabled=false`、privateNetwork為`projects/jenfu-platform-prod/global/networks/jenfu-platform-prod-vpc`，IAM DB authentication已開。Root原始network JSON另確認有1個ACTIVE `servicenetworking-googleapis-com` PSA peer；不是沒有peering，也不代表ProJED有可達route。未讀／列印實際IP、Secret值或業務資料。
+- 現有managed source的Unix socket＋direct app-role DSN，以及本輪合成socket PASS，都不是此private-only instance的正式連線證據。[Google私有IP連線文件](https://docs.cloud.google.com/sql/docs/postgres/connect-run#private-ip)要求Cloud Run有通往SQL VPC的路徑；Auth Proxy不替代該route。Shared VPC／Direct VPC是待具體化方案，不擅自啟用Shared VPC、增加網路、公開SQL或改firewall。PSA不支援跨一般VPC peering的transitive連線，不能只加app→Platform peering就宣稱可達（[限制](https://docs.cloud.google.com/sql/docs/postgres/about-private-services-access)）。
+- [Platform AGENTS](https://github.com/jedchang0308-jenfu/Jenfu-Platform/blob/bea8db0fbd052450b6b0220e3594a37b1cad2039/AGENTS.md)要求DB CONNECT只授精確lifecycle IAM logins。ProJED目前直接以`projed_runtime_disposable`登入不符合此邊界；下一步要接獨立runtime／migrator／一次性importer IAM identities及其app role，不把原`projed-prod-release`同時授予migration/import credentials後稱為隔離。三個密碼型DSN Secret僅是§33.3舊規劃，尚未建立或被認定為正式解法；IAM登入不自動建立PostgreSQL membership／CONNECT／schema。
+- Platform DEV-010／012的bootstrap只允許既有三app，不能重放或放寬其歷史allowlist來納入ProJED；沿已授權Platform DEV-007的app onboarding範圍補ProJED owner package，不借用OrgMaster業務schema或新增bootstrap管理密碼。本輪只讀其他repo，保留Platform原有dirty next-env.d.ts，沒有修改owner source或正式ACL。
+
+本輪交付的是可驗證Job artifact入口，尚不是可apply的完整foundation包。上述IAM auth／private network與owner bootstrap仍須實作；具體新權限與網路責任待完整執行內容可審閱後一次收斂，不逐個SHA重問。正式資料apply／reconcile、真Session、原使用者映射、原origin／writer fence／恢復／切流及release分母保留。
+
+**最終受測 source `8d9f670bb497bfac948abc687e6cc09a6b5e33d3` 的 [CI40827705748](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40827705748) 兩jobs全部成功。** 原lockfile strict server／frontend型別、207／117／13／7（共344）unit、三boundary與compiled artifact PASS。PostgreSQL17.11／Node24.22.1原生71checks、snapshot60checks／45projections及33migrations PASS，artifact `12877661874` 已讀回 `s3/20261029T061603Z-579227cf/result.json` 與 `migration/20261029T061723Z-7f3409ea/result.json`。OCI artifact `12877651193`／`dev139-oci-4209932ab93ff69b353d05a6/result.json` 已讀回PASS、12checks、actual/expected33migrations，runtime image `sha256:f50e22037d9cc3294bf24448320c32241eda960c06cdb55849a68b5beadc4e9c`、jobs image `sha256:05bb4fdaf21417b7903d65950215849b3221937a987a858624d4289204c19fc6`。真正wrapper從空DB套用與重跑、same-artifact binding、prod-dependency compiled importer載入及missing/extra input拒絕通過；沒有真source snapshot apply或正式Job部署。第一版source d45845c的CI40827374802亦完整PASS；最後差異僅為MJS測試Node imports與dist-jobs忽略項。
+
+本機focused lint的首個有效失敗保留：新增MJS unit缺Node globals（9個no-undef）；改明確import node:buffer／node:process後7項unit及lint PASS，沒有鬆綁規則。所有原SQL bytes不改寫，所有自建OCI資源由既有nonce清理；沒有本機DB、正式資料或IAM／Secret／credential／billing／network／traffic變更。
+
+下一步沿已查證的既有owner實作接線，避免另加Node connector SDK：Platform source `bea8db0`／OrgMaster `46f6a3c` 的production runtime renderer使用獨立Cloud SQL Proxy container（private-ip／auto-iam-authn／lazy-refresh、TCP與startup probe、production VPC）；migration Job則用原生cloud_sql_instance volume／VPC與metadata短期token，不讀持久SQL密碼。這是source audit，不是本輪新做的provider qualification。ProJED `0029`／`0031`／`0032`有依賴exact `current_user`的ledger／cleanup guard；不能直接把runtime斷言改成IAM username而讓guard略過。IAM適配須同時驗證真正SESSION_USER與app-role context，保留現有guard；runtime／migrator／importer IAM login及membership分開，依既有角色語意實作，不改寫凍結SQL。
+
+
+## 48. Managed IAM login and app role context（W34，2026-10-29）
+
+Managed profile／binding改為`cloud-sql-iam`，固定runtime／migrator／importer三個不同IAM DB logins（`projed-prod-<purpose>@projed-cc78d.iam`）。Runtime的無密碼DSN只可連本container group的127.0.0.1:5432 private IAM proxy；兩個Job只可連exact instance的/cloudsql Unix socket，透過metadata每次執行取得短期token，不把token寫進DSN。舊direct app-role／帶password／錯用途或project的managed URL拒絕，不保留未發布的密碼fallback。Disposable profile／既有33份SQL bytes不變。
+
+共用`shared/dev139ManagedDatabase.mjs`在進入app role前核對真正SESSION_USER、DB、IAM login／app group安全屬性、精確membership、非DB owner及無sibling core USAGE／CREATE。Runtime／importer不得有owner／migrator或其他app role membership；migrator只允許自己的migrator／owner鏈。隨後只能SET ROLE固定app role並核對SESSION_USER仍是原IAM login、current_user為該app role；RuntimeDatabase每次checkout套用，失敗destroy client不交給actor transaction。這保留0029／0031／0032依current_user執行的原ledger／cleanup guard，不以變更登入身分略過防護。Migration的owner切換維持transaction-local；importer無owner或DDL權。
+
+原migrator與snapshot driver重用此helper；Node pg Job用明確host/user/password選項，避免connectionString中的空password覆蓋短期token。Metadata失敗／無效回覆只回安全code、不自動重送；原來源TLS／repeatable-read／精度／原子apply／exact reconcile保留。Helper與types編入runtime／Job，沒有新增Node connector SDK或更改平台IAM／network。
+
+Focused release16項、S1設定案例、strict S2／jobs no-emit overlay與affected lint PASS。查核修正sibling schema拒絕同時核USAGE及CREATE；本機lint另修正Node globals與finally可能覆蓋原錯誤，不鬆綁規則。遠端OCI新增三個IAM-shaped PostgreSQL login、NOLOGIN app groups、固定角色配對、錯用途登入／owner membership／sibling CREATE拒絕與恢復；isolated loopback network及metadata fixture不接外網，並保留DB outage／recovery。這不是Google IAM token或真proxy authentication qualification，result明列metadataProvider=FIXTURE_ONLY、cloudIamAuthentication／proxyAuthentication／productionIdentity=NOT_RUN；原Windows業務／RLS／snapshot回歸繼續。CI結果由下列最終收據核實，fixture不外推正式資格。
+
+本輪只實作登入與角色適配，shared VPC／Direct VPC、正式IAM users／CONNECT／membership、owner bootstrap、真proxy image及其私網配置與provider readback仍須完成；不擅自啟用API、建立SA、Secret、公開SQL或寫正式資料。完整Session／既有使用者、會議管線與provider、Hosting／原origin、writer fence、正式snapshot／恢復／切流及release原分母保留。
+
+**W34受測source `ab68782df63d66ceefe21d611c4ddf9e2eade0cf` 的 [CI40830527602](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40830527602)兩jobs全部成功。** 原lockfile server／frontend strict型別、S2 207／S3 117／migration13／release16（共353）unit、三boundary及compiled runtime／Job artifact PASS。PostgreSQL17.11／Node24.22.1原生71checks與snapshot60checks／45projections、33migrations PASS；artifact `12878124674` 已讀回 `s3/20261029T064254Z-e887a7c8/result.json` 與 `migration/20261029T064414Z-2492eb2d/result.json`。
+
+OCI artifact `12878865460`／`dev139-oci-2c265dadeb87c584c7e1ff5e/result.json` 已讀回14checks PASS：三用途SESSION_USER／app-role配對、錯用途不切role、runtime有owner membership或sibling CREATE即ready503，撤銷錯grant後ready恢復；原33份migration重播、Web／Job binding一致、私有API安全拒絕、DB停復機及Web SIGTERM與owned cleanup皆通過。Runtime image ID `sha256:a98533c9fff35fcfe8f4cea01f3b2f66003b7dc0155c6a491b75ec18ee5616d0`、jobs image ID `sha256:1d703dbd03cf34a120dde6d6a591f2d457fb6f7bdcda5caf592e0d5626a6adb6`只代表本次隔離產物，沒有registry push或正式部署。metadataProvider=FIXTURE_ONLY，cloudIamAuthentication／proxyAuthentication／productionIdentity／cloudSqlReadback仍NOT_RUN；真正IAM認證、owner provisioned grants及network route尚未qualified。
+
+唯讀比對Platform DEV-007 migration014確認Principal-state reader的窄EXECUTE grant仍指向`projed_runtime_disposable`，本輪固定app-role context保留此consumer邊界；該owner source未更動、尚未正式publication。後續補同版本source的proxy／VPC service-job renderer與owner bootstrap執行包，再沿既有授權確認新增IAM／network責任；本輪不以合成PG或metadata成功宣稱真Session、正式資料、切流或release。
+
+## 49. Cloud Run create renderer and source Secret bundle（W35，2026-10-29）
+
+新增 `npm run create:dev-139:cloud-run-plan -- --input=<file> [--output=<file>]`。輸入包含 releaseId、40字元 sourceRevision、固定 ProJED Artifact Registry 路徑的 runtime／jobs／analysis manifest digest、同映像產生的 managed binding、音訊 bucket 與數字型 sourceBundleVersion；拒絕 mutable tag、latest、其他 target 與任意 env override。程式只輸出 IAM 保護的 `projed-prod` service、四個 migrate／plan／apply／reconcile Job、獨立 `projed-meeting-analysis` Job，以及每15分鐘的 recovery Scheduler與具名 foundation 需求；七個 REST request 均為 create，不能覆寫既有服務。Scheduler建立後會定期呼叫固定Job，因此屬待核准的雲端執行責任；純renderer不會執行任何請求。Renderer不證明輸入digest／binding來源，也不取代artifact／release驗證；尚無registry push、provider apply、排程啟用或traffic activation。
+
+Runtime 使用獨立 lifecycle SA、已釘 digest 的 Cloud SQL Proxy sidecar（private-ip／auto-iam-authn／lazy-refresh），只接本 container group 的 loopback。Job 沿既有 Cloud SQL volume 與短期 metadata token，不新增 connector SDK 或持久 SQL 密碼。Runtime 不掛來源 Secret；migrator 不取得 importer 的來源憑證。Source bundle Secret 固定 `projed-prod-migration-source` 並釘數字版本，只授 importer 讀取；正式建立、寫入版本與 grant 尚未執行。此 foundation candidate 建立後，其新 service 立即以100% latest-ready 路由並要求 IAM invocation；renderer 明列這個初始狀態（[Cloud Run v2 Service API](https://docs.cloud.google.com/run/docs/reference/rest/v2/projects.locations.services)）。真 Session／production pin、匿名 invocation及 Hosting 曝光留待正式相容發布，不會變更既有服務／Hosting traffic，也不以新 run.app 可達宣稱原入口完成。
+
+本輪唯讀查得兩 project 同屬 organization `361825816000`，既有 SQL host VPC 的 `/24` runtime subnet 在 asia-east1、Private Google Access 已開且 PSA peer 存在；host project 尚未啟用 Shared VPC。ProJED 的 Compute API 未開，attachment 狀態因此仍未知。Host 沒有 Cloud Router／NAT，故 renderer 選 **PRIVATE_RANGES_ONLY**：私有 SQL 經既有 host subnet，Google／Supabase 公開 HTTPS 及來源 pooler 使用 Cloud Run 一般外送；不為此新增 NAT、SQL instance 或公開 SQL IP。這是待實施的 Shared VPC／Direct VPC 方案，並非已確認路由；實際 subnet 可用 IP 容量尚未知。新增權限明列三個 app SA、精確 SQL instance 的 cloudsql.client／instanceUser、Cloud Run service agent 的 host NetworkViewer／精確 subnet NetworkUser，以及 importer 專屬 SecretAccessor；不自行授 Owner／Editor 或組織管理權。
+
+Managed snapshot wrapper 改以唯一 `PROJED_MIGRATION_SOURCE_BUNDLE_FILE` 掛載 `{bundleVersion:1,sourceBinding,databaseUrl,sslRootCertPem}`，替代 wrapper 原本分散的 source binding／DSN 輸入，混用拒絕；底層 migration CLI 的既有介面保留。Bundle 固定 source project、verify-full、port5432、完整路由帳號與 CA SHA256，限制大小；只在本 Job 暫存目錄以0600寫 CA／binding，改寫 sslrootcert 路徑，交 compiled source contract 再核對後才啟動 driver。Child 只取得本用途環境，錯誤遮罩使用實際 materialized DSN；finally 清除自建檔案。沒有讀取、建立或輸出正式 source credential。
+
+Session pooler 的連線帳號為 `role.projectRef`，真正 PostgreSQL `current_user` 為去掉一次專案尾碼的 role；來源核對現區分兩者，URL 仍綁完整帳號，不放寬錯 suffix／錯 role。官方 [Supabase 連線文件](https://supabase.com/docs/guides/database/connecting-to-postgres#endpoints-and-ip-versions)及 [Supavisor routing source](https://github.com/supabase/supavisor/blob/main/lib/supavisor/handler_helpers.ex#L449-L480)支持此差異。真 source TLS／pooler authentication 與完整 snapshot 尚未執行。
+
+Direct VPC 冷啟動可能先有 proxy listener、稍後才有可用私網路由。Runtime 僅對初始唯讀 boundary checkout 的明確網路／pg-pool transport timeout 做最多150秒等待，位於180秒 app startup probe內；認證、權限、binding、ledger 或未知錯誤立即拒絕。逾時保留第一個有效錯誤，log 只有嘗試次數與時間，不輸出 DSN；業務 command、Job apply 及未知寫入不因此重送。依據 [Google Direct VPC 文件](https://docs.cloud.google.com/run/docs/configuring/vpc-direct-vpc)，真 route 仍須 provider qualification。
+
+Owner bootstrap在W35仍是缺口；現行Platform DEV-007已補`db/dev-010/005_dev007_projed_production_roles.sql`／`006_dev007_projed_revoke_owner_create.sql`、metadata-token runner與Job renderer，受測source及範圍見下段。005建立精確NOLOGIN app groups／IAM membership／CONNECT，僅在migration window授owner DB CREATE；006先撤銷並讀回，再記ledger，ledger失敗不恢復CREATE。ProJED schema／app ledger仍由本repo migrations建立，不改PUBLIC、sibling ACL或凍結SQL。外層coordinator的005 → 完整app migrations → always006、真正IAM／網路與immutable image／正式執行仍待接齊，renderer不能當成可直接apply的完整foundation。
+
+2026-10-30核對Platform既有DEV-007工作樹與[PR157](https://github.com/jedchang0308-jenfu/Jenfu-Platform/pull/157)：本輪source `4b11b60b3810c63cd5c4716945557ce0fd93ad61`移除plan／validator固定`last=0033`的過期界線，精確改為`managed` source profile的全部有序entries；既有target、角色／grantor檢查及always finalize不變，005／006 bytes未改。12 focused helper／runner unit PASS；[required Source QC40915396401](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/40915396401)與[native40915386857](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/40915386857)均SUCCESS。Artifact`12916285773`已讀回Platform24／OrgMaster21 PASS、foundation19 PASS＋4預期拒絕／注入失敗，三套cleanup全部true；foundation僅實跑ProJED0001，不由本repo39-migration回歸推論005→全部app migrations→006已整鏈驗證。舊a4268 source的相同有限資格與歷史失敗仍保留owner DEV-007；本輪未改正式ACL或新增required gate。
+
+2026-10-31 Platform source `998b89568adb1abadf1872e1f0967f4262360c9e`已在原runner補owner window core，確認005 readback後只呼叫一次app migration adapter，finally006並核對CREATE已撤銷；partial／漂移／unknown不成功，primary／finalizer錯誤分開保留。28 focused unit／syntax／staged boundary PASS，native改鎖ProJED qualified `896645a684f625c2faaeba1f7005f41ebe30e252`全部42份，驗mid-chain故障撤權、精確prefix readback、新window補齊及最終sibling ACL。未複製JS parser或建立test-only自動恢復。[required Source QC41100270016](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/41100270016)與[native41100258590](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/41100258590)待終態；CLI main仍單phase，正式Cloud Job adapter／source-image admission、真IAM／Session及執行未完成，core不冒稱正式coordinator已交付。005／006與ProJED0001–0042 bytes保持不變。
+
+本機 release25、source connection3、startup6 focused unit、affected lint及既有 strict S2 no-emit 型別 overlay PASS；overlay 借用現有 pg 宣告，原 lockfile 完整型別與 native／OCI 結果仍以遠端 CI 為準。另以 Google Run v2 Discovery（revision20261023）一次性唯讀核對五個 fixture create body 的欄位／型別／enum，均相容；這不是 provider admission 或部署證據，也不新增 network schema check 為 required gate。新增 OCI case 使用掛載的合成 bundle，compiled child 在錯 target 安全拒絕且不洩憑證，實際結果見下列收據。容量風險的單次授權保留，但本輪仍使用遠端隔離資源，未在本機建立 DB／Docker。
+
+**W35受測 source `1f5f8897aa3370057d697ec1ab7bd17a95e47f9a` 的 [CI40834881396](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40834881396) 兩 jobs 全部成功。** 原 lockfile strict server／frontend型別、S2 213／S3 117／migration14／release25（共369）unit、三boundary及compiled runtime／Job artifact PASS。PostgreSQL17.11／Node24.22.1 原生71checks、snapshot60checks／45table projections及33migrations PASS；artifact `12880004258` 已讀回 `s3/20261029T072437Z-189c2c74/result.json` 與 `migration/20261029T072555Z-05b80dad/result.json`。
+
+OCI artifact `12880153312`／`dev139-oci-8804b677207a83722ea9ac71/result.json` 已讀回15checks PASS，新增 mounted source bundle 的 compiled child 拒絕與不洩漏案例，並保留原migration重播、IAM-shaped login／role isolation、權限與ledger漂移、DB outage／recovery、SIGTERM及owned cleanup。Runtime image ID `sha256:12dc3bf8ae26fd5af8e5e88e1439766d041e7dcd1d1076a8a3773b4298eff3d7`、jobs image ID `sha256:94af35f68955f13a3012a2c59b913df81e2058bc4152e0e42d2d4713fa420277`只屬隔離產物，沒有registry push。33份SQL與profile共34個SHA256另核對同commit Git blob完全相符，沒有改寫migration bytes或以Windows CRLF binding代替Linux產物。metadataProvider=FIXTURE_ONLY，cloudIamAuthentication／proxyAuthentication／sourceSupabaseAuthentication／productionIdentity／cloudSqlReadback／browser／productionRelease仍NOT_RUN。
+
+Focused review 另修正新service的預設路由說明、OCI失敗診斷也遮合成source密碼／CA marker，以及renderer hash欄位的型別檢查。新request bodies以Google Discovery欄位／型別／enum再確認PASS，沒有把這次審查或網路查核設成required gate。此輪沒有正式DB、IAM／Secret／credential／billing／network／traffic操作；Platform／OrgMaster其他worktree仍保留原狀。下一步完成上述Platform中立role bootstrap與owner執行接線；真Session、使用者映射、資料／原功能、原origin、writer fence、recovery、切流及正式發布仍計入完整目標。
+
+## 50. Real ASR and zero-retention decision（2026-10-29）
+
+人類已明確要求「本次同時完成真 ASR」，並選擇「維持零留存，採可符合條件的 Google Cloud 路徑（建議）」。真音訊轉錄、HTTP錄音／status／review、durable worker與cleanup均計入DEV-139；不延後DEV-123、不把其歷史fake worker造文字結果當ASR。既有來源／人工內容／pointer／review與預算／取消／unknown-result語意仍保留，正式IAM／API／billing等新責任依原界線處理。
+
+[Google目前Gemini Developer API資料政策](https://ai.google.dev/gemini-api/docs/zdr)明列付費服務的防濫用prompt／response保留，store=false與手動刪Files不會消除該獨立留存。因此舊SPEC-123的Gemini Developer專案ZDR假設不可當成已符合；本次不將其用於真實會議內容。此結論不推論Vertex／Cloud Speech或任何實際project已獲資格，亦不解除資料保留限制。
+
+後續matching／compose若採Google Cloud上的Gemini，須另依[官方零留存說明](https://docs.cloud.google.com/gemini-enterprise-agent-platform/resources/zero-data-retention)核對所選模型與project的abuse logging、request-response logging及跨請求cache；不能由Cloud Speech資格推論其已符合。官方亦提供project `cacheConfig` 唯讀查詢與關閉cache方式，[abuse monitoring](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/abuse-monitoring)區分適用契約／模型。實際project適用條款、例外與cache狀態目前未核實；這是既有人類零留存條件在後續內容處理的延續，不阻擋不傳送真實內容的開發或ASR帳務回收，不自行變更帳戶條款、權限或project設定。
+
+本輪重讀官方頁面，支援模型的implicit cache亦有預設開啟的durable儲存；本案沿`disableCache=true`全部停用後讀回，不把僅停durable／RAM暫存推論為整個project已符合。2026-10-29實際唯讀查詢`projed-cc78d`：`us-central1-aiplatform.googleapis.com/v1/projects/projed-cc78d/cacheConfig`回403，故cache設定仍未知；Service Usage enabled inventory確認`aiplatform.googleapis.com`與`speech.googleapis.com`均未啟用。僅讀取metadata，未enable API、改cache／IAM／Secret／credential／billing或送任何會議內容，正式provider qualification仍未完成。
+
+採用Cloud Speech-to-Text **V1同步Recognize**，固定 `https://speech.googleapis.com/v1/speech:recognize`、`cmn-Hant-TW`、`default` model與word offsets。V1[資料使用FAQ](https://docs.cloud.google.com/speech-to-text/docs/v1/data-usage-faq)明列sync在記憶體處理、未參與data logging時不儲存內容；[V1語言表](https://docs.cloud.google.com/speech-to-text/docs/v1/speech-to-text-supported-languages)及[Recognize](https://docs.cloud.google.com/speech-to-text/docs/reference/rest/v1/speech/recognize)支持所需輸入／回應。先前V2草案的繁中Private GA／Preview與專屬留存政策未核實，不作本輪預設依賴。原五分鐘GCS source不改，worker在記憶體解碼並切最多50秒PCM子段，避開provider Files、conversation state及batch transcript保留；不是把Operation刪除或GET404當零留存證據。固定billing project為ProJED，實際project logging設定、API／權限、價格及轉錄品質仍須qualified，不預填帳戶已符合。
+
+目標DB已有run queue／source version／lease／usage／cleanup與transcript表，但0001–0033尚未授ASR worker claim／dispatch／settle／transcript INSERT，HTTP錄音caller亦未接齊。沿原run與nonce／token責任補forward-only0034及後續worker migration／接線，不另建通用queue。先完成安全source／合成媒體測試，再由真provider、普通使用入口與資料／費用／取消／清理讀回證據驗收；本節與W35的369 unit／15 OCI均不代表ASR完成。
+
+## 51. Owner foundation qualification and ASR components（W36–W37，2026-10-29）
+
+### 音訊清理接線（0042／Rev78，2026-10-31已通過隔離驗證）
+
+最終受測source `896645a684f625c2faaeba1f7005f41ebe30e252` 的 [CI41098779700](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/41098779700)兩jobs SUCCESS：658 unit（494／122／14／28）、原lockfile型別／三boundary／compiled artifact、native domain72／snapshot60及OCI18／42 migrations全部PASS。Artifacts `12997077955`（s3/20261030T172827Z-1bc3525e、migration/20261030T172919Z-1c1e1734）及 `12997486519`（dev139-oci-5f47d75d9255d66ba920add6）已讀回；兩份native receipt各有42份migration hash，OCI精確source、migrationCount=expected=42、dockerExecution及owned cleanup均PASS。0001–0042自此保留qualified bytes。Storage為synthetic，metadataProvider為FIXTURE_ONLY；此結果不證明實際bucket永久purge、真Speech／LLM或正式Session／雲端／發布，完整分母維持。以下首輪／第二輪失敗與修正保留其原證據範圍，不再是現行阻塞。
+
+沿既有`meeting_artifact_cleanup`及15分鐘recovery Job補上GCS purge，不新增queue或required gate。`0042`只開metadata scan、150秒lease claim與exact-token finish；沒有原Session也可處理自己的到期義務，但不能讀record正文／transcript／LLM checkpoint。RPC短期purpose只讀capture生命週期，排除created／recording／paused及未到期audio／upload期限。Capture刪除前保存stop／cancel／delete適用七天錨點至原due，FK SET NULL後仍保留義務。既有已detached的GCS義務無法還原完整生命週期，migration保守延長七天；歷史NULL或Supabase backend不自動指派GCS。這不是對正式物件執行刪除。
+
+Storage增加有界、可指定generation的metadata probe；只有404可證該generation不存在，403／5xx／timeout不能當missing。Known generation不碰replacement；unknown upload只有actual bytes、SHA、size及同generation均符合原proof才可刪該generation。沒有upload token的明確未送出與已有token但missing分開；後者仍unknown，不假報quiescent。每unit最多一次generation-fenced DELETE，結果未知先probe exact generation，不盲重送；只有明確missing才結清deleted。未完成hash驗證的generation一律不保存成upload proof，SQL亦禁止unknown／conflict升級generation，防止後續Job誤刪。Metadata finish獨立於caller abort，仍須未過lease及原token。
+
+清理host在既有analysis Job內先跑一次，最多20個scan／4個unit，與後續ASR／discussion／LLM共用600秒截止與150秒headroom。Storage qualification缺失時不claim；不把使用者重新登入當作purge前提。Failure／unknown留15分鐘backoff，其他獨立義務繼續；logs只含aggregate數量及固定錯誤碼。真正GCS bucket的soft-delete／versioning及精確權限仍須資格化，不能用一般GET404推定實體物件已永久移除。
+
+本機S2 494項PASS（含generation信任提升修正）、S2／S3 strict同版本PG宣告overlay、affected lint與兩份42-migration static profile PASS。新增native cases沿isolated資料與synthetic storage驗時限、lease／stale token、actor拒絕、unknown不升級、錯hash／replacement不刪、parent-delete錨點及private-body拒絕；實際native／OCI結果待本版CI。先前完整41份基線仍為下節`f69b73c...`；不以unit／static成功宣稱42份已資格化。
+
+並行source審查另收緊候選0042的maintenance RLS：scan／claim／finish必須沒有business actor，claim只可讀exact obligation的parent capture，finish不授capture讀取；anchor仍由parent-delete trigger維護。正常actor query port原已拒絕`set_config`，本次是SQL邊界的防禦補強，沒有證據顯示HTTP client能設定maintenance purpose。Native加direct runtime policy負例及purpose／capture GUC恢復，避免只驗RPC拒絕卻未覆蓋policy；未改0001–0041。
+
+首輪source `13b85d5f85351253814553057fb07af8d578b1a3` 的 [CI41097032163](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/41097032163)整體FAIL。658 unit、原lockfile型別／三boundary／compiled artifact及OCI18／42 migrations PASS；已讀回artifact `12996073831`（dev139-oci-1485b0174701843d5700eff6），精確source、Docker execution及owned cleanup check均PASS，metadataProvider仍FIXTURE_ONLY。Native cleanup功能斷言走完後，catalog roles把PG `name[]`當作`text[]`比較而FAIL；獨立snapshot另在既有retention oracle未列0042必要cleanup欄位grant時FAIL。現將catalog query明確轉text[]，同步兩份精確column oracle，保留table-wide／DELETE／importer拒絕及功能斷言。兩項有效失敗均保留，沒有domain／snapshot成功result artifact；修正版native／OCI尚待同版CI，不以OCI成功替代完整資格。
+
+第二輪source `a7ba0db43ddab72f2e7c7a2e6ceb14ba12c21e24` 的 [CI41098081638](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/41098081638)仍整體FAIL：新增actor／exact-parent RLS負例已走完，domain在catalog checker將table-level DELETE傳給僅支援column privileges的函式時回`22023`。現column oracle只列精確SELECT／INSERT／UPDATE，DELETE保留獨立`has_table_privilege=false`斷言，未少驗刪除拒絕。獨立snapshot60與OCI18／42 migrations PASS；artifacts `12997546053`（migration/20261030T172457Z-ce061572）及`12996219615`已讀回，domain沒有成功result。其他658 unit／原lockfile型別／三boundary／compiled artifact PASS；此修正只改QA，0042功能SQL與0001–0041不變，完整domain資格待修正版。
+
+本次gcloud唯讀已恢復，無須沿用先前重新登入阻塞。精確project `projed-cc78d` 目前Run／Storage／Artifact Registry／Secret Manager API已啟用，Compute／SQL Admin／Speech／Vertex AI／Scheduler未啟用。asia-east1只有既有`projed-ai-backend`，沒有Job；專案bucket清單僅`run-sources-projed-cc78d-asia-east1`，不是音訊桶，且有七天soft delete。本輪未查runtime env，不能據此排除跨project bucket；沒有以它或fixture冒充合格audio bucket。Cloud LLM cache／abuse／logging與真provider品質仍UNKNOWN，三份binding仍未發布。後續需具名audio bucket、API／IAM／network及owner foundation執行包的明確授權；目前只讀盤點，沒有變更資源、正式資料或traffic。
+
+### 階段編排與原子發布（0041／Rev75–77，2026-10-30已通過隔離驗證）
+
+目前完整受測source為`f69b73c251529354ed20275168cd5a834182cec6`：[CI40989463156](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40989463156)兩jobs SUCCESS。625 unit（461／122／14／28）、原lockfile型別／三boundary／compiled artifact、PG17.11 domain71／snapshot60、41份migration與Linux OCI18全部PASS。已讀回artifacts `12949225449`（s3/20261030T020740Z-1d508b0e、migration/20261030T020902Z-277dde93）及`12948602081`（dev139-oci-5b78a1f2f8215d123fb9c208），OCI精確source SHA與migrationCount=expected=41、owned cleanup均已核對。原生正例已走完256字provider ID結算、兩段retrieve→match→compose→publication、WBS變動重查及空／單葉／取消分支；私人摘要隔離、人工決策保留與原record不變亦通過。0001–0041自此保留qualified bytes，後續schema變更另加forward migration。這是source／隔離資格；metadataProvider=FIXTURE_ONLY，真ASR／LLM、正式Session、正常browser、Cloud SQL readback及production release仍NOT_RUN。
+
+`meetingLlmPlan`在原Session的actor transaction讀取目前run／discussion、實際private input/result hash與live WBS。沒有有效current index就使用lexical／pointer，不為取得空結果而呼叫embedding；候選為空時只保存固定`{"matches":[]}`本機進度，不造provider dispatch、usage或費用。空來源直接完成空結果；單discussion沿用原文；多discussion依既有fanout8 plan逐節點compose。只有實際checkpoint可供重用，matching snapshot、當前prompt或compose childHash改變時不能拿舊結果宣稱完成。完成plan攜帶實際input/result hash proofs，並非以處理步數或記憶體輸出當ready。
+
+新增forward-only`0041_meeting_analysis_publication_v1`；0001–0040已資格化bytes保持原樣。本機進度與publisher各有窄INSERT/RPC範圍。Publisher與當前WBS重查放在同一actor/write transaction，核對原Session／來源、完整discussion及compose coverage、已存proofs與已知費用後，才原子寫入review、切active revision及run/capture ready。所有AI關聯維持suggested／needs_review，不依未校準分數自動接受；model relation保留於candidate snapshot。已有human-reviewed、clear-all或protected ranges的resolution完整保留；不更新record正文、標題、metadata或人工projection。
+
+最終摘要仍在FORCE RLS、append-only的private `compose/final` checkpoint，不放run cursor、scan或費用manifest。原Session以外的使用者只可依目前record既有權限讀取已發布、仍為active來源的摘要；其他unit input/result不因發布放寬。正常review回傳nullable summary，舊資料沒有摘要時為null，非法型別拒絕；既有review介面加唯讀摘要，不自動填寫或覆寫人工draft。
+
+查核同時修正手動會議合成的舊呼叫路徑：HTTP不再將meeting provider缺失轉給Developer API RAG provider；production僅以同一份已資格化Cloud LLM binding建立adapter，固定3.5 Flash且只有一次JSON generation。原預設3.5不可用時切3.1的行為已取消，避免切往未列入本次資格的模型；native原案例改驗單次失敗／不新增成功audit，正常owner／reader、取消、權限與品質案例保留。這是既有零留存要求的落實，非用縮小驗收範圍遮掩未完成。其他RAG功能沒有變更。
+
+`meetingLlmPipeline`在真正local／publish寫入交易內重跑planner；paid unit離開交易後才進既有單次worker。各host每輪最多20項metadata／4個private步驟，temporary identity／DB故障不當成撤銷。Managed Job正常CMD由`meetingBackgroundHost`接ASR→discussion→LLM；只有已提交的來源／checkpoint進度才續跑下一輪，所有phase共用原600秒截止並保留150秒派送headroom。失敗、unknown或只完成metadata recovery的run，本Job內不得再進private work；其他獨立run繼續。沒有進度立即結束，不做timer polling、遞迴jobs.run或provider重送。LLM為null仍可執行免模型分支及有完整證據的publisher。各輪真實計數累加，log只有metadata，不含來源文字或身分。
+
+Production HTTP明確注入已資格化Cloud Speech upload repository；binding／bucket不符回503 `ASR_PROVIDER_UNQUALIFIED`，不建立舊fake queue。新上傳與prepare仍在同一原Session交易，prepare不複製身分。COMMIT確認後才以獨立Job binding呼叫固定`jobs.run`一次，POST空`{}`、無overrides，5秒涵蓋token與回應；unknown不重送，durable queue由後續排程恢復。Completion原始idempotent位元不可被prepare回執覆蓋，replay不再觸發Job。未確認COMMIT不派送。Job呼叫能力與Speech／LLM零留存資格分開，三份binding目前均未發布，不以env或fixture啟用真provider。
+
+Analysis Job用專用asr-job不可變映像與既有CMD，runtime SA／IAM socket／私網，taskCount=parallelism=1、maxRetries=0、timeout=600s。恢復排程每15分鐘、OAuth專用無DB權限的Scheduler SA、retryCount=0；web runtime與Scheduler各僅綁固定Job的內建`roles/run.invoker`，無cancel／overrides或project-wide權限，避免新增custom role管理（[官方角色權限](https://docs.cloud.google.com/run/docs/reference/iam/roles#cloud_run_invoker)）。此頻率以立即啟動為主、恢復為輔，降低空轉執行；實際費用仍待專案資格化，不宣稱帳單已符合。正式Job／排程／IAM建立、音訊清理、真provider／Session、browser、cloud readback與切流發布仍須完成。
+
+上一版完整基線為`9be3187a523f37bf5c1109a79cd046d31902f628`的[CI40928475291](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40928475291)，兩jobs SUCCESS。原lockfile型別、unit／三boundary／compiled artifact、PG17.11 domain71／snapshot60、40份migration及OCI18 PASS。已讀回 artifacts `12921287871`（s3/20261029T181527Z-a7f80457、migration/20261029T181648Z-2b80d1fb）及`12920229850`（dev139-oci-28fdd3c5506550c894feedd0），owned cleanup PASS；provider metadata是FIXTURE_ONLY，正式IAM／Speech／Cloud SQL／Session／browser／release仍NOT_RUN。
+
+本Rev75新增planner／host、summary parser／caller回歸與41份migration的native publication案例；真DB fixture沿正常ASR／discussion建立，synthetic transport只提供有界回應。案例包含兩段retrieve→match→compose→publish、current WBS變更後只重做matching並重用獨立embedding／compose、零模型的空來源／單葉略過compose、無候選local不動ledger、缺proof／未知費用阻擋、取消後不發布、human clear-all／protected保留、summary RLS與record完全不變。完整本機S2 442項及S3 122項PASS，strict同版本PG宣告overlay／frontend檢查亦已過；新native／OCI結果仍待本版CI，不拿40份基線代替。本機曾因新增proofs欄位的舊empty oracle與pipeline union narrowing未同步而失敗，已在原案例修正；沒有改舊SQL或增加required gate。
+
+首版`b57c566ba1abc3ae260a0b6b6a5f0a793dedb1d6`的[CI40985662364](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40985662364)605 unit（442／122／14／27）、原lockfile型別／三boundary／compiled artifact及41份snapshot60 PASS。Domain在進入publication前的合成ASR fixture被0037的word時間上界正確拒絕（`42501 MEETING_ASR_SETTLEMENT_INVALID`）：原三詞固定0–300ms超過該PCM unit實際範圍，已改依已驗dispatch起訖等分，不改ASR guard或SQL。OCI獨立因check-only exact oracle漏列新增`llmDispatch:DISABLED`而失敗，已同步同一欄位；後續原生／容器案例仍須同版重驗，兩個失敗均保留。
+
+續版`6bf9a5784fb260302bedff1faf292893177ca264`的[CI40986644955](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40986644955)仍FAIL，獨立snapshot及unit／型別／boundary／compiled artifact通過。Domain進入local負例後揭露0041的真實RLS缺陷：在設publication phase之前`SELECT run FOR UPDATE`會被UPDATE policy隱藏，正常回false而未檢查source。候選0041改在既有全域app transaction advisory lock內做普通SELECT；local無run UPDATE，publisher實際UPDATE仍須精確phase／RLS／guard，沒有增grant或放寬拒絕。Native先斷言原Session source live，再保持錯source必須42501。OCI獨立因maintenance exact oracle仍漏LLM輸出而失敗，已同步目前累加shape。Rev76的focused背景／上傳／派送與release純測試已通過，完整原生結果待本版CI，不把先前40份基線或DDL成功當成publication PASS。
+
+Rev76 source `6f6d2bf06553c732c3f6fddbf1e09d104c3166dc` 的[CI40988052664](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40988052664)624 unit（460／122／14／28）、原lockfile型別／三boundary／compiled artifact及41份snapshot60 PASS，Linux OCI18亦PASS。已讀回artifacts `12948265945`（dev139-oci-1e004375afcf42c826389034，含owned cleanup）與`12947873349`（migration/20261030T015427Z-901f67dc）。Domain通過原Session live、local空match及拒絕案例後，在paid unit結算遭`2201B invalid repetition count(s)`：0040的responseId regex使用`{1,256}`，超過PostgreSQL ARE量詞界限。原0001–0040保持bytes；候選0041僅以CREATE OR REPLACE保留原settlement函式全部身分／租約／費用／unknown語意，把此一驗證改為1–256字長度加原字元集合。新增實際256字合法ID的完整結算與257字／空值／非法字元原生拒絕；新版結果另驗，不以OCI或snapshot替代尚未完成的publisher。
+
+Cloud上傳重播若已過run deadline，僅在idempotent receipt後讀精確run的到期布林；明確過期回409並rollback，不prepare、不派送。缺失／非法metadata及真正prepare guard失敗仍503，不將同名42501一律降為revision conflict。既有terminal completion的409不改，沒有新增自動重啟或費用預留入口。
+
+本次唯讀雲端刷新遇到`gcloud`需重新驗證、不能在非互動模式刷新憑證，未登入或修改credential；目前API／Job／Scheduler／audio bucket／cache／abuse及logging狀態均未重新確認，不沿用舊觀察宣稱現況或ZDR。已請人類重新登入，程式與隔離驗證繼續。真正provider內容呼叫、雲端資源/IAM建立與正式資料／切流仍未執行。
+
+### 下游LLM unit持久化與費用隔離（0040，2026-10-30已通過隔離驗證）
+
+新增forward-only`0040_meeting_llm_units_v1`，原0001–0039 bytes不改。沿既有run的150秒lease與原main AppSession，為retrieve／match／compose保存FORCE RLS、runtime append-only的私有input／result checkpoint；run cursor及usage manifest只放stage／unit key／input hash／attempt／租約與數值帳務資訊。無actor的scan／readback／recovery不讀私人內容；run／usage policy以exact run/token metadata scope分開，不讓policy互查形成RLS遞迴。Checkpoint隨owned capture/run cascade，無FK的usage仍保留其原UUID及費用責任。
+
+每次claim、dispatch、完成結果存放都重新解析原Session；matching重驗live WBS selected snapshots及相鄰discussion，compose依當前原文與已驗私有child結果重建plan／childHash。已取消、過期、失權、錯source或舊lease只准結算自己attempt，不寫私人結果、不動新lease。未知claim／COMMIT不換token重領；同token先讀事實收據，不能因觀察不明重新POST。Known pending逾期可在原Session仍有效時續行一次，最多兩個attempt按run＋stage＋unitKey計，不因input hash改變重設；metadata的舊期限也不能回收仍有效的真run lease。
+
+費用沿既有Asia/Taipei月NT1000帳本，LLM逐attempt獨立預留，不使用Speech pool／token。依[Cloud標準Global定價](https://cloud.google.com/model-garden/pricing)，3.5 Flash input／response與reasoning採1.50／9.00 USD每百萬tokens及既有40 TWD/USD buffer；保守預留完整context，再對candidate／thought各給一份完整65536 output allowance，向上取NT111。這是單次暫時reservation，已知結果按實際回報tokens的60／360 microTWD估算結算並釋放未用額，不是每次固定費用或invoice；無cache折扣假設。Embedding的Cloud表未定義count單位，以目前800 codepoint query的UTF8 bytes、2048-token上限及可驗billable-character count的較大值估上界，最多4096 count／6 microTWD，預留30000 microTWD；不偷換Developer API單位。未知結果保留預留、停止該run新的付費stage。實際project pricing／零留存資格仍未完成，新增程式不因此啟用付費派送。
+
+`meetingLlmRepository`把provider前後檢查及private checkpoint放在同一actor transaction，費用結算才可在actor前置失效時轉metadata-only；fallback去除result正文、保留數值usage與限定provider識別。已進SQL或COMMIT的失敗不轉第二個交易。SQL也拒絕manifest NULL、透過completed.code把正文存到帳務欄、未知usage欄位及超界計價。原取消／ASR guard只對新精確LLM phase交給新guard，不擴大一般DML；deadline finish僅終止無lease的下游metadata，不會建立ready／resolution或覆寫人工資料。
+
+本機S2 404項、S2／S3 strict同版本PG宣告overlay、affected lint及兩S3 boundary PASS。首個boundary failure為未同步0040 ordered-path contract，已在原兩處path list追加；native helper初次typecheck誤引用callback內的`makeDiscussionBatch`，已改用正常`runMeetingDiscussionUnit`而非複製組裝邏輯。新PG helper在既有upload驗證最後，以另一筆正常ASR／assembly fixture及同Session下的nonce cloned run驗claim/replay、原Session／RLS／source拒絕、費用exactly-once、真租約回收、跨hash兩次上限、取消及metadata-only，保留舊獨立預算斷言。首版`379ad5b4a2679008564d6a4a9d533ccaa3822c9f`的[CI40924356439](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40924356439)單元567項（404／122／14／27）、型別、三boundary及compiled artifact PASS；Windows domain／snapshot及Linux OCI均在0040載入遇到`42601 syntax error at end of input`，下游native案例未執行，不算獨立產品失敗或PASS。修正PL/pgSQL `IF`比較內未括起的`CASE`表達式後，仍須遠端40-migration native／OCI重驗，不拿下列39份收據代替。未在本機啟DB／Docker或呼叫provider，也不新增required gate。
+
+第二版`aec4c9a05c42cba29dde08b357e47e30b04a7509`的[CI40925498936](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40925498936)已通過同567 unit、型別／三boundary／compiled artifact與Linux OCI18／40 migrations；artifact `12919419731`（`dev139-oci-3885c8c9bc4e68629afea4bb`）已讀回，owned cleanup PASS，metadata provider仍是FIXTURE_ONLY，其餘正式IAM／Speech／Session／browser／Cloud SQL／release均NOT_RUN。Windows domain首次在LLM claim遇到`42501 permission denied for table meeting_ai_budget_months`：新函式的`SELECT *`讀取了既有column grant未開放的`updated_at`；snapshot獨立遇到新LLM column grant未同步舊exact oracle。已將新usage／budget查詢改為既有允許欄位的精確投影、不增加grants，並在原retention loop同步新欄位、private checkpoint及helper；native須重驗，不以OCI可載入代替行為通過。
+
+`meetingLlmWorker`候選已補單次retrieve／match／compose的claim→dispatch→provider→private settlement；沒有在network I/O期間持有actor transaction。Dispatch COMMIT未知只以read-only確認原token，settlement COMMIT未知先讀同token的事實收據，查無才將同payload重送一次，不重送provider。Readback若是recovery先存的unknown／未發布收據，照實回報，不把本機結果當已存；只有實際private checkpoint可供後續使用。原Session／source／current WBS與lease的發布判定仍由repository及SQL執行。Generation的已知usage即使內容無法解析也入帳；embedding向量不可用時保留已驗數值usage作unusable結算，缺失／非法用量仍unknown保留預留。Worker不做多餘countTokens模型請求，也不偽造free branch的provider dispatch。新增driver unit11項與provider focused11項PASS；新增native路徑以真repository／SQL配synthetic transport驗結果及費用，尚待CI，不是真provider或ZDR證據。
+
+以上候選完整S2 416項、S2及S3 strict同版本PG宣告overlay、affected lint與script syntax PASS；worker test首次S2檢查的stage type錯誤匯入及空字串聯集已修，不以只含S3的overlay充作S2通過。`50c0f01c38e07e612570dd5040a25117b63aff62`的[CI40927243819](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40927243819)579 unit（416／122／14／27）、型別／三boundary／compiled artifact、snapshot60及OCI18／40 migrations PASS。已讀回 artifacts `12920024499`（migration/20261029T180910Z-f230a7d6）與`12920338300`（dev139-oci-e13705fbf03d13a02c563765），owned cleanup PASS。Domain的LLM helper及真driver／SQL案例已走到最後，隨後外層Session fixture在取消capture後錯誤仍期待worker Session可讀而失敗（`verifyAsrSessionBinding`，undefined≠context UUID）；已改該callback明確期待terminal查詢NULL，不改正式Session／取消guard。Domain整批仍未PASS，須受影響重驗；獨立snapshot與OCI成功不擴算正常browser／Google provider／正式環境。
+
+另補`readMeetingTaskRagCoverage`：重用同一fresh document／完整chunks／目前task proof SQL，以NULL參數略過score，不造dummy vector、不呼叫provider或重建索引；僅回覆coverage，供後續selector在沒有有效index時直接走lexical／pointer。原positive-vector排序維持；unit7項與新native complete／incomplete coverage案例已補，native待CI。
+
+0040當時尚缺的selector／免provider分支／bounded host／finalizer，已由上方Rev75候選接續，不把單次driver或未驗新候選算成完整分析。實際零留存／OrgMaster與Platform真Session、既有使用者及資料、完整foundation migration window、Cloud Run／SQL／Storage／Hosting／舊入口、writer fence／reconcile／恢復／切流與正式發布繼續計入DEV-139。
+
+### Task-only retrieval、matching 與 bounded compose 核心（2026-10-30）
+
+`meetingTaskRead`只讀目前actor可讀的同tenant／project有效task／milestone，保留legacy NULL task與completed狀態，排除group／archived／其他看板。WBS canonical文字與歷史FNV hash抽至`shared/wbsRagSource`供原client index與server共用；chunk normalize亦共用並保留UTF-16 offsets，原索引文字／hash不變，不重建整個專案。RAG的`contentHash`仍是原格式；candidate的`sourceHash`則採目前WBS row＋tags的DB SHA256，snapshot再綁定送模型的文字、path、updatedAt及source hash。
+
+Task-only檢索只接受Google／gemini-embedding-001／3072維的current版本。除hash外必須比對完整canonical內容、目前task state、連續chunk index／extent從0覆蓋到尾及全部current chunk向量，最後才在完整合格corpus按cosine排序取top6；缺／舊索引只標incomplete並用文字／pointer降級，不偷偷補索引。`readCurrentMeetingTaskSnapshots`重新讀取目前來源並比對snapshot，可識別parent path改名而child timestamp／index內容未變的情況；後續provider回覆存放須在同一個重新授權的actor transaction使用此重驗，不能只比child updatedAt或FNV hash。
+
+純候選核心先live scope filter，再合併lexical4／RAG6／pointer2並以未用文字候選補滿12，分數同值按canonical UUID穩定排序；代碼只作完整boundary比對，不將`T-12`／`T-123`共同前綴當命中。每個model candidate文字最多800 Unicode code points。Matching prompt只以本discussion的原文及local zero-based inclusive word quote作證據，前後400字脈絡不能當本段引文；解析拒絕unknown欄位／任務／越界quote與重複task。`related`／`decision`／`action`只是關係分類，evidenceScore仍是未校準的model訊號，不授權改task或自動接受。
+
+Compose plan以fanout8形成穩定merge tree，每個子摘要／輸出最多2000 Unicode code points；provider只看該node至多8個direct child摘要，回覆需覆蓋相同unique child IDs，無關排列不作拒絕理由。完整有序leaf coverage與hash由server沿已驗child結果重建，不要求模型在根節點回抄整場UUID，亦不把完整transcript塞入舊同步合成endpoint。Empty／single leaf明確處理，不製造空摘要；coverage只證來源與輸入完整性，parser不宣稱能證明語意真實。
+
+首版核心source `906c1cd70171746a931d1dd87b940e88238e99cb` 的 [CI40913132805](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40913132805)兩jobs SUCCESS：原lockfile strict型別、538 unit（375／122／14／27）、三boundary／compiled artifact、PG17.11 domain71／snapshot60、39 migrations及OCI18 PASS。Artifacts `12915226911`（s3/20261029T163758Z-106de3d8、migration/20261029T163846Z-ba7070bc）與`12915705417`（dev139-oci-1659bc5d08421b9bf2875cef）已讀回。新增native helper沿既有meeting-upload檢查，用同一nonce workspace的獨立board實驗八個task完整排序、latest stale／同宣告hash異內容、連續overlap／缺口／缺尾、missing embedding、舊state與ancestor path失效、outsider及錯source version拒絕。Metadata仍FIXTURE_ONLY，真provider／cloud IAM／browser／正式SQL／release NOT_RUN。
+
+Source審查續修三個具體邊界，不改0001–0039或grants：chunk range保留numeric整數／範圍判定，再轉bigint，避免合法`N.0`因text cast出現22P02，native加入scaled JSON number正例；matching重用ASR literal word alignment，拒絕不存在於raw的word anchor，保留NFKC等價原文；compose以目前plan的children重算中間結果childHash，拒絕相同ID但leaf內容已變的舊checkpoint，單次memo避免重複展開。上述修正版與下列Cloud transport的本版受測收據見下段，不沿用首版收據代替新增案例。
+
+`googleCloudMeetingProvider`新增固定ProJED OAuth的text-only Cloud transport，尚未接Job：query採us-central1的[embedding Predict](https://docs.cloud.google.com/gemini-enterprise-agent-platform/reference/models/text-embeddings-api)、`RETRIEVAL_QUERY`／3072維／autoTruncate=false；matching／compose保留既定`gemini-3.5-flash`候選與global endpoint，提供同prompt／generation config的[countTokens](https://docs.cloud.google.com/gemini-enterprise-agent-platform/reference/rest/v1/projects.locations.publishers.models/countTokens)及非streaming [generateContent](https://docs.cloud.google.com/gemini-enterprise-agent-platform/reference/models/inference)。每method最多一次POST，不做model fallback或隱式重送；輸入／回應／時間有界，無Files、conversation history、tools或explicit cachedContent。完成／阻擋／截斷結果都保留可驗證的[usage metadata](https://docs.cloud.google.com/gemini-enterprise-agent-platform/reference/rest/v1/GenerateContentResponse#UsageMetadata)，缺資料不記零；thought text不作結果，非STOP／cached context／model漂移標unusable，不把無正文當免費。Embedding token／billable-character數只是provider metadata，費率單位仍待qualification，不猜作invoice；adapter不授予零留存、費率或派送資格。
+
+修復source `f90202ca6e00f2ed12c798577878c6316d6b15d6` 的 [CI40914809823](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40914809823)兩jobs SUCCESS：原lockfile strict型別、552 unit（389／122／14／27）、三boundary／compiled artifact、PG17.11 domain71／snapshot60、39 migrations及OCI18 PASS。Artifacts`12914979598`（s3/20261029T164958Z-cf51b0aa、migration/20261029T165118Z-7d438c60）與`12914573630`（dev139-oci-f1a6d3f62798c90f0e20158d）已讀回；新增scaled-number正例實跑，provider10項測試僅fake fetch，含token延遲期間取消仍零POST、body／fetch期限、512KiB response cap、非法JSON／UTF8及不可用生成結果保留usage。Owned cleanup PASS；metadata仍fixture，真Cloud IAM／provider／browser／SQL／release NOT_RUN。2026-10-30嘗試唯讀Cloud Console查核data logging時停在Google重新驗證身分頁，設定仍未知；未操作密碼、data logging或API開關，不以登入頁當資格證據。
+
+尚未接durable retrieve-query／match／compose的預留、派送、結算／checkpoint與finalizer，也沒有把目前core／synthetic結果認列成真ASR或analysis ready。原零留存、人工優先、private資料、migration／writer fence／正式切流發布分母全部保留，不新增required gate。
+
+後續LLM的向量、候選、回覆與摘要checkpoint沿editor-only私有儲存隔離；run cursor只留進度／ID／hash，不能讓無actor的metadata掃描或費用結算讀到私人內容。Provider前後重驗selected snapshot及原Session，和同交易的結果存放一起完成，人工resolution／正文與links仍由既有review／CAS路徑維護。
+
+下一個持久化切片沿既有run／Job：assembly done後每discussion一個retrieve-query及matching unit，再處理fanout8 compose node；各次provider I/O放在短actor transaction之外，回覆後重新解析原Session、重驗scope／source／lease及selected snapshots後存editor-only checkpoint。沿既有usage／月額做各stage費用預留，不借用Speech專用cost pool／ASR checkpoint，不另建queue；取消或失權只做exact-attempt accounting，不發布內容。既有`meeting_task_match_results`／resolution仍是human review面，不能直接拿來當草稿checkpoint或宣稱ready。
+
+### Discussion persistence 與有界 host（0039）
+
+`0039`沿既有run／revision／lease與原main AppSession，從private ASR checkpoint組裝discussion草稿；不另建queue／service／scheduler。每個來源以最多16段一批原子新增transcript與cursor，每unit最多8批，沿150秒lease與10秒headroom。Canonical source-wide字詞、時間、來源SHA／generation與完整coverage須一致；原Session、權限、source、deadline或lease失效即停止私人寫入。重疊去重只接受literal文字及唯一時間對應，大小寫／字寬差異保留字詞；NFKC仍只用於raw alignment。
+
+草稿沿既有revision／segment唯一索引append-only，runtime只增精確12欄INSERT；已提交批次須以同內容讀回，不以cursor移動猜成功。Unknown commit先唯讀查核，證明未提交且lease仍有效才允許一次相同payload重送。換lease後舊token不得改寫，續跑重算後核對既存邊界hash／word cursor；Session失效不轉maintenance寫私人內容。Scan與exact-token finish僅處理run metadata，保留capture／checkpoint／usage／budget。原0001–0038 SQL不改。
+
+現有ASR Job在同一10分鐘取消signal內接discussion host，每輪最多20筆metadata／4個source unit。私人工作由原Session resolver啟用，與付費ASR資格分開；Session契約未發布仍只做metadata。完成assembly後run仍queued／retrieve，active revision、capture與resolution不變；matching／compose／publisher尚須完成，不能顯示整場analysis ready。原workspace／看板／權限及正式資料／切流發布範圍不縮減，無新增required gate。
+
+本機509 unit（S2 346／S3 122／migration14／release27）、strict app／S2／S3／jobs同版本宣告overlay與affected lint PASS。既有native upload helper新增實際repository factory、claim競爭／重播、wrong source／word／Session、撤銷、expired／stale lease、metadata-only finish及完成草稿仍inactive／budget不變；遠端結果見下列受測source收據。一次本機migration rehearsal在SQL仍更新時，以`BINDING_INVALID`停止於source-preflight（expected exit 2、actual 1），catalog oracle未執行、不列PASS；nonce `c0ae0b81df5a4d72a31d07d4ecf2832e` 的temp root與postgres process已核對不存在，原port未記錄，不猜值。後續PG／OCI只用現有遠端CI；本輪只有隔離fixture與metadata讀取，未動正式資料或雲端IAM／Secret／credential／billing，亦無provider內容派送。
+
+Source `4b9e9b76d22e9da39a9f6f068dc647d105d1d0f5` 的 [CI40899598294](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40899598294)整體FAIL：domain upload helper的新Session撤銷案例在cleanup嘗試還原已提交的撤銷，觸發既有`app_session_revoke_v1`不可逆保護（23514）。此為fixture錯誤，不削弱guard；改在同一admin fixture交易中以真runtime role與已驗有效scope先驗not_committed，再撤銷並驗append拒絕，最後rollback整個交易，不反轉已提交Session。成功factory append與後段案例在首輪仍未執行，不列PASS。獨立原lockfile型別／509unit／三boundary／compiled artifact、PG17.11 snapshot60及OCI18／39 migrations通過；artifacts `12909735538`（migration/20261029T151937Z-2a39a0ec）與 `12908487226`（dev139-oci-64878bb795339f876e82f4f1）已讀回。僅修native harness，0039 SQL與正式Session語意不變，完整修復source續跑同一既有CI。
+
+Source `f6a317482f29458b667ce8b739860d010057fdf4` 的 [CI40901292375](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40901292375)仍整體FAIL，與前輪撤銷fixture失敗獨立：新claim／拒絕／真repository append與readback／草稿inactive斷言已走完，舊cleanup卻先單獨刪除producer run，觸發transcript外鍵23503。保留此FK，刪除多餘的單獨run DELETE，改沿既有workspace原子cascade清理capture／transcript／run；未放寬RLS、取消或資料完整性。獨立509 unit／原lockfile型別／三boundary／compiled artifact、snapshot60與OCI18／39 migrations仍PASS。Artifacts `12909603251`（migration/20261029T152944Z-cfdbabfb）及`12909612701`（dev139-oci-10a121fe32b8f3bb0aec64c1）已讀回；metadata為fixture，cloud IAM／真ASR／release NOT_RUN。整組domain驗證仍未PASS，修正同一native helper後續跑，不把功能斷言已走完當整體通過。
+
+修復source `c10fa37ec028352bd5cd1360a20e98ddf1f4ee6a` 的 [CI40902613232](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40902613232)兩jobs SUCCESS：原lockfile strict型別／509 unit（346／122／14／27）／三boundary／compiled artifact、PG17.11 domain71／snapshot60、OCI18及39 migrations全數PASS。Artifacts `12908964105`（s3/20261029T153606Z-baede8e5、migration/20261029T153724Z-63b6e646）與`12910840224`（dev139-oci-ee0cced52b75aa4ab6c3e17e）已讀回；discussion真factory／撤銷拒絕／exact readback／inactive草稿與FK保護、workspace cascade／owned cleanup，以及容器預設CMD的ASR＋discussion metadata正常入口均已實跑。兩輪有效失敗保留，未改0039 SQL、不可逆Session guard或FK，也不新增required gate。Metadata／IAM仍是fixture，normal browser／真ASR／正式cloud／release NOT_RUN；RAG／matching／resolution／compose／publisher、cleanup與原外部Session／既有使用者資料／舊入口／writer fence／切流發布仍全部計入DEV-139，不以草稿或隔離CI結案。
+
+### 現行 ASR host 與回收候選（0038）
+
+`meetingAsrJob.ts` 使用 managed main 的 runtime IAM／Unix socket 與既有 Session resolver，不開 HTTP port、不借 migrator／importer、不複製使用者 cookie。每次掃描最多20筆 metadata、派送最多4個 unit，整次有10分鐘期限；每 unit 在150秒 lease結束前10秒中斷storage／decoder／provider I/O，留下獨立帳務結算時間。掃描順序每分鐘輪轉，暫時不可用的前頁不永久遮住其他工作。程序停止後不領新 unit，已送出結果照原 token 結算，未知 COMMIT 不在同程序重領／重送。
+
+Forward-only `0038_meeting_asr_control_v1` 在同一 app transaction lock 內重讀 run／unit／pool：過期 pending 才能按未送出清算，已 dispatched 只可記 usage unknown；未到期或新的 lease 不受 stale scan影響。原 Session仍有效且0037重試條件成立時可排第二attempt；Session無效只改run／ledger metadata，不寫private checkpoint／capture。Tokenless pool僅釋放未分配餘額，餘額歸零且replay不再退款；owner status沿既有0037規則修復terminal capture佔位。新增helper均invoker／固定search_path／非PUBLIC、runtime-only，沒有新queue或一般ledger API，0001–0037 bytes保持不變。
+
+專用 `asr-job` image繼承既有media layer，普通web預設仍為`final`。`--check-only` 在config／credential／DB載入前回報CHECK_ONLY、runtime NOT_CONNECTED及provider NOT_RUN；既有OCI verifier將實跑compiled entry、ffmpeg與egress trap，不將check-only當provider通過。`CURRENT_MEETING_ASR_BINDING`目前NULL，Production identity pins仍空；正式project的API／data-logging／bucket資格尚未完成時，新音訊派送停用，但安全的逾期／費用回收不因此停用。暫時性identity state／DB失敗不當作Session撤銷。
+
+本機466 unit（S2 305／S3 120／migration14／release27）、S2／S3 strict同版本宣告overlay、受影響lint與兩S3 boundary PASS；原生PG recovery與OCI正常入口結果見下列受測source收據。最終discussion≤30秒／800字、來源詞索引重編、RAG／matching／resolution／publisher、cleanup、真provider與正常入口、外部Session與既有資料、雲端／舊origin／writer fence／切流發布仍計入DEV-139完成分母；不增加required gate。
+
+0038首輪 source `3e30ec8228f35dac80d86a7143654697a68281d0` 的 [CI40879190180](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40879190180) 整體FAIL：新增pending recovery已完成，但fixture先由completion建立舊10,000,000微元預留，再拍before基線；prepare替換預留後，測試誤以新增48,000為全程差額，實際為−9,952,000。已將五組基線移至fixture建立前，保留pending／unknown hold、活躍lease拒絕退款及lost/orphan淨0的語意，不改0038或先前SQL。後續新native cases尚未執行，不以此輪宣稱完整回收通過。原lockfile型別／466 unit／三boundary／compiled artifact、snapshot60與OCI17／38 migrations均獨立PASS；artifacts `12899702608`（migration/20261029T131254Z-77555cfa）及 `12899473258`（dev139-oci-5985f67991435d828cf36ed1）已讀回。ASR image `sha256:9ce1a23d84da6b2726675360a55bcf26cbeb86db7a354e6df8fcfc19c4c48389`實跑非root／ffmpeg／offline check-only，owned cleanup PASS；metadata仍fixture，provider NOT_RUN。修復source續用同CI驗證。
+
+修復 source `a2b872fecc1b50a742006f9f5a23c267b8d094c2` 的 [CI40880215240](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40880215240)兩jobs SUCCESS：466 unit、原lockfile型別／三boundary／compiled artifact、PG17.11 domain71／snapshot60及OCI17／38 migrations全部PASS。Artifacts `12899892837`（s3/20261029T131827Z-cb3982d1、migration/20261029T131946Z-b3dacb4c）與 `12898879834`（dev139-oci-9c6306f261c74182f203d5fa）已讀回。原meeting-upload helper已實跑五組回收／stale scan／lost Session／orphan案例，包含真repository、費用差額、無private寫入、GUC恢復及無額外UPDATE grants；第一輪fixture FAIL保留。後續補專用容器預設CMD在同一隔離DB的maintenance正常啟動／退出，不新增required gate；目前provider／正式雲端／正常browser／release仍NOT_RUN。
+
+正常入口補驗 source `97b51d3f86dcfa6635b22bb82d49dabfddc371cd` 的 [CI40881548437](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40881548437)兩jobs SUCCESS：原lockfile型別／466 unit／三boundary／compiled artifact、domain71／snapshot60及OCI18／38 migrations全部PASS。已讀回artifacts `12900213741`（s3/20261029T132742Z-771a0a4b、migration/20261029T132857Z-1c3227c0）及 `12899994042`（dev139-oci-510ca99038ab12f470839898）。ASR image `sha256:4accd9949a91376fc6edb71054386165d4a5bd6d946b8b577959e96168302f3e`以預設CMD、runtime IAM-shaped login、短期metadata fixture token及Unix socket進入真compiled host；精確local SCRAM規則要求token，空佇列回報dispatchDisabled／全0計數後正常退出，測後還原隔離HBA並完成owned cleanup。這是實際容器／PostgreSQL認證路徑，仍非Google IAM／Cloud SQL或真ASR provider資格；0001–0038 SQL bytes不再修改，正式環境及完整產品交付持續未結案。
+
+### Discussion assembly 與來源定位回聽候選
+
+`meetingDiscussionAssembly.ts`每次處理一個frozen verified source（最多7個checkpoint），驗capture／source version／ID／原SHA與generation、連續unit／chunk及完整sample coverage，同來源decoded SHA一致；沿既有normalizer與±2秒decoder slack，不裁掉真實samples。缺件、錯序、跨capture或proof漂移拒絕。Generator逐段輸出，不一次載入整場轉錄，不寫DB／active revision或標ready。
+
+固定`dev139.discussion.v1`以句末、800ms停頓、整數邊界最多30秒／800 Unicode code points切段；discussion不跨provider chunk接縫，不增加換行或拼黏英文詞。NFKC／case fold僅供word與raw對齊，未錨定的非標點文字拒絕；raw保留原始slice，normalized為identity mapping。每個上傳source的`source_word_index`跨chunk累加，換source重設；輸出`sourceAudioRanges`的`from_word/to_word`是source-wide inclusive索引，後續candidate的`fromWord/toWord`則是該discussion內wordOffsets的local inclusive索引。只在相鄰source真實重疊、宣告幾何吻合且文字／時間唯一對應時去重；不明或模糊時保留，不全場刪重複句、不壓平gap。前後各400 code points context由獨立helper提供，不加入本段evidence。
+
+HTTP review對完整且一致的word source anchor選exact verified current-source row，明確來源不可用時回null，不改播重疊檔案；無單一明確anchor的legacy維持原time fallback。新增optional `audioSourceStartOffsetMs/EndOffsetMs`，回聽在metadata就緒後將capture時間轉為檔內位置，於discussion終點停止。切帳／換capture／卸載會清除自己的audio與事件，舊`play()`晚完成不得停掉新audio。舊資料沒有來源時間欄位時維持原行為。
+
+本機新增assembler14項、caller7項、strict app／S2／S3及affected lint PASS；native review fixture已改為真正contract的`fromWord/toWord`與合成word anchors，包含重疊decoy精確選檔及來源purged時禁止換檔、finally還原。Source `3ab60a5358dd8b23130648b4c62709445673caea` 的 [CI40888164747](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40888164747)兩jobs SUCCESS：原lockfile型別／482 unit（319／122／14／27）／三boundary／compiled artifact、PG17.11 domain71／snapshot60、OCI18及38 migrations全部PASS。Artifacts `12902554707`（s3/20261029T140844Z-817936b2、migration/20261029T140937Z-62f0d05a）與 `12903168014`（dev139-oci-653a8a901de8848b6b2ab0a1）已讀回；新native來源選擇／purged拒絕及quote roundtrip皆在既有helper實跑，owned cleanup PASS。普通browser／真麥克風／provider仍NOT_RUN。此輪不改0001–0038 SQL。下一步仍須把完整來源assembly持久化、RAG／matching／resolution／compose及publisher接回durable host，沿原Session／source／取消／費用與人工內容保護；現有ASR完成只到retrieve，不因pure helper或回聽修正宣稱整場分析完成。
+
+Platform DEV-007 source `a4268b68a054ed95b99198a9f822abf340ef4ce7` 的 [Source QC40841930197](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/40841930197)及[native40841924869](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/40841924869)均PASS。Neutral005／006只處理ProJED專用roles／membership／CONNECT與初次owner database CREATE window；migrator→owner正常DDL鏈保留，runtime／importer不入owner。SQL接受可SET實際DB owner、或operator非effective owner且有direct CREATE／CONNECT grant option兩條路徑；未知路徑拒絕。006先提交撤CREATE及catalog讀回，再寫ledger；metadata失敗不會回滾已完成撤權。同SQL checksum的重播保留原合法ledger source，不為無關GitSHA重建歷史。
+
+Native artifact `12883615809` 的 `output/dev-007/foundation/2026-10-29T08-27-37.429Z-b41e4866/result.json` 已讀回PASS，19項檢查及4項預期拒絕／注入失敗（runtime/importer SET owner、migration22012、006 checksum conflict），無FAIL／BLOCKED；另Platform24及OrgMaster21 checks PASS。測試以真非superuser IAC session驗兩種grantor配置、錯target／role drift不修復、同SQL來源重用、ProJED0001 raw blob建立schema、故障後撤權與admin row／sibling ACL保留。0001來自ProJED `1f5f889`，不是完整33 migrations或真IAM認證。Cluster／port／temp cleanup全true，沒有本機DB或正式環境操作。首輪及第二輪fixture／source snapshot失敗保留在Platform DEV-007唯一spec，不把Source QC PASS代替native、也不重寫FAIL。
+
+`server/meetingAudioPcm.ts`與`server/googleCloudSpeechProvider.ts`是後續ASR的獨立元件：前者以固定pipe-only ffmpeg、乾淨child env、受控timeout／abort和sample上限解碼，保留合理2秒codec／clock容差，不裁切原samples，分為50秒PCM；10MiB source上限與既有audio input共用。後者用metadata-token port作一次V1 inline PCM請求、固定model／語言／billing target、禁redirect／重試／Files／LRO，保留HTTPstatus及requestSent／usageUnknown；不回傳原始錯誤、token、audio，缺billing metadata不補零，合法空protobuf results保留no-speech語意。這些元件尚未接worker／HTTP錄音入口，不代表真ASR完成。
+
+Focused fake-child／fake-fetch17項、strict S2 no-emit overlay及affected lint PASS；新decoder最初缺五個KernelError union成員的型別失敗已補精確code，沒有鬆綁型別。Docker新增獨立media-runtime layer提供ffmpeg，普通web／migration image不增media toolchain；既有Linux OCI驗證在DB／HTTP檢查後用nonce-owned、非root、read-only、network=none容器實跑五種合成音訊格式與sample分片。下列遠端CI已核實真codec結果；只支持合成tone／codec，不是語音辨識、帳戶零留存或provider資格，沒有API啟用或付費呼叫。
+
+**W37 source `4b8fd1446a4e09e754e87e0d3853ef1eda54b205` 的 [CI40844810661](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40844810661) 兩jobs成功。** 原lockfile strict server／frontend、三boundary與compiled artifact PASS；S2 230／S3 117／migration14／release25共386 unit PASS。Native artifact `12884910836` 的PG17.11移轉60／S3 71checks PASS，33 migrations與45table projections保持；browser smoke NOT_RUN。OCI artifact `12883969193` 的16checks PASS，非root／read-only／network=none以FFmpeg5.1.9解碼52.125秒合成tone：WAV／WebM／OGG各834000 samples、MP3 835200、MP4 835584，依800000 samples上限切兩段，保留codec padding；owned container／socket／volume／credential cleanup PASS。Runtime／jobs／media image IDs分別`sha256:3aebd37dd0a96f63f469afe2f87479eb8ff5bfeabb59b731f39db4c43a3a5bab`／`sha256:cd28e16012d6ede55a7754458b9aab0991a47e23388a974c5a7a142c06aea112`／`sha256:2c1cc2db4a026d26dd1cb5c8f5ade7e20187be322f9a87615bf1513e7fdea9ce`，僅屬隔離產物，不是已push的manifest digest。metadata與IAM仍為fixture，speech recognition／provider／正式cloud／release NOT_RUN。
+
+W38接回現有HTTP錄音／review：`meetingAnalysisService`使用既有meeting-control與audio端點，reserve→帶actor的PUT→verify保留source version、SHA、bytes與取消／切帳保護；HTTP meeting draft走save-projection以保留record／review CAS。Sidebar解除HTTP隱藏，預算不足不再顯示已排隊；原feature flag與legacy來源仍依既有入口。這是candidate接線，尚無正常browser／真麥克風驗收；HTTP retry尚無server實作，不假裝支援。
+
+`meetingAsrWorker.ts`新增一個bounded unit核心：從claim核對canonical GCS路徑、generation／hash／bytes／MIME，解碼保留samples，按50秒chunk送一次provider；送前需repository確認目前actor／Principal／source／lease／deadline／budget。Dispatch COMMIT不明只讀回同claim，不重領或重送；provider未知結果保留usage_unknown，已送出後取消仍交accounting-only結算，不將取消當免費。Word offsets保留實際音訊來源與全局時間，不由文字長度造時間；provider允許的100ms末端rounding明確收斂至實際sample末點，整個詞已超出來源則拒絕並保留未知用量，不截音訊。此核心的repository仍是明確待實作的DB seam，mock測試不能證明DB grants／防晚到寫入，尚無可運行的durable host。
+
+`googleCloudSpeechPricing.ts`採[V1無data logging標準價](https://cloud.google.com/speech-to-text/pricing)$0.024/min、逐request向上進位1秒，16kHz samples以BigInt計算、最多兩attempt預留；不扣免費額、不賦予unknown重送權。40 TWD/USD是保守預算換算，並非即期匯率或invoice actual，現有NT1000/月不增加；W38 aggregate estimator缺totalBilledTime時仍為未知、不補零，成功Recognize的現行估值規則見下列W41。Focused核心14／價格6項、frontend adapter/service/caller/review37項、affected lint與app types PASS；S2／S3 strict overlay亦PASS。W38 source `4128ebe09b1086d739f7a41a5d075c3b80e13584` 的 [CI40848061654](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40848061654) 整體FAIL：S3 unit的共享dataBackend fixture漏新增isHttpBackend匯出，5例在esbuild harness載入前失敗，S3為114 PASS／5 FAIL。獨立的S2 250／migration14／release25、原lockfile型別／三boundary／compiled artifact、PG17移轉60／domain71與OCI16均PASS，未取消或把整體改記PASS。已補fixture並增加HTTP草稿確實走projection CAS而非普通upsert的caller案例，既有caller預設仍非HTTP，新案例獨立HTTP模組並finally還原fixtures；整組S3 120/120與affected lint PASS。新source待CI，不沿用舊CI作新source執行證據。已知local checkout缺pg宣告，overlay只借用現有相同版本宣告，不修改lock或放寬tsconfig。
+
+後續以既有run／lease／usage／cleanup落實worker repository／forward-only migration、durable host及零留存project readback；worker逐unit重新核對Principal／guard／既有UUID與private-record／Board權限，以run綁定建立時的AppSession context，沿既有撤銷／期限及sourceSessionExpiresAtMs核對，不複製cookie或bearer至Job、不延長Session；handoff60秒是交換期限，並非AppSession壽命。ASR Job沿runtime IAM identity／固定app role新增exact Unix連線入口，不借用migrator或importer身分。完整原功能、使用者與資料、正常origin、writer fence／恢復／切流／發布仍計入目標；本次沒有IAM／Secret／credential／billing擴張、正式資料寫入或付費provider呼叫，也不新增required gate。
+
+W38 fixture修復 source `793e319a62757fddd42377f68f98069f002346b3` 的 [CI40849409859](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40849409859)兩jobs SUCCESS；S2 250／S3 120／migration14／release25共409 unit、原lockfile型別／三boundary／compiled artifact PASS，PG17.11 domain71／snapshot60與33 migrations／OCI16 PASS；artifacts `12885739333`／`12886007956`已讀回，generated tone與provider NOT_RUN界線不變。不是改寫原40848061654的5項FAIL，後續0034與Session resolver尚不在該受測source內。
+
+W39新增forward-only`0034_meeting_asr_session_binding_v1`：只加run→既有main AppSession的不可變context UUID reference、exact-run metadata讀取及same-context bind，沒有新auth table／通用queue、cookie複製、延長Session或ASR dispatch／transcript權限。綁定由既有actor transaction重新授權來源；trigger限制唯一新欄位、完整凍結來源／未到期run與active同actor Session，rebind拒絕，原cancel guard保留。歷史匯入run的新欄位預設NULL，不猜配當前使用者；Session實體刪除保留該reference，missing Session停止、不得因此開放換綁；bound Session policy亦直接排除revoked／expired。
+
+`PostgresAppSessionStore.readMeetingRunSession`以exact run的唯讀transaction取得既有proof；`resolveMeetingRunActor`與HTTP共用同一`actorForSession`，每次重讀目前Platform state與canonical mapping、核對UUID／guard／revoked／source-session horizon，fresh actor仍最多10秒，不因handoff過期重做交換或新增owner。Production pins空時先拒絕、不碰Session store。27項Session unit（含4個新ASR分組）、S2／S3 strict overlay與三boundary PASS；原auth service的7個未修改ASCII regex有既有`no-control-regex` lint errors，新增Store／native helper lint無error，不宣稱全檔lint綠燈。Native在原meeting-upload helper加入nonce-owned proof／Session的bind／replay、無Session／rebind／跨帳拒絕、exact-run讀取、logout、實體Session刪除後禁止換綁及singleton pool實際同backend PID的context清理；首次W39 source `a8c32c5dc7cce7e71dfb355545f3334023b39f66` 的 [CI40851257157](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40851257157)整體FAIL：原生domain／新增Session binding與OCI34份migration已通過，snapshot retention oracle仍停在舊UPDATE欄位清單，精確拒絕新增authorization_context_id。已只補此欄位與bind helper的runtime-only／非PUBLIC EXECUTE核對，沒有擴成table級UPDATE、跳過oracle或修改SQL bytes；其他獨立check繼續完成，整體待修復source CI。不能把mock resolver或W38結果當新SQL已全部驗證。
+
+W39修復source `f8f536bc40290b3bc1bdd8f58df718cadc7304d2` 的 [CI40853073178](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40853073178)兩jobs SUCCESS：原lockfile型別／三boundary／compiled artifact、S2 254／S3 120／migration14／release25共413 unit PASS；PG17.11 domain71／snapshot60、34份migration及OCI16 PASS。已讀回artifacts `12887973207`（`s3/20261029T095616Z-a67a343d/result.json`、`migration/20261029T095733Z-779f99dd/result.json`）與`12888720566`（`dev139-oci-fe94e457ff4e75f31a64f403/result.json`）；0034 canonical Git blob SHA256 `b2fd3ca2e9d9c9d6e1288e6ea13885cbd0df1a195924d0c9158abf165cdcfdf4`與OCI相同，不混用Windows CRLF hash。新bind／delete／rebind／backend-PID assertions在原meeting-upload helper內無條件await完成，未另新增命名case gate；snapshot精確grants／helper EXECUTE oracle已通過。原40851257157 FAIL保留，未改寫0034 bytes來重跑。OCI仍是合成IAM／音訊、owned cleanup PASS，真Speech／provider auth／Cloud SQL／browser／正式release NOT_RUN。
+
+2026-10-29唯讀ProJED enabled-service inventory有56項，未啟用`speech.googleapis.com`；未啟用API或更動權限，亦不由此推論data-logging設定已qualified。下一步仍是ASR dispatch／usage與transcript repository、durable host／cleanup，再做實際project零留存與provider／正常入口驗證；Session binding完成不代表真ASR或完整DEV-139已完成。
+
+W40新增forward-only`0035_meeting_cloud_speech_reservation_v1`：Cloud Speech模式的completion沿舊來源驗證完成後，在同一actor transaction綁main Session、核對GCS verified generation／hash／size與時長，按$0.024/min、40 TWD/USD預算值、逐request進位1秒與兩attempt預留全來源上界，包含2秒decoder slack；現有NT1000/月不增加。舊Gemini預留僅在pending／reserved／actual NULL且尚無處理進度時可替換，舊usage保留known-zero/superseded-before-dispatch的事實；NULL dispatch／未知或已處理legacy拒絕，不清帳猜配。Budget行鎖與數值上限、run升級／cost pool採原子交易，idempotent replay不重留款。舊cancel／Session guard保留，新的cancel invariant防新增column grants擴張取消目的；沒有ASR dispatch、transcript或一般ledger API。
+
+`MeetingUploadRepository({cloudSpeech:true})`接上此原子準備流程，普通HTTP runtime目前尚未啟用該選項，須隨真正worker／provider接線完成後使用，不能把DB queued當作已辨識。原meeting-upload native helper加上預算不足不建pool、legacy unknown不退款、精確CHECK fault令pool INSERT失敗時全交易回滾、成功／重播與取消一次退款、月額不得由runtime提高。此新SQL與新增DB assertions尚待本輪遠端CI，既有34-migration證據不外推。
+
+Google官方[Speech定價說明](https://cloud.google.com/speech-to-text/pricing)明列實收server error不計費；provider／unit核心現在只對確收500–599且分類吻合者給`rejected_unbilled`，逾時／transport／malformed與4xx仍unknown，不新增自動重送。Focused provider／worker24項PASS。`managedRuntimeJobConnectionOptions`新增固定runtime IAM login／exact Unix socket及每新connection取得短期token的async password callback；既有web只loopback proxy、migrator/importer helper不接受runtime的限制保留。10項managed DB helper unit、S2／S3 strict overlays與三boundary PASS；metadata與IAM仍僅合成，尚無runtime Job host或正式API啟用。
+
+W40首次source `86242d76056d700e3c2505dda29c83464fbb8fd7` 的 [CI40857913489](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40857913489)在0035新草案CREATE FUNCTION的CASE條件解析失敗（42601），DB／snapshot／OCI相同前置失效；尚未進入新預留行為案例。0035未曾成功套用或發布，修正此未套用草案的CASE括號；0001–0034不改。原FAIL保留，不以通過的unit／types代替DB驗收；修復source續用原CI，無正式操作。
+
+W40修復source `ae735dd471c0118e291368cbb81a6349c2040182` 的 [CI40858423982](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40858423982)兩jobs SUCCESS：S2 255／S3 120／migration14／release27共416 unit、原lockfile型別／三boundary／compiled artifact PASS；PG17.11 domain71／snapshot60及35份migration、OCI16 PASS。已讀回artifacts `12890781648`／`12891000337`；原meeting-upload helper的滿額、unknown拒絕、指定CHECK rollback、96,000微TWD預留／replay／cancel assertions已執行，並非只看migration能套用。前次42601 FAIL保留為同一前置失效，未把衍生DB失敗當多個獨立缺陷。新0035已通過套用／重播，後續維持forward-only。Provider、Google IAM／真runtime Job連線、Cloud SQL、browser及正式release仍NOT_RUN；實際claim／dispatch／settle／transcript與background host仍是下一段，未以動態預留完成縮減完整DEV-139分母。
+
+
+W41的forward-only `0036_meeting_asr_claim_dispatch_v1`候選沿現有run領取一個來源／50秒chunk，使用150秒lease與server-only UUID token；同token可讀回同claim，其他token不能重領未到期unit。每attempt的保守預留從既有cost pool分配，月預留不重加；unit identity與token唯一約束保留。送出意圖只保存7個sample／digest／offset欄位，不保存provider音訊或raw transcript；送前再次核對原main Session與其source-session horizon、private-record權限、原source version／GCS generation與hash／metadata、lease／deadline及預留月份。取消、過期、撤銷、錯Session／token／source均不可取得paid intent。原prepare／cancel欄位不變保護維持；0001–0035已qualified bytes不改。這是claim／dispatch SQL與隔離案例候選，尚未具備settlement、lease recovery、transcript發布或durable host，不啟用普通runtime的Cloud Speech選項；完整DEV-139與真ASR驗收分母保留。
+
+成功Recognize的費用處理精簡：官方[回應契約](https://docs.cloud.google.com/speech-to-text/docs/reference/rest/v1/speech/recognize)的totalBilledTime是可選metadata，[V1價格](https://cloud.google.com/speech-to-text/pricing)按送入音訊、channel及每request一秒進位。因此已確定成功、且已知實際送出的16kHz單聲道PCM sample數時，缺metadata可依精確樣本長度向上估算，不再要求額外人工帳單證據才能接受結果；標記budget_estimate_not_invoice，不宣稱invoice actual或零費用。存在metadata時仍驗證不超過PCM上界。無回應／未知結果繼續usage_unknown、保留預留、禁止自動重送；估值不授予重試權，不提高NT1000月額。這項精簡不更動供應商零留存條件，也不新增required gate。
+
+
+W41首輪source `db3541b9241f29d4fa737fc3e98d274b86bf1edf` 的 [CI40862926097](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40862926097)整體FAIL：新增native fixture先對固定payload keys排序，expected卻將chunkIndex排在chunkCount之前；在claim行為之前即斷言失敗。已刪除這個只重述常數形狀的重複斷言，保留真正SQL payload檢查、競爭／replay／source／Session拒絕案例，沒有放寬安全oracle。36份SQL套用／重播、snapshot及OCI已獨立PASS，其他檢查照常完成；新claim／dispatch行為仍NOT_RUN，待修復source CI，不把migration套用等同新行為通過。本次不改任何SQL bytes。
+
+同批補`meetingAsrSettlementInput`的JSON-safe normalizer：沿既有provider文字／詞數上限、保留小數毫秒、校驗source word index與unit時間範圍，成功結果以精確samples估值，不保留raw provider error。Focused 9項與S2 strict overlay PASS；此元件尚未接DB settlement，不代表已能結算或發布逐字稿。
+
+
+V1正式接線的權限收斂：官方[V1 REST quickstart](https://docs.cloud.google.com/speech-to-text/docs/v1/transcribe-api?hl=en)列Service Usage Consumer；目前provider固定x-goog-user-project，先以quota project的serviceusage.services.use（或該預設角色）作最窄候選，不因V2角色表就預授roles/speech.client，也不建立Speech credential Secret。這是官方文件與header的推導，尚非實際IAM／Recognize驗證；若實際拒絕，依具體permission收斂，不直接擴成Owner／Editor。API仍未啟用。Data logging的官方[已記載入口](https://docs.cloud.google.com/speech-to-text/docs/v1/enable-data-logging?hl=en)是Console的Cloud Speech API → Data logging；公開REST catalog未找到讀取此設定的方法，因此仍須查明實際project opt-in狀態，不能以預設關閉或API目前disabled代替。這是既有零留存條件的查證，不新增通用人工簽核或required gate。
+
+
+W41修復source `a4b44dc603ff1a437c2e43a15844796191100423` 的 [CI40863711838](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40863711838)兩jobs SUCCESS：原lockfile型別、三boundary、compiled artifact及433 unit（S2 272／S3 120／migration14／release27）PASS；36 migrations、PG17.11 domain71／snapshot60、OCI16 PASS。已讀回artifacts `12892628224`（s3/20261029T111649Z-ec510a6f、migration/20261029T111808Z-0f4a2633）及`12892986580`（dev139-oci-97a553bd3b91567066ec1a68）。原meeting-upload helper現在實際完成雙獨立transaction競爭恰一方claim、同token replay與96,000月預留不變／48,000 pool allocation、錯Session／token／改變GCS source拒絕、dispatch replay及Session刪除後拒絕、dispatch後取消保留in-flight預留。首輪固定keys斷言FAIL保留；不以OCI套用代替這些行為結果。沒有provider、正式IAM／DB或切流操作。
+
+背景Job的source接線補齊：`loadRuntimeConfig(env,{managedJob:true})`是程式-only選項，限managed/main，驗證精確runtime IAM／Unix socket；一般web仍走原loopback規則，環境變數不能啟用Job transport。`RuntimeDatabase`以同一shared helper為每條新連線取得短期metadata token，checkout仍核對SESSION_USER／runtime app role及membership，不以migrator/importer代替；認證錯誤保留安全代碼、不暴露token provider訊息。`createRuntimeSessionAuth`僅向server組合提供同一resolveMeetingRunActor，沒有新增HTTP端點；production pins空時仍先拒絕、不讀Session store。新增4項transport測試、既有managed DB10項與ASR Session4項、strict overlay／affected lint PASS；原lockfile整體CI待本次source。仍未新增Job host或啟用Cloud Speech；後續須以同交易settlement關閉unsent false-return、取消與跨月預留，exact token只授accounting-only，不授私人內容發布。
+
+
+Job接線受測source `09fbbbc61071fbdbeca7d1f55c85e3842b343bf3` 的 [CI40864705531](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40864705531)兩jobs SUCCESS：原lockfile strict型別、三boundary／compiled artifact及437 unit（276／120／14／27）PASS；PG17.11 domain71／snapshot60、36 migrations與OCI16 PASS。已讀回artifacts `12892718933`（s3/20261029T112429Z-316f5ef5、migration/20261029T112546Z-f7a23f6f）與`12893002396`（dev139-oci-f98879052eafb06593ae9719）。SQL與上一輪a4b44dc完全相同，背景Job transport新增案例只驗program-only設定、每新連線token callback與既有role guard，metadata／IAM仍為fixture；真runtime Job連線、provider／project logging資格、Cloud SQL／normal browser與正式release仍NOT_RUN。沒有把此CI／文件收據當成settlement、durable host或完整DEV-139完成。
+
+
+0037結算候選沿既有usage／budget新增exact-token RPC，成功費用以microTWD整數入帳；unit預留與pool未分配餘額分開結清，不重複退款。相同payload重播回原metadata receipt、不重扣款；不同payload拒絕，已記unknown的收據不由普通settle猜改。Unknown保留unit預留、只放回未用pool；確證未送出或明確unbilled的暫時失敗才可在目前授權／原月份及兩attempt預留內重試。舊token不能釋放新lease仍需的pool。原月已送出的成功回應可跨月結算／保存；若尚有ASR來源待處理則關閉舊月pool並保留成功checkpoint，停止新派送，不跨月挪用預留；後續有界retry／resume仍須完成。新spent欄位不得沿舊cancel路徑任意更新；取消已部分消費的pool只退remaining，不退原始總額。所有變動同交易，沿原app mutation lock，先證明token再鎖run／unit／pool／month，run RLS不反查usage形成遞迴。
+
+真ASR transport結果存獨立private `meeting_asr_unit_results`：保留每個來源／chunk的實際word anchors及sample coverage，runtime僅SELECT／INSERT，FORCE RLS；父capture／run／source刪除會清內容，獨立usage只留accounting metadata。不把50秒chunk當SPEC-123的最終<=30秒／800字discussion，不用未跑matcher冒充零候選。全部ASR完成後run僅queued／resume_stage=retrieve，capture仍非ready、active revision不變；最終討論分段、跨chunk來源詞索引重編、RAG／候選與resolution及正式publisher仍計入完整交付，尚未實作完成。來源snapshot沒有這張中間結果表，因此不造importer映射或grant。
+
+Dispatch增加真正唯讀的exact-payload readback RPC；unknown COMMIT不重跑mark來取得派送權。最後chunk須覆蓋來源時長±2秒，跨chunk也核對相同decoded digest／chunk count，避免5分鐘來源只送50秒卻被當完成。非空逐字稿須帶真word anchors；SQL核對來源ID、詞序／時間與metadata，保留provider的小數毫秒。失效Session／取消／source刪除後只結算費用、不存checkpoint；capture的private狀態不由失效background actor改寫。合法owner重新查詢status時，依目前權限與同source version把terminal run同步至capture，釋放卡住的active slot，來源內容／active pointer不變。
+
+原meeting-upload native helper加入成功checkpoint／費用與same-token replay、錯來源anchor回滾、取消與Session刪除後accounting-only、未知用量保留、expired pending的有界重試、dispatch readback正反例與owner status收斂。清理移除需逐階段手工擴充的金額白名單：保留起始預算不存在／nonce自建所有權、limit與非負總額、刪自有run／usage後同月無foreign資料才刪自建budget。各行為原本的精確金額assert保留；不是放寬case或新增required gate。Focused33項與三boundary／strict overlays的本次結果依實際自查記錄，新增SQL／DB assertions仍待原生CI；前次437 unit／36 migrations證據不外推為0037已通過。沒有provider呼叫、正式資料、IAM／Secret／credential／billing／network／traffic操作。
+
+
+0037首輪source `2751eae4adfe8716b9b561515735733debbd29e3` 的 [CI40870597208](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40870597208)整體FAIL：新的SQL套用與domain71（結算／replay／source刪除cascade／unknown／owner status等）、441 unit（280／120／14／27）、原lockfile型別與三boundary／compiled artifact、OCI16／37 migrations均獨立PASS；snapshot在meeting-retention.sql精確UPDATE oracle仍缺run resume_stage／actual_twd_micros／next_attempt_at及budget spent_twd_micros時拒絕，未達完整snapshot PASS。原FAIL保留。已只把四個欄位加入對應oracle，沒有擴成table UPDATE、跳過runtime privileges或改SQL；新checkpoint的RLS／ACL oracle須在修復source真正執行完後才認列。已讀回artifacts `12895493686`（s3/20261029T120944Z-c30d02e2）及`12895038770`（dev139-oci-eac091303c1ad666aadb58a4）；SQL bytes維持不變。
+
+`meetingAsrRepository`補上實際SQL persistence與transaction factory：每次從原Session重新取得actor並授權目前record，綁定exact run／lease／payload；claim或callback／COMMIT錯誤不暗中取得第二claim或另走accounting重試。Mark／readback為false時，在同交易關閉已證未送出的unit，避免core早退漏預留；未知dispatch COMMIT只調真正read RPC，再依已知未送出事實結清，不重mark／POST。只有actor前置條件未成立、尚未進入SQL callback時才轉accounting-only；該交易清空business actor context，仍用runtime role與exact token，不受原取消signal阻止必要費用結算，也不授內容存放。Native取消case改以真repository factory在已查無Session下完成首筆accounting，再以原SQL replay驗不重扣。Focused repository10項、完整S2 290項及strict overlays／affected lint PASS，原生factory路徑待本次CI；沒有把SQL mock當正式IAM／ASR成功。Durable host、完整recovery、最終discussion／任務候選與publisher及真provider資格仍續行。
+
+
+修復source `1c45af89dd344203b38f9ad62c0d4134a7ffd157` 的 [CI40872083750](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40872083750)仍整體FAIL，但與首輪oracle失敗獨立：新repository／actor-free helper已走完，後段一般協作HTTP在verify-pg.ts:1373遇ACTOR_INVALID；全suite共用的synthetic actor自建立僅60秒，擴充後在該點逾期。451 unit（290／120／14／27）、原lockfile型別、三boundary／compiled artifact、snapshot60（含修復的四欄及新checkpoint ACL／5 helpers）、OCI16／37 migrations均已PASS，未取消獨立驗證。Artifacts `12896293389`（migration/20261029T122257Z-734b3f81）與`12895499378`（dev139-oci-dde2c967769657831be19a83）已讀回；domain整組仍未PASS，不沿用首輪domain冒稱新factory全域回歸完成。只延長這個nonce隔離suite的共享合成actor至同CI有界20分鐘，正式actor／Session短時效、source horizon及撤銷／expiry guards不改；既有S1 actor過期拒絕assert亦已直接執行PASS。這是harness生命週期修正，不放寬真身分驗收、延長正式Session或新增required gate。SQL bytes不改，完整修復source續跑同CI。
+
+
+0037修復source `b93b40f4569acce5dd366d690226b6fc0307568a` 的 [CI40873354609](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40873354609)兩jobs SUCCESS：451 unit（S2 290／S3 120／migration14／release27）、原lockfile strict型別／三boundary／compiled artifact PASS；PG17.11 domain71／snapshot60、37份移轉與OCI16 PASS。已讀回artifacts `12896932993`（s3/20261029T123029Z-b5c89ad2、migration/20261029T123144Z-a61a9c87）與`12897620424`（dev139-oci-0508d0d98d77e62731fdf00a）。新增SQL／checkpoint ACL／5 helpers精確grants、真repository actor-free首次結算與同payload重播、source刪除cascade／ledger保留、readonly dispatch readback、owner status收斂、ASR完不重領及unknown／pending lease assertions均在原meeting-upload helper完成；不是僅看schema可套用或mock PASS。首輪oracle及第二輪shared fixture expiry失敗均保留，未改0001–0037 bytes或放寬正式actor／安全拒絕。正式provider、Google IAM／Cloud SQL／normal browser與release仍NOT_RUN；durable host／完整recovery、最終討論分段與來源詞索引重編、RAG／候選／resolution及正式publisher、外部Session、資料／舊origin／writer fence／切流發布全部仍計入完成分母，沒有因本輪451或private checkpoint結案。

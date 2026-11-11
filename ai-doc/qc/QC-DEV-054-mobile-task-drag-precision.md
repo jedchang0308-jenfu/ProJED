@@ -3,7 +3,7 @@
 關聯 DEV：DEV-054
 關聯 SPEC：`ai-doc/specs/SPEC-054-mobile-task-drag-precision.md`
 關聯 QA：`ai-doc/qa/QA-DEV-054-mobile-task-drag-precision.md`
-狀態：歷史 Automated QA-QC PASS；現行自用裝置確認待補，雙平台量化阻塞已解除
+狀態：歷史 Automated QA-QC PASS；現行 RD 開發完成，自用裝置驗收待確認，雙平台量化阻塞已解除
 歷史驗證日期：2026-08-14；2026-10-19 由 RD 更新契約／關卡說明，不改歷史觀測為新 QC PASS。
 
 ## 1. 結論
@@ -78,6 +78,8 @@
 - 上述 workbook／裝置偵測是歷史附件，現行不再要求雙平台固定次數、成功率與逐筆錄影／簽核；不刪除或改寫當時未執行的事實。
 - 剩餘確認：實際常用裝置的原失敗路徑與主要拖拉／action／取消及復原，簡記版本、裝置與結果。錯誤 target／parent／action、duplicate effect 或 cancel write 仍判失敗；未測平台標未驗證。
 
-目前 DEV-054 保持「驗證中／自用裝置確認待補」；本次治理修正與 RD 自查不等於新獨立 QC 或實機驗收。DEV-097 依自身驗收前進，正式發布仍需其既有 release gate。
+目前 DEV-054 為「RD 開發完成／自用裝置驗收待確認」；本次治理修正與 RD 自查不等於新獨立 QC 或實機驗收。DEV-097 依自身驗收前進，正式發布仍需其既有 release gate。
 
 2026-10-19 RD 自查續接見 [QA §15](../qa/QA-DEV-054-mobile-task-drag-precision.md#15-2026-10-19-精簡實作與-rd-自查)：DEV-054 46/46 static、15/15 browser，DEV-053／029 各5項選測及兩個選測器負向均符合預期；原R01／R15版型預期失敗保留。此補記不改上方歷史QC的身分、版本或結果。
+
+2026-10-26 目前分支的 RD fresh rerun 見 [QA §16](../qa/QA-DEV-054-mobile-task-drag-precision.md#16-2026-10-26-rd-開發完成重驗)：46/46 static、15/15 browser、console／network error 0。這是開發完成證據，不追加獨立 QC 或實機 gate。

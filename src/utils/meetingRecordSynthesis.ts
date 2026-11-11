@@ -1,5 +1,5 @@
-import { serializeTaskMention, TASK_MENTION_PATTERN } from './recordContentMentions';
-import { summarizeTaskActivity } from './meetingActivitySummary';
+import { serializeTaskMention, TASK_MENTION_PATTERN } from './recordTaskMentionSyntax.js';
+import { summarizeTaskActivity } from './meetingActivitySummary.js';
 
 export type MeetingSynthesisTask = {
   id: string;
@@ -258,7 +258,7 @@ const collectMentionedTaskIds = (content: string) => {
   TASK_MENTION_PATTERN.lastIndex = 0;
   let match: RegExpExecArray | null;
   while ((match = TASK_MENTION_PATTERN.exec(content)) !== null) {
-    if (!ids.includes(match[2])) ids.push(match[2]);
+    if (!ids.includes(match[2]!)) ids.push(match[2]!);
   }
   return ids;
 };
@@ -272,24 +272,24 @@ const collectDirectMentionedTaskIds = (content: string) =>
         TASK_MENTION_PATTERN.lastIndex = 0;
         const matches = Array.from(line.matchAll(TASK_MENTION_PATTERN));
         TASK_MENTION_PATTERN.lastIndex = 0;
-        const ids = matches.map(match => match[2]);
+        const ids = matches.map(match => match[2]!);
         if (ids.length <= 1) return ids;
 
-        const firstMatch = matches[0];
+        const firstMatch = matches[0]!;
         const prefix = line.slice(0, firstMatch.index ?? 0)
           .replace(/^[-*]\s*/, '')
           .replace(/^\d+(?:\.\d+)*(?:\.)?\s+/, '')
           .replace(/^\d{1,2}:\d{2}\s*/, '')
           .trim();
         const separatorsArePath = matches.slice(0, -1).every((match, index) => {
-          const nextMatch = matches[index + 1];
+          const nextMatch = matches[index + 1]!;
           const between = line.slice(
             (match.index ?? 0) + match[0].length,
             nextMatch.index ?? line.length,
           );
           return /^[\s／/]+$/.test(between);
         });
-        return !prefix && separatorsArePath ? [ids[ids.length - 1]] : ids;
+        return !prefix && separatorsArePath ? [ids[ids.length - 1]!] : ids;
       }),
   );
 
@@ -432,7 +432,7 @@ const createPathTask = (
   sourceTask: MeetingSynthesisTask,
   taskById: Map<string, MeetingSynthesisTask>,
 ): MeetingSynthesisTask => {
-  const pathItem = path[pathIndex];
+  const pathItem = path[pathIndex]!;
   const knownTask = taskById.get(pathItem.id);
   if (knownTask) return knownTask;
 

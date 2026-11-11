@@ -1,4 +1,5 @@
-import type { TaskDetailNote, TaskNode, TaskTag } from '../../types';
+import type { TaskNode, TaskTag } from '../../types';
+import { buildWbsRagSource } from '../../../shared/wbsRagSource.js';
 import { chunkText } from './chunking';
 import type { RagChunkDraft, RagCitation, RagDocumentDraft } from './ragContract';
 import { taskNoteToAiMarkdown } from '../../utils/taskNoteRichContent';
@@ -15,60 +16,6 @@ export interface WbsRagBuildResult {
   chunks: RagChunkDraft[];
 }
 
-const stableHash = (content: string): string => {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < content.length; i += 1) {
-    hash ^= content.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return `fnv1a32:${(hash >>> 0).toString(16).padStart(8, '0')}`;
-};
-
-const formatDateRange = (node: TaskNode): string | null => {
-  if (node.startDate && node.endDate) return `${node.startDate} 至 ${node.endDate}`;
-  if (node.startDate) return `開始：${node.startDate}`;
-  if (node.endDate) return `結束：${node.endDate}`;
-  return null;
-};
-
-const formatDetailNotes = (detailNotes: TaskDetailNote[] | undefined): string[] =>
-  (detailNotes ?? [])
-    .map(note => {
-      const title = note.title.trim();
-      const content = taskNoteToAiMarkdown(note).trim();
-      if (!title && !content) return null;
-      return [
-        `## 備註：${title || '未命名'}`,
-        `備註 ID：${note.id}`,
-        content,
-      ].filter(Boolean).join('\n\n');
-    })
-    .filter((note): note is string => Boolean(note));
-
-const formatTags = (node: TaskNode, tagById: Map<string, TaskTag>): string | null => {
-  const names = (node.tagIds ?? [])
-    .map(tagId => tagById.get(tagId)?.name)
-    .filter((name): name is string => Boolean(name));
-  return names.length > 0 ? `標籤：${names.join(', ')}` : null;
-};
-
-const buildNodeContent = (node: TaskNode, tagById: Map<string, TaskTag>): string => {
-  const detailNoteSections = formatDetailNotes(node.detailNotes);
-  const parts = [
-    `標題：${node.title}`,
-    `類型：${node.nodeType ?? 'task'}`,
-    `狀態：${node.status}`,
-    formatTags(node, tagById),
-    formatDateRange(node) ? `排程：${formatDateRange(node)}` : null,
-    detailNoteSections.length === 0 && node.description?.trim()
-      ? `描述：\n${node.description.trim()}`
-      : null,
-    ...detailNoteSections,
-  ];
-
-  return parts.filter((part): part is string => Boolean(part)).join('\n\n');
-};
-
 export const buildWbsRagDocuments = ({ tenantId, projectId, nodes, tags = [] }: WbsRagBuildInput): WbsRagBuildResult => {
   const documents: RagDocumentDraft[] = [];
   const chunks: RagChunkDraft[] = [];
@@ -77,10 +24,11 @@ export const buildWbsRagDocuments = ({ tenantId, projectId, nodes, tags = [] }: 
   for (const node of nodes) {
     if (node.isArchived) continue;
 
-    const content = buildNodeContent(node, tagById);
+    const tagNames=(node.tagIds??[]).map(tagId=>tagById.get(tagId)?.name)
+      .filter((name):name is string=>Boolean(name));
+    const {content,contentHash}=buildWbsRagSource(node,tagNames);
     if (!content.trim()) continue;
 
-    const contentHash = stableHash(content);
     const document: RagDocumentDraft = {
       tenantId,
       projectId,

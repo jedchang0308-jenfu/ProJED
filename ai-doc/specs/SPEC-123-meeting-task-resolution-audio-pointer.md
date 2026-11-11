@@ -1,5 +1,7 @@
 # SPEC-123：會議錄音、滑鼠線索與既有任務辨識
 
+2026-10-29 接續：人類已將真ASR納入本次DEV-139並確認供應商零留存；目前實作／provider選型權威見[SPEC-139 §50](SPEC-139-projed-jenfu-platform-onboarding.md#50-real-asr-and-zero-retention-decision2026-10-29)。下列Gemini Developer project ZDR方案是歷史設計，不能據此認定現行API符合零留存；既有錄音／source／人工review／取消／費用與清理語意保留，不以fake worker或文件資格代替真轉錄。
+
 - 狀態：`Architecture Confirmed / Production Control Plane Deployed / Hosted Synthetic PASS / Frontend Feature-Gated / Provider Qualification Gate Pending`
 - 文件角色：DEV-123 current-phase implementation authority
 - 建立日期：2026-09-14

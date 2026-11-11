@@ -1,21 +1,9 @@
 import type { QuickCaptureRecord } from '../../features/quickTaskCapture/model';
+import type { QuickAuthSnapshot, QuickTaskCreateResult } from '../../features/quickTaskCapture/contract';
+import { isHttpBackend } from '../backendMode';
+import { httpQuickTaskService } from '../httpApi/backend';
 
-export type QuickAuthSnapshot = Readonly<{
-  accountId: string;
-  accessToken: string;
-  authEpoch: number;
-  contextRevision?: number;
-  contextProjectRef?: string;
-}>;
-
-export type QuickTaskCreateResult = {
-  status: 'committed';
-  captureId: string;
-  ownerId: string;
-  titleHash: string;
-  created: boolean;
-  committedAt: number;
-};
+export type { QuickAuthSnapshot, QuickTaskCreateResult } from '../../features/quickTaskCapture/contract';
 
 const parseResult = (value: unknown): QuickTaskCreateResult => {
   if (!value || typeof value !== 'object') throw Object.assign(new Error('INVALID_RECEIPT'), { code: 'INVALID_RECEIPT' });
@@ -41,8 +29,19 @@ export const createQuickUnplacedTask = async (input: {
   auth: QuickAuthSnapshot;
   signal: AbortSignal;
 }) => {
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+  if (isHttpBackend) {
+    const result = await httpQuickTaskService.create(input.capture, input.signal);
+    if (result.captureId !== input.capture.captureId || result.ownerId !== input.auth.accountId
+      || result.titleHash !== await sha256Hex(input.capture.title)) {
+      throw Object.assign(new Error('INVALID_RECEIPT'), { code: 'INVALID_RECEIPT' });
+    }
+    return result;
+  }
+  const env = (import.meta as ImportMeta & {
+    env?: { VITE_SUPABASE_URL?: string; VITE_SUPABASE_ANON_KEY?: string };
+  }).env;
+  const supabaseUrl = env?.VITE_SUPABASE_URL;
+  const supabaseAnonKey = env?.VITE_SUPABASE_ANON_KEY;
   if (!supabaseUrl || !supabaseAnonKey) throw Object.assign(new Error('BACKEND_UNSUPPORTED'), { code: 'BACKEND_UNSUPPORTED' });
   const response = await fetch(`${supabaseUrl}/rest/v1/rpc/create_quick_unplaced_task_v1`, {
     method: 'POST',

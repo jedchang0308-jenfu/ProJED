@@ -2,7 +2,7 @@ import type { SerializedEditorState } from 'lexical';
 import type {
   TaskInteractionLocation,
   TaskInteractionSurfaceId,
-} from '../interactions/task/types';
+} from '../interactions/task/types.js';
 
 // Core scalar types
 export type TaskStatus = 'todo' | 'in_progress' | 'delayed' | 'completed' | 'unsure' | 'onhold';
@@ -712,7 +712,7 @@ export type BoardContextMenuState =
       title: string;
       /** Placement-only context; when set, this row is a tracking projection. */
       trackingReferenceId?: string;
-      taskPlacementContext?: import('../interactions/task/types').TaskPlacementInteractionContext;
+      taskPlacementContext?: import('../interactions/task/types.js').TaskPlacementInteractionContext;
       interactionLocation?: TaskInteractionLocation;
       surfaceId?: TaskInteractionSurfaceId;
       interactionId?: string;

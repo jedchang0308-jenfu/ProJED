@@ -20,6 +20,7 @@ export type BackupErrorCode =
   | 'OUT_OF_PACKAGE_REFERENCE'
   | 'IMPORT_ROLLED_BACK'
   | 'VERIFY_MISMATCH'
+  | 'COMMIT_UNKNOWN'
   | 'BACKEND_UNSUPPORTED';
 
 export class BackupError extends Error {
@@ -106,7 +107,7 @@ export interface BackupPackageV2 {
   createdAt: string;
   source: {
     appVersion: string;
-    backend: 'supabase' | 'local-test';
+    backend: 'supabase' | 'local-test' | 'http';
     workspaceId: string;
     /** Optional display metadata; older V2 packages remain valid without it. */
     workspaceTitle?: string;

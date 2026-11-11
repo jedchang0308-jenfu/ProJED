@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import useAuthStore from '../store/useAuthStore';
 import useBoardStore from '../store/useBoardStore';
-import { isLocalTestBackend, isSupabaseBackend } from '../services/dataBackend';
+import { isHttpBackend, isLocalTestBackend, isSupabaseBackend } from '../services/dataBackend';
 import {
   calendarSubscriptionService,
   type CalendarSubscription,
@@ -41,6 +41,7 @@ import CalendarSubscriptionBuilderPreview, {
 } from './CalendarSubscriptionBuilderPreview';
 
 const ADMIN_ROLES = new Set(['owner', 'admin', 'project_manager']);
+const isCalendarRemoteBackend = isSupabaseBackend || isHttpBackend;
 
 const emptyFilters = (
   workspaceId?: string,
@@ -554,7 +555,7 @@ const CalendarSubscriptionsView: React.FC = () => {
   }, [members, user]);
 
   const loadSubscriptions = async () => {
-    if (!isSupabaseBackend) return;
+    if (!isCalendarRemoteBackend) return;
     setIsLoading(true);
     try {
       const [nextSubscriptions, nextWorkspaceRefs, nextBoardRefs] = await Promise.all([
@@ -585,7 +586,7 @@ const CalendarSubscriptionsView: React.FC = () => {
   }, [activeBoard?.id, activeWorkspace?.id, editingId]);
 
   useEffect(() => {
-    if (!isSupabaseBackend || effectiveMemberWorkspaceIds.length === 0) {
+    if (!isCalendarRemoteBackend || effectiveMemberWorkspaceIds.length === 0) {
       setMembers([]);
       return;
     }
@@ -777,7 +778,7 @@ const CalendarSubscriptionsView: React.FC = () => {
               ? '訂閱條件尚未完整。'
               : undefined;
 
-  if (!isSupabaseBackend) {
+  if (!isCalendarRemoteBackend) {
     return (
       <div
         className="h-full overflow-auto bg-slate-50 p-4 sm:p-6"

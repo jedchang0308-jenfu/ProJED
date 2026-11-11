@@ -27,6 +27,7 @@ import MainLayout from './components/MainLayout';
 import { useCalendarStore } from './store/useCalendarStore';
 import dayjs from 'dayjs';
 import { supabaseWorkspaceService } from './services/supabase/projedService';
+import { httpDomainReadService } from './services/httpApi/backend';
 import HomeView from './components/HomeView';
 // ListView 已由 WbsListView 取代，import 移除
 // CardModal 已在 Phase B 移除，改為在清單視圖行內編輯
@@ -241,9 +242,11 @@ function AppContent() {
       displayName: userDisplayName,
     }).then(async (invite) => {
       const store = useBoardStore.getState();
-      if (dataBackend === 'supabase') {
+      if (dataBackend === 'supabase' || dataBackend === 'http') {
         try {
-          const nextWorkspaces = await supabaseWorkspaceService.list();
+          const nextWorkspaces = dataBackend === 'http'
+            ? await httpDomainReadService.listWorkspaces()
+            : await supabaseWorkspaceService.list();
           store.setWorkspaces(nextWorkspaces);
         } catch (workspaceError) {
           console.warn('[BoardInvite] accepted but workspace reload failed:', workspaceError);
@@ -273,7 +276,7 @@ function AppContent() {
   // 表示為全新使用者，自動建立一個預設工作區。
   useEffect(() => {
     if (!userId) return;
-    if (dataBackend === 'local-test') return;
+    if (dataBackend === 'local-test' || dataBackend === 'http') return;
 
     const hasLegacyData = localStorage.getItem('projed-storage') || localStorage.getItem('projed_data');
     const hasBoardInviteToken = new URLSearchParams(window.location.search).has(BOARD_INVITE_TOKEN_PARAM);
