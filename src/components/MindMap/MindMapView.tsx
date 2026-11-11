@@ -1,4 +1,5 @@
 import React from 'react';
+import { flushSync } from 'react-dom';
 import useBoardStore from '../../store/useBoardStore';
 import { useWbsStore } from '../../store/useWbsStore';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
@@ -81,7 +82,6 @@ import {
 } from './mindMapGeometry';
 import {
   cancelPendingAnimationFrameRef,
-  clearPendingTimeoutRef,
   scheduleCoalescedAnimationFrame,
 } from './mindMapFrameScheduler';
 import {
@@ -94,6 +94,7 @@ import {
 import { buildMindMapOverlayPaths } from './mindMapOverlayPaths';
 import {
   getMindMapKeyboardAction,
+  getMindMapTitleTyping,
   isMindMapDeleteKey,
   isMindMapRelationshipLabelEditKey,
   isMindMapTextEditingTarget,
@@ -271,7 +272,6 @@ type MindMapGeometryDirtyReason =
   | 'relationship-edit'
   | 'viewport-layout';
 
-const MINDMAP_POINTER_QUICK_TITLE_DELAY_MS = 240;
 const isDev075ProbeEnabled = () => {
   if (typeof window === 'undefined') return false;
   const phase = new URLSearchParams(window.location.search).get('dev075Phase');
@@ -321,8 +321,7 @@ const MindMapView: React.FC = () => {
 
   const [selectionStore] = React.useState<MindMapSelectionStore>(() => createMindMapSelectionStore());
   const dev075ProbeEnabled = React.useMemo(() => isDev075ProbeEnabled(), []);
-  const [inlineTitleEditNodeId, setInlineTitleEditNodeId] = React.useState<string | null>(null);
-  const [inlineTitleEditFocusNodeId, setInlineTitleEditFocusNodeId] = React.useState<string | null>(null);
+  const [inlineTitleEdit, setInlineTitleEdit] = React.useState<{ nodeId: string; initialText?: string } | null>(null);
   const [expandedNodeIds, setExpandedNodeIds] = React.useState<Set<string>>(() => new Set());
   const [draggedNodeId, setDraggedNodeId] = React.useState<string | null>(null);
   const [dropTarget, setDropTarget] = React.useState<MindMapDropTarget | null>(null);
@@ -372,7 +371,6 @@ const MindMapView: React.FC = () => {
   const middleMousePanFrameRef = React.useRef<number | null>(null);
   const zoomLabelRef = React.useRef<HTMLSpanElement>(null);
   const zoomLevelRef = React.useRef(zoomLevel);
-  const pointerQuickTitleTimerRef = React.useRef<number | null>(null);
   const autoCenteredBoardRef = React.useRef<string | null>(null);
   const selectionBoardRef = React.useRef<string | null>(null);
   const initialSelectionBoardRef = React.useRef<string | null>(null);
@@ -542,32 +540,25 @@ const MindMapView: React.FC = () => {
   }, [clearRelationshipHover, clearRelationshipPointerDrag, clearSelectedRelationship, finishRelationshipDraftMode]);
 
   const selectRelationship = React.useCallback((relationshipId: string) => {
-    clearPendingTimeoutRef(pointerQuickTitleTimerRef);
     cancelPendingNodeFocus();
-    setInlineTitleEditNodeId(null);
-    setInlineTitleEditFocusNodeId(null);
+    setInlineTitleEdit(null);
     setSelectedRelationshipId(relationshipId);
     selectionStore.setSelectedNodeId(null);
     syncDev075ProbeAttributes();
   }, [cancelPendingNodeFocus, selectionStore, syncDev075ProbeAttributes]);
 
-  const cancelPointerQuickTitleRequest = React.useCallback(() => {
-    clearPendingTimeoutRef(pointerQuickTitleTimerRef);
-  }, []);
-
   const selectNode = React.useCallback((nodeId: string | null) => {
     // Keep the inline editor alive when the newly-created node receives focus
     // and re-dispatches selection. Selecting a different node still exits edit
     // mode so the editor never remains attached to a stale task.
-    cancelPointerQuickTitleRequest();
-    setInlineTitleEditNodeId(editingNodeId => editingNodeId && editingNodeId !== nodeId ? null : editingNodeId);
+    setInlineTitleEdit(edit => edit?.nodeId === nodeId ? edit : null);
     const placementId = nodeId ? getPlacementIdForNodeId(nodeId) : null;
     const change = selectionStore.setSelectedNodeId(placementId);
     syncDev075ProbeAttributes();
     if (change.changed && nodeId) scheduleNodeFocus(nodeId);
     if (change.changed && !nodeId) cancelPendingNodeFocus();
     setSelectedRelationshipId(null);
-  }, [cancelPendingNodeFocus, cancelPointerQuickTitleRequest, getPlacementIdForNodeId, scheduleNodeFocus, selectionStore, syncDev075ProbeAttributes]);
+  }, [cancelPendingNodeFocus, getPlacementIdForNodeId, scheduleNodeFocus, selectionStore, syncDev075ProbeAttributes]);
 
   const hideMarqueeOverlay = React.useCallback(() => {
     const overlay = marqueeOverlayRef.current;
@@ -622,7 +613,7 @@ const MindMapView: React.FC = () => {
       || relationshipToolActive
       || relationshipPointerDrag
       || draggedNodeId
-      || inlineTitleEditNodeId
+      || inlineTitleEdit
       || useDialogStore.getState().isOpen
     ) return;
     const target = event.target instanceof Element ? event.target : null;
@@ -667,7 +658,7 @@ const MindMapView: React.FC = () => {
       // Synthetic QA pointer events and older browsers may not own an active pointer.
       // The window-level cancel paths still make the marquee session safe to unwind.
     }
-  }, [cancelMarquee, closeLocalMenu, draggedNodeId, getPlacementIdForNodeId, inlineTitleEditNodeId, relationshipPointerDrag, relationshipToolActive, selectionStore]);
+  }, [cancelMarquee, closeLocalMenu, draggedNodeId, getPlacementIdForNodeId, inlineTitleEdit, relationshipPointerDrag, relationshipToolActive, selectionStore]);
 
   const handleMarqueePointerMove = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     const session = marqueeSessionRef.current;
@@ -727,14 +718,12 @@ const MindMapView: React.FC = () => {
     if (canEditTask) {
       updateNode(nodeId, { title: getCommittedMindMapTitle(title) });
     }
-    setInlineTitleEditNodeId(null);
-    setInlineTitleEditFocusNodeId(null);
+    setInlineTitleEdit(null);
     if (restoreNodeFocus) scheduleNodeFocus(nodeId);
   }, [canEditTask, scheduleNodeFocus, updateNode]);
 
   const cancelInlineTitleEdit = React.useCallback((nodeId: string, restoreNodeFocus = false) => {
-    setInlineTitleEditNodeId(null);
-    setInlineTitleEditFocusNodeId(null);
+    setInlineTitleEdit(null);
     if (restoreNodeFocus) scheduleNodeFocus(nodeId);
   }, [scheduleNodeFocus]);
 
@@ -785,7 +774,6 @@ const MindMapView: React.FC = () => {
   }, [zoomLevel]);
 
   React.useEffect(() => () => {
-    clearPendingTimeoutRef(pointerQuickTitleTimerRef);
     cancelPendingAnimationFrameRef(zoomIntentFrameRef);
     cancelPendingAnimationFrameRef(connectorRecomputeFrameRef);
     cancelPendingAnimationFrameRef(marqueeFrameRef);
@@ -867,8 +855,7 @@ const MindMapView: React.FC = () => {
   React.useEffect(() => {
     if (selectionBoardRef.current === boardId) return;
     selectionBoardRef.current = boardId;
-    setInlineTitleEditNodeId(null);
-    setInlineTitleEditFocusNodeId(null);
+    setInlineTitleEdit(null);
     selectNode(null);
     setMindMapClipboard(null);
     closeLocalMenu(false);
@@ -1263,8 +1250,7 @@ const MindMapView: React.FC = () => {
       const expansionPath = getMindMapExpansionPath(nodes, parentId, boardId);
       expandNodes([...expansionPath, node.id]);
       if (canEditTask) {
-        setInlineTitleEditNodeId(node.id);
-        setInlineTitleEditFocusNodeId(node.id);
+        setInlineTitleEdit({ nodeId: node.id });
       }
       return created;
     } finally {
@@ -1464,13 +1450,11 @@ const MindMapView: React.FC = () => {
     intent: MindMapQuickCreateIntent,
   ) => {
     if (!canEditTask) {
-      setInlineTitleEditNodeId(null);
-      setInlineTitleEditFocusNodeId(null);
+      setInlineTitleEdit(null);
       return;
     }
     updateNode(nodeId, { title: getCommittedMindMapTitle(title) });
-    setInlineTitleEditNodeId(null);
-    setInlineTitleEditFocusNodeId(null);
+    setInlineTitleEdit(null);
     if (intent === 'child') void createChildForNode(nodeId);
     else void createSiblingForNode(nodeId);
   }, [canEditTask, createChildForNode, createSiblingForNode, updateNode]);
@@ -2014,16 +1998,7 @@ const MindMapView: React.FC = () => {
     // burst so a newly pasted node can immediately receive another task.
     resetPasteBurstAnchor();
     handleNodeSelect(nodeId);
-    const projected = projectionNodes[nodeId] || nodes[nodeId];
-    // A tracking projection may open the canonical details, but it must not
-    // enter inline editing because the reference has no local task content.
-    if (!canEditTask || projected?.isTrackingReference || relationshipToolActive || draggedNodeId) return;
-    pointerQuickTitleTimerRef.current = window.setTimeout(() => {
-      pointerQuickTitleTimerRef.current = null;
-      setInlineTitleEditNodeId(nodeId);
-      setInlineTitleEditFocusNodeId(null);
-    }, MINDMAP_POINTER_QUICK_TITLE_DELAY_MS);
-  }, [canEditTask, draggedNodeId, handleNodeSelect, nodes, projectionNodes, relationshipToolActive, resetPasteBurstAnchor]);
+  }, [handleNodeSelect, resetPasteBurstAnchor]);
 
   const handleNodeOpenDetails = React.useCallback((nodeId: string, trackingReferenceId?: string) => {
     if (relationshipToolActive || draggedNodeId) return;
@@ -2061,8 +2036,7 @@ const MindMapView: React.FC = () => {
     const handleStartRelationship = (event: Event) => {
       const taskId = (event as CustomEvent<{ taskId?: string }>).detail?.taskId;
       if (!canEditTask || !taskId || !nodes[taskId]) return;
-      setInlineTitleEditNodeId(null);
-      setInlineTitleEditFocusNodeId(null);
+      setInlineTitleEdit(null);
       clearSelectedRelationship();
       beginRelationshipDraftSelectionWithCleanup(taskId);
       setRelationshipToolActive(true);
@@ -2229,7 +2203,7 @@ const MindMapView: React.FC = () => {
   React.useEffect(() => {
     if (!selectedRelationshipId) return undefined;
     const handleRelationshipWindowKeyDown = (event: KeyboardEvent) => {
-      if (isMindMapTextEditingTarget(event.target)) return;
+      if (event.isComposing || isMindMapTextEditingTarget(event.target)) return;
       if (event.key === 'Escape') {
         event.preventDefault();
         event.stopPropagation();
@@ -2263,14 +2237,32 @@ const MindMapView: React.FC = () => {
       event.nativeEvent.stopImmediatePropagation?.();
     };
     const isEditingText = isMindMapTextEditingTarget(event.target);
-    // Pointer quick naming starts before the title input has keyboard focus.
-    if (inlineTitleEditNodeId && !isEditingText && isMindMapDeleteKey(event)) {
+    // Keep task shortcuts out of an active title edit even if focus is in transit.
+    if (inlineTitleEdit && !isEditingText && isMindMapDeleteKey(event)) {
       consumeMindMapKeyboardEvent();
       return;
     }
     const selectedNodeId = getNodeIdForPlacementId(selectionStore.getPrimaryPlacementId());
     const selectedPlacementIds = selectionStore.getSelectedPlacementIds();
     const hasMultiSelection = selectedPlacementIds.length > 1;
+    const selectedNode = selectedNodeId ? projectionNodes[selectedNodeId] || nodes[selectedNodeId] : null;
+    const typing = !isEditingText && !inlineTitleEdit ? getMindMapTitleTyping(event.nativeEvent) : null;
+    if (typing && !hasMultiSelection && selectedNode
+      && !selectedNode.isTrackingReference && canEditTask && !relationshipToolActive
+      && !selectedRelationshipId && !draggedNodeId
+      && (event.target === event.currentTarget || event.target === nodeElementRegistryRef.current.get(selectedNode.id))) {
+      cancelPendingNodeFocus();
+      if (typing.composing) {
+        // Mount and focus the input before the browser handles the composition key.
+        event.stopPropagation();
+        flushSync(() => setInlineTitleEdit({ nodeId: selectedNode.id, initialText: '' }));
+      } else {
+        consumeMindMapKeyboardEvent();
+        setInlineTitleEdit({ nodeId: selectedNode.id, initialText: typing.text });
+      }
+      return;
+    }
+    if (event.nativeEvent.isComposing) return;
     const action = getMindMapKeyboardAction(event, {
       isEditingText,
       hasSelectedNode: Boolean(selectedNodeId),
@@ -2391,10 +2383,12 @@ const MindMapView: React.FC = () => {
 
     if (action.type === 'archive-selected-node' && selectedNodeId) {
       consumeMindMapKeyboardEvent();
-      void archivePlacementSelection(selectedPlacementIds);
+      if (!event.repeat) void archivePlacementSelection(selectedPlacementIds);
     }
   }, [
     archivePlacementSelection,
+    canEditTask,
+    cancelPendingNodeFocus,
     clipboard,
     closeLocalMenu,
     deactivateRelationshipMode,
@@ -2409,9 +2403,11 @@ const MindMapView: React.FC = () => {
     handleMindMapCopy,
     handleMindMapCut,
     handleMindMapPaste,
-    inlineTitleEditNodeId,
+    draggedNodeId,
+    inlineTitleEdit,
     navigationIndex,
     nodes,
+    projectionNodes,
     relationshipDraft,
     relationshipPointerDrag,
     relationshipToolActive,
@@ -2645,8 +2641,8 @@ const MindMapView: React.FC = () => {
       dateLockStatus={dateLockStatusByTaskId.get(node.canonicalTaskId || node.id)}
       canMoveTask={canMoveTask || canManageTaskReference}
       canManageTaskReference={canManageTaskReference}
-      isTitleEditing={inlineTitleEditNodeId === node.id}
-      autoFocusTitleInput={inlineTitleEditFocusNodeId === node.id}
+      isTitleEditing={inlineTitleEdit?.nodeId === node.id}
+      initialTitleText={inlineTitleEdit?.nodeId === node.id ? inlineTitleEdit.initialText : undefined}
       onTitleEditCommit={commitInlineTitleEdit}
       onTitleEditContinue={continueInlineTitleEdit}
       onTitleEditCancel={cancelInlineTitleEdit}
@@ -2686,8 +2682,7 @@ const MindMapView: React.FC = () => {
     handleNodeOpenDetails,
     handleNodePointerPrimary,
     handleNodeSelect,
-    inlineTitleEditFocusNodeId,
-    inlineTitleEditNodeId,
+    inlineTitleEdit,
     relationshipToolActive,
     selectionStore,
     showStartDate,

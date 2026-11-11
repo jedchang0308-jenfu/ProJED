@@ -50,6 +50,15 @@ export const isMindMapRelationshipToolToggleKey = (event: MindMapKeyboardEventLi
 export const hasMindMapShortcutModifier = (event: MindMapKeyboardEventLike) =>
   Boolean(event.ctrlKey || event.metaKey || event.altKey);
 
+export const getMindMapTitleTyping = (event: KeyboardEvent) => {
+  if (event.isComposing || event.key === 'Process' || event.key === 'Dead') {
+    return { text: '', composing: true };
+  }
+  if (Array.from(event.key).length !== 1
+    || (hasMindMapShortcutModifier(event) && !event.getModifierState('AltGraph'))) return null;
+  return { text: event.key, composing: false };
+};
+
 export const getMindMapKeyboardAction = (
   event: MindMapKeyboardEventLike,
   state: MindMapKeyboardState,

@@ -285,15 +285,15 @@ ADR 判定:
 
 ## DEV-073 心智圖 XMind 式快速命名差異增補（2026-08-18）
 
-本增補記錄最新使用者決策：只有心智圖新增後與 fine-pointer 單擊既有任務會進入 XMind 式快速命名；清單、看板、甘特與其他模式維持既有 `TaskDetailsModal` title edit。DEV-071 的 `task.select` resolver 與雙擊／右鍵明細入口仍保留，但 selection-only side effect 已由本節覆寫；現行驗收以本節與 `SPEC-073` 為準。
+心智圖新增後會進入快速命名。既有任務單擊後只選取，選取後打字才進入快速命名。清單、看板、甘特與其他模式沿用 `TaskDetailsModal` title edit。現行驗收依 `SPEC-073`。
 
 - 心智圖 toolbar、`Enter` 同階新增、`Tab` 子任務新增後，選取新節點並 focus 視覺低干擾的 quick-title input，可直接打字且不開啟 `TaskDetailsModal`。
 - quick-title 必須貼合節點文字、不滿版、不顯示藍色反白；輸入層不攔截 pointer，節點仍可拖曳。
 - quick-title 中按一次 `Enter` 會提交目前名稱並離開 quick-title，不建立新任務；按一次 `Tab` 會提交目前名稱並建立／選取子任務，延續 quick-title focus，不需要先退出編輯模式。
 - blur 保存並退出、`Escape` 取消且不新增；IME composition Enter 不建立任務，key action 與 blur 不得重複執行。空值 fallback 與權限沿用既有 command。
 - 非心智圖新增後仍使用 `task.open-details-for-naming` 與 `prepareNewTaskNaming()`，不得出現 mindmap quick-title editor。
-- 心智圖 fine-pointer 單擊立即選取並在可取消的雙擊判定窗後進入 quick-title；coarse pointer、唯讀、relationship 與 drag 維持 selection／專用行為，不進入 quick-title。
-- 雙擊與右鍵「開啟明細」維持既有明細入口；pending click request 不得攔截雙擊或指向 stale node。
+- 心智圖單擊立即選取。Delete 或 Backspace 封存選取的任務。開始打字後進入 quick-title，兩鍵只編輯文字。
+- 雙擊與右鍵「開啟明細」維持既有明細入口。
 - 驗證證據：`QA-DEV-073-task-title-edit-defaults.md`、`scripts/verify-dev-073-task-title-edit-defaults.mjs`、`scripts/verify-dev-073-task-title-edit-defaults-browser.pw.js`。
 
 ## DEV-060 看板僅顯示到期日替代增補（2026-08-04）

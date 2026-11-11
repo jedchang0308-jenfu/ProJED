@@ -57,7 +57,7 @@ const documentationMap = read(files.documentationMap);
 assert(
   'New task insertion selects and routes naming through the current host adapter',
   mindMapView.includes('selectNode(node.id)') &&
-    mindMapView.includes('setInlineTitleEditNodeId(node.id)') &&
+    mindMapView.includes('setInlineTitleEdit({ nodeId: node.id })') &&
     !mindMapView.includes('prepareNewTaskNaming(node.id)') &&
     !mindMapView.includes('setEditingNodeId(node.id)') &&
     !mindMapView.includes('setEditingTitle(node.title)') &&
@@ -86,7 +86,7 @@ assert(
 
 assert(
   'Deleting a selected branch uses the archive command outside quick naming',
-  mindMapView.includes('inlineTitleEditNodeId && !isEditingText && isMindMapDeleteKey(event)') &&
+  mindMapView.includes('inlineTitleEdit && !isEditingText && isMindMapDeleteKey(event)') &&
     mindMapView.includes('void archivePlacementSelection(selectedPlacementIds);') &&
     mindMapView.includes("recoveryKind: 'archive'"),
 );
