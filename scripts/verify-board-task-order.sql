@@ -5,6 +5,7 @@ create type public.wbs_item_type as enum ('group','milestone','task');
 alter table public.wbs_items alter column item_type drop default;
 alter table public.wbs_items alter column item_type type public.wbs_item_type using item_type::public.wbs_item_type;
 \ir ../supabase/migrations/20261111062404_board_task_order_transaction.sql
+\ir ../supabase/migrations/20261111064913_isolate_board_task_order_rpc_implementation.sql
 
 insert into public.wbs_items(id,tenant_id,project_id,legacy_node_id,title,item_type,sort_order)
 values ('40000000-0000-4000-8000-000000000013', :'tenant_id', :'source_project_id', 'tail', 'Tail', 'task', 1);
@@ -107,6 +108,10 @@ begin
   if cardinality(public.get_board_task_write_capabilities_v1(t,b)) <> 0 then raise exception 'missing board membership gained write permissions'; end if;
   if has_function_privilege('anon','public.commit_board_task_order_v1(uuid,uuid,text,text,text,text,text,text,text,text,boolean,text[])','execute') then
     raise exception 'anonymous execution granted';
+  end if;
+  if has_function_privilege('authenticated','private.board_task_write_capabilities_v1(uuid,uuid)','execute')
+    or to_regprocedure('private.commit_board_task_order_v1_impl(uuid,uuid,text,text,text,text,text,text,text,text,boolean,text[])') is not null then
+    raise exception 'privileged function remains callable through the legacy private schema';
   end if;
 end $$;
 reset role;
