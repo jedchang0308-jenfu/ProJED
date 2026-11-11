@@ -1128,32 +1128,29 @@ export const supabaseNodeService = {
     return data as BoardTaskOrderResult;
   },
 
-  listByProject: async (workspaceId: string, boardId: string): Promise<TaskNode[]> => {
+  listByProject: async (workspaceId: string, boardId: string, signal?: AbortSignal): Promise<TaskNode[]> => {
     requireSupabase();
     const tenantId = await resolveWorkspaceId(workspaceId);
     const projectId = await resolveProjectId(tenantId, boardId);
-    const { data, error } = await supabase
+    const itemQuery = supabase
       .from('wbs_items')
       .select('*')
       .eq('tenant_id', tenantId)
       .eq('project_id', projectId)
       .order('sort_order', { ascending: true });
+    const { data, error } = await (signal ? itemQuery.abortSignal(signal) : itemQuery);
     assertNoError(error);
     const nodeIdByDbId = new Map((data ?? []).map(item => [item.id, legacyOrId(item.id, item.legacy_node_id)]));
 
     let tagRows: TaskTagRow[] = [];
     let assignmentRows: WbsItemTagAssignment[] = [];
     try {
+      const tagQuery = supabase.from('task_tags').select('*').eq('tenant_id', tenantId);
+      const assignmentQuery = supabase.from('wbs_item_tags').select('item_id,tag_id')
+        .eq('tenant_id', tenantId).eq('project_id', projectId);
       const [tagResult, assignmentResult] = await Promise.all([
-        supabase
-          .from('task_tags')
-          .select('*')
-          .eq('tenant_id', tenantId),
-        supabase
-          .from('wbs_item_tags')
-          .select('item_id,tag_id')
-          .eq('tenant_id', tenantId)
-          .eq('project_id', projectId),
+        signal ? tagQuery.abortSignal(signal) : tagQuery,
+        signal ? assignmentQuery.abortSignal(signal) : assignmentQuery,
       ]);
       const tagsUnavailable = assertNoTagTableError(tagResult.error) || assertNoTagTableError(assignmentResult.error);
       if (!tagsUnavailable) {
@@ -1270,11 +1267,14 @@ export const supabaseNodeService = {
     updates: { id: string; data: Partial<TaskNode> }[]
   ): Promise<void> => {
     requireSupabase();
-    await Promise.all(
+    const results = await Promise.allSettled(
       updates.map(({ id, data }) =>
         supabaseNodeService.update(workspaceId, boardId, id, data)
       )
     );
+    // Recovery must wait for every write, including siblings of a rejected write.
+    const failure = results.find(result => result.status === 'rejected');
+    if (failure) throw failure.reason;
   },
 
   deleteAllByProject: async (workspaceId: string, boardId: string): Promise<void> => {

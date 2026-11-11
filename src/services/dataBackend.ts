@@ -391,11 +391,11 @@ export const nodeService = {
       ? supabaseNodeService.commitBoardOrder(command)
       : firestoreNodeService.commitBoardOrder(command, canEdit),
 
-  listByProject: (workspaceId: string, boardId: string): Promise<TaskNode[]> =>
+  listByProject: (workspaceId: string, boardId: string, signal?: AbortSignal): Promise<TaskNode[]> =>
     isLocalTestBackend
       ? localTestNodeService.listByProject(workspaceId, boardId)
       : isSupabaseBackend
-      ? supabaseNodeService.listByProject(workspaceId, boardId)
+      ? supabaseNodeService.listByProject(workspaceId, boardId, signal)
       : firestoreNodeService.listByProject(workspaceId, boardId),
 
   create: (workspaceId: string, boardId: string, node: TaskNode): Promise<void | TaskNode> =>

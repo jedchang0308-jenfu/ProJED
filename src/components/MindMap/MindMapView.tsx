@@ -34,6 +34,7 @@ import MindMapRelationshipStyleLayer from './MindMapRelationshipStyleLayer';
 import MindMapToolbar from './MindMapToolbar';
 import MindMapContextMenu, { type MindMapContextMenuState } from './MindMapContextMenu';
 import MindMapBatchAssignmentPicker from './MindMapBatchAssignmentPicker';
+import { useMindMapBatchRecovery } from './useMindMapBatchRecovery';
 import { isPrimaryPointerActivation } from '../../interactions/pointerActivation';
 import {
   createInsertionPreview as createDragInsertionPreview,
@@ -306,7 +307,6 @@ const MindMapView: React.FC = () => {
   const moveTrackingReference = useWbsStore(state => state.moveTrackingReference);
   const commitNodeBatch = useWbsStore(state => state.commitNodeBatch);
   const commitNodeForestCreate = useWbsStore(state => state.commitNodeForestCreate);
-  const recoverNodeBatch = useWbsStore(state => state.recoverNodeBatch);
   const getNodeLockStatus = useWbsStore(state => state.getNodeLockStatus);
   const taskFilters = useTaskFilterStore(state => state.filters);
   const resetTaskFilters = useTaskFilterStore(state => state.resetFilters);
@@ -350,7 +350,6 @@ const MindMapView: React.FC = () => {
   const [pendingPastedRootIds, setPendingPastedRootIds] = React.useState<readonly string[]>([]);
   const [localMenu, setLocalMenu] = React.useState<MindMapLocalMenuState | null>(null);
   const [assignmentOpen, setAssignmentOpen] = React.useState(false);
-  const [batchRecoveryMessage, setBatchRecoveryMessage] = React.useState<string | null>(null);
   const creatingTaskRef = React.useRef(false);
   const mindMapViewRef = React.useRef<HTMLDivElement>(null);
   const mapSurfaceRef = React.useRef<HTMLDivElement>(null);
@@ -402,6 +401,7 @@ const MindMapView: React.FC = () => {
   }, []);
 
   const boardId = activeBoardId || '';
+  const { message: batchRecoveryMessage, request: requestBatchRecovery } = useMindMapBatchRecovery(boardId);
 
   const getPlacementIdForNodeId = React.useCallback((nodeId: string) => (
     projectionNodes[nodeId]?.trackingReferenceId || primaryPlacementId(nodeId)
@@ -868,31 +868,6 @@ const MindMapView: React.FC = () => {
   }, [clipboard]);
 
   React.useEffect(() => () => resetPasteBurstAnchor(), [resetPasteBurstAnchor]);
-
-  React.useEffect(() => {
-    let active = true;
-    setBatchRecoveryMessage(null);
-    if (!boardId) return undefined;
-    try {
-      if (window.sessionStorage.getItem(`projed.mindmap.batch-recovery.v1.${boardId}`)) {
-        setBatchRecoveryMessage('正在確認前一筆批次操作結果…');
-      }
-    } catch {
-      setBatchRecoveryMessage('無法讀取批次復原狀態，已暫停新的批次操作。');
-    }
-    void recoverNodeBatch(boardId).then(outcome => {
-      if (!active || !outcome) return;
-      if (outcome.status === 'indeterminate') {
-        setBatchRecoveryMessage(outcome.error || '前一筆批次操作結果未確認，已暫停新的批次操作。');
-      } else if (outcome.status === 'compensated') {
-        toast.warning('已還原前一筆未完成的批次操作。');
-        setBatchRecoveryMessage(null);
-      } else {
-        setBatchRecoveryMessage(null);
-      }
-    });
-    return () => { active = false; };
-  }, [boardId, recoverNodeBatch]);
 
   React.useEffect(() => {
     if (!boardId || rootNodes.length === 0 || initialSelectionBoardRef.current === boardId) return;
@@ -1617,20 +1592,19 @@ const MindMapView: React.FC = () => {
   const reportBatchOutcome = React.useCallback((
     outcome: Awaited<ReturnType<typeof commitNodeBatch>>,
     successMessage?: string,
+    recoveryBoardId = boardId,
   ) => {
     if (outcome.status === 'committed') {
       if (successMessage) toast.success(successMessage);
       return true;
     }
     if (outcome.status === 'indeterminate') {
-      const message = outcome.error || '操作結果未確認，已暫停相同批次操作。';
-      setBatchRecoveryMessage(message);
-      toast.error(message);
+      requestBatchRecovery(recoveryBoardId, outcome.error);
       return false;
     }
     toast.error(outcome.error || (outcome.status === 'compensated' ? '操作失敗，已還原原狀。' : '操作未完成。'));
     return false;
-  }, []);
+  }, [boardId, requestBatchRecovery]);
 
   const commitMindMapSiblingMove = React.useCallback(async (
     nodeId: string,
@@ -1823,7 +1797,7 @@ const MindMapView: React.FC = () => {
       Object.fromEntries(taskIds.map(id => [id, { isArchived: true }])),
       { label: '批次封存任務', recoveryKind: 'archive' },
     );
-    if (!reportBatchOutcome(outcome, `已封存 ${taskIds.length} 個任務。`)) return false;
+    if (!reportBatchOutcome(outcome, `已封存 ${taskIds.length} 個任務。`, source.boardId)) return false;
     setMindMapClipboard(clipboard?.mode === 'cut' ? null : clipboard);
     selectionStore.setSelection([]);
     closeLocalMenu(false);
