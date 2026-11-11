@@ -1,9 +1,6 @@
 import type { TaskNode } from '../../types';
 import { createBlankTaskNode } from '../../features/taskCreation/createBlankTaskNode';
-import {
-  getInsertOrder,
-  getSiblingNodes,
-} from './mindMapTree';
+import { getSiblingNodes } from './mindMapTree';
 
 export const DEFAULT_MINDMAP_TASK_TITLE = '新任務';
 
@@ -36,6 +33,7 @@ interface MindMapTaskCreatePlan {
   parentId: string | null;
   order: number;
   inheritRootSideFromId?: string;
+  siblingOrderUpdates?: Record<string, { order: number }>;
 }
 
 export const createMindMapTaskNode = ({
@@ -82,11 +80,24 @@ export const getMindMapSiblingTaskCreatePlan = ({
   if (!nodeId) return null;
   const selected = nodes[nodeId];
   if (!selected) return null;
-  const siblings = getSiblingNodes(nodes, parentNodesIndex, selected.parentId, boardId);
+  const siblings = getSiblingNodes(nodes, parentNodesIndex, selected.parentId, boardId)
+    .sort((left, right) => left.order - right.order || left.id.localeCompare(right.id));
+  const index = siblings.findIndex(sibling => sibling.id === selected.id);
+  if (index < 0) return null;
+  // Supabase stores WBS and primary placement order as integers. Make room
+  // only until the next gap instead of creating an unsavable fractional order.
+  const order = Math.floor(selected.order) + 1;
+  const siblingOrderUpdates: Record<string, { order: number }> = {};
+  let nextOrder = order + 1;
+  for (const sibling of siblings.slice(index + 1)) {
+    if (sibling.order >= nextOrder) break;
+    siblingOrderUpdates[sibling.id] = { order: nextOrder++ };
+  }
   return {
     parentId: selected.parentId || null,
-    order: getInsertOrder(siblings, selected.id, 'after'),
+    order,
     inheritRootSideFromId: selected.parentId ? undefined : selected.id,
+    siblingOrderUpdates,
   };
 };
 

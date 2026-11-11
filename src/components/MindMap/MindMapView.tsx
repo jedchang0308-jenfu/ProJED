@@ -355,6 +355,7 @@ const MindMapView: React.FC = () => {
   const [localMenu, setLocalMenu] = React.useState<MindMapLocalMenuState | null>(null);
   const [assignmentOpen, setAssignmentOpen] = React.useState(false);
   const [batchRecoveryMessage, setBatchRecoveryMessage] = React.useState<string | null>(null);
+  const creatingTaskRef = React.useRef(false);
   const mindMapViewRef = React.useRef<HTMLDivElement>(null);
   const mapSurfaceRef = React.useRef<HTMLDivElement>(null);
   const mapStageRef = React.useRef<HTMLDivElement>(null);
@@ -1235,15 +1236,17 @@ const MindMapView: React.FC = () => {
     return () => window.removeEventListener('dragover', handleWindowDragOver);
   }, [draggedNodeId, getCurrentCoordinateMapper]);
 
-  const createTask = React.useCallback((
+  const createTask = React.useCallback(async (
     parentId: string | null,
     order: number,
     title = DEFAULT_MINDMAP_TASK_TITLE,
+    siblingOrderUpdates: Record<string, { order: number }> = {},
   ) => {
     if (!canCreateTask || !activeWorkspaceId || !boardId) {
       toast.warning(MINDMAP_MESSAGES.noCreateTaskPermission);
       return null;
     }
+    if (creatingTaskRef.current) return null;
 
     const node = createMindMapTaskNode({
       workspaceId: activeWorkspaceId,
@@ -1252,19 +1255,44 @@ const MindMapView: React.FC = () => {
       title,
       order,
     });
-    addNode(node);
-    selectNode(node.id);
-    const expansionPath = getMindMapExpansionPath(nodes, parentId, boardId);
-    expandNodes([...expansionPath, node.id]);
-    if (canEditTask) {
-      setInlineTitleEditNodeId(node.id);
-      setInlineTitleEditFocusNodeId(node.id);
+    const userId = useAuthStore.getState().user?.uid;
+    const isCurrentBoard = () => useBoardStore.getState().activeBoardId === boardId
+      && useAuthStore.getState().user?.uid === userId;
+    creatingTaskRef.current = true;
+    try {
+      if (Object.keys(siblingOrderUpdates).length > 0) {
+        if (!canMoveTask) {
+          toast.warning('相鄰任務的排序已無空位，需要搬移任務權限才能插入。');
+          return null;
+        }
+        const outcome = await commitNodeBatch(siblingOrderUpdates, { recoveryKind: 'move', skipUndo: true });
+        if (outcome.status !== 'committed') {
+          if (outcome.status === 'indeterminate') setBatchRecoveryMessage(outcome.error || '排序結果尚待確認。');
+          toast.error(outcome.error || '無法調整任務排序。');
+          return null;
+        }
+      }
+      if (!isCurrentBoard()) return null;
+      await addNode(node, { persistFirst: true });
+      if (!isCurrentBoard()) return null;
+      selectNode(node.id);
+      const expansionPath = getMindMapExpansionPath(nodes, parentId, boardId);
+      expandNodes([...expansionPath, node.id]);
+      if (canEditTask) {
+        setInlineTitleEditNodeId(node.id);
+        setInlineTitleEditFocusNodeId(node.id);
+      }
+      return node;
+    } catch (error) {
+      toast.error(error instanceof Error ? `新增任務失敗：${error.message}` : '新增任務失敗。');
+      return null;
+    } finally {
+      creatingTaskRef.current = false;
     }
-    return node;
-  }, [activeWorkspaceId, addNode, boardId, canCreateTask, canEditTask, expandNodes, nodes, selectNode]);
+  }, [activeWorkspaceId, addNode, boardId, canCreateTask, canEditTask, canMoveTask, commitNodeBatch, expandNodes, nodes, selectNode]);
 
   const handleCreateRoot = React.useCallback(() => {
-    createTask(null, getNextMindMapRootOrder(rootNodes));
+    return createTask(null, getNextMindMapRootOrder(rootNodes));
   }, [createTask, rootNodes]);
 
   const getMindMapContentBounds = React.useCallback(() => {
@@ -1430,11 +1458,11 @@ const MindMapView: React.FC = () => {
     };
   }, [boardId, centerMindMapContent, markGeometryDirty, rootNodes]);
 
-  const createSiblingForNode = React.useCallback((nodeId: string | null) => {
+  const createSiblingForNode = React.useCallback(async (nodeId: string | null) => {
     if (!nodeId) return handleCreateRoot();
     const plan = getMindMapSiblingTaskCreatePlan({ nodeId, nodes, parentNodesIndex, boardId });
     if (!plan) return null;
-    const created = createTask(plan.parentId, plan.order, DEFAULT_MINDMAP_TASK_TITLE);
+    const created = await createTask(plan.parentId, plan.order, DEFAULT_MINDMAP_TASK_TITLE, plan.siblingOrderUpdates);
     if (created && plan.inheritRootSideFromId) {
       updateRootSide(created.id, getNodeSide(plan.inheritRootSideFromId));
     }
@@ -1460,13 +1488,10 @@ const MindMapView: React.FC = () => {
       return;
     }
     updateNode(nodeId, { title: getCommittedMindMapTitle(title) });
-    const created = intent === 'child'
-      ? createChildForNode(nodeId)
-      : createSiblingForNode(nodeId);
-    if (!created) {
-      setInlineTitleEditNodeId(null);
-      setInlineTitleEditFocusNodeId(null);
-    }
+    setInlineTitleEditNodeId(null);
+    setInlineTitleEditFocusNodeId(null);
+    if (intent === 'child') void createChildForNode(nodeId);
+    else void createSiblingForNode(nodeId);
   }, [canEditTask, createChildForNode, createSiblingForNode, updateNode]);
 
   const localMenuSelection = React.useMemo(() => {

@@ -120,6 +120,7 @@ export type CommitNodeBatchOptions = {
   label?: string;
   mergeKey?: string;
   timeoutMs?: number;
+  skipUndo?: boolean;
   recoveryKind?: 'copy-paste' | 'cut-paste' | 'move' | 'assign' | 'archive' | 'undo' | 'redo';
   presentation?: Readonly<{
     commit: () => Promise<void>;
@@ -160,7 +161,7 @@ export interface WbsBoardActions {
   /**
    * 新增單一任務節點
    */
-  addNode: (node: TaskNode) => void;
+  addNode: (node: TaskNode, options?: { persistFirst?: boolean }) => void | Promise<void>;
 
   /**
    * 更新任務節點 (部分欄位)
@@ -1270,13 +1271,21 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     get()._buildIndices(nextNodes);
   },
 
-  addNode: (node) => {
-    const state = get();
+  addNode: (node, { persistFirst = false } = {}) => {
     const normalizedNode = normalizeTaskStatusNode(normalizeTaskAssignmentNode(node));
-    // 使用 Immutable 更新 nodes
-    const updatedNodes = { ...state.nodes, [normalizedNode.id]: normalizedNode };
-    set({ nodes: updatedNodes });
-    get()._buildIndices(updatedNodes);
+    const publishNode = () => {
+      const updatedNodes = { ...get().nodes, [normalizedNode.id]: normalizedNode };
+      set({ nodes: updatedNodes });
+      get()._buildIndices(updatedNodes);
+      useUndoStore.getState().pushUndo({
+        label: '新增任務',
+        undo: () => get().archiveNode(normalizedNode.id),
+        redo: () => {
+          if (persistFirst) get().updateNode(normalizedNode.id, { isArchived: false });
+          else get().addNode(normalizedNode);
+        },
+      });
+    };
 
     const isUnplacedTask = isTaskWorkbenchUnplacedTask(normalizedNode);
     const creationActivityPayload = {
@@ -1291,6 +1300,20 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
         order: normalizedNode.order,
       },
     };
+    const recordCreation = async () => {
+      logTaskActivity(normalizedNode, 'task_created', creationActivityPayload);
+      await commitMeetingTaskMutation(null, normalizedNode, ['title', 'status', 'description', 'detailNotes', 'startDate', 'endDate', 'isDurationLocked', 'assigneeIds', 'assigneeId', 'collaboratorIds', 'tagIds', 'isArchived'], `task-create-${normalizedNode.id}-${Date.now().toString(36)}`);
+    };
+
+    if (persistFirst) {
+      const userId = useAuthStore.getState().user?.uid;
+      return nodeService.create(normalizedNode.workspaceId, normalizedNode.boardId, normalizedNode).then(() => {
+        if (useAuthStore.getState().user?.uid !== userId) return;
+        publishNode();
+        void recordCreation();
+      });
+    }
+    publishNode();
 
     // 同步寫入資料來源；未歸位任務是工作台本機位置，不寫入假看板路徑。
     if (isUnplacedTask) {
@@ -1301,21 +1324,11 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
         const boardId = normalizedNode.boardId;
          void persistTaskCreationBeforeActivity(
            () => nodeService.create(workspaceId, boardId, normalizedNode),
-           async () => {
-             logTaskActivity(normalizedNode, 'task_created', creationActivityPayload);
-             await commitMeetingTaskMutation(null, normalizedNode, ['title', 'status', 'description', 'detailNotes', 'startDate', 'endDate', 'isDurationLocked', 'assigneeIds', 'assigneeId', 'collaboratorIds', 'tagIds', 'isArchived'], `task-create-${normalizedNode.id}-${Date.now().toString(36)}`);
-           },
+           recordCreation,
          ).catch(error => {
           console.error('[wbsStore] Failed to persist created task before activity logging:', error);
         });
     }
-
-    // 紀錄上一步
-    useUndoStore.getState().pushUndo({
-        label: '新增任務',
-        undo: () => get().archiveNode(normalizedNode.id),
-        redo: () => get().addNode(normalizedNode),
-    });
   },
 
   duplicateNodeTree: async (id, options = {}) => {
@@ -1791,7 +1804,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       }
       clearNodeBatchRecovery(descriptor.boardId, descriptor.operationId, archiveTaskId);
       options.presentation?.onCommitted?.();
-      if (!useUndoStore.getState().isApplying) {
+      if (!options.skipUndo && !useUndoStore.getState().isApplying) {
         const label = options.label || (affectedTaskIds.length > 1 ? '批次修改任務' : '修改任務');
         useUndoStore.getState().pushUndo({
           label,

@@ -131,7 +131,7 @@ async (page) => {
     window.__projedTaskTrackingTestFault = { operation, failNext: true, message };
   }, { operation, message });
   const runCase = async (id, expected, flow) => {
-    if (archiveOnly && !/^B18[AB]-/.test(id)) {
+    if (archiveOnly && !/^B18[ABC]-/.test(id)) {
       cases.push({ id, status: 'NOT_RUN', expected });
       return;
     }
@@ -321,6 +321,35 @@ async (page) => {
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForFunction(key => sessionStorage.getItem(key) === null, recoveryKey);
     return { rightClickPersisted: true, deletePersisted: true, overlapBlocked: true, priorJournalPreserved: true, archivedReadbackClearsLegacyJournal: true };
+  });
+
+  await runCase('B18C-mindmap-dense-sibling-creation', 'a task inserted between adjacent integer orders persists before display; failed creation never leaves a node', async () => {
+    await seed({ references: [] });
+    await page.locator('[data-mode-switcher-trigger="true"]').click();
+    await page.locator('[data-mode-switcher-value="mindmap"]').click();
+    const task = id => page.locator('[data-mindmap-node="' + id + '"]');
+    const menu = page.locator('[data-mindmap-context-menu="true"]');
+    const create = async () => {
+      await task('p-task-b').click({ button: 'right' });
+      await menu.locator('[data-task-action-id="task.create-sibling"]').click();
+    };
+    const before = Object.keys(await readNodes());
+    await page.evaluate(() => {
+      localStorage.setItem('projed-local-test.taskNodeFault', 'create-second-once');
+      localStorage.setItem('projed-local-test.taskNodeFaultProgress', '1');
+    });
+    await create();
+    await page.getByText(/新增任務失敗：/).last().waitFor({ state: 'visible' });
+    if ((await readNodes())['p-task-d'].order !== 3 || await task('p-task-b').count() !== 1
+      || await page.locator('[data-mindmap-node-title="新任務"]').count()) throw new Error('failed insert left an unsaved task or failed to make space');
+    await create();
+    await page.locator('[data-mindmap-node-title="新任務"]').waitFor({ state: 'visible' });
+    const persisted = await readNodes();
+    const createdId = Object.keys(persisted).find(id => !before.includes(id));
+    if (!createdId || persisted[createdId].order !== 2 || persisted['p-task-d'].order !== 3) {
+      throw new Error('the stored insertion order must place the new task between the existing siblings');
+    }
+    return { insertedAt: persisted[createdId].order, nextSiblingOrder: persisted['p-task-d'].order, failedCreateLeftNoNode: true };
   });
 
   await runCase('B19-desktop-pointer-dnd-parity', 'pointer drag reorders and appends tracking placement while canonical drag keeps its own command route; failure retains source', async () => {
