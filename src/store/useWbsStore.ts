@@ -1920,6 +1920,10 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     const finalizeCommitted = async () => {
       applyCommittedPatches(afterPatches);
       const committedNodes = get().nodes;
+      // The canonical task write is already confirmed. Recording ancillary
+      // activity must not keep this task locked while those requests finish.
+      clearNodeBatchRecovery(descriptor.boardId, descriptor.operationId, archiveTaskId);
+      options.presentation?.onCommitted?.();
       for (const id of affectedTaskIds) {
         const beforeNode = beforeNodes[id];
         const afterNode = committedNodes[id];
@@ -1932,8 +1936,6 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
           deleteCalendarEventBestEffort(id);
         }
       }
-      clearNodeBatchRecovery(descriptor.boardId, descriptor.operationId, archiveTaskId);
-      options.presentation?.onCommitted?.();
       if (!useUndoStore.getState().isApplying) {
         const label = options.label || (affectedTaskIds.length > 1 ? '批次修改任務' : '修改任務');
         useUndoStore.getState().pushUndo({
