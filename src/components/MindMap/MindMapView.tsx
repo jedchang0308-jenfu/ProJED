@@ -2,6 +2,7 @@ import React from 'react';
 import useBoardStore from '../../store/useBoardStore';
 import { useWbsStore } from '../../store/useWbsStore';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
+import { useTaskPlacementPermissions } from '../../hooks/useTaskPlacementPermissions';
 import useDialogStore from '../../store/useDialogStore';
 import { toast } from '../../store/useToastStore';
 import { useMemberStore } from '../../store/useMemberStore';
@@ -1484,6 +1485,31 @@ const MindMapView: React.FC = () => {
     };
   }, [getNodeIdForPlacementId, localMenu, nodes, projectionNodes]);
 
+  // A tracking projection is rendered on the active Board, but its mutation
+  // authority belongs to the canonical task's source Board.  The local mind
+  // map menu must use the same placement-aware capability path as the shared
+  // context menu; otherwise a valid archive action is hidden in production
+  // while the target Board still exposes the placement.
+  const localMenuProjectionNode = localMenuSelection.placementNodes.length === 1
+    ? localMenuSelection.placementNodes[0].node
+    : null;
+  const localMenuTrackingReference = localMenuProjectionNode?.isTrackingReference
+    && localMenuProjectionNode.trackingReferenceId
+    ? trackingReferences.find(reference => (
+      reference.id === localMenuProjectionNode.trackingReferenceId && !reference.removedAt
+    )) || null
+    : null;
+  const localMenuPermissionNode = localMenuProjectionNode?.canonicalTaskId
+    ? nodes[localMenuProjectionNode.canonicalTaskId] || localMenuProjectionNode
+    : localMenuProjectionNode;
+  const localMenuPlacementPermissions = useTaskPlacementPermissions(
+    localMenuPermissionNode,
+    localMenuTrackingReference,
+  );
+  const localMenuCanDeleteTask = localMenuTrackingReference
+    ? localMenuPlacementPermissions.canDeleteTask
+    : canDeleteTask;
+
   const getClipboardSelection = React.useCallback((): MindMapClipboardSelection => {
     const placementNodes = selectionStore.getSelectedPlacementIds().flatMap(placementId => {
       const nodeId = getNodeIdForPlacementId(placementId);
@@ -1555,7 +1581,7 @@ const MindMapView: React.FC = () => {
       lock('task.promote', '無法將此任務往上一階');
     }
     if (!canAssignTask) lock('task.assign', '缺少指派任務權限');
-    if (!canDeleteTask) lock('task.archive', '缺少封存任務權限');
+    if (!localMenuCanDeleteTask) lock('task.archive', '缺少封存任務權限');
     if (!canManageTaskReference) {
       lock('task.create-tracking-reference', '缺少管理追蹤副本權限');
       lock('task.remove-tracking-reference', '缺少管理追蹤副本權限');
@@ -1584,12 +1610,12 @@ const MindMapView: React.FC = () => {
     canAssignTask,
     canCreateDependency,
     canCreateTask,
-    canDeleteTask,
     canEditTask,
     canManageTaskReference,
     canMoveTask,
     clipboard,
     localMenuSelection,
+    localMenuCanDeleteTask,
     nodes,
     projectionNodes,
   ]);
@@ -1766,7 +1792,15 @@ const MindMapView: React.FC = () => {
   ]);
 
   const archivePlacementSelection = React.useCallback(async (placementIds: readonly string[]) => {
-    if (!canDeleteTask || placementIds.length === 0) return false;
+    const canArchiveSelection = (
+      localMenuTrackingReference
+      && placementIds.length === 1
+      && localMenuSelection.placementIds.length === 1
+      && localMenuSelection.placementIds[0] === placementIds[0]
+    )
+      ? localMenuCanDeleteTask
+      : canDeleteTask;
+    if (!canArchiveSelection || placementIds.length === 0) return false;
     const placementNodes = placementIds.flatMap(placementId => {
       const nodeId = getNodeIdForPlacementId(placementId);
       const node = nodeId ? projectionNodes[nodeId] || nodes[nodeId] : null;
@@ -1790,7 +1824,7 @@ const MindMapView: React.FC = () => {
     selectionStore.setSelection([]);
     closeLocalMenu(false);
     return true;
-  }, [canDeleteTask, clipboard, closeLocalMenu, commitNodeBatch, getNodeIdForPlacementId, nodes, projectionNodes, reportBatchOutcome, selectionStore, setMindMapClipboard]);
+  }, [canDeleteTask, clipboard, closeLocalMenu, commitNodeBatch, getNodeIdForPlacementId, localMenuCanDeleteTask, localMenuSelection.placementIds, localMenuTrackingReference, nodes, projectionNodes, reportBatchOutcome, selectionStore, setMindMapClipboard]);
 
   const handleMindMapBatchArchive = React.useCallback(async () => {
     await archivePlacementSelection(localMenuSelection.placementIds);
