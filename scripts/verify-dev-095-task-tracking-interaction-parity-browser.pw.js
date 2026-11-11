@@ -200,6 +200,37 @@ async (page) => {
     return { primaryActions, referenceActions, sharedActions: sharedPrimary, derivedManagerActions: derivedActions };
   });
 
+  await runCase('B18A-mindmap-reference-archive-parity', 'a tracking placement can archive its canonical task from the context menu or Delete', async () => {
+    const openMindMapReference = async () => {
+      const modeTrigger = page.locator('[data-mode-switcher-trigger="true"]');
+      await modeTrigger.click();
+      await page.locator('[data-mode-switcher-value="mindmap"]').click();
+      const target = page.locator('[data-mindmap-placement-kind="tracking-reference"][data-task-placement-id="p-ref-c"]').first();
+      await target.waitFor({ state: 'visible', timeout: 10000 });
+      return target;
+    };
+
+    await seed();
+    const contextTarget = await openMindMapReference();
+    await contextTarget.click({ button: 'right', position: { x: 28, y: 10 } });
+    const contextMenu = page.locator('[data-mindmap-context-menu="true"]');
+    await contextMenu.waitFor({ state: 'visible', timeout: 10000 });
+    const archiveAction = contextMenu.locator('[data-task-action-id="task.archive"]');
+    await archiveAction.waitFor({ state: 'visible', timeout: 10000 });
+    await archiveAction.click();
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}')['p-task-c']?.isArchived === true, null, { timeout: 10000 });
+    if (await contextTarget.count()) throw new Error('context-menu archive left the tracking placement visible');
+
+    await seed();
+    const keyboardTarget = await openMindMapReference();
+    await keyboardTarget.focus();
+    await page.keyboard.press('Delete');
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}')['p-task-c']?.isArchived === true, null, { timeout: 10000 });
+    if (await keyboardTarget.count()) throw new Error('Delete archive left the tracking placement visible');
+
+    return { contextMenuArchivedCanonicalTask: true, deleteArchivedCanonicalTask: true, canonicalTaskId: 'p-task-c' };
+  });
+
   await runCase('B19-desktop-pointer-dnd-parity', 'pointer drag reorders and appends tracking placement while canonical drag keeps its own command route; failure retains source', async () => {
     await seed({ references: [nestedRefsA[0]] });
     const beforeNodes = await readNodes();

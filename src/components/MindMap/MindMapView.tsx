@@ -1542,7 +1542,7 @@ const MindMapView: React.FC = () => {
       ].forEach(actionId => lock(actionId as TaskActionId, '多選時不支援此操作'));
     }
     if (localMenuSelection.hasTrackingProjection) {
-      ['task.copy', 'task.cut', 'task.paste-after', 'task.assign', 'task.archive'].forEach(actionId => (
+      ['task.copy', 'task.cut', 'task.paste-after', 'task.assign'].forEach(actionId => (
         lock(actionId as TaskActionId, '選取包含追蹤副本，無法安全批次修改正本')
       ));
     }
@@ -1772,10 +1772,6 @@ const MindMapView: React.FC = () => {
       const node = nodeId ? projectionNodes[nodeId] || nodes[nodeId] : null;
       return node ? [node] : [];
     });
-    if (placementNodes.some(node => node.isTrackingReference)) {
-      toast.warning('選取包含追蹤副本，無法安全批次封存正本。');
-      return false;
-    }
     const canonicalTaskIds = Array.from(new Set(placementNodes.map(node => node.canonicalTaskId || node.id)));
     const forestRootIds = normalizeMindMapForestRoots(canonicalTaskIds, nodes);
     if (forestRootIds.length === 0) return false;
