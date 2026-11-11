@@ -6,7 +6,7 @@ async (page) => {
   const screenshotBase = `output/playwright/dev-068-title-child-drop-${Date.now()}`;
   const requestedCaseId = page.url().match(/[?&]dev068Case=([^&]+)/)?.[1] || null;
   const currentPageOrigin = page.url().match(/^https?:\/\/[^/]+/)?.[0];
-  const appBaseUrl = currentPageOrigin || 'http://localhost:4000';
+  const appBaseUrl = currentPageOrigin || 'http://localhost:1040';
   const assert = (condition, message, details = {}) => {
     if (!condition) throw new Error(`${message}: ${JSON.stringify(details)}`);
   };

@@ -75,7 +75,7 @@ async (page) => {
 
   const seed = async () => {
     await page.setViewportSize(result.viewport);
-    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:1040/', { waitUntil: 'domcontentloaded' });
     await page.evaluate(({ account, workspace, nodes, unplaced, recordFixture }) => {
       localStorage.clear();
       localStorage.setItem('projed-local-test.selected-account', account.id);

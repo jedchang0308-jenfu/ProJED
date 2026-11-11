@@ -13,7 +13,7 @@ async (page) => {
   page.on('pageerror', error => pageErrors.push(error.message));
 
   await page.setViewportSize({ width: 1280, height: 720 });
-  await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
+  await page.goto('http://localhost:1040/', { waitUntil: 'domcontentloaded' });
 
   const fixedTestButton = page.getByRole('button', { name: /使用固定測試環境/ });
   if (await fixedTestButton.count() && await fixedTestButton.isVisible().catch(() => false)) {

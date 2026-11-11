@@ -179,7 +179,7 @@ async (page) => {
   };
 
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
+  await page.goto('http://localhost:1040/', { waitUntil: 'domcontentloaded' });
   const fixedEnvironmentButton = page.getByRole('button', { name: /使用固定測試環境/ });
   if (await fixedEnvironmentButton.count()) await fixedEnvironmentButton.click();
   await waitForApp();
@@ -350,7 +350,7 @@ async (page) => {
   });
 
   await runCase('QA-084-B12 calendar subscription backdrop', async () => {
-    await page.goto('http://localhost:4000/?qcCalendarSubscription=1', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:1040/?qcCalendarSubscription=1', { waitUntil: 'networkidle' });
     await waitForApp();
     const workspaceSidebar = page.locator('[data-layout-region="workspace-sidebar"]');
     if (!(await workspaceSidebar.isVisible().catch(() => false))) {

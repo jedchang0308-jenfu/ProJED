@@ -78,7 +78,7 @@ async (page) => {
   const boardV5Key = boardId => `projed-task-filters:v5:account:${encodeURIComponent(account.id)}:board:${encodeURIComponent(boardId)}`;
   const executionUrl = () => {
     const current = page.url();
-    return current && !current.startsWith('about:') ? current : 'http://localhost:4000/';
+    return current && !current.startsWith('about:') ? current : 'http://localhost:1040/';
   };
 
   const seedBase = async () => {

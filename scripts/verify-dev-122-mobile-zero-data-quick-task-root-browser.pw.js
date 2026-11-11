@@ -4,7 +4,7 @@ async (page) => {
   const result = {
     devId: 'DEV-122', status: 'FAIL', sourceRevision: 'working-tree', buildId: 'unknown', actorAlias: 'DEV122-ROOT-A', fixtureVersion: 'DEV122-ROOT-R12-V1', platform: 'Chromium', route: '/', viewport: { width: 390, height: 844 },
     cases: [], browserErrors: [], httpFailures: [], screenshots: [],
-    runtime: { port: 4000, reused: true, cleaned: false, portReleased: false },
+    runtime: { port: 1040, reused: true, cleaned: false, portReleased: false },
   };
   const failures = [];
   const record = (id, ok, details = {}) => { result.cases.push({ id, sourceRevision: result.sourceRevision, buildId: result.buildId, actorAlias: result.actorAlias, fixtureVersion: result.fixtureVersion, route: result.route, viewport: result.viewport, platform: result.platform, expected: true, actual: ok, status: ok ? 'PASS' : 'FAIL', details }); if (!ok) failures.push(id); };
@@ -12,7 +12,7 @@ async (page) => {
   page.on('pageerror', error => result.browserErrors.push(error.message));
   page.on('response', response => {
     if (response.status() < 400 || response.url().includes('favicon')) return;
-    if (response.url().startsWith('http://localhost:4000/')) result.httpFailures.push({ status: response.status(), url: response.url() });
+    if (response.url().startsWith('http://localhost:1040/')) result.httpFailures.push({ status: response.status(), url: response.url() });
   });
   let collectQuickRequests = false;
   const quickRequests = [];
@@ -25,7 +25,7 @@ async (page) => {
   const unplacedTask = { id: 'task_workbench_unplaced_dev122-root', workspaceId: workspace.id, boardId: '__task_workbench_unplaced__', parentId: null, title: 'DEV122 root intent task', status: 'todo', nodeType: 'task', order: 0, description: '', createdAt: 1704067200000, updatedAt: 1704067200000 };
   try {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:1040/', { waitUntil: 'domcontentloaded' });
     await page.evaluate(({ account, workspace, unplacedTask }) => {
       localStorage.clear();
       sessionStorage.clear();
@@ -75,10 +75,10 @@ async (page) => {
       && shortcut?.icons?.some(icon => icon.sizes === '512x512')
       && rootManifestLinks.length === 1
       && rootManifestLinks[0] === '/manifest.webmanifest'
-      && page.url().replace('http://localhost:4000', '').split(/[?#]/u)[0] === '/', { rootManifest, rootManifestLinks, url: page.url() });
+      && page.url().replace('http://localhost:1040', '').split(/[?#]/u)[0] === '/', { rootManifest, rootManifestLinks, url: page.url() });
 
     collectQuickRequests = true;
-    await page.goto('http://localhost:4000/quick-task/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:1040/quick-task/', { waitUntil: 'domcontentloaded' });
     await page.locator('#quick-task-title').waitFor({ state: 'visible', timeout: 10000 });
     await page.waitForTimeout(250);
     collectQuickRequests = false;
@@ -101,7 +101,7 @@ async (page) => {
     const settingsEvidence = [];
     for (const viewport of [{ width: 390, height: 844 }, { width: 1440, height: 900 }]) {
       await page.setViewportSize(viewport);
-      await page.goto('http://localhost:4000/?qcReset=1', { waitUntil: 'domcontentloaded' });
+      await page.goto('http://localhost:1040/?qcReset=1', { waitUntil: 'domcontentloaded' });
       await page.evaluate(({ account, workspace }) => {
         localStorage.setItem('projed-local-test.selected-account', account.id);
         localStorage.setItem('projed-local-test.session', JSON.stringify(account));

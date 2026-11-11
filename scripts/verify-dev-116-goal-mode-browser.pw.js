@@ -9,9 +9,9 @@ async (page) => {
     viewports: [{ width: 1440, height: 900 }, { width: 814, height: 698 }, { width: 390, height: 900 }],
     requestCounts: { boardRecordListLoad: 1, perRowRecordLoads: 0 },
     mutationCounts: { task: 0, record: 0, taskLink: 0 },
-    cases: [], browserErrors: [], httpFailures: [], cleanup: { runtime: 'matching pre-existing localhost:4000', action: 'reused; not stopped' },
+    cases: [], browserErrors: [], httpFailures: [], cleanup: { runtime: 'matching pre-existing localhost:1040', action: 'reused; not stopped' },
     screenshots: [],
-    runtime: { port: 4000, ownerPid: 28532, cleaned: false, portReleased: false, reused: true },
+    runtime: { port: 1040, ownerPid: 28532, cleaned: false, portReleased: false, reused: true },
   };
   const failures = [];
   const record = (id, ok, details = {}) => { result.cases.push({ id, ok, details }); if (!ok) failures.push(id); };
@@ -48,7 +48,7 @@ async (page) => {
 
   const seed = async (view = 'goal', width = 1440) => {
     await page.setViewportSize({ width, height: 900 });
-    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:1040/', { waitUntil: 'domcontentloaded' });
     await page.evaluate(({ account, workspace, nodes, meetingRecord, meetingRecordHistory, view }) => {
       localStorage.clear(); sessionStorage.clear();
       localStorage.setItem('projed-local-test.selected-account', account.id);

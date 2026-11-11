@@ -1,7 +1,7 @@
 /* eslint-disable */
 async (page) => {
   const outputDir = 'output/playwright/dev-123-meeting-task-resolution';
-  const result = { devId: 'DEV-123', status: 'FAIL', cases: [], screenshots: [], browserErrors: [], httpFailures: [], runtime: { port: 4000, reused: true, cleaned: false, portReleased: false } };
+  const result = { devId: 'DEV-123', status: 'FAIL', cases: [], screenshots: [], browserErrors: [], httpFailures: [], runtime: { port: 1040, reused: true, cleaned: false, portReleased: false } };
   const failures = [];
   const record = (id, ok, details = {}) => { result.cases.push({ id, ok, details }); if (!ok) failures.push(id); };
   page.on('console', message => { if (message.type() === 'error' && !message.text().includes('favicon')) result.browserErrors.push(message.text()); });
@@ -9,7 +9,7 @@ async (page) => {
   page.on('response', response => { if (response.status() >= 500 && !response.url().includes('favicon')) result.httpFailures.push({ status: response.status(), url: response.url() }); });
   try {
     await page.setViewportSize({ width: 1280, height: 900 });
-    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:1040/', { waitUntil: 'domcontentloaded' });
     // New Playwright sessions do not inherit the desktop smoke-test session.
     // Use the app's fixed local test environment so this verifier remains
     // black-box and does not write auth fixtures through page.evaluate.
