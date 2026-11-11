@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { AlertTriangle, ArrowRightLeft, Plus, Trash2, Pencil, LayoutDashboard, X } from 'lucide-react';
+import { AlertTriangle, ArrowRightLeft, Clock3, Plus, Trash2, Pencil, LayoutDashboard, X } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
 import { useMemberStore } from '../store/useMemberStore';
@@ -101,7 +101,6 @@ export const GlobalContextMenu: React.FC = () => {
   const [transferBoardTarget, setTransferBoardTarget] = useState(null);
   const [isAssigneeMenuOpen, setIsAssigneeMenuOpen] = useState(false);
   const [isDeletingWorkspace, setIsDeletingWorkspace] = useState(false);
-  const [reservationEditorKey, setReservationEditorKey] = useState<string | null>(null);
   const [reservationInput, setReservationInput] = useState('');
   const [reservationError, setReservationError] = useState<string | null>(null);
   const reservationInputRef = useRef<HTMLInputElement | null>(null);
@@ -137,7 +136,7 @@ export const GlobalContextMenu: React.FC = () => {
     && currentNode.boardId === activeBoardId,
   );
   const currentReservationValue = getMeetingTaskReservationValue(meetingDraft?.metadata, currentNode?.id || '');
-  const isReservationEditorOpen = Boolean(reservationEditorKey && reservationEditorKey === reservationContextKey);
+  const isReservationEditorOpen = Boolean(contextMenuState?.isOpen && canEditMeetingReservation && reservationContextKey);
   const taskMenuInteractionContext: InteractionContext | null = isTaskMenu && contextMenuState?.kind === 'task'
     ? {
       interactionId: contextMenuState.interactionId || 'legacy-context-menu',
@@ -274,7 +273,6 @@ export const GlobalContextMenu: React.FC = () => {
 
   useEffect(() => {
     if (!contextMenuState?.isOpen || contextMenuState.kind !== 'task') {
-      setReservationEditorKey(null);
       setReservationError(null);
     }
   }, [contextMenuState?.isOpen, contextMenuState?.kind, contextMenuState?.nodeId, contextMenuState?.surfaceId, contextMenuState?.interactionId]);
@@ -296,7 +294,6 @@ export const GlobalContextMenu: React.FC = () => {
   }, [currentReservationValue, isReservationEditorOpen, reservationContextKey]);
 
   const cancelReservationEditor = () => {
-    setReservationEditorKey(null);
     setReservationError(null);
     closeContextMenu({ preserveTaskSelection: true });
   };
@@ -330,38 +327,42 @@ export const GlobalContextMenu: React.FC = () => {
   };
 
   const meetingReservationEditor = isReservationEditorOpen ? (
-    <div className="px-2.5 py-1.5" data-meeting-reservation-editor="true">
-      <input
-        ref={reservationInputRef}
-        type="text"
-        inputMode="numeric"
-        pattern="[0-9]*"
-        maxLength={3}
-        value={reservationInput}
-        onChange={(event) => {
-          setReservationInput(event.target.value);
-          setReservationError(null);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === 'Escape') {
-            event.preventDefault();
-            event.stopPropagation();
-            cancelReservationEditor();
-            return;
-          }
-          if (event.key === 'Enter') {
-            if (event.nativeEvent.isComposing || event.isComposing || event.keyCode === 229) return;
-            event.preventDefault();
-            event.stopPropagation();
-            commitReservation();
-          }
-        }}
-        aria-label="預約時間"
-        aria-invalid={reservationError ? 'true' : 'false'}
-        aria-describedby={reservationError ? 'meeting-reservation-error' : undefined}
-        className="w-full rounded border border-indigo-300 bg-white px-2 py-1 text-sm text-slate-800 outline-none ring-indigo-200 focus:ring-2"
-        data-meeting-reservation-input="true"
-      />
+    <div className="px-3 py-1.5" data-meeting-reservation-editor="true">
+      <div className="flex min-h-9 items-center gap-2.5">
+        <Clock3 size={14} aria-hidden="true" className="flex-shrink-0 text-indigo-500" />
+        <input
+          ref={reservationInputRef}
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          maxLength={3}
+          value={reservationInput}
+          onChange={(event) => {
+            setReservationInput(event.target.value);
+            setReservationError(null);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              event.stopPropagation();
+              cancelReservationEditor();
+              return;
+            }
+            if (event.key === 'Enter') {
+              if (event.nativeEvent.isComposing || event.isComposing || event.keyCode === 229) return;
+              event.preventDefault();
+              event.stopPropagation();
+              commitReservation();
+            }
+          }}
+          aria-label="預約時間"
+          aria-invalid={reservationError ? 'true' : 'false'}
+          aria-describedby={reservationError ? 'meeting-reservation-error' : undefined}
+          placeholder="預約時間"
+          className="min-w-0 flex-1 rounded border border-indigo-300 bg-white px-2 py-1 text-sm text-slate-800 outline-none ring-indigo-200 focus:ring-2"
+          data-meeting-reservation-input="true"
+        />
+      </div>
       {reservationError ? (
         <p id="meeting-reservation-error" role="alert" className="mt-1 text-[11px] leading-4 text-rose-600">
           {reservationError}
@@ -776,9 +777,6 @@ export const GlobalContextMenu: React.FC = () => {
       case 'task.create-tracking-reference': return handleCreateTrackingReference();
       case 'task.remove-tracking-reference': return handleRemoveTrackingReference();
       case 'task.edit-meeting-reservation':
-        if (!canEditMeetingReservation || !reservationContextKey) return;
-        setReservationEditorKey(reservationContextKey);
-        setReservationError(null);
         return;
       case 'task.dependency-start': return enterDependencyMode('start');
       case 'task.dependency-end': return enterDependencyMode('end');

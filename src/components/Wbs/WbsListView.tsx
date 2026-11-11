@@ -7,7 +7,7 @@ import type { TaskNode } from '../../types';
 import useDialogStore from '../../store/useDialogStore';
 import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core';
 import { useDragSensors } from '../../hooks/useDragSensors';
-import { compactClassNames } from '../ui/compactTokens';
+import { compactClassNames, taskViewFrameClassName } from '../ui/compactTokens';
 import { projectTaskFilterResults } from '../../features/taskFilters';
 import { useTaskFilterStore } from '../../store/useTaskFilterStore';
 import { TaskFilterResultState } from '../ui/TaskFilterResultState';
@@ -205,7 +205,7 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
 
   return (
     <WbsDependencyContext.Provider value={dependencyContextValue}>
-      <div className="flex flex-col w-full h-full bg-white overflow-hidden relative">
+      <div className={`relative flex h-full w-full flex-col overflow-hidden bg-white ${taskViewFrameClassName}`}>
         
 
         {/* 依賴選單 Modal 已經移除，統一由右鍵選單進入選取模式 */}

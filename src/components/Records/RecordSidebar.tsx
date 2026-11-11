@@ -24,6 +24,7 @@ import MeetingTaskMatchReview from './MeetingTaskMatchReview';
 import type { EditableKnowledgeRecord, EditableKnowledgeRecordType, KnowledgeRecordStatus, KnowledgeRecordType, KnowledgeRecordVisibility, RecordTaskLinkRole } from '../../types';
 import { reconcileMeetingResolutionTaskLinks } from '../../features/meetingTaskResolution/meetingAnalysisContract';
 import { isPrimaryPointerActivation } from '../../interactions/pointerActivation';
+import { getMeetingTaskReservations } from '../../utils/meetingTaskReservation';
 
 type ProjectChangeImportStatus = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
 type ProjectChangeImportStepState = 'pending' | 'skipped' | 'inserted';
@@ -904,6 +905,10 @@ const RecordSidebar: React.FC = () => {
   const canUseProjectChangeImport = Boolean(draft && !isPublished && (isLiveMeeting || isWorkLog));
   const shouldShowProjectChangeImport = Boolean(canUseProjectChangeImport && isProjectImportExpanded);
   const sidebarRecordTitle = draft ? recordTypeLabel(draft.type) : '紀錄';
+  const isMeetingSidebar = draft?.type === 'meeting';
+  const meetingReservationTotal = isMeetingSidebar
+    ? Object.values(getMeetingTaskReservations(draft.metadata)?.values ?? {}).reduce((total, value) => total + value, 0)
+    : 0;
   const projectImportStepEnabled = canUseProjectChangeImport && !saving && !isSynthesizing;
   const contentMinHeightClass = draft?.type === 'meeting' ? 'min-h-[220px]' : 'min-h-[150px]';
   const projectImportStatusLabel = getProjectImportStepStatusLabel(
@@ -1208,7 +1213,7 @@ const RecordSidebar: React.FC = () => {
 
   if (isPanelCollapsed) {
     return (
-      <aside className="fixed inset-x-0 bottom-0 z-30 flex h-12 w-full shrink-0 flex-row items-center justify-between border-t border-slate-200 bg-white px-3 shadow-sm sm:relative sm:inset-auto sm:z-auto sm:h-auto sm:w-12 sm:flex-col sm:justify-start sm:border-l sm:border-t-0 sm:px-0 sm:py-3">
+      <aside className={`fixed inset-x-0 bottom-0 z-30 flex h-12 w-full shrink-0 flex-row items-center justify-between rounded-xl border bg-white px-3 sm:relative sm:inset-auto sm:z-auto sm:h-auto sm:w-[34px] sm:flex-col sm:justify-start sm:px-0 sm:py-3 ${isMeetingSidebar ? 'border-primary-400 shadow-[0_0_12px_4px_rgba(99,102,241,0.75),0_0_28px_10px_rgba(99,102,241,0.48)]' : 'border-slate-200 shadow-sm'}`}>
         <button
           type="button"
           onClick={togglePanelCollapsed}
@@ -1220,9 +1225,22 @@ const RecordSidebar: React.FC = () => {
         >
           <ChevronLeft size={17} />
         </button>
-        <div className="mt-0 flex text-[11px] font-medium text-slate-500 [writing-mode:horizontal-tb] sm:mt-3 sm:[writing-mode:vertical-rl]">
-          {sidebarRecordTitle}
+        <div className={`mt-0 flex text-[11px] [writing-mode:horizontal-tb] sm:mt-3 sm:[writing-mode:vertical-rl] ${isMeetingSidebar ? 'font-bold text-primary-700 drop-shadow-[0_0_8px_rgba(99,102,241,1)]' : 'font-medium text-slate-500'}`}>
+          {isMeetingSidebar ? '會議進行中...' : sidebarRecordTitle}
         </div>
+        {isMeetingSidebar && meetingReservationTotal > 0 ? (
+          <div
+            className="mt-0 flex items-center gap-1 text-[10px] font-medium text-slate-600 sm:mt-3 sm:flex-col"
+            aria-label={`預約合計 ${meetingReservationTotal}`}
+            title={`預約合計 ${meetingReservationTotal}`}
+            data-meeting-reservation-total={meetingReservationTotal}
+          >
+            <span className="sm:hidden">預約合計</span>
+            <span className="inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap rounded-full bg-[#f6cd03] px-1 py-px text-[12px] font-semibold leading-none tabular-nums text-black">
+              {meetingReservationTotal}
+            </span>
+          </div>
+        ) : null}
         {selectedLinks.length ? (
           <div className="mt-0 rounded-md bg-blue-50 px-1.5 py-1 text-[11px] font-semibold text-blue-600 sm:mt-3">
             {selectedLinks.length}
@@ -1236,7 +1254,7 @@ const RecordSidebar: React.FC = () => {
     <>
     <aside
       data-record-composer-shell
-      className="fixed inset-x-0 bottom-0 z-30 flex max-h-[48vh] w-full shrink-0 flex-col border-t border-slate-200 bg-white shadow-2xl sm:relative sm:inset-auto sm:z-auto sm:max-h-none sm:w-[var(--record-sidebar-width)] sm:border-l sm:border-t-0 sm:shadow-sm"
+      className="fixed inset-x-0 bottom-0 z-30 flex max-h-[48vh] w-full shrink-0 flex-col rounded-xl border border-slate-200 bg-white shadow-2xl sm:relative sm:inset-auto sm:z-auto sm:max-h-none sm:w-[var(--record-sidebar-width)] sm:shadow-sm"
       style={sidebarResizeStyle}
     >
       <div

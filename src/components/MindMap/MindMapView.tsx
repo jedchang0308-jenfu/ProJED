@@ -32,6 +32,7 @@ import MindMapRelationshipOverlay from './MindMapRelationshipOverlay';
 import MindMapRootLayout from './MindMapRootLayout';
 import MindMapRelationshipStyleLayer from './MindMapRelationshipStyleLayer';
 import MindMapToolbar from './MindMapToolbar';
+import { taskViewFrameClassName } from '../ui/compactTokens';
 import MindMapContextMenu, { type MindMapContextMenuState } from './MindMapContextMenu';
 import MindMapBatchAssignmentPicker from './MindMapBatchAssignmentPicker';
 import { useMindMapBatchRecovery } from './useMindMapBatchRecovery';
@@ -2665,14 +2666,14 @@ const MindMapView: React.FC = () => {
 
   if (!activeBoard) {
     return (
-      <div className="flex h-full items-center justify-center bg-white text-sm text-slate-500">
+      <div className={`flex h-full items-center justify-center bg-white text-sm text-slate-500 ${taskViewFrameClassName}`}>
         {MINDMAP_MESSAGES.selectBoardPrompt}
       </div>
     );
   }
 
   return (
-    <div ref={mindMapViewRef} className="flex h-full flex-col overflow-hidden bg-white" data-mindmap-view onKeyDown={handleKeyDown} tabIndex={-1}>
+    <div ref={mindMapViewRef} className={`flex h-full flex-col overflow-hidden bg-white ${taskViewFrameClassName}`} data-mindmap-view onKeyDown={handleKeyDown} tabIndex={-1}>
       <MindMapToolbar
         isReadOnly={isReadOnly}
         canEditTask={canEditTask}

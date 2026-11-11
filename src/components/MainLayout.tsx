@@ -313,8 +313,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             onBlur={() => setPreviewedPanel(null)}
             className={cn(
               topbarClassNames.textButton,
-              'px-2 text-xs text-primary-700 hover:text-primary-700',
-              previewedPanel === 'task-workbench' && 'z-50 border-primary-500 bg-primary-100 text-primary-800 ring-2 ring-primary-300 shadow-[0_0_0_4px_rgba(99,102,241,0.28)]',
+              'px-2',
+              previewedPanel === 'task-workbench' && 'z-50 border-primary-500 bg-primary-100 ring-2 ring-primary-300 shadow-[0_0_0_4px_rgba(99,102,241,0.28)]',
             )}
             title="開啟或收合所有任務"
             aria-label="開啟或收合所有任務"
@@ -322,7 +322,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           >
             <span
               aria-hidden="true"
-              className="text-[11px] font-black leading-none tracking-tight"
+              className="min-w-0 truncate"
               data-task-workbench-nav-label="all"
             >
               所有任務
@@ -338,8 +338,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             className={cn(
               topbarClassNames.textButton,
               'app-board-switcher min-w-0 max-w-[48vw] justify-start px-2 sm:max-w-none',
-              isSidebarOpen && 'border-primary-300 bg-primary-50 text-primary-700',
-              previewedPanel === 'workspace-sidebar' && 'z-50 border-primary-500 bg-primary-100 text-primary-800 ring-2 ring-primary-300 shadow-[0_0_0_4px_rgba(99,102,241,0.28)]',
+              isSidebarOpen && 'border-primary-300 bg-primary-50',
+              previewedPanel === 'workspace-sidebar' && 'z-50 border-primary-500 bg-primary-100 ring-2 ring-primary-300 shadow-[0_0_0_4px_rgba(99,102,241,0.28)]',
             )}
             title={activeWorkspace && activeBoard
               ? `${isSidebarOpen ? '收合' : '展開'}工作區與看板：${activeWorkspace.title} / ${activeBoard.title}`
@@ -354,7 +354,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           >
             <span
               data-topbar-board-title="true"
-              className="app-board-title min-w-0 truncate text-xs font-bold text-slate-800 sm:overflow-visible sm:text-clip sm:text-sm"
+              className="app-board-title min-w-0 truncate text-slate-600 sm:overflow-visible sm:text-clip"
             >
               {activeBoard?.title || '選擇看板'}
             </span>
@@ -455,15 +455,17 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             type="button"
             onClick={toggleRagPanel}
             className={cn(
-              'btn-outline flex h-7 shrink-0 px-2 text-xs sm:h-8 sm:px-3 sm:text-sm',
               topbarClassNames.textButton,
-              isRagOpen ? 'border-blue-400 bg-blue-50 text-blue-600' : 'hover:border-blue-400 hover:text-blue-600',
+              'px-2 sm:px-3',
+              isRagOpen
+                ? 'border-primary-300 bg-primary-50 hover:border-primary-400 hover:bg-primary-100'
+                : 'hover:border-primary-400 hover:bg-primary-50',
             )}
             title="問AI"
             aria-label="問AI"
             data-ai-analysis-open="true"
           >
-            <Sparkles size={14} className={isRagOpen ? 'text-blue-500' : 'text-slate-400'} />
+            <Sparkles size={14} className={isRagOpen ? 'text-primary-600' : 'text-slate-400'} />
             <span>問AI</span>
           </button>
 

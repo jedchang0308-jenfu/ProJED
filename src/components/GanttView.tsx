@@ -8,7 +8,7 @@ import { Calendar } from 'lucide-react';
 import SharedTaskSidebar from './SharedTaskSidebar';
 import { ViewToolbar } from './ui/ViewToolbar';
 import { GanttHeader, GanttGrid, GanttRow, GanttTaskBar, getColWidth, getX, BAR_HEIGHT } from './Gantt';
-import { compactClassNames, compactSegmentedButtonClass } from './ui/compactTokens';
+import { compactClassNames, compactSegmentedButtonClass, taskViewFrameClassName } from './ui/compactTokens';
 import { selectAndOpenTaskDetails } from '../utils/taskInteractions';
 import { buildHierarchicalTaskItems } from '../utils/taskHierarchy';
 import { useCoarsePointer } from '../hooks/useCoarsePointer';
@@ -186,7 +186,7 @@ const GanttView = () => {
     };
 
     return (
-        <div className="flex-1 flex flex-col bg-slate-50 overflow-hidden">
+        <div className={`flex-1 flex flex-col bg-slate-50 overflow-hidden ${taskViewFrameClassName}`}>
             <ViewToolbar
                 rightControls={(
                     <>
