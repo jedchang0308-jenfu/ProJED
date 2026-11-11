@@ -3,6 +3,7 @@ async (page) => {
   const OUTPUT_DIR = 'output/playwright/dev-095';
   const diagnostics = [];
   const cases = [];
+  const archiveOnly = new URL(page.url()).searchParams.get('dev095Focus') === 'archive';
   page.on('console', message => {
     if (message.text().includes('測試故障：追蹤副本操作失敗。')) return;
     if (message.text().includes('追蹤副本已被其他人更新，請重新載入。')) return;
@@ -130,6 +131,10 @@ async (page) => {
     window.__projedTaskTrackingTestFault = { operation, failNext: true, message };
   }, { operation, message });
   const runCase = async (id, expected, flow) => {
+    if (archiveOnly && !/^B18[AB]-/.test(id)) {
+      cases.push({ id, status: 'NOT_RUN', expected });
+      return;
+    }
     const started = Date.now();
     let actual = {};
     let failure = null;
@@ -228,7 +233,94 @@ async (page) => {
     await page.waitForFunction(() => JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}')['p-task-c']?.isArchived === true, null, { timeout: 10000 });
     if (await keyboardTarget.count()) throw new Error('Delete archive left the tracking placement visible');
 
-    return { contextMenuArchivedCanonicalTask: true, deleteArchivedCanonicalTask: true, canonicalTaskId: 'p-task-c' };
+    const crossBoard = [ref('p-ref-c', 'p-task-c', boardB, null, 0)];
+    await seed({ userId: 'local-test-viewer', activeBoardId: boardB, references: crossBoard, sourceRole: 'viewer', targetRole: 'owner' });
+    const denied = await openMindMapReference();
+    await denied.focus();
+    await page.keyboard.press('Delete');
+    await page.getByText('缺少正本任務的封存權限。', { exact: true }).waitFor({ state: 'visible' });
+    if ((await readNodes())['p-task-c'].isArchived) throw new Error('target permissions allowed an unauthorized source archive');
+
+    await seed({ userId: 'local-test-viewer', activeBoardId: boardB, references: crossBoard, sourceRole: 'owner', targetRole: 'viewer' });
+    const allowed = await openMindMapReference();
+    await allowed.focus();
+    await page.keyboard.press('Delete');
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}')['p-task-c']?.isArchived === true);
+    return { contextMenuArchivedCanonicalTask: true, deleteArchivedCanonicalTask: true, crossBoardSourcePermissionEnforced: true };
+  });
+
+  await runCase('B18B-mindmap-archive-recovery-isolation', 'new tasks can be archived with either entry point while overlapping writes stay protected', async () => {
+    const recoveryKey = 'projed.mindmap.batch-recovery.v1.' + boardA;
+    const archivePrefix = 'projed.mindmap.archive-recovery.v1.' + boardA + ':';
+    const recovery = {
+      version: 1, operationId: 'stale-batch', workspaceId, boardId: boardA,
+      kind: 'archive', phase: 'indeterminate', targetIds: ['p-task-b', 'p-task-d'],
+      expectedBeforeFingerprint: 'fnv1a32:00000000', expectedAfterFingerprint: 'fnv1a32:00000001',
+    };
+    await seed({ references: [] });
+    await page.evaluate(({ recoveryKey, recovery }) => {
+      sessionStorage.setItem(recoveryKey, JSON.stringify(recovery));
+    }, { recoveryKey, recovery });
+    await page.locator('[data-mode-switcher-trigger="true"]').click();
+    await page.locator('[data-mode-switcher-value="mindmap"]').click();
+    await page.getByText('批次資料與已知前後指紋皆不一致，涉及的任務仍待確認。', { exact: true }).waitFor({ state: 'visible', timeout: 10000 });
+    const task = id => page.locator('[data-mindmap-node="' + id + '"]');
+    const menu = page.locator('[data-mindmap-context-menu="true"]');
+    const archive = menu.locator('[data-task-action-id="task.archive"]');
+    const blockedMessage = '前一筆操作仍待確認，暫時無法執行這項操作。';
+    await task('p-task-d').click({ button: 'right' });
+    await archive.click();
+    await page.getByText(blockedMessage, { exact: true }).last().waitFor({ state: 'visible', timeout: 10000 });
+    await page.keyboard.press('Escape');
+    if ((await readNodes())['p-task-d'].isArchived) throw new Error('overlapping task was archived');
+
+    const createTask = async () => {
+      const before = await readNodes();
+      await task('p-task-d').click({ button: 'right' });
+      await menu.locator('[data-task-action-id="task.create-sibling"]').click();
+      await page.waitForFunction(ids => {
+        const nodes = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
+        return Object.keys(nodes).some(id => !ids.includes(id));
+      }, Object.keys(before));
+      const createdId = Object.keys(await readNodes()).find(id => !before[id]);
+      const input = task(createdId).locator('input');
+      if (await input.count()) await page.keyboard.press('Escape');
+      return createdId;
+    };
+    const first = await createTask();
+    await task(first).click({ button: 'right' });
+    await archive.click();
+    const second = await createTask();
+    await task(second).focus();
+    await page.keyboard.press('Delete');
+    await page.waitForFunction(ids => {
+      const nodes = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
+      return ids.every(id => nodes[id]?.isArchived === true);
+    }, [first, second], { timeout: 10000 });
+    await task(second).waitFor({ state: 'detached', timeout: 10000 });
+    const journals = await page.evaluate(({ recoveryKey, archivePrefix }) => ({
+      existing: JSON.parse(sessionStorage.getItem(recoveryKey)),
+      activeArchives: Object.keys(sessionStorage).filter(key => key.startsWith(archivePrefix)),
+    }), { recoveryKey, archivePrefix });
+    if (JSON.stringify(journals.existing) !== JSON.stringify(recovery) || journals.activeArchives.length) {
+      throw new Error('archive modified the old recovery record or left an unnecessary new one');
+    }
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.locator('[data-mindmap-view]').waitFor({ state: 'visible', timeout: 15000 });
+    if (await task(first).count() || await task(second).count() || (await readNodes())['p-task-d'].isArchived) {
+      throw new Error('archive or protection did not survive reload');
+    }
+    // Emulate an authoritative readback confirming that both original targets
+    // are archived, while their unrelated fields no longer match either hash.
+    await page.evaluate(ids => {
+      const key = 'projed-local-test.nodes';
+      const nodes = JSON.parse(localStorage.getItem(key));
+      ids.forEach(id => { nodes[id] = { ...nodes[id], isArchived: true, title: '後續修改的名稱' }; });
+      localStorage.setItem(key, JSON.stringify(nodes));
+    }, recovery.targetIds);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(key => sessionStorage.getItem(key) === null, recoveryKey);
+    return { rightClickPersisted: true, deletePersisted: true, overlapBlocked: true, priorJournalPreserved: true, archivedReadbackClearsLegacyJournal: true };
   });
 
   await runCase('B19-desktop-pointer-dnd-parity', 'pointer drag reorders and appends tracking placement while canonical drag keeps its own command route; failure retains source', async () => {
@@ -564,7 +656,9 @@ async (page) => {
     return { derived: derivedEvidence, sourceEditorCanonicalUpdate: canonical.title, referenceConverged: true, permissionBeforeRevokeEditable: beforeRevokeEvidence, permissionRevokedToReadonly: revokedEvidence, staleRevisionSourceRetained: true, staleRevision: afterStale.revision, providerFailureSourceRetained: true, recoverableMessage: faultMessage, unexpectedDiagnostics: unexpected };
   });
 
-  const passed = cases.every(item => item.status === 'PASS');
+  const executed = cases.filter(item => item.status !== 'NOT_RUN');
+  const runPassed = executed.length > 0 && executed.every(item => item.status === 'PASS');
+  const passed = runPassed && !archiveOnly;
   const result = {
     dev: 'DEV-095',
     devId: 'DEV-095',
@@ -572,9 +666,9 @@ async (page) => {
     environment: 'local-test-browser-interaction-parity',
     provider: 'local-test',
     cases,
-    status: passed ? 'passed' : 'failed',
+    status: runPassed ? (archiveOnly ? 'archive-focus-passed' : 'passed') : 'failed',
     passed,
-    summary: { PASS: cases.filter(item => item.status === 'PASS').length, FAIL: cases.filter(item => item.status === 'FAIL').length, NOT_RUN: 0, BLOCKED: 0 },
+    summary: { PASS: cases.filter(item => item.status === 'PASS').length, FAIL: cases.filter(item => item.status === 'FAIL').length, NOT_RUN: cases.filter(item => item.status === 'NOT_RUN').length, BLOCKED: 0 },
     evidence: ['normal board/list UI entry', 'desktop pointer', 'KeyboardSensor', 'real TouchEvent long-press', 'same Task Details component', 'capability-aware action catalog', 'recursive TaskPlacementTree', '1440x900 screenshot', '390x844 screenshot', '320x844 screenshot', 'localStorage canonical/reference readback', 'provider failure recovery'],
     diagnostics: diagnostics.slice(-80),
   };
@@ -583,6 +677,6 @@ async (page) => {
     sessionStorage.setItem('__DEV095_INTERACTION_PARITY_ARTIFACT', JSON.stringify(value));
     localStorage.setItem('__DEV095_INTERACTION_PARITY_ARTIFACT', JSON.stringify(value));
   }, result);
-  if (!passed) throw new Error(`DEV-095 interaction parity browser verifier failed: ${JSON.stringify(result)}`);
+  if (!runPassed) throw new Error(`DEV-095 interaction parity browser verifier failed: ${JSON.stringify(result)}`);
   return result;
 }
