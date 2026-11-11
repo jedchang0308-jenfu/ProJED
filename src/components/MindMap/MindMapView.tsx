@@ -2,6 +2,9 @@ import React from 'react';
 import useBoardStore from '../../store/useBoardStore';
 import { useWbsStore } from '../../store/useWbsStore';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
+import { useTaskPlacementPermissions } from '../../hooks/useTaskPlacementPermissions';
+import { memberService } from '../../services/dataBackend';
+import useAuthStore from '../../store/useAuthStore';
 import useDialogStore from '../../store/useDialogStore';
 import { toast } from '../../store/useToastStore';
 import { useMemberStore } from '../../store/useMemberStore';
@@ -1484,6 +1487,31 @@ const MindMapView: React.FC = () => {
     };
   }, [getNodeIdForPlacementId, localMenu, nodes, projectionNodes]);
 
+  // A tracking projection is rendered on the active Board, but its mutation
+  // authority belongs to the canonical task's source Board.  The local mind
+  // map menu must use the same placement-aware capability path as the shared
+  // context menu; otherwise a valid archive action is hidden in production
+  // while the target Board still exposes the placement.
+  const localMenuProjectionNode = localMenuSelection.placementNodes.length === 1
+    ? localMenuSelection.placementNodes[0].node
+    : null;
+  const localMenuTrackingReference = localMenuProjectionNode?.isTrackingReference
+    && localMenuProjectionNode.trackingReferenceId
+    ? trackingReferences.find(reference => (
+      reference.id === localMenuProjectionNode.trackingReferenceId && !reference.removedAt
+    )) || null
+    : null;
+  const localMenuPermissionNode = localMenuProjectionNode?.canonicalTaskId
+    ? nodes[localMenuProjectionNode.canonicalTaskId] || localMenuProjectionNode
+    : localMenuProjectionNode;
+  const localMenuPlacementPermissions = useTaskPlacementPermissions(
+    localMenuPermissionNode,
+    localMenuTrackingReference,
+  );
+  const localMenuCanDeleteTask = localMenuTrackingReference
+    ? !localMenuPlacementPermissions.loading && localMenuPlacementPermissions.canDeleteTask
+    : canDeleteTask;
+
   const getClipboardSelection = React.useCallback((): MindMapClipboardSelection => {
     const placementNodes = selectionStore.getSelectedPlacementIds().flatMap(placementId => {
       const nodeId = getNodeIdForPlacementId(placementId);
@@ -1525,7 +1553,7 @@ const MindMapView: React.FC = () => {
       return { enabled, disabledReasons };
     }
     if (batchRecoveryMessage) {
-      ['task.copy', 'task.cut', 'task.paste-after', 'task.assign', 'task.archive', 'task.promote'].forEach(actionId => (
+      ['task.copy', 'task.cut', 'task.paste-after', 'task.assign', 'task.promote'].forEach(actionId => (
         lock(actionId as TaskActionId, '前一筆批次操作結果待確認')
       ));
     }
@@ -1542,7 +1570,7 @@ const MindMapView: React.FC = () => {
       ].forEach(actionId => lock(actionId as TaskActionId, '多選時不支援此操作'));
     }
     if (localMenuSelection.hasTrackingProjection) {
-      ['task.copy', 'task.cut', 'task.paste-after', 'task.assign', 'task.archive'].forEach(actionId => (
+      ['task.copy', 'task.cut', 'task.paste-after', 'task.assign'].forEach(actionId => (
         lock(actionId as TaskActionId, '選取包含追蹤副本，無法安全批次修改正本')
       ));
     }
@@ -1555,7 +1583,7 @@ const MindMapView: React.FC = () => {
       lock('task.promote', '無法將此任務往上一階');
     }
     if (!canAssignTask) lock('task.assign', '缺少指派任務權限');
-    if (!canDeleteTask) lock('task.archive', '缺少封存任務權限');
+    if (!localMenuCanDeleteTask) lock('task.archive', '缺少封存任務權限');
     if (!canManageTaskReference) {
       lock('task.create-tracking-reference', '缺少管理追蹤副本權限');
       lock('task.remove-tracking-reference', '缺少管理追蹤副本權限');
@@ -1576,6 +1604,8 @@ const MindMapView: React.FC = () => {
     if (anchorNode.isTrackingReference) {
       lock('task.create-sibling', '追蹤副本不支援新增同階任務');
       lock('task.create-child', '追蹤副本不支援新增子任務');
+    } else {
+      lock('task.remove-tracking-reference', '此任務是正本');
     }
     return { enabled, disabledReasons };
   }, [
@@ -1584,12 +1614,12 @@ const MindMapView: React.FC = () => {
     canAssignTask,
     canCreateDependency,
     canCreateTask,
-    canDeleteTask,
     canEditTask,
     canManageTaskReference,
     canMoveTask,
     clipboard,
     localMenuSelection,
+    localMenuCanDeleteTask,
     nodes,
     projectionNodes,
   ]);
@@ -1766,25 +1796,40 @@ const MindMapView: React.FC = () => {
   ]);
 
   const archivePlacementSelection = React.useCallback(async (placementIds: readonly string[]) => {
-    if (!canDeleteTask || placementIds.length === 0) return false;
     const placementNodes = placementIds.flatMap(placementId => {
       const nodeId = getNodeIdForPlacementId(placementId);
       const node = nodeId ? projectionNodes[nodeId] || nodes[nodeId] : null;
       return node ? [node] : [];
     });
-    if (placementNodes.some(node => node.isTrackingReference)) {
-      toast.warning('選取包含追蹤副本，無法安全批次封存正本。');
-      return false;
-    }
+    if (placementNodes.length === 0 || placementNodes.length !== placementIds.length) return false;
     const canonicalTaskIds = Array.from(new Set(placementNodes.map(node => node.canonicalTaskId || node.id)));
     const forestRootIds = normalizeMindMapForestRoots(canonicalTaskIds, nodes);
     if (forestRootIds.length === 0) return false;
     const taskIds = collectMindMapForestTaskIds(forestRootIds, nodes);
+    const source = nodes[forestRootIds[0]];
+    if (taskIds.some(id => nodes[id].boardId !== source.boardId || nodes[id].workspaceId !== source.workspaceId)) {
+      toast.warning('請分開封存不同看板的任務。');
+      return false;
+    }
+    const userId = useAuthStore.getState().user?.uid;
+    let allowed = canDeleteTask;
+    if (source.boardId !== boardId) {
+      try {
+        const access = userId && await memberService.getCurrentBoardAccess(source.workspaceId, source.boardId, userId);
+        allowed = Boolean(access && access.capabilities.includes('delete_task'));
+      } catch {
+        allowed = false;
+      }
+    }
+    if (!allowed) {
+      toast.warning('缺少正本任務的封存權限。');
+      return false;
+    }
     const descendantCount = taskIds.length - forestRootIds.length;
     const confirmed = descendantCount === 0 || await useDialogStore.getState().showConfirm(
       `將封存 ${forestRootIds.length} 個任務分支與其 ${descendantCount} 個子任務，確定繼續？`,
     );
-    if (!confirmed) return false;
+    if (!confirmed || useBoardStore.getState().activeBoardId !== boardId || useAuthStore.getState().user?.uid !== userId) return false;
     const outcome = await commitNodeBatch(
       Object.fromEntries(taskIds.map(id => [id, { isArchived: true }])),
       { label: '批次封存任務', recoveryKind: 'archive' },
@@ -1794,7 +1839,7 @@ const MindMapView: React.FC = () => {
     selectionStore.setSelection([]);
     closeLocalMenu(false);
     return true;
-  }, [canDeleteTask, clipboard, closeLocalMenu, commitNodeBatch, getNodeIdForPlacementId, nodes, projectionNodes, reportBatchOutcome, selectionStore, setMindMapClipboard]);
+  }, [boardId, canDeleteTask, clipboard, closeLocalMenu, commitNodeBatch, getNodeIdForPlacementId, nodes, projectionNodes, reportBatchOutcome, selectionStore, setMindMapClipboard]);
 
   const handleMindMapBatchArchive = React.useCallback(async () => {
     await archivePlacementSelection(localMenuSelection.placementIds);
