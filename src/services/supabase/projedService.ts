@@ -1132,15 +1132,40 @@ export const supabaseNodeService = {
     requireSupabase();
     const tenantId = await resolveWorkspaceId(workspaceId);
     const projectId = await resolveProjectId(tenantId, boardId);
-    const itemQuery = supabase
-      .from('wbs_items')
-      .select('*')
-      .eq('tenant_id', tenantId)
-      .eq('project_id', projectId)
-      .order('sort_order', { ascending: true });
-    const { data, error } = await (signal ? itemQuery.abortSignal(signal) : itemQuery);
-    assertNoError(error);
-    const nodeIdByDbId = new Map((data ?? []).map(item => [item.id, legacyOrId(item.id, item.legacy_node_id)]));
+    const readItems = (count?: 'exact') => supabase.from('wbs_items')
+      .select('*', { count }).eq('tenant_id', tenantId).eq('project_id', projectId);
+    let items: WbsItemRow[];
+    if (signal) {
+      // Recovery uses absence as evidence. Check full board read access and
+      // count all rows so an RLS-filtered or truncated result cannot unlock it.
+      const access = await supabase.from('projects').select('id')
+        .eq('tenant_id', tenantId).eq('id', projectId).abortSignal(signal).single();
+      assertNoError(access.error);
+      if (!access.data) throw new Error('無法確認看板讀取權限。');
+      const rows = new Map<string, WbsItemRow>();
+      let expectedCount: number | null = null;
+      do {
+        const page = await readItems('exact').order('id')
+          .range(rows.size, rows.size + 499).abortSignal(signal);
+        assertNoError(page.error);
+        if (page.count === null || (expectedCount !== null && expectedCount !== page.count)) {
+          throw new Error('確認期間看板資料已變更。');
+        }
+        expectedCount = page.count;
+        for (const item of page.data ?? []) {
+          if (rows.has(item.id)) throw new Error('確認期間看板資料已變更。');
+          rows.set(item.id, item);
+        }
+        if (!page.data?.length && rows.size < expectedCount) throw new Error('未讀取完整看板資料。');
+      } while (rows.size < expectedCount);
+      if (rows.size !== expectedCount) throw new Error('未讀取完整看板資料。');
+      items = [...rows.values()];
+    } else {
+      const result = await readItems().order('sort_order', { ascending: true });
+      assertNoError(result.error);
+      items = result.data ?? [];
+    }
+    const nodeIdByDbId = new Map(items.map(item => [item.id, legacyOrId(item.id, item.legacy_node_id)]));
 
     let tagRows: TaskTagRow[] = [];
     let assignmentRows: WbsItemTagAssignment[] = [];
@@ -1169,7 +1194,7 @@ export const supabaseNodeService = {
       tagIdsByItemId.set(assignment.item_id, [...(tagIdsByItemId.get(assignment.item_id) || []), tagId]);
     });
 
-    return (data ?? []).map(item => mapWbsItemToTaskNode(
+    return items.map(item => mapWbsItemToTaskNode(
       item,
       nodeIdByDbId,
       workspaceId,

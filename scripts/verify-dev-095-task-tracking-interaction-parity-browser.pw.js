@@ -131,7 +131,7 @@ async (page) => {
     window.__projedTaskTrackingTestFault = { operation, failNext: true, message };
   }, { operation, message });
   const runCase = async (id, expected, flow) => {
-    if (archiveOnly && !/^B18[A-H]-/.test(id)) {
+    if (archiveOnly && !/^B18[A-I]-/.test(id)) {
       cases.push({ id, status: 'NOT_RUN', expected });
       return;
     }
@@ -253,7 +253,7 @@ async (page) => {
     const recoveryKey = 'projed.mindmap.batch-recovery.v1.' + boardA;
     const archivePrefix = 'projed.mindmap.archive-recovery.v1.' + boardA + ':';
     const recovery = {
-      version: 1, operationId: 'stale-batch', workspaceId, boardId: boardA,
+      version: 1, operationId: 'recent-batch', workspaceId, boardId: boardA, createdAt: Date.now(),
       kind: 'archive', phase: 'indeterminate', targetIds: ['p-task-b', 'p-task-d'],
       expectedBeforeFingerprint: 'fnv1a32:00000000', expectedAfterFingerprint: 'fnv1a32:00000001',
     };
@@ -396,6 +396,42 @@ async (page) => {
     await task.waitFor({ state: 'detached' });
     if (!(await readNodes())['p-task-d'].isArchived) throw new Error('explicit archive did not persist after unlock');
     return { unchangedConfirmedWithoutReplay: true, backspacePersisted: true };
+  });
+
+  await runCase('B18I-mindmap-stale-mixed-recovery', 'an old partial archive accepts the database snapshot without repeating any write', async () => {
+    await seed({ references: [] });
+    await page.locator('[data-mode-switcher-trigger="true"]').click();
+    await page.locator('[data-mode-switcher-value="mindmap"]').click();
+    const node = id => page.locator('[data-mindmap-node="' + id + '"]');
+    const key = 'projed.mindmap.batch-recovery.v1.' + boardA;
+    await node('p-task-d').click();
+    await page.evaluate(({ key, workspaceId, boardA }) => {
+      const nodes = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
+      nodes['p-task-b'].isArchived = true;
+      localStorage.setItem('projed-local-test.nodes', JSON.stringify(nodes));
+      sessionStorage.setItem(key, JSON.stringify({
+        version: 1, operationId: 'stale-mixed-archive', workspaceId, boardId: boardA,
+        createdAt: Date.now() - 180000, kind: 'archive', phase: 'indeterminate',
+        targetIds: ['p-task-b', 'p-task-d'],
+        expectedBeforeFingerprint: 'fnv1a32:00000000', expectedAfterFingerprint: 'fnv1a32:00000001',
+      }));
+    }, { key, workspaceId, boardA });
+    const beforeRecovery = await readNodes();
+    const documentTime = await page.evaluate(() => performance.timeOrigin);
+    await page.keyboard.press('Delete');
+    await page.waitForFunction(journal => sessionStorage.getItem(journal) === null, key, { timeout: 12000 });
+    await page.locator('[data-mindmap-batch-recovery-alert]').waitFor({ state: 'hidden' });
+    await node('p-task-b').waitFor({ state: 'detached' });
+    if (JSON.stringify(await readNodes()) !== JSON.stringify(beforeRecovery)
+      || !await node('p-task-d').isVisible()
+      || await page.evaluate(() => performance.timeOrigin) !== documentTime) {
+      throw new Error('stale recovery must apply current rows without writing or reloading');
+    }
+    await node('p-task-d').click();
+    await page.keyboard.press('Backspace');
+    await node('p-task-d').waitFor({ state: 'detached' });
+    if (!(await readNodes())['p-task-d'].isArchived) throw new Error('Backspace did not persist after old lock release');
+    return { partialArchivePreserved: true, noReplay: true, unlockedWithoutReload: true, backspacePersisted: true };
   });
 
   await runCase('B18C-mindmap-dense-sibling-creation', 'a task inserted between adjacent integer orders persists before display; failed creation never leaves a node', async () => {

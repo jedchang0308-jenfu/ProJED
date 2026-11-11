@@ -108,7 +108,7 @@ export type BatchUpdateNodesOptions = {
   persistenceOrder?: 'parallel' | 'root-first' | 'leaves-first';
 };
 
-export type NodeBatchCommitStatus = 'committed' | 'rejected' | 'compensated' | 'indeterminate';
+export type NodeBatchCommitStatus = 'committed' | 'rejected' | 'compensated' | 'reconciled' | 'indeterminate';
 
 export type NodeBatchCommitOutcome = Readonly<{
   status: NodeBatchCommitStatus;
@@ -724,6 +724,10 @@ type NodeBatchRecoveryDescriptor = Readonly<{
 
 const pendingBatchOperations = new Set<string>();
 const pendingBatchWrites = new Set<string>();
+// After a reload we no longer have the old request handle. Give a recent
+// journal time to settle before accepting a mixed database snapshot.
+const mixedRecoveryGraceMs = 60_000;
+const undatedRecoveryObservedAt = new Map<string, number>();
 
 const withPendingBatchWork = async <T>(
   pending: Set<string>,
@@ -852,6 +856,7 @@ const clearNodeBatchRecovery = (boardId: string, operationId: string, archiveTas
   const current = readNodeBatchRecovery(boardId, archiveTaskId);
   if (current?.operationId === operationId) {
     window.sessionStorage.removeItem(getNodeBatchRecoveryKey(boardId, archiveTaskId));
+    undatedRecoveryObservedAt.delete(operationId);
   }
 };
 
@@ -2356,25 +2361,37 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
         const confirmedArchive = convergence === 'after' && descriptor.phase === 'indeterminate'
           && (descriptor.archiveStateOnly || descriptor.archiveTaskId || descriptor.kind === 'archive');
         if (pendingBatchWrites.has(descriptor.operationId) && !confirmedArchive) return stillChecking();
-        if (convergence === 'after' || convergence === 'before') {
-          const current = get();
-          const nextNodes = { ...current.nodes };
-          descriptor.targetIds.forEach(id => {
-            if (remoteNodes[id]) nextNodes[id] = remoteNodes[id];
-            else if (nextNodes[id]?.boardId === descriptor.boardId) delete nextNodes[id];
-          });
-          set({ nodes: nextNodes });
-          get()._buildIndices(nextNodes);
-          clearNodeBatchRecovery(boardId, descriptor.operationId, archiveTaskId);
-          return outcome(convergence === 'after' ? 'committed' : 'rejected');
+        if (convergence === 'mixed') {
+          const now = Date.now();
+          let startedAt = descriptor.createdAt;
+          if (!Number.isFinite(startedAt) || startedAt > now) {
+            startedAt = undatedRecoveryObservedAt.get(descriptor.operationId) ?? now;
+            undatedRecoveryObservedAt.set(descriptor.operationId, startedAt);
+          }
+          if (now - startedAt < mixedRecoveryGraceMs) {
+            return outcome('indeterminate', '批次資料與已知前後指紋皆不一致，涉及的任務仍待確認。', true);
+          }
         }
-        return outcome('indeterminate', '批次資料與已知前後指紋皆不一致，涉及的任務仍待確認。');
+
+        // A stale mixed journal cannot establish which original writes won.
+        // Display the confirmed rows and retire the obsolete lock without
+        // replaying the operation or reporting it as committed.
+        const nextNodes = { ...get().nodes };
+        descriptor.targetIds.forEach(id => {
+          if (remoteNodes[id]) nextNodes[id] = remoteNodes[id];
+          else if (nextNodes[id]?.boardId === descriptor.boardId) delete nextNodes[id];
+        });
+        set({ nodes: nextNodes });
+        get()._buildIndices(nextNodes);
+        clearNodeBatchRecovery(boardId, descriptor.operationId, archiveTaskId);
+        return outcome(convergence === 'after' ? 'committed' : convergence === 'before' ? 'rejected' : 'reconciled');
       } catch {
         return outcome('indeterminate', '暫時無法讀取操作結果，系統會自動重試。', true);
       }
     };
     const outcomes = await Promise.all([recover(), ...archiveTaskIds.map(recover)]);
     return outcomes.find(outcome => outcome?.status === 'indeterminate')
+      || outcomes.find(outcome => outcome?.status === 'reconciled')
       || outcomes.find(outcome => outcome !== null)
       || null;
   },

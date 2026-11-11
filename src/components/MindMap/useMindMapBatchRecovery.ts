@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useWbsStore } from '../../store/useWbsStore';
+import { toast } from '../../store/useToastStore';
 
 const recoveryDelays = [350, 750, 1_500, 3_000, 6_000, 10_000];
 const pendingMessage = '正在確認前一筆操作結果…';
@@ -43,6 +44,9 @@ export function useMindMapBatchRecovery(boardId: string) {
         pending.delete(id);
         return false;
       });
+      if (results.some(({ outcome }) => outcome?.status === 'reconciled')) {
+        toast.warning('已同步資料庫現況並解除舊鎖定。前一筆操作無法確認是否完整完成。');
+      }
       if (!pending.size) {
         setMessage(null);
         return;
