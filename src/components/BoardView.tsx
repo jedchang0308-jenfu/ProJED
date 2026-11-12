@@ -37,6 +37,7 @@ import type { TaskNode } from '../types';
 import type { TaskTrackingReference } from '../features/taskTracking/types';
 import { buildTaskFilterNodesWithTrackingReferences, primaryPlacementId } from '../features/taskTracking/model';
 import { createBlankTaskNode } from '../features/taskCreation/createBlankTaskNode';
+import { createOrderedBoardTask } from '../features/taskCreation/boardTaskOrderActions';
 import { prepareNewTaskNaming } from '../utils/taskInteractions';
 import {
     desktopTaskDropPreviewMatches,
@@ -1912,24 +1913,19 @@ const BoardView = () => {
     };
 
     /** 新增頂層任務（Level 1 → 新列表） */
-    const handleAddColumn = () => {
+    const handleAddColumn = async () => {
         if (!canCreateTask || !activeBoardId) return;
 
-        const nextOrder = useWbsStore.getState()
-            .getRootNodesForBoard(activeBoardId)
-            .filter(node => !node.isArchived)
-            .reduce((maxOrder, node) => Math.max(maxOrder, node.order), -1) + 1;
         const newNode = createBlankTaskNode({
             id: 'node_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 5),
             workspaceId: activeWorkspaceId || '',
             boardId: activeBoardId,
             parentId: null,
             nodeType: 'group',
-            order: nextOrder,
+            order: 0,
         });
 
-        addNode(newNode);
-        prepareNewTaskNaming(newNode.id);
+        if (await createOrderedBoardTask(newNode)) prepareNewTaskNaming(newNode.id);
     };
 
 

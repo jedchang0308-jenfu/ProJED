@@ -4,9 +4,7 @@ import { useWbsStore } from '../store/useWbsStore';
 
 const TASK_DESCRIPTION_HOVER_DELAY_MS = 1000;
 
-const TASK_SELECTED_PREVIEW_SURFACE = '[data-task-surface-source="true"][data-task-id]';
-const TASK_DESCRIPTION_EXPLICIT_SURFACE = '[data-task-description-hover-trigger="true"][data-task-id]';
-const TASK_DESCRIPTION_HOVER_TRIGGER = `${TASK_SELECTED_PREVIEW_SURFACE}, ${TASK_DESCRIPTION_EXPLICIT_SURFACE}`;
+const TASK_DESCRIPTION_HOVER_TRIGGER = '[data-task-description-indicator="true"][data-task-description-hover-trigger="true"]';
 const TASK_DESCRIPTION_HOVER_CARD = '[data-task-description-hover-card="true"]';
 const TASK_DESCRIPTION_HOVER_CARD_ID = 'task-description-hover-card';
 const CLOSE_GRACE_MS = 120;
@@ -41,15 +39,18 @@ const getTrigger = (target: EventTarget | null) => (
 );
 
 const resolveHoverCandidate = (trigger: HTMLElement): HoverCandidate | null => {
-  const taskId = trigger.getAttribute('data-task-id')?.trim() || '';
+  const taskId = trigger.getAttribute('data-task-id')?.trim()
+    || trigger.closest<HTMLElement>('[data-task-id]')?.getAttribute('data-task-id')?.trim()
+    || '';
   if (!taskId) return null;
 
-  if (trigger.hasAttribute('data-task-description-hover-content')) {
+  const inlineDescriptionSource = trigger.closest<HTMLElement>('[data-task-description-hover-content]');
+  if (inlineDescriptionSource) {
     return {
       trigger,
       taskId,
       sourceKind: 'inline',
-      description: trigger.getAttribute('data-task-description-hover-content')?.trim() || '',
+      description: inlineDescriptionSource.getAttribute('data-task-description-hover-content')?.trim() || '',
     };
   }
 
@@ -286,7 +287,8 @@ const TaskDescriptionHoverCard: React.FC = () => {
       }
     };
     const observer = new MutationObserver(closeIfInvalidCandidate);
-    observer.observe(trigger, {
+    const descriptionSource = trigger.closest<HTMLElement>('[data-task-description-hover-content]') || trigger;
+    observer.observe(descriptionSource, {
       attributes: true,
       attributeFilter: [
         'data-task-id',

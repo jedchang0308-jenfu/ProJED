@@ -16,7 +16,8 @@ export const TaskDescriptionIndicator: React.FC<TaskDescriptionIndicatorProps> =
     <span
       aria-hidden="true"
       data-task-description-indicator="true"
-      className={`pointer-events-none inline-flex h-[11px] w-[11px] shrink-0 items-center justify-center text-slate-400/90 ${className}`}
+      data-task-description-hover-trigger="true"
+      className={`inline-flex h-[11px] w-[11px] shrink-0 items-center justify-center text-slate-400/90 ${className}`}
     >
       <AlignLeft size={9} strokeWidth={1.75} />
     </span>
