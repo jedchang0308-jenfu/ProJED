@@ -1031,6 +1031,7 @@ export const GlobalContextMenu: React.FC = () => {
 
       {detailsNodeId && (
         <TaskDetailsModal
+          key={detailsNodeId}
           nodeId={detailsNodeId}
           trackingReferenceId={detailsTrackingReferenceId || undefined}
           canGoBack={detailsNavigation.canGoBack}

@@ -768,19 +768,17 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
             </span>
           )}
           <NoteToolbarPlugin canEdit={canEdit} noteTitle={noteLabel} onSave={onSave} showToolbar={!isCellVariant} />
-          {!isDescription ? (
-            <button
-              type="button"
-              onClick={onAdd}
-              disabled={!canEdit}
-              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border-0 bg-transparent text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:opacity-40"
-              title="新增備註欄"
-              aria-label="新增備註欄"
-              data-task-detail-note-add="true"
-            >
-              <Plus size={14} />
-            </button>
-          ) : null}
+          <button
+            type="button"
+            onClick={onAdd}
+            disabled={!canEdit}
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border-0 bg-transparent text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:opacity-40"
+            title="新增備註欄"
+            aria-label="新增備註欄"
+            data-task-detail-note-add="true"
+          >
+            <Plus size={14} />
+          </button>
           <button
             type="button"
             onClick={onDelete}

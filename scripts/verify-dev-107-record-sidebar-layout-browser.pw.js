@@ -1,6 +1,7 @@
 /* eslint-disable */
 async (page) => {
-  const OUTPUT_DIR = process.env.PROJED_PLAYWRIGHT_OUTPUT_DIR || 'output/playwright/dev-107-record-sidebar-layout';
+  const OUTPUT_DIR = (typeof process !== 'undefined' && process.env.PROJED_PLAYWRIGHT_OUTPUT_DIR)
+    || 'output/playwright/dev-107-record-sidebar-layout';
   const BASE_URL = page.url().match(/^https?:\/\/[^/]+/)?.[0] || 'http://localhost:1040';
   const TARGET_TITLE = 'DEV-107 既有會議草稿排版驗證';
   const diagnostics = [];
@@ -227,7 +228,27 @@ async (page) => {
   });
   await runCase('TC-107-001-1440', 'existing meeting draft renders meeting-record variant without overlap', async () => {
     await openExistingDraft({ width: 1440, height: 900 });
-    return inspectMeetingRecord({ width: 1440, height: 900 });
+    const layout = await inspectMeetingRecord({ width: 1440, height: 900 });
+    const editor = page.locator('[data-record-content-editor="true"]');
+    const waitForDraftContent = content => page.waitForFunction(async expected => {
+      const { default: store } = await import('/src/store/useRecordStore.ts');
+      return store.getState().draft?.content === expected;
+    }, content);
+    await editor.press('Control+a');
+    await page.keyboard.insertText('第一筆紀錄的編輯歷史');
+    await waitForDraftContent('第一筆紀錄的編輯歷史');
+    await editor.press('Control+z');
+    await waitForDraftContent(longContent);
+    await page.evaluate(() => document.dispatchEvent(new CustomEvent('open-knowledge-record', {
+      detail: { recordId: 'dev107-meeting-old' },
+    })));
+    await waitForDraftContent('另一筆草稿。');
+    await page.waitForFunction(() => document.querySelector('[data-record-content-editor="true"]')?.textContent === '另一筆草稿。');
+    for (const shortcut of ['Control+y', 'Control+z']) {
+      await editor.press(shortcut);
+      assert((await editor.innerText()).trim() === '另一筆草稿。', shortcut + ' restored a different record');
+    }
+    return { ...layout, draftHistoryIsolated: true };
   });
   await runCase('TC-107-001-1024', 'existing meeting draft renders meeting-record variant without overlap', async () => {
     await openExistingDraft({ width: 1024, height: 768 });

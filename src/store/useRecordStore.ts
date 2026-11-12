@@ -170,6 +170,7 @@ interface RecordStoreState {
   returnViewAfterSelection: ViewMode | null;
   contentCursorOffset: number | null;
   draft: RecordDraft | null;
+  draftEditorSession: number;
   draftBaselineSignature: string | null;
   meetingActivities: MeetingTaskActivity[];
   appendedMeetingActivityIds: string[];
@@ -564,6 +565,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
   returnViewAfterSelection: null,
   contentCursorOffset: null,
   draft: null,
+  draftEditorSession: 0,
   draftBaselineSignature: null,
   meetingActivities: [],
   appendedMeetingActivityIds: [],
@@ -643,6 +645,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       meetingTaskCaptureEnabled: false,
       contentCursorOffset: 0,
       draft,
+      draftEditorSession: get().draftEditorSession + 1,
       draftBaselineSignature: getRecordDraftSignature(draft),
       meetingActivities: [],
       appendedMeetingActivityIds: [],
@@ -689,6 +692,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       meetingTaskCaptureEnabled: false,
       contentCursorOffset: record.content.length,
       draft,
+      draftEditorSession: get().draftEditorSession + 1,
       draftBaselineSignature: getRecordDraftSignature(draft),
       meetingActivities: [],
       appendedMeetingActivityIds: [],
@@ -740,6 +744,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
         returnViewAfterSelection: null,
         contentCursorOffset: state.draft === draft ? state.contentCursorOffset ?? draft.content.length : draft.content.length,
         draft,
+        draftEditorSession: isExistingMeetingDraft ? state.draftEditorSession : state.draftEditorSession + 1,
         draftBaselineSignature: isExistingMeetingDraft
           ? state.draftBaselineSignature ?? getRecordDraftSignature(draft)
           : getRecordDraftSignature(draft),
@@ -1598,6 +1603,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
     meetingTaskCaptureEnabled: false,
     returnViewAfterSelection: null,
     contentCursorOffset: snapshot.contentCursorOffset,
+    draftEditorSession: get().draftEditorSession + 1,
     draft: {
       ...snapshot.draft,
       taskLinks: snapshot.draft.taskLinks.map(link => ({ nodeId: link.nodeId, role: link.role })),

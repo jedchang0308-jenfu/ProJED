@@ -722,6 +722,7 @@ const RecordSidebar: React.FC = () => {
   const lastSaveFeedback = useRecordStore(state => state.lastSaveFeedback);
   const meetingDraftRecovery = useRecordStore(state => state.meetingDraftRecovery);
   const draftBaselineSignature = useRecordStore(state => state.draftBaselineSignature);
+  const draftEditorSession = useRecordStore(state => state.draftEditorSession);
   const contentFocusRequestId = useRecordStore(state => state.contentFocusRequestId);
   const contentFocusPending = useRecordStore(state => state.contentFocusPending);
   const meetingProjectImportStatus = useRecordStore(state => state.meetingProjectImportStatus);
@@ -1549,6 +1550,7 @@ const RecordSidebar: React.FC = () => {
                   </div>
                   <label className="flex min-h-0 flex-1 flex-col">
                     <RecordContentEditor
+                      key={draftEditorSession}
                       value={draft.content}
                       nodes={nodes}
                       cursorOffset={contentCursorOffset}

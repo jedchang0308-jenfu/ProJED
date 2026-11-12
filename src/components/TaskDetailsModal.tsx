@@ -17,6 +17,7 @@ import TaskDetailNoteField from './TaskNotes/TaskDetailNoteField';
 import {
   areTaskNoteRichContentsEqual,
   getTaskDetailNotesWithCanonicalPurpose,
+  TASK_PURPOSE_NOTE_ID,
 } from '../utils/taskNoteRichContent';
 import { toast } from '../store/useToastStore';
 import { isPrimaryPointerActivation } from '../interactions/pointerActivation';
@@ -104,10 +105,6 @@ const readSavedSize = () => {
   }
 };
 
-const getDisplayedDetailNotes = (node: TaskNode | undefined): TaskDetailNote[] => (
-  getTaskDetailNotesWithCanonicalPurpose(node || { detailNotes: [], description: '' })
-);
-
 const areDetailNotesEqual = (left: TaskDetailNote[], right: TaskDetailNote[]) => (
   left.length === right.length
   && left.every((note, index) => (
@@ -172,6 +169,14 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
   onCreateChild,
 }) => {
   const node = useWbsStore((state) => state.nodes[nodeId]);
+  const currentNodeTitle = node?.title || '';
+  const currentNodeDetailNotes = node?.detailNotes;
+  const currentNodeDescription = node?.description || '';
+  const canonicalNotes = React.useMemo(() => getTaskDetailNotesWithCanonicalPurpose({
+    detailNotes: currentNodeDetailNotes,
+    description: currentNodeDescription,
+    title: currentNodeTitle,
+  }), [currentNodeDetailNotes, currentNodeDescription, currentNodeTitle]);
   const currentAccountId = useAuthStore((state) => state.user?.uid ?? null);
   const nodes = useWbsStore((state) => state.nodes);
   const trackingReferences = useWbsStore((state) => state.trackingReferences);
@@ -199,11 +204,29 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
   const [size, setSize] = React.useState(readSavedSize);
   const [minimumModalSize, setMinimumModalSize] = React.useState(getMinimumModalSize);
   const [maximumModalSize, setMaximumModalSize] = React.useState(getMaximumModalSize);
-  const [startDate, setStartDate] = React.useState('');
-  const [endDate, setEndDate] = React.useState('');
+  const [startDate, setStartDate] = React.useState(() => node?.startDate || '');
+  const [endDate, setEndDate] = React.useState(() => node?.endDate || '');
   const [durationDraft, setDurationDraft] = React.useState<string | null>(null);
-  const [titleValue, setTitleValue] = React.useState('');
-  const [notes, setNotes] = React.useState<TaskDetailNote[]>([]);
+  const [titleValue, setTitleValue] = React.useState(() => node?.title || '');
+  const [noteEdit, setNoteEdit] = React.useState(() => ({
+    source: canonicalNotes,
+    baseline: canonicalNotes,
+    draft: null as TaskDetailNote[] | null,
+    editorRevision: 0,
+  }));
+  if (noteEdit.source !== canonicalNotes) {
+    const changed = !areDetailNotesEqual(noteEdit.source, canonicalNotes);
+    setNoteEdit({
+      ...noteEdit,
+      source: canonicalNotes,
+      baseline: noteEdit.draft ? noteEdit.baseline : canonicalNotes,
+      editorRevision: noteEdit.editorRevision + (changed && !noteEdit.draft ? 1 : 0),
+    });
+  }
+  const notes = noteEdit.draft ?? noteEdit.source;
+  const notesConflict = Boolean(noteEdit.draft && !areDetailNotesEqual(noteEdit.baseline, canonicalNotes));
+  const [purposeEditorReset, setPurposeEditorReset] = React.useState(0);
+  const noteWriteBaselineRef = React.useRef<TaskDetailNote[] | null>(null);
   const [meetingDiscussion, setMeetingDiscussion] = React.useState('');
   const [meetingDiscussionError, setMeetingDiscussionError] = React.useState<string | null>(null);
   const isMeetingMode = useRecordStore((state) => state.isMeetingMode);
@@ -211,7 +234,6 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
   const { isMeetingRecordUnavailable } = useMeetingRecordAvailability();
   const appendTaskDiscussionToMeetingDraft = useRecordStore((state) => state.appendTaskDiscussionToMeetingDraft);
   const meetingQuickNotes = useTaskMeetingQuickNotes(node, activeMeetingBoardId);
-  const skipNextNotesSave = React.useRef(true);
   const skipNextTitleBlurSave = React.useRef(false);
   const [saveState, setSaveState] = React.useState<TaskDetailsSaveState>('idle');
   const [isClosePending, setIsClosePending] = React.useState(false);
@@ -230,7 +252,6 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
   const unknownUpdateVersionsRef = React.useRef<Record<string, number>>({});
   const persistenceOwnerNodeIdRef = React.useRef<string | undefined>(undefined);
   const pendingTransitionRef = React.useRef<TaskDetailsTransition | null>(null);
-  const previousNodeIdRef = React.useRef<string | undefined>(undefined);
   const pinchCloseRef = React.useRef<{
     initialDistance: number;
     triggered: boolean;
@@ -244,11 +265,8 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
     [boardMembers]
   );
   const currentNodeId = node?.id;
-  const currentNodeTitle = node?.title || '';
   const currentNodeStartDate = node?.startDate || '';
   const currentNodeEndDate = node?.endDate || '';
-  const currentNodeDetailNotes = node?.detailNotes;
-  const currentNodeDescription = node?.description || '';
 
   const clearSaveFeedbackTimer = React.useCallback(() => {
     if (saveFeedbackTimerRef.current !== null) {
@@ -474,8 +492,37 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
     updateNode,
   ]);
 
+  const getLatestNotes = React.useCallback(() => {
+    const latest = useWbsStore.getState().nodes[nodeId];
+    return latest ? getTaskDetailNotesWithCanonicalPurpose(latest) : null;
+  }, [nodeId]);
+
+  const canSaveNoteDraft = React.useCallback(() => {
+    if (!noteEdit.draft) return true;
+    const latest = getLatestNotes();
+    return latest !== null && areDetailNotesEqual(noteEdit.baseline, latest);
+  }, [getLatestNotes, noteEdit.baseline, noteEdit.draft]);
+
+  const persistNoteDraft = React.useCallback((updates: Partial<TaskNode>) => {
+    if (!canSaveNoteDraft()) return false;
+    const didQueue = persistTaskUpdates(updates);
+    const submittedNotes = updates.detailNotes;
+    if (didQueue && submittedNotes) {
+      noteWriteBaselineRef.current = noteEdit.baseline;
+      const savedNotes = getLatestNotes() ?? submittedNotes;
+      setNoteEdit(current => ({
+        ...current,
+        source: savedNotes,
+        baseline: savedNotes,
+        draft: null,
+        editorRevision: current.editorRevision + (areDetailNotesEqual(submittedNotes, savedNotes) ? 0 : 1),
+      }));
+    }
+    return didQueue;
+  }, [canSaveNoteDraft, getLatestNotes, noteEdit.baseline, persistTaskUpdates]);
+
   const savePendingTaskDetails = React.useCallback(() => {
-    if (!node || !canEditTask) return false;
+    if (!node || !canEditTask || !canSaveNoteDraft()) return false;
 
     const updates: Partial<TaskNode> = {};
     const trimmedTitle = titleValue.trim();
@@ -486,42 +533,62 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
       if (trimmedTitle !== node.title) updates.title = trimmedTitle;
     }
 
-    const displayedNotes = getDisplayedDetailNotes(node);
-    const nextDescription = notes[0]?.content || '';
-    if (!areDetailNotesEqual(notes, displayedNotes) || nextDescription !== (node.description || '')) {
+    if (!areDetailNotesEqual(notes, canonicalNotes)) {
       updates.detailNotes = notes;
-      updates.description = nextDescription;
+      updates.description = notes[0]?.content || '';
     }
 
     if (Object.keys(updates).length > 0) {
-      return persistTaskUpdates(updates);
+      return persistNoteDraft(updates);
     }
     return false;
-  }, [canEditTask, node, notes, persistTaskUpdates, titleValue]);
+  }, [canEditTask, canSaveNoteDraft, canonicalNotes, node, notes, persistNoteDraft, titleValue]);
 
   const retryFailedSave = React.useCallback(() => {
     if (pendingPersistCountRef.current > 0) return false;
+    if (!canSaveNoteDraft()) return false;
     const failedUpdates = { ...failedUpdatesRef.current };
     if (Object.keys(failedUpdates).length === 0) return false;
+    if (failedUpdates.detailNotes) {
+      const latest = getLatestNotes();
+      const baseline = noteWriteBaselineRef.current;
+      const submittedNotes = getTaskDetailNotesWithCanonicalPurpose(failedUpdates);
+      if (!latest) return false;
+      if (!areDetailNotesEqual(latest, submittedNotes) && (!baseline || !areDetailNotesEqual(latest, baseline))) {
+        setNoteEdit(current => ({
+          ...current,
+          baseline: baseline ?? submittedNotes,
+          draft: current.draft ?? submittedNotes,
+          editorRevision: current.editorRevision + (current.draft ? 0 : 1),
+        }));
+        toast.error('備註已在其他地方更新，請先載入最新備註。');
+        return false;
+      }
+    }
 
     failedUpdatesRef.current = {};
     failedUpdateVersionsRef.current = {};
     unknownUpdatesRef.current = {};
     unknownUpdateVersionsRef.current = {};
     return persistTaskUpdates(failedUpdates, { forcePersistence: true, skipActivity: true });
-  }, [persistTaskUpdates]);
+  }, [canSaveNoteDraft, getLatestNotes, persistTaskUpdates]);
 
   const handleSaveDetails = React.useCallback(() => {
+    if (!canSaveNoteDraft()) return;
     const didQueueDraft = savePendingTaskDetails();
     if (didQueueDraft || pendingPersistCountRef.current > 0) return;
     if (retryFailedSave()) return;
     showSaveFeedback();
-  }, [retryFailedSave, savePendingTaskDetails, showSaveFeedback]);
+  }, [canSaveNoteDraft, retryFailedSave, savePendingTaskDetails, showSaveFeedback]);
 
   const requestTransition = React.useCallback((transition: TaskDetailsTransition) => {
     if (pendingTransitionRef.current || isClosePending) return;
     if (!canPersistTask) {
       runTransition(transition);
+      return;
+    }
+    if (!canSaveNoteDraft()) {
+      toast.error('備註已在其他地方更新，請先處理備註草稿。');
       return;
     }
     if (titleAutosaveTimerRef.current !== null) {
@@ -549,7 +616,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
       pendingTransitionRef.current = null;
       runTransition(transition);
     }
-  }, [canPersistTask, isClosePending, runTransition, savePendingTaskDetails]);
+  }, [canPersistTask, canSaveNoteDraft, isClosePending, runTransition, savePendingTaskDetails]);
 
   React.useEffect(() => {
     const handleDetailsNavigate = (event: Event) => {
@@ -635,27 +702,10 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
     if (event.touches.length < 2) pinchCloseRef.current = null;
   }, []);
 
-  React.useEffect(() => {
+  // GlobalContextMenu mounts a separate editing session for each task ID.
+  React.useLayoutEffect(() => {
     persistenceOwnerNodeIdRef.current = currentNodeId;
-    if (previousNodeIdRef.current === currentNodeId) return;
-    previousNodeIdRef.current = currentNodeId;
-    pendingPersistOperationsRef.current.clear();
-    pendingPersistCountRef.current = 0;
-    optimisticTitleRef.current = null;
-    failedUpdatesRef.current = {};
-    failedUpdateVersionsRef.current = {};
-    unknownUpdatesRef.current = {};
-    unknownUpdateVersionsRef.current = {};
-    pendingTransitionRef.current = null;
-    setIsClosePending(false);
-    setSaveState('idle');
-    setMeetingDiscussion('');
-    setMeetingDiscussionError(null);
-    if (titleAutosaveTimerRef.current !== null) {
-      window.clearTimeout(titleAutosaveTimerRef.current);
-      titleAutosaveTimerRef.current = null;
-    }
-    titleEditSequenceRef.current += 1;
+    return () => { persistenceOwnerNodeIdRef.current = undefined; };
   }, [currentNodeId]);
 
   React.useEffect(() => {
@@ -692,15 +742,6 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
     setEndDate(currentNodeEndDate);
     setDurationDraft(null);
   }, [currentNodeEndDate, currentNodeId, currentNodeStartDate]);
-
-  React.useEffect(() => {
-    if (!currentNodeId) return;
-    setNotes(getTaskDetailNotesWithCanonicalPurpose({
-      detailNotes: currentNodeDetailNotes,
-      description: currentNodeDescription,
-    }));
-    skipNextNotesSave.current = true;
-  }, [currentNodeDescription, currentNodeDetailNotes, currentNodeId]);
 
   React.useEffect(() => {
     if (!node || !canEditTask) return;
@@ -761,27 +802,17 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
   }, []);
 
   React.useEffect(() => {
-    if (!node) return;
-
-    if (skipNextNotesSave.current) {
-      skipNextNotesSave.current = false;
-      return;
-    }
-
-    const displayedNotes = getDisplayedDetailNotes(node);
-    const nextDescription = notes[0]?.content || '';
-    if (areDetailNotesEqual(notes, displayedNotes) && nextDescription === (node.description || '')) return;
+    if (!canEditTask || !noteEdit.draft || notesConflict || areDetailNotesEqual(notes, canonicalNotes)) return;
 
     const timer = window.setTimeout(() => {
-      if (!canEditTask) return;
-      persistTaskUpdates({
+      persistNoteDraft({
         detailNotes: notes,
-        description: nextDescription,
+        description: notes[0]?.content || '',
       });
     }, TASK_DETAILS_AUTOSAVE_DELAY_MS);
 
     return () => window.clearTimeout(timer);
-  }, [canEditTask, notes, node, persistTaskUpdates]);
+  }, [canEditTask, canonicalNotes, noteEdit.draft, notes, notesConflict, persistNoteDraft]);
 
   const ancestorPath = buildAncestorPath(node, nodes);
 
@@ -976,37 +1007,57 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
     persistTaskUpdates({ isDurationLocked: !node.isDurationLocked });
   };
 
-  const updateNote = (noteId: string, updates: Partial<TaskDetailNote>) => {
-    if (!canEditTask) return;
+  const editNotes = (update: (current: TaskDetailNote[]) => TaskDetailNote[]) => {
+    if (!canEditTask || isClosePending) return;
     markDraftDirty();
-    setNotes((current) =>
-      current.map((note) => (note.id === noteId ? { ...note, ...updates } : note))
-    );
+    setNoteEdit(current => {
+      const next = update(current.draft ?? current.source);
+      return { ...current, draft: areDetailNotesEqual(next, current.source) ? null : next };
+    });
+  };
+
+  const updateNote = (noteId: string, updates: Partial<TaskDetailNote>) => {
+    editNotes(current => current.map(note => note.id === noteId ? { ...note, ...updates } : note));
   };
 
   const addNote = () => {
-    if (!canEditTask) return;
-    markDraftDirty();
-    setNotes((current) => [...current, createNote(current.length + 1)]);
+    editNotes(current => [...current, createNote(current.length + 1)]);
   };
 
   const deleteNote = (noteId: string) => {
-    if (!canEditTask) return;
+    if (!canEditTask || isClosePending) return;
     const note = notes.find((item) => item.id === noteId);
     const noteLabel = note?.title?.trim() || '此備註欄';
-    const isLastNote = notes.length <= 1;
+    const isPurpose = noteId === TASK_PURPOSE_NOTE_ID;
     const confirmed = window.confirm(
-      isLastNote
-        ? `刪除「${noteLabel}」後會保留一個空白備註欄。確定刪除內容？`
+      isPurpose
+        ? `確定清空「${noteLabel}」的內容？`
         : `確定刪除「${noteLabel}」？`
     );
     if (!confirmed) return;
 
-    markDraftDirty();
-    setNotes((current) => {
-      const nextNotes = current.filter((item) => item.id !== noteId);
-      return nextNotes.length > 0 ? nextNotes : [createNote(1)];
-    });
+    if (isPurpose) setPurposeEditorReset(current => current + 1);
+    editNotes(current => isPurpose
+      ? current.map(item => item.id === noteId ? createNote(1) : item)
+      : current.filter(item => item.id !== noteId));
+  };
+
+  const loadLatestNotes = () => {
+    if (pendingPersistCountRef.current > 0) return;
+    const latest = getLatestNotes();
+    if (!latest || !window.confirm('載入最新備註會捨棄這個視窗裡的備註草稿。確定繼續？')) return;
+    for (const key of ['detailNotes', 'description'] as const) {
+      delete failedUpdatesRef.current[key];
+      delete failedUpdateVersionsRef.current[key];
+      delete unknownUpdatesRef.current[key];
+      delete unknownUpdateVersionsRef.current[key];
+    }
+    noteWriteBaselineRef.current = null;
+    setNoteEdit(current => ({
+      source: latest, baseline: latest, draft: null, editorRevision: current.editorRevision + 1,
+    }));
+    setSaveState(Object.keys(unknownUpdatesRef.current).length > 0 ? 'unknown'
+      : Object.keys(failedUpdatesRef.current).length > 0 ? 'error' : 'idle');
   };
 
   const handleAppendMeetingDiscussion = () => {
@@ -1057,7 +1108,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
     && node
     && (
       titleValue.trim() !== (node.title || '').trim()
-      || !areDetailNotesEqual(notes, getDisplayedDetailNotes(node))
+      || !areDetailNotesEqual(notes, canonicalNotes)
       || saveState === 'saving'
       || saveState === 'error'
       || saveState === 'unknown'
@@ -1463,11 +1514,19 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
           </section>
 
           <section className="pt-2" data-task-detail-notes-section="true">
+            {notesConflict ? (
+              <div role="alert" data-task-details-notes-conflict="true" className="mb-2 flex flex-wrap items-center gap-2 rounded-md bg-amber-50 p-2 text-sm text-amber-900">
+                <span>備註已在其他地方更新。請先複製要保留的草稿，再載入最新備註。</span>
+                <button type="button" onClick={loadLatestNotes} disabled={saveState === 'saving'} className="font-medium underline">
+                  載入最新備註
+                </button>
+              </div>
+            ) : null}
             <div className="grid gap-2" data-task-detail-notes-grid="true">
               {notes.map((note, noteIndex) => (
                 <TaskDetailNoteField
-                  key={note.id}
-                  canEdit={canEditTask}
+                  key={`${note.id}:${noteEdit.editorRevision}:${note.id === TASK_PURPOSE_NOTE_ID ? purposeEditorReset : 0}`}
+                  canEdit={canEditTask && !isClosePending}
                   accountId={currentAccountId}
                   taskId={node.id}
                   isDescription={note.id === 'note_default'}
