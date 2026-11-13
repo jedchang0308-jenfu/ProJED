@@ -7,7 +7,8 @@
  */
 import React, { useRef, useState } from 'react';
 import { useDndContext } from '@dnd-kit/core';
-import { Check, ChevronRight, Link } from 'lucide-react';
+import { Check, Link } from 'lucide-react';
+import { TaskHierarchyDisclosure } from './TaskHierarchyIndentedRow';
 import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
 import useRecordStore from '../../store/useRecordStore';
@@ -250,7 +251,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
         className="pointer-events-none absolute top-0 h-px w-px opacity-0"
         data-task-direct-child-title-anchor="true"
         style={{
-          left: 'calc(9px + 2px + var(--kanban-checklist-body-pad-x, 4px) + var(--kanban-checklist-base, 4px))',
+          left: 'calc(var(--kanban-tree-card-inset) + var(--kanban-tree-title-inset) + var(--kanban-tree-indent))',
         }}
       />
       <>
@@ -300,7 +301,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
               'data-task-card-primary-content': 'true',
               'data-mobile-task-card-primary': 'true',
             } as React.HTMLAttributes<HTMLElement>}
-            bodyClassName={`${
+            bodyClassName={`kanban-tree-card-header ${
               isDragPlaceholder ? 'kanban-drag-source-placeholder pointer-events-none' : ''
             } ${
               showChecklistSurface ? 'rounded-t-[7px]' : 'rounded-[7px]'
@@ -348,30 +349,21 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
               </>
             )}
             meetingReservationValue={meetingReservationValue}
-            rowTrailing={showChecklistSurface ? (
-              <>
-                  <button
-                    type="button"
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsChecklistExpanded(current => !current);
-                    }}
-                    className="kanban-checklist-toggle relative inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-slate-400 transition-colors after:absolute after:-inset-1 hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                    aria-expanded={isChecklistExpanded}
-                    aria-controls={checklistRegionId}
-                    aria-label={checklistToggleLabel}
-                    title={checklistToggleLabel}
-                    data-kanban-checklist-toggle="true"
-                    data-kanban-checklist-state={isChecklistExpanded ? 'expanded' : 'collapsed'}
-                  >
-                    <ChevronRight
-                      size={16}
-                      aria-hidden="true"
-                      className={`transition-transform duration-150 ${isChecklistExpanded ? 'rotate-90' : ''}`}
-                    />
-                  </button>
-              </>
+            rowLeading={showChecklistSurface ? (
+              <TaskHierarchyDisclosure
+                expanded={isChecklistExpanded}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsChecklistExpanded(current => !current);
+                }}
+                className="task-tree-dot kanban-tree-disclosure kanban-checklist-toggle"
+                aria-controls={checklistRegionId}
+                aria-label={checklistToggleLabel}
+                title={checklistToggleLabel}
+                data-kanban-checklist-toggle="true"
+                data-kanban-checklist-state={isChecklistExpanded ? 'expanded' : 'collapsed'}
+              />
             ) : null}
             meta={isSelectingMode ? (
               <div onPointerDown={(e) => e.stopPropagation()} className="kanban-task-meta mt-px flex flex-wrap items-center gap-1 text-[10px] text-slate-400">
@@ -409,16 +401,15 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
           {!isDragPlaceholder && showChecklistSurface && (
             <div
               id={checklistRegionId}
-              className={`kanban-checklist-section mx-[9px] mb-[6px] mt-1 rounded-md border-l-2 border-slate-300/80 transition-[background-color,box-shadow] duration-100 ${
-                isChecklistExpanded ? 'bg-surface-subtask' : 'bg-transparent'
-              }`}
+              className="kanban-tree-section kanban-checklist-section"
+              hidden={!isChecklistExpanded}
               data-task-id={nodeId}
-              data-kanban-checklist-visual="inset-rail"
+              data-kanban-checklist-visual="rounded-tree"
               data-kanban-card-subtree-scope="true"
               data-task-surface-subtree="true"
             >
-              {showChecklistSurface && isChecklistExpanded && (
-                <div className="kanban-checklist-body px-1 pb-0.5">
+              {isChecklistExpanded && (
+                <div className="kanban-checklist-body">
                   <KanbanChecklist
                     parentId={nodeId}
                     parentPlacementId={trackingReference?.id}

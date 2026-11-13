@@ -192,7 +192,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
         className="pointer-events-none absolute top-0 h-px w-px opacity-0"
         data-task-direct-child-title-anchor="true"
         style={{
-          left: 'calc(var(--kanban-column-body-pad, 8px) + 1px + var(--kanban-card-pad-x, 9px))',
+          left: 'calc(var(--kanban-column-body-pad, 8px) + 1px + var(--kanban-card-pad-x, 9px) + var(--kanban-tree-title-inset))',
         }}
       />
       <KanbanColumnPresentation

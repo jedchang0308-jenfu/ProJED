@@ -346,6 +346,111 @@ body[data-kanban-mouse-pan-active="true"] * {
   );
 }
 
+[data-kanban-column] {
+  --kanban-tree-title-inset: 17px;
+}
+
+:root {
+  --task-tree-branch-indent: 10.4px;
+}
+
+.kanban-task-card {
+  --kanban-tree-card-inset: var(--kanban-card-pad-x, 9px);
+  --kanban-tree-indent: var(--task-tree-branch-indent);
+  --kanban-tree-node-offset: 9px;
+  --kanban-tree-branch-radius: 5px;
+  --task-tree-dot-color: #a2aec3;
+  --task-tree-dot-surface: var(--color-surface-task);
+}
+
+.kanban-tree-card-header .kanban-task-title-row {
+  position: relative;
+  align-items: center;
+  min-height: 24px;
+}
+
+.kanban-tree-card-header .kanban-task-title-content {
+  padding-inline-start: var(--kanban-tree-title-inset);
+}
+
+.kanban-tree-section {
+  margin-inline: var(--kanban-tree-card-inset);
+  padding-block-end: 5px;
+}
+
+.kanban-tree-section.kanban-checklist-section,
+.kanban-tree-section .kanban-checklist-root {
+  margin-top: 0;
+}
+
+.kanban-tree-section .kanban-checklist-body,
+.kanban-tree-section .kanban-checklist-root {
+  padding: 0;
+}
+
+.kanban-tree-section .kanban-checklist-item {
+  --kanban-tree-title-x: calc(var(--kanban-tree-title-inset) + (var(--kanban-checklist-depth, 0) + 1) * var(--kanban-tree-indent));
+  --kanban-tree-node-x: calc(var(--kanban-tree-title-x) - var(--kanban-tree-node-offset));
+  padding-inline-start: var(--kanban-tree-title-x);
+  min-height: 28px;
+}
+
+.kanban-tree-section [data-kanban-checklist-row-visual="rounded-branch"]:not([data-kanban-drag-source-placeholder])::before {
+  content: "";
+  position: absolute;
+  inset-block: 0 50%;
+  inset-inline-start: calc(var(--kanban-tree-node-x) - var(--kanban-tree-indent));
+  width: var(--kanban-tree-indent);
+  border-inline-start: 1px solid var(--task-tree-dot-color);
+  border-block-end: 1px solid var(--task-tree-dot-color);
+  border-end-start-radius: var(--kanban-tree-branch-radius);
+  pointer-events: none;
+}
+
+.kanban-tree-section [data-kanban-tree-continuation]::before,
+.kanban-tree-section [data-kanban-tree-stem]::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  border-inline-start: 1px solid var(--task-tree-dot-color);
+}
+
+.kanban-tree-section [data-kanban-tree-continuation]::before {
+  inset-block: 0;
+  inset-inline-start: calc(var(--kanban-tree-title-inset) + (var(--kanban-checklist-child-depth) - 1) * var(--kanban-tree-indent) - var(--kanban-tree-node-offset));
+}
+
+.kanban-tree-section [data-kanban-tree-stem]::after {
+  inset-block: 50% 0;
+  inset-inline-start: var(--kanban-tree-node-x);
+}
+
+.kanban-tree-disclosure {
+  position: absolute;
+  z-index: 2;
+  inset-inline-start: calc(var(--kanban-tree-node-x, var(--kanban-tree-title-inset) - var(--kanban-tree-node-offset)) - 8px);
+  inset-block-start: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.kanban-tree-disclosure:hover::before {
+  box-shadow: 0 0 0 4px rgb(224 231 255 / 86%);
+}
+
+.kanban-task-card [data-task-date-badge="true"] {
+  background: transparent;
+  padding-inline: 0;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .task-hierarchy-indented-row {
   padding-left: calc(
     var(--task-hierarchy-base, 0px)
@@ -414,7 +519,7 @@ body[data-kanban-mouse-pan-active="true"] * {
 
 [data-goal-view="true"] .goal-task-hierarchy-row {
   /* R17: 8px baseline × 1.30, keeping every guide/title calculation aligned. */
-  --task-hierarchy-indent: 10.4px;
+  --task-hierarchy-indent: var(--task-tree-branch-indent);
   --goal-hierarchy-lane-start: 20px;
   /* R17: extend the incoming branch by the same 2.4px added to the depth
      track so the branch still meets the title edge after the +30% spacing. */
@@ -459,36 +564,37 @@ body[data-kanban-mouse-pan-active="true"] * {
   display: none;
 }
 
-[data-goal-view="true"] .goal-task-hierarchy-row > button[data-goal-collapse-toggle]::before {
+.task-tree-dot::before {
+  --task-tree-dot-radius: 3px;
   content: "";
   position: absolute;
-  left: calc(var(--goal-hierarchy-node-control-anchor) - 3px);
+  left: calc(var(--task-tree-dot-center, 50%) - var(--task-tree-dot-radius));
   top: 50%;
   box-sizing: border-box;
   width: 6px;
   height: 6px;
   transform: translateY(-50%);
   border-radius: 999px;
-  background-color: var(--goal-hierarchy-line-color);
+  background-color: var(--task-tree-dot-color);
   box-shadow: 0 0 0 1px rgb(255 255 255 / 88%);
   transition: background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
 }
 
-[data-goal-view="true"] .goal-task-hierarchy-row > button[data-goal-collapse-toggle][aria-expanded="false"]::before {
-  left: calc(var(--goal-hierarchy-node-control-anchor) - 4px);
+.task-tree-dot[aria-expanded="false"]::before {
+  --task-tree-dot-radius: 4px;
   width: 8px;
   height: 8px;
-  border: 2px solid var(--goal-hierarchy-line-color);
-  background-color: rgb(255 255 255 / 96%);
+  border: 2px solid var(--task-tree-dot-color);
+  background-color: var(--task-tree-dot-surface, rgb(255 255 255 / 96%));
 }
 
-[data-goal-view="true"] tr[data-goal-hierarchy-scope] .goal-task-hierarchy-row > button[data-goal-collapse-toggle]::before {
-  background-color: var(--goal-hierarchy-line-active-color);
+[data-goal-view="true"] .goal-task-hierarchy-row > button[data-goal-collapse-toggle] {
+  --task-tree-dot-center: var(--goal-hierarchy-node-control-anchor);
+  --task-tree-dot-color: var(--goal-hierarchy-line-color);
 }
 
-[data-goal-view="true"] tr[data-goal-hierarchy-scope] .goal-task-hierarchy-row > button[data-goal-collapse-toggle][aria-expanded="false"]::before {
-  border-color: var(--goal-hierarchy-line-active-color);
-  background-color: rgb(255 255 255 / 96%);
+[data-goal-view="true"] tr[data-goal-hierarchy-scope] .goal-task-hierarchy-row > button[data-goal-collapse-toggle] {
+  --task-tree-dot-color: var(--goal-hierarchy-line-active-color);
 }
 
 [data-goal-view="true"] .goal-task-hierarchy-row > button[data-goal-collapse-toggle]:hover::before,
