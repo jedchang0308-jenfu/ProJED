@@ -269,7 +269,7 @@ async (page) => {
       if (item.markHasIcon) throw new Error(`${level} reservation icon should be absent: ${JSON.stringify(item)}`);
       if (!item.markIsIntegratedToken) throw new Error(`${level} reservation value token contract missing: ${JSON.stringify(item)}`);
       if (!item.markStyle || item.markStyle.backgroundColor === 'rgba(0, 0, 0, 0)' || item.markStyle.color !== 'rgb(0, 0, 0)' || item.markStyle.borderWidth !== '0px') throw new Error(`${level} reservation token style mismatch: ${JSON.stringify(item)}`);
-      if (item.dateX !== null && item.markX !== null && item.markX < item.dateX) throw new Error(`${level} mark precedes date: ${JSON.stringify(item)}`);
+      if (item.dateX !== null && item.markX !== null && (level === 'l1' ? item.markX < item.dateX : item.markX > item.dateX)) throw new Error(`${level} date and reservation order mismatch: ${JSON.stringify(item)}`);
       if (item.title && item.title.height > 26) throw new Error(`${level} title wrapped: ${JSON.stringify(item.title)}`);
     }
     await page.screenshot({ path: screenshots.tablet, fullPage: false });

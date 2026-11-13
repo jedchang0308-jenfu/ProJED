@@ -39,7 +39,7 @@ async (page) => {
     const visible = (element) => element instanceof HTMLElement && element.offsetParent !== null;
     const card = Array.from(document.querySelectorAll('.kanban-task-card[data-task-id]'))
       .find(element => visible(element) && visible(element.querySelector('.kanban-checklist-item[data-task-id]')));
-    const section = card?.querySelector('[data-kanban-checklist-visual="inset-rail"]');
+    const section = card?.querySelector('[data-kanban-checklist-visual="rounded-tree"]');
     const row = section?.querySelector('.kanban-checklist-item[data-task-id]');
     if (!(card instanceof HTMLElement) || !(section instanceof HTMLElement) || !(row instanceof HTMLElement)) {
       return { found: false };
@@ -48,8 +48,14 @@ async (page) => {
     const cardStyle = getComputedStyle(card);
     const sectionStyle = getComputedStyle(section);
     const rowStyle = getComputedStyle(row);
+    const branchStyle = getComputedStyle(row, '::before');
+    const toggle = card.querySelector('[data-kanban-checklist-toggle]');
+    const toggleStyle = getComputedStyle(toggle, '::before');
     const cardRect = card.getBoundingClientRect();
     const rowRect = row.getBoundingClientRect();
+    const dateRightOffsets = Array.from(card.querySelectorAll('[data-task-date-badge="true"]'))
+      .filter(visible)
+      .map(date => cardRect.right - date.getBoundingClientRect().right);
     const visibleErrors = Array.from(document.querySelectorAll('.inline-error, [role="alert"]'))
       .filter(visible)
       .map(element => element.textContent?.trim())
@@ -75,6 +81,9 @@ async (page) => {
         level: row.getAttribute('data-task-hierarchy-level'),
         borderWidths: [rowStyle.borderTopWidth, rowStyle.borderRightWidth, rowStyle.borderBottomWidth, rowStyle.borderLeftWidth],
         boxShadow: rowStyle.boxShadow,
+        branchRadius: branchStyle.borderEndStartRadius,
+        branchWidth: branchStyle.borderInlineStartWidth,
+        expandedDotWidth: toggleStyle.width,
       },
       geometry: {
         cardLeft: cardRect.left,
@@ -82,6 +91,8 @@ async (page) => {
         rowLeft: rowRect.left,
         rowRight: rowRect.right,
         leftInset: rowRect.left - cardRect.left,
+        rightInset: cardRect.right - rowRect.right,
+        dateRightOffsets,
       },
       viewport: window.innerWidth,
       documentWidth: document.documentElement.scrollWidth,
@@ -115,6 +126,8 @@ async (page) => {
     ]) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       if (viewport.key === 'mobile') {
+        const taskPanelToggle = page.getByTitle('收合所有任務', { exact: true });
+        if (await taskPanelToggle.isVisible()) await taskPanelToggle.click();
         const mobileSidebar = page.locator('[data-mobile-sidebar-overlay="true"]');
         if (await mobileSidebar.isVisible() && await mobileSidebar.getAttribute('data-sidebar-panel') === 'expanded') {
           await page.locator('[data-main-sidebar-toggle="true"]').click();
@@ -125,9 +138,8 @@ async (page) => {
         has: page.locator('.kanban-checklist-item[data-task-id]'),
       }).first();
       await card.scrollIntoViewIfNeeded();
-      await page.waitForTimeout(100);
       viewportEvidence[viewport.key] = await readHierarchyEvidence();
-      await page.screenshot({ path: viewport.screenshot, fullPage: false });
+      await card.screenshot({ path: viewport.screenshot });
     }
 
     const evidenceList = Object.values(viewportEvidence);
@@ -139,22 +151,39 @@ async (page) => {
       evidence.card.boxShadow !== 'none'
     )), { viewportEvidence });
     record('QA-063-002', evidenceList.every(evidence => (
-      evidence.section.visual === 'inset-rail' &&
-      parseFloat(evidence.section.borderLeftWidth) >= 2 &&
-      evidence.row.visual === 'flat-unlined' &&
+      evidence.section.visual === 'rounded-tree' &&
+      evidence.section.borderLeftWidth === '0px' &&
+      evidence.section.backgroundColor === 'rgba(0, 0, 0, 0)' &&
+      evidence.row.visual === 'rounded-branch' &&
+      evidence.row.branchRadius === '5px' &&
+      evidence.row.branchWidth === '1px' &&
+      evidence.row.expandedDotWidth === '6px' &&
       evidence.row.level === 'L3+' &&
       evidence.row.borderWidths.every(width => parseFloat(width) === 0) &&
       evidence.row.boxShadow === 'none'
     )), { viewportEvidence });
     record('QA-063-003', evidenceList.every(evidence => (
-      evidence.geometry.leftInset >= 8 &&
-      evidence.geometry.rowRight <= evidence.geometry.cardRight
+      evidence.geometry.leftInset > 0 &&
+      Math.abs(evidence.geometry.leftInset - evidence.geometry.rightInset) <= 1 &&
+      evidence.geometry.dateRightOffsets.every(offset => Math.abs(offset - evidence.geometry.rightInset) <= 1)
     )), { viewportEvidence });
     record('QA-063-004', evidenceList.every(evidence => (
       evidence.documentWidth <= evidence.viewport &&
       evidence.bodyWidth <= evidence.viewport &&
       evidence.visibleErrors.length === 0
     )) && browserErrors.length === 0, { viewportEvidence, browserErrors });
+
+    const nestedToggle = page.locator('[data-kanban-branch-toggle="true"]').first();
+    await nestedToggle.scrollIntoViewIfNeeded();
+    const subtreeId = await nestedToggle.getAttribute('aria-controls');
+    const subtree = page.locator(`[id="${subtreeId}"]`);
+    await nestedToggle.press('Enter');
+    record('QA-063-nested-collapse', await nestedToggle.getAttribute('aria-expanded') === 'false'
+      && !await subtree.isVisible()
+      && await nestedToggle.evaluate(element => getComputedStyle(element, '::before').width) === '8px');
+    await nestedToggle.press('Space');
+    record('QA-063-nested-expand', await nestedToggle.getAttribute('aria-expanded') === 'true'
+      && await subtree.isVisible());
 
     result.ok = result.cases.every(item => item.ok);
     console.log(JSON.stringify(result, null, 2));

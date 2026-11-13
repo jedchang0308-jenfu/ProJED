@@ -28,8 +28,8 @@ type KanbanCardPresentationProps = {
   showDate?: boolean;
   showTags?: boolean;
   titleIndicator?: React.ReactNode;
+  rowLeading?: React.ReactNode;
   titleTrailing?: React.ReactNode;
-  rowTrailing?: React.ReactNode;
   meetingReservationValue?: number | null;
   tags?: React.ReactNode;
   meta?: React.ReactNode;
@@ -47,8 +47,8 @@ export const KanbanCardPresentation: React.FC<KanbanCardPresentationProps> = ({
   showDate = true,
   showTags = true,
   titleIndicator,
+  rowLeading,
   titleTrailing,
-  rowTrailing,
   meetingReservationValue,
   tags,
   meta,
@@ -66,6 +66,7 @@ export const KanbanCardPresentation: React.FC<KanbanCardPresentationProps> = ({
     >
       <Row className="kanban-task-title-row flex items-start justify-between gap-1">
         <Content className="kanban-task-title-content flex min-w-0 flex-1 items-center gap-1">
+          {rowLeading}
           <Title
             {...titleProps}
             className={`task-title-text relative flex min-w-0 flex-1 items-center gap-[2px] pr-2 text-sm font-medium leading-tight transition-colors ${model.status ? taskStatusTitleClass[model.status] : ''} ${titleClassName}`}
@@ -81,6 +82,7 @@ export const KanbanCardPresentation: React.FC<KanbanCardPresentationProps> = ({
           {showTags ? tags : null}
           {titleTrailing}
         </Content>
+        <MeetingTaskReservationMark value={meetingReservationValue} className="self-center" />
         {showDate && model.status ? (
           <TaskDateBadge
             startDate={model.startDate}
@@ -94,8 +96,6 @@ export const KanbanCardPresentation: React.FC<KanbanCardPresentationProps> = ({
             className="ml-0.5 self-center"
           />
         ) : null}
-        <MeetingTaskReservationMark value={meetingReservationValue} className="self-center" />
-        {rowTrailing}
       </Row>
       {meta}
     </Body>
