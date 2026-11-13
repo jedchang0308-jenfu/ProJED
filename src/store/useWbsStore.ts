@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import dayjs from 'dayjs';
-import type { ActivityEventType, Dependency, KanbanViewConfig, TaskNode, TaskStatus } from '../types';
+import type { ActivityEventType, Dependency, KanbanViewConfig, TaskNode, TaskNoteCompareAndSetResult, TaskNotePersistenceSnapshot, TaskStatus } from '../types';
 import { isSupabaseBackend, nodeService, dependencyService, workspaceService, boardService, tagService, eventLogService, memberService } from '../services/dataBackend';
 import useUndoStore from './useUndoStore';
 import useBoardStore from './useBoardStore';
@@ -45,6 +45,7 @@ import type {
 } from '../features/taskTracking/types';
 import { buildTaskTreeClonePlan } from '../features/taskClonePlan';
 import { compareBoardTaskOrder, type BoardTaskOrderDestination, type BoardTaskOrderIntent } from '../features/taskCreation/boardTaskOrder';
+import { areTaskNoteSnapshotsEqual, taskNoteSnapshotFromNode } from '../utils/taskNotePersistence';
 
 /**
  * WbsStore 狀態定義
@@ -147,6 +148,10 @@ export type TaskPlacementCommandOptions = {
   mergeKey?: string;
 };
 
+type CommitTaskNotesOptions = {
+  skipUndo?: boolean;
+};
+
 export interface WbsBoardActions {
   // ===== 基礎資料操作 (CRUD) =====
   
@@ -173,6 +178,14 @@ export interface WbsBoardActions {
     updates: Partial<TaskNode>,
     options?: UpdateNodeOptions,
   ) => UpdateNodeDispatchResult;
+
+  /** Atomically persist task notes only when the provider snapshot is unchanged. */
+  commitTaskNotes: (
+    id: string,
+    expected: TaskNotePersistenceSnapshot,
+    next: TaskNotePersistenceSnapshot,
+    options?: CommitTaskNotesOptions,
+  ) => Promise<TaskNoteCompareAndSetResult>;
 
   /**
    * 以單一 undo command 套用多筆任務更新，用於拖曳、重排與跨視圖歸位。
@@ -1555,6 +1568,88 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       nodeCount: copiedNodes.length,
       dependencyCount: copiedDependencies.length,
     };
+  },
+
+  commitTaskNotes: async (id, expected, next, options = {}) => {
+    const oldNode = get().nodes[id];
+    if (!oldNode) throw new Error('Task note compare-and-set target does not exist.');
+
+    let outcome: TaskNoteCompareAndSetResult;
+    if (isTaskWorkbenchUnplacedTask(oldNode)) {
+      const current = taskNoteSnapshotFromNode(oldNode);
+      if (!areTaskNoteSnapshotsEqual(current, expected)) {
+        outcome = { status: 'conflict', snapshot: current };
+      } else {
+        const persisted: TaskNotePersistenceSnapshot = {
+          detailNotes: next.detailNotes,
+          description: next.description,
+          updatedAt: Date.now(),
+        };
+        await persistTaskWorkbenchUnplacedTask({
+          ...oldNode,
+          detailNotes: persisted.detailNotes,
+          description: persisted.description ?? undefined,
+          updatedAt: persisted.updatedAt,
+        }, useAuthStore.getState().user?.uid);
+        outcome = { status: 'persisted', snapshot: persisted };
+      }
+    } else {
+      outcome = await nodeService.compareAndSetNotes(
+        oldNode.workspaceId,
+        oldNode.boardId,
+        id,
+        expected,
+        next,
+      );
+    }
+
+    // A previous request can commit at the provider but lose its response.
+    // Retrying the same desired snapshot is therefore an idempotent success,
+    // not a user-visible conflict.
+    if (outcome.status === 'conflict' && areTaskNoteSnapshotsEqual(outcome.snapshot, next)) {
+      outcome = { status: 'persisted', snapshot: outcome.snapshot };
+    }
+
+    const currentNode = get().nodes[id];
+    if (!currentNode) return outcome;
+    const reconciledNode: TaskNode = {
+      ...currentNode,
+      detailNotes: outcome.snapshot.detailNotes,
+      description: outcome.snapshot.description ?? undefined,
+      updatedAt: outcome.snapshot.updatedAt ?? currentNode.updatedAt,
+    };
+    set(state => ({ nodes: { ...state.nodes, [id]: reconciledNode } }));
+    if (outcome.status === 'conflict') return outcome;
+
+    const beforeNode: TaskNode = {
+      ...oldNode,
+      detailNotes: expected.detailNotes,
+      description: expected.description ?? undefined,
+    };
+    const operationId = createUpdateNodeOperationId();
+    await commitMeetingTaskMutation(beforeNode, reconciledNode, ['detailNotes', 'description'], operationId);
+
+    if (!options.skipUndo) {
+      const persisted = outcome.snapshot;
+      const commitOrThrow = async (
+        from: TaskNotePersistenceSnapshot,
+        to: TaskNotePersistenceSnapshot,
+      ) => {
+        const result = await get().commitTaskNotes(id, from, to, { skipUndo: true });
+        if (result.status === 'conflict') {
+          throw new Error('備註已在其他地方更新，無法套用復原或重做。');
+        }
+      };
+      useUndoStore.getState().pushUndo({
+        label: '修改任務',
+        scope: 'task',
+        entityIds: [id],
+        undo: () => commitOrThrow(persisted, expected),
+        redo: () => commitOrThrow(expected, persisted),
+      });
+    }
+
+    return outcome;
   },
 
   updateNode: (id, updates, options): UpdateNodeDispatchResult => {

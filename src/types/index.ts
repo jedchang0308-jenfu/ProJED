@@ -532,6 +532,17 @@ export interface TaskDetailNoteRichContent {
   editorState: SerializedEditorState;
 }
 
+/** Provider-stable task-note payload used for field-level compare-and-set writes. */
+export interface TaskNotePersistenceSnapshot {
+  detailNotes: TaskDetailNote[];
+  description: string | null;
+  updatedAt?: number;
+}
+
+export type TaskNoteCompareAndSetResult =
+  | { status: 'persisted'; snapshot: TaskNotePersistenceSnapshot }
+  | { status: 'conflict'; snapshot: TaskNotePersistenceSnapshot };
+
 /** Volatile meeting capture contract. These values must never be persisted in a draft snapshot. */
 export type MeetingLiveFieldKey =
   | 'created'

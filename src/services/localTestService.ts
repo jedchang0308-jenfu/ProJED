@@ -15,6 +15,8 @@ import {
   type MeetingDraftCheckpointInput,
   type MeetingDraftCheckpointResult,
   type TaskNode,
+  type TaskNoteCompareAndSetResult,
+  type TaskNotePersistenceSnapshot,
   type TaskTag,
   type Workspace,
   type WorkspaceMember,
@@ -23,6 +25,7 @@ import { hashBoardInviteToken } from '../utils/boardInviteToken';
 import { getLocalTestProfileOverride } from './localTestProfileService';
 import { MeetingDraftCheckpointError } from './meetingDraftRecoveryService';
 import { projectBoardTaskOrder, type BoardTaskOrderCommand } from '../features/taskCreation/boardTaskOrder';
+import { areTaskNoteSnapshotsEqual, taskNoteSnapshotFromNode } from '../utils/taskNotePersistence';
 
 const WORKSPACES_KEY = 'projed-local-test.workspaces';
 const NODES_KEY = 'projed-local-test.nodes';
@@ -788,6 +791,60 @@ export const localTestNodeService = {
       return new Promise<void>(() => {});
     }
     writeNodes(nextNodes);
+  },
+
+  compareAndSetNotes: async (
+    _workspaceId: string,
+    _boardId: string,
+    nodeId: string,
+    expected: TaskNotePersistenceSnapshot,
+    next: TaskNotePersistenceSnapshot,
+  ): Promise<TaskNoteCompareAndSetResult> => {
+    const nodes = readNodes();
+    const currentNode = nodes[nodeId];
+    if (!currentNode) throw new Error('Task note compare-and-set target does not exist.');
+    recordTaskPersistenceAttempt(nodeId, {
+      detailNotes: next.detailNotes,
+      description: next.description ?? undefined,
+    });
+    if (consumeTaskPersistenceFault('reject-once') || consumeTaskNodeFault('update-once')) {
+      throw new Error('local-test injected task persistence rejection');
+    }
+
+    const current = taskNoteSnapshotFromNode(currentNode);
+    if (!areTaskNoteSnapshotsEqual(current, expected)) {
+      return { status: 'conflict', snapshot: current };
+    }
+
+    const persisted: TaskNotePersistenceSnapshot = {
+      detailNotes: next.detailNotes,
+      description: next.description,
+      updatedAt: Date.now(),
+    };
+    const nextNodes = {
+      ...nodes,
+      [nodeId]: {
+        ...currentNode,
+        detailNotes: persisted.detailNotes,
+        description: persisted.description ?? undefined,
+        updatedAt: persisted.updatedAt,
+      },
+    };
+    if (consumeTaskPersistenceFault('timeout-commit-once')) {
+      writeNodes(nextNodes);
+      return new Promise<TaskNoteCompareAndSetResult>(() => {});
+    }
+    if (consumeTaskPersistenceFault('delay-response-once')) {
+      writeNodes(nextNodes);
+      return new Promise<TaskNoteCompareAndSetResult>((resolve) => {
+        window.setTimeout(() => resolve({ status: 'persisted', snapshot: persisted }), 750);
+      });
+    }
+    if (consumeTaskPersistenceFault('timeout-no-commit-once')) {
+      return new Promise<TaskNoteCompareAndSetResult>(() => {});
+    }
+    writeNodes(nextNodes);
+    return { status: 'persisted', snapshot: persisted };
   },
 
   delete: async (_workspaceId: string, _boardId: string, nodeId: string): Promise<void> => {

@@ -16,6 +16,8 @@ import {
   type EditableKnowledgeRecord,
   type KnowledgeRecordInput,
   type TaskNode,
+  type TaskNoteCompareAndSetResult,
+  type TaskNotePersistenceSnapshot,
   type TaskTag,
   type Workspace,
   type WorkspaceMember,
@@ -411,6 +413,19 @@ export const nodeService = {
       : isSupabaseBackend
       ? supabaseNodeService.update(workspaceId, boardId, nodeId, updates)
       : firestoreNodeService.update(workspaceId, boardId, nodeId, updates),
+
+  compareAndSetNotes: (
+    workspaceId: string,
+    boardId: string,
+    nodeId: string,
+    expected: TaskNotePersistenceSnapshot,
+    next: TaskNotePersistenceSnapshot,
+  ): Promise<TaskNoteCompareAndSetResult> =>
+    isLocalTestBackend
+      ? localTestNodeService.compareAndSetNotes(workspaceId, boardId, nodeId, expected, next)
+      : isSupabaseBackend
+      ? supabaseNodeService.compareAndSetNotes(workspaceId, boardId, nodeId, expected, next)
+      : firestoreNodeService.compareAndSetNotes(workspaceId, boardId, nodeId, expected, next),
 
   delete: (workspaceId: string, boardId: string, nodeId: string): Promise<void> =>
     isLocalTestBackend

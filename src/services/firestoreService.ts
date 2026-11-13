@@ -1,10 +1,11 @@
 import { requireFirebaseDb } from './firebase';
 import {
-  collection, doc, setDoc, updateDoc, deleteDoc, writeBatch, deleteField, getDoc, getDocs
+  collection, doc, setDoc, updateDoc, deleteDoc, writeBatch, deleteField, getDoc, getDocs, runTransaction
 } from 'firebase/firestore';
-import type { Workspace, Board, BoardMember, Dependency, EditableKnowledgeRecord, KnowledgeRecord, KnowledgeRecordInput, MeetingDraftCheckpointInput, MeetingDraftCheckpointResult, TaskNode, TaskTag, WorkspaceMember } from '../types';
+import type { Workspace, Board, BoardMember, Dependency, EditableKnowledgeRecord, KnowledgeRecord, KnowledgeRecordInput, MeetingDraftCheckpointInput, MeetingDraftCheckpointResult, TaskNode, TaskNoteCompareAndSetResult, TaskNotePersistenceSnapshot, TaskTag, WorkspaceMember } from '../types';
 import { MeetingDraftCheckpointError } from './meetingDraftRecoveryService';
 import { projectBoardTaskOrder, type BoardTaskOrderCommand } from '../features/taskCreation/boardTaskOrder';
+import { areTaskNoteSnapshotsEqual, taskNoteSnapshotFromNode } from '../utils/taskNotePersistence';
 
 // ==========================
 // Helper: 處理 undefined 轉 deleteField()
@@ -204,6 +205,37 @@ export const nodeService = {
   update: async (wsId: string, bId: string, nId: string, updates: Partial<import('../types').TaskNode>) => {
     const db = requireFirebaseDb();
     await updateDoc(doc(db, 'workspaces', wsId, 'boards', bId, 'nodes', nId), sanitizeUpdates(updates));
+  },
+  compareAndSetNotes: async (
+    wsId: string,
+    bId: string,
+    nId: string,
+    expected: TaskNotePersistenceSnapshot,
+    next: TaskNotePersistenceSnapshot,
+  ): Promise<TaskNoteCompareAndSetResult> => {
+    const db = requireFirebaseDb();
+    const nodeRef = doc(db, 'workspaces', wsId, 'boards', bId, 'nodes', nId);
+    return runTransaction(db, async transaction => {
+      const snapshot = await transaction.get(nodeRef);
+      if (!snapshot.exists()) throw new Error('Task note compare-and-set target does not exist.');
+      const currentNode = snapshot.data() as TaskNode;
+      const current = taskNoteSnapshotFromNode(currentNode);
+      if (!areTaskNoteSnapshotsEqual(current, expected)) {
+        return { status: 'conflict', snapshot: current };
+      }
+
+      const persisted: TaskNotePersistenceSnapshot = {
+        detailNotes: next.detailNotes,
+        description: next.description,
+        updatedAt: Date.now(),
+      };
+      transaction.update(nodeRef, sanitizeUpdates({
+        detailNotes: persisted.detailNotes,
+        description: persisted.description ?? undefined,
+        updatedAt: persisted.updatedAt,
+      }));
+      return { status: 'persisted', snapshot: persisted };
+    });
   },
   delete: async (wsId: string, bId: string, nId: string) => {
     const db = requireFirebaseDb();

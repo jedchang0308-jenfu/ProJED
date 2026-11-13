@@ -28,6 +28,8 @@ import type {
   RecordTaskLinkRole,
   TagColor,
   TaskNode,
+  TaskNoteCompareAndSetResult,
+  TaskNotePersistenceSnapshot,
   TaskTag,
   Workspace,
   WorkspaceMember,
@@ -274,6 +276,16 @@ export const mapWbsItemToTaskNode = (
   tagIds,
   };
 };
+
+const mapWbsItemToTaskNoteSnapshot = (
+  item: Pick<WbsItemRow, 'detail_notes' | 'description' | 'updated_at'>,
+): TaskNotePersistenceSnapshot => ({
+  detailNotes: Array.isArray(item.detail_notes)
+    ? item.detail_notes as unknown as TaskNode['detailNotes'] ?? []
+    : [],
+  description: item.description ?? null,
+  updatedAt: toTimestamp(item.updated_at),
+});
 
 const mapTaskTag = (row: TaskTagRow, requestedWorkspaceId?: string): TaskTag => ({
   id: legacyOrId(row.id, row.legacy_tag_id),
@@ -1269,6 +1281,54 @@ export const supabaseNodeService = {
     if ('tagIds' in updates) {
       await supabaseTagService.setNodeTags(workspaceId, boardId, nodeId, updates.tagIds ?? []);
     }
+  },
+
+  compareAndSetNotes: async (
+    workspaceId: string,
+    boardId: string,
+    nodeId: string,
+    expected: TaskNotePersistenceSnapshot,
+    next: TaskNotePersistenceSnapshot,
+  ): Promise<TaskNoteCompareAndSetResult> => {
+    requireSupabase();
+    const tenantId = await resolveWorkspaceId(workspaceId);
+    const projectId = await resolveProjectId(tenantId, boardId);
+    let updateQuery = supabase
+      .from('wbs_items')
+      .update({
+        detail_notes: next.detailNotes as unknown as Json,
+        description: next.description,
+      })
+      .eq('tenant_id', tenantId)
+      .eq('project_id', projectId)
+      .eq('detail_notes', expected.detailNotes as unknown as NonNullable<Json>);
+    updateQuery = expected.description === null
+      ? updateQuery.is('description', null)
+      : updateQuery.eq('description', expected.description);
+    updateQuery = isUuid(nodeId)
+      ? updateQuery.eq('id', nodeId)
+      : updateQuery.eq('legacy_node_id', nodeId);
+
+    const { data, error } = await updateQuery
+      .select('detail_notes,description,updated_at')
+      .maybeSingle();
+    assertNoError(error);
+    if (data) {
+      return { status: 'persisted', snapshot: mapWbsItemToTaskNoteSnapshot(data) };
+    }
+
+    let readQuery = supabase
+      .from('wbs_items')
+      .select('detail_notes,description,updated_at')
+      .eq('tenant_id', tenantId)
+      .eq('project_id', projectId);
+    readQuery = isUuid(nodeId)
+      ? readQuery.eq('id', nodeId)
+      : readQuery.eq('legacy_node_id', nodeId);
+    const { data: current, error: readError } = await readQuery.single();
+    assertNoError(readError);
+    if (!current) throw new Error('Supabase did not find the requested WBS item after a note conflict.');
+    return { status: 'conflict', snapshot: mapWbsItemToTaskNoteSnapshot(current) };
   },
 
   delete: async (workspaceId: string, boardId: string, nodeId: string): Promise<void> => {

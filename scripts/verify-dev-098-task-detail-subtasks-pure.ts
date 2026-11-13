@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import type { TaskNode } from '../src/types';
+import type { TaskNode, TaskNotePersistenceSnapshot } from '../src/types';
 import type { TaskTrackingReference } from '../src/features/taskTracking/types';
 import { primaryPlacementId } from '../src/features/taskTracking/model';
 import { buildTaskPlacementTreeRows } from '../src/components/Wbs/TaskPlacementTree';
@@ -20,6 +20,7 @@ import {
   pushTaskDetailsNavigation,
   resolveTaskDetailsPersistenceDecision,
 } from '../src/components/taskDetailsNavigation';
+import { areTaskNoteSnapshotsEqual } from '../src/utils/taskNotePersistence';
 
 const root = process.cwd();
 const now = 1_788_000_000_000;
@@ -186,6 +187,37 @@ await check('P10-capability-matrix', 'create/edit/move/tracking actions are deni
   assert.equal(guardTaskAction('task.archive', { nodeExists: true, canDeleteTask: true }).allowed, true);
   assert.equal(guardTaskAction('task.remove-tracking-reference', { nodeExists: true, canManageTaskReference: false }).allowed, false);
   assert.equal(guardTaskAction('task.remove-tracking-reference', { nodeExists: true, canManageTaskReference: true }).allowed, true);
+});
+
+await check('P11-note-snapshot-comparison', 'note persistence ignores timestamps and object key order, while preserving note-array order and content changes.', () => {
+  const baseline: TaskNotePersistenceSnapshot = {
+    detailNotes: [
+      { id: 'n1', title: '任務目的', content: '內容 A' },
+      { id: 'n2', title: '一般備註', content: '內容 B' },
+    ],
+    description: '內容 A',
+    updatedAt: 1,
+  };
+  const equivalent = {
+    updatedAt: 999,
+    description: '內容 A',
+    detailNotes: [
+      { content: '內容 A', title: '任務目的', id: 'n1' },
+      { title: '一般備註', id: 'n2', content: '內容 B' },
+    ],
+  } as TaskNotePersistenceSnapshot;
+  const reordered = {
+    ...equivalent,
+    detailNotes: [...equivalent.detailNotes].reverse(),
+  };
+  const changed = {
+    ...equivalent,
+    detailNotes: equivalent.detailNotes.map(note => note.id === 'n2' ? { ...note, content: '內容 C' } : note),
+  };
+
+  assert.equal(areTaskNoteSnapshotsEqual(baseline, equivalent), true);
+  assert.equal(areTaskNoteSnapshotsEqual(baseline, reordered), false);
+  assert.equal(areTaskNoteSnapshotsEqual(baseline, changed), false);
 });
 
 const artifact = {

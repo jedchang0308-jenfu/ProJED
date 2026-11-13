@@ -207,7 +207,8 @@ async (page) => {
     const verifyTask = async (id, purpose) => {
       await modal.and(page.locator('[data-task-id="' + id + '"]')).waitFor({ state: 'visible' });
       await editor('任務目的').waitFor({ state: 'visible' });
-      if ((await editor('任務目的').innerText()).trim() !== purpose) throw new Error('Wrong purpose shown for ' + id);
+      const actualPurpose = (await editor('任務目的').innerText()).trim();
+      if (actualPurpose !== purpose) throw new Error('Wrong purpose shown for ' + id + ': expected=' + JSON.stringify(purpose) + ' actual=' + JSON.stringify(actualPurpose));
       if ((await editor('備註').innerText()).trim() !== '備註：' + id) throw new Error('Wrong note shown for ' + id);
       if (await modal.locator('[data-task-details-title-input="true"]').inputValue() !== taskNodes[id].title) {
         throw new Error('Wrong title shown for ' + id);
@@ -238,11 +239,32 @@ async (page) => {
       || persisted[siblingId].detailNotes[0].content !== editedPurpose) {
       throw new Error('Viewing or editing one task changed the wrong stored purpose');
     }
+    await page.evaluate(async id => {
+      const { useWbsStore } = await import('/src/store/useWbsStore.ts');
+      const stored = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}')[id];
+      const state = useWbsStore.getState();
+      useWbsStore.setState({ nodes: { ...state.nodes, [id]: structuredClone(stored) } });
+    }, siblingId);
+    await page.waitForTimeout(120);
+    if (await modal.locator('[data-task-details-notes-conflict="true"]').count()) {
+      throw new Error('Own persisted note echo was misclassified as an external conflict');
+    }
     await page.evaluate(() => {
       window.confirm = () => true;
     });
     const replacePurposeFromElsewhere = content => page.evaluate(async ({ id, content }) => {
       const { useWbsStore } = await import('/src/store/useWbsStore.ts');
+      const storedNodes = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
+      const storedTask = storedNodes[id];
+      storedNodes[id] = {
+        ...storedTask,
+        description: content,
+        detailNotes: storedTask.detailNotes.map(note => note.id === 'note_default'
+          ? { id: note.id, title: note.title, content }
+          : note),
+        updatedAt: Date.now(),
+      };
+      localStorage.setItem('projed-local-test.nodes', JSON.stringify(storedNodes));
       const state = useWbsStore.getState();
       const task = state.nodes[id];
       useWbsStore.setState({ nodes: { ...state.nodes, [id]: {
@@ -262,7 +284,7 @@ async (page) => {
     await backToParent();
     await page.waitForTimeout(1050);
     await verifyTask(siblingId, '本機未儲存草稿');
-    if ((await readNodes())[siblingId].description !== editedPurpose) throw new Error('Conflicted draft was written');
+    if ((await readNodes())[siblingId].description !== '另一位使用者更新的目的') throw new Error('Conflicted draft overwrote the provider value');
     await conflict.getByRole('button', { name: '載入最新備註' }).click();
     await conflict.waitFor({ state: 'detached' });
     await verifyTask(siblingId, '另一位使用者更新的目的');
@@ -271,11 +293,11 @@ async (page) => {
     await editor('任務目的').fill('第一次儲存失敗的草稿');
     await modal.locator('[data-task-details-save-status="error"]').waitFor({ state: 'visible' });
     await replacePurposeFromElsewhere('儲存失敗後收到的最新內容');
-    await verifyTask(siblingId, '儲存失敗後收到的最新內容');
+    await verifyTask(siblingId, '第一次儲存失敗的草稿');
     await modal.locator('[data-task-details-save-retry="true"]').click();
     await conflict.waitFor({ state: 'visible' });
     await verifyTask(siblingId, '第一次儲存失敗的草稿');
-    if ((await readNodes())[siblingId].description !== editedPurpose) throw new Error('Retry wrote a conflicted draft');
+    if ((await readNodes())[siblingId].description !== '儲存失敗後收到的最新內容') throw new Error('Retry wrote a conflicted draft');
     await conflict.getByRole('button', { name: '載入最新備註' }).click();
     await conflict.waitFor({ state: 'detached' });
     await verifyTask(siblingId, '儲存失敗後收到的最新內容');

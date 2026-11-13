@@ -317,8 +317,9 @@ const NoteToolbarPlugin: React.FC<{
   canEdit: boolean;
   noteTitle: string;
   onSave: () => void;
+  onBeforeMutation: () => void;
   showToolbar?: boolean;
-}> = ({ canEdit, noteTitle, onSave, showToolbar = true }) => {
+}> = ({ canEdit, noteTitle, onSave, onBeforeMutation, showToolbar = true }) => {
   const [editor] = useLexicalComposerContext();
   const [isOpen, setIsOpen] = React.useState(false);
   const [state, setState] = React.useState<ToolbarState>(EMPTY_TOOLBAR_STATE);
@@ -346,6 +347,7 @@ const NoteToolbarPlugin: React.FC<{
     const enteredUrl = window.prompt('輸入連結網址；留空可移除連結', 'https://');
     if (enteredUrl === null) return;
     if (!enteredUrl.trim()) {
+      onBeforeMutation();
       editor.dispatchCommand(TOGGLE_LINK_COMMAND, null);
       setLinkError('');
       return;
@@ -356,8 +358,9 @@ const NoteToolbarPlugin: React.FC<{
       return;
     }
     setLinkError('');
+    onBeforeMutation();
     editor.dispatchCommand(TOGGLE_LINK_COMMAND, safeUrl);
-  }, [editor]);
+  }, [editor, onBeforeMutation]);
 
   React.useEffect(() => editor.registerCommand(
     KEY_DOWN_COMMAND,
@@ -387,12 +390,17 @@ const NoteToolbarPlugin: React.FC<{
     COMMAND_PRIORITY_HIGH,
   ), [editor, onSave, requestLink]);
 
-  const formatText = (format: TextFormatType) => editor.dispatchCommand(FORMAT_TEXT_COMMAND, format);
+  const formatText = (format: TextFormatType) => {
+    onBeforeMutation();
+    editor.dispatchCommand(FORMAT_TEXT_COMMAND, format);
+  };
   const setParagraph = () => {
+    onBeforeMutation();
     editor.dispatchCommand(REMOVE_LIST_COMMAND, undefined);
     editor.update(() => $setBlocksType($getSelection(), () => $createParagraphNode()));
   };
   const setHeading = () => {
+    onBeforeMutation();
     editor.dispatchCommand(REMOVE_LIST_COMMAND, undefined);
     editor.update(() => $setBlocksType(
       $getSelection(),
@@ -400,6 +408,7 @@ const NoteToolbarPlugin: React.FC<{
     ));
   };
   const setList = (kind: 'bullet' | 'number') => {
+    onBeforeMutation();
     const active = kind === 'bullet' ? state.bullet : state.number;
     editor.dispatchCommand(
       active
@@ -409,6 +418,7 @@ const NoteToolbarPlugin: React.FC<{
     );
   };
   const clearFormatting = () => {
+    onBeforeMutation();
     editor.dispatchCommand(REMOVE_LIST_COMMAND, undefined);
     editor.update(() => {
       const selection = $getSelection();
@@ -463,10 +473,10 @@ const NoteToolbarPlugin: React.FC<{
           data-task-note-toolbar-persistence="toggle-only"
         >
           <div className="flex w-max items-center gap-0.5">
-            <ToolbarButton label="復原" onClick={() => editor.dispatchCommand(UNDO_COMMAND, undefined)}>
+            <ToolbarButton label="復原" onClick={() => { onBeforeMutation(); editor.dispatchCommand(UNDO_COMMAND, undefined); }}>
               <Undo2 size={15} />
             </ToolbarButton>
-            <ToolbarButton label="重做" onClick={() => editor.dispatchCommand(REDO_COMMAND, undefined)}>
+            <ToolbarButton label="重做" onClick={() => { onBeforeMutation(); editor.dispatchCommand(REDO_COMMAND, undefined); }}>
               <Redo2 size={15} />
             </ToolbarButton>
             <span className="mx-1 h-5 w-px bg-slate-200" aria-hidden="true" />
@@ -512,23 +522,38 @@ const NoteToolbarPlugin: React.FC<{
 
 const NoteChangePlugin: React.FC<{
   onUpdate: (updates: Partial<TaskDetailNote>) => void;
-}> = ({ onUpdate }) => {
+  userMutationPendingRef: React.MutableRefObject<boolean>;
+}> = ({ onUpdate, userMutationPendingRef }) => {
+  const [editor] = useLexicalComposerContext();
   const initializedRef = React.useRef(false);
 
   React.useEffect(() => {
     initializedRef.current = true;
   }, []);
 
+  React.useEffect(() => {
+    const markUserMutation = (event: Event) => {
+      const root = editor.getRootElement();
+      if (root && event.target instanceof Node && root.contains(event.target)) {
+        userMutationPendingRef.current = true;
+      }
+    };
+    const eventTypes = ['beforeinput', 'input', 'paste', 'cut', 'drop', 'compositionend'] as const;
+    eventTypes.forEach(type => document.addEventListener(type, markUserMutation, true));
+    return () => eventTypes.forEach(type => document.removeEventListener(type, markUserMutation, true));
+  }, [editor, userMutationPendingRef]);
+
   const handleChange = React.useCallback((editorState: EditorState) => {
     // Lexical may emit an initialization update. It is not a user edit and
     // must not lazy-upgrade a legacy note or create an Undo entry.
-    if (!initializedRef.current) return;
+    if (!initializedRef.current || !userMutationPendingRef.current) return;
+    userMutationPendingRef.current = false;
     const richContent = createTaskNoteRichContent(editorState.toJSON());
     onUpdate({
       richContent,
       content: taskNoteRichContentToPlainText(richContent),
     });
-  }, [onUpdate]);
+  }, [onUpdate, userMutationPendingRef]);
 
   return (
     <OnChangePlugin
@@ -609,6 +634,10 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
     props.onUpdate(updates);
   }, [note.content, props]);
   const contentEditableRef = React.useRef<HTMLDivElement | null>(null);
+  const userMutationPendingRef = React.useRef(false);
+  const markUserMutation = React.useCallback(() => {
+    userMutationPendingRef.current = true;
+  }, []);
   const resizeFrameRef = React.useRef<number | null>(null);
   const heightPreferenceScopeKey = React.useMemo(
     () => getTaskNoteEditorHeightScopeKey(accountId, taskId, note.id),
@@ -767,7 +796,7 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
               {noteLabel}
             </span>
           )}
-          <NoteToolbarPlugin canEdit={canEdit} noteTitle={noteLabel} onSave={onSave} showToolbar={!isCellVariant} />
+          <NoteToolbarPlugin canEdit={canEdit} noteTitle={noteLabel} onSave={onSave} onBeforeMutation={markUserMutation} showToolbar={!isCellVariant} />
           <button
             type="button"
             onClick={onAdd}
@@ -849,7 +878,7 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
         <LinkPlugin validateUrl={url => Boolean(sanitizeTaskNoteUrl(url))} />
         <LinkSafetyPlugin />
         <EditorEditablePlugin editable={canEdit} />
-        <NoteChangePlugin onUpdate={onUpdate} />
+        <NoteChangePlugin onUpdate={onUpdate} userMutationPendingRef={userMutationPendingRef} />
         {isCellVariant && cellCommit && cellCancel ? <CellEditorInteractionPlugin onCommit={cellCommit} onCancel={cellCancel} /> : null}
       </div>
     </LexicalComposer>
