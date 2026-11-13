@@ -407,10 +407,6 @@ body[data-kanban-mouse-pan-active="true"] * {
   pointer-events: none;
 }
 
-.kanban-tree-section [data-kanban-checklist-row-visual="rounded-branch"]:not(:has(.kanban-tree-disclosure))::before {
-  width: calc(var(--kanban-tree-indent) + var(--kanban-tree-node-offset) - 4px);
-}
-
 .kanban-tree-section [data-kanban-tree-continuation]::before,
 .kanban-tree-section [data-kanban-tree-stem]::after {
   content: "";
