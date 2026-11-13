@@ -363,16 +363,6 @@ body[data-kanban-mouse-pan-active="true"] * {
   --task-tree-dot-surface: var(--color-surface-task);
 }
 
-.kanban-tree-card-header .kanban-task-title-row {
-  position: relative;
-  align-items: center;
-  min-height: 24px;
-}
-
-.kanban-tree-card-header .kanban-task-title-content {
-  padding-inline-start: var(--kanban-tree-title-inset);
-}
-
 .kanban-tree-section {
   margin-inline: var(--kanban-tree-card-inset);
   padding-block-end: 5px;

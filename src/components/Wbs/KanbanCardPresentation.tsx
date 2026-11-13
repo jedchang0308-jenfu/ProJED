@@ -28,7 +28,6 @@ type KanbanCardPresentationProps = {
   showDate?: boolean;
   showTags?: boolean;
   titleIndicator?: React.ReactNode;
-  rowLeading?: React.ReactNode;
   titleTrailing?: React.ReactNode;
   meetingReservationValue?: number | null;
   tags?: React.ReactNode;
@@ -47,7 +46,6 @@ export const KanbanCardPresentation: React.FC<KanbanCardPresentationProps> = ({
   showDate = true,
   showTags = true,
   titleIndicator,
-  rowLeading,
   titleTrailing,
   meetingReservationValue,
   tags,
@@ -66,7 +64,6 @@ export const KanbanCardPresentation: React.FC<KanbanCardPresentationProps> = ({
     >
       <Row className="kanban-task-title-row flex items-start justify-between gap-1">
         <Content className="kanban-task-title-content flex min-w-0 flex-1 items-center gap-1">
-          {rowLeading}
           <Title
             {...titleProps}
             className={`task-title-text relative flex min-w-0 flex-1 items-center gap-[2px] pr-2 text-sm font-medium leading-tight transition-colors ${model.status ? taskStatusTitleClass[model.status] : ''} ${titleClassName}`}

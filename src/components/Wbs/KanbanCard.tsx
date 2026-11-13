@@ -8,7 +8,6 @@
 import React, { useRef, useState } from 'react';
 import { useDndContext } from '@dnd-kit/core';
 import { Check, Link } from 'lucide-react';
-import { TaskHierarchyDisclosure } from './TaskHierarchyIndentedRow';
 import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
 import useRecordStore from '../../store/useRecordStore';
@@ -22,7 +21,6 @@ import { isTaskPrimaryActionTarget } from '../../utils/taskInteractions';
 import type { TaskFilterResultProjection } from '../../features/taskFilters';
 import {
   TASK_CHILD_DROP_HIGHLIGHT_EVENT,
-  TASK_CHILD_DROP_SUCCESS_EVENT,
   type TaskChildDropSuccessDetail,
 } from './taskDrag/taskChildDropFeedback';
 import { TaskPlacementPendingIndicator } from './taskDrag/TaskPlacementPendingIndicator';
@@ -55,7 +53,6 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
   const showTags = useBoardStore(s => s.showTags);
   const selectedTaskId = useBoardStore(s => s.selectedTaskId);
   const tags = useTagStore(s => s.tags);
-  const [isChecklistExpanded, setIsChecklistExpanded] = useState(true);
   const cardScopeRef = useRef<HTMLDivElement | null>(null);
 
   // 看板依賴選取 Context
@@ -129,7 +126,6 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
       && (!filterProjection || filterProjection.visibleTaskIds.has(reference.taskId))
       && Boolean(useWbsStore.getState().nodes[reference.taskId])
   ), [filterProjection, node?.boardId, nodeId, trackingReference?.boardId, trackingReference?.id, trackingReferences]);
-  const checklistToggleLabel = isChecklistExpanded ? '收合下層任務' : '展開下層任務';
   const checklistRegionId = `kanban-checklist-${placementController.placementId.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
 
   // dnd-kit 拖動邏輯（此卡片可被拖動）
@@ -172,11 +168,6 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
 
   React.useEffect(() => {
     let highlightTimer: ReturnType<typeof setTimeout> | null = null;
-    const handleChildDropSuccess = (event: Event) => {
-      const detail = (event as CustomEvent<TaskChildDropSuccessDetail>).detail;
-      if (!detail) return;
-      if (detail.targetNodeId === nodeId) setIsChecklistExpanded(true);
-    };
     const handleChildDropHighlight = (event: Event) => {
       const detail = (event as CustomEvent<TaskChildDropSuccessDetail>).detail;
       if (!detail) return;
@@ -185,10 +176,8 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
       if (highlightTimer) clearTimeout(highlightTimer);
       highlightTimer = setTimeout(() => setIsRecentlyChildDropped(false), 1400);
     };
-    window.addEventListener(TASK_CHILD_DROP_SUCCESS_EVENT, handleChildDropSuccess);
     window.addEventListener(TASK_CHILD_DROP_HIGHLIGHT_EVENT, handleChildDropHighlight);
     return () => {
-      window.removeEventListener(TASK_CHILD_DROP_SUCCESS_EVENT, handleChildDropSuccess);
       window.removeEventListener(TASK_CHILD_DROP_HIGHLIGHT_EVENT, handleChildDropHighlight);
       if (highlightTimer) clearTimeout(highlightTimer);
     };
@@ -301,7 +290,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
               'data-task-card-primary-content': 'true',
               'data-mobile-task-card-primary': 'true',
             } as React.HTMLAttributes<HTMLElement>}
-            bodyClassName={`kanban-tree-card-header ${
+            bodyClassName={` ${
               isDragPlaceholder ? 'kanban-drag-source-placeholder pointer-events-none' : ''
             } ${
               showChecklistSurface ? 'rounded-t-[7px]' : 'rounded-[7px]'
@@ -349,22 +338,6 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
               </>
             )}
             meetingReservationValue={meetingReservationValue}
-            rowLeading={showChecklistSurface ? (
-              <TaskHierarchyDisclosure
-                expanded={isChecklistExpanded}
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsChecklistExpanded(current => !current);
-                }}
-                className="task-tree-dot kanban-tree-disclosure kanban-checklist-toggle"
-                aria-controls={checklistRegionId}
-                aria-label={checklistToggleLabel}
-                title={checklistToggleLabel}
-                data-kanban-checklist-toggle="true"
-                data-kanban-checklist-state={isChecklistExpanded ? 'expanded' : 'collapsed'}
-              />
-            ) : null}
             meta={isSelectingMode ? (
               <div onPointerDown={(e) => e.stopPropagation()} className="kanban-task-meta mt-px flex flex-wrap items-center gap-1 text-[10px] text-slate-400">
                 <button
@@ -402,24 +375,21 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
             <div
               id={checklistRegionId}
               className="kanban-tree-section kanban-checklist-section"
-              hidden={!isChecklistExpanded}
               data-task-id={nodeId}
               data-kanban-checklist-visual="rounded-tree"
               data-kanban-card-subtree-scope="true"
               data-task-surface-subtree="true"
             >
-              {isChecklistExpanded && (
-                <div className="kanban-checklist-body">
-                  <KanbanChecklist
-                    parentId={nodeId}
-                    parentPlacementId={trackingReference?.id}
-                    depth={0}
-                    previewNodes={previewNodes}
-                    previewParentIndex={previewParentIndex}
-                    filterProjection={filterProjection}
-                  />
-                </div>
-              )}
+              <div className="kanban-checklist-body">
+                <KanbanChecklist
+                  parentId={nodeId}
+                  parentPlacementId={trackingReference?.id}
+                  depth={0}
+                  previewNodes={previewNodes}
+                  previewParentIndex={previewParentIndex}
+                  filterProjection={filterProjection}
+                />
+              </div>
             </div>
           )}
       </>
