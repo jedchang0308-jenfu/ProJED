@@ -373,15 +373,6 @@ body[data-kanban-mouse-pan-active="true"] * {
   padding-inline-start: var(--kanban-tree-title-inset);
 }
 
-.kanban-tree-card-header .kanban-task-title-row:has([data-kanban-checklist-toggle][aria-expanded="true"])::before {
-  content: "";
-  position: absolute;
-  inset-block: 50% calc(-1 * var(--kanban-card-pad-y, 6px));
-  inset-inline-start: calc(var(--kanban-tree-title-inset) - var(--kanban-tree-node-offset));
-  border-inline-start: 1px solid var(--task-tree-dot-color);
-  pointer-events: none;
-}
-
 .kanban-tree-section {
   margin-inline: var(--kanban-tree-card-inset);
   padding-block-end: 5px;

@@ -103,6 +103,7 @@ const TaskChecklistRow: React.FC<TaskChecklistRowProps> = ({
   const nodeTags = getNodeTags(child, tags);
   const hasGrandchildren = !trackingReference && Boolean(grandchildIds && grandchildIds.length > 0);
   const isBoardRow = hostAdapter.surfaceId === 'board.checklist-row';
+  const hasIncomingBranch = isBoardRow && depth > 0;
   const [isExpanded, setIsExpanded] = React.useState(true);
   const subtreeId = React.useId();
   const hasVisibleGrandchildren = hasGrandchildren && grandchildIds?.some(id => {
@@ -268,7 +269,7 @@ const TaskChecklistRow: React.FC<TaskChecklistRowProps> = ({
       data-task-hover-scope-source-id={child.id}
       data-task-hover-has-descendants={hasGrandchildren ? 'true' : undefined}
       data-task-placement-pending={taskGesture.isPlacementPending ? 'true' : undefined}
-      data-kanban-tree-continuation={isBoardRow && hasNextSibling && !isDragPlaceholder ? 'true' : undefined}
+      data-kanban-tree-continuation={hasIncomingBranch && hasNextSibling && !isDragPlaceholder ? 'true' : undefined}
       className={`relative ${isDragging ? 'pointer-events-none' : ''}`}
     >
       <span
@@ -334,7 +335,7 @@ const TaskChecklistRow: React.FC<TaskChecklistRowProps> = ({
         data-task-selected={selectedTaskId === child.id ? 'true' : undefined}
         data-touch-tap-guard="true"
         data-task-touch-gesture-surface={taskGesture.touchGestureEnabled ? 'true' : undefined}
-        data-kanban-checklist-row-visual={isBoardRow ? 'rounded-branch' : 'flat-unlined'}
+        data-kanban-checklist-row-visual={hasIncomingBranch ? 'rounded-branch' : 'flat-unlined'}
         data-kanban-tree-stem={isBoardRow && hasVisibleSubtree && showSubtree && !isDragPlaceholder ? 'true' : undefined}
         data-task-hierarchy-depth={depth}
         data-task-hierarchy-level="L3+"

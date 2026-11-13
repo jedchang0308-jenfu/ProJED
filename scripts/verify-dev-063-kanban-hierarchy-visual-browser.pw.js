@@ -48,7 +48,10 @@ async (page) => {
     const cardStyle = getComputedStyle(card);
     const sectionStyle = getComputedStyle(section);
     const rowStyle = getComputedStyle(row);
-    const branchStyle = getComputedStyle(row, '::before');
+    const titleRow = card.querySelector('.kanban-task-title-row');
+    const firstLevelRows = Array.from(section.querySelectorAll('.kanban-checklist-item[data-task-hierarchy-depth="0"]'));
+    const deeperRow = section.querySelector('.kanban-checklist-item[data-task-hierarchy-depth="1"]');
+    const branchStyle = deeperRow ? getComputedStyle(deeperRow, '::before') : null;
     const toggle = card.querySelector('[data-kanban-checklist-toggle]');
     const toggleStyle = getComputedStyle(toggle, '::before');
     const cardRect = card.getBoundingClientRect();
@@ -69,6 +72,7 @@ async (page) => {
         borderWidths: [cardStyle.borderTopWidth, cardStyle.borderRightWidth, cardStyle.borderBottomWidth, cardStyle.borderLeftWidth],
         boxShadow: cardStyle.boxShadow,
         backgroundColor: cardStyle.backgroundColor,
+        headerConnector: getComputedStyle(titleRow, '::before').content !== 'none',
       },
       section: {
         visual: section.getAttribute('data-kanban-checklist-visual'),
@@ -81,8 +85,11 @@ async (page) => {
         level: row.getAttribute('data-task-hierarchy-level'),
         borderWidths: [rowStyle.borderTopWidth, rowStyle.borderRightWidth, rowStyle.borderBottomWidth, rowStyle.borderLeftWidth],
         boxShadow: rowStyle.boxShadow,
-        branchRadius: branchStyle.borderEndStartRadius,
-        branchWidth: branchStyle.borderInlineStartWidth,
+        branchRadius: branchStyle?.borderEndStartRadius,
+        branchWidth: branchStyle?.borderInlineStartWidth,
+        firstLevelConnectors: firstLevelRows.some(element =>
+          getComputedStyle(element, '::before').content !== 'none'
+          || getComputedStyle(element.parentElement, '::before').content !== 'none'),
         expandedDotWidth: toggleStyle.width,
       },
       geometry: {
@@ -154,7 +161,9 @@ async (page) => {
       evidence.section.visual === 'rounded-tree' &&
       evidence.section.borderLeftWidth === '0px' &&
       evidence.section.backgroundColor === 'rgba(0, 0, 0, 0)' &&
-      evidence.row.visual === 'rounded-branch' &&
+      !evidence.card.headerConnector &&
+      !evidence.row.firstLevelConnectors &&
+      evidence.row.visual === 'flat-unlined' &&
       evidence.row.branchRadius === '5px' &&
       evidence.row.branchWidth === '1px' &&
       evidence.row.expandedDotWidth === '6px' &&
