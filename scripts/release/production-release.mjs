@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { createServer } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { buildProductionArtifact } from './build-production-artifact.mjs';
 import { verifyManifest } from './verify-production-artifact.mjs';
@@ -104,12 +105,18 @@ export const buildReleaseRuntimeEnv = (parentEnv = process.env) => buildSanitize
   extra: { PROJED_RELEASE_PROFILE: 'production' },
 });
 
-const runBrowserSmokeAtUrl = async ({ baseUrl, releaseId, sessionPrefix, filename = path.join(root, 'scripts', 'verify-release-browser-smoke.pw.js') }) => {
+const runBrowserSmokeAtUrl = async ({ baseUrl, releaseId, sessionPrefix, filename = path.join(root, 'scripts', 'verify-release-browser-smoke.pw.js'), runtimeProfile = 'production', artifactWindowKey, artifactPath }) => {
+  if (Boolean(artifactWindowKey) !== Boolean(artifactPath)) throw new Error('DEV-083 browser artifact capture requires both a window key and output path.');
   const url = new URL(baseUrl);
   url.searchParams.set('dev083ReleaseId', releaseId);
-  const smoke = await run('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(root, 'scripts', 'run-playwright-code.ps1'), '-SessionPrefix', sessionPrefix, '-Filename', filename, '-OutputDirectory', path.join(root, 'output', 'playwright', sessionPrefix), '-BaseUrl', url.toString()], { cwd: root, env: buildReleaseRuntimeEnv(process.env) });
+  const env = runtimeProfile === 'local-test'
+    ? buildSanitizedChildEnv(process.env, { extra: { NODE_ENV: 'test' } })
+    : buildReleaseRuntimeEnv(process.env);
+  const runnerArgs = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(root, 'scripts', 'run-playwright-code.ps1'), '-SessionPrefix', sessionPrefix, '-Filename', filename, '-OutputDirectory', path.join(root, 'output', 'playwright', sessionPrefix), '-BaseUrl', url.toString()];
+  if (artifactWindowKey && artifactPath) runnerArgs.push('-ArtifactWindowKey', artifactWindowKey, '-ArtifactPath', artifactPath);
+  const smoke = await run('powershell.exe', runnerArgs, { cwd: root, env });
   if (smoke.code !== 0) throw new Error(`DEV-083 browser smoke failed: ${redact((smoke.stderr || smoke.stdout).trim().slice(-1200))}`);
-  return { ok: true, baseUrl: url.origin, expectedReleaseId: releaseId };
+  return { ok: true, baseUrl: url.origin, expectedReleaseId: releaseId, runtimeProfile };
 };
 
 const git = async args => {
@@ -158,6 +165,78 @@ const waitForHttp = async (url, timeoutMs = 20000) => {
     await new Promise(resolve => setTimeout(resolve, 250));
   }
   throw new Error(`DEV-083 Layer2 runtime did not become ready at ${url}.`);
+};
+
+const findAvailableLoopbackPort = async () => new Promise((resolve, reject) => {
+  const server = createServer();
+  server.once('error', reject);
+  server.listen(0, '127.0.0.1', () => {
+    const address = server.address();
+    if (!address || typeof address === 'string') {
+      server.close(() => reject(new Error('DEV-083 could not allocate an isolated local feature-smoke port.')));
+      return;
+    }
+    server.close(error => error ? reject(error) : resolve(address.port));
+  });
+});
+
+const runLocalTestModeFeatureSmoke = async ({ manifest, filename }) => {
+  const port = await findAvailableLoopbackPort();
+  const baseUrl = `http://127.0.0.1:${port}/`;
+  const viteBin = path.join(root, 'node_modules', 'vite', 'bin', 'vite.js');
+  const childEnv = buildSanitizedChildEnv(process.env, { extra: { NODE_ENV: 'test' } });
+  const child = spawn(process.execPath, [viteBin, '--mode', 'test', '--host', '127.0.0.1', '--port', String(port), '--strictPort'], { cwd: root, env: childEnv, stdio: ['ignore', 'ignore', 'pipe'] });
+  let stderr = '';
+  child.stderr.on('data', chunk => { stderr += chunk; });
+  let primaryError;
+  let exited = false;
+  const exit = new Promise(resolve => child.once('close', code => { exited = true; resolve(code); }));
+  child.once('error', error => { primaryError = error; });
+  let result;
+  try {
+    await Promise.race([
+      waitForHttp(baseUrl),
+      exit.then(code => { throw new Error(`DEV-083 isolated Vite test server exited before readiness (${code ?? 'unknown'}): ${redact(stderr).slice(-500)}`); }),
+    ]);
+    const sessionPrefix = `dev083-direct-local-feature-${manifest.releaseId}`;
+    const artifactPath = path.join(root, 'output', 'playwright', sessionPrefix, 'result.json');
+    result = await runBrowserSmokeAtUrl({ baseUrl, releaseId: manifest.releaseId, sessionPrefix, filename, runtimeProfile: 'local-test', artifactWindowKey: '__DEV098_ARTIFACT', artifactPath });
+    let testArtifact;
+    try { testArtifact = JSON.parse(fs.readFileSync(artifactPath, 'utf8').replace(/^\uFEFF/u, '')); } catch { throw new Error('DEV-083 local feature smoke did not produce a valid structured browser artifact.'); }
+    if (testArtifact.dev !== 'DEV-098' || testArtifact.status !== 'PASS' || !Array.isArray(testArtifact.cases)
+      || testArtifact.summary?.pass !== testArtifact.cases.length || testArtifact.summary?.fail !== 0 || testArtifact.summary?.diagnostics !== 0) {
+      throw new Error('DEV-083 local feature smoke artifact is not a complete DEV-098 pass.');
+    }
+    result.testSummary = testArtifact.summary;
+    result.revision = testArtifact.revision;
+    result.resultPath = path.relative(root, artifactPath).replaceAll(path.sep, '/');
+  } catch (error) {
+    primaryError ??= error;
+  }
+  let cleanupError;
+  try {
+    if (!exited) {
+      if (process.platform === 'win32') {
+        const stopped = await run('taskkill', ['/PID', String(child.pid), '/T', '/F'], { cwd: root, env: process.env });
+        if (stopped.code !== 0 && !exited) throw new Error('DEV-083 local feature-smoke server cleanup failed.');
+      } else child.kill('SIGTERM');
+    }
+    await Promise.race([
+      exit,
+      new Promise(resolve => setTimeout(resolve, 5000)),
+    ]);
+    try {
+      const remaining = await fetch(baseUrl, { signal: AbortSignal.timeout(1000) });
+      cleanupError = new Error(`DEV-083 local feature-smoke cleanup failed: port ${port} still responds with HTTP ${remaining.status}.`);
+    } catch {
+      // Expected after stopping this task-owned Vite process.
+    }
+  } catch (error) {
+    cleanupError = error;
+  }
+  if (primaryError) throw primaryError;
+  if (cleanupError) throw cleanupError;
+  return { ...result, environment: 'isolated-vite-test-mode', sourceCommit: manifest.source.commit, processPid: child.pid, port };
 };
 
 export const runLayer2Smoke = async (distDir, manifest) => {
@@ -354,9 +433,12 @@ export const verifyRemoteArtifact = async ({
 export const runDirectRelease = async (args, services = {
   assertCleanWorktree, git, buildProductionArtifact, verifyManifest,
   readLiveReleaseSnapshot, deployExactArtifact, verifyRemoteArtifact, runBrowserSmokeAtUrl,
+  runLocalTestModeFeatureSmoke,
 }) => {
   if (typeof args.reason !== 'string' || !args.reason.trim()) throw new Error('DEV-083 direct requires --reason describing bounded impact and quick recovery.');
   if (args.verify_only !== undefined && args.verify_only !== true) throw new Error('DEV-083 --verify-only is a boolean flag.');
+  if (args.feature_smoke_local !== undefined && args.feature_smoke_local !== true) throw new Error('DEV-083 --feature-smoke-local is a boolean flag.');
+  if (args.feature_smoke_local && !args.feature_smoke) throw new Error('DEV-083 --feature-smoke-local requires --feature-smoke <repository .pw.js file>.');
   if (args.verify_only && !args.manifest) throw new Error('DEV-083 --verify-only requires the already published --manifest.');
   if (args.level3_evidence || args.approve_release) throw new Error('DEV-083 direct does not consume protected-phase evidence or approval tokens.');
   let featureFile;
@@ -392,6 +474,12 @@ export const runDirectRelease = async (args, services = {
     receipt = JSON.parse(fs.readFileSync(evidencePath, 'utf8'));
     if (receipt.phase !== 'direct' || receipt.releaseId !== manifest.releaseId || receipt.treeSha256 !== manifest.artifact.treeSha256
       || receipt.manifestPath !== manifestPath || !receipt.previousLiveRelease?.versionName) throw new Error('DEV-083 direct receipt identity/recovery mismatch.');
+    if (receipt.verification === 'failed') {
+      receipt.verificationHistory = [
+        ...(Array.isArray(receipt.verificationHistory) ? receipt.verificationHistory : []),
+        { verification: 'failed', error: redact(receipt.error ?? 'Previous verification failed without a recorded error.') },
+      ];
+    }
   } else {
     if (fs.existsSync(evidencePath)) throw new Error('DEV-083 direct already attempted; inspect live state and use --manifest with --verify-only instead of redeploying.');
     const previousLiveRelease = await services.readLiveReleaseSnapshot();
@@ -413,6 +501,20 @@ export const runDirectRelease = async (args, services = {
   delete receipt.feature;
   save();
   try {
+    if (featureFile && args.feature_smoke_local) {
+      const sourceHead = await services.git(['rev-parse', 'HEAD']);
+      if (sourceHead !== manifest.source.commit) throw new Error('DEV-083 local feature smoke source HEAD does not match the published artifact commit.');
+      receipt.feature = await services.runLocalTestModeFeatureSmoke({ manifest, filename: featureFile });
+      if (receipt.feature?.ok !== true || receipt.feature.environment !== 'isolated-vite-test-mode'
+        || receipt.feature.sourceCommit !== manifest.source.commit || receipt.feature.expectedReleaseId !== manifest.releaseId
+        || receipt.feature.testSummary?.pass < 1 || receipt.feature.testSummary?.fail !== 0 || receipt.feature.testSummary?.diagnostics !== 0) {
+        throw new Error('DEV-083 local feature smoke evidence is incomplete or does not match the published artifact.');
+      }
+      receipt.feature.filename = path.relative(root, featureFile).replaceAll(path.sep, '/');
+      if (sha256(fs.readFileSync(featureFile)) !== featureSha256) throw new Error('DEV-083 feature smoke changed during verification.');
+      receipt.feature.sha256 = featureSha256;
+      save();
+    }
     if (!args.verify_only) {
       receipt.deployment = { status: 'attempting' };
       save();
@@ -427,7 +529,7 @@ export const runDirectRelease = async (args, services = {
     receipt.published = true;
     receipt.browser = await services.runBrowserSmokeAtUrl({ baseUrl: PRODUCTION_CONTRACT.canonicalOrigin, releaseId: manifest.releaseId, sessionPrefix: 'dev083-direct' });
     if (receipt.browser?.ok !== true) throw new Error('DEV-083 direct canonical browser smoke failed.');
-    if (featureFile) {
+    if (featureFile && !args.feature_smoke_local) {
       receipt.feature = await services.runBrowserSmokeAtUrl({ baseUrl: PRODUCTION_CONTRACT.canonicalOrigin, releaseId: manifest.releaseId, sessionPrefix: 'dev083-direct-feature', filename: featureFile });
       if (receipt.feature?.ok !== true) throw new Error('DEV-083 direct feature smoke failed.');
       receipt.feature.filename = path.relative(root, featureFile).replaceAll(path.sep, '/');
@@ -514,7 +616,7 @@ const activate = async args => {
 export async function runRelease(argv = process.argv.slice(2)) {
   const args = parseArgs(argv);
   const phase = args.phase;
-  if (!['direct', 'prepare', 'candidate', 'activate'].includes(phase)) throw new Error('DEV-083 P1 usage: npm run release:production -- --phase <direct|prepare|candidate|activate> [args]. direct requires --reason; --feature-smoke records changed-feature verification.');
+  if (!['direct', 'prepare', 'candidate', 'activate'].includes(phase)) throw new Error('DEV-083 P1 usage: npm run release:production -- --phase <direct|prepare|candidate|activate> [args]. direct requires --reason; --feature-smoke records changed-feature verification and --feature-smoke-local runs test-fixture cases only in an isolated local Vite test server.');
   if (phase === 'direct') return runDirectRelease(args);
   if (phase === 'prepare') return prepare(args);
   if (phase === 'candidate') return candidate(args);
