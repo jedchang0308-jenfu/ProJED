@@ -1812,6 +1812,10 @@ body[data-kanban-mouse-pan-active="true"] * {
   padding: var(--kanban-column-body-pad) !important;
 }
 
+[data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"] [data-kanban-column] > [data-mobile-pan-surface="kanban-column"] {
+  padding-inline: 0 !important;
+}
+
 [data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"] [data-kanban-column-header] [data-task-title-slot],
 [data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"] [data-task-hierarchy-level="L2"] [data-task-title-slot] {
   font-size: var(--kanban-l1-l2-title-size) !important;
