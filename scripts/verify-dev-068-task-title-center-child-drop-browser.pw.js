@@ -1407,7 +1407,7 @@ async (page) => {
             if (!primary || !title) return null;
             return {
               offset: title.getBoundingClientRect().left - primary.getBoundingClientRect().left,
-              titleIsFirst: titleContent?.firstElementChild === title,
+              titleIsFirst: Array.from(titleContent?.children || []).find(child => !child.matches('[data-kanban-checklist-toggle="true"]')) === title,
               hasToggle: Boolean(titleContent?.querySelector('[data-kanban-checklist-toggle="true"]')),
             };
           })

@@ -29,7 +29,6 @@ type KanbanCardPresentationProps = {
   showTags?: boolean;
   titleIndicator?: React.ReactNode;
   titleTrailing?: React.ReactNode;
-  rowTrailing?: React.ReactNode;
   meetingReservationValue?: number | null;
   tags?: React.ReactNode;
   meta?: React.ReactNode;
@@ -48,7 +47,6 @@ export const KanbanCardPresentation: React.FC<KanbanCardPresentationProps> = ({
   showTags = true,
   titleIndicator,
   titleTrailing,
-  rowTrailing,
   meetingReservationValue,
   tags,
   meta,
@@ -81,6 +79,7 @@ export const KanbanCardPresentation: React.FC<KanbanCardPresentationProps> = ({
           {showTags ? tags : null}
           {titleTrailing}
         </Content>
+        <MeetingTaskReservationMark value={meetingReservationValue} className="self-center" />
         {showDate && model.status ? (
           <TaskDateBadge
             startDate={model.startDate}
@@ -91,11 +90,9 @@ export const KanbanCardPresentation: React.FC<KanbanCardPresentationProps> = ({
             endLocked={model.endLocked}
             durationLocked={model.isDurationLocked}
             surface="checklist"
-            className="ml-0.5 self-center"
+            className="kanban-card-date ml-0.5 self-center"
           />
         ) : null}
-        <MeetingTaskReservationMark value={meetingReservationValue} className="self-center" />
-        {rowTrailing}
       </Row>
       {meta}
     </Body>

@@ -95,7 +95,7 @@ async (page) => {
         paddingLeft: Number.parseFloat(getComputedStyle(row).paddingLeft || '0'),
         titleLeft: title?.getBoundingClientRect().left ?? null,
         rowHeight: row.getBoundingClientRect().height,
-        token: getComputedStyle(row).getPropertyValue('--task-hierarchy-indent').trim(),
+        token: getComputedStyle(row).getPropertyValue(modeName === 'board' ? '--kanban-tree-indent' : '--task-hierarchy-indent').trim(),
       };
     }).sort((left, right) => left.depth - right.depth);
     const [firstId, secondId] = modeName === 'board'
@@ -145,8 +145,8 @@ async (page) => {
   for (const mode of ['board', 'list', 'gantt', 'calendar']) {
     await page.setViewportSize({ width: 1440, height: 900 });
     await switchMode(mode);
-    await verifyMode(mode, { width: 1440, height: 900 }, 6);
-    await verifyMode(mode, { width: 760, height: 900 }, 5);
+    await verifyMode(mode, { width: 1440, height: 900 }, mode === 'board' ? 10.4 : 6);
+    await verifyMode(mode, { width: 760, height: 900 }, mode === 'board' ? 10.4 : 5);
   }
 
   assert(diagnostics.length === 0, 'cross-view hierarchy verification must not raise page or console errors', { diagnostics });
