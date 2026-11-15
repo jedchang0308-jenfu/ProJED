@@ -172,9 +172,9 @@ async (page) => {
       evidence.row.boxShadow === 'none'
     )), { viewportEvidence });
     record('QA-063-003', evidenceList.every(evidence => (
-      evidence.geometry.leftInset > 0 &&
+      evidence.geometry.leftInset >= 1 &&
       Math.abs(evidence.geometry.leftInset - evidence.geometry.rightInset) <= 1 &&
-      evidence.geometry.dateRightOffsets.every(offset => Math.abs(offset - evidence.geometry.rightInset) <= 1)
+      evidence.geometry.dateRightOffsets.every(offset => Math.abs((offset - evidence.geometry.rightInset) - 6) <= 1)
     )), { viewportEvidence });
     record('QA-063-004', evidenceList.every(evidence => (
       evidence.documentWidth <= evidence.viewport &&
