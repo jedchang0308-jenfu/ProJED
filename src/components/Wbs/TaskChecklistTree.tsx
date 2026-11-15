@@ -439,7 +439,7 @@ const TaskChecklistRow: React.FC<TaskChecklistRowProps> = ({
             endLocked={lockStatus.endLocked}
             durationLocked={Boolean(child.isDurationLocked)}
             surface="checklist"
-            className="ml-0.5"
+            className={isBoardRow ? 'kanban-tree-date' : 'ml-0.5'}
           />
           {!isBoardRow ? <MeetingTaskReservationMark value={hostAdapter.meetingReservationValues?.[childId]} className="self-center" /> : null}
           </>

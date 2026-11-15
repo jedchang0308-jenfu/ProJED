@@ -90,7 +90,7 @@ export const KanbanCardPresentation: React.FC<KanbanCardPresentationProps> = ({
             endLocked={model.endLocked}
             durationLocked={model.isDurationLocked}
             surface="checklist"
-            className="ml-0.5 self-center"
+            className="kanban-card-date ml-0.5 self-center"
           />
         ) : null}
       </Row>
