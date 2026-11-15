@@ -52,7 +52,7 @@ async (page) => {
     const firstLevelRows = Array.from(section.querySelectorAll('.kanban-checklist-item[data-task-hierarchy-depth="0"]'));
     const deeperRow = section.querySelector('.kanban-checklist-item[data-task-hierarchy-depth="1"]');
     const branchStyle = deeperRow ? getComputedStyle(deeperRow, '::before') : null;
-    const toggle = card.querySelector('[data-kanban-checklist-toggle]');
+    const toggle = card.querySelector('[data-kanban-branch-toggle="true"]');
     const toggleStyle = getComputedStyle(toggle, '::before');
     const cardRect = card.getBoundingClientRect();
     const rowRect = row.getBoundingClientRect();
