@@ -195,7 +195,20 @@ async (page) => {
       && await subtree.isVisible());
 
     result.ok = result.cases.every(item => item.ok);
-    console.log(JSON.stringify(result, null, 2));
+    const artifact = {
+      dev: 'DEV-098',
+      revision: 'working-tree',
+      status: result.ok && browserErrors.length === 0 ? 'PASS' : 'FAIL',
+      cases: result.cases.map(item => ({ ...item, status: item.ok ? 'PASS' : 'FAIL' })),
+      diagnostics: browserErrors,
+      summary: {
+        pass: result.cases.filter(item => item.ok).length,
+        fail: result.cases.filter(item => !item.ok).length,
+        diagnostics: browserErrors.length,
+      },
+    };
+    window.__DEV098_ARTIFACT = artifact;
+    console.log(JSON.stringify(artifact, null, 2));
   } catch (error) {
     await page.screenshot({ path: screenshots.failure, fullPage: false }).catch(() => undefined);
     throw new Error(JSON.stringify({
