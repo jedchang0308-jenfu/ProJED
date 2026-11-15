@@ -359,7 +359,6 @@ body[data-kanban-mouse-pan-active="true"] * {
 }
 
 .kanban-task-card {
-  --kanban-tree-card-inset: var(--kanban-card-pad-x, 9px);
   --kanban-tree-indent: var(--task-tree-branch-indent);
   --kanban-tree-node-offset: 5.4px;
   --kanban-tree-branch-radius: 5px;
@@ -368,7 +367,7 @@ body[data-kanban-mouse-pan-active="true"] * {
 }
 
 .kanban-tree-section {
-  margin-inline: var(--kanban-tree-card-inset);
+  margin-inline: 0;
   padding-block-end: 2.5px;
 }
 
