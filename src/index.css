@@ -1790,6 +1790,10 @@ body[data-kanban-mouse-pan-active="true"] * {
   gap: var(--kanban-board-gap) !important;
 }
 
+[data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"] .kanban-task-card {
+  --kanban-tree-node-offset: 9px;
+}
+
 [data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"][data-kanban-view-size="large"] {
   --kanban-column-width: 630px;
   --kanban-board-gap: 20px;
