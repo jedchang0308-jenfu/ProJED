@@ -1790,10 +1790,6 @@ body[data-kanban-mouse-pan-active="true"] * {
   gap: var(--kanban-board-gap) !important;
 }
 
-[data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"] .kanban-task-card {
-  --kanban-tree-node-offset: 9px;
-}
-
 [data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"][data-kanban-view-size="large"] {
   --kanban-column-width: 630px;
   --kanban-board-gap: 20px;
@@ -1809,6 +1805,12 @@ body[data-kanban-mouse-pan-active="true"] * {
   --kanban-tag-font-size: 22.5px;
   --kanban-checklist-base: 10px;
   --kanban-l3-min-height: 50px;
+}
+
+@media (max-width: 767px) {
+  .kanban-task-card {
+    --kanban-tree-node-offset: 12px;
+  }
 }
 
 [data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"] [data-kanban-column],
