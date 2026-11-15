@@ -365,7 +365,7 @@ body[data-kanban-mouse-pan-active="true"] * {
 
 .kanban-tree-section {
   margin-inline: var(--kanban-tree-card-inset);
-  padding-block-end: 5px;
+  padding-block-end: 2.5px;
 }
 
 .kanban-tree-section.kanban-checklist-section,
@@ -382,7 +382,7 @@ body[data-kanban-mouse-pan-active="true"] * {
   --kanban-tree-title-x: calc(var(--kanban-tree-title-inset) + (var(--kanban-checklist-depth, 0) + 1) * var(--kanban-tree-indent));
   --kanban-tree-node-x: calc(var(--kanban-tree-title-x) - var(--kanban-tree-node-offset));
   padding-inline-start: var(--kanban-tree-title-x);
-  min-height: 28px;
+  min-height: 22px;
 }
 
 .kanban-tree-section [data-kanban-checklist-row-visual="rounded-branch"]:not([data-kanban-drag-source-placeholder])::before {
@@ -1846,4 +1846,8 @@ body[data-kanban-mouse-pan-active="true"] * {
 
 [data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"] .kanban-checklist-item {
   min-height: var(--kanban-l3-min-height) !important;
+}
+
+[data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"] .kanban-tree-section .kanban-checklist-item {
+  min-height: 18px !important;
 }
