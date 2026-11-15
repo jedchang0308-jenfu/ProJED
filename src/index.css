@@ -356,8 +356,8 @@ body[data-kanban-mouse-pan-active="true"] * {
 
 .kanban-task-card {
   --kanban-tree-card-inset: var(--kanban-card-pad-x, 9px);
-  --kanban-tree-indent: 6.24px;
-  --kanban-tree-node-offset: 9px;
+  --kanban-tree-indent: var(--task-tree-branch-indent);
+  --kanban-tree-node-offset: 5.4px;
   --kanban-tree-branch-radius: 5px;
   --task-tree-dot-color: #a2aec3;
   --task-tree-dot-surface: var(--color-surface-task);
