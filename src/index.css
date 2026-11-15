@@ -360,7 +360,7 @@ body[data-kanban-mouse-pan-active="true"] * {
 
 .kanban-task-card {
   --kanban-tree-indent: var(--task-tree-branch-indent);
-  --kanban-tree-node-offset: 12px;
+  --kanban-tree-node-offset: 5.4px;
   --kanban-tree-branch-radius: 5px;
   --task-tree-dot-color: #a2aec3;
   --task-tree-dot-surface: var(--color-surface-task);
@@ -434,7 +434,10 @@ body[data-kanban-mouse-pan-active="true"] * {
   inset-block-start: 50%;
   transform: translateY(-50%);
   width: 16px;
-  height: 24px;
+  height: min(24px, 100%);
+  /* Keep the dot centered on the guide even under the mobile button defaults. */
+  min-width: 0;
+  min-height: 0;
   padding: 0;
   border: 0;
   border-radius: 999px;
@@ -802,6 +805,10 @@ body[data-kanban-mouse-pan-active="true"] * {
 }
 
 @media (max-width: 767px) {
+  .kanban-task-card {
+    --kanban-tree-node-offset: 9px;
+  }
+
   :root {
     --task-hierarchy-indent: 5px;
   }
