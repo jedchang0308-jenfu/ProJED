@@ -350,6 +350,10 @@ body[data-kanban-mouse-pan-active="true"] * {
   --kanban-tree-title-inset: 17px;
 }
 
+[data-kanban-column] > [data-mobile-pan-surface="kanban-column"] {
+  padding-inline: 0 !important;
+}
+
 :root {
   --task-tree-branch-indent: 10.4px;
 }
