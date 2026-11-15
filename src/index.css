@@ -389,11 +389,12 @@ body[data-kanban-mouse-pan-active="true"] * {
 }
 
 .kanban-task-card-body .kanban-card-date {
-  margin-inline-end: calc(-1 * var(--kanban-card-pad-x, 9px));
+  margin-inline-end: calc(6px - var(--kanban-card-pad-x, 9px));
 }
 
 .kanban-tree-section .kanban-tree-date {
   margin-inline-start: auto;
+  margin-inline-end: 6px;
 }
 
 .kanban-tree-section [data-kanban-checklist-row-visual="rounded-branch"]:not([data-kanban-drag-source-placeholder])::before {
