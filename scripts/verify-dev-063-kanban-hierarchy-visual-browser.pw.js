@@ -207,7 +207,7 @@ async (page) => {
         diagnostics: browserErrors.length,
       },
     };
-    window.__DEV098_ARTIFACT = artifact;
+    await page.evaluate(value => { window.__DEV098_ARTIFACT = value; }, artifact);
     console.log(JSON.stringify(artifact, null, 2));
   } catch (error) {
     await page.screenshot({ path: screenshots.failure, fullPage: false }).catch(() => undefined);
