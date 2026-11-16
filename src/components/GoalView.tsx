@@ -2,7 +2,7 @@ import React from 'react';
 import dayjs from 'dayjs';
 import { closestCorners, type DragEndEvent, type DragMoveEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { ChevronLeft, Link, Loader2, Lock, Unlock } from 'lucide-react';
+import { ChevronLeft, Link, Loader2, Lock, X } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import useAuthStore from '../store/useAuthStore';
 import { useWbsStore } from '../store/useWbsStore';
@@ -11,10 +11,12 @@ import { useMemberStore } from '../store/useMemberStore';
 import { useTagStore } from '../store/useTagStore';
 import useRecordStore, { createRecordScopeKey } from '../store/useRecordStore';
 import { projectTaskFilterResults } from '../features/taskFilters';
-import { buildHierarchicalTaskItems, type HierarchicalTaskViewItem } from '../utils/taskHierarchy';
+import { buildGoalTaskRows, type GoalTaskRow } from '../features/goalMode/taskRows';
 import { normalizeManualTaskStatus } from '../utils/taskStatus';
 import { getNodeTags } from '../utils/tags';
-import { isTaskPrimaryActionTarget } from '../utils/taskInteractions';
+import { isTaskPrimaryActionTarget, prepareNewTaskNaming } from '../utils/taskInteractions';
+import { createBlankTaskNode } from '../features/taskCreation/createBlankTaskNode';
+import { createOrderedBoardTask } from '../features/taskCreation/boardTaskOrderActions';
 import {
   projectMeetingTaskQuickNotesByTask,
   type MeetingTaskQuickNoteProjection,
@@ -34,9 +36,11 @@ import { TaskHierarchyIndentedRow } from './Wbs/TaskHierarchyIndentedRow';
 import { taskViewFrameClassName } from './ui/compactTokens';
 import MeetingQuickNoteRows from './TaskNotes/MeetingQuickNoteRows';
 import { useTaskPlacementController } from './Wbs/useTaskPlacementController';
+import { useTableDependencySelection } from './Wbs/useTableDependencySelection';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
 import { useDragSensors } from '../hooks/useDragSensors';
-import { primaryPlacementId } from '../features/taskTracking/model';
+import { buildTaskFilterNodesWithTrackingReferences, primaryPlacementId } from '../features/taskTracking/model';
+import type { TaskTrackingReference } from '../features/taskTracking/types';
 import DesktopTaskDragHost from './Wbs/taskDrag/DesktopTaskDragHost';
 import { DesktopTaskInsertionIndicator } from './Wbs/taskDrag/DesktopTaskDragLayer';
 import GoalHierarchyGuides from './Wbs/GoalHierarchyGuides';
@@ -67,6 +71,78 @@ const TaskDetailNoteEditor = React.lazy(() => import('./TaskNotes/TaskDetailNote
 type GoalViewProps = {
   boardId: string;
 };
+
+type TableDependencySelection = ReturnType<typeof useTableDependencySelection>;
+
+const formatGoalDateDisplay = (value?: string | null) => {
+  if (!value || !dayjs(value).isValid()) return '';
+  const date = dayjs(value);
+  return date.year() === dayjs().year() ? date.format('MM/DD') : date.format('YYYY/MM/DD');
+};
+
+function GoalDateDependency({ task, side, dependency, canSelect, activeDependencyId, onDependencyHover, onNavigateDependency }: {
+  task: TaskNode;
+  side: 'start' | 'end';
+  dependency: TableDependencySelection;
+  canSelect: boolean;
+  activeDependencyId: string | null;
+  onDependencyHover: (dependencyId: string | null) => void;
+  onNavigateDependency: (dependencyId: string, role: 'active' | 'passive') => void;
+}) {
+  const { selection, showMarkers, markers, selectTarget } = dependency;
+  if (selection && canSelect) {
+    const label = `${task.title || '未命名任務'}的${side === 'start' ? '開始日期' : '結束日期'}`;
+    const isSelectedEndpoint = selection.id === task.id && selection.side === side;
+    const selectedDate = side === 'start' ? task.startDate : task.endDate;
+    const selectedDateLabel = formatGoalDateDisplay(selectedDate) || '未設定';
+    return (
+      <button
+        type="button"
+        className={`absolute inset-0 flex items-center justify-end gap-1 rounded-sm border px-1 text-amber-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-500 ${isSelectedEndpoint ? 'border-amber-500 bg-amber-100 font-semibold' : 'border-dashed border-amber-400 hover:bg-amber-100/50 focus-visible:bg-amber-100/50'}`}
+        aria-label={isSelectedEndpoint ? `目前設定端點：${label}，${selectedDateLabel}；再次點選可取消` : `選取${label}`}
+        aria-pressed={isSelectedEndpoint}
+        title={isSelectedEndpoint ? `目前設定：${selectedDateLabel}（再次點選可取消）` : `選取${label}作為依賴目標`}
+        onClick={() => void selectTarget(task.id, side, task.title)}
+      >
+        {isSelectedEndpoint ? (
+          <>
+            <span className="shrink-0 rounded bg-amber-500 px-1 text-[9px] leading-4 text-white">來源</span>
+            <span className="truncate text-[10px] tabular-nums">{selectedDateLabel}</span>
+          </>
+        ) : <Link size={12} />}
+      </button>
+    );
+  }
+  const dateMarkers = markers[`${task.id}_${side}`]?.filter(marker => !marker.isSelf || marker.role === 'passive');
+  if (!dateMarkers?.length) return null;
+  return (
+    <span className="flex shrink-0 flex-nowrap items-center gap-0.5 whitespace-nowrap" data-goal-dependency-markers="true">
+      {dateMarkers.map(marker => {
+        const isHighlighted = activeDependencyId === marker.id;
+        const description = marker.isSelf ? '工期' : marker.role === 'active' ? '主動驅動' : '被動跟隨';
+        return (
+          <button
+            key={`${marker.id}-${marker.role}`}
+            type="button"
+            className={`inline-flex shrink-0 cursor-pointer items-center justify-center rounded px-0.5 text-[9px] leading-tight transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${isHighlighted ? 'bg-primary text-white ring-2 ring-primary/40' : showMarkers ? marker.role === 'active' ? 'bg-slate-700 text-white' : 'bg-slate-200 text-slate-700' : 'text-amber-600 hover:bg-amber-100'}`}
+            title={`${description}；點擊定位另一端`}
+            aria-label={`依賴關係 ${marker.label}，${description}；點擊定位另一端`}
+            data-goal-dependency-marker="true"
+            data-goal-dependency-marker-id={marker.id}
+            data-goal-dependency-role={marker.role}
+            onPointerEnter={event => { if (event.pointerType === 'mouse') onDependencyHover(marker.id); }}
+            onPointerLeave={event => { if (event.pointerType === 'mouse') onDependencyHover(null); }}
+            onFocus={() => onDependencyHover(marker.id)}
+            onBlur={() => onDependencyHover(null)}
+            onClick={() => onNavigateDependency(marker.id, marker.role)}
+          >
+            {showMarkers ? marker.isSelf ? `${marker.offset ?? 0} 天` : marker.label : <Link size={9} />}
+          </button>
+        );
+      })}
+    </span>
+  );
+}
 
 const GOAL_CONTENT_ROW_HEIGHT_PX = 32;
 const GOAL_CONTENT_LINE_HEIGHT_PX = 20;
@@ -124,16 +200,22 @@ const GoalColumnHeader: React.FC<{
   onToggle: () => void;
   className: string;
   collapsedClassName?: string;
-}> = ({ id, column, collapsed, onToggle, className, collapsedClassName = 'w-[22.4px] min-w-[22.4px] px-0 text-center' }) => (
+  override?: { label: string; hint: string; control: React.ReactNode };
+  hint?: string;
+}> = ({ id, column, collapsed, onToggle, className, collapsedClassName = 'w-[22.4px] min-w-[22.4px] px-0 text-center', override, hint }) => (
   <th
     id={id}
     scope="col"
     className={`${className} ${collapsed ? collapsedClassName : ''}`}
     data-goal-column-header={column}
+    title={override?.hint ?? hint}
   >
     <span className={`flex w-full min-w-0 items-center ${collapsed ? 'justify-center' : 'justify-between gap-1'}`}>
-      <span className={collapsed ? 'sr-only' : 'shrink-0 whitespace-nowrap leading-none'} data-goal-column-label={column}>{GOAL_COLUMN_LABELS[column]}</span>
-      <button
+      <span className={collapsed ? 'sr-only' : 'shrink-0 whitespace-nowrap leading-none'} data-goal-column-label={column}>{override?.label ?? GOAL_COLUMN_LABELS[column]}</span>
+      {override ? <>
+        <span className="sr-only" role="status">{override.hint}</span>
+        {override.control}
+      </> : <button
         type="button"
         className={`group inline-grid ${collapsed ? 'h-5 w-5' : 'h-6 w-6'} shrink-0 place-items-center rounded-md text-slate-400 transition-transform duration-150 ease-out hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-1 focus-visible:ring-offset-surface-panel active:scale-95 motion-reduce:transform-none motion-reduce:transition-none`}
         aria-label={collapsed ? `展開${GOAL_COLUMN_LABELS[column]}欄` : `收合${GOAL_COLUMN_LABELS[column]}欄`}
@@ -158,7 +240,7 @@ const GoalColumnHeader: React.FC<{
             className={`transition-transform duration-150 ease-out motion-reduce:transition-none ${collapsed ? 'rotate-180' : ''}`}
           />
         </span>
-      </button>
+      </button>}
     </span>
   </th>
 );
@@ -253,6 +335,7 @@ const OwnedCell: React.FC<{
     onToggleExpanded();
   };
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTableCellElement>) => {
+    if (event.nativeEvent.isComposing) return;
     if (event.key === 'Escape' && isSessionCell) {
       event.preventDefault();
       event.stopPropagation();
@@ -283,7 +366,6 @@ const OwnedCell: React.FC<{
       data-goal-cell-selected={selected ? 'true' : undefined}
       onClick={cell.kind === 'owner' ? onSelect : undefined}
       onDoubleClick={cell.kind === 'owner' ? handleDoubleClick : undefined}
-      onContextMenu={cell.kind === 'owner' ? event => { event.preventDefault(); onSelect(); onOpenMenu(event); } : undefined}
       onKeyDown={cell.kind === 'owner' ? handleKeyDown : undefined}
       data-goal-column={dataGoalColumn}
       data-goal-cell-kind={cell.kind}
@@ -402,8 +484,12 @@ const GoalCellActionMenu: React.FC<{
 
 const GoalRow: React.FC<{
   row: GoalProjectionRow;
-  node: HierarchicalTaskViewItem;
+  node: GoalTaskRow;
   hasChildren: boolean;
+  dependency: TableDependencySelection;
+  activeDependencyId: string | null;
+  onDependencyHover: (dependencyId: string | null) => void;
+  onNavigateDependency: (dependencyId: string, role: 'active' | 'passive') => void;
   collapsed: boolean;
   onToggle: () => void;
   showDescriptionColumn: boolean;
@@ -433,6 +519,10 @@ const GoalRow: React.FC<{
   row,
   node,
   hasChildren,
+  dependency,
+  activeDependencyId,
+  onDependencyHover,
+  onNavigateDependency,
   collapsed,
   onToggle,
   showDescriptionColumn,
@@ -467,6 +557,7 @@ const GoalRow: React.FC<{
   const endDateColumnCollapsed = collapsedColumns.has('end-date');
   const durationColumnCollapsed = collapsedColumns.has('duration');
   const dependencies = useWbsStore(state => state.dependencies);
+  const progress = useWbsStore(state => state.getNodeProgress(node.id));
   const getNodeLockStatus = useWbsStore(state => state.getNodeLockStatus);
   const updateNode = useWbsStore(state => state.updateNode);
   const tags = useTagStore(state => state.tags);
@@ -475,14 +566,15 @@ const GoalRow: React.FC<{
   const [localEndDate, setLocalEndDate] = React.useState(node.endDate || '');
   const placementController = useTaskPlacementController({
     task: node,
+    reference: node.reference,
     surfaceId: 'goal.row',
     sortableType: 'goal-row',
     origin: 'mode-primary',
+    interactionDisabled: Boolean(dependency.selection),
   });
   const { interactionBinding, permissions, sortable } = placementController;
   const { attributes, listeners, setNodeRef, isDragging } = sortable;
   const { onKeyDown: sortableKeyDown, ...pointerDragListeners } = listeners ?? {};
-  void sortableKeyDown;
   const lockStatus = getNodeLockStatus(node.id, dependencies);
   const isEndDateEffectivelyLocked = lockStatus.endLocked || Boolean(node.isDurationLocked);
   const isStartDateReadOnly = !permissions.canEditTask || lockStatus.startLocked;
@@ -585,7 +677,7 @@ const GoalRow: React.FC<{
     position: 'relative' as const,
     zIndex: isDragging ? 40 : 1,
   };
-  const hierarchyScope = activeHierarchyScopeId === node.id
+  const hierarchyScope = activeHierarchyScopeId === node.rowId
     ? 'parent'
     : activeHierarchyScopeId && hierarchyDecoration.ancestorTaskIds.includes(activeHierarchyScopeId)
       ? 'descendant'
@@ -593,7 +685,13 @@ const GoalRow: React.FC<{
   const hierarchyInteractionProps = {
     ...placementController.activationProps,
     ...attributes,
+    'aria-disabled': dependency.selection ? true : undefined,
     ...pointerDragListeners,
+    onKeyDown: (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.nativeEvent.isComposing) return;
+      if (event.key === ' ' && event.shiftKey) sortableKeyDown?.(event);
+      else placementController.activationProps.onKeyDown(event);
+    },
     onClick: (event: React.MouseEvent<HTMLDivElement>) => {
       if (isDragging || isTaskPrimaryActionTarget(event.target)) return;
       void interactionBinding.dispatch('pointer.primary');
@@ -604,13 +702,13 @@ const GoalRow: React.FC<{
       void interactionBinding.openMenu({ x: event.clientX, y: event.clientY });
     },
     onMouseEnter: () => {
-      onHierarchyScopeChange(node.id);
+      onHierarchyScopeChange(node.rowId);
     },
     onMouseLeave: (event: React.MouseEvent<HTMLDivElement>) => {
       if (!event.currentTarget.contains(document.activeElement)) onHierarchyScopeChange(null);
     },
     onFocusCapture: () => {
-      onHierarchyScopeChange(node.id);
+      onHierarchyScopeChange(node.rowId);
     },
     onBlurCapture: (event: React.FocusEvent<HTMLDivElement>) => {
       if (!event.currentTarget.contains(event.relatedTarget as Node | null) && !event.currentTarget.matches(':hover')) {
@@ -618,6 +716,7 @@ const GoalRow: React.FC<{
       }
     },
     'data-goal-task-id': node.id,
+    'aria-keyshortcuts': sortableKeyDown ? 'Shift+Space' : undefined,
     'data-task-drag-surface': 'true',
     'data-task-drag-surface-kind': 'goal-row',
   } as React.HTMLAttributes<HTMLDivElement>;
@@ -627,18 +726,25 @@ const GoalRow: React.FC<{
       ref={setNodeRef}
       style={dndStyle}
       className={isDragging ? 'opacity-50' : ''}
-      onMouseEnter={() => onHierarchyScopeChange(node.id)}
+      onContextMenu={event => {
+        event.preventDefault();
+        event.stopPropagation();
+        void interactionBinding.openMenu({ x: event.clientX, y: event.clientY });
+      }}
+      onMouseEnter={() => onHierarchyScopeChange(node.rowId)}
       onMouseLeave={event => {
         if (!event.currentTarget.contains(document.activeElement)) onHierarchyScopeChange(null);
       }}
-      onFocusCapture={() => onHierarchyScopeChange(node.id)}
+      onFocusCapture={() => onHierarchyScopeChange(node.rowId)}
       onBlurCapture={event => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null) && !event.currentTarget.matches(':hover')) {
           onHierarchyScopeChange(null);
         }
       }}
       data-goal-task-row="true"
-      data-goal-task-row-id={node.id}
+      data-goal-task-row-id={node.rowId}
+      data-task-placement-kind={node.reference ? 'tracking-reference' : 'primary'}
+      data-task-placement-id={placementController.placementId}
       data-goal-level={node.level}
       data-goal-hierarchy-last-sibling={hierarchyDecoration.isLastVisibleSibling ? 'true' : 'false'}
       data-goal-hierarchy-scope={hierarchyScope}
@@ -650,7 +756,7 @@ const GoalRow: React.FC<{
     >
       <th
         scope="row"
-        id={safeTaskDomId(node.id)}
+        id={safeTaskDomId(node.rowId)}
         className="relative sticky left-0 z-[2] border-r border-t-0 border-slate-200 bg-white py-0 align-middle text-left font-normal min-w-[252px] px-[10px]"
         data-goal-task-cell="true"
         data-goal-task-cell-located={hierarchyScope}
@@ -664,20 +770,29 @@ const GoalRow: React.FC<{
           taskTitle={node.title || '未命名任務'}
           surface="goal"
           className="goal-task-hierarchy-row relative z-[1] pr-[10px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40"
-          disclosureAttributes={{ 'data-goal-collapse-toggle': node.id }}
+          disclosureAttributes={{ 'data-goal-collapse-toggle': node.rowId }}
           containerProps={hierarchyInteractionProps}
         >
           <GoalHierarchyGuides
-            nodeId={node.id}
+            nodeId={node.rowId}
             level={node.level}
             hasChildren={hasChildren}
             decoration={hierarchyDecoration}
             activeScopeId={activeHierarchyScopeId}
           />
+          {node.reference ? <Link size={12} className="mr-1 shrink-0 text-slate-500" aria-label="追蹤副本" /> : null}
           {node.nodeType === 'milestone' ? <span className="mr-1 shrink-0 rounded border border-amber-300 bg-amber-50 px-1 py-0.5 text-[10px] leading-none text-amber-600">里程碑</span> : null}
           <span className={`task-title-text min-w-0 flex-1 truncate pr-1 text-sm ${node.level === 0 ? 'font-semibold' : 'font-medium'} ${taskStatusTitleClass[node.status]}`} data-task-title-slot="true">
             {node.title || '未命名任務'}
           </span>
+          <span
+            className="size-3 shrink-0 rounded-full ring-1 ring-inset ring-slate-400/40"
+            style={{ backgroundImage: `conic-gradient(var(--color-primary) ${progress}%, var(--color-slate-200) 0)` }}
+            role="img"
+            aria-label={`任務進度 ${progress}%`}
+            title={`${progress}%`}
+            data-task-progress-indicator="true"
+          />
           {collapsed && hierarchyDecoration.eligibleDescendantCount > 0 ? (
             <span
               className="relative z-[1] shrink-0 px-0.5 text-[10px] font-medium text-slate-400"
@@ -695,7 +810,7 @@ const GoalRow: React.FC<{
         </TaskHierarchyIndentedRow>
       </th>
       {showDescriptionColumn && !descriptionColumnCollapsed ? (
-        <OwnedCell cell={row.descriptionCell} column="description" ownerTaskId={row.descriptionCell.kind === 'owner' ? node.id : undefined} headers={`goal-column-description ${safeTaskDomId(node.id)}`} ownerAttribute={row.descriptionCell.kind === 'owner' ? node.id : undefined} activeScope={activeDescriptionScope} className="max-w-[360px] border-r border-slate-200 px-3 py-0 align-top text-xs text-slate-600" selected={selectedCellKey === `description:${node.id}`} expanded={expandedCellKeys.has(`description:${node.id}`)} canEdit={permissions.canEditTask} onSelect={() => onSelectCell(`description:${node.id}`)} onHierarchyScopeChange={onHierarchyScopeChange} onToggleExpanded={() => onToggleCell(`description:${node.id}`)} onOpenMenu={event => onOpenCellMenu(`description:${node.id}`, 'description', node.id, event)} data-goal-column="description">
+        <OwnedCell cell={row.descriptionCell} column="description" ownerTaskId={row.descriptionCell.kind === 'owner' ? node.id : undefined} headers={`goal-column-description ${safeTaskDomId(node.rowId)}`} ownerAttribute={row.descriptionCell.kind === 'owner' ? node.id : undefined} activeScope={activeDescriptionScope} className="max-w-[360px] border-r border-slate-200 px-3 py-0 align-top text-xs text-slate-600" selected={selectedCellKey === `description:${node.rowId}`} expanded={expandedCellKeys.has(`description:${node.rowId}`)} canEdit={permissions.canEditTask} onSelect={() => onSelectCell(`description:${node.rowId}`)} onHierarchyScopeChange={onHierarchyScopeChange} onToggleExpanded={() => onToggleCell(`description:${node.rowId}`)} onOpenMenu={event => onOpenCellMenu(`description:${node.rowId}`, 'description', node.id, event)} data-goal-column="description">
           {row.descriptionCell.kind === 'owner' ? row.descriptionCell.value : ''}
         </OwnedCell>
       ) : descriptionColumnCollapsed ? (
@@ -708,8 +823,9 @@ const GoalRow: React.FC<{
         />
       ) : null}
       {showMeetingColumn && !meetingColumnCollapsed ? (
-        <OwnedCell cell={row.meetingCell} column="meeting" ownerTaskId={row.meetingCell.kind === 'owner' ? node.id : undefined} headers={`goal-column-meeting ${safeTaskDomId(node.id)}`} ownerAttribute={row.meetingCell.kind === 'owner' ? node.id : undefined} activeScope={activeMeetingScope} className="max-w-[380px] border-r border-slate-200 px-3 py-0 align-top text-xs text-slate-600" selected={selectedCellKey === `meeting:${node.id}`} expanded={expandedCellKeys.has(`meeting:${node.id}`)} lineAlignedScroll canEdit={false} onSelect={() => onSelectCell(`meeting:${node.id}`)} onHierarchyScopeChange={onHierarchyScopeChange} onToggleExpanded={() => onToggleCell(`meeting:${node.id}`)} onOpenMenu={event => onOpenCellMenu(`meeting:${node.id}`, 'meeting', node.id, event)} data-goal-column="meeting">
-          {row.meetingCell.kind === 'owner' ? <MeetingQuickNoteRows entries={meetingEntries} /> : isFirstRow && meetingStatus === 'loading' ? <span className="inline-flex items-center gap-1 text-slate-400"><Loader2 size={12} className="animate-spin" />載入中…</span> : isFirstRow && meetingStatus === 'error' ? <span className="inline-flex flex-wrap items-center gap-2 text-red-600">紀錄載入失敗<button type="button" onClick={onRetryMeeting} className="font-semibold underline">重試</button></span> : null}
+        <OwnedCell cell={row.meetingCell} column="meeting" ownerTaskId={row.meetingCell.kind === 'owner' ? node.id : undefined} headers={`goal-column-meeting ${safeTaskDomId(node.rowId)}`} ownerAttribute={row.meetingCell.kind === 'owner' ? node.id : undefined} activeScope={activeMeetingScope} className="max-w-[380px] border-r border-slate-200 px-3 py-0 align-top text-xs text-slate-600" selected={selectedCellKey === `meeting:${node.rowId}`} expanded={expandedCellKeys.has(`meeting:${node.rowId}`)} lineAlignedScroll canEdit={false} onSelect={() => onSelectCell(`meeting:${node.rowId}`)} onHierarchyScopeChange={onHierarchyScopeChange} onToggleExpanded={() => onToggleCell(`meeting:${node.rowId}`)} onOpenMenu={event => onOpenCellMenu(`meeting:${node.rowId}`, 'meeting', node.id, event)} data-goal-column="meeting">
+          {isFirstRow && meetingStatus === 'partial' ? <span role="status" data-goal-record-warning="partial" className="block text-amber-700">部分會議紀錄無法辨識，已略過。</span> : null}
+          {row.meetingCell.kind === 'owner' ? <MeetingQuickNoteRows entries={meetingEntries} /> : isFirstRow && meetingStatus === 'loading' ? <span className="inline-flex items-center gap-1 text-slate-400"><Loader2 size={12} className="animate-spin" />載入中…</span> : isFirstRow && meetingStatus === 'error' ? <span role="alert" className="inline-flex flex-wrap items-center gap-2 text-red-600">紀錄載入失敗<button type="button" onClick={onRetryMeeting} className="font-semibold underline">重試</button></span> : null}
         </OwnedCell>
       ) : showMeetingColumn && meetingColumnCollapsed ? (
         <td className="w-[22.4px] min-w-[22.4px] border-r border-slate-200 px-0 py-0" data-goal-column="meeting" data-goal-column-collapsed="true" aria-hidden="true" />
@@ -759,16 +875,22 @@ const GoalRow: React.FC<{
       )}
       {showStartDate && !startDateColumnCollapsed ? (
         <td className="relative min-w-0 px-1 py-0 align-middle" data-goal-column="start-date" data-goal-planning-control="start-date">
-          <input
-            type="date"
-            value={localStartDate}
-            onChange={handleStartDateChange}
-            readOnly={isStartDateReadOnly}
-            className={`${GOAL_DATE_INPUT_CLASS} ${isStartDateReadOnly ? 'pointer-events-none cursor-not-allowed text-slate-500' : ''}`}
-            title={lockStatus.startLocked ? '此日期受依賴關係鎖定，請至甘特圖追蹤' : ''}
-            aria-label={`修改「${node.title || '未命名任務'}」開始日期`}
-          />
-          {lockStatus.startLocked ? <Link size={11} className="pointer-events-none absolute right-7 text-slate-400" /> : null}
+          <div className="relative flex min-w-0 items-center gap-1">
+            <input
+              type="date"
+              value={localStartDate}
+              onChange={handleStartDateChange}
+              readOnly={isStartDateReadOnly || Boolean(dependency.selection)}
+              className={`${GOAL_DATE_INPUT_CLASS} flex-1 text-transparent [-webkit-text-fill-color:transparent] ${isStartDateReadOnly ? 'pointer-events-none cursor-not-allowed' : ''}`}
+              title={lockStatus.startLocked ? '此日期受依賴關係鎖定，請至甘特圖追蹤' : ''}
+              aria-label={`修改「${node.title || '未命名任務'}」開始日期`}
+            />
+            <span aria-hidden="true" className={`pointer-events-none absolute left-1 right-7 top-1/2 -translate-y-1/2 truncate text-xs ${isStartDateReadOnly ? 'text-slate-500' : 'text-slate-600'}`}>
+              {formatGoalDateDisplay(localStartDate) || '年/月/日'}
+            </span>
+            {isStartDateReadOnly ? <Lock size={11} className="pointer-events-none shrink-0 text-slate-400" aria-hidden="true" /> : null}
+            <GoalDateDependency task={node} side="start" dependency={dependency} canSelect={permissions.canCreateDependency} activeDependencyId={activeDependencyId} onDependencyHover={onDependencyHover} onNavigateDependency={onNavigateDependency} />
+          </div>
         </td>
       ) : showStartDate && startDateColumnCollapsed ? (
         <td className="w-[22.4px] min-w-[22.4px] border-r border-slate-200 px-0 py-0" data-goal-column="start-date" data-goal-column-collapsed="true" aria-hidden="true" />
@@ -777,34 +899,45 @@ const GoalRow: React.FC<{
         <td className="w-[22.4px] min-w-[22.4px] border-r border-slate-200 px-0 py-0" data-goal-column="end-date" data-goal-column-collapsed="true" aria-hidden="true" />
       ) : (
       <td className="relative min-w-0 px-1 py-0 align-middle" data-goal-column="end-date" data-goal-planning-control="end-date">
-        <input
-          type="date"
-          value={localEndDate}
-          onChange={handleEndDateChange}
-          readOnly={isEndDateReadOnly}
-          className={`${GOAL_DATE_INPUT_CLASS} ${isDueToday ? 'font-semibold text-orange-600' : ''} ${isEndDateReadOnly ? 'pointer-events-none cursor-not-allowed text-slate-500' : ''}`}
-          title={isEndDateEffectivelyLocked ? (node.isDurationLocked ? '因工期鎖定，請調整開始日期或修改工期' : '此日期受依賴關係鎖定，請至甘特圖追蹤') : ''}
-          aria-label={`修改「${node.title || '未命名任務'}」結束日期`}
-        />
-        {lockStatus.endLocked ? <Link size={11} className="pointer-events-none absolute right-7 text-slate-400" /> : null}
+        <div className="relative flex min-w-0 items-center gap-1">
+          <input
+            type="date"
+            value={localEndDate}
+            onChange={handleEndDateChange}
+            readOnly={isEndDateReadOnly || Boolean(dependency.selection)}
+            className={`${GOAL_DATE_INPUT_CLASS} flex-1 text-transparent [-webkit-text-fill-color:transparent] ${lockStatus.endLocked ? 'pointer-events-none cursor-not-allowed' : ''}`}
+            title={isEndDateEffectivelyLocked ? (node.isDurationLocked ? '因工期鎖定，請調整開始日期或修改工期' : '此日期受依賴關係鎖定，請至甘特圖追蹤') : ''}
+            aria-label={`修改「${node.title || '未命名任務'}」結束日期`}
+          />
+          <span aria-hidden="true" className={`pointer-events-none absolute left-1 right-7 top-1/2 -translate-y-1/2 truncate text-xs ${isDueToday ? 'font-semibold text-orange-600' : isEndDateEffectivelyLocked ? 'text-slate-500' : 'text-slate-600'}`}>
+            {formatGoalDateDisplay(localEndDate) || '年/月/日'}
+          </span>
+          {isEndDateReadOnly ? <Lock size={11} className="pointer-events-none shrink-0 text-slate-400" aria-hidden="true" /> : null}
+          <GoalDateDependency task={node} side="end" dependency={dependency} canSelect={permissions.canCreateDependency} activeDependencyId={activeDependencyId} onDependencyHover={onDependencyHover} onNavigateDependency={onNavigateDependency} />
+        </div>
       </td>
       )}
       {durationColumnCollapsed ? (
         <td className="w-[22.4px] min-w-[22.4px] border-r border-slate-200 px-0 py-0" data-goal-column="duration" data-goal-column-collapsed="true" aria-hidden="true" />
       ) : (
-      <td className="px-1 py-0 align-middle" data-goal-column="duration" data-goal-planning-control="duration">
-        <div className={`group relative flex h-7 items-center gap-0.5 rounded-sm focus-within:outline focus-within:outline-1 focus-within:outline-primary/50 ${node.isDurationLocked ? 'text-amber-600' : 'text-slate-400'}`}>
+      <td className="py-0 pl-1 pr-0 align-middle" data-goal-column="duration" data-goal-planning-control="duration">
+        <div className={`group relative flex h-7 w-full min-w-0 items-center gap-0 rounded-sm focus-within:outline focus-within:outline-1 focus-within:outline-primary/50 ${node.isDurationLocked ? 'text-amber-600' : 'text-slate-400'}`}>
           <button
             type="button"
             onClick={() => {
               if (permissions.canEditTask) updateNode(node.id, { isDurationLocked: !node.isDurationLocked });
             }}
             disabled={!permissions.canEditTask}
-            className={`flex h-7 w-5 shrink-0 items-center justify-center rounded-sm outline-none focus-visible:outline focus-visible:outline-1 focus-visible:outline-primary/50 ${node.isDurationLocked ? 'text-amber-600' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'}`}
-            title={node.isDurationLocked ? '解除工期鎖定' : '鎖定工期'}
-            aria-label={`${node.isDurationLocked ? '解除' : '啟用'}「${node.title || '未命名任務'}」工期鎖定`}
+            role="switch"
+            aria-checked={Boolean(node.isDurationLocked)}
+            className={`relative flex h-5 w-12 shrink-0 items-center rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50 ${node.isDurationLocked ? 'bg-amber-500' : 'bg-slate-300'}`}
+            title={node.isDurationLocked ? '改為自動計算工期' : '固定工期天數'}
+            aria-label={`${node.isDurationLocked ? '改為自動計算' : '固定'}「${node.title || '未命名任務'}」工期`}
           >
-            {node.isDurationLocked ? <Lock size={12} /> : <Unlock size={12} />}
+            <span aria-hidden="true" className={`absolute text-[8px] font-bold leading-none text-white ${node.isDurationLocked ? 'left-1.5' : 'right-1.5'}`}>
+              {node.isDurationLocked ? 'ON' : 'OFF'}
+            </span>
+            <span aria-hidden="true" className={`absolute left-0.5 top-0.5 inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${node.isDurationLocked ? 'translate-x-7' : ''}`} />
           </button>
           <input
             type="number"
@@ -812,10 +945,10 @@ const GoalRow: React.FC<{
             value={durationDays}
             onChange={handleDurationChange}
             disabled={!permissions.canEditTask || !node.isDurationLocked}
-            className={`peer h-7 w-8 border-0 bg-transparent px-0 text-center text-xs outline-none focus-visible:outline focus-visible:outline-1 focus-visible:outline-primary/50 ${node.isDurationLocked ? 'text-slate-600' : 'pointer-events-none text-slate-400'}`}
+            className={`peer h-7 min-w-0 flex-1 border-0 bg-transparent px-0 text-right text-xs outline-none focus-visible:outline focus-visible:outline-1 focus-visible:outline-primary/50 ${node.isDurationLocked ? 'text-slate-600' : 'pointer-events-none text-slate-400'}`}
             aria-label={`修改「${node.title || '未命名任務'}」工期天數`}
           />
-          {durationDays === '' ? <span className="pointer-events-none absolute inset-y-0 left-5 flex items-center px-1 text-xs text-slate-400 peer-focus:hidden">—</span> : null}
+          {durationDays === '' ? <span className="pointer-events-none absolute inset-y-0 left-12 flex items-center px-1 text-xs text-slate-400 peer-focus:hidden">—</span> : null}
         </div>
       </td>
       )}
@@ -827,6 +960,8 @@ const GoalView: React.FC<GoalViewProps> = ({ boardId }) => {
   const accountId = useAuthStore(state => state.user?.uid ?? null);
   const activeWorkspaceId = useBoardStore(state => state.activeWorkspaceId);
   const nodes = useWbsStore(state => state.nodes);
+  const references = useWbsStore(state => state.trackingReferences);
+  const moveTrackingReference = useWbsStore(state => state.moveTrackingReference);
   const parentNodesIndex = useWbsStore(state => state.parentNodesIndex);
   const batchUpdateNodes = useWbsStore(state => state.batchUpdateNodes);
   const recalculateAncestorStatus = useWbsStore(state => state.recalculateAncestorStatus);
@@ -834,14 +969,44 @@ const GoalView: React.FC<GoalViewProps> = ({ boardId }) => {
   const taskError = useWbsStore(state => state.error);
   const taskFilters = useTaskFilterStore(state => state.filters);
   const resetTaskFilters = useTaskFilterStore(state => state.resetFilters);
+  const taskFiltersLocked = useTaskFilterStore(state => state.controlsLocked);
+  const taskFilterWarning = useTaskFilterStore(state => state.warning);
   const boardMembers = useMemberStore(state => state.boardMembers);
   const membersLoading = useMemberStore(state => state.loading);
   const records = useRecordStore(state => state.records);
   const recordListLoad = useRecordStore(state => state.recordListLoad);
   const loadRecords = useRecordStore(state => state.loadRecords);
-  const showStartDate = useBoardStore(state => state.showStartDate);
+  const showStartDatePreference = useBoardStore(state => state.showStartDate);
   const showTags = useBoardStore(state => state.showTags);
-  const { canMoveTask, canEditTask } = useBoardPermissions();
+  const { canMoveTask, canEditTask, canCreateTask, canCreateDependency, canManageTaskReference } = useBoardPermissions();
+  const dependency = useTableDependencySelection(boardId, canCreateDependency);
+  const [hoveredDependencyId, setHoveredDependencyId] = React.useState<string | null>(null);
+  const [pinnedDependencyId, setPinnedDependencyId] = React.useState<string | null>(null);
+  const activeDependencyId = hoveredDependencyId ?? pinnedDependencyId;
+  const showStartDate = showStartDatePreference || Boolean(dependency.selection);
+  const creatingRootTask = React.useRef(false);
+  const [isCreatingRootTask, setIsCreatingRootTask] = React.useState(false);
+  const createRootTask = async () => {
+    if (!canCreateTask || !activeWorkspaceId || !boardId || creatingRootTask.current) return;
+    creatingRootTask.current = true;
+    setIsCreatingRootTask(true);
+    try {
+      const task = createBlankTaskNode({
+        id: `node_${crypto.randomUUID()}`,
+        workspaceId: activeWorkspaceId,
+        boardId,
+        parentId: null,
+        nodeType: 'group',
+        order: 0,
+      });
+      if (await createOrderedBoardTask(task) && useBoardStore.getState().activeBoardId === boardId) {
+        prepareNewTaskNaming(task.id);
+      }
+    } finally {
+      creatingRootTask.current = false;
+      setIsCreatingRootTask(false);
+    }
+  };
   const goalSession = useGoalCellSession();
   const sensors = useDragSensors();
   const [collapsedIds, setCollapsedIds] = React.useState<Set<string>>(() => new Set());
@@ -934,35 +1099,41 @@ const GoalView: React.FC<GoalViewProps> = ({ boardId }) => {
   }, [boardId, clearGoalChildIntent, updateGoalDropPreview]);
 
   const filterProjection = React.useMemo(
-    () => projectTaskFilterResults(nodes, taskFilters, { boardId }),
-    [boardId, nodes, taskFilters],
+    () => projectTaskFilterResults(
+      buildTaskFilterNodesWithTrackingReferences(Object.values(nodes), references, boardId),
+      taskFilters,
+      { boardId },
+    ),
+    [boardId, nodes, references, taskFilters],
   );
   const hierarchy = React.useMemo(
-    () => buildHierarchicalTaskItems({
+    () => buildGoalTaskRows({
       nodes,
       parentNodesIndex,
-      activeBoardId: boardId,
+      boardId,
+      references,
       visibleTaskIds: filterProjection.visibleTaskIds,
       collapsedIds,
     }),
-    [boardId, collapsedIds, filterProjection.visibleTaskIds, nodes, parentNodesIndex],
+    [boardId, collapsedIds, filterProjection.visibleTaskIds, nodes, parentNodesIndex, references],
   );
   const fullyExpandedHierarchy = React.useMemo(
-    () => buildHierarchicalTaskItems({
+    () => buildGoalTaskRows({
       nodes,
       parentNodesIndex,
-      activeBoardId: boardId,
+      boardId,
+      references,
       visibleTaskIds: filterProjection.visibleTaskIds,
       collapsedIds: EMPTY_COLLAPSED_IDS,
     }),
-    [boardId, filterProjection.visibleTaskIds, nodes, parentNodesIndex],
+    [boardId, filterProjection.visibleTaskIds, nodes, parentNodesIndex, references],
   );
   const hierarchyDecorations = React.useMemo(
     () => buildGoalHierarchyDecorations({
-      renderedItems: hierarchy.items,
-      fullyExpandedItems: fullyExpandedHierarchy.items,
+      renderedItems: hierarchy.map(item => ({ id: item.rowId, parentId: item.rowParentId, level: item.level })),
+      fullyExpandedItems: fullyExpandedHierarchy.map(item => ({ id: item.rowId, parentId: item.rowParentId, level: item.level })),
     }),
-    [fullyExpandedHierarchy.items, hierarchy.items],
+    [fullyExpandedHierarchy, hierarchy],
   );
   const recordScopeKey = activeWorkspaceId && boardId ? createRecordScopeKey(activeWorkspaceId, boardId) : null;
   const recordStateIsCurrent = Boolean(recordScopeKey && recordListLoad.scopeKey === recordScopeKey);
@@ -977,13 +1148,13 @@ const GoalView: React.FC<GoalViewProps> = ({ boardId }) => {
       : meetingIndex.invalidRecordIds.length > 0 ? 'partial'
         : meetingNotesByTaskId.size > 0 ? 'ready' : 'empty';
   const projection = React.useMemo(() => buildGoalSparseProjection(
-    hierarchy.items.map(row => ({
-      taskId: row.id,
+    hierarchy.map(row => ({
+      taskId: row.rowId,
       level: row.level,
-      description: goalSession.getDescriptionAnchor(row.id, getTaskPurposeText(row)),
-      meeting: meetingNotesByTaskId.has(row.id) ? 'meeting-notes' : null,
+      description: row.reference ? null : goalSession.getDescriptionAnchor(row.id, getTaskPurposeText(row)),
+      meeting: !row.reference && meetingNotesByTaskId.has(row.id) ? 'meeting-notes' : null,
     })),
-  ), [goalSession, hierarchy.items, meetingNotesByTaskId]);
+  ), [goalSession, hierarchy, meetingNotesByTaskId]);
   const activeContentScopes = React.useMemo(() => {
     const description = new Map<string, GoalContentScope>();
     const meeting = new Map<string, GoalContentScope>();
@@ -1008,11 +1179,14 @@ const GoalView: React.FC<GoalViewProps> = ({ boardId }) => {
   const showDescriptionColumn = hasDescriptionColumn;
   const showMeetingColumn = projection.hasMeetingColumn || meetingStatus === 'loading' || meetingStatus === 'error' || meetingStatus === 'partial';
   const visibleContentColumnCount = Number(hasDescriptionColumn) + Number(showMeetingColumn);
+  const renderedCollapsedColumns = dependency.selection
+    ? new Set([...collapsedColumns].filter(column => column !== 'start-date' && column !== 'end-date'))
+    : collapsedColumns;
   const meetingColumnCollapsed = collapsedColumns.has('meeting');
   const ownerColumnCollapsed = collapsedColumns.has('owner');
   const statusColumnCollapsed = collapsedColumns.has('status');
-  const startDateColumnCollapsed = collapsedColumns.has('start-date');
-  const endDateColumnCollapsed = collapsedColumns.has('end-date');
+  const startDateColumnCollapsed = renderedCollapsedColumns.has('start-date');
+  const endDateColumnCollapsed = renderedCollapsedColumns.has('end-date');
   const durationColumnCollapsed = collapsedColumns.has('duration');
   const goalTableMinWidth = GOAL_TASK_COLUMN_WIDTH_PX
     + (hasDescriptionColumn ? (descriptionColumnCollapsed ? GOAL_COLLAPSED_COLUMN_WIDTH_PX : GOAL_CONTENT_COLUMN_MIN_WIDTH_PX) : 0)
@@ -1054,6 +1228,11 @@ const GoalView: React.FC<GoalViewProps> = ({ boardId }) => {
     return () => window.clearTimeout(timer);
   }, [goalChildIntent, updateGoalChildArmedId, updateGoalChildIntent]);
   const handleGoalDragMove = React.useCallback((event: DragMoveEvent) => {
+    if (event.active.data.current?.trackingReference || event.over?.data.current?.trackingReference) {
+      clearGoalChildIntent();
+      updateGoalDropPreview(null);
+      return;
+    }
     const activeItem = event.active.data.current?.item as TaskNode | undefined;
     const activeRect = event.active.rect.current.translated;
     if (!activeItem || !activeRect) return;
@@ -1071,7 +1250,7 @@ const GoalView: React.FC<GoalViewProps> = ({ boardId }) => {
     }
     const laneRect = lane.getBoundingClientRect();
     const rootRect = root.getBoundingClientRect();
-    const rows: GoalTaskRect[] = Array.from(root.querySelectorAll<HTMLElement>('[data-goal-task-row-id]')).map(row => {
+    const rows: GoalTaskRect[] = Array.from(root.querySelectorAll<HTMLElement>('[data-goal-task-row-id][data-task-placement-kind="primary"]')).map(row => {
       const rect = row.getBoundingClientRect();
       const hierarchyRow = row.querySelector<HTMLElement>('[data-task-hierarchy-row="true"]');
       const title = hierarchyRow?.querySelector<HTMLElement>('[data-task-title-slot="true"]');
@@ -1145,9 +1324,25 @@ const GoalView: React.FC<GoalViewProps> = ({ boardId }) => {
     const presentedChildTargetId = goalChildArmedIdRef.current;
     clearGoalChildIntent();
     updateGoalDropPreview(null);
-    if (!canMoveTask || !event.over || !presentedPreview || presentedPreview.feedbackKind === 'origin' || event.active.id === event.over.id) return;
+    if (!event.over || event.active.id === event.over.id) return;
+    const reference = event.active.data.current?.trackingReference as TaskTrackingReference | undefined;
+    const targetReference = event.over.data.current?.trackingReference as TaskTrackingReference | undefined;
     const activeItem = event.active.data.current?.item as TaskNode | undefined;
     const overItem = event.over.data.current?.item as TaskNode | undefined;
+    if (reference) {
+      if (!canManageTaskReference || !overItem) return;
+      void moveTrackingReference({
+        referenceId: reference.id,
+        targetBoardId: boardId,
+        targetParentPlacementId: targetReference
+          ? targetReference.parentPlacementId
+          : overItem.parentId && overItem.parentId !== boardId ? primaryPlacementId(overItem.parentId) : null,
+        anchorPlacementId: targetReference?.id ?? primaryPlacementId(overItem.id),
+        position: 'after',
+      });
+      return;
+    }
+    if (targetReference || !canMoveTask || !presentedPreview || presentedPreview.feedbackKind === 'origin') return;
     if (!activeItem || !overItem) return;
     const activeRect = event.active.rect.current.translated;
     const overRect = event.over.rect;
@@ -1169,7 +1364,7 @@ const GoalView: React.FC<GoalViewProps> = ({ boardId }) => {
       target: { nodeId: overItem.id, surfaceKind: targetSurfaceKind, orderingPosition: isPresentedChild ? undefined : resolvedOrderingPosition },
       dependencies: { canMoveTask, batchUpdateNodes, recalculateAncestorStatus },
     });
-  }, [batchUpdateNodes, canMoveTask, clearGoalChildIntent, recalculateAncestorStatus, updateGoalDropPreview]);
+  }, [batchUpdateNodes, boardId, canManageTaskReference, canMoveTask, clearGoalChildIntent, moveTrackingReference, recalculateAncestorStatus, updateGoalDropPreview]);
   const retryMeeting = React.useCallback(() => {
     if (activeWorkspaceId && boardId) void loadRecords(activeWorkspaceId, boardId);
   }, [activeWorkspaceId, boardId, loadRecords]);
@@ -1206,9 +1401,30 @@ const GoalView: React.FC<GoalViewProps> = ({ boardId }) => {
     });
   }, []);
 
+  const handleDependencyHover = React.useCallback((dependencyId: string | null) => {
+    setHoveredDependencyId(dependencyId);
+    if (dependencyId) setPinnedDependencyId(current => current === dependencyId ? current : null);
+  }, []);
+
+  const navigateToDependencyCounterpart = React.useCallback((dependencyId: string, role: 'active' | 'passive') => {
+    setPinnedDependencyId(dependencyId);
+    setHoveredDependencyId(dependencyId);
+    const root = document.querySelector<HTMLElement>('[data-goal-view="true"][data-goal-record-state]');
+    if (!root) return;
+    const counterpart = Array.from(root.querySelectorAll<HTMLElement>('[data-goal-dependency-marker="true"]'))
+      .find(marker => marker.dataset.goalDependencyMarkerId === dependencyId && marker.dataset.goalDependencyRole !== role);
+    counterpart?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+  }, []);
+
+  const clearPinnedDependencyOnOtherClick = React.useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (!(event.target instanceof Element) || !event.target.closest('[data-goal-dependency-marker="true"]')) {
+      setPinnedDependencyId(null);
+    }
+  }, []);
+
   const sourceIsVisible = Boolean(
     goalSession.session.taskId
-    && hierarchy.items.some(item => item.id === goalSession.session.taskId)
+    && hierarchy.some(item => item.rowId === goalSession.session.taskId)
     && projection.rows.some(row => row.taskId === goalSession.session.taskId && row.descriptionCell.kind === 'owner'),
   );
   React.useEffect(() => {
@@ -1224,18 +1440,31 @@ const GoalView: React.FC<GoalViewProps> = ({ boardId }) => {
   if (taskError) {
     return <div role="alert" className="m-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 shadow-sm" data-goal-view="true">任務載入失敗：{taskError}</div>;
   }
+  if (taskFiltersLocked) {
+    return <div role="alert" className={`flex h-full items-center justify-center p-6 text-sm text-slate-600 ${taskViewFrameClassName}`} data-goal-view="true">{taskFilterWarning || '篩選偏好無法載入'}</div>;
+  }
 
   const hasNoTasks = filterProjection.totalTaskCount === 0;
-  const hasNoFilteredTasks = filterProjection.totalTaskCount > 0 && hierarchy.items.length === 0;
+  const hasNoFilteredTasks = filterProjection.totalTaskCount > 0 && hierarchy.length === 0;
+  const dependencyHint = dependency.selection
+    ? `選擇「${dependency.selection.title}」的${dependency.selection.side === 'start' ? '開始日期' : '結束日期'}所依賴的日期。按 Esc 取消。`
+    : null;
   const goalChildIsArmed = Boolean(goalDropPreview && goalChildArmedId === goalDropPreview.targetNodeId);
   const goalTreePreview = goalDropPreview && goalDropPreview.feedbackKind !== 'origin'
     ? (goalChildIsArmed ? goalDropPreview.childTreePreview : goalDropPreview.standardTreePreview)
     : null;
   return (
-    <div className={`flex h-full min-h-0 flex-col overflow-auto bg-slate-50 ${taskViewFrameClassName}`} data-goal-view="true" data-goal-record-state={meetingStatus}>
-      {meetingStatus === 'error' ? <div role="alert" className="mx-3 mb-3 flex items-center justify-between gap-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 sm:mx-5"><span>會議紀錄載入失敗，暫不顯示舊資料。</span><button type="button" onClick={retryMeeting} className="shrink-0 font-semibold underline">重試</button></div> : null}
-      {meetingStatus === 'partial' ? <div role="status" className="mx-3 mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 sm:mx-5" data-goal-record-warning="partial">部分會議紀錄無法辨識，已略過不可靠內容。</div> : null}
-      {hasNoTasks ? <div className="mx-3 flex min-h-[220px] items-center justify-center rounded-md border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500 sm:mx-5">目前沒有任務</div> : hasNoFilteredTasks ? (
+    <div className={`flex h-full min-h-0 flex-col overflow-auto bg-slate-50 ${taskViewFrameClassName}`} data-goal-view="true" data-goal-record-state={meetingStatus} onClickCapture={clearPinnedDependencyOnOtherClick}>
+      {hasNoTasks ? (
+        <div className="mx-3 flex min-h-[220px] flex-col items-center justify-center gap-3 rounded-md border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500 sm:mx-5">
+          <span>目前沒有任務</span>
+          {canCreateTask ? (
+            <button type="button" className="rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-100 disabled:opacity-50" disabled={isCreatingRootTask} onClick={() => void createRootTask()}>
+              新增根任務
+            </button>
+          ) : null}
+        </div>
+      ) : hasNoFilteredTasks ? (
         <div className="mx-3 flex min-h-[220px] flex-col items-center justify-center gap-3 rounded-md border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500 sm:mx-5">
           <span>目前篩選沒有符合的任務</span>
           <button type="button" onClick={resetTaskFilters} className="rounded border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50">清除篩選</button>
@@ -1246,7 +1475,7 @@ const GoalView: React.FC<GoalViewProps> = ({ boardId }) => {
           collisionDetection={closestCorners}
           onDragStart={event => {
             const item = event.active.data.current?.item as TaskNode | undefined;
-            if (canMoveTask && item) {
+            if (item && (event.active.data.current?.trackingReference ? canManageTaskReference : canMoveTask)) {
               setActiveDragNode(item);
               const rect = event.active.rect.current.initial;
               if (rect) {
@@ -1355,34 +1584,50 @@ const GoalView: React.FC<GoalViewProps> = ({ boardId }) => {
                     column="meeting"
                     collapsed={meetingColumnCollapsed}
                     onToggle={() => toggleGoalColumn('meeting')}
+                    hint={meetingStatus === 'error' ? '會議紀錄載入失敗' : meetingStatus === 'partial' ? '部分會議紀錄無法辨識，已略過。' : undefined}
                     className="sticky top-0 z-[7] border-b border-r border-slate-200 bg-surface-panel px-3 py-1.5"
                   />
                 ) : null}
                 <GoalColumnHeader id="goal-column-owner" column="owner" collapsed={ownerColumnCollapsed} onToggle={() => toggleGoalColumn('owner')} className="sticky top-0 z-[7] border-b border-l border-r border-slate-200 bg-surface-panel px-1 py-1.5" />
                 <GoalColumnHeader id="goal-column-status" column="status" collapsed={statusColumnCollapsed} onToggle={() => toggleGoalColumn('status')} className="sticky top-0 z-[7] border-b border-r border-slate-200 bg-surface-panel px-1 py-1.5" />
                 {showStartDate ? <GoalColumnHeader id="goal-column-start-date" column="start-date" collapsed={startDateColumnCollapsed} onToggle={() => toggleGoalColumn('start-date')} className="sticky top-0 z-[7] border-b border-r border-slate-200 bg-surface-panel px-1 py-1.5" /> : null}
-                <GoalColumnHeader id="goal-column-end-date" column="end-date" collapsed={endDateColumnCollapsed} onToggle={() => toggleGoalColumn('end-date')} className="sticky top-0 z-[7] border-b border-r border-slate-200 bg-surface-panel px-1 py-1.5" />
+                <GoalColumnHeader
+                  id="goal-column-end-date"
+                  column="end-date"
+                  collapsed={endDateColumnCollapsed}
+                  onToggle={() => toggleGoalColumn('end-date')}
+                  className="sticky top-0 z-[7] border-b border-r border-slate-200 bg-surface-panel px-1 py-1.5"
+                  override={dependencyHint ? {
+                    label: '選擇依賴日期',
+                    hint: dependencyHint,
+                    control: <button type="button" className="inline-grid size-6 shrink-0 place-items-center rounded text-amber-200 hover:bg-white/15 focus-visible:outline focus-visible:outline-amber-200" aria-label="取消設定依賴" title="取消設定（Esc）" onClick={dependency.close}><X size={14} /></button>,
+                  } : undefined}
+                />
                 <GoalColumnHeader id="goal-column-duration" column="duration" collapsed={durationColumnCollapsed} onToggle={() => toggleGoalColumn('duration')} className="sticky top-0 z-[7] border-b border-r border-slate-200 bg-surface-panel px-1 py-1.5" />
               </tr>
             </thead>
             <tbody>
-              <SortableContext items={hierarchy.items.map(node => primaryPlacementId(node.id))} strategy={verticalListSortingStrategy}>
+              <SortableContext items={hierarchy.map(node => node.reference?.id ?? primaryPlacementId(node.id))} strategy={verticalListSortingStrategy}>
                 {projection.rows.map((row, index) => {
-                  const node = hierarchy.items[index];
+                  const node = hierarchy[index];
                   return (
                     <GoalRow
-                      key={node.id}
+                      key={node.rowId}
                       row={row}
                       node={node}
-                      hasChildren={(parentNodesIndex[node.id] || []).length > 0}
-                      collapsed={collapsedIds.has(node.id)}
+                      hasChildren={node.hasChildren}
+                      dependency={dependency}
+                      activeDependencyId={activeDependencyId}
+                      onDependencyHover={handleDependencyHover}
+                      onNavigateDependency={navigateToDependencyCounterpart}
+                      collapsed={collapsedIds.has(node.rowId)}
                       onToggle={() => setCollapsedIds(previous => {
                         const next = new Set(previous);
-                        if (next.has(node.id)) next.delete(node.id); else next.add(node.id);
+                        if (next.has(node.rowId)) next.delete(node.rowId); else next.add(node.rowId);
                         return next;
                       })}
                       showDescriptionColumn={showDescriptionColumn}
-                      collapsedColumns={collapsedColumns}
+                      collapsedColumns={renderedCollapsedColumns}
                       showMeetingColumn={showMeetingColumn}
                       meetingStatus={meetingStatus}
                       isFirstRow={index === 0}
@@ -1392,12 +1637,12 @@ const GoalView: React.FC<GoalViewProps> = ({ boardId }) => {
                       membersLoading={membersLoading}
                       showStartDate={showStartDate}
                       showTags={showTags}
-                      hierarchyDecoration={hierarchyDecorations.get(node.id) ?? EMPTY_GOAL_HIERARCHY_DECORATION}
+                      hierarchyDecoration={hierarchyDecorations.get(node.rowId) ?? EMPTY_GOAL_HIERARCHY_DECORATION}
                       activeHierarchyScopeId={visibleHierarchyScopeId}
-                      childDropCandidate={goalChildCandidateTargetId === node.id}
-                      childDropTarget={goalChildTargetId === node.id}
-                      activeDescriptionScope={activeContentScopes.description.get(node.id)}
-                      activeMeetingScope={activeContentScopes.meeting.get(node.id)}
+                      childDropCandidate={goalChildCandidateTargetId === node.rowId}
+                      childDropTarget={goalChildTargetId === node.rowId}
+                      activeDescriptionScope={activeContentScopes.description.get(node.rowId)}
+                      activeMeetingScope={activeContentScopes.meeting.get(node.rowId)}
                       onHierarchyScopeChange={setActiveHierarchyScopeId}
                       selectedCellKey={selectedCellKey}
                       expandedCellKeys={expandedCellKeys}

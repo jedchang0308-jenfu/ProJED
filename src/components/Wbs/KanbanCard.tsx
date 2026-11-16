@@ -31,6 +31,7 @@ import { useTaskPlacementController } from './useTaskPlacementController';
 import { KANBAN_CARD_FRAME_CLASS, KanbanCardPresentation } from './KanbanCardPresentation';
 import { getMeetingTaskReservationValue } from '../../utils/meetingTaskReservation';
 import { TaskDescriptionIndicator } from '../TaskDescriptionIndicator';
+import { TaskHierarchyDisclosure } from './TaskHierarchyIndentedRow';
 
 interface KanbanCardProps {
   nodeId: string;       // Level 2 TaskNode 的 ID
@@ -164,6 +165,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
   const status = node?.status || 'todo';
   const nodeTags = getNodeTags(node, tags);
   const showChecklistSurface = hasVisibleChildren || hasVisibleTrackingChildren;
+  const [isChecklistExpanded, setIsChecklistExpanded] = useState(true);
   const [isRecentlyChildDropped, setIsRecentlyChildDropped] = useState(false);
 
   React.useEffect(() => {
@@ -318,6 +320,21 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
               },
             } as React.HTMLAttributes<HTMLElement>}
             titleTextProps={{ 'data-task-id': nodeId } as React.HTMLAttributes<HTMLElement>}
+            titleLeading={showChecklistSurface ? (
+              <TaskHierarchyDisclosure
+                expanded={isChecklistExpanded}
+                className="task-tree-dot kanban-card-disclosure"
+                aria-controls={checklistRegionId}
+                aria-label={`${isChecklistExpanded ? '收合' : '展開'} ${node.title || '未命名任務'}`}
+                onPointerDown={event => event.stopPropagation()}
+                onClick={event => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setIsChecklistExpanded(current => !current);
+                }}
+                data-kanban-branch-toggle="true"
+              />
+            ) : null}
             showDate={!isSelectingMode}
             showTags={showTags}
             tags={showTags && nodeTags.length > 0 ? <KanbanTagSticker tags={nodeTags} /> : null}
@@ -375,12 +392,13 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
             <div
               id={checklistRegionId}
               className="kanban-tree-section kanban-checklist-section"
+              hidden={!isChecklistExpanded}
               data-task-id={nodeId}
               data-kanban-checklist-visual="rounded-tree"
               data-kanban-card-subtree-scope="true"
               data-task-surface-subtree="true"
             >
-              <div className="kanban-checklist-body">
+              {isChecklistExpanded ? <div className="kanban-checklist-body">
                 <KanbanChecklist
                   parentId={nodeId}
                   parentPlacementId={trackingReference?.id}
@@ -389,7 +407,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
                   previewParentIndex={previewParentIndex}
                   filterProjection={filterProjection}
                 />
-              </div>
+              </div> : null}
             </div>
           )}
       </>

@@ -20,7 +20,7 @@ const ACTION_CATALOG: readonly TaskActionDefinition[] = Object.freeze([
   { id: 'task.select', label: '選取任務', icon: 'mouse-pointer-2', section: null, kind: 'selection' },
   { id: 'task.open-details', label: '開啟詳情', icon: 'panel-right', section: null, kind: 'navigation' },
   { id: 'task.open-details-for-naming', label: '開啟詳情並命名', icon: 'panel-right', section: null, kind: 'navigation' },
-  { id: 'task.switch-to-list', label: '切換至清單', icon: 'list-checks', section: null, kind: 'navigation' },
+  { id: 'task.switch-to-list', label: '切換至 OKR', icon: 'list-checks', section: null, kind: 'navigation' },
   { id: 'task.open-menu', label: '開啟操作選單', icon: 'menu', section: null, kind: 'presentation' },
   { id: 'task.clear-selection', label: '清除選取', icon: 'x', section: null, kind: 'selection' },
   { id: 'task.toggle-complete', label: '切換完成狀態', icon: 'check', section: null, kind: 'mutation', capability: 'edit' },

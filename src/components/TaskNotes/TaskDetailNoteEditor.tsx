@@ -97,7 +97,6 @@ const TASK_NOTE_EDITOR_HEIGHTS_KEY = 'projed.taskDetailNote.heights.v2';
 const TASK_NOTE_EDITOR_MIN_HEIGHT = 36;
 const TASK_NOTE_EDITOR_MAX_HEIGHT = 960;
 const TASK_NOTE_EDITOR_KEYBOARD_RESIZE_STEP = 12;
-const TASK_DESCRIPTION_PLACEHOLDER = '說明任務的目的、要解決的問題、要達成的目標。';
 
 const clampTaskNoteEditorHeight = (value: number) => Math.min(
   TASK_NOTE_EDITOR_MAX_HEIGHT,
@@ -615,7 +614,6 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
   const canEdit = props.canEdit;
   const accountId = props.variant === 'cell' ? null : props.accountId;
   const taskId = props.taskId;
-  const isDescription = props.variant === 'cell' ? true : props.isDescription;
   const note = props.note;
   const titleEditable = props.variant === 'cell' ? false : props.titleEditable ?? true;
   const onAdd = props.variant === 'cell' ? () => undefined : props.onAdd;
@@ -648,7 +646,7 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
   const resizeStartRef = React.useRef<{ pointerId: number; startY: number; startHeight: number } | null>(null);
   const pendingHeightRef = React.useRef<number | null>(null);
   const [editorHeight, setEditorHeight] = React.useState(TASK_NOTE_EDITOR_MIN_HEIGHT);
-  const notePlaceholder = isDescription ? TASK_DESCRIPTION_PLACEHOLDER : '輸入備註內容';
+  const notePlaceholder = '';
   const noteLabel = note.id === 'note_default' ? '任務目的' : (note.title || '備註');
 
   const autoSizeContent = React.useCallback(() => {
@@ -777,7 +775,7 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
         data-inline-editor={isCellVariant ? 'true' : undefined}
         data-task-note-editor-loaded="true"
       >
-        {!isCellVariant ? <div className="relative mb-1 flex min-w-0 flex-wrap items-center gap-1 md:flex-nowrap" data-task-detail-note-header="true">
+        {!isCellVariant ? <div className="relative mb-0 flex min-w-0 flex-wrap items-center gap-1 md:flex-nowrap" data-task-detail-note-header="true">
           {titleEditable ? (
             <input
               type="text"
@@ -837,14 +835,14 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
                 data-task-detail-note-content-input="true"
               />
             )}
-            placeholder={(
+            placeholder={notePlaceholder ? (
               <div
                 className="pointer-events-none absolute left-2 top-1.5 text-sm leading-6 text-slate-400"
                 data-task-detail-note-placeholder="true"
               >
                 {notePlaceholder}
               </div>
-            )}
+            ) : null}
             ErrorBoundary={LexicalErrorBoundary}
           />
           {!isCellVariant && canEdit ? (

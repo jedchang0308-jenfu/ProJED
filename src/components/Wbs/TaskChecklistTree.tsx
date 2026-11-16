@@ -103,7 +103,8 @@ const TaskChecklistRow: React.FC<TaskChecklistRowProps> = ({
   const nodeTags = getNodeTags(child, tags);
   const hasGrandchildren = !trackingReference && Boolean(grandchildIds && grandchildIds.length > 0);
   const isBoardRow = hostAdapter.surfaceId === 'board.checklist-row';
-  const hasIncomingBranch = isBoardRow && depth > 0;
+  const isTaskDetailsRow = hostAdapter.surfaceId === 'task-details.subtask-row';
+  const hasIncomingBranch = depth > 0;
   const [isExpanded, setIsExpanded] = React.useState(true);
   const subtreeId = React.useId();
   const hasVisibleGrandchildren = hasGrandchildren && grandchildIds?.some(id => {
@@ -135,7 +136,6 @@ const TaskChecklistRow: React.FC<TaskChecklistRowProps> = ({
       && reference.id !== placementId);
   });
   const hasVisibleSubtree = hasVisibleGrandchildren || hasTrackingGrandchildren;
-  const showSubtree = !isBoardRow || isExpanded;
 
   const wbsDependencies = useWbsStore(s => s.dependencies);
   const getNodeLockStatus = useWbsStore(s => s.getNodeLockStatus);
@@ -277,9 +277,7 @@ const TaskChecklistRow: React.FC<TaskChecklistRowProps> = ({
         className="pointer-events-none absolute top-0 h-px w-px opacity-0"
         data-task-direct-child-title-anchor="true"
         style={{
-          left: isBoardRow
-            ? 'calc((var(--kanban-checklist-child-depth, 1) + 1) * var(--kanban-tree-indent) + var(--kanban-tree-title-inset))'
-            : 'calc((var(--kanban-checklist-child-depth, 1) * var(--task-hierarchy-indent, 6px)) + var(--kanban-checklist-base, 4px))',
+          left: 'calc((var(--kanban-checklist-child-depth, 1) + 1) * var(--kanban-tree-indent) + var(--kanban-tree-title-inset))',
         }}
       />
       {/* 單一待辦項目列 — root surface 承接拖曳，互動子元件由 sensor 層防誤觸 */}
@@ -297,7 +295,9 @@ const TaskChecklistRow: React.FC<TaskChecklistRowProps> = ({
               ? isSelfNode
                 ? 'bg-amber-50 ring-1 ring-inset ring-amber-400 cursor-crosshair'
                 : 'hover:bg-amber-50/60 cursor-crosshair'
-              : 'cursor-pointer hover:bg-white'
+              : isTaskDetailsRow
+                ? 'cursor-pointer bg-transparent hover:bg-slate-100/70 active:bg-slate-100 focus-visible:bg-slate-100/70 focus-visible:outline focus-visible:outline-1 focus-visible:outline-primary/50'
+                : 'cursor-pointer hover:bg-white'
         }`}
         style={{ '--kanban-checklist-depth': depth } as React.CSSProperties}
         onContextMenu={(e) => {
@@ -336,12 +336,12 @@ const TaskChecklistRow: React.FC<TaskChecklistRowProps> = ({
         data-touch-tap-guard="true"
         data-task-touch-gesture-surface={taskGesture.touchGestureEnabled ? 'true' : undefined}
         data-kanban-checklist-row-visual={hasIncomingBranch ? 'rounded-branch' : 'flat-unlined'}
-        data-kanban-tree-stem={isBoardRow && hasVisibleSubtree && showSubtree && !isDragPlaceholder ? 'true' : undefined}
+        data-kanban-tree-stem={hasVisibleSubtree && isExpanded && !isDragPlaceholder ? 'true' : undefined}
         data-task-hierarchy-depth={depth}
         data-task-hierarchy-level="L3+"
         data-task-child-drop-committed={isRecentlyChildDropped ? 'true' : undefined}
       >
-        {isBoardRow && hasVisibleSubtree && !isDragPlaceholder ? (
+        {hasVisibleSubtree && !isDragPlaceholder ? (
           <TaskHierarchyDisclosure
             expanded={isExpanded}
             className="task-tree-dot kanban-tree-disclosure"
@@ -439,7 +439,7 @@ const TaskChecklistRow: React.FC<TaskChecklistRowProps> = ({
             endLocked={lockStatus.endLocked}
             durationLocked={Boolean(child.isDurationLocked)}
             surface="checklist"
-            className={isBoardRow ? 'kanban-tree-date' : 'ml-0.5'}
+            className="kanban-tree-date"
           />
           {!isBoardRow ? <MeetingTaskReservationMark value={hostAdapter.meetingReservationValues?.[childId]} className="self-center" /> : null}
           </>
@@ -447,9 +447,9 @@ const TaskChecklistRow: React.FC<TaskChecklistRowProps> = ({
       </div>
 
       {/* 遞迴渲染更深層的子節點 */}
-      {!isDragPlaceholder && (isBoardRow ? hasVisibleSubtree : hasGrandchildren || hasTrackingGrandchildren) && (
-        <div id={subtreeId} hidden={!showSubtree} data-task-surface-subtree="true">
-          {showSubtree && <TaskChecklistTree
+      {!isDragPlaceholder && hasVisibleSubtree && (
+        <div id={subtreeId} hidden={!isExpanded} data-task-surface-subtree="true">
+          {isExpanded && <TaskChecklistTree
             parentId={child.id}
             parentPlacementId={trackingReference?.id}
             depth={depth + 1}
@@ -520,7 +520,7 @@ export const TaskChecklistTree: React.FC<TaskChecklistTreeProps> = ({ parentId, 
   if (isRecursiveParent || renderRows.length === 0) return null;
 
   return (
-    <div className={depth === 0 ? `kanban-checklist-root ${hostAdapter.surfaceId === 'board.checklist-row' ? '' : 'mt-px'}` : ''}>
+    <div className={depth === 0 ? 'kanban-checklist-root' : undefined}>
       <TaskPlacementTree rows={renderRows}>
         {row => (
           <TaskChecklistRow

@@ -46,8 +46,9 @@ export const useTaskPlacementController = ({
       placementId,
       placementKind,
       boardId: reference?.boardId || task.boardId,
-      parentPlacementId: reference?.parentPlacementId
-        ?? (task.parentId ? primaryPlacementId(task.parentId) : null),
+      parentPlacementId: reference
+        ? reference.parentPlacementId
+        : task.parentId ? primaryPlacementId(task.parentId) : null,
       canEditCanonicalTask: permissions.canEditTask,
       canManageReferenceHere: permissions.canManageTaskReference,
     },

@@ -4,7 +4,7 @@ import { taskStatusTitleClass } from '../ui/taskStatusStyles';
 import { TaskDateBadge } from './TaskDateBadge';
 import { MeetingTaskReservationMark } from './MeetingTaskReservationMark';
 
-export const KANBAN_CARD_FRAME_CLASS = 'kanban-task-card relative mb-[6px] rounded-lg border border-slate-300 bg-surface-task shadow-[0_2px_7px_rgba(15,23,42,0.14)] transition-shadow';
+export const KANBAN_CARD_FRAME_CLASS = 'kanban-task-card relative mb-[2px] rounded-lg border border-slate-300 bg-surface-task shadow-[0_2px_7px_rgba(15,23,42,0.14)] transition-shadow';
 
 export type KanbanCardPresentationModel = {
   title: string;
@@ -27,6 +27,7 @@ type KanbanCardPresentationProps = {
   titleClassName?: string;
   showDate?: boolean;
   showTags?: boolean;
+  titleLeading?: React.ReactNode;
   titleIndicator?: React.ReactNode;
   titleTrailing?: React.ReactNode;
   meetingReservationValue?: number | null;
@@ -45,6 +46,7 @@ export const KanbanCardPresentation: React.FC<KanbanCardPresentationProps> = ({
   titleClassName = '',
   showDate = true,
   showTags = true,
+  titleLeading,
   titleIndicator,
   titleTrailing,
   meetingReservationValue,
@@ -64,6 +66,7 @@ export const KanbanCardPresentation: React.FC<KanbanCardPresentationProps> = ({
     >
       <Row className="kanban-task-title-row flex items-start justify-between gap-1">
         <Content className="kanban-task-title-content flex min-w-0 flex-1 items-center gap-1">
+          {titleLeading}
           <Title
             {...titleProps}
             className={`task-title-text relative flex min-w-0 flex-1 items-center gap-[2px] pr-2 text-sm font-medium leading-tight transition-colors ${model.status ? taskStatusTitleClass[model.status] : ''} ${titleClassName}`}

@@ -22,7 +22,6 @@ import {
   restoreTaskDetailsReturnFocus,
   selectAndOpenTaskDetails,
 } from '../utils/taskInteractions';
-import { getTaskAssigneeIds } from '../utils/taskAssignments';
 import { resolveTaskMenu } from '../interactions/task/resolveTaskInteraction';
 import { getTaskActionEnabledMap, guardTaskAction } from '../interactions/task/taskActionGuards';
 import { TaskActionMenu } from '../interactions/task/TaskActionMenu';
@@ -231,13 +230,6 @@ export const GlobalContextMenu: React.FC = () => {
     label: member.profile?.displayName || member.profile?.email || member.userId,
     role: member.role,
   }));
-  const currentPrimaryIds = getTaskAssigneeIds(currentNode);
-  const currentAssigneeLabel = currentPrimaryIds.length === 0
-    ? '未指派'
-    : currentPrimaryIds.length > 1
-      ? `共同主責 ${currentPrimaryIds.length} 人`
-      : assigneeOptions.find(member => member.id === currentPrimaryIds[0])?.label || `已離開成員 (${currentPrimaryIds[0]})`;
-
   const enterDependencyMode = (side: 'start' | 'end') => {
     if (!canCreateDependency) return;
     if (!contextMenuState) return;
@@ -1001,9 +993,11 @@ export const GlobalContextMenu: React.FC = () => {
                 actionIds={resolvedTaskMenuActionIds}
                 enabled={taskActionEnabled}
                 onAction={handleTaskAction}
+                combineCreateActions
+                combineDependencyActions
                 assignmentOpen={isAssigneeMenuOpen}
-                assignmentSummary={currentAssigneeLabel}
                 onToggleAssignment={() => setIsAssigneeMenuOpen(current => !current)}
+                onAssignmentOpenChange={setIsAssigneeMenuOpen}
                 assignmentContent={currentNode ? (
                   <TaskAssignmentPicker
                     node={currentNode}
@@ -1011,6 +1005,7 @@ export const GlobalContextMenu: React.FC = () => {
                     membersLoading={membersLoading}
                     disabled={!canAssignTask}
                     inline
+                    menuSurface
                     onChange={(primaryIds, collaboratorIds) => updateNode(currentNode.id, {
                       assigneeIds: primaryIds,
                       collaboratorIds,
@@ -1035,9 +1030,10 @@ export const GlobalContextMenu: React.FC = () => {
           nodeId={detailsNodeId}
           trackingReferenceId={detailsTrackingReferenceId || undefined}
           canGoBack={detailsNavigation.canGoBack}
+          canGoForward={detailsNavigation.canGoForward}
           onBack={() => {
             const returnFocusPlacementId = detailsNavigation.current?.returnFocusPlacementId;
-            const previous = detailsNavigation.pop();
+            const previous = detailsNavigation.back();
             if (previous) {
               setSelectedTaskId(previous.taskId);
               if (returnFocusPlacementId) {
@@ -1048,6 +1044,10 @@ export const GlobalContextMenu: React.FC = () => {
                 });
               }
             }
+          }}
+          onForward={() => {
+            const next = detailsNavigation.forward();
+            if (next) setSelectedTaskId(next.taskId);
           }}
           onNavigateToTask={(taskId, targetTrackingReferenceId, placementId) => {
             const state = useWbsStore.getState();

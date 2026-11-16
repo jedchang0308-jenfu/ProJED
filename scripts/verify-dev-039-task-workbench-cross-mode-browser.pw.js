@@ -1,7 +1,6 @@
 /* eslint-disable */
 async (page) => {
   const modes = [
-    { value: 'list', label: '清單模式' },
     { value: 'mindmap', label: '心智圖模式' },
     { value: 'board', label: '看板模式' },
     { value: 'goal', label: 'OKR模式' },

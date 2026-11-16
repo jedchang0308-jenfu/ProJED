@@ -294,7 +294,7 @@ async (page) => {
     const modeEvidence = [];
     for (const mode of [
       ['board', '看板模式'],
-      ['list', '清單模式'],
+      ['goal', 'OKR模式'],
       ['mindmap', '心智圖模式'],
       ['gantt', '甘特圖模式'],
       ['calendar', '日曆模式'],
@@ -307,7 +307,7 @@ async (page) => {
     }
     observations.boardModeParity = modeEvidence;
     await selectMode('board', '看板模式');
-    pass('U04b Board/List/MindMap/Gantt/Calendar keep one V6 matched result');
+    pass('U04b Board/OKR/MindMap/Gantt/Calendar keep one V6 matched result');
 
     step = 'reload and Board Workbench state isolation';
     await reloadForTest();

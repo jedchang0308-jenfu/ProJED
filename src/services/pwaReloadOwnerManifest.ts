@@ -101,7 +101,7 @@ export const PWA_RELOAD_SAFETY_OWNER_MANIFEST = [
   },
   {
     ownerId: 'task-drag',
-    authority: 'BoardView / WbsListView / GoalView / SharedTaskSidebar / GanttTaskBar / MindMapView / useTaskDragSession',
+    authority: 'BoardView / GoalView / SharedTaskSidebar / GanttTaskBar / MindMapView / useTaskDragSession',
     surfaces: ['list', 'mindmap', 'board', 'goal', 'gantt', 'calendar'],
     readiness: ['app-content'],
   },
