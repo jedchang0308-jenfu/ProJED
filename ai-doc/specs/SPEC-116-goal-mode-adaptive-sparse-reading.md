@@ -1,5 +1,9 @@
 # SPEC-116：全層級目標模式與自適應留白閱讀
 
+## DEV-140 視角整合
+
+DEV-140 將 OKR 定為唯一的階層任務表格，舊 `list` 視角指向 OKR。原清單的進度、日期依賴、追蹤副本及新增根任務功能併入同一視角。進度以小圓餅顯示，懸浮時顯示百分比。本節取代下文關於清單與 OKR 並存、進度只出現在清單及各自呈現的規定。OKR 的內容歸屬、合併儲存格、編輯、會議紀錄與手機限制沿用現行規則。交付與驗收見 [DEV-140](../dev_task.md#dev-140-okr-list-consolidation)。
+
 - 狀態：`Target Authority / Interaction parity implemented / Targeted QA-QC PASS / NOT RELEASED`
 - 日期：2026-09-11
 - 對應 DEV：DEV-116

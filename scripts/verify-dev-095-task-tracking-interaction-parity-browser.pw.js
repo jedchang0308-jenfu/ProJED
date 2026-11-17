@@ -666,7 +666,7 @@ async (page) => {
     return { keyboard, mobile };
   });
 
-  await runCase('B21-shared-surface-visual-parity', 'List row, Kanban card and checklist content share slots/styles; only the tracking frame border is dashed at 1440/390/320', async () => {
+  await runCase('B21-shared-surface-visual-parity', 'OKR rows, Kanban cards and checklists display canonical task titles and identify tracking references', async () => {
     await seed();
     const compare = async (primaryTarget, referenceTarget) => page.evaluate(({ primarySelector, referenceSelector }) => {
       const p = document.querySelector(primarySelector);
@@ -706,10 +706,17 @@ async (page) => {
 
     const mode = page.locator('[data-mode-switcher-trigger="true"]');
     await mode.click();
-    await page.locator('[data-mode-switcher-value="list"]').click();
-    await placement('p-ref-a').waitFor({ state: 'visible', timeout: 10000 });
-    const listEvidence = await compare('[data-task-placement-id="primary:p-task-a"]', '[data-task-placement-id="p-ref-a"]');
-    if (!listEvidence || listEvidence.referenceBorder !== 'dashed' || listEvidence.primaryTitle !== listEvidence.referenceTitle || listEvidence.visibleTrackingCopy) throw new Error(`List shared surface mismatch: ${JSON.stringify(listEvidence)}`);
+    await page.locator('[data-mode-switcher-value="goal"]').click();
+    const goalPrimary = page.locator('[data-goal-task-row][data-task-placement-id="primary:p-task-a"]');
+    const goalReference = page.locator('[data-goal-task-row][data-task-placement-id="p-ref-a"]');
+    await goalReference.waitFor({ state: 'visible', timeout: 10000 });
+    const goalEvidence = {
+      primaryTitle: await goalPrimary.locator('[data-task-title-slot="true"]').innerText(),
+      referenceTitle: await goalReference.locator('[data-task-title-slot="true"]').innerText(),
+      referenceKind: await goalReference.getAttribute('data-task-placement-kind'),
+      referenceIndicator: await goalReference.locator('[aria-label="追蹤副本"]').isVisible(),
+    };
+    if (goalEvidence.primaryTitle !== goalEvidence.referenceTitle || goalEvidence.referenceKind !== 'tracking-reference' || !goalEvidence.referenceIndicator) throw new Error(`OKR shared surface mismatch: ${JSON.stringify(goalEvidence)}`);
 
     const viewports = [];
     for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }, { width: 320, height: 844 }]) {
@@ -720,7 +727,7 @@ async (page) => {
       await page.screenshot({ path: screenshot, fullPage: true });
       viewports.push({ viewport, layout, screenshot });
     }
-    return { board: boardEvidence, checklist: checklistEvidence, list: listEvidence, viewports };
+    return { board: boardEvidence, checklist: checklistEvidence, goal: goalEvidence, viewports };
   });
 
   await runCase('B22-recursive-child-parity', 'tracking descendants use the same recursive checklist surface, expand/collapse two levels, preserve nested details/focus, and do not auto-project canonical children', async () => {

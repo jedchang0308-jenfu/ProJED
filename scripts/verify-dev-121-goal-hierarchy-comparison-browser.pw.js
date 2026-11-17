@@ -136,6 +136,10 @@ async (page) => {
       };
     });
     await descriptionToggle.click();
+    await descriptionToggle.locator('[data-goal-column-toggle-glyph]').evaluate(async glyph => {
+      getComputedStyle(glyph).backgroundColor;
+      await Promise.all(glyph.getAnimations().map(animation => animation.finished.catch(() => {})));
+    });
     const descriptionCollapsedProbe = await goal.evaluate(root => {
       const firstCell = root.querySelector('[data-goal-description-column-collapsed="true"]');
       const button = root.querySelector('[data-goal-description-column-toggle]');

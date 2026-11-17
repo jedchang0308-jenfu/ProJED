@@ -3,6 +3,44 @@
 Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 外層遞迴讀取 sibling clone 或備份資料夾。
 
+<a id="dev-140-okr-list-consolidation"></a>
+
+## DEV-140：以 OKR 模式整合清單模式
+
+- 狀態：已實作，DEV-140 本機瀏覽器驗收通過。A01–A04 共 22 項操作檢查通過，桌面與手機限制皆以隔離的本機資料驗證。
+- 目標：使用者在「視角」只需選擇「清單模式」，即可在同一張階層任務表格查看目標、追蹤進度及進行日常排程。
+
+### 產品範圍
+
+| 項目 | 整合後行為 |
+| --- | --- |
+| 視角選單 | 桌面只保留「清單模式」入口，移除重複的「OKR 模式」入口；實作沿用原 OKR 階層表格。 |
+| OKR 表格 | 保留任務目的、會議紀錄、欄位收合與顯示偏好、逐層展開／收合，以及原有的編輯、篩選、拖放和任務明細操作。 |
+| 清單功能 | 納入追蹤／參照任務、進度和依賴關係的設定及標示。新增根任務入口位於空看板提示區。進度以小圓餅顯示，懸浮時顯示百分比。依賴選取提示放在日期表頭，會議紀錄提示放在會議紀錄欄。 |
+| 舊偏好 | 舊值 `list` 載入時解析為 `goal`，有效看板切換時繼續顯示 OKR。新選擇儲存 `goal`，避免重新整理還原到舊清單。 |
+| 手機 | 沿用現行手機的看板模式限制。讀到舊清單或 OKR 值時，依現有手機行為顯示看板。開放手機 OKR 屬後續範圍。 |
+
+### 工程交接
+
+1. 以 [GoalView](../src/components/GoalView.tsx) 為基礎，沿用 [SPEC-116](specs/SPEC-116-goal-mode-adaptive-sparse-reading.md)、[SPEC-119](specs/SPEC-119-goal-cell-direct-edit-and-content-fit.md) 與 [SPEC-121](specs/SPEC-121-goal-hierarchy-comparison-grid.md) 的階層、合併儲存格及內容編輯規則。整合時先確認參照列與一般任務列如何共用樹狀列模型，保持列識別、階層、篩選與操作對象一致。任務目的與會議紀錄仍依各欄原有的內容歸屬呈現及操作。
+2. 對照 [WbsListView](../src/components/Wbs/WbsListView.tsx) 盤點清單獨有能力及其相關呼叫端，沿用追蹤任務放置、依賴檢查與排序新增邏輯。追蹤列的操作權限依既有規則判斷，移動參照位置時仍操作參照本身。資料庫結構、原任務及參照 ID、權限模型皆在本次變更範圍外。
+3. 補齊功能後，收斂 [MainLayout](../src/components/MainLayout.tsx) 的選單與 [App](../src/App.tsx) 的畫面入口。在 [useBoardStore](../src/store/useBoardStore.ts) 處理 `projed-last-view` 舊值及切板相容性。移除清單畫面前，查清 `list` 在共用右鍵選單、拖放或其他任務操作中的用途。若它仍代表供其他畫面使用的互動類型，保留該契約。
+
+### 驗收條件
+
+| 編號 | 操作與通過條件 |
+| --- | --- |
+| A01 | 桌面開啟「視角」只看到一個階層表格入口「清單模式」。以既存 `list` 偏好登入後進入原有有效看板，直接呈現整合後表格。切換到另一個有效看板並重新整理，仍呈現整合後表格。以手機限制模式開啟同一舊偏好，正常進入看板。 |
+| A02 | 看板同時包含一般任務與追蹤任務時，兩者依既有階層與放置順序顯示。篩選、收合、開啟明細及允許的拖放操作均對應正確任務或參照。 |
+| A03 | 在 OKR 新增根任務，確認首筆可建立、排序且重載後仍存在。既有的進度、有效依賴、禁止自我或循環依賴等行為，依清單原有規則比對。唯讀或無權限身分不可因整合而取得額外修改能力。 |
+| A04 | 在含多層子任務及各自內容的看板切換任務、收合欄位並編輯任務目的，重新開啟後讀回正確內容。會議紀錄、合併儲存格及既有編輯、拖放與篩選行為維持可用。 |
+
+### 本機驗證紀錄
+
+- 無視窗 Edge，1440 與 390 px 隔離測試畫面，DEV-140 瀏覽器 22/22。涵蓋舊偏好、切板與重載、追蹤列放置和篩選、日期依賴標記與循環阻擋、唯讀權限、空板首筆根任務，以及整合後「清單模式」入口下的目的欄操作與會議紀錄讀回。進度顯示在任務名稱欄，驗證只剩數字百分比。腳本為 [verify-dev-140-okr-list-browser.pw.js](../scripts/verify-dev-140-okr-list-browser.pw.js)，本機結果為 `output/playwright/dev-140/result.json`。
+- TypeScript、核心靜態回歸 11/11、DEV-116 靜態 30/30 通過。
+- DEV-121 另以整合前的 OKR 元件搭配既有工作樹樣式做對照。兩版均為 31 項通過、同樣 6 項樹線樣式斷言未通過。欄位收合、會議紀錄與唯讀瀏覽皆通過。對照證據為 `output/playwright/dev-140/dev121-comparison.json`。
+
 <a id="dev-139-jenfu-platform-onboarding"></a>
 
 ## DEV-139：ProJED 納入 Jenfu-Platform，Cloud Run／Cloud SQL 對齊並保留 Vite
@@ -351,6 +389,8 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 同一 source commit 的 DEV-121 static 28/28、Chromium 37/37、Goal empty-location、TypeScript、targeted ESLint 與 diff check 均通過；direct receipt 保留 `feature-pending`，因完整 fixture runner 固定使用 localhost/local-test，未將 local-only 結果冒充 authenticated production Goal smoke。未改資料、schema、migration、權限或 persistence；部署前 live version `63d9b2ea3d7cdb4f` 保留為 rollback anchor。
 
 ## 總任務清單
+
+- ✓ DEV-140 [交付點] [已實作／本機瀏覽器驗收通過] [ProJED] [以 OKR 模式整合清單模式](#dev-140-okr-list-consolidation)
 
 - ○ DEV-139 [交付點] [待排／S1架構定案] [P1] [文件階段] ProJED 首階段基礎對齊，保留 Vite
   - 摘要：保留原工作區／看板／權限及個人／外部協作，Cloud Run／Cloud SQL／身分對齊；原網址／PWA相容，不丟資料／重建帳號／強迫重裝，費用不大幅增加。
@@ -2218,6 +2258,12 @@ Rework 4 的真正需求不是新增手機編輯能力模組，而是移除裝�
 - 本地實作未執行 commit、push、PR、merge、deploy、production data 或 release；若要 release，需由使用者另行提出並進既有 release gate。
 
 ## DEV-080：固定地端測試入口改用 localhost:4000
+
+<a id="projed-independent-local-1040"></a>
+
+**2026-11-16 現行開發交接。** Platform 主控的 `JENFU/DEV-021#daily-local-test-binding` 四系統啟動範圍為 1000～1030。ProJED 維持 `npm run dev:local` 的獨立 `http://localhost:1040/` 測試入口，沿目前 `package.json` 與 `scripts/local-test-server.ps1`；下方 4000 為歷史交付紀錄。
+
+首次確認後沿用 ProJED 主工作樹、1040 origin 與固定測試瀏覽器設定檔。local-test 資料沿用該 origin 與 profile 的瀏覽器儲存，正常重開讀同一組資料；隔離候選另用臨時 profile。後續以獨立啟動、同 profile 重開讀回和 Platform 啟動時未碰 1040 驗收。此處只記開發邊界，尚未重跑瀏覽器或變動 ProJED 資料。
 
 - 文件成熟度：`RD Implementation Ready`
 - 狀態：完成／Implemented／QA PASS／QC PASS／未 Release

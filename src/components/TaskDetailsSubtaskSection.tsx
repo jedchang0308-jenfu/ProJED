@@ -1,6 +1,5 @@
 import React from 'react';
 import { DndContext, pointerWithin, type DragEndEvent, type DragOverEvent, useDroppable } from '@dnd-kit/core';
-import { ChevronDown, ChevronRight, Plus } from 'lucide-react';
 import type { TaskNode } from '../types';
 import type { TaskTrackingReference } from '../features/taskTracking/types';
 import { primaryPlacementId } from '../features/taskTracking/model';
@@ -311,11 +310,8 @@ export const TaskDetailsSubtaskSection: React.FC<TaskDetailsSubtaskSectionProps>
   node,
   trackingReference,
   bodyRef,
-  canCreateTask = false,
-  onCreateChild,
   onOpenDetails,
 }) => {
-  const [isExpanded, setIsExpanded] = React.useState(true);
   const childIds = useWbsStore(state => state.parentNodesIndex[node.id] || EMPTY_IDS);
   const trackingReferences = useWbsStore(state => state.trackingReferences);
   const nodes = useWbsStore(state => state.nodes);
@@ -335,49 +331,25 @@ export const TaskDetailsSubtaskSection: React.FC<TaskDetailsSubtaskSectionProps>
 
   return (
     <section className="mt-4" data-task-details-subtasks="true">
-      <div className="flex min-h-9 items-center justify-between gap-2">
-        <button
-          type="button"
-          className="inline-flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-100"
-          onClick={() => setIsExpanded(current => !current)}
-          aria-expanded={isExpanded}
-          aria-controls="task-details-subtask-panel"
-          data-task-details-subtask-toggle="true"
-        >
-          {isExpanded ? <ChevronDown size={15} aria-hidden="true" /> : <ChevronRight size={15} aria-hidden="true" />}
-          <span>子任務</span>
-          <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-500" data-task-details-subtask-count="true">
-            {childCount}
-          </span>
-        </button>
-        {canCreateTask && onCreateChild ? (
-          <button
-            type="button"
-            className="inline-flex h-8 items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-100"
-            onClick={() => onCreateChild(node.id)}
-            data-task-details-subtask-create="true"
-          >
-            <Plus size={14} aria-hidden="true" />
-            新增子任務
-          </button>
-        ) : null}
+      <h3 className="mb-1 text-sm font-semibold text-slate-700">子任務</h3>
+      <div
+        id="task-details-subtask-panel"
+        className="min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-2"
+        data-task-details-subtask-panel="true"
+      >
+        {childCount > 0 ? (
+          <TaskDetailsSubtaskDragHost
+            rootTask={node}
+            trackingReference={trackingReference}
+            bodyRef={bodyRef}
+            onOpenDetails={onOpenDetails}
+          />
+        ) : (
+          <div className="flex min-h-12 items-center justify-center px-3 py-3 text-xs text-slate-400" data-task-details-subtask-empty="true">
+            尚無子任務
+          </div>
+        )}
       </div>
-      {isExpanded ? (
-        <div id="task-details-subtask-panel" className="mt-1 min-w-0" data-task-details-subtask-panel="true">
-          {childCount > 0 ? (
-            <TaskDetailsSubtaskDragHost
-              rootTask={node}
-              trackingReference={trackingReference}
-              bodyRef={bodyRef}
-              onOpenDetails={onOpenDetails}
-            />
-          ) : (
-            <div className="flex min-h-12 items-center justify-center px-3 py-3 text-xs text-slate-400" data-task-details-subtask-empty="true">
-              尚無子任務
-            </div>
-          )}
-        </div>
-      ) : null}
     </section>
   );
 };

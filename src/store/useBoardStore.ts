@@ -50,7 +50,11 @@ const safeSetItem = (key: string, value: string | null) => {
 const getStoredView = () => {
     try {
         const stored = localStorage.getItem(VIEW_STORAGE_KEY);
-        if (stored && ['list', 'mindmap', 'board', 'goal', 'gantt', 'calendar', 'records', 'calendar_subscriptions', 'settings', 'recycle_bin'].includes(stored)) {
+        if (stored === 'list') {
+            safeSetItem(VIEW_STORAGE_KEY, 'goal');
+            return 'goal';
+        }
+        if (stored && ['mindmap', 'board', 'goal', 'gantt', 'calendar', 'records', 'calendar_subscriptions', 'settings', 'recycle_bin'].includes(stored)) {
             return stored as ViewMode;
         }
     } catch { /* ignore */ }
@@ -175,8 +179,9 @@ const useBoardStore = create<BoardStore>()(
             set({ activeBoardId: id, selectedTaskId: null });
         },
         setView: (view) => {
-            safeSetItem(VIEW_STORAGE_KEY, view);
-            set({ currentView: view, selectedTaskId: null });
+            const currentView = view === 'list' ? 'goal' : view;
+            safeSetItem(VIEW_STORAGE_KEY, currentView);
+            set({ currentView, selectedTaskId: null });
         },
         setSidebarOpen: (isOpen) => set({ isSidebarOpen: isOpen }),
         setDependencySelection: (state) => set({ dependencySelection: state }),

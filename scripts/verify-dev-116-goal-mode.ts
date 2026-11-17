@@ -28,7 +28,6 @@ const pwaUpdate = read('src/services/pwaUpdateService.ts');
 const localTest = read('src/utils/localTestEnvironment.ts');
 const hierarchyLayoutPath = 'src/components/Wbs/TaskHierarchyIndentedRow.tsx';
 const hierarchyLayout = existsSync(resolve(hierarchyLayoutPath)) ? read(hierarchyLayoutPath) : '';
-const listNode = read('src/components/Wbs/WbsNodeItem.tsx');
 
 check('P01', 'ViewMode includes goal', types.includes("'goal'"));
 check('P02', 'App lazy-loads and renders GoalView', app.includes("import('./components/GoalView')") && app.includes("case 'goal':") && app.includes('hostMode="goal"'));
@@ -70,10 +69,10 @@ check('P23', 'goal headers use flat labels and compact task-name width while own
   ((goalHeaderMarkup.includes('<GoalColumnHeader') && goalHeaderMarkup.includes('column="task"') && goal.includes("task: '任務名稱'"))
     || (goalHeaderMarkup.includes('id="goal-column-task"') && goalHeaderMarkup.includes('任務名稱')))
   && !goalHeaderMarkup.includes('<div') && goal.includes('min-w-[252px]') && goal.includes('GOAL_TASK_COLUMN_WIDTH_PX = 252') && goal.includes('goalTableMinWidth') && goal.includes('任務名稱、任務目的、會議紀錄、負責人、狀態、開始日期、結束日期與工期') && !goal.includes('>任務目標</th>') && goal.includes('data-goal-content-scroll') && goal.includes('GOAL_CONTENT_ROW_HEIGHT_PX') && goal.includes('overflow-y-auto'));
-check('P24', 'goal keeps its internal value while exposing the OKR mode label', layout.includes("{ value: 'goal', label: 'OKR模式'") && !layout.includes("{ value: 'goal', label: '目標模式'"));
+check('P24', 'goal keeps its internal value while exposing the consolidated list mode label', layout.includes("{ value: 'goal', label: '清單模式'") && !layout.includes("{ value: 'goal', label: 'OKR模式'") && !layout.includes("{ value: 'goal', label: '目標模式'"));
 check('P25', 'mode switcher removes the visible introduction row but keeps an accessible menu name', modeSwitcher.includes('aria-label="切換模式"') && !modeSwitcher.includes('data-mode-switcher-close') && !modeSwitcher.includes('>切換模式</div>'));
-check('P26', 'goal and list share hierarchy indentation geometry', hierarchyLayout.includes('task-hierarchy-indented-row') && hierarchyLayout.includes('data-task-hierarchy-disclosure') && goal.includes("from './Wbs/TaskHierarchyIndentedRow'") && read('src/components/Wbs/WbsNodeItem.tsx').includes("from './TaskHierarchyIndentedRow'") && !goal.includes('row.level * 16'));
-check('P27', 'goal owns task capabilities while progress stays list-only', goal.includes('useTaskPlacementController') && goal.includes('DesktopTaskDragHost') && !goal.includes('<DndContext') && !goal.includes('data-goal-task-progress') && goal.includes('<TagChip') && goal.includes('<TaskAssignmentPicker') && goal.includes('showIcon={false}') && goal.includes('data-goal-planning-control') && listNode.includes('data-task-progress-indicator') && !hierarchyLayout.includes('TaskAssignmentPicker') && !hierarchyLayout.includes('TagChip'));
+check('P26', 'goal uses the shared hierarchy indentation component', hierarchyLayout.includes('task-hierarchy-indented-row') && hierarchyLayout.includes('data-task-hierarchy-disclosure') && goal.includes("from './Wbs/TaskHierarchyIndentedRow'") && !goal.includes('row.level * 16'));
+check('P27', 'goal includes progress and owns task capabilities', goal.includes('useTaskPlacementController') && goal.includes('DesktopTaskDragHost') && !goal.includes('<DndContext') && goal.includes('data-task-progress-indicator') && goal.includes('getNodeProgress(node.id)') && goal.includes('<TagChip') && goal.includes('<TaskAssignmentPicker') && goal.includes('showIcon={false}') && goal.includes('data-goal-planning-control') && !hierarchyLayout.includes('TaskAssignmentPicker') && !hierarchyLayout.includes('TagChip'));
 check('P29', 'goal date inputs do not use an extra row layout wrapper', !goal.includes('relative flex h-8 min-w-0 items-center') && goal.includes('data-goal-column="end-date"') && goal.includes('type="date"'));
 check('P30', 'goal task title does not use a redundant text wrapper', goal.includes('task-title-text min-w-0 flex-1 truncate') && !goal.includes('task-title-text relative flex min-w-0 flex-1 items-center gap-[2px]'));
 const taskDragManifestStart = pwaManifest.indexOf("ownerId: 'task-drag'");

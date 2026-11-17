@@ -1,6 +1,6 @@
 import React from 'react';
 import dayjs from 'dayjs';
-import { AlertCircle, ArrowUp, CheckCircle2, LoaderCircle, Lock, Unlock, X } from 'lucide-react';
+import { AlertCircle, ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, LoaderCircle, Lock, X } from 'lucide-react';
 import { useWbsStore, type UpdateNodeDispatchResult } from '../store/useWbsStore';
 import { useMemberStore } from '../store/useMemberStore';
 import useRecordStore from '../store/useRecordStore';
@@ -50,7 +50,9 @@ interface TaskDetailsModalProps {
   trackingReferenceId?: string;
   onClose: () => void;
   canGoBack?: boolean;
+  canGoForward?: boolean;
   onBack?: () => void;
+  onForward?: () => void;
   onNavigateToTask?: (taskId: string, trackingReferenceId?: string, placementId?: string) => void;
   onCreateChild?: (taskId: string) => void;
 }
@@ -66,9 +68,11 @@ const createNote = (index: number): TaskDetailNote => ({
   content: '',
 });
 
-const formatTaskDateForMobile = (value: string) => (
-  value && dayjs(value).isValid() ? dayjs(value).format('YYYY/MM/DD') : ''
-);
+const formatTaskDateForDisplay = (value: string) => {
+  const date = dayjs(value);
+  if (!value || !date.isValid()) return '年/月/日';
+  return date.format(date.year() === dayjs().year() ? 'MM/DD' : 'YYYY/MM/DD');
+};
 
 const SIZE_STORAGE_KEY = 'projed.taskDetailsModal.size.v4';
 
@@ -158,6 +162,7 @@ const getTouchDistance = (touches: React.TouchList) => {
 type TaskDetailsTransition =
   | { kind: 'close' }
   | { kind: 'back' }
+  | { kind: 'forward' }
   | { kind: 'navigate'; taskId: string; trackingReferenceId?: string; placementId?: string }
   | { kind: 'create-child'; parentId: string };
 
@@ -165,7 +170,10 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
   nodeId,
   trackingReferenceId,
   onClose,
+  canGoBack = false,
+  canGoForward = false,
   onBack,
+  onForward,
   onNavigateToTask,
   onCreateChild,
 }) => {
@@ -342,12 +350,14 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
       onClose();
     } else if (transition.kind === 'back') {
       onBack?.();
+    } else if (transition.kind === 'forward') {
+      onForward?.();
     } else if (transition.kind === 'create-child') {
       onCreateChild?.(transition.parentId);
     } else {
       onNavigateToTask?.(transition.taskId, transition.trackingReferenceId, transition.placementId);
     }
-  }, [onBack, onClose, onCreateChild, onNavigateToTask]);
+  }, [onBack, onClose, onCreateChild, onForward, onNavigateToTask]);
 
   const settlePersistence = React.useCallback((
     sourceNodeId: string,
@@ -970,8 +980,6 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
     return () => window.clearTimeout(timer);
   }, [canEditTask, canonicalNotes, noteEdit.draft, notes, notesConflict, persistNoteDraft]);
 
-  const ancestorPath = buildAncestorPath(node, nodes);
-
   const parentPlacementId = trackingReference?.parentPlacementId || null;
   const parentTrackingReference = parentPlacementId && !parentPlacementId.startsWith('primary:')
     ? trackingReferences.find(reference => reference.id === parentPlacementId && !reference.removedAt) || null
@@ -982,6 +990,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
       : parentTrackingReference?.taskId
     : node?.parentId;
   const parentTask = parentTaskId ? nodes[parentTaskId] : undefined;
+  const ancestorPath = buildAncestorPath(node, nodes);
   const canNavigateToParent = Boolean(
     onNavigateToTask
     && parentTask
@@ -1255,6 +1264,8 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
   };
 
   const { startLocked, endLocked } = getNodeLockStatus(node.id, dependencies);
+  const isStartDateReadOnly = !canEditTask || startLocked;
+  const isEndDateReadOnly = !canEditTask || endLocked || Boolean(node.isDurationLocked);
   const currentStatus = normalizeManualTaskStatus(node.status);
   const isDueToday = currentStatus !== 'completed' && !!endDate && dayjs(endDate).isSame(dayjs(), 'day');
   const closeButtonTitle = saveState === 'error' || saveState === 'unknown'
@@ -1313,23 +1324,10 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div
-          className="flex items-start gap-2 px-5 py-3"
+          className="grid grid-cols-[minmax(0,1fr)_auto_auto] grid-rows-[auto_auto] items-start gap-x-2 gap-y-1 px-4 py-2"
           data-task-details-header="true"
         >
-          {canNavigateToParent ? (
-            <button
-              type="button"
-              onClick={navigateToParent}
-              disabled={isClosePending}
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:cursor-wait disabled:opacity-60"
-              aria-label="回到上一階任務"
-              title="回到上一階任務"
-              data-task-details-parent="true"
-            >
-              <ArrowUp size={18} aria-hidden="true" />
-            </button>
-          ) : null}
-          <div className="min-w-0 flex-1">
+          <div className="col-start-1 row-start-1 min-w-0" data-task-details-title-row="true">
             <div className="flex min-w-0 flex-col gap-0.5">
               {canEditTask ? (
                 <input
@@ -1341,53 +1339,88 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
                   onKeyDown={handleTitleKeyDown}
                   data-task-details-title-input="true"
                   aria-label="編輯任務名稱"
-                  className="h-9 w-full min-w-0 border-0 bg-transparent px-0 text-base font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 hover:bg-slate-50/80 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                  className="h-9 w-full min-w-0 rounded-md border border-slate-200 bg-white px-2 text-base font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 hover:bg-slate-50/80 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
                 />
               ) : (
                 <p className="truncate text-sm font-semibold text-slate-900">
                   {node.title}
                 </p>
               )}
-              {ancestorPath.length > 0 && (
-                <nav
-                  aria-label="任務完整位置"
-                  data-task-details-parent-path="true"
-                  className="flex min-w-0 items-center gap-x-1 overflow-hidden whitespace-nowrap text-[11px] font-medium leading-4 text-slate-500"
-                >
-                  {ancestorPath.map((ancestor, index) => (
-                    <React.Fragment key={ancestor.id}>
-                      <button
-                        type="button"
-                        onClick={() => requestTransition({
-                          kind: 'navigate',
-                          taskId: ancestor.id,
-                          placementId: trackingReference?.id || (node ? primaryPlacementId(node.id) : undefined),
-                        })}
-                        disabled={isClosePending}
-                        data-task-details-parent-name="true"
-                        data-task-details-parent-link="true"
-                        data-task-details-parent-id={ancestor.id}
-                        data-task-id={ancestor.id}
-                        data-task-description-hover-trigger={ancestor.description?.trim() ? 'true' : undefined}
-                        aria-label={`開啟上層任務：${ancestor.title || '未命名任務'}`}
-                        className="min-w-0 max-w-[min(11rem,30vw)] truncate text-left text-blue-700 underline decoration-blue-200 underline-offset-2 transition-colors hover:text-blue-800 hover:decoration-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:ring-offset-1 disabled:cursor-wait disabled:opacity-60"
-                      >
-                        {ancestor.title || '未命名任務'}
-                      </button>
-                      {index < ancestorPath.length - 1 && (
-                        <span className="shrink-0 text-slate-300" aria-hidden="true">
-                          /
-                        </span>
-                      )}
-                    </React.Fragment>
-                  ))}
-                </nav>
-              )}
             </div>
+          </div>
+          <div className="col-start-1 row-start-2 grid min-h-6 w-full min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-2" data-task-details-navigation-row="true">
+            <div className="flex shrink-0 items-center gap-1" role="group" aria-label="任務導覽" data-task-details-navigation="true">
+            <button
+              type="button"
+              onClick={() => requestTransition({ kind: 'back' })}
+              disabled={!canGoBack || isClosePending}
+              className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-40"
+              aria-label="返回上一個任務"
+              title="返回上一個任務"
+              data-task-details-history-back="true"
+            >
+              <ArrowLeft size={14} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={() => requestTransition({ kind: 'forward' })}
+              disabled={!canGoForward || isClosePending}
+              className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-40"
+              aria-label="前往下一個任務"
+              title="前往下一個任務"
+              data-task-details-history-forward="true"
+            >
+              <ArrowRight size={14} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={navigateToParent}
+              disabled={!canNavigateToParent || isClosePending}
+              className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-40"
+              aria-label="回到上一階任務"
+              title="回到上一階任務"
+              data-task-details-parent="true"
+            >
+              <ArrowUp size={14} aria-hidden="true" />
+            </button>
+          </div>
+            {ancestorPath.length > 0 && (
+              <nav
+                aria-label="任務完整位置"
+                data-task-details-parent-path="true"
+                className="flex min-w-0 items-center gap-x-1 overflow-hidden whitespace-nowrap text-xs font-medium leading-4 text-slate-500"
+              >
+                {ancestorPath.map((ancestor, index) => (
+                  <React.Fragment key={ancestor.id}>
+                    <button
+                      type="button"
+                      onClick={() => requestTransition({
+                        kind: 'navigate',
+                        taskId: ancestor.id,
+                        placementId: trackingReference?.id || (node ? primaryPlacementId(node.id) : undefined),
+                      })}
+                      disabled={isClosePending}
+                      data-task-details-parent-name="true"
+                      data-task-details-parent-link="true"
+                      data-task-details-parent-id={ancestor.id}
+                      data-task-id={ancestor.id}
+                      data-task-description-hover-trigger={ancestor.description?.trim() ? 'true' : undefined}
+                      aria-label={`開啟上層任務：${ancestor.title || '未命名任務'}`}
+                      className="max-w-[min(11rem,30vw)] truncate text-left text-inherit hover:underline focus-visible:underline focus-visible:outline-none disabled:cursor-wait disabled:opacity-60"
+                    >
+                      {ancestor.title || '未命名任務'}
+                    </button>
+                    {index < ancestorPath.length - 1 ? (
+                      <span className="shrink-0 text-slate-300" aria-hidden="true">/</span>
+                    ) : null}
+                  </React.Fragment>
+                ))}
+              </nav>
+            )}
           </div>
           {canPersistTask ? (
             <div
-              className="flex h-9 min-w-[7.5rem] shrink-0 items-center justify-end text-xs font-medium"
+              className="col-start-2 row-start-1 flex h-9 min-w-[7.5rem] shrink-0 items-center justify-end text-xs font-medium"
               role="status"
               aria-live="polite"
               aria-atomic="true"
@@ -1417,7 +1450,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
               ) : null}
             </div>
           ) : null}
-          <div className="group relative shrink-0">
+          <div className="group relative col-start-3 row-start-1 shrink-0">
             <button
               type="button"
               onClick={handleClose}
@@ -1449,11 +1482,11 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
               data-task-details-meta-grid="true"
             >
               <div
-                className="rounded-lg border border-slate-200 bg-slate-50/80 shadow-sm md:border-0 md:bg-transparent md:shadow-none lg:col-span-full"
+                className="rounded-lg border border-slate-200 bg-slate-50/80 p-2 lg:col-span-full"
                 data-task-details-mobile-meta="true"
               >
                 <div
-                  className="space-y-1.5 bg-white px-2 py-2 md:grid md:grid-cols-[8.5rem_minmax(0,1fr)] md:items-start md:gap-x-3 md:gap-y-2 md:space-y-0 md:bg-transparent md:px-0 md:py-0 lg:grid lg:grid-cols-[5.5rem_24rem_minmax(0,1fr)] lg:items-end lg:gap-x-3 lg:gap-y-2"
+                  className="space-y-1.5 md:grid md:grid-cols-[8.5rem_minmax(0,1fr)] md:items-start md:gap-x-3 md:gap-y-2 md:space-y-0 lg:grid lg:grid-cols-[5.5rem_24rem_minmax(0,1fr)] lg:items-end lg:gap-x-3 lg:gap-y-2"
                   data-task-details-mobile-meta-controls="true"
                 >
               <div
@@ -1466,9 +1499,33 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
                   data-task-details-schedule-controls="true"
                   data-task-details-mobile-schedule-controls="true"
                 >
-                  <span className="col-span-4 block text-xs font-medium text-slate-500" data-task-details-meta-label-text="true">
+                  <span className="col-span-3 block text-xs font-medium text-slate-500" data-task-details-meta-label-text="true">
                     日期
                   </span>
+                  <div className="col-start-4 flex min-w-0 items-center gap-1.5 text-xs font-medium text-slate-500">
+                    <span data-task-details-meta-label-text="true">工期</span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={Boolean(node.isDurationLocked)}
+                      aria-label="固定工期"
+                      disabled={!canEditTask}
+                      onClick={handleToggleDurationLock}
+                      title={node.isDurationLocked ? '固定工期：ON' : '固定工期：OFF'}
+                      className={`relative inline-flex h-5 w-12 shrink-0 items-center rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50 ${node.isDurationLocked ? 'bg-amber-500' : 'bg-slate-300'}`}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={`absolute text-[8px] font-bold leading-none text-white ${node.isDurationLocked ? 'left-1.5' : 'right-1.5'}`}
+                      >
+                        {node.isDurationLocked ? 'ON' : 'OFF'}
+                      </span>
+                      <span
+                        aria-hidden="true"
+                        className={`absolute left-0.5 top-0.5 inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${node.isDurationLocked ? 'translate-x-7' : ''}`}
+                      />
+                    </button>
+                  </div>
                   <div className="contents">
                     <label
                       className="col-start-1 block min-w-0 text-xs font-medium text-slate-500"
@@ -1483,31 +1540,26 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
                           value={startDate}
                           onChange={(event) => handleDateChange('startDate', event)}
                           max={!node.isDurationLocked ? (endDate || undefined) : undefined}
-                          readOnly={!canEditTask || startLocked}
-                          className={`h-8 w-full min-w-0 rounded-md px-2 text-sm text-transparent outline-none transition focus:ring-2 sm:text-slate-700 lg:w-[8rem] lg:flex-none ${
-                            !canEditTask || startLocked
-                              ? 'border border-dashed border-slate-300 bg-slate-50 sm:text-slate-500 pointer-events-none'
+                          readOnly={isStartDateReadOnly}
+                          className={`task-details-date-native-input h-8 w-full min-w-0 rounded-md px-2 text-sm text-transparent outline-none transition focus:ring-2 lg:w-[8rem] lg:flex-none ${
+                            isStartDateReadOnly
+                              ? 'border border-dashed border-slate-300 bg-slate-50 pointer-events-none'
                               : 'border border-slate-200 focus:border-blue-400 focus:ring-blue-100'
                           }`}
                         />
                         <span
                           aria-hidden="true"
-                          className="pointer-events-none absolute inset-y-0 left-2 right-5 flex items-center whitespace-nowrap text-[11px] font-normal text-slate-700 sm:hidden"
+                          className={`pointer-events-none absolute inset-y-0 left-2 ${isStartDateReadOnly ? 'right-8' : 'right-5'} flex items-center whitespace-nowrap text-[11px] font-normal sm:text-sm ${isStartDateReadOnly ? 'text-slate-500' : 'text-slate-700'}`}
                           data-task-details-mobile-date-value="true"
                         >
-                          {formatTaskDateForMobile(startDate)}
+                          {formatTaskDateForDisplay(startDate)}
                         </span>
+                        {isStartDateReadOnly ? (
+                          <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-slate-400" role="img" aria-label="開始日期已鎖定">
+                            <Lock size={14} />
+                          </span>
+                        ) : null}
                       </div>
-                      <span
-                        className={`${startLocked ? 'inline-flex' : 'hidden'} h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border ${
-                          startLocked
-                            ? 'border-amber-200 bg-amber-50 text-amber-600'
-                            : 'border-slate-200 bg-slate-50 text-slate-300'
-                        }`}
-                        title={startLocked ? '開始日期已有依賴關係鎖定' : '開始日期沒有依賴關係鎖定'}
-                      >
-                        {startLocked ? <Lock size={15} /> : <Unlock size={15} />}
-                      </span>
                     </div>
                     </label>
 
@@ -1532,10 +1584,10 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
                           value={endDate}
                           onChange={(event) => handleDateChange('endDate', event)}
                           min={startDate || undefined}
-                          readOnly={!canEditTask || endLocked || node.isDurationLocked}
-                          className={`h-8 w-full min-w-0 rounded-md rounded-r-none border-r-0 px-2 text-sm text-transparent outline-none transition focus:ring-2 sm:text-slate-700 lg:w-[8rem] lg:flex-none ${
-                            !canEditTask || endLocked || node.isDurationLocked
-                              ? 'border border-dashed border-slate-300 bg-slate-50 sm:text-slate-500 pointer-events-none'
+                          readOnly={isEndDateReadOnly}
+                          className={`task-details-date-native-input h-8 w-full min-w-0 rounded-md rounded-r-none border-r-0 px-2 text-sm text-transparent outline-none transition focus:ring-2 lg:w-[8rem] lg:flex-none ${
+                            isEndDateReadOnly
+                              ? 'border border-dashed border-slate-300 bg-slate-50 pointer-events-none'
                               : isDueToday
                               ? 'border border-orange-300 bg-orange-50 sm:text-orange-700 shadow-[0_0_0_1px_rgba(251,146,60,0.25)] focus:border-orange-400 focus:ring-orange-100'
                               : 'border border-slate-200 focus:border-blue-400 focus:ring-blue-100'
@@ -1543,18 +1595,17 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
                         />
                         <span
                           aria-hidden="true"
-                          className="pointer-events-none absolute inset-y-0 left-2 right-5 flex items-center whitespace-nowrap text-[11px] font-normal text-slate-700 sm:hidden"
+                          className={`pointer-events-none absolute inset-y-0 left-2 ${isEndDateReadOnly ? 'right-8' : 'right-5'} flex items-center whitespace-nowrap text-[11px] font-normal sm:text-sm ${isEndDateReadOnly ? 'text-slate-500' : 'text-slate-700'}`}
                           data-task-details-mobile-date-value="true"
                         >
-                          {formatTaskDateForMobile(endDate)}
+                          {formatTaskDateForDisplay(endDate)}
                         </span>
+                        {isEndDateReadOnly ? (
+                          <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-slate-400" role="img" aria-label="結束日期已鎖定">
+                            <Lock size={14} />
+                          </span>
+                        ) : null}
                       </div>
-                      <span
-                        className={`${endLocked ? 'inline-flex' : 'hidden'} h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-amber-200 bg-amber-50 text-amber-600`}
-                        title="結束日期已有依賴關係鎖定"
-                      >
-                        <Lock size={15} />
-                      </span>
                     </div>
                   </label>
                   </div>
@@ -1562,25 +1613,12 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
                     className={`col-start-4 ml-0 inline-flex h-8 shrink-0 items-center overflow-hidden rounded-l-none rounded-r-md border ${
                       node.isDurationLocked
                         ? 'border-amber-200 bg-amber-50/70'
-                        : 'border-slate-200 bg-slate-50'
+                        : 'border-slate-200 bg-white'
                     }`}
-                    title={node.isDurationLocked ? '鎖定工期：自動推算結束日期' : '未鎖定工期：日期獨立計算'}
+                    title={node.isDurationLocked ? '固定工期：自動推算結束日期' : '自動計算工期：日期獨立計算'}
                     data-task-details-duration-inline="true"
                     data-task-details-mobile-duration="true"
                   >
-                    <button
-                      type="button"
-                      onClick={handleToggleDurationLock}
-                      disabled={!canEditTask}
-                      className={`inline-flex h-full w-8 flex-shrink-0 items-center justify-center border-r transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-100 ${
-                        node.isDurationLocked
-                          ? 'border-amber-200 text-amber-600 hover:bg-amber-100'
-                          : 'border-slate-200 text-slate-400 hover:bg-slate-100'
-                      }`}
-                      title={node.isDurationLocked ? '鎖定工期：自動推算結束日期' : '非鎖定：日期獨立計算'}
-                    >
-                      {node.isDurationLocked ? <Lock size={15} /> : <Unlock size={15} />}
-                    </button>
                     <input
                       type="number"
                       min="0"
@@ -1640,6 +1678,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
                         membersLoading={membersLoading}
                         disabled={!canAssignTask}
                         fullSummary
+                        showIcon={false}
                         onChange={handleAssignmentChange}
                       />
                     </div>

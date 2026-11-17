@@ -57,32 +57,59 @@ export const requestTaskDetailsNavigation = (detail: Omit<TaskDetailsNavigationE
  * creates a second overlay.
  */
 export const useTaskDetailsNavigation = () => {
-  const [entries, setEntries] = React.useState<TaskDetailsNavigationEntry[]>([]);
-  const current = entries[entries.length - 1] || null;
+  const [navigation, setNavigation] = React.useState<{ entries: TaskDetailsNavigationEntry[]; index: number }>({
+    entries: [],
+    index: -1,
+  });
+  const { entries, index } = navigation;
+  const current = entries[index] || null;
 
   const openRoot = React.useCallback((entry: TaskDetailsNavigationEntry) => {
-    setEntries(openTaskDetailsNavigation(entry));
+    setNavigation({ entries: openTaskDetailsNavigation(entry), index: 0 });
   }, []);
 
   const push = React.useCallback((entry: TaskDetailsNavigationEntry) => {
-    setEntries((currentEntries) => pushTaskDetailsNavigation(currentEntries, entry));
+    setNavigation(currentNavigation => {
+      const currentEntry = currentNavigation.entries[currentNavigation.index];
+      if (currentEntry?.taskId === entry.taskId
+        && currentEntry.trackingReferenceId === entry.trackingReferenceId) {
+        return currentNavigation;
+      }
+      const nextEntries = currentNavigation.entries.slice(0, currentNavigation.index + 1);
+      nextEntries.push(entry);
+      return { entries: nextEntries, index: nextEntries.length - 1 };
+    });
   }, []);
 
-  const pop = React.useCallback(() => {
-    const result = popTaskDetailsNavigation(entries);
-    setEntries(result.entries);
-    return result.previous;
-  }, [entries]);
+  const back = React.useCallback(() => {
+    if (index <= 0) return null;
+    const previous = entries[index - 1] || null;
+    setNavigation(currentNavigation => currentNavigation.index > 0
+      ? { ...currentNavigation, index: currentNavigation.index - 1 }
+      : currentNavigation);
+    return previous;
+  }, [entries, index]);
 
-  const clear = React.useCallback(() => setEntries(clearTaskDetailsNavigation()), []);
+  const forward = React.useCallback(() => {
+    if (index < 0 || index >= entries.length - 1) return null;
+    const next = entries[index + 1] || null;
+    setNavigation(currentNavigation => currentNavigation.index < currentNavigation.entries.length - 1
+      ? { ...currentNavigation, index: currentNavigation.index + 1 }
+      : currentNavigation);
+    return next;
+  }, [entries, index]);
+
+  const clear = React.useCallback(() => setNavigation({ entries: clearTaskDetailsNavigation(), index: -1 }), []);
 
   return {
     entries,
     current,
-    canGoBack: entries.length > 1,
+    canGoBack: index > 0,
+    canGoForward: index >= 0 && index < entries.length - 1,
     openRoot,
     push,
-    pop,
+    back,
+    forward,
     clear,
   };
 };

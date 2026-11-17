@@ -421,7 +421,7 @@ async (page) => {
     });
     const goalHierarchyGeometry = await readHierarchyGeometry('goal');
     const capabilityProbe = {
-      progressRows: await goalView.locator('[data-goal-task-progress]').count(),
+      progressRows: await goalView.locator('[data-task-progress-indicator="true"]').count(),
       tagVisible: await goalView.getByText('OKR', { exact: true }).isVisible().catch(() => false),
       assigneeControls: await goalView.locator('[data-goal-planning-control="assignee"]').count(),
       assigneeIcons: await goalView.locator('[data-goal-planning-control="assignee"] [data-task-assignment-trigger-icon="true"]').count(),
@@ -430,7 +430,7 @@ async (page) => {
       endDateControls: await goalView.locator('[data-goal-planning-control="end-date"]').count(),
       durationControls: await goalView.locator('[data-goal-planning-control="duration"]').count(),
     };
-    record('B12-goal-omits-progress-and-decorative-assignee-icons-while-retaining-tags-and-planning-controls', capabilityProbe.progressRows === 0 && capabilityProbe.assigneeIcons === 0 && capabilityProbe.tagVisible && capabilityProbe.assigneeControls === 4 && capabilityProbe.statusControls === 4 && capabilityProbe.startDateControls === 4 && capabilityProbe.endDateControls === 4 && capabilityProbe.durationControls === 4, capabilityProbe);
+    record('B12-goal-shows-progress-tags-and-planning-controls', capabilityProbe.progressRows === 4 && capabilityProbe.assigneeIcons === 0 && capabilityProbe.tagVisible && capabilityProbe.assigneeControls === 4 && capabilityProbe.statusControls === 4 && capabilityProbe.startDateControls === 4 && capabilityProbe.endDateControls === 4 && capabilityProbe.durationControls === 4, capabilityProbe);
     const childRow = goalView.locator('[data-goal-task-row-id="dev116-child"]');
     await childRow.getByLabel('修改「DEV116 子任務」狀態').selectOption('in_progress');
     const assignmentPicker = childRow.locator('[data-task-assignment-picker="true"]');
@@ -451,30 +451,20 @@ async (page) => {
     record('B13-goal-editor-controls-update-the-visible-canonical-task', goalEditProbe.status === 'in_progress' && goalEditProbe.assignee.trim() !== '未指派' && goalEditProbe.startDate === '2026-09-02' && goalEditProbe.endDate === '2026-09-06' && goalEditProbe.duration === '4', goalEditProbe);
     await page.screenshot({ path: `${OUTPUT_DIR}/V19-goal-capabilities-1440x900.png`, fullPage: false });
     result.screenshots.push(`${OUTPUT_DIR}/V19-goal-capabilities-1440x900.png`);
-    await page.locator('[data-mode-switcher-trigger]').click();
-    await page.locator('[data-mode-switcher-value="list"]').click();
-    const listChildRow = page.locator('[data-task-drag-surface-kind="wbs-list-row"][data-task-id="dev116-child"]').first();
-    await listChildRow.waitFor({ state: 'visible', timeout: 10000 });
-    const listReadback = {
-      progressRows: await listChildRow.locator('[data-task-progress-indicator="true"]').count(),
-      assigneeIcons: await listChildRow.locator('[data-task-assignment-picker="true"] [data-task-assignment-trigger-icon="true"]').count(),
-      status: await listChildRow.locator('select[title="修改狀態"]').inputValue(),
-      assignee: await listChildRow.locator('[data-task-assignment-picker="true"] button').first().textContent(),
-      startDate: await listChildRow.locator('[data-wbs-list-date-control="start"] input').inputValue(),
-      endDate: await listChildRow.locator('[data-wbs-list-date-control="end"] input').inputValue(),
-      duration: await listChildRow.locator('[data-wbs-list-duration-control="true"] input').inputValue(),
-    };
-    record('B14-list-keeps-progress-and-assignee-icon-while-reading-the-same-canonical-task-after-goal-edits', listReadback.progressRows === 1 && listReadback.assigneeIcons === 1 && listReadback.status === 'in_progress' && listReadback.assignee.trim() === goalEditProbe.assignee.trim() && listReadback.startDate === '2026-09-02' && listReadback.endDate === '2026-09-06' && listReadback.duration === '4', listReadback);
-    const listHierarchyGeometry = await readHierarchyGeometry('list');
-    const hierarchyParity = {
-      goal: goalHierarchyGeometry,
-      list: listHierarchyGeometry,
-      rowHeightDifference: goalHierarchyGeometry.parent && listHierarchyGeometry.parent ? Math.abs(goalHierarchyGeometry.parent.rowHeight - listHierarchyGeometry.parent.rowHeight) : null,
-    };
-    record('V20-goal-compact-owned-tree-and-list-shared-default-geometry', Math.abs(goalHierarchyGeometry.titleDelta - 10.4) <= 0.75 && Math.abs(listHierarchyGeometry.titleDelta - 6) <= 0.75 && goalHierarchyGeometry.parent.indentToken === '10.4px' && listHierarchyGeometry.parent.indentToken === '6px' && Math.abs(goalHierarchyGeometry.parent.rowHeight - 32) <= 1 && Math.abs(listHierarchyGeometry.parent.rowHeight - 20) <= 1, hierarchyParity);
-    await page.locator('[data-mode-switcher-trigger]').click();
-    await page.locator('[data-mode-switcher-value="goal"]').click();
+    await page.evaluate(() => localStorage.setItem('projed-last-view', 'list'));
+    await page.reload({ waitUntil: 'networkidle' });
     await goalView.waitFor({ state: 'visible', timeout: 10000 });
+    const restored = {
+      mode: await page.evaluate(() => localStorage.getItem('projed-last-view')),
+      progressRows: await childRow.locator('[data-task-progress-indicator="true"]').count(),
+      status: await childRow.getByLabel('修改「DEV116 子任務」狀態').inputValue(),
+      assignee: await assignmentPicker.getByRole('button').textContent(),
+      startDate: await childRow.getByLabel('修改「DEV116 子任務」開始日期').inputValue(),
+      endDate: await childRow.getByLabel('修改「DEV116 子任務」結束日期').inputValue(),
+      duration: await childRow.getByLabel('修改「DEV116 子任務」工期天數').inputValue(),
+    };
+    record('B14-legacy-list-preference-restores-goal-with-edits', restored.mode === 'goal' && restored.progressRows === 1 && restored.status === goalEditProbe.status && restored.assignee.trim() === goalEditProbe.assignee.trim() && restored.startDate === goalEditProbe.startDate && restored.endDate === goalEditProbe.endDate && restored.duration === goalEditProbe.duration, restored);
+    record('V20-goal-compact-tree-geometry', Math.abs(goalHierarchyGeometry.titleDelta - 10.4) <= 0.75 && goalHierarchyGeometry.parent.indentToken === '10.4px' && Math.abs(goalHierarchyGeometry.parent.rowHeight - 32) <= 1, goalHierarchyGeometry);
     const dragSource = goalView.locator('[data-goal-task-row-id="dev116-sibling"] [data-goal-task-id="dev116-sibling"]');
     const dragTarget = goalView.locator('[data-goal-task-row-id="dev116-parent"] [data-goal-task-id="dev116-parent"]');
     const sourceBox = await dragSource.boundingBox();

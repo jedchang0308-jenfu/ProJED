@@ -28,7 +28,6 @@ import { useCalendarStore } from './store/useCalendarStore';
 import dayjs from 'dayjs';
 import { supabaseWorkspaceService } from './services/supabase/projedService';
 import HomeView from './components/HomeView';
-// ListView 已由 WbsListView 取代，import 移除
 // CardModal 已在 Phase B 移除，改為在清單視圖行內編輯
 import GlobalDialog from './components/GlobalDialog';
 import { AppUpdatePrompt } from './components/AppUpdatePrompt';
@@ -51,9 +50,6 @@ const RecordsView = lazy(() => import('./components/Records/RecordsView'));
 const SettingsView = lazy(() => import('./components/SettingsView'));
 const RecycleBinView = lazy(() => import('./components/RecycleBinView'));
 const MindMapView = lazy(() => import('./components/MindMap/MindMapView'));
-const WbsListView = lazy(() =>
-  import('./components/Wbs/WbsListView').then(module => ({ default: module.WbsListView })),
-);
 const GoalView = lazy(() => import('./components/GoalView'));
 
 const formatBoardInviteAcceptError = (inviteError: unknown): string => {
@@ -336,9 +332,9 @@ function AppContent() {
   const renderContent = () => {
     switch (currentView) {
       case 'home':        return <HomeView />;
-      case 'list':        return <TaskInteractionScope hostMode="list"><WbsListView boardId={activeBoardId || ''} /></TaskInteractionScope>; // 攔截原本的 ListView
       case 'mindmap':     return <TaskInteractionScope hostMode="mindmap"><MindMapView /></TaskInteractionScope>;
       case 'board':       return <TaskInteractionScope hostMode="board"><BoardView /></TaskInteractionScope>;
+      case 'list':
       case 'goal':        return <TaskInteractionScope hostMode="goal"><GoalView boardId={activeBoardId || ''} /></TaskInteractionScope>;
       case 'gantt':       return <TaskInteractionScope hostMode="gantt"><GanttView /></TaskInteractionScope>;
       case 'calendar':    return <TaskInteractionScope hostMode="calendar"><CalendarView /></TaskInteractionScope>;

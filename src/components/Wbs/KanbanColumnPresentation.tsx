@@ -55,7 +55,7 @@ export const KanbanColumnPresentation: React.FC<KanbanColumnPresentationProps> =
   <>
     <div
       {...headerProps}
-      className={`group mobile-pan-item flex flex-col gap-1 bg-white px-[10px] py-[8px] transition-colors hover:bg-slate-50 ${headerClassName}`}
+      className={`group mobile-pan-item flex flex-col gap-[3px] px-[7px] pt-[6px] pb-[8pt] transition-colors ${headerClassName}`}
     >
       {placeholder ? (
         <div
@@ -114,7 +114,7 @@ export const KanbanColumnPresentation: React.FC<KanbanColumnPresentationProps> =
     <div
       ref={bodyRef}
       {...bodyProps}
-      className={`scroll-container mobile-pan-surface flex-1 overflow-y-auto rounded-md px-[8px] py-[8px] transition-[background-color,box-shadow] duration-100 mx-0 mb-0 bg-surface-panel ${bodyClassName}`}
+      className={`scroll-container mobile-pan-surface flex-1 overflow-y-auto px-[8px] pt-0 pb-[5px] transition-[background-color,box-shadow] duration-100 mx-0 mb-0 ${bodyClassName}`}
     >
       {children}
       <div className="mobile-pan-rail" data-mobile-pan-rail="kanban-column" aria-hidden="true" />

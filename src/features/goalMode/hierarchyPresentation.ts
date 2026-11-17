@@ -83,8 +83,8 @@ export const buildGoalHierarchyDecorations = ({
   renderedItems,
   fullyExpandedItems,
 }: Readonly<{
-  renderedItems: readonly HierarchicalTaskViewItem[];
-  fullyExpandedItems: readonly HierarchicalTaskViewItem[];
+  renderedItems: readonly HierarchyItem[];
+  fullyExpandedItems: readonly HierarchyItem[];
 }>): ReadonlyMap<string, GoalHierarchyDecoration> => {
   if (!hasUniqueIdsAndValidLevels(renderedItems) || !hasUniqueIdsAndValidLevels(fullyExpandedItems)) return new Map();
   if (!hasValidDfsParents(fullyExpandedItems) || !hasValidDfsParents(renderedItems)) return new Map();

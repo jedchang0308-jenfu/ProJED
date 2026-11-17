@@ -4,10 +4,8 @@ import {
   ChevronRight,
   Columns,
   LineChart,
-  ListChecks,
   Network,
   Redo2,
-  Sparkles,
   Target,
   Undo2,
 } from 'lucide-react';
@@ -205,7 +203,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
   const modeSwitcherOptions: ModeSwitcherOption<ViewMode>[] = [
     { value: 'board', label: '看板模式', icon: <Columns size={13} /> },
-    { value: 'list', label: '清單模式', icon: <ListChecks size={13} /> },
     { value: 'mindmap', label: '心智圖模式', icon: <Network size={13} /> },
     { value: 'gantt', label: '甘特圖模式', icon: <LineChart size={13} /> },
     {
@@ -214,7 +211,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       icon: <CalendarDays size={13} />,
       title: '日曆功能開發中，內容可能尚未穩定',
     },
-    { value: 'goal', label: 'OKR模式', icon: <Target size={13} /> },
+    { value: 'goal', label: '清單模式', icon: <Target size={13} /> },
   ];
   const visibleModeSwitcherOptions = isMeetingMode
     ? modeSwitcherOptions.filter(option => isMeetingContinuityView(option.value))
@@ -461,12 +458,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                 ? 'border-primary-300 bg-primary-50 hover:border-primary-400 hover:bg-primary-100'
                 : 'hover:border-primary-400 hover:bg-primary-50',
             )}
-            title="問AI"
-            aria-label="問AI"
+            title="AI"
+            aria-label="AI"
             data-ai-analysis-open="true"
           >
-            <Sparkles size={14} className={isRagOpen ? 'text-primary-600' : 'text-slate-400'} />
-            <span>問AI</span>
+            <span>AI</span>
           </button>
 
           <AppMoreMenu
