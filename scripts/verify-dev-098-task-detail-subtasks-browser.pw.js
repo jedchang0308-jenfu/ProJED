@@ -90,6 +90,14 @@ async (page) => {
   };
   const placement = id => page.locator('[data-task-surface-frame="true"][data-task-placement-id="' + id + '"]').last();
   const openPlacement = async id => {
+    const viewport = page.viewportSize();
+    if (viewport && viewport.width <= 640) {
+      const collapseWorkbench = page.locator('[data-task-workbench-collapse-toggle="true"]');
+      if (await collapseWorkbench.count() && await collapseWorkbench.isVisible()) {
+        await collapseWorkbench.click();
+        await page.locator('[data-task-workbench-panel="true"]').waitFor({ state: 'detached', timeout: 5000 });
+      }
+    }
     const frame = placement(id);
     await frame.waitFor({ state: 'visible', timeout: 15000 });
     await frame.locator(':scope > [data-task-surface-source="true"]').first().click({ force: true });
@@ -136,10 +144,14 @@ async (page) => {
     const modal = await openPlacement('primary:dev098-parent');
     const section = modal.locator('[data-task-details-subtasks="true"]');
     if (await section.count() !== 1) throw new Error('subtask section missing');
-    const count = await section.locator('[data-task-details-subtask-count="true"]').innerText();
-    if (count !== '2') throw new Error('direct child count should be 2, got ' + count);
+    const currentLocation = section.locator('[aria-current="location"]');
+    if (await currentLocation.count() !== 1 || !(await currentLocation.innerText()).includes('現在任務位置')) throw new Error('current task location missing');
+    const directChildren = section.locator('[data-task-placement-tree="true"]').first().locator(':scope > [data-task-surface-frame="true"]');
+    const count = await directChildren.count();
+    if (count !== 2) throw new Error('task map should render two direct children, got ' + count);
+    if (await section.locator('[data-task-placement-id="primary:dev098-grandchild"]').count() !== 1) throw new Error('expanded task map is missing its nested descendant');
     if (await section.locator('[data-task-details-subtask-empty="true"]').count()) throw new Error('non-empty parent rendered empty state');
-    return { expanded: await section.locator('[data-task-details-subtask-toggle="true"]').getAttribute('aria-expanded'), count };
+    return { currentLocation: true, directChildCount: count, nestedDescendantVisible: true };
   });
   await run('B03-single-modal-parent-navigation', async () => {
     await close().catch(() => {});
@@ -495,9 +507,12 @@ async (page) => {
     if (await modal.getByText('拖曳到此處新增為直屬子任務', { exact: true }).count() !== 0) throw new Error('root drop helper row was not removed');
     const rootDropClass = await rootDrop.getAttribute('class');
     if (rootDropClass?.includes('border') || rootDropClass?.includes('rounded')) throw new Error('root drop target still renders a container');
-    await modal.locator('[data-task-details-subtask-toggle="true"]').click();
-    if (await modal.locator('[data-task-details-subtask-panel="true"]').count() !== 0) throw new Error('collapse did not hide panel');
-    await modal.locator('[data-task-details-subtask-toggle="true"]').click();
+    const nestedRow = modal.locator('[data-task-placement-id="primary:dev098-grandchild"]');
+    if (await nestedRow.count() !== 1) throw new Error('mobile task map did not render its nested row');
+    await modal.getByRole('button', { name: '收合 子任務 P1' }).click();
+    if (await nestedRow.count() !== 0) throw new Error('mobile task map branch did not collapse');
+    await modal.getByRole('button', { name: '展開 子任務 P1' }).click();
+    if (await nestedRow.count() !== 1) throw new Error('mobile task map branch did not expand');
     return { viewport: [390, 844], collapsedAndExpanded: true, rootDropHelperRemoved: true, rootDropContainerRemoved: true };
   });
 
