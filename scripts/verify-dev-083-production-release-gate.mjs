@@ -18,6 +18,7 @@ import {
   buildReleaseRuntimeEnv,
   runRelease,
   runDirectRelease,
+  matchesReusableTestViteProcess,
   summarizeLiveChannel,
   verifyRemoteArtifact,
 } from './release/production-release.mjs';
@@ -73,6 +74,21 @@ try {
       if (key in child) throw new Error(`${key} survived release runtime sanitization`);
     }
     if (child.PROJED_RELEASE_PROFILE !== 'production') throw new Error('release runtime profile is missing');
+  });
+  await check('local-feature-smoke-reuses-only-matching-test-vite-owner', () => {
+    const owner = {
+      commandLine: '"node" "C:\\VIBE CODING\\ProJED\\ProJED\\node_modules\\.bin\\..\\vite\\bin\\vite.js" --mode test --host 127.0.0.1 --port 1040',
+      localAddress: '127.0.0.1', port: 1040, rootDir: root,
+    };
+    if (!matchesReusableTestViteProcess(owner)) throw new Error('matching same-repository test Vite process was rejected');
+    for (const invalid of [
+      { ...owner, commandLine: owner.commandLine.replace('--mode test', '--mode production') },
+      { ...owner, commandLine: owner.commandLine.replace('C:\\VIBE CODING\\ProJED\\ProJED', 'C:\\other\\repo') },
+      { ...owner, commandLine: owner.commandLine.replace('--port 1040', '--port 1041') },
+      { ...owner, localAddress: '0.0.0.0' },
+    ]) {
+      if (matchesReusableTestViteProcess(invalid)) throw new Error('foreign or non-test Vite process was accepted for reuse');
+    }
   });
   await check('credential-rotation-evidence-modes', () => {
     const attested = classifyOldCredentialEvidence({ credentialProvided: false, manualRotationConfirmed: true, envName: 'OLD_KEY' });
@@ -332,6 +348,25 @@ try {
     assert.equal(receipt.feature.environment, 'isolated-vite-test-mode');
     assert.equal(receipt.feature.sourceCommit, receipt.source.commit);
     assert.deepEqual(receipt.feature.testSummary, { pass: 16, fail: 0, diagnostics: 0 });
+  });
+  await check('direct-local-feature-smoke-accepts-verified-runtime-owner-evidence', async () => {
+    const f = directFixture();
+    f.services.runLocalTestModeFeatureSmoke = async ({ manifest: candidate, filename }) => {
+      assert.equal(candidate, f.manifest);
+      assert.equal(filename, path.resolve(root, featureSmoke));
+      f.calls.push('feature-local');
+      return {
+        ok: true, environment: 'same-repository-vite-test-mode', sourceCommit: f.manifest.source.commit,
+        expectedReleaseId: f.manifest.releaseId, testSummary: { pass: 16, fail: 0, diagnostics: 0 },
+        runtimeOwnership: 'reused-verified-process', processPid: 27172, port: 1040,
+      };
+    };
+    const result = await runDirectRelease({ ...directArgs, feature_smoke: featureSmoke, feature_smoke_local: true }, f.services);
+    assert.equal(result.complete, true);
+    const receipt = JSON.parse(fs.readFileSync(f.evidenceFile, 'utf8'));
+    assert.equal(receipt.feature.environment, 'same-repository-vite-test-mode');
+    assert.equal(receipt.feature.processPid, 27172);
+    assert.equal(receipt.feature.port, 1040);
   });
   await check('direct-shell-only-is-feature-pending', async () => {
     const f = directFixture();
