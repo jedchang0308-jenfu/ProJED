@@ -18,6 +18,7 @@ import {
   buildReleaseRuntimeEnv,
   runRelease,
   runDirectRelease,
+  buildBrowserSmokeUrl,
   matchesReusableTestViteProcess,
   summarizeLiveChannel,
   verifyRemoteArtifact,
@@ -89,6 +90,12 @@ try {
     ]) {
       if (matchesReusableTestViteProcess(invalid)) throw new Error('foreign or non-test Vite process was accepted for reuse');
     }
+  });
+  await check('local-test-smoke-url-is-bound-by-receipt-not-query', () => {
+    const local = buildBrowserSmokeUrl({ baseUrl: 'http://localhost:1040/', releaseId: 'local-release-id', runtimeProfile: 'local-test' });
+    if (local !== 'http://localhost:1040/') throw new Error('local test smoke URL added release query parameters');
+    const production = new URL(buildBrowserSmokeUrl({ baseUrl: 'https://projed-cc78d.web.app/', releaseId: 'production-release-id' }));
+    if (production.searchParams.get('dev083ReleaseId') !== 'production-release-id') throw new Error('production browser smoke release identity query is missing');
   });
   await check('credential-rotation-evidence-modes', () => {
     const attested = classifyOldCredentialEvidence({ credentialProvided: false, manualRotationConfirmed: true, envName: 'OLD_KEY' });

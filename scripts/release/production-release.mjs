@@ -105,14 +105,19 @@ export const buildReleaseRuntimeEnv = (parentEnv = process.env) => buildSanitize
   extra: { PROJED_RELEASE_PROFILE: 'production' },
 });
 
+export const buildBrowserSmokeUrl = ({ baseUrl, releaseId, runtimeProfile = 'production' }) => {
+  const url = new URL(baseUrl);
+  if (runtimeProfile !== 'local-test') url.searchParams.set('dev083ReleaseId', releaseId);
+  return url.toString();
+};
+
 const runBrowserSmokeAtUrl = async ({ baseUrl, releaseId, sessionPrefix, filename = path.join(root, 'scripts', 'verify-release-browser-smoke.pw.js'), runtimeProfile = 'production', artifactWindowKey, artifactPath }) => {
   if (Boolean(artifactWindowKey) !== Boolean(artifactPath)) throw new Error('DEV-083 browser artifact capture requires both a window key and output path.');
-  const url = new URL(baseUrl);
-  url.searchParams.set('dev083ReleaseId', releaseId);
+  const url = buildBrowserSmokeUrl({ baseUrl, releaseId, runtimeProfile });
   const env = runtimeProfile === 'local-test'
     ? buildSanitizedChildEnv(process.env, { extra: { NODE_ENV: 'test' } })
     : buildReleaseRuntimeEnv(process.env);
-  const runnerArgs = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(root, 'scripts', 'run-playwright-code.ps1'), '-SessionPrefix', sessionPrefix, '-Filename', filename, '-OutputDirectory', path.join(root, 'output', 'playwright', sessionPrefix), '-BaseUrl', url.toString()];
+  const runnerArgs = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(root, 'scripts', 'run-playwright-code.ps1'), '-SessionPrefix', sessionPrefix, '-Filename', filename, '-OutputDirectory', path.join(root, 'output', 'playwright', sessionPrefix), '-BaseUrl', url];
   if (artifactWindowKey && artifactPath) runnerArgs.push('-ArtifactWindowKey', artifactWindowKey, '-ArtifactPath', artifactPath);
   const smoke = await run('powershell.exe', runnerArgs, { cwd: root, env });
   if (smoke.code !== 0) throw new Error(`DEV-083 browser smoke failed: ${redact((smoke.stderr || smoke.stdout).trim().slice(-1200))}`);
@@ -193,10 +198,8 @@ export const matchesReusableTestViteProcess = ({ commandLine, localAddress, port
 
 const inspectReusableTestViteProcess = async () => {
   if (process.platform !== 'win32') return null;
-  const escapedRoot = root.replaceAll("'", "''");
   const script = [
     "$ErrorActionPreference = 'Stop'",
-    `$rootPath = '${escapedRoot}'`,
     "$listeners = @(Get-NetTCPConnection -State Listen -LocalPort 1040 -ErrorAction SilentlyContinue)",
     "if ($listeners.Count -eq 0) { @{ status = 'unbound' } | ConvertTo-Json -Compress; exit 0 }",
     "$rows = foreach ($listener in $listeners) { $process = Get-CimInstance Win32_Process -Filter \"ProcessId = $($listener.OwningProcess)\"; [pscustomobject]@{ pid = [int]$listener.OwningProcess; port = [int]$listener.LocalPort; localAddress = [string]$listener.LocalAddress; commandLine = [string]$process.CommandLine } }",
