@@ -117,12 +117,16 @@ async (page) => {
     const modal = document.querySelector('[data-task-details-modal="true"]');
     const titleInput = modal?.querySelector('[data-task-details-title-input="true"]');
     const path = modal?.querySelector('[data-task-details-parent-path="true"]');
+    const toolbar = path?.closest('[data-task-details-navigation-row="true"]');
+    const panel = toolbar?.closest('[data-task-details-subtask-panel="true"]');
+    const current = panel?.querySelector('[aria-current="location"] strong');
     const names = Array.from(path?.querySelectorAll('[data-task-details-parent-name="true"]') || [])
       .map((element) => (element.textContent || '').trim())
       .filter(Boolean);
     const titleRect = titleInput?.getBoundingClientRect();
     const pathRect = path?.getBoundingClientRect();
-    const modalBox = modal?.querySelector('.shadow-2xl')?.getBoundingClientRect();
+    const toolbarRect = toolbar?.getBoundingClientRect();
+    const currentRect = current?.getBoundingClientRect();
     const visibleAlerts = Array.from(document.querySelectorAll('.inline-error,[role="alert"]'))
       .filter((element) => {
         const rect = element.getBoundingClientRect();
@@ -139,9 +143,11 @@ async (page) => {
       names,
       titleRect: titleRect ? { top: titleRect.top, bottom: titleRect.bottom, left: titleRect.left, right: titleRect.right } : null,
       pathRect: pathRect ? { top: pathRect.top, bottom: pathRect.bottom, left: pathRect.left, right: pathRect.right, height: pathRect.height } : null,
-      pathClassName: path?.getAttribute('class') || '',
-      pathLineHeight: path ? getComputedStyle(path).lineHeight : '',
-      modalBox: modalBox ? { left: modalBox.left, right: modalBox.right, width: modalBox.width } : null,
+      toolbarRect: toolbarRect ? { top: toolbarRect.top, bottom: toolbarRect.bottom, right: toolbarRect.right } : null,
+      currentTop: currentRect?.top,
+      currentLabel: current?.textContent || '',
+      rowHeights: Array.from(path?.querySelectorAll('[data-task-details-parent-name="true"]') || [])
+        .map(element => element.getBoundingClientRect().height),
       visibleAlerts,
     };
   });
@@ -157,13 +163,14 @@ async (page) => {
   assert(!result.pathText.startsWith('位置') && result.pathAriaLabel === '任務完整位置', 'parent path should omit the redundant visible position label while keeping accessible context', result);
   assert(result.titleRect && result.pathRect && result.pathRect.top >= result.titleRect.bottom - 1, 'parent path should render below the title field', result);
   assert(
-    result.pathRect && result.pathRect.height <= 20 && result.pathClassName.includes('overflow-hidden') && result.pathLineHeight === '16px',
-    'parent path should use a compact single-line presentation',
+    result.pathRect && result.rowHeights.length > 0 && result.pathRect.height === Math.max(...result.rowHeights),
+    'desktop parent path should use a single row',
     result,
   );
   assert(
-    result.modalBox && result.pathRect && result.pathRect.right <= result.modalBox.right - 40,
-    'parent path should stay inside the modal header',
+    result.toolbarRect && result.pathRect && result.pathRect.right <= result.toolbarRect.right
+      && result.currentTop >= result.toolbarRect.bottom && result.currentLabel === '現在任務位置',
+    'parent path should stay in the task map toolbar above the current task marker',
     result,
   );
   assert(result.visibleAlerts.length === 0, 'task details parent path view should not show runtime alerts', result);

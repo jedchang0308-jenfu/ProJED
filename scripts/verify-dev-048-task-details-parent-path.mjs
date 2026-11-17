@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../src/components/TaskDetailsModal.tsx', import.meta.url), 'utf8');
+const taskMapSource = readFileSync(new URL('../src/components/TaskDetailsSubtaskSection.tsx', import.meta.url), 'utf8');
 const hierarchySource = readFileSync(new URL('../src/utils/taskHierarchy.ts', import.meta.url), 'utf8');
 
 const checks = [
@@ -11,7 +12,7 @@ const checks = [
   {
     name: 'ancestor path is built from parentId',
     pass: source.includes("import { buildAncestorPath } from '../utils/taskHierarchy';") &&
-      source.includes('const ancestorPath = buildAncestorPath(node, nodes);') &&
+      source.includes('return buildAncestorPath(node, nodes).map(') &&
       hierarchySource.includes('let currentParentId: string | null = node.parentId;'),
   },
   {
@@ -26,13 +27,13 @@ const checks = [
   },
   {
     name: 'parent path has stable DOM hooks for browser QC',
-    pass: source.includes('data-task-details-parent-path="true"') &&
-      source.includes('data-task-details-parent-name="true"'),
+    pass: taskMapSource.includes('data-task-details-parent-path="true"') &&
+      taskMapSource.includes('data-task-details-parent-name="true"'),
   },
   {
     name: 'long parent names stay inspectable with title fallback',
-    pass: source.includes("title={ancestor.title || '未命名任務'}") &&
-      source.includes("ancestor.title || '未命名任務'"),
+    pass: taskMapSource.includes('title={taskTitle}') &&
+      taskMapSource.includes("ancestor.task.title || '未命名任務'"),
   },
 ];
 

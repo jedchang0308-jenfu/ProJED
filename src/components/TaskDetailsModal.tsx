@@ -1,6 +1,6 @@
 import React from 'react';
 import dayjs from 'dayjs';
-import { AlertCircle, ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, LoaderCircle, Lock, X } from 'lucide-react';
+import { AlertCircle, CheckCircle2, LoaderCircle, Lock, X } from 'lucide-react';
 import { useWbsStore, type UpdateNodeDispatchResult } from '../store/useWbsStore';
 import { useMemberStore } from '../store/useMemberStore';
 import useRecordStore from '../store/useRecordStore';
@@ -11,7 +11,7 @@ import useBoardStore from '../store/useBoardStore';
 import TaskAssignmentPicker from './TaskAssignmentPicker';
 import { MANUAL_TASK_STATUSES, normalizeManualTaskStatus, TASK_STATUS_LABELS } from '../utils/taskStatus';
 import { buildAncestorPath } from '../utils/taskHierarchy';
-import { primaryPlacementId } from '../features/taskTracking/model';
+import { isPrimaryPlacementId, PRIMARY_PLACEMENT_PREFIX, primaryPlacementId } from '../features/taskTracking/model';
 import { getTaskStatusFieldClass } from './ui/taskStatusStyles';
 import TaskDetailNoteField from './TaskNotes/TaskDetailNoteField';
 import {
@@ -36,7 +36,7 @@ import {
   getTaskDetailsModalMinimumSize,
   type TaskDetailsModalViewport,
 } from './taskDetailsModalSizing';
-import { TaskDetailsSubtaskSection } from './TaskDetailsSubtaskSection';
+import { TaskDetailsSubtaskSection, type TaskMapAncestor } from './TaskDetailsSubtaskSection';
 import { resolveTaskDetailsPersistenceDecision, TASK_DETAILS_NAVIGATE_EVENT } from './taskDetailsNavigation';
 import { useTaskMeetingQuickNotes } from '../hooks/useTaskMeetingQuickNotes';
 import TaskMeetingQuickNoteSection from './TaskNotes/TaskMeetingQuickNoteSection';
@@ -980,34 +980,45 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
     return () => window.clearTimeout(timer);
   }, [canEditTask, canonicalNotes, noteEdit.draft, notes, notesConflict, persistNoteDraft]);
 
-  const parentPlacementId = trackingReference?.parentPlacementId || null;
-  const parentTrackingReference = parentPlacementId && !parentPlacementId.startsWith('primary:')
-    ? trackingReferences.find(reference => reference.id === parentPlacementId && !reference.removedAt) || null
-    : null;
-  const parentTaskId = trackingReference
-    ? parentPlacementId?.startsWith('primary:')
-      ? parentPlacementId.slice('primary:'.length)
-      : parentTrackingReference?.taskId
-    : node?.parentId;
-  const parentTask = parentTaskId ? nodes[parentTaskId] : undefined;
-  const ancestorPath = buildAncestorPath(node, nodes);
-  const canNavigateToParent = Boolean(
-    onNavigateToTask
-    && parentTask
-    && !parentTask.isArchived
-    && parentTask.id !== node?.id,
-  );
-  const navigateToParent = React.useCallback(() => {
-    if (!canNavigateToParent || !parentTask || !node) return;
-    requestTransition({
-      kind: 'navigate',
-      taskId: parentTask.id,
-      trackingReferenceId: parentTrackingReference?.id,
-      placementId: trackingReference?.id || primaryPlacementId(node.id),
-    });
-  }, [canNavigateToParent, node, parentTask, parentTrackingReference?.id, requestTransition, trackingReference?.id]);
+  const ancestorPath = React.useMemo<TaskMapAncestor[]>(() => {
+    if (!node) return [];
+    if (!trackingReference) {
+      return buildAncestorPath(node, nodes).map(task => ({ task, placementId: primaryPlacementId(task.id) }));
+    }
+
+    const path: TaskMapAncestor[] = [];
+    const visited = new Set([trackingReference.id]);
+    const references = new Map(trackingReferences
+      .filter(reference => !reference.removedAt && reference.boardId === trackingReference.boardId)
+      .map(reference => [reference.id, reference]));
+    let placementId = trackingReference.parentPlacementId;
+    while (placementId && !visited.has(placementId)) {
+      visited.add(placementId);
+      const reference = references.get(placementId);
+      const taskId = isPrimaryPlacementId(placementId)
+        ? placementId.slice(PRIMARY_PLACEMENT_PREFIX.length)
+        : reference?.taskId;
+      const task = taskId ? nodes[taskId] : undefined;
+      if (!task || task.isArchived || (!reference && task.boardId !== trackingReference.boardId)) break;
+      path.push({ task, placementId, trackingReferenceId: reference?.id });
+      placementId = reference
+        ? reference.parentPlacementId
+        : task.parentId ? primaryPlacementId(task.parentId) : null;
+    }
+    return path.reverse();
+  }, [node, nodes, trackingReference, trackingReferences]);
 
   if (!node) return null;
+
+  const taskMapPlacementId = trackingReference?.id || primaryPlacementId(node.id);
+  const navigateToAncestor = (ancestor: TaskMapAncestor) => {
+    requestTransition({
+      kind: 'navigate',
+      taskId: ancestor.task.id,
+      trackingReferenceId: ancestor.trackingReferenceId,
+      placementId: taskMapPlacementId,
+    });
+  };
 
   const durationDays = (startDate && endDate && dayjs(startDate).isValid() && dayjs(endDate).isValid())
     ? dayjs(endDate).diff(dayjs(startDate), 'day')
@@ -1169,6 +1180,10 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
 
   const handleToggleDurationLock = () => {
     if (!canEditTask) return;
+    if (!node.isDurationLocked && (!startDate || !dayjs(startDate).isValid())) {
+      window.alert('防呆機制：請先設定開始日期，再固定工期。');
+      return;
+    }
     persistTaskUpdates({ isDurationLocked: !node.isDurationLocked });
   };
 
@@ -1286,6 +1301,18 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
       || saveState === 'unknown'
     ),
   );
+  const taskMapDependencies = !trackingReference || trackingReference.boardId === node.boardId
+    ? dependencies.flatMap(dependency => {
+      const { id, fromId, fromSide, toId, toSide } = dependency;
+      if (fromId !== node.id && toId !== node.id) return [];
+      const from = nodes[fromId];
+      const to = nodes[toId];
+      if (!from || !to || from.isArchived || to.isArchived || from.boardId !== node.boardId || to.boardId !== node.boardId) return [];
+      const label = (task: TaskNode, side: 'start' | 'end') =>
+        `${task.id === node.id ? '本任務' : task.title || '未命名任務'}・${side === 'start' ? '開始' : '結束'}`;
+      return [{ id, from: label(from, fromSide), to: label(to, toSide) }];
+    })
+    : [];
 
   return (
     <div
@@ -1324,7 +1351,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div
-          className="grid grid-cols-[minmax(0,1fr)_auto_auto] grid-rows-[auto_auto] items-start gap-x-2 gap-y-1 px-4 py-2"
+          className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-start gap-x-2 gap-y-1 px-4 pt-2 pb-0"
           data-task-details-header="true"
         >
           <div className="col-start-1 row-start-1 min-w-0" data-task-details-title-row="true">
@@ -1339,7 +1366,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
                   onKeyDown={handleTitleKeyDown}
                   data-task-details-title-input="true"
                   aria-label="編輯任務名稱"
-                  className="h-9 w-full min-w-0 rounded-md border border-slate-200 bg-white px-2 text-base font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 hover:bg-slate-50/80 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                  className="h-9 w-full min-w-0 border-0 bg-transparent px-2 text-base font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-blue-200"
                 />
               ) : (
                 <p className="truncate text-sm font-semibold text-slate-900">
@@ -1347,76 +1374,6 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
                 </p>
               )}
             </div>
-          </div>
-          <div className="col-start-1 row-start-2 grid min-h-6 w-full min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-2" data-task-details-navigation-row="true">
-            <div className="flex shrink-0 items-center gap-1" role="group" aria-label="任務導覽" data-task-details-navigation="true">
-            <button
-              type="button"
-              onClick={() => requestTransition({ kind: 'back' })}
-              disabled={!canGoBack || isClosePending}
-              className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-40"
-              aria-label="返回上一個任務"
-              title="返回上一個任務"
-              data-task-details-history-back="true"
-            >
-              <ArrowLeft size={14} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              onClick={() => requestTransition({ kind: 'forward' })}
-              disabled={!canGoForward || isClosePending}
-              className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-40"
-              aria-label="前往下一個任務"
-              title="前往下一個任務"
-              data-task-details-history-forward="true"
-            >
-              <ArrowRight size={14} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              onClick={navigateToParent}
-              disabled={!canNavigateToParent || isClosePending}
-              className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-40"
-              aria-label="回到上一階任務"
-              title="回到上一階任務"
-              data-task-details-parent="true"
-            >
-              <ArrowUp size={14} aria-hidden="true" />
-            </button>
-          </div>
-            {ancestorPath.length > 0 && (
-              <nav
-                aria-label="任務完整位置"
-                data-task-details-parent-path="true"
-                className="flex min-w-0 items-center gap-x-1 overflow-hidden whitespace-nowrap text-xs font-medium leading-4 text-slate-500"
-              >
-                {ancestorPath.map((ancestor, index) => (
-                  <React.Fragment key={ancestor.id}>
-                    <button
-                      type="button"
-                      onClick={() => requestTransition({
-                        kind: 'navigate',
-                        taskId: ancestor.id,
-                        placementId: trackingReference?.id || (node ? primaryPlacementId(node.id) : undefined),
-                      })}
-                      disabled={isClosePending}
-                      data-task-details-parent-name="true"
-                      data-task-details-parent-link="true"
-                      data-task-details-parent-id={ancestor.id}
-                      data-task-id={ancestor.id}
-                      data-task-description-hover-trigger={ancestor.description?.trim() ? 'true' : undefined}
-                      aria-label={`開啟上層任務：${ancestor.title || '未命名任務'}`}
-                      className="max-w-[min(11rem,30vw)] truncate text-left text-inherit hover:underline focus-visible:underline focus-visible:outline-none disabled:cursor-wait disabled:opacity-60"
-                    >
-                      {ancestor.title || '未命名任務'}
-                    </button>
-                    {index < ancestorPath.length - 1 ? (
-                      <span className="shrink-0 text-slate-300" aria-hidden="true">/</span>
-                    ) : null}
-                  </React.Fragment>
-                ))}
-              </nav>
-            )}
           </div>
           {canPersistTask ? (
             <div
@@ -1475,7 +1432,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
           </div>
         </div>
 
-        <div ref={bodyRef} className="flex-1 overflow-auto px-4 py-4" data-task-details-scroll-surface="true">
+        <div ref={bodyRef} className="flex-1 overflow-auto px-4 pt-0 pb-4" data-task-details-scroll-surface="true">
           <section className="pb-2" data-task-details-meta-section="true">
             <div
               className="grid gap-y-3 lg:grid-cols-[5.5rem_24rem_minmax(0,1fr)] lg:items-end lg:gap-x-3 lg:gap-y-2"
@@ -1502,7 +1459,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
                   <span className="col-span-3 block text-xs font-medium text-slate-500" data-task-details-meta-label-text="true">
                     日期
                   </span>
-                  <div className="col-start-4 flex min-w-0 items-center gap-1.5 text-xs font-medium text-slate-500">
+                  <div className="col-start-4 flex min-w-0 items-end gap-1.5 text-xs font-medium text-slate-500">
                     <span data-task-details-meta-label-text="true">工期</span>
                     <button
                       type="button"
@@ -1511,8 +1468,12 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
                       aria-label="固定工期"
                       disabled={!canEditTask}
                       onClick={handleToggleDurationLock}
-                      title={node.isDurationLocked ? '固定工期：ON' : '固定工期：OFF'}
-                      className={`relative inline-flex h-5 w-12 shrink-0 items-center rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50 ${node.isDurationLocked ? 'bg-amber-500' : 'bg-slate-300'}`}
+                      title={node.isDurationLocked
+                        ? '固定工期：ON'
+                        : startDate && dayjs(startDate).isValid()
+                          ? '固定工期：OFF'
+                          : '請先設定開始日期，再固定工期'}
+                      className={`relative inline-flex h-5 w-12 shrink-0 items-center rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50 ${node.isDurationLocked ? 'bg-primary' : 'bg-slate-300'}`}
                     >
                       <span
                         aria-hidden="true"
@@ -1610,9 +1571,9 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
                   </label>
                   </div>
                   <span
-                    className={`col-start-4 ml-0 inline-flex h-8 shrink-0 items-center overflow-hidden rounded-l-none rounded-r-md border ${
+                    className={`col-start-4 ml-0 inline-flex h-8 w-full min-w-0 shrink-0 items-center overflow-hidden rounded-l-none rounded-r-md border ${
                       node.isDurationLocked
-                        ? 'border-amber-200 bg-amber-50/70'
+                        ? 'border-primary/30 bg-primary/5'
                         : 'border-slate-200 bg-white'
                     }`}
                     title={node.isDurationLocked ? '固定工期：自動推算結束日期' : '自動計算工期：日期獨立計算'}
@@ -1628,7 +1589,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
                       placeholder="—"
                       disabled={!canEditTask || !node.isDurationLocked}
                       aria-label="工期天數"
-                      className={`h-full w-16 border-0 bg-transparent px-1.5 text-sm text-center outline-none transition focus:ring-2 focus:ring-inset focus:ring-blue-100 ${
+                      className={`h-full min-w-0 flex-1 border-0 bg-transparent px-1.5 text-sm text-center outline-none transition focus:ring-2 focus:ring-inset focus:ring-blue-100 ${
                         !node.isDurationLocked
                           ? 'text-slate-400'
                           : 'text-slate-700'
@@ -1767,6 +1728,12 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
             node={node}
             trackingReference={trackingReference}
             bodyRef={bodyRef}
+            ancestorPath={ancestorPath}
+            dateDependencies={taskMapDependencies}
+            navigationPending={isClosePending}
+            onNavigateToAncestor={onNavigateToTask ? navigateToAncestor : undefined}
+            onBack={canGoBack ? () => requestTransition({ kind: 'back' }) : undefined}
+            onForward={canGoForward ? () => requestTransition({ kind: 'forward' }) : undefined}
             canCreateTask={placementPermissions.canCreateTask && !trackingReference}
             onCreateChild={parentId => requestTransition({ kind: 'create-child', parentId })}
             onOpenDetails={(taskId, targetTrackingReferenceId, placementId) => requestTransition({

@@ -57,6 +57,7 @@ import {
   Underline,
 } from 'lucide-react';
 import type { TaskDetailNote } from '../../types';
+import { TaskDetailSectionAction, TaskDetailSectionActions, TaskDetailSectionHeader } from '../TaskDetailSectionHeader';
 import { TASK_NOTE_CONTENT_SURFACE_CLASS_NAME } from './TaskNoteContentSurface';
 import {
   createTaskNoteRichContent,
@@ -440,9 +441,8 @@ const NoteToolbarPlugin: React.FC<{
   if (!showToolbar) return null;
 
   return (
-    <div className="contents md:relative md:block md:shrink-0" data-task-note-format-control="true">
-      <button
-        type="button"
+    <div className="relative inline-flex h-full w-7 shrink-0" data-task-note-format-control="true">
+      <TaskDetailSectionAction
         onMouseDown={event => event.preventDefault()}
         onPointerDown={event => event.preventDefault()}
         onClick={() => {
@@ -453,22 +453,18 @@ const NoteToolbarPlugin: React.FC<{
         aria-expanded={isOpen}
         aria-haspopup="true"
         title="文字格式"
-        className={[
-          'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border-0 bg-transparent transition-colors md:h-7 md:w-7',
-          'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-200',
-          isOpen ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900',
-        ].join(' ')}
+        className="rounded-l-[5px]"
         data-task-note-format-toggle="true"
       >
         <span aria-hidden="true" className="text-sm font-semibold leading-none underline decoration-1 underline-offset-2">A</span>
-      </button>
+      </TaskDetailSectionAction>
       {isOpen ? (
         <div
           role="toolbar"
           aria-label={'文字格式工具：' + (noteTitle || '未命名備註')}
-          className="order-last z-40 mt-1 w-full max-w-full overflow-x-auto overscroll-x-contain rounded-lg border border-slate-200 bg-white p-1.5 shadow-xl md:absolute md:right-8 md:top-1/2 md:order-none md:mt-0 md:w-auto md:max-w-[calc(100vw-5rem)] md:-translate-y-1/2"
+          className="absolute left-0 top-full z-40 mt-1 w-[min(36rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] overflow-x-auto overscroll-x-contain rounded-lg border border-slate-200 bg-white p-1.5 shadow-xl md:left-auto md:right-8 md:top-1/2 md:mt-0 md:w-auto md:max-w-[calc(100vw-5rem)] md:-translate-y-1/2"
           data-task-note-toolbar-popover="true"
-          data-task-note-toolbar-placement="desktop-left-mobile-below"
+          data-task-note-toolbar-placement="anchored-below-mobile-desktop-left"
           data-task-note-toolbar-persistence="toggle-only"
         >
           <div className="flex w-max items-center gap-0.5">
@@ -646,7 +642,9 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
   const resizeStartRef = React.useRef<{ pointerId: number; startY: number; startHeight: number } | null>(null);
   const pendingHeightRef = React.useRef<number | null>(null);
   const [editorHeight, setEditorHeight] = React.useState(TASK_NOTE_EDITOR_MIN_HEIGHT);
-  const notePlaceholder = '';
+  const notePlaceholder = note.id === 'note_default'
+    ? '你的目的是什麼? 想達到什麼結果?'
+    : '';
   const noteLabel = note.id === 'note_default' ? '任務目的' : (note.title || '備註');
 
   const autoSizeContent = React.useCallback(() => {
@@ -657,7 +655,7 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
       const element = contentEditableRef.current;
       if (!element) return;
       element.style.height = 'auto';
-      const intrinsicHeight = Math.max(TASK_NOTE_EDITOR_MIN_HEIGHT, Math.ceil(element.scrollHeight));
+      const intrinsicHeight = Math.max(TASK_NOTE_EDITOR_MIN_HEIGHT, Math.ceil(element.getBoundingClientRect().height));
       intrinsicHeightRef.current = intrinsicHeight;
       const nextHeight = preferredHeightRef.current === null
         ? intrinsicHeight
@@ -775,49 +773,49 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
         data-inline-editor={isCellVariant ? 'true' : undefined}
         data-task-note-editor-loaded="true"
       >
-        {!isCellVariant ? <div className="relative mb-0 flex min-w-0 flex-wrap items-center gap-1 md:flex-nowrap" data-task-detail-note-header="true">
-          {titleEditable ? (
+        {!isCellVariant ? <TaskDetailSectionHeader
+          data-task-detail-note-header="true"
+          titleContent={titleEditable ? (
             <input
               type="text"
               value={note.title}
               onChange={event => onUpdate({ title: event.target.value })}
               disabled={!canEdit}
-              className="h-9 min-w-0 flex-1 border-0 bg-transparent px-0 text-sm font-semibold text-slate-800 outline-none transition hover:bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-100 disabled:text-slate-400 md:h-7"
+              className="h-full w-full min-w-0 border-0 bg-transparent px-0 text-sm font-semibold text-inherit outline-none transition hover:bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-100 disabled:text-slate-400"
               placeholder="備註"
               data-task-detail-note-title-input="true"
             />
           ) : (
-            <span
-              className="flex h-9 min-w-0 flex-1 items-center px-0 text-sm font-semibold text-slate-800 md:h-7"
-              data-task-detail-note-title="true"
-            >
+            <span className="flex h-full w-full items-center" data-task-detail-note-title="true">
               {noteLabel}
             </span>
           )}
-          <NoteToolbarPlugin canEdit={canEdit} noteTitle={noteLabel} onSave={onSave} onBeforeMutation={markUserMutation} showToolbar={!isCellVariant} />
-          <button
-            type="button"
-            onClick={onAdd}
-            disabled={!canEdit}
-            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border-0 bg-transparent text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:opacity-40"
-            title="新增備註欄"
-            aria-label="新增備註欄"
-            data-task-detail-note-add="true"
-          >
-            <Plus size={14} />
-          </button>
-          <button
-            type="button"
-            onClick={onDelete}
-            disabled={!canEdit}
-            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border-0 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-100 disabled:cursor-not-allowed disabled:opacity-40"
-            title="刪除此備註欄"
-            aria-label={'刪除備註欄：' + noteLabel}
-            data-task-detail-note-delete="true"
-          >
-            <Trash2 size={14} />
-          </button>
-        </div> : null}
+        >
+          <TaskDetailSectionActions data-task-detail-note-actions="true">
+            <TaskDetailSectionAction
+              onClick={onAdd}
+              disabled={!canEdit}
+              className="rounded-l-[5px]"
+              title="新增備註欄"
+              aria-label="新增備註欄"
+              data-task-detail-note-add="true"
+            >
+              <Plus size={14} aria-hidden="true" />
+            </TaskDetailSectionAction>
+            <NoteToolbarPlugin canEdit={canEdit} noteTitle={noteLabel} onSave={onSave} onBeforeMutation={markUserMutation} showToolbar={!isCellVariant} />
+            <TaskDetailSectionAction
+              tone="danger"
+              onClick={onDelete}
+              disabled={!canEdit}
+              className="rounded-r-[5px]"
+              title="刪除此備註欄"
+              aria-label={'刪除備註欄：' + noteLabel}
+              data-task-detail-note-delete="true"
+            >
+              <Trash2 size={14} aria-hidden="true" />
+            </TaskDetailSectionAction>
+          </TaskDetailSectionActions>
+        </TaskDetailSectionHeader> : null}
         <div className={isCellVariant ? 'min-w-0' : 'relative min-w-0'} data-task-note-resize-frame={isCellVariant ? undefined : 'true'}>
           <RichTextPlugin
             contentEditable={(
@@ -825,7 +823,9 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
                 ref={contentEditableRef}
                 onBlur={isCellVariant ? handleCellBlur : undefined}
                 className={[
-                  isCellVariant ? 'min-h-0 w-full max-w-full whitespace-pre-wrap break-words bg-transparent text-xs leading-5 text-slate-700 outline-none' : TASK_NOTE_CONTENT_SURFACE_CLASS_NAME,
+                  isCellVariant
+                    ? 'min-h-0 w-full max-w-full whitespace-pre-wrap break-words bg-transparent text-xs leading-5 text-slate-700 outline-none'
+                    : `${TASK_NOTE_CONTENT_SURFACE_CLASS_NAME} border-slate-300 shadow-[0_1px_2px_rgba(15,23,42,0.08)]`,
                   isCellVariant ? '' : 'resize-none',
                   'aria-disabled:cursor-default aria-disabled:border-slate-200/50 aria-disabled:text-slate-400',
                 ].join(' ')}
@@ -837,7 +837,7 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
             )}
             placeholder={notePlaceholder ? (
               <div
-                className="pointer-events-none absolute left-2 top-1.5 text-sm leading-6 text-slate-400"
+                className="pointer-events-none absolute left-2 top-1.5 text-sm leading-6 text-slate-300"
                 data-task-detail-note-placeholder="true"
               >
                 {notePlaceholder}

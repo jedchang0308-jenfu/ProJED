@@ -1,4 +1,5 @@
 import React from 'react';
+import { ArrowLeft, ArrowRight, ArrowUp, ChevronDown, Ellipsis, Plus } from 'lucide-react';
 import { DndContext, pointerWithin, type DragEndEvent, type DragOverEvent, useDroppable } from '@dnd-kit/core';
 import type { TaskNode } from '../types';
 import type { TaskTrackingReference } from '../features/taskTracking/types';
@@ -15,6 +16,7 @@ import { taskDragSourceKindToSurfaceKind } from './Wbs/taskDrag/taskDropIntent';
 import { TaskDragPresenter } from './Wbs/taskDrag/TaskDragPresenter';
 import { MobileTaskActionContext } from './Wbs/mobileTaskActionContext';
 import { KanbanInsertionMarker } from './Wbs/KanbanInsertionMarker';
+import { TaskDetailSectionAction, TaskDetailSectionActions, TaskDetailSectionHeader } from './TaskDetailSectionHeader';
 
 const EMPTY_IDS: string[] = [];
 const TASK_CHILD_DROP_RETAIN_MARGIN_PX = 32;
@@ -297,10 +299,22 @@ const TaskDetailsSubtaskDragHost: React.FC<TaskDetailsSubtaskDragHostProps> = ({
   );
 };
 
+export type TaskMapAncestor = {
+  task: TaskNode;
+  placementId: string;
+  trackingReferenceId?: string;
+};
+
 export type TaskDetailsSubtaskSectionProps = {
   node: TaskNode;
   trackingReference?: TaskTrackingReference | null;
   bodyRef: React.RefObject<HTMLElement | null>;
+  ancestorPath: readonly TaskMapAncestor[];
+  dateDependencies: readonly { id: string; from: string; to: string }[];
+  navigationPending: boolean;
+  onBack?: () => void;
+  onForward?: () => void;
+  onNavigateToAncestor?: (ancestor: TaskMapAncestor) => void;
   canCreateTask?: boolean;
   onCreateChild?: (taskId: string) => void;
   onOpenDetails?: (taskId: string, trackingReferenceId?: string, placementId?: string) => void;
@@ -310,8 +324,30 @@ export const TaskDetailsSubtaskSection: React.FC<TaskDetailsSubtaskSectionProps>
   node,
   trackingReference,
   bodyRef,
+  ancestorPath,
+  dateDependencies,
+  navigationPending,
+  onBack,
+  onForward,
+  onNavigateToAncestor,
+  canCreateTask = false,
+  onCreateChild,
   onOpenDetails,
 }) => {
+  const headingId = React.useId();
+  const pathId = React.useId();
+  const [isPathExpanded, setIsPathExpanded] = React.useState(false);
+  const parent = ancestorPath[ancestorPath.length - 1];
+  const navigationActions = [
+    { icon: ArrowLeft, label: '返回上一個任務', marker: 'data-task-details-history-back', action: onBack },
+    { icon: ArrowRight, label: '前往下一個任務', marker: 'data-task-details-history-forward', action: onForward },
+    {
+      icon: ArrowUp,
+      label: '回到上一階任務',
+      marker: 'data-task-details-parent',
+      action: parent && onNavigateToAncestor ? () => onNavigateToAncestor(parent) : undefined,
+    },
+  ];
   const childIds = useWbsStore(state => state.parentNodesIndex[node.id] || EMPTY_IDS);
   const trackingReferences = useWbsStore(state => state.trackingReferences);
   const nodes = useWbsStore(state => state.nodes);
@@ -330,25 +366,120 @@ export const TaskDetailsSubtaskSection: React.FC<TaskDetailsSubtaskSectionProps>
   }, [childIds, node.boardId, nodes, rootPlacementId, trackingReference, trackingReferences]);
 
   return (
-    <section className="mt-4" data-task-details-subtasks="true">
-      <h3 className="mb-1 text-sm font-semibold text-slate-700">子任務</h3>
+    <section className="task-details-task-map mt-4 min-w-0" aria-labelledby={headingId} data-task-details-subtasks="true" data-task-details-task-map="true">
+      <TaskDetailSectionHeader titleContent={<h3 id={headingId}>任務地圖</h3>} />
       <div
         id="task-details-subtask-panel"
-        className="min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-2"
+        className="min-w-0 rounded-lg border border-slate-200 bg-white px-2 pb-1"
         data-task-details-subtask-panel="true"
       >
-        {childCount > 0 ? (
-          <TaskDetailsSubtaskDragHost
-            rootTask={node}
-            trackingReference={trackingReference}
-            bodyRef={bodyRef}
-            onOpenDetails={onOpenDetails}
-          />
-        ) : (
-          <div className="flex min-h-12 items-center justify-center px-3 py-3 text-xs text-slate-400" data-task-details-subtask-empty="true">
-            尚無子任務
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 border-b border-slate-200 py-1" data-task-details-navigation-row="true">
+          <div className="flex shrink-0 items-center gap-1" role="group" aria-label="任務導覽" data-task-details-navigation="true">
+            {navigationActions.map(({ icon: Icon, label, marker, action }) => (
+              <button
+                key={marker}
+                type="button"
+                onClick={action}
+                disabled={!action || navigationPending}
+                aria-label={label}
+                title={label}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-transparent text-slate-500 transition-colors enabled:hover:bg-slate-100 focus-visible:outline focus-visible:outline-primary disabled:opacity-40"
+                {...{ [marker]: 'true' }}
+              >
+                <Icon size={14} aria-hidden="true" />
+              </button>
+            ))}
           </div>
-        )}
+          {ancestorPath.length > 1 ? (
+            <button
+              type="button"
+              className="task-details-task-map-path-toggle h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 focus-visible:outline focus-visible:outline-primary"
+              aria-label={isPathExpanded ? '收合父任務路徑' : '展開完整父任務路徑'}
+              aria-controls={pathId}
+              aria-expanded={isPathExpanded}
+              onClick={() => setIsPathExpanded(expanded => !expanded)}
+            >
+              {isPathExpanded ? <ChevronDown size={14} aria-hidden="true" /> : <Ellipsis size={14} aria-hidden="true" />}
+            </button>
+          ) : null}
+          {parent ? (
+            <nav
+              id={pathId}
+              aria-label="任務完整位置"
+              className="task-details-task-map-path flex min-w-0 flex-1 items-center gap-x-1 text-xs font-medium text-slate-500"
+              data-task-details-parent-path="true"
+              data-expanded={isPathExpanded}
+            >
+              {ancestorPath.map((ancestor, index) => {
+                const taskTitle = ancestor.task.title || '未命名任務';
+                return (
+                  <React.Fragment key={ancestor.placementId}>
+                    {index > 0 ? (
+                      <span className="task-details-task-map-earlier shrink-0 text-slate-400" aria-hidden="true">/</span>
+                    ) : null}
+                    <button
+                      type="button"
+                      disabled={navigationPending || !onNavigateToAncestor}
+                      onClick={() => onNavigateToAncestor?.(ancestor)}
+                      aria-label={`開啟上層任務：${taskTitle}`}
+                      title={taskTitle}
+                      className={`task-details-task-map-crumb min-w-0 truncate rounded px-0.5 text-left enabled:hover:underline focus-visible:outline focus-visible:outline-primary ${ancestor === parent ? '' : 'task-details-task-map-earlier'}`}
+                      data-task-details-parent-name="true"
+                      data-task-details-parent-link="true"
+                      data-task-details-parent-id={ancestor.task.id}
+                      data-task-id={ancestor.task.id}
+                      data-task-description-hover-trigger={ancestor.task.description?.trim() ? 'true' : undefined}
+                    >
+                      {taskTitle}
+                    </button>
+                  </React.Fragment>
+                );
+              })}
+            </nav>
+          ) : null}
+        </div>
+        <div className="task-details-task-map-tree min-w-0 pt-1">
+          <div className="task-details-task-map-current relative flex min-w-0 items-center gap-1.5" data-has-children={childCount > 0} aria-current="location">
+            <span className="task-tree-dot task-details-task-map-origin" aria-hidden="true" />
+            <strong className="min-w-0 break-words text-sm font-bold text-black">現在任務位置</strong>
+            <TaskDetailSectionActions data-task-details-task-map-actions="true">
+              <TaskDetailSectionAction
+                onClick={() => onCreateChild?.(node.id)}
+                disabled={navigationPending || !canCreateTask || !onCreateChild}
+                className="rounded-[5px]"
+                title="新增子任務"
+                aria-label="新增子任務"
+                data-task-details-add-subtask="true"
+              >
+                <Plus size={14} aria-hidden="true" />
+              </TaskDetailSectionAction>
+            </TaskDetailSectionActions>
+          </div>
+          {childCount > 0 ? (
+            <TaskDetailsSubtaskDragHost
+              rootTask={node}
+              trackingReference={trackingReference}
+              bodyRef={bodyRef}
+              onOpenDetails={onOpenDetails}
+            />
+          ) : (
+            <p className="py-1 pl-6 text-xs text-slate-500" data-task-details-subtask-empty="true">尚無子任務</p>
+          )}
+        </div>
+        {dateDependencies.length > 0 ? (
+          <details className="group/task-dates ml-4 text-xs text-slate-500" data-task-details-task-map-date-dependencies="true">
+            <summary className="flex w-fit cursor-pointer list-none items-center gap-1.5 rounded px-1 py-1.5 hover:bg-slate-100 focus-visible:outline focus-visible:outline-primary [&::-webkit-details-marker]:hidden">
+              <span aria-hidden="true">⇢</span>
+              日期依賴
+              <ChevronDown size={12} aria-hidden="true" className="group-open/task-dates:rotate-180" />
+            </summary>
+            <ul className="ml-2 space-y-1 border-l border-dashed border-slate-300 pl-2">
+              {dateDependencies.map(({ id, from, to }) => (
+                <li key={id} className="break-words">{from} → {to}</li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
       </div>
     </section>
   );

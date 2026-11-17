@@ -360,7 +360,8 @@ body[data-kanban-mouse-pan-active="true"] * {
 }
 
 .kanban-task-card,
-.kanban-checklist-root {
+.kanban-checklist-root,
+.task-details-task-map-tree {
   --kanban-tree-indent: calc(var(--task-tree-branch-indent) * 0.7);
   --kanban-tree-node-offset: 6.3px;
   --kanban-tree-branch-radius: 5px;
@@ -412,6 +413,82 @@ body[data-kanban-mouse-pan-active="true"] * {
 .kanban-checklist-root .kanban-tree-date {
   margin-inline-start: auto;
   margin-inline-end: 6px;
+}
+
+.task-details-task-map {
+  container: task-details-task-map / inline-size;
+}
+
+.task-details-task-map-path-toggle {
+  display: none;
+}
+
+.task-details-task-map-crumb {
+  min-height: 28px;
+}
+
+.task-details-task-map-tree {
+  --task-map-title-inset: 18px;
+  --task-map-indent: 12px;
+  --task-map-node-offset: 7px;
+}
+
+.task-details-task-map-tree .kanban-checklist-root {
+  --kanban-tree-title-inset: var(--task-map-title-inset);
+  --kanban-tree-indent: var(--task-map-indent);
+  --kanban-tree-node-offset: var(--task-map-node-offset);
+}
+
+.task-details-task-map-tree .kanban-checklist-item {
+  min-height: 28px;
+}
+
+.task-details-task-map-current {
+  min-height: 32px;
+  padding-inline-start: var(--task-map-title-inset);
+}
+
+.task-details-task-map-origin,
+.task-details-task-map-current[data-has-children="true"]::after {
+  position: absolute;
+  inset-inline-start: calc(var(--task-map-title-inset) - var(--task-map-node-offset));
+  inset-block-start: 50%;
+  pointer-events: none;
+}
+
+.task-details-task-map-origin {
+  z-index: 1;
+}
+
+.task-details-task-map-current[data-has-children="true"]::after {
+  content: "";
+  inset-block-end: 0;
+  border-inline-start: 1px solid var(--task-tree-dot-color);
+}
+
+@container task-details-task-map (width <= 30rem) {
+  .task-details-task-map-path-toggle {
+    display: inline-flex;
+  }
+
+  .task-details-task-map-path[data-expanded="false"] .task-details-task-map-earlier {
+    display: none;
+  }
+
+  .task-details-task-map-path[data-expanded="true"] {
+    flex-basis: 100%;
+    flex-wrap: wrap;
+    padding-top: 2px;
+  }
+
+  .task-details-task-map-tree {
+    --task-map-title-inset: 14px;
+    --task-map-indent: 9px;
+  }
+
+  .task-details-task-map-tree .kanban-checklist-item {
+    min-height: 32px;
+  }
 }
 
 .kanban-checklist-root [data-kanban-checklist-row-visual="rounded-branch"]:not([data-kanban-drag-source-placeholder])::before {
@@ -780,6 +857,10 @@ body[data-kanban-mouse-pan-active="true"] * {
   background-color: var(--goal-row-surface);
 }
 
+[data-goal-view="true"] tbody > tr[data-goal-task-row] > th[data-goal-task-cell] {
+  background-color: var(--goal-row-surface);
+}
+
 /* A row-spanning owner cell belongs to the task row where it starts. Keep the
    whole merged region on that row's surface without adding a second divider;
    the native table boundary remains the only group edge. */
@@ -803,10 +884,9 @@ body[data-kanban-mouse-pan-active="true"] * {
   }
 }
 
-/* Keep every frozen task-name level on one shared surface while idle. During
-   location, the fixed task-name cell joins the same parent/descendant scope
-   tint as planning/content cells so the located task remains visible after
-   horizontal scrolling. */
+/* Keep the frozen task-name lane aligned with its row surface while idle.
+   During location, it joins the same parent/descendant scope tint as planning
+   and content cells. */
 [data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-hierarchy-scope="parent"] > [data-goal-planning-control],
 [data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-child-drop-candidate="true"] > [data-goal-planning-control],
 [data-goal-view="true"] tbody > tr[data-goal-task-row][data-goal-child-drop-target="true"] > [data-goal-planning-control] {
@@ -1343,13 +1423,12 @@ body[data-kanban-mouse-pan-active="true"] * {
   [data-task-details-header="true"] {
     display: grid !important;
     grid-template-columns: minmax(0, 1fr) auto !important;
-    grid-template-rows: auto auto !important;
     column-gap: 8px !important;
     row-gap: 4px !important;
     align-items: flex-start !important;
     padding-top: max(16px, env(safe-area-inset-top, 0px)) !important;
     padding-right: max(20px, env(safe-area-inset-right, 0px)) !important;
-    padding-bottom: 16px !important;
+    padding-bottom: 0 !important;
     padding-left: max(20px, env(safe-area-inset-left, 0px)) !important;
   }
 
@@ -1358,9 +1437,8 @@ body[data-kanban-mouse-pan-active="true"] * {
     grid-row: 1 !important;
   }
 
-  [data-task-details-header="true"] > [data-task-details-navigation-row="true"] {
-    grid-column: 1 / -1 !important;
-    grid-row: 2 !important;
+  [data-task-details-task-map-actions="true"] {
+    height: 36px;
   }
 
   [data-task-details-header="true"] > .group {
@@ -1370,7 +1448,7 @@ body[data-kanban-mouse-pan-active="true"] * {
 
   [data-task-details-header="true"] > [data-task-details-save-status] {
     grid-column: 1 / -1 !important;
-    grid-row: 3 !important;
+    grid-row: 2 !important;
     width: auto !important;
     min-width: 0 !important;
     max-width: 100% !important;
@@ -1543,9 +1621,9 @@ body[data-kanban-mouse-pan-active="true"] * {
   }
 
   [data-task-details-duration-inline="true"] > input {
-    width: 52px !important;
-    min-width: 52px !important;
-    flex: 0 0 52px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    flex: 1 1 auto !important;
     border-radius: 0 5px 5px 0 !important;
     padding-left: 4px !important;
     padding-right: 4px !important;
@@ -1752,9 +1830,9 @@ body[data-kanban-mouse-pan-active="true"] * {
   }
 
   [data-task-details-mobile-meta="true"] [data-task-details-mobile-duration="true"] input {
-    width: 52px !important;
-    min-width: 52px !important;
-    flex: 0 0 52px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    flex: 1 1 auto !important;
     border-radius: 0 6px 6px 0 !important;
     padding-left: 6px !important;
     padding-right: 6px !important;

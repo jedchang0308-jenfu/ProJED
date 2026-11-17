@@ -71,6 +71,12 @@ async (page) => {
     await page.mouse.dblclick(box.x + box.width / 2, Math.max(box.y + 1, box.y + box.height - 2));
     return true;
   };
+  const dblclickCenter = async locator => {
+    const box = await locator.boundingBox();
+    if (!box) return false;
+    await page.mouse.dblclick(box.x + Math.min(32, box.width / 2), box.y + box.height / 2);
+    return true;
+  };
 
   try {
     await seed(1298);
@@ -85,9 +91,9 @@ async (page) => {
       const webkitScrollbarStyle = scroll ? getComputedStyle(scroll, '::-webkit-scrollbar') : null;
       return { overflowY: style?.overflowY ?? null, maxHeight: style?.maxHeight ?? null, scrollbarWidth: style?.scrollbarWidth ?? null, webkitScrollbarWidth: webkitScrollbarStyle?.width ?? null, scrollHeight: scroll?.scrollHeight ?? 0, clientHeight: scroll?.clientHeight ?? 0, cellChildren: cell.children.length, legacyWrapper: Boolean(cell.querySelector('div.min-h-0.max-w-full')) };
     });
-    record('B01-collapsed-retains-one-y-scroll', initial.overflowY === 'auto' && initial.maxHeight !== 'none' && initial.scrollbarWidth === 'thin' && initial.webkitScrollbarWidth === '3px' && initial.scrollHeight > initial.clientHeight && initial.cellChildren === 1 && !initial.legacyWrapper, initial);
-    await page.screenshot({ path: `${OUTPUT_DIR}/B01-goal-content-scrollbar-1298x698.png`, fullPage: false });
-    result.screenshots.push(OUTPUT_DIR + '/B01-goal-content-scrollbar-1298x698.png');
+    record('B01-purpose-expands-to-fit-by-default', await purposeContent.getAttribute('data-goal-content-expanded') === 'true' && initial.overflowY !== 'auto' && initial.maxHeight === 'none' && initial.scrollbarWidth === 'thin' && initial.webkitScrollbarWidth === '3px' && initial.scrollHeight <= initial.clientHeight && initial.cellChildren === 1 && !initial.legacyWrapper, initial);
+    await page.screenshot({ path: `${OUTPUT_DIR}/B01-goal-content-expanded-1298x698.png`, fullPage: false });
+    result.screenshots.push(OUTPUT_DIR + '/B01-goal-content-expanded-1298x698.png');
     await purpose.click();
     record('B02-single-click-selects-only-cell', await purpose.getAttribute('data-goal-cell-selected') === 'true' && await goal.locator('[data-goal-cell-selected="true"]').count() === 1, {});
     record('B03-native-table-aria-boundary', await purpose.getAttribute('aria-selected') === null && await purpose.getAttribute('aria-expanded') === null && await goal.locator('[data-goal-task-table="true"]').count() === 1, {});
@@ -140,14 +146,14 @@ async (page) => {
     });
     record('B07-enter-saves-canonical-purpose', saved.description.includes('｜edited') && Array.isArray(saved.detailNotes) && saved.detailNotes[0]?.content === saved.description && Boolean(saved.detailNotes[0]?.richContent), { saved });
     await purpose.waitFor({ state: 'visible' });
-    const expandedBefore = await dblclickBottom(purposeContent);
+    const collapsedFromCenter = await dblclickCenter(purposeContent);
     await page.waitForTimeout(100);
-    const expandedProbe = await purpose.evaluate(cell => { const scroll = cell.querySelector('[data-goal-content-scroll="true"]'); return { expanded: scroll?.getAttribute('data-goal-content-expanded'), overflowY: scroll ? getComputedStyle(scroll).overflowY : null, maxHeight: scroll ? getComputedStyle(scroll).maxHeight : null, scrollHeight: scroll?.scrollHeight ?? 0, clientHeight: scroll?.clientHeight ?? 0 }; });
-    record('B08-double-bottom-expands-content', expandedBefore && expandedProbe.expanded === 'true' && expandedProbe.overflowY !== 'auto' && expandedProbe.maxHeight === 'none' && expandedProbe.scrollHeight <= expandedProbe.clientHeight, expandedProbe);
-    await dblclickBottom(purposeContent);
+    const collapsedProbe = await purpose.evaluate(cell => { const scroll = cell.querySelector('[data-goal-content-scroll="true"]'); return { expanded: scroll?.getAttribute('data-goal-content-expanded'), overflowY: scroll ? getComputedStyle(scroll).overflowY : null, maxHeight: scroll ? getComputedStyle(scroll).maxHeight : null, scrollHeight: scroll?.scrollHeight ?? 0, clientHeight: scroll?.clientHeight ?? 0 }; });
+    record('B08-double-click-collapses-purpose-with-y-scroll', collapsedFromCenter && collapsedProbe.expanded === 'false' && collapsedProbe.overflowY === 'auto' && collapsedProbe.maxHeight !== 'none' && collapsedProbe.scrollHeight > collapsedProbe.clientHeight, collapsedProbe);
+    await dblclickCenter(purposeContent);
     await page.waitForTimeout(100);
-    const collapsedAgain = await purpose.evaluate(cell => { const scroll = cell.querySelector('[data-goal-content-scroll="true"]'); return { expanded: scroll?.getAttribute('data-goal-content-expanded'), overflowY: scroll ? getComputedStyle(scroll).overflowY : null, maxHeight: scroll ? getComputedStyle(scroll).maxHeight : null }; });
-    record('B09-repeat-bottom-restores-y-scroll', collapsedAgain.expanded === 'false' && collapsedAgain.overflowY === 'auto' && collapsedAgain.maxHeight !== 'none', collapsedAgain);
+    const expandedAgain = await purpose.evaluate(cell => { const scroll = cell.querySelector('[data-goal-content-scroll="true"]'); return { expanded: scroll?.getAttribute('data-goal-content-expanded'), overflowY: scroll ? getComputedStyle(scroll).overflowY : null, maxHeight: scroll ? getComputedStyle(scroll).maxHeight : null, scrollHeight: scroll?.scrollHeight ?? 0, clientHeight: scroll?.clientHeight ?? 0 }; });
+    record('B09-repeat-double-click-restores-full-content', expandedAgain.expanded === 'true' && expandedAgain.overflowY !== 'auto' && expandedAgain.maxHeight === 'none' && expandedAgain.scrollHeight <= expandedAgain.clientHeight, expandedAgain);
     await meeting.waitFor({ state: 'visible' });
     const meetingBefore = await meeting.evaluate(cell => ({ text: cell.textContent || '', scroll: cell.querySelector('[data-goal-content-scroll="true"]')?.getAttribute('data-goal-content-expanded') || null }));
     await dblclickBottom(meetingContent);
