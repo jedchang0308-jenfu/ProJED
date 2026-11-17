@@ -287,6 +287,11 @@ output/release/dev-083/<release-id>/
 - owner 不符或檢查失敗時，保留原 listener，改走 task-owned isolated Vite test server；完成後只清理本次啟動的 process tree並確認 port 釋放。
 - 兩種路徑都需產生 DEV-098 完整 PASS artifact，且 feature smoke 必須於 deploy 前檢查 source commit、release ID、case counts 與 diagnostics。此 addendum 記錄程式契約與 fixture checks，不代表本機 runner 或 production release 已通過。
 
+### 13.8 Local-Test Smoke URL Identity
+
+- Local-test fixture smoke URL 不附加 `dev083ReleaseId` query，避免 Windows CLI 對帶 query URL 的參數拆分；release ID 與 source commit 仍在 direct receipt 中綁定，production canonical smoke 保留 query。
+- Gate fixture 驗證 local-test URL 無 release query、production URL 仍帶正確 release ID。實際 DEV-098 16/16 local smoke 與 production release 狀態另依該次 receipt 記錄。
+
 | 殘留失效模式 | S/O/D | RPN | Release判定 |
 |---|---:|---:|---|
 | P2未實作且manual direct deploy仍可繞過P1 | 5/3/5 | 75 | 使用者接受；保留為治理債，不屬本次 credential policy waiver |
