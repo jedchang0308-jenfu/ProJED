@@ -281,6 +281,12 @@ output/release/dev-083/<release-id>/
 - Authenticated smoke：既有正式Chrome session重載後仍在`https://projed-cc78d.web.app/`，工作區與真實資料可見，無visible alert／inline error／localhost；乾淨browser critical errors為0。
 - Rollback：previous live version `93c2a80ddc1a798e`。canonical gate未失敗，未執行rollback。
 
+### 13.7 Reused Local Feature-Smoke Runtime
+
+- `--feature-smoke-local` 可重用標準 1040 runtime，但僅接受同 repository、loopback listener、Vite `--mode test` 且 port 為 1040 的程序；以 process ID／command identity 唯讀確認，不停止既有程序。
+- owner 不符或檢查失敗時，保留原 listener，改走 task-owned isolated Vite test server；完成後只清理本次啟動的 process tree並確認 port 釋放。
+- 兩種路徑都需產生 DEV-098 完整 PASS artifact，且 feature smoke 必須於 deploy 前檢查 source commit、release ID、case counts 與 diagnostics。此 addendum 記錄程式契約與 fixture checks，不代表本機 runner 或 production release 已通過。
+
 | 殘留失效模式 | S/O/D | RPN | Release判定 |
 |---|---:|---:|---|
 | P2未實作且manual direct deploy仍可繞過P1 | 5/3/5 | 75 | 使用者接受；保留為治理債，不屬本次 credential policy waiver |

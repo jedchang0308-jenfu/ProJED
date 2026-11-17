@@ -180,7 +180,68 @@ const findAvailableLoopbackPort = async () => new Promise((resolve, reject) => {
   });
 });
 
+export const matchesReusableTestViteProcess = ({ commandLine, localAddress, port, rootDir = root }) => {
+  if (Number(port) !== 1040 || !['127.0.0.1', '::1'].includes(String(localAddress))) return false;
+  const command = String(commandLine ?? '').replaceAll('/', '\\').toLowerCase();
+  const expectedRoot = path.resolve(rootDir).replaceAll('/', '\\').toLowerCase();
+  return command.includes(expectedRoot)
+    && command.includes('\\vite\\bin\\vite.js')
+    && /(?:^|\s)--mode\s+test(?:\s|$)/u.test(command)
+    && /(?:^|\s)--host\s+(?:127\.0\.0\.1|localhost)(?:\s|$)/u.test(command)
+    && /(?:^|\s)--port\s+1040(?:\s|$)/u.test(command);
+};
+
+const inspectReusableTestViteProcess = async () => {
+  if (process.platform !== 'win32') return null;
+  const escapedRoot = root.replaceAll("'", "''");
+  const script = [
+    "$ErrorActionPreference = 'Stop'",
+    `$rootPath = '${escapedRoot}'`,
+    "$listeners = @(Get-NetTCPConnection -State Listen -LocalPort 1040 -ErrorAction SilentlyContinue)",
+    "if ($listeners.Count -eq 0) { @{ status = 'unbound' } | ConvertTo-Json -Compress; exit 0 }",
+    "$rows = foreach ($listener in $listeners) { $process = Get-CimInstance Win32_Process -Filter \"ProcessId = $($listener.OwningProcess)\"; [pscustomobject]@{ pid = [int]$listener.OwningProcess; port = [int]$listener.LocalPort; localAddress = [string]$listener.LocalAddress; commandLine = [string]$process.CommandLine } }",
+    "$owners = @($rows | Select-Object -ExpandProperty pid -Unique)",
+    "@{ status = 'occupied'; rows = @($rows); owners = $owners } | ConvertTo-Json -Depth 4 -Compress",
+  ].join('; ');
+  const inspected = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
+    cwd: root,
+    env: buildSanitizedChildEnv(process.env),
+  });
+  if (inspected.code !== 0) return null;
+  let result;
+  try { result = JSON.parse(inspected.stdout.trim()); } catch { return null; }
+  if (result.status !== 'occupied' || !Array.isArray(result.rows) || result.rows.length === 0) return null;
+  const owners = [...new Set(result.rows.map(row => Number(row.pid)))];
+  if (owners.length !== 1 || !result.rows.every(row => matchesReusableTestViteProcess({ ...row, rootDir: root }))) return null;
+  return { pid: owners[0], port: 1040 };
+};
+
 const runLocalTestModeFeatureSmoke = async ({ manifest, filename }) => {
+  const reusable = await inspectReusableTestViteProcess();
+  if (reusable) {
+    const baseUrl = 'http://localhost:1040/';
+    await waitForHttp(baseUrl);
+    const sessionPrefix = `dev083-direct-local-feature-${manifest.releaseId}`;
+    const artifactPath = path.join(root, 'output', 'playwright', sessionPrefix, 'result.json');
+    const result = await runBrowserSmokeAtUrl({ baseUrl, releaseId: manifest.releaseId, sessionPrefix, filename, runtimeProfile: 'local-test', artifactWindowKey: '__DEV098_ARTIFACT', artifactPath });
+    let testArtifact;
+    try { testArtifact = JSON.parse(fs.readFileSync(artifactPath, 'utf8').replace(/^\uFEFF/u, '')); } catch { throw new Error('DEV-083 local feature smoke did not produce a valid structured browser artifact.'); }
+    if (testArtifact.dev !== 'DEV-098' || testArtifact.status !== 'PASS' || !Array.isArray(testArtifact.cases)
+      || testArtifact.summary?.pass !== testArtifact.cases.length || testArtifact.summary?.fail !== 0 || testArtifact.summary?.diagnostics !== 0) {
+      throw new Error('DEV-083 local feature smoke artifact is not a complete DEV-098 pass.');
+    }
+    return {
+      ...result,
+      testSummary: testArtifact.summary,
+      revision: testArtifact.revision,
+      resultPath: path.relative(root, artifactPath).replaceAll(path.sep, '/'),
+      environment: 'same-repository-vite-test-mode',
+      sourceCommit: manifest.source.commit,
+      processPid: reusable.pid,
+      port: reusable.port,
+      runtimeOwnership: 'reused-verified-process',
+    };
+  }
   const port = await findAvailableLoopbackPort();
   const baseUrl = `http://127.0.0.1:${port}/`;
   const viteBin = path.join(root, 'node_modules', 'vite', 'bin', 'vite.js');
@@ -505,10 +566,14 @@ export const runDirectRelease = async (args, services = {
       const sourceHead = await services.git(['rev-parse', 'HEAD']);
       if (sourceHead !== manifest.source.commit) throw new Error('DEV-083 local feature smoke source HEAD does not match the published artifact commit.');
       receipt.feature = await services.runLocalTestModeFeatureSmoke({ manifest, filename: featureFile });
-      if (receipt.feature?.ok !== true || receipt.feature.environment !== 'isolated-vite-test-mode'
+      if (receipt.feature?.ok !== true || !['isolated-vite-test-mode', 'same-repository-vite-test-mode'].includes(receipt.feature.environment)
         || receipt.feature.sourceCommit !== manifest.source.commit || receipt.feature.expectedReleaseId !== manifest.releaseId
         || receipt.feature.testSummary?.pass < 1 || receipt.feature.testSummary?.fail !== 0 || receipt.feature.testSummary?.diagnostics !== 0) {
         throw new Error('DEV-083 local feature smoke evidence is incomplete or does not match the published artifact.');
+      }
+      if (receipt.feature.environment === 'same-repository-vite-test-mode'
+        && (receipt.feature.runtimeOwnership !== 'reused-verified-process' || !Number.isInteger(receipt.feature.processPid) || receipt.feature.port !== 1040)) {
+        throw new Error('DEV-083 reused local feature smoke runtime ownership evidence is incomplete.');
       }
       receipt.feature.filename = path.relative(root, featureFile).replaceAll(path.sep, '/');
       if (sha256(fs.readFileSync(featureFile)) !== featureSha256) throw new Error('DEV-083 feature smoke changed during verification.');
