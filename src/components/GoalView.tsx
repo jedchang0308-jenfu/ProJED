@@ -155,7 +155,7 @@ const GOAL_PLANNING_WIDTHS = {
   status: 72,
   start: 112,
   end: 112,
-  duration: 84,
+  duration: 96,
 } as const;
 const GOAL_STATUS_SELECT_CLASS = 'h-7 w-full appearance-none border-0 bg-transparent px-1 py-0 text-center text-[11px] font-semibold outline-none transition-colors focus-visible:rounded-sm focus-visible:outline focus-visible:outline-1 focus-visible:outline-primary/50';
 const GOAL_DATE_INPUT_CLASS = 'peer block h-7 w-full min-w-0 border border-transparent bg-transparent px-1 py-0 text-xs text-slate-600 outline-none transition-colors hover:bg-slate-100/50 focus:bg-white focus-visible:border-transparent focus-visible:outline focus-visible:outline-1 focus-visible:outline-primary/50 [&::-webkit-calendar-picker-indicator]:opacity-0 hover:[&::-webkit-calendar-picker-indicator]:opacity-100 focus:[&::-webkit-calendar-picker-indicator]:opacity-100';
@@ -314,20 +314,25 @@ const OwnedCell: React.FC<{
   if (cell.kind === 'covered') return null;
   const handleDoubleClick = (event: React.MouseEvent<HTMLTableCellElement>) => {
     if (cell.kind !== 'owner' || isSessionCell) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    if (event.clientY >= rect.bottom - GOAL_CONTENT_EDGE_HIT_PX) {
+    if (isDescriptionOwner) {
       event.preventDefault();
       onToggleExpanded();
       return;
     }
-    if (isDescriptionOwner && canEdit && ownerTaskId) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (event.clientY >= rect.bottom - GOAL_CONTENT_EDGE_HIT_PX) {
       event.preventDefault();
-      const node = useWbsStore.getState().nodes[ownerTaskId];
-      if (node) goalSession.beginEditing(node);
+      onToggleExpanded();
     }
   };
   const handleContentDoubleClick = (event: React.MouseEvent<HTMLDivElement>) => {
     if (cell.kind !== 'owner' || isSessionCell) return;
+    if (isDescriptionOwner) {
+      event.preventDefault();
+      event.stopPropagation();
+      onToggleExpanded();
+      return;
+    }
     const rect = event.currentTarget.getBoundingClientRect();
     if (event.clientY < rect.bottom - GOAL_CONTENT_EDGE_HIT_PX) return;
     event.preventDefault();
@@ -511,7 +516,7 @@ const GoalRow: React.FC<{
   activeMeetingScope?: GoalContentScope;
   onHierarchyScopeChange: (taskId: string | null) => void;
   selectedCellKey: string | null;
-  expandedCellKeys: ReadonlySet<string>;
+  cellExpansionOverrides: ReadonlySet<string>;
   onSelectCell: (key: string) => void;
   onToggleCell: (key: string) => void;
   onOpenCellMenu: (key: string, column: GoalCellColumn, taskId: string, event: React.MouseEvent<HTMLTableCellElement> | React.KeyboardEvent<HTMLTableCellElement>) => void;
@@ -544,7 +549,7 @@ const GoalRow: React.FC<{
   activeMeetingScope,
   onHierarchyScopeChange,
   selectedCellKey,
-  expandedCellKeys,
+  cellExpansionOverrides,
   onSelectCell,
   onToggleCell,
   onOpenCellMenu,
@@ -810,7 +815,7 @@ const GoalRow: React.FC<{
         </TaskHierarchyIndentedRow>
       </th>
       {showDescriptionColumn && !descriptionColumnCollapsed ? (
-        <OwnedCell cell={row.descriptionCell} column="description" ownerTaskId={row.descriptionCell.kind === 'owner' ? node.id : undefined} headers={`goal-column-description ${safeTaskDomId(node.rowId)}`} ownerAttribute={row.descriptionCell.kind === 'owner' ? node.id : undefined} activeScope={activeDescriptionScope} className="max-w-[360px] border-r border-slate-200 px-3 py-0 align-top text-xs text-slate-600" selected={selectedCellKey === `description:${node.rowId}`} expanded={expandedCellKeys.has(`description:${node.rowId}`)} canEdit={permissions.canEditTask} onSelect={() => onSelectCell(`description:${node.rowId}`)} onHierarchyScopeChange={onHierarchyScopeChange} onToggleExpanded={() => onToggleCell(`description:${node.rowId}`)} onOpenMenu={event => onOpenCellMenu(`description:${node.rowId}`, 'description', node.id, event)} data-goal-column="description">
+        <OwnedCell cell={row.descriptionCell} column="description" ownerTaskId={row.descriptionCell.kind === 'owner' ? node.id : undefined} headers={`goal-column-description ${safeTaskDomId(node.rowId)}`} ownerAttribute={row.descriptionCell.kind === 'owner' ? node.id : undefined} activeScope={activeDescriptionScope} className="max-w-[360px] border-r border-slate-200 px-3 py-0 align-top text-xs text-slate-600" selected={selectedCellKey === `description:${node.rowId}`} expanded={!cellExpansionOverrides.has(`description:${node.rowId}`)} canEdit={permissions.canEditTask} onSelect={() => onSelectCell(`description:${node.rowId}`)} onHierarchyScopeChange={onHierarchyScopeChange} onToggleExpanded={() => onToggleCell(`description:${node.rowId}`)} onOpenMenu={event => onOpenCellMenu(`description:${node.rowId}`, 'description', node.id, event)} data-goal-column="description">
           {row.descriptionCell.kind === 'owner' ? row.descriptionCell.value : ''}
         </OwnedCell>
       ) : descriptionColumnCollapsed ? (
@@ -823,7 +828,7 @@ const GoalRow: React.FC<{
         />
       ) : null}
       {showMeetingColumn && !meetingColumnCollapsed ? (
-        <OwnedCell cell={row.meetingCell} column="meeting" ownerTaskId={row.meetingCell.kind === 'owner' ? node.id : undefined} headers={`goal-column-meeting ${safeTaskDomId(node.rowId)}`} ownerAttribute={row.meetingCell.kind === 'owner' ? node.id : undefined} activeScope={activeMeetingScope} className="max-w-[380px] border-r border-slate-200 px-3 py-0 align-top text-xs text-slate-600" selected={selectedCellKey === `meeting:${node.rowId}`} expanded={expandedCellKeys.has(`meeting:${node.rowId}`)} lineAlignedScroll canEdit={false} onSelect={() => onSelectCell(`meeting:${node.rowId}`)} onHierarchyScopeChange={onHierarchyScopeChange} onToggleExpanded={() => onToggleCell(`meeting:${node.rowId}`)} onOpenMenu={event => onOpenCellMenu(`meeting:${node.rowId}`, 'meeting', node.id, event)} data-goal-column="meeting">
+        <OwnedCell cell={row.meetingCell} column="meeting" ownerTaskId={row.meetingCell.kind === 'owner' ? node.id : undefined} headers={`goal-column-meeting ${safeTaskDomId(node.rowId)}`} ownerAttribute={row.meetingCell.kind === 'owner' ? node.id : undefined} activeScope={activeMeetingScope} className="max-w-[380px] border-r border-slate-200 px-3 py-0 align-top text-xs text-slate-600" selected={selectedCellKey === `meeting:${node.rowId}`} expanded={cellExpansionOverrides.has(`meeting:${node.rowId}`)} lineAlignedScroll canEdit={false} onSelect={() => onSelectCell(`meeting:${node.rowId}`)} onHierarchyScopeChange={onHierarchyScopeChange} onToggleExpanded={() => onToggleCell(`meeting:${node.rowId}`)} onOpenMenu={event => onOpenCellMenu(`meeting:${node.rowId}`, 'meeting', node.id, event)} data-goal-column="meeting">
           {isFirstRow && meetingStatus === 'partial' ? <span role="status" data-goal-record-warning="partial" className="block text-amber-700">部分會議紀錄無法辨識，已略過。</span> : null}
           {row.meetingCell.kind === 'owner' ? <MeetingQuickNoteRows entries={meetingEntries} /> : isFirstRow && meetingStatus === 'loading' ? <span className="inline-flex items-center gap-1 text-slate-400"><Loader2 size={12} className="animate-spin" />載入中…</span> : isFirstRow && meetingStatus === 'error' ? <span role="alert" className="inline-flex flex-wrap items-center gap-2 text-red-600">紀錄載入失敗<button type="button" onClick={onRetryMeeting} className="font-semibold underline">重試</button></span> : null}
         </OwnedCell>
@@ -921,17 +926,22 @@ const GoalRow: React.FC<{
         <td className="w-[22.4px] min-w-[22.4px] border-r border-slate-200 px-0 py-0" data-goal-column="duration" data-goal-column-collapsed="true" aria-hidden="true" />
       ) : (
       <td className="py-0 pl-1 pr-0 align-middle" data-goal-column="duration" data-goal-planning-control="duration">
-        <div className={`group relative flex h-7 w-full min-w-0 items-center gap-0 rounded-sm focus-within:outline focus-within:outline-1 focus-within:outline-primary/50 ${node.isDurationLocked ? 'text-amber-600' : 'text-slate-400'}`}>
+        <div className={`group relative flex h-7 w-full min-w-0 items-center gap-0 rounded-sm focus-within:outline focus-within:outline-1 focus-within:outline-primary/50 ${node.isDurationLocked ? 'text-primary' : 'text-slate-400'}`}>
           <button
             type="button"
             onClick={() => {
-              if (permissions.canEditTask) updateNode(node.id, { isDurationLocked: !node.isDurationLocked });
+              if (!permissions.canEditTask) return;
+              if (!node.isDurationLocked && (!localStartDate || !dayjs(localStartDate).isValid())) {
+                alert('防呆機制：請先設定開始日期，再固定工期。');
+                return;
+              }
+              updateNode(node.id, { isDurationLocked: !node.isDurationLocked });
             }}
             disabled={!permissions.canEditTask}
             role="switch"
             aria-checked={Boolean(node.isDurationLocked)}
-            className={`relative flex h-5 w-12 shrink-0 items-center rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50 ${node.isDurationLocked ? 'bg-amber-500' : 'bg-slate-300'}`}
-            title={node.isDurationLocked ? '改為自動計算工期' : '固定工期天數'}
+            className={`relative flex h-5 w-12 shrink-0 items-center rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50 ${node.isDurationLocked ? 'bg-primary' : 'bg-slate-300'}`}
+            title={node.isDurationLocked ? '改為自動計算工期' : localStartDate ? '固定工期天數' : '請先設定開始日期，再固定工期'}
             aria-label={`${node.isDurationLocked ? '改為自動計算' : '固定'}「${node.title || '未命名任務'}」工期`}
           >
             <span aria-hidden="true" className={`absolute text-[8px] font-bold leading-none text-white ${node.isDurationLocked ? 'left-1.5' : 'right-1.5'}`}>
@@ -1014,7 +1024,9 @@ const GoalView: React.FC<GoalViewProps> = ({ boardId }) => {
   const descriptionColumnCollapsed = collapsedColumns.has('description');
   const [activeHierarchyScopeId, setActiveHierarchyScopeId] = React.useState<string | null>(null);
   const [selectedCellKey, setSelectedCellKey] = React.useState<string | null>(null);
-  const [expandedCellKeys, setExpandedCellKeys] = React.useState<Set<string>>(() => new Set());
+  // Task-purpose cells fit all text by default; an override entry collapses them.
+  // Meeting history remains compact until its key is explicitly expanded.
+  const [cellExpansionOverrides, setCellExpansionOverrides] = React.useState<Set<string>>(() => new Set());
   const [cellMenu, setCellMenu] = React.useState<{
     key: string;
     taskId: string;
@@ -1090,7 +1102,7 @@ const GoalView: React.FC<GoalViewProps> = ({ boardId }) => {
     setCollapsedIds(new Set());
     setActiveHierarchyScopeId(null);
     setSelectedCellKey(null);
-    setExpandedCellKeys(new Set());
+    setCellExpansionOverrides(new Set());
     setCellMenu(null);
     goalDragPointerRef.current = null;
     setGoalDragPointer(null);
@@ -1394,7 +1406,7 @@ const GoalView: React.FC<GoalViewProps> = ({ boardId }) => {
   }, []);
 
   const toggleCell = React.useCallback((key: string) => {
-    setExpandedCellKeys(current => {
+    setCellExpansionOverrides(current => {
       const next = new Set(current);
       if (next.has(key)) next.delete(key); else next.add(key);
       return next;
@@ -1645,7 +1657,7 @@ const GoalView: React.FC<GoalViewProps> = ({ boardId }) => {
                       activeMeetingScope={activeContentScopes.meeting.get(node.rowId)}
                       onHierarchyScopeChange={setActiveHierarchyScopeId}
                       selectedCellKey={selectedCellKey}
-                      expandedCellKeys={expandedCellKeys}
+                      cellExpansionOverrides={cellExpansionOverrides}
                       onSelectCell={key => setSelectedCellKey(key)}
                       onToggleCell={toggleCell}
                       onOpenCellMenu={openCellMenu}
@@ -1661,7 +1673,7 @@ const GoalView: React.FC<GoalViewProps> = ({ boardId }) => {
         <GoalCellActionMenu
           taskId={cellMenu.taskId}
           column={cellMenu.column}
-          expanded={expandedCellKeys.has(cellMenu.key)}
+          expanded={cellMenu.column === 'description' ? !cellExpansionOverrides.has(cellMenu.key) : cellExpansionOverrides.has(cellMenu.key)}
           canEdit={cellMenu.column === 'description' && canEditTask && useBoardStore.getState().activeBoardId === boardId}
           x={cellMenu.x}
           y={cellMenu.y}

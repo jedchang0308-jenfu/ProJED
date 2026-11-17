@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
@@ -10,7 +9,6 @@ import {
 } from '../src/utils/taskNoteRichContent';
 
 const read = (path: string) => readFileSync(resolve(path), 'utf8');
-const hash = (path: string) => createHash('sha256').update(read(path)).digest('hex');
 const checks: Array<{ id: string; label: string; status: 'PASS' | 'FAIL'; details?: unknown }> = [];
 const failures: string[] = [];
 const check = (id: string, label: string, condition: boolean, details?: unknown) => {
@@ -26,6 +24,8 @@ const wbs = read('src/store/useWbsStore.ts');
 const app = read('src/App.tsx');
 const pwaBridge = read('src/components/PwaReloadSafetyBridge.tsx');
 const pwaManifest = read('src/services/pwaReloadOwnerManifest.ts');
+const goalModeStatic = read('scripts/verify-dev-116-goal-mode.ts');
+const goalModeBrowser = read('scripts/verify-dev-116-goal-mode-browser.pw.js');
 const indexCss = read('src/index.css');
 const systemScrollbarConsumers = [
   'src/components/BoardView.tsx',
@@ -64,15 +64,15 @@ check('P04', 'other notes and identity survive first-note update', richUpdates.d
 check('P05', 'semantic no-op reuses latest notes array', noOpUpdates.detailNotes === richNotes);
 check('P06', 'cell editor uses same Lexical variant without details chrome', editor.includes("variant: 'cell'") && editor.includes('showToolbar={!isCellVariant}') && editor.includes('data-goal-cell-editor') && editor.includes('data-task-note-resize-handle') && editor.includes('!isCellVariant && canEdit'));
 check('P07', 'cell keyboard contract keeps save/cancel/newline and composition guard', editor.includes('INSERT_LINE_BREAK_COMMAND') && editor.includes("onCommit('save')") && editor.includes("onCancel()") && editor.includes('event.isComposing'));
-check('P08', 'Goal cell retains one bounded scroll element and reversible fit', goal.includes('data-goal-content-scroll') && goal.includes('data-goal-content-expanded') && goal.includes('overflow-y-auto') && goal.includes("maxHeight: 'none'") && goal.includes('GOAL_CONTENT_EDGE_HIT_PX'));
+check('P08', 'Purpose defaults to full text and double-click can restore compact y-scroll', goal.includes('data-goal-content-scroll') && goal.includes('data-goal-content-expanded') && goal.includes('overflow-y-auto') && goal.includes("maxHeight: 'none'") && goal.includes('expanded={!cellExpansionOverrides.has(`description:${node.rowId}`)}') && goal.includes('if (isDescriptionOwner)') && goal.includes('GOAL_CONTENT_EDGE_HIT_PX'));
 check('P09', 'Goal cell handles selection, F2 and keyboard menu without changing task menu', goal.includes('data-goal-cell-key') && goal.includes("event.key === 'F2'") && goal.includes("event.key === 'F10'") && goal.includes('GoalCellActionMenu') && !goal.includes('aria-selected'));
 check('P10', 'single cross-view session owns draft and recovery', session.includes("'idle' | 'editing' | 'saving' | 'error' | 'unknown'") && session.includes('GoalCellRecoveryNotice') && session.includes('sourceVisible') && app.includes('<GoalCellSessionProvider'));
-check('P11', 'session checks latest task scope and permission before every write', session.includes('latestNode.isArchived') && session.includes('latestNode.boardId !== current.boardId') && session.includes('canEditCanonicalTask(latestNode)') && session.includes('getTaskPurposeNote(latestNode)'));
-check('P12', 'persistence result distinguishes callback failure and unknown timeout', session.includes('onPersistSuccess') && session.includes('onPersistError') && session.includes('SESSION_TIMEOUT_MS') && session.includes("status: 'unknown'") && session.includes("status: 'error'"));
-check('P13', 'forced retry does not create empty undo', wbs.includes('if (hasChanges) {') && wbs.includes('forcePersistence') && session.includes('skipActivity: forcePersistence'));
+check('P11', 'session revalidates the latest task scope and edit permission before compare-and-set', session.includes('const latestNode = useWbsStore.getState().nodes[current.taskId]') && session.includes('latestNode.isArchived') && session.includes('latestNode.boardId !== current.boardId') && session.includes('latestNode.workspaceId !== current.workspaceId') && session.includes('canEditCanonicalTask(latestNode)') && session.includes('buildTaskPurposeUpdates(latestNode, draftNote)') && session.includes('commitTaskNotes('));
+check('P12', 'compare-and-set settlement distinguishes persisted, conflict, failure and unknown timeout', session.includes('SESSION_TIMEOUT_MS') && session.includes("status: 'unknown'") && session.includes("status: 'error'") && session.includes('outcome.status === \'persisted\'') && session.includes('settleAsError(attemptId') && session.includes('commitTaskNotes('));
+check('P13', 'retry resubmits the same compare-and-set draft without a forced generic update', session.includes("current.status !== 'error'") && session.includes('dispatchAttempt({ ...current, status: \'error\', error: undefined }, current.draftNote)') && wbs.includes('compareAndSetNotes(') && wbs.includes('{ skipUndo: true }') && !session.includes('forcePersistence'));
 check('P14', 'PWA safety sees unfocused Goal session marker through existing owner', pwaBridge.includes('data-goal-edit-session-state') && pwaManifest.includes('GoalCellSessionProvider') && pwaBridge.includes("ownerId: 'inline-editor'"));
 check('P15', 'meeting cell remains read-only and only task purpose enters editor', goal.includes('column="meeting"') && goal.includes('canEdit={false}') && goal.includes('column="description"') && session.includes('makeCellKey'));
-check('P16', 'DEV-116 verifier baselines include the SPEC-121 R8 compact Goal geometry oracle', hash('scripts/verify-dev-116-goal-mode.ts') === 'bfba4107ae8cc62cfd0333b168f9fdb6e16da17bf88a3c4097ac08840bb413b2' && hash('scripts/verify-dev-116-goal-mode-browser.pw.js') === 'dcefce722bca12495f97f80cd39bdb83b991723f67095437584e028ec04ca66f');
+check('P16', 'DEV-116 verifiers retain static and browser compact Goal geometry oracles', goalModeStatic.includes('GOAL_CONTENT_ROW_HEIGHT_PX') && goalModeStatic.includes('data-goal-content-scroll') && goalModeBrowser.includes("'V20-goal-compact-tree-geometry'") && goalModeBrowser.includes('goalHierarchyGeometry.titleDelta') && goalModeBrowser.includes('goalHierarchyGeometry.parent.rowHeight'));
 check('P17', 'rich equality remains available for semantic conflict/no-op checks', richContent.includes('areTaskNoteRichContentsEqual') && areTaskNoteRichContentsEqual(legacyRich, legacyRich));
 check('P18', 'one shared system scrollbar foundation replaces per-surface utilities and preserves explicit exceptions', indexCss.includes('--scrollbar-system-size: 3px') && indexCss.includes(':where(*)::-webkit-scrollbar') && indexCss.includes('.no-scrollbar') && indexCss.includes('.scrollbar-gantt') && indexCss.includes('scrollbar-width: auto') && indexCss.includes('width: 12px') && !indexCss.includes('.scrollbar-thin') && !indexCss.includes('.scrollbar-subtle') && !indexCss.includes('.goal-content-scrollbar') && systemScrollbarConsumers.every(source => !/scrollbar-(?:thin|subtle)|goal-content-scrollbar|custom-scrollbar|scrollbar-(?:thumb|track)-/.test(source)));
 

@@ -104,7 +104,7 @@ const TaskChecklistRow: React.FC<TaskChecklistRowProps> = ({
   const hasGrandchildren = !trackingReference && Boolean(grandchildIds && grandchildIds.length > 0);
   const isBoardRow = hostAdapter.surfaceId === 'board.checklist-row';
   const isTaskDetailsRow = hostAdapter.surfaceId === 'task-details.subtask-row';
-  const hasIncomingBranch = depth > 0;
+  const hasIncomingBranch = depth > 0 || isTaskDetailsRow;
   const [isExpanded, setIsExpanded] = React.useState(true);
   const subtreeId = React.useId();
   const hasVisibleGrandchildren = hasGrandchildren && grandchildIds?.some(id => {
