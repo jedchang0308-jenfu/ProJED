@@ -219,6 +219,11 @@ async (page) => {
     const verifyTask = async (id, purpose) => {
       await modal.and(page.locator('[data-task-id="' + id + '"]')).waitFor({ state: 'visible' });
       await editor('任務目的').waitFor({ state: 'visible' });
+      await page.waitForFunction(({ taskId, expectedPurpose }) => {
+        const taskModal = document.querySelector('[data-task-details-modal="true"][data-task-id="' + taskId + '"]');
+        const purposeEditor = taskModal?.querySelector('[data-task-detail-note-content-input="true"][aria-label="備註內容：任務目的"]');
+        return purposeEditor?.textContent?.trim() === expectedPurpose;
+      }, { taskId: id, expectedPurpose: purpose }, { timeout: 5000 });
       const actualPurpose = (await editor('任務目的').innerText()).trim();
       if (actualPurpose !== purpose) throw new Error('Wrong purpose shown for ' + id + ': expected=' + JSON.stringify(purpose) + ' actual=' + JSON.stringify(actualPurpose));
       if ((await editor('備註').innerText()).trim() !== '備註：' + id) throw new Error('Wrong note shown for ' + id);
@@ -265,16 +270,18 @@ async (page) => {
       window.confirm = () => true;
     });
     const replacePurposeFromElsewhere = content => page.evaluate(async ({ id, content }) => {
-      const { useWbsStore } = await import('/src/store/useWbsStore.ts');
+      const useWbsStore = window.__DEV098_TASK_DETAIL_STORE__;
+      if (!useWbsStore) throw new Error('Task detail store test bridge is unavailable');
       const storedNodes = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
       const storedTask = storedNodes[id];
+      const updatedAt = Date.now();
       storedNodes[id] = {
         ...storedTask,
         description: content,
         detailNotes: storedTask.detailNotes.map(note => note.id === 'note_default'
           ? { id: note.id, title: note.title, content }
           : note),
-        updatedAt: Date.now(),
+        updatedAt,
       };
       localStorage.setItem('projed-local-test.nodes', JSON.stringify(storedNodes));
       const state = useWbsStore.getState();
@@ -282,6 +289,7 @@ async (page) => {
       useWbsStore.setState({ nodes: { ...state.nodes, [id]: {
         ...task,
         description: content,
+        updatedAt,
         detailNotes: task.detailNotes.map(note => note.id === 'note_default'
           ? { id: note.id, title: note.title, content }
           : note),
@@ -509,9 +517,9 @@ async (page) => {
     if (rootDropClass?.includes('border') || rootDropClass?.includes('rounded')) throw new Error('root drop target still renders a container');
     const nestedRow = modal.locator('[data-task-placement-id="primary:dev098-grandchild"]');
     if (await nestedRow.count() !== 1) throw new Error('mobile task map did not render its nested row');
-    await modal.getByRole('button', { name: '收合 子任務 P1' }).click();
+    await modal.locator('[data-kanban-branch-toggle="true"][aria-label="收合 子任務 P1"]').click();
     if (await nestedRow.count() !== 0) throw new Error('mobile task map branch did not collapse');
-    await modal.getByRole('button', { name: '展開 子任務 P1' }).click();
+    await modal.locator('[data-kanban-branch-toggle="true"][aria-label="展開 子任務 P1"]').click();
     if (await nestedRow.count() !== 1) throw new Error('mobile task map branch did not expand');
     return { viewport: [390, 844], collapsedAndExpanded: true, rootDropHelperRemoved: true, rootDropContainerRemoved: true };
   });

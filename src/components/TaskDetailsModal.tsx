@@ -178,6 +178,16 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
   onCreateChild,
 }) => {
   const node = useWbsStore((state) => state.nodes[nodeId]);
+  React.useEffect(() => {
+    if (import.meta.env.MODE !== 'test') return;
+    const testWindow = window as Window & { __DEV098_TASK_DETAIL_STORE__?: typeof useWbsStore };
+    testWindow.__DEV098_TASK_DETAIL_STORE__ = useWbsStore;
+    return () => {
+      if (testWindow.__DEV098_TASK_DETAIL_STORE__ === useWbsStore) {
+        delete testWindow.__DEV098_TASK_DETAIL_STORE__;
+      }
+    };
+  }, []);
   const currentNodeTitle = node?.title || '';
   const currentNodeDetailNotes = node?.detailNotes;
   const currentNodeDescription = node?.description || '';
