@@ -476,6 +476,18 @@ export interface Database {
     };
     Views: Record<string, never>;
     Functions: {
+      compare_and_set_task_notes: {
+        Args: {
+          p_tenant_id: string;
+          p_project_id: string;
+          p_item_id: string;
+          p_expected_detail_notes: Json;
+          p_expected_description: string | null;
+          p_next_detail_notes: Json;
+          p_next_description: string | null;
+        };
+        Returns: Array<Pick<WbsItemRow, 'detail_notes' | 'description' | 'updated_at'>>;
+      };
       get_board_task_write_capabilities_v1: {
         Args: { p_tenant_id: string; p_project_id: string };
         Returns: string[];

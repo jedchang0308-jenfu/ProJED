@@ -1293,39 +1293,30 @@ export const supabaseNodeService = {
     requireSupabase();
     const tenantId = await resolveWorkspaceId(workspaceId);
     const projectId = await resolveProjectId(tenantId, boardId);
-    let updateQuery = supabase
-      .from('wbs_items')
-      .update({
-        detail_notes: next.detailNotes as unknown as Json,
-        description: next.description,
+    const itemId = await requireNodeId(tenantId, projectId, nodeId);
+    const { data, error } = await supabase
+      .rpc('compare_and_set_task_notes', {
+        p_tenant_id: tenantId,
+        p_project_id: projectId,
+        p_item_id: itemId,
+        p_expected_detail_notes: expected.detailNotes as unknown as Json,
+        p_expected_description: expected.description,
+        p_next_detail_notes: next.detailNotes as unknown as Json,
+        p_next_description: next.description,
       })
-      .eq('tenant_id', tenantId)
-      .eq('project_id', projectId)
-      .eq('detail_notes', expected.detailNotes as unknown as NonNullable<Json>);
-    updateQuery = expected.description === null
-      ? updateQuery.is('description', null)
-      : updateQuery.eq('description', expected.description);
-    updateQuery = isUuid(nodeId)
-      ? updateQuery.eq('id', nodeId)
-      : updateQuery.eq('legacy_node_id', nodeId);
-
-    const { data, error } = await updateQuery
-      .select('detail_notes,description,updated_at')
       .maybeSingle();
     assertNoError(error);
     if (data) {
       return { status: 'persisted', snapshot: mapWbsItemToTaskNoteSnapshot(data) };
     }
 
-    let readQuery = supabase
+    const { data: current, error: readError } = await supabase
       .from('wbs_items')
       .select('detail_notes,description,updated_at')
       .eq('tenant_id', tenantId)
-      .eq('project_id', projectId);
-    readQuery = isUuid(nodeId)
-      ? readQuery.eq('id', nodeId)
-      : readQuery.eq('legacy_node_id', nodeId);
-    const { data: current, error: readError } = await readQuery.single();
+      .eq('project_id', projectId)
+      .eq('id', itemId)
+      .single();
     assertNoError(readError);
     if (!current) throw new Error('Supabase did not find the requested WBS item after a note conflict.');
     return { status: 'conflict', snapshot: mapWbsItemToTaskNoteSnapshot(current) };
