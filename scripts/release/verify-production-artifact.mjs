@@ -8,6 +8,7 @@ import {
   sha256,
 } from './production-contract.mjs';
 import { collectTestPublicForbiddenValues } from './env-boundary.mjs';
+import { validateVersionRetention } from './version-retention.mjs';
 
 const walkFiles = dir => {
   const files = [];
@@ -82,6 +83,29 @@ export function verifyManifest(manifestPath, { root = process.cwd() } = {}) {
   else if (tree.sha256 !== manifest.artifact.treeSha256) errors.push('artifact tree digest mismatch');
   if (tree && JSON.stringify(tree.entries) !== JSON.stringify(manifest.artifact.entries)) errors.push('artifact file manifest mismatch');
   const compatibility = manifest.artifact?.compatibility;
+  const retention = manifest.artifact?.versionRetention;
+  const retentionPath = distDir ? path.join(distDir, 'app-version-retention.json') : '';
+  const rootEntryPath = distDir ? path.join(distDir, 'index.html') : '';
+  if (!retention && rootEntryPath && fs.existsSync(rootEntryPath)
+    && fs.readFileSync(rootEntryPath, 'utf8').includes('__PROJED_VERSION_BOOT__')) errors.push('pinned entry requires version retention provenance');
+  if (retention || (retentionPath && fs.existsSync(retentionPath))) {
+    if (!retention || !fs.existsSync(retentionPath)) errors.push('version retention provenance missing');
+    else {
+      const catalog = JSON.parse(fs.readFileSync(retentionPath, 'utf8'));
+      if (JSON.stringify(catalog) !== JSON.stringify(retention)) errors.push('version retention catalog mismatch');
+      errors.push(...validateVersionRetention(retention, tree?.entries || []));
+      const current = retention.releases?.filter(release => release.supersededAt === null) || [];
+      if (current.length !== 1 || current[0].version !== `release:${manifest.releaseId}` || current[0].legacy) errors.push('version retention current release mismatch');
+      for (const release of retention.releases || []) {
+        if (release.legacy) continue;
+        const prefix = path.join(distDir, 'app-releases', release.version.replace(':', '-'));
+        for (const entry of ['index.html', 'quick-task/index.html']) {
+          const entryPath = path.join(prefix, entry);
+          if (!fs.existsSync(entryPath) || !fs.readFileSync(entryPath, 'utf8').includes(`name="projed-shell-version" content="${release.version}"`)) errors.push('version retention HTML identity mismatch');
+        }
+      }
+    }
+  }
   if (compatibility) {
     if (compatibility.schemaVersion !== 1 || typeof compatibility.sourceReleaseId !== 'string'
       || !/^[a-f0-9]{64}$/i.test(compatibility.sourceTreeSha256 || '') || !Array.isArray(compatibility.entries)) {

@@ -309,10 +309,8 @@ const installQuickPwaLifecycle = (reloadSafetyReady: Promise<boolean>) => {
       removePrompt ??= mountQuickTaskPwaUpdatePrompt({
         read: pwaUpdate.getPwaUpdateState,
         subscribe: pwaUpdate.subscribePwaUpdateState,
-        apply: pwaUpdate.applyPwaUpdate,
         retry: pwaUpdate.retryPwaUpdate,
         recover: pwaUpdate.clearPwaApplicationCacheAndReload,
-        dismiss: pwaUpdate.dismissPwaUpdatePrompt,
       });
       return pwaUpdate;
     })().catch(error => { apiPromise = null; throw error; });

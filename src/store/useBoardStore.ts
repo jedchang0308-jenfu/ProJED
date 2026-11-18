@@ -6,6 +6,7 @@ import { workspaceService, boardService } from '../services/dataBackend';
 import type { BoardStore, ViewMode } from '../types';
 import type { BoardContextMenuState } from '../types';
 import type { TaskHostMode, TaskInteractionLocation, TaskInteractionSurfaceId } from '../interactions/task/types';
+import { readPwaReloadLocation } from '../services/pwaReloadLocation';
 import {
     createDefaultTaskDisplaySettings,
     readBoardTaskDisplaySettings,
@@ -25,6 +26,7 @@ const WS_STORAGE_KEY = 'projed-last-ws';
 const BOARD_STORAGE_KEY = 'projed-last-board';
 const MODAL_STORAGE_KEY = 'projed-last-modal';
 const BOARD_TASK_VIEWS = new Set<ViewMode>(['list', 'mindmap', 'board', 'goal', 'gantt', 'calendar']);
+const reloadLocation = readPwaReloadLocation();
 
 const getDefaultDisplaySettings = () => ({
     showDependencies: createDefaultTaskDisplaySettings().showDependencies,
@@ -49,7 +51,7 @@ const safeSetItem = (key: string, value: string | null) => {
 
 const getStoredView = () => {
     try {
-        const stored = localStorage.getItem(VIEW_STORAGE_KEY);
+        const stored = reloadLocation?.view ?? localStorage.getItem(VIEW_STORAGE_KEY);
         if (stored === 'list') {
             safeSetItem(VIEW_STORAGE_KEY, 'goal');
             return 'goal';
@@ -145,8 +147,8 @@ const pushBoardDisplayUndo = (set, label, before, after) => {
 const useBoardStore = create<BoardStore>()(
     (set, get) => ({
         workspaces: [],
-        activeWorkspaceId: getStoredId(WS_STORAGE_KEY),
-        activeBoardId: getStoredId(BOARD_STORAGE_KEY),
+        activeWorkspaceId: reloadLocation ? reloadLocation.workspaceId : getStoredId(WS_STORAGE_KEY),
+        activeBoardId: reloadLocation ? reloadLocation.boardId : getStoredId(BOARD_STORAGE_KEY),
         currentView: getStoredView(),
         // The global task workbench is the default left-side workspace.
         // Keep the workspace/board navigator available from the top-left menu

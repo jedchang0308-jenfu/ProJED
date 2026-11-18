@@ -7,6 +7,8 @@ import GlobalErrorBoundary from './components/GlobalErrorBoundary'
 import { installSupabaseBrowserDiagnostics } from './services/supabase/browserDiagnostics'
 import { setupPwaInstallPromptListener } from './services/pwaInstallService'
 import { handleRecoverableAppLoadError, setupPwaLifecycle } from './services/pwaUpdateService'
+import { registerPwaReloadLocation } from './services/pwaReloadLocation'
+import useBoardStore from './store/useBoardStore'
 import { installAppIconRefresh } from './services/appIconService'
 import { captureQuickWorkbenchIntent } from './features/taskWorkbench/entryIntent'
 
@@ -14,6 +16,10 @@ installAppIconRefresh('main');
 captureQuickWorkbenchIntent();
 installSupabaseBrowserDiagnostics();
 setupPwaInstallPromptListener();
+registerPwaReloadLocation(() => {
+  const { currentView, activeWorkspaceId, activeBoardId } = useBoardStore.getState();
+  return { view: currentView, workspaceId: activeWorkspaceId, boardId: activeBoardId };
+});
 setupPwaLifecycle();
 
 // 全域監聽資源載入錯誤 (常發生在 PWA 發布新版本後，快取抓到舊 index.html 但找不到 JS chunk)

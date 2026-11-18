@@ -4,10 +4,8 @@ import { getPwaUpdatePresentation } from '../../services/pwaUpdatePresentation';
 type QuickTaskPwaUpdateActions = {
   read: () => PwaUpdateState;
   subscribe: (listener: (state: PwaUpdateState) => void) => () => void;
-  apply: () => Promise<boolean>;
   retry: () => Promise<boolean>;
   recover: () => Promise<boolean>;
-  dismiss: () => void;
 };
 
 const createButton = (label: string, variant: 'primary' | 'secondary', attribute: string) => {
@@ -38,17 +36,12 @@ export const mountQuickTaskPwaUpdatePrompt = (actions: QuickTaskPwaUpdateActions
 
   const controls = document.createElement('div');
   controls.className = 'quick-task-pwa-update-controls';
-  const normalControls = document.createElement('div');
-  normalControls.className = 'quick-task-pwa-update-buttons';
-  const update = createButton('重新載入', 'primary', 'pwaUpdateAction');
-  const later = createButton('稍後', 'secondary', 'pwaUpdateLater');
-  normalControls.append(update, later);
   const recoveryControls = document.createElement('div');
   recoveryControls.className = 'quick-task-pwa-update-buttons';
   const retry = createButton('重試', 'primary', 'pwaUpdateRetry');
   const recover = createButton('清除快取後重整', 'secondary', 'pwaCacheRecovery');
   recoveryControls.append(retry, recover);
-  controls.append(normalControls, recoveryControls);
+  controls.append(recoveryControls);
   toast.append(content, controls);
   root.append(toast);
   document.body.append(root);
@@ -74,19 +67,14 @@ export const mountQuickTaskPwaUpdatePrompt = (actions: QuickTaskPwaUpdateActions
     heading.textContent = presentation.title;
     detail.textContent = presentation.detail ?? '';
     detail.hidden = presentation.detail === null;
-    normalControls.hidden = isRecovery;
     recoveryControls.hidden = !isRecovery;
-    update.textContent = isUpdating ? '準備重新載入' : '重新載入';
-    update.disabled = isUpdating || isRecovering;
-    later.hidden = isUpdating;
-    later.disabled = isUpdating;
     retry.textContent = isApplying ? '準備重新載入' : '重試';
     retry.disabled = isUpdating || isRecovering;
     recover.textContent = isRecovering ? '正在恢復' : '清除快取後重整';
     recover.disabled = isUpdating || isRecovering;
   };
 
-  const run = async (operation: 'apply' | 'retry' | 'recover') => {
+  const run = async (operation: 'retry' | 'recover') => {
     if (!active || suspended || updating()) return;
     if (operation === 'recover') isRecovering = true;
     else isApplying = true;
@@ -99,16 +87,10 @@ export const mountQuickTaskPwaUpdatePrompt = (actions: QuickTaskPwaUpdateActions
       if (active && !suspended) render();
     }
   };
-  const onUpdateClick = () => { void run('apply'); };
   const onRetryClick = () => { void run('retry'); };
   const onRecoverClick = () => { void run('recover'); };
-  const onDismissClick = () => {
-    if (active && !suspended && !updating()) actions.dismiss();
-  };
-  update.addEventListener('click', onUpdateClick);
   retry.addEventListener('click', onRetryClick);
   recover.addEventListener('click', onRecoverClick);
-  later.addEventListener('click', onDismissClick);
   const unsubscribe = actions.subscribe(state => { currentState = state; render(); });
   const onPageHide = (event: PageTransitionEvent) => {
     if (event.persisted) {
@@ -129,10 +111,8 @@ export const mountQuickTaskPwaUpdatePrompt = (actions: QuickTaskPwaUpdateActions
     active = false;
     unsubscribe();
     root.remove();
-    update.removeEventListener('click', onUpdateClick);
     retry.removeEventListener('click', onRetryClick);
     recover.removeEventListener('click', onRecoverClick);
-    later.removeEventListener('click', onDismissClick);
     window.removeEventListener('pagehide', onPageHide);
     window.removeEventListener('pageshow', onPageShow);
   };

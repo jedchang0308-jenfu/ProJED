@@ -3,6 +3,18 @@
 Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 外層遞迴讀取 sibling clone 或備份資料夾。
 
+<a id="dev-141-manual-app-updates"></a>
+
+## DEV-141：新版先通知，由使用者手動更新
+
+- 建立日期：2026-11-18（Asia/Taipei）。
+- 現況與證據：已實作，本機隔離的無視窗 Edge 以三個正式型前端建置驗證 A01–A07 全數通過。主程式使用測試帳號與看板，快速新增任務使用窄版畫面。讀回了啟用中的 Service Worker、各分頁實際版本、導覽次數與其他分頁的草稿。A03 包含瀏覽器程序重新啟動與繞過 Service Worker 的版本讀回。結果：[DEV-141 瀏覽器紀錄](../output/playwright/dev-141/dev141-dda88a28/result.json)（本機產物），重現命令為 `npm run verify:dev-141-manual-update`。
+- 工程契約與驗收：[SPEC-041 DEV-141 手動更新](specs/SPEC-041-pwa-update-notification-cache-recovery.md#dev-141-manual-app-updates)，A01–A04 為使用者指定的必驗收項目。
+- 回歸：TypeScript、受影響範圍 ESLint、DEV-041 24/24、DEV-096 26/26、DEV-097 23/23、DEV-134 資產驗證 6/6 與 DEV-141 版本保留驗證通過。首輪封存 JavaScript 含未替換的 Vite preload 標記，已移到完成轉換後封存，重建後由瀏覽器讀回通過。
+- 併行分工：選單提醒請求模型 `gpt-6-sol`（high），版號入口與資產保留請求模型 `gpt-6-astra`（high）；主流程整合確認、分頁隔離與本機驗收。
+- 下一步：正式導入前，用常用手機的已安裝 PWA 複驗關閉重開，並確認舊版使用者的首次導入安排。正式環境尚未發布，也未驗證既有正式 PWA 設定檔。
+- 待定：正式舊版支援期限。封裝以至少 14 天為預設，從確認舊版已被取代後保守計算。
+
 <a id="dev-140-okr-list-consolidation"></a>
 
 ## DEV-140：以 OKR 模式整合清單模式
@@ -389,6 +401,8 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 同一 source commit 的 DEV-121 static 28/28、Chromium 37/37、Goal empty-location、TypeScript、targeted ESLint 與 diff check 均通過；direct receipt 保留 `feature-pending`，因完整 fixture runner 固定使用 localhost/local-test，未將 local-only 結果冒充 authenticated production Goal smoke。未改資料、schema、migration、權限或 persistence；部署前 live version `63d9b2ea3d7cdb4f` 保留為 rollback anchor。
 
 ## 總任務清單
+
+- ○ DEV-141 [交付點] [已實作／本機瀏覽器 A01–A07 通過／未發布] [ProJED] [新版先通知，由使用者手動更新](#dev-141-manual-app-updates)
 
 - ✓ DEV-140 [交付點] [已實作／本機瀏覽器驗收通過] [ProJED] [以 OKR 模式整合清單模式](#dev-140-okr-list-consolidation)
 

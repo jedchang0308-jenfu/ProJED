@@ -1,9 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import {
-  applyPwaUpdate,
   clearPwaApplicationCacheAndReload,
-  dismissPwaUpdatePrompt,
   getPwaUpdateState,
   subscribePwaUpdateState,
   retryPwaUpdate,
@@ -24,19 +22,8 @@ export const AppUpdatePrompt: React.FC = () => {
 
   const presentation = getPwaUpdatePresentation(state);
   const { isRecovery } = presentation;
-  const visible = presentation.visible
-    || (state.updateAvailable && !state.dismissedAt && typeof window !== 'undefined' && Boolean(window.__projedPwaUpdateTest));
+  const visible = presentation.visible;
   const isUpdating = state.localUpdateBusy || isApplying || isRecovering;
-
-  const handleUpdate = async () => {
-    if (isUpdating || isRecovering) return;
-    setIsApplying(true);
-    try {
-      await applyPwaUpdate();
-    } finally {
-      setIsApplying(false);
-    }
-  };
 
   const handleRecovery = async () => {
     if (isRecovering || isUpdating) return;
@@ -84,7 +71,7 @@ export const AppUpdatePrompt: React.FC = () => {
           )}
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          {isRecovery ? (
+          {isRecovery && (
             <>
               <Button
                 type="button"
@@ -109,31 +96,6 @@ export const AppUpdatePrompt: React.FC = () => {
               >
                 清除快取後重整
               </Button>
-            </>
-          ) : (
-            <>
-              <Button
-                type="button"
-                size="sm"
-                isLoading={isUpdating}
-                onClick={handleUpdate}
-                className="h-8 px-2.5 text-xs focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                data-pwa-update-action
-              >
-                {isUpdating ? '準備重新載入' : '重新載入'}
-              </Button>
-              {!isUpdating && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  onClick={dismissPwaUpdatePrompt}
-                  className="h-8 px-2 text-xs focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                  data-pwa-update-later
-                >
-                  稍後
-                </Button>
-              )}
             </>
           )}
         </div>

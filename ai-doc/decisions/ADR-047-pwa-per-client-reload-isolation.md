@@ -6,6 +6,9 @@
 
 關聯：DEV-097、DEV-096、DEV-041、SPEC-041、ADR-037
 
+後續更新政策見 [SPEC-041 DEV-141](../specs/SPEC-041-pwa-update-notification-cache-recovery.md#dev-141-manual-app-updates)。
+DEV-141 導入後，每分頁只可在使用者確認並通過本頁安全檢查後重載；下文保留原決策及證據。
+
 ## Context
 
 DEV-097 的產品決策已確認：normal update 只協調「何時重新載入才不會中斷工作」，不是讓使用者

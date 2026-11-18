@@ -8,14 +8,14 @@ import {
   PWA_UPDATE_CONTROLLER_TIMEOUT_MS,
   PWA_UPDATE_LEASE_MS,
   PWA_UPDATE_LEASE_RENEW_MS,
-  PWA_UPDATE_MAX_TARGET_ROUNDS,
-  retargetPwaUpdateTransaction,
   renewPwaUpdateTransactionLease,
   serializePwaUpdateTransaction,
   transitionPwaUpdateTransaction,
   type PwaUpdatePhase,
   type PwaUpdateTransactionV1,
 } from './pwaUpdateTransaction';
+import { confirmLoadedAppVersion, reserveAppVersionNavigation } from './pwaVersionPin';
+import { capturePwaReloadLocation, clearPwaReloadLocation } from './pwaReloadLocation';
 import {
   clearPwaReloadReservation,
   getPwaReloadSafetySnapshot,
@@ -84,15 +84,12 @@ type PwaUpdateListener = (state: PwaUpdateState) => void;
 
 const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
 const APP_SHELL_CHECK_INTERVAL_MS = 15 * 60 * 1000;
-const RECOVERY_WINDOW_MS = 5 * 60 * 1000;
-const MAX_AUTO_RECOVERY_ATTEMPTS = 1;
 const CURRENT_VERSION_KEY = 'projed.pwa-update.current-version.v1';
 const LEGACY_APP_VERSION_KEY = 'projed.pwaUpdate.currentBundle';
 const COMPLETED_VERSION_KEY = 'projed.pwa-update.completed-version.v1';
 const TRANSACTION_KEY = 'projed.pwa-update.transaction.v1';
 const TAB_ID_KEY = 'projed.pwa-update.tab-id.v1';
 const DISMISSED_TARGET_KEY = 'projed.pwa-update.dismissed-target.v1';
-const RECOVERY_ATTEMPTS_KEY = 'projed.pwa-update.recovery.v1';
 const LATEST_RELOAD_PARAM = 'projed_update_latest';
 const STATE_EVENT_NAME = 'projed:pwa-update-state';
 const CROSS_TAB_CHANNEL_NAME = 'projed.pwa-update.v1';
@@ -112,7 +109,6 @@ let applyPromise: Promise<boolean> | null = null;
 let retryPromise: Promise<boolean> | null = null;
 let recoveryPromise: Promise<boolean> | null = null;
 let documentSuspended = false;
-let boundaryEpoch = 0;
 const CHECK_TIMEOUT_MS = 10_000;
 const nativeUpdates = new WeakMap<ServiceWorkerRegistration, Promise<void>>();
 type DetectionFlight = {
@@ -270,31 +266,6 @@ const removeSessionValue = (key: string) => {
   }
 };
 
-const readRecoveryAttempts = () => {
-  const stored = getSessionValue(RECOVERY_ATTEMPTS_KEY);
-  if (!stored) return { count: 0, firstAttemptAt: 0 };
-  try {
-    const parsed: unknown = JSON.parse(stored);
-    if (!parsed || typeof parsed !== 'object') return { count: 0, firstAttemptAt: 0 };
-    const candidate = parsed as { count?: unknown; firstAttemptAt?: unknown };
-    const count = typeof candidate.count === 'number' && Number.isInteger(candidate.count) && candidate.count >= 0
-      ? candidate.count
-      : 0;
-    const firstAttemptAt = typeof candidate.firstAttemptAt === 'number' && Number.isFinite(candidate.firstAttemptAt)
-      ? candidate.firstAttemptAt
-      : 0;
-    return { count, firstAttemptAt };
-  } catch {
-    return { count: 0, firstAttemptAt: 0 };
-  }
-};
-
-const writeRecoveryAttempts = (count: number, firstAttemptAt: number) => (
-  setSessionValue(RECOVERY_ATTEMPTS_KEY, JSON.stringify({ count, firstAttemptAt }))
-);
-
-const resetRecoveryAttempts = () => removeSessionValue(RECOVERY_ATTEMPTS_KEY);
-
 const readTransaction = () => {
   if (typeof localStorage === 'undefined') return null;
   try {
@@ -355,7 +326,13 @@ const removeTransactionIf = (transactionId: string) => {
   }
 };
 
-const dismissedTarget = () => getSessionValue(DISMISSED_TARGET_KEY);
+const dismissedTarget = () => {
+  try {
+    return localStorage.getItem(DISMISSED_TARGET_KEY) ?? getSessionValue(DISMISSED_TARGET_KEY);
+  } catch {
+    return getSessionValue(DISMISSED_TARGET_KEY);
+  }
+};
 
 const extractBundleVersionFromSrc = (src: string | null | undefined) => {
   const match = src?.match(/\/assets\/(?:index|main)-([A-Za-z0-9_-]+)\.js/);
@@ -490,9 +467,9 @@ const fetchLatestAppVersion = async (options?: { deadlineAt: number; signal: Abo
   }
 };
 
-const buildLatestReloadUrl = () => {
+const buildLatestReloadUrl = (targetVersion: string) => {
   const url = new URL(window.location.href);
-  url.searchParams.set(LATEST_RELOAD_PARAM, `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  url.searchParams.set(LATEST_RELOAD_PARAM, targetVersion);
   return `${url.pathname}${url.search}${url.hash}`;
 };
 
@@ -500,6 +477,7 @@ const stripLatestReloadParam = () => {
   if (typeof window === 'undefined') return;
   const url = new URL(window.location.href);
   if (!url.searchParams.has(LATEST_RELOAD_PARAM)) return;
+  clearPwaReloadLocation();
   url.searchParams.delete(LATEST_RELOAD_PARAM);
   window.history.replaceState(null, document.title, `${url.pathname}${url.search}${url.hash}`);
 };
@@ -561,7 +539,6 @@ const completeTransaction = (transaction: PwaUpdateTransactionV1, currentVersion
     return false;
   }
   removeTransactionIf(transaction.transactionId);
-  resetRecoveryAttempts();
   setUpdateState({
     status: 'idle',
     updateAvailable: false,
@@ -582,49 +559,32 @@ const completeTransaction = (transaction: PwaUpdateTransactionV1, currentVersion
   return true;
 };
 
-const scheduleBoundedRecovery = (transaction: PwaUpdateTransactionV1) => {
-  if (transaction.recoveryAttemptCount !== 0) {
-    failTransaction(transaction, 'POST_RELOAD_MISMATCH', '更新後仍未載入目標版本，請使用下方恢復操作。');
-    return false;
-  }
-  try {
-    const recovering = transitionPwaUpdateTransaction(transaction, 'recovering', Date.now(), {
-      recoveryAttemptCount: 1,
-    });
-    if (!writeTransaction(recovering)) throw new Error('Unable to persist recovery transaction.');
-    setUpdateState({
-      status: 'recovering',
-      updateAvailable: false,
-      recoveryAttemptCount: 1,
-      transactionId: recovering.transactionId,
-      targetVersion: recovering.targetVersion,
-      errorMessage: '正在重新取得最新應用程式檔案。',
-    });
-    void startLocalRecovery(async () => {
-      const gate = await requestPwaReloadBoundary('app-open', getCurrentViewIntent());
-      if (gate.ok) window.location.replace(buildLatestReloadUrl());
-      else failTransaction(recovering, 'RECOVERY_BLOCKED', safetyFailureMessage(gate.code));
-      return gate.ok;
-    });
-    return true;
-  } catch (error) {
-    failTransaction(transaction, 'RECOVERY_RESERVATION_FAILED', error instanceof Error ? error.message : '更新恢復失敗。');
-    return false;
-  }
-};
-
 const reconcilePendingTransaction = () => {
-  if (normalReloadRequested) return;
+  if (normalReloadRequested || applyPromise || retryPromise || recoveryPromise) return;
   // Shared activation history cannot prove this document's failed view loaded.
   if (updateState.failureKind === 'load' || updateState.failureKind === 'cache-recovery') return;
   const transaction = readTransaction();
-  if (!transaction) return;
-
-  const currentVersion = getCurrentAppVersion();
-  if (currentVersion && currentVersion === transaction.targetVersion) {
-    completeTransaction(transaction, currentVersion);
+  if (!transaction) {
+    const currentVersion = getCurrentAppVersion();
+    const latestVersion = updateState.latestVersion;
+    if (currentVersion && latestVersion && currentVersion !== latestVersion
+      && readCompletedVersion() === latestVersion) {
+      showAvailableTarget(currentVersion, latestVersion);
+    }
     return;
   }
+
+  const currentVersion = getCurrentAppVersion();
+  const reservation = getPwaReloadReservation();
+  const ownsLocalReload = transaction.ownerTabId === getTabId()
+    && reservation?.targetVersion === transaction.targetVersion;
+  if (currentVersion && currentVersion === transaction.targetVersion) {
+    if (ownsLocalReload) completeTransaction(transaction, currentVersion);
+    return;
+  }
+  if (!ownsLocalReload && transaction.targetVersion !== updateState.latestVersion) return;
+  // A foreign attempt can change the waiting worker, not this page's local UI or navigation.
+  if (transaction.ownerTabId && transaction.ownerTabId !== getTabId()) return;
 
   if (transaction.phase === 'failed') {
     syncStateFromTransaction(transaction);
@@ -636,12 +596,9 @@ const reconcilePendingTransaction = () => {
     return;
   }
 
-  if (transaction.normalReloadReserved) {
-    const reservation = getPwaReloadReservation();
-    const ownsLocalReload = transaction.ownerTabId === getTabId()
-      && reservation?.targetVersion === transaction.targetVersion;
-    if (ownsLocalReload) scheduleBoundedRecovery(transaction);
-    else syncStateFromTransaction(transaction);
+  if (transaction.normalReloadReserved && ownsLocalReload) {
+    clearPwaReloadReservation();
+    failTransaction(transaction, 'POST_RELOAD_MISMATCH', '更新後仍未載入目標版本，請重試。');
     return;
   }
 
@@ -667,16 +624,24 @@ const recordLoadedAppVersion = () => {
     previousVersion = null;
   }
 
+  const versionConfirmed = confirmLoadedAppVersion(currentVersion);
   setUpdateState({
     currentVersion,
     latestVersion: updateState.latestVersion || currentVersion,
     previousVersion,
     pendingLocalTarget: null,
   });
-  const reloadReservation = getPwaReloadReservation();
-  if (reloadReservation?.targetVersion === currentVersion) clearPwaReloadReservation();
   setPwaReloadReadiness('version-shell', currentVersion, true);
-  reconcilePendingTransaction();
+  if (versionConfirmed) reconcilePendingTransaction();
+  const reloadReservation = getPwaReloadReservation();
+  if (reloadReservation?.targetVersion === currentVersion) {
+    clearPwaReloadReservation();
+    if (!versionConfirmed) {
+      setUpdateState({ status: 'failed', errorMessage: '無法保存已載入版本，請重試。', errorCode: 'VERSION_PIN_WRITE_FAILED', failureKind: 'update' });
+    } else if (!updateState.lastAppliedAt) {
+      setUpdateState({ lastAppliedAt: Date.now() });
+    }
+  }
 };
 
 const createAvailableTransaction = (sourceVersion: string, targetVersion: string) => (
@@ -691,44 +656,35 @@ const createAvailableTransaction = (sourceVersion: string, targetVersion: string
   })
 );
 
-const ensureAvailableTransaction = (sourceVersion: string, targetVersion: string) => {
-  const existing = readTransaction();
-  if (existing) {
-    if (existing.targetVersion === targetVersion) return existing;
-    if (existing.phase !== 'available' && existing.phase !== 'failed') return existing;
-  }
-
-  // completedVersion is cross-tab history, not proof that this document has
-  // loaded the target. A stale client whose sourceVersion still differs must
-  // create its own local convergence obligation at its next safe boundary.
-
-  const next = createAvailableTransaction(sourceVersion, targetVersion);
-  if (!writeTransaction(next)) throw new Error('Unable to persist PWA update transaction.');
-  return next;
+const showAvailableTarget = (currentVersion: string, targetVersion: string, errorMessage: string | null = null) => {
+  const sameTarget = updateState.targetVersion === targetVersion;
+  setUpdateState({
+    status: 'update-available',
+    updateAvailable: true,
+    currentVersion,
+    latestVersion: targetVersion,
+    targetVersion,
+    pendingLocalTarget: targetVersion,
+    dismissedAt: dismissedTarget() === targetVersion ? Date.now() : null,
+    transactionId: null,
+    normalReloadReserved: false,
+    ownerFence: 0,
+    lastUpdateFoundAt: sameTarget ? updateState.lastUpdateFoundAt || Date.now() : Date.now(),
+    errorMessage: errorMessage ?? (sameTarget && updateState.updateAvailable ? updateState.errorMessage : null),
+    errorCode: null,
+    failureKind: null,
+  });
 };
 
 const publishDetectedTarget = (currentVersion: string, latestVersion: string, flight: DetectionFlight) => {
     setUpdateState({ currentVersion, latestVersion, lastCheckedAt: Date.now() });
     if (!flightIsCurrent(flight)) return false;
     if (updateState.failureKind === 'load' || updateState.failureKind === 'cache-recovery') return false;
-    const observedWaitingWorker = registeredServiceWorker?.waiting;
-    if (
-      observedWaitingWorker
-      && !registeredServiceWorker?.installing
-      && latestVersion !== currentVersion
-    ) {
-      waitingWorkerTargets.set(observedWaitingWorker, latestVersion);
-    }
     const existing = readTransaction();
-    if (existing && existing.targetVersion === currentVersion) {
-      completeTransaction(existing, currentVersion);
-      return false;
-    }
     // A completed version is global metadata, not proof that this document
     // has loaded it. An old tab must keep its local pending target.
     if (latestVersion === currentVersion) {
-      if (!existing || existing.phase === 'failed') {
-        if (existing) removeTransactionIf(existing.transactionId);
+      if (updateState.targetVersion !== currentVersion || updateState.failureKind !== 'update') {
         setUpdateState({
           status: 'idle',
           updateAvailable: false,
@@ -745,49 +701,17 @@ const publishDetectedTarget = (currentVersion: string, latestVersion: string, fl
     }
 
     // Detection never reopens a failed activation; retry owns that effect.
-    if (existing?.phase === 'failed' || updateState.failureKind === 'update') return false;
+    if (updateState.failureKind === 'update' && updateState.targetVersion === latestVersion) return false;
 
     // Another tab may already have activated and completed this target. The
     // current document is still stale, so keep a local obligation but do not
     // create a second global transaction or message the worker again.
-    if (readCompletedVersion() === latestVersion) {
-      const isDismissed = dismissedTarget() === latestVersion;
-      setUpdateState({
-        status: 'update-available',
-        updateAvailable: true,
-        dismissedAt: isDismissed ? Date.now() : null,
-        currentVersion,
-        latestVersion,
-        pendingLocalTarget: latestVersion,
-        transactionId: null,
-        targetVersion: latestVersion,
-        ownerFence: 0,
-        normalReloadReserved: false,
-        lastUpdateFoundAt: updateState.lastUpdateFoundAt || Date.now(),
-        errorMessage: null,
-      });
-      return true;
+    if (existing?.phase === 'failed' && existing.targetVersion === latestVersion
+      && existing.ownerTabId === getTabId()) {
+      syncStateFromTransaction(existing);
+      return false;
     }
-
-    const transaction = ensureAvailableTransaction(currentVersion, latestVersion);
-    if (!transaction) return false;
-    const isDismissed = dismissedTarget() === latestVersion;
-    setUpdateState({
-      status: transaction.phase === 'available' ? 'update-available' : statusForPhase(transaction.phase),
-      updateAvailable: transaction.phase !== 'failed',
-      dismissedAt: isDismissed ? Date.now() : null,
-      currentVersion,
-      latestVersion,
-      pendingLocalTarget: latestVersion,
-      transactionId: transaction.transactionId,
-      targetVersion: transaction.targetVersion,
-      ownerFence: transaction.ownerFence,
-      normalReloadReserved: transaction.normalReloadReserved,
-      lastUpdateFoundAt: transaction.phase === 'available' ? (updateState.lastUpdateFoundAt || Date.now()) : updateState.lastUpdateFoundAt,
-      errorMessage: transaction.phase === 'failed' ? transactionFailureMessage(transaction) : null,
-      errorCode: transaction.phase === 'failed' ? transaction.errorCode || 'APPLY_FAILED' : null,
-      failureKind: transaction.phase === 'failed' ? 'update' : null,
-    });
+    showAvailableTarget(currentVersion, latestVersion);
     return true;
 };
 
@@ -805,6 +729,27 @@ const cancelDetection = () => {
   flight.controller.abort(new Error('CHECK_CANCELLED'));
   setUpdateState({ check: checkResult('cancelled', flight) });
 };
+const readWorkerVersion = async (worker: ServiceWorker, deadlineAt: number, signal?: AbortSignal) => {
+  if (typeof MessageChannel === 'undefined') throw new Error('CHECK_VERSION_UNKNOWN');
+  const channel = new MessageChannel();
+  const requestId = createId('worker');
+  const response = new Promise<unknown>((resolve, reject) => {
+    channel.port1.onmessage = event => resolve(event.data);
+    channel.port1.onmessageerror = () => reject(new Error('CHECK_VERSION_UNKNOWN'));
+  });
+  try {
+    worker.postMessage({ type: 'PROJED_PWA_WORKER_VERSION_V1', requestId }, [channel.port2]);
+    const reply = await waitUntil(response, deadlineAt, signal);
+    const identity = reply as { type?: unknown; schemaVersion?: unknown; requestId?: unknown; version?: unknown } | null;
+    if (!identity || identity.type !== 'PROJED_PWA_WORKER_VERSION_V1' || identity.schemaVersion !== 1
+      || identity.requestId !== requestId || !validVersion(identity.version)) throw new Error('CHECK_VERSION_UNKNOWN');
+    return identity.version;
+  } finally {
+    channel.port1.close();
+    channel.port2.close();
+  }
+};
+
 const confirmSameVersionWaitingWorker = async (flight: DetectionFlight, latestVersion: string) => {
   const registration = registeredServiceWorker;
   if (!registration) return;
@@ -823,31 +768,13 @@ const confirmSameVersionWaitingWorker = async (flight: DetectionFlight, latestVe
   if (registeredServiceWorker !== registration || registration.installing) throw new Error('CHECK_VERSION_UNKNOWN');
   const waiting = registration.waiting;
   if (!waiting || waitingWorkerTargets.get(waiting) === latestVersion) return;
-  if (typeof MessageChannel === 'undefined') throw new Error('CHECK_VERSION_UNKNOWN');
-  const channel = new MessageChannel();
-  const requestId = String(flight.requestId);
-  const response = new Promise<unknown>((resolve, reject) => {
-    channel.port1.onmessage = event => resolve(event.data);
-    channel.port1.onmessageerror = () => reject(new Error('CHECK_VERSION_UNKNOWN'));
-  });
-  try {
-    waiting.postMessage({ type: 'PROJED_PWA_WORKER_VERSION_V1', requestId }, [channel.port2]);
-    const reply = await waitUntil(response, flight.deadlineAt, flight.controller.signal);
-    if (!flightIsCurrent(flight)) throw new Error('CHECK_CANCELLED');
-    const identity = reply as { type?: unknown; schemaVersion?: unknown; requestId?: unknown; version?: unknown } | null;
-    if (!identity || identity.type !== 'PROJED_PWA_WORKER_VERSION_V1' || identity.schemaVersion !== 1
-      || identity.requestId !== requestId || !validVersion(identity.version) || identity.version !== latestVersion
-      || registeredServiceWorker !== registration || registration.waiting !== waiting || registration.installing) {
-      throw new Error('CHECK_VERSION_UNKNOWN');
-    }
-    // Bind only the exact worker that answered, after the flight/snapshot checks.
-    waitingWorkerTargets.set(waiting, identity.version);
-  } finally {
-    channel.port1.onmessage = null;
-    channel.port1.onmessageerror = null;
-    channel.port1.close();
-    channel.port2.close();
+  const version = await readWorkerVersion(waiting, flight.deadlineAt, flight.controller.signal);
+  if (!flightIsCurrent(flight)) throw new Error('CHECK_CANCELLED');
+  if (version !== latestVersion || registeredServiceWorker !== registration
+    || registration.waiting !== waiting || registration.installing) {
+    throw new Error('CHECK_VERSION_UNKNOWN');
   }
+  waitingWorkerTargets.set(waiting, version);
 };
 const runDetection = async (flight: DetectionFlight): Promise<PwaUpdateCheckState> => {
   let result: PwaUpdateCheckState;
@@ -929,8 +856,8 @@ export const checkPwaUpdate = async (options?: { deadlineAt?: number }): Promise
   if (isLocalUpdateBusy()) return checkResult('busy');
   const deadlineAt = options?.deadlineAt ?? Date.now() + CHECK_TIMEOUT_MS;
   if (Date.now() >= deadlineAt) return checkResult('error', undefined, 'CHECK_TIMEOUT');
-  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return checkResult('error', undefined, 'CHECK_UNAVAILABLE');
-  const flight = detectUpdate(true);
+  if (typeof navigator === 'undefined') return checkResult('error', undefined, 'CHECK_UNAVAILABLE');
+  const flight = detectUpdate(Boolean(serviceWorkerRegistrationPromise));
   try {
     return { ...await waitUntil(flight.promise, Math.min(deadlineAt, flight.deadlineAt)) };
   } catch {
@@ -941,29 +868,17 @@ const checkForAppShellUpdate = async (requireWorker = false) => {
   if (documentSuspended || isLocalUpdateBusy()) return false;
   return (await detectUpdate(requireWorker).promise).phase === 'available';
 };
-const checkAtNaturalBoundary = async (boundary: 'app-open' | 'foreground') => {
-  const epoch = boundaryEpoch;
-  if (documentSuspended || document.visibilityState !== 'visible') return;
-  const result = await checkForAppShellUpdate(boundary === 'foreground');
-  if (result && epoch === boundaryEpoch && !documentSuspended && document.visibilityState === 'visible'
-    && getPwaReloadSafetySnapshot().state === 'safe') void applyPwaUpdateAtBoundary(boundary);
+const checkWhenVisible = () => {
+  if (!documentSuspended && document.visibilityState === 'visible') void checkForAppShellUpdate();
 };
 const bindAppShellUpdateChecks = () => {
   if (appShellCheckListenersBound || typeof window === 'undefined' || typeof document === 'undefined') return;
   appShellCheckListenersBound = true;
-  const appOpenEpoch = boundaryEpoch;
-  const appOpenVisible = !documentSuspended && document.visibilityState === 'visible';
-  window.setTimeout(() => {
-    if (appOpenVisible && appOpenEpoch === boundaryEpoch) void checkAtNaturalBoundary('app-open');
-  }, 3000);
-  window.setInterval(() => void checkForAppShellUpdate(), APP_SHELL_CHECK_INTERVAL_MS);
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && !documentSuspended) void checkAtNaturalBoundary('foreground');
-    else boundaryEpoch += 1;
-  });
+  window.setTimeout(checkWhenVisible, 3000);
+  window.setInterval(checkWhenVisible, APP_SHELL_CHECK_INTERVAL_MS);
+  document.addEventListener('visibilitychange', checkWhenVisible);
   window.addEventListener('pagehide', () => {
     documentSuspended = true;
-    boundaryEpoch += 1;
     cancelDetection();
   });
   window.addEventListener('pageshow', (event) => {
@@ -971,27 +886,8 @@ const bindAppShellUpdateChecks = () => {
     documentSuspended = false;
     recordLoadedAppVersion();
     syncReloadSafetyState();
-    if (document.visibilityState === 'visible') void checkAtNaturalBoundary('foreground');
+    checkWhenVisible();
   });
-};
-
-const reserveAutomaticRecoveryAttempt = () => {
-  const now = Date.now();
-  const stored = readRecoveryAttempts();
-  const withinWindow = stored.firstAttemptAt > 0 && now - stored.firstAttemptAt < RECOVERY_WINDOW_MS;
-  const count = withinWindow ? stored.count : 0;
-  const firstAttemptAt = withinWindow ? stored.firstAttemptAt : now;
-  if (count >= MAX_AUTO_RECOVERY_ATTEMPTS) {
-    setUpdateState({ recoveryAttemptCount: count });
-    return false;
-  }
-  const nextCount = count + 1;
-  if (!writeRecoveryAttempts(nextCount, firstAttemptAt)) {
-    setUpdateState({ status: 'failed', errorMessage: '無法保存恢復保護狀態，請手動重新整理。' });
-    return false;
-  }
-  setUpdateState({ recoveryAttemptCount: nextCount });
-  return true;
 };
 
 const delay = (milliseconds: number) => new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds));
@@ -1034,7 +930,13 @@ const waitForWorkerActivated = () => new Promise<boolean>((resolve) => {
 });
 
 const reloadAtOwnBoundary = (targetVersion: string) => {
+  if (!capturePwaReloadLocation(targetVersion)) throw new Error('VIEW_INTENT_NOT_DURABLE');
   if (!reservePwaReloadForTarget(targetVersion)) throw new Error('RELOAD_RESERVATION_FAILED');
+  if (!reserveAppVersionNavigation(targetVersion)) {
+    clearPwaReloadReservation();
+    clearPwaReloadLocation();
+    throw new Error('VERSION_NAVIGATION_RESERVATION_FAILED');
+  }
   normalReloadRequested = true;
   let pagehideReceived = false;
   const onPageHide = () => { pagehideReceived = true; };
@@ -1043,6 +945,7 @@ const reloadAtOwnBoundary = (targetVersion: string) => {
     window.removeEventListener('pagehide', onPageHide);
     if (pagehideReceived) return;
     clearPwaReloadReservation();
+    clearPwaReloadLocation();
     normalReloadRequested = false;
     setUpdateState({
       status: 'update-available',
@@ -1052,7 +955,7 @@ const reloadAtOwnBoundary = (targetVersion: string) => {
       errorMessage: '重新載入尚未開始，請再試一次。',
     });
   }, 3000);
-  window.location.replace(buildLatestReloadUrl());
+  window.location.replace(buildLatestReloadUrl(targetVersion));
 };
 
 type ApplyLockRecord = {
@@ -1169,7 +1072,8 @@ const claimApplyTransaction = async (sourceVersion: string, targetVersion: strin
     await releaseIndexedDbLock(lease);
     return null;
   }
-  if (existing && existing.phase === 'failed' && existing.targetVersion === targetVersion && !retryFailed) {
+  if (existing && existing.phase === 'failed' && existing.ownerTabId === getTabId()
+    && existing.targetVersion === targetVersion && !retryFailed) {
     await releaseIndexedDbLock(lease);
     return null;
   }
@@ -1219,47 +1123,35 @@ const assertApplyOwnership = (transaction: PwaUpdateTransactionV1) => {
   return Boolean(current && ownsPwaUpdateTransaction(current, getTabId(), transaction.ownerFence, Date.now()));
 };
 
-const prepareStableTarget = async (claimed: PwaUpdateTransactionV1) => {
-  let transaction = claimed;
-  let waitingWorker: ServiceWorker | null = null;
-  for (let round = 0; round < PWA_UPDATE_MAX_TARGET_ROUNDS; round += 1) {
-    if (!assertApplyOwnership(transaction)) throw new Error('PWA update owner lease expired.');
-    const registration = registeredServiceWorker;
-    if (registration) {
-      const previousWaiting = registration.waiting;
-      const previousTarget = previousWaiting ? waitingWorkerTargets.get(previousWaiting) : null;
-      await waitUntil(refreshWorker(registration), Date.now() + CHECK_TIMEOUT_MS);
-      const nextWaitingWorker = previousWaiting
-        && previousTarget === transaction.targetVersion
-        && registration.waiting === previousWaiting
-        ? previousWaiting
-        : await waitForWaitingWorker(registration, previousWaiting);
-      // Another client may have activated the worker already. In that case
-      // there is no waiting worker left to message; this document can still
-      // converge through its own reload boundary.
-      if (nextWaitingWorker) waitingWorker = nextWaitingWorker;
-    }
-    const latest = await fetchLatestAppVersion();
-    if (!latest) throw new Error('Latest app version is unavailable.');
-    if (waitingWorker) waitingWorkerTargets.set(waitingWorker, latest);
-    if (latest === transaction.targetVersion) {
-      if (waitingWorker && waitingWorkerTargets.get(waitingWorker) !== latest) throw new Error('TARGET_UNSTABLE');
-      return { transaction, waitingWorker };
-    }
-    if (round === PWA_UPDATE_MAX_TARGET_ROUNDS - 1) throw new Error('TARGET_UNSTABLE');
-    transaction = retargetPwaUpdateTransaction(transaction, latest, Date.now());
-    if (!persistOwnedTransaction(transaction)) throw new Error('PWA update retarget lost ownership.');
-    setUpdateState({ latestVersion: latest, targetVersion: latest });
+class UpdateTargetChanged extends Error {
+  constructor(readonly latestVersion: string) {
+    super('UPDATE_TARGET_CHANGED');
   }
-  throw new Error('TARGET_UNSTABLE');
+}
+
+const verifyConfirmedTarget = async (targetVersion: string) => {
+  const latestVersion = await fetchLatestAppVersion();
+  if (latestVersion !== targetVersion) throw new UpdateTargetChanged(latestVersion);
+};
+
+const prepareWaitingWorker = async (targetVersion: string) => {
+  const registration = registeredServiceWorker;
+  if (!registration) return null;
+  await waitUntil(refreshWorker(registration), Date.now() + CHECK_TIMEOUT_MS);
+  const waiting = registration.waiting ?? await waitForWaitingWorker(registration);
+  if (!waiting) return null;
+  const version = await readWorkerVersion(waiting, Date.now() + CHECK_TIMEOUT_MS);
+  if (registration.waiting !== waiting) return null;
+  // An unrelated waiting worker must never be activated by this confirmation.
+  return version === targetVersion ? waiting : null;
 };
 
 const applyStandardUpdate = async (transaction: PwaUpdateTransactionV1, lease: ApplyLockRecord, canContinue: () => boolean) => {
   const renewal = startLeaseRenewal(transaction, lease);
   let current = transaction;
   try {
-    const prepared = await prepareStableTarget(current);
-    current = prepared.transaction;
+    const waitingWorker = await prepareWaitingWorker(current.targetVersion);
+    await verifyConfirmedTarget(current.targetVersion);
     if (!canContinue()) return false;
     current = transitionPwaUpdateTransaction(current, 'awaiting-controller', Date.now(), { normalReloadReserved: true });
     if (!persistOwnedTransaction(current)) throw new Error('PWA update reservation was lost.');
@@ -1275,14 +1167,15 @@ const applyStandardUpdate = async (transaction: PwaUpdateTransactionV1, lease: A
 
     if (!assertApplyOwnership(current)) throw new Error('PWA update owner lease expired before activation.');
     if (!canContinue()) return false;
-    if (prepared.waitingWorker) {
+    if (waitingWorker && registeredServiceWorker?.waiting === waitingWorker) {
       const activated = waitForWorkerActivated();
       // Message the exact worker that passed target stabilization. Workbox's
       // convenience method can still point at an older waiting worker during
       // a B-waiting→C retarget race.
-      prepared.waitingWorker.postMessage({ type: 'SKIP_WAITING' });
+      waitingWorker.postMessage({ type: 'SKIP_WAITING' });
       if (!(await activated)) throw new Error('WORKER_ACTIVATION_FAILED');
     }
+    await verifyConfirmedTarget(current.targetVersion);
     if (!canContinue()) return false;
     reloadAtOwnBoundary(current.targetVersion);
     return true;
@@ -1315,15 +1208,16 @@ const runTestModeApply = async () => {
   return true;
 };
 
-const runQueuedApply = async (retryFailed = false, canContinue: () => boolean = () => !documentSuspended) => {
+const runQueuedApply = async (targetVersion: string, retryFailed: boolean, canContinue: () => boolean) => {
   if (!canContinue()) return false;
   const currentVersion = getCurrentAppVersion() || updateState.currentVersion;
-  const targetVersion = updateState.targetVersion || updateState.latestVersion;
   if (!currentVersion || !targetVersion || currentVersion === targetVersion) {
     setUpdateState({ status: 'idle', updateAvailable: false });
     return false;
   }
 
+  await verifyConfirmedTarget(targetVersion);
+  if (!canContinue()) return false;
   if (readCompletedVersion() === targetVersion) {
     if (retryFailed) clearPwaReloadReservation();
     reloadAtOwnBoundary(targetVersion);
@@ -1332,7 +1226,7 @@ const runQueuedApply = async (retryFailed = false, canContinue: () => boolean = 
 
   const ownership = await claimApplyTransaction(currentVersion, targetVersion, retryFailed);
   if (!ownership) {
-    syncStateFromTransaction(readTransaction());
+    setUpdateState({ errorMessage: '另一個分頁正在更新，請稍後再按更新。' });
     return false;
   }
 
@@ -1355,6 +1249,10 @@ const runQueuedApply = async (retryFailed = false, canContinue: () => boolean = 
     applied = await applyStandardUpdate(transaction, lease, canContinue);
     return applied;
   } catch (error) {
+    if (error instanceof UpdateTargetChanged) {
+      if (assertApplyOwnership(transaction)) removeTransactionIf(transaction.transactionId);
+      throw error;
+    }
     const message = error instanceof Error && error.message === 'TARGET_UNSTABLE'
       ? '版本正在切換，請稍後重新檢查。'
       : error instanceof Error ? error.message : '無法套用新版本。';
@@ -1416,11 +1314,11 @@ const installPwaUpdateTestControls = () => {
     try {
       localStorage.removeItem(TRANSACTION_KEY);
       localStorage.removeItem(COMPLETED_VERSION_KEY);
+      localStorage.removeItem(DISMISSED_TARGET_KEY);
     } catch {
       // Test reset remains deterministic in memory even when storage is unavailable.
     }
     removeSessionValue(DISMISSED_TARGET_KEY);
-    resetRecoveryAttempts();
     notifyUpdateListeners();
   };
 
@@ -1466,6 +1364,9 @@ const setupCrossTabSync = () => {
   }
   window.addEventListener('storage', (event) => {
     if (event.key === TRANSACTION_KEY || event.key === COMPLETED_VERSION_KEY) reconcilePendingTransaction();
+    if (event.key === DISMISSED_TARGET_KEY && updateState.updateAvailable) {
+      setUpdateState({ dismissedAt: dismissedTarget() === updateState.targetVersion ? Date.now() : null });
+    }
   });
 };
 
@@ -1481,11 +1382,17 @@ export const subscribePwaUpdateState = (listener: PwaUpdateListener) => {
 
 export const dismissPwaUpdatePrompt = () => {
   const target = updateState.targetVersion || updateState.latestVersion;
-  if (target) setSessionValue(DISMISSED_TARGET_KEY, target);
+  if (target) {
+    try { localStorage.setItem(DISMISSED_TARGET_KEY, target); }
+    catch { setSessionValue(DISMISSED_TARGET_KEY, target); }
+  }
   setUpdateState({ dismissedAt: Date.now() });
 };
 
-const getCurrentViewIntent = (): ViewMode | null => {
+const getCurrentViewIntent = (): ViewMode | 'quick-task' | null => {
+  const view = getPwaReloadSafetySnapshot().currentView;
+  if (view) return view;
+  if (/^\/quick-task(?:\/|$)/.test(window.location.pathname)) return 'quick-task';
   if (typeof localStorage === 'undefined') return null;
   try {
     const value = localStorage.getItem('projed-last-view');
@@ -1514,51 +1421,68 @@ const safetyFailureMessage = (code: PwaReloadSafetyFailureCode) => {
   }
 };
 
-const applyPwaUpdateAtBoundary = (boundary: PwaReloadBoundary, retryFailed = false): Promise<boolean> => {
+const applyConfirmedUpdate = (targetVersion: string, retryFailed = false): Promise<boolean> => {
   if (applyPromise) return applyPromise;
   if (retryPromise && !retryFailed) return retryPromise;
   if (recoveryPromise) return recoveryPromise;
   if (documentSuspended) return Promise.resolve(false);
   if ((updateState.status === 'failed' || updateState.failureKind === 'load' || updateState.failureKind === 'cache-recovery') && !retryFailed) return Promise.resolve(false);
   if (!updateState.updateAvailable && !updateState.targetVersion && !updateState.latestVersion) return Promise.resolve(false);
-  const naturalEpoch = boundary === 'user-confirmed' ? null : boundaryEpoch;
   const canContinue = () => !documentSuspended
-    && getPwaReloadSafetySnapshot().state === 'safe'
-    && (naturalEpoch === null || (naturalEpoch === boundaryEpoch && document.visibilityState === 'visible'));
+    && getPwaReloadSafetySnapshot().state === 'safe';
   // Install the local effect guard before cancellation can synchronously notify subscribers.
   applyPromise = Promise.resolve().then(async () => {
 
   // Test-mode transaction controls intentionally bypass the production safety
   // gate; production never exposes this control surface.
-  if ((import.meta.env.DEV || import.meta.env.MODE === 'test') && typeof window !== 'undefined' && window.__projedPwaUpdateTest) {
+  if ((import.meta.env.DEV || import.meta.env.MODE === 'test') && targetVersion === 'test-next' && window.__projedPwaUpdateTest) {
     return runTestModeApply();
   }
 
   const currentView = getCurrentViewIntent();
-  const gate = await requestPwaReloadBoundary(boundary, currentView);
+  const gate = await requestPwaReloadBoundary('user-confirmed', currentView);
   syncReloadSafetyState();
   if (gate.ok && !canContinue()) return false;
   if (!gate.ok) {
     setUpdateState({
       status: retryFailed ? 'failed' : 'update-available',
       updateAvailable: !retryFailed,
-      pendingBoundary: boundary,
+      pendingBoundary: null,
       pendingLocalTarget: updateState.targetVersion || updateState.latestVersion,
       errorMessage: safetyFailureMessage(gate.code),
     });
     return false;
   }
 
-  return runQueuedApply(retryFailed, canContinue);
+  try {
+    return await runQueuedApply(targetVersion, retryFailed, canContinue);
+  } catch (error) {
+    const currentVersion = getCurrentAppVersion();
+    if (error instanceof UpdateTargetChanged && currentVersion) {
+      if (currentVersion === error.latestVersion) {
+        setUpdateState({ status: 'idle', updateAvailable: false, latestVersion: currentVersion, targetVersion: null, pendingLocalTarget: null, errorMessage: null, errorCode: null, failureKind: null });
+      } else {
+        showAvailableTarget(currentVersion, error.latestVersion, '可用版本已變更，請再按一次更新。');
+      }
+    } else {
+      setUpdateState({ status: 'failed', updateAvailable: false, errorMessage: '無法取得可用版本，請重試。', errorCode: 'APPLY_FAILED', failureKind: 'update' });
+    }
+    return false;
+  }
   }).finally(() => { applyPromise = null; notifyUpdateListeners(); });
   cancelDetection();
   notifyUpdateListeners();
   return applyPromise;
 };
 
-export const applyPwaUpdate = async () => {
+export const applyPwaUpdate = async (confirmedTarget?: string | null) => {
   if (applyPromise) return applyPromise;
-  return applyPwaUpdateAtBoundary('user-confirmed');
+  const target = updateState.targetVersion || updateState.latestVersion;
+  if (confirmedTarget && confirmedTarget !== target) {
+    if (updateState.updateAvailable) setUpdateState({ errorMessage: '可用版本已變更，請再按一次更新。' });
+    return false;
+  }
+  return updateState.updateAvailable && target ? applyConfirmedUpdate(target) : false;
 };
 
 // An explicit retry starts a new fenced attempt; background checks never reopen
@@ -1569,9 +1493,13 @@ const runPwaUpdateRetry = async () => {
   const requiresReload = failureKind === 'load' || failureKind === 'cache-recovery';
   try {
     const currentVersion = getCurrentAppVersion();
-    const latestVersion = await fetchLatestAppVersion();
-    if (!currentVersion || !latestVersion) throw new Error('無法確認版本，請稍後重試。');
-    setUpdateState({ currentVersion, latestVersion, targetVersion: latestVersion });
+    if (!currentVersion) throw new Error('無法確認版本，請稍後重試。');
+    const confirmedTarget = updateState.targetVersion;
+    const latestVersion = requiresReload ? currentVersion : await fetchLatestAppVersion();
+    if (confirmedTarget && confirmedTarget !== latestVersion && !requiresReload && latestVersion !== currentVersion) {
+      showAvailableTarget(currentVersion, latestVersion, '可用版本已變更，請再按一次更新。');
+      return false;
+    }
     if (latestVersion === currentVersion && !requiresReload) {
       const transaction = readTransaction();
       if (transaction?.phase === 'failed') removeTransactionIf(transaction.transactionId);
@@ -1590,7 +1518,7 @@ const runPwaUpdateRetry = async () => {
       reloadAtOwnBoundary(latestVersion);
       return true;
     }
-    return await applyPwaUpdateAtBoundary('user-confirmed', true);
+    return await applyConfirmedUpdate(latestVersion, true);
   } catch (error) {
     setUpdateState({ status: 'failed', errorMessage: error instanceof Error ? error.message : '無法重試，請稍後再試。', errorCode: 'RETRY_CHECK_FAILED', failureKind: failureKind || 'update' });
     return false;
@@ -1618,24 +1546,32 @@ const runCacheRecovery = async () => {
   setUpdateState({ status: 'recovering', updateAvailable: false, errorMessage: null });
 
   try {
-    if (!('serviceWorker' in navigator)) throw new Error('Service worker is unavailable.');
-    const registrations = await navigator.serviceWorker.getRegistrations();
-    const unregisterResults = await Promise.all(registrations.map((registration) => registration.unregister()));
-    if (unregisterResults.some((result) => result !== true)) throw new Error('Service worker unregister did not complete.');
-    if (!('caches' in window)) throw new Error('Cache Storage is unavailable.');
-    const cacheNames = await window.caches.keys();
-    const deleteResults = await Promise.all(cacheNames.map((cacheName) => window.caches.delete(cacheName)));
-    if (deleteResults.some((result) => result !== true)) throw new Error('Cache Storage deletion did not complete.');
-    const transaction = readTransaction();
-    if (transaction) removeTransactionIf(transaction.transactionId);
-    resetRecoveryAttempts();
+    const currentVersion = getCurrentAppVersion();
+    if (!currentVersion) throw new Error('無法確認目前版本。');
+    if ('caches' in window) {
+      const cacheNames = await window.caches.keys();
+      const scope = `${window.location.origin}/`;
+      const cacheId = currentVersion.replace(/^release:/, '');
+      const versionPath = `/app-releases/${currentVersion.replace(':', '-')}/`;
+      for (const cacheName of [`projed-${cacheId}-precache-v2-${scope}`, 'projed-version-files']) {
+        if (!cacheNames.includes(cacheName)) continue;
+        const cache = await window.caches.open(cacheName);
+        const versionFiles = (await cache.keys()).filter(request => new URL(request.url).pathname.startsWith(versionPath));
+        const deleted = await Promise.all(versionFiles.map(request => cache.delete(request)));
+        if (deleted.some(result => !result)) throw new Error('無法清除目前版本的快取。');
+      }
+    }
+    if (documentSuspended || getPwaReloadSafetySnapshot().state !== 'safe') {
+      throw new Error('無法確認內容已保存，請再試一次。');
+    }
+    clearPwaReloadReservation();
+    reloadAtOwnBoundary(currentVersion);
   } catch (error) {
     const message = error instanceof Error ? error.message : '清除應用程式快取失敗。';
     console.warn('[PWA] Failed to clear app cache:', error);
     setUpdateState({ status: 'failed', errorMessage: message, errorCode: 'CACHE_RECOVERY_FAILED', failureKind: 'cache-recovery' });
     return false;
   }
-  window.location.replace(buildLatestReloadUrl());
   return true;
 };
 
@@ -1654,15 +1590,6 @@ export const handleRecoverableAppLoadError = (error: unknown, source: 'error' | 
   const message = error instanceof Error ? error.message : typeof error === 'string' ? error : '新版檔案載入失敗。';
   console.warn(`[PWA] Recoverable app load error from ${source}:`, error);
   setUpdateState({ status: 'recoverable-cache-error', updateAvailable: false, errorMessage: message, errorCode: 'CHUNK_LOAD_FAILED', failureKind: 'load' });
-  if (!reserveAutomaticRecoveryAttempt()) {
-    setUpdateState({ status: 'failed', errorMessage: message });
-    return false;
-  }
-  void startLocalRecovery(async () => {
-    const gate = await requestPwaReloadBoundary('foreground', getCurrentViewIntent());
-    if (gate.ok) window.location.replace(buildLatestReloadUrl());
-    return gate.ok;
-  });
   return true;
 };
 
@@ -1673,22 +1600,16 @@ export const setupPwaLifecycle = () => {
   if (typeof window === 'undefined') return;
   if (!safetySubscriptionBound) {
     safetySubscriptionBound = true;
-    let previousState = getPwaReloadSafetySnapshot();
+    let lastView = getPwaReloadSafetySnapshot().currentView;
     subscribePwaReloadSafety((nextState) => {
+      const viewChanged = lastView !== nextState.currentView;
+      lastView = nextState.currentView;
       setUpdateState({
         reloadSafetyState: nextState.state,
         reloadSafetyCode: nextState.code,
         pendingBoundary: nextState.pendingBoundary,
       });
-      const viewChanged = previousState.currentView !== null
-        && nextState.currentView !== null
-        && previousState.currentView !== nextState.currentView;
-      const becameSafeAtAppOpen = previousState.state === 'booting' && nextState.state === 'safe';
-      previousState = nextState;
-      if (!documentSuspended && document.visibilityState === 'visible' && updateState.updateAvailable
-        && (viewChanged || becameSafeAtAppOpen) && nextState.state === 'safe') {
-        void applyPwaUpdateAtBoundary(viewChanged ? 'view-transition' : 'app-open');
-      }
+      if (viewChanged && import.meta.env.PROD) checkWhenVisible();
     });
   }
   setupCrossTabSync();

@@ -59,7 +59,7 @@
         "destination": "/quick-task/index.html"
       },
       {
-        "source": "!/@(assets){,/**}",
+        "source": "!/@(assets|app-releases){,/**}",
         "destination": "/index.html"
       }
     ]

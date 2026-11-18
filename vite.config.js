@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import { createHash } from 'node:crypto'
 import { createPwaWorkerVersionSource } from './scripts/pwa-worker-version-source.mjs'
+import { pinnedVersionEntryPlugin } from './scripts/pwa-version-entry.mjs'
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
@@ -61,7 +62,7 @@ export default defineConfig(({ mode }) => {
         clientsClaim: false,
         skipWaiting: false,
         navigateFallback: 'index.html',
-        navigateFallbackDenylist: [/^\/api\//, /^\/__/, /^\/quick-task(?:\/|$)/, /[?&]projed_update_latest=/],
+        navigateFallbackDenylist: [/^\/api\//, /^\/__/, /^\/app-releases\//, /^\/quick-task(?:\/|$)/, /[?&]projed_update_latest=/],
         ignoreURLParametersMatching: [
           /^utm_/,
           /^fbclid$/,
@@ -71,6 +72,23 @@ export default defineConfig(({ mode }) => {
         additionalManifestEntries: [{ url: '/app-shell-meta.json', revision: shellVersion }],
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         runtimeCaching: [
+          {
+            urlPattern: ({ url, request }) => url.origin === self.location.origin && request.mode === 'navigate' && /^\/quick-task(?:\/|$)/.test(url.pathname),
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'projed-quick-entry', networkTimeoutSeconds: 5,
+              plugins: [{ handlerDidError: async () => caches.match('/quick-task/index.html', { ignoreSearch: true }) }],
+            },
+          },
+          {
+            urlPattern: ({ url }) => url.origin === self.location.origin && (/^\/app-releases\//.test(url.pathname) || /^\/assets\//.test(url.pathname)),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'projed-version-files', cacheableResponse: { statuses: [200] },
+              // A was precached by worker A; worker C must still find it offline.
+              plugins: [{ handlerDidError: async ({ request }) => caches.match(request, { ignoreSearch: true }) }],
+            },
+          },
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             handler: 'StaleWhileRevalidate',
@@ -112,6 +130,7 @@ export default defineConfig(({ mode }) => {
         });
       },
     },
+    pinnedVersionEntryPlugin(shellVersion),
   ],
   server: {
     watch: {

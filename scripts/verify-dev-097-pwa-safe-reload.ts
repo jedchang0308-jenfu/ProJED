@@ -44,8 +44,7 @@ assert(
 assert(
   'global completed metadata cannot suppress a stale document local obligation',
   !updateService.includes('if (readCompletedVersion() === targetVersion) return null;')
-    && updateService.includes('completedVersion is cross-tab history')
-    && updateService.includes('do not\n    // create a second global transaction')
+    && updateService.includes('showAvailableTarget(currentVersion, latestVersion)')
     && /if \(readCompletedVersion\(\) === targetVersion\) \{\s*(?:if \(retryFailed\) clearPwaReloadReservation\(\);\s*)?reloadAtOwnBoundary\(targetVersion\);/.test(updateService),
 );
 assert(
@@ -63,15 +62,15 @@ assert(
     && !updateService.includes("setUpdateState({ reloadSafetyCode: 'WORKER_ACTIVATION_FAILED'"),
 );
 assert(
-  'retarget activation messages only the worker mapped to the stable target',
-  updateService.includes('const waitingWorkerTargets = new WeakMap<ServiceWorker, string>()')
-    && updateService.includes('previousTarget === transaction.targetVersion')
-    && updateService.includes("prepared.waitingWorker.postMessage({ type: 'SKIP_WAITING' })"),
+  'activation messages only the worker that answers with the confirmed target',
+  updateService.includes('const version = await readWorkerVersion(waiting')
+    && updateService.includes('return version === targetVersion ? waiting : null')
+    && updateService.includes("waitingWorker.postMessage({ type: 'SKIP_WAITING' })"),
 );
-assert('update service owns Workbox without virtual helper', updateService.includes("import { Workbox") && !updateService.includes('virtual:pwa-register') && updateService.includes("prepared.waitingWorker.postMessage({ type: 'SKIP_WAITING' })"));
+assert('update service owns Workbox without virtual helper', updateService.includes("import { Workbox") && !updateService.includes('virtual:pwa-register') && updateService.includes("waitingWorker.postMessage({ type: 'SKIP_WAITING' })"));
 assert('worker isolation flags are fail-closed and normal cleanup is disabled', vite.includes('clientsClaim: false') && vite.includes('skipWaiting: false') && vite.includes('cleanupOutdatedCaches: false') && vite.includes('PROJED_RELEASE_ID'));
 assert('workbox-window is a direct runtime dependency', /"workbox-window"\s*:\s*"7\.4\.1"/.test(packageJson));
-assert('normal prompt has exact compact action set', prompt.includes('getPwaUpdatePresentation(state)') && presentation.includes('新版已就緒') && prompt.includes('重新載入') && prompt.includes('稍後') && !prompt.includes('關閉更新提示'));
+assert('DEV-141 moves the normal prompt into the menu and preserves recovery', prompt.includes('getPwaUpdatePresentation(state)') && presentation.includes('visible: isRecovery') && read('src/components/AppMoreMenu.tsx').includes('data-app-update-later') && !prompt.includes('稍後'));
 assert(
   'owner bridge selectors return stable store snapshots',
   !/use(?:Record|Dialog|Rag)Store\(state\s*=>\s*\(\{/.test(ownerBridge)

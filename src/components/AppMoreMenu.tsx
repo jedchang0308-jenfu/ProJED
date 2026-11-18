@@ -4,6 +4,7 @@ import useAuthStore from '../store/useAuthStore';
 import {
   applyPwaUpdate,
   checkPwaUpdate,
+  dismissPwaUpdatePrompt,
   getPwaUpdateState,
   subscribePwaUpdateState,
   type PwaUpdateCheckState,
@@ -77,25 +78,14 @@ const AppMoreMenu: React.FC<AppMoreMenuProps> = ({
   const operationRef = useRef<CheckOperation>(emptyOperation());
   const actionSequenceRef = useRef(0);
   const cancelWaitRef = useRef<(() => void) | null>(null);
-  const pendingPromptFocusRef = useRef<number | null>(null);
-  const focusFrameRef = useRef<number | null>(null);
-
-  const clearPromptFocus = useCallback(() => {
-    pendingPromptFocusRef.current = null;
-    if (focusFrameRef.current !== null && typeof window !== 'undefined') {
-      window.cancelAnimationFrame(focusFrameRef.current);
-      focusFrameRef.current = null;
-    }
-  }, []);
 
   const invalidateMenuOperation = useCallback(() => {
     actionSequenceRef.current += 1;
-    clearPromptFocus();
     cancelWaitRef.current?.();
     cancelWaitRef.current = null;
     operationRef.current = emptyOperation();
     setOperation(operationRef.current);
-  }, [clearPromptFocus]);
+  }, []);
 
   const closeMenu = useCallback(() => {
     invalidateMenuOperation();
@@ -129,13 +119,12 @@ const AppMoreMenu: React.FC<AppMoreMenuProps> = ({
     return () => {
       mountedRef.current = false;
       actionSequenceRef.current += 1;
-      clearPromptFocus();
       cancelWaitRef.current?.();
       cancelWaitRef.current = null;
       window.removeEventListener('pagehide', handlePageHide);
       unsubscribe();
     };
-  }, [clearPromptFocus, invalidateMenuOperation]);
+  }, [invalidateMenuOperation]);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -169,50 +158,11 @@ const AppMoreMenu: React.FC<AppMoreMenuProps> = ({
 
     if (nextOpen) {
       actionSequenceRef.current += 1;
-      clearPromptFocus();
       operationRef.current = emptyOperation();
       setOperation(operationRef.current);
     } else {
       invalidateMenuOperation();
     }
-  };
-
-  const transferFocusToPrompt = (sequence: number, result: PwaUpdateCheckState) => {
-    pendingPromptFocusRef.current = sequence;
-
-    const tryFocus = (attempt: number) => {
-      if (
-        !mountedRef.current
-        || pendingPromptFocusRef.current !== sequence
-        || actionSequenceRef.current !== sequence
-        || isOpenRef.current
-      ) return;
-
-      if (!getPwaCheckPresentation(stateRef.current, { pending: false, result }).handoffToPrompt) {
-        clearPromptFocus();
-        return;
-      }
-
-      const promptAction = document.querySelector<HTMLElement>(
-        '[data-pwa-update-prompt] [data-pwa-update-action]',
-      );
-      const isDisabled = promptAction instanceof HTMLButtonElement && promptAction.disabled;
-      if (promptAction && !isDisabled) {
-        promptAction.focus({ preventScroll: true });
-        pendingPromptFocusRef.current = null;
-        focusFrameRef.current = null;
-        return;
-      }
-
-      if (attempt >= 4) {
-        pendingPromptFocusRef.current = null;
-        focusFrameRef.current = null;
-        return;
-      }
-      focusFrameRef.current = window.requestAnimationFrame(() => tryFocus(attempt + 1));
-    };
-
-    focusFrameRef.current = window.requestAnimationFrame(() => tryFocus(0));
   };
 
   const handleCheck = () => {
@@ -273,36 +223,23 @@ const AppMoreMenu: React.FC<AppMoreMenuProps> = ({
 
       operationRef.current = completedOperation;
       setOperation(completedOperation);
-      if (!presentation.handoffToPrompt) return;
-
-      const details = detailsRef.current;
-      if (!details?.open || actionSequenceRef.current !== sequence) return;
-      clearPromptFocus();
-      operationRef.current = emptyOperation();
-      setOperation(operationRef.current);
-      isOpenRef.current = false;
-      details.open = false;
-      setIsOpen(false);
-      transferFocusToPrompt(sequence, result);
     }).finally(() => {
       if (timeoutId !== null) window.clearTimeout(timeoutId);
       if (cancelWaitRef.current === cancelWait) cancelWaitRef.current = null;
     });
   };
 
-  const handleReload = async () => {
+  const handleReload = async (targetVersion: string | null) => {
     if (stateRef.current.localUpdateBusy) return;
     try {
-      await applyPwaUpdate();
+      await applyPwaUpdate(targetVersion);
     } catch {
-      // The existing global update prompt owns recovery feedback.
+      // The service state supplies inline safety feedback or the recovery prompt.
     }
   };
 
   const presentation = getPwaCheckPresentation(state, operation);
-  const hasUpdateNotification = state.status === 'update-available'
-    && state.updateAvailable
-    && !state.dismissedAt;
+  const hasUpdateNotification = presentation.showBadge;
   const isLocalBusy = state.localUpdateBusy;
   const statusMessage = presentation.statusMessage;
   const showPersonalRecordAction = !isMeetingMode && !isRecordOpen;
@@ -465,15 +402,32 @@ const AppMoreMenu: React.FC<AppMoreMenuProps> = ({
               {statusMessage}
             </p>
           ) : null}
-          {!isLocalBusy && presentation.showReload ? (
-            <button
-              type="button"
-              className="mt-1 flex min-h-11 w-full items-center rounded px-3 text-left text-sm font-semibold text-primary hover:bg-primary/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
-              onClick={() => void handleReload()}
-              data-app-update-reload="true"
-            >
-              重新載入
-            </button>
+          {presentation.showUpdate ? (
+            <div className="px-3 py-1" data-app-update-available="true">
+              <p className="text-xs font-semibold text-slate-700">新版已就緒</p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="min-h-11 rounded px-2 text-sm font-semibold text-primary hover:bg-primary/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={isLocalBusy || operation.pending}
+                  onClick={() => void handleReload(state.targetVersion || state.latestVersion)}
+                  data-app-update-reload="true"
+                  data-update-target={state.targetVersion || state.latestVersion || undefined}
+                >
+                  更新
+                </button>
+                {presentation.showLater ? (
+                  <button
+                    type="button"
+                    className="min-h-11 rounded px-2 text-sm text-slate-600 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                    onClick={dismissPwaUpdatePrompt}
+                    data-app-update-later="true"
+                  >
+                    稍後
+                  </button>
+                ) : null}
+              </div>
+            </div>
           ) : null}
           <div className="my-1 h-px bg-slate-200" role="separator" />
           <div className="flex min-w-0 items-center justify-between gap-2 px-2 py-2" data-app-more-account="true">
