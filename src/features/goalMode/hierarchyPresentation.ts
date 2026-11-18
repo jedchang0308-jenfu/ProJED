@@ -75,7 +75,7 @@ const buildEligibleDescendantCounts = (items: readonly HierarchyItem[]): Map<str
 };
 
 /**
- * Derives Goal-only visual hierarchy facts from the canonical rendered and
+ * Derives visual hierarchy facts from the rendered and
  * fully-expanded rows. It never decides ordering, visibility, ownership, or
  * mutation. Invalid or mismatched projections fail closed to an empty map.
  */

@@ -576,9 +576,8 @@ body[data-kanban-mouse-pan-active="true"] * {
   );
 }
 
-/* Goal keeps hierarchy decoration inside the native frozen task cell. Each
-   segment names the relation owner so sibling rails cannot bleed across roots. */
-[data-goal-view="true"] .goal-hierarchy-guides {
+/* Each tree line names the relation owner so sibling rails end at the right row. */
+.goal-hierarchy-guides {
   position: absolute;
   z-index: 0;
   inset: 0;
@@ -586,6 +585,7 @@ body[data-kanban-mouse-pan-active="true"] * {
 }
 
 [data-goal-view="true"],
+[data-shared-task-sidebar="true"],
 [data-goal-hierarchy-guide-layer="preview"] {
   --goal-hierarchy-line-color: #a2aec3;
   --goal-hierarchy-line-active-color: var(--goal-hierarchy-line-color);
@@ -594,7 +594,8 @@ body[data-kanban-mouse-pan-active="true"] * {
   --goal-hierarchy-child-task-blue: #edf8f8;
 }
 
-[data-goal-view="true"] {
+[data-goal-view="true"],
+[data-shared-task-sidebar="true"] {
   /* Keep the comparison grid easy to track across wide rows without
      competing with the existing hierarchy scope tints. */
   --goal-row-surface-odd: rgb(255 255 255 / 100%);
@@ -606,7 +607,8 @@ body[data-kanban-mouse-pan-active="true"] * {
 
 /* Keep the column labels visually anchored above the alternating data rows.
    The controls remain white-on-dark so their collapse affordances stay legible. */
-[data-goal-view="true"] thead[data-goal-sticky-header="true"] > tr > th {
+[data-goal-view="true"] thead[data-goal-sticky-header="true"] > tr > th,
+.shared-task-sidebar-header {
   background-color: var(--goal-header-surface);
   border-color: var(--goal-header-border);
   color: var(--goal-header-ink);
@@ -636,7 +638,7 @@ body[data-kanban-mouse-pan-active="true"] * {
   background-color: rgb(255 255 255 / 24%);
 }
 
-[data-goal-view="true"] .goal-task-hierarchy-row {
+.goal-task-hierarchy-row {
   /* R17: 8px baseline × 1.30, keeping every guide/title calculation aligned. */
   --task-hierarchy-indent: var(--task-tree-branch-indent);
   --goal-hierarchy-lane-start: 20px;
@@ -655,10 +657,26 @@ body[data-kanban-mouse-pan-active="true"] * {
   padding-right: 10px;
 }
 
+[data-shared-task-sidebar="true"] .goal-task-hierarchy-row {
+  height: 100%;
+  min-height: 0;
+}
+
+[data-shared-task-sidebar="true"] .goal-task-hierarchy-row > button {
+  min-width: 20px;
+  min-height: 20px;
+}
+
+[data-shared-task-sidebar="true"] [data-task-drag-surface-kind="shared-sidebar-row"]:nth-child(even) {
+  background-color: var(--goal-row-surface-even);
+}
+
 /* The disclosure is the tree node. Its 20px hit target sits mostly to the left
    of the rail and ends at the title edge, while the visible dot stays centered
    on the task's own lane. */
-[data-goal-view="true"] .goal-task-hierarchy-row > button[data-goal-collapse-toggle] {
+.goal-task-hierarchy-row > button[data-goal-collapse-toggle] {
+  --task-tree-dot-center: var(--goal-hierarchy-node-control-anchor);
+  --task-tree-dot-color: var(--goal-hierarchy-line-color);
   position: absolute;
   z-index: 2;
   top: 50%;
@@ -679,7 +697,7 @@ body[data-kanban-mouse-pan-active="true"] * {
   cursor: pointer;
 }
 
-[data-goal-view="true"] .goal-task-hierarchy-row > button[data-goal-collapse-toggle] > svg {
+.goal-task-hierarchy-row > button[data-goal-collapse-toggle] > svg {
   display: none;
 }
 
@@ -707,26 +725,20 @@ body[data-kanban-mouse-pan-active="true"] * {
   background-color: var(--task-tree-dot-surface, rgb(255 255 255 / 96%));
 }
 
-[data-goal-view="true"] .goal-task-hierarchy-row > button[data-goal-collapse-toggle] {
-  --task-tree-dot-center: var(--goal-hierarchy-node-control-anchor);
-  --task-tree-dot-color: var(--goal-hierarchy-line-color);
-}
-
 [data-goal-view="true"] tr[data-goal-hierarchy-scope] .goal-task-hierarchy-row > button[data-goal-collapse-toggle] {
   --task-tree-dot-color: var(--goal-hierarchy-line-active-color);
 }
 
-[data-goal-view="true"] .goal-task-hierarchy-row > button[data-goal-collapse-toggle]:hover::before,
-[data-goal-view="true"] .goal-task-hierarchy-row > button[data-goal-collapse-toggle]:focus-visible::before {
+.goal-task-hierarchy-row > button[data-goal-collapse-toggle]:hover::before,
+.goal-task-hierarchy-row > button[data-goal-collapse-toggle]:focus-visible::before {
   box-shadow: 0 0 0 4px rgb(224 231 255 / 86%);
 }
 
-[data-goal-view="true"] .goal-task-hierarchy-row > button[data-goal-collapse-toggle]:focus-visible {
+.goal-task-hierarchy-row > button[data-goal-collapse-toggle]:focus-visible {
   outline: none;
 }
 
-[data-goal-view="true"] .goal-hierarchy-guide-segment,
-[data-goal-hierarchy-guide-layer="preview"] .goal-hierarchy-guide-segment {
+.goal-hierarchy-guide-segment {
   position: absolute;
   background: var(--goal-hierarchy-line-color);
   border-radius: 999px;
@@ -734,8 +746,7 @@ body[data-kanban-mouse-pan-active="true"] * {
   transition: background-color 120ms ease, box-shadow 120ms ease;
 }
 
-[data-goal-view="true"] .goal-hierarchy-guide-segment[data-goal-hierarchy-guide-active="true"],
-[data-goal-hierarchy-guide-layer="preview"] .goal-hierarchy-guide-segment[data-goal-hierarchy-guide-active="true"] {
+.goal-hierarchy-guide-segment[data-goal-hierarchy-guide-active="true"] {
   background: var(--goal-hierarchy-line-active-color);
 }
 
@@ -749,40 +760,40 @@ body[data-kanban-mouse-pan-active="true"] * {
   height: 1px;
 }
 
-[data-goal-view="true"] .goal-hierarchy-guide-continuation {
+.goal-hierarchy-guide-continuation {
   left: calc(var(--goal-hierarchy-lane-start) + (var(--goal-guide-level, 0) * var(--task-hierarchy-indent)));
   top: -1px;
   bottom: -1px;
   width: 1px;
 }
 
-[data-goal-view="true"] .goal-hierarchy-guide-incoming-vertical {
+.goal-hierarchy-guides .goal-hierarchy-guide-incoming-vertical {
   left: calc(var(--goal-hierarchy-lane-start) + (var(--goal-guide-level, 0) * var(--task-hierarchy-indent)));
   top: -1px;
   height: calc(50% + 1px);
   width: 1px;
 }
 
-[data-goal-view="true"] .goal-hierarchy-guides[data-goal-hierarchy-last-sibling="false"] .goal-hierarchy-guide-incoming-vertical {
+.goal-hierarchy-guides[data-goal-hierarchy-last-sibling="false"] .goal-hierarchy-guide-incoming-vertical {
   bottom: -1px;
   height: auto;
 }
 
-[data-goal-view="true"] .goal-hierarchy-guide-incoming-branch {
+.goal-hierarchy-guides .goal-hierarchy-guide-incoming-branch {
   left: calc(var(--goal-hierarchy-lane-start) + (var(--goal-guide-level, 0) * var(--task-hierarchy-indent)));
   top: 50%;
   width: var(--goal-hierarchy-branch-width);
   height: 1px;
 }
 
-[data-goal-view="true"] .goal-hierarchy-guide-child-stem {
+.goal-hierarchy-guides .goal-hierarchy-guide-child-stem {
   left: calc(var(--goal-hierarchy-lane-start) + (var(--goal-node-level, 0) * var(--task-hierarchy-indent)));
   top: 50%;
   bottom: -1px;
   width: 1px;
 }
 
-[data-goal-view="true"] .goal-hierarchy-guide-root-branch {
+.goal-hierarchy-guides .goal-hierarchy-guide-root-branch {
   left: calc(var(--goal-hierarchy-lane-start) + (var(--goal-node-level, 0) * var(--task-hierarchy-indent)));
   top: 50%;
   width: 4px;
@@ -791,7 +802,7 @@ body[data-kanban-mouse-pan-active="true"] * {
 
 /* Match the board tree's rounded L connector: one joined rail and branch
    avoids the square seam created by separate vertical and horizontal strokes. */
-[data-goal-view="true"] .goal-hierarchy-guides[data-goal-hierarchy-guide-layer="row"] .goal-hierarchy-guide-incoming-vertical {
+.goal-hierarchy-guides[data-goal-hierarchy-guide-layer="row"] .goal-hierarchy-guide-incoming-vertical {
   box-sizing: border-box;
   width: var(--task-hierarchy-indent);
   margin-left: 0;
@@ -803,7 +814,7 @@ body[data-kanban-mouse-pan-active="true"] * {
   border-end-start-radius: var(--kanban-tree-branch-radius);
 }
 
-[data-goal-view="true"] .goal-hierarchy-guides[data-goal-hierarchy-guide-layer="row"] .goal-hierarchy-guide-incoming-vertical[data-goal-hierarchy-guide-active="true"] {
+.goal-hierarchy-guides[data-goal-hierarchy-guide-layer="row"] .goal-hierarchy-guide-incoming-vertical[data-goal-hierarchy-guide-active="true"] {
   border-color: var(--goal-hierarchy-line-active-color);
 }
 
@@ -812,7 +823,7 @@ body[data-kanban-mouse-pan-active="true"] * {
   height: calc(50% + 1px);
 }
 
-[data-goal-view="true"] .goal-hierarchy-guides[data-goal-hierarchy-last-sibling="false"] .goal-hierarchy-guide-incoming-vertical::after {
+.goal-hierarchy-guides[data-goal-hierarchy-last-sibling="false"] .goal-hierarchy-guide-incoming-vertical::after {
   content: "";
   position: absolute;
   inset-inline-start: -1px;
@@ -822,11 +833,11 @@ body[data-kanban-mouse-pan-active="true"] * {
   background: var(--goal-hierarchy-line-color);
 }
 
-[data-goal-view="true"] .goal-hierarchy-guides[data-goal-hierarchy-last-sibling="false"] .goal-hierarchy-guide-incoming-vertical[data-goal-hierarchy-guide-active="true"]::after {
+.goal-hierarchy-guides[data-goal-hierarchy-last-sibling="false"] .goal-hierarchy-guide-incoming-vertical[data-goal-hierarchy-guide-active="true"]::after {
   background: var(--goal-hierarchy-line-active-color);
 }
 
-[data-goal-view="true"] .goal-hierarchy-guides[data-goal-hierarchy-guide-layer="row"] .goal-hierarchy-guide-incoming-branch {
+.goal-hierarchy-guides[data-goal-hierarchy-guide-layer="row"] .goal-hierarchy-guide-incoming-branch {
   display: none;
 }
 
@@ -1395,7 +1406,7 @@ body[data-kanban-mouse-pan-active="true"] * {
     margin-top: 2px !important;
   }
 
-  [data-mobile-pan-surface="gantt"] [data-task-id] {
+  [data-mobile-pan-surface="gantt"] [data-task-id]:not([data-gantt-task-list="true"] *) {
     border-radius: 5px !important;
   }
 

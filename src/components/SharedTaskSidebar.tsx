@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useMemo, useState, type RefObject } from 'react';
 import { useWbsStore } from '../store/useWbsStore';
 import useBoardStore from '../store/useBoardStore';
-import { ChevronLeft, ChevronRight, ChevronDown, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -14,17 +14,37 @@ import { primaryPlacementId } from '../features/taskTracking/model';
 import { TaskDescriptionIndicator } from './TaskDescriptionIndicator';
 import { createBlankTaskNode } from '../features/taskCreation/createBlankTaskNode';
 import { createOrderedBoardTask, moveOrderedBoardTask } from '../features/taskCreation/boardTaskOrderActions';
+import { buildGoalHierarchyDecorations, type GoalHierarchyDecoration } from '../features/goalMode/hierarchyPresentation';
+import type { HierarchicalTaskViewItem } from '../utils/taskHierarchy';
+import { TaskListNameRow } from './Wbs/TaskListNameRow';
 
 type SharedTaskSidebarSurface = 'gantt' | 'calendar';
 
-interface SortableSidebarRowProps { item: any; onClick: (item: any) => void; rowHeight: number; surface: SharedTaskSidebarSurface; onAddChild?: (item: any) => void; onToggleCollapse?: (id: string) => void; isCollapsed?: boolean; }
-const SortableSidebarRow = ({ item, onClick, rowHeight, surface, onAddChild, onToggleCollapse, isCollapsed }: SortableSidebarRowProps) => {
-    const { canCreateTask, canMoveTask, canManageTaskReference } = useBoardPermissions();
+const EMPTY_DECORATION: GoalHierarchyDecoration = {
+    parentId: null,
+    isLastVisibleSibling: true,
+    hasVisibleChildren: false,
+    ancestorTaskIds: [],
+    ancestorContinuations: [],
+    eligibleDescendantCount: 0,
+};
+
+interface SortableSidebarRowProps {
+    item: HierarchicalTaskViewItem;
+    onClick: (item: HierarchicalTaskViewItem) => void;
+    rowHeight: number;
+    surface: SharedTaskSidebarSurface;
+    onToggleCollapse: (id: string) => void;
+    isCollapsed: boolean;
+    decoration: GoalHierarchyDecoration;
+}
+const SortableSidebarRow = ({ item, onClick, rowHeight, surface, onToggleCollapse, isCollapsed, decoration }: SortableSidebarRowProps) => {
+    const { canMoveTask, canManageTaskReference } = useBoardPermissions();
     const selectedTaskId = useBoardStore(s => s.selectedTaskId);
     const setContextMenuState = useBoardStore(s => s.setContextMenuState);
     const removeTrackingReference = useWbsStore(s => s.removeTrackingReference);
-    const level = Number.isFinite(item.level) ? item.level : 0;
-    const isTrackingReference = Boolean(item.isTrackingReference && item.trackingReferenceId);
+    const trackingReferenceId = item.isTrackingReference ? item.trackingReferenceId : undefined;
+    const isTrackingReference = Boolean(trackingReferenceId);
     const placementId = item.trackingReferenceId || primaryPlacementId(item.id);
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         // The collapsed task row remains one visual item, but drag identity is
@@ -38,20 +58,12 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, surface, onAddChild, onT
         transform: CSS.Transform.toString(transform),
         transition,
         height: rowHeight,
-        '--task-hierarchy-depth': level,
-        '--task-hierarchy-base': '10px',
-        position: 'relative' as any,
+        position: 'relative' as const,
         zIndex: isDragging ? 50 : 1,
     };
     const dragSurfaceBindings = { ...attributes, ...listeners };
 
-    const isGroup = item.nodeType === 'group';
     const isTask = item.nodeType === 'task';
-    const childIds = useWbsStore(s => s.parentNodesIndex[item.id]);
-    // A tracking projection owns only its placement. The canonical task's
-    // children belong to the primary hierarchy and must not appear under a
-    // cross-board reference row.
-    const hasChildren = !isTrackingReference && Boolean(childIds && childIds.length > 0);
     const interactionBinding = useTaskInteractionBinding({
         taskId: item.id,
         title: item.title,
@@ -60,7 +72,6 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, surface, onAddChild, onT
         origin: 'shared-task-sidebar',
         nodeRole: item.nodeType || 'task',
     });
-
     return (
         <div
             ref={setNodeRef}
@@ -93,14 +104,9 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, surface, onAddChild, onT
             data-task-drag-surface="true"
             data-task-drag-surface-kind="shared-sidebar-row"
             data-task-selected={selectedTaskId === item.id ? 'true' : undefined}
-            data-task-hierarchy-row="true"
-            data-task-hierarchy-surface={surface}
-            data-task-hierarchy-depth={level}
             data-task-placement-kind={isTrackingReference ? 'tracking-reference' : 'primary'}
             aria-label={isTrackingReference ? `追蹤副本：${item.title || '未命名任務'}` : item.title || '未命名任務'}
-            className={`flex items-center px-[10px] border-b border-slate-100 hover:bg-primary/5 transition-colors gap-1 cursor-pointer group
-                task-hierarchy-indented-row
-                task-title-text ${isGroup ? 'font-medium text-slate-700' : isTask && level === 1 ? 'font-medium text-slate-600' : 'font-medium text-slate-500'}
+            className={`group cursor-pointer px-[10px] transition-colors hover:bg-primary/5
                 ${item.isTrackingReference ? 'border-2 border-dashed border-violet-300 bg-violet-50/40' : ''}
                 ${selectedTaskId === item.id ? 'bg-primary/[0.05] ring-2 ring-inset ring-primary/30' : ''}
                 ${isDragging ? 'opacity-50 bg-slate-100' : ''}`}
@@ -110,65 +116,58 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, surface, onAddChild, onT
                 else onClick(item);
             }}
         >
-            {hasChildren && onToggleCollapse ? (
-                <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onToggleCollapse(item.id);
-                    }}
-                    className="inline-flex h-[18px] w-[18px] flex-shrink-0 items-center justify-center rounded p-0 text-slate-400 transition-all hover:bg-slate-200 hover:text-slate-600"
-                    title={isCollapsed ? '展開' : '收疊'}
-                >
-                    {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-                </button>
-            ) : (
-                <div className="flex-shrink-0 w-[18px]" />
-            )}
-            <span className={`task-title-text relative flex min-w-0 flex-1 items-center gap-[2px] ${level === 0 ? 'text-[13px]' : level === 1 ? 'text-[11px]' : 'text-[10px]'}`}>
-                <span className="min-w-0 truncate">{item.title}</span>
-                <TaskDescriptionIndicator description={item.description} />
-            </span>
-            {onAddChild && !isTrackingReference && (
-                <button
-                    disabled={!canCreateTask}
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        if (!canCreateTask) return;
-                        onAddChild(item);
-                    }}
-                    className="opacity-0 group-hover:opacity-100 p-1 hover:bg-slate-200 rounded text-slate-400 transition-all hover:text-primary z-50"
-                    title="新增子任務"
-                >
-                    <Plus size={12} />
-                </button>
-            )}
-            {isTrackingReference && (
-                <button
-                    type="button"
-                    className="shrink-0 rounded px-1 text-[10px] text-slate-400 hover:bg-rose-50 hover:text-rose-600"
-                    aria-label="移除此處追蹤"
-                    title="移除此處追蹤"
-                    onClick={(event) => {
-                        event.stopPropagation();
-                        void removeTrackingReference(item.trackingReferenceId);
-                    }}
-                >
-                    移除
-                </button>
-            )}
+            <TaskListNameRow
+                task={item}
+                rowId={item.id}
+                surface={surface}
+                isTrackingReference={isTrackingReference}
+                hasChildren={decoration.eligibleDescendantCount > 0}
+                collapsed={isCollapsed}
+                onToggle={() => onToggleCollapse(item.id)}
+                decoration={decoration}
+                titleIndicator={<TaskDescriptionIndicator description={item.description} />}
+            >
+                {trackingReferenceId && (
+                    <button
+                        type="button"
+                        className="shrink-0 rounded px-1 text-[10px] text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                        aria-label="移除此處追蹤"
+                        title="移除此處追蹤"
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            void removeTrackingReference(trackingReferenceId);
+                        }}
+                    >
+                        移除
+                    </button>
+                )}
+            </TaskListNameRow>
         </div>
     );
 };
 
-interface SharedTaskSidebarProps { flattenedItems: any[]; collapsedIds: any; toggleCollapse: (id: string) => void; onItemClick: (item: any) => void; isTaskListOpen: boolean; setIsTaskListOpen: (isOpen: boolean) => void; surface: SharedTaskSidebarSurface; rowHeight?: number; }
+interface SharedTaskSidebarProps {
+    flattenedItems: readonly HierarchicalTaskViewItem[];
+    fullyExpandedItems: readonly HierarchicalTaskViewItem[];
+    collapsedIds: ReadonlySet<string>;
+    toggleCollapse: (id: string) => void;
+    onItemClick: (item: HierarchicalTaskViewItem) => void;
+    isTaskListOpen: boolean;
+    setIsTaskListOpen: (isOpen: boolean) => void;
+    surface: SharedTaskSidebarSurface;
+    rowHeight?: number;
+    listRef?: RefObject<HTMLDivElement | null>;
+}
 const SharedTaskSidebar = ({
     flattenedItems,
+    fullyExpandedItems,
     collapsedIds,
     toggleCollapse,
     onItemClick,
     isTaskListOpen,
     setIsTaskListOpen,
     surface,
+    listRef,
     rowHeight = COMPACT_DIMENSIONS.taskRowHeight
 }: SharedTaskSidebarProps) => {
     const { activeWorkspaceId, activeBoardId } = useBoardStore();
@@ -176,7 +175,12 @@ const SharedTaskSidebar = ({
     const moveTrackingReference = useWbsStore(s => s.moveTrackingReference);
 
     const sensors = useDragSensors();
-    const [activeSortableItem, setActiveSortableItem] = useState(null);
+    const [activeSortableItem, setActiveSortableItem] = useState<HierarchicalTaskViewItem | null>(null);
+    const isGantt = surface === 'gantt';
+    const decorations = useMemo(() => buildGoalHierarchyDecorations({
+        renderedItems: flattenedItems,
+        fullyExpandedItems,
+    }), [flattenedItems, fullyExpandedItems]);
 
     const handleSortableDragEnd = (event: any) => {
         const { active, over } = event;
@@ -223,30 +227,19 @@ const SharedTaskSidebar = ({
         }
     };
 
-    const handleAddChild = async (item: any) => {
-        if (!canCreateTask) return;
-        if (activeWorkspaceId && activeBoardId) {
-            const newNode = createBlankTaskNode({
-                id: 'node_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 5),
-                workspaceId: activeWorkspaceId,
-                boardId: activeBoardId,
-                parentId: item.id,
-                nodeType: 'task',
-                order: 0,
-            });
-            if (!await createOrderedBoardTask(newNode)) return;
-            if (collapsedIds.has(item.id)) toggleCollapse(item.id);
-            prepareNewTaskNaming(newNode.id);
-        }
-    };
-
     return (
-        <div data-task-hierarchy-surface={surface} className={`flex-shrink-0 flex flex-col border-r border-slate-200 bg-white/95 z-20 transition-all duration-300 ease-in-out relative ${isTaskListOpen ? 'w-64' : 'w-10'}`}>
+        <div
+            ref={listRef}
+            data-gantt-task-list={isGantt ? 'true' : undefined}
+            data-shared-task-sidebar="true"
+            data-task-hierarchy-surface={surface}
+            className={`flex shrink-0 flex-col border-r border-slate-200 bg-white transition-[width] duration-300 ease-in-out ${isGantt ? 'sticky left-0 z-[110]' : 'relative z-20'} ${isTaskListOpen ? isGantt ? 'w-[min(16rem,60cqw)]' : 'w-64 max-w-[60%]' : 'w-10'}`}
+        >
             {!isTaskListOpen ? (
-                <div className="flex-1 flex flex-col items-center pt-[6px] gap-[8px] overflow-hidden">
+                <div className={`flex flex-1 flex-col items-center gap-[8px] pt-[6px] ${isGantt ? '' : 'overflow-hidden'}`}>
                     <button
                         onClick={() => setIsTaskListOpen(true)}
-                        className="p-1.5 hover:bg-slate-100 rounded-full text-primary transition-colors"
+                        className={`p-1.5 hover:bg-slate-100 rounded-full text-primary transition-colors ${isGantt ? 'sticky top-[6px]' : ''}`}
                         title="展開任務清單"
                     >
                         <ChevronRight size={18} />
@@ -255,17 +248,17 @@ const SharedTaskSidebar = ({
                 </div>
             ) : (
                 <>
-                    <div className="h-9 flex items-center justify-between px-[10px] border-b border-slate-200 bg-slate-50/90 font-semibold text-xs text-slate-500 shrink-0">
+                    <div className={`shared-task-sidebar-header flex h-8 shrink-0 items-center justify-between border-b pl-[30px] pr-[10px] text-xs font-semibold ${isGantt ? 'sticky top-0 z-[60]' : ''}`}>
                         <span>任務名稱</span>
                         <button
                             onClick={() => setIsTaskListOpen(false)}
-                            className="p-1 hover:bg-slate-200 rounded text-slate-400 transition-colors"
+                            className="rounded p-1 transition-colors hover:bg-white/15"
                             title="收疊任務清單"
                         >
                             <ChevronLeft size={14} />
                         </button>
                     </div>
-                    <div className="flex-1 overflow-y-auto overflow-x-hidden">
+                    <div className={isGantt ? 'flex-1' : 'min-h-0 flex-1 overflow-y-auto overflow-x-hidden'}>
                         <DndContext
                             sensors={sensors}
                             collisionDetection={closestCorners}
@@ -277,11 +270,11 @@ const SharedTaskSidebar = ({
                             onDragEnd={handleSortableDragEnd}
                         >
                             <SortableContext
-                                items={flattenedItems.map((i: any) => i.trackingReferenceId || primaryPlacementId(i.id))}
+                                items={flattenedItems.map(i => i.trackingReferenceId || primaryPlacementId(i.id))}
                                 strategy={verticalListSortingStrategy}
                             >
                                 <div>
-                                    {flattenedItems.map((item: any) => (
+                                    {flattenedItems.map(item => (
                                         <SortableSidebarRow
                                             key={`${item.nodeType}-${item.id}`}
                                             item={item}
@@ -289,8 +282,8 @@ const SharedTaskSidebar = ({
                                             onClick={onItemClick}
                                             onToggleCollapse={toggleCollapse}
                                             isCollapsed={collapsedIds.has(item.id)}
-                                            onAddChild={handleAddChild}
                                             rowHeight={rowHeight}
+                                            decoration={decorations.get(item.id) ?? EMPTY_DECORATION}
                                         />
                                     ))}
                                 </div>
@@ -298,7 +291,7 @@ const SharedTaskSidebar = ({
                             <DragOverlay dropAnimation={{ duration: 200, easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)' }}>
                                 {activeSortableItem ? (
                                     <div className="task-title-text max-w-[220px] truncate rounded-md border border-primary/20 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-xl ring-2 ring-primary/20 cursor-grabbing">
-                                        {(activeSortableItem as any).title || '未命名任務'}
+                                        {activeSortableItem.title || '未命名任務'}
                                     </div>
                                 ) : null}
                             </DragOverlay>

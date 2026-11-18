@@ -11,7 +11,6 @@ import { getX, getDateFromX, GANTT_COLOR_MAP, BAR_HEIGHT } from './utils';
 import { COMPACT_DIMENSIONS } from '../ui/compactTokens';
 import { useTaskInteractionBinding } from '../../interactions/task/useTaskInteractionBinding';
 import { isPrimaryPointerActivation } from '../../interactions/pointerActivation';
-import { TaskDescriptionIndicator } from '../TaskDescriptionIndicator';
 
 interface TaskItem {
     id: string;
@@ -38,13 +37,14 @@ interface GanttTaskBarProps {
     showDependencies: boolean;
     viewport: { scrollLeft: number; width: number };
     scrollAreaRef: React.RefObject<HTMLDivElement | null>;
+    taskListRef: React.RefObject<HTMLDivElement | null>;
     onItemClick: (item: TaskItem) => void;
     rowHeight?: number;
 }
 
 const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
     item, colWidth, mode, gridStart, gridEnd, activeBoard, activeWorkspaceId,
-    setSimulatedDates, simulatedDates, showDependencies, viewport, scrollAreaRef, onItemClick, rowHeight = BAR_HEIGHT
+    setSimulatedDates, simulatedDates, showDependencies, viewport, scrollAreaRef, taskListRef, onItemClick, rowHeight = BAR_HEIGHT
 }) => {
     const updateNode = useWbsStore(s => s.updateNode);
     const wbsDependencies = useWbsStore(s => s.dependencies);
@@ -183,9 +183,10 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
         const handleMouseMove = (e: MouseEvent) => {
             if (scrollAreaRef.current) {
                 const rect = scrollAreaRef.current.getBoundingClientRect();
+                const timelineLeft = taskListRef.current?.getBoundingClientRect().right ?? rect.left;
                 const threshold = 80;
                 const scrollSpeed = 15;
-                if (e.clientX < rect.left + threshold) {
+                if (e.clientX < timelineLeft + threshold) {
                     scrollAreaRef.current.scrollLeft -= scrollSpeed;
                 } else if (e.clientX > rect.right - threshold) {
                     scrollAreaRef.current.scrollLeft += scrollSpeed;
@@ -286,7 +287,7 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
                 rafIdRef.current = null;
             }
         };
-    }, [dragState, colWidth, mode, activeWorkspaceId, activeBoard, setSimulatedDates, updateNode, gridStart, scrollAreaRef]);
+    }, [dragState, colWidth, mode, activeWorkspaceId, activeBoard, setSimulatedDates, updateNode, gridStart, scrollAreaRef, taskListRef]);
 
 
     const renderDependencies = () => {
@@ -393,7 +394,6 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
                     style={textStyles}
                 >
                     <span>{item.title}</span>
-                    <TaskDescriptionIndicator description={item.description} />
                 </span>
             );
         } else {
@@ -412,7 +412,6 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
                     `}
                 >
                     <span>{item.title} {isInfiniteFallback && "(尚未設定日期)"}</span>
-                    <TaskDescriptionIndicator description={item.description} />
                 </div>
             );
         }
@@ -457,7 +456,7 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
                 width: width,
                 height: barHeight,
                 top: item.row * rowHeight + (rowHeight - barHeight) / 2,
-                transition: isDragging ? 'none' : 'all 0.2s'
+                transition: isDragging ? 'none' : 'left 200ms, width 200ms, filter 200ms, box-shadow 200ms'
             }}
         >
             {isDragging && dragDates && (

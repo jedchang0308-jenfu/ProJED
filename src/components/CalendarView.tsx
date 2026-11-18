@@ -6,7 +6,7 @@
  * 提供 Google Calendar 風格的月檢視，讓使用者以日曆格線直覺查看任務排程。
  *
  * 架構設計：
- * 1. 左側側邊欄：複用 GanttView 的任務層級面板模式
+ * 1. 左側側邊欄：與清單模式、甘特圖共用任務名稱列
  * 2. 右側月曆主體：逐週渲染（Week-row based），每週分成兩層：
  *    - 底層 (grid)：7 個日期格，只放日期數字與背景色
  *    - 頂層 (absolute overlay)：任務條以絕對定位橫跨多欄，
@@ -63,6 +63,8 @@ import { projectTaskFilterResults } from '../features/taskFilters';
 import { TaskFilterResultState } from './ui/TaskFilterResultState';
 import { buildCollapsedProjectionTasks, buildProjectionParentIndex } from '../features/taskTracking/model';
 import { TaskDescriptionIndicator } from './TaskDescriptionIndicator';
+
+const FULLY_EXPANDED = new Set<string>();
 
 // ──────────────────────────────────────────────────────────
 // 核心算法：將任務清單轉換為「按週分割的線段」
@@ -198,7 +200,7 @@ const CalendarView = () => {
         [activeBoardId, projectionNodes, taskFilters],
     );
     const isCoarsePointer = useCoarsePointer();
-    const ganttRowHeight = isCoarsePointer ? 22 : BAR_HEIGHT;
+    const taskRowHeight = isCoarsePointer ? 22 : BAR_HEIGHT;
 
     const toggleCollapse = (id) => {
         setCollapsedIds(prev => {
@@ -212,15 +214,20 @@ const CalendarView = () => {
     // (activeBoard 已不再需要)
 
     // ── 資料扁平化（與 GanttView 共用階層排序與收疊邏輯）────────
-    const flattenedItems = useMemo(() => {
-        return buildHierarchicalTaskItems({
-            nodes: projectionNodes,
-            parentNodesIndex: projectionParentNodesIndex,
-            activeBoardId,
-            visibleTaskIds: filterProjection.visibleTaskIds,
-            collapsedIds,
-        }).items;
-    }, [activeBoardId, projectionNodes, projectionParentNodesIndex, filterProjection, collapsedIds]);
+    const hierarchyInputs = useMemo(() => ({
+        nodes: projectionNodes,
+        parentNodesIndex: projectionParentNodesIndex,
+        activeBoardId,
+        visibleTaskIds: filterProjection.visibleTaskIds,
+    }), [activeBoardId, projectionNodes, projectionParentNodesIndex, filterProjection.visibleTaskIds]);
+    const fullyExpandedItems = useMemo(
+        () => buildHierarchicalTaskItems({ ...hierarchyInputs, collapsedIds: FULLY_EXPANDED }).items,
+        [hierarchyInputs],
+    );
+    const flattenedItems = useMemo(
+        () => collapsedIds.size ? buildHierarchicalTaskItems({ ...hierarchyInputs, collapsedIds }).items : fullyExpandedItems,
+        [collapsedIds, fullyExpandedItems, hierarchyInputs],
+    );
 
     // ── 月曆週陣列：weeks[weekIdx][col(0-6)] = dayInfo ──
     const weeks = useMemo(() => {
@@ -315,17 +322,16 @@ const CalendarView = () => {
 
             {/* ── 主體 ── */}
             {!taskLoading && !taskResultError && filterProjection.matchedTaskIds.size > 0 ? <div className="flex-1 flex overflow-hidden">
-                {/* 左側側邊欄 */}
-                {/* ── 左側：任務清單側邊欄（複用共用側邊欄，支援拖曳）── */}
                 <SharedTaskSidebar
                     flattenedItems={flattenedItems}
+                    fullyExpandedItems={fullyExpandedItems}
                     collapsedIds={collapsedIds}
                     toggleCollapse={toggleCollapse}
                     onItemClick={handleItemClick}
                     isTaskListOpen={isTaskListOpen}
                     setIsTaskListOpen={setIsTaskListOpen}
                     surface="calendar"
-                    rowHeight={ganttRowHeight}
+                    rowHeight={taskRowHeight}
                 />
 
                 {/* 右側月曆主體 */}

@@ -12,7 +12,8 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 - 工程契約與驗收：[SPEC-041 DEV-141 手動更新](specs/SPEC-041-pwa-update-notification-cache-recovery.md#dev-141-manual-app-updates)，A01–A04 為使用者指定的必驗收項目。
 - 回歸：TypeScript、受影響範圍 ESLint、DEV-041 24/24、DEV-096 26/26、DEV-097 23/23、DEV-134 資產驗證 6/6 與 DEV-141 版本保留驗證通過。首輪封存 JavaScript 含未替換的 Vite preload 標記，已移到完成轉換後封存，重建後由瀏覽器讀回通過。
 - 併行分工：選單提醒請求模型 `gpt-6-sol`（high），版號入口與資產保留請求模型 `gpt-6-astra`（high）；主流程整合確認、分頁隔離與本機驗收。
-- 下一步：正式導入前，用常用手機的已安裝 PWA 複驗關閉重開，並確認舊版使用者的首次導入安排。正式環境尚未發布，也未驗證既有正式 PWA 設定檔。
+- 正式發布：2026-11-18 已發布至 `https://projed-cc78d.web.app`，release ID `20261118074427-5894bd`，來源 immutable commit `8e124da5561cbfa1ef7bb3bec11f49ff8e46cf39`。canonical artifact 158/158 檔案雜湊讀回通過；初次 Service Worker 安裝約 90 秒後 active，無 page error。DEV-141 A01–A07 於同一候選來源全數通過，證據：[發布 receipt](../output/release/dev-083/20261118074427-5894bd/direct-evidence.json)、[canonical slow smoke](../output/playwright/dev-141-canonical-slow-long/)、[A01–A07 瀏覽器紀錄](../output/playwright/dev-141/dev141-25fcf4d4/result.json)。
+- 後續：用常用手機的已安裝 PWA 複驗關閉重開，並確認舊版使用者的首次導入安排；既有正式 PWA 設定檔尚未實機驗證。
 - 待定：正式舊版支援期限。封裝以至少 14 天為預設，從確認舊版已被取代後保守計算。
 
 <a id="dev-140-okr-list-consolidation"></a>
@@ -402,7 +403,7 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 
 ## 總任務清單
 
-- ○ DEV-141 [交付點] [已實作／本機瀏覽器 A01–A07 通過／未發布] [ProJED] [新版先通知，由使用者手動更新](#dev-141-manual-app-updates)
+- ✓ DEV-141 [交付點] [已實作／A01–A07 通過／已發布 2026-11-18] [ProJED] [新版先通知，由使用者手動更新](#dev-141-manual-app-updates)
 
 - ✓ DEV-140 [交付點] [已實作／本機瀏覽器驗收通過] [ProJED] [以 OKR 模式整合清單模式](#dev-140-okr-list-consolidation)
 

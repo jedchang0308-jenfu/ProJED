@@ -32,7 +32,7 @@ import {
 } from '../features/goalMode/hierarchyPresentation';
 import type { TaskNode, TaskStatus } from '../types';
 import { taskStatusTitleClass } from './ui/taskStatusStyles';
-import { TaskHierarchyIndentedRow } from './Wbs/TaskHierarchyIndentedRow';
+import { TaskListNameRow } from './Wbs/TaskListNameRow';
 import { taskViewFrameClassName } from './ui/compactTokens';
 import MeetingQuickNoteRows from './TaskNotes/MeetingQuickNoteRows';
 import { useTaskPlacementController } from './Wbs/useTaskPlacementController';
@@ -562,7 +562,6 @@ const GoalRow: React.FC<{
   const endDateColumnCollapsed = collapsedColumns.has('end-date');
   const durationColumnCollapsed = collapsedColumns.has('duration');
   const dependencies = useWbsStore(state => state.dependencies);
-  const progress = useWbsStore(state => state.getNodeProgress(node.id));
   const getNodeLockStatus = useWbsStore(state => state.getNodeLockStatus);
   const updateNode = useWbsStore(state => state.updateNode);
   const tags = useTagStore(state => state.tags);
@@ -766,53 +765,24 @@ const GoalRow: React.FC<{
         data-goal-task-cell="true"
         data-goal-task-cell-located={hierarchyScope}
       >
-        <TaskHierarchyIndentedRow
-          depth={node.level}
+        <TaskListNameRow
+          task={node}
+          rowId={node.rowId}
+          isTrackingReference={Boolean(node.reference)}
           hasChildren={hasChildren}
-          expanded={!collapsed}
+          collapsed={collapsed}
           onToggle={onToggle}
-          taskId={node.id}
-          taskTitle={node.title || '未命名任務'}
           surface="goal"
-          className="goal-task-hierarchy-row relative z-[1] pr-[10px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40"
-          disclosureAttributes={{ 'data-goal-collapse-toggle': node.rowId }}
+          decoration={hierarchyDecoration}
+          activeScopeId={activeHierarchyScopeId}
           containerProps={hierarchyInteractionProps}
         >
-          <GoalHierarchyGuides
-            nodeId={node.rowId}
-            level={node.level}
-            hasChildren={hasChildren}
-            decoration={hierarchyDecoration}
-            activeScopeId={activeHierarchyScopeId}
-          />
-          {node.reference ? <Link size={12} className="mr-1 shrink-0 text-slate-500" aria-label="追蹤副本" /> : null}
-          {node.nodeType === 'milestone' ? <span className="mr-1 shrink-0 rounded border border-amber-300 bg-amber-50 px-1 py-0.5 text-[10px] leading-none text-amber-600">里程碑</span> : null}
-          <span className={`task-title-text min-w-0 flex-1 truncate pr-1 text-sm ${node.level === 0 ? 'font-semibold' : 'font-medium'} ${taskStatusTitleClass[node.status]}`} data-task-title-slot="true">
-            {node.title || '未命名任務'}
-          </span>
-          <span
-            className="size-3 shrink-0 rounded-full ring-1 ring-inset ring-slate-400/40"
-            style={{ backgroundImage: `conic-gradient(var(--color-primary) ${progress}%, var(--color-slate-200) 0)` }}
-            role="img"
-            aria-label={`任務進度 ${progress}%`}
-            title={`${progress}%`}
-            data-task-progress-indicator="true"
-          />
-          {collapsed && hierarchyDecoration.eligibleDescendantCount > 0 ? (
-            <span
-              className="relative z-[1] shrink-0 px-0.5 text-[10px] font-medium text-slate-400"
-              aria-label={`已收合 ${hierarchyDecoration.eligibleDescendantCount} 個下層任務`}
-              data-goal-descendant-count={hierarchyDecoration.eligibleDescendantCount}
-            >
-              +{hierarchyDecoration.eligibleDescendantCount}
-            </span>
-          ) : null}
           {showTags && nodeTags.length > 0 ? (
             <div className="hidden max-w-[150px] shrink-0 gap-1 xl:flex" data-goal-task-tags="true">
               {nodeTags.slice(0, 2).map(tag => <TagChip key={tag.id} tag={tag} compact />)}
             </div>
           ) : null}
-        </TaskHierarchyIndentedRow>
+        </TaskListNameRow>
       </th>
       {showDescriptionColumn && !descriptionColumnCollapsed ? (
         <OwnedCell cell={row.descriptionCell} column="description" ownerTaskId={row.descriptionCell.kind === 'owner' ? node.id : undefined} headers={`goal-column-description ${safeTaskDomId(node.rowId)}`} ownerAttribute={row.descriptionCell.kind === 'owner' ? node.id : undefined} activeScope={activeDescriptionScope} className="max-w-[360px] border-r border-slate-200 px-3 py-0 align-top text-xs text-slate-600" selected={selectedCellKey === `description:${node.rowId}`} expanded={!cellExpansionOverrides.has(`description:${node.rowId}`)} canEdit={permissions.canEditTask} onSelect={() => onSelectCell(`description:${node.rowId}`)} onHierarchyScopeChange={onHierarchyScopeChange} onToggleExpanded={() => onToggleCell(`description:${node.rowId}`)} onOpenMenu={event => onOpenCellMenu(`description:${node.rowId}`, 'description', node.id, event)} data-goal-column="description">
