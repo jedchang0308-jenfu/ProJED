@@ -23,6 +23,7 @@ const compile = source => ts.transpileModule(source, { compilerOptions: { module
 const quickMain = fs.readFileSync('src/quickTask/main.ts', 'utf8');
 const quickPwaLifecycle = quickMain.slice(quickMain.indexOf('const installQuickPwaLifecycle'), quickMain.indexOf('const needsRecovery'));
 const quickPromptSource = fs.readFileSync('src/features/quickTaskCapture/pwaUpdatePrompt.ts', 'utf8');
+const quickInstallSource = fs.readFileSync('src/features/quickTaskCapture/install.ts', 'utf8');
 const mainPromptSource = fs.readFileSync('src/components/AppUpdatePrompt.tsx', 'utf8');
 const presentationSource = fs.readFileSync('src/services/pwaUpdatePresentation.ts', 'utf8');
 const presentationModule = { exports: {} };
@@ -476,9 +477,9 @@ await check('U03-success-result-clearResult-hides-stale-CTA', () => {
   const state = { ...serviceFixture().api.getPwaUpdateState(), status: 'idle', updateAvailable: false, currentVersion: 'release:A', latestVersion: 'release:C', localUpdateBusy: false, reloadSafetyState: 'safe' };
   const oldSuccess = { requestId: 7, phase: 'available', currentVersion: 'release:A', latestVersion: 'release:B', startedAt: 1, finishedAt: 2, errorCode: null };
   const view = presentationModule.exports.getPwaCheckPresentation(state, { pending: false, result: oldSuccess });
-  assert.equal(view.clearResult, true); assert.equal(view.showReload, false); assert.equal(view.handoffToPrompt, false);
+  assert.equal(view.clearResult, true); assert.equal(view.showUpdate, false); assert.equal(view.showBadge, false);
   const busyView = presentationModule.exports.getPwaCheckPresentation({ ...state, latestVersion: 'release:B', localUpdateBusy: true }, { pending: false, result: oldSuccess });
-  assert.equal(busyView.clearResult, true); assert.equal(busyView.showReload, false);
+  assert.equal(busyView.clearResult, true); assert.equal(busyView.showUpdate, false);
 });
 await check('U04-manual-promotion-runs-one-ordered-refresh-and-one-metadata-reread', async () => {
   const f = serviceFixture({ autoRegister: false }); f.api.fixture.register(f.registration);
@@ -744,22 +745,27 @@ await check('R11-quick-shell-starts-shared-update-lifecycle-after-reload-safety'
   assert.ok(quickMain.includes('const getPwaApi = installQuickPwaLifecycle(reloadSafetyReady);'));
   assert.ok(!quickMain.includes("from '../services/pwaUpdateService'"));
 });
-await check('R12-quick-shell-mounts-the-shared-safe-reload-prompt-after-update-service', () => {
+await check('R12-quick-shell-mounts-recovery-prompt-and-keeps-normal-update-in-menu', () => {
   assert.ok(quickPwaLifecycle.includes('setupPwaLifecycle();'));
   assert.ok(quickPwaLifecycle.indexOf('setupPwaLifecycle();') < quickPwaLifecycle.indexOf("await import('../features/quickTaskCapture/pwaUpdatePrompt')"));
-  for (const action of ['subscribePwaUpdateState', 'applyPwaUpdate', 'retryPwaUpdate', 'clearPwaApplicationCacheAndReload', 'dismissPwaUpdatePrompt']) assert.ok(quickPwaLifecycle.includes(action));
+  for (const action of ['subscribePwaUpdateState', 'retryPwaUpdate', 'clearPwaApplicationCacheAndReload']) assert.ok(quickPwaLifecycle.includes(action));
   assert.ok(quickPromptSource.includes('getPwaUpdatePresentation(currentState)'));
   assert.ok(mainPromptSource.includes('getPwaUpdatePresentation(state)'));
-  assert.ok(presentationSource.includes("state.reloadSafetyState === 'dirty' || state.reloadSafetyState === 'blocked'"));
+  assert.ok(presentationSource.includes('visible: isRecovery'));
   assert.ok(presentationSource.includes("state.status === 'recoverable-cache-error'"));
   assert.ok(presentationSource.includes("state.status === 'failed'"));
+  assert.ok(!quickPromptSource.includes('pwaUpdateLater'));
+  assert.ok(!mainPromptSource.includes('dismissPwaUpdatePrompt'));
+  for (const selector of ['quickUpdateBadge', 'quickUpdateAvailable', 'quickUpdateReload', 'quickUpdateLater']) assert.ok(quickInstallSource.includes(selector));
+  assert.ok(quickInstallSource.includes('void getUpdateApi().catch(() => undefined)'));
+  assert.ok(!quickInstallSource.includes('handoffToPrompt'));
 });
-await check('R12-quick-prompt-mirrors-main-visibility-and-dismiss-contract', () => {
+await check('R12-quick-prompt-mirrors-main-recovery-only-visibility', () => {
   const visible = state => present(state).visible;
   const base = { status: 'idle', updateAvailable: true, dismissedAt: null, reloadSafetyState: 'safe' };
   assert.equal(visible(base), false);
-  assert.equal(visible({ ...base, reloadSafetyState: 'dirty' }), true);
-  assert.equal(visible({ ...base, reloadSafetyState: 'blocked' }), true);
+  assert.equal(visible({ ...base, reloadSafetyState: 'dirty' }), false);
+  assert.equal(visible({ ...base, reloadSafetyState: 'blocked' }), false);
   assert.equal(visible({ ...base, reloadSafetyState: 'dirty', dismissedAt: Date.now() }), false);
   assert.equal(visible({ ...base, status: 'recoverable-cache-error', reloadSafetyState: 'safe' }), true);
   assert.equal(visible({ ...base, status: 'failed', reloadSafetyState: 'safe' }), true);
@@ -767,10 +773,10 @@ await check('R12-quick-prompt-mirrors-main-visibility-and-dismiss-contract', () 
 });
 await check('R12-shared-presentation-preserves-failure-precedence-and-exact-wording', () => {
   const base = Object.freeze({ status: 'update-available', updateAvailable: true, dismissedAt: null, reloadSafetyState: 'dirty', failureKind: null, errorMessage: null });
-  assert.deepEqual({ ...present(base) }, { visible: true, isRecovery: false, title: '新版已就緒', detail: null });
+  assert.deepEqual({ ...present(base) }, { visible: false, isRecovery: false, title: '新版已就緒', detail: null });
   assert.equal(present({ ...base, errorMessage: 'stale failure' }).detail, null);
-  assert.equal(present({ ...base, reloadSafetyState: 'blocked' }).detail, '目前無法確認內容是否已保存。');
-  assert.equal(present({ ...base, reloadSafetyState: 'blocked', errorMessage: '草稿尚未保存' }).detail, '草稿尚未保存');
+  assert.equal(present({ ...base, reloadSafetyState: 'blocked' }).visible, false);
+  assert.equal(presentationModule.exports.getPwaCheckPresentation({ ...base, errorMessage: '草稿尚未保存' }, { pending: false, result: null }).statusMessage, '草稿尚未保存');
   for (const status of ['failed', 'recoverable-cache-error']) {
     for (const [failureKind, title] of [[null, '重新載入未完成'], ['update', '重新載入未完成'], ['load', '畫面載入失敗'], ['cache-recovery', '快取恢復未完成']]) {
       const state = { ...base, status, failureKind, updateAvailable: false, dismissedAt: 1, reloadSafetyState: 'blocked' };
@@ -808,7 +814,7 @@ await check('R12-quick-prompt-skips-equivalent-renders-and-keeps-action-feedback
   const cleanup = module.exports.mountQuickTaskPwaUpdatePrompt({
     read: () => readState,
     subscribe: callback => { subscribeCount++; listener = callback; return () => { unsubscribeCount++; }; },
-    apply: operation('apply'), retry: operation('retry'), recover: operation('recover'), dismiss: () => actions.push('dismiss'),
+    retry: operation('retry'), recover: operation('recover'),
   });
   const node = key => nodes.find(item => item.dataset[key]);
   const heading = nodes.find(item => item.tag === 'h2');
@@ -826,12 +832,11 @@ await check('R12-quick-prompt-skips-equivalent-renders-and-keeps-action-feedback
   fs.writeFileSync(path.join(output, 'prompt-render-measurements.json'), JSON.stringify({ layer: 'DOM property setter adapter; not browser frame timing', measurements }, null, 2));
   for (const measurement of measurements) assert.equal(measurement.domPropertyWrites, 0, `${measurement.scenario}: equivalent state should not rewrite DOM`);
   listener(base);
-  assert.equal(node('pwaUpdatePrompt').hidden, false);
+  assert.equal(node('pwaUpdatePrompt').hidden, true);
   assert.equal(heading.textContent, '新版已就緒');
   listener({ ...base, dismissedAt: 1 });
   assert.equal(node('pwaUpdatePrompt').hidden, true);
   for (const [key, status, failureKind, title, pendingLabel] of [
-    ['pwaUpdateAction', 'update-available', null, '新版已就緒', '準備重新載入'],
     ['pwaUpdateRetry', 'failed', 'load', '畫面載入失敗', '準備重新載入'],
     ['pwaCacheRecovery', 'recoverable-cache-error', 'cache-recovery', '快取恢復未完成', '正在恢復'],
   ]) {
@@ -850,8 +855,7 @@ await check('R12-quick-prompt-skips-equivalent-renders-and-keeps-action-feedback
   }
   listener({ ...base, status: 'failed', failureKind: 'load', errorMessage: '更新後的失敗原因' });
   assert.equal(node('pwaUpdateError').textContent, '更新後的失敗原因');
-  node('pwaUpdateLater').events.click();
-  assert.deepEqual(actions, ['apply', 'retry', 'recover', 'dismiss']);
+  assert.deepEqual(actions, ['retry', 'recover']);
   assert.equal(subscribeCount, 1);
   assert.equal(roots.length, 1);
   cleanup(); cleanup(); assert.equal(unsubscribeCount, 1);
@@ -877,7 +881,7 @@ await check('U06-adapter-synthetic-persisted-cycles-same-root-not-real-bfcache',
   module.exports.mountQuickTaskPwaUpdatePrompt({
     read: () => { readCount++; return readState; },
     subscribe: callback => { listener = callback; return () => { unsubscribeCount++; }; },
-    apply: async () => true, retry: async () => true, recover: async () => true, dismiss() {},
+    retry: async () => true, recover: async () => true,
   });
   listener(readState);
   const rootNode = roots[0], heading = nodes.find(node => node.tag === 'h2');
@@ -1020,12 +1024,12 @@ try {
     finally { fs.unlinkSync(link); }
     assert.equal(fs.readdirSync(outside).length, 0);
   });
-  await check('R07-retention-does-not-accumulate-earlier-generations', () => {
+  await check('R07-retention-preserves-earlier-compatible-assets-at-rollout', () => {
     const previous = artifact('previous', { 'assets/main-previous.js': 'previous', 'assets/inherited.js': 'inherited' }, { entries: [{ path: 'assets/inherited.js' }], schemaVersion: 1, sourceReleaseId: 'earlier', sourceTreeSha256: 'a'.repeat(64) });
     previous.manifest.artifact.compatibility.entries = previous.manifest.artifact.entries.filter(entry => entry.path === 'assets/inherited.js'); fs.writeFileSync(previous.manifestPath, JSON.stringify(previous.manifest));
     const next = artifact('bounded', { 'assets/main-bounded.js': 'bounded' });
     retainPreviousAssets({ distDir: next.dist, previousManifestPath: previous.manifestPath });
-    assert.equal(fs.existsSync(path.join(next.dist, 'assets/main-previous.js')), true); assert.equal(fs.existsSync(path.join(next.dist, 'assets/inherited.js')), false);
+    assert.equal(fs.existsSync(path.join(next.dist, 'assets/main-previous.js')), true); assert.equal(fs.existsSync(path.join(next.dist, 'assets/inherited.js')), true);
   });
   await check('R07-shipping-build-requires-previous-binding-before-build', async () => {
     await assert.rejects(buildProductionArtifact({ parentEnv: {}, requirePreviousAssets: true }), /previous-manifest/);

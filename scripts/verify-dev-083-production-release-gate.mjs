@@ -18,6 +18,8 @@ import {
   buildReleaseRuntimeEnv,
   runRelease,
   runDirectRelease,
+  buildBrowserSmokeUrl,
+  matchesReusableTestViteProcess,
   summarizeLiveChannel,
   verifyRemoteArtifact,
 } from './release/production-release.mjs';
@@ -73,6 +75,27 @@ try {
       if (key in child) throw new Error(`${key} survived release runtime sanitization`);
     }
     if (child.PROJED_RELEASE_PROFILE !== 'production') throw new Error('release runtime profile is missing');
+  });
+  await check('local-feature-smoke-reuses-only-matching-test-vite-owner', () => {
+    const owner = {
+      commandLine: '"node" "C:\\VIBE CODING\\ProJED\\ProJED\\node_modules\\.bin\\..\\vite\\bin\\vite.js" --mode test --host 127.0.0.1 --port 1040',
+      localAddress: '127.0.0.1', port: 1040, rootDir: root,
+    };
+    if (!matchesReusableTestViteProcess(owner)) throw new Error('matching same-repository test Vite process was rejected');
+    for (const invalid of [
+      { ...owner, commandLine: owner.commandLine.replace('--mode test', '--mode production') },
+      { ...owner, commandLine: owner.commandLine.replace('C:\\VIBE CODING\\ProJED\\ProJED', 'C:\\other\\repo') },
+      { ...owner, commandLine: owner.commandLine.replace('--port 1040', '--port 1041') },
+      { ...owner, localAddress: '0.0.0.0' },
+    ]) {
+      if (matchesReusableTestViteProcess(invalid)) throw new Error('foreign or non-test Vite process was accepted for reuse');
+    }
+  });
+  await check('local-test-smoke-url-is-bound-by-receipt-not-query', () => {
+    const local = buildBrowserSmokeUrl({ baseUrl: 'http://localhost:1040/', releaseId: 'local-release-id', runtimeProfile: 'local-test' });
+    if (local !== 'http://localhost:1040/') throw new Error('local test smoke URL added release query parameters');
+    const production = new URL(buildBrowserSmokeUrl({ baseUrl: 'https://projed-cc78d.web.app/', releaseId: 'production-release-id' }));
+    if (production.searchParams.get('dev083ReleaseId') !== 'production-release-id') throw new Error('production browser smoke release identity query is missing');
   });
   await check('credential-rotation-evidence-modes', () => {
     const attested = classifyOldCredentialEvidence({ credentialProvided: false, manualRotationConfirmed: true, envName: 'OLD_KEY' });
@@ -305,6 +328,12 @@ try {
         record(filename ? 'feature' : 'browser');
         return { ok: true };
       },
+      runLocalTestModeFeatureSmoke: async ({ manifest: candidate, filename }) => {
+        assert.equal(candidate, manifest);
+        assert.equal(filename, path.resolve(root, featureSmoke));
+        record('feature-local');
+        return { ok: true, environment: 'isolated-vite-test-mode', sourceCommit: manifest.source.commit, expectedReleaseId: manifest.releaseId, testSummary: { pass: 16, fail: 0, diagnostics: 0 } };
+      },
     };
     return { services, calls, manifest, manifestPath, evidenceFile, previousLiveRelease };
   };
@@ -315,6 +344,36 @@ try {
     assert.equal(result.complete, true);
     assert.equal(result.verification, 'passed');
     assert.equal(JSON.parse(fs.readFileSync(f.evidenceFile, 'utf8')).feature.sha256.length, 64);
+  });
+  await check('direct-local-feature-smoke-isolated-and-bound-before-deploy', async () => {
+    const f = directFixture();
+    const result = await runDirectRelease({ ...directArgs, feature_smoke: featureSmoke, feature_smoke_local: true }, f.services);
+    assert.deepEqual(f.calls, ['clean', 'git', 'build', 'clean', 'git', 'artifact', 'recovery', 'git', 'feature-local', 'deploy', 'provenance', 'browser']);
+    assert.equal(result.complete, true);
+    assert.equal(result.verification, 'passed');
+    const receipt = JSON.parse(fs.readFileSync(f.evidenceFile, 'utf8'));
+    assert.equal(receipt.feature.environment, 'isolated-vite-test-mode');
+    assert.equal(receipt.feature.sourceCommit, receipt.source.commit);
+    assert.deepEqual(receipt.feature.testSummary, { pass: 16, fail: 0, diagnostics: 0 });
+  });
+  await check('direct-local-feature-smoke-accepts-verified-runtime-owner-evidence', async () => {
+    const f = directFixture();
+    f.services.runLocalTestModeFeatureSmoke = async ({ manifest: candidate, filename }) => {
+      assert.equal(candidate, f.manifest);
+      assert.equal(filename, path.resolve(root, featureSmoke));
+      f.calls.push('feature-local');
+      return {
+        ok: true, environment: 'same-repository-vite-test-mode', sourceCommit: f.manifest.source.commit,
+        expectedReleaseId: f.manifest.releaseId, testSummary: { pass: 16, fail: 0, diagnostics: 0 },
+        runtimeOwnership: 'reused-verified-process', processPid: 27172, port: 1040,
+      };
+    };
+    const result = await runDirectRelease({ ...directArgs, feature_smoke: featureSmoke, feature_smoke_local: true }, f.services);
+    assert.equal(result.complete, true);
+    const receipt = JSON.parse(fs.readFileSync(f.evidenceFile, 'utf8'));
+    assert.equal(receipt.feature.environment, 'same-repository-vite-test-mode');
+    assert.equal(receipt.feature.processPid, 27172);
+    assert.equal(receipt.feature.port, 1040);
   });
   await check('direct-shell-only-is-feature-pending', async () => {
     const f = directFixture();
@@ -329,6 +388,8 @@ try {
     ['invalid-boolean', { ...directArgs, verify_only: 'false' }],
     ['protected-evidence-in-direct', { ...directArgs, level3_evidence: 'unused.json' }],
     ['missing-feature-file', { ...directArgs, feature_smoke: 'scripts/missing-direct-feature.pw.js' }],
+    ['local-mode-without-feature', { ...directArgs, feature_smoke_local: true }],
+    ['local-mode-not-boolean', { ...directArgs, feature_smoke: featureSmoke, feature_smoke_local: 'true' }],
     ['shell-as-feature', { ...directArgs, feature_smoke: 'scripts/verify-release-browser-smoke.pw.js' }],
   ]) {
     await check(`direct-rejects-${name}-before-work`, async () => {
@@ -348,16 +409,18 @@ try {
       assert.equal(f.calls.includes('deploy'), false);
     });
   }
-  for (const failAt of ['deploy', 'provenance', 'browser', 'feature']) {
+  for (const failAt of ['deploy', 'provenance', 'browser', 'feature', 'feature-local']) {
     await check(`direct-preserves-recovery-on-${failAt}-failure`, async () => {
       const f = directFixture({ failAt });
-      await assert.rejects(runDirectRelease({ ...directArgs, feature_smoke: featureSmoke }, f.services), /fixture .* failure/);
+      const args = { ...directArgs, feature_smoke: featureSmoke, ...(failAt === 'feature-local' ? { feature_smoke_local: true } : {}) };
+      await assert.rejects(runDirectRelease(args, f.services), /fixture .* failure/);
       const receipt = JSON.parse(fs.readFileSync(f.evidenceFile, 'utf8'));
       assert.equal(receipt.complete, false);
       assert.equal(receipt.verification, 'failed');
       assert.deepEqual(receipt.previousLiveRelease, f.previousLiveRelease);
-      assert.equal(receipt.published, failAt === 'deploy' ? null : true);
-      assert.equal(receipt.deployment.status, failAt === 'deploy' ? 'unknown' : 'published');
+      const beforeDeploy = failAt === 'feature-local';
+      assert.equal(receipt.published, beforeDeploy ? false : failAt === 'deploy' ? null : true);
+      assert.equal(receipt.deployment.status, beforeDeploy ? 'not-started' : failAt === 'deploy' ? 'unknown' : 'published');
     });
   }
   await check('direct-pinned-artifact-does-not-rebuild-current-source', async () => {
@@ -378,6 +441,28 @@ try {
     assert.equal(result.complete, true);
     assert.deepEqual(f.calls, ['artifact', 'provenance', 'browser', 'feature']);
     assert.deepEqual(JSON.parse(fs.readFileSync(f.evidenceFile, 'utf8')).previousLiveRelease, f.previousLiveRelease);
+  });
+  await check('direct-verify-only-rechecks-local-feature-without-redeploy', async () => {
+    const f = directFixture();
+    await runDirectRelease({ ...directArgs, feature_smoke: featureSmoke, feature_smoke_local: true }, f.services);
+    f.calls.length = 0;
+    const result = await runDirectRelease({ ...directArgs, manifest: f.manifestPath, verify_only: true, feature_smoke: featureSmoke, feature_smoke_local: true }, f.services);
+    assert.equal(result.complete, true);
+    assert.deepEqual(f.calls, ['artifact', 'git', 'feature-local', 'provenance', 'browser']);
+  });
+  await check('direct-verify-only-retains-prior-failed-attempt-history', async () => {
+    const f = directFixture();
+    await runDirectRelease({ ...directArgs, feature_smoke: featureSmoke, feature_smoke_local: true }, f.services);
+    const receiptPath = f.evidenceFile;
+    const receipt = JSON.parse(fs.readFileSync(receiptPath, 'utf8'));
+    receipt.verification = 'failed';
+    receipt.error = 'fixture production feature smoke used the local-only fixture';
+    fs.writeFileSync(receiptPath, JSON.stringify(receipt));
+    const result = await runDirectRelease({ ...directArgs, manifest: f.manifestPath, verify_only: true, feature_smoke: featureSmoke, feature_smoke_local: true }, f.services);
+    const updated = JSON.parse(fs.readFileSync(receiptPath, 'utf8'));
+    assert.equal(result.verification, 'passed');
+    assert.equal(updated.verificationHistory.length, 1);
+    assert.match(updated.verificationHistory[0].error, /local-only fixture/);
   });
   await check('direct-does-not-redeploy-an-existing-attempt', async () => {
     const f = directFixture();

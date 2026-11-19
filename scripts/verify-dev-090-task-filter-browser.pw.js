@@ -168,7 +168,7 @@ async (page) => {
   try {
     await seed();
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto('http://localhost:4000/', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:1040/', { waitUntil: 'networkidle' });
     await page.locator('[data-kanban-column-header="true"][data-task-id="dev090-root"]').waitFor({ state: 'visible', timeout: 15000 });
 
     step = 'B01-B06-default-and-migration';

@@ -8,7 +8,7 @@ const preview = 'https://projed-cc78d--level3-smoke-test.web.app';
 assert.equal(getQuickInstallUrl(main), `${quick}/quick-task/?install=1`);
 assert.equal(getQuickInstallUrl(quick), '/quick-task/?install=1');
 assert.equal(getQuickInstallUrl(preview), '/quick-task/?install=1');
-assert.equal(getQuickInstallUrl('http://localhost:4000'), '/quick-task/?install=1');
+assert.equal(getQuickInstallUrl('http://localhost:1040'), '/quick-task/?install=1');
 assert.equal(getMainInstallUrl(quick), `${main}/`);
 assert.equal(getMainInstallUrl(main), '/');
 assert.equal(getMainInstallUrl(preview), '/');

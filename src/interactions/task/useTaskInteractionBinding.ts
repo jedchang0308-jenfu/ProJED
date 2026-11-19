@@ -80,7 +80,7 @@ export const useTaskInteractionBinding = ({
       selectAndOpenTaskDetails(targetTaskId, trackingReferenceId);
     },
     'task.open-details-for-naming': ({ taskId: targetTaskId }) => prepareNewTaskNaming(targetTaskId),
-    'task.switch-to-list': () => setView('list'),
+    'task.switch-to-list': () => setView('goal'),
     'task.clear-selection': () => clearTaskSelection(),
     ...commandDependencies,
   }), [commandDependencies, placementContext, setView, trackingReferenceId]);

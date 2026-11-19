@@ -4,10 +4,8 @@ import {
   ChevronRight,
   Columns,
   LineChart,
-  ListChecks,
   Network,
   Redo2,
-  Sparkles,
   Target,
   Undo2,
 } from 'lucide-react';
@@ -56,6 +54,8 @@ interface MainLayoutProps {
 const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const {
     currentView,
+    activeWorkspaceId,
+    activeBoardId,
     getActiveBoard,
     getActiveWorkspace,
     setView,
@@ -206,7 +206,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
   const modeSwitcherOptions: ModeSwitcherOption<ViewMode>[] = [
     { value: 'board', label: '看板模式', icon: <Columns size={13} /> },
-    { value: 'list', label: '清單模式', icon: <ListChecks size={13} /> },
     { value: 'mindmap', label: '心智圖模式', icon: <Network size={13} /> },
     { value: 'gantt', label: '甘特圖模式', icon: <LineChart size={13} /> },
     {
@@ -215,7 +214,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       icon: <CalendarDays size={13} />,
       title: '日曆功能開發中，內容可能尚未穩定',
     },
-    { value: 'goal', label: 'OKR模式', icon: <Target size={13} /> },
+    { value: 'goal', label: '清單模式', icon: <Target size={13} /> },
   ];
   const visibleModeSwitcherOptions = isMeetingMode
     ? modeSwitcherOptions.filter(option => isMeetingContinuityView(option.value))
@@ -314,8 +313,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             onBlur={() => setPreviewedPanel(null)}
             className={cn(
               topbarClassNames.textButton,
-              'px-2 text-xs text-primary-700 hover:text-primary-700',
-              previewedPanel === 'task-workbench' && 'z-50 border-primary-500 bg-primary-100 text-primary-800 ring-2 ring-primary-300 shadow-[0_0_0_4px_rgba(99,102,241,0.28)]',
+              'px-2',
+              previewedPanel === 'task-workbench' && 'z-50 border-primary-500 bg-primary-100 ring-2 ring-primary-300 shadow-[0_0_0_4px_rgba(99,102,241,0.28)]',
             )}
             title="開啟或收合所有任務"
             aria-label="開啟或收合所有任務"
@@ -323,7 +322,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           >
             <span
               aria-hidden="true"
-              className="text-[11px] font-black leading-none tracking-tight"
+              className="min-w-0 truncate"
               data-task-workbench-nav-label="all"
             >
               所有任務
@@ -339,8 +338,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             className={cn(
               topbarClassNames.textButton,
               'app-board-switcher min-w-0 max-w-[48vw] justify-start px-2 sm:max-w-none',
-              isSidebarOpen && 'border-primary-300 bg-primary-50 text-primary-700',
-              previewedPanel === 'workspace-sidebar' && 'z-50 border-primary-500 bg-primary-100 text-primary-800 ring-2 ring-primary-300 shadow-[0_0_0_4px_rgba(99,102,241,0.28)]',
+              isSidebarOpen && 'border-primary-300 bg-primary-50',
+              previewedPanel === 'workspace-sidebar' && 'z-50 border-primary-500 bg-primary-100 ring-2 ring-primary-300 shadow-[0_0_0_4px_rgba(99,102,241,0.28)]',
             )}
             title={activeWorkspace && activeBoard
               ? `${isSidebarOpen ? '收合' : '展開'}工作區與看板：${activeWorkspace.title} / ${activeBoard.title}`
@@ -355,7 +354,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           >
             <span
               data-topbar-board-title="true"
-              className="app-board-title min-w-0 truncate text-xs font-bold text-slate-800 sm:overflow-visible sm:text-clip sm:text-sm"
+              className="app-board-title min-w-0 truncate text-slate-600 sm:overflow-visible sm:text-clip"
             >
               {activeBoard?.title || '選擇看板'}
             </span>
@@ -457,21 +456,20 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             onClick={isHttpBackend ? undefined : toggleRagPanel}
             disabled={isHttpBackend}
             className={cn(
-              'btn-outline flex h-7 shrink-0 px-2 text-xs sm:h-8 sm:px-3 sm:text-sm',
               topbarClassNames.textButton,
+              'px-2 sm:px-3',
               isHttpBackend
                 ? 'cursor-not-allowed border-slate-200 text-slate-400'
                 : isRagOpen
-                  ? 'border-blue-400 bg-blue-50 text-blue-600'
-                  : 'hover:border-blue-400 hover:text-blue-600',
+                  ? 'border-primary-300 bg-primary-50 hover:border-primary-400 hover:bg-primary-100'
+                  : 'hover:border-primary-400 hover:bg-primary-50',
             )}
-            title={isHttpBackend ? '專案智慧助理正在移轉，暫不查詢舊資料來源' : '問AI'}
-            aria-label={isHttpBackend ? '問AI（目前後端暫不支援）' : '問AI'}
+            title={isHttpBackend ? '專案智慧助理正在移轉，暫不查詢舊資料來源' : 'AI'}
+            aria-label={isHttpBackend ? 'AI（目前後端暫不支援）' : 'AI'}
             data-ai-analysis-open="true"
             data-ai-analysis-supported={isHttpBackend ? 'false' : 'true'}
           >
-            <Sparkles size={14} className={isRagOpen ? 'text-blue-500' : 'text-slate-400'} />
-            <span>問AI</span>
+            <span>AI</span>
           </button>
 
           <AppMoreMenu
@@ -524,7 +522,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         <RagSidebar />
       </div>
 
-        <GlobalContextMenu />
+        <GlobalContextMenu key={JSON.stringify([activeWorkspaceId, activeBoardId])} />
         <TaskDescriptionHoverCard />
       </div>
     </PanelPreviewProvider>

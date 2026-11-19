@@ -238,7 +238,7 @@ export const AppInstallAssistant: React.FC<AppInstallAssistantProps> = ({ mode =
         <div className="grid gap-3 sm:grid-cols-2" role="group" aria-label="選擇要安裝的 App">
           {([
             { id: 'main' as const, name: 'ProJED 主程式', description: '完整任務工作台', icon: '/icons/projed-main-icon-brand-20260929-192.png' },
-            { id: 'quick' as const, name: 'ProJED-快速建任務', description: '立即記下待辦', icon: '/icons/projed-quick-task-icon-brand-20260929-192.png' },
+            { id: 'quick' as const, name: 'ProJED-建待辦', description: '立即記下待辦', icon: '/icons/projed-quick-task-icon-brand-20260929-192.png' },
           ]).map((app) => (
             <button
               key={app.id}
@@ -318,10 +318,10 @@ export const AppInstallAssistant: React.FC<AppInstallAssistantProps> = ({ mode =
               data-quick-task-install-link="true"
               className="inline-flex min-h-10 items-center rounded-lg bg-teal-700 px-4 py-2 text-sm font-bold text-white hover:bg-teal-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
             >
-              開啟 ProJED-快速建任務安裝頁
+              開啟 ProJED-建待辦安裝頁
             </a>
-            {!isAndroidDevice && <p className="mt-2 text-sm leading-6 text-slate-600">ProJED-快速建任務使用獨立安裝頁；開啟後點「安裝 ProJED-快速建任務」。</p>}
-            {isAndroidDevice && <div className="mt-3"><AndroidChromeSteps target="ProJED-快速建任務安裝頁" /></div>}
+            {!isAndroidDevice && <p className="mt-2 text-sm leading-6 text-slate-600">ProJED-建待辦使用獨立安裝頁；開啟後點「安裝 ProJED-建待辦」。</p>}
+            {isAndroidDevice && <div className="mt-3"><AndroidChromeSteps target="ProJED-建待辦安裝頁" /></div>}
             <p className="mt-2 text-sm leading-6 text-slate-600">首次開啟獨立入口時，請用與主程式相同的 Google 帳號登入。若舊入口仍有待同步待辦，請先完成同步。</p>
           </div>
         )}

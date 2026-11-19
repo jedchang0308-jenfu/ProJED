@@ -7,6 +7,8 @@ export const COMPACT_DIMENSIONS = {
   calendarLaneGap: 2,
 };
 
+export const taskViewFrameClassName = 'rounded-xl border border-slate-300 shadow-sm';
+
 export const compactClassNames = {
   toolbar:
     'app-compact-toolbar h-12 border-b border-slate-200/80 bg-white/85 backdrop-blur-md flex items-center justify-between px-[12px] shrink-0 shadow-[0_1px_0_rgba(15,23,42,0.04)]',

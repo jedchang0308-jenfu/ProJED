@@ -1,6 +1,6 @@
 /* eslint-disable */
 async (page) => {
-  const BASE_URL = 'http://localhost:4000/';
+  const BASE_URL = 'http://localhost:1040/';
   const OUTPUT_DIR = 'output/playwright/dev-095';
   const diagnostics = [];
   const cases = [];
@@ -513,10 +513,10 @@ async (page) => {
     await page.keyboard.press('Escape');
 
     await modeTrigger.click();
-    await page.locator('[data-mode-switcher-value="list"]').click();
-    const listReference = reference(seeded.id);
-    await listReference.waitFor({ state: 'visible', timeout: 15000 });
-    await listReference.dblclick();
+    await page.locator('[data-mode-switcher-value="goal"]').click();
+    const goalReference = reference(seeded.id);
+    await goalReference.waitFor({ state: 'visible', timeout: 15000 });
+    await goalReference.locator('[data-task-title-slot="true"]').dblclick();
     const details = page.locator('[data-task-details-modal="true"]');
     await details.waitFor({ state: 'visible', timeout: 10000 });
     const detailsEvidence = await details.evaluate(element => ({

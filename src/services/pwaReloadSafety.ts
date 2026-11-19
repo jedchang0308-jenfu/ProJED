@@ -3,6 +3,7 @@ import {
   type PwaReloadSurface,
   type PwaReloadSafetyOwnerId,
 } from './pwaReloadOwnerManifest';
+import { getPwaReloadLocationView } from './pwaReloadLocation';
 
 export type PwaReloadSafetyState = 'booting' | 'safe' | 'dirty' | 'preparing' | 'blocked';
 export type PwaReloadBoundary = 'app-open' | 'foreground' | 'view-transition' | 'user-confirmed';
@@ -173,6 +174,8 @@ const manifestIsComplete = (view: PwaReloadSurface | null) => {
 
 const validateViewIntent = (view: PwaReloadSurface | null) => {
   if (view === 'quick-task') return true;
+  const localView = getPwaReloadLocationView();
+  if (localView) return !view || localView === view;
   if (!view || typeof localStorage === 'undefined') return true;
   try {
     return localStorage.getItem('projed-last-view') === view;

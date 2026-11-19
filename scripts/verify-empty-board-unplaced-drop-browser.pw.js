@@ -111,7 +111,7 @@ async (page) => {
   });
 
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
+  await page.goto('http://localhost:1040/', { waitUntil: 'domcontentloaded' });
   await seed({ mobile: false });
 
   const desktopSource = page.locator(

@@ -48,7 +48,7 @@ const checks = [
         'src/components/Wbs/KanbanCard.tsx',
         'src/components/Wbs/KanbanChecklist.tsx',
         'src/components/Wbs/KanbanColumn.tsx',
-        'src/components/Wbs/WbsNodeItem.tsx',
+        'src/components/GoalView.tsx',
       ].every(file => !hasInlineSubmitCancelShortcut(file) || hasImeCompositionGuard(file)),
   },
   {
@@ -78,9 +78,9 @@ const checks = [
   },
   {
     name: 'date boundary guards reject invalid parent/child ranges',
-    ok: includes('src/components/Wbs/WbsNodeItem.tsx', 'validateDateBoundary') &&
-      includes('src/components/Wbs/WbsNodeItem.tsx', '結束日期不得早於開始日期') &&
-      includes('src/components/Wbs/WbsNodeItem.tsx', '下層任務的日期不得超出上層任務的範圍'),
+    ok: includes('src/components/GoalView.tsx', 'validateDateBoundary') &&
+      includes('src/components/GoalView.tsx', '結束日期不得早於開始日期') &&
+      includes('src/components/GoalView.tsx', '下層任務的日期不得超出上層任務的範圍'),
   },
   {
     name: 'shared task sidebar guards node level and consumes the shared hierarchy token',

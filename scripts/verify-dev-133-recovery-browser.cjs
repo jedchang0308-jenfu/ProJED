@@ -9,7 +9,7 @@ const { execFileSync } = require('node:child_process');
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 
 const root = path.resolve(__dirname, '..');
-const origin = process.env.DEV133_BASE_URL || 'http://localhost:4000';
+const origin = process.env.DEV133_BASE_URL || 'http://localhost:1040';
 assert.match(origin, /^http:\/\/(localhost|127\.0\.0\.1):\d+$/);
 const output = process.env.DEV133_OUTPUT_DIR
   ? path.resolve(process.env.DEV133_OUTPUT_DIR)

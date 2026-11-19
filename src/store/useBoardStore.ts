@@ -6,6 +6,7 @@ import { workspaceService, boardService } from '../services/dataBackend';
 import type { BoardStore, ViewMode } from '../types';
 import type { BoardContextMenuState } from '../types';
 import type { TaskHostMode, TaskInteractionLocation, TaskInteractionSurfaceId } from '../interactions/task/types';
+import { readPwaReloadLocation } from '../services/pwaReloadLocation';
 import {
     createDefaultTaskDisplaySettings,
     readBoardTaskDisplaySettings,
@@ -24,6 +25,8 @@ const VIEW_STORAGE_KEY = 'projed-last-view';
 const WS_STORAGE_KEY = 'projed-last-ws';
 const BOARD_STORAGE_KEY = 'projed-last-board';
 const MODAL_STORAGE_KEY = 'projed-last-modal';
+const BOARD_TASK_VIEWS = new Set<ViewMode>(['list', 'mindmap', 'board', 'goal', 'gantt', 'calendar']);
+const reloadLocation = readPwaReloadLocation();
 
 const getDefaultDisplaySettings = () => ({
     showDependencies: createDefaultTaskDisplaySettings().showDependencies,
@@ -48,8 +51,12 @@ const safeSetItem = (key: string, value: string | null) => {
 
 const getStoredView = () => {
     try {
-        const stored = localStorage.getItem(VIEW_STORAGE_KEY);
-        if (stored && ['list', 'mindmap', 'board', 'goal', 'gantt', 'calendar', 'records', 'calendar_subscriptions', 'settings', 'recycle_bin'].includes(stored)) {
+        const stored = reloadLocation?.view ?? localStorage.getItem(VIEW_STORAGE_KEY);
+        if (stored === 'list') {
+            safeSetItem(VIEW_STORAGE_KEY, 'goal');
+            return 'goal';
+        }
+        if (stored && ['mindmap', 'board', 'goal', 'gantt', 'calendar', 'records', 'calendar_subscriptions', 'settings', 'recycle_bin'].includes(stored)) {
             return stored as ViewMode;
         }
     } catch { /* ignore */ }
@@ -140,8 +147,8 @@ const pushBoardDisplayUndo = (set, label, before, after) => {
 const useBoardStore = create<BoardStore>()(
     (set, get) => ({
         workspaces: [],
-        activeWorkspaceId: getStoredId(WS_STORAGE_KEY),
-        activeBoardId: getStoredId(BOARD_STORAGE_KEY),
+        activeWorkspaceId: reloadLocation ? reloadLocation.workspaceId : getStoredId(WS_STORAGE_KEY),
+        activeBoardId: reloadLocation ? reloadLocation.boardId : getStoredId(BOARD_STORAGE_KEY),
         currentView: getStoredView(),
         // The global task workbench is the default left-side workspace.
         // Keep the workspace/board navigator available from the top-left menu
@@ -174,8 +181,9 @@ const useBoardStore = create<BoardStore>()(
             set({ activeBoardId: id, selectedTaskId: null });
         },
         setView: (view) => {
-            safeSetItem(VIEW_STORAGE_KEY, view);
-            set({ currentView: view, selectedTaskId: null });
+            const currentView = view === 'list' ? 'goal' : view;
+            safeSetItem(VIEW_STORAGE_KEY, currentView);
+            set({ currentView, selectedTaskId: null });
         },
         setSidebarOpen: (isOpen) => set({ isSidebarOpen: isOpen }),
         setDependencySelection: (state) => set({ dependencySelection: state }),
@@ -345,20 +353,21 @@ const useBoardStore = create<BoardStore>()(
         },
 
         switchBoard: (workspaceId, boardId) => {
-            const { workspaces } = get();
+            const { workspaces, currentView } = get();
             const ws = workspaces.find(w => w.id === workspaceId);
             const board = ws?.boards.find(b => b.id === boardId);
             // Optimistic rows use a local-only id until Supabase returns the
             // canonical project id. Never route the app into a board that the
             // backend cannot resolve yet, even if the pending row is clicked.
             if (board && !board.id.startsWith('b_')) {
+                const nextView = BOARD_TASK_VIEWS.has(currentView) ? currentView : 'board';
                 safeSetItem(WS_STORAGE_KEY, workspaceId);
                 safeSetItem(BOARD_STORAGE_KEY, boardId);
-                safeSetItem(VIEW_STORAGE_KEY, 'board');
+                safeSetItem(VIEW_STORAGE_KEY, nextView);
                 set({
                     activeWorkspaceId: workspaceId,
                     activeBoardId: boardId,
-                    currentView: 'board',
+                    currentView: nextView,
                 });
             }
         },

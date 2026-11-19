@@ -106,7 +106,7 @@ async (page) => {
   const openFixture = async (visibleNodeCount, viewport = { width: 1440, height: 900 }, routePhase = phase) => {
     await page.setViewportSize(viewport);
     const query = routePhase ? `?dev075Phase=${routePhase}` : '';
-    await page.goto(`http://localhost:4000/${query}`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`http://localhost:1040/${query}`, { waitUntil: 'domcontentloaded' });
     await writeFixture(visibleNodeCount);
     await page.reload({ waitUntil: 'networkidle' });
     if (await page.locator('nav').count() === 0) {

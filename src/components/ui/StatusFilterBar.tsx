@@ -10,7 +10,8 @@ import { countActiveTaskFilters, createBoardAssigneeFilterOptions, createTaskTag
 import TaskConditionFilterControls from './TaskConditionFilterControls';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 import { cn } from '../../utils/cn';
-import { getTaskFilterTriggerClass, getTaskFilterChoiceClass } from './taskConditionFilterStyles';
+import { getTaskFilterChoiceClass } from './taskConditionFilterStyles';
+import { topbarClassNames } from './compactTokens';
 
 const FILTER_PANEL_WIDTH = 288;
 const FILTER_PANEL_GUTTER = 8;
@@ -150,14 +151,7 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = ({
   return (
     <div className={cn('relative', isOpen ? 'z-[10000]' : 'z-10')}>
       <div
-        className={cn(
-          'inline-flex h-8 shrink-0 items-stretch overflow-hidden rounded-md border shadow-[0_1px_2px_rgba(15,23,42,0.05)] transition-colors',
-          isOpen || hasActiveFilter || hasPendingUpdate
-            ? hasActiveFilter
-              ? 'border-primary-500 bg-primary-50 ring-2 ring-primary-200/80'
-              : 'border-primary-400 bg-primary-50/70 text-primary-700 ring-2 ring-primary-200/70'
-            : 'border-slate-300 bg-white text-slate-600 hover:border-primary-400 hover:bg-primary-50 hover:text-primary-700',
-        )}
+        className={cn('relative inline-flex shrink-0 items-center gap-1', isOpen && 'z-[10000]')}
         data-task-filter-control-group="true"
         data-task-filter-control-pending={hasPendingUpdate ? 'true' : 'false'}
         data-task-filter-sync-error={hasSyncFailure ? 'true' : 'false'}
@@ -167,23 +161,25 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = ({
           id="filter-menu-trigger"
           type="button"
           aria-label={hasActiveFilter ? `過濾器已啟用（${activeFilterCount} 項）` : '過濾器'}
+          aria-pressed={hasActiveFilter}
           title="過濾器"
           onClick={openPanel}
           className={cn(
-            'inline-flex h-full min-w-8 shrink-0 items-center justify-center gap-1 border-0 px-1.5 text-inherit transition-colors focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/45',
-            getTaskFilterTriggerClass(hasActiveFilter, isOpen),
+            topbarClassNames.iconButton,
+            (hasActiveFilter || isOpen) && 'border-primary-300 bg-primary-50 text-slate-600 hover:border-primary-400 hover:bg-primary-100 hover:text-slate-600',
+            isOpen && 'ring-2 ring-primary-200/80',
           )}
           data-active-task-filter-count={activeFilterCount}
           data-task-filter-active={hasActiveFilter ? 'true' : 'false'}
         >
-          <SlidersHorizontal size={13} />
+          <SlidersHorizontal size={15} />
           {hasActiveFilter ? <span className="inline-flex min-w-4 items-center justify-center rounded-full bg-white px-1 py-0.5 text-[10px] font-bold leading-none text-primary-700" aria-hidden="true">{activeFilterCount > 99 ? '99+' : activeFilterCount}</span> : null}
         </button>
         {hasPendingUpdate ? (
           <button
             type="button"
             onClick={onApplyPendingUpdate}
-            className="inline-flex h-full min-w-8 items-center justify-center gap-1 border-0 border-l border-primary/25 bg-primary/[0.07] px-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/15"
+            className={topbarClassNames.textButton}
             title={'更新篩選結果（' + pendingUpdateCount + '）'}
             aria-label={'更新篩選結果（' + pendingUpdateCount + '）'}
           >
@@ -198,7 +194,7 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = ({
           <button
             type="button"
             onClick={() => void retrySync()}
-            className="inline-flex h-full w-8 items-center justify-center border-0 border-l border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
+            className={cn(topbarClassNames.iconButton, 'border-amber-300 bg-amber-50 text-amber-700 hover:border-amber-400 hover:bg-amber-100')}
             title={syncWarning || '重新同步篩選偏好'}
             aria-label={syncWarning || '重新同步篩選偏好'}
           >

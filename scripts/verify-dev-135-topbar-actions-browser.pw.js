@@ -1,7 +1,7 @@
 /* eslint-disable */
 async (page) => {
   const OUTPUT_DIR = process.env.PROJED_PLAYWRIGHT_OUTPUT_DIR || 'output/playwright/dev-135-topbar-actions';
-  const BASE_URL = page.url().match(/^https?:\/\/[^/]+/)?.[0] || 'http://localhost:4000';
+  const BASE_URL = page.url().match(/^https?:\/\/[^/]+/)?.[0] || 'http://localhost:1040';
   const assert = (condition, message, details = {}) => {
     if (!condition) throw new Error(`${message}: ${JSON.stringify(details)}`);
   };

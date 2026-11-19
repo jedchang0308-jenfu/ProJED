@@ -14,8 +14,8 @@ async (page) => {
     screenshots: [],
     browserErrors: [],
     httpFailures: [],
-    cleanup: { runtime: 'matching pre-existing localhost:4000', action: 'reused; not stopped' },
-    runtime: { port: 4000, reused: true, cleaned: false, portReleased: false },
+    cleanup: { runtime: 'matching pre-existing localhost:1040', action: 'reused; not stopped' },
+    runtime: { port: 1040, reused: true, cleaned: false, portReleased: false },
   };
   const failures = [];
   const dialogs = [];
@@ -84,7 +84,7 @@ async (page) => {
 
   const seed = async (width = 1440, height = 900, account = owner, currentWorkspace = workspace, currentNodes = nodes, records = [meetingRecord]) => {
     await page.setViewportSize({ width, height });
-    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:1040/', { waitUntil: 'domcontentloaded' });
     await page.evaluate(({ account, currentWorkspace, currentNodes, records }) => {
       localStorage.clear(); sessionStorage.clear();
       localStorage.setItem('projed-local-test.selected-account', account.id);
@@ -136,6 +136,10 @@ async (page) => {
       };
     });
     await descriptionToggle.click();
+    await descriptionToggle.locator('[data-goal-column-toggle-glyph]').evaluate(async glyph => {
+      getComputedStyle(glyph).backgroundColor;
+      await Promise.all(glyph.getAnimations().map(animation => animation.finished.catch(() => {})));
+    });
     const descriptionCollapsedProbe = await goal.evaluate(root => {
       const firstCell = root.querySelector('[data-goal-description-column-collapsed="true"]');
       const button = root.querySelector('[data-goal-description-column-toggle]');

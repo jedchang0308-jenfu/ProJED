@@ -1,7 +1,7 @@
 param(
   [ValidateSet('baseline', 'after', 'diff')]
   [string]$Phase = 'after',
-  [string]$BaseUrl = 'http://localhost:4000/',
+  [string]$BaseUrl = 'http://localhost:1040/',
   [string]$OutputDirectory = 'output/playwright/dev-070'
 )
 

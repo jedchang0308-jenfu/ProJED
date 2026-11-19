@@ -2,7 +2,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const root = process.cwd();
-const canonicalOrigin = 'http://localhost:4000/';
+const canonicalOrigin = 'http://localhost:1040/';
 const legacyOrigin = 'http://127.0.0.1' + ':4000';
 const excludedDirectoryNames = new Set(['.git', 'node_modules', 'dist', 'build', 'output']);
 

@@ -28,9 +28,9 @@ async (page) => {
 
   const openApp = async (viewport) => {
     await page.setViewportSize(viewport);
-    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:1040/', { waitUntil: 'domcontentloaded' });
     await seedSession();
-    await page.goto('http://localhost:4000/?qcReset=1', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:1040/?qcReset=1', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
     await seedSession();
     await page.reload({ waitUntil: 'domcontentloaded' });
@@ -77,7 +77,7 @@ async (page) => {
     const panel = page.locator('[data-pwa-install-settings]');
     await panel.waitFor({ state: 'visible', timeout: 10000 });
     const text = await panel.innerText();
-    assert(text.includes('ProJED 主程式') && text.includes('ProJED-快速建任務'), `${label} should show both App choices`, { text });
+    assert(text.includes('ProJED 主程式') && text.includes('ProJED-建待辦'), `${label} should show both App choices`, { text });
     assert(!text.includes('提示狀態') && !text.includes('重新顯示提示'), `${label} should keep the choice screen concise`, { text });
     assert(!/Service Worker|manifest|cache|PWA|403/i.test(text), `${label} should not expose technical terms`, { text });
     const quickEntry = panel.locator('[data-quick-task-install-cta="true"]');
@@ -110,7 +110,7 @@ async (page) => {
     assert(await quickDetail.isVisible(), `${label} should show quick App installation guidance`);
     const quickText = await quickDetail.innerText();
     assert(quickText.includes('與主程式相同的 Google 帳號登入'), `${label} should explain the separate login`, { quickText });
-    if (label.startsWith('mobile')) assert(quickText.includes('用手機 Chrome 開啟 ProJED-快速建任務安裝頁'), `${label} should teach Chrome installation for the quick App`, { quickText });
+    if (label.startsWith('mobile')) assert(quickText.includes('用手機 Chrome 開啟 ProJED-建待辦安裝頁'), `${label} should teach Chrome installation for the quick App`, { quickText });
     assert(!/自動.{0,8}兩.{0,8}圖示|立即.{0,8}捷徑|iOS.{0,8}長按/u.test(quickText), `${label} should avoid unsupported shortcut promises`, { quickText });
     const quickLinks = await quickDetail.locator('a').evaluateAll(links => links.map(link => link.getAttribute('href')));
     assert(quickLinks.length === 1 && quickLinks[0] === '/quick-task/?install=1', `${label} should preserve the independent install link`, { quickLinks });
@@ -119,7 +119,7 @@ async (page) => {
 
   const assertRetiredQuickCaptureShellAbsent = async () => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('http://localhost:4000/?qcReset=1', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:1040/?qcReset=1', { waitUntil: 'networkidle' });
     assert(await page.locator('[data-quick-capture-shell]').count() === 0, 'retired quick capture floating shell should not render before login');
     assert(await page.locator('[data-quick-capture-toggle]').count() === 0, 'retired quick capture toggle should not render before login');
     await assertNoHorizontalOverflow('mobile without retired quick capture shell');

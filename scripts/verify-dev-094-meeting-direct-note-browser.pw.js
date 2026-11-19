@@ -1,7 +1,7 @@
 /* eslint-disable */
 async (page) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
+  await page.goto('http://localhost:1040/', { waitUntil: 'domcontentloaded' });
   if (await page.locator('button', { hasText: '使用固定測試環境' }).count()) {
     await page.locator('button', { hasText: '使用固定測試環境' }).click();
     await page.locator('button', { hasText: '新增會議記錄' }).first().waitFor({ state: 'visible', timeout: 10000 });

@@ -15,7 +15,7 @@ type BeforeInstallPromptEventLike = Event & {
 type QuickInstallPlatform = 'standalone' | 'ios' | 'android' | 'embedded' | 'browser';
 type QuickPwaUpdateApi = Pick<
   typeof import('../../services/pwaUpdateService'),
-  'getPwaUpdateState' | 'subscribePwaUpdateState' | 'checkPwaUpdate' | 'applyPwaUpdate'
+  'getPwaUpdateState' | 'subscribePwaUpdateState' | 'checkPwaUpdate' | 'applyPwaUpdate' | 'dismissPwaUpdatePrompt'
 >;
 
 type QuickInstallGuideOptions = {
@@ -121,6 +121,13 @@ export const installQuickInstallGuide = (container: HTMLElement, options?: Quick
   summary.setAttribute('aria-label', '更多選項');
   summary.title = '更多選項';
   summary.textContent = '⋮';
+  const updateBadge = document.createElement('span');
+  updateBadge.className = 'quick-task-update-badge';
+  updateBadge.dataset.quickUpdateBadge = 'true';
+  updateBadge.setAttribute('aria-hidden', 'true');
+  updateBadge.textContent = '1';
+  updateBadge.hidden = true;
+  summary.append(updateBadge);
   const panel = document.createElement('div');
   panel.className = 'quick-task-install-menu-panel';
 
@@ -133,8 +140,18 @@ export const installQuickInstallGuide = (container: HTMLElement, options?: Quick
   checkStatus.setAttribute('role', 'status');
   checkStatus.setAttribute('aria-live', 'polite');
   checkStatus.hidden = true;
-  const reloadButton = createButton('重新載入', 'quickUpdateReload');
+  const readyStatus = document.createElement('small');
+  readyStatus.dataset.quickUpdateAvailable = 'true';
+  readyStatus.textContent = '新版已就緒';
+  readyStatus.hidden = true;
+  const updateActions = document.createElement('div');
+  updateActions.className = 'quick-task-update-actions';
+  updateActions.hidden = true;
+  const reloadButton = createButton('更新', 'quickUpdateReload');
   reloadButton.hidden = true;
+  const laterButton = createButton('稍後', 'quickUpdateLater');
+  laterButton.hidden = true;
+  updateActions.append(reloadButton, laterButton);
 
   const installButton = createButton('安裝APP', 'quickInstallAction');
   const installNotice = document.createElement('small');
@@ -142,7 +159,7 @@ export const installQuickInstallGuide = (container: HTMLElement, options?: Quick
   installNotice.setAttribute('role', 'status');
   installNotice.setAttribute('aria-live', 'polite');
   installNotice.hidden = true;
-  panel.append(updateRow, checkStatus, reloadButton, installButton, installNotice);
+  panel.append(updateRow, checkStatus, readyStatus, updateActions, installButton, installNotice);
   menu.append(summary, panel);
   section.replaceChildren(menu);
   section.hidden = false;
@@ -179,7 +196,7 @@ export const installQuickInstallGuide = (container: HTMLElement, options?: Quick
     }
     if (platform === 'android' || (platform === 'browser' && compactViewport.matches)) {
       return {
-        title: '從 Chrome 安裝 ProJED-快速建任務',
+        title: '從 Chrome 安裝 ProJED-建待辦',
         message: '用手機 Chrome 開啟此頁，點右上角「⋮」，選「安裝應用程式」，再點「安裝」。',
       };
     }
@@ -217,7 +234,7 @@ export const installQuickInstallGuide = (container: HTMLElement, options?: Quick
     const pendingStep = document.createElement('li');
     pendingStep.append(pendingMessage);
     const installStep = document.createElement('li');
-    installStep.textContent = '先保留安裝連結；只有在 Android「設定 → 應用程式」找得到「ProJED-快速建任務」時，才解除安裝該 App。';
+    installStep.textContent = '先保留安裝連結；只有在 Android「設定 → 應用程式」找得到「ProJED-建待辦」（舊版名稱「ProJED-快速建任務」）時，才解除安裝該 App。';
     const reopenStep = document.createElement('li');
     reopenStep.textContent = '從保留的連結以 Chrome 開啟，選「安裝應用程式」，用原帳號登入；完成後確認應用程式清單有獨立圖示。';
     stepList.append(pendingStep, installStep, reopenStep);
@@ -235,7 +252,7 @@ export const installQuickInstallGuide = (container: HTMLElement, options?: Quick
     const destinationLink = document.createElement('a');
     destinationLink.className = 'quick-task-install-destination';
     destinationLink.href = installUrl;
-    destinationLink.textContent = '開啟 ProJED-快速建任務安裝頁';
+    destinationLink.textContent = '開啟 ProJED-建待辦安裝頁';
     dialogContent.append(destinationLink);
   }
 
@@ -245,6 +262,13 @@ export const installQuickInstallGuide = (container: HTMLElement, options?: Quick
     dialogMessage.textContent = notice;
     if (!installNoticeDialog.open) installNoticeDialog.showModal();
     dialogCloseButton.focus();
+  };
+
+  const renderUpdateBadge = () => {
+    const showBadge = updateState ? getPwaCheckPresentation(updateState, { pending: checkPending, result: checkResult }).showBadge : false;
+    updateBadge.hidden = !showBadge;
+    summary.setAttribute('aria-label', showBadge ? '更多選項，有可用更新' : '更多選項');
+    summary.title = showBadge ? '更多選項，有可用更新' : '更多選項';
   };
 
   const renderCheckRow = () => {
@@ -263,8 +287,13 @@ export const installQuickInstallGuide = (container: HTMLElement, options?: Quick
     checkStatus.textContent = statusMessage ?? '';
     checkStatus.hidden = !statusMessage;
 
-    reloadButton.hidden = !presentation?.showReload;
+    readyStatus.hidden = !presentation?.showUpdate;
+    updateActions.hidden = !presentation?.showUpdate;
+    reloadButton.hidden = !presentation?.showUpdate;
     reloadButton.disabled = checkDisabled;
+    reloadButton.dataset.updateTarget = updateState?.targetVersion || updateState?.latestVersion || '';
+    laterButton.hidden = !presentation?.showLater;
+    laterButton.disabled = checkDisabled;
   };
 
   const syncUpdateState = (state: PwaUpdateState) => {
@@ -274,6 +303,7 @@ export const installQuickInstallGuide = (container: HTMLElement, options?: Quick
       const presentation = getPwaCheckPresentation(state, { pending: checkPending, result: checkResult });
       if (presentation.clearResult) checkResult = null;
     }
+    renderUpdateBadge();
     renderCheckRow();
   };
 
@@ -350,28 +380,11 @@ export const installQuickInstallGuide = (container: HTMLElement, options?: Quick
     if (api) readUpdateState(api);
     checkResult = result;
 
-    let presentation = updateState ? getPwaCheckPresentation(updateState, { pending: false, result }) : null;
+    const presentation = updateState ? getPwaCheckPresentation(updateState, { pending: false, result }) : null;
     if (presentation?.clearResult) {
       checkResult = null;
-      presentation = updateState ? getPwaCheckPresentation(updateState, { pending: false, result: null }) : null;
     }
     renderCheckRow();
-
-    if (presentation?.handoffToPrompt && active && !suspended && menu.open) {
-      const focusPrompt = () => {
-        if (!active || suspended || !menu.open || checkResult !== result) return;
-        const currentPresentation = updateState
-          ? getPwaCheckPresentation(updateState, { pending: checkPending, result: checkResult })
-          : null;
-        if (!currentPresentation?.handoffToPrompt) return;
-        const promptAction = document.querySelector<HTMLElement>('.quick-task-pwa-update [data-pwa-update-action]');
-        if (!promptAction) return;
-        closeMenu();
-        promptAction.focus();
-      };
-      if (document.querySelector('.quick-task-pwa-update [data-pwa-update-action]')) focusPrompt();
-      else window.requestAnimationFrame(focusPrompt);
-    }
   };
 
   const startCheck = async () => {
@@ -417,11 +430,11 @@ export const installQuickInstallGuide = (container: HTMLElement, options?: Quick
     const presentation = updateState
       ? getPwaCheckPresentation(updateState, { pending: checkPending, result: checkResult })
       : null;
-    if (!presentation?.showReload) return;
+    if (!presentation?.showUpdate) return;
     reloadPending = true;
     renderCheckRow();
     try {
-      await updateApi.applyPwaUpdate();
+      await updateApi.applyPwaUpdate(reloadButton.dataset.updateTarget);
     } catch {
       // The shared service state owns update failures and the recovery prompt.
     } finally {
@@ -438,7 +451,7 @@ export const installQuickInstallGuide = (container: HTMLElement, options?: Quick
     installButton.textContent = platform === 'standalone'
       ? '安裝與圖示'
       : deferredPrompt
-        ? '安裝 ProJED-快速建任務'
+        ? '安裝 ProJED-建待辦'
         : platform !== 'browser' || compactViewport.matches
           ? 'APP安裝教學'
           : '安裝APP';
@@ -450,7 +463,7 @@ export const installQuickInstallGuide = (container: HTMLElement, options?: Quick
   const promptInstall = async () => {
     if (!active || suspended || installing) return;
     if (mainProductionOrigin) {
-      showInstallNotice('目前這個網址屬於 ProJED 主程式。若有尚未同步的任務，請先在此完成同步，再開啟快速 App 的安裝頁。', '安裝 ProJED-快速建任務');
+      showInstallNotice('目前這個網址屬於 ProJED 主程式。若有尚未同步的任務，請先在此完成同步，再開啟快速 App 的安裝頁。', '安裝 ProJED-建待辦');
       return;
     }
     if (!deferredPrompt || platform === 'standalone') {
@@ -609,7 +622,7 @@ export const installQuickInstallGuide = (container: HTMLElement, options?: Quick
     void (async () => {
       try {
         if (navigator.share) {
-          await navigator.share({ title: '安裝 ProJED-快速建任務', url: installUrl });
+          await navigator.share({ title: '安裝 ProJED-建待辦', url: installUrl });
           if (!active || suspended || lifecycleEpoch !== operationEpoch) return;
           linkNotice = '已開啟分享選單；請將連結存到卸載後可開啟的位置。';
         } else if (navigator.clipboard?.writeText) {
@@ -630,6 +643,10 @@ export const installQuickInstallGuide = (container: HTMLElement, options?: Quick
 
   const onCheckClick = () => { void startCheck(); };
   const onReloadClick = () => { void applyCheckedUpdate(); };
+  const onLaterClick = () => {
+    if (!active || suspended || !menu.open || reloadPending || updateState?.localUpdateBusy) return;
+    updateApi?.dismissPwaUpdatePrompt();
+  };
   const onInstallClick = () => {
     if (!active || suspended) return;
     closeMenu();
@@ -659,6 +676,7 @@ export const installQuickInstallGuide = (container: HTMLElement, options?: Quick
     summary.removeEventListener('click', onSummaryClick);
     checkButton.removeEventListener('click', onCheckClick);
     reloadButton.removeEventListener('click', onReloadClick);
+    laterButton.removeEventListener('click', onLaterClick);
     installButton.removeEventListener('click', onInstallClick);
     reinstallToggle?.removeEventListener('click', onReinstallToggle);
     dialogContent.querySelector<HTMLButtonElement>('[data-quick-icon-reinstall-link]')?.removeEventListener('click', onSaveInstallLink);
@@ -675,6 +693,7 @@ export const installQuickInstallGuide = (container: HTMLElement, options?: Quick
 
   checkButton.addEventListener('click', onCheckClick);
   reloadButton.addEventListener('click', onReloadClick);
+  laterButton.addEventListener('click', onLaterClick);
   installButton.addEventListener('click', onInstallClick);
   summary.addEventListener('click', onSummaryClick);
   menu.addEventListener('toggle', onMenuToggle);
@@ -687,6 +706,7 @@ export const installQuickInstallGuide = (container: HTMLElement, options?: Quick
   document.addEventListener('pointerdown', closeMenuOnOutsidePointer);
   document.addEventListener('keydown', closeMenuOnEscape);
   compactViewport.addEventListener('change', onCompactViewportChange);
+  void getUpdateApi().catch(() => undefined);
   renderInstallControls();
   renderReinstallContent();
   return cleanup;

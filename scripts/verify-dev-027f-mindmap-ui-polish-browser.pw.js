@@ -18,7 +18,7 @@ async (page) => {
 
   const openMindMap = async (width, height, { allowMobileBoardOnly = false } = {}) => {
     await page.setViewportSize({ width, height });
-    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:1040/', { waitUntil: 'domcontentloaded' });
     await page.evaluate((account) => {
       localStorage.setItem('projed-local-test.selected-account', account.id);
       localStorage.setItem('projed-local-test.session', JSON.stringify({

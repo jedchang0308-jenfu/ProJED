@@ -33,10 +33,13 @@ const baselineRevision = md5(baselineRootManifestText);
 const shortcut = distRootManifest.shortcuts?.[0];
 const checks = [
   ['quick-only-manifest', html.includes('/quick-task/manifest.webmanifest') && !html.includes('href="/manifest.webmanifest"')],
-  ['quick-precache', sw.includes('quick-task/index.html') && sw.includes('quick-task/manifest.webmanifest')],
+  ['quick-entry-precache', sw.includes('quick-task/index.html')],
   ['root-single-manifest-link', (rootHtml.match(/rel=["']manifest["']/gu) ?? []).length === 1 && rootHtml.includes('href="/manifest.webmanifest"')],
   ['root-manifest-source-dist-parity', JSON.stringify(sourceRootManifest) === JSON.stringify(distRootManifest)],
-  ['root-manifest-precache', sw.includes('manifest.webmanifest') && sw.includes(sourceRevision) && !sw.includes(baselineRevision)],
+  ['live-install-manifests-independent-of-app-version', !/url:["'](?:quick-task\/)?manifest\.webmanifest["'],revision:/.test(sw)
+    && sw.includes('projed-install-manifests') && sw.includes('NetworkFirst') && sw.includes('no-store')
+    && sw.includes('/manifest.webmanifest') && sw.includes('/quick-task/manifest.webmanifest')
+    && sw.includes('pwaManifestCache-')],
   ['W07-build-a-to-b-identity', baselineRootManifest.id === '/'
     && baselineRootManifest.start_url === '/'
     && baselineRootManifest.scope === '/'
@@ -44,8 +47,8 @@ const checks = [
     && distRootManifest.id === baselineRootManifest.id
     && distRootManifest.start_url === baselineRootManifest.start_url
     && distRootManifest.scope === baselineRootManifest.scope],
-  ['W07-build-b-shortcut', shortcut?.name === 'ProJED-快速建任務'
-    && shortcut.short_name === 'ProJED-快速建任務'
+  ['W07-build-b-shortcut', shortcut?.name === 'ProJED-建待辦'
+    && shortcut.short_name === 'ProJED-建待辦'
     && shortcut.description === '直接輸入一筆待辦'
     && shortcut.url === '/quick-task/'
     && shortcut.icons?.some(icon => icon.sizes === '192x192')

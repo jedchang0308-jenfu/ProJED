@@ -80,7 +80,7 @@ async (page) => {
     environment: 'local-test / Chromium',
     route: '/',
     viewport: { width: 754, height: 698 },
-    runtime: { port: 4000, reused: true, cleaned: false },
+    runtime: { port: 1040, reused: true, cleaned: false },
   };
 
   page.on('console', message => {
@@ -94,7 +94,7 @@ async (page) => {
   });
 
   await page.setViewportSize(result.viewport);
-  await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
+  await page.goto('http://localhost:1040/', { waitUntil: 'domcontentloaded' });
   await page.evaluate(async () => {
     const registrations = await navigator.serviceWorker?.getRegistrations?.() || [];
     await Promise.all(registrations.map(registration => registration.unregister()));

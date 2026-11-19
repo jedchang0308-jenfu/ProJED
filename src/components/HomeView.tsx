@@ -3,6 +3,7 @@ import React from 'react';
 import { Layout as LayoutIcon, Plus, Trash2, Trello } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import useDialogStore from '../store/useDialogStore';
+import { afterTaskDetailsSave } from './taskDetailsNavigation';
 
 const HomeView = () => {
     const { workspaces, addBoard, removeBoard, switchBoard } = useBoardStore();
@@ -68,7 +69,7 @@ const HomeView = () => {
                                         {workspace.boards.map((board) => (
                                             <div key={board.id} className="group relative">
                                                 <button
-                                                    onClick={() => switchBoard(workspace.id, board.id)}
+                                                    onClick={() => afterTaskDetailsSave(() => switchBoard(workspace.id, board.id))}
                                                     className="h-28 w-full overflow-hidden rounded-lg border border-slate-200 bg-white p-4 text-left transition-all hover:border-primary hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary/40"
                                                 >
                                                     <div className="relative z-10">

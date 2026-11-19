@@ -5,7 +5,7 @@
  * restricted to fixture bootstrap and read-only measurement.
  */
 async (page) => {
-  const BASE_URL = 'http://localhost:4000/?dev074Phase=after';
+  const BASE_URL = 'http://localhost:1040/?dev074Phase=after';
   const OUTPUT = 'output/playwright/dev-074-ai-real-operation';
   const viewportDesktop = { width: 1440, height: 900, label: 'desktop' };
   const viewportCompact = { width: 1024, height: 768, label: 'compact' };

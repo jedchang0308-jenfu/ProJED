@@ -428,11 +428,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
                         ${isSelectingMode ? 'pointer-events-none text-slate-400' : ''}`}
                     title={lockStatus.startLocked ? '此日期受依賴關係鎖定，請至甘特圖追蹤' : ''}
                 />
-                {lockStatus.startLocked && (
-                    <span className="text-slate-400 absolute right-8 flex items-center bg-slate-50/50 pr-1 pl-0.5">
-                        <Link size={12} className="opacity-60" />
-                    </span>
-                )}
+                {isStartDateReadOnly && <Lock size={12} className="pointer-events-none absolute right-8 text-slate-400" aria-hidden="true" />}
                 {showDependencies && dependencyMarkers?.[`${nodeId}_start`]?.length > 0 && (
                     <div className="flex items-center gap-0.5 flex-shrink-0">
                         {dependencyMarkers[`${nodeId}_start`].filter(m => !m.isSelf || m.role === 'passive').map(m => (
@@ -483,17 +479,9 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
                     className={`h-full min-h-0 min-w-0 flex-1 rounded-md px-2 text-xs cursor-pointer transition-all
                         ${isEndDateReadOnly ? 'border border-dashed border-slate-300 bg-slate-50/50 text-slate-700 pointer-events-none' : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300 focus:border-primary focus:outline-none'}
                         ${isSelectingMode ? 'pointer-events-none text-slate-400' : ''}`}
-                    title={isEndDateEffectivelyLocked ? (node.isDurationLocked ? '因工期鎖定，請調整開始日期或修改工期' : '此日期受依賴關係鎖定，請至甘特圖追蹤') : ''}
+                    title={isEndDateEffectivelyLocked ? (node.isDurationLocked && !lockStatus.endLocked ? '工期固定，請調整開始日期或工期天數' : '此日期受依賴關係鎖定，請至甘特圖追蹤') : ''}
                 />
-                {isEndDateEffectivelyLocked && (
-                    <span className="text-slate-400 absolute right-8 flex items-center bg-slate-50/50 pr-1 pl-0.5">
-                        {node.isDurationLocked && !lockStatus.endLocked ? (
-                            <span className="opacity-60 text-[10px] font-semibold">L</span>
-                        ) : (
-                            <Link size={12} className="opacity-60" />
-                        )}
-                    </span>
-                )}
+                {isEndDateReadOnly && <Lock size={12} className="pointer-events-none absolute right-8 text-slate-400" aria-hidden="true" />}
                 {showDependencies && dependencyMarkers?.[`${nodeId}_end`]?.length > 0 && (
                     <div className="flex items-center gap-0.5 flex-shrink-0">
                         {dependencyMarkers[`${nodeId}_end`].filter(m => !m.isSelf || m.role === 'passive').map(m => (
@@ -537,8 +525,10 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
                  type="button"
                  onClick={handleToggleDurationLock}
                  disabled={!canEditTask}
+                 aria-pressed={Boolean(node.isDurationLocked)}
+                 aria-label={node.isDurationLocked ? '改為自動計算工期' : '固定工期天數'}
                  className={`flex h-full w-8 flex-shrink-0 items-center justify-center rounded-none border-r p-0 transition-colors ${node.isDurationLocked ? 'border-amber-200 bg-amber-50 text-amber-600 hover:bg-amber-100' : 'border-slate-200 text-slate-400 hover:bg-slate-100 hover:text-slate-600'}`}
-                 title={node.isDurationLocked ? '鎖定工期：開始日期變動時同步推動結束日期' : '非鎖定工期：日期各自獨立，自動計算天數'}
+                 title={node.isDurationLocked ? '固定工期：開始日期變動時同步推動結束日期' : '自動計算工期：日期各自獨立'}
              >
                  {node.isDurationLocked ? <Lock size={12} /> : <Unlock size={12} />}
              </button>
@@ -550,7 +540,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
                  placeholder="-"
                  disabled={!canEditTask || !node.isDurationLocked}
                  className={`h-full w-12 border-0 bg-transparent px-1 text-center text-xs focus:outline-none ${!node.isDurationLocked ? 'pointer-events-none text-slate-400 opacity-70' : 'text-slate-600 focus:bg-white'} ${isSelectingMode ? 'pointer-events-none text-slate-400' : ''}`}
-                 title={node.isDurationLocked ? "輸入工期天數自動推算結束日期" : "請先點擊鎖頭以鎖定工期，才能手動修改"}
+                 title={node.isDurationLocked ? "輸入固定工期天數並自動推算結束日期" : "啟用固定工期後可手動輸入天數"}
              />
         </div>
 

@@ -57,6 +57,7 @@ import {
   Underline,
 } from 'lucide-react';
 import type { TaskDetailNote } from '../../types';
+import { TaskDetailSectionAction, TaskDetailSectionActions, TaskDetailSectionHeader } from '../TaskDetailSectionHeader';
 import { TASK_NOTE_CONTENT_SURFACE_CLASS_NAME } from './TaskNoteContentSurface';
 import {
   createTaskNoteRichContent,
@@ -97,7 +98,6 @@ const TASK_NOTE_EDITOR_HEIGHTS_KEY = 'projed.taskDetailNote.heights.v2';
 const TASK_NOTE_EDITOR_MIN_HEIGHT = 36;
 const TASK_NOTE_EDITOR_MAX_HEIGHT = 960;
 const TASK_NOTE_EDITOR_KEYBOARD_RESIZE_STEP = 12;
-const TASK_DESCRIPTION_PLACEHOLDER = '說明任務的目的、要解決的問題、要達成的目標。';
 
 const clampTaskNoteEditorHeight = (value: number) => Math.min(
   TASK_NOTE_EDITOR_MAX_HEIGHT,
@@ -184,7 +184,7 @@ const initializeLegacyContent = (content: string) => () => {
 
 const EditorEditablePlugin: React.FC<{ editable: boolean }> = ({ editable }) => {
   const [editor] = useLexicalComposerContext();
-  React.useEffect(() => editor.setEditable(editable), [editable, editor]);
+  React.useLayoutEffect(() => editor.setEditable(editable), [editable, editor]);
   return null;
 };
 
@@ -317,8 +317,9 @@ const NoteToolbarPlugin: React.FC<{
   canEdit: boolean;
   noteTitle: string;
   onSave: () => void;
+  onBeforeMutation: () => void;
   showToolbar?: boolean;
-}> = ({ canEdit, noteTitle, onSave, showToolbar = true }) => {
+}> = ({ canEdit, noteTitle, onSave, onBeforeMutation, showToolbar = true }) => {
   const [editor] = useLexicalComposerContext();
   const [isOpen, setIsOpen] = React.useState(false);
   const [state, setState] = React.useState<ToolbarState>(EMPTY_TOOLBAR_STATE);
@@ -346,6 +347,7 @@ const NoteToolbarPlugin: React.FC<{
     const enteredUrl = window.prompt('輸入連結網址；留空可移除連結', 'https://');
     if (enteredUrl === null) return;
     if (!enteredUrl.trim()) {
+      onBeforeMutation();
       editor.dispatchCommand(TOGGLE_LINK_COMMAND, null);
       setLinkError('');
       return;
@@ -356,12 +358,14 @@ const NoteToolbarPlugin: React.FC<{
       return;
     }
     setLinkError('');
+    onBeforeMutation();
     editor.dispatchCommand(TOGGLE_LINK_COMMAND, safeUrl);
-  }, [editor]);
+  }, [editor, onBeforeMutation]);
 
   React.useEffect(() => editor.registerCommand(
     KEY_DOWN_COMMAND,
     event => {
+      if (event.isComposing || event.keyCode === 229 || editor.isComposing()) return false;
       const target = event.target as HTMLElement | null;
       if (!target || !editor.getRootElement()?.contains(target)) return false;
       const systemKey = event.ctrlKey || event.metaKey;
@@ -380,19 +384,25 @@ const NoteToolbarPlugin: React.FC<{
         return true;
       }
       if (systemKey && ['a', 'b', 'i', 'u', 'z', 'y'].includes(shortcut)) {
+        if (shortcut !== 'a') onBeforeMutation();
         event.stopPropagation();
       }
       return false;
     },
     COMMAND_PRIORITY_HIGH,
-  ), [editor, onSave, requestLink]);
+  ), [editor, onBeforeMutation, onSave, requestLink]);
 
-  const formatText = (format: TextFormatType) => editor.dispatchCommand(FORMAT_TEXT_COMMAND, format);
+  const formatText = (format: TextFormatType) => {
+    onBeforeMutation();
+    editor.dispatchCommand(FORMAT_TEXT_COMMAND, format);
+  };
   const setParagraph = () => {
+    onBeforeMutation();
     editor.dispatchCommand(REMOVE_LIST_COMMAND, undefined);
     editor.update(() => $setBlocksType($getSelection(), () => $createParagraphNode()));
   };
   const setHeading = () => {
+    onBeforeMutation();
     editor.dispatchCommand(REMOVE_LIST_COMMAND, undefined);
     editor.update(() => $setBlocksType(
       $getSelection(),
@@ -400,6 +410,7 @@ const NoteToolbarPlugin: React.FC<{
     ));
   };
   const setList = (kind: 'bullet' | 'number') => {
+    onBeforeMutation();
     const active = kind === 'bullet' ? state.bullet : state.number;
     editor.dispatchCommand(
       active
@@ -409,6 +420,7 @@ const NoteToolbarPlugin: React.FC<{
     );
   };
   const clearFormatting = () => {
+    onBeforeMutation();
     editor.dispatchCommand(REMOVE_LIST_COMMAND, undefined);
     editor.update(() => {
       const selection = $getSelection();
@@ -431,9 +443,8 @@ const NoteToolbarPlugin: React.FC<{
   if (!showToolbar) return null;
 
   return (
-    <div className="contents md:relative md:block md:shrink-0" data-task-note-format-control="true">
-      <button
-        type="button"
+    <div className="inline-flex h-full w-7 shrink-0 md:relative" data-task-note-format-control="true">
+      <TaskDetailSectionAction
         onMouseDown={event => event.preventDefault()}
         onPointerDown={event => event.preventDefault()}
         onClick={() => {
@@ -444,29 +455,25 @@ const NoteToolbarPlugin: React.FC<{
         aria-expanded={isOpen}
         aria-haspopup="true"
         title="文字格式"
-        className={[
-          'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border-0 bg-transparent transition-colors md:h-7 md:w-7',
-          'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-200',
-          isOpen ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900',
-        ].join(' ')}
+        className="rounded-l-[5px]"
         data-task-note-format-toggle="true"
       >
         <span aria-hidden="true" className="text-sm font-semibold leading-none underline decoration-1 underline-offset-2">A</span>
-      </button>
+      </TaskDetailSectionAction>
       {isOpen ? (
         <div
           role="toolbar"
           aria-label={'文字格式工具：' + (noteTitle || '未命名備註')}
-          className="order-last z-40 mt-1 w-full max-w-full overflow-x-auto overscroll-x-contain rounded-lg border border-slate-200 bg-white p-1.5 shadow-xl md:absolute md:right-8 md:top-1/2 md:order-none md:mt-0 md:w-auto md:max-w-[calc(100vw-5rem)] md:-translate-y-1/2"
+          className="absolute left-0 top-full z-40 mt-1 w-full max-w-xl overflow-x-auto overscroll-x-contain rounded-lg border border-slate-200 bg-white p-1.5 shadow-xl md:left-auto md:right-8 md:top-1/2 md:mt-0 md:w-max md:max-w-[calc(60pt+1.75rem)] md:-translate-y-1/2"
           data-task-note-toolbar-popover="true"
-          data-task-note-toolbar-placement="desktop-left-mobile-below"
+          data-task-note-toolbar-placement="anchored-below-mobile-desktop-left"
           data-task-note-toolbar-persistence="toggle-only"
         >
           <div className="flex w-max items-center gap-0.5">
-            <ToolbarButton label="復原" onClick={() => editor.dispatchCommand(UNDO_COMMAND, undefined)}>
+            <ToolbarButton label="復原" onClick={() => { onBeforeMutation(); editor.dispatchCommand(UNDO_COMMAND, undefined); }}>
               <Undo2 size={15} />
             </ToolbarButton>
-            <ToolbarButton label="重做" onClick={() => editor.dispatchCommand(REDO_COMMAND, undefined)}>
+            <ToolbarButton label="重做" onClick={() => { onBeforeMutation(); editor.dispatchCommand(REDO_COMMAND, undefined); }}>
               <Redo2 size={15} />
             </ToolbarButton>
             <span className="mx-1 h-5 w-px bg-slate-200" aria-hidden="true" />
@@ -512,23 +519,38 @@ const NoteToolbarPlugin: React.FC<{
 
 const NoteChangePlugin: React.FC<{
   onUpdate: (updates: Partial<TaskDetailNote>) => void;
-}> = ({ onUpdate }) => {
+  userMutationPendingRef: React.MutableRefObject<boolean>;
+}> = ({ onUpdate, userMutationPendingRef }) => {
+  const [editor] = useLexicalComposerContext();
   const initializedRef = React.useRef(false);
 
   React.useEffect(() => {
     initializedRef.current = true;
   }, []);
 
+  React.useEffect(() => {
+    const markUserMutation = (event: Event) => {
+      const root = editor.getRootElement();
+      if (root && event.target instanceof Node && root.contains(event.target)) {
+        userMutationPendingRef.current = true;
+      }
+    };
+    const eventTypes = ['beforeinput', 'input', 'paste', 'cut', 'drop', 'compositionend'] as const;
+    eventTypes.forEach(type => document.addEventListener(type, markUserMutation, true));
+    return () => eventTypes.forEach(type => document.removeEventListener(type, markUserMutation, true));
+  }, [editor, userMutationPendingRef]);
+
   const handleChange = React.useCallback((editorState: EditorState) => {
     // Lexical may emit an initialization update. It is not a user edit and
     // must not lazy-upgrade a legacy note or create an Undo entry.
-    if (!initializedRef.current) return;
+    if (!initializedRef.current || !userMutationPendingRef.current) return;
+    userMutationPendingRef.current = false;
     const richContent = createTaskNoteRichContent(editorState.toJSON());
     onUpdate({
       richContent,
       content: taskNoteRichContentToPlainText(richContent),
     });
-  }, [onUpdate]);
+  }, [onUpdate, userMutationPendingRef]);
 
   return (
     <OnChangePlugin
@@ -590,7 +612,6 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
   const canEdit = props.canEdit;
   const accountId = props.variant === 'cell' ? null : props.accountId;
   const taskId = props.taskId;
-  const isDescription = props.variant === 'cell' ? true : props.isDescription;
   const note = props.note;
   const titleEditable = props.variant === 'cell' ? false : props.titleEditable ?? true;
   const onAdd = props.variant === 'cell' ? () => undefined : props.onAdd;
@@ -609,6 +630,10 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
     props.onUpdate(updates);
   }, [note.content, props]);
   const contentEditableRef = React.useRef<HTMLDivElement | null>(null);
+  const userMutationPendingRef = React.useRef(false);
+  const markUserMutation = React.useCallback(() => {
+    userMutationPendingRef.current = true;
+  }, []);
   const resizeFrameRef = React.useRef<number | null>(null);
   const heightPreferenceScopeKey = React.useMemo(
     () => getTaskNoteEditorHeightScopeKey(accountId, taskId, note.id),
@@ -619,7 +644,9 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
   const resizeStartRef = React.useRef<{ pointerId: number; startY: number; startHeight: number } | null>(null);
   const pendingHeightRef = React.useRef<number | null>(null);
   const [editorHeight, setEditorHeight] = React.useState(TASK_NOTE_EDITOR_MIN_HEIGHT);
-  const notePlaceholder = isDescription ? TASK_DESCRIPTION_PLACEHOLDER : '輸入備註內容';
+  const notePlaceholder = note.id === 'note_default'
+    ? '你的目的是什麼? 想達到什麼結果?'
+    : '';
   const noteLabel = note.id === 'note_default' ? '任務目的' : (note.title || '備註');
 
   const autoSizeContent = React.useCallback(() => {
@@ -630,7 +657,7 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
       const element = contentEditableRef.current;
       if (!element) return;
       element.style.height = 'auto';
-      const intrinsicHeight = Math.max(TASK_NOTE_EDITOR_MIN_HEIGHT, Math.ceil(element.scrollHeight));
+      const intrinsicHeight = Math.max(TASK_NOTE_EDITOR_MIN_HEIGHT, Math.ceil(element.getBoundingClientRect().height));
       intrinsicHeightRef.current = intrinsicHeight;
       const nextHeight = preferredHeightRef.current === null
         ? intrinsicHeight
@@ -748,51 +775,49 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
         data-inline-editor={isCellVariant ? 'true' : undefined}
         data-task-note-editor-loaded="true"
       >
-        {!isCellVariant ? <div className="relative mb-1 flex min-w-0 flex-wrap items-center gap-1 md:flex-nowrap" data-task-detail-note-header="true">
-          {titleEditable ? (
+        {!isCellVariant ? <TaskDetailSectionHeader
+          data-task-detail-note-header="true"
+          titleContent={titleEditable ? (
             <input
               type="text"
               value={note.title}
               onChange={event => onUpdate({ title: event.target.value })}
               disabled={!canEdit}
-              className="h-9 min-w-0 flex-1 border-0 bg-transparent px-0 text-sm font-semibold text-slate-800 outline-none transition hover:bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-100 disabled:text-slate-400 md:h-7"
+              className="h-full w-full min-w-0 border-0 bg-transparent px-0 text-sm font-semibold text-inherit outline-none transition hover:bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-100 disabled:text-slate-400"
               placeholder="備註"
               data-task-detail-note-title-input="true"
             />
           ) : (
-            <span
-              className="flex h-9 min-w-0 flex-1 items-center px-0 text-sm font-semibold text-slate-800 md:h-7"
-              data-task-detail-note-title="true"
-            >
+            <span className="flex h-full w-full items-center" data-task-detail-note-title="true">
               {noteLabel}
             </span>
           )}
-          <NoteToolbarPlugin canEdit={canEdit} noteTitle={noteLabel} onSave={onSave} showToolbar={!isCellVariant} />
-          {!isDescription ? (
-            <button
-              type="button"
+        >
+          <TaskDetailSectionActions data-task-detail-note-actions="true">
+            <TaskDetailSectionAction
               onClick={onAdd}
               disabled={!canEdit}
-              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border-0 bg-transparent text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-l-[5px]"
               title="新增備註欄"
               aria-label="新增備註欄"
               data-task-detail-note-add="true"
             >
-              <Plus size={14} />
-            </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={onDelete}
-            disabled={!canEdit}
-            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border-0 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-100 disabled:cursor-not-allowed disabled:opacity-40"
-            title="刪除此備註欄"
-            aria-label={'刪除備註欄：' + noteLabel}
-            data-task-detail-note-delete="true"
-          >
-            <Trash2 size={14} />
-          </button>
-        </div> : null}
+              <Plus size={14} aria-hidden="true" />
+            </TaskDetailSectionAction>
+            <NoteToolbarPlugin canEdit={canEdit} noteTitle={noteLabel} onSave={onSave} onBeforeMutation={markUserMutation} showToolbar={!isCellVariant} />
+            <TaskDetailSectionAction
+              tone="danger"
+              onClick={onDelete}
+              disabled={!canEdit}
+              className="rounded-r-[5px]"
+              title="刪除此備註欄"
+              aria-label={'刪除備註欄：' + noteLabel}
+              data-task-detail-note-delete="true"
+            >
+              <Trash2 size={14} aria-hidden="true" />
+            </TaskDetailSectionAction>
+          </TaskDetailSectionActions>
+        </TaskDetailSectionHeader> : null}
         <div className={isCellVariant ? 'min-w-0' : 'relative min-w-0'} data-task-note-resize-frame={isCellVariant ? undefined : 'true'}>
           <RichTextPlugin
             contentEditable={(
@@ -800,7 +825,9 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
                 ref={contentEditableRef}
                 onBlur={isCellVariant ? handleCellBlur : undefined}
                 className={[
-                  isCellVariant ? 'min-h-0 w-full max-w-full whitespace-pre-wrap break-words bg-transparent text-xs leading-5 text-slate-700 outline-none' : TASK_NOTE_CONTENT_SURFACE_CLASS_NAME,
+                  isCellVariant
+                    ? 'min-h-0 w-full max-w-full whitespace-pre-wrap break-words bg-transparent text-xs leading-5 text-slate-700 outline-none'
+                    : `${TASK_NOTE_CONTENT_SURFACE_CLASS_NAME} border-slate-300 shadow-[0_1px_2px_rgba(15,23,42,0.08)]`,
                   isCellVariant ? '' : 'resize-none',
                   'aria-disabled:cursor-default aria-disabled:border-slate-200/50 aria-disabled:text-slate-400',
                 ].join(' ')}
@@ -810,14 +837,14 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
                 data-task-detail-note-content-input="true"
               />
             )}
-            placeholder={(
+            placeholder={notePlaceholder ? (
               <div
-                className="pointer-events-none absolute left-2 top-1.5 text-sm leading-6 text-slate-400"
+                className="pointer-events-none absolute left-2 top-1.5 text-sm leading-6 text-slate-300"
                 data-task-detail-note-placeholder="true"
               >
                 {notePlaceholder}
               </div>
-            )}
+            ) : null}
             ErrorBoundary={LexicalErrorBoundary}
           />
           {!isCellVariant && canEdit ? (
@@ -851,7 +878,7 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
         <LinkPlugin validateUrl={url => Boolean(sanitizeTaskNoteUrl(url))} />
         <LinkSafetyPlugin />
         <EditorEditablePlugin editable={canEdit} />
-        <NoteChangePlugin onUpdate={onUpdate} />
+        <NoteChangePlugin onUpdate={onUpdate} userMutationPendingRef={userMutationPendingRef} />
         {isCellVariant && cellCommit && cellCancel ? <CellEditorInteractionPlugin onCommit={cellCommit} onCancel={cellCancel} /> : null}
       </div>
     </LexicalComposer>

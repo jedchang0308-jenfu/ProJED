@@ -3,18 +3,15 @@ import type { PwaUpdateState, PwaUpdateCheckState, PwaCheckErrorCode } from './p
 // Shared by the React shell and the lightweight Quick Task shell; no runtime side effects.
 export const getPwaUpdatePresentation = (state: PwaUpdateState) => {
   const isRecovery = state.status === 'recoverable-cache-error' || state.status === 'failed';
-  const isBlocked = !isRecovery && state.reloadSafetyState === 'blocked';
-
   return {
-    visible: isRecovery || (state.updateAvailable && !state.dismissedAt
-      && (state.reloadSafetyState === 'dirty' || state.reloadSafetyState === 'blocked')),
+    visible: isRecovery,
     isRecovery,
     title: isRecovery
       ? state.failureKind === 'load' ? '畫面載入失敗'
         : state.failureKind === 'cache-recovery' ? '快取恢復未完成' : '重新載入未完成'
       : '新版已就緒',
-    detail: isRecovery || isBlocked
-      ? state.errorMessage || (isBlocked ? '目前無法確認內容是否已保存。' : '請重試；若仍無法開啟，可清除應用程式快取後再載入。')
+    detail: isRecovery
+      ? state.errorMessage || '請重試；若仍無法開啟，可清除應用程式快取後再載入。'
       : null,
   };
 };
@@ -23,8 +20,9 @@ export type PwaCheckUiState = { pending: boolean; result: PwaUpdateCheckState | 
 export type PwaCheckPresentation = {
   checkDisabled: boolean;
   statusMessage: string | null;
-  showReload: boolean;
-  handoffToPrompt: boolean;
+  showUpdate: boolean;
+  showLater: boolean;
+  showBadge: boolean;
   clearResult: boolean;
 };
 const checkMessages: Record<PwaCheckErrorCode, string> = {
@@ -39,16 +37,20 @@ export const getPwaCheckPresentation = (state: PwaUpdateState, operation: PwaChe
   const success = result?.phase === 'up-to-date' || result?.phase === 'available';
   const clearResult = Boolean(success && (state.localUpdateBusy
     || result.currentVersion !== state.currentVersion || result.latestVersion !== state.latestVersion));
-  const promptVisible = getPwaUpdatePresentation(state).visible;
-  const available = result?.phase === 'available' && !clearResult && !state.localUpdateBusy && !operation.pending;
+  const isRecovery = getPwaUpdatePresentation(state).isRecovery;
+  const available = state.updateAvailable && !isRecovery;
   return {
     checkDisabled: state.localUpdateBusy || operation.pending,
     statusMessage: state.localUpdateBusy ? '正在更新' : operation.pending ? '檢查中'
-      : clearResult ? null : result?.phase === 'up-to-date' ? '已是最新版'
-        : result?.phase === 'available' ? '發現新版' : result?.phase === 'busy' ? '正在更新'
-          : result?.phase === 'error' ? checkMessages[result.errorCode ?? 'CHECK_FAILED'] : null,
-    showReload: available && !promptVisible,
-    handoffToPrompt: available && promptVisible,
+      : available && state.errorMessage ? state.errorMessage
+        : clearResult ? null : result?.phase === 'up-to-date' && !available ? '已是最新版'
+          : result?.phase === 'busy' ? '正在更新'
+          : result?.phase === 'error' ? checkMessages[result.errorCode ?? 'CHECK_FAILED']
+            : !available && !isRecovery && state.lastAppliedAt && state.previousVersion !== state.currentVersion ? '已完成更新'
+              : null,
+    showUpdate: available,
+    showLater: available && !state.dismissedAt && !state.localUpdateBusy,
+    showBadge: available && !state.dismissedAt && !state.localUpdateBusy,
     clearResult,
   };
 };

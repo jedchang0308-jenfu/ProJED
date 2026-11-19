@@ -3,6 +3,7 @@ async (page) => {
   const OUTPUT_DIR = 'output/playwright/dev-095';
   const diagnostics = [];
   const cases = [];
+  const archiveOnly = new URL(page.url()).searchParams.get('dev095Focus') === 'archive';
   page.on('console', message => {
     if (message.text().includes('測試故障：追蹤副本操作失敗。')) return;
     if (message.text().includes('追蹤副本已被其他人更新，請重新載入。')) return;
@@ -130,6 +131,10 @@ async (page) => {
     window.__projedTaskTrackingTestFault = { operation, failNext: true, message };
   }, { operation, message });
   const runCase = async (id, expected, flow) => {
+    if (archiveOnly && !/^B18[A-I]-/.test(id)) {
+      cases.push({ id, status: 'NOT_RUN', expected });
+      return;
+    }
     const started = Date.now();
     let actual = {};
     let failure = null;
@@ -198,6 +203,323 @@ async (page) => {
     if (JSON.stringify(derivedActions) !== JSON.stringify(expectedDerivedActions)) throw new Error(`derived manager action guard mismatch: ${JSON.stringify(derivedActions)}`);
     await page.keyboard.press('Escape');
     return { primaryActions, referenceActions, sharedActions: sharedPrimary, derivedManagerActions: derivedActions };
+  });
+
+  await runCase('B18A-mindmap-reference-archive-parity', 'a tracking placement can archive its canonical task from the context menu or Delete', async () => {
+    const openMindMapReference = async () => {
+      const modeTrigger = page.locator('[data-mode-switcher-trigger="true"]');
+      await modeTrigger.click();
+      await page.locator('[data-mode-switcher-value="mindmap"]').click();
+      const target = page.locator('[data-mindmap-placement-kind="tracking-reference"][data-task-placement-id="p-ref-c"]').first();
+      await target.waitFor({ state: 'visible', timeout: 10000 });
+      return target;
+    };
+
+    await seed();
+    const contextTarget = await openMindMapReference();
+    await contextTarget.click({ button: 'right', position: { x: 28, y: 10 } });
+    const contextMenu = page.locator('[data-mindmap-context-menu="true"]');
+    await contextMenu.waitFor({ state: 'visible', timeout: 10000 });
+    const archiveAction = contextMenu.locator('[data-task-action-id="task.archive"]');
+    await archiveAction.waitFor({ state: 'visible', timeout: 10000 });
+    await archiveAction.click();
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}')['p-task-c']?.isArchived === true, null, { timeout: 10000 });
+    if (await contextTarget.count()) throw new Error('context-menu archive left the tracking placement visible');
+
+    await seed();
+    const keyboardTarget = await openMindMapReference();
+    await keyboardTarget.focus();
+    await page.keyboard.press('Delete');
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}')['p-task-c']?.isArchived === true, null, { timeout: 10000 });
+    if (await keyboardTarget.count()) throw new Error('Delete archive left the tracking placement visible');
+
+    const crossBoard = [ref('p-ref-c', 'p-task-c', boardB, null, 0)];
+    await seed({ userId: 'local-test-viewer', activeBoardId: boardB, references: crossBoard, sourceRole: 'viewer', targetRole: 'owner' });
+    const denied = await openMindMapReference();
+    await denied.focus();
+    await page.keyboard.press('Delete');
+    await page.getByText('缺少正本任務的封存權限。', { exact: true }).waitFor({ state: 'visible' });
+    if ((await readNodes())['p-task-c'].isArchived) throw new Error('target permissions allowed an unauthorized source archive');
+
+    await seed({ userId: 'local-test-viewer', activeBoardId: boardB, references: crossBoard, sourceRole: 'owner', targetRole: 'viewer' });
+    const allowed = await openMindMapReference();
+    await allowed.focus();
+    await page.keyboard.press('Delete');
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}')['p-task-c']?.isArchived === true);
+    return { contextMenuArchivedCanonicalTask: true, deleteArchivedCanonicalTask: true, crossBoardSourcePermissionEnforced: true };
+  });
+
+  await runCase('B18B-mindmap-archive-recovery-isolation', 'new tasks can be archived with either entry point while overlapping writes stay protected', async () => {
+    const recoveryKey = 'projed.mindmap.batch-recovery.v1.' + boardA;
+    const archivePrefix = 'projed.mindmap.archive-recovery.v1.' + boardA + ':';
+    const recovery = {
+      version: 1, operationId: 'recent-batch', workspaceId, boardId: boardA, createdAt: Date.now(),
+      kind: 'archive', phase: 'indeterminate', targetIds: ['p-task-b', 'p-task-d'],
+      expectedBeforeFingerprint: 'fnv1a32:00000000', expectedAfterFingerprint: 'fnv1a32:00000001',
+    };
+    await seed({ references: [] });
+    await page.evaluate(({ recoveryKey, recovery }) => {
+      sessionStorage.setItem(recoveryKey, JSON.stringify(recovery));
+    }, { recoveryKey, recovery });
+    await page.locator('[data-mode-switcher-trigger="true"]').click();
+    await page.locator('[data-mode-switcher-value="mindmap"]').click();
+    await page.getByText('批次資料與已知前後指紋皆不一致，涉及的任務仍待確認。', { exact: true }).waitFor({ state: 'visible', timeout: 10000 });
+    const task = id => page.locator('[data-mindmap-node="' + id + '"]');
+    const menu = page.locator('[data-mindmap-context-menu="true"]');
+    const archive = menu.locator('[data-task-action-id="task.archive"]');
+    const blockedMessage = '前一筆操作仍待確認，暫時無法執行這項操作。';
+    await task('p-task-d').click({ button: 'right' });
+    await archive.click();
+    await page.getByText(blockedMessage, { exact: true }).last().waitFor({ state: 'visible', timeout: 10000 });
+    await page.keyboard.press('Escape');
+    if ((await readNodes())['p-task-d'].isArchived) throw new Error('overlapping task was archived');
+
+    const createTask = async () => {
+      const before = await readNodes();
+      await task('p-task-d').click({ button: 'right' });
+      await menu.locator('[data-task-action-id="task.create-sibling"]').click();
+      await page.waitForFunction(ids => {
+        const nodes = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
+        return Object.keys(nodes).some(id => !ids.includes(id));
+      }, Object.keys(before));
+      const createdId = Object.keys(await readNodes()).find(id => !before[id]);
+      const input = task(createdId).locator('input');
+      if (await input.count()) await page.keyboard.press('Escape');
+      return createdId;
+    };
+    const first = await createTask();
+    await task(first).click({ button: 'right' });
+    await archive.click();
+    const second = await createTask();
+    await task(second).focus();
+    await page.keyboard.press('Delete');
+    await page.waitForFunction(ids => {
+      const nodes = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
+      return ids.every(id => nodes[id]?.isArchived === true);
+    }, [first, second], { timeout: 10000 });
+    await task(second).waitFor({ state: 'detached', timeout: 10000 });
+    const journals = await page.evaluate(({ recoveryKey, archivePrefix }) => ({
+      existing: JSON.parse(sessionStorage.getItem(recoveryKey)),
+      activeArchives: Object.keys(sessionStorage).filter(key => key.startsWith(archivePrefix)),
+    }), { recoveryKey, archivePrefix });
+    if (JSON.stringify(journals.existing) !== JSON.stringify(recovery) || journals.activeArchives.length) {
+      throw new Error('archive modified the old recovery record or left an unnecessary new one');
+    }
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.locator('[data-mindmap-view]').waitFor({ state: 'visible', timeout: 15000 });
+    if (await task(first).count() || await task(second).count() || (await readNodes())['p-task-d'].isArchived) {
+      throw new Error('archive or protection did not survive reload');
+    }
+    // Emulate an authoritative readback confirming that both original targets
+    // are archived, while their unrelated fields no longer match either hash.
+    await page.evaluate(ids => {
+      const key = 'projed-local-test.nodes';
+      const nodes = JSON.parse(localStorage.getItem(key));
+      ids.forEach(id => { nodes[id] = { ...nodes[id], isArchived: true, title: '後續修改的名稱' }; });
+      localStorage.setItem(key, JSON.stringify(nodes));
+    }, recovery.targetIds);
+    await page.waitForFunction(key => sessionStorage.getItem(key) === null, recoveryKey, { timeout: 12000 });
+    await page.locator('[data-mindmap-batch-recovery-alert]').waitFor({ state: 'hidden' });
+    await task('p-task-d').waitFor({ state: 'detached' });
+    return { rightClickPersisted: true, deletePersisted: true, overlapBlocked: true, priorJournalPreserved: true, legacyJournalClearedWithoutReload: true };
+  });
+
+  await runCase('B18G-mindmap-archive-live-recovery', 'a duplicate key press waits for authoritative readback, then Backspace works on the same open map', async () => {
+    await seed({ references: [] });
+    await page.locator('[data-mode-switcher-trigger="true"]').click();
+    await page.locator('[data-mode-switcher-value="mindmap"]').click();
+    const task = id => page.locator('[data-mindmap-node="' + id + '"]');
+    const alert = page.locator('[data-mindmap-batch-recovery-alert]');
+    const archiveKey = 'projed.mindmap.archive-recovery.v1.' + boardA + ':p-task-d';
+
+    // The database commits immediately, but neither the write response nor
+    // the first verification read reaches the UI.
+    await page.evaluate(() => {
+      localStorage.setItem('projed-local-test.taskPersistenceFault', 'timeout-commit-once');
+      localStorage.setItem('projed-local-test.taskPersistenceReadbackFault', 'unavailable-once');
+    });
+    await task('p-task-d').click();
+    await page.keyboard.press('Delete');
+    await page.waitForFunction(key => sessionStorage.getItem(key) !== null, archiveKey);
+    await page.keyboard.press('Delete');
+    await alert.waitFor({ state: 'visible' });
+    if (!(await readNodes())['p-task-d'].isArchived || !await task('p-task-d').isVisible()) {
+      throw new Error('fixture did not observe the database commit before the UI confirmation');
+    }
+    await page.waitForFunction(key => sessionStorage.getItem(key) === null, archiveKey, { timeout: 18000 });
+    await alert.waitFor({ state: 'hidden' });
+    await task('p-task-d').waitFor({ state: 'detached' });
+
+    const next = task('p-task-c');
+    await task('p-task-b').hover();
+    const toggle = page.locator('[data-mindmap-toggle-parent-id="p-task-b"]');
+    if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click({ force: true });
+    await next.click();
+    await page.keyboard.press('Backspace');
+    await next.waitFor({ state: 'detached' });
+    if (!(await readNodes())['p-task-c'].isArchived) throw new Error('Backspace failed after automatic recovery');
+    return { databaseCommitRecoveredWithoutReload: true, backspacePersisted: true };
+  });
+
+  await runCase('B18H-mindmap-archive-uncommitted-recovery', 'a confirmed unchanged task unlocks without replaying the old archive', async () => {
+    await seed({ references: [] });
+    await page.locator('[data-mode-switcher-trigger="true"]').click();
+    await page.locator('[data-mode-switcher-value="mindmap"]').click();
+    const task = page.locator('[data-mindmap-node="p-task-d"]');
+    const alert = page.locator('[data-mindmap-batch-recovery-alert]');
+    const archiveKey = 'projed.mindmap.archive-recovery.v1.' + boardA + ':p-task-d';
+    await task.click();
+    await page.evaluate(({ archiveKey, workspaceId, boardA }) => {
+      const fingerprint = isArchived => {
+        const value = JSON.stringify([['p-task-d', { isArchived }]]);
+        let hash = 0x811c9dc5;
+        for (let index = 0; index < value.length; index++) {
+          hash = Math.imul(hash ^ value.charCodeAt(index), 0x01000193);
+        }
+        return 'fnv1a32:' + (hash >>> 0).toString(16).padStart(8, '0');
+      };
+      sessionStorage.setItem(archiveKey, JSON.stringify({
+        version: 1, operationId: 'confirmed-unchanged', workspaceId, boardId: boardA,
+        kind: 'archive', phase: 'indeterminate', targetIds: ['p-task-d'],
+        archiveTaskId: 'p-task-d', archiveStateOnly: true,
+        expectedBeforeFingerprint: fingerprint(false), expectedAfterFingerprint: fingerprint(true),
+      }));
+    }, { archiveKey, workspaceId, boardA });
+    await page.keyboard.press('Delete');
+    await alert.waitFor({ state: 'visible' });
+    await page.waitForFunction(key => sessionStorage.getItem(key) === null, archiveKey);
+    await alert.waitFor({ state: 'hidden' });
+    if ((await readNodes())['p-task-d'].isArchived || !await task.isVisible()) {
+      throw new Error('recovery must not repeat a blocked archive');
+    }
+    await page.keyboard.press('Backspace');
+    await task.waitFor({ state: 'detached' });
+    if (!(await readNodes())['p-task-d'].isArchived) throw new Error('explicit archive did not persist after unlock');
+    return { unchangedConfirmedWithoutReplay: true, backspacePersisted: true };
+  });
+
+  await runCase('B18I-mindmap-stale-mixed-recovery', 'an old partial archive accepts the database snapshot without repeating any write', async () => {
+    await seed({ references: [] });
+    await page.locator('[data-mode-switcher-trigger="true"]').click();
+    await page.locator('[data-mode-switcher-value="mindmap"]').click();
+    const node = id => page.locator('[data-mindmap-node="' + id + '"]');
+    const key = 'projed.mindmap.batch-recovery.v1.' + boardA;
+    await node('p-task-d').click();
+    await page.evaluate(({ key, workspaceId, boardA }) => {
+      const nodes = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
+      nodes['p-task-b'].isArchived = true;
+      localStorage.setItem('projed-local-test.nodes', JSON.stringify(nodes));
+      sessionStorage.setItem(key, JSON.stringify({
+        version: 1, operationId: 'stale-mixed-archive', workspaceId, boardId: boardA,
+        createdAt: Date.now() - 180000, kind: 'archive', phase: 'indeterminate',
+        targetIds: ['p-task-b', 'p-task-d'],
+        expectedBeforeFingerprint: 'fnv1a32:00000000', expectedAfterFingerprint: 'fnv1a32:00000001',
+      }));
+    }, { key, workspaceId, boardA });
+    const beforeRecovery = await readNodes();
+    const documentTime = await page.evaluate(() => performance.timeOrigin);
+    await page.keyboard.press('Delete');
+    await page.waitForFunction(journal => sessionStorage.getItem(journal) === null, key, { timeout: 12000 });
+    await page.locator('[data-mindmap-batch-recovery-alert]').waitFor({ state: 'hidden' });
+    await node('p-task-b').waitFor({ state: 'detached' });
+    if (JSON.stringify(await readNodes()) !== JSON.stringify(beforeRecovery)
+      || !await node('p-task-d').isVisible()
+      || await page.evaluate(() => performance.timeOrigin) !== documentTime) {
+      throw new Error('stale recovery must apply current rows without writing or reloading');
+    }
+    await node('p-task-d').click();
+    await page.keyboard.press('Backspace');
+    await node('p-task-d').waitFor({ state: 'detached' });
+    if (!(await readNodes())['p-task-d'].isArchived) throw new Error('Backspace did not persist after old lock release');
+    return { partialArchivePreserved: true, noReplay: true, unlockedWithoutReload: true, backspacePersisted: true };
+  });
+
+  await runCase('B18C-mindmap-dense-sibling-creation', 'a task inserted between adjacent integer orders persists before display; failed creation never leaves a node', async () => {
+    await seed({ references: [] });
+    await page.locator('[data-mode-switcher-trigger="true"]').click();
+    await page.locator('[data-mode-switcher-value="mindmap"]').click();
+    const task = id => page.locator('[data-mindmap-node="' + id + '"]');
+    const menu = page.locator('[data-mindmap-context-menu="true"]');
+    const create = async () => {
+      await task('p-task-b').click({ button: 'right' });
+      await menu.locator('[data-task-action-id="task.create-sibling"]').click();
+    };
+    const before = Object.keys(await readNodes());
+    await page.evaluate(() => {
+      localStorage.setItem('projed-local-test.taskNodeFault', 'create-second-once');
+      localStorage.setItem('projed-local-test.taskNodeFaultProgress', '1');
+    });
+    await create();
+    await page.getByText(/新增任務失敗：/).last().waitFor({ state: 'visible' });
+    if ((await readNodes())['p-task-d'].order !== 2 || await task('p-task-b').count() !== 1
+      || await page.locator('[data-mindmap-node-title="新任務"]').count()) throw new Error('failed insert left a node or shifted its sibling');
+    await create();
+    await page.locator('[data-mindmap-node-title="新任務"]').waitFor({ state: 'visible' });
+    const persisted = await readNodes();
+    const createdId = Object.keys(persisted).find(id => !before.includes(id));
+    if (!createdId || !Number.isInteger(persisted[createdId].order)
+      || !(persisted['p-task-b'].order < persisted[createdId].order && persisted[createdId].order < persisted['p-task-d'].order)) {
+      throw new Error('the stored insertion order must place the new task between the existing siblings');
+    }
+    return { insertedAt: persisted[createdId].order, nextSiblingOrder: persisted['p-task-d'].order, failedCreateRolledBack: true };
+  });
+
+  const switchMode = async mode => {
+    await page.locator('[data-mode-switcher-trigger="true"]').click();
+    await page.locator('[data-mode-switcher-value="' + mode + '"]').click();
+  };
+  const rowIn = (surface, id) => page.locator('[data-task-drag-surface-kind="' + surface + '"][data-task-id="' + id + '"]').first();
+
+  await runCase('B18D-global-menu-order-transaction', 'global context menu inserts a persisted sibling before opening naming', async () => {
+    await seed({ references: [] });
+    await switchMode('list');
+    await rowIn('wbs-list-row', 'p-task-b').click({ button: 'right' });
+    const menu = page.locator('[data-global-context-menu="true"]');
+    await menu.locator('[data-task-action-id="task.create-sibling"]').click();
+    await details().waitFor({ state: 'visible' });
+    const id = await details().getAttribute('data-task-id');
+    const saved = await readNodes();
+    if (!saved[id] || saved[id].parentId !== 'p-col-a' || !(saved['p-task-b'].order < saved[id].order && saved[id].order < saved['p-task-d'].order)) {
+      throw new Error('global context menu did not persist the requested position');
+    }
+    return { savedBeforeNaming: true, order: saved[id].order };
+  });
+
+  await runCase('B18E-wbs-order-transaction', 'WBS list swaps canonical siblings and retains their stored order after reload', async () => {
+    await seed({ references: [] });
+    await switchMode('list');
+    const first = rowIn('wbs-list-row', 'p-task-b');
+    const second = rowIn('wbs-list-row', 'p-task-d');
+    await first.waitFor({ state: 'visible' });
+    await drag(first, second);
+    await page.waitForFunction(() => {
+      const tasks = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
+      return tasks['p-task-d'].order < tasks['p-task-b'].order;
+    }, null, { timeout: 5000 });
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await first.waitFor({ state: 'visible' });
+    const boxes = await Promise.all([first.boundingBox(), second.boundingBox()]);
+    if (!boxes[0] || !boxes[1] || boxes[1].y >= boxes[0].y) throw new Error('WBS ordering did not survive reload');
+    return { swapPersistedAndReloaded: true };
+  });
+
+  await runCase('B18F-sidebar-order-transaction', 'shared sidebar swaps siblings and appends a new root through the same transaction', async () => {
+    await seed({ references: [] });
+    await switchMode('gantt');
+    const first = rowIn('shared-sidebar-row', 'p-task-b');
+    const second = rowIn('shared-sidebar-row', 'p-task-d');
+    await first.waitFor({ state: 'visible' });
+    await drag(first, second);
+    await page.waitForFunction(() => {
+      const tasks = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
+      return tasks['p-task-d'].order < tasks['p-task-b'].order;
+    }, null, { timeout: 5000 });
+    await page.getByRole('button', { name: '新增頂層任務' }).first().click();
+    await details().waitFor({ state: 'visible' });
+    const id = await details().getAttribute('data-task-id');
+    const saved = await readNodes();
+    if (!saved[id] || saved[id].parentId !== null || saved[id].order <= saved['p-col-a'].order) throw new Error('sidebar root did not persist at the end');
+    return { swapPersisted: true, rootSavedBeforeNaming: true };
   });
 
   await runCase('B19-desktop-pointer-dnd-parity', 'pointer drag reorders and appends tracking placement while canonical drag keeps its own command route; failure retains source', async () => {
@@ -344,7 +666,7 @@ async (page) => {
     return { keyboard, mobile };
   });
 
-  await runCase('B21-shared-surface-visual-parity', 'List row, Kanban card and checklist content share slots/styles; only the tracking frame border is dashed at 1440/390/320', async () => {
+  await runCase('B21-shared-surface-visual-parity', 'OKR rows, Kanban cards and checklists display canonical task titles and identify tracking references', async () => {
     await seed();
     const compare = async (primaryTarget, referenceTarget) => page.evaluate(({ primarySelector, referenceSelector }) => {
       const p = document.querySelector(primarySelector);
@@ -384,10 +706,17 @@ async (page) => {
 
     const mode = page.locator('[data-mode-switcher-trigger="true"]');
     await mode.click();
-    await page.locator('[data-mode-switcher-value="list"]').click();
-    await placement('p-ref-a').waitFor({ state: 'visible', timeout: 10000 });
-    const listEvidence = await compare('[data-task-placement-id="primary:p-task-a"]', '[data-task-placement-id="p-ref-a"]');
-    if (!listEvidence || listEvidence.referenceBorder !== 'dashed' || listEvidence.primaryTitle !== listEvidence.referenceTitle || listEvidence.visibleTrackingCopy) throw new Error(`List shared surface mismatch: ${JSON.stringify(listEvidence)}`);
+    await page.locator('[data-mode-switcher-value="goal"]').click();
+    const goalPrimary = page.locator('[data-goal-task-row][data-task-placement-id="primary:p-task-a"]');
+    const goalReference = page.locator('[data-goal-task-row][data-task-placement-id="p-ref-a"]');
+    await goalReference.waitFor({ state: 'visible', timeout: 10000 });
+    const goalEvidence = {
+      primaryTitle: await goalPrimary.locator('[data-task-title-slot="true"]').innerText(),
+      referenceTitle: await goalReference.locator('[data-task-title-slot="true"]').innerText(),
+      referenceKind: await goalReference.getAttribute('data-task-placement-kind'),
+      referenceIndicator: await goalReference.locator('[aria-label="追蹤副本"]').isVisible(),
+    };
+    if (goalEvidence.primaryTitle !== goalEvidence.referenceTitle || goalEvidence.referenceKind !== 'tracking-reference' || !goalEvidence.referenceIndicator) throw new Error(`OKR shared surface mismatch: ${JSON.stringify(goalEvidence)}`);
 
     const viewports = [];
     for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }, { width: 320, height: 844 }]) {
@@ -398,7 +727,7 @@ async (page) => {
       await page.screenshot({ path: screenshot, fullPage: true });
       viewports.push({ viewport, layout, screenshot });
     }
-    return { board: boardEvidence, checklist: checklistEvidence, list: listEvidence, viewports };
+    return { board: boardEvidence, checklist: checklistEvidence, goal: goalEvidence, viewports };
   });
 
   await runCase('B22-recursive-child-parity', 'tracking descendants use the same recursive checklist surface, expand/collapse two levels, preserve nested details/focus, and do not auto-project canonical children', async () => {
@@ -533,7 +862,9 @@ async (page) => {
     return { derived: derivedEvidence, sourceEditorCanonicalUpdate: canonical.title, referenceConverged: true, permissionBeforeRevokeEditable: beforeRevokeEvidence, permissionRevokedToReadonly: revokedEvidence, staleRevisionSourceRetained: true, staleRevision: afterStale.revision, providerFailureSourceRetained: true, recoverableMessage: faultMessage, unexpectedDiagnostics: unexpected };
   });
 
-  const passed = cases.every(item => item.status === 'PASS');
+  const executed = cases.filter(item => item.status !== 'NOT_RUN');
+  const runPassed = executed.length > 0 && executed.every(item => item.status === 'PASS');
+  const passed = runPassed && !archiveOnly;
   const result = {
     dev: 'DEV-095',
     devId: 'DEV-095',
@@ -541,9 +872,9 @@ async (page) => {
     environment: 'local-test-browser-interaction-parity',
     provider: 'local-test',
     cases,
-    status: passed ? 'passed' : 'failed',
+    status: runPassed ? (archiveOnly ? 'archive-focus-passed' : 'passed') : 'failed',
     passed,
-    summary: { PASS: cases.filter(item => item.status === 'PASS').length, FAIL: cases.filter(item => item.status === 'FAIL').length, NOT_RUN: 0, BLOCKED: 0 },
+    summary: { PASS: cases.filter(item => item.status === 'PASS').length, FAIL: cases.filter(item => item.status === 'FAIL').length, NOT_RUN: cases.filter(item => item.status === 'NOT_RUN').length, BLOCKED: 0 },
     evidence: ['normal board/list UI entry', 'desktop pointer', 'KeyboardSensor', 'real TouchEvent long-press', 'same Task Details component', 'capability-aware action catalog', 'recursive TaskPlacementTree', '1440x900 screenshot', '390x844 screenshot', '320x844 screenshot', 'localStorage canonical/reference readback', 'provider failure recovery'],
     diagnostics: diagnostics.slice(-80),
   };
@@ -552,6 +883,6 @@ async (page) => {
     sessionStorage.setItem('__DEV095_INTERACTION_PARITY_ARTIFACT', JSON.stringify(value));
     localStorage.setItem('__DEV095_INTERACTION_PARITY_ARTIFACT', JSON.stringify(value));
   }, result);
-  if (!passed) throw new Error(`DEV-095 interaction parity browser verifier failed: ${JSON.stringify(result)}`);
+  if (!runPassed) throw new Error(`DEV-095 interaction parity browser verifier failed: ${JSON.stringify(result)}`);
   return result;
 }

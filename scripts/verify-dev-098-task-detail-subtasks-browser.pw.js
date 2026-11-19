@@ -33,7 +33,7 @@ async (page) => {
     id: workspaceId, title: 'DEV-098 Workspace', ownerId: account.id, members: [account.id], order: 1, createdAt: 1704067200000,
     boards: [{ id: boardId, title: 'DEV-098 Board', dependencies: [], order: 1, createdAt: 1704067200000 }],
   };
-  const seed = async ({ viewport, userId = account.id, role = 'owner', trackingReferences = [] } = {}) => {
+  const seed = async ({ viewport, userId = account.id, role = 'owner', trackingReferences = [], taskNodes = nodes } = {}) => {
     await page.setViewportSize(viewport || { width: 1440, height: 900 });
     await page.evaluate(({ account, workspace, nodes, workspaceId, boardId, trackingReferences, role }) => {
       localStorage.clear();
@@ -50,7 +50,7 @@ async (page) => {
       localStorage.setItem('projed-last-ws', workspaceId);
       localStorage.setItem('projed-last-board', boardId);
       localStorage.setItem('projed-last-view', 'board');
-    }, { account: accountFor(userId), workspace, nodes, workspaceId, boardId, trackingReferences, role });
+    }, { account: accountFor(userId), workspace, nodes: taskNodes, workspaceId, boardId, trackingReferences, role });
     await page.reload({ waitUntil: 'domcontentloaded' });
     const fixed = page.getByRole('button', { name: /使用固定測試環境/ });
     if (await fixed.count() && await fixed.first().isVisible().catch(() => false)) await fixed.first().click({ force: true });
@@ -90,6 +90,14 @@ async (page) => {
   };
   const placement = id => page.locator('[data-task-surface-frame="true"][data-task-placement-id="' + id + '"]').last();
   const openPlacement = async id => {
+    const viewport = page.viewportSize();
+    if (viewport && viewport.width <= 640) {
+      const collapseWorkbench = page.locator('[data-task-workbench-collapse-toggle="true"]');
+      if (await collapseWorkbench.count() && await collapseWorkbench.isVisible()) {
+        await collapseWorkbench.click();
+        await page.locator('[data-task-workbench-panel="true"]').waitFor({ state: 'detached', timeout: 5000 });
+      }
+    }
     const frame = placement(id);
     await frame.waitFor({ state: 'visible', timeout: 15000 });
     await frame.locator(':scope > [data-task-surface-source="true"]').first().click({ force: true });
@@ -136,10 +144,14 @@ async (page) => {
     const modal = await openPlacement('primary:dev098-parent');
     const section = modal.locator('[data-task-details-subtasks="true"]');
     if (await section.count() !== 1) throw new Error('subtask section missing');
-    const count = await section.locator('[data-task-details-subtask-count="true"]').innerText();
-    if (count !== '2') throw new Error('direct child count should be 2, got ' + count);
+    const currentLocation = section.locator('[aria-current="location"]');
+    if (await currentLocation.count() !== 1 || !(await currentLocation.innerText()).includes('現在任務位置')) throw new Error('current task location missing');
+    const directChildren = section.locator('[data-task-placement-tree="true"]').first().locator(':scope > [data-task-surface-frame="true"]');
+    const count = await directChildren.count();
+    if (count !== 2) throw new Error('task map should render two direct children, got ' + count);
+    if (await section.locator('[data-task-placement-id="primary:dev098-grandchild"]').count() !== 1) throw new Error('expanded task map is missing its nested descendant');
     if (await section.locator('[data-task-details-subtask-empty="true"]').count()) throw new Error('non-empty parent rendered empty state');
-    return { expanded: await section.locator('[data-task-details-subtask-toggle="true"]').getAttribute('aria-expanded'), count };
+    return { currentLocation: true, directChildCount: count, nestedDescendantVisible: true };
   });
   await run('B03-single-modal-parent-navigation', async () => {
     await close().catch(() => {});
@@ -170,7 +182,7 @@ async (page) => {
     await directChild.locator('[data-task-details-parent-link="true"][data-task-details-parent-id="dev098-parent"]').click();
     await page.waitForFunction(() => document.querySelector('[data-task-details-modal="true"]')?.getAttribute('data-task-id') === 'dev098-parent');
     if (await details().count() !== 1) throw new Error('parent navigation created a second modal');
-    return {
+    const navigationEvidence = {
       modalCount: await details().count(),
       taskId: await details().getAttribute('data-task-id'),
       titleInputAvailable: true,
@@ -180,6 +192,152 @@ async (page) => {
       breadcrumbTargetTaskId: await details().getAttribute('data-task-id'),
       breadcrumbLinkIds,
       backButtonHidden: true,
+    };
+
+    await close();
+    const taskNodes = structuredClone(nodes);
+    const parentId = 'dev098-parent';
+    const childId = 'dev098-child';
+    const siblingId = 'dev098-sibling';
+    for (const [id, content, date] of [
+      [parentId, '父任務目的', '2026-01-01'],
+      [childId, '第一個子任務目的', '2026-01-02'],
+      [siblingId, '', '2026-01-03'],
+    ]) {
+      Object.assign(taskNodes[id], {
+        startDate: date,
+        description: id === parentId ? '尚未同步的舊版描述' : content,
+        detailNotes: [
+          { id: 'note_default', title: '任務目的', content },
+          { id: 'shared-note', title: '備註', content: '備註：' + id },
+        ],
+      });
+    }
+    await seed({ taskNodes });
+    await openPlacement('primary:' + parentId);
+    const editor = title => modal.locator('[data-task-detail-note-content-input="true"][aria-label="備註內容：' + title + '"]');
+    const verifyTask = async (id, purpose) => {
+      await modal.and(page.locator('[data-task-id="' + id + '"]')).waitFor({ state: 'visible' });
+      await editor('任務目的').waitFor({ state: 'visible' });
+      await page.waitForFunction(({ taskId, expectedPurpose }) => {
+        const taskModal = document.querySelector('[data-task-details-modal="true"][data-task-id="' + taskId + '"]');
+        const purposeEditor = taskModal?.querySelector('[data-task-detail-note-content-input="true"][aria-label="備註內容：任務目的"]');
+        return purposeEditor?.textContent?.trim() === expectedPurpose;
+      }, { taskId: id, expectedPurpose: purpose }, { timeout: 5000 });
+      const actualPurpose = (await editor('任務目的').innerText()).trim();
+      if (actualPurpose !== purpose) throw new Error('Wrong purpose shown for ' + id + ': expected=' + JSON.stringify(purpose) + ' actual=' + JSON.stringify(actualPurpose));
+      if ((await editor('備註').innerText()).trim() !== '備註：' + id) throw new Error('Wrong note shown for ' + id);
+      if (await modal.locator('[data-task-details-title-input="true"]').inputValue() !== taskNodes[id].title) {
+        throw new Error('Wrong title shown for ' + id);
+      }
+      if (await modal.locator('[data-task-details-date-grid="true"] input[type="date"]').first().inputValue() !== taskNodes[id].startDate) {
+        throw new Error('Wrong start date shown for ' + id);
+      }
+    };
+    const openChild = id => sourceContent(modalPlacement('primary:' + id)).click();
+    const backToParent = () => modal.getByRole('button', { name: '回到上一階任務' }).click();
+    await verifyTask(parentId, '父任務目的');
+    await openChild(childId);
+    await verifyTask(childId, '第一個子任務目的');
+    await backToParent();
+    await verifyTask(parentId, '父任務目的');
+    await openChild(siblingId);
+    await verifyTask(siblingId, '');
+    const editedPurpose = '只儲存第二個子任務的目的';
+    await editor('任務目的').fill(editedPurpose);
+    await backToParent();
+    await verifyTask(parentId, '父任務目的');
+    await openChild(siblingId);
+    await verifyTask(siblingId, editedPurpose);
+    const persisted = await readNodes();
+    if (persisted[parentId].description !== taskNodes[parentId].description
+      || persisted[childId].detailNotes[0].content !== taskNodes[childId].detailNotes[0].content
+      || persisted[siblingId].description !== editedPurpose
+      || persisted[siblingId].detailNotes[0].content !== editedPurpose) {
+      throw new Error('Viewing or editing one task changed the wrong stored purpose');
+    }
+    await page.evaluate(async id => {
+      const { useWbsStore } = await import('/src/store/useWbsStore.ts');
+      const stored = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}')[id];
+      const state = useWbsStore.getState();
+      useWbsStore.setState({ nodes: { ...state.nodes, [id]: structuredClone(stored) } });
+    }, siblingId);
+    await page.waitForTimeout(120);
+    if (await modal.locator('[data-task-details-notes-conflict="true"]').count()) {
+      throw new Error('Own persisted note echo was misclassified as an external conflict');
+    }
+    await page.evaluate(() => {
+      window.confirm = () => true;
+    });
+    const replacePurposeFromElsewhere = content => page.evaluate(async ({ id, content }) => {
+      const useWbsStore = window.__DEV098_TASK_DETAIL_STORE__;
+      if (!useWbsStore) throw new Error('Task detail store test bridge is unavailable');
+      const storedNodes = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
+      const storedTask = storedNodes[id];
+      const updatedAt = Date.now();
+      storedNodes[id] = {
+        ...storedTask,
+        description: content,
+        detailNotes: storedTask.detailNotes.map(note => note.id === 'note_default'
+          ? { id: note.id, title: note.title, content }
+          : note),
+        updatedAt,
+      };
+      localStorage.setItem('projed-local-test.nodes', JSON.stringify(storedNodes));
+      const state = useWbsStore.getState();
+      const task = state.nodes[id];
+      useWbsStore.setState({ nodes: { ...state.nodes, [id]: {
+        ...task,
+        description: content,
+        updatedAt,
+        detailNotes: task.detailNotes.map(note => note.id === 'note_default'
+          ? { id: note.id, title: note.title, content }
+          : note),
+      } } });
+    }, { id: siblingId, content });
+    await replacePurposeFromElsewhere('同步後的任務目的');
+    await verifyTask(siblingId, '同步後的任務目的');
+    await editor('任務目的').fill('本機未儲存草稿');
+    await replacePurposeFromElsewhere('另一位使用者更新的目的');
+    const conflict = modal.locator('[data-task-details-notes-conflict="true"]');
+    await conflict.waitFor({ state: 'visible' });
+    await backToParent();
+    await page.waitForTimeout(1050);
+    await verifyTask(siblingId, '本機未儲存草稿');
+    if ((await readNodes())[siblingId].description !== '另一位使用者更新的目的') throw new Error('Conflicted draft overwrote the provider value');
+    await conflict.getByRole('button', { name: '載入最新備註' }).click();
+    await conflict.waitFor({ state: 'detached' });
+    await verifyTask(siblingId, '另一位使用者更新的目的');
+
+    await page.evaluate(() => localStorage.setItem('projed-local-test.taskNodeFault', 'update-once'));
+    await editor('任務目的').fill('第一次儲存失敗的草稿');
+    await backToParent();
+    await modal.locator('[data-task-details-save-status="error"]').waitFor({ state: 'visible' });
+    await replacePurposeFromElsewhere('儲存失敗後收到的最新內容');
+    await verifyTask(siblingId, '第一次儲存失敗的草稿');
+    await modal.locator('[data-task-details-save-retry="true"]').click();
+    await conflict.waitFor({ state: 'visible' });
+    await verifyTask(siblingId, '第一次儲存失敗的草稿');
+    if ((await readNodes())[siblingId].description !== '儲存失敗後收到的最新內容') throw new Error('Retry wrote a conflicted draft');
+    await conflict.getByRole('button', { name: '載入最新備註' }).click();
+    await conflict.waitFor({ state: 'detached' });
+    await verifyTask(siblingId, '儲存失敗後收到的最新內容');
+
+    const deleteButtons = modal.locator('[data-task-detail-note-delete="true"]');
+    await deleteButtons.first().click();
+    await backToParent();
+    await page.waitForFunction(id => {
+      const task = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}')[id];
+      return task?.description === '' && task.detailNotes?.length === 2 && task.detailNotes[0].content === '';
+    }, siblingId);
+    await openChild(siblingId);
+    await verifyTask(siblingId, '');
+    return {
+      ...navigationEvidence,
+      purposeIsolation: {
+        verifiedTasks: [parentId, childId, siblingId], savedTask: siblingId, externalUpdate: true,
+        conflictProtected: true, retryConflictProtected: true, clearedPurposePreservedNote: true,
+      },
     };
   });
 
@@ -191,13 +349,14 @@ async (page) => {
     const titleInput = modal.locator('[data-task-details-title-input="true"]');
     await titleInput.fill(updatedTitle);
     await titleInput.blur();
-    await page.waitForFunction(title => JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}')['dev098-parent']?.title === title, updatedTitle);
+    await page.waitForTimeout(1200);
+    if ((await readNodes())['dev098-parent'].title === updatedTitle) throw new Error('title blur saved before close');
     const editor = modal.locator('[data-task-detail-note-card="true"] [contenteditable="true"]').first();
     await editor.waitFor({ state: 'visible', timeout: 10000 });
     await editor.fill('明細草稿已保存');
     await editor.press('Tab');
     await page.waitForTimeout(1100);
-    await page.waitForFunction(() => JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}')['dev098-parent']?.description === '明細草稿已保存', null, { timeout: 10000 });
+    if ((await readNodes())['dev098-parent'].description === '明細草稿已保存') throw new Error('note blur saved before close');
     await close();
     const reopened = await openPlacement('primary:dev098-parent');
     const persistedTitle = await reopened.locator('[data-task-details-title-input="true"]').inputValue();
@@ -214,6 +373,7 @@ async (page) => {
     const titleInput = modal.locator('[data-task-details-title-input="true"]');
     await titleInput.fill('父任務 P0（待重試）');
     await titleInput.blur();
+    await sourceContent(modalPlacement('primary:dev098-child')).click();
     await modal.locator('[data-task-details-save-status="error"]').waitFor({ state: 'visible', timeout: 10000 });
     const retry = modal.locator('[data-task-details-save-retry="true"]');
     if (await retry.count() !== 1) throw new Error('save failure did not expose retry');
@@ -358,9 +518,12 @@ async (page) => {
     if (await modal.getByText('拖曳到此處新增為直屬子任務', { exact: true }).count() !== 0) throw new Error('root drop helper row was not removed');
     const rootDropClass = await rootDrop.getAttribute('class');
     if (rootDropClass?.includes('border') || rootDropClass?.includes('rounded')) throw new Error('root drop target still renders a container');
-    await modal.locator('[data-task-details-subtask-toggle="true"]').click();
-    if (await modal.locator('[data-task-details-subtask-panel="true"]').count() !== 0) throw new Error('collapse did not hide panel');
-    await modal.locator('[data-task-details-subtask-toggle="true"]').click();
+    const nestedRow = modal.locator('[data-task-placement-id="primary:dev098-grandchild"]');
+    if (await nestedRow.count() !== 1) throw new Error('mobile task map did not render its nested row');
+    await modal.locator('[data-kanban-branch-toggle="true"][aria-label="收合 子任務 P1"]').click();
+    if (await nestedRow.count() !== 0) throw new Error('mobile task map branch did not collapse');
+    await modal.locator('[data-kanban-branch-toggle="true"][aria-label="展開 子任務 P1"]').click();
+    if (await nestedRow.count() !== 1) throw new Error('mobile task map branch did not expand');
     return { viewport: [390, 844], collapsedAndExpanded: true, rootDropHelperRemoved: true, rootDropContainerRemoved: true };
   });
 

@@ -51,7 +51,7 @@ async (page) => {
   };
 
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
+  await page.goto(new URL('/', page.url()).href, { waitUntil: 'domcontentloaded' });
   await page.evaluate(({ account, workspace, nodes }) => {
     localStorage.clear();
     localStorage.setItem('projed-local-test.selected-account', account.id);
@@ -77,15 +77,13 @@ async (page) => {
 
   const selectors = {
     board: '.kanban-checklist-item[data-task-hierarchy-depth]',
-    list: '[data-task-hierarchy-row="true"][data-task-hierarchy-surface="list"]',
+    goal: '[data-task-hierarchy-row="true"][data-task-hierarchy-surface="goal"]',
     gantt: '[data-task-hierarchy-row="true"][data-task-hierarchy-surface="gantt"]',
     calendar: '[data-task-hierarchy-row="true"][data-task-hierarchy-surface="calendar"]',
   };
 
   const readHierarchy = async (mode) => page.locator(selectors[mode]).evaluateAll((rows, modeName) => {
-    const titleFor = row => modeName === 'board'
-      ? row.querySelector('[data-task-title-slot="true"]')
-      : row.querySelector('.task-title-text span');
+    const titleFor = row => row.querySelector('[data-task-title-slot="true"]');
     const values = rows.map(row => {
       const depth = Number(row.getAttribute('data-task-hierarchy-depth'));
       const title = titleFor(row);
@@ -95,7 +93,7 @@ async (page) => {
         paddingLeft: Number.parseFloat(getComputedStyle(row).paddingLeft || '0'),
         titleLeft: title?.getBoundingClientRect().left ?? null,
         rowHeight: row.getBoundingClientRect().height,
-        token: getComputedStyle(row).getPropertyValue('--task-hierarchy-indent').trim(),
+        token: getComputedStyle(row).getPropertyValue(modeName === 'board' ? '--kanban-tree-indent' : '--task-hierarchy-indent').trim(),
       };
     }).sort((left, right) => left.depth - right.depth);
     const [firstId, secondId] = modeName === 'board'
@@ -131,7 +129,8 @@ async (page) => {
     const geometry = await readHierarchy(mode);
     const tolerance = 0.75;
     assert(geometry.pair.length === 2 && geometry.pair[1].depth - geometry.pair[0].depth === 1, `${mode} must render the fixed adjacent parent-child pair`, geometry);
-    assert(geometry.rows.every(row => row.token === `${expectedIndent}px`), `${mode} must inherit the shared ${expectedIndent}px token`, geometry);
+    const expectedToken = mode === 'board' ? 'calc(10.4px * 0.7)' : `${expectedIndent}px`;
+    assert(geometry.rows.every(row => row.token === expectedToken), `${mode} must inherit the ${expectedToken} indent token`, geometry);
     assert(Math.abs(geometry.paddingDelta - expectedIndent) <= tolerance, `${mode} computed padding must advance by ${expectedIndent}px`, geometry);
     assert(Math.abs(geometry.titleDelta - expectedIndent) <= tolerance, `${mode} title position must advance by ${expectedIndent}px`, geometry);
     assert(geometry.adjacentDeltas.length > 0 && geometry.adjacentDeltas.every(delta => Math.abs(delta.padding - expectedIndent) <= tolerance && Math.abs(delta.title - expectedIndent) <= tolerance), `${mode} every visible adjacent level must advance by ${expectedIndent}px`, geometry);
@@ -142,18 +141,19 @@ async (page) => {
     results.push({ mode, viewport: `${viewport.width}x${viewport.height}`, expectedIndent, geometry, screenshotPath, result: 'PASS' });
   };
 
-  for (const mode of ['board', 'list', 'gantt', 'calendar']) {
+  for (const mode of ['board', 'goal', 'gantt', 'calendar']) {
     await page.setViewportSize({ width: 1440, height: 900 });
     await switchMode(mode);
-    await verifyMode(mode, { width: 1440, height: 900 }, 6);
-    await verifyMode(mode, { width: 760, height: 900 }, 5);
+    const sharedIndent = mode === 'board' ? 7.28 : 10.4;
+    await verifyMode(mode, { width: 1440, height: 900 }, sharedIndent);
+    await verifyMode(mode, { width: 760, height: 900 }, sharedIndent);
   }
 
   assert(diagnostics.length === 0, 'cross-view hierarchy verification must not raise page or console errors', { diagnostics });
   const artifact = {
     verifier: 'DEV-087 cross-view hierarchy indent browser',
     result: 'PASS',
-    tokens: { desktop: 6, narrow: 5, breakpoint: 767 },
+    tokens: { board: 7.28, sharedTaskList: 10.4 },
     results,
     diagnostics,
   };

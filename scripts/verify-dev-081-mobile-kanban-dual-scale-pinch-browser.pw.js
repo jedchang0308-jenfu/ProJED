@@ -34,7 +34,7 @@ async (page) => {
   const openApp = async (viewport, touch = true) => {
     await page.setViewportSize(viewport);
     const touchParam = touch ? '?dev081Touch=1' : '';
-    await page.goto(`http://localhost:4000/${touchParam}`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`http://localhost:1040/${touchParam}`, { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
     const fixedLogin = page.getByRole('button', { name: /使用固定測試環境/ }).first();
     if (await fixedLogin.isVisible().catch(() => false)) {
@@ -42,7 +42,7 @@ async (page) => {
       await page.waitForTimeout(700);
     }
     const query = touch ? '?qcReset=1&qcSize=96&dev081Touch=1' : '?qcReset=1&qcSize=96';
-    await page.goto(`http://localhost:4000/${query}`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`http://localhost:1040/${query}`, { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
     await page.locator('[data-mobile-pan-surface="board"]').waitFor({ state: 'visible', timeout: 15000 });
     const emulationCdp = await page.context().newCDPSession(page);

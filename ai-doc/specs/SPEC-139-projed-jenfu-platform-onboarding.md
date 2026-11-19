@@ -1,5 +1,7 @@
 # SPEC-139：ProJED 納入 Jenfu-Platform 的產品與技術交接契約
 
+2026-11-19 main同步：納入`0670a0aee5327cd30d53f21360d577b278376028`的既有修正及DEV-140／141，保留本分支HTTP資料模式、Session與42份已資格化SQL。Main新增的board order transaction與task-note compare-and-set目前只由Supabase／Firebase／local-test實作；HTTP facade明確拒絕這兩項未接線操作，避免落入legacy provider，HTTP list讀取保留AbortSignal。HTTP正常新增／移動入口與備註CAS須隨此新介面補齊，仍列入DEV-139後續整合，不能以同步完成宣稱HTTP已支援新版操作。其餘backends沿main行為；沒有執行migration或正式發布。
+
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。
 - 日期：2026-10-31（Asia/Taipei）；版本：Rev 78（音訊到期清理與unknown generation保護通過隔離驗證；零留存資格及正式交付續行）。
 - 文件狀態：**整合與發布續行中；W22 OrgMaster publisher 與 W23 Platform Session／handoff source 均有 draft PR／required CI PASS，隔離驗證 PASS；Production Resolver Disabled；未 Release**。Firebase／OIDC 真身分與完整 Session 部署、RAG／文字會議真 provider 資格、錄音管線與剩餘資料處置、雲端 readback、舊入口、writer fence、切流及正式發布仍計入完成分母。W22 owner source 見 [§36](#36-orgmaster-minimum-principal-publication-w222026-10-29)，W23 Platform source 與驗證邊界見 [§37](#37-platform-projed-session-and-handoff-w232026-10-29)；W21 承接六類文件／同步資料與精度保護見 [§35](#35-document-source-retention-w212026-10-28)；W20 資料保留見 §34，具體資源與待確認的新權限仍見 §33。本輪未寫正式資料、切流或變更 IAM／Secret／credential／billing。

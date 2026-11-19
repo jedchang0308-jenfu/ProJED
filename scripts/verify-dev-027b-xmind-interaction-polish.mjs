@@ -39,7 +39,6 @@ const mindMapDrag = read(files.mindMapDrag);
 const mindMapGeometry = read(files.mindMapGeometry);
 const mindMapOverlayPaths = read(files.mindMapOverlayPaths);
 const mindMapPan = read(files.mindMapPan);
-const mindMapSelection = read(files.mindMapSelection);
 const mindMapViewport = read(files.mindMapViewport);
 const mindMapZoom = read(files.mindMapZoom);
 const mindMapKeyboard = read(files.mindMapKeyboard);
@@ -58,7 +57,7 @@ const documentationMap = read(files.documentationMap);
 assert(
   'New task insertion selects and routes naming through the current host adapter',
   mindMapView.includes('selectNode(node.id)') &&
-    mindMapView.includes('setInlineTitleEditNodeId(node.id)') &&
+    mindMapView.includes('setInlineTitleEdit({ nodeId: node.id })') &&
     !mindMapView.includes('prepareNewTaskNaming(node.id)') &&
     !mindMapView.includes('setEditingNodeId(node.id)') &&
     !mindMapView.includes('setEditingTitle(node.title)') &&
@@ -86,18 +85,16 @@ assert(
 );
 
 assert(
-  'Deleting a branch preserves Xmind-style nearest-task focus',
-  mindMapSelection.includes('export const getNextSelectionAfterDelete') &&
-    mindMapSelection.includes('previousSibling?.id || parentCandidate?.id || nextSibling?.id || fallbackRoot?.id || null') &&
-    (mindMapView.includes('getMindMapArchiveTaskPlan({ selectedNodeId, nodes, parentNodesIndex, boardId, rootNodes, getChildren })') ||
-      mindMapView.includes('getMindMapArchiveTaskPlan({ selectedNodeId: targetNodeId, nodes, parentNodesIndex, boardId, rootNodes, getChildren })')) &&
-    mindMapView.includes('selectNode(plan.nextSelectionId)') &&
-    !mindMapView.includes('setSelectedNodeId(null);\n    setEditingNodeId(null);'),
+  'Deleting a selected branch uses the archive command outside quick naming',
+  mindMapView.includes('inlineTitleEdit && !isEditingText && isMindMapDeleteKey(event)') &&
+    mindMapView.includes('void archivePlacementSelection(selectedPlacementIds);') &&
+    mindMapView.includes("recoveryKind: 'archive'"),
 );
 
 assert(
   'Enter sibling inherits side and inserts after selected',
-  mindMapView.includes('getMindMapSiblingTaskCreatePlan({ nodeId, nodes, parentNodesIndex, boardId })') &&
+  mindMapView.includes('getMindMapSiblingTaskCreatePlan({ nodeId, nodes, boardId })') &&
+    mindMapView.includes('createOrderedBoardTask(node, anchorId)') &&
     mindMapView.includes('updateRootSide(created.id, getNodeSide(plan.inheritRootSideFromId))') &&
     mindMapView.includes('createSiblingForNode') &&
     mindMapView.includes('createChildForNode'),

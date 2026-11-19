@@ -56,7 +56,6 @@ const mindMapConnectorOverlay = read(files.mindMapConnectorOverlay);
 const mindMapDrag = read(files.mindMapDrag);
 const mindMapDragPreviewBadge = read(files.mindMapDragPreviewBadge);
 const mindMapDragPreviewLayer = read(files.mindMapDragPreviewLayer);
-const mindMapMessages = read(files.mindMapMessages);
 const mindMapSideStorage = read(files.mindMapSideStorage);
 const taskDetailsModal = read(files.taskDetailsModal);
 const browserVerifier = read(files.browserVerifier);
@@ -95,7 +94,7 @@ assert(
   mindMapView.includes('useWbsStore') &&
     mindMapView.includes('addNode') &&
     mindMapView.includes('updateNode') &&
-    mindMapView.includes('archiveTask') &&
+    mindMapView.includes('archivePlacementSelection') &&
     !mindMapView.includes('fetch('),
 );
 
@@ -171,10 +170,9 @@ assert(
 
 assert(
   'Archive subtree has confirmation guard',
-  mindMapView.includes('showConfirm') &&
-    mindMapMessages.includes('getMindMapArchiveTaskConfirmMessage') &&
-    mindMapMessages.includes('子任務') &&
-    mindMapMessages.includes('之後可從目前看板回收桶還原'),
+  mindMapView.includes('descendantCount === 0 || await useDialogStore.getState().showConfirm(') &&
+    mindMapView.includes('${descendantCount} 個子任務，確定繼續？') &&
+    mindMapView.includes("recoveryKind: 'archive'"),
 );
 
 assert(

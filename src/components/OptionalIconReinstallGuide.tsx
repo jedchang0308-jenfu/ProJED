@@ -34,8 +34,8 @@ export const OptionalIconReinstallDetails: React.FC = () => {
     },
     {
       id: 'quick' as const,
-      appName: 'ProJED-快速建任務',
-      linkLabel: '保存 ProJED-快速建任務連結',
+      appName: 'ProJED-建待辦',
+      linkLabel: '保存 ProJED-建待辦連結',
       oldIcon: '/icons/projed-quick-task-icon-legacy-red.png',
       newIcon: '/icons/projed-quick-task-icon-brand-20260929-192.png',
       installUrl: new URL(getQuickInstallUrl(window.location.origin), window.location.origin).toString(),
@@ -44,7 +44,7 @@ export const OptionalIconReinstallDetails: React.FC = () => {
   const saveLink = async (target: IconTarget, installUrl: string) => {
     try {
       if (navigator.share) {
-        await navigator.share({ title: target === 'main' ? '安裝 ProJED' : '安裝 ProJED-快速建任務', url: installUrl });
+        await navigator.share({ title: target === 'main' ? '安裝 ProJED' : '安裝 ProJED-建待辦', url: installUrl });
         setLinkStatus({ target, message: '已分享連結；請確認儲存在重裝後仍找得到的位置。' });
       } else if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(installUrl);
@@ -84,7 +84,7 @@ export const OptionalIconReinstallDetails: React.FC = () => {
                       {pending.status === 'ready' && pending.count > 0 && `有 ${pending.count} 筆快速待辦尚未同步，請先完成同步，暫勿移除 App。`}
                       {pending.status === 'unavailable' && '無法檢查本機待辦；請先確認同步狀態，暫勿直接移除。'}
                     </span></p>
-                    <p className="mt-1 text-xs leading-5 text-slate-600"><strong className="font-medium">ProJED-快速建任務：</strong><span data-icon-reinstall-pending="check-in-app">請先在該 App 確認全部已同步；此處無法查看該 App 的本機待辦。</span></p>
+                    <p className="mt-1 text-xs leading-5 text-slate-600"><strong className="font-medium">ProJED-建待辦：</strong><span data-icon-reinstall-pending="check-in-app">請先在該 App 確認全部已同步；此處無法查看該 App 的本機待辦。</span></p>
                   </li>
                   <li>
                     <span className="font-semibold text-slate-900">保存要更換 App 的安裝連結</span>
@@ -106,7 +106,7 @@ export const OptionalIconReinstallDetails: React.FC = () => {
                     <ol className="mt-2 list-decimal space-y-3 pl-5 text-slate-600">
                       <li>
                         <span className="font-medium text-slate-800">只移除要更換的 App</span>
-                        <p>打開 Android「設定 → 應用程式」（部分手機會寫「應用程式管理」），搜尋要更換的 App，點「解除安裝」。主程式可能顯示為「ProJED」；快速入口顯示為「ProJED-快速建任務」。只移除選中的那一個，另一個保留。若清單找不到要更換的 App，請保留另一個並直接進行下一步。</p>
+                        <p>打開 Android「設定 → 應用程式」（部分手機會寫「應用程式管理」），搜尋要更換的 App，點「解除安裝」。主程式可能顯示為「ProJED」；快速入口顯示為「ProJED-建待辦」，舊版可能仍顯示「ProJED-快速建任務」。只移除選中的那一個，另一個保留。若清單找不到要更換的 App，請保留另一個並直接進行下一步。</p>
                       </li>
                       <li>
                         <span className="font-medium text-slate-800">用 Chrome 開啟對應連結</span>

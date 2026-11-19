@@ -403,7 +403,7 @@ async (page) => {
 
     const narrowOverflow = await assertNoHorizontalOverflow(320);
     const narrowHeading = await page.locator('.quick-task-header h1').innerText();
-    record('A09-320px-layout', narrowHeading === 'ProJED-快速建任務'
+    record('A09-320px-layout', narrowHeading === 'ProJED-建待辦'
       && narrowOverflow.document <= narrowOverflow.viewport + 1 && narrowOverflow.body <= narrowOverflow.viewport + 1,
     { heading: narrowHeading, ...narrowOverflow });
     await page.screenshot({ path: `${outputDir}/quick-task-320x844.png`, fullPage: true });

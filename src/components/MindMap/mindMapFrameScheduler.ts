@@ -2,12 +2,6 @@ interface PendingWindowHandleRef {
   current: number | null;
 }
 
-export const clearPendingTimeoutRef = (timerRef: PendingWindowHandleRef) => {
-  if (timerRef.current === null) return;
-  window.clearTimeout(timerRef.current);
-  timerRef.current = null;
-};
-
 export const cancelPendingAnimationFrameRef = (frameRef: PendingWindowHandleRef) => {
   if (frameRef.current === null) return;
   window.cancelAnimationFrame(frameRef.current);

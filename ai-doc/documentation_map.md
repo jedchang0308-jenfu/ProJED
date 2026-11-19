@@ -1,5 +1,8 @@
 # ProJED Documentation Map
 
+- [DEV-141 新版先通知，由使用者手動更新](dev_task.md#dev-141-manual-app-updates) · [工程契約與驗收](specs/SPEC-041-pwa-update-notification-cache-recovery.md#dev-141-manual-app-updates)
+- [DEV-140 以 OKR 模式整合清單模式](dev_task.md#dev-140-okr-list-consolidation)
+
 ## 2026-10-19：DEV-118 全選顯示與完整分類矩陣（本機實作與驗收完成／未發布）
 
 產品入口為 [DEV-118 選取矩陣](dev_task.md#dev-118-selection-matrix-20261019)，工程authority為 [SPEC-039 本輪V6定案](specs/SPEC-039-task-filter-core-and-workbench-profiles.md#dev-118-selection-matrix-v6-20261019)。統一為「勾選＝納入；預設全選；全不選＝零筆；同分類 OR、跨分類 AND」，補齊四個日期桶、無人員、無標籤、三態全選、搜尋與0～5分類計數。

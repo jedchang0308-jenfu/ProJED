@@ -4,7 +4,7 @@ async (page) => {
   const result = {
     devId: 'DEV-124', status: 'FAIL', sourceRevision: 'working-tree', environment: 'local-test / Chromium', route: '/',
     viewport: { width: 1440, height: 900 }, cases: [], browserErrors: [], httpFailures: [], screenshots: [],
-    runtime: { port: 4000, reused: true, cleaned: false, portReleased: false },
+    runtime: { port: 1040, reused: true, cleaned: false, portReleased: false },
   };
   const failures = [];
   const record = (id, ok, details = {}) => { result.cases.push({ id, ok, details }); if (!ok) failures.push(id); };
@@ -24,7 +24,7 @@ async (page) => {
   };
   try {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:1040/', { waitUntil: 'domcontentloaded' });
     await page.evaluate(({ account, workspace, nodes }) => {
       localStorage.clear(); sessionStorage.clear();
       localStorage.setItem('projed-local-test.selected-account', account.id);

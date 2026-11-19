@@ -22,7 +22,7 @@ $exitCode = 1
 $hasRunCodeError = $true
 
 try {
-  $baseUrl = if ($BaseUrl) { $BaseUrl } elseif ($env:PLAYWRIGHT_BASE_URL) { $env:PLAYWRIGHT_BASE_URL } else { "http://localhost:4000/" }
+  $baseUrl = if ($BaseUrl) { $BaseUrl } elseif ($env:PLAYWRIGHT_BASE_URL) { $env:PLAYWRIGHT_BASE_URL } else { "http://localhost:1040/" }
   npx.cmd --yes --package @playwright/cli playwright-cli -s $session open $baseUrl
   if ($LASTEXITCODE -ne 0) {
     $exitCode = $LASTEXITCODE
@@ -38,14 +38,14 @@ try {
       if ($ArtifactWindowKey -notmatch '^[A-Za-z_][A-Za-z0-9_]*$') {
         throw 'ArtifactWindowKey must be a valid window identifier.'
       }
-      $artifactEvalOutput = & npx.cmd --yes --package @playwright/cli playwright-cli -s $session eval "() => window['$ArtifactWindowKey'] || JSON.parse(sessionStorage.getItem('$ArtifactWindowKey') || localStorage.getItem('$ArtifactWindowKey') || 'null')" 2>&1
+      $artifactEvalOutput = & npx.cmd --yes --package @playwright/cli playwright-cli -s $session eval "() => JSON.stringify(window['$ArtifactWindowKey'] || JSON.parse(sessionStorage.getItem('$ArtifactWindowKey') || localStorage.getItem('$ArtifactWindowKey') || 'null'))" 2>&1
       $artifactEvalText = ($artifactEvalOutput -join "`n")
-      $artifactMatch = [regex]::Match($artifactEvalText, '(?s)### Result\s*(\{.*\})\s*### Ran Playwright code')
+      $artifactMatch = [regex]::Match($artifactEvalText, '(?s)### Result\s*("(?:\\.|[^"\\])*")\s*### Ran Playwright code')
       if (-not $artifactMatch.Success) {
         $artifactPreview = if ($artifactEvalText.Length -gt 4000) { $artifactEvalText.Substring(0, 4000) } else { $artifactEvalText }
         throw "Playwright artifact '$ArtifactWindowKey' is missing or not an object. Eval output: $artifactPreview"
       }
-      $artifactJson = $artifactMatch.Groups[1].Value.Trim()
+      $artifactJson = $artifactMatch.Groups[1].Value.Trim() | ConvertFrom-Json
       $artifact = $artifactJson | ConvertFrom-Json
       if ($null -eq $artifact -or $artifact -is [System.Array] -or $artifact -is [string] -or $artifact -is [int] -or $artifact -is [double] -or $artifact -is [bool]) {
         throw "Playwright artifact '$ArtifactWindowKey' must be a JSON object."

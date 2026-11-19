@@ -20,6 +20,8 @@ interface TaskAssignmentPickerProps {
   disabled?: boolean;
   compact?: boolean;
   inline?: boolean;
+  /** Omits the nested card so a shared context-menu submenu surface can frame it. */
+  menuSurface?: boolean;
   fullSummary?: boolean;
   /** Goal uses the quiet surface; default keeps every existing consumer unchanged. */
   triggerVariant?: 'default' | 'quiet';
@@ -42,6 +44,7 @@ export const TaskAssignmentPicker: React.FC<TaskAssignmentPickerProps> = ({
   disabled = false,
   compact = false,
   inline = false,
+  menuSurface = false,
   fullSummary = false,
   triggerVariant = 'default',
   portal = false,
@@ -181,7 +184,7 @@ export const TaskAssignmentPicker: React.FC<TaskAssignmentPickerProps> = ({
           className={`flex min-h-8 cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors ${
             checked
               ? 'bg-primary/10 text-primary ring-1 ring-primary/15'
-              : 'text-slate-600 hover:bg-primary/5 hover:text-primary'
+              : 'text-slate-600 hover:bg-primary/5 hover:text-primary dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white'
           } ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
         >
           <input
@@ -200,7 +203,7 @@ export const TaskAssignmentPicker: React.FC<TaskAssignmentPickerProps> = ({
   const panel = (
     <div
       ref={panelRef}
-      className={`${inline ? '' : portal ? 'fixed z-[10020]' : 'absolute left-0 top-full z-[80] mt-1'} w-full min-w-[250px] space-y-2 rounded-lg border border-slate-200 bg-white p-2 text-left shadow-xl`}
+      className={`${inline && menuSurface ? 'w-full min-w-0 space-y-2 p-2 text-left' : `${inline ? '' : portal ? 'fixed z-[10020]' : 'absolute left-0 top-full z-[80] mt-1'} w-full min-w-[250px] space-y-2 rounded-lg border border-slate-200 bg-white p-2 text-left shadow-xl`}`}
       style={portal ? portalStyle : undefined}
       data-task-assignment-picker-panel="true"
       onClick={event => event.stopPropagation()}
@@ -211,7 +214,7 @@ export const TaskAssignmentPicker: React.FC<TaskAssignmentPickerProps> = ({
         </div>
         <div className="max-h-40 overflow-y-auto">{renderMemberList('primary')}</div>
       </div>
-      <div className="border-t border-slate-100" />
+      <div className="border-t border-slate-100 dark:border-gray-700" />
       <div className="space-y-1.5" data-task-assignment-section="collaborator">
         <div className="px-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">
           協作

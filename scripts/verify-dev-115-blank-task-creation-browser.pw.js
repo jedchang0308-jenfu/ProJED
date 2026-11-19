@@ -12,7 +12,7 @@ async (page) => {
     cases: [],
     browserErrors: [],
     httpFailures: [],
-    cleanup: { runtime: 'matching pre-existing localhost:4000', action: 'reused; not stopped' },
+    cleanup: { runtime: 'matching pre-existing localhost:1040', action: 'reused; not stopped' },
   };
   const failures = [];
   const record = (id, ok, details = {}) => {
@@ -78,7 +78,7 @@ async (page) => {
   };
   const seed = async () => {
     await page.setViewportSize(result.viewport);
-    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:1040/', { waitUntil: 'domcontentloaded' });
     await page.evaluate(({ account, workspace, nodes }) => {
       localStorage.clear();
       localStorage.setItem('projed-local-test.selected-account', account.id);

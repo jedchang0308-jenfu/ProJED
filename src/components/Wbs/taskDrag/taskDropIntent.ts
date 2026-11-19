@@ -264,6 +264,39 @@ export const resolveTaskDropOutcome = ({
   });
 };
 
+export const getTaskMoveOrderingPlan = (
+  sourceNode: TaskNode,
+  targetNode: TaskNode,
+  intent: TaskDropIntent,
+  nodesRecord: Record<string, TaskNode>,
+) => {
+  const sourceScopeKey = getPlacementScopeKey(getTaskPlacementScope(sourceNode));
+  const destinationScopeKey = getPlacementScopeKey(getTaskPlacementScope({ ...sourceNode, parentId: intent.parentId }));
+  const parentIndex = buildTaskParentIndex(nodesRecord);
+  const sourceIds = parentIndex[sourceScopeKey] || [];
+  if (!sourceIds.includes(sourceNode.id)) return null;
+
+  const sourceWithoutDragged = sourceIds.filter(id => id !== sourceNode.id);
+  const destinationAfter = sourceScopeKey === destinationScopeKey
+    ? sourceWithoutDragged.slice()
+    : (parentIndex[destinationScopeKey] || []).slice();
+  const targetIndex = destinationAfter.indexOf(targetNode.id);
+  if (intent.displayPosition !== 'append' && targetIndex < 0) return null;
+
+  const insertionIndex = intent.displayPosition === 'append'
+    ? destinationAfter.length
+    : targetIndex + (intent.displayPosition === 'after' ? 1 : 0);
+  destinationAfter.splice(insertionIndex, 0, sourceNode.id);
+  const sameScope = sourceScopeKey === destinationScopeKey;
+  const ordering: TaskMoveOrderingPlan = {
+    sourceScopeKey,
+    destinationScopeKey,
+    sourceSiblingIds: sameScope ? destinationAfter : sourceWithoutDragged,
+    destinationSiblingIds: destinationAfter,
+  };
+  return { ordering, isOriginOrder: sameScope && sourceIds.every((id, index) => id === destinationAfter[index]) };
+};
+
 /**
  * Resolve a primary Board/Goal drop into one deterministic plan. Geometry is
  * responsible only for selecting the target and before/after/append edge;
@@ -293,34 +326,9 @@ export const resolvePrimaryTaskMovePlan = ({
 
   const intent = resolveTaskDropIntent({ source, target, nodesRecord });
   if (!intent) return invalid();
-  const sourceScopeKey = getPlacementScopeKey(getTaskPlacementScope(sourceNode));
-  const movedNode = {
-    ...sourceNode,
-    parentId: intent.parentId,
-    nodeType: intent.nodeType ?? sourceNode.nodeType,
-  };
-  const destinationScopeKey = getPlacementScopeKey(getTaskPlacementScope(movedNode));
-  const parentIndex = buildTaskParentIndex(nodesRecord);
-  const sourceIds = parentIndex[sourceScopeKey] || [];
-  const destinationIds = parentIndex[destinationScopeKey] || [];
-  if (!sourceIds.includes(sourceNode.id)
-    || (intent.displayPosition !== 'append' && !destinationIds.includes(targetNode.id))) return invalid(intent);
-
-  const sourceWithoutDragged = sourceIds.filter(id => id !== sourceNode.id);
-  const destinationBase = sourceScopeKey === destinationScopeKey
-    ? sourceWithoutDragged
-    : destinationIds.slice();
-  const targetIndex = destinationBase.indexOf(targetNode.id);
-  const insertionIndex = intent.displayPosition === 'append'
-    ? destinationBase.length
-    : targetIndex + (intent.displayPosition === 'after' ? 1 : 0);
-  if (intent.displayPosition !== 'append' && targetIndex < 0) return invalid(intent);
-
-  const destinationAfter = destinationBase.slice();
-  destinationAfter.splice(Math.max(0, insertionIndex), 0, sourceNode.id);
-  const origin = sourceScopeKey === destinationScopeKey
-    && sourceIds.length === destinationAfter.length
-    && sourceIds.every((id, index) => id === destinationAfter[index])
+  const move = getTaskMoveOrderingPlan(sourceNode, targetNode, intent, nodesRecord);
+  if (!move) return invalid(intent);
+  const origin = move.isOriginOrder
     && (intent.nodeType ?? sourceNode.nodeType) === sourceNode.nodeType
     && (sourceNode.parentId || null) === (intent.parentId || null);
   const ownershipChanged = !taskOwnershipEquals(
@@ -332,12 +340,7 @@ export const resolvePrimaryTaskMovePlan = ({
     targetNodeId: targetNode.id,
     outcomeKind: ownershipChanged ? 'move' : origin ? 'origin' : 'move',
     intent,
-    ordering: {
-      sourceScopeKey,
-      destinationScopeKey,
-      sourceSiblingIds: sourceScopeKey === destinationScopeKey ? destinationAfter : sourceWithoutDragged,
-      destinationSiblingIds: destinationAfter,
-    },
+    ordering: move.ordering,
   };
 };
 

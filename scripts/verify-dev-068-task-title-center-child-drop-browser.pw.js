@@ -6,7 +6,7 @@ async (page) => {
   const screenshotBase = `output/playwright/dev-068-title-child-drop-${Date.now()}`;
   const requestedCaseId = page.url().match(/[?&]dev068Case=([^&]+)/)?.[1] || null;
   const currentPageOrigin = page.url().match(/^https?:\/\/[^/]+/)?.[0];
-  const appBaseUrl = currentPageOrigin || 'http://localhost:4000';
+  const appBaseUrl = currentPageOrigin || 'http://localhost:1040';
   const assert = (condition, message, details = {}) => {
     if (!condition) throw new Error(`${message}: ${JSON.stringify(details)}`);
   };
@@ -1407,7 +1407,7 @@ async (page) => {
             if (!primary || !title) return null;
             return {
               offset: title.getBoundingClientRect().left - primary.getBoundingClientRect().left,
-              titleIsFirst: titleContent?.firstElementChild === title,
+              titleIsFirst: Array.from(titleContent?.children || []).find(child => !child.matches('[data-kanban-checklist-toggle="true"]')) === title,
               hasToggle: Boolean(titleContent?.querySelector('[data-kanban-checklist-toggle="true"]')),
             };
           })

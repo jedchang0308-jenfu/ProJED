@@ -72,7 +72,7 @@ assert(
     source.appInstallAssistant.includes('data-pwa-install-settings') &&
     source.appInstallAssistant.includes('data-app-install-choice={app.id}') &&
     source.appInstallAssistant.includes("name: 'ProJED 主程式'") &&
-    source.appInstallAssistant.includes("name: 'ProJED-快速建任務'"),
+    source.appInstallAssistant.includes("name: 'ProJED-建待辦'"),
 );
 
 assert(
@@ -80,7 +80,7 @@ assert(
   source.appInstallAssistant.includes("data-quick-task-install-cta={app.id === 'quick' ? 'true' : undefined}") &&
     source.appInstallAssistant.includes('data-quick-task-install-link="true"') &&
     source.appInstallAssistant.includes('href={getQuickInstallUrl(window.location.origin)}') &&
-    source.appInstallAssistant.includes('開啟 ProJED-快速建任務安裝頁') &&
+    source.appInstallAssistant.includes('開啟 ProJED-建待辦安裝頁') &&
     source.appInstallAssistant.includes('與主程式相同的 Google 帳號登入') &&
     !/自動.{0,8}兩.{0,8}圖示|立即.{0,8}捷徑|iOS.{0,8}長按/u.test(source.appInstallAssistant),
 );
@@ -104,7 +104,7 @@ assert(
     source.appInstallAssistant.includes('不再提示') &&
     source.appInstallAssistant.includes('data-main-install-action="true"') &&
     source.appInstallAssistant.includes('安裝 ProJED 主程式') &&
-    source.appInstallAssistant.includes('開啟 ProJED-快速建任務安裝頁'),
+    source.appInstallAssistant.includes('開啟 ProJED-建待辦安裝頁'),
 );
 
 assert(

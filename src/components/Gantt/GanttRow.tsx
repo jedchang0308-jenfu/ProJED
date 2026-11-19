@@ -1,6 +1,6 @@
 import React from 'react';
 import dayjs from 'dayjs';
-import { getX, BAR_HEIGHT } from './utils';
+import { getX } from './utils';
 
 interface GroupData {
     start: number;
@@ -16,9 +16,10 @@ interface GanttRowProps {
     colWidth: number;
     mode: string;
     gridStart: dayjs.Dayjs;
+    rowHeight: number;
 }
 
-const GanttRow: React.FC<GanttRowProps> = ({ groups, colWidth, mode, gridStart }) => {
+const GanttRow: React.FC<GanttRowProps> = ({ groups, colWidth, mode, gridStart, rowHeight }) => {
     return (
         <div className="absolute inset-0 pointer-events-none z-0">
             {groups.map(g => {
@@ -41,8 +42,8 @@ const GanttRow: React.FC<GanttRowProps> = ({ groups, colWidth, mode, gridStart }
                         key={g.id}
                         className={`absolute rounded-lg border ${bgColor} ${borderColor}`}
                         style={{
-                            top: g.start * BAR_HEIGHT + paddingTopBottom,
-                            height: (g.end - g.start + 1) * BAR_HEIGHT - (paddingTopBottom * 2),
+                            top: g.start * rowHeight + paddingTopBottom,
+                            height: (g.end - g.start + 1) * rowHeight - (paddingTopBottom * 2),
                             left: x1 - paddingLeftRight,
                             width: width
                         }}

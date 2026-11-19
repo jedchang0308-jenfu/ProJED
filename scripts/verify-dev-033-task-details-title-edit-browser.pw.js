@@ -16,7 +16,7 @@ async (page) => {
 
   const openApp = async () => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:1040/', { waitUntil: 'domcontentloaded' });
     await page.evaluate((account) => {
       localStorage.setItem('projed-local-test.selected-account', account.id);
       localStorage.setItem('projed-local-test.session', JSON.stringify({
@@ -53,128 +53,187 @@ async (page) => {
     return modal;
   };
 
-  const readStoredTitle = async (taskId) => page.evaluate((taskId) => {
-    const nodes = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
-    return nodes[taskId]?.title || '';
-  }, taskId);
+  const readTask = taskId => page.evaluate(taskId => JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}')[taskId], taskId);
+  const readTrace = () => page.evaluate(() => JSON.parse(localStorage.getItem('projed-local-test.taskPersistenceTrace') || '[]'));
+  const assertNoWrites = async (baseline, label) => {
+    await page.waitForTimeout(1250);
+    assert(JSON.stringify(await readTask(baseline.id)) === baseline.task, label + ' must not change provider task');
+    assert(JSON.stringify(await readTrace()) === baseline.trace, label + ' must not issue provider writes');
+  };
+  const snapshot = async id => ({ id, task: JSON.stringify(await readTask(id)), trace: JSON.stringify(await readTrace()) });
+  const modal = page.locator('[data-task-details-modal="true"]');
+  const title = () => modal.locator('[data-task-details-title-input="true"]');
+  const note = () => modal.locator('[data-task-detail-note-content-input="true"]').first();
+  const status = () => modal.locator('[data-task-details-meta-field="status"] select');
+  const close = async () => {
+    await modal.getByRole('button', { name: '關閉任務詳情' }).click();
+    await modal.waitFor({ state: 'hidden', timeout: 10000 });
+  };
+  const navigate = taskId => page.evaluate(taskId => document.dispatchEvent(new CustomEvent('open-task-details', { detail: { taskId } })), taskId);
+  const imeEvents = [];
+  const cdp = await page.context().newCDPSession(page);
+  const compose = async (input, text, isTitle) => {
+    await input.focus();
+    if (isTitle) await input.selectText();
+    else await input.press('Control+a');
+    await cdp.send('Input.imeSetComposition', { text: '中文候選', selectionStart: 4, selectionEnd: 4 });
+    // Exercise Chromium's native composition lifecycle, including Enter while
+    // composing, rather than a synthetic CompositionEvent on an unchanged DOM.
+    await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 229, nativeVirtualKeyCode: 229 });
+    assert(await modal.isVisible(), 'IME Enter must not dismiss task details');
+    await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 229, nativeVirtualKeyCode: 229 });
+    await cdp.send('Input.insertText', { text });
+    await page.waitForFunction(({ text, isTitle }) => {
+      const target = document.querySelector(isTitle ? '[data-task-details-title-input="true"]' : '[data-task-detail-note-content-input="true"]');
+      return isTitle ? target?.value === text : target?.textContent === text;
+    }, { text, isTitle });
+  };
 
   let step = 'open-app';
   try {
     await openApp();
     const taskId = 'qc-card-1-child-1';
-    const originalTitle = await readStoredTitle(taskId);
-    assert(Boolean(originalTitle), 'test task should have an original title', { taskId, originalTitle });
+    const targetTaskId = 'qc-card-1-child-2';
+    const original = await readTask(taskId);
+    assert(original?.title && await readTask(targetTaskId), 'seed must contain both task fixtures');
+    await openTaskDetails(taskId);
+    await note().waitFor({ state: 'visible', timeout: 15000 });
+    await page.evaluate(() => {
+      window.__DEV033_IME_EVENTS = [];
+      for (const type of ['compositionstart', 'compositionupdate', 'compositionend', 'input']) {
+        document.addEventListener(type, event => {
+          const target = event.target;
+          if (target instanceof Element && target.closest('[data-task-details-modal="true"]')) {
+            window.__DEV033_IME_EVENTS.push({ type: event.type, data: event.data, trusted: event.isTrusted, composing: event.isComposing, title: target.matches('[data-task-details-title-input="true"]') });
+          }
+        }, true);
+      }
+    });
+    const baseline = await snapshot(taskId);
+    await assertNoWrites(baseline, 'opening details');
+    assert(await modal.locator('[data-task-details-save="true"]').count() === 0, 'details must not add a redundant save button');
 
-    step = 'enter saves title';
-    const modal = await openTaskDetails(taskId);
-    const titleInput = modal.locator('[data-task-details-title-input="true"]');
-    await titleInput.waitFor({ state: 'visible', timeout: 10000 });
-    assert(await modal.getByText('已儲存', { exact: true }).count() === 0, 'saved status should be hidden before any edit');
-    await page.waitForTimeout(1200);
-    assert(await modal.getByText('已儲存', { exact: true }).count() === 0, 'opening task details should not autosave initial notes');
-    assert(await modal.getByText('更多詳情選項', { exact: true }).count() === 0, 'removed task details subtitle should not be visible');
-    assert(await modal.getByText('時間設定', { exact: true }).count() === 0, 'removed schedule section heading should not be visible');
-    assert(await modal.getByText('備註欄', { exact: true }).count() === 0, 'removed notes section heading should not be visible');
-    assert(await modal.getByText(/\d+\s*紀錄\s*\/\s*\d+\s*片段/).count() === 0, 'removed task knowledge count badge should not be visible');
-    assert(await modal.locator('.lucide-pencil').count() === 0, 'removed title pencil affordance should not be visible');
-    const savedTitle = `DEV033 modal rename ${Date.now().toString(36)}`;
-    await titleInput.fill(`${savedTitle}   `);
-    await titleInput.press('Enter');
-    await page.waitForFunction(({ taskId, savedTitle }) => {
-      const nodes = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
-      return nodes[taskId]?.title === savedTitle;
-    }, { taskId, savedTitle }, { timeout: 10000 });
-    const inputValueAfterSave = await titleInput.inputValue();
-    assert(inputValueAfterSave === savedTitle, 'modal title input should show trimmed saved title', { inputValueAfterSave, savedTitle });
+    step = 'native title and rich note composition remain drafts through wait and blur';
+    const savedTitle = `中文標題 ${Date.now().toString(36)}`;
+    const savedNote = `中文備註 ${Date.now().toString(36)}`;
+    await compose(title(), savedTitle, true);
+    await title().press('Enter');
+    await note().click();
+    await assertNoWrites(baseline, 'title composition, Enter and blur');
+    await compose(note(), savedNote, false);
+    await note().press('Control+a');
+    await note().press('Control+b');
+    await page.waitForFunction(() => Boolean(document.querySelector('[data-task-detail-note-content-input="true"] .font-semibold')));
+    const nextStatus = original.status === 'in_progress' ? 'todo' : 'in_progress';
+    await status().selectOption(nextStatus);
+    await title().focus();
+    await assertNoWrites(baseline, 'rich note composition, formatting, metadata and blur');
+    assert(await title().inputValue() === savedTitle && (await note().innerText()).trim() === savedNote, 'draft DOM must retain committed Chinese text', { expectedTitle: savedTitle, actualTitle: await title().inputValue(), expectedNote: savedNote, actualNote: await note().innerText() });
+    assert(await status().inputValue() === nextStatus, 'metadata must show the local draft');
+    const events = await page.evaluate(() => window.__DEV033_IME_EVENTS);
+    for (const isTitle of [true, false]) {
+      for (const type of ['compositionstart', 'compositionupdate', 'compositionend']) {
+        assert(events.some(event => event.title === isTitle && event.type === type && (type === 'compositionend' || event.trusted)), 'CDP composition lifecycle must be observed', { isTitle, type, events });
+      }
+    }
+    imeEvents.push(...events);
+    step = 'unsaved task draft blocks automatic PWA reload and beforeunload';
+    await page.waitForFunction(() => window.__projedPwaReloadSafetyTest?.getSnapshot().owners.some(owner => owner.ownerId === 'task-details' && owner.state === 'dirty'));
+    const reloadBoundary = await page.evaluate(() => window.__projedPwaReloadSafetyTest.requestBoundary('app-open', window.__projedPwaReloadSafetyTest.getSnapshot().currentView));
+    assert(!reloadBoundary.ok && reloadBoundary.code === 'OWNER_ACTION_REQUIRED', 'PWA automatic boundary must retain the unsaved draft', { reloadBoundary });
+    const dirtyUnload = await page.evaluate(() => {
+      const event = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(event);
+      return event.defaultPrevented;
+    });
+    assert(dirtyUnload, 'dirty task must register beforeunload cancellation');
+    await assertNoWrites(baseline, 'PWA boundary and beforeunload probe');
 
-    step = 'title autosaves after the debounce interval';
-    const autoSavedTitle = `DEV033 title autosave ${Date.now().toString(36)}`;
-    await titleInput.fill(autoSavedTitle);
-    await page.waitForFunction(({ taskId, autoSavedTitle }) => {
-      const nodes = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
-      return nodes[taskId]?.title === autoSavedTitle;
-    }, { taskId, autoSavedTitle }, { timeout: 10000 });
-    await modal.locator('[data-task-details-save-status="saved"]', { hasText: '已儲存' }).waitFor({ state: 'visible', timeout: 10000 });
-    await page.waitForTimeout(2000);
-    assert(await modal.locator('[data-task-details-save-status="saved"]', { hasText: '已儲存' }).isVisible(), 'saved status should remain visible after autosave completes');
+    step = 'close persists the entire draft and reopening retains rich text';
+    const richDraftDom = await note().innerHTML();
+    const richDraftState = await note().evaluate(element => element.__lexicalEditor?.getEditorState().toJSON());
+    await close();
+    await page.waitForFunction(() => window.__projedPwaReloadSafetyTest?.getSnapshot().owners.some(owner => owner.ownerId === 'task-details' && owner.state === 'safe'));
+    const cleanUnload = await page.evaluate(() => {
+      const event = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(event);
+      return event.defaultPrevented;
+    });
+    assert(!cleanUnload, 'successfully closed task must remove beforeunload cancellation');
+    const stored = await readTask(taskId);
+    assert(stored.title === savedTitle && stored.status === nextStatus && stored.detailNotes[0].content === savedNote, 'close must persist title, note and metadata', { stored });
+    assert(JSON.stringify(stored.detailNotes[0].richContent).includes('"format":1'), 'close must persist bold rich content', { richContent: stored.detailNotes[0].richContent, richDraftDom, richDraftState });
+    await openTaskDetails(taskId);
+    await note().waitFor({ state: 'visible', timeout: 10000 });
+    assert(await title().inputValue() === savedTitle && (await note().innerText()).trim() === savedNote, 'reopen must restore persisted text');
+    assert(await note().locator('.font-semibold').count() > 0, 'reopen must restore rich formatting');
+    await assertNoWrites(await snapshot(taskId), 'reopening unchanged details');
 
-    step = 'escape reverts title without closing modal';
-    await titleInput.fill('should not save');
-    await titleInput.press('Escape');
-    await modal.waitFor({ state: 'visible', timeout: 10000 });
-    const valueAfterEscape = await titleInput.inputValue();
-    const storedTitleAfterEscape = await readStoredTitle(taskId);
-    assert(valueAfterEscape === autoSavedTitle, 'Escape in title input should revert to current task title', { valueAfterEscape, autoSavedTitle });
-    assert(storedTitleAfterEscape === autoSavedTitle, 'Escape in title input should not persist draft title', { storedTitleAfterEscape, autoSavedTitle });
+    step = 'failed close retains the full draft until explicit retry';
+    const rejectedTitle = savedTitle + ' 失敗重試';
+    const rejectedNote = savedNote + ' 保留草稿';
+    const previousStatus = stored.status;
+    await title().fill(rejectedTitle);
+    await note().fill(rejectedNote);
+    await status().selectOption(previousStatus === 'todo' ? 'in_progress' : 'todo');
+    const beforeFailure = await snapshot(taskId);
+    await page.evaluate(() => localStorage.setItem('projed-local-test.taskPersistenceFault', 'reject-once'));
+    await modal.getByRole('button', { name: '關閉任務詳情' }).click();
+    await modal.locator('[data-task-details-save-status="error"]').waitFor({ state: 'visible', timeout: 10000 });
+    assert(await title().inputValue() === rejectedTitle && (await note().innerText()).trim() === rejectedNote, 'failed close must retain both text drafts');
+    const failedStored = await readTask(taskId);
+    const beforeFailedTask = JSON.parse(beforeFailure.task);
+    assert(failedStored.title === beforeFailedTask.title && failedStored.status === beforeFailedTask.status, 'rejected metadata write must leave provider metadata unchanged', { beforeFailedTask, failedStored });
+    const traceAfterFailure = JSON.stringify(await readTrace());
+    await page.waitForTimeout(1400);
+    assert(JSON.stringify(await readTrace()) === traceAfterFailure, 'failed save must not retry on a timer');
+    await modal.locator('[data-task-details-save-retry="true"]').click();
+    await modal.locator('[data-task-details-save-status="saved"]').waitFor({ state: 'visible', timeout: 10000 });
+    assert(await modal.isVisible(), 'explicit retry keeps the current task available');
+    assert((await readTask(taskId)).title === rejectedTitle && (await readTask(taskId)).detailNotes[0].content === rejectedNote, 'explicit retry must persist the latest full draft');
+    await close();
 
-    step = 'autosave status replaces the redundant save button';
-    const closeButton = modal.locator('button[aria-label="關閉任務詳情"]');
-    assert(await modal.locator('[data-task-details-save="true"]').count() === 0, 'redundant save button should be removed');
-    const closeTooltip = modal.locator('[data-task-details-close-tooltip="true"]');
-    assert((await closeTooltip.textContent())?.includes('自動儲存'), 'close tooltip should explain automatic saving');
-    await closeButton.hover();
-    await closeTooltip.waitFor({ state: 'visible', timeout: 5000 });
-    await page.waitForTimeout(200);
-    await page.screenshot({ path: 'output/playwright/dev-033-task-details-autosave-tooltip-1440x900.png', fullPage: true });
-    const firstNote = modal.locator('[data-task-detail-note-card="true"]').first().locator('[data-task-detail-note-content-input="true"]');
-    const autoSavedNote = `DEV033 autosave ${Date.now().toString(36)}`;
-    await firstNote.fill(autoSavedNote);
-    await modal.locator('[data-task-details-save-status="saved"]', { hasText: '已儲存' }).waitFor({ state: 'visible', timeout: 10000 });
-    await page.waitForFunction(({ taskId, autoSavedNote }) => {
-      const nodes = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
-      return nodes[taskId]?.detailNotes?.[0]?.content === autoSavedNote;
-    }, { taskId, autoSavedNote }, { timeout: 10000 });
-    await page.screenshot({ path: 'output/playwright/dev-033-task-details-autosave-saved-1440x900.png', fullPage: true });
-
-    step = 'close flushes pending note immediately';
-    const closeSavedNote = `DEV033 close save ${Date.now().toString(36)}`;
-    await firstNote.fill(closeSavedNote);
-    await closeButton.click();
-    await modal.waitFor({ state: 'hidden', timeout: 5000 });
-    await page.waitForFunction(({ taskId, closeSavedNote }) => {
-      const nodes = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
-      return nodes[taskId]?.detailNotes?.[0]?.content === closeSavedNote;
-    }, { taskId, closeSavedNote }, { timeout: 10000 });
-
-    const reopenedModal = await openTaskDetails(taskId);
-    assert(await reopenedModal.getByText('已儲存', { exact: true }).count() === 0, 'saved status should reset when task details reopen');
-    await page.waitForTimeout(1200);
-    assert(await reopenedModal.getByText('已儲存', { exact: true }).count() === 0, 'reopening task details should not autosave initial notes');
-    const reopenedNoteValue = await reopenedModal.locator('[data-task-detail-note-card="true"]').first().locator('[data-task-detail-note-content-input="true"]').textContent();
-    assert(reopenedNoteValue === closeSavedNote, 'close button should preserve the latest pending note', { reopenedNoteValue, closeSavedNote });
-
-    const verifyResponsiveTooltip = async (viewport, artifactName) => {
-      await page.setViewportSize(viewport);
-      await page.waitForTimeout(250);
-      const responsiveClose = reopenedModal.locator('button[aria-label="關閉任務詳情"]');
-      const responsiveTooltip = reopenedModal.locator('[data-task-details-close-tooltip="true"]');
-      await responsiveClose.focus();
-      await responsiveTooltip.waitFor({ state: 'visible', timeout: 5000 });
-      await page.waitForTimeout(200);
-      const geometry = await responsiveTooltip.evaluate((element) => {
-        const rect = element.getBoundingClientRect();
-        return {
-          left: rect.left,
-          right: rect.right,
-          top: rect.top,
-          bottom: rect.bottom,
-          viewportWidth: window.innerWidth,
-          viewportHeight: window.innerHeight,
-          documentWidth: document.documentElement.scrollWidth,
-        };
-      });
-      assert(geometry.left >= 0 && geometry.right <= geometry.viewportWidth, 'close tooltip should stay inside the viewport', geometry);
-      assert(geometry.top >= 0 && geometry.bottom <= geometry.viewportHeight, 'close tooltip should stay vertically visible', geometry);
-      assert(geometry.documentWidth <= geometry.viewportWidth, 'task details should not introduce horizontal page overflow', geometry);
-      await page.screenshot({ path: `output/playwright/${artifactName}.png`, fullPage: true });
-    };
-
-    step = 'responsive tooltip and visible error sweep';
-    await verifyResponsiveTooltip({ width: 1024, height: 768 }, 'dev-033-task-details-autosave-tooltip-1024x768');
-    await verifyResponsiveTooltip({ width: 390, height: 844 }, 'dev-033-task-details-autosave-tooltip-390x844');
-    const visibleErrors = await page.locator('.inline-error:visible, [role="alert"]:visible').allTextContents();
-    assert(visibleErrors.length === 0, 'task details should not show visible errors in the successful autosave flow', { visibleErrors });
+    step = 'task navigation flushes a draft and failed navigation stays on the source task';
+    await openTaskDetails(taskId);
+    const navigationTitle = rejectedTitle + ' 導覽';
+    await title().fill(navigationTitle);
+    await page.evaluate(() => localStorage.setItem('projed-local-test.taskPersistenceFault', 'reject-once'));
+    await navigate(targetTaskId);
+    await modal.locator('[data-task-details-save-status="error"]').waitFor({ state: 'visible', timeout: 10000 });
+    assert(await modal.getAttribute('data-task-id') === taskId && await title().inputValue() === navigationTitle, 'failed navigation must retain source task and draft');
+    const failedNavigationTrace = JSON.stringify(await readTrace());
+    await navigate(targetTaskId);
+    await page.waitForTimeout(150);
+    assert(await modal.getAttribute('data-task-id') === taskId && JSON.stringify(await readTrace()) === failedNavigationTrace, 'navigation while failed must require explicit retry');
+    await modal.locator('[data-task-details-save-retry="true"]').click();
+    await modal.locator('[data-task-details-save-status="saved"]').waitFor({ state: 'visible', timeout: 10000 });
+    await navigate(targetTaskId);
+    await page.waitForFunction(taskId => document.querySelector('[data-task-details-modal="true"]')?.getAttribute('data-task-id') === taskId, targetTaskId);
+    assert((await readTask(taskId)).title === navigationTitle, 'navigation must persist source draft');
+    const targetNote = '切換前的最後備註';
+    await note().fill(targetNote);
+    await navigate(taskId);
+    await page.waitForFunction(taskId => document.querySelector('[data-task-details-modal="true"]')?.getAttribute('data-task-id') === taskId, taskId);
+    assert((await readTask(targetTaskId)).detailNotes[0].content === targetNote, 'successful task switch must flush pending note');
+    step = 'navigation during active IME waits for committed Chinese text';
+    const beforeImeNavigation = await snapshot(taskId);
+    const imeNavigationTitle = '組字完成後再切換任務';
+    await title().focus();
+    await title().selectText();
+    await cdp.send('Input.imeSetComposition', { text: '尚未選字', selectionStart: 4, selectionEnd: 4 });
+    await navigate(targetTaskId);
+    await assertNoWrites(beforeImeNavigation, 'navigation while native composition is active');
+    assert(await modal.getAttribute('data-task-id') === taskId, 'active IME must defer task navigation');
+    await cdp.send('Input.insertText', { text: imeNavigationTitle });
+    await page.waitForFunction(taskId => document.querySelector('[data-task-details-modal="true"]')?.getAttribute('data-task-id') === taskId, targetTaskId);
+    assert((await readTask(taskId)).title === imeNavigationTitle, 'deferred navigation must save the committed Chinese candidate');
+    await close();
+    const artifact = { status: 'PASS', nativeImeEvents: imeEvents.length, imeMethod: 'CDP imeSetComposition/insertText; trusted start/update/input; Chromium reports untrusted end', checks: ['no writes on wait/blur/Enter', 'title + rich note + status', 'close/reopen', 'failed close retention + retry', 'failed navigation retention + retry', 'task switch flush', 'PWA dirty owner + beforeunload handler', 'navigation deferred during native IME'] };
+    await page.evaluate(artifact => { window.__DEV033_ARTIFACT = artifact; }, artifact);
+    return artifact;
   } catch (error) {
     throw new Error(`${step}: ${error.message}`);
+  } finally {
+    await cdp.detach();
   }
 }

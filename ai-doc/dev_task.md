@@ -3,6 +3,62 @@
 Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 外層遞迴讀取 sibling clone 或備份資料夾。
 
+<a id="dev-141-manual-app-updates"></a>
+
+## DEV-141：新版先通知，由使用者手動更新
+
+- 建立日期：2026-11-18（Asia/Taipei）。
+- 現況與證據：已實作，本機隔離的無視窗 Edge 以三個正式型前端建置驗證 A01–A07 全數通過。主程式使用測試帳號與看板，快速新增任務使用窄版畫面。讀回了啟用中的 Service Worker、各分頁實際版本、導覽次數與其他分頁的草稿。A03 包含瀏覽器程序重新啟動與繞過 Service Worker 的版本讀回。結果：[DEV-141 瀏覽器紀錄](../output/playwright/dev-141/dev141-dda88a28/result.json)（本機產物），重現命令為 `npm run verify:dev-141-manual-update`。
+- 工程契約與驗收：[SPEC-041 DEV-141 手動更新](specs/SPEC-041-pwa-update-notification-cache-recovery.md#dev-141-manual-app-updates)，A01–A04、A08 為必驗收項目。2026-11-19 補齊一般單鍵更新、安裝資訊變更及支援診斷的責任邊界，並同步 SPEC-034 與 QA-DEV-041，撤除舊文件中一般更新自動套用的相反要求。一般功能發布維持安裝 identity、名稱、圖示與 standalone；一般使用者從「⋯」按「更新」完成，不得要求開發人員選項、ADB、清除資料或重裝。
+- 2026-11-19 本機複驗：以來源 `338b6e815c3ef99d60309f5ed549ac7569191cbf` 的三個真實建置及 worker，A01–A08 全數通過。新增 A08 覆蓋主程式／建待辦 × 桌面 1280／手機寬度 390 × 首次未受控制／已受控制，共八組；均從正常選單按一次更新、只導覽一次並讀回 B，A／B manifest 與圖示內容一致。首次完整執行曾在 A08 主程式桌面載入 B 時逾時；保留失敗後，增加逐案例診斷與獨立續跑，再以相同建置完成八組單獨複驗及完整 A01–A08 複驗，兩次未重現，不宣稱已確定根因或修復。證據：[完整通過結果](../output/playwright/dev-141/dev141-3ee13d61-recheck-aea36529/result.json)、[八組單獨複驗](../output/playwright/dev-141/dev141-3ee13d61-recheck-2648c22d/single-button-cases.json)、[首輪失敗](../output/playwright/dev-141/dev141-3ee13d61/result.json)（均為本機產物）。
+- 回歸：TypeScript、受影響範圍 ESLint、DEV-041 24/24、DEV-096 26/26、DEV-097 23/23、DEV-134 資產驗證 6/6 與 DEV-141 版本保留驗證通過。首輪封存 JavaScript 含未替換的 Vite preload 標記，已移到完成轉換後封存，重建後由瀏覽器讀回通過。
+- 併行分工：選單提醒請求模型 `gpt-6-sol`（high），版號入口與資產保留請求模型 `gpt-6-astra`（high）；主流程整合確認、分頁隔離與本機驗收。
+- 正式發布：2026-11-18 已發布至 `https://projed-cc78d.web.app`，release ID `20261118074427-5894bd`，來源 immutable commit `8e124da5561cbfa1ef7bb3bec11f49ff8e46cf39`。canonical artifact 158/158 檔案雜湊讀回通過；初次 Service Worker 安裝約 90 秒後 active，無 page error。DEV-141 A01–A07 於同一候選來源全數通過，證據：[發布 receipt](../output/release/dev-083/20261118074427-5894bd/direct-evidence.json)、[A01–A07 瀏覽器紀錄](../output/playwright/dev-141/dev141-25fcf4d4/result.json)。
+- 安裝資訊遷移實機證據（2026-11-19）：既有 Android 安裝已讀回「ProJED-建待辦」、versionCode 3、standalone、Succeeded，原 package identity 不變、未重裝或清除資料。這次改名曾需要 Chrome 原生名稱確認及支援診斷；不能當成一般功能更新的必做步驟，也不能以伺服器 manifest 或 Scheduled 代替完成。詳見[實機紀錄](../output/android-diagnostics/verification-summary.md)（本機產物）。
+- 2026-11-19 正式發布：[PR #29](https://github.com/jedchang0308-jenfu/ProJED/pull/29) 已合併，來源 `e59560cc121995442b24b7beabe09b991b0a5ece`、release ID `20261119123850-c35cf3`。兩個正式來源均讀回新版；canonical artifact 271/271 檔案雜湊、無視窗 Edge 主畫面與正常更新選單檢查通過。名稱、圖示、兩個 manifest 與前版逐位元組相同，前版入口仍可取得。證據：[發布收據](../outputs/projed-dev141-mobile-release-e59560c/output/release/dev-083/20261119123850-c35cf3/direct-evidence.json)（本機產物）。新空白瀏覽器在首次 worker 安裝中檢查曾逾時，安裝完成後正常；已保留失敗並補齊該 smoke 的既有安裝前提，只複驗同一發布包，未再次部署。
+- 手機正常更新補驗（2026-11-19）：使用者在既有已安裝「ProJED-建待辦」完成正常介面驗收。截圖顯示「⋯」新版提醒；按「稍後」、關閉並重開後，紅點消失且仍可更新。手機 Chrome 同來源頁留下未送出測試草稿後，已安裝 App 按一次「更新」完成；使用者確認「App 更新完成，另一頁草稿仍在且未見重載」。全程未要求開發人員選項、重新配對、重裝或清除資料。這是使用者協作的實機 UI 驗收，不宣稱取得手機數字版號或導覽計數；數字版號與導覽次數另有上述本機自動化證據。詳見[手機驗收紀錄](qa/QA-DEV-041-pwa-update-notification-cache-recovery.md#dev-141-installed-phone-acceptance)。本次結案文件不再產生 App 新版提醒。
+- 主程式手機補驗：原 Chrome 測試頁曾卡在登入載入中；修復個人資料同步等待並加入保留登入資料的手動重試後，已經 [PR #31](https://github.com/jedchang0308-jenfu/ProJED/pull/31) 發布 `20261119132017-8675f2`（來源 `b6ca86239900c4d945b2060c42c1ae6e1d7d0206`），348/348 canonical 檔案及主程式啟動檢查通過。使用者確認主程式已安裝版從正常選單更新完成可進主畫面，原 Chrome 頁未被重整，新分頁正常載入，全程未要求開發人員選項。隔離重播、手機人工觀察及正式證據邊界見[主程式驗收紀錄](qa/QA-DEV-041-pwa-update-notification-cache-recovery.md#dev-141-installed-phone-acceptance)。
+- 後續邊界：仍須依實際使用情況確認尚未取得 DEV-141 的舊更新器首次導入安排；本輪已安裝主程式與快速待辦的正常更新及分頁觀察通過，不擴張為所有歷史版本或其他裝置的實機驗證；手機「稍後」重開僅在快速待辦完成。
+- 待定：正式舊版支援期限。封裝以至少 14 天為預設，從確認舊版已被取代後保守計算。
+
+<a id="dev-140-okr-list-consolidation"></a>
+
+## DEV-140：以 OKR 模式整合清單模式
+
+- 狀態：已實作，DEV-140 本機瀏覽器驗收通過。A01–A04 共 22 項操作檢查通過，桌面與手機限制皆以隔離的本機資料驗證。
+- 目標：使用者在「視角」只需選擇「清單模式」，即可在同一張階層任務表格查看目標、追蹤進度及進行日常排程。
+
+### 產品範圍
+
+| 項目 | 整合後行為 |
+| --- | --- |
+| 視角選單 | 桌面只保留「清單模式」入口，移除重複的「OKR 模式」入口；實作沿用原 OKR 階層表格。 |
+| OKR 表格 | 保留任務目的、會議紀錄、欄位收合與顯示偏好、逐層展開／收合，以及原有的編輯、篩選、拖放和任務明細操作。 |
+| 清單功能 | 納入追蹤／參照任務、進度和依賴關係的設定及標示。新增根任務入口位於空看板提示區。進度以小圓餅顯示，懸浮時顯示百分比。依賴選取提示放在日期表頭，會議紀錄提示放在會議紀錄欄。 |
+| 舊偏好 | 舊值 `list` 載入時解析為 `goal`，有效看板切換時繼續顯示 OKR。新選擇儲存 `goal`，避免重新整理還原到舊清單。 |
+| 手機 | 沿用現行手機的看板模式限制。讀到舊清單或 OKR 值時，依現有手機行為顯示看板。開放手機 OKR 屬後續範圍。 |
+
+### 工程交接
+
+1. 以 [GoalView](../src/components/GoalView.tsx) 為基礎，沿用 [SPEC-116](specs/SPEC-116-goal-mode-adaptive-sparse-reading.md)、[SPEC-119](specs/SPEC-119-goal-cell-direct-edit-and-content-fit.md) 與 [SPEC-121](specs/SPEC-121-goal-hierarchy-comparison-grid.md) 的階層、合併儲存格及內容編輯規則。整合時先確認參照列與一般任務列如何共用樹狀列模型，保持列識別、階層、篩選與操作對象一致。任務目的與會議紀錄仍依各欄原有的內容歸屬呈現及操作。
+2. 對照 [WbsListView](../src/components/Wbs/WbsListView.tsx) 盤點清單獨有能力及其相關呼叫端，沿用追蹤任務放置、依賴檢查與排序新增邏輯。追蹤列的操作權限依既有規則判斷，移動參照位置時仍操作參照本身。資料庫結構、原任務及參照 ID、權限模型皆在本次變更範圍外。
+3. 補齊功能後，收斂 [MainLayout](../src/components/MainLayout.tsx) 的選單與 [App](../src/App.tsx) 的畫面入口。在 [useBoardStore](../src/store/useBoardStore.ts) 處理 `projed-last-view` 舊值及切板相容性。移除清單畫面前，查清 `list` 在共用右鍵選單、拖放或其他任務操作中的用途。若它仍代表供其他畫面使用的互動類型，保留該契約。
+
+### 驗收條件
+
+| 編號 | 操作與通過條件 |
+| --- | --- |
+| A01 | 桌面開啟「視角」只看到一個階層表格入口「清單模式」。以既存 `list` 偏好登入後進入原有有效看板，直接呈現整合後表格。切換到另一個有效看板並重新整理，仍呈現整合後表格。以手機限制模式開啟同一舊偏好，正常進入看板。 |
+| A02 | 看板同時包含一般任務與追蹤任務時，兩者依既有階層與放置順序顯示。篩選、收合、開啟明細及允許的拖放操作均對應正確任務或參照。 |
+| A03 | 在 OKR 新增根任務，確認首筆可建立、排序且重載後仍存在。既有的進度、有效依賴、禁止自我或循環依賴等行為，依清單原有規則比對。唯讀或無權限身分不可因整合而取得額外修改能力。 |
+| A04 | 在含多層子任務及各自內容的看板切換任務、收合欄位並編輯任務目的，重新開啟後讀回正確內容。會議紀錄、合併儲存格及既有編輯、拖放與篩選行為維持可用。 |
+
+### 本機驗證紀錄
+
+- 無視窗 Edge，1440 與 390 px 隔離測試畫面，DEV-140 瀏覽器 22/22。涵蓋舊偏好、切板與重載、追蹤列放置和篩選、日期依賴標記與循環阻擋、唯讀權限、空板首筆根任務，以及整合後「清單模式」入口下的目的欄操作與會議紀錄讀回。進度顯示在任務名稱欄，驗證只剩數字百分比。腳本為 [verify-dev-140-okr-list-browser.pw.js](../scripts/verify-dev-140-okr-list-browser.pw.js)，本機結果為 `output/playwright/dev-140/result.json`。
+- TypeScript、核心靜態回歸 11/11、DEV-116 靜態 30/30 通過。
+- DEV-121 另以整合前的 OKR 元件搭配既有工作樹樣式做對照。兩版均為 31 項通過、同樣 6 項樹線樣式斷言未通過。欄位收合、會議紀錄與唯讀瀏覽皆通過。對照證據為 `output/playwright/dev-140/dev121-comparison.json`。
+
 <a id="dev-139-jenfu-platform-onboarding"></a>
 
 ## DEV-139：ProJED 納入 Jenfu-Platform，Cloud Run／Cloud SQL 對齊並保留 Vite
@@ -375,6 +431,10 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 
 ## 總任務清單
 
+- ✓ DEV-141 [交付點] [A01–A08 本機通過／手機主程式與快速待辦人工補驗通過／已發布 2026-11-19] [ProJED] [新版先通知，由使用者手動更新](#dev-141-manual-app-updates)
+
+- ✓ DEV-140 [交付點] [已實作／本機瀏覽器驗收通過] [ProJED] [以 OKR 模式整合清單模式](#dev-140-okr-list-consolidation)
+
 - → DEV-139 [交付點] [整合／正式發布續行中／未Release] [P1] [W31] ProJED 首階段基礎對齊，保留 Vite
   - W31：review／human decisions／projection接Cloud SQL，以來源版本、resolution/review與精確時間CAS保護人工內容，same-key replay及RAG mirror採單交易；source5da37e7／CI40822736839通過333項unit、33-migration／S3 71checks與snapshot60／45，收據見SPEC-139 §45。真ASR／worker／清理／正式整合仍續行。
   - W30：complete-upload 核對真 verified segment、來源凍結與單次 run／pending 預留採原子交易；重播不重留款，不足回 awaiting_budget，未啟用 worker／HTTP 錄音或 provider。source fed1f9e／CI 40818685810 已通過325項 unit、32-migration／S3 70 checks、snapshot60／45；收據見 SPEC-139 §44，完整管線／正式整合仍續行。
@@ -537,8 +597,8 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 證據：`SPEC-026`、`QA-DEV-026`
   - 計入交付：是
 - ✓ DEV-027 [交付點] [完成] [P2] [本機已驗證] Xmind-like 心智圖模式
-  - 摘要：交付心智圖模式與後續互動改善。
-  - 證據：`SPEC-027`、`QA/QC-DEV-027`
+  - 摘要：交付心智圖模式與後續互動改善；2026-11-10 修正任務提升至父階後新增子任務造成階層回彈，改以整數同階順序保存。
+  - 證據：`SPEC-027`、`QA/QC-DEV-027`；修正含於 session commit `a87733f`，正式發布狀態記錄於 DEV-073。
   - 計入交付：是
 - ◇ DEV-028 [交付點] [驗證中] [P1] [本機 QC 通過 / 選取生命週期增補待人工補證] 四模式任務操作契約
   - 摘要：原跨模式任務操作一致性已完成；本輪依使用者回饋增補選取生命週期，詳情關閉、ESC、空白點擊與切換檢視後不得殘留選取框，心智圖清除後不得自動回選根節點。
@@ -792,13 +852,14 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 阻塞 / 恢復條件：若任一模式出現不同預設、Enter 執行錯誤按鈕、prompt 游標被攔截或按鍵穿透底層模式，回 RD 修正 `GlobalDialog` 共用契約，不在模式元件增加分支。
   - 證據：`SPEC-072`、`QA-DEV-072`、DEV-072 static/browser verifier、DEV-028 regression、TypeScript、`build:test`。
   - 計入交付：否
-- ✓ DEV-073 [開發點] [完成] [P1] [RD Implemented / Local QA-QC PASS / 未 Release] 心智圖 XMind 式快速命名
-  - 摘要：只有心智圖新增任務後或細滑鼠單擊既有任務會進入節點快速命名；可直接打字，按一次 Enter 只保存並離開、不新增任務，按一次 Tab 即保存並新增子任務。其他模式維持原本進入任務明細 title edit；心智圖雙擊與右鍵仍開任務明細。
+- ✓ DEV-073 [開發點] [完成] [P1] [RD Implemented / Local QA-QC PASS / Published / Feature Smoke Pending] 心智圖 XMind 式快速命名
+  - 摘要：只有心智圖新增任務後或細滑鼠單擊既有任務會進入節點快速命名；Enter 只保存並離開，Tab 保存並新增子任務。快速命名時 Delete／Backspace 編輯文字而不封存任務；長草稿可擴張節點並帶動連線。其他模式維持原 title edit。
   - 來源 ID：`USER-20260818-TASK-TITLE-EDIT-DEFAULTS`
   - 父任務：DEV-028、DEV-071、DEV-070
-  - 下一步：若要正式交付，依既有 release gate 另行驗證；本輪不含 deploy／release。
+  - 下一步：若要將 DEV-073 標記為正式驗收完成，需以不修改正式業務資料的方式補上心智圖功能層 production smoke；完成後依 DEV-083 使用 `--verify-only` 更新收據。
   - 阻塞 / 恢復條件：若新增／單擊入口未 focus title、Enter 誤新增任務、Tab 建立層級錯誤、IME 組字誤新增、單擊開 modal、雙擊被 quick-title 攔截、右鍵入口錯誤或權限／relationship／觸控邊界漂移，回 RD 修正 MindMap host adapter。
-  - 證據：`SPEC-073`、`QA-DEV-073`、DEV-073 static/browser verifier、DEV-028 static regression、TypeScript、`build:test`。
+  - 證據：`SPEC-073`、`QA-DEV-073`、DEV-073 static/browser verifier、DEV-028 static regression、TypeScript、`build:test`；sealed artifact `20261110091307-66cb3f` 綁定 `a87733f` 且 verifier PASS，正式站前版 `20261022092907-c1b4bf`。
+  - 發布結果：sealed artifact `20261110091307-66cb3f` 已部署至 Firebase Hosting live，release-meta readback 綁定 source `a87733ff018d597be7a6a004a454b524912da388`；direct receipt `published:true`，但 `complete:false`／`feature-pending`。部署前 live release `20261022092907-c1b4bf` 保存在 receipt 作為 recovery 版本。通用瀏覽器 smoke 不當作本功能驗收；尚無 production feature-specific smoke，且未在正式資料新增或修改任務。
   - 計入交付：否
 - ✓ DEV-074 [開發點] [完成] [P1] [RD Implemented / QA-QC PASS / 未 Release] 心智圖單一 Scene 座標系重構
   - 摘要：將心智圖節點、階層連線、關係線與互動 overlay 收斂到同一 world coordinate scene，
@@ -1977,7 +2038,7 @@ Rework 4 的真正需求不是新增手機編輯能力模組，而是移除裝�
 - DEV-073 static verifier：PASS；非心智圖 shared details naming、心智圖 quick-title continuation、IME guard、fine/coarse pointer split、click arbitration、double-click／menu wiring 均符合契約。
 - DEV-073 browser verifier：PASS；1440x900、0 console error；toolbar 建立後可直接輸入，Enter 一次保存並離開且不建立新任務，Tab 一次保存並建立子任務；細滑鼠單擊進入 quick-title、Escape 取消草稿，快速雙擊仍開正確明細，快速切換節點只由最新 selection 進入命名；quick-title 不滿版、反白透明、輸入層不攔 pointer 且節點仍 draggable。
 - DEV-028 static regression：45/45 PASS；TypeScript：PASS；`build:test`：PASS。
-- Execution Boundary：本輪未執行 merge、deploy 或 release；保留既有 dirty worktree。
+- Execution Boundary：程式與 SPEC 已由 `a87733f` 合併並推送至 local／remote `main`；sealed artifact `20261110091307-66cb3f` verifier PASS，已部署至 Firebase Hosting live 並讀回相同 release id/source commit。direct receipt 為 `published:true`、`complete:false`／`feature-pending`；尚未執行 production feature-specific smoke，不宣稱正式功能驗收完成。為保留 manifest 綁定的絕對 artifact 路徑，暫留 task-owned worktree `outputs/projed-release-worktree-a87733f`；DEV-073 負責，待正式 release 歷史資產退役且必要 receipt 已保留後再清理。
 
 ## DEV-074：心智圖單一 Scene 座標系重構
 
@@ -2243,6 +2304,12 @@ Rework 4 的真正需求不是新增手機編輯能力模組，而是移除裝�
 - 本地實作未執行 commit、push、PR、merge、deploy、production data 或 release；若要 release，需由使用者另行提出並進既有 release gate。
 
 ## DEV-080：固定地端測試入口改用 localhost:4000
+
+<a id="projed-independent-local-1040"></a>
+
+**2026-11-16 現行開發交接。** Platform 主控的 `JENFU/DEV-021#daily-local-test-binding` 四系統啟動範圍為 1000～1030。ProJED 維持 `npm run dev:local` 的獨立 `http://localhost:1040/` 測試入口，沿目前 `package.json` 與 `scripts/local-test-server.ps1`；下方 4000 為歷史交付紀錄。
+
+首次確認後沿用 ProJED 主工作樹、1040 origin 與固定測試瀏覽器設定檔。local-test 資料沿用該 origin 與 profile 的瀏覽器儲存，正常重開讀同一組資料；隔離候選另用臨時 profile。後續以獨立啟動、同 profile 重開讀回和 Platform 啟動時未碰 1040 驗收。此處只記開發邊界，尚未重跑瀏覽器或變動 ProJED 資料。
 
 - 文件成熟度：`RD Implementation Ready`
 - 狀態：完成／Implemented／QA PASS／QC PASS／未 Release

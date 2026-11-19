@@ -48,7 +48,7 @@ async (page) => {
   };
   const seed = async (viewport) => {
     await page.setViewportSize(viewport);
-    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:1040/', { waitUntil: 'domcontentloaded' });
     const fixedTestEnvironment = page.getByRole('button', { name: 'T 使用固定測試環境' });
     if (await fixedTestEnvironment.count() > 0) {
       await fixedTestEnvironment.click();

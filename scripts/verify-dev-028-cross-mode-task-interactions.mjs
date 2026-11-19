@@ -193,10 +193,9 @@ assert(
     !kanbanColumn.includes('flex flex-col gap-1 border-b') &&
     kanbanCard.includes('data-kanban-card-visual="framed-elevated"') &&
     kanbanCard.includes('data-task-hierarchy-level="L2"') &&
-    kanbanCard.includes('data-kanban-checklist-visual="inset-rail"') &&
+    kanbanCard.includes('data-kanban-checklist-visual="rounded-tree"') &&
     kanbanCard.includes('kanban-checklist-section') &&
-    kanbanCard.includes('mt-1 rounded-md border-l-2') &&
-    kanbanChecklistContract.includes('data-kanban-checklist-row-visual="flat-unlined"') &&
+    kanbanChecklistContract.includes("'rounded-branch' : 'flat-unlined'") &&
     kanbanChecklistContract.includes('data-task-hierarchy-level="L3+"') &&
     !kanbanChecklistContract.includes('border-b border-slate-200/80') &&
     !kanbanChecklistContract.includes('kanban-checklist-root mt-px border-t') &&

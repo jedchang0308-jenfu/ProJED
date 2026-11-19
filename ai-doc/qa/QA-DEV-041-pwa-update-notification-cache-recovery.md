@@ -5,7 +5,44 @@
 關聯 SPEC: `ai-doc/specs/SPEC-041-pwa-update-notification-cache-recovery.md`
 建立日期: 2026-07-05
 
+> 2026-11-19 現行契約：一般新版只在「⋯」提醒、使用者按「更新」後套用，依 [SPEC-041 DEV-141 的 A01–A08](../specs/SPEC-041-pwa-update-notification-cache-recovery.md#dev-141-manual-app-updates) 驗收。一般更新不得要求開發人員選項、ADB、清除資料或重裝；名稱／圖示／模式等安裝資訊變更另需原生遷移驗證。下方保留 DEV-041 歷史案例，不以早期自動套用或重載條款覆蓋現行契約。可重現入口：`npm run verify:dev-141-manual-update`。
+
 > 2026-08-30 authority note：本文件保留 DEV-041 Phase 1 與既有 production release 的歷史驗證事實。DEV-096 已重新開啟「同版本提示重複出現」缺陷；B02 的舊 CTA「一鍵更新到最新版」與 C01～C04 的 normal cache-purge apply 語意，已由 SPEC-041 `DEV-096 Corrective Addendum` 及 `ai-doc/qa/QA-DEV-096-pwa-update-transaction-convergence.md` 取代。其他 DEV-041 cases 仍是 regression；不得以本文件歷史 PASS 宣稱 DEV-096 已通過。
+
+<a id="dev-141-installed-phone-acceptance"></a>
+
+## DEV-141 已安裝手機正常更新補驗（2026-11-19）
+
+範圍：使用者既有 Android 已安裝「ProJED-建待辦」。方法為使用者協作的正常 App／Chrome 介面驗收，不使用開發人員選項、重新配對、重裝、清除資料或技術診斷頁；未宣稱獨立 QC。使用者核准先發布再測手機切換，正式站由 `20261119091203-538b7b` 更新至 `20261119123850-c35cf3`，來源為 `e59560cc121995442b24b7beabe09b991b0a5ece`。
+
+| 操作 | 實機觀察／使用者回報 | 結果 |
+| --- | --- | --- |
+| 開啟「⋯」查看新版 | 使用者回傳 20:45 截圖：紅點 1、「新版已就緒」、「更新／稍後」；名稱為「ProJED-建待辦」。使用者確認截圖為按稍後前。 | 正常選單提醒通過；不將此截圖當成已更新完成。 |
+| 按稍後，從最近使用的 App 關閉，再由桌面重開 | 使用者回覆「符合：紅點消失，仍可按更新」。 | 手機人工觀察通過，未自動切換成已更新狀態。 |
+| 在已安裝 App 按一次更新 | 使用者依正常選單完成操作，回覆「App 更新完成」。 | 手機正常更新操作通過，未要求技術設定或額外安裝。 |
+| 更新時保留同來源另一頁 | 先在手機 Chrome 的 `https://projed-cc78d.firebaseapp.com/quick-task/` 留下未送出的測試草稿，更新已安裝 App 後返回該原分頁；使用者回覆「另一頁草稿仍在且未見重載」。 | 手機人工觀察通過；未建立測試待辦。 |
+
+證據邊界：手機結果來自使用者截圖與操作回報，未用 ADB 抽取手機數字版號或導覽次數。真實 A／B／C 建置的數字版號、單次導覽及其他分頁零新增導覽另由 DEV-141 本機自動化驗證支持。這次手機補驗不涵蓋其他裝置或所有舊更新器。
+
+機器紀錄：[手機觀察](../../output/mobile-real-device/dev141-manual-update/observations.json)、[正式發布收據](../../outputs/projed-dev141-mobile-release-e59560c/output/release/dev-083/20261119123850-c35cf3/direct-evidence.json)（本機產物）。正式收據包含 271/271 檔案及正常選單檢查通過，保留首次新設定檔 worker 安裝期間的檢查逾時及後續複驗。原 manifest／圖示內容一致，前版入口仍保留。
+
+### 主程式手機補驗的載入阻礙（2026-11-19）
+
+使用者已確認主程式已安裝版可看到「新版已就緒／更新／稍後」，但另開正式站 Chrome 分頁時卡在深色登入「載入中」。這是本輪主程式手機驗收的原始失敗，後續修正與獨立的主程式實機操作結果如下，不沿用快速待辦的手機 PASS。
+
+全新未登入的手機尺寸 Edge 在有／無 worker 下皆正常到登入頁。以合成既有 session、攔截所有後端請求後，個人資料請求不回應可重現相同載入畫面；釋放為失敗後即可開啟主畫面。這確認了可造成症狀的路徑，未宣稱已直接讀取手機內的失敗請求。
+
+修正：個人資料同步共用 10 秒取消期限，失敗沿用原有 session-user fallback；未確認登入狀態仍不開放主畫面。登入等待超過 15 秒提供保留資料的手動「重試」，只重載本頁。未清除 session、放寬權限或加入自動重整。
+
+隔離驗證：未登入、個人資料不回應、session refresh 不回應三項通過；手動重試保留 session，另一頁不新增導覽且測試草稿保留。入口：`node scripts/verify-auth-startup-recovery.mjs <dist>`，以 `PROJED_PLAYWRIGHT_MODULE` 指定現有 Playwright。證據：[失敗重播](../../output/mobile-real-device/dev141-auth-profile-pending.json)、[修正驗證](../../output/auth-startup-recovery/result.json)、[同一正式產物驗證](../../output/auth-startup-recovery/production-artifact/result.json)（本機產物）。全部 Supabase 流量均由測試攔截，不使用正式身分或寫入正式資料。
+
+正式發布：[PR #31](https://github.com/jedchang0308-jenfu/ProJED/pull/31) 合併來源 `b6ca86239900c4d945b2060c42c1ae6e1d7d0206`，release `20261119132017-8675f2`。348/348 canonical 檔案及新匿名主程式啟動 smoke 通過，舊版資產保留。[發布收據](../../outputs/projed-auth-startup-release/output/release/dev-083/20261119132017-8675f2/direct-evidence.json)為本機產物。
+
+主程式手機補驗通過：使用者從已安裝「ProJED 3.0」的正常選單檢查並更新後，回覆「更新完成，可進入主畫面」。保留原本失敗的 Chrome 頁面，再另開 `https://projed-cc78d.web.app/` 新分頁，使用者確認「符合：原頁未重整，新頁正常載入」。整個正常更新驗收未要求開發人員選項、重新配對、清除資料或重裝。這是使用者協作的可見畫面驗收；未聲稱手機導覽次數、數字版號或實際失敗請求已經工具讀回。未另測主程式手機的「稍後」重開，該項手機證據仍限快速待辦。
+
+[主程式手機觀察紀錄](../../output/mobile-real-device/dev141-manual-update/main-observations.json)（本機產物）。本次結案文件不另發布 App。
+
+下方為 DEV-041 的歷史計畫與證據；本節手機補驗依現行 DEV-141 判定。
 
 ## QA 目標
 

@@ -24,7 +24,6 @@ type MindMapKeyboardAction =
 
 interface MindMapKeyboardState {
   isEditingText: boolean;
-  isQuickTitleEditing?: boolean;
   hasSelectedNode: boolean;
   hasSelectedRelationship: boolean;
   hasRelationshipMode: boolean;
@@ -36,16 +35,8 @@ export const isMindMapTextEditingTarget = (target: EventTarget | null) => {
   return element.tagName === 'INPUT' || element.tagName === 'TEXTAREA' || element.isContentEditable;
 };
 
-export const isMindMapQuickTitleEditingTarget = (target: EventTarget | null) => {
-  const element = target as HTMLElement | null;
-  return element?.getAttribute?.('data-mindmap-quick-title-input') === 'true';
-};
-
 export const isMindMapDeleteKey = (event: MindMapKeyboardEventLike) =>
   event.key === 'Delete' || event.key === 'Backspace';
-
-export const isMindMapForwardDeleteKey = (event: MindMapKeyboardEventLike) =>
-  event.key === 'Delete';
 
 export const isMindMapSpaceKey = (event: MindMapKeyboardEventLike) =>
   event.key === ' ' || event.key === 'Space' || event.key === 'Spacebar' || event.code === 'Space';
@@ -59,16 +50,20 @@ export const isMindMapRelationshipToolToggleKey = (event: MindMapKeyboardEventLi
 export const hasMindMapShortcutModifier = (event: MindMapKeyboardEventLike) =>
   Boolean(event.ctrlKey || event.metaKey || event.altKey);
 
+export const getMindMapTitleTyping = (event: KeyboardEvent) => {
+  if (event.isComposing || event.key === 'Process' || event.key === 'Dead') {
+    return { text: '', composing: true };
+  }
+  if (Array.from(event.key).length !== 1
+    || (hasMindMapShortcutModifier(event) && !event.getModifierState('AltGraph'))) return null;
+  return { text: event.key, composing: false };
+};
+
 export const getMindMapKeyboardAction = (
   event: MindMapKeyboardEventLike,
   state: MindMapKeyboardState,
 ): MindMapKeyboardAction | null => {
-  if (state.isEditingText) {
-    // Quick naming is visually an editor so users can type immediately, but
-    // Delete remains a task command. Backspace and all other text keys stay
-    // native so relationship/details inputs keep their editing semantics.
-    if (!state.isQuickTitleEditing || !isMindMapForwardDeleteKey(event)) return null;
-  }
+  if (state.isEditingText) return null;
   if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && state.hasSelectedNode) {
     const shortcutKey = event.key.toLowerCase();
     if (shortcutKey === 'c') return { type: 'copy-selection' };

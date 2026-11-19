@@ -61,13 +61,13 @@ const normalApplyBody = service.match(/export const applyPwaUpdate[\s\S]*?(?=exp
 
 assert('normal apply does not call cache recovery', !normalApplyBody.includes('clearPwaApplicationCacheAndReload'));
 assert('normal apply has no background auto-update path and pagehide only guards navigation start', !service.includes('applyUpdateWhenBackgrounded') && service.includes("addEventListener('pagehide'"));
-assert('normal activation is owned by direct stabilized-worker messaging', service.includes("import { Workbox") && service.includes("prepared.waitingWorker.postMessage({ type: 'SKIP_WAITING' })") && !service.includes('virtual:pwa-register') && service.includes("status: 'awaiting-controller'"));
+assert('normal activation is owned by direct verified-worker messaging', service.includes("import { Workbox") && service.includes("waitingWorker.postMessage({ type: 'SKIP_WAITING' })") && service.includes('return version === targetVersion ? waiting : null') && !service.includes('virtual:pwa-register') && service.includes("status: 'awaiting-controller'"));
 assert('post-reload completion compares current and target', service.includes('currentVersion === transaction.targetVersion') && service.includes('writeCompletedVersion'));
 assert('cross-tab lock has Web Locks and PWA IndexedDB paths', service.includes('locks.request(APPLY_LOCK_NAME') && service.includes("indexedDB.open(APPLY_LOCK_DB_NAME") && service.includes('ownerFence'));
 assert('production version uses injected release ID and release metadata', vite.includes('VITE_PROJED_RELEASE_ID') && env.includes('VITE_PROJED_RELEASE_ID') && service.includes('/release-meta.json'));
 assert('preview version uses build-wide app-shell metadata with bundle-hash fallback when release ID is absent', service.includes('getEmbeddedAppShellVersion() || canonicalBundleVersion(getCurrentBundleHash())') && service.includes('if (getProductionReleaseId())'));
 assert('normal UI removes the redlined icon and description', !prompt.includes('RefreshCw') && !prompt.includes('一鍵更新到最新版') && !prompt.includes('description'));
-assert('normal UI retains DEV-097 compact reload action contract', prompt.includes('getPwaUpdatePresentation(state)') && presentation.includes('新版已就緒') && prompt.includes('重新載入') && prompt.includes('稍後') && !prompt.includes('關閉更新提示'));
+assert('normal UI uses the DEV-141 menu actions', prompt.includes('getPwaUpdatePresentation(state)') && presentation.includes('visible: isRecovery') && read('src/components/AppMoreMenu.tsx').includes('data-app-update-later') && !prompt.includes('稍後'));
 assert('new verifier scripts are registered', packageJson.includes('verify:dev-096-pwa-update-transaction-convergence') && packageJson.includes('verify:dev-096-pwa-update-transaction-convergence-browser') && packageJson.includes('verify:dev-096-pwa-update-transaction-convergence-sw'));
 
 const failedResults = results.filter((result) => !result.ok);

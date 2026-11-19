@@ -95,7 +95,7 @@ async (page) => {
 
   const openFixture = async (visibleNodeCount, viewport = { width: 1440, height: 900 }) => {
     await page.setViewportSize(viewport);
-    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:1040/', { waitUntil: 'domcontentloaded' });
     await writeFixture(visibleNodeCount);
     await page.reload({ waitUntil: 'networkidle' });
     if (await page.locator('nav').count() === 0) {

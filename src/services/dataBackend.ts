@@ -16,6 +16,8 @@ import {
   type EditableKnowledgeRecord,
   type KnowledgeRecordInput,
   type TaskNode,
+  type TaskNoteCompareAndSetResult,
+  type TaskNotePersistenceSnapshot,
   type TaskTag,
   type Workspace,
   type WorkspaceMember,
@@ -72,6 +74,7 @@ import {
   isLocalTestBackend,
   isSupabaseBackend,
 } from './backendMode';
+import type { BoardTaskOrderCommand, BoardTaskOrderResult } from '../features/taskCreation/boardTaskOrder';
 
 export {
   dataBackend,
@@ -442,13 +445,22 @@ export const boardInviteService = {
 };
 
 export const nodeService = {
-  listByProject: (workspaceId: string, boardId: string): Promise<TaskNode[]> =>
+  commitBoardOrder: (command: BoardTaskOrderCommand, canEdit: boolean): Promise<BoardTaskOrderResult> =>
     isHttpBackend
-      ? httpDomainReadService.listTasks(workspaceId, boardId)
+      ? rejectHttpUnsupported('atomic board task ordering')
+      : isLocalTestBackend
+      ? localTestNodeService.commitBoardOrder(command, canEdit)
+      : isSupabaseBackend
+      ? supabaseNodeService.commitBoardOrder(command)
+      : firestoreNodeService.commitBoardOrder(command, canEdit),
+
+  listByProject: (workspaceId: string, boardId: string, signal?: AbortSignal): Promise<TaskNode[]> =>
+    isHttpBackend
+      ? httpDomainReadService.listTasks(workspaceId, boardId, signal)
       : isLocalTestBackend
       ? localTestNodeService.listByProject(workspaceId, boardId)
       : isSupabaseBackend
-      ? supabaseNodeService.listByProject(workspaceId, boardId)
+      ? supabaseNodeService.listByProject(workspaceId, boardId, signal)
       : firestoreNodeService.listByProject(workspaceId, boardId),
 
   create: (workspaceId: string, boardId: string, node: TaskNode): Promise<void | TaskNode> =>
@@ -468,6 +480,21 @@ export const nodeService = {
       : isSupabaseBackend
       ? supabaseNodeService.update(workspaceId, boardId, nodeId, updates)
       : firestoreNodeService.update(workspaceId, boardId, nodeId, updates),
+
+  compareAndSetNotes: (
+    workspaceId: string,
+    boardId: string,
+    nodeId: string,
+    expected: TaskNotePersistenceSnapshot,
+    next: TaskNotePersistenceSnapshot,
+  ): Promise<TaskNoteCompareAndSetResult> =>
+    isHttpBackend
+      ? rejectHttpUnsupported('task note compare-and-set')
+      : isLocalTestBackend
+      ? localTestNodeService.compareAndSetNotes(workspaceId, boardId, nodeId, expected, next)
+      : isSupabaseBackend
+      ? supabaseNodeService.compareAndSetNotes(workspaceId, boardId, nodeId, expected, next)
+      : firestoreNodeService.compareAndSetNotes(workspaceId, boardId, nodeId, expected, next),
 
   delete: (workspaceId: string, boardId: string, nodeId: string): Promise<void> =>
     isHttpBackend

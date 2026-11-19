@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import { useCallback, useRef, useState, useEffect, useMemo } from 'react';
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
 import { useTaskFilterStore } from '../store/useTaskFilterStore';
@@ -8,7 +8,7 @@ import { Calendar } from 'lucide-react';
 import SharedTaskSidebar from './SharedTaskSidebar';
 import { ViewToolbar } from './ui/ViewToolbar';
 import { GanttHeader, GanttGrid, GanttRow, GanttTaskBar, getColWidth, getX, BAR_HEIGHT } from './Gantt';
-import { compactClassNames, compactSegmentedButtonClass } from './ui/compactTokens';
+import { compactClassNames, compactSegmentedButtonClass, taskViewFrameClassName } from './ui/compactTokens';
 import { selectAndOpenTaskDetails } from '../utils/taskInteractions';
 import { buildHierarchicalTaskItems } from '../utils/taskHierarchy';
 import { useCoarsePointer } from '../hooks/useCoarsePointer';
@@ -17,6 +17,7 @@ import { TaskFilterResultState } from './ui/TaskFilterResultState';
 import { buildCollapsedProjectionTasks, buildProjectionParentIndex } from '../features/taskTracking/model';
 
 const DEFAULT_GRID_START = dayjs().startOf('year');
+const FULLY_EXPANDED = new Set<string>();
 
 const GanttView = () => {
     const {
@@ -51,6 +52,7 @@ const GanttView = () => {
     const [simulatedDates, setSimulatedDates] = useState(null);
 
     const scrollAreaRef = useRef<HTMLDivElement>(null);
+    const taskListRef = useRef<HTMLDivElement>(null);
 
     // (activeBoard 已不再需要，WBS 資料由 useWbsStore 驅動)
 
@@ -76,8 +78,20 @@ const GanttView = () => {
         () => projectTaskFilterResults(projectionNodes, taskFilters, { boardId: activeBoardId }),
         [activeBoardId, projectionNodes, taskFilters],
     );
-
-
+    const hierarchyInputs = useMemo(() => ({
+        nodes: projectionNodes,
+        parentNodesIndex: projectionParentNodesIndex,
+        activeBoardId,
+        visibleTaskIds: filterProjection.visibleTaskIds,
+    }), [activeBoardId, filterProjection.visibleTaskIds, projectionNodes, projectionParentNodesIndex]);
+    const fullyExpandedHierarchy = useMemo(
+        () => buildHierarchicalTaskItems({ ...hierarchyInputs, collapsedIds: FULLY_EXPANDED }),
+        [hierarchyInputs],
+    );
+    const hierarchy = useMemo(
+        () => collapsedIds.size ? buildHierarchicalTaskItems({ ...hierarchyInputs, collapsedIds }) : fullyExpandedHierarchy,
+        [collapsedIds, fullyExpandedHierarchy, hierarchyInputs],
+    );
     const { flattenedItems, groups, gridStart, gridEnd, totalUnits } = useMemo(() => {
         if (!activeBoardId) return { flattenedItems: [], groups: [], gridStart: DEFAULT_GRID_START, gridEnd: dayjs(DEFAULT_GRID_START).add(60, 'day'), totalUnits: 60 };
 
@@ -95,13 +109,7 @@ const GanttView = () => {
             }
         };
 
-        const { items, groups } = buildHierarchicalTaskItems({
-            nodes: projectionNodes,
-            parentNodesIndex: projectionParentNodesIndex,
-            activeBoardId,
-            visibleTaskIds: filterProjection.visibleTaskIds,
-            collapsedIds,
-        });
+        const { items, groups } = hierarchy;
         items.forEach(item => updateBounds(item.startDate || null, item.endDate || null));
 
         const today = dayjs();
@@ -138,55 +146,56 @@ const GanttView = () => {
             gridEnd: calculatedGridEnd,
             totalUnits: units
         };
-    }, [activeBoardId, filterProjection, mode, collapsedIds, projectionNodes, projectionParentNodesIndex]);
+    }, [activeBoardId, hierarchy, mode]);
     const isTimelineEligible = (item: any) => [item.startDate, item.endDate]
         .some(value => Boolean(value && dayjs(value).isValid()));
     const timelineItems = flattenedItems.filter(isTimelineEligible);
     const hasScheduledItems = timelineItems.length > 0;
 
     const colWidth = getColWidth(mode);
+    const timelineWidth = totalUnits * colWidth;
+    const todayX = getX(dayjs().startOf('day'), colWidth, mode, gridStart);
+    const showTimeline = !taskLoading && !taskResultError && filterProjection.matchedTaskIds.size > 0;
 
-    const handleScroll = (e: any) => {
-        const { scrollLeft } = e.target;
-        setViewport(prev => ({ ...prev, scrollLeft }));
-    };
+    const getTimelineViewportWidth = useCallback(() => Math.max(0,
+        (scrollAreaRef.current?.clientWidth ?? 0) - (taskListRef.current?.offsetWidth ?? 0),
+    ), []);
+    const updateViewport = useCallback(() => {
+        const scrollLeft = scrollAreaRef.current?.scrollLeft ?? 0;
+        const width = getTimelineViewportWidth();
+        setViewport(previous => previous.scrollLeft === scrollLeft && previous.width === width
+            ? previous : { scrollLeft, width });
+    }, [getTimelineViewportWidth]);
 
     const scrollToNow = () => {
         if (scrollAreaRef.current) {
-            const todayX = getX(dayjs(), colWidth, mode, gridStart);
             scrollAreaRef.current.scrollTo({
-                left: Math.max(0, todayX - scrollAreaRef.current.clientWidth / 2),
+                left: Math.max(0, todayX - getTimelineViewportWidth() / 2),
                 behavior: 'smooth'
             });
         }
     };
 
     useEffect(() => {
-        if (scrollAreaRef.current) {
-            const todayX = getX(dayjs(), colWidth, mode, gridStart);
-            scrollAreaRef.current.scrollLeft = Math.max(0, todayX - scrollAreaRef.current.clientWidth / 2);
-            setViewport({
-                scrollLeft: scrollAreaRef.current.scrollLeft,
-                width: scrollAreaRef.current.clientWidth
-            });
-        }
+        if (!showTimeline || !scrollAreaRef.current) return;
+        scrollAreaRef.current.scrollLeft = Math.max(0, todayX - getTimelineViewportWidth() / 2);
+        updateViewport();
+    }, [todayX, showTimeline, getTimelineViewportWidth, updateViewport]);
 
-        const handleResize = () => {
-            if (scrollAreaRef.current) {
-                setViewport(prev => ({ ...prev, width: scrollAreaRef.current!.clientWidth }));
-            }
-        };
-
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, [mode, colWidth, gridStart]);
+    useEffect(() => {
+        if (!showTimeline || !scrollAreaRef.current || !taskListRef.current) return;
+        const observer = new ResizeObserver(updateViewport);
+        observer.observe(scrollAreaRef.current);
+        observer.observe(taskListRef.current);
+        return () => observer.disconnect();
+    }, [showTimeline, updateViewport]);
 
     const handleItemClick = (item: any) => {
         selectAndOpenTaskDetails(item.id, item.trackingReferenceId);
     };
 
     return (
-        <div className="flex-1 flex flex-col bg-slate-50 overflow-hidden">
+        <div className={`flex-1 flex flex-col bg-slate-50 overflow-hidden ${taskViewFrameClassName}`}>
             <ViewToolbar
                 rightControls={(
                     <>
@@ -218,61 +227,66 @@ const GanttView = () => {
                 error={taskResultError}
                 onReset={resetTaskFilters}
             />
-            {!taskLoading && !taskResultError && filterProjection.matchedTaskIds.size > 0 ? <div className="flex-1 flex overflow-hidden">
-                {/* Left Sidebar */}
-                <SharedTaskSidebar
-                    flattenedItems={flattenedItems}
-                    collapsedIds={collapsedIds}
-                    toggleCollapse={toggleCollapse}
-                    onItemClick={handleItemClick}
-                    isTaskListOpen={isTaskListOpen}
-                    setIsTaskListOpen={setIsTaskListOpen}
-                    surface="gantt"
-                    rowHeight={ganttRowHeight}
-                />
+            {showTimeline ? <div className="relative min-h-0 flex-1 [container-type:inline-size]">
+                {!hasScheduledItems ? (
+                    <div className="pointer-events-none absolute inset-x-0 top-14 z-20 text-center text-xs text-slate-500" data-task-date-empty-hint="gantt">
+                        符合篩選的任務尚未設定日期
+                    </div>
+                ) : null}
+                <div
+                    ref={scrollAreaRef}
+                    onScroll={updateViewport}
+                    className="mobile-pan-surface scrollbar-gantt absolute inset-0 z-0 overflow-auto select-none bg-white"
+                    data-mobile-pan-surface="gantt"
+                >
+                    <div className="flex min-h-full w-max min-w-full">
+                        {/* Left Sidebar */}
+                        <SharedTaskSidebar
+                            flattenedItems={flattenedItems}
+                            fullyExpandedItems={fullyExpandedHierarchy.items}
+                            collapsedIds={collapsedIds}
+                            toggleCollapse={toggleCollapse}
+                            onItemClick={handleItemClick}
+                            isTaskListOpen={isTaskListOpen}
+                            setIsTaskListOpen={setIsTaskListOpen}
+                            surface="gantt"
+                            rowHeight={ganttRowHeight}
+                            listRef={taskListRef}
+                        />
 
-                {/* Right Timeline */}
-                <div className="flex-1 overflow-hidden relative">
-                    {!hasScheduledItems ? (
-                        <div className="pointer-events-none absolute inset-x-0 top-14 z-20 text-center text-xs text-slate-500" data-task-date-empty-hint="gantt">
-                            符合篩選的任務尚未設定日期
-                        </div>
-                    ) : null}
-                    <div
-                        ref={scrollAreaRef}
-                        onScroll={handleScroll}
-                        className="mobile-pan-surface h-full overflow-scroll relative select-none bg-white scrollbar-gantt"
-                        data-mobile-pan-surface="gantt"
-                    >
-                        <GanttHeader mode={mode} gridStart={gridStart} totalUnits={totalUnits} colWidth={colWidth} />
+                        {/* Right Timeline */}
+                        <div className="relative flex-1" style={{ minWidth: timelineWidth }}>
+                            <GanttHeader mode={mode} gridStart={gridStart} totalUnits={totalUnits} colWidth={colWidth} />
 
-                        <div className="relative" style={{ width: totalUnits * colWidth, minHeight: '100%', height: `calc(${Math.max(flattenedItems.length * ganttRowHeight, 100)}px + 65vh)` }}>
-                            
-                            <GanttGrid mode={mode} gridStart={gridStart} totalUnits={totalUnits} colWidth={colWidth} />
-                            
-                            <GanttRow groups={groups} colWidth={colWidth} mode={mode} gridStart={gridStart} />
+                            <div className="relative" style={{ height: `calc(${Math.max(flattenedItems.length * ganttRowHeight, 100)}px + 65vh)` }}>
 
-                            {timelineItems.map((item: any) => (
-                                <GanttTaskBar
-                                    key={`${item.type}-${item.id}`}
-                                    item={item}
-                                    colWidth={colWidth}
-                                    mode={mode}
-                                    gridStart={gridStart}
-                                    gridEnd={gridEnd}
-                                    activeBoard={null}
-                                    activeWorkspaceId={activeWorkspaceId || ''}
-                                    setSimulatedDates={setSimulatedDates}
-                                    simulatedDates={simulatedDates}
-                                    showDependencies={showDependencies}
-                                    viewport={viewport}
-                                    scrollAreaRef={scrollAreaRef}
-                                    onItemClick={handleItemClick}
-                                    rowHeight={ganttRowHeight}
-                                />
-                            ))}
+                                <GanttGrid mode={mode} gridStart={gridStart} totalUnits={totalUnits} colWidth={colWidth} />
 
-                            <div className="mobile-pan-rail absolute bottom-0 left-0 right-0" data-mobile-pan-rail="gantt" aria-hidden="true" />
+                                <GanttRow groups={groups} colWidth={colWidth} mode={mode} gridStart={gridStart} rowHeight={ganttRowHeight} />
+
+                                {timelineItems.map((item: any) => (
+                                    <GanttTaskBar
+                                        key={`${item.type}-${item.id}`}
+                                        item={item}
+                                        colWidth={colWidth}
+                                        mode={mode}
+                                        gridStart={gridStart}
+                                        gridEnd={gridEnd}
+                                        activeBoard={null}
+                                        activeWorkspaceId={activeWorkspaceId || ''}
+                                        setSimulatedDates={setSimulatedDates}
+                                        simulatedDates={simulatedDates}
+                                        showDependencies={showDependencies}
+                                        viewport={viewport}
+                                        scrollAreaRef={scrollAreaRef}
+                                        taskListRef={taskListRef}
+                                        onItemClick={handleItemClick}
+                                        rowHeight={ganttRowHeight}
+                                    />
+                                ))}
+
+                                <div className="mobile-pan-rail absolute bottom-0 left-0 right-0" data-mobile-pan-rail="gantt" aria-hidden="true" />
+                            </div>
                         </div>
                     </div>
                 </div>

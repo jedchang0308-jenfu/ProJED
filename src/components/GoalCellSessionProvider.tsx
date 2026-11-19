@@ -1,13 +1,14 @@
 import React from 'react';
 import { useMemberStore } from '../store/useMemberStore';
 import useBoardStore from '../store/useBoardStore';
-import { useWbsStore, type UpdateNodeDispatchResult } from '../store/useWbsStore';
-import type { TaskDetailNote, TaskNode } from '../types';
+import { useWbsStore } from '../store/useWbsStore';
+import type { TaskDetailNote, TaskNode, TaskNotePersistenceSnapshot } from '../types';
 import {
   areTaskNoteRichContentsEqual,
   buildTaskPurposeUpdates,
   getTaskPurposeNote,
 } from '../utils/taskNoteRichContent';
+import { taskNoteSnapshotFromNode } from '../utils/taskNotePersistence';
 
 type GoalCellSessionStatus = 'idle' | 'editing' | 'saving' | 'error' | 'unknown';
 
@@ -18,6 +19,7 @@ export type GoalCellSession = Readonly<{
   boardId?: string;
   workspaceId?: string;
   originalNote?: TaskDetailNote;
+  baselineSnapshot?: TaskNotePersistenceSnapshot;
   draftNote?: TaskDetailNote;
   submittedNote?: TaskDetailNote;
   error?: string;
@@ -115,9 +117,8 @@ export const GoalCellSessionProvider: React.FC<React.PropsWithChildren<{ account
   const dispatchAttempt = React.useCallback((
     current: GoalCellSession,
     draftNote: TaskDetailNote,
-    forcePersistence = false,
   ) => {
-    if (!accountId || !current.taskId || !current.boardId || !current.workspaceId) return;
+    if (!accountId || !current.taskId || !current.boardId || !current.workspaceId || !current.baselineSnapshot) return;
     const latestNode = useWbsStore.getState().nodes[current.taskId];
     if (!latestNode || latestNode.isArchived || latestNode.boardId !== current.boardId || latestNode.workspaceId !== current.workspaceId) {
       setSession({ ...current, status: 'error', error: '來源任務已離開目前看板，尚未確認保存。', submittedNote: draftNote });
@@ -128,16 +129,11 @@ export const GoalCellSessionProvider: React.FC<React.PropsWithChildren<{ account
       return;
     }
 
-    const latestOriginalNote = getTaskPurposeNote(latestNode);
-    const comparisonNote = current.status === 'error' && current.submittedNote
-      ? current.submittedNote
-      : current.originalNote;
-    if (!comparisonNote || !areNotesEqual(latestOriginalNote, comparisonNote)) {
-      setSession({ ...current, status: 'error', error: '任務目的已被其他變更更新，請複製或捨棄後重新編輯。', submittedNote: draftNote });
-      return;
-    }
-
     const updates = buildTaskPurposeUpdates(latestNode, draftNote);
+    const nextSnapshot = taskNoteSnapshotFromNode({
+      ...latestNode,
+      ...updates,
+    });
     const attemptId = `${current.taskId}:${Date.now().toString(36)}:${++attemptSequenceRef.current}`;
     const savingSession: GoalCellSession = {
       ...current,
@@ -151,33 +147,6 @@ export const GoalCellSessionProvider: React.FC<React.PropsWithChildren<{ account
     sessionRef.current = savingSession;
     setSession(savingSession);
 
-    const onPersistSuccess = () => settleAsSaved(attemptId);
-    const onPersistError = (error: unknown) => settleAsError(attemptId, error);
-    const dispatchResult: UpdateNodeDispatchResult = useWbsStore.getState().updateNode(
-      current.taskId,
-      updates,
-      {
-        forcePersistence,
-        skipActivity: forcePersistence,
-        onPersistSuccess,
-        onPersistError,
-      },
-    );
-
-    if (!dispatchResult.accepted) {
-      clearAttempt();
-      setSession({
-        ...current,
-        status: 'error',
-        error: dispatchResult.reason === 'no_changes'
-          ? '本機沒有可保存的差異，請重新確認目前內容。'
-          : '來源任務不存在，尚未確認保存。',
-        submittedNote: draftNote,
-      });
-      return;
-    }
-
-    setSession(currentState => currentState.attemptId === attemptId ? currentState : savingSession);
     attemptRef.current.timer = window.setTimeout(() => {
       const latest = sessionRef.current;
       if (latest.attemptId !== attemptId || !attemptRef.current || attemptRef.current.id !== attemptId) return;
@@ -188,24 +157,23 @@ export const GoalCellSessionProvider: React.FC<React.PropsWithChildren<{ account
       });
     }, SESSION_TIMEOUT_MS);
 
-    void dispatchResult.completion.then(
+    void useWbsStore.getState().commitTaskNotes(
+      current.taskId,
+      current.baselineSnapshot,
+      nextSnapshot,
+    ).then(
       outcome => {
-        if (outcome === 'persisted') {
+        if (outcome.status === 'persisted') {
           settleAsSaved(attemptId);
         } else {
-          settleAsError(attemptId, new Error('任務目的儲存失敗。'));
+          settleAsError(attemptId, new Error('任務目的已被其他變更更新，請複製或捨棄後重新編輯。'));
         }
       },
       error => {
-        const currentState = sessionRef.current;
-        if (currentState.attemptId === attemptId && attemptRef.current?.id === attemptId) {
-          setSession({ ...currentState, status: 'unknown', error: '儲存結果未確認，請稍後再試。' });
-        } else {
-          console.error('[GoalCellSession] persistence completion rejected after callback:', error);
-        }
+        settleAsError(attemptId, error);
       },
     );
-  }, [accountId, clearAttempt, settleAsError, settleAsSaved]);
+  }, [accountId, settleAsError, settleAsSaved]);
 
   const beginEditing = React.useCallback((node: TaskNode) => {
     const current = sessionRef.current;
@@ -218,6 +186,7 @@ export const GoalCellSessionProvider: React.FC<React.PropsWithChildren<{ account
       boardId: node.boardId,
       workspaceId: node.workspaceId,
       originalNote: note,
+      baselineSnapshot: taskNoteSnapshotFromNode(node),
       draftNote: note,
       sourceVisible: true,
     });
@@ -252,7 +221,7 @@ export const GoalCellSessionProvider: React.FC<React.PropsWithChildren<{ account
   const retry = React.useCallback(() => {
     const current = sessionRef.current;
     if (current.status !== 'error' || !current.draftNote) return;
-    dispatchAttempt({ ...current, status: 'error', error: undefined }, current.draftNote, true);
+    dispatchAttempt({ ...current, status: 'error', error: undefined }, current.draftNote);
   }, [dispatchAttempt]);
 
   const discard = React.useCallback(() => {

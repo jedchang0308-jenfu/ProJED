@@ -209,7 +209,10 @@ const RecordContentEditor: React.FC<RecordContentEditorProps> = ({
   focusPending,
   onFocusConsumed,
 }) => (
-  <LexicalComposer initialConfig={editorConfig}>
+  <LexicalComposer initialConfig={{
+    ...editorConfig,
+    editorState: () => $setEditorContentFromRecordString(normalizeRecordContentNewlines(value)),
+  }}>
     <div className={`relative mt-1 ${editorContainerClassName || ''}`}>
       {!value ? (
         <div className="pointer-events-none absolute left-3 top-2 z-10 text-sm leading-6 text-slate-400">

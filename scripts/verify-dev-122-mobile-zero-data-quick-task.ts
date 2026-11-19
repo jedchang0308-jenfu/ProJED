@@ -40,6 +40,9 @@ const quickManifest = JSON.parse(quickManifestSource) as {
   id?: string;
   start_url?: string;
   scope?: string;
+  name?: string;
+  short_name?: string;
+  display?: string;
   icons?: Array<{ src?: string; sizes?: string; type?: string }>;
 };
 const buildOutputDirectory = process.env.DEV133_BUILD_OUTDIR ?? 'dist';
@@ -74,6 +77,9 @@ check('S02', !quickMain.includes("from '../App'") && !quickMain.includes("from '
 check('S03', quickManifest.id === '/quick-task/'
   && quickManifest.start_url === '/quick-task/'
   && quickManifest.scope === '/quick-task/'
+  && quickManifest.name === 'ProJED-建待辦'
+  && quickManifest.short_name === quickManifest.name
+  && quickManifest.display === 'standalone'
   && quickManifest.icons?.some(icon => icon.src === '/icons/projed-quick-task-icon-brand-20260929-192.png' && icon.sizes === '192x192' && icon.type === 'image/png')
   && quickManifest.icons?.some(icon => icon.src === '/icons/projed-quick-task-icon-brand-20260929-512.png' && icon.sizes === '512x512' && icon.type === 'image/png')
   && shortcutIconDimensions?.width === 512
@@ -108,8 +114,8 @@ check('S15', rootManifest.id === '/'
   && rootManifest.scope === '/'
   && rootManifest.shortcuts?.filter(shortcut => shortcut.url === '/quick-task/').length === 1
   && quickShortcut !== undefined
-  && quickShortcut.name === 'ProJED-快速建任務'
-  && quickShortcut.short_name === 'ProJED-快速建任務'
+  && quickShortcut.name === 'ProJED-建待辦'
+  && quickShortcut.short_name === 'ProJED-建待辦'
   && quickShortcut.description === '直接輸入一筆待辦'
   && quickShortcut.url === '/quick-task/'
   && quickShortcut.icons?.length === 2

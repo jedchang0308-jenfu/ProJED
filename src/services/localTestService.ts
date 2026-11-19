@@ -15,6 +15,8 @@ import {
   type MeetingDraftCheckpointInput,
   type MeetingDraftCheckpointResult,
   type TaskNode,
+  type TaskNoteCompareAndSetResult,
+  type TaskNotePersistenceSnapshot,
   type TaskTag,
   type Workspace,
   type WorkspaceMember,
@@ -22,6 +24,8 @@ import {
 import { hashBoardInviteToken } from '../utils/boardInviteToken';
 import { getLocalTestProfileOverride } from './localTestProfileService';
 import { MeetingDraftCheckpointError } from './meetingDraftRecoveryService';
+import { projectBoardTaskOrder, type BoardTaskOrderCommand } from '../features/taskCreation/boardTaskOrder';
+import { areTaskNoteSnapshotsEqual, taskNoteSnapshotFromNode } from '../utils/taskNotePersistence';
 
 const WORKSPACES_KEY = 'projed-local-test.workspaces';
 const NODES_KEY = 'projed-local-test.nodes';
@@ -730,6 +734,21 @@ export const localTestBoardService = {
 };
 
 export const localTestNodeService = {
+  commitBoardOrder: async (command: BoardTaskOrderCommand, canEdit: boolean) => {
+    const nodes = readNodes();
+    const result = projectBoardTaskOrder(command, Object.values(nodes), canEdit);
+    if (command.kind === 'create' && consumeSecondTaskNodeCreateFault()) {
+      throw new Error('local-test injected second task create rejection');
+    }
+    if (consumeTaskNodeFault('batch-once')) throw new Error('測試故障：任務排序儲存失敗。');
+    for (const patch of result.nodes) {
+      const node = command.kind === 'create' && command.node.id === patch.id ? command.node : nodes[patch.id];
+      nodes[patch.id] = { ...node, ...patch };
+    }
+    writeNodes(nodes);
+    return result;
+  },
+
   listByProject: async (workspaceId: string, boardId: string): Promise<TaskNode[]> => {
     if (consumeTaskPersistenceReadbackFault('unavailable-once')) {
       throw new Error('local-test injected persistence readback unavailability');
@@ -772,6 +791,60 @@ export const localTestNodeService = {
       return new Promise<void>(() => {});
     }
     writeNodes(nextNodes);
+  },
+
+  compareAndSetNotes: async (
+    _workspaceId: string,
+    _boardId: string,
+    nodeId: string,
+    expected: TaskNotePersistenceSnapshot,
+    next: TaskNotePersistenceSnapshot,
+  ): Promise<TaskNoteCompareAndSetResult> => {
+    const nodes = readNodes();
+    const currentNode = nodes[nodeId];
+    if (!currentNode) throw new Error('Task note compare-and-set target does not exist.');
+    recordTaskPersistenceAttempt(nodeId, {
+      detailNotes: next.detailNotes,
+      description: next.description ?? undefined,
+    });
+    if (consumeTaskPersistenceFault('reject-once') || consumeTaskNodeFault('update-once')) {
+      throw new Error('local-test injected task persistence rejection');
+    }
+
+    const current = taskNoteSnapshotFromNode(currentNode);
+    if (!areTaskNoteSnapshotsEqual(current, expected)) {
+      return { status: 'conflict', snapshot: current };
+    }
+
+    const persisted: TaskNotePersistenceSnapshot = {
+      detailNotes: next.detailNotes,
+      description: next.description,
+      updatedAt: Date.now(),
+    };
+    const nextNodes = {
+      ...nodes,
+      [nodeId]: {
+        ...currentNode,
+        detailNotes: persisted.detailNotes,
+        description: persisted.description ?? undefined,
+        updatedAt: persisted.updatedAt,
+      },
+    };
+    if (consumeTaskPersistenceFault('timeout-commit-once')) {
+      writeNodes(nextNodes);
+      return new Promise<TaskNoteCompareAndSetResult>(() => {});
+    }
+    if (consumeTaskPersistenceFault('delay-response-once')) {
+      writeNodes(nextNodes);
+      return new Promise<TaskNoteCompareAndSetResult>((resolve) => {
+        window.setTimeout(() => resolve({ status: 'persisted', snapshot: persisted }), 750);
+      });
+    }
+    if (consumeTaskPersistenceFault('timeout-no-commit-once')) {
+      return new Promise<TaskNoteCompareAndSetResult>(() => {});
+    }
+    writeNodes(nextNodes);
+    return { status: 'persisted', snapshot: persisted };
   },
 
   delete: async (_workspaceId: string, _boardId: string, nodeId: string): Promise<void> => {

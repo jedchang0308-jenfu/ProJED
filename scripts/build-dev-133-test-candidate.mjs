@@ -25,7 +25,7 @@ let passed = false;
 try {
   await build(options);
   const quickHtml = await readFile(path.join(output, 'dist/quick-task/index.html'), 'utf8');
-  if (!quickHtml.includes('ProJED-快速建任務') || quickHtml.includes('maxlength="500"')) throw Error('QUICK_BUNDLE_CONTRACT_FAILED');
+  if (!quickHtml.includes('ProJED-建待辦') || quickHtml.includes('maxlength="500"')) throw Error('QUICK_BUNDLE_CONTRACT_FAILED');
   server = await preview({ ...options, preview: { host: '127.0.0.1', port: 4193, strictPort: true } });
   lifecycle.status = 'running';
   const child = spawn('python', [path.join(output, 'driver.py'), output], { cwd: root, stdio: 'inherit', windowsHide: true });
