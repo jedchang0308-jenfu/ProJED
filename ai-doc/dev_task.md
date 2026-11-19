@@ -15,8 +15,9 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 - 併行分工：選單提醒請求模型 `gpt-6-sol`（high），版號入口與資產保留請求模型 `gpt-6-astra`（high）；主流程整合確認、分頁隔離與本機驗收。
 - 正式發布：2026-11-18 已發布至 `https://projed-cc78d.web.app`，release ID `20261118074427-5894bd`，來源 immutable commit `8e124da5561cbfa1ef7bb3bec11f49ff8e46cf39`。canonical artifact 158/158 檔案雜湊讀回通過；初次 Service Worker 安裝約 90 秒後 active，無 page error。DEV-141 A01–A07 於同一候選來源全數通過，證據：[發布 receipt](../output/release/dev-083/20261118074427-5894bd/direct-evidence.json)、[A01–A07 瀏覽器紀錄](../output/playwright/dev-141/dev141-25fcf4d4/result.json)。
 - 安裝資訊遷移實機證據（2026-11-19）：既有 Android 安裝已讀回「ProJED-建待辦」、versionCode 3、standalone、Succeeded，原 package identity 不變、未重裝或清除資料。這次改名曾需要 Chrome 原生名稱確認及支援診斷；不能當成一般功能更新的必做步驟，也不能以伺服器 manifest 或 Scheduled 代替完成。詳見[實機紀錄](../output/android-diagnostics/verification-summary.md)（本機產物）。
-- 後續：一般功能更新 A03／A04 在常用手機已安裝 PWA 的關閉重開與分頁隔離仍需裝置補驗，並確認舊更新器首次導入安排；上述安裝資訊遷移成功不替代這兩項驗證。本次文件／驗證補強不代表已另行發布正式站。
-- 本輪手機驗收安排（2026-11-19）：手機已安裝「ProJED-建待辦」的正常選單回報「已是最新版」，當時正式站為 `20261119091203-538b7b`；此訊息不視為跨版本更新通過。使用者已核准先提交、合併並發布本次文件／驗證腳本，再以手機的正常「稍後／更新」操作補驗，不重開偵錯或重新配對。實機結果尚待完成，不能先標記通過。
+- 2026-11-19 正式發布：[PR #29](https://github.com/jedchang0308-jenfu/ProJED/pull/29) 已合併，來源 `e59560cc121995442b24b7beabe09b991b0a5ece`、release ID `20261119123850-c35cf3`。兩個正式來源均讀回新版；canonical artifact 271/271 檔案雜湊、無視窗 Edge 主畫面與正常更新選單檢查通過。名稱、圖示、兩個 manifest 與前版逐位元組相同，前版入口仍可取得。證據：[發布收據](../outputs/projed-dev141-mobile-release-e59560c/output/release/dev-083/20261119123850-c35cf3/direct-evidence.json)（本機產物）。新空白瀏覽器在首次 worker 安裝中檢查曾逾時，安裝完成後正常；已保留失敗並補齊該 smoke 的既有安裝前提，只複驗同一發布包，未再次部署。
+- 手機正常更新補驗（2026-11-19）：使用者在既有已安裝「ProJED-建待辦」完成正常介面驗收。截圖顯示「⋯」新版提醒；按「稍後」、關閉並重開後，紅點消失且仍可更新。手機 Chrome 同來源頁留下未送出測試草稿後，已安裝 App 按一次「更新」完成；使用者確認「App 更新完成，另一頁草稿仍在且未見重載」。全程未要求開發人員選項、重新配對、重裝或清除資料。這是使用者協作的實機 UI 驗收，不宣稱取得手機數字版號或導覽計數；數字版號與導覽次數另有上述本機自動化證據。詳見[手機驗收紀錄](qa/QA-DEV-041-pwa-update-notification-cache-recovery.md#dev-141-installed-phone-acceptance)。本次結案文件不再產生 App 新版提醒。
+- 後續邊界：仍須依實際使用情況確認尚未取得 DEV-141 的舊更新器首次導入安排；本輪已安裝快速待辦的正常更新通過，不擴張為所有歷史版本或其他裝置的實機驗證。
 - 待定：正式舊版支援期限。封裝以至少 14 天為預設，從確認舊版已被取代後保守計算。
 
 <a id="dev-140-okr-list-consolidation"></a>
@@ -406,7 +407,7 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 
 ## 總任務清單
 
-- ✓ DEV-141 [交付點] [已實作／A01–A08 本機通過／已發布 2026-11-18] [ProJED] [新版先通知，由使用者手動更新](#dev-141-manual-app-updates)
+- ✓ DEV-141 [交付點] [A01–A08 本機通過／手機快速待辦人工補驗通過／已發布 2026-11-19] [ProJED] [新版先通知，由使用者手動更新](#dev-141-manual-app-updates)
 
 - ✓ DEV-140 [交付點] [已實作／本機瀏覽器驗收通過] [ProJED] [以 OKR 模式整合清單模式](#dev-140-okr-list-consolidation)
 
