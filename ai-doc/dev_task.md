@@ -63,6 +63,8 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
 ## DEV-139：ProJED 納入 Jenfu-Platform，Cloud Run／Cloud SQL 對齊並保留 Vite
 
+- 2026-11-20：來源唯讀盤點發現44筆NULL-workspace稽核被現行importer阻擋，已補0044原樣承接並沿既有RLS保持runtime隔離；新增snapshot／權限回歸與44份profile，必要原生CI待驗。精確metadata、限制及結果沿[SPEC開頭](specs/SPEC-139-projed-jenfu-platform-onboarding.md)；未改正式來源或執行切流。
+
 - 2026-11-19：排序交易／備註CAS HTTP接線與0043、owner-window直接輸入及跨owner主線同步已納入現有分支。ProJED、Platform及OrgMaster必要CI均SUCCESS；完整migration與跨owner原生回歸PASS。精確source、失敗修正、分層收據與仍未執行的正式責任統一見[SPEC開頭](specs/SPEC-139-projed-jenfu-platform-onboarding.md)；保留零留存及完整交付分母。
 
 - 建立日期：2026-10-08（Asia/Taipei）。

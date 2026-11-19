@@ -352,7 +352,9 @@ INSERT INTO public.record_task_links VALUES
 INSERT INTO public.activity_events VALUES
   ('45678901-1234-4234-8234-123456789004', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', '11111111-1111-4111-8111-111111111111', 'task.updated', 'wbs_items', 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1', '{"field":"title"}', '2026-01-02T00:00:00Z');
 INSERT INTO public.audit_logs VALUES
-  ('56789012-1234-4234-8234-123456789005', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '11111111-1111-4111-8111-111111111111', 'task.update', 'wbs_items', 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1', '{"title":"Old"}', '{"title":"Parent task"}', '2026-01-02T00:00:00Z');
+  ('56789012-1234-4234-8234-123456789005', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '11111111-1111-4111-8111-111111111111', 'task.update', 'wbs_items', 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1', '{"title":"Old"}', '{"title":"Parent task"}', '2026-01-02T00:00:00Z'),
+  ('56789012-1234-4234-8234-123456789006', NULL, '11111111-1111-4111-8111-111111111111', 'legacy.profile.update', 'profiles', '11111111-1111-4111-8111-111111111111', '{"value":9007199254740993.1234567890123456789,"nested":{"value":null}}', '{"label":"preserved without workspace"}', '2026-01-03T00:00:00.123456Z'),
+  ('56789012-1234-4234-8234-123456789007', NULL, NULL, 'legacy.system.event', 'profiles', NULL, NULL, NULL, '2026-01-04T00:00:00.654321Z');
 INSERT INTO public.llm_access_logs VALUES
   ('01234567-1234-4234-8234-123456789011', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', '11111111-1111-4111-8111-111111111111', 'google', 'fixture-model', 'original-prompt-hash', ARRAY['01234567-1234-4234-8234-123456789099']::uuid[], '{"resultCount":1,"usage":{"inputTokens":7}}', '2026-01-02T00:00:00Z'),
   ('01234567-1234-4234-8234-123456789012', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', NULL, '22222222-2222-4222-8222-222222222222', 'legacy', NULL, NULL, ARRAY[]::uuid[], '["legacy",{"tokens":2}]', '2026-01-03T00:00:00Z'),

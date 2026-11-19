@@ -260,6 +260,11 @@ UPDATE public.document_versions
     throw 'DEV-139 migration plan did not accept the valid linked published RAG source.'
   }
 
+  Assert-SourcePreflightBlocked `
+    -MutationSql "UPDATE public.audit_logs SET entity_table = NULL WHERE id = '56789012-1234-4234-8234-123456789006'" `
+    -RestoreSql "UPDATE public.audit_logs SET entity_table = 'profiles' WHERE id = '56789012-1234-4234-8234-123456789006'" `
+    -ExpectedDomainPrefix 'public.audit_logs WHERE entity_table IS NULL'
+
   foreach ($sourceDomain in @('documents', 'document_versions', 'document_chunks', 'document_embeddings', 'rag_sync_jobs', 'external_rag_objects')) {
     $condition = if ($sourceDomain -eq 'documents') { 'WHERE project_id IS NOT NULL' } elseif ($sourceDomain -eq 'rag_sync_jobs') { 'WHERE source_document_id IS NOT NULL' } else { '' }
     $scopeRowId = Invoke-PgScalar -Database $sourceDatabase -Sql "SELECT id::text FROM public.$sourceDomain $condition ORDER BY id LIMIT 1"
@@ -531,7 +536,7 @@ UPDATE public.document_versions
   if ($targetRagEligible -ne '1') { throw 'DEV-139 apply/reconcile did not retain the valid published RAG source.' }
   $importedGuardBindings = Invoke-PgScalar -Database $targetDatabase -Sql "SELECT (SELECT count(*) FROM projed_core.account_authorization_guards) || ':' || (SELECT count(*) FROM projed_core.account_authorization_guards guard JOIN projed_core.google_identity_proofs proof USING (local_user_id) JOIN projed_core.profiles profile ON profile.id = guard.local_user_id WHERE guard.local_user_id = '11111111-1111-4111-8111-111111111111' AND guard.active AND guard.revision = 1 AND guard.updated_at = profile.updated_at) || ':' || (SELECT count(*) FROM projed_core.account_authorization_guards WHERE local_user_id = '22222222-2222-4222-8222-222222222222')"
   if ($importedGuardBindings -ne '1:1:0') { throw "DEV-139 source account guard projection mismatch: $importedGuardBindings" }
-  foreach ($retentionCheck in @('llm-access-retention.sql', 'workspace-lifecycle.sql', 'document-retention.sql', 'meeting-retention.sql')) {
+  foreach ($retentionCheck in @('audit-retention.sql', 'llm-access-retention.sql', 'workspace-lifecycle.sql', 'document-retention.sql', 'meeting-retention.sql')) {
     try {
       # Each file owns a connection-local BEGIN/ROLLBACK; a failed psql closes
       # that transaction, so independent readback/negative cases remain safe.
@@ -635,6 +640,8 @@ UPDATE public.document_versions
       'google-proof-schema-and-permission-fail-closed', 'google-proof-preserves-profile-auth-state',
       'importer-createdb-reject', 'importer-createrole-reject', 'importer-owner-membership-reject',
       'llm-log-exact-retention', 'llm-log-scope-mismatch-reject',
+      'legacy-unscoped-audit-exact-retention', 'legacy-unscoped-audit-runtime-deny',
+      'audit-unknown-entity-prewrite-reject',
       'llm-log-actor-rls', 'llm-log-immutable-runtime', 'llm-log-transfer-and-delete',
       'llm-json-scalar-and-json-null-preserved', 'normal-board-transfer-command',
       'json-numeric-precision-retained-and-drift-rejected',

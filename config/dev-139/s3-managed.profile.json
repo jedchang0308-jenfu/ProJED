@@ -200,6 +200,10 @@
     {
       "version": "0043_task_order_reindex_v1",
       "path": "db/migrations/0043_task_order_reindex_v1.sql"
+    },
+    {
+      "version": "0044_legacy_unscoped_audit_retention_v1",
+      "path": "db/migrations/0044_legacy_unscoped_audit_retention_v1.sql"
     }
   ],
   "objectAllowlist": [

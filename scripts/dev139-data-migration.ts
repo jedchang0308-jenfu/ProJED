@@ -631,7 +631,7 @@ const BLOCKERS = [
   )`],
   ['public.tenants', "WHERE owner_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.tenant_members member WHERE member.tenant_id = public.tenants.id AND member.user_id = public.tenants.owner_id AND member.status::text = 'active')"],
   ['public.activity_events', 'WHERE entity_table IS NULL'],
-  ['public.audit_logs', 'WHERE tenant_id IS NULL OR entity_table IS NULL'],
+  ['public.audit_logs', 'WHERE entity_table IS NULL'],
   ['public.wbs_item_placements', "WHERE placement_kind = 'tracking_reference' AND created_by IS NULL"],
   ['public.projects', 'WHERE abs(sort_order::numeric) > 9007199254740991'],
   ['public.task_tags', 'WHERE abs(sort_order::numeric) > 9007199254740991'],
