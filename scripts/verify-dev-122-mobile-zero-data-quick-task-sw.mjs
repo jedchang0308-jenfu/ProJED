@@ -33,10 +33,13 @@ const baselineRevision = md5(baselineRootManifestText);
 const shortcut = distRootManifest.shortcuts?.[0];
 const checks = [
   ['quick-only-manifest', html.includes('/quick-task/manifest.webmanifest') && !html.includes('href="/manifest.webmanifest"')],
-  ['quick-precache', sw.includes('quick-task/index.html') && sw.includes('quick-task/manifest.webmanifest')],
+  ['quick-entry-precache', sw.includes('quick-task/index.html')],
   ['root-single-manifest-link', (rootHtml.match(/rel=["']manifest["']/gu) ?? []).length === 1 && rootHtml.includes('href="/manifest.webmanifest"')],
   ['root-manifest-source-dist-parity', JSON.stringify(sourceRootManifest) === JSON.stringify(distRootManifest)],
-  ['root-manifest-precache', sw.includes('manifest.webmanifest') && sw.includes(sourceRevision) && !sw.includes(baselineRevision)],
+  ['live-install-manifests-independent-of-app-version', !/url:["'](?:quick-task\/)?manifest\.webmanifest["'],revision:/.test(sw)
+    && sw.includes('projed-install-manifests') && sw.includes('NetworkFirst') && sw.includes('no-store')
+    && sw.includes('/manifest.webmanifest') && sw.includes('/quick-task/manifest.webmanifest')
+    && sw.includes('pwaManifestCache-')],
   ['W07-build-a-to-b-identity', baselineRootManifest.id === '/'
     && baselineRootManifest.start_url === '/'
     && baselineRootManifest.scope === '/'

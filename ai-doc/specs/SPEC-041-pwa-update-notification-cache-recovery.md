@@ -14,6 +14,13 @@
 
 ### 需求與適用範圍
 
+2026-11-19 安裝資訊修正：Android 安裝名稱與顯示模式（manifest）須與應用程式版本分離。既有 Workbox precache 會讓 Chrome 即使以 `cache: no-store` 讀取仍收到舊的 `minimal-ui`，伺服器 manifest 正確不代表裝置已讀到新版。
+
+- canonical `/manifest.webmanifest`、`/quick-task/manifest.webmanifest` 不再使用版本 precache；改採網路優先，離線沿用安裝資訊快取。manifest URL、id、scope、start_url 維持不變。
+- 新 worker 安裝時取得並驗證相同 identity 的 manifest，只修補 ProJED cache 內這兩個 canonical 路徑（保留 Workbox revision keys）；不修改版本快照、採用版本、登入、草稿、待同步資料，不呼叫 skipWaiting、clients.claim 或 reload。
+- 驗收：以真實舊 worker 重現伺服器已更新但原生 manifest reader 仍讀到 minimal-ui；新 worker 處於 waiting 時即可修復舊快取；下一次自然開啟，原生 reader 讀到「ProJED-建待辦」與 standalone；兩個原分頁不重整且維持舊版；離線或無效 identity 不破壞既有有效快取。
+- 入口：`node scripts/verify-installed-manifest-update.mjs <舊發布包 dist> <修正發布包 dist>`（沿用 `PROJED_PLAYWRIGHT_MODULE` 指定專案既有 Playwright）。這是瀏覽器安裝資訊交付證據，Android WebAPK 實際重製及安裝仍由 Chrome 排程，未連接實機不得宣稱手機已完成更新。
+
 使用者要自行決定何時更新 ProJED。新版可用時先通知，點「更新」後才切換。點「稍後」後，即使重新整理、關掉瀏覽器再開，仍應載入原版本。在一個分頁更新時，同一瀏覽器的其他分頁繼續使用各自目前的版本。
 
 主程式、快速新增任務頁、桌面與手機瀏覽器、已安裝的 PWA 都遵循同一規則。這是 DEV-141 導入後的產品契約，取代 DEV-097、DEV-134 及 ADR-047 對安全狀態靜默套用、自然邊界自動重載及自動恢復重載的相關條款。既有記錄與驗收證據仍對應當時版本。 [DEV-141 任務紀錄](../dev_task.md#dev-141-manual-app-updates) · [ADR-047](../decisions/ADR-047-pwa-per-client-reload-isolation.md)

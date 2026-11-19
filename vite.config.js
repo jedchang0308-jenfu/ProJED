@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import { createHash } from 'node:crypto'
 import { createPwaWorkerVersionSource } from './scripts/pwa-worker-version-source.mjs'
+import { createManifestCacheRepairSource } from './scripts/pwa-manifest-cache-source.mjs'
 import { pinnedVersionEntryPlugin } from './scripts/pwa-version-entry.mjs'
 
 // https://vite.dev/config/
@@ -13,6 +14,8 @@ export default defineConfig(({ mode }) => {
     ? `release:${releaseId}`
     : `build:${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   const workerVersionFile = `assets/pwaWorkerVersion-${createHash('sha256').update(shellVersion).digest('hex').slice(0, 16)}.js`;
+  const manifestRepairSource = createManifestCacheRepairSource();
+  const manifestRepairFile = `assets/pwaManifestCache-${createHash('sha256').update(manifestRepairSource).digest('hex').slice(0, 16)}.js`;
   return ({
   ...(mode === 'production' && !process.env.PROJED_RELEASE_ID
     ? (() => { throw new Error('DEV-097: sealed production build requires PROJED_RELEASE_ID.'); })()
@@ -38,6 +41,7 @@ export default defineConfig(({ mode }) => {
         return html.replace('</head>', `    <meta name="projed-shell-version" content="${shellVersion}" />\n  </head>`);
       },
       generateBundle() {
+        this.emitFile({ type: 'asset', fileName: manifestRepairFile, source: manifestRepairSource });
         this.emitFile({
           type: 'asset',
           fileName: workerVersionFile,
@@ -56,7 +60,7 @@ export default defineConfig(({ mode }) => {
       includeAssets: ['icons/*.png'],
       manifest: false,
       workbox: {
-        importScripts: [`/${workerVersionFile}`],
+        importScripts: [`/${workerVersionFile}`, `/${manifestRepairFile}`],
         cacheId: `projed-${process.env.PROJED_RELEASE_ID || 'test'}`,
         cleanupOutdatedCaches: false,
         clientsClaim: false,
@@ -69,9 +73,20 @@ export default defineConfig(({ mode }) => {
           /^(install|capture|claim|code|error|error_code|error_description)$/,
         ],
         globPatterns: ['**/*.{js,css,html,png,svg,ico,webmanifest}'],
+        globIgnores: ['manifest.webmanifest', 'quick-task/manifest.webmanifest'],
         additionalManifestEntries: [{ url: '/app-shell-meta.json', revision: shellVersion }],
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         runtimeCaching: [
+          {
+            urlPattern: ({ url }) => url.origin === self.location.origin
+              && ['/manifest.webmanifest', '/quick-task/manifest.webmanifest'].includes(url.pathname),
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'projed-install-manifests', networkTimeoutSeconds: 5,
+              fetchOptions: { cache: 'no-store' },
+              plugins: [{ handlerDidError: async ({ request }) => caches.match(request, { ignoreSearch: true }) }],
+            },
+          },
           {
             urlPattern: ({ url, request }) => url.origin === self.location.origin && request.mode === 'navigate' && /^\/quick-task(?:\/|$)/.test(url.pathname),
             handler: 'NetworkFirst',
