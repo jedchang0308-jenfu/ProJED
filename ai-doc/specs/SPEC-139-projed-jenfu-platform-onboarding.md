@@ -2,7 +2,9 @@
 
 2026-11-19 HTTP排序／備註接線：沿`main@0670a0aee5327cd30d53f21360d577b278376028`的新介面，`nodeService.commitBoardOrder`與`compareAndSetNotes`改走ProJED自有HTTP後端，其他backend與讀取AbortSignal保留原行為。排序與前端共用規則，在現有actor交易鎖內重讀目前看板、核對建立／移動／編輯權限，原子寫入排名、父節點及有權限時的父任務重開；衝突拒絕不做盲目重送。備註以JSONB內容及nullable description做CAS，回傳persisted／conflict與canonical snapshot；不以與備註無關的updatedAt製造衝突。
 
-原`0001`～`0042` SQL保留qualified bytes；新增forward-only `0043_task_order_reindex_v1`，讓只有create_task的角色也能在建立時間距不足時重編同層序號，透過transaction scope＋rank-only trigger限制欄位，未授予一般移動／內容編輯權。兩個POST入口沿用可信Session、expected actor、same-origin、RLS與resource revision。隔離PG案例新增原子回復、併發、舊parent、循環／跨看板拒絕、create-only角色、備註競爭／物件key順序／陣列順序及未授權拒絕；CI收據待本次執行更新。前次同步CI44536399441的Windows隔離檢查成功，OCI在舊版「root HTML直接含JS」假設失敗；本輪probe改驗main的versioned entry及實際資產hash，不移除驗證。沒有執行正式migration、資料寫入或切流；完整DEV-139交付分母不變。
+原`0001`～`0042` SQL保留qualified bytes；新增forward-only `0043_task_order_reindex_v1`，讓只有create_task的角色也能在建立時間距不足時重編同層序號，透過transaction scope＋rank-only trigger限制欄位，未授予一般移動／內容編輯權。兩個POST入口沿用可信Session、expected actor、same-origin、RLS與resource revision。隔離PG案例新增原子回復、併發、舊parent、循環／跨看板拒絕、create-only角色、備註競爭／物件key順序／陣列順序及未授權拒絕。前次同步CI44536399441的Windows隔離檢查成功，OCI在舊版「root HTML直接含JS」假設失敗；本輪probe改驗main的versioned entry及實際資產hash，不移除驗證。沒有執行正式migration、資料寫入或切流；完整DEV-139交付分母不變。
+
+本輪受測程式`bc519d75b7a0985875639226c3269435a04e4b71`的[CI44540622894](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44540622894)兩jobs及PR9 checks均SUCCESS：原lockfile型別、662 unit（S2 494／S3 126／migration14／release28）、三boundary、compiled artifact、PostgreSQL17.11 domain73／snapshot60、43份migration與LinuxOCI18 PASS。已讀回artifacts14537678164／14537867415，包含新增HTTP排序／CAS完整案例、create-only成功而move／edit／CAS仍拒絕、音訊與既有Session回歸及owned container／socket／credential cleanup。Native與OCI收據各綁自己的原始migration hash；與此工作樹的差異已逐份確認僅為Windows／Linux checkout換行，沒有SQL內容漂移，不混用不同平台的binding。後續僅補本段與索引收據，不重跑未受影響的產品驗證。Browser smoke、真provider、production identity及正式發布NOT_RUN；零留存條件及整體DEV-139後續責任保留。
 
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。
 - 日期：2026-10-31（Asia/Taipei）；版本：Rev 78（音訊到期清理與unknown generation保護通過隔離驗證；零留存資格及正式交付續行）。
