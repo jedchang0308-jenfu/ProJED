@@ -311,6 +311,7 @@ async (page) => {
 
     await page.evaluate(() => localStorage.setItem('projed-local-test.taskNodeFault', 'update-once'));
     await editor('任務目的').fill('第一次儲存失敗的草稿');
+    await backToParent();
     await modal.locator('[data-task-details-save-status="error"]').waitFor({ state: 'visible' });
     await replacePurposeFromElsewhere('儲存失敗後收到的最新內容');
     await verifyTask(siblingId, '第一次儲存失敗的草稿');
@@ -324,11 +325,11 @@ async (page) => {
 
     const deleteButtons = modal.locator('[data-task-detail-note-delete="true"]');
     await deleteButtons.first().click();
+    await backToParent();
     await page.waitForFunction(id => {
       const task = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}')[id];
       return task?.description === '' && task.detailNotes?.length === 2 && task.detailNotes[0].content === '';
     }, siblingId);
-    await backToParent();
     await openChild(siblingId);
     await verifyTask(siblingId, '');
     return {
@@ -348,13 +349,14 @@ async (page) => {
     const titleInput = modal.locator('[data-task-details-title-input="true"]');
     await titleInput.fill(updatedTitle);
     await titleInput.blur();
-    await page.waitForFunction(title => JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}')['dev098-parent']?.title === title, updatedTitle);
+    await page.waitForTimeout(1200);
+    if ((await readNodes())['dev098-parent'].title === updatedTitle) throw new Error('title blur saved before close');
     const editor = modal.locator('[data-task-detail-note-card="true"] [contenteditable="true"]').first();
     await editor.waitFor({ state: 'visible', timeout: 10000 });
     await editor.fill('明細草稿已保存');
     await editor.press('Tab');
     await page.waitForTimeout(1100);
-    await page.waitForFunction(() => JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}')['dev098-parent']?.description === '明細草稿已保存', null, { timeout: 10000 });
+    if ((await readNodes())['dev098-parent'].description === '明細草稿已保存') throw new Error('note blur saved before close');
     await close();
     const reopened = await openPlacement('primary:dev098-parent');
     const persistedTitle = await reopened.locator('[data-task-details-title-input="true"]').inputValue();
@@ -371,6 +373,7 @@ async (page) => {
     const titleInput = modal.locator('[data-task-details-title-input="true"]');
     await titleInput.fill('父任務 P0（待重試）');
     await titleInput.blur();
+    await sourceContent(modalPlacement('primary:dev098-child')).click();
     await modal.locator('[data-task-details-save-status="error"]').waitFor({ state: 'visible', timeout: 10000 });
     const retry = modal.locator('[data-task-details-save-retry="true"]');
     if (await retry.count() !== 1) throw new Error('save failure did not expose retry');

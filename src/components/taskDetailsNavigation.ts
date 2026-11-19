@@ -7,6 +7,16 @@ export type TaskDetailsNavigationEntry = {
 };
 
 export const TASK_DETAILS_NAVIGATE_EVENT = 'task-details-navigate';
+export const TASK_DETAILS_ACTION_EVENT = 'task-details-action';
+
+/** The open editor decides when it is safe to execute a user-requested action. */
+export const afterTaskDetailsSave = (run: () => void) => {
+  if (typeof document !== 'undefined' && document.querySelector('[data-task-details-modal="true"]')) {
+    document.dispatchEvent(new CustomEvent(TASK_DETAILS_ACTION_EVENT, { detail: { run } }));
+  } else {
+    run();
+  }
+};
 
 export type TaskDetailsPersistenceDecision = 'idle' | 'wait' | 'stay' | 'run';
 

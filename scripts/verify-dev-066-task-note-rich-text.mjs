@@ -180,7 +180,7 @@ const richTextSource = readFileSync('src/utils/taskNoteRichContent.ts', 'utf8');
 assert('every viewport lazy-loads the same task note editor', fieldSource.includes("React.lazy(() => import('./TaskDetailNoteEditor'))"));
 assert('field has no viewport-specific editor gate', !fieldSource.includes('matchMedia') && !fieldSource.includes('TaskDetailNoteMobile'));
 assert('append-only mobile UI and write helper are removed', !fieldSource.includes('data-task-note-mobile-append') && !fieldSource.includes('追加文字') && !richTextSource.includes('appendPlainTextToTaskNote'));
-assert('responsive toolbar keeps desktop-left and mobile-below placement', editorSource.includes('data-task-note-toolbar-placement="desktop-left-mobile-below"') && editorSource.includes('order-last') && editorSource.includes('md:absolute md:right-8 md:top-1/2'));
+assert('responsive toolbar keeps anchored desktop-left and mobile-below placement', editorSource.includes('data-task-note-toolbar-placement="anchored-below-mobile-desktop-left"') && editorSource.includes('top-full') && editorSource.includes('md:right-8') && editorSource.includes('md:top-1/2'));
 assert('toolbar stays open until its toggle is clicked again', editorSource.includes('data-task-note-toolbar-persistence="toggle-only"') && !editorSource.includes("document.addEventListener('pointerdown', handlePointerDown") && !editorSource.includes("setIsOpen(false)"));
 assert('touch toolbar controls preserve editor selection', editorSource.includes('onPointerDown={event => event.preventDefault()}'));
 assert('ambiguous paragraph and heading glyphs are replaced by visible labels', editorSource.includes('label="本文"') && editorSource.includes('label="小標題"'));

@@ -184,7 +184,7 @@ const initializeLegacyContent = (content: string) => () => {
 
 const EditorEditablePlugin: React.FC<{ editable: boolean }> = ({ editable }) => {
   const [editor] = useLexicalComposerContext();
-  React.useEffect(() => editor.setEditable(editable), [editable, editor]);
+  React.useLayoutEffect(() => editor.setEditable(editable), [editable, editor]);
   return null;
 };
 
@@ -365,6 +365,7 @@ const NoteToolbarPlugin: React.FC<{
   React.useEffect(() => editor.registerCommand(
     KEY_DOWN_COMMAND,
     event => {
+      if (event.isComposing || event.keyCode === 229 || editor.isComposing()) return false;
       const target = event.target as HTMLElement | null;
       if (!target || !editor.getRootElement()?.contains(target)) return false;
       const systemKey = event.ctrlKey || event.metaKey;
@@ -383,12 +384,13 @@ const NoteToolbarPlugin: React.FC<{
         return true;
       }
       if (systemKey && ['a', 'b', 'i', 'u', 'z', 'y'].includes(shortcut)) {
+        if (shortcut !== 'a') onBeforeMutation();
         event.stopPropagation();
       }
       return false;
     },
     COMMAND_PRIORITY_HIGH,
-  ), [editor, onSave, requestLink]);
+  ), [editor, onBeforeMutation, onSave, requestLink]);
 
   const formatText = (format: TextFormatType) => {
     onBeforeMutation();
@@ -441,7 +443,7 @@ const NoteToolbarPlugin: React.FC<{
   if (!showToolbar) return null;
 
   return (
-    <div className="relative inline-flex h-full w-7 shrink-0" data-task-note-format-control="true">
+    <div className="inline-flex h-full w-7 shrink-0 md:relative" data-task-note-format-control="true">
       <TaskDetailSectionAction
         onMouseDown={event => event.preventDefault()}
         onPointerDown={event => event.preventDefault()}
@@ -462,7 +464,7 @@ const NoteToolbarPlugin: React.FC<{
         <div
           role="toolbar"
           aria-label={'文字格式工具：' + (noteTitle || '未命名備註')}
-          className="absolute left-0 top-full z-40 mt-1 w-[min(36rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] overflow-x-auto overscroll-x-contain rounded-lg border border-slate-200 bg-white p-1.5 shadow-xl md:left-auto md:right-8 md:top-1/2 md:mt-0 md:w-auto md:max-w-[calc(100vw-5rem)] md:-translate-y-1/2"
+          className="absolute left-0 top-full z-40 mt-1 w-full max-w-xl overflow-x-auto overscroll-x-contain rounded-lg border border-slate-200 bg-white p-1.5 shadow-xl md:left-auto md:right-8 md:top-1/2 md:mt-0 md:w-max md:max-w-[calc(60pt+1.75rem)] md:-translate-y-1/2"
           data-task-note-toolbar-popover="true"
           data-task-note-toolbar-placement="anchored-below-mobile-desktop-left"
           data-task-note-toolbar-persistence="toggle-only"

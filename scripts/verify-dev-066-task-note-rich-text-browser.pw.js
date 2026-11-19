@@ -199,7 +199,25 @@ async (page) => {
   await secondEditor.press('Control+a');
   await secondCard.locator('[data-task-note-format-toggle="true"]').click();
   const secondToolbar = secondCard.locator('[data-task-note-toolbar-popover="true"]');
-  await secondToolbar.getByRole('button', { name: '粗體' }).click();
+  try {
+    await secondToolbar.getByRole('button', { name: '粗體' }).click({ timeout: 5000 });
+  } catch (error) {
+    const geometry = await secondToolbar.getByRole('button', { name: '粗體' }).evaluate(button => {
+      const rect = element => {
+        const r = element?.getBoundingClientRect();
+        return r ? { x: r.x, y: r.y, width: r.width, height: r.height } : null;
+      };
+      const r = button.getBoundingClientRect();
+      const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+      const card = button.closest('[data-task-detail-note-card]');
+      return { button: rect(button), toolbar: rect(button.closest('[role="toolbar"]')), card: rect(card), toggle: rect(card?.querySelector('[data-task-note-format-toggle]')), dialog: rect(document.querySelector('[data-task-details-dialog]')), body: rect(document.querySelector('[data-task-details-scroll-surface]')), hit: hit?.outerHTML?.slice(0, 500) };
+    });
+    await page.screenshot({ path: 'output/playwright/dev-066-toolbar-hit-failure.png' });
+    throw new Error(error.message + '\nTOOLBAR_GEOMETRY=' + JSON.stringify(geometry));
+  }
+  await page.waitForTimeout(1200);
+  assert(!(await readStoredTask()).detailNotes[1].richContent, 'format-only edits stay local until explicit save');
+  await secondEditor.press('Control+s');
   await page.waitForFunction(() => {
     const task = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}')['dev066-task'];
     const root = task?.detailNotes?.[1]?.richContent?.editorState?.root;
@@ -215,6 +233,7 @@ async (page) => {
   await page.waitForFunction(() => document.querySelectorAll('[data-task-detail-note-card="true"]')[1]?.querySelector('ul'));
   await secondToolbar.getByRole('button', { name: '項目清單' }).click();
   await page.waitForFunction(() => !document.querySelectorAll('[data-task-detail-note-card="true"]')[1]?.querySelector('ul'));
+  await page.evaluate(() => { window.prompt = () => 'https://example.com/dev066'; });
   await secondToolbar.getByRole('button', { name: '連結' }).click();
   await page.waitForFunction(() => document.querySelectorAll('[data-task-detail-note-card="true"]')[1]?.querySelector('a[href="https://example.com/dev066"]'));
   await secondToolbar.getByRole('button', { name: '清除格式' }).click();
@@ -222,6 +241,7 @@ async (page) => {
   await secondEditor.click();
   await secondEditor.press('Control+a');
   await secondEditor.press('Control+b');
+  await secondEditor.press('Control+s');
   await page.waitForFunction(() => {
     const task = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}')['dev066-task'];
     return task?.detailNotes?.[1]?.richContent?.editorState?.root?.children?.[0]?.children?.[0]?.format === 1;
@@ -271,6 +291,9 @@ async (page) => {
   await firstMobileEditor.click();
   await firstMobileEditor.press('Control+End');
   await firstMobileEditor.type(mobileText);
+  await page.waitForTimeout(1200);
+  assert(!(await readStoredTask()).detailNotes[0].content.includes(mobileText), 'mobile typing stays a draft until explicit save');
+  await firstMobileEditor.press('Control+s');
   await page.waitForFunction(mobileText => {
     const task = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}')['dev066-task'];
     return task?.detailNotes?.[0]?.content?.includes(mobileText);
@@ -292,6 +315,7 @@ async (page) => {
   assert(mobileToolbarBounds.x >= 0 && mobileToolbarBounds.x + mobileToolbarBounds.width <= mobileToolbarViewport.width + 1, 'mobile toolbar stays inside viewport', { mobileToolbarBounds, mobileToolbarViewport });
   assert(mobileToolbarBounds.width >= 280, 'mobile toolbar uses the note header width instead of collapsing to one button', { mobileToolbarBounds });
   await firstMobileToolbar.getByRole('button', { name: '底線' }).click();
+  await firstMobileEditor.press('Control+s');
   await page.waitForFunction(() => {
     const task = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}')['dev066-task'];
     return (task?.detailNotes?.[0]?.richContent?.editorState?.root?.children?.[0]?.children?.[0]?.format & 8) === 8;
@@ -343,7 +367,7 @@ async (page) => {
     assert(await reopenedMobileModal.locator('[data-task-note-editor-loaded="true"]').count() === 2, 'responsive viewport keeps the unified editors mounted', { viewport });
   }
 
-  console.log(JSON.stringify({
+  const artifact = { status: 'PASS',
     desktop: {
       editorCount: 2,
       formatToggleCount: 2,
@@ -363,5 +387,7 @@ async (page) => {
       responsiveHealth,
     },
     diagnostics,
-  }, null, 2));
+  };
+  await page.evaluate(artifact => { window.__DEV066_ARTIFACT = artifact; }, artifact);
+  return artifact;
 }

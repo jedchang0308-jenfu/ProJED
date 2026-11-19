@@ -119,7 +119,8 @@ await check('P03-local-collapse-navigation', 'navigation helpers are local immut
   assert.deepEqual(popped.entries.map(entry => entry.taskId), ['root']);
   assert.deepEqual(clearTaskDetailsNavigation(), []);
   const section = readFileSync(resolve(root, 'src/components/TaskDetailsSubtaskSection.tsx'), 'utf8');
-  assert.match(section, /useState\(true\)/);
+  assert.match(section, /aria-expanded=\{isPathExpanded\}/);
+  assert.match(section, /setIsPathExpanded\(expanded => !expanded\)/);
   assert.doesNotMatch(section, /localStorage/);
 });
 
@@ -177,7 +178,8 @@ await check('P08-persistence-pending-gate', 'pending persistence waits, failed p
 await check('P09-save-reject-recovery', 'save rejection decision preserves current entry and exposes recoverable stay semantics; no stale transition is executed.', () => {
   assert.equal(resolveTaskDetailsPersistenceDecision({ pendingCount: 0, hasFailedUpdates: true, hasPendingTransition: true }), 'stay');
   const modal = readFileSync(resolve(root, 'src/components/TaskDetailsModal.tsx'), 'utf8');
-  assert.match(modal, /toast\.error\((?:isUnknown|[^\n])*'儲存(狀態未確認，請先重試|失敗，請(?:先)?重試)'/);
+  assert.match(modal, /data-task-details-save-retry="true"/);
+  assert.match(modal, /saveState === 'unknown' \? '狀態未確認，請重試' : '儲存失敗，請重試'/);
   assert.match(modal, /pendingTransitionRef\.current = null/);
 });
 

@@ -211,12 +211,17 @@ async (page) => {
   await taskModal.waitFor({ state: 'visible', timeout: 10000 });
   const taskTitleInput = taskModal.locator('[data-task-details-title-input="true"]');
   const originalTaskTitle = await taskTitleInput.inputValue();
+  const taskId = await taskModal.getAttribute('data-task-id');
+  const storedTaskBeforeDraft = await page.evaluate(id => JSON.stringify(JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}')[id]), taskId);
   await taskTitleInput.fill(`${originalTaskTitle} DEV097 未保存`);
+  await taskTitleInput.blur();
+  await page.waitForTimeout(1250);
+  assert(await page.evaluate(id => JSON.stringify(JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}')[id]), taskId) === storedTaskBeforeDraft, 'task draft must remain unpersisted across blur and idle');
   const taskDetailsDirty = await waitForOwner(page, 'task-details', 'dirty');
   const taskDetailsBlocked = await assertBlockedByOwner(page, 'task details local edit');
   await taskTitleInput.press('Escape');
   const cancelledTaskTitle = await taskTitleInput.inputValue();
-  assert(cancelledTaskTitle === originalTaskTitle, 'Escape must restore the task title before autosave', { originalTaskTitle, cancelledTaskTitle });
+  assert(cancelledTaskTitle === originalTaskTitle, 'Escape must cancel the local task title draft', { originalTaskTitle, cancelledTaskTitle });
   const taskDetailsSafe = await waitForOwner(page, 'task-details', 'safe');
   await taskModal.getByRole('button', { name: '關閉任務詳情' }).click();
   await taskModal.waitFor({ state: 'hidden', timeout: 10000 });
