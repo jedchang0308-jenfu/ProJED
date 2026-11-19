@@ -44,8 +44,8 @@ const checks = [
     && distRootManifest.id === baselineRootManifest.id
     && distRootManifest.start_url === baselineRootManifest.start_url
     && distRootManifest.scope === baselineRootManifest.scope],
-  ['W07-build-b-shortcut', shortcut?.name === 'ProJED-快速建任務'
-    && shortcut.short_name === 'ProJED-快速建任務'
+  ['W07-build-b-shortcut', shortcut?.name === 'ProJED-建待辦'
+    && shortcut.short_name === 'ProJED-建待辦'
     && shortcut.description === '直接輸入一筆待辦'
     && shortcut.url === '/quick-task/'
     && shortcut.icons?.some(icon => icon.sizes === '192x192')

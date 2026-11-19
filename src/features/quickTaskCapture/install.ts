@@ -196,7 +196,7 @@ export const installQuickInstallGuide = (container: HTMLElement, options?: Quick
     }
     if (platform === 'android' || (platform === 'browser' && compactViewport.matches)) {
       return {
-        title: '從 Chrome 安裝 ProJED-快速建任務',
+        title: '從 Chrome 安裝 ProJED-建待辦',
         message: '用手機 Chrome 開啟此頁，點右上角「⋮」，選「安裝應用程式」，再點「安裝」。',
       };
     }
@@ -234,7 +234,7 @@ export const installQuickInstallGuide = (container: HTMLElement, options?: Quick
     const pendingStep = document.createElement('li');
     pendingStep.append(pendingMessage);
     const installStep = document.createElement('li');
-    installStep.textContent = '先保留安裝連結；只有在 Android「設定 → 應用程式」找得到「ProJED-快速建任務」時，才解除安裝該 App。';
+    installStep.textContent = '先保留安裝連結；只有在 Android「設定 → 應用程式」找得到「ProJED-建待辦」（舊版名稱「ProJED-快速建任務」）時，才解除安裝該 App。';
     const reopenStep = document.createElement('li');
     reopenStep.textContent = '從保留的連結以 Chrome 開啟，選「安裝應用程式」，用原帳號登入；完成後確認應用程式清單有獨立圖示。';
     stepList.append(pendingStep, installStep, reopenStep);
@@ -252,7 +252,7 @@ export const installQuickInstallGuide = (container: HTMLElement, options?: Quick
     const destinationLink = document.createElement('a');
     destinationLink.className = 'quick-task-install-destination';
     destinationLink.href = installUrl;
-    destinationLink.textContent = '開啟 ProJED-快速建任務安裝頁';
+    destinationLink.textContent = '開啟 ProJED-建待辦安裝頁';
     dialogContent.append(destinationLink);
   }
 
@@ -451,7 +451,7 @@ export const installQuickInstallGuide = (container: HTMLElement, options?: Quick
     installButton.textContent = platform === 'standalone'
       ? '安裝與圖示'
       : deferredPrompt
-        ? '安裝 ProJED-快速建任務'
+        ? '安裝 ProJED-建待辦'
         : platform !== 'browser' || compactViewport.matches
           ? 'APP安裝教學'
           : '安裝APP';
@@ -463,7 +463,7 @@ export const installQuickInstallGuide = (container: HTMLElement, options?: Quick
   const promptInstall = async () => {
     if (!active || suspended || installing) return;
     if (mainProductionOrigin) {
-      showInstallNotice('目前這個網址屬於 ProJED 主程式。若有尚未同步的任務，請先在此完成同步，再開啟快速 App 的安裝頁。', '安裝 ProJED-快速建任務');
+      showInstallNotice('目前這個網址屬於 ProJED 主程式。若有尚未同步的任務，請先在此完成同步，再開啟快速 App 的安裝頁。', '安裝 ProJED-建待辦');
       return;
     }
     if (!deferredPrompt || platform === 'standalone') {
@@ -622,7 +622,7 @@ export const installQuickInstallGuide = (container: HTMLElement, options?: Quick
     void (async () => {
       try {
         if (navigator.share) {
-          await navigator.share({ title: '安裝 ProJED-快速建任務', url: installUrl });
+          await navigator.share({ title: '安裝 ProJED-建待辦', url: installUrl });
           if (!active || suspended || lifecycleEpoch !== operationEpoch) return;
           linkNotice = '已開啟分享選單；請將連結存到卸載後可開啟的位置。';
         } else if (navigator.clipboard?.writeText) {

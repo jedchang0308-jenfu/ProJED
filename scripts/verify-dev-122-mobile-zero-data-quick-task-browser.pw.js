@@ -219,7 +219,7 @@ async (page) => {
       const installAction = installPage.getByRole('button', { name: '在桌面建立APP' });
       await installAction.waitFor({ state: 'visible' });
       await installAction.click();
-      const nativeInstallAction = installPage.getByRole('button', { name: '安裝 ProJED-快速建任務' });
+      const nativeInstallAction = installPage.getByRole('button', { name: '安裝 ProJED-建待辦' });
       const installNoticeDialog = installPage.getByRole('dialog', { name: '安裝提示' });
       const noPromptFeedback = await installNoticeDialog.getByText('目前瀏覽器無法直接開啟安裝視窗。請用 Chrome 或 Edge 開啟此頁，點網址列的安裝圖示。').isVisible();
       await installNoticeDialog.getByRole('button', { name: '關閉' }).click();

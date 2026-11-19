@@ -67,8 +67,8 @@ async (page) => {
       && rootManifest.value.id === '/'
       && rootManifest.value.start_url === '/'
       && rootManifest.value.scope === '/'
-      && shortcut?.name === 'ProJED-快速建任務'
-      && shortcut?.short_name === 'ProJED-快速建任務'
+      && shortcut?.name === 'ProJED-建待辦'
+      && shortcut?.short_name === 'ProJED-建待辦'
       && shortcut?.description === '直接輸入一筆待辦'
       && shortcut?.url === '/quick-task/'
       && shortcut?.icons?.some(icon => icon.sizes === '192x192')
@@ -152,9 +152,9 @@ async (page) => {
       result.screenshots.push(screenshot);
     }
     record('B24', settingsEvidence.every(evidence => evidence.entryCount === 1
-      && evidence.entryText.includes('ProJED-快速建任務')
+      && evidence.entryText.includes('ProJED-建待辦')
       && evidence.detailText.includes('與主程式相同的 Google 帳號登入')
-      && evidence.detailText.includes('開啟 ProJED-快速建任務安裝頁')
+      && evidence.detailText.includes('開啟 ProJED-建待辦安裝頁')
       && evidence.hrefs.length === 1
       && evidence.hrefs[0] === '/quick-task/?install=1'
       && !/自動.{0,8}兩.{0,8}圖示|立即.{0,8}捷徑|iOS.{0,8}長按/u.test(evidence.detailText)

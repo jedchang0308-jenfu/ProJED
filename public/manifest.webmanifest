@@ -16,8 +16,8 @@
   ],
   "shortcuts": [
     {
-      "name": "ProJED-快速建任務",
-      "short_name": "ProJED-快速建任務",
+      "name": "ProJED-建待辦",
+      "short_name": "ProJED-建待辦",
       "description": "直接輸入一筆待辦",
       "url": "/quick-task/",
       "icons": [
