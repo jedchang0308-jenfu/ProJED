@@ -28,13 +28,19 @@
 
 ### 主程式手機補驗的載入阻礙（2026-11-19）
 
-使用者已確認主程式已安裝版可看到「新版已就緒／更新／稍後」，但另開正式站 Chrome 分頁時卡在深色登入「載入中」。主程式手機更新／其他分頁驗收因此尚未通過，不沿用快速待辦的手機 PASS。
+使用者已確認主程式已安裝版可看到「新版已就緒／更新／稍後」，但另開正式站 Chrome 分頁時卡在深色登入「載入中」。這是本輪主程式手機驗收的原始失敗，後續修正與獨立的主程式實機操作結果如下，不沿用快速待辦的手機 PASS。
 
 全新未登入的手機尺寸 Edge 在有／無 worker 下皆正常到登入頁。以合成既有 session、攔截所有後端請求後，個人資料請求不回應可重現相同載入畫面；釋放為失敗後即可開啟主畫面。這確認了可造成症狀的路徑，未宣稱已直接讀取手機內的失敗請求。
 
 修正：個人資料同步共用 10 秒取消期限，失敗沿用原有 session-user fallback；未確認登入狀態仍不開放主畫面。登入等待超過 15 秒提供保留資料的手動「重試」，只重載本頁。未清除 session、放寬權限或加入自動重整。
 
-隔離驗證：未登入、個人資料不回應、session refresh 不回應三項通過；手動重試保留 session，另一頁不新增導覽且測試草稿保留。入口：`node scripts/verify-auth-startup-recovery.mjs <dist>`，以 `PROJED_PLAYWRIGHT_MODULE` 指定現有 Playwright。證據：[失敗重播](../../output/mobile-real-device/dev141-auth-profile-pending.json)、[修正驗證](../../output/auth-startup-recovery/result.json)（本機產物）。全部 Supabase 流量均由測試攔截，不使用正式身分或寫入正式資料。手機正式站補驗仍待修正版發布後完成。
+隔離驗證：未登入、個人資料不回應、session refresh 不回應三項通過；手動重試保留 session，另一頁不新增導覽且測試草稿保留。入口：`node scripts/verify-auth-startup-recovery.mjs <dist>`，以 `PROJED_PLAYWRIGHT_MODULE` 指定現有 Playwright。證據：[失敗重播](../../output/mobile-real-device/dev141-auth-profile-pending.json)、[修正驗證](../../output/auth-startup-recovery/result.json)、[同一正式產物驗證](../../output/auth-startup-recovery/production-artifact/result.json)（本機產物）。全部 Supabase 流量均由測試攔截，不使用正式身分或寫入正式資料。
+
+正式發布：[PR #31](https://github.com/jedchang0308-jenfu/ProJED/pull/31) 合併來源 `b6ca86239900c4d945b2060c42c1ae6e1d7d0206`，release `20261119132017-8675f2`。348/348 canonical 檔案及新匿名主程式啟動 smoke 通過，舊版資產保留。[發布收據](../../outputs/projed-auth-startup-release/output/release/dev-083/20261119132017-8675f2/direct-evidence.json)為本機產物。
+
+主程式手機補驗通過：使用者從已安裝「ProJED 3.0」的正常選單檢查並更新後，回覆「更新完成，可進入主畫面」。保留原本失敗的 Chrome 頁面，再另開 `https://projed-cc78d.web.app/` 新分頁，使用者確認「符合：原頁未重整，新頁正常載入」。整個正常更新驗收未要求開發人員選項、重新配對、清除資料或重裝。這是使用者協作的可見畫面驗收；未聲稱手機導覽次數、數字版號或實際失敗請求已經工具讀回。未另測主程式手機的「稍後」重開，該項手機證據仍限快速待辦。
+
+[主程式手機觀察紀錄](../../output/mobile-real-device/dev141-manual-update/main-observations.json)（本機產物）。本次結案文件不另發布 App。
 
 下方為 DEV-041 的歷史計畫與證據；本節手機補驗依現行 DEV-141 判定。
 
