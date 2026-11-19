@@ -9,11 +9,14 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
 - 建立日期：2026-11-18（Asia/Taipei）。
 - 現況與證據：已實作，本機隔離的無視窗 Edge 以三個正式型前端建置驗證 A01–A07 全數通過。主程式使用測試帳號與看板，快速新增任務使用窄版畫面。讀回了啟用中的 Service Worker、各分頁實際版本、導覽次數與其他分頁的草稿。A03 包含瀏覽器程序重新啟動與繞過 Service Worker 的版本讀回。結果：[DEV-141 瀏覽器紀錄](../output/playwright/dev-141/dev141-dda88a28/result.json)（本機產物），重現命令為 `npm run verify:dev-141-manual-update`。
-- 工程契約與驗收：[SPEC-041 DEV-141 手動更新](specs/SPEC-041-pwa-update-notification-cache-recovery.md#dev-141-manual-app-updates)，A01–A04 為使用者指定的必驗收項目。
+- 工程契約與驗收：[SPEC-041 DEV-141 手動更新](specs/SPEC-041-pwa-update-notification-cache-recovery.md#dev-141-manual-app-updates)，A01–A04、A08 為必驗收項目。2026-11-19 補齊一般單鍵更新、安裝資訊變更及支援診斷的責任邊界，並同步 SPEC-034 與 QA-DEV-041，撤除舊文件中一般更新自動套用的相反要求。一般功能發布維持安裝 identity、名稱、圖示與 standalone；一般使用者從「⋯」按「更新」完成，不得要求開發人員選項、ADB、清除資料或重裝。
+- 2026-11-19 本機複驗：以來源 `338b6e815c3ef99d60309f5ed549ac7569191cbf` 的三個真實建置及 worker，A01–A08 全數通過。新增 A08 覆蓋主程式／建待辦 × 桌面 1280／手機寬度 390 × 首次未受控制／已受控制，共八組；均從正常選單按一次更新、只導覽一次並讀回 B，A／B manifest 與圖示內容一致。首次完整執行曾在 A08 主程式桌面載入 B 時逾時；保留失敗後，增加逐案例診斷與獨立續跑，再以相同建置完成八組單獨複驗及完整 A01–A08 複驗，兩次未重現，不宣稱已確定根因或修復。證據：[完整通過結果](../output/playwright/dev-141/dev141-3ee13d61-recheck-aea36529/result.json)、[八組單獨複驗](../output/playwright/dev-141/dev141-3ee13d61-recheck-2648c22d/single-button-cases.json)、[首輪失敗](../output/playwright/dev-141/dev141-3ee13d61/result.json)（均為本機產物）。
 - 回歸：TypeScript、受影響範圍 ESLint、DEV-041 24/24、DEV-096 26/26、DEV-097 23/23、DEV-134 資產驗證 6/6 與 DEV-141 版本保留驗證通過。首輪封存 JavaScript 含未替換的 Vite preload 標記，已移到完成轉換後封存，重建後由瀏覽器讀回通過。
 - 併行分工：選單提醒請求模型 `gpt-6-sol`（high），版號入口與資產保留請求模型 `gpt-6-astra`（high）；主流程整合確認、分頁隔離與本機驗收。
 - 正式發布：2026-11-18 已發布至 `https://projed-cc78d.web.app`，release ID `20261118074427-5894bd`，來源 immutable commit `8e124da5561cbfa1ef7bb3bec11f49ff8e46cf39`。canonical artifact 158/158 檔案雜湊讀回通過；初次 Service Worker 安裝約 90 秒後 active，無 page error。DEV-141 A01–A07 於同一候選來源全數通過，證據：[發布 receipt](../output/release/dev-083/20261118074427-5894bd/direct-evidence.json)、[A01–A07 瀏覽器紀錄](../output/playwright/dev-141/dev141-25fcf4d4/result.json)。
-- 後續：用常用手機的已安裝 PWA 複驗關閉重開，並確認舊版使用者的首次導入安排；既有正式 PWA 設定檔尚未實機驗證。
+- 安裝資訊遷移實機證據（2026-11-19）：既有 Android 安裝已讀回「ProJED-建待辦」、versionCode 3、standalone、Succeeded，原 package identity 不變、未重裝或清除資料。這次改名曾需要 Chrome 原生名稱確認及支援診斷；不能當成一般功能更新的必做步驟，也不能以伺服器 manifest 或 Scheduled 代替完成。詳見[實機紀錄](../output/android-diagnostics/verification-summary.md)（本機產物）。
+- 後續：一般功能更新 A03／A04 在常用手機已安裝 PWA 的關閉重開與分頁隔離仍需裝置補驗，並確認舊更新器首次導入安排；上述安裝資訊遷移成功不替代這兩項驗證。本次文件／驗證補強不代表已另行發布正式站。
+- 本輪手機驗收安排（2026-11-19）：手機已安裝「ProJED-建待辦」的正常選單回報「已是最新版」，當時正式站為 `20261119091203-538b7b`；此訊息不視為跨版本更新通過。使用者已核准先提交、合併並發布本次文件／驗證腳本，再以手機的正常「稍後／更新」操作補驗，不重開偵錯或重新配對。實機結果尚待完成，不能先標記通過。
 - 待定：正式舊版支援期限。封裝以至少 14 天為預設，從確認舊版已被取代後保守計算。
 
 <a id="dev-140-okr-list-consolidation"></a>
@@ -403,7 +406,7 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 
 ## 總任務清單
 
-- ✓ DEV-141 [交付點] [已實作／A01–A07 通過／已發布 2026-11-18] [ProJED] [新版先通知，由使用者手動更新](#dev-141-manual-app-updates)
+- ✓ DEV-141 [交付點] [已實作／A01–A08 本機通過／已發布 2026-11-18] [ProJED] [新版先通知，由使用者手動更新](#dev-141-manual-app-updates)
 
 - ✓ DEV-140 [交付點] [已實作／本機瀏覽器驗收通過] [ProJED] [以 OKR 模式整合清單模式](#dev-140-okr-list-consolidation)
 

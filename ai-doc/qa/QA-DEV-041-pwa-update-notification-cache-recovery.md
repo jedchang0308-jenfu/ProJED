@@ -5,6 +5,8 @@
 關聯 SPEC: `ai-doc/specs/SPEC-041-pwa-update-notification-cache-recovery.md`
 建立日期: 2026-07-05
 
+> 2026-11-19 現行契約：一般新版只在「⋯」提醒、使用者按「更新」後套用，依 [SPEC-041 DEV-141 的 A01–A08](../specs/SPEC-041-pwa-update-notification-cache-recovery.md#dev-141-manual-app-updates) 驗收。一般更新不得要求開發人員選項、ADB、清除資料或重裝；名稱／圖示／模式等安裝資訊變更另需原生遷移驗證。下方保留 DEV-041 歷史案例，不以早期自動套用或重載條款覆蓋現行契約。可重現入口：`npm run verify:dev-141-manual-update`。
+
 > 2026-08-30 authority note：本文件保留 DEV-041 Phase 1 與既有 production release 的歷史驗證事實。DEV-096 已重新開啟「同版本提示重複出現」缺陷；B02 的舊 CTA「一鍵更新到最新版」與 C01～C04 的 normal cache-purge apply 語意，已由 SPEC-041 `DEV-096 Corrective Addendum` 及 `ai-doc/qa/QA-DEV-096-pwa-update-transaction-convergence.md` 取代。其他 DEV-041 cases 仍是 regression；不得以本文件歷史 PASS 宣稱 DEV-096 已通過。
 
 ## QA 目標
