@@ -1,8 +1,11 @@
-import type { Dependency, TaskNode, TaskTag } from '../../types';
+import type { Dependency, TaskNode, TaskTag, TaskNoteCompareAndSetResult, TaskNotePersistenceSnapshot } from '../../types';
+import type { BoardTaskOrderCommand, BoardTaskOrderResult } from '../../features/taskCreation/boardTaskOrder';
 import { parseHttpDependency, parseHttpTag, parseHttpTask } from './domainReadAdapter';
 import { HttpApiClient } from './httpApiClient';
 
 export interface ProjedDomainWriteAdapter {
+  commitBoardOrder(command: BoardTaskOrderCommand, signal?: AbortSignal): Promise<BoardTaskOrderResult>;
+  compareAndSetNotes(workspaceRef: string, boardRef: string, taskRef: string, expected: TaskNotePersistenceSnapshot, next: TaskNotePersistenceSnapshot, signal?: AbortSignal): Promise<TaskNoteCompareAndSetResult>;
   createTask(workspaceRef: string, boardRef: string, task: TaskNode, signal?: AbortSignal): Promise<TaskNode>;
   updateTask(workspaceRef: string, boardRef: string, taskRef: string, updates: Partial<TaskNode>, signal?: AbortSignal): Promise<TaskNode>;
   batchUpdateTasks(
@@ -92,6 +95,29 @@ function taskUpdateBody(updates: Partial<TaskNode>): Record<string, unknown> {
 
 export function createHttpDomainWriteAdapter(client: HttpApiClient): ProjedDomainWriteAdapter {
   return {
+    async commitBoardOrder(command, signal) {
+      const body = command.kind === 'create'
+        ? {kind:command.kind,node:taskCreateBody(command.node),destination:command.destination,protectedTaskIds:command.protectedTaskIds,...(command.reopenParent === undefined ? {} : {reopenParent:command.reopenParent})}
+        : {kind:command.kind,taskId:command.taskId,sourceParentId:command.sourceParentId,destination:command.destination,protectedTaskIds:command.protectedTaskIds};
+      const result = data(await client.request<unknown>(boardPath(command.workspaceId,command.boardId,'tasks:commit-order'), {method:'POST',body,signal}), 'TASK_ORDER') as BoardTaskOrderResult;
+      const statuses = new Set(['todo','in_progress','delayed','completed','unsure','onhold']);
+      if (!result || typeof result !== 'object' || typeof result.reopenedParent !== 'boolean' || !Array.isArray(result.nodes) || result.nodes.length === 0
+          || result.nodes.some(node => !node || typeof node.id !== 'string' || !node.id || !(node.parentId === null || typeof node.parentId === 'string')
+            || !Number.isFinite(node.order) || !statuses.has(node.status) || !Number.isSafeInteger(node.createdAt) || !Number.isSafeInteger(node.updatedAt)
+            || typeof node.storageId !== 'string' || !node.storageId)
+          || new Set(result.nodes.map(node => node.id)).size !== result.nodes.length) throw new Error('HTTP_API_INVALID_TASK_ORDER');
+      return result;
+    },
+    async compareAndSetNotes(workspaceRef,boardRef,taskRef,expected,next,signal) {
+      const value = data(await client.request<unknown>(boardPath(workspaceRef,boardRef,`tasks/${ref(taskRef,'TASK_REF')}/notes:compare-and-set`), {
+        method:'POST',body:{expected,next},signal,
+      }), 'TASK_NOTES') as TaskNoteCompareAndSetResult;
+      if (!value || !['persisted','conflict'].includes(value.status) || !value.snapshot || !Array.isArray(value.snapshot.detailNotes)
+          || !(value.snapshot.description === null || typeof value.snapshot.description === 'string') || !Number.isSafeInteger(value.snapshot.updatedAt)) throw new Error('HTTP_API_INVALID_TASK_NOTES');
+      // Reuse the task DTO's rich-note validation before exposing remote content.
+      parseHttpTask({id:taskRef,workspaceId:workspaceRef,boardId:boardRef,parentId:null,title:'notes',status:'todo',order:0,detailNotes:value.snapshot.detailNotes});
+      return value;
+    },
     async createTask(workspaceRef, boardRef, task, signal) {
       const response = await client.request<unknown>(boardPath(workspaceRef, boardRef, 'tasks'), {
         method: 'POST', body: taskCreateBody(task), signal,

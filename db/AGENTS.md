@@ -35,6 +35,8 @@
 
 ## SQL 邊界
 
+`0043` 只補建立任務所需的同看板序號重編：由 actor transaction 核對 `create_task` 並暫設精確 scope，trigger 限制只能更新 `sort_order`／`updated_at`；一般移動、內容編輯與備註 CAS 仍各自檢查原 capability。`0001`～`0042` 保留既有 qualified bytes。
+
 - 物件只能落在 `projed_core`／`projed_contract`，且需符合本次 source-controlled DEV-139 profile 的 allowlist。
 - 所有 helper 必須是 `SECURITY INVOKER`、固定 `search_path` 並使用完整 schema 名稱；不得讀 `auth.users`、`auth.uid()` 或客戶端可傳入的 actor 參數。
 - 新物件需明確撤銷 PUBLIC 權限；含使用者／資源資料的 table 須啟用並 FORCE RLS。不得建立跨 core FK、extension、任意 dynamic SQL 或 `SECURITY DEFINER`。

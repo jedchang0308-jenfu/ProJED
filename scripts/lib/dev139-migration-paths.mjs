@@ -47,4 +47,5 @@ export const S3_MIGRATION_PATHS = Object.freeze([
   'db/migrations/0040_meeting_llm_units_v1.sql',
   'db/migrations/0041_meeting_analysis_publication_v1.sql',
   'db/migrations/0042_meeting_audio_cleanup_v1.sql',
+  'db/migrations/0043_task_order_reindex_v1.sql',
 ]);

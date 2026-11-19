@@ -13,6 +13,7 @@ import {
   validTaskDetailNotes,
 } from './domainRead.js';
 import { KernelError } from './errors.js';
+import { projectBoardTaskOrder, type BoardTaskOrderCommand, type BoardTaskOrderResult } from '../shared/boardTaskOrder.js';
 
 const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -241,6 +242,100 @@ function validateCreate(input: DomainTaskCreate): void {
 
 export class DomainWriteRepository {
   constructor(private readonly readRepository = new DomainReadRepository()) {}
+
+  async commitBoardOrder(port: ActorQueryPort, workspaceRef: string, boardRef: string, input: Record<string, unknown>): Promise<BoardTaskOrderResult> {
+    const create = input.kind === 'create';
+    if (!create && input.kind !== 'move') invalid('Task order kind is invalid');
+    const keys = create ? ['kind','node','destination','protectedTaskIds','reopenParent'] : ['kind','taskId','sourceParentId','destination','protectedTaskIds'];
+    if (Object.keys(input).some(key => !keys.includes(key)) || !isRecord(input.destination)) invalid('Task order input is invalid');
+    const destination = input.destination;
+    if (!['append','before','after','swap'].includes(String(destination.position))
+        || Object.keys(destination).some(key => !['parentId','position','anchorId'].includes(key))
+        || (destination.parentId !== null && typeof destination.parentId !== 'string')
+        || (destination.position === 'append' ? hasOwn(destination, 'anchorId') : typeof destination.anchorId !== 'string')
+        || !Array.isArray(input.protectedTaskIds) || input.protectedTaskIds.length > 10000
+        || input.protectedTaskIds.some(id => typeof id !== 'string' || id.length < 1 || id.length > 255)
+        || (hasOwn(input,'reopenParent') && typeof input.reopenParent !== 'boolean')) invalid('Task order destination is invalid');
+    const board = await resolveBoard(port, workspaceRef, boardRef);
+    await assertCapability(port, board, create ? 'create_task' : 'move_task');
+    const tasks = await this.readRepository.listTasks(port, workspaceRef, boardRef);
+    const canonical = (value: unknown, allowArchived = false): string | null => {
+      if (value === null) return null;
+      reference(value, 'task reference');
+      const matches = tasks.filter(task => task.id === value || task.storageId === value);
+      if (matches.length !== 1 || (!allowArchived && matches[0]!.isArchived)) notFound();
+      return matches[0]!.id;
+    };
+    const parentId = canonical(destination.parentId);
+    const normalizedDestination = destination.position === 'append' ? { parentId, position: 'append' as const }
+      : { parentId, position: destination.position as 'before'|'after'|'swap', anchorId: canonical(destination.anchorId)! };
+    let node: DomainTaskCreate | undefined;
+    let command: BoardTaskOrderCommand;
+    const base = { workspaceId: board.legacyWorkspaceId, boardId: board.legacyBoardId, destination: normalizedDestination,
+      protectedTaskIds: (input.protectedTaskIds as string[]).map(id => tasks.find(task => task.storageId === id)?.id ?? id) };
+    if (create) {
+      node = input.node as unknown as DomainTaskCreate;
+      validateCreate(node);
+      if (tasks.some(task => task.id === node!.id || task.storageId === node!.id)) throw new KernelError('REVISION_CONFLICT','Task already exists',409);
+      command = { ...base, kind: 'create', node: { ...node, workspaceId:base.workspaceId,boardId:base.boardId,parentId }, reopenParent: input.reopenParent === true };
+    } else {
+      command = { ...base, kind: 'move', taskId: canonical(input.taskId)!, sourceParentId: canonical(input.sourceParentId,true) };
+    }
+    const edit = await port.query<{allowed:boolean}>(
+      'SELECT projed_core.actor_has_board_capability_v1($1::uuid,$2::uuid,\'edit_task\') AS allowed', [board.tenantId,board.id]);
+    let result: BoardTaskOrderResult;
+    try { result = projectBoardTaskOrder(command, tasks, edit.rows[0]?.allowed === true); }
+    catch (cause) { throw new KernelError('REVISION_CONFLICT','Task order changed; reload before retrying',409,{cause}); }
+    if (create) {
+      const ranks = result.nodes.flatMap(patch => {
+        const old = tasks.find(task => task.id === patch.id);
+        return old && old.order !== patch.order ? [{ id:old.storageId!,order:patch.order }] : [];
+      });
+      if (ranks.length > 0) {
+        await port.reindexTaskOrder(board.tenantId,board.id,ranks);
+        await bumpRevision(port,board.tenantId,board.id);
+      }
+    }
+    for (const patch of result.nodes) {
+      if (create && patch.id === node!.id) {
+        await this.createTask(port,workspaceRef,boardRef,{...node!,parentId:patch.parentId,order:patch.order});
+      } else {
+        const old = tasks.find(task => task.id === patch.id)!;
+        const updates: DomainTaskUpdate = {};
+        if (old.parentId !== patch.parentId) updates.parentId = patch.parentId;
+        if (!create && old.order !== patch.order) updates.order = patch.order;
+        if (old.status !== patch.status) updates.status = patch.status;
+        if (Object.keys(updates).length > 0) await this.updateTask(port,workspaceRef,boardRef,patch.id,updates);
+      }
+    }
+    const current = await this.readRepository.listTasks(port,workspaceRef,boardRef);
+    return { nodes: result.nodes.map(patch => {
+      const {id,storageId,parentId,order,status,createdAt,updatedAt} = current.find(task => task.id === patch.id)!;
+      return {id,storageId,parentId,order,status,createdAt,updatedAt};
+    }),
+      reopenedParent: result.reopenedParent };
+  }
+
+  async compareAndSetTaskNotes(port: ActorQueryPort, workspaceRef: string, boardRef: string, taskRef: string, input: Record<string, unknown>) {
+    const validSnapshot = (value: unknown): value is {detailNotes:unknown[];description:string|null;updatedAt?:number} => isRecord(value)
+      && Object.keys(value).every(key => ['detailNotes','description','updatedAt'].includes(key))
+      && validTaskDetailNotes(value.detailNotes) && (value.description === null || typeof value.description === 'string')
+      && (!hasOwn(value,'updatedAt') || (typeof value.updatedAt === 'number' && Number.isSafeInteger(value.updatedAt) && value.updatedAt >= 0));
+    if (Object.keys(input).some(key => !['expected','next'].includes(key)) || !validSnapshot(input.expected) || !validSnapshot(input.next)) invalid('Task note snapshots are invalid');
+    const board = await resolveBoard(port,workspaceRef,boardRef);
+    await assertCapability(port,board,'edit_task');
+    const id = await resolveTaskId(port,board,taskRef);
+    const updated = await port.query(`UPDATE projed_core.wbs_items SET detail_notes=$4::jsonb,description=$5,updated_at=now()
+      WHERE tenant_id=$1::uuid AND project_id=$2::uuid AND id=$3::uuid AND NOT archived
+        AND detail_notes=$6::jsonb AND description IS NOT DISTINCT FROM $7::text`,
+    [board.tenantId,board.id,id,JSON.stringify(input.next.detailNotes),input.next.description,
+      JSON.stringify(input.expected.detailNotes),input.expected.description]);
+    const current = (await this.readRepository.listTasks(port,workspaceRef,boardRef)).find(task => task.storageId === id);
+    if (!current || current.isArchived) notFound();
+    if (updated.rowCount === 1) await bumpRevision(port,board.tenantId,board.id);
+    return {status:updated.rowCount === 1 ? 'persisted' as const : 'conflict' as const,
+      snapshot:{detailNotes:current.detailNotes,description:current.description ?? null,updatedAt:current.updatedAt}};
+  }
 
   async createTask(
     port: ActorQueryPort,

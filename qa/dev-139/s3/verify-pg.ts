@@ -48,6 +48,7 @@ import { verifyMeetingAudioPostgres } from './verify-meeting-audio-pg.js';
 import { verifyMeetingAudioCleanupPostgres } from './verify-meeting-audio-cleanup-pg.js';
 import { verifyMeetingUploadPostgres } from './verify-meeting-upload-pg.js';
 import { verifyMeetingReviewPostgres } from './verify-meeting-review-pg.js';
+import { verifyTaskOrderNotesPostgres } from './verify-task-order-notes-pg.js';
 import { createPreferencesHttpDispatcher } from '../../../server/preferencesHttp.js';
 import { createCalendarHttpDispatcher } from '../../../server/calendarHttp.js';
 import { buildCalendarFeed } from '../../../server/calendar.js';
@@ -137,6 +138,7 @@ async function runIndependent(name:string,verify:()=>Promise<void>):Promise<void
   }
 }
 await runIndependent('actor-serialization',()=>verifyActorSerializationPostgres(database,config,actorA,actorB));
+await runIndependent('task-order-notes',()=>verifyTaskOrderNotesPostgres(config,actorB,actorA,actorD));
 await verifyMeetingSynthesisPostgres(database,config,actorB,actorA,actorD);
 await runIndependent('meeting-capture',()=>verifyMeetingCapturePostgres(database,config,actorB,actorA,actorD));
 await runIndependent('meeting-audio',()=>verifyMeetingAudioPostgres(database,config,actorB,actorA,actorD));
@@ -1757,6 +1759,7 @@ console.log(JSON.stringify({
     'rag-record-mirror-index-consumer-current-retrieval-private-denial-and-supersession',
     'meeting-text-synthesis-current-scope-quality-model-fallback-and-stale-reply-denial',
     'actor-transaction-cross-account-serialization-native-advisory-wait',
+    'http-task-order-atomic-rank-concurrency-rollback-parent-capability-and-notes-cas',
     'meeting-capture-http-source-clock-pointer-private-cancel-atomic-refund-and-cleanup',
     'meeting-audio-private-proxy-generation-readback-cancel-parent-delete-and-cleanup-proof',
     'meeting-audio-cleanup-retention-lease-generation-and-no-private-content',

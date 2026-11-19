@@ -190,9 +190,14 @@
     {
       "version": "0042_meeting_audio_cleanup_v1",
       "path": "db/migrations/0042_meeting_audio_cleanup_v1.sql"
+    },
+    {
+      "version": "0043_task_order_reindex_v1",
+      "path": "db/migrations/0043_task_order_reindex_v1.sql"
     }
   ],
   "objectAllowlist": [
+    "projed_core.task_order_reindex_guard_v1",
     "projed_core.schema_migrations",
     "projed_core.runtime_metadata",
     "projed_core.profiles",

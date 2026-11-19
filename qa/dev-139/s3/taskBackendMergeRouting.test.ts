@@ -32,6 +32,7 @@ function facade(backend: 'http' | 'local-test' | 'supabase' | 'firebase') {
     isLocalTestBackend: backend === 'local-test',
     isSupabaseBackend: backend === 'supabase',
     httpDomainReadService: provider('http'),
+    httpDomainWriteService: provider('http'),
     localTestNodeService: provider('local-test'),
     supabaseNodeService: provider('supabase'),
     firestoreNodeService: provider('firebase'),
@@ -47,18 +48,22 @@ function facade(backend: 'http' | 'local-test' | 'supabase' | 'firebase') {
   };
 }
 
-test('HTTP facade rejects unported order/note writes and forwards read cancellation without calling legacy providers', async () => {
+test('HTTP facade routes atomic order/note writes and read cancellation without calling legacy providers', async () => {
   const { calls, service } = facade('http');
-  await assert.rejects(service.commitBoardOrder({ kind: 'move' }, true), /HTTP backend does not support atomic board task ordering/);
-  await assert.rejects(service.compareAndSetNotes('workspace', 'board', 'task', {}, {}), /HTTP backend does not support task note compare-and-set/);
-  assert.equal(calls.length, 0, 'unsupported HTTP writes must not fall through to Firebase/Supabase');
+  const command = {kind:'move'};
+  await service.commitBoardOrder(command, true);
+  await service.compareAndSetNotes('workspace', 'board', 'task', {}, {});
+  assert.deepEqual(calls, [
+    {provider:'http',method:'commitBoardOrder',args:[command]},
+    {provider:'http',method:'compareAndSetNotes',args:['workspace','board','task',{},{}]},
+  ]);
 
   const signal = new AbortController().signal;
   await service.listByProject('workspace', 'board', signal);
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].provider, 'http');
-  assert.equal(calls[0].method, 'listTasks');
-  assert.deepEqual(calls[0].args, ['workspace', 'board', signal]);
+  assert.equal(calls.length, 3);
+  assert.equal(calls[2].provider, 'http');
+  assert.equal(calls[2].method, 'listTasks');
+  assert.deepEqual(calls[2].args, ['workspace', 'board', signal]);
 });
 
 test('main order and note operations retain each supported legacy backend and its argument contract', async () => {

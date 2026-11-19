@@ -447,7 +447,7 @@ export const boardInviteService = {
 export const nodeService = {
   commitBoardOrder: (command: BoardTaskOrderCommand, canEdit: boolean): Promise<BoardTaskOrderResult> =>
     isHttpBackend
-      ? rejectHttpUnsupported('atomic board task ordering')
+      ? httpDomainWriteService.commitBoardOrder(command)
       : isLocalTestBackend
       ? localTestNodeService.commitBoardOrder(command, canEdit)
       : isSupabaseBackend
@@ -489,7 +489,7 @@ export const nodeService = {
     next: TaskNotePersistenceSnapshot,
   ): Promise<TaskNoteCompareAndSetResult> =>
     isHttpBackend
-      ? rejectHttpUnsupported('task note compare-and-set')
+      ? httpDomainWriteService.compareAndSetNotes(workspaceId,boardId,nodeId,expected,next)
       : isLocalTestBackend
       ? localTestNodeService.compareAndSetNotes(workspaceId, boardId, nodeId, expected, next)
       : isSupabaseBackend

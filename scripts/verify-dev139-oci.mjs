@@ -402,6 +402,9 @@ try {
     assert.equal(sha(metaBytes), binding.staticFixtureSha256);
     const meta = JSON.parse(metaBytes);
     assert.equal(meta.releaseId, ${JSON.stringify(prefix)});
+    const shellVersion = JSON.parse(readFileSync('dist/app-shell-meta.json')).version;
+    assert.match(shellVersion, /^(release|build):[A-Za-z0-9][A-Za-z0-9._-]{0,159}$/);
+    const releasePath = '/app-releases/' + shellVersion.replace(':','-') + '/';
     for (const [path, expected] of [['/', meta.entrySha256], ['/quick-task/', meta.quickEntrySha256]]) {
       const response = await fetch('http://127.0.0.1:8080'+path);
       assert.equal(response.status, 200);
@@ -409,14 +412,23 @@ try {
       assert.equal(response.headers.get('cache-control'), 'no-cache');
       const bytes = Buffer.from(await response.arrayBuffer());
       assert.equal(sha(bytes), expected);
-      const assets = [...bytes.toString().matchAll(/(?:src|href)="(\/assets\/[^\"]+\.(?:js|css))"/g)].map(m=>m[1]);
+      const entry = releasePath + (path === '/' ? 'index.html' : 'quick-task/index.html');
+      const versioned = await fetch('http://127.0.0.1:8080'+entry);
+      assert.equal(versioned.status,200);
+      const html = Buffer.from(await versioned.arrayBuffer());
+      assert.equal(sha(html),sha(readFileSync('dist'+entry)));
+      assert.ok(html.toString().includes('name="projed-shell-version"'));
+      assert.ok(html.toString().includes(shellVersion));
+      const assets = [...html.toString().matchAll(/(?:src|href)="((?:\/app-releases\/[^/]+)?\/assets\/[^\"]+\.(?:js|css))"/g)].map(m=>m[1]);
       assert.ok(assets.some(asset=>asset.endsWith('.js')));
       for (const asset of assets) {
+        assert.ok(asset.startsWith(releasePath+'assets/'));
         const r = await fetch('http://127.0.0.1:8080'+asset);
         assert.equal(r.status, 200);
         assert.equal(sha(Buffer.from(await r.arrayBuffer())), sha(readFileSync('dist'+asset)));
       }
     }
+    assert.equal((await fetch('http://127.0.0.1:8080/app-releases/release-missing/index.html')).status,404);
     for (const path of ['/health/live','/health/ready']) {
       const response = await fetch('http://127.0.0.1:8080'+path);
       assert.equal(response.status, 200);

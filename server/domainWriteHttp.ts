@@ -27,7 +27,8 @@ export interface DomainWriteHttpResult {
 type DomainWriteOperation =
   | { kind: 'task-create'; workspaceRef: string; boardRef: string }
   | { kind: 'task-update' | 'task-delete'; workspaceRef: string; boardRef: string; itemRef: string }
-  | { kind: 'task-batch'; workspaceRef: string; boardRef: string }
+  | { kind: 'task-batch' | 'task-order'; workspaceRef: string; boardRef: string }
+  | { kind: 'task-notes'; workspaceRef: string; boardRef: string; itemRef: string }
   | { kind: 'task-tags'; workspaceRef: string; boardRef: string; itemRef: string }
   | { kind: 'tag-create'; workspaceRef: string }
   | { kind: 'tag-update' | 'tag-delete'; workspaceRef: string; itemRef: string }
@@ -70,6 +71,7 @@ function operationFor(rawUrl: string | undefined, method: string | undefined): D
   if (!boardRef) return null;
   if (parts.length === 8 && parts[7] === 'tasks' && method === 'POST') return { kind: 'task-create', workspaceRef, boardRef };
   if (parts.length === 8 && parts[7] === 'tasks:batch-update' && method === 'POST') return { kind: 'task-batch', workspaceRef, boardRef };
+  if (parts.length === 8 && parts[7] === 'tasks:commit-order' && method === 'POST') return { kind: 'task-order', workspaceRef, boardRef };
   if (parts.length === 8 && parts[7] === 'dependencies' && method === 'POST') {
     return { kind: 'dependency-create', workspaceRef, boardRef };
   }
@@ -78,6 +80,7 @@ function operationFor(rawUrl: string | undefined, method: string | undefined): D
   if (parts.length === 10 && parts[7] === 'tasks' && parts[9] === 'tags' && method === 'PUT') {
     return { kind: 'task-tags', workspaceRef, boardRef, itemRef };
   }
+  if (parts.length === 10 && parts[7] === 'tasks' && parts[9] === 'notes:compare-and-set' && method === 'POST') return {kind:'task-notes',workspaceRef,boardRef,itemRef};
   if (parts.length !== 9) return null;
   if (parts[7] === 'tasks') {
     if (method === 'PATCH') return { kind: 'task-update', workspaceRef, boardRef, itemRef };
@@ -93,7 +96,7 @@ function operationFor(rawUrl: string | undefined, method: string | undefined): D
 
 function isWriteShape(rawUrl: string | undefined): boolean {
   return rawUrl?.startsWith('/api/v1/workspaces/') === true
-    && (/\/(?:tasks(?::batch-update)?|dependencies|tags)(?:\/|$)/.test(rawUrl));
+    && (/\/(?:tasks(?::batch-update|:commit-order)?|dependencies|tags)(?:\/|$)/.test(rawUrl));
 }
 
 function errorResult(error: unknown, requestId: string): DomainWriteHttpResult {
@@ -198,6 +201,8 @@ export function createDomainWriteHttpDispatcher(
           case 'task-create': return repository.createTask(port, operation.workspaceRef, operation.boardRef, body as unknown as DomainTaskCreate);
           case 'task-update': return repository.updateTask(port, operation.workspaceRef, operation.boardRef, operation.itemRef, body as DomainTaskUpdate);
           case 'task-delete': return repository.deleteTask(port, operation.workspaceRef, operation.boardRef, operation.itemRef);
+          case 'task-order': return repository.commitBoardOrder(port,operation.workspaceRef,operation.boardRef,body);
+          case 'task-notes': return repository.compareAndSetTaskNotes(port,operation.workspaceRef,operation.boardRef,operation.itemRef,body);
           case 'task-batch': {
             if (!Array.isArray(body.updates)) throw new KernelError('DOMAIN_DATA_INVALID', 'Task updates are required', 400);
             return repository.batchUpdateTasks(

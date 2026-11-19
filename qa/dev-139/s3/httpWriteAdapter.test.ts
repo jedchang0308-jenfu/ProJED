@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import { createHttpCollaborationAdapter } from '../../../src/services/httpApi/collaborationAdapter';
 import { createHttpDomainWriteAdapter } from '../../../src/services/httpApi/domainWriteAdapter';
-import { HttpApiClient } from '../../../src/services/httpApi/httpApiClient';
+import { HttpApiClient, HttpApiError } from '../../../src/services/httpApi/httpApiClient';
 import type { TaskNode } from '../../../src/types';
 
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), {
@@ -16,6 +16,52 @@ const task: TaskNode = {
   title: 'Task', detailNotes: [], status: 'todo', assigneeIds: [], collaboratorIds: [], tagIds: [],
   order: 1, isArchived: false,
 };
+
+test('atomic ordering and notes use scoped HTTP bodies, canonical metadata and abort signals', async () => {
+  const captures: Array<{ path: string; init?: RequestInit }> = [];
+  const snapshot = { detailNotes: [{ id:'note',title:'Title',content:'Text' }],description:null,updatedAt:123 };
+  const patch = { id:task.id,parentId:null,order:1024,status:'todo',storageId:'canonical-task',createdAt:10,updatedAt:123 };
+  const adapter = createHttpDomainWriteAdapter(new HttpApiClient(async (input,init) => {
+    captures.push({ path:String(input),init });
+    return json({ data:String(input).endsWith('tasks:commit-order') ? { nodes:[patch],reopenedParent:false } : { status:'conflict',snapshot } });
+  }));
+  const signal = new AbortController().signal;
+  const result = await adapter.commitBoardOrder({ kind:'create',workspaceId:'ws-a',boardId:'board-a',node:{...task,storageId:'untrusted',updatedAt:999},destination:{parentId:null,position:'append'},protectedTaskIds:[],reopenParent:true },signal);
+  assert.deepEqual(result.nodes,[patch]);
+  await adapter.commitBoardOrder({ kind:'move',workspaceId:'ws-a',boardId:'board-a',taskId:task.id,sourceParentId:null,destination:{parentId:null,position:'before',anchorId:'other'},protectedTaskIds:['pending'] },signal);
+  const cas = await adapter.compareAndSetNotes('ws-a','board-a','task-a',snapshot,snapshot,signal);
+  assert.deepEqual(cas,{status:'conflict',snapshot});
+  assert.deepEqual(captures.map(value => value.path),[
+    '/api/v1/workspaces/ws-a/boards/board-a/tasks:commit-order',
+    '/api/v1/workspaces/ws-a/boards/board-a/tasks:commit-order',
+    '/api/v1/workspaces/ws-a/boards/board-a/tasks/task-a/notes:compare-and-set',
+  ]);
+  const body = JSON.parse(String(captures[0]!.init!.body));
+  assert.equal(body.node.workspaceId,undefined);
+  assert.equal(body.node.storageId,undefined);
+  assert.equal(body.node.updatedAt,undefined);
+  assert.equal(body.canEdit,undefined);
+  assert.equal(body.reopenParent,true);
+  assert.deepEqual(JSON.parse(String(captures[1]!.init!.body)), { kind:'move',taskId:task.id,sourceParentId:null,destination:{parentId:null,position:'before',anchorId:'other'},protectedTaskIds:['pending'] });
+  assert.deepEqual(JSON.parse(String(captures[2]!.init!.body)),{expected:snapshot,next:snapshot});
+  assert.ok(captures.every(value => value.init?.signal === signal));
+});
+
+test('atomic write adapters reject malformed results and preserve permission failures', async () => {
+  const command = { kind:'move' as const,workspaceId:'ws-a',boardId:'board-a',taskId:task.id,sourceParentId:null,destination:{parentId:null,position:'append' as const},protectedTaskIds:[] };
+  const patch = { id:task.id,parentId:null,order:1,status:'todo',storageId:'canonical',createdAt:1,updatedAt:2 };
+  for (const result of [{nodes:[],reopenedParent:false},{nodes:[patch,patch],reopenedParent:false},{nodes:[{...patch,order:null}],reopenedParent:false}]) {
+    const adapter = createHttpDomainWriteAdapter(new HttpApiClient(async () => json({data:result})));
+    await assert.rejects(adapter.commitBoardOrder(command),/HTTP_API_INVALID_TASK_ORDER/);
+  }
+  const empty = {detailNotes:[],description:null};
+  for (const result of [{status:'unknown',snapshot:{...empty,updatedAt:2}},{status:'persisted',snapshot:{detailNotes:[{id:'invalid'}],description:null,updatedAt:2}}]) {
+    const adapter = createHttpDomainWriteAdapter(new HttpApiClient(async () => json({data:result})));
+    await assert.rejects(adapter.compareAndSetNotes('ws-a','board-a','task-a',empty,empty),/HTTP_API_INVALID_/);
+  }
+  const denied = createHttpDomainWriteAdapter(new HttpApiClient(async () => json({error:{code:'ACCESS_DENIED',requestId:'qa',retryable:false}},403)));
+  await assert.rejects(denied.commitBoardOrder(command),(error:unknown) => error instanceof HttpApiError && error.status === 403);
+});
 
 test('write adapter sends scoped JSON commands without bearer credentials', async () => {
   const captures: Array<{ path: string; init?: RequestInit }> = [];

@@ -17,6 +17,7 @@ export type BoardMutationAuthorization = 'bootstrap' | 'edit-settings' | 'manage
 
 export interface ActorQueryPort {
   query: ScopedQuery;
+  reindexTaskOrder(tenantId: string, projectId: string, orders: readonly { id: string; order: number }[]): Promise<void>;
   authorizeWorkspaceBootstrap(tenantId: string): Promise<void>;
   authorizeBoardMutation(
     tenantId: string,
@@ -190,6 +191,24 @@ export async function runActorTransaction<T>(
     }
   };
 
+  const reindexTaskOrder: ActorQueryPort['reindexTaskOrder'] = async (tenantId, projectId, orders) => {
+    if (![tenantId,projectId].every(value => UUID_RE.test(value)) || orders.length < 1 || orders.length > 10000
+        || orders.some(value => !UUID_RE.test(value.id) || !Number.isSafeInteger(value.order))
+        || new Set(orders.map(value => value.id)).size !== orders.length) {
+      throw new KernelError('TRANSACTION_USAGE_INVALID','Task order scope is invalid');
+    }
+    const authz = await guardedClientQuery<{allowed:boolean}>(`SELECT allowed,
+      CASE WHEN allowed THEN set_config('projed.task_order_reindex',$1::text || '/' || $2::text,true) ELSE '' END
+      FROM (SELECT projed_core.actor_has_board_capability_v1($1::uuid,$2::uuid,'create_task') AS allowed) a`,[tenantId,projectId]);
+    if (authz.rows[0]?.allowed !== true) throw new KernelError('ACCESS_DENIED','Actor is not authorized',403);
+    const updated = await guardedClientQuery(`UPDATE projed_core.wbs_items item SET sort_order=rank."order",updated_at=now()
+      FROM jsonb_to_recordset($3::jsonb) AS rank(id uuid,"order" double precision)
+      WHERE item.tenant_id=$1::uuid AND item.project_id=$2::uuid AND item.id=rank.id AND NOT item.archived`,
+    [tenantId,projectId,JSON.stringify(orders)]);
+    if (updated.rowCount !== orders.length) throw new KernelError('REVISION_CONFLICT','Task order changed',409);
+    await guardedClientQuery("SELECT set_config('projed.task_order_reindex','',true)");
+  };
+
   const authorizeTaskPlacement = async (
     tenantId: string,
     projectId: string,
@@ -361,6 +380,7 @@ export async function runActorTransaction<T>(
       authorizeBoardMutation,
       authorizeBoardTransfer,
       authorizeTaskPlacement,
+      reindexTaskOrder,
       authorizeTaskTrackingDerivedRead,
       authorizeBackupGuard,
       authorizeRecordRagMutation,
