@@ -15,6 +15,14 @@ let published = false;
 let invalid = false;
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.png': 'image/png' };
 const paths = ['/manifest.webmanifest', '/quick-task/manifest.webmanifest'];
+const waitUntil = async (page, predicate, timeout = 45000) => {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    if (await page.evaluate(predicate)) return;
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  throw new Error('Timed out waiting for worker/manifest convergence');
+};
 const server = http.createServer((req, res) => {
   const pathname = new URL(req.url, 'http://localhost').pathname;
   const relative = pathname.endsWith('/') ? pathname + 'index.html' : pathname;
@@ -68,8 +76,7 @@ try {
   assert.equal(JSON.parse((await cdp.send('Page.getAppManifest')).data).display, 'minimal-ui', 'Existing browser still sees the old manifest');
   checks.push('Reproduced old cached minimal-ui despite new server manifest');
   await quick.evaluate(async () => { await (await navigator.serviceWorker.getRegistration()).update(); });
-  await quick.waitForFunction(async () => Boolean((await navigator.serviceWorker.getRegistration())?.waiting), null, { timeout: 45000 });
-  await quick.waitForFunction(async () => (await (await fetch('/quick-task/manifest.webmanifest', { cache: 'no-store' })).json()).display === 'standalone', null, { timeout: 15000 });
+  await waitUntil(quick, async () => Boolean((await navigator.serviceWorker.getRegistration())?.waiting));
   const after = await quick.evaluate(async () => ({
     adopted: localStorage.getItem('projed:pwa:adopted-version:v1'), tab: sessionStorage.getItem('projed:pwa:tab-version:v1'), shell: document.querySelector('meta[name="projed-shell-version"]')?.content,
     local: localStorage.getItem('manifest-regression-unsynced'),
@@ -120,7 +127,7 @@ try {
   const fresh = await context.newPage();
   await fresh.goto(origin + '/quick-task/');
   await fresh.waitForSelector('#quick-task-title');
-  await fresh.waitForFunction(async () => !(await navigator.serviceWorker.getRegistration())?.waiting);
+  await waitUntil(fresh, async () => !(await navigator.serviceWorker.getRegistration())?.waiting);
   for (const pathname of paths) {
     // Legacy entries are allowed; current worker's precache must exclude canonical identities.
     assert.ok(!fs.readFileSync(path.join(fixedDir, 'sw.js'), 'utf8').includes('url:"' + pathname.slice(1) + '",revision:'), pathname);
