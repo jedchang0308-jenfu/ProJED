@@ -3,10 +3,10 @@
 狀態：Done / Browser QC Passed / Local-first scope  
 文件角色：PM / RD 開發規格  
 建立日期：2026-06-29  
-更新日期：2026-09-16（DEV-122 R12 compatible extension）
+更新日期：2026-11-19（DEV-141 一般單鍵更新與安裝資訊變更的責任邊界）
 需求來源：使用者在 `codex/UX優化` 分支提出出差臨時記事啟動摩擦、PWA 更新策略、加入主畫面指引過於複雜等 UX 問題。
 
-最新修正：2026-09-16，DEV-122 R12將`/quick-task/`加入canonical root ProJED manifest的app shortcut，保留選用的quick獨立install identity，並補齊既有安裝更新與平台fallback；本規格原有root安裝、更新與設定頁入口維持。QuickCaptureShell仍退役，右下角`待整理`浮窗仍由DEV-039全域任務平台的`未歸位`lane取代。
+2026-09-16 相容性修正：DEV-122 R12將`/quick-task/`加入canonical root ProJED manifest的app shortcut，保留選用的quick獨立install identity，並補齊既有安裝更新與平台fallback；本規格原有root安裝與設定頁入口維持。QuickCaptureShell仍退役，右下角`待整理`浮窗仍由DEV-039全域任務平台的`未歸位`lane取代。現行更新行為以 DEV-141 為準。
 
 ---
 
@@ -107,7 +107,7 @@
 1. 使用者第一次在手機瀏覽器開啟 ProJED 時，能看到符合當前平台的加入主畫面引導。
 2. 使用者已加入主畫面後，不再看到重複提示。
 3. 使用者點手機桌面 ProJED 圖示開啟後，可用 App Shell 快取快速進入。
-4. App 更新由系統背景處理，不要求使用者每次手動更新或清快取。
+4. App 更新依 [DEV-141 現行契約](SPEC-041-pwa-update-notification-cache-recovery.md#dev-141-manual-app-updates)：背景偵測並在「⋯」提醒，使用者按「更新」才套用；一般更新不要求清快取、重裝或開發人員選項。
 5. 內建瀏覽器情境只顯示「下一步」，不把技術原因放在主訊息。
 6. 設定頁保留「App 安裝與快速開啟」入口，讓使用者可自行查詢。
 
@@ -310,19 +310,21 @@ type CaptureDraft = {
 
 ### 10.1 已採用規則
 
+本節的背景套用條款是早期基線；現行更新政策以 [DEV-141](SPEC-041-pwa-update-notification-cache-recovery.md#dev-141-manual-app-updates) 為準。下列工程規則同步依現行契約修正。
+
 - 使用 `vite-plugin-pwa` 產生版本化 service worker。
 - 使用 hashed JS/CSS assets，避免新版與舊版 chunk 混用。
 - 移除永久 kill switch，不再每次啟動清除 cache。
-- `cleanupOutdatedCaches` 自動清理舊版本快取。
+- 支援期間保留舊版入口與資產，不在使用者選擇更新前清除其需要的版本。
 - 偵測到新版時，先排入 pending update。
-- 使用者離開頁面、頁面進入背景或下次開啟時套用新版。
+- 使用者離開、回前景或重開時只更新通知；按「更新」後才套用，其他分頁維持原版。
 
 ### 10.2 更新 UX 原則
 
 - 預設不打斷正在輸入的使用者。
-- 不要求使用者每次手動更新。
+- 一般使用者只需按 App 內既有「更新」；不得要求進開發人員選項、使用 ADB、清除資料或重裝。
 - 若需要立即更新，只能在沒有未儲存草稿或已完成保存時提示。
-- 發生 chunk load error 時可 reload；必要時才提供清除本地快取作為最後手段。
+- 發生 chunk load error 時提供手動重試／恢復入口；不自動 reload，也不清除登入或業務資料。安裝名稱、圖示、模式變更另依 DEV-141 的原生遷移規則驗證。
 
 ---
 

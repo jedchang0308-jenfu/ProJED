@@ -16,7 +16,9 @@ const cliPlaywright = (process.env.PATH || '').split(path.delimiter)
   .map(dir => path.resolve(dir, '..', 'playwright'))
   .find(dir => fs.existsSync(path.join(dir, 'package.json')));
 const { chromium } = require(process.env.PROJED_PLAYWRIGHT_MODULE || cliPlaywright || 'playwright');
-const reused = process.argv[2] ? path.resolve(process.argv[2]) : null;
+const artifactArgument = process.argv.slice(2).find(argument => !argument.startsWith('--'));
+const reused = artifactArgument ? path.resolve(artifactArgument) : null;
+const singleButtonOnly = process.argv.includes('--single-button');
 const run = reused ? path.basename(reused) : 'dev141-' + randomUUID().slice(0, 8);
 const output = path.resolve('output/playwright/dev-141', reused ? run + '-recheck-' + randomUUID().slice(0, 8) : run);
 const envDir = path.join(output, 'env');
@@ -80,6 +82,12 @@ const observe = (page, label) => {
 const noPrompt = async page => {
   assert.equal(await page.locator('[data-pwa-update-prompt]:visible, [data-quick-pwa-update-prompt]:visible').count(), 0);
 };
+const seedLocalSession = () => {
+  if (localStorage.getItem('projed-local-test.session')) return;
+  const account = { id: 'local-test-user', uid: 'local-test-user', email: 'dev141@fixture.invalid', displayName: 'DEV-141', createdAt: 1704067200000 };
+  localStorage.setItem('projed-local-test.selected-account', account.id);
+  localStorage.setItem('projed-local-test.session', JSON.stringify(account));
+};
 const refreshCheck = page => page.evaluate(async () => {
   document.dispatchEvent(new Event('visibilitychange'));
   await (await navigator.serviceWorker.getRegistration('/'))?.update();
@@ -127,15 +135,11 @@ try {
   });
   await new Promise((resolve, reject) => server.once('error', reject).listen(0, '127.0.0.1', resolve));
   const origin = 'http://127.0.0.1:' + server.address().port;
+  if (!singleButtonOnly) {
   const profile = path.join(output, 'profile');
   const launch = () => chromium.launchPersistentContext(profile, { channel: 'msedge', headless: true, viewport: { width: 1280, height: 800 } });
   context = await launch();
-  await context.addInitScript(() => {
-    if (localStorage.getItem('projed-local-test.session')) return;
-    const account = { id: 'local-test-user', uid: 'local-test-user', email: 'dev141@fixture.invalid', displayName: 'DEV-141', createdAt: 1704067200000 };
-    localStorage.setItem('projed-local-test.selected-account', account.id);
-    localStorage.setItem('projed-local-test.session', JSON.stringify(account));
-  });
+  await context.addInitScript(seedLocalSession);
   publish('A');
   const main = context.pages()[0];
   const mainNavs = observe(main, 'main-A');
@@ -332,6 +336,80 @@ try {
   await fresh.goto(origin + '/quick-task/', { waitUntil: 'domcontentloaded' });
   await loaded(fresh, 'C');
   record('A07', { confirmedVersion: version('C'), retargetNavs: retargetNavs(), firstVisit: await state(fresh) });
+  await context.close();
+  }
+
+  const installationParity = [];
+  for (const manifestPath of ['manifest.webmanifest', 'quick-task/manifest.webmanifest']) {
+    const a = fs.readFileSync(path.join(artifacts.A, manifestPath));
+    const b = fs.readFileSync(path.join(artifacts.B, manifestPath));
+    assert.ok(a.equals(b), 'Ordinary release must keep installation identity stable: ' + manifestPath);
+    for (const icon of JSON.parse(a).icons) {
+      const iconPath = icon.src.replace(/^\//, '');
+      assert.ok(fs.readFileSync(path.join(artifacts.A, iconPath)).equals(fs.readFileSync(path.join(artifacts.B, iconPath))), 'Installed icon changed: ' + iconPath);
+    }
+    installationParity.push(manifestPath);
+  }
+  const singleButtonCases = [];
+  for (const quickEntry of [false, true]) {
+    for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 812 }]) {
+     for (const controlled of [false, true]) {
+      publish('A');
+      const label = (quickEntry ? 'quick' : 'main') + '-' + viewport.width + '-' + (controlled ? 'controlled' : 'first-load');
+      context = await chromium.launchPersistentContext(path.join(output, 'single-button-' + label), { channel: 'msedge', headless: true, viewport });
+      await context.addInitScript(seedLocalSession);
+      const subject = context.pages()[0];
+      const navigations = observe(subject, label);
+      const dialogs = [];
+      const requests = [];
+      subject.on('response', response => { if (response.url().startsWith(origin)) requests.push({ url: response.url(), status: response.status(), worker: response.fromServiceWorker() }); });
+      subject.on('requestfailed', request => requests.push({ url: request.url(), failure: request.failure()?.errorText }));
+      try {
+      subject.on('dialog', async dialog => { dialogs.push(dialog.type()); await dialog.dismiss(); });
+      await subject.goto(origin + (quickEntry ? '/quick-task/' : '/'), { waitUntil: 'domcontentloaded' });
+      await loaded(subject, 'A');
+      const trigger = subject.locator(quickEntry ? '[data-quick-install-menu] summary' : '[data-app-more-menu] > summary');
+      if (!quickEntry) {
+        await trigger.or(subject.getByRole('button', { name: '使用固定測試環境' })).waitFor();
+        if (!await trigger.isVisible()) await subject.getByRole('button', { name: '使用固定測試環境' }).click();
+      }
+      await trigger.waitFor();
+      await workerVersion(subject, 'A');
+      if (controlled) {
+        await subject.reload({ waitUntil: 'domcontentloaded' });
+        await loaded(subject, 'A');
+        await subject.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
+      }
+      publish('B');
+      // Simulate returning to the foreground. Only the actual UI button applies B.
+      await subject.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+      await openMenu(subject, quickEntry);
+      const update = subject.locator(quickEntry ? '[data-quick-update-reload]' : '[data-app-update-reload]');
+      await update.waitFor();
+      await update.waitFor({ state: 'visible' });
+      const before = navigations();
+      await update.click();
+      await loaded(subject, 'B');
+      await trigger.waitFor();
+      assert.equal(navigations(), before + 1, 'Exactly one page navigation after one update click');
+      assert.equal((await state(subject)).adopted, version('B'));
+      assert.deepEqual(dialogs, []);
+      const visibleText = await subject.locator('body').innerText();
+      assert.ok(!/開發人員選項|USB 偵錯|無線偵錯|chrome:\/\/webapks|adb pair/i.test(visibleText), 'Ordinary update must not require developer operations');
+      singleButtonCases.push({ entry: quickEntry ? 'quick-task' : 'main', viewport, controlled, passed: true, updateClicks: 1, navigationDelta: navigations() - before, result: await state(subject), dialogs });
+      console.log('A08 ' + label + ' PASS');
+      } catch (error) {
+        const snapshot = await subject.evaluate(() => ({ url: window.location.href, ready: document.readyState, version: document.querySelector('meta[name="projed-shell-version"]')?.content, boot: window.__PROJED_VERSION_BOOT__, body: document.body?.innerHTML.slice(0, 1600), scripts: [...document.scripts].map(s => ({ src: s.src, type: s.type })) })).catch(() => null);
+        singleButtonCases.push({ entry: quickEntry ? 'quick-task' : 'main', viewport, controlled, passed: false, error: String(error), snapshot, requests });
+        await subject.screenshot({ path: path.join(output, label + '-failed.png') }).catch(() => undefined);
+        console.log('A08 ' + label + ' FAIL');
+      } finally { await context.close(); }
+     }
+    }
+  }
+  fs.writeFileSync(path.join(output, 'single-button-cases.json'), JSON.stringify(singleButtonCases, null, 2));
+  assert.ok(singleButtonCases.every(item => item.passed), 'Some normal single-button update cases failed');
+  record('A08', { installationParity, cases: singleButtonCases, scope: 'Real built app/worker and normal update buttons; local browser verification, not Android WebAPK migration' });
   assert.deepEqual(diagnostics, []);
 } catch (error) {
   failed = error instanceof Error ? error.stack || error.message : String(error);
