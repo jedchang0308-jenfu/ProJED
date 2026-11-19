@@ -63,7 +63,7 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
 ## DEV-139：ProJED 納入 Jenfu-Platform，Cloud Run／Cloud SQL 對齊並保留 Vite
 
-- 2026-11-19：main同步後的排序交易與備註CAS已接至HTTP facade／server；新增0043保留create-only角色的序號重編能力，0001–0042不改寫。程式bc519d7的[CI44540622894](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44540622894)兩jobs SUCCESS，必要隔離DB／CI與artifact收據見[SPEC開頭](specs/SPEC-139-projed-jenfu-platform-onboarding.md)；正式環境與完整交付狀態不變。
+- 2026-11-19：排序交易／備註CAS HTTP接線與0043、owner-window直接輸入及跨owner主線同步已納入現有分支。ProJED、Platform及OrgMaster必要CI均SUCCESS；完整migration與跨owner原生回歸PASS。精確source、失敗修正、分層收據與仍未執行的正式責任統一見[SPEC開頭](specs/SPEC-139-projed-jenfu-platform-onboarding.md)；保留零留存及完整交付分母。
 
 - 建立日期：2026-10-08（Asia/Taipei）。
 - 狀態：**整合與正式發布續行中／未 Release**。現行 source、身分及分層驗證統一見 [SPEC §13.3](specs/SPEC-139-projed-jenfu-platform-onboarding.md#133-首次登入註冊與既有帳號相容2026-10-29)、§33–§37、[§38 RAG](specs/SPEC-139-projed-jenfu-platform-onboarding.md#38-record-rag-lifecycle-and-retrieval-w242026-10-29)、[§39 文字會議／Inbox](specs/SPEC-139-projed-jenfu-platform-onboarding.md#39-meeting-text-synthesis-and-legacy-inbox-isolation-w252026-10-29)、[§41 capture 控制／原子取消](specs/SPEC-139-projed-jenfu-platform-onboarding.md#41-meeting-capture-control-w272026-10-29)及 [§40 會議資料／compiled artifact](specs/SPEC-139-projed-jenfu-platform-onboarding.md#40-meeting-source-retention-and-compiled-artifact-w262026-10-29)。真 Session、既有 UUID mapping、完整功能與資料、雲端 readback、Hosting／舊入口、writer fence、切流及正式發布仍計入完成分母；本索引不複製每版 SHA／測試數／CI 結果，source 或隔離 PASS 不代表正式驗收。
