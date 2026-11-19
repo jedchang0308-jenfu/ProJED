@@ -48,6 +48,22 @@ function assertInvalid(input) {
   assert.throws(() => renderProjedCloudRun(input), { code: 'CLOUD_RUN_INPUT_INVALID' });
 }
 
+test('owner window input comes from the same fixed Job and complete ordered migration hashes', () => {
+  const input = makeInput();
+  input.binding.migrationSha256 = Object.fromEntries([...S3_MIGRATION_PATHS].reverse().map((path,index) => [path,index.toString(16).padStart(64,'0')]));
+  const plan = renderProjedCloudRun(input);
+  const owner = plan.foundation.ownerBootstrap;
+  assert.deepEqual(owner.migrationJobInput, {sourceRevision:input.sourceRevision,job:plan.jobs.migrate,
+    expectedMigrations:S3_MIGRATION_PATHS.map(path => ({version:path.slice('db/migrations/'.length,-4),checksum:input.binding.migrationSha256[path]}))});
+  assert.equal(owner.migrationJobInput.expectedMigrations.length,S3_MIGRATION_PATHS.length);
+  assert.equal(owner.coordinatorPermissions.job,plan.jobs.migrate.name);
+  assert.equal(owner.coordinatorPermissions.iamChangesApplied,false);
+  assert.deepEqual(owner.coordinatorPermissions.cloudRunPermissions,['run.jobs.get','run.jobs.run','run.executions.get','run.operations.get']);
+  assert.deepEqual(owner.coordinatorPermissions.loggingPermissions,['logging.logEntries.list']);
+  assert.equal(owner.implementedByThisRenderer,false);
+  assert.ok(plan.requests.every(({url}) => !url.includes('setIamPolicy') && !url.endsWith(':run')));
+});
+
 test('renderer fixes the typed target and emits IAM-only, private-network create requests', () => {
   const input = makeInput();
   const plan = renderProjedCloudRun(input);

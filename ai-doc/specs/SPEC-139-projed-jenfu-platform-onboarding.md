@@ -1,5 +1,7 @@
 # SPEC-139：ProJED 納入 Jenfu-Platform 的產品與技術交接契約
 
+2026-11-19 owner-window交接：Cloud Run純renderer的`foundation.ownerBootstrap.migrationJobInput`由同一managed binding直接產生固定Job spec、sourceRevision與完整ordered migration checksums，供Platform DEV-007 window消費，不再人工重組或以固定42份作門檻；另明列operator對精確migration Job／execution／operation及stdout ledger的唯讀Logging需求，沒有套用IAM。Job／DB／網路設定與schema未改，本機release29 PASS，完整CI收據後補。Platform PR157已有window CLI／Job adapter候選266bae44（66 focused/image PASS），正在同步最新main與處理migration序號衝突；未完成source/image正式admission。當日GCP唯讀回`Reauthentication failed`，須登入刷新後重新盤點；不將10月成功credential或舊資源清單當現行狀態。真Session、資料／writer fence、零留存及正式切流目標不變。
+
 2026-11-19 HTTP排序／備註接線：沿`main@0670a0aee5327cd30d53f21360d577b278376028`的新介面，`nodeService.commitBoardOrder`與`compareAndSetNotes`改走ProJED自有HTTP後端，其他backend與讀取AbortSignal保留原行為。排序與前端共用規則，在現有actor交易鎖內重讀目前看板、核對建立／移動／編輯權限，原子寫入排名、父節點及有權限時的父任務重開；衝突拒絕不做盲目重送。備註以JSONB內容及nullable description做CAS，回傳persisted／conflict與canonical snapshot；不以與備註無關的updatedAt製造衝突。
 
 原`0001`～`0042` SQL保留qualified bytes；新增forward-only `0043_task_order_reindex_v1`，讓只有create_task的角色也能在建立時間距不足時重編同層序號，透過transaction scope＋rank-only trigger限制欄位，未授予一般移動／內容編輯權。兩個POST入口沿用可信Session、expected actor、same-origin、RLS與resource revision。隔離PG案例新增原子回復、併發、舊parent、循環／跨看板拒絕、create-only角色、備註競爭／物件key順序／陣列順序及未授權拒絕。前次同步CI44536399441的Windows隔離檢查成功，OCI在舊版「root HTML直接含JS」假設失敗；本輪probe改驗main的versioned entry及實際資產hash，不移除驗證。沒有執行正式migration、資料寫入或切流；完整DEV-139交付分母不變。

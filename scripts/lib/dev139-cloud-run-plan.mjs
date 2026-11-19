@@ -214,7 +214,16 @@ export function renderProjedCloudRun(input) {
     })),
     ownerBootstrap: { project: target.hostProject, database: binding.databaseName,
       roles: MANAGED_DATABASE.roles, requiresTemporaryOwnerDatabaseCreate: true,
-      revokeOwnerDatabaseCreateAfterMigration: true, implementedByThisRenderer: false },
+      revokeOwnerDatabaseCreateAfterMigration: true, implementedByThisRenderer: false,
+      migrationJobInput: { sourceRevision, job:jobs.migrate, expectedMigrations:S3_MIGRATION_PATHS.map(path => ({
+        version:path.slice('db/migrations/'.length,-'.sql'.length),checksum:binding.migrationSha256[path],
+      })) },
+      coordinatorPermissions: { principal:'dev010-prod-iac@jenfu-platform-prod.iam.gserviceaccount.com',
+        job:jobs.migrate.name, cloudRunPermissions:['run.jobs.get','run.jobs.run','run.executions.get','run.operations.get'],
+        loggingProject:target.project,loggingPermissions:['logging.logEntries.list'],
+        loggingFilterScope:{job:'projed-prod-migration',location:target.region,execution:'exact-started-execution',stream:'stdout-migration-ledger-only'},
+        iamChangesApplied:false },
+    },
     operatorRequirements: {
       // Requirements for the authenticated operator, not automatic grants to an
       // arbitrary principal or a new owner/editor role.
