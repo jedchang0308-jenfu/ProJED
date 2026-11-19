@@ -17,7 +17,8 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 - 安裝資訊遷移實機證據（2026-11-19）：既有 Android 安裝已讀回「ProJED-建待辦」、versionCode 3、standalone、Succeeded，原 package identity 不變、未重裝或清除資料。這次改名曾需要 Chrome 原生名稱確認及支援診斷；不能當成一般功能更新的必做步驟，也不能以伺服器 manifest 或 Scheduled 代替完成。詳見[實機紀錄](../output/android-diagnostics/verification-summary.md)（本機產物）。
 - 2026-11-19 正式發布：[PR #29](https://github.com/jedchang0308-jenfu/ProJED/pull/29) 已合併，來源 `e59560cc121995442b24b7beabe09b991b0a5ece`、release ID `20261119123850-c35cf3`。兩個正式來源均讀回新版；canonical artifact 271/271 檔案雜湊、無視窗 Edge 主畫面與正常更新選單檢查通過。名稱、圖示、兩個 manifest 與前版逐位元組相同，前版入口仍可取得。證據：[發布收據](../outputs/projed-dev141-mobile-release-e59560c/output/release/dev-083/20261119123850-c35cf3/direct-evidence.json)（本機產物）。新空白瀏覽器在首次 worker 安裝中檢查曾逾時，安裝完成後正常；已保留失敗並補齊該 smoke 的既有安裝前提，只複驗同一發布包，未再次部署。
 - 手機正常更新補驗（2026-11-19）：使用者在既有已安裝「ProJED-建待辦」完成正常介面驗收。截圖顯示「⋯」新版提醒；按「稍後」、關閉並重開後，紅點消失且仍可更新。手機 Chrome 同來源頁留下未送出測試草稿後，已安裝 App 按一次「更新」完成；使用者確認「App 更新完成，另一頁草稿仍在且未見重載」。全程未要求開發人員選項、重新配對、重裝或清除資料。這是使用者協作的實機 UI 驗收，不宣稱取得手機數字版號或導覽計數；數字版號與導覽次數另有上述本機自動化證據。詳見[手機驗收紀錄](qa/QA-DEV-041-pwa-update-notification-cache-recovery.md#dev-141-installed-phone-acceptance)。本次結案文件不再產生 App 新版提醒。
-- 後續邊界：仍須依實際使用情況確認尚未取得 DEV-141 的舊更新器首次導入安排；本輪已安裝快速待辦的正常更新通過，不擴張為所有歷史版本或其他裝置的實機驗證。
+- 主程式手機補驗：原 Chrome 測試頁曾卡在登入載入中；修復個人資料同步等待並加入保留登入資料的手動重試後，已經 [PR #31](https://github.com/jedchang0308-jenfu/ProJED/pull/31) 發布 `20261119132017-8675f2`（來源 `b6ca86239900c4d945b2060c42c1ae6e1d7d0206`），348/348 canonical 檔案及主程式啟動檢查通過。使用者確認主程式已安裝版從正常選單更新完成可進主畫面，原 Chrome 頁未被重整，新分頁正常載入，全程未要求開發人員選項。隔離重播、手機人工觀察及正式證據邊界見[主程式驗收紀錄](qa/QA-DEV-041-pwa-update-notification-cache-recovery.md#dev-141-installed-phone-acceptance)。
+- 後續邊界：仍須依實際使用情況確認尚未取得 DEV-141 的舊更新器首次導入安排；本輪已安裝主程式與快速待辦的正常更新及分頁觀察通過，不擴張為所有歷史版本或其他裝置的實機驗證；手機「稍後」重開僅在快速待辦完成。
 - 待定：正式舊版支援期限。封裝以至少 14 天為預設，從確認舊版已被取代後保守計算。
 
 <a id="dev-140-okr-list-consolidation"></a>
@@ -407,7 +408,7 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 
 ## 總任務清單
 
-- ✓ DEV-141 [交付點] [A01–A08 本機通過／手機快速待辦人工補驗通過／已發布 2026-11-19] [ProJED] [新版先通知，由使用者手動更新](#dev-141-manual-app-updates)
+- ✓ DEV-141 [交付點] [A01–A08 本機通過／手機主程式與快速待辦人工補驗通過／已發布 2026-11-19] [ProJED] [新版先通知，由使用者手動更新](#dev-141-manual-app-updates)
 
 - ✓ DEV-140 [交付點] [已實作／本機瀏覽器驗收通過] [ProJED] [以 OKR 模式整合清單模式](#dev-140-okr-list-consolidation)
 
