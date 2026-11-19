@@ -115,6 +115,15 @@ const PwaReloadSafetyOwners: React.FC<{ currentView: ViewMode; userId: string | 
     taskDetailsActive && taskDetailsState !== 'safe' ? ['PENDING_WRITE'] : []
   ), [taskDetailsActive, taskDetailsState]);
   const taskDetailsSnapshot = useOwnerSnapshot('task-details', taskDetailsReasons.length ? 'dirty' : 'safe', taskDetailsReasons);
+  useEffect(() => {
+    if (!taskDetailsReasons.length) return;
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warnBeforeUnload);
+    return () => window.removeEventListener('beforeunload', warnBeforeUnload);
+  }, [taskDetailsReasons]);
   usePwaReloadSafetyOwner(useMemo(() => ({
     ownerId: 'task-details' as const,
     getSnapshot: () => taskDetailsSnapshot,

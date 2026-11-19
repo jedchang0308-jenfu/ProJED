@@ -373,6 +373,6 @@ export default function AuthGate({ children }: AuthGateProps) {
   }
 
   // 已登入且遷移完成（或跳過）：渲染主應用程式
-  return <>{children}</>;
+  return <React.Fragment key={user.uid}>{children}</React.Fragment>;
 }
 

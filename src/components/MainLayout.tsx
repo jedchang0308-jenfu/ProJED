@@ -53,6 +53,8 @@ interface MainLayoutProps {
 const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const {
     currentView,
+    activeWorkspaceId,
+    activeBoardId,
     getActiveBoard,
     getActiveWorkspace,
     setView,
@@ -515,7 +517,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         <RagSidebar />
       </div>
 
-        <GlobalContextMenu />
+        <GlobalContextMenu key={JSON.stringify([activeWorkspaceId, activeBoardId])} />
         <TaskDescriptionHoverCard />
       </div>
     </PanelPreviewProvider>

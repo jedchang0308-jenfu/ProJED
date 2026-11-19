@@ -1573,6 +1573,14 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
   commitTaskNotes: async (id, expected, next, options = {}) => {
     const oldNode = get().nodes[id];
     if (!oldNode) throw new Error('Task note compare-and-set target does not exist.');
+    if (oldNode.isArchived) throw new Error('Task note compare-and-set target is archived.');
+    const operationAccountId = useAuthStore.getState().user?.uid;
+    const ownsCurrentTask = () => {
+      const current = get().nodes[id];
+      return useAuthStore.getState().user?.uid === operationAccountId
+        && Boolean(current && !current.isArchived
+          && current.workspaceId === oldNode.workspaceId && current.boardId === oldNode.boardId);
+    };
 
     let outcome: TaskNoteCompareAndSetResult;
     if (isTaskWorkbenchUnplacedTask(oldNode)) {
@@ -1590,7 +1598,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
           detailNotes: persisted.detailNotes,
           description: persisted.description ?? undefined,
           updatedAt: persisted.updatedAt,
-        }, useAuthStore.getState().user?.uid);
+        }, operationAccountId);
         outcome = { status: 'persisted', snapshot: persisted };
       }
     } else {
@@ -1610,6 +1618,10 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       outcome = { status: 'persisted', snapshot: outcome.snapshot };
     }
 
+    // Provider completion can arrive after logout, board moves or deletion.
+    // It must never reconcile into a different account/task ownership session.
+    if (!ownsCurrentTask()) throw new Error('Task note editing session changed before completion.');
+
     const currentNode = get().nodes[id];
     if (!currentNode) return outcome;
     const reconciledNode: TaskNode = {
@@ -1628,6 +1640,8 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     };
     const operationId = createUpdateNodeOperationId();
     await commitMeetingTaskMutation(beforeNode, reconciledNode, ['detailNotes', 'description'], operationId);
+
+    if (!ownsCurrentTask()) throw new Error('Task note editing session changed before completion.');
 
     if (!options.skipUndo) {
       const persisted = outcome.snapshot;

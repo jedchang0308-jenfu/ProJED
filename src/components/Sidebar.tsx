@@ -14,6 +14,7 @@ import {
   getTaskDetailsModalMinimumSize,
 } from './taskDetailsModalSizing';
 import { isPrimaryPointerActivation } from '../interactions/pointerActivation';
+import { afterTaskDetailsSave } from './taskDetailsNavigation';
 
 const BOARD_WORKSPACE_VIEWS = ['list', 'mindmap', 'board', 'goal', 'gantt', 'calendar'];
 const SETTINGS_SCOPE_VIEWS = ['settings', 'calendar_subscriptions'];
@@ -375,7 +376,7 @@ const Sidebar = () => {
                         switchToBoard();
                         return;
                       }
-                      void guardRecordDraft(switchToBoard, {
+                      void guardRecordDraft(() => afterTaskDetailsSave(switchToBoard), {
                         title: isCurrentBoard ? '返回看板？' : '切換看板？',
                         message: '切換看板會離開目前紀錄；若尚未完成本機保存，請先決定是否存草稿。',
                       });

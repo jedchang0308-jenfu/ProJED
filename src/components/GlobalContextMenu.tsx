@@ -28,7 +28,7 @@ import { TaskActionMenu } from '../interactions/task/TaskActionMenu';
 import type { InteractionContext } from '../interactions/task/types';
 import { useTaskPlacementPermissions } from '../hooks/useTaskPlacementPermissions';
 import { getReferenceSubtree, PRIMARY_PLACEMENT_PREFIX, primaryPlacementId } from '../features/taskTracking/model';
-import { requestTaskDetailsNavigation, useTaskDetailsNavigation } from './taskDetailsNavigation';
+import { afterTaskDetailsSave, requestTaskDetailsNavigation, useTaskDetailsNavigation } from './taskDetailsNavigation';
 import { createBlankTaskNode } from '../features/taskCreation/createBlankTaskNode';
 import { isTaskWorkbenchUnplacedTask } from '../features/taskWorkbench/placement';
 import { buildTaskSiblingMoveUpdates } from './Wbs/taskDrag/taskMoveUpdateNormalization';
@@ -367,6 +367,16 @@ export const GlobalContextMenu: React.FC = () => {
     const handleOpenTaskDetails = (event: Event) => {
       const customEvent = event as CustomEvent<{ taskId: string; trackingReferenceId?: string }>;
       if (customEvent.detail?.taskId) {
+        if (detailsNodeId) {
+          // Some launchers preselect the target. Keep selection with the open
+          // draft until the editor has accepted the navigation.
+          setSelectedTaskId(detailsNodeId);
+          if (customEvent.detail.taskId !== detailsNodeId
+            || (customEvent.detail.trackingReferenceId || null) !== detailsTrackingReferenceId) {
+            requestTaskDetailsNavigation(customEvent.detail);
+          }
+          return;
+        }
         setSelectedTaskId(customEvent.detail.taskId);
         detailsNavigation.openRoot({
           taskId: customEvent.detail.taskId,
@@ -380,7 +390,7 @@ export const GlobalContextMenu: React.FC = () => {
     return () => {
       document.removeEventListener(OPEN_TASK_DETAILS_EVENT, handleOpenTaskDetails);
     };
-  }, [detailsNavigation.openRoot, setSelectedTaskId]);
+  }, [detailsNavigation.openRoot, detailsNodeId, detailsTrackingReferenceId, setSelectedTaskId]);
 
   useEffect(() => {
     if (!contextMenuState) return;
@@ -758,8 +768,8 @@ export const GlobalContextMenu: React.FC = () => {
           updatedAt: Date.now(),
         });
         return closeContextMenu({ preserveTaskSelection: true });
-      case 'task.create-sibling': return handleAddSibling();
-      case 'task.create-child': return handleAddChild();
+      case 'task.create-sibling': return afterTaskDetailsSave(() => void handleAddSibling());
+      case 'task.create-child': return afterTaskDetailsSave(() => void handleAddChild());
       case 'task.create-relationship': {
         if (contextMenuState?.kind !== 'task' || !canEditTask) return;
         requestMindMapRelationshipStart(contextMenuState.nodeId);
@@ -822,7 +832,7 @@ export const GlobalContextMenu: React.FC = () => {
 
   const handleOpenBoard = () => {
     if (!contextMenuState || contextMenuState.kind !== 'board') return;
-    switchBoard(contextMenuState.workspaceId, contextMenuState.boardId);
+    afterTaskDetailsSave(() => switchBoard(contextMenuState.workspaceId, contextMenuState.boardId));
     closeContextMenu();
   };
 
