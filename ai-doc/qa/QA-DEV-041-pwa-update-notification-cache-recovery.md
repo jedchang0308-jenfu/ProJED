@@ -9,6 +9,25 @@
 
 > 2026-08-30 authority note：本文件保留 DEV-041 Phase 1 與既有 production release 的歷史驗證事實。DEV-096 已重新開啟「同版本提示重複出現」缺陷；B02 的舊 CTA「一鍵更新到最新版」與 C01～C04 的 normal cache-purge apply 語意，已由 SPEC-041 `DEV-096 Corrective Addendum` 及 `ai-doc/qa/QA-DEV-096-pwa-update-transaction-convergence.md` 取代。其他 DEV-041 cases 仍是 regression；不得以本文件歷史 PASS 宣稱 DEV-096 已通過。
 
+<a id="dev-141-installed-phone-acceptance"></a>
+
+## DEV-141 已安裝手機正常更新補驗（2026-11-19）
+
+範圍：使用者既有 Android 已安裝「ProJED-建待辦」。方法為使用者協作的正常 App／Chrome 介面驗收，不使用開發人員選項、重新配對、重裝、清除資料或技術診斷頁；未宣稱獨立 QC。使用者核准先發布再測手機切換，正式站由 `20261119091203-538b7b` 更新至 `20261119123850-c35cf3`，來源為 `e59560cc121995442b24b7beabe09b991b0a5ece`。
+
+| 操作 | 實機觀察／使用者回報 | 結果 |
+| --- | --- | --- |
+| 開啟「⋯」查看新版 | 使用者回傳 20:45 截圖：紅點 1、「新版已就緒」、「更新／稍後」；名稱為「ProJED-建待辦」。使用者確認截圖為按稍後前。 | 正常選單提醒通過；不將此截圖當成已更新完成。 |
+| 按稍後，從最近使用的 App 關閉，再由桌面重開 | 使用者回覆「符合：紅點消失，仍可按更新」。 | 手機人工觀察通過，未自動切換成已更新狀態。 |
+| 在已安裝 App 按一次更新 | 使用者依正常選單完成操作，回覆「App 更新完成」。 | 手機正常更新操作通過，未要求技術設定或額外安裝。 |
+| 更新時保留同來源另一頁 | 先在手機 Chrome 的 `https://projed-cc78d.firebaseapp.com/quick-task/` 留下未送出的測試草稿，更新已安裝 App 後返回該原分頁；使用者回覆「另一頁草稿仍在且未見重載」。 | 手機人工觀察通過；未建立測試待辦。 |
+
+證據邊界：手機結果來自使用者截圖與操作回報，未用 ADB 抽取手機數字版號或導覽次數。真實 A／B／C 建置的數字版號、單次導覽及其他分頁零新增導覽另由 DEV-141 本機自動化驗證支持。這次手機補驗不涵蓋其他裝置或所有舊更新器。
+
+機器紀錄：[手機觀察](../../output/mobile-real-device/dev141-manual-update/observations.json)、[正式發布收據](../../outputs/projed-dev141-mobile-release-e59560c/output/release/dev-083/20261119123850-c35cf3/direct-evidence.json)（本機產物）。正式收據包含 271/271 檔案及正常選單檢查通過，保留首次新設定檔 worker 安裝期間的檢查逾時及後續複驗。原 manifest／圖示內容一致，前版入口仍保留。
+
+下方為 DEV-041 的歷史計畫與證據；本節手機補驗依現行 DEV-141 判定。
+
 ## QA 目標
 
 驗證新版本發布後，使用者能看見更新提示、主動按更新按鈕套用新版本，且 stale cache / chunk-load 類異常有可恢復流程。此 QA 不驗證正式部署本身；正式部署需另走 deployment-release-gate。
