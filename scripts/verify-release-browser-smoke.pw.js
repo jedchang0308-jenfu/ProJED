@@ -58,7 +58,24 @@ async (page) => {
       }
     }
 
+    // Versioned HTML and the live icon refresher can cancel an earlier icon load.
+    // Only tolerate that cancellation after validating the final displayed icon.
+    const iconUrl = document.head.querySelector('link[rel="icon"]')?.href;
+    let finalIcon = null;
+    if (iconUrl) {
+      try {
+        const response = await fetch(iconUrl, { cache: 'no-store' });
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        finalIcon = {
+          url: iconUrl,
+          ok: response.ok && document.head.querySelector('link[rel="icon"]')?.href === iconUrl
+            && [137, 80, 78, 71, 13, 10, 26, 10].every((byte, index) => bytes[index] === byte),
+        };
+      } catch { finalIcon = { url: iconUrl, ok: false }; }
+    }
+
     return {
+      finalIcon,
       url: window.location.href,
       title: document.title,
       rootNonEmpty: Boolean(root && root.innerHTML.trim().length > 0),
@@ -78,6 +95,9 @@ async (page) => {
   ));
   const criticalFailed = failedRequests.filter((request) => (
     !/fonts\.gstatic|fonts\.googleapis|accounts\.google|apis\.google|favicon/i.test(request.url)
+    && !(request.failure === 'net::ERR_ABORTED' && result.finalIcon?.ok
+      && new URL(request.url).origin === new URL(result.finalIcon.url).origin
+      && new URL(request.url).pathname === new URL(result.finalIcon.url).pathname)
   ));
   const hasMainBundle = result.scripts.some((src) => /\/assets\/(?:index|main)-[A-Za-z0-9_-]+\.js/.test(src || ''));
   const hasMainStyle = result.styles.some((href) => /\/assets\/(?:index|main)-[A-Za-z0-9_-]+\.css/.test(href || ''));
@@ -87,6 +107,7 @@ async (page) => {
     hasMainStyle &&
     criticalMessages.length === 0 &&
     pageErrors.length === 0 &&
+    result.finalIcon?.ok === true &&
     criticalFailed.length === 0 &&
     result.releaseIdentityMatch;
 
