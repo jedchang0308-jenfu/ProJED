@@ -26,6 +26,16 @@
 
 機器紀錄：[手機觀察](../../output/mobile-real-device/dev141-manual-update/observations.json)、[正式發布收據](../../outputs/projed-dev141-mobile-release-e59560c/output/release/dev-083/20261119123850-c35cf3/direct-evidence.json)（本機產物）。正式收據包含 271/271 檔案及正常選單檢查通過，保留首次新設定檔 worker 安裝期間的檢查逾時及後續複驗。原 manifest／圖示內容一致，前版入口仍保留。
 
+### 主程式手機補驗的載入阻礙（2026-11-19）
+
+使用者已確認主程式已安裝版可看到「新版已就緒／更新／稍後」，但另開正式站 Chrome 分頁時卡在深色登入「載入中」。主程式手機更新／其他分頁驗收因此尚未通過，不沿用快速待辦的手機 PASS。
+
+全新未登入的手機尺寸 Edge 在有／無 worker 下皆正常到登入頁。以合成既有 session、攔截所有後端請求後，個人資料請求不回應可重現相同載入畫面；釋放為失敗後即可開啟主畫面。這確認了可造成症狀的路徑，未宣稱已直接讀取手機內的失敗請求。
+
+修正：個人資料同步共用 10 秒取消期限，失敗沿用原有 session-user fallback；未確認登入狀態仍不開放主畫面。登入等待超過 15 秒提供保留資料的手動「重試」，只重載本頁。未清除 session、放寬權限或加入自動重整。
+
+隔離驗證：未登入、個人資料不回應、session refresh 不回應三項通過；手動重試保留 session，另一頁不新增導覽且測試草稿保留。入口：`node scripts/verify-auth-startup-recovery.mjs <dist>`，以 `PROJED_PLAYWRIGHT_MODULE` 指定現有 Playwright。證據：[失敗重播](../../output/mobile-real-device/dev141-auth-profile-pending.json)、[修正驗證](../../output/auth-startup-recovery/result.json)（本機產物）。全部 Supabase 流量均由測試攔截，不使用正式身分或寫入正式資料。手機正式站補驗仍待修正版發布後完成。
+
 下方為 DEV-041 的歷史計畫與證據；本節手機補驗依現行 DEV-141 判定。
 
 ## QA 目標

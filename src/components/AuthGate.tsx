@@ -36,6 +36,13 @@ interface AuthGateProps {
 
 export default function AuthGate({ children }: AuthGateProps) {
   const { user, loading, error, signInWithGoogle } = useAuthStore();
+  const [authWaitExpired, setAuthWaitExpired] = useState(false);
+  useEffect(() => {
+    if (!loading) return;
+    const reset = window.setTimeout(() => setAuthWaitExpired(false), 0);
+    const timer = window.setTimeout(() => setAuthWaitExpired(true), 15000);
+    return () => { window.clearTimeout(reset); window.clearTimeout(timer); };
+  }, [loading]);
   const [isInApp, setIsInApp] = useState(false);
   const [copiedLoginUrl, setCopiedLoginUrl] = useState(false);
   const isLocalTestMode = isLocalTestAuth();
@@ -174,8 +181,18 @@ export default function AuthGate({ children }: AuthGateProps) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-10 h-10 border-4 border-blue-400 border-t-transparent rounded-full animate-spin" />
-          <p className="text-slate-300 text-sm">載入中...</p>
+          {authWaitExpired ? (
+            <>
+              <p role="alert" className="text-slate-200 text-sm">登入狀態讀取逾時</p>
+              <p className="text-slate-400 text-sm">請確認網路連線後重試，現有登入資料會保留。</p>
+              <button type="button" onClick={() => window.location.reload()} className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white">重試</button>
+            </>
+          ) : (
+            <>
+              <div className="w-10 h-10 border-4 border-blue-400 border-t-transparent rounded-full animate-spin" />
+              <p className="text-slate-300 text-sm">載入中...</p>
+            </>
+          )}
         </div>
       </div>
     );

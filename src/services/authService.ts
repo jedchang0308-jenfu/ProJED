@@ -68,24 +68,34 @@ const mapSupabaseUser = (user: SupabaseUser): FirestoreUser => ({
 
 const ensureSupabaseProfile = async (user: SupabaseUser): Promise<FirestoreUser> => {
   const mappedUser = mapSupabaseUser(user);
-  const { data: existingProfile, error: profileReadError } = await supabase
-    .from('profiles')
-    .select('display_name')
-    .eq('id', mappedUser.uid)
-    .maybeSingle();
+  // Profile enrichment must not hold the authenticated shell indefinitely.
+  // The caller already falls back to the session user when this operation fails.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  try {
+    const { data: existingProfile, error: profileReadError } = await supabase
+      .from('profiles')
+      .select('display_name')
+      .eq('id', mappedUser.uid)
+      .abortSignal(controller.signal)
+      .maybeSingle();
 
-  if (profileReadError) throw new Error(profileReadError.message);
+    if (profileReadError) throw new Error(profileReadError.message);
 
-  const displayName = existingProfile?.display_name ?? mappedUser.displayName;
-  const { error } = await supabase
-    .from('profiles')
-    .upsert({
-      id: mappedUser.uid,
-      email: mappedUser.email,
-      display_name: displayName,
-    });
-  if (error) throw new Error(error.message);
-  return { ...mappedUser, displayName };
+    const displayName = existingProfile?.display_name ?? mappedUser.displayName;
+    const { error } = await supabase
+      .from('profiles')
+      .upsert({
+        id: mappedUser.uid,
+        email: mappedUser.email,
+        display_name: displayName,
+      })
+      .abortSignal(controller.signal);
+    if (error) throw new Error(error.message);
+    return { ...mappedUser, displayName };
+  } finally {
+    clearTimeout(timeout);
+  }
 };
 
 const requireSupabaseAuth = () => {
