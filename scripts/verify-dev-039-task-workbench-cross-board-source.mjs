@@ -46,9 +46,10 @@ assert(
 
 assert(
   'generic nodeService exposes listByProject for all supported backends',
-  source.dataBackend.includes('listByProject: (workspaceId: string, boardId: string): Promise<TaskNode[]>') &&
+  source.dataBackend.includes('listByProject: (workspaceId: string, boardId: string, signal?: AbortSignal): Promise<TaskNode[]>') &&
+    source.dataBackend.includes('httpDomainReadService.listTasks(workspaceId, boardId, signal)') &&
     source.dataBackend.includes('localTestNodeService.listByProject(workspaceId, boardId)') &&
-    source.dataBackend.includes('supabaseNodeService.listByProject(workspaceId, boardId)') &&
+    source.dataBackend.includes('supabaseNodeService.listByProject(workspaceId, boardId, signal)') &&
     source.dataBackend.includes('firestoreNodeService.listByProject(workspaceId, boardId)') &&
     source.firestoreService.includes('listByProject: async (wsId: string, bId: string): Promise<TaskNode[]>') &&
     source.firestoreService.includes("collection(db, 'workspaces', wsId, 'boards', bId, 'nodes')") &&
