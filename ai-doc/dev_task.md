@@ -63,6 +63,11 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
 ## DEV-139：ProJED 納入 Jenfu-Platform，Cloud Run／Cloud SQL 對齊並保留 Vite
 
+  - 2026-11-20 最新結果。原 Supabase 的兩個私人身分檢視已依核准建立，提交後讀回角色、七個欄位及 ACL。此次未讀使用者列或執行資料移轉。[正式來源執行結果](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-source-views-applied)
+  - 外部協作已確定由資源擁有者邀請、OrgMaster 審核，再由 ProJED 依當前授權啟用 Board 成員。下一步是銜接中央申請／資格狀態與本地邀請、Session 撤銷，並依 A03／A11 驗證現有使用者。個人使用及內部登入沿原流程。[外部協作契約](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-external-access)
+
+  以下 2026-11-20 紀錄保留各次執行當時的狀態。
+
   - 2026-11-20 續行：具名 foundation 已核准並部分建置；5 APIs／4 SAs／3 instance-scoped SQL IAM users／私人音訊桶與空來源 Secret 已讀回，cache 關閉、模型內容 logging 預設關閉。05:57 UTC來源33項現存阻擋檢查皆0，可選缺表沿原driver略過；僅唯讀盤點，未正式export／apply／reconcile。Shared VPC 權限、桶 metadata 管理修復、Speech runtime實呼叫／Gemini 豁免仍待完成，真內容推論未啟用。ProJED 80cc88f 的 CI44670238352 全 PASS（672 unit、domain73／snapshot63、45 migration、OCI18）；Platform native44670325280 PASS，中央發布同步撤銷已實測。OrgMaster6190897／Platform06171a12 Source QC 均 PASS。新45份候選 Cloud Build3b2133ea已 SUCCESS，source provenance、三個 registry digests／實際Job完整binding均讀回一致；舊44份候選保留。詳[目前規格](specs/SPEC-139-projed-jenfu-platform-onboarding.md#471-2026-11-20-最小-foundation-變更提案)。正式 Session、資料移轉、writer fence、切流與發布均保留原分母。
 
   - 2026-11-20 續行：正式來源已建立無登入且無密碼的 `projed_dev139_source_reader` 骨架，限43個已分類應用relation；Supabase保留`auth` schema的USAGE不能由現行owner轉授，直接Auth欄位grant已撤回。driver改採兩個固定security-barrier身分投影並在讀取前查核owner／7欄型別／barrier／權限；原生隔離演練`20261120T062852Z-e1b871c4`PASS，含projection漂移、barrier關閉、SELECT撤銷及45份migration／資料保留回歸。受測source `effd5e7` 的 CI44688269763 已通過兩個required jobs（完整型別／unit／boundary／compiled artifact、Session／snapshot PostgreSQL與OCI），artifacts 14607646867／14607412836。正式兩個view因屬持久schema與敏感資料邊界仍待人類明確核准，尚無LOGIN／Secret版本／export／apply／reconcile；不以本機或CI PASS縮減正式分母。詳[SPEC §13.3](specs/SPEC-139-projed-jenfu-platform-onboarding.md#133-首次登入註冊與既有帳號相容2026-10-29)及[§47.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#471-2026-11-20-最小-foundation-變更提案)。
@@ -177,7 +182,7 @@ Rev6 沿同一核心補既有網址／安裝相容、verified legacy mapping、H
 |---|---|---|
 | 已獲入口權限的員工：Portal → ProJED → 編輯任務 → 重載 | 經平台身分與 ProJED 自有授權完成，DB 與畫面一致；Portal 可見不等同任意任務 allow。 | 正常 UI 入口＋API／DB commit／reload＋actor／scope。 |
 | 個人使用者：ProJED 正常入口 → 私人工作區／任務 | 不要求建立虛假員工資料；私人內容不因公司權限而自動公開，既有可用流程保留。 | 正常登入／UI／持久化＋私人資料拒絕案例。 |
-| 外部協作者：看板邀請 → 接受 → 授權範圍操作 | 只看見核准範圍；撤回邀請／撤權後停止存取，不能取得其他看板或公司資料。 | 正常邀請流程＋allow／deny／撤權＋DB。 |
+| 外部協作者從邀請、審核到看板操作 | 僅有效外部資格、有效邀請授權及當前成員角色三者同時成立才開放。撤邀後的核准重送、已移除的看板及停用後的舊 Session 均拒絕。 | A03 的雙方 UI、HTTP、Session 與 DB，A11 的既有成員移轉。 |
 | 既有工作區／看板／權限入口 → 原角色操作 → 保存後重載 | 五種角色、原 ID／membership、非預設及空集合 Board matrix、管理繼承與 allow／deny 保持；公司角色不取代本地角色。 | 同一隔離 fixture 的舊／新行為對照＋正常 UI／API／DB 設定讀回。 |
 | Quick Task：未登入／離線輸入 → 明確認領 → 同步 → 工作台 | 本機先存與讀回、已知 owner、receipt／冪等及切帳競態保護維持；未知成功結果可讀回核實。 | 真實 IndexedDB＋正常入口＋API receipt＋工作台 UI／reload。 |
 | 舊書籤／已安裝 PWA → 原網址新版 → 正常登入／原資料操作 | 不重註冊、重建資料、改權限或強迫重裝；verified mapping 到原 localUserId，待同步／草稿保留；停寫有回饋，解除後同 key 補送。不同帳號／mapping 歧義不錯綁，新網站可達不能替代切換證據。 | 同 profile／舊新版 artifact、真 SW／IDB、各 origin Session／Hosting→API→DB、全來源fence後full snapshot／receipt reconciliation及停寫量測。 |
@@ -460,6 +465,7 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 - ✓ DEV-140 [交付點] [已實作／本機瀏覽器驗收通過] [ProJED] [以 OKR 模式整合清單模式](#dev-140-okr-list-consolidation)
 
 - → DEV-139 [交付點] [整合／正式發布續行中／未Release] [P1] [W31] ProJED 首階段基礎對齊，保留 Vite
+  - 2026-11-20 正式來源的兩個移轉用身分檢視已建立。外部協作雙重核准已定案，實作與跨系統驗收待完成。[DEV-139 現行規格](specs/SPEC-139-projed-jenfu-platform-onboarding.md)
   - W31：review／human decisions／projection接Cloud SQL，以來源版本、resolution/review與精確時間CAS保護人工內容，same-key replay及RAG mirror採單交易；source5da37e7／CI40822736839通過333項unit、33-migration／S3 71checks與snapshot60／45，收據見SPEC-139 §45。真ASR／worker／清理／正式整合仍續行。
   - W30：complete-upload 核對真 verified segment、來源凍結與單次 run／pending 預留採原子交易；重播不重留款，不足回 awaiting_budget，未啟用 worker／HTTP 錄音或 provider。source fed1f9e／CI 40818685810 已通過325項 unit、32-migration／S3 70 checks、snapshot60／45；收據見 SPEC-139 §44，完整管線／正式整合仍續行。
   - W29：錄音 caller 凍結原 scope 與每段 bytes，outbox 綁 owner／record／capture／sourceVersion，舊列保留不猜配；HTTP 錄音仍停用，完整分析／清理／正式整合續行。source 82dc77a／CI 40815746209 已通過319項 unit、31-migration native 與 snapshot；受測收據見 SPEC-139 §43，真身分／正式移轉／切流未完成。

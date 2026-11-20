@@ -1,5 +1,7 @@
 # SPEC-139：ProJED 納入 Jenfu-Platform 的產品與技術交接契約
 
+2026-11-20 更新。外部協作須同時取得資源擁有者邀請與 OrgMaster 核准，行為與驗收以 [§4.2.1](#dev139-external-access) 及 A03／A11 為準，雙方正式接線待驗。正式 Supabase 來源的兩個身分檢視已提交並讀回 ACL。Google Cloud 仍是目標環境，這次來源變更僅供移轉既有帳號時核對原 UUID。見[正式來源執行結果](#dev139-source-views-applied)。
+
 2026-11-20 續行：人類已核准 §47.1 具名 foundation，並回覆適用 Google Cloud Master Agreement／防濫用留存豁免「不確定」。五個 API、四個專用 SA、三個 instance-scoped SQL IAM login、私人音訊桶及空白來源 Secret 已建立；Vertex cache 已讀回關閉，三個模型的內容 logging config 均不存在、依官方規格為預設關閉。Speech data logging 已依官方 default-off／明確 opt-in 契約收斂為同步 Recognize、禁止 opt-in 與外部 opt-in 即撤銷資格；部署後 runtime SA 實呼叫、Gemini 豁免、Shared VPC 及音訊桶 metadata 管理修復仍待完成，真實內容推論保持停用。Session 已改為登入核實來源、一般操作只查本地 Session／mapping／guard；三方同步撤銷 source 與實際隔離 PostgreSQL 證據見 §13，最新候選 artifact 與限制見 §47.1。正式 Session、資料移轉、writer fence、舊入口、切流與發布仍保留在原完成分母。
 
 同日三份跨 owner PR 已依人類核准轉為 ready-for-review：ProJED #9、Platform #157、OrgMaster #187 均仍 open、未 merge／部署／切流；三個 base 分別仍是遠端最新 `0670a0a`／`5ae88bc`／`a8830e9`。Platform `b7293c2` 與 OrgMaster `4b722b4` 的 required Source QC 均 SUCCESS；ProJED 最新 `5654478` 只修文件且沒有新 checks，最後 executable source `7308b1d` 的 CI44691983128 仍是本版程式證據，不以 ready 狀態外推正式驗收。
@@ -135,7 +137,7 @@ Session／私人 API 回應採 `Cache-Control: no-store`；SW 不快取 API、�
 |---|---|---|
 | 公司使用者 | Platform 正常登入→已指派 ProJED 入口→新版本 handoff→ProJED Session→公司資格與本地 capability/resource。 | Portal 可見／SSO 成功不等於看板管理權，也不產生私人資料讀取權。 |
 | 個人使用者 | ProJED 正常登入→OrgMaster 最小非員工 Principal publication→Platform 身分／ProJED Session→個人 Workspace／Board。保留既有個人使用，不新增員工白名單限制。 | 個人登入不產生公司角色或其他 app 入口。 |
-| 外部協作者 | 正常登入→看板邀請接受→指定 Board membership；邀請期限、一次性接受與撤銷由 ProJED 驗證。 | Board guest 身分不公開其他看板／工作區，也不授予平台其他 app。 |
+| 外部協作者 | Workspace／Board 擁有者邀請指定 Board → OrgMaster 管理員核准 ProJED 外部資格 → 受邀者以相符身分接受有效邀請 → ProJED 啟用指定 Board 成員。 | 每次受保護操作依 §4.2.1 判斷，僅能在獲授權的 Board 執行角色允許的操作。 |
 | Worker | 經驗證的 workload identity＋purpose／資源範圍＋active claim／lease；保存發起 Principal。 | 不將 service identity 當成任意人類角色，不以使用者瀏覽器憑證執行全域維護。 |
 
 目標 Session 採各 origin 的 HttpOnly／Secure opaque cookie 與 server-owned session state；mutation 有 CSRF／Origin 驗證。cookie／callback／服務來源限定 exact origin；不以 CORS 代替登入，也不把權威 bearer 或 DB 憑證放入 localStorage／前端 bundle。Quick 的 auth context 只保留本機 owner 提示、epoch 與登出 barrier。
@@ -143,6 +145,18 @@ Session／私人 API 回應採 `Cache-Control: no-store`；SW 不快取 API、�
 主程式與 Quick 允許登入不同帳號、各自登出，不自動切帳。受控全域撤銷依契約生效；不增加跨 origin 即時畫面刷新或自動 SSO 的產品承諾。
 
 現行 handoff v2 的 employeeId required 與兩個 audience 不能原地放寬成非員工契約。新 consumer／非員工 wire contract 採新版本與相容窗口，issuer／audience／PKCE／CSRF／一次性 code／來源 Session 到期及原始 auth_time／epoch／revocation 保護保留；精確 wire version 由發布 owner 的契約收斂，不在本 repo 冒稱已存在。
+
+<a id="dev139-external-access"></a>
+
+### 4.2.1 外部協作者的邀請、核准與撤權
+
+1. **提出申請。** 具該資源擁有權的 Workspace／Board owner 從 ProJED 分享入口邀請外部人員，限定 Board 與角色。ProJED 保存待接受邀請，通知 OrgMaster 建立 `PENDING` 申請。通知只含識別本次申請、邀請人、登入對象與來源所需資料。待核准或遭拒時，邀請連結、正常登入與個人 Session 均無法開啟受邀看板。個人工作區及內部帳號沿用 §4.2 原入口。
+2. **審核外部資格。** OrgMaster 管理員從外部人員清單核准或拒絕。清單顯示登入識別、邀請人、申請來源、狀態（待核准、有效、停用、拒絕）、核准人與時間、最近登入、公司及備註。核准時以已驗證的登入來源綁定並建立或啟用最小 Principal，只授 ProJED 外部協作資格。已有個人 Principal 時沿用同一身分。Email 僅供聯絡，不能當作身分綁定或接受邀請的證明。中央管理員取得的權限限於資格管理，私人工作區、看板及任務內容仍由 ProJED 控制。
+3. **接受並啟用。** 受邀者接受時，由 ProJED 後端在同一交易重驗中央資格的目前版本、本次邀請的受邀身分、Board、角色、期限與撤回狀態，再啟用該 Board 的 membership 並保存接受回執。僅收到中央核准仍不能讀取 Board。撤回後才送達的核准、舊申請的重送或已移除的成員均不可藉重播重新取得授權。接受前檢查一次性 token 與期限，接受後以回執關聯的有效授權判斷存取，原 token 到期不會讓正常成員掉權。
+4. **日常操作。** 外部人員每次操作共享看板，HTTP 後端均須確認有效 Session、OrgMaster 外部資格有效、該 Board 的邀請授權仍有效，以及現行 membership 與角色 capability 允許該操作。中央明確禁止或全域停用優先。沿 §4.3 在中央狀態發布時同步更新本地 guard，一般操作讀本地狀態，無須逐次詢問 OrgMaster 或要求人工核准。個人 Session 不可繞過共享看板的檢查。
+5. **撤權與恢復。** ProJED owner 可單獨移除特定 Workspace／Board 的授權，其他獨立授權依原 scope 處理。OrgMaster 全域停用該外部人員時拒絕該 Principal 的新 Session、使主程式及 Quick 的既有 Session 失效，即使同一 Principal 另有個人入口亦適用。保留並凍結外部成員關係，保留任務、備註及歷史。恢復後須重新登入，逐一依當下有效邀請授權、scope 與 membership 恢復可執行操作。先前由 owner 移除的權限維持撤銷。普通離職、單板移除及拒絕外部申請僅作用於對應資格或資源。
+
+既有外部協作者移轉時保留原 UUID、成員紀錄及內容歸屬。能核實現行中央核准及原邀請授權的成員可沿用原關係。證據不足時凍結受影響的共享範圍，補足對應資格或取得新的有效邀請後再開放。既有 membership、同名或相同 email 均不能自行補作批准。
 
 ### 4.3 保護查詢與寫入
 
@@ -164,7 +178,7 @@ D2 要求保留使用者功能及授權結果；server/API、policy 與登入 ad
 | 角色與 membership | 保留 `owner / admin / project_manager / member / viewer`、Workspace 與 Board 成員區別及 membership／invite 既有狀態。外部 guest 是特定 Board 的存取範圍描述，不另造角色或把 Board 成員自動提升為整個 Workspace 成員權限。 |
 | 看板權限設定 | 搬移 `board_role_permissions` 的每 Board／role capabilities，保留非預設及明確空集合設定；沿原 owner 固定能力與其餘角色 normalization，不把所有角色重設為 default。保留原設定／分享操作入口及保存後重載結果。 |
 | 管理與繼承 | Workspace owner/admin 依原 capability／Board matrix 計算繼承；Board 管理權不外推為整個 Workspace 管理權。公司角色與 Portal 指派只提供對應公司准入，不能改寫 ProJED membership 或擴張私人存取。 |
-| 邀請、撤權與可見性 | 保留既有分享／邀請／接受／撤銷流程與 scope；撤權後新請求拒絕，guest 的 identity anchor 不暴露其他 Board。各角色操作是否允許，必須與凍結基線一致。 |
+| 邀請、撤權與可見性 | 保留既有分享入口、看板範圍與各角色能力。外部邀請沿 §4.2.1 增加中央資格審核。撤權後新請求拒絕，guest 的身分關聯只用於指定 Board。 |
 
 身分 mapping 只把可信 Principal 連到原 `localUserId`，不重派 owner、重新接受 invite 或重算公司員工角色為看板角色。若發現原程式、資料設定、SQL policy 與規格互斥，停止受影響 slice 並先收斂來源；不得以「架構對齊」默默放寬授權或移除現有功能。
 
@@ -179,6 +193,10 @@ D2 要求保留使用者功能及授權結果；server/API、policy 與登入 ad
 | Platform／current auth state | 當前 `platform_contract.read_principal_auth_state_v3(text)` 及 admission 的可用範圍需由 owner 確認適用 ProJED；0 row／不可確認不得當 epoch 0 或 allow。區分全域安全撤銷、公司准入撤銷及本 App Session 登出，給出版本與有效時間契約。 |
 | ProJED／consumer conformance | exact issuer／audience／redirect／consumer ACL、可信 mapping、Session 前置條件及本地 capability；synthetic 員工、非員工、guest、錯 issuer／audience、撤權／失效及 producer unavailable 測例。舊 consumer 的 compatibility receipt 與 ProJED 新路徑 evidence 分開。 |
 
+§4.2.1 的權責交接沿用同一組 owner。ProJED 傳送可辨識同一次邀請的申請通知並保留 Board 授權。OrgMaster 維護外部清單、審核結果與停用／恢復狀態。Platform 及 ProJED 消費目前有效版本並使舊 Session 失效。既有個人登入或一般 ProJED admission 的測試只覆蓋其原範圍，外部雙重核准另依 A03 驗收。
+
+目前 [acceptInvite](../../server/collaborationWrite.ts) 會比對邀請 token、有效期與 actor profile email，之後寫入 membership。接手者須在此交易接入核准的 Principal 與當前外部資格，並在後續 Board 請求執行 §4.2.1 的授權條件。
+
 外部交接以 canonical repo／DEV-139／本節 slice 引用來源；目標 owner 在獲人類開發授權後才查其索引選 native ID，提交 owner／source／版本／相容證據。此處不向其他專案派工或修改任何發布契約。
 
 ## 5. 資料與 API 交接面
@@ -192,7 +210,7 @@ D2 要求保留使用者功能及授權結果；server/API、policy 與登入 ad
 | 角色／權限設定 | Workspace／Board membership、原角色與 `board_role_permissions` 按 §4.4 保留；權限空集合不轉 default，平台公司角色不替換本地角色。 |
 | Task 與多視圖 | 同一 canonical task；parent、dependencies、placements／tracking、assignees、tags、dates、archive 狀態及人工正文保持。projection ID 不可當 canonical task ID。 |
 | 狀態 | TaskStatus 保留 `todo / in_progress / delayed / completed / unsure / onhold`；member 與 invite 狀態沿現行型別，不為平台整合重定義業務生命週期。 |
-| invite／membership | 接受邀請、更新 membership、回執在同一自有交易；guest identity anchor 不擴張 workspace 可見性。 |
+| invite／membership | 外部資格由 OrgMaster 發布。ProJED 依 §4.2.1 核對資格與邀請，在同一交易接受、更新指定 Board membership 並寫入回執。 |
 | Quick receipt | `(localUserId, captureId)` 冪等；首次 titleHash、commit 時間與結果不可變；Task 改名／歸位／刪除後 replay 不重建。 |
 | 會議／文件／檔案 | 原稿、來源版本、段落／task links、vector／chunks、job／lease、費用 ledger、projection receipt、retention／cleanup 全部有 owner。未資格驗證功能維持未啟用。 |
 | 已有連結／feed | Board 分享、calendar/feed、檔案／知識連結的 identifier 和權限保留；origin 改變須有受控相容處置，不讓有效舊連結默默指向錯誤資源。 |
@@ -373,7 +391,7 @@ Fixture 採 synthetic 私人 A／B、公司 C1／C2、guest G、Workspace／Boar
 |---|---|---|---|
 | A01 公司入口 | 有 ProJED 指派與測試看板權限的員工從 Platform 正常入口進 ProJED，改 Task 後重載。 | Principal／local mapping 一致；DB commit 與 UI 重載相同。缺入口、僅有 Portal 可見或已撤權時拒絕；不新增其他 app 權限。 | 正常 UI 導航、API、managed nonprod DB、actor／scope。 |
 | A02 個人資料 | A 從 ProJED 登入，既有 Sidebar 建 Workspace／Board／Task；B 與公司管理員用自己的入口查詢同資源；撤回 A 的公司資格後再開私人資料。 | A 正常可用且不用 Employee；B／未授權公司管理員無私人內容。公司資格撤銷不替代全域 Principal 停用；私人使用保留。真正空資料與依賴失敗有不同狀態。 | UI、API＋RLS／transaction DB；OrgMaster／Platform 新版真 producer。 |
-| A03 外部協作 | 有分享能力的 owner 從看板分享入口邀請 G；G 正常登入接受後操作，owner 再撤權。 | 僅核准 Board 可見；只讀／寫依實際 membership；其他 Board deny，撤權後新請求 deny。重播／已撤銷 invite 不產生 membership。 | 分享／接受／撤權 UI、API、DB。 |
+| A03 外部協作 | Owner 邀請 G，管理員在 OrgMaster 清單收到申請並分別測拒絕與核准。另測待審時撤邀後才核准、已核准未接受、接受後重新送件、單板移除與全域停用／恢復。 | 待審、拒絕、邀請失效或受邀身分不符均無新增存取。只有核准且接受者依 Board 角色讀寫，其他 Board 及中央管理員直接讀取皆拒絕。停用後舊 Session 和新登入均拒絕。恢復後新登入僅可使用仍有效的授權，已移除的 Board 與舊 Session 仍拒絕。凍結前後的任務、備註及成員歷史保持一致。 | 分享與 OrgMaster 審核／停用 UI、Session、新舊請求與直接 HTTP 拒絕、membership／回執與歷史讀回。隔離環境驗證晚到及重播。 |
 | A04 Quick durable | Quick 起始頁未登入或離線輸入，submit 後重開，再登入與明確認領，前往工作台。 | 先有 IDB commit/readback；遠端 receipt 與同 ID task 唯一。逾時重送、改名／刪除後 replay 不重建；不先載入整個看板。 | 真 IDB、正常 Quick／主程式入口、API／DB receipt、network trace。 |
 | A05 切帳與晚到回應 | A 已綁 capture；切換 B，再返回 A；在 callback／claim／commit 期間注入切帳與結果不明。 | B 不看見或補送 A 的內容；A 可同 key 恢復；原回應不污染 B UI；unbound 不自動改綁。 | 同 profile UI、IDB CAS、API actor／receipt；注入證據標明 SIMULATION。 |
 | A06 舊 PWA 恢復 | 同一 browser profile／已安裝儲存建立舊版未同步記錄／人工草稿，先驗原 origin 升級；有核准換 origin 情境時另驗受控恢復。 | known owner、原 ID／hash／內容完整；新版重載可讀、失敗時舊副本仍可恢復；不刪 SW／IDB 解決更新。保留已安裝入口，不強迫重裝。僅新頁可達不算通過。 | 舊／新 artifact、真 SW／IDB、UI、API／DB reconciliation；窄版量測，browser／實體 installed evidence 分層。 |
@@ -381,7 +399,9 @@ Fixture 採 synthetic 私人 A／B、公司 C1／C2、guest G、Workspace／Boar
 | A08 已可用附屬功能 | 由既有會議草稿、知識／檔案及行事曆入口執行現行可用操作。 | 人工正文、來源、費用及清理責任保留；失敗可重試，未資格功能仍 gated。新外部 provider dispatch 未驗不算 PASS。 | 原功能所需 UI／API／DB／Storage／真 provider；按實際層列結果。 |
 | A09 工作區／看板／權限相容 | 五種角色各從既有 Sidebar／看板設定／分享及成員入口，依凍結基線建立／切換／改名／受控移動、保存 Board 權限並重載；用相同隔離 fixture 對照移轉前後 allow／deny。 | ID、歸屬、membership、非預設／空集合 matrix 及 Workspace 繼承一致；有權操作仍可用，無權操作仍拒絕。Board guest 不看到其他 Board，公司 admin 不變成私人 owner；不得增減既有業務權限。 | 舊／新 source 與 fixture、正常 UI、API、DB mapping／policy／role-permissions readback；不需 Platform 摘要或 AI-PDM UI。 |
 | A10 DB 與運作邊界 | 隔離 PostgreSQL 驗 policy／pool actor cleanup，核准非正式環境驗各入口 startup、角色與觀測。 | 無 context／跨 core／跨 lifecycle DB／runtime DDL deny；兩入口與全部 workers 計入容量，backup/restore 可證明。 | Disposable 真 PostgreSQL 與 managed nonprod 分層；正式放行另需 Production 證據。 |
-| A11 既有使用者切換 | 公司／個人／外部使用者從原書籤、主 PWA、獨立 Quick 及同 origin 相容入口重新開啟；完成需要的正常登入，再讀原 Board／Task、修改並重載；加入舊版離線回網、mapping 歧義與停寫中送出。 | 不重註冊／重建資料／改權限／強迫重裝；原 ID 與 allow／deny 一致。各 origin 可選不同帳號，原 owner pending 不錯送；停寫不清空或誤報成功，解除後同 key 唯一讀回。登入／mapping 失敗有恢復入口，不出現假空帳號或循環重登。 | 同 browser profile 舊／新 artifact、正常 UI→真 Session／API→DB／receipt、Hosting／cache trace、writer fence後full-snapshot reconciliation與停寫量測；SIMULATION 與實體安裝證據分列。 |
+| A11 既有使用者切換 | 公司／個人／外部使用者從原書籤、主 PWA、獨立 Quick 及同 origin 相容入口重新開啟，登入後依原角色操作及重載。涵蓋外部資格及原邀請證據齊備／缺漏、舊版離線回網、mapping 歧義與停寫中送出。 | 保留原 UUID、內容、安裝及原角色能力。外部證據齊備可讀原 Board，缺漏時僅凍結受影響共享範圍且保留資料。各 origin 可選不同帳號，原 owner pending 不錯送。停寫不清空或誤報成功，解除後同 key 唯一讀回。登入／mapping 失敗有恢復入口。 | 同 browser profile 舊／新 artifact、正常 UI→真 Session／API→DB／receipt、Hosting／cache trace、writer fence 後 full-snapshot reconciliation 及停寫量測。SIMULATION 與實體安裝證據分列。 |
+
+A11 仍須從原入口讀取 Board／Task、修改再重載，確認既有使用者無需重新註冊或強迫重裝。遇到登入或 mapping 問題，不得出現假空帳號或循環重登。
 
 受影響的 UI 流程覆蓋正常、載入、空白及錯誤／拒絕；版面或互動改變時，依既有主／Quick 基線檢查 390px 窄版、桌面、overflow、焦點與鍵盤操作，不要求 A01–A11 每列重複排列相同的版面／輸入組合。未受影響且仍有效的證據可重用；純文件／SQL 修改不因 HEAD 改變就重跑全部 UI。身分、資料、權限或舊入口行為受影響時仍驗相應 A／T 案例；使用者取消的 Android 實體裝置 gate 不自行恢復，窄版 browser 不能冒稱實體 PWA PASS。
 
@@ -1385,6 +1405,14 @@ API 啟用前的 cache、generation 及 embedding logging 三個唯讀 GET 均�
 同日另以鉦富帳戶查Google Drive契約／ZDR文件metadata，兩次搜尋均無結果，仍不能判定契約不存在。依Google目前[防濫用規格](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/abuse-monitoring)，本次所選非Frontier Google模型在一般線上條款下仍可能留存被標記的提示，Master Agreement適用性須由可查證文件確認；不套用其他供應商的ZDR申請程序。當時仍要求Speech Console另行readback；其後依官方default-off＋明確opt-in契約精簡為前述可執行控制，不以試打enhanced模型推定設定，也不放寬Gemini gate。
 
 #### 已核准 foundation 的實際執行（2026-11-20）
+
+<a id="dev139-source-views-applied"></a>
+
+**正式來源身分投影已建立（2026-11-20）。** 人類核准後，在原 Supabase 專案 `knodlkxqpcqyrtgwpdst` 執行 [create-only SQL](../../scripts/dev139-source-identity-projections.apply.sql)，SHA-256 為 `64da752bfd14b29df4c9cf02b4be6c6d06e0c7cc0ed601685e68cbfbd87ee34a`。事前兩個檢視均不存在。交易內 ACL 檢查通過後提交，另以 catalog 讀回確認下列結果。
+
+- `private.projed_dev139_google_identities_v1` 限 Google 身分，四欄為 `user_id`、`provider`、`provider_id`、`identity_data`。`private.projed_dev139_auth_users_v1` 三欄為 `id`、`banned_until`、`deleted_at`。兩者 owner 為 `postgres`、security barrier 已開啟，採 owner 權限執行。
+- 專用 reader 維持 `NOLOGIN`，對上述兩個檢視只有 SELECT，不能直讀底層 Auth 表。兩個檢視對 PUBLIC、anon、authenticated、service_role 的 grant 數均為零。
+- 本次只變更這兩個來源檢視及其 ACL。未查詢使用者資料列、建立移轉登入或 Secret 版本、匯入 Cloud SQL 或切流。下列較早讀回保留變更前狀態。
 
 人類已核准 §47.1；下列為實際 provider metadata readback，不是 source 提案。證據存於 task-owned ignored `output/dev139-foundation-20261120/`，不含 Secret 內容、密碼或會議資料：
 
