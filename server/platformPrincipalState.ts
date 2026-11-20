@@ -1,3 +1,5 @@
+import { performance } from 'node:perf_hooks';
+import { setTimeout as wait } from 'node:timers/promises';
 import { KernelError } from './errors.js';
 import { parsePlatformHandoffV4, type PlatformHandoffBinding, type PlatformHandoffV4 } from './platformHandoff.js';
 
@@ -15,6 +17,12 @@ export const PLATFORM_PRINCIPAL_STATE_MAX_READ_AGE_MS = 10_000;
 // PostgreSQL and Date.now() can sample opposite sides of one millisecond.
 // This accommodates that precision boundary, not a general clock-skew budget.
 const STATE_READ_PRECISION_MS = 1;
+// V8's interpolated UTC and PostgreSQL's precise UTC can briefly disagree on
+// Windows. Wait once for local UTC to catch up; never accept a future row by
+// enlarging the precision/expiry limits or by rewriting the owner timestamp.
+// This is a scheduler deadline, not an accepted timestamp skew. Timers may run
+// later than requested; every success still requires UTC >= the owner read_at.
+const STATE_READ_CLOCK_CATCHUP_BUDGET_MS = 50;
 
 const MAX_INT64 = 9_223_372_036_854_775_807n;
 const MAX_SAFE_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
@@ -312,9 +320,24 @@ export function createPlatformPrincipalStateReader(
     }
     if (!result || !Array.isArray(result.rows) || result.rows.length !== 1) unavailable();
     const state = parseStateRow(result.rows[0], identity);
-    const completedAtMs = now();
+    let completedAtMs = now();
     const stateReadAtMs = parseIsoTimestamp(state.readAt);
     if (!Number.isSafeInteger(completedAtMs) || completedAtMs < startedAtMs || stateReadAtMs === null
+        || completedAtMs - startedAtMs > PLATFORM_PRINCIPAL_STATE_MAX_READ_AGE_MS) unavailable();
+    const aheadMs = stateReadAtMs - completedAtMs;
+    if (aheadMs > STATE_READ_PRECISION_MS) {
+      const waitMs = aheadMs + STATE_READ_PRECISION_MS;
+      if (waitMs > STATE_READ_CLOCK_CATCHUP_BUDGET_MS) unavailable();
+      const waitStartedAtMs = performance.now();
+      await wait(waitMs);
+      const waitedMs = performance.now() - waitStartedAtMs;
+      const caughtUpAtMs = now();
+      if (!Number.isFinite(waitedMs) || waitedMs < 0 || waitedMs > STATE_READ_CLOCK_CATCHUP_BUDGET_MS
+          || !Number.isSafeInteger(caughtUpAtMs) || caughtUpAtMs < completedAtMs
+          || caughtUpAtMs < stateReadAtMs) unavailable();
+      completedAtMs = caughtUpAtMs;
+    }
+    if (completedAtMs - startedAtMs > PLATFORM_PRINCIPAL_STATE_MAX_READ_AGE_MS
         || stateReadAtMs - completedAtMs > STATE_READ_PRECISION_MS
         || completedAtMs - stateReadAtMs > PLATFORM_PRINCIPAL_STATE_MAX_READ_AGE_MS) {
       unavailable();

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { performance } from 'node:perf_hooks';
 
 import { KernelError } from '../../../server/errors.js';
 import {
@@ -169,6 +170,51 @@ test('accepts only the one-millisecond sampling boundary and preserves the owner
   await assert.rejects(reader([stateRow(proof, {
     read_at: new Date(NOW + 2).toISOString(),
   })]).readForHandoff(proof), hasCode('IDENTITY_STATE_UNAVAILABLE'));
+});
+
+test('waits once for local UTC to catch up to a small owner timestamp difference without changing the timestamp', async () => {
+  const proof = handoff();
+  let samples = 0;
+  const result = await reader([stateRow(proof, { read_at: new Date(NOW + 2).toISOString() })], {
+    now: () => ++samples <= 3 ? NOW : NOW + 2,
+  }).readForHandoff(proof);
+  assert.equal(result.stateReadAtMs, NOW + 2);
+  assert.equal(result.state.readAt, new Date(NOW + 2).toISOString());
+});
+
+test('rejects a larger clock difference, a local clock that never catches up, and a slow state read', async () => {
+  const identity = { identityIssuer: handoff().identity.identityIssuer, identitySubject: handoff().identity.identitySubject,
+    principalId: handoff().identity.principalId };
+  for (const difference of [2, 100]) {
+    await assert.rejects(reader([stateRow(handoff(), { read_at: new Date(NOW + difference).toISOString() })])
+      .readCurrent(identity), hasCode('IDENTITY_STATE_UNAVAILABLE'));
+  }
+  let samples = 0;
+  await assert.rejects(reader([stateRow(handoff(), { read_at: new Date(NOW + 10_001).toISOString() })], {
+    now: () => ++samples === 1 ? NOW : NOW + 10_001,
+  }).readCurrent(identity), hasCode('IDENTITY_STATE_UNAVAILABLE'));
+  samples = 0;
+  await assert.rejects(reader([stateRow(handoff(), { read_at: new Date(NOW + 2).toISOString() })], {
+    now: () => ++samples <= 2 ? NOW : NOW - 1,
+  }).readCurrent(identity), hasCode('IDENTITY_STATE_UNAVAILABLE'));
+});
+
+test('rechecks handoff expiry after UTC catches up instead of extending the handoff', async () => {
+  const proof = handoff({ expiresAt: new Date(NOW + 2).toISOString() });
+  let samples = 0;
+  await assert.rejects(reader([stateRow(proof, { read_at: new Date(NOW + 2).toISOString() })], {
+    now: () => ++samples <= 3 ? NOW : NOW + 2,
+  }).readForHandoff(proof), hasCode('IDENTITY_INVALID'));
+});
+
+test('rejects an over-budget scheduler turn even when UTC has caught up', async (context) => {
+  let monotonicSamples = 0;
+  context.mock.method(performance, 'now', () => ++monotonicSamples === 1 ? 0 : 51);
+  let samples = 0;
+  const proof = handoff();
+  await assert.rejects(reader([stateRow(proof, { read_at: new Date(NOW + 2).toISOString() })], {
+    now: () => ++samples <= 3 ? NOW : NOW + 2,
+  }).readForHandoff(proof), hasCode('IDENTITY_STATE_UNAVAILABLE'));
 });
 
 test('accepts a current employee handoff and preserves the signed int64 mapping revision as text', async () => {

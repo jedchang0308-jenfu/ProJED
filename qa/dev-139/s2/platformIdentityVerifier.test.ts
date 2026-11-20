@@ -200,6 +200,19 @@ test('one-millisecond state sampling precision never extends the ten-second leas
   assert.equal(future.calls().mappingCalls, 0);
 });
 
+test('clock catch-up preserves source expiries and caps the current-state lease at ten seconds', async () => {
+  const proof = wire();
+  let samples = 0;
+  const subject = consumerHarness({ rows: [stateRow(proof, { read_at: new Date(NOW + 2).toISOString() })],
+    now: () => ++samples <= 4 ? NOW : NOW + 2 });
+  const result = await subject.consumer.consumeVerified(EXCHANGE_INPUT, 'quick');
+  assert.equal(result.identity.currentStateExpiresAtMs, NOW + 2 + 10_000);
+  assert.equal(result.actor.expiresAtMs, NOW + 2 + 10_000);
+  assert.equal(result.identity.expiresAtMs, Date.parse(proof.expiresAt));
+  assert.equal(result.identity.sourceSessionExpiresAtMs, Date.parse(proof.sourceSessionExpiresAt));
+  assert.deepEqual(subject.calls(), { exchangeCalls: 1, readForHandoffCalls: 1, mappingCalls: 1 });
+});
+
 test('exact v4 issuer/audience and out-of-band manifest pin fail closed on mismatch', async () => {
   for (const proof of [
     wire({ issuer: 'https://other.example.test/api/sso' }),
