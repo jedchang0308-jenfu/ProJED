@@ -20,7 +20,7 @@ async (page) => {
     if (!condition) throw new Error(`${message}: ${JSON.stringify(details)}`);
   };
   const waitForProduct = async () => {
-    await page.locator('nav').waitFor({ state: 'visible', timeout: 20000 });
+    await page.locator('nav.app-main-nav').waitFor({ state: 'visible', timeout: 20000 });
     await page.locator('[data-task-id="shared-parent"]').first().waitFor({ state: 'visible', timeout: 20000 });
   };
   const openPermissions = async target => {

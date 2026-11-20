@@ -127,6 +127,7 @@ async (page) => {
   record('old-empty-list-cannot-erase-new-created-invitation', await dialog.getByText('recipient-b@example.invalid', { exact: true }).count() === 1);
   stage = 'withdraw-and-retry-original-invitation';
   await dialog.getByRole('button', { name: '撤回', exact: true }).click();
+  await page.getByText('連結已失效，OrgMaster 尚未收到撤回通知。可再次按撤回重送。', { exact: true }).waitFor();
   record('withdraw-pending-removes-copyable-link', await dialog.getByRole('button', { name: '複製連結', exact: true }).isDisabled());
   await dialog.getByRole('button', { name: '撤回', exact: true }).click();
   await dialog.getByText('目前沒有待處理的加入要求。', { exact: true }).waitFor();
@@ -153,9 +154,11 @@ async (page) => {
   const result = artifact('PASS');
   await page.evaluate(value => { window.__DEV139_BOARD_SHARE_SCOPE = value; }, result);
   return result;
-  } catch {
+  } catch (error) {
     await page.evaluate(value => { window.__DEV139_BOARD_SHARE_SCOPE = value; }, artifact('FAIL')).catch(() => undefined);
-    throw new Error(`BOARD_SHARE_SCOPE_UI_FAILED ${stage}`);
+    const failedChecks = checks.filter(check => !check.ok).map(check => check.id);
+    const destinations = [...new Set(blocked.map(value => value.startsWith('/') ? value.split('/').slice(0, 4).join('/') : new URL(value).hostname))];
+    throw new Error(`BOARD_SHARE_SCOPE_UI_FAILED ${stage} ${error?.name ?? 'Error'} checks=${failedChecks} destinations=${destinations}`);
   } finally {
     await page.evaluate(() => { delete window.__BOARD_SHARE_COPIED; }).catch(() => undefined);
   }
