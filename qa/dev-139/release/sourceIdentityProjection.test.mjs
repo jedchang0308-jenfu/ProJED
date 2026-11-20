@@ -22,6 +22,16 @@ test('source projection grants are create-only and exclude direct Auth access', 
   assert.doesNotMatch(applySql, /GRANT[\s\S]*?ON TABLE auth\./iu);
 });
 
+test('source projection apply verifies its contract before commit', () => {
+  assert.match(applySql, /DEV139_SOURCE_PROJECTION_POSTFLIGHT_INVALID/u);
+  assert.match(applySql, /DEV139_SOURCE_PROJECTION_COLUMNS_INVALID/u);
+  assert.match(applySql, /DEV139_SOURCE_PROJECTION_PRIVILEGES_INVALID/u);
+  assert.match(applySql, /DEV139_SOURCE_PROJECTION_PUBLIC_GRANT_INVALID/u);
+  assert.match(applySql, /pg_catalog\.has_table_privilege\(\s*'projed_dev139_source_reader', 'auth\.identities', 'SELECT'\s*\)/u);
+  assert.match(applySql, /pg_catalog\.aclexplode\(/u);
+  assert.ok(applySql.indexOf('$dev139_source_projection_postflight$') < applySql.lastIndexOf('COMMIT;'));
+});
+
 test('source projection removal drops only the two fixed views with dependency protection', () => {
   assert.equal((removeSql.match(/DROP VIEW private\.projed_dev139_/gu) ?? []).length, 2);
   assert.match(removeSql, /DROP VIEW private\.projed_dev139_auth_users_v1 RESTRICT;/u);
