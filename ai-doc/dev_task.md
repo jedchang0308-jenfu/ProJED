@@ -69,6 +69,8 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
   - 2026-11-20 續行：兩個正式身分投影已補create-only apply與`RESTRICT` remove SQL，Google-only、精確7欄、owner／barrier及view-only SELECT固定，不授reader直接Auth權限。release unit 34/34及小型task-owned PostgreSQL18 apply／ACL readback／remove實跑PASS，暫存cluster與listener已清理；source `7308b1d` 的 CI44691983128兩jobs亦SUCCESS，snapshot直接載入同一份SQL，artifacts14608418747／14608828853三份收據均PASS並綁45份migration。正式Supabase仍零變更，待上述明確核准後才執行。
 
+  - 2026-11-20 續行：source `d0468e5`將apply補成同transaction postflight，在COMMIT前核對兩view owner／barrier、精確7欄、reader view-only SELECT、Auth直讀關閉及PUBLIC零grant，失敗即rollback。release unit35/35、targeted lint及CI44694286316兩jobs SUCCESS；artifacts14609773360／14610002096讀回snapshot63／domain73／OCI18 checks，均綁45份migration且OCI綁exact source。正式來源仍未套用，browser／provider／productionRelease仍NOT_RUN。
+
   - 2026-11-20 續行：COO依官方default-off＋明確Console opt-in契約，移除Speech data logging無公開API卻要求第二份readback的過度治理；保留同步Recognize、禁止opt-in及外部opt-in即撤銷qualification。runtime SA合成probe因操作者缺`iam.serviceAccounts.getAccessToken`在發token前拒絕，未為測試新增Token Creator或改用人類身分；Edge「AI測試」唯讀查證遇Google重新驗證即停止，未操作憑證或冒稱取得project readback。Speech實呼叫仍待正式runtime，Gemini防濫用豁免gate不變。
 
   - 2026-11-20 續行：ProJED #9、Platform #157、OrgMaster #187 已依人類核准轉為ready-for-review，三者仍open且未merge／deploy／切流；base分別仍是遠端最新`0670a0a`／`5ae88bc`／`a8830e9`。Platform `b7293c2`、OrgMaster `4b722b4` required Source QC均SUCCESS；ProJED `5654478`為docs-only且無新check，程式仍引用`7308b1d`的CI44691983128，不以ready狀態縮減正式分母。
