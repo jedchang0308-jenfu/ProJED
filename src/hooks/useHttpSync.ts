@@ -15,6 +15,8 @@ import { useTagStore } from '../store/useTagStore';
 import { useWbsStore } from '../store/useWbsStore';
 import { createCoalescedAsyncRefresh } from '../utils/coalescedAsyncRefresh';
 import { filterReadIdentity } from '../features/taskFilters/optionSource';
+import { protectRecordEditorOnIdentityChange, restoreParkedRecordEditor } from '../services/httpApi/recordSessionBoundary';
+import { cancelRecordSessionLogout } from '../services/recordSessionProtection';
 
 const ACTIVE_POLL_INTERVAL_MS = 5_000;
 
@@ -60,8 +62,6 @@ async function refreshWorkspaceIndex(isCurrent: () => boolean) {
 async function refreshActiveScope(isCurrent: () => boolean) {
   if (!isCurrent()) return;
   const { activeWorkspaceId, activeBoardId, workspaces } = useBoardStore.getState();
-  const sameScope = () => isCurrent() && useBoardStore.getState().activeWorkspaceId === activeWorkspaceId
-    && useBoardStore.getState().activeBoardId === activeBoardId;
   if (!activeWorkspaceId) {
     useWbsStore.setState({ nodes: {}, dependencies: [], loading: false, error: null });
     useMemberStore.getState().clearMembers();
@@ -71,9 +71,17 @@ async function refreshActiveScope(isCurrent: () => boolean) {
   }
   const boardId = activeBoardId;
 
-  const boardExists = boardId !== null
-    && workspaces.some(workspace => workspace.id === activeWorkspaceId
+  const containsBoard = (index: typeof workspaces) =>
+    index.some(workspace => workspace.id === activeWorkspaceId
       && workspace.boards.some(board => board.id === boardId));
+  const boardExists = boardId !== null && containsBoard(workspaces);
+  const sameScope = () => {
+    const current = useBoardStore.getState();
+    // On startup the saved IDs can precede the workspace index. A read begun
+    // against that empty index must not clear a newer, populated board.
+    return isCurrent() && current.activeWorkspaceId === activeWorkspaceId && current.activeBoardId === boardId
+      && containsBoard(current.workspaces) === boardExists;
+  };
   const tasksAndDependencies = boardExists
     ? Promise.all([
       httpDomainReadService.listTasks(activeWorkspaceId, boardId),
@@ -112,20 +120,28 @@ export function useHttpSync(options: { enabled?: boolean } = {}) {
   const initialized = useRef(false);
   const activeWorkspaceId = useBoardStore(state => state.activeWorkspaceId);
   const activeBoardId = useBoardStore(state => state.activeBoardId);
+  const recordListLoad = useRecordStore(state => state.recordListLoad);
+  const currentBoardAccess = useMemberStore(state => state.currentBoardAccess);
 
   useLayoutEffect(() => {
     if (!enabled) return;
     readEpoch.current += 1;
     const userId = useAuthStore.getState().user?.uid ?? null;
+    if (userId && !useAuthStore.getState().loading) cancelRecordSessionLogout(userId);
     // Preserve a same-account reload location, never another account's data.
     clearPublishedReads(Boolean(userId && (!initialized.current || previousUserId.current === userId)));
     initialized.current = true;
     previousUserId.current = userId;
     return () => {
       readEpoch.current += 1;
+      protectRecordEditorOnIdentityChange(userId, identity);
       clearPublishedReads(useAuthStore.getState().user?.uid === userId);
     };
   }, [enabled, identity]);
+
+  useLayoutEffect(() => {
+    if (enabled && identity && filterReadIdentity(useAuthStore.getState().user) === identity) restoreParkedRecordEditor();
+  }, [enabled, identity, activeWorkspaceId, activeBoardId, recordListLoad, currentBoardAccess]);
 
   useEffect(() => {
     if (!enabled) return;

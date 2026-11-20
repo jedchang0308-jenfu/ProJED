@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { authService } from '../services/authService';
 import { isHttpBackend } from '../services/backendMode';
 import { clearMeetingDraftRecoveryForUser } from '../services/meetingDraftRecoveryService';
+import { markRecordSessionLogout, cancelRecordSessionLogout } from '../services/recordSessionProtection';
 import type { AuthStore } from '../types';
 
 const useAuthStore = create<AuthStore>((set) => ({
@@ -20,13 +21,15 @@ const useAuthStore = create<AuthStore>((set) => ({
   },
   
   signOut: async () => {
+    const currentUserId = useAuthStore.getState().user?.uid;
     try {
-      const currentUserId = useAuthStore.getState().user?.uid;
+      if (currentUserId && isHttpBackend) markRecordSessionLogout(currentUserId);
       set({ loading: true, error: null });
       if (currentUserId) await clearMeetingDraftRecoveryForUser(currentUserId);
       await authService.signOut();
       set({ user: null, loading: false });
     } catch (error: any) {
+      if (currentUserId && isHttpBackend) cancelRecordSessionLogout(currentUserId);
       set({ error: error.message, loading: false });
     }
   },

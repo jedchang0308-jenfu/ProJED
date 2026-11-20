@@ -22,6 +22,7 @@ import type { UndoStore, UndoCommand } from '../types';
 
 /** 最多保留 50 步 */
 const MAX_STACK_SIZE = 50;
+let clearGeneration = 0;
 
 const useUndoStore = create<UndoStore>((set, get) => ({
   undoStack: [],
@@ -61,10 +62,12 @@ const useUndoStore = create<UndoStore>((set, get) => ({
     if (isApplying || undoStack.length === 0) return;
 
     const command = undoStack[undoStack.length - 1];
+    const generation = clearGeneration;
     set({ isApplying: true });
 
     Promise.resolve(command.undo())
       .then(() => {
+        if (generation !== clearGeneration) return;
         set((state) => ({
           undoStack: state.undoStack.slice(0, -1),
           redoStack: [...redoStack, command],
@@ -72,6 +75,7 @@ const useUndoStore = create<UndoStore>((set, get) => ({
         }));
       })
       .catch((error) => {
+        if (generation !== clearGeneration) return;
         console.error('[Undo] undo failed:', error);
         set({ isApplying: false });
       });
@@ -89,10 +93,12 @@ const useUndoStore = create<UndoStore>((set, get) => ({
     if (isApplying || redoStack.length === 0) return;
 
     const command = redoStack[redoStack.length - 1];
+    const generation = clearGeneration;
     set({ isApplying: true });
 
     Promise.resolve(command.redo())
       .then(() => {
+        if (generation !== clearGeneration) return;
         set((state) => ({
           undoStack: [...undoStack, command],
           redoStack: state.redoStack.slice(0, -1),
@@ -100,6 +106,7 @@ const useUndoStore = create<UndoStore>((set, get) => ({
         }));
       })
       .catch((error) => {
+        if (generation !== clearGeneration) return;
         console.error('[Undo] redo failed:', error);
         set({ isApplying: false });
       });
@@ -110,7 +117,7 @@ const useUndoStore = create<UndoStore>((set, get) => ({
    * 設計意圖：切換看板時應清空 Undo 歷史，
    * 避免在不同看板之間混用操作紀錄，造成資料錯亂。
    */
-  clear: () => set({ undoStack: [], redoStack: [], isApplying: false }),
+  clear: () => { clearGeneration += 1; set({ undoStack: [], redoStack: [], isApplying: false }); },
 
   /** canUndo — 供 UI 決定按鈕是否可點擊 */
   canUndo: () => !get().isApplying && get().undoStack.length > 0,

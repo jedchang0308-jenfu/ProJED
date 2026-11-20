@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { MoreVertical } from 'lucide-react';
 import useAuthStore from '../store/useAuthStore';
 import { afterTaskDetailsSave } from './taskDetailsNavigation';
+import { useRecordDraftGuard } from '../hooks/useRecordDraftGuard';
 import {
   applyPwaUpdate,
   checkPwaUpdate,
@@ -71,6 +72,7 @@ const AppMoreMenu: React.FC<AppMoreMenuProps> = ({
   const [operation, setOperation] = useState<CheckOperation>(emptyOperation);
   const [isOpen, setIsOpen] = useState(false);
   const currentUser = useAuthStore(s => s.user);
+  const guardRecordDraft = useRecordDraftGuard();
   const detailsRef = useRef<HTMLDetailsElement>(null);
   const summaryRef = useRef<HTMLElement>(null);
   const mountedRef = useRef(false);
@@ -438,7 +440,7 @@ const AppMoreMenu: React.FC<AppMoreMenuProps> = ({
             </div>
             <button
               type="button"
-              onClick={() => afterTaskDetailsSave(() => void useAuthStore.getState().signOut())}
+              onClick={() => afterTaskDetailsSave(() => void guardRecordDraft(() => useAuthStore.getState().signOut()))}
               className="flex h-9 shrink-0 items-center rounded px-2 text-xs font-semibold text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
               title="登出"
               aria-label="登出"
