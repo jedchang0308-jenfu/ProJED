@@ -2,7 +2,7 @@ import { verifyCalendarMachinePostgres } from './verify-calendar-machine-pg.js';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import type { IncomingMessage } from 'node:http';
 import { resolve } from 'node:path';
 
@@ -72,14 +72,15 @@ await verifyGoogleMappingsPostgres(database);
 await verifyAppSessionsPostgres(database,config);
 await verifyRagPostgres(database,config);
 
-const runBrowserSmoke = (baseUrl: string, name: 'http-ui' | 'rag-ui' | 'quick-http-binding' | 'board-share-scope'): Promise<void> => new Promise((done, reject) => {
+const runBrowserSmoke = (baseUrl: string, name: 'http-ui' | 'rag-ui' | 'quick-http-binding' | 'board-share-scope' | 'calendar-ui'): Promise<void> => new Promise((done, reject) => {
   const artifactKey = { 'http-ui': '__DEV139_HTTP_UI_ARTIFACT', 'rag-ui': '__DEV139_RAG_UI_ARTIFACT',
-    'quick-http-binding': '__DEV139_QUICK_HTTP_BINDING', 'board-share-scope': '__DEV139_BOARD_SHARE_SCOPE' }[name];
+    'quick-http-binding': '__DEV139_QUICK_HTTP_BINDING', 'board-share-scope': '__DEV139_BOARD_SHARE_SCOPE',
+    'calendar-ui': '__DEV139_CALENDAR_UI' }[name];
   const output = `output/playwright/dev-139-${name}`;
   const child = spawn('powershell.exe', [
     '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'scripts/run-playwright-code.ps1',
     '-SessionPrefix', `dev139-${name}`,
-    '-Filename', `qa/dev-139/s3/${name}${name === 'http-ui' || name === 'rag-ui' ? '-smoke' : ''}.pw.js`,
+    '-Filename', `qa/dev-139/s3/${name}${name === 'http-ui' || name === 'rag-ui' || name === 'calendar-ui' ? '-smoke' : ''}.pw.js`,
     '-OutputDirectory', output,
     '-BaseUrl', baseUrl,
     '-ArtifactWindowKey', artifactKey,
@@ -740,6 +741,38 @@ try {
     for (const scenario of ['http-ui', 'rag-ui', 'quick-http-binding', 'board-share-scope'] as const) {
       await runIndependent(scenario, () => runBrowserSmoke(base, scenario));
     }
+    await runIndependent('calendar-ui-and-postgres-readback', async () => {
+      assert.ok(browserActor);
+      await runBrowserSmoke(base, 'calendar-ui');
+      const receipt = JSON.parse(readFileSync('output/playwright/dev-139-calendar-ui/result.json', 'utf8')) as {
+        result: string; subscriptionId: string; ownerUserId: string; name: string; filters: unknown; isActive: boolean;
+      };
+      assert.equal(receipt.result, 'PASS');
+      assert.match(receipt.subscriptionId, /^[0-9a-f-]{36}$/u);
+      assert.equal(receipt.ownerUserId, browserActor.localUserId);
+      // Read the row produced by the normal UI, then remove only that owned
+      // fixture in the same transaction. No token or bearer URL is read out.
+      const stored = await runActorTransaction(database, config, browserActor, async port => {
+        const result = await port.query<{
+          owner_user_id: string; name: string; filters_json: unknown; is_active: boolean; token_hash_only: boolean;
+        }>(`SELECT owner_user_id::text, name, filters_json, is_active,
+                   token_hash ~ '^[0-9a-f]{64}$' AS token_hash_only
+              FROM projed_core.calendar_subscriptions
+             WHERE id = $1::uuid AND owner_user_id = projed_core.current_actor_user_id_v1()`, [receipt.subscriptionId]);
+        const removed = await port.query(`DELETE FROM projed_core.calendar_subscriptions
+          WHERE id = $1::uuid AND owner_user_id = projed_core.current_actor_user_id_v1()`, [receipt.subscriptionId]);
+        assert.equal(removed.rowCount, 1);
+        return result.rows;
+      });
+      assert.deepEqual(stored, [{ owner_user_id: browserActor.localUserId, name: receipt.name,
+        filters_json: receipt.filters, is_active: false, token_hash_only: true }]);
+      assert.equal(receipt.isActive, false);
+      writeFileSync('output/playwright/dev-139-calendar-ui/postgres-readback.json', JSON.stringify({
+        status: 'PASS', evidenceLevel: 'DIRECT_ISOLATED_POSTGRES_AFTER_NORMAL_UI',
+        subscriptionId: receipt.subscriptionId, ownerMatches: true, filtersMatch: true,
+        disabled: true, tokenStoredAsHashOnly: true, ownedSubscriptionRemoved: true,
+      }, null, 2) + '\n');
+    });
     await runActorTransaction(database, config, actorB, async port => {
       await port.query(`
         UPDATE projed_core.profiles

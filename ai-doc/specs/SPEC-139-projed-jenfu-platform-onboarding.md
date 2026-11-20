@@ -1465,15 +1465,15 @@ API 啟用前的 cache、generation 及 embedding logging 三個唯讀 GET 均�
 
 #### 已核對的 Google Cloud 候選映像（49 份 migration）
 
-來源 `52951b98da58c3bba05f01ad0f78b84d25495cf4` 已通過原生與容器 CI。Cloud Build 以相同來源建置，來源封存 SHA-256 `806df5cc490b70faa1dbdee498fdca4de27a4e6d855cf196c72c0d537acf24be` 與 Google 回報相符。從 Jobs 映像輸出的 managed profile 及 `0001` 至 `0049` 的 SQL 雜湊已逐檔核對。登錄庫讀回的三個 digest 如下。[隔離 CI](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44740909306)｜[Cloud Build](https://console.cloud.google.com/cloud-build/builds;region=asia-east1/85b50b5f-dd8a-436f-b26d-78cd04042a56?project=967362299895)
+來源 `01ebf9454a3b71b4015159e81f0275d78a5d1b99` 已通過原生 PostgreSQL／正常畫面與 Linux 容器 CI，包含人工會議及看板權限修正。Cloud Build 以相同來源的 1,032 個 Git blob 建置，來源封存 SHA-256 `503ca1cb508d1241b50ab800792f31cbdade2d4686228fd220faaaddabe29f9d` 與 Google provenance 回報相符，來源物件 generation 為 `1795188383141751`。從 Jobs 映像輸出的 managed profile 及 `0001` 至 `0049` 的 SQL 雜湊已逐檔核對。登錄庫讀回的三個 digest 與建置輸出一致。[隔離 CI](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44761571087)｜[Cloud Build](https://console.cloud.google.com/cloud-build/builds;region=asia-east1/8a09d83b-044c-4283-a036-d7d21d7ae092?project=967362299895)
 
 | 映像 | Registry digest |
 |---|---|
-| `projed-prod` | `sha256:9a6f1bd8ea9f67bc346edb042ede512adad2bec786ab04b1a0937b3163f4a550` |
-| `projed-prod-jobs` | `sha256:53a074f8f8b139903be0ac849dd125ba9ab0db07ea069871a4aab94c5c5818f4` |
-| `projed-prod-asr-job` | `sha256:e149a5633edf6fd5c812035c83bc1c00d11a1aac3cda49ffebce35ef177c7d9a` |
+| `projed-prod` | `sha256:16c67abc93e7059f1550acb24fb2f230b8a7dc3e4b27d907b4d4a69d64796e65` |
+| `projed-prod-jobs` | `sha256:5aeaf8cb0c3e720b1be70a34074dab994abb3969ee9d49a4cb0569a10ba1b8a3` |
+| `projed-prod-asr-job` | `sha256:298e789525abc8ad9795474cb872b1b21255d1979998b34c5e278a3dee916126` |
 
-三者的候選標籤為 `candidate-52951b98da58-20261120`。執行時映像在禁網環境驗出四個供應商及工作綁定均為 `null`，ASR 映像可啟動 ffmpeg。本次操作到映像登錄為止，正式資料、服務與流量均未切換。
+三者的候選標籤為 `candidate-01ebf9454a3b-20261120`。執行時映像在禁網環境以 UID 1000 驗出四個供應商及工作綁定均為 `null`，ASR 映像可啟動 ffmpeg。後續純測試與文件變更沿用這份可執行產物，行為變更須重新綁定。本次核對範圍為映像登錄，正式服務、資料及流量仍待部署階段驗證。
 
 #### 已發布至 registry 的 45 份候選映像 readback（2026-11-20，source 5f9432f）
 

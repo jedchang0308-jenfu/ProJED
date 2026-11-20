@@ -156,6 +156,8 @@ jobs:
             output/playwright/dev-139-quick-http-binding/result.json
             output/playwright/dev-139-board-share-scope/result.json
             output/playwright/dev-139-board-share-scope/unavailable-mobile.png
+            output/playwright/dev-139-calendar-ui/*.json
+            output/playwright/dev-139-calendar-ui/*.png
           if-no-files-found: ignore
           retention-days: 7
 

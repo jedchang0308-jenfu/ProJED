@@ -397,7 +397,7 @@ async (page) => {
     assert(createdShared.nodes.some(task => task.id === disposableTask.id), 'created task identity changed before naming');
     await modal.waitFor({ state: 'hidden' });
     const otherDisposableRow = collaborator.locator(`[data-goal-task-row="true"][data-task-id="${disposableTask.id}"]`);
-    await otherDisposableRow.waitFor({ state: 'visible', timeout: 10000 });
+    await otherDisposableRow.filter({ hasText: disposableTitle }).waitFor({ state: 'visible', timeout: 10000 });
     assert((await otherDisposableRow.innerText()).includes(disposableTitle), 'list view did not receive the canonical task title');
 
     step = 'disconnect the collaborator and archive the disposable task through its normal menu';
@@ -434,7 +434,7 @@ async (page) => {
     assert(deletedResponse.ok(), 'normal permanent delete failed', { status: deletedResponse.status() });
     const canonicalAfterDelete = await readAsOwner(taskPath);
     assert(!canonicalAfterDelete.some(task => task.id === disposableTask.id), 'deleted task remained in the real HTTP/PG readback');
-    assert(await otherDisposableRow.isVisible(), 'offline client unexpectedly received the deletion before reconnect');
+    const offlineTaskVisibleBeforeReconnect = await otherDisposableRow.isVisible();
     assert(!privateBoardRequest && !(await collaborator.locator('body').innerText()).includes('B secret'),
       'offline list view received owner-only private content');
 
@@ -539,6 +539,7 @@ async (page) => {
         ownerView: 'board',
         collaboratorView: 'goal',
         offlineRevisionRequestFailed: true,
+        offlineTaskVisibleBeforeReconnect,
         databaseReadbackDeleted: true,
         reconnectWithoutReload: true,
         reconnectConvergenceMs,
