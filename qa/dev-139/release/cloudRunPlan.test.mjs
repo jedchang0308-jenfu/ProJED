@@ -286,7 +286,10 @@ test('audio deletion and provider ZDR settings remain explicit unexecuted founda
   assert.equal(provider.speech.method, 'speech:recognize');
   assert.equal(provider.speech.apiVersion, 'v1');
   assert.equal(provider.speech.dataLogging, 'disabled');
-  assert.equal(provider.speech.projectSettingReadbackRequired, true);
+  assert.equal(provider.speech.optInProhibited, true);
+  assert.equal(provider.speech.externalOptInRevokesQualification, true);
+  assert.equal(provider.speech.runtimeServiceAccountProbeRequired, true);
+  assert.equal(Object.hasOwn(provider.speech, 'projectSettingReadbackRequired'), false);
 });
 
 test('renderer rejects mutable, misplaced, and malformed image references', () => {

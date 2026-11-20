@@ -75,6 +75,8 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
   - 2026-11-20 續行：COO依官方default-off＋明確Console opt-in契約，移除Speech data logging無公開API卻要求第二份readback的過度治理；保留同步Recognize、禁止opt-in及外部opt-in即撤銷qualification。runtime SA合成probe因操作者缺`iam.serviceAccounts.getAccessToken`在發token前拒絕，未為測試新增Token Creator或改用人類身分；Edge「AI測試」唯讀查證遇Google重新驗證即停止，未操作憑證或冒稱取得project readback。Speech實呼叫仍待正式runtime，Gemini防濫用豁免gate不變。
 
+  - 2026-11-20 續行：同一治理修正已同步到正式Cloud Run plan renderer，移除殘留的Speech `projectSettingReadbackRequired`，改為可執行的`optInProhibited`、外部opt-in撤銷qualification及部署後runtime SA probe；Vertex project readback與契約／豁免gate不變。release unit36/36、targeted lint與diff-check PASS，待同版CI；未部署或呼叫provider。
+
   - 2026-11-20 續行：ProJED #9、Platform #157、OrgMaster #187 已依人類核准轉為ready-for-review，三者仍open且未merge／deploy／切流；base分別仍是遠端最新`0670a0a`／`5ae88bc`／`a8830e9`。Platform `b7293c2`、OrgMaster `4b722b4` required Source QC均SUCCESS；ProJED `5654478`為docs-only且無新check，程式仍引用`7308b1d`的CI44691983128，不以ready狀態縮減正式分母。
 
   - 2026-11-20 續行：`effd5e7`的新45份候選Cloud Build54a37e8b已SUCCESS；1,010個Git blob、source provenance、三個registry digests與實際Job binding的45個migration SHA均讀回一致，runtime仍nonroot且四個provider／Job bindings為null。這是artifact-only，未部署或切流。同期唯讀刷新確認Shared VPC、bucket IAM修復、來源Secret版本、Speech runtime實呼叫／Gemini豁免仍未完成；Cloud Run Job仍不存在，正式交付分母不變。精確收據見[SPEC §47.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#471-2026-11-20-最小-foundation-變更提案)。

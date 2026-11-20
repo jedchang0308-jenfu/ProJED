@@ -1401,6 +1401,8 @@ API 啟用前的 cache、generation 及 embedding logging 三個唯讀 GET 均�
 
 07:10 UTC治理抽查移除Speech的不可執行重複證明：官方明定data logging預設關閉、opt-in須在Console另行明確同意；本任務只以CLI啟用API且未執行該opt-in。保留同步Recognize、禁止opt-in及一旦外部opt-in即撤銷qualification三個控制，無需再要求不存在的公開設定API；Gemini防濫用留存豁免仍是獨立硬gate。嘗試以現行操作者取得runtime SA短期token做合成Speech probe，被IAM以缺`iam.serviceAccounts.getAccessToken`拒絕；未新增Token Creator這個非正式runtime所需權限，也未改用操作者身分冒充production IAM。Edge「AI測試」唯讀查證遇Google重新驗證即停止，未輸入／提交憑證，亦未把未取得的project readback記為PASS。實際Speech呼叫仍須由部署後runtime SA執行，provider binding繼續null；沒有送任何音訊或真實內容。
 
+後續檢查正式Cloud Run plan renderer發現同一舊門檻仍殘留為Speech `projectSettingReadbackRequired=true`，會在真正產生release plan時重新造成無法完成的阻塞。現已移除該欄，改為明確`optInProhibited`、外部opt-in即撤銷qualification及部署後runtime SA probe；Vertex的project setting readback與適用契約／防濫用豁免證據均保留。release unit 36/36、targeted lint與diff-check PASS，待同版CI；本輪未部署、未呼叫provider，亦未改正式IAM／Secret／資料或流量。
+
 #### 最新45份候選映像 readback（2026-11-20，source effd5e7）
 
 受完整[CI44688269763](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44688269763)驗證的 executable source `effd5e758f56bafb6de0e02bcc0d55702b9a995a`，以既有create-only流程逐一核對1,010個Git blob；封存9,767,534 bytes、SHA256=`d934fe5c1fe1af02c510f0d96c0873a76b8daf251decee24666d5c5f45eb14aa`。原source object `dev139/candidate-effd5e758f56-20261120/source-d934fe5c1fe1af02.tar.gz`使用generation precondition=0建立，generation=`1795156820258543`；`gcloud builds submit`另建立Cloud Build staging object，provider `sourceProvenance`的SHA256／MD5與本機封存完全相同，未用object名稱推論內容。

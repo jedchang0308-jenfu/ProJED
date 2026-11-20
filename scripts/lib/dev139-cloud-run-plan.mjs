@@ -222,7 +222,8 @@ export function renderProjedCloudRun(input) {
     providerConfiguration: {
       qualificationApplied: false,
       speech: { method: 'speech:recognize', apiVersion: 'v1', dataLogging: 'disabled',
-        projectSettingReadbackRequired: true },
+        optInProhibited: true, externalOptInRevokesQualification: true,
+        runtimeServiceAccountProbeRequired: true },
       vertex: { cacheConfig: { url: `https://us-central1-aiplatform.googleapis.com/v1/projects/${target.project}/cacheConfig`,
         body: { name: `projects/${target.project}/cacheConfig`, disableCache: true } },
         requestResponseLogging: 'disabled', abuseMonitoring: 'exempt',
