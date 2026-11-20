@@ -201,11 +201,7 @@ export const persistTaskWorkbenchPlacementCommand = async ({
   }
   if (isHttpBackend) {
     if (!accountId) throw new Error('Authenticated account is required to move global workbench tasks.');
-    const session = await httpSessionService.getSession();
-    if (session.entry !== 'main' || session.uid !== accountId) {
-      throw new Error('TASK_WORKBENCH_ACTOR_CHANGED');
-    }
-    const expectedActor = { accountId: session.uid, contextId: session.authContextId };
+    const expectedActor = await httpSessionService.verifyBoundActor(accountId, 'main');
     let result: TaskWorkbenchPlacementCommandResult;
     try {
       result = await httpTaskWorkbenchService.place(command, expectedActor);

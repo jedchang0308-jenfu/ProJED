@@ -134,6 +134,9 @@ export function createSessionHttpDispatcher(
       }
       const actor = await resolveActor!(request);
       if (isRead) {
+        if (request.headers['x-projed-expected-account-id'] !== undefined || request.headers['x-projed-expected-context-id'] !== undefined) {
+          assertExpectedActor(request, actor);
+        }
         const sessionInfo = resolveSessionInfo ? await resolveSessionInfo(request, actor) : undefined;
         const expiresAtMs = sessionInfo?.expiresAtMs ?? actor.expiresAtMs;
         if (!Number.isSafeInteger(expiresAtMs) || expiresAtMs <= Date.now()) {

@@ -1017,6 +1017,13 @@ try {
   await calendarA.delete(createdCalendar.subscription.id);
   assert.equal((await fetch(rotatedFeedUrl)).status, 404);
   await writeB.deleteTask('ws-b', 'board-shared', 'calendar-feed-task');
+  const changedSession = await fetch(`${base}/api/v1/session`, { headers: {
+    cookie: '__session=qa-b', 'x-projed-expected-account-id': actorA.localUserId, 'x-projed-expected-context-id': actorA.contextId,
+  } });
+  assert.equal(changedSession.status, 409);
+  const changedProfile = await changedSession.json() as { data?: unknown; error: { code: string } };
+  assert.equal(changedProfile.error.code, 'ACTOR_CHANGED');
+  assert.equal(changedProfile.data, undefined);
   await assert.rejects(
     staleActorRead.listWorkspaces(),
     (error: unknown) => error instanceof HttpApiError

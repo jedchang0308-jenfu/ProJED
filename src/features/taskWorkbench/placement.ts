@@ -87,13 +87,8 @@ const sortTaskWorkbenchUnplacedTasks = (tasks: TaskNode[]) => [...tasks]
 
 const getTaskTimestamp = (task: TaskNode) => task.updatedAt ?? task.createdAt ?? 0;
 
-const getHttpExpectedActor = async (accountId: string): Promise<HttpExpectedActor> => {
-  const session = await httpSessionService.getSession();
-  if (session.entry !== 'main' || session.uid !== accountId) {
-    throw new Error('TASK_WORKBENCH_ACTOR_CHANGED');
-  }
-  return { accountId: session.uid, contextId: session.authContextId };
-};
+const getHttpExpectedActor = (accountId: string): Promise<HttpExpectedActor> =>
+  httpSessionService.verifyBoundActor(accountId, 'main');
 
 export const claimUnboundTaskWorkbenchUnplacedTasks = async (accountId: string): Promise<TaskNode[]> => {
   const unboundTasks = readUnboundTaskWorkbenchUnplacedTasks();

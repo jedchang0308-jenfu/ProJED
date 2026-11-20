@@ -1,5 +1,5 @@
 import type { FirestoreUser } from '../../types';
-import { HttpApiClient, HttpApiError } from './httpApiClient';
+import { HttpApiClient, HttpApiError, type HttpExpectedActor } from './httpApiClient';
 
 export interface HttpSessionProfile extends FirestoreUser {
   expiresAt: number;
@@ -11,6 +11,7 @@ export type ProjedAppEntry = 'main' | 'quick';
 
 export interface ProjedSessionAdapter {
   getSession(signal?: AbortSignal): Promise<HttpSessionProfile>;
+  verifyBoundActor(accountId: string, entry: ProjedAppEntry): Promise<Readonly<HttpExpectedActor>>;
   startLogin(entry: ProjedAppEntry, returnPath?: string, signal?: AbortSignal): Promise<string>;
   updateDisplayName(displayName: string, signal?: AbortSignal): Promise<HttpSessionProfile>;
   logout(signal?: AbortSignal): Promise<void>;
@@ -117,6 +118,15 @@ export function createHttpSessionAdapter(client: HttpApiClient): ProjedSessionAd
   let nextRead = 0;
   let appliedRead = 0;
   return {
+    async verifyBoundActor(accountId, entry) {
+      const expectedActor = client.snapshotExpectedActor();
+      if (expectedActor.accountId !== accountId) throw new HttpApiError('ACTOR_CHANGED', 409, null, false);
+      const profile = parseSession(await client.request('/api/v1/session', { expectedActor }));
+      if (profile.entry !== entry || profile.uid !== accountId || profile.authContextId !== expectedActor.contextId) {
+        throw new HttpApiError('ACTOR_CHANGED', 409, null, false);
+      }
+      return expectedActor;
+    },
     async getSession(signal) {
       const read = ++nextRead;
       let session: HttpSessionProfile;

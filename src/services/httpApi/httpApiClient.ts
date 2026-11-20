@@ -196,7 +196,7 @@ export class HttpApiClient {
     return true;
   }
 
-  private snapshotExpectedActor(): Readonly<HttpExpectedActor> {
+  snapshotExpectedActor(): Readonly<HttpExpectedActor> {
     if (!this.expectedActor || !this.expectedActor.accountId || !this.expectedActor.contextId) {
       throw new HttpApiError('ACTOR_REQUIRED', 401, null, false);
     }
@@ -319,7 +319,7 @@ export class HttpApiClient {
     const sessionLookup = method === 'GET' && url === '/api/v1/session';
     const initialRevision = this.bindingRevision;
     const expectedActor = options.expectedActor ?? (sessionLookup ? null : this.expectedActor);
-    const bindingChanged = () => !sessionLookup && this.bindingRevision !== initialRevision;
+    const bindingChanged = () => (!sessionLookup || expectedActor !== null) && this.bindingRevision !== initialRevision;
     if (expectedActor) {
       headers.set('x-projed-expected-account-id', expectedActor.accountId);
       headers.set('x-projed-expected-context-id', expectedActor.contextId);

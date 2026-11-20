@@ -9,6 +9,32 @@ const appOrigin = 'https://projed.example.test';
 const state = 'S'.repeat(43);
 const challenge = 'C'.repeat(43);
 
+test('checking a workbench Session never adopts a different actor or replaces a newer login', async () => {
+  const expected = { accountId: 'a', contextId: 'a-original' };
+  const next = { accountId: 'b', contextId: 'b-new' };
+  const profile = (id: string, context: string) => Response.json({ data: {
+    localUserId: id, email: null, displayName: null, createdAt: 1, expiresAt: future, entry: 'main', authContextId: context,
+  } });
+  let deliver!: (response: Response) => void;
+  const client = new HttpApiClient(async (_path, init) => {
+    assert.equal(new Headers(init?.headers).get('x-projed-expected-context-id'), expected.contextId);
+    return new Promise<Response>(resolve => { deliver = resolve; });
+  });
+  const session = createHttpSessionAdapter(client);
+  client.bindExpectedActor(expected);
+  for (const response of [profile('b', 'b-new'), profile('a', 'a-different-login')]) {
+    const read = session.verifyBoundActor('a', 'main');
+    deliver(response);
+    await assert.rejects(read, { code: 'ACTOR_CHANGED' });
+    assert.deepEqual(client.snapshotExpectedActor(), expected);
+  }
+  const read = session.verifyBoundActor('a', 'main');
+  client.bindExpectedActor(next);
+  deliver(profile('a', 'a-original'));
+  await assert.rejects(read, { code: 'ACTOR_CHANGED' });
+  assert.deepEqual(client.snapshotExpectedActor(), next);
+});
+
 test('late Session success or denial cannot replace the current account binding', async () => {
   const profile = (id: string) => Response.json({ data: { localUserId: id, email: null, displayName: null,
     createdAt: 1, expiresAt: future, authContextId: 'session-' + id, entry: 'main' } });
