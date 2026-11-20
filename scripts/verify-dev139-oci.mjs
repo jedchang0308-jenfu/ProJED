@@ -5,6 +5,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
+import { verifyLegacyClientFenceOci } from './lib/dev139-legacy-client-fence-oci.mjs';
 
 // Actual OCI qualification runs on the disposable Linux CI host. Never start
 // Docker or consume the developer's constrained Windows disk through this path.
@@ -41,6 +42,7 @@ let jobsImageId;
 let mediaImageId;
 let asrImageId;
 let mediaProof;
+let legacyClientFenceProof;
 let postgresVersion;
 let appliedMigrationCount = 0;
 let firstFailure;
@@ -556,6 +558,10 @@ try {
   mediaProof = JSON.parse(codecResult.stdout.trim());
   assert.equal(mediaProof.fixtures.length, 5);
   passed('actual-nonroot-five-audio-formats-decoding-and-sample-chunking');
+  legacyClientFenceProof = { status: 'FAIL', detail: 'T07 attempt started; no successful PostgREST/PG proof returned' };
+  legacyClientFenceProof = await verifyLegacyClientFenceOci({ docker, createContainer, runOwnedContainer,
+    pgName, fixtureNetwork, toolsImage, prefix, nonce, secrets });
+  passed('actual-legacy-client-postgrest-write-fence-and-recovery');
 } catch (error) {
   firstFailure = error;
   for (const name of [...containers].reverse()) {
@@ -609,6 +615,7 @@ const result = {
   expectedMigrationCount: binding ? Object.keys(binding.migrationSha256).length : 0,
   profileSha256: binding?.profileSha256, migrationSha256: binding?.migrationSha256,
   staticFixtureSha256: binding?.staticFixtureSha256, checks,
+  legacyClientFence: legacyClientFenceProof ?? { status: 'NOT_RUN' },
   dockerExecution: status, browserSmoke: 'NOT_RUN', productionIdentity: 'NOT_RUN',
   metadataProvider: 'FIXTURE_ONLY', cloudIamAuthentication: 'NOT_RUN', proxyAuthentication: 'NOT_RUN',
   sourceSupabaseAuthentication: 'NOT_RUN',
