@@ -56,13 +56,40 @@ async (page) => {
     await page.getByRole('button', { name: '關閉工作區與看板' }).click();
     await page.screenshot({ path: 'output/playwright/dev-139-http-ui/main.png', fullPage: false });
 
-    step = 'reload same HTTP-backed scope';
-    await page.reload({ waitUntil: 'domcontentloaded' });
+    step = 'edit a task through its details dialog';
+    const taskPath = '/api/v1/workspaces/ws-b/boards/board-shared/tasks';
+    const taskTitle = page.locator('[data-task-title-slot="true"][data-task-id="shared-parent"]').first();
+    const modal = page.locator('[data-task-details-modal="true"]');
+    const editTitle = async title => {
+      await taskTitle.click();
+      await modal.getByRole('textbox', { name: '編輯任務名稱' }).fill(title);
+      const [saved] = await Promise.all([
+        page.waitForResponse(response => new URL(response.url()).pathname === taskPath + '/shared-parent'
+          && response.request().method() === 'PATCH'),
+        modal.getByRole('button', { name: '關閉任務詳情' }).click(),
+      ]);
+      assert(saved.ok(), 'task save failed', { status: saved.status() });
+      await modal.waitFor({ state: 'hidden' });
+    };
+    const editedTitle = 'Shared parent edited in browser';
+    await editTitle(editedTitle);
+    step = 'verify the saved task after reload';
+    const [loaded] = await Promise.all([
+      page.waitForResponse(response => new URL(response.url()).pathname === taskPath
+        && response.request().method() === 'GET'),
+      page.reload({ waitUntil: 'domcontentloaded' }),
+    ]);
+    const tasks = (await loaded.json()).data;
+    assert(loaded.ok() && tasks.some(task => task.id === 'shared-parent' && task.title === editedTitle),
+      'saved title is missing from the reloaded task list');
     await waitForProduct();
+    assert((await taskTitle.innerText()).includes(editedTitle), 'saved title is missing from the board');
     bodyText = await page.locator('body').innerText();
     assert(bodyText.includes('Shared board') && bodyText.includes('Shared parent'),
       'board or task did not survive reload', { bodyText: bodyText.slice(0, 1200) });
     assert(!bodyText.includes('B secret'), 'private-board task leaked after reload');
+    step = 'restore the shared fixture through the same dialog';
+    await editTitle('Shared parent');
 
     const apiPaths = [...new Set(sameOriginResponses
       .map(item => new URL(item.url).pathname)
@@ -83,6 +110,7 @@ async (page) => {
       board: 'board-shared',
       task: 'shared-parent',
       reload: true,
+      titleEditPersistedAfterReload: true,
       privateBoardLeak: false,
       apiPaths,
       screenshot: 'output/playwright/dev-139-http-ui/main.png',
