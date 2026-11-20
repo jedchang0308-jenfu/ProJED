@@ -707,6 +707,8 @@ Main 正常登入與 Quick 現在使用所在 origin 的 `/api/v1/session/login`
 
 來源現況證據僅為唯讀 aggregate：2026-10-28 19:45:15 UTC，在 Supabase `knodlkxqpcqyrtgwpdst` 的單一 repeatable-read read-only transaction 核對 profiles=8、Auth users=8、Google identities=8、covered profiles=8，無 Google profile／孤兒／無效 subject／重複 subject／disabled Google users 均為 0；另唯讀 catalog 已核實 identity 與 source-user 欄位型別。沒有下載 UUID 對照、帳號內容、token 或密碼，沒有正式寫入；實際搬移仍須由受控 driver 的同一 snapshot proof／reconcile 完成。
 
+2026-11-20 04:32 UTC 刷新唯讀 aggregate：profiles／Auth users／Google identities／Google proof覆蓋均8，未覆蓋、孤兒、重複subject及停用／刪除Google users均0。04:33 UTC另查public＋private catalog共43個relation，直接由現行`findUnclassifiedSourceRelations`驗無未分類項目，Google JSON proof形狀不符亦0；source PostgreSQL17.6。兩筆為分開的repeatable-read read-only盤點，只有counts與catalog metadata，未下載UUID／email／私人內容，沒有寫入；不冒稱正式same-snapshot export／reconciliation。證據位於`output/dev139-foundation-20261120/source-aggregate-inventory.json`及`source-catalog-readback.json`。
+
 本版 source 驗證：S2 85/85、migration unit 13/13、S3 unit 53/53、前端型別與 managed／disposable 21 份 migration 的 boundary PASS。共用本機 dependencies 缺已宣告的 `@types/pg`，server／S2／migration 嚴格型別檢查使用 task-owned 暫存設定指向已存在的同版 8.23.1 declarations，未放寬 production tsconfig；不把它記成原始 aggregate 命令 PASS。下列遠端 CI 以 lockfile 完整安裝後，已通過原 server／S2 型別命令，CI 不依賴本機 overlay。
 
 本版 native Session／移轉案例已加入原 S3／migration wrappers。本機容量預檢仍 BLOCKED（相同 2 GiB request），未在本機啟動本版 cluster；遠端結果分列如下，舊 bundle 不升格。移轉收據已將過期的 `identity-guards-not-imported` 改為 source-derived guard 及停用／刪除／缺來源使用者的 prewrite 拒絕，名稱與實際檢查一致。source／unit／型別不能代表正常 browser、真 Firebase／OIDC、Hosting 或正式資料驗收。
