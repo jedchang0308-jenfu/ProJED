@@ -2,7 +2,7 @@
 
 2026-11-20 更新。Platform、OrgMaster 與 ProJED 的本機 HTTP 入口及隔離 PostgreSQL 已驗過原 UUID、待審拒絕、重新登入後僅可讀指定看板，以及移除成員後舊 Session 回 401。一般讀取沿用登入快照。三系統共 26 項通過，Google 與工作負載身分採合成證明。ProJED 的 Vite 瀏覽器案例已由任務詳情修改標題，重載後從 HTTP 回應及畫面核對，再由同一入口還原。既有行事曆訂閱另有隔離資料庫驗證。正式使用者、雲端路由及供應商資格仍依部署邊界分別查證。[外部協作契約](#dev139-external-access)｜[三系統 CI](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/44729053126)｜[看板瀏覽器與 PostgreSQL CI](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44731128457)
 
-正式 Supabase 的兩個私有身分檢視已建立並讀回 ACL，供移轉時核對既有帳號 UUID。目標環境仍為 Google Cloud。[正式來源執行結果](#dev139-source-views-applied)
+正式 Supabase 的兩個私有身分檢視已建立並讀回 ACL，供移轉時核對既有帳號 UUID。現行站台在切流前繼續使用原服務。Google Cloud 候選前端透過同源 HTTP API 取得 Session，即使打包環境留有舊 Supabase 設定，載入主程式或 Quick 也應略過舊 SDK 的初始化，避免它在原 PWA 網址讀取或更新登入資料。原版站台仍沿用自己的登入流程。[正式來源執行結果](#dev139-source-views-applied)
 
 個人帳號從側欄建立工作區、從首頁建立看板，再從看板新增任務及改名，重載可讀回相同任務與名稱。共享其他看板的協作者直接查該私人任務得到 404。在已共享看板上，即使一次讀取失敗，下一次同步仍能顯示已提交的名稱。此演練使用合成登入身分及隔離 PostgreSQL。[A02／A07 瀏覽器與資料庫 CI](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44738740935)
 
@@ -422,6 +422,10 @@ Fixture 採 synthetic 私人 A／B、公司 C1／C2、guest G、Workspace／Boar
 | A11 既有使用者切換 | 公司／個人／外部使用者從原書籤、主 PWA、獨立 Quick 及同 origin 相容入口重新開啟，登入後依原角色操作及重載。涵蓋外部資格及原邀請證據齊備／缺漏、舊版離線回網、mapping 歧義與停寫中送出。 | 保留原 UUID、內容、安裝及原角色能力。外部證據齊備可讀原 Board，缺漏時僅凍結受影響共享範圍且保留資料。各 origin 可選不同帳號，原 owner pending 不錯送。停寫不清空或誤報成功，解除後同 key 唯一讀回。登入／mapping 失敗有恢復入口。 | 同 browser profile 舊／新 artifact、正常 UI→真 Session／API→DB／receipt、Hosting／cache trace、writer fence 後 full-snapshot reconciliation 及停寫量測。SIMULATION 與實體安裝證據分列。 |
 
 A11 仍須從原入口讀取 Board／Task、修改再重載，確認既有使用者無需重新註冊或強迫重裝。遇到登入或 mapping 問題，不得出現假空帳號或循環重登。
+
+A03 已由 OrgMaster 管理元件送出核准，經實際 HTTP 與隔離 PostgreSQL 驗證接受邀請、重新登入及看板權限。另一張邀請在舊管理畫面開啟後被擁有者撤回；晚到的核准得到 409，管理員重新載入後看見「已撤回」。此演練綁定 Platform `cc12b668`、OrgMaster `ff6ba9a` 與 ProJED `977cc11`，涵蓋合成身分與本機三系統。正式登入與託管路徑仍依 T08 查證。[三系統執行紀錄](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/44749827180)
+
+T07 已用舊版 `0670a0a` 的工作台與 Quick 呼叫程式、Supabase SDK 2.105.4、實際 PostgREST 及隔離 PostgreSQL 演練。停寫前已提交但遺失回應的 Quick 任務可憑原識別碼讀回；停寫期間五次寫入均回 HTTP 503／`PT503`，資料表內容維持一致。解除停寫後再送同一識別碼，仍只有一筆任務及一筆回執。這次驗到舊 SDK 與資料庫的寫入邊界，使用合成登入，正式 Edge 工作者、在途排空與原 Hosting 入口仍須在切換環境查證。[T07 Linux OCI 執行紀錄](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44748124380/job/136329293641)
 
 受影響的 UI 流程覆蓋正常、載入、空白及錯誤／拒絕；版面或互動改變時，依既有主／Quick 基線檢查 390px 窄版、桌面、overflow、焦點與鍵盤操作，不要求 A01–A11 每列重複排列相同的版面／輸入組合。未受影響且仍有效的證據可重用；純文件／SQL 修改不因 HEAD 改變就重跑全部 UI。身分、資料、權限或舊入口行為受影響時仍驗相應 A／T 案例；使用者取消的 Android 實體裝置 gate 不自行恢復，窄版 browser 不能冒稱實體 PWA PASS。
 
