@@ -951,7 +951,7 @@ const TaskWorkbenchPanel: React.FC<{
     setWorkbenchSourceStatus('loading');
     setWorkbenchLoadedBoardIds([]);
     void listWorkbenchTasks(boardOptions).then(workbenchSource => {
-      if (cancelled) return;
+      if (cancelled || filterReadIdentity(useAuthStore.getState().user) !== filterIdentity) return;
       setNodes(workbenchSource.tasks, {
         scopeBoardIds: workbenchSource.loadedBoardIds,
         preserveOutOfScope: workbenchSource.failedBoardIds.length > 0,
@@ -963,7 +963,7 @@ const TaskWorkbenchPanel: React.FC<{
     return () => {
       cancelled = true;
     };
-  }, [boardOptions, boardScopeIds, setNodes]);
+  }, [boardOptions, boardScopeIds, filterIdentity, setNodes]);
 
   React.useEffect(() => {
     if (filtersLocked || (selectedBoardId && boardOptions.some(option => option.boardId === selectedBoardId))) return;

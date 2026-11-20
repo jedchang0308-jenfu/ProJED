@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 
 import { httpCollaborationService, httpDomainReadService } from '../services/httpApi/backend';
 import {
@@ -13,11 +13,23 @@ import useRecordStore from '../store/useRecordStore';
 import { useTagStore } from '../store/useTagStore';
 import { useWbsStore } from '../store/useWbsStore';
 import { createCoalescedAsyncRefresh } from '../utils/coalescedAsyncRefresh';
+import { filterReadIdentity } from '../features/taskFilters/optionSource';
 
 const ACTIVE_POLL_INTERVAL_MS = 5_000;
 
-async function refreshWorkspaceIndex() {
+function clearPublishedReads(preserveSelection: boolean) {
+  useBoardStore.setState({ workspaces: [], selectedTaskId: null,
+    ...(!preserveSelection && { activeWorkspaceId: null, activeBoardId: null }) });
+  useWbsStore.setState({ nodes: {}, dependencies: [], boardNodesIndex: {}, parentNodesIndex: {}, loadedBoardIds: [],
+    trackingReferences: [], stagedTrackingReferences: [], kanbanConfigs: {}, pendingPlacementNodeIds: {}, loading: false, error: null });
+  useMemberStore.getState().clearMembers();
+  useTagStore.getState().setTags([], null);
+  useRecordStore.getState().resetRecordList();
+}
+
+async function refreshWorkspaceIndex(isCurrent: () => boolean) {
   const workspaces = await httpDomainReadService.listWorkspaces();
+  if (!isCurrent()) return;
   const current = useBoardStore.getState();
   const activeWorkspaceId = workspaces.some(workspace => workspace.id === current.activeWorkspaceId)
     ? current.activeWorkspaceId
@@ -29,8 +41,11 @@ async function refreshWorkspaceIndex() {
   useBoardStore.setState({ workspaces, activeWorkspaceId, activeBoardId });
 }
 
-async function refreshActiveScope() {
+async function refreshActiveScope(isCurrent: () => boolean) {
+  if (!isCurrent()) return;
   const { activeWorkspaceId, activeBoardId, workspaces } = useBoardStore.getState();
+  const sameScope = () => isCurrent() && useBoardStore.getState().activeWorkspaceId === activeWorkspaceId
+    && useBoardStore.getState().activeBoardId === activeBoardId;
   if (!activeWorkspaceId) {
     useWbsStore.setState({ nodes: {}, dependencies: [], loading: false, error: null });
     useMemberStore.getState().clearMembers();
@@ -56,8 +71,12 @@ async function refreshActiveScope() {
     useMemberStore.getState().loadMembers(activeWorkspaceId, boardId),
     useTagStore.getState().loadTags(activeWorkspaceId),
     boardExists ? useRecordStore.getState().loadRecords(activeWorkspaceId, boardId) : Promise.resolve(),
-  ]);
-  if (!boardExists || !boardId || !boardData || useBoardStore.getState().activeBoardId !== boardId) {
+  ]).catch(error => {
+    if (!sameScope()) return [null];
+    throw error;
+  });
+  if (!sameScope()) return;
+  if (!boardExists || !boardId || !boardData) {
     if (!boardExists) {
       useWbsStore.setState({ nodes: {}, dependencies: [], loading: false, error: null });
       useRecordStore.getState().resetRecordList();
@@ -71,26 +90,39 @@ async function refreshActiveScope() {
 
 export function useHttpSync(options: { enabled?: boolean } = {}) {
   const enabled = options.enabled ?? true;
-  const userId = useAuthStore(state => state.user?.uid);
+  const identity = useAuthStore(state => filterReadIdentity(state.user));
+  const readEpoch = useRef(0);
+  const previousUserId = useRef<string | null>(null);
+  const initialized = useRef(false);
   const activeWorkspaceId = useBoardStore(state => state.activeWorkspaceId);
   const activeBoardId = useBoardStore(state => state.activeBoardId);
 
+  useLayoutEffect(() => {
+    if (!enabled) return;
+    readEpoch.current += 1;
+    const userId = useAuthStore.getState().user?.uid ?? null;
+    // Preserve a same-account reload location, never another account's data.
+    clearPublishedReads(Boolean(userId && (!initialized.current || previousUserId.current === userId)));
+    initialized.current = true;
+    previousUserId.current = userId;
+    return () => {
+      readEpoch.current += 1;
+      clearPublishedReads(useAuthStore.getState().user?.uid === userId);
+    };
+  }, [enabled, identity]);
+
   useEffect(() => {
     if (!enabled) return;
-    if (!userId) {
-      useBoardStore.setState({ workspaces: [], activeWorkspaceId: null, activeBoardId: null });
-      useWbsStore.setState({ nodes: {}, dependencies: [], loading: false, error: null });
-      useMemberStore.getState().clearMembers();
-      useTagStore.getState().setTags([], null);
-      useRecordStore.getState().resetRecordList();
-      return;
-    }
+    if (!identity) return;
 
     let revisionSnapshot: RevisionSnapshot | null = null;
     let cancelled = false;
+    const epoch = readEpoch.current;
+    const isCurrent = () => !cancelled && epoch === readEpoch.current
+      && filterReadIdentity(useAuthStore.getState().user) === identity;
     const poll = createCoalescedAsyncRefresh(async () => {
       const revisions = await httpCollaborationService.listResourceRevisions();
-      if (cancelled) return;
+      if (!isCurrent()) return;
       const nextSnapshot = createRevisionSnapshot(revisions);
       const context = useBoardStore.getState();
       const decision = decideRevisionRefresh(
@@ -100,15 +132,17 @@ export function useHttpSync(options: { enabled?: boolean } = {}) {
         context.activeBoardId,
       );
       if (!decision.changed) return;
-      if (decision.refreshWorkspaces) await refreshWorkspaceIndex();
-      if (decision.refreshActiveScope) await refreshActiveScope();
+      if (decision.refreshWorkspaces) await refreshWorkspaceIndex(isCurrent);
+      if (!isCurrent()) return;
+      if (decision.refreshActiveScope) await refreshActiveScope(isCurrent);
+      if (!isCurrent()) return;
       // A failed reload leaves the previous revision in place so the next poll
       // retries even when nobody has edited the board again.
       revisionSnapshot = nextSnapshot;
     }, {
       onError: error => {
         console.error('[useHttpSync] Poll or canonical reload failed:', error);
-        if (!cancelled) {
+        if (isCurrent()) {
           useWbsStore.setState({
             loading: false,
             error: error instanceof Error ? error.message : 'HTTP 同步失敗',
@@ -134,18 +168,21 @@ export function useHttpSync(options: { enabled?: boolean } = {}) {
       window.removeEventListener('online', pollIfVisible);
       document.removeEventListener('visibilitychange', pollIfVisible);
     };
-  }, [enabled, userId]);
+  }, [enabled, identity]);
 
   useEffect(() => {
-    if (!enabled || !userId) return;
+    if (!enabled || !identity) return;
     let cancelled = false;
-    refreshActiveScope().catch(error => {
+    const epoch = readEpoch.current;
+    const isCurrent = () => !cancelled && epoch === readEpoch.current
+      && filterReadIdentity(useAuthStore.getState().user) === identity;
+    refreshActiveScope(isCurrent).catch(error => {
       console.error('[useHttpSync] Active scope load failed:', error);
-      if (!cancelled) useWbsStore.setState({
+      if (isCurrent()) useWbsStore.setState({
         loading: false,
         error: error instanceof Error ? error.message : 'HTTP 看板載入失敗',
       });
     });
     return () => { cancelled = true; };
-  }, [enabled, userId, activeWorkspaceId, activeBoardId]);
+  }, [enabled, identity, activeWorkspaceId, activeBoardId]);
 }
