@@ -210,12 +210,30 @@ async (page) => {
     await editTitle('Shared parent');
 
     step = 'verify collaborator read-only controls and reject forged permission/task writes';
-    await otherTitle.click();
     const otherModal = collaborator.locator('[data-task-details-modal="true"]');
-    await otherModal.waitFor({ state: 'visible' });
-    assert(await otherModal.getByRole('textbox', { name: '編輯任務名稱' }).count() === 0,
-      'read-only collaborator received an editable task title');
-    await otherModal.getByRole('button', { name: '關閉任務詳情' }).click();
+    const collaboratorDisabledTitleAncestors = {};
+    for (const taskId of ['shared-parent', 'shared-child']) {
+      const title = collaborator.locator(`[data-task-title-slot="true"][data-task-id="${taskId}"]`).first();
+      await title.waitFor({ state: 'visible' });
+      collaboratorDisabledTitleAncestors[taskId] = await title.evaluate(element => {
+        const disabled = [];
+        for (let node = element; node; node = node.parentElement) {
+          if (node.hasAttribute('disabled') || node.getAttribute('aria-disabled') === 'true') {
+            disabled.push({ tag: node.tagName, role: node.getAttribute('role'), taskId: node.getAttribute('data-task-id'),
+              columnHeader: node.getAttribute('data-kanban-column-header') });
+          }
+        }
+        return disabled;
+      });
+      assert(collaboratorDisabledTitleAncestors[taskId].length === 0,
+        'a disabled drag ancestor prevents normal read-only task access', { taskId, ancestors: collaboratorDisabledTitleAncestors[taskId] });
+      await title.click();
+      await otherModal.waitFor({ state: 'visible' });
+      assert(await otherModal.getByRole('textbox', { name: '編輯任務名稱' }).count() === 0,
+        'read-only collaborator received an editable task title', { taskId });
+      await otherModal.getByRole('button', { name: '關閉任務詳情' }).click();
+      await otherModal.waitFor({ state: 'hidden' });
+    }
     await openPermissions(collaborator);
     const otherPermissions = collaborator.locator('[data-board-permission-settings]');
     await otherPermissions.getByText('僅可檢視', { exact: true }).waitFor();
@@ -320,6 +338,7 @@ async (page) => {
         ownerAndOtherRolesPreserved: true,
         ownerTaskEditStillAllowed: true,
         collaboratorReadOnlyControls: true,
+        collaboratorDisabledTitleAncestors,
         collaboratorMatrixWriteStatus: deniedMatrix.status(),
         collaboratorTaskWriteStatus: deniedTask.status(),
         deniedWritesLeftStateUnchanged: true,
