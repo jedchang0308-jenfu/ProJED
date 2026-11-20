@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { authService } from '../services/authService';
+import { isHttpBackend } from '../services/backendMode';
 import { clearMeetingDraftRecoveryForUser } from '../services/meetingDraftRecoveryService';
 import type { AuthStore } from '../types';
 
@@ -43,10 +44,11 @@ const useAuthStore = create<AuthStore>((set) => ({
   },
 }));
 
-// Initialize the global auth state listener once
+// The HTTP callback runs on the server. One Session read resolves the initial
+// state; a second bootstrap response could overwrite a newer login or denial.
 authService.handleRedirectResult()
   .then((user) => {
-    if (user) {
+    if (user || isHttpBackend) {
       useAuthStore.setState({ user, loading: false, error: null });
     }
   })
@@ -54,8 +56,10 @@ authService.handleRedirectResult()
     useAuthStore.setState({ error: error.message, loading: false });
   });
 
-authService.onAuthStateChanged((user) => {
-  useAuthStore.setState({ user, loading: false });
-});
+if (!isHttpBackend) {
+  authService.onAuthStateChanged((user) => {
+    useAuthStore.setState({ user, loading: false });
+  });
+}
 
 export default useAuthStore;

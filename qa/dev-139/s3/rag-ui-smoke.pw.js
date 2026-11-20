@@ -46,6 +46,9 @@ async (page) => {
     ]);
     const session = (await sessionResponse.json()).data;
     await page.locator('[data-task-id="shared-parent"]').first().waitFor({ state: 'visible', timeout: 20000 });
+    const startupSessionReads = await page.evaluate(() => performance.getEntriesByType('resource')
+      .filter(entry => new URL(entry.name).pathname === '/api/v1/session').length);
+    assert(startupSessionReads === 1, 'main startup looked up the same Session ' + startupSessionReads + ' times');
     step = 'open the normal AI button';
     const ai = page.getByRole('button', { name: 'AI', exact: true });
     assert(await ai.isEnabled(), 'HTTP backend still disables the normal AI button');
@@ -111,7 +114,7 @@ async (page) => {
     assert(!await page.locator('nav').isVisible() && !await input.isVisible(), 'private application stayed visible after Session loss');
     const artifact = { result: 'PASS', evidenceLevel: 'DEV139_REAL_HTTP_PRODUCT_RAG_UNQUALIFIED_UI',
       provider: 'NOT_CALLED_UNQUALIFIED', identity: 'ISOLATED_SESSION', queryCount: calls.length,
-      status: 503, code: 'RAG_PROVIDER_UNAVAILABLE', questionRetained: true, actorHeadersBound: true,
+      status: 503, code: 'RAG_PROVIDER_UNAVAILABLE', questionRetained: true, actorHeadersBound: true, startupSessionReads,
       switchedActorRejected: 409, newActorRebound: true, missingSessionRejected: 401, privateUiClosed: true,
       viewports: ['1440x900', '390x844'], externalRequests: external.length, pageErrors,
       screenshot: 'output/playwright/dev-139-rag-ui/unavailable-mobile.png' };
