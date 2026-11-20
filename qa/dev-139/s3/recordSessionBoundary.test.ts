@@ -106,8 +106,10 @@ test('explicit logout does not checkpoint or retain an abandoned private editor'
   f.records.getState().openNewRecord('work_log');
   f.records.getState().updateDraft({ content: 'explicitly abandoned' });
   f.markRecordSessionLogout('a');
+  // Normal logout first sets loading=true and unmounts AppContent while the
+  // old account is still present; the subsequent null state has no mounted hook.
+  assert.equal(f.protectRecordEditorOnIdentityChange('a', 'a:session-a'), true);
   f.auth.user = null;
-  f.protectRecordEditorOnIdentityChange('a', 'a:session-a');
   f.cancelRecordSessionLogout('a');
   f.auth.user = { uid: 'a', authContextId: 'session-new' };
   f.records.setState({ recordListLoad: { status: 'ready', scopeKey: '["ws","board"]', error: null } });

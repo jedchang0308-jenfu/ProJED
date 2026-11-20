@@ -4,7 +4,7 @@ import { build } from 'esbuild';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
-async function authFixture(http: boolean) {
+async function authFixture(http: boolean, failLogout = false) {
   const output = await build({ stdin: { contents: `
     export {default as auth} from './src/store/useAuthStore';
     export * from './src/services/recordSessionProtection';
@@ -21,7 +21,7 @@ async function authFixture(http: boolean) {
     api.onLoad({ filter: /.*/, namespace: 'fixture' }, args => ({ loader: 'js', contents: args.path === 'backend'
       ? `export const isHttpBackend=${http}`
       : args.path === 'clear' ? 'export const clearMeetingDraftRecoveryForUser=async()=>true'
-        : 'export const authService={handleRedirectResult:async()=>null,onAuthStateChanged:()=>{},signOut:async()=>{}}' }));
+        : `export const authService={handleRedirectResult:async()=>null,onAuthStateChanged:()=>{},signOut:async()=>{${failLogout ? 'throw Error("fixture logout failed")' : ''}}}` }));
   } }] });
   return import(`data:text/javascript;base64,${Buffer.from(output.outputFiles[0]!.text).toString('base64')}`);
 }
@@ -56,5 +56,15 @@ test('HTTP explicit logout remains marked until its fresh Session mount resumes 
   await f.auth.getState().signOut();
   assert.equal(f.isRecordSessionLogout('http-a'), true);
   f.cancelRecordSessionLogout('http-a');
+  assert.equal(f.isRecordSessionLogout('http-a'), false);
+});
+
+test('failed remote HTTP logout retains the original owner and leaves the existing recovery choice usable', async () => {
+  const f = await authFixture(true, true);
+  await Promise.resolve();
+  f.auth.setState({ user: { uid: 'http-a', authContextId: 'context-a' }, loading: false });
+  await f.auth.getState().signOut();
+  assert.equal(f.auth.getState().user.uid, 'http-a');
+  assert.equal(f.auth.getState().loading, false);
   assert.equal(f.isRecordSessionLogout('http-a'), false);
 });

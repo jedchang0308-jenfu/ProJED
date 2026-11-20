@@ -23,10 +23,12 @@ const parkedEditors = new Map<string, ParkedEditor>();
 const key = (accountId: string, workspaceId: string, boardId: string) => JSON.stringify([accountId, workspaceId, boardId]);
 
 export function protectRecordEditorOnIdentityChange(accountId: string | null, identity: string | null): boolean {
-  if (filterReadIdentity(useAuthStore.getState().user) === identity) return false;
+  const explicitLogout = Boolean(accountId && isRecordSessionLogout(accountId));
+  // AuthGate unmounts on logout's loading=true, before user becomes null.
+  if (!explicitLogout && filterReadIdentity(useAuthStore.getState().user) === identity) return false;
   const state = useRecordStore.getState();
   const { activeWorkspaceId: workspaceId, activeBoardId: boardId } = useBoardStore.getState();
-  if (accountId && isRecordSessionLogout(accountId)) {
+  if (accountId && explicitLogout) {
     for (const [scope, editor] of parkedEditors) if (editor.accountId === accountId) parkedEditors.delete(scope);
   } else if (accountId && identity && workspaceId && boardId) {
     const dirty = state.draft && (getRecordDraftSignature(state.draft) !== state.draftBaselineSignature || state.saving || state.meetingActivities.length > 0);

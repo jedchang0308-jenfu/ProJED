@@ -440,7 +440,11 @@ const AppMoreMenu: React.FC<AppMoreMenuProps> = ({
             </div>
             <button
               type="button"
-              onClick={() => afterTaskDetailsSave(() => void guardRecordDraft(() => useAuthStore.getState().signOut()))}
+              onClick={() => afterTaskDetailsSave(() => void guardRecordDraft(() => useAuthStore.getState().signOut(), {
+                clearsLocalRecovery: true,
+                title: '登出前保存紀錄？',
+                message: '登出會清除此帳號的本機復原草稿。你可以先正式存成草稿、明確不儲存，或取消登出繼續編輯；既有已保存紀錄不會刪除。',
+              }))}
               className="flex h-9 shrink-0 items-center rounded px-2 text-xs font-semibold text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
               title="登出"
               aria-label="登出"
