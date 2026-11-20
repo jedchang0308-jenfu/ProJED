@@ -1,12 +1,14 @@
 /* global document, window */
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
 import { createRequire } from 'node:module';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { build } from 'vite';
 import { retainVersionHistory } from './release/version-retention.mjs';
+import { verifyQuickUpgradeSources, runQuickBackendUpgrade } from './lib/dev139-quick-backend-upgrade.mjs';
 
 // Actual app bundles, shared Workbox worker, and one disposable browser profile.
 // A built local-data mode exercises the real updater without contacting production.
@@ -19,6 +21,8 @@ const { chromium } = require(process.env.PROJED_PLAYWRIGHT_MODULE || cliPlaywrig
 const artifactArgument = process.argv.slice(2).find(argument => !argument.startsWith('--'));
 const reused = artifactArgument ? path.resolve(artifactArgument) : null;
 const singleButtonOnly = process.argv.includes('--single-button');
+const backendUpgradeOnly = process.argv.includes('--quick-backend-upgrade');
+const legacySourceRoot = process.argv.find(value => value.startsWith('--legacy-source-root='))?.split('=').slice(1).join('=');
 const run = reused ? path.basename(reused) : 'dev141-' + randomUUID().slice(0, 8);
 const output = path.resolve('output/playwright/dev-141', reused ? run + '-recheck-' + randomUUID().slice(0, 8) : run);
 const envDir = path.join(output, 'env');
@@ -100,7 +104,16 @@ let failed = null;
 try {
   process.env.PROJED_RELEASE_ENV_DIR = envDir;
   process.env.VITE_DATA_BACKEND = 'local-test';
-  for (const [index, name] of ['A', 'B', 'C'].entries()) {
+  if (backendUpgradeOnly) {
+    assert.ok(legacySourceRoot, '--legacy-source-root is required for the exact old main checkout');
+    assert.equal(reused, null, 'Backend upgrade builds must bind their exact source, not reuse an unbound artifact');
+    record('A06-source-binding', verifyQuickUpgradeSources(path.resolve(legacySourceRoot), process.cwd()));
+    process.env.VITE_SUPABASE_URL = 'http://127.0.0.1:47971';
+    process.env.VITE_SUPABASE_ANON_KEY = 'dev139-public-synthetic-anon-key';
+    process.env.VITE_SUPABASE_AUTH_MODE = 'oauth-google';
+    process.env.VITE_SUPABASE_AUTO_TEST_LOGIN = 'false';
+  }
+  for (const [index, name] of (backendUpgradeOnly ? ['A', 'B'] : ['A', 'B', 'C']).entries()) {
     const dir = path.join(reused || output, name);
     if (reused) {
       assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'app-shell-meta.json'), 'utf8')).version, version(name));
@@ -108,13 +121,24 @@ try {
       continue;
     }
     process.env.PROJED_RELEASE_ID = run + '-' + name;
-    await build({ mode: 'dev141', logLevel: 'error', build: { outDir: dir } });
+    const buildRoot = backendUpgradeOnly && name === 'A' ? path.resolve(legacySourceRoot) : process.cwd();
+    if (backendUpgradeOnly) process.env.VITE_DATA_BACKEND = name === 'A' ? 'supabase' : 'http';
+    const buildArtifact = backendUpgradeOnly && name === 'A'
+      ? (await import(pathToFileURL(createRequire(path.join(buildRoot, 'package.json')).resolve('vite')).href)).build
+      : build;
+    await buildArtifact({ ...(backendUpgradeOnly
+      ? { root: buildRoot, configFile: path.join(buildRoot, 'vite.config.js'), configLoader: 'runner' } : {}),
+    mode: 'dev141', logLevel: 'error', build: { outDir: dir } });
     const predecessor = ['A', 'B', 'C'][index - 1];
     retainVersionHistory({
       distDir: dir, version: version(name), previousDistDir: artifacts[predecessor],
       previousVersion: predecessor ? version(predecessor) : undefined,
     });
     artifacts[name] = dir;
+    if (backendUpgradeOnly) record('A06-artifact-' + name, { version: version(name),
+      backend: name === 'A' ? 'supabase' : 'http',
+      files: ['sw.js', 'quick-task/index.html', 'app-shell-meta.json'].map(file => ({ path: file,
+        sha256: createHash('sha256').update(fs.readFileSync(path.join(dir, file))).digest('hex') })) });
     console.log('Built ' + version(name));
   }
 
@@ -135,7 +159,7 @@ try {
   });
   await new Promise((resolve, reject) => server.once('error', reject).listen(0, '127.0.0.1', resolve));
   const origin = 'http://127.0.0.1:' + server.address().port;
-  if (!singleButtonOnly) {
+  if (!singleButtonOnly && !backendUpgradeOnly) {
   const profile = path.join(output, 'profile');
   const launch = () => chromium.launchPersistentContext(profile, { channel: 'msedge', headless: true, viewport: { width: 1280, height: 800 } });
   context = await launch();
@@ -351,6 +375,14 @@ try {
     installationParity.push(manifestPath);
   }
   const singleButtonCases = [];
+  if (backendUpgradeOnly) {
+    context = await chromium.launchPersistentContext(path.join(output, 'quick-backend-profile'),
+      { channel: 'msedge', headless: true, viewport: { width: 390, height: 844 } });
+    await runQuickBackendUpgrade({ context, origin, output, publish, loaded, workerVersion, refreshCheck, record });
+    await context.close();
+    record('A06-installation-parity', { installationParity, originPreserved: true,
+      browserProfilePreserved: true, physicalInstalledPwa: 'NOT_RUN', reinstallation: 'NOT_REQUIRED' });
+  } else {
   for (const quickEntry of [false, true]) {
     for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 812 }]) {
      for (const controlled of [false, true]) {
@@ -410,6 +442,7 @@ try {
   fs.writeFileSync(path.join(output, 'single-button-cases.json'), JSON.stringify(singleButtonCases, null, 2));
   assert.ok(singleButtonCases.every(item => item.passed), 'Some normal single-button update cases failed');
   record('A08', { installationParity, cases: singleButtonCases, scope: 'Real built app/worker and normal update buttons; local browser verification, not Android WebAPK migration' });
+  }
   assert.deepEqual(diagnostics, []);
 } catch (error) {
   failed = error instanceof Error ? error.stack || error.message : String(error);
