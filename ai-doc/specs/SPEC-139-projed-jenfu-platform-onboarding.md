@@ -1062,7 +1062,9 @@ ProJED 自有 opaque Session、主／Quick callback、Google→原 UUID proof �
 
 `CURRENT_RAG_BINDING`維持null，須包含實際project、embedding及兩個generation models、abuse豁免／cache及內容logging停用的來源證據才可啟用；meeting-only資格不覆蓋Flash-Lite。新renderer列出三個模型及各自location以供原有qualification讀回，沒有增加另一套簽核。輸送保留單次POST、總deadline與同源／actor／RLS／來源再驗；取消後晚到IAM token不得再送內容。回應須為原模型、正常結束、無cached content／tool output，thought不回傳；embedding須為未截斷且finite float32／非零的3072維向量。原2800字分段及既有vectors保留，不以模型限制截斷正文或改寫資料；長輸入若超過Cloud模型token上限會安全拒絕並顯示索引不完整，真實語料長度、跨API向量相容性及品質仍待原provider資格／產品驗證，不以合成vector認列完成。
 
-RD針對性自查：Cloud adapter 11項unit、三檔strict型別、affected lint與三boundary PASS；首次完整本機型別檢查發現新test的KernelError literal不在既有union，已修fixture，不改runtime error契約。共用node_modules另缺 `@types/pg`，故完整server／S3型別不宣稱本機PASS，交CI按原lockfile安裝核實。Native RAG fixture已改經真正Cloud adapter＋合成IAM／model wire，保留原owner／guest／private拒絕、index續作、撤權／來源競爭及cleanup；compiled verifier另查未發布資格不取得token、runtime無API-key啟用分支。新版CI待實際終態，不以這些synthetic內容或fixture qualification當正式Google核准。
+RD針對性自查：Cloud adapter 11項unit、三檔strict型別、affected lint與三boundary PASS；首次完整本機型別檢查發現新test的KernelError literal不在既有union，已修fixture，不改runtime error契約。共用node_modules另缺 `@types/pg`，故完整server／S3型別不宣稱本機PASS；下列CI按原lockfile安裝已完整通過。Native RAG fixture已改經真正Cloud adapter＋合成IAM／model wire，保留原owner／guest／private拒絕、index續作、撤權／來源競爭及cleanup；compiled verifier另查未發布資格不取得token、runtime無API-key啟用分支。不以synthetic內容或fixture qualification當正式Google核准。
+
+受測source `9c4bd643415d62afd48be8e5ad20f3965832ae63` 的[CI44647679915](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44647679915)兩jobs SUCCESS：668 unit（497／126／14／31）、完整型別、三boundary、compiled artifact、PostgreSQL17.11 domain73／snapshot63、44份migration與OCI18 PASS。Artifacts14589223567／14588628606已回讀：native `s3/20261120T004319Z-cebee45d`／`migration/20261120T004426Z-265235e3`均PASS；OCI `dev139-oci-f14578595c0ff1730f4bef79` source相符、actual=expected44、owned cleanup PASS。雲端IAM、真Speech／模型、Cloud SQL、registry push、browser及正式發布仍未驗；後續只補本段收據，不重跑未受影響程式。
 
 ### 38.2 資料、權限與可恢復邊界
 
