@@ -431,7 +431,7 @@ export class CollaborationWriteRepository {
     if (result.rowCount !== 1) notFound();
     await port.query(`
       UPDATE projed_core.actor_scope_access
-         SET active = false, scope_revision = scope_revision + 1, updated_at = now()
+         SET active = false, scope_revision = scope_revision + 1, updated_at = clock_timestamp()
        WHERE local_user_id = $3::uuid AND tenant_id = $1::uuid AND project_id = $2::uuid AND active
     `, [board.tenantId, board.id, userId]);
     await bumpRevision(port, board.tenantId, board.id);
@@ -531,8 +531,14 @@ export class CollaborationWriteRepository {
       SELECT id::text AS id, tenant_id::text AS tenant_id, project_id::text AS project_id,
              email, status, default_role,
              floor(extract(epoch FROM expires_at) * 1000)::bigint::text AS expires_at_ms
-        FROM projed_core.board_invites
-       WHERE token_hash = $1
+        FROM projed_core.board_invites invite
+       WHERE invite.token_hash = $1
+         AND NOT EXISTS (
+           SELECT 1 FROM projed_core.actor_scope_access scope
+            WHERE scope.local_user_id = projed_core.current_actor_user_id_v1()
+              AND scope.tenant_id = invite.tenant_id AND scope.project_id = invite.project_id
+              AND NOT scope.active AND scope.updated_at >= invite.created_at
+         )
        FOR UPDATE
     `, [tokenHash]);
     if (result.rows.length !== 1) notFound();

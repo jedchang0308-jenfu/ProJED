@@ -1378,7 +1378,19 @@ try {
   assert.equal(httpAccepted.defaultRole, 'admin');
   assert.equal((await httpB.listBoardMembers('ws-b', 'board-shared'))
     .find(member => member.userId === actorE.localUserId)?.role, 'admin');
+  const olderInviteToken = 'dev139-http-before-removal';
+  const olderInvite = await collaborationB.createInvite('ws-b', 'board-shared', {
+    email: 'e@example.invalid',
+    tokenHash: createHash('sha256').update(olderInviteToken).digest('hex'),
+    expiresAt: Date.now() + 60_000,
+    defaultRole: 'viewer',
+  });
   await collaborationB.removeBoardMember('ws-b', 'board-shared', actorE.localUserId);
+  await assert.rejects(
+    collaborationE.acceptInvite({ token: olderInviteToken, userId: actorE.localUserId, email: 'e@example.invalid' }),
+    (error: unknown) => error instanceof Error && 'status' in error && error.status === 404,
+  );
+  await collaborationB.revokeInvite('ws-b', 'board-shared', olderInvite.id);
   assert.equal((await httpE.listWorkspaces()).some(workspace => workspace.id === 'ws-b'), false);
   assert.equal((await collaborationE.listResourceRevisions())
     .some(item => item.workspaceId === 'ws-b' && item.boardId === 'board-shared'), false);
