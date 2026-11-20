@@ -63,6 +63,7 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
 ## DEV-139：ProJED 納入 Jenfu-Platform，Cloud Run／Cloud SQL 對齊並保留 Vite
 
+  - 舊版 Quick 離線草稿已在同一網址原地升級，經新版正常按鈕提交及同識別碼重送後，隔離 PostgreSQL 只有一筆任務與回執。切帳後的舊工作區、任務及標籤回應亦已修正。受測程式 `52951b9` 的原生及容器 CI 均通過。[升級與對帳](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44740909306)
   - 個人帳號已從側欄建工作區、在首頁建看板，再從看板建任務並改名。重載後畫面與資料庫讀回一致，有其他共享看板權限的另一帳號讀此私人任務得到 404。此證據來自 Vite、實際 HTTP API 與隔離 PostgreSQL，使用合成登入身分。[瀏覽器與資料庫 CI](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44738740935)
   - 合併前驗證已涵蓋舊庫業務表停寫、專用來源角色執行一致性快照與對帳，以及 Vite 任務詳情修改後重載讀回。Quick Task 保留來源停寫期間的草稿與原提交識別碼。正式入口、正式資料與雲端供應商資格仍各自待驗。[移轉與恢復條件](specs/SPEC-139-projed-jenfu-platform-onboarding.md#66-移轉-readiness-與恢復條件)｜[瀏覽器與資料庫 CI](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44731128457)
   - 2026-11-20 最新結果。原 Supabase 的兩個私人身分檢視已依核准建立，提交後讀回角色、七個欄位及 ACL。此次未讀使用者列或執行資料移轉。[正式來源執行結果](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-source-views-applied)

@@ -6,6 +6,8 @@
 
 個人帳號從側欄建立工作區、從首頁建立看板，再從看板新增任務及改名，重載可讀回相同任務與名稱。共享其他看板的協作者直接查該私人任務得到 404。在已共享看板上，即使一次讀取失敗，下一次同步仍能顯示已提交的名稱。此演練使用合成登入身分及隔離 PostgreSQL。[A02／A07 瀏覽器與資料庫 CI](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44738740935)
 
+舊版 Quick `0670a0a` 離線建立草稿後，在同一個瀏覽器設定檔及網址升級至 `52951b9`，Service Worker 與 IndexedDB 保留原草稿。另一帳號無法看見或送出。原帳號以正常按鈕送出後收到 201，以相同識別碼重送收到 200。隔離 PostgreSQL 核對到一筆任務與一筆回執，帳號、識別碼、內容雜湊及回執時間一致。另一帳號可見筆數均為零。此項使用合成身分、實際產品程式及隔離 HTTP／資料庫；正式登入與託管入口留待部署階段驗證。[A06／T05 升級與對帳 CI](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44740909306)
+
 Cloud Run 設定、音訊上傳／播放及背景清理都限定使用已核准的私人桶 `projed-cc78d-meeting-audio`。清理依資料庫的既有到期紀錄與物件 generation 執行，即使語音辨識停用仍可清除到期錄音。語音辨識另外核對專案、同一音訊桶、模型及零留存資格。此變更不會啟用正式推論。
 
 2026-11-20 續行：人類已核准 §47.1 具名 foundation，並回覆適用 Google Cloud Master Agreement／防濫用留存豁免「不確定」。五個 API、四個專用 SA、三個 instance-scoped SQL IAM login、私人音訊桶及空白來源 Secret 已建立；Vertex cache 已讀回關閉，三個模型的內容 logging config 均不存在、依官方規格為預設關閉。Speech data logging 已依官方 default-off／明確 opt-in 契約收斂為同步 Recognize、禁止 opt-in 與外部 opt-in 即撤銷資格；部署後 runtime SA 實呼叫、Gemini 豁免、Shared VPC 及音訊桶 metadata 管理修復仍待完成，真實內容推論保持停用。Session 已改為登入核實來源、一般操作只查本地 Session／mapping／guard；三方同步撤銷 source 與實際隔離 PostgreSQL 證據見 §13，最新候選 artifact 與限制見 §47.1。正式 Session、資料移轉、writer fence、舊入口、切流與發布仍保留在原完成分母。
