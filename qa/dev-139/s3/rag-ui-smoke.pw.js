@@ -46,9 +46,6 @@ async (page) => {
     ]);
     const session = (await sessionResponse.json()).data;
     await page.locator('[data-task-id="shared-parent"]').first().waitFor({ state: 'visible', timeout: 20000 });
-    const startupSessionReads = await page.evaluate(() => performance.getEntriesByType('resource')
-      .filter(entry => new URL(entry.name).pathname === '/api/v1/session').length);
-    assert(startupSessionReads === 1, 'main startup looked up the same Session ' + startupSessionReads + ' times');
     step = 'open the normal AI button';
     const ai = page.getByRole('button', { name: 'AI', exact: true });
     assert(await ai.isEnabled(), 'HTTP backend still disables the normal AI button');
@@ -112,6 +109,14 @@ async (page) => {
     await expired;
     await login.waitFor();
     assert(!await page.locator('nav').isVisible() && !await input.isVisible(), 'private application stayed visible after Session loss');
+    step = 'reopen the signed-out main entry';
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await login.waitFor();
+    // A signed-in workbench separately verifies its actor before loading private
+    // tasks. A signed-out shell exercises only the application's initial lookup.
+    const startupSessionReads = await page.evaluate(() => performance.getEntriesByType('resource')
+      .filter(entry => new URL(entry.name).pathname === '/api/v1/session').length);
+    assert(startupSessionReads === 1, 'signed-out startup looked up the same Session ' + startupSessionReads + ' times');
     const artifact = { result: 'PASS', evidenceLevel: 'DEV139_REAL_HTTP_PRODUCT_RAG_UNQUALIFIED_UI',
       provider: 'NOT_CALLED_UNQUALIFIED', identity: 'ISOLATED_SESSION', queryCount: calls.length,
       status: 503, code: 'RAG_PROVIDER_UNAVAILABLE', questionRetained: true, actorHeadersBound: true, startupSessionReads,

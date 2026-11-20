@@ -159,6 +159,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
   };
 
   const dragSurfaceBindings = taskGesture.mobileActionMode || isSelectingMode || isRecordCaptureMode || taskGesture.isPlacementPending
+    || !permissions.canDragPlacement
     ? {}
     : { ...attributes, ...listeners };
 
