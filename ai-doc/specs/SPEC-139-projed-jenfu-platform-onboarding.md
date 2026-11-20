@@ -1453,7 +1453,19 @@ API 啟用前的 cache、generation 及 embedding logging 三個唯讀 GET 均�
 
 後續檢查正式Cloud Run plan renderer發現同一舊門檻仍殘留為Speech `projectSettingReadbackRequired=true`，會在真正產生release plan時重新造成無法完成的阻塞。現已移除該欄，改為明確`optInProhibited`、外部opt-in即撤銷qualification及部署後runtime SA probe；Vertex的project setting readback與適用契約／防濫用豁免證據均保留。source `5f9432fbd376e1e087d2602fce7c06aabe1e34c5`的[CI44696691376](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44696691376)兩jobs SUCCESS；artifacts14610569643／14610813500已讀回snapshot63、domain73及OCI18 checks均PASS，OCI精確綁同source與45/45 migrations；metadata仍FIXTURE_ONLY、browser／productionRelease仍NOT_RUN。本輪未部署、未呼叫provider，亦未改正式IAM／Secret／資料或流量。
 
-本分支的資料庫結構已進至 `0049_session_directory_visibility_v1`。隔離 PostgreSQL 移轉演練及 Linux 候選映像各自核對 49 份 migration。下列 Google Artifact Registry digest 對應當時的 45 份版本；目前 49 份的雲端候選須依實際 image digest 另行核對。[隔離移轉與 OCI 結果](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44736001461)
+<a id="dev139-cloud-49"></a>
+
+#### 已核對的 Google Cloud 候選映像（49 份 migration）
+
+來源 `52951b98da58c3bba05f01ad0f78b84d25495cf4` 已通過原生與容器 CI。Cloud Build 以相同來源建置，來源封存 SHA-256 `806df5cc490b70faa1dbdee498fdca4de27a4e6d855cf196c72c0d537acf24be` 與 Google 回報相符。從 Jobs 映像輸出的 managed profile 及 `0001` 至 `0049` 的 SQL 雜湊已逐檔核對。登錄庫讀回的三個 digest 如下。[隔離 CI](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44740909306)｜[Cloud Build](https://console.cloud.google.com/cloud-build/builds;region=asia-east1/85b50b5f-dd8a-436f-b26d-78cd04042a56?project=967362299895)
+
+| 映像 | Registry digest |
+|---|---|
+| `projed-prod` | `sha256:9a6f1bd8ea9f67bc346edb042ede512adad2bec786ab04b1a0937b3163f4a550` |
+| `projed-prod-jobs` | `sha256:53a074f8f8b139903be0ac849dd125ba9ab0db07ea069871a4aab94c5c5818f4` |
+| `projed-prod-asr-job` | `sha256:e149a5633edf6fd5c812035c83bc1c00d11a1aac3cda49ffebce35ef177c7d9a` |
+
+三者的候選標籤為 `candidate-52951b98da58-20261120`。執行時映像在禁網環境驗出四個供應商及工作綁定均為 `null`，ASR 映像可啟動 ffmpeg。本次操作到映像登錄為止，正式資料、服務與流量均未切換。
 
 #### 已發布至 registry 的 45 份候選映像 readback（2026-11-20，source 5f9432f）
 
