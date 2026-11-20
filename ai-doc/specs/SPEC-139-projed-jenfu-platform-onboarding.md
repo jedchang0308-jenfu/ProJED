@@ -1,6 +1,8 @@
 # SPEC-139：ProJED 納入 Jenfu-Platform 的產品與技術交接契約
 
-2026-11-20 續行：人類已核准 §47.1 具名 foundation，並回覆適用 Google Cloud Master Agreement／防濫用留存豁免「不確定」。五個 API、四個專用 SA、三個 instance-scoped SQL IAM login、私人音訊桶及空白來源 Secret 已建立；Vertex cache 已讀回關閉，三個模型的內容 logging config 均不存在、依官方規格為預設關閉。Gemini 豁免、Speech project logging、Shared VPC 及音訊桶 metadata 管理修復仍待完成，真實內容推論保持停用。Session 已改為登入核實來源、一般操作只查本地 Session／mapping／guard；三方同步撤銷 source 與實際隔離 PostgreSQL 證據見 §13，最新候選 artifact 與限制見 §47.1。正式 Session、資料移轉、writer fence、舊入口、切流與發布仍保留在原完成分母。
+2026-11-20 續行：人類已核准 §47.1 具名 foundation，並回覆適用 Google Cloud Master Agreement／防濫用留存豁免「不確定」。五個 API、四個專用 SA、三個 instance-scoped SQL IAM login、私人音訊桶及空白來源 Secret 已建立；Vertex cache 已讀回關閉，三個模型的內容 logging config 均不存在、依官方規格為預設關閉。Speech data logging 已依官方 default-off／明確 opt-in 契約收斂為同步 Recognize、禁止 opt-in 與外部 opt-in 即撤銷資格；部署後 runtime SA 實呼叫、Gemini 豁免、Shared VPC 及音訊桶 metadata 管理修復仍待完成，真實內容推論保持停用。Session 已改為登入核實來源、一般操作只查本地 Session／mapping／guard；三方同步撤銷 source 與實際隔離 PostgreSQL 證據見 §13，最新候選 artifact 與限制見 §47.1。正式 Session、資料移轉、writer fence、舊入口、切流與發布仍保留在原完成分母。
+
+同日三份跨 owner PR 已依人類核准轉為 ready-for-review：ProJED #9、Platform #157、OrgMaster #187 均仍 open、未 merge／部署／切流；三個 base 分別仍是遠端最新 `0670a0a`／`5ae88bc`／`a8830e9`。Platform `b7293c2` 與 OrgMaster `4b722b4` 的 required Source QC 均 SUCCESS；ProJED 最新 `5654478` 只修文件且沒有新 checks，最後 executable source `7308b1d` 的 CI44691983128 仍是本版程式證據，不以 ready 狀態外推正式驗收。
 
 2026-11-20續行：RAG會把可讀會議、知識與即時看板內容送至provider，但舊runtime僅憑GEMINI_API_KEY啟用Developer API，可能繞過已選定的零留存路徑。現已改為固定ProJED Google Cloud／短期IAM token及獨立RAG模型資格，保留Flash-Lite／Flash兩種原選擇；沒有資格時拒絕，不以meeting-only資格、API key或env flag啟用。詳[§38.1](#381-原行為與最小接線)。沒有變更正式資源或傳送真實內容；foundation核准、Google適用契約及Shared VPC權限仍待確認。
 
