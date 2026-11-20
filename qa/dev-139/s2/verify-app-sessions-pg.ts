@@ -38,11 +38,15 @@ function denied(action: Promise<unknown>) {
   return assert.rejects(action,(error: unknown)=>error instanceof KernelError && (error.httpStatus===409||error.httpStatus===403));
 }
 
-export async function startBrowserFixtureSession(database: RuntimeDatabase, config: RuntimeConfig, who: 'a' | 'b'): Promise<ServerActorV1> {
+export async function startBrowserFixtureSession(database: RuntimeDatabase, config: RuntimeConfig,
+  identity: 'owner' | 'employeeCollaborator' | 'personalWithoutGrant'): Promise<ServerActorV1> {
   const store = new PostgresAppSessionStore(database);
   const row = intent();
   const claim = opaqueHash();
-  const input = complete(row, claim, who);
+  const login = complete(row, claim, identity === 'owner' ? 'b' : 'a');
+  const input: CompleteLoginInput = identity === 'employeeCollaborator'
+    ? { ...login, identity: { ...login.identity, principalKind: 'employee', employeeId: 'synthetic-employee-a' } }
+    : login;
   await store.begin(row);
   await store.claim(row.tokenHash, row.stateHash, claim, Date.now());
   await publishSyntheticPrincipalState(config, input.identity);

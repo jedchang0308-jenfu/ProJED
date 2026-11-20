@@ -693,8 +693,14 @@ const httpConfig = process.env.PROJED_DEV139_BROWSER_SMOKE === '1'
   ? { ...config, staticRoot: resolve('dist') }
   : config;
 const browserActor = process.env.PROJED_DEV139_BROWSER_SMOKE === '1'
-  ? await startBrowserFixtureSession(database, config, 'b') : null;
-const browserCollaborator = browserActor ? await startBrowserFixtureSession(database, config, 'a') : null;
+  ? await startBrowserFixtureSession(database, config, 'owner') : null;
+if (browserActor) {
+  const personal = await startBrowserFixtureSession(database, config, 'personalWithoutGrant');
+  await assert.rejects(runActorTransaction(database, config, personal, port =>
+    repository.listTasks(port, 'ws-b', 'board-shared')), (error: unknown) =>
+    error instanceof KernelError && error.httpStatus === 404);
+}
+const browserCollaborator = browserActor ? await startBrowserFixtureSession(database, config, 'employeeCollaborator') : null;
 const http = createKernelHttpServer(httpConfig, database, expected, {
   resolveActor: async (request) => {
     if (browserActor && request.headers.cookie === '__session=qa-browser') return browserActor;
