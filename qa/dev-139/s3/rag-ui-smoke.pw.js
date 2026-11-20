@@ -5,6 +5,15 @@ async (page) => {
   const calls = [];
   const external = [];
   const pageErrors = [];
+  const authResponses = [];
+  page.on('response', response => {
+    const path = new URL(response.url()).pathname;
+    const category = /^\/api\/v1\/(session|scope-revisions|workspaces)(?:\/|$)/.exec(path)?.[1];
+    if (category && response.request().method() === 'GET') {
+      authResponses.push(category + '=' + response.status());
+      if (authResponses.length > 12) authResponses.shift();
+    }
+  });
   // The board loads a public holiday calendar independently of the assistant.
   // Serve only that fixed, read-only URL locally and still catch every other fetch.
   const publicCalendar = /^https:\/\/cdn\.jsdelivr\.net\/gh\/ruyut\/TaiwanCalendar\/data\/(\d{4})\.json$/;
@@ -71,25 +80,30 @@ async (page) => {
     assert(pageErrors.length === 0, 'unexpected browser errors ' + JSON.stringify(pageErrors));
     await page.screenshot({ path: 'output/playwright/dev-139-rag-ui/unavailable-mobile.png', fullPage: false });
     const login = page.getByRole('button', { name: /檢查 Jenfu-Platform 登入/ });
-    const waitForRejectedPoll = (status, code) => page.waitForResponse(async reply => {
-      if (new URL(reply.url()).pathname !== '/api/v1/scope-revisions' || reply.status() !== status) return false;
+    const waitForRejectedRead = (status, code) => page.waitForResponse(async reply => {
+      const path = new URL(reply.url()).pathname;
+      if (!(path === '/api/v1/scope-revisions' || path === '/api/v1/workspaces' || path.startsWith('/api/v1/workspaces/'))
+        || reply.request().method() !== 'GET' || reply.status() !== status) return false;
       return (await reply.json()).error?.code === code;
     });
     step = 'switch the cookie while the original private panel remains open';
-    const switched = waitForRejectedPoll(409, 'ACTOR_CHANGED');
+    const switched = waitForRejectedRead(409, 'ACTOR_CHANGED');
     await page.context().addCookies([{ name: '__session', value: 'qa-browser-collaborator', url: `${baseUrl}/` }]);
     await page.evaluate(() => window.dispatchEvent(new Event('focus')));
     await switched;
     await login.waitFor();
     assert(!await input.isVisible(), 'old private question still visible after the server rejected the previous actor');
-    step = 'use the normal login check for the new actor, then lose the Session cookie';
+    step = 'use the normal login check for the new actor';
     const [rebound] = await Promise.all([
-      page.waitForResponse(reply => new URL(reply.url()).pathname === '/api/v1/session' && reply.ok()),
+      page.waitForResponse(reply => new URL(reply.url()).pathname === '/api/v1/session'),
       login.click(),
     ]);
-    assert((await rebound.json()).data.localUserId !== session.localUserId, 'login did not resolve the other actor');
+    const newSession = await rebound.json();
+    assert(rebound.ok(), 'new Session read returned HTTP ' + rebound.status() + ' ' + (newSession.error?.code ?? ''));
+    assert(newSession.data?.localUserId && newSession.data.localUserId !== session.localUserId, 'login did not resolve the other actor');
     await page.locator('nav').waitFor();
-    const expired = waitForRejectedPoll(401, 'ACTOR_INVALID');
+    step = 'lose the new Session cookie and wait for the first rejected canonical read';
+    const expired = waitForRejectedRead(401, 'ACTOR_INVALID');
     await page.context().clearCookies({ name: '__session' });
     await page.evaluate(() => window.dispatchEvent(new Event('focus')));
     await expired;
@@ -104,6 +118,6 @@ async (page) => {
     await page.evaluate(value => { window.__DEV139_RAG_UI_ARTIFACT = value; }, artifact);
     return artifact;
   } catch (error) {
-    throw new Error(`RAG UI smoke failed at ${step}: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(`RAG UI smoke failed at ${step}: ${error instanceof Error ? error.message : String(error)}; recent reads: ${authResponses.join(', ')}`);
   }
 }

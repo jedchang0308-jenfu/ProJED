@@ -18,6 +18,21 @@ import { filterReadIdentity } from '../features/taskFilters/optionSource';
 
 const ACTIVE_POLL_INTERVAL_MS = 5_000;
 
+function handleReadError(error: unknown) {
+  const user = useAuthStore.getState().user;
+  if (error instanceof HttpApiError && user && 'authContextId' in user && typeof user.authContextId === 'string'
+    && ((error.status === 401 && error.code === 'ACTOR_INVALID')
+      || (error.status === 409 && error.code === 'ACTOR_CHANGED' && error.requestId !== null))) {
+    // A local rejection of a late request has no server request ID.
+    if (httpApiClient.clearExpectedActor({ accountId: user.uid, contextId: user.authContextId })) {
+      useAuthStore.setState({ user: null, loading: false, error: null });
+    }
+    return;
+  }
+  console.error('[useHttpSync] Failed to refresh current scope:', error);
+  useWbsStore.setState({ loading: false, error: error instanceof Error ? error.message : 'HTTP 同步失敗' });
+}
+
 function clearPublishedReads(preserveSelection: boolean) {
   useBoardStore.setState({ workspaces: [], selectedTaskId: null,
     ...(!preserveSelection && { activeWorkspaceId: null, activeBoardId: null }) });
@@ -142,23 +157,7 @@ export function useHttpSync(options: { enabled?: boolean } = {}) {
       revisionSnapshot = nextSnapshot;
     }, {
       onError: error => {
-        if (!isCurrent()) return;
-        const user = useAuthStore.getState().user;
-        if (error instanceof HttpApiError && user && 'authContextId' in user && typeof user.authContextId === 'string'
-          && ((error.status === 401 && error.code === 'ACTOR_INVALID')
-            || (error.status === 409 && error.code === 'ACTOR_CHANGED' && error.requestId !== null))) {
-          // A server rejection of this Session must close its private UI. A late
-          // local ACTOR_CHANGED from an earlier request has no server request ID.
-          if (httpApiClient.clearExpectedActor({ accountId: user.uid, contextId: user.authContextId })) {
-            useAuthStore.setState({ user: null, loading: false, error: null });
-          }
-          return;
-        }
-        console.error('[useHttpSync] Poll or canonical reload failed:', error);
-        useWbsStore.setState({
-          loading: false,
-          error: error instanceof Error ? error.message : 'HTTP 同步失敗',
-        });
+        if (isCurrent()) handleReadError(error);
       },
     });
 
@@ -188,11 +187,7 @@ export function useHttpSync(options: { enabled?: boolean } = {}) {
     const isCurrent = () => !cancelled && epoch === readEpoch.current
       && filterReadIdentity(useAuthStore.getState().user) === identity;
     refreshActiveScope(isCurrent).catch(error => {
-      console.error('[useHttpSync] Active scope load failed:', error);
-      if (isCurrent()) useWbsStore.setState({
-        loading: false,
-        error: error instanceof Error ? error.message : 'HTTP 看板載入失敗',
-      });
+      if (isCurrent()) handleReadError(error);
     });
     return () => { cancelled = true; };
   }, [enabled, identity, activeWorkspaceId, activeBoardId]);
