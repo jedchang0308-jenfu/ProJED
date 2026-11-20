@@ -101,7 +101,7 @@ try {
       incoming.on('end', () => {
         const body = Buffer.concat(chunks);
         const upstream = request({ hostname: '127.0.0.1', port: 3000, method: incoming.method,
-          path: incoming.url.slice('/rest/v1'.length), headers: { ...incoming.headers, host: '127.0.0.1:3000' } }, response => {
+          path: incoming.url.slice('/rest/v1'.length), headers: { ...incoming.headers, host: '127.0.0.1:3000', 'accept-encoding': 'identity' } }, response => {
           const received = [];
           response.on('data', chunk => received.push(chunk));
           response.on('end', () => {
