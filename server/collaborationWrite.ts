@@ -429,11 +429,12 @@ export class CollaborationWriteRepository {
        WHERE tenant_id = $1::uuid AND project_id = $2::uuid AND user_id = $3::uuid
     `, [board.tenantId, board.id, userId]);
     if (result.rowCount !== 1) notFound();
-    await port.query(`
+    const removedScope = await port.query(`
       UPDATE projed_core.actor_scope_access
          SET active = false, scope_revision = scope_revision + 1, updated_at = clock_timestamp()
-       WHERE local_user_id = $3::uuid AND tenant_id = $1::uuid AND project_id = $2::uuid AND active
+       WHERE local_user_id = $3::uuid AND tenant_id = $1::uuid AND project_id = $2::uuid
     `, [board.tenantId, board.id, userId]);
+    if (removedScope.rowCount !== 1) throw new KernelError('DB_BOUNDARY_INVALID', 'Board member scope is missing', 503);
     await bumpRevision(port, board.tenantId, board.id);
   }
 

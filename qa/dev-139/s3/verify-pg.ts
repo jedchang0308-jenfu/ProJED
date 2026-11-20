@@ -1378,6 +1378,17 @@ try {
   assert.equal(httpAccepted.defaultRole, 'admin');
   assert.equal((await httpB.listBoardMembers('ws-b', 'board-shared'))
     .find(member => member.userId === actorE.localUserId)?.role, 'admin');
+  // A migrated membership can already have an inactive scope before its owner removes it.
+  await runActorTransaction(database, config, actorB, async port => {
+    const tenantId = '12222222-2222-4222-8222-222222222222';
+    const projectId = '22222222-2222-4222-8222-222222222222';
+    await port.authorizeBoardMutation(tenantId, projectId, 'manage-members');
+    const frozen = await port.query(`
+      UPDATE projed_core.actor_scope_access SET active = false, updated_at = now()
+       WHERE tenant_id = $1 AND project_id = $2 AND local_user_id = $3 AND active
+    `, [tenantId, projectId, actorE.localUserId]);
+    assert.equal(frozen.rowCount, 1);
+  });
   const olderInviteToken = 'dev139-http-before-removal';
   const olderInvite = await collaborationB.createInvite('ws-b', 'board-shared', {
     email: 'e@example.invalid',
