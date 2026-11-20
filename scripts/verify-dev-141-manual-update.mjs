@@ -126,9 +126,15 @@ try {
     const buildArtifact = backendUpgradeOnly && name === 'A'
       ? (await import(pathToFileURL(createRequire(path.join(buildRoot, 'package.json')).resolve('vite')).href)).build
       : build;
-    await buildArtifact({ ...(backendUpgradeOnly
-      ? { root: buildRoot, configFile: path.join(buildRoot, 'vite.config.js'), configLoader: 'runner' } : {}),
-    mode: 'dev141', logLevel: 'error', build: { outDir: dir } });
+    const originalCwd = process.cwd();
+    try {
+      // The historical config has relative Rollup HTML inputs. Its normal CLI
+      // entry runs in that source tree; root alone does not change those inputs.
+      if (backendUpgradeOnly) process.chdir(buildRoot);
+      await buildArtifact({ ...(backendUpgradeOnly
+        ? { root: buildRoot, configFile: path.join(buildRoot, 'vite.config.js'), configLoader: 'runner' } : {}),
+      mode: 'dev141', logLevel: 'error', build: { outDir: dir } });
+    } finally { process.chdir(originalCwd); }
     const predecessor = ['A', 'B', 'C'][index - 1];
     retainVersionHistory({
       distDir: dir, version: version(name), previousDistDir: artifacts[predecessor],
