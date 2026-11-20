@@ -1,6 +1,6 @@
 # SPEC-139：ProJED 納入 Jenfu-Platform 的產品與技術交接契約
 
-2026-11-20 更新。外部協作依 §4.2.1 與 §4.3 執行。Platform、OrgMaster 與 ProJED 的本機 HTTP 入口及隔離 PostgreSQL 已驗過原 UUID、待審拒絕、接受後舊 Session 看不到新看板、重新登入後僅可讀指定看板，以及移除成員後舊 Session 回 401。看板權限投影沿用登入快照，受測一般讀取未查詢中央契約。隔離收據 `2026-11-20T10-48-56.021Z-7934b7e9` 共 26 項通過，含三系統 HTTP 流程；Google 與工作負載身分採合成證明。完整合併前 CI、瀏覽器及行事曆訂閱仍須依各自結果判定。[外部協作契約](#dev139-external-access)
+2026-11-20 更新。Platform、OrgMaster 與 ProJED 的本機 HTTP 入口及隔離 PostgreSQL 已驗過原 UUID、待審拒絕、重新登入後僅可讀指定看板，以及移除成員後舊 Session 回 401。一般讀取沿用登入快照。三系統共 26 項通過，Google 與工作負載身分採合成證明。ProJED 的 Vite 瀏覽器案例已由任務詳情修改標題，重載後從 HTTP 回應及畫面核對，再由同一入口還原。既有行事曆訂閱另有隔離資料庫驗證。正式使用者、雲端路由及供應商資格仍依部署邊界分別查證。[外部協作契約](#dev139-external-access)｜[三系統 CI](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/44729053126)｜[看板瀏覽器與 PostgreSQL CI](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44731128457)
 
 正式 Supabase 的兩個私有身分檢視已建立並讀回 ACL，供移轉時核對既有帳號 UUID。目標環境仍為 Google Cloud。[正式來源執行結果](#dev139-source-views-applied)
 
@@ -374,6 +374,8 @@ Server 搬移與 browser storage 恢復分開驗收。IndexedDB、Session、SW �
 **舊庫業務表停寫。** `node --import tsx scripts/dev139-source-write-fence.ts apply` 輸出供切換時使用的 SQL；`remove` 輸出回復 SQL。產生 SQL 時不連線。套用時同一交易等待既有交易離開、替舊庫 `public` 與 `private` 的應用表安裝停寫觸發器並核對覆蓋。鎖定逾時會整筆回滾。表仍可讀；SDK、RPC 或背景工作對這些表的新增、修改、刪除與清空均收到 `PT503 / PROJED_SOURCE_WRITE_PAUSED`。正式 importer 的 `plan` 可在停寫前執行；`apply` 與 `reconcile` 會在自己的唯讀快照中再次查核所有觸發器。
 
 舊版六個 Edge 入口共用 `PROJED_LEGACY_WRITE_MODE`。切換窗口將其設為 `paused` 後，新錄音寫入、上傳憑證、背景分析、音訊清理與模型請求在接觸儲存或供應商前回 503。原有授權下的狀態與播放查詢仍可使用。行事曆可繼續提供訂閱，期間略過最近存取時間寫入。未設定與 `open` 沿用正常模式，其他設定值均停寫。
+
+Quick Task 收到精確的 `PT503 / PROJED_SOURCE_WRITE_PAUSED` 後停止該筆自動重送，在原裝置顯示「寫入暫停，已保留」。重新載入或恢復連線仍保留草稿；原帳號可按「恢復後重試」，沿用原提交識別碼核對收據。一般 503 沿用既有結果不明處理。隔離 PostgreSQL 已驗停寫前交易排空、四種資料異動遭拒、停寫中仍可讀，並使用專用來源角色在同一快照中完成移轉與對帳。正式來源仍持續服務。[停寫與移轉 CI](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44730208522)
 
 正式移轉前須確認各 Edge 都採用停寫版本及設定，並等候在途工作完成、已簽發的 Storage 上傳 URL 到期（舊錄音入口設兩小時）。期間保持來源結構穩定，另核對 Auth 帳號異動、其他可直接寫入 Storage 的來源及外部排程。目標開放業務寫入前才可直接恢復舊庫寫入；目標已有新資料時沿 §6.5 保留新寫入與收據，避免兩邊同時受理。
 

@@ -63,6 +63,7 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
 ## DEV-139：ProJED 納入 Jenfu-Platform，Cloud Run／Cloud SQL 對齊並保留 Vite
 
+  - 合併前驗證已涵蓋舊庫業務表停寫、專用來源角色執行一致性快照與對帳，以及 Vite 任務詳情修改後重載讀回。Quick Task 保留來源停寫期間的草稿與原提交識別碼。正式入口、正式資料與雲端供應商資格仍各自待驗。[移轉與恢復條件](specs/SPEC-139-projed-jenfu-platform-onboarding.md#66-移轉-readiness-與恢復條件)｜[瀏覽器與資料庫 CI](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44731128457)
   - 2026-11-20 最新結果。原 Supabase 的兩個私人身分檢視已依核准建立，提交後讀回角色、七個欄位及 ACL。此次未讀使用者列或執行資料移轉。[正式來源執行結果](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-source-views-applied)
   - 資源擁有者邀請、OrgMaster 審核、登入快照及舊 Session 撤權已接線。三系統本機 HTTP 與隔離 PostgreSQL 已驗證原 UUID、外部協作看板隔離及撤權。正常 Vite 入口的工作區、看板、任務與重載已通過瀏覽器驗證；既有行事曆訂閱已通過 11 項隔離資料庫驗證。合併前仍追蹤完整 CI，正式使用者與 Google 雲端切換另依 A03／A11 查證。[外部協作契約](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-external-access)
 

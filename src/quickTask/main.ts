@@ -168,6 +168,21 @@ const clearRetryTimer = () => {
   if (retryTimer !== null) window.clearTimeout(retryTimer);
   retryTimer = null;
 };
+const updateDisplayedSession = (snapshot: typeof authSnapshot) => {
+  if (authSnapshot?.accountId !== snapshot?.accountId || authSnapshot?.authEpoch !== snapshot?.authEpoch) {
+    pendingClaim = null;
+    recoveryCaptureId = null;
+    recoveryRenderRevision += 1;
+    hideRecovery();
+  }
+  if (currentRecord?.accountId && currentRecord.accountId !== snapshot?.accountId) {
+    currentRecord = null;
+    success.hidden = true;
+    titleInput.value = '';
+    setMessage('登入帳號已變更；原待辦仍保留在本機，請從待處理入口恢復。');
+  }
+  authSnapshot = snapshot;
+};
 const verifyAndFlush = async (expected: NonNullable<typeof authSnapshot>) => {
   if (!pageActive) return;
   if (syncInFlight || localCommitInFlight) {
@@ -182,10 +197,11 @@ const verifyAndFlush = async (expected: NonNullable<typeof authSnapshot>) => {
     const verification = await auth.verifyQuickSessionState(expected);
     if (authSnapshot?.accountId !== expected.accountId || authSnapshot.authEpoch !== expected.authEpoch) return;
     if (verification.status !== 'verified') {
-      const label = !navigator.onLine
+      if (verification.status === 'unauthenticated') updateDisplayedSession(null);
+      const label = verification.status === 'unauthenticated' ? '此快速 App 尚未登入' : !navigator.onLine
         ? '目前離線；已保留原帳號本機綁定，網路恢復後自動同步'
         : verification.status === 'unreachable' ? '登入狀態待確認；服務恢復後自動同步'
-          : verification.status === 'unauthenticated' ? '此快速 App 尚未登入' : '登入狀態已變更，請重新確認';
+          : '登入狀態已變更，請重新確認';
       setAuthStatus(label, verification.status === 'unauthenticated', false);
       // Initial verification plus seven retries is the eight-check event budget.
       if (verification.status === 'unreachable' && navigator.onLine && authRetryCount < 7) {
@@ -250,11 +266,12 @@ const refreshAuthAndSync = async () => {
   const current = auth.getQuickAuthSnapshot();
   if (snapshot ? current?.accountId !== snapshot.accountId || current.accessToken !== snapshot.accessToken
     || current.authEpoch !== snapshot.authEpoch : current !== null) return;
-  authSnapshot = snapshot;
+  updateDisplayedSession(snapshot);
   if (!snapshot) {
     setAuthStatus(auth.getQuickSessionLoadState() === 'unreachable'
       ? (navigator.onLine ? '登入狀態待確認；服務恢復後自動同步' : '目前離線；待辦仍保留在本機')
       : '此快速 App 尚未登入', auth.getQuickSessionLoadState() !== 'unreachable');
+    await renderRecovery();
     return;
   }
   void verifyAndFlush(snapshot);
@@ -850,19 +867,7 @@ void (async () => {
   await finishClaimFromUrl();
   await renderRecovery();
   const onAuthChange = (snapshot: typeof authSnapshot) => {
-    if (authSnapshot?.accountId !== snapshot?.accountId || authSnapshot?.authEpoch !== snapshot?.authEpoch) {
-      pendingClaim = null;
-      recoveryCaptureId = null;
-      recoveryRenderRevision += 1;
-      hideRecovery();
-    }
-    if (currentRecord?.accountId && currentRecord.accountId !== snapshot?.accountId) {
-      currentRecord = null;
-      success.hidden = true;
-      titleInput.value = '';
-      setMessage('登入帳號已變更；原待辦仍保留在本機，請從待處理入口恢復。');
-    }
-    authSnapshot = snapshot;
+    updateDisplayedSession(snapshot);
     if (snapshot) {
       setAuthStatus('正在確認登入狀態…', false);
       void verifyAndFlush(snapshot);

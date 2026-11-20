@@ -67,8 +67,9 @@ const stopBinding = async (
   barrier: boolean,
   isCurrent: () => boolean = () => true,
   stoppedSessionId: string | null = null,
+  observed?: QuickAuthContext,
 ) => {
-  const current = await getQuickAuthContext();
+  const current = observed ?? await getQuickAuthContext();
   if (!isCurrent()) return false;
   if (!validContext(current)) throw new Error('AUTH_CONTEXT_PROJECT_MISMATCH');
   await saveQuickAuthContext({
@@ -85,13 +86,29 @@ const stopBinding = async (
   return true;
 };
 
-export const loadQuickSession = async (): Promise<QuickAuthSnapshot | null> => {
+const rejectSession = async (observed: QuickAuthContext | undefined) => {
+  locallyStopped = true;
+  bumpQuickAuthEpoch();
+  sessionLoadState = 'unauthenticated';
+  const stoppedEpoch = authEpoch;
+  if (observed?.bindingAllowed && validContext(observed)) {
+    // Revoke only the binding seen before the request. Another tab may already
+    // have completed a new login and advanced its IndexedDB revision.
+    await stopBinding(true, () => locallyStopped && authEpoch === stoppedEpoch,
+      observed.sessionId, observed).catch(() => undefined);
+  }
+};
+
+const readQuickSession = async (): Promise<QuickAuthSnapshot | null> => {
   const loadRevision = ++sessionLoadRevision;
   const expectedEpoch = authEpoch;
   const isCurrent = () => loadRevision === sessionLoadRevision && authEpoch === expectedEpoch;
   const staleResult = () => getQuickAuthSnapshot();
   sessionLoadState = 'checking';
+  let observed: QuickAuthContext | undefined;
   try {
+    observed = await getQuickAuthContext();
+    if (!isCurrent()) return staleResult();
     const profile = await httpSessionService.getSession();
     if (!isCurrent()) return staleResult();
     const identity = sessionIdentity(profile.authContextId);
@@ -117,13 +134,24 @@ export const loadQuickSession = async (): Promise<QuickAuthSnapshot | null> => {
   } catch (error) {
     if (!isCurrent()) return staleResult();
     if (isAuthFailure(error)) {
-      sessionLoadState = 'unauthenticated';
-      setCachedSession(null, null);
+      await rejectSession(observed);
       return null;
     }
     sessionLoadState = 'unreachable';
     return staleResult();
   }
+};
+
+let currentLoad: { epoch: number; result: Promise<QuickAuthSnapshot | null> } | null = null;
+export const loadQuickSession = () => {
+  // Startup, visibility and the recovery panel can ask for the same cookie
+  // concurrently. They must all observe the same completed authorization read.
+  if (currentLoad?.epoch === authEpoch) return currentLoad.result;
+  const read = { epoch: authEpoch, result: readQuickSession() };
+  currentLoad = read;
+  return read.result.finally(() => {
+    if (currentLoad === read) currentLoad = null;
+  });
 };
 
 export const isQuickBindingContextCurrent = (context: QuickBindingContext) => !locallyStopped
@@ -134,7 +162,10 @@ export const isQuickBindingContextCurrent = (context: QuickBindingContext) => !l
 
 export const getQuickBindingContext = async (): Promise<QuickBindingContext | null> => {
   if (locallyStopped) return null;
+  const epoch = authEpoch;
+  const revision = sessionLoadRevision;
   const context = await getQuickAuthContext().catch(() => undefined);
+  if (locallyStopped || epoch !== authEpoch || revision !== sessionLoadRevision) return null;
   if (!validContext(context) || !context?.bindingAllowed || !context.accountId) return null;
   if (cachedSnapshot && (cachedSnapshot.accountId !== context.accountId
       || cachedSnapshot.accessToken !== context.sessionId)) return null;
@@ -164,7 +195,11 @@ export const verifyQuickSessionState = async (expected: QuickAuthSnapshot): Prom
   const stale = () => locallyStopped || cachedSnapshot?.accountId !== expected.accountId
     || cachedSnapshot.authEpoch !== expected.authEpoch || cachedSnapshot.accessToken !== expected.accessToken;
   if (stale()) return { status: 'stale', snapshot: null };
+  const loadRevision = sessionLoadRevision;
+  let observed: QuickAuthContext | undefined;
   try {
+    observed = await getQuickAuthContext();
+    if (stale()) return { status: 'stale', snapshot: null };
     const profile = await withDeadline(httpSessionService.getSession(), Date.now() + 15_000);
     if (stale()) return { status: 'stale', snapshot: null };
     const identity = sessionIdentity(profile.authContextId);
@@ -201,8 +236,8 @@ export const verifyQuickSessionState = async (expected: QuickAuthSnapshot): Prom
   } catch (error) {
     if (stale()) return { status: 'stale', snapshot: null };
     if (isAuthFailure(error)) {
-      setCachedSession(null, null);
-      sessionLoadState = 'unauthenticated';
+      if (loadRevision !== sessionLoadRevision) return { status: 'stale', snapshot: null };
+      await rejectSession(observed?.sessionId === expected.accessToken ? observed : undefined);
       return { status: 'unauthenticated', snapshot: null };
     }
     return { status: 'unreachable', snapshot: null };

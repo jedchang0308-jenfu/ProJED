@@ -122,6 +122,9 @@ jobs:
           path: |
             output/playwright/dev-139-http-ui/result.json
             output/playwright/dev-139-http-ui/main.png
+            output/playwright/dev-139-rag-ui/result.json
+            output/playwright/dev-139-rag-ui/unavailable-mobile.png
+            output/playwright/dev-139-quick-http-binding/result.json
           if-no-files-found: ignore
           retention-days: 7
 
