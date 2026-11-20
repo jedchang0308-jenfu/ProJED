@@ -6,6 +6,7 @@ import {
   QUICK_CAPTURE_RETENTION_MS,
   QUICK_CAPTURE_SCHEMA_VERSION,
   QUICK_CAPTURE_STORE,
+  isQuickCaptureWritePaused,
   isQuickCaptureReceipt,
   type QuickAuthContext,
   type QuickCaptureReceipt,
@@ -293,7 +294,7 @@ export const retryQuickCapture = async (captureId: string, accountId: string) =>
         || (record.leaseExpiresAt && record.leaseExpiresAt > Date.now())) return;
       if (record.state === 'failed_permanent' && !record.lastErrorCode?.includes('WORKSPACE')
         && record.lastErrorCode !== '23503' && record.lastErrorCode !== 'AUTO_RETRY_EXHAUSTED'
-        && record.lastErrorCode !== 'P0001') return;
+        && record.lastErrorCode !== 'P0001' && !isQuickCaptureWritePaused(record)) return;
       next = { ...record, state: 'pending', attemptCount: 0, nextAttemptAt: null, lastErrorCode: null,
         leaseId: null, leaseExpiresAt: null, updatedAt: Date.now() };
       store.put(next);

@@ -5,7 +5,7 @@ import {
   getQuickAuthContext,
   prepareQuickCapturesForSync,
 } from './outbox';
-import { classifyQuickSyncError, type QuickAuthContext } from './model';
+import { classifyQuickSyncError, isQuickSourceWritePaused, QUICK_SOURCE_WRITE_PAUSED, type QuickAuthContext } from './model';
 import { createQuickUnplacedTask, type QuickAuthSnapshot } from '../../services/supabase/quickTaskCaptureService';
 
 export type QuickTaskAuthGuard = {
@@ -59,16 +59,19 @@ export const flushQuickTaskOutbox = async (
       if (finished?.state === 'synced' && await allowed()) onProgress?.(leased.captureId, 'synced');
     } catch (error) {
       const state = classifyQuickSyncError(error);
+      const writePaused = isQuickSourceWritePaused(error);
       const retryAfter = parseRetryAfter(error && typeof error === 'object' && 'retryAfter' in error ? (error as { retryAfter?: unknown }).retryAfter : null);
       await finishQuickCaptureLease(
         leased.captureId,
         leased.leaseId!,
         state,
-        error && typeof error === 'object' && 'code' in error ? String((error as { code?: unknown }).code) : 'SYNC_FAILED',
+        writePaused ? QUICK_SOURCE_WRITE_PAUSED
+          : error && typeof error === 'object' && 'code' in error ? String((error as { code?: unknown }).code) : 'SYNC_FAILED',
         retryAfter,
       );
       if (await allowed()) onProgress?.(leased.captureId, state);
       if (state === 'failed_auth') return true;
+      if (writePaused) return false;
     } finally {
       window.clearTimeout(timeout);
     }

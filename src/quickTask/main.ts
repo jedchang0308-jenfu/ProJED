@@ -10,7 +10,7 @@ import {
   retryQuickCapture,
   updateQuickCapture,
 } from '../features/quickTaskCapture/outbox';
-import { createQuickCaptureId, normalizeQuickTitle, isQuickTitleValid, type QuickCaptureRecord } from '../features/quickTaskCapture/model';
+import { createQuickCaptureId, normalizeQuickTitle, isQuickTitleValid, isQuickCaptureWritePaused, type QuickCaptureRecord } from '../features/quickTaskCapture/model';
 import { startVoiceCapture, type VoiceSession } from '../features/quickTaskCapture/voice';
 import { flushQuickTaskOutbox } from '../features/quickTaskCapture/sync';
 import { installQuickReloadSafety } from '../features/quickTaskCapture/reloadSafety';
@@ -466,7 +466,8 @@ const renderRecovery = async () => {
       : unboundCount === 0 && otherAccountPending === 0 ? '同步異常' : '需處理';
   const currentActionHint = currentRecord && currentNeedsRecovery
     ? currentRecord.accountId === null ? '需確認同步帳號'
-      : currentRecord.state === 'failed_auth' ? '需重新登入' : '需處理同步異常'
+      : currentRecord.state === 'failed_auth' ? '需重新登入'
+        : isQuickCaptureWritePaused(currentRecord) ? '寫入暫停，恢復後重試' : '需處理同步異常'
     : '';
   const selected = actionable.find(record => record.captureId === recoveryCaptureId);
   if (currentRecord) {
@@ -604,17 +605,19 @@ const showNextRecovery = async (interactionRevision: number) => {
 };
 
 const renderRecoveryFailure = (record: QuickCaptureRecord) => {
+  const writePaused = isQuickCaptureWritePaused(record);
   const needsWorkspace = Boolean(record.lastErrorCode?.includes('WORKSPACE')) || record.lastErrorCode === '23503';
   const needsErrorVerification = record.lastErrorCode === 'P0001';
-  const canRetry = record.lastErrorCode === 'AUTO_RETRY_EXHAUSTED' || needsWorkspace || needsErrorVerification;
+  const canRetry = writePaused || record.lastErrorCode === 'AUTO_RETRY_EXHAUSTED' || needsWorkspace || needsErrorVerification;
   const explanation = record.state === 'failed_auth' ? '請重新登入原帳號後同步。'
-    : needsWorkspace ? '請先到主程式完成帳號與工作台設定，再回來重試。'
+    : writePaused ? '來源服務已暫停寫入；待辦仍保留在本機。服務恢復後，請以原帳號重試。'
+      : needsWorkspace ? '請先到主程式完成帳號與工作台設定，再回來重試。'
       : needsErrorVerification ? '請以原帳號重新確認同步結果；原任務仍保留在本機。'
       : canRetry ? '同步多次失敗，待辦仍保留在本機。' : '同步結果需要查證，待辦仍保留在本機。';
   recovery.hidden = false;
   recovery.dataset.compact = 'false';
   recoveryContent.hidden = false;
-  recoveryContent.innerHTML = `<strong>同步未完成</strong><span>${escapeHtml(record.title)}</span><span>${explanation}</span><div class="quick-task-actions">${record.state === 'failed_auth' ? '<button type="button" data-recovery-login="true">重新登入</button>' : ''}${needsWorkspace ? '<button type="button" data-workbench="true">前往工作台</button>' : ''}${canRetry ? `<button type="button" data-retry="true">${needsErrorVerification ? '重新確認' : '重試'}</button>` : ''}<button type="button" data-back="true">返回</button></div>`;
+  recoveryContent.innerHTML = `<strong>${writePaused ? '寫入暫停' : '同步未完成'}</strong><span>${escapeHtml(record.title)}</span><span>${explanation}</span><div class="quick-task-actions">${record.state === 'failed_auth' ? '<button type="button" data-recovery-login="true">重新登入</button>' : ''}${needsWorkspace ? '<button type="button" data-workbench="true">前往工作台</button>' : ''}${canRetry ? `<button type="button" data-retry="true">${writePaused ? '恢復後重試' : needsErrorVerification ? '重新確認' : '重試'}</button>` : ''}<button type="button" data-back="true">返回</button></div>`;
   recoveryDetails.open = true;
   recoveryContent.querySelector<HTMLButtonElement>('[data-recovery-login]')?.addEventListener('click', () => {
     void getAuthApi().then(auth => auth.startQuickGoogleSignIn(new URL('/quick-task/', window.location.origin).toString()))
@@ -649,7 +652,7 @@ const escapeHtml = (value: string) => value.replace(/[&<>"']/gu, char => ({ '&':
 
 const renderSuccess = (record: QuickCaptureRecord, synced: boolean) => {
   success.hidden = false;
-  success.innerHTML = `<strong>${synced ? '已建立' : '已記下，待同步'}</strong><span>${escapeHtml(record.title)}</span>`;
+  success.innerHTML = `<strong>${synced ? '已建立' : isQuickCaptureWritePaused(record) ? '寫入暫停，已保留' : '已記下，待同步'}</strong><span>${escapeHtml(record.title)}</span>`;
 };
 
 const digest = async (value: string) => {
