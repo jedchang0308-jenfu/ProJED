@@ -24,10 +24,19 @@ async (page) => {
     await page.locator('[data-task-id="shared-parent"]').first().waitFor({ state: 'visible', timeout: 20000 });
   };
   const openPermissions = async target => {
-    if (!(await target.locator('[data-settings-view="true"]').isVisible())) {
-      await target.locator('[data-app-more-menu="true"] > summary').click();
-      await target.locator('[data-app-more-settings="true"]').click();
+    // SettingsView is lazy: after reload its root can still be absent even
+    // though the persisted view already makes this menu action "return to board".
+    const menu = target.locator('[data-app-more-menu="true"]');
+    await menu.waitFor({ state: 'visible' });
+    await menu.locator('summary').click();
+    const settingsAction = target.locator('[data-app-more-settings="true"]');
+    await settingsAction.waitFor({ state: 'visible' });
+    if (await settingsAction.getAttribute('aria-current') === 'page') {
+      await menu.locator('summary').click();
+    } else {
+      await settingsAction.click();
     }
+    await target.locator('[data-settings-view="true"]').waitFor({ state: 'visible' });
     await target.locator('[data-settings-section-tab="permissions"]').click();
     await target.locator('[data-board-permission-settings]').waitFor({ state: 'visible' });
   };
@@ -113,6 +122,7 @@ async (page) => {
     assert(await permissionsPanel.locator('button[aria-pressed]').count() === initialPermissions.owner.length * 4,
       'normal settings do not expose every existing capability for each editable role');
     await saveAdminReference(true);
+    step = 'reload the persisted non-default permissions through normal settings';
     await page.reload({ waitUntil: 'domcontentloaded' });
     await openPermissions(page);
     await waitForAdminReference(true);
@@ -120,6 +130,7 @@ async (page) => {
     assert(JSON.stringify(persistedNonDefault.admin) === '["manage_task_reference"]', 'non-default matrix did not survive reload');
     await page.screenshot({ path: 'output/playwright/dev-139-http-ui/permissions-non-default.png', fullPage: false });
     await saveAdminReference(false);
+    step = 'reload the persisted explicitly empty permissions through normal settings';
     await page.reload({ waitUntil: 'domcontentloaded' });
     await openPermissions(page);
     await waitForAdminReference(false);
@@ -325,6 +336,7 @@ async (page) => {
     await page.evaluate(value => { window.__DEV139_HTTP_UI_ARTIFACT = value; }, artifact);
     return artifact;
   } catch (error) {
+    await page.screenshot({ path: 'output/playwright/dev-139-http-ui/failure.png', fullPage: false }).catch(() => {});
     throw new Error(`DEV-139 HTTP UI smoke failed at ${step}: ${error instanceof Error ? error.message : String(error)}`);
   } finally {
     await collaboratorContext?.close();
