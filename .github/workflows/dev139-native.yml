@@ -7,13 +7,17 @@ on:
         description: Exercise the built Vite app against the isolated PostgreSQL backend
         type: boolean
         default: false
+      quick_upgrade:
+        description: Exercise the previous Quick PWA and the candidate in one browser profile
+        type: boolean
+        default: false
   push:
     branches: [codex/projed-independent-dev]
     paths:
       - .github/workflows/dev139-native.yml
       - Dockerfile.dev139
       - .dockerignore
-      - vite.config.ts
+      - vite.config.js
       - server/**
       - shared/**
       - supabase/functions/**
@@ -26,6 +30,7 @@ on:
       - scripts/build-dev139-cloud-run.mjs
       - scripts/verify-dev139-cloud-run-artifact.mjs
       - scripts/verify-dev139-oci.mjs
+      - scripts/verify-dev-141-manual-update.mjs
       - scripts/create-dev139-managed-binding.mjs
       - scripts/create-dev139-cloud-run-plan.mjs
       - scripts/run-dev139-managed-job.mjs
@@ -106,6 +111,30 @@ jobs:
       - name: PostgreSQL snapshot migration rehearsal
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         run: '& ./qa/dev-139/migration/verify-isolated.ps1 -PostgresBin $env:PGBIN'
+      - name: Check out the pre-migration Quick client
+        id: quick_base
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' && (inputs.quick_upgrade || contains(github.event.head_commit.message, '[dev139-upgrade]')) }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 0670a0aee5327cd30d53f21360d577b278376028
+          path: output/dev139-quick-upgrade-source-A
+          persist-credentials: false
+      - name: Upgrade the installed Quick client in place
+        if: ${{ !cancelled() && steps.quick_base.outcome == 'success' }}
+        run: |
+          npm ci --no-audit --no-fund --prefix output/dev139-quick-upgrade-source-A
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run verify:dev-141-manual-update -- --quick-backend-upgrade --legacy-source-root=output/dev139-quick-upgrade-source-A
+      - name: Retain Quick upgrade result
+        if: ${{ always() && steps.quick_base.outcome == 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: dev139-quick-upgrade
+          path: |
+            output/playwright/dev-141/*/result.json
+            output/playwright/dev-141/*/A06-*.png
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Retain sanitized results
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
