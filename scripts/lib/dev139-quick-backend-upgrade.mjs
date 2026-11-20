@@ -28,7 +28,7 @@ export async function runQuickBackendUpgrade({ context, origin, output, publish,
   const other = '22222222-2222-4222-8222-222222222222';
   const title = 'A06 已保存未同步的原任務 🧭';
   let httpAccount = other;
-  let browserOffline = false;
+  let sourceUnavailable = false;
   const sourceCalls = [], targetCalls = [], unexpected = [], pageErrors = [];
   const receipts = new Map();
   let targetEffects = 0;
@@ -48,7 +48,7 @@ export async function runQuickBackendUpgrade({ context, origin, output, publish,
     const request = route.request(), url = new URL(request.url());
     const headers = { 'access-control-allow-origin': origin, 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
     if (url.origin === sourceOrigin) {
-      if (browserOffline) return route.abort('internetdisconnected');
+      if (sourceUnavailable) return route.abort('internetdisconnected');
       if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
       if (url.pathname === '/auth/v1/user') return route.fulfill({ status: 200, headers, json: user(owner) });
       if (url.pathname === '/rest/v1/rpc/create_quick_unplaced_task_v1') {
@@ -110,7 +110,8 @@ export async function runQuickBackendUpgrade({ context, origin, output, publish,
   await loaded(page, 'A');
   await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
   await page.locator('#quick-task-auth-status').filter({ hasText: '此快速 App 已登入' }).waitFor();
-  browserOffline = true;
+  await page.waitForLoadState('networkidle');
+  sourceUnavailable = true;
   await context.setOffline(true);
   assert.equal(await page.evaluate(() => navigator.onLine), false);
   await page.getByRole('textbox', { name: '任務名稱' }).fill(title);
@@ -125,9 +126,11 @@ export async function runQuickBackendUpgrade({ context, origin, output, publish,
     captureId: original.captureId, accountId: original.accountId,
     titleHash: createHash('sha256').update(title).digest('hex'), state: original.state });
   await context.setOffline(false);
-  browserOffline = false;
+  // The app origin can fetch its new worker/assets while the retired source
+  // remains unreachable. Do not manufacture a 503 retry/backoff on the old
+  // record just to stage the update; source-fence behavior is tested separately.
   await page.evaluate(() => window.dispatchEvent(new Event('online')));
-  await waitLocal(value => value.captures[0].attemptCount >= 1 && value.captures[0].leaseId === null);
+  await waitLocal(value => value.captures[0].leaseId === null);
   publish('B');
   await refreshCheck(page);
   await workerVersion(page, 'B', 'waiting');
@@ -154,7 +157,7 @@ export async function runQuickBackendUpgrade({ context, origin, output, publish,
   assert.equal(restored.captures.length, 1);
   assert.equal(targetEffects, 1);
   assert.ok(targetCalls.length >= 1 && targetCalls.every(call => call.captureId === original.captureId && call.title === title));
-  assert.ok(sourceCalls.length >= 1 && sourceCalls.every(call => call.p_capture_id === original.captureId && call.p_title === title));
+  assert.ok(sourceCalls.every(call => call.p_capture_id === original.captureId && call.p_title === title));
   await page.reload({ waitUntil: 'domcontentloaded' });
   await loaded(page, 'B');
   const reloaded = await readLocal();
@@ -166,7 +169,8 @@ export async function runQuickBackendUpgrade({ context, origin, output, publish,
   await page.screenshot({ path: path.join(output, 'A06-http-recovered.png') });
   record('A06-backend-upgrade-recovered', { sourceBackend: 'supabase', targetBackend: 'http',
     originalIdAccountContentAndTimePreserved: true, receiptPersistedAfterReload: true,
-    sourceRequestsRejected: sourceCalls.length, syntheticTargetRequests: targetCalls.length, syntheticTargetEffects: targetEffects,
+    sourceRequestsRejected: sourceCalls.length, sourceUnavailableDuringUpdate: true,
+    syntheticTargetRequests: targetCalls.length, syntheticTargetEffects: targetEffects,
     sameOrigin: origin, sameBrowserProfile: true, actualServiceWorker: true, viewport: '390x844',
     apiEvidence: 'SYNTHETIC_SESSION_AND_COMMITTED_RECEIPT_NO_DATABASE_OR_PROVIDER', externalRequests: unexpected.length });
 }
