@@ -1364,11 +1364,11 @@ gcloud compute shared-vpc associated-projects add projed-cc78d --host-project=je
 | 推論 | project自訂角色 `projedMeetingInference` 僅含 `aiplatform.endpoints.predict`、`serviceusage.services.use`、`speech.recognizers.recognize`，只給runtime；自訂角色 `projedMeetingAudio` 僅含上述三個object權限，只綁音訊bucket。六個permission均已由IAM可測權限metadata查到GA；不授Owner／Editor／AI Admin，不授runtime cache、IAM或bucket管理權。 |
 | Job與協調者 | runtime及scheduler只得呼叫固定 `projed-meeting-analysis`。既有Platform `dev010-prod-iac@jenfu-platform-prod.iam.gserviceaccount.com` 得讀／執行固定 `projed-prod-migration`、讀該execution／operation及ProJED project的Cloud Logging；adapter僅查指定execution的migration stdout ledger。Logging IAM為project讀取範圍，不能把程式的filter宣稱為IAM對其他logs的拒絕；不授override或任意Job執行。 |
 | 移轉來源credential | 新Secret `projed-prod-migration-source` 的數字版本只掛給一次性importer，內容沿既有TLS verify-full／source binding／CA／DSN bundle，runtime與migrator不可讀。先核對來源 `knodlkxqpcqyrtgwpdst` 可用的唯讀移轉登入；若需新建，限專用 `projed_dev139_source_reader`、本次已分類來源及身分映射欄位SELECT、唯讀snapshot交易與有界有效期，完成後撤銷。不得拿通用管理credential放入runtime或輸出值；實際grant須沿來源RLS及最小SELECT範圍核對，不能為讀取而更改業務policy。 |
-| 零留存設定 | 在已核准的ProJED專案關閉Speech data logging，將Vertex `cacheConfig.disableCache=true`、所選模型request-response logging停用並讀回。這些設定可執行，但不代表取得Google防濫用留存豁免；適用契約／豁免證據與模型仍須實際確認。未合格時相應runtime bindings維持null，RAG亦須覆蓋原Flash-Lite選擇。 |
+| 零留存設定 | Speech V1 data logging依官方為預設關閉且須另行在Console明確opt-in；本案只用同步Recognize並禁止opt-in，不再要求官方未提供的第二份API readback。若日後有人在專案外流程opt-in，立即撤銷Speech qualification。Vertex仍將`cacheConfig.disableCache=true`、所選模型request-response logging停用並讀回；這些設定不代表取得Google防濫用留存豁免，適用契約／豁免與模型仍須實際確認。未合格時相應runtime bindings維持null，RAG亦須覆蓋原Flash-Lite選擇。 |
 
 完整runtime／migration／snapshot／analysis Job與Scheduler create requests仍由同一個 `scripts/lib/dev139-cloud-run-plan.mjs` 渲染，沿實際immutable image與其binding產出；本節沒有虛構image digest、Secret version或資格收據。建立資源後先確認IAM、route、ledger、Session與provider，再依原有資料保護／writer fence／恢復流程執行移轉和切流。核准foundation不允許資料改寫、down migration、服務刪除、billing／SQL tier擴張或以合成資格開放真實會議內容；正常正式資料移轉／發布仍依完整任務與其必要前提續行。
 
-零留存查證沿Google[Speech V1 FAQ](https://docs.cloud.google.com/speech-to-text/docs/v1/data-usage-faq)及[專案data logging設定](https://docs.cloud.google.com/speech-to-text/docs/v1/enable-data-logging)：保留同步Recognize及停用logging，不改用會留存transcript的async。Vertex依[零留存設定](https://docs.cloud.google.com/gemini-enterprise-agent-platform/resources/zero-data-retention)停用所有cache，並由[適用契約與abuse monitoring](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/abuse-monitoring)確認所選模型；僅有「不訓練」或API啟用不構成零留存資格。本次尚無該project的契約／豁免證據。
+零留存查證沿Google[Speech V1 FAQ](https://docs.cloud.google.com/speech-to-text/docs/v1/data-usage-faq)、[data logging預設與用途](https://docs.cloud.google.com/speech-to-text/docs/v1/data-logging)及[明確opt-in／disable入口](https://docs.cloud.google.com/speech-to-text/docs/v1/enable-data-logging)：保留同步Recognize、禁止opt-in，不改用會留存transcript的async。這是Speech留存控制的契約基礎，不外推至Vertex，也不取代部署後runtime SA實呼叫。Vertex依[零留存設定](https://docs.cloud.google.com/gemini-enterprise-agent-platform/resources/zero-data-retention)停用所有cache，並由[適用契約與abuse monitoring](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/abuse-monitoring)確認所選模型；僅有「不訓練」或API啟用不構成零留存資格。本次尚無該project的契約／豁免證據。
 
 本機針對性自查：release unit 31/31、MJS syntax、affected lint與diff-check PASS；新增案例驗runtime-only推論、bucket-only讀寫刪、無多餘管理權、真正刪除設定，以及設定提案不得自動產生資格或IAM執行。未改server／frontend／SQL或既有qualified 44份migration。
 
@@ -1376,7 +1376,7 @@ gcloud compute shared-vpc associated-projects add projed-cc78d --host-project=je
 
 API 啟用前的 cache、generation 及 embedding logging 三個唯讀 GET 均為 403 SERVICE_DISABLED，當時 UNKNOWN；此歷史結果不覆寫。以 project／編號／留存及 Google 寄件者關鍵字查可用郵件未找到既有核准紀錄，不將無搜尋結果視為不存在契約。人類已回覆適用 Master Agreement／豁免「不確定」，因此仍無可查證資格。未寄信、提交豁免表單或將設定提案當成 Google 核准。
 
-同日另以鉦富帳戶查Google Drive契約／ZDR文件metadata，兩次搜尋均無結果，仍不能判定契約不存在。依Google目前[防濫用規格](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/abuse-monitoring)，本次所選非Frontier Google模型在一般線上條款下仍可能留存被標記的提示，Master Agreement適用性須由可查證文件確認；不套用其他供應商的ZDR申請程序。Speech logging仍依[官方Console入口](https://docs.cloud.google.com/speech-to-text/docs/v1/enable-data-logging)核對；[enhanced模型不要求啟用logging](https://docs.cloud.google.com/speech-to-text/docs/v1/enhanced-models)，故不能以試打該模型推定專案logging狀態，本次沒有執行這類探測或推論。
+同日另以鉦富帳戶查Google Drive契約／ZDR文件metadata，兩次搜尋均無結果，仍不能判定契約不存在。依Google目前[防濫用規格](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/abuse-monitoring)，本次所選非Frontier Google模型在一般線上條款下仍可能留存被標記的提示，Master Agreement適用性須由可查證文件確認；不套用其他供應商的ZDR申請程序。當時仍要求Speech Console另行readback；其後依官方default-off＋明確opt-in契約精簡為前述可執行控制，不以試打enhanced模型推定設定，也不放寬Gemini gate。
 
 #### 已核准 foundation 的實際執行（2026-11-20）
 
@@ -1389,9 +1389,11 @@ API 啟用前的 cache、generation 及 embedding logging 三個唯讀 GET 均�
 - 空白 `projed-prod-migration-source` Secret 已建立，只綁 importer secretAccessor；尚無 Secret 版本或移轉 credential，不借用舊 AI_API_KEY／其他 app Secret。
 - 來源已建立無登入、唯讀設定的 `projed_dev139_source_reader` 骨架並授43個已分類應用relation的精確SELECT；Supabase保留`auth` schema的USAGE無法由現行`postgres`轉授，直接Auth欄位grant已撤回。兩個固定security-barrier身分投影view及其reader SELECT尚待人類明確核准，未建立LOGIN／密碼／Secret版本，未執行正式資料讀寫。
 - ProJED Run service agent 已取得 host networkViewer 及指定 runtime subnet 的 networkUser。嘗試啟用 Shared VPC host 被 Google 明確拒絕，缺 compute.organizations.enableXpnHost；未自授組織管理權，service-project 關聯未執行，已交既有 Shared VPC 管理員處理。
-- Vertex cache 已從預設 DURABLE 讀回 disableCache=true。三個 exact 模型／location 的 fetchPublisherModelConfig 均明確回覆 PublisherModelConfig NOT_FOUND；依[官方 logging 規格](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/capabilities/request-response-logging)，這代表未配置、預設關閉內容 request/response logging，沒有另建立空設定或開啟 metadata logging。Speech project logging 仍未讀回；Google 防濫用留存豁免仍不確定，四個 runtime provider/job bindings 保持 null，未送真實內容或呼叫模型。
+- Vertex cache 已從預設 DURABLE 讀回 disableCache=true。三個 exact 模型／location 的 fetchPublisherModelConfig 均明確回覆 PublisherModelConfig NOT_FOUND；依[官方 logging 規格](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/capabilities/request-response-logging)，這代表未配置、預設關閉內容 request/response logging，沒有另建立空設定或開啟 metadata logging。Speech依官方default-off、須明確opt-in及本任務未執行opt-in的可追溯流程，移除不可取得的額外API readback；Google防濫用留存豁免仍不確定，四個runtime provider/job bindings保持null，未送真實內容或呼叫模型。
 
 06:38 UTC 再次唯讀刷新：`jenfu-platform-prod`仍不是Shared VPC host，`projed-cc78d`無host project；音訊桶IAM policy仍因缺`storage.buckets.getIamPolicy`拒絕，來源Secret versions仍為空，Cloud Run Jobs仍為空。ProJED現存唯一service仍是原`projed-ai-backend`且100%舊revision，保留既有AI_API_KEY Secret reference；本輪未改它、未部署新runtime或分流。Supabase reader仍為NOLOGIN／NOINHERIT／BYPASSRLS、connection limit=1與原三項唯讀timeout，兩個正式投影view仍不存在，Auth直接權限仍為false。沒有以重查結果替代待核准修復或正式執行。
+
+07:10 UTC治理抽查移除Speech的不可執行重複證明：官方明定data logging預設關閉、opt-in須在Console另行明確同意；本任務只以CLI啟用API且未執行該opt-in。保留同步Recognize、禁止opt-in及一旦外部opt-in即撤銷qualification三個控制，無需再要求不存在的公開設定API；Gemini防濫用留存豁免仍是獨立硬gate。嘗試以現行操作者取得runtime SA短期token做合成Speech probe，被IAM以缺`iam.serviceAccounts.getAccessToken`拒絕；未新增Token Creator這個非正式runtime所需權限，也未改用操作者身分冒充production IAM。Edge「AI測試」唯讀查證遇Google重新驗證即停止，未輸入／提交憑證，亦未把未取得的project readback記為PASS。實際Speech呼叫仍須由部署後runtime SA執行，provider binding繼續null；沒有送任何音訊或真實內容。
 
 #### 最新45份候選映像 readback（2026-11-20，source effd5e7）
 

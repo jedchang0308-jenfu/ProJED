@@ -69,7 +69,9 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
   - 2026-11-20 續行：兩個正式身分投影已補create-only apply與`RESTRICT` remove SQL，Google-only、精確7欄、owner／barrier及view-only SELECT固定，不授reader直接Auth權限。release unit 34/34及小型task-owned PostgreSQL18 apply／ACL readback／remove實跑PASS，暫存cluster與listener已清理；source `7308b1d` 的 CI44691983128兩jobs亦SUCCESS，snapshot直接載入同一份SQL，artifacts14608418747／14608828853三份收據均PASS並綁45份migration。正式Supabase仍零變更，待上述明確核准後才執行。
 
-  - 2026-11-20 續行：`effd5e7`的新45份候選Cloud Build54a37e8b已SUCCESS；1,010個Git blob、source provenance、三個registry digests與實際Job binding的45個migration SHA均讀回一致，runtime仍nonroot且四個provider／Job bindings為null。這是artifact-only，未部署或切流。同期唯讀刷新確認Shared VPC、bucket IAM修復、來源Secret版本、Speech logging／Gemini豁免仍未完成；Cloud Run Job仍不存在，正式交付分母不變。精確收據見[SPEC §47.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#471-2026-11-20-最小-foundation-變更提案)。
+  - 2026-11-20 續行：COO依官方default-off＋明確Console opt-in契約，移除Speech data logging無公開API卻要求第二份readback的過度治理；保留同步Recognize、禁止opt-in及外部opt-in即撤銷qualification。runtime SA合成probe因操作者缺`iam.serviceAccounts.getAccessToken`在發token前拒絕，未為測試新增Token Creator或改用人類身分；Edge「AI測試」唯讀查證遇Google重新驗證即停止，未操作憑證或冒稱取得project readback。Speech實呼叫仍待正式runtime，Gemini防濫用豁免gate不變。
+
+  - 2026-11-20 續行：`effd5e7`的新45份候選Cloud Build54a37e8b已SUCCESS；1,010個Git blob、source provenance、三個registry digests與實際Job binding的45個migration SHA均讀回一致，runtime仍nonroot且四個provider／Job bindings為null。這是artifact-only，未部署或切流。同期唯讀刷新確認Shared VPC、bucket IAM修復、來源Secret版本、Speech runtime實呼叫／Gemini豁免仍未完成；Cloud Run Job仍不存在，正式交付分母不變。精確收據見[SPEC §47.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#471-2026-11-20-最小-foundation-變更提案)。
 
   - 2026-11-20續行：RAG已移除API key即啟用Developer API的runtime分支，改接同一ProJED Google Cloud／短期IAM及獨立零留存模型資格，保留原兩種模型與資料／權限／索引語意。相關unit／型別／native Cloud adapter fixture及正式資格缺口統一見[SPEC §38.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#381-原行為與最小接線)；未變更SQL／正式資源，完整交付仍續行。
 
