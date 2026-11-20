@@ -99,7 +99,7 @@ async (page) => {
     const name = 'DEV139 normal Calendar UI ' + Date.now();
     await page.getByLabel('訂閱名稱', { exact: true }).fill(name);
     await page.locator('[data-calendar-subscription-preview-source-state="ready"]').waitFor();
-    await builder.locator('[data-calendar-subscription-preview-event="true"]').filter({ hasText: 'Shared parent' }).first().waitFor();
+    await builder.locator('[data-calendar-subscription-preview-event="true"]').filter({ hasText: 'Calendar UI shared event' }).first().waitFor();
 
     step = 'create the subscription through the normal submit button';
     const createdResponse = await uiResponse(subscriptionsPath, 'POST', () => page.locator('[data-calendar-subscription-submit="true"]').click());
@@ -142,7 +142,8 @@ async (page) => {
     step = 'read real ICS without a human Session and exclude the private board';
     const ics = await readFeed(originalFeedUrl, 200);
     assert(ics.includes('BEGIN:VCALENDAR') && ics.includes('BEGIN:VEVENT')
-      && ics.includes('Shared parent') && !ics.includes('B secret'), 'real ICS lost the shared event or disclosed the excluded private board');
+      && ics.includes('Calendar UI shared event') && !ics.includes('B secret')
+      && !ics.includes('Calendar UI private event'), 'real ICS lost the shared event or disclosed the excluded private board');
     const statuses = [];
     step = 'disable and enable through the persisted subscription controls';
     await uiResponse(itemPath + '/disable', 'POST', () => row().getByRole('button', { name: '停用', exact: true }).click());
