@@ -63,7 +63,7 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
 ## DEV-139：ProJED 納入 Jenfu-Platform，Cloud Run／Cloud SQL 對齊並保留 Vite
 
-- 2026-11-20：來源唯讀盤點發現44筆NULL-workspace稽核被現行importer阻擋，已補0044原樣承接並沿既有RLS保持runtime隔離。ProJED 44份profile、snapshot／RLS及OCI，Platform完整44份owner window／required CI均SUCCESS；第一輪runtime白名單缺漏的FAIL與修正保留。精確metadata、source與分層收據沿[SPEC開頭](specs/SPEC-139-projed-jenfu-platform-onboarding.md)；正式來源未改寫，GCP重新登入、真provider／正式接線與切流仍未完成。
+  - 2026-11-20：來源唯讀盤點發現44筆NULL-workspace稽核被現行importer阻擋，已補0044原樣承接並沿既有RLS保持runtime隔離。ProJED 44份profile、snapshot／RLS及OCI，Platform完整44份owner window／required CI均SUCCESS；第一輪runtime白名單缺漏的FAIL與修正保留。精確metadata、source與分層收據沿[SPEC開頭](specs/SPEC-139-projed-jenfu-platform-onboarding.md)；GCP登入已恢復，新增foundation差異及具名最小權限提案見[§47.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#471-2026-11-20-最小-foundation-變更提案)。真provider零留存資格、正式接線、資料移轉與切流仍未完成，正式來源未改寫。
 
 - 2026-11-19：排序交易／備註CAS HTTP接線與0043、owner-window直接輸入及跨owner主線同步已納入現有分支。ProJED、Platform及OrgMaster必要CI均SUCCESS；完整migration與跨owner原生回歸PASS。精確source、失敗修正、分層收據與仍未執行的正式責任統一見[SPEC開頭](specs/SPEC-139-projed-jenfu-platform-onboarding.md)；保留零留存及完整交付分母。
 

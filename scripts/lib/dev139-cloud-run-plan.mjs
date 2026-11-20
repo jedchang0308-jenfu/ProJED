@@ -190,11 +190,43 @@ export function renderProjedCloudRun(input) {
     organization: target.organization,
     enableApis: [{ project: target.project, services: ['run.googleapis.com', 'compute.googleapis.com',
       'sqladmin.googleapis.com', 'cloudbuild.googleapis.com', 'artifactregistry.googleapis.com', 'secretmanager.googleapis.com',
-      'cloudscheduler.googleapis.com'] }],
-    sharedVpc: { hostProject: target.hostProject, serviceProject: target.project, network: target.network, subnet: target.subnet },
+      'cloudscheduler.googleapis.com', 'speech.googleapis.com', 'aiplatform.googleapis.com', 'storage.googleapis.com'] }],
+    sharedVpc: { hostProject: target.hostProject, serviceProject: target.project, network: target.network, subnet: target.subnet,
+      requireEnabledHost: true, requireAssociatedServiceProject: true },
     serviceAccounts: ['runtime', 'migrator', 'importer'].map(purpose => ({ email: account(purpose), databaseLogin: binding.iamLogins[purpose] })),
     schedulerServiceAccount: {
       email: meetingSchedulerAccount, databaseLogin: null, databaseIamRoles: [], databaseGrants: [],
+    },
+    // Existing source buckets retain deleted objects for seven days. Audio
+    // requires its own bucket so exact-generation cleanup really removes it.
+    audioStorage: {
+      resource: `projects/_/buckets/${audioBucket}`,
+      createRequest: { method: 'POST', url: `https://storage.googleapis.com/storage/v1/b?project=${target.project}`,
+        body: { name: audioBucket, location: target.region.toUpperCase(), storageClass: 'STANDARD',
+          iamConfiguration: { uniformBucketLevelAccess: { enabled: true }, publicAccessPrevention: 'enforced' },
+          versioning: { enabled: false }, softDeletePolicy: { retentionDurationSeconds: '0' } } },
+      // No age-based lifecycle: the app's seven-day deadline starts at stop,
+      // not object creation. The existing generation-bound worker owns expiry.
+      expiryExecutor: target.analysisJob,
+    },
+    customRoles: [
+      { name: `projects/${target.project}/roles/projedMeetingInference`,
+        title: 'ProJED meeting inference', stage: 'GA',
+        includedPermissions: ['aiplatform.endpoints.predict', 'serviceusage.services.use', 'speech.recognizers.recognize'] },
+      { name: `projects/${target.project}/roles/projedMeetingAudio`,
+        title: 'ProJED private meeting audio', stage: 'GA',
+        includedPermissions: ['storage.objects.create', 'storage.objects.get', 'storage.objects.delete'] },
+    ],
+    // Desired configuration only, never provider qualification. In particular,
+    // neither API enablement nor cache=false proves an abuse-logging exemption.
+    providerConfiguration: {
+      qualificationApplied: false,
+      speech: { method: 'speech:recognize', apiVersion: 'v1', dataLogging: 'disabled',
+        projectSettingReadbackRequired: true },
+      vertex: { cacheConfig: { url: `https://us-central1-aiplatform.googleapis.com/v1/projects/${target.project}/cacheConfig`,
+        body: { name: `projects/${target.project}/cacheConfig`, disableCache: true } },
+        requestResponseLogging: 'disabled', abuseMonitoring: 'exempt',
+        projectSettingReadbackRequired: true, applicableAgreementEvidenceRequired: true },
     },
     iamBindings: [
       { resource: `projects/${target.hostProject}`, member: serviceAgent, role: 'roles/compute.networkViewer' },
@@ -207,6 +239,10 @@ export function renderProjedCloudRun(input) {
         role: 'roles/run.invoker' },
       { resource: analysisJob, member: `serviceAccount:${meetingSchedulerAccount}`,
         role: 'roles/run.invoker' },
+      { resource: `projects/${target.project}`, member: `serviceAccount:${account('runtime')}`,
+        role: `projects/${target.project}/roles/projedMeetingInference` },
+      { resource: `projects/_/buckets/${audioBucket}`, member: `serviceAccount:${account('runtime')}`,
+        role: `projects/${target.project}/roles/projedMeetingAudio` },
     ],
     sqlIamUsers: ['runtime', 'migrator', 'importer'].map(purpose => ({
       project: target.hostProject, instance: target.sqlInstance, type: 'CLOUD_IAM_SERVICE_ACCOUNT',

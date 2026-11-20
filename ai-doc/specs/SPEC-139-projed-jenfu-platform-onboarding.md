@@ -1,5 +1,7 @@
 # SPEC-139：ProJED 納入 Jenfu-Platform 的產品與技術交接契約
 
+2026-11-20雲端登入已恢復；本次metadata readback確認原project／organization與private-only SQL未變。新runtime／三個SQL IAM login／背景Job／audio bucket仍未建立，SQL所在project尚不是Shared VPC host。已補renderer缺少的Speech／Vertex API、最小推論／音訊權限、獨立可真正刪除音訊的bucket設定，以及ZDR設定與實際資格的區別。具名變更與需人類確認的新增責任統一見[§47.1](#471-2026-11-20-最小-foundation-變更提案)；不重問既定產品方向，不將本次盤點加入required gate。零留存binding仍未發布，未送真實會議內容、變更正式權限或切流。
+
 2026-11-20來源稽核承接：Supabase MCP唯讀核對既有ProJED project，於2026-11-19 15:56:42 UTC同一aggregate statement盤點43個public／private持久relation，無未知relation；現行33個可執行preflight predicates只有audit_logs阻擋，8個Google帳號無disabled／deleted／missing。任務822、落點823、文件7／版本8／chunks11、稽核77；其中44筆tenant_id=NULL，28筆actor_id也NULL。另查欄位、JSON類型、長度及參照，唯一不相容是target不接受NULL tenant；沒有下載正文、audit payload、provider subject或credentials，也沒有正式寫入。此為動態盤點，非writer-fenced snapshot／backup或正式移轉證據。
 
 同日16:03:49 UTC以新predicate重查同一來源，只回counts／metadata：33個現存predicate全無blocker、無未知relation、無disabled Google account；不代表已apply或reconcile。首次source5057838的[CI44561684367](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44561684367)保留FAIL：OCI已套用並精確重播全部44份SQL，runtime與snapshot入口因runtime有序migration白名單漏列0044而以CONFIG_INVALID拒絕；尚未驗到新audit retention案例。已補server/config白名單，0001–0044 SQL不改寫；本機S2 494/494 PASS。最初本機10項失敗含相同config前提及sandbox loopback EACCES，修正前提／取得工具執行核准後同套通過，不將這些衍生失敗當多個產品缺陷。
@@ -1300,6 +1302,36 @@ Binding以容器內實際profile／SQL／static metadata bytes為準；本次33�
 
 
 ## 47. Managed Job artifact and real foundation gaps（W33，2026-10-29）
+
+### 47.1 2026-11-20 最小 foundation 變更提案
+
+此節為目前具名執行範圍，後文W33保留歷史。登入恢復後，唯讀核對 `projed-cc78d`（967362299895、organization 361825816000）及 `jenfu-platform-prod`，不讀Secret內容、不列出會議／私人資料。已確認：
+
+- ProJED僅有既有 `projed-ai-backend`，asia-east1無Job；既有 `cr-build` 具有 `roles/run.builder`，不因此借用 `cr-runtime` 或 `AI_API_KEY`。專用SA與SQL IAM users尚不存在。
+- API差異為Compute、SQL Admin、Scheduler、Speech、Vertex未啟用；Run／Cloud Build／Artifact Registry／Secret Manager／Storage已啟用。
+- SQL仍是POSTGRES_17／RUNNABLE、私網、IAM登入、既有 `jenfu_prod`；保留tier、backup／PITR與其他資料庫。子網 `jenfu-platform-prod-runtime` 已存在，asia-east1、10.20.10.0/24、Private Google Access開啟；PSA peer ACTIVE。`shared-vpc associated-projects list`明確回覆host尚未啟用，不能由子網存在推論跨project路由可用。
+- 唯一已列出的bucket是 `run-sources-projed-cc78d-asia-east1`，soft delete七天；提案 `projed-cc78d-meeting-audio` 的metadata GET回404。新桶須create-only，全球名稱如有競爭就先readback，不接管未知資源。
+
+新增的IAM／Secret／credential及共用網路責任，依人類全域協作規範等待一次具體核准；核准下表後沿正常workflow執行、讀回及修正，不逐個SHA再確認。這不是重問Cloud Run＋Cloud SQL方向或新增發布關卡。
+
+| 責任 | 具名變更與限制 |
+|---|---|
+| API與網路 | 在ProJED啟用上述五個缺少的API；將 `jenfu-platform-prod` 啟用為Shared VPC host，僅關聯 `projed-cc78d`，沿既有VPC／runtime子網以Direct VPC PRIVATE_RANGES_ONLY出網。ProJED Run service agent只取得host networkViewer及該子網networkUser；不新建connector、公開SQL或修改既有firewall／PSA。 |
+| 專用身分 | 新建 `projed-prod-runtime`、`projed-prod-migrator`、`projed-prod-importer`、`projed-prod-meeting-scheduler` 四個 `@projed-cc78d.iam.gserviceaccount.com` SA。前三個在指定SQL instance建立IAM login，僅給該instance的cloudsql.client／instanceUser；scheduler不進DB、不讀音訊或Secret。 |
+| DB foundation | 沿Platform DEV-007既有005→ProJED完整44份migration→always006入口，建立ProJED專用NOLOGIN角色／精確membership及CONNECT；owner DB CREATE限migration window且finally撤銷讀回。保留44份已通過SQL bytes、sibling core與PUBLIC ACL；不手工重寫正式業務資料。 |
+| 音訊 | 新建 `projed-cc78d-meeting-audio`，ASIA-EAST1／STANDARD、uniform access及public access prevention、soft delete=0、versioning=false、無retention lock。只有runtime取得此bucket的objects.create/get/delete；沿既有七天期限及exact-generation cleanup，不加以建立日計算而可能提早刪除的lifecycle。 |
+| 推論 | project自訂角色 `projedMeetingInference` 僅含 `aiplatform.endpoints.predict`、`serviceusage.services.use`、`speech.recognizers.recognize`，只給runtime；自訂角色 `projedMeetingAudio` 僅含上述三個object權限，只綁音訊bucket。六個permission均已由IAM可測權限metadata查到GA；不授Owner／Editor／AI Admin，不授runtime cache、IAM或bucket管理權。 |
+| Job與協調者 | runtime及scheduler只得呼叫固定 `projed-meeting-analysis`。既有Platform `dev010-prod-iac@jenfu-platform-prod.iam.gserviceaccount.com` 得讀／執行固定 `projed-prod-migration`、讀該execution／operation及ProJED project的Cloud Logging；adapter僅查指定execution的migration stdout ledger。Logging IAM為project讀取範圍，不能把程式的filter宣稱為IAM對其他logs的拒絕；不授override或任意Job執行。 |
+| 移轉來源credential | 新Secret `projed-prod-migration-source` 的數字版本只掛給一次性importer，內容沿既有TLS verify-full／source binding／CA／DSN bundle，runtime與migrator不可讀。先核對來源 `knodlkxqpcqyrtgwpdst` 可用的唯讀移轉登入；若需新建，限專用 `projed_dev139_source_reader`、本次已分類來源及身分映射欄位SELECT、唯讀snapshot交易與有界有效期，完成後撤銷。不得拿通用管理credential放入runtime或輸出值；實際grant須沿來源RLS及最小SELECT範圍核對，不能為讀取而更改業務policy。 |
+| 零留存設定 | 在已核准的ProJED專案關閉Speech data logging，將Vertex `cacheConfig.disableCache=true`、所選模型request-response logging停用並讀回。這些設定可執行，但不代表取得Google防濫用留存豁免；適用契約／豁免證據與模型仍須實際確認。未合格時三份runtime binding維持null。 |
+
+完整runtime／migration／snapshot／analysis Job與Scheduler create requests仍由同一個 `scripts/lib/dev139-cloud-run-plan.mjs` 渲染，沿實際immutable image與其binding產出；本節沒有虛構image digest、Secret version或資格收據。建立資源後先確認IAM、route、ledger、Session與provider，再依原有資料保護／writer fence／恢復流程執行移轉和切流。核准foundation不允許資料改寫、down migration、服務刪除、billing／SQL tier擴張或以合成資格開放真實會議內容；正常正式資料移轉／發布仍依完整任務與其必要前提續行。
+
+零留存查證沿Google[Speech V1 FAQ](https://docs.cloud.google.com/speech-to-text/docs/v1/data-usage-faq)及[專案data logging設定](https://docs.cloud.google.com/speech-to-text/docs/v1/enable-data-logging)：保留同步Recognize及停用logging，不改用會留存transcript的async。Vertex依[零留存設定](https://docs.cloud.google.com/gemini-enterprise-agent-platform/resources/zero-data-retention)停用所有cache，並由[適用契約與abuse monitoring](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/abuse-monitoring)確認所選模型；僅有「不訓練」或API啟用不構成零留存資格。本次尚無該project的契約／豁免證據。
+
+本機針對性自查：release unit 31/31、MJS syntax與diff-check PASS；新增案例驗runtime-only推論、bucket-only讀寫刪、無多餘管理權、真正刪除設定，以及設定提案不得自動產生資格或IAM執行。未改server／frontend／SQL或既有qualified 44份migration；前版CI與native／OCI產品回歸仍按其原受測來源重用，新版required CI結果待實際回讀。
+
+### W33 歷史實作與證據
 
 本輪將正式migration／import所需程式裝入明確的`Dockerfile.dev139 --target managed-jobs`，預設build仍是web runtime，不會意外改成Job。Importer以TypeScript預先編譯成`dist-jobs`，Job使用production dependencies／非root，保留現有migration runner與source-boundary checker；沒有重做snapshot、加入第二套migration邏輯或新required gate。
 

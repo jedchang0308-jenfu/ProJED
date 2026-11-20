@@ -130,6 +130,8 @@ test('renderer fixes the typed target and emits IAM-only, private-network create
     serviceProject: 'projed-cc78d',
     network: CLOUD_RUN_TARGET.network,
     subnet: CLOUD_RUN_TARGET.subnet,
+    requireEnabledHost: true,
+    requireAssociatedServiceProject: true,
   });
   assert.deepEqual(plan.foundation.serviceAccounts.map(({ email, databaseLogin }) => ({ email, databaseLogin })), [
     { email: 'projed-prod-runtime@projed-cc78d.iam.gserviceaccount.com', databaseLogin: MANAGED_DATABASE.iamLogins.runtime },
@@ -212,6 +214,7 @@ test('renderer fixes the typed target and emits IAM-only, private-network create
   assert.deepEqual(plan.foundation.enableApis[0].services, [
     'run.googleapis.com', 'compute.googleapis.com', 'sqladmin.googleapis.com', 'cloudbuild.googleapis.com',
     'artifactregistry.googleapis.com', 'secretmanager.googleapis.com', 'cloudscheduler.googleapis.com',
+    'speech.googleapis.com', 'aiplatform.googleapis.com', 'storage.googleapis.com',
   ]);
   assert.deepEqual(plan.foundation.schedulerServiceAccount, {
     email: 'projed-prod-meeting-scheduler@projed-cc78d.iam.gserviceaccount.com',
@@ -219,7 +222,7 @@ test('renderer fixes the typed target and emits IAM-only, private-network create
   });
   assert.equal(plan.foundation.sqlIamUsers.some(({ serviceAccount }) =>
     serviceAccount === plan.foundation.schedulerServiceAccount.email), false);
-  assert.equal('customRoles' in plan.foundation, false);
+  assert.equal(plan.foundation.customRoles.some(({ name }) => /scheduler/i.test(name)), false);
   assert.deepEqual(plan.foundation.iamBindings.filter(({ role }) => role === 'roles/run.invoker'), [
     { resource: plan.jobs.analysis.name,
       member: 'serviceAccount:projed-prod-runtime@projed-cc78d.iam.gserviceaccount.com', role: 'roles/run.invoker' },
@@ -243,6 +246,45 @@ test('renderer fixes the typed target and emits IAM-only, private-network create
   assert.equal(plan.requests[0].body, plan.service);
   assert.deepEqual(plan.requests.slice(1, 6).map(({ body }) => body), Object.values(plan.jobs));
   assert.equal(plan.requests.some(({ url }) => /hosting|traffic|setIamPolicy|secrets\/|runWithOverrides/iu.test(url)), false);
+});
+
+test('meeting IAM grants inference only to runtime and audio access only on the private bucket', () => {
+  const { foundation, requests } = renderProjedCloudRun(makeInput());
+  const roles = Object.fromEntries(foundation.customRoles.map(role => [role.name, role.includedPermissions]));
+  const inferenceRole = 'projects/projed-cc78d/roles/projedMeetingInference';
+  const audioRole = 'projects/projed-cc78d/roles/projedMeetingAudio';
+  assert.deepEqual(roles[inferenceRole], ['aiplatform.endpoints.predict', 'serviceusage.services.use', 'speech.recognizers.recognize']);
+  assert.deepEqual(roles[audioRole], ['storage.objects.create', 'storage.objects.get', 'storage.objects.delete']);
+  assert.deepEqual(foundation.iamBindings.filter(({ role }) => role === inferenceRole || role === audioRole), [
+    { resource: 'projects/projed-cc78d', member: 'serviceAccount:projed-prod-runtime@projed-cc78d.iam.gserviceaccount.com', role: inferenceRole },
+    { resource: 'projects/_/buckets/projed-meeting-audio', member: 'serviceAccount:projed-prod-runtime@projed-cc78d.iam.gserviceaccount.com', role: audioRole },
+  ]);
+  assert.equal(foundation.iamBindings.some(({ role }) => /roles\/(?:owner|editor|storage\.admin|aiplatform\.admin)$/.test(role)), false);
+  assert.ok(requests.every(({ url }) => !/setIamPolicy|iam.googleapis.com|cacheConfig|storage.googleapis.com/.test(url)));
+});
+
+test('audio deletion and provider ZDR settings remain explicit unexecuted foundation prerequisites', () => {
+  const plan = renderProjedCloudRun(makeInput({ audioBucket: 'projed-cc78d-meeting-audio' }));
+  const storage = plan.foundation.audioStorage;
+  assert.equal(storage.resource, 'projects/_/buckets/projed-cc78d-meeting-audio');
+  assert.deepEqual(storage.createRequest.body, {
+    name: 'projed-cc78d-meeting-audio', location: 'ASIA-EAST1', storageClass: 'STANDARD',
+    iamConfiguration: { uniformBucketLevelAccess: { enabled: true }, publicAccessPrevention: 'enforced' },
+    versioning: { enabled: false }, softDeletePolicy: { retentionDurationSeconds: '0' },
+  });
+  assert.equal('retentionPolicy' in storage.createRequest.body, false);
+  assert.equal('lifecycle' in storage.createRequest.body, false);
+  assert.equal(storage.expiryExecutor, 'projed-meeting-analysis');
+  const provider = plan.foundation.providerConfiguration;
+  assert.equal(provider.qualificationApplied, false);
+  assert.deepEqual(provider.vertex.cacheConfig.body, { name: 'projects/projed-cc78d/cacheConfig', disableCache: true });
+  assert.equal(provider.vertex.abuseMonitoring, 'exempt');
+  assert.equal(provider.vertex.applicableAgreementEvidenceRequired, true);
+  assert.equal(provider.vertex.projectSettingReadbackRequired, true);
+  assert.equal(provider.speech.method, 'speech:recognize');
+  assert.equal(provider.speech.apiVersion, 'v1');
+  assert.equal(provider.speech.dataLogging, 'disabled');
+  assert.equal(provider.speech.projectSettingReadbackRequired, true);
 });
 
 test('renderer rejects mutable, misplaced, and malformed image references', () => {
