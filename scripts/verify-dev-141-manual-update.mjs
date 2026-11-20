@@ -60,7 +60,7 @@ const workerVersion = (page, expected, slot = 'active') => page.evaluate(async (
   const deadline = Date.now() + 15000;
   while (Date.now() < deadline) {
     const registration = await navigator.serviceWorker.getRegistration('/');
-    const worker = registration?.[slot];
+    const worker = slot === 'controller' ? navigator.serviceWorker.controller : registration?.[slot];
     if (worker) {
       const actual = await new Promise(resolve => {
         const channel = new MessageChannel();

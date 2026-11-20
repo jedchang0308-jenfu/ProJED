@@ -136,6 +136,7 @@ export async function runQuickBackendUpgrade({ context, origin, output, publish,
   await page.locator('[data-quick-update-reload]').click();
   await loaded(page, 'B');
   await workerVersion(page, 'B');
+  await workerVersion(page, 'B', 'controller');
   await page.locator('#quick-task-auth-status').filter({ hasText: '此快速 App 已登入' }).waitFor();
   const wrongAccount = await waitLocal(value => value.binding?.accountId === other);
   const sameOriginal = capture => capture.captureId === original.captureId && capture.accountId === owner
