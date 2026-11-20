@@ -68,6 +68,28 @@ ALTER VIEW private.projed_dev139_auth_users_v1 OWNER TO postgres;
 
 REVOKE ALL ON TABLE private.projed_dev139_google_identities_v1 FROM PUBLIC;
 REVOKE ALL ON TABLE private.projed_dev139_auth_users_v1 FROM PUBLIC;
+
+DO $dev139_source_projection_revoke_api_roles$
+DECLARE
+  api_role name;
+BEGIN
+  FOR api_role IN
+    SELECT role.rolname
+      FROM pg_catalog.pg_roles AS role
+     WHERE role.rolname = ANY(ARRAY['anon', 'authenticated', 'service_role'])
+  LOOP
+    EXECUTE pg_catalog.format(
+      'REVOKE ALL ON TABLE private.projed_dev139_google_identities_v1 FROM %I',
+      api_role
+    );
+    EXECUTE pg_catalog.format(
+      'REVOKE ALL ON TABLE private.projed_dev139_auth_users_v1 FROM %I',
+      api_role
+    );
+  END LOOP;
+END
+$dev139_source_projection_revoke_api_roles$;
+
 REVOKE ALL ON TABLE auth.identities FROM projed_dev139_source_reader;
 REVOKE ALL ON TABLE auth.users FROM projed_dev139_source_reader;
 
@@ -82,6 +104,7 @@ DECLARE
   projection_column_count integer;
   expected_column_count integer;
   public_grant_count integer;
+  api_role_grant_count integer;
 BEGIN
   SELECT count(*)
     INTO projection_count
@@ -150,6 +173,16 @@ BEGIN
        'SELECT'
      )
      OR pg_catalog.has_table_privilege(
+       'projed_dev139_source_reader',
+       'private.projed_dev139_google_identities_v1',
+       'INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER'
+     )
+     OR pg_catalog.has_table_privilege(
+       'projed_dev139_source_reader',
+       'private.projed_dev139_auth_users_v1',
+       'INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER'
+     )
+     OR pg_catalog.has_table_privilege(
        'projed_dev139_source_reader', 'auth.identities', 'SELECT'
      )
      OR pg_catalog.has_table_privilege(
@@ -175,6 +208,27 @@ BEGIN
 
   IF public_grant_count <> 0 THEN
     RAISE EXCEPTION 'DEV139_SOURCE_PROJECTION_PUBLIC_GRANT_INVALID';
+  END IF;
+
+  SELECT count(*)
+    INTO api_role_grant_count
+    FROM pg_catalog.pg_roles AS role
+   WHERE role.rolname = ANY(ARRAY['anon', 'authenticated', 'service_role'])
+     AND (
+       pg_catalog.has_table_privilege(
+         role.rolname,
+         'private.projed_dev139_google_identities_v1',
+         'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER'
+       )
+       OR pg_catalog.has_table_privilege(
+         role.rolname,
+         'private.projed_dev139_auth_users_v1',
+         'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER'
+       )
+     );
+
+  IF api_role_grant_count <> 0 THEN
+    RAISE EXCEPTION 'DEV139_SOURCE_PROJECTION_API_ROLE_GRANT_INVALID';
   END IF;
 END
 $dev139_source_projection_postflight$;

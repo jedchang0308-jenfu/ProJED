@@ -4,6 +4,7 @@ import test from 'node:test';
 
 const applySql = readFileSync('scripts/dev139-source-identity-projections.apply.sql', 'utf8');
 const removeSql = readFileSync('scripts/dev139-source-identity-projections.remove.sql', 'utf8');
+const sourceFixtureSql = readFileSync('qa/dev-139/migration/source-fixture.sql', 'utf8');
 
 test('source identity projections expose only the approved columns through fixed barrier views', () => {
   assert.match(applySql, /CREATE VIEW private\.projed_dev139_google_identities_v1\s+WITH \(security_barrier = true\) AS\s+SELECT identity\.user_id,\s+identity\.provider,\s+identity\.provider_id,\s+identity\.identity_data\s+FROM auth\.identities AS identity\s+WHERE identity\.provider = 'google';/u);
@@ -16,6 +17,9 @@ test('source identity projections expose only the approved columns through fixed
 test('source projection grants are create-only and exclude direct Auth access', () => {
   assert.match(applySql, /DEV139_SOURCE_PROJECTION_ALREADY_EXISTS/u);
   assert.doesNotMatch(applySql, /CREATE\s+OR\s+REPLACE\s+VIEW/iu);
+  assert.match(applySql, /ARRAY\['anon', 'authenticated', 'service_role'\]/u);
+  assert.match(applySql, /REVOKE ALL ON TABLE private\.projed_dev139_google_identities_v1 FROM %I/u);
+  assert.match(applySql, /REVOKE ALL ON TABLE private\.projed_dev139_auth_users_v1 FROM %I/u);
   assert.match(applySql, /REVOKE ALL ON TABLE auth\.identities FROM projed_dev139_source_reader;/u);
   assert.match(applySql, /REVOKE ALL ON TABLE auth\.users FROM projed_dev139_source_reader;/u);
   assert.equal((applySql.match(/GRANT SELECT ON TABLE private\.projed_dev139_/gu) ?? []).length, 2);
@@ -27,9 +31,19 @@ test('source projection apply verifies its contract before commit', () => {
   assert.match(applySql, /DEV139_SOURCE_PROJECTION_COLUMNS_INVALID/u);
   assert.match(applySql, /DEV139_SOURCE_PROJECTION_PRIVILEGES_INVALID/u);
   assert.match(applySql, /DEV139_SOURCE_PROJECTION_PUBLIC_GRANT_INVALID/u);
+  assert.match(applySql, /DEV139_SOURCE_PROJECTION_API_ROLE_GRANT_INVALID/u);
+  assert.match(applySql, /INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER/u);
   assert.match(applySql, /pg_catalog\.has_table_privilege\(\s*'projed_dev139_source_reader', 'auth\.identities', 'SELECT'\s*\)/u);
   assert.match(applySql, /pg_catalog\.aclexplode\(/u);
   assert.ok(applySql.indexOf('$dev139_source_projection_postflight$') < applySql.lastIndexOf('COMMIT;'));
+});
+
+test('snapshot fixture exercises explicit Supabase API-role grant removal', () => {
+  assert.match(sourceFixtureSql, /CREATE ROLE anon NOLOGIN;/u);
+  assert.match(sourceFixtureSql, /CREATE ROLE authenticated NOLOGIN;/u);
+  assert.match(sourceFixtureSql, /CREATE ROLE service_role NOLOGIN;/u);
+  assert.match(sourceFixtureSql, /ALTER DEFAULT PRIVILEGES IN SCHEMA private\s+GRANT SELECT ON TABLES TO anon, authenticated, service_role;/u);
+  assert.match(sourceFixtureSql, /ALTER DEFAULT PRIVILEGES IN SCHEMA private\s+REVOKE SELECT ON TABLES FROM anon, authenticated, service_role;/u);
 });
 
 test('source projection removal drops only the two fixed views with dependency protection', () => {

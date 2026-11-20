@@ -1,8 +1,14 @@
 CREATE SCHEMA private;
 CREATE SCHEMA auth;
 
+CREATE ROLE anon NOLOGIN;
+CREATE ROLE authenticated NOLOGIN;
+CREATE ROLE service_role NOLOGIN;
 CREATE ROLE projed_dev139_source_reader NOLOGIN NOINHERIT BYPASSRLS;
 GRANT USAGE ON SCHEMA private TO projed_dev139_source_reader;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA private
+  GRANT SELECT ON TABLES TO anon, authenticated, service_role;
 
 CREATE TABLE auth.users (
   id uuid PRIMARY KEY,
@@ -19,6 +25,9 @@ CREATE TABLE auth.identities (
 );
 
 \ir ../../../scripts/dev139-source-identity-projections.apply.sql
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA private
+  REVOKE SELECT ON TABLES FROM anon, authenticated, service_role;
 
 CREATE TABLE public.profiles (
   id uuid PRIMARY KEY,
