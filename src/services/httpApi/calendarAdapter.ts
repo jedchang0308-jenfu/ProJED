@@ -60,15 +60,8 @@ function absoluteFeedUrl(value: unknown): string {
 }
 
 export function createHttpCalendarAdapter(client: HttpApiClient, reads: ProjedDomainReadAdapter) {
-  let referencesInFlight: Promise<References> | null = null;
-  const references = () => {
-    if (!referencesInFlight) {
-      referencesInFlight = client.request<unknown>('/api/v1/calendar-subscriptions/references')
-        .then(response => parseReferences(dataOf(response)))
-        .finally(() => { referencesInFlight = null; });
-    }
-    return referencesInFlight;
-  };
+  // Do not share in-flight actor-bound directory data across Session changes.
+  const references = async () => parseReferences(dataOf(await client.request<unknown>('/api/v1/calendar-subscriptions/references')));
   const idPath = (id: string, suffix = '') => {
     if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error('HTTP_API_INVALID_CALENDAR_ID');
     return `/api/v1/calendar-subscriptions/${encodeURIComponent(id)}${suffix}`;
@@ -88,19 +81,23 @@ export function createHttpCalendarAdapter(client: HttpApiClient, reads: ProjedDo
       const selected = new Set(workspaceIds);
       return all.filter(board => selected.has(board.workspaceId) || selected.has(board.appWorkspaceId));
     },
-    async listWorkspaceMembers(workspaceIds: string[]): Promise<CalendarWorkspaceMember[]> {
+    async listWorkspaceMembers(workspaceIds: string[], boardIds?: string[]): Promise<CalendarWorkspaceMember[]> {
       const refs = await references();
-      const uniqueRefs = [...new Set(workspaceIds.map(id => (
-        refs.workspaces.find(item => item.id === id || item.appWorkspaceId === id)?.appWorkspaceId ?? id
-      )))];
-      const rows = await Promise.all(uniqueRefs.map(ref => reads.listWorkspaceMembers(ref)));
-      return rows.flat().filter(member => member.status === 'active').map(member => ({
+      const selectedWorkspaces = new Set(workspaceIds);
+      const selectedBoards = boardIds ? new Set(boardIds) : null;
+      const boards = refs.boards.filter(board => (selectedWorkspaces.has(board.workspaceId) || selectedWorkspaces.has(board.appWorkspaceId))
+        && (!selectedBoards || selectedBoards.has(board.id) || selectedBoards.has(board.appBoardId)));
+      const rows = await Promise.all(boards.map(async board => ({ board,
+        members: await reads.listBoardMembers(board.appWorkspaceId, board.appBoardId),
+      })));
+      return rows.flatMap(({ board, members }) => members.map(member => ({
         workspaceId: member.workspaceId,
+        boardIds: [board.id, board.appBoardId],
         userId: member.userId,
         role: member.role,
         email: member.profile?.email ?? null,
         displayName: member.profile?.displayName ?? null,
-      }));
+      })));
     },
     async create(input: CalendarSubscriptionInput): Promise<CalendarSubscriptionWithUrl> {
       const data = dataOf(await client.request<unknown>('/api/v1/calendar-subscriptions', { method: 'POST', body: input }));

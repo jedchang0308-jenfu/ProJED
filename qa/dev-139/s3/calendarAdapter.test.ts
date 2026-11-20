@@ -25,12 +25,10 @@ const subscription = {
 const reads: ProjedDomainReadAdapter = {
   async getCurrentBoardAccess() { throw new Error('not used'); },
   async listWorkspaces() { return []; },
-  async listWorkspaceMembers(workspaceRef) {
-    return [{ workspaceId: workspaceRef, userId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', role: 'owner', status: 'active',
-      profile: { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', email: 'a@example.test', displayName: 'A' } }];
-  },
+  async listWorkspaceMembers() { throw new Error('management directory is forbidden'); },
   async listTags() { return []; },
-  async listBoardMembers() { return []; },
+  async listBoardMembers(workspaceId, boardId) { return [{ workspaceId, boardId, userId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', role: 'owner',
+    profile: { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', email: 'a@example.test', displayName: 'A' } }]; },
   async getBoardRolePermissions() { throw new Error('not used'); },
   async listTasks() { return []; },
   async listDependencies() { return []; },

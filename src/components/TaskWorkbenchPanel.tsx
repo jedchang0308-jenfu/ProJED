@@ -69,7 +69,8 @@ import TaskConditionFilterControls from './ui/TaskConditionFilterControls';
 import { getTaskFilterTriggerClass, taskFilterFieldClass } from './ui/taskConditionFilterStyles';
 import { getSharedInlinePanelWidthStyle } from '../features/layout/preferences';
 import { buildWorkbenchProjectionTasks } from '../features/taskTracking/model';
-import { memberService, tagService } from '../services/dataBackend';
+import { isHttpBackend, memberService, tagService } from '../services/dataBackend';
+import { filterReadIdentity, loadBoardFilterOptions } from '../features/taskFilters/optionSource';
 
 type PanelPrefs = TaskWorkbenchPanelPrefs;
 
@@ -736,6 +737,7 @@ const TaskWorkbenchPanel: React.FC<{
   canManageTaskReference?: boolean;
   onClosed?: () => void;
 }> = ({ canMoveTask = false, canManageTaskReference = false, onClosed }) => {
+  const filterIdentity = useAuthStore(state => filterReadIdentity(state.user));
   const accountId = useAuthStore(state => state.user?.uid ?? null);
   const { canCreateTask } = useBoardPermissions();
   const { previewedPanel } = usePanelPreview();
@@ -761,6 +763,7 @@ const TaskWorkbenchPanel: React.FC<{
   const [unboundClaimStatus, setUnboundClaimStatus] = React.useState<'idle' | 'claiming' | 'error'>('idle');
   const [workbenchLoadedBoardIds, setWorkbenchLoadedBoardIds] = React.useState<string[]>([]);
   const [filterOptionSource, setFilterOptionSource] = React.useState<{
+    identity?: string | null;
     status: 'loading' | 'ready' | 'error';
     workspaceId: string | null;
     boardId: string | null;
@@ -1035,41 +1038,45 @@ const TaskWorkbenchPanel: React.FC<{
     }
     const { workspaceId, boardId } = selectedBoardOption;
     let cancelled = false;
-    setFilterOptionSource({ status: 'loading', workspaceId, boardId, workspaceMembers: [], boardMembers: [], tags: [] });
-    void Promise.all([
-      memberService.listWorkspaceMembers(workspaceId),
-      memberService.listBoardMembers(workspaceId, boardId),
-      tagService.listByWorkspace(workspaceId),
-    ]).then(([workspaceMembers, boardMembers, tags]) => {
-      if (cancelled) return;
-      setFilterOptionSource({ status: 'ready', workspaceId, boardId, workspaceMembers, boardMembers, tags });
+    setFilterOptionSource({ status: 'loading', identity: filterIdentity, workspaceId, boardId, workspaceMembers: [], boardMembers: [], tags: [] });
+    void loadBoardFilterOptions(workspaceId, boardId, {
+      listBoardMembers: memberService.listBoardMembers,
+      listTags: tagService.listByWorkspace,
+      ...(!isHttpBackend && { listWorkspaceMembers: memberService.listWorkspaceMembers }),
+    }).then(options => {
+      if (cancelled || filterReadIdentity(useAuthStore.getState().user) !== filterIdentity) return;
+      setFilterOptionSource({ status: 'ready', identity: filterIdentity, workspaceId, boardId, ...options });
     }).catch(error => {
       console.error('[TaskWorkbenchPanel] filter option source load failed:', error);
-      if (cancelled) return;
-      setFilterOptionSource({ status: 'error', workspaceId, boardId, workspaceMembers: [], boardMembers: [], tags: [] });
+      if (cancelled || filterReadIdentity(useAuthStore.getState().user) !== filterIdentity) return;
+      setFilterOptionSource({ status: 'error', identity: filterIdentity, workspaceId, boardId, workspaceMembers: [], boardMembers: [], tags: [] });
     });
     return () => {
       cancelled = true;
     };
-  }, [accountId, scopedBoardMemberRefresh, scopedTagRefresh, scopedWorkspaceMemberRefresh, selectedBoardOption]);
+  }, [filterIdentity, scopedBoardMemberRefresh, scopedTagRefresh, scopedWorkspaceMemberRefresh, selectedBoardOption]);
   const fallbackWorkspaceId = selectedBoardOption?.workspaceId || activeWorkspaceId || boardOptions[0]?.workspaceId || '';
+  const scopedFilterOptions = filterOptionSource.identity === filterIdentity
+    && filterOptionSource.workspaceId === selectedBoardOption?.workspaceId
+    && filterOptionSource.boardId === selectedBoardId
+    ? filterOptionSource : { status: 'loading' as const, workspaceId: null, boardId: null, workspaceMembers: [], boardMembers: [], tags: [] };
 
   const assigneeOptions = React.useMemo(
-    () => createBoardAssigneeFilterOptions(selectedBoardId, filterOptionSource.boardMembers, nodes, filterOptionSource.workspaceMembers, selectedFilters.people.ids),
-    [filterOptionSource.boardMembers, filterOptionSource.workspaceMembers, nodes, selectedBoardId, selectedFilters.people.ids],
+    () => createBoardAssigneeFilterOptions(selectedBoardId, scopedFilterOptions.boardMembers, nodes, scopedFilterOptions.workspaceMembers, selectedFilters.people.ids),
+    [scopedFilterOptions.boardMembers, scopedFilterOptions.workspaceMembers, nodes, selectedBoardId, selectedFilters.people.ids],
   );
   const selectedTagOptions = React.useMemo(
-    () => createTaskTagFilterOptions(selectedBoardId, filterOptionSource.tags, nodes, selectedFilters.tags.ids),
-    [filterOptionSource.tags, nodes, selectedBoardId, selectedFilters.tags.ids],
+    () => createTaskTagFilterOptions(selectedBoardId, scopedFilterOptions.tags, nodes, selectedFilters.tags.ids),
+    [scopedFilterOptions.tags, nodes, selectedBoardId, selectedFilters.tags.ids],
   );
   const selectedOptionStatus = resolveScopedTaskFilterOptionStatus({
     selectedWorkspaceId: selectedBoardOption?.workspaceId ?? null,
     selectedBoardId,
     taskSourceStatus: workbenchSourceStatus,
     loadedTaskBoardIds: workbenchLoadedBoardIds,
-    optionSourceStatus: filterOptionSource.status,
-    optionSourceWorkspaceId: filterOptionSource.workspaceId,
-    optionSourceBoardId: filterOptionSource.boardId,
+    optionSourceStatus: scopedFilterOptions.status,
+    optionSourceWorkspaceId: scopedFilterOptions.workspaceId,
+    optionSourceBoardId: scopedFilterOptions.boardId,
   });
   const workbenchProjectionTasks = React.useMemo(
     () => buildWorkbenchProjectionTasks(Object.values(nodes), trackingReferences, boardScopeIds),

@@ -26,6 +26,8 @@ export type CalendarSubscription = {
 };
 
 export type CalendarWorkspaceMember = {
+  /** HTTP directory entries are visible only in these Board aliases. */
+  boardIds?: string[];
   workspaceId: string;
   userId: string;
   role: TenantRole;
@@ -440,8 +442,8 @@ export const calendarSubscriptionService = {
     return (data ?? []).map(mapSubscription);
   },
 
-  listWorkspaceMembers: async (workspaceIds: string[]): Promise<CalendarWorkspaceMember[]> => {
-    if (isHttpBackend) return httpCalendarService.listWorkspaceMembers(workspaceIds);
+  listWorkspaceMembers: async (workspaceIds: string[], boardIds?: string[]): Promise<CalendarWorkspaceMember[]> => {
+    if (isHttpBackend) return httpCalendarService.listWorkspaceMembers(workspaceIds, boardIds);
     requireSupabase();
     const resolvedWorkspaceIds = await Promise.all(workspaceIds.map(resolveWorkspaceId));
     const uniqueWorkspaceIds = Array.from(new Set(resolvedWorkspaceIds));

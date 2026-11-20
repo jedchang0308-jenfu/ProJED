@@ -34,6 +34,7 @@ import type {
 import { PROFILE_UPDATED_EVENT, type ProfileUpdatedDetail } from '../utils/profileEvents';
 import { toast } from '../store/useToastStore';
 import { isPrimaryPointerActivation } from '../interactions/pointerActivation';
+import { filterReadIdentity } from '../features/taskFilters/optionSource';
 import CalendarSubscriptionBuilderPreview, {
   type CalendarSubscriptionBuilderAssigneeOption,
   type CalendarSubscriptionBuilderPayload,
@@ -344,6 +345,7 @@ const CalendarSubscriptionDeleteDialog: React.FC<CalendarSubscriptionDeleteDialo
 
 const CalendarSubscriptionsView: React.FC = () => {
   const user = useAuthStore((state) => state.user);
+  const identity = filterReadIdentity(user);
   const workspaces = useBoardStore((state) => state.workspaces);
   const activeWorkspaceId = useBoardStore((state) => state.activeWorkspaceId);
   const activeBoardId = useBoardStore((state) => state.activeBoardId);
@@ -355,10 +357,15 @@ const CalendarSubscriptionsView: React.FC = () => {
     () => activeWorkspace?.boards.find((board) => board.id === activeBoardId),
     [activeBoardId, activeWorkspace]
   );
-  const [subscriptions, setSubscriptions] = useState<CalendarSubscription[]>([]);
-  const [workspaceRefs, setWorkspaceRefs] = useState<CalendarWorkspaceRef[]>([]);
-  const [boardRefs, setBoardRefs] = useState<CalendarBoardRef[]>([]);
-  const [members, setMembers] = useState<CalendarWorkspaceMember[]>([]);
+  const [storedSubscriptions, setSubscriptions] = useState<CalendarSubscription[]>([]);
+  const [storedWorkspaceRefs, setWorkspaceRefs] = useState<CalendarWorkspaceRef[]>([]);
+  const [storedBoardRefs, setBoardRefs] = useState<CalendarBoardRef[]>([]);
+  const [loadedIdentity, setLoadedIdentity] = useState<string | null>(null);
+  const [memberSource, setMemberSource] = useState<{ identity: string | null; members: CalendarWorkspaceMember[] }>({ identity: null, members: [] });
+  const subscriptions = useMemo(() => loadedIdentity === identity ? storedSubscriptions : [], [loadedIdentity, identity, storedSubscriptions]);
+  const workspaceRefs = useMemo(() => loadedIdentity === identity ? storedWorkspaceRefs : [], [loadedIdentity, identity, storedWorkspaceRefs]);
+  const boardRefs = useMemo(() => loadedIdentity === identity ? storedBoardRefs : [], [loadedIdentity, identity, storedBoardRefs]);
+  const members = useMemo(() => memberSource.identity === identity ? memberSource.members : [], [memberSource, identity]);
   const [generatedUrls, setGeneratedUrls] = useState<Record<string, string>>({});
   const [name, setName] = useState(DEFAULT_CALENDAR_SUBSCRIPTION_NAME);
   const [filters, setFilters] = useState<CalendarSubscriptionFilters>(() =>
@@ -403,7 +410,7 @@ const CalendarSubscriptionsView: React.FC = () => {
     const handleProfileUpdated = (event: Event) => {
       const detail = (event as CustomEvent<ProfileUpdatedDetail>).detail;
       if (!detail?.uid) return;
-      setMembers(currentMembers => currentMembers.map(member => (
+      setMemberSource(source => ({ ...source, members: source.members.map(member => (
         member.userId === detail.uid
           ? {
               ...member,
@@ -411,7 +418,7 @@ const CalendarSubscriptionsView: React.FC = () => {
               displayName: detail.displayName ?? member.displayName,
             }
           : member
-      )));
+      )) }));
     };
 
     window.addEventListener(PROFILE_UPDATED_EVENT, handleProfileUpdated);
@@ -458,9 +465,11 @@ const CalendarSubscriptionsView: React.FC = () => {
     [boardOptions]
   );
   const selectedWorkspaceKey = effectiveMemberWorkspaceIds.join(',');
+  const memberBoardIds = useMemo(() => boardOptions.map(board => board.id), [boardOptions]);
 
   const manageableWorkspaceIds = useMemo(() => {
     if (!user) return [];
+    if (isHttpBackend) return [];
     const ids = new Set<string>();
     members
       .filter((member) => member.userId === user.uid && ADMIN_ROLES.has(member.role))
@@ -471,11 +480,14 @@ const CalendarSubscriptionsView: React.FC = () => {
       });
     return Array.from(ids);
   }, [members, user, workspaceRefs]);
+  const manageableBoardIds = useMemo(() => isHttpBackend ? workspaces.flatMap(workspace => workspace.boards
+    .filter(board => board.sessionCapabilities?.includes('manage_board_members')).map(board => board.id)) : [], [workspaces]);
 
   const calendarAssigneeOptions = useMemo<CalendarSubscriptionBuilderAssigneeOption[]>(() => {
-    const byUserId = new Map<string, { member: CalendarWorkspaceMember; workspaceIds: Set<string> }>();
+    const byUserId = new Map<string, { member: CalendarWorkspaceMember; workspaceIds: Set<string>; boardIds: Set<string> }>();
     members.forEach((member) => {
-      const current = byUserId.get(member.userId) ?? { member, workspaceIds: new Set<string>() };
+      const current = byUserId.get(member.userId) ?? { member, workspaceIds: new Set<string>(), boardIds: new Set<string>() };
+      member.boardIds?.forEach(boardId => current.boardIds.add(boardId));
       current.workspaceIds.add(member.workspaceId);
       const ref = workspaceRefs.find((workspace) => workspace.id === member.workspaceId);
       if (ref?.appWorkspaceId) current.workspaceIds.add(ref.appWorkspaceId);
@@ -500,16 +512,18 @@ const CalendarSubscriptionsView: React.FC = () => {
           email: user.email ?? null,
         },
         workspaceIds: new Set(effectiveMemberWorkspaceIds),
+        boardIds: new Set(memberBoardIds),
       });
     }
     return Array.from(byUserId.values())
-      .map(({ member, workspaceIds }) => ({
+      .map(({ member, workspaceIds, boardIds }) => ({
         id: member.userId,
         label: getMemberLabel(member),
         workspaceIds: Array.from(workspaceIds),
+        ...(isHttpBackend && { boardIds: Array.from(boardIds) }),
       }))
       .sort((a, b) => a.label.localeCompare(b.label, 'zh-TW'));
-  }, [activeWorkspace?.id, effectiveMemberWorkspaceIds, members, user, workspaceRefs]);
+  }, [activeWorkspace?.id, effectiveMemberWorkspaceIds, memberBoardIds, members, user, workspaceRefs]);
 
   const workspaceNameById = useMemo(() => {
     const map = new Map<string, string>();
@@ -563,19 +577,25 @@ const CalendarSubscriptionsView: React.FC = () => {
         calendarSubscriptionService.listWorkspaceRefs(),
         calendarSubscriptionService.listBoardRefs(),
       ]);
+      if (filterReadIdentity(useAuthStore.getState().user) !== identity) return;
       setSubscriptions(nextSubscriptions);
       setWorkspaceRefs(nextWorkspaceRefs);
       setBoardRefs(nextBoardRefs);
+      setLoadedIdentity(identity);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '讀取訂閱失敗');
+      if (filterReadIdentity(useAuthStore.getState().user) === identity) toast.error(error instanceof Error ? error.message : '讀取訂閱失敗');
     } finally {
-      setIsLoading(false);
+      if (filterReadIdentity(useAuthStore.getState().user) === identity) setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    void loadSubscriptions();
-  }, []);
+    setGeneratedUrls({});
+    resetForm();
+    setViewMode('list');
+    setSubscriptionToDelete(null);
+    if (identity) void loadSubscriptions();
+  }, [identity]);
 
   useEffect(() => {
     if (editingId) return;
@@ -587,21 +607,21 @@ const CalendarSubscriptionsView: React.FC = () => {
 
   useEffect(() => {
     if (!isCalendarRemoteBackend || effectiveMemberWorkspaceIds.length === 0) {
-      setMembers([]);
+      setMemberSource({ identity, members: [] });
       return;
     }
 
     let cancelled = false;
-    setMembers([]);
-    calendarSubscriptionService.listWorkspaceMembers(effectiveMemberWorkspaceIds)
+    setMemberSource({ identity, members: [] });
+    calendarSubscriptionService.listWorkspaceMembers(effectiveMemberWorkspaceIds, memberBoardIds)
       .then((nextMembers) => {
-        if (!cancelled) setMembers(nextMembers);
+        if (!cancelled && filterReadIdentity(useAuthStore.getState().user) === identity) setMemberSource({ identity, members: nextMembers });
       })
-      .catch((error) => toast.error(error instanceof Error ? error.message : '讀取成員失敗'));
+      .catch((error) => { if (!cancelled && filterReadIdentity(useAuthStore.getState().user) === identity) toast.error(error instanceof Error ? error.message : '讀取成員失敗'); });
     return () => {
       cancelled = true;
     };
-  }, [selectedWorkspaceKey, effectiveMemberWorkspaceIds]);
+  }, [identity, selectedWorkspaceKey, effectiveMemberWorkspaceIds, memberBoardIds]);
 
   const resetForm = () => {
     setName(DEFAULT_CALENDAR_SUBSCRIPTION_NAME);
@@ -951,8 +971,10 @@ const CalendarSubscriptionsView: React.FC = () => {
               <CalendarSubscriptionBuilderPreview
                 boards={boardOptions}
                 currentUserId={user?.uid}
+                key={identity}
                 assigneeOptions={calendarAssigneeOptions}
                 manageableWorkspaceIds={manageableWorkspaceIds}
+                manageableBoardIds={manageableBoardIds}
                 initialFilters={filters}
                 resetKey={`${editingId ?? 'new'}:${builderRevision}`}
                 onPayloadChange={setBuilderPayload}
