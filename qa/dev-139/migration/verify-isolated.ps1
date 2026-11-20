@@ -76,7 +76,12 @@ function Invoke-DataMode([string]$Mode, [int[]]$ExpectedExitCodes) {
   }
   $jsonLine = $lines | Where-Object { $_.ToString().Trim().StartsWith('{') } | Select-Object -Last 1
   if (-not $jsonLine) { throw "DEV-139 data $Mode did not return a JSON result." }
-  return ($jsonLine.ToString() | ConvertFrom-Json)
+  $receipt = $jsonLine.ToString() | ConvertFrom-Json
+  if ($receipt.evidenceScope -ne 'DATABASE_ONLY' -or $receipt.legacyStorage.status -ne 'NOT_INVENTORIED' -or
+      $receipt.newWriterAllowed -ne $false -or $null -ne $receipt.legacyStorage.count) {
+    throw "DEV-139 data $Mode overstated its DB-only evidence or authorized a new writer."
+  }
+  return $receipt
 }
 
 function Set-DisposableSourceFence([ValidateSet('apply', 'remove')][string]$Mode) {
@@ -265,6 +270,9 @@ UPDATE public.document_versions
     -RestoreSql "UPDATE private.meeting_draft_projections SET applied_run_id = 'a4234567-1234-4234-8234-123456789001' WHERE record_id = '23456789-1234-4234-8234-123456789002'" `
     -ExpectedDomainPrefix 'private.meeting_draft_projections WHERE'
 
+  # Synthetic legacy Storage metadata deliberately remains outside the DB copy.
+  # A nonempty or unreadable bucket inventory must never become an empty claim.
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "CREATE SCHEMA storage; CREATE TABLE storage.objects(id integer PRIMARY KEY); INSERT INTO storage.objects VALUES (1); REVOKE ALL ON SCHEMA storage FROM PUBLIC")
   $plan = Invoke-DataMode -Mode 'plan' -ExpectedExitCodes @(0)
   if ($plan.status -ne 'PASS' -or $plan.matches -ne $false -or $plan.tables.profiles.count -ne 2 -or
       $plan.tables.google_identity_proofs.count -ne 1 -or $plan.tables.llm_access_logs.count -ne 5 -or
@@ -347,6 +355,9 @@ UPDATE public.document_versions
   }
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "CREATE ROLE projed_source_reader_disposable LOGIN PASSWORD '$readerPassword'; GRANT CONNECT ON DATABASE $sourceDatabase TO projed_source_reader_disposable; GRANT USAGE ON SCHEMA public, private TO projed_source_reader_disposable; GRANT SELECT ON ALL TABLES IN SCHEMA public, private TO projed_source_reader_disposable; ALTER TABLE public.dev139_unknown_empty_source ENABLE ROW LEVEL SECURITY; CREATE POLICY hide_rows ON public.dev139_unknown_empty_source FOR SELECT USING (false)")
   $encodedReader = [Uri]::EscapeDataString($readerPassword)
+  if ((Invoke-PgScalar -Database $sourceDatabase -Sql "SELECT has_schema_privilege('projed_source_reader_disposable','storage','USAGE')") -ne 'f') {
+    throw 'DEV-139 source reader fixture unexpectedly acquired Storage access.'
+  }
   try {
     $env:PROJED_MIGRATION_SOURCE_DATABASE_URL = "postgresql://projed_source_reader_disposable:${encodedReader}@127.0.0.1:$port/$sourceDatabase"
     $hiddenRowsApply = Invoke-DataMode -Mode 'apply' -ExpectedExitCodes @(1)
@@ -650,9 +661,14 @@ UPDATE public.document_versions
     profileSha256 = $profileHash
     migrationSha256 = $migrationHashes
     snapshotId = $finalReconcile.snapshotId
+    evidenceScope = $finalReconcile.evidenceScope
+    legacyStorage = $finalReconcile.legacyStorage
+    newWriterAllowed = $finalReconcile.newWriterAllowed
     tables = $finalReconcile.tables
     emptySourceRelations = $finalReconcile.emptySourceRelations
     checks = @(
+      'database-only-receipts-do-not-inventory-storage-or-authorize-writers',
+      'nonempty-and-unreadable-storage-never-claimed-empty',
       'legacy-business-table-fence-drain-read-reject-recover',
       'empty-target-plan', 'single-transaction-rollback', 'full-snapshot-apply', 'reconciled-with-source-app-writes-paused',
       'unknown-empty-relation-diagnostic', 'unknown-populated-relation-block',

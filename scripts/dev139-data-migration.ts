@@ -696,6 +696,17 @@ function snapshotId(snapshot: ReadonlyMap<string, readonly Row[]>): string {
   return digest(snapshotSummary(snapshot));
 }
 
+export function createDatabaseSnapshotReceipt<T extends Row>(result: T) {
+  // This importer neither inventories legacy Storage nor enables a writer.
+  // Keep these boundaries authoritative even if a caller supplies other claims.
+  return {
+    ...result,
+    evidenceScope: 'DATABASE_ONLY' as const,
+    legacyStorage: { status: 'NOT_INVENTORIED' as const },
+    newWriterAllowed: false as const,
+  };
+}
+
 async function readSource(client: Client): Promise<Map<string, Row[]>> {
   const result = new Map<string, Row[]>();
   for (const spec of TABLES) {
@@ -1104,7 +1115,7 @@ async function main(): Promise<void> {
     const { blockers, emptySourceRelations } = await sourcePreflight(source);
     if (blockers.length > 0) {
       await source.query('ROLLBACK');
-      console.log(JSON.stringify({ status: 'BLOCKED', mode, blockers, emptySourceRelations }));
+      console.log(JSON.stringify(createDatabaseSnapshotReceipt({ status: 'BLOCKED', mode, blockers, emptySourceRelations })));
       process.exitCode = 2;
       return;
     }
@@ -1124,10 +1135,10 @@ async function main(): Promise<void> {
     if (blockers.length > 0) {
       await target.query('ROLLBACK');
       await source.query('ROLLBACK');
-      console.log(JSON.stringify({
+      console.log(JSON.stringify(createDatabaseSnapshotReceipt({
         status: 'BLOCKED', mode, snapshotId: snapshotId(sourceSnapshot),
         tables: snapshotSummary(sourceSnapshot), blockers, emptySourceRelations,
-      }));
+      })));
       process.exitCode = 2;
       return;
     }
@@ -1141,10 +1152,10 @@ async function main(): Promise<void> {
     }
     await target.query(mode === 'apply' ? 'COMMIT' : 'ROLLBACK');
     await source.query('ROLLBACK');
-    console.log(JSON.stringify({
+    console.log(JSON.stringify(createDatabaseSnapshotReceipt({
       status: 'PASS', mode, snapshotId: sourceDigest, targetSnapshotId: targetDigest,
       matches, tables: snapshotSummary(sourceSnapshot), emptySourceRelations,
-    }));
+    })));
   } catch (error) {
     try { await target.query('ROLLBACK'); } catch { /* connection may already be closed */ }
     try { await source.query('ROLLBACK'); } catch { /* connection may already be closed */ }
@@ -1160,7 +1171,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   } catch (error) {
     const code = typeof error === 'object' && error && 'code' in error && typeof error.code === 'string'
       ? error.code : 'MIGRATION_FAILED';
-    console.error(JSON.stringify({ status: 'FAIL', code }));
+    console.error(JSON.stringify(createDatabaseSnapshotReceipt({ status: 'FAIL', code })));
     process.exitCode = 1;
   }
 }
