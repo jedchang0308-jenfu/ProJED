@@ -34,7 +34,7 @@ function isLoopback(hostname: string): boolean {
 function parseReturnPath(value: string, origin: string): string {
   if (typeof value !== 'string' || value.length < 1 || value.length > 2048
       || !value.startsWith('/') || value.startsWith('//') || value.includes('\\')
-      || /[\u0000-\u001f\u007f]/u.test(value)) {
+      || Array.from(value).some(character => character < ' ' || character.charCodeAt(0) === 127)) {
     throw new Error('HTTP_API_INVALID_LOGIN_RETURN_PATH');
   }
   let parsed: URL;
