@@ -474,6 +474,8 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
     const actorNowMs = nowFrom(now);
     const actor: ServerActorV1 = Object.freeze({
       principalId: identity.principalId,
+      principalKind: identity.principalKind,
+      googleSubject: identity.googleSubject,
       localUserId: stored.localUserId,
       entry: stored.entry,
       contextId: stored.contextId,

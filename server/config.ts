@@ -121,6 +121,7 @@ const S3_RUNTIME_MIGRATION_PATHS:readonly string[] = [
   'db/migrations/0043_task_order_reindex_v1.sql',
   'db/migrations/0044_legacy_unscoped_audit_retention_v1.sql',
   'db/migrations/0045_central_session_revocation_v1.sql',
+  'db/migrations/0046_external_board_invitation_v1.sql',
 ];
 const PROFILE_MIGRATION_PATHS = new Map<string, readonly string[]>([
   ['^dev139_s1_[0-9a-f]{32}$', [

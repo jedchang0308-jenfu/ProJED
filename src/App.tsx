@@ -27,7 +27,7 @@ import MainLayout from './components/MainLayout';
 import { useCalendarStore } from './store/useCalendarStore';
 import dayjs from 'dayjs';
 import { supabaseWorkspaceService } from './services/supabase/projedService';
-import { httpDomainReadService } from './services/httpApi/backend';
+import { HttpApiError } from './services/httpApi/httpApiClient';
 import HomeView from './components/HomeView';
 // CardModal 已在 Phase B 移除，改為在清單視圖行內編輯
 import GlobalDialog from './components/GlobalDialog';
@@ -54,6 +54,9 @@ const MindMapView = lazy(() => import('./components/MindMap/MindMapView'));
 const GoalView = lazy(() => import('./components/GoalView'));
 
 const formatBoardInviteAcceptError = (inviteError: unknown): string => {
+  if (inviteError instanceof HttpApiError && inviteError.code === 'EXTERNAL_APPROVAL_PENDING') {
+    return '外部協作申請待 OrgMaster 核准。核准後請重新開啟此邀請連結。';
+  }
   const message = inviteError instanceof Error ? inviteError.message : '';
   if (
     message.includes('此邀請屬於其他電子郵件地址') ||
@@ -237,12 +240,19 @@ function AppContent() {
       email: userEmail,
       displayName: userDisplayName,
     }).then(async (invite) => {
+      params.delete(BOARD_INVITE_TOKEN_PARAM);
+      const nextQuery = params.toString();
+      window.history.replaceState(
+        null, '', `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash}`,
+      );
+      if (dataBackend === 'http') {
+        toast.success('已接受看板邀請。請重新登入以開啟獲授權的看板。');
+        return;
+      }
       const store = useBoardStore.getState();
-      if (dataBackend === 'supabase' || dataBackend === 'http') {
+      if (dataBackend === 'supabase') {
         try {
-          const nextWorkspaces = dataBackend === 'http'
-            ? await httpDomainReadService.listWorkspaces()
-            : await supabaseWorkspaceService.list();
+          const nextWorkspaces = await supabaseWorkspaceService.list();
           store.setWorkspaces(nextWorkspaces);
         } catch (workspaceError) {
           console.warn('[BoardInvite] accepted but workspace reload failed:', workspaceError);
@@ -253,13 +263,6 @@ function AppContent() {
       store.setView('board');
       useMemberStore.getState().loadMembers(invite.workspaceId, invite.boardId).catch(console.error);
 
-      params.delete(BOARD_INVITE_TOKEN_PARAM);
-      const nextQuery = params.toString();
-      window.history.replaceState(
-        null,
-        '',
-        `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash}`
-      );
       toast.success('已接受看板邀請。');
     }).catch((inviteError) => {
       console.error('[BoardInvite] accept failed:', inviteError);

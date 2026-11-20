@@ -6,6 +6,8 @@ import { KernelError, asKernelError } from './errors.js';
 
 export interface ServerActorV1 {
   readonly principalId: string;
+  readonly principalKind?: 'employee' | 'personal';
+  readonly googleSubject?: string;
   readonly localUserId: string;
   readonly entry: 'main' | 'quick';
   readonly contextId: string;

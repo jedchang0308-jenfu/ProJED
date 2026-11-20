@@ -146,6 +146,7 @@ export interface KernelHttpServer {
 }
 
 export interface KernelHttpOptions {
+  readonly publishExternalInvitation?: import('./externalBoardInvites.js').ExternalInvitationPublisher;
   readonly meetingUploads?:MeetingUploadRepository|null;
   readonly meetingJobDispatcher?:ReturnType<typeof createMeetingJobDispatcher>;
   readonly meetingAudioStorage?:MeetingAudioStorage;
@@ -201,7 +202,7 @@ export function createKernelHttpServer(
     config, database, options.resolveActor, options.destroySession, options.resolveSessionInfo,
     options.resolveLogoutIdentity,
   );
-  const dispatchCollaborationWrite = createCollaborationWriteHttpDispatcher(config, database, options.resolveActor);
+  const dispatchCollaborationWrite = createCollaborationWriteHttpDispatcher(config, database, options.resolveActor, undefined, options.publishExternalInvitation);
   const dispatchRecordActivity = createRecordActivityHttpDispatcher(config, database, options.resolveActor);
   const dispatchQuickTask = createQuickTaskHttpDispatcher(config, database, options.resolveActor);
   const dispatchTaskWorkbench = createTaskWorkbenchHttpDispatcher(config, database, options.resolveActor);

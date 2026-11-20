@@ -12,6 +12,7 @@ import {
 import { PostgresAppSessionStore } from './postgresAppSessionStore.js';
 import { GooglePrincipalMappingResolver } from './principalMappings.js';
 import { createServiceIdentityTokenProvider } from './serviceIdentityToken.js';
+import { createExternalInvitationPublisher } from './externalBoardInvites.js';
 
 function configError(): never { throw new KernelError('CONFIG_INVALID','Published Session configuration is incomplete',503); }
 type RuntimeSessionAuthOptions = KernelHttpOptions & {
@@ -77,7 +78,7 @@ export function createRuntimeSessionAuth(
     store: new PostgresAppSessionStore(database), consumer, mappings, binding,
     pins: CURRENT_PRODUCTION_IDENTITY_PINS, origins: { main,quick }, environment:'production',
   });
-  return { dispatchAuth:auth.dispatchAuth,resolveActor:auth.resolveActor,
+  return { publishExternalInvitation:createExternalInvitationPublisher(),dispatchAuth:auth.dispatchAuth,resolveActor:auth.resolveActor,
     resolveSessionInfo:auth.resolveSessionInfo,resolveLogoutIdentity:auth.resolveLogoutIdentity,
     destroySession:auth.destroySession,resolveMeetingRunActor:auth.resolveMeetingRunActor };
 }

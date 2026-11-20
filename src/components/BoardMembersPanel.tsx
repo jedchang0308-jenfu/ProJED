@@ -13,7 +13,7 @@ import { useBoardPermissions } from '../hooks/useBoardPermissions';
 import { useMemberStore } from '../store/useMemberStore';
 import useBoardStore from '../store/useBoardStore';
 import { toast } from '../store/useToastStore';
-import { boardInviteService } from '../services/dataBackend';
+import { boardInviteService, dataBackend } from '../services/dataBackend';
 import {
   type BoardInvite,
   type BoardMember,
@@ -142,6 +142,9 @@ export const BoardShareDialog: React.FC<BoardShareDialogProps> = ({ open, onOpen
     removeBoardMember,
     canManageBoardMembers,
   } = useBoardMemberPanelState();
+  const currentAccess = useMemberStore(state => state.currentBoardAccess);
+  const canInviteExternal = currentAccess?.workspaceRole === 'owner' || currentAccess?.boardRole === 'owner';
+  const [externalInvite, setExternalInvite] = React.useState(false);
   const activeBoard = useBoardStore(state => {
     const workspace = state.workspaces.find(item => item.id === state.activeWorkspaceId);
     return workspace?.boards.find(board => board.id === state.activeBoardId);
@@ -199,6 +202,7 @@ export const BoardShareDialog: React.FC<BoardShareDialogProps> = ({ open, onOpen
   const closeDialog = () => {
     if (inviteLoading) return;
     setInviteEmail('');
+    setExternalInvite(false);
     onOpenChange(false);
   };
 
@@ -217,6 +221,7 @@ export const BoardShareDialog: React.FC<BoardShareDialogProps> = ({ open, onOpen
         email,
         tokenHash: await hashBoardInviteToken(token),
         defaultRole: inviteRole,
+        ...(dataBackend === 'http' && externalInvite ? { external: true } : {}),
         expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
       });
       const inviteUrl = buildBoardInviteUrl(token);
@@ -224,7 +229,9 @@ export const BoardShareDialog: React.FC<BoardShareDialogProps> = ({ open, onOpen
       setLatestInviteId(createdInvite.id);
       setInviteEmail('');
       setActiveTab('requests');
-      toast.success(isLocalBoardInviteUrl(inviteUrl)
+      if (createdInvite.externalNotificationPending) {
+        toast.warning('邀請已建立。審核通知尚未送達，受邀者開啟連結時會再次送出。');
+      } else toast.success(isLocalBoardInviteUrl(inviteUrl)
         ? '已建立本機測試邀請連結，請在同一個測試環境開啟。'
         : '已建立看板邀請。');
       await loadPendingInvites();
@@ -336,6 +343,13 @@ export const BoardShareDialog: React.FC<BoardShareDialogProps> = ({ open, onOpen
         </header>
 
         <div className="overflow-y-auto px-5 py-4">
+          {dataBackend === 'http' && canInviteExternal && (
+            <label className="mb-3 flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={externalInvite} disabled={inviteLoading}
+                onChange={event => setExternalInvite(event.target.checked)} />
+              邀請外部協作者（需 OrgMaster 核准）
+            </label>
+          )}
           <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_132px_auto]">
             <input
               ref={inputRef}

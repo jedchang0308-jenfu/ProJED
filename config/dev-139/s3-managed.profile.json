@@ -208,6 +208,10 @@
     {
       "version": "0045_central_session_revocation_v1",
       "path": "db/migrations/0045_central_session_revocation_v1.sql"
+      },
+      {
+        "version": "0046_external_board_invitation_v1",
+        "path": "db/migrations/0046_external_board_invitation_v1.sql"
     }
   ],
   "objectAllowlist": [

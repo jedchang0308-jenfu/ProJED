@@ -17,6 +17,8 @@ import type { TrustedSessionActorResolver } from './domainReadHttp.js';
 import { isSameOriginWrite, readJsonBody } from './domainWriteHttp.js';
 import { asKernelError, KernelError } from './errors.js';
 import { assertExpectedActor } from './expectedActorHttp.js';
+import { resolveBoard } from './domainRead.js';
+import type { ExternalInvitation, ExternalInvitationPublisher } from './externalBoardInvites.js';
 
 export interface CollaborationWriteHttpResult {
   readonly matched: boolean;
@@ -129,6 +131,7 @@ export function createCollaborationWriteHttpDispatcher(
   database: RuntimeDatabase,
   resolveActor?: TrustedSessionActorResolver,
   repository = new CollaborationWriteRepository(),
+  publishExternal?: ExternalInvitationPublisher,
 ) {
   return async (request: IncomingMessage, requestId: string): Promise<CollaborationWriteHttpResult> => {
     if (request.method === 'GET' || request.method === 'HEAD') return { matched: false };
@@ -150,6 +153,21 @@ export function createCollaborationWriteHttpDispatcher(
       const actor = await resolveActor(request);
       assertExpectedActor(request, actor);
       const body = request.method === 'DELETE' ? {} : await readJsonBody(request);
+      if (operation.kind === 'invite-accept' && config.env === 'managed' && !actor.principalKind) {
+        throw new KernelError('IDENTITY_INVALID', 'Recipient identity is unavailable', 403);
+      }
+      if (operation.kind === 'invite-accept' && (actor.principalKind || publishExternal)) {
+        const invite = await runActorTransaction(database, config, actor,
+          port => repository.externalInvitationForRecipient(port, body.token, actor));
+        if (invite) {
+          if (!publishExternal || !actor.googleSubject) {
+            throw new KernelError('IDENTITY_STATE_UNAVAILABLE', 'External qualification service is unavailable', 503);
+          }
+          await publishExternal({ action: 'submit', ...invite });
+          await publishExternal({ action: 'bind', requestId: invite.requestId, principalId: actor.principalId, googleSubject: actor.googleSubject });
+        }
+      }
+      let notification: Parameters<ExternalInvitationPublisher>[0] | undefined;
       const data = await runActorTransaction(database, config, actor, async (port) => {
         switch (operation.kind) {
           case 'workspace-create': return repository.createWorkspace(port, body as WorkspaceCreateInput);
@@ -184,15 +202,37 @@ export function createCollaborationWriteHttpDispatcher(
             }
             return repository.updateRolePermissions(port, operation.workspaceRef, operation.boardRef, body.permissions);
           }
-          case 'invite-create': return repository.createInvite(
-            port, operation.workspaceRef, operation.boardRef, body as unknown as BoardInviteCreate,
-          );
-          case 'invite-revoke': return repository.revokeInvite(
-            port, operation.workspaceRef, operation.boardRef, operation.itemRef,
-          );
-          case 'invite-accept': return repository.acceptInvite(port, body.token);
+          case 'invite-create': {
+            if (body.external === true && !publishExternal) {
+              throw new KernelError('IDENTITY_STATE_UNAVAILABLE', 'External qualification service is unavailable', 503);
+            }
+            const invite = await repository.createInvite(port, operation.workspaceRef, operation.boardRef, body as unknown as BoardInviteCreate);
+            if (body.external === true) {
+              const board = await resolveBoard(port, operation.workspaceRef, operation.boardRef);
+              const application: ExternalInvitation = {
+                requestId: invite.id, invitationId: invite.id, inviterPrincipalId: actor.principalId,
+                boardId: board.id, role: invite.defaultRole, expiresAt: new Date(invite.expiresAt).toISOString(),
+                contactEmail: invite.email, company: '', note: '',
+              };
+              notification = { action: 'submit', ...application };
+            }
+            return invite;
+          }
+          case 'invite-revoke':
+            if (await repository.revokeInvite(port, operation.workspaceRef, operation.boardRef, operation.itemRef)) {
+              notification = { action: 'withdraw', requestId: operation.itemRef };
+            }
+            return null;
+          case 'invite-accept': return repository.acceptInvite(port, body.token, actor);
         }
       });
+      if (notification && publishExternal) {
+        try { await publishExternal(notification); }
+        catch {
+          return { matched: true, status: operation.kind === 'invite-create' ? 201 : 200,
+            body: { data: data ?? null, externalNotificationPending: true } };
+        }
+      }
       const created = operation.kind === 'workspace-create' || operation.kind === 'board-create' || operation.kind === 'invite-create';
       return { matched: true, status: created ? 201 : 200, body: { data: data ?? null } };
     } catch (error) {

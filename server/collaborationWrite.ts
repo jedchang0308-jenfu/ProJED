@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 
-import type { ActorQueryPort } from './actorTransaction.js';
+import type { ActorQueryPort, ServerActorV1 } from './actorTransaction.js';
+import { requireExternalQualification, type ExternalInvitation } from './externalBoardInvites.js';
 import type { DomainBoardInvite } from './collaborationRead.js';
 import {
   COLLABORATION_ROLES,
@@ -70,6 +71,7 @@ export interface BoardTransferPreview {
   };
 }
 export interface BoardInviteCreate {
+  external?: boolean;
   email: string;
   tokenHash: string;
   expiresAt: number;
@@ -435,6 +437,11 @@ export class CollaborationWriteRepository {
        WHERE local_user_id = $3::uuid AND tenant_id = $1::uuid AND project_id = $2::uuid
     `, [board.tenantId, board.id, userId]);
     if (removedScope.rowCount !== 1) throw new KernelError('DB_BOUNDARY_INVALID', 'Board member scope is missing', 503);
+    await port.query(`
+      UPDATE projed_core.board_invites SET external_access_revoked_at = clock_timestamp()
+       WHERE tenant_id = $1::uuid AND project_id = $2::uuid
+         AND external_recipient_user_id = $3::uuid AND external_access_revoked_at IS NULL
+    `, [board.tenantId, board.id, userId]);
     await bumpRevision(port, board.tenantId, board.id);
   }
 
@@ -465,12 +472,24 @@ export class CollaborationWriteRepository {
     boardRef: string,
     input: BoardInviteCreate,
   ): Promise<DomainBoardInvite> {
-    if (!isRecord(input) || Object.keys(input).some(key => !['email', 'tokenHash', 'expiresAt', 'defaultRole'].includes(key))) {
+    if (!isRecord(input) || Object.keys(input).some(key => !['email', 'tokenHash', 'expiresAt', 'defaultRole', 'external'].includes(key))
+        || (input.external !== undefined && typeof input.external !== 'boolean')) {
       invalid('invite input is invalid');
     }
     const board = await resolveBoard(port, workspaceRef, boardRef);
     await port.authorizeBoardMutation(board.tenantId, board.id, 'manage-members');
     const normalizedEmail = email(input.email);
+    if (input.external) {
+      const owner = await port.query(`
+        SELECT id FROM projed_core.tenants
+         WHERE id = $1::uuid AND owner_id = projed_core.current_actor_user_id_v1()
+        UNION ALL
+        SELECT project_id FROM projed_core.project_members
+         WHERE tenant_id = $1::uuid AND project_id = $2::uuid
+           AND user_id = projed_core.current_actor_user_id_v1() AND role = 'owner'
+      `, [board.tenantId, board.id]);
+      if (!owner.rows.length) throw new KernelError('ACCESS_DENIED', 'External invitations require the resource owner', 403);
+    }
     const defaultRole = role(input.defaultRole ?? 'member', true);
     if (!HASH_RE.test(input.tokenHash)) invalid('tokenHash is invalid');
     if (!Number.isSafeInteger(input.expiresAt) || input.expiresAt <= Date.now()
@@ -485,14 +504,15 @@ export class CollaborationWriteRepository {
       await port.query(`
         INSERT INTO projed_core.board_invites(
           id, tenant_id, project_id, legacy_workspace_id, legacy_board_id,
-          email, invited_by, status, default_role, token_hash, expires_at
+          email, invited_by, status, default_role, token_hash, expires_at, external_inviter_principal_id
         ) VALUES (
           $1::uuid, $2::uuid, $3::uuid, $4, $5, $6, projed_core.current_actor_user_id_v1(),
-          'pending', $7, $8, to_timestamp($9::double precision / 1000.0)
+          'pending', $7, $8, to_timestamp($9::double precision / 1000.0),
+          CASE WHEN $10 THEN current_setting('projed.actor_principal_id') END
         )
       `, [
         id, board.tenantId, board.id, board.legacyWorkspaceId, board.legacyBoardId,
-        normalizedEmail, defaultRole, input.tokenHash, input.expiresAt,
+        normalizedEmail, defaultRole, input.tokenHash, input.expiresAt, input.external === true,
       ]);
     } catch (error) {
       if ((error as { code?: string }).code === '23505') invalid('A pending invite already exists', 409);
@@ -507,30 +527,32 @@ export class CollaborationWriteRepository {
     workspaceRef: string,
     boardRef: string,
     inviteId: string,
-  ): Promise<void> {
+  ): Promise<boolean> {
     if (!UUID_RE.test(inviteId)) invalid('inviteId is invalid');
     const board = await resolveBoard(port, workspaceRef, boardRef);
     await port.authorizeBoardMutation(board.tenantId, board.id, 'manage-members');
-    const result = await port.query(`
+    const result = await port.query<{ external: boolean }>(`
       UPDATE projed_core.board_invites
          SET status = 'revoked', revoked_at = now(), updated_at = now()
        WHERE id = $3::uuid AND tenant_id = $1::uuid AND project_id = $2::uuid AND status = 'pending'
+       RETURNING external_inviter_principal_id IS NOT NULL AS external
     `, [board.tenantId, board.id, inviteId]);
     if (result.rowCount !== 1) notFound();
     await bumpRevision(port, board.tenantId, board.id);
+    return result.rows[0]!.external;
   }
 
-  async acceptInvite(port: ActorQueryPort, token: unknown): Promise<DomainBoardInvite> {
+  private async pendingInvite(port: ActorQueryPort, token: unknown) {
     if (typeof token !== 'string' || token.length < 16 || token.length > 512) invalid('invite token is invalid');
     const tokenHash = createHash('sha256').update(token).digest('hex');
     const profile = await currentProfile(port);
     if (!profile.email) throw new KernelError('ACCESS_DENIED', 'Verified actor email is required', 403);
     const result = await port.query<{
       id: string; tenant_id: string; project_id: string; email: string; status: DomainBoardInvite['status'];
-      default_role: CollaborationRole; expires_at_ms: string;
+      default_role: CollaborationRole; expires_at_ms: string; external_inviter_principal_id: string | null;
     }>(`
       SELECT id::text AS id, tenant_id::text AS tenant_id, project_id::text AS project_id,
-             email, status, default_role,
+             email, status, default_role, external_inviter_principal_id,
              floor(extract(epoch FROM expires_at) * 1000)::bigint::text AS expires_at_ms
         FROM projed_core.board_invites invite
        WHERE invite.token_hash = $1
@@ -547,12 +569,37 @@ export class CollaborationWriteRepository {
     if (invite.email !== profile.email.trim().toLowerCase()) throw new KernelError('ACCESS_DENIED', 'Invite email does not match actor', 403);
     if (invite.status !== 'pending') invalid('Invite is no longer pending', 409);
     if (Number(invite.expires_at_ms) <= Date.now()) invalid('Invite has expired', 409);
+    const external: ExternalInvitation | null = invite.external_inviter_principal_id ? {
+      requestId: invite.id, invitationId: invite.id, inviterPrincipalId: invite.external_inviter_principal_id,
+      boardId: invite.project_id, role: invite.default_role, expiresAt: new Date(Number(invite.expires_at_ms)).toISOString(),
+      contactEmail: invite.email, company: '', note: '',
+    } : null;
+    return { invite, profile, external };
+  }
+
+  async externalInvitationForRecipient(port: ActorQueryPort, token: unknown, actor: ServerActorV1) {
+    const { external } = await this.pendingInvite(port, token);
+    if (actor.principalKind === 'personal' && !external) {
+      throw new KernelError('ACCESS_DENIED', 'Contact the owner for an external invitation', 403);
+    }
+    return external;
+  }
+
+  async acceptInvite(port: ActorQueryPort, token: unknown, actor?: ServerActorV1): Promise<DomainBoardInvite> {
+    const { invite, profile, external } = await this.pendingInvite(port, token);
+    if (external) {
+      if (!actor?.googleSubject) throw new KernelError('ACCESS_DENIED', 'A verified recipient is required', 403);
+      await requireExternalQualification(port, actor, external);
+    } else if (actor?.principalKind === 'personal') {
+      throw new KernelError('ACCESS_DENIED', 'Contact the owner for an external invitation', 403);
+    }
+    const memberEmail = invite.email;
     await port.query(`
       INSERT INTO projed_core.tenant_members(
         tenant_id, user_id, role, status, member_email, member_display_name
       ) VALUES ($1::uuid, $2::uuid, 'member', 'active', $3, $4)
       ON CONFLICT (tenant_id, user_id) DO NOTHING
-    `, [invite.tenant_id, profile.id, profile.email.trim().toLowerCase(), profile.displayName]);
+    `, [invite.tenant_id, profile.id, memberEmail, profile.displayName]);
     const activeAnchor = await port.query(`
       SELECT 1 FROM projed_core.tenant_members
        WHERE tenant_id = $1::uuid AND user_id = $2::uuid AND status = 'active'
@@ -565,7 +612,7 @@ export class CollaborationWriteRepository {
         tenant_id, project_id, user_id, role, member_email, member_display_name
       ) VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6)
       ON CONFLICT DO NOTHING
-    `, [invite.tenant_id, invite.project_id, profile.id, invite.default_role, profile.email.trim().toLowerCase(), profile.displayName]);
+    `, [invite.tenant_id, invite.project_id, profile.id, invite.default_role, memberEmail, profile.displayName]);
     await port.query(`
       INSERT INTO projed_core.actor_scope_access(local_user_id, tenant_id, project_id, active, scope_revision)
       VALUES ($1::uuid, $2::uuid, $3::uuid, true, 1)
@@ -576,9 +623,11 @@ export class CollaborationWriteRepository {
     `, [profile.id, invite.tenant_id, invite.project_id]);
     const accepted = await port.query(`
       UPDATE projed_core.board_invites
-         SET status = 'accepted', accepted_at = now(), updated_at = now()
-       WHERE id = $1::uuid AND status = 'pending'
-    `, [invite.id]);
+         SET status = 'accepted', accepted_at = now(), updated_at = now(),
+             external_recipient_principal_id = $2,
+             external_recipient_user_id = $3::uuid
+       WHERE id = $1::uuid AND status = 'pending' AND expires_at > clock_timestamp()
+    `, [invite.id, external ? actor!.principalId : null, external ? profile.id : null]);
     if (accepted.rowCount !== 1) invalid('Invite is no longer pending', 409);
     await bumpRevision(port, invite.tenant_id, invite.project_id);
     return this.getInvite(port, invite.id);

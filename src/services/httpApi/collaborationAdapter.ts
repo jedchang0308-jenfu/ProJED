@@ -226,7 +226,9 @@ export function createHttpCollaborationAdapter(client: HttpApiClient): ProjedCol
       const response = await client.request<unknown>(boardPath(workspaceRef, boardRef, 'invites'), {
         method: 'POST', body: input, signal,
       });
-      return parseInvite(data(response, 'INVITE_CREATE'));
+      const invite = parseInvite(data(response, 'INVITE_CREATE'));
+      return record(response, 'INVITE_CREATE').externalNotificationPending === true
+        ? { ...invite, externalNotificationPending: true } : invite;
     },
     async revokeInvite(workspaceRef, boardRef, inviteId, signal) {
       await client.request<unknown>(boardPath(workspaceRef, boardRef, `invites/${ref(inviteId, 'INVITE_ID')}`), {

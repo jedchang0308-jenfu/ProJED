@@ -206,6 +206,7 @@ export interface BoardMember {
 }
 
 export interface BoardInvite {
+  externalNotificationPending?: boolean;
   id: string;
   workspaceId: string;
   boardId: string;
@@ -221,6 +222,7 @@ export interface BoardInvite {
 }
 
 export interface BoardInviteCreateInput {
+  external?: boolean;
   email: string;
   tokenHash: string;
   expiresAt: number;
