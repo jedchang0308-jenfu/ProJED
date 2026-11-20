@@ -26,6 +26,8 @@ test('late Session success or denial cannot replace the current account binding'
     assert.equal((await session.getSession()).uid, 'b');
     deliver(stale);
     await assert.rejects(late, { code: 'ACTOR_CHANGED' });
+    assert.equal(client.clearExpectedActor({ accountId: 'a', contextId: 'session-a' }), false);
+    assert.equal(client.clearExpectedActor({ accountId: 'b', contextId: 'older-session-b' }), false);
     await client.request('/api/v1/workspaces');
   }
 });

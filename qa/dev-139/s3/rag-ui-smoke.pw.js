@@ -70,9 +70,35 @@ async (page) => {
     assert(external.length === 0, 'unexpected HTTP destinations ' + JSON.stringify(external));
     assert(pageErrors.length === 0, 'unexpected browser errors ' + JSON.stringify(pageErrors));
     await page.screenshot({ path: 'output/playwright/dev-139-rag-ui/unavailable-mobile.png', fullPage: false });
+    const login = page.getByRole('button', { name: /檢查 Jenfu-Platform 登入/ });
+    const waitForRejectedPoll = (status, code) => page.waitForResponse(async reply => {
+      if (new URL(reply.url()).pathname !== '/api/v1/scope-revisions' || reply.status() !== status) return false;
+      return (await reply.json()).error?.code === code;
+    });
+    step = 'switch the cookie while the original private panel remains open';
+    const switched = waitForRejectedPoll(409, 'ACTOR_CHANGED');
+    await page.context().addCookies([{ name: '__session', value: 'qa-browser-collaborator', url: `${baseUrl}/` }]);
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await switched;
+    await login.waitFor();
+    assert(!await input.isVisible(), 'old private question still visible after the server rejected the previous actor');
+    step = 'use the normal login check for the new actor, then lose the Session cookie';
+    const [rebound] = await Promise.all([
+      page.waitForResponse(reply => new URL(reply.url()).pathname === '/api/v1/session' && reply.ok()),
+      login.click(),
+    ]);
+    assert((await rebound.json()).data.localUserId !== session.localUserId, 'login did not resolve the other actor');
+    await page.locator('nav').waitFor();
+    const expired = waitForRejectedPoll(401, 'ACTOR_INVALID');
+    await page.context().clearCookies({ name: '__session' });
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expired;
+    await login.waitFor();
+    assert(!await page.locator('nav').isVisible() && !await input.isVisible(), 'private application stayed visible after Session loss');
     const artifact = { result: 'PASS', evidenceLevel: 'DEV139_REAL_HTTP_PRODUCT_RAG_UNQUALIFIED_UI',
       provider: 'NOT_CALLED_UNQUALIFIED', identity: 'ISOLATED_SESSION', queryCount: calls.length,
       status: 503, code: 'RAG_PROVIDER_UNAVAILABLE', questionRetained: true, actorHeadersBound: true,
+      switchedActorRejected: 409, newActorRebound: true, missingSessionRejected: 401, privateUiClosed: true,
       viewports: ['1440x900', '390x844'], externalRequests: external.length, pageErrors,
       screenshot: 'output/playwright/dev-139-rag-ui/unavailable-mobile.png' };
     await page.evaluate(value => { window.__DEV139_RAG_UI_ARTIFACT = value; }, artifact);

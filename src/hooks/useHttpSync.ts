@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
 
-import { httpCollaborationService, httpDomainReadService } from '../services/httpApi/backend';
+import { httpApiClient, httpCollaborationService, httpDomainReadService } from '../services/httpApi/backend';
+import { HttpApiError } from '../services/httpApi/httpApiClient';
 import {
   createRevisionSnapshot,
   decideRevisionRefresh,
@@ -141,13 +142,23 @@ export function useHttpSync(options: { enabled?: boolean } = {}) {
       revisionSnapshot = nextSnapshot;
     }, {
       onError: error => {
-        console.error('[useHttpSync] Poll or canonical reload failed:', error);
-        if (isCurrent()) {
-          useWbsStore.setState({
-            loading: false,
-            error: error instanceof Error ? error.message : 'HTTP 同步失敗',
-          });
+        if (!isCurrent()) return;
+        const user = useAuthStore.getState().user;
+        if (error instanceof HttpApiError && user && 'authContextId' in user && typeof user.authContextId === 'string'
+          && ((error.status === 401 && error.code === 'ACTOR_INVALID')
+            || (error.status === 409 && error.code === 'ACTOR_CHANGED' && error.requestId !== null))) {
+          // A server rejection of this Session must close its private UI. A late
+          // local ACTOR_CHANGED from an earlier request has no server request ID.
+          if (httpApiClient.clearExpectedActor({ accountId: user.uid, contextId: user.authContextId })) {
+            useAuthStore.setState({ user: null, loading: false, error: null });
+          }
+          return;
         }
+        console.error('[useHttpSync] Poll or canonical reload failed:', error);
+        useWbsStore.setState({
+          loading: false,
+          error: error instanceof Error ? error.message : 'HTTP 同步失敗',
+        });
       },
     });
 

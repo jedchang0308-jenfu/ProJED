@@ -188,9 +188,12 @@ export class HttpApiClient {
     this.bindingRevision++;
   }
 
-  clearExpectedActor(): void {
+  clearExpectedActor(expected?: HttpExpectedActor): boolean {
+    if (expected && this.expectedActor && (this.expectedActor.accountId !== expected.accountId
+      || this.expectedActor.contextId !== expected.contextId)) return false;
     this.expectedActor = null;
     this.bindingRevision++;
+    return true;
   }
 
   private snapshotExpectedActor(): Readonly<HttpExpectedActor> {
