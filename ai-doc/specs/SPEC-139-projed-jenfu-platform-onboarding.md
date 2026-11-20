@@ -1403,7 +1403,21 @@ API 啟用前的 cache、generation 及 embedding logging 三個唯讀 GET 均�
 
 後續檢查正式Cloud Run plan renderer發現同一舊門檻仍殘留為Speech `projectSettingReadbackRequired=true`，會在真正產生release plan時重新造成無法完成的阻塞。現已移除該欄，改為明確`optInProhibited`、外部opt-in即撤銷qualification及部署後runtime SA probe；Vertex的project setting readback與適用契約／防濫用豁免證據均保留。source `5f9432fbd376e1e087d2602fce7c06aabe1e34c5`的[CI44696691376](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44696691376)兩jobs SUCCESS；artifacts14610569643／14610813500已讀回snapshot63、domain73及OCI18 checks均PASS，OCI精確綁同source與45/45 migrations；metadata仍FIXTURE_ONLY、browser／productionRelease仍NOT_RUN。本輪未部署、未呼叫provider，亦未改正式IAM／Secret／資料或流量。
 
-#### 最新45份候選映像 readback（2026-11-20，source effd5e7）
+#### 最新45份候選映像 readback（2026-11-20，source 5f9432f）
+
+受完整[CI44696691376](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44696691376)驗證的 executable source `5f9432fbd376e1e087d2602fce7c06aabe1e34c5`，以精確Git archive建立Cloud Build context。gcloud預設ignore從1,629個blob排除`.gitignore`及歷史`output/playwright/dev-118/v7/production-browser-smoke.json`，實際上傳1,627個build檔案、無程式／migration／設定缺漏；staging object generation=`1795160960516642`，下載後SHA256=`aabe533b25e5101d84f832965d37b25070673824ec54362b0250b1fa06eeabd5`，與provider `sourceProvenance`完全相同。
+
+[Cloud Build e04f848b-21c4-4eca-8563-3fc8f96fef1c](https://console.cloud.google.com/cloud-build/builds;region=asia-east1/e04f848b-21c4-4eca-8563-3fc8f96fef1c?project=967362299895)於07:49:21–07:53:42 UTC SUCCESS，原六steps全成功。三個`candidate-5f9432fbd376-20261120` tag已逐一向registry讀回：
+
+| 目標 | 已讀回 immutable digest |
+|---|---|
+| projed-prod | sha256:19887d030a450d9c23bf939020a614fcf3da1077f1eb0329af2cdfaafbfe1b7c |
+| projed-prod-jobs | sha256:6803e1d468935bfb8069e0d3a06a7dd7f037081dbbf23f4fc45de96e72a6c9ab |
+| projed-prod-asr-job | sha256:10734d323aed46c025b6b76ff5b5e210be67f8e68ed99e7eec1412ee174a7b6d |
+
+實際managed-jobs image在network=none／read-only／nonroot輸出45份binding；profile與45個migration SHA256均與exact Git archive bytes相符，mismatch=0，compiled static hash=`1daebdb694375adfd64582737e7073e6f17e90bb241138cc9003f8cdba8b8312`。Windows checkout直接比較曾因CRLF得到profile及29份SQL差異，已拒絕該錯誤基準並改用build來源archive重核。離線runtime驗UID1000／Node v24.12.0及四個provider／Job bindings均null，ASR image的ffmpeg5.1.9可執行。這是artifact-only；未部署、未執行migration／import、未建立credential、未呼叫provider或切流。
+
+#### 前一版45份候選映像 readback（2026-11-20，source effd5e7）
 
 受完整[CI44688269763](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44688269763)驗證的 executable source `effd5e758f56bafb6de0e02bcc0d55702b9a995a`，以既有create-only流程逐一核對1,010個Git blob；封存9,767,534 bytes、SHA256=`d934fe5c1fe1af02c510f0d96c0873a76b8daf251decee24666d5c5f45eb14aa`。原source object `dev139/candidate-effd5e758f56-20261120/source-d934fe5c1fe1af02.tar.gz`使用generation precondition=0建立，generation=`1795156820258543`；`gcloud builds submit`另建立Cloud Build staging object，provider `sourceProvenance`的SHA256／MD5與本機封存完全相同，未用object名稱推論內容。
 

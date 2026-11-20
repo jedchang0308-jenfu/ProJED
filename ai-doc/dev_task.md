@@ -77,9 +77,9 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
   - 2026-11-20 續行：同一治理修正已同步到正式Cloud Run plan renderer，移除殘留的Speech `projectSettingReadbackRequired`，改為可執行的`optInProhibited`、外部opt-in撤銷qualification及部署後runtime SA probe；Vertex project readback與契約／豁免gate不變。source `5f9432f`的CI44696691376兩jobs SUCCESS；artifacts14610569643／14610813500讀回snapshot63／domain73／OCI18 checks均PASS，OCI精確綁同source及45/45 migrations。未部署或呼叫provider，metadata仍FIXTURE_ONLY、browser／productionRelease仍NOT_RUN。
 
-  - 2026-11-20 續行：ProJED #9、Platform #157、OrgMaster #187 已依人類核准轉為ready-for-review，三者仍open且未merge／deploy／切流；base分別仍是遠端最新`0670a0a`／`5ae88bc`／`a8830e9`。Platform `b7293c2`、OrgMaster `4b722b4` required Source QC均SUCCESS；ProJED `5654478`為docs-only且無新check，程式仍引用`7308b1d`的CI44691983128，不以ready狀態縮減正式分母。
+  - 2026-11-20 續行：ProJED #9、Platform #157、OrgMaster #187 已依人類核准轉為ready-for-review，三者仍open且未merge／deploy／切流；base分別仍是遠端最新`0670a0a`／`5ae88bc`／`a8830e9`。Platform `b7293c2`、OrgMaster `4b722b4` required Source QC均SUCCESS；ProJED最新可執行source `5f9432f`的CI44696691376兩jobs亦SUCCESS，不以ready狀態縮減正式分母。
 
-  - 2026-11-20 續行：`effd5e7`的新45份候選Cloud Build54a37e8b已SUCCESS；1,010個Git blob、source provenance、三個registry digests與實際Job binding的45個migration SHA均讀回一致，runtime仍nonroot且四個provider／Job bindings為null。這是artifact-only，未部署或切流。同期唯讀刷新確認Shared VPC、bucket IAM修復、來源Secret版本、Speech runtime實呼叫／Gemini豁免仍未完成；Cloud Run Job仍不存在，正式交付分母不變。精確收據見[SPEC §47.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#471-2026-11-20-最小-foundation-變更提案)。
+  - 2026-11-20 續行：最新可執行source `5f9432f`的45份候選Cloud Build e04f848b已SUCCESS；provider staging SHA、三個registry digests、nonroot／provider-null及實際Job binding均讀回，45個migration SHA與exact Git archive bytes逐份一致。gcloud預設只排除`.gitignore`及一份歷史Playwright收據，1627個build檔案無code缺漏。這是artifact-only，未部署或切流。同期唯讀刷新仍確認Shared VPC非host、bucket IAM不可讀、來源Secret零版本且Cloud Run Job為空；正式來源views、Speech runtime實呼叫／Gemini豁免仍未完成，完整交付分母不變。精確收據見[SPEC §47.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#471-2026-11-20-最小-foundation-變更提案)。
 
   - 2026-11-20續行：RAG已移除API key即啟用Developer API的runtime分支，改接同一ProJED Google Cloud／短期IAM及獨立零留存模型資格，保留原兩種模型與資料／權限／索引語意。相關unit／型別／native Cloud adapter fixture及正式資格缺口統一見[SPEC §38.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#381-原行為與最小接線)；未變更SQL／正式資源，完整交付仍續行。
 
