@@ -276,6 +276,7 @@ export async function verifyAppSessionsPostgres(database: RuntimeDatabase, confi
   await store.claim(rollbackIntent.tokenHash,rollbackIntent.stateHash,rollbackClaim,Date.now());
   const rollbackInput={...complete(rollbackIntent,rollbackClaim),sessionTokenHash:created.tokenHash,
     identity:newIdentity('personal',`rollback-new-${randomUUID()}`)};
+  await publishSyntheticPrincipalState(config,rollbackInput.identity);
   await denied(store.complete(rollbackInput));
   assert.deepEqual(await resolver.resolve(rollbackInput.identity),{status:'missing'});
   assert.equal((await store.readLogin(rollbackIntent.tokenHash))?.status,'processing');
