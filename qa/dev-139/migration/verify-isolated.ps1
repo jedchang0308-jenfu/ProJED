@@ -79,6 +79,12 @@ function Invoke-DataMode([string]$Mode, [int[]]$ExpectedExitCodes) {
   return ($jsonLine.ToString() | ConvertFrom-Json)
 }
 
+function Set-DisposableSourceFence([ValidateSet('apply', 'remove')][string]$Mode) {
+  $sql = (& node --import tsx scripts/dev139-source-write-fence.ts $Mode) -join "`n"
+  if ($LASTEXITCODE -ne 0) { throw 'Could not render source fence SQL.' }
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', $sql)
+}
+
 function Assert-SourcePreflightBlocked([string]$MutationSql, [string]$RestoreSql, [string]$ExpectedDomainPrefix) {
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', $MutationSql)
   try {
@@ -539,6 +545,7 @@ UPDATE public.document_versions
   if ($rollbackCount -ne '0') { throw 'DEV-139 failed import left partial target rows.' }
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "UPDATE public.task_workbench_unplaced_items SET task = jsonb_build_object('id', 'unplaced-1', 'title', 'Unplaced')")
 
+  Set-DisposableSourceFence -Mode 'apply'
   $apply = Invoke-DataMode -Mode 'apply' -ExpectedExitCodes @(0)
   if ($apply.status -ne 'PASS' -or $apply.matches -ne $true -or
       $unknownEmptyDomain -notin @($apply.emptySourceRelations.domain)) {
@@ -548,6 +555,7 @@ UPDATE public.document_versions
   if ($reconcile.status -ne 'PASS' -or $reconcile.matches -ne $true -or $reconcile.snapshotId -ne $apply.snapshotId) {
     throw 'DEV-139 post-commit reconciliation failed.'
   }
+  Set-DisposableSourceFence -Mode 'remove'
   $targetRagEligible = Invoke-PgScalar -Database $targetDatabase -Sql "SELECT count(*) FROM projed_core.knowledge_records record JOIN projed_core.documents document ON document.id = record.source_document_id AND document.tenant_id = record.tenant_id AND document.project_id = record.project_id AND document.source_table = 'knowledge_records' AND document.source_id = record.id AND document.source_type = 'meeting_note' AND document.visibility = record.visibility AND document.rag_enabled = record.rag_enabled JOIN projed_core.document_versions version ON version.tenant_id = document.tenant_id AND version.document_id = document.id AND version.content_hash = document.content_hash JOIN projed_core.document_chunks chunk ON chunk.tenant_id = document.tenant_id AND chunk.document_id = document.id AND chunk.document_version_id = version.id WHERE record.id = '23456789-1234-4234-8234-123456789002' AND record.status = 'published' AND record.visibility <> 'private' AND record.rag_enabled AND document.rag_enabled AND version.id = (SELECT latest.id FROM projed_core.document_versions latest WHERE latest.tenant_id = document.tenant_id AND latest.document_id = document.id ORDER BY latest.version DESC LIMIT 1)"
   if ($targetRagEligible -ne '1') { throw 'DEV-139 apply/reconcile did not retain the valid published RAG source.' }
   $importedGuardBindings = Invoke-PgScalar -Database $targetDatabase -Sql "SELECT (SELECT count(*) FROM projed_core.account_authorization_guards) || ':' || (SELECT count(*) FROM projed_core.account_authorization_guards guard JOIN projed_core.google_identity_proofs proof USING (local_user_id) JOIN projed_core.profiles profile ON profile.id = guard.local_user_id WHERE guard.local_user_id = '11111111-1111-4111-8111-111111111111' AND guard.active AND guard.revision = 1 AND guard.updated_at = profile.updated_at) || ':' || (SELECT count(*) FROM projed_core.account_authorization_guards WHERE local_user_id = '22222222-2222-4222-8222-222222222222')"
@@ -646,7 +654,7 @@ UPDATE public.document_versions
     emptySourceRelations = $finalReconcile.emptySourceRelations
     checks = @(
       'legacy-business-table-fence-drain-read-reject-recover',
-      'empty-target-plan', 'single-transaction-rollback', 'full-snapshot-apply',
+      'empty-target-plan', 'single-transaction-rollback', 'full-snapshot-apply', 'reconciled-with-source-app-writes-paused',
       'unknown-empty-relation-diagnostic', 'unknown-populated-relation-block',
       'rls-hidden-source-reject', 'unknown-partitioned-relation-block',
       'empty-inheritance-child-diagnostic', 'ordinary-inheritance-child-block', 'plain-view-non-authority-skip',

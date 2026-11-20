@@ -30,7 +30,10 @@ try {
   await assert.rejects(assertSourceAppWritesPaused(owner), incomplete);
   await writer.query('COMMIT');
   await owner.query(apply);
+  await owner.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+  await owner.query('SET LOCAL ROLE projed_dev139_source_reader');
   await assertSourceAppWritesPaused(owner);
+  await owner.query('ROLLBACK');
   const read = () => writer.query('SELECT id FROM public.dev139_fence_probe ORDER BY id');
   assert.deepEqual((await read()).rows, [{ id: 1 }]);
   for (const sql of [

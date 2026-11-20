@@ -56,13 +56,13 @@ END $check$;`;
   if (mode === 'apply') return `${preflight}
 CREATE FUNCTION ${triggerFunction}() RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER AS $body$${body}$body$;
 REVOKE ALL ON FUNCTION ${triggerFunction}() FROM PUBLIC;
-DO $apply$ DECLARE t record; BEGIN
-  FOR t IN ${tables} ORDER BY c.oid LOOP
-    IF t.relkind = 'f' THEN RAISE EXCEPTION 'SOURCE_FOREIGN_WRITER_UNSUPPORTED'; END IF;
-    EXECUTE format('LOCK TABLE ONLY %I.%I IN ACCESS EXCLUSIVE MODE', t.nspname, t.relname);
+DO $apply$ DECLARE target_table record; BEGIN
+  FOR target_table IN ${tables} ORDER BY c.oid LOOP
+    IF target_table.relkind = 'f' THEN RAISE EXCEPTION 'SOURCE_FOREIGN_WRITER_UNSUPPORTED'; END IF;
+    EXECUTE format('LOCK TABLE ONLY %I.%I IN ACCESS EXCLUSIVE MODE', target_table.nspname, target_table.relname);
     EXECUTE format('CREATE TRIGGER ${triggerName} BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE ON %I.%I
-      FOR EACH STATEMENT EXECUTE FUNCTION ${triggerFunction}()', t.nspname, t.relname);
-    EXECUTE format('ALTER TABLE ONLY %I.%I ENABLE ALWAYS TRIGGER ${triggerName}', t.nspname, t.relname);
+      FOR EACH STATEMENT EXECUTE FUNCTION ${triggerFunction}()', target_table.nspname, target_table.relname);
+    EXECUTE format('ALTER TABLE ONLY %I.%I ENABLE ALWAYS TRIGGER ${triggerName}', target_table.nspname, target_table.relname);
   END LOOP;
   IF NOT (${fenced}) THEN RAISE EXCEPTION 'SOURCE_APP_WRITES_NOT_PAUSED'; END IF;
 END $apply$;
