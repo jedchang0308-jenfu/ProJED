@@ -16,10 +16,7 @@ import type {
 } from './identityConsumer.js';
 import type { PlatformHandoffBinding } from './platformHandoff.js';
 import {
-  PLATFORM_PROJED_PRINCIPAL_STATE_CONTRACT,
   PLATFORM_PRINCIPAL_STATE_MAX_READ_AGE_MS,
-  type PlatformPrincipalState,
-  type PlatformPrincipalStateReader,
 } from './platformPrincipalState.js';
 import {
   clearSessionCookie,
@@ -61,7 +58,6 @@ const URL_SENTINEL = 'http://projed.invalid';
 export interface AppSessionServiceOptions {
   readonly store: AppSessionStore;
   readonly consumer: Pick<IdentityConsumer, 'verifyIdentity'>;
-  readonly states: Pick<PlatformPrincipalStateReader, 'readCurrent'>;
   readonly mappings: PrincipalMappingResolver;
   readonly binding: PlatformHandoffBinding;
   readonly pins: readonly IdentityContractPin[];
@@ -251,38 +247,6 @@ function validIntentShape(value: unknown): value is StoredLoginIntent {
     && Number.isSafeInteger(value.expiresAtMs) && Number(value.expiresAtMs) >= 0;
 }
 
-function stateReadAtMs(value: PlatformPrincipalState): number | null {
-  if (typeof value.readAt !== 'string') return null;
-  const parsed = Date.parse(value.readAt);
-  return Number.isSafeInteger(parsed) && parsed >= 0 && new Date(parsed).toISOString() === value.readAt ? parsed : null;
-}
-
-function stateRevokedBeforeMs(value: PlatformPrincipalState): number | null | undefined {
-  if (value.revokedBefore === null) return null;
-  if (typeof value.revokedBefore !== 'string') return undefined;
-  const parsed = Date.parse(value.revokedBefore);
-  return Number.isSafeInteger(parsed) && parsed >= 0 && new Date(parsed).toISOString() === value.revokedBefore
-    ? parsed
-    : undefined;
-}
-
-function stateShape(value: unknown): value is PlatformPrincipalState {
-  if (!exactKeys(value, [
-    'contractVersion', 'principalId', 'principalKind', 'employeeId', 'identityIssuer', 'identitySubject',
-    'googleSubject', 'mappingRevision', 'authEpoch', 'revokedBefore', 'readAt',
-  ])) return false;
-  const revision = value.mappingRevision;
-  return value.contractVersion === PLATFORM_PROJED_PRINCIPAL_STATE_CONTRACT.contractVersion
-    && text(value.principalId) && (value.principalKind === 'employee' || value.principalKind === 'personal')
-    && (value.principalKind === 'personal' ? value.employeeId === null : text(value.employeeId))
-    && text(value.identityIssuer) && text(value.identitySubject) && text(value.googleSubject)
-    && typeof revision === 'string' && REVISION_RE.test(revision) && BigInt(revision) <= MAX_INT64
-    && Number.isSafeInteger(value.authEpoch) && Number(value.authEpoch) >= 0
-    && (value.revokedBefore === null || typeof value.revokedBefore === 'string')
-    && stateReadAtMs(value as unknown as PlatformPrincipalState) !== null
-    && stateRevokedBeforeMs(value as unknown as PlatformPrincipalState) !== undefined;
-}
-
 function unavailable(): never {
   throw new KernelError('IDENTITY_STATE_UNAVAILABLE', 'Application session state cannot be confirmed', 503);
 }
@@ -379,26 +343,6 @@ function identityInvalidOrUnavailable(error: unknown): never {
   unavailable();
 }
 
-function checkCurrentState(
-  identity: ProducerVerifiedIdentity,
-  stateInput: unknown,
-  nowMs: number,
-): { state: PlatformPrincipalState; readAtMs: number } {
-  if (!stateShape(stateInput)) unavailable();
-  const state = stateInput;
-  const readAtMs = stateReadAtMs(state);
-  const revokedBeforeMs = stateRevokedBeforeMs(state);
-  if (readAtMs === null || revokedBeforeMs === undefined
-      || readAtMs > nowMs || nowMs - readAtMs > PLATFORM_PRINCIPAL_STATE_MAX_READ_AGE_MS) unavailable();
-  if (state.principalId !== identity.principalId || state.principalKind !== identity.principalKind
-      || state.employeeId !== identity.employeeId || state.identityIssuer !== identity.identityIssuer
-      || state.identitySubject !== identity.identitySubject || state.googleSubject !== identity.googleSubject
-      || state.mappingRevision !== identity.mappingRevision || state.authEpoch !== identity.authEpoch
-      || revokedBeforeMs !== identity.revokedBeforeMs || identity.authenticatedAtMs > readAtMs
-      || (revokedBeforeMs !== null && identity.authenticatedAtMs <= revokedBeforeMs)) invalidSession();
-  return { state, readAtMs };
-}
-
 function mappingForSession(
   identity: ProducerVerifiedIdentity,
   mapping: unknown,
@@ -456,7 +400,6 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
       || typeof options.store.reject !== 'function' || typeof options.store.complete !== 'function'
       || typeof options.store.readSession !== 'function' || typeof options.store.revokeSession !== 'function'
       || !options.consumer || typeof options.consumer.verifyIdentity !== 'function'
-      || !options.states || typeof options.states.readCurrent !== 'function'
       || !options.mappings || typeof options.mappings.resolve !== 'function'
       || !validBinding(options.binding, options.environment)
       || !Array.isArray(options.pins)
@@ -512,17 +455,6 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
       invalidSession();
     }
     const identity = stored.identity;
-    let stateInput: PlatformPrincipalState;
-    try {
-      stateInput = await options.states.readCurrent({
-        identityIssuer: identity.identityIssuer,
-        identitySubject: identity.identitySubject,
-        principalId: identity.principalId,
-      });
-    } catch (error) {
-      identityInvalidOrUnavailable(error);
-    }
-    const checked = checkCurrentState(identity, stateInput, nowFrom(now));
     let mappingResult: unknown;
     try {
       mappingResult = await options.mappings.resolve({
@@ -548,7 +480,7 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
       expiresAtMs: Math.min(
         stored.expiresAtMs,
         identity.sourceSessionExpiresAtMs,
-        checked.readAtMs + PLATFORM_PRINCIPAL_STATE_MAX_READ_AGE_MS,
+        actorNowMs + PLATFORM_PRINCIPAL_STATE_MAX_READ_AGE_MS,
       ),
       accountGuardRevision: stored.accountGuardRevision,
     });
@@ -568,7 +500,7 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
     });
   };
 
-  /** Uses the original Session's horizon/revocation and the same live verifier as HTTP. */
+  /** Uses the original Session's horizon/revocation and the same local Session/guard verifier as HTTP. */
   const resolveMeetingRunActor = async (runId: string): Promise<ServerActorV1> => {
     if (!UUID_RE.test(runId)) invalidSession();
     if (!contractPinned || !pins.some(pin => pinMatches(pin,binding))) {

@@ -1,3 +1,4 @@
+import { publishSyntheticPrincipalState } from '../s2/principalStateFixture.js';
 import assert from 'node:assert/strict';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
@@ -72,6 +73,7 @@ function identity(label: string, email: string): ProducerVerifiedIdentity {
 
 async function firstLogin(
   store: PostgresAppSessionStore,
+  config: RuntimeConfig,
   label: string,
 ): Promise<{ session: StoredAppSession; actor: ServerActorV1 }> {
   const intent = loginIntent();
@@ -89,6 +91,7 @@ async function firstLogin(
     entry: 'main',
     nowMs: Date.now(),
   };
+  await publishSyntheticPrincipalState(config,proof);
   const session = await store.complete(input);
   assert.equal(session.identity.googleSubject, proof.googleSubject);
   assert.equal(session.identity.principalKind, 'personal');
@@ -306,9 +309,9 @@ async function closeHttpServer(server: ReturnType<typeof createKernelHttpServer>
 /** Real disposable PostgreSQL, real RLS/HTTP path, synthetic identities/provider only. */
 export async function verifyRagPostgres(database: RuntimeDatabase, config: RuntimeConfig): Promise<void> {
   const store = new PostgresAppSessionStore(database);
-  const ownerLogin = await firstLogin(store, 'rag-owner');
-  const guestLogin = await firstLogin(store, 'rag-board-guest');
-  const outsiderLogin = await firstLogin(store, 'rag-outsider');
+  const ownerLogin = await firstLogin(store, config, 'rag-owner');
+  const guestLogin = await firstLogin(store, config, 'rag-board-guest');
+  const outsiderLogin = await firstLogin(store, config, 'rag-outsider');
   const ownerScope = await createWorkspaceBoard(database, config, ownerLogin.actor, 'RAG owner');
   const outsiderScope = await createWorkspaceBoard(database, config, outsiderLogin.actor, 'RAG outsider');
 

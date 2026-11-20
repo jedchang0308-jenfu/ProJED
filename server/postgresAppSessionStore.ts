@@ -7,6 +7,7 @@ import type { RuntimeDatabase } from './db.js';
 import { KernelError } from './errors.js';
 import { validateNormalizedIdentity, type ProducerVerifiedIdentity } from './identityConsumer.js';
 import { resolveGoogleMappingInTransaction } from './principalMappings.js';
+import { createPlatformPrincipalStateReader, PLATFORM_PROJED_PRINCIPAL_STATE_CONTRACT } from './platformPrincipalState.js';
 
 const HASH = /^[a-f0-9]{64}$/u;
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u;
@@ -52,7 +53,7 @@ function session(row: QueryResultRow): StoredAppSession {
   const proof = row.identity as ProducerVerifiedIdentity;
   try {
     // Validate the original proof at its original issue time. Future requests
-    // re-read current state; they must not re-consume an expired handoff code.
+    // use the local account revocation guard; never re-consume a handoff code.
     validateNormalizedIdentity(proof, timestamp(proof?.issuedAtMs));
   } catch { unavailable(); }
   const expiresAtMs = timestamp(row.expires_at_ms);
@@ -185,6 +186,25 @@ export class PostgresAppSessionStore implements AppSessionStore {
     const proof = Object.freeze({ ...input.identity });
     validateNormalizedIdentity(proof,this.#now());
     return this.#transaction(input.tokenHash,null,false,async client => {
+      // Hold the app publication/commit fence before the final login-only
+      // admission read. A stale proof cannot mint a Session after revocation.
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended('projed:runtime-transaction:v1', 0))");
+      const states = createPlatformPrincipalStateReader({
+        contractBinding: PLATFORM_PROJED_PRINCIPAL_STATE_CONTRACT,
+        handoffBinding: { contractVersion:'jenfu.sso-handoff.v4', issuer:proof.issuer,
+          manifestSha256:proof.manifestSha256, audience:'projed' },
+        query: { query: async (text,values) => client.query(text,[...values]) }, now:this.#now,
+      });
+      const currentState = await states.readCurrent({ identityIssuer:proof.identityIssuer,
+        identitySubject:proof.identitySubject, principalId:proof.principalId });
+      const revokedBeforeMs = currentState.revokedBefore === null ? null : Date.parse(currentState.revokedBefore);
+      if (currentState.principalKind!==proof.principalKind || currentState.employeeId!==proof.employeeId
+        || currentState.googleSubject!==proof.googleSubject || currentState.mappingRevision!==proof.mappingRevision
+        || currentState.authEpoch!==proof.authEpoch || revokedBeforeMs!==proof.revokedBeforeMs
+        || proof.authenticatedAtMs>Date.parse(currentState.readAt)
+        || (revokedBeforeMs!==null && proof.authenticatedAtMs<=revokedBeforeMs)) {
+        throw new KernelError('IDENTITY_INVALID','Principal changed before Session completion',401);
+      }
       const initial = await client.query(`SELECT ${LOGIN_COLUMNS} FROM projed_core.app_login_intents
         WHERE token_hash=$1 AND state_hash=$2`,[input.tokenHash,input.stateHash]);
       if (initial.rows.length !== 1) conflict();

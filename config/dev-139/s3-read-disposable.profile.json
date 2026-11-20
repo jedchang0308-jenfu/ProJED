@@ -198,6 +198,10 @@
     {
       "version": "0044_legacy_unscoped_audit_retention_v1",
       "path": "db/migrations/0044_legacy_unscoped_audit_retention_v1.sql"
+    },
+    {
+      "version": "0045_central_session_revocation_v1",
+      "path": "db/migrations/0045_central_session_revocation_v1.sql"
     }
   ],
   "objectAllowlist": [
@@ -385,7 +389,11 @@
     "projed_core.meeting_audio_cleanup_detach_v1",
     "projed_core.scan_meeting_audio_cleanup_v1",
     "projed_core.claim_meeting_audio_cleanup_v1",
-    "projed_core.finish_meeting_audio_cleanup_v1"
+    "projed_core.finish_meeting_audio_cleanup_v1",
+    "projed_contract.v_google_session_accounts_v1",
+    "projed_contract.v_account_session_guards_v1",
+    "projed_contract.invalidate_google_sessions_v1",
+    "projed_core.account_session_revocation_guard_v1"
   ],
   "staticFixturePath": "qa/dev-139/s1/static",
   "runtime": {

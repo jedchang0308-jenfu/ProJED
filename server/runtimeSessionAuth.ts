@@ -74,7 +74,7 @@ export function createRuntimeSessionAuth(
     verifier: createPlatformIdentityVerifier({ handoffs,stateReader:states,binding,environment:'production' }),
   });
   const auth = createAppSessionService({
-    store: new PostgresAppSessionStore(database), consumer, states, mappings, binding,
+    store: new PostgresAppSessionStore(database), consumer, mappings, binding,
     pins: CURRENT_PRODUCTION_IDENTITY_PINS, origins: { main,quick }, environment:'production',
   });
   return { dispatchAuth:auth.dispatchAuth,resolveActor:auth.resolveActor,

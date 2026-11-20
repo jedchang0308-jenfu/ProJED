@@ -266,6 +266,7 @@ function fixture(input: { pins?: readonly IdentityContractPin[]; origins?: { mai
         producerCallCount += 1;
         producerInputs.push(producerInput);
         if (verifyGate) await verifyGate();
+        await states.readCurrent({identityIssuer:identity.identityIssuer,identitySubject:identity.identitySubject,principalId:identity.principalId});
         return identity;
       },
     },
@@ -287,7 +288,6 @@ function fixture(input: { pins?: readonly IdentityContractPin[]; origins?: { mai
   const service = createAppSessionService({
     store,
     consumer,
-    states,
     mappings,
     binding: BINDING,
     pins,
@@ -818,7 +818,7 @@ test('an existing login nonce is cancelled before a replacement starts and fence
   assert.equal(intentFrom(f, secondCookie).status, 'pending');
 });
 
-test('Session requests reread current state once per request and preserve stored entry/context and long expiry', async () => {
+test('Session requests use local guards with zero upstream reads and preserve entry/context and long expiry', async () => {
   const f = fixture({ origins: { main: MAIN_ORIGIN, quick: MAIN_ORIGIN } });
   const login = await start(f, 'quick');
   const authorize = authorizationFrom(login);
@@ -848,17 +848,18 @@ test('Session requests reread current state once per request and preserve stored
   const requestTwo = request('GET', '/api/v1/session', { host: host(MAIN_ORIGIN), cookie: sessionCookie });
   const actorTwo = await f.service.resolveActor(requestTwo);
   assert.equal(actorTwo.contextId, actorOne.contextId);
-  assert.equal(f.counts().stateReadCount, 2);
+  assert.equal(f.counts().stateReadCount, 1);
   assert.equal(f.counts().mappingReadCount, mappingCountAfterRequestOne + 1);
 
   const beforeMapping = f.counts().mappingReadCount;
   const changedIdentity = identityAt(nextNow, { authEpoch: f.identity().authEpoch + 1 });
   f.setState(stateFor(changedIdentity, nextNow));
+  f.store.guardRevision=String(Number(f.store.guardRevision)+1);
   const driftRequest = request('GET', '/api/v1/session', { host: host(MAIN_ORIGIN), cookie: sessionCookie });
   await assert.rejects(f.service.resolveActor(driftRequest), (error: unknown) =>
-    error instanceof KernelError && error.code === 'IDENTITY_INVALID');
-  assert.equal(f.counts().stateReadCount, 3);
-  assert.equal(f.counts().mappingReadCount, beforeMapping);
+    error instanceof KernelError && error.code === 'IDENTITY_MAPPING_CONFLICT');
+  assert.equal(f.counts().stateReadCount, 1);
+  assert.equal(f.counts().mappingReadCount, beforeMapping+1);
 });
 
 test('long AI requests explicitly refresh the same Session and reject state drift after provider work', async () => {
@@ -877,10 +878,11 @@ test('long AI requests explicitly refresh the same Session and reject state drif
   assert.equal(refreshed.localUserId,before.localUserId);
   assert.equal(refreshed.contextId,before.contextId);
   assert.ok(refreshed.expiresAtMs>f.now());
-  assert.equal(f.counts().stateReadCount,2);
+  assert.equal(f.counts().stateReadCount,1);
   f.setState(stateFor(identityAt(f.now(),{authEpoch:f.identity().authEpoch+1}),f.now()));
+  f.store.guardRevision=String(Number(f.store.guardRevision)+1);
   await assert.rejects(f.service.resolveActor(ongoing,{refresh:true}),
-    (error: unknown)=>error instanceof KernelError && error.code==='IDENTITY_INVALID');
+    (error: unknown)=>error instanceof KernelError && error.code==='IDENTITY_MAPPING_CONFLICT');
 });
 
 test('wrong-origin prior Session stays untouched while confirmed revoked or missing rows clear for re-login', async () => {
@@ -933,10 +935,11 @@ test('global epoch drift blocks private reads but not login start or pending-log
   f.store.seedSession(oldSession);
   const oldCookie = `__session=${oldToken}`;
   f.setState(stateFor(identityAt(f.now(), { authEpoch: identity.authEpoch + 1 }), f.now()));
+  f.store.guardRevision=String(Number(f.store.guardRevision)+1);
 
   await assert.rejects(f.service.resolveActor(request('GET', '/api/v1/session', {
     host: host(MAIN_ORIGIN), cookie: oldCookie,
-  })), (error: unknown) => error instanceof KernelError && error.code === 'IDENTITY_INVALID');
+  })), (error: unknown) => error instanceof KernelError && error.code === 'IDENTITY_MAPPING_CONFLICT');
   const before = f.counts();
   const login = await start(f, 'main', oldCookie);
   assert.equal(login.status, 200);
@@ -992,9 +995,9 @@ test('local logout ignores unavailable current-state service and a lost revoke f
   f.store.seedSession(oldSession);
   const req = logoutRequest(MAIN_ORIGIN, `__session=${oldToken}`);
   f.setStateUnavailable(true);
-  await assert.rejects(f.service.resolveActor(request('GET', '/api/v1/session', {
+  assert.equal((await f.service.resolveActor(request('GET', '/api/v1/session', {
     host: host(MAIN_ORIGIN), cookie: `__session=${oldToken}`,
-  })), (error: unknown) => error instanceof KernelError && error.code === 'IDENTITY_STATE_UNAVAILABLE');
+  }))).localUserId,USER_ID);
   const stateReads = f.counts().stateReadCount;
   await f.service.resolveLogoutIdentity(req);
   const result = await f.service.destroySession(req);
@@ -1122,7 +1125,7 @@ test('ASR run uses its bound main Session with fresh state after handoff expiry,
   const actor=await f.service.resolveMeetingRunActor(runId);
   assert.equal(actor.contextId,CONTEXT_ID);assert.equal(actor.localUserId,USER_ID);
   assert.equal(actor.expiresAtMs,f.now()+10_000);
-  assert.equal(f.counts().producerCallCount,0);assert.equal(f.counts().stateReadCount,1);
+  assert.equal(f.counts().producerCallCount,0);assert.equal(f.counts().stateReadCount,0);
   assert.equal(f.counts().mappingReadCount,1);
   await assert.rejects(f.service.resolveMeetingRunActor('10000000-0000-4000-8000-000000000002'));
 });
@@ -1141,7 +1144,7 @@ test('ASR bound Session rejects revocation, expiry, wrong entry and a changed ac
   }
 });
 
-test('ASR bound Session fails closed on current Principal drift, stale state or state outage',async()=>{
+test('ASR bound Session does not query upstream during stale or unavailable source state',async()=>{
   for(const variant of ['epoch','mapping','stale','unavailable'] as const){
     const f=fixture(),runId='10000000-0000-4000-8000-000000000001';
     f.store.meetingRuns.set(runId,{tokenHash:'f'.repeat(64),publicOrigin:MAIN_ORIGIN,entry:'main',
@@ -1152,7 +1155,8 @@ test('ASR bound Session fails closed on current Principal drift, stale state or 
       ...(variant==='mapping'?{mappingRevision:'8'}:{}),
       ...(variant==='stale'?{readAt:new Date(f.now()-10_001).toISOString()}:{})});
     if(variant==='unavailable')f.setStateUnavailable(true);
-    await assert.rejects(f.service.resolveMeetingRunActor(runId));
+    assert.equal((await f.service.resolveMeetingRunActor(runId)).localUserId,USER_ID);
+    assert.equal(f.counts().stateReadCount,0);
     assert.equal(f.counts().producerCallCount,0);
   }
 });

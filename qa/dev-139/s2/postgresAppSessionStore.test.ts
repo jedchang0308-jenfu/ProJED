@@ -77,6 +77,7 @@ function completeInput(overrides: Partial<CompleteLoginInput> = {}): CompleteLog
 interface QueryRecord { readonly sql: string; readonly values: readonly unknown[]; }
 interface HarnessOptions {
   readonly intent?: StoredLoginIntent;
+  readonly sourceState?: Partial<ProducerVerifiedIdentity> | 'unavailable';
   readonly guardRevision?: string;
   readonly identity?: ProducerVerifiedIdentity;
   readonly oldSessionIdentity?: ProducerVerifiedIdentity;
@@ -140,6 +141,15 @@ function harness(options: HarnessOptions = {}) {
       }
       if (options.failOperation === 'email-refresh' && /UPDATE projed_core\.profiles\s+SET email/u.test(normalized)) {
         throw new Error('simulated verified email refresh failure');
+      }
+      if (normalized.startsWith('SELECT * FROM platform_contract.read_projed_principal_state_v1(')) {
+        if(options.sourceState==='unavailable') throw new Error('source unavailable');
+        const current={...proof,...options.sourceState};
+        return result([{contract_version:'jenfu.platform.projed-principal-state.v1',principal_id:current.principalId,
+          principal_kind:current.principalKind,employee_id:current.employeeId,identity_issuer:current.identityIssuer,
+          identity_subject:current.identitySubject,google_subject:current.googleSubject,mapping_revision:current.mappingRevision,
+          auth_epoch:String(current.authEpoch),revoked_before:current.revokedBeforeMs===null?null:new Date(current.revokedBeforeMs),
+          read_at:new Date(NOW)}] as unknown as R[]);
       }
       if (/SELECT .*FROM projed_core\.app_login_intents/u.test(normalized)) {
         if (options.failOperation === 'intent-select') throw new Error('simulated operation query failure');
@@ -495,3 +505,15 @@ test('bootstrap insert failure rolls back before publishing Session or consuming
   assert.equal(sql.includes('ROLLBACK'), true);
   assert.deepEqual(db.releases, [false]);
 });
+
+for (const drift of [{authEpoch:5},{mappingRevision:'13'},{googleSubject:'different-google'},'unavailable'] as const) {
+  test(`login final transaction rejects source drift ${JSON.stringify(drift)} before enrollment`,async()=>{
+    const h=harness({sourceState:drift});
+    await assert.rejects(h.store.complete(completeInput()),error=>error instanceof KernelError);
+    assert.equal(h.queries.some(q=>q.sql.startsWith('INSERT INTO projed_core.')),false);
+    assert.equal(h.queries.some(q=>q.sql==='COMMIT'),false);
+    const lock=h.queries.findIndex(q=>q.sql.includes("projed:runtime-transaction:v1"));
+    const read=h.queries.findIndex(q=>q.sql.includes('platform_contract.read_projed_principal_state_v1'));
+    assert.ok(lock>=0&&read>lock);
+  });
+}

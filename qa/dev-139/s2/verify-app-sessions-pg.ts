@@ -1,3 +1,5 @@
+import { verifyCentralRevocationPostgres } from './verify-central-revocation-pg.js';
+import { publishSyntheticPrincipalState } from './principalStateFixture.js';
 import assert from 'node:assert/strict';
 import { createHash,randomBytes,randomUUID } from 'node:crypto';
 import type { RuntimeDatabase } from '../../../server/db.js';
@@ -44,6 +46,7 @@ export async function verifyAppSessionsPostgres(database: RuntimeDatabase, confi
   const claimHash=opaqueHash();
   assert.equal((await store.claim(first.tokenHash,first.stateHash,claimHash,Date.now())).status,'processing');
   const input=complete(first,claimHash);
+  await publishSyntheticPrincipalState(config,input.identity);
   const created=await store.complete(input);
   assert.equal(created.contextId,input.contextId);
   assert.equal(created.expiresAtMs,input.identity.sourceSessionExpiresAtMs);
@@ -69,6 +72,7 @@ export async function verifyAppSessionsPostgres(database: RuntimeDatabase, confi
   const switchClaim=opaqueHash();
   await store.claim(switched.tokenHash,switched.stateHash,switchClaim,Date.now());
   const switchedInput=complete(switched,switchClaim,'b');
+  await publishSyntheticPrincipalState(config,switchedInput.identity);
   const second=await store.complete(switchedInput);
   assert.equal(second.localUserId,'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
   assert.notEqual(second.contextId,created.contextId);
@@ -95,6 +99,7 @@ export async function verifyAppSessionsPostgres(database: RuntimeDatabase, confi
   const prepare = async (proof: ProducerVerifiedIdentity) => {
     const row=intent(); const claim=opaqueHash();
     await store.begin(row); await store.claim(row.tokenHash,row.stateHash,claim,Date.now());
+    await publishSyntheticPrincipalState(config,proof);
     return {...complete(row,claim),identity:proof};
   };
   const subject=`first-personal-${randomUUID()}`;
@@ -328,4 +333,7 @@ export async function verifyAppSessionsPostgres(database: RuntimeDatabase, confi
       (error: unknown)=>(error as {code?:string}).code==='23514');
     await lease.client.query('ROLLBACK');
   } finally { lease.release(); }
+  const revokeSession=await store.complete(await prepare(newIdentity('personal',`central-fence-${randomUUID()}`)));
+  await verifyCentralRevocationPostgres(database,config,revokeSession);
+
 }
