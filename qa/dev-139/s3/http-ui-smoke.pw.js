@@ -108,8 +108,6 @@ async (page) => {
     assert(interrupted, 'collaborator did not encounter the simulated transient read failure');
     assert(!privateBoardRequest && !(await collaborator.locator('body').innerText()).includes('B secret'),
       'collaborator loaded the owner-only private board');
-    await collaboratorContext.close();
-    collaboratorContext = null;
     step = 'verify the saved task after reload';
     const [loaded] = await Promise.all([
       page.waitForResponse(response => new URL(response.url()).pathname === taskPath
@@ -127,6 +125,49 @@ async (page) => {
     assert(!bodyText.includes('B secret'), 'private-board task leaked after reload');
     step = 'restore the shared fixture through the same dialog';
     await editTitle('Shared parent');
+
+    step = 'create a private workspace from the personal owner sidebar';
+    const workspaceTitle = 'Personal workspace from sidebar';
+    const boardTitle = 'Personal board from home';
+    const privateTitle = 'Private task created in browser';
+    const saveThroughUi = async (path, method, action) => {
+      const [response] = await Promise.all([
+        page.waitForResponse(reply => new URL(reply.url()).pathname === path && reply.request().method() === method),
+        action(),
+      ]);
+      assert(response.ok(), 'normal HTTP operation failed', { path, method, status: response.status() });
+      return (await response.json()).data;
+    };
+    await page.locator('[data-main-sidebar-toggle="true"]').click();
+    await workspaceSidebar.locator('[data-sidebar-workspace-title="true"]').first().click({ button: 'right' });
+    await page.locator('[data-context-menu-create-workspace="true"]').click();
+    const createWorkspace = page.locator('[data-workspace-create-dialog="true"]');
+    await createWorkspace.getByRole('textbox').fill(workspaceTitle);
+    const workspace = await saveThroughUi('/api/v1/workspaces', 'POST', () => createWorkspace.getByRole('button', { name: '建立', exact: true }).click());
+    await createWorkspace.waitFor({ state: 'hidden' });
+    if (await workspaceSidebar.isVisible()) await page.getByRole('button', { name: '關閉工作區與看板' }).click();
+    step = 'create a private board and task through their normal controls';
+    const section = page.locator('[data-home-workspace-section="true"]').filter({ hasText: workspaceTitle });
+    await section.locator('[data-empty-workspace-create-board="true"]').click();
+    await page.getByPlaceholder('請輸入文字...').fill(boardTitle);
+    const boardsPath = `/api/v1/workspaces/${encodeURIComponent(workspace.id)}/boards`;
+    const board = await saveThroughUi(boardsPath, 'POST', () => page.locator('[data-global-dialog-decision-index="1"]').click());
+    const privatePath = `${boardsPath}/${encodeURIComponent(board.id)}/tasks`;
+    const creation = await saveThroughUi(privatePath + ':commit-order', 'POST', () => page.getByTitle('新增列表', { exact: true }).click());
+    assert(creation.nodes.length === 1, 'expected one new task in the empty personal board');
+    const taskId = creation.nodes[0].id;
+    await modal.getByRole('textbox', { name: '編輯任務名稱' }).fill(privateTitle);
+    await saveThroughUi(`${privatePath}/${encodeURIComponent(taskId)}`, 'PATCH', () => modal.getByRole('button', { name: '關閉任務詳情' }).click());
+    step = 'reload the private task and verify isolation for the shared board collaborator';
+    const privateTasks = await saveThroughUi(privatePath, 'GET', () => page.reload({ waitUntil: 'domcontentloaded' }));
+    assert(privateTasks.some(task => task.id === taskId && task.title === privateTitle), 'private task did not survive reload');
+    await page.locator('[data-task-title-slot="true"]').filter({ hasText: privateTitle }).first().waitFor();
+    const otherSession = (await (await collaborator.request.get(baseUrl + '/api/v1/session')).json()).data;
+    const denied = await collaborator.request.get(baseUrl + privatePath, { headers: {
+      'x-projed-expected-account-id': otherSession.localUserId,
+      'x-projed-expected-context-id': otherSession.authContextId,
+    } });
+    assert(denied.status() === 404 && !(await denied.text()).includes(privateTitle), 'private task disclosed to another authenticated actor', { status: denied.status() });
 
     const apiPaths = [...new Set(sameOriginResponses
       .map(item => new URL(item.url).pathname)
@@ -149,6 +190,8 @@ async (page) => {
       reload: true,
       titleEditPersistedAfterReload: true,
       collaboratorRecoveredAfterTransientReadFailure: true,
+      personalWorkspaceBoardTaskPersistedAfterReload: true,
+      collaboratorPrivateTaskStatus: denied.status(),
       privateBoardLeak: false,
       apiPaths,
       screenshot: 'output/playwright/dev-139-http-ui/main.png',
