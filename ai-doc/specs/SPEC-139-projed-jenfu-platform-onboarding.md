@@ -1311,6 +1311,14 @@ Binding以容器內實際profile／SQL／static metadata bytes為準；本次33�
 - API差異為Compute、SQL Admin、Scheduler、Speech、Vertex未啟用；Run／Cloud Build／Artifact Registry／Secret Manager／Storage已啟用。
 - SQL仍是POSTGRES_17／RUNNABLE、私網、IAM登入、既有 `jenfu_prod`；保留tier、backup／PITR與其他資料庫。子網 `jenfu-platform-prod-runtime` 已存在，asia-east1、10.20.10.0/24、Private Google Access開啟；PSA peer ACTIVE。`shared-vpc associated-projects list`明確回覆host尚未啟用，不能由子網存在推論跨project路由可用。
 - 唯一已列出的bucket是 `run-sources-projed-cc78d-asia-east1`，soft delete七天；提案 `projed-cc78d-meeting-audio` 的metadata GET回404。新桶須create-only，全球名稱如有競爭就先readback，不接管未知資源。
+- 目前操作者的project `testIamPermissions` 已回傳SA／custom role／Secret／bucket建立、API啟用、project IAM及SQL IAM user／子網IAM所需權限；organization與兩project測試均未回傳 `compute.organizations.enableXpnHost`／`enableXpnResource`，Shared VPC操作尚無已驗證的執行權限。核准不等於取得Google IAM權限；這兩步由既有Shared VPC管理員執行，不暗中授予操作者整個organization的管理角色。
+
+具備該權限的管理員可沿以下具名命令完成網路關聯；本次只準備命令，沒有執行：
+
+```powershell
+gcloud compute shared-vpc enable jenfu-platform-prod
+gcloud compute shared-vpc associated-projects add projed-cc78d --host-project=jenfu-platform-prod
+```
 
 新增的IAM／Secret／credential及共用網路責任，依人類全域協作規範等待一次具體核准；核准下表後沿正常workflow執行、讀回及修正，不逐個SHA再確認。這不是重問Cloud Run＋Cloud SQL方向或新增發布關卡。
 
@@ -1329,7 +1337,11 @@ Binding以容器內實際profile／SQL／static metadata bytes為準；本次33�
 
 零留存查證沿Google[Speech V1 FAQ](https://docs.cloud.google.com/speech-to-text/docs/v1/data-usage-faq)及[專案data logging設定](https://docs.cloud.google.com/speech-to-text/docs/v1/enable-data-logging)：保留同步Recognize及停用logging，不改用會留存transcript的async。Vertex依[零留存設定](https://docs.cloud.google.com/gemini-enterprise-agent-platform/resources/zero-data-retention)停用所有cache，並由[適用契約與abuse monitoring](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/abuse-monitoring)確認所選模型；僅有「不訓練」或API啟用不構成零留存資格。本次尚無該project的契約／豁免證據。
 
-本機針對性自查：release unit 31/31、MJS syntax與diff-check PASS；新增案例驗runtime-only推論、bucket-only讀寫刪、無多餘管理權、真正刪除設定，以及設定提案不得自動產生資格或IAM執行。未改server／frontend／SQL或既有qualified 44份migration；前版CI與native／OCI產品回歸仍按其原受測來源重用，新版required CI結果待實際回讀。
+本機針對性自查：release unit 31/31、MJS syntax、affected lint與diff-check PASS；新增案例驗runtime-only推論、bucket-only讀寫刪、無多餘管理權、真正刪除設定，以及設定提案不得自動產生資格或IAM執行。未改server／frontend／SQL或既有qualified 44份migration。
+
+受測source `fef9f8119ee1494bc94fe454c41e360085656e26` 的[CI44644625891](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44644625891)兩jobs SUCCESS：665 unit（494／126／14／31）、原lockfile型別、三boundary、compiled artifact、PostgreSQL17.11 domain73／snapshot63、44份migration及OCI18 PASS。已讀回artifacts14587159598／14588103349：native `s3/20261120T002032Z-023f60cd`／`migration/20261120T002139Z-6d728a73`均PASS，OCI `dev139-oci-b265c857b200d3cac07178d6`綁同一完整source、actual=expected44與owned cleanup PASS。這是RD自查／CI隔離資格；真Cloud IAM／Speech／Cloud SQL／registry push／browser與正式發布仍NOT_RUN。後續僅補本節收據與操作者metadata，不改受測程式或重跑未受影響的產品驗證。
+
+同次Vertex cache、generation及embedding模型logging的三個唯讀GET均403 `SERVICE_DISABLED`，故狀態仍UNKNOWN。以專案／編號／留存及Google寄件者關鍵字查詢可用郵件未找到既有核准紀錄，不將搜尋無結果當成不存在契約；已詢問人類是否有適用Master Agreement或明確豁免來源，尚未取得回覆。未寄信、提交豁免表單或把計畫欄位當成Google核准。
 
 ### W33 歷史實作與證據
 
