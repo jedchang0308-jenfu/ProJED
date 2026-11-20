@@ -5,11 +5,21 @@ async (page) => {
   const calls = [];
   const external = [];
   const pageErrors = [];
+  // The board loads a public holiday calendar independently of the assistant.
+  // Serve only that fixed, read-only URL locally and still catch every other fetch.
+  const publicCalendar = /^https:\/\/cdn\.jsdelivr\.net\/gh\/ruyut\/TaiwanCalendar\/data\/(\d{4})\.json$/;
+  await page.route(publicCalendar, async route => {
+    const request = route.request();
+    if (request.method() !== 'GET' || request.postData()) throw new Error('Unexpected public calendar request');
+    const year = new URL(request.url()).pathname.slice(-9, -5);
+    await route.fulfill({ json: [{ date: year + '0101', isHoliday: true }] });
+  });
   page.on('pageerror', error => pageErrors.push(error.message));
   page.on('request', request => {
     const url = new URL(request.url());
     if (url.pathname === ragPath) calls.push(request);
-    if (['https:', 'http:'].includes(url.protocol) && url.origin !== baseUrl && ['fetch', 'xhr'].includes(request.resourceType())) external.push(url.origin);
+    if (['https:', 'http:'].includes(url.protocol) && url.origin !== baseUrl
+      && !publicCalendar.test(request.url()) && ['fetch', 'xhr'].includes(request.resourceType())) external.push(url.origin);
   });
   const assert = (condition, message) => { if (!condition) throw new Error(message); };
   let step = 'load real product with isolated Session';

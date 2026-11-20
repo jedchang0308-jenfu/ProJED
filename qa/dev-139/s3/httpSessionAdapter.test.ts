@@ -9,6 +9,27 @@ const appOrigin = 'https://projed.example.test';
 const state = 'S'.repeat(43);
 const challenge = 'C'.repeat(43);
 
+test('late Session success or denial cannot replace the current account binding', async () => {
+  const profile = (id: string) => Response.json({ data: { localUserId: id, email: null, displayName: null,
+    createdAt: 1, expiresAt: future, authContextId: 'session-' + id, entry: 'main' } });
+  for (const stale of [profile('a'), new Response(null, { status: 401 })]) {
+    let deliver!: (response: Response) => void;
+    let calls = 0;
+    const client = new HttpApiClient(async (_input, init) => {
+      if (++calls === 1) return new Promise<Response>(resolve => { deliver = resolve; });
+      if (calls === 2) return profile('b');
+      assert.equal(new Headers(init?.headers).get('x-projed-expected-account-id'), 'b');
+      return Response.json({ data: [] });
+    });
+    const session = createHttpSessionAdapter(client);
+    const late = session.getSession();
+    assert.equal((await session.getSession()).uid, 'b');
+    deliver(stale);
+    await assert.rejects(late, { code: 'ACTOR_CHANGED' });
+    await client.request('/api/v1/workspaces');
+  }
+});
+
 const authorizationUrl = (overrides: Record<string, string> = {}) => {
   const query = new URLSearchParams({
     client_id: 'projed',

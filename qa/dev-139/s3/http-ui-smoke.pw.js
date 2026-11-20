@@ -97,6 +97,9 @@ async (page) => {
       }
     });
     await collaborator.goto(baseUrl);
+    await collaborator.locator('[data-main-sidebar-toggle="true"]').click();
+    const otherSidebar = collaborator.locator('[data-sidebar-panel="expanded"]');
+    await otherSidebar.getByText('Shared board', { exact: true }).click();
     const otherTitle = collaborator.locator('[data-task-title-slot="true"][data-task-id="shared-parent"]').first();
     await otherTitle.filter({ hasText: 'Shared parent' }).waitFor();
     step = 'save as owner and observe recovery on the second client';

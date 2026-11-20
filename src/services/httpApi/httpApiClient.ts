@@ -178,31 +178,30 @@ function errorFromResponse(response: Response, payload: unknown): HttpApiError {
 
 export class HttpApiClient {
   private expectedActor: HttpExpectedActor | null = null;
+  private bindingRevision = 0;
 
   constructor(private readonly fetcher: HttpApiFetch = globalThis.fetch.bind(globalThis)) {}
 
   bindExpectedActor(expectedActor: HttpExpectedActor): void {
-    this.expectedActor = { ...expectedActor };
+    if (this.expectedActor?.accountId === expectedActor.accountId && this.expectedActor.contextId === expectedActor.contextId) return;
+    this.expectedActor = Object.freeze({ ...expectedActor });
+    this.bindingRevision++;
   }
 
   clearExpectedActor(): void {
     this.expectedActor = null;
+    this.bindingRevision++;
   }
 
   private snapshotExpectedActor(): Readonly<HttpExpectedActor> {
     if (!this.expectedActor || !this.expectedActor.accountId || !this.expectedActor.contextId) {
       throw new HttpApiError('ACTOR_REQUIRED', 401, null, false);
     }
-    return Object.freeze({
-      accountId: this.expectedActor.accountId,
-      contextId: this.expectedActor.contextId,
-    });
+    return this.expectedActor;
   }
 
   private assertExpectedActorUnchanged(snapshot: Readonly<HttpExpectedActor>): void {
-    if (!this.expectedActor
-        || this.expectedActor.accountId !== snapshot.accountId
-        || this.expectedActor.contextId !== snapshot.contextId) {
+    if (this.expectedActor !== snapshot) {
       throw new HttpApiError('ACTOR_CHANGED', 409, null, false);
     }
   }
@@ -314,8 +313,10 @@ export class HttpApiClient {
       throw new HttpApiError('INVALID_REQUEST', 0, null, false);
     }
     const headers = new Headers({ accept: 'application/json' });
-    const expectedActor = options.expectedActor
-      ?? (method === 'GET' && url === '/api/v1/session' ? null : this.expectedActor);
+    const sessionLookup = method === 'GET' && url === '/api/v1/session';
+    const initialRevision = this.bindingRevision;
+    const expectedActor = options.expectedActor ?? (sessionLookup ? null : this.expectedActor);
+    const bindingChanged = () => !sessionLookup && this.bindingRevision !== initialRevision;
     if (expectedActor) {
       headers.set('x-projed-expected-account-id', expectedActor.accountId);
       headers.set('x-projed-expected-context-id', expectedActor.contextId);
@@ -342,11 +343,16 @@ export class HttpApiClient {
       void error;
       throw new HttpApiError('DEPENDENCY_UNAVAILABLE', 503, null, true);
     }
+    if (bindingChanged()) {
+      await cancelResponseBody(response);
+      throw new HttpApiError('ACTOR_CHANGED', 409, null, false);
+    }
     if (response.status === 204) {
       if (!response.ok) throw new HttpApiError('HTTP_REQUEST_FAILED', response.status, response.headers.get('x-request-id'), false);
       return undefined as T;
     }
     const payload = await parseJson(response);
+    if (bindingChanged()) throw new HttpApiError('ACTOR_CHANGED', 409, null, false);
     if (!response.ok) throw errorFromResponse(response, payload);
     return payload as T;
   }

@@ -9,6 +9,36 @@ const json = (value: unknown, init: ResponseInit = {}) => new Response(JSON.stri
   headers: { 'content-type': 'application/json; charset=utf-8', ...init.headers },
 });
 
+test('private read started before sign-out cannot return its body after the same account signs back in', async () => {
+  let deliver!: (response: Response) => void;
+  const client = new HttpApiClient(() => new Promise(resolve => { deliver = resolve; }));
+  const actor = { accountId: 'a', contextId: 'original' };
+  client.bindExpectedActor(actor);
+  const read = client.request('/api/v1/workspaces');
+  client.clearExpectedActor();
+  client.bindExpectedActor(actor);
+  deliver(json({ data: ['original private workspace'] }));
+  await assert.rejects(read, (error: unknown) => error instanceof HttpApiError && error.code === 'ACTOR_CHANGED');
+});
+
+test('a context switch while the JSON body is arriving discards the result', async () => {
+  let stream!: ReadableStreamDefaultController<Uint8Array>;
+  let parsing!: () => void;
+  const bodyStarted = new Promise<void>(resolve => { parsing = resolve; });
+  const response = new Response(new ReadableStream<Uint8Array>({ start(controller) { stream = controller; } }),
+    { headers: { 'content-type': 'application/json' } });
+  const parse = response.json.bind(response);
+  response.json = () => { parsing(); return parse(); };
+  const client = new HttpApiClient(async () => response);
+  client.bindExpectedActor({ accountId: 'a', contextId: 'scope-1' });
+  const read = client.request('/api/v1/workspaces');
+  await bodyStarted;
+  client.bindExpectedActor({ accountId: 'a', contextId: 'scope-2' });
+  stream.enqueue(new TextEncoder().encode('{"data":["old scope"]}'));
+  stream.close();
+  await assert.rejects(read, (error: unknown) => error instanceof HttpApiError && error.code === 'ACTOR_CHANGED');
+});
+
 test('transport uses only same-origin cookie requests with private caching disabled', async () => {
   const captures: Array<{ input: RequestInfo | URL; init?: RequestInit }> = [];
   const client = new HttpApiClient(async (input, init) => {

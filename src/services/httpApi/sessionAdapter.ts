@@ -1,5 +1,5 @@
 import type { FirestoreUser } from '../../types';
-import { HttpApiClient } from './httpApiClient';
+import { HttpApiClient, HttpApiError } from './httpApiClient';
 
 export interface HttpSessionProfile extends FirestoreUser {
   expiresAt: number;
@@ -114,21 +114,30 @@ function parseSession(value: unknown): HttpSessionProfile {
 }
 
 export function createHttpSessionAdapter(client: HttpApiClient): ProjedSessionAdapter {
+  let nextRead = 0;
+  let appliedRead = 0;
   return {
     async getSession(signal) {
+      const read = ++nextRead;
+      let session: HttpSessionProfile;
       try {
-        const session = parseSession(await client.request<unknown>('/api/v1/session', { signal }));
-        client.bindExpectedActor({ accountId: session.uid, contextId: session.authContextId });
-        return session;
+        session = parseSession(await client.request<unknown>('/api/v1/session', { signal }));
       } catch (error) {
+        if (read < appliedRead) throw new HttpApiError('ACTOR_CHANGED', 409, null, false);
+        appliedRead = read;
         client.clearExpectedActor();
         throw error;
       }
+      if (read < appliedRead) throw new HttpApiError('ACTOR_CHANGED', 409, null, false);
+      appliedRead = read;
+      client.bindExpectedActor({ accountId: session.uid, contextId: session.authContextId });
+      return session;
     },
     async startLogin(entry, returnPath = '/', signal) {
       if (entry !== 'main' && entry !== 'quick') throw new Error('HTTP_API_INVALID_LOGIN_ENTRY');
       const origin = currentOrigin();
       const normalizedReturnPath = parseReturnPath(returnPath, origin);
+      appliedRead = ++nextRead;
       client.clearExpectedActor();
       const response = record(await client.request<unknown>('/api/v1/session/login', {
         method: 'POST', body: { entry, returnPath: normalizedReturnPath }, signal,
@@ -146,7 +155,9 @@ export function createHttpSessionAdapter(client: HttpApiClient): ProjedSessionAd
       return session;
     },
     async logout(signal) {
+      appliedRead = ++nextRead;
       await client.request<unknown>('/api/v1/session/logout', { method: 'POST', signal });
+      appliedRead = ++nextRead;
       client.clearExpectedActor();
     },
   };
