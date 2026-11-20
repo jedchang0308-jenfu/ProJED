@@ -47,8 +47,8 @@ OrgMaster當前來源`99ea1a7ec3872deb7f4df1a13e2a4203ca02e2f8`修正release／a
 本輪受測程式`bc519d75b7a0985875639226c3269435a04e4b71`的[CI44540622894](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44540622894)兩jobs及PR9 checks均SUCCESS：原lockfile型別、662 unit（S2 494／S3 126／migration14／release28）、三boundary、compiled artifact、PostgreSQL17.11 domain73／snapshot60、43份migration與LinuxOCI18 PASS。已讀回artifacts14537678164／14537867415，包含新增HTTP排序／CAS完整案例、create-only成功而move／edit／CAS仍拒絕、音訊與既有Session回歸及owned container／socket／credential cleanup。Native與OCI收據各綁自己的原始migration hash；與此工作樹的差異已逐份確認僅為Windows／Linux checkout換行，沒有SQL內容漂移，不混用不同平台的binding。後續僅補本段與索引收據，不重跑未受影響的產品驗證。Browser smoke、真provider、production identity及正式發布NOT_RUN；零留存條件及整體DEV-139後續責任保留。
 
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。
-- 日期：2026-10-31（Asia/Taipei）；版本：Rev 78（音訊到期清理與unknown generation保護通過隔離驗證；零留存資格及正式交付續行）。
-- 文件狀態：**整合與發布續行中；W22 OrgMaster publisher 與 W23 Platform Session／handoff source 均有 draft PR／required CI PASS，隔離驗證 PASS；Production Resolver Disabled；未 Release**。Firebase／OIDC 真身分與完整 Session 部署、RAG／文字會議真 provider 資格、錄音管線與剩餘資料處置、雲端 readback、舊入口、writer fence、切流及正式發布仍計入完成分母。W22 owner source 見 [§36](#36-orgmaster-minimum-principal-publication-w222026-10-29)，W23 Platform source 與驗證邊界見 [§37](#37-platform-projed-session-and-handoff-w232026-10-29)；W21 承接六類文件／同步資料與精度保護見 [§35](#35-document-source-retention-w212026-10-28)；W20 資料保留見 §34，具體資源與待確認的新權限仍見 §33。本輪未寫正式資料、切流或變更 IAM／Secret／credential／billing。
+- 日期：2026-11-21（Asia/Taipei）；可執行來源 `8421432`，驗證版本與產物依 §8、§47.1 的實際收據識別。
+- 文件狀態：**合併前整合核對中**。ProJED、Platform、OrgMaster 的既有 PR 均已 ready-for-review；目前 source／隔離驗證見 §8，Google Cloud 候選最終讀回受重新驗證阻擋，見 §47.1。正式 identity pins 與 provider 資格、真資料、原入口、writer fence、切流及發布仍依對應環境查證。身分 owner source 見 [§36](#36-orgmaster-minimum-principal-publication-w222026-10-29)與 [§37](#37-platform-projed-session-and-handoff-w232026-10-29)，資料保留見 §34–§35，資源與操作授權見 §33 及 §47.1。
 - 適用階段：S1–S3 本地切片歷史見 §12–§32；2026-10-28 續行授權見 [DEV-139 人類決策與授權範圍](../dev_task.md#1-人類決策與授權範圍)，涵蓋 ProJED／OrgMaster／Jenfu-Platform 的 source 整合工作。正式整合與發布仍是完整目標，不以本地切片完成替代；新責任權限依 §33 處理。定期審視不是續行或發布的 required gate；本輪未執行正式資料寫入、切流或 IAM／Secret／credential／billing 變更。
 - 直接交接入口：[§11 S1 定案契約](#11-架構決策與-s1-定案契約)、[§12 S1 實作狀態](#12-s1-實作狀態2026-10-26)、[§13 S2 consumer seam](#13-s2-projed-identity-consumer-seam2026-10-26)、[§14 S3 read adapter](#14-s3-http-read-adapter-slice2026-10-26)、[§15 S3 domain command](#15-s3-domain-command-w12026-10-26)、[§16 S3 collaboration command](#16-s3-collaboration-command-w22026-10-27)、[§17 S3 record／activity](#17-s3-recordactivity-w32026-10-27)、[§18 S3 HTTP product wiring](#18-s3-http-product-wiring-w42026-10-27)、[§19 S3 Board transfer](#19-s3-board-transfer-w52026-10-27)、[§20 S3 legacy provider boundary](#20-s3-legacy-provider-boundary-w62026-10-27)、[§21 S3 Quick Task](#21-s3-quick-task-w72026-10-27)、[§22 S3 Task Workbench](#22-s3-task-workbench-w82026-10-27)、[§23 S3 Actor CAS](#23-s3-actor-context-cas-w92026-10-27)、[§24 S3 Task Tracking](#24-s3-task-tracking-w102026-10-27)、[§25 S3 Backup／Import](#25-s3-backupimport-w112026-10-27)、[§26 S3 Account Preferences](#26-s3-account-preferences-w122026-10-27)、[§27 S3 Calendar Subscription](#27-s3-calendar-subscription-w132026-10-27)及[§32 本地開發收斂](#32-s3-local-development-closure-w182026-10-27)；[§11.8 技術主管審查](#118-技術主管審查與最小優化)保留 Rev5 修正理由；既有使用者切換見 [§6.3](#63-既有使用者的切換基線)。
 - 決策來源：[DEV-139 人類決策](../dev_task.md#dev-139-jenfu-platform-onboarding)；架構取捨：[ADR-054](../decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。本文件不是其他 owner 已接受或已發布的契約。
@@ -389,7 +389,7 @@ Quick Task 收到精確的 `PT503 / PROJED_SOURCE_WRITE_PAUSED` 後停止該筆�
 
 正式移轉前須確認各 Edge 都採用停寫版本及設定，並等候在途工作完成、已簽發的 Storage 上傳 URL 到期（舊錄音入口設兩小時）。期間保持來源結構穩定，另核對 Auth 帳號異動、其他可直接寫入 Storage 的來源及外部排程。目標開放業務寫入前才可直接恢復舊庫寫入；目標已有新資料時沿 §6.5 保留新寫入與收據，避免兩邊同時受理。
 
-W14已使「受支援DB domain的一次性full-snapshot搬移」達到本地RD rehearsal PASS，但整體仍非 Release Ready。S2尚須發布非員工wire／admission／revocation、verified legacy mapping proof、各入口Session／Cookie／callback與取消／切帳契約；正式切換尚須核對未承接的Inbox、RAG、會議／Storage資料，完成舊版API／SW／IDB相容、全部寫入來源fence、檔案與job恢復及Hosting路由／artifact契約。
+現行來源已在 W14 之後補齊身分 Session、RAG、會議資料保留、私人音訊傳輸、背景工作及結果發布，並完成 51 份 migration 的隔離 snapshot 演練。最新證據見 §8、§34–§51。正式切換仍需發布 owner 契約與 production pins、核實既有帳號 mapping、取得 writer-fenced 真來源 snapshot，並查證實際 Storage 清單、舊入口與 Session／Cookie／callback、檔案及工作恢復。Inbox 等 optional domain 若出現非空資料，既有 importer blocker 仍須明確承接。
 
 正式資料plan時沿W14命令只輸出table count／digest與阻擋domain，不落地含正文或email的snapshot檔；先處理實際非空的未承接domain，再按A06／A09／A11、T07／T08驗正常使用者路徑。正式切換另確認可接受停寫／恢復窗口、成本與環境／資源主要動作範圍。沒有新的PWA重裝、資料揭露或零重登需求；若日後要求換public origin、立即移除Hosting、零停寫或另造Session bridge，先回架構／產品影響審查。
 
@@ -405,7 +405,7 @@ W14已使「受支援DB domain的一次性full-snapshot搬移」達到本地RD r
 
 ## 8. 驗收與證據契約
 
-本節定義後續驗收，不代表本輪已執行。文件升級只驗證決策追溯、引用、索引及契約一致性；不啟動 runtime、build、DB 或瀏覽器。
+本節定義工程驗收，並記錄各案例實際完成的環境與證據。隔離回歸、編譯產物、正常畫面及正式環境的結果各依實際範圍判定，最新執行結果與仍待驗證項目見下列說明及 §47.1。
 
 Fixture 採 synthetic 私人 A／B、公司 C1／C2、guest G、Workspace／Board 五種角色 `owner / admin / project_manager / member / viewer`，包含不同 Board 權限設定與明確空集合；建立父資料及必要邀請，但案例的建立／修改／同步結果由正常 UI→API→DB delivery path 產生。非正式不使用正式 row、token、音訊或私人草稿。
 
@@ -498,26 +498,26 @@ T01–T08 是對應 A01–A11 的完整工程驗收案例；現有分層命令�
 
 Rev 8 的 employee-only／無 ProJED audience 是當時基線。現行 owner source 已增加最小 Principal publication、ProJED Session v3／handoff v4，實際 source／CI 與尚未發布的邊界以 §36–§37 為準；不再把舊契約缺口當作所有後續 source 工作的停止條件。production pin set 仍空集合，真 handoff fail closed；callback、App Session、mapping 與真正常登入仍須完成驗證，不因 source／CI 通過而標為整合完成。
 
-S3 fail-closed read／write route及 collaboration command 已完成本地實作：只接受由上層注入的可信 Session actor resolver，並以同一 actor transaction 呼叫 repository。沒有 resolver 的 production composition 保持404；正常產品接入及登入切換仍須S2 owner wire。不得用QA simulation、S1 synthetic actor或任意header／body取代真Session。
+S3 read／write route 及 collaboration command 已接入既有 Session actor 與同一 actor transaction。正式 composition 由 `createRuntimeSessionAuth` 組合 Platform handoff、Google→原 UUID mapping、持久化 App Session、撤銷及外部邀請 publisher；production pins 仍為空集合，因此正式 resolver 維持關閉。正常產品已以隔離 Session 驗證接線，正式啟用仍需對應 owner publication 與核准的 origin／contract pins；QA actor 只用於隔離驗證。
 
 ### 9.1 三個工作段及目前成熟度
 
 沿用同一 DEV-139 與 §9 列出的 owner native task；分段用於辨識依賴與證據範圍，不增設逐段核准。授權以人類原始指示及直接索引為準；文件準備、測試替身或本地 PASS 均不擴張正式權限或繞過身分契約。
 
-| Slice／owner | 估工輸出與依賴 | 驗收邊界／實作前仍需補齊 |
+| Slice／owner | 現行實作與依賴 | 驗證範圍與正式啟用依賴 |
 |---|---|---|
 | S1 ProJED runtime／DB 核心 | **RD Implementation Ready＋架構定案**；§11 固定 schema／roles／policy、runtime／actor transaction、checker、migration runner、驗證入口及 source surface。沒有 provider／現有前端切換或真 SSO。 | K01–K08、T01／A10 的限定 local HTTP／DB 層；正常產品 UI 不在 S1。測試 actor 只在隔離 verifier process 內注入，不發布可自述身分的 HTTP auth。 |
-| S2 身分 producer／consumer | ProJED server-only consumer seam 已實作：只接受 verifier output、exact contract pin、有效時間／撤銷與唯一 mapping，成功只產生既有 `ServerActorV1`；production pins 空集合，QA simulation 不進 production import graph。OrgMaster／Platform owner source 見 §36–§37，可在既有授權內續行隔離整合。 | 本地 seam 12/12 PASS，不是 A01／A02／A03／A05／A11 或 T03／T06／T08 的真登入證據。正式 owner publication／consumer ACL、既有帳號 mapping proof、相容 origin／Cookie／callback／Session state／期限與在途撤銷仍須驗證；新權限與正式動作不由 source 授權推定。 |
-| S3 ProJED 現有能力移轉 | frontend read／write、workspace／board／member／permission／invite、record／activity、resource revision、明確HTTP backend、單一polling scheduler、Board跨Workspace搬移、Quick／Workbench、Task Tracking、Backup／Import、帳號偏好、Calendar subscription／ICS feed、W14 full-snapshot rehearsal及W15舊Calendar URL代理已實作；`0003`～`0014`以scope／capability RLS、同一actor transaction、冪等receipt、專用importer及fail-closed route保護。disposable PostgreSQL另驗空白candidate單交易搬移、rollback、digest reconcile、非空目標／未承接domain／漂移拒絕。 | 本地adapter與DB／HTTP acceptance只證明bounded foundation；W18已用QA actor完成正常HTTP產品UI／reload煙霧，但cookie-to-actor mapping不進production graph，不是真Session或A03–A11／T02／T04／T05／T07／T08證據。RAG／會議音訊／Inbox與Storage尚未承接；正式資料plan、writer fence、舊client／Hosting／PWA相容部署、容量／費用及真Session／正式入口UI仍需完成，不能退出原provider。 |
+| S2 身分 producer／consumer | server-only consumer、持久化 Session、Google→原 UUID proof、登入權限快照、中央撤銷及外部協作已實作。正式組合與版本化 pin 驗證沿用相同路徑；production pins 尚待發布。 | 已用三系統 HTTP、OrgMaster 管理元件及隔離 PostgreSQL 驗證邀請／撤邀／核准、切帳、重新登入與舊 Session 拒絕。身分證明採合成 fixture；正式 owner publication／consumer ACL、真既有帳號 mapping、原公開入口與 Cookie／callback 仍須在相應環境驗證。 |
+| S3 ProJED 現有能力移轉 | 工作區／看板／權限、排序與備註 CAS、record／activity、Quick／Workbench、追蹤、備份／匯入、偏好及行事曆已接 HTTP。RAG、文字會議、私人音訊 GCS port、錄音 caller／outbox、ASR／LLM 背景處理、發布及到期清理已實作，資格不足時安全拒絕。legacy Inbox 保留原 owner 隔離與非空 domain blocker。 | `8421432` 的正常畫面、受限 HTTP／PostgreSQL、51 份 snapshot migration 及 Linux OCI 均通過，範圍見 §8。Google provider 真呼叫與零留存資格、正式資料與 Storage snapshot、完整 writer fence、原 Hosting／PWA／Session 路徑及共享容量／費用仍依正式環境查證。 |
 
-S1 已完成本地核心；S2 consumer seam 與 §36–§37 owner source 可在隔離環境續行整合，真 producer／Session 尚未完成部署驗證；S3 W1–W18的bounded slices已本地實作及驗證。本地QA Session已驅動編譯後Vite artifact、真HTTP API及隔離PostgreSQL完成正常產品UI煙霧，但這不是真Platform SSO／既有帳號mapping或正式環境證據。synthetic migration fixture、managed連線契約、未部署相容代理與未執行Docker container仍不能宣稱正式資料、無縫切換或整合完成。
+S1 本地核心、S2／S3 source 整合與隔離驗證已完成上述範圍，包含實際 Linux 容器、編譯後 Vite、HTTP 與 PostgreSQL。後續以正式 provider／身分／資料、Cloud Run／Cloud SQL、原入口及恢復證據完成對應啟用條件；隔離結果只支持其受測來源、身分與資料。
 
-S2／S3 正式啟用的 readiness 缺口：已發布owner wire／consumer ACL／非員工及在途撤銷契約；真資料plan與verified mapping；Inbox、RAG、會議／Storage等未承接domain的處置；全來源fence、舊PWA恢復、Hosting／各public origin Session／Cookie／callback／artifact相容；共享容量及可歸屬費用證據。沒有未決產品D1／D2；依賴只限制相應啟用／正式動作，不阻擋安全且獨立的 source／測試工作，也不要求人類重新選相同方案。
+S2／S3 正式啟用仍需發布 owner wire／consumer ACL／production pins，核實真資料與 mapping、目前來源 domain／Storage 清單及零留存 provider 資格，並驗全來源 fence、舊 PWA 恢復、公開入口 Session／Cookie／callback、共享容量及可歸屬費用。D1／D2 沿既有決策；各依賴限制其相應的啟用動作。
 
-後續 capsule：
+交付順序如下。
 
-1. **首階段基礎對齊的非正式實作**：補到 RD Implementation Ready，再在明確專案／本地或非正式範圍內實作 runtime／API、schemas／roles、identity consumer、同步與檔案替代；以 A01–A05／A07–A10 驗原功能與權限，不新增業務串接 UI。
-2. **資料／PWA 演練**：W14已完成支援domain的本地full-snapshot／rollback／reconciliation，W15已準備Calendar舊URL代理；後續只補真資料plan、verified mapping、未承接domain、全來源writer fence、Hosting／舊client相容部署、容量／恢復與rollback compatibility，並用真browser正常舊入口驗A06／A09／A11、T07／T08及量測停寫，不複製正式私資料。
+1. **Source 與隔離驗證**已完成上述範圍，沿 §8 的受測版本核對原功能與權限，最後候選讀回見 §47.1。
+2. **正式資料／入口驗證**沿現有 snapshot／rollback／reconciliation、Quick 原地升級及 Calendar 舊 URL 代理，補真來源 snapshot、verified mapping、目前非空 domain／Storage、全來源 writer fence、Hosting／Cookie／Session 與恢復證據，依 A06／A09／A11、T07／T08 查證。
 3. **正式切換／退役**：另有明確正式主要動作與資源範圍，確認可接受停寫／恢復窗口，沿 app-owned release gate 完成真身份→API→DB／storage readback、恢復與觀察；保持單一 writer 與既有 public origin 相容，舊站／DB／Hosting／Billing 處置另有退役 gate。
 4. **跨 app 業務使用情境**：基礎對齊有相容證據且人類要求任務／資料串接後，依 §5.3 固定 consumer、最小欄位、授權及正常 UI 驗收；本輪不建立新 DEV 或任務摘要／專案連結實作。
 
