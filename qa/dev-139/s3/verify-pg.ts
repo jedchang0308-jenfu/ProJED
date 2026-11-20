@@ -71,7 +71,7 @@ await verifyGoogleMappingsPostgres(database);
 await verifyAppSessionsPostgres(database,config);
 await verifyRagPostgres(database,config);
 
-const runBrowserSmoke = (baseUrl: string, name: 'http-ui' | 'rag-ui' | 'quick-http-binding' = 'http-ui'): Promise<void> => new Promise((done, reject) => {
+const runBrowserSmoke = (baseUrl: string, name: 'http-ui' | 'rag-ui' | 'quick-http-binding'): Promise<void> => new Promise((done, reject) => {
   const artifactKey = { 'http-ui': '__DEV139_HTTP_UI_ARTIFACT', 'rag-ui': '__DEV139_RAG_UI_ARTIFACT',
     'quick-http-binding': '__DEV139_QUICK_HTTP_BINDING' }[name];
   const output = `output/playwright/dev-139-${name}`;
@@ -693,10 +693,12 @@ const httpConfig = process.env.PROJED_DEV139_BROWSER_SMOKE === '1'
   ? { ...config, staticRoot: resolve('dist') }
   : config;
 const browserActor = process.env.PROJED_DEV139_BROWSER_SMOKE === '1'
-  ? await startBrowserFixtureSession(database, config) : null;
+  ? await startBrowserFixtureSession(database, config, 'b') : null;
+const browserCollaborator = browserActor ? await startBrowserFixtureSession(database, config, 'a') : null;
 const http = createKernelHttpServer(httpConfig, database, expected, {
   resolveActor: async (request) => {
     if (browserActor && request.headers.cookie === '__session=qa-browser') return browserActor;
+    if (browserCollaborator && request.headers.cookie === '__session=qa-browser-collaborator') return browserCollaborator;
     if (request.headers.cookie === '__session=qa-a') return actorA;
     if (request.headers.cookie === '__session=qa-b') return actorB;
     if (request.headers.cookie === '__session=qa-b-quick') return actorBQuick;
@@ -724,9 +726,9 @@ const clientFor = (
 };
 try {
   if (process.env.PROJED_DEV139_BROWSER_SMOKE === '1') {
-    await runBrowserSmoke(base);
-    await runBrowserSmoke(base, 'rag-ui');
-    await runBrowserSmoke(base, 'quick-http-binding');
+    for (const scenario of ['http-ui', 'rag-ui', 'quick-http-binding'] as const) {
+      await runIndependent(scenario, () => runBrowserSmoke(base, scenario));
+    }
     await runActorTransaction(database, config, actorB, async port => {
       await port.query(`
         UPDATE projed_core.profiles

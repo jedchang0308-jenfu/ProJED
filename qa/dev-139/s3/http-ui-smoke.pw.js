@@ -25,6 +25,7 @@ async (page) => {
   };
 
   let step = 'bind isolated actor';
+  let collaboratorContext;
   try {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.context().addCookies([{ name: '__session', value: 'qa-browser', url: `${baseUrl}/` }]);
@@ -72,7 +73,40 @@ async (page) => {
       await modal.waitFor({ state: 'hidden' });
     };
     const editedTitle = 'Shared parent edited in browser';
+    step = 'open the shared board as its collaborator';
+    collaboratorContext = await page.context().browser().newContext({ serviceWorkers: 'block' });
+    await collaboratorContext.addCookies([{ name: '__session', value: 'qa-browser-collaborator', url: baseUrl + '/' }]);
+    await collaboratorContext.addInitScript(() => {
+      localStorage.setItem('projed-last-ws', 'ws-b');
+      localStorage.setItem('projed-last-board', 'board-shared');
+      localStorage.setItem('projed-last-view', 'board');
+    });
+    const collaborator = await collaboratorContext.newPage();
+    let interrupted = false;
+    let privateBoardRequest = false;
+    collaborator.on('request', request => {
+      if (new URL(request.url()).pathname.includes('/boards/board-private/')) privateBoardRequest = true;
+    });
+    await collaborator.route(baseUrl + taskPath, async route => {
+      const response = await route.fetch();
+      if (!interrupted && response.ok() && (await response.json()).data.some(task => task.id === 'shared-parent' && task.title === editedTitle)) {
+        interrupted = true;
+        await route.fulfill({ status: 503, json: { error: { code: 'DEPENDENCY_UNAVAILABLE' } } });
+      } else {
+        await route.fulfill({ response });
+      }
+    });
+    await collaborator.goto(baseUrl);
+    const otherTitle = collaborator.locator('[data-task-title-slot="true"][data-task-id="shared-parent"]').first();
+    await otherTitle.filter({ hasText: 'Shared parent' }).waitFor();
+    step = 'save as owner and observe recovery on the second client';
     await editTitle(editedTitle);
+    await otherTitle.filter({ hasText: editedTitle }).waitFor({ timeout: 30000 });
+    assert(interrupted, 'collaborator did not encounter the simulated transient read failure');
+    assert(!privateBoardRequest && !(await collaborator.locator('body').innerText()).includes('B secret'),
+      'collaborator loaded the owner-only private board');
+    await collaboratorContext.close();
+    collaboratorContext = null;
     step = 'verify the saved task after reload';
     const [loaded] = await Promise.all([
       page.waitForResponse(response => new URL(response.url()).pathname === taskPath
@@ -111,6 +145,7 @@ async (page) => {
       task: 'shared-parent',
       reload: true,
       titleEditPersistedAfterReload: true,
+      collaboratorRecoveredAfterTransientReadFailure: true,
       privateBoardLeak: false,
       apiPaths,
       screenshot: 'output/playwright/dev-139-http-ui/main.png',
@@ -122,5 +157,7 @@ async (page) => {
     return artifact;
   } catch (error) {
     throw new Error(`DEV-139 HTTP UI smoke failed at ${step}: ${error instanceof Error ? error.message : String(error)}`);
+  } finally {
+    await collaboratorContext?.close();
   }
 }

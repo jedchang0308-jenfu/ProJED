@@ -22,7 +22,8 @@ async function refreshWorkspaceIndex() {
   const activeWorkspaceId = workspaces.some(workspace => workspace.id === current.activeWorkspaceId)
     ? current.activeWorkspaceId
     : workspaces[0]?.id ?? null;
-  const activeBoardId = workspaces.some(workspace => workspace.boards.some(board => board.id === current.activeBoardId))
+  const activeBoardId = workspaces.find(workspace => workspace.id === activeWorkspaceId)
+    ?.boards.some(board => board.id === current.activeBoardId)
     ? current.activeBoardId
     : null;
   useBoardStore.setState({ workspaces, activeWorkspaceId, activeBoardId });
@@ -50,12 +51,12 @@ async function refreshActiveScope() {
     : Promise.resolve(null);
 
   if (boardExists) useWbsStore.setState({ loading: true, error: null });
-  await Promise.all([
+  const [boardData] = await Promise.all([
+    tasksAndDependencies,
     useMemberStore.getState().loadMembers(activeWorkspaceId, boardId),
     useTagStore.getState().loadTags(activeWorkspaceId),
     boardExists ? useRecordStore.getState().loadRecords(activeWorkspaceId, boardId) : Promise.resolve(),
   ]);
-  const boardData = await tasksAndDependencies;
   if (!boardExists || !boardId || !boardData || useBoardStore.getState().activeBoardId !== boardId) {
     if (!boardExists) {
       useWbsStore.setState({ nodes: {}, dependencies: [], loading: false, error: null });
@@ -98,10 +99,12 @@ export function useHttpSync(options: { enabled?: boolean } = {}) {
         context.activeWorkspaceId,
         context.activeBoardId,
       );
-      revisionSnapshot = nextSnapshot;
       if (!decision.changed) return;
       if (decision.refreshWorkspaces) await refreshWorkspaceIndex();
       if (decision.refreshActiveScope) await refreshActiveScope();
+      // A failed reload leaves the previous revision in place so the next poll
+      // retries even when nobody has edited the board again.
+      revisionSnapshot = nextSnapshot;
     }, {
       onError: error => {
         console.error('[useHttpSync] Poll or canonical reload failed:', error);
