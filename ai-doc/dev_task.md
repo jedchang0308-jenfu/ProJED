@@ -67,6 +67,8 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
   - 2026-11-20 續行：正式來源已建立無登入且無密碼的 `projed_dev139_source_reader` 骨架，限43個已分類應用relation；Supabase保留`auth` schema的USAGE不能由現行owner轉授，直接Auth欄位grant已撤回。driver改採兩個固定security-barrier身分投影並在讀取前查核owner／7欄型別／barrier／權限；原生隔離演練`20261120T062852Z-e1b871c4`PASS，含projection漂移、barrier關閉、SELECT撤銷及45份migration／資料保留回歸。受測source `effd5e7` 的 CI44688269763 已通過兩個required jobs（完整型別／unit／boundary／compiled artifact、Session／snapshot PostgreSQL與OCI），artifacts 14607646867／14607412836。正式兩個view因屬持久schema與敏感資料邊界仍待人類明確核准，尚無LOGIN／Secret版本／export／apply／reconcile；不以本機或CI PASS縮減正式分母。詳[SPEC §13.3](specs/SPEC-139-projed-jenfu-platform-onboarding.md#133-首次登入註冊與既有帳號相容2026-10-29)及[§47.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#471-2026-11-20-最小-foundation-變更提案)。
 
+  - 2026-11-20 續行：兩個正式身分投影已補create-only apply與`RESTRICT` remove SQL，Google-only、精確7欄、owner／barrier及view-only SELECT固定，不授reader直接Auth權限。release unit 34/34及小型task-owned PostgreSQL18 apply／ACL readback／remove實跑PASS，暫存cluster與listener已清理；正式Supabase仍零變更，待上述明確核准後才執行。
+
   - 2026-11-20 續行：`effd5e7`的新45份候選Cloud Build54a37e8b已SUCCESS；1,010個Git blob、source provenance、三個registry digests與實際Job binding的45個migration SHA均讀回一致，runtime仍nonroot且四個provider／Job bindings為null。這是artifact-only，未部署或切流。同期唯讀刷新確認Shared VPC、bucket IAM修復、來源Secret版本、Speech logging／Gemini豁免仍未完成；Cloud Run Job仍不存在，正式交付分母不變。精確收據見[SPEC §47.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#471-2026-11-20-最小-foundation-變更提案)。
 
   - 2026-11-20續行：RAG已移除API key即啟用Developer API的runtime分支，改接同一ProJED Google Cloud／短期IAM及獨立零留存模型資格，保留原兩種模型與資料／權限／索引語意。相關unit／型別／native Cloud adapter fixture及正式資格缺口統一見[SPEC §38.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#381-原行為與最小接線)；未變更SQL／正式資源，完整交付仍續行。

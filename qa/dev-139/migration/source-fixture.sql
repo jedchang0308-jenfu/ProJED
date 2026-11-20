@@ -1,6 +1,9 @@
 CREATE SCHEMA private;
 CREATE SCHEMA auth;
 
+CREATE ROLE projed_dev139_source_reader NOLOGIN NOINHERIT BYPASSRLS;
+GRANT USAGE ON SCHEMA private TO projed_dev139_source_reader;
+
 CREATE TABLE auth.users (
   id uuid PRIMARY KEY,
   banned_until timestamptz,
@@ -15,18 +18,7 @@ CREATE TABLE auth.identities (
   identity_data jsonb NOT NULL
 );
 
-CREATE VIEW private.projed_dev139_google_identities_v1
-WITH (security_barrier=true) AS
-SELECT user_id, provider, provider_id, identity_data
-  FROM auth.identities;
-
-CREATE VIEW private.projed_dev139_auth_users_v1
-WITH (security_barrier=true) AS
-SELECT id, banned_until, deleted_at
-  FROM auth.users;
-
-REVOKE ALL ON TABLE private.projed_dev139_google_identities_v1 FROM PUBLIC;
-REVOKE ALL ON TABLE private.projed_dev139_auth_users_v1 FROM PUBLIC;
+\ir ../../../scripts/dev139-source-identity-projections.apply.sql
 
 CREATE TABLE public.profiles (
   id uuid PRIMARY KEY,
