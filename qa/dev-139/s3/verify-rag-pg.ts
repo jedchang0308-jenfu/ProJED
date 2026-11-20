@@ -8,7 +8,7 @@ import type { RuntimeConfig } from '../../../server/config.js';
 import type { RuntimeDatabase } from '../../../server/db.js';
 import { KernelError } from '../../../server/errors.js';
 import { createKernelHttpServer } from '../../../server/http.js';
-import type { RagProvider } from '../../../server/geminiRagProvider.js';
+import { createQualifiedCloudRagProvider, type RagProvider } from '../../../server/geminiRagProvider.js';
 import { CollaborationWriteRepository } from '../../../server/collaborationWrite.js';
 import { RecordActivityRepository, type DomainKnowledgeRecordInput } from '../../../server/recordActivity.js';
 import { PostgresAppSessionStore } from '../../../server/postgresAppSessionStore.js';
@@ -124,22 +124,36 @@ function deterministicProvider(): {
   const vector = Array<number>(EMBEDDING_DIMENSIONS).fill(0);
   vector[0] = 1;
   let barrier: ActiveProviderBarrier | null = null;
-  const provider: RagProvider = {
-    async embed(content) {
-      counts.embed += 1;
-      const current = barrier;
-      if (current && content.includes(current.needle)) {
-        barrier = null;
-        current.reachedResolve();
-        await current.resume;
+  // Exercise the actual Cloud adapter through HTTP and RLS. Only the external
+  // IAM/model wire is synthetic; this does not attest the production project.
+  const provider = createQualifiedCloudRagProvider({
+    binding: { projectId: 'projed-cc78d', provider: 'google-cloud-rag', embeddingModel: EMBEDDING_MODEL,
+      generationModels: ['gemini-3.1-flash-lite', 'gemini-3.5-flash'], abuseMonitoring: 'exempt',
+      cache: 'disabled', requestResponseLogging: 'disabled', qualificationEvidenceRef: 'native-fixture-only' },
+    getAccessToken: async () => 'synthetic-rag-iam-token',
+    fetcher: async (input, init) => {
+      const url = String(input), body = JSON.parse(String(init?.body));
+      assert.equal(new Headers(init?.headers).get('authorization'), 'Bearer synthetic-rag-iam-token');
+      assert.equal(new Headers(init?.headers).get('x-goog-user-project'), 'projed-cc78d');
+      let result: unknown;
+      if (url === 'https://us-central1-aiplatform.googleapis.com/v1/projects/projed-cc78d/locations/us-central1/publishers/google/models/gemini-embedding-001:predict') {
+        counts.embed += 1;
+        const content = body.instances[0].content as string;
+        const current = barrier;
+        if (current && content.includes(current.needle)) {
+          barrier = null; current.reachedResolve(); await current.resume;
+        }
+        result = { predictions: [{ embeddings: { values: [...vector], statistics: { truncated: false, token_count: 4 } } }] };
+      } else {
+        assert.match(url, /^https:\/\/aiplatform\.googleapis\.com\/v1\/projects\/projed-cc78d\/locations\/global\/publishers\/google\/models\/gemini-(?:3\.1-flash-lite|3\.5-flash):generateContent$/u);
+        counts.generate += 1;
+        result = { modelVersion: url.split('/').at(-1)!.split(':')[0], usageMetadata: { cachedContentTokenCount: 0 },
+          candidates: [{ finishReason: 'STOP', content: { parts: [{ text: 'synthetic-rag-answer' }] } }] };
       }
-      return [...vector];
+      return new Response(JSON.stringify(result), { headers: { 'content-type': 'application/json' } });
     },
-    async generate() {
-      counts.generate += 1;
-      return 'synthetic-rag-answer';
-    },
-  };
+  });
+  assert.ok(provider);
   return {
     provider,
     counts,

@@ -279,6 +279,8 @@ test('audio deletion and provider ZDR settings remain explicit unexecuted founda
   assert.equal(provider.qualificationApplied, false);
   assert.deepEqual(provider.vertex.cacheConfig.body, { name: 'projects/projed-cc78d/cacheConfig', disableCache: true });
   assert.equal(provider.vertex.abuseMonitoring, 'exempt');
+  assert.deepEqual(provider.vertex.models, [{ location: 'us-central1', model: 'gemini-embedding-001' },
+    { location: 'global', model: 'gemini-3.1-flash-lite' }, { location: 'global', model: 'gemini-3.5-flash' }]);
   assert.equal(provider.vertex.applicableAgreementEvidenceRequired, true);
   assert.equal(provider.vertex.projectSettingReadbackRequired, true);
   assert.equal(provider.speech.method, 'speech:recognize');

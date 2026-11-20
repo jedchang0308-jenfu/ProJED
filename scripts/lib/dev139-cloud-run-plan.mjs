@@ -226,6 +226,8 @@ export function renderProjedCloudRun(input) {
       vertex: { cacheConfig: { url: `https://us-central1-aiplatform.googleapis.com/v1/projects/${target.project}/cacheConfig`,
         body: { name: `projects/${target.project}/cacheConfig`, disableCache: true } },
         requestResponseLogging: 'disabled', abuseMonitoring: 'exempt',
+        models: [{ location: 'us-central1', model: 'gemini-embedding-001' },
+          { location: 'global', model: 'gemini-3.1-flash-lite' }, { location: 'global', model: 'gemini-3.5-flash' }],
         projectSettingReadbackRequired: true, applicableAgreementEvidenceRequired: true },
     },
     iamBindings: [

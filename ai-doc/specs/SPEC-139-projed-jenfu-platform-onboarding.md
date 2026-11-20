@@ -1,5 +1,7 @@
 # SPEC-139：ProJED 納入 Jenfu-Platform 的產品與技術交接契約
 
+2026-11-20續行：RAG會把可讀會議、知識與即時看板內容送至provider，但舊runtime僅憑GEMINI_API_KEY啟用Developer API，可能繞過已選定的零留存路徑。現已改為固定ProJED Google Cloud／短期IAM token及獨立RAG模型資格，保留Flash-Lite／Flash兩種原選擇；沒有資格時拒絕，不以meeting-only資格、API key或env flag啟用。詳[§38.1](#381-原行為與最小接線)。沒有變更正式資源或傳送真實內容；foundation核准、Google適用契約及Shared VPC權限仍待確認。
+
 2026-11-20雲端登入已恢復；本次metadata readback確認原project／organization與private-only SQL未變。新runtime／三個SQL IAM login／背景Job／audio bucket仍未建立，SQL所在project尚不是Shared VPC host。已補renderer缺少的Speech／Vertex API、最小推論／音訊權限、獨立可真正刪除音訊的bucket設定，以及ZDR設定與實際資格的區別。具名變更與需人類確認的新增責任統一見[§47.1](#471-2026-11-20-最小-foundation-變更提案)；不重問既定產品方向，不將本次盤點加入required gate。零留存binding仍未發布，未送真實會議內容、變更正式權限或切流。
 
 2026-11-20來源稽核承接：Supabase MCP唯讀核對既有ProJED project，於2026-11-19 15:56:42 UTC同一aggregate statement盤點43個public／private持久relation，無未知relation；現行33個可執行preflight predicates只有audit_logs阻擋，8個Google帳號無disabled／deleted／missing。任務822、落點823、文件7／版本8／chunks11、稽核77；其中44筆tenant_id=NULL，28筆actor_id也NULL。另查欄位、JSON類型、長度及參照，唯一不相容是target不接受NULL tenant；沒有下載正文、audit payload、provider subject或credentials，也沒有正式寫入。此為動態盤點，非writer-fenced snapshot／backup或正式移轉證據。
@@ -1056,7 +1058,11 @@ ProJED 自有 opaque Session、主／Quick callback、Google→原 UUID proof �
 
 `RecordActivityRepository` 與 `knowledgeRecordRagMirror.ts` 在同一 actor transaction 儲存 record、source pointer、document、append-only version、2800 字分段與 pending job。只有 published／non-private record 可啟用；同內容／visibility 與完整目前分段重用既有版本及工作，不因重存重付 provider 費用。新編輯使用帶版本標記的 SHA-256，既有來源 hash／vectors 先原樣保留，未修改資料不全量重算。改為 private／draft／archived 時停用 mirror、使待處理工作失效並清除本地 current chunks／vectors，保留 pointer／歷史 versions；不假報已刪除外部 provider 物件。
 
-沿既有 runtime、資料庫和 `GEMINI_API_KEY` 使用 `gemini-embedding-001`／3072 維，[模型文件](https://ai.google.dev/gemini-api/docs/embeddings)可查既有模型規格。本次不另建服務帳號、queue、vector database 或 extension；key 僅 server 讀取，正式 Secret／provider 資格仍須在原責任邊界完成。查詢採 RLS 可見資料的完整 cosine 排序後才取 top count；本輪小型 corpus 沒有 ANN 或商業擴展要求，也沒有已量測的正式效能承諾。
+2026-11-20現行transport已取代W24的GEMINI_API_KEY／Developer API路徑：`createQualifiedCloudRagProvider`只用固定 `projed-cc78d` 與metadata短期IAM token，embedding沿[Cloud predict API](https://docs.cloud.google.com/gemini-enterprise-agent-platform/reference/models/text-embeddings-api)，generation固定Google Cloud global端點。保留 `gemini-embedding-001`／3072維、Flash-Lite／Flash原選擇與既有輸入／時間界線；不改成未列入資格的替代模型。沒有另建queue、vector database、extension或SQL migration；推論權限沿§47.1同一runtime最小角色，無新增API key Secret。查詢仍採RLS可見資料的完整cosine排序後才取top count；本輪小型corpus沒有ANN或商業擴展要求，也沒有已量測的正式效能承諾。
+
+`CURRENT_RAG_BINDING`維持null，須包含實際project、embedding及兩個generation models、abuse豁免／cache及內容logging停用的來源證據才可啟用；meeting-only資格不覆蓋Flash-Lite。新renderer列出三個模型及各自location以供原有qualification讀回，沒有增加另一套簽核。輸送保留單次POST、總deadline與同源／actor／RLS／來源再驗；取消後晚到IAM token不得再送內容。回應須為原模型、正常結束、無cached content／tool output，thought不回傳；embedding須為未截斷且finite float32／非零的3072維向量。原2800字分段及既有vectors保留，不以模型限制截斷正文或改寫資料；長輸入若超過Cloud模型token上限會安全拒絕並顯示索引不完整，真實語料長度、跨API向量相容性及品質仍待原provider資格／產品驗證，不以合成vector認列完成。
+
+RD針對性自查：Cloud adapter 11項unit、三檔strict型別、affected lint與三boundary PASS；首次完整本機型別檢查發現新test的KernelError literal不在既有union，已修fixture，不改runtime error契約。共用node_modules另缺 `@types/pg`，故完整server／S3型別不宣稱本機PASS，交CI按原lockfile安裝核實。Native RAG fixture已改經真正Cloud adapter＋合成IAM／model wire，保留原owner／guest／private拒絕、index續作、撤權／來源競爭及cleanup；compiled verifier另查未發布資格不取得token、runtime無API-key啟用分支。新版CI待實際終態，不以這些synthetic內容或fixture qualification當正式Google核准。
 
 ### 38.2 資料、權限與可恢復邊界
 
@@ -1331,7 +1337,7 @@ gcloud compute shared-vpc associated-projects add projed-cc78d --host-project=je
 | 推論 | project自訂角色 `projedMeetingInference` 僅含 `aiplatform.endpoints.predict`、`serviceusage.services.use`、`speech.recognizers.recognize`，只給runtime；自訂角色 `projedMeetingAudio` 僅含上述三個object權限，只綁音訊bucket。六個permission均已由IAM可測權限metadata查到GA；不授Owner／Editor／AI Admin，不授runtime cache、IAM或bucket管理權。 |
 | Job與協調者 | runtime及scheduler只得呼叫固定 `projed-meeting-analysis`。既有Platform `dev010-prod-iac@jenfu-platform-prod.iam.gserviceaccount.com` 得讀／執行固定 `projed-prod-migration`、讀該execution／operation及ProJED project的Cloud Logging；adapter僅查指定execution的migration stdout ledger。Logging IAM為project讀取範圍，不能把程式的filter宣稱為IAM對其他logs的拒絕；不授override或任意Job執行。 |
 | 移轉來源credential | 新Secret `projed-prod-migration-source` 的數字版本只掛給一次性importer，內容沿既有TLS verify-full／source binding／CA／DSN bundle，runtime與migrator不可讀。先核對來源 `knodlkxqpcqyrtgwpdst` 可用的唯讀移轉登入；若需新建，限專用 `projed_dev139_source_reader`、本次已分類來源及身分映射欄位SELECT、唯讀snapshot交易與有界有效期，完成後撤銷。不得拿通用管理credential放入runtime或輸出值；實際grant須沿來源RLS及最小SELECT範圍核對，不能為讀取而更改業務policy。 |
-| 零留存設定 | 在已核准的ProJED專案關閉Speech data logging，將Vertex `cacheConfig.disableCache=true`、所選模型request-response logging停用並讀回。這些設定可執行，但不代表取得Google防濫用留存豁免；適用契約／豁免證據與模型仍須實際確認。未合格時三份runtime binding維持null。 |
+| 零留存設定 | 在已核准的ProJED專案關閉Speech data logging，將Vertex `cacheConfig.disableCache=true`、所選模型request-response logging停用並讀回。這些設定可執行，但不代表取得Google防濫用留存豁免；適用契約／豁免證據與模型仍須實際確認。未合格時相應runtime bindings維持null，RAG亦須覆蓋原Flash-Lite選擇。 |
 
 完整runtime／migration／snapshot／analysis Job與Scheduler create requests仍由同一個 `scripts/lib/dev139-cloud-run-plan.mjs` 渲染，沿實際immutable image與其binding產出；本節沒有虛構image digest、Secret version或資格收據。建立資源後先確認IAM、route、ledger、Session與provider，再依原有資料保護／writer fence／恢復流程執行移轉和切流。核准foundation不允許資料改寫、down migration、服務刪除、billing／SQL tier擴張或以合成資格開放真實會議內容；正常正式資料移轉／發布仍依完整任務與其必要前提續行。
 

@@ -57,6 +57,13 @@ assert.equal(Object.keys(binding).some(key => /password|secret|credential/i.test
 assert.equal(binding.staticFixtureSha256, createHash('sha256').update(readFileSync('dist/dev139-cloud-run-meta.json')).digest('hex'));
 
 const { loadRuntimeConfig } = await import(`../dist-server/server/config.js?verify=${Date.now()}`);
+const ragModule = await import('../dist-server/server/geminiRagProvider.js');
+const ragQualification = await import('../dist-server/server/ragRuntimeBinding.js');
+assert.equal(ragQualification.CURRENT_RAG_BINDING, null);
+assert.equal(ragModule.createQualifiedCloudRagProvider({ binding: null,
+  getAccessToken: async () => { throw new Error('Unqualified artifact must not obtain an IAM token'); } }), undefined);
+assert.doesNotMatch(readFileSync('dist-server/server/index.js', 'utf8'), /GEMINI_API_KEY|createGeminiRagProvider/);
+assert.doesNotMatch(readFileSync('dist-server/server/geminiRagProvider.js', 'utf8'), /generativelanguage\.googleapis\.com|x-goog-api-key/);
 // Import the emitted meeting entry without booting the HTTP server or a pool.
 // Its shared/src dependencies must resolve in the packaged Node ESM layout.
 const meetingModule = await import('../dist-server/server/meetingSynthesis.js');

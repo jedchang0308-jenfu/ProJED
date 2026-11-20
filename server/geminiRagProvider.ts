@@ -1,4 +1,5 @@
 import { KernelError } from './errors.js';
+import { hasQualifiedRagBinding, type RagRuntimeBinding } from './ragRuntimeBinding.js';
 
 export interface RagProvider {
   embed(content: string, signal?: AbortSignal): Promise<number[]>;
@@ -9,8 +10,9 @@ export interface RagProvider {
   ): Promise<string>;
 }
 
-export interface GeminiRagProviderOptions {
-  apiKey: string;
+export interface CloudRagProviderOptions {
+  binding: RagRuntimeBinding | null;
+  getAccessToken: () => Promise<string>;
   fetcher?: typeof fetch;
 }
 
@@ -23,7 +25,9 @@ type RagProviderErrorCode =
 
 const EMBEDDING_MODEL = 'gemini-embedding-001';
 const EMBEDDING_DIMENSIONS = 3072;
-const API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
+const PROJECT = 'projed-cc78d';
+const API_BASE = `https://aiplatform.googleapis.com/v1/projects/${PROJECT}/locations/global/publishers/google/models`;
+const EMBED_URL = `https://us-central1-aiplatform.googleapis.com/v1/projects/${PROJECT}/locations/us-central1/publishers/google/models/${EMBEDDING_MODEL}:predict`;
 const EMBED_TIMEOUT_MS = 8_000;
 const GENERATE_TIMEOUT_MS = 20_000;
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
@@ -144,25 +148,34 @@ async function withDeadline<T>(
 }
 
 function validateInput(content: string, maxLength: number): void {
-  if (typeof content !== 'string' || content.trim().length === 0 || content.length > maxLength) {
+  if (typeof content !== 'string' || content.trim().length === 0 || content.length > maxLength
+      || Buffer.from(content, 'utf8').toString('utf8') !== content) {
     throw invalidRequest();
   }
 }
 
-export function createGeminiRagProvider({ apiKey, fetcher = globalThis.fetch.bind(globalThis) }: GeminiRagProviderOptions): RagProvider {
-  if (typeof apiKey !== 'string' || apiKey.trim().length === 0) {
+export function createQualifiedCloudRagProvider({ binding, getAccessToken,
+  fetcher = globalThis.fetch.bind(globalThis) }: CloudRagProviderOptions): RagProvider | undefined {
+  if (binding === null) return undefined;
+  if (!hasQualifiedRagBinding(binding) || typeof getAccessToken !== 'function' || typeof fetcher !== 'function') {
     throw new KernelError('CONFIG_INVALID', 'RAG provider configuration is incomplete', 503);
   }
 
   const post = async (url: string, body: Record<string, unknown>, signal: AbortSignal, generation = false): Promise<unknown> => {
     let response: Response;
     try {
+      if (signal.aborted) throw timeoutError();
+      let token: string;
+      try { token = await getAccessToken(); } catch { throw unavailable(); }
+      if (signal.aborted) throw timeoutError();
+      if (typeof token !== 'string' || token.length > 16_384 || !/^[A-Za-z0-9\-._~+/]+=*$/u.test(token)) throw unavailable();
       response = await fetcher(url, {
         method: 'POST',
         headers: {
           accept: 'application/json',
           'content-type': 'application/json',
-          'x-goog-api-key': apiKey,
+          authorization: `Bearer ${token}`,
+          'x-goog-user-project': PROJECT,
         },
         body: JSON.stringify(body),
         signal,
@@ -207,17 +220,25 @@ export function createGeminiRagProvider({ apiKey, fetcher = globalThis.fetch.bin
     async embed(content, signal) {
       validateInput(content, MAX_EMBED_INPUT_CHARS);
       return withDeadline(async requestSignal => {
-        const payload = await post(`${API_BASE}/${EMBEDDING_MODEL}:embedContent`, {
-          model: `models/${EMBEDDING_MODEL}`,
-          content: { parts: [{ text: content }] },
-          output_dimensionality: EMBEDDING_DIMENSIONS,
+        const payload = await post(EMBED_URL, {
+          // Keep the API's default retrieval task; do not silently truncate or
+          // mix a new document/query task pair with existing stored vectors.
+          instances: [{ content }],
+          parameters: { autoTruncate: false, outputDimensionality: EMBEDDING_DIMENSIONS },
         }, requestSignal);
-        if (!isRecord(payload) || !isRecord(payload.embedding) || !Array.isArray(payload.embedding.values)
-            || payload.embedding.values.length !== EMBEDDING_DIMENSIONS
-            || !payload.embedding.values.every(value => typeof value === 'number' && Number.isFinite(value))) {
+        if (!isRecord(payload) || !Array.isArray(payload.predictions) || payload.predictions.length !== 1
+            || !isRecord(payload.predictions[0]) || !isRecord(payload.predictions[0].embeddings)) throw invalidResponse();
+        const embedding = payload.predictions[0].embeddings;
+        if (!isRecord(embedding.statistics) || embedding.statistics.truncated !== false
+            || typeof embedding.statistics.token_count !== 'number' || !Number.isSafeInteger(embedding.statistics.token_count)
+            || embedding.statistics.token_count < 1 || embedding.statistics.token_count > 2048
+            || !Array.isArray(embedding.values) || embedding.values.length !== EMBEDDING_DIMENSIONS
+            || !embedding.values.every(value => typeof value === 'number' && Number.isFinite(Math.fround(value)))) {
           throw invalidResponse();
         }
-        return [...payload.embedding.values] as number[];
+        const values = (embedding.values as number[]).map(Math.fround);
+        if (!values.some(value => value !== 0)) throw invalidResponse();
+        return values;
       }, EMBED_TIMEOUT_MS, signal);
     },
 
@@ -231,22 +252,31 @@ export function createGeminiRagProvider({ apiKey, fetcher = globalThis.fetch.bin
       return withDeadline(async requestSignal => {
         const payload = await post(`${API_BASE}/${model}:generateContent`, {
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          ...(responseMimeType !== undefined || temperature !== undefined
-            ? {generationConfig: {...(responseMimeType ? {responseMimeType} : {}),
-              ...(temperature !== undefined ? {temperature} : {})}} : {}),
+          generationConfig: { candidateCount: 1, maxOutputTokens: 8192,
+            ...(responseMimeType ? { responseMimeType } : {}), ...(temperature !== undefined ? { temperature } : {}) },
         }, requestSignal, true);
-        if (!isRecord(payload) || !Array.isArray(payload.candidates) || !isRecord(payload.candidates[0])) {
+        if (!isRecord(payload) || typeof payload.modelVersion !== 'string'
+            || !new RegExp(`^${model.replaceAll('.', '\\.')}(-[0-9]{3})?$`, 'u').test(payload.modelVersion)
+            || !isRecord(payload.usageMetadata)
+            || (payload.usageMetadata.cachedContentTokenCount ?? 0) !== 0
+            || !Array.isArray(payload.candidates) || payload.candidates.length !== 1
+            || !isRecord(payload.candidates[0]) || payload.candidates[0].finishReason !== 'STOP') {
           throw invalidResponse();
         }
         const content = payload.candidates[0].content;
         if (!isRecord(content) || !Array.isArray(content.parts)) throw invalidResponse();
-        const text = content.parts
-          .filter(isRecord)
-          .map(part => part.text)
-          .filter((part): part is string => typeof part === 'string')
-          .join('');
-        if (text.trim().length === 0 || text.length > MAX_GENERATED_TEXT_CHARS) throw invalidResponse();
-        return text;
+        const text: string[] = [];
+        for (const part of content.parts) {
+          if (!isRecord(part) || typeof part.text !== 'string'
+              || Object.keys(part).some(key => !['text', 'thought', 'thoughtSignature'].includes(key))
+              || (part.thought !== undefined && typeof part.thought !== 'boolean')) throw invalidResponse();
+          if (part.thought !== true) text.push(part.text);
+        }
+        const answer = text.join('');
+        if (answer.trim().length === 0 || answer.length > MAX_GENERATED_TEXT_CHARS
+            || Buffer.from(answer, 'utf8').toString('utf8') !== answer) throw invalidResponse();
+        if (signal?.aborted) throw timeoutError();
+        return answer;
       }, GENERATE_TIMEOUT_MS, signal);
     },
   };

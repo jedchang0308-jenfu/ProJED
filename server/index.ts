@@ -5,7 +5,8 @@ import { RuntimeDatabase, type ExpectedMigration } from './db.js';
 import { createKernelHttpServer } from './http.js';
 import { createRuntimeSessionAuth } from './runtimeSessionAuth.js';
 import { awaitDatabaseStartup } from './startup.js';
-import {createGeminiRagProvider} from './geminiRagProvider.js';
+import {createQualifiedCloudRagProvider} from './geminiRagProvider.js';
+import {CURRENT_RAG_BINDING} from './ragRuntimeBinding.js';
 import {createGcsMeetingAudioStorage} from './meetingAudioStorage.js';
 import {createServiceAccessTokenProvider} from './serviceAccessToken.js';
 import {CURRENT_MEETING_LLM_BINDING} from './meetingLlmRuntimeBinding.js';
@@ -31,7 +32,8 @@ async function main(): Promise<void> {
       getAccessToken:createServiceAccessTokenProvider()});
   const http = createKernelHttpServer(config, database, expectedMigrations, {
     ...createRuntimeSessionAuth(config,database),
-    ragProvider:process.env.GEMINI_API_KEY?createGeminiRagProvider({apiKey:process.env.GEMINI_API_KEY}):undefined,
+    ragProvider:CURRENT_RAG_BINDING===null?undefined:createQualifiedCloudRagProvider({binding:CURRENT_RAG_BINDING,
+      getAccessToken:createServiceAccessTokenProvider()}),
     meetingSynthesisProvider,
     meetingSynthesisModel:'gemini-3.5-flash',
     meetingUploads:createQualifiedMeetingUploadRepository(CURRENT_MEETING_ASR_BINDING,process.env.PROJED_MEETING_AUDIO_BUCKET),
