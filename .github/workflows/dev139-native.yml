@@ -16,6 +16,7 @@ on:
       - vite.config.ts
       - server/**
       - shared/**
+      - supabase/functions/**
       - src/**
       - db/**
       - config/dev-139/**

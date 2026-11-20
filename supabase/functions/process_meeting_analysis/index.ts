@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveSupabaseFunctionKey } from "../_shared/supabaseApiKeys.mjs";
+import { legacyWritesPaused, sourcePausedResponse } from "../_shared/sourceWritePause.mjs";
 
 const supabase = createClient(Deno.env.get("SUPABASE_URL") ?? "", resolveSupabaseFunctionKey("secret"), {
   auth: { persistSession: false, autoRefreshToken: false },
@@ -221,6 +222,7 @@ Deno.serve(async (request) => {
   if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
   try {
     requireWorkerSecret(request);
+    if (legacyWritesPaused()) return sourcePausedResponse();
     return Response.json(await processOne());
   } catch (error) {
     if (error instanceof Error && error.message === "WORKER_AUTH_REQUIRED") {

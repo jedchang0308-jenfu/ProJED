@@ -373,7 +373,9 @@ Server 搬移與 browser storage 恢復分開驗收。IndexedDB、Session、SW �
 
 **舊庫業務表停寫。** `node --import tsx scripts/dev139-source-write-fence.ts apply` 輸出供切換時使用的 SQL；`remove` 輸出回復 SQL。產生 SQL 時不連線。套用時同一交易等待既有交易離開、替舊庫 `public` 與 `private` 的應用表安裝停寫觸發器並核對覆蓋。鎖定逾時會整筆回滾。表仍可讀；SDK、RPC 或背景工作對這些表的新增、修改、刪除與清空均收到 `PT503 / PROJED_SOURCE_WRITE_PAUSED`。正式 importer 的 `plan` 可在停寫前執行；`apply` 與 `reconcile` 會在自己的唯讀快照中再次查核所有觸發器。
 
-此 SQL 僅涵蓋舊庫業務表。切換時仍需暫停來源結構變更、確認 Auth 的帳號異動已停止、已簽發的 Storage 寫入 URL 已失效，並等候在途 Edge／外部工作結束。目標開放業務寫入前才可直接恢復舊庫寫入；目標已有新資料時沿 §6.5 保留新寫入與收據，避免兩邊同時受理。
+舊版六個 Edge 入口共用 `PROJED_LEGACY_WRITE_MODE`。切換窗口將其設為 `paused` 後，新錄音寫入、上傳憑證、背景分析、音訊清理與模型請求在接觸儲存或供應商前回 503。原有授權下的狀態與播放查詢仍可使用。行事曆可繼續提供訂閱，期間略過最近存取時間寫入。未設定與 `open` 沿用正常模式，其他設定值均停寫。
+
+正式移轉前須確認各 Edge 都採用停寫版本及設定，並等候在途工作完成、已簽發的 Storage 上傳 URL 到期（舊錄音入口設兩小時）。期間保持來源結構穩定，另核對 Auth 帳號異動、其他可直接寫入 Storage 的來源及外部排程。目標開放業務寫入前才可直接恢復舊庫寫入；目標已有新資料時沿 §6.5 保留新寫入與收據，避免兩邊同時受理。
 
 W14已使「受支援DB domain的一次性full-snapshot搬移」達到本地RD rehearsal PASS，但整體仍非 Release Ready。S2尚須發布非員工wire／admission／revocation、verified legacy mapping proof、各入口Session／Cookie／callback與取消／切帳契約；正式切換尚須核對未承接的Inbox、RAG、會議／Storage資料，完成舊版API／SW／IDB相容、全部寫入來源fence、檔案與job恢復及Hosting路由／artifact契約。
 

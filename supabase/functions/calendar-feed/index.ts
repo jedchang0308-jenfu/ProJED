@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { FEED_TASK_LIMIT, buildCalendarFeedIcs } from "./ics.mjs";
 import { proxyLegacyCalendarFeed } from "./compatibilityProxy.mjs";
 import { resolveSupabaseFunctionKey } from "../_shared/supabaseApiKeys.mjs";
+import { legacyWritesPaused } from "../_shared/sourceWritePause.mjs";
 import { matchesTaskFilterQueryV5, normalizeTaskFilterQueryV5, type TaskFilterQueryV5 } from "./taskFilterV4.ts";
 
 const renderCalendarFeedIcs = buildCalendarFeedIcs as unknown as (input: Record<string, unknown>) => string;
@@ -754,10 +755,12 @@ Deno.serve(async (req) => {
     const allowedScope = await getAllowedTenantAndProjectScope(subscription);
     const ics = await buildIcs(subscription, allowedScope);
 
-    await supabase
-      .from("calendar_subscriptions")
-      .update({ last_accessed_at: new Date().toISOString() })
-      .eq("id", subscription.id);
+    if (!legacyWritesPaused()) {
+      await supabase
+        .from("calendar_subscriptions")
+        .update({ last_accessed_at: new Date().toISOString() })
+        .eq("id", subscription.id);
+    }
 
     return responseText(ics, 200, "text/calendar; charset=utf-8");
   } catch (error) {

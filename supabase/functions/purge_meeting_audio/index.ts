@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveSupabaseFunctionKey } from "../_shared/supabaseApiKeys.mjs";
+import { legacyWritesPaused, sourcePausedResponse } from "../_shared/sourceWritePause.mjs";
 
 const supabase = createClient(Deno.env.get("SUPABASE_URL") ?? "", resolveSupabaseFunctionKey("secret"), {
   auth: { persistSession: false, autoRefreshToken: false },
@@ -54,6 +55,7 @@ Deno.serve(async (request) => {
   if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
   try {
     requirePurgeSecret(request);
+    if (legacyWritesPaused()) return sourcePausedResponse();
     const { data: captures, error: captureError } = await supabase.from("meeting_capture_sessions")
       .select("id,audio_expires_at").not("audio_expires_at", "is", null).lte("audio_expires_at", new Date().toISOString()).limit(100);
     if (captureError) throw captureError;

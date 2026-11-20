@@ -26,7 +26,16 @@ const invokeLegacy = async <T>(operation: string, payload: Record<string, unknow
   const response = await supabase.functions.invoke('meeting_capture_control', {
     body: { operation, ...payload },
   });
-  if (response.error) throw response.error;
+  if (response.error) {
+    const context = response.error.context;
+    if (context instanceof Response && context.status === 503) {
+      const failure = await context.clone().json().catch(() => null);
+      if (failure?.error?.code === 'PROJED_SOURCE_WRITE_PAUSED') {
+        throw new Error('ProJED 正在移轉資料，請於恢復後重試。');
+      }
+    }
+    throw response.error;
+  }
   return response.data as T;
 };
 
