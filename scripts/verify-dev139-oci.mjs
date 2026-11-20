@@ -300,7 +300,7 @@ try {
     '--env', 'PROJED_ENV=managed', '--env', 'PROJED_APP_ENTRY=main',
     '--env', 'PROJED_RUNTIME_BINDING_FILE=/verification/binding.json',
     '--env', `PROJED_DATABASE_URL=postgresql://${encodeURIComponent(binding.iamLogins.runtime)}@localhost/jenfu_prod?host=${encodeURIComponent(socketPath)}`,
-    '--env', 'PROJED_MEETING_AUDIO_BUCKET=unqualified-fixture-bucket',
+    '--env', 'PROJED_MEETING_AUDIO_BUCKET=projed-cc78d-meeting-audio',
     asrImage], { network: fixtureNetwork, timeout: 90_000 });
   assert.equal(asrMaintenance.status, 0, asrMaintenance.stderr);
   const asrMaintenanceLines = asrMaintenance.stdout.trim().split(/\r?\n/u);
@@ -311,7 +311,7 @@ try {
     discussion: { scanned: 0, units: 0, completed: 0, sources: 0, abandoned: 0, deferred: 0, failures: 0, errors: {} },
     llm: { scanned: 0, units: 0, recovered: 0, published: 0, local: 0, abandoned: 0, deferred: 0, failures: 0, errors: {} },
     deferredRuns: 0, failures: 0,
-    cleanupEnabled: false,
+    cleanupEnabled: true,
     cleanup: { scanned: 0, units: 0, deleted: 0, unknown: 0, conflicts: 0, deferred: 0, failures: 0, errors: {} },
   });
   docker(['exec', pgName, 'sed', '-i', '1d', '/var/lib/postgresql/data/pg_hba.conf']);

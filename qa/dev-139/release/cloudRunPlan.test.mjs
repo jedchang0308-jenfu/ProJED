@@ -33,7 +33,7 @@ function makeInput(overrides = {}) {
     runtimeImage: `${CLOUD_RUN_TARGET.repository}/projed-prod@sha256:${IMAGE_DIGEST}`,
     jobsImage: `${CLOUD_RUN_TARGET.repository}/projed-prod-jobs@sha256:${IMAGE_DIGEST}`,
     analysisImage: `${CLOUD_RUN_TARGET.repository}/projed-prod-asr-job@sha256:${IMAGE_DIGEST}`,
-    audioBucket: 'projed-meeting-audio',
+    audioBucket: 'projed-cc78d-meeting-audio',
     binding: makeBinding(),
     sourceBundleVersion: '1',
     ...overrides,
@@ -257,7 +257,7 @@ test('meeting IAM grants inference only to runtime and audio access only on the 
   assert.deepEqual(roles[audioRole], ['storage.objects.create', 'storage.objects.get', 'storage.objects.delete']);
   assert.deepEqual(foundation.iamBindings.filter(({ role }) => role === inferenceRole || role === audioRole), [
     { resource: 'projects/projed-cc78d', member: 'serviceAccount:projed-prod-runtime@projed-cc78d.iam.gserviceaccount.com', role: inferenceRole },
-    { resource: 'projects/_/buckets/projed-meeting-audio', member: 'serviceAccount:projed-prod-runtime@projed-cc78d.iam.gserviceaccount.com', role: audioRole },
+    { resource: 'projects/_/buckets/projed-cc78d-meeting-audio', member: 'serviceAccount:projed-prod-runtime@projed-cc78d.iam.gserviceaccount.com', role: audioRole },
   ]);
   assert.equal(foundation.iamBindings.some(({ role }) => /roles\/(?:owner|editor|storage\.admin|aiplatform\.admin)$/.test(role)), false);
   assert.ok(requests.every(({ url }) => !/setIamPolicy|iam.googleapis.com|cacheConfig|storage.googleapis.com/.test(url)));
@@ -307,8 +307,8 @@ test('renderer rejects mutable, misplaced, and malformed image references', () =
   assertInvalid(makeInput({ analysisImage: `${CLOUD_RUN_TARGET.repository}/projed-prod@sha256:${IMAGE_DIGEST}` }));
 });
 
-test('renderer rejects invalid audio bucket names and Cloud Build source buckets', () => {
-  for (const audioBucket of ['', 'ab', 'UPPERCASE', 'run-sources', 'run-sources-projed-123',
+test('renderer rejects every bucket outside the approved private meeting storage', () => {
+  for (const audioBucket of ['other-private-meeting-audio', '', 'ab', 'UPPERCASE', 'run-sources', 'run-sources-projed-123',
     '192.168.1.10', 'goog-audio', 'audio-google-recordings', 'x'.repeat(64), 'audio..recordings']) {
     assertInvalid(makeInput({ audioBucket }));
   }

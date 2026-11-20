@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { KernelError } from '../../../server/errors.js';
-import { createGcsMeetingAudioStorage } from '../../../server/meetingAudioStorage.js';
+import { createGcsMeetingAudioStorage, createManagedMeetingAudioStorage } from '../../../server/meetingAudioStorage.js';
 
 const bucket = 'projed-meeting-audio-test';
 const key = [
@@ -12,6 +12,15 @@ const key = [
   'v1/0.webm',
 ].join('/');
 const tokenValue = 'synthetic-access-token-never-log';
+test('managed storage supports cleanup without inference and rejects other buckets before authentication', () => {
+  const getAccessToken = async (): Promise<string> => assert.fail('configuration must not request credentials');
+  for (const unbound of [undefined, '', 'another-private-bucket', 'run-sources-projed-cc78d-asia-east1']) {
+    assert.equal(createManagedMeetingAudioStorage(unbound, getAccessToken), undefined);
+  }
+  const storage = createManagedMeetingAudioStorage('projed-cc78d-meeting-audio', getAccessToken);
+  assert.equal(typeof storage?.probe, 'function');
+  assert.equal(typeof storage?.delete, 'function');
+});
 const generation = '9007199254740993123';
 
 interface FetchCall {

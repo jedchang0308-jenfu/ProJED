@@ -1,6 +1,7 @@
 import { MANAGED_DATABASE, assertManagedIamLogins, validateManagedDatabaseUrl,
   validateManagedRuntimeJobDatabaseUrl } from '../../shared/dev139ManagedDatabase.mjs';
 import { S3_MIGRATION_PATHS } from './dev139-migration-paths.mjs';
+import { MANAGED_MEETING_AUDIO_BUCKET } from '../../shared/dev139MeetingAudio.mjs';
 
 export const CLOUD_RUN_TARGET = Object.freeze({
   project: 'projed-cc78d', projectNumber: '967362299895', organization: '361825816000',
@@ -28,13 +29,6 @@ function exactKeys(value, keys) {
 function immutableImage(image, suffix) {
   const prefix = `${CLOUD_RUN_TARGET.repository}/${suffix}@sha256:`;
   if (typeof image !== 'string' || !image.startsWith(prefix) || !SHA256.test(image.slice(prefix.length))) invalid();
-}
-function validAudioBucket(bucket) {
-  if (typeof bucket !== 'string' || bucket.length < 3 || bucket.length > 222
-      || !/^[a-z0-9][a-z0-9._-]*[a-z0-9]$/u.test(bucket)
-      || bucket.startsWith('goog') || /google|g00gle/u.test(bucket)
-      || /^run-sources(?:-|$)/u.test(bucket) || /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/u.test(bucket)) return false;
-  return bucket.split('.').every(part => part.length > 0 && part.length <= 63);
 }
 function account(purpose) { return `projed-prod-${purpose}@${CLOUD_RUN_TARGET.project}.iam.gserviceaccount.com`; }
 function databaseUrl(binding, purpose) {
@@ -66,7 +60,7 @@ export function renderProjedCloudRun(input) {
   immutableImage(runtimeImage, 'projed-prod');
   immutableImage(jobsImage, 'projed-prod-jobs');
   immutableImage(analysisImage, 'projed-prod-asr-job');
-  if (!validAudioBucket(audioBucket)) invalid();
+  if (audioBucket !== MANAGED_MEETING_AUDIO_BUCKET) invalid();
   exactKeys(binding, BINDING_KEYS);
   try {
     assertManagedIamLogins(binding.iamLogins);

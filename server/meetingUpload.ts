@@ -1,7 +1,7 @@
 import type { ActorQueryPort } from './actorTransaction.js';
 import { KernelError } from './errors.js';
 import { normalizeMeetingUploadCompletion } from './meetingUploadInput.js';
-import type {MeetingAsrRuntimeBinding} from './meetingAsrRuntimeBinding.js';
+import {hasQualifiedMeetingAsrBinding,type MeetingAsrRuntimeBinding} from './meetingAsrRuntimeBinding.js';
 
 const CONFLICTS = new Set([
   'MEETING_UPLOAD_SOURCE_CONFLICT', 'MEETING_UPLOAD_CAPTURE_NOT_READY',
@@ -66,10 +66,6 @@ export class MeetingUploadRepository {
  * and the configured audio storage bucket identify the same project resource. */
 export function createQualifiedMeetingUploadRepository(binding:MeetingAsrRuntimeBinding|null,
   audioBucket:string|undefined):MeetingUploadRepository|null{
-  if(binding===null||typeof audioBucket!=='string'||audioBucket.trim().length===0
-      ||typeof binding.audioBucket!=='string'||binding.audioBucket.trim().length===0
-      ||binding.projectId!=='projed-cc78d'||binding.provider!=='google-cloud-speech-v1'||binding.model!=='default'
-      ||binding.dataLogging!=='disabled'||typeof binding.qualificationEvidenceRef!=='string'
-      ||binding.qualificationEvidenceRef.trim().length===0||binding.audioBucket!==audioBucket)return null;
+  if(!hasQualifiedMeetingAsrBinding(binding,audioBucket))return null;
   return new MeetingUploadRepository({cloudSpeech:true});
 }

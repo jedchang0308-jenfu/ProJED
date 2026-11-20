@@ -8,6 +8,6 @@
     "declaration": false,
     "allowJs": true
   },
-  "include": ["server/**/*.ts", "shared/dev139ManagedDatabase.mjs"],
+  "include": ["server/**/*.ts", "shared/dev139ManagedDatabase.mjs", "shared/dev139MeetingAudio.mjs"],
   "exclude": ["qa", "node_modules"]
 }

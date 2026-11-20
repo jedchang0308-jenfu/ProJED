@@ -16,7 +16,7 @@ const config={env:'disposable',entry:'main',profile:{runtime:{timeouts:{transact
 const actor:ServerActorV1={principalId:'google:subject',localUserId:'95c1d3df-226a-4e6f-9db5-f0f7f0db9749',
   entry:'main',contextId:'9fcadd06-a3cb-43c2-8d1f-7c17147d0e68',expiresAtMs:Date.now()+60_000,accountGuardRevision:'1'};
 const binding:MeetingAsrRuntimeBinding={projectId:'projed-cc78d',provider:'google-cloud-speech-v1',model:'default',
-  dataLogging:'disabled',audioBucket:'projed-audio-qualified',qualificationEvidenceRef:'source:qualification:2026-10'};
+  dataLogging:'disabled',audioBucket:'projed-cc78d-meeting-audio',qualificationEvidenceRef:'source:qualification:2026-10'};
 const captureId='b53c9bd0-1e4c-4b02-b153-28f3ab4c2341';
 const recordId='3b7ff75b-1c7a-4e52-9de4-34e77ee40b7b';
 const runId='91e4a817-b146-45d0-a77a-c2a9938a6b11';
@@ -70,6 +70,7 @@ test('Cloud upload repository stays disabled without exact qualification or matc
   assert.equal(createQualifiedMeetingUploadRepository(binding,undefined),null);
   assert.equal(createQualifiedMeetingUploadRepository(binding,''),null);
   assert.equal(createQualifiedMeetingUploadRepository(binding,'different-bucket'),null);
+  assert.equal(createQualifiedMeetingUploadRepository({...binding,audioBucket:'another-private-bucket'},'another-private-bucket'),null);
   assert.equal(createQualifiedMeetingUploadRepository({...binding,projectId:'other-project'} as unknown as MeetingAsrRuntimeBinding,
     binding.audioBucket),null);
   assert.equal(createQualifiedMeetingUploadRepository({...binding,provider:'google-cloud-speech-v2'} as unknown as MeetingAsrRuntimeBinding,

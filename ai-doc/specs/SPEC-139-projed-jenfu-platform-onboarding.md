@@ -4,6 +4,8 @@
 
 正式 Supabase 的兩個私有身分檢視已建立並讀回 ACL，供移轉時核對既有帳號 UUID。目標環境仍為 Google Cloud。[正式來源執行結果](#dev139-source-views-applied)
 
+Cloud Run 設定、音訊上傳／播放及背景清理都限定使用已核准的私人桶 `projed-cc78d-meeting-audio`。清理依資料庫的既有到期紀錄與物件 generation 執行，即使語音辨識停用仍可清除到期錄音。語音辨識另外核對專案、同一音訊桶、模型及零留存資格。此變更不會啟用正式推論。
+
 2026-11-20 續行：人類已核准 §47.1 具名 foundation，並回覆適用 Google Cloud Master Agreement／防濫用留存豁免「不確定」。五個 API、四個專用 SA、三個 instance-scoped SQL IAM login、私人音訊桶及空白來源 Secret 已建立；Vertex cache 已讀回關閉，三個模型的內容 logging config 均不存在、依官方規格為預設關閉。Speech data logging 已依官方 default-off／明確 opt-in 契約收斂為同步 Recognize、禁止 opt-in 與外部 opt-in 即撤銷資格；部署後 runtime SA 實呼叫、Gemini 豁免、Shared VPC 及音訊桶 metadata 管理修復仍待完成，真實內容推論保持停用。Session 已改為登入核實來源、一般操作只查本地 Session／mapping／guard；三方同步撤銷 source 與實際隔離 PostgreSQL 證據見 §13，最新候選 artifact 與限制見 §47.1。正式 Session、資料移轉、writer fence、舊入口、切流與發布仍保留在原完成分母。
 
 同日三份跨 owner PR 已依人類核准轉為 ready-for-review：ProJED #9、Platform #157、OrgMaster #187 均仍 open、未 merge／部署／切流；三個 base 分別仍是遠端最新 `0670a0a`／`5ae88bc`／`a8830e9`。Platform `b7293c2` 與 OrgMaster `4b722b4` 的 required Source QC 均 SUCCESS；ProJED 最新 `5654478` 只修文件且沒有新 checks，最後 executable source `7308b1d` 的 CI44691983128 仍是本版程式證據，不以 ready 狀態外推正式驗收。

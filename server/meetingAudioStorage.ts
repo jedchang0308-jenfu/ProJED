@@ -1,4 +1,5 @@
 import { KernelError } from './errors.js';
+import { MANAGED_MEETING_AUDIO_BUCKET } from '../shared/dev139MeetingAudio.mjs';
 
 const STORAGE_API = 'https://storage.googleapis.com';
 const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
@@ -232,6 +233,11 @@ function requestInit(token: string, signal?: AbortSignal, extraHeaders?: Record<
     redirect: 'error',
     signal,
   };
+}
+
+export function createManagedMeetingAudioStorage(bucket: string | undefined, getAccessToken: () => Promise<string>) {
+  if (bucket !== MANAGED_MEETING_AUDIO_BUCKET) return undefined;
+  return createGcsMeetingAudioStorage({ bucket, getAccessToken });
 }
 
 export function createGcsMeetingAudioStorage(

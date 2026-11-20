@@ -7,7 +7,7 @@ import { createRuntimeSessionAuth } from './runtimeSessionAuth.js';
 import { awaitDatabaseStartup } from './startup.js';
 import {createQualifiedCloudRagProvider} from './geminiRagProvider.js';
 import {CURRENT_RAG_BINDING} from './ragRuntimeBinding.js';
-import {createGcsMeetingAudioStorage} from './meetingAudioStorage.js';
+import {createManagedMeetingAudioStorage} from './meetingAudioStorage.js';
 import {createServiceAccessTokenProvider} from './serviceAccessToken.js';
 import {CURRENT_MEETING_LLM_BINDING} from './meetingLlmRuntimeBinding.js';
 import {createQualifiedMeetingSynthesisProvider} from './meetingSynthesisCloudProvider.js';
@@ -39,9 +39,7 @@ async function main(): Promise<void> {
     meetingUploads:createQualifiedMeetingUploadRepository(CURRENT_MEETING_ASR_BINDING,process.env.PROJED_MEETING_AUDIO_BUCKET),
     meetingJobDispatcher:CURRENT_MEETING_JOB_BINDING===null?undefined
       :createMeetingJobDispatcher(CURRENT_MEETING_JOB_BINDING,{getAccessToken:createServiceAccessTokenProvider()}),
-    meetingAudioStorage:process.env.PROJED_MEETING_AUDIO_BUCKET?createGcsMeetingAudioStorage({
-      bucket:process.env.PROJED_MEETING_AUDIO_BUCKET,getAccessToken:createServiceAccessTokenProvider(),
-    }):undefined,
+    meetingAudioStorage:createManagedMeetingAudioStorage(process.env.PROJED_MEETING_AUDIO_BUCKET,createServiceAccessTokenProvider()),
   });
   const address = await http.listen();
   console.log(JSON.stringify({ event: 'projed_kernel_ready', entry: config.entry, host: address.host, port: address.port }));

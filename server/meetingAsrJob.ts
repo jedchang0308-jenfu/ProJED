@@ -6,12 +6,12 @@ import {KernelError} from './errors.js';
 import {CURRENT_PRODUCTION_IDENTITY_PINS} from './identityConsumer.js';
 import {createGoogleCloudMeetingProvider} from './googleCloudMeetingProvider.js';
 import {createGoogleCloudSpeechProvider} from './googleCloudSpeechProvider.js';
-import {createGcsMeetingAudioStorage} from './meetingAudioStorage.js';
+import {createManagedMeetingAudioStorage} from './meetingAudioStorage.js';
 import {runMeetingBackgroundHost} from './meetingBackgroundHost.js';
 import {runMeetingAudioCleanupHost} from './meetingAudioCleanupWorker.js';
 import {createPostgresMeetingAudioCleanupRepository} from './meetingAudioCleanupRepository.js';
 import {createPostgresMeetingAsrControl,createPostgresMeetingAsrRepository} from './meetingAsrRepository.js';
-import {CURRENT_MEETING_ASR_BINDING} from './meetingAsrRuntimeBinding.js';
+import {CURRENT_MEETING_ASR_BINDING,hasQualifiedMeetingAsrBinding} from './meetingAsrRuntimeBinding.js';
 import {runMeetingAsrUnit} from './meetingAsrWorker.js';
 import {createPostgresMeetingDiscussionControl,createPostgresMeetingDiscussionRepository} from './meetingDiscussionRepository.js';
 import {runMeetingDiscussionUnit} from './meetingDiscussionWorker.js';
@@ -49,23 +49,22 @@ export async function meetingAsrJobMain(args:readonly string[]=process.argv.slic
   try{
     await awaitDatabaseStartup(()=>database.assertRuntimeBoundary(expected));
     const auth=createRuntimeSessionAuth(config,database);
-    const binding=CURRENT_MEETING_ASR_BINDING;
-    const cleanupEnabled=binding!==null&&binding.audioBucket===process.env.PROJED_MEETING_AUDIO_BUCKET;
+    const configuredBucket=process.env.PROJED_MEETING_AUDIO_BUCKET;
+    const getAccessToken=createServiceAccessTokenProvider();
+    const audioStorage=createManagedMeetingAudioStorage(configuredBucket,getAccessToken);
+    const cleanupEnabled=audioStorage!==undefined;
     // Maintenance remains available without provider qualification or Session
     // publication. New paid work additionally requires both actual bindings.
-    const dispatchEnabled=binding!==null&&binding.audioBucket===process.env.PROJED_MEETING_AUDIO_BUCKET
+    const dispatchEnabled=hasQualifiedMeetingAsrBinding(CURRENT_MEETING_ASR_BINDING,configuredBucket)
       &&typeof auth.resolveMeetingRunActor==='function';
     const resolveActor=auth.resolveMeetingRunActor??(async()=>{throw new KernelError('IDENTITY_CONTRACT_UNAVAILABLE','Session contract is unpublished',503);});
     const repository=(runId:string)=>createPostgresMeetingAsrRepository({runId,database,config,resolveActor});
     const control=createPostgresMeetingAsrControl({database,config});
-    const audioStorage=cleanupEnabled&&binding?createGcsMeetingAudioStorage({
-      bucket:binding.audioBucket,getAccessToken:createServiceAccessTokenProvider(),
-    }):undefined;
     // Retention does not borrow a user's Session or call an inference provider.
     // Run once before paid work so a busy queue cannot starve due obligations.
     const cleanup=await runMeetingAudioCleanupHost({repository:createPostgresMeetingAudioCleanupRepository({database,config}),
       storageEnabled:cleanupEnabled,...(audioStorage?{storage:audioStorage}:{}),deadlineAtMs:jobDeadlineAtMs},controller.signal);
-    let media:{storage:ReturnType<typeof createGcsMeetingAudioStorage>;provider:ReturnType<typeof createGoogleCloudSpeechProvider>}|undefined;
+    let speechProvider:ReturnType<typeof createGoogleCloudSpeechProvider>|undefined;
     const discussionControl=createPostgresMeetingDiscussionControl({database,config});
     const llmBinding=CURRENT_MEETING_LLM_BINDING;
     const llmDispatchEnabled=hasQualifiedMeetingLlmBinding(llmBinding)&&typeof auth.resolveMeetingRunActor==='function';
@@ -74,13 +73,9 @@ export async function meetingAsrJobMain(args:readonly string[]=process.argv.slic
     const summary=await runMeetingBackgroundHost({deadlineAtMs:jobDeadlineAtMs,asr:{...control,dispatchEnabled,
       recover:(runId,token)=>repository(runId).recoverExpired(token),
       runUnit:async(runId,signal)=>{
-        if(!dispatchEnabled||!binding)throw new KernelError('CONFIG_INVALID','ASR dispatch is unqualified');
-        if(!media){
-          const getAccessToken=createServiceAccessTokenProvider();
-          media={storage:audioStorage??createGcsMeetingAudioStorage({bucket:binding.audioBucket,getAccessToken}),
-            provider:createGoogleCloudSpeechProvider({getAccessToken})};
-        }
-        return runMeetingAsrUnit({...media,repository:repository(runId)},signal);
+        if(!dispatchEnabled||!audioStorage)throw new KernelError('CONFIG_INVALID','ASR dispatch is unqualified');
+        speechProvider??=createGoogleCloudSpeechProvider({getAccessToken});
+        return runMeetingAsrUnit({storage:audioStorage,provider:speechProvider,repository:repository(runId)},signal);
       },
     },discussion:{...discussionControl,
       ...(auth.resolveMeetingRunActor?{originalSessionResolver:auth.resolveMeetingRunActor}:{}),
