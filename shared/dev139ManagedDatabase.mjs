@@ -18,6 +18,14 @@ export const MANAGED_DATABASE = Object.freeze({
 });
 
 function fail(code, message) { throw Object.assign(new Error(message), { code }); }
+
+export function isManagedMigrationSource(binding) {
+  const projectRef = 'knodlkxqpcqyrtgwpdst';
+  const reader = 'projed_dev139_source_reader';
+  if (binding.projectRef !== projectRef || binding.databaseName !== 'postgres') return false;
+  return (binding.connectionMode === 'direct' && binding.readerRole === reader)
+    || (binding.connectionMode === 'session' && binding.readerRole === `${reader}.${projectRef}`);
+}
 function assertPurpose(purpose) {
   if (!Object.hasOwn(MANAGED_DATABASE.iamLogins, purpose)) fail('CONFIG_INVALID', 'Unknown database lifecycle');
 }

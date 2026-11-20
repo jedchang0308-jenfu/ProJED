@@ -20,7 +20,7 @@ import {
 } from '../server/config.js';
 import {
   deriveSupabaseSourceDatabaseRole,
-  validateSupabaseSourceBinding,
+  validateManagedSupabaseSourceBinding,
   validateSupabaseSourceUrl,
   type SupabaseSourceBindingV1,
 } from './dev139-supabase-source-contract.js';
@@ -1068,7 +1068,7 @@ async function main(): Promise<void> {
     throw Object.assign(new Error('Migration source bytes do not match the runtime binding'), { code: 'BINDING_INVALID' });
   }
   const sourceBinding = managed
-    ? validateSupabaseSourceBinding(readJson<SupabaseSourceBindingV1>(sourceBindingPath!))
+    ? validateManagedSupabaseSourceBinding(readJson<SupabaseSourceBindingV1>(sourceBindingPath!))
     : undefined;
   const sourceUrl = sourceBinding
     ? validateSupabaseSourceUrl(sourceRaw, sourceBinding)

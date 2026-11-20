@@ -365,9 +365,9 @@ try {
     bundleVersion: 1,
     sourceBinding: { bindingVersion: 1, provider: 'supabase-postgres', projectRef: 'knodlkxqpcqyrtgwpdst',
       connectionMode: 'direct', hostname: 'db.knodlkxqpcqyrtgwpdst.supabase.co', port: 5432,
-      databaseName: 'postgres', readerRole: 'fixture_reader', sslMode: 'verify-full',
+      databaseName: 'postgres', readerRole: 'projed_dev139_source_reader', sslMode: 'verify-full',
       sslRootCertSha256: createHash('sha256').update(sourceCa).digest('hex') },
-    databaseUrl: `postgresql://fixture_reader:${sourcePassword}@db.knodlkxqpcqyrtgwpdst.supabase.co:5432/postgres?sslmode=verify-full&sslrootcert=%2Fcaller%2Fca.pem`,
+    databaseUrl: `postgresql://projed_dev139_source_reader:${sourcePassword}@db.knodlkxqpcqyrtgwpdst.supabase.co:5432/postgres?sslmode=verify-full&sslrootcert=%2Fcaller%2Fca.pem`,
     sslRootCertPem: sourceCa,
   };
   const sourceBundlePath = join(temp, 'source-bundle.json');

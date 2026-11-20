@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync, realpathSync, statSync } from 'node:fs';
 import { isAbsolute } from 'node:path';
+import { isManagedMigrationSource } from '../shared/dev139ManagedDatabase.mjs';
 
 export interface SupabaseSourceBindingV1 {
   bindingVersion: 1;
@@ -68,10 +69,16 @@ export function deriveSupabaseSourceDatabaseRole(binding: SupabaseSourceBindingV
   return databaseRole;
 }
 
+export function validateManagedSupabaseSourceBinding(value: unknown): SupabaseSourceBindingV1 {
+  const binding = validateSupabaseSourceBinding(value);
+  if (!isManagedMigrationSource(binding)) fail('Managed source must use the dedicated migration reader and database');
+  return binding;
+}
+
 export function validateSupabaseSourceUrl(raw: string, binding: SupabaseSourceBindingV1): string {
   let url: URL;
   try { url = new URL(raw); }
-  catch (error) { throw Object.assign(new Error('Supabase source URL is invalid', { cause: error }), { code: 'SOURCE_URL_INVALID' }); }
+  catch { throw Object.assign(new Error('Supabase source URL is invalid'), { code: 'SOURCE_URL_INVALID' }); }
   const queryKeys = [...url.searchParams.keys()].sort();
   const certificatePath = url.searchParams.get('sslrootcert') ?? '';
   if (!['postgres:', 'postgresql:'].includes(url.protocol)

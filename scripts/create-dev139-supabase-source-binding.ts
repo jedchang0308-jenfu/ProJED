@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 
 import {
   sha256Bytes,
-  validateSupabaseSourceBinding,
+  validateManagedSupabaseSourceBinding,
   type SupabaseSourceBindingV1,
 } from './dev139-supabase-source-contract.js';
 
@@ -19,7 +19,7 @@ for (const argument of process.argv.slice(2)) {
 
 if (!options.ca) throw new Error('--ca is required');
 const certificatePath = resolve(options.ca);
-const binding: SupabaseSourceBindingV1 = validateSupabaseSourceBinding({
+const binding: SupabaseSourceBindingV1 = validateManagedSupabaseSourceBinding({
   bindingVersion: 1,
   provider: 'supabase-postgres',
   projectRef: options['project-ref'] ?? '',

@@ -8,12 +8,28 @@ import type { Client } from 'pg';
 import {
   deriveSupabaseSourceDatabaseRole,
   sha256Bytes,
+  validateManagedSupabaseSourceBinding,
   validateSupabaseSourceBinding,
   validateSupabaseSourceUrl,
 } from '../../../scripts/dev139-supabase-source-contract.js';
 import { validateSource } from '../../../scripts/dev139-data-migration.js';
 
 const projectRef = 'abcdefghijklmnopqrst';
+
+test('managed importer accepts only the selected source project, database and reader', () => {
+  const project = 'knodlkxqpcqyrtgwpdst';
+  const binding = { bindingVersion: 1, provider: 'supabase-postgres', projectRef: project,
+    hostname: `db.${project}.supabase.co`, connectionMode: 'direct', port: 5432, databaseName: 'postgres',
+    readerRole: 'projed_dev139_source_reader', sslMode: 'verify-full', sslRootCertSha256: 'a'.repeat(64) };
+  assert.deepEqual(validateManagedSupabaseSourceBinding(binding), binding);
+  for (const change of [{ readerRole: 'postgres' }, { databaseName: 'other' },
+    { projectRef, hostname: `db.${projectRef}.supabase.co` }]) {
+    assert.throws(() => validateManagedSupabaseSourceBinding({ ...binding, ...change }), { code: 'SOURCE_BINDING_INVALID' });
+  }
+  assert.throws(() => validateSupabaseSourceUrl('postgresql://reader:private-test-marker@[', validateManagedSupabaseSourceBinding(binding)),
+    (error: unknown) => error instanceof Error && 'code' in error && error.code === 'SOURCE_URL_INVALID'
+      && error.cause === undefined && !error.message.includes('private-test-marker'));
+});
 
 function sourceIdentityClient(roleName: string): Client {
   return {

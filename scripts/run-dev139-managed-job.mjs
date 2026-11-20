@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { tmpdir } from 'node:os';
+import { isManagedMigrationSource } from '../shared/dev139ManagedDatabase.mjs';
 
 import {
   createManagedBinding,
@@ -17,7 +18,6 @@ const SOURCE_BINDING_ENV = 'PROJED_MIGRATION_SOURCE_BINDING_FILE';
 const SOURCE_DATABASE_URL_ENV = 'PROJED_MIGRATION_SOURCE_DATABASE_URL';
 const LEGACY_SOURCE_ENV = Object.freeze([SOURCE_BINDING_ENV, SOURCE_DATABASE_URL_ENV]);
 const SOURCE_MIGRATION_MODES = new Set(['plan', 'apply', 'reconcile']);
-const SOURCE_PROJECT_REF = 'knodlkxqpcqyrtgwpdst';
 const SOURCE_BUNDLE_MAX_BYTES = 256 * 1024;
 const SOURCE_CA_MAX_BYTES = 128 * 1024;
 const SOURCE_BINDING_KEYS = Object.freeze([
@@ -108,20 +108,13 @@ function exactObjectKeys(value, keys) {
 function validateSourceBindingShape(value) {
   if (!exactObjectKeys(value, SOURCE_BINDING_KEYS)) invalidSourceBundle();
   const binding = value;
-  const projectRefValid = binding.projectRef === SOURCE_PROJECT_REF;
   const hostnameValid = typeof binding.hostname === 'string'
     && binding.hostname === binding.hostname.toLowerCase()
     && /^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$/u.test(binding.hostname);
-  const databaseValid = typeof binding.databaseName === 'string'
-    && /^[A-Za-z_][A-Za-z0-9_-]{0,62}$/u.test(binding.databaseName);
-  const roleValid = typeof binding.readerRole === 'string'
-    && /^[A-Za-z_][A-Za-z0-9_.-]{0,127}$/u.test(binding.readerRole);
   const hashValid = typeof binding.sslRootCertSha256 === 'string'
     && /^[a-f0-9]{64}$/u.test(binding.sslRootCertSha256);
   if (binding.bindingVersion !== 1 || binding.provider !== 'supabase-postgres'
-      || !projectRefValid
-      || (binding.connectionMode !== 'direct' && binding.connectionMode !== 'session')
-      || !hostnameValid || binding.port !== 5432 || !databaseValid || !roleValid
+      || !isManagedMigrationSource(binding) || !hostnameValid || binding.port !== 5432
       || binding.sslMode !== 'verify-full' || !hashValid) {
     invalidSourceBundle();
   }
@@ -246,7 +239,7 @@ async function validateMaterializedSourceBundle(materialized) {
     throw Object.assign(new Error('Managed source contract is unavailable'), { code: 'SOURCE_BUNDLE_INVALID' });
   }
   try {
-    const binding = contract.validateSupabaseSourceBinding(materialized.sourceBinding);
+    const binding = contract.validateManagedSupabaseSourceBinding(materialized.sourceBinding);
     contract.validateSupabaseSourceUrl(materialized.sourceDatabaseUrl, binding);
   } catch {
     throw Object.assign(new Error('Managed source bundle is invalid'), { code: 'SOURCE_BUNDLE_INVALID' });

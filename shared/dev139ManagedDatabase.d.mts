@@ -1,4 +1,7 @@
 export type ManagedPurpose = 'runtime' | 'migrator' | 'importer';
+export function isManagedMigrationSource(binding: {
+  projectRef: string; databaseName: string; connectionMode: string; readerRole: string;
+}): boolean;
 export interface ManagedIamLogins { runtime: string; migrator: string; importer: string }
 export interface ManagedBinding {
   databaseName: string; databasePort: number; runtimeRole: string;

@@ -29,11 +29,11 @@ function makeBundle(overrides = {}) {
       hostname: HOSTNAME,
       port: 5432,
       databaseName: 'postgres',
-      readerRole: 'projed_snapshot_reader',
+      readerRole: 'projed_dev139_source_reader',
       sslMode: 'verify-full',
       sslRootCertSha256: CERTIFICATE_SHA256,
     },
-    databaseUrl: `postgresql://projed_snapshot_reader:source-password@${HOSTNAME}:5432/postgres?sslmode=verify-full&sslrootcert=%2Fcaller%2Fsupabase-root-ca.pem`,
+    databaseUrl: `postgresql://projed_dev139_source_reader:source-password@${HOSTNAME}:5432/postgres?sslmode=verify-full&sslrootcert=%2Fcaller%2Fsupabase-root-ca.pem`,
     sslRootCertPem: CERTIFICATE,
     ...overrides,
   };
@@ -43,7 +43,7 @@ function assertInvalid(work) {
   assert.throws(work, (error) => {
     assert.equal(error.code, 'SOURCE_BUNDLE_INVALID');
     assert.equal(error.message, 'Managed source bundle is invalid');
-    assert.doesNotMatch(error.message, /source-password|supabase|projed_snapshot_reader/u);
+    assert.doesNotMatch(error.message, /source-password|supabase|projed_dev139_source_reader/u);
     return true;
   });
 }
@@ -106,6 +106,26 @@ test('source bundle rejects wrong project, certificate drift, and oversized CA w
     },
   });
   assertInvalid(() => parseSourceBundleBytes(JSON.stringify(oversizedBundle)));
+});
+
+test('direct and pooled source bundles reject a matching administrator URL before writing credentials', () => {
+  for (const connectionMode of ['direct', 'session']) {
+    const base = makeBundle();
+    const hostname = connectionMode === 'direct' ? HOSTNAME : 'aws-0-asia-east1.pooler.supabase.com';
+    const suffix = connectionMode === 'direct' ? '' : `.${PROJECT_REF}`;
+    for (const role of ['projed_dev139_source_reader', 'postgres']) {
+      const readerRole = role + suffix;
+      const url = new URL(base.databaseUrl);
+      url.hostname = hostname;
+      url.username = readerRole;
+      const bundle = { ...base, databaseUrl: url.toString(), sourceBinding: {
+        ...base.sourceBinding, connectionMode, hostname, readerRole,
+      } };
+      const parse = () => parseSourceBundleBytes(JSON.stringify(bundle));
+      if (role === 'postgres') assertInvalid(parse);
+      else assert.deepEqual(parse(), bundle);
+    }
+  }
 });
 
 test('source bundle URL validation rejects project, port, TLS, password, extra, and duplicate query drift', () => {
