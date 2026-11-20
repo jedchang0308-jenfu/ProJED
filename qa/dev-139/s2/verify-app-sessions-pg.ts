@@ -38,6 +38,21 @@ function denied(action: Promise<unknown>) {
   return assert.rejects(action,(error: unknown)=>error instanceof KernelError && (error.httpStatus===409||error.httpStatus===403));
 }
 
+export async function startBrowserFixtureSession(database: RuntimeDatabase, config: RuntimeConfig): Promise<ServerActorV1> {
+  const store = new PostgresAppSessionStore(database);
+  const row = intent();
+  const claim = opaqueHash();
+  const input = complete(row, claim, 'b');
+  await store.begin(row);
+  await store.claim(row.tokenHash, row.stateHash, claim, Date.now());
+  await publishSyntheticPrincipalState(config, input.identity);
+  const session = await store.complete(input);
+  return { principalId: session.identity.principalId, principalKind: session.identity.principalKind,
+    localUserId: session.localUserId, entry: session.entry, contextId: session.contextId,
+    sessionTokenHash: session.tokenHash, expiresAtMs: session.expiresAtMs,
+    accountGuardRevision: session.accountGuardRevision };
+}
+
 /** True local SQL/roles, with synthetic owner identity proof; not real SSO. */
 export async function verifyAppSessionsPostgres(database: RuntimeDatabase, config: RuntimeConfig): Promise<void> {
   const store=new PostgresAppSessionStore(database);

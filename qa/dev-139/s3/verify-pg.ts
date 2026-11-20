@@ -1,3 +1,4 @@
+import { verifyCalendarMachinePostgres } from './verify-calendar-machine-pg.js';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -39,7 +40,7 @@ import { createBackupPackage } from '../../../src/features/backup/package.js';
 import { BackupError } from '../../../src/features/backup/types.js';
 import { TaskTrackingError } from '../../../src/features/taskTracking/errors.js';
 import { verifyGoogleMappingsPostgres } from '../s2/verify-mappings-pg.js';
-import { verifyAppSessionsPostgres } from '../s2/verify-app-sessions-pg.js';
+import { startBrowserFixtureSession, verifyAppSessionsPostgres } from '../s2/verify-app-sessions-pg.js';
 import {verifyRagPostgres} from './verify-rag-pg.js';
 import {verifyMeetingSynthesisPostgres} from './verify-meeting-synthesis-pg.js';
 import { verifyActorSerializationPostgres } from './verify-actor-serialization-pg.js';
@@ -688,8 +689,11 @@ let destroyedSessionCount = 0;
 const httpConfig = process.env.PROJED_DEV139_BROWSER_SMOKE === '1'
   ? { ...config, staticRoot: resolve('dist') }
   : config;
+const browserActor = process.env.PROJED_DEV139_BROWSER_SMOKE === '1'
+  ? await startBrowserFixtureSession(database, config) : null;
 const http = createKernelHttpServer(httpConfig, database, expected, {
   resolveActor: async (request) => {
+    if (browserActor && request.headers.cookie === '__session=qa-browser') return browserActor;
     if (request.headers.cookie === '__session=qa-a') return actorA;
     if (request.headers.cookie === '__session=qa-b') return actorB;
     if (request.headers.cookie === '__session=qa-b-quick') return actorBQuick;
@@ -935,6 +939,7 @@ try {
     `, [calendarTenantId, calendarProjectId, refs]));
     assert.equal(removed.rowCount, refs.length);
   }
+  await verifyCalendarMachinePostgres(database, config, actorA, tokenHash, calendarProjectId, calendarTenantId);
   const legacyStatusFilter = {
     todo: true, in_progress: true, delayed: true, completed: false, unsure: true, onhold: true,
   };
@@ -1815,6 +1820,7 @@ console.log(JSON.stringify({
     'http-backup-copy-replace-stale-rollback-idempotency-rls-and-origin',
     'http-account-layout-and-task-filter-preferences-cas-rls-and-origin',
     'http-calendar-subscription-hash-only-owner-origin-legacy-pagination-lifecycle-feed-and-revocation',
+    'managed-calendar-machine-bearer-legacy-owned-external-current-rights-and-revocation',
     ...(process.env.PROJED_DEV139_BROWSER_SMOKE === '1' ? ['http-normal-product-ui-and-reload'] : []),
   ],
 }));

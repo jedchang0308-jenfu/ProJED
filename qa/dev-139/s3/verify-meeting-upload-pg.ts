@@ -19,6 +19,8 @@ import { createPostgresMeetingDiscussionRepository, parseMeetingDiscussionClaim,
   parseMeetingDiscussionReadProgress, parseMeetingDiscussionSourceInput } from '../../../server/meetingDiscussionRepository.js';
 import {runMeetingDiscussionUnit,type MeetingDiscussionBatch,type MeetingDiscussionClaim} from '../../../server/meetingDiscussionWorker.js';
 import { PostgresAppSessionStore } from '../../../server/postgresAppSessionStore.js';
+import { publishSyntheticPrincipalState } from '../s2/principalStateFixture.js';
+import type { ProducerVerifiedIdentity } from '../../../server/identityConsumer.js';
 import { MeetingUploadRepository } from '../../../server/meetingUpload.js';
 import {verifyMeetingTaskReadPostgres} from './verify-meeting-task-read-pg.js';
 import {verifyMeetingLlmPostgres} from './verify-meeting-llm-pg.js';
@@ -344,7 +346,8 @@ async function verifyAsrSessionBinding(database:RuntimeDatabase,config:RuntimeCo
     pool:{...config.profile.runtime.pool,max:1}}}});
   const store=new PostgresAppSessionStore(sessionDatabase),contextId=randomUUID(),otherContextId=randomUUID();
   const subject=`qa-asr-session-${randomUUID()}`,hashes=[digest(randomUUID()),digest(randomUUID())];
-  const boundActor={...owner,contextId},otherActor={...owner,contextId:otherContextId};
+  const boundActor={...owner,contextId,sessionTokenHash:hashes[0]!};
+  const otherActor={...owner,contextId:otherContextId,sessionTokenHash:hashes[1]!};
   let proofCreated=false;
   let failed=false,failure:unknown;
   const cleanupErrors:unknown[]=[];
@@ -359,20 +362,25 @@ async function verifyAsrSessionBinding(database:RuntimeDatabase,config:RuntimeCo
     try{metadataPid=(await initialLease.client.query<{pid:number}>('SELECT pg_backend_pid() AS pid')).rows[0]!.pid;}
     finally{initialLease.release();}
     assert.equal(await store.readMeetingRunSession(runId),null,'an unbound run grants no Session metadata read');
-    await assert.rejects(bind(boundActor),deny,'a synthetic actor context without a stored Session cannot bind');
+    await assert.rejects(bind({...owner,contextId}),deny,'a synthetic actor context without a stored Session cannot bind');
     await admin.query('INSERT INTO projed_core.google_identity_proofs(google_subject,local_user_id) VALUES($1,$2::uuid)',
       [subject,owner.localUserId]);proofCreated=true;
     const now=Date.now(),sourceExpiry=now+8*60*60*1000;
-    const identity={contractVersion:'jenfu.sso-handoff.v4',audience:'projed',manifestSha256:'a'.repeat(64),
+    const identity:ProducerVerifiedIdentity={contractVersion:'jenfu.sso-handoff.v4',audience:'projed',manifestSha256:'a'.repeat(64),
       issuer:'http://127.0.0.1:4300/api/sso',identityIssuer:'https://accounts.google.com',identitySubject:subject,
       googleSubject:subject,principalId:owner.principalId,principalKind:'personal',employeeId:null,
       authEpoch:1,authenticatedAtMs:now-30_000,revokedBeforeMs:null,sourceSessionExpiresAtMs:sourceExpiry,
       issuedAtMs:now-1000,expiresAtMs:now+60_000,currentStateExpiresAtMs:now+10_000,mappingRevision:'1'};
+    await publishSyntheticPrincipalState(config,identity);
     for(const [index,context] of [contextId,otherContextId].entries()){
-      await admin.query(`INSERT INTO projed_core.app_sessions(token_hash,public_origin,entry,local_user_id,
-        google_subject,context_id,account_guard_revision,identity,expires_at_ms)
-        VALUES($1,'http://127.0.0.1:4100','main',$2::uuid,$3,$4::uuid,$5::bigint,$6::jsonb,$7::bigint)`,
-      [hashes[index],owner.localUserId,subject,context,owner.accountGuardRevision,JSON.stringify(identity),sourceExpiry]);
+      const tokenHash=digest(randomUUID()),stateHash=digest(randomUUID()),claimHash=digest(randomUUID());
+      await store.begin({tokenHash,stateHash,entry:'main',publicOrigin:'http://127.0.0.1:4100',returnPath:'/',
+        oldSessionHash:null,codeVerifier:digest(randomUUID()),status:'pending',claimHash:null,
+        completedSessionHash:null,expiresAtMs:now+60_000});
+      await store.claim(tokenHash,stateHash,claimHash,Date.now());
+      const session=await store.complete({tokenHash,stateHash,claimHash,identity,entry:'main',
+        sessionTokenHash:hashes[index]!,contextId:context,nowMs:Date.now()});
+      assert.equal(session.localUserId,owner.localUserId);
     }
     assert.equal(await bind(boundActor),contextId);
     assert.equal(await bind(boundActor),contextId,'the same context can replay without creating another authorization');

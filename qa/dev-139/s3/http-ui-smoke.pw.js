@@ -27,7 +27,7 @@ async (page) => {
   let step = 'bind isolated actor';
   try {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.context().addCookies([{ name: '__session', value: 'qa-b', url: `${baseUrl}/` }]);
+    await page.context().addCookies([{ name: '__session', value: 'qa-browser', url: `${baseUrl}/` }]);
     await page.evaluate(() => {
       localStorage.setItem('projed-last-ws', 'ws-b');
       localStorage.setItem('projed-last-board', 'board-shared');
@@ -70,6 +70,7 @@ async (page) => {
     assert(apiPaths.includes('/api/v1/session'), 'normal UI did not resolve the HTTP session', { apiPaths });
     assert(apiPaths.includes('/api/v1/workspaces'), 'normal UI did not load HTTP workspaces', { apiPaths });
     assert(apiPaths.some(path => path.endsWith('/tasks')), 'normal UI did not load HTTP tasks', { apiPaths });
+    assert(apiPaths.some(path => path.endsWith('/access')), 'normal UI did not load the Session permission projection', { apiPaths });
     assert(consoleErrors.length === 0 && pageErrors.length === 0 && responseErrors.length === 0,
       'browser diagnostics were not clean', { consoleErrors, pageErrors, responseErrors });
 

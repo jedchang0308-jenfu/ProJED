@@ -2,6 +2,11 @@ name: DEV-139 isolated validation
 
 on:
   workflow_dispatch:
+    inputs:
+      browser_smoke:
+        description: Exercise the built Vite app against the isolated PostgreSQL backend
+        type: boolean
+        default: false
   push:
     branches: [codex/projed-independent-dev]
     paths:
@@ -94,7 +99,9 @@ jobs:
       # image's binaries, never its shared database/service or cloud credentials.
       - name: PostgreSQL Session and domain HTTP regressions
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
-        run: '& ./qa/dev-139/s3/verify-isolated.ps1 -DatabaseOnly -PostgresBin $env:PGBIN'
+        env:
+          DEV139_BROWSER_SMOKE: ${{ inputs.browser_smoke || contains(github.event.head_commit.message, '[dev139-browser]') }}
+        run: '& ./qa/dev-139/s3/verify-isolated.ps1 -DatabaseOnly:($env:DEV139_BROWSER_SMOKE -ne "true") -PostgresBin $env:PGBIN'
       - name: PostgreSQL snapshot migration rehearsal
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         run: '& ./qa/dev-139/migration/verify-isolated.ps1 -PostgresBin $env:PGBIN'
@@ -104,6 +111,16 @@ jobs:
         with:
           name: dev139-isolated-results
           path: output/qa/dev-139/**/result.json
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Retain browser smoke evidence
+        if: ${{ always() && (inputs.browser_smoke || contains(github.event.head_commit.message, '[dev139-browser]')) }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: dev139-browser-smoke
+          path: |
+            output/playwright/dev-139-http-ui/result.json
+            output/playwright/dev-139-http-ui/main.png
           if-no-files-found: ignore
           retention-days: 7
 
