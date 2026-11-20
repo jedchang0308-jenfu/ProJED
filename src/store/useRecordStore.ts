@@ -144,7 +144,7 @@ export const createRecordScopeKey = (workspaceId: string, boardId: string): stri
 
 let recordListRequestSequence = 0;
 let meetingSynthesisRequestSequence = 0;
-let draftSaveSequence = 0;
+let recordMutationSequence = 0;
 
 const activeBoardIdForMeeting = () => useBoardStore.getState().activeBoardId;
 
@@ -155,6 +155,16 @@ const currentMeetingAuthScope = () => {
     : null;
   return { accountId: user?.uid ?? null, authContextId };
 };
+
+function recordScopeGuard(workspaceId: string, boardId: string) {
+  const started = currentMeetingAuthScope();
+  return () => {
+    const actor = currentMeetingAuthScope();
+    const board = useBoardStore.getState();
+    return actor.accountId === started.accountId && actor.authContextId === started.authContextId
+      && board.activeWorkspaceId === workspaceId && board.activeBoardId === boardId;
+  };
+}
 
 const upsertRecordWithIntegrity = async (
   workspaceId: string,
@@ -560,6 +570,57 @@ const createMeetingSynthesisInput = (
     tasks: Array.from(taskMap.values()),
   };
 };
+
+// History commands can finish after the editor has closed. Their result still
+// belongs to the originating actor and board, independently of the open draft.
+function recordHistoryOperations(
+  workspaceId: string, boardId: string, isCurrentScope: () => boolean,
+  set: (update: Partial<RecordStoreState> | ((state: RecordStoreState) => Partial<RecordStoreState>)) => void,
+) {
+  type Patch = (state: RecordStoreState) => Partial<RecordStoreState>;
+  async function run(operation: () => Promise<Patch>) {
+    if (!isCurrentScope()) throw new Error('紀錄的帳號或看板已變更。');
+    const request = ++recordMutationSequence;
+    set({ saving: true, error: null });
+    try {
+      const patch = await operation();
+      if (!isCurrentScope() || request !== recordMutationSequence) throw new Error('紀錄操作已離開原本的範圍。');
+      set(patch);
+    } catch (error) {
+      if (request === recordMutationSequence && isCurrentScope()) {
+        set({ error: error instanceof Error ? error.message : String(error), lastSaveFeedback: null });
+      }
+      throw error;
+    } finally {
+      if (request === recordMutationSequence) set({ saving: false });
+    }
+  }
+  return {
+    restore: (input: KnowledgeRecordInput) => run(async () => {
+      const restored = await upsertRecordWithIntegrity(workspaceId, boardId, input);
+      const restoredDraft = toDraftFromRecordInput(input, restored);
+      return state => ({
+        records: [restored, ...state.records.filter(record => record.id !== restored.id)],
+        draft: state.draft?.id === restored.id ? restoredDraft : state.draft,
+        draftBaselineSignature: state.draft?.id === restored.id ? getRecordDraftSignature(restoredDraft) : state.draftBaselineSignature,
+        lastSaveFeedback: { recordId: restored.id, status: restored.status, savedAt: Date.now() },
+      });
+    }),
+    archive: (recordId: string) => run(async () => {
+      await recordService.delete(workspaceId, boardId, recordId);
+      return state => ({
+        records: state.records.filter(record => record.id !== recordId),
+        draft: state.draft?.id === recordId ? null : state.draft,
+        draftBaselineSignature: state.draft?.id === recordId ? null : state.draftBaselineSignature,
+        lastSaveFeedback: state.lastSaveFeedback?.recordId === recordId ? null : state.lastSaveFeedback,
+        ...(state.draft?.id === recordId && state.draft.type === 'meeting' && {
+          meetingDraftRecovery: initialMeetingDraftRecoveryState,
+          meetingDraftRecoveryClearToken: state.meetingDraftRecoveryClearToken + 1,
+        }),
+      });
+    }),
+  };
+}
 
 const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) => ({
   records: [],
@@ -1481,16 +1542,12 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       : undefined;
     const previousInput = previousRecord ? toRecordInput(previousRecord) : null;
 
-    const request = ++draftSaveSequence;
+    const request = ++recordMutationSequence;
     const editorSession = get().draftEditorSession;
-    const auth = currentMeetingAuthScope();
+    const isCurrentScope = recordScopeGuard(activeWorkspaceId, activeBoardId);
     const isCurrentSave = () => {
       const current = get();
-      const board = useBoardStore.getState();
-      const actor = currentMeetingAuthScope();
-      return request === draftSaveSequence
-        && actor.accountId === auth.accountId && actor.authContextId === auth.authContextId
-        && board.activeWorkspaceId === activeWorkspaceId && board.activeBoardId === activeBoardId
+      return request === recordMutationSequence && isCurrentScope()
         && current.draftEditorSession === editorSession && current.draft?.id === currentDraft.id;
     };
     set({ saving: true, error: null });
@@ -1543,56 +1600,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
         },
       }));
 
-      const applyRecordInput = async (input: KnowledgeRecordInput) => {
-        ++draftSaveSequence;
-        set({ saving: true, error: null });
-        try {
-          const restored = await upsertRecordWithIntegrity(activeWorkspaceId, activeBoardId, input);
-          const restoredDraft = toDraftFromRecordInput(input, restored);
-          set(state => ({
-            saving: false,
-            records: [restored, ...state.records.filter(record => record.id !== restored.id)],
-            draft: state.draft?.id === restored.id ? restoredDraft : state.draft,
-            draftBaselineSignature: state.draft?.id === restored.id
-              ? getRecordDraftSignature(restoredDraft)
-              : state.draftBaselineSignature,
-            lastSaveFeedback: {
-              recordId: restored.id,
-              status: restored.status,
-              savedAt: Date.now(),
-            },
-          }));
-        } catch (error) {
-          set({
-            saving: false,
-            error: error instanceof Error ? error.message : String(error),
-            lastSaveFeedback: null,
-          });
-          throw error;
-        }
-      };
-
-      const archiveSavedRecord = async () => {
-        ++draftSaveSequence;
-        set({ saving: true, error: null });
-        try {
-          await recordService.delete(activeWorkspaceId, activeBoardId, saved.id);
-          set(state => ({
-            saving: false,
-            records: state.records.filter(record => record.id !== saved.id),
-            draft: state.draft?.id === saved.id ? null : state.draft,
-            draftBaselineSignature: state.draft?.id === saved.id ? null : state.draftBaselineSignature,
-            lastSaveFeedback: state.lastSaveFeedback?.recordId === saved.id ? null : state.lastSaveFeedback,
-          }));
-        } catch (error) {
-          set({
-            saving: false,
-            error: error instanceof Error ? error.message : String(error),
-            lastSaveFeedback: null,
-          });
-          throw error;
-        }
-      };
+      const history = recordHistoryOperations(activeWorkspaceId, activeBoardId, isCurrentScope, set);
 
       useUndoStore.getState().pushUndo({
         label: previousInput
@@ -1600,8 +1608,8 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
           : '新增紀錄',
         scope: 'record',
         entityIds: [saved.id],
-        undo: () => previousInput ? applyRecordInput(previousInput) : archiveSavedRecord(),
-        redo: () => applyRecordInput(savedInput),
+        undo: () => previousInput ? history.restore(previousInput) : history.archive(saved.id),
+        redo: () => history.restore(savedInput),
       });
       // Save-and-exit callers must leave newer, unsaved input open.
       if (hasNewEdits) return null;
@@ -1616,70 +1624,31 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       });
       return null;
     } finally {
-      if (request === draftSaveSequence && get().saving) set({ saving: false });
+      if (request === recordMutationSequence && get().saving) set({ saving: false });
     }
   },
 
   archiveRecord: async (recordId) => {
     const { activeWorkspaceId, activeBoardId } = useBoardStore.getState();
     if (!activeWorkspaceId || !activeBoardId) return;
-    ++draftSaveSequence;
+    const isCurrentScope = recordScopeGuard(activeWorkspaceId, activeBoardId);
+    const history = recordHistoryOperations(activeWorkspaceId, activeBoardId, isCurrentScope, set);
     const archivedRecord = get().records.find(record => record.id === recordId);
-    set({ saving: true, error: null });
     try {
-      await recordService.delete(activeWorkspaceId, activeBoardId, recordId);
-      set(state => ({
-        saving: false,
-        records: state.records.filter(record => record.id !== recordId),
-        draft: state.draft?.id === recordId ? null : state.draft,
-        draftBaselineSignature: state.draft?.id === recordId ? null : state.draftBaselineSignature,
-        lastSaveFeedback: state.lastSaveFeedback?.recordId === recordId ? null : state.lastSaveFeedback,
-      }));
-      if (archivedRecord?.type === 'meeting') get().requestMeetingDraftRecoveryClear();
-      if (archivedRecord) {
-        const restoreInput = toRecordInput(archivedRecord);
-        useUndoStore.getState().pushUndo({
-          label: '封存紀錄',
-          scope: 'record',
-          entityIds: [recordId],
-          undo: async () => {
-            ++draftSaveSequence;
-            set({ saving: true, error: null });
-            try {
-              const restored = await upsertRecordWithIntegrity(activeWorkspaceId, activeBoardId, restoreInput);
-              const restoredDraft = toDraftFromRecordInput(restoreInput, restored);
-              set(state => ({
-                saving: false,
-                records: [restored, ...state.records.filter(record => record.id !== restored.id)],
-                draft: state.draft?.id === restored.id ? restoredDraft : state.draft,
-                draftBaselineSignature: state.draft?.id === restored.id
-                  ? getRecordDraftSignature(restoredDraft)
-                  : state.draftBaselineSignature,
-                lastSaveFeedback: {
-                  recordId: restored.id,
-                  status: restored.status,
-                  savedAt: Date.now(),
-                },
-              }));
-            } catch (error) {
-              set({
-                saving: false,
-                error: error instanceof Error ? error.message : String(error),
-                lastSaveFeedback: null,
-              });
-              throw error;
-            }
-          },
-          redo: () => get().archiveRecord(recordId),
-        });
-      }
-    } catch (error) {
-      set({
-        saving: false,
-        error: error instanceof Error ? error.message : String(error),
-        lastSaveFeedback: null,
-      });
+      await history.archive(recordId);
+    } catch {
+      // The history operation publishes the error in the originating scope.
+      return;
     }
+    if (!isCurrentScope() || !archivedRecord) return;
+    const restoreInput = toRecordInput(archivedRecord);
+    useUndoStore.getState().pushUndo({
+      label: '封存紀錄',
+      scope: 'record',
+      entityIds: [recordId],
+      undo: () => history.restore(restoreInput),
+      redo: () => history.archive(recordId),
+    });
   },
 
   setMeetingDraftRecovery: (updates) => set(state => ({

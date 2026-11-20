@@ -15,6 +15,7 @@ const files = {
   recordStore: 'src/store/useRecordStore.ts',
   boardView: 'src/components/BoardView.tsx',
   taskDragCommit: 'src/components/Wbs/taskDrag/taskDragCommit.ts',
+  orderActions: 'src/features/taskCreation/boardTaskOrderActions.ts',
   wbsListView: 'src/components/Wbs/WbsListView.tsx',
   sharedTaskSidebar: 'src/components/SharedTaskSidebar.tsx',
   packageJson: 'package.json',
@@ -75,7 +76,7 @@ assert(
 );
 
 assert(
-  'Phase 2 drag and cross-view placement callers use batch undo',
+  'Board drag and cross-view ordered moves register reversible commands',
   includesAll(source.boardView, [
     'const batchUpdateNodes = useWbsStore(s => s.batchUpdateNodes);',
     'commitDesktopTaskDrag({',
@@ -86,15 +87,12 @@ assert(
     "label: '移到未歸位'",
     "label: '歸位任務'",
   ]) &&
-    includesAll(source.wbsListView, [
-      'batchUpdateNodes({',
-      "label: '重排任務'",
-      "label: '移動任務位置'",
-    ]) &&
-    includesAll(source.sharedTaskSidebar, [
-      'const batchUpdateNodes = useWbsStore(s => s.batchUpdateNodes);',
-      "label: '重排任務'",
-      "label: '移動任務位置'",
+    [source.wbsListView, source.sharedTaskSidebar].every(view => view.includes('moveOrderedBoardTask(activeItem.id,')) &&
+    source.orderActions.includes("kind: 'move', taskId: nodeId") &&
+    includesAll(source.wbsStore, [
+      'getBoardOrderUndoDestination(previous, intent.destination, beforeNodes)',
+      'get().commitBoardTaskOrder({ ...intent, destination: undoDestination, sourceParentId: task.parentId })',
+      'redo: async () => { await get().commitBoardTaskOrder(intent); }',
     ]) &&
     !source.boardView.includes('Object.entries(updates).forEach(([nodeId, nodeUpdates]) => updateNode(nodeId, nodeUpdates))') &&
     !source.wbsListView.includes('updateNode(activeItem.id, { order: overItem.order })') &&
@@ -135,7 +133,7 @@ assert(
     "scope: 'filter'",
     'undo: () => applyScopedFilters(scope, before, \'pending-upsert\')',
     'redo: () => applyScopedFilters(scope, after, \'pending-upsert\')',
-    "'修改負責人篩選'",
+    "'清除負責人篩選'",
   ]) &&
     includesAll(source.boardStore, [
       'const cloneBoardDisplaySnapshot =',
@@ -157,11 +155,12 @@ assert(
     'const savedInput = toRecordInput(saved);',
     "label: previousInput",
     "scope: 'record'",
-    'undo: () => previousInput ? applyRecordInput(previousInput) : archiveSavedRecord()',
-    'redo: () => applyRecordInput(savedInput)',
+    'undo: () => previousInput ? history.restore(previousInput) : history.archive(saved.id)',
+    'redo: () => history.restore(savedInput)',
     'const archivedRecord = get().records.find(record => record.id === recordId);',
     "label: '封存紀錄'",
-    'redo: () => get().archiveRecord(recordId)',
+    'undo: () => history.restore(restoreInput)',
+    'redo: () => history.archive(recordId)',
   ]),
 );
 

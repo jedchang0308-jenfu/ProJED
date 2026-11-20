@@ -49,6 +49,7 @@ type CallerFixture = {
   recordService: {
     listByProject: (...args: unknown[]) => Promise<unknown[]>;
     upsert: (...args: unknown[]) => Promise<unknown>;
+    delete: (...args: unknown[]) => Promise<void>;
   };
   eventLogService: { listActivity: (...args: unknown[]) => Promise<unknown[]> };
   synthesize: (...args: unknown[]) => Promise<Record<string, unknown>>;
@@ -61,7 +62,7 @@ const fixture: CallerFixture = {
   undoStore: createFixtureStore({ pushUndo: () => undefined }),
   memberStore: createFixtureStore({}),
   tagStore: createFixtureStore({}),
-  recordService: { listByProject: async () => [], upsert: async () => null },
+  recordService: { listByProject: async () => [], upsert: async () => null, delete: async () => {} },
   eventLogService: { listActivity: async () => [] },
   synthesize: async () => ({}),
   saveProjection: async () => ({}),
@@ -155,6 +156,7 @@ async function loadRecordStore(isHttpBackend = false) {
       synthesizeMeetingDraft: () => Promise<boolean>;
       importMeetingProjectChanges: () => Promise<boolean>;
       saveDraft: () => Promise<unknown>;
+      archiveRecord: (recordId: string) => Promise<void>;
       updateDraft: (updates: { content: string }) => void;
     };
     setState: (patch: Record<string, unknown>) => void;
@@ -326,6 +328,44 @@ test('a late save failure cannot unlock or replace a newer draft save', async ()
     assert.equal(store.getState().saving, false);
   } finally {
     fixture.recordService.upsert = originalUpsert;
+  }
+});
+
+test('archiving clears only its own recovery, and a late undo never republishes a private record in another session', async () => {
+  const store = await loadRecordStore(true);
+  setMeetingFixtureState(store);
+  const draft = store.getState().draft as Record<string, unknown>;
+  const saved = { ...draft, workspaceId: 'workspace-a', boardId: 'board-a', updatedAt: Date.now() };
+  const commands: Array<{ undo: () => Promise<void>; redo: () => Promise<void> }> = [];
+  const originalPush = fixture.undoStore.getState().pushUndo;
+  const originalUpsert = fixture.recordService.upsert;
+  const originalDelete = fixture.recordService.delete;
+  let deleteCalls = 0;
+  try {
+    fixture.undoStore.setState({ pushUndo: (command: typeof commands[number]) => commands.push(command) });
+    fixture.recordService.delete = async () => { deleteCalls += 1; };
+    store.setState({ records: [saved], meetingDraftRecoveryClearToken: 0 });
+    await store.getState().archiveRecord('unrelated');
+    assert.equal((store.getState() as { meetingDraftRecoveryClearToken?: number }).meetingDraftRecoveryClearToken, 0);
+    await store.getState().archiveRecord('meeting-a');
+    assert.equal(store.getState().draft, null);
+    assert.equal((store.getState() as { meetingDraftRecoveryClearToken?: number }).meetingDraftRecoveryClearToken, 1);
+    assert.equal(commands.length, 1);
+    const restore = deferred<unknown>();
+    fixture.recordService.upsert = () => restore.promise;
+    const pending = commands[0]!.undo();
+    fixture.authStore.setState({ user: { uid: 'actor-a', authContextId: 'new-session' } });
+    restore.resolve(saved);
+    await assert.rejects(pending);
+    await assert.rejects(commands[0]!.redo());
+    assert.deepEqual((store.getState() as { records?: unknown[] }).records, []);
+    assert.equal(store.getState().error, null);
+    assert.equal(deleteCalls, 2);
+  } finally {
+    fixture.undoStore.setState({ pushUndo: originalPush });
+    fixture.recordService.delete = originalDelete;
+    fixture.recordService.upsert = originalUpsert;
+    setMeetingFixtureState(store);
   }
 });
 
