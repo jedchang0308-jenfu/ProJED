@@ -13,8 +13,9 @@ interface BoardScope extends PermissionScope {
   approvedRole?: string;
 }
 
-// Called only in login completion under the same mutex as grants and revocations.
-export async function captureSessionPermissions(client: PoolClient, identity: ProducerVerifiedIdentity) {
+// Human login captures once; machine Calendar reads rebuild current rights.
+// Both hold the same app mutex as grants and revocations.
+export async function captureSessionPermissions(client: PoolClient, identity: Pick<ProducerVerifiedIdentity, 'principalId' | 'principalKind' | 'googleSubject'>) {
   const workspaces: Record<string, PermissionScope> = {};
   const boards: Record<string, BoardScope> = {};
   const workspaceRows = await client.query<{ id: string; role: string; capabilities: string[] }>(`
@@ -34,11 +35,12 @@ export async function captureSessionPermissions(client: PoolClient, identity: Pr
 
   const boardRows = await client.query<{
     id: string; workspace_id: string; board_role: string | null; inherited_role: string | null;
-    capabilities: string[]; owns_workspace: boolean; external_invite_id: string | null;
+    capabilities: string[]; owns_workspace: boolean; created_board: boolean; external_invite_id: string | null;
     approved_role: string | null; direct_capabilities: string[] | null; approved_capabilities: string[] | null;
   }>(`
     SELECT board.id::text, board.tenant_id::text AS workspace_id, direct.role AS board_role,
            workspace_member.role AS inherited_role, tenant.owner_id=projed_core.current_actor_user_id_v1() AS owns_workspace,
+           board.created_by=projed_core.current_actor_user_id_v1() AS created_board,
            invite.id::text AS external_invite_id, invite.default_role AS approved_role,
            direct_matrix.capabilities AS direct_capabilities, invite_matrix.capabilities AS approved_capabilities,
            ARRAY(SELECT capability FROM unnest($1::text[]) capability
@@ -57,7 +59,8 @@ export async function captureSessionPermissions(client: PoolClient, identity: Pr
       LEFT JOIN projed_core.board_role_permissions invite_matrix ON invite_matrix.project_id=board.id AND invite_matrix.role=invite.default_role
   `, [[...PERMISSION_CAPABILITIES], identity.principalId]);
   for (const row of boardRows.rows) {
-    if (!row.owns_workspace && row.board_role !== 'owner' && (row.external_invite_id || identity.principalKind === 'personal')) {
+    const ownsBoard = row.board_role === 'owner' && row.created_board;
+    if (!row.owns_workspace && (row.external_invite_id || identity.principalKind === 'personal' && !ownsBoard)) {
       if (!row.external_invite_id || !row.approved_role) continue;
       const qualification = await client.query(`
         SELECT 1 FROM orgmaster_contract.read_projed_external_qualification_v1($1::text,$2::text)

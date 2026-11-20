@@ -1,4 +1,4 @@
-param([string]$PostgresBin = '', [switch]$DatabaseOnly)
+param([string]$PostgresBin = '', [switch]$DatabaseOnly, [switch]$CalendarOnly)
 
 $ErrorActionPreference = 'Stop'
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
@@ -100,7 +100,7 @@ try {
   }
   [IO.File]::WriteAllText($bindingPath, ($binding | ConvertTo-Json -Depth 5), [Text.UTF8Encoding]::new($false))
 
-  if (-not $DatabaseOnly) {
+  if (-not $DatabaseOnly -and -not $CalendarOnly) {
     $env:PROJED_RELEASE_ID = "dev139-local-ui-$($nonce.Substring(0,8))"
     npm.cmd run build:dev-139:cloud-run
     if ($LASTEXITCODE -ne 0) { throw 'DEV-139 HTTP frontend candidate build failed' }
@@ -125,9 +125,10 @@ try {
   # Fixture-only administrative access, bound to this nonce database. The
   # verifier never logs this value; the runtime still uses its restricted role.
   $env:PROJED_QA_MEETING_ADMIN_URL = "postgresql://postgres:${adminPassword}@127.0.0.1:$port/$databaseName"
-  $env:PROJED_DEV139_BROWSER_SMOKE = if ($DatabaseOnly) { '0' } else { '1' }
+  $env:PROJED_DEV139_BROWSER_SMOKE = if ($DatabaseOnly -or $CalendarOnly) { '0' } else { '1' }
   $env:PORT = '0'
-  $verifierLines = @(& npx.cmd tsx qa/dev-139/s3/verify-pg.ts)
+  $verifierPath = if ($CalendarOnly) { 'qa/dev-139/s3/verify-calendar-machine-only-pg.ts' } else { 'qa/dev-139/s3/verify-pg.ts' }
+  $verifierLines = @(& npx.cmd tsx $verifierPath)
   $verifierExitCode = $LASTEXITCODE
   $verifierLines | ForEach-Object { Write-Output $_ }
   if ($verifierExitCode -ne 0) { throw 'DEV-139 S3 PostgreSQL verifier failed' }
@@ -144,8 +145,8 @@ try {
   New-Item -ItemType Directory -Path $evidenceDir -Force | Out-Null
   [ordered]@{
     status = 'PASS'
-    evidenceLevel = if ($DatabaseOnly) { 'S3_DOMAIN_HTTP_DB_LOCAL_ACCEPTANCE' } else { 'S3_DOMAIN_CORE_LOCAL_ACCEPTANCE' }
-    browserSmoke = if ($DatabaseOnly) { 'NOT_RUN' } else { 'PASS' }
+    evidenceLevel = if ($CalendarOnly) { 'CALENDAR_MACHINE_LOCAL_ACCEPTANCE' } elseif ($DatabaseOnly) { 'S3_DOMAIN_HTTP_DB_LOCAL_ACCEPTANCE' } else { 'S3_DOMAIN_CORE_LOCAL_ACCEPTANCE' }
+    browserSmoke = if ($DatabaseOnly -or $CalendarOnly) { 'NOT_RUN' } else { 'PASS' }
     postgres = $versionText
     node = (& node --version) -join ''
     databaseName = $databaseName

@@ -202,14 +202,18 @@
     {
       "version": "0045_central_session_revocation_v1",
       "path": "db/migrations/0045_central_session_revocation_v1.sql"
-      },
-      {
-        "version": "0046_external_board_invitation_v1",
-        "path": "db/migrations/0046_external_board_invitation_v1.sql"
-      },
-      {
-        "version": "0047_login_permission_snapshot_v1",
-        "path": "db/migrations/0047_login_permission_snapshot_v1.sql"
+    },
+    {
+      "version": "0046_external_board_invitation_v1",
+      "path": "db/migrations/0046_external_board_invitation_v1.sql"
+    },
+    {
+      "version": "0047_login_permission_snapshot_v1",
+      "path": "db/migrations/0047_login_permission_snapshot_v1.sql"
+    },
+    {
+      "version": "0048_calendar_machine_authority_v1",
+      "path": "db/migrations/0048_calendar_machine_authority_v1.sql"
     }
   ],
   "objectAllowlist": [

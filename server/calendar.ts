@@ -1,6 +1,7 @@
+import { runCalendarFeedTransaction } from './calendarFeedTransaction.js';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 
-import { runActorTransaction, type ActorQueryPort, type ServerActorV1 } from './actorTransaction.js';
+import type { ActorQueryPort } from './actorTransaction.js';
 import { buildCalendarIcs, CALENDAR_FEED_TASK_LIMIT } from './calendarIcs.js';
 import {
   calendarDateTypes,
@@ -16,7 +17,6 @@ import type { RuntimeDatabase } from './db.js';
 import { KernelError } from './errors.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const HASH_RE = /^[a-f0-9]{64}$/;
 const STATUS_SET = new Set(['todo', 'in_progress', 'delayed', 'completed', 'unsure', 'onhold']);
 const MAX_SCOPE_ITEMS = 100;
 const CALENDAR_FEED_SCAN_PAGE_SIZE = 500;
@@ -335,76 +335,19 @@ export class CalendarRepository {
   }
 }
 
-export async function resolveCalendarFeedActor(
-  database: RuntimeDatabase,
-  config: RuntimeConfig,
-  tokenHash: string,
-): Promise<{ actor: ServerActorV1; subscriptionId: string }> {
-  if (!HASH_RE.test(tokenHash)) throw new KernelError('RESOURCE_NOT_FOUND', 'Calendar feed is unavailable', 404);
-  const lease = await database.checkout();
-  let started = false;
-  try {
-    await lease.client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
-    started = true;
-    await lease.client.query(`
-      SELECT set_config('projed.calendar_feed_token_hash', $1, true),
-             set_config('statement_timeout', $2, true), set_config('lock_timeout', $3, true),
-             set_config('idle_in_transaction_session_timeout', $4, true)
-    `, [tokenHash, `${config.profile.runtime.timeouts.statementMillis}ms`, `${config.profile.runtime.timeouts.lockMillis}ms`,
-      `${config.profile.runtime.timeouts.idleInTransactionMillis}ms`]);
-    const subscription = await lease.client.query<{ id: string; owner_user_id: string }>(`
-      SELECT id::text, owner_user_id::text FROM projed_core.calendar_subscriptions WHERE token_hash = $1
-    `, [tokenHash]);
-    const subscriptionRow = subscription.rows[0];
-    if (!subscriptionRow) {
-      await lease.client.query('ROLLBACK');
-      started = false;
-      lease.release();
-      throw new KernelError('RESOURCE_NOT_FOUND', 'Calendar feed is unavailable', 404);
-    }
-    await lease.client.query("SELECT set_config('projed.calendar_feed_owner_user_id', $1, true)", [subscriptionRow.owner_user_id]);
-    const guard = await lease.client.query<{ active: boolean; revision: string }>(`
-      SELECT active, revision::text FROM projed_core.account_authorization_guards WHERE local_user_id = $1::uuid
-    `, [subscriptionRow.owner_user_id]);
-    await lease.client.query('COMMIT');
-    started = false;
-    lease.release();
-    const guardRow = guard.rows[0];
-    if (!guardRow?.active) throw new KernelError('ACCESS_DENIED', 'Calendar feed is disabled', 410);
-    return {
-      subscriptionId: subscriptionRow.id,
-      actor: {
-        principalId: `calendar-feed:${subscriptionRow.id}`,
-        localUserId: subscriptionRow.owner_user_id,
-        entry: 'main',
-        contextId: randomUUID(),
-        expiresAtMs: Date.now() + config.profile.runtime.timeouts.requestMillis + 1000,
-        accountGuardRevision: guardRow.revision,
-      },
-    };
-  } catch (error) {
-    if (started) {
-      try { await lease.client.query('ROLLBACK'); } catch { lease.release(true); throw error; }
-    }
-    lease.release();
-    throw error;
-  }
-}
-
 export async function buildCalendarFeed(
   database: RuntimeDatabase,
   config: RuntimeConfig,
   tokenHash: string,
 ): Promise<string> {
-  const resolved = await resolveCalendarFeedActor(database, config, tokenHash);
-  return runActorTransaction(database, config, resolved.actor, async port => {
+  return runCalendarFeedTransaction(database, config, tokenHash, async (port, subscriptionId) => {
     const subscriptions = await port.query<SubscriptionRow>(`
       SELECT id::text, owner_user_id::text, name, filters_json, is_active, expires_at,
              last_accessed_at, created_at, updated_at
         FROM projed_core.calendar_subscriptions
        WHERE id = $1::uuid AND token_hash = $2 AND owner_user_id = projed_core.current_actor_user_id_v1()
        FOR SHARE
-    `, [resolved.subscriptionId, tokenHash]);
+    `, [subscriptionId, tokenHash]);
     const subscription = subscriptions.rows[0];
     if (!subscription) throw new KernelError('RESOURCE_NOT_FOUND', 'Calendar feed is unavailable', 404);
     if (!subscription.is_active || (subscription.expires_at && subscription.expires_at.getTime() <= Date.now())) {
@@ -509,10 +452,6 @@ export async function buildCalendarFeed(
       appBaseUrl: config.publicAppUrl,
       taskLimitReached,
     });
-    await port.query(`
-      UPDATE projed_core.calendar_subscriptions SET last_accessed_at = now()
-       WHERE id = $1::uuid AND owner_user_id = projed_core.current_actor_user_id_v1()
-    `, [subscription.id]);
     return ics;
   });
 }
