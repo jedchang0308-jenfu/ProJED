@@ -28,7 +28,10 @@ export async function publishSyntheticPrincipalState(config: RuntimeConfig, proo
             s.proof->>'identityIssuer',s.proof->>'identitySubject',s.proof->>'googleSubject',
             (s.proof->>'mappingRevision')::bigint,(s.proof->>'authEpoch')::bigint,
             CASE WHEN s.proof->>'revokedBeforeMs' IS NOT NULL THEN to_timestamp((s.proof->>'revokedBeforeMs')::double precision/1000) END,
-            clock_timestamp()
+            -- Windows PostgreSQL and Node expose different clock precision.
+            -- Keep this synthetic read safely in the past; production retains
+            -- its strict future-time rejection and the ten-second horizon.
+            clock_timestamp()-interval '100 milliseconds'
           FROM platform_contract.synthetic_projed_states s WHERE s.principal_id=p_principal
             AND s.proof->>'identityIssuer'=p_issuer AND s.proof->>'identitySubject'=p_subject;
         $$;
