@@ -144,6 +144,7 @@ export const createRecordScopeKey = (workspaceId: string, boardId: string): stri
 
 let recordListRequestSequence = 0;
 let meetingSynthesisRequestSequence = 0;
+let draftSaveSequence = 0;
 
 const activeBoardIdForMeeting = () => useBoardStore.getState().activeBoardId;
 
@@ -1480,6 +1481,18 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       : undefined;
     const previousInput = previousRecord ? toRecordInput(previousRecord) : null;
 
+    const request = ++draftSaveSequence;
+    const editorSession = get().draftEditorSession;
+    const auth = currentMeetingAuthScope();
+    const isCurrentSave = () => {
+      const current = get();
+      const board = useBoardStore.getState();
+      const actor = currentMeetingAuthScope();
+      return request === draftSaveSequence
+        && actor.accountId === auth.accountId && actor.authContextId === auth.authContextId
+        && board.activeWorkspaceId === activeWorkspaceId && board.activeBoardId === activeBoardId
+        && current.draftEditorSession === editorSession && current.draft?.id === currentDraft.id;
+    };
     set({ saving: true, error: null });
     try {
       const resolutionMetadata = payload.metadata?.meetingTaskResolution;
@@ -1502,6 +1515,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
           taskLinks: payload.taskLinks,
           requestKey: `projection:${payload.id}:${Date.now()}`,
         });
+        if (!isCurrentSave()) return null;
         const refreshed = await recordService.listByProject(activeWorkspaceId, activeBoardId);
         const reloaded = refreshed.find(record => record.id === payload.id);
         if (!reloaded) throw new Error('會議投影已寫入，但重新載入紀錄失敗。');
@@ -1509,21 +1523,20 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       } else {
         saved = await upsertRecordWithIntegrity(activeWorkspaceId, activeBoardId, payload);
       }
+      if (!isCurrentSave()) return null;
       const savedInput = toRecordInput(saved);
+      const hasNewEdits = get().draft !== currentDraft;
+      const savedDraft = {
+        ...payload,
+        id: saved.id,
+        taskLinks: saved.taskLinks.map(link => ({ nodeId: link.nodeId, role: link.role })),
+      };
       set(state => ({
         saving: false,
-        draft: {
-          ...payload,
-          id: saved.id,
-          taskLinks: saved.taskLinks.map(link => ({ nodeId: link.nodeId, role: link.role })),
-        },
-        draftBaselineSignature: getRecordDraftSignature({
-          ...payload,
-          id: saved.id,
-          taskLinks: saved.taskLinks.map(link => ({ nodeId: link.nodeId, role: link.role })),
-        }),
+        draft: hasNewEdits ? state.draft : savedDraft,
+        draftBaselineSignature: getRecordDraftSignature(savedDraft),
         records: [saved, ...state.records.filter(record => record.id !== saved.id)],
-        lastSaveFeedback: {
+        lastSaveFeedback: hasNewEdits ? null : {
           recordId: saved.id,
           status: payload.status,
           savedAt: Date.now(),
@@ -1531,6 +1544,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       }));
 
       const applyRecordInput = async (input: KnowledgeRecordInput) => {
+        ++draftSaveSequence;
         set({ saving: true, error: null });
         try {
           const restored = await upsertRecordWithIntegrity(activeWorkspaceId, activeBoardId, input);
@@ -1559,6 +1573,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       };
 
       const archiveSavedRecord = async () => {
+        ++draftSaveSequence;
         set({ saving: true, error: null });
         try {
           await recordService.delete(activeWorkspaceId, activeBoardId, saved.id);
@@ -1588,21 +1603,27 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
         undo: () => previousInput ? applyRecordInput(previousInput) : archiveSavedRecord(),
         redo: () => applyRecordInput(savedInput),
       });
+      // Save-and-exit callers must leave newer, unsaved input open.
+      if (hasNewEdits) return null;
       if (draft.type === 'meeting') get().requestMeetingDraftRecoveryClear();
       return saved;
     } catch (error) {
+      if (!isCurrentSave()) return null;
       set({
         saving: false,
         error: error instanceof Error ? error.message : String(error),
         lastSaveFeedback: null,
       });
       return null;
+    } finally {
+      if (request === draftSaveSequence && get().saving) set({ saving: false });
     }
   },
 
   archiveRecord: async (recordId) => {
     const { activeWorkspaceId, activeBoardId } = useBoardStore.getState();
     if (!activeWorkspaceId || !activeBoardId) return;
+    ++draftSaveSequence;
     const archivedRecord = get().records.find(record => record.id === recordId);
     set({ saving: true, error: null });
     try {
@@ -1622,6 +1643,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
           scope: 'record',
           entityIds: [recordId],
           undo: async () => {
+            ++draftSaveSequence;
             set({ saving: true, error: null });
             try {
               const restored = await upsertRecordWithIntegrity(activeWorkspaceId, activeBoardId, restoreInput);

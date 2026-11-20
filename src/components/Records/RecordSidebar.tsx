@@ -922,6 +922,7 @@ const RecordSidebar: React.FC = () => {
   }, [meetingSaveFeedback]);
 
   React.useEffect(() => {
+    setMeetingSaveFeedback(null);
     setProjectChangeImport(createInitialProjectChangeImportState());
     setIsProjectImportExpanded(false);
     setIsLinkedTasksOpen(false);
@@ -1055,11 +1056,17 @@ const RecordSidebar: React.FC = () => {
     await saveDraft({ nodes, status });
   };
 
+  const showDraftSaveResult = (saved: boolean) => {
+    const current = useRecordStore.getState();
+    if (current.draft?.id !== draft?.id || current.saving) return;
+    setMeetingSaveFeedback(saved ? 'saved' : current.error ? 'error' : null);
+  };
+
   const handleMeetingSaveDraft = async () => {
     setIsMeetingOverflowOpen(false);
     setMeetingSaveFeedback('saving');
     const saved = await saveDraft({ nodes, status: 'draft' });
-    setMeetingSaveFeedback(saved ? 'saved' : 'error');
+    showDraftSaveResult(Boolean(saved));
   };
 
   const handleEnsureMeetingSaved = async () => {
@@ -1067,7 +1074,7 @@ const RecordSidebar: React.FC = () => {
     if (draft.id && scopedRecords.some(record => record.id === draft.id)) return draft.id;
     setMeetingSaveFeedback('saving');
     const saved = await saveDraft({ nodes, status: 'draft' });
-    setMeetingSaveFeedback(saved ? 'saved' : 'error');
+    showDraftSaveResult(Boolean(saved));
     return saved?.id ?? null;
   };
 
@@ -1099,7 +1106,7 @@ const RecordSidebar: React.FC = () => {
     setMeetingSaveFeedback('saving');
     const saved = await saveDraft({ nodes, status: 'draft' });
     if (!saved) {
-      setMeetingSaveFeedback('error');
+      showDraftSaveResult(false);
       return;
     }
 

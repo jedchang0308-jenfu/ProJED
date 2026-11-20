@@ -268,6 +268,41 @@ test('HTTP meeting draft save uses projection CAS instead of ordinary record ups
   }
 });
 
+test('late HTTP record saves leave the active actor, editor and newer text alone', async () => {
+  const store = await loadRecordStore(true);
+  const originalUpsert = fixture.recordService.upsert;
+  try {
+    for (const change of ['account', 'session', 'workspace', 'board', 'editor', 'typing', 'late error']) {
+      setMeetingFixtureState(store);
+      const draft = store.getState().draft as Record<string, unknown>;
+      const write = deferred<unknown>();
+      fixture.recordService.upsert = () => write.promise;
+      store.setState({ records: [], draftEditorSession: 3, lastSaveFeedback: null, meetingDraftRecoveryClearToken: 0 });
+      const pending = store.getState().saveDraft();
+      if (change === 'account') fixture.authStore.setState({ user: { uid: 'actor-b', authContextId: 'context-b' } });
+      if (change === 'session') fixture.authStore.setState({ user: { uid: 'actor-a', authContextId: 'new-context' } });
+      if (change === 'workspace') fixture.boardStore.setState({ activeWorkspaceId: 'workspace-b' });
+      if (change === 'board') fixture.boardStore.setState({ activeBoardId: 'board-b' });
+      if (change === 'typing') store.getState().updateDraft({ content: 'new unsaved text' });
+      else store.setState({ draft: { ...draft, content: 'current editor' }, draftEditorSession: change === 'editor' || change === 'late error' ? 4 : 3 });
+      if (change === 'late error') write.reject(new Error('previous editor save failed'));
+      else write.resolve({ ...draft, workspaceId: 'workspace-a', boardId: 'board-a', updatedAt: Date.now() });
+      assert.equal(await pending, null, change);
+      const state = store.getState() as ReturnType<typeof store.getState> & {
+        draft: { content: string }; records: unknown[]; meetingDraftRecoveryClearToken: number;
+      };
+      assert.equal(state.draft.content, change === 'typing' ? 'new unsaved text' : 'current editor', change);
+      assert.equal(state.records.length, change === 'typing' ? 1 : 0, change);
+      assert.equal(state.meetingDraftRecoveryClearToken, 0, change);
+      assert.equal(state.saving, false, change);
+      assert.equal(state.error, null, change);
+    }
+  } finally {
+    fixture.recordService.upsert = originalUpsert;
+    setMeetingFixtureState(store);
+  }
+});
+
 test('meeting synthesis applies a valid deferred response and status alone keeps save and publish busy', async () => {
   const store = await recordStorePromise;
   setMeetingFixtureState(store);

@@ -423,7 +423,9 @@ Fixture 採 synthetic 私人 A／B、公司 C1／C2、guest G、Workspace／Boar
 
 A11 仍須從原入口讀取 Board／Task、修改再重載，確認既有使用者無需重新註冊或強迫重裝。遇到登入或 mapping 問題，不得出現假空帳號或循環重登。
 
-A03 已由 OrgMaster 管理元件送出核准，經實際 HTTP 與隔離 PostgreSQL 驗證接受邀請、重新登入及看板權限。另一張邀請在舊管理畫面開啟後被擁有者撤回；晚到的核准得到 409，管理員重新載入後看見「已撤回」。此演練綁定 Platform `cc12b668`、OrgMaster `ff6ba9a` 與 ProJED `977cc11`，涵蓋合成身分與本機三系統。正式登入與託管路徑仍依 T08 查證。[三系統執行紀錄](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/44749827180)
+A03 已由 OrgMaster 管理元件送出核准，經實際 HTTP 與隔離 PostgreSQL 驗證接受邀請、重新登入及看板權限。擁有者撤邀後，晚到的核准得到 409，管理員重新載入後看見「已撤回」。切換帳號後，帶舊帳號綁定查 Session 得到 409，帶目前綁定得到 200。七項流程全數通過，受測版本為 Platform `462d3c61`、OrgMaster `ff6ba9a` 與 ProJED `5d384a1`。此演練使用合成身分。正式登入與託管路徑仍依 T08 查證。[三系統執行紀錄](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/44753454323)
+
+A09 已由看板設定修改管理員權限，重載後核對新增權限與清空權限均能保存，其他角色維持原設定。唯讀協作者可點開父、子任務詳情。嘗試修改任務標題或角色權限均得到 403，原擁有者重新查詢後資料一致。此演練使用正常瀏覽器入口與隔離 PostgreSQL。[ProJED 權限回歸](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44752941134)
 
 T07 已用舊版 `0670a0a` 的工作台與 Quick 呼叫程式、Supabase SDK 2.105.4、實際 PostgREST 及隔離 PostgreSQL 演練。停寫前已提交但遺失回應的 Quick 任務可憑原識別碼讀回；停寫期間五次寫入均回 HTTP 503／`PT503`，資料表內容維持一致。解除停寫後再送同一識別碼，仍只有一筆任務及一筆回執。這次驗到舊 SDK 與資料庫的寫入邊界，使用合成登入，正式 Edge 工作者、在途排空與原 Hosting 入口仍須在切換環境查證。[T07 Linux OCI 執行紀錄](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44748124380/job/136329293641)
 

@@ -63,7 +63,7 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
 ## DEV-139：ProJED 納入 Jenfu-Platform，Cloud Run／Cloud SQL 對齊並保留 Vite
 
-  - 原工作台與 Quick 的 Supabase 客戶端已在隔離 PostgreSQL 驗過停寫、未知結果重送及解除停寫後的唯一回執。OrgMaster 管理元件已在三系統演練中完成核准，撤邀後才送達的核准回 409，重新載入顯示已撤回。兩者使用合成身分。[舊端停寫驗證](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44748124380/job/136329293641)｜[外部協作驗證](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/44749827180)
+  - 原工作台與 Quick 已在隔離 PostgreSQL 驗過停寫、未知結果重送及唯一回執。三系統演練已驗證撤邀後核准回 409，以及換帳號後拒絕舊 Session 綁定。看板設定已驗證權限修改與清空後可重載，唯讀協作者可開啟詳情，兩項越權修改均回 403。演練使用合成身分。[舊端停寫](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44748124380/job/136329293641)｜[外部協作](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/44753454323)｜[看板權限](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44752941134)
   - Google Cloud 已建置並讀回 `52951b9` 的服務、移轉工作與語音工作三個候選映像。移轉映像中的 49 份 SQL 已逐檔對帳。後續看板與登入修正仍須綁定新版映像，正式服務尚未切換。[建置與映像識別碼](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-cloud-49)
   - 舊版 Quick 離線草稿已在同一網址原地升級，經新版正常按鈕提交及同識別碼重送後，隔離 PostgreSQL 只有一筆任務與回執。切帳後的舊工作區、任務及標籤回應亦已修正。受測程式 `52951b9` 的原生及容器 CI 均通過。[升級與對帳](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44740909306)
   - 個人帳號已從側欄建工作區、在首頁建看板，再從看板建任務並改名。重載後畫面與資料庫讀回一致，有其他共享看板權限的另一帳號讀此私人任務得到 404。此證據來自 Vite、實際 HTTP API 與隔離 PostgreSQL，使用合成登入身分。[瀏覽器與資料庫 CI](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44738740935)
