@@ -52,6 +52,8 @@ type TableSpec = {
 
 const { Client: PgClient } = pg;
 const UUID_PATTERN = "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$";
+const GOOGLE_IDENTITIES_PROJECTION = 'private.projed_dev139_google_identities_v1';
+const AUTH_USERS_PROJECTION = 'private.projed_dev139_auth_users_v1';
 // Preserve PostgreSQL JSON separately from SQL NULL. The default pg parser
 // collapses JSON literal null and SQL NULL to the same JS value, and its
 // parameter encoder otherwise treats JSON strings as unquoted SQL text.
@@ -97,7 +99,7 @@ const TABLES: readonly TableSpec[] = [
   // Keep it after profiles so user_id is checked against the same read-only source snapshot.
   {
     target: 'google_identity_proofs',
-    sourceRelation: 'auth.identities',
+    sourceRelation: GOOGLE_IDENTITIES_PROJECTION,
     columns: ['google_subject', 'local_user_id'],
     sourceSql: `
       SELECT provider_id AS google_subject,
@@ -106,7 +108,7 @@ const TABLES: readonly TableSpec[] = [
              identity_data ? 'sub' AS identity_data_has_sub,
              jsonb_typeof(identity_data -> 'sub') AS identity_data_sub_type,
              identity_data ->> 'sub' AS identity_data_sub
-        FROM auth.identities
+        FROM private.projed_dev139_google_identities_v1
        WHERE provider = 'google'
        ORDER BY provider_id, user_id
     `,
@@ -117,14 +119,14 @@ const TABLES: readonly TableSpec[] = [
   },
   {
     target: 'account_authorization_guards',
-    sourceRelation: 'auth.users',
+    sourceRelation: AUTH_USERS_PROJECTION,
     columns: ['local_user_id', 'active', 'revision', 'updated_at'],
     sourceSql: `
       SELECT DISTINCT profile.id::text AS local_user_id, profile.updated_at
         FROM public.profiles profile
-        JOIN auth.identities identity
+        JOIN private.projed_dev139_google_identities_v1 identity
           ON identity.user_id = profile.id AND identity.provider = 'google'
-        JOIN auth.users source_user ON source_user.id = profile.id
+        JOIN private.projed_dev139_auth_users_v1 source_user ON source_user.id = profile.id
        ORDER BY local_user_id
     `,
     project: (rows, priorSnapshot) => projectAccountAuthorizationGuards(
@@ -730,13 +732,92 @@ async function validateGoogleIdentitySourceSchema(client: Client): Promise<void>
   validateGoogleIdentitySourceColumns(result.rows);
 }
 
+async function validateIdentityProjections(client: Client): Promise<void> {
+  const result = await client.query<{
+    relation_name: string;
+    relation_kind: string;
+    owner_name: string;
+    security_barrier: boolean;
+    security_invoker: boolean;
+    schema_usage: boolean;
+    relation_select: boolean;
+    column_name: string;
+    data_type: string;
+  }>(`
+    SELECT relation.relname AS relation_name,
+           relation.relkind::text AS relation_kind,
+           pg_catalog.pg_get_userbyid(relation.relowner) AS owner_name,
+           COALESCE('security_barrier=true' = ANY(relation.reloptions), false) AS security_barrier,
+           COALESCE('security_invoker=true' = ANY(relation.reloptions), false) AS security_invoker,
+           pg_catalog.has_schema_privilege(current_user, relation_namespace.oid, 'USAGE') AS schema_usage,
+           pg_catalog.has_table_privilege(current_user, relation.oid, 'SELECT') AS relation_select,
+           attribute.attname AS column_name,
+           pg_catalog.format_type(attribute.atttypid, attribute.atttypmod) AS data_type
+      FROM pg_catalog.pg_class relation
+      JOIN pg_catalog.pg_namespace relation_namespace
+        ON relation_namespace.oid = relation.relnamespace
+      JOIN pg_catalog.pg_attribute attribute
+        ON attribute.attrelid = relation.oid
+       AND attribute.attnum > 0
+       AND NOT attribute.attisdropped
+     WHERE relation_namespace.nspname = 'private'
+       AND relation.relname = ANY($1::text[])
+     ORDER BY relation.relname, attribute.attnum
+  `, [[
+    'projed_dev139_google_identities_v1',
+    'projed_dev139_auth_users_v1',
+  ]]);
+  const expected = new Map<string, ReadonlyMap<string, string>>([
+    ['projed_dev139_google_identities_v1', new Map([
+      ['user_id', 'uuid'], ['provider', 'text'], ['provider_id', 'text'], ['identity_data', 'jsonb'],
+    ])],
+    ['projed_dev139_auth_users_v1', new Map([
+      ['id', 'uuid'], ['banned_until', 'timestamp with time zone'], ['deleted_at', 'timestamp with time zone'],
+    ])],
+  ]);
+  if (result.rows.length !== 7) {
+    throw Object.assign(new Error('Source identity projection contract is invalid'), {
+      code: 'SOURCE_IDENTITY_PROJECTION_INVALID',
+    });
+  }
+  const actual = new Map<string, Map<string, string>>();
+  for (const row of result.rows) {
+    if (row.relation_kind !== 'v' || row.owner_name !== 'postgres' || !row.security_barrier
+        || row.security_invoker || !row.schema_usage || !row.relation_select
+        || !expected.has(row.relation_name)) {
+      throw Object.assign(new Error('Source identity projection contract is invalid'), {
+        code: 'SOURCE_IDENTITY_PROJECTION_INVALID',
+      });
+    }
+    const columns = actual.get(row.relation_name) ?? new Map<string, string>();
+    if (columns.has(row.column_name)) {
+      throw Object.assign(new Error('Source identity projection contract is invalid'), {
+        code: 'SOURCE_IDENTITY_PROJECTION_INVALID',
+      });
+    }
+    columns.set(row.column_name, row.data_type);
+    actual.set(row.relation_name, columns);
+  }
+  for (const [relation, columns] of expected) {
+    const observed = actual.get(relation);
+    if (!observed || observed.size !== columns.size
+        || [...columns].some(([column, type]) => observed.get(column) !== type)) {
+      throw Object.assign(new Error('Source identity projection contract is invalid'), {
+        code: 'SOURCE_IDENTITY_PROJECTION_INVALID',
+      });
+    }
+  }
+}
+
 async function validateAuthUserSourceSchema(client: Client): Promise<void> {
   const result = await client.query<AuthUserSourceColumnContractRow>(`
     SELECT relation.relkind::text AS relation_kind,
            attribute.attname AS column_name,
            pg_catalog.format_type(attribute.atttypid, attribute.atttypmod) AS data_type,
-           pg_catalog.has_schema_privilege(current_user, relation_namespace.oid, 'USAGE') AS schema_usage,
-           pg_catalog.has_column_privilege(current_user, 'auth.users', attribute.attname, 'SELECT') AS column_select
+           pg_catalog.has_schema_privilege(current_user, 'private', 'USAGE') AS schema_usage,
+           pg_catalog.has_column_privilege(
+             current_user, 'private.projed_dev139_auth_users_v1', attribute.attname, 'SELECT'
+           ) AS column_select
       FROM pg_catalog.pg_class relation
       JOIN pg_catalog.pg_namespace relation_namespace
         ON relation_namespace.oid = relation.relnamespace
@@ -812,11 +893,12 @@ async function sourcePreflight(client: Client) {
     SELECT count(*)::int AS count
       FROM (
         SELECT DISTINCT profile.id AS local_user_id
-          FROM auth.identities identity
+          FROM private.projed_dev139_google_identities_v1 identity
           JOIN public.profiles profile ON profile.id = identity.user_id
          WHERE identity.provider = 'google'
       ) google_profiles
-      LEFT JOIN auth.users source_user ON source_user.id = google_profiles.local_user_id
+      LEFT JOIN private.projed_dev139_auth_users_v1 source_user
+        ON source_user.id = google_profiles.local_user_id
      WHERE source_user.id IS NULL
         OR source_user.deleted_at IS NOT NULL
         OR source_user.banned_until > transaction_timestamp()
@@ -1014,6 +1096,7 @@ async function main(): Promise<void> {
     // This setting does not grant permission to bypass a row security policy.
     await source.query('SET LOCAL row_security = off');
     await validateSource(source, sourceBinding);
+    await validateIdentityProjections(source);
     await validateGoogleIdentitySourceSchema(source);
     await validateAuthUserSourceSchema(source);
     const { blockers, emptySourceRelations } = await sourcePreflight(source);

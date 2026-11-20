@@ -7,7 +7,11 @@ $profilePath = 'config/dev-139/s3-read-disposable.profile.json'
 $profile = Get-Content -LiteralPath $profilePath -Raw | ConvertFrom-Json
 
 $systemDrive = Get-PSDrive -Name ([IO.Path]::GetPathRoot($env:TEMP).TrimEnd('\').TrimEnd(':')) -ErrorAction Stop
-if ($systemDrive.Free -lt 512MB) { throw 'DEV-139 migration rehearsal requires at least 512 MiB free on the temp drive.' }
+$systemDriveFree = $systemDrive.Free
+if ($null -eq $systemDriveFree) {
+  $systemDriveFree = [IO.DriveInfo]::new($systemDrive.Root).AvailableFreeSpace
+}
+if ($systemDriveFree -lt 512MB) { throw 'DEV-139 migration rehearsal requires at least 512 MiB free on the temp drive.' }
 
 if (-not $PostgresBin) {
   $initdbCommand = Get-Command initdb.exe -ErrorAction Stop
@@ -333,7 +337,7 @@ UPDATE public.document_versions
   if ($unknownPopulatedApply.status -ne 'BLOCKED' -or $unknownEmptyDomain -notin @($unknownPopulatedApply.blockers.domain)) {
     throw 'DEV-139 apply did not reject unknown populated data before target writes.'
   }
-  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "CREATE ROLE projed_source_reader_disposable LOGIN PASSWORD '$readerPassword'; GRANT CONNECT ON DATABASE $sourceDatabase TO projed_source_reader_disposable; GRANT USAGE ON SCHEMA public, private, auth TO projed_source_reader_disposable; GRANT SELECT ON ALL TABLES IN SCHEMA public, private TO projed_source_reader_disposable; GRANT SELECT ON auth.identities TO projed_source_reader_disposable; GRANT SELECT (id, banned_until, deleted_at) ON auth.users TO projed_source_reader_disposable; ALTER TABLE public.dev139_unknown_empty_source ENABLE ROW LEVEL SECURITY; CREATE POLICY hide_rows ON public.dev139_unknown_empty_source FOR SELECT USING (false)")
+  Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', "CREATE ROLE projed_source_reader_disposable LOGIN PASSWORD '$readerPassword'; GRANT CONNECT ON DATABASE $sourceDatabase TO projed_source_reader_disposable; GRANT USAGE ON SCHEMA public, private TO projed_source_reader_disposable; GRANT SELECT ON ALL TABLES IN SCHEMA public, private TO projed_source_reader_disposable; ALTER TABLE public.dev139_unknown_empty_source ENABLE ROW LEVEL SECURITY; CREATE POLICY hide_rows ON public.dev139_unknown_empty_source FOR SELECT USING (false)")
   $encodedReader = [Uri]::EscapeDataString($readerPassword)
   try {
     $env:PROJED_MIGRATION_SOURCE_DATABASE_URL = "postgresql://projed_source_reader_disposable:${encodedReader}@127.0.0.1:$port/$sourceDatabase"
@@ -435,34 +439,44 @@ UPDATE public.document_versions
       Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'ALTER TABLE auth.identities_missing_probe RENAME TO identities')
     }
 
-    Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'ALTER TABLE auth.users ALTER COLUMN deleted_at TYPE text USING NULL::text')
+    Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'DROP VIEW private.projed_dev139_auth_users_v1; CREATE VIEW private.projed_dev139_auth_users_v1 WITH (security_barrier=true) AS SELECT id, banned_until, deleted_at::text AS deleted_at FROM auth.users; GRANT SELECT ON private.projed_dev139_auth_users_v1 TO projed_source_reader_disposable')
     try {
       $wrongAuthUserSchema = Invoke-DataMode -Mode 'apply' -ExpectedExitCodes @(1)
-      if ($wrongAuthUserSchema.status -ne 'FAIL' -or $wrongAuthUserSchema.code -ne 'SOURCE_GOOGLE_USER_SCHEMA_INVALID') {
-        throw 'DEV-139 wrong auth.users column type was not rejected.'
+      if ($wrongAuthUserSchema.status -ne 'FAIL' -or $wrongAuthUserSchema.code -ne 'SOURCE_IDENTITY_PROJECTION_INVALID') {
+        throw 'DEV-139 wrong identity projection column type was not rejected.'
       }
     } finally {
-      Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'ALTER TABLE auth.users ALTER COLUMN deleted_at TYPE timestamptz USING NULL::timestamptz')
+      Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'DROP VIEW private.projed_dev139_auth_users_v1; CREATE VIEW private.projed_dev139_auth_users_v1 WITH (security_barrier=true) AS SELECT id, banned_until, deleted_at FROM auth.users; REVOKE ALL ON private.projed_dev139_auth_users_v1 FROM PUBLIC; GRANT SELECT ON private.projed_dev139_auth_users_v1 TO projed_source_reader_disposable')
     }
 
-    Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'REVOKE SELECT (deleted_at) ON auth.users FROM projed_source_reader_disposable')
+    Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'ALTER VIEW private.projed_dev139_google_identities_v1 SET (security_barrier=false)')
+    try {
+      $identityProjectionBarrier = Invoke-DataMode -Mode 'apply' -ExpectedExitCodes @(1)
+      if ($identityProjectionBarrier.status -ne 'FAIL' -or $identityProjectionBarrier.code -ne 'SOURCE_IDENTITY_PROJECTION_INVALID') {
+        throw 'DEV-139 identity projection without a security barrier was not rejected.'
+      }
+    } finally {
+      Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'ALTER VIEW private.projed_dev139_google_identities_v1 SET (security_barrier=true)')
+    }
+
+    Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'REVOKE SELECT ON private.projed_dev139_auth_users_v1 FROM projed_source_reader_disposable')
     try {
       $authUserPermission = Invoke-DataMode -Mode 'apply' -ExpectedExitCodes @(1)
-      if ($authUserPermission.status -ne 'FAIL' -or $authUserPermission.code -ne 'SOURCE_GOOGLE_USER_PERMISSION_INVALID') {
-        throw 'DEV-139 auth.users column permission failure was not rejected.'
+      if ($authUserPermission.status -ne 'FAIL' -or $authUserPermission.code -ne 'SOURCE_IDENTITY_PROJECTION_INVALID') {
+        throw 'DEV-139 auth user projection permission failure was not rejected before reading identity data.'
       }
     } finally {
-      Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'GRANT SELECT (deleted_at) ON auth.users TO projed_source_reader_disposable')
+      Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'GRANT SELECT ON private.projed_dev139_auth_users_v1 TO projed_source_reader_disposable')
     }
 
-    Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'REVOKE SELECT ON auth.identities FROM projed_source_reader_disposable')
+    Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'REVOKE SELECT ON private.projed_dev139_google_identities_v1 FROM projed_source_reader_disposable')
     try {
       $identityPermission = Invoke-DataMode -Mode 'apply' -ExpectedExitCodes @(1)
-      if ($identityPermission.status -ne 'FAIL' -or $identityPermission.code -ne '42501') {
-        throw 'DEV-139 auth.identities permission failure did not retain generic PostgreSQL code 42501.'
+      if ($identityPermission.status -ne 'FAIL' -or $identityPermission.code -ne 'SOURCE_IDENTITY_PROJECTION_INVALID') {
+        throw 'DEV-139 identity projection permission failure was not rejected before reading identity data.'
       }
     } finally {
-      Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'GRANT SELECT ON auth.identities TO projed_source_reader_disposable')
+      Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', $sourceDatabase, '-v', 'ON_ERROR_STOP=1', '-c', 'GRANT SELECT ON private.projed_dev139_google_identities_v1 TO projed_source_reader_disposable')
     }
   } finally {
     $env:PROJED_MIGRATION_SOURCE_DATABASE_URL = "postgresql://postgres:${encodedAdmin}@127.0.0.1:$port/$sourceDatabase"
