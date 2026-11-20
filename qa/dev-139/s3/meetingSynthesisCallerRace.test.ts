@@ -303,6 +303,32 @@ test('late HTTP record saves leave the active actor, editor and newer text alone
   }
 });
 
+test('a late save failure cannot unlock or replace a newer draft save', async () => {
+  const store = await loadRecordStore(true);
+  setMeetingFixtureState(store);
+  const originalUpsert = fixture.recordService.upsert;
+  try {
+    const firstWrite = deferred<unknown>();
+    fixture.recordService.upsert = () => firstWrite.promise;
+    const firstSave = store.getState().saveDraft();
+    store.getState().updateDraft({ content: 'second version' });
+    const secondWrite = deferred<unknown>();
+    fixture.recordService.upsert = () => secondWrite.promise;
+    const secondSave = store.getState().saveDraft();
+    firstWrite.reject(new Error('first response was late'));
+    assert.equal(await firstSave, null);
+    assert.equal(store.getState().saving, true);
+    assert.equal(store.getState().error, null);
+    const draft = store.getState().draft as Record<string, unknown>;
+    secondWrite.resolve({ ...draft, workspaceId: 'workspace-a', boardId: 'board-a', updatedAt: Date.now() });
+    const saved = await secondSave as { content: string };
+    assert.equal(saved.content, 'second version');
+    assert.equal(store.getState().saving, false);
+  } finally {
+    fixture.recordService.upsert = originalUpsert;
+  }
+});
+
 test('meeting synthesis applies a valid deferred response and status alone keeps save and publish busy', async () => {
   const store = await recordStorePromise;
   setMeetingFixtureState(store);

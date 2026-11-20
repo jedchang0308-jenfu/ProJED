@@ -201,15 +201,17 @@ test('one-millisecond state sampling precision never extends the ten-second leas
 });
 
 test('clock catch-up preserves source expiries and caps the current-state lease at ten seconds', async () => {
-  const proof = wire();
+  const expiresAt = '2026-10-29T12:00:25.000Z';
+  const sourceSessionExpiresAt = '2026-10-29T12:04:00.000Z';
+  const proof = wire({ expiresAt, sourceSessionExpiresAt });
   let samples = 0;
-  const subject = consumerHarness({ rows: [stateRow(proof, { read_at: new Date(NOW + 2).toISOString() })],
+  const subject = consumerHarness({ wire: proof, rows: [stateRow(proof, { read_at: new Date(NOW + 2).toISOString() })],
     now: () => ++samples <= 4 ? NOW : NOW + 2 });
   const result = await subject.consumer.consumeVerified(EXCHANGE_INPUT, 'quick');
   assert.equal(result.identity.currentStateExpiresAtMs, NOW + 2 + 10_000);
   assert.equal(result.actor.expiresAtMs, NOW + 2 + 10_000);
-  assert.equal(result.identity.expiresAtMs, Date.parse(proof.expiresAt));
-  assert.equal(result.identity.sourceSessionExpiresAtMs, Date.parse(proof.sourceSessionExpiresAt));
+  assert.equal(result.identity.expiresAtMs, Date.parse(expiresAt));
+  assert.equal(result.identity.sourceSessionExpiresAtMs, Date.parse(sourceSessionExpiresAt));
   assert.deepEqual(subject.calls(), { exchangeCalls: 1, readForHandoffCalls: 1, mappingCalls: 1 });
 });
 
