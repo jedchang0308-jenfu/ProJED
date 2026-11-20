@@ -21,11 +21,15 @@ export function verifyQuickUpgradeSources(legacyRoot, candidateRoot) {
   return { legacy: source(legacyRoot, 'supabase'), candidate: source(candidateRoot, 'http') };
 }
 
-export async function runQuickBackendUpgrade({ context, origin, output, publish, loaded, workerVersion, refreshCheck, record }) {
+export async function runQuickBackendUpgrade({ context, origin, output, publish, loaded, workerVersion, refreshCheck, record, liveBackend = null }) {
   assert.equal(new URL(origin).hostname, '127.0.0.1');
   const sourceOrigin = 'http://127.0.0.1:47971';
-  const owner = '11111111-1111-4111-8111-111111111111';
-  const other = '22222222-2222-4222-8222-222222222222';
+  const owner = liveBackend?.owner ?? '11111111-1111-4111-8111-111111111111';
+  const other = liveBackend?.other ?? '22222222-2222-4222-8222-222222222222';
+  if (liveBackend) {
+    for (const id of [owner, other, liveBackend.ownerContext]) assert.match(id, /^[a-f0-9-]{36}$/u);
+    assert.ok(liveBackend.proofPath, 'A06 native reconciliation output is required');
+  }
   const title = 'A06 已保存未同步的原任務 🧭';
   let httpAccount = other;
   let sourceUnavailable = false;
@@ -33,6 +37,12 @@ export async function runQuickBackendUpgrade({ context, origin, output, publish,
   const receipts = new Map();
   let targetEffects = 0;
   const page = context.pages()[0];
+  const selectTargetAccount = async isOwner => {
+    httpAccount = isOwner ? owner : other;
+    if (liveBackend) await context.addCookies([{ name: '__session',
+      value: isOwner ? 'qa-upgrade-owner' : 'qa-upgrade-other', url: origin + '/' }]);
+  };
+  await selectTargetAccount(false);
   page.on('pageerror', error => pageErrors.push(error.message));
   const user = id => ({ id, aud: 'authenticated', role: 'authenticated', email: 'a06@fixture.invalid',
     app_metadata: { provider: 'google' }, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' });
@@ -58,6 +68,7 @@ export async function runQuickBackendUpgrade({ context, origin, output, publish,
         return route.fulfill({ status: 503, headers, json: { message: 'ISOLATED_SOURCE_UNAVAILABLE' } });
       }
     } else if (url.origin === origin) {
+      if (url.pathname === '/api/v1/session' && liveBackend) return route.continue();
       if (url.pathname === '/api/v1/session') return route.fulfill({ json: { data: { localUserId: httpAccount,
         authContextId: httpAccount, entry: 'main', createdAt: 1704067200000, expiresAt: Date.now() + 600000,
         email: 'a06@fixture.invalid', displayName: 'A06 synthetic Session' } } });
@@ -67,7 +78,8 @@ export async function runQuickBackendUpgrade({ context, origin, output, publish,
         assert.equal(httpAccount, owner, 'Another account dispatched the original owner draft');
         const headers = await request.allHeaders();
         assert.equal(headers['x-projed-expected-account-id'], owner);
-        assert.equal(headers['x-projed-expected-context-id'], owner);
+        assert.equal(headers['x-projed-expected-context-id'], liveBackend?.ownerContext ?? owner);
+        if (liveBackend) return route.continue();
         const hash = createHash('sha256').update(body.title).digest('hex');
         const existing = receipts.get(body.captureId);
         if (!existing) {
@@ -148,21 +160,53 @@ export async function runQuickBackendUpgrade({ context, origin, output, publish,
   assert.equal(targetCalls.length, 0);
   assert.ok(!(await page.locator('body').innerText()).includes(title), 'Wrong account saw the private saved title');
   record('A06-wrong-account-isolated', { originalPreserved: true, targetRequests: 0, privateTitleVisible: false });
-  httpAccount = owner;
-  await page.reload({ waitUntil: 'domcontentloaded' });
+  await selectTargetAccount(true);
+  let acknowledgedReceipt;
+  if (liveBackend) {
+    const [response] = await Promise.all([
+      page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/quick-tasks'
+        && response.request().method() === 'POST'),
+      page.reload({ waitUntil: 'domcontentloaded' }),
+    ]);
+    assert.equal(response.status(), 201);
+    acknowledgedReceipt = (await response.json()).data;
+  } else await page.reload({ waitUntil: 'domcontentloaded' });
   await loaded(page, 'B');
   await page.locator('#quick-task-auth-status').filter({ hasText: '此快速 App 已登入' }).waitFor();
   const restored = await waitLocal(value => value.captures[0].state === 'synced' && value.captures[0].receipt);
   assert.ok(sameOriginal(restored.captures[0]));
   assert.equal(restored.captures.length, 1);
-  assert.equal(targetEffects, 1);
+  if (!liveBackend) assert.equal(targetEffects, 1);
   assert.ok(targetCalls.length >= 1 && targetCalls.every(call => call.captureId === original.captureId && call.title === title));
   assert.ok(sourceCalls.every(call => call.p_capture_id === original.captureId && call.p_title === title));
+  if (liveBackend) {
+    assert.equal(targetCalls.length, 1, 'The normal Quick submission was duplicated');
+    assert.deepEqual(restored.captures[0].receipt, acknowledgedReceipt);
+    const requestBody = { captureId: targetCalls[0].captureId, title: targetCalls[0].title,
+      workspaceHint: targetCalls[0].workspaceHint };
+    const replay = await page.evaluate(async ({ body, accountId, contextId }) => {
+      const response = await fetch('/api/v1/quick-tasks', { method: 'POST', credentials: 'same-origin',
+        headers: { 'content-type': 'application/json', 'x-projed-expected-account-id': accountId,
+          'x-projed-expected-context-id': contextId }, body: JSON.stringify(body) });
+      return { status: response.status, data: (await response.json()).data };
+    }, { body: requestBody, accountId: owner, contextId: liveBackend.ownerContext });
+    assert.equal(replay.status, 200);
+    assert.deepEqual(replay.data, { ...acknowledgedReceipt, created: false });
+    assert.equal(targetCalls.length, 2);
+    fs.writeFileSync(liveBackend.proofPath, JSON.stringify({
+      scope: 'REAL_BROWSER_HTTP_ACK_PENDING_NATIVE_PG_READBACK_SYNTHETIC_IDENTITY',
+      captureId: original.captureId, ownerId: owner, clientCreatedAt: original.clientCreatedAt,
+      titleHash: createHash('sha256').update(original.title).digest('hex'),
+      requestBodyHash: createHash('sha256').update(JSON.stringify(requestBody)).digest('hex'),
+      productSubmissions: 1, explicitQaReplays: 1, firstStatus: 201, replayStatus: replay.status,
+      firstReceipt: acknowledgedReceipt, replayReceipt: replay.data,
+    }, null, 2) + '\n', { flag: 'wx' });
+  }
   await page.reload({ waitUntil: 'domcontentloaded' });
   await loaded(page, 'B');
   const reloaded = await readLocal();
   assert.ok(sameOriginal(reloaded.captures[0]) && reloaded.captures[0].receipt?.status === 'committed');
-  assert.equal(targetEffects, 1);
+  if (!liveBackend) assert.equal(targetEffects, 1);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), true);
   assert.deepEqual(unexpected, []);
   assert.deepEqual(pageErrors, []);
@@ -170,7 +214,9 @@ export async function runQuickBackendUpgrade({ context, origin, output, publish,
   record('A06-backend-upgrade-recovered', { sourceBackend: 'supabase', targetBackend: 'http',
     originalIdAccountContentAndTimePreserved: true, receiptPersistedAfterReload: true,
     sourceRequestsRejected: sourceCalls.length, sourceUnavailableDuringUpdate: true,
-    syntheticTargetRequests: targetCalls.length, syntheticTargetEffects: targetEffects,
+    ...(liveBackend ? { realHttpRequests: targetCalls.length, productSubmissions: 1, explicitQaReplays: 1 }
+      : { syntheticTargetRequests: targetCalls.length, syntheticTargetEffects: targetEffects }),
     sameOrigin: origin, sameBrowserProfile: true, actualServiceWorker: true, viewport: '390x844',
-    apiEvidence: 'SYNTHETIC_SESSION_AND_COMMITTED_RECEIPT_NO_DATABASE_OR_PROVIDER', externalRequests: unexpected.length });
+    apiEvidence: liveBackend ? 'REAL_KERNEL_HTTP_ACK_PENDING_NATIVE_PG_RECONCILIATION_SYNTHETIC_IDENTITY'
+      : 'SYNTHETIC_SESSION_AND_COMMITTED_RECEIPT_NO_DATABASE_OR_PROVIDER', externalRequests: unexpected.length });
 }

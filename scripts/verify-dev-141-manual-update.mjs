@@ -9,6 +9,7 @@ import { pathToFileURL } from 'node:url';
 import { build } from 'vite';
 import { retainVersionHistory } from './release/version-retention.mjs';
 import { verifyQuickUpgradeSources, runQuickBackendUpgrade } from './lib/dev139-quick-backend-upgrade.mjs';
+import { createQuickUpgradeApiProxy } from './lib/dev139-quick-upgrade-proxy.mjs';
 
 // Actual app bundles, shared Workbox worker, and one disposable browser profile.
 // A built local-data mode exercises the real updater without contacting production.
@@ -41,6 +42,7 @@ let active = 'A';
 let unavailableVersion = null;
 let context;
 let server;
+let upgradeApiProxy;
 const MIME = {
   '.js': 'text/javascript', '.html': 'text/html', '.css': 'text/css',
   '.json': 'application/json', '.webmanifest': 'application/manifest+json',
@@ -112,6 +114,7 @@ try {
     process.env.VITE_SUPABASE_ANON_KEY = 'dev139-public-synthetic-anon-key';
     process.env.VITE_SUPABASE_AUTH_MODE = 'oauth-google';
     process.env.VITE_SUPABASE_AUTO_TEST_LOGIN = 'false';
+    if (process.env.PROJED_DEV139_QUICK_PG_BASE) upgradeApiProxy = createQuickUpgradeApiProxy(process.env.PROJED_DEV139_QUICK_PG_BASE);
   }
   for (const [index, name] of (backendUpgradeOnly ? ['A', 'B'] : ['A', 'B', 'C']).entries()) {
     const dir = path.join(reused || output, name);
@@ -148,7 +151,8 @@ try {
     console.log('Built ' + version(name));
   }
 
-  server = http.createServer((request, response) => {
+  server = http.createServer(async (request, response) => {
+    if (upgradeApiProxy && await upgradeApiProxy(request, response)) return;
     const url = new URL(request.url, 'http://localhost');
     const root = artifacts[active];
     let relative = decodeURIComponent(url.pathname).slice(1);
@@ -384,7 +388,11 @@ try {
   if (backendUpgradeOnly) {
     context = await chromium.launchPersistentContext(path.join(output, 'quick-backend-profile'),
       { channel: 'msedge', headless: true, viewport: { width: 390, height: 844 } });
-    await runQuickBackendUpgrade({ context, origin, output, publish, loaded, workerVersion, refreshCheck, record });
+    await runQuickBackendUpgrade({ context, origin, output, publish, loaded, workerVersion, refreshCheck, record,
+      liveBackend: upgradeApiProxy ? { owner: process.env.PROJED_DEV139_QUICK_PG_OWNER,
+        other: process.env.PROJED_DEV139_QUICK_PG_OTHER,
+        ownerContext: process.env.PROJED_DEV139_QUICK_PG_CONTEXT,
+        proofPath: process.env.PROJED_DEV139_QUICK_PG_PROOF } : null });
     await context.close();
     record('A06-installation-parity', { installationParity, originPreserved: true,
       browserProfilePreserved: true, physicalInstalledPwa: 'NOT_RUN', reinstallation: 'NOT_REQUIRED' });

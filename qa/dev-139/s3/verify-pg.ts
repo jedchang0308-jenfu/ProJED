@@ -44,6 +44,7 @@ import { startBrowserFixtureSession, verifyAppSessionsPostgres } from '../s2/ver
 import {verifyRagPostgres} from './verify-rag-pg.js';
 import {verifyMeetingSynthesisPostgres} from './verify-meeting-synthesis-pg.js';
 import { verifyActorSerializationPostgres } from './verify-actor-serialization-pg.js';
+import { verifyQuickBackendUpgradePostgres } from './verify-quick-upgrade-pg.js';
 import { verifyMeetingCapturePostgres } from './verify-meeting-capture-pg.js';
 import { verifyMeetingAudioPostgres } from './verify-meeting-audio-pg.js';
 import { verifyMeetingAudioCleanupPostgres } from './verify-meeting-audio-cleanup-pg.js';
@@ -701,8 +702,12 @@ if (browserActor) {
     error instanceof KernelError && error.httpStatus === 404);
 }
 const browserCollaborator = browserActor ? await startBrowserFixtureSession(database, config, 'employeeCollaborator') : null;
+let upgradeOwner: ServerActorV1 | null = null;
+let upgradeOther: ServerActorV1 | null = null;
 const http = createKernelHttpServer(httpConfig, database, expected, {
   resolveActor: async (request) => {
+    if (upgradeOwner && request.headers.cookie === '__session=qa-upgrade-owner') return upgradeOwner;
+    if (upgradeOther && request.headers.cookie === '__session=qa-upgrade-other') return upgradeOther;
     if (browserActor && request.headers.cookie === '__session=qa-browser') return browserActor;
     if (browserCollaborator && request.headers.cookie === '__session=qa-browser-collaborator') return browserCollaborator;
     if (request.headers.cookie === '__session=qa-a') return actorA;
@@ -1786,7 +1791,15 @@ try {
   assert.equal(unknownApi.status, 404);
   assert.match(unknownApi.headers.get('content-type') ?? '', /^application\/json/);
 } finally {
-  await http.shutdown();
+  try {
+    if (process.env.DEV139_QUICK_UPGRADE === 'true') await runIndependent('quick-upgrade-live-http-postgres', async () => {
+      // Earlier independent permission cases may revoke old snapshots. This
+      // explicit new login authorizes only this final isolated browser case.
+      upgradeOwner = await startBrowserFixtureSession(database, config, 'owner');
+      upgradeOther = await startBrowserFixtureSession(database, config, 'employeeCollaborator');
+      await verifyQuickBackendUpgradePostgres(database, config, base, upgradeOwner, upgradeOther);
+    });
+  } finally { await http.shutdown(); }
 }
 
 if(independentFailures.length)throw new AggregateError(independentFailures,'Independent native regressions failed');
@@ -1835,5 +1848,6 @@ console.log(JSON.stringify({
     'http-calendar-subscription-hash-only-owner-origin-legacy-pagination-lifecycle-feed-and-revocation',
     'managed-calendar-machine-bearer-legacy-owned-external-current-rights-and-revocation',
     ...(process.env.PROJED_DEV139_BROWSER_SMOKE === '1' ? ['http-normal-product-ui-and-reload'] : []),
+    ...(process.env.DEV139_QUICK_UPGRADE === 'true' ? ['quick-upgrade-normal-browser-http-postgres-reconciliation'] : []),
   ],
 }));
