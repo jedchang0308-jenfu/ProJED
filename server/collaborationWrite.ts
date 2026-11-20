@@ -940,8 +940,8 @@ export class CollaborationWriteRepository {
           tenant_id, project_id, user_id, role, member_email, member_display_name
         ) VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6)
         ON CONFLICT (project_id, user_id) DO UPDATE
-          SET tenant_id = EXCLUDED.tenant_id, role = EXCLUDED.role,
-              member_email = EXCLUDED.member_email, member_display_name = EXCLUDED.member_display_name,
+          SET member_email = EXCLUDED.member_email, member_display_name = EXCLUDED.member_display_name,
+              role = EXCLUDED.role,
               updated_at = now()
       `, [target.id, board.id, profile.id, member.role, member.member_email, member.member_display_name]);
     }

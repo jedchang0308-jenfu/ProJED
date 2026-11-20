@@ -511,6 +511,34 @@ async (page) => {
         'x-projed-expected-context-id': otherSession.authContextId },
     });
 
+    step = 'move the owned board through the normal sidebar without replacing its Session';
+    await page.locator('[data-main-sidebar-toggle="true"]').click();
+    await workspaceSidebar.locator('[data-sidebar-board-title="true"]').filter({ hasText: boardTitle }).click({ button: 'right' });
+    await page.getByRole('button', { name: '移動到工作區', exact: true }).click();
+    const transferDialog = page.locator('[data-board-transfer-dialog="true"]');
+    await transferDialog.locator('select').selectOption('ws-b');
+    await transferDialog.getByPlaceholder(boardTitle, { exact: true }).fill(boardTitle);
+    await saveThroughUi(`${boardsPath}/${encodeURIComponent(board.id)}/transfer`, 'POST',
+      () => transferDialog.getByRole('button', { name: '移動到 B workspace', exact: true }).click());
+    await transferDialog.waitFor({ state: 'hidden' });
+    if (await workspaceSidebar.isVisible()) await page.getByRole('button', { name: '關閉工作區與看板' }).click();
+    const movedTasksPath = `/api/v1/workspaces/ws-b/boards/${encodeURIComponent(board.id)}/tasks`;
+    const movedTasks = await saveThroughUi(movedTasksPath, 'GET', () => page.reload({ waitUntil: 'domcontentloaded' }));
+    assert(movedTasks.some(task => task.id === taskId && task.title === privateTitle), 'normal board transfer lost its task after reload');
+    await page.locator('[data-task-title-slot="true"]').filter({ hasText: privateTitle }).first().waitFor();
+    const continuedSession = (await (await page.request.get(baseUrl + '/api/v1/session')).json()).data;
+    assert(continuedSession.localUserId === ownerSession.localUserId && continuedSession.authContextId === ownerSession.authContextId,
+      'normal board transfer replaced the original owner Session');
+    const movedRecords = await readAsOwner(`/api/v1/workspaces/ws-b/boards/${encodeURIComponent(board.id)}/records`);
+    assert(movedRecords.length === 1 && movedRecords[0].status === 'draft' && movedRecords[0].type === 'meeting',
+      'normal board transfer lost the private manual meeting draft');
+    const deniedMoved = await collaborator.request.get(baseUrl + movedTasksPath, { headers: {
+      'x-projed-expected-account-id': otherSession.localUserId,
+      'x-projed-expected-context-id': otherSession.authContextId,
+    } });
+    assert(deniedMoved.status() === 404 && !(await deniedMoved.text()).includes(privateTitle),
+      'moving the private board exposed its task to the collaborator');
+
     const apiPaths = [...new Set(sameOriginResponses
       .map(item => new URL(item.url).pathname)
       .filter(path => path.startsWith('/api/')))];
@@ -562,6 +590,8 @@ async (page) => {
       },
       personalWorkspaceBoardTaskPersistedAfterReload: true,
       collaboratorPrivateTaskStatus: denied.status(),
+      normalBoardTransfer: { sidebarEntry: true, sameSession: true, taskReloaded: true,
+        privateMeetingDraftPreserved: true, collaboratorStatus: deniedMoved.status() },
       manualMeetingDraft,
       privateBoardLeak: false,
       apiPaths,

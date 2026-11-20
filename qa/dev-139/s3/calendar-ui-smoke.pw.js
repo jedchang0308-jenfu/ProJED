@@ -15,7 +15,13 @@ async (page) => {
   await page.route('**/*', async route => {
     const request = route.request();
     const url = new URL(request.url());
-    if (publicCalendar.test(request.url()) && request.method() === 'GET') {
+    if (url.hostname === 'fonts.googleapis.com' && request.method() === 'GET') {
+      await route.fulfill({ contentType: 'text/css', body: '' });
+    } else if (request.method() === 'GET'
+      && ((url.hostname === 'accounts.google.com' && url.pathname === '/gsi/client')
+        || (url.hostname === 'apis.google.com' && url.pathname === '/js/api.js'))) {
+      await route.fulfill({ contentType: 'application/javascript', body: '' });
+    } else if (publicCalendar.test(request.url()) && request.method() === 'GET') {
       await route.fulfill({ json: [] });
     } else if (['http:', 'https:'].includes(url.protocol) && url.origin !== baseUrl) {
       unexpectedExternalRequests.push(url.origin);
@@ -168,7 +174,8 @@ async (page) => {
     await openCalendar();
     await row().getByRole('button', { name: '啟用', exact: true }).waitFor();
     assert(!await row().getByRole('button', { name: '複製', exact: true }).count(), 'final reload retained a one-time bearer URL');
-    assert(pageErrors.length === 0 && unexpectedExternalRequests.length === 0, 'Calendar browser emitted errors or external requests');
+    assert(pageErrors.length === 0 && unexpectedExternalRequests.length === 0,
+      `Calendar browser emitted errors or external requests: ${JSON.stringify({ pageErrors, externalOrigins: unexpectedExternalRequests })}`);
     await page.screenshot({ path: artifactDirectory + '/disabled.png', fullPage: false });
     const artifact = {
       result: 'PASS',
@@ -176,6 +183,7 @@ async (page) => {
       identity: 'SYNTHETIC_ISOLATED_OWNER_SESSION',
       clipboard: 'MEMORY_ONLY_WRITE_PORT_NO_HOST_CLIPBOARD',
       publicHolidayCalendar: 'LOCAL_READ_ONLY_FIXTURE',
+      googleSdkAssets: 'LOCAL_EMPTY_STATIC_FIXTURES',
       providerCalls: 'NOT_REQUESTED',
       subscriptionId,
       ownerUserId: session.localUserId,

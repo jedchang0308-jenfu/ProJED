@@ -431,6 +431,10 @@ A08 人工會議草稿已從既有選單新增、輸入正文、儲存並退出�
 
 A07 正常看板新增任務後，另一帳號的清單視圖可見同一任務。以瀏覽器離線注入中斷該帳號，擁有者從正常選單封存、再從回收桶永久刪除，HTTP／PostgreSQL 讀回確認該 ID 已不存在。協作者重連後取得成功的最新查詢，102 毫秒內收斂，切回看板亦沒有復活或私人資料。此案例在 `52f430c` 通過；同批行事曆案例因誤用被預覽排除的群組任務而失敗，整批 CI 仍列失敗，待修正專用有日期任務後續驗。[本次執行與獨立瀏覽器收據](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44765378305)
 
+A08 行事曆在本機編譯前端、真 HTTP 與隔離 PostgreSQL 18 通過正常設定入口的建立、重載、改名、停用、啟用及輪替。匿名 ICS 包含已納入看板的有日期任務，排除私人看板；狀態依序為停用 410、啟用 200、舊連結 404、新連結 200、再次停用 410。直接 SQL 核對 owner、完整 filters、停用狀態及 token 僅存雜湊，最後清理本案例訂閱及任務。登入身分、節日資料及首頁 Google SDK 靜態資產使用隔離 fixture；HTTP、ICS 與資料庫回應皆為實際執行。修正了群組任務不產生事件的 fixture 假設及 Windows 收據 BOM 解析。完整 CI 仍須涵蓋同版來源與移板修正，本機收據位於 `output/qa/dev-139/s3/20261120T161417Z-e6c5fa28/result.json` 及 `output/playwright/dev-139-calendar-ui/postgres-readback.json`。
+
+A09 移板新增 `0050_session_board_transfer_v1`，只在核心已授權的精確移板交易讀取原成員，並在可證明原權限仍有效時更新發起 Session 的既有看板 scope。保留 capability 與外部 approvedRole 上限，其他舊 Session 撤銷；繼承來源改變而無法證明等權時維持拒絕。移除 upsert 對已由 FK 搬移之 tenant_id 的重複指定，解除未授權欄位更新。原 `0001`–`0049` bytes 保留。本機真 HTTP／PG 已驗 owner、無繼承之顯式 member、純繼承 owner、減權、舊 Session 撤銷及範圍外拒絕；正常側欄另驗移板後以原 Session 重載同任務、私人會議草稿保留、協作者 404。收據分別為 `output/qa/dev-139/bound-board-transfer/172f2979-37c8-4586-8261-bb46e436d13d/result.json` 及 `output/qa/dev-139/s3/20261120T162130Z-7d15a831/result.json`。完整 CI 與新版候選映像仍待核對，舊的 49 份候選不能代表這次移板修正。
+
 T07 已用舊版 `0670a0a` 的工作台與 Quick 呼叫程式、Supabase SDK 2.105.4、實際 PostgREST 及隔離 PostgreSQL 演練。停寫前已提交但遺失回應的 Quick 任務可憑原識別碼讀回；停寫期間五次寫入均回 HTTP 503／`PT503`，資料表內容維持一致。解除停寫後再送同一識別碼，仍只有一筆任務及一筆回執。這次驗到舊 SDK 與資料庫的寫入邊界，使用合成登入，正式 Edge 工作者、在途排空與原 Hosting 入口仍須在切換環境查證。[T07 Linux OCI 執行紀錄](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44748124380/job/136329293641)
 
 受影響的 UI 流程覆蓋正常、載入、空白及錯誤／拒絕；版面或互動改變時，依既有主／Quick 基線檢查 390px 窄版、桌面、overflow、焦點與鍵盤操作，不要求 A01–A11 每列重複排列相同的版面／輸入組合。未受影響且仍有效的證據可重用；純文件／SQL 修改不因 HEAD 改變就重跑全部 UI。身分、資料、權限或舊入口行為受影響時仍驗相應 A／T 案例；使用者取消的 Android 實體裝置 gate 不自行恢復，窄版 browser 不能冒稱實體 PWA PASS。

@@ -218,6 +218,10 @@
     {
       "version": "0049_session_directory_visibility_v1",
       "path": "db/migrations/0049_session_directory_visibility_v1.sql"
+    },
+    {
+      "version": "0050_session_board_transfer_v1",
+      "path": "db/migrations/0050_session_board_transfer_v1.sql"
     }
   ],
   "objectAllowlist": [
@@ -415,7 +419,8 @@
     "projed_core.session_permission_loss_v1",
     "projed_core.accepted_invite_revision_v1",
     "projed_core.revocable_resource_sessions_v1",
-    "projed_core.revoke_reduced_permissions_v1"
+    "projed_core.revoke_reduced_permissions_v1",
+    "projed_core.session_board_transfer_v1"
   ],
   "staticFixturePath": "qa/dev-139/s1/static",
   "runtime": {

@@ -724,14 +724,14 @@ const http = createKernelHttpServer(httpConfig, database, expected, {
 });
 const address = await http.listen();
 const base = `http://${address.host}:${address.port}`;
-const fetchFor = (session: 'qa-a' | 'qa-b' | 'qa-b-quick' | 'qa-c' | 'qa-e'): HttpApiFetch => async (input, init) => {
+const fetchFor = (session: 'qa-a' | 'qa-b' | 'qa-b-quick' | 'qa-c' | 'qa-e' | 'qa-browser'): HttpApiFetch => async (input, init) => {
   const headers = new Headers(init?.headers);
   headers.set('cookie', `__session=${session}`);
   headers.set('origin', base);
   return fetch(`${base}${String(input)}`, { ...init, headers });
 };
 const clientFor = (
-  session: 'qa-a' | 'qa-b' | 'qa-b-quick' | 'qa-c' | 'qa-e',
+  session: 'qa-a' | 'qa-b' | 'qa-b-quick' | 'qa-c' | 'qa-e' | 'qa-browser',
   actor: ServerActorV1,
 ) => {
   const client = new HttpApiClient(fetchFor(session));
@@ -761,7 +761,7 @@ try {
           createdCalendarTasks.push(task);
         }
         await runBrowserSmoke(base, 'calendar-ui');
-        const receipt = JSON.parse(readFileSync('output/playwright/dev-139-calendar-ui/result.json', 'utf8')) as {
+        const receipt = JSON.parse(readFileSync('output/playwright/dev-139-calendar-ui/result.json', 'utf8').replace(/^\uFEFF/u, '')) as {
           result: string; subscriptionId: string; ownerUserId: string; name: string; filters: unknown; isActive: boolean;
         };
         assert.equal(receipt.result, 'PASS');
