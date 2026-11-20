@@ -119,6 +119,16 @@ async (page) => {
     await page.locator('nav.app-main-nav').waitFor({ state: 'visible', timeout: 20000 });
     await page.locator('[data-task-id="shared-parent"]').first().waitFor({ state: 'visible', timeout: 20000 });
   };
+  const verifyOwnerBoardScope = async () => {
+    const canvas = page.locator('[data-kanban-mouse-pan-surface="true"]');
+    assert((await canvas.innerText()).includes('Shared parent'), 'selected board canvas has no shared parent');
+    // This owner also has a private board. Their personal "all tasks" panel
+    // can legitimately finish loading before the shared board assertion.
+    const onlyInPersonalWorkbench = await page.getByText('B secret').evaluateAll(matches =>
+      matches.every(element => element.closest('[data-task-workbench-panel="true"]') !== null));
+    assert(onlyInPersonalWorkbench && !(await canvas.innerText()).includes('B secret'),
+      'owner-only task appeared outside the personal workbench');
+  };
   const openPermissions = async target => {
     // SettingsView is lazy: after reload its root can still be absent even
     // though the persisted view already makes this menu action "return to board".
@@ -159,7 +169,7 @@ async (page) => {
     assert(bodyText.includes('Shared board'), 'board title is missing from the normal UI', { bodyText: bodyText.slice(0, 1200) });
     assert(bodyText.includes('Shared parent'), 'task title is missing from the normal UI', { bodyText: bodyText.slice(0, 1200) });
     assert(!bodyText.includes('檢查 Jenfu-Platform 登入'), 'authenticated actor was returned to the login shell');
-    assert(!bodyText.includes('B secret'), 'inactive private-board task leaked into the selected board');
+    await verifyOwnerBoardScope();
     await page.locator('[data-main-sidebar-toggle="true"]').click();
     const workspaceSidebar = page.locator('[data-sidebar-panel="expanded"]');
     await workspaceSidebar.waitFor({ state: 'visible', timeout: 10000 });
@@ -301,7 +311,7 @@ async (page) => {
     bodyText = await page.locator('body').innerText();
     assert(bodyText.includes('Shared board') && bodyText.includes('Shared parent'),
       'board or task did not survive reload', { bodyText: bodyText.slice(0, 1200) });
-    assert(!bodyText.includes('B secret'), 'private-board task leaked after reload');
+    await verifyOwnerBoardScope();
     step = 'restore the shared fixture through the same dialog';
     await editTitle('Shared parent');
 
