@@ -1,115 +1,23 @@
-import { create } from 'zustand';
-import { queryProjectKnowledge, RagRetrievalError } from '../services/rag/ragRetrievalService';
-import type { RagCitation } from '../services/rag/ragContract';
+import { queryProjectKnowledge } from '../services/rag/ragRetrievalService';
+import useAuthStore from './useAuthStore';
+import useBoardStore from './useBoardStore';
+import { createRagConversationStore } from './ragConversationStore';
 
-export interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  citations?: {
-    chunkId: string;
-    citation: RagCitation;
-  }[];
-}
+export type { ChatMessage } from './ragConversationStore';
 
-interface RagState {
-  isOpen: boolean;
-  isLoading: boolean;
-  error: string | null;
-  queryDraft: string;
-  chatHistory: ChatMessage[];
-  generationModel: string;
+const useRagStore = createRagConversationStore({
+  readScope: () => {
+    const { user } = useAuthStore.getState();
+    const { activeWorkspaceId, activeBoardId } = useBoardStore.getState();
+    if (!user || !activeWorkspaceId) return null;
+    const contextId = 'authContextId' in user && typeof user.authContextId === 'string' ? user.authContextId : null;
+    return { accountId: user.uid, contextId, workspaceId: activeWorkspaceId, boardId: activeBoardId };
+  },
+  query: queryProjectKnowledge,
+});
 
-  togglePanel: () => void;
-  setIsOpen: (isOpen: boolean) => void;
-  setQueryDraft: (query: string) => void;
-  setGenerationModel: (model: string) => void;
-  clearHistory: () => void;
-  submitQuery: (query: string, tenantId: string, projectId: string | null) => Promise<void>;
-}
-
-const generateId = () => Math.random().toString(36).substring(2, 9);
-
-const useRagStore = create<RagState>((set, get) => ({
-  isOpen: false,
-  isLoading: false,
-  error: null,
-  queryDraft: '',
-  chatHistory: [],
-  generationModel: 'gemini-3.1-flash-lite',
-
-  togglePanel: () => set((state) => ({ isOpen: !state.isOpen })),
-  setIsOpen: (isOpen) => set({ isOpen }),
-  setQueryDraft: (query) => set({ queryDraft: query }),
-  setGenerationModel: (model) => set({ generationModel: model }),
-  clearHistory: () => set({ chatHistory: [], error: null }),
-
-  submitQuery: async (query: string, tenantId: string, projectId: string | null) => {
-    if (!query.trim()) return;
-
-    const userMsgId = generateId();
-    const newChatHistory = [
-      ...get().chatHistory,
-      { id: userMsgId, role: 'user' as const, content: query }
-    ];
-
-    set({
-      chatHistory: newChatHistory,
-      queryDraft: '',
-      isLoading: true,
-      error: null
-    });
-
-    try {
-      const { generationModel } = get();
-      const response = await queryProjectKnowledge({
-        tenantId,
-        projectId,
-        query,
-        generationModel,
-        matchThreshold: 0.35,
-        matchCount: 10
-      });
-
-      const citations = response.chunks.map(c => ({
-        chunkId: c.chunkId,
-        citation: c.citation
-      }));
-
-      set((state) => ({
-        chatHistory: [
-          ...state.chatHistory,
-          {
-            id: generateId(),
-            role: 'assistant',
-            content: response.answer,
-            citations: citations.length > 0 ? citations : undefined
-          }
-        ],
-        isLoading: false
-      }));
-    } catch (err) {
-      console.error('RAG Error:', err);
-      let errorMessage = '知識檢索失敗，請稍後再試。';
-
-      if (err instanceof RagRetrievalError) {
-        if (err.status === 429) {
-          errorMessage = 'AI 查詢額度已達上限，請稍後再試。';
-        } else if (err.status === 401 || err.status === 403) {
-          errorMessage = '你沒有權限查詢這個專案知識庫，請確認登入狀態。';
-        } else {
-          errorMessage = err.message || errorMessage;
-        }
-      } else if (err instanceof Error) {
-        errorMessage = err.message;
-      }
-
-      set({
-        error: errorMessage,
-        isLoading: false
-      });
-    }
-  }
-}));
+// Invalidate synchronously before another account/scope can render old content.
+useAuthStore.subscribe(() => useRagStore.getState().syncScope());
+useBoardStore.subscribe(() => useRagStore.getState().syncScope());
 
 export default useRagStore;

@@ -41,7 +41,6 @@ import {
 import { useWbsStore } from '../store/useWbsStore';
 import { useTaskFilterStore } from '../store/useTaskFilterStore';
 import { clearTaskSelection } from '../utils/taskInteractions';
-import { isHttpBackend } from '../services/backendMode';
 import TaskDescriptionHoverCard from './TaskDescriptionHoverCard';
 import TaskWorkbenchPanel from './TaskWorkbenchPanel';
 import { getHostModeFromView, TaskInteractionScope } from '../interactions/task/TaskInteractionScope';
@@ -453,21 +452,18 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         >
           <button
             type="button"
-            onClick={isHttpBackend ? undefined : toggleRagPanel}
-            disabled={isHttpBackend}
+            onClick={toggleRagPanel}
             className={cn(
               topbarClassNames.textButton,
               'px-2 sm:px-3',
-              isHttpBackend
-                ? 'cursor-not-allowed border-slate-200 text-slate-400'
-                : isRagOpen
+              isRagOpen
                   ? 'border-primary-300 bg-primary-50 hover:border-primary-400 hover:bg-primary-100'
                   : 'hover:border-primary-400 hover:bg-primary-50',
             )}
-            title={isHttpBackend ? '專案智慧助理正在移轉，暫不查詢舊資料來源' : 'AI'}
-            aria-label={isHttpBackend ? 'AI（目前後端暫不支援）' : 'AI'}
+            title="AI"
+            aria-label="AI"
             data-ai-analysis-open="true"
-            data-ai-analysis-supported={isHttpBackend ? 'false' : 'true'}
+            data-ai-analysis-supported="true"
           >
             <span>AI</span>
           </button>
