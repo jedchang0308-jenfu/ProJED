@@ -1169,12 +1169,13 @@ export async function verifyMeetingUploadPostgres(
       });
 
     assert.ok(boundDispatchActor,'the Session helper supplied the exact run-bound actor context');
-    assert.equal(await markUnit(boundDispatchActor,dispatchToken,exactDispatchPayload),false,
-      'dispatch is denied after the bound Session is revoked and physically deleted');
+    const sessionDenied={name:'KernelError',code:'ACCESS_DENIED',httpStatus:403};
+    await assert.rejects(markUnit(boundDispatchActor,dispatchToken,exactDispatchPayload),sessionDenied,
+      'the transaction rejects dispatch after the bound Session is revoked and physically deleted');
     const revokedDispatchLedger=await readDispatchLedger(dispatchToken);
     const revokedDispatchBudget=await readBudget(admin,month);
-    assert.equal(await readDispatch(boundDispatchActor,dispatchToken,exactDispatchPayload),false,
-      'dispatch readback is false after the bound Session is revoked and physically deleted');
+    await assert.rejects(readDispatch(boundDispatchActor,dispatchToken,exactDispatchPayload),sessionDenied,
+      'the transaction rejects dispatch readback after the bound Session is revoked and physically deleted');
     assert.deepEqual(await readDispatchLedger(dispatchToken),revokedDispatchLedger,
       'post-revocation dispatch readback does not alter unit or pool accounting');
     assert.deepEqual(await readBudget(admin,month),revokedDispatchBudget,
@@ -1282,10 +1283,10 @@ export async function verifyMeetingUploadPostgres(
     assert.deepEqual(await readBudget(admin,month),{
       limit_twd_micros:DEFAULT_BUDGET_MICROS,reserved_twd_micros:'0',spent_twd_micros:'16000',
     },'accounting-only repository transaction persists charge and releases the cancelled pool');
-    const cancelledReceipt=record(await settleUnit(boundDispatchActor,dispatchRunId,dispatchToken,
-      cancelledPayload),'late recognized settlement after cancellation');
-    assert.equal(cancelledReceipt.published,false,'cancellation prevents late transcript publication');
-    assert.equal(cancelledReceipt.asrComplete,false);
+    await assert.rejects(settleUnit(boundDispatchActor,dispatchRunId,dispatchToken,cancelledPayload),sessionDenied,
+      'the deleted Session cannot publish a late transcript');
+    assert.equal(await accountingRepository.settle(dispatchClaim,{kind:'recognized',transcript:cancelledTranscript}),
+      'accounted_only','a late recognized settlement replay after cancellation remains accounting-only');
     assert.equal(await countCheckpoints(dispatchRunId),0,'cancelled source creates no ASR checkpoint');
     assert.deepEqual(await readBudget(admin,month),{
       limit_twd_micros:DEFAULT_BUDGET_MICROS,reserved_twd_micros:'0',spent_twd_micros:'16000',
