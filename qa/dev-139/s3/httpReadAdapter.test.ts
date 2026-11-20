@@ -146,7 +146,7 @@ test('seven read operations use scoped paths and preserve domain identifiers', a
 test('board access uses the Session projection even when its role has no editable capabilities', async () => {
   const paths: string[] = [];
   const projection = { workspaceId: 'ws', boardId: 'board', boardRole: 'admin', capabilities: ['read_board'],
-    canConfigureRolePermissions: false };
+    canConfigureRolePermissions: false, canInviteExternal: false };
   const adapter = createHttpDomainReadAdapter(new HttpApiClient(async input => {
     paths.push(String(input));
     return json({ data: projection });
@@ -155,6 +155,19 @@ test('board access uses the Session projection even when its role has no editabl
   assert.deepEqual(paths, ['/api/v1/workspaces/ws/boards/board/access']);
   projection.capabilities.push('unexpected');
   await assert.rejects(adapter.getCurrentBoardAccess('ws', 'board'), /INVALID_BOARD_ACCESS/);
+});
+
+test('workspace menus receive independent capabilities for each listed Board', async () => {
+  const adapter=createHttpDomainReadAdapter(new HttpApiClient(async ()=>json({data:[{
+    id:'ws',title:'Workspace',sessionCapabilities:['read_workspace','create_board'],boards:[
+      {id:'read',title:'View',dependencies:[],sessionCapabilities:['read_board']},
+      {id:'edit',title:'Settings',dependencies:[],sessionCapabilities:['read_board','edit_board_settings']},
+    ],
+  }]})));
+  const [workspace]=await adapter.listWorkspaces();
+  assert.deepEqual(workspace?.sessionCapabilities,['read_workspace','create_board']);
+  assert.deepEqual(workspace?.boards.map(board=>board.sessionCapabilities),
+    [['read_board'],['read_board','edit_board_settings']]);
 });
 
 test('resource refs are path-encoded and blank refs fail before dispatch', async () => {

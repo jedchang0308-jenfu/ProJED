@@ -220,6 +220,10 @@
     {
       "version": "0048_calendar_machine_authority_v1",
       "path": "db/migrations/0048_calendar_machine_authority_v1.sql"
+    },
+    {
+      "version": "0049_session_directory_visibility_v1",
+      "path": "db/migrations/0049_session_directory_visibility_v1.sql"
     }
   ],
   "objectAllowlist": [

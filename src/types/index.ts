@@ -237,6 +237,7 @@ export interface BoardInviteAcceptInput {
 }
 
 export interface CurrentBoardAccess {
+  canInviteExternal?: boolean;
   canConfigureRolePermissions?: boolean;
   workspaceId: string;
   boardId: string;
@@ -666,6 +667,7 @@ export interface Dependency {
 }
 
 export interface Board {
+  sessionCapabilities?: PermissionCapability[];
   id: string;
   title: string;
   /** @deprecated Dependencies are stored in useWbsStore / Firestore dependencies collection. */
@@ -675,6 +677,7 @@ export interface Board {
 }
 
 export interface Workspace {
+  sessionCapabilities?: PermissionCapability[];
   id: string;
   title: string;
   boards: Board[];

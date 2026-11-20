@@ -226,8 +226,11 @@ export function createCollaborationWriteHttpDispatcher(
           case 'invite-accept': return repository.acceptInvite(port, body.token, actor);
         }
       });
-      if (notification && publishExternal) {
-        try { await publishExternal(notification); }
+      if (notification) {
+        try {
+          if (!publishExternal) throw new Error('External qualification publisher is unavailable');
+          await publishExternal(notification);
+        }
         catch {
           return { matched: true, status: operation.kind === 'invite-create' ? 201 : 200,
             body: { data: data ?? null, externalNotificationPending: true } };

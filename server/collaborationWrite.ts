@@ -493,7 +493,8 @@ export class CollaborationWriteRepository {
         WITH bound AS (SELECT nullif(current_setting('projed.session_permissions',true),'')::jsonb AS permissions)
         SELECT 1 FROM bound WHERE CASE WHEN permissions IS NOT NULL
           THEN permissions->'workspaces'->($1::uuid)::text->>'role'='owner'
-            OR permissions->'boards'->($2::uuid)::text->>'role'='owner'
+            OR (permissions->'boards'->($2::uuid)::text->>'role'='owner'
+              AND NOT ((permissions->'boards'->($2::uuid)::text) ? 'approvedRole'))
           ELSE EXISTS (SELECT 1 FROM projed_core.tenants
             WHERE id=$1::uuid AND owner_id=projed_core.current_actor_user_id_v1())
             OR EXISTS (SELECT 1 FROM projed_core.project_members WHERE tenant_id=$1::uuid
@@ -548,7 +549,13 @@ export class CollaborationWriteRepository {
        WHERE id = $3::uuid AND tenant_id = $1::uuid AND project_id = $2::uuid AND status = 'pending'
        RETURNING external_inviter_principal_id IS NOT NULL AS external
     `, [board.tenantId, board.id, inviteId]);
-    if (result.rowCount !== 1) notFound();
+    if (result.rowCount !== 1) {
+      const revoked = await port.query(`SELECT 1 FROM projed_core.board_invites
+        WHERE tenant_id=$1::uuid AND project_id=$2::uuid AND id=$3::uuid AND status='revoked'
+          AND external_inviter_principal_id IS NOT NULL`, [board.tenantId, board.id, inviteId]);
+      if (revoked.rowCount !== 1) notFound();
+      return true;
+    }
     await bumpRevision(port, board.tenantId, board.id);
     return result.rows[0]!.external;
   }

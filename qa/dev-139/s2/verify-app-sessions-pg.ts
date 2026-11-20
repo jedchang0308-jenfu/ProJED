@@ -186,6 +186,16 @@ export async function verifyAppSessionsPostgres(database: RuntimeDatabase, confi
   const oldEmailToken=randomBytes(32).toString('base64url');
   const freshEmailToken=randomBytes(32).toString('base64url');
   const inviteExpiresAt=Date.now()+60*60*1000;
+  const withdrawn=await runActorTransaction(database,config,employeeActor,port=>commands.createInvite(
+    port,inviteWorkspace.id,inviteBoard.id,{email:'withdrawn@example.invalid',
+      tokenHash:opaqueHash(),expiresAt:inviteExpiresAt,defaultRole:'member',external:true}));
+  const withdraw=()=>runActorTransaction(database,config,employeeActor,
+    port=>commands.revokeInvite(port,inviteWorkspace.id,inviteBoard.id,withdrawn.id));
+  const revisions=()=>runActorTransaction(database,config,employeeActor,port=>collaborationReads.listResourceRevisions(port));
+  assert.equal(await withdraw(),true);
+  const withdrawnRevisions=await revisions();
+  assert.equal(await withdraw(),true,'A locally revoked external request can resend its withdrawal');
+  assert.deepEqual(await revisions(),withdrawnRevisions,'A withdrawal retry does not mutate the Board twice');
   const oldEmailInvite=await runActorTransaction(database,config,employeeActor,port=>commands.createInvite(
     port,inviteWorkspace.id,inviteBoard.id,{email:'a@example.invalid',
       tokenHash:createHash('sha256').update(oldEmailToken).digest('hex'),expiresAt:inviteExpiresAt,defaultRole:'member'}));
@@ -227,6 +237,12 @@ export async function verifyAppSessionsPostgres(database: RuntimeDatabase, confi
     (error: unknown)=>error instanceof KernelError && error.code==='RESOURCE_NOT_FOUND');
   assert.equal((await runActorTransaction(database,config,refreshedActor,port=>reads.listWorkspaces(port)))
     .some(item=>item.id===inviteWorkspace.id),false);
+  const hiddenMetadata=await runActorTransaction(database,config,refreshedActor,port=>port.query(`
+    SELECT (SELECT count(*)::integer FROM projed_core.resource_revisions WHERE tenant_id=$1::uuid) AS revisions,
+           (SELECT count(*)::integer FROM projed_core.project_members WHERE project_id=$2::uuid) AS board_members,
+           (SELECT count(*)::integer FROM projed_core.tenant_members WHERE tenant_id=$1::uuid AND user_id<>$3::uuid) AS other_members
+  `,[inviteWorkspace.id,inviteBoard.id,recipient.localUserId]));
+  assert.deepEqual(hiddenMetadata.rows,[{revisions:0,board_members:0,other_members:0}]);
   const memberSession=await store.complete(await prepare(refreshedProof));
   const memberActor={...refreshedActor,sessionTokenHash:memberSession.tokenHash,contextId:memberSession.contextId};
   const access=()=>runActorTransaction(database,config,memberActor,

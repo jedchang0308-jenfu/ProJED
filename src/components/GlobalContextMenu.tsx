@@ -11,7 +11,7 @@ import { toast } from '../store/useToastStore';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
 import useDialogStore from '../store/useDialogStore';
 import useAuthStore from '../store/useAuthStore';
-import { boardService } from '../services/dataBackend';
+import { boardService, isHttpBackend } from '../services/dataBackend';
 import {
   clearTaskSelection,
   OPEN_TASK_DETAILS_EVENT,
@@ -199,23 +199,29 @@ export const GlobalContextMenu: React.FC = () => {
     toast.info('已將完成任務改為進行中，並新增任務。');
   };
   const canCreateBoardInWorkspace = (workspaceId: string) => {
+    if (isHttpBackend) return getWorkspace(workspaceId)?.sessionCapabilities?.includes('create_board') === true;
     if (currentBoardAccess?.workspaceId === workspaceId && canCreateBoard) return true;
     if (isWorkspaceOwner(workspaceId)) return true;
     const role = getWorkspaceRole(workspaceId);
     return role === 'owner' || role === 'admin' || role === 'project_manager';
   };
   const canDeleteWorkspaceInWorkspace = (workspaceId: string) => {
+    if (isHttpBackend) return getWorkspace(workspaceId)?.sessionCapabilities?.includes('delete_workspace') === true;
     if (currentBoardAccess?.workspaceId === workspaceId && canDeleteWorkspace) return true;
     if (isWorkspaceOwner(workspaceId)) return true;
     return getWorkspaceRole(workspaceId) === 'owner';
   };
-  const canEditBoardSettingsInWorkspace = (workspaceId: string) => {
+  const canEditBoardSettingsInWorkspace = (workspaceId: string, boardId: string) => {
+    if (isHttpBackend) return getWorkspace(workspaceId)?.boards.find(board => board.id === boardId)
+      ?.sessionCapabilities?.includes('edit_board_settings') === true;
     if (currentBoardAccess?.workspaceId === workspaceId && canEditBoardSettings) return true;
     if (isWorkspaceOwner(workspaceId)) return true;
     const role = getWorkspaceRole(workspaceId);
     return role === 'owner' || role === 'admin' || role === 'project_manager';
   };
-  const canMoveBoardFromWorkspace = (workspaceId: string) => {
+  const canMoveBoardFromWorkspace = (workspaceId: string, boardId: string) => {
+    if (isHttpBackend) return getWorkspace(workspaceId)?.boards.find(board => board.id === boardId)
+      ?.sessionCapabilities?.includes('move_board_between_workspaces') === true;
     if (currentBoardAccess?.workspaceId === workspaceId && canMoveBoardBetweenWorkspaces) return true;
     if (
       currentBoardAccess?.workspaceId === workspaceId &&
@@ -791,6 +797,7 @@ export const GlobalContextMenu: React.FC = () => {
 
   const handleRenameWorkspace = () => {
     if (!contextMenuState || contextMenuState.kind !== 'workspace') return;
+    if (isHttpBackend && !getWorkspace(contextMenuState.workspaceId)?.sessionCapabilities?.includes('manage_workspace_settings')) return;
     setPendingWorkspaceTitleEditId(contextMenuState.workspaceId);
     closeContextMenu();
   };
@@ -838,6 +845,7 @@ export const GlobalContextMenu: React.FC = () => {
 
   const handleRenameBoard = () => {
     if (!contextMenuState || contextMenuState.kind !== 'board') return;
+    if (isHttpBackend && !canEditBoardSettingsInWorkspace(contextMenuState.workspaceId, contextMenuState.boardId)) return;
     setPendingBoardTitleEdit({
       workspaceId: contextMenuState.workspaceId,
       boardId: contextMenuState.boardId,
@@ -857,7 +865,7 @@ export const GlobalContextMenu: React.FC = () => {
 
   const handleOpenTransferBoard = () => {
     if (!contextMenuState || contextMenuState.kind !== 'board') return;
-    if (!canMoveBoardFromWorkspace(contextMenuState.workspaceId)) return;
+    if (!canMoveBoardFromWorkspace(contextMenuState.workspaceId, contextMenuState.boardId)) return;
     setTransferBoardTarget({
       workspaceId: contextMenuState.workspaceId,
       boardId: contextMenuState.boardId,
@@ -868,7 +876,7 @@ export const GlobalContextMenu: React.FC = () => {
 
   const handleDeleteBoard = async () => {
     if (!contextMenuState || contextMenuState.kind !== 'board') return;
-    if (!canEditBoardSettingsInWorkspace(contextMenuState.workspaceId)) return;
+    if (!canEditBoardSettingsInWorkspace(contextMenuState.workspaceId, contextMenuState.boardId)) return;
     const { workspaceId, boardId, title } = contextMenuState;
     const confirmed = await useDialogStore.getState().showConfirm(`確定要刪除看板「${title}」嗎？`);
     if (confirmed) {
@@ -932,6 +940,7 @@ export const GlobalContextMenu: React.FC = () => {
                 </button>
                 <button
                   onClick={handleRenameWorkspace}
+                  disabled={isHttpBackend && !getWorkspace(contextMenuState.workspaceId)?.sessionCapabilities?.includes('manage_workspace_settings')}
                   className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
                 >
                   <Pencil size={14} className="flex-shrink-0 text-indigo-500" />
@@ -966,6 +975,7 @@ export const GlobalContextMenu: React.FC = () => {
                 </button>
                 <button
                   onClick={handleRenameBoard}
+                  disabled={isHttpBackend && !canEditBoardSettingsInWorkspace(contextMenuState.workspaceId, contextMenuState.boardId)}
                   className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
                 >
                   <Pencil size={14} className="flex-shrink-0 text-indigo-500" />
@@ -982,7 +992,7 @@ export const GlobalContextMenu: React.FC = () => {
                 <div className="my-1 border-t border-gray-100 dark:border-gray-700" />
                 <button
                   onClick={handleOpenTransferBoard}
-                  disabled={!canMoveBoardFromWorkspace(contextMenuState.workspaceId) || workspaces.length < 2}
+                  disabled={!canMoveBoardFromWorkspace(contextMenuState.workspaceId, contextMenuState.boardId) || workspaces.length < 2}
                   title={workspaces.length < 2 ? '需要至少兩個工作區才能移動看板' : undefined}
                   className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-indigo-50 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-700"
                 >
@@ -991,7 +1001,7 @@ export const GlobalContextMenu: React.FC = () => {
                 </button>
                 <button
                   onClick={() => void handleDeleteBoard()}
-                  disabled={!canEditBoardSettingsInWorkspace(contextMenuState.workspaceId)}
+                  disabled={!canEditBoardSettingsInWorkspace(contextMenuState.workspaceId, contextMenuState.boardId)}
                   className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/20"
                 >
                   <Trash2 size={14} className="flex-shrink-0 text-red-500" />

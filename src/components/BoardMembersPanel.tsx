@@ -143,7 +143,8 @@ export const BoardShareDialog: React.FC<BoardShareDialogProps> = ({ open, onOpen
     canManageBoardMembers,
   } = useBoardMemberPanelState();
   const currentAccess = useMemberStore(state => state.currentBoardAccess);
-  const canInviteExternal = currentAccess?.workspaceRole === 'owner' || currentAccess?.boardRole === 'owner';
+  const canInviteExternal = currentAccess?.canInviteExternal ??
+    (currentAccess?.workspaceRole === 'owner' || currentAccess?.boardRole === 'owner');
   const [externalInvite, setExternalInvite] = React.useState(false);
   const activeBoard = useBoardStore(state => {
     const workspace = state.workspaces.find(item => item.id === state.activeWorkspaceId);
@@ -265,13 +266,17 @@ export const BoardShareDialog: React.FC<BoardShareDialogProps> = ({ open, onOpen
 
     try {
       setInviteLoading(true);
-      await boardInviteService.revoke(activeWorkspaceId, activeBoardId, invite.id);
+      const receipt = await boardInviteService.revoke(activeWorkspaceId, activeBoardId, invite.id);
       setRecentInviteLinks(current => {
         const next = { ...current };
         delete next[invite.id];
         return next;
       });
       if (latestInviteId === invite.id) setLatestInviteId(null);
+      if (receipt?.externalNotificationPending) {
+        toast.warning('連結已失效，OrgMaster 尚未收到撤回通知。可再次按撤回重送。');
+        return;
+      }
       toast.success('已刪除邀請連結。');
       await loadPendingInvites();
     } catch {

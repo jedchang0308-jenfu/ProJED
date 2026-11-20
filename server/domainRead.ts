@@ -28,7 +28,8 @@ export interface BoardIdentity {
 export interface DomainWorkspace {
   id: string;
   title: string;
-  boards: Array<{ id: string; title: string; dependencies: []; order?: number; createdAt: number }>;
+  boards: Array<{ id: string; title: string; dependencies: []; order?: number; createdAt: number; sessionCapabilities?: string[] }>;
+  sessionCapabilities?: string[];
   ownerId?: string;
   order?: number;
   createdAt: number;
@@ -187,14 +188,16 @@ export class DomainReadRepository {
     const board = await resolveBoard(port, workspaceRef, boardRef);
     const result = await port.query<{
       workspace_role: CollaborationRole | null; board_role: CollaborationRole | null;
-      capabilities: string[]; can_configure: boolean;
+      capabilities: string[]; can_configure: boolean; can_invite_external: boolean;
     }>(`
       WITH bound AS (SELECT nullif(current_setting('projed.session_permissions',true),'')::jsonb AS permissions),
       scope AS (SELECT permissions->'workspaces'->$1::text AS workspace, permissions->'boards'->$2::text AS board FROM bound)
       SELECT workspace->>'role' AS workspace_role, board->>'role' AS board_role,
              ARRAY(SELECT jsonb_array_elements_text(workspace->'capabilities')
                    UNION SELECT jsonb_array_elements_text(board->'capabilities')) AS capabilities,
-             (board->'capabilities') ? 'configure_permissions' AS can_configure
+             (board->'capabilities') ? 'configure_permissions' AS can_configure,
+             coalesce(workspace->>'role'='owner',false) OR
+               (coalesce(board->>'role'='owner',false) AND NOT (board ? 'approvedRole')) AS can_invite_external
         FROM scope WHERE board->>'workspaceId'=$1 AND (board->'capabilities') ? 'read_board'
     `, [board.tenantId, board.id]);
     const access = result.rows[0];
@@ -205,26 +208,29 @@ export class DomainReadRepository {
       ...(access.board_role && { boardRole: access.board_role }),
       capabilities: access.capabilities.filter(cap => cap !== 'configure_permissions' && cap !== 'write_tags'),
       canConfigureRolePermissions: access.can_configure,
+      canInviteExternal: access.can_invite_external,
     };
   }
 
   async listWorkspaces(port: ActorQueryPort): Promise<DomainWorkspace[]> {
     const tenants = await port.query<{
       id: string; legacy_workspace_id: string; title: string; owner_id: string | null;
-      sort_order: number | null; created_at_ms: string;
+      sort_order: number | null; created_at_ms: string; session_capabilities: string[] | null;
     }>(`
       SELECT id::text AS id, legacy_workspace_id, title, owner_id::text AS owner_id,
-             sort_order, floor(extract(epoch FROM created_at) * 1000)::bigint::text AS created_at_ms
+             sort_order, floor(extract(epoch FROM created_at) * 1000)::bigint::text AS created_at_ms,
+             nullif(current_setting('projed.session_permissions',true),'')::jsonb->'workspaces'->id::text->'capabilities' AS session_capabilities
         FROM projed_core.tenants
        ORDER BY sort_order NULLS LAST, created_at, id
     `);
     if (tenants.rows.length === 0) return [];
     const projects = await port.query<{
       tenant_id: string; id: string; legacy_board_id: string; title: string;
-      sort_order: number | null; created_at_ms: string;
+      sort_order: number | null; created_at_ms: string; session_capabilities: string[] | null;
     }>(`
       SELECT tenant_id::text AS tenant_id, id::text AS id, legacy_board_id, title,
-             sort_order, floor(extract(epoch FROM created_at) * 1000)::bigint::text AS created_at_ms
+             sort_order, floor(extract(epoch FROM created_at) * 1000)::bigint::text AS created_at_ms,
+             nullif(current_setting('projed.session_permissions',true),'')::jsonb->'boards'->id::text->'capabilities' AS session_capabilities
         FROM projed_core.projects
        ORDER BY tenant_id, sort_order NULLS LAST, created_at, id
     `);
@@ -234,6 +240,7 @@ export class DomainReadRepository {
       target.push({
         id: project.legacy_board_id,
         title: project.title,
+        ...(project.session_capabilities && { sessionCapabilities: project.session_capabilities.filter(cap => PERMISSION_SET.has(cap)) }),
         dependencies: [],
         ...(optionalNumber(project.sort_order) === undefined ? {} : { order: project.sort_order! }),
         createdAt: milliseconds(project.created_at_ms),
@@ -243,6 +250,7 @@ export class DomainReadRepository {
     return tenants.rows.map(tenant => ({
       id: tenant.legacy_workspace_id,
       title: tenant.title,
+      ...(tenant.session_capabilities && { sessionCapabilities: tenant.session_capabilities.filter(cap => cap !== 'write_tags') }),
       boards: boardsByTenant.get(tenant.id) ?? [],
       ...(tenant.owner_id === null ? {} : { ownerId: tenant.owner_id }),
       ...(optionalNumber(tenant.sort_order) === undefined ? {} : { order: tenant.sort_order! }),

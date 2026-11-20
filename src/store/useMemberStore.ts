@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { createDefaultBoardRolePermissionMatrix, type BoardMember, type BoardRolePermissionMatrix, type CollaborationMemberProfile, type CurrentBoardAccess, type WorkspaceMember } from '../types';
 import { isHttpBackend, memberService } from '../services/dataBackend';
 import useAuthStore from './useAuthStore';
+import useBoardStore from './useBoardStore';
 
 interface MemberState {
   workspaceMembers: WorkspaceMember[];
@@ -93,8 +94,10 @@ export const useMemberStore = create<MemberStore>((set, get) => ({
       const currentBoardAccess = boardId && currentUserId
         ? await memberService.getCurrentBoardAccess(workspaceId, boardId, currentUserId)
         : null;
-      const workspaceMembers = isHttpBackend && boardId && !currentBoardAccess?.capabilities.includes('manage_workspace_members')
-        ? [] : await memberService.listWorkspaceMembers(workspaceId);
+      const workspaceAccess = currentBoardAccess?.capabilities ??
+        useBoardStore.getState().workspaces.find(workspace => workspace.id === workspaceId)?.sessionCapabilities;
+      const workspaceMembers = !isHttpBackend || workspaceAccess?.includes('manage_workspace_members')
+        ? await memberService.listWorkspaceMembers(workspaceId) : [];
       const boardMembers = boardId
         ? await memberService.listBoardMembers(workspaceId, boardId)
         : [];

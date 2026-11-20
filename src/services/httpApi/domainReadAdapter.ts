@@ -113,6 +113,13 @@ export function parseHttpDependency(value: unknown): Dependency {
   };
 }
 
+function sessionCapabilities(row: Record<string, unknown>) {
+  const capabilities = optionalStringArray(row.sessionCapabilities, 'SESSION_CAPABILITIES');
+  if (!capabilities) return {};
+  if (!capabilities.every(cap => ACCESS_CAPABILITIES.has(cap))) throw new Error('HTTP_API_INVALID_SESSION_CAPABILITIES');
+  return { sessionCapabilities: capabilities as CurrentBoardAccess['capabilities'] };
+}
+
 export function parseHttpBoard(value: unknown): Board {
   const row = record(value, 'BOARD');
   if (!Array.isArray(row.dependencies)) throw new Error('HTTP_API_INVALID_BOARD_DEPENDENCIES');
@@ -122,6 +129,7 @@ export function parseHttpBoard(value: unknown): Board {
   return {
     id: stringValue(row.id, 'BOARD_ID'),
     title: stringValue(row.title, 'BOARD_TITLE'),
+    ...sessionCapabilities(row),
     dependencies,
     ...(order === undefined ? {} : { order }),
     ...(createdAt === undefined ? {} : { createdAt }),
@@ -138,6 +146,7 @@ export function parseHttpWorkspace(value: unknown): Workspace {
   return {
     id: stringValue(row.id, 'WORKSPACE_ID'),
     title: stringValue(row.title, 'WORKSPACE_TITLE'),
+    ...sessionCapabilities(row),
     boards: row.boards.map(parseHttpBoard),
     ...(ownerId === undefined ? {} : { ownerId }),
     ...(members === undefined ? {} : { members }),
@@ -314,11 +323,14 @@ export function createHttpDomainReadAdapter(client: HttpApiClient): ProjedDomain
       const response = await client.request<unknown>(boardPath(workspaceRef, boardRef, 'access'), { signal });
       const access = dataRecord(response, 'BOARD_ACCESS');
       if (!Array.isArray(access.capabilities) || !access.capabilities.every(cap => typeof cap === 'string' && ACCESS_CAPABILITIES.has(cap))
-          || typeof access.canConfigureRolePermissions !== 'boolean') throw new Error('HTTP_API_INVALID_BOARD_ACCESS');
+          || typeof access.canConfigureRolePermissions !== 'boolean' || typeof access.canInviteExternal !== 'boolean') {
+        throw new Error('HTTP_API_INVALID_BOARD_ACCESS');
+      }
       return {
         workspaceId: stringValue(access.workspaceId, 'WORKSPACE_ID'), boardId: stringValue(access.boardId, 'BOARD_ID'),
         capabilities: access.capabilities as CurrentBoardAccess['capabilities'],
         canConfigureRolePermissions: access.canConfigureRolePermissions,
+        canInviteExternal: access.canInviteExternal,
         ...(access.workspaceRole === undefined ? {} : { workspaceRole: role(access.workspaceRole) }),
         ...(access.boardRole === undefined ? {} : { boardRole: role(access.boardRole) }),
       };

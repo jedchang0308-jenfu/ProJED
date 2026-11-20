@@ -65,7 +65,7 @@ export interface ProjedCollaborationAdapter {
     input: BoardInviteCreateInput,
     signal?: AbortSignal,
   ): Promise<BoardInvite>;
-  revokeInvite(workspaceRef: string, boardRef: string, inviteId: string, signal?: AbortSignal): Promise<void>;
+  revokeInvite(workspaceRef: string, boardRef: string, inviteId: string, signal?: AbortSignal): Promise<{ externalNotificationPending: boolean }>;
   acceptInvite(input: BoardInviteAcceptInput, signal?: AbortSignal): Promise<BoardInvite>;
   listResourceRevisions(signal?: AbortSignal): Promise<ResourceRevision[]>;
 }
@@ -231,9 +231,10 @@ export function createHttpCollaborationAdapter(client: HttpApiClient): ProjedCol
         ? { ...invite, externalNotificationPending: true } : invite;
     },
     async revokeInvite(workspaceRef, boardRef, inviteId, signal) {
-      await client.request<unknown>(boardPath(workspaceRef, boardRef, `invites/${ref(inviteId, 'INVITE_ID')}`), {
+      const response = await client.request<unknown>(boardPath(workspaceRef, boardRef, `invites/${ref(inviteId, 'INVITE_ID')}`), {
         method: 'DELETE', signal,
       });
+      return { externalNotificationPending: record(response, 'INVITE_REVOKE').externalNotificationPending === true };
     },
     async acceptInvite(input, signal) {
       const response = await client.request<unknown>('/api/v1/invites:accept', {

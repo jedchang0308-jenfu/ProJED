@@ -53,4 +53,5 @@ export const S3_MIGRATION_PATHS = Object.freeze([
   'db/migrations/0046_external_board_invitation_v1.sql',
   'db/migrations/0047_login_permission_snapshot_v1.sql',
   'db/migrations/0048_calendar_machine_authority_v1.sql',
+  'db/migrations/0049_session_directory_visibility_v1.sql',
 ]);
