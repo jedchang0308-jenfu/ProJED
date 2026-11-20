@@ -9,7 +9,7 @@ async (page) => {
   page.on('request', request => {
     const url = new URL(request.url());
     if (url.pathname === ragPath) calls.push(request);
-    if (url.origin !== baseUrl && ['fetch', 'xhr'].includes(request.resourceType())) external.push(url.origin);
+    if (['https:', 'http:'].includes(url.protocol) && url.origin !== baseUrl && ['fetch', 'xhr'].includes(request.resourceType())) external.push(url.origin);
   });
   const assert = (condition, message) => { if (!condition) throw new Error(message); };
   let step = 'load real product with isolated Session';
@@ -56,7 +56,9 @@ async (page) => {
     await ai.click();
     assert(await input.inputValue() === question, 'closing the panel discarded the retained question');
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'RAG overflows the mobile viewport');
-    assert(calls.length === 1 && external.length === 0 && pageErrors.length === 0, 'unexpected query, external fetch or page error');
+    assert(calls.length === 1, 'unexpected RAG query count ' + calls.length);
+    assert(external.length === 0, 'unexpected HTTP destinations ' + JSON.stringify(external));
+    assert(pageErrors.length === 0, 'unexpected browser errors ' + JSON.stringify(pageErrors));
     await page.screenshot({ path: 'output/playwright/dev-139-rag-ui/unavailable-mobile.png', fullPage: false });
     const artifact = { result: 'PASS', evidenceLevel: 'DEV139_REAL_HTTP_PRODUCT_RAG_UNQUALIFIED_UI',
       provider: 'NOT_CALLED_UNQUALIFIED', identity: 'ISOLATED_SESSION', queryCount: calls.length,
