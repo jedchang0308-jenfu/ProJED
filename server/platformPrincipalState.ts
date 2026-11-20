@@ -12,6 +12,9 @@ export const PLATFORM_PROJED_PRINCIPAL_STATE_SQL =
   'SELECT * FROM platform_contract.read_projed_principal_state_v1($1::text,$2::text,$3::text)' as const;
 
 export const PLATFORM_PRINCIPAL_STATE_MAX_READ_AGE_MS = 10_000;
+// PostgreSQL and Date.now() can sample opposite sides of one millisecond.
+// This accommodates that precision boundary, not a general clock-skew budget.
+const STATE_READ_PRECISION_MS = 1;
 
 const MAX_INT64 = 9_223_372_036_854_775_807n;
 const MAX_SAFE_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
@@ -261,7 +264,8 @@ export function verifyProjedHandoffPrincipalState(
       || currentState.googleSubject !== handoff.identity.googleSubject
       || currentState.mappingRevision !== handoff.mappingRevision
       || currentState.authEpoch !== handoff.authState.authEpoch) identityInvalid();
-  if (stateReadAtMs > nowMs || nowMs - stateReadAtMs > PLATFORM_PRINCIPAL_STATE_MAX_READ_AGE_MS) unavailable();
+  if (stateReadAtMs - nowMs > STATE_READ_PRECISION_MS
+      || nowMs - stateReadAtMs > PLATFORM_PRINCIPAL_STATE_MAX_READ_AGE_MS) unavailable();
   const handoffRevokedBeforeMs = handoff.authState.revokedBefore === null
     ? null
     : parseIsoTimestamp(handoff.authState.revokedBefore);
@@ -311,7 +315,8 @@ export function createPlatformPrincipalStateReader(
     const completedAtMs = now();
     const stateReadAtMs = parseIsoTimestamp(state.readAt);
     if (!Number.isSafeInteger(completedAtMs) || completedAtMs < startedAtMs || stateReadAtMs === null
-        || stateReadAtMs > completedAtMs || completedAtMs - stateReadAtMs > PLATFORM_PRINCIPAL_STATE_MAX_READ_AGE_MS) {
+        || stateReadAtMs - completedAtMs > STATE_READ_PRECISION_MS
+        || completedAtMs - stateReadAtMs > PLATFORM_PRINCIPAL_STATE_MAX_READ_AGE_MS) {
       unavailable();
     }
     return state;

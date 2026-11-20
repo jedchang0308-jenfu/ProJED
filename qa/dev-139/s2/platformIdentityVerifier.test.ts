@@ -189,6 +189,17 @@ test('one exchange and one state read produce a retained verified result through
   assert.equal('codeVerifier' in result.identity, false);
 });
 
+test('one-millisecond state sampling precision never extends the ten-second lease', async () => {
+  const proof = wire();
+  const subject = consumerHarness({ rows: [stateRow(proof, { read_at: new Date(NOW + 1).toISOString() })] });
+  const result = await subject.consumer.consumeVerified(EXCHANGE_INPUT, 'quick');
+  assert.equal(result.identity.currentStateExpiresAtMs, NOW + 10_000);
+  assert.equal(result.actor.expiresAtMs, NOW + 10_000);
+  const future = consumerHarness({ rows: [stateRow(proof, { read_at: new Date(NOW + 2).toISOString() })] });
+  await assert.rejects(future.consumer.consumeVerified(EXCHANGE_INPUT, 'quick'), hasCode('IDENTITY_STATE_UNAVAILABLE'));
+  assert.equal(future.calls().mappingCalls, 0);
+});
+
 test('exact v4 issuer/audience and out-of-band manifest pin fail closed on mismatch', async () => {
   for (const proof of [
     wire({ issuer: 'https://other.example.test/api/sso' }),

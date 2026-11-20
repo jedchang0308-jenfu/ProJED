@@ -133,7 +133,7 @@ test('reads current state for an existing long-lived source Session without appl
   assert.equal(result.authEpoch, proof.authState.authEpoch);
 });
 
-test('reads current state on every request and rejects stale or future read_at', async () => {
+test('reads current state every time and rejects stale or beyond-precision future read_at', async () => {
   const proof = handoff();
   const identity = {
     identityIssuer: proof.identity.identityIssuer,
@@ -156,8 +156,19 @@ test('reads current state on every request and rejects stale or future read_at',
     read_at: new Date(NOW - PLATFORM_PRINCIPAL_STATE_MAX_READ_AGE_MS - 1).toISOString(),
   })]).readCurrent(identity), hasCode('IDENTITY_STATE_UNAVAILABLE'));
   await assert.rejects(reader([stateRow(proof, {
-    read_at: new Date(NOW + 1).toISOString(),
+    read_at: new Date(NOW + 2).toISOString(),
   })]).readCurrent(identity), hasCode('IDENTITY_STATE_UNAVAILABLE'));
+});
+
+test('accepts only the one-millisecond sampling boundary and preserves the owner timestamp', async () => {
+  const proof = handoff();
+  for (const readAt of [new Date(NOW + 1), new Date(NOW + 1).toISOString()]) {
+    const result = await reader([stateRow(proof, { read_at: readAt })]).readForHandoff(proof);
+    assert.equal(result.stateReadAtMs, NOW + 1);
+  }
+  await assert.rejects(reader([stateRow(proof, {
+    read_at: new Date(NOW + 2).toISOString(),
+  })]).readForHandoff(proof), hasCode('IDENTITY_STATE_UNAVAILABLE'));
 });
 
 test('accepts a current employee handoff and preserves the signed int64 mapping revision as text', async () => {

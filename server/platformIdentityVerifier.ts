@@ -154,7 +154,7 @@ export function createPlatformIdentityVerifier(
       const currentStateExpiresAtMs = Math.min(
         expiresAtMs,
         sourceSessionExpiresAtMs,
-        verifiedState.stateReadAtMs + PLATFORM_PRINCIPAL_STATE_MAX_READ_AGE_MS,
+        Math.min(verifiedState.stateReadAtMs, verifiedAtMs) + PLATFORM_PRINCIPAL_STATE_MAX_READ_AGE_MS,
       );
       if (!Number.isSafeInteger(currentStateExpiresAtMs) || currentStateExpiresAtMs <= verifiedAtMs) invalid();
 
