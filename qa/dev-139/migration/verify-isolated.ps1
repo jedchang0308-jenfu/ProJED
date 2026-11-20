@@ -195,6 +195,8 @@ try {
 
   $env:PROJED_MIGRATION_SOURCE_DATABASE_URL = "postgresql://postgres:${encodedAdmin}@127.0.0.1:$port/$sourceDatabase"
   $env:PROJED_MIGRATION_TARGET_DATABASE_URL = "postgresql://projed_importer_disposable:${encodedImporter}@127.0.0.1:$port/$targetDatabase"
+  & node --import tsx qa/dev-139/migration/sourceWriteFence.ts
+  if ($LASTEXITCODE -ne 0) { throw 'DEV-139 legacy business table fence rehearsal failed.' }
 
   Invoke-PgTool 'psql.exe' @('-h', '127.0.0.1', '-p', "$port", '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-c', 'ALTER ROLE projed_importer_disposable CREATEDB')
   $createDatabaseRole = Invoke-DataMode -Mode 'plan' -ExpectedExitCodes @(1)
@@ -643,6 +645,7 @@ UPDATE public.document_versions
     tables = $finalReconcile.tables
     emptySourceRelations = $finalReconcile.emptySourceRelations
     checks = @(
+      'legacy-business-table-fence-drain-read-reject-recover',
       'empty-target-plan', 'single-transaction-rollback', 'full-snapshot-apply',
       'unknown-empty-relation-diagnostic', 'unknown-populated-relation-block',
       'rls-hidden-source-reject', 'unknown-partitioned-relation-block',

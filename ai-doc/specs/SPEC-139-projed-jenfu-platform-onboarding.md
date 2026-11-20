@@ -371,6 +371,10 @@ Server 搬移與 browser storage 恢復分開驗收。IndexedDB、Session、SW �
 
 ### 6.6 移轉 readiness 與恢復條件
 
+**舊庫業務表停寫。** `node --import tsx scripts/dev139-source-write-fence.ts apply` 輸出供切換時使用的 SQL；`remove` 輸出回復 SQL。產生 SQL 時不連線。套用時同一交易等待既有交易離開、替舊庫 `public` 與 `private` 的應用表安裝停寫觸發器並核對覆蓋。鎖定逾時會整筆回滾。表仍可讀；SDK、RPC 或背景工作對這些表的新增、修改、刪除與清空均收到 `PT503 / PROJED_SOURCE_WRITE_PAUSED`。正式 importer 的 `plan` 可在停寫前執行；`apply` 與 `reconcile` 會在自己的唯讀快照中再次查核所有觸發器。
+
+此 SQL 僅涵蓋舊庫業務表。切換時仍需暫停來源結構變更、確認 Auth 的帳號異動已停止、已簽發的 Storage 寫入 URL 已失效，並等候在途 Edge／外部工作結束。目標開放業務寫入前才可直接恢復舊庫寫入；目標已有新資料時沿 §6.5 保留新寫入與收據，避免兩邊同時受理。
+
 W14已使「受支援DB domain的一次性full-snapshot搬移」達到本地RD rehearsal PASS，但整體仍非 Release Ready。S2尚須發布非員工wire／admission／revocation、verified legacy mapping proof、各入口Session／Cookie／callback與取消／切帳契約；正式切換尚須核對未承接的Inbox、RAG、會議／Storage資料，完成舊版API／SW／IDB相容、全部寫入來源fence、檔案與job恢復及Hosting路由／artifact契約。
 
 正式資料plan時沿W14命令只輸出table count／digest與阻擋domain，不落地含正文或email的snapshot檔；先處理實際非空的未承接domain，再按A06／A09／A11、T07／T08驗正常使用者路徑。正式切換另確認可接受停寫／恢復窗口、成本與環境／資源主要動作範圍。沒有新的PWA重裝、資料揭露或零重登需求；若日後要求換public origin、立即移除Hosting、零停寫或另造Session bridge，先回架構／產品影響審查。

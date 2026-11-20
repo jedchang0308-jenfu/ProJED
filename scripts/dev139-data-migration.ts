@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import pg, { type Client } from 'pg';
+import { assertSourceAppWritesPaused } from './dev139-source-write-fence.js';
 import {
   fetchManagedJobToken,
   managedJobConnectionOptions,
@@ -1096,6 +1097,7 @@ async function main(): Promise<void> {
     // This setting does not grant permission to bypass a row security policy.
     await source.query('SET LOCAL row_security = off');
     await validateSource(source, sourceBinding);
+    if (managed && mode !== 'plan') await assertSourceAppWritesPaused(source);
     await validateIdentityProjections(source);
     await validateGoogleIdentitySourceSchema(source);
     await validateAuthUserSourceSchema(source);
