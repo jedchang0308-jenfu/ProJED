@@ -63,7 +63,7 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
 ## DEV-139：ProJED 納入 Jenfu-Platform，Cloud Run／Cloud SQL 對齊並保留 Vite
 
-  - 2026-11-20 artifact續行：既有cr-build完成web／managed-jobs／ASR三個候選image並推送，source generation／SHA、registry digest及44份migration的實際image binding已讀回一致，見[SPEC §47.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#471-2026-11-20-最小-foundation-變更提案)。另確認一般request仍查上游admission state，須按現行Platform DEV-015補本地Session／撤銷版本fence及零上游查詢驗證；沿DEV-139與兩owner既有任務續行，不另加gate。正式source／provider資格與發布未完成。
+  - 2026-11-20 續行：具名 foundation 已核准並部分建置；5 APIs／4 SAs／3 instance-scoped SQL IAM users／私人音訊桶與空來源 Secret 已讀回，cache 關閉、模型內容 logging 預設關閉。Shared VPC 權限、桶 metadata 管理修復、Speech logging／Gemini 豁免仍待完成，真內容推論未啟用。ProJED 80cc88f 的 CI44670238352 全 PASS（672 unit、domain73／snapshot63、45 migration、OCI18）；Platform native44670325280 PASS，中央發布同步撤銷已實測。OrgMaster6190897／Platform06171a12 Source QC 均 PASS。新45份候選 Cloud Build3b2133ea已 SUCCESS，source provenance、三個 registry digests／實際Job完整binding均讀回一致；舊44份候選保留。詳[目前規格](specs/SPEC-139-projed-jenfu-platform-onboarding.md#471-2026-11-20-最小-foundation-變更提案)。正式 Session、資料移轉、writer fence、切流與發布均保留原分母。
 
   - 2026-11-20續行：RAG已移除API key即啟用Developer API的runtime分支，改接同一ProJED Google Cloud／短期IAM及獨立零留存模型資格，保留原兩種模型與資料／權限／索引語意。相關unit／型別／native Cloud adapter fixture及正式資格缺口統一見[SPEC §38.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#381-原行為與最小接線)；未變更SQL／正式資源，完整交付仍續行。
 
