@@ -95,6 +95,25 @@ test('retrieve dispatch stores a valid 3072-value embedding checkpoint with prov
   assert.equal(stored.embedding.slice(1).every(value=>value===0),true);
 });
 
+test('database lease clock ahead of the worker does not reject an otherwise valid claim',async()=>{
+  const f=fixture('retrieve','query:clock-ahead',{queryText:'閥門更新'},150_016);
+  f.setEmbed(async()=>({values:Array<number>(3072).fill(.25),tokenCount:3,billableCharacterCount:4}));
+  const result=await runMeetingLlmUnit(f.deps,f.prepared,new AbortController().signal);
+  assert.equal(result.state,'settled');
+  assert.equal(f.calls.embed,1);
+  assert.equal(f.settlements[0]?.kind,'completed');
+});
+
+test('a future database lease cannot extend the worker local execution deadline',async()=>{
+  const f=fixture('retrieve','query:local-deadline',{queryText:'閥門更新'},600_000);
+  let clock=100_000;
+  f.setBeforeMark(()=>{clock+=140_001;});
+  const result=await runMeetingLlmUnit({...f.deps,now:()=>clock},f.prepared,new AbortController().signal);
+  assert.equal(result.state,'settled');
+  assert.equal(f.calls.embed,0);
+  assert.equal(f.settlements[0]?.kind,'not_sent');
+});
+
 test('invalid embedding response with provider-validated usage settles unusable at known cost',async()=>{
   const f=fixture('retrieve','query:0-invalid',{queryText:'閥門更新'});
   const usage={tokenCount:4,billableCharacterCount:9};

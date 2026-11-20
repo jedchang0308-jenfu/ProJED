@@ -222,6 +222,10 @@
     {
       "version": "0050_session_board_transfer_v1",
       "path": "db/migrations/0050_session_board_transfer_v1.sql"
+    },
+    {
+      "version": "0051_transfer_read_empty_context_v1",
+      "path": "db/migrations/0051_transfer_read_empty_context_v1.sql"
     }
   ],
   "objectAllowlist": [

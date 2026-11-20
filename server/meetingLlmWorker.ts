@@ -33,15 +33,14 @@ function leaseScope(parent:AbortSignal,expiresAt:number,now:()=>number){
   return {signal:controller.signal,active(){if(now()>=deadline)abort();if(controller.signal.aborted)interrupted();},
     dispose(){if(timer)clearTimeout(timer);parent.removeEventListener('abort',abort);}};
 }
-function validateClaim(claim:MeetingLlmClaim,unit:MeetingLlmPreparedUnit,now:number):void{
+function validateClaim(claim:MeetingLlmClaim,unit:MeetingLlmPreparedUnit):void{
   for(const id of [claim.runId,claim.captureId,claim.leaseToken,claim.transcriptRevisionId])requireUuid(id,'LLM identity');
   const input=readMeetingLlmEnvelope(claim);
   if(claim.status!=='claimed'||claim.stage!==unit.stage||claim.unitKey!==unit.unitKey
     ||claim.inputHash!==unit.inputHash||claim.inputText!==unit.inputText
     ||claim.sourceVersion!==input.sourceVersion||claim.transcriptRevisionId!==input.transcriptRevisionId
     ||typeof claim.attemptId!=='string'||claim.attemptId.length<1||claim.attemptId.length>300
-    ||!Number.isSafeInteger(claim.leaseExpiresAtMs)||claim.leaseExpiresAtMs<1
-    ||claim.leaseExpiresAtMs>now+150_000)invalid();
+    ||!Number.isSafeInteger(claim.leaseExpiresAtMs)||claim.leaseExpiresAtMs<1)invalid();
 }
 function validateBody(unit:MeetingLlmPreparedUnit):void{
   const {body}=readMeetingLlmEnvelope(unit);
@@ -85,12 +84,15 @@ export async function runMeetingLlmUnit(deps:MeetingLlmWorkerDependencies,prepar
   signal:AbortSignal):Promise<MeetingLlmUnitResult>{
   if(signal.aborted)interrupted();
   const unit=Object.freeze({...prepared});validateBody(unit);
+  const now=deps.now??Date.now;
+  const localDeadline=now()+150_000;
   const claimed=await deps.repository.claim(unit);
   if(claimed===null)return {state:'idle'};
   if(claimed==='awaiting_budget')return {state:'awaiting_budget'};
-  const claim=Object.freeze({...claimed}),now=deps.now??Date.now;
-  validateClaim(claim,unit,now());
-  const lease=leaseScope(signal,claim.leaseExpiresAtMs,now);
+  const claim=Object.freeze({...claimed});
+  validateClaim(claim,unit);
+  // Database and worker clocks can differ. Both deadlines bound execution.
+  const lease=leaseScope(signal,Math.min(claim.leaseExpiresAtMs,localDeadline),now);
   let invoked=false,payload:MeetingLlmSettlement;
   try{
     try{

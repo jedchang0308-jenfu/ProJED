@@ -435,6 +435,8 @@ A08 行事曆在本機編譯前端、真 HTTP 與隔離 PostgreSQL 18 通過正�
 
 A09 移板新增 `0050_session_board_transfer_v1`，只在核心已授權的精確移板交易讀取原成員，並在可證明原權限仍有效時更新發起 Session 的既有看板 scope。保留 capability 與外部 approvedRole 上限，其他舊 Session 撤銷；繼承來源改變而無法證明等權時維持拒絕。移除 upsert 對已由 FK 搬移之 tenant_id 的重複指定，解除未授權欄位更新。原 `0001`–`0049` bytes 保留。本機真 HTTP／PG 已驗 owner、無繼承之顯式 member、純繼承 owner、減權、舊 Session 撤銷及範圍外拒絕；正常側欄另驗移板後以原 Session 重載同任務、私人會議草稿保留、協作者 404。收據分別為 `output/qa/dev-139/bound-board-transfer/172f2979-37c8-4586-8261-bb46e436d13d/result.json` 及 `output/qa/dev-139/s3/20261120T162130Z-7d15a831/result.json`。完整 CI 與新版候選映像仍待核對，舊的 49 份候選不能代表這次移板修正。
 
+`bdb526e` 的完整 CI 已驗上述正常畫面、Calendar SQL 對帳及移板，但稍後舊行事曆 1,001 筆掃描出現 SQL 57014，整批列失敗。以同一資料比較，空移板 context 短路可減少額外 RLS 成本且輸出一致，因此新增 `0051_transfer_read_empty_context_v1`，只在非空 context 才評估原精確移板授權。另修正 LLM worker 對資料庫／本機時鐘差異的 lease 誤拒，執行期限取資料庫到期與本機 150 秒上限較早者；兩項定向回歸與原 11 項 worker 測試通過。含這兩項修正的本機完整 DatabaseOnly 回歸通過，保留原 2 秒 statement／5 秒 transaction 界線，收據為 `output/qa/dev-139/s3/20261120T164121Z-2c6f17a4/result.json`。此結果仍須由同版完整 CI 核對，無須新增 required gate。[保留的 CI 失敗及獨立成功證據](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44772769961)
+
 T07 已用舊版 `0670a0a` 的工作台與 Quick 呼叫程式、Supabase SDK 2.105.4、實際 PostgREST 及隔離 PostgreSQL 演練。停寫前已提交但遺失回應的 Quick 任務可憑原識別碼讀回；停寫期間五次寫入均回 HTTP 503／`PT503`，資料表內容維持一致。解除停寫後再送同一識別碼，仍只有一筆任務及一筆回執。這次驗到舊 SDK 與資料庫的寫入邊界，使用合成登入，正式 Edge 工作者、在途排空與原 Hosting 入口仍須在切換環境查證。[T07 Linux OCI 執行紀錄](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44748124380/job/136329293641)
 
 受影響的 UI 流程覆蓋正常、載入、空白及錯誤／拒絕；版面或互動改變時，依既有主／Quick 基線檢查 390px 窄版、桌面、overflow、焦點與鍵盤操作，不要求 A01–A11 每列重複排列相同的版面／輸入組合。未受影響且仍有效的證據可重用；純文件／SQL 修改不因 HEAD 改變就重跑全部 UI。身分、資料、權限或舊入口行為受影響時仍驗相應 A／T 案例；使用者取消的 Android 實體裝置 gate 不自行恢復，窄版 browser 不能冒稱實體 PWA PASS。
