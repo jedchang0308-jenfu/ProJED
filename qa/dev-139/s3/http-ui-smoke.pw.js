@@ -371,6 +371,96 @@ async (page) => {
         'denied matrix write persisted', { role });
     }
 
+    step = 'create a disposable shared task and observe it in another normal view';
+    await collaborator.locator('[data-settings-return-button="true"]').click();
+    await collaborator.locator('[data-mode-switcher-trigger="true"]').click();
+    await collaborator.locator('[data-mode-switcher-value="goal"]').click();
+    const [createdSharedResponse] = await Promise.all([
+      page.waitForResponse(response => new URL(response.url()).pathname === taskPath + ':commit-order'
+        && response.request().method() === 'POST'),
+      page.getByTitle('新增列表', { exact: true }).click(),
+    ]);
+    assert(createdSharedResponse.ok(), 'normal shared task creation failed', { status: createdSharedResponse.status() });
+    const createdShared = (await createdSharedResponse.json()).data;
+    // commit-order can return existing siblings too; the opened details dialog
+    // identifies the task created by the normal button without seeding a row.
+    await modal.waitFor({ state: 'visible' });
+    const disposableTitle = 'DEV139 shared task deleted while collaborator offline';
+    await modal.getByRole('textbox', { name: '編輯任務名稱' }).fill(disposableTitle);
+    const [namedSharedResponse] = await Promise.all([
+      page.waitForResponse(response => new URL(response.url()).pathname.startsWith(taskPath + '/')
+        && response.request().method() === 'PATCH' && response.request().postDataJSON()?.title === disposableTitle),
+      modal.getByRole('button', { name: '關閉任務詳情' }).click(),
+    ]);
+    assert(namedSharedResponse.ok(), 'normal shared task naming failed', { status: namedSharedResponse.status() });
+    const disposableTask = (await namedSharedResponse.json()).data;
+    assert(createdShared.nodes.some(task => task.id === disposableTask.id), 'created task identity changed before naming');
+    await modal.waitFor({ state: 'hidden' });
+    const otherDisposableRow = collaborator.locator(`[data-goal-task-row="true"][data-task-id="${disposableTask.id}"]`);
+    await otherDisposableRow.waitFor({ state: 'visible', timeout: 10000 });
+    assert((await otherDisposableRow.innerText()).includes(disposableTitle), 'list view did not receive the canonical task title');
+
+    step = 'disconnect the collaborator and archive the disposable task through its normal menu';
+    const offlineRead = collaborator.waitForEvent('requestfailed', {
+      predicate: request => new URL(request.url()).pathname === '/api/v1/scope-revisions',
+      timeout: 12000,
+    });
+    await collaboratorContext.setOffline(true);
+    await offlineRead;
+    assert(await collaborator.evaluate(() => navigator.onLine === false), 'collaborator browser did not enter offline mode');
+    const disposableHeader = page.locator(`[data-kanban-column-header="true"][data-task-id="${disposableTask.id}"]`);
+    await disposableHeader.click({ button: 'right' });
+    const taskMenu = page.locator('[data-global-context-menu="true"]');
+    const [archivedResponse] = await Promise.all([
+      page.waitForResponse(response => new URL(response.url()).pathname === taskPath + '/' + encodeURIComponent(disposableTask.id)
+        && response.request().method() === 'PATCH' && response.request().postDataJSON()?.isArchived === true),
+      taskMenu.locator('[data-task-action-id="task.archive"]').click(),
+    ]);
+    assert(archivedResponse.ok() && (await archivedResponse.json()).data.isArchived === true,
+      'normal archive was not committed by the real HTTP service', { status: archivedResponse.status() });
+    await disposableHeader.waitFor({ state: 'hidden' });
+
+    step = 'permanently delete only the disposable task through the current-board recycle bin';
+    await openPermissions(page);
+    await page.locator('[data-settings-section-tab="backup"]').click();
+    await page.getByRole('button', { name: '目前看板回收桶', exact: true }).click();
+    await page.locator('[data-recycle-bin-view="current-board"]').waitFor({ state: 'visible' });
+    await page.getByRole('button', { name: '永久刪除任務 ' + disposableTitle, exact: true }).click();
+    const [deletedResponse] = await Promise.all([
+      page.waitForResponse(response => new URL(response.url()).pathname === taskPath + '/' + encodeURIComponent(disposableTask.id)
+        && response.request().method() === 'DELETE'),
+      page.locator('[data-global-dialog-decision-index="1"]').click(),
+    ]);
+    assert(deletedResponse.ok(), 'normal permanent delete failed', { status: deletedResponse.status() });
+    const canonicalAfterDelete = await readAsOwner(taskPath);
+    assert(!canonicalAfterDelete.some(task => task.id === disposableTask.id), 'deleted task remained in the real HTTP/PG readback');
+    assert(await otherDisposableRow.isVisible(), 'offline client unexpectedly received the deletion before reconnect');
+    assert(!privateBoardRequest && !(await collaborator.locator('body').innerText()).includes('B secret'),
+      'offline list view received owner-only private content');
+
+    step = 'reconnect the collaborator and reconcile the deleted task without reloading';
+    const reconnectedRead = collaborator.waitForResponse(response => new URL(response.url()).pathname === taskPath
+      && response.request().method() === 'GET' && response.ok(), { timeout: 10000 });
+    const reconnectStartedAt = Date.now();
+    await collaboratorContext.setOffline(false);
+    const reconnectedTasks = (await (await reconnectedRead).json()).data;
+    assert(!reconnectedTasks.some(task => task.id === disposableTask.id), 'reconnected canonical read returned the deleted task');
+    await otherDisposableRow.waitFor({ state: 'hidden', timeout: 10000 });
+    const reconnectConvergenceMs = Date.now() - reconnectStartedAt;
+    assert(reconnectConvergenceMs <= 10000, 'reconnected list view exceeded the existing 10-second convergence contract', { reconnectConvergenceMs });
+    assert(reconnectedTasks.some(task => task.id === 'shared-parent')
+      && !privateBoardRequest && !(await collaborator.locator('body').innerText()).includes('B secret'),
+      'reconnect lost the authorized task or disclosed private content');
+    await collaborator.locator('[data-mode-switcher-trigger="true"]').click();
+    await collaborator.locator('[data-mode-switcher-value="board"]').click();
+    await collaborator.locator('[data-task-title-slot="true"][data-task-id="shared-parent"]').first().waitFor({ state: 'visible' });
+    assert(await collaborator.locator(`[data-task-id="${disposableTask.id}"]`).count() === 0,
+      'returning to board view resurrected the deleted task');
+    await openPermissions(page);
+    await page.locator('[data-settings-return-button="true"]').click();
+    await waitForProduct();
+    await page.screenshot({ path: 'output/playwright/dev-139-http-ui/collaboration-reconnect.png', fullPage: false });
+
     step = 'create a private workspace from the personal owner sidebar';
     const workspaceTitle = 'Personal workspace from sidebar';
     const boardTitle = 'Personal board from home';
@@ -442,6 +532,19 @@ async (page) => {
       reload: true,
       titleEditPersistedAfterReload: true,
       collaboratorRecoveredAfterTransientReadFailure: true,
+      collaborationDeleteReconnect: {
+        scope: 'normal board/list UI and real isolated HTTP/PG; synthetic login; browser network outage injected with setOffline',
+        normalCreateArchiveAndPermanentDelete: true,
+        canonicalTaskId: disposableTask.id,
+        ownerView: 'board',
+        collaboratorView: 'goal',
+        offlineRevisionRequestFailed: true,
+        databaseReadbackDeleted: true,
+        reconnectWithoutReload: true,
+        reconnectConvergenceMs,
+        switchingBackDidNotResurrectTask: true,
+        privateBoardLeak: false,
+      },
       boardPermissions: {
         scope: 'isolated production HTTP/PG with synthetic identity proofs; no mocked permission responses',
         normalSettingsEntry: true,

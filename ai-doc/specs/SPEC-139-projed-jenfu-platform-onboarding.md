@@ -12,11 +12,11 @@ Cloud Run 設定、音訊上傳／播放及背景清理都限定使用已核准�
 
 2026-11-20 續行：人類已核准 §47.1 具名 foundation，並回覆適用 Google Cloud Master Agreement／防濫用留存豁免「不確定」。五個 API、四個專用 SA、三個 instance-scoped SQL IAM login、私人音訊桶及空白來源 Secret 已建立；Vertex cache 已讀回關閉，三個模型的內容 logging config 均不存在、依官方規格為預設關閉。Speech data logging 已依官方 default-off／明確 opt-in 契約收斂為同步 Recognize、禁止 opt-in 與外部 opt-in 即撤銷資格；部署後 runtime SA 實呼叫、Gemini 豁免、Shared VPC 及音訊桶 metadata 管理修復仍待完成，真實內容推論保持停用。Session 已改為登入核實來源、一般操作只查本地 Session／mapping／guard；三方同步撤銷 source 與實際隔離 PostgreSQL 證據見 §13，最新候選 artifact 與限制見 §47.1。正式 Session、資料移轉、writer fence、舊入口、切流與發布仍保留在原完成分母。
 
-同日三份跨 owner PR 已依人類核准轉為 ready-for-review：ProJED #9、Platform #157、OrgMaster #187 均仍 open、未 merge／部署／切流；三個 base 分別仍是遠端最新 `0670a0a`／`5ae88bc`／`a8830e9`。Platform `b7293c2` 與 OrgMaster `4b722b4` 的 required Source QC 均 SUCCESS；ProJED 最新 `5654478` 只修文件且沒有新 checks，最後 executable source `7308b1d` 的 CI44691983128 仍是本版程式證據，不以 ready 狀態外推正式驗收。
+跨專案 PR 已依核准轉為 ready-for-review。ProJED #9、Platform #157、OrgMaster #187 維持 open。ProJED 可執行來源 `01ebf94` 的原生與容器 CI 均通過，Platform `462d3c61` 及 OrgMaster `ff6ba9a` 的跨系統結果見 §8；候選映像與正式環境限制見 §47.1。[ProJED CI](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44761571087)
 
 2026-11-20續行：RAG會把可讀會議、知識與即時看板內容送至provider，但舊runtime僅憑GEMINI_API_KEY啟用Developer API，可能繞過已選定的零留存路徑。現已改為固定ProJED Google Cloud／短期IAM token及獨立RAG模型資格，保留Flash-Lite／Flash兩種原選擇；沒有資格時拒絕，不以meeting-only資格、API key或env flag啟用。詳[§38.1](#381-原行為與最小接線)。沒有變更正式資源或傳送真實內容；foundation核准、Google適用契約及Shared VPC權限仍待確認。
 
-2026-11-20雲端登入已恢復；本次metadata readback確認原project／organization與private-only SQL未變。新runtime／三個SQL IAM login／背景Job／audio bucket仍未建立，SQL所在project尚不是Shared VPC host。已補renderer缺少的Speech／Vertex API、最小推論／音訊權限、獨立可真正刪除音訊的bucket設定，以及ZDR設定與實際資格的區別。具名變更與需人類確認的新增責任統一見[§47.1](#471-2026-11-20-最小-foundation-變更提案)；不重問既定產品方向，不將本次盤點加入required gate。零留存binding仍未發布，未送真實會議內容、變更正式權限或切流。
+2026-11-20 雲端盤點與具名 foundation 的變更前狀態、核准後結果統一見 [§47.1](#471-2026-11-20-最小-foundation-變更提案)。該節保留 Shared VPC 管理權限與零留存資格的實際缺口。
 
 2026-11-20來源稽核承接：Supabase MCP唯讀核對既有ProJED project，於2026-11-19 15:56:42 UTC同一aggregate statement盤點43個public／private持久relation，無未知relation；現行33個可執行preflight predicates只有audit_logs阻擋，8個Google帳號無disabled／deleted／missing。任務822、落點823、文件7／版本8／chunks11、稽核77；其中44筆tenant_id=NULL，28筆actor_id也NULL。另查欄位、JSON類型、長度及參照，唯一不相容是target不接受NULL tenant；沒有下載正文、audit payload、provider subject或credentials，也沒有正式寫入。此為動態盤點，非writer-fenced snapshot／backup或正式移轉證據。
 
@@ -426,6 +426,8 @@ A11 仍須從原入口讀取 Board／Task、修改再重載，確認既有使用
 A03 已由 OrgMaster 管理元件送出核准，經實際 HTTP 與隔離 PostgreSQL 驗證接受邀請、重新登入及看板權限。擁有者撤邀後，晚到的核准得到 409，管理員重新載入後看見「已撤回」。切換帳號後，帶舊帳號綁定查 Session 得到 409，帶目前綁定得到 200。七項流程全數通過，受測版本為 Platform `462d3c61`、OrgMaster `ff6ba9a` 與 ProJED `5d384a1`。此演練使用合成身分。正式登入與託管路徑仍依 T08 查證。[三系統執行紀錄](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/44753454323)
 
 A09 已由看板設定修改管理員權限，重載後核對新增權限與清空權限均能保存，其他角色維持原設定。唯讀協作者可點開父、子任務詳情。嘗試修改任務標題或角色權限均得到 403，原擁有者重新查詢後資料一致。此演練使用正常瀏覽器入口與隔離 PostgreSQL。[ProJED 權限回歸](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44752941134)
+
+A08 人工會議草稿已從既有選單新增、輸入正文、儲存並退出，再重載開回同一筆紀錄。首次 PUT 保留前端草稿 ID，資料庫只有一筆相同正文的草稿；另一帳號的畫面沒有正文，直接 API 回 404。麥克風與語音／模型請求均為零。此正常畫面與隔離 PostgreSQL 證據綁定 `01ebf9454a3b71b4015159e81f0275d78a5d1b99`，原生與 Linux OCI 均通過。驗證期間已修正舊的空工作區查詢覆蓋已載入紀錄，以及儲存晚到回應污染新帳號／編輯內容的問題。另以本機正常畫面與合成 HTTP 驗證登出時取消保留草稿、先儲存再登出、捨棄後不復原；該登出證據未使用 PostgreSQL。真語音與模型仍依各自資格查證。[完整 CI 與瀏覽器證據](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44761571087)
 
 T07 已用舊版 `0670a0a` 的工作台與 Quick 呼叫程式、Supabase SDK 2.105.4、實際 PostgREST 及隔離 PostgreSQL 演練。停寫前已提交但遺失回應的 Quick 任務可憑原識別碼讀回；停寫期間五次寫入均回 HTTP 503／`PT503`，資料表內容維持一致。解除停寫後再送同一識別碼，仍只有一筆任務及一筆回執。這次驗到舊 SDK 與資料庫的寫入邊界，使用合成登入，正式 Edge 工作者、在途排空與原 Hosting 入口仍須在切換環境查證。[T07 Linux OCI 執行紀錄](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44748124380/job/136329293641)
 
