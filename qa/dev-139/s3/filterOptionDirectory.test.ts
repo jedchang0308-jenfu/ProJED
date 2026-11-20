@@ -58,7 +58,7 @@ test('calendar references from an old in-flight Session are never reused by anot
   client.bindExpectedActor({ accountId: 'new', contextId: 'new-session' });
   assert.equal((await adapter.listBoardRefs())[0]?.appBoardId, 'new');
   finishOld(json({ workspaces: [], boards: [board('old')] }));
-  await old;
+  await assert.rejects(old, { code: 'ACTOR_CHANGED', status: 409 });
   assert.deepEqual(actors, ['old', 'new']);
   assert.notEqual(filterReadIdentity({ uid: 'old' }), filterReadIdentity({ uid: 'new' }));
   assert.notEqual(filterReadIdentity(Object.assign({ uid: 'same' }, { authContextId: 'one' })), filterReadIdentity(Object.assign({ uid: 'same' }, { authContextId: 'two' })));
