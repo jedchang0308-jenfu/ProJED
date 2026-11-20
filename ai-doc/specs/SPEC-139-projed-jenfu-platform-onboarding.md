@@ -4,6 +4,8 @@
 
 正式 Supabase 的兩個私有身分檢視已建立並讀回 ACL，供移轉時核對既有帳號 UUID。目標環境仍為 Google Cloud。[正式來源執行結果](#dev139-source-views-applied)
 
+個人帳號從側欄建立工作區、從首頁建立看板，再從看板新增任務及改名，重載可讀回相同任務與名稱。共享其他看板的協作者直接查該私人任務得到 404。在已共享看板上，即使一次讀取失敗，下一次同步仍能顯示已提交的名稱。此演練使用合成登入身分及隔離 PostgreSQL。[A02／A07 瀏覽器與資料庫 CI](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44738740935)
+
 Cloud Run 設定、音訊上傳／播放及背景清理都限定使用已核准的私人桶 `projed-cc78d-meeting-audio`。清理依資料庫的既有到期紀錄與物件 generation 執行，即使語音辨識停用仍可清除到期錄音。語音辨識另外核對專案、同一音訊桶、模型及零留存資格。此變更不會啟用正式推論。
 
 2026-11-20 續行：人類已核准 §47.1 具名 foundation，並回覆適用 Google Cloud Master Agreement／防濫用留存豁免「不確定」。五個 API、四個專用 SA、三個 instance-scoped SQL IAM login、私人音訊桶及空白來源 Secret 已建立；Vertex cache 已讀回關閉，三個模型的內容 logging config 均不存在、依官方規格為預設關閉。Speech data logging 已依官方 default-off／明確 opt-in 契約收斂為同步 Recognize、禁止 opt-in 與外部 opt-in 即撤銷資格；部署後 runtime SA 實呼叫、Gemini 豁免、Shared VPC 及音訊桶 metadata 管理修復仍待完成，真實內容推論保持停用。Session 已改為登入核實來源、一般操作只查本地 Session／mapping／guard；三方同步撤銷 source 與實際隔離 PostgreSQL 證據見 §13，最新候選 artifact 與限制見 §47.1。正式 Session、資料移轉、writer fence、舊入口、切流與發布仍保留在原完成分母。
@@ -1449,7 +1451,9 @@ API 啟用前的 cache、generation 及 embedding logging 三個唯讀 GET 均�
 
 後續檢查正式Cloud Run plan renderer發現同一舊門檻仍殘留為Speech `projectSettingReadbackRequired=true`，會在真正產生release plan時重新造成無法完成的阻塞。現已移除該欄，改為明確`optInProhibited`、外部opt-in即撤銷qualification及部署後runtime SA probe；Vertex的project setting readback與適用契約／防濫用豁免證據均保留。source `5f9432fbd376e1e087d2602fce7c06aabe1e34c5`的[CI44696691376](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44696691376)兩jobs SUCCESS；artifacts14610569643／14610813500已讀回snapshot63、domain73及OCI18 checks均PASS，OCI精確綁同source與45/45 migrations；metadata仍FIXTURE_ONLY、browser／productionRelease仍NOT_RUN。本輪未部署、未呼叫provider，亦未改正式IAM／Secret／資料或流量。
 
-#### 最新45份候選映像 readback（2026-11-20，source 5f9432f）
+本分支的資料庫結構已進至 `0049_session_directory_visibility_v1`。隔離 PostgreSQL 移轉演練及 Linux 候選映像各自核對 49 份 migration。下列 Google Artifact Registry digest 對應當時的 45 份版本；目前 49 份的雲端候選須依實際 image digest 另行核對。[隔離移轉與 OCI 結果](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44736001461)
+
+#### 已發布至 registry 的 45 份候選映像 readback（2026-11-20，source 5f9432f）
 
 受完整[CI44696691376](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44696691376)驗證的 executable source `5f9432fbd376e1e087d2602fce7c06aabe1e34c5`，以精確Git archive建立Cloud Build context。gcloud預設ignore從1,629個blob排除`.gitignore`及歷史`output/playwright/dev-118/v7/production-browser-smoke.json`，實際上傳1,627個build檔案、無程式／migration／設定缺漏；staging object generation=`1795160960516642`，下載後SHA256=`aabe533b25e5101d84f832965d37b25070673824ec54362b0250b1fa06eeabd5`，與provider `sourceProvenance`完全相同。
 
