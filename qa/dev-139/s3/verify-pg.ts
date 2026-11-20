@@ -72,14 +72,14 @@ await verifyGoogleMappingsPostgres(database);
 await verifyAppSessionsPostgres(database,config);
 await verifyRagPostgres(database,config);
 
-const runBrowserSmoke = (baseUrl: string, name: 'http-ui' | 'rag-ui' | 'quick-http-binding'): Promise<void> => new Promise((done, reject) => {
+const runBrowserSmoke = (baseUrl: string, name: 'http-ui' | 'rag-ui' | 'quick-http-binding' | 'board-share-scope'): Promise<void> => new Promise((done, reject) => {
   const artifactKey = { 'http-ui': '__DEV139_HTTP_UI_ARTIFACT', 'rag-ui': '__DEV139_RAG_UI_ARTIFACT',
-    'quick-http-binding': '__DEV139_QUICK_HTTP_BINDING' }[name];
+    'quick-http-binding': '__DEV139_QUICK_HTTP_BINDING', 'board-share-scope': '__DEV139_BOARD_SHARE_SCOPE' }[name];
   const output = `output/playwright/dev-139-${name}`;
   const child = spawn('powershell.exe', [
     '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'scripts/run-playwright-code.ps1',
     '-SessionPrefix', `dev139-${name}`,
-    '-Filename', `qa/dev-139/s3/${name}${name === 'quick-http-binding' ? '' : '-smoke'}.pw.js`,
+    '-Filename', `qa/dev-139/s3/${name}${name === 'http-ui' || name === 'rag-ui' ? '-smoke' : ''}.pw.js`,
     '-OutputDirectory', output,
     '-BaseUrl', baseUrl,
     '-ArtifactWindowKey', artifactKey,
@@ -737,7 +737,7 @@ const clientFor = (
 };
 try {
   if (process.env.PROJED_DEV139_BROWSER_SMOKE === '1') {
-    for (const scenario of ['http-ui', 'rag-ui', 'quick-http-binding'] as const) {
+    for (const scenario of ['http-ui', 'rag-ui', 'quick-http-binding', 'board-share-scope'] as const) {
       await runIndependent(scenario, () => runBrowserSmoke(base, scenario));
     }
     await runActorTransaction(database, config, actorB, async port => {
