@@ -709,6 +709,8 @@ Main 正常登入與 Quick 現在使用所在 origin 的 `/api/v1/session/login`
 
 2026-11-20 04:32 UTC 刷新唯讀 aggregate：profiles／Auth users／Google identities／Google proof覆蓋均8，未覆蓋、孤兒、重複subject及停用／刪除Google users均0。04:33 UTC另查public＋private catalog共43個relation，直接由現行`findUnclassifiedSourceRelations`驗無未分類項目，Google JSON proof形狀不符亦0；source PostgreSQL17.6。兩筆為分開的repeatable-read read-only盤點，只有counts與catalog metadata，未下載UUID／email／私人內容，沒有寫入；不冒稱正式same-snapshot export／reconciliation。證據位於`output/dev139-foundation-20261120/source-aggregate-inventory.json`及`source-catalog-readback.json`。
 
+同日05:57 UTC，依現行`sourcePreflight`的34項固定predicate重查：33項現存檢查的blocking count皆0，歷史可選`private.quick_task_oauth_clients`仍不存在，沿driver的`to_regclass`語意略過並重新確認未出現。診斷helper第一輪未處理缺表而回42P01，修正helper後才取得本次結果；產品driver本來即處理缺表，未改產品邏輯或抹除首次失敗。06:07 UTC另查ACL metadata：43個應用relation加2個指定Auth來源共45表、40表啟用RLS，專用`projed_dev139_source_reader`尚不存在。後續一次性reader須沿§47.1核對精確SELECT及完整讀取能力，不新增業務policy或借用管理credential。證據為同目錄`source-blocker-readback.json`、`source-blocker-first-failure.json`及`source-security-readback.json`；均為唯讀counts／catalog，沒有UUID、email或正文。這些分開時間的盤點不取代正式driver同一snapshot與writer-fenced reconciliation，也不新增required gate。
+
 本版 source 驗證：S2 85/85、migration unit 13/13、S3 unit 53/53、前端型別與 managed／disposable 21 份 migration 的 boundary PASS。共用本機 dependencies 缺已宣告的 `@types/pg`，server／S2／migration 嚴格型別檢查使用 task-owned 暫存設定指向已存在的同版 8.23.1 declarations，未放寬 production tsconfig；不把它記成原始 aggregate 命令 PASS。下列遠端 CI 以 lockfile 完整安裝後，已通過原 server／S2 型別命令，CI 不依賴本機 overlay。
 
 本版 native Session／移轉案例已加入原 S3／migration wrappers。本機容量預檢仍 BLOCKED（相同 2 GiB request），未在本機啟動本版 cluster；遠端結果分列如下，舊 bundle 不升格。移轉收據已將過期的 `identity-guards-not-imported` 改為 source-derived guard 及停用／刪除／缺來源使用者的 prewrite 拒絕，名稱與實際檢查一致。source／unit／型別不能代表正常 browser、真 Firebase／OIDC、Hosting 或正式資料驗收。
@@ -1363,6 +1365,8 @@ gcloud compute shared-vpc associated-projects add projed-cc78d --host-project=je
 受測source `fef9f8119ee1494bc94fe454c41e360085656e26` 的[CI44644625891](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44644625891)兩jobs SUCCESS：665 unit（494／126／14／31）、原lockfile型別、三boundary、compiled artifact、PostgreSQL17.11 domain73／snapshot63、44份migration及OCI18 PASS。已讀回artifacts14587159598／14588103349：native `s3/20261120T002032Z-023f60cd`／`migration/20261120T002139Z-6d728a73`均PASS，OCI `dev139-oci-b265c857b200d3cac07178d6`綁同一完整source、actual=expected44與owned cleanup PASS。這是RD自查／CI隔離資格；真Cloud IAM／Speech／Cloud SQL／registry push／browser與正式發布仍NOT_RUN。後續僅補本節收據與操作者metadata，不改受測程式或重跑未受影響的產品驗證。
 
 API 啟用前的 cache、generation 及 embedding logging 三個唯讀 GET 均為 403 SERVICE_DISABLED，當時 UNKNOWN；此歷史結果不覆寫。以 project／編號／留存及 Google 寄件者關鍵字查可用郵件未找到既有核准紀錄，不將無搜尋結果視為不存在契約。人類已回覆適用 Master Agreement／豁免「不確定」，因此仍無可查證資格。未寄信、提交豁免表單或將設定提案當成 Google 核准。
+
+同日另以鉦富帳戶查Google Drive契約／ZDR文件metadata，兩次搜尋均無結果，仍不能判定契約不存在。依Google目前[防濫用規格](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/abuse-monitoring)，本次所選非Frontier Google模型在一般線上條款下仍可能留存被標記的提示，Master Agreement適用性須由可查證文件確認；不套用其他供應商的ZDR申請程序。Speech logging仍依[官方Console入口](https://docs.cloud.google.com/speech-to-text/docs/v1/enable-data-logging)核對；[enhanced模型不要求啟用logging](https://docs.cloud.google.com/speech-to-text/docs/v1/enhanced-models)，故不能以試打該模型推定專案logging狀態，本次沒有執行這類探測或推論。
 
 #### 已核准 foundation 的實際執行（2026-11-20）
 
