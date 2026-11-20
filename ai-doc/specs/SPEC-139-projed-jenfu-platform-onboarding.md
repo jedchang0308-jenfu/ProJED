@@ -1387,7 +1387,23 @@ API 啟用前的 cache、generation 及 embedding logging 三個唯讀 GET 均�
 - ProJED Run service agent 已取得 host networkViewer 及指定 runtime subnet 的 networkUser。嘗試啟用 Shared VPC host 被 Google 明確拒絕，缺 compute.organizations.enableXpnHost；未自授組織管理權，service-project 關聯未執行，已交既有 Shared VPC 管理員處理。
 - Vertex cache 已從預設 DURABLE 讀回 disableCache=true。三個 exact 模型／location 的 fetchPublisherModelConfig 均明確回覆 PublisherModelConfig NOT_FOUND；依[官方 logging 規格](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/capabilities/request-response-logging)，這代表未配置、預設關閉內容 request/response logging，沒有另建立空設定或開啟 metadata logging。Speech project logging 仍未讀回；Google 防濫用留存豁免仍不確定，四個 runtime provider/job bindings 保持 null，未送真實內容或呼叫模型。
 
-#### 45 份候選映像 readback（2026-11-20，source80cc88f）
+06:38 UTC 再次唯讀刷新：`jenfu-platform-prod`仍不是Shared VPC host，`projed-cc78d`無host project；音訊桶IAM policy仍因缺`storage.buckets.getIamPolicy`拒絕，來源Secret versions仍為空，Cloud Run Jobs仍為空。ProJED現存唯一service仍是原`projed-ai-backend`且100%舊revision，保留既有AI_API_KEY Secret reference；本輪未改它、未部署新runtime或分流。Supabase reader仍為NOLOGIN／NOINHERIT／BYPASSRLS、connection limit=1與原三項唯讀timeout，兩個正式投影view仍不存在，Auth直接權限仍為false。沒有以重查結果替代待核准修復或正式執行。
+
+#### 最新45份候選映像 readback（2026-11-20，source effd5e7）
+
+受完整[CI44688269763](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44688269763)驗證的 executable source `effd5e758f56bafb6de0e02bcc0d55702b9a995a`，以既有create-only流程逐一核對1,010個Git blob；封存9,767,534 bytes、SHA256=`d934fe5c1fe1af02c510f0d96c0873a76b8daf251decee24666d5c5f45eb14aa`。原source object `dev139/candidate-effd5e758f56-20261120/source-d934fe5c1fe1af02.tar.gz`使用generation precondition=0建立，generation=`1795156820258543`；`gcloud builds submit`另建立Cloud Build staging object，provider `sourceProvenance`的SHA256／MD5與本機封存完全相同，未用object名稱推論內容。
+
+[Cloud Build54a37e8b-c6de-4f90-98d6-801d10d19485](https://console.cloud.google.com/cloud-build/builds;region=asia-east1/54a37e8b-c6de-4f90-98d6-801d10d19485?project=967362299895)於06:41:11–06:45:15 UTC正式SUCCESS，六steps全成功。三個`candidate-effd5e758f56-20261120` tag已逐一向registry讀回：
+
+| 目標 | 已讀回 immutable digest |
+|---|---|
+| projed-prod | sha256:9c0fb4d11742a0c503c3e9b47f2bf9cbc4d87b337a1be04f4b8edb2728661d34 |
+| projed-prod-jobs | sha256:5e3d17cce6c5c9dc9f1212dd18c18b0e5832fec70a2bccfae6615451602f2e74 |
+| projed-prod-asr-job | sha256:1d5a94101115f830b34cc1f128ec01651dc4d6d84d0374feefc20e26b18e6d33 |
+
+實際managed-jobs image在network=none／read-only／nonroot輸出binding：Cloud SQL instance／三個IAM login均符合§47.1，profile SHA256=`d1985e6089362018a6fd746163d2dc8b2df9d4fb40a32dba908c3e6519a57b6e`，45個migration path／SHA256已與`effd5e7` Git blob逐檔相符；compiled static hash=`51b2de07751f5e41c7d49a88c0ba1ae806ae757bc439e9dfe9bedb9144ab21b4`。離線runtime驗UID1000／Node v24.12.0與四個provider／Job bindings均null，ASR image的ffmpeg5.1.9可執行。compact receipts位於ignored `output/dev139-effd5e758f56-20261120/`，狀態`ARTIFACT_ONLY_VERIFIED`；只新增source object、build及候選images，未部署、未執行migration／import、未建立credential、未呼叫provider或切流。前一版候選保留，不覆寫或冒充本版。
+
+#### 前一版45份候選映像 readback（2026-11-20，source80cc88f）
 
 [Cloud Build3b2133ea-a70e-46bf-9cb0-16721a7a5ef1](https://console.cloud.google.com/cloud-build/builds;region=asia-east1/3b2133ea-a70e-46bf-9cb0-16721a7a5ef1?project=967362299895) SUCCESS（04:00:30–04:05:22 UTC），六 steps 全成功。來源 `80cc88fe036270e9ce0718f18fa131e49bfb5375` 已通過前述完整CI；1,010個 Git blob 均逐檔核對，封存9,766,934 bytes、SHA256=`f74904cdafd525055c78b7469e0ea09ac193cd14e44f92ea03dcc82970076924`。沿既有source bucket create-only 上傳，generation=`1795147175424172`，provider provenance 的 SHA256／resolved generation 均與本機封存一致；沒有使用dirty文件或QA／資料輸出建置。最初 tag預檢因CLI採「Image not found」而非NOT_FOUND字樣停止，查證明確不存在訊息後才繼續，未覆寫舊tag。
 
