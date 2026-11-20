@@ -63,10 +63,10 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
 ## DEV-139：ProJED 納入 Jenfu-Platform，Cloud Run／Cloud SQL 對齊並保留 Vite
 
-  - 協作刪除與離線重連已通過正常看板／清單、真 HTTP 與 PostgreSQL 回歸。行事曆已在本機由正常設定入口完成保存、重載、停用與連結輪替，並直接對帳資料庫及匿名 ICS。移板以 0050 修正原登入快照整合，必要權限分支及正常側欄移板後原 Session 重載、任務與私人會議保留、協作者拒絕均已本機通過，仍待同版完整 CI 與新版候選核對。[A07–A09 實際證據](specs/SPEC-139-projed-jenfu-platform-onboarding.md#8-驗收與證據契約)
+  - `8421432` 的完整原生／正常畫面與 Linux OCI CI 均通過，涵蓋移板後原 Session 重載、任務與私人會議保留、協作者拒絕、離線重連與行事曆匿名 ICS／token 撤銷及直接 SQL 對帳。0051 收斂移板 policy 的一般讀取成本，worker 亦修正跨時鐘 lease 誤拒。Platform `a8db9c10` 的 owner 原生及 required QC 已驗同源 51 份 migration 與恢復。[完整 CI 與 A07–A09 證據](specs/SPEC-139-projed-jenfu-platform-onboarding.md#8-驗收與證據契約)
   - 人工會議已由正常選單建立及儲存，重載後保留原草稿 ID 與正文，另一帳號讀取回 404，麥克風及模型呼叫均為零。已修正晚到查詢清空紀錄、儲存結果跨帳號覆蓋及登出草稿處理。`01ebf94` 的原生 PostgreSQL／瀏覽器與 Linux OCI CI 通過；登出取消／先儲存／捨棄另以本機合成 HTTP 驗證。[A08 實際證據與限制](specs/SPEC-139-projed-jenfu-platform-onboarding.md#8-驗收與證據契約)
   - 原工作台與 Quick 已在隔離 PostgreSQL 驗過停寫、未知結果重送及唯一回執。三系統演練已驗證撤邀後核准回 409，以及換帳號後拒絕舊 Session 綁定。看板設定已驗證權限修改與清空後可重載，唯讀協作者可開啟詳情，兩項越權修改均回 403。演練使用合成身分。[舊端停寫](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44748124380/job/136329293641)｜[外部協作](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/44753454323)｜[看板權限](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44752941134)
-  - Google Cloud 已建置並讀回 `01ebf94` 的服務、移轉工作與語音工作三個候選映像，包含人工會議、看板權限及登入修正。來源封存、三個 registry digest 與移轉映像中的 49 份 SQL 均核對一致。正式服務仍待部署階段驗證。[建置與映像識別碼](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-cloud-49)
+  - 51 份 migration 的 `8421432` 三個候選映像已提交 Cloud Build `d73d71b0`。最終狀態與 digest 讀回遇 Google 強制重新驗證，待原帳號登入後接續同一建置。先前 49 份候選及其對帳證據保留於歷史段落，正式服務仍待部署階段驗證。[最新建置與讀回狀態](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-cloud-51)
   - 舊版 Quick 離線草稿已在同一網址原地升級，經新版正常按鈕提交及同識別碼重送後，隔離 PostgreSQL 只有一筆任務與回執。切帳後的舊工作區、任務及標籤回應亦已修正。受測程式 `52951b9` 的原生及容器 CI 均通過。[升級與對帳](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44740909306)
   - 個人帳號已從側欄建工作區、在首頁建看板，再從看板建任務並改名。重載後畫面與資料庫讀回一致，有其他共享看板權限的另一帳號讀此私人任務得到 404。此證據來自 Vite、實際 HTTP API 與隔離 PostgreSQL，使用合成登入身分。[瀏覽器與資料庫 CI](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44738740935)
   - 合併前驗證已涵蓋舊庫業務表停寫、專用來源角色執行一致性快照與對帳，以及 Vite 任務詳情修改後重載讀回。Quick Task 保留來源停寫期間的草稿與原提交識別碼。正式入口、正式資料與雲端供應商資格仍各自待驗。[移轉與恢復條件](specs/SPEC-139-projed-jenfu-platform-onboarding.md#66-移轉-readiness-與恢復條件)｜[瀏覽器與資料庫 CI](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44731128457)

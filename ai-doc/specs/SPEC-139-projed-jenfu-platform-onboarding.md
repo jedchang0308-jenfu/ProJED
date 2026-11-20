@@ -1,5 +1,7 @@
 # SPEC-139：ProJED 納入 Jenfu-Platform 的產品與技術交接契約
 
+2026-11-21 合併前核對。可執行來源 `8421432bdbfc5482476f30fc6b48666ddd1bb1bf` 的原生與 Linux OCI CI 全數通過，已讀回正常移板、原 Session 重載、私人會議保留、行事曆設定／匿名 ICS／token 撤銷及資料庫對帳，另有 75 項原生檢查、67 項快照演練與 19 項 OCI 檢查。Platform `a8db9c10` 的既有 owner 原生與 required Source QC 均通過，51 份 managed migration ledger、故障恢復及清理收據綁定同一 ProJED 來源。登入與外部供應商採各案例明示的合成證明，正式環境依賴仍見 §47.1。[ProJED 完整 CI](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44776232248)｜[Platform owner 原生](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/44776318222)｜[Platform required Source QC](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/44776332390)
+
 2026-11-20 更新。Platform、OrgMaster 與 ProJED 的本機 HTTP 入口及隔離 PostgreSQL 已驗過原 UUID、待審拒絕、重新登入後僅可讀指定看板，以及移除成員後舊 Session 回 401。一般讀取沿用登入快照。三系統共 26 項通過，Google 與工作負載身分採合成證明。ProJED 的 Vite 瀏覽器案例已由任務詳情修改標題，重載後從 HTTP 回應及畫面核對，再由同一入口還原。既有行事曆訂閱另有隔離資料庫驗證。正式使用者、雲端路由及供應商資格仍依部署邊界分別查證。[外部協作契約](#dev139-external-access)｜[三系統 CI](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/44729053126)｜[看板瀏覽器與 PostgreSQL CI](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44731128457)
 
 正式 Supabase 的兩個私有身分檢視已建立並讀回 ACL，供移轉時核對既有帳號 UUID。現行站台在切流前繼續使用原服務。Google Cloud 候選前端透過同源 HTTP API 取得 Session，即使打包環境留有舊 Supabase 設定，載入主程式或 Quick 也應略過舊 SDK 的初始化，避免它在原 PWA 網址讀取或更新登入資料。原版站台仍沿用自己的登入流程。[正式來源執行結果](#dev139-source-views-applied)
@@ -435,7 +437,7 @@ A08 行事曆在本機編譯前端、真 HTTP 與隔離 PostgreSQL 18 通過正�
 
 A09 移板新增 `0050_session_board_transfer_v1`，只在核心已授權的精確移板交易讀取原成員，並在可證明原權限仍有效時更新發起 Session 的既有看板 scope。保留 capability 與外部 approvedRole 上限，其他舊 Session 撤銷；繼承來源改變而無法證明等權時維持拒絕。移除 upsert 對已由 FK 搬移之 tenant_id 的重複指定，解除未授權欄位更新。原 `0001`–`0049` bytes 保留。本機真 HTTP／PG 已驗 owner、無繼承之顯式 member、純繼承 owner、減權、舊 Session 撤銷及範圍外拒絕；正常側欄另驗移板後以原 Session 重載同任務、私人會議草稿保留、協作者 404。收據分別為 `output/qa/dev-139/bound-board-transfer/172f2979-37c8-4586-8261-bb46e436d13d/result.json` 及 `output/qa/dev-139/s3/20261120T162130Z-7d15a831/result.json`。完整 CI 與新版候選映像仍待核對，舊的 49 份候選不能代表這次移板修正。
 
-`bdb526e` 的完整 CI 已驗上述正常畫面、Calendar SQL 對帳及移板，但稍後舊行事曆 1,001 筆掃描出現 SQL 57014，整批列失敗。以同一資料比較，空移板 context 短路可減少額外 RLS 成本且輸出一致，因此新增 `0051_transfer_read_empty_context_v1`，只在非空 context 才評估原精確移板授權。另修正 LLM worker 對資料庫／本機時鐘差異的 lease 誤拒，執行期限取資料庫到期與本機 150 秒上限較早者；兩項定向回歸與原 11 項 worker 測試通過。含這兩項修正的本機完整 DatabaseOnly 回歸通過，保留原 2 秒 statement／5 秒 transaction 界線，收據為 `output/qa/dev-139/s3/20261120T164121Z-2c6f17a4/result.json`。此結果仍須由同版完整 CI 核對，無須新增 required gate。[保留的 CI 失敗及獨立成功證據](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44772769961)
+`bdb526e` 的完整 CI 已驗上述正常畫面、Calendar SQL 對帳及移板，但稍後舊行事曆 1,001 筆掃描出現 SQL 57014，整批列失敗。以同一資料比較，空移板 context 短路可減少額外 RLS 成本且輸出一致，因此新增 `0051_transfer_read_empty_context_v1`，只在非空 context 才評估原精確移板授權。另修正 LLM worker 對資料庫／本機時鐘差異的 lease 誤拒，執行期限取資料庫到期與本機 150 秒上限較早者；兩項定向回歸與原 11 項 worker 測試通過。修正後本機完整 DatabaseOnly 及來源 `8421432` 的完整 CI 均通過，保留原 2 秒 statement／5 秒 transaction 界線。本機收據為 `output/qa/dev-139/s3/20261120T164121Z-2c6f17a4/result.json`，最終 CI 的正常移板、行事曆與直接 SQL 對帳收據均已讀回。[修正後完整 CI](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44776232248)｜[保留的先前失敗](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44772769961)
 
 T07 已用舊版 `0670a0a` 的工作台與 Quick 呼叫程式、Supabase SDK 2.105.4、實際 PostgREST 及隔離 PostgreSQL 演練。停寫前已提交但遺失回應的 Quick 任務可憑原識別碼讀回；停寫期間五次寫入均回 HTTP 503／`PT503`，資料表內容維持一致。解除停寫後再送同一識別碼，仍只有一筆任務及一筆回執。這次驗到舊 SDK 與資料庫的寫入邊界，使用合成登入，正式 Edge 工作者、在途排空與原 Hosting 入口仍須在切換環境查證。[T07 Linux OCI 執行紀錄](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44748124380/job/136329293641)
 
@@ -1470,6 +1472,16 @@ API 啟用前的 cache、generation 及 embedding logging 三個唯讀 GET 均�
 後續檢查正式Cloud Run plan renderer發現同一舊門檻仍殘留為Speech `projectSettingReadbackRequired=true`，會在真正產生release plan時重新造成無法完成的阻塞。現已移除該欄，改為明確`optInProhibited`、外部opt-in即撤銷qualification及部署後runtime SA probe；Vertex的project setting readback與適用契約／防濫用豁免證據均保留。source `5f9432fbd376e1e087d2602fce7c06aabe1e34c5`的[CI44696691376](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44696691376)兩jobs SUCCESS；artifacts14610569643／14610813500已讀回snapshot63、domain73及OCI18 checks均PASS，OCI精確綁同source與45/45 migrations；metadata仍FIXTURE_ONLY、browser／productionRelease仍NOT_RUN。本輪未部署、未呼叫provider，亦未改正式IAM／Secret／資料或流量。
 
 <a id="dev139-cloud-49"></a>
+
+<a id="dev139-cloud-51"></a>
+
+#### 51 份 migration 候選建置與待完成讀回
+
+來源 `8421432bdbfc5482476f30fc6b48666ddd1bb1bf` 已通過完整 CI 及 Platform owner 驗證。封存逐一核對 1,034 個 Git blob，共 9,804,501 bytes，SHA-256 為 `ba4a070873efa0e3e1489f81f996b1e0d2f3b1669d3432a0a37e3631f1ec34ee`。三個新標籤預檢均回 Image not found 後，已提交 Cloud Build `d73d71b0-b2fa-4a47-9c26-5b2e8aaad77a`，預定產物為服務、移轉工作與 ASR 工作的 `candidate-8421432bdbfc-20261121`。
+
+最後一次成功查詢為 WORKING；後續 Google CLI 回覆 Reauthentication failed。已核對 active account 仍為原操作者，並請使用者完成該帳號重新驗證。建置最終狀態、provider source provenance、51 份 image binding 及三個 registry digest 均仍待讀回，不能引用下列舊候選代替。登入恢復後接續觀察同一 build，不重送建置。[同一 Cloud Build](https://console.cloud.google.com/cloud-build/builds;region=asia-east1/d73d71b0-b2fa-4a47-9c26-5b2e8aaad77a?project=967362299895)
+
+同日唯讀刷新確認，ProJED Shared VPC host 關聯回空物件，Platform xpnProjectStatus 為 UNSPECIFIED_XPN_PROJECT_STATUS，音訊桶 getIamPolicy 仍被拒絕。這些是正式路徑的現況依賴，正式部署、資料移轉與推論仍依既有授權及零留存資格處理。
 
 #### 已核對的 Google Cloud 候選映像（49 份 migration）
 
