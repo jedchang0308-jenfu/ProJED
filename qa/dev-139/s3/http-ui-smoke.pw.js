@@ -19,6 +19,102 @@ async (page) => {
   const assert = (condition, message, details = {}) => {
     if (!condition) throw new Error(`${message}: ${JSON.stringify(details)}`);
   };
+  const verifyPrivateManualMeetingDraft = async (target, other, scope) => {
+    const origin = new URL(target.url()).origin;
+    const recordsPath = `/api/v1/workspaces/${encodeURIComponent(scope.workspaceId)}/boards/${encodeURIComponent(scope.boardId)}/records`;
+    const title = `DEV139 private manual meeting draft ${Date.now()}`;
+    const content = 'DEV139 手動會議正文：確認人工決議與後續追蹤，不使用語音或模型。';
+    const blockedRequests = [];
+    const microphoneKey = 'dev139-manual-meeting-microphone-attempts';
+    const check = (condition, message) => { if (!condition) throw new Error(`A08 manual meeting: ${message}`); };
+    const protectMicrophone = key => {
+      if (!sessionStorage.getItem(key)) sessionStorage.setItem(key, '0');
+      if (navigator.mediaDevices) navigator.mediaDevices.getUserMedia = async () => {
+        sessionStorage.setItem(key, String(Number(sessionStorage.getItem(key) || '0') + 1));
+        throw new Error('DEV139_MANUAL_MEETING_MICROPHONE_FORBIDDEN');
+      };
+    };
+    await target.evaluate(key => sessionStorage.setItem(key, '0'), microphoneKey);
+    await target.addInitScript(protectMicrophone, microphoneKey);
+    await target.evaluate(protectMicrophone, microphoneKey);
+    const guardProvider = async route => {
+      const request = route.request();
+      const url = new URL(request.url());
+      const audioOrModel = url.origin === origin
+        && (/^\/api\/v1\/(?:meeting-control|meeting-audio)(?:\/|$)/u.test(url.pathname)
+          || /\/meeting:synthesize$/u.test(url.pathname));
+      const provider = /(?:speech|aiplatform|generativelanguage)\.googleapis\.com$|(?:^|\.)openai\.com$|(?:^|\.)anthropic\.com$/u.test(url.hostname)
+        || /\/functions\/v1\//u.test(url.pathname);
+      if (audioOrModel || provider) {
+        blockedRequests.push({ method: request.method(), path: url.pathname });
+        await route.abort();
+      } else await route.fallback();
+    };
+    await target.route('**/*', guardProvider);
+    const openRecords = async current => {
+      const menu = current.locator('[data-app-more-menu="true"]');
+      await menu.locator('summary').click();
+      const action = current.locator('[data-app-more-records="true"]');
+      if (await action.getAttribute('aria-current') === 'page') await menu.locator('summary').click();
+      else await action.click();
+      await current.locator('[data-record-section-controls="true"]').waitFor({ state: 'visible' });
+    };
+    try {
+      await target.locator('[data-app-more-menu="true"] summary').click();
+      await target.locator('[data-app-more-meeting-record="true"]').click();
+      const composer = target.locator('[data-record-composer-shell]');
+      await composer.waitFor({ state: 'visible' });
+      await composer.locator('[data-record-title-input]').fill(title);
+      await composer.locator('[data-record-content-editor="true"]').fill(content);
+      await composer.locator('[data-meeting-draft-overflow]').click();
+      const [savedResponse] = await Promise.all([
+        target.waitForResponse(response => new URL(response.url()).pathname.startsWith(recordsPath + '/')
+          && response.request().method() === 'PUT' && response.request().postDataJSON()?.title === title),
+        composer.locator('[data-meeting-draft-save-and-exit]').click(),
+      ]);
+      check(savedResponse.ok(), `save failed (${savedResponse.status()})`);
+      const saved = (await savedResponse.json()).data;
+      const savedRequest = savedResponse.request();
+      check(savedRequest.postDataJSON().id === saved?.id
+        && new URL(savedRequest.url()).pathname === recordsPath + '/' + encodeURIComponent(saved.id), 'first PUT did not preserve the client draft identity');
+      check(saved?.id && saved.type === 'meeting' && saved.status === 'draft' && saved.title === title
+        && saved.content.includes(content), 'normal save did not return the typed manual draft');
+      await composer.waitFor({ state: 'hidden' });
+      const [reloadRead] = await Promise.all([
+        target.waitForResponse(response => new URL(response.url()).pathname === recordsPath && response.request().method() === 'GET'),
+        target.reload({ waitUntil: 'domcontentloaded' }),
+      ]);
+      check(reloadRead.ok(), `reload record read failed (${reloadRead.status()})`);
+      const reloadedRecords = (await reloadRead.json()).data;
+      await target.locator('nav.app-main-nav').waitFor({ state: 'visible' });
+      await openRecords(target);
+      const recordRow = target.locator('[data-record-list="true"] .record-list-row').filter({ hasText: title });
+      await recordRow.waitFor({ state: 'visible' });
+      await recordRow.click();
+      await composer.waitFor({ state: 'visible' });
+      check(await composer.locator('[data-record-title-input]').inputValue() === title, 'reloaded title changed');
+      check((await composer.locator('[data-record-content-editor="true"]').innerText()).includes(content), 'reloaded body changed');
+      const matches = reloadedRecords.filter(record => record.title === title);
+      check(matches.length === 1 && matches[0].id === saved.id && matches[0].status === 'draft'
+        && matches[0].content.includes(content), 'reload created another record or changed the stored draft');
+      await composer.locator('[data-record-composer-close]').click();
+      await composer.waitFor({ state: 'hidden' });
+      await other.reload({ waitUntil: 'domcontentloaded' });
+      await other.locator('nav.app-main-nav').waitFor({ state: 'visible' });
+      await openRecords(other);
+      const otherBody = await other.locator('body').innerText();
+      check(!otherBody.includes(title) && !otherBody.includes(content), 'manual draft appeared in another account UI');
+      const denied = await other.request.get(origin + recordsPath, { headers: scope.otherHeaders });
+      const deniedBody = await denied.text();
+      check(denied.status() === 404 && !deniedBody.includes(title) && !deniedBody.includes(content), 'private record API disclosed content to another account');
+      const microphoneAttempts = await target.evaluate(key => Number(sessionStorage.getItem(key) || '0'), microphoneKey);
+      check(microphoneAttempts === 0 && blockedRequests.length === 0, 'manual flow attempted microphone, speech, or model requests');
+      return { normalMeetingEntry: true, saveAndExit: true, reloadSameRecord: true, recordStatus: 'draft',
+        otherAccountUiVisible: false, otherAccountApiStatus: denied.status(), microphoneAttempts,
+        speechOrModelRequests: blockedRequests.length, firstSaveMethod: savedRequest.method(), firstSavePreservedDraftId: true,
+        identity: 'ISOLATED_BROWSER_SESSION', providerCalls: 'NOT_REQUESTED' };
+    } finally { await target.unroute('**/*', guardProvider); }
+  };
   const waitForProduct = async () => {
     await page.locator('nav.app-main-nav').waitFor({ state: 'visible', timeout: 20000 });
     await page.locator('[data-task-id="shared-parent"]').first().waitFor({ state: 'visible', timeout: 20000 });
@@ -308,6 +404,13 @@ async (page) => {
     } });
     assert(denied.status() === 404 && !(await denied.text()).includes(privateTitle), 'private task disclosed to another authenticated actor', { status: denied.status() });
 
+    step = 'save and reload a manual meeting draft through the private board UI';
+    const manualMeetingDraft = await verifyPrivateManualMeetingDraft(page, collaborator, {
+      workspaceId: workspace.id, boardId: board.id,
+      otherHeaders: { 'x-projed-expected-account-id': otherSession.localUserId,
+        'x-projed-expected-context-id': otherSession.authContextId },
+    });
+
     const apiPaths = [...new Set(sameOriginResponses
       .map(item => new URL(item.url).pathname)
       .filter(path => path.startsWith('/api/')))];
@@ -345,6 +448,7 @@ async (page) => {
       },
       personalWorkspaceBoardTaskPersistedAfterReload: true,
       collaboratorPrivateTaskStatus: denied.status(),
+      manualMeetingDraft,
       privateBoardLeak: false,
       apiPaths,
       screenshot: 'output/playwright/dev-139-http-ui/main.png',
