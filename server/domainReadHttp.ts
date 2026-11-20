@@ -24,6 +24,7 @@ type DomainReadOperation =
   | { readonly kind: 'workspace-members'; readonly workspaceRef: string }
   | { readonly kind: 'tags'; readonly workspaceRef: string }
   | { readonly kind: 'board-members'; readonly workspaceRef: string; readonly boardRef: string }
+  | { readonly kind: 'access'; readonly workspaceRef: string; readonly boardRef: string }
   | { readonly kind: 'role-permissions'; readonly workspaceRef: string; readonly boardRef: string }
   | { readonly kind: 'tasks'; readonly workspaceRef: string; readonly boardRef: string }
   | { readonly kind: 'dependencies'; readonly workspaceRef: string; readonly boardRef: string }
@@ -66,6 +67,7 @@ function operationFor(rawUrl: string | undefined): DomainReadOperation | null {
   if (!boardRef) return null;
   switch (parts[7]) {
     case 'members': return { kind: 'board-members', workspaceRef, boardRef };
+    case 'access': return { kind: 'access', workspaceRef, boardRef };
     case 'role-permissions': return { kind: 'role-permissions', workspaceRef, boardRef };
     case 'tasks': return { kind: 'tasks', workspaceRef, boardRef };
     case 'dependencies': return { kind: 'dependencies', workspaceRef, boardRef };
@@ -115,6 +117,7 @@ export function createDomainReadHttpDispatcher(
           case 'workspace-members': return repository.listWorkspaceMembers(port, operation.workspaceRef);
           case 'tags': return repository.listTags(port, operation.workspaceRef);
           case 'board-members': return repository.listBoardMembers(port, operation.workspaceRef, operation.boardRef);
+          case 'access': return repository.getCurrentBoardAccess(port, operation.workspaceRef, operation.boardRef);
           case 'role-permissions': return repository.getBoardRolePermissions(port, operation.workspaceRef, operation.boardRef);
           case 'tasks': return repository.listTasks(port, operation.workspaceRef, operation.boardRef);
           case 'dependencies': return repository.listDependencies(port, operation.workspaceRef, operation.boardRef);

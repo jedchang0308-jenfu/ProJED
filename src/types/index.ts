@@ -237,6 +237,7 @@ export interface BoardInviteAcceptInput {
 }
 
 export interface CurrentBoardAccess {
+  canConfigureRolePermissions?: boolean;
   workspaceId: string;
   boardId: string;
   workspaceRole?: CollaborationRole;

@@ -272,10 +272,16 @@ export class CollaborationWriteRepository {
     await assertWorkspaceCapability(port, workspace.id, 'create_board');
     const profile = await currentProfile(port);
     const membership = await port.query<{ role: CollaborationRole }>(`
-      SELECT role FROM projed_core.tenant_members
-       WHERE tenant_id = $1::uuid AND user_id = $2::uuid AND status = 'active'
+      SELECT CASE WHEN nullif(current_setting('projed.session_permissions',true),'') IS NOT NULL
+        THEN current_setting('projed.session_permissions')::jsonb->'workspaces'->($1::uuid)::text->>'role'
+        ELSE (SELECT role FROM projed_core.tenant_members
+               WHERE tenant_id=$1::uuid AND user_id=$2::uuid AND status='active')
+      END AS role
     `, [workspace.id, profile.id]);
-    if (membership.rows.length !== 1) throw new KernelError('ACCESS_DENIED', 'Actor is not authorized', 403);
+    const creatorRole = membership.rows[0]?.role;
+    if (!creatorRole || !COLLABORATION_ROLES.includes(creatorRole)) {
+      throw new KernelError('ACCESS_DENIED', 'Actor is not authorized', 403);
+    }
     const id = randomUUID();
     const boardTitle = input.title === undefined ? '未命名看板' : title(input.title, 'board title');
     await port.query(`
@@ -293,7 +299,7 @@ export class CollaborationWriteRepository {
       INSERT INTO projed_core.project_members(
         tenant_id, project_id, user_id, role, member_email, member_display_name
       ) VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6)
-    `, [workspace.id, id, profile.id, membership.rows[0]!.role, profile.email, profile.displayName]);
+    `, [workspace.id, id, profile.id, creatorRole, profile.email, profile.displayName]);
     await port.query(`
       INSERT INTO projed_core.actor_scope_access(local_user_id, tenant_id, project_id, active, scope_revision)
       VALUES ($1::uuid, $2::uuid, $3::uuid, true, 1)
@@ -379,6 +385,9 @@ export class CollaborationWriteRepository {
     `, [board.tenantId, board.id, userId]);
     if (existing.rows[0]?.role === 'owner' && normalizedRole !== 'owner') {
       throw new KernelError('ACCESS_DENIED', 'Board owner cannot be demoted', 403);
+    }
+    if (normalizedRole === 'owner' && existing.rows[0]?.role !== 'owner') {
+      throw new KernelError('ACCESS_DENIED', 'Membership editing cannot transfer ownership', 403);
     }
     if (existing.rows.length) {
       await port.query(`
@@ -481,12 +490,14 @@ export class CollaborationWriteRepository {
     const normalizedEmail = email(input.email);
     if (input.external) {
       const owner = await port.query(`
-        SELECT id FROM projed_core.tenants
-         WHERE id = $1::uuid AND owner_id = projed_core.current_actor_user_id_v1()
-        UNION ALL
-        SELECT project_id FROM projed_core.project_members
-         WHERE tenant_id = $1::uuid AND project_id = $2::uuid
-           AND user_id = projed_core.current_actor_user_id_v1() AND role = 'owner'
+        WITH bound AS (SELECT nullif(current_setting('projed.session_permissions',true),'')::jsonb AS permissions)
+        SELECT 1 FROM bound WHERE CASE WHEN permissions IS NOT NULL
+          THEN permissions->'workspaces'->($1::uuid)::text->>'role'='owner'
+            OR permissions->'boards'->($2::uuid)::text->>'role'='owner'
+          ELSE EXISTS (SELECT 1 FROM projed_core.tenants
+            WHERE id=$1::uuid AND owner_id=projed_core.current_actor_user_id_v1())
+            OR EXISTS (SELECT 1 FROM projed_core.project_members WHERE tenant_id=$1::uuid
+              AND project_id=$2::uuid AND user_id=projed_core.current_actor_user_id_v1() AND role='owner') END
       `, [board.tenantId, board.id]);
       if (!owner.rows.length) throw new KernelError('ACCESS_DENIED', 'External invitations require the resource owner', 403);
     }
@@ -629,7 +640,6 @@ export class CollaborationWriteRepository {
        WHERE id = $1::uuid AND status = 'pending' AND expires_at > clock_timestamp()
     `, [invite.id, external ? actor!.principalId : null, external ? profile.id : null]);
     if (accepted.rowCount !== 1) invalid('Invite is no longer pending', 409);
-    await bumpRevision(port, invite.tenant_id, invite.project_id);
     return this.getInvite(port, invite.id);
   }
 

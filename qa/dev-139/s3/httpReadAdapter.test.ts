@@ -143,6 +143,20 @@ test('seven read operations use scoped paths and preserve domain identifiers', a
   assert.deepEqual(paths, Object.keys(responses));
 });
 
+test('board access uses the Session projection even when its role has no editable capabilities', async () => {
+  const paths: string[] = [];
+  const projection = { workspaceId: 'ws', boardId: 'board', boardRole: 'admin', capabilities: ['read_board'],
+    canConfigureRolePermissions: false };
+  const adapter = createHttpDomainReadAdapter(new HttpApiClient(async input => {
+    paths.push(String(input));
+    return json({ data: projection });
+  }));
+  assert.deepEqual(await adapter.getCurrentBoardAccess('ws', 'board'), projection);
+  assert.deepEqual(paths, ['/api/v1/workspaces/ws/boards/board/access']);
+  projection.capabilities.push('unexpected');
+  await assert.rejects(adapter.getCurrentBoardAccess('ws', 'board'), /INVALID_BOARD_ACCESS/);
+});
+
 test('resource refs are path-encoded and blank refs fail before dispatch', async () => {
   const paths: string[] = [];
   const adapter = createHttpDomainReadAdapter(new HttpApiClient(async (input) => {

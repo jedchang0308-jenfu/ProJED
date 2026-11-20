@@ -7,6 +7,7 @@ import type { RuntimeDatabase } from './db.js';
 import { KernelError } from './errors.js';
 import { validateNormalizedIdentity, type ProducerVerifiedIdentity } from './identityConsumer.js';
 import { resolveGoogleMappingInTransaction } from './principalMappings.js';
+import { captureSessionPermissions } from './sessionPermissions.js';
 import { createPlatformPrincipalStateReader, PLATFORM_PROJED_PRINCIPAL_STATE_CONTRACT } from './platformPrincipalState.js';
 
 const HASH = /^[a-f0-9]{64}$/u;
@@ -267,8 +268,9 @@ export class PostgresAppSessionStore implements AppSessionStore {
       });
       validateServerActor(actor,this.#now());
       await client.query(`SELECT set_config('projed.actor_principal_id',$1,true),set_config('projed.actor_entry',$2,true),
-        set_config('projed.actor_context_id',$3,true),set_config('projed.actor_guard_revision',$4,true)`,
-      [proof.principalId,intent.entry,input.contextId,mapped.accountGuardRevision]);
+        set_config('projed.actor_context_id',$3,true),set_config('projed.actor_guard_revision',$4,true),
+        set_config('projed.actor_local_user_id',$5,true)`,
+      [proof.principalId,intent.entry,input.contextId,mapped.accountGuardRevision,mapped.localUserId]);
       if (proof.verifiedEmail !== undefined) {
         await client.query(`SELECT set_config('projed.verified_google_subject',$1,true),
           set_config('projed.actor_local_user_id',$2,true),
@@ -288,11 +290,12 @@ export class PostgresAppSessionStore implements AppSessionStore {
         if (revoked.rowCount !== 1) throw new KernelError('ACTOR_CHANGED','Original Session changed during login',409);
       }
       await client.query("SELECT set_config('projed.session_token_hash',$1,true)",[input.sessionTokenHash]);
+      const permissions = await captureSessionPermissions(client,proof);
       const result = await client.query(`INSERT INTO projed_core.app_sessions
-        (token_hash,public_origin,entry,local_user_id,google_subject,context_id,account_guard_revision,identity,expires_at_ms)
-        VALUES($1,$2,$3,$4::uuid,$5,$6::uuid,$7::bigint,$8::jsonb,$9::bigint) RETURNING ${SESSION_COLUMNS}`,
+        (token_hash,public_origin,entry,local_user_id,google_subject,context_id,account_guard_revision,identity,expires_at_ms,permission_snapshot)
+        VALUES($1,$2,$3,$4::uuid,$5,$6::uuid,$7::bigint,$8::jsonb,$9::bigint,$10::jsonb) RETURNING ${SESSION_COLUMNS}`,
       [input.sessionTokenHash,intent.publicOrigin,intent.entry,mapped.localUserId,proof.googleSubject,input.contextId,
-        mapped.accountGuardRevision,JSON.stringify(proof),proof.sourceSessionExpiresAtMs]);
+        mapped.accountGuardRevision,JSON.stringify(proof),proof.sourceSessionExpiresAtMs,JSON.stringify(permissions)]);
       const consumed = await client.query(`UPDATE projed_core.app_login_intents
         SET status='consumed',claim_hash=NULL,code_verifier=NULL,completed_session_hash=$2
         WHERE token_hash=$1 AND claim_hash=$3 AND status='processing'`,[input.tokenHash,input.sessionTokenHash,input.claimHash]);
@@ -305,7 +308,8 @@ export class PostgresAppSessionStore implements AppSessionStore {
 
   async readSession(tokenHash: string): Promise<StoredAppSession | null> {
     return this.#transaction(null,tokenHash,true,async client => {
-      const result = await client.query(`SELECT ${SESSION_COLUMNS} FROM projed_core.app_sessions WHERE token_hash=$1`,[tokenHash]);
+      const result = await client.query(`SELECT ${SESSION_COLUMNS} FROM projed_core.app_sessions WHERE token_hash=$1
+        AND permission_snapshot IS NOT NULL`,[tokenHash]);
       if (result.rows.length > 1) unavailable();
       return result.rows[0] ? session(result.rows[0]) : null;
     });
@@ -321,7 +325,7 @@ export class PostgresAppSessionStore implements AppSessionStore {
         JOIN projed_core.meeting_analysis_runs run ON run.authorization_context_id=session.context_id
         WHERE run.id=$1::uuid AND run.state IN ('queued','running','awaiting_budget','failed_retryable')
           AND run.deadline_at>clock_timestamp() AND session.entry='main'
-          AND session.revoked_at_ms IS NULL
+          AND session.revoked_at_ms IS NULL AND session.permission_snapshot IS NOT NULL
           AND session.expires_at_ms>extract(epoch FROM clock_timestamp())*1000`,[runId]);
       if(result.rows.length>1)unavailable();
       return result.rows[0]?session(result.rows[0]):null;

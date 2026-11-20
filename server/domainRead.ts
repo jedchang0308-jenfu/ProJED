@@ -183,6 +183,31 @@ export async function resolveBoard(port: ActorQueryPort, workspaceRef: string, b
 }
 
 export class DomainReadRepository {
+  async getCurrentBoardAccess(port: ActorQueryPort, workspaceRef: string, boardRef: string) {
+    const board = await resolveBoard(port, workspaceRef, boardRef);
+    const result = await port.query<{
+      workspace_role: CollaborationRole | null; board_role: CollaborationRole | null;
+      capabilities: string[]; can_configure: boolean;
+    }>(`
+      WITH bound AS (SELECT nullif(current_setting('projed.session_permissions',true),'')::jsonb AS permissions),
+      scope AS (SELECT permissions->'workspaces'->$1::text AS workspace, permissions->'boards'->$2::text AS board FROM bound)
+      SELECT workspace->>'role' AS workspace_role, board->>'role' AS board_role,
+             ARRAY(SELECT jsonb_array_elements_text(workspace->'capabilities')
+                   UNION SELECT jsonb_array_elements_text(board->'capabilities')) AS capabilities,
+             (board->'capabilities') ? 'configure_permissions' AS can_configure
+        FROM scope WHERE board->>'workspaceId'=$1 AND (board->'capabilities') ? 'read_board'
+    `, [board.tenantId, board.id]);
+    const access = result.rows[0];
+    if (!access) notFound();
+    return {
+      workspaceId: board.legacyWorkspaceId, boardId: board.legacyBoardId,
+      ...(access.workspace_role && { workspaceRole: access.workspace_role }),
+      ...(access.board_role && { boardRole: access.board_role }),
+      capabilities: access.capabilities.filter(cap => cap !== 'configure_permissions' && cap !== 'write_tags'),
+      canConfigureRolePermissions: access.can_configure,
+    };
+  }
+
   async listWorkspaces(port: ActorQueryPort): Promise<DomainWorkspace[]> {
     const tenants = await port.query<{
       id: string; legacy_workspace_id: string; title: string; owner_id: string | null;

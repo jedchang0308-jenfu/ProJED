@@ -14,6 +14,7 @@ export async function verifyCentralRevocationPostgres(database: RuntimeDatabase,
   assert.equal(url.pathname,`/${config.binding.databaseName}`);
   const admin=new pg.Client({connectionString:url.toString()});await admin.connect();
   const actor: ServerActorV1={principalId:session.identity.principalId,localUserId:session.localUserId,
+    sessionTokenHash:session.tokenHash,
     entry:session.entry,contextId:session.contextId,accountGuardRevision:session.accountGuardRevision,expiresAtMs:Date.now()+10_000};
   const check=()=>runActorTransaction(database,config,actor,async()=>true);
   const revoke=()=>admin.query('SELECT projed_contract.invalidate_google_sessions_v1($1::text)',[session.identity.googleSubject]);

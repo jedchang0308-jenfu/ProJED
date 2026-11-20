@@ -206,6 +206,10 @@
       {
         "version": "0046_external_board_invitation_v1",
         "path": "db/migrations/0046_external_board_invitation_v1.sql"
+      },
+      {
+        "version": "0047_login_permission_snapshot_v1",
+        "path": "db/migrations/0047_login_permission_snapshot_v1.sql"
     }
   ],
   "objectAllowlist": [
@@ -397,7 +401,13 @@
     "projed_contract.v_google_session_accounts_v1",
     "projed_contract.v_account_session_guards_v1",
     "projed_contract.invalidate_google_sessions_v1",
-    "projed_core.account_session_revocation_guard_v1"
+    "projed_core.account_session_revocation_guard_v1",
+    "projed_core.session_effective_permissions_v1",
+    "projed_core.session_created_resource_v1",
+    "projed_core.session_permission_loss_v1",
+    "projed_core.accepted_invite_revision_v1",
+    "projed_core.revocable_resource_sessions_v1",
+    "projed_core.revoke_reduced_permissions_v1"
   ],
   "staticFixturePath": "qa/dev-139/s1/static",
   "runtime": {

@@ -477,6 +477,7 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
       principalKind: identity.principalKind,
       googleSubject: identity.googleSubject,
       localUserId: stored.localUserId,
+      sessionTokenHash: stored.tokenHash,
       entry: stored.entry,
       contextId: stored.contextId,
       expiresAtMs: Math.min(

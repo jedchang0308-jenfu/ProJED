@@ -357,6 +357,7 @@ export const memberService = {
     boardId: string,
     userId: string
   ): Promise<CurrentBoardAccess> => {
+    if (isHttpBackend) return httpDomainReadService.getCurrentBoardAccess(workspaceId, boardId);
     if (isSupabaseBackend) {
       return supabaseMemberService.getCurrentBoardAccess(workspaceId, boardId, userId);
     }

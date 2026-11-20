@@ -23,6 +23,7 @@ const subscription = {
 };
 
 const reads: ProjedDomainReadAdapter = {
+  async getCurrentBoardAccess() { throw new Error('not used'); },
   async listWorkspaces() { return []; },
   async listWorkspaceMembers(workspaceRef) {
     return [{ workspaceId: workspaceRef, userId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', role: 'owner', status: 'active',

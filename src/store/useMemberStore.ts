@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { createDefaultBoardRolePermissionMatrix, type BoardMember, type BoardRolePermissionMatrix, type CollaborationMemberProfile, type CurrentBoardAccess, type WorkspaceMember } from '../types';
-import { memberService } from '../services/dataBackend';
+import { isHttpBackend, memberService } from '../services/dataBackend';
 import useAuthStore from './useAuthStore';
 
 interface MemberState {
@@ -24,6 +24,7 @@ interface MemberActions {
 }
 
 type MemberStore = MemberState & MemberActions;
+let memberLoadGeneration = 0;
 
 export const useMemberStore = create<MemberStore>((set, get) => ({
   workspaceMembers: [],
@@ -35,16 +36,19 @@ export const useMemberStore = create<MemberStore>((set, get) => ({
   loadedWorkspaceId: null,
   loadedBoardId: null,
 
-  clearMembers: () => set({
-    workspaceMembers: [],
-    boardMembers: [],
-    boardRolePermissions: createDefaultBoardRolePermissionMatrix(),
-    currentBoardAccess: null,
-    loading: false,
-    error: null,
-    loadedWorkspaceId: null,
-    loadedBoardId: null,
-  }),
+  clearMembers: () => {
+    memberLoadGeneration++;
+    set({
+      workspaceMembers: [],
+      boardMembers: [],
+      boardRolePermissions: createDefaultBoardRolePermissionMatrix(),
+      currentBoardAccess: null,
+      loading: false,
+      error: null,
+      loadedWorkspaceId: null,
+      loadedBoardId: null,
+    });
+  },
 
   updateMemberProfile: (userId, profile) => set(state => {
     const mergeProfile = (member: WorkspaceMember | BoardMember) => {
@@ -68,6 +72,7 @@ export const useMemberStore = create<MemberStore>((set, get) => ({
   }),
 
   loadMembers: async (workspaceId, boardId) => {
+    const generation = ++memberLoadGeneration;
     if (!workspaceId) {
       set({
         workspaceMembers: [],
@@ -82,20 +87,21 @@ export const useMemberStore = create<MemberStore>((set, get) => ({
       return;
     }
 
-    set({ loading: true, error: null, loadedWorkspaceId: null, loadedBoardId: null });
+    set({ loading: true, error: null, currentBoardAccess: null, loadedWorkspaceId: null, loadedBoardId: null });
     try {
-      const workspaceMembers = await memberService.listWorkspaceMembers(workspaceId);
+      const currentUserId = useAuthStore.getState().user?.uid;
+      const currentBoardAccess = boardId && currentUserId
+        ? await memberService.getCurrentBoardAccess(workspaceId, boardId, currentUserId)
+        : null;
+      const workspaceMembers = isHttpBackend && boardId && !currentBoardAccess?.capabilities.includes('manage_workspace_members')
+        ? [] : await memberService.listWorkspaceMembers(workspaceId);
       const boardMembers = boardId
         ? await memberService.listBoardMembers(workspaceId, boardId)
         : [];
       const boardRolePermissions = boardId
         ? await memberService.getBoardRolePermissions(workspaceId, boardId)
         : createDefaultBoardRolePermissionMatrix();
-      const currentUserId = useAuthStore.getState().user?.uid;
-      const currentBoardAccess = boardId && currentUserId
-        ? await memberService.getCurrentBoardAccess(workspaceId, boardId, currentUserId)
-        : null;
-
+      if (generation !== memberLoadGeneration || currentUserId !== useAuthStore.getState().user?.uid) return;
       set({
         workspaceMembers,
         boardMembers,
@@ -107,6 +113,7 @@ export const useMemberStore = create<MemberStore>((set, get) => ({
         loadedBoardId: boardId || null,
       });
     } catch (error) {
+      if (generation !== memberLoadGeneration) return;
       console.error('[useMemberStore] loadMembers failed:', error);
       set({
         workspaceMembers: [],

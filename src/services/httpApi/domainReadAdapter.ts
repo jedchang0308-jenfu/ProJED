@@ -1,6 +1,7 @@
 import {
   BOARD_PERMISSION_CAPABILITIES,
   COLLABORATION_ROLES,
+  WORKSPACE_ROLE_CAPABILITIES,
   createDefaultBoardRolePermissionMatrix,
   normalizeBoardRolePermissionMatrix,
   type Board,
@@ -8,6 +9,7 @@ import {
   type BoardRolePermissionMatrix,
   type CollaborationMemberProfile,
   type CollaborationRole,
+  type CurrentBoardAccess,
   type Dependency,
   type MembershipStatus,
   type TaskNode,
@@ -21,6 +23,7 @@ import { isTaskNoteRichContent } from '../../utils/taskNoteRichContent';
 import { HttpApiClient } from './httpApiClient';
 
 export interface ProjedDomainReadAdapter {
+  getCurrentBoardAccess(workspaceRef: string, boardRef: string, signal?: AbortSignal): Promise<CurrentBoardAccess>;
   listWorkspaces(signal?: AbortSignal): Promise<Workspace[]>;
   listWorkspaceMembers(workspaceRef: string, signal?: AbortSignal): Promise<WorkspaceMember[]>;
   listTags(workspaceRef: string, signal?: AbortSignal): Promise<TaskTag[]>;
@@ -34,6 +37,7 @@ const ROLES = new Set<string>(COLLABORATION_ROLES);
 const MEMBERSHIP_STATUSES = new Set<MembershipStatus>(['active', 'invited', 'suspended']);
 const TASK_STATUSES = new Set<TaskStatus>(['todo', 'in_progress', 'delayed', 'completed', 'unsure', 'onhold']);
 const CAPABILITIES = new Set<string>(BOARD_PERMISSION_CAPABILITIES);
+const ACCESS_CAPABILITIES = new Set<string>([...CAPABILITIES, ...Object.values(WORKSPACE_ROLE_CAPABILITIES).flat()]);
 const TAG_COLORS = new Set<TagColor>(['green', 'yellow', 'orange', 'red', 'purple', 'blue', 'sky', 'lime', 'pink', 'black', 'gray']);
 
 function record(value: unknown, label: string): Record<string, unknown> {
@@ -306,6 +310,19 @@ function boardPath(workspaceRef: string, boardRef: string, suffix: string): stri
 
 export function createHttpDomainReadAdapter(client: HttpApiClient): ProjedDomainReadAdapter {
   return {
+    async getCurrentBoardAccess(workspaceRef, boardRef, signal) {
+      const response = await client.request<unknown>(boardPath(workspaceRef, boardRef, 'access'), { signal });
+      const access = dataRecord(response, 'BOARD_ACCESS');
+      if (!Array.isArray(access.capabilities) || !access.capabilities.every(cap => typeof cap === 'string' && ACCESS_CAPABILITIES.has(cap))
+          || typeof access.canConfigureRolePermissions !== 'boolean') throw new Error('HTTP_API_INVALID_BOARD_ACCESS');
+      return {
+        workspaceId: stringValue(access.workspaceId, 'WORKSPACE_ID'), boardId: stringValue(access.boardId, 'BOARD_ID'),
+        capabilities: access.capabilities as CurrentBoardAccess['capabilities'],
+        canConfigureRolePermissions: access.canConfigureRolePermissions,
+        ...(access.workspaceRole === undefined ? {} : { workspaceRole: role(access.workspaceRole) }),
+        ...(access.boardRole === undefined ? {} : { boardRole: role(access.boardRole) }),
+      };
+    },
     async listWorkspaces(signal) {
       const response = await client.request<unknown>('/api/v1/workspaces', { signal });
       return items(response, 'WORKSPACES').map(parseHttpWorkspace);

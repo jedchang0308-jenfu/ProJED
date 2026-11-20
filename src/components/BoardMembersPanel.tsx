@@ -97,10 +97,10 @@ const formatDate = (value?: number) => {
 const canConfigureRolePermissionsFromAccess = (
   currentBoardAccess: ReturnType<typeof useMemberStore.getState>['currentBoardAccess']
 ) =>
-  currentBoardAccess?.workspaceRole === 'owner'
+  currentBoardAccess?.canConfigureRolePermissions ?? (currentBoardAccess?.workspaceRole === 'owner'
   || currentBoardAccess?.workspaceRole === 'admin'
   || currentBoardAccess?.boardRole === 'owner'
-  || currentBoardAccess?.boardRole === 'admin';
+  || currentBoardAccess?.boardRole === 'admin');
 
 const useBoardMemberPanelState = () => {
   const activeWorkspaceId = useBoardStore(state => state.activeWorkspaceId);

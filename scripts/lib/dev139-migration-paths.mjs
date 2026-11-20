@@ -51,4 +51,5 @@ export const S3_MIGRATION_PATHS = Object.freeze([
   'db/migrations/0044_legacy_unscoped_audit_retention_v1.sql',
   'db/migrations/0045_central_session_revocation_v1.sql',
   'db/migrations/0046_external_board_invitation_v1.sql',
+  'db/migrations/0047_login_permission_snapshot_v1.sql',
 ]);

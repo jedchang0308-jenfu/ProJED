@@ -8,6 +8,7 @@ export interface ServerActorV1 {
   readonly principalId: string;
   readonly principalKind?: 'employee' | 'personal';
   readonly googleSubject?: string;
+  readonly sessionTokenHash?: string;
   readonly localUserId: string;
   readonly entry: 'main' | 'quick';
   readonly contextId: string;
@@ -241,12 +242,14 @@ export async function runActorTransaction<T>(
     }
     const result = await guardedClientQuery<{ allowed: boolean }>(`
       WITH authz AS (
-        SELECT EXISTS (
+        SELECT CASE WHEN nullif(current_setting('projed.session_permissions',true),'') IS NOT NULL
+          THEN (current_setting('projed.session_permissions')::jsonb->'visibleWorkspaces') ? ($1::uuid)::text
+          ELSE EXISTS (
           SELECT 1 FROM projed_core.tenant_members member
            WHERE member.tenant_id = $1::uuid
              AND member.user_id = projed_core.current_actor_user_id_v1()
              AND member.status = 'active'
-        ) AND projed_core.actor_context_valid_v1() AS allowed
+        ) END AND projed_core.actor_context_valid_v1() AS allowed
       )
       SELECT allowed,
              CASE WHEN allowed THEN set_config('projed.authorized_tracking_derived_read', $1::text, true)
@@ -376,6 +379,21 @@ export async function runActorTransaction<T>(
     await client.query("SELECT pg_advisory_xact_lock_shared(hashtextextended('projed:account:' || $1, 0))", [actor.localUserId]);
     const guard = await client.query<{ valid: boolean }>('SELECT projed_core.actor_context_valid_v1() AS valid');
     if (guard.rows[0]?.valid !== true) throw new KernelError('ACCESS_DENIED', 'Actor is not authorized', 403);
+    if (actor.sessionTokenHash) {
+      await client.query("SELECT set_config('projed.session_token_hash',$1,true)", [actor.sessionTokenHash]);
+      const bound = await client.query(`
+        SELECT set_config('projed.session_permissions',
+          projed_core.session_effective_permissions_v1(permission_snapshot,created_resource_permissions)::text, true)
+          FROM projed_core.app_sessions
+         WHERE token_hash=$1 AND context_id=$2::uuid AND local_user_id=$3::uuid
+           AND identity->>'principalId'=$4 AND entry=$5 AND account_guard_revision=$6::bigint
+           AND revoked_at_ms IS NULL AND expires_at_ms > extract(epoch FROM clock_timestamp())*1000
+           AND permission_snapshot IS NOT NULL
+      `, [actor.sessionTokenHash, actor.contextId, actor.localUserId, actor.principalId, actor.entry, actor.accountGuardRevision]);
+      if (bound.rowCount !== 1) throw new KernelError('ACCESS_DENIED','Session permissions are unavailable',403);
+    } else if (config.env === 'managed') {
+      throw new KernelError('ACCESS_DENIED','An authenticated Session is required',403);
+    }
     const result = await callback({
       query,
       authorizeWorkspaceBootstrap,

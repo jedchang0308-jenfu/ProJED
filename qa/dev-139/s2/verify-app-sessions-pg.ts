@@ -122,7 +122,7 @@ export async function verifyAppSessionsPostgres(database: RuntimeDatabase, confi
   const owner=concurrent[0]!;
   const actor: ServerActorV1={principalId:owner.identity.principalId,localUserId:owner.localUserId,
     entry:owner.entry,contextId:owner.contextId,accountGuardRevision:owner.accountGuardRevision,
-    expiresAtMs:owner.expiresAtMs};
+    expiresAtMs:owner.expiresAtMs,principalKind:owner.identity.principalKind,sessionTokenHash:owner.tokenHash};
   const reads=new DomainReadRepository();
   const collaborationReads=new CollaborationReadRepository();
   const commands=new CollaborationWriteRepository(reads);
@@ -133,33 +133,35 @@ export async function verifyAppSessionsPostgres(database: RuntimeDatabase, confi
   assert.deepEqual((await runActorTransaction(database,config,actor,port=>reads.listWorkspaceMembers(port,workspace.id)))
     .map(member=>member.userId),[owner.localUserId]);
   const employeeActor={...actor,principalId:employee.identity.principalId,localUserId:employee.localUserId,
-    contextId:employee.contextId,accountGuardRevision:employee.accountGuardRevision};
+    contextId:employee.contextId,accountGuardRevision:employee.accountGuardRevision,principalKind:employee.identity.principalKind,sessionTokenHash:employee.tokenHash};
   assert.deepEqual(await runActorTransaction(database,config,employeeActor,port=>reads.listWorkspaces(port)),[]);
   await assert.rejects(runActorTransaction(database,config,employeeActor,port=>reads.listTasks(port,workspace.id,board.id)),
     (error: unknown)=>error instanceof KernelError && error.code==='RESOURCE_NOT_FOUND');
 
-  const {verifiedEmail:initialEmail,...originalGoogleProof}=personalProof;
-  const refreshedProof={...personalProof,verifiedEmail:'fresh@example.invalid'};
+  const recipientProof=newIdentity('employee','invite-recipient-'+randomUUID());
+  const recipient=await store.complete(await prepare(recipientProof));
+  const {verifiedEmail:initialEmail,...originalGoogleProof}=recipientProof;
+  const refreshedProof={...recipientProof,verifiedEmail:'fresh@example.invalid'};
   const {verifiedEmail:refreshedEmail,...sameGoogleProof}=refreshedProof;
   assert.equal(initialEmail,'a@example.invalid');
   assert.equal(refreshedEmail,'fresh@example.invalid');
   assert.deepEqual(sameGoogleProof,originalGoogleProof,'The second login changes only the verified email');
   const refreshedInput=await prepare(refreshedProof);
   const refreshed=await store.complete(refreshedInput);
-  assert.equal(refreshed.localUserId,owner.localUserId,'Verified email refresh must retain the existing profile UUID');
-  assert.equal(refreshed.accountGuardRevision,owner.accountGuardRevision,'Verified email refresh must not recreate or advance the guard');
-  assert.equal(refreshed.identity.googleSubject,owner.identity.googleSubject);
-  assert.notEqual(refreshed.contextId,owner.contextId);
+  assert.equal(refreshed.localUserId,recipient.localUserId,'Verified email refresh must retain the existing profile UUID');
+  assert.equal(refreshed.accountGuardRevision,recipient.accountGuardRevision,'Verified email refresh must not recreate or advance the guard');
+  assert.equal(refreshed.identity.googleSubject,recipient.identity.googleSubject);
+  assert.notEqual(refreshed.contextId,recipient.contextId);
   const refreshedMapping=await resolver.resolve(refreshedProof);
   assert.equal(refreshedMapping.status,'active');
-  if(refreshedMapping.status==='active') assert.equal(refreshedMapping.localUserId,owner.localUserId);
+  if(refreshedMapping.status==='active') assert.equal(refreshedMapping.localUserId,recipient.localUserId);
   const refreshedActor: ServerActorV1={principalId:refreshed.identity.principalId,localUserId:refreshed.localUserId,
     entry:refreshed.entry,contextId:refreshed.contextId,accountGuardRevision:refreshed.accountGuardRevision,
-    expiresAtMs:refreshed.expiresAtMs};
+    expiresAtMs:refreshed.expiresAtMs,principalKind:refreshed.identity.principalKind,sessionTokenHash:refreshed.tokenHash};
   const refreshedProfile=await runActorTransaction(database,config,refreshedActor,port=>port.query<{id:string;email:string|null}>(`
     SELECT id::text AS id,email FROM projed_core.profiles WHERE id=$1::uuid
-  `,[owner.localUserId]));
-  assert.deepEqual(refreshedProfile.rows,[{id:owner.localUserId,email:'fresh@example.invalid'}]);
+  `,[recipient.localUserId]));
+  assert.deepEqual(refreshedProfile.rows,[{id:recipient.localUserId,email:'fresh@example.invalid'}]);
 
   // Keep invite/RLS effects on these fresh fixture accounts, not imported seed A/B.
   const inviteWorkspace=await runActorTransaction(database,config,employeeActor,
@@ -183,41 +185,64 @@ export async function verifyAppSessionsPostgres(database: RuntimeDatabase, confi
   assert.equal((await runActorTransaction(database,config,refreshedActor,port=>reads.listWorkspaces(port)))
     .some(item=>item.id===inviteWorkspace.id),false,'New account must not see inviter workspace before accepting an invite');
   await assert.rejects(
-    runActorTransaction(database,config,refreshedActor,port=>commands.acceptInvite(port,oldEmailToken)),
+    runActorTransaction(database,config,refreshedActor,port=>commands.acceptInvite(port,oldEmailToken,refreshedActor)),
     (error: unknown)=>error instanceof KernelError && error.code==='RESOURCE_NOT_FOUND' && error.httpStatus===404,
     'The old email invite must be hidden by recipient RLS after verified email refresh',
   );
   assert.deepEqual((await runActorTransaction(database,config,employeeActor,
     port=>collaborationReads.listPendingInvites(port,inviteWorkspace.id,inviteBoard.id))).map(item=>item.email).sort(),
   ['a@example.invalid','fresh@example.invalid'],'The rejected old-email invite remains pending');
+  await assert.rejects(runActorTransaction(database,config,actor,port=>commands.acceptInvite(port,oldEmailToken,actor)),
+    (error: unknown)=>error instanceof KernelError && error.code==='ACCESS_DENIED',
+    'A personal account cannot use a matching contact email to accept an internal invitation');
   const acceptedFreshInvite=await runActorTransaction(database,config,refreshedActor,
-    port=>commands.acceptInvite(port,freshEmailToken));
+    port=>commands.acceptInvite(port,freshEmailToken,refreshedActor));
   assert.equal(acceptedFreshInvite.status,'accepted');
   assert.equal(acceptedFreshInvite.email,'fresh@example.invalid');
   const invitedMembers=await runActorTransaction(database,config,employeeActor,
     port=>reads.listWorkspaceMembers(port,inviteWorkspace.id));
-  assert.deepEqual(invitedMembers.filter(member=>member.userId===owner.localUserId).map(member=>member.profile.email),
+  assert.deepEqual(invitedMembers.filter(member=>member.userId===recipient.localUserId).map(member=>member.profile.email),
     ['fresh@example.invalid'],'The refreshed email is accepted through the real invite and RLS path');
   await assert.rejects(runActorTransaction(database,config,refreshedActor,
     port=>reads.listWorkspaceMembers(port,inviteWorkspace.id)),
     (error: unknown)=>error instanceof KernelError && error.code==='RESOURCE_NOT_FOUND',
     'A board invitation must not grant workspace member-management access');
-  assert.deepEqual(await runActorTransaction(database,config,refreshedActor,
-    port=>reads.listTasks(port,inviteWorkspace.id,inviteBoard.id)),[]);
+  await assert.rejects(runActorTransaction(database,config,refreshedActor,
+    port=>reads.listTasks(port,inviteWorkspace.id,inviteBoard.id)),
+    (error: unknown)=>error instanceof KernelError && error.code==='RESOURCE_NOT_FOUND');
   assert.equal((await runActorTransaction(database,config,refreshedActor,port=>reads.listWorkspaces(port)))
-    .some(item=>item.id===inviteWorkspace.id),true);
+    .some(item=>item.id===inviteWorkspace.id),false);
+  const memberSession=await store.complete(await prepare(refreshedProof));
+  const memberActor={...refreshedActor,sessionTokenHash:memberSession.tokenHash,contextId:memberSession.contextId};
+  const access=()=>runActorTransaction(database,config,memberActor,
+    port=>reads.getCurrentBoardAccess(port,inviteWorkspace.id,inviteBoard.id));
+  const originalAccess=await access();
+  assert.equal(originalAccess.boardRole,'member');
+  assert.ok(originalAccess.capabilities.includes('edit_task'));
+  const matrix=await runActorTransaction(database,config,employeeActor,
+    port=>reads.getBoardRolePermissions(port,inviteWorkspace.id,inviteBoard.id));
+  assert.ok(!matrix.member.includes('manage_board_members'));
+  const increased={...matrix,member:[...matrix.member,'manage_board_members']};
+  await runActorTransaction(database,config,employeeActor,
+    port=>commands.updateRolePermissions(port,inviteWorkspace.id,inviteBoard.id,increased));
+  assert.deepEqual((await access()).capabilities.sort(),originalAccess.capabilities.sort());
+  await runActorTransaction(database,config,employeeActor,port=>commands.updateRolePermissions(port,
+    inviteWorkspace.id,inviteBoard.id,{...increased,member:increased.member.filter(cap=>cap!=='edit_task')}));
+  assert.ok((await store.readSession(memberSession.tokenHash))?.revokedAtMs);
+  await assert.rejects(access(),(error: unknown)=>error instanceof KernelError && error.code==='ACCESS_DENIED');
+  assert.equal((await store.readSession(employee.tokenHash))?.revokedAtMs,null);
 
   await assert.rejects(
     runActorTransaction(database,config,refreshedActor,port=>port.query(`
       UPDATE projed_core.profiles SET email='unverified-change@example.invalid' WHERE id=$1::uuid
-    `,[owner.localUserId])),
+    `,[recipient.localUserId])),
     (error: unknown)=>error instanceof KernelError && (error.cause as {code?:string}|undefined)?.code==='42501',
     'An authorized actor without registration scope cannot change profile email',
   );
   const displayUpdate=await runActorTransaction(database,config,refreshedActor,port=>port.query<{
     email:string|null;display_name:string|null;
   }>(`UPDATE projed_core.profiles SET display_name='Updated through actor scope',updated_at=now()
-      WHERE id=$1::uuid RETURNING email,display_name`,[owner.localUserId]));
+      WHERE id=$1::uuid RETURNING email,display_name`,[recipient.localUserId]));
   assert.deepEqual(displayUpdate.rows,[{email:'fresh@example.invalid',display_name:'Updated through actor scope'}],
     'Existing actor-scoped display-name updates remain available');
 
