@@ -48,6 +48,40 @@ function assertInvalid(input) {
   assert.throws(() => renderProjedCloudRun(input), { code: 'CLOUD_RUN_INPUT_INVALID' });
 }
 
+test('candidate preparation needs no source credential and cannot schedule or import production data', () => {
+  const { sourceBundleVersion, ...input } = makeInput();
+  const plan = renderProjedCloudRun({ ...input, deploymentScope: 'candidate' });
+  assert.deepEqual(Object.keys(plan.jobs), ['migrate', 'analysis']);
+  assert.equal(plan.scheduler, null);
+  assert.equal(plan.requests.length, 3);
+  assert.ok(plan.requests.every(({ method, url }) => method === 'POST'
+    && url.startsWith('https://run.googleapis.com/v2/projects/projed-cc78d/locations/asia-east1/')
+    && !url.endsWith(':run')));
+  assert.equal(JSON.stringify(plan.requests).includes('secret'), false);
+  assert.equal(plan.foundation.iamBindings.some(({ role }) => role === 'roles/secretmanager.secretAccessor'), false);
+  assert.deepEqual(plan.foundation.operatorRequirements.cloudSchedulerPermissions, []);
+  assert.equal(plan.foundation.schedulerServiceAccount, null);
+  assert.equal(plan.foundation.serviceAccounts.some(({ email }) => email.includes('importer')), false);
+  assert.equal(plan.service.invokerIamDisabled, false);
+  assert.equal(plan.service.name.endsWith('/services/projed-prod'), true);
+  assert.equal(envMap(plan.service.template.containers[0]).PROJED_PUBLIC_APP_URL, 'https://projed-cc78d.web.app');
+  assert.equal(plan.service.template.vpcAccess.egress, 'PRIVATE_RANGES_ONLY');
+  assert.equal(plan.foundation.providerConfiguration.qualificationApplied, false);
+  assert.equal(plan.foundation.providerConfiguration.vertex.applicableAgreementEvidenceRequired, true);
+  assert.equal(plan.foundation.ownerBootstrap.migrationJobInput.expectedMigrations.length, S3_MIGRATION_PATHS.length);
+});
+
+test('candidate scope is explicit and preserves image, bucket and exact-input rejection', () => {
+  const { sourceBundleVersion, ...input } = makeInput();
+  const candidate = { ...input, deploymentScope: 'candidate' };
+  assertInvalid(input);
+  assertInvalid({ ...candidate, sourceBundleVersion });
+  assertInvalid({ ...candidate, deploymentScope: 'other' });
+  assertInvalid({ ...candidate, runtimeImage: `${CLOUD_RUN_TARGET.repository}/projed-prod:latest` });
+  assertInvalid({ ...candidate, audioBucket: 'unapproved-audio-bucket' });
+  assertInvalid({ ...candidate, binding: { ...input.binding, migrationSha256: {} } });
+});
+
 test('owner window input comes from the same fixed Job and complete ordered migration hashes', () => {
   const input = makeInput();
   input.binding.migrationSha256 = Object.fromEntries([...S3_MIGRATION_PATHS].reverse().map((path,index) => [path,index.toString(16).padStart(64,'0')]));

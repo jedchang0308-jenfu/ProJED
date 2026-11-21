@@ -63,6 +63,7 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
 ## DEV-139：ProJED 納入 Jenfu-Platform，Cloud Run／Cloud SQL 對齊並保留 Vite
 
+  - 候選準備已補明確 candidate renderer：不要求來源 Secret、不產生 snapshot import／Scheduler，只準備 IAM 保護的 service 與手動 Jobs；40 項 release 自查及完整 binding 的 owner input 驗證通過。原分支與已驗證映像保留，正式執行與零留存資格仍依各環境查證，營運證據保留於任務本機輸出。[候選部署設計與界線](specs/SPEC-139-projed-jenfu-platform-onboarding.md#471-2026-11-20-最小-foundation-變更提案)
   - `8421432` 的完整原生／正常畫面與 Linux OCI CI 均通過，涵蓋移板後原 Session 重載、任務與私人會議保留、協作者拒絕、離線重連與行事曆匿名 ICS／token 撤銷及直接 SQL 對帳。0051 收斂移板 policy 的一般讀取成本，worker 亦修正跨時鐘 lease 誤拒。Platform `a8db9c10` 的 owner 原生及 required QC 已驗同源 51 份 migration 與恢復。[完整 CI 與 A07–A09 證據](specs/SPEC-139-projed-jenfu-platform-onboarding.md#8-驗收與證據契約)
   - 人工會議已由正常選單建立及儲存，重載後保留原草稿 ID 與正文，另一帳號讀取回 404，麥克風及模型呼叫均為零。已修正晚到查詢清空紀錄、儲存結果跨帳號覆蓋及登出草稿處理。`01ebf94` 的原生 PostgreSQL／瀏覽器與 Linux OCI CI 通過；登出取消／先儲存／捨棄另以本機合成 HTTP 驗證。[A08 實際證據與限制](specs/SPEC-139-projed-jenfu-platform-onboarding.md#8-驗收與證據契約)
   - 原工作台與 Quick 已在隔離 PostgreSQL 驗過停寫、未知結果重送及唯一回執。三系統演練已驗證撤邀後核准回 409，以及換帳號後拒絕舊 Session 綁定。看板設定已驗證權限修改與清空後可重載，唯讀協作者可開啟詳情，兩項越權修改均回 403。演練使用合成身分。[舊端停寫](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44748124380/job/136329293641)｜[外部協作](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/44753454323)｜[看板權限](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44752941134)

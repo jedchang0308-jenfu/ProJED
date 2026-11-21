@@ -48,7 +48,7 @@ OrgMaster當前來源`99ea1a7ec3872deb7f4df1a13e2a4203ca02e2f8`修正release／a
 
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。
 - 日期：2026-11-21（Asia/Taipei）；可執行來源 `8421432`，驗證版本與產物依 §8、§47.1 的實際收據識別。
-- 文件狀態為**合併前核對完成**。ProJED、Platform、OrgMaster 的既有 PR 均為 ready-for-review、open 且 mergeable；程式來源 `8421432` 的成功 CI 及 Google Cloud 候選映像已核對，證據見 §8、§47.1。後續提交僅更新文件，沿用該程式來源的驗證。正式 identity pins 與 provider 資格、真資料、原入口、writer fence、切流及發布仍依對應環境查證。身分 owner source 見 [§36](#36-orgmaster-minimum-principal-publication-w222026-10-29)與 [§37](#37-platform-projed-session-and-handoff-w232026-10-29)，資料保留見 §34–§35，資源與操作授權見 §33 及 §47.1。
+- 文件狀態為**已合併，候選部署準備中**。原分支與已驗證映像保留，程式來源 `8421432` 的成功 CI 及候選映像沿用，證據見 §8、§47.1。候選部署與正式啟用分階段處理；正式 identity pins 與 provider 資格、真資料、原入口、writer fence、切流及發布仍依對應環境查證。身分 owner source 見 [§36](#36-orgmaster-minimum-principal-publication-w222026-10-29)與 [§37](#37-platform-projed-session-and-handoff-w232026-10-29)，資料保留見 §34–§35，資源與操作授權見 §33 及 §47.1。
 - 適用階段：S1–S3 本地切片歷史見 §12–§32；2026-10-28 續行授權見 [DEV-139 人類決策與授權範圍](../dev_task.md#1-人類決策與授權範圍)，涵蓋 ProJED／OrgMaster／Jenfu-Platform 的 source 整合工作。正式整合與發布仍是完整目標，不以本地切片完成替代；新責任權限依 §33 處理。定期審視不是續行或發布的 required gate；本輪未執行正式資料寫入、切流或 IAM／Secret／credential／billing 變更。
 - 直接交接入口：[§11 S1 定案契約](#11-架構決策與-s1-定案契約)、[§12 S1 實作狀態](#12-s1-實作狀態2026-10-26)、[§13 S2 consumer seam](#13-s2-projed-identity-consumer-seam2026-10-26)、[§14 S3 read adapter](#14-s3-http-read-adapter-slice2026-10-26)、[§15 S3 domain command](#15-s3-domain-command-w12026-10-26)、[§16 S3 collaboration command](#16-s3-collaboration-command-w22026-10-27)、[§17 S3 record／activity](#17-s3-recordactivity-w32026-10-27)、[§18 S3 HTTP product wiring](#18-s3-http-product-wiring-w42026-10-27)、[§19 S3 Board transfer](#19-s3-board-transfer-w52026-10-27)、[§20 S3 legacy provider boundary](#20-s3-legacy-provider-boundary-w62026-10-27)、[§21 S3 Quick Task](#21-s3-quick-task-w72026-10-27)、[§22 S3 Task Workbench](#22-s3-task-workbench-w82026-10-27)、[§23 S3 Actor CAS](#23-s3-actor-context-cas-w92026-10-27)、[§24 S3 Task Tracking](#24-s3-task-tracking-w102026-10-27)、[§25 S3 Backup／Import](#25-s3-backupimport-w112026-10-27)、[§26 S3 Account Preferences](#26-s3-account-preferences-w122026-10-27)、[§27 S3 Calendar Subscription](#27-s3-calendar-subscription-w132026-10-27)及[§32 本地開發收斂](#32-s3-local-development-closure-w182026-10-27)；[§11.8 技術主管審查](#118-技術主管審查與最小優化)保留 Rev5 修正理由；既有使用者切換見 [§6.3](#63-既有使用者的切換基線)。
 - 決策來源：[DEV-139 人類決策](../dev_task.md#dev-139-jenfu-platform-onboarding)；架構取捨：[ADR-054](../decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。本文件不是其他 owner 已接受或已發布的契約。
@@ -1403,6 +1403,14 @@ Binding以容器內實際profile／SQL／static metadata bytes為準；本次33�
 ## 47. Managed Job artifact and real foundation gaps（W33，2026-10-29）
 
 ### 47.1 2026-11-20 最小 foundation 變更提案
+
+**候選部署準備。** 候選部署須維持零留存、原資料／網址／PWA，與正式啟用分開執行。具名 foundation 仍依本節契約及實際 provider readback 查證；營運盤點及 IAM 執行紀錄保留於任務的本機證據。
+
+候選階段使用同一 renderer 的明確 `deploymentScope: "candidate"`，輸入不含 `sourceBundleVersion`；只產生 IAM 保護的 `projed-prod`、migration Job 與手動 analysis Job 三個 create request。不建立來源 snapshot plan/apply/reconcile Jobs、不要求來源 Secret 版本、不建立 Scheduler，也不產生 Job execution、公開 invoker、Hosting 或既有 traffic 變更。正式匯入仍沿原模式要求精確 Secret 版本與停寫／完整性契約。原完整模式保持相容；兩模式共用 immutable image、51 份 SQL、私人網路及 provider 資格檢查，無資格時推論繼續關閉。這是部署階段的責任拆分，不新增人工 gate，也不把候選 ready 當成登入、正式移轉或切流驗收。
+
+候選輸入已從既有 Build `d73d71b0` 的實際 binding 抽出，51 個 raw Git blob hash 與 profile 再核對一致；renderer 產物通過 Platform owner 的 `validateProjedMigrationJobInput`。新 release-plan 自查 40/40 PASS。renderer／測試不會被 `Dockerfile.dev139` 複製進 runtime／managed-jobs／ASR final image；此次沒有修改其編譯、前端、server、SQL 或實際映像 bytes，保留原 artifact 的來源 `8421432` 與 digest，不改掛新來源。輸入、render-only plan 及 IAM 讀回位於 task-owned `output/dev139-candidate-20261121/`。正式候選尚未部署，網路前置條件未成立時不提交依賴它的 Run create 或 migration。
+
+來源準備沿現行 driver 做 repeatable-read／read-only 聚合與 catalog 查核，只保存必要數量及拒絕原因，不下載私人內容。來源仍持續服務時的盤點不能取代停寫後的正式 snapshot／reconciliation；正式業務數量與本次實際讀回只保留在本機證據，不加入公開規格。
 
 此節為目前具名執行範圍，後文W33保留歷史。登入恢復後，唯讀核對 `projed-cc78d`（967362299895、organization 361825816000）及 `jenfu-platform-prod`，不讀Secret內容、不列出會議／私人資料。以下為本次變更前唯讀基線；最新執行結果另列於下方，不將基線當成目前未執行狀態：
 
