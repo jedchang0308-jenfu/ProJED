@@ -19,6 +19,10 @@
 
 ## 2026-10-08：DEV-139 ProJED 納入 Jenfu-Platform 開發文件入口
 
+**現行決策（2026-11-21）**：採集中 `jenfu-platform-prod` 與自有固定網域（名稱待指定），不再以跨專案 Shared VPC 為前置。先讀 [SPEC §3／3.2](specs/SPEC-139-projed-jenfu-platform-onboarding.md#3-目標架構與資料權責)、[§6 遷移／跨 origin 草稿／舊連結與退出](specs/SPEC-139-projed-jenfu-platform-onboarding.md#6-資料移轉pwa-與恢復)、[§8 驗收](specs/SPEC-139-projed-jenfu-platform-onboarding.md#8-驗收與證據契約)及 [ADR-054 Rev15](decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。新站重新登入、更新書籤及 PWA 重裝已納入，舊入口先恢復資料再過渡；保留原 ID／權限與零留存。**本輪只改文件與計畫，不部署、不切流，不做正式 migration／資料、DNS、IAM、Secret 或 billing 變更。** 舊 source／artifact 的適用範圍依原綁定保留，新 target 另驗；歷史 Shared VPC 引導停止，已做者不自動撤回。正式業務數量與實際 IAM／營運讀回只留任務本機證據。
+
+以下日期／Rev／W 為原方案的來源與驗證歷史導覽，不覆蓋上述決策或構成新環境 PASS。
+
 音訊同源 proxy、未知寫入 readback 與跨取消／刪除清理 proof 的現行 source／驗證界線見 [SPEC §42](specs/SPEC-139-projed-jenfu-platform-onboarding.md#42-meeting-audio-transport-w282026-10-29)；完整錄音 UI／worker／cleanup 與正式接線仍計入交付。
 
 會議 capture 控制、取消退款與 review scope 保護的本版 source／驗證界線見 [SPEC §41](specs/SPEC-139-projed-jenfu-platform-onboarding.md#41-meeting-capture-control-w272026-10-29)；未以此取代錄音全功能、真身分或正式發布驗收。
@@ -33,11 +37,11 @@
 
 人類已選 **Cloud Run＋Cloud SQL 完整對齊，保留 Vite**，保留個人與外部協作，成本採 **只要費用不大幅增加即可**。D1 已確認由 OrgMaster 登錄個人／外部最小 Principal／登入來源，私人內容仍由 ProJED 隔離。D2 最新決策為 **保留現有工作區、看板與權限功能，先雲端架構、資料庫及身分契約對齊**。SPEC-139 §4.4／A09 保留原 ID、membership、五種角色、每 Board 非預設／空集合權限、繼承及邀請／撤權；其餘資料／API／Session／PWA／移轉與驗收沿同一規格，不另建 QA 文件。
 
-Rev6將人類「已有使用者」的切換評估寫入同四文件：以不丟資料、不重建帳號、不改權限、不強迫重裝為目標，優先保留既有主／Quick public origin與PWA，由相容Hosting轉送Cloud Run。各App預留正常重新登入，停寫時間由演練量測再確認；零重登／零停寫未承諾。Rev25將移轉收斂為writer fence後單次full snapshot／reconciliation；Rev26補舊Calendar URL代理；Rev27補單一managed候選；Rev28補Supabase→Cloud SQL exact snapshot連線；Rev29補importer管理權限拒絕、漏資料blocker與正常HTTP產品UI煙霧。沒有建立雙寫／CDC／delta平台或新簽核層。Cookie／callback、container／雲端、晚回網恢復及真入口仍待驗。
+歷史 Rev6 曾以原 origin／不重裝作過渡基線；現已由 2026-11-21 自有網域、重新登入及 PWA 重裝決策取代。保留不丟資料、不重建帳號、不改權限，舊入口改為有界恢復與連結轉移，不設永久 API proxy。各App預留正常重新登入，停寫時間由演練量測再確認；零重登／零停寫未承諾。Rev25將移轉收斂為writer fence後單次full snapshot／reconciliation；Rev26補舊Calendar URL代理；Rev27補單一managed候選；Rev28補Supabase→Cloud SQL exact snapshot連線；Rev29補importer管理權限拒絕、漏資料blocker與正常HTTP產品UI煙霧。沒有建立雙寫／CDC／delta平台或新簽核層。Cookie／callback、container／雲端、晚回網恢復及真入口仍待驗。
 
 Node24／npm11、node:http＋pg、PostgreSQL 17／18 local contract、projed_core／projed_contract、scoped query port／profile／binding／health及唯一ServerActorV1已落地。S2 server-only consumer seam要求exact producer與唯一mapping；production pins空集合。W14完成空白candidate full-snapshot單交易apply／reconcile；W15補舊Calendar URL代理；W16補managed runtime／artifact／Hosting候選；W17補exact Supabase來源與managed Cloud SQL importer；W18確保importer無管理能力／app role membership，`llm_access_logs`與Quick OAuth client非空時停止，並以QA Session完成編譯artifact→HTTP API→PostgreSQL的正常UI／reload smoke。沒有新增第二Cloud Run服務、snapshot檔、雙寫、CDC、delta服務、registry或簽核層。S2真owner wire、Docker及雲端runtime、舊origin／PWA部署、真資料plan／未承接domain、writer fence、費用／容量證據仍讀§4.5、§6、§8.1、§9.1及§28–§32；本地UI證據不代表真SSO、無縫切換、效能或費用PASS。
 
-目前 [DEV-083 發布契約](specs/SPEC-083-production-release-environment-integrity.md)、[ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md) 與 [SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md) 繼續約束現有runtime。保留Hosting舊入口是規劃中的Compatible exception，修正立即換run.app public origin假設，維持雙origin／各App Session／local-first／私人scope及pipeline ownership；不改正式backend／hosting或歷史驗收。ADR-054為Accepted，涵蓋ProJED選型與本repo本地開發收斂，不代表外部owner接受、真身分／正式入口接線或完整整合定案。Platform摘要／AI-PDM連結仍Future Phase Captured / Not Requested，待基礎相容證據及人類實際業務串接要求再進入，不作目前開發完成的blocker或效益PASS。
+目前 [DEV-083 發布契約](specs/SPEC-083-production-release-environment-integrity.md)、[ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md) 與 [SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md) 繼續約束現有runtime。舊 Hosting 入口只作有界恢復與轉移；新自有網域與 PWA 重裝依現行 §6，主／Quick 各自 Session、local-first、私人 scope 及 pipeline ownership 保留。本輪不改正式 backend／Hosting 或歷史驗收。ADR-054為Accepted，涵蓋ProJED選型與本repo本地開發收斂，不代表外部owner接受、真身分／正式入口接線或完整整合定案。Platform摘要／AI-PDM連結仍Future Phase Captured / Not Requested，待基礎相容證據及人類實際業務串接要求再進入，不作目前開發完成的blocker或效益PASS。
 
 ## Documentation Map Update - 2026-10-06（DEV-138 DEV-133 分支整合）
 
