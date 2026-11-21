@@ -2,6 +2,7 @@
 import { create } from 'zustand';
 import useAuthStore from './useAuthStore';
 import useUndoStore from './useUndoStore';
+import { reconcileCreatedBoard } from './reconcileCreatedBoard';
 import { workspaceService, boardService } from '../services/dataBackend';
 import type { BoardStore, ViewMode } from '../types';
 import type { BoardContextMenuState } from '../types';
@@ -79,7 +80,7 @@ const viewToTaskSurfaceId = (view: ViewMode): TaskInteractionSurfaceId => {
     }
 };
 
-const createTaskInteractionId = () => {
+const createLocalId = () => {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
     return `task-interaction-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 };
@@ -94,7 +95,7 @@ const normalizeTaskContextMenuState = (state: BoardContextMenuState, currentView
         ...state,
         interactionLocation,
         surfaceId: state.surfaceId || viewToTaskSurfaceId(currentView),
-        interactionId: state.interactionId || createTaskInteractionId(),
+        interactionId: state.interactionId || createLocalId(),
     };
 };
 
@@ -456,7 +457,7 @@ const useBoardStore = create<BoardStore>()(
                 return;
             }
 
-            const tempId = 'b_' + Date.now();
+            const tempId = 'b_' + createLocalId();
             // Keep the optimistic row visible while the request is pending, but
             // do not make the temporary id active. Supabase resolves legacy
             // board ids through `projects`, so loading/synchronising this id
@@ -540,16 +541,9 @@ const useBoardStore = create<BoardStore>()(
                     set((state) => ({
                         workspaces: state.workspaces.map(ws => {
                             if (ws.id !== targetWorkspaceId) return ws;
-                            const resolvedBoard = {
-                                ...createdBoard,
-                                title: ws.boards.find(board => board.id === tempId)?.title || createdBoard.title,
-                            };
-                            const hasCreatedBoard = ws.boards.some(board => board.id === createdBoard.id);
                             return {
                                 ...ws,
-                                boards: hasCreatedBoard
-                                    ? ws.boards.map(board => board.id === createdBoard.id ? resolvedBoard : board)
-                                    : ws.boards.map(board => board.id === tempId ? resolvedBoard : board),
+                                boards: reconcileCreatedBoard(ws.boards, tempId, createdBoard),
                             };
                         }),
                         activeWorkspaceId: targetWorkspaceId,

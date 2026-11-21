@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { repairMeetingSynthesisStructure } from '../_shared/meetingSynthesisStructure.ts';
+import { legacyWritesPaused, sourcePausedResponse } from "../_shared/sourceWritePause.mjs";
 
 const ALLOWED_ORIGINS = [
   'http://localhost:5173',
@@ -537,6 +538,7 @@ serve(async (req) => {
     return createErrorResponse('Missing Authorization header', 'UNAUTHORIZED', 401, origin);
   }
 
+  if (legacyWritesPaused()) return sourcePausedResponse(getCorsHeaders(origin));
   const requestData = await req.json().catch(() => null);
   if (!isValidInput(requestData)) {
     return createErrorResponse('Invalid meeting synthesis input', 'BAD_REQUEST', 400, origin);

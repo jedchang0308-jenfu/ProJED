@@ -93,6 +93,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
   };
 
   const dragSurfaceBindings = isSelectingMode || taskGesture.mobileActionMode || taskGesture.isPlacementPending
+    || !permissions.canDragPlacement
     ? {}
     : { ...attributes, ...listeners };
 

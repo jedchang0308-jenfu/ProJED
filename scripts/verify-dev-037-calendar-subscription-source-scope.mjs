@@ -111,9 +111,9 @@ assert(
   'DEV-037 governance docs remain discoverable',
   source.spec.includes('Board scope 的 `.ics` feed 不包含其他看板任務') &&
     source.qa.includes('QA-037-F01') &&
-    source.devTask.includes('DEV-037: 行事曆訂閱來源範圍清晰化') &&
-    source.documentationMap.includes('DEV-037: 行事曆訂閱來源範圍清晰化') &&
-    source.backlog.includes('DEV-037: 行事曆訂閱來源範圍清晰化'),
+    /DEV-037[^\r\n]*行事曆訂閱來源範圍/u.test(source.devTask) &&
+    /DEV-037[^\r\n]*行事曆訂閱來源範圍/u.test(source.documentationMap) &&
+    /DEV-037[^\r\n]*行事曆訂閱來源範圍/u.test(source.backlog),
 );
 
 const failed = results.filter(result => !result.ok);

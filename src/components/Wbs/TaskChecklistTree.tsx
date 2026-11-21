@@ -241,6 +241,7 @@ const TaskChecklistRow: React.FC<TaskChecklistRowProps> = ({
   }, [childId]);
 
   const dragSurfaceBindings = taskGesture.mobileActionMode || isSelectingMode || isRecordCaptureMode || taskGesture.isPlacementPending
+    || !permissions.canDragPlacement
     ? {}
     : { ...attributes, ...listeners };
 

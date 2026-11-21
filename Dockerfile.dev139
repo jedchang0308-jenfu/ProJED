@@ -1,0 +1,56 @@
+ARG NODE_IMAGE=node:24.12.0-bookworm-slim
+
+FROM ${NODE_IMAGE} AS build
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --ignore-scripts
+COPY . .
+ARG PROJED_RELEASE_ID
+RUN PROJED_RELEASE_ID="${PROJED_RELEASE_ID}" npm run build:dev-139:cloud-run
+
+FROM ${NODE_IMAGE} AS runtime
+ENV NODE_ENV=production \
+    PROJED_ENV=managed \
+    PROJED_SOURCE_PROFILE=config/dev-139/s3-managed.profile.json \
+    PROJED_APP_ENTRY=main
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
+COPY --from=build --chown=node:node /app/dist ./dist
+COPY --from=build --chown=node:node /app/dist-server ./dist-server
+COPY --from=build --chown=node:node /app/config/dev-139/s3-managed.profile.json ./config/dev-139/s3-managed.profile.json
+COPY --from=build --chown=node:node /app/db/migrations ./db/migrations
+USER node
+CMD ["node", "dist-server/server/index.js"]
+
+# One-off migration/import commands use the same profile, SQL and frontend
+# artifact as runtime, with production dependencies and a compiled importer.
+# Keep the existing source-boundary checker; it inspects these raw sources and
+# never executes them as the business runtime.
+FROM runtime AS managed-jobs
+COPY --from=build --chown=node:node /app/dist-jobs ./dist-jobs
+COPY --from=build --chown=node:node /app/server ./server
+COPY --from=build --chown=node:node /app/src ./src
+COPY --from=build --chown=node:node /app/shared ./shared
+COPY --from=build --chown=node:node /app/scripts/lib/dev139-managed-binding.mjs /app/scripts/lib/dev139-migration-paths.mjs ./scripts/lib/
+COPY --from=build --chown=node:node /app/scripts/check-db-boundary.mjs ./scripts/check-db-boundary.mjs
+COPY --from=build --chown=node:node /app/scripts/migrate-dev-139-s1.mjs ./scripts/migrate-dev-139-s1.mjs
+COPY --from=build --chown=node:node /app/scripts/create-dev139-managed-binding.mjs ./scripts/create-dev139-managed-binding.mjs
+COPY --from=build --chown=node:node /app/scripts/run-dev139-managed-job.mjs ./scripts/run-dev139-managed-job.mjs
+CMD ["node", "scripts/run-dev139-managed-job.mjs"]
+
+# Audio decoding has a separate image layer; ordinary web/migration images do
+# not acquire a media toolchain. Only the explicit ASR target inherits it.
+FROM runtime AS media-runtime
+USER root
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+USER node
+
+# Durable ASR execution is an explicit one-off target and carries ffmpeg.
+FROM media-runtime AS asr-job
+CMD ["node", "dist-server/server/meetingAsrJob.js"]
+
+# A normal build still produces the web runtime. Jobs require an explicit target.
+FROM runtime AS final

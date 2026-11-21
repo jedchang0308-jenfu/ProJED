@@ -1,6 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { FEED_TASK_LIMIT, buildCalendarFeedIcs } from "./ics.mjs";
+import { proxyLegacyCalendarFeed } from "./compatibilityProxy.mjs";
 import { resolveSupabaseFunctionKey } from "../_shared/supabaseApiKeys.mjs";
+import { legacyWritesPaused } from "../_shared/sourceWritePause.mjs";
 import { matchesTaskFilterQueryV5, normalizeTaskFilterQueryV5, type TaskFilterQueryV5 } from "./taskFilterV4.ts";
 
 const renderCalendarFeedIcs = buildCalendarFeedIcs as unknown as (input: Record<string, unknown>) => string;
@@ -112,11 +114,17 @@ const DEFAULT_STATUS_FILTERS: Record<string, boolean> = {
   onhold: true,
 };
 
-const supabase = createClient(
-  Deno.env.get("SUPABASE_URL") ?? "",
-  resolveSupabaseFunctionKey("secret"),
-  { auth: { persistSession: false, autoRefreshToken: false } },
-);
+let supabase: ReturnType<typeof createClient>;
+
+const initializeLegacySupabase = () => {
+  if (!supabase) {
+    supabase = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      resolveSupabaseFunctionKey("secret"),
+      { auth: { persistSession: false, autoRefreshToken: false } },
+    );
+  }
+};
 
 const hashString = async (message: string) => {
   const encoded = new TextEncoder().encode(message);
@@ -722,7 +730,14 @@ Deno.serve(async (req) => {
   const token = extractToken(req);
   if (!token) return responseText("Calendar feed not found", 404);
 
+  const compatibilityResponse = await proxyLegacyCalendarFeed({
+    configuredOrigin: Deno.env.get("PROJED_CALENDAR_FEED_PROXY_ORIGIN"),
+    token,
+  });
+  if (compatibilityResponse) return compatibilityResponse;
+
   try {
+    initializeLegacySupabase();
     const tokenHash = await hashString(token);
     const { data, error } = await supabase
       .from("calendar_subscriptions")
@@ -740,10 +755,12 @@ Deno.serve(async (req) => {
     const allowedScope = await getAllowedTenantAndProjectScope(subscription);
     const ics = await buildIcs(subscription, allowedScope);
 
-    await supabase
-      .from("calendar_subscriptions")
-      .update({ last_accessed_at: new Date().toISOString() })
-      .eq("id", subscription.id);
+    if (!legacyWritesPaused()) {
+      await supabase
+        .from("calendar_subscriptions")
+        .update({ last_accessed_at: new Date().toISOString() })
+        .eq("id", subscription.id);
+    }
 
     return responseText(ics, 200, "text/calendar; charset=utf-8");
   } catch (error) {

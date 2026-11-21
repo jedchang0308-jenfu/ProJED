@@ -89,7 +89,7 @@ add('transaction fallback projects the same command and compensates partial pers
 ]));
 add('fault injection is test-only and occurs before backend mutation',
   transaction.includes("if (import.meta.env.MODE !== 'test'")
-  && transaction.indexOf('await applyPlacementTestFault();') < transaction.indexOf('if (!isSupabaseBackend)'));
+  && transaction.indexOf('await applyPlacementTestFault();') < transaction.indexOf('if (!isSupabaseBackend && !isHttpBackend)'));
 add('remote ambiguity retries the same command then resolves through the owner-scoped ledger',
   (transaction.match(/supabaseTaskWorkbenchPlacementService\.commit\(command\)/g) || []).length === 2
   && includesAll(transaction, ['isRetryablePlacementError', 'TaskPlacementOutcomeUnknownError',

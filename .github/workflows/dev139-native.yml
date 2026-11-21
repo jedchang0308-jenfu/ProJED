@@ -1,0 +1,186 @@
+name: DEV-139 isolated validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      browser_smoke:
+        description: Exercise the built Vite app against the isolated PostgreSQL backend
+        type: boolean
+        default: false
+      quick_upgrade:
+        description: Exercise the previous Quick PWA and the candidate in one browser profile
+        type: boolean
+        default: false
+  push:
+    branches: [codex/projed-independent-dev]
+    paths:
+      - .github/workflows/dev139-native.yml
+      - Dockerfile.dev139
+      - .dockerignore
+      - vite.config.js
+      - server/**
+      - shared/**
+      - supabase/functions/**
+      - src/**
+      - db/**
+      - config/dev-139/**
+      - qa/dev-139/**
+      - scripts/check-db-boundary.mjs
+      - scripts/migrate-dev-139-s1.mjs
+      - scripts/build-dev139-cloud-run.mjs
+      - scripts/verify-dev139-cloud-run-artifact.mjs
+      - scripts/verify-dev139-oci.mjs
+      - scripts/verify-dev-141-manual-update.mjs
+      - scripts/create-dev139-managed-binding.mjs
+      - scripts/create-dev139-cloud-run-plan.mjs
+      - scripts/run-dev139-managed-job.mjs
+      - scripts/dev139-*.ts
+      - scripts/lib/dev139-*.ts
+      - scripts/lib/dev139-*.mjs
+      - tsconfig*.json
+      - package.json
+      - package-lock.json
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dev139-isolated-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  isolated:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Install locked dependencies
+        id: dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Check out the pre-migration Quick client
+        id: quick_base
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' && (inputs.quick_upgrade || contains(github.event.head_commit.message, '[dev139-upgrade]')) }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 0670a0aee5327cd30d53f21360d577b278376028
+          path: output/dev139-quick-upgrade-source-A
+          persist-credentials: false
+      - name: Install the old Quick locked dependencies
+        id: quick_base_dependencies
+        if: ${{ !cancelled() && steps.quick_base.outcome == 'success' }}
+        run: npm ci --no-audit --no-fund --prefix output/dev139-quick-upgrade-source-A
+      - name: Server and S2 typecheck
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: npx tsc -p tsconfig.server.s2.json --noEmit
+      - name: Frontend typecheck
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: |
+          npx tsc -p tsconfig.json --noEmit
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npx tsc -p tsconfig.dev139.s3.json --noEmit
+      - name: S2 unit tests
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: npm run verify:dev-139:s2:unit
+      - name: S3 unit tests
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: npm run verify:dev-139:s3:unit
+      - name: Migration unit tests
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: npx tsx --test qa/dev-139/migration/*.test.ts
+      - name: Managed job entry and binding unit tests
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: npm run verify:dev-139:release-unit
+      - name: Kernel boundary
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: npm run check:db-boundary
+      - name: Disposable boundary
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: npm run verify:dev-139:s3:db-static
+      - name: Managed source boundary
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: npm run verify:dev-139:managed-static
+      - name: Compiled Cloud Run candidate artifact
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        # Existing verifier compiles server + Vite and checks emitted entry,
+        # static hashes and managed binding. It never runs Docker or connects DB.
+        run: npm run verify:dev-139:cloud-run-artifact
+      # Both wrappers create and clean up their own nonce cluster. They use the
+      # image's binaries, never its shared database/service or cloud credentials.
+      - name: PostgreSQL Session and domain HTTP regressions
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        env:
+          DEV139_BROWSER_SMOKE: ${{ inputs.browser_smoke || contains(github.event.head_commit.message, '[dev139-browser]') }}
+          DEV139_QUICK_UPGRADE: ${{ steps.quick_base_dependencies.outcome == 'success' }}
+        run: '& ./qa/dev-139/s3/verify-isolated.ps1 -DatabaseOnly:($env:DEV139_BROWSER_SMOKE -ne "true") -PostgresBin $env:PGBIN'
+      - name: PostgreSQL snapshot migration rehearsal
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: '& ./qa/dev-139/migration/verify-isolated.ps1 -PostgresBin $env:PGBIN'
+      - name: Retain Quick upgrade result
+        if: ${{ always() && steps.quick_base.outcome == 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: dev139-quick-upgrade
+          path: |
+            output/playwright/dev-141/*/result.json
+            output/playwright/dev-141/*/A06-*.png
+            output/playwright/dev-139-quick-pg/*.json
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Retain sanitized results
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: dev139-isolated-results
+          path: output/qa/dev-139/**/result.json
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Retain browser smoke evidence
+        if: ${{ always() && (inputs.browser_smoke || contains(github.event.head_commit.message, '[dev139-browser]')) }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: dev139-browser-smoke
+          path: |
+            output/playwright/dev-139-http-ui/result.json
+            output/playwright/dev-139-http-ui/*.png
+            output/playwright/dev-139-rag-ui/result.json
+            output/playwright/dev-139-rag-ui/unavailable-mobile.png
+            output/playwright/dev-139-quick-http-binding/result.json
+            output/playwright/dev-139-board-share-scope/result.json
+            output/playwright/dev-139-board-share-scope/unavailable-mobile.png
+            output/playwright/dev-139-calendar-ui/*.json
+            output/playwright/dev-139-calendar-ui/*.png
+          if-no-files-found: ignore
+          retention-days: 7
+
+  oci:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Actual Linux runtime image and isolated Unix socket
+        # Builds the real Dockerfile, bootstraps only nonce-owned containers and
+        # tests managed-shaped socket configuration. No cloud credentials/push.
+        run: node scripts/verify-dev139-oci.mjs
+      - name: Retain sanitized OCI result
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: dev139-isolated-oci-result
+          path: output/qa/dev-139/oci/**/result.json
+          if-no-files-found: ignore
+          retention-days: 7

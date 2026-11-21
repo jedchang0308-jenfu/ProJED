@@ -1,5 +1,7 @@
-import { isLocalTestBackend, isSupabaseBackend } from './dataBackend';
+import { isHttpBackend, isLocalTestBackend, isSupabaseBackend } from './dataBackend';
 import { isSupabaseConfigured, supabase } from './supabase/client';
+import { httpMeetingSynthesisService } from './httpApi/backend';
+import { HttpApiError } from './httpApi/httpApiClient';
 import {
   getMeetingSynthesisFailureMessage,
   readMeetingSynthesisFailureDetails,
@@ -29,6 +31,12 @@ export class MeetingSynthesisError extends Error {
 
 const MEETING_SYNTHESIS_TIMEOUT_MS = 30000;
 
+export interface MeetingSynthesisRequestContext {
+  readonly workspaceId?: string | null;
+  readonly boardId?: string | null;
+  readonly signal?: AbortSignal;
+}
+
 const isTimeoutOrAbortError = (error: unknown) => {
   const name = error instanceof Error ? error.name : '';
   const message = error instanceof Error ? error.message : String(error);
@@ -46,7 +54,7 @@ const buildTimeoutFallbackSynthesis = (input: MeetingSynthesisInput): MeetingSyn
   return {
     ...fallback,
     warnings: [
-      `AI整理超過 ${Math.round(MEETING_SYNTHESIS_TIMEOUT_MS / 1000)} 秒未完成，已改用本機規則整理；請人工校稿。`,
+      'AI整理逾時，已改用本機規則整理；請人工校稿。',
       ...fallback.warnings,
     ],
     provider: 'deterministic-timeout-fallback',
@@ -142,7 +150,55 @@ const parseFunctionError = async (error: unknown) => {
 
 export const synthesizeMeetingRecord = async (
   input: MeetingSynthesisInput,
+  context: MeetingSynthesisRequestContext = {},
 ): Promise<MeetingSynthesisResponse> => {
+  if (isHttpBackend) {
+    if (!context.workspaceId || !context.boardId) {
+      throw new MeetingSynthesisError(
+        '請先選擇工作區與看板，再整理會議草稿。',
+        'MEETING_SYNTHESIS_SCOPE_REQUIRED',
+        400,
+      );
+    }
+    if (context.signal?.aborted) throw context.signal.reason ?? new DOMException('Aborted', 'AbortError');
+
+    const controller = new AbortController();
+    let timedOut = false;
+    const abortFromCaller = () => controller.abort(context.signal?.reason);
+    context.signal?.addEventListener('abort', abortFromCaller, { once: true });
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      controller.abort(new DOMException('Meeting synthesis timed out', 'TimeoutError'));
+    }, MEETING_SYNTHESIS_TIMEOUT_MS);
+
+    try {
+      const response = await httpMeetingSynthesisService.synthesize(input, {
+        workspaceId: context.workspaceId,
+        boardId: context.boardId,
+        signal: controller.signal,
+      });
+      return assertMeetingSynthesisResponse(input, response);
+    } catch (error) {
+      if (context.signal?.aborted) throw error;
+      if (timedOut || (error instanceof HttpApiError && error.code === 'RAG_TIMEOUT')) {
+        return assertMeetingSynthesisResponse(input, buildTimeoutFallbackSynthesis(input));
+      }
+      if (error instanceof HttpApiError) {
+        const details = readMeetingSynthesisFailureDetails(error.details);
+        throw new MeetingSynthesisError(
+          getMeetingSynthesisFailureMessage(error.code, error.code, details),
+          error.code,
+          error.status,
+          details,
+        );
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+      context.signal?.removeEventListener('abort', abortFromCaller);
+    }
+  }
+
   if (isLocalTestBackend || !isSupabaseBackend || !isSupabaseConfigured) {
     return assertMeetingSynthesisResponse(input, buildDeterministicMeetingSynthesis(input));
   }

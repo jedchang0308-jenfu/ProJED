@@ -22,8 +22,8 @@ import {
 
 const APP_VERSION = '0.0.0';
 
-const requireSupportedBackend = (): 'supabase' | 'local-test' => {
-  if (dataBackend === 'supabase' || dataBackend === 'local-test') return dataBackend;
+const requireSupportedBackend = (): 'supabase' | 'local-test' | 'http' => {
+  if (dataBackend === 'supabase' || dataBackend === 'local-test' || dataBackend === 'http') return dataBackend;
   throw new BackupError('BACKEND_UNSUPPORTED', '目前資料後端只能檢查備份檔，不能建立或執行交易式備份。');
 };
 
@@ -62,7 +62,7 @@ const toBatchError = (error: unknown): CreateBoardBackupPackageResult['error'] =
 };
 
 const createPackageFromBackend = async (
-  backend: 'supabase' | 'local-test',
+  backend: 'supabase' | 'local-test' | 'http',
   workspaceId: string,
   boardId: string,
   workspaceTitle?: string

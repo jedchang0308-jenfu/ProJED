@@ -1,5 +1,8 @@
 import React from 'react';
 import useRecordStore from '../store/useRecordStore';
+import useAuthStore from '../store/useAuthStore';
+import { filterReadIdentity } from '../features/taskFilters/optionSource';
+import { registerRecordSessionCheckpoint } from '../services/recordSessionProtection';
 import {
   clearMeetingDraftSnapshot,
   getMeetingDraftRecoveryScopeKey,
@@ -90,8 +93,9 @@ const buildRecoverySnapshot = (
   workspaceId: string,
   boardId: string,
   writeSequence: number,
+  includeInactiveEditor = false,
 ): MeetingDraftRecoverySnapshotV2 | null => {
-  if (!state.isMeetingMode || state.draft?.type !== 'meeting' || state.draft.status !== 'draft') return null;
+  if ((!includeInactiveEditor && !state.isMeetingMode) || state.draft?.type !== 'meeting' || state.draft.status !== 'draft') return null;
   const draft = toLocalRecord(state.draft);
   return {
     schemaVersion: 2,
@@ -122,6 +126,9 @@ export const useMeetingDraftRecovery = ({
   recordsLoaded,
 }: MeetingDraftRecoveryProps) => {
   const { isMeetingRecordUnavailable } = useMeetingRecordAvailability();
+  const identity = useAuthStore(state => filterReadIdentity(state.user));
+  const isCurrentIdentity = React.useCallback(() => filterReadIdentity(useAuthStore.getState().user) === identity,
+    [identity]);
   const [version, setVersion] = React.useState(0);
   const stateRef = React.useRef(useRecordStore.getState());
   const currentSignatureRef = React.useRef<string | null>(null);
@@ -130,6 +137,17 @@ export const useMeetingDraftRecovery = ({
   const writeSequenceRef = React.useRef(0);
   const restoredScopeRef = React.useRef<string | null>(null);
   const localTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  React.useLayoutEffect(() => {
+    if (!userId || !identity || !workspaceId || !boardId) return;
+    return registerRecordSessionCheckpoint({ accountId: userId, identity, workspaceId, boardId }, () => {
+      const snapshot = buildRecoverySnapshot(useRecordStore.getState(), userId, workspaceId, boardId, writeSequenceRef.current + 1, true);
+      if (!snapshot) return null;
+      writeSequenceRef.current = snapshot.writeSequence;
+      saveEmergencyMeetingDraftSnapshot(snapshot);
+      return { snapshot, completion: saveMeetingDraftSnapshot(snapshot) };
+    });
+  }, [boardId, identity, userId, workspaceId]);
 
   React.useEffect(() => {
     return useRecordStore.subscribe((next, previous) => {
@@ -157,7 +175,7 @@ export const useMeetingDraftRecovery = ({
         if (userId && workspaceId && boardId && previousDraftId) {
           const scopeKey = getMeetingDraftRecoveryScopeKey(userId, workspaceId, boardId, previousDraftId);
           void clearMeetingDraftSnapshot(scopeKey).then(cleared => {
-            if (!cleared && useRecordStore.getState().draft?.id === previousDraftId) {
+            if (!cleared && isCurrentIdentity() && useRecordStore.getState().draft?.id === previousDraftId) {
               useRecordStore.getState().setMeetingDraftRecovery({
                 localStatus: 'error',
                 message: '本機清理尚未完成，內容仍保留在此裝置。',
@@ -168,7 +186,7 @@ export const useMeetingDraftRecovery = ({
         setVersion(value => value + 1);
       }
     });
-  }, [boardId, userId, workspaceId]);
+  }, [boardId, isCurrentIdentity, userId, workspaceId]);
 
   React.useEffect(() => {
     if (!recordsLoaded) return;
@@ -193,7 +211,7 @@ export const useMeetingDraftRecovery = ({
     restoredScopeRef.current = currentScope;
     let cancelled = false;
     void loadLatestMeetingDraftSnapshotWithSource(currentScope).then(loaded => {
-      if (cancelled || !loaded) return;
+      if (cancelled || !isCurrentIdentity() || !loaded) return;
       const { snapshot, source } = loaded;
       const currentState = useRecordStore.getState();
       if (currentState.draft || currentState.isMeetingMode) return;
@@ -217,10 +235,10 @@ export const useMeetingDraftRecovery = ({
     return () => {
       cancelled = true;
     };
-  }, [boardId, isMeetingRecordUnavailable, recordsLoaded, userId, workspaceId]);
+  }, [boardId, isCurrentIdentity, isMeetingRecordUnavailable, recordsLoaded, userId, workspaceId]);
 
   const forceFlush = React.useCallback(async () => {
-    if (!userId || !workspaceId || !boardId || isMeetingRecordUnavailable) return false;
+    if (!isCurrentIdentity() || !userId || !workspaceId || !boardId || isMeetingRecordUnavailable) return false;
     const snapshot = buildRecoverySnapshot(
       stateRef.current,
       userId,
@@ -234,7 +252,7 @@ export const useMeetingDraftRecovery = ({
     useRecordStore.getState().setMeetingDraftRecovery({ localStatus: 'saving', message: null });
     const result = await saveMeetingDraftSnapshot(snapshot);
     const current = useRecordStore.getState();
-    if (currentSignatureRef.current === snapshot.localSignature && current.draft?.id === snapshot.draftId) {
+    if (isCurrentIdentity() && currentSignatureRef.current === snapshot.localSignature && current.draft?.id === snapshot.draftId) {
       if (result.indexedDbSaved) {
         localCommittedSignatureRef.current = snapshot.localSignature;
         changedAtRef.current = null;
@@ -248,7 +266,7 @@ export const useMeetingDraftRecovery = ({
       });
     }
     return result.indexedDbSaved;
-  }, [boardId, isMeetingRecordUnavailable, userId, workspaceId]);
+  }, [boardId, isCurrentIdentity, isMeetingRecordUnavailable, userId, workspaceId]);
 
   React.useEffect(() => registerMeetingDraftForceFlush(forceFlush), [forceFlush]);
 
@@ -267,7 +285,7 @@ export const useMeetingDraftRecovery = ({
       writeSequenceRef.current = snapshot.writeSequence;
       useRecordStore.getState().setMeetingDraftRecovery({ localStatus: 'saving', message: null });
       void saveMeetingDraftSnapshot(snapshot).then(result => {
-        if (currentSignatureRef.current !== snapshot.localSignature || useRecordStore.getState().draft?.id !== snapshot.draftId) return;
+        if (!isCurrentIdentity() || currentSignatureRef.current !== snapshot.localSignature || useRecordStore.getState().draft?.id !== snapshot.draftId) return;
         if (result.indexedDbSaved) {
           localCommittedSignatureRef.current = snapshot.localSignature;
           changedAtRef.current = null;
@@ -284,7 +302,7 @@ export const useMeetingDraftRecovery = ({
     return () => {
       if (localTimerRef.current) clearTimeout(localTimerRef.current);
     };
-  }, [boardId, isMeetingRecordUnavailable, recordsLoaded, userId, version, workspaceId]);
+  }, [boardId, isCurrentIdentity, isMeetingRecordUnavailable, recordsLoaded, userId, version, workspaceId]);
 
   React.useEffect(() => {
     if (!userId || !workspaceId || !boardId || isMeetingRecordUnavailable) return undefined;

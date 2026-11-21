@@ -9,6 +9,7 @@ import { forceFlushMeetingDraft } from './useMeetingDraftRecovery';
 type GuardOptions = {
   title?: string;
   message?: string;
+  clearsLocalRecovery?: boolean;
 };
 
 export const useRecordDraftGuard = () => {
@@ -60,7 +61,7 @@ export const useRecordDraftGuard = () => {
       return true;
     }
 
-    if (draft.type === 'meeting') {
+    if (draft.type === 'meeting' && !options.clearsLocalRecovery) {
       if (await forceFlushMeetingDraft()) {
         await action();
         return true;

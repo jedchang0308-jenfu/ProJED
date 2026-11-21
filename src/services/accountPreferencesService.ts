@@ -1,4 +1,5 @@
-import { isSupabaseBackend } from './dataBackend';
+import { isHttpBackend, isSupabaseBackend } from './dataBackend';
+import { httpPreferencesService } from './httpApi/backend';
 import { isSupabaseConfigured, supabase } from './supabase/client';
 import type { Json } from './supabase/database.types';
 import {
@@ -127,6 +128,7 @@ const mergeLayoutIntoPreferences = (
 });
 
 const readRemotePreferences = async (accountId: string): Promise<UiPreferences> => {
+  if (isHttpBackend) return { layout: normalizeLayoutPreferences(await httpPreferencesService.readLayout()) };
   const { data, error } = await supabase
     .from('profiles')
     .select('ui_preferences')
@@ -138,6 +140,13 @@ const readRemotePreferences = async (accountId: string): Promise<UiPreferences> 
 };
 
 const writeRemotePreferences = async (accountId: string, updates: AccountLayoutPreferences) => {
+  if (isHttpBackend) {
+    const layout = normalizeLayoutPreferences(await httpPreferencesService.updateLayout(updates));
+    const nextPreferences = mergeLayoutIntoPreferences(preferencesCache.get(accountId) ?? {}, layout);
+    preferencesCache.set(accountId, nextPreferences);
+    writeLocalPreferences(accountId, nextPreferences);
+    return;
+  }
   const remotePreferences = await readRemotePreferences(accountId);
   const nextPreferences = mergeLayoutIntoPreferences(remotePreferences, updates);
   const { error } = await supabase
@@ -151,7 +160,7 @@ const writeRemotePreferences = async (accountId: string, updates: AccountLayoutP
   writeLocalPreferences(accountId, nextPreferences);
 };
 
-const shouldUseRemotePreferences = () => isSupabaseBackend && isSupabaseConfigured;
+const shouldUseRemotePreferences = () => isHttpBackend || (isSupabaseBackend && isSupabaseConfigured);
 
 export const hydrateAccountLayoutPreferences = (
   accountId: string | null | undefined,

@@ -4,6 +4,7 @@ import { useFirestoreSync } from './useFirestoreSync';
 import { useMemberSync } from './useMemberSync';
 import { useSupabaseSync } from './useSupabaseSync';
 import { useTagSync } from './useTagSync';
+import { useHttpSync } from './useHttpSync';
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
 import type { TaskNode } from '../types';
@@ -55,6 +56,7 @@ export function useDataSync() {
   useLocalTestNodeSync();
   useFirestoreSync({ enabled: dataBackend === 'firebase' });
   useSupabaseSync({ enabled: dataBackend === 'supabase' });
+  useHttpSync({ enabled: dataBackend === 'http' });
   useMemberSync();
   useTagSync();
 }

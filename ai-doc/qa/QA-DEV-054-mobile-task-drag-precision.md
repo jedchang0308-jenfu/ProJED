@@ -1,6 +1,6 @@
 # QA-DEV-054：手機任務拖拉定位精準度驗證計畫
 
-狀態：自用驗收契約修訂；目前自動化結果見執行產物，自用裝置重點確認待補
+狀態：RD Development Complete / 2026-10-26 Local Static + Browser PASS / 自用裝置驗收待確認
 
 2026-10-19：依使用者指示精簡。現行完成要求以 §2／§8–§11 為準，取代舊雙平台固定次數／成功率及逐筆工作簿。§12–§14 保留歷史執行紀錄；未測實機仍未驗證，不因本次改契約而變成 PASS。
 
@@ -61,12 +61,12 @@
 
 - Desktop browser：`1440x900`、`1024x768`。
 - Mobile / touch browser automation：`320x844`、`337x415`、`390x844`、`430x932`、使用者回報重現尺寸 `636x764`，另加寬觸控 `844x390` 與 `1024x768`。
-- Physical iOS：至少一台 iPhone Safari；記錄 device、iOS、Safari、viewport。
-- Physical Android：至少一台 Android Chrome；記錄 device、Android、Chrome、viewport。
+- 實際自用裝置：使用平常操作 ProJED 的手機與瀏覽器，簡記裝置、系統、瀏覽器版本與結果。
+- 其他 iOS／Android 平台：只有實際使用需求時才納入；未測標示未驗證，不形成雙平台硬門檻。
 
 ### 4.3 Evidence Instrumentation
 
-Debug trace 至少記錄：
+下列 debug trace 只在自動化案例需要判定，或實際失敗需要診斷時擷取；正常自用確認不要求完整 trace：
 
 - raw point、intent point。
 - candidate target、locked target、pending target。
@@ -148,7 +148,8 @@ R01–R15 是現行 DEV-054 browser suite，與 §6 對應來源共同承接舊 
 
 ## 9. 通過／未通過／待確認
 
-- 通過：相關自動化及實際自用裝置原失敗／主要流程均有可追溯結果，無錯誤提交、重複效果、取消寫入或原復原路徑失效。
+- RD 開發通過：受影響 static／browser 案例通過，無錯誤提交、重複效果、取消寫入或原復原路徑失效。
+- 自用裝置驗收通過：在實際常用裝置完成原失敗／主要流程，且沒有上述安全失敗。
 - 未通過：必要行為仍失效，或資料／scope／parent／action 不符合畫面及授權。保留首個有效失敗並修正，不靠刪測或重試掩蓋。
 - 待確認：常用裝置尚未操作，或某個必要保護缺證據；只保留該層待驗，不把未使用平台缺席當成整體阻塞，不連帶卡 DEV-097。
 
@@ -188,13 +189,9 @@ npm.cmd run verify:dev-044-undo-coverage
 | DEV-044 undo regression | `verify:dev-044-undo-coverage` | static 26/26 passed |
 | Type/build | `npm.cmd exec tsc -- --noEmit`、`npm.cmd run build:test` | passed |
 
-尚未執行或尚未形成完整 QC package：
+當時尚未執行的 B01–B12 正式 QC report 與 iOS／Android 50-trial matrix、trial sheet、錄影及裝置資訊，保留為歷史事實。這些舊 package 要求已被 §2、§8–§11 取代，不再是 RD 開發完成條件；未執行項目不改寫成 PASS。
 
-- QA-054-B01~B12 完整 browser trace matrix 尚未逐項以正式 QC report 收斂。
-- QA-054-P01~P10 iOS / Android 實機 50-trial matrix、trial sheet、錄影與裝置資訊尚未執行。
-- 因 physical iOS / Android gate 是本 DEV 完成標準，本輪 QA 判定仍為 `未充分驗證`，不得把 DEV-054 標記完成。
-
-## 13. 歷史 QC Evidence Package（現行最小記錄見 §10）
+## 13. 歷史 QC Evidence Package 快照（已被現行 §10 取代）
 
 - Git / working tree boundary 與測試環境 URL。
 - Required command 結果與失敗 log。
@@ -250,3 +247,16 @@ Automated QA 判定：`PASS`。整體 DEV 判定：`未充分驗證`（僅因 re
 所有 browser session 由 runner 的 finally 關閉，已確認已知 task browser PID 結束；Vite task-owned tree 已停止，4000 port 已釋放。首輪失敗與本輪新結果分開保存，不覆寫歷史收據。未重建未變產品、未執行 DEV-097 新一輪 real-SW／production，也沒有把既有 PWA 安全證據失效化。
 
 剩餘僅為本 DEV 實際自用裝置重點操作確認；其他未測手機平台仍未驗證。DEV-097 的雙平台前置已解除，自己的 dirty owner／cancel／flush／資料保留／更新恢復與 release 邊界保留；解除連動不代表 DEV-097 已發布或增加完成率。
+
+## 16. 2026-10-26 RD 開發完成重驗
+
+受測來源為 `codex/projed-independent-dev@79500386e40a1572afd671f7b5e3e916dcfaaceb`。本輪在 task-owned `localhost:4000`／Vite test 執行，沒有連線正式 backend、修改 DB 或發布；結果仍屬 RD 自查。
+
+| 驗證 | 結果 |
+|---|---|
+| DEV-054 static | 46/46 PASS；static verifier 改驗工程常數的安全界限，不再把可調參數鎖成整段 source 字串 |
+| DEV-054 browser | R01–R15 15/15 PASS；console／network error 0；`physicalDevice=not-executed` |
+| 關鍵資料安全 | invalid／screen-edge release 零寫入、action 與 Workbench 歸位 exactly-once、placed row 不可拖、取消／清理與重試契約通過 |
+| 畫面證據 | `output/playwright/dev-054-mobile-drag-1793017005495-*`；含 R01、R05、R06、R08、R10–R12、R15 對應畫面 |
+
+判定：DEV-054 的 RD 開發完成。實際常用手機的手感與平台事件仍是獨立的自用驗收待確認；本輪沒有把 synthetic touch 結果改稱實機 PASS 或正式發布。

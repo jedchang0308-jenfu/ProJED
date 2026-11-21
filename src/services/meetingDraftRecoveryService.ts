@@ -1,4 +1,5 @@
 import type { MeetingDraftRecoverySnapshot, MeetingDraftRecoverySnapshotV2 } from '../types';
+import { isRecordSessionLogout } from './recordSessionProtection';
 
 export const MEETING_DRAFT_RECOVERY_DB_NAME = 'projed-draft-recovery';
 export const MEETING_DRAFT_RECOVERY_STORE_NAME = 'meeting-drafts';
@@ -78,7 +79,7 @@ const readSessionSnapshot = (scopeKey: string): MeetingDraftRecoverySnapshot | n
 };
 
 export const saveEmergencyMeetingDraftSnapshot = (snapshot: MeetingDraftRecoverySnapshot): boolean => {
-  if (!canUseBrowserStorage()) return false;
+  if (!canUseBrowserStorage() || isRecordSessionLogout(snapshot.ownerUserId)) return false;
   try {
     sessionStorage.setItem(
       getMeetingDraftRecoverySessionKey(snapshot.scopeKey),
@@ -248,6 +249,7 @@ const drainSaveQueue = async (scopeKey: string, queue: SaveQueue) => {
 };
 
 export const saveMeetingDraftSnapshot = (snapshot: MeetingDraftRecoverySnapshot): Promise<MeetingDraftRecoverySaveResult> => {
+  if (isRecordSessionLogout(snapshot.ownerUserId)) return Promise.resolve({ indexedDbSaved: false, sessionStorageSaved: false, status: 'error' });
   const queue = getSaveQueue(snapshot.scopeKey);
   return new Promise(resolve => {
     const normalized = normalizeMeetingDraftRecoverySnapshot(snapshot);
@@ -303,6 +305,7 @@ export const loadLatestMeetingDraftSnapshot = async (scopePrefix: string): Promi
 
 export const clearMeetingDraftSnapshot = (scopeKey: string): Promise<boolean> => {
   const queue = getSaveQueue(scopeKey);
+  queue.pending?.resolves.forEach(resolve => resolve({ indexedDbSaved: false, sessionStorageSaved: false, status: 'error' }));
   queue.pending = null;
   queue.clearRequested = true;
   return new Promise(resolve => {
@@ -312,6 +315,9 @@ export const clearMeetingDraftSnapshot = (scopeKey: string): Promise<boolean> =>
 };
 
 export const clearMeetingDraftRecoveryForUser = async (ownerUserId: string): Promise<boolean> => {
+  // Finish/cancel this owner's existing writes before deliberate logout cleanup.
+  const prefix = `${encodeURIComponent(ownerUserId)}:`;
+  await Promise.all([...saveQueues.keys()].filter(scope => scope.startsWith(prefix)).map(clearMeetingDraftSnapshot));
   if (canUseBrowserStorage()) {
     const prefix = `${MEETING_DRAFT_RECOVERY_SESSION_PREFIX}${encodeURIComponent(ownerUserId)}:`;
     try {

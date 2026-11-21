@@ -101,7 +101,6 @@ const RagSidebar: React.FC = () => {
 
     setIsQuickMenuOpen(false);
     submitQuery(buildScopedPrompt(prompt), activeWorkspace.id, activeBoard?.id || null);
-    setQueryDraft('');
   };
 
   const handleSubmit = (e?: React.FormEvent) => {
@@ -109,7 +108,6 @@ const RagSidebar: React.FC = () => {
     if (!input.trim() || isLoading || !activeWorkspace) return;
 
     submitQuery(input.trim(), activeWorkspace.id, activeBoard?.id || null);
-    setQueryDraft('');
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -281,7 +279,7 @@ const RagSidebar: React.FC = () => {
         )}
 
         {error && (
-          <div className="mx-auto w-full rounded-lg border border-red-100 bg-red-50 p-3 text-center text-sm text-red-600">
+          <div role="alert" className="mx-auto w-full rounded-lg border border-red-100 bg-red-50 p-3 text-center text-sm text-red-600">
             {error}
           </div>
         )}

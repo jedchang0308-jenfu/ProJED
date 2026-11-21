@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { buildSync } from 'esbuild';
 import { webcrypto } from 'node:crypto';
 import ts from 'typescript';
 import { repairMeetingSynthesisStructure } from '../supabase/functions/_shared/meetingSynthesisStructure';
@@ -73,17 +74,23 @@ let handler: (req: Request) => Promise<Response>;
 let providerContent = content(tag('child-a'));
 let inputTasks = tasks;
 const logs: unknown[] = [];
-const source = readFileSync('supabase/functions/synthesize_meeting_record/index.ts', 'utf8')
-  .replace(/^import .*;\r?\n/gm, '');
+const serveModule = 'https://deno.land/std@0.177.0/http/server.ts';
+const source = buildSync({
+  entryPoints: ['supabase/functions/synthesize_meeting_record/index.ts'], bundle: true,
+  write: false, format: 'cjs', external: [serveModule],
+}).outputFiles[0].text;
+const edgeEnv = new Map([['GEMINI_API_KEY', 'fixture-only'], ['GEMINI_MEETING_SYNTHESIS_MODEL', 'fixture-model']]);
 const sandbox = vm.createContext({
-  serve: (callback: typeof handler) => { handler = callback; },
-  repairMeetingSynthesisStructure,
-  Deno: { env: { get: (key: string) => key === 'GEMINI_API_KEY' ? 'fixture-only' : 'fixture-model' } },
+  require: (specifier: string) => {
+    assert.equal(specifier, serveModule);
+    return { serve: (callback: typeof handler) => { handler = callback; } };
+  },
+  Deno: { env: { get: (key: string) => edgeEnv.get(key) } },
   crypto: webcrypto, Request, Response,
   fetch: async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify({ content: providerContent, linkedTaskIds: [] }) }] } }] }), { status: 200 }),
   console: { log: (value: unknown) => logs.push(value), warn: (value: unknown) => logs.push(value), error: (value: unknown) => logs.push(value) },
 });
-vm.runInContext(ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText, sandbox);
+vm.runInContext(source, sandbox);
 const invoke = () => handler(new Request('https://fixture.local', { method: 'POST', headers: { Authorization: 'Bearer fixture-only', 'Content-Type': 'application/json' }, body: JSON.stringify({ title: 'DEV-137', rawContent: `${tag('child-a')} RD 已確認資料流。`, taskLinks: [], tasks: inputTasks, activities: [], requiredContractVersion: 'meeting-synthesis-v2' }) }));
 
 let response = await invoke();
@@ -134,7 +141,7 @@ const clientExports: Record<string, unknown> = {};
 const clientSandbox = vm.createContext({
   exports: clientExports, Error,
   MEETING_SYNTHESIS_CONTRACT_VERSION: 'meeting-synthesis-v2',
-  isLocalTestBackend: false, isSupabaseBackend: true, isSupabaseConfigured: true,
+  isLocalTestBackend: false, isHttpBackend: false, isSupabaseBackend: true, isSupabaseConfigured: true,
   supabase: { functions: { invoke: async () => ({ data: null, error: functionError }) } },
   getMeetingSynthesisFailureMessage, readMeetingSynthesisFailureDetails,
 });

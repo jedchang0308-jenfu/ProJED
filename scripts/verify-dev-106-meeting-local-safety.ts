@@ -78,8 +78,9 @@ assert('closePanel has no implicit recovery clear', !store.slice(store.indexOf('
 assert('new/open record paths have no implicit recovery clear', !store.slice(store.indexOf('openNewRecord:'), store.indexOf('startMeetingRecord:')).includes('requestMeetingDraftRecoveryClear()') && !store.slice(store.indexOf('openExistingRecord:'), store.indexOf('startMeetingRecord:')).includes('requestMeetingDraftRecoveryClear()'));
 assert('meeting mode exit has no direct discard path', !exitGuard.includes('exit_without_saving') && exitGuard.includes('forceFlushMeetingDraft'));
 assert('cross-record meeting navigation force flushes', draftGuard.includes("draft.type === 'meeting'") && draftGuard.includes('forceFlushMeetingDraft'));
-assert('workspace view transitions are guarded', workspaceSidebar.includes('useRecordDraftGuard') && workspaceSidebar.includes('void guardRecordDraft') && workspaceSidebar.includes('開啟紀錄庫會離開目前紀錄'));
-assert('board switching transitions are guarded', workspaceSidebar.includes('void guardRecordDraft(switchToBoard') && workspaceSidebar.includes('切換看板會離開目前紀錄'));
+const recordsNavigation = mainLayout.slice(mainLayout.indexOf('const handleOpenRecords'), mainLayout.indexOf('const handleOpenSettings'));
+assert('workspace view transitions are guarded', /guardRecordDraft\(\(\) => \{\s*setView\(nextView\)/u.test(recordsNavigation) && recordsNavigation.includes("'records'"));
+assert('board switching transitions are guarded', workspaceSidebar.includes('void guardRecordDraft(() => afterTaskDetailsSave(switchToBoard)') && workspaceSidebar.includes('切換看板會離開目前紀錄'));
 assert('system-page return transition is guarded', mainLayout.includes('void guardRecordDraft(() => setView(nextView)') && mainLayout.includes('返回看板會離開目前紀錄'));
 assert('records page return transition is guarded', recordsView.includes('void guardRecordDraft(() => setView(') && recordsView.includes('返回看板會離開目前紀錄'));
 assert('settings page return transition is guarded', settingsView.includes('useRecordDraftGuard') && settingsView.includes('void guardRecordDraft(() => setView('));

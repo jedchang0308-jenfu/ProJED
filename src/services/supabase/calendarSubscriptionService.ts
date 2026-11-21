@@ -10,6 +10,8 @@ import type {
   TenantRole,
 } from './database.types';
 import { normalizePersistedTaskFiltersV5 } from '../../features/taskFilters';
+import { BackendFeatureUnavailableError, isHttpBackend, isSupabaseBackend } from '../backendMode';
+import { httpCalendarService } from '../httpApi/backend';
 import { configuredSupabaseUrl, isSupabaseConfigured, supabase } from './client';
 
 export type CalendarSubscription = {
@@ -24,6 +26,8 @@ export type CalendarSubscription = {
 };
 
 export type CalendarWorkspaceMember = {
+  /** HTTP directory entries are visible only in these Board aliases. */
+  boardIds?: string[];
   workspaceId: string;
   userId: string;
   role: TenantRole;
@@ -61,6 +65,9 @@ const TOKEN_BYTES = 32;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const requireSupabase = () => {
+  if (!isSupabaseBackend) {
+    throw new BackendFeatureUnavailableError('行事曆訂閱');
+  }
   if (!isSupabaseConfigured) {
     throw new Error('尚未設定 Supabase。請設定 VITE_SUPABASE_URL 與 VITE_SUPABASE_ANON_KEY。');
   }
@@ -425,6 +432,7 @@ export const resolveBoardRef = async (
 
 export const calendarSubscriptionService = {
   list: async (): Promise<CalendarSubscription[]> => {
+    if (isHttpBackend) return httpCalendarService.list();
     requireSupabase();
     const { data, error } = await supabase
       .from('calendar_subscriptions')
@@ -434,7 +442,8 @@ export const calendarSubscriptionService = {
     return (data ?? []).map(mapSubscription);
   },
 
-  listWorkspaceMembers: async (workspaceIds: string[]): Promise<CalendarWorkspaceMember[]> => {
+  listWorkspaceMembers: async (workspaceIds: string[], boardIds?: string[]): Promise<CalendarWorkspaceMember[]> => {
+    if (isHttpBackend) return httpCalendarService.listWorkspaceMembers(workspaceIds, boardIds);
     requireSupabase();
     const resolvedWorkspaceIds = await Promise.all(workspaceIds.map(resolveWorkspaceId));
     const uniqueWorkspaceIds = Array.from(new Set(resolvedWorkspaceIds));
@@ -457,6 +466,7 @@ export const calendarSubscriptionService = {
   },
 
   listWorkspaceRefs: async (): Promise<CalendarWorkspaceRef[]> => {
+    if (isHttpBackend) return httpCalendarService.listWorkspaceRefs();
     requireSupabase();
     const { data, error } = await supabase
       .from('tenants')
@@ -471,6 +481,7 @@ export const calendarSubscriptionService = {
   },
 
   listBoardRefs: async (workspaceIds: string[] = []): Promise<CalendarBoardRef[]> => {
+    if (isHttpBackend) return httpCalendarService.listBoardRefs(workspaceIds);
     requireSupabase();
     const resolvedWorkspaceIds = unique(await Promise.all(workspaceIds.map(resolveWorkspaceId)));
     let projectQuery = supabase
@@ -512,6 +523,7 @@ export const calendarSubscriptionService = {
   },
 
   create: async (input: CalendarSubscriptionInput, ownerUserId: string): Promise<CalendarSubscriptionWithUrl> => {
+    if (isHttpBackend) return httpCalendarService.create(input);
     requireSupabase();
     const token = generateToken();
     const tokenHash = await sha256Hex(token);
@@ -535,6 +547,7 @@ export const calendarSubscriptionService = {
   },
 
   update: async (subscriptionId: string, input: CalendarSubscriptionInput): Promise<CalendarSubscription> => {
+    if (isHttpBackend) return httpCalendarService.update(subscriptionId, input);
     requireSupabase();
     const filters = await normalizeFilters(input.filters);
     const { data, error } = await supabase
@@ -552,6 +565,7 @@ export const calendarSubscriptionService = {
   },
 
   disable: async (subscriptionId: string): Promise<void> => {
+    if (isHttpBackend) return httpCalendarService.setActive(subscriptionId, false);
     requireSupabase();
     const { data, error } = await supabase.rpc('set_calendar_subscription_active', {
       target_subscription_id: subscriptionId,
@@ -562,6 +576,7 @@ export const calendarSubscriptionService = {
   },
 
   enable: async (subscriptionId: string): Promise<void> => {
+    if (isHttpBackend) return httpCalendarService.setActive(subscriptionId, true);
     requireSupabase();
     const { data, error } = await supabase.rpc('set_calendar_subscription_active', {
       target_subscription_id: subscriptionId,
@@ -572,6 +587,7 @@ export const calendarSubscriptionService = {
   },
 
   regenerateToken: async (subscriptionId: string): Promise<string> => {
+    if (isHttpBackend) return httpCalendarService.rotate(subscriptionId);
     requireSupabase();
     const token = generateToken();
     const tokenHash = await sha256Hex(token);
@@ -585,6 +601,7 @@ export const calendarSubscriptionService = {
   },
 
   delete: async (subscriptionId: string): Promise<void> => {
+    if (isHttpBackend) return httpCalendarService.delete(subscriptionId);
     requireSupabase();
     const { data, error } = await supabase.rpc('delete_calendar_subscription', {
       target_subscription_id: subscriptionId,

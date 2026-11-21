@@ -10,13 +10,14 @@ import {
   retryQuickCapture,
   updateQuickCapture,
 } from '../features/quickTaskCapture/outbox';
-import { createQuickCaptureId, normalizeQuickTitle, isQuickTitleValid, type QuickCaptureRecord } from '../features/quickTaskCapture/model';
+import { createQuickCaptureId, normalizeQuickTitle, isQuickTitleValid, isQuickCaptureWritePaused, type QuickCaptureRecord } from '../features/quickTaskCapture/model';
 import { startVoiceCapture, type VoiceSession } from '../features/quickTaskCapture/voice';
 import { flushQuickTaskOutbox } from '../features/quickTaskCapture/sync';
 import { installQuickReloadSafety } from '../features/quickTaskCapture/reloadSafety';
 import { installQuickInstallGuide } from '../features/quickTaskCapture/install';
 import { getWorkbenchUrl } from '../features/quickTaskCapture/origins';
 import { installAppIconRefresh } from '../services/appIconService';
+import { isHttpBackend } from '../services/backendMode';
 
 installAppIconRefresh('quick-task');
 
@@ -77,7 +78,9 @@ let pageActive = true;
 let pendingClaim: { captureId: string; nonceHash: string; accountId: string; email: string | null; authEpoch: number; contextRevision: number } | null = null;
 
 const getAuthApi = () => {
-  authApiPromise ??= import('../features/quickTaskCapture/auth');
+  authApiPromise ??= isHttpBackend
+    ? import('../features/quickTaskCapture/authHttp') as Promise<QuickAuthApi>
+    : import('../features/quickTaskCapture/auth');
   return authApiPromise;
 };
 
@@ -165,6 +168,21 @@ const clearRetryTimer = () => {
   if (retryTimer !== null) window.clearTimeout(retryTimer);
   retryTimer = null;
 };
+const updateDisplayedSession = (snapshot: typeof authSnapshot) => {
+  if (authSnapshot?.accountId !== snapshot?.accountId || authSnapshot?.authEpoch !== snapshot?.authEpoch) {
+    pendingClaim = null;
+    recoveryCaptureId = null;
+    recoveryRenderRevision += 1;
+    hideRecovery();
+  }
+  if (currentRecord?.accountId && currentRecord.accountId !== snapshot?.accountId) {
+    currentRecord = null;
+    success.hidden = true;
+    titleInput.value = '';
+    setMessage('登入帳號已變更；原待辦仍保留在本機，請從待處理入口恢復。');
+  }
+  authSnapshot = snapshot;
+};
 const verifyAndFlush = async (expected: NonNullable<typeof authSnapshot>) => {
   if (!pageActive) return;
   if (syncInFlight || localCommitInFlight) {
@@ -179,10 +197,11 @@ const verifyAndFlush = async (expected: NonNullable<typeof authSnapshot>) => {
     const verification = await auth.verifyQuickSessionState(expected);
     if (authSnapshot?.accountId !== expected.accountId || authSnapshot.authEpoch !== expected.authEpoch) return;
     if (verification.status !== 'verified') {
-      const label = !navigator.onLine
+      if (verification.status === 'unauthenticated') updateDisplayedSession(null);
+      const label = verification.status === 'unauthenticated' ? '此快速 App 尚未登入' : !navigator.onLine
         ? '目前離線；已保留原帳號本機綁定，網路恢復後自動同步'
         : verification.status === 'unreachable' ? '登入狀態待確認；服務恢復後自動同步'
-          : verification.status === 'unauthenticated' ? '此快速 App 尚未登入' : '登入狀態已變更，請重新確認';
+          : '登入狀態已變更，請重新確認';
       setAuthStatus(label, verification.status === 'unauthenticated', false);
       // Initial verification plus seven retries is the eight-check event budget.
       if (verification.status === 'unreachable' && navigator.onLine && authRetryCount < 7) {
@@ -197,7 +216,7 @@ const verifyAndFlush = async (expected: NonNullable<typeof authSnapshot>) => {
     const verified = verification.snapshot;
     authRetryCount = 0;
     setAuthStatus(`此快速 App 已登入：${verified.email ?? 'ProJED 帳號'}`, false, true);
-    const authFailed = await flushQuickTaskOutbox(verified, (captureId, state) => {
+    const authFailed = await flushQuickTaskOutbox(verified, auth, (captureId, state) => {
       if (authSnapshot?.accountId === verified.accountId && authSnapshot.authEpoch === verified.authEpoch
         && state === 'synced' && currentRecord?.captureId === captureId) {
         currentRecord = { ...currentRecord, state: 'synced' };
@@ -247,11 +266,12 @@ const refreshAuthAndSync = async () => {
   const current = auth.getQuickAuthSnapshot();
   if (snapshot ? current?.accountId !== snapshot.accountId || current.accessToken !== snapshot.accessToken
     || current.authEpoch !== snapshot.authEpoch : current !== null) return;
-  authSnapshot = snapshot;
+  updateDisplayedSession(snapshot);
   if (!snapshot) {
     setAuthStatus(auth.getQuickSessionLoadState() === 'unreachable'
       ? (navigator.onLine ? '登入狀態待確認；服務恢復後自動同步' : '目前離線；待辦仍保留在本機')
       : '此快速 App 尚未登入', auth.getQuickSessionLoadState() !== 'unreachable');
+    await renderRecovery();
     return;
   }
   void verifyAndFlush(snapshot);
@@ -463,7 +483,8 @@ const renderRecovery = async () => {
       : unboundCount === 0 && otherAccountPending === 0 ? '同步異常' : '需處理';
   const currentActionHint = currentRecord && currentNeedsRecovery
     ? currentRecord.accountId === null ? '需確認同步帳號'
-      : currentRecord.state === 'failed_auth' ? '需重新登入' : '需處理同步異常'
+      : currentRecord.state === 'failed_auth' ? '需重新登入'
+        : isQuickCaptureWritePaused(currentRecord) ? '寫入暫停，恢復後重試' : '需處理同步異常'
     : '';
   const selected = actionable.find(record => record.captureId === recoveryCaptureId);
   if (currentRecord) {
@@ -601,17 +622,19 @@ const showNextRecovery = async (interactionRevision: number) => {
 };
 
 const renderRecoveryFailure = (record: QuickCaptureRecord) => {
+  const writePaused = isQuickCaptureWritePaused(record);
   const needsWorkspace = Boolean(record.lastErrorCode?.includes('WORKSPACE')) || record.lastErrorCode === '23503';
   const needsErrorVerification = record.lastErrorCode === 'P0001';
-  const canRetry = record.lastErrorCode === 'AUTO_RETRY_EXHAUSTED' || needsWorkspace || needsErrorVerification;
+  const canRetry = writePaused || record.lastErrorCode === 'AUTO_RETRY_EXHAUSTED' || needsWorkspace || needsErrorVerification;
   const explanation = record.state === 'failed_auth' ? '請重新登入原帳號後同步。'
-    : needsWorkspace ? '請先到主程式完成帳號與工作台設定，再回來重試。'
+    : writePaused ? '來源服務已暫停寫入；待辦仍保留在本機。服務恢復後，請以原帳號重試。'
+      : needsWorkspace ? '請先到主程式完成帳號與工作台設定，再回來重試。'
       : needsErrorVerification ? '請以原帳號重新確認同步結果；原任務仍保留在本機。'
       : canRetry ? '同步多次失敗，待辦仍保留在本機。' : '同步結果需要查證，待辦仍保留在本機。';
   recovery.hidden = false;
   recovery.dataset.compact = 'false';
   recoveryContent.hidden = false;
-  recoveryContent.innerHTML = `<strong>同步未完成</strong><span>${escapeHtml(record.title)}</span><span>${explanation}</span><div class="quick-task-actions">${record.state === 'failed_auth' ? '<button type="button" data-recovery-login="true">重新登入</button>' : ''}${needsWorkspace ? '<button type="button" data-workbench="true">前往工作台</button>' : ''}${canRetry ? `<button type="button" data-retry="true">${needsErrorVerification ? '重新確認' : '重試'}</button>` : ''}<button type="button" data-back="true">返回</button></div>`;
+  recoveryContent.innerHTML = `<strong>${writePaused ? '寫入暫停' : '同步未完成'}</strong><span>${escapeHtml(record.title)}</span><span>${explanation}</span><div class="quick-task-actions">${record.state === 'failed_auth' ? '<button type="button" data-recovery-login="true">重新登入</button>' : ''}${needsWorkspace ? '<button type="button" data-workbench="true">前往工作台</button>' : ''}${canRetry ? `<button type="button" data-retry="true">${writePaused ? '恢復後重試' : needsErrorVerification ? '重新確認' : '重試'}</button>` : ''}<button type="button" data-back="true">返回</button></div>`;
   recoveryDetails.open = true;
   recoveryContent.querySelector<HTMLButtonElement>('[data-recovery-login]')?.addEventListener('click', () => {
     void getAuthApi().then(auth => auth.startQuickGoogleSignIn(new URL('/quick-task/', window.location.origin).toString()))
@@ -646,7 +669,7 @@ const escapeHtml = (value: string) => value.replace(/[&<>"']/gu, char => ({ '&':
 
 const renderSuccess = (record: QuickCaptureRecord, synced: boolean) => {
   success.hidden = false;
-  success.innerHTML = `<strong>${synced ? '已建立' : '已記下，待同步'}</strong><span>${escapeHtml(record.title)}</span>`;
+  success.innerHTML = `<strong>${synced ? '已建立' : isQuickCaptureWritePaused(record) ? '寫入暫停，已保留' : '已記下，待同步'}</strong><span>${escapeHtml(record.title)}</span>`;
 };
 
 const digest = async (value: string) => {
@@ -844,19 +867,7 @@ void (async () => {
   await finishClaimFromUrl();
   await renderRecovery();
   const onAuthChange = (snapshot: typeof authSnapshot) => {
-    if (authSnapshot?.accountId !== snapshot?.accountId || authSnapshot?.authEpoch !== snapshot?.authEpoch) {
-      pendingClaim = null;
-      recoveryCaptureId = null;
-      recoveryRenderRevision += 1;
-      hideRecovery();
-    }
-    if (currentRecord?.accountId && currentRecord.accountId !== snapshot?.accountId) {
-      currentRecord = null;
-      success.hidden = true;
-      titleInput.value = '';
-      setMessage('登入帳號已變更；原待辦仍保留在本機，請從待處理入口恢復。');
-    }
-    authSnapshot = snapshot;
+    updateDisplayedSession(snapshot);
     if (snapshot) {
       setAuthStatus('正在確認登入狀態…', false);
       void verifyAndFlush(snapshot);

@@ -46,6 +46,7 @@ export type MoveTaskSubtreeResult = {
 };
 
 const ROOT_SCOPE_PARENT = '__root__';
+export const MAX_TASKS_PER_PLACEMENT = 200;
 
 const normalizeParentId = (parentId: string | null | undefined) => parentId || null;
 
@@ -172,6 +173,9 @@ export const assertMoveTaskSubtreeCommand = (
     throw new Error('Task placement command must cross the unplaced ownership boundary.');
   }
   const actualSubtreeIds = getTaskSubtreeIds(command.rootTaskId, nodesRecord);
+  if (actualSubtreeIds.length > MAX_TASKS_PER_PLACEMENT) {
+    throw new Error(`Task placement supports at most ${MAX_TASKS_PER_PLACEMENT} tasks at a time.`);
+  }
   if (actualSubtreeIds.length !== command.expectedSubtreeIds.length
     || actualSubtreeIds.some((id, index) => command.expectedSubtreeIds[index] !== id)) {
     throw new Error('Task placement command does not contain the exact canonical subtree.');

@@ -11,14 +11,14 @@ import {
   createCalendarSafeDefaultTaskFilters,
   materializeCalendarBoardFilters,
 } from '../features/calendarSubscriptions/filters';
-import { nodeService } from '../services/dataBackend';
+import { nodeService, tagService } from '../services/dataBackend';
 import type {
   CalendarSubscriptionBoardFilterSnapshot,
   CalendarSubscriptionDateType,
   CalendarSubscriptionFilters,
 } from '../services/supabase/database.types';
-import { useTagStore } from '../store/useTagStore';
-import type { TaskNode } from '../types';
+import { isCalendarAssigneeVisible } from '../features/calendarSubscriptions/memberScope';
+import type { TaskNode, TaskTag } from '../types';
 import TaskConditionFilterControls, { type TaskConditionAssigneeOption } from './ui/TaskConditionFilterControls';
 import { taskFilterFieldClass } from './ui/taskConditionFilterStyles';
 import { TaskDescriptionIndicator } from './TaskDescriptionIndicator';
@@ -35,6 +35,7 @@ export type CalendarSubscriptionBuilderBoard = {
 
 export type CalendarSubscriptionBuilderAssigneeOption = TaskConditionAssigneeOption & {
   workspaceIds?: string[];
+  boardIds?: string[];
 };
 
 export type CalendarSubscriptionBuilderPayload = {
@@ -58,6 +59,7 @@ type Props = {
   currentUserId?: string | null;
   assigneeOptions?: CalendarSubscriptionBuilderAssigneeOption[];
   manageableWorkspaceIds?: string[];
+  manageableBoardIds?: string[];
   allowAllAssignees?: boolean;
   initialFilters?: CalendarSubscriptionFilters | null;
   resetKey?: string | number;
@@ -102,13 +104,14 @@ const CalendarSubscriptionBuilderPreview: React.FC<Props> = ({
   currentUserId,
   assigneeOptions = [],
   manageableWorkspaceIds = [],
+  manageableBoardIds = [],
   allowAllAssignees = false,
   initialFilters,
   resetKey = 'default',
   onPayloadChange,
   onValidationChange,
 }) => {
-  const tags = useTagStore(state => state.tags);
+  const [tagSource, setTagSource] = useState<{ workspaceId: string | null; currentUserId?: string | null; status: 'loading' | 'ready' | 'error'; tags: TaskTag[] }>({ workspaceId: null, status: 'loading', tags: [] });
   const filterToggleRef = useRef<HTMLButtonElement>(null);
   const filterPanelRef = useRef<HTMLDivElement>(null);
   const initializedResetKeyRef = useRef<string | number | null>(null);
@@ -326,11 +329,26 @@ const CalendarSubscriptionBuilderPreview: React.FC<Props> = ({
   const selectedDateTypes = selectedSnapshot?.date_types ?? ['due_date'];
   const activeFilterCount = countActiveTaskFiltersV5(selectedFilters);
   const manageableWorkspaceSet = useMemo(() => new Set(manageableWorkspaceIds), [manageableWorkspaceIds]);
-  const canManageSelectedBoard = allowAllAssignees || !selectedBoard || workspaceAliases(selectedBoard).some(id => manageableWorkspaceSet.has(id));
+  const canManageSelectedBoard = allowAllAssignees || !selectedBoard
+    || boardAliases(selectedBoard).some(id => manageableBoardIds.includes(id))
+    || workspaceAliases(selectedBoard).some(id => manageableWorkspaceSet.has(id));
+  const selectedTagWorkspaceId = selectedBoard?.workspaceId ?? null;
+  useEffect(() => {
+    let cancelled = false;
+    setTagSource({ workspaceId: selectedTagWorkspaceId, currentUserId, status: 'loading', tags: [] });
+    if (selectedTagWorkspaceId) void tagService.listByWorkspace(selectedTagWorkspaceId).then(tags => {
+      if (!cancelled) setTagSource({ workspaceId: selectedTagWorkspaceId, currentUserId, status: 'ready', tags });
+    }).catch(() => {
+      if (!cancelled) setTagSource({ workspaceId: selectedTagWorkspaceId, currentUserId, status: 'error', tags: [] });
+    });
+    return () => { cancelled = true; };
+  }, [selectedTagWorkspaceId, currentUserId]);
+  const scopedTags = tagSource.workspaceId === selectedTagWorkspaceId && tagSource.currentUserId === currentUserId
+    ? tagSource : { status: 'loading' as const, tags: [] };
   const visibleAssigneeOptions = useMemo(() => {
     const selectedWorkspaceAliases = selectedBoard ? workspaceAliases(selectedBoard) : [];
     const options = assigneeOptions
-      .filter(option => !option.workspaceIds?.length || option.workspaceIds.some(id => selectedWorkspaceAliases.includes(id)))
+      .filter(option => isCalendarAssigneeVisible(option, selectedBoard ? boardAliases(selectedBoard) : [], selectedWorkspaceAliases))
       .map(option => ({
         ...option,
         disabled: option.id !== currentUserId && !canManageSelectedBoard,
@@ -579,7 +597,8 @@ const CalendarSubscriptionBuilderPreview: React.FC<Props> = ({
                   variant="calendar-v5"
                   assigneeOptions={visibleAssigneeOptions}
                   value={selectedFilters}
-                  tags={tags}
+                  tags={scopedTags.tags}
+                  tagOptionsStatus={scopedTags.status}
                   unassignedDisabled={!canManageSelectedBoard}
                   unassignedDisabledReason="你只能訂閱自己負責的任務。"
                   showOverdueFilter

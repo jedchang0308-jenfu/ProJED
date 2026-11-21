@@ -58,6 +58,16 @@ export const QUICK_CAPTURE_SCHEMA_VERSION = 2;
 export const QUICK_CAPTURE_LEASE_MS = 30_000;
 export const QUICK_CAPTURE_MAX_AUTOMATIC_ATTEMPTS = 8;
 export const QUICK_CAPTURE_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+export const QUICK_SOURCE_WRITE_PAUSED = 'PROJED_SOURCE_WRITE_PAUSED';
+
+// Only this database rejection proves the source declined the write. A generic
+// 503 can follow an unknown commit and must keep the existing retry semantics.
+export const isQuickSourceWritePaused = (error: unknown) => Boolean(error && typeof error === 'object'
+  && 'code' in error && error.code === 'PT503'
+  && 'message' in error && error.message === QUICK_SOURCE_WRITE_PAUSED);
+
+export const isQuickCaptureWritePaused = (record: Pick<QuickCaptureRecord, 'state' | 'lastErrorCode'>) =>
+  record.state === 'failed_permanent' && record.lastErrorCode === QUICK_SOURCE_WRITE_PAUSED;
 
 const OUTER_TRIM_START = /^\s+/u;
 const OUTER_TRIM_END = /\s+$/u;
@@ -107,6 +117,7 @@ export const insertFinalTranscript = (input: {
 };
 
 export const classifyQuickSyncError = (error: unknown): QuickCaptureState => {
+  if (isQuickSourceWritePaused(error)) return 'failed_permanent';
   const code = typeof error === 'object' && error && 'code' in error
     ? String((error as { code?: unknown }).code)
     : '';

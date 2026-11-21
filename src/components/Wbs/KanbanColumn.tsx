@@ -125,6 +125,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
   };
   const isColumnPlaceholder = isColumnDragging || taskGesture.isActive;
   const columnHeaderDragBindings = taskGesture.mobileActionMode || isSelectingMode || taskGesture.isPlacementPending
+    || !permissions.canDragPlacement
     ? {}
     : { ...columnAttributes, ...columnListeners };
 

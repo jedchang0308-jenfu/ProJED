@@ -12,8 +12,10 @@ import {
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
 import { useMemberStore } from '../store/useMemberStore';
 import useBoardStore from '../store/useBoardStore';
+import useAuthStore from '../store/useAuthStore';
+import { filterReadIdentity } from '../features/taskFilters/optionSource';
 import { toast } from '../store/useToastStore';
-import { boardInviteService } from '../services/dataBackend';
+import { boardInviteService, dataBackend } from '../services/dataBackend';
 import {
   type BoardInvite,
   type BoardMember,
@@ -24,6 +26,7 @@ import {
   normalizeBoardRolePermissionMatrix,
 } from '../types';
 import { isPrimaryPointerActivation } from '../interactions/pointerActivation';
+import { BOARD_PERMISSION_ROWS as PERMISSION_ROWS } from './boardPermissionRows';
 import {
   buildBoardInviteUrl,
   generateBoardInviteToken,
@@ -56,19 +59,6 @@ const INVITE_ROLE_OPTIONS: CollaborationRole[] = ['admin', 'project_manager', 'm
 const DEFAULT_INVITE_ROLE: CollaborationRole = 'member';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const PERMISSION_ROWS: { capability: PermissionCapability; label: string }[] = [
-  { capability: 'read_board', label: '查看看板' },
-  { capability: 'create_task', label: '建立任務' },
-  { capability: 'edit_task', label: '編輯任務' },
-  { capability: 'move_task', label: '移動任務' },
-  { capability: 'delete_task', label: '封存／永久刪除任務' },
-  { capability: 'assign_task', label: '指派任務' },
-  { capability: 'create_dependency', label: '建立相依關係' },
-  { capability: 'manage_board_members', label: '管理看板成員' },
-  { capability: 'edit_board_settings', label: '編輯看板設定' },
-  { capability: 'read_audit', label: '查看稽核紀錄' },
-];
-
 const getMemberLabel = (member: Pick<BoardMember | WorkspaceMember, 'userId' | 'profile'>) =>
   member.profile?.displayName || member.profile?.email || member.userId;
 
@@ -97,10 +87,10 @@ const formatDate = (value?: number) => {
 const canConfigureRolePermissionsFromAccess = (
   currentBoardAccess: ReturnType<typeof useMemberStore.getState>['currentBoardAccess']
 ) =>
-  currentBoardAccess?.workspaceRole === 'owner'
+  currentBoardAccess?.canConfigureRolePermissions ?? (currentBoardAccess?.workspaceRole === 'owner'
   || currentBoardAccess?.workspaceRole === 'admin'
   || currentBoardAccess?.boardRole === 'owner'
-  || currentBoardAccess?.boardRole === 'admin';
+  || currentBoardAccess?.boardRole === 'admin');
 
 const useBoardMemberPanelState = () => {
   const activeWorkspaceId = useBoardStore(state => state.activeWorkspaceId);
@@ -131,7 +121,14 @@ const useBoardMemberPanelState = () => {
   };
 };
 
-export const BoardShareDialog: React.FC<BoardShareDialogProps> = ({ open, onOpenChange }) => {
+export const BoardShareDialog: React.FC<BoardShareDialogProps> = (props) => {
+  const identity = useAuthStore(state => filterReadIdentity(state.user));
+  const workspaceId = useBoardStore(state => state.activeWorkspaceId);
+  const boardId = useBoardStore(state => state.activeBoardId);
+  return <ScopedBoardShareDialog key={JSON.stringify([identity, workspaceId, boardId])} {...props} />;
+};
+
+const ScopedBoardShareDialog: React.FC<BoardShareDialogProps> = ({ open, onOpenChange }) => {
   const {
     activeWorkspaceId,
     activeBoardId,
@@ -142,6 +139,10 @@ export const BoardShareDialog: React.FC<BoardShareDialogProps> = ({ open, onOpen
     removeBoardMember,
     canManageBoardMembers,
   } = useBoardMemberPanelState();
+  const currentAccess = useMemberStore(state => state.currentBoardAccess);
+  const canInviteExternal = currentAccess?.canInviteExternal ??
+    (currentAccess?.workspaceRole === 'owner' || currentAccess?.boardRole === 'owner');
+  const [externalInvite, setExternalInvite] = React.useState(false);
   const activeBoard = useBoardStore(state => {
     const workspace = state.workspaces.find(item => item.id === state.activeWorkspaceId);
     return workspace?.boards.find(board => board.id === state.activeBoardId);
@@ -150,10 +151,18 @@ export const BoardShareDialog: React.FC<BoardShareDialogProps> = ({ open, onOpen
   const [inviteEmail, setInviteEmail] = React.useState('');
   const [inviteRole, setInviteRole] = React.useState<CollaborationRole>(DEFAULT_INVITE_ROLE);
   const [pendingInvites, setPendingInvites] = React.useState<BoardInvite[]>([]);
+  const [pendingInvitesLoading, setPendingInvitesLoading] = React.useState(false);
+  const [pendingInvitesError, setPendingInvitesError] = React.useState(false);
   const [inviteLoading, setInviteLoading] = React.useState(false);
   const [recentInviteLinks, setRecentInviteLinks] = React.useState<Record<string, string>>({});
   const [latestInviteId, setLatestInviteId] = React.useState<string | null>(null);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const scopeMounted = React.useRef(true);
+  const pendingRead = React.useRef(0);
+  React.useEffect(() => {
+    scopeMounted.current = true;
+    return () => { scopeMounted.current = false; pendingRead.current += 1; };
+  }, []);
 
   const latestInvite = latestInviteId
     ? pendingInvites.find(invite => invite.id === latestInviteId) ?? null
@@ -164,17 +173,23 @@ export const BoardShareDialog: React.FC<BoardShareDialogProps> = ({ open, onOpen
     : '';
 
   const loadPendingInvites = React.useCallback(async () => {
+    const revision = ++pendingRead.current;
     if (!activeWorkspaceId || !activeBoardId) {
       setPendingInvites([]);
       return;
     }
-
+    setPendingInvitesLoading(true);
+    setPendingInvitesError(false);
     try {
       const invites = await boardInviteService.listPending(activeWorkspaceId, activeBoardId);
+      if (!scopeMounted.current || revision !== pendingRead.current) return;
       setPendingInvites(invites);
     } catch (error) {
+      if (!scopeMounted.current || revision !== pendingRead.current) return;
       console.warn('[BoardShareDialog] failed to load pending invites:', error);
-      setPendingInvites([]);
+      setPendingInvitesError(true);
+    } finally {
+      if (scopeMounted.current && revision === pendingRead.current) setPendingInvitesLoading(false);
     }
   }, [activeBoardId, activeWorkspaceId]);
 
@@ -199,6 +214,7 @@ export const BoardShareDialog: React.FC<BoardShareDialogProps> = ({ open, onOpen
   const closeDialog = () => {
     if (inviteLoading) return;
     setInviteEmail('');
+    setExternalInvite(false);
     onOpenChange(false);
   };
 
@@ -217,22 +233,27 @@ export const BoardShareDialog: React.FC<BoardShareDialogProps> = ({ open, onOpen
         email,
         tokenHash: await hashBoardInviteToken(token),
         defaultRole: inviteRole,
+        ...(dataBackend === 'http' && externalInvite ? { external: true } : {}),
         expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
       });
+      if (!scopeMounted.current) return;
       const inviteUrl = buildBoardInviteUrl(token);
       setRecentInviteLinks(current => ({ ...current, [createdInvite.id]: inviteUrl }));
       setLatestInviteId(createdInvite.id);
       setInviteEmail('');
       setActiveTab('requests');
-      toast.success(isLocalBoardInviteUrl(inviteUrl)
+      if (createdInvite.externalNotificationPending) {
+        toast.warning('邀請已建立。審核通知尚未送達，受邀者開啟連結時會再次送出。');
+      } else toast.success(isLocalBoardInviteUrl(inviteUrl)
         ? '已建立本機測試邀請連結，請在同一個測試環境開啟。'
         : '已建立看板邀請。');
       await loadPendingInvites();
     } catch (error) {
+      if (!scopeMounted.current) return;
       const message = error instanceof Error ? error.message : '';
       toast.error(message || '無法建立看板邀請。');
     } finally {
-      setInviteLoading(false);
+      if (scopeMounted.current) setInviteLoading(false);
     }
   };
 
@@ -258,19 +279,24 @@ export const BoardShareDialog: React.FC<BoardShareDialogProps> = ({ open, onOpen
 
     try {
       setInviteLoading(true);
-      await boardInviteService.revoke(activeWorkspaceId, activeBoardId, invite.id);
+      const receipt = await boardInviteService.revoke(activeWorkspaceId, activeBoardId, invite.id);
+      if (!scopeMounted.current) return;
       setRecentInviteLinks(current => {
         const next = { ...current };
         delete next[invite.id];
         return next;
       });
       if (latestInviteId === invite.id) setLatestInviteId(null);
+      if (receipt?.externalNotificationPending) {
+        toast.warning('連結已失效，OrgMaster 尚未收到撤回通知。可再次按撤回重送。');
+        return;
+      }
       toast.success('已刪除邀請連結。');
       await loadPendingInvites();
     } catch {
-      toast.error('無法刪除邀請連結。');
+      if (scopeMounted.current) toast.error('無法刪除邀請連結。');
     } finally {
-      setInviteLoading(false);
+      if (scopeMounted.current) setInviteLoading(false);
     }
   };
 
@@ -336,6 +362,13 @@ export const BoardShareDialog: React.FC<BoardShareDialogProps> = ({ open, onOpen
         </header>
 
         <div className="overflow-y-auto px-5 py-4">
+          {dataBackend === 'http' && canInviteExternal && (
+            <label className="mb-3 flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={externalInvite} disabled={inviteLoading}
+                onChange={event => setExternalInvite(event.target.checked)} />
+              邀請外部協作者（需 OrgMaster 核准）
+            </label>
+          )}
           <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_132px_auto]">
             <input
               ref={inputRef}
@@ -439,7 +472,7 @@ export const BoardShareDialog: React.FC<BoardShareDialogProps> = ({ open, onOpen
                     : 'border-transparent text-slate-500 hover:text-slate-800'
                 }`}
               >
-                加入要求 <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-xs">{pendingInvites.length}</span>
+                加入要求 <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-xs">{pendingInvitesLoading || pendingInvitesError ? '—' : pendingInvites.length}</span>
               </button>
             </div>
           </div>
@@ -453,6 +486,14 @@ export const BoardShareDialog: React.FC<BoardShareDialogProps> = ({ open, onOpen
                 onRoleChange={handleRoleChange}
                 onRemove={handleRemove}
               />
+            ) : pendingInvitesLoading ? (
+              <p role="status" className="text-sm text-slate-500">正在讀取邀請清單…</p>
+            ) : pendingInvitesError ? (
+              <div role="status" className="flex items-center gap-3 text-sm text-amber-700">
+                <span>無法讀取邀請清單，請重試。</span>
+                <button type="button" disabled={inviteLoading} onClick={() => void loadPendingInvites()}
+                  className="rounded border border-slate-300 px-3 py-1 text-slate-700">重試</button>
+              </div>
             ) : (
               <PendingInviteRows
                 invites={pendingInvites}

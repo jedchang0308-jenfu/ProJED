@@ -445,7 +445,7 @@ export const buildBackupPayload = (source: BoardBackupSource): BackupPayloadV2 =
 
 export const createBackupPackage = async (
   source: BoardBackupSource,
-  backend: 'supabase' | 'local-test',
+  backend: 'supabase' | 'local-test' | 'http',
   appVersion = '0.0.0'
 ): Promise<BackupPackageV2> => {
   const payload = buildBackupPayload(source);
@@ -706,6 +706,20 @@ export const validateBackupPayload = (payload: BackupPayloadV2): void => {
     if (referenceTaskIds.has(duplicateScopeKey)) throw new BackupError('INVALID_FILE', `追蹤副本 ${reference.taskSourceId} 在相同位置重複。`);
     referenceTaskIds.add(duplicateScopeKey);
   });
+  const referenceById = new Map(
+    (payload.trackingReferences ?? []).map(reference => [reference.sourceId, reference])
+  );
+  (payload.trackingReferences ?? []).forEach(reference => {
+    const visited = new Set<string>([reference.sourceId]);
+    let parentId = reference.parentSourceId;
+    while (parentId && referenceById.has(parentId)) {
+      if (visited.has(parentId)) {
+        throw new BackupError('INVALID_FILE', `追蹤副本 ${reference.sourceId} 形成父位置循環。`);
+      }
+      visited.add(parentId);
+      parentId = referenceById.get(parentId)?.parentSourceId ?? null;
+    }
+  });
 
   const taskById = new Map(payload.tasks.map(task => [task.sourceId, task]));
   payload.tasks.forEach(task => {
@@ -760,7 +774,7 @@ const parseV2Package = async (value: Record<string, unknown>): Promise<BackupPac
   if (!UTC_ISO_PATTERN.test(createdAt) || !Number.isFinite(Date.parse(createdAt))) {
     throw new BackupError('INVALID_FILE', 'createdAt 必須是 UTC ISO-8601 時間。');
   }
-  if (value.source.backend !== 'supabase' && value.source.backend !== 'local-test') {
+  if (value.source.backend !== 'supabase' && value.source.backend !== 'local-test' && value.source.backend !== 'http') {
     throw new BackupError('INVALID_FILE', 'source backend 不受支援。');
   }
   if (value.manifest.canonicalization !== 'json-sort-v1') {
@@ -772,6 +786,9 @@ const parseV2Package = async (value: Record<string, unknown>): Promise<BackupPac
 
   const payload = parsePayload(value.payload);
   const isV3 = inputSchemaVersion === BACKUP_SCHEMA_VERSION;
+  if (!isV3 && (payload.trackingReferences !== undefined || value.manifest.entities.trackingReferences !== undefined)) {
+    throw new BackupError('INVALID_FILE', 'V2 備份不能包含 V3 追蹤副本欄位。');
+  }
   validateBackupPayload(payload);
   const checksum = readRequiredString(value.manifest.checksum.value, 'checksum');
   const actualChecksum = await calculateBackupChecksum(payload);

@@ -15,6 +15,18 @@ import { synthesizeMeetingRecord } from '../../services/meetingSynthesisService'
 import { getMeetingRecordActionState, getMeetingWorkflowStepActions, getRecordDraftSignature, type MeetingWorkflowStepAction } from '../../utils/meetingRecordWorkflow';
 import { getRecordComposerVariant } from '../../utils/recordComposerVariant';
 import { PROJECT_CHANGE_EVENT_TYPES, createProjectChangeSynthesisInput, wrapProjectChangeImportContent, type ProjectChangeScope } from '../../utils/projectChangeImport';
+import {
+  isProjectChangePreviewForCurrentSource,
+  ProjectChangePreviewRequestGate,
+  projectChangePreviewSourceKey,
+  type ProjectChangePreviewSource,
+} from './projectChangePreviewRequest';
+import {
+  matchesMeetingReviewCallbackBinding,
+  meetingReviewScopeKey,
+  type CurrentMeetingReviewBinding,
+  type MeetingReviewCallbackBinding,
+} from './meetingReviewRequestGate';
 import { cn } from '../../utils/cn';
 import RecordContentEditor from './RecordContentEditor';
 import { TaskDescriptionIndicator } from '../TaskDescriptionIndicator';
@@ -66,6 +78,14 @@ const fromTextDateTime = (value: string) => {
   return parsed.isValid() && parsed.year() === year && parsed.month() === month - 1 && parsed.date() === day && parsed.hour() === hour && parsed.minute() === minute
     ? parsed.valueOf()
     : undefined;
+};
+
+const meetingCaptureIdForDraft = (draft: { metadata?: Record<string, unknown> | null } | null) => {
+  const resolution = draft?.metadata?.meetingTaskResolution;
+  return resolution && typeof resolution === 'object' && !Array.isArray(resolution)
+    && typeof (resolution as Record<string, unknown>).captureId === 'string'
+    ? String((resolution as Record<string, unknown>).captureId)
+    : null;
 };
 
 const RecordTextDateTimeInput: React.FC<{
@@ -482,6 +502,7 @@ type ProjectChangeImportState = {
   previewContent: string;
   eventCount: number;
   message: string | null;
+  sourceKey: string | null;
 };
 
 const createInitialProjectChangeImportState = (): ProjectChangeImportState => ({
@@ -494,6 +515,7 @@ const createInitialProjectChangeImportState = (): ProjectChangeImportState => ({
   previewContent: '',
   eventCount: 0,
   message: null,
+  sourceKey: null,
 });
 
 const ProjectChangeImportPanel: React.FC<{
@@ -629,6 +651,7 @@ const RecordSidebar: React.FC = () => {
   const [isLinkedTasksOpen, setIsLinkedTasksOpen] = React.useState(false);
   const [isProjectImportExpanded, setIsProjectImportExpanded] = React.useState(false);
   const [projectChangeImport, setProjectChangeImport] = React.useState(createInitialProjectChangeImportState);
+  const projectChangePreviewGateRef = React.useRef<ProjectChangePreviewRequestGate | null>(null);
   const sidebarWidthRef = React.useRef(sidebarWidth);
   const resizeCleanupRef = React.useRef<(() => void) | null>(null);
   const composerScrollRef = React.useRef<HTMLDivElement | null>(null);
@@ -650,31 +673,112 @@ const RecordSidebar: React.FC = () => {
   const closePanel = useRecordStore(state => state.closePanel);
   const togglePanelCollapsed = useRecordStore(state => state.togglePanelCollapsed);
   const updateDraft = useRecordStore(state => state.updateDraft);
-  const handleMeetingReviewRevisionChange = React.useCallback((reviewRevision: number) => {
+  const draftSignatureForPreview = getRecordDraftSignature(draft);
+  const authContextIdForPreview = user && 'authContextId' in user && typeof user.authContextId === 'string'
+    ? user.authContextId
+    : null;
+  const meetingReviewScope = {
+    accountId: user?.uid ?? null,
+    authContextId: authContextIdForPreview,
+    workspaceId: activeWorkspaceId,
+    boardId: activeBoardId,
+    recordId: draft?.id ?? null,
+    captureId: meetingCaptureIdForDraft(draft),
+  };
+  const meetingReviewScopeIdentity = meetingReviewScopeKey({ ...meetingReviewScope, scopeGeneration: 0 });
+  const meetingReviewScopeGenerationRef = React.useRef({ key: meetingReviewScopeIdentity, generation: 0 });
+  if (meetingReviewScopeGenerationRef.current.key !== meetingReviewScopeIdentity) {
+    meetingReviewScopeGenerationRef.current = {
+      key: meetingReviewScopeIdentity,
+      generation: meetingReviewScopeGenerationRef.current.generation + 1,
+    };
+  }
+  const meetingReviewScopeGeneration = meetingReviewScopeGenerationRef.current.generation;
+  const readCurrentMeetingReviewBinding = (): CurrentMeetingReviewBinding => {
     const currentDraft = useRecordStore.getState().draft;
-    if (!currentDraft || currentDraft.type !== 'meeting') return;
-    const currentResolution = currentDraft.metadata?.meetingTaskResolution;
-    const currentRevision = currentResolution && typeof currentResolution === 'object' && !Array.isArray(currentResolution)
-      ? (currentResolution as Record<string, unknown>).reviewRevision
-      : undefined;
-    if (currentRevision === reviewRevision) return;
-    updateDraft({
-      metadata: {
-        ...(currentDraft.metadata ?? {}),
-        meetingTaskResolution: {
-          ...(currentResolution && typeof currentResolution === 'object' && !Array.isArray(currentResolution) ? currentResolution : {}),
-          reviewRevision,
-        },
-      },
-    });
-  }, [updateDraft]);
-  const handleMeetingResolvedTaskLinksChange = React.useCallback((acceptedTaskIds: string[], manuallyResolvedTaskIds: string[]) => {
+    const currentUser = useAuthStore.getState().user;
+    const currentAuthContextId = currentUser && 'authContextId' in currentUser && typeof currentUser.authContextId === 'string'
+      ? currentUser.authContextId
+      : null;
+    const board = useBoardStore.getState();
+    const currentScope = {
+      accountId: currentUser?.uid ?? null,
+      authContextId: currentAuthContextId,
+      workspaceId: board.activeWorkspaceId,
+      boardId: board.activeBoardId,
+      recordId: currentDraft?.id ?? null,
+      captureId: meetingCaptureIdForDraft(currentDraft),
+    };
+    const currentIdentity = meetingReviewScopeKey({ ...currentScope, scopeGeneration: 0 });
+    return {
+      ...currentScope,
+      scopeGeneration: meetingReviewScopeGenerationRef.current.key === currentIdentity
+        ? meetingReviewScopeGenerationRef.current.generation
+        : -1,
+      draftSignature: getRecordDraftSignature(currentDraft) ?? '',
+    };
+  };
+  const meetingRecordingScope = {
+    accountId: user?.uid ?? null, authContextId: authContextIdForPreview,
+    tenantId: activeWorkspaceId, projectId: activeBoardId,
+    recordId: draft?.id ?? null, captureId: meetingCaptureIdForDraft(draft),
+  };
+  const readCurrentMeetingRecordingScope = () => {
+    const current = readCurrentMeetingReviewBinding();
+    return {
+      accountId: current.accountId, authContextId: current.authContextId,
+      tenantId: current.workspaceId, projectId: current.boardId,
+      recordId: current.recordId, captureId: current.captureId,
+    };
+  };
+  const projectChangePreviewSource = React.useMemo<ProjectChangePreviewSource>(() => ({
+    draftId: draft?.id ?? null,
+    draftSignature: draftSignatureForPreview,
+    accountId: user?.uid ?? null,
+    authContextId: authContextIdForPreview,
+    workspaceId: activeWorkspaceId,
+    boardId: activeBoardId,
+  }), [
+    draft?.id,
+    draftSignatureForPreview,
+    user?.uid,
+    authContextIdForPreview,
+    activeWorkspaceId,
+    activeBoardId,
+  ]);
+  if (!projectChangePreviewGateRef.current) {
+    projectChangePreviewGateRef.current = new ProjectChangePreviewRequestGate(projectChangePreviewSource);
+  }
+  const readCurrentProjectChangePreviewSource = (): ProjectChangePreviewSource => {
+    const currentDraft = useRecordStore.getState().draft;
+    const currentUser = useAuthStore.getState().user;
+    const currentAuthContextId = currentUser && 'authContextId' in currentUser && typeof currentUser.authContextId === 'string'
+      ? currentUser.authContextId
+      : null;
+    const board = useBoardStore.getState();
+    return {
+      draftId: currentDraft?.id ?? null,
+      draftSignature: getRecordDraftSignature(currentDraft),
+      accountId: currentUser?.uid ?? null,
+      authContextId: currentAuthContextId,
+      workspaceId: board.activeWorkspaceId,
+      boardId: board.activeBoardId,
+    };
+  };
+  const handleMeetingReviewApplied = React.useCallback((
+    reviewRevision: number,
+    acceptedTaskIds: string[],
+    manuallyResolvedTaskIds: string[],
+    binding: MeetingReviewCallbackBinding,
+  ) => {
+    if (!matchesMeetingReviewCallbackBinding(binding, readCurrentMeetingReviewBinding())) return;
     const currentDraft = useRecordStore.getState().draft;
     if (!currentDraft || currentDraft.type !== 'meeting') return;
     const currentResolution = currentDraft.metadata?.meetingTaskResolution;
     const resolution = currentResolution && typeof currentResolution === 'object' && !Array.isArray(currentResolution)
       ? currentResolution as Record<string, unknown>
       : {};
+    const currentRevision = typeof resolution.reviewRevision === 'number' ? resolution.reviewRevision : undefined;
     const previousAutoLinkSet = Array.isArray(resolution.autoLinkSet)
       ? resolution.autoLinkSet.filter((item): item is string => typeof item === 'string')
       : [];
@@ -695,7 +799,8 @@ const RecordSidebar: React.FC = () => {
     const sameLinks = currentDraft.taskLinks.length === nextTaskLinks.length
       && currentDraft.taskLinks.every((link, index) => link.nodeId === nextTaskLinks[index]?.nodeId && link.role === nextTaskLinks[index]?.role);
     const sameIds = (left: string[], right: string[]) => left.length === right.length && left.every((id, index) => id === right[index]);
-    if (sameLinks
+    if (currentRevision === reviewRevision
+      && sameLinks
       && sameIds(previousAutoLinkSet, nextAutoLinkSet)
       && sameIds(previousManualLinkSet, nextManualLinkSet)
       && sameIds(previousResolutionLinkSet, nextResolutionLinkSet)) return;
@@ -705,6 +810,7 @@ const RecordSidebar: React.FC = () => {
         ...(currentDraft.metadata ?? {}),
         meetingTaskResolution: {
           ...resolution,
+          reviewRevision,
           autoLinkSet: nextAutoLinkSet,
           manualLinkSet: nextManualLinkSet,
           resolutionLinkSet: nextResolutionLinkSet,
@@ -816,21 +922,26 @@ const RecordSidebar: React.FC = () => {
   }, [meetingSaveFeedback]);
 
   React.useEffect(() => {
+    setMeetingSaveFeedback(null);
     setProjectChangeImport(createInitialProjectChangeImportState());
     setIsProjectImportExpanded(false);
     setIsLinkedTasksOpen(false);
     window.requestAnimationFrame(() => composerScrollRef.current?.scrollTo({ top: 0, behavior: 'auto' }));
   }, [draft?.id]);
 
+  React.useEffect(() => {
+    const gate = projectChangePreviewGateRef.current;
+    if (!gate) return;
+    const transition = gate.reconcileSource(projectChangePreviewSource, projectChangeImport);
+    if (transition.changed) setProjectChangeImport(transition.state);
+  }, [projectChangePreviewSource, projectChangeImport]);
+
   if (!isPanelOpen || (isMeetingMode && isMeetingRecordUnavailable)) return null;
 
   const composerVariant = getRecordComposerVariant(draft, isMeetingMode);
   const isLiveMeeting = composerVariant === 'live-meeting';
   const isWorkLog = composerVariant === 'work-log';
-  const meetingTaskResolutionCaptureId = isLiveMeeting && draft?.metadata?.meetingTaskResolution && typeof draft.metadata.meetingTaskResolution === 'object' && !Array.isArray(draft.metadata.meetingTaskResolution)
-    && typeof (draft.metadata.meetingTaskResolution as Record<string, unknown>).captureId === 'string'
-    ? String((draft.metadata.meetingTaskResolution as Record<string, unknown>).captureId)
-    : null;
+  const meetingTaskResolutionCaptureId = isLiveMeeting ? meetingCaptureIdForDraft(draft) : null;
   const selectedLinks = draft?.taskLinks || [];
   const isSynthesizing = meetingSynthesisStatus === 'synthesizing';
   const isMeetingWorkflow = draft?.type === 'meeting';
@@ -945,11 +1056,17 @@ const RecordSidebar: React.FC = () => {
     await saveDraft({ nodes, status });
   };
 
+  const showDraftSaveResult = (saved: boolean) => {
+    const current = useRecordStore.getState();
+    if (current.draft?.id !== draft?.id || current.saving) return;
+    setMeetingSaveFeedback(saved ? 'saved' : current.error ? 'error' : null);
+  };
+
   const handleMeetingSaveDraft = async () => {
     setIsMeetingOverflowOpen(false);
     setMeetingSaveFeedback('saving');
     const saved = await saveDraft({ nodes, status: 'draft' });
-    setMeetingSaveFeedback(saved ? 'saved' : 'error');
+    showDraftSaveResult(Boolean(saved));
   };
 
   const handleEnsureMeetingSaved = async () => {
@@ -957,16 +1074,17 @@ const RecordSidebar: React.FC = () => {
     if (draft.id && scopedRecords.some(record => record.id === draft.id)) return draft.id;
     setMeetingSaveFeedback('saving');
     const saved = await saveDraft({ nodes, status: 'draft' });
-    setMeetingSaveFeedback(saved ? 'saved' : 'error');
+    showDraftSaveResult(Boolean(saved));
     return saved?.id ?? null;
   };
 
   const handleMeetingCaptureStarted = (captureId: string) => {
-    if (!draft || draft.type !== 'meeting') return;
-    const currentResolution = draft.metadata?.meetingTaskResolution;
+    const currentDraft = useRecordStore.getState().draft;
+    if (!currentDraft || currentDraft.type !== 'meeting' || currentDraft.id !== draft?.id) return;
+    const currentResolution = currentDraft.metadata?.meetingTaskResolution;
     updateDraft({
       metadata: {
-        ...(draft.metadata ?? {}),
+        ...(currentDraft.metadata ?? {}),
         meetingTaskResolution: {
           ...(currentResolution && typeof currentResolution === 'object' && !Array.isArray(currentResolution) ? currentResolution : {}),
           captureId,
@@ -988,7 +1106,7 @@ const RecordSidebar: React.FC = () => {
     setMeetingSaveFeedback('saving');
     const saved = await saveDraft({ nodes, status: 'draft' });
     if (!saved) {
-      setMeetingSaveFeedback('error');
+      showDraftSaveResult(false);
       return;
     }
 
@@ -1030,7 +1148,16 @@ const RecordSidebar: React.FC = () => {
   };
 
   const handleProjectChangePreview = async () => {
-    if (!activeWorkspaceId || !draft) {
+    const gate = projectChangePreviewGateRef.current;
+    if (!gate) return;
+    const requestId = gate.begin(projectChangePreviewSource);
+    const requestSourceKey = projectChangePreviewSourceKey(projectChangePreviewSource);
+    const workspaceId = activeWorkspaceId;
+    const boardId = activeBoardId;
+    const sourceDraft = draft;
+    const isCurrentRequest = () => gate.isCurrent(requestId, readCurrentProjectChangePreviewSource());
+
+    if (!workspaceId || !sourceDraft) {
       setProjectChangeImport(state => ({
         ...state,
         status: 'error',
@@ -1056,13 +1183,14 @@ const RecordSidebar: React.FC = () => {
       previewContent: '',
       eventCount: 0,
       message: '正在整理指定範圍內的專案變化。',
+      sourceKey: requestSourceKey,
     }));
 
     try {
       const events = await withProjectChangeImportTimeout(
         eventLogService.listActivity({
-          workspaceId: activeWorkspaceId,
-          boardId: activeBoardId,
+          workspaceId,
+          boardId,
           scope: projectChangeImport.scope,
           startedAt,
           endedAt,
@@ -1070,6 +1198,7 @@ const RecordSidebar: React.FC = () => {
         }),
         '讀取專案變化逾時，請確認正式環境連線後重試；也可以縮短日期範圍再整理。',
       );
+      if (!isCurrentRequest()) return;
 
       if (events.length === 0) {
         setProjectChangeImport(state => ({
@@ -1078,56 +1207,68 @@ const RecordSidebar: React.FC = () => {
           previewContent: '',
           eventCount: 0,
           message: '這個時間範圍內沒有可匯入的任務變化。',
+          sourceKey: null,
         }));
         return;
       }
 
       const result = await withProjectChangeImportTimeout(
         synthesizeMeetingRecord(createProjectChangeSynthesisInput(
-          draft.title || '專案變化紀錄',
+          sourceDraft.title || '專案變化紀錄',
           events,
           nodes,
           activitySummaryResolvers,
-        )),
+        ), { workspaceId, boardId }),
         '整理專案變化逾時，請稍後重試；也可以縮短日期範圍或先手動撰寫紀錄。',
       );
+      if (!isCurrentRequest()) return;
       setProjectChangeImport(state => ({
         ...state,
         status: 'ready',
         previewContent: result.content,
         eventCount: events.length,
         message: `已整理 ${events.length} 筆任務變化。確認後可插入紀錄內容。`,
+        sourceKey: requestSourceKey,
       }));
     } catch (error) {
+      if (!isCurrentRequest()) return;
       setProjectChangeImport(state => ({
         ...state,
         status: 'error',
         previewContent: '',
         eventCount: 0,
         message: error instanceof Error ? error.message : String(error),
+        sourceKey: null,
       }));
     }
   };
 
   const handleInsertProjectChanges = () => {
-    if (!draft || !projectChangeImport.previewContent.trim()) return;
+    if (!draft || !projectChangeImport.previewContent.trim()
+        || !isProjectChangePreviewForCurrentSource(projectChangeImport.sourceKey, readCurrentProjectChangePreviewSource())) return;
+    projectChangePreviewGateRef.current?.cancel();
     const projectChangeBlock = wrapProjectChangeImportContent(projectChangeImport.previewContent);
     const nextContent = [draft.content.trim(), projectChangeBlock]
       .filter(Boolean)
       .join('\n\n');
     updateDraft({ content: nextContent });
     setContentCursorOffset(nextContent.length);
+    const insertedSource = readCurrentProjectChangePreviewSource();
+    projectChangePreviewGateRef.current?.markInserted(insertedSource);
+    const insertedSourceKey = projectChangePreviewSourceKey(insertedSource);
     setProjectChangeImport(state => ({
       ...state,
       dismissedDraftId: draft.id ?? null,
       status: 'ready',
       stepState: 'inserted',
       message: `已插入 ${state.eventCount} 筆專案變化整理，請繼續撰寫。`,
+      sourceKey: insertedSourceKey,
     }));
     setIsProjectImportExpanded(false);
   };
 
   const handleSkipProjectChanges = () => {
+    projectChangePreviewGateRef.current?.cancel();
     setProjectChangeImport(state => ({
       ...state,
       dismissedDraftId: draft?.id ?? null,
@@ -1136,6 +1277,7 @@ const RecordSidebar: React.FC = () => {
       previewContent: '',
       eventCount: 0,
       message: null,
+      sourceKey: null,
     }));
     setIsProjectImportExpanded(false);
   };
@@ -1144,15 +1286,19 @@ const RecordSidebar: React.FC = () => {
     <ProjectChangeImportPanel
       state={projectChangeImport}
       disabled={!activeWorkspaceId || (projectChangeImport.scope === 'board' && !activeBoardId) || saving || isSynthesizing}
-      onChange={updates => setProjectChangeImport(state => ({
-        ...state,
-        ...updates,
-        status: 'idle',
-        stepState: 'pending',
-        previewContent: '',
-        eventCount: 0,
-        message: null,
-      }))}
+      onChange={updates => {
+        projectChangePreviewGateRef.current?.cancel();
+        setProjectChangeImport(state => ({
+          ...state,
+          ...updates,
+          status: 'idle',
+          stepState: 'pending',
+          previewContent: '',
+          eventCount: 0,
+          message: null,
+          sourceKey: null,
+        }));
+      }}
       onPreview={() => void handleProjectChangePreview()}
       onInsert={handleInsertProjectChanges}
       onSkip={handleSkipProjectChanges}
@@ -1414,6 +1560,8 @@ const RecordSidebar: React.FC = () => {
                         <MeetingRecordingControls
                           tenantId={activeWorkspaceId}
                           projectId={activeBoardId}
+                          scope={meetingRecordingScope}
+                          readCurrentScope={readCurrentMeetingRecordingScope}
                           initialCaptureId={meetingTaskResolutionCaptureId}
                           onEnsureSaved={handleEnsureMeetingSaved}
                           onCaptureStarted={handleMeetingCaptureStarted}
@@ -1422,9 +1570,14 @@ const RecordSidebar: React.FC = () => {
                       <MeetingTaskMatchReview
                         captureId={meetingTaskResolutionCaptureId}
                         recordId={draft?.id ?? null}
+                        accountId={user?.uid ?? null}
+                        authContextId={authContextIdForPreview}
+                        workspaceId={activeWorkspaceId}
+                        boardId={activeBoardId}
+                        scopeGeneration={meetingReviewScopeGeneration}
+                        draftSignature={draftSignatureForPreview ?? ''}
                         taskOptions={meetingTaskOptions}
-                        onReviewRevisionChange={handleMeetingReviewRevisionChange}
-                        onResolvedTaskLinksChange={handleMeetingResolvedTaskLinksChange}
+                        onReviewApplied={handleMeetingReviewApplied}
                       />
                     </>
                   ) : null}

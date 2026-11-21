@@ -64,6 +64,8 @@ export type MeetingTaskCandidate = {
 export type MeetingReviewSegment = {
   segmentId: string;
   audioSegmentId?: string | null;
+  audioSourceStartOffsetMs?: number | null;
+  audioSourceEndOffsetMs?: number | null;
   transcriptRevisionId: string;
   text: string;
   startOffsetMs: number;
@@ -76,6 +78,23 @@ export type MeetingReviewSegment = {
   humanEmptyDecision: boolean;
   candidates: MeetingTaskCandidate[];
 };
+
+export type MeetingReviewResponse = {
+  captureId: string;
+  state: string;
+  reviewRevision: number;
+  summary: string | null;
+  segments: MeetingReviewSegment[];
+};
+
+/** Old meeting-control responses may omit the newly published summary. */
+export function readMeetingReviewSummary(value: unknown): string | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Invalid meeting review response');
+  const response = value as Record<string, unknown>;
+  if (!Object.prototype.hasOwnProperty.call(response, 'summary')) return null;
+  if (response.summary === null || typeof response.summary === 'string') return response.summary;
+  throw new TypeError('Invalid meeting review summary');
+}
 
 export type MeetingSegmentResolution = {
   segmentId: string;

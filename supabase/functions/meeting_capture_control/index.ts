@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveSupabaseFunctionKey } from "../_shared/supabaseApiKeys.mjs";
+import { legacyWritesPaused, sourcePausedResponse } from "../_shared/sourceWritePause.mjs";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -836,6 +837,10 @@ Deno.serve(async (request) => {
   try {
     const body = await request.json() as Record<string, unknown>;
     const operation = String(body.operation ?? "");
+    if (legacyWritesPaused() && operation !== "status" && operation !== "playback-url") {
+      if (!getToken(request)) return errorResponse("AUTH_REQUIRED", 401);
+      return sourcePausedResponse(CORS_HEADERS);
+    }
     const result = operation === "begin" ? await begin(request, body)
       : operation === "progress" ? await progress(request, body)
       : operation === "pause" ? await pause(request, body)

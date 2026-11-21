@@ -457,12 +457,13 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
               topbarClassNames.textButton,
               'px-2 sm:px-3',
               isRagOpen
-                ? 'border-primary-300 bg-primary-50 hover:border-primary-400 hover:bg-primary-100'
-                : 'hover:border-primary-400 hover:bg-primary-50',
+                  ? 'border-primary-300 bg-primary-50 hover:border-primary-400 hover:bg-primary-100'
+                  : 'hover:border-primary-400 hover:bg-primary-50',
             )}
             title="AI"
             aria-label="AI"
             data-ai-analysis-open="true"
+            data-ai-analysis-supported="true"
           >
             <span>AI</span>
           </button>
