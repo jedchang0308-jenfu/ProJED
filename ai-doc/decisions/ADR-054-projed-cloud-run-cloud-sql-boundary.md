@@ -1,89 +1,52 @@
 # ADR-054：ProJED Cloud Run／Cloud SQL 與跨系統責任邊界
 
-- 日期：2026-10-29（Asia/Taipei）。
-- 修訂：Rev 14，補齊已選Cloud Run／shared SQL的private route與lifecycle IAM責任；source進度與資格只見SPEC-139，未授權或執行新foundation／traffic。
-- 狀態：**Accepted（ProJED 技術選型；完整整合續行）**；S1、S2 consumer seam及S3 W1–W18本地驗收PASS。Platform Session／handoff source 已有 draft PR／CI 及 LOCAL_SIMULATION PostgreSQL 證據，但真 Firebase／OIDC、ProJED Session wire、真資料及 release 仍未完成；本 ADR 的Accepted不表示其他owner接受、無縫切換或production closure。
-- 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。詳細交接契約：[SPEC-139](../specs/SPEC-139-projed-jenfu-platform-onboarding.md)。
-- 適用未來整合路徑；不立即取代既有 runtime，不表示其他 repo 接受新契約，也不授權程式、DB、遠端或付費操作。
+- 日期：2026-11-21（Asia/Taipei）。
+- 修訂：Rev 15，集中專案、自有固定網域與跨 origin 遷移。
+- 狀態：**Accepted（架構方向）；本輪文件／計畫更新，未完成新綁定實作或部署**。
+- 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)；唯一工程交接：[SPEC-139](../specs/SPEC-139-projed-jenfu-platform-onboarding.md)，現行 target 見 §3／§3.2，遷移見 §6，驗收見 §8。
+- 本輪不部署、不切流、不執行正式 migration／資料重寫，不變更 DNS、IAM、Secret 或 billing；舊 Shared VPC 引導不再要求執行，已做的設定不自動撤回。
 
 ## Context
 
-ProJED 已有 React／Vite 與主／Quick PWA，瀏覽器使用 Supabase Auth／Data API／RPC／Realtime；profile、業務外鍵與本機 receipt 綁定既有 user ID。Jenfu 現行體系採各 app 獨立 Cloud Run runtime、Cloud SQL app-owned schemas 與 versioned contract，平台不是業務資料容器。
+ProJED 保留 React／Vite、主程式／Quick、個人及外部協作、原 Workspace／Board／Task 與權限。OrgMaster 登錄最小 Principal／登入來源，Platform 提供身分契約，私人內容及本地能力仍由 ProJED 控制。成本條件為「只要費用不大幅增加即可」，不加入自用軟體不需要的 SaaS 條件。
 
-兩者整合的必要工作是替換持久化及 provider 能力、銜接可信身份與資料授權，並保留個人／外部協作。現行平台 SSO v2 要求 employeeId，不含 ProJED audience，不能視為已支援非員工。
-
-使用者已選完整對齊 Cloud Run／Cloud SQL、保留 Vite；費用條件更新為「只要費用不大幅增加即可」。既有雙 App 允許各自登入／切帳、local-first 與私人資料隔離持續有效。
-
-D2 最新人類原文為「保留 ProJED 現有的工作區、看板與權限功能，先處理雲端架構、資料庫和身分契約的對齊」。因此首階段為基礎對齊與既有行為相容，Platform 任務摘要、AI-PDM 專案／看板連結留待後續；原先建議 2A 未被採用。
-
-人類另補充「PROJED已有使用者, 我可以無縫切換嗎」，並要求「請寫進發文件」。因此移轉設計以既有使用者可延續為基線：不丟資料、不重建帳號、不改權限、不強迫重裝，優先保留既有 public origin。預留正常重新登入與經演練確認的短暫停寫，不承諾零重登／零停寫；實際窗口未由人類指定，也未授權正式切換。
+2026-11-21 人類選定「ProJED 集中到 jenfu-platform-prod，改用自有固定網址」，並要求先更新文件與遷移計畫、保留原資料及舊入口過渡、納入 PWA 重裝／離線草稿／連結轉移、維持零留存，先不部署不切流。這取代先前 runtime 留在 `projed-cc78d`、跨專案 Shared VPC、永久維持舊 origin 與無須重裝的假設；不是立即變更現役服務。
 
 ## Options
 
-| 已考慮方向 | 決策來源與處置 |
+| 方向 | 決策 |
 |---|---|
-| Cloud Run＋Cloud SQL，保留 Vite、自有 API、app-owned schemas | **人類選定的目標方向**；以最小必要 server 能力承接現有功能。 |
-| Portal 連結／API 串接，繼續使用獨立 Supabase DB | 既有評估替代案；不作此任務終態，因人類已選完整對齊。 |
-| 全面改寫 Next.js／將 ProJED 併入 Platform runtime | 不在已確認範圍，無目前證據支持增加此重寫與共同發布責任。 |
-| OrgMaster 統一最小非員工 Principal／登入來源登錄 | **D1 人類確認**：「接受統一登錄最小身分資料（建議）」；私人內容仍由 ProJED 隔離。 |
-| ProJED 保留非公司身份、平台採聯邦驗證 | D1 的替代選項未採用；不建立第二套非員工 publisher。 |
-| 保留現有工作區／看板／權限，先雲端架構／DB／身分契約對齊 | **D2 人類確認**，以最新原文為準；首階段交付基礎對齊及原功能相容。 |
-| Platform 任務摘要／AI-PDM 專案看板連結 | D2 未採作首階段；未來有業務串接要求及明確資料範圍後再評估。 |
-| 保留既有 Hosting public origin，受控轉送 Cloud Run | 納入此次開發文件的相容設計基線；保護既有書籤、PWA 與 origin storage，仍需 Session／路由／費用及環境證據。 |
-| 立即改用新 run.app 網址／全面 redirect／要求重裝 | 不作預設切換策略；會影響既有 Session、安裝與未同步資料，不能以新網站可達代替恢復驗收。 |
+| Hosting／runtime／Jobs 集中 `jenfu-platform-prod`，採自有固定網域、同專案私人 SQL | **目前選定**；網域實際名稱待人類指定，不自選或操作 DNS。 |
+| runtime 留在舊專案，跨專案 Shared VPC 並永久保留舊網址前門 | 被本次決策取代；舊資源／證據保留，不再作續行前置。 |
+| 將 ProJED 併入 PDM／Platform runtime、共用業務資料或服務身分 | 不採用；集中基礎設施仍保留 app-owned 邊界。 |
+| 換網址後直接清舊安裝／本機資料或全面 redirect | 不採用；須先完成草稿、舊裝置與已發出連結的恢復／轉移。 |
 
-## Chosen Rule
+## Decision
 
-2026-10-29 private route具體化沿[SPEC §49](../specs/SPEC-139-projed-jenfu-platform-onboarding.md#49-cloud-run-create-renderer-and-source-secret-bundlew352026-10-29)：ProJED仍在projed-cc78d保留單一runtime與既有Hosting origins；jenfu-platform-prod作既有SQL VPC的Shared VPC host候選，Direct VPC使用其asia-east1 runtime subnet與PRIVATE_RANGES_ONLY。私有SQL不開public IP，不新增NAT／SQL instance，公開Google／Supabase連線沿Cloud Run一般外送。這是同organization下可實施的source方案，尚未啟用Shared VPC、attach project、授權subnet或qualified真route；實際foundation與費用責任依既有授權邊界處理。
-
-Runtime／migrator／importer採三個獨立IAM login及既有NOLOGIN app角色；runtime經private IAM proxy，Jobs走Cloud SQL socket與metadata短期token。Platform只provision中立roles／lifecycle ACL；ProJED自己的有序migration建立app schema與ledger，不由Platform接管業務資料。首次0001所需database CREATE只暫授app owner，成功或失敗後均由owner步驟撤銷並讀回；不改寫既有SQL、不將role／Secret或跨app權限合併為共用release identity。Source renderer、隔離驗證及此ADR均非正式grant或部署證據。
-
-
-2026-10-29 續行修正：人類已要求完成外部接線、正式資料及發布；現行契約為 SPEC-139，選測與開發出口見 §8.1／§11.5，整合進度與分層證據只在 §33及後續實作節維護。W22／W23 source、PR／CI 與本地模擬不代表真 Firebase／OIDC、ProJED opaque Session／既有 UUID proof 或正式整合完成；工作區／看板權限仍由 ProJED 控制。W18／Rev10 為 local 切片歷史，W20／W21 資料保留也不代表 RAG／會議等剩餘功能完成，不縮減完整目標。
-
-managed database 固定既有 `jenfu-platform-prod / asia-east1 / jenfu-platform-prod-pg / jenfu_prod`，不是另建 `projed` DB。原 Hosting project 為 `projed-cc78d`，唯一新 runtime 規劃為同 project／asia-east1 的 `projed-prod`，以受控跨 project 身分連共用 SQL，不增加第二個 edge proxy。新 runtime／release 服務帳號、app Secret 與 SQL grant 尚待新責任權限確認；舊 `projed-ai-backend` 與現有身分不覆寫。此項精簡不執行正式資料、流量或權限變更。
-
-人類已要求「升級到架構確定」與 rd-tech-lead 審視並優化，並要求把既有使用者切換評估寫入文件。下列 ProJED 架構規則固定，現行契約為 SPEC-139；D1 publisher 與 D2 首階段範圍不變。已完成 S1 的固定順序與人工 freeze／QC／Spec Drift 不作後續開發前置，沿 SPEC §9／§11.5 的授權、選測與啟用界線續行；required CI、DB checker 與正式發布保護仍有效。人類選定方向及本 repo 決策不表示外部 owner wire／程式已接受或發布：
-
-1. **共用 infrastructure，業務權威獨立。** ProJED 自有 repo、runtime、release、`projed_core / projed_contract`、ledger 及 lifecycle-specific 角色；app key 宣告為 `projed`，平台實際登錄屬 S2。其他 app 只用受控 contract。
-2. **保留前端，新增必要 server 邊界。** Vite產物由Node HTTP runtime提供，browser經自有API；不讓DB runtime role／DSN或provider Secret進前端。主／Quick既有兩個public origin與manifest identity保留，相容Hosting把兩邊的`/api/**`轉送至同一個ProJED Cloud Run runtime，同一套server業務實作、各origin Session；可信`main / quick`由Session actor決定，不由Host或forwarded header決定。run.app不直接成為既有使用者必換的新網址；原主origin的Quick相容入口沿原Session，不另造帳號狀態或跨origin token bridge。
-3. **OrgMaster 最小身分與 ProJED 本地 UUID 分工。** OrgMaster 發布個人／外部最小 Principal／登入來源及必要安全 metadata，不存私人內容；Platform 處理登入／Session／revocation。verified Principal 決定安全主體；既有 local UUID 保留外鍵／receipt，provider proof／受控 mapping 才可連結。不用 email、Employee 或 UID fallback，不造假 Employee。
-4. **保留本地權限，分層銜接身分。** OrgMaster 現有公司角色／scope 契約持續作公司資格權威；ProJED 保留 Workspace／Board membership、五種角色、每 Board 已設定的能力矩陣與繼承、邀請及撤權行為。非預設或空集合權限不重設為 default。離職／公司撤權不直接停用個人 Principal；公司管理角色、入口可見或 SSO 不改派 Workspace／Board owner，也不授予私人存取。
-   員工、個人與外部協作者的有效權限統一在登入時計算一次，綁定伺服器 Session。外部看板須有 OrgMaster 核准的外部資格、擁有者的有效邀請授權及看板成員權限。日常操作與輪詢套用同一快照；OrgMaster 停用或 ProJED owner 撤權時，使受影響的舊 Session 失效，下次登入才重新計算。[SPEC-139 §4.2.1–4.3](../specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-external-access)
-5. **API 與 DB 共守範圍。** server 每請求核實 current identity／grant，自有交易內重驗 resource；DB policy 使用可信且交易區域的 actor context，同 client transaction、transaction advisory lock＋guard revision 及固定 scope 排序，runtime 不是 owner/BYPASSRLS。交易核心只交出 scoped query port，db.ts 獨占 pool／lease cleanup；closed port 不得再 dispatch，COMMIT unknown 不由 rollback 或自動 retry 偽裝成功。S1 只驗 account／profile，缺 context／跨 scope 拒絕；其他 scope 的完整命令在 S3 收斂。
-6. **保留現有 durable 語意。** Quick immutable owner／captureId、明確認領、receipt replay；AI source／lease／budget／projection／cleanup；檔案私有存取與已知 qualification gate 保留。同步通知不成為第二資料權威。
-7. **先相容與演練，再受控切換。** managed DDL forward-only，新舊 migration 歷史分開；verified mapping 保留原帳號 UUID、canonical IDs／權限／receipt，本機資料另驗。先準備舊入口／舊 client 相容，再做全來源 writer fence、單一一致性full snapshot及exact reconciliation；不建delta／雙寫平台。正式來源只接受綁定的Supabase direct或5432 session endpoint、verify-full CA及read-only repeatable-read，目標只接受Cloud SQL Unix socket與專用importer。短暫停寫完成最後核對後才啟用新唯一writer；新寫入後的回復須保留新資料。
-8. **費用是限制，分期驗證效益。** 用可取得基線比較同等用量持續費用，列出兩入口、相容 Hosting、worker／storage／同步／SQL 容量等邊際增量與雙跑／恢復窗口支出；未能退役的費用不能算節省。沒有必須降費或有投資回收期的條件，不擅設增幅百分比。首階段驗基礎對齊與原功能相容，任務／資料串接效益在後續實際情境驗證。
-9. **首階段不擴增業務功能。** ProJED 是身分契約 consumer，Platform 提供 registry／launch／handoff；不新增任務摘要 BFF、AI-PDM project↔Board mapping、跨 app task API 或另一份 task master。跨 app 業務 ACL 預設拒絕，後續明確選定情境再補契約。
-10. **固定工程選型，分段完成替代證據。** Node 24／npm 11、node:http＋pg；本地隔離驗證支援 PostgreSQL 17／18，managed target 按實際綁定版本重驗。同步採版本 polling＋canonical reload，檔案採私有 Cloud Storage，工作沿原 DB claim／lease 的 bounded worker／Job；詳細決策見現行 SPEC-139 §11。完整 inventory、legacy ref／UUID、Session前置條件及receipt保留；真provider／原功能移轉及Hosting相容仍須S2／S3驗證。
-
-使用思考習慣：#效用理論、#限制條件、#多層次分析
+1. **集中專案，app 權責獨立。** ProJED Hosting、單一 Cloud Run runtime、Jobs／Scheduler、app Secret／Storage 在 `jenfu-platform-prod` 管理；同專案 VPC／runtime subnet 連既定 `jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg`／`jenfu_prod`，不開 SQL public IP、不要求跨專案 Shared VPC。保留自有 repo、release、專用 SA、SQL IAM login、`projed_core`／`projed_contract`、ledger 與最小權限，不與 PDM 共用 runtime 身分或合併業務資料。
+2. **自有固定網域，舊入口有限過渡。** 新網址名稱及主／Quick exact origin／path 尚未指定；後續才固定 Hosting、DNS／TLS、OAuth callback、允許 origin、Cookie／CSRF 與 manifest。主／Quick 各自登入、換帳及登出語意保留，不跨 origin 複製 Session。舊 web.app、獨立 Quick 與同 origin Quick 入口保留恢復／轉移指引，不為永久保留舊網址新增永久 API proxy。
+3. **既有資料與授權不重建。** 原帳號 UUID、Workspace／Board／Task ID、正文／備註、membership、非預設／空集合 matrix、附件、job／receipt 及歷史保留。Principal 連原 local UUID 仍要可信 provider proof／mapping，不以 email 補綁、不授公司管理員私人內容；日常操作沿登入快照及受控撤權，不新增跨 app 業務 consumer。
+4. **明確處理跨 origin 與 PWA 重裝。** 新站重新登入、使用者更新書籤並重裝 PWA；新 origin 不能自動繼承舊 IDB、localStorage、SW、Session 或安裝。舊入口先提供正常同步或受控匯出／恢復，完成處置再導向；沒有來源／owner proof、尚未登入或網路失敗時保留原副本。known owner 不改綁，unbound 明確認領，結果不明先查原 key 的可信 receipt；不錯帳、不重複任務、不默默丟稿。細節見 SPEC §6.2。
+5. **單一 writer 與可回復性維持。** 沿原全來源停寫／在途排空、一致性 full snapshot、分 domain count／ID／FK／digest 與回執核對，不做雙寫／CDC／delta 平台。正式 apply 前未解差異拒絕，新 writer 已產生資料後的恢復須保留新增內容與唯一 receipt，不能只切回舊網址。已套用 SQL 不改寫，不 down migration。
+6. **連結分流與退出有界。** 深層任務／Board 連結保留 canonical ref、重導後仍判權；邀請重驗期限／撤回／接受證明，不擅自延長或復活；行事曆訂閱驗 client 轉址支援，需要者更新訂閱，舊 feed 僅限期相容；附件／signed URL 不變公開或延長到期。舊裝置與離線恢復、連結轉移及剩餘義務處置後，才另行授權退出舊入口；新站可開或窗口到期不能代替。
+7. **新綁定另驗，未變證據重用。** SPEC §3.2 覆蓋 profile、renderer、SA／SQL IAM login、Jobs／Scheduler／Secret／Storage、Hosting／OAuth、模型／計費 project 與資格。舊 artifact 綁舊 source／project，只能沿真實未變輸入評估重用，不能改寫 receipt 或把舊 digest 直接改掛新專案。未變資料／權限／取消／exactly-once 回歸沿用原證據，不新增重複人工 gate。
+8. **零留存保持硬邊界。** 新專案的實際 caller／模型、cache／內容 logging、適用契約／豁免及必要實呼叫均須有對應證據；API 啟用或舊專案關閉 logging 不等於新資格。未資格化推論繼續停用，原始內容及私人結果不能以維運或診斷名義外送。
 
 ## Consequences
 
-- 可保留既有前端與個人／外部協作，平台納入方式符合獨立 app 邊界。
-- Supabase 的 Auth／API／RPC／policy／Realtime／Functions／Storage 能力需逐項接替，新增 server 開發及維運責任；這些必須算入估工與費用，不能描述成單純搬 DB。
-- 保留既有兩個 public origin 可降低本機／安裝變動，但不自動延續 Supabase Session；Principal mapping 與本機 owner／receipt 仍須可恢復且驗證。Hosting Cookie 轉送限制、callback、同 origin Quick Session、靜態 rewrite 優先序及 artifact／cache 相容增加必要驗證責任，不能以 direct run.app 成功、全面 redirect 或重裝取代。
-- 加入共用SQL擴大共同故障／維護影響，第四app需要重新計算effective revisions／pool與恢復證據，不能套用舊三app PASS；Main／Quick共用單一ProJED runtime與pool，避免為入口差異倍增服務與成本。
-- D1 已採集中最小身分，OrgMaster／Platform 沿既有 DEV-057／DEV-007 補齊非員工 publication／admission 與分層撤銷；source 進度見 SPEC §36–§37，既有跨專案 source 授權見 DEV-139 直接索引。不建立 ProJED 的平行 Principal publisher 或公司角色權威；新 IAM／Secret／credential、shared foundation grant 與費用責任仍依 §33，不由本 ADR 擴張。
-- D2 已將首階段限定為基礎對齊，既有工作區／看板／權限是必要驗收而非重設目標；不發布跨 app 業務 consumer manifest，也不宣稱任務串接效益已交付。後續 consumer、欄位與資料揭露依 SPEC-139 §5.3 的恢復條件再收斂。
+- 減少跨專案網路與長期入口責任，但不宣稱已降低帳單或已完成新資源設定；比較同等用量的 Hosting、網域／憑證、Jobs／SQL／Storage、恢復窗口與雙跑支出，不擅設增幅百分比。
+- 使用者需明確得知新網址、重新登入與 PWA 重裝步驟；新站的體驗驗收包含舊裝置／草稿／邀請／訂閱，不以 HTTP 200 或新安裝畫面取代資料恢復。
+- 私人資料隔離、workspace／board／matrix、取消後寫入拒絕、原 key 唯一回執、資料完整性及 migration recovery 持續有效。集中共用 SQL 不擴張其他 app 的權限或共同發布責任。
+- 現行程式、profile／固定 target 仍有舊專案綁定；此 ADR 是新決策與交接，不能用舊 renderer／Job／qualification 直接部署新架構。既有資源與映像不自動刪除。
 
 ## Migration and Compatibility
 
-Intentional replacement 的人類來源是 Cloud Run／Cloud SQL 方案選擇；本 ADR 只記錄未來責任規則。現行 [SPEC-083](../specs/SPEC-083-production-release-environment-integrity.md)、[ADR-053](ADR-053-quick-task-cross-origin-account-link.md)／[SPEC-133](../specs/SPEC-133-quick-task-shared-identity-sync.md) 仍約束目前 runtime。
+遷移權威為 [SPEC §6](../specs/SPEC-139-projed-jenfu-platform-onboarding.md#6-資料移轉pwa-與恢復)。先盤點來源與本機未送內容、準備兩側恢復，再演練新綁定／candidate／真 Session／私人隔離及跨 origin 移轉，最後另經正式操作授權才停寫、搬移核對、切流與退役。邀請、深鏈、Calendar／其他連結的分類及退出條件見 §6.4。
 
-未來受控替換範圍為 hosting／provider／auth adapter／data API／同步 transport；保留 [SPEC-036](../specs/SPEC-036-trello-like-workspace-governance.md) 資源治理、[ADR-050](ADR-050-mobile-quick-task-entry-and-outbox.md) local-first／receipt、ADR-053 各 App Session 與 [ADR-051](ADR-051-projed-owned-meeting-analysis-pipeline.md) pipeline ownership。D2 原功能與權限相容的交接及驗收以 SPEC-139 §4.4／A09 為權威；不改寫歷史正式驗收，也不把未資格 provider 升格為 PASS。
-
-Rev6 的既有網址相容是 **Compatible exception**：相容期保留 Hosting 前門，runtime／DB 仍按 Cloud Run／Cloud SQL 目標替換。它修正先前立即使用新 run.app public origin 的規劃假設，維持 ADR-053 的兩 origin／各自登入／local-first，不復活認證 broker。以 SPEC-139 §6.3–§6.6／A06／A11／T07／T08 為權威；project／region／路由／Cookie／callback／artifact、mapping／fence／恢復尚待工程收斂，不表示此例外已在現行 release 生效。
-
-保留原因是既有書籤／PWA／未同步資料的恢復。移除觸發條件為替代入口／所有已知 pending 或歧義的恢復可驗證、未上線裝置的剩餘義務有明確處置、成本／觀察證據及相應退役主要動作授權。時間到期或七日 synced 副本清理規則不能代替退役證據，也不自行解除 Billing。
-
-現行 SSO v2 的 employeeId required 不能原地放寬；新版本依 owner contract review、consumer 相容窗口與撤銷範圍收斂。原有 producer／consumer 正常路徑持續有效，正式目標、切流與回復操作不在此文件。
+既有 [SPEC-083](../specs/SPEC-083-production-release-environment-integrity.md)、[ADR-053](ADR-053-quick-task-cross-origin-account-link.md)／[SPEC-133](../specs/SPEC-133-quick-task-shared-identity-sync.md) 仍約束目前 runtime；本決策在未來正式替換時更新其 target／origin 綁定，保留 [ADR-050](ADR-050-mobile-quick-task-entry-and-outbox.md) local-first／owner／receipt、[SPEC-036](../specs/SPEC-036-trello-like-workspace-governance.md) 資源授權與 [ADR-051](ADR-051-projed-owned-meeting-analysis-pipeline.md) 管線責任。不把「需要重裝」解讀為可清除舊內容或共享 token。
 
 ## Re-entry and Acceptance
 
-D1／D2及本輪架構文件要求已寫入SPEC-139／DEV-139／map。Rev4自審的callback／取消／設定責任缺口已由Rev5修正；S1完成技術主管文件審查，維持RD Implementation Ready＋架構定案，詳細契約及五項審查發現見SPEC-139 §11／§11.8。同一八案補fail-seeking，沒有另加runtime、框架、queue或人工步驟；未量測工時、帳單或容量，不宣稱實際效能／費用改善。此為RD修改後自驗，不是產品或獨立QC PASS。
+後續待實作的是 §3.2 的綁定差額、跨 origin 恢復證明／傳輸、舊連結相容、使用者遷移指引與 SPEC A06／A11、T05／T07／T08 的受影響案例。網域名稱為待確認，不需為本輪文件另行立案；具名操作仍按主要動作授權。本輪不觸發部署、正式 migration、資料重寫、DNS、IAM、Secret、billing 或切流。
 
-Rev29／W18完成本repo importer fail-closed、漏資料blocker及QA Session下正常HTTP產品UI／reload煙霧；這使ProJED本地開發可收斂，但不把QA actor改稱真身分。外部非員工wire／撤銷、真Principal mapping、真資料未承接domain、container／雲端與相容入口、A11／T07／T08正式切換證據仍待owner與release工作，不能宣稱無縫切換或整體整合完成。checkpoint等目前gated能力保持原狀；新登入／provider切換必須有真身分及相容證據，不重問D1／D2，也不擴權修改其他repo。
-
-2026-10-26 已依新的人類實作要求，在 ProJED 獨立工作樹建立 S1 runtime／DB kernel、migration／checker／verifier；型別、靜態契約、unit、PostgreSQL 18 task-owned isolated DB 與既有 Vite build 均通過。COO 審視後不再要求為本地 gate 額外安裝 PG17；managed target 仍依實際版本重驗。既有前端、provider 與正式 runtime 未切換。S2／S3 需各自 prerequisite；正式 migration／release／retirement 各依原 gate。
+此為文件自查與架構／遷移計畫更新，未宣稱新目標產品、費用、provider 或正式驗收 PASS。公開文件只放架構與遷移設計，實際營運資料與 IAM 讀回保留本機證據；不新增 COO／QA／QC 簽核或 SaaS 條件。

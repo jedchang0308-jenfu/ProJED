@@ -52,11 +52,15 @@ function env(name, value) { return { name, value }; }
  * admission; the caller must extract binding from the immutable Job image and
  * verify source, grants, route and existing resources before any mutation. */
 export function renderProjedCloudRun(input) {
-  exactKeys(input, INPUT_KEYS);
+  const candidateOnly = input?.deploymentScope === 'candidate';
+  exactKeys(input, candidateOnly
+    ? [...INPUT_KEYS.filter(key => key !== 'sourceBundleVersion'), 'deploymentScope']
+    : INPUT_KEYS);
   const { binding, runtimeImage, jobsImage, analysisImage, audioBucket, releaseId, sourceRevision, sourceBundleVersion } = input;
   if (typeof releaseId !== 'string' || !/^[a-z][a-z0-9-]{0,40}$/.test(releaseId)
       || typeof sourceRevision !== 'string' || !/^[a-f0-9]{40}$/.test(sourceRevision)
-      || typeof sourceBundleVersion !== 'string' || !/^[1-9][0-9]{0,9}$/.test(sourceBundleVersion)) invalid();
+      || (!candidateOnly && (typeof sourceBundleVersion !== 'string'
+        || !/^[1-9][0-9]{0,9}$/.test(sourceBundleVersion)))) invalid();
   immutableImage(runtimeImage, 'projed-prod');
   immutableImage(jobsImage, 'projed-prod-jobs');
   immutableImage(analysisImage, 'projed-prod-asr-job');
@@ -112,7 +116,7 @@ export function renderProjedCloudRun(input) {
     },
   };
   const jobs = {};
-  for (const mode of ['migrate', 'plan', 'apply', 'reconcile']) {
+  for (const mode of candidateOnly ? ['migrate'] : ['migrate', 'plan', 'apply', 'reconcile']) {
     const purpose = mode === 'migrate' ? 'migrator' : 'importer';
     const name = mode === 'migrate' ? 'projed-prod-migration' : `projed-prod-snapshot-${mode}`;
     const environment = [env('PROJED_ENV', 'managed')];
@@ -187,8 +191,9 @@ export function renderProjedCloudRun(input) {
       'cloudscheduler.googleapis.com', 'speech.googleapis.com', 'aiplatform.googleapis.com', 'storage.googleapis.com'] }],
     sharedVpc: { hostProject: target.hostProject, serviceProject: target.project, network: target.network, subnet: target.subnet,
       requireEnabledHost: true, requireAssociatedServiceProject: true },
-    serviceAccounts: ['runtime', 'migrator', 'importer'].map(purpose => ({ email: account(purpose), databaseLogin: binding.iamLogins[purpose] })),
-    schedulerServiceAccount: {
+    serviceAccounts: (candidateOnly ? ['runtime', 'migrator'] : ['runtime', 'migrator', 'importer'])
+      .map(purpose => ({ email: account(purpose), databaseLogin: binding.iamLogins[purpose] })),
+    schedulerServiceAccount: candidateOnly ? null : {
       email: meetingSchedulerAccount, databaseLogin: null, databaseIamRoles: [], databaseGrants: [],
     },
     // Existing source buckets retain deleted objects for seven days. Audio
@@ -228,20 +233,20 @@ export function renderProjedCloudRun(input) {
     iamBindings: [
       { resource: `projects/${target.hostProject}`, member: serviceAgent, role: 'roles/compute.networkViewer' },
       { resource: target.subnet, member: serviceAgent, role: 'roles/compute.networkUser' },
-      ...['runtime', 'migrator', 'importer'].flatMap(purpose => ['roles/cloudsql.client', 'roles/cloudsql.instanceUser']
+      ...(candidateOnly ? ['runtime', 'migrator'] : ['runtime', 'migrator', 'importer']).flatMap(purpose => ['roles/cloudsql.client', 'roles/cloudsql.instanceUser']
         .map(role => ({ resource: `projects/${target.hostProject}`, member: `serviceAccount:${account(purpose)}`, role, condition: sqlCondition }))),
-      { resource: `projects/${target.project}/secrets/${target.sourceBundleSecret}`,
-        member: `serviceAccount:${account('importer')}`, role: 'roles/secretmanager.secretAccessor' },
+      ...(candidateOnly ? [] : [{ resource: `projects/${target.project}/secrets/${target.sourceBundleSecret}`,
+        member: `serviceAccount:${account('importer')}`, role: 'roles/secretmanager.secretAccessor' }]),
       { resource: analysisJob, member: `serviceAccount:${account('runtime')}`,
         role: 'roles/run.invoker' },
-      { resource: analysisJob, member: `serviceAccount:${meetingSchedulerAccount}`,
-        role: 'roles/run.invoker' },
+      ...(candidateOnly ? [] : [{ resource: analysisJob, member: `serviceAccount:${meetingSchedulerAccount}`,
+        role: 'roles/run.invoker' }]),
       { resource: `projects/${target.project}`, member: `serviceAccount:${account('runtime')}`,
         role: `projects/${target.project}/roles/projedMeetingInference` },
       { resource: `projects/_/buckets/${audioBucket}`, member: `serviceAccount:${account('runtime')}`,
         role: `projects/${target.project}/roles/projedMeetingAudio` },
     ],
-    sqlIamUsers: ['runtime', 'migrator', 'importer'].map(purpose => ({
+    sqlIamUsers: (candidateOnly ? ['runtime', 'migrator'] : ['runtime', 'migrator', 'importer']).map(purpose => ({
       project: target.hostProject, instance: target.sqlInstance, type: 'CLOUD_IAM_SERVICE_ACCOUNT',
       serviceAccount: account(purpose), databaseLogin: binding.iamLogins[purpose],
     })),
@@ -260,12 +265,13 @@ export function renderProjedCloudRun(input) {
     operatorRequirements: {
       // Requirements for the authenticated operator, not automatic grants to an
       // arbitrary principal or a new owner/editor role.
-      serviceAccountUserOn: ['runtime', 'migrator', 'importer', 'meeting-scheduler'].map(account),
+      serviceAccountUserOn: (candidateOnly ? ['runtime', 'migrator']
+        : ['runtime', 'migrator', 'importer', 'meeting-scheduler']).map(account),
       artifactReaderOn: `projects/${target.project}/locations/${target.region}/repositories/cloud-run-source-deploy`,
       cloudRunProject: target.project,
       cloudRunPermissions: ['run.services.create', 'run.services.get', 'run.jobs.create',
         'run.jobs.get', 'run.jobs.run', 'run.executions.get', 'run.operations.get'],
-      cloudSchedulerPermissions: ['cloudscheduler.jobs.create', 'cloudscheduler.jobs.get'],
+      cloudSchedulerPermissions: candidateOnly ? [] : ['cloudscheduler.jobs.create', 'cloudscheduler.jobs.get'],
       cloudSchedulerProject: target.project,
       sharedVpcAdministration: { organization: target.organization,
         projects: [target.hostProject, target.project], requiresExistingAuthorizedAdministrator: true },
@@ -278,7 +284,8 @@ export function renderProjedCloudRun(input) {
     { method: 'POST', url: `https://run.googleapis.com/v2/${parent}/services?serviceId=${target.service}`, body: service },
     ...Object.values(jobs).map(job => ({ method: 'POST',
       url: `https://run.googleapis.com/v2/${parent}/jobs?jobId=${job.name.split('/').at(-1)}`, body: job })),
-    { method: 'POST', url: `https://cloudscheduler.googleapis.com/v1/${parent}/jobs`, body: scheduler },
+    ...(candidateOnly ? [] : [{ method: 'POST', url: `https://cloudscheduler.googleapis.com/v1/${parent}/jobs`, body: scheduler }]),
   ];
-  return { renderOnly: true, sourceRevision, releaseId, service, jobs, scheduler, foundation, requests };
+  return { renderOnly: true, sourceRevision, releaseId, service, jobs,
+    scheduler: candidateOnly ? null : scheduler, foundation, requests };
 }

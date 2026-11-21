@@ -1,55 +1,15 @@
 # SPEC-139：ProJED 納入 Jenfu-Platform 的產品與技術交接契約
 
-2026-11-21 合併前核對。可執行來源 `8421432bdbfc5482476f30fc6b48666ddd1bb1bf` 的原生與 Linux OCI CI 全數通過，已讀回正常移板、原 Session 重載、私人會議保留、行事曆設定／匿名 ICS／token 撤銷及資料庫對帳，另有 75 項原生檢查、67 項快照演練與 19 項 OCI 檢查。Platform `a8db9c10` 的既有 owner 原生與 required Source QC 均通過，51 份 managed migration ledger、故障恢復及清理收據綁定同一 ProJED 來源。登入與外部供應商採各案例明示的合成證明，正式環境依賴仍見 §47.1。[ProJED 完整 CI](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44776232248)｜[Platform owner 原生](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/44776318222)｜[Platform required Source QC](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/44776332390)
+**2026-11-21 現行決策：ProJED 的 Hosting、Cloud Run 後端與 Jobs 集中至 `jenfu-platform-prod`，改用自有固定網域；名稱待人類指定。** 同專案私人網路連既定 Cloud SQL，保留 ProJED 獨立服務、身分與業務權限，不再以跨專案 Shared VPC 關聯為前置。
 
-2026-11-20 更新。Platform、OrgMaster 與 ProJED 的本機 HTTP 入口及隔離 PostgreSQL 已驗過原 UUID、待審拒絕、重新登入後僅可讀指定看板，以及移除成員後舊 Session 回 401。一般讀取沿用登入快照。三系統共 26 項通過，Google 與工作負載身分採合成證明。ProJED 的 Vite 瀏覽器案例已由任務詳情修改標題，重載後從 HTTP 回應及畫面核對，再由同一入口還原。既有行事曆訂閱另有隔離資料庫驗證。正式使用者、雲端路由及供應商資格仍依部署邊界分別查證。[外部協作契約](#dev139-external-access)｜[三系統 CI](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/44729053126)｜[看板瀏覽器與 PostgreSQL CI](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44731128457)
+本輪只更新開發文件與遷移計畫。先前「繼續部署候選」的執行要求已被本輪範圍取代；不部署、不切流、不執行正式 migration／資料重寫，也不變更 DNS、IAM、Secret 或 billing。舊入口保留過渡，新網址須重新登入、更新書籤及重新安裝 PWA。現行設計見 §3、§6、§8–§9、§47.1 與 ADR-054；歷史 source／CI 結果不等於新目標已驗證。
 
-正式 Supabase 的兩個私有身分檢視已建立並讀回 ACL，供移轉時核對既有帳號 UUID。現行站台在切流前繼續使用原服務。Google Cloud 候選前端透過同源 HTTP API 取得 Session，即使打包環境留有舊 Supabase 設定，載入主程式或 Quick 也應略過舊 SDK 的初始化，避免它在原 PWA 網址讀取或更新登入資料。原版站台仍沿用自己的登入流程。[正式來源執行結果](#dev139-source-views-applied)
-
-個人帳號從側欄建立工作區、從首頁建立看板，再從看板新增任務及改名，重載可讀回相同任務與名稱。共享其他看板的協作者直接查該私人任務得到 404。在已共享看板上，即使一次讀取失敗，下一次同步仍能顯示已提交的名稱。此演練使用合成登入身分及隔離 PostgreSQL。[A02／A07 瀏覽器與資料庫 CI](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44738740935)
-
-舊版 Quick `0670a0a` 離線建立草稿後，在同一個瀏覽器設定檔及網址升級至 `52951b9`，Service Worker 與 IndexedDB 保留原草稿。另一帳號無法看見或送出。原帳號以正常按鈕送出後收到 201，以相同識別碼重送收到 200。隔離 PostgreSQL 核對到一筆任務與一筆回執，帳號、識別碼、內容雜湊及回執時間一致。另一帳號可見筆數均為零。此項使用合成身分、實際產品程式及隔離 HTTP／資料庫；正式登入與託管入口留待部署階段驗證。[A06／T05 升級與對帳 CI](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44740909306)
-
-Cloud Run 設定、音訊上傳／播放及背景清理都限定使用已核准的私人桶 `projed-cc78d-meeting-audio`。清理依資料庫的既有到期紀錄與物件 generation 執行，即使語音辨識停用仍可清除到期錄音。語音辨識另外核對專案、同一音訊桶、模型及零留存資格。此變更不會啟用正式推論。
-
-2026-11-20 續行：人類已核准 §47.1 具名 foundation，並回覆適用 Google Cloud Master Agreement／防濫用留存豁免「不確定」。五個 API、四個專用 SA、三個 instance-scoped SQL IAM login、私人音訊桶及空白來源 Secret 已建立；Vertex cache 已讀回關閉，三個模型的內容 logging config 均不存在、依官方規格為預設關閉。Speech data logging 已依官方 default-off／明確 opt-in 契約收斂為同步 Recognize、禁止 opt-in 與外部 opt-in 即撤銷資格；部署後 runtime SA 實呼叫、Gemini 豁免、Shared VPC 及音訊桶 metadata 管理修復仍待完成，真實內容推論保持停用。Session 已改為登入核實來源、一般操作只查本地 Session／mapping／guard；三方同步撤銷 source 與實際隔離 PostgreSQL 證據見 §13，最新候選 artifact 與限制見 §47.1。正式 Session、資料移轉、writer fence、舊入口、切流與發布仍保留在原完成分母。
-
-跨專案 PR 已依核准轉為 ready-for-review。ProJED #9、Platform #157、OrgMaster #187 維持 open。ProJED 可執行來源 `01ebf94` 的原生與容器 CI 均通過，Platform `462d3c61` 及 OrgMaster `ff6ba9a` 的跨系統結果見 §8；候選映像與正式環境限制見 §47.1。[ProJED CI](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44761571087)
-
-2026-11-20續行：RAG會把可讀會議、知識與即時看板內容送至provider，但舊runtime僅憑GEMINI_API_KEY啟用Developer API，可能繞過已選定的零留存路徑。現已改為固定ProJED Google Cloud／短期IAM token及獨立RAG模型資格，保留Flash-Lite／Flash兩種原選擇；沒有資格時拒絕，不以meeting-only資格、API key或env flag啟用。詳[§38.1](#381-原行為與最小接線)。沒有變更正式資源或傳送真實內容；foundation核准、Google適用契約及Shared VPC權限仍待確認。
-
-2026-11-20 雲端盤點與具名 foundation 的變更前狀態、核准後結果統一見 [§47.1](#471-2026-11-20-最小-foundation-變更提案)。該節保留 Shared VPC 管理權限與零留存資格的實際缺口。
-
-2026-11-20來源稽核承接：Supabase MCP唯讀核對既有ProJED project，於2026-11-19 15:56:42 UTC同一aggregate statement盤點43個public／private持久relation，無未知relation；現行33個可執行preflight predicates只有audit_logs阻擋，8個Google帳號無disabled／deleted／missing。任務822、落點823、文件7／版本8／chunks11、稽核77；其中44筆tenant_id=NULL，28筆actor_id也NULL。另查欄位、JSON類型、長度及參照，唯一不相容是target不接受NULL tenant；沒有下載正文、audit payload、provider subject或credentials，也沒有正式寫入。此為動態盤點，非writer-fenced snapshot／backup或正式移轉證據。
-
-同日16:03:49 UTC以新predicate重查同一來源，只回counts／metadata：33個現存predicate全無blocker、無未知relation、無disabled Google account；不代表已apply或reconcile。首次source5057838的[CI44561684367](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44561684367)保留FAIL：OCI已套用並精確重播全部44份SQL，runtime與snapshot入口因runtime有序migration白名單漏列0044而以CONFIG_INVALID拒絕；尚未驗到新audit retention案例。已補server/config白名單，0001–0044 SQL不改寫；本機S2 494/494 PASS。最初本機10項失敗含相同config前提及sandbox loopback EACCES，修正前提／取得工具執行核准後同套通過，不將這些衍生失敗當多個產品缺陷。
-
-新增forward-only `0044_legacy_unscoped_audit_retention_v1`，保留audit原ID／NULL tenant及actor／JSON／微秒時間，不猜補owner或丟棄紀錄；0001–0043 qualified SQL不變。只取消tenant的NOT NULL並要求缺tenant時project也為NULL，原FK、FORCE RLS、scoped read／insert政策與不可改刪權限保留。來源舊policy把NULL tenant開給所有authenticated，這不擴張為新runtime權限；新schema仍須具體工作區／看板授權。現有產品caller只有scoped audit寫入，沒有新增全域稽核入口。Importer不再因tenant=NULL阻擋，但entity_table缺值仍在任何target寫入前拒絕。兩份完整profile與Cloud Run有序manifest對齊44份；native snapshot fixture補有actor／無actor兩筆無範圍證據、完整reconcile、微秒及大數JSON、runtime／其他actor拒讀與新增、既有scoped write成功、禁止改刪及project缺tenant拒絕。這些新增案例已由下列完整snapshot rehearsal實跑通過。
-
-最終受測source `87d1140e6c98fd3bb48e90097dc6b16dfe41cdc1` 的[CI44562593269](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44562593269)兩jobs SUCCESS：663 unit（494／126／14／29）、原lock型別／三boundary／compiled artifact、PG17.11 domain73／snapshot63及44份migration、OCI18 PASS。Artifacts14550317672／14549956941已讀回，含三個新增audit checks；Windows wrapper完成cluster stop及port釋放驗證，OCI owned cleanup PASS。Native與OCI各綁自身byte hash，不混用換行不同的binding。後續僅文件／索引回填時沿用此證據，不將正式來源aggregate當作已搬移資料。
-
-Platform來源 `8a7c0786c90ce919c59efe2b66c4517e3e8a31ea` 的[required Source QC44563425347](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/44563425347)與[native44563410709](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/44563410709)均SUCCESS，artifact14551202221已讀回：Platform24／OrgMaster22、foundation19 PASS＋4 EXPECTED_FAIL；綁上述ProJED source的44份完整有序ledger，中途0023注入失敗保留22份prefix、always撤CREATE，恢復後完整套至0044並再次撤權／unlock。三組owned cleanup布林全部true；005／006及舊app SQL不變。這是隔離真SQL與Google HTTP fixture，不是正式Cloud Run執行或真Session證據。
-
-另以Supabase MCP盤點六個仍ACTIVE的legacy Edge入口：meeting_capture_control、process_meeting_analysis、purge_meeting_audio、match_project_knowledge、synthesize_meeting_record、calendar-feed；當次pg_cron未安裝且無analysis run。metadata不能證明外部排程／在途請求已排空，正式writer fence仍須涵蓋它們與舊client，calendar相容入口仍須保留。未停用、重部署或變更任何來源入口。GCP唯讀仍回Reauthentication failed，先前登入刷新要求仍待完成；零留存、真Session／provider、完整資料與正式切流分母維持。
-
-2026-11-19 owner-window交接：Cloud Run renderer的`foundation.ownerBootstrap.migrationJobInput`從同一managed binding產生固定Job spec、sourceRevision及43份ordered migration checksums，由Platform DEV-007 window直接消費，不再人工重組；operator對精確Job／execution／operation及stdout ledger的唯讀Logging需求僅列計畫，未套用IAM。程式`2864c50137feb1bd225dc68b8b3078362dfeedac`的[CI44546277800](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44546277800)兩jobs SUCCESS，已讀artifacts14541696672／14540572830：663 unit（494／126／14／29）、domain73／snapshot60、43份migration及OCI18 PASS，metadataProvider仍FIXTURE_ONLY。HTTP排序／CAS與SQL相對bc519d7未變，renderer至Platform驗證器的直接相容檢查PASS（合成image輸入，不代表正式image admission）。
-
-跨owner主線同步：Platform已納入main5ae88bc，保留001–019；未發布014／015只改名020／021且SQL blob不變。來源`f901799073456e653157fb2b4d4ecf58c5803b18`的[required Source QC44557065513](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/44557065513)與[native44557053008](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/44557053008)SUCCESS；artifact14544724317已讀回：Platform24／OrgMaster22、foundation19 PASS＋4 EXPECTED_FAIL，完整ProJED43份真SQL的prefix故障／恢復、always006撤權及unlock，owned cleanup全true。OrgMaster原生受測來源d48f435已納入master a8830e9，全部62份master SQL、60-entry profile prefix及三份draft SQL blob不變；draft041／042／043順延065／066／067，現行63-entry。原生涵蓋完整001–064與065–067、066 reader／core isolation及個人／inactive Employee映射。後續owner控制修正未改動這些SQL、server、fixture或lockfile，證據沿原來源重用。
-
-OrgMaster當前來源`99ea1a7ec3872deb7f4df1a13e2a4203ca02e2f8`修正release／administration／PDM owner對新63-entry完整世代的讀取：只接受已審核完整60或63份，各append recipe仍維持自身exact bounds；共用validator沿既有輕量migration模組，沒有新增工具依賴。RD自查243項release／migration、63項Principal HTTP及後續65項consumer／runner回歸PASS。前兩次required CI的過期60-entry caller與image缺import失敗均保留，最新[required CI44558688552](https://github.com/jedchang0308-jenfu/OrgMaster/actions/runs/44558688552) **SUCCESS**，job135681666416已讀回：精確依賴、實際tool image import、isolated packaging7/7、PostgreSQL18 owner檢查、DB boundary、既有release／contracts、app tests與build通過；app1529 PASS／7既有SKIP，Node主要suite503 PASS／1既有SKIP，未將skip算PASS。本機完整packaging因缺lock指定pg closure的失敗保留，由CI精確closure的實際成功補足必要驗證；不改寫本機結果。
-
-當日GCP唯讀盤點回`Reauthentication failed`，待使用者完成既有登入刷新要求；不以10月credential或舊inventory當現況。上述均為source／隔離證據；真Session、既有使用者完整資料、零留存雲端資格、image發布／正式migration、writer fence及切流仍未執行，整體交付分母不變。
-
-2026-11-19 HTTP排序／備註接線：沿`main@0670a0aee5327cd30d53f21360d577b278376028`的新介面，`nodeService.commitBoardOrder`與`compareAndSetNotes`改走ProJED自有HTTP後端，其他backend與讀取AbortSignal保留原行為。排序與前端共用規則，在現有actor交易鎖內重讀目前看板、核對建立／移動／編輯權限，原子寫入排名、父節點及有權限時的父任務重開；衝突拒絕不做盲目重送。備註以JSONB內容及nullable description做CAS，回傳persisted／conflict與canonical snapshot；不以與備註無關的updatedAt製造衝突。
-
-原`0001`～`0042` SQL保留qualified bytes；新增forward-only `0043_task_order_reindex_v1`，讓只有create_task的角色也能在建立時間距不足時重編同層序號，透過transaction scope＋rank-only trigger限制欄位，未授予一般移動／內容編輯權。兩個POST入口沿用可信Session、expected actor、same-origin、RLS與resource revision。隔離PG案例新增原子回復、併發、舊parent、循環／跨看板拒絕、create-only角色、備註競爭／物件key順序／陣列順序及未授權拒絕。前次同步CI44536399441的Windows隔離檢查成功，OCI在舊版「root HTML直接含JS」假設失敗；本輪probe改驗main的versioned entry及實際資產hash，不移除驗證。沒有執行正式migration、資料寫入或切流；完整DEV-139交付分母不變。
-
-本輪受測程式`bc519d75b7a0985875639226c3269435a04e4b71`的[CI44540622894](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44540622894)兩jobs及PR9 checks均SUCCESS：原lockfile型別、662 unit（S2 494／S3 126／migration14／release28）、三boundary、compiled artifact、PostgreSQL17.11 domain73／snapshot60、43份migration與LinuxOCI18 PASS。已讀回artifacts14537678164／14537867415，包含新增HTTP排序／CAS完整案例、create-only成功而move／edit／CAS仍拒絕、音訊與既有Session回歸及owned container／socket／credential cleanup。Native與OCI收據各綁自己的原始migration hash；與此工作樹的差異已逐份確認僅為Windows／Linux checkout換行，沒有SQL內容漂移，不混用不同平台的binding。後續僅補本段與索引收據，不重跑未受影響的產品驗證。Browser smoke、真provider、production identity及正式發布NOT_RUN；零留存條件及整體DEV-139後續責任保留。
+本規格保留架構、資料安全、遷移設計及來源測試適用性；正式業務數量、IAM 實際讀回與非公開營運證據留在任務本機輸出。早期原地升級測試仍只支持原受測 origin／產物，不能證明跨 origin 草稿、安裝或新專案資格已完成。
 
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。
 - 日期：2026-11-21（Asia/Taipei）；可執行來源 `8421432`，驗證版本與產物依 §8、§47.1 的實際收據識別。
-- 文件狀態為**合併前核對完成**。ProJED、Platform、OrgMaster 的既有 PR 均為 ready-for-review、open 且 mergeable；程式來源 `8421432` 的成功 CI 及 Google Cloud 候選映像已核對，證據見 §8、§47.1。後續提交僅更新文件，沿用該程式來源的驗證。正式 identity pins 與 provider 資格、真資料、原入口、writer fence、切流及發布仍依對應環境查證。身分 owner source 見 [§36](#36-orgmaster-minimum-principal-publication-w222026-10-29)與 [§37](#37-platform-projed-session-and-handoff-w232026-10-29)，資料保留見 §34–§35，資源與操作授權見 §33 及 §47.1。
-- 適用階段：S1–S3 本地切片歷史見 §12–§32；2026-10-28 續行授權見 [DEV-139 人類決策與授權範圍](../dev_task.md#1-人類決策與授權範圍)，涵蓋 ProJED／OrgMaster／Jenfu-Platform 的 source 整合工作。正式整合與發布仍是完整目標，不以本地切片完成替代；新責任權限依 §33 處理。定期審視不是續行或發布的 required gate；本輪未執行正式資料寫入、切流或 IAM／Secret／credential／billing 變更。
+- 文件狀態為**集中專案／自有網域方案已選定，文件與遷移計畫更新；實作與部署未完成**。舊 source／映像依原環境保留，重用範圍見 §3.2；新綁定及候選另驗。網域定名、主／Quick exact origin 與回呼是後續綁定待辦，不阻擋本輪文件交付。
+- 適用範圍：本輪僅文件／計畫。既有 source 開發、候選準備與 IAM 修復紀錄保留為歷史，不授權繼續執行；Shared VPC 未執行者取消引導，已執行者只記錄現況，不自動撤回。先前廣泛續行授權不覆蓋本輪明確的停止事項。
 - 直接交接入口：[§11 S1 定案契約](#11-架構決策與-s1-定案契約)、[§12 S1 實作狀態](#12-s1-實作狀態2026-10-26)、[§13 S2 consumer seam](#13-s2-projed-identity-consumer-seam2026-10-26)、[§14 S3 read adapter](#14-s3-http-read-adapter-slice2026-10-26)、[§15 S3 domain command](#15-s3-domain-command-w12026-10-26)、[§16 S3 collaboration command](#16-s3-collaboration-command-w22026-10-27)、[§17 S3 record／activity](#17-s3-recordactivity-w32026-10-27)、[§18 S3 HTTP product wiring](#18-s3-http-product-wiring-w42026-10-27)、[§19 S3 Board transfer](#19-s3-board-transfer-w52026-10-27)、[§20 S3 legacy provider boundary](#20-s3-legacy-provider-boundary-w62026-10-27)、[§21 S3 Quick Task](#21-s3-quick-task-w72026-10-27)、[§22 S3 Task Workbench](#22-s3-task-workbench-w82026-10-27)、[§23 S3 Actor CAS](#23-s3-actor-context-cas-w92026-10-27)、[§24 S3 Task Tracking](#24-s3-task-tracking-w102026-10-27)、[§25 S3 Backup／Import](#25-s3-backupimport-w112026-10-27)、[§26 S3 Account Preferences](#26-s3-account-preferences-w122026-10-27)、[§27 S3 Calendar Subscription](#27-s3-calendar-subscription-w132026-10-27)及[§32 本地開發收斂](#32-s3-local-development-closure-w182026-10-27)；[§11.8 技術主管審查](#118-技術主管審查與最小優化)保留 Rev5 修正理由；既有使用者切換見 [§6.3](#63-既有使用者的切換基線)。
 - 決策來源：[DEV-139 人類決策](../dev_task.md#dev-139-jenfu-platform-onboarding)；架構取捨：[ADR-054](../decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。本文件不是其他 owner 已接受或已發布的契約。
 
@@ -57,13 +17,15 @@ OrgMaster當前來源`99ea1a7ec3872deb7f4df1a13e2a4203ca02e2f8`修正release／a
 
 首階段保留 ProJED 現有工作區、看板、權限與操作流程，先對齊 Cloud Run 雲端架構、Cloud SQL 資料庫及身分契約，保留 React／Vite／Zustand、個人任務、外部協作、Quick Task、多視圖及已可用 AI 功能。身分接入改變可信登入來源及 Session，不重設 ProJED 的業務權限模型。
 
-ProJED 已有使用者，移轉必須以「不丟資料、不重建帳號、不改權限、不強迫重裝」為相容目標，先保留既有網址再分階段替換後端。切換時預留各 App 的正常重新登入及經演練確認的短暫停寫；零重登／零停寫尚無實作證據，不能承諾。人類要求將評估寫入文件，未指定可接受停寫分鐘數、恢復窗口或授權正式切換；這些實際界線在移轉／release re-entry 收斂。
+ProJED 已有使用者，移轉以不丟資料、不重建帳號、不改既有權限為必要條件。2026-11-21 人類改選自有固定網址，明確納入重新登入、書籤／連結更新與 PWA 重裝；不再承諾永久保留原 origin 或無須重裝。舊入口先完成資料恢復再受控導向新站，不立即清除本機儲存。短暫停寫與恢復窗口仍由演練量測後確認，不承諾零重登／零停寫；本輪不執行切換。
 
 成本採人類最新要求「只要費用不大幅增加即可」。首階段效益為基礎設施及身分契約一致、既有功能與資料授權相容；任務／資料跨系統使用是後續效益，節費及投資回收期不是必要驗收。首階段必須證明新路徑上的原功能及權限行為，不能只以平台可見、登入成功、表格搬入同一 DB 或測試數量認列交付。
 
-2026-10-28 人類選取前述剩餘工作並要求「請繼續執行直到完成」，已將 ProJED／OrgMaster／Jenfu-Platform 真接線與正式移轉／發布納入本次目標；先前僅本地開發的敘述保留為 W18 歷史範圍，不再用它縮減新目標。新建 IAM／Secret／credential、共用 foundation grant 與費用擴張依人類全域協作規範另確認；§33 列出已查證的具體範圍。其他 repo 的既有修改仍保留，跨 repo 實作沿各自 native DEV 與隔離分支，不把本文件當外部 owner acceptance。
+2026-10-28 人類曾要求整合續行，完整產品目標仍保留 ProJED／OrgMaster／Jenfu-Platform 真接線、資料與原功能驗收；本輪 2026-11-21 的文件／計畫範圍已取代先前立即執行部署的指示。不得以歷史續行授權執行本輪禁止的正式操作。其他 repo 的既有修改仍保留，未來跨 repo 實作沿各自 native DEV 與隔離分支，不把本文件當外部 owner acceptance。
 
 ### 人類產品決策
+
+**D3（2026-11-21，Human Confirmed）**：採集中 `jenfu-platform-prod` 與自有固定網域方案，保留舊入口過渡，納入 PWA 重裝、離線草稿及連結轉移，維持零留存。實際網域待確認；本輪只更新文件與計畫，先不部署、不切流。D3 取代先前跨專案 Shared VPC、原 origin 永久前門及不需重裝的假設；D1／D2、真 ASR 的原交付分母與資料／授權保護保留。
 
 2026-10-08 的兩項決策均已有明確人類回覆；D2 採最新原文的首階段範圍，不把先前建議或預選的 2A 視為採用：
 
@@ -96,23 +58,27 @@ ProJED 已有使用者，移轉必須以「不丟資料、不重建帳號、不�
 
 ```mermaid
 flowchart LR
-  Main[ProJED 主程式 Vite] --> API[ProJED 自有 API 與授權交易]
-  Quick[Quick 輕量入口 各自 Session] --> API
-  Identity[受控 Principal 與 Session 契約] --> API
-  API --> Core[ProJED 自有 core schema]
-  API --> Files[ProJED 私有檔案]
-  Worker[既有有界 job 與 cleanup] --> Core
+  User[使用者] --> Domain[自有固定網域 名稱待確認]
+  subgraph Target[jenfu-platform-prod]
+    Domain --> Hosting[ProJED Hosting 主程式與 Quick]
+    Hosting --> API[ProJED 專用 Cloud Run API]
+    Identity[OrgMaster 與 Platform 身分契約] --> API
+    API --> SQL[既定私人 Cloud SQL 中的 ProJED schemas]
+    API --> Storage[ProJED 私人 Storage]
+    Jobs[ProJED 專用 Jobs 與清理] --> SQL
+    Jobs --> Storage
+  end
+  Old[舊主與 Quick 入口] --> Recovery[限期恢復與連結轉移]
+  Recovery --> Domain
 ```
 
-- 基礎部署單位為 Vite 靜態檔＋Node API 的單一 ProJED Cloud Run 服務。既有主程式與獨立 Quick PWA 的兩個 public origin／manifest identity 依 ADR-053 保留，皆由各自 Hosting 前門將 `/api/**` 轉送至同一 runtime；可信 `main / quick` entry 由未來簽發的 App Session actor 決定，不由 Host／forwarded header 決定。兩個 public origin 不等於兩個 runtime，也不新增另一套業務資料權威或 app key。
-- 不為登入簡化合併 origin、強制重裝或共享 token。既有使用者預設保留現行主／Quick public origin，由相容入口轉送至 Cloud Run；`run.app` 是 runtime 服務位址，不要求使用者立即改網址。相容窗口及入口退役條件見 §6.3–§6.6；實際服務／環境綁定後續核實，不臆造正式 target。
-- ProJED 宣告 app key `projed`，自有 schema 固定 `projed_core`／`projed_contract`；平台 registry 的實際登錄列為 S2 owner 工作，不宣稱已登錄。Workspace、Board、Task、membership、Board role permissions、invite、profile、receipt、job、audit、檔案 metadata 都由 ProJED 擁有；不得寄存在 Platform core。contract schema 保留受控邊界，首階段不因此建立任務摘要 endpoint 或賦予其他 app 業務資料讀取權。
-- 同一 lifecycle DB 使用 app-specific owner／migrator／runtime、ledger、Secret 及單一目標 DSN。runtime 無 DDL、owner、migrator、BYPASSRLS 或其他 app core 權限；跨 app 只使用版本化 contract 與明確 consumer ACL。
-- app-specific `db/AGENTS.md`、S1 SQL 與 DB boundary checker 已建立並通過靜態自查；根目錄治理規則未修改，完整 domain SQL 仍屬 S3。
-- 檔案持久化選定 ProJED 私有 Cloud Storage。API 驗證用途與資源權限，DB 保存 metadata／cleanup obligation；不把 Cloud Run 本機磁碟當作持久儲存。不建立共用公開 bucket；實際 bucket／IAM 綁定及移轉驗收屬後續環境範圍。
-- durable job 沿 ADR-051 的獨立生命週期使用有界 worker／Job；沒有獨立工作責任的 handler 留在 API。禁止靠 HTTP 回應後的記憶體工作宣稱完成持久處理。
-
-API 與 worker 可讀取其他 owner 已發布的 contract，但不能操作其 core、ledger 或 outbox。共用 SQL instance 不建立跨 core FK 或跨 owner 的假原子交易。
+- ProJED Hosting、單一 app runtime、Jobs／Scheduler、app Secret 與 Storage 的長期管理責任集中於 `jenfu-platform-prod`。沿既有 VPC／runtime subnet 的同專案私人網路連 `jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg`、`jenfu_prod`；不開 SQL public IP，不以 `projed-cc78d` 的跨專案 Shared VPC 關聯為必要條件。
+- ProJED 保留自己的 repo、release、服務、runtime／migrator／importer／scheduler 身分、`projed_core`／`projed_contract`、ledger 與資源權限。集中專案不表示與 PDM 合併業務資料、共用 runtime SA、擴張公司管理員的私人存取或建立跨 core FK。app key 仍為 `projed`，其餘系統只消費受控 versioned contract。
+- 保留 React／Vite 與輕量 Quick；Hosting 及 API 在同一目標專案，由已綁定自有網域承接。網域實際名稱、主／Quick 的 exact origin／path／callback 尚未指定，文件不自選網址、不假設 DNS 已可用。保留主／Quick 各自登入、換帳與登出的語意；若最終採同 origin 路徑，須驗 API／Cookie 隔離，不能默默共用 Session。若採子網域，亦須固定各自允許來源及回呼，不能用 wildcard 放寬。
+- 舊 `https://projed-cc78d.web.app`、`https://projed-cc78d.firebaseapp.com/quick-task/` 及原主 origin 的 `/quick-task/` 保留為過渡與資料恢復入口，詳 §6。不得為永久保留舊網址另建永久 API 轉送服務；舊登入／token 不跨 origin 複製，新站重新核實身分與本地權限。
+- Workspace、Board、Task、membership、權限矩陣、invite、profile、receipt、job、audit 與檔案 metadata 仍由 ProJED 擁有。runtime 無 owner、DDL、migrator、BYPASSRLS 或其他 app core 權限，交易內 scope／guard／RLS 與原授權結果保持。
+- 私人 Cloud Storage、音訊到期及 exact-generation 清理責任維持；新專案 bucket 的名稱、ACL、物件移轉與到期映射須後續實際綁定，不把舊 bucket 讀回當成新桶已合格。Cloud Run 本機磁碟不作持久儲存。
+- durable worker／Jobs 沿 ADR-051 的 claim／lease、預算、取消、unknown outcome 與 publication 保護；不新增無必要 runtime、共用業務權威或 SaaS 條件。模型未取得新專案資格時繼續拒絕，不能只改計費專案或 API key 就啟用。
 
 ### 3.1 Runtime 工程基線與模組責任
 
@@ -127,6 +93,21 @@ API 與 worker 可讀取其他 owner 已發布的 contract，但不能操作其 
 | 同步／worker | 同步只提示重新讀取受權資料；長工作沿原 job／lease／費用／清理責任。API 回應不宣稱 worker 完成。 |
 
 Session／私人 API 回應採 `Cache-Control: no-store`；SW 不快取 API、登入 callback、Session 或私人內容。雜湊靜態資產與 HTML／manifest／SW 的快取及更新沿現有 PWA release 契約，不能用 SPA／離線快取假造登入成功。關閉時停止接收新請求，有界完成／回滾在途交易並關閉 pool；未提交與 commit 結果不明分開記錄。觀測只留 request ID、結果碼、耗時及最小 scope／版本，不記 token、DSN、任務正文或邀請原 token。
+
+### 3.2 受影響綁定、證據與實作差額
+
+下列是後續 RD／release 的變更面，不是本輪可執行的雲端操作表。資源名稱須先查重；網域與需要的新責任確認後才產生具名執行包。
+
+| 變更面 | 新方案與必要核對 | 舊證據適用範圍 |
+|---|---|---|
+| Profile／renderer／artifact | 檢查 `s3-managed.profile.json`、`shared/dev139ManagedDatabase.mjs`、`scripts/lib/dev139-cloud-run-plan.mjs`、build／binding／release allowlist。目標 project、image repository、主／Quick origin、network、資源完整名稱及 hash 一起重新綁定；不手改已套用 SQL。 | 現行程式仍有 `projed-cc78d` 固定值，未因改文件完成重定向。舊 profile／映像只證明原來源與原綁定；可評估未變產物重用，但不得把舊 digest／receipt 直接改掛新專案。 |
+| SA／SQL IAM login／角色 | 在 `jenfu-platform-prod` 規劃 ProJED 專用 runtime、migrator、importer、scheduler SA，前三者使用各自 SQL IAM login；不借 PDM 或 Platform runtime 身分。保留既有 app NOLOGIN role／schema 與完整 migration ledger，按最小權限重綁 CONNECT／membership。 | 已核准舊 project 的 SA／grant 不等於新 SA 已存在或新權限已核准；SQL bytes／資料語意未變的證據可沿原來源重用，login／ACL／route 另驗。 |
+| Jobs／Scheduler／Secret | 專案、SA、固定 Job、執行權、migration owner window、stdout ledger／finally 撤權、Secret resource／version 與執行結果重新核對。候選 create 與執行／排程啟動分開；來源 credential 仍為精確用途及唯讀。 | 不搬用未綁定 Secret，不借其他 app 憑證，不因候選建立成功就啟動寫入或排程；已做的舊資源不自動刪除。 |
+| Hosting／網域／OAuth | 目標專案的 Hosting／路由、自有網域及 TLS／DNS、Platform registry／handoff、Google OAuth callback、CORS／CSRF／Cookie／允許 origin、主／Quick Session 與 PWA manifest 分別固定。 | 現有網址可用或同 origin 更新成功，不證明新 origin 的登入、Cookie、SW、安裝或深層連結可用。實際名稱待人類指定，本輪不改 DNS。 |
+| Storage／附件／錄音 | 私人 bucket、最小 ACL、來源 object ref／digest、目標 generation、到期及清理義務一併移轉核對；不因複製延長保留期限或把新 generation 當成原 upload proof。 | 舊 bucket 的設定／空白盤點只對原時間與資源有效；未盤點不視為空，新桶及檔案／播放／清理另驗。 |
+| 模型／費用／零留存 | Speech、Vertex、RAG／LLM 的 resource／quota／計費 project、SA caller、模型／region、cache 與內容 logging、適用契約／豁免及實呼叫證據重新綁定至新專案。 | 舊 project 的設定或條款適用性不自動移轉；新資格未成立前 provider／job dispatch 綁定保持停用，不能以 env flag／store=false／刪檔代替零留存證據。 |
+
+只刷新受影響證據，保留未變的資料模型、權限／私人隔離、取消／exactly-once、回復與必要回歸。來源／本機／CI／provider／正式環境各自標示；本輪文件更新不認列實作、候選、實際費用或新目標驗收 PASS，也不增加獨立人工簽核 gate。
 
 ## 4. 身分、Session 與授權契約
 
@@ -325,13 +306,13 @@ Quick 沿 [現行 invoker RPC](../../supabase/migrations/20261001090000_dev_133_
 
 1. 建立 schema／table／function／policy／extension、Workspace／Board membership／權限設定、檔案／feed／連結、Auth mapping、job／receipt 的完整 inventory，核對來源實際狀態；migration 檔名不等於 live inventory。
 2. 舊 Supabase migration 歷史不改寫。新 Cloud SQL managed DDL 採 ProJED 自有 forward-only migration 與獨立 ledger；shared extensions／foundation 不由 app 搶 ownership。
-3. 先以 synthetic／核准 sanitized fixture 演練完整轉換；目標必須是空白candidate DB，以一個repeatable-read來源snapshot及單一目標交易逐domain檢查count、ID／FK、scope、人工內容／checksum與receipt，完全一致才commit。
+3. 先以 synthetic／核准 sanitized fixture 在空白隔離 candidate DB 演練完整轉換。正式目標只檢查 ProJED 受管 domain 的可接入／恢復條件，不清空共用 `jenfu_prod` 或其他 app 資料；以一個 repeatable-read 來源 snapshot 及單一目標交易逐 domain 檢查 count、ID／FK、scope、人工內容／checksum 與 receipt，完全一致才 commit。目標已有不明來源資料時先拒絕，不自行覆寫。
 4. 本自用系統不建立連續雙寫、CDC或delta平台。正式切換先以可驗證fence停止舊庫全部業務寫入及在途job，再從同一一致性snapshot做一次完整搬移與reconciliation；任一未承接domain或差異即不開放新writer。
 5. 新路徑已有寫入後，回復必須說明新資料如何保留、舊 binary 是否可讀、job／receipt 是否仍單一；僅切回 DNS／舊網站不是完整恢復。禁止 destructive/down migration 或手改正式 row。
 
 ### 6.2 Browser 本機資料
 
-Server 搬移與 browser storage 恢復分開驗收。IndexedDB、Session、SW 及 manifest 綁 origin／安裝環境；若另換新 run.app public origin，不能直接讀舊 origin。§6.3–§6.4 優先保留既有 origin，仍須驗證舊版 client／SW／IDB 升級。舊入口在受控窗口保留核身後補送或可驗證匯出／匯入；具體 transport、來源 proof、import CAS 與目的帳號確認在移轉實作契約固定。
+Server 搬移與 browser storage 恢復分開驗收。新自有網域與舊 origin 的 IndexedDB、localStorage、Session、SW 及 PWA 安裝不共享；新站不能自動讀取舊裝置的草稿，也不能宣稱跨 origin 自動繼承安裝。保留舊入口的正常登入與恢復畫面，提供有界的同步或受控匯出／恢復：停寫前可核身補送舊來源並納入最後 snapshot；停寫後不得再向舊庫補寫，沿原識別碼恢復至新唯一 writer。沒有可驗證來源／owner proof 或新端不可用時，原副本留存並顯示待恢復，不標示已移轉。
 
 - known owner 的 pending 只補送本人；不同帳號拒絕且不顯示該筆私人內容，不改成 unbound。
 - unbound 記錄仍需使用者明確確認目的帳號；登入 callback／升級／匯入不自動認領。
@@ -339,6 +320,12 @@ Server 搬移與 browser storage 恢復分開驗收。IndexedDB、Session、SW �
 - 登出／切帳／晚到回應以凍結 owner、Session／epoch、source revision 與 CAS 隔離；前一帳號回應不更新目前帳號畫面。
 - 未同步資料與人工草稿不因清理、版本升級、origin 切換或恢復被刪除。七日清理只適用已驗證 receipt 的 synced 本機副本，不能用作 server receipt TTL。
 - 舊安裝未完成恢復前不能全面 redirect 或刪 SW／IDB；保留現行更新交易、dirty guard 與可辨識恢復入口，不承諾 OS 自動換 icon／origin。
+
+**跨 origin 草稿交接契約。** 匯出／恢復包至少保留格式版本、原 origin／record type、原 owner 或 unbound 狀態、captureId／冪等 key、內容 hash、來源版本、pending／failed／unknown／committed 狀態與已知 receipt；不夾帶 cookie、token、Secret 或 provider 身分明文。包檔視為不可信輸入，需可核實來源／owner 的用途限定恢復證明，新站再以可信 Principal→原 UUID mapping 與當下權限核對；檔案自述 owner、email、名稱或單純 hash 都不能作授權證據。證明簽發／驗證方式與必要資源在後續實作綁定，不藉此另建永久跨 origin 認證 broker。
+
+已知 owner 僅能由本人恢復，另一帳號不得預覽或認領其內容；unbound 仍需使用者明確確認目的帳號，確認期間換帳以 CAS 拒絕，不能改綁已知 owner。結果不明者先查同 key 的可信 source／target receipt 與已完成的 reconciliation：已提交回首次結果；同 key 異內容拒絕；依賴不可確認就保留 unknown，不盲目建新 ID。只有已證明尚未提交且新站已是唯一 writer 才補送，提交後由 API／DB 讀回唯一任務與回執。任一解析、身分、授權或網路失敗均保留舊副本及可辨識恢復狀態；不得先清資料再測匯入。
+
+<a id="63-既有使用者切換基線"></a>
 
 ### 6.3 既有使用者的切換基線
 
@@ -348,20 +335,29 @@ Server 搬移與 browser storage 恢復分開驗收。IndexedDB、Session、SW �
 |---|---|
 | 雲端資料與權限 | 原 profile UUID、Workspace／Board／Task ID、membership、invite 狀態、五種角色及非預設／明確空集合 Board matrix 保留；移轉前後 count／ID／內容與 allow／deny reconciliation 無未解差異。附件、job、receipt 與人工原稿另有完整性證據。 |
 | 帳號與登入 | 已核實的原登入身分對應既有 localUserId，使用者不重新註冊或重新建立工作區；Google 登入選同一帳號仍須驗 provider binding chain，不能只看 email。各 App 預留切換時一次正常重新登入，不承諾舊 Supabase Session 自動變成 Platform Session；日後到期／撤銷沿原規則。歧義隔離、資料保留並有恢復入口，不顯示為新空帳號。 |
-| 網址與安裝 | repository 正式主入口為 `https://projed-cc78d.web.app`；SPEC-133 §3 的獨立 Quick 為 `https://projed-cc78d.firebaseapp.com/quick-task/`，另保留主 origin 的 `/quick-task/` 相容入口。這是現行來源基線而非本輪 live readback／新發布 target；沿原 manifest id／start_url／scope 與 SW 更新保護，不要求換 origin 或重裝。 |
+| 網址與安裝 | 長期改用待指定的自有固定網域，主／Quick 的 exact origin／path 及 manifest identity 在定名後固定。使用者更新書籤、在新站重新登入並重新安裝 PWA；舊安裝不自動變成新 origin。三個舊入口保留恢復與轉移指引，先完成草稿處置再導向，不立即刪 SW／IDB／localStorage。 |
 | 離線草稿與待送任務 | 在原 browser profile／安裝儲存中保留 known owner、unbound、captureId／hash、人工正文及 pending／failed 狀態；登入、升級或切帳不清空或自動認領。恢復後只以原 key 核實／補送到本人新路徑，結果不明先查 receipt。 |
 | 停寫與可恢復性 | 以短暫停寫完成一致性full snapshot／核對，不另建delta平台；時長由正式資料plan與演練量測，可接受窗口在正式 re-entry 確認，不先承諾零停機或固定分鐘數。停寫／登入失效有就地狀態與重試入口，草稿保留，不把錯誤當空資料或成功。 |
 
 不以「所有使用者必須同時更新」作為切換前提。離線舊版回來、舊 SW 繼續供應 bundle、持有舊 Supabase Session 的直接寫入及在途 worker 都須由 server authority 保護；只發布新版前端不能保證舊庫已停止寫入。
 
-### 6.4 保留既有 public origin 的相容入口
+<a id="64-保留既有-public-origin-的相容入口"></a>
 
-- 開發設計基線為既有 Firebase Hosting public origin→受控 rewrite→ProJED Cloud Run runtime／自有 API→Cloud SQL。主／Quick 仍共用同一套業務實作、各 origin Session 及唯一資料權威；Hosting 只保留入口／路由責任，不新增認證 broker、token bridge、task master 或舊庫雙寫。
-- Firebase 官方支援 Hosting URL rewrite 至 Cloud Run；這支持過渡路徑可設計，不證明本案環境已可轉送。Hosting site／Cloud Run 的 project、region、服務路由、網路／發布權責及費用須實際核對；不推定現行站點可直接轉送到任意另一個 GCP project。[官方路由依據](https://firebase.google.com/docs/hosting/full-config#direct-requests-to-a-cloud-run-container)
-- Hosting 轉送 Cookie 一般只保留 `__session`。S2 必須收斂相容入口的 cookie／state／callback 契約並驗證；不得把既有 cookie 名稱直接套用後宣稱成功，也不能改用前端 bearer／跨 origin 複製來繞過限制。HttpOnly／Secure、exact public origin、CSRF／Origin、期限／撤銷及 `no-store` 保護沿 §4.2，不信任任意 forwarded host／return URL。[官方 Cookie 限制](https://firebase.google.com/docs/hosting/manage-cache#using_cookies)
-- 主 origin 的 `/quick-task/` 相容入口沿該 origin 的 Session；獨立 Quick origin可登入另一帳號。S2／S3需固定public origin／app entry／Session actor的對應；兩個origin共用runtime也不能新增第三套帳號狀態、共享跨origin Session或自動切帳。
-- Hosting 靜態檔優先於 rewrite，且現行 `firebase.json` 有 Quick／SPA fallback。S3 必須核對實際命中順序、HTML／SW／manifest／assets 與 API 的同一 artifact／相容 revision；API／登入錯誤不能回 SPA 200，私人 API／Session／callback 不被 CDN 或 SW 快取。舊版不相容時保存本機內容並引導更新／恢復，不能靜默送入另一個帳號。[官方 rewrite 規則](https://firebase.google.com/docs/hosting/full-config#configure-rewrites)
-- 保留 Hosting 是有界相容責任，不取消 Cloud Run／Cloud SQL 對齊方向。其流量、發布與保留費用納入 §7；未驗證舊使用者恢復與替代入口前，不能把 Hosting／舊站已停止的支出算為節省，也不能先做 Billing unlink 或退役。
+### 6.4 舊入口過渡、連結轉移與退出
+
+舊主站、獨立 Quick 及主 origin 的 Quick 相容入口保留作有限過渡，讓舊裝置可辨識新站、核身恢復／受控匯出與更新安裝。新長期 Hosting 與 API 位於 `jenfu-platform-prod`；不為永久保留舊 origin 新增永久 API proxy。過渡只承接已盤點的恢復或唯讀責任，不設另一個 writer，不直接跨 origin 複製 Session。
+
+| 已發出入口／連結 | 過渡與更新方式 | 拒絕或退出條件 |
+|---|---|---|
+| 主／Quick 書籤、PWA 啟動入口 | 舊站先呈現遷移與草稿恢復狀態，完成處置後提供新站連結；指引更新書籤及重裝主／Quick PWA。 | 有 dirty／pending／unbound／unknown 或登入歧義時，不無條件 redirect，不清舊儲存；新站可開不代表恢復已完成。 |
+| 工作區／看板／任務深層連結 | 以原 canonical ID／legacy ref 及受控 route／query／fragment mapping 導向新站；新站重新登入並判權。 | 不做任意外部 return URL／open redirect，不以連結持有授權；找不到或無權須顯示可辨識結果，不落到錯帳／錯任務。 |
+| 分享／邀請連結 | 盤點既有 token、有效期、撤回及接受 receipt；可保留者經短期相容入口轉移並由新站重驗，失效者由有權 owner 重發。 | 不延長舊 token 期限、不重新啟用撤回邀請，不把 URL token 放入公開紀錄；登入／搬網址不等於接受授權。 |
+| 行事曆 ICS 訂閱 | 保留原 token／訂閱 scope 與撤銷語意，安排有期限的唯讀相容 feed；實測 client 能否跟隨轉址。不能跟隨者提供新訂閱網址並明確要求更新或重新訂閱。 | 不保證所有行事曆 client 自動更新；不能只改前端連結就關閉舊 feed。新 feed 驗證及已知訂閱處置完成後才退役相容入口。 |
+| 附件、錄音、下載與其他已發出連結 | 盤點受權下載路由、signed URL／到期時間及來源 object ref；新站經目前權限產生新連結，需要的唯讀相容路徑限期保留。 | 不建立公開 bucket／永久 bearer bridge，不任意延長 signed URL 或保留期限；失效可辨識並保留資料恢復路徑。 |
+
+**舊入口退出條件。** 核對已知舊裝置及離線使用者的 pending／unbound／unknown、人工草稿與匯入失敗已恢復，回執與唯一任務讀回一致；未上線或無法聯絡的裝置有具名保管／延後處置安排。已發出的邀請、深層連結、訂閱與檔案路徑有轉移結果、仍需保留項與剩餘期限，舊 writer 已停、在途排空且目標資料完整。不能只因新站可開、七日 synced 副本到期或觀察窗口結束就認列退出。實際舊站／Storage／憑證／服務／Billing 退役另依主要動作授權執行，本輪不刪資源；未解恢復義務期間不得先清舊 SW、IndexedDB、localStorage 或待送內容。
+
+新 Hosting 的 Cookie／CSRF／callback、靜態檔與 rewrite 優先序、HTML／API／SW／manifest 同產物及私人 no-store 保護仍要驗證。主／Quick 即使共用 runtime 也保留各自 Session／換帳語意；不能以 CORS、forwarded host 或跨 origin token 複製代替身分與來源驗證。
 
 ### 6.5 移轉狀態與單一寫入權威
 
@@ -372,7 +368,7 @@ Server 搬移與 browser storage 恢復分開驗收。IndexedDB、Session、SW �
 | 盤點與相容準備 | 舊庫唯一 writer；目標尚未接正式寫入。 | 核對登入／origin／已安裝版本／本機與 server inventory；準備舊站相容更新、verified mapping、就地停寫／恢復入口。未上線使用者的未知狀態不能算已完成。 |
 | 隔離演練 | 正式權威不變；目標只用 synthetic／核准 sanitized fixture。 | W14已驗單次full snapshot→空白candidate、整批rollback、count／digest reconciliation及未承接domain拒絕；正式身份、檔案／Storage、舊版／離線恢復與writer fence仍分開驗證。 |
 | 最後停寫與核對 | 舊庫所有納入範圍的寫入已 server-fenced；新庫尚未開放業務寫入。 | 直接 SDK／RPC／Functions／worker／在途 job 都有可核實界線；在fence後取得唯一full snapshot並完成核對。任一未解差異不開放新 writer；使用者可保留本機草稿及待送 key。 |
-| 啟用新路徑 | 新庫唯一 writer；舊庫維持 fence。 | 同一可信 Principal→mapping→Session→API→DB 路徑可用後，原網址／PWA 進新版；原 ID／key 補送及 receipt readback。新寫入後恢復須保存新資料與單一 job／receipt，不能只切回舊網站。 |
+| 啟用新路徑 | 新庫唯一 writer；舊庫維持 fence。 | 同一可信 Principal→mapping→Session→API→DB 路徑可用後，新自有網域承接業務，使用者重新登入並安裝新 PWA；舊入口先恢復草稿再導向，原 ID／key 補送及 receipt readback。新寫入後恢復須保存新資料與單一 job／receipt，不能只切回舊網站。 |
 | 保留恢復與退役評估 | 新庫仍唯一 writer；舊入口只提供已驗證的相容／恢復。 | 已知未同步及歧義帳號逐項處理，保留核身後恢復義務。窗口到期不等於所有離線裝置已恢復，不自動刪本機資料／舊資產；入口或資源退役另需證據與對應人類主要動作授權。 |
 
 停止條件：mapping 不可核實、權限／內容不一致、舊寫入仍成功、target 已寫入卻無保留新資料的恢復路徑、Session／回呼不可用或私人內容被快取。停止受影響轉換並保存差異，不能用雙寫、改 owner、重設權限、刪草稿或忽略舊 client 取得 PASS。
@@ -391,7 +387,7 @@ Quick Task 收到精確的 `PT503 / PROJED_SOURCE_WRITE_PAUSED` 後停止該筆�
 
 現行來源已在 W14 之後補齊身分 Session、RAG、會議資料保留、私人音訊傳輸、背景工作及結果發布，並完成 51 份 migration 的隔離 snapshot 演練。最新證據見 §8、§34–§51。正式切換仍需發布 owner 契約與 production pins、核實既有帳號 mapping、取得 writer-fenced 真來源 snapshot，並查證實際 Storage 清單、舊入口與 Session／Cookie／callback、檔案及工作恢復。Inbox 等 optional domain 若出現非空資料，既有 importer blocker 仍須明確承接。
 
-正式資料plan時沿W14命令只輸出table count／digest與阻擋domain，不落地含正文或email的snapshot檔；先處理實際非空的未承接domain，再按A06／A09／A11、T07／T08驗正常使用者路徑。正式切換另確認可接受停寫／恢復窗口、成本與環境／資源主要動作範圍。沒有新的PWA重裝、資料揭露或零重登需求；若日後要求換public origin、立即移除Hosting、零停寫或另造Session bridge，先回架構／產品影響審查。
+正式資料plan時沿W14命令只輸出table count／digest與阻擋domain，不落地含正文或email的snapshot檔；先處理實際非空的未承接domain，再按A06／A09／A11、T07／T08驗正常使用者路徑。正式切換另確認可接受停寫／恢復窗口、成本與環境／資源主要動作範圍。新自有網域、重新登入、PWA 重裝、離線草稿及既有連結轉移已納入本次計畫，不再當成未選定情境。實際網域仍待指定；立即清除舊入口／儲存、零停寫或新增 Session bridge 不在此決策內。來源資料、原權限及恢復義務不因改網址而減少。
 
 ## 7. 費用、容量與相容限制
 
@@ -416,14 +412,14 @@ Fixture 採 synthetic 私人 A／B、公司 C1／C2、guest G、Workspace／Boar
 | A03 外部協作 | Owner 邀請 G，管理員在 OrgMaster 清單收到申請並分別測拒絕與核准。另測待審時撤邀後才核准、已核准未接受、接受後重新送件、單板移除與全域停用／恢復。 | 待審、拒絕、邀請失效或受邀身分不符均無新增存取。G 接受後以舊 Session 直讀新 Board 仍被拒；下次登入才可依核准角色讀寫，其他 Board 及中央管理員直接讀取皆拒絕。停用後舊 Session 和新登入均拒絕。恢復後新登入僅可使用仍有效的授權，已移除的 Board 與舊 Session 仍拒絕。凍結前後的任務、備註及成員歷史保持一致。 | 分享與 OrgMaster 審核／停用 UI、Session、新舊請求與直接 HTTP 拒絕、membership／回執與歷史讀回。隔離環境驗證晚到及重播。 |
 | A04 Quick durable | Quick 起始頁未登入或離線輸入，submit 後重開，再登入與明確認領，前往工作台。 | 先有 IDB commit/readback；遠端 receipt 與同 ID task 唯一。逾時重送、改名／刪除後 replay 不重建；不先載入整個看板。 | 真 IDB、正常 Quick／主程式入口、API／DB receipt、network trace。 |
 | A05 切帳與晚到回應 | A 已綁 capture；切換 B，再返回 A；在 callback／claim／commit 期間注入切帳與結果不明。 | B 不看見或補送 A 的內容；A 可同 key 恢復；原回應不污染 B UI；unbound 不自動改綁。 | 同 profile UI、IDB CAS、API actor／receipt；注入證據標明 SIMULATION。 |
-| A06 舊 PWA 恢復 | 同一 browser profile／已安裝儲存建立舊版未同步記錄／人工草稿，先驗原 origin 升級；有核准換 origin 情境時另驗受控恢復。 | known owner、原 ID／hash／內容完整；新版重載可讀、失敗時舊副本仍可恢復；不刪 SW／IDB 解決更新。保留已安裝入口，不強迫重裝。僅新頁可達不算通過。 | 舊／新 artifact、真 SW／IDB、UI、API／DB reconciliation；窄版量測，browser／實體 installed evidence 分層。 |
+| A06 舊 PWA 恢復 | 在舊主／Quick origin 的同一 browser profile／安裝儲存建立 pending、unbound、unknown 與人工草稿；跨新自有 origin 走 §6.2 的同步或受控匯出／恢復、重新登入與 PWA 重裝。 | 原 owner／ID／hash／內容完整；錯帳不可預覽或認領，同 key 不重建；失敗保留原副本，離線回網仍可恢復。新安裝不假稱繼承舊儲存；未完成處置不清 SW／IDB／localStorage，不全面 redirect。 | 舊／新 origin、artifact、真 SW／IDB、UI、恢復證明、API／DB receipt 與 reconciliation；browser／實體安裝證據分層。 |
 | A07 協作同步 | A、同 Board 已授權 B 從正常看板入口開相同 canonical task，多視圖更新／刪除與重連。 | committed 變更收斂到同一資料；private／其他 Board 收不到內容。撤權、refresh 失敗不顯示舊內容為當前成功。 | 雙 client UI、transport／API、DB scope／版本。 |
 | A08 已可用附屬功能 | 由既有會議草稿、知識／檔案及行事曆入口執行現行可用操作。 | 人工正文、來源、費用及清理責任保留；失敗可重試，未資格功能仍 gated。新外部 provider dispatch 未驗不算 PASS。 | 原功能所需 UI／API／DB／Storage／真 provider；按實際層列結果。 |
 | A09 工作區／看板／權限相容 | 五種角色各從既有 Sidebar／看板設定／分享及成員入口，依凍結基線建立／切換／改名／受控移動、保存 Board 權限並重載；用相同隔離 fixture 對照移轉前後 allow／deny。 | ID、歸屬、membership、非預設／空集合 matrix 及 Workspace 繼承一致；有權操作仍可用，無權操作仍拒絕。Board guest 不看到其他 Board，公司 admin 不變成私人 owner；不得增減既有業務權限。 | 舊／新 source 與 fixture、正常 UI、API、DB mapping／policy／role-permissions readback；不需 Platform 摘要或 AI-PDM UI。 |
 | A10 DB 與運作邊界 | 隔離 PostgreSQL 驗 policy／pool actor cleanup，核准非正式環境驗各入口 startup、角色與觀測。 | 無 context／跨 core／跨 lifecycle DB／runtime DDL deny；兩入口與全部 workers 計入容量，backup/restore 可證明。 | Disposable 真 PostgreSQL 與 managed nonprod 分層；正式放行另需 Production 證據。 |
-| A11 既有使用者切換 | 公司／個人／外部使用者從原書籤、主 PWA、獨立 Quick 及同 origin 相容入口重新開啟，登入後依原角色操作及重載。涵蓋外部資格及原邀請證據齊備／缺漏、舊版離線回網、mapping 歧義與停寫中送出。 | 保留原 UUID、內容、安裝及原角色能力。外部證據齊備可讀原 Board，缺漏時僅凍結受影響共享範圍且保留資料。各 origin 可選不同帳號，原 owner pending 不錯送。停寫不清空或誤報成功，解除後同 key 唯一讀回。登入／mapping 失敗有恢復入口。 | 同 browser profile 舊／新 artifact、正常 UI→真 Session／API→DB／receipt、Hosting／cache trace、writer fence 後 full-snapshot reconciliation 及停寫量測。SIMULATION 與實體安裝證據分列。 |
+| A11 既有使用者切換 | 公司／個人／外部從舊書籤、PWA、邀請、任務深鏈及行事曆訂閱進入過渡，再從新固定網址重新登入、更新連結及重裝 PWA；涵蓋晚回網、mapping 歧義與停寫送出。 | 原 UUID、內容、角色及 matrix 保留；待送／人工草稿有明確恢復結果，錯帳不認領、同 key 唯一。連結按 §6.4 分類，無錯誤落點／假空資料／循環登入；舊入口僅在恢復義務與連結轉移完成後退役。 | 舊／新 origin 正常 UI→真 Session／API→DB／receipt、Hosting／cache trace、跨 origin 恢復／重裝及連結 client 證據、writer-fenced snapshot／reconciliation 與停寫量測。 |
 
-A11 仍須從原入口讀取 Board／Task、修改再重載，確認既有使用者無需重新註冊或強迫重裝。遇到登入或 mapping 問題，不得出現假空帳號或循環重登。
+A11 須驗舊入口恢復／轉移及新自有網址上的 Board／Task 修改重載；既有使用者不重新註冊，重新登入與 PWA 重裝則是已選定的搬遷步驟。遇到登入、mapping 或匯入問題，保留資料並提供恢復入口，不得出現假空帳號、錯誤落點或循環重登。先前同 origin 升級證據不能覆蓋跨 origin 恢復。
 
 A03 已由 OrgMaster 管理元件送出核准，經實際 HTTP 與隔離 PostgreSQL 驗證接受邀請、重新登入及看板權限。擁有者撤邀後，晚到的核准得到 409，管理員重新載入後看見「已撤回」。切換帳號後，帶舊帳號綁定查 Session 得到 409，帶目前綁定得到 200。七項流程全數通過，受測版本為 Platform `462d3c61`、OrgMaster `ff6ba9a` 與 ProJED `5d384a1`。此演練使用合成身分。正式登入與託管路徑仍依 T08 查證。[三系統執行紀錄](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/44753454323)
 
@@ -452,7 +448,7 @@ T07 已用舊版 `0670a0a` 的工作台與 Quick 呼叫程式、Supabase SDK 2.1
 | runtime 連線池串用上一帳號 context | 缺 actor、A/B 交錯與 rollback/release 連線測例；其他 scope 成功即 FAIL。 |
 | source 逾時後雙建 Task／恢復時清空 pending | unknown-outcome replay、舊 receipt／task 已刪與 IDB readback；重複效果或 pending 被刪即 FAIL。 |
 | 前端已換版但舊 client／worker 仍寫舊庫 | T07 從舊直連 SDK／RPC／Functions／worker 實際嘗試寫入並核對 fence／commit 邊界；只驗新版前端停送不足，任一 fence 後舊寫入成功即 FAIL。 |
-| 相容入口可開但 Cookie／回呼／SW 不相容 | T08 從原網址登入、取消／切帳／重開、遇依賴失敗並驗各 origin；Cookie 被剝除、API 變 SPA 200、私人快取或假空帳號即 FAIL，不能以 direct run.app 成功覆蓋。 |
+| 相容入口可開但 Cookie／回呼／SW 不相容 | T08 從新固定網址登入及舊入口恢復／轉移，驗取消／切帳／重開、依賴失效、連結與 PWA 重裝；Cookie 被剝除、API 變 SPA 200、私人快取或假空帳號即 FAIL，不能以 direct run.app 成功覆蓋。 |
 | consumer 偽造 Principal／未授權資料被快取 | wrong consumer、forged actor、撤權、private scope、producer unavailable；無可核實 proof 仍 allow 即 FAIL。 |
 | 新 app 擠爆共享 DB／背景副作用污染 | 最大 effective revision/pool、恢復及 worker retry；cross-DB 成功或實際容量超 gate 停止，不自動擴資源。 |
 
@@ -470,10 +466,10 @@ T01–T08 是對應 A01–A11 的完整工程驗收案例；現有分層命令�
 | T02 登入快照與撤權競態／A03、A09 | 登入後在同一 Session 開看板、改任務、寫備註、輪詢與重連；另以直接 API 嘗試讀取範圍外看板。同 Board 正常 mutation 與撤 membership／保存 matrix 交錯，涵蓋非預設及空集合。 | 由實際登入計算入口、上游查詢與資料層 trace 核對：登入計算 1 次；上述日常操作重算 0 次、上游授權查詢 0 次，亦無逐請求讀取成員或矩陣推導權限。範圍外讀取拒絕。依 §5.7 比對 guard、提交順序與 DB 結果，舊 Session 在撤權提交後不能再讀寫或留下副作用；重新登入只計算 1 次，結果反映新權限。 |
 | T03 Session 切帳／A05 | Quick 先凍結 A 的 account／context，再使本 App cookie 成為 B；送 A 的 capture，另注入 A 晚到成功回應。 | `ACTOR_CHANGED` 且 B 無 task／receipt；late response 不污染 B UI／IDB。真 Session／browser 證據與 SIMULATION 注入分開。 |
 | T04 Legacy ref 與 scope／A09 | 相同 legacy Board ref 位於不同 Workspace、不同 UUID；五種角色與 guest 各從原入口讀／改／保存權限。 | 只解析指定父 scope；原 ref、空集合 matrix、allow／deny 與舊基線一致。保存舊／新 fixture、正常 UI、API DTO 及 DB UUID 對照。 |
-| T05 Quick unknown outcome／A04、A05 | 正常 Quick submit 後在 DB commit／HTTP 回應間中斷；同 key 重送，再改名／移動／刪 task 後 replay；另送異 title。 | 同 key 唯一 receipt、原 hash／owner／時間、replay 不重建；異內容 409。UI／IDB、實際 commit／receipt 證據；注入的位置及限制明示。 |
+| T05 Quick unknown outcome／A04、A05、A06 | 正常 Quick submit 在 DB commit／HTTP 回應間中斷；跨 origin 恢復包重播、切帳、竄改 owner／proof／內容及原任務改名／移動／刪除後 replay。 | 先查可信 receipt，同 key 唯一、原 hash／owner／時間不變；B 不預覽／認領 A 的資料，unbound 明確認領且換帳 CAS 拒絕。異內容 409；未知結果或來源證明無法核實時保留草稿，不另建 key／任務。 |
 | T06 依賴與安全邊界／A01、A02、A10 | 真 producer 資格通過後，用無 Employee 的個人、wrong audience、失效 state／mapping、錯 DSN／owner role、API 未知 route／private SW cache 查驗。 | producer 不可確認為可辨識錯誤且無寫入，非員工正常入口可用；錯角色／DB 啟動拒絕，API 不回 SPA／私人快取。保存 owner wire 版本及 HTTP／DB／cache evidence。 |
 | T07 Writer fence／A06、A11 | 隔離來源／目標與舊client artifact，從真舊SDK／RPC／Functions及受控worker在fence前後寫入；包含在途提交、fence後full snapshot與target啟用後同key重送。 | 切換前僅source寫、停寫兩側不接受業務寫、啟用後僅target寫；source snapshot與reconciliation可核對，無缺漏／雙effect。已提交target資料可按既定恢復契約保留。保存真舊請求／job、拒絕／commit順序、snapshot／receipt及停寫量測；fixture不能直接seed預期target結果。 |
-| T08 Hosting／Session 相容／A01、A02、A05、A11 | 真 producer／核准非正式 Hosting→Cloud Run 路徑具備後，從相容主／Quick origin 正常登入、取消、切帳及重開；驗同 origin Quick、錯 callback／forged host、CDN／SW 舊 bundle 與依賴失效。 | 相容 Cookie 到 server 且綁 exact public origin／entry／actor；各 App Session 分開，錯 origin／actor 拒絕。HTML／API revision 相容、API 非 SPA、私人 no-store；無登入循環／跨帳號／假空資料。保存正常 UI、Cookie attributes 的去秘密摘要、路由／artifact／cache／Session／DB 證據；localhost mock 或 direct run.app 不覆蓋此層。 |
+| T08 Hosting／Session 相容／A01、A02、A05、A06、A11 | 真 producer 與新專案候選路徑具備後，驗自有網域主／Quick 登入、取消、切帳及重開；舊入口恢復後導向、重新安裝及 §6.4 各類連結／行事曆 client；另驗錯 callback／forged host、舊 SW 及依賴失效。 | exact origin／entry／actor 與 Cookie／CSRF 正確，各 App Session 分開；HTML／API revision 相容、API 非 SPA、私人 no-store。舊副本未處置不清除，邀請不復活、深鏈不錯落、feed 不假設自動跟隨轉址；新 target／模型設定不能由舊 project 收據冒認。 |
 
 現有 `npm run dev:local` 與 `scripts/local-test-server.ps1` 是 ProJED 固定 4000 入口，且目前跑 Vite `--mode test`；它本身不證明新 Node API／Cloud SQL 已接入。未來整合驗證在同一入口下依明確 test profile 接入新 API，source acceptance 要核實 profile、代理／同源路徑、actor 及 DB。不得覆蓋使用者的主測試台、清除未知 4000 process 或另留常駐 localhost；需要隔離 server／DB／browser 時記錄 task owner／PID tree／loopback port／cleanup，完畢核實 port released。
 
@@ -502,6 +498,8 @@ S3 read／write route 及 collaboration command 已接入既有 Session actor �
 
 ### 9.1 三個工作段及目前成熟度
 
+下表是既有 source／隔離驗證範圍，不代表集中專案版本已實作。新目標的差額以 §3.2、§6、§47.1 為準；本輪只交付文件及計畫，以下正式操作順序是未來工作，不是執行授權。
+
 沿用同一 DEV-139 與 §9 列出的 owner native task；分段用於辨識依賴與證據範圍，不增設逐段核准。授權以人類原始指示及直接索引為準；文件準備、測試替身或本地 PASS 均不擴張正式權限或繞過身分契約。
 
 | Slice／owner | 現行實作與依賴 | 驗證範圍與正式啟用依賴 |
@@ -517,8 +515,8 @@ S2／S3 正式啟用仍需發布 owner wire／consumer ACL／production pins，�
 交付順序如下。
 
 1. **Source、隔離驗證與候選映像核對**已完成上述範圍，沿 §8、§47.1 的受測版本與產物核對原功能、權限及 51 份 migration。
-2. **正式資料／入口驗證**沿現有 snapshot／rollback／reconciliation、Quick 原地升級及 Calendar 舊 URL 代理，補真來源 snapshot、verified mapping、目前非空 domain／Storage、全來源 writer fence、Hosting／Cookie／Session 與恢復證據，依 A06／A09／A11、T07／T08 查證。
-3. **正式切換／退役**：另有明確正式主要動作與資源範圍，確認可接受停寫／恢復窗口，沿 app-owned release gate 完成真身份→API→DB／storage readback、恢復與觀察；保持單一 writer 與既有 public origin 相容，舊站／DB／Hosting／Billing 處置另有退役 gate。
+2. **正式資料／入口驗證**沿現有 snapshot／rollback／reconciliation、跨 origin Quick／人工草稿恢復、PWA 重裝及限期 Calendar 舊 URL 相容，補真來源 snapshot、verified mapping、目前非空 domain／Storage、全來源 writer fence、Hosting／Cookie／Session 與恢復證據，依 A06／A09／A11、T07／T08 查證。
+3. **正式切換／退役**：另有明確正式主要動作與資源範圍，確認可接受停寫／恢復窗口，沿 app-owned release gate 完成真身份→API→DB／storage readback、恢復與觀察；保持單一 writer、新自有網域及有界舊入口恢復；舊裝置／離線義務與連結轉移完成後，舊站／DB／Hosting／Billing 處置另依退役授權。
 4. **跨 app 業務使用情境**：基礎對齊有相容證據且人類要求任務／資料串接後，依 §5.3 固定 consumer、最小欄位、授權及正常 UI 驗收；本輪不建立新 DEV 或任務摘要／專案連結實作。
 
 Release Impact Note：hosting／backend／Auth／Session／PWA origin、runtime／migration／Storage 與發布 artifact 受影響。現行 SPEC-083、ADR-053／SPEC-133 的 provider 與 Session 契約持續約束目前 runtime；本規格描述未來受控取代，不提供正式 target、切流／rollback 命令或生效宣告。
@@ -546,15 +544,17 @@ Rev 3 另只讀核對 Jenfu-Platform `package.json`、canonical-principal／veri
 
 ### 11.1 已固定的架構決策
 
+部署 project／public origin／PWA 安裝策略以 2026-11-21 的 §3、§6 決策為準；原 S1 的 actor、角色、交易、資料安全與可重播契約保留。固定為舊 project 的程式常數與 profile 仍須後續實作，不因文件變更而被視為新目標已通過。
+
 | 決策 | 定案內容／相容限制 |
 |---|---|
-| Runtime／前端 | Node 24／npm 11、TypeScript、node:http＋pg；單一 Cloud Run runtime提供主／Quick shell與API，兩個既有public origin仍維持各自同源Session。可信entry由Session actor決定，不由Host header決定。保留React／Vite／Zustand，不引進ORM、第二runtime或另一套frontend runtime。 |
+| Runtime／前端 | Node 24／npm 11、TypeScript、node:http＋pg；單一 ProJED Cloud Run runtime 在 `jenfu-platform-prod` 提供主／Quick shell 與 API，Hosting 亦在同專案。自有網域名稱及主／Quick endpoint 待指定後固定，各 App Session 語意保留；可信 entry 由 Session actor 決定，不由 Host header 決定。保留 React／Vite／Zustand，不引進 ORM、第二 runtime 或另一套 frontend runtime。 |
 | DB ownership | app key=`projed`；`projed_core / projed_contract`、lifecycle-specific owner／migrator／runtime、ledger 與單一 DSN。foundation 提供 DB／角色／schema bootstrap；app runner 只管自己的 forward-only DDL。 |
 | 身分與權限 | OrgMaster 最小 Principal publisher、Platform handoff／Session／current state、ProJED 本地 UUID mapping／resource capability。S2 trusted adapter 產生 §11.4 唯一內部 `ServerActorV1`，不另建平行 VerifiedActor／identity master，也不讓 DB 或 browser 自行決定 Principal。實際非員工 wire 未發布，S2 保持 gate。 |
 | Policy／交易 | trusted transaction-local context、account／resource guard revision、transaction advisory locks、同一 client；runtime 無 owner／BYPASSRLS。S1 只定案 account／profile 核心，Board membership／matrix 的全部 command 在 S3 補契約。 |
 | 同步 | 版本 polling＋canonical reload；同一 canonical task，通知不含私人正文。S3 每個可見 App／account／context 只有一個 polling scheduler，合併 workspace index 與 active Board 的受權 scope 檢查；view 不另建 timer／連線。重用 [coalescedAsyncRefresh](../../src/utils/coalescedAsyncRefresh.ts) 的 single-flight／trailing-run 語意，version 未變不重載正文。5 秒 active interval、hidden pause、focus／reconnect 補讀及 10 秒正常週期收斂仍是 S3 驗收目標；cursor／guard、連線與費用需真證據，不套舊三 app PASS。 |
 | 檔案／工作 | 私有 Cloud Storage；上傳 intent、hash／bytes／purpose／owner 與完成驗證由 ProJED 擁有，讀取走受權 API或原相同上限的短效 URL。沿 ADR-051 的 DB claim／lease、bounded worker／Job、費用與 cleanup；未資格功能不啟用，不新增通用 queue。 |
-| 移轉／本機恢復 | 優先保留既有public origin／PWA，由相容入口轉至Cloud Run；先全來源writer fence，再以單一一致性full snapshot匯入空白candidate並做不可變reconciliation，沿§6.3–§6.6，不新增delta／雙寫平台。若換origin另驗export／import／claim、server核實來源／目的帳號proof、原ID／CAS。Cookie／callback、route／artifact、proof／bundle／恢復格式在S2／S3／演練補齊，未完成前保留可恢復入口。 |
+| 移轉／本機恢復 | 新自有 origin 的重新登入、書籤更新與 PWA 重裝已納入；舊入口先恢復本機內容再受控導向。先全來源 writer fence，再做一致性 full snapshot／reconciliation，保留 shared DB 的其他 app 資料。依 §6 驗跨 origin export／import／claim、可信來源／目的帳號 proof、原 ID／CAS 與 unknown receipt，未完成前保留舊副本及恢復入口，不新增 delta／雙寫平台。 |
 
 費用限制仍是「不大幅增加」，不把未查證的帳單、第四 app capacity、PITR／恢復或外部 owner acceptance 寫成已通過。kernel 的局部開發不依賴付費 tier 決策；新登入／移轉／managed 環境驗收則須各自 evidence。
 
@@ -709,6 +709,8 @@ S1的transaction-local與transaction advisory lock依據：[PostgreSQL17設定�
 **現行結論：上述缺口已在Rev5文件修正，S1 RD Implementation Ready＋架構定案通過文件審查；完整整合仍有條件。** 此為RD修改後自驗，非獨立QC／程式或效能PASS。S1沿同一source surface及五個verify/check命令、K01–K08交接，沒有另增runtime service、middleware framework、通用授權／query engine、第二queue或每輪人工步驟；未量測工時／帳單，不宣稱已降低成本或提高實際效能。S2真身分／mapping／Session仍未定案；S3完整domain／polling／provider與移轉、共享容量／費用仍依原re-entry條件補證據。
 
 ## 12. S1 實作狀態（2026-10-26）
+
+**歷史實作／證據適用性。** §12–§51 中原 source、舊 project／origin／bucket／SA、原地升級及雲端候選描述均依原受測版本解讀，不覆蓋現行 §3／§6／§8–§9。資料／權限核心未變的證據可重用；所有新目標綁定須按 §3.2 更新並查證，不能執行舊 plan 或把舊 receipt 改掛新 project。
 
 已建立 §11.2 指定的 Node／PostgreSQL 核心、兩份 forward-only migration、靜態 profile／attempt binding、migration runner、DB boundary checker、synthetic static／health／API fail-closed runtime、actor transaction 與 isolated verifier。`package.json` 直接固定 Node／npm engines、`pg ^8.21.0`、`@types/pg ^8.23.1` 及 §11.6 六個命令；既有 `src/`、Vite／PWA、Firebase／Supabase config、Functions、舊 migrations、4000 launcher 與 release scripts未修改。
 
@@ -920,6 +922,8 @@ Quick Task保留既有IndexedDB outbox、離線先記下、帳號claim、lease�
 本地驗證通過S3 frontend 33/33、server／全app TypeScript、targeted ESLint零error、HTTP test build、DEV-089 scope 1000次及placement transaction 28/28。PostgreSQL 18 task-owned isolated acceptance實際套用0001–0009兩次並驗證migration idempotency、兩張Workbench表ENABLE＋FORCE RLS catalog、owner隔離、錯entry／actor-context切換拒絕、小數排序、cycle／封存／partial subtree拒絕、雙向placement、idempotency、重放撤權拒絕，以及dependency／record link rollback；最新bundle為`output/qa/dev-139/s3/20261027T021950Z-ec53c1a6`。
 
 此證據只支持本地synthetic資料與opaque QA Session。舊Supabase `inbox_items.promoted_task_node_id`在新schema沒有對應Inbox表，正式資料移轉須先盤點並以可核對的mapping保留或重建該關聯；完成前不得宣稱Quick／Workbench歷史資料已全量相容。真Jenfu Session、正常瀏覽器UI、資料匯入、Hosting／PWA相容及正式切流仍未驗證。
+
+<a id="23-s3-actor-context-cas-w92026-10-27"></a>
 
 ## 23. S3 Actor／Context CAS W9（2026-10-27）
 
@@ -1402,186 +1406,23 @@ Binding以容器內實際profile／SQL／static metadata bytes為準；本次33�
 
 ## 47. Managed Job artifact and real foundation gaps（W33，2026-10-29）
 
-### 47.1 2026-11-20 最小 foundation 變更提案
+<a id="471-2026-11-20-最小-foundation-變更提案"></a>
 
-此節為目前具名執行範圍，後文W33保留歷史。登入恢復後，唯讀核對 `projed-cc78d`（967362299895、organization 361825816000）及 `jenfu-platform-prod`，不讀Secret內容、不列出會議／私人資料。以下為本次變更前唯讀基線；最新執行結果另列於下方，不將基線當成目前未執行狀態：
+### 47.1 集中專案的重新綁定與後續計畫
 
-- ProJED僅有既有 `projed-ai-backend`，asia-east1無Job；既有 `cr-build` 具有 `roles/run.builder`，不因此借用 `cr-runtime` 或 `AI_API_KEY`。專用SA與SQL IAM users尚不存在。
-- API差異為Compute、SQL Admin、Scheduler、Speech、Vertex未啟用；Run／Cloud Build／Artifact Registry／Secret Manager／Storage已啟用。
-- SQL仍是POSTGRES_17／RUNNABLE、私網、IAM登入、既有 `jenfu_prod`；保留tier、backup／PITR與其他資料庫。子網 `jenfu-platform-prod-runtime` 已存在，asia-east1、10.20.10.0/24、Private Google Access開啟；PSA peer ACTIVE。`shared-vpc associated-projects list`明確回覆host尚未啟用，不能由子網存在推論跨project路由可用。
-- 唯一已列出的bucket是 `run-sources-projed-cc78d-asia-east1`，soft delete七天；提案 `projed-cc78d-meeting-audio` 的metadata GET回404。新桶須create-only，全球名稱如有競爭就先readback，不接管未知資源。
-- 目前操作者的project `testIamPermissions` 已回傳SA／custom role／Secret／bucket建立、API啟用、project IAM及SQL IAM user／子網IAM所需權限；organization與兩project測試均未回傳 `compute.organizations.enableXpnHost`／`enableXpnResource`，Shared VPC操作尚無已驗證的執行權限。核准不等於取得Google IAM權限；這兩步由既有Shared VPC管理員執行，不暗中授予操作者整個organization的管理角色。
+現行 target 為 `jenfu-platform-prod`，長期主／Quick 自有網域名稱待指定。以 §3.2 的 profile、服務／SA、SQL IAM login、Job／Scheduler、Secret、Storage、OAuth／origin、模型及費用／資格綁定表作為後續實作差額；先核對具名資源與所需權限，再取得相應操作授權。既有 Cloud SQL／schema／角色與已套用 SQL 不改寫，app 身分不與 PDM 或 Platform 共用。
 
-具備該權限的管理員可沿以下具名命令完成網路關聯；本次只準備命令，沒有執行：
+先前 `projed-cc78d` 跨專案 Shared VPC host／service-project 操作引導及候選執行包，**不再是本方案的前置或可直接執行的部署計畫**。尚未做的引導停止；若已執行，只保留實際狀態／責任紀錄，不自動停用關聯、撤回 IAM 或刪除資源。已完成修復與未執行項分開記錄，公開文件不複製其實際 IAM／營運讀回。
 
-```powershell
-gcloud compute shared-vpc enable jenfu-platform-prod
-gcloud compute shared-vpc associated-projects add projed-cc78d --host-project=jenfu-platform-prod
-```
+後續順序為：確認自有網域及主／Quick endpoint → 更新 source／profile／owner 契約與具名資源計畫 → 以新綁定建立並驗候選、身分／私人隔離及 provider 安全拒絕 → 補 §6 跨 origin 草稿／連結／PWA 恢復與單一 writer 演練 → 另經正式操作授權才執行資料移轉、切流及舊入口退役。本輪停在文件／計畫，不建立、更新或執行候選，也不改 DNS、IAM、Secret、billing 或正式資料。
 
-2026-11-20 人類已核准下表具名 foundation 範圍；本範圍沿正常 workflow 執行、讀回及修正，不逐個 SHA 再確認。核准不代表 Google 權限、provider 零留存資格或切流證據已成立。
+零留存的適用契約、SA caller／模型／project、cache／內容 logging 及 provider 實測以新專案證據為準。未資格化的 ASR／LLM／RAG 路徑繼續停用；不能以舊 project 已關 cache／logging、Files 刪除、store=false、改費用專案或舊 image 自帶 null 綁定，取代新專案的資格與拒絕驗證。
 
-| 責任 | 具名變更與限制 |
-|---|---|
-| API與網路 | 在ProJED啟用上述五個缺少的API；將 `jenfu-platform-prod` 啟用為Shared VPC host，僅關聯 `projed-cc78d`，沿既有VPC／runtime子網以Direct VPC PRIVATE_RANGES_ONLY出網。ProJED Run service agent只取得host networkViewer及該子網networkUser；不新建connector、公開SQL或修改既有firewall／PSA。 |
-| 專用身分 | 新建 `projed-prod-runtime`、`projed-prod-migrator`、`projed-prod-importer`、`projed-prod-meeting-scheduler` 四個 `@projed-cc78d.iam.gserviceaccount.com` SA。前三個在指定SQL instance建立IAM login，僅給該instance的cloudsql.client／instanceUser；scheduler不進DB、不讀音訊或Secret。 |
-| DB foundation | 沿 Platform DEV-007 既有 005→ProJED 完整 45 份 migration→always 006 入口，建立 app 專用 NOLOGIN 角色／精確 membership 及 CONNECT。新增 0045 同步 Session revocation contract；0001–0044 保留已通過 bytes。owner DB CREATE 限 migration window 且 finally 撤銷讀回；不手工重寫正式業務資料。source profile／Job binding 必須同為 45 份，舊 44 份候選 image 不代表本版。 |
-| 音訊 | 新建 `projed-cc78d-meeting-audio`，ASIA-EAST1／STANDARD、uniform access及public access prevention、soft delete=0、versioning=false、無retention lock。只有runtime取得此bucket的objects.create/get/delete；沿既有七天期限及exact-generation cleanup，不加以建立日計算而可能提早刪除的lifecycle。 |
-| 推論 | project自訂角色 `projedMeetingInference` 僅含 `aiplatform.endpoints.predict`、`serviceusage.services.use`、`speech.recognizers.recognize`，只給runtime；自訂角色 `projedMeetingAudio` 僅含上述三個object權限，只綁音訊bucket。六個permission均已由IAM可測權限metadata查到GA；不授Owner／Editor／AI Admin，不授runtime cache、IAM或bucket管理權。 |
-| Job與協調者 | runtime及scheduler只得呼叫固定 `projed-meeting-analysis`。既有Platform `dev010-prod-iac@jenfu-platform-prod.iam.gserviceaccount.com` 得讀／執行固定 `projed-prod-migration`、讀該execution／operation及ProJED project的Cloud Logging；adapter僅查指定execution的migration stdout ledger。Logging IAM為project讀取範圍，不能把程式的filter宣稱為IAM對其他logs的拒絕；不授override或任意Job執行。 |
-| 移轉來源credential | 新Secret `projed-prod-migration-source` 的數字版本只掛給一次性importer，內容沿既有TLS verify-full／source binding／CA／DSN bundle，runtime與migrator不可讀。先核對來源 `knodlkxqpcqyrtgwpdst` 可用的唯讀移轉登入；若需新建，限專用 `projed_dev139_source_reader`、本次已分類來源及身分映射欄位SELECT、唯讀snapshot交易與有界有效期，完成後撤銷。不得拿通用管理credential放入runtime或輸出值；實際grant須沿來源RLS及最小SELECT範圍核對，不能為讀取而更改業務policy。 |
-| 零留存設定 | Speech V1 data logging依官方為預設關閉且須另行在Console明確opt-in；本案只用同步Recognize並禁止opt-in，不再要求官方未提供的第二份API readback。若日後有人在專案外流程opt-in，立即撤銷Speech qualification。Vertex仍將`cacheConfig.disableCache=true`、所選模型request-response logging停用並讀回；這些設定不代表取得Google防濫用留存豁免，適用契約／豁免與模型仍須實際確認。未合格時相應runtime bindings維持null，RAG亦須覆蓋原Flash-Lite選擇。 |
-
-完整runtime／migration／snapshot／analysis Job與Scheduler create requests仍由同一個 `scripts/lib/dev139-cloud-run-plan.mjs` 渲染，沿實際immutable image與其binding產出；本節沒有虛構image digest、Secret version或資格收據。建立資源後先確認IAM、route、ledger、Session與provider，再依原有資料保護／writer fence／恢復流程執行移轉和切流。核准foundation不允許資料改寫、down migration、服務刪除、billing／SQL tier擴張或以合成資格開放真實會議內容；正常正式資料移轉／發布仍依完整任務與其必要前提續行。
-
-零留存查證沿Google[Speech V1 FAQ](https://docs.cloud.google.com/speech-to-text/docs/v1/data-usage-faq)、[data logging預設與用途](https://docs.cloud.google.com/speech-to-text/docs/v1/data-logging)及[明確opt-in／disable入口](https://docs.cloud.google.com/speech-to-text/docs/v1/enable-data-logging)：保留同步Recognize、禁止opt-in，不改用會留存transcript的async。這是Speech留存控制的契約基礎，不外推至Vertex，也不取代部署後runtime SA實呼叫。Vertex依[零留存設定](https://docs.cloud.google.com/gemini-enterprise-agent-platform/resources/zero-data-retention)停用所有cache，並由[適用契約與abuse monitoring](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/abuse-monitoring)確認所選模型；僅有「不訓練」或API啟用不構成零留存資格。本次尚無該project的契約／豁免證據。
-
-本機針對性自查：release unit 31/31、MJS syntax、affected lint與diff-check PASS；新增案例驗runtime-only推論、bucket-only讀寫刪、無多餘管理權、真正刪除設定，以及設定提案不得自動產生資格或IAM執行。未改server／frontend／SQL或既有qualified 44份migration。
-
-受測source `fef9f8119ee1494bc94fe454c41e360085656e26` 的[CI44644625891](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44644625891)兩jobs SUCCESS：665 unit（494／126／14／31）、原lockfile型別、三boundary、compiled artifact、PostgreSQL17.11 domain73／snapshot63、44份migration及OCI18 PASS。已讀回artifacts14587159598／14588103349：native `s3/20261120T002032Z-023f60cd`／`migration/20261120T002139Z-6d728a73`均PASS，OCI `dev139-oci-b265c857b200d3cac07178d6`綁同一完整source、actual=expected44與owned cleanup PASS。這是RD自查／CI隔離資格；真Cloud IAM／Speech／Cloud SQL／registry push／browser與正式發布仍NOT_RUN。後續僅補本節收據與操作者metadata，不改受測程式或重跑未受影響的產品驗證。
-
-API 啟用前的 cache、generation 及 embedding logging 三個唯讀 GET 均為 403 SERVICE_DISABLED，當時 UNKNOWN；此歷史結果不覆寫。以 project／編號／留存及 Google 寄件者關鍵字查可用郵件未找到既有核准紀錄，不將無搜尋結果視為不存在契約。人類已回覆適用 Master Agreement／豁免「不確定」，因此仍無可查證資格。未寄信、提交豁免表單或將設定提案當成 Google 核准。
-
-同日另以鉦富帳戶查Google Drive契約／ZDR文件metadata，兩次搜尋均無結果，仍不能判定契約不存在。依Google目前[防濫用規格](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/abuse-monitoring)，本次所選非Frontier Google模型在一般線上條款下仍可能留存被標記的提示，Master Agreement適用性須由可查證文件確認；不套用其他供應商的ZDR申請程序。當時仍要求Speech Console另行readback；其後依官方default-off＋明確opt-in契約精簡為前述可執行控制，不以試打enhanced模型推定設定，也不放寬Gemini gate。
-
-#### 已核准 foundation 的實際執行（2026-11-20）
+歷史來源投影與候選 artifact 的具名執行、正式資料聚合及 IAM 讀回留在任務本機證據；原 Git／CI 來源仍供確認未變邏輯與 hash。下列歷史錨點保留導覽，不表示舊 artifact 已通過新目標資格。
 
 <a id="dev139-source-views-applied"></a>
-
-**正式來源身分投影已建立（2026-11-20）。** 人類核准後，在原 Supabase 專案 `knodlkxqpcqyrtgwpdst` 執行 [create-only SQL](../../scripts/dev139-source-identity-projections.apply.sql)，SHA-256 為 `64da752bfd14b29df4c9cf02b4be6c6d06e0c7cc0ed601685e68cbfbd87ee34a`。事前兩個檢視均不存在。交易內 ACL 檢查通過後提交，另以 catalog 讀回確認下列結果。
-
-- `private.projed_dev139_google_identities_v1` 限 Google 身分，四欄為 `user_id`、`provider`、`provider_id`、`identity_data`。`private.projed_dev139_auth_users_v1` 三欄為 `id`、`banned_until`、`deleted_at`。兩者 owner 為 `postgres`、security barrier 已開啟，採 owner 權限執行。
-- 專用 reader 維持 `NOLOGIN`，對上述兩個檢視只有 SELECT，不能直讀底層 Auth 表。兩個檢視對 PUBLIC、anon、authenticated、service_role 的 grant 數均為零。
-- 本次只變更這兩個來源檢視及其 ACL。未查詢使用者資料列、建立移轉登入或 Secret 版本、匯入 Cloud SQL 或切流。下列較早讀回保留變更前狀態。
-
-人類已核准 §47.1；下列為實際 provider metadata readback，不是 source 提案。證據存於 task-owned ignored `output/dev139-foundation-20261120/`，不含 Secret 內容、密碼或會議資料：
-
-- Compute／SQL Admin／Scheduler／Speech／Vertex 五個 API 已啟用。四個專用 SA 已建立；runtime subject=`103702214558273469918`、migrator=`106331844521651249896`、importer=`104920868740231053205`、scheduler=`110493706793418503792`，均以實際 metadata 為準，沒有建立 SA key。
-- 三個 SQL user 均讀回 CLOUD_IAM_SERVICE_ACCOUNT；host IAM 的 cloudsql.client／instanceUser 兩個 bindings 精確限制 `jenfu-platform-prod-pg`，沒有給 scheduler。原 IAM auth、POSTGRES_17、max_connections=100、tier db-custom-1-3840 保留；app migration／owner CREATE window／業務資料匯入仍未執行。
-- `projedMeetingInference` 與 `projedMeetingAudio` 已建立並核對精確三個 permission。前者只綁 runtime；後者只綁新音訊桶。音訊桶 metadata 已讀回 ASIA-EAST1、uniform=true、public access prevention enforced、soft-delete=0、versioning=false、無 retention policy／lifecycle。
-- 新桶預設 legacy object owner/reader 權限已移除；同次操作也移除了提供 metadata 管理的 legacy bucket bindings，使目前操作者失去 get/setIamPolicy（testIamPermissions 只剩 bucket.get）。這是本輪操作缺陷，沒有將它隱藏成完成驗收。已另請人類核准只限此桶、僅 get/setIamPolicy 的 `projedMeetingAudioPolicyAdmin` 修復，不含物件存取；未自行擴張權限，最終 bucket IAM readback 尚未完成。
-- 空白 `projed-prod-migration-source` Secret 已建立，只綁 importer secretAccessor；尚無 Secret 版本或移轉 credential，不借用舊 AI_API_KEY／其他 app Secret。
-- 來源已建立無登入、唯讀設定的 `projed_dev139_source_reader` 骨架並授43個已分類應用relation的精確SELECT；Supabase保留`auth` schema的USAGE無法由現行`postgres`轉授，直接Auth欄位grant已撤回。兩個固定security-barrier身分投影view及其reader SELECT尚待人類明確核准，未建立LOGIN／密碼／Secret版本，未執行正式資料讀寫。
-- ProJED Run service agent 已取得 host networkViewer 及指定 runtime subnet 的 networkUser。嘗試啟用 Shared VPC host 被 Google 明確拒絕，缺 compute.organizations.enableXpnHost；未自授組織管理權，service-project 關聯未執行，已交既有 Shared VPC 管理員處理。
-- Vertex cache 已從預設 DURABLE 讀回 disableCache=true。三個 exact 模型／location 的 fetchPublisherModelConfig 均明確回覆 PublisherModelConfig NOT_FOUND；依[官方 logging 規格](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/capabilities/request-response-logging)，這代表未配置、預設關閉內容 request/response logging，沒有另建立空設定或開啟 metadata logging。Speech依官方default-off、須明確opt-in及本任務未執行opt-in的可追溯流程，移除不可取得的額外API readback；Google防濫用留存豁免仍不確定，四個runtime provider/job bindings保持null，未送真實內容或呼叫模型。
-
-06:38 UTC 再次唯讀刷新：`jenfu-platform-prod`仍不是Shared VPC host，`projed-cc78d`無host project；音訊桶IAM policy仍因缺`storage.buckets.getIamPolicy`拒絕，來源Secret versions仍為空，Cloud Run Jobs仍為空。ProJED現存唯一service仍是原`projed-ai-backend`且100%舊revision，保留既有AI_API_KEY Secret reference；本輪未改它、未部署新runtime或分流。Supabase reader仍為NOLOGIN／NOINHERIT／BYPASSRLS、connection limit=1與原三項唯讀timeout，兩個正式投影view仍不存在，Auth直接權限仍為false。沒有以重查結果替代待核准修復或正式執行。
-
-07:10 UTC治理抽查移除Speech的不可執行重複證明：官方明定data logging預設關閉、opt-in須在Console另行明確同意；本任務只以CLI啟用API且未執行該opt-in。保留同步Recognize、禁止opt-in及一旦外部opt-in即撤銷qualification三個控制，無需再要求不存在的公開設定API；Gemini防濫用留存豁免仍是獨立硬gate。嘗試以現行操作者取得runtime SA短期token做合成Speech probe，被IAM以缺`iam.serviceAccounts.getAccessToken`拒絕；未新增Token Creator這個非正式runtime所需權限，也未改用操作者身分冒充production IAM。Edge「AI測試」唯讀查證遇Google重新驗證即停止，未輸入／提交憑證，亦未把未取得的project readback記為PASS。實際Speech呼叫仍須由部署後runtime SA執行，provider binding繼續null；沒有送任何音訊或真實內容。
-
-後續檢查正式Cloud Run plan renderer發現同一舊門檻仍殘留為Speech `projectSettingReadbackRequired=true`，會在真正產生release plan時重新造成無法完成的阻塞。現已移除該欄，改為明確`optInProhibited`、外部opt-in即撤銷qualification及部署後runtime SA probe；Vertex的project setting readback與適用契約／防濫用豁免證據均保留。source `5f9432fbd376e1e087d2602fce7c06aabe1e34c5`的[CI44696691376](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44696691376)兩jobs SUCCESS；artifacts14610569643／14610813500已讀回snapshot63、domain73及OCI18 checks均PASS，OCI精確綁同source與45/45 migrations；metadata仍FIXTURE_ONLY、browser／productionRelease仍NOT_RUN。本輪未部署、未呼叫provider，亦未改正式IAM／Secret／資料或流量。
-
 <a id="dev139-cloud-49"></a>
-
 <a id="dev139-cloud-51"></a>
-
-#### 已核對的 51 份 migration 候選映像
-
-來源 `8421432bdbfc5482476f30fc6b48666ddd1bb1bf` 已通過完整 CI 及 Platform owner 驗證。封存逐一核對 1,034 個 Git blob，共 9,804,501 bytes，SHA-256 為 `ba4a070873efa0e3e1489f81f996b1e0d2f3b1669d3432a0a37e3631f1ec34ee`。三個新標籤預檢均回 Image not found 後，提交的同一 Cloud Build `d73d71b0-b2fa-4a47-9c26-5b2e8aaad77a` 已於 2026-11-21 00:56:42（Asia/Taipei）成功完成，六個步驟皆為 SUCCESS。
-
-使用者恢復原帳號登入後，已讀回同一建置及映像。Google source provenance 的 SHA-256 與封存相同，source object generation 為 `1795193534803042`。Jobs 映像輸出的 51 份 migration SHA-256 逐一與該 Git 來源核對一致；managed profile SHA-256 為 `99a5551712d13fb0b6ae1725a7a491e7dd6020b972f672bb1b691f87c1a525ac`，亦與 Platform owner 收據相符。三個獨立 registry digest 與 Cloud Build results 一致，標籤均為 `candidate-8421432bdbfc-20261121`。[同一 Cloud Build](https://console.cloud.google.com/cloud-build/builds;region=asia-east1/d73d71b0-b2fa-4a47-9c26-5b2e8aaad77a?project=967362299895)
-
-| 映像 | 已讀回的 registry digest |
-|---|---|
-| `projed-prod` | `sha256:c44f7f8cfb448cdd4203fb5b899f6aeae2e09db4c0ca0a4db5af96eab08e9c99` |
-| `projed-prod-jobs` | `sha256:120199b938a77ce37f649afcbb4d6792e1b5fbf1a5a3c5754ce84a3ab61eb1f8` |
-| `projed-prod-asr-job` | `sha256:3ed5362e53cdeca44b4cd48213898d5cc007706a4f751bd8a38ee9233fddeff4` |
-
-實際映像在禁網環境驗證 UID 1000 與四個 provider／job binding 均為 null，ASR 映像的 ffmpeg 可啟動。此次證據範圍為建置及已登錄產物；正式 runtime、資料與推論的啟用仍依對應驗證及零留存資格。完整讀回存於 `output/dev139-8421432bdbfc-20261121/artifact-readback.json`。原登入失效期間保留的 WORKING／Reauthentication failed 觀察已由這次成功讀回收斂。
-
-同日唯讀刷新確認，ProJED Shared VPC host 關聯回空物件，Platform xpnProjectStatus 為 UNSPECIFIED_XPN_PROJECT_STATUS，音訊桶 getIamPolicy 仍被拒絕。這些是正式路徑的現況依賴，正式部署、資料移轉與推論仍依既有授權及零留存資格處理。
-
-#### 已核對的 Google Cloud 候選映像（49 份 migration）
-
-來源 `01ebf9454a3b71b4015159e81f0275d78a5d1b99` 已通過原生 PostgreSQL／正常畫面與 Linux 容器 CI，包含人工會議及看板權限修正。Cloud Build 以相同來源的 1,032 個 Git blob 建置，來源封存 SHA-256 `503ca1cb508d1241b50ab800792f31cbdade2d4686228fd220faaaddabe29f9d` 與 Google provenance 回報相符，來源物件 generation 為 `1795188383141751`。從 Jobs 映像輸出的 managed profile 及 `0001` 至 `0049` 的 SQL 雜湊已逐檔核對。登錄庫讀回的三個 digest 與建置輸出一致。[隔離 CI](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44761571087)｜[Cloud Build](https://console.cloud.google.com/cloud-build/builds;region=asia-east1/8a09d83b-044c-4283-a036-d7d21d7ae092?project=967362299895)
-
-| 映像 | Registry digest |
-|---|---|
-| `projed-prod` | `sha256:16c67abc93e7059f1550acb24fb2f230b8a7dc3e4b27d907b4d4a69d64796e65` |
-| `projed-prod-jobs` | `sha256:5aeaf8cb0c3e720b1be70a34074dab994abb3969ee9d49a4cb0569a10ba1b8a3` |
-| `projed-prod-asr-job` | `sha256:298e789525abc8ad9795474cb872b1b21255d1979998b34c5e278a3dee916126` |
-
-三者的候選標籤為 `candidate-01ebf9454a3b-20261120`。執行時映像在禁網環境以 UID 1000 驗出四個供應商及工作綁定均為 `null`，ASR 映像可啟動 ffmpeg。後續純測試與文件變更沿用這份可執行產物，行為變更須重新綁定。本次核對範圍為映像登錄，正式服務、資料及流量仍待部署階段驗證。
-
-#### 已發布至 registry 的 45 份候選映像 readback（2026-11-20，source 5f9432f）
-
-受完整[CI44696691376](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44696691376)驗證的 executable source `5f9432fbd376e1e087d2602fce7c06aabe1e34c5`，以精確Git archive建立Cloud Build context。gcloud預設ignore從1,629個blob排除`.gitignore`及歷史`output/playwright/dev-118/v7/production-browser-smoke.json`，實際上傳1,627個build檔案、無程式／migration／設定缺漏；staging object generation=`1795160960516642`，下載後SHA256=`aabe533b25e5101d84f832965d37b25070673824ec54362b0250b1fa06eeabd5`，與provider `sourceProvenance`完全相同。
-
-[Cloud Build e04f848b-21c4-4eca-8563-3fc8f96fef1c](https://console.cloud.google.com/cloud-build/builds;region=asia-east1/e04f848b-21c4-4eca-8563-3fc8f96fef1c?project=967362299895)於07:49:21–07:53:42 UTC SUCCESS，原六steps全成功。三個`candidate-5f9432fbd376-20261120` tag已逐一向registry讀回：
-
-| 目標 | 已讀回 immutable digest |
-|---|---|
-| projed-prod | sha256:19887d030a450d9c23bf939020a614fcf3da1077f1eb0329af2cdfaafbfe1b7c |
-| projed-prod-jobs | sha256:6803e1d468935bfb8069e0d3a06a7dd7f037081dbbf23f4fc45de96e72a6c9ab |
-| projed-prod-asr-job | sha256:10734d323aed46c025b6b76ff5b5e210be67f8e68ed99e7eec1412ee174a7b6d |
-
-實際managed-jobs image在network=none／read-only／nonroot輸出45份binding；profile與45個migration SHA256均與exact Git archive bytes相符，mismatch=0，compiled static hash=`1daebdb694375adfd64582737e7073e6f17e90bb241138cc9003f8cdba8b8312`。Windows checkout直接比較曾因CRLF得到profile及29份SQL差異，已拒絕該錯誤基準並改用build來源archive重核。離線runtime驗UID1000／Node v24.12.0及四個provider／Job bindings均null，ASR image的ffmpeg5.1.9可執行。這是artifact-only；未部署、未執行migration／import、未建立credential、未呼叫provider或切流。
-
-#### 前一版45份候選映像 readback（2026-11-20，source effd5e7）
-
-受完整[CI44688269763](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44688269763)驗證的 executable source `effd5e758f56bafb6de0e02bcc0d55702b9a995a`，以既有create-only流程逐一核對1,010個Git blob；封存9,767,534 bytes、SHA256=`d934fe5c1fe1af02c510f0d96c0873a76b8daf251decee24666d5c5f45eb14aa`。原source object `dev139/candidate-effd5e758f56-20261120/source-d934fe5c1fe1af02.tar.gz`使用generation precondition=0建立，generation=`1795156820258543`；`gcloud builds submit`另建立Cloud Build staging object，provider `sourceProvenance`的SHA256／MD5與本機封存完全相同，未用object名稱推論內容。
-
-[Cloud Build54a37e8b-c6de-4f90-98d6-801d10d19485](https://console.cloud.google.com/cloud-build/builds;region=asia-east1/54a37e8b-c6de-4f90-98d6-801d10d19485?project=967362299895)於06:41:11–06:45:15 UTC正式SUCCESS，六steps全成功。三個`candidate-effd5e758f56-20261120` tag已逐一向registry讀回：
-
-| 目標 | 已讀回 immutable digest |
-|---|---|
-| projed-prod | sha256:9c0fb4d11742a0c503c3e9b47f2bf9cbc4d87b337a1be04f4b8edb2728661d34 |
-| projed-prod-jobs | sha256:5e3d17cce6c5c9dc9f1212dd18c18b0e5832fec70a2bccfae6615451602f2e74 |
-| projed-prod-asr-job | sha256:1d5a94101115f830b34cc1f128ec01651dc4d6d84d0374feefc20e26b18e6d33 |
-
-實際managed-jobs image在network=none／read-only／nonroot輸出binding：Cloud SQL instance／三個IAM login均符合§47.1，profile SHA256=`d1985e6089362018a6fd746163d2dc8b2df9d4fb40a32dba908c3e6519a57b6e`，45個migration path／SHA256已與`effd5e7` Git blob逐檔相符；compiled static hash=`51b2de07751f5e41c7d49a88c0ba1ae806ae757bc439e9dfe9bedb9144ab21b4`。離線runtime驗UID1000／Node v24.12.0與四個provider／Job bindings均null，ASR image的ffmpeg5.1.9可執行。compact receipts位於ignored `output/dev139-effd5e758f56-20261120/`，狀態`ARTIFACT_ONLY_VERIFIED`；只新增source object、build及候選images，未部署、未執行migration／import、未建立credential、未呼叫provider或切流。前一版候選保留，不覆寫或冒充本版。
-
-#### 前一版45份候選映像 readback（2026-11-20，source80cc88f）
-
-[Cloud Build3b2133ea-a70e-46bf-9cb0-16721a7a5ef1](https://console.cloud.google.com/cloud-build/builds;region=asia-east1/3b2133ea-a70e-46bf-9cb0-16721a7a5ef1?project=967362299895) SUCCESS（04:00:30–04:05:22 UTC），六 steps 全成功。來源 `80cc88fe036270e9ce0718f18fa131e49bfb5375` 已通過前述完整CI；1,010個 Git blob 均逐檔核對，封存9,766,934 bytes、SHA256=`f74904cdafd525055c78b7469e0ea09ac193cd14e44f92ea03dcc82970076924`。沿既有source bucket create-only 上傳，generation=`1795147175424172`，provider provenance 的 SHA256／resolved generation 均與本機封存一致；沒有使用dirty文件或QA／資料輸出建置。最初 tag預檢因CLI採「Image not found」而非NOT_FOUND字樣停止，查證明確不存在訊息後才繼續，未覆寫舊tag。
-
-三個新 tag 均為 `candidate-80cc88fe0362-20261120`，且逐一以 immutable digest 再查 registry 成功；repository=`asia-east1-docker.pkg.dev/projed-cc78d/cloud-run-source-deploy`：
-
-| 目標 | 已讀回 digest |
-|---|---|
-| projed-prod | sha256:09ef29c7c4850582d9c8bb095923460862fe7f775abb2a37d7513de7f63fb2f7 |
-| projed-prod-jobs | sha256:e3d0ccb53dec67e243bcbbfd895150bf628f7e5f64ba364f737a4024d97ae2a3 |
-| projed-prod-asr-job | sha256:c400f4181a188eff6af49ff3cd4bb94e3a783259d218ec860bd52be0d44ee707 |
-
-實際managed-jobs映像在 network=none、read-only、nonroot 下輸出45份完整binding；profileSHA256=`d1985e6089362018a6fd746163d2dc8b2df9d4fb40a32dba908c3e6519a57b6e`，45個 path／checksum 均與這份Git source封存原始bytes逐一相符，static hash=`ebb79ccb4b21957e3889f8650440ec94f6d9cceda29e116ddcea6a9f85faf14f`為實際編譯後dist產物。離線 runtime 檢查確認UID1000／Nodev24.12.0及四個provider／job bindings仍null；實際ffmpeg5.1.9可執行。結果存 `output/dev139-80cc88fe0362-20261120/artifact-readback.json`，狀態ARTIFACT_ONLY_VERIFIED；此image未部署、未執行migration／import、未呼叫provider或切流。保留舊44份候選；不得把它或其他CI checkout的hash改掛到本image binding。
-
-#### 歷史44份候選映像 readback（2026-11-20，source9c4bd64）
-
-[Cloud Build 6218bd44-0732-4d47-97f0-f9afb7c73913](https://console.cloud.google.com/cloud-build/builds;region=asia-east1/6218bd44-0732-4d47-97f0-f9afb7c73913?project=967362299895) SUCCESS，01:06:11–01:10:31 UTC；使用既有 `cr-build@projed-cc78d.iam.gserviceaccount.com`，六個steps全成功。來源為CI已通過的 `9c4bd643415d62afd48be8e5ad20f3965832ae63`，僅匯出建置所需1,009個Git blob；不帶.env、工作區輸出、根目錄QA／Supabase／備份。每檔OID核對及封存SHA256通過，沒有拿dirty檔案建置。原封存預檢曾攔下Windows換行及路徑範圍索引問題，修正取包／索引方法後重驗；沒有改SQL、全域Git設定或放寬hash檢查。
-
-Source object為既有bucket內 `dev139/candidate-9c4bd643415d-20261120/source-941ac0a9ba1dcb08.tar.gz`，generation `1795136706136839`、9,766,117 bytes，SHA256 `941ac0a9ba1dcb08191e6c627b87d6cde9304311f98dd225127e339b36aae621`；Cloud Build實際sourceProvenance的generation與SHA256一致。候選tag先確認不存在，只有下列三個新image，既有projed-ai-backend未改：
-
-| 同一repo下的image | Registry讀回的immutable digest |
-|---|---|
-| `projed-prod` | `sha256:5c04a06789617a008bd3ca0d0afe417b86ccd5079d7452cac9a4853ef573c951` |
-| `projed-prod-jobs` | `sha256:d7de861f5cc0bdd136d55841540c4055897e552f76de07fd063821405bf0a462` |
-| `projed-prod-asr-job` | `sha256:adf2ba52c363852be8c4ce32147fd8fe68303bffcbb1458f7a7aa5be6026718f` |
-
-Repo為 `asia-east1-docker.pkg.dev/projed-cc78d/cloud-run-source-deploy`，三個digest均已逐一向registry讀回。binding是同一managed-jobs映像以network=none／非root執行原`binding`入口的實際stdout；已解析完整JSON，44份migration與profile的原始bytes均與來源封存核對。Profile SHA256=`44ace74f7c1475e55539c7f618f1f35be8cda819e6d6e62b8a8cf5647641781b`，static fixture SHA256=`f5ffe4be20eb1ef97d50c6742f204f924a341d57cfa4105f7d2d57507a37a4ad`，不代換其他checkout／CI平台的binding。實際runtime驗UID=1000、Node24.12.0及四個provider／Job資格binding仍null；ASR image內ffmpeg5.1.9可執行。這些是offline artifact檢查，不是Cloud SQL連線、真ASR或模型品質證據。
-
-`output/dev139-9c4bd643415d-20261120/`保留source-preparation、build-request／readback、registry-readback、managed-binding及artifact-readback JSON與小型來源封存，供本任務下一階段使用；任務結束依實際使用／回復參照處理自建候選，不清未知資源。Cloud Build已終態，未建立本機Docker／DB／listener。這次僅新增source object、build與候選images，沒有新IAM／Secret／credential／API／SQL／Cloud Run／traffic變更；正式source admission、§13.3接線差距、foundation、零留存資格及移轉／切流仍未完成。
-
-### W33 歷史實作與證據
-
-本輪將正式migration／import所需程式裝入明確的`Dockerfile.dev139 --target managed-jobs`，預設build仍是web runtime，不會意外改成Job。Importer以TypeScript預先編譯成`dist-jobs`，Job使用production dependencies／非root，保留現有migration runner與source-boundary checker；沒有重做snapshot、加入第二套migration邏輯或新required gate。
-
-`run-dev139-managed-job.mjs`只接受`binding|migrate|plan|apply|reconcile`一個positional mode，缺必要來源／credential或多餘參數在子行程前拒絕；binding來自Job自己實際profile／SQL／static artifact bytes，寫入自己暫存目錄並清理。Child只保留該mode需要的DSN，不傳runtime DSN；診斷遮蔽DSN／password，SIGTERM轉送child且中斷結果不當成功、不自動重送未知寫入。`binding`不連DB。原CLI與Job共用pure binding helper，合法stdout／output-file行為保留，未知／重複選項拒絕。7項focused unit、jobs strict no-emit overlay與affected lint PASS；實際Job image／compiled importer／wrapper migration與既有regression由下列最終CI核實。
-
-**新查證的真正式差距取代§30／§33.3當時的可達性假設，並未改變Cloud Run＋Cloud SQL／原origin的目標：**
-
-- 2026-10-29只讀instance metadata：目標仍POSTGRES_17／RUNNABLE，`ipv4Enabled=false`、privateNetwork為`projects/jenfu-platform-prod/global/networks/jenfu-platform-prod-vpc`，IAM DB authentication已開。Root原始network JSON另確認有1個ACTIVE `servicenetworking-googleapis-com` PSA peer；不是沒有peering，也不代表ProJED有可達route。未讀／列印實際IP、Secret值或業務資料。
-- 現有managed source的Unix socket＋direct app-role DSN，以及本輪合成socket PASS，都不是此private-only instance的正式連線證據。[Google私有IP連線文件](https://docs.cloud.google.com/sql/docs/postgres/connect-run#private-ip)要求Cloud Run有通往SQL VPC的路徑；Auth Proxy不替代該route。Shared VPC／Direct VPC是待具體化方案，不擅自啟用Shared VPC、增加網路、公開SQL或改firewall。PSA不支援跨一般VPC peering的transitive連線，不能只加app→Platform peering就宣稱可達（[限制](https://docs.cloud.google.com/sql/docs/postgres/about-private-services-access)）。
-- [Platform AGENTS](https://github.com/jedchang0308-jenfu/Jenfu-Platform/blob/bea8db0fbd052450b6b0220e3594a37b1cad2039/AGENTS.md)要求DB CONNECT只授精確lifecycle IAM logins。ProJED目前直接以`projed_runtime_disposable`登入不符合此邊界；下一步要接獨立runtime／migrator／一次性importer IAM identities及其app role，不把原`projed-prod-release`同時授予migration/import credentials後稱為隔離。三個密碼型DSN Secret僅是§33.3舊規劃，尚未建立或被認定為正式解法；IAM登入不自動建立PostgreSQL membership／CONNECT／schema。
-- Platform DEV-010／012的bootstrap只允許既有三app，不能重放或放寬其歷史allowlist來納入ProJED；沿已授權Platform DEV-007的app onboarding範圍補ProJED owner package，不借用OrgMaster業務schema或新增bootstrap管理密碼。本輪只讀其他repo，保留Platform原有dirty next-env.d.ts，沒有修改owner source或正式ACL。
-
-本輪交付的是可驗證Job artifact入口，尚不是可apply的完整foundation包。上述IAM auth／private network與owner bootstrap仍須實作；具體新權限與網路責任待完整執行內容可審閱後一次收斂，不逐個SHA重問。正式資料apply／reconcile、真Session、原使用者映射、原origin／writer fence／恢復／切流及release分母保留。
-
-**最終受測 source `8d9f670bb497bfac948abc687e6cc09a6b5e33d3` 的 [CI40827705748](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40827705748) 兩jobs全部成功。** 原lockfile strict server／frontend型別、207／117／13／7（共344）unit、三boundary與compiled artifact PASS。PostgreSQL17.11／Node24.22.1原生71checks、snapshot60checks／45projections及33migrations PASS，artifact `12877661874` 已讀回 `s3/20261029T061603Z-579227cf/result.json` 與 `migration/20261029T061723Z-7f3409ea/result.json`。OCI artifact `12877651193`／`dev139-oci-4209932ab93ff69b353d05a6/result.json` 已讀回PASS、12checks、actual/expected33migrations，runtime image `sha256:f50e22037d9cc3294bf24448320c32241eda960c06cdb55849a68b5beadc4e9c`、jobs image `sha256:05bb4fdaf21417b7903d65950215849b3221937a987a858624d4289204c19fc6`。真正wrapper從空DB套用與重跑、same-artifact binding、prod-dependency compiled importer載入及missing/extra input拒絕通過；沒有真source snapshot apply或正式Job部署。第一版source d45845c的CI40827374802亦完整PASS；最後差異僅為MJS測試Node imports與dist-jobs忽略項。
-
-本機focused lint的首個有效失敗保留：新增MJS unit缺Node globals（9個no-undef）；改明確import node:buffer／node:process後7項unit及lint PASS，沒有鬆綁規則。所有原SQL bytes不改寫，所有自建OCI資源由既有nonce清理；沒有本機DB、正式資料或IAM／Secret／credential／billing／network／traffic變更。
-
-下一步沿已查證的既有owner實作接線，避免另加Node connector SDK：Platform source `bea8db0`／OrgMaster `46f6a3c` 的production runtime renderer使用獨立Cloud SQL Proxy container（private-ip／auto-iam-authn／lazy-refresh、TCP與startup probe、production VPC）；migration Job則用原生cloud_sql_instance volume／VPC與metadata短期token，不讀持久SQL密碼。這是source audit，不是本輪新做的provider qualification。ProJED `0029`／`0031`／`0032`有依賴exact `current_user`的ledger／cleanup guard；不能直接把runtime斷言改成IAM username而讓guard略過。IAM適配須同時驗證真正SESSION_USER與app-role context，保留現有guard；runtime／migrator／importer IAM login及membership分開，依既有角色語意實作，不改寫凍結SQL。
-
 
 ## 48. Managed IAM login and app role context（W34，2026-10-29）
 

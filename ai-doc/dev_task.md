@@ -63,6 +63,11 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
 ## DEV-139：ProJED 納入 Jenfu-Platform，Cloud Run／Cloud SQL 對齊並保留 Vite
 
+  - **2026-11-21 現行決策／本輪僅文件與遷移計畫**：Hosting／runtime／Jobs 集中 `jenfu-platform-prod`，同專案私人 SQL，改採待指定的自有固定網域，保留 ProJED 專用服務、SA、schema 與權限；不再要求跨專案 Shared VPC 關聯。新網址重新登入、更新書籤與重裝 PWA 已納入範圍；舊入口先完成離線草稿／原 owner／captureId／unknown receipt 恢復及深鏈、邀請、行事曆訂閱轉移，再有界退出。未資格化推論保持停用。**先不部署、不切流，不做正式 migration／資料重寫、DNS、IAM、Secret 或 billing 變更**；舊操作引導停止，已做資源不自動撤回或刪除。[目標與綁定差額](specs/SPEC-139-projed-jenfu-platform-onboarding.md#32-受影響綁定證據與實作差額)｜[遷移與舊入口退出](specs/SPEC-139-projed-jenfu-platform-onboarding.md#6-資料移轉pwa-與恢復)｜[ADR-054 Rev15](decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)
+
+  以下為原目標 source／測試與候選準備歷史，不能作新 project／origin 已實作或驗收的證據；原資料與必要安全回歸的分母保留，未變部分沿原來源重用。
+
+  - 候選準備已補明確 candidate renderer：不要求來源 Secret、不產生 snapshot import／Scheduler，只準備 IAM 保護的 service 與手動 Jobs；40 項 release 自查及完整 binding 的 owner input 驗證通過。原分支與已驗證映像保留，正式執行與零留存資格仍依各環境查證，營運證據保留於任務本機輸出。[候選部署設計與界線](specs/SPEC-139-projed-jenfu-platform-onboarding.md#471-2026-11-20-最小-foundation-變更提案)
   - `8421432` 的完整原生／正常畫面與 Linux OCI CI 均通過，涵蓋移板後原 Session 重載、任務與私人會議保留、協作者拒絕、離線重連與行事曆匿名 ICS／token 撤銷及直接 SQL 對帳。0051 收斂移板 policy 的一般讀取成本，worker 亦修正跨時鐘 lease 誤拒。Platform `a8db9c10` 的 owner 原生及 required QC 已驗同源 51 份 migration 與恢復。[完整 CI 與 A07–A09 證據](specs/SPEC-139-projed-jenfu-platform-onboarding.md#8-驗收與證據契約)
   - 人工會議已由正常選單建立及儲存，重載後保留原草稿 ID 與正文，另一帳號讀取回 404，麥克風及模型呼叫均為零。已修正晚到查詢清空紀錄、儲存結果跨帳號覆蓋及登出草稿處理。`01ebf94` 的原生 PostgreSQL／瀏覽器與 Linux OCI CI 通過；登出取消／先儲存／捨棄另以本機合成 HTTP 驗證。[A08 實際證據與限制](specs/SPEC-139-projed-jenfu-platform-onboarding.md#8-驗收與證據契約)
   - 原工作台與 Quick 已在隔離 PostgreSQL 驗過停寫、未知結果重送及唯一回執。三系統演練已驗證撤邀後核准回 409，以及換帳號後拒絕舊 Session 綁定。看板設定已驗證權限修改與清空後可重載，唯讀協作者可開啟詳情，兩項越權修改均回 403。演練使用合成身分。[舊端停寫](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44748124380/job/136329293641)｜[外部協作](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/44753454323)｜[看板權限](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/44752941134)
@@ -116,6 +121,8 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 - 真ASR本次交付：2026-10-29人類確認「本次同時完成真 ASR」；DEV-139承接既有DEV-123錄音管線的真轉錄、worker／cleanup與正常UI接線及實測，不再列後續或待答；同日確認供應商零留存、採符合條件的Google Cloud路徑。fake worker／文字合成結果不代表ASR完成。
 
 ### 1. 人類決策與授權範圍
+
+**2026-11-21 最新範圍取代先前部署續行要求**：人類選定 ProJED 集中 `jenfu-platform-prod`、自有固定網域，要求先更新文件及遷移計畫，納入舊入口過渡、重新登入／PWA 重裝、離線草稿與連結移轉。域名待指定；本輪不部署、不切流、不做正式 migration／資料重寫、DNS、IAM、Secret 或 billing 變更。Shared VPC 未做的指令不再要求執行，已做者只記錄，不自動撤回；原 UUID／資料／權限、單一 writer、取消／exactly-once、recovery 與零留存維持。以下日期與授權表列為各時期紀錄，不覆蓋本段停止事項。
 
 2026-10-28 最新人類指示：選取前述全部外部／正式剩餘項目並要求「請繼續執行直到完成」，簡單與查核交由 `gpt-6-luna` xhigh 併行。此要求擴展 W18 的本地切片目標，ProJED／OrgMaster／Jenfu-Platform 真接線、正式移轉與發布均須完成後才結案。下列 2026-10-26 的本地範圍與未授權描述是歷史界線；新建 IAM／Secret／credential、shared foundation grant 與費用擴張仍依人類全域規範確認。具體新責任與安全的獨立工作見 SPEC §33，不重問 D1／D2。
 
@@ -469,7 +476,7 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 
 - ✓ DEV-140 [交付點] [已實作／本機瀏覽器驗收通過] [ProJED] [以 OKR 模式整合清單模式](#dev-140-okr-list-consolidation)
 
-- → DEV-139 [交付點] [整合／正式發布續行中／未Release] [P1] [W31] ProJED 首階段基礎對齊，保留 Vite
+- → DEV-139 [交付點] [集中專案／自有網域計畫更新；先不部署不切流] [P1] ProJED 首階段基礎對齊，保留 Vite
   - 2026-11-20 正式來源的兩個移轉用身分檢視已建立。外部協作雙重核准及登入權限快照已接線；本機跨系統案例已驗證日常操作不查上游及撤權後舊 Session 失效。完整 CI 與正式切換的進度見本頁 DEV-139 最新結果。[DEV-139 現行規格](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-external-access)
   - W31：review／human decisions／projection接Cloud SQL，以來源版本、resolution/review與精確時間CAS保護人工內容，same-key replay及RAG mirror採單交易；source5da37e7／CI40822736839通過333項unit、33-migration／S3 71checks與snapshot60／45，收據見SPEC-139 §45。真ASR／worker／清理／正式整合仍續行。
   - W30：complete-upload 核對真 verified segment、來源凍結與單次 run／pending 預留採原子交易；重播不重留款，不足回 awaiting_budget，未啟用 worker／HTTP 錄音或 provider。source fed1f9e／CI 40818685810 已通過325項 unit、32-migration／S3 70 checks、snapshot60／45；收據見 SPEC-139 §44，完整管線／正式整合仍續行。
