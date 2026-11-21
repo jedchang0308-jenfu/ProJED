@@ -48,7 +48,7 @@ OrgMaster當前來源`99ea1a7ec3872deb7f4df1a13e2a4203ca02e2f8`修正release／a
 
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。
 - 日期：2026-11-21（Asia/Taipei）；可執行來源 `8421432`，驗證版本與產物依 §8、§47.1 的實際收據識別。
-- 文件狀態：**合併前整合核對中**。ProJED、Platform、OrgMaster 的既有 PR 均已 ready-for-review；目前 source／隔離驗證見 §8，Google Cloud 候選最終讀回受重新驗證阻擋，見 §47.1。正式 identity pins 與 provider 資格、真資料、原入口、writer fence、切流及發布仍依對應環境查證。身分 owner source 見 [§36](#36-orgmaster-minimum-principal-publication-w222026-10-29)與 [§37](#37-platform-projed-session-and-handoff-w232026-10-29)，資料保留見 §34–§35，資源與操作授權見 §33 及 §47.1。
+- 文件狀態為**合併前核對完成**。ProJED、Platform、OrgMaster 的既有 PR 均為 ready-for-review、open 且 mergeable；程式來源 `8421432` 的成功 CI 及 Google Cloud 候選映像已核對，證據見 §8、§47.1。後續提交僅更新文件，沿用該程式來源的驗證。正式 identity pins 與 provider 資格、真資料、原入口、writer fence、切流及發布仍依對應環境查證。身分 owner source 見 [§36](#36-orgmaster-minimum-principal-publication-w222026-10-29)與 [§37](#37-platform-projed-session-and-handoff-w232026-10-29)，資料保留見 §34–§35，資源與操作授權見 §33 及 §47.1。
 - 適用階段：S1–S3 本地切片歷史見 §12–§32；2026-10-28 續行授權見 [DEV-139 人類決策與授權範圍](../dev_task.md#1-人類決策與授權範圍)，涵蓋 ProJED／OrgMaster／Jenfu-Platform 的 source 整合工作。正式整合與發布仍是完整目標，不以本地切片完成替代；新責任權限依 §33 處理。定期審視不是續行或發布的 required gate；本輪未執行正式資料寫入、切流或 IAM／Secret／credential／billing 變更。
 - 直接交接入口：[§11 S1 定案契約](#11-架構決策與-s1-定案契約)、[§12 S1 實作狀態](#12-s1-實作狀態2026-10-26)、[§13 S2 consumer seam](#13-s2-projed-identity-consumer-seam2026-10-26)、[§14 S3 read adapter](#14-s3-http-read-adapter-slice2026-10-26)、[§15 S3 domain command](#15-s3-domain-command-w12026-10-26)、[§16 S3 collaboration command](#16-s3-collaboration-command-w22026-10-27)、[§17 S3 record／activity](#17-s3-recordactivity-w32026-10-27)、[§18 S3 HTTP product wiring](#18-s3-http-product-wiring-w42026-10-27)、[§19 S3 Board transfer](#19-s3-board-transfer-w52026-10-27)、[§20 S3 legacy provider boundary](#20-s3-legacy-provider-boundary-w62026-10-27)、[§21 S3 Quick Task](#21-s3-quick-task-w72026-10-27)、[§22 S3 Task Workbench](#22-s3-task-workbench-w82026-10-27)、[§23 S3 Actor CAS](#23-s3-actor-context-cas-w92026-10-27)、[§24 S3 Task Tracking](#24-s3-task-tracking-w102026-10-27)、[§25 S3 Backup／Import](#25-s3-backupimport-w112026-10-27)、[§26 S3 Account Preferences](#26-s3-account-preferences-w122026-10-27)、[§27 S3 Calendar Subscription](#27-s3-calendar-subscription-w132026-10-27)及[§32 本地開發收斂](#32-s3-local-development-closure-w182026-10-27)；[§11.8 技術主管審查](#118-技術主管審查與最小優化)保留 Rev5 修正理由；既有使用者切換見 [§6.3](#63-既有使用者的切換基線)。
 - 決策來源：[DEV-139 人類決策](../dev_task.md#dev-139-jenfu-platform-onboarding)；架構取捨：[ADR-054](../decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。本文件不是其他 owner 已接受或已發布的契約。
@@ -516,7 +516,7 @@ S2／S3 正式啟用仍需發布 owner wire／consumer ACL／production pins，�
 
 交付順序如下。
 
-1. **Source 與隔離驗證**已完成上述範圍，沿 §8 的受測版本核對原功能與權限，最後候選讀回見 §47.1。
+1. **Source、隔離驗證與候選映像核對**已完成上述範圍，沿 §8、§47.1 的受測版本與產物核對原功能、權限及 51 份 migration。
 2. **正式資料／入口驗證**沿現有 snapshot／rollback／reconciliation、Quick 原地升級及 Calendar 舊 URL 代理，補真來源 snapshot、verified mapping、目前非空 domain／Storage、全來源 writer fence、Hosting／Cookie／Session 與恢復證據，依 A06／A09／A11、T07／T08 查證。
 3. **正式切換／退役**：另有明確正式主要動作與資源範圍，確認可接受停寫／恢復窗口，沿 app-owned release gate 完成真身份→API→DB／storage readback、恢復與觀察；保持單一 writer 與既有 public origin 相容，舊站／DB／Hosting／Billing 處置另有退役 gate。
 4. **跨 app 業務使用情境**：基礎對齊有相容證據且人類要求任務／資料串接後，依 §5.3 固定 consumer、最小欄位、授權及正常 UI 驗收；本輪不建立新 DEV 或任務摘要／專案連結實作。
@@ -1475,11 +1475,19 @@ API 啟用前的 cache、generation 及 embedding logging 三個唯讀 GET 均�
 
 <a id="dev139-cloud-51"></a>
 
-#### 51 份 migration 候選建置與待完成讀回
+#### 已核對的 51 份 migration 候選映像
 
-來源 `8421432bdbfc5482476f30fc6b48666ddd1bb1bf` 已通過完整 CI 及 Platform owner 驗證。封存逐一核對 1,034 個 Git blob，共 9,804,501 bytes，SHA-256 為 `ba4a070873efa0e3e1489f81f996b1e0d2f3b1669d3432a0a37e3631f1ec34ee`。三個新標籤預檢均回 Image not found 後，已提交 Cloud Build `d73d71b0-b2fa-4a47-9c26-5b2e8aaad77a`，預定產物為服務、移轉工作與 ASR 工作的 `candidate-8421432bdbfc-20261121`。
+來源 `8421432bdbfc5482476f30fc6b48666ddd1bb1bf` 已通過完整 CI 及 Platform owner 驗證。封存逐一核對 1,034 個 Git blob，共 9,804,501 bytes，SHA-256 為 `ba4a070873efa0e3e1489f81f996b1e0d2f3b1669d3432a0a37e3631f1ec34ee`。三個新標籤預檢均回 Image not found 後，提交的同一 Cloud Build `d73d71b0-b2fa-4a47-9c26-5b2e8aaad77a` 已於 2026-11-21 00:56:42（Asia/Taipei）成功完成，六個步驟皆為 SUCCESS。
 
-最後一次成功查詢為 WORKING；後續 Google CLI 回覆 Reauthentication failed。已核對 active account 仍為原操作者，並請使用者完成該帳號重新驗證。建置最終狀態、provider source provenance、51 份 image binding 及三個 registry digest 均仍待讀回，不能引用下列舊候選代替。登入恢復後接續觀察同一 build，不重送建置。[同一 Cloud Build](https://console.cloud.google.com/cloud-build/builds;region=asia-east1/d73d71b0-b2fa-4a47-9c26-5b2e8aaad77a?project=967362299895)
+使用者恢復原帳號登入後，已讀回同一建置及映像。Google source provenance 的 SHA-256 與封存相同，source object generation 為 `1795193534803042`。Jobs 映像輸出的 51 份 migration SHA-256 逐一與該 Git 來源核對一致；managed profile SHA-256 為 `99a5551712d13fb0b6ae1725a7a491e7dd6020b972f672bb1b691f87c1a525ac`，亦與 Platform owner 收據相符。三個獨立 registry digest 與 Cloud Build results 一致，標籤均為 `candidate-8421432bdbfc-20261121`。[同一 Cloud Build](https://console.cloud.google.com/cloud-build/builds;region=asia-east1/d73d71b0-b2fa-4a47-9c26-5b2e8aaad77a?project=967362299895)
+
+| 映像 | 已讀回的 registry digest |
+|---|---|
+| `projed-prod` | `sha256:c44f7f8cfb448cdd4203fb5b899f6aeae2e09db4c0ca0a4db5af96eab08e9c99` |
+| `projed-prod-jobs` | `sha256:120199b938a77ce37f649afcbb4d6792e1b5fbf1a5a3c5754ce84a3ab61eb1f8` |
+| `projed-prod-asr-job` | `sha256:3ed5362e53cdeca44b4cd48213898d5cc007706a4f751bd8a38ee9233fddeff4` |
+
+實際映像在禁網環境驗證 UID 1000 與四個 provider／job binding 均為 null，ASR 映像的 ffmpeg 可啟動。此次證據範圍為建置及已登錄產物；正式 runtime、資料與推論的啟用仍依對應驗證及零留存資格。完整讀回存於 `output/dev139-8421432bdbfc-20261121/artifact-readback.json`。原登入失效期間保留的 WORKING／Reauthentication failed 觀察已由這次成功讀回收斂。
 
 同日唯讀刷新確認，ProJED Shared VPC host 關聯回空物件，Platform xpnProjectStatus 為 UNSPECIFIED_XPN_PROJECT_STATUS，音訊桶 getIamPolicy 仍被拒絕。這些是正式路徑的現況依賴，正式部署、資料移轉與推論仍依既有授權及零留存資格處理。
 
