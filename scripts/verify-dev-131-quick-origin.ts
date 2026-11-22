@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
-import { getMainInstallUrl, getQuickInstallUrl, getWorkbenchUrl, isMainProductionOrigin, isQuickProductionOrigin } from '../src/features/quickTaskCapture/origins';
+import { getMainInstallUrl, getQuickCaptureUrl, getQuickInstallUrl, getWorkbenchUrl, isMainProductionOrigin, isQuickProductionOrigin } from '../src/features/quickTaskCapture/origins';
 
 const main = 'https://projed-cc78d.web.app';
 const quick = 'https://projed-cc78d.firebaseapp.com';
 const preview = 'https://projed-cc78d--level3-smoke-test.web.app';
+assert.equal(getQuickCaptureUrl(main), `${quick}/quick-task/`);
+assert.equal(getQuickCaptureUrl('https://projed-prod-9536592944.asia-east1.run.app'), '/quick-task/');
 
 assert.equal(getQuickInstallUrl(main), `${quick}/quick-task/?install=1`);
 assert.equal(getQuickInstallUrl(quick), '/quick-task/?install=1');

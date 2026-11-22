@@ -1,3 +1,4 @@
+import { MANAGED_PROJECT_ID as PROJECT } from '../shared/dev139DeploymentTarget.mjs';
 import { KernelError } from './errors.js';
 import { hasQualifiedRagBinding, type RagRuntimeBinding } from './ragRuntimeBinding.js';
 
@@ -25,7 +26,6 @@ type RagProviderErrorCode =
 
 const EMBEDDING_MODEL = 'gemini-embedding-001';
 const EMBEDDING_DIMENSIONS = 3072;
-const PROJECT = 'projed-cc78d';
 const API_BASE = `https://aiplatform.googleapis.com/v1/projects/${PROJECT}/locations/global/publishers/google/models`;
 const EMBED_URL = `https://us-central1-aiplatform.googleapis.com/v1/projects/${PROJECT}/locations/us-central1/publishers/google/models/${EMBEDDING_MODEL}:predict`;
 const EMBED_TIMEOUT_MS = 8_000;

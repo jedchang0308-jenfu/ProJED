@@ -33,7 +33,7 @@ function makeInput(overrides = {}) {
     runtimeImage: `${CLOUD_RUN_TARGET.repository}/projed-prod@sha256:${IMAGE_DIGEST}`,
     jobsImage: `${CLOUD_RUN_TARGET.repository}/projed-prod-jobs@sha256:${IMAGE_DIGEST}`,
     analysisImage: `${CLOUD_RUN_TARGET.repository}/projed-prod-asr-job@sha256:${IMAGE_DIGEST}`,
-    audioBucket: 'projed-cc78d-meeting-audio',
+    audioBucket: 'jenfu-platform-prod-projed-meeting-audio',
     binding: makeBinding(),
     sourceBundleVersion: '1',
     ...overrides,
@@ -55,7 +55,7 @@ test('candidate preparation needs no source credential and cannot schedule or im
   assert.equal(plan.scheduler, null);
   assert.equal(plan.requests.length, 3);
   assert.ok(plan.requests.every(({ method, url }) => method === 'POST'
-    && url.startsWith('https://run.googleapis.com/v2/projects/projed-cc78d/locations/asia-east1/')
+    && url.startsWith('https://run.googleapis.com/v2/projects/jenfu-platform-prod/locations/asia-east1/')
     && !url.endsWith(':run')));
   assert.equal(JSON.stringify(plan.requests).includes('secret'), false);
   assert.equal(plan.foundation.iamBindings.some(({ role }) => role === 'roles/secretmanager.secretAccessor'), false);
@@ -64,7 +64,7 @@ test('candidate preparation needs no source credential and cannot schedule or im
   assert.equal(plan.foundation.serviceAccounts.some(({ email }) => email.includes('importer')), false);
   assert.equal(plan.service.invokerIamDisabled, false);
   assert.equal(plan.service.name.endsWith('/services/projed-prod'), true);
-  assert.equal(envMap(plan.service.template.containers[0]).PROJED_PUBLIC_APP_URL, 'https://projed-cc78d.web.app');
+  assert.equal(envMap(plan.service.template.containers[0]).PROJED_PUBLIC_APP_URL, 'https://projed-prod-9536592944.asia-east1.run.app');
   assert.equal(plan.service.template.vpcAccess.egress, 'PRIVATE_RANGES_ONLY');
   assert.equal(plan.foundation.providerConfiguration.qualificationApplied, false);
   assert.equal(plan.foundation.providerConfiguration.vertex.applicableAgreementEvidenceRequired, true);
@@ -116,17 +116,21 @@ test('renderer fixes the typed target and emits IAM-only, private-network create
       subnet: CLOUD_RUN_TARGET.subnet,
     },
     {
-      project: 'projed-cc78d',
+      project: 'jenfu-platform-prod',
       region: 'asia-east1',
       service: 'projed-prod',
-      repository: 'asia-east1-docker.pkg.dev/projed-cc78d/cloud-run-source-deploy',
+      repository: 'asia-east1-docker.pkg.dev/jenfu-platform-prod/projed-release',
       hostProject: 'jenfu-platform-prod',
       network: 'projects/jenfu-platform-prod/global/networks/jenfu-platform-prod-vpc',
       subnet: 'projects/jenfu-platform-prod/regions/asia-east1/subnetworks/jenfu-platform-prod-runtime',
     },
   );
 
-  assert.equal(plan.service.name, 'projects/projed-cc78d/locations/asia-east1/services/projed-prod');
+  assert.equal(plan.service.name, 'projects/jenfu-platform-prod/locations/asia-east1/services/projed-prod');
+  assert.equal(plan.foundation.operatorRequirements.artifactReaderOn,
+    'projects/jenfu-platform-prod/locations/asia-east1/repositories/projed-release');
+  assert.equal(plan.foundation.operatorRequirements.networkProject, CLOUD_RUN_TARGET.project);
+  assert.equal('sharedVpcAdministration' in plan.foundation.operatorRequirements, false);
   assert.equal(plan.service.ingress, 'INGRESS_TRAFFIC_ALL');
   assert.equal(plan.service.invokerIamDisabled, false);
   assert.deepEqual(plan.service.traffic, [{ type: 'TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST', percent: 100 }]);
@@ -149,7 +153,7 @@ test('renderer fixes the typed target and emits IAM-only, private-network create
   assert.deepEqual(runtime.ports, [{ name: 'http1', containerPort: 8080 }]);
   const runtimeEnvironment = envMap(runtime);
   assert.equal(runtimeEnvironment.PROJED_RUNTIME_BINDING_JSON, JSON.stringify(input.binding));
-  assert.equal(runtimeEnvironment.PROJED_DATABASE_URL, 'postgresql://projed-prod-runtime%40projed-cc78d.iam@127.0.0.1:5432/jenfu_prod');
+  assert.equal(runtimeEnvironment.PROJED_DATABASE_URL, 'postgresql://projed-prod-runtime%40jenfu-platform-prod.iam@127.0.0.1:5432/jenfu_prod');
   assert.equal(runtimeEnvironment.PROJED_SOURCE_PROFILE, 'config/dev-139/s3-managed.profile.json');
   assert.equal(runtimeEnvironment.PROJED_MEETING_AUDIO_BUCKET, input.audioBucket);
   assert.equal(Object.keys(runtimeEnvironment).some((key) => /SOURCE.*(DATABASE|BUNDLE)|DATABASE.*SOURCE|SECRET|TOKEN|PASSWORD|CREDENTIAL|PROVIDER/u.test(key)), false);
@@ -159,18 +163,16 @@ test('renderer fixes the typed target and emits IAM-only, private-network create
   assert.ok(proxy.args.includes(MANAGED_DATABASE.cloudSqlInstance));
 
   assert.equal(plan.foundation.organization, '361825816000');
-  assert.deepEqual(plan.foundation.sharedVpc, {
-    hostProject: 'jenfu-platform-prod',
-    serviceProject: 'projed-cc78d',
+  assert.deepEqual(plan.foundation.privateNetwork, {
+    project: 'jenfu-platform-prod',
     network: CLOUD_RUN_TARGET.network,
     subnet: CLOUD_RUN_TARGET.subnet,
-    requireEnabledHost: true,
-    requireAssociatedServiceProject: true,
+    crossProjectAssociationRequired: false,
   });
   assert.deepEqual(plan.foundation.serviceAccounts.map(({ email, databaseLogin }) => ({ email, databaseLogin })), [
-    { email: 'projed-prod-runtime@projed-cc78d.iam.gserviceaccount.com', databaseLogin: MANAGED_DATABASE.iamLogins.runtime },
-    { email: 'projed-prod-migrator@projed-cc78d.iam.gserviceaccount.com', databaseLogin: MANAGED_DATABASE.iamLogins.migrator },
-    { email: 'projed-prod-importer@projed-cc78d.iam.gserviceaccount.com', databaseLogin: MANAGED_DATABASE.iamLogins.importer },
+    { email: 'projed-prod-runtime@jenfu-platform-prod.iam.gserviceaccount.com', databaseLogin: MANAGED_DATABASE.iamLogins.runtime },
+    { email: 'projed-prod-migrator@jenfu-platform-prod.iam.gserviceaccount.com', databaseLogin: MANAGED_DATABASE.iamLogins.migrator },
+    { email: 'projed-prod-importer@jenfu-platform-prod.iam.gserviceaccount.com', databaseLogin: MANAGED_DATABASE.iamLogins.importer },
   ]);
 
   assert.deepEqual(Object.keys(plan.jobs), ['migrate', 'plan', 'apply', 'reconcile', 'analysis']);
@@ -189,17 +191,17 @@ test('renderer fixes the typed target and emits IAM-only, private-network create
   }
 
   const migration = plan.jobs.migrate.template.template;
-  assert.equal(migration.serviceAccount, 'projed-prod-migrator@projed-cc78d.iam.gserviceaccount.com');
+  assert.equal(migration.serviceAccount, 'projed-prod-migrator@jenfu-platform-prod.iam.gserviceaccount.com');
   assert.equal(migration.volumes.some(({ secret }) => Boolean(secret)), false);
   assert.equal(migration.containers[0].env.some(({ name }) => name.includes('SOURCE_BUNDLE')), false);
   assert.equal(migration.containers[0].env.find(({ name }) => name === 'PROJED_MIGRATOR_DATABASE_URL').value,
-    'postgresql://projed-prod-migrator%40projed-cc78d.iam@localhost/jenfu_prod?host=%2Fcloudsql%2Fjenfu-platform-prod%3Aasia-east1%3Ajenfu-platform-prod-pg');
+    'postgresql://projed-prod-migrator%40jenfu-platform-prod.iam@localhost/jenfu_prod?host=%2Fcloudsql%2Fjenfu-platform-prod%3Aasia-east1%3Ajenfu-platform-prod-pg');
 
   for (const mode of ['plan', 'apply', 'reconcile']) {
     const importer = plan.jobs[mode].template.template;
-    assert.equal(importer.serviceAccount, 'projed-prod-importer@projed-cc78d.iam.gserviceaccount.com');
+    assert.equal(importer.serviceAccount, 'projed-prod-importer@jenfu-platform-prod.iam.gserviceaccount.com');
     assert.deepEqual(importer.volumes[1].secret, {
-      secret: `projects/projed-cc78d/secrets/${CLOUD_RUN_TARGET.sourceBundleSecret}`,
+      secret: `projects/jenfu-platform-prod/secrets/${CLOUD_RUN_TARGET.sourceBundleSecret}`,
       items: [{ version: '1', path: 'bundle.json' }],
     });
     assert.equal(importer.volumes[1].secret.items.some(({ version }) => version === 'latest'), false);
@@ -208,10 +210,10 @@ test('renderer fixes the typed target and emits IAM-only, private-network create
   const analysis = plan.jobs.analysis.template;
   const analysisTask = analysis.template;
   const [analysisContainer] = analysisTask.containers;
-  assert.equal(plan.jobs.analysis.name, 'projects/projed-cc78d/locations/asia-east1/jobs/projed-meeting-analysis');
+  assert.equal(plan.jobs.analysis.name, 'projects/jenfu-platform-prod/locations/asia-east1/jobs/projed-meeting-analysis');
   assert.equal(analysis.taskCount, 1);
   assert.equal(analysis.parallelism, 1);
-  assert.equal(analysisTask.serviceAccount, 'projed-prod-runtime@projed-cc78d.iam.gserviceaccount.com');
+  assert.equal(analysisTask.serviceAccount, 'projed-prod-runtime@jenfu-platform-prod.iam.gserviceaccount.com');
   assert.equal(analysisTask.maxRetries, 0);
   assert.equal(analysisTask.timeout, '600s');
   assert.deepEqual(analysisTask.vpcAccess, plan.service.template.vpcAccess);
@@ -227,19 +229,19 @@ test('renderer fixes the typed target and emits IAM-only, private-network create
   assert.equal(analysisEnvironment.PROJED_SOURCE_PROFILE, 'config/dev-139/s3-managed.profile.json');
   assert.equal(analysisEnvironment.PROJED_RUNTIME_BINDING_JSON, JSON.stringify(input.binding));
   assert.equal(analysisEnvironment.PROJED_DATABASE_URL,
-    'postgresql://projed-prod-runtime%40projed-cc78d.iam@localhost/jenfu_prod?host=%2Fcloudsql%2Fjenfu-platform-prod%3Aasia-east1%3Ajenfu-platform-prod-pg');
+    'postgresql://projed-prod-runtime%40jenfu-platform-prod.iam@localhost/jenfu_prod?host=%2Fcloudsql%2Fjenfu-platform-prod%3Aasia-east1%3Ajenfu-platform-prod-pg');
   assert.equal(analysisEnvironment.PROJED_MEETING_AUDIO_BUCKET, input.audioBucket);
 
   assert.equal(plan.scheduler.name,
-    'projects/projed-cc78d/locations/asia-east1/jobs/projed-meeting-analysis-recovery');
+    'projects/jenfu-platform-prod/locations/asia-east1/jobs/projed-meeting-analysis-recovery');
   assert.equal(plan.scheduler.schedule, '*/15 * * * *');
   assert.equal(plan.scheduler.timeZone, 'Asia/Taipei');
   assert.deepEqual(plan.scheduler.retryConfig, { retryCount: 0 });
   assert.deepEqual(plan.scheduler.httpTarget, {
-    uri: 'https://run.googleapis.com/v2/projects/projed-cc78d/locations/asia-east1/jobs/projed-meeting-analysis:run',
+    uri: 'https://run.googleapis.com/v2/projects/jenfu-platform-prod/locations/asia-east1/jobs/projed-meeting-analysis:run',
     httpMethod: 'POST', headers: { 'Content-Type': 'application/json' }, body: 'e30=',
     oauthToken: {
-      serviceAccountEmail: 'projed-prod-meeting-scheduler@projed-cc78d.iam.gserviceaccount.com',
+      serviceAccountEmail: 'projed-prod-meeting-scheduler@jenfu-platform-prod.iam.gserviceaccount.com',
       scope: 'https://www.googleapis.com/auth/cloud-platform',
     },
   });
@@ -251,7 +253,7 @@ test('renderer fixes the typed target and emits IAM-only, private-network create
     'speech.googleapis.com', 'aiplatform.googleapis.com', 'storage.googleapis.com',
   ]);
   assert.deepEqual(plan.foundation.schedulerServiceAccount, {
-    email: 'projed-prod-meeting-scheduler@projed-cc78d.iam.gserviceaccount.com',
+    email: 'projed-prod-meeting-scheduler@jenfu-platform-prod.iam.gserviceaccount.com',
     databaseLogin: null, databaseIamRoles: [], databaseGrants: [],
   });
   assert.equal(plan.foundation.sqlIamUsers.some(({ serviceAccount }) =>
@@ -259,9 +261,9 @@ test('renderer fixes the typed target and emits IAM-only, private-network create
   assert.equal(plan.foundation.customRoles.some(({ name }) => /scheduler/i.test(name)), false);
   assert.deepEqual(plan.foundation.iamBindings.filter(({ role }) => role === 'roles/run.invoker'), [
     { resource: plan.jobs.analysis.name,
-      member: 'serviceAccount:projed-prod-runtime@projed-cc78d.iam.gserviceaccount.com', role: 'roles/run.invoker' },
+      member: 'serviceAccount:projed-prod-runtime@jenfu-platform-prod.iam.gserviceaccount.com', role: 'roles/run.invoker' },
     { resource: plan.jobs.analysis.name,
-      member: 'serviceAccount:projed-prod-meeting-scheduler@projed-cc78d.iam.gserviceaccount.com', role: 'roles/run.invoker' },
+      member: 'serviceAccount:projed-prod-meeting-scheduler@jenfu-platform-prod.iam.gserviceaccount.com', role: 'roles/run.invoker' },
   ]);
   assert.equal(plan.foundation.iamBindings.some(({ resource, role }) =>
     role === 'roles/run.invoker' && resource !== plan.jobs.analysis.name), false);
@@ -274,7 +276,7 @@ test('renderer fixes the typed target and emits IAM-only, private-network create
   assert.ok(plan.requests.slice(0, 6).every(({ method, url }) =>
     method === 'POST' && url.startsWith('https://run.googleapis.com/v2/')));
   assert.deepEqual(plan.requests[6], {
-    method: 'POST', url: 'https://cloudscheduler.googleapis.com/v1/projects/projed-cc78d/locations/asia-east1/jobs',
+    method: 'POST', url: 'https://cloudscheduler.googleapis.com/v1/projects/jenfu-platform-prod/locations/asia-east1/jobs',
     body: plan.scheduler,
   });
   assert.equal(plan.requests[0].body, plan.service);
@@ -285,24 +287,24 @@ test('renderer fixes the typed target and emits IAM-only, private-network create
 test('meeting IAM grants inference only to runtime and audio access only on the private bucket', () => {
   const { foundation, requests } = renderProjedCloudRun(makeInput());
   const roles = Object.fromEntries(foundation.customRoles.map(role => [role.name, role.includedPermissions]));
-  const inferenceRole = 'projects/projed-cc78d/roles/projedMeetingInference';
-  const audioRole = 'projects/projed-cc78d/roles/projedMeetingAudio';
+  const inferenceRole = 'projects/jenfu-platform-prod/roles/projedMeetingInference';
+  const audioRole = 'projects/jenfu-platform-prod/roles/projedMeetingAudio';
   assert.deepEqual(roles[inferenceRole], ['aiplatform.endpoints.predict', 'serviceusage.services.use', 'speech.recognizers.recognize']);
   assert.deepEqual(roles[audioRole], ['storage.objects.create', 'storage.objects.get', 'storage.objects.delete']);
   assert.deepEqual(foundation.iamBindings.filter(({ role }) => role === inferenceRole || role === audioRole), [
-    { resource: 'projects/projed-cc78d', member: 'serviceAccount:projed-prod-runtime@projed-cc78d.iam.gserviceaccount.com', role: inferenceRole },
-    { resource: 'projects/_/buckets/projed-cc78d-meeting-audio', member: 'serviceAccount:projed-prod-runtime@projed-cc78d.iam.gserviceaccount.com', role: audioRole },
+    { resource: 'projects/jenfu-platform-prod', member: 'serviceAccount:projed-prod-runtime@jenfu-platform-prod.iam.gserviceaccount.com', role: inferenceRole },
+    { resource: 'projects/_/buckets/jenfu-platform-prod-projed-meeting-audio', member: 'serviceAccount:projed-prod-runtime@jenfu-platform-prod.iam.gserviceaccount.com', role: audioRole },
   ]);
   assert.equal(foundation.iamBindings.some(({ role }) => /roles\/(?:owner|editor|storage\.admin|aiplatform\.admin)$/.test(role)), false);
   assert.ok(requests.every(({ url }) => !/setIamPolicy|iam.googleapis.com|cacheConfig|storage.googleapis.com/.test(url)));
 });
 
 test('audio deletion and provider ZDR settings remain explicit unexecuted foundation prerequisites', () => {
-  const plan = renderProjedCloudRun(makeInput({ audioBucket: 'projed-cc78d-meeting-audio' }));
+  const plan = renderProjedCloudRun(makeInput({ audioBucket: 'jenfu-platform-prod-projed-meeting-audio' }));
   const storage = plan.foundation.audioStorage;
-  assert.equal(storage.resource, 'projects/_/buckets/projed-cc78d-meeting-audio');
+  assert.equal(storage.resource, 'projects/_/buckets/jenfu-platform-prod-projed-meeting-audio');
   assert.deepEqual(storage.createRequest.body, {
-    name: 'projed-cc78d-meeting-audio', location: 'ASIA-EAST1', storageClass: 'STANDARD',
+    name: 'jenfu-platform-prod-projed-meeting-audio', location: 'ASIA-EAST1', storageClass: 'STANDARD',
     iamConfiguration: { uniformBucketLevelAccess: { enabled: true }, publicAccessPrevention: 'enforced' },
     versioning: { enabled: false }, softDeletePolicy: { retentionDurationSeconds: '0' },
   });
@@ -311,7 +313,7 @@ test('audio deletion and provider ZDR settings remain explicit unexecuted founda
   assert.equal(storage.expiryExecutor, 'projed-meeting-analysis');
   const provider = plan.foundation.providerConfiguration;
   assert.equal(provider.qualificationApplied, false);
-  assert.deepEqual(provider.vertex.cacheConfig.body, { name: 'projects/projed-cc78d/cacheConfig', disableCache: true });
+  assert.deepEqual(provider.vertex.cacheConfig.body, { name: 'projects/jenfu-platform-prod/cacheConfig', disableCache: true });
   assert.equal(provider.vertex.abuseMonitoring, 'exempt');
   assert.deepEqual(provider.vertex.models, [{ location: 'us-central1', model: 'gemini-embedding-001' },
     { location: 'global', model: 'gemini-3.1-flash-lite' }, { location: 'global', model: 'gemini-3.5-flash' }]);

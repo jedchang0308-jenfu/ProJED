@@ -15,8 +15,8 @@ const config={env:'disposable',entry:'main',profile:{runtime:{timeouts:{transact
   lockMillis:1000,idleInTransactionMillis:1000}}}} as unknown as RuntimeConfig;
 const actor:ServerActorV1={principalId:'google:subject',localUserId:'95c1d3df-226a-4e6f-9db5-f0f7f0db9749',
   entry:'main',contextId:'9fcadd06-a3cb-43c2-8d1f-7c17147d0e68',expiresAtMs:Date.now()+60_000,accountGuardRevision:'1'};
-const binding:MeetingAsrRuntimeBinding={projectId:'projed-cc78d',provider:'google-cloud-speech-v1',model:'default',
-  dataLogging:'disabled',audioBucket:'projed-cc78d-meeting-audio',qualificationEvidenceRef:'source:qualification:2026-10'};
+const binding:MeetingAsrRuntimeBinding={projectId:'jenfu-platform-prod',provider:'google-cloud-speech-v1',model:'default',
+  dataLogging:'disabled',audioBucket:'jenfu-platform-prod-projed-meeting-audio',qualificationEvidenceRef:'source:qualification:2026-10'};
 const captureId='b53c9bd0-1e4c-4b02-b153-28f3ab4c2341';
 const recordId='3b7ff75b-1c7a-4e52-9de4-34e77ee40b7b';
 const runId='91e4a817-b146-45d0-a77a-c2a9938a6b11';
@@ -148,7 +148,7 @@ test('fresh committed upload wakes the job once while replay and non-runs do not
     createQualifiedMeetingUploadRepository(binding,binding.audioBucket),{async run(signal){
       freshCalls++;dispatchedSignal=signal;
       assert.ok(fresh.statements.some(statement=>statement.text==='COMMIT'),'Job dispatch follows acknowledged COMMIT');
-      return {kind:'accepted',operationName:'projects/projed-cc78d/locations/asia-east1/operations/op-1'};
+      return {kind:'accepted',operationName:'projects/jenfu-platform-prod/locations/asia-east1/operations/op-1'};
     }});
   const completed=await freshDispatcher(requestFor(uploadBody()),'fresh-committed-upload');
   assert.equal(completed.status,200);

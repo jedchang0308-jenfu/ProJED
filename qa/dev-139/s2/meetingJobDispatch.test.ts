@@ -7,8 +7,8 @@ import { CURRENT_MEETING_JOB_BINDING, MEETING_ANALYSIS_JOB_RESOURCE,
   type MeetingJobRuntimeBinding } from '../../../server/meetingJobRuntimeBinding.js';
 
 const TOKEN = 'fixture.oauth.token';
-const OPERATION = 'projects/projed-cc78d/locations/asia-east1/operations/exec-123';
-const ENDPOINT = 'https://run.googleapis.com/v2/projects/projed-cc78d/locations/asia-east1/jobs/projed-meeting-analysis:run';
+const OPERATION = 'projects/jenfu-platform-prod/locations/asia-east1/operations/exec-123';
+const ENDPOINT = 'https://run.googleapis.com/v2/projects/jenfu-platform-prod/locations/asia-east1/jobs/projed-meeting-analysis:run';
 const BINDING: MeetingJobRuntimeBinding = {
   resource: MEETING_ANALYSIS_JOB_RESOURCE,
   qualificationEvidenceRef: 'qualification/meeting-job-invocation-v1',
@@ -81,7 +81,7 @@ test('uses one fixed POST without overrides and returns only a bounded matching 
   assert.ok(request.init.signal instanceof AbortSignal);
   const headers = new Headers(request.init.headers);
   assert.equal(headers.get('authorization'), `Bearer ${TOKEN}`);
-  assert.equal(headers.get('x-goog-user-project'), 'projed-cc78d');
+  assert.equal(headers.get('x-goog-user-project'), 'jenfu-platform-prod');
   assert.equal(headers.get('accept'), 'application/json');
   assert.equal(headers.get('content-type'), 'application/json');
   assert.deepEqual(JSON.parse(String(request.init.body)), {});
@@ -147,7 +147,7 @@ test('invalid or oversized success bodies stay unknown and never leak their cont
   }), { status: 200 });
   const responses = [
     () => jsonResponse({ name: 'projects/other/locations/asia-east1/operations/exec-123' }),
-    () => jsonResponse({ name: 'projects/projed-cc78d/locations/us-central1/operations/exec-123' }),
+    () => jsonResponse({ name: 'projects/jenfu-platform-prod/locations/us-central1/operations/exec-123' }),
     () => new Response('private body that is not JSON', { status: 200 }),
     () => oversized,
   ];

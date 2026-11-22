@@ -7,6 +7,8 @@
 
 ## Context
 
+2026-11-22 相容 amendment（DEV-139）：沿 [SPEC-139 §3.3](../specs/SPEC-139-projed-jenfu-platform-onboarding.md#33-本機優先記事2026-11-22) 補編輯草稿與快取優先啟動。Quick controller 的 `editor.ts` 只管理未確認輸入，仍重用同一 IDB captures、終止標記、revision CAS 與同 ID 原子提交；不增加 worker、client、remote inbox 或同步 queue。TaskDetails 的 scoped checkpoint 屬既有主程式欄位／備註編輯生命週期，保留自己的 canonical baseline／unknown readback，不併入 Quick RPC；以實際模態編輯器重開、衝突及換帳案例驗證必要性。六個 Quick authority、owner／claim、receipt 與安全更新責任不變。
+
 使用者要求在手機建立第二個 App 入口「ProJED快速建待辦」，點開後立即編輯任務名稱，可直接打字或使用名稱旁的語音按鈕，而且名稱可操作前不等待完整 ProJED 資料。R11 進一步確認：快速建立能力也必須隨 ProJED 主程式一起安裝，讓支援 app shortcuts 的平台可直接從主程式圖示開啟，同時保留第二個圖示供追求單鍵啟動的人選用。
 
 現行 root entry 靜態匯入完整 App，登入後會啟動 `useDataSync()`；現行未歸位建立流程又依賴已載入的 workspace、client-calculated order 與完整 task store。把 quick route 放進現有 App、或直接重用未歸位 `list + upsert`，都無法形成可證明的零業務讀取邊界。

@@ -1,5 +1,5 @@
+import { MANAGED_PROJECT_ID as BILLING_PROJECT } from '../shared/dev139DeploymentTarget.mjs';
 const RECOGNIZE_URL = 'https://speech.googleapis.com/v1/speech:recognize';
-const BILLING_PROJECT = 'projed-cc78d';
 const SAMPLE_RATE_HZ = 16_000;
 const BYTES_PER_SAMPLE = 2;
 const MAX_CHUNK_SECONDS = 50;

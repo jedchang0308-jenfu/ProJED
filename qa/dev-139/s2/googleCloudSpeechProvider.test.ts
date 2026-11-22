@@ -57,7 +57,7 @@ test('sends one fixed V1 inline PCM request and preserves transcript, word preci
   const headers = new Headers(calls[0]?.init.headers);
   assert.equal(headers.get('authorization'), `Bearer ${TOKEN}`);
   assert.equal(headers.get('content-type'), 'application/json');
-  assert.equal(headers.get('x-goog-user-project'), 'projed-cc78d');
+  assert.equal(headers.get('x-goog-user-project'), 'jenfu-platform-prod');
   const requestBody = JSON.parse(String(calls[0]?.init.body)) as {
     config: Record<string, unknown>;
     audio: { content: string };

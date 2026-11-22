@@ -1,5 +1,6 @@
 import { URL } from 'node:url';
 import { TextDecoder } from 'node:util';
+import { MANAGED_PROJECT_ID } from './dev139DeploymentTarget.mjs';
 
 export const MANAGED_DATABASE = Object.freeze({
   host: 'cloud-sql-iam',
@@ -7,9 +8,9 @@ export const MANAGED_DATABASE = Object.freeze({
   databaseName: 'jenfu_prod',
   databasePort: 5432,
   iamLogins: Object.freeze({
-    runtime: 'projed-prod-runtime@projed-cc78d.iam',
-    migrator: 'projed-prod-migrator@projed-cc78d.iam',
-    importer: 'projed-prod-importer@projed-cc78d.iam',
+    runtime: `projed-prod-runtime@${MANAGED_PROJECT_ID}.iam`,
+    migrator: `projed-prod-migrator@${MANAGED_PROJECT_ID}.iam`,
+    importer: `projed-prod-importer@${MANAGED_PROJECT_ID}.iam`,
   }),
   roles: Object.freeze({
     owner: 'projed_owner_disposable', migrator: 'projed_migrator_disposable',

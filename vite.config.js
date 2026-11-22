@@ -88,11 +88,15 @@ export default defineConfig(({ mode }) => {
             },
           },
           {
-            urlPattern: ({ url, request }) => url.origin === self.location.origin && request.mode === 'navigate' && /^\/quick-task(?:\/|$)/.test(url.pathname),
-            handler: 'NetworkFirst',
+            urlPattern: ({ url, request }) => url.origin === self.location.origin && request.mode === 'navigate'
+              && /^\/quick-task(?:\/|$)/.test(url.pathname) && !url.searchParams.has('projed_update_latest'),
+            handler: 'CacheFirst',
             options: {
-              cacheName: 'projed-quick-entry', networkTimeoutSeconds: 5,
-              plugins: [{ handlerDidError: async () => caches.match('/quick-task/index.html', { ignoreSearch: true }) }],
+              cacheName: 'projed-quick-entry',
+              // Only the public shell is cached. Existing per-tab version pins
+              // still choose the bundle; explicit update navigation bypasses it.
+              plugins: [{ cachedResponseWillBeUsed: async ({ cachedResponse }) => cachedResponse
+                || caches.match('/quick-task/index.html', { ignoreSearch: true }) }],
             },
           },
           {

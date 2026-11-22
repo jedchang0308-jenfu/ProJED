@@ -44,6 +44,8 @@ import TaskMeetingQuickNoteSection from './TaskNotes/TaskMeetingQuickNoteSection
 import { useMeetingRecordAvailability } from '../utils/meetingRecordAvailability';
 import useAuthStore from '../store/useAuthStore';
 import { areTaskNoteSnapshotsEqual, taskNoteSnapshotFromNode } from '../utils/taskNotePersistence';
+import { clearConfirmedTaskDetailsLocalDrafts, discardTaskDetailsLocalDraft,
+  loadTaskDetailsLocalDraft, saveTaskDetailsLocalDraft, type TaskDetailsLocalDraft } from '../services/taskDetailsLocalDraft';
 import {
   TASK_DETAILS_DRAFT_KEYS,
   classifyTaskDetailsReadback,
@@ -378,6 +380,72 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
       && Boolean(current && !current.isArchived && current.workspaceId === owner.workspaceId && current.boardId === owner.boardId)
       && (!trackingReferenceId || useWbsStore.getState().trackingReferences.some(reference => reference.id === trackingReferenceId && !reference.removedAt));
   }, [nodeId, trackingReferenceId]);
+  const [localDraftReady, setLocalDraftReady] = React.useState(false);
+  const [localDraftStatus, setLocalDraftStatus] = React.useState<'saving' | 'local' | 'failed' | null>(null);
+  const localWriterRef = React.useRef(`task-details-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  const localRestoredRef = React.useRef<TaskDetailsLocalDraft | null>(null);
+  const localDraftQueueRef = React.useRef<Promise<unknown>>(Promise.resolve());
+  const localDraftWriteRef = React.useRef(0);
+  const localDraftScope = React.useMemo(() => {
+    const owner = sessionOwnerRef.current;
+    return owner.accountId && owner.workspaceId && owner.boardId
+      ? { accountId: owner.accountId, workspaceId: owner.workspaceId, boardId: owner.boardId, taskId: nodeId } : null;
+  }, [nodeId]);
+  React.useEffect(() => {
+    if (!localDraftScope || !canPersistTask || localDraftReady) return;
+    let disposed = false;
+    void loadTaskDetailsLocalDraft(localDraftScope, taskDetailsFieldsFromNode(node), canonicalNoteSnapshot).then(saved => {
+      if (disposed || !ownsLiveTask()) return;
+      // Never replace typing that began while IndexedDB was opening.
+      if (saved && Object.keys(fieldEditRef.current.draft).length === 0 && !noteEditRef.current.draft) {
+        localRestoredRef.current = saved;
+        fieldEditRef.current = saved.fields;
+        setFieldEdit(saved.fields);
+        noteEditRef.current = { ...noteEditRef.current, draft: saved.notes.draft,
+          baseline: saved.notes.baseline.detailNotes, baselineSnapshot: saved.notes.baseline,
+          editorRevision: noteEditRef.current.editorRevision + 1 };
+        setNoteEdit(noteEditRef.current);
+        // The cached task might be optimistic or stale after a restart. Use
+        // the existing canonical readback before any recovered edit is sent.
+        failedUpdatesRef.current = saved.submitted;
+        unknownUpdatesRef.current = saved.submitted;
+        setSaveState('unknown');
+        setLocalDraftStatus('local');
+      }
+      setLocalDraftReady(true);
+    }, () => { if (!disposed) { setLocalDraftStatus('failed'); setLocalDraftReady(true); } });
+    return () => { disposed = true; };
+  }, [canPersistTask, canonicalNoteSnapshot, localDraftReady, localDraftScope, node, ownsLiveTask]);
+  React.useEffect(() => {
+    if (!localDraftReady || !localDraftScope || !ownsLiveTask()) return;
+    const hasDraft = Object.keys(fieldEdit.draft).length > 0 || Boolean(noteEdit.draft);
+    if (!hasDraft) {
+      if (saveState === 'saved') localDraftQueueRef.current = localDraftQueueRef.current.catch(() => undefined)
+        .then(() => clearConfirmedTaskDetailsLocalDrafts(localDraftScope, taskDetailsFieldsFromNode(node), canonicalNoteSnapshot));
+      return;
+    }
+    const request = ++localDraftWriteRef.current;
+    const submitted: Partial<TaskNode> = { ...fieldEdit.draft,
+      ...(noteEdit.draft ? { detailNotes: noteEdit.draft, description: noteEdit.draft[0]?.content ?? '' } : {}),
+      ...failedUpdatesRef.current, ...unknownUpdatesRef.current };
+    const snapshot: TaskDetailsLocalDraft = { ...localDraftScope, key: localWriterRef.current,
+      schemaVersion: 1, savedAt: Date.now(), fields: fieldEdit,
+      notes: { baseline: noteEdit.baselineSnapshot, draft: noteEdit.draft },
+      unknown: saveState === 'saving' || saveState === 'unknown', submitted };
+    setLocalDraftStatus('saving');
+    localDraftQueueRef.current = localDraftQueueRef.current.catch(() => undefined)
+      .then(() => saveTaskDetailsLocalDraft(snapshot)).then(() => {
+        if (request === localDraftWriteRef.current && ownsLiveTask()) setLocalDraftStatus('local');
+      }, () => { if (request === localDraftWriteRef.current && ownsLiveTask()) setLocalDraftStatus('failed'); });
+  }, [canonicalNoteSnapshot, fieldEdit, localDraftReady, localDraftScope, node, noteEdit, ownsLiveTask, saveState]);
+  React.useEffect(() => {
+    if (localDraftStatus !== 'saving' && localDraftStatus !== 'failed') return;
+    const guard = (event: BeforeUnloadEvent) => {
+      event.preventDefault(); event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', guard);
+    return () => window.removeEventListener('beforeunload', guard);
+  }, [localDraftStatus]);
   const pinchCloseRef = React.useRef<{
     initialDistance: number;
     triggered: boolean;
@@ -1325,7 +1393,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
     return path.reverse();
   }, [node, nodes, trackingReference, trackingReferences]);
 
-  if (!node) return null;
+  if (!node || currentAccountId !== sessionOwnerRef.current.accountId) return null;
 
   const taskMapPlacementId = trackingReference?.id || primaryPlacementId(node.id);
   const navigateToAncestor = (ancestor: TaskMapAncestor) => {
@@ -1534,6 +1602,13 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
       ? '確定捨棄本機草稿？未確認的變更可能已儲存，重新開啟時會載入最新資料。'
       : '確定捨棄這個視窗中的未儲存草稿？已成功儲存的欄位會保留。')) return;
     setIsDiscarding(true);
+    localDraftWriteRef.current += 1;
+    const restored = localRestoredRef.current;
+    localDraftQueueRef.current = localDraftQueueRef.current.catch(() => undefined)
+      .then(() => discardTaskDetailsLocalDraft(localWriterRef.current))
+      .then(() => restored ? discardTaskDetailsLocalDraft(restored.key, restored.savedAt) : undefined);
+    localRestoredRef.current = null;
+    setLocalDraftStatus(null);
     try {
       let restoredStatus = false;
       if (ownsLiveTask()) {
@@ -1729,9 +1804,13 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
                   data-task-details-save-retry="true"
                 >
                   <AlertCircle size={14} aria-hidden="true" />
-                  {saveState === 'unknown' ? '狀態未確認，請重試' : '儲存失敗，請重試'}
+                  {saveState === 'unknown' ? (localRestoredRef.current ? '本機草稿待確認，確認後同步' : '狀態未確認，請重試')
+                    : localDraftStatus === 'local' ? '已存本機，同步失敗，請重試' : '儲存失敗，請重試'}
                 </button>
-              ) : taskDetailsHasLocalChanges ? <span className="text-slate-500">尚未儲存</span> : null}
+              ) : taskDetailsHasLocalChanges ? <span className="text-slate-500" data-task-details-local-status={localDraftStatus}>
+                {localDraftStatus === 'local' ? '已存本機，待儲存至雲端'
+                  : localDraftStatus === 'failed' ? '本機保存失敗，請保留此頁' : '本機保存中…'}
+              </span> : null}
               {taskDetailsHasLocalChanges && !submissionPending ? (
                 <button type="button" onClick={() => { void discardDraft(); }} data-task-details-discard="true" className="ml-1 rounded-md px-2 py-1 text-slate-500 hover:bg-slate-100">
                   捨棄草稿

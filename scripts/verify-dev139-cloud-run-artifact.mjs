@@ -42,9 +42,9 @@ const binding = JSON.parse(run([
 const managedProfile = JSON.parse(readFileSync('config/dev-139/s3-managed.profile.json', 'utf8'));
 assert.equal(managedProfile.database.host, 'cloud-sql-iam');
 assert.deepEqual(managedProfile.database.iamLogins, {
-  runtime: 'projed-prod-runtime@projed-cc78d.iam',
-  migrator: 'projed-prod-migrator@projed-cc78d.iam',
-  importer: 'projed-prod-importer@projed-cc78d.iam',
+  runtime: 'projed-prod-runtime@jenfu-platform-prod.iam',
+  migrator: 'projed-prod-migrator@jenfu-platform-prod.iam',
+  importer: 'projed-prod-importer@jenfu-platform-prod.iam',
 });
 assert.deepEqual(binding.migrationSha256, Object.fromEntries(managedProfile.migrations.map(({ path }) => [
   path, createHash('sha256').update(readFileSync(path)).digest('hex'),

@@ -1,5 +1,7 @@
+import { MANAGED_PROJECT_ID } from '../shared/dev139DeploymentTarget.mjs';
+
 export const MEETING_ANALYSIS_JOB_RESOURCE =
-  'projects/projed-cc78d/locations/asia-east1/jobs/projed-meeting-analysis';
+  `projects/${MANAGED_PROJECT_ID}/locations/asia-east1/jobs/projed-meeting-analysis`;
 
 /** Explicit evidence reference that this fixed Job's invocation target and IAM
  * capability were qualified. It says nothing about Speech or LLM providers. */

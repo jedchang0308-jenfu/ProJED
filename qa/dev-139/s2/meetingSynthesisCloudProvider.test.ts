@@ -14,7 +14,7 @@ import { MeetingCloudProviderError, type GoogleCloudMeetingProvider,
   type MeetingCloudGeneration } from '../../../server/googleCloudMeetingProvider.js';
 
 const binding: MeetingLlmRuntimeBinding = {
-  projectId: 'projed-cc78d',
+  projectId: 'jenfu-platform-prod',
   provider: 'google-cloud-meeting',
   embeddingModel: 'gemini-embedding-001',
   generationModel: 'gemini-3.5-flash',

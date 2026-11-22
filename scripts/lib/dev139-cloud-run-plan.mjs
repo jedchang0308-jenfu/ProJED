@@ -2,13 +2,15 @@ import { MANAGED_DATABASE, assertManagedIamLogins, validateManagedDatabaseUrl,
   validateManagedRuntimeJobDatabaseUrl } from '../../shared/dev139ManagedDatabase.mjs';
 import { S3_MIGRATION_PATHS } from './dev139-migration-paths.mjs';
 import { MANAGED_MEETING_AUDIO_BUCKET } from '../../shared/dev139MeetingAudio.mjs';
+import { MANAGED_PROJECT_ID, MANAGED_PROJECT_NUMBER, MANAGED_IMAGE_REPOSITORY,
+  MANAGED_PUBLIC_ORIGIN } from '../../shared/dev139DeploymentTarget.mjs';
 
 export const CLOUD_RUN_TARGET = Object.freeze({
-  project: 'projed-cc78d', projectNumber: '967362299895', organization: '361825816000',
+  project: MANAGED_PROJECT_ID, projectNumber: MANAGED_PROJECT_NUMBER, organization: '361825816000',
   region: 'asia-east1', service: 'projed-prod', analysisJob: 'projed-meeting-analysis',
   recoveryScheduler: 'projed-meeting-analysis-recovery',
-  publicOrigin: 'https://projed-cc78d.web.app',
-  repository: 'asia-east1-docker.pkg.dev/projed-cc78d/cloud-run-source-deploy',
+  publicOrigin: MANAGED_PUBLIC_ORIGIN,
+  repository: MANAGED_IMAGE_REPOSITORY,
   hostProject: 'jenfu-platform-prod', sqlInstance: 'jenfu-platform-prod-pg',
   network: 'projects/jenfu-platform-prod/global/networks/jenfu-platform-prod-vpc',
   subnet: 'projects/jenfu-platform-prod/regions/asia-east1/subnetworks/jenfu-platform-prod-runtime',
@@ -82,8 +84,8 @@ export function renderProjedCloudRun(input) {
   const service = {
     name: `${parent}/services/${target.service}`, labels,
     ingress: 'INGRESS_TRAFFIC_ALL',
-    // A newly created service immediately routes to its latest ready revision,
-    // behind IAM. Public invocation and the existing Hosting entry activate later.
+    // A new candidate remains behind IAM. Publication of the direct run.app
+    // entry is separate and is not authorized by rendering this plan.
     invokerIamDisabled: false,
     traffic: [{ type: 'TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST', percent: 100 }],
     template: {
@@ -181,7 +183,6 @@ export function renderProjedCloudRun(input) {
     },
   };
 
-  const serviceAgent = `serviceAccount:service-${target.projectNumber}@serverless-robot-prod.iam.gserviceaccount.com`;
   const sqlCondition = { title: 'projed-exact-sql-instance', expression:
     `resource.type == 'sqladmin.googleapis.com/Instance' && resource.name == 'projects/${target.hostProject}/instances/${target.sqlInstance}'` };
   const foundation = {
@@ -189,8 +190,8 @@ export function renderProjedCloudRun(input) {
     enableApis: [{ project: target.project, services: ['run.googleapis.com', 'compute.googleapis.com',
       'sqladmin.googleapis.com', 'cloudbuild.googleapis.com', 'artifactregistry.googleapis.com', 'secretmanager.googleapis.com',
       'cloudscheduler.googleapis.com', 'speech.googleapis.com', 'aiplatform.googleapis.com', 'storage.googleapis.com'] }],
-    sharedVpc: { hostProject: target.hostProject, serviceProject: target.project, network: target.network, subnet: target.subnet,
-      requireEnabledHost: true, requireAssociatedServiceProject: true },
+    privateNetwork: { project: target.project, network: target.network, subnet: target.subnet,
+      crossProjectAssociationRequired: false },
     serviceAccounts: (candidateOnly ? ['runtime', 'migrator'] : ['runtime', 'migrator', 'importer'])
       .map(purpose => ({ email: account(purpose), databaseLogin: binding.iamLogins[purpose] })),
     schedulerServiceAccount: candidateOnly ? null : {
@@ -231,8 +232,6 @@ export function renderProjedCloudRun(input) {
         projectSettingReadbackRequired: true, applicableAgreementEvidenceRequired: true },
     },
     iamBindings: [
-      { resource: `projects/${target.hostProject}`, member: serviceAgent, role: 'roles/compute.networkViewer' },
-      { resource: target.subnet, member: serviceAgent, role: 'roles/compute.networkUser' },
       ...(candidateOnly ? ['runtime', 'migrator'] : ['runtime', 'migrator', 'importer']).flatMap(purpose => ['roles/cloudsql.client', 'roles/cloudsql.instanceUser']
         .map(role => ({ resource: `projects/${target.hostProject}`, member: `serviceAccount:${account(purpose)}`, role, condition: sqlCondition }))),
       ...(candidateOnly ? [] : [{ resource: `projects/${target.project}/secrets/${target.sourceBundleSecret}`,
@@ -267,14 +266,13 @@ export function renderProjedCloudRun(input) {
       // arbitrary principal or a new owner/editor role.
       serviceAccountUserOn: (candidateOnly ? ['runtime', 'migrator']
         : ['runtime', 'migrator', 'importer', 'meeting-scheduler']).map(account),
-      artifactReaderOn: `projects/${target.project}/locations/${target.region}/repositories/cloud-run-source-deploy`,
+      artifactReaderOn: `projects/${target.project}/locations/${target.region}/repositories/${target.repository.split('/').at(-1)}`,
       cloudRunProject: target.project,
       cloudRunPermissions: ['run.services.create', 'run.services.get', 'run.jobs.create',
         'run.jobs.get', 'run.jobs.run', 'run.executions.get', 'run.operations.get'],
       cloudSchedulerPermissions: candidateOnly ? [] : ['cloudscheduler.jobs.create', 'cloudscheduler.jobs.get'],
       cloudSchedulerProject: target.project,
-      sharedVpcAdministration: { organization: target.organization,
-        projects: [target.hostProject, target.project], requiresExistingAuthorizedAdministrator: true },
+      networkProject: target.project,
       apiEnableProjects: [target.project],
     },
   };

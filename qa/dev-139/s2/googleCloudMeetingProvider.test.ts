@@ -5,8 +5,8 @@ import {createGoogleCloudMeetingProvider,MeetingCloudProviderError,
   type GoogleCloudMeetingProviderOptions, type MeetingCloudProviderErrorCode} from '../../../server/googleCloudMeetingProvider.js';
 
 const TOKEN='fixture.oauth.token';
-const EMBEDDING_URL='https://us-central1-aiplatform.googleapis.com/v1/projects/projed-cc78d/locations/us-central1/publishers/google/models/gemini-embedding-001:predict';
-const GENERATION_BASE='https://aiplatform.googleapis.com/v1/projects/projed-cc78d/locations/global/publishers/google/models/gemini-3.5-flash';
+const EMBEDDING_URL='https://us-central1-aiplatform.googleapis.com/v1/projects/jenfu-platform-prod/locations/us-central1/publishers/google/models/gemini-embedding-001:predict';
+const GENERATION_BASE='https://aiplatform.googleapis.com/v1/projects/jenfu-platform-prod/locations/global/publishers/google/models/gemini-3.5-flash';
 const USAGE={promptTokenCount:20,candidatesTokenCount:5,thoughtsTokenCount:2,totalTokenCount:27,cachedContentTokenCount:0};
 
 type ResponseFactory=()=>Response|Promise<Response>;
@@ -61,7 +61,7 @@ function assertCommonRequest(request:RecordedRequest):void{
   assert.equal(headers.get('authorization'),`Bearer ${TOKEN}`);
   assert.equal(headers.get('accept'),'application/json');
   assert.equal(headers.get('content-type'),'application/json');
-  assert.equal(headers.get('x-goog-user-project'),'projed-cc78d');
+  assert.equal(headers.get('x-goog-user-project'),'jenfu-platform-prod');
 }
 
 test('uses the fixed OAuth endpoints and one POST with the expected request bodies',async()=>{

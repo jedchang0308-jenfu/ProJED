@@ -19,7 +19,7 @@
 
 ## 2026-10-08：DEV-139 ProJED 納入 Jenfu-Platform 開發文件入口
 
-**現行決策（2026-11-21）**：採集中 `jenfu-platform-prod` 與自有固定網域（名稱待指定），不再以跨專案 Shared VPC 為前置。先讀 [SPEC §3／3.2](specs/SPEC-139-projed-jenfu-platform-onboarding.md#3-目標架構與資料權責)、[§6 遷移／跨 origin 草稿／舊連結與退出](specs/SPEC-139-projed-jenfu-platform-onboarding.md#6-資料移轉pwa-與恢復)、[§8 驗收](specs/SPEC-139-projed-jenfu-platform-onboarding.md#8-驗收與證據契約)及 [ADR-054 Rev15](decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。新站重新登入、更新書籤及 PWA 重裝已納入，舊入口先恢復資料再過渡；保留原 ID／權限與零留存。**本輪只改文件與計畫，不部署、不切流，不做正式 migration／資料、DNS、IAM、Secret 或 billing 變更。** 舊 source／artifact 的適用範圍依原綁定保留，新 target 另驗；歷史 Shared VPC 引導停止，已做者不自動撤回。正式業務數量與實際 IAM／營運讀回只留任務本機證據。
+**現行決策（2026-11-22）**：採集中 `jenfu-platform-prod`、同專案私人 SQL 與 Cloud Run `run.app` 直接入口，不採 Firebase Hosting、不要求跨專案 Shared VPC。本輪授權 source／必要測試／受影響文件，優先本機記事；不恢復部署、不切流，不改 IAM、Secret、billing、容量或正式資料。先讀 [SPEC §3／3.2](specs/SPEC-139-projed-jenfu-platform-onboarding.md#3-目標架構與資料權責)、[§3.3 本機優先記事](specs/SPEC-139-projed-jenfu-platform-onboarding.md#33-本機優先記事2026-11-22)、[§6 遷移](specs/SPEC-139-projed-jenfu-platform-onboarding.md#6-資料移轉pwa-與恢復)及 [ADR-054 Rev16](decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。保留既有帳號／權限、私人隔離、草稿、CAS／receipt 與零留存；新 origin／Session、跨 origin 恢復及正式 provider 資格仍需實際證據。本機結果與正式驗收分開，不新增 required gate。
 
 以下日期／Rev／W 為原方案的來源與驗證歷史導覽，不覆蓋上述決策或構成新環境 PASS。
 

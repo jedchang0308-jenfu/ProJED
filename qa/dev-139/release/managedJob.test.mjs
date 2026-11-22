@@ -25,16 +25,16 @@ const BINDING_CLI = resolve(PROJECT_ROOT, 'scripts/create-dev139-managed-binding
 const MANAGED_JOB_CLI = resolve(PROJECT_ROOT, 'scripts/run-dev139-managed-job.mjs');
 const INSTANCE = 'jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg';
 const IAM_LOGINS = {
-  runtime: 'projed-prod-runtime@projed-cc78d.iam',
-  migrator: 'projed-prod-migrator@projed-cc78d.iam',
-  importer: 'projed-prod-importer@projed-cc78d.iam',
+  runtime: 'projed-prod-runtime@jenfu-platform-prod.iam',
+  migrator: 'projed-prod-migrator@jenfu-platform-prod.iam',
+  importer: 'projed-prod-importer@jenfu-platform-prod.iam',
 };
 
 function makeEnvironment(overrides = {}) {
   return {
-    PROJED_MIGRATOR_DATABASE_URL: 'postgresql://projed-prod-migrator%40projed-cc78d.iam@localhost/jenfu_prod?host=%2Fcloudsql%2Fjenfu-platform-prod%3Aasia-east1%3Ajenfu-platform-prod-pg',
+    PROJED_MIGRATOR_DATABASE_URL: 'postgresql://projed-prod-migrator%40jenfu-platform-prod.iam@localhost/jenfu_prod?host=%2Fcloudsql%2Fjenfu-platform-prod%3Aasia-east1%3Ajenfu-platform-prod-pg',
     PROJED_MIGRATION_SOURCE_BUNDLE_FILE: '/secrets/source/bundle.json',
-    PROJED_MIGRATION_TARGET_DATABASE_URL: 'postgresql://projed-prod-importer%40projed-cc78d.iam@localhost/jenfu_prod?host=%2Fcloudsql%2Fjenfu-platform-prod%3Aasia-east1%3Ajenfu-platform-prod-pg',
+    PROJED_MIGRATION_TARGET_DATABASE_URL: 'postgresql://projed-prod-importer%40jenfu-platform-prod.iam@localhost/jenfu_prod?host=%2Fcloudsql%2Fjenfu-platform-prod%3Aasia-east1%3Ajenfu-platform-prod-pg',
     ...overrides,
   };
 }
@@ -118,11 +118,11 @@ test('managed binding builder rejects unix mode and malformed IAM login maps', (
     ...Object.keys(IAM_LOGINS).map((purpose) => ({
       ...baseProfile,
       database: { ...baseProfile.database, iamLogins: {
-        ...IAM_LOGINS, [purpose]: IAM_LOGINS[purpose].replace('projed-cc78d', 'other-project'),
+        ...IAM_LOGINS, [purpose]: IAM_LOGINS[purpose].replace('jenfu-platform-prod', 'other-project'),
       } },
     })),
     { ...baseProfile, database: { ...baseProfile.database, iamLogins: {
-      ...IAM_LOGINS, operator: 'projed-prod-operator@projed-cc78d.iam',
+      ...IAM_LOGINS, operator: 'projed-prod-operator@jenfu-platform-prod.iam',
     } } },
   ];
 
@@ -216,7 +216,7 @@ test('managed Job rejects legacy source environment mixing and withholds source 
   for (const name of ['PROJED_MIGRATION_SOURCE_BINDING_FILE', 'PROJED_MIGRATION_SOURCE_DATABASE_URL']) {
     assert.throws(() => selectManagedJobExecution(['plan'], makeEnvironment({ [name]: 'legacy-secret' }), 'node'), /Legacy source environment is not accepted/u);
     assert.throws(() => selectManagedJobExecution(['migrate'], {
-      PROJED_MIGRATOR_DATABASE_URL: 'postgresql://projed-prod-migrator%40projed-cc78d.iam@localhost/jenfu_prod',
+      PROJED_MIGRATOR_DATABASE_URL: 'postgresql://projed-prod-migrator%40jenfu-platform-prod.iam@localhost/jenfu_prod',
       [name]: 'legacy-secret',
     }, 'node'), /Legacy source environment is not accepted/u);
   }
@@ -225,14 +225,14 @@ test('managed Job rejects legacy source environment mixing and withholds source 
     PROJED_MIGRATION_SOURCE_BUNDLE_FILE: '/secrets/source/bundle.json',
   }, 'node'), /Source bundle credentials are not accepted/u);
   assert.throws(() => selectManagedJobExecution(['migrate'], {
-    PROJED_MIGRATOR_DATABASE_URL: 'postgresql://projed-prod-migrator%40projed-cc78d.iam@localhost/jenfu_prod',
+    PROJED_MIGRATOR_DATABASE_URL: 'postgresql://projed-prod-migrator%40jenfu-platform-prod.iam@localhost/jenfu_prod',
     PROJED_MIGRATION_SOURCE_BUNDLE_FILE: '/secrets/source/bundle.json',
   }, 'node'), /Source bundle credentials are not accepted/u);
 });
 
 test('managed Job child environment materializes only the required source files and DSN', () => {
   const environment = makeEnvironment({
-    PROJED_DATABASE_URL: 'postgresql://projed-prod-runtime%40projed-cc78d.iam@127.0.0.1:5432/jenfu_prod',
+    PROJED_DATABASE_URL: 'postgresql://projed-prod-runtime%40jenfu-platform-prod.iam@127.0.0.1:5432/jenfu_prod',
   });
   const plan = selectManagedJobExecution(['plan'], environment, 'node');
   const sourceBundle = {

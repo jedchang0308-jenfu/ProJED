@@ -1,10 +1,10 @@
 # ADR-054：ProJED Cloud Run／Cloud SQL 與跨系統責任邊界
 
-- 日期：2026-11-21（Asia/Taipei）。
-- 修訂：Rev 15，集中專案、自有固定網域與跨 origin 遷移。
-- 狀態：**Accepted（架構方向）；本輪文件／計畫更新，未完成新綁定實作或部署**。
+- 日期：2026-11-22（Asia/Taipei）。
+- 修訂：Rev 16，Cloud Run 直接入口、本機優先記事與跨 origin 遷移。
+- 狀態：**Accepted；本輪 source／必要測試／文件，未部署或切流**。
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)；唯一工程交接：[SPEC-139](../specs/SPEC-139-projed-jenfu-platform-onboarding.md)，現行 target 見 §3／§3.2，遷移見 §6，驗收見 §8。
-- 本輪不部署、不切流、不執行正式 migration／資料重寫，不變更 DNS、IAM、Secret 或 billing；舊 Shared VPC 引導不再要求執行，已做的設定不自動撤回。
+- 本輪不部署、不切流、不執行正式 migration／資料重寫，不變更 DNS、IAM、Secret、billing 或容量；舊 Shared VPC 引導不再要求執行，已做的設定不自動撤回。
 
 ## Context
 
@@ -16,15 +16,15 @@ ProJED 保留 React／Vite、主程式／Quick、個人及外部協作、原 Wor
 
 | 方向 | 決策 |
 |---|---|
-| Hosting／runtime／Jobs 集中 `jenfu-platform-prod`，採自有固定網域、同專案私人 SQL | **目前選定**；網域實際名稱待人類指定，不自選或操作 DNS。 |
+| Vite 前端／runtime／Jobs 集中 `jenfu-platform-prod`，Cloud Run `run.app` 直接入口、同專案私人 SQL | **目前選定**；不採 Firebase Hosting，不要求另購網域；正式 origin／Session 仍須驗明。 |
 | runtime 留在舊專案，跨專案 Shared VPC 並永久保留舊網址前門 | 被本次決策取代；舊資源／證據保留，不再作續行前置。 |
 | 將 ProJED 併入 PDM／Platform runtime、共用業務資料或服務身分 | 不採用；集中基礎設施仍保留 app-owned 邊界。 |
 | 換網址後直接清舊安裝／本機資料或全面 redirect | 不採用；須先完成草稿、舊裝置與已發出連結的恢復／轉移。 |
 
 ## Decision
 
-1. **集中專案，app 權責獨立。** ProJED Hosting、單一 Cloud Run runtime、Jobs／Scheduler、app Secret／Storage 在 `jenfu-platform-prod` 管理；同專案 VPC／runtime subnet 連既定 `jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg`／`jenfu_prod`，不開 SQL public IP、不要求跨專案 Shared VPC。保留自有 repo、release、專用 SA、SQL IAM login、`projed_core`／`projed_contract`、ledger 與最小權限，不與 PDM 共用 runtime 身分或合併業務資料。
-2. **自有固定網域，舊入口有限過渡。** 新網址名稱及主／Quick exact origin／path 尚未指定；後續才固定 Hosting、DNS／TLS、OAuth callback、允許 origin、Cookie／CSRF 與 manifest。主／Quick 各自登入、換帳及登出語意保留，不跨 origin 複製 Session。舊 web.app、獨立 Quick 與同 origin Quick 入口保留恢復／轉移指引，不為永久保留舊網址新增永久 API proxy。
+1. **集中專案，app 權責獨立。** ProJED 靜態前端、單一 Cloud Run runtime、Jobs／Scheduler、app Secret／Storage 在 `jenfu-platform-prod` 管理；同專案 VPC／runtime subnet 連既定 `jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg`／`jenfu_prod`，不開 SQL public IP、不要求跨專案 Shared VPC。保留自有 repo、release、專用 SA、SQL IAM login、`projed_core`／`projed_contract`、ledger 與最小權限，不與 PDM 共用 runtime 身分或合併業務資料。
+2. **直接採 Cloud Run 固定入口。** 人類已選與 PDM 相同的 `run.app` 直接入口，不採 Firebase Hosting、不要求購買自有網域。Cloud Run 同時提供 Vite 主程式、實體 Quick 與 API；source 預期網址見 SPEC §3，正式網址仍須 provider readback。主／Quick 各自登入、換帳與登出的語意維持，exact origin／Cookie／callback 隔離須實際驗明，不能用同服務或本機合成登入推論正式接線完成。舊 Firebase 入口只保留既定恢復／過渡，不另建永久 API proxy。
 3. **既有資料與授權不重建。** 原帳號 UUID、Workspace／Board／Task ID、正文／備註、membership、非預設／空集合 matrix、附件、job／receipt 及歷史保留。Principal 連原 local UUID 仍要可信 provider proof／mapping，不以 email 補綁、不授公司管理員私人內容；日常操作沿登入快照及受控撤權，不新增跨 app 業務 consumer。
 4. **明確處理跨 origin 與 PWA 重裝。** 新站重新登入、使用者更新書籤並重裝 PWA；新 origin 不能自動繼承舊 IDB、localStorage、SW、Session 或安裝。舊入口先提供正常同步或受控匯出／恢復，完成處置再導向；沒有來源／owner proof、尚未登入或網路失敗時保留原副本。known owner 不改綁，unbound 明確認領，結果不明先查原 key 的可信 receipt；不錯帳、不重複任務、不默默丟稿。細節見 SPEC §6.2。
 5. **單一 writer 與可回復性維持。** 沿原全來源停寫／在途排空、一致性 full snapshot、分 domain count／ID／FK／digest 與回執核對，不做雙寫／CDC／delta 平台。正式 apply 前未解差異拒絕，新 writer 已產生資料後的恢復須保留新增內容與唯一 receipt，不能只切回舊網址。已套用 SQL 不改寫，不 down migration。
@@ -34,10 +34,10 @@ ProJED 保留 React／Vite、主程式／Quick、個人及外部協作、原 Wor
 
 ## Consequences
 
-- 減少跨專案網路與長期入口責任，但不宣稱已降低帳單或已完成新資源設定；比較同等用量的 Hosting、網域／憑證、Jobs／SQL／Storage、恢復窗口與雙跑支出，不擅設增幅百分比。
+- 減少跨專案網路與長期入口責任，但不宣稱已降低帳單或已完成新資源設定；比較同等用量的前端傳輸／Cloud Run、Jobs／SQL／Storage、恢復窗口與雙跑支出，不擅設增幅百分比。
 - 使用者需明確得知新網址、重新登入與 PWA 重裝步驟；新站的體驗驗收包含舊裝置／草稿／邀請／訂閱，不以 HTTP 200 或新安裝畫面取代資料恢復。
 - 私人資料隔離、workspace／board／matrix、取消後寫入拒絕、原 key 唯一回執、資料完整性及 migration recovery 持續有效。集中共用 SQL 不擴張其他 app 的權限或共同發布責任。
-- 現行程式、profile／固定 target 仍有舊專案綁定；此 ADR 是新決策與交接，不能用舊 renderer／Job／qualification 直接部署新架構。既有資源與映像不自動刪除。
+- 本輪 target／managed profile、renderer 與模型 project guard 收斂到集中專案，僅代表 source 設定；IAM、資源、正式 Session／origin 與 provider 資格未執行。舊映像與已套用 SQL 保留，不自動刪除或把舊證據改掛新 project。
 
 ## Migration and Compatibility
 
@@ -47,6 +47,6 @@ ProJED 保留 React／Vite、主程式／Quick、個人及外部協作、原 Wor
 
 ## Re-entry and Acceptance
 
-後續待實作的是 §3.2 的綁定差額、跨 origin 恢復證明／傳輸、舊連結相容、使用者遷移指引與 SPEC A06／A11、T05／T07／T08 的受影響案例。網域名稱為待確認，不需為本輪文件另行立案；具名操作仍按主要動作授權。本輪不觸發部署、正式 migration、資料重寫、DNS、IAM、Secret、billing 或切流。
+本輪依 SPEC §3.3 實作本機記事與必要驗證，直接回填 DEV-139，不新增任務或 required gate。Quick 重用原 DB／outbox、capture ID／receipt；主程式備註 checkpoint 是 task／board／workspace scope 的獨立編輯生命週期，沿現有 canonical readback／CAS，不另建同步 worker。後續仍有正式主／Quick origin／Session 綁定、跨 origin 恢復證明／傳輸、舊連結相容及 A06／A11、T05／T07／T08 的正式環境案例。本輪不觸發部署、正式 migration、資料重寫、DNS、IAM、Secret、billing 或切流。
 
-此為文件自查與架構／遷移計畫更新，未宣稱新目標產品、費用、provider 或正式驗收 PASS。公開文件只放架構與遷移設計，實際營運資料與 IAM 讀回保留本機證據；不新增 COO／QA／QC 簽核或 SaaS 條件。
+本機驗證只支持對應 source／合成身分與資料，不宣稱新目標費用、provider 或正式驗收 PASS。公開文件只放架構與遷移設計，實際營運資料與 IAM 讀回保留本機證據；不新增 COO／QA／QC 簽核或 SaaS 條件。

@@ -27,6 +27,8 @@ export type QuickCaptureRecord = {
     expiresAt: number;
   } | null;
   receipt?: QuickCaptureReceipt | null;
+  /** Editable local checkpoint, never eligible for the remote outbox worker. */
+  localDraft?: { revision: number; projectRef: string };
 };
 
 export type QuickCaptureReceipt = {
@@ -59,6 +61,11 @@ export const QUICK_CAPTURE_LEASE_MS = 30_000;
 export const QUICK_CAPTURE_MAX_AUTOMATIC_ATTEMPTS = 8;
 export const QUICK_CAPTURE_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 export const QUICK_SOURCE_WRITE_PAUSED = 'PROJED_SOURCE_WRITE_PAUSED';
+export const QUICK_LOCAL_DRAFT = 'LOCAL_EDITING_DRAFT';
+// Use an existing terminal state so older installed clients also refuse to send
+// editable text. No IndexedDB version change or parallel queue is required.
+export const isQuickLocalDraft = (record: Pick<QuickCaptureRecord, 'state' | 'lastErrorCode'>) =>
+  record.state === 'failed_permanent' && record.lastErrorCode === QUICK_LOCAL_DRAFT;
 
 // Only this database rejection proves the source declined the write. A generic
 // 503 can follow an unknown commit and must keep the existing retry semantics.

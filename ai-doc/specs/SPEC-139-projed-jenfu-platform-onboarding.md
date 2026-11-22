@@ -1,15 +1,15 @@
 # SPEC-139：ProJED 納入 Jenfu-Platform 的產品與技術交接契約
 
-**2026-11-21 現行決策：ProJED 的 Hosting、Cloud Run 後端與 Jobs 集中至 `jenfu-platform-prod`，改用自有固定網域；名稱待人類指定。** 同專案私人網路連既定 Cloud SQL，保留 ProJED 獨立服務、身分與業務權限，不再以跨專案 Shared VPC 關聯為前置。
+**2026-11-22 現行決策：ProJED 採與 PDM 相同的 Cloud Run `run.app` 直接入口，不採 Firebase Hosting；runtime／Jobs 集中至 `jenfu-platform-prod`，保留 Vite，優先改善隨時開啟、立即記事的本機體驗。** 同專案私人網路連既定 Cloud SQL，保留 ProJED 獨立服務、身分與業務權限，不再以跨專案 Shared VPC 關聯為前置。
 
-本輪只更新開發文件與遷移計畫。先前「繼續部署候選」的執行要求已被本輪範圍取代；不部署、不切流、不執行正式 migration／資料重寫，也不變更 DNS、IAM、Secret 或 billing。舊入口保留過渡，新網址須重新登入、更新書籤及重新安裝 PWA。現行設計見 §3、§6、§8–§9、§47.1 與 ADR-054；歷史 source／CI 結果不等於新目標已驗證。
+本輪授權程式、必要測試與受影響文件；不恢復暫停的部署。不部署、不切流、不執行正式 migration／資料重寫，也不變更 DNS、IAM、Secret 或 billing。舊入口保留過渡，新網址須重新登入、更新書籤及重新安裝 PWA。現行設計見 §3、§6、§8–§9、§47.1 與 ADR-054；歷史 source／CI 結果不等於新目標已驗證。
 
 本規格保留架構、資料安全、遷移設計及來源測試適用性；正式業務數量、IAM 實際讀回與非公開營運證據留在任務本機輸出。早期原地升級測試仍只支持原受測 origin／產物，不能證明跨 origin 草稿、安裝或新專案資格已完成。
 
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。
-- 日期：2026-11-21（Asia/Taipei）；可執行來源 `8421432`，驗證版本與產物依 §8、§47.1 的實際收據識別。
-- 文件狀態為**集中專案／自有網域方案已選定，文件與遷移計畫更新；實作與部署未完成**。舊 source／映像依原環境保留，重用範圍見 §3.2；新綁定及候選另驗。網域定名、主／Quick exact origin 與回呼是後續綁定待辦，不阻擋本輪文件交付。
-- 適用範圍：本輪僅文件／計畫。既有 source 開發、候選準備與 IAM 修復紀錄保留為歷史，不授權繼續執行；Shared VPC 未執行者取消引導，已執行者只記錄現況，不自動撤回。先前廣泛續行授權不覆蓋本輪明確的停止事項。
+- 日期：2026-11-22（Asia/Taipei）；本輪受測來源、範圍與限制見 §3.3，歷史 artifact 仍依原收據識別。
+- 狀態：**Cloud Run 直接入口已選定，集中目標 source 與本機記事改善已完成本輪自查；尚未部署或切流**。舊 artifact 不代表新目標資格；新服務完整網址仍須 provider readback，主／Quick 身分與 callback 隔離仍需實際接線驗證。
+- 適用範圍：本輪程式／測試／文件，不建立或執行雲端候選，不改 IAM、Secret、billing、容量、正式資料或流量。舊 Shared VPC 引導取消；已完成設定與舊入口保留，不自動撤回或刪除。
 - 直接交接入口：[§11 S1 定案契約](#11-架構決策與-s1-定案契約)、[§12 S1 實作狀態](#12-s1-實作狀態2026-10-26)、[§13 S2 consumer seam](#13-s2-projed-identity-consumer-seam2026-10-26)、[§14 S3 read adapter](#14-s3-http-read-adapter-slice2026-10-26)、[§15 S3 domain command](#15-s3-domain-command-w12026-10-26)、[§16 S3 collaboration command](#16-s3-collaboration-command-w22026-10-27)、[§17 S3 record／activity](#17-s3-recordactivity-w32026-10-27)、[§18 S3 HTTP product wiring](#18-s3-http-product-wiring-w42026-10-27)、[§19 S3 Board transfer](#19-s3-board-transfer-w52026-10-27)、[§20 S3 legacy provider boundary](#20-s3-legacy-provider-boundary-w62026-10-27)、[§21 S3 Quick Task](#21-s3-quick-task-w72026-10-27)、[§22 S3 Task Workbench](#22-s3-task-workbench-w82026-10-27)、[§23 S3 Actor CAS](#23-s3-actor-context-cas-w92026-10-27)、[§24 S3 Task Tracking](#24-s3-task-tracking-w102026-10-27)、[§25 S3 Backup／Import](#25-s3-backupimport-w112026-10-27)、[§26 S3 Account Preferences](#26-s3-account-preferences-w122026-10-27)、[§27 S3 Calendar Subscription](#27-s3-calendar-subscription-w132026-10-27)及[§32 本地開發收斂](#32-s3-local-development-closure-w182026-10-27)；[§11.8 技術主管審查](#118-技術主管審查與最小優化)保留 Rev5 修正理由；既有使用者切換見 [§6.3](#63-既有使用者的切換基線)。
 - 決策來源：[DEV-139 人類決策](../dev_task.md#dev-139-jenfu-platform-onboarding)；架構取捨：[ADR-054](../decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。本文件不是其他 owner 已接受或已發布的契約。
 
@@ -17,13 +17,15 @@
 
 首階段保留 ProJED 現有工作區、看板、權限與操作流程，先對齊 Cloud Run 雲端架構、Cloud SQL 資料庫及身分契約，保留 React／Vite／Zustand、個人任務、外部協作、Quick Task、多視圖及已可用 AI 功能。身分接入改變可信登入來源及 Session，不重設 ProJED 的業務權限模型。
 
-ProJED 已有使用者，移轉以不丟資料、不重建帳號、不改既有權限為必要條件。2026-11-21 人類改選自有固定網址，明確納入重新登入、書籤／連結更新與 PWA 重裝；不再承諾永久保留原 origin 或無須重裝。舊入口先完成資料恢復再受控導向新站，不立即清除本機儲存。短暫停寫與恢復窗口仍由演練量測後確認，不承諾零重登／零停寫；本輪不執行切換。
+ProJED 已有使用者，移轉以不丟資料、不重建帳號、不改既有權限為必要條件。2026-11-22 人類改選 Cloud Run 固定 `run.app` 直接網址，明確納入重新登入、書籤／連結更新與 PWA 重裝；不再承諾永久保留原 origin 或無須重裝。舊入口先完成資料恢復再受控導向新站，不立即清除本機儲存。短暫停寫與恢復窗口仍由演練量測後確認，不承諾零重登／零停寫；本輪不執行切換。
 
 成本採人類最新要求「只要費用不大幅增加即可」。首階段效益為基礎設施及身分契約一致、既有功能與資料授權相容；任務／資料跨系統使用是後續效益，節費及投資回收期不是必要驗收。首階段必須證明新路徑上的原功能及權限行為，不能只以平台可見、登入成功、表格搬入同一 DB 或測試數量認列交付。
 
-2026-10-28 人類曾要求整合續行，完整產品目標仍保留 ProJED／OrgMaster／Jenfu-Platform 真接線、資料與原功能驗收；本輪 2026-11-21 的文件／計畫範圍已取代先前立即執行部署的指示。不得以歷史續行授權執行本輪禁止的正式操作。其他 repo 的既有修改仍保留，未來跨 repo 實作沿各自 native DEV 與隔離分支，不把本文件當外部 owner acceptance。
+2026-10-28 人類曾要求整合續行，完整產品目標仍保留 ProJED／OrgMaster／Jenfu-Platform 真接線、資料與原功能驗收；本輪 2026-11-22 允許繼續 source／測試／文件，但不恢復先前暫停的部署。不得以歷史續行授權執行本輪禁止的正式操作。其他 repo 的既有修改仍保留，未來跨 repo 實作沿各自 native DEV 與隔離分支，不把本文件當外部 owner acceptance。
 
 ### 人類產品決策
+
+**D4（2026-11-22，Human Confirmed）**：直接採用 Cloud Run `run.app` 入口，不採 Firebase Hosting；撤回 Firebase 網站命名選擇。重用既有 PWA／Quick／outbox，補上編輯草稿持久保存、明確同步狀態與必要回歸，保留工作區／看板／權限、帳號隔離、既有草稿、CAS／回執與零留存。費用不大幅增加；本輪不部署、不切流、不改 IAM／Secret／billing／容量。D4 取代 D3 的自有網域／Hosting 及僅文件限制；D3 的集中專案與跨 origin 恢復責任維持。
 
 **D3（2026-11-21，Human Confirmed）**：採集中 `jenfu-platform-prod` 與自有固定網域方案，保留舊入口過渡，納入 PWA 重裝、離線草稿及連結轉移，維持零留存。實際網域待確認；本輪只更新文件與計畫，先不部署、不切流。D3 取代先前跨專案 Shared VPC、原 origin 永久前門及不需重裝的假設；D1／D2、真 ASR 的原交付分母與資料／授權保護保留。
 
@@ -58,10 +60,9 @@ ProJED 已有使用者，移轉以不丟資料、不重建帳號、不改既有�
 
 ```mermaid
 flowchart LR
-  User[使用者] --> Domain[自有固定網域 名稱待確認]
+  User[使用者] --> Domain[Cloud Run 固定 run.app 入口]
   subgraph Target[jenfu-platform-prod]
-    Domain --> Hosting[ProJED Hosting 主程式與 Quick]
-    Hosting --> API[ProJED 專用 Cloud Run API]
+    Domain --> API[ProJED 專用 Cloud Run 前端與 API]
     Identity[OrgMaster 與 Platform 身分契約] --> API
     API --> SQL[既定私人 Cloud SQL 中的 ProJED schemas]
     API --> Storage[ProJED 私人 Storage]
@@ -72,9 +73,9 @@ flowchart LR
   Recovery --> Domain
 ```
 
-- ProJED Hosting、單一 app runtime、Jobs／Scheduler、app Secret 與 Storage 的長期管理責任集中於 `jenfu-platform-prod`。沿既有 VPC／runtime subnet 的同專案私人網路連 `jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg`、`jenfu_prod`；不開 SQL public IP，不以 `projed-cc78d` 的跨專案 Shared VPC 關聯為必要條件。
+- ProJED 前端、單一 app runtime、Jobs／Scheduler、app Secret 與 Storage 的長期管理責任集中於 `jenfu-platform-prod`。沿既有 VPC／runtime subnet 的同專案私人網路連 `jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg`、`jenfu_prod`；不開 SQL public IP，不以 `projed-cc78d` 的跨專案 Shared VPC 關聯為必要條件。
 - ProJED 保留自己的 repo、release、服務、runtime／migrator／importer／scheduler 身分、`projed_core`／`projed_contract`、ledger 與資源權限。集中專案不表示與 PDM 合併業務資料、共用 runtime SA、擴張公司管理員的私人存取或建立跨 core FK。app key 仍為 `projed`，其餘系統只消費受控 versioned contract。
-- 保留 React／Vite 與輕量 Quick；Hosting 及 API 在同一目標專案，由已綁定自有網域承接。網域實際名稱、主／Quick 的 exact origin／path／callback 尚未指定，文件不自選網址、不假設 DNS 已可用。保留主／Quick 各自登入、換帳與登出的語意；若最終採同 origin 路徑，須驗 API／Cookie 隔離，不能默默共用 Session。若採子網域，亦須固定各自允許來源及回呼，不能用 wildcard 放寬。
+- 保留 React／Vite 與實體 `/quick-task/`；由同一 Cloud Run runtime 提供靜態前端及 API，不新增 Firebase Hosting、負載平衡器、CDN 或常駐容量。renderer 的預期主網址為 `https://projed-prod-9536592944.asia-east1.run.app`，是 source 規劃值，尚未建立或讀回。主／Quick 各自登入、換帳與登出的契約保留；正式接線需固定 provider 驗明的各自 origin 或完整 Cookie／API 隔離，不能因使用同服務就默默共用 Session，也不使用 wildcard 放寬。這項正式 origin／Session 接線未完成，不外推本機合成 Session PASS。
 - 舊 `https://projed-cc78d.web.app`、`https://projed-cc78d.firebaseapp.com/quick-task/` 及原主 origin 的 `/quick-task/` 保留為過渡與資料恢復入口，詳 §6。不得為永久保留舊網址另建永久 API 轉送服務；舊登入／token 不跨 origin 複製，新站重新核實身分與本地權限。
 - Workspace、Board、Task、membership、權限矩陣、invite、profile、receipt、job、audit 與檔案 metadata 仍由 ProJED 擁有。runtime 無 owner、DDL、migrator、BYPASSRLS 或其他 app core 權限，交易內 scope／guard／RLS 與原授權結果保持。
 - 私人 Cloud Storage、音訊到期及 exact-generation 清理責任維持；新專案 bucket 的名稱、ACL、物件移轉與到期映射須後續實際綁定，不把舊 bucket 讀回當成新桶已合格。Cloud Run 本機磁碟不作持久儲存。
@@ -100,14 +101,43 @@ Session／私人 API 回應採 `Cache-Control: no-store`；SW 不快取 API、�
 
 | 變更面 | 新方案與必要核對 | 舊證據適用範圍 |
 |---|---|---|
-| Profile／renderer／artifact | 檢查 `s3-managed.profile.json`、`shared/dev139ManagedDatabase.mjs`、`scripts/lib/dev139-cloud-run-plan.mjs`、build／binding／release allowlist。目標 project、image repository、主／Quick origin、network、資源完整名稱及 hash 一起重新綁定；不手改已套用 SQL。 | 現行程式仍有 `projed-cc78d` 固定值，未因改文件完成重定向。舊 profile／映像只證明原來源與原綁定；可評估未變產物重用，但不得把舊 digest／receipt 直接改掛新專案。 |
+| Profile／renderer／artifact | 檢查 `s3-managed.profile.json`、`shared/dev139ManagedDatabase.mjs`、`scripts/lib/dev139-cloud-run-plan.mjs`、build／binding／release allowlist。目標 project、image repository、主／Quick origin、network、資源完整名稱及 hash 一起重新綁定；不手改已套用 SQL。 | 本輪集中 target／profile／renderer／模型 project guard 改向 `jenfu-platform-prod`；僅 source 設定，不代表新資源、IAM、origin 或資格已建立。舊 profile／映像只證明原來源與原綁定；可評估未變產物重用，但不得把舊 digest／receipt 直接改掛新專案。 |
 | SA／SQL IAM login／角色 | 在 `jenfu-platform-prod` 規劃 ProJED 專用 runtime、migrator、importer、scheduler SA，前三者使用各自 SQL IAM login；不借 PDM 或 Platform runtime 身分。保留既有 app NOLOGIN role／schema 與完整 migration ledger，按最小權限重綁 CONNECT／membership。 | 已核准舊 project 的 SA／grant 不等於新 SA 已存在或新權限已核准；SQL bytes／資料語意未變的證據可沿原來源重用，login／ACL／route 另驗。 |
 | Jobs／Scheduler／Secret | 專案、SA、固定 Job、執行權、migration owner window、stdout ledger／finally 撤權、Secret resource／version 與執行結果重新核對。候選 create 與執行／排程啟動分開；來源 credential 仍為精確用途及唯讀。 | 不搬用未綁定 Secret，不借其他 app 憑證，不因候選建立成功就啟動寫入或排程；已做的舊資源不自動刪除。 |
-| Hosting／網域／OAuth | 目標專案的 Hosting／路由、自有網域及 TLS／DNS、Platform registry／handoff、Google OAuth callback、CORS／CSRF／Cookie／允許 origin、主／Quick Session 與 PWA manifest 分別固定。 | 現有網址可用或同 origin 更新成功，不證明新 origin 的登入、Cookie、SW、安裝或深層連結可用。實際名稱待人類指定，本輪不改 DNS。 |
+| 直接入口／OAuth | Cloud Run 提供 Vite／Quick／API；以 provider readback 固定主／Quick origin、Platform registry／handoff、callback、CORS／CSRF／Cookie、Session 與 manifest。 | 不要求 Firebase Hosting 或購買自有網域；現有或本機網址可用不證明正式登入／安裝完成。本輪不建立服務、不改 DNS。 |
 | Storage／附件／錄音 | 私人 bucket、最小 ACL、來源 object ref／digest、目標 generation、到期及清理義務一併移轉核對；不因複製延長保留期限或把新 generation 當成原 upload proof。 | 舊 bucket 的設定／空白盤點只對原時間與資源有效；未盤點不視為空，新桶及檔案／播放／清理另驗。 |
 | 模型／費用／零留存 | Speech、Vertex、RAG／LLM 的 resource／quota／計費 project、SA caller、模型／region、cache 與內容 logging、適用契約／豁免及實呼叫證據重新綁定至新專案。 | 舊 project 的設定或條款適用性不自動移轉；新資格未成立前 provider／job dispatch 綁定保持停用，不能以 env flag／store=false／刪檔代替零留存證據。 |
 
-只刷新受影響證據，保留未變的資料模型、權限／私人隔離、取消／exactly-once、回復與必要回歸。來源／本機／CI／provider／正式環境各自標示；本輪文件更新不認列實作、候選、實際費用或新目標驗收 PASS，也不增加獨立人工簽核 gate。
+只刷新受影響證據，保留未變的資料模型、權限／私人隔離、取消／exactly-once、回復與必要回歸。來源／本機／CI／provider／正式環境各自標示；本輪 source／本機自查不認列雲端候選、實際費用或新目標正式驗收 PASS，也不增加獨立人工簽核 gate。
+
+### 3.3 本機優先記事（2026-11-22）
+
+本節沿既有 A06／A11、T05／T08 補足實例，不新增 required gate、獨立 QA/QC 文件或另一套同步平台。
+
+- **啟動**：沿單一 root worker、既有預快取、版本固定與安全更新。Quick 導覽先讀公開 shell 快取，缺快取才連網；明確 `projed_update_latest` 更新導覽不被舊 shell 攔截。API、Session、私人內容及模型回覆不進 shell 快取。Quick 輸入不等待 Session、看板清單、React 主程式或分析；主程式登入等待／未登入畫面另提供「先記事」直接入口。首次無快取仍需取得程式。
+- **Quick 編輯草稿**：沿 `projed-quick-task-v1`／`captures`，DB 版本維持 2；以既有 terminal state 加 `LOCAL_EDITING_DRAFT` 和 local revision 保存輸入，避免舊 client 把尚未確認的文字送出。不新增 capture queue 或 worker。每次 checkpoint 以 owner／project／revision CAS 保存並讀回；按「建立」才以同 capture ID 原子凍結為 immutable outbox 項目。未送出草稿不自動發布。
+- **隔離與恢復**：在線先確認目前 Session 的 owner，再恢復同 project 的私人草稿；斷線可沿已驗明本機 binding 歸屬恢復／編輯，不把它當遠端授權。登出／驗明帳號改變即隱藏原私人編輯，原副本仍保留；先輸入、後登入的 unbound 文字不能自動改綁，沿原明確認領。跨頁 local CAS 衝突停止覆寫，使用者可明確另存本機副本。
+- **主程式備註**：沿現有 `TaskDetailsModal` 欄位／備註草稿及 CAS／unknown readback，新增專用本機 checkpoint（`projed-task-detail-drafts-v1`）。它具有不同的 task／board／workspace baseline 與生命週期，不承接 Quick capture 同步或另建背景 worker。每 editor 獨立 key，scope 為 account／workspace／board／task，保留 baseline、送出內容與 unknown 狀態。恢復後先經既有 canonical readback，再允許原儲存流程；不直接重播未知操作，不由本機副本宣告雲端成功。確認成功只清對應已確認內容，其他頁不同修改繼續保留。既有 meeting recovery 不換格式、不改 DB。
+- **狀態**：「草稿已存本機、尚未建立」只代表 checkpoint 完成；「已記下、待同步」代表 immutable local capture 已完成；「已同步／已建立」僅 strict owner／capture／title-hash committed receipt 或既有 canonical save readback 成立後顯示。儲存中、本機失敗、驗證失效、遠端失敗及版本衝突不得混成已同步；儲存失敗保留輸入並提供重試／另存，本機未存妥時保留離頁防護。
+- **同步與成本**：Quick 沿 verified actor／context revision、lease、固定 capture ID、既有 receipt-first 交易與防重複。未知回應只用原 key 核對既有回執，不另建 ID；權限／payload／owner 衝突保留副本並拒絕覆寫。打字及草稿保存不呼叫模型、不下載看板；不增常駐個體或容量。零留存未資格化的 ASR／LLM／RAG 仍停用。
+
+本輪自查使用本機 HTTP bundle、獨立無視窗 Edge、真實 Service Worker／IndexedDB、合成 Session／回執。量測從導航起至欄位實際接受輸入，首次／已有快取、一般／帶入口參數及離線分開，各三次取中位數。隔夜採關頁重開與時鐘推進 13 小時的模擬，不宣稱真實隔夜待機、實機 iOS／Android、正式網路或正式 provider 已驗收。證據放任務忽略輸出 `output/qa/dev139-local-first/`；入口為 `scripts/verify-dev-139-local-first-quick.py`，本輪 33／33 行為案例 PASS；儲存空間故障、錯誤回應遺失、相同文字的新意圖與重試 ID、明確認領、主程式入口、實際備註元件重開／衝突／換帳均已實測。原有效失敗與 harness 修正證據保留於本機，不改寫為 PASS。
+
+本機輸入就緒時間（毫秒，3 次中位數；相同 Edge／模擬條件）：
+
+| 情境 | 改善前 | 改善後 |
+|---|---:|---:|
+| 首次、一般本機網路 | 136.6 | 199.4 |
+| 首次、導航延遲 6 秒 | 6144.5 | 6111.2 |
+| 已有快取、導航延遲 6 秒 | 111.4 | 105.1 |
+| 已有快取、帶一般入口參數且導航延遲 6 秒 | 6061.7 | 45.6 |
+| 已有快取、完全離線 | 52.2 | 42.1 |
+
+標準 Quick 路徑原已命中預快取；主要啟動改善是原本落入網路優先的帶參數入口。首次一般網路有樣本波動，未見改善；首次弱網仍須等網路，不宣稱全面加速、消除 Cloud Run 冷啟動或已量到正式費用。
+
+自查：DEV-139 S1／S2／S3 共 696 項單元均完成；首輪 9 項 localhost `EACCES` 保留，允許 localhost 後僅補跑受影響 4 檔／14 項，全部 PASS，其餘 687 項沿同一來源重用。release 40 項及最後更新的 renderer 9 項、前端／server／S2／S3／build overlays strict typecheck、managed boundary／51 份既有 migration bytes、Quick 26 項 static／SW、dual-origin routing、task draft 16 assertions 與 meeting recovery 自查 PASS。共享依賴缺少 `@types/pg` 的原失敗保留，strict server checks 只在忽略輸出內補原 lockfile 型別版本，不修改共享 node_modules。lint 無 error；AuthGate 原有 effect 警告未作無關修改。遠端既有原生／OCI CI 依實際來源與 Actions 收據認列；上述本機結果不是 provider／正式資料／切流驗收。
+
+重現本機情境：先用隔離 env 的 `VITE_DATA_BACKEND=http`、`PROJED_RELEASE_PROFILE=dev139-http`、具名 `PROJED_RELEASE_ID` 建置 HTTP bundle，再執行 `python -X utf8 scripts/verify-dev-139-local-first-quick.py <bundle> --report <output.json>`。`--measure-only` 與 `--behavior-only` 可只刷新受影響部分；測試自建 localhost／合成身分、獨立無視窗 Edge，結束關閉 browser／server，不使用正式登入或會議內容。
 
 ## 4. 身分、Session 與授權契約
 
@@ -312,7 +342,7 @@ Quick 沿 [現行 invoker RPC](../../supabase/migrations/20261001090000_dev_133_
 
 ### 6.2 Browser 本機資料
 
-Server 搬移與 browser storage 恢復分開驗收。新自有網域與舊 origin 的 IndexedDB、localStorage、Session、SW 及 PWA 安裝不共享；新站不能自動讀取舊裝置的草稿，也不能宣稱跨 origin 自動繼承安裝。保留舊入口的正常登入與恢復畫面，提供有界的同步或受控匯出／恢復：停寫前可核身補送舊來源並納入最後 snapshot；停寫後不得再向舊庫補寫，沿原識別碼恢復至新唯一 writer。沒有可驗證來源／owner proof 或新端不可用時，原副本留存並顯示待恢復，不標示已移轉。
+Server 搬移與 browser storage 恢復分開驗收。新 Cloud Run origin 與舊 origin 的 IndexedDB、localStorage、Session、SW 及 PWA 安裝不共享；新站不能自動讀取舊裝置的草稿，也不能宣稱跨 origin 自動繼承安裝。保留舊入口的正常登入與恢復畫面，提供有界的同步或受控匯出／恢復：停寫前可核身補送舊來源並納入最後 snapshot；停寫後不得再向舊庫補寫，沿原識別碼恢復至新唯一 writer。沒有可驗證來源／owner proof 或新端不可用時，原副本留存並顯示待恢復，不標示已移轉。
 
 - known owner 的 pending 只補送本人；不同帳號拒絕且不顯示該筆私人內容，不改成 unbound。
 - unbound 記錄仍需使用者明確確認目的帳號；登入 callback／升級／匯入不自動認領。
@@ -335,7 +365,7 @@ Server 搬移與 browser storage 恢復分開驗收。新自有網域與舊 orig
 |---|---|
 | 雲端資料與權限 | 原 profile UUID、Workspace／Board／Task ID、membership、invite 狀態、五種角色及非預設／明確空集合 Board matrix 保留；移轉前後 count／ID／內容與 allow／deny reconciliation 無未解差異。附件、job、receipt 與人工原稿另有完整性證據。 |
 | 帳號與登入 | 已核實的原登入身分對應既有 localUserId，使用者不重新註冊或重新建立工作區；Google 登入選同一帳號仍須驗 provider binding chain，不能只看 email。各 App 預留切換時一次正常重新登入，不承諾舊 Supabase Session 自動變成 Platform Session；日後到期／撤銷沿原規則。歧義隔離、資料保留並有恢復入口，不顯示為新空帳號。 |
-| 網址與安裝 | 長期改用待指定的自有固定網域，主／Quick 的 exact origin／path 及 manifest identity 在定名後固定。使用者更新書籤、在新站重新登入並重新安裝 PWA；舊安裝不自動變成新 origin。三個舊入口保留恢復與轉移指引，先完成草稿處置再導向，不立即刪 SW／IDB／localStorage。 |
+| 網址與安裝 | 長期改用 Cloud Run 固定 run.app 入口，主／Quick 的 exact origin／path／Session 隔離與 manifest identity 依 provider readback 固定。使用者更新書籤、在新站重新登入並重新安裝 PWA；舊安裝不自動變成新 origin。三個舊入口保留恢復與轉移指引，先完成草稿處置再導向，不立即刪 SW／IDB／localStorage。 |
 | 離線草稿與待送任務 | 在原 browser profile／安裝儲存中保留 known owner、unbound、captureId／hash、人工正文及 pending／failed 狀態；登入、升級或切帳不清空或自動認領。恢復後只以原 key 核實／補送到本人新路徑，結果不明先查 receipt。 |
 | 停寫與可恢復性 | 以短暫停寫完成一致性full snapshot／核對，不另建delta平台；時長由正式資料plan與演練量測，可接受窗口在正式 re-entry 確認，不先承諾零停機或固定分鐘數。停寫／登入失效有就地狀態與重試入口，草稿保留，不把錯誤當空資料或成功。 |
 
@@ -368,7 +398,7 @@ Server 搬移與 browser storage 恢復分開驗收。新自有網域與舊 orig
 | 盤點與相容準備 | 舊庫唯一 writer；目標尚未接正式寫入。 | 核對登入／origin／已安裝版本／本機與 server inventory；準備舊站相容更新、verified mapping、就地停寫／恢復入口。未上線使用者的未知狀態不能算已完成。 |
 | 隔離演練 | 正式權威不變；目標只用 synthetic／核准 sanitized fixture。 | W14已驗單次full snapshot→空白candidate、整批rollback、count／digest reconciliation及未承接domain拒絕；正式身份、檔案／Storage、舊版／離線恢復與writer fence仍分開驗證。 |
 | 最後停寫與核對 | 舊庫所有納入範圍的寫入已 server-fenced；新庫尚未開放業務寫入。 | 直接 SDK／RPC／Functions／worker／在途 job 都有可核實界線；在fence後取得唯一full snapshot並完成核對。任一未解差異不開放新 writer；使用者可保留本機草稿及待送 key。 |
-| 啟用新路徑 | 新庫唯一 writer；舊庫維持 fence。 | 同一可信 Principal→mapping→Session→API→DB 路徑可用後，新自有網域承接業務，使用者重新登入並安裝新 PWA；舊入口先恢復草稿再導向，原 ID／key 補送及 receipt readback。新寫入後恢復須保存新資料與單一 job／receipt，不能只切回舊網站。 |
+| 啟用新路徑 | 新庫唯一 writer；舊庫維持 fence。 | 同一可信 Principal→mapping→Session→API→DB 路徑可用後，新 Cloud Run 固定入口承接業務，使用者重新登入並安裝新 PWA；舊入口先恢復草稿再導向，原 ID／key 補送及 receipt readback。新寫入後恢復須保存新資料與單一 job／receipt，不能只切回舊網站。 |
 | 保留恢復與退役評估 | 新庫仍唯一 writer；舊入口只提供已驗證的相容／恢復。 | 已知未同步及歧義帳號逐項處理，保留核身後恢復義務。窗口到期不等於所有離線裝置已恢復，不自動刪本機資料／舊資產；入口或資源退役另需證據與對應人類主要動作授權。 |
 
 停止條件：mapping 不可核實、權限／內容不一致、舊寫入仍成功、target 已寫入卻無保留新資料的恢復路徑、Session／回呼不可用或私人內容被快取。停止受影響轉換並保存差異，不能用雙寫、改 owner、重設權限、刪草稿或忽略舊 client 取得 PASS。
@@ -387,7 +417,7 @@ Quick Task 收到精確的 `PT503 / PROJED_SOURCE_WRITE_PAUSED` 後停止該筆�
 
 現行來源已在 W14 之後補齊身分 Session、RAG、會議資料保留、私人音訊傳輸、背景工作及結果發布，並完成 51 份 migration 的隔離 snapshot 演練。最新證據見 §8、§34–§51。正式切換仍需發布 owner 契約與 production pins、核實既有帳號 mapping、取得 writer-fenced 真來源 snapshot，並查證實際 Storage 清單、舊入口與 Session／Cookie／callback、檔案及工作恢復。Inbox 等 optional domain 若出現非空資料，既有 importer blocker 仍須明確承接。
 
-正式資料plan時沿W14命令只輸出table count／digest與阻擋domain，不落地含正文或email的snapshot檔；先處理實際非空的未承接domain，再按A06／A09／A11、T07／T08驗正常使用者路徑。正式切換另確認可接受停寫／恢復窗口、成本與環境／資源主要動作範圍。新自有網域、重新登入、PWA 重裝、離線草稿及既有連結轉移已納入本次計畫，不再當成未選定情境。實際網域仍待指定；立即清除舊入口／儲存、零停寫或新增 Session bridge 不在此決策內。來源資料、原權限及恢復義務不因改網址而減少。
+正式資料plan時沿W14命令只輸出table count／digest與阻擋domain，不落地含正文或email的snapshot檔；先處理實際非空的未承接domain，再按A06／A09／A11、T07／T08驗正常使用者路徑。正式切換另確認可接受停寫／恢復窗口、成本與環境／資源主要動作範圍。Cloud Run 直接入口、重新登入、PWA 重裝、離線草稿及既有連結轉移已納入本次計畫。正式主／Quick origin 與 Session 綁定仍須驗明；立即清除舊入口／儲存、零停寫或新增 Session bridge 不在此決策內。來源資料、原權限及恢復義務不因改網址而減少。
 
 ## 7. 費用、容量與相容限制
 
@@ -1410,11 +1440,11 @@ Binding以容器內實際profile／SQL／static metadata bytes為準；本次33�
 
 ### 47.1 集中專案的重新綁定與後續計畫
 
-現行 target 為 `jenfu-platform-prod`，長期主／Quick 自有網域名稱待指定。以 §3.2 的 profile、服務／SA、SQL IAM login、Job／Scheduler、Secret、Storage、OAuth／origin、模型及費用／資格綁定表作為後續實作差額；先核對具名資源與所需權限，再取得相應操作授權。既有 Cloud SQL／schema／角色與已套用 SQL 不改寫，app 身分不與 PDM 或 Platform 共用。
+現行 target 為 `jenfu-platform-prod`，長期採 Cloud Run run.app 直接入口，不使用 Firebase Hosting；主／Quick exact origin／Session 隔離仍須實際綁定。以 §3.2 的 profile、服務／SA、SQL IAM login、Job／Scheduler、Secret、Storage、OAuth／origin、模型及費用／資格綁定表作為後續實作差額；先核對具名資源與所需權限，再取得相應操作授權。既有 Cloud SQL／schema／角色與已套用 SQL 不改寫，app 身分不與 PDM 或 Platform 共用。
 
 先前 `projed-cc78d` 跨專案 Shared VPC host／service-project 操作引導及候選執行包，**不再是本方案的前置或可直接執行的部署計畫**。尚未做的引導停止；若已執行，只保留實際狀態／責任紀錄，不自動停用關聯、撤回 IAM 或刪除資源。已完成修復與未執行項分開記錄，公開文件不複製其實際 IAM／營運讀回。
 
-後續順序為：確認自有網域及主／Quick endpoint → 更新 source／profile／owner 契約與具名資源計畫 → 以新綁定建立並驗候選、身分／私人隔離及 provider 安全拒絕 → 補 §6 跨 origin 草稿／連結／PWA 恢復與單一 writer 演練 → 另經正式操作授權才執行資料移轉、切流及舊入口退役。本輪停在文件／計畫，不建立、更新或執行候選，也不改 DNS、IAM、Secret、billing 或正式資料。
+後續順序為：完成本機記事改善與 source 回歸 → 固定主／Quick endpoint 與 Session 隔離／owner 契約及具名資源計畫 → 以新綁定建立並驗候選、身分／私人隔離及 provider 安全拒絕 → 補 §6 跨 origin 草稿／連結／PWA 恢復與單一 writer 演練 → 另經正式操作授權才執行資料移轉、切流及舊入口退役。本輪只進行 source／必要測試／文件，不建立、更新或執行雲端候選，不恢復暫停部署，不改 DNS、IAM、Secret、billing、容量或正式資料。
 
 零留存的適用契約、SA caller／模型／project、cache／內容 logging 及 provider 實測以新專案證據為準。未資格化的 ASR／LLM／RAG 路徑繼續停用；不能以舊 project 已關 cache／logging、Files 刪除、store=false、改費用專案或舊 image 自帶 null 綁定，取代新專案的資格與拒絕驗證。
 
