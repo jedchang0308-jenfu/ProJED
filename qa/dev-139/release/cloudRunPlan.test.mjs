@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { URL } from 'node:url';
 
 import { MANAGED_DATABASE } from '../../../shared/dev139ManagedDatabase.mjs';
 import { S3_MIGRATION_PATHS } from '../../../scripts/lib/dev139-migration-paths.mjs';
@@ -49,7 +50,8 @@ function assertInvalid(input) {
 }
 
 test('candidate preparation needs no source credential and cannot schedule or import production data', () => {
-  const { sourceBundleVersion, ...input } = makeInput();
+  const input = makeInput();
+  delete input.sourceBundleVersion;
   const plan = renderProjedCloudRun({ ...input, deploymentScope: 'candidate' });
   assert.deepEqual(Object.keys(plan.jobs), ['migrate', 'analysis']);
   assert.equal(plan.scheduler, null);
@@ -69,6 +71,27 @@ test('candidate preparation needs no source credential and cannot schedule or im
   assert.equal(plan.foundation.providerConfiguration.qualificationApplied, false);
   assert.equal(plan.foundation.providerConfiguration.vertex.applicableAgreementEvidenceRequired, true);
   assert.equal(plan.foundation.ownerBootstrap.migrationJobInput.expectedMigrations.length, S3_MIGRATION_PATHS.length);
+  assert.equal(plan.foundation.ownerBootstrap.migrationJobInput.profile, 'central-candidate');
+});
+
+test('Cloud Run create uses query IDs and omits names while preserving desired readback identity', () => {
+  for (const candidate of [false, true]) {
+    const full = makeInput();
+    const input = { ...full };
+    delete input.sourceBundleVersion;
+    const plan = renderProjedCloudRun(candidate ? { ...input, deploymentScope: 'candidate' } : full);
+    for (const resource of [plan.service, ...Object.values(plan.jobs)]) {
+      const id = resource.name.split('/').at(-1);
+      const kind = resource === plan.service ? 'serviceId' : 'jobId';
+      const request = plan.requests.find(({ url }) => new URL(url).searchParams.get(kind) === id);
+      assert.ok(request, `missing create request for ${resource.name}`);
+      assert.equal(Object.hasOwn(request.body, 'name'), false);
+      const { name, ...body } = resource;
+      assert.deepEqual(request.body, body);
+      assert.ok(name.startsWith('projects/jenfu-platform-prod/locations/asia-east1/'));
+    }
+    if (!candidate) assert.equal(plan.requests.at(-1).body.name, plan.scheduler.name);
+  }
 });
 
 test('candidate scope is explicit and preserves image, bucket and exact-input rejection', () => {
@@ -279,8 +302,13 @@ test('renderer fixes the typed target and emits IAM-only, private-network create
     method: 'POST', url: 'https://cloudscheduler.googleapis.com/v1/projects/jenfu-platform-prod/locations/asia-east1/jobs',
     body: plan.scheduler,
   });
-  assert.equal(plan.requests[0].body, plan.service);
-  assert.deepEqual(plan.requests.slice(1, 6).map(({ body }) => body), Object.values(plan.jobs));
+  assert.deepEqual(plan.requests[0].body, {
+    labels: plan.service.labels, ingress: plan.service.ingress,
+    invokerIamDisabled: plan.service.invokerIamDisabled,
+    traffic: plan.service.traffic, template: plan.service.template,
+  });
+  assert.deepEqual(plan.requests.slice(1, 6).map(({ body }) => body),
+    Object.values(plan.jobs).map(job => ({ labels: job.labels, template: job.template })));
   assert.equal(plan.requests.some(({ url }) => /hosting|traffic|setIamPolicy|secrets\/|runWithOverrides/iu.test(url)), false);
 });
 

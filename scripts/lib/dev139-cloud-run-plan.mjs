@@ -49,6 +49,11 @@ function vpcAccess() {
   return { egress: 'PRIVATE_RANGES_ONLY', networkInterfaces: [{ network: CLOUD_RUN_TARGET.network, subnetwork: CLOUD_RUN_TARGET.subnet }] };
 }
 function env(name, value) { return { name, value }; }
+// Cloud Run v2 create uses serviceId/jobId; the server rejects resource.name
+// in the create body. Keep names on the desired resources for exact readback.
+function createBody(resource) {
+  return Object.fromEntries(Object.entries(resource).filter(([key]) => key !== 'name'));
+}
 
 /** Pure create-request rendering. This performs no provider calls or deployment
  * admission; the caller must extract binding from the immutable Job image and
@@ -252,7 +257,7 @@ export function renderProjedCloudRun(input) {
     ownerBootstrap: { project: target.hostProject, database: binding.databaseName,
       roles: MANAGED_DATABASE.roles, requiresTemporaryOwnerDatabaseCreate: true,
       revokeOwnerDatabaseCreateAfterMigration: true, implementedByThisRenderer: false,
-      migrationJobInput: { sourceRevision, job:jobs.migrate, expectedMigrations:S3_MIGRATION_PATHS.map(path => ({
+      migrationJobInput: { ...(candidateOnly ? { profile: 'central-candidate' } : {}), sourceRevision, job:jobs.migrate, expectedMigrations:S3_MIGRATION_PATHS.map(path => ({
         version:path.slice('db/migrations/'.length,-'.sql'.length),checksum:binding.migrationSha256[path],
       })) },
       coordinatorPermissions: { principal:'dev010-prod-iac@jenfu-platform-prod.iam.gserviceaccount.com',
@@ -279,9 +284,9 @@ export function renderProjedCloudRun(input) {
   // POST create requests intentionally cannot replace an existing service/job,
   // execute an import, rewrite Hosting, change existing traffic or grant permissions.
   const requests = [
-    { method: 'POST', url: `https://run.googleapis.com/v2/${parent}/services?serviceId=${target.service}`, body: service },
+    { method: 'POST', url: `https://run.googleapis.com/v2/${parent}/services?serviceId=${target.service}`, body: createBody(service) },
     ...Object.values(jobs).map(job => ({ method: 'POST',
-      url: `https://run.googleapis.com/v2/${parent}/jobs?jobId=${job.name.split('/').at(-1)}`, body: job })),
+      url: `https://run.googleapis.com/v2/${parent}/jobs?jobId=${job.name.split('/').at(-1)}`, body: createBody(job) })),
     ...(candidateOnly ? [] : [{ method: 'POST', url: `https://cloudscheduler.googleapis.com/v1/${parent}/jobs`, body: scheduler }]),
   ];
   return { renderOnly: true, sourceRevision, releaseId, service, jobs,

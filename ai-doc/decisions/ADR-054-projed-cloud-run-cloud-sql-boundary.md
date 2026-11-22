@@ -2,9 +2,9 @@
 
 - 日期：2026-11-22（Asia/Taipei）。
 - 修訂：Rev 16，Cloud Run 直接入口、本機優先記事與跨 origin 遷移。
-- 狀態：**Accepted；本機記事 source／必要驗證完成，D5 恢復候選準備及部署驗證；尚未部署或切流**。
+- 狀態：**Accepted；本機記事 source／必要驗證完成，D5 恢復候選準備及部署驗證；候選映像／Job 已建立，Web 候選驗證待完成，未切流**。
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)；唯一工程交接：[SPEC-139](../specs/SPEC-139-projed-jenfu-platform-onboarding.md)，現行 target 見 §3／§3.2，遷移見 §6，驗收見 §8。
-- D5 保留原資料、網址及 PWA，先不切流；集中專案新 IAM／SQL owner 差額依 SPEC §47.2 具名確認後才套用。不做業務資料搬入、不改 DNS、Secret、billing 或容量；舊 Shared VPC 引導不再要求執行，已做的設定不自動撤回。
+- D5 保留原資料、網址及 PWA，先不切流；集中專案新 IAM／SQL owner 差額已依 SPEC §47.2 具名核准，限同一候選責任範圍。不做業務資料搬入、不改 DNS、Secret、billing 或容量；舊 Shared VPC 引導不再要求執行，已做的設定不自動撤回。
 
 ## Context
 
