@@ -1477,6 +1477,22 @@ D5 已授權部署候選；人類另已具名核准以下集中專案差額。�
 
 候選 provider 請求修正：Cloud Run v2 `serviceId`／`jobId` 決定 create 名稱，body 省略 `name`；完整 resource name 保留於 desired state／owner admission／讀回，不把 HTTP create body 當成 provider 已存在的資源。候選 owner input 明列 `central-candidate`，拒絕默認回舊專案路徑。此 deployment planner 修正不改 runtime／Job 程式、profile 或 SQL；可重用已驗映像，但必須分別記錄 planner 與 artifact 來源。原 CreateJob 400、CLI staging 403 與修正後讀回留在同一任務輸出，不改寫原失敗。
 
+<a id="dev139-owner-coordinator-delta"></a>
+
+#### 47.2.1 Owner coordinator 的臨時讀取／執行差額（待確認）
+
+原 §47.2 核准的三 SA、七項 foundation IAM 與兩 SQL IAM login 不重問、不重放。Owner window 尚缺的 coordinator 權限獨立列出；自動審查已拒絕直接新增持久 Job／Logging role／binding，未執行該次請求。既有 owner 權限查核只讀回拒絕，不以其他工具繞過。
+
+具名對象為既有 `dev010-prod-iac@jenfu-platform-prod.iam.gserviceaccount.com`，不新增 SA、TokenCreator、key 或 Secret。提出僅本次 DEV-139 window 使用、每個 binding 最多兩小時自動失效且結束撤除的差額：
+
+| Role | 精確 permissions | IAM scope |
+|---|---|---|
+| `projedMigrationCoordinator` | `run.jobs.get`、`run.jobs.run`、`run.executions.get` | 只綁 `projects/jenfu-platform-prod/locations/asia-east1/jobs/projed-prod-migration`。 |
+| `projedMigrationOperationReader` | `run.operations.get` | `jenfu-platform-prod` 的 Cloud Run operation metadata 讀取，不授其他 Job 執行／修改。 |
+| `projedMigrationLedgerReader` | `logging.logEntries.list` | project 級讀取能力；程式固定查本次 migration execution 的 stdout，但 query filter **不是**逐筆 IAM 隔離，授權時明確揭露此可見範圍。 |
+
+只影響 owner coordinator，不授 runtime／一般使用者讀 logs 或執行 migration。需先證明實際 Job／operation／stdout 可讀，才開啟 owner CREATE window；未核准前繼續來源／artifact 的獨立工作，正式 schema／Web 啟動保持未執行。此為新增權限責任的具名確認，不新增 required gate。
+
 ## 48. Managed IAM login and app role context（W34，2026-10-29）
 
 Managed profile／binding改為`cloud-sql-iam`，固定runtime／migrator／importer三個不同IAM DB logins（`projed-prod-<purpose>@projed-cc78d.iam`）。Runtime的無密碼DSN只可連本container group的127.0.0.1:5432 private IAM proxy；兩個Job只可連exact instance的/cloudsql Unix socket，透過metadata每次執行取得短期token，不把token寫進DSN。舊direct app-role／帶password／錯用途或project的managed URL拒絕，不保留未發布的密碼fallback。Disposable profile／既有33份SQL bytes不變。
