@@ -2,9 +2,9 @@
 
 - 日期：2026-11-22（Asia/Taipei）。
 - 修訂：Rev 16，Cloud Run 直接入口、本機優先記事與跨 origin 遷移。
-- 狀態：**Accepted；本輪 source／必要測試／文件，未部署或切流**。
+- 狀態：**Accepted；本機記事 source／必要驗證完成，D5 恢復候選準備及部署驗證；尚未部署或切流**。
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)；唯一工程交接：[SPEC-139](../specs/SPEC-139-projed-jenfu-platform-onboarding.md)，現行 target 見 §3／§3.2，遷移見 §6，驗收見 §8。
-- 本輪不部署、不切流、不執行正式 migration／資料重寫，不變更 DNS、IAM、Secret、billing 或容量；舊 Shared VPC 引導不再要求執行，已做的設定不自動撤回。
+- D5 保留原資料、網址及 PWA，先不切流；集中專案新 IAM／SQL owner 差額依 SPEC §47.2 具名確認後才套用。不做業務資料搬入、不改 DNS、Secret、billing 或容量；舊 Shared VPC 引導不再要求執行，已做的設定不自動撤回。
 
 ## Context
 
@@ -47,6 +47,6 @@ ProJED 保留 React／Vite、主程式／Quick、個人及外部協作、原 Wor
 
 ## Re-entry and Acceptance
 
-本輪依 SPEC §3.3 實作本機記事與必要驗證，直接回填 DEV-139，不新增任務或 required gate。Quick 重用原 DB／outbox、capture ID／receipt；主程式備註 checkpoint 是 task／board／workspace scope 的獨立編輯生命週期，沿現有 canonical readback／CAS，不另建同步 worker。後續仍有正式主／Quick origin／Session 綁定、跨 origin 恢復證明／傳輸、舊連結相容及 A06／A11、T05／T07／T08 的正式環境案例。本輪不觸發部署、正式 migration、資料重寫、DNS、IAM、Secret、billing 或切流。
+本輪依 SPEC §3.3 實作本機記事與必要驗證，直接回填 DEV-139，不新增任務或 required gate。Quick 重用原 DB／outbox、capture ID／receipt；主程式備註 checkpoint 是 task／board／workspace scope 的獨立編輯生命週期，沿現有 canonical readback／CAS，不另建同步 worker。後續仍有正式主／Quick origin／Session 綁定、跨 origin 恢復證明／傳輸、舊連結相容及 A06／A11、T05／T07／T08 的正式環境案例。本機記事切片未觸發部署或正式變更；後續候選依 D5／§47.2 接續，不從本機 PASS 推定正式資格。
 
 本機驗證只支持對應 source／合成身分與資料，不宣稱新目標費用、provider 或正式驗收 PASS。公開文件只放架構與遷移設計，實際營運資料與 IAM 讀回保留本機證據；不新增 COO／QA／QC 簽核或 SaaS 條件。

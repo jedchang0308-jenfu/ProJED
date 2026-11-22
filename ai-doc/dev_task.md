@@ -63,9 +63,11 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
 ## DEV-139：ProJED 納入 Jenfu-Platform，Cloud Run／Cloud SQL 對齊並保留 Vite
 
-  - **2026-11-22 現行決策／程式與必要驗證**：採與 PDM 相同的 Cloud Run `run.app` 直接入口，不採 Firebase Hosting；runtime／Jobs 集中 `jenfu-platform-prod`、同專案私人 SQL、保留 Vite 與 ProJED 專用權限。重用 PWA／Quick／原 outbox，補輸入草稿持久保存、明確本機／雲端狀態、帳號切換隱藏、原 capture ID 原子提交與 local CAS；主程式備註補 scoped checkpoint，恢復沿原 canonical readback／CAS。既有工作區、看板、權限、草稿相容與零留存維持，費用不大幅增加。**不恢復暫停部署、不切流、不改 IAM／Secret／billing／容量或正式資料**。新 origin 的重新登入、PWA 重裝、舊資料與入口恢復仍待正式演練，未資格化推論仍停用。[本機記事與驗證](specs/SPEC-139-projed-jenfu-platform-onboarding.md#33-本機優先記事2026-11-22)｜[目標與綁定差額](specs/SPEC-139-projed-jenfu-platform-onboarding.md#32-受影響綁定證據與實作差額)｜[ADR-054 Rev16](decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)
+  - **2026-11-22 現行決策／程式與必要驗證**：採與 PDM 相同的 Cloud Run `run.app` 直接入口，不採 Firebase Hosting；runtime／Jobs 集中 `jenfu-platform-prod`、同專案私人 SQL、保留 Vite 與 ProJED 專用權限。重用 PWA／Quick／原 outbox，補輸入草稿持久保存、明確本機／雲端狀態、帳號切換隱藏、原 capture ID 原子提交與 local CAS；主程式備註補 scoped checkpoint，恢復沿原 canonical readback／CAS。既有工作區、看板、權限、草稿相容與零留存維持，費用不大幅增加。**最新 D5 已恢復候選準備、部署及驗證；先不切流、保留原資料／網址／PWA。集中專案新 IAM／SQL owner 差額待具名確認，不改 Secret／billing／容量或正式業務資料**。新 origin 的重新登入、PWA 重裝、舊資料與入口恢復仍待正式演練，未資格化推論仍停用。[本機記事與驗證](specs/SPEC-139-projed-jenfu-platform-onboarding.md#33-本機優先記事2026-11-22)｜[目標與綁定差額](specs/SPEC-139-projed-jenfu-platform-onboarding.md#32-受影響綁定證據與實作差額)｜[ADR-054 Rev16](decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)
 
-  - **本輪本機自查完成**：PWA／Quick／實際備註元件有效 35 項案例（未變 Quick 證據重用、修正後備註 7 項重驗）及既有 Quick binding 9 項、696 項 DEV-139 unit、40 項 release、受影響 strict types／邊界／既有 Quick 與 meeting recovery 回歸 PASS。3 次量測中位數：帶參數弱網快取啟動 6061.7→45.6ms；標準快取 111.4→105.1ms；離線 52.2→42.1ms。首次一般網路 136.6→199.4ms、有波動未見改善；首次弱網 6144.5→6111.2ms，仍需網路。隔夜為關頁重開＋時鐘推進模擬，未宣稱實機或正式環境驗收。完整證據／失敗保留在忽略輸出 `output/qa/dev139-local-first/`；後續正式 origin／Session、跨 origin 恢復及 provider 資格仍按原分母，不恢復部署。[結果與重現入口](specs/SPEC-139-projed-jenfu-platform-onboarding.md#33-本機優先記事2026-11-22)
+  - **本輪本機自查完成**：PWA／Quick／實際備註元件有效 35 項案例（未變 Quick 證據重用、修正後備註 7 項重驗）及既有 Quick binding 9 項、696 項 DEV-139 unit、40 項 release、受影響 strict types／邊界／既有 Quick 與 meeting recovery 回歸 PASS。3 次量測中位數：帶參數弱網快取啟動 6061.7→45.6ms；標準快取 111.4→105.1ms；離線 52.2→42.1ms。首次一般網路 136.6→199.4ms、有波動未見改善；首次弱網 6144.5→6111.2ms，仍需網路。隔夜為關頁重開＋時鐘推進模擬，未宣稱實機或正式環境驗收。完整證據／失敗保留在忽略輸出 `output/qa/dev139-local-first/`；後續正式 origin／Session、跨 origin 恢復及 provider 資格仍按原分母；後續候選沿 D5。[結果與重現入口](specs/SPEC-139-projed-jenfu-platform-onboarding.md#33-本機優先記事2026-11-22)
+
+  - **恢復候選的查核與差額**：來源 `8089d0c` 的 [CI 45003027298](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45003027298) 兩 jobs SUCCESS；重用既有來源與回歸。已重查舊三入口／PWA manifest／SW 基線；新候選尚未部署。先完成集中專案的專用建置／runtime／migrator 與 owner 接線，不建立 importer credential／來源 Secret 或啟用未資格化模型。[最小具名範圍與限制](specs/SPEC-139-projed-jenfu-platform-onboarding.md#472-恢復候選後的最小集中專案差額2026-11-22待具名確認)；實際讀回留 `output/dev139-candidate-20261122/`。
 
   以下為原目標 source／測試與候選準備歷史，不能作新 project／origin 已實作或驗收的證據；原資料與必要安全回歸的分母保留，未變部分沿原來源重用。
 
@@ -124,7 +126,7 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
 ### 1. 人類決策與授權範圍
 
-**2026-11-21 最新範圍取代先前部署續行要求**：人類選定 ProJED 集中 `jenfu-platform-prod`、自有固定網域，要求先更新文件及遷移計畫，納入舊入口過渡、重新登入／PWA 重裝、離線草稿與連結移轉。域名待指定；本輪不部署、不切流、不做正式 migration／資料重寫、DNS、IAM、Secret 或 billing 變更。Shared VPC 未做的指令不再要求執行，已做者只記錄，不自動撤回；原 UUID／資料／權限、單一 writer、取消／exactly-once、recovery 與零留存維持。以下日期與授權表列為各時期紀錄，不覆蓋本段停止事項。
+**2026-11-21 歷史停止範圍（候選部分已由 2026-11-22 D5 取代）**：人類選定 ProJED 集中 `jenfu-platform-prod`、自有固定網域，要求先更新文件及遷移計畫，納入舊入口過渡、重新登入／PWA 重裝、離線草稿與連結移轉。域名待指定；本輪不部署、不切流、不做正式 migration／資料重寫、DNS、IAM、Secret 或 billing 變更。Shared VPC 未做的指令不再要求執行，已做者只記錄，不自動撤回；原 UUID／資料／權限、單一 writer、取消／exactly-once、recovery 與零留存維持。以下日期與授權表列為各時期紀錄，不覆蓋本段停止事項。
 
 2026-10-28 最新人類指示：選取前述全部外部／正式剩餘項目並要求「請繼續執行直到完成」，簡單與查核交由 `gpt-6-luna` xhigh 併行。此要求擴展 W18 的本地切片目標，ProJED／OrgMaster／Jenfu-Platform 真接線、正式移轉與發布均須完成後才結案。下列 2026-10-26 的本地範圍與未授權描述是歷史界線；新建 IAM／Secret／credential、shared foundation grant 與費用擴張仍依人類全域規範確認。具體新責任與安全的獨立工作見 SPEC §33，不重問 D1／D2。
 

@@ -2,14 +2,14 @@
 
 **2026-11-22 現行決策：ProJED 採與 PDM 相同的 Cloud Run `run.app` 直接入口，不採 Firebase Hosting；runtime／Jobs 集中至 `jenfu-platform-prod`，保留 Vite，優先改善隨時開啟、立即記事的本機體驗。** 同專案私人網路連既定 Cloud SQL，保留 ProJED 獨立服務、身分與業務權限，不再以跨專案 Shared VPC 關聯為前置。
 
-本輪授權程式、必要測試與受影響文件；不恢復暫停的部署。不部署、不切流、不執行正式 migration／資料重寫，也不變更 DNS、IAM、Secret 或 billing。舊入口保留過渡，新網址須重新登入、更新書籤及重新安裝 PWA。現行設計見 §3、§6、§8–§9、§47.1 與 ADR-054；歷史 source／CI 結果不等於新目標已驗證。
+本輪人類已恢復候選準備、部署與驗證，先不切流；保留原資料、網址與既有 PWA。新入口不導流、不改寫舊 Hosting／Service Worker，不執行來源停寫或業務資料搬入；IAM／SQL login 與 owner 綁定差額依 §47.2 另列具名範圍，未獲確認前不套用。不改 DNS、Secret、billing 或雲端容量。未資格化模型維持停用。現行設計見 §3、§6、§8–§9、§47.1–47.2 與 ADR-054；歷史 source／CI 結果不等於新目標已驗證。
 
 本規格保留架構、資料安全、遷移設計及來源測試適用性；正式業務數量、IAM 實際讀回與非公開營運證據留在任務本機輸出。早期原地升級測試仍只支持原受測 origin／產物，不能證明跨 origin 草稿、安裝或新專案資格已完成。
 
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。
 - 日期：2026-11-22（Asia/Taipei）；本輪受測來源、範圍與限制見 §3.3，歷史 artifact 仍依原收據識別。
 - 狀態：**Cloud Run 直接入口已選定，集中目標 source 與本機記事改善已完成本輪自查；尚未部署或切流**。舊 artifact 不代表新目標資格；新服務完整網址仍須 provider readback，主／Quick 身分與 callback 隔離仍需實際接線驗證。
-- 適用範圍：本輪程式／測試／文件，不建立或執行雲端候選，不改 IAM、Secret、billing、容量、正式資料或流量。舊 Shared VPC 引導取消；已完成設定與舊入口保留，不自動撤回或刪除。
+- 適用範圍：本輪程式／測試／文件與 IAM 保護的候選部署、唯讀／安全拒絕驗證；集中專案的新 IAM 與 owner migration window 尚待 §47.2 具名確認。無正式業務資料寫入、停寫或切流。舊 Shared VPC 引導取消；已完成設定與舊入口保留，不自動撤回或刪除。
 - 直接交接入口：[§11 S1 定案契約](#11-架構決策與-s1-定案契約)、[§12 S1 實作狀態](#12-s1-實作狀態2026-10-26)、[§13 S2 consumer seam](#13-s2-projed-identity-consumer-seam2026-10-26)、[§14 S3 read adapter](#14-s3-http-read-adapter-slice2026-10-26)、[§15 S3 domain command](#15-s3-domain-command-w12026-10-26)、[§16 S3 collaboration command](#16-s3-collaboration-command-w22026-10-27)、[§17 S3 record／activity](#17-s3-recordactivity-w32026-10-27)、[§18 S3 HTTP product wiring](#18-s3-http-product-wiring-w42026-10-27)、[§19 S3 Board transfer](#19-s3-board-transfer-w52026-10-27)、[§20 S3 legacy provider boundary](#20-s3-legacy-provider-boundary-w62026-10-27)、[§21 S3 Quick Task](#21-s3-quick-task-w72026-10-27)、[§22 S3 Task Workbench](#22-s3-task-workbench-w82026-10-27)、[§23 S3 Actor CAS](#23-s3-actor-context-cas-w92026-10-27)、[§24 S3 Task Tracking](#24-s3-task-tracking-w102026-10-27)、[§25 S3 Backup／Import](#25-s3-backupimport-w112026-10-27)、[§26 S3 Account Preferences](#26-s3-account-preferences-w122026-10-27)、[§27 S3 Calendar Subscription](#27-s3-calendar-subscription-w132026-10-27)及[§32 本地開發收斂](#32-s3-local-development-closure-w182026-10-27)；[§11.8 技術主管審查](#118-技術主管審查與最小優化)保留 Rev5 修正理由；既有使用者切換見 [§6.3](#63-既有使用者的切換基線)。
 - 決策來源：[DEV-139 人類決策](../dev_task.md#dev-139-jenfu-platform-onboarding)；架構取捨：[ADR-054](../decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。本文件不是其他 owner 已接受或已發布的契約。
 
@@ -21,9 +21,11 @@ ProJED 已有使用者，移轉以不丟資料、不重建帳號、不改既有�
 
 成本採人類最新要求「只要費用不大幅增加即可」。首階段效益為基礎設施及身分契約一致、既有功能與資料授權相容；任務／資料跨系統使用是後續效益，節費及投資回收期不是必要驗收。首階段必須證明新路徑上的原功能及權限行為，不能只以平台可見、登入成功、表格搬入同一 DB 或測試數量認列交付。
 
-2026-10-28 人類曾要求整合續行，完整產品目標仍保留 ProJED／OrgMaster／Jenfu-Platform 真接線、資料與原功能驗收；本輪 2026-11-22 允許繼續 source／測試／文件，但不恢復先前暫停的部署。不得以歷史續行授權執行本輪禁止的正式操作。其他 repo 的既有修改仍保留，未來跨 repo 實作沿各自 native DEV 與隔離分支，不把本文件當外部 owner acceptance。
+完整產品目標仍保留 ProJED／OrgMaster／Jenfu-Platform 真接線、資料與原功能驗收。2026-11-22 人類在本機記事切片後恢復「正式切流前必要準備、部署候選並驗證」；不包含正式切流、來源停寫、業務資料搬入或新 IAM／Secret／billing 的概括擴張。其他 repo 的既有修改仍保留，跨 repo 實作沿各自 native DEV 與隔離分支，不把本文件當外部 owner acceptance。
 
 ### 人類產品決策
+
+**D5（2026-11-22，Human Confirmed）**：恢復候選準備、部署及驗證，維持零留存，保留原資料、網址與既有 PWA，先不切流。取代 D4 的「不恢復部署」，其 Cloud Run 直接入口、集中專案、本機記事與費用要求維持。只建立 IAM 保護的新候選，不把新服務自身路由視為舊站切換；新增集中專案 IAM／owner 責任的具名差額見 §47.2，尚非已核准。
 
 **D4（2026-11-22，Human Confirmed）**：直接採用 Cloud Run `run.app` 入口，不採 Firebase Hosting；撤回 Firebase 網站命名選擇。重用既有 PWA／Quick／outbox，補上編輯草稿持久保存、明確同步狀態與必要回歸，保留工作區／看板／權限、帳號隔離、既有草稿、CAS／回執與零留存。費用不大幅增加；本輪不部署、不切流、不改 IAM／Secret／billing／容量。D4 取代 D3 的自有網域／Hosting 及僅文件限制；D3 的集中專案與跨 origin 恢復責任維持。
 
@@ -1444,7 +1446,7 @@ Binding以容器內實際profile／SQL／static metadata bytes為準；本次33�
 
 先前 `projed-cc78d` 跨專案 Shared VPC host／service-project 操作引導及候選執行包，**不再是本方案的前置或可直接執行的部署計畫**。尚未做的引導停止；若已執行，只保留實際狀態／責任紀錄，不自動停用關聯、撤回 IAM 或刪除資源。已完成修復與未執行項分開記錄，公開文件不複製其實際 IAM／營運讀回。
 
-後續順序為：完成本機記事改善與 source 回歸 → 固定主／Quick endpoint 與 Session 隔離／owner 契約及具名資源計畫 → 以新綁定建立並驗候選、身分／私人隔離及 provider 安全拒絕 → 補 §6 跨 origin 草稿／連結／PWA 恢復與單一 writer 演練 → 另經正式操作授權才執行資料移轉、切流及舊入口退役。本輪只進行 source／必要測試／文件，不建立、更新或執行雲端候選，不恢復暫停部署，不改 DNS、IAM、Secret、billing、容量或正式資料。
+後續順序為：完成本機記事改善與 source 回歸 → 固定主／Quick endpoint 與 Session 隔離／owner 契約及具名資源計畫 → 以新綁定建立並驗候選、身分／私人隔離及 provider 安全拒絕 → 補 §6 跨 origin 草稿／連結／PWA 恢復與單一 writer 演練 → 另經正式操作授權才執行資料移轉、切流及舊入口退役。D4 的本機記事切片只進行 source／必要測試／文件；最新 D5 已恢復候選部署與驗證，集中專案差額及仍禁止的正式動作依下方 §47.2。
 
 零留存的適用契約、SA caller／模型／project、cache／內容 logging 及 provider 實測以新專案證據為準。未資格化的 ASR／LLM／RAG 路徑繼續停用；不能以舊 project 已關 cache／logging、Files 刪除、store=false、改費用專案或舊 image 自帶 null 綁定，取代新專案的資格與拒絕驗證。
 
@@ -1453,6 +1455,22 @@ Binding以容器內實際profile／SQL／static metadata bytes為準；本次33�
 <a id="dev139-source-views-applied"></a>
 <a id="dev139-cloud-49"></a>
 <a id="dev139-cloud-51"></a>
+
+### 47.2 恢復候選後的最小集中專案差額（2026-11-22，待具名確認）
+
+D5 已授權部署候選；先前核准及建立的 `projed-cc78d` foundation 不能自動成為集中專案的新 IAM 授權。以下是本次候選的具名差額，不是新的 required gate；同範圍 SHA、digest 或失敗修正不重新要求人類批准。
+
+| 責任 | 本次範圍與保護 |
+|---|---|
+| 建置與來源 | 新建 `jenfu-platform-prod` 的 `projed-prod-builder` SA；只授專用 `asia-east1/projed-release` repository writer、`roles/logging.logWriter`，以及既有 `jenfu-platform-prod_asia-east1_cloudbuild` 桶中 `dev139/` 來源前綴的 objectViewer。來源只匯出已驗 commit 的必要 Git blobs；不含 `.env`、credential、本機輸出或業務資料。沿既有 operator actAs，不新增人員 Owner／Editor。 |
+| 執行與 SQL | 新建同專案 `projed-prod-runtime`、`projed-prod-migrator` SA 與兩個相應 SQL IAM login；各只授 exact `jenfu-platform-prod-pg` 的 Cloud SQL client／instanceUser，DB CONNECT／membership 由 Platform owner 路徑精確配對本 app role。Runtime 不取得 owner、其他 app core 或 migration 權限。 |
+| Owner window | 將 Platform DEV-007 owner renderer／reader 與新目標、兩用途候選登入配對；已 qualified SQL bytes 保留，以 forward-only 差額接入。只套 ProJED 的 51 份有序 schema migration、核對 ledger，finally 撤回暫時 owner CREATE。既有 DB／app ACL、舊 login／來源資料不重寫、不匯入業務 snapshot。Owner coordinator 只取得具名 `projed-prod-migration` 的 get／run／execution／operation 及該次 migration ledger stdout 所需讀取權。 |
+| 新資源與執行 | 專用 `projed-release` repo、既有來源桶的任務前綴、新 IAM 保護的 `projed-prod` service、`projed-prod-migration` 與未排程的 `projed-meeting-analysis` Job。只執行建置、owner migration window 及非業務寫入的候選驗證；不執行分析 Job、不建 Scheduler、不授匿名 invoker。 |
+| 延後責任 | 本次不建立 importer／migration Secret、不授來源 credential、不建音訊桶或模型 IAM、不啟用 Speech／Vertex；未資格化 provider／dispatch 保持 null。若後續確實需要上述責任，再沿具名差額處理，不為了候選一次開齊正式切流資源。 |
+
+費用保護：沿既定 min=0／max=1、concurrency=40、現有 SQL tier 與私人網路；不增常駐容量、不改 billing。新 repo 延續原 ProJED 無自動付費掃描的行為，明確指定 `vulnerabilityScanningConfig.enablementConfig=DISABLED`，不變更其他 repo 的掃描策略（[官方 repository 設定](https://docs.cloud.google.com/artifact-registry/docs/reference/rest/v1/projects.locations.repositories#VulnerabilityScanningConfig)）。保留原映像及既有來源物件，候選以新 tag／immutable digest 識別，不覆寫 recovery reference。
+
+本輪 readback／權限／PWA 基線及來源封存留在忽略輸出 `output/dev139-candidate-20261122/`；目前只證明必要權限與舊入口基線，尚無新 Cloud Build／新 registry image／健康候選／真 Session 或正式 provider 驗收。新候選的驗證不替代 §6 的跨 origin 草稿恢復、單一 writer 與正式切流準備。
 
 ## 48. Managed IAM login and app role context（W34，2026-10-29）
 
