@@ -409,6 +409,13 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
         // the existing canonical readback before any recovered edit is sent.
         failedUpdatesRef.current = saved.submitted;
         unknownUpdatesRef.current = saved.submitted;
+        // Restored requests enter the same per-key settlement protocol as a
+        // live request. Otherwise canonical readback cannot retire their flags.
+        for (const key of Object.keys(saved.submitted)) {
+          failedUpdateVersionsRef.current[key] = 0;
+          unknownUpdateVersionsRef.current[key] = 0;
+          latestPersistVersionByKeyRef.current[key] = 0;
+        }
         setSaveState('unknown');
         setLocalDraftStatus('local');
       }
@@ -417,13 +424,10 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
     return () => { disposed = true; };
   }, [canPersistTask, canonicalNoteSnapshot, localDraftReady, localDraftScope, node, ownsLiveTask]);
   React.useEffect(() => {
-    if (!localDraftReady || !localDraftScope || !ownsLiveTask()) return;
+    if (!localDraftReady || !localDraftScope || !ownsLiveTask()
+      || fieldEditRef.current !== fieldEdit || noteEditRef.current !== noteEdit) return;
     const hasDraft = Object.keys(fieldEdit.draft).length > 0 || Boolean(noteEdit.draft);
-    if (!hasDraft) {
-      if (saveState === 'saved') localDraftQueueRef.current = localDraftQueueRef.current.catch(() => undefined)
-        .then(() => clearConfirmedTaskDetailsLocalDrafts(localDraftScope, taskDetailsFieldsFromNode(node), canonicalNoteSnapshot));
-      return;
-    }
+    if (!hasDraft) return;
     const request = ++localDraftWriteRef.current;
     const submitted: Partial<TaskNode> = { ...fieldEdit.draft,
       ...(noteEdit.draft ? { detailNotes: noteEdit.draft, description: noteEdit.draft[0]?.content ?? '' } : {}),
@@ -653,6 +657,17 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
       return;
     }
 
+    // A successful close may unmount before the saved-state effect runs.
+    // Retire only content confirmed by the existing settlement/readback, after
+    // earlier local checkpoints; never leave a saved request as a ghost draft.
+    if (localDraftScope && pendingPersistCountRef.current === 0
+      && Object.keys(fieldEditRef.current.draft).length === 0 && !noteEditRef.current.draft) {
+      const fields = fieldEditRef.current.baseline;
+      const notes = noteEditRef.current.baselineSnapshot;
+      localDraftQueueRef.current = localDraftQueueRef.current.catch(() => undefined)
+        .then(() => clearConfirmedTaskDetailsLocalDrafts(localDraftScope, fields, notes));
+    }
+
     if (persistenceDecision === 'run' && pendingTransitionRef.current) {
       if (Object.keys(fieldEditRef.current.draft).length > 0 || noteEditRef.current.draft) {
         pendingTransitionRef.current = null;
@@ -662,13 +677,15 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
       }
       const transition = pendingTransitionRef.current;
       pendingTransitionRef.current = null;
-      runTransition(transition);
+      void localDraftQueueRef.current.catch(() => undefined).then(() => {
+        if (ownsLiveTask()) runTransition(transition);
+      });
       return;
     }
 
     if (Object.keys(fieldEditRef.current.draft).length > 0 || noteEditRef.current.draft) setSaveState('idle');
     else showSaveFeedback();
-  }, [clearSaveFeedbackTimer, ownsLiveTask, runTransition, showSaveFeedback, updateNoteEditState]);
+  }, [clearSaveFeedbackTimer, localDraftScope, ownsLiveTask, runTransition, showSaveFeedback, updateNoteEditState]);
 
   const recordRejectedPersistence = React.useCallback((
     requestUpdates: Partial<TaskNode>,

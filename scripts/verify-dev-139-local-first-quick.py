@@ -461,6 +461,27 @@ async def modal_behavior(browser, origin, checks):
         await modal.evaluate("window.__DEV139_TASK_DRAFT.mount('different-account')")
         await modal.locator('[data-task-details-modal]').wait_for()
         check('actual-task-modal-account-switch-does-not-restore-private-draft', '離線備註草稿' not in await modal.locator('[contenteditable="true"]').first.inner_text())
+        await modal.evaluate("window.__DEV139_TASK_DRAFT.mount('clean-save-owner')")
+        note = modal.locator('[contenteditable="true"]').first
+        await note.fill('已確認成功的新備註')
+        await modal.locator('[data-task-details-local-status="local"]').wait_for()
+        await modal.get_by_role('button', name='關閉任務詳情', exact=True).click()
+        await modal.locator('[data-task-details-modal]').wait_for(state='hidden')
+        await modal.evaluate("window.__DEV139_TASK_DRAFT.mount('clean-save-owner')")
+        await modal.locator('[data-task-details-modal]').wait_for()
+        await modal.wait_for_timeout(100)
+        check('confirmed-save-and-close-does-not-restore-a-ghost-draft',
+            '已確認成功的新備註' in await modal.locator('[contenteditable="true"]').first.inner_text()
+            and await modal.locator('[data-task-details-save-retry]').count()==0)
+        await modal.evaluate('window.__DEV139_TASK_DRAFT.unmount()')
+        await modal.locator('[data-task-details-modal]').wait_for(state='hidden')
+        await modal.evaluate("window.__DEV139_TASK_DRAFT.seedUnknownSaved('clean-save-owner')")
+        await modal.evaluate("window.__DEV139_TASK_DRAFT.mount('clean-save-owner')")
+        await modal.locator('[data-task-details-save-retry]').click()
+        await modal.locator('[data-task-details-save-status="saved"]').wait_for()
+        check('restored-unknown-note-settles-through-readback-without-resending',
+            (await modal.evaluate('window.__DEV139_TASK_DRAFT.counters()'))['writes']==1
+            and await modal.locator('[data-task-details-save-retry]').count()==0)
         await modal.screenshot(path=str(OPTIONS.report.parent / 'task-note-local-first.png'), full_page=True)
         check('no-uncaught-modal-errors', not errors)
     except Exception:

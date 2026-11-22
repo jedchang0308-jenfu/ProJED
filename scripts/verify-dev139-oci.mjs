@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { verifyLegacyClientFenceOci } from './lib/dev139-legacy-client-fence-oci.mjs';
+import { MANAGED_MEETING_AUDIO_BUCKET } from '../shared/dev139MeetingAudio.mjs';
 
 // Actual OCI qualification runs on the disposable Linux CI host. Never start
 // Docker or consume the developer's constrained Windows disk through this path.
@@ -302,7 +303,7 @@ try {
     '--env', 'PROJED_ENV=managed', '--env', 'PROJED_APP_ENTRY=main',
     '--env', 'PROJED_RUNTIME_BINDING_FILE=/verification/binding.json',
     '--env', `PROJED_DATABASE_URL=postgresql://${encodeURIComponent(binding.iamLogins.runtime)}@localhost/jenfu_prod?host=${encodeURIComponent(socketPath)}`,
-    '--env', 'PROJED_MEETING_AUDIO_BUCKET=projed-cc78d-meeting-audio',
+    '--env', `PROJED_MEETING_AUDIO_BUCKET=${MANAGED_MEETING_AUDIO_BUCKET}`,
     asrImage], { network: fixtureNetwork, timeout: 90_000 });
   assert.equal(asrMaintenance.status, 0, asrMaintenance.stderr);
   const asrMaintenanceLines = asrMaintenance.stdout.trim().split(/\r?\n/u);

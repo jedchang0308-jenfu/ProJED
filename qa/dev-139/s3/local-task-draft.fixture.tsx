@@ -8,6 +8,8 @@ import { nodeService, recordService } from '../../../src/services/dataBackend';
 import { areTaskNoteSnapshotsEqual, taskNoteSnapshotFromNode } from '../../../src/utils/taskNotePersistence';
 import { TASK_PURPOSE_NOTE_ID } from '../../../src/utils/taskNoteRichContent';
 import type { TaskNode } from '../../../src/types';
+import { saveTaskDetailsLocalDraft } from '../../../src/services/taskDetailsLocalDraft';
+import { taskDetailsFieldsFromNode } from '../../../src/components/taskDetailsDraft';
 
 // Actual modal/stores; only the remote data seam is synthetic. No real backend.
 let canonical: TaskNode = {
@@ -40,7 +42,7 @@ useMemberStore.setState({ loading: false, boardMembers: [], currentBoardAccess: 
 } });
 const mount = (accountId: string) => {
   useAuthStore.setState({ user: { uid: accountId, displayName: '本機測試', email: null }, loading: false });
-  root.render(<TaskDetailsModal key={accountId} nodeId={canonical.id} onClose={() => undefined} />);
+  root.render(<TaskDetailsModal key={accountId} nodeId={canonical.id} onClose={() => root.render(null)} />);
 };
 const fixture = {
   counters: () => ({ writes, reads }),
@@ -48,6 +50,16 @@ const fixture = {
     canonical = { ...canonical, description: content, detailNotes: [{ id: TASK_PURPOSE_NOTE_ID, title: '目的', content }] };
   },
   mount,
+  unmount: () => root.render(null),
+  seedUnknownSaved(accountId: string) {
+    const snapshot = taskNoteSnapshotFromNode(canonical);
+    return saveTaskDetailsLocalDraft({ accountId, workspaceId: canonical.workspaceId, boardId: canonical.boardId,
+      taskId: canonical.id, key: 'fixture-unknown-saved', schemaVersion: 1, savedAt: Date.now(),
+      fields: { baseline: taskDetailsFieldsFromNode(canonical), draft: {} },
+      notes: { baseline: { detailNotes: [{ id: TASK_PURPOSE_NOTE_ID, title: '目的', content: '原版本' }], description: '原版本' },
+        draft: snapshot.detailNotes }, unknown: true,
+      submitted: { detailNotes: snapshot.detailNotes, description: snapshot.description ?? '' } });
+  },
 };
 Object.assign(window, { __DEV139_TASK_DRAFT: fixture });
 mount('local-notes-owner');
