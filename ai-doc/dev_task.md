@@ -69,6 +69,8 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
   - **恢復候選的查核與差額**：來源 `8089d0c` 的 [CI 45003027298](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45003027298) 兩 jobs SUCCESS；重用既有來源與回歸。已重查舊三入口／PWA manifest／SW 基線；新候選尚未部署。具名核准已收到；專用建置／runtime／migrator foundation、候選映像與未執行 Job 已讀回，owner PostgreSQL17／required source CI 已通過，繼續 owner window 與 Web 候選驗證，不建立 importer credential／來源 Secret 或啟用未資格化模型。[最小具名範圍與限制](specs/SPEC-139-projed-jenfu-platform-onboarding.md#472-恢復候選後的最小集中專案差額2026-11-22待具名確認)；實際讀回留 `output/dev139-candidate-20261122/`。
 
+  - **候選交接的剩餘邊界**：已驗明的 `8089d0c` 映像沿用，部署 planner `0677935` 已修正 Cloud Run create body／candidate owner profile，41 項 release 回歸及兩個零 execution Job 模板讀回通過。Platform `d05341b9` 的 required CI／PG17 native 已成功，四份 owner SQL 直接綁 Git bytes；仍未執行正式 schema window 或建立 Web service。自動審查拒絕新增持久 owner coordinator IAM 及 [Platform #230](https://github.com/jedchang0308-jenfu/Jenfu-Platform/pull/230) ready 轉換，改提出 [兩小時臨時 owner 差額](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-owner-coordinator-delta) 並等待具名決定；原三 SA／七項 foundation IAM／兩 SQL login 的核准不重問。本次查核不是 required gate。
+
   以下為原目標 source／測試與候選準備歷史，不能作新 project／origin 已實作或驗收的證據；原資料與必要安全回歸的分母保留，未變部分沿原來源重用。
 
   - 候選準備已補明確 candidate renderer：不要求來源 Secret、不產生 snapshot import／Scheduler，只準備 IAM 保護的 service 與手動 Jobs；40 項 release 自查及完整 binding 的 owner input 驗證通過。原分支與已驗證映像保留，正式執行與零留存資格仍依各環境查證，營運證據保留於任務本機輸出。[候選部署設計與界線](specs/SPEC-139-projed-jenfu-platform-onboarding.md#471-2026-11-20-最小-foundation-變更提案)
