@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import { createHash, randomBytes } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { verifyLegacyClientFenceOci } from './lib/dev139-legacy-client-fence-oci.mjs';
 import { MANAGED_MEETING_AUDIO_BUCKET } from '../shared/dev139MeetingAudio.mjs';
+import { stagePublicPredecessor } from './lib/dev139-predecessor-stage.mjs';
+import { legacyManifestFixture } from '../qa/dev-139/release/httpArtifactFixture.mjs';
 
 // Actual OCI qualification runs on the disposable Linux CI host. Never start
 // Docker or consume the developer's constrained Windows disk through this path.
@@ -19,6 +21,8 @@ const label = 'projed.dev139.oci-attempt';
 const prefix = `dev139-oci-${nonce}`;
 const toolsImage = `${prefix}:build`;
 const runtimeImage = `${prefix}:runtime`;
+const legacyEntryImage = `${prefix}:legacy-entry`;
+const legacyHttpImage = `${prefix}:legacy-http`;
 const jobsImage = `${prefix}:jobs`;
 const mediaImage = `${prefix}:media`;
 const asrImage = `${prefix}:asr-job`;
@@ -39,11 +43,13 @@ const secrets = Array.from({ length: 5 }, () => randomBytes(24).toString('hex'))
 const [adminPassword, migratorPassword, importerPassword, runtimePassword, runtimeIamToken] = secrets;
 let binding;
 let imageId;
+let legacyEntryImageId;
 let jobsImageId;
 let mediaImageId;
 let asrImageId;
 let mediaProof;
 let legacyClientFenceProof;
+let predecessorStage;
 let postgresVersion;
 let appliedMigrationCount = 0;
 let firstFailure;
@@ -55,6 +61,9 @@ function sanitize(value) {
 }
 
 function docker(args, { input, env = {}, timeout = 90_000, allowFailure = false } = {}) {
+  if (args[0] === 'build' && args.includes('Dockerfile.dev139') && process.env.GITHUB_SHA) {
+    args = [...args.slice(0, 1), '--build-arg', `PROJED_SOURCE_REVISION=${process.env.GITHUB_SHA}`, ...args.slice(1)];
+  }
   const result = spawnSync('docker', args, {
     input, env: { ...process.env, ...env }, encoding: 'utf8', timeout,
     maxBuffer: 32 * 1024 * 1024,
@@ -140,6 +149,24 @@ try {
   assert.equal(image.Config.User, 'node');
   assert.deepEqual(image.Config.Cmd, ['node', 'dist-server/server/index.js']);
   passed('actual-linux-amd64-nonroot-runtime-image');
+
+  docker(['build', '--platform', 'linux/amd64', '--target', 'legacy-entry', '--label', `${label}=${nonce}`,
+    '--build-arg', `PROJED_RELEASE_ID=${prefix}`, '-f', 'Dockerfile.dev139', '-t', legacyEntryImage, '.'], { timeout: 600_000 });
+  images.add(legacyEntryImage);
+  const entryImage = JSON.parse(docker(['image', 'inspect', legacyEntryImage]).stdout)[0];
+  legacyEntryImageId = entryImage.Id;
+  assert.equal(entryImage.Config.User, 'node');
+  assert.deepEqual(entryImage.Config.Cmd, ['node', 'dist-server/server/legacyEntryMain.js']);
+  const entryCheck = runOwnedContainer('legacy-entry-check', ['--read-only', '--tmpfs', '/tmp', legacyEntryImage, 'node',
+    'dist-server/server/legacyEntryMain.js', '--check-only']);
+  assert.deepEqual(JSON.parse(entryCheck.stdout), { event: 'projed_legacy_entry_check', status: 'CHECK_ONLY',
+    transport: 'UNPUBLISHED', upstream: 'NOT_CONTACTED', userAuthority: 'APP_SESSION_REQUIRED', database: 'NOT_CONNECTED', models: 'NOT_RUN' });
+  runOwnedContainer('legacy-entry-no-db', ['--read-only', '--tmpfs', '/tmp', legacyEntryImage, 'node', '--input-type=module', '-e',
+    "import assert from 'node:assert/strict';import {existsSync} from 'node:fs';for(const path of ['/app/db','/app/config','/app/dist','/app/node_modules/pg','/app/dist-server/server/index.js'])assert.equal(existsSync(path),false);"]);
+  const inactiveEntry = runOwnedContainer('legacy-entry-unpublished', ['--read-only', '--tmpfs', '/tmp', legacyEntryImage], { allowFailure: true });
+  assert.equal(inactiveEntry.status, 1);
+  assert.match(inactiveEntry.stderr, /LEGACY_ENTRY_UNAVAILABLE/);
+  passed('actual-nonroot-no-db-legacy-entry-check-only-and-unpublished-start-denial');
 
   docker(['build', '--platform', 'linux/amd64', '--target', 'managed-jobs', '--label', `${label}=${nonce}`,
     '--build-arg', `PROJED_RELEASE_ID=${prefix}`, '-f', 'Dockerfile.dev139', '-t', jobsImage, '.'], { timeout: 600_000 });
@@ -575,6 +602,35 @@ try {
   legacyClientFenceProof = await verifyLegacyClientFenceOci({ docker, createContainer, runOwnedContainer,
     pgName, fixtureNetwork, toolsImage, prefix, nonce, secrets });
   passed('actual-legacy-client-postgrest-write-fence-and-recovery');
+
+  // Exercise the actual Linux old-origin build with a portable, verified public
+  // fixture. The source path deliberately cannot resolve inside the container.
+  const predecessorRoot = join(temp, 'public-predecessor');
+  const predecessorManifest = legacyManifestFixture(predecessorRoot);
+  const predecessor = JSON.parse(readFileSync(predecessorManifest, 'utf8'));
+  predecessor.artifact.distDir = 'C:\\unavailable-projed-predecessor\\dist';
+  writeFileSync(predecessorManifest, JSON.stringify(predecessor));
+  const staging = resolve('dev139-predecessor');
+  assert.equal(existsSync(staging), false, 'Never replace another predecessor input');
+  predecessorStage = staging;
+  stagePublicPredecessor({ manifestPath: predecessorManifest, distDir: predecessorRoot, output: staging });
+  docker(['build', '--platform', 'linux/amd64', '--target', 'runtime', '--label', `${label}=${nonce}`,
+    '--build-arg', `PROJED_RELEASE_ID=${prefix}-legacy`, '--build-arg', 'PROJED_HTTP_BUILD_MODE=legacy-entry',
+    '--build-arg', 'PROJED_PREVIOUS_RELEASE_MANIFEST=/app/dev139-predecessor/manifest.json',
+    '-f', 'Dockerfile.dev139', '-t', legacyHttpImage, '.'], { timeout: 600_000 });
+  images.add(legacyHttpImage);
+  const oldAssetHash = createHash('sha256').update(readFileSync(join(predecessorRoot, 'assets/client-old-fixture.js'))).digest('hex');
+  runOwnedContainer('legacy-http-retention', ['--read-only', '--tmpfs', '/tmp', legacyHttpImage, 'node', '--input-type=module', '-e',
+    `import assert from 'node:assert/strict';import{readFileSync,existsSync}from'node:fs';import{createHash}from'node:crypto';
+    const meta=JSON.parse(readFileSync('/app/dist/dev139-cloud-run-meta.json'));
+    const manifest=JSON.parse(readFileSync('/app/http-artifact-manifest.json'));
+    assert.equal(meta.buildMode,'legacy-entry');assert.equal(meta.previousAssets,'VERIFIED_AND_RETAINED');
+    assert.match(manifest.sourceRevision,/^[a-f0-9]{40}$/);assert.equal(meta.sourceRevision,manifest.sourceRevision);
+    assert.equal(manifest.artifact.versionRetention.retentionDays,30);
+    assert.equal(createHash('sha256').update(readFileSync('/app/dist/assets/client-old-fixture.js')).digest('hex'),${JSON.stringify(oldAssetHash)});
+    for(const name of ['index.html','quick-task/index.html'])assert.equal(existsSync('/app/dist/app-releases/release-old-fixture/'+name),true);
+    assert.equal(existsSync('/app/dev139-predecessor'),false);`]);
+  passed('actual-linux-old-origin-http-build-portable-windows-predecessor-and-immutable-version-retention');
 } catch (error) {
   firstFailure = error;
   for (const name of [...containers].reverse()) {
@@ -589,6 +645,12 @@ try {
     }
   }
 } finally {
+  if (predecessorStage) {
+    try {
+      assert.equal(predecessorStage, resolve('dev139-predecessor'));
+      rmSync(predecessorStage, { recursive: true, force: true });
+    } catch (error) { cleanupFailures.push(error); }
+  }
   for (const name of [...containers].reverse()) {
     try {
       const container = inspectResource('container', name);
@@ -623,7 +685,7 @@ if (!firstFailure && cleanupFailures.length === 0) passed('owned-container-socke
 const status = firstFailure || cleanupFailures.length ? 'FAIL' : 'PASS';
 const result = {
   status, evidenceLevel: 'ISOLATED_LINUX_OCI_IAM_SHAPED_POSTGRES',
-  sourceSha: process.env.GITHUB_SHA, releaseId: prefix, imageId, jobsImageId, asrImageId, mediaImageId, mediaProof,
+  sourceSha: process.env.GITHUB_SHA, releaseId: prefix, imageId, legacyEntryImageId, jobsImageId, asrImageId, mediaImageId, mediaProof,
   postgres: postgresVersion, migrationCount: appliedMigrationCount,
   expectedMigrationCount: binding ? Object.keys(binding.migrationSha256).length : 0,
   profileSha256: binding?.profileSha256, migrationSha256: binding?.migrationSha256,

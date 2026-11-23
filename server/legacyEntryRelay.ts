@@ -67,7 +67,7 @@ function allowedPath(raw: string): { path: string; privateResponse: boolean } {
   const api = rawPath.startsWith('/api/v1/')
     || /^\/api\/auth\/jenfu-sso\/(?:start|callback|cancel)$/.test(rawPath);
   const asset = ['/', '/quick-task', '/quick-task/', '/quick-task/index.html', '/index.html', '/sw.js',
-    '/manifest.webmanifest', '/quick-task/manifest.webmanifest', '/app-shell-meta.json', '/release-meta.json',
+    '/manifest.webmanifest', '/quick-task/manifest.webmanifest', '/app-shell-meta.json', '/release-meta.json', '/app-version-retention.json',
     '/dev139-cloud-run-meta.json', '/pwa-update-bridge.html', '/favicon.ico', '/vite.svg'].includes(rawPath)
     || /^\/(?:assets|app-releases|icons)\/.+/.test(rawPath) || /^\/workbox-[A-Za-z0-9_-]+\.js$/.test(rawPath);
   if (!api && !asset) throw new Error('RELAY_PATH_DENIED');

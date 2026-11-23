@@ -67,7 +67,7 @@ export function scanArtifact({ distDir, root = process.cwd() } = {}) {
   return { ok: errors.length === 0, errors };
 }
 
-export function verifyManifest(manifestPath, { root = process.cwd() } = {}) {
+export function verifyManifest(manifestPath, { root = process.cwd(), distDir: relocatedDistDir } = {}) {
   if (!manifestPath || !fs.existsSync(manifestPath)) throw new Error('DEV-083 P1: manifest path is missing.');
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   const errors = [];
@@ -77,7 +77,9 @@ export function verifyManifest(manifestPath, { root = process.cwd() } = {}) {
   if (manifest.environment?.supabaseProjectRef !== PRODUCTION_CONTRACT.supabaseProjectRef) errors.push('Supabase project mismatch');
   if (manifest.environment?.redirectUrl !== PRODUCTION_CONTRACT.canonicalRedirectUrl) errors.push('redirect URL mismatch');
   if (manifest.contractSha256 !== contractDigest()) errors.push('production contract digest mismatch');
-  const distDir = manifest.artifact?.distDir;
+  // A relocated public artifact must still match every original entry/hash.
+  // Never rewrite the original manifest merely to transport Windows paths.
+  const distDir = relocatedDistDir ?? manifest.artifact?.distDir;
   const tree = distDir && fs.existsSync(distDir) ? digestTree(distDir) : null;
   if (!tree) errors.push('artifact dist directory missing');
   else if (tree.sha256 !== manifest.artifact.treeSha256) errors.push('artifact tree digest mismatch');

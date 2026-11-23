@@ -77,6 +77,8 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
 ## DEV-139：ProJED 納入 Jenfu-Platform，Cloud Run／Cloud SQL 對齊並保留 Vite
 
+  - **舊網址封裝source（2026-11-23，未部署）**：補獨立無DB relay entry／lean target、空public全rewrite、原manifest不改寫的Windows→Linux public staging，以及舊版→HTTP A→HTTP B版本保留。入口21／封裝與roundtrip11／release52及型別／boundary本機通過；S2首輪既有50ms時鐘catch-up 1項安全拒絕，負載後單檔7/7重播PASS，首失敗保留，整版CI／Linux Docker待驗。當前候選仍 `41eede3`／`00003-bjv`；無新資源、IAM、Hosting或資料變更。[接手命令與未完成邊界](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-legacy-entry-packaging)。
+
   - **最新候選（2026-11-23）**：source `41eede3` 的 [CI45141685539](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45141685539) 兩jobs SUCCESS，764 unit、型別／boundary／compiled artifact、隔離PG／snapshot與OCI20通過；修正版Cloud Build `4566c830` 核對來源原始blob、51 SQL／profile及三digests，私人Web `projed-prod-00003-bjv` 的16項唯讀HTTP／18項PWA通過。首次CRLF封包 `ac8cd88d` 已拒絕未部署，原始證據保留。IAM／容量未變、舊00002保留、migration仍原一次、analysis零次；新入口／identity／provider bindings仍停用，原資料／網址／PWA未改、不切流。完整DEV-139未完成；[結果／剩餘工作](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-remaining-delivery-plan)。
 
   - **2026-11-23 後續 source 準備**：文件已單獨提交 `0f5eba7`；接續原目標收斂未啟用的入口 factory／真 RS256 transport 與中央 HTTP seam，保留使用者 App Session。補原錄音 header、32 MiB request 相容、回應串流、55秒期限／取消與未知寫入不重送；入口／Session 17項、完整S2 530項、release41、strict S2與managed boundary本機通過。此為合成／loopback結果，新source CI／artifact／candidate尚待核對；原已驗候選仍 `95d9de5`，入口／identity／provider bindings停用，無新入口／IAM／SQL／資料／網址或PWA變更。現況與缺口沿 [§3.0.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-remaining-delivery-plan)，不以此認列完整交付。

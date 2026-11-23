@@ -268,6 +268,8 @@ test('HEAD, conditional static responses and decompressed bodies retain their ex
     const decoded = await fetch(`${base}/sw.js`, { headers: mainHeaders });
     assert.equal(decoded.headers.get('content-encoding'), null); assert.equal(decoded.headers.get('content-length'), null);
     assert.equal(decoded.headers.get('service-worker-allowed'), '/'); assert.equal(await decoded.text(), 'decoded');
+    const catalog = await fetch(`${base}/app-version-retention.json`, { headers: mainHeaders });
+    assert.equal(catalog.status, 200); assert.equal(await catalog.text(), 'decoded');
   });
 });
 

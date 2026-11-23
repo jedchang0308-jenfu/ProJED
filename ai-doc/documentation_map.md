@@ -26,6 +26,8 @@
 
 **其餘工作先文件化**：[SPEC-139 §3.0.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-remaining-delivery-plan) 統一交接入口／真登入、原地 PWA／草稿、零留存背景處理及最後換址的修改面、必要驗證與執行順序；正式資料交付仍只維護於 SPEC-142。文件交接已單獨提交 `0f5eba7`，該回合未擴寫程式或執行正式操作；後續同範圍來源 `41eede3`／候選結果見上段。入口factory／Session 17項隔離案例已通過，但實際Hosting／provider接線、真身分與未資格模型仍未完成，不把私人候選PASS當完整交付。
 
+**未部署的舊網址封裝**：[SPEC-139 §3.0.2](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-legacy-entry-packaging) 記錄無DB entry／lean image、空public全rewrite、可攜前版staging、HTTP產物manifest與跨兩版保留。原manifest／public bytes及既有保留天數不改；本機必要案例通過，完整CI／Linux封裝待驗，不改當前私人候選或舊入口、不執行DEV-142。
+
 以下日期／Rev／W 為原方案的來源與驗證歷史導覽，不覆蓋上述決策或構成新環境 PASS。
 
 音訊同源 proxy、未知寫入 readback 與跨取消／刪除清理 proof 的現行 source／驗證界線見 [SPEC §42](specs/SPEC-139-projed-jenfu-platform-onboarding.md#42-meeting-audio-transport-w282026-10-29)；完整錄音 UI／worker／cleanup 與正式接線仍計入交付。

@@ -6,6 +6,7 @@ node_modules
 dist
 dist-server
 dist-jobs
+http-artifact-manifest.json
 output
 outputs
 logs

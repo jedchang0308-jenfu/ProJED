@@ -1,14 +1,25 @@
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { retainHttpVersionHistory } from './lib/dev139-http-version-retention.mjs';
+import { writeHttpArtifactManifest } from './lib/dev139-http-artifact.mjs';
 
 const root = process.cwd();
 const releaseId = String(process.env.PROJED_RELEASE_ID ?? '').trim();
 if (!/^[A-Za-z0-9._-]{1,96}$/.test(releaseId)) {
   throw new Error('PROJED_RELEASE_ID is required and must be filesystem-safe');
 }
+const buildMode = process.env.PROJED_HTTP_BUILD_MODE ?? 'candidate';
+if (!['candidate', 'legacy-entry'].includes(buildMode)) throw new Error('HTTP build mode is invalid');
+const previousManifestPath = process.env.PROJED_PREVIOUS_RELEASE_MANIFEST;
+const sourceRevision = process.env.PROJED_SOURCE_REVISION || process.env.GITHUB_SHA || null;
+if (sourceRevision !== null && !/^[a-f0-9]{40}$/.test(sourceRevision)) throw new Error('HTTP source revision is invalid');
+if (buildMode === 'legacy-entry' && !previousManifestPath) {
+  throw new Error('Old-origin HTTP build requires its verified predecessor manifest');
+}
+if (buildMode === 'legacy-entry' && sourceRevision === null) throw new Error('Old-origin HTTP build requires its source revision');
 
 const run = (command, args, env = process.env) => {
   const result = spawnSync(command, args, { cwd: root, env, encoding: 'utf8', stdio: 'pipe' });
@@ -49,24 +60,23 @@ try {
   const serverEntry = resolve('dist-server/server/index.js');
   if (!statSync(serverEntry).isFile()) throw new Error('Compiled server entry is missing');
 
-  const walk = directory => readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
-    const path = join(directory, entry.name);
-    return entry.isDirectory() ? walk(path) : [path];
-  });
-  const forbiddenRef = 'knodlkxqpcqyrtgwpdst.supabase.co';
-  if (walk(resolve('dist')).some(path => readFileSync(path).includes(forbiddenRef))) {
-    throw new Error('HTTP candidate contains the legacy production Supabase origin');
-  }
+  const retained = retainHttpVersionHistory({ distDir: resolve('dist'), releaseId, previousManifestPath,
+    requirePreviousAssets: buildMode === 'legacy-entry' });
 
   const sha256 = value => createHash('sha256').update(value).digest('hex');
   writeFileSync(resolve('dist/dev139-cloud-run-meta.json'), `${JSON.stringify({
     schemaVersion: 1,
     releaseId,
     backend: 'http',
+    buildMode,
+    previousAssets: retained.previousAssets,
+    sourceRevision,
     entrySha256: sha256(index),
     quickEntrySha256: sha256(quick),
   }, null, 2)}\n`, 'utf8');
-  process.stdout.write(`${JSON.stringify({ status: 'PASS', releaseId, backend: 'http' })}\n`);
+  writeHttpArtifactManifest({ distDir: resolve('dist'), releaseId, sourceRevision, manifestPath: resolve('http-artifact-manifest.json') });
+  process.stdout.write(`${JSON.stringify({ status: 'PASS', releaseId, backend: 'http', buildMode,
+    previousAssets: retained.previousAssets })}\n`);
 } finally {
   rmSync(envDir, { recursive: true, force: true });
 }

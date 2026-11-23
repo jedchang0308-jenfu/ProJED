@@ -41,3 +41,6 @@ outputs/
 !.env.example
 !.env.test.example
 !.env.staging.example
+# Generated public artifact metadata and explicit Docker predecessor input.
+/http-artifact-manifest.json
+/dev139-predecessor/

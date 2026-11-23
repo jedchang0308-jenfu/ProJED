@@ -132,6 +132,28 @@ Source `41eede303c96e2b0bebebdf6e04774f9fcbaf9ab` 的 [CI45141685539](https://gi
 
 結果在 `output/dev139-legacy-entry-20261123/candidate-final-verification.json`、同目錄原始建置／拒絕／來源／部署／HTTP收據與 `output/playwright/dev139-private-candidate-pwa/candidate-41eede3-r2.json`。入口binding、production identity pins及四個provider／Job bindings仍停用；直接匿名瀏覽／安裝、真Session、正式使用者映射、實際Hosting入口、零留存資格與DEV-142仍按上表未結案，完整DEV-139保持未完成。
 
+<a id="dev139-legacy-entry-packaging"></a>
+
+#### 3.0.2 舊網址入口封裝與可攜版本保留（2026-11-23）
+
+延續 §3.0.1 的 source 準備；既有私人候選仍為 `41eede3`／`00003-bjv`。下列封裝未部署，不建立SA／IAM、不改舊Hosting或正式資料：
+
+- `server/legacyEntryMain.ts` 與明確 `legacy-entry` Docker target只帶六個編譯模組與JOSE，不帶SQL、DB driver、profile或業務前端。check-only不取憑證／連線，null binding在listen／取token前拒絕，shutdown最多8秒且不重送未知寫入；預設web target不變。
+- 沿[Hosting靜態檔優先於rewrite](https://firebase.google.com/docs/hosting/full-config#priority_order_of_hosting_responses)，opt-in產生獨立設定與真正空的public目錄，固定舊site／`projed-legacy-entry`／asia-east1，主／Quick／SW／API全路徑轉送；不沿用舊HTML destination、不redirect到run.app，原firebase.json／API-only模式不變。生成結果僅 `PREPARED_NOT_DEPLOYED`。
+- [stage-dev139-predecessor.mjs](../../scripts/stage-dev139-predecessor.mjs) 核對原manifest與完整public tree，只複製列明的靜態檔，不搬整個outputs或相鄰env／營運收據。原manifest bytes不改；selection固定manifest／tree SHA及相對dist，容器內重驗。原DEV-083 verifier僅新增呼叫端dist relocation參數，其既有target／contract／file hashes及預設不變。
+- `retainHttpVersionHistory` 重用既有catalog／immutable copy與原保留天數。新HTTP檔先完整拒絕舊Supabase origin，之後才原樣保留已驗前版，不全域豁免舊檔名。HTTP build另在public tree外產出 `http-artifact-manifest.json`，固定source、目前metadata、tree／entries及catalog；下一次可驗HTTP前驅，涵蓋舊版→HTTP A→HTTP B。未綁source的本機candidate不作可信前版；舊bundle晚回網的writer fence／unknown／receipt仍由DEV-142處理，資產保留不等於資料搬遷。
+
+準備命令（只產本機設定／靜態輸入，不含deploy）：
+
+```text
+node scripts/create-dev139-hosting-config.mjs --mode=legacy-entry --service=projed-legacy-entry --region=asia-east1 --output=output/dev139-legacy-entry-packaging-20261123/firebase.legacy-entry.json
+node scripts/stage-dev139-predecessor.mjs --manifest=<已核對live來源的manifest> --dist=<相同tree的public目錄> --output=dev139-predecessor
+```
+
+Linux建置仍固定source封包；可攜 `dev139-predecessor/` 是另具manifest／tree SHA的公開靜態輸入，須明列於建置包，不默認Git archive會包含未追蹤目錄。Docker args為 `PROJED_HTTP_BUILD_MODE=legacy-entry`、`PROJED_PREVIOUS_RELEASE_MANIFEST=/app/dev139-predecessor/manifest.json`、`PROJED_SOURCE_REVISION=<已驗source SHA>`，缺前版或source即拒絕。私人candidate可不帶前版，但metadata標 `NOT_SUPPLIED_CANDIDATE_ONLY`，不能據此切換原網址。前版檔案核對只支持來源一致；正式發布仍沿既有流程綁到live readback，不另加人工簽核。
+
+本機入口／Session21、封裝／roundtrip11、release52、原Hosting verifier與strict S2／managed boundary通過。完整S2首輪533/534：既有clock catch-up在並行負載下逾原50ms scheduler deadline而安全拒絕；首失敗保留，負載結束後單檔7/7重播通過，未放寬身分／時鐘保護。整版CI及真Linux lean entry／portable legacy-entry HTTP build仍待執行，不能以fixture代替provider或正式PWA驗收。結果留 `output/dev139-legacy-entry-packaging-20261123/`。實際live前版選取／staging、新入口SA／跨專案invoker及映像拉取差額、Hosting接線與真Session／零留存資格仍未完成；原資料、網址、PWA及當前私人候選不變。
+
 ### 3.1 Runtime 工程基線與模組責任
 
 本節固定 ProJED 的技術選型。S1 server 已依 Node `>=24.11.0 <25`／npm `>=11 <12`、`pg ^8.21.0`、TypeScript、`node:http` 實作；本地隔離驗證接受 PostgreSQL 17／18，並記錄實際 major。lockfile 已固定實際解析版本；未來 managed target 仍按實際綁定版本重驗，這不要求 Vite 改成 Next.js。S1 完整契約見 §11、實作結果見 §12。
