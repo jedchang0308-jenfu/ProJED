@@ -71,7 +71,7 @@ jobs:
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' && (inputs.quick_upgrade || contains(github.event.head_commit.message, '[dev139-upgrade]')) }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: 0670a0aee5327cd30d53f21360d577b278376028
+          ref: 1437a25c74e10daf8530c3b099742297712175ce
           path: output/dev139-quick-upgrade-source-A
           persist-credentials: false
       - name: Install the old Quick locked dependencies

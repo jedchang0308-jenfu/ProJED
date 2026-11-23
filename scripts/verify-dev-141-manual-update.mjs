@@ -386,14 +386,19 @@ try {
   }
   const singleButtonCases = [];
   if (backendUpgradeOnly) {
-    context = await chromium.launchPersistentContext(path.join(output, 'quick-backend-profile'),
-      { channel: 'msedge', headless: true, viewport: { width: 390, height: 844 } });
-    await runQuickBackendUpgrade({ context, origin, output, publish, loaded, workerVersion, refreshCheck, record,
-      liveBackend: upgradeApiProxy ? { owner: process.env.PROJED_DEV139_QUICK_PG_OWNER,
+    const liveBackend = upgradeApiProxy ? { owner: process.env.PROJED_DEV139_QUICK_PG_OWNER,
         other: process.env.PROJED_DEV139_QUICK_PG_OTHER,
         ownerContext: process.env.PROJED_DEV139_QUICK_PG_CONTEXT,
-        proofPath: process.env.PROJED_DEV139_QUICK_PG_PROOF } : null });
-    await context.close();
+        proofPath: process.env.PROJED_DEV139_QUICK_PG_PROOF,
+        sourceFixture: process.env.PROJED_DEV139_QUICK_SOURCE_FIXTURE } : null;
+    for (const sourceCommitted of liveBackend?.sourceFixture ? [false, true] : [false]) {
+      context = await chromium.launchPersistentContext(path.join(output, sourceCommitted ? 'quick-committed-profile' : 'quick-backend-profile'),
+        { channel: 'msedge', headless: true, viewport: { width: 390, height: 844 } });
+      try {
+        await runQuickBackendUpgrade({ context, origin, output, publish, loaded, workerVersion, refreshCheck, record,
+          liveBackend, sourceCommitted });
+      } finally { await context.close(); context = null; }
+    }
     record('A06-installation-parity', { installationParity, originPreserved: true,
       browserProfilePreserved: true, physicalInstalledPwa: 'NOT_RUN', reinstallation: 'NOT_REQUIRED' });
   } else {

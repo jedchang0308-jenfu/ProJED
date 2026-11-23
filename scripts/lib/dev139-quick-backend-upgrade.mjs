@@ -5,12 +5,16 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
-export const LEGACY_QUICK_SOURCE_REVISION = '0670a0aee5327cd30d53f21360d577b278376028';
+export const LEGACY_QUICK_SOURCE_REVISION = '1437a25c74e10daf8530c3b099742297712175ce';
 const git = (root, ...args) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim();
 
 export function verifyQuickUpgradeSources(legacyRoot, candidateRoot) {
   assert.equal(git(legacyRoot, 'rev-parse', 'HEAD'), LEGACY_QUICK_SOURCE_REVISION, 'A must use the fixed old main source');
-  const roots = ['src', 'public', 'quick-task', 'scripts', 'index.html', 'vite.config.js', 'tsconfig.json', 'package.json', 'package-lock.json'];
+  // Only the scripts imported by Vite are frontend build inputs. The QA runner
+  // itself can be under review without misrepresenting a changed product build.
+  const roots = ['src', 'public', 'quick-task', 'scripts/pwa-version-entry.mjs',
+    'scripts/pwa-worker-version-source.mjs', 'scripts/pwa-manifest-cache-source.mjs',
+    'index.html', 'vite.config.js', 'tsconfig.json', 'package.json', 'package-lock.json'];
   const source = (root, backend) => {
     assert.equal(git(root, 'diff', '--name-only', 'HEAD', '--', ...roots), '', 'Build inputs must be committed');
     return { revision: git(root, 'rev-parse', 'HEAD'), tree: git(root, 'rev-parse', 'HEAD^{tree}'), backend,
@@ -21,7 +25,8 @@ export function verifyQuickUpgradeSources(legacyRoot, candidateRoot) {
   return { legacy: source(legacyRoot, 'supabase'), candidate: source(candidateRoot, 'http') };
 }
 
-export async function runQuickBackendUpgrade({ context, origin, output, publish, loaded, workerVersion, refreshCheck, record, liveBackend = null }) {
+export async function runQuickBackendUpgrade({ context, origin, output, publish, loaded, workerVersion, refreshCheck, record, liveBackend = null,
+  sourceCommitted = false }) {
   assert.equal(new URL(origin).hostname, '127.0.0.1');
   const sourceOrigin = 'http://127.0.0.1:47971';
   const owner = liveBackend?.owner ?? '11111111-1111-4111-8111-111111111111';
@@ -30,7 +35,23 @@ export async function runQuickBackendUpgrade({ context, origin, output, publish,
     for (const id of [owner, other, liveBackend.ownerContext]) assert.match(id, /^[a-f0-9-]{36}$/u);
     assert.ok(liveBackend.proofPath, 'A06 native reconciliation output is required');
   }
-  const title = 'A06 已保存未同步的原任務 🧭';
+  if (sourceCommitted) assert.ok(liveBackend?.sourceFixture, 'Committed source recovery requires the real nonce PostgreSQL fixture');
+  const scenario = sourceCommitted ? 'source-committed-response-lost' : 'offline-uncommitted';
+  const title = sourceCommitted ? 'A06 舊端已提交但回覆遺失 🧭' : 'A06 已保存未同步的原任務 🧭';
+  const image = name => path.join(output, `A06-${sourceCommitted ? 'source-committed-' : ''}${name}.png`);
+  const proofPath = sourceCommitted ? liveBackend?.proofPath + '.source-committed.json' : liveBackend?.proofPath;
+  let committedSourceReceipt = null, migrationProof = null;
+  const sourceFixture = async (operation, body) => {
+    const endpoint = new URL(liveBackend.sourceFixture);
+    assert.equal(endpoint.protocol, 'http:'); assert.equal(endpoint.hostname, '127.0.0.1');
+    assert.ok(endpoint.port && /^\/[a-f0-9-]{36}$/.test(endpoint.pathname) && !endpoint.search && !endpoint.hash
+      && !endpoint.username && !endpoint.password, 'Source fixture must be the existing bounded loopback endpoint');
+    const response = await fetch(endpoint.href + '/' + operation, { method: 'POST',
+      headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+      signal: AbortSignal.timeout(30_000), redirect: 'error' });
+    assert.equal(response.status, 200, `Nonce source fixture ${operation} failed`);
+    return response.json();
+  };
   let httpAccount = other;
   let sourceUnavailable = false;
   const sourceCalls = [], targetCalls = [], unexpected = [], pageErrors = [];
@@ -62,9 +83,16 @@ export async function runQuickBackendUpgrade({ context, origin, output, publish,
       if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
       if (url.pathname === '/auth/v1/user') return route.fulfill({ status: 200, headers, json: user(owner) });
       if (url.pathname === '/rest/v1/rpc/create_quick_unplaced_task_v1') {
-        sourceCalls.push(request.postDataJSON());
-        // A is genuinely old code without the new pause marker. This local
-        // response never commits anything; do not call it a production fence.
+        const body = request.postDataJSON(); sourceCalls.push(body);
+        if (sourceCommitted) {
+          committedSourceReceipt = await sourceFixture('commit', body);
+          sourceUnavailable = true;
+          // The actual old UI submitted this RPC and PG committed first. Drop
+          // only its browser response; never manufacture a capture in IDB.
+          return route.abort('connectionreset');
+        }
+        // This ordinary unavailable response never commits anything. The
+        // explicit source-write pause/fence is verified separately.
         return route.fulfill({ status: 503, headers, json: { message: 'ISOLATED_SOURCE_UNAVAILABLE' } });
       }
     } else if (url.origin === origin) {
@@ -123,9 +151,11 @@ export async function runQuickBackendUpgrade({ context, origin, output, publish,
   await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
   await page.locator('#quick-task-auth-status').filter({ hasText: '此快速 App 已登入' }).waitFor();
   await page.waitForLoadState('networkidle');
-  sourceUnavailable = true;
-  await context.setOffline(true);
-  assert.equal(await page.evaluate(() => navigator.onLine), false);
+  if (!sourceCommitted) {
+    sourceUnavailable = true;
+    await context.setOffline(true);
+    assert.equal(await page.evaluate(() => navigator.onLine), false);
+  }
   await page.getByRole('textbox', { name: '任務名稱' }).fill(title);
   await page.getByRole('button', { name: '建立', exact: true }).click();
   const old = await waitLocal(value => value.captures.length === 1 && value.captures[0].accountId === owner);
@@ -133,8 +163,19 @@ export async function runQuickBackendUpgrade({ context, origin, output, publish,
   assert.equal(original.title, title);
   assert.notEqual(original.state, 'synced');
   assert.equal(targetCalls.length, 0);
-  await page.screenshot({ path: path.join(output, 'A06-old-offline-saved.png') });
-  record('A06-old-offline-capture', { backend: 'supabase', workerControlled: true, databaseVersion: old.version,
+  if (sourceCommitted) {
+    await waitLocal(value => committedSourceReceipt && value.captures[0].leaseId === null);
+    assert.equal(committedSourceReceipt.captureId, original.captureId);
+    assert.equal(committedSourceReceipt.ownerId, owner);
+    assert.equal(committedSourceReceipt.titleHash, createHash('sha256').update(title).digest('hex'));
+    migrationProof = await sourceFixture('snapshot-import', {});
+    assert.equal(migrationProof.sourceCommits, 1);
+    assert.equal(migrationProof.migration.matches, true);
+    assert.equal(migrationProof.migration.sourceDigest, migrationProof.migration.targetDigest);
+    assert.deepEqual(migrationProof.sourceReceipt, committedSourceReceipt);
+  }
+  await page.screenshot({ path: image('old-offline-saved') });
+  record(sourceCommitted ? 'A06-source-committed-capture' : 'A06-old-offline-capture', { scenario, backend: 'supabase', workerControlled: true, databaseVersion: old.version,
     captureId: original.captureId, accountId: original.accountId,
     titleHash: createHash('sha256').update(title).digest('hex'), state: original.state });
   await context.setOffline(false);
@@ -159,7 +200,7 @@ export async function runQuickBackendUpgrade({ context, origin, output, publish,
   assert.ok(sameOriginal(wrongAccount.captures[0]));
   assert.equal(targetCalls.length, 0);
   assert.ok(!(await page.locator('body').innerText()).includes(title), 'Wrong account saw the private saved title');
-  record('A06-wrong-account-isolated', { originalPreserved: true, targetRequests: 0, privateTitleVisible: false });
+  record('A06-wrong-account-isolated', { scenario, originalPreserved: true, targetRequests: 0, privateTitleVisible: false });
   await selectTargetAccount(true);
   let acknowledgedReceipt;
   if (liveBackend) {
@@ -168,8 +209,9 @@ export async function runQuickBackendUpgrade({ context, origin, output, publish,
         && response.request().method() === 'POST'),
       page.reload({ waitUntil: 'domcontentloaded' }),
     ]);
-    assert.equal(response.status(), 201);
+    assert.equal(response.status(), sourceCommitted ? 200 : 201);
     acknowledgedReceipt = (await response.json()).data;
+    if (sourceCommitted) assert.deepEqual(acknowledgedReceipt, { ...committedSourceReceipt, created: false });
   } else await page.reload({ waitUntil: 'domcontentloaded' });
   await loaded(page, 'B');
   await page.locator('#quick-task-auth-status').filter({ hasText: '此快速 App 已登入' }).waitFor();
@@ -193,13 +235,15 @@ export async function runQuickBackendUpgrade({ context, origin, output, publish,
     assert.equal(replay.status, 200);
     assert.deepEqual(replay.data, { ...acknowledgedReceipt, created: false });
     assert.equal(targetCalls.length, 2);
-    fs.writeFileSync(liveBackend.proofPath, JSON.stringify({
+    fs.writeFileSync(proofPath, JSON.stringify({
       scope: 'REAL_BROWSER_HTTP_ACK_PENDING_NATIVE_PG_READBACK_SYNTHETIC_IDENTITY',
+      scenario,
       captureId: original.captureId, ownerId: owner, clientCreatedAt: original.clientCreatedAt,
       titleHash: createHash('sha256').update(original.title).digest('hex'),
       requestBodyHash: createHash('sha256').update(JSON.stringify(requestBody)).digest('hex'),
-      productSubmissions: 1, explicitQaReplays: 1, firstStatus: 201, replayStatus: replay.status,
+      productSubmissions: 1, explicitQaReplays: 1, firstStatus: sourceCommitted ? 200 : 201, replayStatus: replay.status,
       firstReceipt: acknowledgedReceipt, replayReceipt: replay.data,
+      ...(sourceCommitted ? { sourceReceipt: committedSourceReceipt, migration: migrationProof } : {}),
     }, null, 2) + '\n', { flag: 'wx' });
   }
   await page.reload({ waitUntil: 'domcontentloaded' });
@@ -210,10 +254,11 @@ export async function runQuickBackendUpgrade({ context, origin, output, publish,
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), true);
   assert.deepEqual(unexpected, []);
   assert.deepEqual(pageErrors, []);
-  await page.screenshot({ path: path.join(output, 'A06-http-recovered.png') });
-  record('A06-backend-upgrade-recovered', { sourceBackend: 'supabase', targetBackend: 'http',
+  await page.screenshot({ path: image('http-recovered') });
+  record('A06-backend-upgrade-recovered', { scenario, sourceBackend: 'supabase', targetBackend: 'http',
     originalIdAccountContentAndTimePreserved: true, receiptPersistedAfterReload: true,
-    sourceRequestsRejected: sourceCalls.length, sourceUnavailableDuringUpdate: true,
+    sourceRpcRequests: sourceCalls.length, sourceCommitted, responseDropped: sourceCommitted,
+    sourceUnavailableDuringUpdate: true,
     ...(liveBackend ? { realHttpRequests: targetCalls.length, productSubmissions: 1, explicitQaReplays: 1 }
       : { syntheticTargetRequests: targetCalls.length, syntheticTargetEffects: targetEffects }),
     sameOrigin: origin, sameBrowserProfile: true, actualServiceWorker: true, viewport: '390x844',

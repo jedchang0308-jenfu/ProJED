@@ -42,7 +42,7 @@ import {
 type Mode = 'plan' | 'apply' | 'reconcile';
 type Row = Record<string, unknown>;
 
-type TableSpec = {
+export type TableSpec = {
   target: string;
   sourceRelation: string;
   columns: readonly string[];
@@ -63,7 +63,7 @@ const AUTH_USERS_PROJECTION = 'private.projed_dev139_auth_users_v1';
 class SnapshotJson {
   constructor(readonly text: string) {}
 }
-const snapshotTypes = {
+export const snapshotTypes = {
   getTypeParser: ((oid: number, format = 'text') => {
     if ((oid === 114 || oid === 3802) && format === 'text') {
       return (raw: string) => new SnapshotJson(raw);
@@ -88,7 +88,7 @@ const table = (
   transform?: (row: Row) => Row,
 ): TableSpec => ({ target, sourceRelation, columns, sourceSql, ...(transform ? { transform } : {}) });
 
-const TABLES: readonly TableSpec[] = [
+export const TABLES: readonly TableSpec[] = [
   table('profiles', 'public.profiles', [
     'id', 'email', 'display_name', 'external_auth_provider', 'external_auth_id', 'ui_preferences', 'created_at', 'updated_at',
   ], `
@@ -692,7 +692,7 @@ function snapshotSummary(snapshot: ReadonlyMap<string, readonly Row[]>) {
   }]));
 }
 
-function snapshotId(snapshot: ReadonlyMap<string, readonly Row[]>): string {
+export function snapshotId(snapshot: ReadonlyMap<string, readonly Row[]>): string {
   return digest(snapshotSummary(snapshot));
 }
 
@@ -707,9 +707,9 @@ export function createDatabaseSnapshotReceipt<T extends Row>(result: T) {
   };
 }
 
-async function readSource(client: Client): Promise<Map<string, Row[]>> {
+export async function readSource(client: Client, specs: readonly TableSpec[] = TABLES): Promise<Map<string, Row[]>> {
   const result = new Map<string, Row[]>();
-  for (const spec of TABLES) {
+  for (const spec of specs) {
     const sourceRows = (await client.query<Row>(spec.sourceSql)).rows;
     const transformed = spec.project
       ? spec.project(sourceRows, result)
@@ -845,9 +845,9 @@ async function validateAuthUserSourceSchema(client: Client): Promise<void> {
   validateAuthUserSourceColumns(result.rows);
 }
 
-async function readTarget(client: Client): Promise<Map<string, Row[]>> {
+export async function readTarget(client: Client, specs: readonly TableSpec[] = TABLES): Promise<Map<string, Row[]>> {
   const result = new Map<string, Row[]>();
-  for (const spec of TABLES) {
+  for (const spec of specs) {
     const projection = spec.columns.map(column => `target.${column}`).join(', ');
     result.set(spec.target, (await client.query<Row>(
       `SELECT ${projection} FROM projed_core.${spec.target} target`,
@@ -943,8 +943,8 @@ async function sourcePreflight(client: Client) {
   return { blockers: found, emptySourceRelations };
 }
 
-async function insertSnapshot(client: Client, snapshot: ReadonlyMap<string, readonly Row[]>): Promise<void> {
-  for (const spec of TABLES) {
+export async function insertSnapshot(client: Client, snapshot: ReadonlyMap<string, readonly Row[]>, specs: readonly TableSpec[] = TABLES): Promise<void> {
+  for (const spec of specs) {
     const rows = snapshot.get(spec.target) ?? [];
     for (let offset = 0; offset < rows.length; offset += 100) {
       const batch = rows.slice(offset, offset + 100);
