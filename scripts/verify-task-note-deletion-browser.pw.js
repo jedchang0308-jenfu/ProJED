@@ -7,7 +7,13 @@ async (page) => {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto('http://localhost:1040/', { waitUntil: 'domcontentloaded' });
+  // The release runner supplies an isolated URL; keep the regression portable
+  // across that dynamic port and the fixed local test server.
+  const runnerUrl = new URL(page.url());
+  runnerUrl.pathname = '/';
+  runnerUrl.search = '';
+  runnerUrl.hash = '';
+  await page.goto(runnerUrl.toString(), { waitUntil: 'domcontentloaded' });
   await page.evaluate(({ taskId, accountId, initialText }) => {
     localStorage.clear();
     const timestamp = 1704067200000;
