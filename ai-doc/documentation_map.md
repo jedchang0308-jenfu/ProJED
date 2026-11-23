@@ -21,7 +21,7 @@
 
 **現行決策（2026-11-22）**：集中 `jenfu-platform-prod`、同專案私人 SQL、Cloud Run `run.app` 直接入口，保留 Vite，不採新 Firebase Hosting／跨專案 Shared VPC。D5 恢復 IAM 保護候選的準備、部署與驗證，保留原資料／網址／既有 PWA，先不切流；已具名核准的集中 foundation 依 [§47.2](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-central-candidate-foundation) 執行。先讀 [架構](specs/SPEC-139-projed-jenfu-platform-onboarding.md#3-目標架構與資料權責)、[本機記事](specs/SPEC-139-projed-jenfu-platform-onboarding.md#33-本機優先記事2026-11-22)、[遷移／恢復](specs/SPEC-139-projed-jenfu-platform-onboarding.md#6-資料移轉pwa-與恢復)及 [ADR-054](decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。保留帳號／權限、私人隔離、草稿、CAS／receipt、零留存及原驗收分母。
 
-**候選進度（2026-11-23）**：ProJED `2e14d7e` 映像／未執行 Jobs、真 Cloud SQL grant probe／rollback、Platform #235 的 013／014／CI／PG17 及 owner Build `5680151e` 已核對，R3 執行包備妥。原 IAM 期間已到期並撤回，待[具名續開相同 scope 的最長兩小時期間](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-owner-window-r3-renewal)；app migration／Web 尚未執行，模型停用、不切流。本機／隔離結果不充作新 origin／Session／provider 或正式驗收，不新增 required gate。
+**候選進度（2026-11-23）**：51 app migrations 單次成功，Platform #236／CI／PG17 與支援 Build `1915c2fb` 已資格化；獨立 reconciliation 回讀同一成功 child／完整 ledger，保留原父 FAIL，CREATE／暫時 role／三項臨時 IAM 已撤回。ProJED `2e14d7e` IAM 保護候選 `projed-prod-00001-c8p` 已部署，12 項唯讀 HTTP 核對通過；Quick 本機保存／線上重開復原通過，但 `/sw.js` 被 IAM 拒絕，新 origin 離線／隔夜驗證阻塞，不能宣稱完整驗收。模型停用、保留原資料／網址／PWA、不切流；[實際結果及剩餘 Session／provider 邊界](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-owner-window-r3-renewal)。不新增 required gate。
 
 以下日期／Rev／W 為原方案的來源與驗證歷史導覽，不覆蓋上述決策或構成新環境 PASS。
 

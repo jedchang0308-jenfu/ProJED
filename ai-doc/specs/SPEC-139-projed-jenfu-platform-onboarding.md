@@ -8,7 +8,7 @@
 
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。
 - 日期：2026-11-23（Asia/Taipei）；本輪受測來源與候選進度見 §47.2，本機記事驗證見 §3.3；歷史 artifact 依原收據識別。
-- 狀態：**集中候選 app／owner 修正版映像已完成來源與產物核對，真 Cloud SQL grant probe 已完整回滾；013／014 來源／回歸與執行包備妥，待續開有界 owner IAM 期間，Web 尚未部署、尚未切流**。修正 Cloud SQL／fixture 身分差異後須驗證相應新來源及產物；舊 artifact 不代表新目標資格。新服務完整網址仍須 provider readback，主／Quick 身分與 callback 隔離仍需實際接線驗證。
+- 狀態：**51 份 app migration 單次成功；來源修正後已回讀核對同一 execution，owner CREATE／臨時 IAM 已撤回；IAM 保護 Web 候選已部署、12 項唯讀 HTTP 核對通過，尚未切流**。Quick 本機保存及線上重開復原已實測；候選的 `/sw.js` 被 IAM 拒絕，離線／隔夜驗證仍阻塞，不以既有本機結果冒充新 origin 通過。真 Session／callback、既有使用者映射、資料移轉與零留存 provider 資格仍待完成。
 - 適用範圍：本輪程式／測試／文件與 IAM 保護的候選部署、唯讀／安全拒絕驗證；集中專案的新 IAM 與 owner migration window 已由人類依 §47.2 具名核准。無正式業務資料寫入、停寫或切流。舊 Shared VPC 引導取消；已完成設定與舊入口保留，不自動撤回或刪除。
 - 直接交接入口：[§11 S1 定案契約](#11-架構決策與-s1-定案契約)、[§12 S1 實作狀態](#12-s1-實作狀態2026-10-26)、[§13 S2 consumer seam](#13-s2-projed-identity-consumer-seam2026-10-26)、[§14 S3 read adapter](#14-s3-http-read-adapter-slice2026-10-26)、[§15 S3 domain command](#15-s3-domain-command-w12026-10-26)、[§16 S3 collaboration command](#16-s3-collaboration-command-w22026-10-27)、[§17 S3 record／activity](#17-s3-recordactivity-w32026-10-27)、[§18 S3 HTTP product wiring](#18-s3-http-product-wiring-w42026-10-27)、[§19 S3 Board transfer](#19-s3-board-transfer-w52026-10-27)、[§20 S3 legacy provider boundary](#20-s3-legacy-provider-boundary-w62026-10-27)、[§21 S3 Quick Task](#21-s3-quick-task-w72026-10-27)、[§22 S3 Task Workbench](#22-s3-task-workbench-w82026-10-27)、[§23 S3 Actor CAS](#23-s3-actor-context-cas-w92026-10-27)、[§24 S3 Task Tracking](#24-s3-task-tracking-w102026-10-27)、[§25 S3 Backup／Import](#25-s3-backupimport-w112026-10-27)、[§26 S3 Account Preferences](#26-s3-account-preferences-w122026-10-27)、[§27 S3 Calendar Subscription](#27-s3-calendar-subscription-w132026-10-27)及[§32 本地開發收斂](#32-s3-local-development-closure-w182026-10-27)；[§11.8 技術主管審查](#118-技術主管審查與最小優化)保留 Rev5 修正理由；既有使用者切換見 [§6.3](#63-既有使用者的切換基線)。
 - 決策來源：[DEV-139 人類決策](../dev_task.md#dev-139-jenfu-platform-onboarding)；架構取捨：[ADR-054](../decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。本文件不是其他 owner 已接受或已發布的契約。
@@ -1514,9 +1514,22 @@ Platform #232 的固定 probe 已完成 source `7ebf8506` 交付：[required Sou
 
 <a id="dev139-owner-window-r3-renewal"></a>
 
-**R3 執行包已備妥，續開期限待人類確認**：官方 owner 支援映像 Build `5680151e-dbe5-4903-a800-fff55059dd3c` 的 source／provenance／SBOM／scan 已 PASS，對應 main `2dda877a` 與 013／014。已 render 單次 Job `dev007-projed-window-57efb93223b6`，配對未執行的 `2e14d7e` app migration Job 及完整 51 份 checksum；未建立或執行此 R3 Job。選擇性／冪等 IAM cleanup 自查通過，未核准續開時會在取得 token／provider 呼叫前拒絕。接續 owner window、精確 ledger／owner CREATE／IAM cleanup、IAM 保護 Web 建立與唯讀 HTTP／隔離 Edge 本機草稿驗證均已備妥；後兩者仍 NOT_RUN。正式 Session／資料映射、provider 零留存、跨 origin 草稿／安裝與完整 DEV-139 分母仍保留。
+**R3 已具名續開並執行，原父 FAIL 保留**：人類已回覆「核准同範圍新一輪最長兩小時」，本輪 condition 固定到 `2026-11-23T05:41:32Z`，不滑動延長。Owner 支援 Build `5680151e-dbe5-4903-a800-fff55059dd3c` 已資格化，來源 main `2dda877a`、013／014 bytes 不變。R3 Job `dev007-projed-window-57efb93223b6` 單次執行 `...-b2c2q` 回報 `DEV007_PROJED_JOB_EXECUTION_FAILED`；實際 child `projed-prod-migration-7fsv7` 已成功且僅一個 execution，51 份 stdout ledger 的順序／checksum 與 `2e14d7e` 產物完全相同。唯讀 catalog 已確認四 app roles／兩 schemas 正確、owner CREATE 關閉、infra membership 回復空集，三項臨時 IAM 已撤回；原父 FAIL 不改寫為 PASS，不直接重送已成功 migration。
 
-續開提案只為原 §47.2.1 同一 coordinator／三個 roles／相同 Job 與 project 範圍，另開最長兩小時的固定期間；首次授予時固定新 expiry，同次重試不滑動，結束立即撤回並讀回，其他 grants 保留。原 `2026-11-23T03:05:56Z` condition 與歷史收據保留，不改寫為新期限。未新增 SA／TokenCreator／Secret／永久 ADMIN、不改費用／容量，不搬業務資料、不啟用未資格化模型、不更動舊網址／PWA或切流；這項確認來自人類原本限定的兩小時存取期間，並非每次換 SHA／PR 重問，也不新增 required gate。
+已證實的 provider wire 差異：v2 `Execution.job` 為同 Job 短名稱；其 immutable template 未回傳 VPC、SQL volume／mount。相同 execution 的 v1 snapshot 已讀回，同 UID 與 Job UID／generation 配對，annotations 明列原私人網路、egress 與 exact Cloud SQL instance；其他 image／SA／command／args／env／retry／terminal counts 符合。這是核對器相容性缺口，不以刪掉隔離檢查、current mutable Job 猜補歷史或手動改 gate PASS 解決。修正已由下方 #236 與獨立復原結果核實；原父 FAIL 保留。
+
+013／014 的現行 infra ledger 對 operator 沒有直接 SELECT，實際唯讀查詢回報 42501。必要 metadata 觀測明確標 `readOnly=false`，只沿已核准的暫時 infra GRANT／SET／兩筆版本 read／RESET／REVOKE，再 ROLLBACK 與比對 catalog 復原；不開 owner CREATE、不重播成功 013／014、不新增 applied ledger、永久 reader 或新 credential。獨立 reconciliation Job 已單次執行；其 Cloud Run adapter 只讀既有 migration execution／stdout，不再啟動 child，輸出復原結果並連回原父 FAIL。這些是同一候選範圍必要 recovery，受本輪固定 expiry；原 `03:05:56Z` condition／歷史收據保留，不新增 required gate。
+
+**2026-11-23 候選實測結果**：
+
+- [Platform #236](https://github.com/jedchang0308-jenfu/Jenfu-Platform/pull/236) 已依正常保護合併 main `b8452dd0`；與受測 `4a52a769` Git tree 相同。Source QC [45111867898](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/45111867898)／PG17 native [45111863444](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/45111863444) 通過（central18、legacy23、Platform26、Org22，cleanup 全通過）。保留首輪 legacy fixture 失敗，不放寬安全契約；005–014 SQL 未變。支援 Build `1915c2fb-73fc-4f38-b203-72dbb3dc2ffa` 已完成來源／provenance 資格化。
+- Reconciliation execution `dev007-projed-reconcile-e9b0364aec04-pd2c8` 成功，結果 `RECONCILED_AFTER_PARENT_FAILURE`：同一 migration execution 的 51 項順序／checksum 全吻合，child execution 集合未變；兩筆 infra ledger 及 CREATE 關閉已核對，暫時 role 交易 ROLLBACK／catalog hash 復原。三項本輪 IAM 已立即撤回，不等 expiry。原 R3 父 FAIL 不改寫。
+- ProJED source 仍為 `2e14d7ee94a10bfb726f97e983591726687ef3f1`，重用 Cloud Build `5e946c9d-9ce2-4ff5-9965-74c743f9bb0f` 的已驗映像。候選 revision `projed-prod-00001-c8p`，provider 已回報固定入口 `https://projed-prod-9536592944.asia-east1.run.app`，Quick 為同 origin `/quick-task/`。IAM 保護、min0／max1／concurrency40，未加入匿名 invoker；Proxy revision 的 linux/amd64 digest 已以原釘選 multi-platform index bytes／SHA 證明，未換映像。
+- 12 項唯讀 HTTP 核對通過：匿名403、live／ready200（真 Cloud SQL／51 migrations）、主／Quick 固定版本 HTML／JS 與來源版本一致；未資格化 Session／workspace API 回傳 `404 ENDPOINT_UNAVAILABLE`／`no-store`，這是安全關閉，不是真登入通過。首輪煙霧腳本假設直接 HTML script 路徑，已改沿既有 OCI 的 pinned-entry 方式；原失敗紀錄保留。
+- 隔離無視窗 Edge 已驗 Quick 可輸入、本機保存、線上關頁重開復原，沒有遠端寫入或模型請求。首次觀測 328ms、補驗266ms，僅為新候選單次觀測，不能作改善前後中位數或快取驗收。`/sw.js` 因私人 IAM 回403，結果明列 `BLOCKED_PRIVATE_IAM_SERVICE_WORKER`，離線／隔夜及已快取開啟仍未在新 origin 完成；不為通過測試擴張公開權限。原 §3.3 本機35項／Quick binding9項有效證據保留，範圍不外推。測試隔離瀏覽器已關閉。
+
+實際 provider／HTTP／browser 收據留 `output/dev139-candidate-20261122/owner-reconciliation-verified.json`、`web-candidate-deployment-proof.json`、`web-candidate-http-verified.json` 與 `web-candidate-local-draft-result.json`。沒有搬入業務資料、模型派送或改動舊網址／Hosting／PWA／DNS；未切流。正式 Session／資料映射、provider 零留存、跨 origin 草稿／安裝與完整 DEV-139 分母保留。
+
 
 ## 48. Managed IAM login and app role context（W34，2026-10-29）
 
