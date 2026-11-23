@@ -29,7 +29,7 @@ CMD ["node", "dist-server/server/index.js"]
 
 # The temporary old-origin entry has no SQL files, DB driver or business
 # composition. Only its six compiled modules and pinned JOSE runtime are copied.
-# This explicit target remains unable to start while the source binding is null.
+# This explicit target requires the qualified private transport source binding.
 FROM ${NODE_IMAGE} AS legacy-entry
 ENV NODE_ENV=production
 WORKDIR /app

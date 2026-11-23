@@ -44,6 +44,7 @@ const [adminPassword, migratorPassword, importerPassword, runtimePassword, runti
 let binding;
 let imageId;
 let legacyEntryImageId;
+let legacyEntryTransport;
 let jobsImageId;
 let mediaImageId;
 let asrImageId;
@@ -159,14 +160,86 @@ try {
   assert.deepEqual(entryImage.Config.Cmd, ['node', 'dist-server/server/legacyEntryMain.js']);
   const entryCheck = runOwnedContainer('legacy-entry-check', ['--read-only', '--tmpfs', '/tmp', legacyEntryImage, 'node',
     'dist-server/server/legacyEntryMain.js', '--check-only']);
-  assert.deepEqual(JSON.parse(entryCheck.stdout), { event: 'projed_legacy_entry_check', status: 'CHECK_ONLY',
-    transport: 'UNPUBLISHED', upstream: 'NOT_CONTACTED', userAuthority: 'APP_SESSION_REQUIRED', database: 'NOT_CONNECTED', models: 'NOT_RUN' });
+  const entryCheckResult = JSON.parse(entryCheck.stdout);
+  legacyEntryTransport = entryCheckResult.transport;
+  assert.ok(['UNPUBLISHED', 'QUALIFICATION_BOUND'].includes(legacyEntryTransport));
+  assert.deepEqual(entryCheckResult, { event: 'projed_legacy_entry_check', status: 'CHECK_ONLY',
+    transport: legacyEntryTransport, upstream: 'NOT_CONTACTED', userAuthority: 'APP_SESSION_REQUIRED', database: 'NOT_CONNECTED', models: 'NOT_RUN' });
   runOwnedContainer('legacy-entry-no-db', ['--read-only', '--tmpfs', '/tmp', legacyEntryImage, 'node', '--input-type=module', '-e',
     "import assert from 'node:assert/strict';import {existsSync} from 'node:fs';for(const path of ['/app/db','/app/config','/app/dist','/app/node_modules/pg','/app/dist-server/server/index.js'])assert.equal(existsSync(path),false);"]);
-  const inactiveEntry = runOwnedContainer('legacy-entry-unpublished', ['--read-only', '--tmpfs', '/tmp', legacyEntryImage], { allowFailure: true });
-  assert.equal(inactiveEntry.status, 1);
-  assert.match(inactiveEntry.stderr, /LEGACY_ENTRY_UNAVAILABLE/);
-  passed('actual-nonroot-no-db-legacy-entry-check-only-and-unpublished-start-denial');
+  passed('actual-nonroot-no-db-legacy-entry-check-only');
+  if (legacyEntryTransport === 'UNPUBLISHED') {
+    const inactiveEntry = runOwnedContainer('legacy-entry-unpublished', ['--read-only', '--tmpfs', '/tmp', legacyEntryImage], { allowFailure: true });
+    assert.equal(inactiveEntry.status, 1);
+    assert.match(inactiveEntry.stderr, /LEGACY_ENTRY_UNAVAILABLE/);
+    passed('actual-unpublished-legacy-entry-start-denial');
+  } else {
+    // runOwnedContainer defaults to --network none. Exercise the real compiled
+    // entry/listener with native loopback HTTP, not a Google provider in CI.
+    const activeEntry = runOwnedContainer('legacy-entry-private-source', ['--read-only', '--tmpfs', '/tmp', legacyEntryImage,
+      'node', '--input-type=module', '-e', String.raw`
+      import assert from 'node:assert/strict';
+      import { request } from 'node:http';
+      import { setTimeout as delay } from 'node:timers/promises';
+      import { legacyEntryMain } from './dist-server/server/legacyEntryMain.js';
+      import { createLegacyEntryRelay } from './dist-server/server/legacyEntryRelay.js';
+      import { CURRENT_LEGACY_ENTRY_BINDING, validLegacyEntryBinding, LEGACY_MAIN_ORIGIN } from './dist-server/server/legacyEntryBinding.js';
+      let metadataCalls = 0;
+      globalThis.fetch = async () => { metadataCalls++; throw new Error('CI_PROVIDER_IO_FORBIDDEN'); };
+      const getIdentityToken = async () => { metadataCalls++; throw new Error('CI_PROVIDER_IO_FORBIDDEN'); };
+      assert.ok(CURRENT_LEGACY_ENTRY_BINDING && validLegacyEntryBinding(CURRENT_LEGACY_ENTRY_BINDING));
+      assert.throws(() => createLegacyEntryRelay(null, { getIdentityToken }), /UNQUALIFIED/);
+      assert.throws(() => createLegacyEntryRelay({ ...CURRENT_LEGACY_ENTRY_BINDING, qualificationSha256: '' }, { getIdentityToken }), /UNQUALIFIED/);
+      assert.equal(metadataCalls, 0);
+      const get = (path, headers = {}) => new Promise((resolve, reject) => {
+        const pending = request({ hostname: '127.0.0.1', port: 8080, path, method: 'GET', agent: false,
+          headers: { host: new URL(LEGACY_MAIN_ORIGIN).host, connection: 'close', ...headers } }, response => {
+          const chunks = []; response.on('data', chunk => chunks.push(chunk));
+          response.once('end', () => resolve({ status: response.statusCode, body: Buffer.concat(chunks).toString('utf8'), headers: response.headers }));
+          response.once('error', reject);
+        });
+        pending.setTimeout(1000, () => pending.destroy(new Error('CI_LOOPBACK_TIMEOUT')));
+        pending.once('error', reject); pending.end();
+      });
+      try {
+        // False/unrelated environment values cannot replace the qualified source
+        // or cause DB/credential composition. Only PORT belongs to this entry.
+        await legacyEntryMain([], { PORT: '8080', PROJED_LEGACY_ENTRY_BINDING: '{"enabled":false}',
+          PROJED_DATABASE_URL: 'CI_MUST_NOT_CONNECT', PROJED_RUNTIME_BINDING_JSON: 'CI_MUST_NOT_READ' });
+        assert.equal(metadataCalls, 0);
+        const codes = [];
+        for (const [path, headers] of [
+          ['/sw.js', { host: 'attacker.invalid' }],
+          ['/sw.js', { 'x-projed-entry-origin': LEGACY_MAIN_ORIGIN, 'x-projed-entry-identity': 'forged.transport.proof' }],
+          ['/rest/v1/profiles', {}],
+        ]) {
+          const result = await get(path, headers); codes.push(result.status);
+          assert.equal(result.status, 403);
+          assert.equal(JSON.parse(result.body).error.code, 'ACCESS_DENIED');
+          assert.equal(result.headers['cache-control'], 'no-store');
+          assert.equal(metadataCalls, 0, 'Rejected input reached the metadata token provider');
+        }
+        const started = Date.now(); process.kill(process.pid, 'SIGTERM');
+        let closed = false;
+        while (Date.now() - started < 9000) {
+          try { await get('/sw.js', { host: 'attacker.invalid' }); }
+          catch (error) {
+            if (error.code === 'ECONNREFUSED') { closed = true; break; }
+            if (error.code !== 'ECONNRESET') throw error;
+          }
+          await delay(25);
+        }
+        assert.equal(closed, true, 'SIGTERM did not release the owned listener within its shutdown bound');
+        assert.equal(metadataCalls, 0);
+        console.log(JSON.stringify({ status: 'PASS', transport: 'QUALIFICATION_BOUND', responseCodes: codes,
+          metadataCalls, sigtermListenerReleased: true, provider: 'NOT_CONTACTED', database: 'NOT_CONNECTED' }));
+      } catch (error) { console.error(error); process.exit(1); }
+      `]);
+    const activeEntryResult = JSON.parse(activeEntry.stdout.trim().split('\n').at(-1));
+    assert.deepEqual(activeEntryResult, { status: 'PASS', transport: 'QUALIFICATION_BOUND', responseCodes: [403, 403, 403],
+      metadataCalls: 0, sigtermListenerReleased: true, provider: 'NOT_CONTACTED', database: 'NOT_CONNECTED' });
+    passed('actual-qualified-private-legacy-entry-listen-pretoken-denials-and-bounded-sigterm');
+  }
 
   docker(['build', '--platform', 'linux/amd64', '--target', 'managed-jobs', '--label', `${label}=${nonce}`,
     '--build-arg', `PROJED_RELEASE_ID=${prefix}`, '-f', 'Dockerfile.dev139', '-t', jobsImage, '.'], { timeout: 600_000 });
@@ -685,7 +758,7 @@ if (!firstFailure && cleanupFailures.length === 0) passed('owned-container-socke
 const status = firstFailure || cleanupFailures.length ? 'FAIL' : 'PASS';
 const result = {
   status, evidenceLevel: 'ISOLATED_LINUX_OCI_IAM_SHAPED_POSTGRES',
-  sourceSha: process.env.GITHUB_SHA, releaseId: prefix, imageId, legacyEntryImageId, jobsImageId, asrImageId, mediaImageId, mediaProof,
+  sourceSha: process.env.GITHUB_SHA, releaseId: prefix, imageId, legacyEntryImageId, legacyEntryTransport, jobsImageId, asrImageId, mediaImageId, mediaProof,
   postgres: postgresVersion, migrationCount: appliedMigrationCount,
   expectedMigrationCount: binding ? Object.keys(binding.migrationSha256).length : 0,
   profileSha256: binding?.profileSha256, migrationSha256: binding?.migrationSha256,

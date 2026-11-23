@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "scope": "PRIVATE_CANDIDATE_TRANSPORT_FOUNDATION",
+  "claims": {
+    "scope": "PRIVATE_CANDIDATE_TRANSPORT_FOUNDATION",
+    "project": "projed-cc78d",
+    "relayService": "projects/projed-cc78d/locations/asia-east1/services/projed-legacy-entry",
+    "upstreamService": "projects/jenfu-platform-prod/locations/asia-east1/services/projed-prod",
+    "upstreamOrigin": "https://projed-prod-56gnizku7q-de.a.run.app",
+    "serviceAccount": "projed-legacy-entry@projed-cc78d.iam.gserviceaccount.com",
+    "serviceAccountSubject": "100626728503472119855",
+    "userManagedKeyCount": 0,
+    "grants": [
+      {
+        "resource": "projects/jenfu-platform-prod/locations/asia-east1/services/projed-prod",
+        "role": "roles/run.invoker",
+        "member": "serviceAccount:projed-legacy-entry@projed-cc78d.iam.gserviceaccount.com"
+      },
+      {
+        "resource": "projects/jenfu-platform-prod/locations/asia-east1/repositories/projed-release",
+        "role": "roles/artifactregistry.reader",
+        "member": "serviceAccount:service-967362299895@serverless-robot-prod.iam.gserviceaccount.com"
+      }
+    ],
+    "centralInvokerIamDisabled": false,
+    "publicIamAdded": false,
+    "userAuthority": "APP_SESSION_REQUIRED",
+    "identityPinsPublished": false,
+    "modelsEnabled": false,
+    "businessDataMoved": false
+  },
+  "qualificationSha256": "f85613401c716c8892dc5f972a848a680261911f67f9d53c91faa0de9bec2f95",
+  "binding": {
+    "version": "projed.legacy-entry.v1",
+    "upstreamOrigin": "https://projed-prod-56gnizku7q-de.a.run.app",
+    "serviceAccount": "projed-legacy-entry@projed-cc78d.iam.gserviceaccount.com",
+    "serviceAccountSubject": "100626728503472119855",
+    "qualificationSha256": "f85613401c716c8892dc5f972a848a680261911f67f9d53c91faa0de9bec2f95"
+  },
+  "observedAt": "2026-11-23T12:13:21.148972+00:00",
+  "evidenceRef": "output/dev139-private-relay-20261123/foundation-verified.json"
+}

@@ -2,20 +2,29 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import test from 'node:test';
 import { legacyEntryCheck, legacyEntryMain, legacyEntryPort, stopLegacyEntry } from '../../../server/legacyEntryMain.js';
+import { CURRENT_LEGACY_ENTRY_BINDING, validLegacyEntryBinding } from '../../../server/legacyEntryBinding.js';
 
 test('entry check-only ignores runtime/credential env and never contacts a provider', async () => {
   const original = globalThis.fetch; let calls = 0;
   globalThis.fetch = async () => { calls++; throw new Error('Check-only must not contact a provider'); };
   try {
     assert.deepEqual(legacyEntryCheck(), { event: 'projed_legacy_entry_check', status: 'CHECK_ONLY',
-      transport: 'UNPUBLISHED', upstream: 'NOT_CONTACTED', userAuthority: 'APP_SESSION_REQUIRED', database: 'NOT_CONNECTED', models: 'NOT_RUN' });
+      transport: CURRENT_LEGACY_ENTRY_BINDING === null ? 'UNPUBLISHED' : 'QUALIFICATION_BOUND',
+      upstream: 'NOT_CONTACTED', userAuthority: 'APP_SESSION_REQUIRED', database: 'NOT_CONNECTED', models: 'NOT_RUN' });
     await legacyEntryMain(['--check-only'], { PORT: 'invalid', PROJED_RUNTIME_BINDING_JSON: '{"enabled":true}', PROJED_DATABASE_URL: 'not-a-database' });
     assert.equal(calls, 0);
   } finally { globalThis.fetch = original; }
 });
 
-test('unpublished default entry refuses before listen; arguments/env cannot publish it', async () => {
-  await assert.rejects(legacyEntryMain([], { PORT: '8080', PROJED_LEGACY_ENTRY_BINDING: '{"enabled":true}' }), /UNQUALIFIED/);
+test('source binding is authoritative and arguments/env cannot publish an unpublished entry', async () => {
+  if (CURRENT_LEGACY_ENTRY_BINDING === null) {
+    await assert.rejects(legacyEntryMain([], { PORT: '8080', PROJED_LEGACY_ENTRY_BINDING: '{"enabled":true}' }), /UNQUALIFIED/);
+  } else {
+    assert.equal(validLegacyEntryBinding(CURRENT_LEGACY_ENTRY_BINDING), true);
+    // A qualified-source normal listen/denial/SIGTERM path is exercised in the
+    // actual lean Linux image. Do not start a public listener in this unit test.
+    assert.equal(legacyEntryCheck().transport, 'QUALIFICATION_BOUND');
+  }
   for (const args of [['--binding=enabled'], ['--check-only', '--listen'], ['unexpected']]) {
     await assert.rejects(legacyEntryMain(args, {}), /ARGUMENT_INVALID/);
   }

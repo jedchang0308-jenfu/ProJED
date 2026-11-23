@@ -12,9 +12,15 @@ export const LEGACY_QUICK_ORIGIN = 'https://projed-cc78d.firebaseapp.com';
 export const LEGACY_ENTRY_UPSTREAM = 'https://projed-prod-56gnizku7q-de.a.run.app';
 export const LEGACY_ENTRY_ACCOUNT = 'projed-legacy-entry@projed-cc78d.iam.gserviceaccount.com';
 
-// No legacy entry resource/IAM or provider-wire qualification has been approved
-// and observed. An env flag cannot publish this binding.
-export const CURRENT_LEGACY_ENTRY_BINDING: LegacyEntryBinding | null = null;
+// Approved private-candidate foundation: the dedicated SA UID and exact
+// service/repository grants were read back. The source qualification is in
+// config/dev-139/legacy-entry-qualification.json; this publishes no user identity,
+// model, public IAM or Hosting route. Environment flags cannot replace it.
+export const CURRENT_LEGACY_ENTRY_BINDING: LegacyEntryBinding | null = Object.freeze({
+  version: 'projed.legacy-entry.v1', upstreamOrigin: LEGACY_ENTRY_UPSTREAM,
+  serviceAccount: LEGACY_ENTRY_ACCOUNT, serviceAccountSubject: '100626728503472119855',
+  qualificationSha256: 'f85613401c716c8892dc5f972a848a680261911f67f9d53c91faa0de9bec2f95',
+});
 
 export function isLegacyPublicOrigin(value: unknown): value is string {
   return value === LEGACY_MAIN_ORIGIN || value === LEGACY_QUICK_ORIGIN;

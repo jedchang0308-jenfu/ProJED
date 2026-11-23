@@ -6,7 +6,7 @@ import { SignJWT, createLocalJWKSet, exportJWK } from 'jose';
 
 import { createLegacyEntryRelay } from '../../../server/legacyEntryRelay.js';
 import { createLegacyEntryRequestPreparer, ENTRY_IDENTITY_HEADER, ENTRY_ORIGIN_HEADER } from '../../../server/legacyEntryOrigin.js';
-import { CURRENT_LEGACY_ENTRY_BINDING, LEGACY_ENTRY_ACCOUNT, LEGACY_ENTRY_UPSTREAM,
+import { CURRENT_LEGACY_ENTRY_BINDING, validLegacyEntryBinding, LEGACY_ENTRY_ACCOUNT, LEGACY_ENTRY_UPSTREAM,
   LEGACY_MAIN_ORIGIN, LEGACY_QUICK_ORIGIN, type LegacyEntryBinding } from '../../../server/legacyEntryBinding.js';
 import { createKernelHttpServer } from '../../../server/http.js';
 import { createAppSessionService } from '../../../server/appSessionService.js';
@@ -41,11 +41,12 @@ async function close(server: Server): Promise<void> {
 }
 const mainHeaders = { 'x-forwarded-host': mainHost, origin: LEGACY_MAIN_ORIGIN };
 
-test('unpublished relay cannot start or acquire an identity token', () => {
+test('explicit null or malformed relay cannot start or acquire an identity token in either source phase', () => {
   let calls = 0;
-  assert.equal(CURRENT_LEGACY_ENTRY_BINDING, null);
+  if (CURRENT_LEGACY_ENTRY_BINDING !== null) assert.equal(validLegacyEntryBinding(CURRENT_LEGACY_ENTRY_BINDING), true);
   assert.throws(() => createLegacyEntryRelay(null, { getIdentityToken: async () => { calls++; return fixtureToken; } }), /UNQUALIFIED/);
-  assert.throws(() => createLegacyEntryRelay({ ...binding, qualificationSha256: '' }), /UNQUALIFIED/);
+  assert.throws(() => createLegacyEntryRelay({ ...binding, qualificationSha256: '' },
+    { getIdentityToken: async () => { calls++; return fixtureToken; } }), /UNQUALIFIED/);
   assert.equal(calls, 0);
 });
 

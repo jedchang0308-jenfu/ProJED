@@ -519,7 +519,7 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 - → DEV-139 [整合交付點] [候選已驗證／舊網址先跑新系統／原資料先不搬遷／未切流] [P1] ProJED 納入 Jenfu-Platform，保留 Vite
   - 現行方向：先在舊主／Quick 網址完成新版前端、登入、API與中央後端接線，正式資料搬遷獨立列 DEV-142；日常運作確認後才換新網址，不重搬 DB／Storage。[DEV-139 現況](#dev-139-jenfu-platform-onboarding)｜[SPEC §3.0](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-two-stage-rollout)。
   - 現有候選與本機證據依原 source／revision 重用；51份 schema SQL 成功不代表正式業務資料搬遷。真 Session／既有 UUID mapping、舊入口及原地草稿相容、provider零留存、正式資料與完整功能驗收仍未結案。
-  - 下一步：source `41eede3`／私人候選 `00003-bjv` 已驗；沿[剩餘交付計畫](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-remaining-delivery-plan)完成入口封裝／原地前端相容、身分owner publication與零留存資格準備。實際新入口具名差額及相依接線另核實，不改原正式資料／網址／PWA、不開新正式 writer、不切流；未資格模型停用，不將本機代理當正式使用者入口。
+  - 下一步：私人候選 `00005-r4j` 已對齊舊主／Quick入口環境，沿用已驗 `c3561e5` 映像。人類已核准 [§3.0.5 私人過渡入口](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-private-relay-foundation-proposal)，專用SA與兩筆資源grant已讀回；source binding／必要CI、私人relay／中央候選及Google實際通路驗證續行。身分owner publication與零留存資格仍未完成；不改原正式資料／網址／PWA、不開新正式writer、不切流，未資格模型停用。
   - 資料交付：[DEV-142](#dev-142-production-data-migration)／[SPEC-142](specs/SPEC-142-projed-production-data-migration.md)，已規劃未執行；晚間窗口量測後另排。原帳號／個人與外部權限、取消／CAS／unknown／exactly-once及完整DEV-139分母保留，父子不重複認列。
 
 - ✓ DEV-138 [開發點] [已完成／正式發布、限定登入與 RPC 驗收及清理 PASS] [P1] [ProJED] DEV-133 guard 恢復、分支整合與正式驗證後清理
