@@ -90,5 +90,15 @@ async (page) => {
   await close();
   assert((await readTask()).description === '重新新增', 'Adding text after clearing must still persist');
   assert(errors.length === 0, 'Browser runtime errors: ' + errors.join('; '));
+  await page.evaluate(() => {
+    window.__DEV098_ARTIFACT = {
+      dev: 'DEV-098',
+      revision: 'working-tree',
+      status: 'PASS',
+      cases: [{ name: 'keyboard-deletion-persistence', status: 'PASS' }],
+      diagnostics: 0,
+      summary: { pass: 1, fail: 0, diagnostics: 0 },
+    };
+  });
   console.log('PASS: Backspace, Delete, clear both notes, reload, insertion, and no-op initialization/selection');
 }
