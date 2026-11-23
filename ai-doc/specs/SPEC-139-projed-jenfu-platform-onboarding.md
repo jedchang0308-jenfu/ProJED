@@ -1,6 +1,6 @@
 # SPEC-139：ProJED 納入 Jenfu-Platform 的產品與技術交接契約
 
-**2026-11-22 現行決策：ProJED 採與 PDM 相同的 Cloud Run `run.app` 直接入口，不採 Firebase Hosting；runtime／Jobs 集中至 `jenfu-platform-prod`，保留 Vite，優先改善隨時開啟、立即記事的本機體驗。** 同專案私人網路連既定 Cloud SQL，保留 ProJED 獨立服務、身分與業務權限，不再以跨專案 Shared VPC 關聯為前置。
+**2026-11-23 現行決策：先保留舊主站／Quick 網址及既有 PWA 入口，讓新版前端、登入、API、資料與背景工作改走集中 Google Cloud；在舊網址確認新系統運作後，最後才換 Cloud Run `run.app` 新網址。** 保留 Vite、本機記事、ProJED 獨立權限及 `jenfu-platform-prod` 同專案私人 SQL；既有 Firebase Hosting 僅暫留為過渡入口，不另建新的 Firebase 網站或把業務權威搬回舊專案。正式資料一次搬遷獨立列為 [DEV-142／SPEC-142](SPEC-142-projed-production-data-migration.md)。
 
 本輪人類已恢復候選準備、部署與驗證，先不切流；保留原資料、網址與既有 PWA。新入口不導流、不改寫舊 Hosting／Service Worker，不執行來源停寫或業務資料搬入；IAM／SQL login 與 owner 綁定差額已依 §47.2 具名核准；只執行該範圍及必要修正，不擴張至來源 credential 或模型資格。不改 DNS、Secret、billing 或雲端容量。未資格化模型維持停用。現行設計見 §3、§6、§8–§9、§47.1–47.2 與 ADR-054；歷史 source／CI 結果不等於新目標已驗證。
 
@@ -17,13 +17,15 @@
 
 首階段保留 ProJED 現有工作區、看板、權限與操作流程，先對齊 Cloud Run 雲端架構、Cloud SQL 資料庫及身分契約，保留 React／Vite／Zustand、個人任務、外部協作、Quick Task、多視圖及已可用 AI 功能。身分接入改變可信登入來源及 Session，不重設 ProJED 的業務權限模型。
 
-ProJED 已有使用者，移轉以不丟資料、不重建帳號、不改既有權限為必要條件。2026-11-22 人類改選 Cloud Run 固定 `run.app` 直接網址，明確納入重新登入、書籤／連結更新與 PWA 重裝；不再承諾永久保留原 origin 或無須重裝。舊入口先完成資料恢復再受控導向新站，不立即清除本機儲存。短暫停寫與恢復窗口仍由演練量測後確認，不承諾零重登／零停寫；本輪不執行切換。
+ProJED 已有使用者，移轉以不丟資料、不重建帳號、不改既有權限為必要條件。2026-11-23 人類將系統／資料搬遷與最後更換網址拆開：先在舊 origin 使用新系統，保留原 PWA 身分與本機儲存，不在資料搬遷窗口要求重裝；最後跨 origin 才處理重新登入、書籤／連結與 PWA 重裝及草稿交接。這不承諾永久保留舊入口、零重登或零停寫。資料窗口偏好低使用量且操作者可確認結果的晚間，演練量測後另排；目前不執行停寫、搬正式資料或切換。
 
 成本採人類最新要求「只要費用不大幅增加即可」。首階段效益為基礎設施及身分契約一致、既有功能與資料授權相容；任務／資料跨系統使用是後續效益，節費及投資回收期不是必要驗收。首階段必須證明新路徑上的原功能及權限行為，不能只以平台可見、登入成功、表格搬入同一 DB 或測試數量認列交付。
 
 完整產品目標仍保留 ProJED／OrgMaster／Jenfu-Platform 真接線、資料與原功能驗收。2026-11-22 人類在本機記事切片後恢復「正式切流前必要準備、部署候選並驗證」；不包含正式切流、來源停寫、業務資料搬入或新 IAM／Secret／billing 的概括擴張。其他 repo 的既有修改仍保留，跨 repo 實作沿各自 native DEV 與隔離分支，不把本文件當外部 owner acceptance。
 
 ### 人類產品決策
+
+**D6（2026-11-23，Human Confirmed；本輪文件）**：採「舊網址先跑新系統，穩定後一次換新網址」，目的為縮小最後使用者更換網址的作業與排錯窗口。原主站／Quick origin 先承載新版前端與中央後端，最後才改 Cloud Run 直接入口；允許規劃有界過渡入口，不表示已核准其新資源／公開權限。資料搬遷特別拆成獨立交付點 DEV-142，其他準備與最後網址切換仍由 DEV-139 管理。D6 取代 D4／D5 的網址先後次序，保留原資料／權限、本機草稿、零留存與費用不大幅增加；現行 active 目標仍只完成切流前準備、部署候選並驗證，原業務資料先不搬遷、原網址／PWA 先不切換。這不是正式停寫、資料搬入、新 writer 或入口 IAM／Secret／credential／billing 的執行授權。
 
 **D5（2026-11-22，Human Confirmed）**：恢復候選準備、部署及驗證，維持零留存，保留原資料、網址與既有 PWA，先不切流。取代 D4 的「不恢復部署」，其 Cloud Run 直接入口、集中專案、本機記事與費用要求維持。只建立 IAM 保護的新候選，不把新服務自身路由視為舊站切換；新增集中專案 IAM／owner 責任的具名差額見 §47.2；人類已另回覆「核准上述具名集中專案差額」，暫停後再明確恢復同一目標，既有核准沿用。
 
@@ -62,7 +64,10 @@ ProJED 已有使用者，移轉以不丟資料、不重建帳號、不改既有�
 
 ```mermaid
 flowchart LR
-  User[使用者] --> Domain[Cloud Run 固定 run.app 入口]
+  User[第一階段使用者] --> Old[舊主站與 Quick 網址]
+  Old --> Entry[有界過渡入口]
+  Entry --> API
+  Later[最後更換網址] --> Domain[Cloud Run 固定 run.app 入口]
   subgraph Target[jenfu-platform-prod]
     Domain --> API[ProJED 專用 Cloud Run 前端與 API]
     Identity[OrgMaster 與 Platform 身分契約] --> API
@@ -71,17 +76,32 @@ flowchart LR
     Jobs[ProJED 專用 Jobs 與清理] --> SQL
     Jobs --> Storage
   end
-  Old[舊主與 Quick 入口] --> Recovery[限期恢復與連結轉移]
-  Recovery --> Domain
 ```
 
 - ProJED 前端、單一 app runtime、Jobs／Scheduler、app Secret 與 Storage 的長期管理責任集中於 `jenfu-platform-prod`。沿既有 VPC／runtime subnet 的同專案私人網路連 `jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg`、`jenfu_prod`；不開 SQL public IP，不以 `projed-cc78d` 的跨專案 Shared VPC 關聯為必要條件。
 - ProJED 保留自己的 repo、release、服務、runtime／migrator／importer／scheduler 身分、`projed_core`／`projed_contract`、ledger 與資源權限。集中專案不表示與 PDM 合併業務資料、共用 runtime SA、擴張公司管理員的私人存取或建立跨 core FK。app key 仍為 `projed`，其餘系統只消費受控 versioned contract。
-- 保留 React／Vite 與實體 `/quick-task/`；由同一 Cloud Run runtime 提供靜態前端及 API，不新增 Firebase Hosting、負載平衡器、CDN 或常駐容量。renderer 的預期主網址為 `https://projed-prod-9536592944.asia-east1.run.app`，是 source 規劃值，尚未建立或讀回。主／Quick 各自登入、換帳與登出的契約保留；正式接線需固定 provider 驗明的各自 origin 或完整 Cookie／API 隔離，不能因使用同服務就默默共用 Session，也不使用 wildcard 放寬。這項正式 origin／Session 接線未完成，不外推本機合成 Session PASS。
-- 舊 `https://projed-cc78d.web.app`、`https://projed-cc78d.firebaseapp.com/quick-task/` 及原主 origin 的 `/quick-task/` 保留為過渡與資料恢復入口，詳 §6。不得為永久保留舊網址另建永久 API 轉送服務；舊登入／token 不跨 origin 複製，新站重新核實身分與本地權限。
+- 保留 React／Vite 與實體 `/quick-task/`；同一中央 Cloud Run runtime 提供新版前端與業務 API。既有 Hosting 暫留承載舊網址，不新增 Firebase 網站、負載平衡器／CDN 或常駐容量。長期主網址 `https://projed-prod-9536592944.asia-east1.run.app` 已由候選 provider readback 固定，但私人候選／loopback 測試不代表正式使用者入口已可用。原主／Quick 及最後新 origin 的登入、換帳、登出、Cookie／callback 需分階段真接線；不因同服務就默默共用 Session，不以 wildcard 或未驗證 forwarded host 放寬。
+- 舊 `https://projed-cc78d.web.app`、`https://projed-cc78d.firebaseapp.com/quick-task/` 及原主 origin 的 `/quick-task/` 在第一階段是新系統的正常使用入口；最後換網址後才縮為有界恢復與導引。過渡入口不持有第二份業務資料／writer，不作永久 API 平台；舊 Supabase Session 不自動成為新 App Session，token／私人資料不跨 origin 複製，詳 §6。
 - Workspace、Board、Task、membership、權限矩陣、invite、profile、receipt、job、audit 與檔案 metadata 仍由 ProJED 擁有。runtime 無 owner、DDL、migrator、BYPASSRLS 或其他 app core 權限，交易內 scope／guard／RLS 與原授權結果保持。
 - 私人 Cloud Storage、音訊到期及 exact-generation 清理責任維持；新專案 bucket 的名稱、ACL、物件移轉與到期映射須後續實際綁定，不把舊 bucket 讀回當成新桶已合格。Cloud Run 本機磁碟不作持久儲存。
 - durable worker／Jobs 沿 ADR-051 的 claim／lease、預算、取消、unknown outcome 與 publication 保護；不新增無必要 runtime、共用業務權威或 SaaS 條件。模型未取得新專案資格時繼續拒絕，不能只改計費專案或 API key 就啟用。
+
+<a id="dev139-two-stage-rollout"></a>
+
+### 3.0 舊網址先跑新系統，最後再換網址（2026-11-23）
+
+| 工作段 | 交付責任與完成邊界 |
+|---|---|
+| DEV-139 切流前準備（目前 active） | 準備原網址的新版前端、真 Session／既有 UUID mapping、API／worker／Storage 相容、過渡入口及原地 PWA 更新。部署候選、唯讀與隔離驗證；保留原正式資料、網址與 PWA，不啟用正式新 writer。 |
+| DEV-142 正式資料搬遷（獨立交付，未執行） | 另排低使用量且可確認結果的晚間窗口，受控停寫、一次 snapshot／搬移／完整核對，再於舊網址開放新後端唯一 writer。完成條件與恢復只維護於 [SPEC-142](SPEC-142-projed-production-data-migration.md)，不以目前 schema migration 或候選 PASS 結案。 |
+| DEV-139 舊網址日常確認 | 正式資料仍在同一新後端，以真使用者日常功能、登入到期、隔夜、弱網草稿與權限行為確認穩定。不新訂固定觀察天數、所有裝置簽到或額外簽核。 |
+| DEV-139 最後換新網址 | 只調整使用者入口與必要 origin／Session／callback／PWA 綁定；沿用同一新資料庫與檔案，不安排第二次伺服器資料搬遷。舊入口暫供未完成草稿恢復與導引；入口問題可暫回舊網址使用同一新後端，不能退回舊 Supabase writer。 |
+
+**過渡入口的最小方案。** 現有 Hosting 在 `projed-cc78d`、中央 runtime 在 `jenfu-platform-prod`；[Hosting Cloud Run rewrite](https://firebase.google.com/docs/reference/hosting/rest/v1beta1/sites.versions#CloudRunRewrite) 只有 serviceId／region／tag，現行 Firebase CLI 亦沿 Hosting project 查服務，不能把跨專案直連當作已完成。規劃在舊專案設有界的薄轉送入口，業務程式／Session authority／資料仍留中央，最後換網址後按 §6.4 退出。只允許固定中央目的地、必要路徑／方法／大小與逾時，拒絕任意 URL／SQL／RPC tunnel；代理服務身分只作可信傳輸，不當作使用者授權，也不記錄 cookie、token、正文或音訊。不新增服務帳號 key／長期 bearer bridge。
+
+舊主／Quick origin 分別接新 Session；既有 `server/sessionCookies.ts` 的 host-only `__session` 與 HttpOnly／Secure／SameSite 保護保留。[Hosting 只轉送 `__session` cookie](https://firebase.google.com/docs/hosting/manage-cache#using_cookies)，但這只證明格式可相容，不代表真登入／撤銷已通過。靜態資產／舊版本保留與 rewrite 優先序須避免舊 HTML 攔住新入口；私人 API／callback／Session 維持 no-store，CDN／SW 不快取私人內容。
+
+下一步 source 變更面為 `firebase.json`、`scripts/release/production-contract.mjs`、`src/services/backendMode.ts`、`src/services/httpApi/httpApiClient.ts`、`src/features/quickTaskCapture/origins.ts`、既有 PWA 更新／版本保留、`server/config.ts`／`appSessionService.ts`／`sessionCookies.ts` 及 managed renderer。舊網址發布契約仍固定 Supabase，HTTP client 使用同源 credentials，因此不能只換 DB 位址或把私人 run.app URL 貼進舊前端。先在既有授權內實作／隔離驗證；過渡入口的新 runtime／SA／跨專案最小 invoker／必要公開入口責任及費用影響，查重與量測後另列具名差額。本輪不建立入口、不擴張公開 IAM、不動 Secret／billing／容量；既有私人候選與本機代理測試不轉成正式使用者 gateway。
 
 ### 3.1 Runtime 工程基線與模組責任
 
@@ -106,7 +126,7 @@ Session／私人 API 回應採 `Cache-Control: no-store`；SW 不快取 API、�
 | Profile／renderer／artifact | 檢查 `s3-managed.profile.json`、`shared/dev139ManagedDatabase.mjs`、`scripts/lib/dev139-cloud-run-plan.mjs`、build／binding／release allowlist。目標 project、image repository、主／Quick origin、network、資源完整名稱及 hash 一起重新綁定；不手改已套用 SQL。 | 本輪集中 target／profile／renderer／模型 project guard 改向 `jenfu-platform-prod`；僅 source 設定，不代表新資源、IAM、origin 或資格已建立。舊 profile／映像只證明原來源與原綁定；可評估未變產物重用，但不得把舊 digest／receipt 直接改掛新專案。 |
 | SA／SQL IAM login／角色 | 在 `jenfu-platform-prod` 規劃 ProJED 專用 runtime、migrator、importer、scheduler SA，前三者使用各自 SQL IAM login；不借 PDM 或 Platform runtime 身分。保留既有 app NOLOGIN role／schema 與完整 migration ledger，按最小權限重綁 CONNECT／membership。 | 已核准舊 project 的 SA／grant 不等於新 SA 已存在或新權限已核准；SQL bytes／資料語意未變的證據可沿原來源重用，login／ACL／route 另驗。 |
 | Jobs／Scheduler／Secret | 專案、SA、固定 Job、執行權、migration owner window、stdout ledger／finally 撤權、Secret resource／version 與執行結果重新核對。候選 create 與執行／排程啟動分開；來源 credential 仍為精確用途及唯讀。 | 不搬用未綁定 Secret，不借其他 app 憑證，不因候選建立成功就啟動寫入或排程；已做的舊資源不自動刪除。 |
-| 直接入口／OAuth | Cloud Run 提供 Vite／Quick／API；以 provider readback 固定主／Quick origin、Platform registry／handoff、callback、CORS／CSRF／Cookie、Session 與 manifest。 | 不要求 Firebase Hosting 或購買自有網域；現有或本機網址可用不證明正式登入／安裝完成。本輪不建立服務、不改 DNS。 |
+| 過渡入口／OAuth／最後新 origin | 先在既有 Hosting 主／Quick origin 接中央 Vite／API／真 Session，最後才換 Cloud Run 直接入口；分別固定 registry／handoff、callback、CORS／CSRF／Cookie、manifest 與可信入口來源，保留必要舊版本資產。 | 既有 Hosting 暫留，不新增 Firebase 網站／另購網域；私人候選／本機代理不證明正式登入／安裝。新過渡 runtime／SA／IAM 與正式 Hosting 切換未由文件授權，舊收據不直接改掛新 origin。 |
 | Storage／附件／錄音 | 私人 bucket、最小 ACL、來源 object ref／digest、目標 generation、到期及清理義務一併移轉核對；不因複製延長保留期限或把新 generation 當成原 upload proof。 | 舊 bucket 的設定／空白盤點只對原時間與資源有效；未盤點不視為空，新桶及檔案／播放／清理另驗。 |
 | 模型／費用／零留存 | Speech、Vertex、RAG／LLM 的 resource／quota／計費 project、SA caller、模型／region、cache 與內容 logging、適用契約／豁免及實呼叫證據重新綁定至新專案。 | 舊 project 的設定或條款適用性不自動移轉；新資格未成立前 provider／job dispatch 綁定保持停用，不能以 env flag／store=false／刪檔代替零留存證據。 |
 
@@ -336,6 +356,8 @@ Quick 沿 [現行 invoker RPC](../../supabase/migrations/20261001090000_dev_133_
 
 ### 6.1 Server 資料
 
+正式業務資料搬遷的獨立交付點是 [DEV-142／SPEC-142](SPEC-142-projed-production-data-migration.md)；本節只維護共用資料安全契約。DEV-139 先完成必要準備及候選驗證，當前不搬正式資料。正式搬遷先在舊網址啟用新系統，最後網址切換不重搬 DB／Storage。
+
 1. 建立 schema／table／function／policy／extension、Workspace／Board membership／權限設定、檔案／feed／連結、Auth mapping、job／receipt 的完整 inventory，核對來源實際狀態；migration 檔名不等於 live inventory。
 2. 舊 Supabase migration 歷史不改寫。新 Cloud SQL managed DDL 採 ProJED 自有 forward-only migration 與獨立 ledger；shared extensions／foundation 不由 app 搶 ownership。
 3. 先以 synthetic／核准 sanitized fixture 在空白隔離 candidate DB 演練完整轉換。正式目標只檢查 ProJED 受管 domain 的可接入／恢復條件，不清空共用 `jenfu_prod` 或其他 app 資料；以一個 repeatable-read 來源 snapshot 及單一目標交易逐 domain 檢查 count、ID／FK、scope、人工內容／checksum 與 receipt，完全一致才 commit。目標已有不明來源資料時先拒絕，不自行覆寫。
@@ -344,7 +366,9 @@ Quick 沿 [現行 invoker RPC](../../supabase/migrations/20261001090000_dev_133_
 
 ### 6.2 Browser 本機資料
 
-Server 搬移與 browser storage 恢復分開驗收。新 Cloud Run origin 與舊 origin 的 IndexedDB、localStorage、Session、SW 及 PWA 安裝不共享；新站不能自動讀取舊裝置的草稿，也不能宣稱跨 origin 自動繼承安裝。保留舊入口的正常登入與恢復畫面，提供有界的同步或受控匯出／恢復：停寫前可核身補送舊來源並納入最後 snapshot；停寫後不得再向舊庫補寫，沿原識別碼恢復至新唯一 writer。沒有可驗證來源／owner proof 或新端不可用時，原副本留存並顯示待恢復，不標示已移轉。
+Server 搬移與 browser storage 恢復分開驗收。第一階段維持原 origin／manifest identity，原 IndexedDB、localStorage、SW 與安裝不因後端搬遷被清除；透過受控原地更新使用新系統，未更新舊版仍受來源 writer fence，不能向舊庫補寫。known owner 沿原識別碼核身恢復至新唯一 writer，unbound 明確認領，unknown 先核實同 key 的可信回執。這個 same-origin provider 切換也須驗本機 namespace／owner 相容，不因保留 URL 就假定舊草稿自動被新 HTTP adapter 接受。
+
+最後換新 Cloud Run origin 時，IndexedDB、localStorage、Session、SW 及 PWA 安裝仍不共享；新站不能自動讀取舊裝置草稿，也不能宣稱繼承安裝。舊入口提供有界同步或受控匯出／恢復，此時兩入口只連同一新後端，不做第二次 server snapshot；沒有可驗證來源／owner proof、尚未登入或新端不可用時，原副本保留並顯示待恢復，不標已移轉。
 
 - known owner 的 pending 只補送本人；不同帳號拒絕且不顯示該筆私人內容，不改成 unbound。
 - unbound 記錄仍需使用者明確確認目的帳號；登入 callback／升級／匯入不自動認領。
@@ -367,7 +391,7 @@ Server 搬移與 browser storage 恢復分開驗收。新 Cloud Run origin 與�
 |---|---|
 | 雲端資料與權限 | 原 profile UUID、Workspace／Board／Task ID、membership、invite 狀態、五種角色及非預設／明確空集合 Board matrix 保留；移轉前後 count／ID／內容與 allow／deny reconciliation 無未解差異。附件、job、receipt 與人工原稿另有完整性證據。 |
 | 帳號與登入 | 已核實的原登入身分對應既有 localUserId，使用者不重新註冊或重新建立工作區；Google 登入選同一帳號仍須驗 provider binding chain，不能只看 email。各 App 預留切換時一次正常重新登入，不承諾舊 Supabase Session 自動變成 Platform Session；日後到期／撤銷沿原規則。歧義隔離、資料保留並有恢復入口，不顯示為新空帳號。 |
-| 網址與安裝 | 長期改用 Cloud Run 固定 run.app 入口，主／Quick 的 exact origin／path／Session 隔離與 manifest identity 依 provider readback 固定。使用者更新書籤、在新站重新登入並重新安裝 PWA；舊安裝不自動變成新 origin。三個舊入口保留恢復與轉移指引，先完成草稿處置再導向，不立即刪 SW／IDB／localStorage。 |
+| 網址與安裝 | DEV-142 搬遷時維持三個舊入口及 PWA 身分，使用者在原網址更新／必要重登，不要求當晚換網址或重裝。舊網址運作確認後才改 Cloud Run 固定 run.app；新 origin／path／Session 與 manifest 綁定另驗，更新書籤、重新核實登入及必要重裝／草稿恢復，不宣稱舊安裝自動變新 origin，不立即刪 SW／IDB／localStorage。 |
 | 離線草稿與待送任務 | 在原 browser profile／安裝儲存中保留 known owner、unbound、captureId／hash、人工正文及 pending／failed 狀態；登入、升級或切帳不清空或自動認領。恢復後只以原 key 核實／補送到本人新路徑，結果不明先查 receipt。 |
 | 停寫與可恢復性 | 以短暫停寫完成一致性full snapshot／核對，不另建delta平台；時長由正式資料plan與演練量測，可接受窗口在正式 re-entry 確認，不先承諾零停機或固定分鐘數。停寫／登入失效有就地狀態與重試入口，草稿保留，不把錯誤當空資料或成功。 |
 
@@ -377,7 +401,7 @@ Server 搬移與 browser storage 恢復分開驗收。新 Cloud Run origin 與�
 
 ### 6.4 舊入口過渡、連結轉移與退出
 
-舊主站、獨立 Quick 及主 origin 的 Quick 相容入口保留作有限過渡，讓舊裝置可辨識新站、核身恢復／受控匯出與更新安裝。新長期 Hosting 與 API 位於 `jenfu-platform-prod`；不為永久保留舊 origin 新增永久 API proxy。過渡只承接已盤點的恢復或唯讀責任，不設另一個 writer，不直接跨 origin 複製 Session。
+舊主站、獨立 Quick 及主 origin 的 Quick 相容入口在第一階段正常使用中央新系統，透過 §3.0 的有界入口，不設另一個業務 writer 或資料副本。原地升級與 DEV-142 先完成，確認日常運作後才進入下表的新網址／連結交接。最後新網址直接連 `jenfu-platform-prod` 的同一 runtime／DB；舊入口縮為恢復與導引，不作永久 API 平台，不直接跨 origin 複製 Session。保留及退出責任不等於所有歷史裝置都要先線上簽到才可換網址。
 
 | 已發出入口／連結 | 過渡與更新方式 | 拒絕或退出條件 |
 |---|---|---|
@@ -434,6 +458,8 @@ Quick Task 收到精確的 `PT503 / PROJED_SOURCE_WRITE_PAUSED` 後停止該筆�
 ## 8. 驗收與證據契約
 
 本節定義工程驗收，並記錄各案例實際完成的環境與證據。隔離回歸、編譯產物、正常畫面及正式環境的結果各依實際範圍判定，最新執行結果與仍待驗證項目見下列說明及 §47.1。
+
+既有 A／T 案例仍有效，按 D6 分階段驗收：先驗舊 origin 原地升級、真 Session／API 與草稿 provider 交接；正式資料／fence／新 writer 結果由 DEV-142 單獨判定；最後才完成新 origin／安裝／跨 origin 恢復。DEV-142 不等待新網址發布，但其完成也不替代完整 DEV-139／真 ASR／provider 資格；不新增一組重複案例或 required gate。
 
 Fixture 採 synthetic 私人 A／B、公司 C1／C2、guest G、Workspace／Board 五種角色 `owner / admin / project_manager / member / viewer`，包含不同 Board 權限設定與明確空集合；建立父資料及必要邀請，但案例的建立／修改／同步結果由正常 UI→API→DB delivery path 產生。非正式不使用正式 row、token、音訊或私人草稿。
 
@@ -529,6 +555,8 @@ Rev 8 的 employee-only／無 ProJED audience 是當時基線。現行 owner sou
 S3 read／write route 及 collaboration command 已接入既有 Session actor 與同一 actor transaction。正式 composition 由 `createRuntimeSessionAuth` 組合 Platform handoff、Google→原 UUID mapping、持久化 App Session、撤銷及外部邀請 publisher；production pins 仍為空集合，因此正式 resolver 維持關閉。正常產品已以隔離 Session 驗證接線，正式啟用仍需對應 owner publication 與核准的 origin／contract pins；QA actor 只用於隔離驗證。
 
 ### 9.1 三個工作段及目前成熟度
+
+下表仍是 S1／S2／S3 工程能力分工；實際發布順序沿 D6／§3.0，正式資料搬遷由 DEV-142 獨立判定。最後新網址／跨 origin 安裝不是 DEV-142 的前置條件，資料搬遷完成也不替代整體身分／功能／provider／新入口驗收。
 
 下表是既有 source／隔離驗證範圍，不代表集中專案版本已實作。新目標的差額以 §3.2、§6、§47.1 為準；本輪只交付文件及計畫，以下正式操作順序是未來工作，不是執行授權。
 
