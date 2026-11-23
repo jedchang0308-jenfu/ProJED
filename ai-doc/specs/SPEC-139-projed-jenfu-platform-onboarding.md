@@ -8,7 +8,7 @@
 
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。
 - 日期：2026-11-23（Asia/Taipei）；本輪受測來源與候選進度見 §47.2，本機記事驗證見 §3.3；歷史 artifact 依原收據識別。
-- 狀態：**source `c3561e5` 的整版 CI、Cloud Build 與私人候選 `projed-prod-00004-vjk` 已驗證：36項唯讀 HTTP、18項私人 PWA；舊 `00003-bjv` 保留，先不切流**。原站前版靜態資產428檔已攜入封包，建置核對現役前版91檔不可變資產、HTTP核對其中19檔主／Quick入口與引用；真 SW／弱網／13小時模擬隔夜／兩次程序重開草稿復原通過，直接匿名 run.app／SW 仍拒絕。原主／Quick metadata 讀回仍為舊發布。51 SQL／profile不變、migration未重跑、analysis零次、IAM／網路／容量未變，原業務資料／網址／PWA未切換。真 Session／callback、既有使用者映射、實際舊入口接線與零留存 provider 資格仍未完成；整體DEV-139未結案。現行結果見 §3.0.2，前版候選及封包失敗保留於 §3.0.1／§47.2。
+- 狀態：**私人候選 `projed-prod-00005-r4j` 已對齊 D6 舊主／Quick 入口環境值，source `6229e86` CI 及11項唯讀HTTP通過，先不切流**。映像仍為已驗 `c3561e5`，主／Quick／SW／metadata bytes及解析後app／proxy digests不變，原18項私人PWA證據重用；舊 `00004-vjk` 保留。先前36項HTTP／舊版資產封裝見 §3.0.2，本輪設定與證據見 §3.0.4。原網址／PWA／業務資料、IAM／網路／容量不變，migration未重跑、analysis零次；真Session／可信映射、實際舊入口及零留存資格仍未完成。下一個新增私人過渡入口的具名責任待 §3.0.5 核准，不由文件或既有三SA核准延伸。整體DEV-139未結案。
 - 適用範圍：本輪程式／測試／文件與 IAM 保護的候選部署、唯讀／安全拒絕驗證；集中專案的新 IAM 與 owner migration window 已由人類依 §47.2 具名核准。無正式業務資料寫入、停寫或切流。舊 Shared VPC 引導取消；已完成設定與舊入口保留，不自動撤回或刪除。
 - 直接交接入口：[§11 S1 定案契約](#11-架構決策與-s1-定案契約)、[§12 S1 實作狀態](#12-s1-實作狀態2026-10-26)、[§13 S2 consumer seam](#13-s2-projed-identity-consumer-seam2026-10-26)、[§14 S3 read adapter](#14-s3-http-read-adapter-slice2026-10-26)、[§15 S3 domain command](#15-s3-domain-command-w12026-10-26)、[§16 S3 collaboration command](#16-s3-collaboration-command-w22026-10-27)、[§17 S3 record／activity](#17-s3-recordactivity-w32026-10-27)、[§18 S3 HTTP product wiring](#18-s3-http-product-wiring-w42026-10-27)、[§19 S3 Board transfer](#19-s3-board-transfer-w52026-10-27)、[§20 S3 legacy provider boundary](#20-s3-legacy-provider-boundary-w62026-10-27)、[§21 S3 Quick Task](#21-s3-quick-task-w72026-10-27)、[§22 S3 Task Workbench](#22-s3-task-workbench-w82026-10-27)、[§23 S3 Actor CAS](#23-s3-actor-context-cas-w92026-10-27)、[§24 S3 Task Tracking](#24-s3-task-tracking-w102026-10-27)、[§25 S3 Backup／Import](#25-s3-backupimport-w112026-10-27)、[§26 S3 Account Preferences](#26-s3-account-preferences-w122026-10-27)、[§27 S3 Calendar Subscription](#27-s3-calendar-subscription-w132026-10-27)及[§32 本地開發收斂](#32-s3-local-development-closure-w182026-10-27)；[§11.8 技術主管審查](#118-技術主管審查與最小優化)保留 Rev5 修正理由；既有使用者切換見 [§6.3](#63-既有使用者的切換基線)。
 - 決策來源：[DEV-139 人類決策](../dev_task.md#dev-139-jenfu-platform-onboarding)；架構取捨：[ADR-054](../decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。本文件不是其他 owner 已接受或已發布的契約。
@@ -184,7 +184,23 @@ Source `463aba2` 的 [CI45158688396](https://github.com/jedchang0308-jenfu/ProJE
 
 兩階段統一產生 `PROJED_PUBLIC_APP_URL`、`PROJED_MAIN_PUBLIC_ORIGIN`、`PROJED_QUICK_PUBLIC_ORIGIN`，只接受封閉階段，不接受任意URL或環境覆寫。切換階段不改 DB／Storage／image／IAM／網路／容量／Jobs／Scheduler／provider 資格；不設定啟用 flag、不發布 identity pin／legacy binding，也不重送來源資料。renderer 仍只產生既有 create-only request；實際既有候選的設定更新須讀回同一服務後，僅取這三個環境值，不執行 renderer 的其他資源請求。
 
-本機 release 55項通過，新增以真 `buildCalendarIcs` 驗兩階段的任務連結及原 workspace／board／task ID，並驗主／Quick不同host、階段改變只影響上述三值、未知階段／任意origin拒絕。完整CI及私人候選設定更新尚待本輪接續核對；原候選仍為 §3.0.2 的 `00004-vjk`。上游唯讀 metadata 另存 `output/dev139-precutover-owner-audit-20261123/owner-runtime-readback.json`：Platform runtime 未配置 ProJED SSO client，consumer pins仍空；source契約一致不等於已正式發布。既有 owner runtime／IAM／資料及零留存限制不變。
+本機 release 55項通過，新增以真 `buildCalendarIcs` 驗兩階段的任務連結及原 workspace／board／task ID，並驗主／Quick不同host、階段改變只影響上述三值、未知階段／任意origin拒絕。Source `6229e86` 的 [CI45162466817](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45162466817) 兩jobs SUCCESS，release55／S2 534／S3 175／migration18、完整隔離PG／snapshot與Linux OCI通過。私人候選只更新這三個環境值，現為 `projed-prod-00005-r4j`；已驗的 app／proxy 解析後digests與source `c3561e5` 不變，舊 `00004-vjk` 保留。11項唯讀HTTP通過，主／Quick／SW／metadata bytes不變、匿名／偽造transport及未資格Session仍拒絕；原18項PWA依相同不可變映像與未變前端重用，沒有宣稱在新revision重跑browser。IAM／網路／容量與migration一次／analysis零次未變，原兩origin metadata仍為 `20261123035148-4604c0`，未改Hosting／原網址／PWA、不搬資料、不切流。結果在 `output/dev139-entry-stage-20261123/final-verification.json`，CI／部署／HTTP及入口設定收據同目錄。上游唯讀 metadata 另存 `output/dev139-precutover-owner-audit-20261123/owner-runtime-readback.json`：Platform runtime 未配置 ProJED SSO client，consumer pins仍空；source契約一致不等於已正式發布。既有 owner runtime／IAM／資料及零留存限制不變。
+
+<a id="dev139-private-relay-foundation-proposal"></a>
+
+#### 3.0.5 私人過渡入口的最小差額（2026-11-23，待人類核准）
+
+此提案只為在不變更舊 Hosting／網址的情況下，完成真 Cloud Run metadata token→中央傳輸驗證的私人候選；**不包含公開入口或正式切流**。既有中央三SA／SQL login核准未涵蓋以下舊專案新身分與跨專案信任。唯讀查核證據為 `output/dev139-entry-stage-20261123/private-relay-foundation-delta.json`：舊專案號 `967362299895`，下列SA及relay服務皆404；中央服務／映像庫未有表列grant。操作者已具有建立服務／SA、actAs及私人呼叫權，無須另加操作者IAM。
+
+| 具名範圍 | 最小變更與限制 |
+|---|---|
+| 舊專案專用SA | 僅在 `projed-cc78d` 建立 `projed-legacy-entry@projed-cc78d.iam.gserviceaccount.com`；不產key、不加SQL／Storage／Secret／模型角色。 |
+| 中央服務的單一caller | 將 `roles/run.invoker` 僅授予上述SA，resource限 `projects/jenfu-platform-prod/locations/asia-east1/services/projed-prod`；不授其他app或專案級invoker。 |
+| 舊Run service agent讀專用映像庫 | 僅將 `roles/artifactregistry.reader` 授予既有 `service-967362299895@serverless-robot-prod.iam.gserviceaccount.com`，resource限 `projects/jenfu-platform-prod/locations/asia-east1/repositories/projed-release`；目前中央project只有其既有networkViewer，不新增project級reader。 |
+| 私人relay候選 | 建立 `projects/projed-cc78d/locations/asia-east1/services/projed-legacy-entry`，使用該專用SA與已驗lean target；IAM保護、`invokerIamDisabled=false`、零常駐、max1、concurrency2、1CPU／256Mi、60秒。無SQL／VPC／volume／Secret；不加入allUsers／allAuthenticatedUsers。這是一個具名新候選資源，不調整中央runtime／SQL容量或billing設定。 |
+| 同範圍來源與驗證 | 讀回SA uniqueId與上述resource／IAM後，將固定caller／上游的transport qualification綁到source，沿原CI、專用builder／repository建置及更新私人relay／中央候選，僅做無業務寫入的正常靜態GET與安全拒絕驗證；未知結果先讀回，不逐SHA／digest重問。原有正常分支保護與同PR範圍維持。 |
+
+核准僅涵蓋本表的新身分／兩筆grant／新私人候選及必要來源建置重試；不授owner/editor、Token Creator或服務帳號key，不建立Secret、key或長期credential，不授資料搬入、來源停寫、writer啟用、模型呼叫、公開IAM、Hosting／DNS／PWA切換，也不部署Platform／OrgMaster runtime。零留存與費用不大幅增加維持，provider／identity pins未資格化仍停用。完成此步不等於正常舊網址已接線、真登入／模型資格成立或DEV-142已執行。
 
 ### 3.1 Runtime 工程基線與模組責任
 
