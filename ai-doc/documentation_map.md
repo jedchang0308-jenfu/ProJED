@@ -21,9 +21,7 @@
 
 **現行決策（2026-11-22）**：集中 `jenfu-platform-prod`、同專案私人 SQL、Cloud Run `run.app` 直接入口，保留 Vite，不採新 Firebase Hosting／跨專案 Shared VPC。D5 恢復 IAM 保護候選的準備、部署與驗證，保留原資料／網址／既有 PWA，先不切流；已具名核准的集中 foundation 依 [§47.2](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-central-candidate-foundation) 執行。先讀 [架構](specs/SPEC-139-projed-jenfu-platform-onboarding.md#3-目標架構與資料權責)、[本機記事](specs/SPEC-139-projed-jenfu-platform-onboarding.md#33-本機優先記事2026-11-22)、[遷移／恢復](specs/SPEC-139-projed-jenfu-platform-onboarding.md#6-資料移轉pwa-與恢復)及 [ADR-054](decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。保留帳號／權限、私人隔離、草稿、CAS／receipt、零留存及原驗收分母。
 
-**候選進度（2026-11-23）**：51 app migrations 單次成功，Platform #236／CI／PG17 與支援 Build `1915c2fb` 已資格化；獨立 reconciliation 回讀同一成功 child／完整 ledger，保留原父 FAIL，CREATE／暫時 role／三項臨時 IAM 已撤回。ProJED `2e14d7e` IAM 保護候選 `projed-prod-00001-c8p` 已部署，12 項唯讀 HTTP 核對通過；Quick 本機保存／線上重開復原通過，但 `/sw.js` 被 IAM 拒絕，新 origin 離線／隔夜驗證阻塞，不能宣稱完整驗收。模型停用、保留原資料／網址／PWA、不切流；[實際結果及剩餘 Session／provider 邊界](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-owner-window-r3-renewal)。不新增 required gate。
-
-**私人 PWA 續驗（2026-11-23）**：main `1437a25` 已同步；不擴張 IAM，改以只讀 loopback 認證代理驗真候選 SW／弱網／模擬隔夜及兩次 browser process 重啟草稿復原18項通過。另修正 module 前輸入的即存缺口，新 bundle 本機必要回歸36項通過；修正版 CI／產物與候選回讀續收斂。直接 `run.app` 無認證瀏覽／安裝及真 Session 未宣稱通過；[入口與證據邊界](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-private-candidate-pwa)，不重跑成功 migration、不重開 owner IAM、不切流。
+**候選進度（2026-11-23）**：main `1437a25` 已同步，source `95d9de5` 的 CI45116273249／Cloud Build `a64392ba` 通過；私人候選 `projed-prod-00002-str` 的14項唯讀HTTP／18項PWA及本機必要回歸36項通過。使用只讀 loopback 認證代理驗真 SW、弱網、模擬隔夜及兩次 browser process 重啟草稿復原，不擴張 IAM；另修正 module 前輸入未即存。51 SQL未變、migration仍一次成功、analysis零次，owner CREATE／臨時 IAM 已撤回，舊revision／映像保留。模型停用、原資料／網址／PWA未改、不切流；直接 `run.app` 無認證瀏覽／安裝及真 Session／provider 資格仍不宣稱通過。[命令與當前證據邊界](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-private-candidate-pwa)；[原父FAIL及復原](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-owner-window-r3-renewal)保留，不新增 required gate。
 
 以下日期／Rev／W 為原方案的來源與驗證歷史導覽，不覆蓋上述決策或構成新環境 PASS。
 
