@@ -79,6 +79,8 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
   - **前次文件收斂（2026-11-23）**：依「其他先寫進開發文件」，同步[其餘工作與順序](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-remaining-delivery-plan)，並修正 §6.5 舊文字仍把新後端啟用與換址／PWA重裝綁在同窗的矛盾。DEV-142 開新 writer 即正式業務切流；最後換址沿同一新庫，不再搬資料。本輪只改文件，不接續程式／部署／正式操作，DEV-139 與 DEV-142 均未結案。
 
+  - **續行切流前準備（2026-11-23）**：補舊主／Quick relay登入callback→正式五domain projection／import→真PG Session原UUID／receipt／撤權的單一隔離案例，本機strict型別通過，真PG／CI尚待同source執行。集中專案Speech／Vertex API均停用、音訊桶404；已備[§3.0.6 Speech／私人音訊具名差額](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-precutover-identity-speech-preparation)，尚未授權／套用。零留存與正式Session資格未成立前保持停用，原資料／網址／PWA及不切流限制不變。
+
   - **最新私人候選／真Google通路（2026-11-23）**：人類已核准[§3.0.5](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-private-relay-foundation-proposal)，專用SA與兩筆精確資源grant已讀回；中央 `00006-jsw`／私人relay `00001-hgp` 已部署。映像source `e5c2462`／Gen1 renderer修正 `5f3693b` 的CI均兩jobs SUCCESS，Cloud Build `94366cc8`成功；36項中央HTTP、14項實際metadata token／Google JWKS transport與18項PWA通過，含13小時模擬及兩次程序重開草稿復原。首個Gen2／256Mi的400與404讀回保留，改Gen1維持原256Mi；舊00005保留、中央網路容量與舊origin不變、無公開IAM。原兩origin metadata仍未變，migration一次／analysis零次，未搬資料、不改Hosting／網址／PWA、不切流。真Session／UUID映射、正常舊入口與模型零留存資格未完成，DEV-139／DEV-142未結案。
 
   - **切流前防重複補驗（2026-11-23）**：現役舊版 `1437a25` 的原離線與新增「來源已提交／回覆遺失→原task／receipt兩domain匯入→HTTP首次created:false」皆完成真UI／PG核對，單task／receipt及另一帳號零可見。[CI45158688396](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45158688396) source `463aba2` 兩jobs通過，artifact回執已取回驗SHA；`e4ab159` 僅修focused runner重複關池，PG18.4本機複驗通過，原失敗保留，其餘CI沿用。隔離DB／服務、四個合成profile與本次舊來源worktree已清理；正式CLI前置、原資料／網址／PWA與私人候選不變。[證據範圍與重現入口](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-source-commit-recovery)。

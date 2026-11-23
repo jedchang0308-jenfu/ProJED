@@ -39,7 +39,7 @@ import { createHttpCalendarAdapter } from '../../../src/services/httpApi/calenda
 import { createBackupPackage } from '../../../src/features/backup/package.js';
 import { BackupError } from '../../../src/features/backup/types.js';
 import { TaskTrackingError } from '../../../src/features/taskTracking/errors.js';
-import { verifyGoogleMappingsPostgres } from '../s2/verify-mappings-pg.js';
+import { verifyGoogleMappingsPostgres, verifyLegacyEntryMappingSessionsPostgres } from '../s2/verify-mappings-pg.js';
 import { startBrowserFixtureSession, verifyAppSessionsPostgres } from '../s2/verify-app-sessions-pg.js';
 import {verifyRagPostgres} from './verify-rag-pg.js';
 import {verifyMeetingSynthesisPostgres} from './verify-meeting-synthesis-pg.js';
@@ -71,6 +71,7 @@ const recordActivity = new RecordActivityRepository();
 await database.assertRuntimeBoundary(expected);
 await verifyGoogleMappingsPostgres(database);
 await verifyAppSessionsPostgres(database,config);
+await verifyLegacyEntryMappingSessionsPostgres(config);
 await verifyRagPostgres(database,config);
 
 const runBrowserSmoke = (baseUrl: string, name: 'http-ui' | 'rag-ui' | 'quick-http-binding' | 'board-share-scope' | 'calendar-ui'): Promise<void> => new Promise((done, reject) => {
@@ -1870,6 +1871,7 @@ console.log(JSON.stringify({
   checks: [
     'migration-boundary', 'google-proof-rls-original-uuid-read-only-and-guard-denial',
     'app-session-store-atomic-cancel-rotation-replay-rls',
+    'legacy-main-quick-host-bound-login-imported-uuid-pg-session-capture-receipt-and-revocation-synthetic-owner',
     'first-login-personal-external-employee-concurrency-original-uuid-and-private-workspace',
     'verified-login-email-refresh-invite-qualification-and-unscoped-update-denial',
     'rag-record-mirror-index-consumer-current-retrieval-private-denial-and-supersession',

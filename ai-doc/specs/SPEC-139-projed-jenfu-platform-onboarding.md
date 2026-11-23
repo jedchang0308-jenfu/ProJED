@@ -215,6 +215,25 @@ Source `463aba2` 的 [CI45158688396](https://github.com/jedchang0308-jenfu/ProJE
 本輪證據集中在 `output/dev139-private-relay-20261123/final-verification.json` 及同目錄source／CI／build／兩服務readback、首次400／後續404／Gen1成功與HTTP收據；PWA原報告為 `output/playwright/dev139-private-candidate-pwa/candidate-e5c2462-private-transport.json`。來源與測試／部署自查分層，不宣稱獨立QC或完整DEV-139完成；真Session／既有使用者映射、owner publication與provider零留存資格仍為後續工作，未啟用模型或傳送真實會議內容。DEV-142仍是獨立且未執行的正式資料交付點；本輪不新增required gate。
 
 
+<a id="dev139-precutover-identity-speech-preparation"></a>
+
+#### 3.0.6 切流前身分整合與集中專案 Speech 差額（2026-11-23）
+
+補既有隔離PG runner中的單一整合案例：正式五domain projection／import／digest→舊主／Quick兩個不同host的relay登入callback→持久PG Session沿原UUID→既有capture receipt回`created:false`、另一帳號不可見、跨host nonce／Cookie拒絕、撤權後讀寫拒絕。Owner exchange與Google signing keys採合成fixture，production pins仍空、正式UUID未搬入；尚待同source真PG／CI驗證。本機strict S2／S3與snapshot overlay已通過；首次DOM＋Node fetch型別衝突以`Buffer.concat`實際產生的`Buffer<ArrayBuffer>`精確回傳型別修正，沒有改request bytes或增加複製。
+
+本次唯讀刷新位於 `output/dev139-precutover-qualification-20261123/`。ProJED三個舊origin環境值已配置；Platform未見ProJED專用環境項。此觀察僅限env存在性，不能推論DB contract／owner publication不存在。集中專案Speech／Vertex API均DISABLED、具名音訊桶404、analysis Job零execution；cache／三模型logging查詢403均帶`SERVICE_DISABLED`，故設定仍UNKNOWN。相關契約／豁免郵件在目前可用來源未找到，適用條款仍UNKNOWN，不能記為確定沒有合約。
+
+**以下為待人類核准的最小Speech／私人音訊差額，尚未套用。** §47.2明確延後集中專案的音訊／模型責任；舊專案核准及§3.0.5私人transport不涵蓋本表。完整具名request／固定image／一次性probe參數已備於 `output/dev139-precutover-qualification-20261123/central-speech-audio-proposal.json`。
+
+| 目標 | 最小新增與限制 |
+|---|---|
+| Speech V1 | 僅啟用`jenfu-platform-prod`的`speech.googleapis.com`；使用既有`projed-prod-runtime@jenfu-platform-prod.iam.gserviceaccount.com`。新增`projects/jenfu-platform-prod/roles/projedSpeechV1Quota`，僅`serviceusage.services.use`，並只授該SA。不預授V2 recognizer或Vertex推論權；若實際拒絕，保留結果再收斂，不自行擴權。 |
+| 私人音訊桶 | 僅建`jenfu-platform-prod-projed-meeting-audio`，ASIA-EAST1／STANDARD、uniform access、public access prevention enforced、versioning關閉、soft-delete為0，無retention lock。新增`projects/jenfu-platform-prod/roles/projedMeetingAudio`，僅objects.create／get／delete；只在此bucket授既有runtime SA。既有七天期限與generation清理由app負責，不建依物件建立時間的lifecycle。 |
+| 既有背景入口 | 僅在`projects/jenfu-platform-prod/locations/asia-east1/jobs/projed-meeting-analysis`授上述runtime SA `roles/run.invoker`；本差額不執行該analysis Job，不發布Session或模型派送binding。 |
+| 一次性真caller probe | 建立並於讀回後清除`projects/jenfu-platform-prod/locations/asia-east1/jobs/projed-speech-qualification`，沿用已驗ASR映像`f111720b…`／source `c3561e5`及同runtime SA；無DB／VPC／Secret，Gen2／1CPU／512Mi／task1／parallel1／maxRetries0／90秒。至多一次送出本機生成的5秒靜音PCM至固定Speech V1，只驗實際caller／IAM／response；未知結果不重送，不傳會議內容、不寫業務資料。此probe不證明辨識品質或完整ASR產品驗收。 |
+
+依[Speech官方資料規則](https://docs.cloud.google.com/speech-to-text/docs/v1/data-logging)維持default-off、不opt-in、外部opt-in即撤銷資格；實際runtime probe成立後才可記錄相應資格。Vertex API、Gemini／embedding／RAG、cache／logging修改與內容呼叫仍延後，依[Google零留存規則](https://docs.cloud.google.com/gemini-enterprise-agent-platform/resources/zero-data-retention)補適用契約／豁免及所選模型資格，不由Speech成功推論。未新增SA／key、Token Creator、Secret、source credential、Scheduler或人員權限；不部署Platform／OrgMaster runtime、不搬正式映射／業務資料、不改中央runtime／SQL容量、billing、Hosting／原網址／PWA、不切流。本節是既有任務的差額與證據範圍，不新增required gate。
+
 ### 3.1 Runtime 工程基線與模組責任
 
 本節固定 ProJED 的技術選型。S1 server 已依 Node `>=24.11.0 <25`／npm `>=11 <12`、`pg ^8.21.0`、TypeScript、`node:http` 實作；本地隔離驗證接受 PostgreSQL 17／18，並記錄實際 major。lockfile 已固定實際解析版本；未來 managed target 仍按實際綁定版本重驗，這不要求 Vite 改成 Next.js。S1 完整契約見 §11、實作結果見 §12。

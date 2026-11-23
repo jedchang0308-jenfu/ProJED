@@ -74,7 +74,7 @@ function allowedPath(raw: string): { path: string; privateResponse: boolean } {
   return { path: raw, privateResponse: api };
 }
 
-async function readBody(request: IncomingMessage, signal: AbortSignal): Promise<Buffer | undefined> {
+async function readBody(request: IncomingMessage, signal: AbortSignal): Promise<Buffer<ArrayBuffer> | undefined> {
   const length = request.headers['content-length'];
   if (length !== undefined && (!/^\d+$/.test(length) || Number(length) > MAX_REQUEST)) throw new Error('RELAY_BODY_LIMIT');
   return new Promise((resolve, reject) => {
