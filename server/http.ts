@@ -28,6 +28,7 @@ import { createTaskTrackingHttpDispatcher } from './taskTrackingHttp.js';
 import {createRagHttpDispatcher} from './ragHttp.js';
 import type {RagProvider} from './geminiRagProvider.js';
 import {createMeetingSynthesisHttpDispatcher,type MeetingSynthesisModel,type MeetingSynthesisProvider} from './meetingSynthesisHttp.js';
+import { createLegacyEntryRequestPreparer, type PrepareLegacyEntryRequest } from './legacyEntryOrigin.js';
 import { createMeetingCaptureHttpDispatcher } from './meetingCaptureHttp.js';
 import type {MeetingUploadRepository} from './meetingUpload.js';
 import type {createMeetingJobDispatcher} from './meetingJobDispatch.js';
@@ -146,6 +147,7 @@ export interface KernelHttpServer {
 }
 
 export interface KernelHttpOptions {
+  readonly prepareLegacyEntry?: PrepareLegacyEntryRequest;
   readonly publishExternalInvitation?: import('./externalBoardInvites.js').ExternalInvitationPublisher;
   readonly meetingUploads?:MeetingUploadRepository|null;
   readonly meetingJobDispatcher?:ReturnType<typeof createMeetingJobDispatcher>;
@@ -198,6 +200,7 @@ export function createKernelHttpServer(
   options: KernelHttpOptions = {},
 ): KernelHttpServer {
   let shuttingDown = false;
+  const prepareLegacyEntry = options.prepareLegacyEntry ?? createLegacyEntryRequestPreparer(null);
   const dispatchSession = createSessionHttpDispatcher(
     config, database, options.resolveActor, options.destroySession, options.resolveSessionInfo,
     options.resolveLogoutIdentity,
@@ -225,6 +228,12 @@ export function createKernelHttpServer(
     const requestId = idFor(request);
     if (shuttingDown) {
       json(response, 503, { status: 'unavailable', requestId }, requestId);
+      return;
+    }
+    try {
+      await prepareLegacyEntry(request);
+    } catch {
+      json(response, 403, { error: { code: 'ACCESS_DENIED', requestId, retryable: false } }, requestId);
       return;
     }
     const url = new URL(request.url ?? '/', 'http://127.0.0.1');

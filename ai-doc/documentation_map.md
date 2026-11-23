@@ -24,7 +24,7 @@
 
 **候選進度（2026-11-23）**：main `1437a25` 已同步，source `95d9de5` 的 CI45116273249／Cloud Build `a64392ba` 通過；私人候選 `projed-prod-00002-str` 的14項唯讀HTTP／18項PWA及本機必要回歸36項通過。使用只讀 loopback 認證代理驗真 SW、弱網、模擬隔夜及兩次 browser process 重啟草稿復原，不擴張 IAM；另修正 module 前輸入未即存。51 SQL未變、migration仍一次成功、analysis零次，owner CREATE／臨時 IAM 已撤回，舊revision／映像保留。模型停用、原資料／網址／PWA未改、不切流；直接 `run.app` 無認證瀏覽／安裝及真 Session／provider 資格仍不宣稱通過。[命令與當前證據邊界](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-private-candidate-pwa)；[原父FAIL及復原](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-owner-window-r3-renewal)保留，不新增 required gate。
 
-**其餘工作先文件化**：[SPEC-139 §3.0.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-remaining-delivery-plan) 統一交接入口／真登入、原地 PWA／草稿、零留存背景處理及最後換址的修改面、必要驗證與執行順序；正式資料交付仍只維護於 SPEC-142。本輪不擴寫程式或執行正式操作，已有入口 source 草稿保持開發中，不沿用先前候選 PASS 宣稱其完成。
+**其餘工作先文件化**：[SPEC-139 §3.0.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-remaining-delivery-plan) 統一交接入口／真登入、原地 PWA／草稿、零留存背景處理及最後換址的修改面、必要驗證與執行順序；正式資料交付仍只維護於 SPEC-142。文件交接已單獨提交 `0f5eba7`，該回合未擴寫程式或執行正式操作。後續持續目標接續 source 準備：未啟用入口／Session 17項、S2 530項、release41與型別／boundary本機通過；實際 Hosting／provider接線及新source CI／候選仍待核對，不沿用先前候選 PASS 宣稱完成，現況只維護於該節。
 
 以下日期／Rev／W 為原方案的來源與驗證歷史導覽，不覆蓋上述決策或構成新環境 PASS。
 

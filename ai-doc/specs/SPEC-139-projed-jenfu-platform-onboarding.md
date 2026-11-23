@@ -122,6 +122,10 @@ flowchart LR
 
 **體驗與費用。** 每次真正改變入口時，沿 §3.3 同一量測口徑區分首次／已快取，檢查點開到可輸入及真同步狀態；不以 HTTP 200 或本機保存當雲端成功。過渡入口多一跳與可能冷啟動，沿現有監測核對延遲、錯誤及整體用量費是否明顯增加；先優化本機 shell／按需資源，不預設增加常駐容量，也不自行加入固定百分比、SLA 或新成本報表。
 
+**後續候選準備／source 自查（2026-11-23）。** 文件交接已單獨提交 `0f5eba7`；持續目標接續收斂入口 factory 與中央傳輸驗證，不啟用新入口。JOSE `6.2.2` 從既有 lockfile 版本升為 runtime dependency，以真 RS256 簽章／固定 Google key source、issuer／audience／SA subject／email／期限驗證傳輸後，才採用兩個固定舊 origin；不產生使用者 actor、不以環境旗標發布。Relay 保留 actor／source version／錄音 record header、原 `__session` Cookie 與 private no-store／no-referrer，請求保留既有 32 MiB envelope、回應採背壓串流，避免額外 10／16 MiB 截斷原正文／匯入／清單。55秒整體期限涵蓋卡住的 body／token／fetch／stream；取消不再派送，已派送 mutation／callback GET 的未知結果不重送或宣稱成功。
+
+新增入口／Session 17項本機案例、完整 S2 530項、release 41項、strict S2型別（重用既有本機 `pg` types overlay）與 managed boundary 已通過；含較大中文正文／12 MiB匯入、18 MiB串流、HEAD／conditional、Cookie／redirect、逾時與斷線、真 RSA transport＋既有 host-bound Session 的缺失／主與Quick錯用／撤銷／guard變更拒絕。這些是合成身分與 loopback HTTP，不是 Google provider、正式使用者或入口部署證據。原 sandbox loopback EACCES、負向 fixture 的型別轉換及 oversized upload reset 首次失敗保留；分別改以允許本機連線執行、明確負向 cast 及只送超限宣告驗證未讀 body 即拒絕，未把網路 reset 當成功。結果留 `output/dev139-legacy-entry-20261123/`；新 source 的 CI／artifact／候選尚須另核對，原已驗候選仍為 `95d9de5`。入口 binding、production identity pins 與四個 provider／Job bindings 仍停用，51份SQL及原資料／網址／PWA未改。部署封裝、實際 Hosting／可信傳輸接線與真 Session／mapping／零留存資格仍按上表未結案。
+
 ### 3.1 Runtime 工程基線與模組責任
 
 本節固定 ProJED 的技術選型。S1 server 已依 Node `>=24.11.0 <25`／npm `>=11 <12`、`pg ^8.21.0`、TypeScript、`node:http` 實作；本地隔離驗證接受 PostgreSQL 17／18，並記錄實際 major。lockfile 已固定實際解析版本；未來 managed target 仍按實際綁定版本重驗，這不要求 Vite 改成 Next.js。S1 完整契約見 §11、實作結果見 §12。
