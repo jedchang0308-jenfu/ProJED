@@ -8,7 +8,7 @@
 
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。
 - 日期：2026-11-23（Asia/Taipei）；本輪受測來源與候選進度見 §47.2，本機記事驗證見 §3.3；歷史 artifact 依原收據識別。
-- 狀態：**main 已同步；source `95d9de5` 的 CI／Cloud Build 與私人候選 `projed-prod-00002-str` 已驗證，14項唯讀 HTTP／18項私人 PWA／36項本機必要回歸通過，先不切流**。不擴張 IAM，經只讀 loopback 認證代理驗真 SW／弱網／模擬隔夜／兩次瀏覽器程序重啟草稿復原；直接 `run.app` 無認證請求仍拒絕。Module 接線前輸入已補即時 checkpoint。51份 SQL 未變、migration仍只一次成功、owner CREATE／臨時 IAM 已撤回；模型停用。真 Session／callback、既有使用者映射、資料移轉與零留存 provider 資格仍待完成。
+- 狀態：**source `41eede3` 的 CI／修正版 Cloud Build 與私人候選 `projed-prod-00003-bjv` 已驗證：16項唯讀 HTTP、18項私人 PWA；舊 `00002-str` 保留，先不切流**。未啟用的過渡入口 factory／中央傳輸驗證已通過17項本機案例，真 Session／callback、既有使用者映射、實際舊入口接線與零留存 provider 資格仍待完成。真 SW／弱網／模擬隔夜／兩次程序重啟草稿復原經只讀 loopback 代理驗證，直接匿名 `run.app`／SW 仍拒絕。51份 SQL 原始位元組未變、migration仍只一次、analysis零次；IAM／容量及原資料／網址／PWA未改。當前來源、首次封包換行失敗與修正收據見 §3.0.1，原候選歷史見 §47.2。
 - 適用範圍：本輪程式／測試／文件與 IAM 保護的候選部署、唯讀／安全拒絕驗證；集中專案的新 IAM 與 owner migration window 已由人類依 §47.2 具名核准。無正式業務資料寫入、停寫或切流。舊 Shared VPC 引導取消；已完成設定與舊入口保留，不自動撤回或刪除。
 - 直接交接入口：[§11 S1 定案契約](#11-架構決策與-s1-定案契約)、[§12 S1 實作狀態](#12-s1-實作狀態2026-10-26)、[§13 S2 consumer seam](#13-s2-projed-identity-consumer-seam2026-10-26)、[§14 S3 read adapter](#14-s3-http-read-adapter-slice2026-10-26)、[§15 S3 domain command](#15-s3-domain-command-w12026-10-26)、[§16 S3 collaboration command](#16-s3-collaboration-command-w22026-10-27)、[§17 S3 record／activity](#17-s3-recordactivity-w32026-10-27)、[§18 S3 HTTP product wiring](#18-s3-http-product-wiring-w42026-10-27)、[§19 S3 Board transfer](#19-s3-board-transfer-w52026-10-27)、[§20 S3 legacy provider boundary](#20-s3-legacy-provider-boundary-w62026-10-27)、[§21 S3 Quick Task](#21-s3-quick-task-w72026-10-27)、[§22 S3 Task Workbench](#22-s3-task-workbench-w82026-10-27)、[§23 S3 Actor CAS](#23-s3-actor-context-cas-w92026-10-27)、[§24 S3 Task Tracking](#24-s3-task-tracking-w102026-10-27)、[§25 S3 Backup／Import](#25-s3-backupimport-w112026-10-27)、[§26 S3 Account Preferences](#26-s3-account-preferences-w122026-10-27)、[§27 S3 Calendar Subscription](#27-s3-calendar-subscription-w132026-10-27)及[§32 本地開發收斂](#32-s3-local-development-closure-w182026-10-27)；[§11.8 技術主管審查](#118-技術主管審查與最小優化)保留 Rev5 修正理由；既有使用者切換見 [§6.3](#63-既有使用者的切換基線)。
 - 決策來源：[DEV-139 人類決策](../dev_task.md#dev-139-jenfu-platform-onboarding)；架構取捨：[ADR-054](../decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。本文件不是其他 owner 已接受或已發布的契約。
@@ -107,11 +107,11 @@ flowchart LR
 
 #### 3.0.1 其餘工作交接與階段判定（2026-11-23）
 
-人類最新指示「其他先寫進開發文件」：本輪補齊下列交接，不繼續擴寫程式、建立過渡入口或執行正式切換。既有未提交程式保留為開發中；此輪文件不改變先前有效的同範圍授權，也不把尚未完成的工作認列完成。
+依人類「其他先寫進開發文件」，先補齊下列交接並單獨提交，該回合沒有擴寫程式、建立過渡入口或正式切換。當時未提交的草稿保留；其後持續目標的 source／候選進度見本節下方。文件不改變先前有效的同範圍授權，也不把尚未完成的工作認列完成。
 
 | 工作／主責 | 接手內容與必要驗證 | 現況與依賴 |
 |---|---|---|
-| 舊網址過渡入口／ProJED | 沿 §3.0 完成薄轉送服務、建置／部署 renderer 與 Hosting 發布契約；固定上游、驗證傳輸身分後才採納原 origin。驗偽造 header／token 拒絕、主／Quick 隔離、body／逾時／取消上限、private no-store、Cookie／redirect 邊界；已送出的未知寫入不自動重送。 | `server/legacyEntryBinding.ts`、`legacyEntryOrigin.ts`、`legacyEntryRelay.ts` 及接線已有工作樹草稿，binding 仍為 `null`。尚缺完整 HTTP／relay 回歸、正式入口封裝與實際 provider 接線；不可據此部署或宣稱已驗。新資源／最小 IAM 差額仍沿 §3.0 處理。 |
+| 舊網址過渡入口／ProJED | 沿 §3.0 完成薄轉送服務、建置／部署 renderer 與 Hosting 發布契約；固定上游、驗證傳輸身分後才採納原 origin。驗偽造 header／token 拒絕、主／Quick 隔離、body／逾時／取消上限、private no-store、Cookie／redirect 邊界；已送出的未知寫入不自動重送。 | `server/legacyEntryBinding.ts`、`legacyEntryOrigin.ts`、`legacyEntryRelay.ts` 與中央 HTTP seam 已提交，17項隔離入口／Session回歸通過，binding 仍為 `null`。尚缺正式入口封裝、實際 provider 接線與該路徑的端到端回歸；不能把 factory／中央私人候選認列為舊入口已部署。新資源／最小 IAM 差額仍沿 §3.0 處理。 |
 | 真登入與既有帳號／ProJED＋Platform／OrgMaster 各 owner | 完成 producer publication／可信 pins、原主／Quick callback 與各自 App Session。驗既有 UUID 不變、個人／外部權限、換帳、登入到期與撤權；不得以 email 猜測映射，也不得把入口 SA 當使用者。 | `server/runtimeSessionAuth.ts` 仍在 production pins 空集合時停用；私人候選 shell 不是真登入證據。正式既有身分投影與業務資料的搬入由 DEV-142 承接，準備階段用隔離資料驗邏輯，不先搬正式映射。 |
 | 原網址前端／PWA／本機資料相容／ProJED | 補同 origin 從舊 provider 切換 HTTP 後的 namespace／owner／receipt 恢復及正常入口更新；保留 manifest identity、既有安裝、草稿與舊資產。驗隔夜可輸入、弱網／離線、關閉重開、登入恢復、換帳隔離、CAS 衝突與 unknown readback／防重複。 | 重用 §3.3 與 §47.2 的未變證據，只補真正改變的原網址／Session／provider 組合；loopback 私人代理測試不能代替舊網址升級。沿既有手動更新機制，不強迫重新安裝或清本機資料。 |
 | 零留存與背景處理／ProJED | 依既有 provider 契約補目標專案／caller 的 ASR、分析、RAG 與 Job 綁定及必要資格證據；接續階段選擇、不呼叫模型分支、背景執行、取消／費用／unknown 與結果發布驗證。 | 未資格模型保持停用，不用真實內容試探資格；真 ASR 仍是 DEV-139 原完成條件。尚缺的契約／豁免或外部設定只阻擋相依模型路徑，不阻擋不需模型的分支與其他準備。 |
@@ -124,7 +124,13 @@ flowchart LR
 
 **後續候選準備／source 自查（2026-11-23）。** 文件交接已單獨提交 `0f5eba7`；持續目標接續收斂入口 factory 與中央傳輸驗證，不啟用新入口。JOSE `6.2.2` 從既有 lockfile 版本升為 runtime dependency，以真 RS256 簽章／固定 Google key source、issuer／audience／SA subject／email／期限驗證傳輸後，才採用兩個固定舊 origin；不產生使用者 actor、不以環境旗標發布。Relay 保留 actor／source version／錄音 record header、原 `__session` Cookie 與 private no-store／no-referrer，請求保留既有 32 MiB envelope、回應採背壓串流，避免額外 10／16 MiB 截斷原正文／匯入／清單。55秒整體期限涵蓋卡住的 body／token／fetch／stream；取消不再派送，已派送 mutation／callback GET 的未知結果不重送或宣稱成功。
 
-新增入口／Session 17項本機案例、完整 S2 530項、release 41項、strict S2型別（重用既有本機 `pg` types overlay）與 managed boundary 已通過；含較大中文正文／12 MiB匯入、18 MiB串流、HEAD／conditional、Cookie／redirect、逾時與斷線、真 RSA transport＋既有 host-bound Session 的缺失／主與Quick錯用／撤銷／guard變更拒絕。這些是合成身分與 loopback HTTP，不是 Google provider、正式使用者或入口部署證據。原 sandbox loopback EACCES、負向 fixture 的型別轉換及 oversized upload reset 首次失敗保留；分別改以允許本機連線執行、明確負向 cast 及只送超限宣告驗證未讀 body 即拒絕，未把網路 reset 當成功。結果留 `output/dev139-legacy-entry-20261123/`；新 source 的 CI／artifact／候選尚須另核對，原已驗候選仍為 `95d9de5`。入口 binding、production identity pins 與四個 provider／Job bindings 仍停用，51份SQL及原資料／網址／PWA未改。部署封裝、實際 Hosting／可信傳輸接線與真 Session／mapping／零留存資格仍按上表未結案。
+新增入口／Session 17項本機案例、完整 S2 530項、release 41項、strict S2型別（重用既有本機 `pg` types overlay）與 managed boundary 已通過；含較大中文正文／12 MiB匯入、18 MiB串流、HEAD／conditional、Cookie／redirect、逾時與斷線、真 RSA transport＋既有 host-bound Session 的缺失／主與Quick錯用／撤銷／guard變更拒絕。這些是合成身分與 loopback HTTP，不是 Google provider、正式使用者或入口部署證據。原 sandbox loopback EACCES、負向 fixture 的型別轉換及 oversized upload reset 首次失敗保留；分別改以允許本機連線執行、明確負向 cast 及只送超限宣告驗證未讀 body 即拒絕，未把網路 reset 當成功。
+
+Source `41eede303c96e2b0bebebdf6e04774f9fcbaf9ab` 的 [CI45141685539](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45141685539) 兩 jobs SUCCESS：530 S2／175 S3／18 migration unit／41 release，共764 unit、原lockfile型別、三boundary、compiled artifact、隔離PostgreSQL／snapshot與Linux OCI20通過。首次 Cloud Build `ac8cd88d-b787-44ad-b203-51844adcfef9` 雖建置成功，但 Windows `git archive` 把LF轉CRLF，51 SQL及profile與原ledger位元組不符，已拒絕、不部署，收據／映像保留。改以Git原始blob打包並重新讀壓縮檔逐項核對1703物件；修正版 Cloud Build `4566c830-0b80-42c3-9e2f-452846d75795` 的 provenance／source archive SHA、三registry digests、編譯後JOSE／nonroot／未發布bindings、51 SQL／profile均核對通過。這是封包修正，不改SQL、ledger或重新執行migration，不新增永久gate。
+
+私人 Web 已更新至 `projed-prod-00003-bjv`，runtime digest `sha256:a69ac1143fc57a09f000787ebff0ce05d47bc0f15807872352f6a21389894af8`；只PATCH image／binding／labels，provider讀回IAM、網路、min0／max1／concurrency40不變，舊 `00002-str` 保留。16項唯讀HTTP通過，含真Cloud SQL readiness、精確metadata／主與Quick版本資產、SW、匿名拒絕、偽造legacy transport拒絕及未資格Session／workspace安全404/no-store。18項新候選PWA通過，含真SW、弱網、13小時時鐘模擬及兩次完整browser process重開草稿復原；代理與直接認證HTTP的SW SHA一致。單次觀測首次562ms、快取弱網250ms、模擬隔夜離線297ms，非新的改善前後比較；原§3.3三次中位數／本機36項未變前端證據重用。代理port、隔離browser及合成profile均已清理，migration execution仍原一次、analysis零次；Jobs未部署／執行，未擴IAM、Secret、billing或容量，原資料／網址／PWA未改、不切流。
+
+結果在 `output/dev139-legacy-entry-20261123/candidate-final-verification.json`、同目錄原始建置／拒絕／來源／部署／HTTP收據與 `output/playwright/dev139-private-candidate-pwa/candidate-41eede3-r2.json`。入口binding、production identity pins及四個provider／Job bindings仍停用；直接匿名瀏覽／安裝、真Session、正式使用者映射、實際Hosting入口、零留存資格與DEV-142仍按上表未結案，完整DEV-139保持未完成。
 
 ### 3.1 Runtime 工程基線與模組責任
 
@@ -1582,6 +1588,8 @@ Platform #232 的固定 probe 已完成 source `7ebf8506` 交付：[required Sou
 實際 provider／HTTP／browser 收據留 `output/dev139-candidate-20261122/owner-reconciliation-verified.json`、`web-candidate-deployment-proof.json`、`web-candidate-http-verified.json` 與 `web-candidate-local-draft-result.json`。沒有搬入業務資料、模型派送或改動舊網址／Hosting／PWA／DNS；未切流。正式 Session／資料映射、provider 零留存、跨 origin 草稿／安裝與完整 DEV-139 分母保留。
 
 <a id="dev139-private-candidate-pwa"></a>
+
+**當前候選續行**：下方 `95d9de5`／`00002-str` 為前一輪結果；最新來源 `41eede3`／`00003-bjv` 的來源封包修正、CI、16項HTTP／18項PWA與仍未完成範圍見 [§3.0.1](#dev139-remaining-delivery-plan)。原失敗／收據保留，不覆寫或重跑未變驗證。
 
 **私人候選 PWA 復原（2026-11-23）**：已正常 merge `origin/main` 的 `1437a25`，merge commit `761a32fa`，保留 main 的任務備註鍵盤刪除修正；沒有 rebase／force push 或改動其他工作樹。前述 IAM403 是測試頁面標頭未涵蓋 Service Worker 下載，不是改成公開 `/sw.js` 的理由。[Google 官方私人服務測試方式](https://docs.cloud.google.com/run/docs/authenticating/developers)使用本機認證代理；本專案的 Windows／無視窗驗證重用既有 Python／Edge，代理只綁 `127.0.0.1`、只對固定候選轉送 GET／HEAD，拒絕其他業務 API、跨站、外部 URL 與 redirect。沿既有 operator 登入，不新增 IAM／credential，token 僅在代理程序記憶體，不進頁面、SW、profile或收據。這不是正式 gateway，也不替代產品 Session。
 

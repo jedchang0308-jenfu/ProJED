@@ -77,6 +77,8 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
 ## DEV-139：ProJED 納入 Jenfu-Platform，Cloud Run／Cloud SQL 對齊並保留 Vite
 
+  - **最新候選（2026-11-23）**：source `41eede3` 的 [CI45141685539](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45141685539) 兩jobs SUCCESS，764 unit、型別／boundary／compiled artifact、隔離PG／snapshot與OCI20通過；修正版Cloud Build `4566c830` 核對來源原始blob、51 SQL／profile及三digests，私人Web `projed-prod-00003-bjv` 的16項唯讀HTTP／18項PWA通過。首次CRLF封包 `ac8cd88d` 已拒絕未部署，原始證據保留。IAM／容量未變、舊00002保留、migration仍原一次、analysis零次；新入口／identity／provider bindings仍停用，原資料／網址／PWA未改、不切流。完整DEV-139未完成；[結果／剩餘工作](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-remaining-delivery-plan)。
+
   - **2026-11-23 後續 source 準備**：文件已單獨提交 `0f5eba7`；接續原目標收斂未啟用的入口 factory／真 RS256 transport 與中央 HTTP seam，保留使用者 App Session。補原錄音 header、32 MiB request 相容、回應串流、55秒期限／取消與未知寫入不重送；入口／Session 17項、完整S2 530項、release41、strict S2與managed boundary本機通過。此為合成／loopback結果，新source CI／artifact／candidate尚待核對；原已驗候選仍 `95d9de5`，入口／identity／provider bindings停用，無新入口／IAM／SQL／資料／網址或PWA變更。現況與缺口沿 [§3.0.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-remaining-delivery-plan)，不以此認列完整交付。
 
   - **2026-11-23 本輪交接**：依「其他先寫進開發文件」，補齊[其餘工作、現況與交付順序](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-remaining-delivery-plan)：過渡入口、真 Session／UUID、原地 PWA／草稿、零留存背景處理、舊網址運作與最後換址。既有入口程式草稿保留為開發中，尚未完整驗證或部署；本輪只更新文件，不繼續擴寫程式或執行切換。DEV-142 仍獨立、未執行，整體 DEV-139 未結案。
@@ -509,7 +511,7 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 - → DEV-139 [整合交付點] [候選已驗證／舊網址先跑新系統／原資料先不搬遷／未切流] [P1] ProJED 納入 Jenfu-Platform，保留 Vite
   - 現行方向：先在舊主／Quick 網址完成新版前端、登入、API與中央後端接線，正式資料搬遷獨立列 DEV-142；日常運作確認後才換新網址，不重搬 DB／Storage。[DEV-139 現況](#dev-139-jenfu-platform-onboarding)｜[SPEC §3.0](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-two-stage-rollout)。
   - 現有候選與本機證據依原 source／revision 重用；51份 schema SQL 成功不代表正式業務資料搬遷。真 Session／既有 UUID mapping、舊入口及原地草稿相容、provider零留存、正式資料與完整功能驗收仍未結案。
-  - 下一步：文件交接已完成；沿[剩餘交付計畫](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-remaining-delivery-plan)收斂切流前 source／CI／候選驗證與入口具名差額，不改原正式資料／網址／PWA、不開新正式 writer、不切流。未資格模型維持停用，不將本機代理當正式使用者入口。
+  - 下一步：source `41eede3`／私人候選 `00003-bjv` 已驗；沿[剩餘交付計畫](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-remaining-delivery-plan)完成入口封裝／原地前端相容、身分owner publication與零留存資格準備。實際新入口具名差額及相依接線另核實，不改原正式資料／網址／PWA、不開新正式 writer、不切流；未資格模型停用，不將本機代理當正式使用者入口。
   - 資料交付：[DEV-142](#dev-142-production-data-migration)／[SPEC-142](specs/SPEC-142-projed-production-data-migration.md)，已規劃未執行；晚間窗口量測後另排。原帳號／個人與外部權限、取消／CAS／unknown／exactly-once及完整DEV-139分母保留，父子不重複認列。
 
 - ✓ DEV-138 [開發點] [已完成／正式發布、限定登入與 RPC 驗收及清理 PASS] [P1] [ProJED] DEV-133 guard 恢復、分支整合與正式驗證後清理
