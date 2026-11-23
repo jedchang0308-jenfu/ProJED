@@ -1479,11 +1479,11 @@ D5 已授權部署候選；人類另已具名核准以下集中專案差額。�
 
 <a id="dev139-owner-coordinator-delta"></a>
 
-#### 47.2.1 Owner coordinator 的臨時讀取／執行差額（待確認）
+#### 47.2.1 Owner coordinator 的臨時讀取／執行差額（2026-11-23 已核准）
 
-原 §47.2 核准的三 SA、七項 foundation IAM 與兩 SQL IAM login 不重問、不重放。Owner window 尚缺的 coordinator 權限獨立列出；自動審查已拒絕直接新增持久 Job／Logging role／binding，未執行該次請求。既有 owner 權限查核只讀回拒絕，不以其他工具繞過。
+原 §47.2 核准的三 SA、七項 foundation IAM 與兩 SQL IAM login 不重問、不重放。2026-11-23 人類另明確核准「本次 owner window 的兩小時臨時權限，以及 Platform #230 改為 ready 並合併 main」。先前持久 Job／Logging IAM 請求的自動審查拒絕留存；改依以下已核准的臨時界線執行，不以其他工具繞過或擴張。
 
-具名對象為既有 `dev010-prod-iac@jenfu-platform-prod.iam.gserviceaccount.com`，不新增 SA、TokenCreator、key 或 Secret。提出僅本次 DEV-139 window 使用、每個 binding 最多兩小時自動失效且結束撤除的差額：
+具名對象為既有 `dev010-prod-iac@jenfu-platform-prod.iam.gserviceaccount.com`，不新增 SA、TokenCreator、key 或 Secret。已核准僅本次 DEV-139 window 使用、每個 binding 最多兩小時自動失效且結束撤除的差額：
 
 | Role | 精確 permissions | IAM scope |
 |---|---|---|
@@ -1491,7 +1491,7 @@ D5 已授權部署候選；人類另已具名核准以下集中專案差額。�
 | `projedMigrationOperationReader` | `run.operations.get` | `jenfu-platform-prod` 的 Cloud Run operation metadata 讀取，不授其他 Job 執行／修改。 |
 | `projedMigrationLedgerReader` | `logging.logEntries.list` | project 級讀取能力；程式固定查本次 migration execution 的 stdout，但 query filter **不是**逐筆 IAM 隔離，授權時明確揭露此可見範圍。 |
 
-只影響 owner coordinator，不授 runtime／一般使用者讀 logs 或執行 migration。需先證明實際 Job／operation／stdout 可讀，才開啟 owner CREATE window；未核准前繼續來源／artifact 的獨立工作，正式 schema／Web 啟動保持未執行。此為新增權限責任的具名確認，不新增 required gate。
+只影響 owner coordinator，不授 runtime／一般使用者讀 logs 或執行 migration。沿既有 admission 先確認實際 Job／operation／stdout 可讀，才開啟 owner CREATE window；映像與必要前置完成後才授予臨時 binding，重試沿原 expiry、不滑動延長，成功或失敗都撤除本任務新增的綁定並讀回，其他 grants 保留。Platform #230 已依保護規則合併至 `a9a514f6`，exact-main CI 成功，owner／SQL 受影響檔案與已驗版本一致；未因此部署 Platform runtime。本輪 source-freeze／owner image／schema window／Web 候選驗證仍待完成，不把來源與 CI 當成正式資格。此為既有 window 的已核准執行界線，不新增 required gate。
 
 ## 48. Managed IAM login and app role context（W34，2026-10-29）
 
