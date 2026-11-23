@@ -1,4 +1,8 @@
 /** Pure preparation only: no provider calls, credentials or deployment. */
+export const LEGACY_ENTRY_ORIGINS = Object.freeze({
+  main: 'https://projed-cc78d.web.app', quick: 'https://projed-cc78d.firebaseapp.com',
+});
+
 export const LEGACY_ENTRY_TARGET = Object.freeze({
   project: 'projed-cc78d', site: 'projed-cc78d', region: 'asia-east1', service: 'projed-legacy-entry',
   account: 'projed-legacy-entry@projed-cc78d.iam.gserviceaccount.com',

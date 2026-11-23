@@ -3,6 +3,7 @@ import test from 'node:test';
 import { URL } from 'node:url';
 
 import { MANAGED_DATABASE } from '../../../shared/dev139ManagedDatabase.mjs';
+import { buildCalendarIcs } from '../../../server/calendarIcs.ts';
 import { S3_MIGRATION_PATHS } from '../../../scripts/lib/dev139-migration-paths.mjs';
 import {
   CLOUD_RUN_TARGET,
@@ -66,12 +67,81 @@ test('candidate preparation needs no source credential and cannot schedule or im
   assert.equal(plan.foundation.serviceAccounts.some(({ email }) => email.includes('importer')), false);
   assert.equal(plan.service.invokerIamDisabled, false);
   assert.equal(plan.service.name.endsWith('/services/projed-prod'), true);
-  assert.equal(envMap(plan.service.template.containers[0]).PROJED_PUBLIC_APP_URL, 'https://projed-prod-9536592944.asia-east1.run.app');
+  assert.equal(envMap(plan.service.template.containers[0]).PROJED_PUBLIC_APP_URL, 'https://projed-cc78d.web.app');
   assert.equal(plan.service.template.vpcAccess.egress, 'PRIVATE_RANGES_ONLY');
   assert.equal(plan.foundation.providerConfiguration.qualificationApplied, false);
   assert.equal(plan.foundation.providerConfiguration.vertex.applicableAgreementEvidenceRequired, true);
   assert.equal(plan.foundation.ownerBootstrap.migrationJobInput.expectedMigrations.length, S3_MIGRATION_PATHS.length);
   assert.equal(plan.foundation.ownerBootstrap.migrationJobInput.profile, 'central-candidate');
+});
+
+test('D6 defaults to old main/Quick origins; final direct mode only changes entry settings', () => {
+  const input = makeInput();
+  const legacy = renderProjedCloudRun(input);
+  const direct = renderProjedCloudRun({ ...input, entryStage: 'direct' });
+  assert.equal(legacy.entryStage, 'legacy');
+  assert.deepEqual(legacy.entryOrigins, { main: 'https://projed-cc78d.web.app', quick: 'https://projed-cc78d.firebaseapp.com' });
+  assert.deepEqual(direct.entryOrigins, { main: 'https://projed-prod-9536592944.asia-east1.run.app', quick: 'https://projed-prod-56gnizku7q-de.a.run.app' });
+  for (const plan of [legacy, direct]) {
+    const environment = envMap(plan.service.template.containers[0]);
+    assert.equal(environment.PROJED_PUBLIC_APP_URL, plan.entryOrigins.main);
+    assert.equal(environment.PROJED_MAIN_PUBLIC_ORIGIN, plan.entryOrigins.main);
+    assert.equal(environment.PROJED_QUICK_PUBLIC_ORIGIN, plan.entryOrigins.quick);
+    assert.notEqual(new URL(plan.entryOrigins.main).host, new URL(plan.entryOrigins.quick).host);
+    assert.equal(environment.PROJED_SSO_ENABLED, undefined);
+    assert.equal(plan.service.invokerIamDisabled, false);
+    assert.equal(plan.foundation.providerConfiguration.qualificationApplied, false);
+  }
+  assert.deepEqual(legacy.jobs, direct.jobs);
+  assert.deepEqual(legacy.scheduler, direct.scheduler);
+  assert.deepEqual(legacy.foundation, direct.foundation);
+  const stripOrigins = plan => {
+    const service = structuredClone(plan.service);
+    service.template.containers[0].env = service.template.containers[0].env.filter(({ name }) =>
+      !['PROJED_PUBLIC_APP_URL', 'PROJED_MAIN_PUBLIC_ORIGIN', 'PROJED_QUICK_PUBLIC_ORIGIN'].includes(name));
+    return service;
+  };
+  assert.deepEqual(stripOrigins(legacy), stripOrigins(direct));
+  assert.deepEqual(renderProjedCloudRun({ ...input, entryStage: 'legacy' }), legacy);
+  for (const entryStage of ['other', '', null, false, undefined, { main: 'https://attacker.invalid' }]) {
+    assertInvalid({ ...input, entryStage });
+  }
+  assertInvalid({ ...input, publicOrigin: 'https://attacker.invalid' });
+  assertInvalid({ ...input, entryOrigins: { main: 'https://attacker.invalid' } });
+});
+
+test('calendar event links follow the selected entry stage and preserve the original task destination', () => {
+  const task = { id: 'task-id', tenantId: 'tenant-id', projectId: 'project-id', legacyTaskId: 'original-task',
+    title: 'entry stage link', description: '', status: 'todo', assigneeIds: [], collaboratorIds: [], tagIds: [],
+    startDate: null, endDate: '2026-11-23', updatedAt: '2026-11-23T00:00:00Z' };
+  for (const entryStage of ['legacy', 'direct']) {
+    const plan = renderProjedCloudRun(makeInput({ entryStage }));
+    const feed = buildCalendarIcs({ subscriptionId: 'subscription', name: 'entry stage fixture', tasks: [task],
+      dateTypesByProjectId: new Map([['project-id', ['due_date']]]), tenantNameById: new Map(),
+      projectNameById: new Map(), workspaceRefById: new Map([['tenant-id', 'original-workspace']]),
+      boardRefById: new Map([['project-id', 'original-board']]), memberLabelById: new Map(),
+      appBaseUrl: envMap(plan.service.template.containers[0]).PROJED_PUBLIC_APP_URL,
+      now: new Date('2026-11-23T00:00:00Z') }).replaceAll('\r\n ', '');
+    const line = feed.split('\r\n').find(value => value.startsWith('URL:'));
+    assert.ok(line);
+    const destination = new URL(line.slice(4).replaceAll('\\,', ','));
+    assert.equal(destination.origin, entryStage === 'legacy' ? 'https://projed-cc78d.web.app' : CLOUD_RUN_TARGET.publicOrigin);
+    assert.equal(destination.searchParams.get('modal'), 'tasknode');
+    assert.equal(destination.searchParams.get('wsId'), 'original-workspace');
+    assert.equal(destination.searchParams.get('boardId'), 'original-board');
+    assert.equal(destination.searchParams.get('itemId'), 'original-task');
+  }
+});
+
+test('candidate and formal preparation preserve the same old-entry contract without enabling a Session', () => {
+  const { sourceBundleVersion, ...input } = makeInput();
+  const candidate = renderProjedCloudRun({ ...input, deploymentScope: 'candidate' });
+  assert.equal(candidate.entryStage, 'legacy');
+  assert.deepEqual(candidate.entryOrigins, renderProjedCloudRun({ ...input, sourceBundleVersion }).entryOrigins);
+  assert.deepEqual(Object.keys(candidate.jobs), ['migrate', 'analysis']);
+  assert.equal(candidate.scheduler, null);
+  assert.equal(JSON.stringify(candidate.requests).includes('allUsers'), false);
+  assert.equal(JSON.stringify(candidate.requests).includes('setIamPolicy'), false);
 });
 
 test('Cloud Run create uses query IDs and omits names while preserving desired readback identity', () => {

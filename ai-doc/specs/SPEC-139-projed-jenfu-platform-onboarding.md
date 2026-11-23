@@ -176,6 +176,16 @@ Source `463aba2` 的 [CI45158688396](https://github.com/jedchang0308-jenfu/ProJE
 
 證據：`output/dev139-quick-source-recovery-20261123/final-verification.json`、同目錄 CI artifact／首失敗／成功執行與清理結果，以及 `output/qa/dev-139/s3/20261123T104733Z-aa220c6c/result.json`。兩次隔離 PG／服務均結束，四個合成 browser profile 與本次臨時舊來源 worktree已移除，報告／截圖／建置保留；可攜public前版仍由DEV-139保留供後續入口交接，不清原發布證據。這是合成 provider／身分、真 UI／HTTP／PG 及兩個正式 projection 的證據，不是完整 CLI 搬遷、正式來源 fence／Storage、真 Session 或實機已安裝 PWA 驗收。私人候選仍為 §3.0.2 的 `c3561e5`／`00004-vjk`，本段未重建／部署候選或執行Job，DEV-142與實際舊入口／零留存資格仍未完成。
 
+<a id="dev139-entry-stage-environment"></a>
+
+#### 3.0.4 舊／新入口階段的 server 設定（2026-11-23）
+
+查核發現 renderer 的 `PROJED_PUBLIC_APP_URL` 仍固定新 Cloud Run 網址，`calendar.ts`／`calendarIcs.ts` 會據此產生任務深層連結；在 D6 舊網址運作階段會把行事曆使用者提前送往新入口。`renderProjedCloudRun` 現以 `entryStage` 明確選擇，預設 `legacy`；主站／Quick 分別為原 web.app／firebaseapp.com。明確選 `direct` 時，主站使用 provider 已觀察的 `https://projed-prod-9536592944.asia-east1.run.app`、Quick 使用同服務另一個已觀察 origin `https://projed-prod-56gnizku7q-de.a.run.app/quick-task/`，保留 host-only Session 隔離，不新增 runtime／Firebase 網站。這是未發布的最終入口候選設定，不能代替正式 callback／安裝交接驗證。
+
+兩階段統一產生 `PROJED_PUBLIC_APP_URL`、`PROJED_MAIN_PUBLIC_ORIGIN`、`PROJED_QUICK_PUBLIC_ORIGIN`，只接受封閉階段，不接受任意URL或環境覆寫。切換階段不改 DB／Storage／image／IAM／網路／容量／Jobs／Scheduler／provider 資格；不設定啟用 flag、不發布 identity pin／legacy binding，也不重送來源資料。renderer 仍只產生既有 create-only request；實際既有候選的設定更新須讀回同一服務後，僅取這三個環境值，不執行 renderer 的其他資源請求。
+
+本機 release 55項通過，新增以真 `buildCalendarIcs` 驗兩階段的任務連結及原 workspace／board／task ID，並驗主／Quick不同host、階段改變只影響上述三值、未知階段／任意origin拒絕。完整CI及私人候選設定更新尚待本輪接續核對；原候選仍為 §3.0.2 的 `00004-vjk`。上游唯讀 metadata 另存 `output/dev139-precutover-owner-audit-20261123/owner-runtime-readback.json`：Platform runtime 未配置 ProJED SSO client，consumer pins仍空；source契約一致不等於已正式發布。既有 owner runtime／IAM／資料及零留存限制不變。
+
 ### 3.1 Runtime 工程基線與模組責任
 
 本節固定 ProJED 的技術選型。S1 server 已依 Node `>=24.11.0 <25`／npm `>=11 <12`、`pg ^8.21.0`、TypeScript、`node:http` 實作；本地隔離驗證接受 PostgreSQL 17／18，並記錄實際 major。lockfile 已固定實際解析版本；未來 managed target 仍按實際綁定版本重驗，這不要求 Vite 改成 Next.js。S1 完整契約見 §11、實作結果見 §12。

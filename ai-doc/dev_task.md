@@ -79,6 +79,8 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
   - **前次文件收斂（2026-11-23）**：依「其他先寫進開發文件」，同步[其餘工作與順序](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-remaining-delivery-plan)，並修正 §6.5 舊文字仍把新後端啟用與換址／PWA重裝綁在同窗的矛盾。DEV-142 開新 writer 即正式業務切流；最後換址沿同一新庫，不再搬資料。本輪只改文件，不接續程式／部署／正式操作，DEV-139 與 DEV-142 均未結案。
 
+  - **入口階段設定（2026-11-23，source準備）**：renderer 預設 D6 舊主／Quick origin，避免行事曆任務連結提前送至新網址；明確 `entryStage=direct` 才產生同 Cloud Run 服務兩個已觀察 origin，保留 host-only Session 隔離。不接受任意URL，不啟用身分／模型、不改資料或權限。本機release55項通過，CI／候選三環境值更新待核對。[契約與驗證](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-entry-stage-environment)。
+
   - **切流前防重複補驗（2026-11-23）**：現役舊版 `1437a25` 的原離線與新增「來源已提交／回覆遺失→原task／receipt兩domain匯入→HTTP首次created:false」皆完成真UI／PG核對，單task／receipt及另一帳號零可見。[CI45158688396](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45158688396) source `463aba2` 兩jobs通過，artifact回執已取回驗SHA；`e4ab159` 僅修focused runner重複關池，PG18.4本機複驗通過，原失敗保留，其餘CI沿用。隔離DB／服務、四個合成profile與本次舊來源worktree已清理；正式CLI前置、原資料／網址／PWA與私人候選不變。[證據範圍與重現入口](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-source-commit-recovery)。
 
   - **最新私人候選（2026-11-23）**：source `c3561e5` 的 [CI45152864784](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45152864784) 兩jobs／Linux OCI通過；同一Cloud Build `68181ef8` SUCCESS並核對原始source封包、51 SQL／profile、四digests與前版91檔不可變資產。私人Web `projed-prod-00004-vjk` 的36項唯讀HTTP／18項PWA通過，含19檔舊版主／Quick引用資產、真SW、弱網、模擬隔夜及兩次程序重開草稿復原。舊00003保留，IAM／網路／容量不變、migration未重跑、analysis零次；原兩origin metadata未變。新薄入口只產映像未部署，真Session／映射、實際舊入口接線及零留存資格仍未完成；DEV-142未執行、不切流。[完整來源／候選證據與剩餘邊界](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-legacy-entry-packaging)。
