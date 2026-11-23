@@ -114,7 +114,7 @@ flowchart LR
 | 舊網址過渡入口／ProJED | 沿 §3.0 完成薄轉送服務、建置／部署 renderer 與 Hosting 發布契約；固定上游、驗證傳輸身分後才採納原 origin。驗偽造 header／token 拒絕、主／Quick 隔離、body／逾時／取消上限、private no-store、Cookie／redirect 邊界；已送出的未知寫入不自動重送。 | §3.0.5已依核准建立私人relay／最小IAM並發布固定SA transport binding，真Google私人通路14項、中央HTTP36項與PWA18項通過；§3.0.6再以真PG串通兩host登入／原UUID／receipt與拒絕路徑。source binding已不是null。正常舊Hosting尚未接線，留待正式入口動作；私人候選成功不代表已切換舊網址。 |
 | 真登入與既有帳號／ProJED＋Platform／OrgMaster 各 owner | 完成 producer publication／可信 pins、原主／Quick callback 與各自 App Session。驗既有 UUID 不變、個人／外部權限、換帳、登入到期與撤權；不得以 email 猜測映射，也不得把入口 SA 當使用者。 | §3.0.6已完成正式五domain projection／import→兩host callback→真PG Session的隔離回歸，包含原UUID、receipt／跨帳／撤權。合成owner／簽章不代表正式producer資格；`server/runtimeSessionAuth.ts`仍因production pins空集合停用。正式身分投影／業務資料搬入由DEV-142承接；準備階段不先搬正式映射。 |
 | 原網址前端／PWA／本機資料相容／ProJED | 補同 origin 從舊 provider 切換 HTTP 後的 namespace／owner／receipt 恢復及正常入口更新；保留 manifest identity、既有安裝、草稿與舊資產。驗隔夜可輸入、弱網／離線、關閉重開、登入恢復、換帳隔離、CAS 衝突與 unknown readback／防重複。 | 重用 §3.3 與 §47.2 的未變證據，只補真正改變的原網址／Session／provider 組合；loopback 私人代理測試不能代替舊網址升級。沿既有手動更新機制，不強迫重新安裝或清本機資料。 |
-| 零留存與背景處理／ProJED | 依既有 provider 契約補目標專案／caller 的 ASR、分析、RAG 與 Job 綁定及必要資格證據；接續階段選擇、不呼叫模型分支、背景執行、取消／費用／unknown 與結果發布驗證。 | 集中專案Speech／Vertex API停用、音訊桶未建；§3.0.6的最小Speech／私人音訊具名差額已備妥、待人類核准，尚未套用。Gemini適用契約／豁免及cache／logging仍未資格化；未資格模型維持停用，不傳真實內容。真ASR保留為DEV-139完成條件；模型／owner依賴不重開已通過的獨立準備。 |
+| 零留存與背景處理／ProJED | 依既有 provider 契約補目標專案／caller 的 ASR、分析、RAG 與 Job 綁定及必要資格證據；接續階段選擇、不呼叫模型分支、背景執行、取消／費用／unknown 與結果發布驗證。 | 集中專案Speech已啟用、私人音訊桶已建；Vertex維持停用。§3.0.6已由人類核准並完成Speech／私人音訊最小差額與一次性5秒靜音probe；source與新候選驗證接續。Gemini適用契約／豁免及cache／logging仍未資格化；未資格模型維持停用，不傳真實內容。真ASR保留為DEV-139完成條件；模型／owner依賴不重開已通過的獨立準備。 |
 | 正式資料搬遷／DEV-142 | 一次窗口完成全部來源 writer fence、snapshot、資料／私人檔案／權限／receipt 核對，以及舊網址開新後端唯一 writer。 | 獨立交付與恢復只以 [SPEC-142](SPEC-142-projed-production-data-migration.md) 判定；目前未執行。晚間窗口待演練量測後安排，不在本輪排程。 |
 | 舊網址運作確認及最後新網址／DEV-139 | DEV-142 完成後，用舊網址確認原功能、權限、草稿同步及背景處理；再發布新 origin／callback／PWA 與書籤／連結／草稿交接。第一階段正常使用可需要重新登入，最後跨 origin 可能需要重新安裝 PWA。 | 不新增固定觀察天數或全員簽到。最後換址沿同一 Cloud SQL／Storage，不再搬伺服器資料；入口回退仍使用新後端，舊入口退出沿 §6.4，不提前清除恢復能力。 |
 
@@ -217,7 +217,7 @@ Source `463aba2` 的 [CI45158688396](https://github.com/jedchang0308-jenfu/ProJE
 
 <a id="dev139-precutover-identity-speech-preparation"></a>
 
-#### 3.0.6 切流前身分整合與集中專案 Speech 差額（2026-11-23）
+#### 3.0.6 切流前身分整合與集中專案 Speech 差額（2026-11-23，已核准／foundation與單次probe已驗）
 
 補既有隔離PG runner中的單一整合案例：正式五domain projection／import／digest→舊主／Quick兩個不同host的relay登入callback→持久PG Session沿原UUID→既有capture receipt回`created:false`、另一帳號不可見、跨host nonce／Cookie拒絕、撤權後讀寫拒絕。Owner exchange與Google signing keys採合成fixture，production pins仍空、正式UUID未搬入；同source真PG與CI結果已通過，見下段。本機strict S2／S3與snapshot overlay已通過；首次DOM＋Node fetch型別衝突以`Buffer.concat`實際產生的`Buffer<ArrayBuffer>`精確回傳型別修正，沒有改request bytes或增加複製。
 
@@ -225,9 +225,9 @@ Source `463aba2` 的 [CI45158688396](https://github.com/jedchang0308-jenfu/ProJE
 
 修正版source `56086da2e5956c4b47ccc5a4defc79ad5767e20b` 的 [CI45195437782](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45195437782) 兩jobs SUCCESS：535 S2／175 S3／18 migration／55 release、原生PG73項（含具名新整合）、獨立snapshot與Linux OCI通過。已取回實際log並解析出含`legacy-main-quick-host-bound-login-imported-uuid-pg-session-capture-receipt-and-revocation-synthetic-owner`的PG PASS報告，收據為同目錄`identity-integration-verified.json`／`native-pg-ci-report.json`，首次FAIL與本機未執行功能的startup結果分開保留。新測試與型別修正未改候選行為；TypeScript實際transpile後relay JavaScript與`e5c2462`完全相同（`relay-runtime-reuse-proof.json`），重用§3.0.5已驗私人候選，不重新建置／部署或重跑PWA。不把合成owner／簽章的PG結果當正式Session／Google身分發布驗收。
 
-本次唯讀刷新位於 `output/dev139-precutover-qualification-20261123/`。ProJED三個舊origin環境值已配置；Platform未見ProJED專用環境項。此觀察僅限env存在性，不能推論DB contract／owner publication不存在。集中專案Speech／Vertex API均DISABLED、具名音訊桶404、analysis Job零execution；cache／三模型logging查詢403均帶`SERVICE_DISABLED`，故設定仍UNKNOWN。相關契約／豁免郵件在目前可用來源未找到，適用條款仍UNKNOWN，不能記為確定沒有合約。
+核准前唯讀刷新位於 `output/dev139-precutover-qualification-20261123/`。ProJED三個舊origin環境值已配置；Platform未見ProJED專用環境項。此觀察僅限env存在性，不能推論DB contract／owner publication不存在。集中專案Speech／Vertex API均DISABLED、具名音訊桶404、analysis Job零execution；cache／三模型logging查詢403均帶`SERVICE_DISABLED`，故設定仍UNKNOWN。相關契約／豁免郵件在目前可用來源未找到，適用條款仍UNKNOWN，不能記為確定沒有合約。
 
-**以下為待人類核准的最小Speech／私人音訊差額，尚未套用。** §47.2明確延後集中專案的音訊／模型責任；舊專案核准及§3.0.5私人transport不涵蓋本表。完整具名request／固定image／一次性probe參數已備於 `output/dev139-precutover-qualification-20261123/central-speech-audio-proposal.json`。
+**人類已明確回覆「核准 SPEC §3.0.6」。以下具名Speech／私人音訊差額已套用並讀回，單次probe已成功且一次性Job已清除；source資格與必要CI／候選更新接續執行。** §47.2明確延後集中專案的音訊／模型責任；舊專案核准及§3.0.5私人transport不涵蓋本表。完整具名request／固定image／一次性probe參數已備於 `output/dev139-precutover-qualification-20261123/central-speech-audio-proposal.json`。
 
 | 目標 | 最小新增與限制 |
 |---|---|
@@ -236,7 +236,11 @@ Source `463aba2` 的 [CI45158688396](https://github.com/jedchang0308-jenfu/ProJE
 | 既有背景入口 | 僅在`projects/jenfu-platform-prod/locations/asia-east1/jobs/projed-meeting-analysis`授上述runtime SA `roles/run.invoker`；本差額不執行該analysis Job，不發布Session或模型派送binding。 |
 | 一次性真caller probe | 建立並於讀回後清除`projects/jenfu-platform-prod/locations/asia-east1/jobs/projed-speech-qualification`，沿用已驗ASR映像`f111720b…`／source `c3561e5`及同runtime SA；無DB／VPC／Secret，Gen2／1CPU／512Mi／task1／parallel1／maxRetries0／90秒。至多一次送出本機生成的5秒靜音PCM至固定Speech V1，只驗實際caller／IAM／response；未知結果不重送，不傳會議內容、不寫業務資料。此probe不證明辨識品質或完整ASR產品驗收。 |
 
-依[Speech官方資料規則](https://docs.cloud.google.com/speech-to-text/docs/v1/data-logging)維持default-off、不opt-in、外部opt-in即撤銷資格；實際runtime probe成立後才可記錄相應資格。Vertex API、Gemini／embedding／RAG、cache／logging修改與內容呼叫仍延後，依[Google零留存規則](https://docs.cloud.google.com/gemini-enterprise-agent-platform/resources/zero-data-retention)補適用契約／豁免及所選模型資格，不由Speech成功推論。未新增SA／key、Token Creator、Secret、source credential、Scheduler或人員權限；不部署Platform／OrgMaster runtime、不搬正式映射／業務資料、不改中央runtime／SQL容量、billing、Hosting／原網址／PWA、不切流。本節是既有任務的差額與證據範圍，不新增required gate。
+完成的具名差額與原始收據在 `output/dev139-speech-qualification-20261123/`：Speech API ENABLED、兩custom roles與三筆exact resource grant逐一讀回；音訊桶PAP enforced／uniform access、versioning false／soft-delete 0，中央runtime／既有analysis模板與migration一次／analysis零次不變。CRM曾因gcloud共用consumer quota回429，首失敗保留；依[官方quota project方法](https://docs.cloud.google.com/docs/quotas/set-quota-project)僅對控制面REST請求指定既定resource project header，未改本機設定、配額上限或billing連結。
+
+一次性Job execution `projed-speech-qualification-skzrv` 成功1次／重試0次，固定runtime SA送出5秒本機合成靜音；Cloud Logging的實際jsonPayload已核對，無會議內容、DB或業務資料寫入。僅證明Speech V1 caller／傳輸，不證明辨識品質或完整ASR流程。Job終止後依fresh UID／etag清除並讀回404，證據留存。`config/dev-139/speech-qualification.json` 將實際probe與私人音訊foundation綁到source，claims SHA `5af1fd87a21f8b5c8312160610266d3083ab63038f76201263e20a87b8517037`。`CURRENT_MEETING_ASR_BINDING`發布此範圍的資格；production pins仍空、Gemini／RAG／背景派送binding仍null。check-only已改為有效Speech資格與pins齊備才報可派送，沒有從env聲稱資格；新source CI與候選驗證尚待完成。
+
+依[Speech官方資料規則](https://docs.cloud.google.com/speech-to-text/docs/v1/data-logging)維持default-off、不opt-in、外部opt-in即撤銷資格；本次實際runtime probe已成立，相應資格限上述caller／傳輸與foundation。Vertex API、Gemini／embedding／RAG、cache／logging修改與內容呼叫仍延後，依[Google零留存規則](https://docs.cloud.google.com/gemini-enterprise-agent-platform/resources/zero-data-retention)補適用契約／豁免及所選模型資格，不由Speech成功推論。未新增SA／key、Token Creator、Secret、source credential、Scheduler或人員權限；不部署Platform／OrgMaster runtime、不搬正式映射／業務資料、不改中央runtime／SQL容量、billing、Hosting／原網址／PWA、不切流。本節是既有任務的差額與證據範圍，不新增required gate。
 
 ### 3.1 Runtime 工程基線與模組責任
 

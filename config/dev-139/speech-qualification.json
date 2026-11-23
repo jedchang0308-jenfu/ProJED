@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "scope": "SPEECH_V1_TRANSPORT_AND_PRIVATE_AUDIO_FOUNDATION",
+  "claims": {
+    "scope": "SPEECH_V1_TRANSPORT_AND_PRIVATE_AUDIO_FOUNDATION",
+    "projectId": "jenfu-platform-prod",
+    "projectNumber": "9536592944",
+    "runtimeServiceAccount": "projed-prod-runtime@jenfu-platform-prod.iam.gserviceaccount.com",
+    "provider": "google-cloud-speech-v1",
+    "method": "speech:recognize",
+    "model": "default",
+    "dataLogging": "disabled",
+    "dataLoggingRule": "OFF_BY_DEFAULT_OPT_IN_PROHIBITED_EXTERNAL_OPT_IN_REVOKES_QUALIFICATION",
+    "dataLoggingRuleSource": "https://docs.cloud.google.com/speech-to-text/docs/v1/data-logging",
+    "audioBucket": {
+      "name": "jenfu-platform-prod-projed-meeting-audio",
+      "location": "ASIA-EAST1",
+      "uniformBucketLevelAccess": true,
+      "publicAccessPrevention": "enforced",
+      "versioning": false,
+      "softDeleteSeconds": 0,
+      "runtimePermissions": [
+        "storage.objects.create",
+        "storage.objects.get",
+        "storage.objects.delete"
+      ]
+    },
+    "quotaPermissions": [
+      "serviceusage.services.use"
+    ],
+    "analysisInvocationResource": "projects/jenfu-platform-prod/locations/asia-east1/jobs/projed-meeting-analysis",
+    "probe": {
+      "execution": "projects/jenfu-platform-prod/locations/asia-east1/jobs/projed-speech-qualification/executions/projed-speech-qualification-skzrv",
+      "image": "asia-east1-docker.pkg.dev/jenfu-platform-prod/projed-release/projed-prod-asr-job@sha256:f111720b688cf1221517b774b106427ab00fa69d5cb867618a36475ffd84fcf3",
+      "imageSourceRevision": "c3561e5604536bc3af8116c58aab1c3275be79f5",
+      "succeededCount": 1,
+      "retriedCount": 0,
+      "paidInputSeconds": 5,
+      "input": "LOCALLY_GENERATED_SILENCE",
+      "recognitionQuality": "NOT_TESTED_BY_SILENCE_PROBE"
+    },
+    "productionIdentityPinsPublished": false,
+    "analysisJobExecuted": false,
+    "geminiQualified": false,
+    "paidUserDispatchEnabled": false
+  },
+  "claimsSha256": "5af1fd87a21f8b5c8312160610266d3083ab63038f76201263e20a87b8517037",
+  "binding": {
+    "projectId": "jenfu-platform-prod",
+    "provider": "google-cloud-speech-v1",
+    "model": "default",
+    "dataLogging": "disabled",
+    "audioBucket": "jenfu-platform-prod-projed-meeting-audio",
+    "qualificationEvidenceRef": "config/dev-139/speech-qualification.json#sha256=5af1fd87a21f8b5c8312160610266d3083ab63038f76201263e20a87b8517037"
+  },
+  "observedAt": "2026-11-23T14:58:22.456670+00:00",
+  "evidenceRefs": [
+    "output/dev139-speech-qualification-20261123/foundation-verified.json",
+    "output/dev139-speech-qualification-20261123/speech-probe-verified.json"
+  ]
+}
