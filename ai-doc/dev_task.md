@@ -79,7 +79,7 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
   - **前次文件收斂（2026-11-23）**：依「其他先寫進開發文件」，同步[其餘工作與順序](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-remaining-delivery-plan)，並修正 §6.5 舊文字仍把新後端啟用與換址／PWA重裝綁在同窗的矛盾。DEV-142 開新 writer 即正式業務切流；最後換址沿同一新庫，不再搬資料。本輪只改文件，不接續程式／部署／正式操作，DEV-139 與 DEV-142 均未結案。
 
-  - **最新私人候選／入口階段（2026-11-23）**：已修正renderer固定新網址的行事曆deep-link問題，預設D6舊主／Quick，明確direct才使用同一Run服務兩個已觀察origin。Source `6229e86` 的 [CI45162466817](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45162466817) 兩jobs通過；私人Web三環境值已讀回為舊origin，現 `00005-r4j`，11項唯讀HTTP通過。不可變映像／主Quick與SW bytes不變，原18項PWA沿用未重跑，舊00004保留；IAM／網路／容量、原資料／網址／PWA不變，不切流。[結果](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-entry-stage-environment)｜下一步具名新SA／兩grant／私人relay差額見[§3.0.5待核准提案](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-private-relay-foundation-proposal)，未由本輪執行。
+  - **最新私人候選／真Google通路（2026-11-23）**：人類已核准[§3.0.5](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-private-relay-foundation-proposal)，專用SA與兩筆精確資源grant已讀回；中央 `00006-jsw`／私人relay `00001-hgp` 已部署。映像source `e5c2462`／Gen1 renderer修正 `5f3693b` 的CI均兩jobs SUCCESS，Cloud Build `94366cc8`成功；36項中央HTTP、14項實際metadata token／Google JWKS transport與18項PWA通過，含13小時模擬及兩次程序重開草稿復原。首個Gen2／256Mi的400與404讀回保留，改Gen1維持原256Mi；舊00005保留、中央網路容量與舊origin不變、無公開IAM。原兩origin metadata仍未變，migration一次／analysis零次，未搬資料、不改Hosting／網址／PWA、不切流。真Session／UUID映射、正常舊入口與模型零留存資格未完成，DEV-139／DEV-142未結案。
 
   - **切流前防重複補驗（2026-11-23）**：現役舊版 `1437a25` 的原離線與新增「來源已提交／回覆遺失→原task／receipt兩domain匯入→HTTP首次created:false」皆完成真UI／PG核對，單task／receipt及另一帳號零可見。[CI45158688396](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45158688396) source `463aba2` 兩jobs通過，artifact回執已取回驗SHA；`e4ab159` 僅修focused runner重複關池，PG18.4本機複驗通過，原失敗保留，其餘CI沿用。隔離DB／服務、四個合成profile與本次舊來源worktree已清理；正式CLI前置、原資料／網址／PWA與私人候選不變。[證據範圍與重現入口](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-source-commit-recovery)。
 
@@ -91,7 +91,7 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
   - **2026-11-23 本輪交接**：依「其他先寫進開發文件」，補齊[其餘工作、現況與交付順序](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-remaining-delivery-plan)：過渡入口、真 Session／UUID、原地 PWA／草稿、零留存背景處理、舊網址運作與最後換址。既有入口程式草稿保留為開發中，尚未完整驗證或部署；本輪只更新文件，不繼續擴寫程式或執行切換。DEV-142 仍獨立、未執行，整體 DEV-139 未結案。
 
-  - **2026-11-23 現行 D6／交付拆分**：舊主站／Quick 網址與既有 PWA 先承載新版前端、登入、API、資料及背景工作，確認新系統日常運作後，最後才換 Cloud Run 新網址。正式資料搬遷獨立為 [DEV-142](#dev-142-production-data-migration)／[SPEC-142](specs/SPEC-142-projed-production-data-migration.md)，偏好低用量且可即時確認結果的晚間窗口，待演練量測後另排。**目前 active 目標仍為正式切流前準備、候選部署與驗證：原正式資料先不搬遷、原網址／PWA不切換。** 過渡入口的新 runtime／SA／IAM、正式停寫／資料寫入及最後網址切換均未由文件核准。資料不遺失、帳號／權限／草稿／唯一回執、零留存及費用不大幅增加維持；[架構與 source 變更面](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-two-stage-rollout)｜[ADR-054 Rev17](decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。
+  - **2026-11-23 現行 D6／交付拆分**：舊主站／Quick 網址與既有 PWA 先承載新版前端、登入、API、資料及背景工作，確認新系統日常運作後，最後才換 Cloud Run 新網址。正式資料搬遷獨立為 [DEV-142](#dev-142-production-data-migration)／[SPEC-142](specs/SPEC-142-projed-production-data-migration.md)，偏好低用量且可即時確認結果的晚間窗口，待演練量測後另排。**目前 active 目標仍為正式切流前準備、候選部署與驗證：原正式資料先不搬遷、原網址／PWA不切換。** 私人過渡入口runtime／SA／兩筆資源IAM已由人類另依§3.0.5具名核准；正式停寫／資料寫入、公開入口與最後網址切換仍未授權。資料不遺失、帳號／權限／草稿／唯一回執、零留存及費用不大幅增加維持；[架構與 source 變更面](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-two-stage-rollout)｜[ADR-054 Rev17](decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。
 
   - **2026-11-22 候選歷史基線（網址順序由 D6 取代）**：採與 PDM 相同的 Cloud Run `run.app` 直接入口，不採 Firebase Hosting；runtime／Jobs 集中 `jenfu-platform-prod`、同專案私人 SQL、保留 Vite 與 ProJED 專用權限。重用 PWA／Quick／原 outbox，補輸入草稿持久保存、明確本機／雲端狀態、帳號切換隱藏、原 capture ID 原子提交與 local CAS；主程式備註補 scoped checkpoint，恢復沿原 canonical readback／CAS。既有工作區、看板、權限、草稿相容與零留存維持，費用不大幅增加。**最新 D5 已恢復候選準備、部署及驗證；先不切流、保留原資料／網址／PWA。集中專案新 IAM／SQL owner 差額已具名核准，不改 Secret／billing／容量或正式業務資料**。新 origin 的重新登入、PWA 重裝、舊資料與入口恢復仍待正式演練，未資格化推論仍停用。[本機記事與驗證](specs/SPEC-139-projed-jenfu-platform-onboarding.md#33-本機優先記事2026-11-22)｜[目標與綁定差額](specs/SPEC-139-projed-jenfu-platform-onboarding.md#32-受影響綁定證據與實作差額)｜[ADR-054 Rev16](decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)
 
@@ -516,10 +516,10 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 
 - ✓ DEV-140 [交付點] [已實作／本機瀏覽器驗收通過] [ProJED] [以 OKR 模式整合清單模式](#dev-140-okr-list-consolidation)
 
-- → DEV-139 [整合交付點] [候選已驗證／舊網址先跑新系統／原資料先不搬遷／未切流] [P1] ProJED 納入 Jenfu-Platform，保留 Vite
+- → DEV-139 [整合交付點] [私人候選與通路已驗證／舊入口待接線／原資料未搬遷／未切流] [P1] ProJED 納入 Jenfu-Platform，保留 Vite
   - 現行方向：先在舊主／Quick 網址完成新版前端、登入、API與中央後端接線，正式資料搬遷獨立列 DEV-142；日常運作確認後才換新網址，不重搬 DB／Storage。[DEV-139 現況](#dev-139-jenfu-platform-onboarding)｜[SPEC §3.0](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-two-stage-rollout)。
   - 現有候選與本機證據依原 source／revision 重用；51份 schema SQL 成功不代表正式業務資料搬遷。真 Session／既有 UUID mapping、舊入口及原地草稿相容、provider零留存、正式資料與完整功能驗收仍未結案。
-  - 下一步：私人候選 `00005-r4j` 已對齊舊主／Quick入口環境，沿用已驗 `c3561e5` 映像。人類已核准 [§3.0.5 私人過渡入口](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-private-relay-foundation-proposal)，專用SA與兩筆資源grant已讀回；source binding／必要CI、私人relay／中央候選及Google實際通路驗證續行。身分owner publication與零留存資格仍未完成；不改原正式資料／網址／PWA、不開新正式writer、不切流，未資格模型停用。
+  - 下一步：中央 `00006-jsw`／私人relay `00001-hgp` 的必要CI／Google通路／PWA已驗，結果見[§3.0.5](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-private-relay-foundation-proposal)。續行身分owner publication／既有UUID映射與provider零留存資格準備；正常舊Hosting、真Session及模型仍未啟用，不由私人transport成功延伸授權。原正式資料／網址／PWA維持，不開新正式writer、不切流。
   - 資料交付：[DEV-142](#dev-142-production-data-migration)／[SPEC-142](specs/SPEC-142-projed-production-data-migration.md)，已規劃未執行；晚間窗口量測後另排。原帳號／個人與外部權限、取消／CAS／unknown／exactly-once及完整DEV-139分母保留，父子不重複認列。
 
 - ✓ DEV-138 [開發點] [已完成／正式發布、限定登入與 RPC 驗收及清理 PASS] [P1] [ProJED] DEV-133 guard 恢復、分支整合與正式驗證後清理

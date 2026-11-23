@@ -2,13 +2,13 @@
 
 **2026-11-23 現行決策：先保留舊主站／Quick 網址及既有 PWA 入口，讓新版前端、登入、API、資料與背景工作改走集中 Google Cloud；在舊網址確認新系統運作後，最後才換 Cloud Run `run.app` 新網址。** 保留 Vite、本機記事、ProJED 獨立權限及 `jenfu-platform-prod` 同專案私人 SQL；既有 Firebase Hosting 僅暫留為過渡入口，不另建新的 Firebase 網站或把業務權威搬回舊專案。正式資料一次搬遷獨立列為 [DEV-142／SPEC-142](SPEC-142-projed-production-data-migration.md)。
 
-本輪人類已恢復候選準備、部署與驗證，先不切流；保留原資料、網址與既有 PWA。新入口不導流、不改寫舊 Hosting／Service Worker，不執行來源停寫或業務資料搬入；IAM／SQL login 與 owner 綁定差額已依 §47.2 具名核准；只執行該範圍及必要修正，不擴張至來源 credential 或模型資格。不改 DNS、Secret、billing 或雲端容量。未資格化模型維持停用。現行設計見 §3、§6、§8–§9、§47.1–47.2 與 ADR-054；歷史 source／CI 結果不等於新目標已驗證。
+本輪人類已恢復候選準備、部署與驗證，先不切流；保留原資料、網址與既有 PWA。新入口不導流、不改寫舊 Hosting／Service Worker，不執行來源停寫或業務資料搬入；IAM／SQL login 與 owner 綁定差額已依 §47.2 具名核准；只執行該範圍及必要修正，不擴張至來源 credential 或模型資格。不改 DNS、Secret、billing 或中央runtime／SQL容量；§3.0.5新增私人relay限人類具名核准的額度。未資格化模型維持停用。現行設計見 §3、§6、§8–§9、§47.1–47.2 與 ADR-054；歷史 source／CI 結果不等於新目標已驗證。
 
 本規格保留架構、資料安全、遷移設計及來源測試適用性；正式業務數量、IAM 實際讀回與非公開營運證據留在任務本機輸出。早期原地升級測試仍只支持原受測 origin／產物，不能證明跨 origin 草稿、安裝或新專案資格已完成。
 
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。
 - 日期：2026-11-23（Asia/Taipei）；本輪受測來源與候選進度見 §47.2，本機記事驗證見 §3.3；歷史 artifact 依原收據識別。
-- 狀態：**私人候選 `projed-prod-00005-r4j` 已對齊 D6 舊主／Quick 入口環境值，source `6229e86` CI 及11項唯讀HTTP通過，先不切流**。映像仍為已驗 `c3561e5`，主／Quick／SW／metadata bytes及解析後app／proxy digests不變，原18項私人PWA證據重用；舊 `00004-vjk` 保留。先前36項HTTP／舊版資產封裝見 §3.0.2，本輪設定與證據見 §3.0.4。原網址／PWA／業務資料與網路／容量不變，migration未重跑、analysis零次；真Session／可信映射、實際舊入口及零留存資格仍未完成。§3.0.5 私人過渡入口已由人類具名核准，專用SA與兩筆資源grant已讀回，source binding／CI及私人候選驗證續行；不增加公開權限。整體DEV-139未結案。
+- 狀態：**§3.0.5 已依人類核准完成專用SA／兩筆資源grant與私人relay，中央候選 `projed-prod-00006-jsw`、relay `projed-legacy-entry-00001-hgp` 已通過必要驗證，先不切流**。映像source `e5c2462`、Gen1 renderer修正 `5f3693b` 的CI均兩jobs SUCCESS，Cloud Build成功；36項中央HTTP、14項真Google私人transport與18項PWA通過，詳見 §3.0.5。中央原 `00005-r4j` 保留，舊主／Quick origin設定與原公開metadata不變；未加公開IAM、未改Hosting／原網址／PWA或搬業務資料，migration仍一次、analysis零次。真Session／既有UUID mapping、正常舊入口接線與模型零留存資格仍未完成，未資格模型維持停用；整體DEV-139及獨立資料交付DEV-142未結案。
 - 適用範圍：本輪程式／測試／文件與 IAM 保護的候選部署、唯讀／安全拒絕驗證；集中專案的新 IAM 與 owner migration window 已由人類依 §47.2 具名核准。無正式業務資料寫入、停寫或切流。舊 Shared VPC 引導取消；已完成設定與舊入口保留，不自動撤回或刪除。
 - 直接交接入口：[§11 S1 定案契約](#11-架構決策與-s1-定案契約)、[§12 S1 實作狀態](#12-s1-實作狀態2026-10-26)、[§13 S2 consumer seam](#13-s2-projed-identity-consumer-seam2026-10-26)、[§14 S3 read adapter](#14-s3-http-read-adapter-slice2026-10-26)、[§15 S3 domain command](#15-s3-domain-command-w12026-10-26)、[§16 S3 collaboration command](#16-s3-collaboration-command-w22026-10-27)、[§17 S3 record／activity](#17-s3-recordactivity-w32026-10-27)、[§18 S3 HTTP product wiring](#18-s3-http-product-wiring-w42026-10-27)、[§19 S3 Board transfer](#19-s3-board-transfer-w52026-10-27)、[§20 S3 legacy provider boundary](#20-s3-legacy-provider-boundary-w62026-10-27)、[§21 S3 Quick Task](#21-s3-quick-task-w72026-10-27)、[§22 S3 Task Workbench](#22-s3-task-workbench-w82026-10-27)、[§23 S3 Actor CAS](#23-s3-actor-context-cas-w92026-10-27)、[§24 S3 Task Tracking](#24-s3-task-tracking-w102026-10-27)、[§25 S3 Backup／Import](#25-s3-backupimport-w112026-10-27)、[§26 S3 Account Preferences](#26-s3-account-preferences-w122026-10-27)、[§27 S3 Calendar Subscription](#27-s3-calendar-subscription-w132026-10-27)及[§32 本地開發收斂](#32-s3-local-development-closure-w182026-10-27)；[§11.8 技術主管審查](#118-技術主管審查與最小優化)保留 Rev5 修正理由；既有使用者切換見 [§6.3](#63-既有使用者的切換基線)。
 - 決策來源：[DEV-139 人類決策](../dev_task.md#dev-139-jenfu-platform-onboarding)；架構取捨：[ADR-054](../decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。本文件不是其他 owner 已接受或已發布的契約。
@@ -188,7 +188,7 @@ Source `463aba2` 的 [CI45158688396](https://github.com/jedchang0308-jenfu/ProJE
 
 <a id="dev139-private-relay-foundation-proposal"></a>
 
-#### 3.0.5 私人過渡入口的最小差額（2026-11-23，人類已核准／foundation 已讀回）
+#### 3.0.5 私人過渡入口的最小差額（2026-11-23，人類已核准／私人候選已驗證）
 
 此提案只為在不變更舊 Hosting／網址的情況下，完成真 Cloud Run metadata token→中央傳輸驗證的私人候選；**不包含公開入口或正式切流**。既有中央三SA／SQL login核准未涵蓋以下舊專案新身分與跨專案信任。唯讀查核證據為 `output/dev139-entry-stage-20261123/private-relay-foundation-delta.json`：舊專案號 `967362299895`，下列SA及relay服務皆404；中央服務／映像庫未有表列grant。操作者已具有建立服務／SA、actAs及私人呼叫權，無須另加操作者IAM。
 
@@ -202,9 +202,18 @@ Source `463aba2` 的 [CI45158688396](https://github.com/jedchang0308-jenfu/ProJE
 
 核准僅涵蓋本表的新身分／兩筆grant／新私人候選及必要來源建置重試；不授owner/editor、Token Creator或服務帳號key，不建立Secret、key或長期credential，不授資料搬入、來源停寫、writer啟用、模型呼叫、公開IAM、Hosting／DNS／PWA切換，也不部署Platform／OrgMaster runtime。零留存與費用不大幅增加維持，provider／identity pins未資格化仍停用。完成此步不等於正常舊網址已接線、真登入／模型資格成立或DEV-142已執行。
 
-人類已對本表回覆「核准」（annotation `aaa5dde4-505e-4bb1-9df8-bf22abd678c2`）。專用SA已建立、uniqueId為 `100626728503472119855`、user-managed key為零；兩筆精確resource grant均已套用並讀回，未加入公開IAM。收據為 `output/dev139-private-relay-20261123/foundation-verified.json`。`config/dev-139/legacy-entry-qualification.json` 保存可公開的精確claims，canonical SHA為 `f85613401c716c8892dc5f972a848a680261911f67f9d53c91faa0de9bec2f95`，與source transport binding一致；此綁定僅讓私人候選接受經Google驗證的專用SA transport，不發布使用者身分／模型資格。22項focused測試及既有strict S2 overlay通過；新source的完整CI、映像、relay建立及Google實際通路驗證接續執行，尚不認列完成。中央候選仍為 `00005-r4j`，runtime／網路／容量未變；未重跑migration或analysis Job。
+人類已對本表回覆「核准」（annotation `aaa5dde4-505e-4bb1-9df8-bf22abd678c2`）。專用SA已建立、uniqueId為 `100626728503472119855`、user-managed key為零；兩筆精確resource grant均已套用並讀回，未加入公開IAM。收據為 `output/dev139-private-relay-20261123/foundation-verified.json`。`config/dev-139/legacy-entry-qualification.json` 保存可公開的精確claims，canonical SHA為 `f85613401c716c8892dc5f972a848a680261911f67f9d53c91faa0de9bec2f95`，與source transport binding一致；此綁定僅讓私人候選接受經Google驗證的專用SA transport，不發布使用者身分／模型資格。22項focused測試及既有strict S2 overlay通過；後續完整CI、映像、中央／relay部署與Google實際通路結果如下。source qualification不等於使用者身分或供應商零留存資格。
 
 第一個建立請求被provider明確拒絕HTTP400：renderer的Gen2與已核准256Mi不相容，未產生服務或operation；原失敗留存 `relay-create-response.json`。依 [Google執行環境規格](https://docs.cloud.google.com/run/docs/configuring/execution-environments)，此無SQL／volume的lean relay改用Gen1，保留1CPU／256Mi／min0／max1／concurrency2，不提高容量或新增權限。修正限純renderer及對應回歸；先讀回同一relay為404後，才可用同一已驗不可變映像重試並保留新收據。這不變更中央runtime／ASR執行環境，也不重建未受影響映像或重跑migration。
+
+完成結果：映像source `e5c2462070eeae3c2cd08589be3d88665ef5f57c` 的 [CI45173861416](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45173861416)、純renderer修正 `5f3693bfba04592b9728406820eafb43f240e3aa` 的 [CI45175870733](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45175870733) 均兩jobs SUCCESS，S2 535／S3 175／migration18／release55、隔離PG／snapshot與Linux OCI通過。Cloud Build `94366cc8-b09c-4176-b70b-2bd9495ea2f6` SUCCESS；raw Git封包SHA／storage generation、51 SQL／profile及兩個registry digest均讀回，四個模型／Job binding仍NULL、identity pins仍空。只發布Web與lean relay兩映像，臨時binding-tools不push、不部署；Gen1修正不影響兩個runtime產物，重用相同已驗digest，未重建ASR或執行migration。
+
+中央私人候選為 `projed-prod-00006-jsw`，原 `00005-r4j` 保留；新relay為 `projed-legacy-entry-00001-hgp`，Gen1／1CPU／256Mi／min0／max1／concurrency2、無DB／VPC／Secret，`invokerIamDisabled=false`。中央設定、IAM與兩筆資源grant、專用SA uniqueId及零user-managed key均再次讀回；未授予任何公開caller。36項中央唯讀HTTP與14項relay驗證通過：實際metadata ID token→Google JWKS→固定SA／audience核對成立，主／Quick／SW／metadata bytes相同；匿名、非固定host、偽造transport及不允許path遭拒，未發布App Session仍回404／no-store。固定routing header僅是私人測試selector，**不代表正常Hosting接線或真使用者登入已完成**。
+
+中央新產物另實跑18項無視窗Edge PWA驗證，真SW、弱網、13小時時鐘模擬及兩次完整browser process重開的本機草稿復原皆通過；不是實際等待隔夜、直接公開run.app或真Session驗收。本次唯讀loopback測試「點開到可輸入」首次438ms、已有快取弱網156ms、模擬隔夜離線140ms、第二次離線重開141ms；不可當成真裝置全流程效能保證。自建proxy port／browser／合成profile均已清理，沒有業務寫入或模型呼叫。舊兩origin四份metadata與部署前完全相同，公開release仍 `20261123035148-4604c0`；migration仍原一次、analysis零次，未搬資料、不改Hosting／網址／既有PWA、不切流。
+
+本輪證據集中在 `output/dev139-private-relay-20261123/final-verification.json` 及同目錄source／CI／build／兩服務readback、首次400／後續404／Gen1成功與HTTP收據；PWA原報告為 `output/playwright/dev139-private-candidate-pwa/candidate-e5c2462-private-transport.json`。來源與測試／部署自查分層，不宣稱獨立QC或完整DEV-139完成；真Session／既有使用者映射、owner publication與provider零留存資格仍為後續工作，未啟用模型或傳送真實會議內容。DEV-142仍是獨立且未執行的正式資料交付點；本輪不新增required gate。
+
 
 ### 3.1 Runtime 工程基線與模組責任
 
