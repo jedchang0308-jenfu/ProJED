@@ -530,12 +530,17 @@ const NoteChangePlugin: React.FC<{
 
   React.useEffect(() => {
     const markUserMutation = (event: Event) => {
+      // Lexical handles deletion on keydown and prevents the native input
+      // events. Mark it before Lexical runs so the resulting state is saved.
+      if (event instanceof KeyboardEvent && (
+        !['Backspace', 'Delete'].includes(event.key) || event.isComposing || event.keyCode === 229
+      )) return;
       const root = editor.getRootElement();
       if (root && event.target instanceof Node && root.contains(event.target)) {
         userMutationPendingRef.current = true;
       }
     };
-    const eventTypes = ['beforeinput', 'input', 'paste', 'cut', 'drop', 'compositionend'] as const;
+    const eventTypes = ['keydown', 'beforeinput', 'input', 'paste', 'cut', 'drop', 'compositionend'] as const;
     eventTypes.forEach(type => document.addEventListener(type, markUserMutation, true));
     return () => eventTypes.forEach(type => document.removeEventListener(type, markUserMutation, true));
   }, [editor, userMutationPendingRef]);
