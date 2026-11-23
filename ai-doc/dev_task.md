@@ -77,6 +77,8 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
 ## DEV-139：ProJED 納入 Jenfu-Platform，Cloud Run／Cloud SQL 對齊並保留 Vite
 
+  - **剩餘三組準備已合併核准（2026-11-24，執行中）**：人類核准中央 Platform／OrgMaster ProJED 身分契約與 runtime、Vertex／合成模型及背景驗證、importer／SQL login／來源 Secret 與最低權限 credential 準備；詳 [§3.0.7](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-approved-precutover-completion)。不再逐 PR／SHA／digest 重問，零留存證明仍不可由操作核准替代；不搬正式資料、不改原網址／PWA、不切流。已移除 renderer 未使用的 Speech V2 權限，13 focused／55 release-unit PASS；來源兩私人 views沿用。已修正reader繼承PUBLIC執行寫入RPC的缺口：rollback試驗與正式ACL讀回均證明reader拒絕、三API角色權限不變、零可寫表，reader仍NOLOGIN，無業務寫入。本輪新Google Cloud操作前 SDK refresh 明確失敗，已請更新既有登入，source與查核繼續；尚未認列三組正式完成。
+
   - **前次文件收斂（2026-11-23）**：依「其他先寫進開發文件」，同步[其餘工作與順序](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-remaining-delivery-plan)，並修正 §6.5 舊文字仍把新後端啟用與換址／PWA重裝綁在同窗的矛盾。DEV-142 開新 writer 即正式業務切流；最後換址沿同一新庫，不再搬資料。本輪只改文件，不接續程式／部署／正式操作，DEV-139 與 DEV-142 均未結案。
 
   - **續行切流前準備／Speech 差額完成（2026-11-23）**：人類核准 [§3.0.6](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-precutover-identity-speech-preparation) 後，Speech／私人音訊桶／兩 roles 三 grant 已讀回，runtime SA 單次 5 秒合成靜音 probe 成功、零重試且 Job 已刪除404。source `4331115` 的 [CI45200634322](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45200634322) 兩jobs SUCCESS（537 S2／175 S3／18 migration／55 release、真PG／snapshot／OCI），包含先前五domain匯入→主／Quick callback→原UUID／receipt／跨帳與撤權整合。Cloud Build `39c31e2a` 成功，私人 Web `00007-cpt` 的36 HTTP、既有relay的14真Google通路及18 PWA通過，含13小時模擬／兩次程序重開草稿復原；舊00006保留。analysis僅改映像、execution仍零，Job API首次400已保留並於確認未變後修正。Speech僅取得caller／傳輸資格；辨識品質、正式身分pins及Gemini／RAG／派送仍未完成。桶物件零、原資料／網址／PWA不變、migration不重跑、不切流；DEV-139／DEV-142未結案。原始收據與最終核對在 `output/dev139-speech-qualification-20261123/final-verification.json`。

@@ -2,7 +2,7 @@
 
 **2026-11-23 現行決策：先保留舊主站／Quick 網址及既有 PWA 入口，讓新版前端、登入、API、資料與背景工作改走集中 Google Cloud；在舊網址確認新系統運作後，最後才換 Cloud Run `run.app` 新網址。** 保留 Vite、本機記事、ProJED 獨立權限及 `jenfu-platform-prod` 同專案私人 SQL；既有 Firebase Hosting 僅暫留為過渡入口，不另建新的 Firebase 網站或把業務權威搬回舊專案。正式資料一次搬遷獨立列為 [DEV-142／SPEC-142](SPEC-142-projed-production-data-migration.md)。
 
-本輪人類已恢復候選準備、部署與驗證，先不切流；保留原資料、網址與既有 PWA。新入口不導流、不改寫舊 Hosting／Service Worker，不執行來源停寫或業務資料搬入；IAM／SQL login 與 owner 綁定差額已依 §47.2 具名核准；只執行該範圍及必要修正，不擴張至來源 credential 或模型資格。不改 DNS、Secret、billing 或中央runtime／SQL容量；§3.0.5新增私人relay限人類具名核准的額度。未資格化模型維持停用。現行設計見 §3、§6、§8–§9、§47.1–47.2 與 ADR-054；歷史 source／CI 結果不等於新目標已驗證。
+本輪人類已恢復候選準備、部署與驗證，先不切流；保留原資料、網址與既有 PWA。新入口不導流、不改寫舊 Hosting／Service Worker，不執行來源停寫或業務資料搬入；IAM／SQL login 與 owner 綁定差額已依 §47.2 具名核准；只執行該範圍及必要修正，不擴張至來源 credential 或模型資格。不改 DNS、billing 或中央runtime／SQL容量；§3.0.5私人relay及§3.0.6 Speech差額已核准，§3.0.7另涵蓋剩餘三組身分／模型／importer與來源Secret責任。未資格化模型維持停用。現行設計見 §3、§6、§8–§9、§47.1–47.2 與 ADR-054；歷史 source／CI 結果不等於新目標已驗證。
 
 本規格保留架構、資料安全、遷移設計及來源測試適用性；正式業務數量、IAM 實際讀回與非公開營運證據留在任務本機輸出。早期原地升級測試仍只支持原受測 origin／產物，不能證明跨 origin 草稿、安裝或新專案資格已完成。
 
@@ -249,6 +249,26 @@ Cloud Build `39c31e2a-b471-4d94-8ca1-43d79783014f` SUCCESS；raw Git blob 封包
 最終provider讀回：私人桶物件零、兩roles權限及三筆resource grant精確、無額外runtime project grant；Speech ENABLED／Vertex DISABLED，migration仍唯一原execution、analysis零次。兩舊origin四份公開metadata與開始前相同，仍為 `20261123035148-4604c0`，未改Hosting／網址／PWA或搬資料、未切流。結果為 `output/dev139-speech-qualification-20261123/final-verification.json`，其原始provider／artifact／operation收據同目錄；PWA為 `output/playwright/dev139-private-candidate-pwa/candidate-4331115-speech.json`。這些是分層RD自查，不宣稱獨立QC、正常Hosting／真使用者驗收或完整DEV-139結案。
 
 依[Speech官方資料規則](https://docs.cloud.google.com/speech-to-text/docs/v1/data-logging)維持default-off、不opt-in、外部opt-in即撤銷資格；本次實際runtime probe已成立，相應資格限上述caller／傳輸與foundation。Vertex API、Gemini／embedding／RAG、cache／logging修改與內容呼叫仍延後，依[Google零留存規則](https://docs.cloud.google.com/gemini-enterprise-agent-platform/resources/zero-data-retention)補適用契約／豁免及所選模型資格，不由Speech成功推論。未新增SA／key、Token Creator、Secret、source credential、Scheduler或人員權限；不部署Platform／OrgMaster runtime、不搬正式映射／業務資料、不改中央runtime／SQL容量、billing、Hosting／原網址／PWA、不切流。本節是既有任務的差額與證據範圍，不新增required gate。
+
+<a id="dev139-approved-precutover-completion"></a>
+
+#### 3.0.7 三組剩餘準備的合併授權（2026-11-24，Human Approved／執行中）
+
+人類已對三組具體範圍整段回覆「核准」，不是再次核准 §3.0.6 或變更零留存要求：
+
+| 已核准責任 | 執行範圍與保留邊界 |
+|---|---|
+| 正式身分接線 | `jenfu-platform-prod` 的 Platform／OrgMaster ProJED 身分契約發布、必要 forward-only schema／精確 consumer 授權及對應 runtime 部署，再接 ProJED Session。保留其他 app 相容性；不搬正式使用者映射或業務資料。owner 工作仍用各 repo 現行來源、native migration／release，不以早期 draft 編號或合成 owner 測試取代正式發布證據。 |
+| 模型與背景處理驗證 | 啟用中央 Vertex API，只授既有 ProJED runtime SA 必要推論權限；核對並關閉相關內容 logging／cache。以合成、非機密內容驗 Speech 品質及分析／RAG／背景結果發布；雲端寫入僅限可辨識並清理的具名測試資料，不修改既有正式資料。關閉專案 cache 前核對其他 app 影響，維持費用不大幅增加；供應商契約／豁免未實證前相應模型資格與派送仍停用，不以本核准代替零留存證明。 |
+| 搬遷基礎準備 | 建中央 `projed-prod-importer@jenfu-platform-prod.iam.gserviceaccount.com`、限定既定 Cloud SQL instance 的 client／instanceUser 與 SQL login，及 `projed-prod-migration-source` Secret；沿用或建立最低權限來源唯讀 credential。Secret accessor 只授該 importer、只限此 Secret，不把來源 credential 帶入 runtime／analysis。只供盤點／準備，不正式搬入、來源停寫或啟用新 writer。 |
+
+同範圍修正、CI、來源合併、映像重建、候選更新及必要恢復一併涵蓋，不因 PR／SHA／digest 改變重問。新增專案／責任面、不可逆 rewrite、公開入口、正式搬遷／切流及最後換網址仍不在本核准內；不新增 required gate 或獨立簽核。既有 §3.0.5／3.0.6 授權與有效證據沿用。
+
+目前來源 reader 仍為 NOLOGIN／NOINHERIT、非 superuser／createdb／createrole／replication，兩個已核准私人身分 views 已存在，無需重建。規劃器的 Vertex inference role 已收斂為 `aiplatform.endpoints.predict`，重用獨立 `projedSpeechV1Quota` 的 `serviceusage.services.use`；移除未使用的 Speech V2 recognizer 權限。13 項針對性 renderer 與完整55項 release-unit 已通過；繁中辨識測試音訊由本機 Windows Hanhan 合成，不含會議或使用者內容。
+
+本輪 SDK 實際回報既有登入 refresh `Reauthentication failed`，已請同帳號更新登入；這不是缺少新核准。新雲端 baseline 讀取在取 token 前即失敗，尚無本輪 API／IAM／Secret／runtime 寫入。安全且獨立的 source／來源 catalog 準備續行；後續雲端成功結果回填本節與直接任務索引，不把準備記成已發布。
+
+來源唯讀 credential 的實際 catalog 查核發現：reader 雖沒有可寫 relation，仍繼承 `PUBLIC` 對寫入 RPC `public.create_tenant_with_owner(text)` 的 EXECUTE；其正常 API 角色已有各自顯式 grant。先於同來源 transaction 試撤 PUBLIC 並 ROLLBACK，確認 reader=false、anon／authenticated／service_role 全部維持true，再依 [來源邊界SQL](../../scripts/dev139-source-reader-execute-boundary.sql) 套用同一精確 REVOKE。provider讀回 reader仍NOLOGIN、可寫relation零、寫入RPC不可執行、三API角色仍可執行、兩個私人views仍存在。沒有呼叫寫入RPC或修改業務資料；未建立來源登入/password。此為已核准第3組的credential準備修正，不變更RPC正文、其他功能或來源writer狀態。實際rollback／apply／readback範圍留 `output/dev139-authorized-foundation-20261124/source-acl-readback.json`。
 
 ### 3.1 Runtime 工程基線與模組責任
 

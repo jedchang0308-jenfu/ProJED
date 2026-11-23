@@ -387,7 +387,10 @@ test('meeting IAM grants inference only to runtime and audio access only on the 
   const roles = Object.fromEntries(foundation.customRoles.map(role => [role.name, role.includedPermissions]));
   const inferenceRole = 'projects/jenfu-platform-prod/roles/projedMeetingInference';
   const audioRole = 'projects/jenfu-platform-prod/roles/projedMeetingAudio';
-  assert.deepEqual(roles[inferenceRole], ['aiplatform.endpoints.predict', 'serviceusage.services.use', 'speech.recognizers.recognize']);
+  assert.deepEqual(roles[inferenceRole], ['aiplatform.endpoints.predict']);
+  const quotaRole = 'projects/jenfu-platform-prod/roles/projedSpeechV1Quota';
+  assert.deepEqual(roles[quotaRole], ['serviceusage.services.use']);
+  assert.equal(foundation.iamBindings.filter(binding => binding.role === quotaRole).length, 1);
   assert.deepEqual(roles[audioRole], ['storage.objects.create', 'storage.objects.get', 'storage.objects.delete']);
   assert.deepEqual(foundation.iamBindings.filter(({ role }) => role === inferenceRole || role === audioRole), [
     { resource: 'projects/jenfu-platform-prod', member: 'serviceAccount:projed-prod-runtime@jenfu-platform-prod.iam.gserviceaccount.com', role: inferenceRole },
