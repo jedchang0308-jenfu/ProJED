@@ -204,6 +204,8 @@ Source `463aba2` 的 [CI45158688396](https://github.com/jedchang0308-jenfu/ProJE
 
 人類已對本表回覆「核准」（annotation `aaa5dde4-505e-4bb1-9df8-bf22abd678c2`）。專用SA已建立、uniqueId為 `100626728503472119855`、user-managed key為零；兩筆精確resource grant均已套用並讀回，未加入公開IAM。收據為 `output/dev139-private-relay-20261123/foundation-verified.json`。`config/dev-139/legacy-entry-qualification.json` 保存可公開的精確claims，canonical SHA為 `f85613401c716c8892dc5f972a848a680261911f67f9d53c91faa0de9bec2f95`，與source transport binding一致；此綁定僅讓私人候選接受經Google驗證的專用SA transport，不發布使用者身分／模型資格。22項focused測試及既有strict S2 overlay通過；新source的完整CI、映像、relay建立及Google實際通路驗證接續執行，尚不認列完成。中央候選仍為 `00005-r4j`，runtime／網路／容量未變；未重跑migration或analysis Job。
 
+第一個建立請求被provider明確拒絕HTTP400：renderer的Gen2與已核准256Mi不相容，未產生服務或operation；原失敗留存 `relay-create-response.json`。依 [Google執行環境規格](https://docs.cloud.google.com/run/docs/configuring/execution-environments)，此無SQL／volume的lean relay改用Gen1，保留1CPU／256Mi／min0／max1／concurrency2，不提高容量或新增權限。修正限純renderer及對應回歸；先讀回同一relay為404後，才可用同一已驗不可變映像重試並保留新收據。這不變更中央runtime／ASR執行環境，也不重建未受影響映像或重跑migration。
+
 ### 3.1 Runtime 工程基線與模組責任
 
 本節固定 ProJED 的技術選型。S1 server 已依 Node `>=24.11.0 <25`／npm `>=11 <12`、`pg ^8.21.0`、TypeScript、`node:http` 實作；本地隔離驗證接受 PostgreSQL 17／18，並記錄實際 major。lockfile 已固定實際解析版本；未來 managed target 仍按實際綁定版本重驗，這不要求 Vite 改成 Next.js。S1 完整契約見 §11、實作結果見 §12。

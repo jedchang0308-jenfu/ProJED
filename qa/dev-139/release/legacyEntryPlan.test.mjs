@@ -57,6 +57,8 @@ test('relay resource renderer is private, has its dedicated identity and has no 
   assert.equal(plan.template.serviceAccount, LEGACY_ENTRY_TARGET.account);
   assert.deepEqual(plan.template.scaling, { minInstanceCount: 0, maxInstanceCount: 1 });
   assert.equal(plan.template.maxInstanceRequestConcurrency, 2);
+  assert.equal(plan.template.executionEnvironment, 'EXECUTION_ENVIRONMENT_GEN1');
+  assert.deepEqual(plan.template.containers[0].resources, { limits: { cpu: '1', memory: '256Mi' }, cpuIdle: true });
   assert.equal(plan.template.vpcAccess, undefined);
   assert.equal(plan.template.volumes, undefined);
   assert.equal(plan.template.containers[0].env, undefined);

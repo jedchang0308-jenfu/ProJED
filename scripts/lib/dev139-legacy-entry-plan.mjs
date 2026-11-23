@@ -39,7 +39,9 @@ export function renderLegacyEntryService({ image, sourceRevision, releaseId }) {
     labels: { 'projed-task': 'dev-139', 'projed-source': sourceRevision, 'projed-release': releaseId },
     ingress: 'INGRESS_TRAFFIC_ALL', invokerIamDisabled: false,
     template: {
-      serviceAccount: LEGACY_ENTRY_TARGET.account, executionEnvironment: 'EXECUTION_ENVIRONMENT_GEN2',
+      // Gen2 requires at least 512 MiB. This lean, network-only entry keeps
+      // the approved 256 MiB allocation and needs no Gen2-only capability.
+      serviceAccount: LEGACY_ENTRY_TARGET.account, executionEnvironment: 'EXECUTION_ENVIRONMENT_GEN1',
       scaling: { minInstanceCount: 0, maxInstanceCount: 1 }, maxInstanceRequestConcurrency: 2, timeout: '60s',
       containers: [{ name: 'legacy-entry', image, ports: [{ name: 'http1', containerPort: 8080 }],
         resources: { limits: { cpu: '1', memory: '256Mi' }, cpuIdle: true },
