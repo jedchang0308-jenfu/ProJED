@@ -107,18 +107,18 @@ flowchart LR
 
 #### 3.0.1 其餘工作交接與階段判定（2026-11-23）
 
-依人類「其他先寫進開發文件」，先補齊下列交接並單獨提交，該回合沒有擴寫程式、建立過渡入口或正式切換。當時未提交的草稿保留；其後持續目標的 source／候選進度見本節下方。文件不改變先前有效的同範圍授權，也不把尚未完成的工作認列完成。
+依人類「其他先寫進開發文件」，先補齊下列交接並單獨提交，該回合沒有擴寫程式、建立過渡入口或正式切換。當時未提交的草稿保留；其後持續目標的現況以本表及§3.0.5／§3.0.6為準，下方保留原source／候選證據。文件不改變先前有效的同範圍授權，也不把尚未完成的工作認列完成。
 
 | 工作／主責 | 接手內容與必要驗證 | 現況與依賴 |
 |---|---|---|
-| 舊網址過渡入口／ProJED | 沿 §3.0 完成薄轉送服務、建置／部署 renderer 與 Hosting 發布契約；固定上游、驗證傳輸身分後才採納原 origin。驗偽造 header／token 拒絕、主／Quick 隔離、body／逾時／取消上限、private no-store、Cookie／redirect 邊界；已送出的未知寫入不自動重送。 | `server/legacyEntryBinding.ts`、`legacyEntryOrigin.ts`、`legacyEntryRelay.ts` 與中央 HTTP seam 已提交，17項隔離入口／Session回歸通過，binding 仍為 `null`。入口封裝／可攜資產的 source 與 CI 已完成，詳 §3.0.2；實際 provider 接線與該路徑的端到端回歸仍未完成，不能把 factory／中央私人候選認列為舊入口已部署。新資源／最小 IAM 差額仍沿 §3.0 處理。 |
-| 真登入與既有帳號／ProJED＋Platform／OrgMaster 各 owner | 完成 producer publication／可信 pins、原主／Quick callback 與各自 App Session。驗既有 UUID 不變、個人／外部權限、換帳、登入到期與撤權；不得以 email 猜測映射，也不得把入口 SA 當使用者。 | `server/runtimeSessionAuth.ts` 仍在 production pins 空集合時停用；私人候選 shell 不是真登入證據。正式既有身分投影與業務資料的搬入由 DEV-142 承接，準備階段用隔離資料驗邏輯，不先搬正式映射。 |
+| 舊網址過渡入口／ProJED | 沿 §3.0 完成薄轉送服務、建置／部署 renderer 與 Hosting 發布契約；固定上游、驗證傳輸身分後才採納原 origin。驗偽造 header／token 拒絕、主／Quick 隔離、body／逾時／取消上限、private no-store、Cookie／redirect 邊界；已送出的未知寫入不自動重送。 | §3.0.5已依核准建立私人relay／最小IAM並發布固定SA transport binding，真Google私人通路14項、中央HTTP36項與PWA18項通過；§3.0.6再以真PG串通兩host登入／原UUID／receipt與拒絕路徑。source binding已不是null。正常舊Hosting尚未接線，留待正式入口動作；私人候選成功不代表已切換舊網址。 |
+| 真登入與既有帳號／ProJED＋Platform／OrgMaster 各 owner | 完成 producer publication／可信 pins、原主／Quick callback 與各自 App Session。驗既有 UUID 不變、個人／外部權限、換帳、登入到期與撤權；不得以 email 猜測映射，也不得把入口 SA 當使用者。 | §3.0.6已完成正式五domain projection／import→兩host callback→真PG Session的隔離回歸，包含原UUID、receipt／跨帳／撤權。合成owner／簽章不代表正式producer資格；`server/runtimeSessionAuth.ts`仍因production pins空集合停用。正式身分投影／業務資料搬入由DEV-142承接；準備階段不先搬正式映射。 |
 | 原網址前端／PWA／本機資料相容／ProJED | 補同 origin 從舊 provider 切換 HTTP 後的 namespace／owner／receipt 恢復及正常入口更新；保留 manifest identity、既有安裝、草稿與舊資產。驗隔夜可輸入、弱網／離線、關閉重開、登入恢復、換帳隔離、CAS 衝突與 unknown readback／防重複。 | 重用 §3.3 與 §47.2 的未變證據，只補真正改變的原網址／Session／provider 組合；loopback 私人代理測試不能代替舊網址升級。沿既有手動更新機制，不強迫重新安裝或清本機資料。 |
-| 零留存與背景處理／ProJED | 依既有 provider 契約補目標專案／caller 的 ASR、分析、RAG 與 Job 綁定及必要資格證據；接續階段選擇、不呼叫模型分支、背景執行、取消／費用／unknown 與結果發布驗證。 | 未資格模型保持停用，不用真實內容試探資格；真 ASR 仍是 DEV-139 原完成條件。尚缺的契約／豁免或外部設定只阻擋相依模型路徑，不阻擋不需模型的分支與其他準備。 |
+| 零留存與背景處理／ProJED | 依既有 provider 契約補目標專案／caller 的 ASR、分析、RAG 與 Job 綁定及必要資格證據；接續階段選擇、不呼叫模型分支、背景執行、取消／費用／unknown 與結果發布驗證。 | 集中專案Speech／Vertex API停用、音訊桶未建；§3.0.6的最小Speech／私人音訊具名差額已備妥、待人類核准，尚未套用。Gemini適用契約／豁免及cache／logging仍未資格化；未資格模型維持停用，不傳真實內容。真ASR保留為DEV-139完成條件；模型／owner依賴不重開已通過的獨立準備。 |
 | 正式資料搬遷／DEV-142 | 一次窗口完成全部來源 writer fence、snapshot、資料／私人檔案／權限／receipt 核對，以及舊網址開新後端唯一 writer。 | 獨立交付與恢復只以 [SPEC-142](SPEC-142-projed-production-data-migration.md) 判定；目前未執行。晚間窗口待演練量測後安排，不在本輪排程。 |
 | 舊網址運作確認及最後新網址／DEV-139 | DEV-142 完成後，用舊網址確認原功能、權限、草稿同步及背景處理；再發布新 origin／callback／PWA 與書籤／連結／草稿交接。第一階段正常使用可需要重新登入，最後跨 origin 可能需要重新安裝 PWA。 | 不新增固定觀察天數或全員簽到。最後換址沿同一 Cloud SQL／Storage，不再搬伺服器資料；入口回退仍使用新後端，舊入口退出沿 §6.4，不提前清除恢復能力。 |
 
-**前次文件交付邊界。** 人類指定「其他先寫進開發文件」的回合只同步上述既有工作與狀態，沒有接續程式、候選部署或正式操作；後續 active 目標仍沿原目標及有效授權，進度見 §3.0.2，不因文件更新取得額外權限。資料搬遷維持 DEV-142 獨立交付，DEV-139 的其餘項目保持待完成。
+**前次文件交付邊界。** 人類指定「其他先寫進開發文件」的回合只同步上述既有工作與狀態，沒有接續程式、候選部署或正式操作；後續active目標仍沿原目標及有效授權，現況見§3.0.5／§3.0.6；文件更新不新增權限。資料搬遷維持 DEV-142 獨立交付，DEV-139 的其餘項目保持待完成。
 
 **正式後端切換與最後換網址不同。** DEV-142 在舊網址開放中央新後端唯一 writer，就是正式業務切流；保留舊網址不代表尚未切流。「先不切流」期間只準備及驗候選。最後換網址則沿用相同中央 DB／Storage，只交接入口、登入與本機資料，不能再次搬伺服器資料或解除舊來源 fence。
 
