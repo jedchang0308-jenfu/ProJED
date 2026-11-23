@@ -8,7 +8,7 @@
 
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。
 - 日期：2026-11-22（Asia/Taipei）；本輪受測來源、範圍與限制見 §3.3，歷史 artifact 仍依原收據識別。
-- 狀態：**Cloud Run 直接入口已選定；集中目標候選映像與兩個未執行 Job 已讀回，owner window／Web 候選驗證進行中，尚未切流**。舊 artifact 不代表新目標資格；新服務完整網址仍須 provider readback，主／Quick 身分與 callback 隔離仍需實際接線驗證。
+- 狀態：**集中目標映像與 Job 已讀回；2026-11-23 owner window 被真 Cloud SQL 角色 guard 拒絕，已撤回臨時 IAM，Web 尚未部署、尚未切流**。修正 Cloud SQL／fixture 身分差異後須驗證相應新來源及產物；舊 artifact 不代表新目標資格。新服務完整網址仍須 provider readback，主／Quick 身分與 callback 隔離仍需實際接線驗證。
 - 適用範圍：本輪程式／測試／文件與 IAM 保護的候選部署、唯讀／安全拒絕驗證；集中專案的新 IAM 與 owner migration window 已由人類依 §47.2 具名核准。無正式業務資料寫入、停寫或切流。舊 Shared VPC 引導取消；已完成設定與舊入口保留，不自動撤回或刪除。
 - 直接交接入口：[§11 S1 定案契約](#11-架構決策與-s1-定案契約)、[§12 S1 實作狀態](#12-s1-實作狀態2026-10-26)、[§13 S2 consumer seam](#13-s2-projed-identity-consumer-seam2026-10-26)、[§14 S3 read adapter](#14-s3-http-read-adapter-slice2026-10-26)、[§15 S3 domain command](#15-s3-domain-command-w12026-10-26)、[§16 S3 collaboration command](#16-s3-collaboration-command-w22026-10-27)、[§17 S3 record／activity](#17-s3-recordactivity-w32026-10-27)、[§18 S3 HTTP product wiring](#18-s3-http-product-wiring-w42026-10-27)、[§19 S3 Board transfer](#19-s3-board-transfer-w52026-10-27)、[§20 S3 legacy provider boundary](#20-s3-legacy-provider-boundary-w62026-10-27)、[§21 S3 Quick Task](#21-s3-quick-task-w72026-10-27)、[§22 S3 Task Workbench](#22-s3-task-workbench-w82026-10-27)、[§23 S3 Actor CAS](#23-s3-actor-context-cas-w92026-10-27)、[§24 S3 Task Tracking](#24-s3-task-tracking-w102026-10-27)、[§25 S3 Backup／Import](#25-s3-backupimport-w112026-10-27)、[§26 S3 Account Preferences](#26-s3-account-preferences-w122026-10-27)、[§27 S3 Calendar Subscription](#27-s3-calendar-subscription-w132026-10-27)及[§32 本地開發收斂](#32-s3-local-development-closure-w182026-10-27)；[§11.8 技術主管審查](#118-技術主管審查與最小優化)保留 Rev5 修正理由；既有使用者切換見 [§6.3](#63-既有使用者的切換基線)。
 - 決策來源：[DEV-139 人類決策](../dev_task.md#dev-139-jenfu-platform-onboarding)；架構取捨：[ADR-054](../decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。本文件不是其他 owner 已接受或已發布的契約。
@@ -1491,7 +1491,13 @@ D5 已授權部署候選；人類另已具名核准以下集中專案差額。�
 | `projedMigrationOperationReader` | `run.operations.get` | `jenfu-platform-prod` 的 Cloud Run operation metadata 讀取，不授其他 Job 執行／修改。 |
 | `projedMigrationLedgerReader` | `logging.logEntries.list` | project 級讀取能力；程式固定查本次 migration execution 的 stdout，但 query filter **不是**逐筆 IAM 隔離，授權時明確揭露此可見範圍。 |
 
-只影響 owner coordinator，不授 runtime／一般使用者讀 logs 或執行 migration。沿既有 admission 先確認實際 Job／operation／stdout 可讀，才開啟 owner CREATE window；映像與必要前置完成後才授予臨時 binding，重試沿原 expiry、不滑動延長，成功或失敗都撤除本任務新增的綁定並讀回，其他 grants 保留。Platform #230 已依保護規則合併至 `a9a514f6`，exact-main CI 成功，owner／SQL 受影響檔案與已驗版本一致；未因此部署 Platform runtime。本輪 source-freeze／owner image／schema window／Web 候選驗證仍待完成，不把來源與 CI 當成正式資格。此為既有 window 的已核准執行界線，不新增 required gate。
+只影響 owner coordinator，不授 runtime／一般使用者讀 logs 或執行 migration。沿既有 admission 先確認實際 Job／operation／stdout 可讀，才開啟 owner CREATE window；映像與必要前置完成後才授予臨時 binding，重試沿原 expiry、不滑動延長，成功或失敗都撤除本任務新增的綁定並讀回，其他 grants 保留。Platform #230 已依保護規則合併至 `a9a514f6`，exact-main CI 成功，owner／SQL 受影響檔案與已驗版本一致；未因此部署 Platform runtime。此為既有 window 的已核准執行界線，不新增 required gate。
+
+**2026-11-23 實際執行與修正範圍**：正式 source-freeze 與 owner tool build `c67cb812-afc2-4873-8c57-2e811d09bb3b` 已 PASS，原 `a9a514f6` 映像／provenance 保留。臨時 Job／operation／stdout admission 已實際通過，Logging 首輪 403 在有界唯讀等待後恢復，未新增 permission。Cloud Run create 的系統變數 `CLOUD_RUN_JOB` 必須由 provider 注入，已修正 HTTP 序列化；對應 source 修正收斂於 [Platform draft #232](https://github.com/jedchang0308-jenfu/Jenfu-Platform/pull/232)，未合併。
+
+同一 owner Job 僅執行一次，prepare 回報 `CREATOR_ADMIN_MEMBERSHIP_DRIFT`、finalizer 回報 `INFRA_OWNER_MEMBERSHIP_DRIFT`；未重送。後續唯讀 catalog 證實 ProJED 四個 app groups 與兩個 schema 均不存在，DB ACL 無 app owner CREATE；migration／analysis Job 各零 execution，Web service 404。三項臨時 IAM member 均已撤回，其他 grants 保留；原 expiry 固定為 `2026-11-23T03:05:56Z`，不因重試延後。
+
+真 IAM SA 的 provider membership 為 `cloudsqliamserviceaccount`，不是人員登入的 `cloudsqliamuser`（[Google 官方角色說明](https://docs.cloud.google.com/sql/docs/postgres/users)）。ProJED 共用 migrator／runtime／背景 Job session validator 改採前者；仍逐一檢查 exact lifecycle identity、固定 app role、所有可達角色的危險 flags、DB owner 與 sibling core 隔離。OCI fixture 補入實際 SA 系統 membership，並驗 unsafe system role／未知 inherited parent 仍拒絕。41 release unit PASS；新增原生／OCI 案例仍待本次 CI，不能以 unit 或舊映像認列正式資格。Platform creator／infra ledger bootstrap 的差異先以 catalog 與既有 bootstrap 路徑釐清，不刪 guard、不手動修改正式角色、不重播其他 app 的 bootstrap。原三入口、manifest、SW 的八份 hash 與圖示／PWA identity 比對均未變；這不代表已驗證安裝裝置或跨 origin 恢復。
 
 ## 48. Managed IAM login and app role context（W34，2026-10-29）
 

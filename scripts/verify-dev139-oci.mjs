@@ -273,10 +273,12 @@ try {
     ALTER ROLE projed_migrator_disposable NOLOGIN;
     ALTER ROLE projed_importer_disposable NOLOGIN;
     ALTER ROLE projed_runtime_disposable NOLOGIN;
+    CREATE ROLE cloudsqliamserviceaccount NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;
     ${Object.entries(binding.iamLogins).map(([purpose, login]) => `
       CREATE ROLE "${login}" LOGIN ${purpose === 'runtime' ? `PASSWORD '${runtimeIamToken}'` : ''}
         NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;
       GRANT projed_${purpose}_disposable TO "${login}";
+      GRANT cloudsqliamserviceaccount TO "${login}" WITH ADMIN FALSE, INHERIT TRUE, SET TRUE;
       GRANT CONNECT ON DATABASE jenfu_prod TO "${login}";
     `).join('\n')}`);
   postgresVersion = pgSql('SHOW server_version;');
@@ -340,7 +342,7 @@ try {
         assert.equal((await wrong.query('SELECT current_user::text AS role')).rows[0].role,b.iamLogins.importer);
       } finally {await wrong.end();}
     `], { network: fixtureNetwork });
-  passed('iam-shaped-session-user-and-exact-app-role-pairs');
+  passed('iam-service-account-system-membership-and-exact-app-role-pairs');
 
   // Load the emitted importer in the actual production-dependency image. Missing
   // source inputs must stop before attempting a source or target connection.
@@ -447,6 +449,16 @@ try {
   `);
   passed('compiled-entry-real-main-quick-and-asset-hashes');
   passed('unpublished-session-and-private-api-fail-closed');
+
+  pgSql('ALTER ROLE cloudsqliamserviceaccount CREATEDB;');
+  appProbe("import assert from 'node:assert/strict';assert.equal((await fetch('http://127.0.0.1:8080/health/ready')).status,503);");
+  pgSql(`ALTER ROLE cloudsqliamserviceaccount NOCREATEDB;
+    CREATE ROLE fixture_unknown_parent NOLOGIN;
+    GRANT fixture_unknown_parent TO cloudsqliamserviceaccount;`);
+  appProbe("import assert from 'node:assert/strict';assert.equal((await fetch('http://127.0.0.1:8080/health/ready')).status,503);");
+  pgSql('REVOKE fixture_unknown_parent FROM cloudsqliamserviceaccount; DROP ROLE fixture_unknown_parent;');
+  appProbe("import assert from 'node:assert/strict';assert.equal((await fetch('http://127.0.0.1:8080/health/ready')).status,200);");
+  passed('iam-system-membership-rejects-privileged-and-unknown-inherited-roles');
 
   pgSql(`GRANT projed_owner_disposable TO "${binding.iamLogins.runtime}";`);
   appProbe("import assert from 'node:assert/strict';assert.equal((await fetch('http://127.0.0.1:8080/health/ready')).status,503);");

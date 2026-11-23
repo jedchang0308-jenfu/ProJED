@@ -179,7 +179,9 @@ export async function prepareManagedDatabaseSession(client, binding, purpose) {
   assertPurpose(purpose);
   assertBinding(binding);
   const appRole = MANAGED_DATABASE.roles[purpose];
-  const allowedRoles = [appRole, 'cloudsqliamuser'];
+  // These lifecycle logins are IAM service accounts. Cloud SQL injects this
+  // system membership; it is distinct from the human IAM user's role.
+  const allowedRoles = [appRole, 'cloudsqliamserviceaccount'];
   if (purpose === 'migrator') allowedRoles.push(MANAGED_DATABASE.roles.owner);
   const result = await client.query(`
     SELECT current_database() AS database_name, session_user::text AS login_name,
