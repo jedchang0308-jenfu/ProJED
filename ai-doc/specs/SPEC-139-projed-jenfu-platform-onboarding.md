@@ -221,6 +221,8 @@ Source `463aba2` 的 [CI45158688396](https://github.com/jedchang0308-jenfu/ProJE
 
 補既有隔離PG runner中的單一整合案例：正式五domain projection／import／digest→舊主／Quick兩個不同host的relay登入callback→持久PG Session沿原UUID→既有capture receipt回`created:false`、另一帳號不可見、跨host nonce／Cookie拒絕、撤權後讀寫拒絕。Owner exchange與Google signing keys採合成fixture，production pins仍空、正式UUID未搬入；尚待同source真PG／CI驗證。本機strict S2／S3與snapshot overlay已通過；首次DOM＋Node fetch型別衝突以`Buffer.concat`實際產生的`Buffer<ArrayBuffer>`精確回傳型別修正，沒有改request bytes或增加複製。
 
+首輪source `8c2c62c` 的 [CI45193327013](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45193327013) 在新callback案例回401而FAIL；獨立OCI與snapshot完成並通過。原因為既有合成state read刻意落後100ms，新wire卻僅早1ms，違反正式`read_at >= issuedAt`檢查。僅將fixture發行時間改早1000ms並保留60秒上限；加驗wrong-host後pending／PKCE不變、無Set-Cookie、零exchange，再用同pending正常callback。原安全拒絕與首次失敗均保留，不改產品時間檢查。本機PG18嘗試在啟動後等待、尚未進bootstrap；已正常停止自建空PG、清除精確nonce目錄與port並釋放容量lease，功能結果保持NOT_RUN，修正版由既有CI真PG驗證。
+
 本次唯讀刷新位於 `output/dev139-precutover-qualification-20261123/`。ProJED三個舊origin環境值已配置；Platform未見ProJED專用環境項。此觀察僅限env存在性，不能推論DB contract／owner publication不存在。集中專案Speech／Vertex API均DISABLED、具名音訊桶404、analysis Job零execution；cache／三模型logging查詢403均帶`SERVICE_DISABLED`，故設定仍UNKNOWN。相關契約／豁免郵件在目前可用來源未找到，適用條款仍UNKNOWN，不能記為確定沒有合約。
 
 **以下為待人類核准的最小Speech／私人音訊差額，尚未套用。** §47.2明確延後集中專案的音訊／模型責任；舊專案核准及§3.0.5私人transport不涵蓋本表。完整具名request／固定image／一次性probe參數已備於 `output/dev139-precutover-qualification-20261123/central-speech-audio-proposal.json`。

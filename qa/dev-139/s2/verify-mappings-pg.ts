@@ -13,6 +13,7 @@ import { createPlatformHandoffClient, type PlatformHandoffBinding } from '../../
 import { createPlatformIdentityVerifier } from '../../../server/platformIdentityVerifier.js';
 import { createPlatformPrincipalStateReader, PLATFORM_PROJED_PRINCIPAL_STATE_CONTRACT } from '../../../server/platformPrincipalState.js';
 import { PostgresAppSessionStore } from '../../../server/postgresAppSessionStore.js';
+import { parseSessionCookie } from '../../../server/sessionCookies.js';
 import { createKernelHttpServer } from '../../../server/http.js';
 import { createLegacyEntryRelay } from '../../../server/legacyEntryRelay.js';
 import { createLegacyEntryRequestPreparer } from '../../../server/legacyEntryOrigin.js';
@@ -165,7 +166,7 @@ export async function verifyLegacyEntryMappingSessionsPostgres(config: RuntimeCo
         identitySubject: `legacy-google-${id}`, googleSubject: `legacy-google-${id}`, principalId: `legacy-principal-${id}`,
         principalKind: 'personal', employeeId: null, verifiedEmail: `${id}@example.invalid`, authEpoch: 1,
         authenticatedAtMs: now - 60_000, revokedBeforeMs: null, sourceSessionExpiresAtMs: now + 3600_000,
-        issuedAtMs: now - 1, expiresAtMs: now + 59_000, currentStateExpiresAtMs: now + 10_000, mappingRevision: '1' };
+        issuedAtMs: now - 1_000, expiresAtMs: now + 59_000, currentStateExpiresAtMs: now + 10_000, mappingRevision: '1' };
       proofs.set(id, identity);
       await publishSyntheticPrincipalState(config, identity);
     }
@@ -190,7 +191,9 @@ export async function verifyLegacyEntryMappingSessionsPostgres(config: RuntimeCo
             emailVerified: true, signInProvider: 'google.com', secondFactor: null, assuranceLevel: 'aal1' },
           authState: { authEpoch: 1, revokedBefore: null }, mappingRevision: '1',
           sourceSessionExpiresAt: new Date(identity.sourceSessionExpiresAtMs).toISOString(),
-          issuedAt: new Date(now - 1).toISOString(), expiresAt: new Date(now + 59_000).toISOString() });
+          // Existing synthetic SQL reads deliberately trail UTC by 100 ms.
+          // Issue before that read; retain the real wire's exact 60-second cap.
+          issuedAt: new Date(now - 1_000).toISOString(), expiresAt: new Date(now + 59_000).toISOString() });
       } });
     const states = createPlatformPrincipalStateReader({ contractBinding: PLATFORM_PROJED_PRINCIPAL_STATE_CONTRACT,
       handoffBinding: identityBinding, environment: 'production', query: { async query(sql, values) {
@@ -246,11 +249,22 @@ export async function verifyLegacyEntryMappingSessionsPostgres(config: RuntimeCo
       codes.set(code, { identity: proofs.get(id)!, callback: authorize.searchParams.get('redirect_uri')!,
         challenge: authorize.searchParams.get('code_challenge')! });
       const callback = '/api/auth/jenfu-sso/callback?' + new URLSearchParams({ code, state: authorize.searchParams.get('state')!, iss: identityBinding.issuer });
+      const loginToken = parseSessionCookie({ headers: { cookie: pending } }).loginToken; assert.ok(loginToken);
+      const loginHash = createHash('sha256').update(loginToken).digest('hex');
+      const before = await store.readLogin(loginHash); assert.equal(before?.status, 'pending');
+      const priorExchanges = exchanges;
       // A pending nonce from one old host must not complete on the other host.
       const wrong = await request(publicOrigin === LEGACY_MAIN_ORIGIN ? LEGACY_QUICK_ORIGIN : LEGACY_MAIN_ORIGIN,
         callback, { headers: { cookie: pending } });
-      assert.notEqual(wrong.status, 303); await wrong.arrayBuffer(); assert.ok(codes.has(code));
+      assert.equal(wrong.status, 401); assert.equal(await errorCode(wrong), 'IDENTITY_INVALID');
+      assert.equal(wrong.headers.get('set-cookie'), null);
+      const after = await store.readLogin(loginHash);
+      assert.equal(after?.status, 'pending'); assert.equal(after.claimHash, null); assert.equal(after.completedSessionHash, null);
+      assert.equal(after.codeVerifier === before.codeVerifier, true, 'Wrong host must not consume or replace the pending verifier');
+      assert.equal(exchanges, priorExchanges); assert.ok(codes.has(code));
       const completed = await request(publicOrigin, callback, { headers: { cookie: pending } });
+      if (completed.status !== 303) assert.fail(JSON.stringify({ stage: 'legacy-host-callback', http: completed.status,
+        errorCode: await errorCode(completed), exchanges, intentStatus: (await store.readLogin(loginHash))?.status }));
       assert.equal(completed.status, 303);
       assert.equal(completed.headers.get('location'), `${publicOrigin}${entry === 'main' ? '/' : '/quick-task/'}`);
       const sessionCookie = cookie(completed); await completed.arrayBuffer();
