@@ -8,7 +8,7 @@
 
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。
 - 日期：2026-11-23（Asia/Taipei）；本輪受測來源與候選進度見 §47.2，本機記事驗證見 §3.3；歷史 artifact 依原收據識別。
-- 狀態：**51 份 app migration 單次成功；來源修正後已回讀核對同一 execution，owner CREATE／臨時 IAM 已撤回；IAM 保護 Web 候選已部署、12 項唯讀 HTTP 核對通過，尚未切流**。Quick 本機保存及線上重開復原已實測；候選的 `/sw.js` 被 IAM 拒絕，離線／隔夜驗證仍阻塞，不以既有本機結果冒充新 origin 通過。真 Session／callback、既有使用者映射、資料移轉與零留存 provider 資格仍待完成。
+- 狀態：**51 份 app migration 單次成功，owner CREATE／臨時 IAM 已撤回；IAM 保護 Web 候選及12項唯讀 HTTP 核對通過，先不切流**。私人候選改經只讀 loopback 認證代理，真 SW／弱網／模擬隔夜／兩次瀏覽器程序重啟草稿復原18項通過；直接 `run.app` 無認證請求仍拒絕，沒有擴張公開權限。Main 已同步；另修正 module 接線前輸入未立即 checkpoint，36項本機必要回歸通過，修正版候選資格化續見下方。真 Session／callback、既有使用者映射、資料移轉與零留存 provider 資格仍待完成。
 - 適用範圍：本輪程式／測試／文件與 IAM 保護的候選部署、唯讀／安全拒絕驗證；集中專案的新 IAM 與 owner migration window 已由人類依 §47.2 具名核准。無正式業務資料寫入、停寫或切流。舊 Shared VPC 引導取消；已完成設定與舊入口保留，不自動撤回或刪除。
 - 直接交接入口：[§11 S1 定案契約](#11-架構決策與-s1-定案契約)、[§12 S1 實作狀態](#12-s1-實作狀態2026-10-26)、[§13 S2 consumer seam](#13-s2-projed-identity-consumer-seam2026-10-26)、[§14 S3 read adapter](#14-s3-http-read-adapter-slice2026-10-26)、[§15 S3 domain command](#15-s3-domain-command-w12026-10-26)、[§16 S3 collaboration command](#16-s3-collaboration-command-w22026-10-27)、[§17 S3 record／activity](#17-s3-recordactivity-w32026-10-27)、[§18 S3 HTTP product wiring](#18-s3-http-product-wiring-w42026-10-27)、[§19 S3 Board transfer](#19-s3-board-transfer-w52026-10-27)、[§20 S3 legacy provider boundary](#20-s3-legacy-provider-boundary-w62026-10-27)、[§21 S3 Quick Task](#21-s3-quick-task-w72026-10-27)、[§22 S3 Task Workbench](#22-s3-task-workbench-w82026-10-27)、[§23 S3 Actor CAS](#23-s3-actor-context-cas-w92026-10-27)、[§24 S3 Task Tracking](#24-s3-task-tracking-w102026-10-27)、[§25 S3 Backup／Import](#25-s3-backupimport-w112026-10-27)、[§26 S3 Account Preferences](#26-s3-account-preferences-w122026-10-27)、[§27 S3 Calendar Subscription](#27-s3-calendar-subscription-w132026-10-27)及[§32 本地開發收斂](#32-s3-local-development-closure-w182026-10-27)；[§11.8 技術主管審查](#118-技術主管審查與最小優化)保留 Rev5 修正理由；既有使用者切換見 [§6.3](#63-既有使用者的切換基線)。
 - 決策來源：[DEV-139 人類決策](../dev_task.md#dev-139-jenfu-platform-onboarding)；架構取捨：[ADR-054](../decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。本文件不是其他 owner 已接受或已發布的契約。
@@ -1529,6 +1529,16 @@ Platform #232 的固定 probe 已完成 source `7ebf8506` 交付：[required Sou
 - 隔離無視窗 Edge 已驗 Quick 可輸入、本機保存、線上關頁重開復原，沒有遠端寫入或模型請求。首次觀測 328ms、補驗266ms，僅為新候選單次觀測，不能作改善前後中位數或快取驗收。`/sw.js` 因私人 IAM 回403，結果明列 `BLOCKED_PRIVATE_IAM_SERVICE_WORKER`，離線／隔夜及已快取開啟仍未在新 origin 完成；不為通過測試擴張公開權限。原 §3.3 本機35項／Quick binding9項有效證據保留，範圍不外推。測試隔離瀏覽器已關閉。
 
 實際 provider／HTTP／browser 收據留 `output/dev139-candidate-20261122/owner-reconciliation-verified.json`、`web-candidate-deployment-proof.json`、`web-candidate-http-verified.json` 與 `web-candidate-local-draft-result.json`。沒有搬入業務資料、模型派送或改動舊網址／Hosting／PWA／DNS；未切流。正式 Session／資料映射、provider 零留存、跨 origin 草稿／安裝與完整 DEV-139 分母保留。
+
+<a id="dev139-private-candidate-pwa"></a>
+
+**私人候選 PWA 復原（2026-11-23）**：已正常 merge `origin/main` 的 `1437a25`，merge commit `761a32fa`，保留 main 的任務備註鍵盤刪除修正；沒有 rebase／force push 或改動其他工作樹。前述 IAM403 是測試頁面標頭未涵蓋 Service Worker 下載，不是改成公開 `/sw.js` 的理由。[Google 官方私人服務測試方式](https://docs.cloud.google.com/run/docs/authenticating/developers)使用本機認證代理；本專案的 Windows／無視窗驗證重用既有 Python／Edge，代理只綁 `127.0.0.1`、只對固定候選轉送 GET／HEAD，拒絕其他業務 API、跨站、外部 URL 與 redirect。沿既有 operator 登入，不新增 IAM／credential，token 僅在代理程序記憶體，不進頁面、SW、profile或收據。這不是正式 gateway，也不替代產品 Session。
+
+可重現入口為 `python -B scripts/verify-dev-139-private-candidate-pwa.py --deployment-proof <已驗候選收據> --report <新的結果檔>`；受測 revision／image 必須與 provider readback 相同，原匿名拒絕及測前／測後 IAM policy 不變亦查核。瀏覽器只存合成的未綁定本機草稿，代理不改寫回應內容；離線同時關閉 browser network 與代理 upstream。真實候選 `projed-prod-00001-c8p` 的18項通過，含 `/sw.js` 200、真 SW 控制、弱網快取、13小時時鐘推進與兩次完整 browser process 重啟後的保存／復原，恢復連線仍保留未同步草稿。單次觀測首次500ms、弱網快取219ms、模擬隔夜離線250ms，僅支持代理下此輪條件，不作新的改善前後比較。直接 HTTPS `run.app` 的無認證瀏覽／安裝，以及真產品 Session／雲端同步不宣稱通過。代理、隔離瀏覽器與合成 profile 均已清理；既有網址／PWA 未動。
+
+首輪另暴露 module 接線前的輸入：欄位可編輯，但既有 editor 只等下一個 input／blur／pagehide 才寫入。以原 Git blob 做確定性重現（`EARLY_INPUT_NOT_CHECKPOINTED`）後，安裝 listener 時補一次現值 checkpoint；不等 Session、不自動綁至稍後登入帳號、不送遠端。原失敗與修正後真 editor／IndexedDB 回歸均保留。本機新 HTTP bundle 的 Quick／實際任務備註36項、strict S3 typecheck、受影響 lint、release41及代理安全拒絕4項通過。首輪深層輸出 EPERM 保留，改專屬短路徑重建後通過，未刪既有輸出或放寬程式檢查。
+
+本輪收據在 `output/playwright/dev139-private-candidate-pwa/`：`attempt-1.json`（保留首輪失敗）、`attempt-2.json`（原候選18項）、`early-input-baseline.json`／`early-input-fixed.json` 與 `merged-local-regression.json`。修正版 immutable artifact／候選 revision 仍須依成功 CI／provider readback 記錄，不把舊 revision 的結果當成新 source 資格；51 SQL／schema 未變，不因此重跑 migration 或重開 owner IAM。沒有新增 required gate，原完整 DEV-139 分母不縮減。
 
 
 ## 48. Managed IAM login and app role context（W34，2026-10-29）

@@ -99,6 +99,9 @@ jobs:
       - name: Managed job entry and binding unit tests
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         run: npm run verify:dev-139:release-unit
+      - name: Private candidate browser transport guards
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: python -B qa/dev-139/release/private_candidate_proxy_test.py
       - name: Kernel boundary
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         run: npm run check:db-boundary

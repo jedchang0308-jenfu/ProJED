@@ -23,6 +23,8 @@
 
 **候選進度（2026-11-23）**：51 app migrations 單次成功，Platform #236／CI／PG17 與支援 Build `1915c2fb` 已資格化；獨立 reconciliation 回讀同一成功 child／完整 ledger，保留原父 FAIL，CREATE／暫時 role／三項臨時 IAM 已撤回。ProJED `2e14d7e` IAM 保護候選 `projed-prod-00001-c8p` 已部署，12 項唯讀 HTTP 核對通過；Quick 本機保存／線上重開復原通過，但 `/sw.js` 被 IAM 拒絕，新 origin 離線／隔夜驗證阻塞，不能宣稱完整驗收。模型停用、保留原資料／網址／PWA、不切流；[實際結果及剩餘 Session／provider 邊界](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-owner-window-r3-renewal)。不新增 required gate。
 
+**私人 PWA 續驗（2026-11-23）**：main `1437a25` 已同步；不擴張 IAM，改以只讀 loopback 認證代理驗真候選 SW／弱網／模擬隔夜及兩次 browser process 重啟草稿復原18項通過。另修正 module 前輸入的即存缺口，新 bundle 本機必要回歸36項通過；修正版 CI／產物與候選回讀續收斂。直接 `run.app` 無認證瀏覽／安裝及真 Session 未宣稱通過；[入口與證據邊界](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-private-candidate-pwa)，不重跑成功 migration、不重開 owner IAM、不切流。
+
 以下日期／Rev／W 為原方案的來源與驗證歷史導覽，不覆蓋上述決策或構成新環境 PASS。
 
 音訊同源 proxy、未知寫入 readback 與跨取消／刪除清理 proof 的現行 source／驗證界線見 [SPEC §42](specs/SPEC-139-projed-jenfu-platform-onboarding.md#42-meeting-audio-transport-w282026-10-29)；完整錄音 UI／worker／cleanup 與正式接線仍計入交付。

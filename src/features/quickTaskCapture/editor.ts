@@ -135,6 +135,9 @@ export const installQuickDraftEditor = (
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') checkpoint();
   });
+  // The static input is usable while the module downloads. Preserve text typed
+  // before these listeners existed, without waiting for blur or pagehide.
+  if (input.value) checkpoint();
   return {
     refresh,
     checkpoint,

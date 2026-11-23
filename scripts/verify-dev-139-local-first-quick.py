@@ -20,6 +20,7 @@ MODE = ARGS.add_mutually_exclusive_group()
 MODE.add_argument("--measure-only", action="store_true")
 MODE.add_argument("--behavior-only", action="store_true")
 MODE.add_argument("--modal-only", action="store_true")
+MODE.add_argument("--early-only", action="store_true")
 OPTIONS = ARGS.parse_args()
 
 
@@ -55,6 +56,22 @@ class Fixture(SimpleHTTPRequestHandler):
     def do_GET(self):
         path = urlsplit(self.path).path
         Fixture.requests.append(path)
+        if path == '/__local-fixtures/early-editor.html':
+            body = b'<!doctype html><meta charset="utf-8"><input id="early-input">'
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        if path == '/__local-fixtures/early-editor.js':
+            body = (OPTIONS.report.parent / 'early-editor.fixture.js').read_bytes()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/javascript')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if path == '/__local-fixtures/task-drafts.js':
             body = (OPTIONS.report.parent / 'task-drafts.fixture.js').read_bytes()
             self.send_response(200)
@@ -216,6 +233,18 @@ async def behavior(browser, origin, checks):
         else (external.append(route.request.url) or route.abort()))
     context.on("page", lambda page: page.on("pageerror", lambda error: errors.append(str(error))))
     try:
+        early_context = await browser.new_context()
+        try:
+            early = await early_context.new_page()
+            await early.goto(origin + '/__local-fixtures/early-editor.html')
+            await early.add_script_tag(url=origin + '/__local-fixtures/early-editor.js')
+            early_result = await early.evaluate('Dev139EarlyDraft.verifyEarlyInput()')
+            check('pre-module-input-is-saved-without-blur-or-pagehide',
+                early_result['savedWithoutAnotherEvent'] and early_result['unbound'])
+        finally:
+            await early_context.close()
+        if OPTIONS.early_only:
+            return
         page = await context.new_page()
         await page.goto(origin + "/quick-task/", wait_until='domcontentloaded')
         await page.locator("#quick-task-auth-status").filter(has_text="此快速 App 已登入").wait_for()
@@ -497,6 +526,9 @@ async def main():
     OPTIONS.report.parent.mkdir(parents=True, exist_ok=True)
     if not OPTIONS.measure_only:
         subprocess.run(['node', '--input-type=module', '-e',
+            "import {buildSync} from 'esbuild';buildSync({entryPoints:['qa/dev-139/s3/early-quick-draft.fixture.ts'],bundle:true,format:'iife',globalName:'Dev139EarlyDraft',define:{'import.meta.env':JSON.stringify({MODE:'test',VITE_DATA_BACKEND:'http'})},outfile:process.argv[1]});",
+            str(OPTIONS.report.parent / 'early-editor.fixture.js')], check=True)
+        subprocess.run(['node', '--input-type=module', '-e',
             "import {buildSync} from 'esbuild';buildSync({entryPoints:['src/services/taskDetailsLocalDraft.ts'],bundle:true,format:'iife',globalName:'Dev139TaskDrafts',outfile:process.argv[1]});",
             str(OPTIONS.report.parent / 'task-drafts.fixture.js')], check=True)
         subprocess.run(['node', '--input-type=module', '-e',
@@ -506,12 +538,13 @@ async def main():
     threading.Thread(target=server.serve_forever, daemon=True).start()
     origin = "http://127.0.0.1:" + str(server.server_port)
     result = {"status": "FAIL", "scope": "LOCAL_TASK_MODAL_SYNTHETIC_DATA" if OPTIONS.modal_only
+        else "LOCAL_REAL_EDITOR_EARLY_INPUT" if OPTIONS.early_only
         else "LOCAL_SYNTHETIC_HTTP_REAL_SW", "checks": []}
     try:
         async with async_playwright() as p:
             browser = await p.chromium.launch(channel="msedge", headless=True)
             try:
-                if not OPTIONS.behavior_only and not OPTIONS.modal_only:
+                if not OPTIONS.behavior_only and not OPTIONS.modal_only and not OPTIONS.early_only:
                     result["performance"] = await asyncio.wait_for(measure(browser, origin), 180)
                 failures = []
                 if not OPTIONS.measure_only:
@@ -520,10 +553,11 @@ async def main():
                             await asyncio.wait_for(behavior(browser, origin, result['checks']), 150)
                         except Exception as error:
                             failures.append('quick: ' + type(error).__name__ + ': ' + str(error))
-                    try:
-                        await asyncio.wait_for(modal_behavior(browser, origin, result['checks']), 90)
-                    except Exception as error:
-                        failures.append('modal: ' + type(error).__name__ + ': ' + str(error))
+                    if not OPTIONS.early_only:
+                        try:
+                            await asyncio.wait_for(modal_behavior(browser, origin, result['checks']), 90)
+                        except Exception as error:
+                            failures.append('modal: ' + type(error).__name__ + ': ' + str(error))
                 if failures:
                     raise AssertionError('; '.join(failures))
                 result["status"] = "PASS"

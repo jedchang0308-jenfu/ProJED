@@ -71,6 +71,8 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
   - **候選交接的剩餘邊界**：Platform #236 已合併 `b8452dd0`，Source QC45111867898／PG17 native45111863444 與支援 Build `1915c2fb` 通過。沿已核准固定期限執行獨立 reconciliation，回讀同一成功 migration 的51項 checksum、013／014 ledger及當前安全狀態；原父 FAIL 保留，沒有重跑 child，owner CREATE／暫時 role／三項臨時 IAM 均撤回。Web `projed-prod-00001-c8p`／固定 `run.app` 入口已由 provider 讀回，12項唯讀 HTTP 核對通過；Quick 本機保存及線上重開復原通過，候選 `/sw.js` 因 IAM403 使離線／隔夜驗證阻塞。真 Session／既有帳號映射、provider 零留存與跨 origin 草稿／安裝仍未驗收，不以停用 Session 的健康候選結案。不搬業務資料、不改原網址／PWA、不啟用模型、不切流。已核准同範圍後續來源沿正常 CI／保護合併；[實際失敗、復原及候選結果](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-owner-window-r3-renewal)，不新增 required gate。
 
+  - **私人 PWA 驗證與 main 同步（2026-11-23）**：`origin/main` `1437a25` 已正常 merge 為 `761a32fa`，保留備註鍵盤刪除修正。原候選透過固定上游／GET-HEAD／loopback 認證代理，真 SW、弱網、模擬隔夜及兩次 browser process 重啟草稿復原18項通過；匿名 `/sw.js` 仍拒絕、IAM policy 不變，不宣稱直接新 origin 安裝或真 Session 通過。另確定性重現並修正 module 接線前輸入未即存的缺口；新 bundle Quick／實際備註36項、strict typecheck／affected lint、release41及代理拒絕4項通過。修正版 CI／immutable artifact／候選回讀續依同一 PR 收斂；SQL 未變，不重跑 migration 或重開 owner IAM。原資料／網址／PWA、零留存與不切流限制不變；[契約、命令與實測邊界](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-private-candidate-pwa)。
+
   以下為原目標 source／測試與候選準備歷史，不能作新 project／origin 已實作或驗收的證據；原資料與必要安全回歸的分母保留，未變部分沿原來源重用。
 
   - 候選準備已補明確 candidate renderer：不要求來源 Secret、不產生 snapshot import／Scheduler，只準備 IAM 保護的 service 與手動 Jobs；40 項 release 自查及完整 binding 的 owner input 驗證通過。原分支與已驗證映像保留，正式執行與零留存資格仍依各環境查證，營運證據保留於任務本機輸出。[候選部署設計與界線](specs/SPEC-139-projed-jenfu-platform-onboarding.md#471-2026-11-20-最小-foundation-變更提案)
