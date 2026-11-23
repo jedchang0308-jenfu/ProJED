@@ -164,6 +164,18 @@ Linux建置仍固定source封包；可攜 `dev139-predecessor/` 是另具manifes
 
 本輪唯讀收尾確認原兩origin的四份公開metadata仍為 `20261123035148-4604c0`；migration execution仍原一次、analysis零次。未部署Job／舊專案薄入口，未搬業務資料或啟用模型，未改原網址／PWA／IAM／Secret／billing／容量；隔離browser、代理port及合成profile均清理。結果：`output/dev139-legacy-entry-packaging-20261123/candidate-final-verification.json`；PWA：`output/playwright/dev139-private-candidate-pwa/candidate-c3561e5-legacy.json`。新入口SA／跨專案invoker及映像拉取差額、Hosting接線、真Session／可信正式映射與provider零留存資格仍未完成；DEV-142未執行，完整DEV-139仍未完成。
 
+<a id="dev139-source-commit-recovery"></a>
+
+#### 3.0.3 現役舊版的提交回覆遺失恢復（2026-11-23）
+
+切流前查核發現原 A06 只用較早的 `0670a0a` 驗未提交／離線草稿，沒有覆蓋來源已提交但回覆遺失的組合；未據此宣稱產品必然雙建。舊版現固定為原站已讀回的 `1437a25`，保留原離線案例，另從正常舊 Quick UI 送出 RPC，讓隔離 PostgreSQL 原子建立來源任務／bytea 回執後才中斷瀏覽器回覆。接著以正式 `TABLES`／`snapshotTypes`／`readSource`／`insertSnapshot`／`readTarget`／`snapshotId` 讀取、匯入及核對原任務與回執兩個 domain；目標使用 importer role。這些函式僅增加供 QA 重用的 export 與預設仍為完整 TABLES 的參數，正式 CLI 的全部來源／fence／空目標／身分／catalog 前置未變。
+
+Source `463aba2` 的 [CI45158688396](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45158688396) 兩 jobs SUCCESS，已查實 opt-in Quick 案例有執行，並取回 artifact `14810520594` 核對 ZIP digest 及兩份 native PG 回執。未提交案例首次201、重播200；已提交案例首次即200／`created:false`，回執與來源的 owner／captureId／title hash／committedAt 相同，source／target digest一致；兩案例皆單一task／receipt、另一帳號零可見，原本機內容與 clientCreatedAt 維持。原工作區／權限／snapshot及Linux OCI回歸亦通過，不新增 required gate。
+
+本機 focused runner 首次在資料核對通過後因重複關閉 pool 退出失敗，原 `launchfixed/` 失敗及回執保留；`e4ab159` 僅修正該獨立測試入口的關池責任，再以 PostgreSQL 18.4／無視窗 Edge 的新 nonce DB 完整複驗通過。本機兩份既有型別 overlay 與 snapshot 收據3項通過；直接 S3 typecheck 因共用安裝缺 `@types/pg` 的原失敗不改寫，原 lockfile 型別由 CI 證明。相對 CI source 只有未被 full CI 呼叫的 standalone runner 收尾改變，其受影響範圍已由本機複驗補齊，其餘 CI 證據沿用。命令為 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File qa/dev-139/s3/verify-isolated.ps1 -QuickUpgradeOnly -PostgresBin <既有PG bin>`；執行前須在既有測試路徑準備固定 `1437a25` 的舊來源及原lock依賴，不改用現役工作樹當測試資料庫。
+
+證據：`output/dev139-quick-source-recovery-20261123/final-verification.json`、同目錄 CI artifact／首失敗／成功執行與清理結果，以及 `output/qa/dev-139/s3/20261123T104733Z-aa220c6c/result.json`。兩次隔離 PG／服務均結束，四個合成 browser profile 與本次臨時舊來源 worktree已移除，報告／截圖／建置保留；可攜public前版仍由DEV-139保留供後續入口交接，不清原發布證據。這是合成 provider／身分、真 UI／HTTP／PG 及兩個正式 projection 的證據，不是完整 CLI 搬遷、正式來源 fence／Storage、真 Session 或實機已安裝 PWA 驗收。私人候選仍為 §3.0.2 的 `c3561e5`／`00004-vjk`，本段未重建／部署候選或執行Job，DEV-142與實際舊入口／零留存資格仍未完成。
+
 ### 3.1 Runtime 工程基線與模組責任
 
 本節固定 ProJED 的技術選型。S1 server 已依 Node `>=24.11.0 <25`／npm `>=11 <12`、`pg ^8.21.0`、TypeScript、`node:http` 實作；本地隔離驗證接受 PostgreSQL 17／18，並記錄實際 major。lockfile 已固定實際解析版本；未來 managed target 仍按實際綁定版本重驗，這不要求 Vite 改成 Next.js。S1 完整契約見 §11、實作結果見 §12。
