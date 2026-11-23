@@ -103,6 +103,25 @@ flowchart LR
 
 下一步 source 變更面為 `firebase.json`、`scripts/release/production-contract.mjs`、`src/services/backendMode.ts`、`src/services/httpApi/httpApiClient.ts`、`src/features/quickTaskCapture/origins.ts`、既有 PWA 更新／版本保留、`server/config.ts`／`appSessionService.ts`／`sessionCookies.ts` 及 managed renderer。舊網址發布契約仍固定 Supabase，HTTP client 使用同源 credentials，因此不能只換 DB 位址或把私人 run.app URL 貼進舊前端。先在既有授權內實作／隔離驗證；過渡入口的新 runtime／SA／跨專案最小 invoker／必要公開入口責任及費用影響，查重與量測後另列具名差額。本輪不建立入口、不擴張公開 IAM、不動 Secret／billing／容量；既有私人候選與本機代理測試不轉成正式使用者 gateway。
 
+<a id="dev139-remaining-delivery-plan"></a>
+
+#### 3.0.1 其餘工作交接與階段判定（2026-11-23）
+
+人類最新指示「其他先寫進開發文件」：本輪補齊下列交接，不繼續擴寫程式、建立過渡入口或執行正式切換。既有未提交程式保留為開發中；此輪文件不改變先前有效的同範圍授權，也不把尚未完成的工作認列完成。
+
+| 工作／主責 | 接手內容與必要驗證 | 現況與依賴 |
+|---|---|---|
+| 舊網址過渡入口／ProJED | 沿 §3.0 完成薄轉送服務、建置／部署 renderer 與 Hosting 發布契約；固定上游、驗證傳輸身分後才採納原 origin。驗偽造 header／token 拒絕、主／Quick 隔離、body／逾時／取消上限、private no-store、Cookie／redirect 邊界；已送出的未知寫入不自動重送。 | `server/legacyEntryBinding.ts`、`legacyEntryOrigin.ts`、`legacyEntryRelay.ts` 及接線已有工作樹草稿，binding 仍為 `null`。尚缺完整 HTTP／relay 回歸、正式入口封裝與實際 provider 接線；不可據此部署或宣稱已驗。新資源／最小 IAM 差額仍沿 §3.0 處理。 |
+| 真登入與既有帳號／ProJED＋Platform／OrgMaster 各 owner | 完成 producer publication／可信 pins、原主／Quick callback 與各自 App Session。驗既有 UUID 不變、個人／外部權限、換帳、登入到期與撤權；不得以 email 猜測映射，也不得把入口 SA 當使用者。 | `server/runtimeSessionAuth.ts` 仍在 production pins 空集合時停用；私人候選 shell 不是真登入證據。正式既有身分投影與業務資料的搬入由 DEV-142 承接，準備階段用隔離資料驗邏輯，不先搬正式映射。 |
+| 原網址前端／PWA／本機資料相容／ProJED | 補同 origin 從舊 provider 切換 HTTP 後的 namespace／owner／receipt 恢復及正常入口更新；保留 manifest identity、既有安裝、草稿與舊資產。驗隔夜可輸入、弱網／離線、關閉重開、登入恢復、換帳隔離、CAS 衝突與 unknown readback／防重複。 | 重用 §3.3 與 §47.2 的未變證據，只補真正改變的原網址／Session／provider 組合；loopback 私人代理測試不能代替舊網址升級。沿既有手動更新機制，不強迫重新安裝或清本機資料。 |
+| 零留存與背景處理／ProJED | 依既有 provider 契約補目標專案／caller 的 ASR、分析、RAG 與 Job 綁定及必要資格證據；接續階段選擇、不呼叫模型分支、背景執行、取消／費用／unknown 與結果發布驗證。 | 未資格模型保持停用，不用真實內容試探資格；真 ASR 仍是 DEV-139 原完成條件。尚缺的契約／豁免或外部設定只阻擋相依模型路徑，不阻擋不需模型的分支與其他準備。 |
+| 正式資料搬遷／DEV-142 | 一次窗口完成全部來源 writer fence、snapshot、資料／私人檔案／權限／receipt 核對，以及舊網址開新後端唯一 writer。 | 獨立交付與恢復只以 [SPEC-142](SPEC-142-projed-production-data-migration.md) 判定；目前未執行。晚間窗口待演練量測後安排，不在本輪排程。 |
+| 舊網址運作確認及最後新網址／DEV-139 | DEV-142 完成後，用舊網址確認原功能、權限、草稿同步及背景處理；再發布新 origin／callback／PWA 與書籤／連結／草稿交接。第一階段正常使用可需要重新登入，最後跨 origin 可能需要重新安裝 PWA。 | 不新增固定觀察天數或全員簽到。最後換址沿同一 Cloud SQL／Storage，不再搬伺服器資料；入口回退仍使用新後端，舊入口退出沿 §6.4，不提前清除恢復能力。 |
+
+**實作順序與放行邊界。** 先收斂入口／身分／原地前端相容的 source 與隔離回歸，再依既有授權更新候選、核實實際接線；模型資格與不需模型分支可獨立推進。只有 SPEC-142 的必要依賴及正式操作責任成立後才進資料窗口；完成資料交付與舊網址日常確認後，才執行最後網址切換。這是既有驗收的分工與排序，不新增 required gate、QA/QC 簽核或另一套完成率。
+
+**體驗與費用。** 每次真正改變入口時，沿 §3.3 同一量測口徑區分首次／已快取，檢查點開到可輸入及真同步狀態；不以 HTTP 200 或本機保存當雲端成功。過渡入口多一跳與可能冷啟動，沿現有監測核對延遲、錯誤及整體用量費是否明顯增加；先優化本機 shell／按需資源，不預設增加常駐容量，也不自行加入固定百分比、SLA 或新成本報表。
+
 ### 3.1 Runtime 工程基線與模組責任
 
 本節固定 ProJED 的技術選型。S1 server 已依 Node `>=24.11.0 <25`／npm `>=11 <12`、`pg ^8.21.0`、TypeScript、`node:http` 實作；本地隔離驗證接受 PostgreSQL 17／18，並記錄實際 major。lockfile 已固定實際解析版本；未來 managed target 仍按實際綁定版本重驗，這不要求 Vite 改成 Next.js。S1 完整契約見 §11、實作結果見 §12。
