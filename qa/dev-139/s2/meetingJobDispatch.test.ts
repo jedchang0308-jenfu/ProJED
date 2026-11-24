@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 
 import { createMeetingJobDispatcher, type MeetingJobDispatchOptions } from '../../../server/meetingJobDispatch.js';
 import { KernelError } from '../../../server/errors.js';
@@ -46,7 +48,6 @@ function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value
 }
 
 test('null binding does no token or request work; invalid qualification target is rejected', async () => {
-  assert.equal(CURRENT_MEETING_JOB_BINDING, null);
   let tokenCalls = 0;
   let requestCalls = 0;
   const dispatch = createMeetingJobDispatcher(null, {
@@ -61,6 +62,21 @@ test('null binding does no token or request work; invalid qualification target i
     options(fetch)), (error: unknown) => error instanceof KernelError && error.code === 'CONFIG_INVALID');
   assert.throws(() => createMeetingJobDispatcher({ ...BINDING, qualificationEvidenceRef: '  ' },
     options(fetch)), (error: unknown) => error instanceof KernelError && error.code === 'CONFIG_INVALID');
+});
+
+test('published Job binding matches invocation-only evidence without claiming provider qualification', () => {
+  const document=JSON.parse(readFileSync(new URL('../../../config/dev-139/meeting-job-qualification.json',import.meta.url),'utf8'));
+  const digest=createHash('sha256').update(JSON.stringify(document.claims)).digest('hex');
+  assert.equal(document.claimsSha256,digest);
+  assert.deepEqual(CURRENT_MEETING_JOB_BINDING,document.binding);
+  assert.equal(document.binding.resource,MEETING_ANALYSIS_JOB_RESOURCE);
+  assert.equal(document.binding.qualificationEvidenceRef,`config/dev-139/meeting-job-qualification.json#sha256=${digest}`);
+  assert.equal(document.claims.targetSucceededCount,1);
+  assert.equal(document.claims.targetRetriedCount,0);
+  assert.equal(document.claims.paidModelDispatchInProbe,false);
+  assert.equal(document.claims.providerQualificationIncluded,false);
+  assert.equal(document.claims.probeJobDeleted,true);
+  assert.equal(document.claims.targetJobPreserved,true);
 });
 
 test('uses one fixed POST without overrides and returns only a bounded matching Operation name', async () => {

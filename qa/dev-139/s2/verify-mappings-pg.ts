@@ -8,7 +8,7 @@ import type { RuntimeConfig } from '../../../server/config.js';
 import { GooglePrincipalMappingResolver } from '../../../server/principalMappings.js';
 import { TABLES, insertSnapshot, readSource, readTarget, snapshotId, snapshotTypes, validateSource } from '../../../scripts/dev139-data-migration.js';
 import { createAppSessionService } from '../../../server/appSessionService.js';
-import { CURRENT_PRODUCTION_IDENTITY_PINS, IdentityConsumer, type ProducerVerifiedIdentity } from '../../../server/identityConsumer.js';
+import { IdentityConsumer, type ProducerVerifiedIdentity } from '../../../server/identityConsumer.js';
 import { createPlatformHandoffClient, type PlatformHandoffBinding } from '../../../server/platformHandoff.js';
 import { createPlatformIdentityVerifier } from '../../../server/platformIdentityVerifier.js';
 import { createPlatformPrincipalStateReader, PLATFORM_PROJED_PRINCIPAL_STATE_CONTRACT } from '../../../server/platformPrincipalState.js';
@@ -72,7 +72,6 @@ export async function verifyLegacyEntryMappingSessionsPostgres(config: RuntimeCo
   const json = async <T>(response: Response): Promise<T> => await response.json() as T;
   const errorCode = async (response: Response) => (await json<{ error: { code: string } }>(response)).error.code;
   assert.equal(config.env, 'disposable');
-  assert.deepEqual(CURRENT_PRODUCTION_IDENTITY_PINS, []);
   const raw = process.env.PROJED_QA_MEETING_ADMIN_URL;
   assert.ok(raw);
   const url = new URL(raw), runtime = new URL(config.databaseUrl);

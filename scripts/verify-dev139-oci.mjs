@@ -7,6 +7,7 @@ import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { verifyLegacyClientFenceOci } from './lib/dev139-legacy-client-fence-oci.mjs';
 import { MANAGED_MEETING_AUDIO_BUCKET } from '../shared/dev139MeetingAudio.mjs';
+import { MANAGED_SSO_BROKER_ORIGIN } from '../shared/dev139DeploymentTarget.mjs';
 import { stagePublicPredecessor } from './lib/dev139-predecessor-stage.mjs';
 import { legacyManifestFixture } from '../qa/dev-139/release/httpArtifactFixture.mjs';
 
@@ -301,9 +302,9 @@ try {
   const asrCheckLines = asrCheckOnly.stdout.trim().split(/\r?\n/u);
   assert.equal(asrCheckLines.length, 1);
   assert.deepEqual(JSON.parse(asrCheckLines[0]), {
-    event: 'projed_meeting_asr_job_check', status: 'CHECK_ONLY', providerDispatch: 'DISABLED',
+    event: 'projed_meeting_asr_job_check', status: 'CHECK_ONLY', providerDispatch: 'QUALIFICATION_BOUND',
     llmDispatch: 'DISABLED',
-    sessionContract: 'UNPUBLISHED', runtime: 'NOT_CONNECTED', provider: 'NOT_RUN',
+    sessionContract: 'PINNED', runtime: 'NOT_CONNECTED', provider: 'NOT_RUN',
   });
   assert.doesNotMatch(`${asrCheckOnly.stdout}${asrCheckOnly.stderr}`, /DEV139_ASR_CHECK_EGRESS_ATTEMPT/u,
     'check-only never opens metadata/provider fetches or database sockets');
@@ -316,10 +317,16 @@ try {
   assert.deepEqual(binding, originalBinding);
   passed('job-and-runtime-build-artifact-binding-match');
   writeFileSync(join(temp, 'binding.json'), JSON.stringify(binding), { mode: 0o444 });
+  const sessionFixtureEnv = [
+    `PROJED_SSO_BROKER_ORIGIN=${MANAGED_SSO_BROKER_ORIGIN}`,
+    'PROJED_MAIN_PUBLIC_ORIGIN=https://projed.example.invalid',
+    'PROJED_QUICK_PUBLIC_ORIGIN=https://quick.projed.example.invalid',
+  ];
   const runtimeEnv = [
     'PROJED_RUNTIME_BINDING_FILE=/verification/binding.json',
     `PROJED_DATABASE_URL=postgresql://${encodeURIComponent(binding.iamLogins.runtime)}@127.0.0.1:5432/jenfu_prod`,
     'PROJED_PUBLIC_APP_URL=https://projed.example.invalid', 'PORT=8080',
+    ...sessionFixtureEnv,
   ].join('\n');
   writeFileSync(join(temp, 'runtime.env'), `${runtimeEnv}\n`, { mode: 0o600 });
   writeFileSync(join(temp, 'migrator.env'), [
@@ -402,6 +409,7 @@ try {
   docker(['exec', '--user', 'postgres', pgName, 'pg_ctl', 'reload', '-D', '/var/lib/postgresql/data']);
   const asrMaintenance = runOwnedContainer('asr-job-maintenance', ['--read-only', '--tmpfs', '/tmp:rw,noexec,nosuid,size=16m',
     ...socketMount, ...bindingMount(),
+    ...sessionFixtureEnv.flatMap(value=>['--env',value]),
     '--env', 'PROJED_ENV=managed', '--env', 'PROJED_APP_ENTRY=main',
     '--env', 'PROJED_RUNTIME_BINDING_FILE=/verification/binding.json',
     '--env', `PROJED_DATABASE_URL=postgresql://${encodeURIComponent(binding.iamLogins.runtime)}@localhost/jenfu_prod?host=${encodeURIComponent(socketPath)}`,
@@ -411,7 +419,7 @@ try {
   const asrMaintenanceLines = asrMaintenance.stdout.trim().split(/\r?\n/u);
   assert.equal(asrMaintenanceLines.length, 1);
   assert.deepEqual(JSON.parse(asrMaintenanceLines[0]), {
-    event: 'projed_meeting_asr_job_finished', dispatchEnabled: false, llmDispatchEnabled: false, rounds: 1,
+    event: 'projed_meeting_asr_job_finished', dispatchEnabled: true, llmDispatchEnabled: false, rounds: 1,
     asr: { scanned: 0, units: 0, recovered: 0, abandoned: 0, deferred: 0, failures: 0, errors: {} },
     discussion: { scanned: 0, units: 0, completed: 0, sources: 0, abandoned: 0, deferred: 0, failures: 0, errors: {} },
     llm: { scanned: 0, units: 0, recovered: 0, published: 0, local: 0, abandoned: 0, deferred: 0, failures: 0, errors: {} },
@@ -539,16 +547,25 @@ try {
       assert.equal(response.status, 200);
       assert.deepEqual(await response.json(), {status:'ok'});
     }
-    for (const path of ['/api/v1/session','/api/v1/workspaces','/api/auth/jenfu-sso/login','/api/not-a-route']) {
-      const response = await fetch('http://127.0.0.1:8080'+path);
-      assert.equal(response.status, 404);
+    for (const path of ['/api/v1/session','/api/v1/workspaces']) {
+      const response = await fetch('http://127.0.0.1:8080'+path,{headers:{host:'projed.example.invalid'}});
+      assert.equal(response.status, 401);
       assert.equal(response.headers.get('cache-control'), 'no-store');
-      assert.equal((await response.json()).error.code, 'ENDPOINT_UNAVAILABLE');
+      assert.equal((await response.json()).error.code, 'IDENTITY_INVALID');
       assert.equal(response.headers.get('set-cookie'), null);
     }
+    const wrongHost = await fetch('http://127.0.0.1:8080/api/v1/session');
+    assert.equal(wrongHost.status,403);
+    assert.equal((await wrongHost.json()).error.code,'ACCESS_DENIED');
+    const wrongMethod = await fetch('http://127.0.0.1:8080/api/auth/jenfu-sso/login');
+    assert.equal(wrongMethod.status,405);
+    assert.equal((await wrongMethod.json()).error.code,'METHOD_NOT_ALLOWED');
+    const unknown = await fetch('http://127.0.0.1:8080/api/not-a-route');
+    assert.equal(unknown.status,404);
+    assert.equal((await unknown.json()).error.code,'ENDPOINT_UNAVAILABLE');
   `);
   passed('compiled-entry-real-main-quick-and-asset-hashes');
-  passed('unpublished-session-and-private-api-fail-closed');
+  passed('published-session-rejects-anonymous-wrong-host-and-method-without-owner-access');
 
   pgSql('ALTER ROLE cloudsqliamserviceaccount CREATEDB;');
   appProbe("import assert from 'node:assert/strict';assert.equal((await fetch('http://127.0.0.1:8080/health/ready')).status,503);");

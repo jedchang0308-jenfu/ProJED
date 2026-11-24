@@ -3,7 +3,6 @@ import test from 'node:test';
 
 import { KernelError } from '../../../server/errors.js';
 import {
-  CURRENT_PRODUCTION_IDENTITY_PINS,
   IdentityConsumer,
   type IdentityContractPin,
   type PrincipalMappingResult,
@@ -286,7 +285,7 @@ test('empty production pins reject before one-time exchange or state access', as
     now: () => NOW,
   });
   const consumer = new IdentityConsumer({
-    pins: CURRENT_PRODUCTION_IDENTITY_PINS,
+    pins: [],
     verifier,
     mappings: { async resolve() { mappingCalls += 1; return { status: 'missing' }; } },
     now: () => NOW,

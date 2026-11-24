@@ -39,9 +39,9 @@ test('Job check-only reports status without connecting runtime or calling provid
   assert.equal(result.runtime,'NOT_CONNECTED');
   assert.equal(result.provider,'NOT_RUN');
   assert.equal(result.llmDispatch,'DISABLED');
-  assert.deepEqual(CURRENT_PRODUCTION_IDENTITY_PINS,[]);
-  assert.equal(result.providerDispatch,'DISABLED');
-  assert.equal(result.sessionContract,'UNPUBLISHED');
+  assert.ok(CURRENT_PRODUCTION_IDENTITY_PINS.length>0);
+  assert.equal(result.providerDispatch,'QUALIFICATION_BOUND');
+  assert.equal(result.sessionContract,'PINNED');
 });
 
 test('ASR check-only needs qualified source binding and Session pins; neither alone enables dispatch',()=>{

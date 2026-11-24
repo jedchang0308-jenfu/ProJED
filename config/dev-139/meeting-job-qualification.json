@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "claims": {
+    "scope": "INVOCATION_AND_EMPTY_BACKGROUND_SQL_TRANSPORT_NOT_FULL_MEETING_ACCEPTANCE",
+    "projectId": "jenfu-platform-prod",
+    "runtimeServiceAccount": "projed-prod-runtime@jenfu-platform-prod.iam.gserviceaccount.com",
+    "resource": "projects/jenfu-platform-prod/locations/asia-east1/jobs/projed-meeting-analysis",
+    "targetGeneration": "4",
+    "targetImage": "asia-east1-docker.pkg.dev/jenfu-platform-prod/projed-release/projed-prod-asr-job@sha256:7be182f8002e60796aa986fe52b23ea2f58e504d570af7103f0a69c895472ff1",
+    "targetImageSource": "4331115964796c4b82438e9fbd7aede2ab08063b",
+    "operation": "projects/jenfu-platform-prod/locations/asia-east1/operations/cd5ea95a-41c1-4ee8-9f84-b6c208d467a0",
+    "probeExecution": "projects/jenfu-platform-prod/locations/asia-east1/jobs/projed-job-dispatch-qualification/executions/projed-job-dispatch-qualification-j4r72",
+    "targetExecution": "projects/jenfu-platform-prod/locations/asia-east1/jobs/projed-meeting-analysis/executions/projed-meeting-analysis-4ptlz",
+    "targetSucceededCount": 1,
+    "targetRetriedCount": 0,
+    "paidModelDispatchInProbe": false,
+    "meetingContentSent": false,
+    "businessDataWritten": false,
+    "iamChanges": 0,
+    "probeJobDeleted": true,
+    "targetJobPreserved": true,
+    "providerQualificationIncluded": false
+  },
+  "claimsSha256": "e004b81fc1869926d36a9376f3dea8c8dd0253d43b99aec2f5e9a29d929eadeb",
+  "binding": {
+    "resource": "projects/jenfu-platform-prod/locations/asia-east1/jobs/projed-meeting-analysis",
+    "qualificationEvidenceRef": "config/dev-139/meeting-job-qualification.json#sha256=e004b81fc1869926d36a9376f3dea8c8dd0253d43b99aec2f5e9a29d929eadeb"
+  },
+  "observedAt": "2026-11-24T11:19:12.736145+00:00",
+  "evidenceRefs": [
+    "output/dev139-job-dispatch-qualification-20261124/verified.json",
+    "output/dev139-job-dispatch-qualification-20261124/terminal-observation.json",
+    "output/dev139-job-dispatch-qualification-20261124/cleanup-verified.json"
+  ]
+}

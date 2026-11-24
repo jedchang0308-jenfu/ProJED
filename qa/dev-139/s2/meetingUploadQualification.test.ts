@@ -11,7 +11,6 @@ import type {RuntimeDatabase} from '../../../server/db.js';
 import {createMeetingCaptureHttpDispatcher} from '../../../server/meetingCaptureHttp.js';
 import {createQualifiedMeetingUploadRepository,MeetingUploadRepository} from '../../../server/meetingUpload.js';
 import {CURRENT_MEETING_ASR_BINDING,hasQualifiedMeetingAsrBinding,type MeetingAsrRuntimeBinding} from '../../../server/meetingAsrRuntimeBinding.js';
-import {CURRENT_PRODUCTION_IDENTITY_PINS} from '../../../server/identityConsumer.js';
 import {CURRENT_MEETING_LLM_BINDING} from '../../../server/meetingLlmRuntimeBinding.js';
 import type {MeetingJobDispatchResult} from '../../../server/meetingJobDispatch.js';
 
@@ -62,7 +61,6 @@ test('published Speech binding matches committed private-foundation claims and t
     dataLogging:'disabled',audioBucket:'jenfu-platform-prod-projed-meeting-audio',
     qualificationEvidenceRef:`config/dev-139/speech-qualification.json#sha256=${digest}`});
   assert.equal(hasQualifiedMeetingAsrBinding(CURRENT_MEETING_ASR_BINDING,document.binding.audioBucket),true);
-  assert.deepEqual(CURRENT_PRODUCTION_IDENTITY_PINS,[]);
   assert.equal(CURRENT_MEETING_LLM_BINDING,null);
   assert.equal(Number.isNaN(Date.parse(document.observedAt)),false);
   assert.deepEqual(document.evidenceRefs,['output/dev139-speech-qualification-20261123/foundation-verified.json',
