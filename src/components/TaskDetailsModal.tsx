@@ -21,9 +21,11 @@ import {
 } from '../utils/taskNoteRichContent';
 import { toast } from '../store/useToastStore';
 import { isPrimaryPointerActivation } from '../interactions/pointerActivation';
-import { isSupabaseBackend, nodeService } from '../services/dataBackend';
+import { dataBackend, nodeService } from '../services/dataBackend';
 import { isTaskWorkbenchUnplacedTask, readTaskWorkbenchUnplacedTasks } from '../features/taskWorkbench/placement';
 import { supabaseTaskWorkbenchUnplacedService } from '../services/supabase/taskWorkbenchUnplacedService';
+import { httpSessionService, httpTaskWorkbenchService } from '../services/httpApi/backend';
+import { readTaskDetailsCanonical } from '../services/taskDetailsCanonicalRead';
 import {
   arePersistedValuesEqual,
   settlePersistenceOperationOnce,
@@ -160,14 +162,13 @@ const readbackTaskPersistence = async (
 };
 
 const readCanonicalTask = async (sourceNode: TaskNode, accountId: string | null): Promise<TaskNode | undefined> => {
-  if (isTaskWorkbenchUnplacedTask(sourceNode)) {
-    // Unplaced tasks deliberately support durable local fallback; never run
-    // the loader here because it also migrates local tasks to the provider.
-    const local = readTaskWorkbenchUnplacedTasks(accountId).find(item => item.id === sourceNode.id);
-    if (local || !isSupabaseBackend || !accountId) return local;
-    return (await supabaseTaskWorkbenchUnplacedService.list()).find(item => item.id === sourceNode.id);
-  }
-  return (await nodeService.listByProject(sourceNode.workspaceId, sourceNode.boardId)).find(item => item.id === sourceNode.id);
+  return readTaskDetailsCanonical(sourceNode, accountId, {
+    backend: dataBackend,
+    readLocalUnplaced: readTaskWorkbenchUnplacedTasks,
+    listHttpUnplaced: async owner => httpTaskWorkbenchService.list(await httpSessionService.verifyBoundActor(owner, 'main')),
+    listSupabaseUnplaced: () => supabaseTaskWorkbenchUnplacedService.list(),
+    listBoard: (workspace, board) => nodeService.listByProject(workspace, board),
+  });
 };
 
 const PINCH_CLOSE_MIN_DISTANCE_DELTA = 36;
@@ -407,8 +408,10 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
         setNoteEdit(noteEditRef.current);
         // The cached task might be optimistic or stale after a restart. Use
         // the existing canonical readback before any recovered edit is sent.
-        failedUpdatesRef.current = saved.submitted;
-        unknownUpdatesRef.current = saved.submitted;
+        // Each recovery state must own its keys: settling an unknown result
+        // must not delete the failed-write flags through a shared object.
+        failedUpdatesRef.current = { ...saved.submitted };
+        unknownUpdatesRef.current = { ...saved.submitted };
         // Restored requests enter the same per-key settlement protocol as a
         // live request. Otherwise canonical readback cannot retire their flags.
         for (const key of Object.keys(saved.submitted)) {
@@ -1062,7 +1065,11 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
     if (pendingPersistCountRef.current > 0 || isDiscarding || !validateDraft()) return;
     if (Object.keys(failedUpdatesRef.current).length === 0) return;
     const retryKeys = new Set(Object.keys(failedUpdatesRef.current));
-    const unknown = { ...unknownUpdatesRef.current };
+    // HTTP unplaced edits keep an optimistic local fallback after a transport
+    // failure. Resolve the server row before deriving the next CAS baseline.
+    const unknown = dataBackend === 'http' && isTaskWorkbenchUnplacedTask(node)
+      ? { ...failedUpdatesRef.current, ...unknownUpdatesRef.current }
+      : { ...unknownUpdatesRef.current };
     if (Object.keys(unknown).length > 0 && node) {
       // Resolve an uncertain provider write before deciding whether it is safe to resend.
       setIsClosePending(true);

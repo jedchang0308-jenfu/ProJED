@@ -399,7 +399,7 @@ const persistNodeTransition = async (
   if (newIsUnplaced) {
     await (newNode.isArchived
       ? persistRemoveTaskWorkbenchUnplacedTask(id, useAuthStore.getState().user?.uid)
-      : persistTaskWorkbenchUnplacedTask(newNode, useAuthStore.getState().user?.uid));
+      : persistTaskWorkbenchUnplacedTask(newNode, useAuthStore.getState().user?.uid, oldWasUnplaced ? oldNode : null));
     if (!oldWasUnplaced && oldNode.workspaceId && oldNode.boardId) {
       await nodeService.delete(oldNode.workspaceId, oldNode.boardId, id);
     }
@@ -1391,7 +1391,8 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     // 同步寫入資料來源；未歸位任務是工作台本機位置，不寫入假看板路徑。
     if (isUnplacedTask) {
         void persistTaskWorkbenchUnplacedTask(normalizedNode, useAuthStore.getState().user?.uid)
-          .then(() => commitMeetingTaskMutation(null, normalizedNode, ['title'], `task-create-${normalizedNode.id}-${Date.now().toString(36)}`));
+          .then(() => commitMeetingTaskMutation(null, normalizedNode, ['title'], `task-create-${normalizedNode.id}-${Date.now().toString(36)}`))
+          .catch(error => console.warn('[WbsStore] Unplaced creation remains local; cloud persistence failed.', error));
     } else if (normalizedNode.workspaceId && normalizedNode.boardId) {
         const workspaceId = normalizedNode.workspaceId;
         const boardId = normalizedNode.boardId;
@@ -1598,7 +1599,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
           detailNotes: persisted.detailNotes,
           description: persisted.description ?? undefined,
           updatedAt: persisted.updatedAt,
-        }, operationAccountId);
+        }, operationAccountId, oldNode);
         outcome = { status: 'persisted', snapshot: persisted };
       }
     } else {

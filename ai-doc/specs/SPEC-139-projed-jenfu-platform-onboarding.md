@@ -1,5 +1,7 @@
 # SPEC-139：ProJED 納入 Jenfu-Platform 的產品與技術交接契約
 
+> 2026-11-25 DEV-142正式窗口：資料已一次匯入並獨立核對，舊origin已發布中央後端；來源停寫保留。真登入發現Platform consumer ACL缺漏，沿Platform #242修復，未完成正式驗收。以[SPEC-142](SPEC-142-projed-production-data-migration.md)最新狀態為準；以下較早準備紀錄不代表尚未切流。最後換址引導仍不啟用。
+
 **2026-11-25 最新執行狀態**：人類要求先完成正式切流前準備、部署候選並驗證；[DEV-142](SPEC-142-projed-production-data-migration.md) 的[恢復紀錄](../reports/DEV-142-precutover-recovery-point-20261124.md)已保存三份程式備份、部署落點與加密 app 資料。來源`7d239c9`的CI45423509034與Cloud Build `b9b70c73-0432-40d7-b40a-0a741e58352d`成功；私人revision `projed-prod-dev139-7d239c9`維持0%、原`00007-cpt`維持100%。私人HTTP36、真Cloud SQL空佇列背景與正式來源／中央目標單次READ ONLY `plan`通過，來源snapshot與隔離還原一致、目標為空；reader已恢復NOLOGIN、連線0、可寫relation 0，臨時Job已刪除。兩舊origin四份metadata與恢復點逐位元組一致，既有PWA輸入未變。未停寫、搬入資料、啟用新writer或切流；正式窗口另取最終快照。保留原網址與既有PWA，最後新網址另階段；未資格Gemini／RAG仍停用。
 
 **2026-11-23 現行決策：先保留舊主站／Quick 網址及既有 PWA 入口，讓新版前端、登入、API、資料與背景工作改走集中 Google Cloud；在舊網址確認新系統運作後，最後才換 Cloud Run `run.app` 新網址。** 保留 Vite、本機記事、ProJED 獨立權限及 `jenfu-platform-prod` 同專案私人 SQL；既有 Firebase Hosting 僅暫留為過渡入口，不另建新的 Firebase 網站或把業務權威搬回舊專案。正式資料一次搬遷獨立列為 [DEV-142／SPEC-142](SPEC-142-projed-production-data-migration.md)。

@@ -10,6 +10,9 @@ import { TASK_PURPOSE_NOTE_ID } from '../../../src/utils/taskNoteRichContent';
 import type { TaskNode } from '../../../src/types';
 import { saveTaskDetailsLocalDraft } from '../../../src/services/taskDetailsLocalDraft';
 import { taskDetailsFieldsFromNode } from '../../../src/components/taskDetailsDraft';
+import { httpSessionService, httpTaskWorkbenchService } from '../../../src/services/httpApi/backend';
+import { loadTaskWorkbenchUnplacedTasks, upsertTaskWorkbenchUnplacedTask, clearTaskWorkbenchUnplacedLocalCaches } from '../../../src/features/taskWorkbench/placement';
+import { TASK_WORKBENCH_UNPLACED_BOARD_ID } from '../../../src/features/taskWorkbench/placementModel';
 
 // Actual modal/stores; only the remote data seam is synthetic. No real backend.
 let canonical: TaskNode = {
@@ -19,8 +22,25 @@ let canonical: TaskNode = {
 };
 let writes = 0;
 let reads = 0;
+let failUnplaced = false;
 const root = createRoot(document.querySelector('#task-draft-fixture')!);
 nodeService.listByProject = async () => { reads += 1; return [structuredClone(canonical)]; };
+httpSessionService.verifyBoundActor = async accountId => {
+  if (useAuthStore.getState().user?.uid !== accountId) throw new Error('ACTOR_CHANGED');
+  return { accountId, contextId: 'synthetic-modal-context' };
+};
+httpTaskWorkbenchService.list = async actor => {
+  if (useAuthStore.getState().user?.uid !== actor.accountId) throw new Error('ACTOR_CHANGED');
+  reads += 1;
+  return [structuredClone(canonical)];
+};
+httpTaskWorkbenchService.upsert = async (task, actor) => {
+  if (useAuthStore.getState().user?.uid !== actor.accountId) throw new Error('ACTOR_CHANGED');
+  if (failUnplaced) throw new Error('SYNTHETIC_UPSERT_UNAVAILABLE');
+  writes += 1;
+  canonical = structuredClone(task);
+  return structuredClone(canonical);
+};
 recordService.listByNode = async () => [];
 useWbsStore.setState({ nodes: { [canonical.id]: structuredClone(canonical) }, dependencies: [],
   commitTaskNotes: async (_id, expected, submitted) => {
@@ -46,6 +66,22 @@ const mount = (accountId: string) => {
 };
 const fixture = {
   counters: () => ({ writes, reads }),
+  async recoverLocalFallback() {
+    const accountId = useAuthStore.getState().user!.uid;
+    const original = structuredClone(canonical);
+    upsertTaskWorkbenchUnplacedTask({ ...canonical, title: 'different-device-local-edit', updatedAt: Date.now() + 10000 }, accountId);
+    const before = writes;
+    const loaded = await loadTaskWorkbenchUnplacedTasks(accountId);
+    const result = { noWrite: writes === before, remoteUnchanged: canonical.title === original.title,
+      localRetained: loaded.some(task => task.title === 'different-device-local-edit') };
+    clearTaskWorkbenchUnplacedLocalCaches(accountId);
+    return result;
+  },
+  failUnplacedWrite(value: boolean) { failUnplaced = value; },
+  useUnplaced() {
+    canonical = { ...canonical, boardId: TASK_WORKBENCH_UNPLACED_BOARD_ID };
+    useWbsStore.setState({ nodes: { [canonical.id]: structuredClone(canonical) } });
+  },
   changeRemoteNotes(content: string) {
     canonical = { ...canonical, description: content, detailNotes: [{ id: TASK_PURPOSE_NOTE_ID, title: '目的', content }] };
   },

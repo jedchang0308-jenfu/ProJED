@@ -76,7 +76,18 @@ test('task workbench adapter uses owner-free same-origin CRUD and placement comm
     assert.equal(new Headers(request.init?.headers).get('x-projed-expected-context-id'), expectedActor.contextId);
   }
   assert.equal(JSON.stringify(JSON.parse(String(requests[1]?.init?.body))).includes('ownerId'), false);
+  assert.equal(JSON.parse(String(requests[1]?.init?.body)).expectedTask, null);
   assert.deepEqual(JSON.parse(String(requests[3]?.init?.body)), command);
+});
+
+test('unplaced updates carry the read canonical baseline without inventing a new owner or retrying', async () => {
+  let body: unknown;
+  const adapter=createHttpTaskWorkbenchAdapter(new HttpApiClient(async (_input,init)=>{
+    body=JSON.parse(String(init?.body));
+    return new Response(JSON.stringify({data:{...task,title:'Edited'}}),{headers:{'content-type':'application/json'}});
+  }));
+  await adapter.upsert({...task,title:'Edited'},expectedActor,undefined,task);
+  assert.deepEqual(body,{task:{...task,title:'Edited'},expectedTask:task});
 });
 
 test('task workbench adapter rejects malformed committed results', async () => {

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 
 import type { ActorQueryPort } from './actorTransaction.js';
 import { resolveBoard, resolveWorkspace, type BoardIdentity, validTaskDetailNotes } from './domainRead.js';
@@ -515,7 +516,7 @@ export class TaskWorkbenchRepository {
     return (await listUnplacedRows(port)).map(taskFromUnplacedRow).filter(task => !task.isArchived);
   }
 
-  async upsert(port: ActorQueryPort, taskId: string, value: unknown): Promise<StoredWorkbenchTask> {
+  async upsert(port: ActorQueryPort, taskId: string, value: unknown, expectedTask: unknown = null): Promise<StoredWorkbenchTask> {
     const task = normalizeTask(value, reference(taskId, 'task id'));
     if (task.isArchived) invalid('Archived tasks cannot be stored in the unplaced workbench');
     await resolveWorkspace(port, task.workspaceId);
@@ -536,6 +537,17 @@ export class TaskWorkbenchRepository {
       if (!ancestor.parentId) break;
       ancestor = byId.get(ancestor.parentId);
       if (!ancestor) invalid('Unplaced task ancestor is unavailable');
+    }
+    const comparable = (item: StoredWorkbenchTask) => Object.fromEntries(
+      Object.entries(item).filter(([key]) => key !== 'createdAt' && key !== 'updatedAt'),
+    );
+    const previous = existing.find(candidate => candidate.id === task.id);
+    // Same desired content is a confirmed replay, not a second write. All
+    // checks run under the same account lock as the following INSERT/UPDATE.
+    if (previous && isDeepStrictEqual(comparable(previous), comparable(task))) return previous;
+    const expected = expectedTask === null ? null : normalizeTask(expectedTask, task.id);
+    if (previous ? !expected || !isDeepStrictEqual(comparable(previous), comparable(expected)) : expected !== null) {
+      throw new KernelError('REVISION_CONFLICT', 'Unplaced task changed before this write', 409);
     }
     const result = await port.query<UnplacedRow>(`
       INSERT INTO projed_core.unplaced_tasks(
