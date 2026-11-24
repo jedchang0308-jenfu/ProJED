@@ -45,6 +45,7 @@ export const isTaskWorkbenchUnplacedTask = (task: Pick<TaskNode, 'boardId'> | nu
 export const persistTaskWorkbenchUnplacedTask = async (
   task: TaskNode,
   accountId: string | null | undefined,
+  expectedTask: TaskNode | null = null,
 ): Promise<void> => {
   const normalized = {
     ...normalizeTaskWorkbenchUnplacedTask(task),
@@ -53,10 +54,11 @@ export const persistTaskWorkbenchUnplacedTask = async (
   upsertTaskWorkbenchUnplacedTask(normalized, accountId);
   if (!accountId || (!isHttpBackend && !isSupabaseBackend)) return;
   try {
-    if (isHttpBackend) await httpTaskWorkbenchService.upsert(normalized, await getHttpExpectedActor(accountId));
+    if (isHttpBackend) await httpTaskWorkbenchService.upsert(normalized, await getHttpExpectedActor(accountId), undefined, expectedTask);
     else await supabaseTaskWorkbenchUnplacedService.upsert(normalized, accountId!);
   } catch (error) {
     console.warn('[taskWorkbench] Failed to persist unplaced task remotely; local fallback retained.', error);
+    if (isHttpBackend) throw error;
   }
 };
 
@@ -102,17 +104,22 @@ export const claimUnboundTaskWorkbenchUnplacedTasks = async (accountId: string):
       : [];
   const merged = indexLatestTaskWorkbenchTasks(remoteTasks, readTaskWorkbenchUnplacedTasks(accountId));
 
+  let retainedUnbound = false;
   for (const task of unboundTasks) {
     const existing = merged.get(task.id);
+    if (existing && isHttpBackend) {
+      retainedUnbound = true;
+      continue;
+    }
     if (existing && getTaskTimestamp(existing) >= getTaskTimestamp(task)) continue;
-    if (isHttpBackend) await httpTaskWorkbenchService.upsert(task, expectedActor!);
+    if (isHttpBackend) await httpTaskWorkbenchService.upsert(task, expectedActor!, undefined, remoteTasks.find(remote => remote.id === task.id) ?? null);
     else if (isSupabaseBackend) await supabaseTaskWorkbenchUnplacedService.upsert(task, accountId);
     merged.set(task.id, task);
   }
 
   const claimed = sortTaskWorkbenchUnplacedTasks(Array.from(merged.values()));
   writeTaskWorkbenchUnplacedTasks(claimed, accountId);
-  clearTaskWorkbenchUnplacedLocalCaches(null);
+  if (!retainedUnbound) clearTaskWorkbenchUnplacedLocalCaches(null);
   return claimed;
 };
 
@@ -133,9 +140,16 @@ export const loadTaskWorkbenchUnplacedTasks = async (
     for (const localTask of localTasks) {
       if (localTask.isArchived) continue;
       const remoteTask = merged.get(localTask.id);
+      // A newer local clock does not prove which remote version was edited.
+      // Keep the fallback visible, but require explicit conflict recovery.
+      if (isHttpBackend && remoteTask && getTaskTimestamp(localTask) > getTaskTimestamp(remoteTask)) {
+        migrationFailed = true;
+        merged.set(localTask.id, localTask);
+        continue;
+      }
       if (!remoteTask || getTaskTimestamp(localTask) > getTaskTimestamp(remoteTask)) {
         try {
-          if (isHttpBackend) await httpTaskWorkbenchService.upsert(localTask, expectedActor!);
+          if (isHttpBackend) await httpTaskWorkbenchService.upsert(localTask, expectedActor!, undefined, remoteTask ?? null);
           else await supabaseTaskWorkbenchUnplacedService.upsert(localTask, accountId!);
           merged.set(localTask.id, localTask);
         } catch (error) {

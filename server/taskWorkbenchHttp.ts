@@ -87,10 +87,10 @@ export function createTaskWorkbenchHttpDispatcher(
       }
       const body = await readJsonBody(request);
       if (isUpsert) {
-        if (Object.keys(body).join('|') !== 'task') {
+        if (!Object.hasOwn(body, 'task') || Object.keys(body).some(key => key !== 'task' && key !== 'expectedTask')) {
           throw new KernelError('DOMAIN_DATA_INVALID', 'Unplaced task body is invalid', 400);
         }
-        const data = await runActorTransaction(database, config, actor, port => repository.upsert(port, itemId, body.task));
+        const data = await runActorTransaction(database, config, actor, port => repository.upsert(port, itemId, body.task, body.expectedTask ?? null));
         return { matched: true, status: 200, body: { data } };
       }
       const data = await runActorTransaction(database, config, actor, port => repository.place(port, body));

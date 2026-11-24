@@ -511,6 +511,55 @@ async def modal_behavior(browser, origin, checks):
         check('restored-unknown-note-settles-through-readback-without-resending',
             (await modal.evaluate('window.__DEV139_TASK_DRAFT.counters()'))['writes']==1
             and await modal.locator('[data-task-details-save-retry]').count()==0)
+        await modal.evaluate('window.__DEV139_TASK_DRAFT.unmount()')
+        await modal.locator('[data-task-details-modal]').wait_for(state='hidden')
+        await modal.evaluate('window.__DEV139_TASK_DRAFT.useUnplaced()')
+        await modal.evaluate("window.__DEV139_TASK_DRAFT.mount('unplaced-recovery-owner')")
+        await modal.locator('[contenteditable="true"]').first.fill('未歸位任務的HTTP草稿復原')
+        await modal.locator('[data-task-details-local-status="local"]').wait_for()
+        before = await modal.evaluate('window.__DEV139_TASK_DRAFT.counters()')
+        await modal.evaluate('window.__DEV139_TASK_DRAFT.unmount()')
+        await modal.locator('[data-task-details-modal]').wait_for(state='hidden')
+        await modal.evaluate("window.__DEV139_TASK_DRAFT.mount('unplaced-recovery-owner')")
+        await modal.locator('[data-task-details-save-retry]').wait_for()
+        check('unplaced-modal-reopen-retains-draft-without-writing',
+            '未歸位任務的HTTP草稿復原' in await modal.locator('[contenteditable="true"]').first.inner_text()
+            and (await modal.evaluate('window.__DEV139_TASK_DRAFT.counters()'))['writes']==before['writes'])
+        await modal.locator('[data-task-details-save-retry]').click()
+        await modal.locator('[data-task-details-save-status="saved"]').wait_for()
+        after = await modal.evaluate('window.__DEV139_TASK_DRAFT.counters()')
+        check('unplaced-modal-reads-cloud-before-one-resumed-write',
+            after['reads']>before['reads'] and after['writes']==before['writes']+1
+            and await modal.locator('[data-task-details-fields-conflict]').count()==0)
+        await modal.evaluate('window.__DEV139_TASK_DRAFT.failUnplacedWrite(true)')
+        await modal.locator('[contenteditable="true"]').first.fill('遠端儲存失敗只能標示本機保留')
+        await modal.locator('[data-task-details-local-status="local"]').wait_for()
+        await modal.get_by_role('button', name='關閉任務詳情', exact=True).click()
+        await modal.locator('[data-task-details-save-retry]').wait_for()
+        check('unplaced-http-failure-keeps-input-without-claiming-cloud-save',
+            '遠端儲存失敗只能標示本機保留' in await modal.locator('[contenteditable="true"]').first.inner_text()
+            and await modal.locator('[data-task-details-save-status="saved"]').count()==0
+            and (await modal.evaluate('window.__DEV139_TASK_DRAFT.counters()'))['writes']==after['writes'])
+        await modal.evaluate('window.__DEV139_TASK_DRAFT.failUnplacedWrite(false)')
+        await modal.locator('[data-task-details-save-retry]').click()
+        await modal.locator('[data-task-details-save-status="saved"]').wait_for()
+        final = await modal.evaluate('window.__DEV139_TASK_DRAFT.counters()')
+        check('unplaced-http-failed-save-rechecks-before-one-retry',
+            final['reads']>after['reads'] and final['writes']==after['writes']+1)
+        await modal.evaluate('window.__DEV139_TASK_DRAFT.remoteMetadataEdit()')
+        await modal.locator('[contenteditable="true"]').first.fill('保留其他裝置標籤的恢復記事')
+        await modal.locator('[data-task-details-local-status="local"]').wait_for()
+        await modal.evaluate('window.__DEV139_TASK_DRAFT.unmount()')
+        await modal.locator('[data-task-details-modal]').wait_for(state='hidden')
+        await modal.evaluate("window.__DEV139_TASK_DRAFT.mount('unplaced-recovery-owner')")
+        await modal.locator('[data-task-details-save-retry]').click()
+        await modal.locator('[data-task-details-save-status="saved"]').wait_for()
+        check('unplaced-recovery-retains-unrelated-remote-metadata',
+            await modal.evaluate('window.__DEV139_TASK_DRAFT.remoteTags()') == ['other-device-tag'])
+        recovered = await modal.evaluate('window.__DEV139_TASK_DRAFT.recoverLocalFallback()')
+        check('newer-local-fallback-does-not-overwrite-an-existing-remote-task', all(recovered.values()))
+        check('unbound-local-input-is-retained-when-its-remote-id-already-exists',
+            await modal.evaluate('window.__DEV139_TASK_DRAFT.claimConflictingUnbound()'))
         await modal.screenshot(path=str(OPTIONS.report.parent / 'task-note-local-first.png'), full_page=True)
         check('no-uncaught-modal-errors', not errors)
     except Exception:

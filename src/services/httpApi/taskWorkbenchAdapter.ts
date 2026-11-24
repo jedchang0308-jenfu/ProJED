@@ -102,9 +102,9 @@ export function createHttpTaskWorkbenchAdapter(client: HttpApiClient) {
       return value.map(parseHttpTask);
     },
 
-    async upsert(task: TaskNode, expectedActor: HttpExpectedActor, signal?: AbortSignal): Promise<TaskNode> {
+    async upsert(task: TaskNode, expectedActor: HttpExpectedActor, signal?: AbortSignal, expectedTask: TaskNode | null = null): Promise<TaskNode> {
       const response = await client.request<unknown>(`/api/v1/task-workbench/unplaced/${ref(task.id)}`, {
-        method: 'PUT', body: { task }, expectedActor, signal,
+        method: 'PUT', body: { task, expectedTask }, expectedActor, signal,
       });
       return parseHttpTask(data(response, 'UNPLACED_UPSERT'));
     },

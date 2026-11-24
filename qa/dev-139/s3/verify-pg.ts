@@ -1225,6 +1225,23 @@ try {
   ].sort());
   assert.equal(stagedUnplaced.find(task => task.id === unplacedChild.id)?.parentId, unplacedRoot.id);
   assert.equal(stagedUnplaced.find(task => task.id === unplacedChild.id)?.order, 0.5);
+  const unplacedBaseline = stagedUnplaced.find(task => task.id === unplacedRoot.id)!;
+  const casUnplaced = await taskWorkbenchBRaw.upsert(
+    { ...unplacedBaseline, title: 'CAS committed unplaced note' }, taskWorkbenchBActor, undefined, unplacedBaseline,
+  );
+  await assert.rejects(
+    taskWorkbenchBRaw.upsert({ ...unplacedBaseline, title: 'Stale overwrite' }, taskWorkbenchBActor, undefined, unplacedBaseline),
+    (error: unknown) => error instanceof HttpApiError && error.status === 409 && error.code === 'REVISION_CONFLICT',
+  );
+  await assert.rejects(
+    taskWorkbenchBRaw.upsert({ ...unplacedBaseline, title: 'Old client overwrite' }, taskWorkbenchBActor),
+    (error: unknown) => error instanceof HttpApiError && error.status === 409 && error.code === 'REVISION_CONFLICT',
+  );
+  const replayUnplaced = await taskWorkbenchBRaw.upsert(casUnplaced, taskWorkbenchBActor, undefined, unplacedBaseline);
+  assert.equal(replayUnplaced.title, casUnplaced.title);
+  assert.equal(replayUnplaced.updatedAt, casUnplaced.updatedAt);
+  assert.equal((await taskWorkbenchB.list()).filter(task => task.id === unplacedRoot.id).length, 1);
+  await taskWorkbenchBRaw.upsert(unplacedBaseline, taskWorkbenchBActor, undefined, casUnplaced);
   await assert.rejects(
     taskWorkbenchB.upsert({ ...unplacedRoot, parentId: unplacedChild.id }),
     (error: unknown) => error instanceof HttpApiError

@@ -70,3 +70,20 @@
 5. 下一步沿 SPEC-142／SPEC-139 既定範圍續行；保留原網址與 PWA，最後新網址另階段。有效證據沿原受測輸入重用，不新增 required gate。
 
 本步實際結果：沒有正式業務資料搬入、來源停寫、新 writer 啟用、流量切換、模型啟用或新增雲端 IAM。固定來源包的Cloud Build、私人候選、HTTP／空佇列背景及正式來源唯讀plan均已完成；下一步依SPEC-142排定低使用量正式窗口，停寫後另取最終快照再執行正式匯入與核對。PR #33 ready通知曾被自動核准審查拒絕（理由為未認定該PR具名通知授權），保持draft；此通知不是候選或資料安全前置，不追加required gate。
+
+## 2026-11-25 正式窗口續行
+
+人類起床後明確恢復正式資料及業務切流。原恢復點保留；來源fence後另取最終native app archive與lossless projected snapshot，AES-GCM新nonce／AAD加密，沿原CurrentUser DPAPI key保護，decrypt roundtrip／TOC／snapshot digest核對通過。新檔不覆寫原43表封存。最終45表snapshot=`0adad950339e91b190a4fe2b9c3eb495eaa33b7a4e95d41207a29b9ea98386b2`；收據在`output/dev142-cutover-20261125-w1/final-backup-receipt.json`。
+
+一次正式apply execution=`projed-dev142-apply-7d239c9-vrvrg`提交成功；獨立READ ONLY reconcile=`projed-dev142-reconcile-7d239c9-2vqtz`亦成功且同digest，兩者retry0。中央`projed-prod-dev139-7d239c9`已100%，舊Hosting release=`1795539461938000`、version=`1bc16b999f0b57d9`已發布固定relay rewrite；前版version=`a38eb65c42245ae3`與原加密資料／程式bundle保留。不得重跑apply或僅解除fence回舊庫。
+
+兩舊origin共16項public HTTP／manifest／SW／provenance／匿名Session拒絕PASS。首輪錯用legacy `/release-meta.json` oracle的404保留，後以已驗HTTP契約`/dev139-cloud-run-meta.json`核對；未將404改成產品PASS。既有Edge profile沿正常「更新」載入同origin新版登入，不清快取或草稿。真Google登入第一次callback 503，Cloud SQL為platform_contract schema 42501；之後callback401保留，不誤判逾時或宣稱真使用者驗收。Platform #242以owner forward-only023修正，必要CI與正式重驗待續。
+
+來源reader已恢復NOLOGIN、connlimit1、連線0，Storage metadata0；plan／apply／reconcile一次性Job均404，診斷Job另於終態後清除。來源fence仍保留。沒有模型／會議內容派送，Gemini／RAG未啟用，Scheduler仍PAUSED；本輪沒有IAM／Secret／billing／容量擴張。最後新網址引導保持未啟用。上述是搬遷與發布結果，DEV-142仍須補正常登入及原資料讀寫／草稿驗收。
+
+
+### 2026-11-25 身分修復及草稿回歸
+
+Platform #242／契約 migration workflow45450242724 已成功發布023（1 applied／22 replayed）；Platform runtime generation235／traffic不變。舊網址已沿原帳號登入成功，原工作區／看板與既有任務可讀；專用測試記事新增／儲存／重新載入讀回及未提交草稿重開恢復已觀察。原 IDENTITY_INVALID 失敗保留於本次輸出，不再要求使用者重做成功登入。
+
+HTTP未歸位任務恢復發現 canonical read／失敗狀態問題，來源修正加入真正遠端讀回、失敗不宣稱雲端成功、鎖內內容CAS與重放不二次寫入。隔離真 modal12項、S3單元180項通過；必要原生PG／CI與正式修正版同步驗收待續。不重寫原搬遷收據、不重搬資料，現行同一Cloud SQL與來源fence保持。

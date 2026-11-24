@@ -8,15 +8,15 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 ## DEV-142：正式資料一次搬遷與舊網址啟用新後端
 
 - 類型：**獨立交付點**；所屬整合目標：[DEV-139](#dev-139-jenfu-platform-onboarding)，P1。
-- 狀態（2026-11-25）：**正式資料／業務切流已授權，切流前恢復點、私人候選與唯讀來源盤點均已驗證；尚未搬資料或切流**。[恢復紀錄](reports/DEV-142-precutover-recovery-point-20261124.md)含三專案自足 Git bundle 還原／fsck、映像落點及加密 app 備份；43表逐欄封存還原PASS，私人Storage metadata／音訊segment均空。新目標45表隔離匯入／101個FK／提交後重連digest已PASS；來源7d239c9的CI45423509034與Cloud Build `b9b70c73` 成功，私人revision `projed-prod-dev139-7d239c9`維持0%、原`00007-cpt`維持100%。正式來源／中央目標單次`plan`均為READ ONLY，來源snapshot與隔離還原一致、目標為空；reader已恢復NOLOGIN、連線0、可寫relation 0，臨時Job已刪除。原網址四份metadata與恢復點逐位元組一致，既有PWA輸入未變。
+- 狀態（2026-11-25）：**正式資料一次匯入與獨立核對完成，舊網址已接中央後端；真使用者登入失敗，尚未交付**。停寫後最終備份／apply／reconcile的45表snapshot一致；中央dev139-7d239c9已100%，舊Hosting release1795539461938000已發布，兩舊origin共16項HTTP檢查PASS。來源fence保留、reader NOLOGIN／連線0，三個importer Job已清除。callback在上游交換成功後遭platform_contract schema 42501，沿Platform #242 forward-only023修復；不重匯資料、不解除來源停寫。詳[SPEC-142](specs/SPEC-142-projed-production-data-migration.md)及[恢復紀錄](reports/DEV-142-precutover-recovery-point-20261124.md)。
 - 唯一交付契約：[SPEC-142](specs/SPEC-142-projed-production-data-migration.md)；共用資料／身分／草稿安全沿 SPEC-139 §4–§6，不另建 SQL／API、QA/QC 或 required gate。
-- 最新人類限制及準備：已核准入口／reader／來源交付，正式切流等人類起床；舊網址、介面、PWA及草稿保留，可接受重新登入。relay回歸12項、Hosting renderer 3項通過；allUsers grant被Google組織政策拒絕400後，人類具名核准只關閉relay Invoker IAM check，單次PATCH與9項實際GET／拒絕驗證通過。中央私人IAM／流量、relay runtime／容量／IAM policy與舊網址metadata均未變。Hosting設定已生成但未發布，reader未開LOGIN，未停寫或搬資料；詳SPEC-142 §7。
+- 最新人類授權：已明確起床並恢復DEV-142正式搬遷與業務切流；保留舊網址、介面、PWA及草稿，可接受重新登入。沿具名relay公開入口、兩小時reader與既有來源／發布授權續行，不新增IAM／Secret／容量責任。最後換址引導仍未啟用。
 - 成果：在原主站／Quick 網址使用新前端／登入／API，受控停止全部舊 writer，一次搬移並核對正式資料／私人檔案，再開放中央新後端唯一 writer；保留 UUID／權限／回執、舊來源與可用恢復參考。
 - 依賴：DEV-139 的過渡入口、原地更新、真 Session／mapping 與必要資料／權限／恢復準備就緒。既有 credential／importer／新入口核准沿用，正式停寫／資料寫入依最新人類授權續行；新責任擴張另核實。只限制相依正式操作，安全的 source／隔離驗證可繼續。
 - 窗口：偏好晚間低用量且操作者能確認結果的時段；先演練量測，再排日期／起訖，不強制凌晨、固定停機分鐘數或自動排程。
 - 完成判定：正式資料／檔案／權限與 receipt 無未解差異，舊 writer 確實停用；原網址的真使用者操作、未授權拒絕及必要草稿／未知結果恢復通過。Schema migration／候選／合成 PASS 不算搬遷完成。
 - 不含：最後換新網址／跨 origin 安裝與完整 DEV-139 結案；最後網址階段使用同一新庫，不重搬 server 資料。父子任務不重複認列，亦不要求所有歷史裝置先上線簽到。
-- 下一步：依 SPEC-142 排定低使用量正式窗口；停寫後另固定最終資料／檔案快照，再執行一次正式匯入、核對與唯一writer切換。既有備份依目前Windows DPAPI環境解密，不冒充整套Supabase平台／異地災難恢復；本輪只有候選與唯讀盤點，沒有正式停寫、搬遷或切流，不新增 required gate。
+- 下一步：完成Platform #242必要CI與owner契約migration發布，重驗真登入／原資料與記事同步；既有已成功搬遷與核對不重跑。
 
 <a id="dev-141-manual-app-updates"></a>
 
@@ -78,9 +78,11 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
 ## DEV-139：ProJED 納入 Jenfu-Platform，Cloud Run／Cloud SQL 對齊並保留 Vite
 
-  - **切流前準備最新結果（2026-11-25）**：[恢復紀錄](reports/DEV-142-precutover-recovery-point-20261124.md)已補加密 app 備份與43表逐欄封存還原PASS；移轉投影／父子排序已修正，45表隔離匯入與重連digest PASS。來源7d239c9的CI45423509034及Cloud Build `b9b70c73`成功；私人Web dev139-7d239c9 tag0%、原00007-cpt 100%，私人HTTP36及空佇列背景通過。正式來源／中央目標單次READ ONLY plan通過，來源snapshot與隔離還原一致、目標為空；reader已回NOLOGIN、連線0、可寫relation 0，臨時Job已刪除。舊origin metadata逐位元組未變，沒有正式搬入或切流。零留存、保留舊網址／PWA及最後換址另階段維持。
+  - **最後換址流程定案（2026-11-25，僅文件）**：人類採用方案2「引導完成切換」：確認草稿→原帳號登入新站→更新書籤／主與Quick PWA入口。DEV-142完成且舊網址上的中央後端運作穩定後才啟用；支援稍後／中斷續行，保留原帳號、UUID、權限與草稿，unknown先查原key回執，交接未核實不標完成、不清舊儲存。規格與驗收見[SPEC-139 §6.4.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-guided-origin-switch)；本次未實作或執行換址。
 
-  - **三組授權續行結果（2026-11-25）**：Platform main728e169／OrgMaster master3683cac的原生發布與真credential同步完成，ProJED v4 pin／Job binding／Speech資格已發布；最新來源7d239c9固定三個映像，analysis generation6、共7次execution（原1次失敗保留，新vhmxn成功且零內容請求），migration仍原1次。專用恢復SA僅固定Job invoker，Scheduler PAUSED；原資料、網址、PWA及Web／Job容量／網路不變。importer／Secret及一次唯讀來源盤點完成，source reader已恢復NOLOGIN。Gemini／RAG因零留存契約未實證保持停用，真使用者Session、完整會議內容驗收及DEV-142正式搬遷未執行；完整產品交付未結案。[結果與邊界](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-approved-precutover-completion)。
+  - **正式切流目前結果（2026-11-25）**：**正式資料一次匯入與獨立核對完成，舊網址已接中央後端；真使用者登入失敗，尚未交付**。停寫後最終備份／apply／reconcile的45表snapshot一致；中央dev139-7d239c9已100%，舊Hosting release1795539461938000已發布，兩舊origin共16項HTTP檢查PASS。來源fence保留、reader NOLOGIN／連線0，三個importer Job已清除。callback在上游交換成功後遭platform_contract schema 42501，沿Platform #242 forward-only023修復；不重匯資料、不解除來源停寫。詳[SPEC-142](specs/SPEC-142-projed-production-data-migration.md)及[恢復紀錄](reports/DEV-142-precutover-recovery-point-20261124.md)。
+
+  - **三組授權續行結果（2026-11-25）**：Platform main728e169／OrgMaster master3683cac的原生發布與真credential同步完成，ProJED v4 pin／Job binding／Speech資格已發布；最新來源7d239c9固定三個映像，analysis generation6、共7次execution（原1次失敗保留，新vhmxn成功且零內容請求），migration仍原1次。專用恢復SA僅固定Job invoker，Scheduler PAUSED；原資料、網址、PWA及Web／Job容量／網路不變。importer／Secret及一次唯讀來源盤點完成，source reader已恢復NOLOGIN。Gemini／RAG因零留存契約未實證保持停用，真使用者Session、完整會議內容驗收及DEV-142資料已搬遷、正常入口尚未驗收；完整產品交付未結案。[結果與邊界](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-approved-precutover-completion)。
 
   - **恢復排程差額（2026-11-24，已核准並完成）**：專用SA／一筆固定Job invoker已建，無project角色／SQL login／user key；四佇列只讀preflight 5t8pm通過，遠期時程下單次真正Scheduler→預設Job kg48s succeeded1／retry0／provider unit0，完成後PAUSED並還原15分鐘cron。原PAUSED400／本機verifier失敗保留，未重送未知結果。analysis共6次、migration仍1次；原資料／網址／PWA、Web／Job spec與07 100%／候選0%不變。切流前已知操作授權已齊備，不再逐PR／SHA／命令重問；正式切流與最後換網址仍分兩批由人類決定，Gemini外部零留存證明仍待取得。見 [SPEC §3.0.8](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-paused-recovery-preparation)。
 
@@ -521,7 +523,7 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 
 ## 總任務清單
 
-- → DEV-142 [獨立交付點] [正式切流已授權／恢復點、候選與唯讀來源盤點PASS／未搬資料或切流] [P1] [正式資料一次搬遷與舊網址啟用新後端](#dev-142-production-data-migration)；所屬整合目標 DEV-139，完成不等待新網址、不重複計入父項。[SPEC-142](specs/SPEC-142-projed-production-data-migration.md)。
+- → DEV-142 [獨立交付點] [已搬遷並保留舊網址／登入與記事讀回PASS／草稿同步修正驗證中] [P1] [正式資料一次搬遷與舊網址啟用新後端](#dev-142-production-data-migration)；所屬整合目標 DEV-139，完成不等待新網址、不重複計入父項。[SPEC-142](specs/SPEC-142-projed-production-data-migration.md)。
 
 - ✓ DEV-141 [交付點] [A01–A08 本機通過／手機主程式與快速待辦人工補驗通過／已發布 2026-11-19] [ProJED] [新版先通知，由使用者手動更新](#dev-141-manual-app-updates)
 
@@ -529,9 +531,10 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 
 - → DEV-139 [整合交付點] [切流前私人候選與通路已驗證／原網址與PWA未變／原資料未搬遷／未切流] [P1] ProJED 納入 Jenfu-Platform，保留 Vite
   - 現行方向：先在舊主／Quick 網址完成新版前端、登入、API與中央後端接線，正式資料搬遷獨立列 DEV-142；日常運作確認後才換新網址，不重搬 DB／Storage。[DEV-139 現況](#dev-139-jenfu-platform-onboarding)｜[SPEC §3.0](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-two-stage-rollout)。
+  - 最後換址已選方案2「引導完成切換」，[草稿→原帳號→書籤／PWA交接](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-guided-origin-switch)僅文件定案；後端在舊網址穩定後才執行，尚未實作／啟用。
   - 現有候選與本機證據依原 source／revision 重用；51份 schema SQL 成功不代表正式業務資料搬遷。真 Session／既有 UUID mapping、舊入口及原地草稿相容、provider零留存、正式資料與完整功能驗收仍未結案。
-  - 下一步：來源7d239c9的CI、固定來源Cloud Build、私人HTTP36、空佇列背景與正式來源唯讀盤點均已成功；正式資料切流依DEV-142另排低使用量窗口。Gemini／RAG 零留存資格未證明仍停用，最後新網址另階段。
-  - 資料交付：[DEV-142](#dev-142-production-data-migration)／[SPEC-142](specs/SPEC-142-projed-production-data-migration.md)，已授權且恢復點、45表目標隔離還原、候選與唯讀來源盤點PASS，尚未停寫、正式搬入或啟用新writer。原帳號／個人與外部權限、取消／CAS／unknown／exactly-once及完整DEV-139分母保留，父子不重複認列。
+  - 下一步：正式匯入／獨立核對及舊網址切流已完成，Platform023修復後登入與原資料讀寫已驗；接續未歸位任務草稿同步修正的CI／部署回歸。Gemini／RAG 零留存資格未證明仍停用，最後新網址另階段。
+  - 資料交付：[DEV-142](#dev-142-production-data-migration)／[SPEC-142](specs/SPEC-142-projed-production-data-migration.md)，正式匯入／獨立核對與舊網址切流已完成；來源fence、reader NOLOGIN及原資料保留，登入／記事讀回PASS，草稿同步修正待正式驗收。原帳號／個人與外部權限、取消／CAS／unknown／exactly-once及完整DEV-139分母保留，父子不重複認列。
 
 - ✓ DEV-138 [開發點] [已完成／正式發布、限定登入與 RPC 驗收及清理 PASS] [P1] [ProJED] DEV-133 guard 恢復、分支整合與正式驗證後清理
   - 摘要：以 DEV-133 Rev12 已合併基線為歷史依據，恢復有效 guard、整合既有分支，完成正式驗證後再清理；不新增產品交付數。
