@@ -506,6 +506,7 @@ try {
     "const r=await fetch('http://127.0.0.1:8080/health/ready',{signal:AbortSignal.timeout(4000)});process.exit(r.status===200?0:1)"], { allowFailure: true }).status === 0);
   appProbe(String.raw`
     import assert from 'node:assert/strict';
+    import { request } from 'node:http';
     import { readFileSync } from 'node:fs';
     import { createHash } from 'node:crypto';
     const sha = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -548,16 +549,28 @@ try {
       assert.deepEqual(await response.json(), {status:'ok'});
     }
     for (const path of ['/api/v1/session','/api/v1/workspaces']) {
-      const response = await fetch('http://127.0.0.1:8080'+path,{headers:{host:'projed.example.invalid'}});
+      // Node 24.12 fetch replaces an explicit Host with the connection host.
+      // Native HTTP preserves the fixture's public host without changing DNS.
+      const response = await new Promise((resolve,reject)=>{
+        const req=request('http://127.0.0.1:8080'+path,{headers:{host:'projed.example.invalid'}},res=>{
+          const chunks=[];
+          res.on('data',chunk=>chunks.push(chunk));
+          res.on('error',reject);
+          res.on('end',()=>resolve({status:res.statusCode,headers:res.headers,body:JSON.parse(Buffer.concat(chunks).toString())}));
+        });
+        req.on('error',reject);
+        req.setTimeout(4000,()=>req.destroy(new Error('Fixture HTTP request timed out')));
+        req.end();
+      });
       assert.equal(response.status, 401);
-      assert.equal(response.headers.get('cache-control'), 'no-store');
-      assert.equal((await response.json()).error.code, 'IDENTITY_INVALID');
-      assert.equal(response.headers.get('set-cookie'), null);
+      assert.equal(response.headers['cache-control'], 'no-store');
+      assert.equal(response.body.error.code, 'IDENTITY_INVALID');
+      assert.equal(response.headers['set-cookie'], undefined);
     }
     const wrongHost = await fetch('http://127.0.0.1:8080/api/v1/session');
     assert.equal(wrongHost.status,403);
     assert.equal((await wrongHost.json()).error.code,'ACCESS_DENIED');
-    const wrongMethod = await fetch('http://127.0.0.1:8080/api/auth/jenfu-sso/login');
+    const wrongMethod = await fetch('http://127.0.0.1:8080/api/v1/session/login');
     assert.equal(wrongMethod.status,405);
     assert.equal((await wrongMethod.json()).error.code,'METHOD_NOT_ALLOWED');
     const unknown = await fetch('http://127.0.0.1:8080/api/not-a-route');
