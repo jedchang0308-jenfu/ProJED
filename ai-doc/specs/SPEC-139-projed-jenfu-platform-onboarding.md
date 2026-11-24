@@ -1,6 +1,6 @@
 # SPEC-139：ProJED 納入 Jenfu-Platform 的產品與技術交接契約
 
-**2026-11-24 最新執行授權**：人類要求「我要執行正式資料及業務切流，請先在此建立一個可恢復點」，並續行資料恢復補驗。[DEV-142](SPEC-142-projed-production-data-migration.md) 的[恢復紀錄](../reports/DEV-142-precutover-recovery-point-20261124.md)已保存三份程式備份、部署落點與加密 app 資料；43表逐欄封存還原PASS，私人Storage metadata／音訊segment均空。移轉投影／父子排序修正後，45表目標隔離匯入／101個FK／重連digest已PASS；必要CI／新產物待補，原生應用環境未還原、實際未切流，正式窗口另取最終快照。保留原網址與既有PWA，最後新網址另階段。以下2026-11-23及更早「先不切流」為當時限制，不否定最新授權；資料安全、零留存與責任邊界維持，未資格Gemini／RAG仍停用。
+**2026-11-24 最新執行授權**：人類要求「我要執行正式資料及業務切流，請先在此建立一個可恢復點」，並續行資料恢復補驗。[DEV-142](SPEC-142-projed-production-data-migration.md) 的[恢復紀錄](../reports/DEV-142-precutover-recovery-point-20261124.md)已保存三份程式備份、部署落點與加密 app 資料；43表逐欄封存還原PASS，私人Storage metadata／音訊segment均空。移轉投影／父子排序修正後，45表目標隔離匯入／101個FK／重連digest已PASS；來源7d239c9的CI45423509034成功；候選來源包已固定，Cloud Build尚未提交、待SDK更新既有登入，原生應用環境未還原、實際未切流，正式窗口另取最終快照。保留原網址與既有PWA，最後新網址另階段。以下2026-11-23及更早「先不切流」為當時限制，不否定最新授權；資料安全、零留存與責任邊界維持，未資格Gemini／RAG仍停用。
 
 **2026-11-23 現行決策：先保留舊主站／Quick 網址及既有 PWA 入口，讓新版前端、登入、API、資料與背景工作改走集中 Google Cloud；在舊網址確認新系統運作後，最後才換 Cloud Run `run.app` 新網址。** 保留 Vite、本機記事、ProJED 獨立權限及 `jenfu-platform-prod` 同專案私人 SQL；既有 Firebase Hosting 僅暫留為過渡入口，不另建新的 Firebase 網站或把業務權威搬回舊專案。正式資料一次搬遷獨立列為 [DEV-142／SPEC-142](SPEC-142-projed-production-data-migration.md)。
 

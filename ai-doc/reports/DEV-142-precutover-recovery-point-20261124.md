@@ -14,7 +14,7 @@
 - 根因二：真實來源的 `depth/path` 與 `parent_id` 順序不一致，分批匯入時父項落在後批。已改依同看板 parent 圖排序，原欄位不變、立即FK保留；缺父、跨 scope、重複 ID 與循環均拒絕。
 - 真實備份重放：23:10:33（Taipei），既有 importer 與完整45表契約匯入隔離PG18，101個FK及提交後重連digest一致。刻意注入未知權限仍被原精確CHECK拒絕，rollback後所有受管表仍空，再做正常完整匯入成功；原始／衍生／目標digest分開記錄。證據：`data-restore-receipt.json`。
 - 原先 retired capability、舊owner能力與父子批次的三個有效失敗分別保留在舊恢復包及新輸出，不以本輪PASS改寫。全部正式資料、舊 writer／網址／PWA不變；正式窗口仍須停寫後取最終snapshot。
-- 必要本機驗證：migration unit24、S2 unit541、S3 unit175、strict同版本PG宣告overlay的S2／S3與affected ESLint通過。原 sandbox 因loopback EACCES失敗保留；一個shutdown fixture在請求未到owned server時無限等候，已補有界請求與錯誤收尾，正常／stalled shutdown四案例通過。這是RD自查，必要遠端CI與新產物尚待接續。
+- 必要本機驗證：migration unit24、S2 unit541、S3 unit175、strict同版本PG宣告overlay的S2／S3與affected ESLint通過。原 sandbox 因loopback EACCES失敗保留；一個shutdown fixture在請求未到owned server時無限等候，已補有界請求與錯誤收尾，正常／stalled shutdown四案例通過。這是RD自查。來源 `7d239c91b5233fcd427d23aea47c06cdcb44389b` 的[CI45423509034](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45423509034)兩jobs SUCCESS，實際PG／HTTP75、snapshot67及OCI23收據已取回。候選來源包／checksum／428份前版資產已核對，但Cloud Build在任何上傳／提交前遇SDK `Reauthentication failed`，等待更新既有Google登入；不重跑有效CI或備份。
 
 ## 2026-11-24 資料備份與恢復補驗
 
@@ -62,4 +62,4 @@ ProJED 已驗程式為 `ea09b133e4576b042a09af31d91069cd36f12391`，與文件 HE
 4. 新 writer 已有新增資料後，優先讓相容程式沿用同一新庫；不能只解除 Supabase fence 或切回舊庫。反向資料 rewrite、down migration、破壞性清空及共用整庫 restore 不隱含於一般應用回退。
 5. 下一步沿 SPEC-142／SPEC-139 既定範圍續行；保留原網址與 PWA，最後新網址另階段。有效證據沿原受測輸入重用，不新增 required gate。
 
-本步實際結果：沒有正式業務資料搬入、來源停寫、新 writer 啟用、流量切換、模型啟用或新增雲端 IAM。下一步完成本輪來源的必要CI／產物與候選準備，再沿既定DEV-142前提準備正式窗口。
+本步實際結果：沒有正式業務資料搬入、來源停寫、新 writer 啟用、流量切換、模型啟用或新增雲端 IAM。下一步在SDK既有登入更新後，以已固定來源包接續Cloud Build／候選驗證；CI已成功、原始備份與schema證據重用。PR #33 ready通知被自動核准審查拒絕（理由為未認定該PR具名通知授權），保持draft；此通知不是候選建置前置，不追加本輪required gate。
