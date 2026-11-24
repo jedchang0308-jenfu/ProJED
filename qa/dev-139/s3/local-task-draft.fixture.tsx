@@ -11,7 +11,7 @@ import type { TaskNode } from '../../../src/types';
 import { saveTaskDetailsLocalDraft } from '../../../src/services/taskDetailsLocalDraft';
 import { taskDetailsFieldsFromNode } from '../../../src/components/taskDetailsDraft';
 import { httpSessionService, httpTaskWorkbenchService } from '../../../src/services/httpApi/backend';
-import { loadTaskWorkbenchUnplacedTasks, upsertTaskWorkbenchUnplacedTask, clearTaskWorkbenchUnplacedLocalCaches } from '../../../src/features/taskWorkbench/placement';
+import { loadTaskWorkbenchUnplacedTasks, upsertTaskWorkbenchUnplacedTask, clearTaskWorkbenchUnplacedLocalCaches, claimUnboundTaskWorkbenchUnplacedTasks, readUnboundTaskWorkbenchUnplacedTasks } from '../../../src/features/taskWorkbench/placement';
 import { TASK_WORKBENCH_UNPLACED_BOARD_ID } from '../../../src/features/taskWorkbench/placementModel';
 
 // Actual modal/stores; only the remote data seam is synthetic. No real backend.
@@ -68,6 +68,14 @@ const fixture = {
   counters: () => ({ writes, reads }),
   remoteMetadataEdit() { canonical = { ...canonical, tagIds: ['other-device-tag'] }; },
   remoteTags: () => canonical.tagIds,
+  async claimConflictingUnbound() {
+    upsertTaskWorkbenchUnplacedTask({ ...canonical, title: 'unbound-input-to-retain' }, null);
+    const before = writes;
+    await claimUnboundTaskWorkbenchUnplacedTasks(useAuthStore.getState().user!.uid);
+    const result = writes === before && readUnboundTaskWorkbenchUnplacedTasks().some(task => task.title === 'unbound-input-to-retain');
+    clearTaskWorkbenchUnplacedLocalCaches(null);
+    return result;
+  },
   async recoverLocalFallback() {
     const accountId = useAuthStore.getState().user!.uid;
     const original = structuredClone(canonical);

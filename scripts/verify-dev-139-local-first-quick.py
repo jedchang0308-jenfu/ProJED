@@ -558,6 +558,8 @@ async def modal_behavior(browser, origin, checks):
             await modal.evaluate('window.__DEV139_TASK_DRAFT.remoteTags()') == ['other-device-tag'])
         recovered = await modal.evaluate('window.__DEV139_TASK_DRAFT.recoverLocalFallback()')
         check('newer-local-fallback-does-not-overwrite-an-existing-remote-task', all(recovered.values()))
+        check('unbound-local-input-is-retained-when-its-remote-id-already-exists',
+            await modal.evaluate('window.__DEV139_TASK_DRAFT.claimConflictingUnbound()'))
         await modal.screenshot(path=str(OPTIONS.report.parent / 'task-note-local-first.png'), full_page=True)
         check('no-uncaught-modal-errors', not errors)
     except Exception:

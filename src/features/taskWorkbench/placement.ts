@@ -104,9 +104,14 @@ export const claimUnboundTaskWorkbenchUnplacedTasks = async (accountId: string):
       : [];
   const merged = indexLatestTaskWorkbenchTasks(remoteTasks, readTaskWorkbenchUnplacedTasks(accountId));
 
+  let retainedUnbound = false;
   for (const task of unboundTasks) {
     const existing = merged.get(task.id);
-    if (existing && (isHttpBackend || getTaskTimestamp(existing) >= getTaskTimestamp(task))) continue;
+    if (existing && isHttpBackend) {
+      retainedUnbound = true;
+      continue;
+    }
+    if (existing && getTaskTimestamp(existing) >= getTaskTimestamp(task)) continue;
     if (isHttpBackend) await httpTaskWorkbenchService.upsert(task, expectedActor!, undefined, remoteTasks.find(remote => remote.id === task.id) ?? null);
     else if (isSupabaseBackend) await supabaseTaskWorkbenchUnplacedService.upsert(task, accountId);
     merged.set(task.id, task);
@@ -114,7 +119,7 @@ export const claimUnboundTaskWorkbenchUnplacedTasks = async (accountId: string):
 
   const claimed = sortTaskWorkbenchUnplacedTasks(Array.from(merged.values()));
   writeTaskWorkbenchUnplacedTasks(claimed, accountId);
-  clearTaskWorkbenchUnplacedLocalCaches(null);
+  if (!retainedUnbound) clearTaskWorkbenchUnplacedLocalCaches(null);
   return claimed;
 };
 
