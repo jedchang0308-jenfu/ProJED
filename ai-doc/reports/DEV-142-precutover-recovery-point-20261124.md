@@ -4,7 +4,17 @@
 - 本機包：`output/dev142-precutover-recovery-20261124/`；機器清單：`manifest.json`，個別 bundle checksum 見 `code-recovery.json`。
 - 人類原文：「我要執行正式資料及業務切流，請先在此建立一個可恢復點」。正式資料／業務切流已授權；本步先保存現況，沒有執行正式切流。
 
-**程式／部署基線及正式業務資料加密備份已建立，43 張業務表的逐欄封存還原核對通過；新 Cloud SQL schema 的隔離匯入因 `collect_task` 權限契約落差失敗，尚非切流就緒。** 此點不包含整套 Supabase Auth／平台環境的還原，也不是停寫後的最終切流快照。
+**程式／部署基線及正式業務資料加密備份已建立，43 張業務表的逐欄封存還原核對通過；修正投影與父子匯入順序後，新目標同契約的45表隔離匯入亦通過。** 原始失敗收據保留；尚非正式 Cloud SQL 匯入或切流驗證，不包含整套 Supabase Auth／平台環境的還原，也不是停寫後的最終切流快照。
+
+## 2026-11-24 目標投影與隔離還原修正
+
+原加密備份與DPAPI key均未改寫。本輪輸出另存 `output/dev139-dev104-projection-20261124/`，不覆蓋原恢復包的機器清單或失敗收據。
+
+- 根因一：DEV-104／commit `e2fee56` 已移除收藏功能與 `collect_task`。移轉投影僅排除此退場值；owner 固定能力及缺省角色沿現行產品契約，自訂角色／明確空權限保留，未知權限不過濾。沒有重啟收藏或修改來源資料／目標約束。
+- 根因二：真實來源的 `depth/path` 與 `parent_id` 順序不一致，分批匯入時父項落在後批。已改依同看板 parent 圖排序，原欄位不變、立即FK保留；缺父、跨 scope、重複 ID 與循環均拒絕。
+- 真實備份重放：23:10:33（Taipei），既有 importer 與完整45表契約匯入隔離PG18，101個FK及提交後重連digest一致。刻意注入未知權限仍被原精確CHECK拒絕，rollback後所有受管表仍空，再做正常完整匯入成功；原始／衍生／目標digest分開記錄。證據：`data-restore-receipt.json`。
+- 原先 retired capability、舊owner能力與父子批次的三個有效失敗分別保留在舊恢復包及新輸出，不以本輪PASS改寫。全部正式資料、舊 writer／網址／PWA不變；正式窗口仍須停寫後取最終snapshot。
+- 必要本機驗證：migration unit24、S2 unit541、S3 unit175、strict同版本PG宣告overlay的S2／S3與affected ESLint通過。原 sandbox 因loopback EACCES失敗保留；一個shutdown fixture在請求未到owned server時無限等候，已補有界請求與錯誤收尾，正常／stalled shutdown四案例通過。這是RD自查，必要遠端CI與新產物尚待接續。
 
 ## 2026-11-24 資料備份與恢復補驗
 
@@ -47,9 +57,9 @@ ProJED 已驗程式為 `ea09b133e4576b042a09af31d91069cd36f12391`，與文件 HE
 ## 恢復方式與下一步
 
 1. 程式恢復：在新目錄 clone 對應 `code/*.bundle`，選上述保存的 ref；不 reset 現有工作樹。bundle 與輸入的 SHA256 必須符合清單。
-2. 使用資料恢復包時，先驗 checksum 與 DPAPI 解密，再沿原生 archive 取回 app 資料；逐欄封存還原可依 `verify-data-restore.py --native-archive` 重現。新目標 schema 相容性失敗尚未解決，不能以封存層核對代替。正式窗口停寫後另固定最終 snapshot 與當時的檔案清單；現在的快照不涵蓋後續新增內容。
+2. 使用資料恢復包時，先驗 checksum 與 DPAPI 解密，再沿原生 archive 取回 app 資料；逐欄封存還原可依 `verify-data-restore.py --native-archive` 重現。目標匯入需使用本輪已驗投影與父子排序的來源／產物；舊映像仍會重現原失敗，不能以本機PASS推定已部署。正式窗口停寫後另固定最終 snapshot 與檔案清單，現在的快照不涵蓋後續新增內容。
 3. 尚未啟用新 writer 的失敗，先核實目標是否提交／有無新增寫入，再沿 SPEC-142 恢復原路徑；未知結果先讀回。
 4. 新 writer 已有新增資料後，優先讓相容程式沿用同一新庫；不能只解除 Supabase fence 或切回舊庫。反向資料 rewrite、down migration、破壞性清空及共用整庫 restore 不隱含於一般應用回退。
 5. 下一步沿 SPEC-142／SPEC-139 既定範圍續行；保留原網址與 PWA，最後新網址另階段。有效證據沿原受測輸入重用，不新增 required gate。
 
-本步實際結果：沒有正式業務資料搬入、來源停寫、新 writer 啟用、流量切換、模型啟用或新增雲端 IAM。下一步修正／驗證看板 `collect_task` 移轉契約，再沿既定 DEV-142 前提準備正式窗口。
+本步實際結果：沒有正式業務資料搬入、來源停寫、新 writer 啟用、流量切換、模型啟用或新增雲端 IAM。下一步完成本輪來源的必要CI／產物與候選準備，再沿既定DEV-142前提準備正式窗口。

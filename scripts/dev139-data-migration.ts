@@ -4,6 +4,8 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import pg, { type Client } from 'pg';
+import { DEFAULT_PERMISSIONS } from '../server/collaborationWrite.js';
+import { COLLABORATION_ROLES, PERMISSION_CAPABILITIES } from '../server/domainRead.js';
 import { assertSourceAppWritesPaused } from './dev139-source-write-fence.js';
 import {
   fetchManagedJobToken,
@@ -88,6 +90,35 @@ const table = (
   transform?: (row: Row) => Row,
 ): TableSpec => ({ target, sourceRelation, columns, sourceSql, ...(transform ? { transform } : {}) });
 
+export function projectBoardPermissionSourceRow(row: Row): Row {
+  if (!Array.isArray(row.capabilities)) {
+    throw Object.assign(new Error('Source board capabilities must be an array'), { code: 'SOURCE_BOARD_CAPABILITIES_INVALID' });
+  }
+  // DEV-104 retired task collection. Some remote databases still retain its
+  // old value. Preserve source/backup bytes and every active or unknown value;
+  // only the retired value is omitted from the current permission projection.
+  const capabilities = row.capabilities.filter(capability => capability !== 'collect_task');
+  // The current product fixes owner to the complete capability set. Older
+  // persisted masks can predate new abilities; do not apply this to editable
+  // roles, and retain unknown values so target constraints still reject them.
+  return { ...row, capabilities: row.role === 'owner'
+    ? [...new Set([...capabilities, ...PERMISSION_CAPABILITIES])]
+    : capabilities };
+}
+
+export function projectBoardPermissionSourceRows(rows: readonly Row[], projects: readonly Row[]): Row[] {
+  const projected = rows.map(projectBoardPermissionSourceRow);
+  const present = new Set(rows.map(row => `${row.tenant_id}:${row.project_id}:${row.role}`));
+  for (const project of projects) {
+    for (const role of COLLABORATION_ROLES) {
+      if (present.has(`${project.tenant_id}:${project.id}:${role}`)) continue;
+      projected.push({ tenant_id: project.tenant_id, project_id: project.id, role,
+        capabilities: [...DEFAULT_PERMISSIONS[role]], updated_at: project.updated_at });
+    }
+  }
+  return projected;
+}
+
 export const TABLES: readonly TableSpec[] = [
   table('profiles', 'public.profiles', [
     'id', 'email', 'display_name', 'external_auth_provider', 'external_auth_id', 'ui_preferences', 'created_at', 'updated_at',
@@ -165,10 +196,13 @@ export const TABLES: readonly TableSpec[] = [
       JOIN public.profiles profile ON profile.id = member.user_id
      ORDER BY member.project_id, member.user_id
   `),
-  table('board_role_permissions', 'public.board_role_permissions', ['tenant_id', 'project_id', 'role', 'capabilities', 'updated_at'], `
+  {
+    ...table('board_role_permissions', 'public.board_role_permissions', ['tenant_id', 'project_id', 'role', 'capabilities', 'updated_at'], `
     SELECT tenant_id, project_id, role::text, capabilities::text[], updated_at
       FROM public.board_role_permissions ORDER BY project_id, role
-  `),
+    `),
+    project: (rows, priorSnapshot) => projectBoardPermissionSourceRows(rows, priorSnapshot.get('projects') ?? []),
+  },
   table('actor_scope_access', 'public.tenant_members', ['local_user_id', 'tenant_id', 'project_id', 'active', 'scope_revision', 'updated_at'], `
     SELECT member.user_id AS local_user_id, member.tenant_id, NULL::uuid AS project_id,
            member.status::text = 'active' AS active, 1::bigint AS scope_revision, member.updated_at
@@ -701,6 +735,8 @@ export function createDatabaseSnapshotReceipt<T extends Row>(result: T) {
   // Keep these boundaries authoritative even if a caller supplies other claims.
   return {
     ...result,
+    sourceNormalization: { retiredBoardCapabilities: ['collect_task'], authority: 'ProJED DEV-104',
+      ownerCapabilities: 'CURRENT_FIXED_OWNER_CONTRACT', missingBoardRoles: 'CURRENT_DEFAULTS_ONLY_WHEN_ABSENT', sourceRowsModified: false },
     evidenceScope: 'DATABASE_ONLY' as const,
     legacyStorage: { status: 'NOT_INVENTORIED' as const },
     newWriterAllowed: false as const,
@@ -945,7 +981,8 @@ async function sourcePreflight(client: Client) {
 
 export async function insertSnapshot(client: Client, snapshot: ReadonlyMap<string, readonly Row[]>, specs: readonly TableSpec[] = TABLES): Promise<void> {
   for (const spec of specs) {
-    const rows = snapshot.get(spec.target) ?? [];
+    const sourceRows = snapshot.get(spec.target) ?? [];
+    const rows = spec.target === 'wbs_items' ? orderSnapshotTaskRows(sourceRows) : sourceRows;
     for (let offset = 0; offset < rows.length; offset += 100) {
       const batch = rows.slice(offset, offset + 100);
       const values: unknown[] = [];
@@ -970,6 +1007,34 @@ export async function insertSnapshot(client: Client, snapshot: ReadonlyMap<strin
       }
     }
   }
+}
+
+export function orderSnapshotTaskRows(rows: readonly Row[]): readonly Row[] {
+  const byId = new Map<unknown, Row>();
+  const children = new Map<unknown, Row[]>();
+  const ordered: Row[] = [];
+  for (const row of rows) {
+    if (typeof row.id !== 'string' || byId.has(row.id)) {
+      throw Object.assign(new Error('Source task identity is invalid'), { code: 'SOURCE_TASK_TREE_INVALID' });
+    }
+    byId.set(row.id, row);
+  }
+  for (const row of rows) {
+    if (row.parent_id === null) { ordered.push(row); continue; }
+    const parent = byId.get(row.parent_id);
+    if (!parent || parent.tenant_id !== row.tenant_id || parent.project_id !== row.project_id) {
+      throw Object.assign(new Error('Source task parent is missing or outside its board'), { code: 'SOURCE_TASK_PARENT_SCOPE_INVALID' });
+    }
+    const siblings = children.get(row.parent_id) ?? [];
+    siblings.push(row); children.set(row.parent_id, siblings);
+  }
+  // Cached legacy depth/path can be stale. Order by authoritative parent IDs,
+  // without changing a row or weakening the immediate same-board foreign key.
+  for (let cursor = 0; cursor < ordered.length; cursor++) ordered.push(...(children.get(ordered[cursor]!.id) ?? []));
+  if (ordered.length !== rows.length) {
+    throw Object.assign(new Error('Source task parent graph has a cycle'), { code: 'SOURCE_TASK_TREE_INVALID' });
+  }
+  return ordered;
 }
 
 function readJson<T>(path: string): T {

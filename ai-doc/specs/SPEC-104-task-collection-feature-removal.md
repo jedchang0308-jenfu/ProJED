@@ -31,9 +31,11 @@
 - Local Test以 `meeting`／`work_log` allowlist讀取紀錄；若舊瀏覽器測試資料仍含已移除的record family，讀取時從Local Test storage清除。
 - Firebase／Supabase讀取同樣只接受 `meeting`／`work_log`；本變更不主動刪除遠端資料。
 
+2026-11-24 DEV-139 移轉補記：正式來源仍有已退場的 `collect_task` 權限值，與當時未套用遠端 migration 的觀察不同。移轉讀取器僅在目標權限投影排除此已退場值，原資料與加密備份保留；其他有效或未知權限不過濾，未知值仍須經既有目標約束拒絕。這不是重新啟用收藏、修改來源資料或擴大有效權限。
+
 ## 5. 驗收條件
 
-1. `src`、`scripts`、`package.json`與`supabase`不含收藏功能專屬識別、檔案或命令。
+1. `src`、`scripts`、`package.json`與`supabase`不含可執行的收藏功能、檔案或命令；DEV-139 來源投影及其回歸可精確辨識退場的權限值，以處理舊資料，不新增產品入口、provider 或寫入路徑。
 2. 工作區側欄、頂列、紀錄庫、任務明細與任務選單無收藏入口。
 3. 一般任務、看板與meeting／work_log流程可正常使用。
 4. TypeScript、test build、受影響回歸與實際browser驗證通過。

@@ -39,8 +39,8 @@ test('entry shutdown lets a normal active response finish and closes its owned l
   try {
     await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
     const address = server.address(); assert.ok(address && typeof address !== 'string');
-    const client = fetch(`http://127.0.0.1:${address.port}`).then(response => response.text());
-    await active;
+    const client = fetch(`http://127.0.0.1:${address.port}`, { signal: AbortSignal.timeout(5000) }).then(response => response.text());
+    await Promise.race([active, client.then(() => { throw new Error('Request completed without reaching the owned server'); })]);
     await stopLegacyEntry(server, 500);
     assert.equal(await client, 'draft-saved'); assert.equal(server.listening, false);
   } finally { server.closeAllConnections(); if (server.listening) await stopLegacyEntry(server, 1); }
@@ -51,7 +51,7 @@ test('entry shutdown bounds a stalled response and never completes its partial b
   try {
     await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
     const address = server.address(); assert.ok(address && typeof address !== 'string');
-    const response = await fetch(`http://127.0.0.1:${address.port}`);
+    const response = await fetch(`http://127.0.0.1:${address.port}`, { signal: AbortSignal.timeout(5000) });
     const body = response.text();
     const rejected = assert.rejects(body);
     await stopLegacyEntry(server, 30); await rejected;

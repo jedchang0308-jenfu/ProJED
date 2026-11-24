@@ -2,7 +2,7 @@
 
 - 日期：2026-11-23（Asia/Taipei）。
 - 任務：[DEV-142](../dev_task.md#dev-142-production-data-migration)；所屬整合目標：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。
-- 狀態（2026-11-24）：**人類已授權正式資料及業務切流，要求先建立恢復點；正式搬遷尚未執行**。[恢復紀錄](../reports/DEV-142-precutover-recovery-point-20261124.md)已補 app 資料加密備份與43表逐欄封存還原PASS，私人Storage metadata／音訊segment均空；新目標隔離匯入因 `collect_task` 權限約束落差FAIL。封存層恢復不代替目標schema／應用回復驗證，也不是停寫後最終快照。
+- 狀態（2026-11-24）：**人類已授權正式資料及業務切流，要求先建立恢復點；正式搬遷尚未執行**。[恢復紀錄](../reports/DEV-142-precutover-recovery-point-20261124.md)已補 app 資料加密備份與43表逐欄封存還原PASS，私人Storage metadata／音訊segment均空；移轉投影與父子排序修正後，新目標同契約45表隔離匯入／101個FK／重連digest已PASS，原失敗保留，必要CI／新產物待接續。封存層恢復不代替目標schema／應用回復驗證，也不是停寫後最終快照。
 - 本文件只維護獨立交付範圍、窗口與判定；資料／身分／權限／草稿的不變條件沿 [SPEC-139 §4–§6](SPEC-139-projed-jenfu-platform-onboarding.md#6-資料移轉pwa-與恢復)，不複製另一套 SQL／API 契約。
 
 ## 1. 獨立交付成果
@@ -55,6 +55,6 @@
 
 ## 6. 與目前目標及後續網址切換的關係
 
-**目前 active 目標為先建立可恢復點，再依本文件執行已授權的正式資料與業務切流；保留原網址／PWA。** 恢復點 `DEV142-PRE-CUTOVER-20261124-214053` 已保存三個專案、映像、舊前端及加密 app 備份，逐欄封存還原通過；下一步修正並重驗新目標的 `collect_task` 契約落差。來源受管PITR／整套平台恢復未證明，本機解密依目前Windows DPAPI環境，原生應用環境未還原；不以封存層PASS或空Storage盤點放行正式匯入，正式停寫後仍取最終快照。只限制受影響正式操作，安全準備續行；既有有效核准及正常同範圍修正不逐 SHA 重問，不概括擴張 IAM／Secret／credential／billing 或破壞性資料回復責任。
+**目前 active 目標為先建立可恢復點，再依本文件執行已授權的正式資料與業務切流；保留原網址／PWA。** 恢復點 `DEV142-PRE-CUTOVER-20261124-214053` 已保存三個專案、映像、舊前端及加密 app 備份，逐欄封存還原通過；新目標投影／父子排序已修正並通過45表隔離匯入，下一步完成必要CI／候選產物。來源受管PITR／整套平台恢復未證明，本機解密依目前Windows DPAPI環境，原生應用環境未還原；不以封存層PASS或空Storage盤點放行正式匯入，正式停寫後仍取最終快照。只限制受影響正式操作，安全準備續行；既有有效核准及正常同範圍修正不逐 SHA 重問，不概括擴張 IAM／Secret／credential／billing 或破壞性資料回復責任。
 
 DEV-142 正式完成後，DEV-139 可在舊網址上確認新系統日常運作，再執行最後新網址切換。最後一步沿用同一套 Cloud SQL／Storage，不再安排第二次伺服器資料搬遷；仍需新的 origin／Session／callback、書籤／PWA 及本機草稿交接。網址階段若出問題，可在資料與權限一致的前提下暫回舊入口使用同一新後端，不能解讀為退回舊資料庫。

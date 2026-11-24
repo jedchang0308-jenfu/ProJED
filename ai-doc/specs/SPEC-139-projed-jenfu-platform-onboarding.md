@@ -1,6 +1,6 @@
 # SPEC-139：ProJED 納入 Jenfu-Platform 的產品與技術交接契約
 
-**2026-11-24 最新執行授權**：人類要求「我要執行正式資料及業務切流，請先在此建立一個可恢復點」，並續行資料恢復補驗。[DEV-142](SPEC-142-projed-production-data-migration.md) 的[恢復紀錄](../reports/DEV-142-precutover-recovery-point-20261124.md)已保存三份程式備份、部署落點與加密 app 資料；43表逐欄封存還原PASS，私人Storage metadata／音訊segment均空。新目標schema隔離匯入因 `collect_task` 權限契約FAIL，原生應用環境未還原、實際未切流；先修正並重驗，正式窗口另取最終快照。保留原網址與既有PWA，最後新網址另階段。以下2026-11-23及更早「先不切流」為當時限制，不否定最新授權；資料安全、零留存與責任邊界維持，未資格Gemini／RAG仍停用。
+**2026-11-24 最新執行授權**：人類要求「我要執行正式資料及業務切流，請先在此建立一個可恢復點」，並續行資料恢復補驗。[DEV-142](SPEC-142-projed-production-data-migration.md) 的[恢復紀錄](../reports/DEV-142-precutover-recovery-point-20261124.md)已保存三份程式備份、部署落點與加密 app 資料；43表逐欄封存還原PASS，私人Storage metadata／音訊segment均空。移轉投影／父子排序修正後，45表目標隔離匯入／101個FK／重連digest已PASS；必要CI／新產物待補，原生應用環境未還原、實際未切流，正式窗口另取最終快照。保留原網址與既有PWA，最後新網址另階段。以下2026-11-23及更早「先不切流」為當時限制，不否定最新授權；資料安全、零留存與責任邊界維持，未資格Gemini／RAG仍停用。
 
 **2026-11-23 現行決策：先保留舊主站／Quick 網址及既有 PWA 入口，讓新版前端、登入、API、資料與背景工作改走集中 Google Cloud；在舊網址確認新系統運作後，最後才換 Cloud Run `run.app` 新網址。** 保留 Vite、本機記事、ProJED 獨立權限及 `jenfu-platform-prod` 同專案私人 SQL；既有 Firebase Hosting 僅暫留為過渡入口，不另建新的 Firebase 網站或把業務權威搬回舊專案。正式資料一次搬遷獨立列為 [DEV-142／SPEC-142](SPEC-142-projed-production-data-migration.md)。
 
@@ -610,6 +610,8 @@ Quick 沿 [現行 invoker RPC](../../supabase/migrations/20261001090000_dev_133_
 3. 先以 synthetic／核准 sanitized fixture 在空白隔離 candidate DB 演練完整轉換。正式目標只檢查 ProJED 受管 domain 的可接入／恢復條件，不清空共用 `jenfu_prod` 或其他 app 資料；以一個 repeatable-read 來源 snapshot 及單一目標交易逐 domain 檢查 count、ID／FK、scope、人工內容／checksum 與 receipt，完全一致才 commit。目標已有不明來源資料時先拒絕，不自行覆寫。
 4. 本自用系統不建立連續雙寫、CDC或delta平台。正式切換先以可驗證fence停止舊庫全部業務寫入及在途job，再從同一一致性snapshot做一次完整搬移與reconciliation；任一未承接domain或差異即不開放新writer。
 5. 新路徑已有寫入後，回復必須說明新資料如何保留、舊 binary 是否可讀、job／receipt 是否仍單一；僅切回 DNS／舊網站不是完整恢復。禁止 destructive/down migration 或手改正式 row。
+
+移轉投影沿現行產品語意：DEV-104 已退場的 `collect_task` 僅從目標權限投影排除，原資料／備份保留；owner 沿現行固定完整能力，缺少的角色列才沿既有建立看板預設補齊，自訂角色及明確 `[]` 不改。其他未知權限保留給既有約束拒絕，收據明列上述正規化，不假稱原始列與衍生列逐位元相同。任務匯入按 `parent_id` 圖先父後子，不信任舊 `depth/path` 快取；缺父、跨看板、重複 ID 或循環拒絕，不 detach、改 ID 或放寬 FK。2026-11-24 使用原加密備份的45表隔離重放、101個FK、提交後重連digest與未知權限拒絕／回滾空庫均通過，見[恢復紀錄](../reports/DEV-142-precutover-recovery-point-20261124.md)；不是正式目標匯入或切流。
 
 ### 6.2 Browser 本機資料
 
