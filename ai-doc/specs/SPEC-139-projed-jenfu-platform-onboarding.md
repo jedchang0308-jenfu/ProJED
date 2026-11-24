@@ -332,15 +332,21 @@ Platform A2 原生 runtime-config producer 已成功建立不可變收據（SHA 
 
 <a id="dev139-paused-recovery-preparation"></a>
 
-#### 3.0.8 切流前暫停恢復排程差額（2026-11-24，尚待具名核准）
+#### 3.0.8 切流前暫停恢復排程差額（2026-11-24，Human Approved／已驗證並保留PAUSED）
 
-唯讀查核確認中央 Scheduler API 已 ENABLED，既有 service agent 已有 `roles/cloudscheduler.serviceAgent`，操作者沿既有 owner 權限；ProJED 專用 `projed-prod-meeting-scheduler@jenfu-platform-prod.iam.gserviceaccount.com` 與 `projects/jenfu-platform-prod/locations/asia-east1/jobs/projed-meeting-analysis-recovery` 均404。現有 candidate renderer／測試明確輸出 scheduler與其SA為null，不將未排程的候選當成已具有自動恢復能力。實際差額與純renderer選取自查保存在 `output/dev139-recovery-readiness-20261124/readback.json`、`relevant-iam-readback.json`、`proposal.json`；無provider變更。
+執行前唯讀基線確認中央 Scheduler API 已 ENABLED，既有 service agent 已有 `roles/cloudscheduler.serviceAgent`，操作者沿既有 owner 權限；ProJED 專用 `projed-prod-meeting-scheduler@jenfu-platform-prod.iam.gserviceaccount.com` 與 `projects/jenfu-platform-prod/locations/asia-east1/jobs/projed-meeting-analysis-recovery` 均404。現有 candidate renderer／測試明確輸出 scheduler與其SA為null，不將未排程的候選當成已具有自動恢復能力。實際差額與純renderer選取自查保存在 `output/dev139-recovery-readiness-20261124/readback.json`、`relevant-iam-readback.json`、`proposal.json`；無provider變更。
 
-**提請一次核准的精確範圍**：在 `jenfu-platform-prod` 建立上述一個專用SA，不建立SQL login／DB grant／key／Secret；僅在既有 `projects/jenfu-platform-prod/locations/asia-east1/jobs/projed-meeting-analysis` 增加該SA的 `roles/run.invoker` 一筆。建立具名recovery Scheduler，固定OAuth SA、POST原Job `:run`、空JSON body及retryCount=0；最終cron沿原規格 `*/15 * * * *`／Asia/Taipei，但本輪保持 **PAUSED**，不自動resume。既有操作者及Scheduler service agent不新增grant。
+**人類已核准的精確範圍**（原文「核准暫停排程準備及限定驗證」）：在 `jenfu-platform-prod` 建立上述一個專用SA，不建立SQL login／DB grant／key／Secret；僅在既有 `projects/jenfu-platform-prod/locations/asia-east1/jobs/projed-meeting-analysis` 增加該SA的 `roles/run.invoker` 一筆。建立具名recovery Scheduler，固定OAuth SA、POST原Job `:run`、空JSON body及retryCount=0；最終cron沿原規格 `*/15 * * * *`／Asia/Taipei，但本輪完成後保持 **PAUSED**，不啟用週期執行。既有操作者及Scheduler service agent不新增grant。
 
 建立時先不給Job invoker，以遠期annual schedule建立並立即pause；只有API明確讀回PAUSED及精確target／OAuth／retry／schedule後才授單筆invoker，避免create尚未pause時取得執行能力。修改成原15分鐘cron時仍須保持PAUSED；任何未知結果只讀同一resource／operation，不重建或重送。API的state為output-only，不能假設create支援直接指定PAUSED（[官方Job契約](https://docs.cloud.google.com/scheduler/docs/reference/rest/v1/projects.locations.jobs)）。
 
-核准後以既有runtime對四佇列做一次只讀檢查，任何非空或private／未切流前提改變即停止；再於PAUSED狀態只請求一次Scheduler手動run並讀回原Job execution、caller及安全事件，零自動重試／未知不重送。若API不允許PAUSED手動run，保留暫停並回報，不自動resume來完成測試（[官方Run契約](https://docs.cloud.google.com/scheduler/docs/reference/rest/v1/projects.locations.jobs/run)）。不送真實會議、不啟用Gemini／RAG、不新增權限範圍、來源credential、billing或Cloud Run／SQL容量，不搬資料、不改原網址／PWA、不切流；建立與資格未經核准不執行。這是原有恢復排程的具名責任差額，不新增required gate或要求重跑既有登入／owner／PWA。
+核准後以既有runtime對四佇列做一次只讀檢查，任何非空或private／未切流前提改變即停止；再於PAUSED狀態只請求一次Scheduler手動run並讀回原Job execution、caller及安全事件，零自動重試／未知不重送。實際PAUSED手動run回400 FAILED_PRECONDITION，已讀回確認沒有派送；沿人類後續「不要再停」的同範圍執行指示，修正技術前提為先改遠期annual cron、短暫ENABLED僅手動run一次、立即PAUSED後才還原15分鐘cron。PAUSED時如省略scheduleTime，以精確cron／Asia/Taipei計算下次annual；ENABLED後須讀回實際下次排程在遠期且未曾派送，才執行手動run。若前提不符，立即暫停，不重送未知結果（[官方Run契約](https://docs.cloud.google.com/scheduler/docs/reference/rest/v1/projects.locations.jobs/run)）。不送真實會議、不啟用Gemini／RAG、不新增權限範圍、來源credential、billing或Cloud Run／SQL容量，不搬資料、不改原網址／PWA、不切流；僅依本項已核准範圍建立與驗證，其他持續禁止事項保留。這是原有恢復排程的具名責任差額，不新增required gate或要求重跑既有登入／owner／PWA。
+
+**實際完成結果**：專用SA `uniqueId=111542066961612720443` 已建立，user-managed key、project-wide grant、SQL login均0；只在固定analysis Job增加一筆invoker。四佇列只讀preflight `5t8pm` PASS／providerRequests0；PAUSED直接run的400與本機optional timestamp／IAM陣列排序比較失敗均保留。以遠期annual cron排除自動觸發、短暫ENABLED僅完成一次真正的Scheduler手動請求後即PAUSED，最後才還原15分鐘cron。Scheduler AttemptFinished證明固定target回HTTP200，唯一新增預設Job execution `kg48s` succeeded1／retry0；四佇列scanned0、failures0、LLM停用、provider派送unit0。OAuth caller證據為實際Scheduler OAuth SA設定＋AttemptFinished200＋唯一目標execution，Cloud Run raw caller audit在查詢窗口未找到，不冒稱已取得該audit。
+
+最新收尾 `output/dev139-recovery-readiness-20261124/final-verification.json`：排程 **PAUSED**、Job generation5與Web／Job spec不變，analysis共6次（保留原1次失敗），migration仍原唯一execution；原00007-cpt固定100%、新候選tag0%，兩舊origin四份metadata原bytes不變。未搬／寫業務資料、未新增Secret／billing／容量／公開權限或模型資格，沒有啟用週期處理。原來源／CI／候選與PWA證據沿用，不因這次IAM／Scheduler差額重新建Web／ASR映像。
+
+**授權收斂（依人類「再次列出所有需要授權，不要再停」）**：目前切流前的已知操作授權已齊備；同專案／環境／已核准資源與責任內的必要修正、技術前提修復、重試、CI、PR ready／合併及候選更新沿用原授權，不逐SHA／digest／PR／工具命令重問，也不把服務端技術拒絕誤當缺少人類授權。後續仍由人類決定的正式動作合併為兩批：① DEV-142正式資料／原UUID映射搬入、來源停寫／限定reader登入窗口、中央唯一writer、舊網址接新系統及持續啟用恢復排程；必要的舊入口公開權限一併具名。② 最後換Cloud Run新網址、必要的Web公開入口IAM及SSO callback／PWA／連結／草稿交接。這兩批目前不執行，並非本輪新的逐步前置。Gemini零留存契約／豁免是必須實證的外部資格，與操作核准不同，不由同意或cache／logging關閉代替；不自行接受法律條款或對外送件，不要求人類重做已成功登入。上述整理不新增required gate或簽核。
 
 ### 3.1 Runtime 工程基線與模組責任
 
