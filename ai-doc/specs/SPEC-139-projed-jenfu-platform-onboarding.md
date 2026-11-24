@@ -330,6 +330,18 @@ Platform A2 原生 runtime-config producer 已成功建立不可變收據（SHA 
 
 來源TLS使用官方Studio原始碼列出的Supabase公開CA；已實測正確pooler host驗鏈通過、錯誤host被拒，不關閉TLS驗證。來源credential在DB內隨機產生並以一次性公鑰加密；人類更正為核准記憶體直送後，經已用非機密字串驗明不回顯的stdin管道、本機記憶體解密及產品strict bundle parser，單次寫入指定Secret。自動審查先前拒絕的本機payload檔案及命令列傳遞均未執行，未繞過拒絕；未保存payload檔案或顯示明文。只將精確官方公開CA的CRLF正規化為原SHA綁定LF，未放寬parser。provider讀回唯一 `projects/9536592944/secrets/projed-prod-migration-source/versions/1` ENABLED、clientSpecifiedPayloadChecksum=true；首次postcondition因provider回專案編號名稱而失敗，直接讀回確認成功、沒有重送addVersion。來源reader始終NOLOGIN、寫入RPC拒絕、零可寫relation，未讀或搬業務資料。臨時交換表DROP取得工具確認後已讀回不存在；具名臨時GPG agent／私鑰目錄已清除、未碰預設GPG。最終狀態在 `output/dev139-authorized-foundation-20261124/source-credential-preparation-final-readback.json`；先前blocked／失敗紀錄保留為歷史，不再阻擋本次準備。
 
+<a id="dev139-paused-recovery-preparation"></a>
+
+#### 3.0.8 切流前暫停恢復排程差額（2026-11-24，尚待具名核准）
+
+唯讀查核確認中央 Scheduler API 已 ENABLED，既有 service agent 已有 `roles/cloudscheduler.serviceAgent`，操作者沿既有 owner 權限；ProJED 專用 `projed-prod-meeting-scheduler@jenfu-platform-prod.iam.gserviceaccount.com` 與 `projects/jenfu-platform-prod/locations/asia-east1/jobs/projed-meeting-analysis-recovery` 均404。現有 candidate renderer／測試明確輸出 scheduler與其SA為null，不將未排程的候選當成已具有自動恢復能力。實際差額與純renderer選取自查保存在 `output/dev139-recovery-readiness-20261124/readback.json`、`relevant-iam-readback.json`、`proposal.json`；無provider變更。
+
+**提請一次核准的精確範圍**：在 `jenfu-platform-prod` 建立上述一個專用SA，不建立SQL login／DB grant／key／Secret；僅在既有 `projects/jenfu-platform-prod/locations/asia-east1/jobs/projed-meeting-analysis` 增加該SA的 `roles/run.invoker` 一筆。建立具名recovery Scheduler，固定OAuth SA、POST原Job `:run`、空JSON body及retryCount=0；最終cron沿原規格 `*/15 * * * *`／Asia/Taipei，但本輪保持 **PAUSED**，不自動resume。既有操作者及Scheduler service agent不新增grant。
+
+建立時先不給Job invoker，以遠期annual schedule建立並立即pause；只有API明確讀回PAUSED及精確target／OAuth／retry／schedule後才授單筆invoker，避免create尚未pause時取得執行能力。修改成原15分鐘cron時仍須保持PAUSED；任何未知結果只讀同一resource／operation，不重建或重送。API的state為output-only，不能假設create支援直接指定PAUSED（[官方Job契約](https://docs.cloud.google.com/scheduler/docs/reference/rest/v1/projects.locations.jobs)）。
+
+核准後以既有runtime對四佇列做一次只讀檢查，任何非空或private／未切流前提改變即停止；再於PAUSED狀態只請求一次Scheduler手動run並讀回原Job execution、caller及安全事件，零自動重試／未知不重送。若API不允許PAUSED手動run，保留暫停並回報，不自動resume來完成測試（[官方Run契約](https://docs.cloud.google.com/scheduler/docs/reference/rest/v1/projects.locations.jobs/run)）。不送真實會議、不啟用Gemini／RAG、不新增權限範圍、來源credential、billing或Cloud Run／SQL容量，不搬資料、不改原網址／PWA、不切流；建立與資格未經核准不執行。這是原有恢復排程的具名責任差額，不新增required gate或要求重跑既有登入／owner／PWA。
+
 ### 3.1 Runtime 工程基線與模組責任
 
 本節固定 ProJED 的技術選型。S1 server 已依 Node `>=24.11.0 <25`／npm `>=11 <12`、`pg ^8.21.0`、TypeScript、`node:http` 實作；本地隔離驗證接受 PostgreSQL 17／18，並記錄實際 major。lockfile 已固定實際解析版本；未來 managed target 仍按實際綁定版本重驗，這不要求 Vite 改成 Next.js。S1 完整契約見 §11、實作結果見 §12。
