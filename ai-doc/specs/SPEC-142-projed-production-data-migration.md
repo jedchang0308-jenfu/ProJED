@@ -58,3 +58,17 @@
 **切流前準備目標已完成，下一個獨立交付點才是本文件的正式資料與業務切流；原網址／PWA繼續保留。** 恢復點 `DEV142-PRE-CUTOVER-20261124-214053` 已保存三個專案、映像、舊前端及加密 app 備份，逐欄封存還原通過；新目標投影／父子排序已修正並通過45表隔離匯入。固定來源候選已建置、部署為私人0% revision並完成HTTP、空佇列背景與正式來源READ ONLY plan；舊revision仍100%，舊origin metadata未變。來源受管PITR／整套平台恢復未證明，本機解密依目前Windows DPAPI環境；不以封存層、空Storage或唯讀plan放行正式匯入，正式停寫後仍取最終快照。既有有效核准及正常同範圍修正不逐 SHA 重問，不概括擴張 IAM／Secret／credential／billing 或破壞性資料回復責任。
 
 DEV-142 正式完成後，DEV-139 可在舊網址上確認新系統日常運作，再執行最後新網址切換。最後一步沿用同一套 Cloud SQL／Storage，不再安排第二次伺服器資料搬遷；仍需新的 origin／Session／callback、書籤／PWA 及本機草稿交接。網址階段若出問題，可在資料與權限一致的前提下暫回舊入口使用同一新後端，不能解讀為退回舊資料庫。
+
+## 7. 本次集中確認的執行差額（2026-11-25，入口／reader／來源交付已核准；切流等人類起床）
+
+人類已回覆「核准入口／reader／來源交付，切流等我起床」，並補充「只有後端搬遷，使用者還是用舊網址繼續運作，不能讓使用者感覺異樣」及「可接受重新登入」。入口、reader與來源交付授權成立；正式來源停寫、最終匯入、新writer啟用及舊Hosting導流仍等人類起床後續行，不因準備核准即自動開窗。不換網址、不重裝PWA、不清除草稿，不改工作區／看板操作介面；同origin更新必要的後端接線，舊版晚回網仍沿fence及receipt保護。
+
+| 差額 | 精確對象、用途與邊界 |
+|---|---|
+| 舊網址公開過渡入口 | 僅對 `projects/projed-cc78d/locations/asia-east1/services/projed-legacy-entry` 增加 `allUsers` 的 `roles/run.invoker`，保留IAM檢查；中央 `projed-prod` 不加公開grant。沿既有Hosting site `projed-cc78d` 發布兩個舊origin到固定relay的rewrite，保留manifest identity／前版資產／本機資料，讓一般使用者可取得登入頁與登入後由App Session授權的API。Relay不取得SQL、Secret或使用者權限，不增加容量。先驗SSO外部redirect與Cookie邊界，才曝光；只開relay不等於略過使用者登入。 |
+| 正式來源讀取期間 | 既有 `projed_dev139_source_reader` 在正式窗口最多兩小時開放LOGIN，維持連線上限1、原最低唯讀權限與既有Secret版本；只供最終備份、匯入與reconcile讀取，完成或失敗立即NOLOGIN並關閉本任務連線。只建立並清除本任務一次性importer Jobs，不新增credential／IAM責任。 |
+| 同範圍來源交付與切流時機 | PR #33及本次DEV-142必要修正的ready通知、正常保護下合併已核准；正式停寫、最終快照、匯入核對及舊網址啟用唯一writer等人類起床後續行。必要CI／回歸與§2依賴仍須成立，不能用人類離線為由略過驗證。未知寫入結果先讀回；已有新資料時不得單純切回舊庫。 |
+
+不包含最後更換網址、Gemini／RAG啟用、billing／容量、其他服務公開、down migration、破壞性清空或反向資料rewrite。正常真使用者登入需在可用正式路徑上驗證，不預收密碼、登入token或已知會逾時的驗證頁；若SDK實際要求重新登入，僅停止依賴該憑證的動作。
+
+**實際準備與入口技術差額**：本機既有relay回歸12項及Hosting renderer 3項通過。`allUsers → roles/run.invoker` 單次setIamPolicy被Google明確拒絕HTTP400／FAILED_PRECONDITION；重新讀回IAM與原值相同。實際effective policy `iam.allowedPolicyMemberDomains`只允許組織customer，`run.managed.requireInvokerIam`為`enforce:false`。人類另具名回覆「核准只調整relay，切流等我起床」，採Google官方的公開服務設定（[Cloud Run public access](https://docs.cloud.google.com/run/docs/authenticating/public)）：只將上述relay的`invokerIamDisabled`設為true，取代表列原allUsers方式。單次PATCH及provider讀回成功，中央後端仍維持IAM及固定relay SA驗證、業務仍須使用者Session；relay runtime／IAM policy／容量／流量及組織政策不變。舊Hosting設定已生成但未發布，reader未開LOGIN、未停寫／搬資料／導流。原拒絕收據與後續讀回保存在`output/dev142-entry-preparation-20261125/`。

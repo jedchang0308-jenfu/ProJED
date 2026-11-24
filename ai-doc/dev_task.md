@@ -10,6 +10,7 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 - 類型：**獨立交付點**；所屬整合目標：[DEV-139](#dev-139-jenfu-platform-onboarding)，P1。
 - 狀態（2026-11-25）：**正式資料／業務切流已授權，切流前恢復點、私人候選與唯讀來源盤點均已驗證；尚未搬資料或切流**。[恢復紀錄](reports/DEV-142-precutover-recovery-point-20261124.md)含三專案自足 Git bundle 還原／fsck、映像落點及加密 app 備份；43表逐欄封存還原PASS，私人Storage metadata／音訊segment均空。新目標45表隔離匯入／101個FK／提交後重連digest已PASS；來源7d239c9的CI45423509034與Cloud Build `b9b70c73` 成功，私人revision `projed-prod-dev139-7d239c9`維持0%、原`00007-cpt`維持100%。正式來源／中央目標單次`plan`均為READ ONLY，來源snapshot與隔離還原一致、目標為空；reader已恢復NOLOGIN、連線0、可寫relation 0，臨時Job已刪除。原網址四份metadata與恢復點逐位元組一致，既有PWA輸入未變。
 - 唯一交付契約：[SPEC-142](specs/SPEC-142-projed-production-data-migration.md)；共用資料／身分／草稿安全沿 SPEC-139 §4–§6，不另建 SQL／API、QA/QC 或 required gate。
+- 最新人類限制及準備：已核准入口／reader／來源交付，正式切流等人類起床；舊網址、介面、PWA及草稿保留，可接受重新登入。relay回歸12項、Hosting renderer 3項通過；allUsers grant被Google組織政策拒絕400後，人類具名核准只關閉relay Invoker IAM check，單次PATCH與9項實際GET／拒絕驗證通過。中央私人IAM／流量、relay runtime／容量／IAM policy與舊網址metadata均未變。Hosting設定已生成但未發布，reader未開LOGIN，未停寫或搬資料；詳SPEC-142 §7。
 - 成果：在原主站／Quick 網址使用新前端／登入／API，受控停止全部舊 writer，一次搬移並核對正式資料／私人檔案，再開放中央新後端唯一 writer；保留 UUID／權限／回執、舊來源與可用恢復參考。
 - 依賴：DEV-139 的過渡入口、原地更新、真 Session／mapping 與必要資料／權限／恢復準備就緒。既有 credential／importer／新入口核准沿用，正式停寫／資料寫入依最新人類授權續行；新責任擴張另核實。只限制相依正式操作，安全的 source／隔離驗證可繼續。
 - 窗口：偏好晚間低用量且操作者能確認結果的時段；先演練量測，再排日期／起訖，不強制凌晨、固定停機分鐘數或自動排程。
