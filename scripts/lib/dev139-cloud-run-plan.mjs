@@ -4,7 +4,7 @@ import { S3_MIGRATION_PATHS } from './dev139-migration-paths.mjs';
 import { MANAGED_MEETING_AUDIO_BUCKET } from '../../shared/dev139MeetingAudio.mjs';
 import { LEGACY_ENTRY_ORIGINS, LEGACY_ENTRY_TARGET } from './dev139-legacy-entry-plan.mjs';
 import { MANAGED_PROJECT_ID, MANAGED_PROJECT_NUMBER, MANAGED_IMAGE_REPOSITORY,
-  MANAGED_PUBLIC_ORIGIN } from '../../shared/dev139DeploymentTarget.mjs';
+  MANAGED_PUBLIC_ORIGIN, MANAGED_SSO_BROKER_ORIGIN } from '../../shared/dev139DeploymentTarget.mjs';
 
 export const CLOUD_RUN_TARGET = Object.freeze({
   project: MANAGED_PROJECT_ID, projectNumber: MANAGED_PROJECT_NUMBER, organization: '361825816000',
@@ -71,6 +71,11 @@ export function renderProjedCloudRun(input) {
   if (entryStage !== 'legacy' && entryStage !== 'direct') invalid();
   const entryOrigins = entryStage === 'legacy' ? LEGACY_ENTRY_ORIGINS
     : { main: CLOUD_RUN_TARGET.publicOrigin, quick: LEGACY_ENTRY_TARGET.upstream };
+  // Both transports use the same Session composition. Configuration is not
+  // qualification: identity pins and provider bindings remain independent.
+  const sessionEnvironment = [env('PROJED_SSO_BROKER_ORIGIN', MANAGED_SSO_BROKER_ORIGIN),
+    env('PROJED_MAIN_PUBLIC_ORIGIN', entryOrigins.main),
+    env('PROJED_QUICK_PUBLIC_ORIGIN', entryOrigins.quick)];
   const { binding, runtimeImage, jobsImage, analysisImage, audioBucket, releaseId, sourceRevision, sourceBundleVersion } = input;
   if (typeof releaseId !== 'string' || !/^[a-z][a-z0-9-]{0,40}$/.test(releaseId)
       || typeof sourceRevision !== 'string' || !/^[a-f0-9]{40}$/.test(sourceRevision)
@@ -115,8 +120,7 @@ export function renderProjedCloudRun(input) {
             env('PROJED_DATABASE_URL', databaseUrl(binding, 'runtime')),
             env('PROJED_MEETING_AUDIO_BUCKET', audioBucket),
             env('PROJED_PUBLIC_APP_URL', entryOrigins.main),
-            env('PROJED_MAIN_PUBLIC_ORIGIN', entryOrigins.main),
-            env('PROJED_QUICK_PUBLIC_ORIGIN', entryOrigins.quick)],
+            ...sessionEnvironment],
           resources: { limits: { cpu: '1', memory: '512Mi' }, cpuIdle: true, startupCpuBoost: true },
           startupProbe: { initialDelaySeconds: 0, timeoutSeconds: 2, periodSeconds: 5, failureThreshold: 36,
             httpGet: { path: '/health/ready', port: 8080 } },
@@ -175,7 +179,7 @@ export function renderProjedCloudRun(input) {
           env('PROJED_SOURCE_PROFILE', 'config/dev-139/s3-managed.profile.json'),
           env('PROJED_RUNTIME_BINDING_JSON', JSON.stringify(binding)),
           env('PROJED_DATABASE_URL', runtimeJobDatabaseUrl(binding)),
-          env('PROJED_MEETING_AUDIO_BUCKET', audioBucket)],
+          env('PROJED_MEETING_AUDIO_BUCKET', audioBucket), ...sessionEnvironment],
         volumeMounts: [{ name: 'cloudsql', mountPath: '/cloudsql' }],
         resources: { limits: { cpu: '1', memory: '512Mi' } } }],
     } },

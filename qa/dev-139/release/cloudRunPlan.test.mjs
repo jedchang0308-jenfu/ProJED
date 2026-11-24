@@ -87,12 +87,23 @@ test('D6 defaults to old main/Quick origins; final direct mode only changes entr
     assert.equal(environment.PROJED_PUBLIC_APP_URL, plan.entryOrigins.main);
     assert.equal(environment.PROJED_MAIN_PUBLIC_ORIGIN, plan.entryOrigins.main);
     assert.equal(environment.PROJED_QUICK_PUBLIC_ORIGIN, plan.entryOrigins.quick);
+    assert.equal(environment.PROJED_SSO_BROKER_ORIGIN, 'https://jenfu-platform-prod-9536592944.asia-east1.run.app');
+    const background = envMap(plan.jobs.analysis.template.template.containers[0]);
+    for (const name of ['PROJED_SSO_BROKER_ORIGIN', 'PROJED_MAIN_PUBLIC_ORIGIN', 'PROJED_QUICK_PUBLIC_ORIGIN']) {
+      assert.equal(background[name], environment[name]);
+    }
     assert.notEqual(new URL(plan.entryOrigins.main).host, new URL(plan.entryOrigins.quick).host);
     assert.equal(environment.PROJED_SSO_ENABLED, undefined);
     assert.equal(plan.service.invokerIamDisabled, false);
     assert.equal(plan.foundation.providerConfiguration.qualificationApplied, false);
   }
-  assert.deepEqual(legacy.jobs, direct.jobs);
+  const stripJobOrigins = plan => {
+    const jobs = structuredClone(plan.jobs);
+    jobs.analysis.template.template.containers[0].env = jobs.analysis.template.template.containers[0].env.filter(({ name }) =>
+      !['PROJED_MAIN_PUBLIC_ORIGIN', 'PROJED_QUICK_PUBLIC_ORIGIN'].includes(name));
+    return jobs;
+  };
+  assert.deepEqual(stripJobOrigins(legacy), stripJobOrigins(direct));
   assert.deepEqual(legacy.scheduler, direct.scheduler);
   assert.deepEqual(legacy.foundation, direct.foundation);
   const stripOrigins = plan => {
