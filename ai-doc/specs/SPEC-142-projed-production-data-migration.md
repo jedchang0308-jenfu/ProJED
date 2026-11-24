@@ -2,7 +2,7 @@
 
 - 日期：2026-11-23（Asia/Taipei）。
 - 任務：[DEV-142](../dev_task.md#dev-142-production-data-migration)；所屬整合目標：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。
-- 狀態（2026-11-25）：**正式資料已一次匯入並獨立核對，舊網址已接中央後端；真使用者登入失敗，尚未完成交付**。停寫後最終加密備份、45表apply與獨立READ ONLY reconcile的snapshot均為`0adad950339e91b190a4fe2b9c3eb495eaa33b7a4e95d41207a29b9ea98386b2`。中央`projed-prod-dev139-7d239c9`已100%，舊Hosting release `1795539461938000`已發布私人後端relay；兩舊origin共16項HTTP／artifact核對PASS，來源fence保留、reader已NOLOGIN／連線0，三個一次性importer Job均404。真Google登入在Platform交換200後，ProJED讀`platform_contract`遭42501；Platform #242以forward-only023修復既有consumer grant，待必要CI、owner發布及真登入重驗，不以HTTP或匯入PASS替代。恢復參考沿[恢復紀錄](../reports/DEV-142-precutover-recovery-point-20261124.md)，本機完整收據在`output/dev142-cutover-20261125-w1/`。
+- 狀態（2026-11-25）：**已完成正式資料一次搬遷與舊網址業務切流**。最終加密備份、45表apply與獨立READ ONLY reconcile一致，snapshot `0adad950339e91b190a4fe2b9c3eb495eaa33b7a4e95d41207a29b9ea98386b2`；來源fence保留、reader NOLOGIN／連線0，臨時Jobs已刪除。Platform023發布修復既有consumer ACL後，正常登入／原工作區看板／記事讀寫及本機草稿恢復通過。草稿同步修正版來源 `97891d3`（PR #37、main合併 `5d88415`）已建置並發布 `projed-prod-dev142-97891d3` 100%；同一新庫、舊網址及原PWA identity不變。CI45457970960、真modal14項、私人HTTP34／公開HTTP16及四manifest identity通過；正式使用者沿正常PWA選單更新，原未提交草稿關閉重開後恢復同步、重載讀回且無假草稿，Quick本機建立／重開／帳號確認／同步亦通過。恢復參考見[恢復紀錄](../reports/DEV-142-precutover-recovery-point-20261124.md)，收據在`output/dev142-cutover-20261125-w1/`。不等於最後換址或完整DEV-139完成。
 - 本文件只維護獨立交付範圍、窗口與判定；資料／身分／權限／草稿的不變條件沿 [SPEC-139 §4–§6](SPEC-139-projed-jenfu-platform-onboarding.md#6-資料移轉pwa-與恢復)，不複製另一套 SQL／API 契約。
 
 ## 1. 獨立交付成果
@@ -55,7 +55,7 @@
 
 ## 6. 與目前目標及後續網址切換的關係
 
-**切流前準備目標已完成，下一個獨立交付點才是本文件的正式資料與業務切流；原網址／PWA繼續保留。** 恢復點 `DEV142-PRE-CUTOVER-20261124-214053` 已保存三個專案、映像、舊前端及加密 app 備份，逐欄封存還原通過；新目標投影／父子排序已修正並通過45表隔離匯入。固定來源候選已建置、部署為私人0% revision並完成HTTP、空佇列背景與正式來源READ ONLY plan；舊revision仍100%，舊origin metadata未變。來源受管PITR／整套平台恢復未證明，本機解密依目前Windows DPAPI環境；不以封存層、空Storage或唯讀plan放行正式匯入，正式停寫後仍取最終快照。既有有效核准及正常同範圍修正不逐 SHA 重問，不概括擴張 IAM／Secret／credential／billing 或破壞性資料回復責任。
+**DEV-142 已完成，原網址／介面／PWA／草稿保留，中央Cloud SQL為唯一業務寫入庫。** 恢復點 `DEV142-PRE-CUTOVER-20261124-214053`、停寫後最終加密app備份、獨立核對及原Hosting／映像參考均保留。來源受管PITR／整套平台恢復未證明，本機解密依目前Windows DPAPI環境，這些限制未被改寫為已驗證。原來源保持fence；已有新寫入後，恢復應在同一新庫維持相容程式與新資料，不直接解除舊fence或整庫覆蓋。既有有效授權及正常同範圍修正不逐SHA重問，不概括擴張IAM／Secret／credential／billing或破壞性資料回復責任。
 
 DEV-142 正式完成後，DEV-139 可在舊網址上確認新系統日常運作，再執行最後新網址切換。人類已採用[方案2：引導完成切換（SPEC-139 §6.4.1）](SPEC-139-projed-jenfu-platform-onboarding.md#dev139-guided-origin-switch)，依序確認草稿、以原帳號登入新站、更新書籤／PWA入口；等後端穩定後才啟用，目前僅文件定案。最後一步沿用同一套 Cloud SQL／Storage，不再安排第二次伺服器資料搬遷；仍需新的 origin／Session／callback、書籤／PWA 及本機草稿交接。網址階段若出問題，可在資料與權限一致的前提下暫回舊入口使用同一新後端，不能解讀為退回舊資料庫。
 
@@ -73,6 +73,6 @@ DEV-142 正式完成後，DEV-139 可在舊網址上確認新系統日常運作�
 
 **2026-11-25 起床後續行**：人類已明確恢復本交付點，取代上表的等待起床狀態。最終加密備份、來源停寫、一次正式 apply／獨立 reconcile（同一 snapshot digest）、中央 revision 100% 及舊 Hosting 導流均已完成；來源資料保留且 fence 啟用，reader 已恢復 NOLOGIN、連線0。真登入最初因 ProJED 角色建立晚於 Platform 020 而缺 principal-state consumer ACL，callback 回報 IDENTITY_INVALID。Platform #242 已合併 `f5163701d47b7c0a15b5a980b1fccf0784b43301`，Source QC45448051592／原生PG45447012295 通過；contract-prerequisite45450242724 成功套用023（新增1、重放22），Platform runtime／traffic 不變、private core／contract CREATE 仍拒絕。修復後沿舊網址與既有 Google Session 登入成功，原工作區／看板／任務可讀，專用測試記事儲存、重新載入讀回及未送出草稿重開恢復已實測。
 
-**草稿同步修正（部署驗證待完成）**：正式恢復案例發現 HTTP 未歸位任務以已清空的本機快取作 canonical read，造成假衝突。改為驗證同一帳號後讀遠端；HTTP 失敗保留本機並向呼叫端回報失敗，恢復狀態各自持有欄位，避免共享物件清除失敗標記。既有 account lock 內加入 expectedTask 內容 CAS，舊版本盲覆寫拒絕409、相同內容重放不二次寫入；較新本機時鐘也不再自動覆寫既有遠端。隔離真 modal 12項與S3單元180項通過；正式環境仍須在同一新庫驗完修正版草稿同步／Quick，才能宣告本交付完成。不重匯、不解除來源 fence、不換新網址、不啟用 Gemini／RAG。
+**草稿同步修正（已發布並通過正式回歸）**：正式恢復案例發現 HTTP 未歸位任務以已清空的本機快取作 canonical read，造成假衝突。改為驗證同一帳號後讀遠端；HTTP 失敗保留本機並向呼叫端回報失敗，恢復狀態各自持有欄位，避免共享物件清除失敗標記。既有 account lock 內加入 expectedTask 內容 CAS，舊版本盲覆寫拒絕409、相同內容重放不二次寫入；較新本機時鐘也不再自動覆寫既有遠端。最終真modal14項／S3單元180項、CI45457970960（PG75／snapshot67／OCI23）與先前完整PWA升級回歸通過；來源97891d3已由Cloud Build72bc0fab-3eed-4884-bcfd-2208aa81f52f建置，私人HTTP34後發布同一新庫。正式主站／Quick正常更新後登入延續，同一未提交草稿恢復同步並重載讀回、Quick待同步記事確認帳號後提交成功，各專用任務一筆可見，無假草稿。兩筆具名驗證資料保留，不刪除使用者資料。不重匯、不解除來源 fence、不換新網址、不啟用 Gemini／RAG。
 
 **實際準備與入口技術差額**：本機既有relay回歸12項及Hosting renderer 3項通過。`allUsers → roles/run.invoker` 單次setIamPolicy被Google明確拒絕HTTP400／FAILED_PRECONDITION；重新讀回IAM與原值相同。實際effective policy `iam.allowedPolicyMemberDomains`只允許組織customer，`run.managed.requireInvokerIam`為`enforce:false`。人類另具名回覆「核准只調整relay，切流等我起床」，採Google官方的公開服務設定（[Cloud Run public access](https://docs.cloud.google.com/run/docs/authenticating/public)）：只將上述relay的`invokerIamDisabled`設為true，取代表列原allUsers方式。單次PATCH及provider讀回成功，中央後端仍維持IAM及固定relay SA驗證、業務仍須使用者Session；relay runtime／IAM policy／容量／流量及組織政策不變。舊Hosting設定已生成但未發布，reader未開LOGIN、未停寫／搬資料／導流。原拒絕收據與後續讀回保存在`output/dev142-entry-preparation-20261125/`。
