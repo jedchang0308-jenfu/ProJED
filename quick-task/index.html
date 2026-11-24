@@ -32,7 +32,8 @@
             </button>
           </div>
           <button id="quick-task-submit" class="quick-task-submit" type="submit" disabled>建立</button>
-          <p class="quick-task-submit-note">按「建立」後，任務將會同步至 ProJED 主程式的「全域任務工作台」。</p>
+          <p id="quick-task-draft-status" class="quick-task-submit-note" role="status" aria-live="polite" hidden></p>
+          <button id="quick-task-draft-retry" type="button" hidden>重試本機保存</button>
         </form>
         <p id="quick-task-message" class="quick-task-message" role="status" aria-live="polite" hidden></p>
       </div>

@@ -4,6 +4,8 @@ import test from 'node:test';
 import {KernelError} from '../../../server/errors.js';
 import {runMeetingAsrHost,type MeetingAsrHostDependencies,type MeetingAsrWork} from '../../../server/meetingAsrHost.js';
 import {meetingAsrJobCheck} from '../../../server/meetingAsrJob.js';
+import {CURRENT_PRODUCTION_IDENTITY_PINS,type IdentityContractPin} from '../../../server/identityConsumer.js';
+import type {MeetingAsrRuntimeBinding} from '../../../server/meetingAsrRuntimeBinding.js';
 
 const RUN_1='11111111-1111-4111-8111-111111111111';
 const RUN_2='12121212-1212-4121-8121-121212121212';
@@ -37,8 +39,26 @@ test('Job check-only reports status without connecting runtime or calling provid
   assert.equal(result.runtime,'NOT_CONNECTED');
   assert.equal(result.provider,'NOT_RUN');
   assert.equal(result.llmDispatch,'DISABLED');
-  assert.ok(result.providerDispatch==='DISABLED'||result.providerDispatch==='QUALIFICATION_BOUND');
-  assert.ok(result.sessionContract==='UNPUBLISHED'||result.sessionContract==='PINNED');
+  assert.ok(CURRENT_PRODUCTION_IDENTITY_PINS.length>0);
+  assert.equal(result.providerDispatch,'QUALIFICATION_BOUND');
+  assert.equal(result.sessionContract,'PINNED');
+});
+
+test('ASR check-only needs qualified source binding and Session pins; neither alone enables dispatch',()=>{
+  const binding:MeetingAsrRuntimeBinding={projectId:'jenfu-platform-prod',provider:'google-cloud-speech-v1',model:'default',
+    dataLogging:'disabled',audioBucket:'jenfu-platform-prod-projed-meeting-audio',qualificationEvidenceRef:'SYNTHETIC_CHECK_ONLY'};
+  const pins:readonly IdentityContractPin[]=[{contractVersion:'jenfu.sso-handoff.v4',manifestSha256:'c'.repeat(64),
+    issuer:'https://platform.example.invalid/api/sso',audience:'projed'}];
+  assert.equal(meetingAsrJobCheck(binding,[]).providerDispatch,'DISABLED');
+  for(const candidate of [null,{...binding,projectId:'another-project'},{...binding,dataLogging:'enabled'},
+    {...binding,audioBucket:'another-bucket'},{...binding,qualificationEvidenceRef:'  '}]){
+    assert.equal(meetingAsrJobCheck(candidate as MeetingAsrRuntimeBinding|null,pins).providerDispatch,'DISABLED');
+  }
+  const qualified=meetingAsrJobCheck(binding,pins);
+  assert.equal(qualified.providerDispatch,'QUALIFICATION_BOUND');
+  assert.equal(qualified.sessionContract,'PINNED');
+  assert.equal(qualified.runtime,'NOT_CONNECTED');
+  assert.equal(qualified.provider,'NOT_RUN');
 });
 
 test('disabled dispatch still recovers expired units and cleans pool, deadline and month work',async()=>{

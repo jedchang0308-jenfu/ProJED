@@ -24,7 +24,7 @@ const INVITE_ROLES = new Set<CollaborationRole>(['admin', 'project_manager', 'me
 const CAPABILITIES = new Set<string>(PERMISSION_CAPABILITIES);
 const MAX_INVITE_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
-const DEFAULT_PERMISSIONS: DomainRolePermissionMatrix = {
+export const DEFAULT_PERMISSIONS: DomainRolePermissionMatrix = {
   owner: [...PERMISSION_CAPABILITIES],
   admin: [...PERMISSION_CAPABILITIES],
   project_manager: [

@@ -13,6 +13,9 @@ test('successful plan, apply and reconciliation only attest their DB data', () =
     assert.equal(receipt.evidenceScope, 'DATABASE_ONLY');
     assert.deepEqual(receipt.legacyStorage, { status: 'NOT_INVENTORIED' });
     assert.equal(receipt.newWriterAllowed, false);
+    assert.deepEqual(receipt.sourceNormalization,
+      { retiredBoardCapabilities: ['collect_task'], authority: 'ProJED DEV-104',
+        ownerCapabilities: 'CURRENT_FIXED_OWNER_CONTRACT', missingBoardRoles: 'CURRENT_DEFAULTS_ONLY_WHEN_ABSENT', sourceRowsModified: false });
   }
 });
 

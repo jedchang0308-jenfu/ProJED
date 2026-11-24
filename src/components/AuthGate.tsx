@@ -24,6 +24,7 @@ import { isHttpBackend, isLocalTestBackend, isSupabaseBackend } from '../service
 import { seedLocalTestEnvironment } from '../utils/localTestEnvironment';
 import { BOARD_INVITE_TOKEN_PARAM } from '../utils/boardInviteToken';
 import { refreshPwaReloadSafety, setPwaReloadReadiness } from '../services/pwaReloadSafety';
+import { getQuickCaptureUrl } from '../features/quickTaskCapture/origins';
 
 // 偵測是否為 App 內建瀏覽器 (Line, FB, IG 等)
 const detectInAppBrowser = (): boolean => {
@@ -193,6 +194,7 @@ export default function AuthGate({ children }: AuthGateProps) {
               <p className="text-slate-300 text-sm">載入中...</p>
             </>
           )}
+          <a href={getQuickCaptureUrl(window.location.origin)} className="text-sm font-medium text-blue-300 underline underline-offset-4">先記事</a>
         </div>
       </div>
     );
@@ -210,7 +212,7 @@ export default function AuthGate({ children }: AuthGateProps) {
               <img src="/icons/projed-main-icon-brand-20260929-512.png" alt="ProJED 標誌" className="w-full h-full object-cover" />
             </div>
             <h1 className="text-2xl font-bold text-white mb-2">ProJED</h1>
-            <p className="text-slate-400 text-sm">專案管理，從登入開始</p>
+            <a href={getQuickCaptureUrl(window.location.origin)} className="text-sm font-medium text-blue-300 underline underline-offset-4">先記事</a>
           </div>
 
           {/* 錯誤訊息 */}

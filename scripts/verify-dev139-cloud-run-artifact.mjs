@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { readFileSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { verifyHttpArtifact } from './lib/dev139-http-artifact.mjs';
 
 const root = process.cwd();
 const releaseId = 'dev139-cloud-run-verify';
@@ -23,6 +24,8 @@ assert.match(dockerfile, /USER node/);
 assert.match(dockerfile, /CMD \["node", "dist-server\/server\/index\.js"\]/);
 assert.match(dockerfile, /FROM media-runtime AS asr-job\s+CMD \["node", "dist-server\/server\/meetingAsrJob\.js"\]/);
 assert.match(dockerfile, /FROM runtime AS final/);
+assert.match(dockerfile, /FROM \$\{NODE_IMAGE\} AS legacy-entry/);
+assert.match(dockerfile, /CMD \["node", "dist-server\/server\/legacyEntryMain\.js"\]/);
 assert.doesNotMatch(dockerfile, /PROJED_DATABASE_URL|PROJED_RUNTIME_BINDING_JSON|password|secret/i);
 for (const entry of ['.git', 'node_modules', 'dist', 'output', '.env.*']) assert.match(dockerignore, new RegExp(`^${entry.replace('.', '\\.')}\r?$`, 'm'));
 
@@ -32,6 +35,11 @@ for (const path of ['dist/index.html', 'dist/quick-task/index.html', 'dist/dev13
 }
 const meta = JSON.parse(readFileSync('dist/dev139-cloud-run-meta.json', 'utf8'));
 assert.deepEqual({ releaseId: meta.releaseId, backend: meta.backend }, { releaseId, backend: 'http' });
+assert.equal(meta.buildMode, 'candidate');
+assert.equal(meta.previousAssets, 'NOT_SUPPLIED_CANDIDATE_ONLY');
+const catalog = JSON.parse(readFileSync('dist/app-version-retention.json', 'utf8'));
+assert.equal(catalog.releases.some(release => release.version === `release:${releaseId}`), true);
+if (meta.sourceRevision !== null) verifyHttpArtifact('http-artifact-manifest.json');
 assert.equal(meta.entrySha256, createHash('sha256').update(readFileSync('dist/index.html')).digest('hex'));
 assert.equal(meta.quickEntrySha256, createHash('sha256').update(readFileSync('dist/quick-task/index.html')).digest('hex'));
 
@@ -42,9 +50,9 @@ const binding = JSON.parse(run([
 const managedProfile = JSON.parse(readFileSync('config/dev-139/s3-managed.profile.json', 'utf8'));
 assert.equal(managedProfile.database.host, 'cloud-sql-iam');
 assert.deepEqual(managedProfile.database.iamLogins, {
-  runtime: 'projed-prod-runtime@projed-cc78d.iam',
-  migrator: 'projed-prod-migrator@projed-cc78d.iam',
-  importer: 'projed-prod-importer@projed-cc78d.iam',
+  runtime: 'projed-prod-runtime@jenfu-platform-prod.iam',
+  migrator: 'projed-prod-migrator@jenfu-platform-prod.iam',
+  importer: 'projed-prod-importer@jenfu-platform-prod.iam',
 });
 assert.deepEqual(binding.migrationSha256, Object.fromEntries(managedProfile.migrations.map(({ path }) => [
   path, createHash('sha256').update(readFileSync(path)).digest('hex'),

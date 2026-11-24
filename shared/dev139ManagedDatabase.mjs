@@ -1,5 +1,6 @@
 import { URL } from 'node:url';
 import { TextDecoder } from 'node:util';
+import { MANAGED_PROJECT_ID } from './dev139DeploymentTarget.mjs';
 
 export const MANAGED_DATABASE = Object.freeze({
   host: 'cloud-sql-iam',
@@ -7,9 +8,9 @@ export const MANAGED_DATABASE = Object.freeze({
   databaseName: 'jenfu_prod',
   databasePort: 5432,
   iamLogins: Object.freeze({
-    runtime: 'projed-prod-runtime@projed-cc78d.iam',
-    migrator: 'projed-prod-migrator@projed-cc78d.iam',
-    importer: 'projed-prod-importer@projed-cc78d.iam',
+    runtime: `projed-prod-runtime@${MANAGED_PROJECT_ID}.iam`,
+    migrator: `projed-prod-migrator@${MANAGED_PROJECT_ID}.iam`,
+    importer: `projed-prod-importer@${MANAGED_PROJECT_ID}.iam`,
   }),
   roles: Object.freeze({
     owner: 'projed_owner_disposable', migrator: 'projed_migrator_disposable',
@@ -178,7 +179,9 @@ export async function prepareManagedDatabaseSession(client, binding, purpose) {
   assertPurpose(purpose);
   assertBinding(binding);
   const appRole = MANAGED_DATABASE.roles[purpose];
-  const allowedRoles = [appRole, 'cloudsqliamuser'];
+  // These lifecycle logins are IAM service accounts. Cloud SQL injects this
+  // system membership; it is distinct from the human IAM user's role.
+  const allowedRoles = [appRole, 'cloudsqliamserviceaccount'];
   if (purpose === 'migrator') allowedRoles.push(MANAGED_DATABASE.roles.owner);
   const result = await client.query(`
     SELECT current_database() AS database_name, session_user::text AS login_name,

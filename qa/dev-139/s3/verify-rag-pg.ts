@@ -130,16 +130,16 @@ function deterministicProvider(): {
   // Exercise the actual Cloud adapter through HTTP and RLS. Only the external
   // IAM/model wire is synthetic; this does not attest the production project.
   const provider = createQualifiedCloudRagProvider({
-    binding: { projectId: 'projed-cc78d', provider: 'google-cloud-rag', embeddingModel: EMBEDDING_MODEL,
+    binding: { projectId: 'jenfu-platform-prod', provider: 'google-cloud-rag', embeddingModel: EMBEDDING_MODEL,
       generationModels: ['gemini-3.1-flash-lite', 'gemini-3.5-flash'], abuseMonitoring: 'exempt',
       cache: 'disabled', requestResponseLogging: 'disabled', qualificationEvidenceRef: 'native-fixture-only' },
     getAccessToken: async () => 'synthetic-rag-iam-token',
     fetcher: async (input, init) => {
       const url = String(input), body = JSON.parse(String(init?.body));
       assert.equal(new Headers(init?.headers).get('authorization'), 'Bearer synthetic-rag-iam-token');
-      assert.equal(new Headers(init?.headers).get('x-goog-user-project'), 'projed-cc78d');
+      assert.equal(new Headers(init?.headers).get('x-goog-user-project'), 'jenfu-platform-prod');
       let result: unknown;
-      if (url === 'https://us-central1-aiplatform.googleapis.com/v1/projects/projed-cc78d/locations/us-central1/publishers/google/models/gemini-embedding-001:predict') {
+      if (url === 'https://us-central1-aiplatform.googleapis.com/v1/projects/jenfu-platform-prod/locations/us-central1/publishers/google/models/gemini-embedding-001:predict') {
         counts.embed += 1;
         const content = body.instances[0].content as string;
         const current = barrier;
@@ -148,7 +148,7 @@ function deterministicProvider(): {
         }
         result = { predictions: [{ embeddings: { values: [...vector], statistics: { truncated: false, token_count: 4 } } }] };
       } else {
-        assert.match(url, /^https:\/\/aiplatform\.googleapis\.com\/v1\/projects\/projed-cc78d\/locations\/global\/publishers\/google\/models\/gemini-(?:3\.1-flash-lite|3\.5-flash):generateContent$/u);
+        assert.match(url, /^https:\/\/aiplatform\.googleapis\.com\/v1\/projects\/jenfu-platform-prod\/locations\/global\/publishers\/google\/models\/gemini-(?:3\.1-flash-lite|3\.5-flash):generateContent$/u);
         counts.generate += 1;
         result = { modelVersion: url.split('/').at(-1)!.split(':')[0], usageMetadata: { cachedContentTokenCount: 0 },
           candidates: [{ finishReason: 'STOP', content: { parts: [{ text: 'synthetic-rag-answer' }] } }] };

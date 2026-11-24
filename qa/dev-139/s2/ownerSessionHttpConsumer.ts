@@ -7,7 +7,7 @@ import type { RuntimeConfig, SourceProfile } from '../../../server/config.js';
 import { RuntimeDatabase } from '../../../server/db.js';
 import { createExternalInvitationPublisher } from '../../../server/externalBoardInvites.js';
 import { createKernelHttpServer } from '../../../server/http.js';
-import { CURRENT_PRODUCTION_IDENTITY_PINS, IdentityConsumer } from '../../../server/identityConsumer.js';
+import { IdentityConsumer } from '../../../server/identityConsumer.js';
 import { createPlatformHandoffClient } from '../../../server/platformHandoff.js';
 import { createPlatformIdentityVerifier } from '../../../server/platformIdentityVerifier.js';
 import { createPlatformPrincipalStateReader, PLATFORM_PROJED_PRINCIPAL_STATE_CONTRACT } from '../../../server/platformPrincipalState.js';
@@ -15,6 +15,14 @@ import { PostgresAppSessionStore } from '../../../server/postgresAppSessionStore
 import { GooglePrincipalMappingResolver } from '../../../server/principalMappings.js';
 
 /** Test-only composition. All identity/provider evidence remains LOCAL_SIMULATION. */
+function localOrigin(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.origin === value && url.protocol === 'http:' && url.port !== ''
+      && ['127.0.0.1','localhost','[::1]'].includes(url.hostname);
+  } catch { return false; }
+}
+
 export async function startOwnerSessionHttpConsumer(options: {
   root: string;
   databaseName: string;
@@ -26,7 +34,8 @@ export async function startOwnerSessionHttpConsumer(options: {
 }) {
   if (!/^dev014_[a-f0-9]{20}$/u.test(options.databaseName)
       || !Number.isSafeInteger(options.databasePort) || options.databasePort < 1024
-      || options.databasePort > 65535 || CURRENT_PRODUCTION_IDENTITY_PINS.length !== 0) {
+      || options.databasePort > 65535 || !localOrigin(options.brokerOrigin)
+      || (options.externalOwnerOrigin !== undefined && !localOrigin(options.externalOwnerOrigin))) {
     throw new Error('LOCAL_SIMULATION_CONSUMER_BINDING_REJECTED');
   }
   const profile = JSON.parse(readFileSync(resolve(options.root, 'config/dev-139/s3-read-disposable.profile.json'), 'utf8')) as SourceProfile;

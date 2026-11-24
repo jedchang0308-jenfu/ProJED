@@ -1,7 +1,7 @@
+import { MANAGED_PROJECT_ID as PROJECT } from '../shared/dev139DeploymentTarget.mjs';
 /** Google Cloud transport only. The durable worker must additionally require
  * the actual project's zero-retention qualification, actor fence and budget.
  * Importing/constructing this adapter does not contact Google or attest ZDR. */
-const PROJECT='projed-cc78d';
 const EMBEDDING_URL=`https://us-central1-aiplatform.googleapis.com/v1/projects/${PROJECT}/locations/us-central1/publishers/google/models/gemini-embedding-001:predict`;
 const GENERATION_BASE=`https://aiplatform.googleapis.com/v1/projects/${PROJECT}/locations/global/publishers/google/models/gemini-3.5-flash`;
 const MAX_RESPONSE_BYTES=512*1024;

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { MANAGED_SSO_BROKER_ORIGIN } from '../shared/dev139DeploymentTarget.mjs';
 
 import { validateServerActor, type ServerActorV1 } from './actorTransaction.js';
 import type { AppEntry } from './config.js';
@@ -71,9 +72,17 @@ export interface IdentityConsumerDependencies {
   readonly createContextId?: () => string;
 }
 
-// Owner v4 source exists, but formal publication and consumer acceptance are
-// pending. Source/CI evidence does not activate a production contract pin.
-export const CURRENT_PRODUCTION_IDENTITY_PINS: readonly IdentityContractPin[] = Object.freeze([]);
+// Native Platform A3 and OrgMaster 368 publications were provider-verified.
+// SPEC-139 §3.0.7 records the immutable receipts; original UUID mappings and
+// current owner state remain mandatory for every new application Session.
+export const CURRENT_PRODUCTION_IDENTITY_PINS: readonly IdentityContractPin[] = Object.freeze([
+  Object.freeze({
+    contractVersion: 'jenfu.sso-handoff.v4',
+    manifestSha256: 'c5471fa9686566cf2ecb42f6f78f52eed5188e36bcfd8208609a96fc0f829e6a',
+    issuer: `${MANAGED_SSO_BROKER_ORIGIN}/api/sso`,
+    audience: 'projed' as const,
+  }),
+]);
 
 const SHA256_RE = /^[a-f0-9]{64}$/;
 const REVISION_RE = /^[1-9][0-9]{0,18}$/;

@@ -1,11 +1,15 @@
 import assert from 'node:assert/strict';
 import { createHash, randomBytes } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { verifyLegacyClientFenceOci } from './lib/dev139-legacy-client-fence-oci.mjs';
+import { MANAGED_MEETING_AUDIO_BUCKET } from '../shared/dev139MeetingAudio.mjs';
+import { MANAGED_SSO_BROKER_ORIGIN } from '../shared/dev139DeploymentTarget.mjs';
+import { stagePublicPredecessor } from './lib/dev139-predecessor-stage.mjs';
+import { legacyManifestFixture } from '../qa/dev-139/release/httpArtifactFixture.mjs';
 
 // Actual OCI qualification runs on the disposable Linux CI host. Never start
 // Docker or consume the developer's constrained Windows disk through this path.
@@ -18,6 +22,8 @@ const label = 'projed.dev139.oci-attempt';
 const prefix = `dev139-oci-${nonce}`;
 const toolsImage = `${prefix}:build`;
 const runtimeImage = `${prefix}:runtime`;
+const legacyEntryImage = `${prefix}:legacy-entry`;
+const legacyHttpImage = `${prefix}:legacy-http`;
 const jobsImage = `${prefix}:jobs`;
 const mediaImage = `${prefix}:media`;
 const asrImage = `${prefix}:asr-job`;
@@ -38,11 +44,14 @@ const secrets = Array.from({ length: 5 }, () => randomBytes(24).toString('hex'))
 const [adminPassword, migratorPassword, importerPassword, runtimePassword, runtimeIamToken] = secrets;
 let binding;
 let imageId;
+let legacyEntryImageId;
+let legacyEntryTransport;
 let jobsImageId;
 let mediaImageId;
 let asrImageId;
 let mediaProof;
 let legacyClientFenceProof;
+let predecessorStage;
 let postgresVersion;
 let appliedMigrationCount = 0;
 let firstFailure;
@@ -54,6 +63,9 @@ function sanitize(value) {
 }
 
 function docker(args, { input, env = {}, timeout = 90_000, allowFailure = false } = {}) {
+  if (args[0] === 'build' && args.includes('Dockerfile.dev139') && process.env.GITHUB_SHA) {
+    args = [...args.slice(0, 1), '--build-arg', `PROJED_SOURCE_REVISION=${process.env.GITHUB_SHA}`, ...args.slice(1)];
+  }
   const result = spawnSync('docker', args, {
     input, env: { ...process.env, ...env }, encoding: 'utf8', timeout,
     maxBuffer: 32 * 1024 * 1024,
@@ -140,6 +152,96 @@ try {
   assert.deepEqual(image.Config.Cmd, ['node', 'dist-server/server/index.js']);
   passed('actual-linux-amd64-nonroot-runtime-image');
 
+  docker(['build', '--platform', 'linux/amd64', '--target', 'legacy-entry', '--label', `${label}=${nonce}`,
+    '--build-arg', `PROJED_RELEASE_ID=${prefix}`, '-f', 'Dockerfile.dev139', '-t', legacyEntryImage, '.'], { timeout: 600_000 });
+  images.add(legacyEntryImage);
+  const entryImage = JSON.parse(docker(['image', 'inspect', legacyEntryImage]).stdout)[0];
+  legacyEntryImageId = entryImage.Id;
+  assert.equal(entryImage.Config.User, 'node');
+  assert.deepEqual(entryImage.Config.Cmd, ['node', 'dist-server/server/legacyEntryMain.js']);
+  const entryCheck = runOwnedContainer('legacy-entry-check', ['--read-only', '--tmpfs', '/tmp', legacyEntryImage, 'node',
+    'dist-server/server/legacyEntryMain.js', '--check-only']);
+  const entryCheckResult = JSON.parse(entryCheck.stdout);
+  legacyEntryTransport = entryCheckResult.transport;
+  assert.ok(['UNPUBLISHED', 'QUALIFICATION_BOUND'].includes(legacyEntryTransport));
+  assert.deepEqual(entryCheckResult, { event: 'projed_legacy_entry_check', status: 'CHECK_ONLY',
+    transport: legacyEntryTransport, upstream: 'NOT_CONTACTED', userAuthority: 'APP_SESSION_REQUIRED', database: 'NOT_CONNECTED', models: 'NOT_RUN' });
+  runOwnedContainer('legacy-entry-no-db', ['--read-only', '--tmpfs', '/tmp', legacyEntryImage, 'node', '--input-type=module', '-e',
+    "import assert from 'node:assert/strict';import {existsSync} from 'node:fs';for(const path of ['/app/db','/app/config','/app/dist','/app/node_modules/pg','/app/dist-server/server/index.js'])assert.equal(existsSync(path),false);"]);
+  passed('actual-nonroot-no-db-legacy-entry-check-only');
+  if (legacyEntryTransport === 'UNPUBLISHED') {
+    const inactiveEntry = runOwnedContainer('legacy-entry-unpublished', ['--read-only', '--tmpfs', '/tmp', legacyEntryImage], { allowFailure: true });
+    assert.equal(inactiveEntry.status, 1);
+    assert.match(inactiveEntry.stderr, /LEGACY_ENTRY_UNAVAILABLE/);
+    passed('actual-unpublished-legacy-entry-start-denial');
+  } else {
+    // runOwnedContainer defaults to --network none. Exercise the real compiled
+    // entry/listener with native loopback HTTP, not a Google provider in CI.
+    const activeEntry = runOwnedContainer('legacy-entry-private-source', ['--read-only', '--tmpfs', '/tmp', legacyEntryImage,
+      'node', '--input-type=module', '-e', String.raw`
+      import assert from 'node:assert/strict';
+      import { request } from 'node:http';
+      import { setTimeout as delay } from 'node:timers/promises';
+      import { legacyEntryMain } from './dist-server/server/legacyEntryMain.js';
+      import { createLegacyEntryRelay } from './dist-server/server/legacyEntryRelay.js';
+      import { CURRENT_LEGACY_ENTRY_BINDING, validLegacyEntryBinding, LEGACY_MAIN_ORIGIN } from './dist-server/server/legacyEntryBinding.js';
+      let metadataCalls = 0;
+      globalThis.fetch = async () => { metadataCalls++; throw new Error('CI_PROVIDER_IO_FORBIDDEN'); };
+      const getIdentityToken = async () => { metadataCalls++; throw new Error('CI_PROVIDER_IO_FORBIDDEN'); };
+      assert.ok(CURRENT_LEGACY_ENTRY_BINDING && validLegacyEntryBinding(CURRENT_LEGACY_ENTRY_BINDING));
+      assert.throws(() => createLegacyEntryRelay(null, { getIdentityToken }), /UNQUALIFIED/);
+      assert.throws(() => createLegacyEntryRelay({ ...CURRENT_LEGACY_ENTRY_BINDING, qualificationSha256: '' }, { getIdentityToken }), /UNQUALIFIED/);
+      assert.equal(metadataCalls, 0);
+      const get = (path, headers = {}) => new Promise((resolve, reject) => {
+        const pending = request({ hostname: '127.0.0.1', port: 8080, path, method: 'GET', agent: false,
+          headers: { host: new URL(LEGACY_MAIN_ORIGIN).host, connection: 'close', ...headers } }, response => {
+          const chunks = []; response.on('data', chunk => chunks.push(chunk));
+          response.once('end', () => resolve({ status: response.statusCode, body: Buffer.concat(chunks).toString('utf8'), headers: response.headers }));
+          response.once('error', reject);
+        });
+        pending.setTimeout(1000, () => pending.destroy(new Error('CI_LOOPBACK_TIMEOUT')));
+        pending.once('error', reject); pending.end();
+      });
+      try {
+        // False/unrelated environment values cannot replace the qualified source
+        // or cause DB/credential composition. Only PORT belongs to this entry.
+        await legacyEntryMain([], { PORT: '8080', PROJED_LEGACY_ENTRY_BINDING: '{"enabled":false}',
+          PROJED_DATABASE_URL: 'CI_MUST_NOT_CONNECT', PROJED_RUNTIME_BINDING_JSON: 'CI_MUST_NOT_READ' });
+        assert.equal(metadataCalls, 0);
+        const codes = [];
+        for (const [path, headers] of [
+          ['/sw.js', { host: 'attacker.invalid' }],
+          ['/sw.js', { 'x-projed-entry-origin': LEGACY_MAIN_ORIGIN, 'x-projed-entry-identity': 'forged.transport.proof' }],
+          ['/rest/v1/profiles', {}],
+        ]) {
+          const result = await get(path, headers); codes.push(result.status);
+          assert.equal(result.status, 403);
+          assert.equal(JSON.parse(result.body).error.code, 'ACCESS_DENIED');
+          assert.equal(result.headers['cache-control'], 'no-store');
+          assert.equal(metadataCalls, 0, 'Rejected input reached the metadata token provider');
+        }
+        const started = Date.now(); process.kill(process.pid, 'SIGTERM');
+        let closed = false;
+        while (Date.now() - started < 9000) {
+          try { await get('/sw.js', { host: 'attacker.invalid' }); }
+          catch (error) {
+            if (error.code === 'ECONNREFUSED') { closed = true; break; }
+            if (error.code !== 'ECONNRESET') throw error;
+          }
+          await delay(25);
+        }
+        assert.equal(closed, true, 'SIGTERM did not release the owned listener within its shutdown bound');
+        assert.equal(metadataCalls, 0);
+        console.log(JSON.stringify({ status: 'PASS', transport: 'QUALIFICATION_BOUND', responseCodes: codes,
+          metadataCalls, sigtermListenerReleased: true, provider: 'NOT_CONTACTED', database: 'NOT_CONNECTED' }));
+      } catch (error) { console.error(error); process.exit(1); }
+      `]);
+    const activeEntryResult = JSON.parse(activeEntry.stdout.trim().split('\n').at(-1));
+    assert.deepEqual(activeEntryResult, { status: 'PASS', transport: 'QUALIFICATION_BOUND', responseCodes: [403, 403, 403],
+      metadataCalls: 0, sigtermListenerReleased: true, provider: 'NOT_CONTACTED', database: 'NOT_CONNECTED' });
+    passed('actual-qualified-private-legacy-entry-listen-pretoken-denials-and-bounded-sigterm');
+  }
+
   docker(['build', '--platform', 'linux/amd64', '--target', 'managed-jobs', '--label', `${label}=${nonce}`,
     '--build-arg', `PROJED_RELEASE_ID=${prefix}`, '-f', 'Dockerfile.dev139', '-t', jobsImage, '.'], { timeout: 600_000 });
   images.add(jobsImage);
@@ -200,9 +302,9 @@ try {
   const asrCheckLines = asrCheckOnly.stdout.trim().split(/\r?\n/u);
   assert.equal(asrCheckLines.length, 1);
   assert.deepEqual(JSON.parse(asrCheckLines[0]), {
-    event: 'projed_meeting_asr_job_check', status: 'CHECK_ONLY', providerDispatch: 'DISABLED',
+    event: 'projed_meeting_asr_job_check', status: 'CHECK_ONLY', providerDispatch: 'QUALIFICATION_BOUND',
     llmDispatch: 'DISABLED',
-    sessionContract: 'UNPUBLISHED', runtime: 'NOT_CONNECTED', provider: 'NOT_RUN',
+    sessionContract: 'PINNED', runtime: 'NOT_CONNECTED', provider: 'NOT_RUN',
   });
   assert.doesNotMatch(`${asrCheckOnly.stdout}${asrCheckOnly.stderr}`, /DEV139_ASR_CHECK_EGRESS_ATTEMPT/u,
     'check-only never opens metadata/provider fetches or database sockets');
@@ -215,10 +317,16 @@ try {
   assert.deepEqual(binding, originalBinding);
   passed('job-and-runtime-build-artifact-binding-match');
   writeFileSync(join(temp, 'binding.json'), JSON.stringify(binding), { mode: 0o444 });
+  const sessionFixtureEnv = [
+    `PROJED_SSO_BROKER_ORIGIN=${MANAGED_SSO_BROKER_ORIGIN}`,
+    'PROJED_MAIN_PUBLIC_ORIGIN=https://projed.example.invalid',
+    'PROJED_QUICK_PUBLIC_ORIGIN=https://quick.projed.example.invalid',
+  ];
   const runtimeEnv = [
     'PROJED_RUNTIME_BINDING_FILE=/verification/binding.json',
     `PROJED_DATABASE_URL=postgresql://${encodeURIComponent(binding.iamLogins.runtime)}@127.0.0.1:5432/jenfu_prod`,
     'PROJED_PUBLIC_APP_URL=https://projed.example.invalid', 'PORT=8080',
+    ...sessionFixtureEnv,
   ].join('\n');
   writeFileSync(join(temp, 'runtime.env'), `${runtimeEnv}\n`, { mode: 0o600 });
   writeFileSync(join(temp, 'migrator.env'), [
@@ -272,10 +380,12 @@ try {
     ALTER ROLE projed_migrator_disposable NOLOGIN;
     ALTER ROLE projed_importer_disposable NOLOGIN;
     ALTER ROLE projed_runtime_disposable NOLOGIN;
+    CREATE ROLE cloudsqliamserviceaccount NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;
     ${Object.entries(binding.iamLogins).map(([purpose, login]) => `
       CREATE ROLE "${login}" LOGIN ${purpose === 'runtime' ? `PASSWORD '${runtimeIamToken}'` : ''}
         NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;
       GRANT projed_${purpose}_disposable TO "${login}";
+      GRANT cloudsqliamserviceaccount TO "${login}" WITH ADMIN FALSE, INHERIT TRUE, SET TRUE;
       GRANT CONNECT ON DATABASE jenfu_prod TO "${login}";
     `).join('\n')}`);
   postgresVersion = pgSql('SHOW server_version;');
@@ -299,16 +409,17 @@ try {
   docker(['exec', '--user', 'postgres', pgName, 'pg_ctl', 'reload', '-D', '/var/lib/postgresql/data']);
   const asrMaintenance = runOwnedContainer('asr-job-maintenance', ['--read-only', '--tmpfs', '/tmp:rw,noexec,nosuid,size=16m',
     ...socketMount, ...bindingMount(),
+    ...sessionFixtureEnv.flatMap(value=>['--env',value]),
     '--env', 'PROJED_ENV=managed', '--env', 'PROJED_APP_ENTRY=main',
     '--env', 'PROJED_RUNTIME_BINDING_FILE=/verification/binding.json',
     '--env', `PROJED_DATABASE_URL=postgresql://${encodeURIComponent(binding.iamLogins.runtime)}@localhost/jenfu_prod?host=${encodeURIComponent(socketPath)}`,
-    '--env', 'PROJED_MEETING_AUDIO_BUCKET=projed-cc78d-meeting-audio',
+    '--env', `PROJED_MEETING_AUDIO_BUCKET=${MANAGED_MEETING_AUDIO_BUCKET}`,
     asrImage], { network: fixtureNetwork, timeout: 90_000 });
   assert.equal(asrMaintenance.status, 0, asrMaintenance.stderr);
   const asrMaintenanceLines = asrMaintenance.stdout.trim().split(/\r?\n/u);
   assert.equal(asrMaintenanceLines.length, 1);
   assert.deepEqual(JSON.parse(asrMaintenanceLines[0]), {
-    event: 'projed_meeting_asr_job_finished', dispatchEnabled: false, llmDispatchEnabled: false, rounds: 1,
+    event: 'projed_meeting_asr_job_finished', dispatchEnabled: true, llmDispatchEnabled: false, rounds: 1,
     asr: { scanned: 0, units: 0, recovered: 0, abandoned: 0, deferred: 0, failures: 0, errors: {} },
     discussion: { scanned: 0, units: 0, completed: 0, sources: 0, abandoned: 0, deferred: 0, failures: 0, errors: {} },
     llm: { scanned: 0, units: 0, recovered: 0, published: 0, local: 0, abandoned: 0, deferred: 0, failures: 0, errors: {} },
@@ -339,7 +450,7 @@ try {
         assert.equal((await wrong.query('SELECT current_user::text AS role')).rows[0].role,b.iamLogins.importer);
       } finally {await wrong.end();}
     `], { network: fixtureNetwork });
-  passed('iam-shaped-session-user-and-exact-app-role-pairs');
+  passed('iam-service-account-system-membership-and-exact-app-role-pairs');
 
   // Load the emitted importer in the actual production-dependency image. Missing
   // source inputs must stop before attempting a source or target connection.
@@ -395,6 +506,7 @@ try {
     "const r=await fetch('http://127.0.0.1:8080/health/ready',{signal:AbortSignal.timeout(4000)});process.exit(r.status===200?0:1)"], { allowFailure: true }).status === 0);
   appProbe(String.raw`
     import assert from 'node:assert/strict';
+    import { request } from 'node:http';
     import { readFileSync } from 'node:fs';
     import { createHash } from 'node:crypto';
     const sha = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -436,16 +548,47 @@ try {
       assert.equal(response.status, 200);
       assert.deepEqual(await response.json(), {status:'ok'});
     }
-    for (const path of ['/api/v1/session','/api/v1/workspaces','/api/auth/jenfu-sso/login','/api/not-a-route']) {
-      const response = await fetch('http://127.0.0.1:8080'+path);
-      assert.equal(response.status, 404);
-      assert.equal(response.headers.get('cache-control'), 'no-store');
-      assert.equal((await response.json()).error.code, 'ENDPOINT_UNAVAILABLE');
-      assert.equal(response.headers.get('set-cookie'), null);
+    for (const path of ['/api/v1/session','/api/v1/workspaces']) {
+      // Node 24.12 fetch replaces an explicit Host with the connection host.
+      // Native HTTP preserves the fixture's public host without changing DNS.
+      const response = await new Promise((resolve,reject)=>{
+        const req=request('http://127.0.0.1:8080'+path,{headers:{host:'projed.example.invalid'}},res=>{
+          const chunks=[];
+          res.on('data',chunk=>chunks.push(chunk));
+          res.on('error',reject);
+          res.on('end',()=>resolve({status:res.statusCode,headers:res.headers,body:JSON.parse(Buffer.concat(chunks).toString())}));
+        });
+        req.on('error',reject);
+        req.setTimeout(4000,()=>req.destroy(new Error('Fixture HTTP request timed out')));
+        req.end();
+      });
+      assert.equal(response.status, 401);
+      assert.equal(response.headers['cache-control'], 'no-store');
+      assert.equal(response.body.error.code, 'IDENTITY_INVALID');
+      assert.equal(response.headers['set-cookie'], undefined);
     }
+    const wrongHost = await fetch('http://127.0.0.1:8080/api/v1/session');
+    assert.equal(wrongHost.status,403);
+    assert.equal((await wrongHost.json()).error.code,'ACCESS_DENIED');
+    const wrongMethod = await fetch('http://127.0.0.1:8080/api/v1/session/login');
+    assert.equal(wrongMethod.status,405);
+    assert.equal((await wrongMethod.json()).error.code,'METHOD_NOT_ALLOWED');
+    const unknown = await fetch('http://127.0.0.1:8080/api/not-a-route');
+    assert.equal(unknown.status,404);
+    assert.equal((await unknown.json()).error.code,'ENDPOINT_UNAVAILABLE');
   `);
   passed('compiled-entry-real-main-quick-and-asset-hashes');
-  passed('unpublished-session-and-private-api-fail-closed');
+  passed('published-session-rejects-anonymous-wrong-host-and-method-without-owner-access');
+
+  pgSql('ALTER ROLE cloudsqliamserviceaccount CREATEDB;');
+  appProbe("import assert from 'node:assert/strict';assert.equal((await fetch('http://127.0.0.1:8080/health/ready')).status,503);");
+  pgSql(`ALTER ROLE cloudsqliamserviceaccount NOCREATEDB;
+    CREATE ROLE fixture_unknown_parent NOLOGIN;
+    GRANT fixture_unknown_parent TO cloudsqliamserviceaccount;`);
+  appProbe("import assert from 'node:assert/strict';assert.equal((await fetch('http://127.0.0.1:8080/health/ready')).status,503);");
+  pgSql('REVOKE fixture_unknown_parent FROM cloudsqliamserviceaccount; DROP ROLE fixture_unknown_parent;');
+  appProbe("import assert from 'node:assert/strict';assert.equal((await fetch('http://127.0.0.1:8080/health/ready')).status,200);");
+  passed('iam-system-membership-rejects-privileged-and-unknown-inherited-roles');
 
   pgSql(`GRANT projed_owner_disposable TO "${binding.iamLogins.runtime}";`);
   appProbe("import assert from 'node:assert/strict';assert.equal((await fetch('http://127.0.0.1:8080/health/ready')).status,503);");
@@ -562,6 +705,35 @@ try {
   legacyClientFenceProof = await verifyLegacyClientFenceOci({ docker, createContainer, runOwnedContainer,
     pgName, fixtureNetwork, toolsImage, prefix, nonce, secrets });
   passed('actual-legacy-client-postgrest-write-fence-and-recovery');
+
+  // Exercise the actual Linux old-origin build with a portable, verified public
+  // fixture. The source path deliberately cannot resolve inside the container.
+  const predecessorRoot = join(temp, 'public-predecessor');
+  const predecessorManifest = legacyManifestFixture(predecessorRoot);
+  const predecessor = JSON.parse(readFileSync(predecessorManifest, 'utf8'));
+  predecessor.artifact.distDir = 'C:\\unavailable-projed-predecessor\\dist';
+  writeFileSync(predecessorManifest, JSON.stringify(predecessor));
+  const staging = resolve('dev139-predecessor');
+  assert.equal(existsSync(staging), false, 'Never replace another predecessor input');
+  predecessorStage = staging;
+  stagePublicPredecessor({ manifestPath: predecessorManifest, distDir: predecessorRoot, output: staging });
+  docker(['build', '--platform', 'linux/amd64', '--target', 'runtime', '--label', `${label}=${nonce}`,
+    '--build-arg', `PROJED_RELEASE_ID=${prefix}-legacy`, '--build-arg', 'PROJED_HTTP_BUILD_MODE=legacy-entry',
+    '--build-arg', 'PROJED_PREVIOUS_RELEASE_MANIFEST=/app/dev139-predecessor/manifest.json',
+    '-f', 'Dockerfile.dev139', '-t', legacyHttpImage, '.'], { timeout: 600_000 });
+  images.add(legacyHttpImage);
+  const oldAssetHash = createHash('sha256').update(readFileSync(join(predecessorRoot, 'assets/client-old-fixture.js'))).digest('hex');
+  runOwnedContainer('legacy-http-retention', ['--read-only', '--tmpfs', '/tmp', legacyHttpImage, 'node', '--input-type=module', '-e',
+    `import assert from 'node:assert/strict';import{readFileSync,existsSync}from'node:fs';import{createHash}from'node:crypto';
+    const meta=JSON.parse(readFileSync('/app/dist/dev139-cloud-run-meta.json'));
+    const manifest=JSON.parse(readFileSync('/app/http-artifact-manifest.json'));
+    assert.equal(meta.buildMode,'legacy-entry');assert.equal(meta.previousAssets,'VERIFIED_AND_RETAINED');
+    assert.match(manifest.sourceRevision,/^[a-f0-9]{40}$/);assert.equal(meta.sourceRevision,manifest.sourceRevision);
+    assert.equal(manifest.artifact.versionRetention.retentionDays,30);
+    assert.equal(createHash('sha256').update(readFileSync('/app/dist/assets/client-old-fixture.js')).digest('hex'),${JSON.stringify(oldAssetHash)});
+    for(const name of ['index.html','quick-task/index.html'])assert.equal(existsSync('/app/dist/app-releases/release-old-fixture/'+name),true);
+    assert.equal(existsSync('/app/dev139-predecessor'),false);`]);
+  passed('actual-linux-old-origin-http-build-portable-windows-predecessor-and-immutable-version-retention');
 } catch (error) {
   firstFailure = error;
   for (const name of [...containers].reverse()) {
@@ -576,6 +748,12 @@ try {
     }
   }
 } finally {
+  if (predecessorStage) {
+    try {
+      assert.equal(predecessorStage, resolve('dev139-predecessor'));
+      rmSync(predecessorStage, { recursive: true, force: true });
+    } catch (error) { cleanupFailures.push(error); }
+  }
   for (const name of [...containers].reverse()) {
     try {
       const container = inspectResource('container', name);
@@ -610,7 +788,7 @@ if (!firstFailure && cleanupFailures.length === 0) passed('owned-container-socke
 const status = firstFailure || cleanupFailures.length ? 'FAIL' : 'PASS';
 const result = {
   status, evidenceLevel: 'ISOLATED_LINUX_OCI_IAM_SHAPED_POSTGRES',
-  sourceSha: process.env.GITHUB_SHA, releaseId: prefix, imageId, jobsImageId, asrImageId, mediaImageId, mediaProof,
+  sourceSha: process.env.GITHUB_SHA, releaseId: prefix, imageId, legacyEntryImageId, legacyEntryTransport, jobsImageId, asrImageId, mediaImageId, mediaProof,
   postgres: postgresVersion, migrationCount: appliedMigrationCount,
   expectedMigrationCount: binding ? Object.keys(binding.migrationSha256).length : 0,
   profileSha256: binding?.profileSha256, migrationSha256: binding?.migrationSha256,

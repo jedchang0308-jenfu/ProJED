@@ -1,5 +1,6 @@
 # ProJED Documentation Map
 
+- [DEV-142 正式資料搬遷（獨立交付點／已規劃未執行）](dev_task.md#dev-142-production-data-migration) · [範圍、晚間窗口與完成判定](specs/SPEC-142-projed-production-data-migration.md)
 - [DEV-141 新版先通知，由使用者手動更新](dev_task.md#dev-141-manual-app-updates) · [工程契約與驗收](specs/SPEC-041-pwa-update-notification-cache-recovery.md#dev-141-manual-app-updates)
 - [DEV-140 以 OKR 模式整合清單模式](dev_task.md#dev-140-okr-list-consolidation)
 
@@ -19,6 +20,16 @@
 
 ## 2026-10-08：DEV-139 ProJED 納入 Jenfu-Platform 開發文件入口
 
+**現行決策（2026-11-23，D6）**：先保留原主站／Quick 網址與PWA入口，讓新版前端、登入、API與資料改走中央Google Cloud；確認舊網址上的新系統日常運作後，最後才換Cloud Run新網址，不重搬DB／Storage。正式資料搬遷獨立為 [DEV-142／SPEC-142](specs/SPEC-142-projed-production-data-migration.md)，已規劃未執行；偏好晚間低用量且可確認結果的時段，演練量測後另排。**目前 active 目標仍先完成切流前準備／候選驗證，原資料先不搬遷、原網址／既有PWA不切換。** 過渡入口的新資源／IAM及正式操作未由文件授權；零留存、原權限、草稿／CAS／receipt與費用限制維持。[兩階段架構與實作變更面](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-two-stage-rollout)｜[資料與恢復契約](specs/SPEC-139-projed-jenfu-platform-onboarding.md#6-資料移轉pwa-與恢復)｜[ADR-054 Rev17](decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。
+
+**最新候選（2026-11-23）**：source `41eede3` 的 CI45141685539 兩jobs SUCCESS（764 unit、型別／boundary／compiled artifact、隔離PG／snapshot／OCI20）；修正版Cloud Build `4566c830` 的原始blob來源、51 SQL／profile及三digests通過，私人Web `projed-prod-00003-bjv` 的16項唯讀HTTP／18項PWA通過。首次CRLF封包建置 `ac8cd88d` 已拒絕未部署；舊 `00002-str` 保留。IAM／網路／容量不變、migration仍原一次、analysis零次；入口／identity／provider bindings仍停用，原資料／網址／PWA未改、不切流。隔夜仍為時鐘模擬，真Session／既有使用者／實際舊入口／provider資格及DEV-142未結案。[目前結果與剩餘工作](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-remaining-delivery-plan)；[PWA驗證入口與前輪歷史](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-private-candidate-pwa)。
+
+**其餘工作先文件化**：[SPEC-139 §3.0.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-remaining-delivery-plan) 統一交接入口／真登入、原地 PWA／草稿、零留存背景處理及最後換址的修改面、必要驗證與執行順序；正式資料交付仍只維護於 SPEC-142。文件交接已單獨提交 `0f5eba7`，該回合未擴寫程式或執行正式操作；後續同範圍來源 `41eede3`／候選結果見上段。入口factory／Session 17項隔離案例已通過，但實際Hosting／provider接線、真身分與未資格模型仍未完成，不把私人候選PASS當完整交付。
+
+**未部署的舊網址封裝**：[SPEC-139 §3.0.2](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-legacy-entry-packaging) 記錄無DB entry／lean image、空public全rewrite、可攜前版staging、HTTP產物manifest與跨兩版保留。原manifest／public bytes及既有保留天數不改；本機必要案例通過，完整CI／Linux封裝待驗，不改當前私人候選或舊入口、不執行DEV-142。
+
+以下日期／Rev／W 為原方案的來源與驗證歷史導覽，不覆蓋上述決策或構成新環境 PASS。
+
 音訊同源 proxy、未知寫入 readback 與跨取消／刪除清理 proof 的現行 source／驗證界線見 [SPEC §42](specs/SPEC-139-projed-jenfu-platform-onboarding.md#42-meeting-audio-transport-w282026-10-29)；完整錄音 UI／worker／cleanup 與正式接線仍計入交付。
 
 會議 capture 控制、取消退款與 review scope 保護的本版 source／驗證界線見 [SPEC §41](specs/SPEC-139-projed-jenfu-platform-onboarding.md#41-meeting-capture-control-w272026-10-29)；未以此取代錄音全功能、真身分或正式發布驗收。
@@ -33,11 +44,11 @@
 
 人類已選 **Cloud Run＋Cloud SQL 完整對齊，保留 Vite**，保留個人與外部協作，成本採 **只要費用不大幅增加即可**。D1 已確認由 OrgMaster 登錄個人／外部最小 Principal／登入來源，私人內容仍由 ProJED 隔離。D2 最新決策為 **保留現有工作區、看板與權限功能，先雲端架構、資料庫及身分契約對齊**。SPEC-139 §4.4／A09 保留原 ID、membership、五種角色、每 Board 非預設／空集合權限、繼承及邀請／撤權；其餘資料／API／Session／PWA／移轉與驗收沿同一規格，不另建 QA 文件。
 
-Rev6將人類「已有使用者」的切換評估寫入同四文件：以不丟資料、不重建帳號、不改權限、不強迫重裝為目標，優先保留既有主／Quick public origin與PWA，由相容Hosting轉送Cloud Run。各App預留正常重新登入，停寫時間由演練量測再確認；零重登／零停寫未承諾。Rev25將移轉收斂為writer fence後單次full snapshot／reconciliation；Rev26補舊Calendar URL代理；Rev27補單一managed候選；Rev28補Supabase→Cloud SQL exact snapshot連線；Rev29補importer管理權限拒絕、漏資料blocker與正常HTTP產品UI煙霧。沒有建立雙寫／CDC／delta平台或新簽核層。Cookie／callback、container／雲端、晚回網恢復及真入口仍待驗。
+歷史 Rev6／2026-11-21～22 的網址先後順序由 D6 取代：第一階段原地更新並保留舊 origin／PWA身分，正式資料搬遷由DEV-142單獨判定；最後才處理新origin登入／PWA／草稿交接，不承諾零重登或永久保留舊入口。來源writer fence、單次一致性snapshot／reconciliation、未授權拒絕與新寫入後的恢復保護維持，不建立雙寫／CDC／delta平台或新簽核層；舊版本證據只支持原受測範圍。
 
 Node24／npm11、node:http＋pg、PostgreSQL 17／18 local contract、projed_core／projed_contract、scoped query port／profile／binding／health及唯一ServerActorV1已落地。S2 server-only consumer seam要求exact producer與唯一mapping；production pins空集合。W14完成空白candidate full-snapshot單交易apply／reconcile；W15補舊Calendar URL代理；W16補managed runtime／artifact／Hosting候選；W17補exact Supabase來源與managed Cloud SQL importer；W18確保importer無管理能力／app role membership，`llm_access_logs`與Quick OAuth client非空時停止，並以QA Session完成編譯artifact→HTTP API→PostgreSQL的正常UI／reload smoke。沒有新增第二Cloud Run服務、snapshot檔、雙寫、CDC、delta服務、registry或簽核層。S2真owner wire、Docker及雲端runtime、舊origin／PWA部署、真資料plan／未承接domain、writer fence、費用／容量證據仍讀§4.5、§6、§8.1、§9.1及§28–§32；本地UI證據不代表真SSO、無縫切換、效能或費用PASS。
 
-目前 [DEV-083 發布契約](specs/SPEC-083-production-release-environment-integrity.md)、[ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md) 與 [SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md) 繼續約束現有runtime。保留Hosting舊入口是規劃中的Compatible exception，修正立即換run.app public origin假設，維持雙origin／各App Session／local-first／私人scope及pipeline ownership；不改正式backend／hosting或歷史驗收。ADR-054為Accepted，涵蓋ProJED選型與本repo本地開發收斂，不代表外部owner接受、真身分／正式入口接線或完整整合定案。Platform摘要／AI-PDM連結仍Future Phase Captured / Not Requested，待基礎相容證據及人類實際業務串接要求再進入，不作目前開發完成的blocker或效益PASS。
+現役runtime仍沿 [SPEC-083](specs/SPEC-083-production-release-environment-integrity.md)、[ADR-053](decisions/ADR-053-quick-task-cross-origin-account-link.md) 與 [SPEC-133](specs/SPEC-133-quick-task-shared-identity-sync.md) 保護；D6後續實作須同步舊網址HTTP發布／同源API與主／Quick Session／PWA綁定，不直接放寬舊正式env或清本機資料。現有私人候選不等於一般使用者入口；本輪只更新DEV-139／DEV-142文件與直接索引，不改正式backend／Hosting。Platform摘要／AI-PDM業務連結仍未要求，不新增為本階段阻塞。
 
 ## Documentation Map Update - 2026-10-06（DEV-138 DEV-133 分支整合）
 

@@ -14,10 +14,10 @@ const key = [
 const tokenValue = 'synthetic-access-token-never-log';
 test('managed storage supports cleanup without inference and rejects other buckets before authentication', () => {
   const getAccessToken = async (): Promise<string> => assert.fail('configuration must not request credentials');
-  for (const unbound of [undefined, '', 'another-private-bucket', 'run-sources-projed-cc78d-asia-east1']) {
+  for (const unbound of [undefined, '', 'another-private-bucket', 'run-sources-jenfu-platform-prod-asia-east1']) {
     assert.equal(createManagedMeetingAudioStorage(unbound, getAccessToken), undefined);
   }
-  const storage = createManagedMeetingAudioStorage('projed-cc78d-meeting-audio', getAccessToken);
+  const storage = createManagedMeetingAudioStorage('jenfu-platform-prod-projed-meeting-audio', getAccessToken);
   assert.equal(typeof storage?.probe, 'function');
   assert.equal(typeof storage?.delete, 'function');
 });

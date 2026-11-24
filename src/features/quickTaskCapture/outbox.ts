@@ -8,6 +8,8 @@ import {
   QUICK_CAPTURE_STORE,
   isQuickCaptureWritePaused,
   isQuickCaptureReceipt,
+  isQuickLocalDraft,
+  normalizeQuickTitle,
   type QuickAuthContext,
   type QuickCaptureReceipt,
   type QuickCaptureRecord,
@@ -77,6 +79,7 @@ export const commitQuickCapture = async (
   record: QuickCaptureRecord,
   expectedContext?: number | { revision: number; projectRef: string; accountId: string },
   isCurrent: () => boolean = () => true,
+  expectedDraftRevision?: number,
 ) => {
   const expectedContextRevision = typeof expectedContext === 'number' ? expectedContext : expectedContext?.revision;
   await transaction(
@@ -88,10 +91,17 @@ export const commitQuickCapture = async (
         if (!isCurrent()) { tx.abort(); return; }
         const existing = captureStore.get(record.captureId);
         existing.onsuccess = () => {
+          try {
           if (!isCurrent()) { tx.abort(); return; }
           const value = existing.result as QuickCaptureRecord | undefined;
-          if (!value) captureStore.add(record);
+          if (value && isQuickLocalDraft(value)) {
+            if (value.localDraft?.revision !== expectedDraftRevision || value.accountId !== record.accountId
+              || normalizeQuickTitle(value.title) !== record.title || value.workspaceHint !== record.workspaceHint) { tx.abort(); return; }
+            captureStore.put(record);
+          } else if (!value && expectedDraftRevision !== undefined) tx.abort();
+          else if (!value) captureStore.add(record);
           else if (value.accountId !== record.accountId || value.title !== record.title) tx.abort();
+          } catch { tx.abort(); }
         };
         existing.onerror = () => tx.abort();
       };
@@ -127,6 +137,43 @@ export const commitQuickCapture = async (
 
 export const getQuickCapture = (captureId: string) => transaction<QuickCaptureRecord | undefined>(QUICK_CAPTURE_STORE, 'readonly', tx => tx.objectStore(QUICK_CAPTURE_STORE).get(captureId));
 
+/** Local editing only: compare revision, owner and project before replacing text.
+ * Once promoted to a capture, its identity/title remain immutable. */
+export const saveQuickCaptureDraft = async (record: QuickCaptureRecord, expectedRevision: number) => {
+  if (!isQuickLocalDraft(record) || record.localDraft?.revision !== expectedRevision + 1
+    || !record.localDraft.projectRef || record.workspaceHint !== null || record.leaseId || record.claimIntent) {
+    throw new Error('LOCAL_DRAFT_INVALID');
+  }
+  let conflict = false;
+  await transaction(QUICK_CAPTURE_STORE, 'readwrite', tx => {
+    const store = tx.objectStore(QUICK_CAPTURE_STORE);
+    const request = store.get(record.captureId);
+    request.onsuccess = () => {
+      try {
+      const current = request.result as QuickCaptureRecord | undefined;
+      // A lost readback can be confirmed with the exact same revision/payload.
+      if (current && JSON.stringify(current) === JSON.stringify(record)) return;
+      if (current ? !isQuickLocalDraft(current) || current.accountId !== record.accountId
+        || current.localDraft?.projectRef !== record.localDraft?.projectRef
+        || current.localDraft?.revision !== expectedRevision : expectedRevision !== 0) {
+        conflict = true; tx.abort(); return;
+      }
+      store.put(record);
+      } catch { tx.abort(); }
+    };
+    request.onerror = () => tx.abort();
+  }).catch(error => { throw conflict ? new Error('LOCAL_DRAFT_CONFLICT') : error; });
+  const readback = await getQuickCapture(record.captureId);
+  if (JSON.stringify(readback) !== JSON.stringify(record)) throw new Error('LOCAL_DRAFT_CONFLICT');
+  return readback!;
+};
+
+export const listQuickCaptureDrafts = async (accountId: string | null, projectRef: string) => {
+  const records = await transaction<QuickCaptureRecord[]>(QUICK_CAPTURE_STORE, 'readonly', tx => tx.objectStore(QUICK_CAPTURE_STORE).getAll());
+  return (records ?? []).filter(record => isQuickLocalDraft(record) && record.accountId === accountId
+    && record.localDraft?.projectRef === projectRef).sort((a, b) => b.updatedAt - a.updatedAt);
+};
+
 export const getQuickAuthContext = () => transaction<QuickAuthContext | undefined>(QUICK_AUTH_CONTEXT_STORE, 'readonly', tx => tx.objectStore(QUICK_AUTH_CONTEXT_STORE).get('current'));
 
 export const saveQuickAuthContext = async (context: QuickAuthContext, expectedRevision?: number | null, isCurrent: () => boolean = () => true) => {
@@ -153,6 +200,7 @@ export const saveQuickAuthContext = async (context: QuickAuthContext, expectedRe
 export const listQuickCaptures = async (accountId: string | null, includeUnbound = false) => {
   const records = await transaction<QuickCaptureRecord[]>(QUICK_CAPTURE_STORE, 'readonly', tx => tx.objectStore(QUICK_CAPTURE_STORE).getAll());
   return (records ?? [])
+    .filter(record => !isQuickLocalDraft(record))
     .filter(record => includeUnbound ? (record.accountId === accountId || record.accountId === null) : record.accountId === accountId)
     .filter(record => record.state !== 'synced' || !isQuickCaptureReceipt(record.receipt, record) || Date.now() - record.updatedAt < QUICK_CAPTURE_RETENTION_MS)
     .sort((a, b) => a.clientCreatedAt - b.clientCreatedAt || a.captureId.localeCompare(b.captureId));
@@ -162,7 +210,7 @@ export const countPendingQuickCaptures = async (accountId: string | null) => (aw
 
 export const countAllPendingQuickCaptures = async () => {
   const records = await transaction<QuickCaptureRecord[]>(QUICK_CAPTURE_STORE, 'readonly', tx => tx.objectStore(QUICK_CAPTURE_STORE).getAll());
-  return (records ?? []).filter(record => record.state !== 'synced').length;
+  return (records ?? []).filter(record => !isQuickLocalDraft(record) && record.state !== 'synced').length;
 };
 
 export const updateQuickCapture = async (captureId: string, update: Partial<QuickCaptureRecord>, expectedLeaseId?: string | null) => {

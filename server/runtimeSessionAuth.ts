@@ -34,6 +34,8 @@ export function createRuntimeSessionAuth(
   database: RuntimeDatabase,
   env: NodeJS.ProcessEnv = process.env,
 ): RuntimeSessionAuthOptions {
+  // Disposable kernels use explicit local test transports, never live owners.
+  if (config.env === 'disposable') return {};
   if (CURRENT_PRODUCTION_IDENTITY_PINS.length === 0) return {};
   if (config.env !== 'managed') configError();
   const brokerOrigin = origin(env.PROJED_SSO_BROKER_ORIGIN);

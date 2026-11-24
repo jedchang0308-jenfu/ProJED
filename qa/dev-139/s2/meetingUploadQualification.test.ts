@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+import {readFileSync} from 'node:fs';
 import {Readable} from 'node:stream';
 import type {IncomingMessage} from 'node:http';
 import test from 'node:test';
@@ -8,18 +10,62 @@ import type {RuntimeConfig} from '../../../server/config.js';
 import type {RuntimeDatabase} from '../../../server/db.js';
 import {createMeetingCaptureHttpDispatcher} from '../../../server/meetingCaptureHttp.js';
 import {createQualifiedMeetingUploadRepository,MeetingUploadRepository} from '../../../server/meetingUpload.js';
-import type {MeetingAsrRuntimeBinding} from '../../../server/meetingAsrRuntimeBinding.js';
+import {CURRENT_MEETING_ASR_BINDING,hasQualifiedMeetingAsrBinding,type MeetingAsrRuntimeBinding} from '../../../server/meetingAsrRuntimeBinding.js';
+import {CURRENT_MEETING_LLM_BINDING} from '../../../server/meetingLlmRuntimeBinding.js';
 import type {MeetingJobDispatchResult} from '../../../server/meetingJobDispatch.js';
 
 const config={env:'disposable',entry:'main',profile:{runtime:{timeouts:{transactionMillis:2000,statementMillis:1000,
   lockMillis:1000,idleInTransactionMillis:1000}}}} as unknown as RuntimeConfig;
 const actor:ServerActorV1={principalId:'google:subject',localUserId:'95c1d3df-226a-4e6f-9db5-f0f7f0db9749',
   entry:'main',contextId:'9fcadd06-a3cb-43c2-8d1f-7c17147d0e68',expiresAtMs:Date.now()+60_000,accountGuardRevision:'1'};
-const binding:MeetingAsrRuntimeBinding={projectId:'projed-cc78d',provider:'google-cloud-speech-v1',model:'default',
-  dataLogging:'disabled',audioBucket:'projed-cc78d-meeting-audio',qualificationEvidenceRef:'source:qualification:2026-10'};
+const binding:MeetingAsrRuntimeBinding={projectId:'jenfu-platform-prod',provider:'google-cloud-speech-v1',model:'default',
+  dataLogging:'disabled',audioBucket:'jenfu-platform-prod-projed-meeting-audio',qualificationEvidenceRef:'source:qualification:2026-10'};
 const captureId='b53c9bd0-1e4c-4b02-b153-28f3ab4c2341';
 const recordId='3b7ff75b-1c7a-4e52-9de4-34e77ee40b7b';
 const runId='91e4a817-b146-45d0-a77a-c2a9938a6b11';
+
+test('published Speech binding matches committed private-foundation claims and the bounded silence probe',()=>{
+  const document=JSON.parse(readFileSync(new URL('../../../config/dev-139/speech-qualification.json',import.meta.url),'utf8')) as {
+    schemaVersion:number;scope:string;claims:Record<string,unknown>;claimsSha256:string;
+    binding:MeetingAsrRuntimeBinding;observedAt:string;evidenceRefs:string[];
+  };
+  assert.equal(document.schemaVersion,1);
+  assert.equal(document.scope,'SPEECH_V1_TRANSPORT_AND_PRIVATE_AUDIO_FOUNDATION');
+  const canonical=(value:unknown):unknown=>Array.isArray(value)?value.map(canonical)
+    :value!==null&&typeof value==='object'
+      ?Object.fromEntries(Object.entries(value).sort(([left],[right])=>left<right?-1:left>right?1:0)
+        .map(([key,entry])=>[key,canonical(entry)])):value;
+  const digest=createHash('sha256').update(JSON.stringify(canonical(document.claims))).digest('hex');
+  assert.equal(document.claimsSha256,digest);
+  assert.equal(digest,'5af1fd87a21f8b5c8312160610266d3083ab63038f76201263e20a87b8517037');
+  assert.deepEqual(document.claims,{
+    scope:'SPEECH_V1_TRANSPORT_AND_PRIVATE_AUDIO_FOUNDATION',projectId:'jenfu-platform-prod',projectNumber:'9536592944',
+    runtimeServiceAccount:'projed-prod-runtime@jenfu-platform-prod.iam.gserviceaccount.com',
+    provider:'google-cloud-speech-v1',method:'speech:recognize',model:'default',dataLogging:'disabled',
+    dataLoggingRule:'OFF_BY_DEFAULT_OPT_IN_PROHIBITED_EXTERNAL_OPT_IN_REVOKES_QUALIFICATION',
+    dataLoggingRuleSource:'https://docs.cloud.google.com/speech-to-text/docs/v1/data-logging',
+    audioBucket:{name:'jenfu-platform-prod-projed-meeting-audio',location:'ASIA-EAST1',uniformBucketLevelAccess:true,
+      publicAccessPrevention:'enforced',versioning:false,softDeleteSeconds:0,
+      runtimePermissions:['storage.objects.create','storage.objects.get','storage.objects.delete']},
+    quotaPermissions:['serviceusage.services.use'],
+    analysisInvocationResource:'projects/jenfu-platform-prod/locations/asia-east1/jobs/projed-meeting-analysis',
+    probe:{execution:'projects/jenfu-platform-prod/locations/asia-east1/jobs/projed-speech-qualification/executions/projed-speech-qualification-skzrv',
+      image:'asia-east1-docker.pkg.dev/jenfu-platform-prod/projed-release/projed-prod-asr-job@sha256:f111720b688cf1221517b774b106427ab00fa69d5cb867618a36475ffd84fcf3',
+      imageSourceRevision:'c3561e5604536bc3af8116c58aab1c3275be79f5',succeededCount:1,retriedCount:0,paidInputSeconds:5,
+      input:'LOCALLY_GENERATED_SILENCE',recognitionQuality:'NOT_TESTED_BY_SILENCE_PROBE'},
+    productionIdentityPinsPublished:false,analysisJobExecuted:false,geminiQualified:false,paidUserDispatchEnabled:false,
+  });
+  assert.ok(CURRENT_MEETING_ASR_BINDING,'Declared qualification must retain its published source binding');
+  assert.deepEqual(CURRENT_MEETING_ASR_BINDING,document.binding);
+  assert.deepEqual(document.binding,{projectId:'jenfu-platform-prod',provider:'google-cloud-speech-v1',model:'default',
+    dataLogging:'disabled',audioBucket:'jenfu-platform-prod-projed-meeting-audio',
+    qualificationEvidenceRef:`config/dev-139/speech-qualification.json#sha256=${digest}`});
+  assert.equal(hasQualifiedMeetingAsrBinding(CURRENT_MEETING_ASR_BINDING,document.binding.audioBucket),true);
+  assert.equal(CURRENT_MEETING_LLM_BINDING,null);
+  assert.equal(Number.isNaN(Date.parse(document.observedAt)),false);
+  assert.deepEqual(document.evidenceRefs,['output/dev139-speech-qualification-20261123/foundation-verified.json',
+    'output/dev139-speech-qualification-20261123/speech-probe-verified.json']);
+});
 
 function uploadBody():Record<string,unknown>{
   return {operation:'complete-upload',captureId,expectedSourceVersion:1,audioManifestHash:'audio-manifest',
@@ -148,7 +194,7 @@ test('fresh committed upload wakes the job once while replay and non-runs do not
     createQualifiedMeetingUploadRepository(binding,binding.audioBucket),{async run(signal){
       freshCalls++;dispatchedSignal=signal;
       assert.ok(fresh.statements.some(statement=>statement.text==='COMMIT'),'Job dispatch follows acknowledged COMMIT');
-      return {kind:'accepted',operationName:'projects/projed-cc78d/locations/asia-east1/operations/op-1'};
+      return {kind:'accepted',operationName:'projects/jenfu-platform-prod/locations/asia-east1/operations/op-1'};
     }});
   const completed=await freshDispatcher(requestFor(uploadBody()),'fresh-committed-upload');
   assert.equal(completed.status,200);

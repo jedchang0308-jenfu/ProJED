@@ -4,6 +4,7 @@ import {
   bindQuickCaptureClaim,
   countAllPendingQuickCaptures,
   getQuickCapture,
+  getQuickAuthContext,
   listQuickCaptures,
   putClaimIntent,
   removeExpiredQuickCaptures,
@@ -18,6 +19,7 @@ import { installQuickInstallGuide } from '../features/quickTaskCapture/install';
 import { getWorkbenchUrl } from '../features/quickTaskCapture/origins';
 import { installAppIconRefresh } from '../services/appIconService';
 import { isHttpBackend } from '../services/backendMode';
+import { installQuickDraftEditor } from '../features/quickTaskCapture/editor';
 
 installAppIconRefresh('quick-task');
 
@@ -93,6 +95,21 @@ const setMessage = (text: string) => {
     message.hidden = true;
   }
 };
+const draftStatus = document.querySelector<HTMLElement>('#quick-task-draft-status')!;
+const draftRetry = document.querySelector<HTMLButtonElement>('#quick-task-draft-retry')!;
+const draftEditor = installQuickDraftEditor(titleInput, state => {
+  const labels = {
+    saving: '草稿保存中…', local: '草稿已存本機，尚未建立', restored: '已恢復本機草稿，尚未建立',
+    conflict: '草稿版本衝突；輸入仍保留，請另存本機副本',
+    failed: '草稿尚未存妥，請保留此頁並重試', empty: '',
+  };
+  draftStatus.textContent = labels[state];
+  draftStatus.dataset.state = state;
+  draftStatus.hidden = state === 'empty';
+  draftRetry.hidden = state !== 'failed' && state !== 'conflict';
+  draftRetry.textContent = state === 'conflict' ? '另存本機副本' : '重試本機保存';
+});
+draftRetry.addEventListener('click', () => { void draftEditor.retry(); });
 const setAuthStatus = (text: string, showLogin: boolean, showLogout = false) => {
   authStatus.replaceChildren();
   authStatus.removeAttribute('data-state');
@@ -137,6 +154,7 @@ const setAuthStatus = (text: string, showLogin: boolean, showLogout = false) => 
     logoutButton.textContent = '登出此 App';
     logoutButton.setAttribute('aria-label', '登出此快速建任務 App');
     logoutButton.addEventListener('click', () => {
+      draftEditor.hide();
       clearRetryTimer();
       authSnapshot = null;
       pendingClaim = null;
@@ -170,6 +188,7 @@ const clearRetryTimer = () => {
 };
 const updateDisplayedSession = (snapshot: typeof authSnapshot) => {
   if (authSnapshot?.accountId !== snapshot?.accountId || authSnapshot?.authEpoch !== snapshot?.authEpoch) {
+    if (authSnapshot?.accountId && authSnapshot.accountId !== snapshot?.accountId) draftEditor.hide();
     pendingClaim = null;
     recoveryCaptureId = null;
     recoveryRenderRevision += 1;
@@ -182,6 +201,7 @@ const updateDisplayedSession = (snapshot: typeof authSnapshot) => {
     setMessage('登入帳號已變更；原待辦仍保留在本機，請從待處理入口恢復。');
   }
   authSnapshot = snapshot;
+  void draftEditor.refresh().catch(() => undefined);
 };
 const verifyAndFlush = async (expected: NonNullable<typeof authSnapshot>) => {
   if (!pageActive) return;
@@ -198,6 +218,19 @@ const verifyAndFlush = async (expected: NonNullable<typeof authSnapshot>) => {
     if (authSnapshot?.accountId !== expected.accountId || authSnapshot.authEpoch !== expected.authEpoch) return;
     if (verification.status !== 'verified') {
       if (verification.status === 'unauthenticated') updateDisplayedSession(null);
+      if (verification.status === 'stale' && authRetryCount < 1) {
+        // A cookie can change in another tab. Fence the old editor before the
+        // Session read selects the new account; never retain its private title.
+        authRetryCount += 1;
+        draftEditor.hide();
+        currentRecord = null;
+        success.hidden = true;
+        hideRecovery();
+        authSnapshot = null;
+        setAuthStatus('正在確認登入狀態…', false);
+        await refreshAuthAndSync();
+        return;
+      }
       const label = verification.status === 'unauthenticated' ? '此快速 App 尚未登入' : !navigator.onLine
         ? '目前離線；已保留原帳號本機綁定，網路恢復後自動同步'
         : verification.status === 'unreachable' ? '登入狀態待確認；服務恢復後自動同步'
@@ -214,6 +247,7 @@ const verifyAndFlush = async (expected: NonNullable<typeof authSnapshot>) => {
       return;
     }
     const verified = verification.snapshot;
+    await draftEditor.refresh(verified.accountId).catch(() => undefined);
     authRetryCount = 0;
     setAuthStatus(`此快速 App 已登入：${verified.email ?? 'ProJED 帳號'}`, false, true);
     const authFailed = await flushQuickTaskOutbox(verified, auth, (captureId, state) => {
@@ -761,10 +795,14 @@ form.addEventListener('submit', async event => {
   submitButton.disabled = true;
   voiceButton.disabled = true;
   localCommitInFlight = true;
+  titleInput.readOnly = true;
   try {
-    const auth = await getAuthApi();
-    const offlineContext = await auth.getQuickBindingContext().catch(() => null);
-    const localAccountId = offlineContext?.bindingAllowed ? offlineContext.accountId : null;
+    const draft = await draftEditor.flush();
+    const offlineContext = await getQuickAuthContext().catch(() => null);
+    const localAccountId = draft ? draft.accountId : offlineContext?.bindingAllowed ? offlineContext.accountId : null;
+    if (localAccountId && (!offlineContext?.bindingAllowed || offlineContext.accountId !== localAccountId)) {
+      throw new Error('PENDING_CAPTURE_ACCOUNT_CHANGED');
+    }
     const pendingRecord = pendingLocalCommit?.record.title === title ? pendingLocalCommit.record : null;
     if (pendingRecord?.accountId && pendingRecord.accountId !== localAccountId) throw new Error('PENDING_CAPTURE_ACCOUNT_CHANGED');
     if (pendingRecord?.accountId && offlineContext?.accountId === pendingRecord.accountId) {
@@ -772,7 +810,7 @@ form.addEventListener('submit', async event => {
     }
     const record: QuickCaptureRecord = pendingRecord ?? {
       schemaVersion: 1,
-      captureId: currentRecord?.captureId ?? createQuickCaptureId(),
+      captureId: draft?.captureId ?? currentRecord?.captureId ?? createQuickCaptureId(),
       accountId: localAccountId,
       title,
       workspaceHint: null,
@@ -790,13 +828,13 @@ form.addEventListener('submit', async event => {
       pendingLocalCommit = { record, context: localAccountId && offlineContext
         ? { revision: offlineContext.revision, projectRef: offlineContext.projectRef, accountId: localAccountId } : undefined };
     }
-    const committed = currentRecord
+    const committed = currentRecord && !draft
       ? await updateQuickCapture(currentRecord.captureId, { state: record.state, lastErrorCode: null, nextAttemptAt: null, leaseId: null, leaseExpiresAt: null })
-      : await commitQuickCapture(record, pendingLocalCommit.context,
-        () => !record.accountId || Boolean(offlineContext && auth.isQuickBindingContextCurrent(offlineContext)));
+      : await commitQuickCapture(record, pendingLocalCommit.context, () => true, draft?.localDraft?.revision);
     if (!committed) throw new Error('IDB_UPDATE_FAILED');
     currentRecord = committed;
     pendingLocalCommit = null;
+    draftEditor.submitted(committed.captureId);
     titleInput.value = '';
     setMessage('');
     renderSuccess(committed, false);
@@ -808,6 +846,7 @@ form.addEventListener('submit', async event => {
         : '目前無法記下，請稍後重試。');
   } finally {
     localCommitInFlight = false;
+    titleInput.readOnly = false;
     submitButton.disabled = false;
     voiceButton.disabled = false;
     if (authSnapshot) void verifyAndFlush(authSnapshot);
@@ -828,7 +867,7 @@ voiceButton.addEventListener('click', () => {
       if (state === 'listening') setMessage('正在聆聽，說完後可繼續編輯。');
       if (state === 'idle') { voiceSession = null; setMessage('語音已加入名稱，可繼續編輯。'); }
     },
-    onValue: (value, caret) => { titleInput.value = value; titleInput.setSelectionRange(caret, caret); },
+    onValue: (value, caret) => { titleInput.value = value; titleInput.setSelectionRange(caret, caret); draftEditor.checkpoint(); },
   });
 });
 
@@ -859,6 +898,7 @@ void (async () => {
     setMessage('登入驗證未完成；待辦仍保留在本機，請重新登入。');
   });
   authSnapshot = await auth.loadQuickSession().catch(() => null);
+  await draftEditor.refresh().catch(() => undefined);
   if (authSnapshot) setAuthStatus('正在確認登入狀態…', false);
   else if (auth.getQuickSessionLoadState() === 'unreachable') {
     setAuthStatus(navigator.onLine ? '登入狀態待確認；服務恢復後自動同步' : '目前離線；待辦仍保留在本機', false);

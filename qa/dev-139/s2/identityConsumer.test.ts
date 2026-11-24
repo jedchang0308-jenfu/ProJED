@@ -3,7 +3,6 @@ import test from 'node:test';
 
 import { KernelError } from '../../../server/errors.js';
 import {
-  CURRENT_PRODUCTION_IDENTITY_PINS,
   IdentityConsumer,
   type IdentityContractPin,
   type PrincipalMappingResult,
@@ -76,7 +75,7 @@ async function expectCode(action: Promise<unknown>, code: string) {
   await assert.rejects(action, (error: unknown) => error instanceof KernelError && error.code === code);
 }
 
-test('production pins stay empty and reject current handoff v2 before a verifier runs', async () => {
+test('empty pins reject current handoff v2 before a verifier runs', async () => {
   let calls = 0;
   const currentV2 = {
     contractVersion: 'jenfu.sso-handoff.v2',
@@ -84,7 +83,7 @@ test('production pins stay empty and reject current handoff v2 before a verifier
     identity: { employeeId: 'employee-required-by-current-v2' },
   };
   const subject = consumer({
-    pins: CURRENT_PRODUCTION_IDENTITY_PINS,
+    pins: [],
     verifier: { verify: async () => { calls += 1; return identity(); } },
   });
   await expectCode(subject.consume(currentV2, 'main'), 'IDENTITY_CONTRACT_UNAVAILABLE');

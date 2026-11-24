@@ -1,9 +1,9 @@
 import { KernelError } from './errors.js';
 import { MEETING_ANALYSIS_JOB_RESOURCE, type MeetingJobRuntimeBinding } from './meetingJobRuntimeBinding.js';
+import { MANAGED_PROJECT_ID as PROJECT } from '../shared/dev139DeploymentTarget.mjs';
 
-const PROJECT = 'projed-cc78d';
 const ENDPOINT = `https://run.googleapis.com/v2/${MEETING_ANALYSIS_JOB_RESOURCE}:run`;
-const OPERATION_PREFIX = 'projects/projed-cc78d/locations/asia-east1/operations/';
+const OPERATION_PREFIX = `projects/${PROJECT}/locations/asia-east1/operations/`;
 const MAX_RESPONSE_BYTES = 128 * 1024;
 const MAX_ACCESS_TOKEN_BYTES = 8 * 1024;
 const DEFAULT_TIMEOUT_MS = 5_000;

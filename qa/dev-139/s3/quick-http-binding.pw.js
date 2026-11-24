@@ -48,7 +48,8 @@ async (entryPage) => {
       await page.getByRole('textbox', { name: '任務名稱' }).fill(title);
       await page.getByRole('button', { name: '建立', exact: true }).click();
       for (let i = 0; i < 50; i++) {
-        const record = (await idb()).captures.find(record => record.title === title);
+        const record = (await idb()).captures.find(record => record.title === title
+          && record.lastErrorCode !== 'LOCAL_EDITING_DRAFT');
         if (record) return record;
         await page.waitForTimeout(100);
       }

@@ -9,9 +9,9 @@
     "cloudSqlInstance": "jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg",
     "portPolicy": "lifecycle-iam",
     "iamLogins": {
-      "runtime": "projed-prod-runtime@projed-cc78d.iam",
-      "migrator": "projed-prod-migrator@projed-cc78d.iam",
-      "importer": "projed-prod-importer@projed-cc78d.iam"
+      "runtime": "projed-prod-runtime@jenfu-platform-prod.iam",
+      "migrator": "projed-prod-migrator@jenfu-platform-prod.iam",
+      "importer": "projed-prod-importer@jenfu-platform-prod.iam"
     },
     "supportedPostgresMajors": [
       17,

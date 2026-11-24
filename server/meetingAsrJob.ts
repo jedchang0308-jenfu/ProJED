@@ -3,7 +3,8 @@ import {pathToFileURL} from 'node:url';
 import {loadRuntimeConfig,sha256} from './config.js';
 import {RuntimeDatabase,type ExpectedMigration} from './db.js';
 import {KernelError} from './errors.js';
-import {CURRENT_PRODUCTION_IDENTITY_PINS} from './identityConsumer.js';
+import {CURRENT_PRODUCTION_IDENTITY_PINS,type IdentityContractPin} from './identityConsumer.js';
+import {MANAGED_MEETING_AUDIO_BUCKET} from '../shared/dev139MeetingAudio.mjs';
 import {createGoogleCloudMeetingProvider} from './googleCloudMeetingProvider.js';
 import {createGoogleCloudSpeechProvider} from './googleCloudSpeechProvider.js';
 import {createManagedMeetingAudioStorage} from './meetingAudioStorage.js';
@@ -11,7 +12,7 @@ import {runMeetingBackgroundHost} from './meetingBackgroundHost.js';
 import {runMeetingAudioCleanupHost} from './meetingAudioCleanupWorker.js';
 import {createPostgresMeetingAudioCleanupRepository} from './meetingAudioCleanupRepository.js';
 import {createPostgresMeetingAsrControl,createPostgresMeetingAsrRepository} from './meetingAsrRepository.js';
-import {CURRENT_MEETING_ASR_BINDING,hasQualifiedMeetingAsrBinding} from './meetingAsrRuntimeBinding.js';
+import {CURRENT_MEETING_ASR_BINDING,hasQualifiedMeetingAsrBinding,type MeetingAsrRuntimeBinding} from './meetingAsrRuntimeBinding.js';
 import {runMeetingAsrUnit} from './meetingAsrWorker.js';
 import {createPostgresMeetingDiscussionControl,createPostgresMeetingDiscussionRepository} from './meetingDiscussionRepository.js';
 import {runMeetingDiscussionUnit} from './meetingDiscussionWorker.js';
@@ -23,11 +24,14 @@ import {createServiceAccessTokenProvider} from './serviceAccessToken.js';
 import {awaitDatabaseStartup} from './startup.js';
 
 /** Check-only imports code, but never loads credentials/config or opens a DB. */
-export function meetingAsrJobCheck(){
+export function meetingAsrJobCheck(
+  asrBinding:MeetingAsrRuntimeBinding|null=CURRENT_MEETING_ASR_BINDING,
+  identityPins:readonly IdentityContractPin[]=CURRENT_PRODUCTION_IDENTITY_PINS,
+){
   return {event:'projed_meeting_asr_job_check',status:'CHECK_ONLY',
-    providerDispatch:CURRENT_MEETING_ASR_BINDING===null?'DISABLED':'QUALIFICATION_BOUND',
-    llmDispatch:!hasQualifiedMeetingLlmBinding(CURRENT_MEETING_LLM_BINDING)||CURRENT_PRODUCTION_IDENTITY_PINS.length===0?'DISABLED':'QUALIFICATION_BOUND',
-    sessionContract:CURRENT_PRODUCTION_IDENTITY_PINS.length===0?'UNPUBLISHED':'PINNED',
+    providerDispatch:!hasQualifiedMeetingAsrBinding(asrBinding,MANAGED_MEETING_AUDIO_BUCKET)||identityPins.length===0?'DISABLED':'QUALIFICATION_BOUND',
+    llmDispatch:!hasQualifiedMeetingLlmBinding(CURRENT_MEETING_LLM_BINDING)||identityPins.length===0?'DISABLED':'QUALIFICATION_BOUND',
+    sessionContract:identityPins.length===0?'UNPUBLISHED':'PINNED',
     runtime:'NOT_CONNECTED',provider:'NOT_RUN'} as const;
 }
 

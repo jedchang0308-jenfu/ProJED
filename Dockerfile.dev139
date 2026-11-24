@@ -6,7 +6,10 @@ COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
 COPY . .
 ARG PROJED_RELEASE_ID
-RUN PROJED_RELEASE_ID="${PROJED_RELEASE_ID}" npm run build:dev-139:cloud-run
+ARG PROJED_HTTP_BUILD_MODE=candidate
+ARG PROJED_PREVIOUS_RELEASE_MANIFEST
+ARG PROJED_SOURCE_REVISION
+RUN PROJED_RELEASE_ID="${PROJED_RELEASE_ID}" PROJED_HTTP_BUILD_MODE="${PROJED_HTTP_BUILD_MODE}" PROJED_PREVIOUS_RELEASE_MANIFEST="${PROJED_PREVIOUS_RELEASE_MANIFEST}" PROJED_SOURCE_REVISION="${PROJED_SOURCE_REVISION}" npm run build:dev-139:cloud-run
 
 FROM ${NODE_IMAGE} AS runtime
 ENV NODE_ENV=production \
@@ -17,11 +20,24 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 COPY --from=build --chown=node:node /app/dist ./dist
+COPY --from=build --chown=node:node /app/http-artifact-manifest.json ./http-artifact-manifest.json
 COPY --from=build --chown=node:node /app/dist-server ./dist-server
 COPY --from=build --chown=node:node /app/config/dev-139/s3-managed.profile.json ./config/dev-139/s3-managed.profile.json
 COPY --from=build --chown=node:node /app/db/migrations ./db/migrations
 USER node
 CMD ["node", "dist-server/server/index.js"]
+
+# The temporary old-origin entry has no SQL files, DB driver or business
+# composition. Only its six compiled modules and pinned JOSE runtime are copied.
+# This explicit target requires the qualified private transport source binding.
+FROM ${NODE_IMAGE} AS legacy-entry
+ENV NODE_ENV=production
+WORKDIR /app
+COPY --from=build --chown=node:node /app/package.json ./package.json
+COPY --from=build --chown=node:node /app/node_modules/jose ./node_modules/jose
+COPY --from=build --chown=node:node /app/dist-server/server/legacyEntryMain.js /app/dist-server/server/legacyEntryRelay.js /app/dist-server/server/legacyEntryOrigin.js /app/dist-server/server/legacyEntryBinding.js /app/dist-server/server/serviceIdentityToken.js /app/dist-server/server/errors.js ./dist-server/server/
+USER node
+CMD ["node", "dist-server/server/legacyEntryMain.js"]
 
 # One-off migration/import commands use the same profile, SQL and frontend
 # artifact as runtime, with production dependencies and a compiled importer.

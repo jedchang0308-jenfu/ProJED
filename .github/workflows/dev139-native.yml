@@ -71,7 +71,7 @@ jobs:
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' && (inputs.quick_upgrade || contains(github.event.head_commit.message, '[dev139-upgrade]')) }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: 0670a0aee5327cd30d53f21360d577b278376028
+          ref: 1437a25c74e10daf8530c3b099742297712175ce
           path: output/dev139-quick-upgrade-source-A
           persist-credentials: false
       - name: Install the old Quick locked dependencies
@@ -99,6 +99,9 @@ jobs:
       - name: Managed job entry and binding unit tests
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         run: npm run verify:dev-139:release-unit
+      - name: Private candidate browser transport guards
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: python -B qa/dev-139/release/private_candidate_proxy_test.py
       - name: Kernel boundary
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         run: npm run check:db-boundary

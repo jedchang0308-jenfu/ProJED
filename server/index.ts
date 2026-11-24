@@ -15,6 +15,8 @@ import {CURRENT_MEETING_ASR_BINDING} from './meetingAsrRuntimeBinding.js';
 import {createQualifiedMeetingUploadRepository} from './meetingUpload.js';
 import {CURRENT_MEETING_JOB_BINDING} from './meetingJobRuntimeBinding.js';
 import {createMeetingJobDispatcher} from './meetingJobDispatch.js';
+import { CURRENT_LEGACY_ENTRY_BINDING } from './legacyEntryBinding.js';
+import { createLegacyEntryRequestPreparer } from './legacyEntryOrigin.js';
 
 async function main(): Promise<void> {
   const config = loadRuntimeConfig();
@@ -31,6 +33,7 @@ async function main(): Promise<void> {
     : createQualifiedMeetingSynthesisProvider({binding:CURRENT_MEETING_LLM_BINDING,
       getAccessToken:createServiceAccessTokenProvider()});
   const http = createKernelHttpServer(config, database, expectedMigrations, {
+    prepareLegacyEntry: createLegacyEntryRequestPreparer(CURRENT_LEGACY_ENTRY_BINDING),
     ...createRuntimeSessionAuth(config,database),
     ragProvider:CURRENT_RAG_BINDING===null?undefined:createQualifiedCloudRagProvider({binding:CURRENT_RAG_BINDING,
       getAccessToken:createServiceAccessTokenProvider()}),

@@ -8,6 +8,14 @@
     "declaration": false,
     "allowJs": true
   },
-  "include": ["server/**/*.ts", "shared/dev139ManagedDatabase.mjs", "shared/dev139MeetingAudio.mjs"],
-  "exclude": ["qa", "node_modules"]
+  "include": [
+    "server/**/*.ts",
+    "shared/dev139ManagedDatabase.mjs",
+    "shared/dev139MeetingAudio.mjs",
+    "shared/dev139DeploymentTarget.mjs"
+  ],
+  "exclude": [
+    "qa",
+    "node_modules"
+  ]
 }

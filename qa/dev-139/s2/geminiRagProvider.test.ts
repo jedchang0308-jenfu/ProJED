@@ -7,7 +7,7 @@ import { CURRENT_RAG_BINDING, type RagRuntimeBinding } from '../../../server/rag
 const TOKEN = 'unit-test-rag-token-do-not-log';
 const VECTOR = Array.from({ length: 3072 }, (_, index) => index / 3072);
 const BINDING: RagRuntimeBinding = {
-  projectId: 'projed-cc78d', provider: 'google-cloud-rag', embeddingModel: 'gemini-embedding-001',
+  projectId: 'jenfu-platform-prod', provider: 'google-cloud-rag', embeddingModel: 'gemini-embedding-001',
   generationModels: ['gemini-3.1-flash-lite', 'gemini-3.5-flash'], abuseMonitoring: 'exempt',
   cache: 'disabled', requestResponseLogging: 'disabled', qualificationEvidenceRef: 'unit-fixture-only',
 };
@@ -50,11 +50,11 @@ test('Cloud embedding binds project, IAM header, no truncation and finite float3
   let calls = 0;
   const client = provider({ fetcher: async (input, init) => {
     calls += 1;
-    assert.equal(String(input), 'https://us-central1-aiplatform.googleapis.com/v1/projects/projed-cc78d/locations/us-central1/publishers/google/models/gemini-embedding-001:predict');
+    assert.equal(String(input), 'https://us-central1-aiplatform.googleapis.com/v1/projects/jenfu-platform-prod/locations/us-central1/publishers/google/models/gemini-embedding-001:predict');
     assert.equal(init?.method, 'POST');
     assert.equal(new Headers(init?.headers).get('authorization'), `Bearer ${TOKEN}`);
     assert.equal(new Headers(init?.headers).get('x-goog-api-key'), null);
-    assert.equal(new Headers(init?.headers).get('x-goog-user-project'), 'projed-cc78d');
+    assert.equal(new Headers(init?.headers).get('x-goog-user-project'), 'jenfu-platform-prod');
     assert.equal(init?.redirect, 'error'); assert.equal(init?.credentials, 'omit'); assert.equal(init?.cache, 'no-store');
     assert.deepEqual(JSON.parse(String(init?.body)), { instances: [{ content: 'retrieval query' }],
       parameters: { autoTruncate: false, outputDimensionality: 3072 } });
@@ -79,7 +79,7 @@ test('Cloud generation preserves both explicit models, bounded text and optional
   } });
   for (const model of BINDING.generationModels) {
     assert.equal(await client.generate({ model, prompt: 'prompt text' }), 'answer');
-    assert.equal(calls.at(-1), `https://aiplatform.googleapis.com/v1/projects/projed-cc78d/locations/global/publishers/google/models/${model}:generateContent`);
+    assert.equal(calls.at(-1), `https://aiplatform.googleapis.com/v1/projects/jenfu-platform-prod/locations/global/publishers/google/models/${model}:generateContent`);
   }
   await assert.rejects(client.generate({ model: 'unapproved-model' as 'gemini-3.5-flash', prompt: 'prompt' }), hasCode('DOMAIN_DATA_INVALID'));
   await assert.rejects(client.generate({ model: 'gemini-3.5-flash', prompt: 'prompt', temperature: Number.NaN }), hasCode('DOMAIN_DATA_INVALID'));

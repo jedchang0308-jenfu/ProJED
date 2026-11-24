@@ -341,8 +341,8 @@ test('managed session verifies each actual login and enters only its fixed lifec
     assert.deepEqual(calls[0].values, [
       MANAGED_DATABASE.roles[purpose],
       purpose === 'migrator'
-        ? [MANAGED_DATABASE.roles.migrator, 'cloudsqliamuser', MANAGED_DATABASE.roles.owner]
-        : [MANAGED_DATABASE.roles[purpose], 'cloudsqliamuser'],
+        ? [MANAGED_DATABASE.roles.migrator, 'cloudsqliamserviceaccount', MANAGED_DATABASE.roles.owner]
+        : [MANAGED_DATABASE.roles[purpose], 'cloudsqliamserviceaccount'],
     ]);
     for (const value of [
       ...Object.values(BINDING.iamLogins),

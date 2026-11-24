@@ -19,9 +19,9 @@ const loaded = loadSourceProfile(profilePath);
 const managed = loadSourceProfile(resolve('config/dev-139/s3-managed.profile.json'));
 const databaseName = `dev139_s1_${'a'.repeat(32)}`;
 const managedIamLogins = {
-  runtime: 'projed-prod-runtime@projed-cc78d.iam',
-  migrator: 'projed-prod-migrator@projed-cc78d.iam',
-  importer: 'projed-prod-importer@projed-cc78d.iam',
+  runtime: 'projed-prod-runtime@jenfu-platform-prod.iam',
+  migrator: 'projed-prod-migrator@jenfu-platform-prod.iam',
+  importer: 'projed-prod-importer@jenfu-platform-prod.iam',
 };
 
 function validBinding(): RuntimeBinding {
@@ -94,7 +94,7 @@ test('managed profile accepts only its exact Cloud SQL IAM binding and runtime l
     ...binding,
     iamLogins: { ...managedIamLogins, runtime: 'projed-prod-runtime@other-project.iam' },
   }, managed.profile, managed.sha256));
-  const extraIamLogins = { ...managedIamLogins, operator: 'projed-prod-operator@projed-cc78d.iam' } as unknown as RuntimeBinding['iamLogins'];
+  const extraIamLogins = { ...managedIamLogins, operator: 'projed-prod-operator@jenfu-platform-prod.iam' } as unknown as RuntimeBinding['iamLogins'];
   assert.throws(() => validateRuntimeBinding({
     ...binding,
     iamLogins: extraIamLogins,
