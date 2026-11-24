@@ -8,14 +8,14 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 ## DEV-142：正式資料一次搬遷與舊網址啟用新後端
 
 - 類型：**獨立交付點**；所屬整合目標：[DEV-139](#dev-139-jenfu-platform-onboarding)，P1。
-- 狀態（2026-11-24）：**正式資料／業務切流已授權，先建恢復點；未執行切流**。[恢復基線](reports/DEV-142-precutover-recovery-point-20261124.md)已保存三個專案及部署落點，三份自足 Git bundle 實際還原／fsck 通過；正式資料 snapshot、來源備份與私人檔案恢復仍待補齊，原網址／PWA 保留。
+- 狀態（2026-11-24）：**正式資料／業務切流已授權，恢復包已補資料封存還原；未執行切流**。[恢復紀錄](reports/DEV-142-precutover-recovery-point-20261124.md)含三專案自足 Git bundle 還原／fsck、映像落點及加密 app 備份；43表逐欄封存還原PASS，私人Storage metadata／音訊segment均空。新目標schema隔離匯入因 `collect_task` 權限約束落差FAIL，原生應用環境未還原，不能宣稱完整切流驗證通過；原網址／PWA 保留。
 - 唯一交付契約：[SPEC-142](specs/SPEC-142-projed-production-data-migration.md)；共用資料／身分／草稿安全沿 SPEC-139 §4–§6，不另建 SQL／API、QA/QC 或 required gate。
 - 成果：在原主站／Quick 網址使用新前端／登入／API，受控停止全部舊 writer，一次搬移並核對正式資料／私人檔案，再開放中央新後端唯一 writer；保留 UUID／權限／回執、舊來源與可用恢復參考。
 - 依賴：DEV-139 的過渡入口、原地更新、真 Session／mapping 與必要資料／權限／恢復準備就緒。既有 credential／importer／新入口核准沿用，正式停寫／資料寫入依最新人類授權續行；新責任擴張另核實。只限制相依正式操作，安全的 source／隔離驗證可繼續。
 - 窗口：偏好晚間低用量且操作者能確認結果的時段；先演練量測，再排日期／起訖，不強制凌晨、固定停機分鐘數或自動排程。
 - 完成判定：正式資料／檔案／權限與 receipt 無未解差異，舊 writer 確實停用；原網址的真使用者操作、未授權拒絕及必要草稿／未知結果恢復通過。Schema migration／候選／合成 PASS 不算搬遷完成。
 - 不含：最後換新網址／跨 origin 安裝與完整 DEV-139 結案；最後網址階段使用同一新庫，不重搬 server 資料。父子任務不重複認列，亦不要求所有歷史裝置先上線簽到。
-- 下一步：先補可用的 ProJED 資料與私人檔案恢復依據，依 SPEC-142 核實正式來源／窗口及相依準備，再續行已授權搬遷；本次恢復基線建立沒有停寫、搬遷或切流，不新增 required gate。
+- 下一步：修正並重驗 `collect_task` 移轉契約，依 SPEC-142 核實入口與正式窗口；停寫後另固定最終資料／檔案快照。既有備份依目前Windows DPAPI環境解密，不冒充整套Supabase平台／異地災難恢復；本次沒有正式停寫、搬遷或切流，不新增 required gate。
 
 <a id="dev-141-manual-app-updates"></a>
 
@@ -77,7 +77,7 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
 ## DEV-139：ProJED 納入 Jenfu-Platform，Cloud Run／Cloud SQL 對齊並保留 Vite
 
-  - **最新人類授權（2026-11-24）**：「我要執行正式資料及業務切流，請先在此建立一個可恢復點」。接續 [DEV-142](#dev-142-production-data-migration)；目前已建立[程式／部署恢復基線](reports/DEV-142-precutover-recovery-point-20261124.md)，資料恢復依據未完成、實際未切流。下列較早「先不切流」依原日期解讀；零留存、保留舊網址／PWA及最後換址另階段維持。
+  - **最新人類授權及補驗（2026-11-24）**：「我要執行正式資料及業務切流，請先在此建立一個可恢復點」，並要求繼續補資料恢復。接續 [DEV-142](#dev-142-production-data-migration)；[恢復紀錄](reports/DEV-142-precutover-recovery-point-20261124.md)已補加密 app 備份與43表逐欄封存還原PASS；新目標schema隔離匯入因 `collect_task` 權限契約FAIL，實際未切流。下列較早「先不切流」依原日期解讀；零留存、保留舊網址／PWA及最後換址另階段維持。
 
   - **三組授權續行進度（2026-11-24）**：Platform main728e169／OrgMaster master3683cac的原生發布與真credential同步完成，ProJED v4 pin／Job binding／Speech資格已發布；source ea09b13的CI45385906394、Cloud Build0a8cae6e、私人HTTP36、真caller／callback7及恢復Scheduler限定驗證通過。新Web dev139-ea09b13 tag0%，原00007-cpt維持100%；analysis generation5、共6次execution（原1次失敗保留）、migration仍原1次。專用恢復SA僅固定Job invoker，Scheduler PAUSED；原資料、網址、PWA及Web／Job容量／網路不變。importer／Secret準備已完成，source reader仍NOLOGIN。Gemini／RAG因零留存契約未實證保持停用，真使用者Session、完整ASR／會議結果發布尚未驗收，DEV-142正式搬遷未執行；完整交付未結案。[結果與邊界](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-approved-precutover-completion)。
 
@@ -520,7 +520,7 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 
 ## 總任務清單
 
-- → DEV-142 [獨立交付點] [正式切流已授權／恢復準備中／未執行] [P1] [正式資料一次搬遷與舊網址啟用新後端](#dev-142-production-data-migration)；所屬整合目標 DEV-139，完成不等待新網址、不重複計入父項。[SPEC-142](specs/SPEC-142-projed-production-data-migration.md)。
+- → DEV-142 [獨立交付點] [正式切流已授權／封存還原PASS／目標權限契約FAIL／未執行] [P1] [正式資料一次搬遷與舊網址啟用新後端](#dev-142-production-data-migration)；所屬整合目標 DEV-139，完成不等待新網址、不重複計入父項。[SPEC-142](specs/SPEC-142-projed-production-data-migration.md)。
 
 - ✓ DEV-141 [交付點] [A01–A08 本機通過／手機主程式與快速待辦人工補驗通過／已發布 2026-11-19] [ProJED] [新版先通知，由使用者手動更新](#dev-141-manual-app-updates)
 
@@ -529,8 +529,8 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 - → DEV-139 [整合交付點] [私人候選與通路已驗證／舊入口待接線／原資料未搬遷／未切流] [P1] ProJED 納入 Jenfu-Platform，保留 Vite
   - 現行方向：先在舊主／Quick 網址完成新版前端、登入、API與中央後端接線，正式資料搬遷獨立列 DEV-142；日常運作確認後才換新網址，不重搬 DB／Storage。[DEV-139 現況](#dev-139-jenfu-platform-onboarding)｜[SPEC §3.0](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-two-stage-rollout)。
   - 現有候選與本機證據依原 source／revision 重用；51份 schema SQL 成功不代表正式業務資料搬遷。真 Session／既有 UUID mapping、舊入口及原地草稿相容、provider零留存、正式資料與完整功能驗收仍未結案。
-  - 下一步：依最新正式資料／業務切流授權，先補齊 DEV-142 資料與私人檔案恢復依據及相依入口，再沿既定窗口續行；程式／部署恢復基線已保存，未實際切流。Gemini／RAG 零留存資格未證明仍停用，最後新網址另階段。
-  - 資料交付：[DEV-142](#dev-142-production-data-migration)／[SPEC-142](specs/SPEC-142-projed-production-data-migration.md)，已授權、恢復準備中、未執行。原帳號／個人與外部權限、取消／CAS／unknown／exactly-once及完整DEV-139分母保留，父子不重複認列。
+  - 下一步：先修正／重驗 DEV-142 的 `collect_task` 目標權限契約與相依入口，再沿既定窗口續行。資料封存還原與程式／部署基線已保存，未實際切流；Gemini／RAG 零留存資格未證明仍停用，最後新網址另階段。
+  - 資料交付：[DEV-142](#dev-142-production-data-migration)／[SPEC-142](specs/SPEC-142-projed-production-data-migration.md)，已授權、封存還原PASS、目標權限契約FAIL、未正式執行。原帳號／個人與外部權限、取消／CAS／unknown／exactly-once及完整DEV-139分母保留，父子不重複認列。
 
 - ✓ DEV-138 [開發點] [已完成／正式發布、限定登入與 RPC 驗收及清理 PASS] [P1] [ProJED] DEV-133 guard 恢復、分支整合與正式驗證後清理
   - 摘要：以 DEV-133 Rev12 已合併基線為歷史依據，恢復有效 guard、整合既有分支，完成正式驗證後再清理；不新增產品交付數。

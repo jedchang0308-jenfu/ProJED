@@ -4,7 +4,19 @@
 - 本機包：`output/dev142-precutover-recovery-20261124/`；機器清單：`manifest.json`，個別 bundle checksum 見 `code-recovery.json`。
 - 人類原文：「我要執行正式資料及業務切流，請先在此建立一個可恢復點」。正式資料／業務切流已授權；本步先保存現況，沒有執行正式切流。
 
-**程式／部署恢復基線已驗證；正式資料 snapshot 尚未建立，來源備份與檔案恢復尚未確認。這不是完整資料恢復點，也不是切流就緒證明。**
+**程式／部署基線及正式業務資料加密備份已建立，43 張業務表的逐欄封存還原核對通過；新 Cloud SQL schema 的隔離匯入因 `collect_task` 權限契約落差失敗，尚非切流就緒。** 此點不包含整套 Supabase Auth／平台環境的還原，也不是停寫後的最終切流快照。
+
+## 2026-11-24 資料備份與恢復補驗
+
+- 原生 app schema 備份：22:08:13–22:08:30（Taipei），`source-app.pgdump.aes`，保存 `public`／`private` 的資料、schema、functions、constraints 與 RLS policies；不匯出 Supabase Auth 密碼、登入 token 或平台全域角色。原生匯出使用其自身的一致性 snapshot。
+- 移轉投影備份：22:08:31（Taipei），`migration-snapshot.json.gz.aes`；沿既有 `readSource`、型別解析與最小 Google 身分投影，在另一個 REPEATABLE READ READ ONLY 交易保存。兩者依序取得，不聲稱是同一 MVCC 時點；來源仍可正常寫入，正式停寫後須另取最終一致快照。
+- 檔案保護：AES-256-GCM，nonce／驗證 tag 與逐檔 SHA256 已核對；解密 key 由 Windows CurrentUser DPAPI 保護，目錄限本帳號與 SYSTEM。`data-key.dpapi` 必須連同備份保留，解密依賴目前 Windows 帳號／DPAPI 環境；目前只保存在此電腦，不能宣稱已有可攜的異地災難備份。來源 credential 僅經程序記憶體使用，沒有 payload 檔案。
+- 實際逐欄還原：22:18:46（Taipei），在自建 PostgreSQL 18 中從原生 archive 抽取全部 43 張表的 COPY 資料，還原至隔離文字欄位封存層，再逐表讀回；每欄原值、SQL NULL、筆數與排序無關的 digest 全部一致。這證明封存資料可取回，不冒充原生應用／權限約束或新 Cloud SQL 目標已還原。原始結果與營運數量留 `native-data-restore-receipt.json`。
+- 新目標相容性：另沿正式同一 `TABLES`／`insertSnapshot` 與既有 migrations，以最小 importer 在隔離 schema 真實匯入。第一個產品失敗為 `IMPORT_BOARD_ROLE_PERMISSIONS_FAILED_BOARD_ROLE_PERMISSIONS_CAPABILITIES_CHECK1`：原資料含 `collect_task`，新約束未收錄。交易未提交；未刪除原權限、改資料、放寬約束或標成 PASS。原始結果留 `data-restore-first-failure.json`，正式匯入須先修正並重驗此契約。
+- 私人檔案盤點：來源所有 Storage metadata 物件數為零，`meeting_capture_segments` 亦零；唯一 `meeting-audio` 桶為私人。沒有可搬／還原的受管音訊內容，因此未製造假檔案驗收。未直接列舉 provider 實體 object store，不宣稱不存在 metadata 之外的孤兒物件；正式窗口再核對是否有新上傳。證據為 `source-post-backup-readback.json`。
+- 來源 reader 曾以最長 20 分鐘到期限制開放本次唯讀匯出，完成即恢復 NOLOGIN；原連線上限 1、讀取範圍與禁止寫入保留。第一輪並行 snapshot／pg_dump 因此上限失敗，已改成依序匯出，沒有增加連線數。所有本機自建 DB 已正常停止、精確目錄清除且五個埠釋放；加密備份與有效／失敗收據保留。
+
+最新資料恢復範圍與 checksum 見同目錄 `data-recovery-manifest.json`。原 `manifest.json` 保留 21:40 程式／部署基線的當時結果；後續資料補驗不改寫該原始收據。零留存、模型停用、原資料／網址／PWA不變；沒有正式停寫、搬入或切流。
 
 ## 已保存與實際驗證
 
@@ -26,18 +38,18 @@ ProJED 已驗程式為 `ea09b133e4576b042a09af31d91069cd36f12391`，與文件 HE
 - Platform `jenfu-platform-prod-1178f25a6eff`、OrgMaster `orgmaster-prod-6a8b73ff1c2d` 仍為現役；原專案私人 relay `projed-legacy-entry-00001-hgp` 保留。
 - 具名 services／revisions／映像／IAM、migration 與 analysis Job 狀態均記於 `runtime-recovery.json`；沒有匯出 credential 或環境變數 payload。Recovery Scheduler 維持 PAUSED，Gemini／RAG 維持停用及既有零留存要求。
 
-## 資料恢復缺口
+## 初次基線的資料觀察與持續限制
 
-- Supabase `knodlkxqpcqyrtgwpdst` 為 ACTIVE_HEALTHY；只讀觀察 2026-11-24 13:38:05 UTC、WAL LSN `2B/7D000000`、public ordinary tables 37、來源 reader 仍 NOLOGIN。這些 catalog 值不是一致性 snapshot 或 PITR 可用證明；本次未匯出業務資料、未啟用停寫 fence。
-- 來源備份頁要求另行登入，現有 connector 無備份清單能力；來源受管備份狀態未知，並非證明沒有備份。尚未建立／核對來源 Storage 檔案備份。
+- Supabase `knodlkxqpcqyrtgwpdst` 為 ACTIVE_HEALTHY；初次只讀觀察 2026-11-24 13:38:05 UTC、WAL LSN `2B/7D000000`、public ordinary tables 37、來源 reader 為 NOLOGIN。這些 catalog 值不是 snapshot 或 PITR 可用證明；後續 app 資料匯出與補驗見上節，來源停寫 fence 尚未啟用。
+- 來源受管備份頁要求另行登入，現有 connector 無備份清單能力；受管備份／PITR 狀態仍未知，並非證明沒有備份。已另外取得上節的自有 app 邏輯備份，不把它聲稱為整套 Supabase 平台備份。
 - 中央共用 Cloud SQL 已設定 backup／PITR，讀回五份既有成功備份；最新 ID `1795460400000`，2026-11-24 05:23（Taipei）完成。本次未新建備份或演練 restore；`earliestRecoveryTime` 未提供，不能保證特定恢復時點。這是共用 instance，不能整庫還原影響其他 app。
 
 ## 恢復方式與下一步
 
 1. 程式恢復：在新目錄 clone 對應 `code/*.bundle`，選上述保存的 ref；不 reset 現有工作樹。bundle 與輸入的 SHA256 必須符合清單。
-2. 正式停寫／搬遷前，先補可用的 ProJED 資料及私人檔案恢復依據，再固定一致性 snapshot；本機 Git／映像／舊前端封存不能替代資料備份。
+2. 使用資料恢復包時，先驗 checksum 與 DPAPI 解密，再沿原生 archive 取回 app 資料；逐欄封存還原可依 `verify-data-restore.py --native-archive` 重現。新目標 schema 相容性失敗尚未解決，不能以封存層核對代替。正式窗口停寫後另固定最終 snapshot 與當時的檔案清單；現在的快照不涵蓋後續新增內容。
 3. 尚未啟用新 writer 的失敗，先核實目標是否提交／有無新增寫入，再沿 SPEC-142 恢復原路徑；未知結果先讀回。
 4. 新 writer 已有新增資料後，優先讓相容程式沿用同一新庫；不能只解除 Supabase fence 或切回舊庫。反向資料 rewrite、down migration、破壞性清空及共用整庫 restore 不隱含於一般應用回退。
 5. 下一步沿 SPEC-142／SPEC-139 既定範圍續行；保留原網址與 PWA，最後新網址另階段。有效證據沿原受測輸入重用，不新增 required gate。
 
-本步實際結果：沒有正式業務資料搬入、來源停寫、新 writer 啟用、流量切換、模型啟用或雲端權限變更。
+本步實際結果：沒有正式業務資料搬入、來源停寫、新 writer 啟用、流量切換、模型啟用或新增雲端 IAM。下一步修正／驗證看板 `collect_task` 移轉契約，再沿既定 DEV-142 前提準備正式窗口。
