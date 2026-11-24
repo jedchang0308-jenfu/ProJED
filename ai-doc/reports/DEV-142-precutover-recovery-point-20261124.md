@@ -87,3 +87,16 @@
 Platform #242／契約 migration workflow45450242724 已成功發布023（1 applied／22 replayed）；Platform runtime generation235／traffic不變。舊網址已沿原帳號登入成功，原工作區／看板與既有任務可讀；專用測試記事新增／儲存／重新載入讀回及未提交草稿重開恢復已觀察。原 IDENTITY_INVALID 失敗保留於本次輸出，不再要求使用者重做成功登入。
 
 HTTP未歸位任務恢復發現 canonical read／失敗狀態問題，來源修正加入真正遠端讀回、失敗不宣稱雲端成功、鎖內內容CAS與重放不二次寫入。隔離真 modal12項、S3單元180項通過；必要原生PG／CI與正式修正版同步驗收待續。不重寫原搬遷收據、不重搬資料，現行同一Cloud SQL與來源fence保持。
+
+
+### 2026-11-25 正式交付完成
+
+上述段落保留各階段時點；目前DEV-142已完成，DEV-139父目標仍未完成。Platform023發布與真登入已通過，原工作區／看板／任務仍在；PR #37已正常合併main `5d88415c593b30a5a2014225296ba7eecbb5f997`，其樹與已驗來源 `97891d360e9b0a08b8574d0fd17c375b8147ce46`一致。CI45457970960成功（原生PG／HTTP75、snapshot67、OCI23），受影響真modal14項通過；先前CI45456002221的完整PWA升級／HTTP77結果依原來源64a55ac保留，不冒充最終來源的完整瀏覽器重跑。
+
+Cloud Build `72bc0fab-3eed-4884-bcfd-2208aa81f52f`五步成功，固定來源包SHA256 `b7791c93350c6c1f2de6f60f289a3145894996a26101efe58c8e8257f3f72497`。網頁映像 `projed-prod@sha256:c85ccff28ff91ca2f059444fc3c7bd635a33333b9667dab57adef1a21b2eed58`，正式revision `projed-prod-dev142-97891d3` 100%；私人HTTP34與兩舊origin HTTP16通過，51份SQL／profile不變，未重跑migration或重新匯入。舊7d映像／revision仍保留為同一新庫的應用恢復參考，沒有實際執行完整應用回退；其已知草稿缺陷仍須考量，不能因此解除舊庫fence或覆寫新資料。
+
+正式Edge「AI測試」沿正常主站／Quick更新選單完成PWA升級；原帳號登入延續、四manifest的id／start_url／scope／名稱／圖示與原封存一致。同一未提交草稿跨關閉重開完整恢復，明確確認同步後顯示已儲存，再重載讀回兩段原文且無假草稿。Quick未登入先存本機、重載保留、SSO後確認帳號並成功同步，重開／更新後維持登入；兩筆具名驗證任務各一筆可見並保留。未宣稱直接正式SQL查重、所有歷史裝置或真實隔夜時間均已驗收。
+
+最終provider讀回：中央私人IAM不變、analysis generation6及七筆既有execution未變、Scheduler PAUSED，三個importer及兩個診斷Job均404。Gemini／RAG停用，不改billing／容量、不換新網址。主站驗證頁保留供人類使用，沒有要求再次登入、清除本機資料或重裝PWA。
+
+本機證據沿 `output/dev142-cutover-20261125-w1/`：`production-user-acceptance-verified.json`、`provider-final-web-repair-verified.json`、`web-fix-public-http-smoke.json`、`web-fix-manifest-identity-readback.json`、`web-fix-http-verified.json`、`artifact-97891d3/artifact-readback.json`及CI artifacts。成功畫面 `recovered-draft-saved.jpg`；首次身分失敗、錯誤metadata探針及未tag候選的latestReady前提修正仍保留，沒有覆寫原搬遷收據。

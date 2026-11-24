@@ -1,19 +1,19 @@
 # SPEC-139：ProJED 納入 Jenfu-Platform 的產品與技術交接契約
 
-> 2026-11-25 DEV-142正式窗口：資料已一次匯入並獨立核對，舊origin已發布中央後端；來源停寫保留。真登入發現Platform consumer ACL缺漏，沿Platform #242修復，未完成正式驗收。以[SPEC-142](SPEC-142-projed-production-data-migration.md)最新狀態為準；以下較早準備紀錄不代表尚未切流。最後換址引導仍不啟用。
+> 2026-11-25：DEV-142正式資料搬遷與舊網址業務切流已交付；原帳號、工作區／看板、記事、原地PWA更新及草稿恢復同步已通過正式使用者回歸。以[SPEC-142](SPEC-142-projed-production-data-migration.md)為權威；較早準備紀錄依其日期解讀。DEV-139整體仍未完成，最後換址引導與未資格模型仍不啟用。
 
-**2026-11-25 最新執行狀態**：人類要求先完成正式切流前準備、部署候選並驗證；[DEV-142](SPEC-142-projed-production-data-migration.md) 的[恢復紀錄](../reports/DEV-142-precutover-recovery-point-20261124.md)已保存三份程式備份、部署落點與加密 app 資料。來源`7d239c9`的CI45423509034與Cloud Build `b9b70c73-0432-40d7-b40a-0a741e58352d`成功；私人revision `projed-prod-dev139-7d239c9`維持0%、原`00007-cpt`維持100%。私人HTTP36、真Cloud SQL空佇列背景與正式來源／中央目標單次READ ONLY `plan`通過，來源snapshot與隔離還原一致、目標為空；reader已恢復NOLOGIN、連線0、可寫relation 0，臨時Job已刪除。兩舊origin四份metadata與恢復點逐位元組一致，既有PWA輸入未變。未停寫、搬入資料、啟用新writer或切流；正式窗口另取最終快照。保留原網址與既有PWA，最後新網址另階段；未資格Gemini／RAG仍停用。
+**2026-11-25 最新執行狀態**：來源 `97891d3`（PR #37／main合併 `5d88415`）已通過CI45457970960並由Cloud Build72bc0fab-3eed-4884-bcfd-2208aa81f52f建置；`projed-prod-dev142-97891d3`承接100%，映像digest `sha256:c85ccff28ff91ca2f059444fc3c7bd635a33333b9667dab57adef1a21b2eed58`。正式資料已一次apply／獨立reconcile，來源fence與NOLOGIN保留；私人HTTP34、兩舊origin HTTP16及四manifest identity通過。Platform023身分修復後，真帳號沿原網址與正常PWA選單可用原資料；同一草稿跨關閉重開恢復、同步、重載讀回，Quick本機待同步／帳號確認／成功提交皆已驗。analysis generation6、七筆既有execution、Scheduler PAUSED、中央私人IAM不變；Gemini／RAG仍停用。恢復與實際版本見[DEV-142恢復紀錄](../reports/DEV-142-precutover-recovery-point-20261124.md)。
 
 **2026-11-23 現行決策：先保留舊主站／Quick 網址及既有 PWA 入口，讓新版前端、登入、API、資料與背景工作改走集中 Google Cloud；在舊網址確認新系統運作後，最後才換 Cloud Run `run.app` 新網址。** 保留 Vite、本機記事、ProJED 獨立權限及 `jenfu-platform-prod` 同專案私人 SQL；既有 Firebase Hosting 僅暫留為過渡入口，不另建新的 Firebase 網站或把業務權威搬回舊專案。正式資料一次搬遷獨立列為 [DEV-142／SPEC-142](SPEC-142-projed-production-data-migration.md)。
 
-本輪人類已恢復候選準備、部署與驗證，先不切流；保留原資料、網址與既有 PWA。新入口不導流、不改寫舊 Hosting／Service Worker，不執行來源停寫或業務資料搬入；IAM／SQL login 與 owner 綁定差額已依 §47.2 具名核准；§3.0.5私人relay及§3.0.6 Speech差額已核准，§3.0.7另涵蓋剩餘三組身分／模型／importer與來源Secret準備責任。只執行上述已核准範圍及必要修正，不改 DNS、billing 或中央runtime／SQL容量；啟用API或建立credential不等於模型資格成立或正式搬遷授權，未資格化模型維持停用。現行設計見 §3、§6、§8–§9、§47.1–47.2 與 ADR-054；歷史 source／CI 結果不等於新目標已驗證。
+本輪人類已起床並明確恢復DEV-142正式搬遷與業務切流，取代較早的「先不切流」限制；依既有具名範圍完成停寫、最終備份、一次匯入核對及舊Hosting導流。原來源資料／網址／PWA保留，最後新網址仍另階段；本輪修正不增加IAM／Secret／billing或容量、不啟用未資格模型，不把資料搬遷完成計作完整DEV-139驗收。
 
 本規格保留架構、資料安全、遷移設計及來源測試適用性；正式業務數量、IAM 實際讀回與非公開營運證據留在任務本機輸出。早期原地升級測試仍只支持原受測 origin／產物，不能證明跨 origin 草稿、安裝或新專案資格已完成。
 
 - 主責：[DEV-139](../dev_task.md#dev-139-jenfu-platform-onboarding)。
-- 日期：2026-11-23（Asia/Taipei）；本輪受測來源與候選進度見 §47.2，本機記事驗證見 §3.3；歷史 artifact 依原收據識別。
-- 狀態：**正式切流前的私人候選、空佇列背景與來源唯讀盤點已完成，整體 DEV-139 尚未結案，先不切流**。最新程式來源 `7d239c9`、Web `projed-prod-dev139-7d239c9`／私人tag0%、原00007-cpt保持100%；analysis generation6、v4身分pin／Job binding／Speech資格已接入，Gemini／RAG因適用零留存契約未證明維持停用。CI、Cloud Build／registry、私人HTTP36、真Cloud SQL空佇列及正式來源／目標READ ONLY plan通過；reader已回NOLOGIN，臨時Job已刪除。原資料、主／Quick網址及PWA不變，正式映射／業務資料搬入留在DEV-142。完整最新證據與未驗分母見 [§3.0.7](#dev139-approved-precutover-completion)；§3.0.5–3.0.6及較早執行紀錄依其原日期解讀，不再作已完成事項的重跑前置。
-- 適用範圍：本輪程式／測試／文件與 IAM 保護的候選部署、唯讀／安全拒絕驗證；集中專案的新 IAM 與 owner migration window 已由人類依 §47.2 具名核准。無正式業務資料寫入、停寫或切流。舊 Shared VPC 引導取消；已完成設定與舊入口保留，不自動撤回或刪除。
+- 日期：2026-11-25（Asia/Taipei）；最新正式子交付見SPEC-142與恢復紀錄，本機記事契約見§3.3；歷史候選／artifact依各自原日期與收據識別。
+- 狀態：**DEV-142已完成；整體DEV-139尚未結案。** 正式資料與舊origin已切到中央Cloud SQL／新API；原地PWA、記事與草稿回歸通過。最後新origin／跨origin交接、完整真ASR／分析與provider資格仍依原驗收分母，不因子交付完成而縮減。
+- 適用範圍：沿現行具名授權維護集中專案、原網址過渡入口及必要同範圍修復；正式資料與舊網址切流結果由DEV-142單獨認列。新網址、模型資格、IAM／Secret／billing擴張與破壞性資料回復不由文件自動授權。
 - 直接交接入口：[§11 S1 定案契約](#11-架構決策與-s1-定案契約)、[§12 S1 實作狀態](#12-s1-實作狀態2026-10-26)、[§13 S2 consumer seam](#13-s2-projed-identity-consumer-seam2026-10-26)、[§14 S3 read adapter](#14-s3-http-read-adapter-slice2026-10-26)、[§15 S3 domain command](#15-s3-domain-command-w12026-10-26)、[§16 S3 collaboration command](#16-s3-collaboration-command-w22026-10-27)、[§17 S3 record／activity](#17-s3-recordactivity-w32026-10-27)、[§18 S3 HTTP product wiring](#18-s3-http-product-wiring-w42026-10-27)、[§19 S3 Board transfer](#19-s3-board-transfer-w52026-10-27)、[§20 S3 legacy provider boundary](#20-s3-legacy-provider-boundary-w62026-10-27)、[§21 S3 Quick Task](#21-s3-quick-task-w72026-10-27)、[§22 S3 Task Workbench](#22-s3-task-workbench-w82026-10-27)、[§23 S3 Actor CAS](#23-s3-actor-context-cas-w92026-10-27)、[§24 S3 Task Tracking](#24-s3-task-tracking-w102026-10-27)、[§25 S3 Backup／Import](#25-s3-backupimport-w112026-10-27)、[§26 S3 Account Preferences](#26-s3-account-preferences-w122026-10-27)、[§27 S3 Calendar Subscription](#27-s3-calendar-subscription-w132026-10-27)及[§32 本地開發收斂](#32-s3-local-development-closure-w182026-10-27)；[§11.8 技術主管審查](#118-技術主管審查與最小優化)保留 Rev5 修正理由；既有使用者切換見 [§6.3](#63-既有使用者的切換基線)。
 - 決策來源：[DEV-139 人類決策](../dev_task.md#dev-139-jenfu-platform-onboarding)；架構取捨：[ADR-054](../decisions/ADR-054-projed-cloud-run-cloud-sql-boundary.md)。本文件不是其他 owner 已接受或已發布的契約。
 
