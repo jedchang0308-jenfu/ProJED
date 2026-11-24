@@ -1,5 +1,7 @@
 # SPEC-139：ProJED 納入 Jenfu-Platform 的產品與技術交接契約
 
+**2026-11-24 最新執行授權**：人類要求「我要執行正式資料及業務切流，請先在此建立一個可恢復點」。先完成 [DEV-142 恢復準備](SPEC-142-projed-production-data-migration.md)，再沿既定範圍執行正式資料／業務切流；保留原網址與既有 PWA，最後新網址仍另階段。已建立[程式／部署恢復基線](../reports/DEV-142-precutover-recovery-point-20261124.md)，三份程式備份實際還原通過；正式資料 snapshot／來源備份與私人檔案恢復尚未證明，實際未切流。以下 2026-11-23 及更早「先不切流」為當時限制，不否定最新授權；其他資料安全、零留存與責任邊界維持，未資格 Gemini／RAG 仍停用。
+
 **2026-11-23 現行決策：先保留舊主站／Quick 網址及既有 PWA 入口，讓新版前端、登入、API、資料與背景工作改走集中 Google Cloud；在舊網址確認新系統運作後，最後才換 Cloud Run `run.app` 新網址。** 保留 Vite、本機記事、ProJED 獨立權限及 `jenfu-platform-prod` 同專案私人 SQL；既有 Firebase Hosting 僅暫留為過渡入口，不另建新的 Firebase 網站或把業務權威搬回舊專案。正式資料一次搬遷獨立列為 [DEV-142／SPEC-142](SPEC-142-projed-production-data-migration.md)。
 
 本輪人類已恢復候選準備、部署與驗證，先不切流；保留原資料、網址與既有 PWA。新入口不導流、不改寫舊 Hosting／Service Worker，不執行來源停寫或業務資料搬入；IAM／SQL login 與 owner 綁定差額已依 §47.2 具名核准；§3.0.5私人relay及§3.0.6 Speech差額已核准，§3.0.7另涵蓋剩餘三組身分／模型／importer與來源Secret準備責任。只執行上述已核准範圍及必要修正，不改 DNS、billing 或中央runtime／SQL容量；啟用API或建立credential不等於模型資格成立或正式搬遷授權，未資格化模型維持停用。現行設計見 §3、§6、§8–§9、§47.1–47.2 與 ADR-054；歷史 source／CI 結果不等於新目標已驗證。
