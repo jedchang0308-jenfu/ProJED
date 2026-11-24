@@ -78,6 +78,8 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
 ## DEV-139：ProJED 納入 Jenfu-Platform，Cloud Run／Cloud SQL 對齊並保留 Vite
 
+  - **最後換址流程定案（2026-11-25，僅文件）**：人類採用方案2「引導完成切換」：確認草稿→原帳號登入新站→更新書籤／主與Quick PWA入口。DEV-142完成且舊網址上的中央後端運作穩定後才啟用；支援稍後／中斷續行，保留原帳號、UUID、權限與草稿，unknown先查原key回執，交接未核實不標完成、不清舊儲存。規格與驗收見[SPEC-139 §6.4.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-guided-origin-switch)；本次未實作或執行換址。
+
   - **切流前準備最新結果（2026-11-25）**：[恢復紀錄](reports/DEV-142-precutover-recovery-point-20261124.md)已補加密 app 備份與43表逐欄封存還原PASS；移轉投影／父子排序已修正，45表隔離匯入與重連digest PASS。來源7d239c9的CI45423509034及Cloud Build `b9b70c73`成功；私人Web dev139-7d239c9 tag0%、原00007-cpt 100%，私人HTTP36及空佇列背景通過。正式來源／中央目標單次READ ONLY plan通過，來源snapshot與隔離還原一致、目標為空；reader已回NOLOGIN、連線0、可寫relation 0，臨時Job已刪除。舊origin metadata逐位元組未變，沒有正式搬入或切流。零留存、保留舊網址／PWA及最後換址另階段維持。
 
   - **三組授權續行結果（2026-11-25）**：Platform main728e169／OrgMaster master3683cac的原生發布與真credential同步完成，ProJED v4 pin／Job binding／Speech資格已發布；最新來源7d239c9固定三個映像，analysis generation6、共7次execution（原1次失敗保留，新vhmxn成功且零內容請求），migration仍原1次。專用恢復SA僅固定Job invoker，Scheduler PAUSED；原資料、網址、PWA及Web／Job容量／網路不變。importer／Secret及一次唯讀來源盤點完成，source reader已恢復NOLOGIN。Gemini／RAG因零留存契約未實證保持停用，真使用者Session、完整會議內容驗收及DEV-142正式搬遷未執行；完整產品交付未結案。[結果與邊界](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-approved-precutover-completion)。
@@ -529,6 +531,7 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 
 - → DEV-139 [整合交付點] [切流前私人候選與通路已驗證／原網址與PWA未變／原資料未搬遷／未切流] [P1] ProJED 納入 Jenfu-Platform，保留 Vite
   - 現行方向：先在舊主／Quick 網址完成新版前端、登入、API與中央後端接線，正式資料搬遷獨立列 DEV-142；日常運作確認後才換新網址，不重搬 DB／Storage。[DEV-139 現況](#dev-139-jenfu-platform-onboarding)｜[SPEC §3.0](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-two-stage-rollout)。
+  - 最後換址已選方案2「引導完成切換」，[草稿→原帳號→書籤／PWA交接](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-guided-origin-switch)僅文件定案；後端在舊網址穩定後才執行，尚未實作／啟用。
   - 現有候選與本機證據依原 source／revision 重用；51份 schema SQL 成功不代表正式業務資料搬遷。真 Session／既有 UUID mapping、舊入口及原地草稿相容、provider零留存、正式資料與完整功能驗收仍未結案。
   - 下一步：來源7d239c9的CI、固定來源Cloud Build、私人HTTP36、空佇列背景與正式來源唯讀盤點均已成功；正式資料切流依DEV-142另排低使用量窗口。Gemini／RAG 零留存資格未證明仍停用，最後新網址另階段。
   - 資料交付：[DEV-142](#dev-142-production-data-migration)／[SPEC-142](specs/SPEC-142-projed-production-data-migration.md)，已授權且恢復點、45表目標隔離還原、候選與唯讀來源盤點PASS，尚未停寫、正式搬入或啟用新writer。原帳號／個人與外部權限、取消／CAS／unknown／exactly-once及完整DEV-139分母保留，父子不重複認列。
