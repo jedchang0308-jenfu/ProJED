@@ -16,6 +16,13 @@
 - 原先 retired capability、舊owner能力與父子批次的三個有效失敗分別保留在舊恢復包及新輸出，不以本輪PASS改寫。全部正式資料、舊 writer／網址／PWA不變；正式窗口仍須停寫後取最終snapshot。
 - 必要本機驗證：migration unit24、S2 unit541、S3 unit175、strict同版本PG宣告overlay的S2／S3與affected ESLint通過。原 sandbox 因loopback EACCES失敗保留；一個shutdown fixture在請求未到owned server時無限等候，已補有界請求與錯誤收尾，正常／stalled shutdown四案例通過。這是RD自查。來源 `7d239c91b5233fcd427d23aea47c06cdcb44389b` 的[CI45423509034](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45423509034)兩jobs SUCCESS，實際PG／HTTP75、snapshot67及OCI23收據已取回。候選來源包／checksum／428份前版資產已核對，但Cloud Build在任何上傳／提交前遇SDK `Reauthentication failed`，等待更新既有Google登入；不重跑有效CI或備份。
 
+## 2026-11-25 私人候選與正式來源唯讀盤點
+
+- 來源 `7d239c91b5233fcd427d23aea47c06cdcb44389b` 的CI45423509034與Cloud Build `b9b70c73-0432-40d7-b40a-0a741e58352d`成功；私人revision `projed-prod-dev139-7d239c9`維持0%、原`projed-prod-00007-cpt`維持100%。私人HTTP36與analysis generation6空佇列execution通過，內容／模型請求0。
+- 正式來源與中央目標只執行一次READ ONLY `plan`：來源snapshot `0adad950…86b2`與本報告的隔離投影／還原相同，中央目標為空。沒有apply、正式資料搬入、來源停寫或新writer。
+- 本次最長20分鐘的來源reader LOGIN完成後立即恢復NOLOGIN；最終讀回活躍連線0、可寫relation 0。具名一次性Cloud Run Job依UID刪除並讀回404。
+- 最終收據 `output/dev139-dev104-projection-20261124/final-precutover-verification.json` 核對兩個舊origin的四份metadata與本恢復點逐位元組一致；Recovery Scheduler仍PAUSED，原migration Job仍只有1次歷史execution。PWA十組來源輸入未變，沿用既有PWA18證據；13小時案例為時鐘模擬，未冒稱真實隔夜或真使用者Session／會議驗收。
+
 ## 2026-11-24 資料備份與恢復補驗
 
 - 原生 app schema 備份：22:08:13–22:08:30（Taipei），`source-app.pgdump.aes`，保存 `public`／`private` 的資料、schema、functions、constraints 與 RLS policies；不匯出 Supabase Auth 密碼、登入 token 或平台全域角色。原生匯出使用其自身的一致性 snapshot。
@@ -38,13 +45,13 @@
 
 三個專案各建立本機 `codex/recovery-dev142-20261124-214053-{main,worktree,validated}` 分支參考及自足 Git bundle；沒有推送恢復分支。每包已在獨立 bare repository 還原、核對三個 ref 並通過 `git fsck --full --no-dangling`，原工作樹未切換／覆寫。Platform 七份既有未追蹤執行輸入另按原路徑保存並核對 checksum。
 
-ProJED 已驗程式為 `ea09b133e4576b042a09af31d91069cd36f12391`，與文件 HEAD／遠端 main 分別記錄；文件更新不冒充已驗映像。七個自有 registry 映像的精確 digest 經 provider 讀回存在；目前只保留遠端映像及本機 digest 記錄，沒有離線匯出映像或變更保留政策。
+恢復點建立時的ProJED已驗程式為 `ea09b133e4576b042a09af31d91069cd36f12391`；後續修正來源 `7d239c91b5233fcd427d23aea47c06cdcb44389b` 已另經CI、Cloud Build及私人候選驗證，不改寫恢復點原始清單。文件HEAD／遠端main分別記錄，文件更新不冒充已驗映像。七個自有registry映像的精確digest經provider讀回存在；目前只保留遠端映像及本機digest記錄，沒有離線匯出映像或變更保留政策。
 
 原前端 release `20261123035148-4604c0` 的 428 個檔案已逐檔核對並封存為 `original-hosting-assets.zip`；zip CRC／內容 checksum 通過，四個現役舊 origin metadata 與封存一致。Hosting release API 回報 403，因此未取得 provider version ID；不能宣稱 Hosting 一鍵 rollback 已驗證。
 
 ## 部署落點
 
-- ProJED `projed-prod-00007-cpt` 仍 100%；`projed-prod-dev139-ea09b13` 私人 tag 保持 0%。00007 是切流前基線，未證明可作新資料／Session 啟用後的相容回退版本。
+- ProJED `projed-prod-00007-cpt` 仍100%；最新 `projed-prod-dev139-7d239c9` 私人tag保持0%，舊私人候選映像亦保留。00007是切流前基線，未證明可作新資料／Session啟用後的相容回退版本。
 - Platform `jenfu-platform-prod-1178f25a6eff`、OrgMaster `orgmaster-prod-6a8b73ff1c2d` 仍為現役；原專案私人 relay `projed-legacy-entry-00001-hgp` 保留。
 - 具名 services／revisions／映像／IAM、migration 與 analysis Job 狀態均記於 `runtime-recovery.json`；沒有匯出 credential 或環境變數 payload。Recovery Scheduler 維持 PAUSED，Gemini／RAG 維持停用及既有零留存要求。
 
@@ -62,4 +69,4 @@ ProJED 已驗程式為 `ea09b133e4576b042a09af31d91069cd36f12391`，與文件 HE
 4. 新 writer 已有新增資料後，優先讓相容程式沿用同一新庫；不能只解除 Supabase fence 或切回舊庫。反向資料 rewrite、down migration、破壞性清空及共用整庫 restore 不隱含於一般應用回退。
 5. 下一步沿 SPEC-142／SPEC-139 既定範圍續行；保留原網址與 PWA，最後新網址另階段。有效證據沿原受測輸入重用，不新增 required gate。
 
-本步實際結果：沒有正式業務資料搬入、來源停寫、新 writer 啟用、流量切換、模型啟用或新增雲端 IAM。下一步在SDK既有登入更新後，以已固定來源包接續Cloud Build／候選驗證；CI已成功、原始備份與schema證據重用。PR #33 ready通知被自動核准審查拒絕（理由為未認定該PR具名通知授權），保持draft；此通知不是候選建置前置，不追加本輪required gate。
+本步實際結果：沒有正式業務資料搬入、來源停寫、新 writer 啟用、流量切換、模型啟用或新增雲端 IAM。固定來源包的Cloud Build、私人候選、HTTP／空佇列背景及正式來源唯讀plan均已完成；下一步依SPEC-142排定低使用量正式窗口，停寫後另取最終快照再執行正式匯入與核對。PR #33 ready通知曾被自動核准審查拒絕（理由為未認定該PR具名通知授權），保持draft；此通知不是候選或資料安全前置，不追加required gate。
