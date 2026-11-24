@@ -1073,7 +1073,8 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
     if (Object.keys(unknown).length > 0 && node) {
       // Resolve an uncertain provider write before deciding whether it is safe to resend.
       setIsClosePending(true);
-      const fieldsAtReadStart = taskDetailsFieldsFromNode(useWbsStore.getState().nodes[nodeId]);
+      const taskAtReadStart = useWbsStore.getState().nodes[nodeId];
+      const fieldsAtReadStart = taskDetailsFieldsFromNode(taskAtReadStart);
       let timer: number | undefined;
       void Promise.race([
         readCanonicalTask(node, sessionOwnerRef.current.accountId),
@@ -1105,9 +1106,19 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
             noteConflict = true;
           }
         }
+        if (dataBackend === 'http' && isTaskWorkbenchUnplacedTask(readback)
+          && useWbsStore.getState().nodes[nodeId] !== taskAtReadStart) {
+          setFieldConflict(true);
+          return;
+        }
         useWbsStore.setState(state => {
           const latest = state.nodes[nodeId];
           if (!latest || !ownsLiveTask()) return {};
+          // Whole-row CAS must retain unrelated remote edits too. The draft
+          // remains separate; a concurrent local store change was fenced above.
+          if (dataBackend === 'http' && isTaskWorkbenchUnplacedTask(readback)) {
+            return { nodes: { ...state.nodes, [nodeId]: readback } };
+          }
           const fields = taskDetailsFieldsFromNode(latest);
           const readbackFields = taskDetailsFieldsFromNode(readback);
           const patch: Partial<TaskNode> = {};

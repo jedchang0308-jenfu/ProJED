@@ -546,6 +546,16 @@ async def modal_behavior(browser, origin, checks):
         final = await modal.evaluate('window.__DEV139_TASK_DRAFT.counters()')
         check('unplaced-http-failed-save-rechecks-before-one-retry',
             final['reads']>after['reads'] and final['writes']==after['writes']+1)
+        await modal.evaluate('window.__DEV139_TASK_DRAFT.remoteMetadataEdit()')
+        await modal.locator('[contenteditable="true"]').first.fill('保留其他裝置標籤的恢復記事')
+        await modal.locator('[data-task-details-local-status="local"]').wait_for()
+        await modal.evaluate('window.__DEV139_TASK_DRAFT.unmount()')
+        await modal.locator('[data-task-details-modal]').wait_for(state='hidden')
+        await modal.evaluate("window.__DEV139_TASK_DRAFT.mount('unplaced-recovery-owner')")
+        await modal.locator('[data-task-details-save-retry]').click()
+        await modal.locator('[data-task-details-save-status="saved"]').wait_for()
+        check('unplaced-recovery-retains-unrelated-remote-metadata',
+            await modal.evaluate('window.__DEV139_TASK_DRAFT.remoteTags()') == ['other-device-tag'])
         recovered = await modal.evaluate('window.__DEV139_TASK_DRAFT.recoverLocalFallback()')
         check('newer-local-fallback-does-not-overwrite-an-existing-remote-task', all(recovered.values()))
         await modal.screenshot(path=str(OPTIONS.report.parent / 'task-note-local-first.png'), full_page=True)

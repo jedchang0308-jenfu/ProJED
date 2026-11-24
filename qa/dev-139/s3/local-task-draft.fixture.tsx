@@ -66,6 +66,8 @@ const mount = (accountId: string) => {
 };
 const fixture = {
   counters: () => ({ writes, reads }),
+  remoteMetadataEdit() { canonical = { ...canonical, tagIds: ['other-device-tag'] }; },
+  remoteTags: () => canonical.tagIds,
   async recoverLocalFallback() {
     const accountId = useAuthStore.getState().user!.uid;
     const original = structuredClone(canonical);
