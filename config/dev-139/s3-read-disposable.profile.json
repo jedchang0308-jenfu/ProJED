@@ -226,6 +226,10 @@
     {
       "version": "0051_transfer_read_empty_context_v1",
       "path": "db/migrations/0051_transfer_read_empty_context_v1.sql"
+    },
+    {
+      "version": "0052_orgmaster_user_directory_v1",
+      "path": "db/migrations/0052_orgmaster_user_directory_v1.sql"
     }
   ],
   "objectAllowlist": [
@@ -424,7 +428,11 @@
     "projed_core.accepted_invite_revision_v1",
     "projed_core.revocable_resource_sessions_v1",
     "projed_core.revoke_reduced_permissions_v1",
-    "projed_core.session_board_transfer_v1"
+    "projed_core.session_board_transfer_v1",
+    "projed_contract.v_user_directory_v1",
+    "projed_contract.v_user_activation_guards_v1",
+    "projed_contract.read_user_directory_v1",
+    "projed_contract.set_user_active_v1"
   ],
   "staticFixturePath": "qa/dev-139/s1/static",
   "runtime": {

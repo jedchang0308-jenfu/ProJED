@@ -56,4 +56,5 @@ export const S3_MIGRATION_PATHS = Object.freeze([
   'db/migrations/0049_session_directory_visibility_v1.sql',
   'db/migrations/0050_session_board_transfer_v1.sql',
   'db/migrations/0051_transfer_read_empty_context_v1.sql',
+  'db/migrations/0052_orgmaster_user_directory_v1.sql',
 ]);
