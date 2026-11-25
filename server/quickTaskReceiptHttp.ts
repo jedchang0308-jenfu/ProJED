@@ -8,7 +8,7 @@ import { assertExpectedActor } from './expectedActorHttp.js';
 import { QuickTaskRepository } from './quickTask.js';
 import type { QuickTaskHttpResult } from './quickTaskHttp.js';
 
-/** Source-prepared readback. Not registered in the production runtime yet. */
+/** Readback uses the same Session and actor boundary as Quick mutations. */
 export function createQuickTaskReceiptHttpDispatcher(config: RuntimeConfig, database: RuntimeDatabase,
   resolveActor?: TrustedSessionActorResolver, repository = new QuickTaskRepository()) {
   return async (request: IncomingMessage, requestId: string): Promise<QuickTaskHttpResult> => {

@@ -17,6 +17,7 @@ import {
 import { createDomainWriteHttpDispatcher } from './domainWriteHttp.js';
 import { createRecordActivityHttpDispatcher } from './recordActivityHttp.js';
 import { createQuickTaskHttpDispatcher } from './quickTaskHttp.js';
+import { createQuickTaskReceiptHttpDispatcher } from './quickTaskReceiptHttp.js';
 import {
   createSessionHttpDispatcher,
   type TrustedSessionDestroyer,
@@ -208,6 +209,7 @@ export function createKernelHttpServer(
   const dispatchCollaborationWrite = createCollaborationWriteHttpDispatcher(config, database, options.resolveActor, undefined, options.publishExternalInvitation);
   const dispatchRecordActivity = createRecordActivityHttpDispatcher(config, database, options.resolveActor);
   const dispatchQuickTask = createQuickTaskHttpDispatcher(config, database, options.resolveActor);
+  const dispatchQuickTaskReceipt = createQuickTaskReceiptHttpDispatcher(config, database, options.resolveActor);
   const dispatchTaskWorkbench = createTaskWorkbenchHttpDispatcher(config, database, options.resolveActor);
   const dispatchTaskTracking = createTaskTrackingHttpDispatcher(config, database, options.resolveActor);
   const dispatchBackup = createBackupHttpDispatcher(config, database, options.resolveActor);
@@ -319,6 +321,11 @@ export function createKernelHttpServer(
       json(response, collaborationWrite.status ?? 500, collaborationWrite.body ?? {
         error: { code: 'DB_UNAVAILABLE', requestId, retryable: true },
       }, requestId);
+      return;
+    }
+    const quickTaskReceipt = await dispatchQuickTaskReceipt(request, requestId);
+    if (quickTaskReceipt.matched) {
+      json(response, quickTaskReceipt.status ?? 500, quickTaskReceipt.body, requestId);
       return;
     }
     const quickTask = await dispatchQuickTask(request, requestId);

@@ -1150,6 +1150,10 @@ try {
   const replayedQuickReceipt = await quickB.create(quickCapture, new AbortController().signal);
   assert.equal(replayedQuickReceipt.created, false);
   assert.equal(replayedQuickReceipt.committedAt, quickReceipt.committedAt);
+  assert.deepEqual(await quickB.readReceipt(quickCapture.captureId, new AbortController().signal),
+    { ...quickReceipt, created: false });
+  assert.equal(await createHttpQuickTaskAdapter(clientFor('qa-a', actorA))
+    .readReceipt(quickCapture.captureId, new AbortController().signal), null);
   await verifyQuickReceiptPostgres(database, config, actorBQuick, actorA, quickReceipt);
   const quickRowsB = await runActorTransaction(database, config, actorB, port => port.query<{
     legacy_task_id: string; workspace_legacy_id: string; title: string;

@@ -1,6 +1,6 @@
 import type { QuickCaptureRecord } from '../../features/quickTaskCapture/model';
 import type { QuickTaskCreateResult } from '../../features/quickTaskCapture/contract';
-import { HttpApiClient } from './httpApiClient';
+import { HttpApiClient, type HttpExpectedActor } from './httpApiClient';
 
 function record(value: unknown, label: string): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`HTTP_API_INVALID_${label}`);
@@ -26,11 +26,11 @@ function parseReceipt(value: unknown): QuickTaskCreateResult {
 export function createHttpQuickTaskAdapter(client: HttpApiClient) {
   return {
     /** A miss remains unresolved; this method never falls back to POST. */
-    async readReceipt(captureId: string, signal: AbortSignal): Promise<QuickTaskCreateResult | null> {
+    async readReceipt(captureId: string, signal: AbortSignal, expectedActor?: HttpExpectedActor): Promise<QuickTaskCreateResult | null> {
       if (!/^task_workbench_unplaced_[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(captureId)) {
         throw Object.assign(new Error('INVALID_CAPTURE'), { code: 'INVALID_CAPTURE' });
       }
-      const value = await client.request<unknown>(`/api/v1/quick-tasks/${captureId}/receipt`, { signal });
+      const value = await client.request<unknown>(`/api/v1/quick-tasks/${captureId}/receipt`, { signal, expectedActor });
       const envelope = record(value, 'QUICK_TASK_ENVELOPE');
       if (envelope.data === null) return null;
       const result = parseReceipt(value);

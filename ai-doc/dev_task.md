@@ -78,12 +78,9 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
 ## DEV-139：ProJED 納入 Jenfu-Platform，Cloud Run／Cloud SQL 對齊並保留 Vite
 
-  - **換址引導前置準備（2026-11-25，本機預覽待人類確認）**：依本輪要求完成三步共用引導元件與狀態邏輯，支援主程式／Quick獨立帳號進度、稍後與重開續行、錯帳／過期／未知結果拒絕、裝置適用的新PWA或書籤指引，安裝事件不直接標完成。14項狀態測試、18項本機瀏覽器／手機案例、嚴格型別與lint通過；單檔預覽可本機操作，已套用確認過的白話緣由／資料保留／程式安裝文案，不連正式服務。入口仍未匯入預覽或開提示；真草稿盤點接線／交接、受信任新站回執、固定新網址及正式接線待續，不執行換址。來源與重現見[SPEC-139 §6.4.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-guided-origin-switch)。
-  - **來源交付／CI（2026-11-25）**：同一分支已建立草稿[PR #41](https://github.com/jedchang0308-jenfu/ProJED/pull/41)。首輪CI45628300966的PG／snapshot與unit通過，但嚴格索引型別使後端／artifact／OCI失敗；route與測試斷言已同PR修正，完整server/S2 overlay／lint通過，修正來源沿原workflow再驗。原失敗保留；未合併、部署或切流，未認列完整DEV-139結案。
-  - **原回執唯讀讀回（2026-11-25，source／隔離接線）**：補GET讀回原記事回執，沿既有Session／actor／owner RLS；無新增或補送fallback，未知提交可核實原key，查不到仍保留unknown。PostgreSQL18.4 DB／HTTP76項、IndexedDB24項、S3及新repository／dispatcher unit205項、受影響lint／隔離pg宣告型別通過；原fixture型別失敗及修正結果均保留。新dispatcher僅在隔離測試註冊，正式runtime／App／Quick未接入，不部署、不切流；詳[SPEC-139 §6.4.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-guided-origin-switch)。
-  - **換址草稿盤點（2026-11-25，本機開發）**：補唯讀 Quick／備註／會議復原／音訊盤點，隔離無視窗 Edge 真 IndexedDB 22項、原引導14項及受影響型別／lint通過；同步main `f642c7b` 後S3 198項通過，直接型別因共享pg宣告缺件失敗、同lock版本隔離overlay通過，未改共享依賴。保留舊副本與原 key，不把本機 synced 當雲端成功、不自動認領或重送；跨帳／編輯 revision 改變、儲存失敗及未知結果拒絕。回執／活動 adapter 僅合成驗證，真 Session／原回執接線、交接及新網址尚待，未掛正式入口、未部署或切流；詳[SPEC-139 §6.4.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-guided-origin-switch)。
-  - **正式畫面界線（2026-11-25）**：右側「試看看不同情況」、合成帳號／保存／登入／安裝選項、模擬開站計數與重設按鈕僅供本機預覽，正式頁面不匯入或掛載。正式引導依實際程式、帳號、記事保存與登入結果判斷，不能由使用者選成功來跳過；保留最後從新圖示／書籤開啟的使用確認。詳[SPEC-139 §6.4.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-guided-origin-switch)；此項確認僅補文件，盤點開發另見上項；尚未接線、部署或切流。
-
+  - **換址引導／草稿恢復（2026-11-25，開發中）**：同一草稿[PR #41](https://github.com/jedchang0308-jenfu/ProJED/pull/41)收斂三步白話引導、真本機草稿盤點與原key唯讀回執；保留主／Quick、帳號、未解內容與未知結果，不自動認領或重送。原生PG18.4 76項、本機IndexedDB24項及unit205項通過；前版來源18db288的[CI45629036385](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45629036385)兩jobs SUCCESS，PG17.12 76／snapshot67／OCI23已回讀，原型別失敗保留。詳[SPEC-139 §6.4.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-guided-origin-switch)。
+  - **接線授權與下一步**：人類已核准「開放程式接線，仍不部署／換址」。已接kernel回執路由及引導的真Session／草稿檢查port，新增6項接線unit與受影響型別通過，新source沿同PR再驗；正常App／Quick畫面、目的端證明與草稿保存／恢復續接。新網址、正式部署／換址與未資格Gemini／RAG仍未完成，維持零留存，不擴張IAM／Secret／billing，不認列完整DEV-139結案。
+  - **正式畫面界線**：右側「試看看不同情況」、合成帳號／保存／登入／安裝選項、計數與重設僅供本機預覽；正式頁面不匯入或掛載、不留空欄。正式狀態依真實登入與保存結果判斷，保留使用者從新圖示／書籤開啟的最後確認，不能手動宣告成功來跳過。
 
 
 - 2026-11-25 管理清單補齊：對應 ORGMASTER/DEV-057 新增個人／外部帳號清單與停用／恢復。ProJED 0052 僅提供最小 metadata 與 account guard CAS；包含未首登既有帳號，不讀私人工作區／任務，停用讓主站／Quick 舊 Session 失效，恢復須重新登入。人類已確認維持現有註冊方式。來源實作及兩 owner 實際 SQL 隔離 9 組驗證通過，正式尚未部署；詳[SPEC 契約](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-orgmaster-user-directory)。

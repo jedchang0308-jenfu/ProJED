@@ -725,6 +725,10 @@ Server 搬移與 browser storage 恢復分開驗收。第一階段維持原 orig
 
 來源已推送同一分支並建立草稿 [PR #41](https://github.com/jedchang0308-jenfu/ProJED/pull/41)，不合併／部署。首輪 [CI45628300966](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45628300966) 的真正PostgreSQL／snapshot、前端型別與unit獨立通過，但後端 `noUncheckedIndexedAccess` 發現新route擷取與新增測試陣列索引的可能undefined，造成後端型別、compiled artifact與OCI失敗；不是provider／資料失敗。原run與 `ci-first-failed.log`保留，在同一PR補上明確非空窄化，不改嚴格設定／gate；使用既有相同pg宣告的server/S2完整overlay與受影響lint通過，修正來源另走原CI驗證，不把首輪整體記為PASS。
 
+**程式接線續行（2026-11-25，人類已核准）。** 人類已明確回覆「開放程式接線，仍不部署／換址」；原暫緩程式接線的限制至此解除，部署、換網址、IAM／Secret／billing限制不變。前一來源 `18db288` 的 [CI45629036385](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45629036385) 兩jobs SUCCESS：原lock依賴型別與unit、三boundary、compiled artifact、PG17.12 DB／HTTP76項、snapshot67項及Linux OCI23項通過；兩份artifact `15030895561`／`15030760212` 已取回，OCI sourceSha與同run一致、52 migrations，registry push與production release均NOT_RUN。首輪失敗不改寫。
+
+沿新授權將回執dispatcher接到既有kernel HTTP路由；`httpDraftInspector`提供可直接接入 `GuidePorts.inspectDrafts` 的正式資料來源，先沿原Session／expected actor檢查本人，再以原key讀回回執與盤點既有本機內容。五秒請求deadline及source Session／editor revision圍籬阻止晚到結果；離線保留本機狀態、不發網路請求。Guide的main／quick範圍與實際Session entry分開，因此既有同origin Quick可合法驗其Main Session，不錯套獨立Quick帳號。新來源接線6項unit及受影響server/S2、S3隔離型別通過；正常App／Quick畫面、目的端證明及草稿實際保存／恢復接線仍待，不宣稱已完整上線。新來源將沿同一PR／CI續驗，不因前版CI綠燈宣稱新source已通過。
+
 **本輪可確認的實作範圍。** `src/features/originSwitch/` 的共用元件／狀態邏輯依序處理草稿、原帳號、新日常入口；主程式／Quick、來源與目標origin、原帳號及本次換址版本分別保存進度。稍後會保留進度；重開後重新查證草稿與目的身分，不能只信舊localStorage的完成旗標。pending／unknown／衝突／未綁帳號／仍在編輯／離線／盤點失敗均不放行；晚到回應在換帳或取消後失效。安裝accepted／dismissed事件不直接完成，最後須由使用者確認從新圖示或書籤開啟且資料正確，並再驗身分及內容狀態。
 
 預覽檔 `qa/dev-139/s3/origin-guide.fixture.tsx` 只提供合成帳號、內容狀態與模擬登入／安裝，沒有被正式App或Quick入口匯入。`scripts/build-dev139-origin-guide-preview.mjs` 產生單檔HTML，CSP封鎖外部連線；正式新網址仍待固定，預覽的保留測試網域不會真的開啟。PWA裝置判斷沿既有 `pwaInstallService`，不新增安裝程序、不複製Session、不傳私人內容，也不清除任何業務儲存。
