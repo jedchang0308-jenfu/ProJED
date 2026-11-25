@@ -7,6 +7,7 @@ import {
   type TaskFilterQuery,
 } from '../features/taskFilters';
 import { taskFilterPreferenceRepository } from '../features/taskFilters/preferenceRepositoryInstance';
+import { SYNC_FALLBACK_WARNING } from '../features/taskFilters/preferenceRepository';
 import useAuthStore from './useAuthStore';
 import useUndoStore from './useUndoStore';
 import { toast } from './useToastStore';
@@ -38,6 +39,13 @@ type TaskFilterStoreActions = {
   reconcileAssigneeIds: (validIds: ReadonlySet<string>, preserveIds?: ReadonlySet<string>) => void;
   reconcileTagIds: (validIds: ReadonlySet<string>) => void;
   refreshProjection: () => void;
+};
+
+export const selectTaskFilterResultError = (state: TaskFilterStoreState): string | null => {
+  // Scope-specific local filters are already active during ordinary hydration
+  // or a transport failure. Editing stays locked until the preference is known.
+  if (!state.controlsLocked || state.hydrationStatus === 'hydrating' || state.warning === SYNC_FALLBACK_WARNING) return null;
+  return state.warning || '篩選偏好無法載入';
 };
 
 const defaultState = (): TaskFilterStoreState => ({

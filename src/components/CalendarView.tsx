@@ -22,7 +22,7 @@
 import React, { useState, useMemo } from 'react';
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
-import { useTaskFilterStore } from '../store/useTaskFilterStore';
+import { selectTaskFilterResultError, useTaskFilterStore } from '../store/useTaskFilterStore';
 import dayjs from 'dayjs';
 import {
     ChevronLeft, ChevronRight, Calendar,
@@ -172,8 +172,7 @@ const CalendarView = () => {
     } = useBoardStore();
     const taskFilters = useTaskFilterStore(state => state.filters);
     const resetTaskFilters = useTaskFilterStore(state => state.resetFilters);
-    const taskFiltersLocked = useTaskFilterStore(state => state.controlsLocked);
-    const taskFilterWarning = useTaskFilterStore(state => state.warning);
+    const taskFilterResultError = useTaskFilterStore(selectTaskFilterResultError);
 
     const [isTaskListOpen, setIsTaskListOpen] = useState(true);
     const [collapsedIds, setCollapsedIds] = useState(new Set());
@@ -194,7 +193,7 @@ const CalendarView = () => {
     );
     const taskLoading = useWbsStore(s => s.loading);
     const taskLoadError = useWbsStore(s => s.error);
-    const taskResultError = taskLoadError || (taskFiltersLocked ? taskFilterWarning || '篩選偏好無法載入' : null);
+    const taskResultError = taskLoadError || taskFilterResultError;
     const filterProjection = useMemo(
         () => projectTaskFilterResults(projectionNodes, taskFilters, { boardId: activeBoardId }),
         [activeBoardId, projectionNodes, taskFilters],
