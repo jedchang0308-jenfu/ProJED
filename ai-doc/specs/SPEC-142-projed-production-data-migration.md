@@ -57,7 +57,7 @@
 
 **DEV-142 已完成，原網址／介面／PWA／草稿保留，中央Cloud SQL為唯一業務寫入庫。** 恢復點 `DEV142-PRE-CUTOVER-20261124-214053`、停寫後最終加密app備份、獨立核對及原Hosting／映像參考均保留。來源受管PITR／整套平台恢復未證明，本機解密依目前Windows DPAPI環境，這些限制未被改寫為已驗證。原來源保持fence；已有新寫入後，恢復應在同一新庫維持相容程式與新資料，不直接解除舊fence或整庫覆蓋。既有有效授權及正常同範圍修正不逐SHA重問，不概括擴張IAM／Secret／credential／billing或破壞性資料回復責任。
 
-DEV-142 正式完成後，DEV-139 可在舊網址上確認新系統日常運作，再執行最後新網址切換。人類已採用[方案2：引導完成切換（SPEC-139 §6.4.1）](SPEC-139-projed-jenfu-platform-onboarding.md#dev139-guided-origin-switch)，依序確認草稿、以原帳號登入新站、更新書籤／PWA入口；等後端穩定後才啟用，目前僅文件定案。最後一步沿用同一套 Cloud SQL／Storage，不再安排第二次伺服器資料搬遷；仍需新的 origin／Session／callback、書籤／PWA 及本機草稿交接。網址階段若出問題，可在資料與權限一致的前提下暫回舊入口使用同一新後端，不能解讀為退回舊資料庫。
+DEV-142 正式完成後，DEV-139 可在舊網址上確認新系統日常運作，再執行最後新網址切換。人類已採用[方案2：引導完成切換（SPEC-139 §6.4.1）](SPEC-139-projed-jenfu-platform-onboarding.md#dev139-guided-origin-switch)，依序確認草稿、以原帳號登入新站、更新書籤／PWA入口；等後端穩定後才啟用；目前共用引導及本機互動預覽已實作，正式新origin／回執／草稿交接接線與提示尚未啟用。最後一步沿用同一套 Cloud SQL／Storage，不再安排第二次伺服器資料搬遷；仍需新的 origin／Session／callback、書籤／PWA 及本機草稿交接。網址階段若出問題，可在資料與權限一致的前提下暫回舊入口使用同一新後端，不能解讀為退回舊資料庫。
 
 ## 7. 本次集中確認的執行差額（2026-11-25，入口／reader／來源交付已核准；切流等人類起床）
 

@@ -1,0 +1,16 @@
+import { build } from 'esbuild';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+
+const output = resolve(process.argv[2] || 'output/dev139-origin-guide-preview');
+const built = await build({ entryPoints: ['qa/dev-139/s3/origin-guide.fixture.tsx'],
+  bundle: true, format: 'iife', jsx: 'automatic', write: false, outfile: 'guide.js',
+  define: { 'process.env.NODE_ENV': '"production"' } });
+const script = built.outputFiles.find(file => file.path.endsWith('.js')).text.replaceAll('</script', '<\\/script');
+const css = built.outputFiles.find(file => file.path.endsWith('.css')).text;
+const frame = `*{box-sizing:border-box}body{margin:0;background:#f2f6f3;color:#29443c;font-family:"Segoe UI","Microsoft JhengHei",sans-serif}.preview-root{max-width:1180px;margin:0 auto;padding:30px}.preview-header{display:flex;gap:18px;align-items:center;font-size:15px}.preview-header strong{color:#08796c;font-size:20px}.preview-header span{color:#70857a;border-left:1px solid #cddbd3;padding-left:18px}.preview-boundary{font-size:13px;color:#728177;line-height:1.7;margin:18px 0 30px}.preview-layout{display:grid;grid-template-columns:minmax(0,720px) 260px;gap:35px;align-items:start}.preview-layout main{min-width:0}.preview-layout aside{padding:13px 0;color:#50695d}.preview-layout summary{font-size:14px;font-weight:650;cursor:pointer}.preview-controls{display:grid;gap:15px;margin-top:22px}.preview-controls label{font-size:12px;color:#7b8c82;display:grid;gap:7px}.preview-controls select{width:100%;font:inherit;font-size:13px;min-height:38px;padding:8px;border:1px solid #d9e3dc;border-radius:7px;background:#f9fbf9;color:#405d50}.preview-counter{font-size:12px;color:#839086}.preview-reset{border:0;background:transparent;color:#6a7f70;text-align:left;cursor:pointer;padding:5px 0;font:inherit;font-size:12px}.preview-return{background:white;border-radius:18px;padding:40px}.preview-return h1{font-size:25px}.preview-return p{font-size:15px;color:#728177}.preview-return button{background:#0b8075;color:white;border:0;border-radius:8px;padding:13px 20px;cursor:pointer}@media(max-width:900px){.preview-root{padding:22px 16px}.preview-layout{grid-template-columns:1fr;gap:20px}.preview-layout aside{order:-1;padding:0}.preview-boundary{font-size:12px;margin-bottom:20px}.preview-controls{grid-template-columns:repeat(2,minmax(0,1fr));padding-bottom:15px}.preview-header span{font-size:13px}.preview-header strong{font-size:18px}}`;
+const html = `<!doctype html><html lang="zh-Hant"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; object-src 'none'; frame-src 'none'"><title>ProJED 新入口引導預覽</title><style>${css}\n${frame}</style></head><body><div id="root"></div><script>${script}</script></body></html>`;
+await mkdir(output, { recursive: true });
+await writeFile(resolve(output, 'index.html'), html);
+console.log(JSON.stringify({ status: 'LOCAL_PREVIEW_ONLY', html: resolve(output, 'index.html'),
+  externalConnections: false, productionEntryChanged: false, credentialOrBusinessData: false }));
