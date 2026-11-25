@@ -682,7 +682,7 @@ Server 搬移與 browser storage 恢復分開驗收。第一階段維持原 orig
 
 **執行時機。** DEV-142 正式資料搬遷完成，且同一中央後端在舊網址的登入、工作區／看板／權限、記事同步及必要背景處理已有可查證的穩定運作結果，才進入本階段；沿 §3.0 日常確認，不新增固定觀察天數、全員簽到或另一道人工簽核。未符合前提時不啟用換址提示或轉址。人類本輪要求開始切流前置準備、先確認換網址及PWA引導功能，已實作可操作的本機預覽及共用狀態邏輯；正式登入回執／草稿盤點與交接 adapter、固定新網址、主／Quick接線及正式提示尚未啟用。未資格模型仍保持停用，預覽不冒充正式換址或模型驗收。
 
-舊站提示採「改用新的 ProJED 入口」，提供「開始切換」與「稍後」。提示不打斷正在輸入、強制重載或宣稱所有本機草稿已在雲端。「稍後」仍可沿舊網址使用同一新後端，之後能從原提示或設定再次開始。新站目的地、主／Quick callback及manifest須在實作／發布前固定並驗明，只允許既定目的地；不從任意query或外部return URL決定。
+舊站提示採「ProJED 要換新網址了」，提供「開始切換」與「稍後」。提示不打斷正在輸入、強制重載或宣稱所有本機草稿已在雲端。「稍後」仍可沿舊網址使用同一新後端，之後能從原提示或設定再次開始。新站目的地、主／Quick callback及manifest須在實作／發布前固定並驗明，只允許既定目的地；不從任意query或外部return URL決定。
 
 | 使用者步驟 | 程式行為與完成依據 | 未完成／中斷時 |
 |---|---|---|
@@ -692,11 +692,13 @@ Server 搬移與 browser storage 恢復分開驗收。第一階段維持原 orig
 
 **草稿與進度。** 沿 §6.2 重用既有outbox／編輯草稿／receipt與用途限定恢復證明，不新增第二份業務權威或永久Session bridge。新origin不能直接讀舊IndexedDB／localStorage，cookie／token不跨站複製，私人內容不塞入網址、analytics或公開log。進度至少可區分尚未開始、待處理草稿、待原帳號登入、待更新入口及完成；按來源origin、主／Quick及原帳號隔離，關閉重開後能續行，換帳不沿用前帳號的完成狀態。只有該入口本機內容已有可核實處置、新站原帳號及資料已確認、使用者已驗明日常入口，才顯示完成；不據一台裝置的完成推論其他裝置。原副本清理仍沿 §6.2／§6.4，不因引導完成就刪除未解資料。
 
+**白話文案確認（本機預覽更新）。** 依人類確認的文案，開場補上統一維護／更新的更換原因、原帳號資料保留、舊網址仍可用；三步改用「確認資料／原帳號登入／安裝程式」，補齊手機／電腦安裝、新圖示開啟與可先用瀏覽器的說明。提示不向使用者暴露PWA、origin、交接或同步等技術詞；仍只更新本機預覽，不接正式回執、部署或切流。
+
 **本輪可確認的實作範圍。** `src/features/originSwitch/` 的共用元件／狀態邏輯依序處理草稿、原帳號、新日常入口；主程式／Quick、來源與目標origin、原帳號及本次換址版本分別保存進度。稍後會保留進度；重開後重新查證草稿與目的身分，不能只信舊localStorage的完成旗標。pending／unknown／衝突／未綁帳號／仍在編輯／離線／盤點失敗均不放行；晚到回應在換帳或取消後失效。安裝accepted／dismissed事件不直接完成，最後須由使用者確認從新圖示或書籤開啟且資料正確，並再驗身分及內容狀態。
 
 預覽檔 `qa/dev-139/s3/origin-guide.fixture.tsx` 只提供合成帳號、內容狀態與模擬登入／安裝，沒有被正式App或Quick入口匯入。`scripts/build-dev139-origin-guide-preview.mjs` 產生單檔HTML，CSP封鎖外部連線；正式新網址仍待固定，預覽的保留測試網域不會真的開啟。PWA裝置判斷沿既有 `pwaInstallService`，不新增安裝程序、不複製Session、不傳私人內容，也不清除任何業務儲存。
 
-重現：`node --import tsx --test qa/dev-139/s3/originGuide.test.ts`（14項）；`node scripts/build-dev139-origin-guide-preview.mjs`；`python qa/dev-139/s3/verify-origin-guide.py --report output/dev139-origin-guide-preview/qa-r2/result.json`（17項本機無視窗Edge，含桌面／iOS指引及390／320寬度）。受影響嚴格型別／lint通過。這些只證明共用邏輯及合成預覽，不等於真新origin、真帳號回執、實際原生安裝或正式草稿跨站交接已完成；沒有新增required gate或固定觀察期。
+重現：`node --import tsx --test qa/dev-139/s3/originGuide.test.ts`（14項）；`node scripts/build-dev139-origin-guide-preview.mjs`；`python qa/dev-139/s3/verify-origin-guide.py --report output/dev139-origin-guide-preview/copy-qa-r2/result.json`（18項本機無視窗Edge，含桌面／iOS指引及390／320寬度）。受影響嚴格型別／lint通過。這些只證明共用邏輯及合成預覽，不等於真新origin、真帳號回執、實際原生安裝或正式草稿跨站交接已完成；沒有新增required gate或固定觀察期。
 
 正式接線時，盤點adapter須完整覆蓋本次裝置／入口的既有outbox、任務／會議／其他人工草稿及編輯狀態；不能把無法讀取或未盤點當作零。目的身分adapter須由受信任後端驗證的原Principal／UUID及權限結果提供，不能將query、postMessage、自填信箱或checkbox當作身分證據。保留原ID／key與既有CAS／回執；unknown先讀回、不盲重送。這些現有義務仍未因預覽通過而被縮減。
 

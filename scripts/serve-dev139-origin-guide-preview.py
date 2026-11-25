@@ -8,6 +8,7 @@ from pathlib import Path
 parser = argparse.ArgumentParser()
 parser.add_argument('--bundle', type=Path, default=Path('output/dev139-origin-guide-preview'))
 parser.add_argument('--runtime', type=Path, required=True)
+parser.add_argument('--port', type=int, default=0)
 args = parser.parse_args()
 html = (args.bundle.resolve() / 'index.html').read_bytes()
 assert b'connect-src' in html and b"'none'" in html
@@ -29,7 +30,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(html)
 
 
-server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+server = ThreadingHTTPServer(('127.0.0.1', args.port), Handler)
 args.runtime.parent.mkdir(parents=True, exist_ok=True)
 record = {'status': 'LOCAL_REVIEW_RUNNING', 'pid': os.getpid(), 'port': server.server_port,
           'url': f'http://127.0.0.1:{server.server_port}/', 'script': str(Path(__file__).resolve()),
