@@ -529,6 +529,10 @@ async (page) => {
     const taskId = creation.nodes[0].id;
     await modal.getByRole('textbox', { name: '編輯任務名稱' }).fill(privateTitle);
     await saveThroughUi(`${privatePath}/${encodeURIComponent(taskId)}`, 'PATCH', () => modal.getByRole('button', { name: '關閉任務詳情' }).click());
+    // The HTTP response can arrive before the editor has settled and removed
+    // its beforeunload guard. Wait for the normal UI acknowledgement.
+    await modal.waitFor({ state: 'hidden' });
+    await page.locator('[data-task-title-slot="true"]').filter({ hasText: privateTitle }).first().waitFor();
     step = 'reload the private task and verify isolation for the shared board collaborator';
     const privateTasks = await saveThroughUi(privatePath, 'GET', () => page.reload({ waitUntil: 'domcontentloaded' }));
     assert(privateTasks.some(task => task.id === taskId && task.title === privateTitle), 'private task did not survive reload');

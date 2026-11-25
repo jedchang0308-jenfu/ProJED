@@ -42,6 +42,7 @@ try {
       $artifactEvalText = ($artifactEvalOutput -join "`n")
       $artifactMatch = [regex]::Match($artifactEvalText, '(?s)### Result\s*("(?:\\.|[^"\\])*")\s*### Ran Playwright code')
       if (-not $artifactMatch.Success) {
+        if ($output) { Write-Output $output }
         $artifactPreview = if ($artifactEvalText.Length -gt 4000) { $artifactEvalText.Substring(0, 4000) } else { $artifactEvalText }
         throw "Playwright artifact '$ArtifactWindowKey' is missing or not an object. Eval output: $artifactPreview"
       }
