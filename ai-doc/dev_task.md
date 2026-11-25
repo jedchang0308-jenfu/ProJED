@@ -79,7 +79,7 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 ## DEV-139：ProJED 納入 Jenfu-Platform，Cloud Run／Cloud SQL 對齊並保留 Vite
 
   - **換址引導／草稿恢復（2026-11-25，開發中）**：同一草稿[PR #41](https://github.com/jedchang0308-jenfu/ProJED/pull/41)收斂三步白話引導、真本機草稿盤點與原key唯讀回執；保留主／Quick、帳號、未解內容與未知結果，不自動認領或重送。原生PG18.4 76項、本機IndexedDB24項及unit205項通過；接線來源2a4df4a的[CI45631620870](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45631620870)兩jobs SUCCESS，PG17.12 76／snapshot67／OCI23已回讀，原型別失敗保留。詳[SPEC-139 §6.4.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-guided-origin-switch)。
-  - **接線授權與下一步**：人類已核准「開放程式接線，仍不部署／換址」。已接kernel回執路由及引導的真Session／草稿檢查port，新增6項接線unit及kernel route的CI已通過；後續複核補完成前再次盤點，15項狀態測試通過、此小修待同批CI。每entry有限origin集合／exact callback與新舊Quick配對已實作，49項認證／入口及S2／S3 760項通過，原生新舊並行／Cookie隔離／撤權案例沿本輪CI驗證；下一步接purpose限定目的端證明及正常App／Quick畫面；使用已讀回的同服務兩個Cloud Run origin保持獨立帳號，草稿保存／恢復續接。新網址、正式部署／換址與未資格Gemini／RAG仍未完成，維持零留存，不擴張IAM／Secret／billing，不認列完整DEV-139結案。
+  - **接線授權與下一步**：人類已核准「開放程式接線，仍不部署／換址」。已接kernel回執路由及引導的真Session／草稿檢查port，新增6項接線unit及kernel route的CI已通過；後續複核補完成前再次盤點，15項狀態測試通過、此小修待同批CI。每entry有限origin集合／exact callback與新舊Quick配對已實作，49項認證／入口及S2／S3 760項通過，原生新舊並行／Cookie隔離／撤權因測試Host／協定缺漏曾兩次FAIL，修正測試傳輸後本機PG18.4 77項通過，原失敗保留，修正source沿CI續驗；Platform DEV-007草稿PR244／53f69c72的225項與Source QC已通過，兩owner整合仍待；下一步接purpose限定目的端證明及正常App／Quick畫面；使用已讀回的同服務兩個Cloud Run origin保持獨立帳號，草稿保存／恢復續接。新網址、正式部署／換址與未資格Gemini／RAG仍未完成，維持零留存，不擴張IAM／Secret／billing，不認列完整DEV-139結案。
   - **正式畫面界線**：右側「試看看不同情況」、合成帳號／保存／登入／安裝選項、計數與重設僅供本機預覽；正式頁面不匯入或掛載、不留空欄。正式狀態依真實登入與保存結果判斷，保留使用者從新圖示／書籤開啟的最後確認，不能手動宣告成功來跳過。
 
 

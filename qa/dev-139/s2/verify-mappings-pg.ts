@@ -240,8 +240,10 @@ export async function verifyLegacyEntryMappingSessionsPostgres(config: RuntimeCo
         assert.ok(init.body === undefined || typeof init.body === 'string');
         return new Promise<Response>((resolve, reject) => {
           const outgoing = requestHttp({ hostname: '127.0.0.1', port: central.port, path,
-            method: init.method ?? 'GET', headers: { ...Object.fromEntries(new Headers(init.headers)),
-              host: new URL(publicOrigin).host, origin: publicOrigin } }, incoming => {
+            method: init.method ?? 'GET', headers: {
+              host: new URL(publicOrigin).host, origin: publicOrigin, 'x-forwarded-proto': 'https',
+              ...Object.fromEntries(new Headers(init.headers)),
+            } }, incoming => {
             const chunks: Buffer[] = [];
             incoming.on('data', (chunk: Buffer) => chunks.push(chunk));
             incoming.on('error', reject);
@@ -315,6 +317,12 @@ export async function verifyLegacyEntryMappingSessionsPostgres(config: RuntimeCo
     const nextQuick = await login(NEXT_QUICK_ORIGIN, 'quick', otherId);
     assert.notEqual(nextMain.profile.authContextId, nextQuick.profile.authContextId);
     assert.notEqual(nextMain.profile.localUserId, nextQuick.profile.localUserId);
+    const crossOriginWrite = await request(NEXT_MAIN_ORIGIN, '/api/v1/quick-tasks', { method: 'POST', headers: {
+      cookie: nextMain.cookie, origin: 'https://cross-site.example.invalid', 'content-type': 'application/json',
+      'x-projed-expected-account-id': ownerId, 'x-projed-expected-context-id': nextMain.profile.authContextId,
+    }, body: JSON.stringify({ captureId, title, workspaceHint: null }) });
+    assert.equal(crossOriginWrite.status, 403);
+    assert.equal(await errorCode(crossOriginWrite), 'ACCESS_DENIED');
     assert.notEqual(main.cookie, quick.cookie); assert.notEqual(main.profile.authContextId, quick.profile.authContextId);
     for (const [publicOrigin, sessionCookie] of [[LEGACY_MAIN_ORIGIN, quick.cookie], [LEGACY_QUICK_ORIGIN, main.cookie]]) {
       const wrong = await request(publicOrigin!, '/api/v1/session', { headers: { cookie: sessionCookie! } });

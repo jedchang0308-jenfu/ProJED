@@ -747,6 +747,12 @@ Handoff exchange新增server-only `callbackOrigin`，只來自已claim且再次�
 
 Origin來源 `34c7381` 的 [CI45636070238](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45636070238) 型別／unit／boundary／compiled artifact及OCI通過，但新增直接入口的原生登入得403，該native驗收未通過，後續相依案例不冒充已跑。已以一次loopback wire讀回重現：Node fetch把指定Host改為socket位址，而Origin仍是新域名，因此既有Host／Origin拒絕正確運作。只把測試直接通路改用`node:http.request`攜帶正確Host；舊relay、認證規則、角色與SQL未改。原失敗與診斷保留在 `output/dev139-origin-guide-preview/auth-origin-ci-first-failed.log`／`auth-origin-host-diagnosis.json`，修正來源再驗，不重試舊來源或略過拒絕。
 
+第二輪origin來源 `005b5f7` 的 [CI45637429691](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45637429691) OCI與其他獨立檢查通過，native已完成新舊五次登入／Cookie隔離，但新直接入口寫入仍403，該回歸未通過。後續定位是loopback socket為HTTP，卻模擬HTTPS origin而未帶Cloud Run邊緣協定metadata；只在測試直接通路補正Host與`x-forwarded-proto=https`，仍讓顯式錯誤Origin的負向請求到達原拒絕檢查，未放寬產品規則。補正後本機PostgreSQL18.4 DB／HTTP **77項**完整通過（`output/qa/dev-139/s3/20261125T145141Z-ab580e38/result.json`）；自建DB／HTTP已停止與清除、容量lease已釋放。兩輪失敗保留，不改成PASS。
+
+另補目的端用的有效權限語意比較核心 `originSwitchPermissions`，8項正常／降權／錯工作區／外部Board-only／不可信形狀／重複scope與非修改來源案例通過；輸入必須沿既有 `session_effective_permissions_v1`包含created-resource權限。只比較原scope與有效動作，不以role標籤或整包metadata hash代替。此核心尚未接目的端intent持久化，不代表目的端證明完成。
+
+跨owner來源：Platform [DEV-007 PR #244](https://github.com/jedchang0308-jenfu/Jenfu-Platform/pull/244)／`53f69c72`已補ProJED專用 `PORTAL_PROJED_ADDITIONAL_CALLBACK_URIS` 可選JSON清單，authorize／exchange／cancel共用精確比對；未設定維持舊行為，空query／fragment等拒絕，未改v4 wire。225項受影響測試與型別、[Source QC45637992993](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/45637992993)通過，主控已讀核心diff核對；仍為draft，未做本次跨owner原生整合或正式provider驗收。Platform工作樹 `output/dev139-platform-origin-aliases`保留供整合，不改正式owner profile env／fixedValues、不發布callback。後續需要兩邊候選在同一隔離登入流程核實，不用單邊mock宣稱整合完成。
+
 **本輪可確認的實作範圍。** `src/features/originSwitch/` 的共用元件／狀態邏輯依序處理草稿、原帳號、新日常入口；主程式／Quick、來源與目標origin、原帳號及本次換址版本分別保存進度。稍後會保留進度；重開後重新查證草稿與目的身分，不能只信舊localStorage的完成旗標。pending／unknown／衝突／未綁帳號／仍在編輯／離線／盤點失敗均不放行；晚到回應在換帳或取消後失效。安裝accepted／dismissed事件不直接完成，最後須由使用者確認從新圖示或書籤開啟且資料正確，並再驗身分及內容狀態。
 
 預覽檔 `qa/dev-139/s3/origin-guide.fixture.tsx` 只提供合成帳號、內容狀態與模擬登入／安裝，沒有被正式App或Quick入口匯入。`scripts/build-dev139-origin-guide-preview.mjs` 產生單檔HTML，CSP封鎖外部連線；正式新網址仍待固定，預覽的保留測試網域不會真的開啟。PWA裝置判斷沿既有 `pwaInstallService`，不新增安裝程序、不複製Session、不傳私人內容，也不清除任何業務儲存。
