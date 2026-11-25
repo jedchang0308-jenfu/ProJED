@@ -162,7 +162,7 @@ export class OriginSwitchGuide {
     if (await this.inspectDrafts(id)) {
       this.set({ stage: 'account' });
       if (['account', 'entry', 'complete'].includes(this.resumeStage) && await this.inspectAccount(id)
-        && this.entryConfirmed) this.set({ stage: 'complete' });
+        && this.entryConfirmed && await this.inspectDrafts(id)) this.set({ stage: 'complete' });
     }
     if (this.current(id)) this.set({ busy: false });
   }
@@ -211,7 +211,7 @@ export class OriginSwitchGuide {
     if (this.disposed || this.state.busy || this.state.stage !== 'entry' || !openedAndChecked) return;
     const id = ++this.generation;
     this.set({ busy: true });
-    if (await this.inspectDrafts(id) && await this.inspectAccount(id)) {
+    if (await this.inspectDrafts(id) && await this.inspectAccount(id) && await this.inspectDrafts(id)) {
       this.entryConfirmed = true;
       this.set({ stage: 'complete' });
     }

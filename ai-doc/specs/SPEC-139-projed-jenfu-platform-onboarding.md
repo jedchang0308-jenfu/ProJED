@@ -729,6 +729,16 @@ Server 搬移與 browser storage 恢復分開驗收。第一階段維持原 orig
 
 沿新授權將回執dispatcher接到既有kernel HTTP路由；`httpDraftInspector`提供可直接接入 `GuidePorts.inspectDrafts` 的正式資料來源，先沿原Session／expected actor檢查本人，再以原key讀回回執與盤點既有本機內容。五秒請求deadline及source Session／editor revision圍籬阻止晚到結果；離線保留本機狀態、不發網路請求。Guide的main／quick範圍與實際Session entry分開，因此既有同origin Quick可合法驗其Main Session，不錯套獨立Quick帳號。新來源接線6項unit及受影響server/S2、S3隔離型別通過；正常App／Quick畫面、目的端證明及草稿實際保存／恢復接線仍待，不宣稱已完整上線。新來源將沿同一PR／CI續驗，不因前版CI綠燈宣稱新source已通過。
 
+接線來源 `2a4df4a` 的 [CI45631620870](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45631620870) 已兩jobs SUCCESS，PG17.12 DB／HTTP76、snapshot67與Linux OCI23通過，涵蓋kernel實際回執route與跨帳不可見；52 migrations未變。取回artifact `15030567626`／`15030802177`，OCI精確sourceSha一致、productionRelease與registryPush皆NOT_RUN。報告存於 `output/dev139-origin-guide-preview/receipt-qa-r1/ci-wired/`。接續複核另修正完成前的競爭：等待目的端驗證時舊站可能產生新草稿，`confirmEntry`與恢復complete在目的端回覆後再盤點一次，狀態測試15項通過；此小修尚未包含在上述2a4df4a CI中，後續同批來源再驗，不重寫舊收據。
+
+**新舊入口、目的端證明與安裝接線方向。** 技術複核基於2a4df4a的真碼，不列為額外required gate。後續沿本節原驗收實作：
+
+- 每個實際Session entry使用明確、有限的origin集合，允許過渡期舊／新並行；仍要求stored publicOrigin等於該請求的可信Host所對應origin，Cookie不跨站接受。登入authorize與exchange採已claim login intent的exact callback，不能只依entry替換成另一個固定網址；既有meeting run Session也保留原origin資格。Platform端callback須沿其既有契約實作／驗證，不能用ProJED本機PASS代替。
+- 已唯讀核實同一 `projed-prod` 服務提供兩個既有網址，開發採主站 `https://projed-prod-9536592944.asia-east1.run.app/`、獨立Quick `https://projed-prod-56gnizku7q-de.a.run.app/quick-task/`，共用既有runtime／DB、不新增服務。兩者origin分開，保留原本獨立帳號；既有主origin的Quick仍沿Main Session。此為程式接線的固定目的設定，不代表已公開、已部署或已發布callback；讀回metadata見同證據目錄 `cloud-run-origins-readback.json`。
+- 目的端證明採一個短效、用途限定的intent／receipt，使用forward-only schema與既有Session證明、owner／purpose RLS及CAS，不建立永久broker、新Secret或泛用Session列舉。綁campaign、source／target origin、Principal→原UUID、guideEntry與實際sessionEntry、source context及原workspace／board／有效能力；目的端以自己的Session驗明並綁精確target context。舊端只讀自己intent的可信結果；期限不得超過兩端Session，換帳／撤銷／context替換／未知commit均先核實同intent，不改綁另一個目的context。有效能力含created-resource權限，不直接hash整包含時間metadata的snapshot。
+- URL／訊息只可傳無授權能力的locator，不能夾帶帳號、私人正文或Cookie／token，持有locator不足以完成或讀私人scope。目標登入round-trip與來源關閉重開可續行，但仍重新核實身分與本機草稿；新端無權宣告已讀取舊IDB。
+- 舊站只能開具名新入口或顯示指引，不能呼叫自己的native prompt冒充新PWA安裝；安裝／加入主畫面發生在已驗明的新origin及正確entry。來源關閉時，目的端最多顯示新站已確認、仍待回舊站核實內容。完成前保留來源最新草稿檢查與既有手動新入口確認，不憑安裝事件或HTTP200完成。
+
 **本輪可確認的實作範圍。** `src/features/originSwitch/` 的共用元件／狀態邏輯依序處理草稿、原帳號、新日常入口；主程式／Quick、來源與目標origin、原帳號及本次換址版本分別保存進度。稍後會保留進度；重開後重新查證草稿與目的身分，不能只信舊localStorage的完成旗標。pending／unknown／衝突／未綁帳號／仍在編輯／離線／盤點失敗均不放行；晚到回應在換帳或取消後失效。安裝accepted／dismissed事件不直接完成，最後須由使用者確認從新圖示或書籤開啟且資料正確，並再驗身分及內容狀態。
 
 預覽檔 `qa/dev-139/s3/origin-guide.fixture.tsx` 只提供合成帳號、內容狀態與模擬登入／安裝，沒有被正式App或Quick入口匯入。`scripts/build-dev139-origin-guide-preview.mjs` 產生單檔HTML，CSP封鎖外部連線；正式新網址仍待固定，預覽的保留測試網域不會真的開啟。PWA裝置判斷沿既有 `pwaInstallService`，不新增安裝程序、不複製Session、不傳私人內容，也不清除任何業務儲存。

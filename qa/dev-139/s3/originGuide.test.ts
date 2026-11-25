@@ -152,3 +152,23 @@ test('stored progress contains neither private draft content nor authentication 
   const saved = JSON.parse(f.storage.getItem(f.guide.key)!);
   assert.deepEqual(Object.keys(saved).sort(), ['entryConfirmed', 'stage', 'version']);
 });
+
+test('edits created while destination verification is pending prevent final completion', { timeout: 1000 }, async () => {
+  let drafts = clean;
+  let delay = false;
+  let release!: () => void;
+  let began!: () => void;
+  const pending = new Promise<void>(resolve => { began = resolve; });
+  const f = fixture({ inspectDrafts: async () => drafts,
+    inspectDestination: async () => {
+      if (delay) await new Promise<void>(resolve => { release = resolve; began(); });
+      return proof;
+    } });
+  await f.guide.start(); await f.guide.verifyAccount();
+  delay = true;
+  const finish = f.guide.confirmEntry(true);
+  await pending;
+  drafts = { ...clean, pending: 1 }; release(); await finish;
+  assert.equal(f.guide.getSnapshot().stage, 'drafts');
+  assert.equal(f.guide.getSnapshot().issue, 'drafts');
+});
