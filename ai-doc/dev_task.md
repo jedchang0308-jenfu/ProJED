@@ -538,7 +538,7 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 
 - → DEV-139 [整合交付點] [DEV-142舊網址中央後端已交付／新網址引導程式候選已接線／未換址] [P1] ProJED 納入 Jenfu-Platform，保留 Vite
   - 現行方向：先在舊主／Quick 網址完成新版前端、登入、API與中央後端接線，正式資料搬遷獨立列 DEV-142；日常運作確認後才換新網址，不重搬 DB／Storage。[DEV-139 現況](#dev-139-jenfu-platform-onboarding)｜[SPEC §3.0](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-two-stage-rollout)。
-  - 最後換址已選方案2「引導完成切換」，[草稿→原帳號→書籤／PWA交接](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-guided-origin-switch)已完成本機引導預覽／狀態邏輯，正接真Session、原回執與目的端短效證明；原生／正常入口隔離驗證已通過，最終來源CI待讀回；正式啟用未執行，後端在舊網址穩定及必要交接驗證成立後才換址。
+  - 最後換址已選方案2「引導完成切換」，[草稿→原帳號→書籤／PWA交接](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-guided-origin-switch)已完成本機引導預覽／狀態邏輯，正接真Session、原回執與目的端短效證明；原生／正常入口隔離驗證已通過，最終來源4f9d346的CI45643364974兩jobs成功（PG78／snapshot67／OCI23）；正式啟用未執行，後端在舊網址穩定及必要交接驗證成立後才換址。
   - 現有候選與本機證據依各自 source／revision 重用；DEV-142的正式資料與舊入口驗收沿其交付證據，不再列為未搬遷。完整DEV-139仍含新入口交接與provider零留存資格，不把單元／CI當正式新址驗收。
   - 下一步：正式匯入／獨立核對及舊網址切流已完成，Platform023修復後登入與原資料讀寫已驗；草稿同步修正已完成CI、發布與正式回歸；DEV-142已交付。Gemini／RAG 零留存資格未證明仍停用，最後新網址另階段。
   - 資料交付：[DEV-142](#dev-142-production-data-migration)／[SPEC-142](specs/SPEC-142-projed-production-data-migration.md)，正式匯入／獨立核對與舊網址切流已完成；來源fence、reader NOLOGIN及原資料保留，登入／記事／草稿恢復及Quick正式回歸PASS，DEV-142已交付。原帳號／個人與外部權限、取消／CAS／unknown／exactly-once及完整DEV-139分母保留，父子不重複認列。

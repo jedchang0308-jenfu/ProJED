@@ -757,7 +757,7 @@ Origin來源 `34c7381` 的 [CI45636070238](https://github.com/jedchang0308-jenfu
 
 `GET /api/v1/origin-switch/config`回公開的核准入口設定，未設定 `PROJED_ORIGIN_SWITCH_CAMPAIGN` 即 `{data:null}`；其餘API預設404。設定為server-only JSON `{campaign,routes}`，route明列guide entry、source／target origin及各自Session entry，兩端均須已在既有認證origin清單；不接受瀏覽器指定任意redirect。沒有設定任何正式env值。`POST /api/v1/origin-switch/intents`只接受固定UUID、campaign、entry、targetOrigin；`GET /intents/:id`讀原意圖；`POST /intents/:id/confirm`由目的端自己的真Session確認。三者均沿expected actor／kernel／FORCE RLS，寫入須同源；同UUID／同target context可重播，未知提交先查同id，不更換帳號或context重綁。
 
-RLS只允許具名intent的原context或正確目的context讀取另一端Session，沒有同帳號Session列舉；counterpart讀取權隨期限失效。核實public origin由kernel從自己的已驗Session row設置，不信客戶端欄位。登出沿既有app transaction鎖，與登入替換／目的端確認序列一致；避免撤銷先提交後仍確認成功。複核指出的期限與撤銷競爭已修正，相關原生案例驗證中，不另設required gate。
+RLS只允許具名intent的原context或正確目的context讀取另一端Session，沒有同帳號Session列舉；counterpart讀取權隨期限失效。核實public origin由kernel從自己的已驗Session row設置，不信客戶端欄位。登出沿既有app transaction鎖，與登入替換／目的端確認序列一致；避免撤銷先提交後仍確認成功。複核指出的期限與撤銷競爭已修正，相關原生案例已通過，不另設required gate。
 
 主程式與Quick以非阻塞lazy入口接引導，仍重用既有編輯／本機保存與同步；沒有campaign不顯示提示、不等完整看板或引導完成才允許記事。正式元件不匯入fixture或右側「試看看不同情況」控制。來源以目前Session與editor safety盤點，再使用同key唯讀回執取得保存結果；目的端locator只放隨機UUID於fragment，登入前保存並移除，沒有登入能力。來源端不呼叫原origin的PWA安裝提示；只有已確認的新站可安裝新程式。目的端不能宣稱已盤點舊IDB，最終完成仍在舊站重查保存與目的端證明後，配合使用者從新圖示／書籤開啟的確認。
 
@@ -766,6 +766,10 @@ RLS只允許具名intent的原context或正確目的context讀取另一端Sessio
 前端正常入口以無視窗Edge跑真Vite頁面與隔離HTTP fixture，**5/5**通過（`output/dev139-origin-guide-preview/frontend-entry-http-r3/result.json`）：停用時main／Quick不出現引導、原Quick草稿關閉重開可恢復、正常AuthGate後顯示引導、未送出的Quick草稿不會建立換址intent、新Quick使用自己的Session確認而不冒稱來源草稿或整體完成。所有網路被攔到本機，使用合成帳號，不是真Google／正式部署證據；首兩次Quick原bootstrap未走入口掛載的有效失敗已保留並修正。主控已檢視390px目的端截圖，安裝步驟與回原網址確認按鈕可讀，沒有測試面板。後端完整S2 **564/564**通過；首次sandbox阻擋loopback EACCES原輸出保留，開放同一隔離loopback後原案例通過，未改產品條件。
 
 認證來源 `602d35b` 的 [CI45639660728](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45639660728) 已兩jobs SUCCESS，原生PG17與OCI收據已取回至 `output/dev139-origin-guide-preview/auth-origin-ci-green/`；此證據只支持其52版來源。新53版曾因compiled runtime migration清單漏新增路徑而在啟動拒絕，失敗保留 `origin-proof-first-profile-failed.log`，修正同一allowlist後，本機PostgreSQL18.4完整78項通過；接著收窄RLS／補登出互斥後再次78項通過（`output/qa/dev-139/s3/20261125T150901Z-c9910265/result.json`），含真Session／原UUID／降權拒絕、同context並行確認、持久讀回、到期Session讀權取消及原生advisory鎖等待。此份不包含其後新增Quick跨帳與正向確認案例，該差額沿最終來源CI驗證，不改寫舊證據。
+
+最終程式來源 `4f9d346` 的 [CI45643364974](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45643364974) **兩jobs SUCCESS**：原lock依賴的前後端型別、單元／三boundary與compiled artifact通過，PostgreSQL17.12 DB／HTTP **78項**、snapshot **67項**及Linux OCI／PG17.11 **23項**通過，均含53份migration。最後Quick原帳確認／異帳拒絕已包含，主／Quick各自Session不合併。收據取回 `output/dev139-origin-guide-preview/origin-proof-ci-final/`，`verified-summary.json`逐一核對53份SQL：Windows收據採其checkout CRLF、Linux收據為同SHA的Git bytes；OCI sourceSha完全一致，registryPush／productionRelease皆NOT_RUN，沒有改寫舊收據。task-owned DB／HTTP／本輪Vite已清除，容量lease已釋放；先前交給使用者檢視的預覽另行保留。此後只有本段及直接索引的證據文字更新，程式／SQL／測試輸入不變，不重跑同套驗證。
+
+本批程式接線與隔離驗證完成，ProJED PR #41及Platform PR #244仍保留draft；完整DEV-139未結案。跨owner候選的原始登入整合、正式callback／新址啟用及真實PWA安裝不以本輪HTTP fixture代替；Gemini／RAG零留存外部資格仍未證明而維持停用。不部署、不換網址、不動正式schema或業務資料、不擴IAM／Secret／billing；既有舊網址／PWA／草稿維持原狀。
 
 **本輪可確認的實作範圍。** `src/features/originSwitch/` 的共用元件／狀態邏輯依序處理草稿、原帳號、新日常入口；主程式／Quick、來源與目標origin、原帳號及本次換址版本分別保存進度。稍後會保留進度；重開後重新查證草稿與目的身分，不能只信舊localStorage的完成旗標。pending／unknown／衝突／未綁帳號／仍在編輯／離線／盤點失敗均不放行；晚到回應在換帳或取消後失效。安裝accepted／dismissed事件不直接完成，最後須由使用者確認從新圖示或書籤開啟且資料正確，並再驗身分及內容狀態。
 
