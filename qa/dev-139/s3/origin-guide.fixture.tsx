@@ -45,7 +45,8 @@ export function OriginGuidePreview() {
         return { sourceOrigin: scope.sourceOrigin, targetOrigin, entry, accountId: kind === 'wrong' ? 'different-account' : scope.accountId,
           workspaceMatched: true, permissionsMatched: kind !== 'denied', expiresAt: Date.now() + (kind === 'expired' ? -1 : 300000) };
       },
-      async openDestination() { setOpened(count => count + 1); },
+      async prepareDestination() { return new URL(entry === 'quick' ? '/quick-task/' : '/', targetOrigin).href; },
+      navigateDestination() { setOpened(count => count + 1); },
       async requestInstall() { return scenarios.install; },
     }, window.localStorage);
   // Reset reconstructs the external controller without changing the persisted account/entry key.

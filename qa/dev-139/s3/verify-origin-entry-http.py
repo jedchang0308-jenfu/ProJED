@@ -32,37 +32,82 @@ campaign = {'campaign': 'entry-http-test', 'routes': [
 
 async def run(local):
     checks = []
+    failures = []
+    def record(case, status='PASS', **details):
+        checks.append({'case': case, 'status': status, **details})
+        snapshot = {'checks': checks, 'status': 'FAIL' if failures else 'RUNNING',
+                    'scope': 'normal frontend entries with isolated HTTP fixtures', 'cloud': 'NOT_RUN'}
+        (report / 'result.json').write_text(json.dumps(snapshot, ensure_ascii=False, indent=2), encoding='utf-8')
+        print(status + ' ' + case, flush=True)
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(channel='msedge', headless=True)
         try:
-            async def page_for(origin, entry, enabled=True, locator=False):
+            async def page_for(origin, entry, enabled=True, locator=False, fixed_intent=False, controls=None):
                 context = await browser.new_context(viewport={'width': 390, 'height': 844})
                 calls = []
-                context_id = '22222222-2222-4222-8222-222222222222' if origin == new else '33333333-3333-4333-8333-333333333333'
+                context_ids = {old: '33333333-3333-4333-8333-333333333333',
+                               new_main: '44444444-4444-4444-8444-444444444444',
+                               new: '22222222-2222-4222-8222-222222222222'}
+                intents = {}
+                if fixed_intent:
+                    await context.add_init_script("Object.defineProperty(crypto, 'randomUUID', {value: () => '" + intent_id + "'});")
+                if locator:
+                    intents[intent_id] = {'id': intent_id, 'campaign': campaign['campaign'], 'sourceOrigin': old,
+                                          'targetOrigin': new_main if entry == 'main' else new, 'accountId': account,
+                                          'entry': entry, 'expiresAt': int(time.time() * 1000) + 300000, 'destination': None}
                 async def route_request(route):
                     url = urlsplit(route.request.url)
-                    if f'{url.scheme}://{url.netloc}' not in [old, new, new_main]:
+                    request_origin = f'{url.scheme}://{url.netloc}'
+                    if request_origin not in context_ids:
                         await route.abort()
                         return
                     if url.path.startswith('/api/v1/'):
-                        calls.append({'path': url.path, 'method': route.request.method,
+                        calls.append({'url': route.request.url, 'origin': request_origin, 'path': url.path, 'method': route.request.method,
                                       'headers': route.request.headers, 'body': route.request.post_data})
                         now = int(time.time() * 1000)
                         if url.path == '/api/v1/session':
                             payload = {'localUserId': account, 'email': 'synthetic@example.test', 'displayName': '測試帳號',
-                                       'createdAt': 1, 'expiresAt': now + 600000, 'authContextId': context_id,
-                                       'entry': 'quick' if origin == new and entry == 'quick' else 'main'}
+                                       'createdAt': 1, 'expiresAt': now + 600000, 'authContextId': context_ids[request_origin],
+                                       'entry': 'quick' if request_origin == new else 'main'}
                         elif url.path == '/api/v1/origin-switch/config':
                             payload = campaign if enabled else None
-                        elif url.path.endswith('/confirm'):
-                            payload = {'id': intent_id, 'campaign': campaign['campaign'], 'sourceOrigin': old,
-                                       'targetOrigin': new, 'accountId': account, 'entry': entry, 'expiresAt': now + 60000,
-                                       'destination': {'sourceOrigin': old, 'targetOrigin': new, 'accountId': account,
-                                                       'entry': entry, 'workspaceMatched': True, 'permissionsMatched': True,
-                                                       'expiresAt': now + 50000}}
-                        elif url.path.startswith('/api/v1/origin-switch/intents/'):
-                            await route.fulfill(status=403, json={'error': {'code': 'ACCESS_DENIED'}})
-                            return
+                        elif url.path.startswith('/api/v1/origin-switch/intents'):
+                            headers = route.request.headers
+                            if headers.get('x-projed-expected-account-id') != account or headers.get('x-projed-expected-context-id') != context_ids[request_origin]:
+                                await route.fulfill(status=409, json={'error': {'code': 'ACTOR_CHANGED'}})
+                                return
+                            if url.path == '/api/v1/origin-switch/intents' and route.request.method == 'POST':
+                                body = route.request.post_data_json
+                                matching = next((value for value in campaign['routes'] if value['entry'] == body.get('entry')
+                                                 and value['sourceOrigin'] == request_origin and value['targetOrigin'] == body.get('targetOrigin')), None)
+                                if not matching or set(body) != {'id', 'campaign', 'entry', 'targetOrigin'} or body['campaign'] != campaign['campaign']:
+                                    await route.fulfill(status=403, json={'error': {'code': 'ACCESS_DENIED'}})
+                                    return
+                                if controls is not None:
+                                    controls['create_started'].set()
+                                    await controls['release_create'].wait()
+                                intents[body['id']] = {'id': body['id'], 'campaign': body['campaign'], 'sourceOrigin': request_origin,
+                                                       'targetOrigin': matching['targetOrigin'], 'accountId': account, 'entry': body['entry'],
+                                                       'expiresAt': now + 300000, 'destination': None}
+                                payload = {key: value for key, value in intents[body['id']].items() if key != 'destination'}
+                            else:
+                                path_id = url.path.split('/')[5]
+                                stored = intents.get(path_id)
+                                if url.path.endswith('/confirm') and route.request.method == 'POST':
+                                    if not stored or request_origin != stored['targetOrigin'] or route.request.post_data_json != {}:
+                                        await route.fulfill(status=403, json={'error': {'code': 'ACCESS_DENIED'}})
+                                        return
+                                    stored['destination'] = {'sourceOrigin': stored['sourceOrigin'], 'targetOrigin': stored['targetOrigin'],
+                                                             'accountId': account, 'entry': stored['entry'], 'workspaceMatched': True,
+                                                             'permissionsMatched': True, 'expiresAt': stored['expiresAt']}
+                                    payload = stored
+                                elif request_origin == old:
+                                    payload = stored
+                                elif stored and request_origin == stored['targetOrigin'] and stored['destination']:
+                                    payload = stored
+                                else:
+                                    await route.fulfill(status=403, json={'error': {'code': 'ACCESS_DENIED'}})
+                                    return
                         else:
                             payload = []
                         await route.fulfill(json={'data': payload})
@@ -147,9 +192,141 @@ async def run(local):
             checks.append({'case': 'target-own-session-confirms-without-source-draft-completion', 'status': 'PASS'})
             await page.screenshot(path=str(report / 'target-confirmed.png'), full_page=True)
             await context.close()
+
+            # Full normal endpoints: no fixture panel, no direct guide/controller
+            # calls. Every cross-origin hop is a real page navigation, including
+            # the final completed-guide action that previously stayed on source.
+            for entry, late_draft in [('main', False), ('quick', False), ('main', True)]:
+                context, page, calls = await page_for(old, entry, fixed_intent=True)
+                case_key = f'{entry}-late-draft' if late_draft else entry
+                target_origin = new_main if entry == 'main' else new
+                expected_path = '/' if entry == 'main' else '/quick-task/'
+                phase = 'source-start'
+                try:
+                    await page.get_by_role('button', name='更換網址', exact=True).click(timeout=20000)
+                    await page.get_by_role('button', name='開始更換', exact=True).click()
+                    await page.locator('[data-origin-guide-stage="account"]').wait_for(timeout=15000)
+                    phase = 'target-navigation'
+                    await page.get_by_role('button', name='前往新網址登入', exact=False).click()
+                    await page.wait_for_url(lambda url: str(url).startswith(target_origin + expected_path), timeout=15000)
+                    await page.get_by_role('button', name='確認帳號與權限', exact=True).wait_for()
+                    assert urlsplit(page.url).fragment == ''
+                    creates = [call for call in calls if call['path'] == '/api/v1/origin-switch/intents' and call['method'] == 'POST']
+                    assert len(creates) == 1 and json.loads(creates[0]['body'])['id'] == intent_id
+                    phase = 'target-confirm'
+                    await page.get_by_role('button', name='確認帳號與權限', exact=True).click()
+                    await page.get_by_role('link', name='回原網址繼續', exact=True).wait_for()
+                    assert not await page.locator('[data-origin-guide-stage="complete"]').count()
+                    confirms = [call for call in calls if call['path'].endswith('/confirm')]
+                    assert len(confirms) == 1 and confirms[0]['origin'] == target_origin
+                    assert confirms[0]['headers']['x-projed-expected-context-id'] == (
+                        '44444444-4444-4444-8444-444444444444' if entry == 'main' else '22222222-2222-4222-8222-222222222222')
+                    phase = 'source-resume'
+                    await page.get_by_role('link', name='回原網址繼續', exact=True).click()
+                    await page.wait_for_url(old + expected_path)
+                    await page.get_by_role('button', name='更換網址', exact=True).click()
+                    await page.get_by_role('button', name='繼續上次的步驟', exact=True).click()
+                    await page.locator('[data-origin-guide-stage="entry"]').wait_for()
+                    await page.get_by_role('radio', name='先用瀏覽器', exact=True).check()
+                    await page.get_by_role('checkbox').check()
+                    await page.get_by_role('button', name='完成更換', exact=True).click()
+                    await page.locator('[data-origin-guide-stage="complete"]').wait_for()
+                    source_reads = [call for call in calls if call['origin'] == old and call['method'] == 'GET'
+                                    and call['path'] == '/api/v1/origin-switch/intents/' + intent_id]
+                    assert len(source_reads) >= 2
+                    await page.screenshot(path=str(report / f'{case_key}-complete-before-final.png'), full_page=True)
+                    if late_draft:
+                        phase = 'controlled-late-record-draft'
+                        # A controlled late production-store event while the
+                        # guide modal is open, not claimed as user input outside
+                        # the modal. The real RecordSidebar/owner remain active.
+                        await page.evaluate("""async () => {
+                            const {default: records} = await import('/src/store/useRecordStore.ts');
+                            records.getState().openNewRecord('work_log');
+                            records.getState().updateDraft({title: '完成後才抵達的未保存草稿', content: '仍需留在原網址保存'});
+                        }""")
+                        await page.wait_for_function("() => document.querySelector('[data-record-title-input]')?.value === '完成後才抵達的未保存草稿'")
+                        await page.get_by_role('button', name='開始使用 ProJED', exact=True).click()
+                        await page.locator('[data-origin-guide-stage="drafts"]').wait_for(timeout=10000)
+                        assert page.url == old + expected_path
+                        assert await page.locator('[data-record-title-input]').input_value() == '完成後才抵達的未保存草稿'
+                        assert await page.evaluate("""async () => {
+                            const {default: records} = await import('/src/store/useRecordStore.ts');
+                            const {getPwaReloadSafetySnapshot} = await import('/src/services/pwaReloadSafety.ts');
+                            return records.getState().draft?.title === '完成後才抵達的未保存草稿'
+                              && getPwaReloadSafetySnapshot().owners.some(owner => owner.ownerId === 'record-draft' && owner.state === 'dirty');
+                        }""")
+                        assert len([call for call in calls if call['path'] == '/api/v1/origin-switch/intents' and call['method'] == 'POST']) == 1
+                        await page.screenshot(path=str(report / 'main-controlled-late-draft-blocked.png'), full_page=True)
+                        record('main-controlled-late-record-draft-blocks-completed-final-departure')
+                        continue
+                    phase = 'completed-final-navigation'
+                    prior_target_configs = len([call for call in calls if call['origin'] == target_origin
+                                                and call['path'] == '/api/v1/origin-switch/config'])
+                    await page.get_by_role('button', name='開始使用 ProJED' if entry == 'main' else '開始使用 ProJED 建待辦', exact=True).click()
+                    await page.wait_for_url(target_origin + expected_path, timeout=10000, wait_until='domcontentloaded')
+                    assert page.url == target_origin + expected_path, 'final URL must be the fixed entry without a locator or query'
+                    for _ in range(100):
+                        if len([call for call in calls if call['origin'] == target_origin
+                                and call['path'] == '/api/v1/origin-switch/config']) > prior_target_configs:
+                            break
+                        await page.wait_for_timeout(100)
+                    assert len([call for call in calls if call['origin'] == target_origin
+                                and call['path'] == '/api/v1/origin-switch/config']) > prior_target_configs
+                    await page.wait_for_timeout(250)
+                    assert await page.evaluate("sessionStorage.getItem('projed.origin-switch.locator.v1:" + entry + "')") is None
+                    assert not await page.locator('.origin-switch-target').count(), 'completion must not restart locator confirmation'
+                    assert len([call for call in calls if call['path'] == '/api/v1/origin-switch/intents' and call['method'] == 'POST']) == 1
+                    record(f'{entry}-full-origin-switch-completion-navigates-to-fixed-entry')
+                except Exception as error:
+                    failures.append({'entry': case_key, 'phase': phase, 'error': type(error).__name__, 'url': page.url})
+                    (report / f'{case_key}-full-flow-failure.json').write_text(json.dumps({'phase': phase, 'url': page.url,
+                        'error': str(error), 'calls': calls, 'body': await page.locator('body').inner_text()}, ensure_ascii=False, indent=2), encoding='utf-8')
+                    await page.screenshot(path=str(report / f'{case_key}-full-flow-failure.png'), full_page=True)
+                    record(f'{case_key}-full-origin-switch-completion-navigates-to-fixed-entry', 'FAIL', phase=phase, url=page.url)
+                finally:
+                    await context.close()
+
+            # Real clicks cancel a pending prepare. Releasing the HTTP response
+            # must not navigate after Later/ESC has fenced the guide generation.
+            for action in ['later', 'escape']:
+                controls = {'create_started': asyncio.Event(), 'release_create': asyncio.Event()}
+                context, page, calls = await page_for(old, 'quick', fixed_intent=True, controls=controls)
+                try:
+                    await page.get_by_role('button', name='更換網址', exact=True).click(timeout=20000)
+                    await page.get_by_role('button', name='開始更換', exact=True).click()
+                    await page.locator('[data-origin-guide-stage="account"]').wait_for()
+                    await page.get_by_role('button', name='前往新網址登入', exact=False).click()
+                    await asyncio.wait_for(controls['create_started'].wait(), timeout=10)
+                    if action == 'later':
+                        await page.get_by_role('button', name='稍後再做', exact=True).click()
+                    else:
+                        await page.keyboard.press('Escape')
+                    await page.locator('dialog[open]').wait_for(state='hidden')
+                    finished_wait = asyncio.create_task(page.wait_for_event('requestfinished', predicate=lambda request:
+                        request.url == old + '/api/v1/origin-switch/intents' and request.method == 'POST'))
+                    await asyncio.sleep(0)
+                    controls['release_create'].set()
+                    finished_request = await asyncio.wait_for(finished_wait, timeout=10)
+                    response = await finished_request.response()
+                    assert response and response.status == 200
+                    await page.wait_for_timeout(400)
+                    assert page.url == old + '/quick-task/'
+                    assert not await page.locator('dialog[open]').count()
+                    assert not [call for call in calls if call['path'].endswith('/confirm')]
+                    record(f'quick-{action}-during-http-prepare-fences-late-navigation')
+                except Exception as error:
+                    failures.append({'entry': 'quick', 'phase': f'prepare-{action}', 'error': type(error).__name__, 'url': page.url})
+                    (report / f'prepare-{action}-failure.json').write_text(json.dumps({'url': page.url, 'error': str(error),
+                        'calls': calls, 'body': await page.locator('body').inner_text()}, ensure_ascii=False, indent=2), encoding='utf-8')
+                    record(f'quick-{action}-during-http-prepare-fences-late-navigation', 'FAIL', url=page.url)
+                finally:
+                    controls['release_create'].set()
+                    await context.close()
         finally:
             await browser.close()
-    return {'checks': checks, 'status': 'PASS', 'scope': 'normal frontend entries with isolated HTTP fixtures', 'cloud': 'NOT_RUN'}
+    return {'checks': checks, 'status': 'FAIL' if failures else 'PASS', 'failures': failures,
+            'scope': 'normal frontend entries with isolated HTTP fixtures', 'cloud': 'NOT_RUN'}
 
 
 with socket.socket() as probe:
@@ -178,6 +355,8 @@ with (report / 'vite.log').open('w', encoding='utf-8') as log:
         result = asyncio.run(run(local))
         (report / 'result.json').write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8')
         print(json.dumps(result, ensure_ascii=False))
+        if result['status'] != 'PASS':
+            raise SystemExit(1)
     finally:
         process.terminate()
         process.wait(timeout=10)

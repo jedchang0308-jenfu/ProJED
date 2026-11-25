@@ -79,9 +79,21 @@ export class OriginSwitchRepository {
     const targetId = confirming ? current.context_id : row.target_context_id;
     if (!targetId) return result;
     if (row.target_context_id && row.target_context_id !== targetId) conflict();
-    const target = targetId === current.context_id ? current : await this.session(port, targetId, actor);
-    if (target.public_origin !== row.target_origin || target.entry !== row.target_entry
-      || Number(target.expires_at_ms) <= now) denied();
+    const sourceRead = !confirming && current.context_id === row.source_context_id;
+    let target: SessionRow;
+    try { target = targetId === current.context_id ? current : await this.session(port, targetId, actor); }
+    catch (error) {
+      // Only an authenticated source's known counterpart invalidation permits
+      // an explicit new intent. Authentication and unknown DB failures retain
+      // their original denial; the old intent is never rebound.
+      if (sourceRead && error instanceof KernelError && error.code === 'ACCESS_DENIED' && error.httpStatus === 403) conflict();
+      throw error;
+    }
+    if (target.public_origin !== row.target_origin || target.entry !== row.target_entry) denied();
+    if (Number(target.expires_at_ms) <= now) {
+      if (sourceRead) conflict();
+      denied();
+    }
     const matched = compareOriginSwitchPermissions(row.source_permissions, target.permissions);
     if (confirming && (!matched.workspaceMatched || !matched.permissionsMatched)) denied();
     result.destination = { sourceOrigin: row.source_origin, targetOrigin: row.target_origin, accountId: row.local_user_id,

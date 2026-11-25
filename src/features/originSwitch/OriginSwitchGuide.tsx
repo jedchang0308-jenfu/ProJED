@@ -19,12 +19,13 @@ const issues: Record<Exclude<GuideIssue, null>, string> = {
   storage: '目前無法記住您做到哪一步。請先保留這個畫面，稍後再試。原本的記事不會被清除。',
 };
 
-export function OriginSwitchGuideView({ guide, accountLabel, platform, targetLabel, onReturn, onNextQuick, sourceGuide = false }: {
+export function OriginSwitchGuideView({ guide, accountLabel, platform, targetLabel, onReturn, onComplete, onNextQuick, sourceGuide = false }: {
   guide: OriginSwitchGuide;
   accountLabel: string;
   platform: PwaInstallPlatform;
   targetLabel: string;
   onReturn(): void;
+  onComplete?(): void;
   onNextQuick?(): void;
   sourceGuide?: boolean;
 }) {
@@ -55,9 +56,10 @@ export function OriginSwitchGuideView({ guide, accountLabel, platform, targetLab
       <p className="og-note">舊圖示先留著，等新程式用得順了再整理；還沒存好的記事不會被清除。</p>
       {guide.scope.entry === 'main' && onNextQuick && <p className="og-note">如果您也有使用「ProJED 建待辦」，可以接著更換它的圖示。</p>}
       <div className="og-actions">
-        <button className="og-primary" onClick={onReturn}>開始使用 {guide.scope.entry === 'main' ? 'ProJED' : 'ProJED 建待辦'}</button>
+        <button className="og-primary" disabled={state.busy} onClick={onComplete ?? onReturn}>開始使用 {guide.scope.entry === 'main' ? 'ProJED' : 'ProJED 建待辦'}</button>
         {guide.scope.entry === 'main' && onNextQuick && <button className="og-secondary" onClick={onNextQuick}>接著更換建待辦</button>}
       </div>
+      {state.issue && <p className="og-issue" role="alert">{issues[state.issue]}</p>}
     </> : <>
       <ol className="og-steps" aria-label="更換步驟">
         {['確認資料', '原帳號登入', '安裝程式'].map((title, index) => <li key={title}

@@ -36,7 +36,8 @@ test('guide draft port verifies the real Session before same-key GET readback, u
   const guide = new OriginSwitchGuide({ accountId, entry: 'main', campaign: 'test',
     sourceOrigin: 'https://old.example.test', targetOrigin: 'https://new.example.test' }, ['https://new.example.test'], {
     inspectDrafts: inspect, inspectDestination: async () => null,
-    openDestination: async () => { throw new Error('should not navigate yet'); }, requestInstall: async () => 'unavailable',
+    prepareDestination: async () => { throw new Error('should not prepare yet'); },
+    navigateDestination: () => { throw new Error('should not navigate yet'); }, requestInstall: async () => 'unavailable',
   }, { getItem: () => null, setItem() {} });
   await guide.start();
   assert.equal(guide.getSnapshot().stage, 'account');

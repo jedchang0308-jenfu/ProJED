@@ -104,8 +104,9 @@ export function assertIntentScope(intent: OriginSwitchIntent, scope: GuideScope)
     intent[key as keyof GuideScope] !== scope[key as keyof GuideScope])) throw invalid();
 }
 
-export function createSourceOriginSwitchConnection(scope: GuideScope, client: HttpApiClient, storage: GuideStorage,
+export function createSourceOriginSwitchConnection(inputScope: GuideScope, client: HttpApiClient, storage: GuideStorage,
   open: (url: string) => void, newId: () => string = () => crypto.randomUUID()) {
+  const scope = Object.freeze({ ...inputScope });
   const adapter = createHttpOriginSwitchAdapter(client);
   const key = `${guideStorageKey(scope)}:intent:${adapter.actor.contextId}`;
   let id = storage.getItem(key);
@@ -116,7 +117,10 @@ export function createSourceOriginSwitchConnection(scope: GuideScope, client: Ht
     if (receipt) assertIntentScope(receipt, scope);
     return receipt;
   };
-  const openDestination = async () => {
+  let preparedUrl: string | null = null;
+  const normalUrl = new URL(scope.entry === 'quick' ? '/quick-task/' : '/', scope.targetOrigin).href;
+  const prepareDestination = async () => {
+    preparedUrl = null;
     const allocate = () => {
       id = newId();
       if (!ORIGIN_SWITCH_UUID.test(id)) throw invalid();
@@ -142,10 +146,16 @@ export function createSourceOriginSwitchConnection(scope: GuideScope, client: Ht
     assertIntentScope(intent, scope);
     const target = new URL(scope.entry === 'quick' ? '/quick-task/' : '/', scope.targetOrigin);
     target.hash = `projed-origin-switch=${id}`;
-    open(target.href);
+    preparedUrl = target.href;
+    return preparedUrl;
   };
-  return { openDestination, inspectDestination: async () => (await read())?.destination ?? null,
-    requestInstall: async (): Promise<'unavailable'> => { await openDestination(); return 'unavailable'; } };
+  const navigateDestination = (url: string) => {
+    if (url !== normalUrl && url !== preparedUrl) throw invalid();
+    const actor = client.snapshotExpectedActor();
+    if (actor.accountId !== adapter.actor.accountId || actor.contextId !== adapter.actor.contextId) throw invalid();
+    open(url);
+  };
+  return { prepareDestination, navigateDestination, inspectDestination: async () => (await read())?.destination ?? null };
 }
 
 /** The target uses its own bound Session and exact configured route. The locator
@@ -162,7 +172,18 @@ export async function confirmOriginSwitchDestination(id: string, config: OriginS
     if (storage?.getItem(attemptKey) === 'attempted') confirmed = await adapter.read(id);
     else {
       storage?.setItem(attemptKey, 'attempted');
-      confirmed = await adapter.confirm(id);
+      try { confirmed = await adapter.confirm(id); }
+      catch (error) {
+        // These exact server rejections occur before writing or after a
+        // confirmed rollback. Only a later explicit click may retry them.
+        // Network/5xx/unknown-commit/malformed-success remain GET-only.
+        if (error instanceof HttpApiError && ((error.status === 403 && error.code === 'ACCESS_DENIED')
+          || (error.status === 400 && error.code === 'DOMAIN_DATA_INVALID')
+          || (error.status === 409 && error.code === 'REVISION_CONFLICT'))) {
+          storage?.setItem(attemptKey, 'known-rejected');
+        }
+        throw error;
+      }
     }
   }
   catch (error) {

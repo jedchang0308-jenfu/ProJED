@@ -30,7 +30,8 @@ function Source({ guide, label }: { guide: OriginSwitchGuide; label: string }) {
     <button type="button" className="origin-switch-offer" onClick={() => setOpen(true)}>更換網址</button>
     <dialog ref={dialog} className="origin-switch-dialog" onCancel={() => { guide.defer(); setOpen(false); }}>
       <OriginSwitchGuideView guide={guide} accountLabel={label} platform={getPwaInstallContext().platform}
-        targetLabel={guide.scope.targetOrigin} sourceGuide onReturn={() => setOpen(false)} />
+        targetLabel={guide.scope.targetOrigin} sourceGuide onReturn={() => setOpen(false)}
+        onComplete={() => void guide.useDestination()} />
     </dialog>
   </>;
 }
@@ -45,6 +46,7 @@ function Destination({ id, config, options }: { id: string; config: OriginSwitch
     try {
       const receipt = await confirmOriginSwitchDestination(id, config, options.entry, httpApiClient, window.location.origin, sessionStorage);
       if (!options.current()) return;
+      sessionStorage.removeItem(locatorStorageKey(options.entry));
       setSource(new URL(options.entry === 'quick' ? '/quick-task/' : '/', receipt.sourceOrigin).href);
       setState('verified');
     } catch { if (options.current()) setState('failed'); }

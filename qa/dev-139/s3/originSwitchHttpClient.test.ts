@@ -5,6 +5,7 @@ import { HttpApiClient } from '../../../src/services/httpApi/httpApiClient';
 import { confirmOriginSwitchDestination, createHttpOriginSwitchAdapter, createSourceOriginSwitchConnection,
   parseOriginSwitchConfig, type OriginSwitchConfig } from '../../../src/features/originSwitch/httpOriginSwitch';
 import { captureOriginSwitchLocator, locatorStorageKey, readOriginSwitchLocator } from '../../../src/features/originSwitch/locator';
+import type { GuideScope } from '../../../src/features/originSwitch/guide';
 
 const id = '11111111-1111-4111-8111-111111111111';
 const accountId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -75,11 +76,12 @@ test('source uses real HTTP, fixed same UUID readback after unknown POST, bound 
     const opened: string[] = []; const storage = memory();
     const source = createSourceOriginSwitchConnection(scope, client, storage, url => opened.push(url), () => { uuidCalls++; return id; });
     assert.equal(await source.inspectDestination(), null); assert.equal(calls.length, 0);
-    await source.openDestination();
+    const prepared = await source.prepareDestination();
+    assert.equal(opened.length, 0); source.navigateDestination(prepared);
     assert.deepEqual(calls.map(call => call.method), ['GET', 'POST', 'GET']);
     assert.deepEqual(calls[1].body, { id, campaign: scope.campaign, entry: 'quick', targetOrigin: scope.targetOrigin });
     assert.equal(opened[0], `${scope.targetOrigin}/quick-task/#projed-origin-switch=${id}`);
-    assert.equal(await source.requestInstall(), 'unavailable');
+    await source.prepareDestination();
     assert.equal(posts, 1); assert.equal(uuidCalls, 1);
     assert.equal(await source.inspectDestination(), null);
     assert.equal(calls.at(-1)?.method, 'GET');
@@ -94,9 +96,9 @@ test('unknown source submit with no committed record keeps the same UUID on expl
   });
   client.bindExpectedActor({ accountId, contextId: 'source' });
   const first = createSourceOriginSwitchConnection(scope, client, storage, () => assert.fail('must not navigate'), () => { ids++; return id; });
-  await assert.rejects(first.openDestination());
+  await assert.rejects(first.prepareDestination());
   const resumed = createSourceOriginSwitchConnection(scope, client, storage, () => assert.fail('must not navigate'), () => { ids++; return id; });
-  await assert.rejects(resumed.openDestination());
+  await assert.rejects(resumed.prepareDestination());
   assert.equal(ids, 1); assert.equal(posts, 2);
 });
 
@@ -105,10 +107,10 @@ test('source intent identity includes the exact context while guide progress sta
   const client = new HttpApiClient(async (_path, init) => init?.method === 'POST'
     ? json({ ...metadata(), id: JSON.parse(String(init.body)).id }) : json(null));
   client.bindExpectedActor({ accountId, contextId: 'first-context' });
-  await createSourceOriginSwitchConnection(scope, client, storage, () => undefined, () => { generated++; return id; }).openDestination();
+  await createSourceOriginSwitchConnection(scope, client, storage, () => undefined, () => { generated++; return id; }).prepareDestination();
   client.bindExpectedActor({ accountId, contextId: 'second-context' });
   await createSourceOriginSwitchConnection(scope, client, storage, () => undefined,
-    () => { generated++; return '22222222-2222-4222-8222-222222222222'; }).openDestination();
+    () => { generated++; return '22222222-2222-4222-8222-222222222222'; }).prepareDestination();
   assert.equal(generated, 2);
 });
 
@@ -128,12 +130,33 @@ test('only authoritative GET REVISION_CONFLICT permits a fresh id on explicit op
     client.bindExpectedActor({ accountId, contextId: 'source' });
     const source = createSourceOriginSwitchConnection(scope, client, storage, () => undefined,
       () => ++generated === 1 ? id : replacement);
-    await source.openDestination(); invalidated = true;
+    await source.prepareDestination(); invalidated = true;
     await assert.rejects(source.inspectDestination()); // A read alone never rotates an id.
     assert.equal(generated, 1);
-    if (status === 409) { await source.openDestination(); assert.equal(generated, 2); assert.equal(postCount, 2); }
-    else { await assert.rejects(source.openDestination()); assert.equal(generated, 1); assert.equal(postCount, 1); }
+    if (status === 409) { await source.prepareDestination(); assert.equal(generated, 2); assert.equal(postCount, 2); }
+    else { await assert.rejects(source.prepareDestination()); assert.equal(generated, 1); assert.equal(postCount, 1); }
   }
+});
+
+test('navigation accepts only the frozen normal entry or exact prepared locator and current actor', async () => {
+  const mutable: GuideScope = { ...scope };
+  const opened: string[] = [];
+  const client = new HttpApiClient(async (_path, init) => init?.method === 'POST' ? json(metadata()) : json(null));
+  client.bindExpectedActor({ accountId, contextId: 'source' });
+  const source = createSourceOriginSwitchConnection(mutable, client, memory(), url => opened.push(url), () => id);
+  mutable.targetOrigin = 'https://evil.example.test'; mutable.entry = 'main';
+  const prepared = await source.prepareDestination();
+  assert.equal(prepared, `${scope.targetOrigin}/quick-task/#projed-origin-switch=${id}`);
+  assert.equal(opened.length, 0);
+  for (const url of ['https://evil.example.test/', `${scope.targetOrigin}/`,
+    `${scope.targetOrigin}/quick-task/?return=evil`, `${scope.targetOrigin}/quick-task/#projed-origin-switch=other`]) {
+    assert.throws(() => source.navigateDestination(url));
+  }
+  source.navigateDestination(`${scope.targetOrigin}/quick-task/`);
+  source.navigateDestination(prepared);
+  client.bindExpectedActor({ accountId, contextId: 'replaced' });
+  assert.throws(() => source.navigateDestination(prepared));
+  assert.equal(opened.length, 2);
 });
 
 test('target confirms with its own Quick Session before GET, then later only reads the same id', async () => {
@@ -163,6 +186,31 @@ test('unknown target confirmation stays unconfirmed on denied readback and never
   await assert.rejects(confirmOriginSwitchDestination(id, config, 'quick', client, scope.targetOrigin, storage));
   await assert.rejects(confirmOriginSwitchDestination(id, config, 'quick', client, scope.targetOrigin, storage));
   assert.equal(posts, 1); assert.ok(reads >= 2);
+});
+
+test('only a definite confirmation rejection permits a later explicit same-id retry', async () => {
+  for (const [status, code, retry] of [[403, 'ACCESS_DENIED', true], [400, 'DOMAIN_DATA_INVALID', true],
+    [409, 'REVISION_CONFLICT', true], [503, 'DB_COMMIT_UNKNOWN', false],
+    [503, 'DB_UNAVAILABLE', false], [403, 'UNRECOGNIZED_ERROR', false]] as const) {
+    let posts = 0; const storage = memory();
+    const client = new HttpApiClient(async (path, init) => {
+      if (String(path) === '/api/v1/session') return json({ localUserId: accountId, email: null, displayName: null,
+        createdAt: 1, expiresAt: Date.now() + 60_000, authContextId: 'target', entry: 'quick' });
+      if (init?.method === 'POST') {
+        posts++;
+        if (posts > 1) return json({ ...metadata(), destination: proof() });
+        return new Response(JSON.stringify({ error: { code } }), { status, headers: { 'content-type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({ error: { code: 'ACCESS_DENIED' } }), {
+        status: 403, headers: { 'content-type': 'application/json' } });
+    });
+    client.bindExpectedActor({ accountId, contextId: 'target' });
+    await assert.rejects(confirmOriginSwitchDestination(id, config, 'quick', client, scope.targetOrigin, storage));
+    assert.equal(posts, 1, 'Never retry inside the failed attempt');
+    if (retry) await confirmOriginSwitchDestination(id, config, 'quick', client, scope.targetOrigin, storage);
+    else await assert.rejects(confirmOriginSwitchDestination(id, config, 'quick', client, scope.targetOrigin, storage));
+    assert.equal(posts, retry ? 2 : 1);
+  }
 });
 
 test('target wrong Session entry and unconfigured target are denied before confirmation', async () => {

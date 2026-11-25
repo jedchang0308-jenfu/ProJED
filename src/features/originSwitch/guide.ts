@@ -30,8 +30,11 @@ export interface DestinationInspection {
 export interface GuidePorts {
   inspectDrafts(): Promise<DraftInspection>;
   inspectDestination(): Promise<DestinationInspection | null>;
-  openDestination(url: string): Promise<void>;
-  requestInstall(): Promise<'accepted' | 'dismissed' | 'unavailable'>;
+  prepareDestination(): Promise<string>;
+  navigateDestination(url: string): void;
+  /** Preview/native-install adapter only. Source guides navigate through the
+   * prepared destination instead, never install the old origin's PWA. */
+  requestInstall?(): Promise<'accepted' | 'dismissed' | 'unavailable'>;
 }
 export interface GuideStorage {
   getItem(key: string): string | null;
@@ -100,6 +103,7 @@ export class OriginSwitchGuide {
   private disposed = false;
   private entryConfirmed = false;
   private resumeStage: GuideStage = 'intro';
+  private destination: DestinationInspection | null = null;
 
   constructor(scope: GuideScope, approvedTargets: readonly string[], private ports: GuidePorts,
     private storage: GuideStorage, private now: () => number = Date.now) {
@@ -142,12 +146,19 @@ export class OriginSwitchGuide {
       return false;
     }
   }
-  private async inspectAccount(id: number): Promise<boolean> {
+  private destinationCurrent(): boolean {
+    const issue = destinationIssue(this.scope, this.destination, this.now());
+    if (issue) this.set({ stage: 'account', issue });
+    return !issue && this.state.issue !== 'storage';
+  }
+  private async inspectAccount(id: number, preserveComplete = false): Promise<boolean> {
+    this.destination = null;
     try {
       const value = await this.ports.inspectDestination();
       if (!this.current(id)) return false;
+      this.destination = value ? { ...value } : null;
       const issue = destinationIssue(this.scope, value, this.now());
-      this.set({ stage: issue ? 'account' : 'entry', issue,
+      this.set({ stage: issue ? 'account' : preserveComplete ? 'complete' : 'entry', issue,
         ...(!issue ? { verification: this.state.verification + 1 } : {}) });
       return !issue && this.state.issue !== 'storage';
     } catch {
@@ -162,7 +173,7 @@ export class OriginSwitchGuide {
     if (await this.inspectDrafts(id)) {
       this.set({ stage: 'account' });
       if (['account', 'entry', 'complete'].includes(this.resumeStage) && await this.inspectAccount(id)
-        && this.entryConfirmed && await this.inspectDrafts(id)) this.set({ stage: 'complete' });
+        && this.entryConfirmed && await this.inspectDrafts(id) && this.destinationCurrent()) this.set({ stage: 'complete' });
     }
     if (this.current(id)) this.set({ busy: false });
   }
@@ -181,12 +192,18 @@ export class OriginSwitchGuide {
     this.set({ busy: true, issue: null });
     if (await this.inspectDrafts(id)) {
       try {
-        // The URL is built only from pinned config; no query/hash carries private data.
-        const url = new URL(this.scope.entry === 'quick' ? '/quick-task/' : '/', this.scope.targetOrigin);
-        await this.ports.openDestination(url.href);
+        await this.prepareAndNavigate(id);
       } catch { if (this.current(id)) this.set({ issue: 'unavailable' }); }
     }
     if (this.current(id)) this.set({ busy: false });
+  }
+  private async prepareAndNavigate(id: number) {
+    // Preparing an intent may wait for HTTP. Recheck cancellation and local
+    // drafts after that wait; navigation itself must be synchronous.
+    const url = await this.ports.prepareDestination();
+    if (this.current(id) && await this.inspectDrafts(id) && this.current(id)) {
+      this.ports.navigateDestination(url);
+    }
   }
   async verifyAccount() {
     if (this.disposed || this.state.busy || !['account', 'entry'].includes(this.state.stage)) return;
@@ -201,8 +218,12 @@ export class OriginSwitchGuide {
     this.set({ busy: true });
     if (await this.inspectDrafts(id) && await this.inspectAccount(id)) {
       try {
-        const install = await this.ports.requestInstall();
-        if (this.current(id)) this.set({ install });
+        if (this.ports.requestInstall) {
+          const install = await this.ports.requestInstall();
+          if (this.current(id)) this.set({ install });
+        } else {
+          await this.prepareAndNavigate(id);
+        }
       } catch { if (this.current(id)) this.set({ install: 'unavailable' }); }
     }
     if (this.current(id)) this.set({ busy: false });
@@ -211,9 +232,23 @@ export class OriginSwitchGuide {
     if (this.disposed || this.state.busy || this.state.stage !== 'entry' || !openedAndChecked) return;
     const id = ++this.generation;
     this.set({ busy: true });
-    if (await this.inspectDrafts(id) && await this.inspectAccount(id) && await this.inspectDrafts(id)) {
+    if (await this.inspectDrafts(id) && await this.inspectAccount(id) && await this.inspectDrafts(id)
+      && this.destinationCurrent()) {
       this.entryConfirmed = true;
       this.set({ stage: 'complete' });
+    }
+    if (this.current(id)) this.set({ busy: false });
+  }
+  async useDestination() {
+    if (this.disposed || this.state.busy || this.state.stage !== 'complete') return;
+    const id = ++this.generation;
+    this.set({ busy: true, issue: null });
+    if (await this.inspectDrafts(id) && await this.inspectAccount(id, true) && await this.inspectDrafts(id)
+      && this.destinationCurrent() && this.current(id)) {
+      try {
+        // Completion opens the normal entry, not the confirmation locator.
+        this.ports.navigateDestination(new URL(this.scope.entry === 'quick' ? '/quick-task/' : '/', this.scope.targetOrigin).href);
+      } catch { if (this.current(id)) this.set({ issue: 'unavailable' }); }
     }
     if (this.current(id)) this.set({ busy: false });
   }

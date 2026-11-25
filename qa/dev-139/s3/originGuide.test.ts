@@ -19,7 +19,8 @@ function fixture(patch: Partial<GuidePorts> = {}, selected = scope, storage = me
   const ports: GuidePorts = {
     inspectDrafts: async () => drafts,
     inspectDestination: async () => { calls.accountReads++; return destination; },
-    openDestination: async url => { calls.opened.push(url); },
+    prepareDestination: async () => new URL(selected.entry === 'quick' ? '/quick-task/' : '/', selected.targetOrigin).href,
+    navigateDestination: url => { calls.opened.push(url); },
     requestInstall: async () => { calls.installations++; return 'accepted'; }, ...patch,
   };
   return { calls, storage, ports, guide: new OriginSwitchGuide(selected, [scope.targetOrigin], ports, storage, () => now),
@@ -171,4 +172,66 @@ test('edits created while destination verification is pending prevent final comp
   drafts = { ...clean, pending: 1 }; release(); await finish;
   assert.equal(f.guide.getSnapshot().stage, 'drafts');
   assert.equal(f.guide.getSnapshot().issue, 'drafts');
+});
+
+test('completion opens the exact normal main or Quick entry after fresh evidence, never a locator', async () => {
+  for (const entry of ['main', 'quick'] as const) {
+    const f = fixture({}, { ...scope, entry });
+    await f.guide.start(); await f.guide.verifyAccount(); await f.guide.confirmEntry(true);
+    await f.guide.useDestination();
+    assert.deepEqual(f.calls.opened, [`${scope.targetOrigin}${entry === 'main' ? '/' : '/quick-task/'}`]);
+  }
+});
+
+test('defer, disposal and new drafts during HTTP preparation fence synchronous navigation', async () => {
+  for (const action of ['defer', 'dispose', 'draft'] as const) {
+    let release!: (url: string) => void;
+    const f = fixture({ prepareDestination: () => new Promise(resolve => { release = resolve; }) });
+    await f.guide.start();
+    const request = f.guide.openDestination(); await new Promise(resolve => setImmediate(resolve));
+    if (action === 'draft') f.drafts({ pending: 1 });
+    else f.guide[action]();
+    release(`${scope.targetOrigin}/`); await request;
+    assert.deepEqual(f.calls.opened, []);
+    if (action === 'draft') assert.equal(f.guide.getSnapshot().issue, 'drafts');
+  }
+});
+
+test('completed handoff rechecks new drafts, destination loss and cancellation before departure', async () => {
+  for (const change of ['draft', 'login', 'defer'] as const) {
+    const f = fixture(); await f.guide.start(); await f.guide.verifyAccount(); await f.guide.confirmEntry(true);
+    if (change === 'draft') f.drafts({ editing: true });
+    if (change === 'login') f.destination(null);
+    if (change === 'defer') f.ports.inspectDestination = async () => { f.guide.defer(); return proof; };
+    await f.guide.useDestination(); assert.deepEqual(f.calls.opened, []);
+    assert.equal(f.guide.getSnapshot().stage, change === 'draft' ? 'drafts' : change === 'login' ? 'account' : 'intro');
+  }
+});
+
+test('proof expiry during the final draft inspection blocks completion and later normal navigation', async () => {
+  for (const action of ['confirmEntry', 'useDestination', 'resume'] as const) {
+    const f = fixture(); await f.guide.start(); await f.guide.verifyAccount();
+    if (action !== 'confirmEntry') await f.guide.confirmEntry(true);
+    if (action === 'resume') f.guide.defer();
+    let scans = 0;
+    f.ports.inspectDrafts = async () => { if (++scans === 2) f.time(2001); return clean; };
+    if (action === 'confirmEntry') await f.guide.confirmEntry(true);
+    else if (action === 'resume') await f.guide.start();
+    else await f.guide.useDestination();
+    assert.equal(f.guide.getSnapshot().stage, 'account');
+    assert.equal(f.guide.getSnapshot().issue, 'expired');
+    assert.deepEqual(f.calls.opened, []);
+  }
+});
+
+test('source install prepares then rechecks drafts and cancellation without prompting the old PWA', async () => {
+  for (const cancel of [false, true]) {
+    const f = fixture({ requestInstall: undefined });
+    await f.guide.start(); await f.guide.verifyAccount();
+    f.ports.prepareDestination = async () => {
+      if (cancel) f.guide.defer(); else f.drafts({ pending: 1 });
+      return `${scope.targetOrigin}/`;
+    };
+    await f.guide.install(); assert.deepEqual(f.calls.opened, []); assert.equal(f.calls.installations, 0);
+  }
 });

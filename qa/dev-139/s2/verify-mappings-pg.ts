@@ -463,15 +463,30 @@ export async function verifyLegacyEntryMappingSessionsPostgres(config: RuntimeCo
     }
     for (const result of revocationResults) if (result.status === 'rejected') throw result.reason;
     assert.equal(await revoke, true);
-    assert.equal((await request(LEGACY_MAIN_ORIGIN, guidePath, { headers: bound(main) })).status, 403,
-      'Completed target logout invalidates the durable proof');
+    assert.equal((await request(LEGACY_MAIN_ORIGIN, guidePath, { headers: bound(main) })).status, 409,
+      'Known target logout invalidates the proof and permits a new explicit intent');
     assert.equal((await request(LEGACY_MAIN_ORIGIN, guidePath, { headers: bound(freshNext) })).status, 401);
+    const replacementId = randomUUID(), replacementPath = `/api/v1/origin-switch/intents/${replacementId}`;
+    const replacementIntent = await request(LEGACY_MAIN_ORIGIN, '/api/v1/origin-switch/intents', {
+      method: 'POST', headers: bound(main), body: JSON.stringify({ id: replacementId,
+        campaign: 'native-origin-guide', entry: 'main', targetOrigin: NEXT_MAIN_ORIGIN }) });
+    assert.equal(replacementIntent.status, 200); await replacementIntent.arrayBuffer();
+    const reloggedTarget = await login(NEXT_MAIN_ORIGIN, 'main', ownerId);
+    assert.equal((await request(NEXT_MAIN_ORIGIN, `${guidePath}/confirm`, {
+      method: 'POST', headers: bound(reloggedTarget), body: '{}' })).status, 403,
+      'A fresh target Session cannot rebind the original intent');
+    const reconfirmed = await request(NEXT_MAIN_ORIGIN, `${replacementPath}/confirm`, {
+      method: 'POST', headers: bound(reloggedTarget), body: '{}' });
+    assert.equal(reconfirmed.status, 200); await reconfirmed.arrayBuffer();
+    const replacementProof = await request(LEGACY_MAIN_ORIGIN, replacementPath, { headers: bound(main) });
+    assert.equal(replacementProof.status, 200);
+    assert.ok((await json<{ data: { destination: unknown } }>(replacementProof)).data.destination);
     const changed = await request(LEGACY_MAIN_ORIGIN, '/api/v1/workspaces', { method: 'POST', headers: bound(main),
       body: JSON.stringify({ title: 'Source changed after confirmation' }) });
     assert.equal(changed.status, 201); await changed.arrayBuffer();
     assert.equal((await request(LEGACY_MAIN_ORIGIN, guidePath, { headers: bound(main) })).status, 409,
       'New effective source rights invalidate the earlier baseline');
-    assert.equal(exchanges, 6);
+    assert.equal(exchanges, 7);
     const quickGuideId = randomUUID(), quickPath = `/api/v1/origin-switch/intents/${quickGuideId}`;
     const quickIntent = await request(LEGACY_QUICK_ORIGIN, '/api/v1/origin-switch/intents', { method: 'POST', headers: bound(quick),
       body: JSON.stringify({ id: quickGuideId, campaign: 'native-origin-guide', entry: 'quick', targetOrigin: NEXT_QUICK_ORIGIN }) });
@@ -497,7 +512,7 @@ export async function verifyLegacyEntryMappingSessionsPostgres(config: RuntimeCo
     }
     const unaffected = await request(NEXT_QUICK_ORIGIN, '/api/v1/session', { headers: { cookie: nextQuick.cookie } });
     assert.equal(unaffected.status, 200); await unaffected.arrayBuffer();
-    assert.equal(exchanges, 7, 'Session reads/revocation must not exchange another owner code');
+    assert.equal(exchanges, 8, 'Session reads/revocation must not exchange another owner code');
   } finally {
     if (relay?.listening) await new Promise<void>((resolve, reject) => {
       relay!.close(error => error ? reject(error) : resolve()); relay!.closeAllConnections();
