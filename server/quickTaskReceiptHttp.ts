@@ -13,7 +13,8 @@ export function createQuickTaskReceiptHttpDispatcher(config: RuntimeConfig, data
   resolveActor?: TrustedSessionActorResolver, repository = new QuickTaskRepository()) {
   return async (request: IncomingMessage, requestId: string): Promise<QuickTaskHttpResult> => {
     const match = /^\/api\/v1\/quick-tasks\/([^/?]+)\/receipt$/u.exec(request.url ?? '');
-    if (!match) return { matched: false };
+    const captureId = match?.[1];
+    if (!captureId) return { matched: false };
     const error = (status: number, code: string): QuickTaskHttpResult => ({ matched: true, status,
       body: { error: { code, requestId, retryable: status === 429 || status >= 500 } } });
     if (request.method !== 'GET') { request.resume(); return error(405, 'METHOD_NOT_ALLOWED'); }
@@ -21,7 +22,7 @@ export function createQuickTaskReceiptHttpDispatcher(config: RuntimeConfig, data
     try {
       const actor = await resolveActor(request);
       assertExpectedActor(request, actor);
-      const data = await runActorTransaction(database, config, actor, port => repository.readReceipt(port, match[1]));
+      const data = await runActorTransaction(database, config, actor, port => repository.readReceipt(port, captureId));
       return { matched: true, status: 200, body: { data } };
     } catch (failure) {
       const problem = asKernelError(failure);

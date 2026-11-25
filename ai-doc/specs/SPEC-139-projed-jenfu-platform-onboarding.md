@@ -723,6 +723,8 @@ Server 搬移與 browser storage 恢復分開驗收。第一階段維持原 orig
 
 本輪 PostgreSQL **18.4／76項 DB與HTTP檢查**通過，含原 migration套用／冪等及新增本人讀回、跨帳不見、過期、換帳、method拒絕與讀前後task／receipt筆數一致；結果 `output/qa/dev-139/s3/20261125T135106Z-d005ef7a/result.json`。另有 **24項**真IndexedDB／合成回執與 **205項**S3及新增repository／dispatcher unit通過，受影響lint及同lock版pg宣告overlay型別通過，紀錄在 `output/dev139-origin-guide-preview/receipt-qa-r1/`。首次測試fixture的錯誤代碼型別失敗保留於 `types.log`，改用既有 `ACTOR_INVALID`後 `types-r2.log`通過；既有同狀態401的原生HTTP證據仍適用，不因此重跑已通過DB。隔離DB／HTTP已關閉並清除，容量預留已釋放。本輪無模型、正式資料、IAM／Secret／billing／容量配置、部署或切流變更；草稿交接、目的端證明、正式接線與零留存外部資格仍按原分母追蹤，不另增required gate。
 
+來源已推送同一分支並建立草稿 [PR #41](https://github.com/jedchang0308-jenfu/ProJED/pull/41)，不合併／部署。首輪 [CI45628300966](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45628300966) 的真正PostgreSQL／snapshot、前端型別與unit獨立通過，但後端 `noUncheckedIndexedAccess` 發現新route擷取與新增測試陣列索引的可能undefined，造成後端型別、compiled artifact與OCI失敗；不是provider／資料失敗。原run與 `ci-first-failed.log`保留，在同一PR補上明確非空窄化，不改嚴格設定／gate；使用既有相同pg宣告的server/S2完整overlay與受影響lint通過，修正來源另走原CI驗證，不把首輪整體記為PASS。
+
 **本輪可確認的實作範圍。** `src/features/originSwitch/` 的共用元件／狀態邏輯依序處理草稿、原帳號、新日常入口；主程式／Quick、來源與目標origin、原帳號及本次換址版本分別保存進度。稍後會保留進度；重開後重新查證草稿與目的身分，不能只信舊localStorage的完成旗標。pending／unknown／衝突／未綁帳號／仍在編輯／離線／盤點失敗均不放行；晚到回應在換帳或取消後失效。安裝accepted／dismissed事件不直接完成，最後須由使用者確認從新圖示或書籤開啟且資料正確，並再驗身分及內容狀態。
 
 預覽檔 `qa/dev-139/s3/origin-guide.fixture.tsx` 只提供合成帳號、內容狀態與模擬登入／安裝，沒有被正式App或Quick入口匯入。`scripts/build-dev139-origin-guide-preview.mjs` 產生單檔HTML，CSP封鎖外部連線；正式新網址仍待固定，預覽的保留測試網域不會真的開啟。PWA裝置判斷沿既有 `pwaInstallService`，不新增安裝程序、不複製Session、不傳私人內容，也不清除任何業務儲存。

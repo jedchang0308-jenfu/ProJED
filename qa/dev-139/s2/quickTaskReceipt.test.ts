@@ -23,8 +23,10 @@ test('receipt repository makes one actor-scoped parameterized SELECT and never c
   assert.deepEqual(await repository.readReceipt(port, captureId), { status: 'committed', captureId,
     ownerId: actor.localUserId, titleHash: stored.title_hash, committedAt: 10, created: false });
   assert.equal(queries.length, 1);
-  assert.match(queries[0], /owner_id = projed_core.current_actor_user_id_v1\(\)/u);
-  assert.doesNotMatch(queries[0], /INSERT|UPDATE|DELETE|advisory|FOR UPDATE/iu);
+  const sql = queries[0];
+  assert.ok(sql);
+  assert.match(sql, /owner_id = projed_core.current_actor_user_id_v1\(\)/u);
+  assert.doesNotMatch(sql, /INSERT|UPDATE|DELETE|advisory|FOR UPDATE/iu);
 });
 
 test('absent receipt is null and malformed ids do not query', async () => {
