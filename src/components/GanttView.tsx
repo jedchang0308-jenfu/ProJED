@@ -2,7 +2,7 @@
 import { useCallback, useRef, useState, useEffect, useMemo } from 'react';
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
-import { useTaskFilterStore } from '../store/useTaskFilterStore';
+import { selectTaskFilterResultError, useTaskFilterStore } from '../store/useTaskFilterStore';
 import dayjs from 'dayjs';
 import { Calendar } from 'lucide-react';
 import SharedTaskSidebar from './SharedTaskSidebar';
@@ -27,8 +27,7 @@ const GanttView = () => {
     } = useBoardStore();
     const taskFilters = useTaskFilterStore(state => state.filters);
     const resetTaskFilters = useTaskFilterStore(state => state.resetFilters);
-    const taskFiltersLocked = useTaskFilterStore(state => state.controlsLocked);
-    const taskFilterWarning = useTaskFilterStore(state => state.warning);
+    const taskFilterResultError = useTaskFilterStore(selectTaskFilterResultError);
 
     const [isTaskListOpen, setIsTaskListOpen] = useState(true);
     const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
@@ -73,7 +72,7 @@ const GanttView = () => {
     );
     const taskLoading = useWbsStore(s => s.loading);
     const taskLoadError = useWbsStore(s => s.error);
-    const taskResultError = taskLoadError || (taskFiltersLocked ? taskFilterWarning || '篩選偏好無法載入' : null);
+    const taskResultError = taskLoadError || taskFilterResultError;
     const filterProjection = useMemo(
         () => projectTaskFilterResults(projectionNodes, taskFilters, { boardId: activeBoardId }),
         [activeBoardId, projectionNodes, taskFilters],

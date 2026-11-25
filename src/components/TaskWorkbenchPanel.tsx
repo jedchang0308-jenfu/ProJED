@@ -149,8 +149,10 @@ const WorkbenchUnclassifiedSection: React.FC<{
   canMoveTask: boolean;
   canManageTaskReference: boolean;
   onCreateTask: () => void;
+  loadStatus: 'loading' | 'ready' | 'unavailable';
+  onRetry: () => void;
   style?: React.CSSProperties;
-}> = ({ tasks, canCreateTask, canMoveTask, canManageTaskReference, onCreateTask, style }) => {
+}> = ({ tasks, canCreateTask, canMoveTask, canManageTaskReference, onCreateTask, loadStatus, onRetry, style }) => {
   const { setNodeRef, isOver } = useDroppable({
     id: 'task-workbench-unplaced-lane',
     disabled: !canMoveTask && !canManageTaskReference,
@@ -213,7 +215,14 @@ const WorkbenchUnclassifiedSection: React.FC<{
             </div>
           </div>
         ) : null}
-        {tasks.length === 0 ? (
+        {loadStatus === 'unavailable' ? (
+          <div className="flex flex-wrap items-center gap-2 px-1 py-1 text-sm text-slate-600" role="status">
+            <span>未歸位任務暫時無法同步。</span>
+            <button type="button" onClick={onRetry} className="font-semibold text-primary underline">重新載入未歸位</button>
+          </div>
+        ) : tasks.length === 0 && loadStatus === 'loading' ? (
+          <div className="px-1 py-1 text-sm text-slate-500" role="status">載入未歸位任務中…</div>
+        ) : tasks.length === 0 ? (
           <div
             className={`px-1 py-1 text-sm font-semibold text-slate-500 ${isOver ? 'invisible' : ''}`}
             data-task-workbench-unplaced-empty-state="true"
@@ -759,6 +768,11 @@ const TaskWorkbenchPanel: React.FC<{
   const [filtersLocked, setFiltersLocked] = React.useState(() => Boolean(readTaskWorkbenchFilterPrefs(accountId).locked));
   const [filterWarning, setFilterWarning] = React.useState<string | null>(() => readTaskWorkbenchFilterPrefs(accountId).warning ?? null);
   const [workbenchSourceStatus, setWorkbenchSourceStatus] = React.useState<'loading' | 'ready' | 'error'>('loading');
+  const [unplacedLoad, setUnplacedLoad] = React.useState<{
+    identity: string | null;
+    status: 'loading' | 'ready' | 'unavailable';
+  }>({ identity: filterIdentity, status: 'loading' });
+  const [unplacedRetry, retryUnplaced] = React.useReducer((value: number) => value + 1, 0);
   const [unboundTaskCount, setUnboundTaskCount] = React.useState(() => readUnboundTaskWorkbenchUnplacedTasks().length);
   const [unboundClaimStatus, setUnboundClaimStatus] = React.useState<'idle' | 'claiming' | 'error'>('idle');
   const [workbenchLoadedBoardIds, setWorkbenchLoadedBoardIds] = React.useState<string[]>([]);
@@ -1152,11 +1166,14 @@ const TaskWorkbenchPanel: React.FC<{
   ), [unplacedTasks]);
 
   React.useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
     const hydrate = async () => {
-      const storedTasks = await loadTaskWorkbenchUnplacedTasks(accountId);
-      if (cancelled || (useAuthStore.getState().user?.uid ?? null) !== accountId) return;
+      setUnplacedLoad({ identity: filterIdentity, status: 'loading' });
+      const { tasks: storedTasks, status } = await loadTaskWorkbenchUnplacedTasks(accountId, controller.signal);
+      if (controller.signal.aborted || filterReadIdentity(useAuthStore.getState().user) !== filterIdentity) return;
       hydrateUnplacedTasks(storedTasks);
+      setUnplacedLoad({ identity: filterIdentity, status });
+      if (status === 'unavailable') return;
 
       if (!fallbackWorkspaceId) return;
 
@@ -1184,10 +1201,12 @@ const TaskWorkbenchPanel: React.FC<{
       hydratedTasks.forEach(task => addNode(task));
     };
     void hydrate();
+    window.addEventListener('online', retryUnplaced);
     return () => {
-      cancelled = true;
+      controller.abort();
+      window.removeEventListener('online', retryUnplaced);
     };
-  }, [accountId, addNode, fallbackWorkspaceId, hydrateUnplacedTasks, inboxItems, markInboxPromoted]);
+  }, [accountId, addNode, fallbackWorkspaceId, filterIdentity, hydrateUnplacedTasks, inboxItems, markInboxPromoted, unplacedRetry]);
 
   const handleCreateUnplacedTask = React.useCallback(() => {
     if (!canCreateTask || !fallbackWorkspaceId) return;
@@ -1201,14 +1220,16 @@ const TaskWorkbenchPanel: React.FC<{
     setUnboundClaimStatus('claiming');
     try {
       const claimed = await claimUnboundTaskWorkbenchUnplacedTasks(accountId);
+      if (filterReadIdentity(useAuthStore.getState().user) !== filterIdentity) return;
       hydrateUnplacedTasks(claimed);
-      setUnboundTaskCount(0);
+      setUnboundTaskCount(readUnboundTaskWorkbenchUnplacedTasks().length);
+      retryUnplaced();
       setUnboundClaimStatus('idle');
     } catch (error) {
       console.error('[TaskWorkbenchPanel] unbound task claim failed:', error);
-      setUnboundClaimStatus('error');
+      if (filterReadIdentity(useAuthStore.getState().user) === filterIdentity) setUnboundClaimStatus('error');
     }
-  }, [accountId, hydrateUnplacedTasks, unboundClaimStatus]);
+  }, [accountId, filterIdentity, hydrateUnplacedTasks, unboundClaimStatus]);
 
   const { setNodeRef: setPlacedBoardLaneRef, isOver: isPlacedBoardLaneOver } = useDroppable({
     id: `task-workbench-placed-board-lane-${selectedBoardId || 'none'}`,
@@ -1491,6 +1512,8 @@ const TaskWorkbenchPanel: React.FC<{
             canMoveTask={canMoveTask}
             canManageTaskReference={canManageTaskReference}
             onCreateTask={handleCreateUnplacedTask}
+            loadStatus={unplacedLoad.identity === filterIdentity ? unplacedLoad.status : 'loading'}
+            onRetry={retryUnplaced}
             style={{ flexBasis: `calc(${unplacedRatio * 100}% - 6px)` }}
           />
 

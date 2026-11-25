@@ -32,6 +32,30 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 const MEETING_AUDIO_PATH_RE = /^\/api\/v1\/meeting-audio\/([0-9a-f-]{36})$/u;
 const AUDIO_MIME_TYPES = new Set(['audio/webm', 'audio/ogg', 'audio/mp4', 'audio/mpeg', 'audio/wav']);
 const MAX_MEETING_AUDIO_BYTES = 10 * 1024 * 1024;
+const MAX_ACTIVE_JSON_REQUESTS = 2;
+const SHARED_READ_PATH = /^\/api\/v1\/(?:scope-revisions$|workspaces(?:$|\/)|preferences\/task-filters\/)/u;
+
+function rateLimitDelay(response: Response): number {
+  const retryAfter = response.headers.get('retry-after');
+  const serverDelay = !retryAfter ? 0 : /^\d+$/u.test(retryAfter)
+    ? Number(retryAfter) * 1000 : Date.parse(retryAfter) - Date.now();
+  return Math.max(serverDelay || 0, 200 + Math.random() * 200);
+}
+
+function waitForRateLimit(delay: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    signal?.throwIfAborted();
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', abort);
+      resolve();
+    }, delay);
+    const abort = () => {
+      clearTimeout(timer);
+      reject(signal?.reason);
+    };
+    signal?.addEventListener('abort', abort, { once: true });
+  });
+}
 
 function checkedApiPath(path: string): string {
   let parsed: URL;
@@ -179,8 +203,35 @@ function errorFromResponse(response: Response, payload: unknown): HttpApiError {
 export class HttpApiClient {
   private expectedActor: HttpExpectedActor | null = null;
   private bindingRevision = 0;
+  private activeJsonRequests = 0;
+  private readonly queuedJsonRequests: Array<() => void> = [];
+  private readonly sharedReads = new Map<string, Promise<unknown>>();
 
   constructor(private readonly fetcher: HttpApiFetch = globalThis.fetch.bind(globalThis)) {}
+
+  private scheduleJsonRequest<T>(run: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      signal?.throwIfAborted();
+      const start = () => {
+        signal?.removeEventListener('abort', abort);
+        this.activeJsonRequests++;
+        void run().then(resolve, reject).finally(() => {
+          this.activeJsonRequests--;
+          this.queuedJsonRequests.shift()?.();
+        });
+      };
+      const abort = () => {
+        const index = this.queuedJsonRequests.indexOf(start);
+        if (index >= 0) this.queuedJsonRequests.splice(index, 1);
+        reject(signal?.reason);
+      };
+      if (this.activeJsonRequests < MAX_ACTIVE_JSON_REQUESTS) start();
+      else {
+        this.queuedJsonRequests.push(start);
+        signal?.addEventListener('abort', abort, { once: true });
+      }
+    });
+  }
 
   bindExpectedActor(expectedActor: HttpExpectedActor): void {
     if (this.expectedActor?.accountId === expectedActor.accountId && this.expectedActor.contextId === expectedActor.contextId) return;
@@ -329,34 +380,61 @@ export class HttpApiClient {
       headers.set('content-type', 'application/json; charset=utf-8');
       body = JSON.stringify(options.body);
     }
-    let response: Response;
-    try {
-      response = await this.fetcher(url, {
-        method,
-        headers,
-        body,
-        signal: options.signal,
-        credentials: 'same-origin',
-        cache: 'no-store',
-        redirect: 'error',
-      });
-    } catch (error) {
-      if (error instanceof HttpApiError) throw error;
-      if (error instanceof DOMException && error.name === 'AbortError') throw error;
-      void error;
-      throw new HttpApiError('DEPENDENCY_UNAVAILABLE', 503, null, true);
+    const assertBinding = () => {
+      if (bindingChanged()) throw new HttpApiError('ACTOR_CHANGED', 409, null, false);
+    };
+    const execute = async (): Promise<T> => {
+      const fetchResponse = async () => {
+        assertBinding();
+        options.signal?.throwIfAborted();
+        try {
+          return await this.fetcher(url, {
+            method, headers, body, signal: options.signal,
+            credentials: 'same-origin', cache: 'no-store', redirect: 'error',
+          });
+        } catch (error) {
+          return requestFailure(error);
+        }
+      };
+      let response = await fetchResponse();
+      if (!bindingChanged() && method === 'GET' && response.status === 429) {
+        const delay = rateLimitDelay(response);
+        if (delay <= 1500) {
+          await cancelResponseBody(response);
+          await waitForRateLimit(delay, options.signal);
+          response = await fetchResponse();
+        }
+      }
+      if (bindingChanged()) {
+        await cancelResponseBody(response);
+        assertBinding();
+      }
+      if (response.status === 429 && !response.headers.get('content-type')?.includes('application/json')) {
+        await cancelResponseBody(response);
+        throw new HttpApiError('REQUEST_THROTTLED', 429, response.headers.get('x-request-id'), true);
+      }
+      if (response.status === 204) return undefined as T;
+      const payload = await parseJson(response);
+      assertBinding();
+      if (!response.ok) throw errorFromResponse(response, payload);
+      return payload as T;
+    };
+
+    if (method !== 'GET') this.sharedReads.clear();
+    const shareKey = method === 'GET' && expectedActor && !options.signal && SHARED_READ_PATH.test(url)
+      ? JSON.stringify([initialRevision, expectedActor.accountId, expectedActor.contextId, url]) : null;
+    if (shareKey !== null) {
+      const existing = this.sharedReads.get(shareKey);
+      if (existing) return existing as Promise<T>;
     }
-    if (bindingChanged()) {
-      await cancelResponseBody(response);
-      throw new HttpApiError('ACTOR_CHANGED', 409, null, false);
+    const result = this.scheduleJsonRequest(execute, options.signal);
+    if (shareKey !== null) {
+      this.sharedReads.set(shareKey, result);
+      const release = () => {
+        if (this.sharedReads.get(shareKey) === result) this.sharedReads.delete(shareKey);
+      };
+      void result.then(release, release);
     }
-    if (response.status === 204) {
-      if (!response.ok) throw new HttpApiError('HTTP_REQUEST_FAILED', response.status, response.headers.get('x-request-id'), false);
-      return undefined as T;
-    }
-    const payload = await parseJson(response);
-    if (bindingChanged()) throw new HttpApiError('ACTOR_CHANGED', 409, null, false);
-    if (!response.ok) throw errorFromResponse(response, payload);
-    return payload as T;
+    return result;
   }
 }

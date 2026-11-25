@@ -170,6 +170,42 @@ async (page) => {
     assert(bodyText.includes('Shared parent'), 'task title is missing from the normal UI', { bodyText: bodyText.slice(0, 1200) });
     assert(!bodyText.includes('檢查 Jenfu-Platform 登入'), 'authenticated actor was returned to the login shell');
     await verifyOwnerBoardScope();
+
+    step = 'keep the board readable and distinguish throttled unplaced reads from empty results';
+    const pressureContext = await page.context().browser().newContext({ serviceWorkers: 'block' });
+    try {
+      await pressureContext.addCookies([{ name: '__session', value: 'qa-browser', url: `${baseUrl}/` }]);
+      await pressureContext.addInitScript(() => {
+        localStorage.setItem('projed-last-ws', 'ws-b');
+        localStorage.setItem('projed-last-board', 'board-shared');
+        localStorage.setItem('projed-last-view', 'board');
+      });
+      const pressurePage = await pressureContext.newPage();
+      const unplaced = '**/api/v1/task-workbench/unplaced';
+      const throttle = route => route.fulfill({ status: 429, contentType: 'text/html', body: 'Busy' });
+      await pressurePage.route(unplaced, throttle);
+      await pressurePage.route('**/api/v1/preferences/task-filters/board-shared', throttle);
+      await pressurePage.goto(baseUrl + '/', { waitUntil: 'domcontentloaded' });
+      const retryUnplaced = pressurePage.getByRole('button', { name: '重新載入未歸位', exact: true });
+      await retryUnplaced.waitFor({ state: 'visible', timeout: 20000 });
+      assert(await pressurePage.locator('[data-task-workbench-unplaced-empty-state]').count() === 0,
+        'unavailable unplaced task list was reported as empty');
+      await pressurePage.locator('[data-kanban-mouse-pan-surface="true"] [data-task-id="shared-parent"]').first()
+        .waitFor({ state: 'visible', timeout: 20000 });
+      await pressurePage.unroute(unplaced, throttle);
+      const [retried] = await Promise.all([
+        pressurePage.waitForResponse(reply => new URL(reply.url()).pathname === '/api/v1/task-workbench/unplaced' && reply.ok()),
+        retryUnplaced.click(),
+      ]);
+      await retryUnplaced.waitFor({ state: 'hidden' });
+      const unplacedTasks = (await retried.json()).data.filter(task => !task.isArchived);
+      if (unplacedTasks.length === 0) {
+        await pressurePage.locator('[data-task-workbench-unplaced-empty-state]').waitFor({ state: 'visible' });
+      }
+    } finally {
+      await pressureContext.close();
+    }
+
     await page.locator('[data-main-sidebar-toggle="true"]').click();
     const workspaceSidebar = page.locator('[data-sidebar-panel="expanded"]');
     await workspaceSidebar.waitFor({ state: 'visible', timeout: 10000 });
@@ -493,6 +529,10 @@ async (page) => {
     const taskId = creation.nodes[0].id;
     await modal.getByRole('textbox', { name: '編輯任務名稱' }).fill(privateTitle);
     await saveThroughUi(`${privatePath}/${encodeURIComponent(taskId)}`, 'PATCH', () => modal.getByRole('button', { name: '關閉任務詳情' }).click());
+    // The HTTP response can arrive before the editor has settled and removed
+    // its beforeunload guard. Wait for the normal UI acknowledgement.
+    await modal.waitFor({ state: 'hidden' });
+    await page.locator('[data-task-title-slot="true"]').filter({ hasText: privateTitle }).first().waitFor();
     step = 'reload the private task and verify isolation for the shared board collaborator';
     const privateTasks = await saveThroughUi(privatePath, 'GET', () => page.reload({ waitUntil: 'domcontentloaded' }));
     assert(privateTasks.some(task => task.id === taskId && task.title === privateTitle), 'private task did not survive reload');
@@ -560,6 +600,8 @@ async (page) => {
       reload: true,
       titleEditPersistedAfterReload: true,
       collaboratorRecoveredAfterTransientReadFailure: true,
+      throttledFiltersDoNotBlankBoard: true,
+      unplacedReadFailureIsRetryableAndNotEmpty: true,
       collaborationDeleteReconnect: {
         scope: 'normal board/list UI and real isolated HTTP/PG; synthetic login; browser network outage injected with setOffline',
         normalCreateArchiveAndPermanentDelete: true,

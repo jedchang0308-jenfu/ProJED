@@ -79,7 +79,7 @@ type QueueState = {
   waiters: Array<(result: TaskFilterMutationResult) => void>;
 };
 
-const SYNC_FALLBACK_WARNING = '篩選偏好無法同步，已使用此裝置設定';
+export const SYNC_FALLBACK_WARNING = '篩選偏好無法同步，已使用此裝置設定';
 const SYNC_PENDING_WARNING = '篩選偏好未同步，已保留在此裝置';
 const LOCAL_SAVE_WARNING = '篩選偏好尚未儲存，請勿關閉頁面並重試';
 const UPGRADE_WARNING = '篩選偏好版本較新，請升級後再同步';

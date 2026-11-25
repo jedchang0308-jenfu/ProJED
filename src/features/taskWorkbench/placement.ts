@@ -94,7 +94,7 @@ const getHttpExpectedActor = (accountId: string): Promise<HttpExpectedActor> =>
 
 export const claimUnboundTaskWorkbenchUnplacedTasks = async (accountId: string): Promise<TaskNode[]> => {
   const unboundTasks = readUnboundTaskWorkbenchUnplacedTasks();
-  if (unboundTasks.length === 0) return loadTaskWorkbenchUnplacedTasks(accountId);
+  if (unboundTasks.length === 0) return (await loadTaskWorkbenchUnplacedTasks(accountId)).tasks;
 
   const expectedActor = isHttpBackend ? await getHttpExpectedActor(accountId) : null;
   const remoteTasks = isHttpBackend
@@ -123,21 +123,28 @@ export const claimUnboundTaskWorkbenchUnplacedTasks = async (accountId: string):
   return claimed;
 };
 
+export type UnplacedTaskLoad = { tasks: TaskNode[]; status: 'ready' | 'unavailable' };
+
 export const loadTaskWorkbenchUnplacedTasks = async (
   accountId: string | null | undefined,
-): Promise<TaskNode[]> => {
+  signal?: AbortSignal,
+): Promise<UnplacedTaskLoad> => {
   const localTasks = readTaskWorkbenchUnplacedTasks(accountId);
-  if (!accountId || (!isHttpBackend && !isSupabaseBackend)) return sortTaskWorkbenchUnplacedTasks(localTasks);
+  if (!accountId || (!isHttpBackend && !isSupabaseBackend)) {
+    return { tasks: sortTaskWorkbenchUnplacedTasks(localTasks), status: 'ready' };
+  }
 
   try {
     const expectedActor = isHttpBackend ? await getHttpExpectedActor(accountId) : null;
     const remoteTasks = isHttpBackend
-      ? await httpTaskWorkbenchService.list(expectedActor!)
+      ? await httpTaskWorkbenchService.list(expectedActor!, signal)
       : await supabaseTaskWorkbenchUnplacedService.list();
+    signal?.throwIfAborted();
     const merged = new Map(remoteTasks.map(task => [task.id, task]));
     let migrationFailed = false;
 
     for (const localTask of localTasks) {
+      signal?.throwIfAborted();
       if (localTask.isArchived) continue;
       const remoteTask = merged.get(localTask.id);
       // A newer local clock does not prove which remote version was edited.
@@ -160,11 +167,11 @@ export const loadTaskWorkbenchUnplacedTasks = async (
       }
     }
 
-    if (!migrationFailed) clearTaskWorkbenchUnplacedLocalCaches(accountId);
-    return sortTaskWorkbenchUnplacedTasks(Array.from(merged.values()));
+    if (!migrationFailed && !signal?.aborted) clearTaskWorkbenchUnplacedLocalCaches(accountId);
+    return { tasks: sortTaskWorkbenchUnplacedTasks(Array.from(merged.values())), status: 'ready' };
   } catch (error) {
     console.warn('[taskWorkbench] Failed to load remote unplaced tasks; using local fallback.', error);
-    return sortTaskWorkbenchUnplacedTasks(localTasks);
+    return { tasks: sortTaskWorkbenchUnplacedTasks(localTasks), status: 'unavailable' };
   }
 };
 

@@ -9,7 +9,7 @@ import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core';
 import { useDragSensors } from '../../hooks/useDragSensors';
 import { compactClassNames, taskViewFrameClassName } from '../ui/compactTokens';
 import { projectTaskFilterResults } from '../../features/taskFilters';
-import { useTaskFilterStore } from '../../store/useTaskFilterStore';
+import { selectTaskFilterResultError, useTaskFilterStore } from '../../store/useTaskFilterStore';
 import { TaskFilterResultState } from '../ui/TaskFilterResultState';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 import { prepareNewTaskNaming } from '../../utils/taskInteractions';
@@ -27,8 +27,7 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
   const activeWorkspaceId = useBoardStore(s => s.activeWorkspaceId);
   const taskFilters = useTaskFilterStore(s => s.filters);
   const resetTaskFilters = useTaskFilterStore(s => s.resetFilters);
-  const taskFiltersLocked = useTaskFilterStore(s => s.controlsLocked);
-  const taskFilterWarning = useTaskFilterStore(s => s.warning);
+  const taskFilterResultError = useTaskFilterStore(selectTaskFilterResultError);
   const dependencySelection = useBoardStore(s => s.dependencySelection);
   const setDependencySelection = useBoardStore(s => s.setDependencySelection);
   // 從全域 Store 取出顯示狀態
@@ -161,7 +160,7 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
   const nodes = useWbsStore(s => s.nodes);
   const taskLoading = useWbsStore(s => s.loading);
   const taskLoadError = useWbsStore(s => s.error);
-  const taskResultError = taskLoadError || (taskFiltersLocked ? taskFilterWarning || '篩選偏好無法載入' : null);
+  const taskResultError = taskLoadError || taskFilterResultError;
   const filterProjection = React.useMemo(
     () => projectTaskFilterResults(
       buildTaskFilterNodesWithTrackingReferences(Object.values(nodes), trackingReferences, boardId),
