@@ -6,7 +6,7 @@ import { ChevronLeft, Link, Loader2, Lock, X } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import useAuthStore from '../store/useAuthStore';
 import { useWbsStore } from '../store/useWbsStore';
-import { useTaskFilterStore } from '../store/useTaskFilterStore';
+import { selectTaskFilterResultError, useTaskFilterStore } from '../store/useTaskFilterStore';
 import { useMemberStore } from '../store/useMemberStore';
 import { useTagStore } from '../store/useTagStore';
 import useRecordStore, { createRecordScopeKey } from '../store/useRecordStore';
@@ -949,8 +949,7 @@ const GoalView: React.FC<GoalViewProps> = ({ boardId }) => {
   const taskError = useWbsStore(state => state.error);
   const taskFilters = useTaskFilterStore(state => state.filters);
   const resetTaskFilters = useTaskFilterStore(state => state.resetFilters);
-  const taskFiltersLocked = useTaskFilterStore(state => state.controlsLocked);
-  const taskFilterWarning = useTaskFilterStore(state => state.warning);
+  const taskFilterResultError = useTaskFilterStore(selectTaskFilterResultError);
   const boardMembers = useMemberStore(state => state.boardMembers);
   const membersLoading = useMemberStore(state => state.loading);
   const records = useRecordStore(state => state.records);
@@ -1422,8 +1421,8 @@ const GoalView: React.FC<GoalViewProps> = ({ boardId }) => {
   if (taskError) {
     return <div role="alert" className="m-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 shadow-sm" data-goal-view="true">任務載入失敗：{taskError}</div>;
   }
-  if (taskFiltersLocked) {
-    return <div role="alert" className={`flex h-full items-center justify-center p-6 text-sm text-slate-600 ${taskViewFrameClassName}`} data-goal-view="true">{taskFilterWarning || '篩選偏好無法載入'}</div>;
+  if (taskFilterResultError) {
+    return <div role="alert" className={`flex h-full items-center justify-center p-6 text-sm text-slate-600 ${taskViewFrameClassName}`} data-goal-view="true">{taskFilterResultError}</div>;
   }
 
   const hasNoTasks = filterProjection.totalTaskCount === 0;

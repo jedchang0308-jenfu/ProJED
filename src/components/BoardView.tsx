@@ -26,7 +26,7 @@ import { KanbanRootDropZone } from './Wbs/KanbanRootDropZone';
 import TaskWorkbenchPanel from './TaskWorkbenchPanel';
 import { compactClassNames, taskViewFrameClassName } from './ui/compactTokens';
 import { projectTaskFilterResults } from '../features/taskFilters';
-import { useTaskFilterStore } from '../store/useTaskFilterStore';
+import { selectTaskFilterResultError, useTaskFilterStore } from '../store/useTaskFilterStore';
 import { TaskFilterResultState } from './ui/TaskFilterResultState';
 import { MobileTaskActionContext } from './Wbs/mobileTaskActionContext';
 import { TaskDragPresenter } from './Wbs/taskDrag/TaskDragPresenter';
@@ -1305,9 +1305,8 @@ const BoardView = () => {
     const taskLoadError = useWbsStore(s => s.error);
     const taskFilters = useTaskFilterStore(s => s.filters);
     const resetTaskFilters = useTaskFilterStore(s => s.resetFilters);
-    const taskFiltersLocked = useTaskFilterStore(s => s.controlsLocked);
-    const taskFilterWarning = useTaskFilterStore(s => s.warning);
-    const taskResultError = taskLoadError || (taskFiltersLocked ? taskFilterWarning || '篩選偏好無法載入' : null);
+    const taskFilterResultError = useTaskFilterStore(selectTaskFilterResultError);
+    const taskResultError = taskLoadError || taskFilterResultError;
     const filterProjection = useMemo(
         () => projectTaskFilterResults(
             buildTaskFilterNodesWithTrackingReferences(Object.values(storeNodes), trackingReferences, activeBoardId || ''),

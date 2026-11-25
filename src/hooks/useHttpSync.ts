@@ -32,7 +32,10 @@ function handleReadError(error: unknown) {
     return;
   }
   console.error('[useHttpSync] Failed to refresh current scope:', error);
-  useWbsStore.setState({ loading: false, error: error instanceof Error ? error.message : 'HTTP 同步失敗' });
+  const message = error instanceof HttpApiError && error.status === 429
+    ? '請求暫時過多，請重新載入看板。'
+    : error instanceof Error ? error.message : 'HTTP 同步失敗';
+  useWbsStore.setState({ loading: false, error: message });
 }
 
 function clearPublishedReads(preserveSelection: boolean) {
@@ -63,7 +66,8 @@ async function refreshActiveScope(isCurrent: () => boolean) {
   if (!isCurrent()) return;
   const { activeWorkspaceId, activeBoardId, workspaces } = useBoardStore.getState();
   if (!activeWorkspaceId) {
-    useWbsStore.setState({ nodes: {}, dependencies: [], loading: false, error: null });
+    useWbsStore.getState().setNodes([]);
+    useWbsStore.setState({ dependencies: [], loading: false, error: null });
     useMemberStore.getState().clearMembers();
     useTagStore.getState().setTags([], null);
     useRecordStore.getState().resetRecordList();
@@ -90,19 +94,22 @@ async function refreshActiveScope(isCurrent: () => boolean) {
     : Promise.resolve(null);
 
   if (boardExists) useWbsStore.setState({ loading: true, error: null });
-  const [boardData] = await Promise.all([
-    tasksAndDependencies,
+  // These stores own their loading/error states. A missed auxiliary read must
+  // not prevent an authorized task snapshot from rendering.
+  void Promise.all([
     useMemberStore.getState().loadMembers(activeWorkspaceId, boardId),
     useTagStore.getState().loadTags(activeWorkspaceId),
     boardExists ? useRecordStore.getState().loadRecords(activeWorkspaceId, boardId) : Promise.resolve(),
-  ]).catch(error => {
-    if (!sameScope()) return [null];
-    throw error;
+  ]).catch(error => console.error('[useHttpSync] Failed to refresh supporting data:', error));
+  const boardData = await tasksAndDependencies.catch(error => {
+    if (sameScope()) throw error;
+    return null;
   });
   if (!sameScope()) return;
   if (!boardExists || !boardId || !boardData) {
     if (!boardExists) {
-      useWbsStore.setState({ nodes: {}, dependencies: [], loading: false, error: null });
+      useWbsStore.getState().setNodes([]);
+      useWbsStore.setState({ dependencies: [], loading: false, error: null });
       useRecordStore.getState().resetRecordList();
     }
     return;
