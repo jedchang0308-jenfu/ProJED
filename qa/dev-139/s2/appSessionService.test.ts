@@ -223,7 +223,8 @@ class FakeAppSessionStore implements AppSessionStore {
 
 type Fixture = ReturnType<typeof fixture>;
 
-function fixture(input: { pins?: readonly IdentityContractPin[]; origins?: { main: string; quick: string } } = {}) {
+function fixture(input: { pins?: readonly IdentityContractPin[]; origins?: { main: string; quick: string };
+  allowedOrigins?: import('../../../server/appSessionService.js').AppSessionOrigins } = {}) {
   let nowMs = Date.now();
   let identity = identityAt(nowMs);
   let state = stateFor(identity, nowMs);
@@ -291,7 +292,7 @@ function fixture(input: { pins?: readonly IdentityContractPin[]; origins?: { mai
     mappings,
     binding: BINDING,
     pins,
-    origins,
+    origins: input.allowedOrigins ?? origins,
     environment: 'test',
     now: () => nowMs,
     createContextId: () => {
@@ -465,7 +466,7 @@ test('personal login creates exact authorize URL and one callback yields an eigh
   assert.equal(f.store.intents.get(intent.tokenHash)?.status, 'consumed');
   assert.equal(f.counts().producerCallCount, 1);
   assert.deepEqual(f.producerInputs[0], {
-    entry: 'main', code: CODE, codeVerifier: intent.codeVerifier,
+    entry: 'main', code: CODE, codeVerifier: intent.codeVerifier, callbackOrigin: MAIN_ORIGIN,
   });
 
   const replay = await f.service.dispatchAuth(
@@ -1166,4 +1167,54 @@ test('ASR exact-run lookup requires pinned identity contract before touching sto
   await assert.rejects(f.service.resolveMeetingRunActor('10000000-0000-4000-8000-000000000001'),
     error=>error instanceof KernelError&&error.code==='IDENTITY_CONTRACT_UNAVAILABLE');
   assert.equal(f.store.calls.includes('readMeetingRunSession'),false);
+});
+
+test('old and new origins login concurrently with exact callback and host-only Session isolation', async () => {
+  const nextMain = 'http://127.0.0.1:4300';
+  const nextQuick = 'http://127.0.0.1:4301';
+  const allowedOrigins = { main: [MAIN_ORIGIN, nextMain], quick: [QUICK_ORIGIN, nextQuick] };
+  const f = fixture({ allowedOrigins });
+  for (const [entry, origins] of Object.entries(allowedOrigins) as Array<['main' | 'quick', string[]]>) {
+    for (const selectedOrigin of origins) {
+      const started = await f.service.dispatchAuth(loginRequest(selectedOrigin, entry), 'alias-login');
+      const authorize = authorizationFrom(started);
+      assert.equal(authorize.searchParams.get('redirect_uri'), `${selectedOrigin}/api/auth/jenfu-sso/callback`);
+      const callback = await f.service.dispatchAuth(callbackRequest(selectedOrigin, cookieValue(started), authorize.searchParams.get('state')!), 'alias-callback');
+      assert.equal(callback.status, 303);
+      const cookie = cookieValue(callback);
+      assert.equal((await f.service.resolveActor(request('GET', '/api/v1/session', { host: host(selectedOrigin), cookie }))).entry, entry);
+      const otherOrigin = selectedOrigin === origins[0] ? origins[1]! : origins[0]!;
+      await assert.rejects(f.service.resolveActor(request('GET', '/api/v1/session', { host: host(otherOrigin), cookie })));
+    }
+  }
+  const inputs = f.producerInputs as Array<{ callbackOrigin: string }>;
+  assert.deepEqual(inputs.map(input => input.callbackOrigin), [MAIN_ORIGIN, nextMain, QUICK_ORIGIN, nextQuick]);
+});
+
+test('an allowed alias cannot bypass exact Host/Origin, callback intent origin or entry', async () => {
+  const nextMain = 'http://127.0.0.1:4300';
+  const f = fixture({ allowedOrigins: { main: [MAIN_ORIGIN, nextMain], quick: QUICK_ORIGIN } });
+  const mismatched = loginRequest(MAIN_ORIGIN, 'main'); mismatched.headers.host = host(nextMain);
+  assert.equal((await f.service.dispatchAuth(mismatched, 'wrong-host')).status, 403);
+  assert.equal((await f.service.dispatchAuth(loginRequest(nextMain, 'quick'), 'wrong-entry')).status, 403);
+  const started = await f.service.dispatchAuth(loginRequest(nextMain, 'main'), 'alias-start');
+  const authorize = authorizationFrom(started);
+  assert.equal((await f.service.dispatchAuth(callbackRequest(MAIN_ORIGIN, cookieValue(started), authorize.searchParams.get('state')!), 'wrong-callback-origin')).status, 401);
+  assert.equal(f.counts().producerCallCount, 0);
+  assert.equal((await f.service.dispatchAuth(callbackRequest(nextMain, cookieValue(started), authorize.searchParams.get('state')!), 'right-callback-origin')).status, 303);
+});
+
+test('origin configuration is frozen and legacy meeting Sessions remain valid with new origins added', async () => {
+  const main = [MAIN_ORIGIN, 'http://127.0.0.1:4200'];
+  const f = fixture({ allowedOrigins: { main, quick: QUICK_ORIGIN } });
+  main.push('http://127.0.0.1:4999');
+  assert.equal((await f.service.dispatchAuth(loginRequest(main[2]!, 'main'), 'late-config-change')).status, 403);
+  const runId = '10000000-0000-4000-8000-000000000001';
+  f.store.meetingRuns.set(runId, { tokenHash: 'f'.repeat(64), publicOrigin: MAIN_ORIGIN, entry: 'main',
+    localUserId: USER_ID, contextId: CONTEXT_ID, accountGuardRevision: f.store.guardRevision,
+    identity: f.identity(), expiresAtMs: f.identity().sourceSessionExpiresAtMs, revokedAtMs: null });
+  assert.equal((await f.service.resolveMeetingRunActor(runId)).localUserId, USER_ID);
+  for (const invalid of [[], [MAIN_ORIGIN, MAIN_ORIGIN], ['https://foreign.test/path'], ['https://user@foreign.test']]) {
+    assert.throws(() => fixture({ allowedOrigins: { main: invalid, quick: QUICK_ORIGIN } }), { code: 'CONFIG_INVALID' });
+  }
 });

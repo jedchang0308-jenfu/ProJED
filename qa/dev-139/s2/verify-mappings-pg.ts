@@ -19,6 +19,8 @@ import { createLegacyEntryRelay } from '../../../server/legacyEntryRelay.js';
 import { createLegacyEntryRequestPreparer } from '../../../server/legacyEntryOrigin.js';
 import { LEGACY_ENTRY_ACCOUNT, LEGACY_ENTRY_UPSTREAM, LEGACY_MAIN_ORIGIN, LEGACY_QUICK_ORIGIN, type LegacyEntryBinding } from '../../../server/legacyEntryBinding.js';
 import { publishSyntheticPrincipalState } from './principalStateFixture.js';
+const NEXT_MAIN_ORIGIN = 'https://next-main.example.invalid';
+const NEXT_QUICK_ORIGIN = 'https://next-quick.example.invalid';
 
 export async function verifyGoogleMappingsPostgres(database: RuntimeDatabase): Promise<void> {
   const lease = await database.checkout();
@@ -172,7 +174,8 @@ export async function verifyLegacyEntryMappingSessionsPostgres(config: RuntimeCo
     const codes = new Map<string, { identity: ProducerVerifiedIdentity; callback: string; challenge: string }>();
     let exchanges = 0;
     const handoffs = createPlatformHandoffClient({ environment: 'production', brokerOrigin, binding: identityBinding,
-      callbacks: { main: `${LEGACY_MAIN_ORIGIN}/api/auth/jenfu-sso/callback`, quick: `${LEGACY_QUICK_ORIGIN}/api/auth/jenfu-sso/callback` },
+      callbacks: { main: [LEGACY_MAIN_ORIGIN, NEXT_MAIN_ORIGIN].map(value => `${value}/api/auth/jenfu-sso/callback`),
+        quick: [LEGACY_QUICK_ORIGIN, NEXT_QUICK_ORIGIN].map(value => `${value}/api/auth/jenfu-sso/callback`) },
       tokenProvider: async audience => { assert.equal(audience, brokerOrigin); return 'SYNTHETIC.owner-service-proof'; },
       fetchImpl: async (input, init) => {
         assert.equal(String(input), `${brokerOrigin}/api/sso/token`);
@@ -204,7 +207,7 @@ export async function verifyLegacyEntryMappingSessionsPostgres(config: RuntimeCo
     const consumer = new IdentityConsumer({ pins: [identityBinding], mappings,
       verifier: createPlatformIdentityVerifier({ handoffs, stateReader: states, binding: identityBinding, environment: 'production' }) });
     const auth = createAppSessionService({ store, consumer, mappings, binding: identityBinding, pins: [identityBinding],
-      origins: { main: LEGACY_MAIN_ORIGIN, quick: LEGACY_QUICK_ORIGIN }, environment: 'production' });
+      origins: { main: [LEGACY_MAIN_ORIGIN, NEXT_MAIN_ORIGIN], quick: [LEGACY_QUICK_ORIGIN, NEXT_QUICK_ORIGIN] }, environment: 'production' });
     const transport: LegacyEntryBinding = { version: 'projed.legacy-entry.v1', upstreamOrigin: LEGACY_ENTRY_UPSTREAM,
       serviceAccount: LEGACY_ENTRY_ACCOUNT, serviceAccountSubject: '123456789012345678901', qualificationSha256: 'b'.repeat(64) };
     const keys = generateKeyPairSync('rsa', { modulusLength: 2048 });
@@ -228,10 +231,16 @@ export async function verifyLegacyEntryMappingSessionsPostgres(config: RuntimeCo
     const address = relay.address(); assert.ok(address && typeof address !== 'string');
     console.log(JSON.stringify({ scope: 'SYNTHETIC_OWNER_REAL_PG_LEGACY_RELAY', pid: process.pid,
       centralPort: central.port, relayPort: address.port }));
-    const request = (publicOrigin: string, path: string, init: RequestInit = {}) => fetch(`http://127.0.0.1:${address.port}${path}`, {
-      ...init, redirect: 'manual', headers: { 'x-forwarded-host': new URL(publicOrigin).host, origin: publicOrigin,
-        ...Object.fromEntries(new Headers(init.headers)) },
-    });
+    const request = (publicOrigin: string, path: string, init: RequestInit = {}) => {
+      assert.ok([LEGACY_MAIN_ORIGIN, LEGACY_QUICK_ORIGIN, NEXT_MAIN_ORIGIN, NEXT_QUICK_ORIGIN].includes(publicOrigin));
+      const direct = publicOrigin === NEXT_MAIN_ORIGIN || publicOrigin === NEXT_QUICK_ORIGIN;
+      return fetch(`http://127.0.0.1:${direct ? central.port : address.port}${path}`, {
+        ...init, redirect: 'manual', headers: {
+          ...(direct ? { host: new URL(publicOrigin).host } : { 'x-forwarded-host': new URL(publicOrigin).host }),
+          origin: publicOrigin, ...Object.fromEntries(new Headers(init.headers)),
+        },
+      });
+    };
     const cookie = (response: Response) => {
       const value = response.headers.get('set-cookie'); assert.ok(value);
       assert.match(value, /; Path=\/;/u); assert.match(value, /; Secure;/u); assert.match(value, /; HttpOnly;/u);
@@ -278,12 +287,21 @@ export async function verifyLegacyEntryMappingSessionsPostgres(config: RuntimeCo
     const main = await login(LEGACY_MAIN_ORIGIN, 'main', ownerId);
     const quick = await login(LEGACY_QUICK_ORIGIN, 'quick', ownerId);
     const other = await login(LEGACY_MAIN_ORIGIN, 'main', otherId);
+    const nextMain = await login(NEXT_MAIN_ORIGIN, 'main', ownerId);
+    const nextQuick = await login(NEXT_QUICK_ORIGIN, 'quick', otherId);
+    assert.notEqual(nextMain.profile.authContextId, nextQuick.profile.authContextId);
+    assert.notEqual(nextMain.profile.localUserId, nextQuick.profile.localUserId);
     assert.notEqual(main.cookie, quick.cookie); assert.notEqual(main.profile.authContextId, quick.profile.authContextId);
     for (const [publicOrigin, sessionCookie] of [[LEGACY_MAIN_ORIGIN, quick.cookie], [LEGACY_QUICK_ORIGIN, main.cookie]]) {
       const wrong = await request(publicOrigin!, '/api/v1/session', { headers: { cookie: sessionCookie! } });
       assert.equal(wrong.status, 401); await wrong.arrayBuffer();
     }
-    for (const [publicOrigin, session] of [[LEGACY_MAIN_ORIGIN, main], [LEGACY_QUICK_ORIGIN, quick]] as const) {
+    for (const [publicOrigin, sessionCookie] of [[NEXT_MAIN_ORIGIN, main.cookie], [LEGACY_MAIN_ORIGIN, nextMain.cookie],
+      [NEXT_MAIN_ORIGIN, nextQuick.cookie], [NEXT_QUICK_ORIGIN, nextMain.cookie]]) {
+      const denied = await request(publicOrigin!, '/api/v1/session', { headers: { cookie: sessionCookie! } });
+      assert.equal(denied.status, 401); await denied.arrayBuffer();
+    }
+    for (const [publicOrigin, session] of [[LEGACY_MAIN_ORIGIN, main], [LEGACY_QUICK_ORIGIN, quick], [NEXT_MAIN_ORIGIN, nextMain]] as const) {
       const replay = await request(publicOrigin, '/api/v1/quick-tasks', { method: 'POST', headers: {
         cookie: session.cookie, 'content-type': 'application/json', 'x-projed-expected-account-id': ownerId,
         'x-projed-expected-context-id': session.profile.authContextId }, body: JSON.stringify({ captureId, title, workspaceHint: null }) });
@@ -309,11 +327,11 @@ export async function verifyLegacyEntryMappingSessionsPostgres(config: RuntimeCo
       (SELECT count(*)::int FROM projed_core.quick_task_capture_receipts WHERE capture_id=$2) AS receipts`,
     [[ownerId, otherId], captureId])).rows[0];
     assert.deepEqual(counts, { profiles: 2, tasks: 1, receipts: 1 });
-    assert.equal(exchanges, 3); assert.equal(codes.size, 0);
+    assert.equal(exchanges, 5); assert.equal(codes.size, 0);
     await admin.query('BEGIN; SET LOCAL ROLE projed_owner_disposable');
     await admin.query('SELECT projed_contract.invalidate_google_sessions_v1($1::text)', [`legacy-google-${ownerId}`]);
     await admin.query('COMMIT');
-    for (const [publicOrigin, session] of [[LEGACY_MAIN_ORIGIN, main], [LEGACY_QUICK_ORIGIN, quick]] as const) {
+    for (const [publicOrigin, session] of [[LEGACY_MAIN_ORIGIN, main], [LEGACY_QUICK_ORIGIN, quick], [NEXT_MAIN_ORIGIN, nextMain]] as const) {
       const revoked = await request(publicOrigin, '/api/v1/session', { headers: { cookie: session.cookie } });
       assert.equal(revoked.status, 409); assert.equal(revoked.headers.get('cache-control'), 'no-store');
       assert.equal(await errorCode(revoked), 'IDENTITY_MAPPING_CONFLICT');
@@ -322,7 +340,9 @@ export async function verifyLegacyEntryMappingSessionsPostgres(config: RuntimeCo
         'x-projed-expected-context-id': session.profile.authContextId }, body: JSON.stringify({ captureId, title, workspaceHint: null }) });
       assert.equal(revokedWrite.status, 409); assert.equal(await errorCode(revokedWrite), 'IDENTITY_MAPPING_CONFLICT');
     }
-    assert.equal(exchanges, 3, 'Session reads/revocation must not exchange another owner code');
+    const unaffected = await request(NEXT_QUICK_ORIGIN, '/api/v1/session', { headers: { cookie: nextQuick.cookie } });
+    assert.equal(unaffected.status, 200); await unaffected.arrayBuffer();
+    assert.equal(exchanges, 5, 'Session reads/revocation must not exchange another owner code');
   } finally {
     if (relay?.listening) await new Promise<void>((resolve, reject) => {
       relay!.close(error => error ? reject(error) : resolve()); relay!.closeAllConnections();

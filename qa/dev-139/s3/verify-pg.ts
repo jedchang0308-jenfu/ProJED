@@ -1896,6 +1896,7 @@ console.log(JSON.stringify({
     'quick-receipt-read-only-http-same-key-native-rls-missing-expired-and-actor-change-no-task-writes',
     'app-session-store-atomic-cancel-rotation-replay-rls',
     'legacy-main-quick-host-bound-login-imported-uuid-pg-session-capture-receipt-and-revocation-synthetic-owner',
+    'concurrent-old-new-origins-exact-callback-pkce-uuid-cookie-isolation-and-owner-revocation',
     'first-login-personal-external-employee-concurrency-original-uuid-and-private-workspace',
     'verified-login-email-refresh-invite-qualification-and-unscoped-update-denial',
     'rag-record-mirror-index-consumer-current-retrieval-private-denial-and-supersession',

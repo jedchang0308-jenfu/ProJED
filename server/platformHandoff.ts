@@ -43,7 +43,7 @@ export interface PlatformHandoffV4 {
 export interface PlatformHandoffClientConfig {
   readonly environment: 'production' | 'development' | 'test';
   readonly brokerOrigin: string;
-  readonly callbacks: Readonly<Record<PlatformHandoffEntry, string>>;
+  readonly callbacks: Readonly<Record<PlatformHandoffEntry, string | readonly string[]>>;
   readonly binding: PlatformHandoffBinding;
   /** Supplies the Platform service identity token for the exact broker origin/audience. */
   readonly tokenProvider: (brokerOrigin: string) => Promise<string>;
@@ -56,6 +56,8 @@ export interface PlatformHandoffExchangeInput {
   readonly entry: PlatformHandoffEntry;
   readonly code: string;
   readonly codeVerifier: string;
+  /** Exact origin from the server-claimed login intent, never a browser redirect URL. */
+  readonly callbackOrigin?: string;
 }
 
 const MAX_INT64 = 9_223_372_036_854_775_807n;
@@ -306,7 +308,8 @@ function validateCallback(value: string, environment: PlatformHandoffClientConfi
 }
 
 function isExchangeInput(value: unknown): value is PlatformHandoffExchangeInput {
-  return isRecord(value) && exactKeys(value, ['entry', 'code', 'codeVerifier'])
+  return isRecord(value) && (exactKeys(value, ['entry', 'code', 'codeVerifier'])
+      || (exactKeys(value, ['entry', 'code', 'codeVerifier', 'callbackOrigin']) && typeof value.callbackOrigin === 'string'))
     && (value.entry === 'main' || value.entry === 'quick')
     && typeof value.code === 'string' && /^[A-Za-z0-9_-]{43}$/u.test(value.code)
     && typeof value.codeVerifier === 'string' && /^[A-Za-z0-9_-]{43,128}$/u.test(value.codeVerifier);
@@ -358,17 +361,31 @@ export function createPlatformHandoffClient(config: PlatformHandoffClientConfig)
   if (config.binding.issuer !== `${broker.origin}/api/sso`) failConfig();
   if (!isRecord(config.callbacks as unknown as Record<string, unknown>)
       || !exactKeys(config.callbacks as unknown as Record<string, unknown>, ['main', 'quick'])) failConfig();
-  const mainCallback = validateCallback(config.callbacks.main, config.environment);
-  const quickCallback = validateCallback(config.callbacks.quick, config.environment);
-  if (new URL(mainCallback).origin === broker.origin || new URL(quickCallback).origin === broker.origin) failConfig();
+  const callbackList = (value: string | readonly string[]): readonly string[] => {
+    const list: unknown[] = Array.isArray(value) ? value : [value];
+    if (list.length < 1 || list.length > 8 || new Set(list).size !== list.length) failConfig();
+    return Object.freeze(list.map(item => {
+      if (typeof item !== 'string') failConfig();
+      const callback = validateCallback(item, config.environment);
+      if (new URL(callback).origin === broker.origin) failConfig();
+      return callback;
+    }));
+  };
+  const mainCallbacks = callbackList(config.callbacks.main);
+  const quickCallbacks = callbackList(config.callbacks.quick);
   const timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > MAX_TIMEOUT_MS) failConfig();
   const endpoint = new URL('/api/sso/token', broker).toString();
-  const callbacks: Readonly<Record<PlatformHandoffEntry, string>> = Object.freeze({ main: mainCallback, quick: quickCallback });
+  const callbacks = Object.freeze({ main: mainCallbacks, quick: quickCallbacks });
 
   return Object.freeze({
     async exchange(input: PlatformHandoffExchangeInput): Promise<PlatformHandoffV4> {
       if (!isExchangeInput(input)) failIdentity();
+      const choices = callbacks[input.entry];
+      const callback = input.callbackOrigin === undefined
+        ? (choices.length === 1 ? choices[0] : undefined)
+        : choices.find(value => new URL(value).origin === input.callbackOrigin);
+      if (!callback) failIdentity();
       const controller = new AbortController();
       let rejectTimeout!: (reason: KernelError) => void;
       const timeoutPromise = new Promise<never>((_resolve, reject) => { rejectTimeout = reject; });
@@ -390,7 +407,7 @@ export function createPlatformHandoffClient(config: PlatformHandoffClientConfig)
           ['grant_type', 'authorization_code'],
           ['code', input.code],
           ['client_id', 'projed'],
-          ['redirect_uri', callbacks[input.entry]],
+          ['redirect_uri', callback],
           ['code_verifier', input.codeVerifier],
         ]).toString();
         let response: Response;
