@@ -13,6 +13,7 @@ import { PostgresAppSessionStore } from './postgresAppSessionStore.js';
 import { GooglePrincipalMappingResolver } from './principalMappings.js';
 import { createServiceIdentityTokenProvider } from './serviceIdentityToken.js';
 import { createExternalInvitationPublisher } from './externalBoardInvites.js';
+import { parseOriginSwitchConfig } from './originSwitchConfig.js';
 
 function configError(): never { throw new KernelError('CONFIG_INVALID','Published Session configuration is incomplete',503); }
 type RuntimeSessionAuthOptions = KernelHttpOptions & {
@@ -99,6 +100,7 @@ export function createRuntimeSessionAuth(
     pins: CURRENT_PRODUCTION_IDENTITY_PINS, origins, environment:'production',
   });
   return { publishExternalInvitation:createExternalInvitationPublisher(),dispatchAuth:auth.dispatchAuth,resolveActor:auth.resolveActor,
+    originSwitchCampaign:parseOriginSwitchConfig(env.PROJED_ORIGIN_SWITCH_CAMPAIGN,origins),
     resolveSessionInfo:auth.resolveSessionInfo,resolveLogoutIdentity:auth.resolveLogoutIdentity,
     destroySession:auth.destroySession,resolveMeetingRunActor:auth.resolveMeetingRunActor };
 }

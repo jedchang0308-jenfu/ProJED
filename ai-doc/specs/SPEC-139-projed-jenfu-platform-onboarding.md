@@ -678,7 +678,7 @@ Server 搬移與 browser storage 恢復分開驗收。第一階段維持原 orig
 
 <a id="dev139-guided-origin-switch"></a>
 
-#### 6.4.1 方案2：引導完成新網址切換（2026-11-25，本機互動預覽已實作／正式接線未啟用）
+#### 6.4.1 方案2：引導完成新網址切換（2026-11-25，程式接線與隔離驗證／正式未啟用）
 
 **執行時機。** DEV-142 正式資料搬遷完成，且同一中央後端在舊網址的登入、工作區／看板／權限、記事同步及必要背景處理已有可查證的穩定運作結果，才進入本階段；沿 §3.0 日常確認，不新增固定觀察天數、全員簽到或另一道人工簽核。未符合前提時不啟用換址提示或轉址。人類本輪要求開始切流前置準備、先確認換網址及PWA引導功能，已實作可操作的本機預覽及共用狀態邏輯；本輪另補唯讀本機草稿盤點；正式登入回執／草稿交接 adapter、固定新網址、主／Quick接線及正式提示尚未啟用。未資格模型仍保持停用，預覽不冒充正式換址或模型驗收。
 
@@ -752,6 +752,20 @@ Origin來源 `34c7381` 的 [CI45636070238](https://github.com/jedchang0308-jenfu
 另補目的端用的有效權限語意比較核心 `originSwitchPermissions`，8項正常／降權／錯工作區／外部Board-only／不可信形狀／重複scope與非修改來源案例通過；輸入必須沿既有 `session_effective_permissions_v1`包含created-resource權限。只比較原scope與有效動作，不以role標籤或整包metadata hash代替。此核心尚未接目的端intent持久化，不代表目的端證明完成。
 
 跨owner來源：Platform [DEV-007 PR #244](https://github.com/jedchang0308-jenfu/Jenfu-Platform/pull/244)／`53f69c72`已補ProJED專用 `PORTAL_PROJED_ADDITIONAL_CALLBACK_URIS` 可選JSON清單，authorize／exchange／cancel共用精確比對；未設定維持舊行為，空query／fragment等拒絕，未改v4 wire。225項受影響測試與型別、[Source QC45637992993](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/45637992993)通過，主控已讀核心diff核對；仍為draft，未做本次跨owner原生整合或正式provider驗收。Platform工作樹 `output/dev139-platform-origin-aliases`保留供整合，不改正式owner profile env／fixedValues、不發布callback。後續需要兩邊候選在同一隔離登入流程核實，不用單邊mock宣稱整合完成。
+
+**短效目的端證明與正常入口接線（2026-11-25，source候選）。** 人類已核准程式接線；部署／換址限制不變。新增forward-only `0053_origin_switch_intents_v1`，0001–0052 bytes不改。唯一新table只存campaign、原UUID／Principal、原／新origin及實際entry、source／target context、有效權限基線與最長15分鐘期限，不存草稿正文、email或登入憑證；不授importer寫入、不新增SA／Secret或排程。`originSwitchPermissions`已接repository，created-resource權限與原scope均納入；新增能力不當失敗，原範圍降權或來源權限變動則拒絕。
+
+`GET /api/v1/origin-switch/config`回公開的核准入口設定，未設定 `PROJED_ORIGIN_SWITCH_CAMPAIGN` 即 `{data:null}`；其餘API預設404。設定為server-only JSON `{campaign,routes}`，route明列guide entry、source／target origin及各自Session entry，兩端均須已在既有認證origin清單；不接受瀏覽器指定任意redirect。沒有設定任何正式env值。`POST /api/v1/origin-switch/intents`只接受固定UUID、campaign、entry、targetOrigin；`GET /intents/:id`讀原意圖；`POST /intents/:id/confirm`由目的端自己的真Session確認。三者均沿expected actor／kernel／FORCE RLS，寫入須同源；同UUID／同target context可重播，未知提交先查同id，不更換帳號或context重綁。
+
+RLS只允許具名intent的原context或正確目的context讀取另一端Session，沒有同帳號Session列舉；counterpart讀取權隨期限失效。核實public origin由kernel從自己的已驗Session row設置，不信客戶端欄位。登出沿既有app transaction鎖，與登入替換／目的端確認序列一致；避免撤銷先提交後仍確認成功。複核指出的期限與撤銷競爭已修正，相關原生案例驗證中，不另設required gate。
+
+主程式與Quick以非阻塞lazy入口接引導，仍重用既有編輯／本機保存與同步；沒有campaign不顯示提示、不等完整看板或引導完成才允許記事。正式元件不匯入fixture或右側「試看看不同情況」控制。來源以目前Session與editor safety盤點，再使用同key唯讀回執取得保存結果；目的端locator只放隨機UUID於fragment，登入前保存並移除，沒有登入能力。來源端不呼叫原origin的PWA安裝提示；只有已確認的新站可安裝新程式。目的端不能宣稱已盤點舊IDB，最終完成仍在舊站重查保存與目的端證明後，配合使用者從新圖示／書籤開啟的確認。
+
+前端接線43項focused、全src型別及既有同版pg宣告overlay的S3型別均通過；同帳號context更新以既有HTTP actor binding訂閱重掛引導，來源意圖key也綁source context。已知GET 409失效才可由使用者再次前往時建立新意圖，未知或拒絕不換key；目的端未知確認只讀回，不盲重送。
+
+前端正常入口以無視窗Edge跑真Vite頁面與隔離HTTP fixture，**5/5**通過（`output/dev139-origin-guide-preview/frontend-entry-http-r3/result.json`）：停用時main／Quick不出現引導、原Quick草稿關閉重開可恢復、正常AuthGate後顯示引導、未送出的Quick草稿不會建立換址intent、新Quick使用自己的Session確認而不冒稱來源草稿或整體完成。所有網路被攔到本機，使用合成帳號，不是真Google／正式部署證據；首兩次Quick原bootstrap未走入口掛載的有效失敗已保留並修正。主控已檢視390px目的端截圖，安裝步驟與回原網址確認按鈕可讀，沒有測試面板。後端完整S2 **564/564**通過；首次sandbox阻擋loopback EACCES原輸出保留，開放同一隔離loopback後原案例通過，未改產品條件。
+
+認證來源 `602d35b` 的 [CI45639660728](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45639660728) 已兩jobs SUCCESS，原生PG17與OCI收據已取回至 `output/dev139-origin-guide-preview/auth-origin-ci-green/`；此證據只支持其52版來源。新53版曾因compiled runtime migration清單漏新增路徑而在啟動拒絕，失敗保留 `origin-proof-first-profile-failed.log`，修正同一allowlist後，本機PostgreSQL18.4完整78項通過；接著收窄RLS／補登出互斥後再次78項通過（`output/qa/dev-139/s3/20261125T150901Z-c9910265/result.json`），含真Session／原UUID／降權拒絕、同context並行確認、持久讀回、到期Session讀權取消及原生advisory鎖等待。此份不包含其後新增Quick跨帳與正向確認案例，該差額沿最終來源CI驗證，不改寫舊證據。
 
 **本輪可確認的實作範圍。** `src/features/originSwitch/` 的共用元件／狀態邏輯依序處理草稿、原帳號、新日常入口；主程式／Quick、來源與目標origin、原帳號及本次換址版本分別保存進度。稍後會保留進度；重開後重新查證草稿與目的身分，不能只信舊localStorage的完成旗標。pending／unknown／衝突／未綁帳號／仍在編輯／離線／盤點失敗均不放行；晚到回應在換帳或取消後失效。安裝accepted／dismissed事件不直接完成，最後須由使用者確認從新圖示或書籤開啟且資料正確，並再驗身分及內容狀態。
 

@@ -334,6 +334,9 @@ export class PostgresAppSessionStore implements AppSessionStore {
 
   async revokeSession(tokenHash: string,publicOrigin: string,nowMs: number): Promise<boolean> {
     return this.#transaction(null,tokenHash,false,async client => {
+      // Same order as login completion and actor transactions: a source or
+      // destination logout cannot race a durable origin confirmation.
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended('projed:runtime-transaction:v1', 0))");
       const revoked = await client.query(`UPDATE projed_core.app_sessions SET revoked_at_ms=$3::bigint
         WHERE token_hash=$1 AND public_origin=$2 AND revoked_at_ms IS NULL`,[tokenHash,publicOrigin,Math.max(timestamp(nowMs),this.#now())]);
       return revoked.rowCount === 1;

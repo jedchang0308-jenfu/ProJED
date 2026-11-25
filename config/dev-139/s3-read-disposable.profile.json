@@ -230,6 +230,10 @@
     {
       "version": "0052_orgmaster_user_directory_v1",
       "path": "db/migrations/0052_orgmaster_user_directory_v1.sql"
+    },
+    {
+      "version": "0053_origin_switch_intents_v1",
+      "path": "db/migrations/0053_origin_switch_intents_v1.sql"
     }
   ],
   "objectAllowlist": [
@@ -432,7 +436,9 @@
     "projed_contract.v_user_directory_v1",
     "projed_contract.v_user_activation_guards_v1",
     "projed_contract.read_user_directory_v1",
-    "projed_contract.set_user_active_v1"
+    "projed_contract.set_user_active_v1",
+    "projed_core.origin_switch_intents",
+    "projed_core.origin_switch_guard_v1"
   ],
   "staticFixturePath": "qa/dev-139/s1/static",
   "runtime": {

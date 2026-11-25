@@ -20,7 +20,11 @@ import { getWorkbenchUrl } from '../features/quickTaskCapture/origins';
 import { installAppIconRefresh } from '../services/appIconService';
 import { isHttpBackend } from '../services/backendMode';
 import { installQuickDraftEditor } from '../features/quickTaskCapture/editor';
+import { captureOriginSwitchLocator } from '../features/originSwitch/locator';
+import { setupPwaInstallPromptListener } from '../services/pwaInstallService';
 
+try { captureOriginSwitchLocator('quick', window.location, window.history, sessionStorage); } catch { /* Locator is never authority. */ }
+setupPwaInstallPromptListener();
 installAppIconRefresh('quick-task');
 
 const titleInput = document.querySelector<HTMLInputElement>('#quick-task-title');
@@ -78,6 +82,11 @@ let retryTimer: number | null = null;
 let authRetryCount = 0;
 let pageActive = true;
 let pendingClaim: { captureId: string; nonceHash: string; accountId: string; email: string | null; authEpoch: number; contextRevision: number } | null = null;
+let originGuideCleanup: (() => void) | undefined;
+let originGuideSession: string | null = null;
+let originGuideRevision = 0;
+form.addEventListener('input', () => { originGuideRevision++; });
+form.addEventListener('submit', () => { originGuideRevision++; });
 
 const getAuthApi = () => {
   authApiPromise ??= isHttpBackend
@@ -157,6 +166,7 @@ const setAuthStatus = (text: string, showLogin: boolean, showLogout = false) => 
       draftEditor.hide();
       clearRetryTimer();
       authSnapshot = null;
+      originGuideCleanup?.(); originGuideCleanup = undefined; originGuideSession = null; originGuideRevision++;
       pendingClaim = null;
       currentRecord = null;
       success.hidden = true;
@@ -201,6 +211,22 @@ const updateDisplayedSession = (snapshot: typeof authSnapshot) => {
     setMessage('登入帳號已變更；原待辦仍保留在本機，請從待處理入口恢復。');
   }
   authSnapshot = snapshot;
+  const guideSession = snapshot ? `${snapshot.accountId}:${snapshot.accessToken}` : null;
+  if (isHttpBackend && guideSession !== originGuideSession) {
+    originGuideCleanup?.(); originGuideCleanup = undefined;
+    originGuideSession = guideSession;
+    originGuideRevision++;
+    if (snapshot) {
+      const accountId = snapshot.accountId;
+      const current = () => pageActive && originGuideSession === guideSession && authSnapshot?.accountId === accountId;
+      void import('../features/originSwitch/runtime').then(module => module.installOriginSwitchEntry({
+        entry: 'quick', accountId, accountLabel: '目前登入的帳號', current,
+        activity: () => ({ current: current(), online: navigator.onLine,
+          editing: isComposing || Boolean(titleInput.value) || localCommitInFlight || claimInFlight || syncInFlight,
+          revision: String(originGuideRevision) }),
+      })).then(dispose => { if (current()) originGuideCleanup = dispose; else dispose(); }).catch(() => undefined);
+    }
+  }
   void draftEditor.refresh().catch(() => undefined);
 };
 const verifyAndFlush = async (expected: NonNullable<typeof authSnapshot>) => {
@@ -898,6 +924,7 @@ void (async () => {
     setMessage('登入驗證未完成；待辦仍保留在本機，請重新登入。');
   });
   authSnapshot = await auth.loadQuickSession().catch(() => null);
+  if (isHttpBackend) updateDisplayedSession(authSnapshot);
   await draftEditor.refresh().catch(() => undefined);
   if (authSnapshot) setAuthStatus('正在確認登入狀態…', false);
   else if (auth.getQuickSessionLoadState() === 'unreachable') {

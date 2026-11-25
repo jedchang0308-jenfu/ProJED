@@ -43,3 +43,5 @@
 - 變更採 forward-only；runtime 啟動不自動 migrate、不修 grants、不以 checker 通過為由修改既有 shared foundation ACL。
 
 靜態 checker 只檢查 source／SQL 形狀，不能取代 disposable PostgreSQL catalog、RLS、pool cleanup 或 HTTP verifier。
+
+`0053` 僅保存換址短效意圖／目的端context證明，不存草稿或憑證；用途限定Session讀權必須隨期限失效，沒有同帳號Session列舉。runtime只可新增意圖與單次target context確認，不可重綁；既有Session／權限／撤銷保護沿用。0001–0052 bytes不改，不授importer新權限。

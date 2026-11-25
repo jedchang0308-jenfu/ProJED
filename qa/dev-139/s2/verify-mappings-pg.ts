@@ -217,6 +217,10 @@ export async function verifyLegacyEntryMappingSessionsPostgres(config: RuntimeCo
       .setAudience(transport.upstreamOrigin).setSubject(transport.serviceAccountSubject)
       .setIssuedAt(nowSeconds).setExpirationTime(nowSeconds + 600).sign(keys.privateKey);
     kernel = createKernelHttpServer({ ...config, host: '127.0.0.1', port: 0 }, database, [], {
+      originSwitchCampaign: { campaign: 'native-origin-guide', routes: [{ entry: 'main', sourceOrigin: LEGACY_MAIN_ORIGIN,
+        targetOrigin: NEXT_MAIN_ORIGIN, sourceSessionEntry: 'main', targetSessionEntry: 'main' }, {
+        entry: 'quick', sourceOrigin: LEGACY_QUICK_ORIGIN, targetOrigin: NEXT_QUICK_ORIGIN,
+        sourceSessionEntry: 'quick', targetSessionEntry: 'quick' }] },
       prepareLegacyEntry: createLegacyEntryRequestPreparer(transport, {
         getKey: createLocalJWKSet({ keys: [{ ...jwk, alg: 'RS256', kid: 'isolated-pg-relay' }] }) }),
       dispatchAuth: auth.dispatchAuth, resolveActor: auth.resolveActor, resolveSessionInfo: auth.resolveSessionInfo,
@@ -360,6 +364,125 @@ export async function verifyLegacyEntryMappingSessionsPostgres(config: RuntimeCo
     [[ownerId, otherId], captureId])).rows[0];
     assert.deepEqual(counts, { profiles: 2, tasks: 1, receipts: 1 });
     assert.equal(exchanges, 5); assert.equal(codes.size, 0);
+    const bound = (session: typeof main) => ({ cookie: session.cookie, 'content-type': 'application/json',
+      'x-projed-expected-account-id': session.profile.localUserId, 'x-projed-expected-context-id': session.profile.authContextId });
+    const guideId = randomUUID(), guidePath = `/api/v1/origin-switch/intents/${guideId}`;
+    const createGuide = () => request(LEGACY_MAIN_ORIGIN, '/api/v1/origin-switch/intents', { method: 'POST',
+      headers: bound(main), body: JSON.stringify({ id: guideId, campaign: 'native-origin-guide', entry: 'main', targetOrigin: NEXT_MAIN_ORIGIN }) });
+    const workspace = await request(LEGACY_MAIN_ORIGIN, '/api/v1/workspaces', { method: 'POST', headers: bound(main),
+      body: JSON.stringify({ title: 'Origin guide native creator rights' }) });
+    assert.equal(workspace.status, 201); await workspace.arrayBuffer();
+    assert.equal((await createGuide()).status, 200);
+    assert.equal((await createGuide()).status, 200, 'Same id and original source context are idempotent');
+    const pendingGuide = await request(LEGACY_MAIN_ORIGIN, guidePath, { headers: bound(main) });
+    assert.equal(pendingGuide.status, 200);
+    assert.equal((await json<{ data: { destination: unknown } }>(pendingGuide)).data.destination, null);
+    const hiddenGuide = await request(LEGACY_MAIN_ORIGIN, guidePath, { headers: bound(other) });
+    assert.equal(hiddenGuide.status, 200); assert.deepEqual(await hiddenGuide.json(), { data: null });
+    const noOriginGuide = await request(NEXT_MAIN_ORIGIN, `${guidePath}/confirm`, { method: 'POST',
+      headers: { ...bound(nextMain), origin: 'https://foreign.example.invalid' }, body: '{}' });
+    assert.equal(noOriginGuide.status, 403);
+    const downgraded = await request(NEXT_MAIN_ORIGIN, `${guidePath}/confirm`, { method: 'POST', headers: bound(nextMain), body: '{}' });
+    assert.equal(downgraded.status, 403, 'Destination snapshot without newly created workspace must not pass');
+    const wrongEntry = await request(LEGACY_QUICK_ORIGIN, `${guidePath}/confirm`, { method: 'POST', headers: bound(quick), body: '{}' });
+    assert.equal(wrongEntry.status, 403);
+    const freshNext = await login(NEXT_MAIN_ORIGIN, 'main', ownerId);
+    const confirmations = await Promise.all([1, 2].map(() => request(NEXT_MAIN_ORIGIN, `${guidePath}/confirm`,
+      { method: 'POST', headers: bound(freshNext), body: '{}' })));
+    for (const response of confirmations) {
+      assert.equal(response.status, 200);
+      const proof = (await json<{ data: { accountId: string; destination: { permissionsMatched: boolean; workspaceMatched: boolean } } }>(response)).data;
+      assert.equal(proof.accountId, ownerId); assert.equal(proof.destination.permissionsMatched, true);
+      assert.equal(proof.destination.workspaceMatched, true);
+    }
+    const recovered = await request(LEGACY_MAIN_ORIGIN, guidePath, { headers: bound(main) });
+    assert.equal(recovered.status, 200);
+    assert.ok((await json<{ data: { destination: unknown } }>(recovered)).data.destination, 'Source reads durable proof after target response loss');
+    const rebind = await request(NEXT_MAIN_ORIGIN, `${guidePath}/confirm`, { method: 'POST', headers: bound(nextMain), body: '{}' });
+    assert.equal(rebind.status, 403, 'A different target context cannot observe or take over a confirmed intent');
+    // No Session may list all same-account Sessions with this purpose scope.
+    const sessionTokenHash = createHash('sha256').update(main.cookie.slice('__session='.length)).digest('hex');
+    const actor = { principalId: proofs.get(ownerId)!.principalId, localUserId: ownerId, entry: 'main' as const,
+      contextId: main.profile.authContextId, expiresAtMs: Date.now() + 60_000, accountGuardRevision: '1', sessionTokenHash };
+    const { runActorTransaction } = await import('../../../server/actorTransaction.js');
+    assert.equal(await runActorTransaction(database, config, actor, async port =>
+      (await port.query('SELECT context_id FROM projed_core.app_sessions')).rowCount), 1);
+    assert.equal(await runActorTransaction(database, config, actor, async port =>
+      (await port.query('SELECT context_id FROM projed_core.app_sessions')).rowCount, { originSwitchIntentId: guideId }), 2);
+    assert.equal(await runActorTransaction(database, config, actor, async port =>
+      (await port.query('SELECT context_id FROM projed_core.app_sessions')).rowCount), 1, 'Purpose scope is transaction local');
+    const expiredId = randomUUID();
+    await admin.query('BEGIN');
+    await admin.query(`SELECT set_config('projed.session_token_hash',$1,true),set_config('projed.actor_context_id',$2,true)`,
+      [sessionTokenHash, actor.contextId]);
+    await admin.query(`INSERT INTO projed_core.origin_switch_intents
+      (id,campaign,local_user_id,principal_id,guard_revision,guide_entry,source_origin,target_origin,
+       source_entry,target_entry,source_context_id,source_permissions,created_at_ms,expires_at_ms)
+      SELECT $2::uuid,campaign,local_user_id,principal_id,guard_revision,guide_entry,source_origin,target_origin,
+        source_entry,target_entry,source_context_id,source_permissions,
+        floor(extract(epoch FROM clock_timestamp())*1000),floor(extract(epoch FROM clock_timestamp())*1000)+100
+      FROM projed_core.origin_switch_intents WHERE id=$1::uuid`, [guideId, expiredId]);
+    await admin.query('COMMIT');
+    await new Promise(resolve => setTimeout(resolve, 150));
+    assert.equal(await runActorTransaction(database, config, actor, async port =>
+      (await port.query('SELECT context_id FROM projed_core.app_sessions')).rowCount, { originSwitchIntentId: expiredId }), 1,
+    'Expired purpose cannot grant counterpart Session visibility');
+    assert.equal((await request(LEGACY_MAIN_ORIGIN, `/api/v1/origin-switch/intents/${expiredId}`, { headers: bound(main) })).status, 409);
+    const { OriginSwitchRepository } = await import('../../../server/originSwitch.js');
+    const proofsRepository = new OriginSwitchRepository({ campaign: 'native-origin-guide', routes: [{ entry: 'main',
+      sourceOrigin: LEGACY_MAIN_ORIGIN, targetOrigin: NEXT_MAIN_ORIGIN, sourceSessionEntry: 'main', targetSessionEntry: 'main' }] });
+    let releaseConfirmation!: () => void, enteredConfirmation!: () => void;
+    const entered = new Promise<void>(resolve => { enteredConfirmation = resolve; });
+    const release = new Promise<void>(resolve => { releaseConfirmation = resolve; });
+    const heldConfirmation = runActorTransaction(database, config, actor, async port => {
+      const proof = await proofsRepository.read(port, actor, guideId);
+      assert.ok(proof?.destination?.permissionsMatched);
+      enteredConfirmation(); await release; return proof;
+    }, { originSwitchIntentId: guideId });
+    void heldConfirmation.catch(() => undefined);
+    let revoke: Promise<boolean> | undefined;
+    let revocationResults: PromiseSettledResult<unknown>[] = [];
+    try {
+      await Promise.race([entered, heldConfirmation.then(() => { throw new Error('Confirmation did not pause'); })]);
+      const targetHash = createHash('sha256').update(freshNext.cookie.slice('__session='.length)).digest('hex');
+      revoke = store.revokeSession(targetHash, NEXT_MAIN_ORIGIN, Date.now());
+      void revoke.catch(() => undefined);
+      const deadline = Date.now() + 1500;
+      let waiting = false;
+      do {
+        waiting = (await admin.query(`SELECT 1 FROM pg_stat_activity WHERE datname=current_database()
+          AND pid<>pg_backend_pid() AND wait_event='advisory'
+          AND query LIKE '%projed:runtime-transaction:v1%'`)).rowCount! > 0;
+        if (waiting) break;
+        await new Promise(resolve => setTimeout(resolve, 20));
+      } while (Date.now() < deadline);
+      assert.ok(waiting, 'Logout must wait behind the active proof transaction');
+    } finally {
+      releaseConfirmation();
+      revocationResults = await Promise.allSettled([heldConfirmation, ...(revoke ? [revoke] : [])]);
+    }
+    for (const result of revocationResults) if (result.status === 'rejected') throw result.reason;
+    assert.equal(await revoke, true);
+    assert.equal((await request(LEGACY_MAIN_ORIGIN, guidePath, { headers: bound(main) })).status, 403,
+      'Completed target logout invalidates the durable proof');
+    assert.equal((await request(LEGACY_MAIN_ORIGIN, guidePath, { headers: bound(freshNext) })).status, 401);
+    const changed = await request(LEGACY_MAIN_ORIGIN, '/api/v1/workspaces', { method: 'POST', headers: bound(main),
+      body: JSON.stringify({ title: 'Source changed after confirmation' }) });
+    assert.equal(changed.status, 201); await changed.arrayBuffer();
+    assert.equal((await request(LEGACY_MAIN_ORIGIN, guidePath, { headers: bound(main) })).status, 409,
+      'New effective source rights invalidate the earlier baseline');
+    assert.equal(exchanges, 6);
+    const quickGuideId = randomUUID(), quickPath = `/api/v1/origin-switch/intents/${quickGuideId}`;
+    const quickIntent = await request(LEGACY_QUICK_ORIGIN, '/api/v1/origin-switch/intents', { method: 'POST', headers: bound(quick),
+      body: JSON.stringify({ id: quickGuideId, campaign: 'native-origin-guide', entry: 'quick', targetOrigin: NEXT_QUICK_ORIGIN }) });
+    assert.equal(quickIntent.status, 200); await quickIntent.arrayBuffer();
+    const foreignQuick = await request(NEXT_QUICK_ORIGIN, `${quickPath}/confirm`, { method: 'POST', headers: bound(nextQuick), body: '{}' });
+    assert.equal(foreignQuick.status, 403, 'Main and Quick accounts are independent, not inferred by origin');
+    const freshQuick = await login(NEXT_QUICK_ORIGIN, 'quick', ownerId);
+    const ownQuick = await request(NEXT_QUICK_ORIGIN, `${quickPath}/confirm`, { method: 'POST', headers: bound(freshQuick), body: '{}' });
+    assert.equal(ownQuick.status, 200);
+    const quickProof = (await json<{ data: { entry: string; destination: { permissionsMatched: boolean } } }>(ownQuick)).data;
+    assert.equal(quickProof.entry, 'quick'); assert.equal(quickProof.destination.permissionsMatched, true);
     await admin.query('BEGIN; SET LOCAL ROLE projed_owner_disposable');
     await admin.query('SELECT projed_contract.invalidate_google_sessions_v1($1::text)', [`legacy-google-${ownerId}`]);
     await admin.query('COMMIT');
@@ -374,7 +497,7 @@ export async function verifyLegacyEntryMappingSessionsPostgres(config: RuntimeCo
     }
     const unaffected = await request(NEXT_QUICK_ORIGIN, '/api/v1/session', { headers: { cookie: nextQuick.cookie } });
     assert.equal(unaffected.status, 200); await unaffected.arrayBuffer();
-    assert.equal(exchanges, 5, 'Session reads/revocation must not exchange another owner code');
+    assert.equal(exchanges, 7, 'Session reads/revocation must not exchange another owner code');
   } finally {
     if (relay?.listening) await new Promise<void>((resolve, reject) => {
       relay!.close(error => error ? reject(error) : resolve()); relay!.closeAllConnections();

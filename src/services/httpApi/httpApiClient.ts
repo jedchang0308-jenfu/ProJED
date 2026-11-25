@@ -203,11 +203,21 @@ function errorFromResponse(response: Response, payload: unknown): HttpApiError {
 export class HttpApiClient {
   private expectedActor: HttpExpectedActor | null = null;
   private bindingRevision = 0;
+  private readonly actorListeners = new Set<() => void>();
   private activeJsonRequests = 0;
   private readonly queuedJsonRequests: Array<() => void> = [];
   private readonly sharedReads = new Map<string, Promise<unknown>>();
 
   constructor(private readonly fetcher: HttpApiFetch = globalThis.fetch.bind(globalThis)) {}
+
+  getExpectedActor = (): Readonly<HttpExpectedActor> | null => this.expectedActor;
+  subscribeExpectedActor = (listener: () => void): (() => void) => {
+    this.actorListeners.add(listener);
+    return () => { this.actorListeners.delete(listener); };
+  };
+  private notifyActorChange(): void {
+    for (const listener of this.actorListeners) { try { listener(); } catch { /* Observers do not alter auth results. */ } }
+  }
 
   private scheduleJsonRequest<T>(run: () => Promise<T>, signal?: AbortSignal): Promise<T> {
     return new Promise<T>((resolve, reject) => {
@@ -237,6 +247,7 @@ export class HttpApiClient {
     if (this.expectedActor?.accountId === expectedActor.accountId && this.expectedActor.contextId === expectedActor.contextId) return;
     this.expectedActor = Object.freeze({ ...expectedActor });
     this.bindingRevision++;
+    this.notifyActorChange();
   }
 
   clearExpectedActor(expected?: HttpExpectedActor): boolean {
@@ -244,6 +255,7 @@ export class HttpApiClient {
       || this.expectedActor.contextId !== expected.contextId)) return false;
     this.expectedActor = null;
     this.bindingRevision++;
+    this.notifyActorChange();
     return true;
   }
 

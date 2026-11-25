@@ -19,13 +19,14 @@ const issues: Record<Exclude<GuideIssue, null>, string> = {
   storage: '目前無法記住您做到哪一步。請先保留這個畫面，稍後再試。原本的記事不會被清除。',
 };
 
-export function OriginSwitchGuideView({ guide, accountLabel, platform, targetLabel, onReturn, onNextQuick }: {
+export function OriginSwitchGuideView({ guide, accountLabel, platform, targetLabel, onReturn, onNextQuick, sourceGuide = false }: {
   guide: OriginSwitchGuide;
   accountLabel: string;
   platform: PwaInstallPlatform;
   targetLabel: string;
   onReturn(): void;
   onNextQuick?(): void;
+  sourceGuide?: boolean;
 }) {
   const state = useSyncExternalStore(guide.subscribe, guide.getSnapshot);
   const [entryKind, setEntryKind] = useState<'bookmark' | 'pwa'>('pwa');
@@ -88,12 +89,13 @@ export function OriginSwitchGuideView({ guide, accountLabel, platform, targetLab
             onChange={() => { setEntryKind('bookmark'); setOpenedForVerification(null); }} />先用瀏覽器</label>
         </fieldset>
         {entryKind === 'pwa' ? <>
-          <ol className="og-instructions">{entryInstallInstructions(platform).map(text => <li key={text}>{text}</li>)}</ol>
-          <button className="og-secondary" disabled={state.busy} onClick={() => void guide.install()}>安裝 {guide.scope.entry === 'main' ? 'ProJED' : 'ProJED 建待辦'}</button>
+          {sourceGuide ? <p className="og-note">請到新網址安裝程式，原網址的圖示先保留。</p>
+            : <ol className="og-instructions">{entryInstallInstructions(platform).map(text => <li key={text}>{text}</li>)}</ol>}
+          <button className="og-secondary" disabled={state.busy} onClick={() => void guide.install()}>{sourceGuide ? '前往新網址安裝' : `安裝 ${guide.scope.entry === 'main' ? 'ProJED' : 'ProJED 建待辦'}`}</button>
           {state.install !== 'idle' && <p className="og-note" role="status">
             {state.install === 'accepted' ? '安裝後，請從新圖示開啟程式，看看原本的任務與筆記是否都在。'
               : state.install === 'dismissed' ? '已取消安裝，您可以稍後再做，或先用瀏覽器。'
-                : '請依上方步驟把程式加到手機或電腦上，舊圖示先留著。'}
+                : sourceGuide ? '請在新網址完成安裝，原圖示先保留。' : '請依上方步驟把程式加到手機或電腦上，舊圖示先留著。'}
           </p>}
         </> : <p className="og-note">請把新網址加到書籤，以後就從新書籤開啟。原本的書籤不會自動換網址。</p>}
         <label className="og-confirm"><input type="checkbox" checked={opened} onChange={event => setOpenedForVerification(event.target.checked ? state.verification : null)} />

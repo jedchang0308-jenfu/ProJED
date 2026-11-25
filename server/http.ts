@@ -18,6 +18,8 @@ import { createDomainWriteHttpDispatcher } from './domainWriteHttp.js';
 import { createRecordActivityHttpDispatcher } from './recordActivityHttp.js';
 import { createQuickTaskHttpDispatcher } from './quickTaskHttp.js';
 import { createQuickTaskReceiptHttpDispatcher } from './quickTaskReceiptHttp.js';
+import { createOriginSwitchHttpDispatcher } from './originSwitchHttp.js';
+import type { OriginSwitchConfig } from './originSwitchConfig.js';
 import {
   createSessionHttpDispatcher,
   type TrustedSessionDestroyer,
@@ -148,6 +150,7 @@ export interface KernelHttpServer {
 }
 
 export interface KernelHttpOptions {
+  readonly originSwitchCampaign?: OriginSwitchConfig | null;
   readonly prepareLegacyEntry?: PrepareLegacyEntryRequest;
   readonly publishExternalInvitation?: import('./externalBoardInvites.js').ExternalInvitationPublisher;
   readonly meetingUploads?:MeetingUploadRepository|null;
@@ -210,6 +213,7 @@ export function createKernelHttpServer(
   const dispatchRecordActivity = createRecordActivityHttpDispatcher(config, database, options.resolveActor);
   const dispatchQuickTask = createQuickTaskHttpDispatcher(config, database, options.resolveActor);
   const dispatchQuickTaskReceipt = createQuickTaskReceiptHttpDispatcher(config, database, options.resolveActor);
+  const dispatchOriginSwitch = createOriginSwitchHttpDispatcher(config, database, options.originSwitchCampaign ?? null, options.resolveActor);
   const dispatchTaskWorkbench = createTaskWorkbenchHttpDispatcher(config, database, options.resolveActor);
   const dispatchTaskTracking = createTaskTrackingHttpDispatcher(config, database, options.resolveActor);
   const dispatchBackup = createBackupHttpDispatcher(config, database, options.resolveActor);
@@ -292,6 +296,8 @@ export function createKernelHttpServer(
       }
       return;
     }
+    const originSwitch = await dispatchOriginSwitch(request, requestId);
+    if (originSwitch.matched) { json(response, originSwitch.status ?? 500, originSwitch.body, requestId); return; }
     const preferences = await dispatchPreferences(request, requestId);
     if (preferences.matched) {
       json(response, preferences.status ?? 500, preferences.body ?? {
