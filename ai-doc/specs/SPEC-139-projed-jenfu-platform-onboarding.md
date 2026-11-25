@@ -715,6 +715,8 @@ Server 搬移與 browser storage 恢復分開驗收。第一階段維持原 orig
 
 本機重現：`python qa/dev-139/s3/verify-local-draft-inventory.py --report output/dev139-origin-guide-preview/inventory-qa`。本輪隔離無視窗 Edge／真 IndexedDB 22項通過，另有原引導狀態14項與受影響 strict typecheck／lint 通過；結果見 `output/dev139-origin-guide-preview/inventory-qa-r7/result.json`。回執 provider 與活動快照仍是合成 adapter，不宣稱實際登入、雲端回執或正式使用者驗收。最初兩次 sandbox 程序等待已停止並保留觀察紀錄，放行同一個本機隔離測試後才取得結果，不以等待當 PASS。正式接線時仍須接既有 Session／editor dirty guard／原回執讀回，並在真正離站／完成前重新檢查；不可用本次盤點取代跨分頁寫入保護、來源／目的身分驗證或草稿交接。本輪未把任何盤點或預覽模組掛進正式 App／Quick。
 
+本輪來源已正常合併最新 `origin/main` `f642c7b`，合併點 `6803c11`，未改 main 或正式環境。合併後完整 S3 unit **198/198** 通過；直接 S3 typecheck 因共享安裝缺少 lockfile 已列的 `@types/pg` 失敗，保留原輸出，再以既有 Platform 相同 **8.23.1** 宣告的本機隔離 overlay 通過，未安裝或修改共享依賴。相關紀錄與來源檔雜湊見同結果目錄的 `verification.json`、`s3-unit.log`、`s3-types.log` 及 `s3-types-overlay.log`；不宣稱遠端 CI 或正式雲端通過。
+
 **本輪可確認的實作範圍。** `src/features/originSwitch/` 的共用元件／狀態邏輯依序處理草稿、原帳號、新日常入口；主程式／Quick、來源與目標origin、原帳號及本次換址版本分別保存進度。稍後會保留進度；重開後重新查證草稿與目的身分，不能只信舊localStorage的完成旗標。pending／unknown／衝突／未綁帳號／仍在編輯／離線／盤點失敗均不放行；晚到回應在換帳或取消後失效。安裝accepted／dismissed事件不直接完成，最後須由使用者確認從新圖示或書籤開啟且資料正確，並再驗身分及內容狀態。
 
 預覽檔 `qa/dev-139/s3/origin-guide.fixture.tsx` 只提供合成帳號、內容狀態與模擬登入／安裝，沒有被正式App或Quick入口匯入。`scripts/build-dev139-origin-guide-preview.mjs` 產生單檔HTML，CSP封鎖外部連線；正式新網址仍待固定，預覽的保留測試網域不會真的開啟。PWA裝置判斷沿既有 `pwaInstallService`，不新增安裝程序、不複製Session、不傳私人內容，也不清除任何業務儲存。
