@@ -45,6 +45,7 @@ import {verifyRagPostgres} from './verify-rag-pg.js';
 import {verifyMeetingSynthesisPostgres} from './verify-meeting-synthesis-pg.js';
 import { verifyActorSerializationPostgres } from './verify-actor-serialization-pg.js';
 import { verifyQuickBackendUpgradePostgres } from './verify-quick-upgrade-pg.js';
+import { verifyQuickReceiptPostgres } from './verify-quick-receipt-pg.js';
 import { verifyMeetingCapturePostgres } from './verify-meeting-capture-pg.js';
 import { verifyMeetingAudioPostgres } from './verify-meeting-audio-pg.js';
 import { verifyMeetingAudioCleanupPostgres } from './verify-meeting-audio-cleanup-pg.js';
@@ -1149,6 +1150,7 @@ try {
   const replayedQuickReceipt = await quickB.create(quickCapture, new AbortController().signal);
   assert.equal(replayedQuickReceipt.created, false);
   assert.equal(replayedQuickReceipt.committedAt, quickReceipt.committedAt);
+  await verifyQuickReceiptPostgres(database, config, actorBQuick, actorA, quickReceipt);
   const quickRowsB = await runActorTransaction(database, config, actorB, port => port.query<{
     legacy_task_id: string; workspace_legacy_id: string; title: string;
   }>(`
@@ -1887,6 +1889,7 @@ console.log(JSON.stringify({
   status: 'PASS',
   checks: [
     'migration-boundary', 'google-proof-rls-original-uuid-read-only-and-guard-denial',
+    'quick-receipt-read-only-http-same-key-native-rls-missing-expired-and-actor-change-no-task-writes',
     'app-session-store-atomic-cancel-rotation-replay-rls',
     'legacy-main-quick-host-bound-login-imported-uuid-pg-session-capture-receipt-and-revocation-synthetic-owner',
     'first-login-personal-external-employee-concurrency-original-uuid-and-private-workspace',

@@ -69,16 +69,19 @@ export async function runInventoryChecks() {
   const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode('private draft'))),
     b => b.toString(16).padStart(2, '0')).join('');
   const receipt = { status: 'committed', captureId: 'capture-1', ownerId: scope.accountId,
-    titleHash: hash, created: false, committedAt: 10 };
+    titleHash: hash, created: false, committedAt: 10 } as const;
   await put(QUICK_CAPTURE_DB, QUICK_CAPTURE_STORE, capture({ state: 'synced', receipt: { ...receipt, privateText: 'do not forward' } }), 2);
   check('local-synced-flag-alone-is-not-proof', draftIssue(await read()) === 'unknown');
   let queried = '';
-  check('authoritative-exact-receipt-can-confirm-synced-copy', draftIssue(await read({ verifyQuickReceipt: async input => {
-    queried = JSON.stringify(input); return true;
-  } })) === null && queried === JSON.stringify(receipt) && !queried.includes('private draft'));
+  check('authoritative-exact-receipt-can-confirm-synced-copy', draftIssue(await read({ readQuickReceipt: async input => {
+    queried = input; return receipt;
+  } })) === null && queried === receipt.captureId);
   await put(QUICK_CAPTURE_DB, QUICK_CAPTURE_STORE, capture({ state: 'synced', receipt: { ...receipt, titleHash: 'a'.repeat(64) } }), 2);
   let calls = 0;
-  check('receipt-for-different-content-is-not-accepted', draftIssue(await read({ verifyQuickReceipt: async () => { calls++; return true; } })) === 'unknown' && calls === 0);
+  check('receipt-for-different-content-is-not-accepted', draftIssue(await read({ readQuickReceipt: async () => { calls++; return receipt; } })) === 'unknown' && calls === 0);
+  await put(QUICK_CAPTURE_DB, QUICK_CAPTURE_STORE, capture({ state: 'failed_retryable', attemptCount: 1 }), 2);
+  check('lost-submit-response-is-confirmed-by-read-without-resending', draftIssue(await read({ readQuickReceipt: async () => receipt })) === null);
+  check('receipt-miss-retains-unknown-instead-of-authorizing-create', draftIssue(await read({ readQuickReceipt: async () => null })) === 'unknown');
   await clear();
   await put('projed-task-detail-drafts-v1', 'drafts', { key: 'note', schemaVersion: 1, accountId: scope.accountId,
     workspaceId: 'workspace', boardId: 'board', taskId: 'task', unknown: true });
@@ -111,19 +114,19 @@ export async function runInventoryChecks() {
   check('unsupported-owned-draft-format-is-not-ignored', !(await read()).complete);
   await clear();
   await put(QUICK_CAPTURE_DB, QUICK_CAPTURE_STORE, capture({ state: 'synced', receipt }), 2);
-  check('late-receipt-after-account-change-is-rejected', !(await read({ verifyQuickReceipt: async () => {
-    activity = { ...activity, current: false, revision: 'B:2' }; return true;
+  check('late-receipt-after-account-change-is-rejected', !(await read({ readQuickReceipt: async () => {
+    activity = { ...activity, current: false, revision: 'B:2' }; return receipt;
   } })).complete);
   activity = { current: true, online: true, editing: false, revision: 'A:3' };
-  check('same-account-editor-revision-change-invalidates-readback', !(await read({ verifyQuickReceipt: async () => {
-    activity.revision = 'A:4'; return true;
+  check('same-account-editor-revision-change-invalidates-readback', !(await read({ readQuickReceipt: async () => {
+    activity.revision = 'A:4'; return receipt;
   } })).complete);
   await put('projed-task-detail-drafts-v1', 'drafts', { key: 'note', schemaVersion: 1, accountId: scope.accountId,
     workspaceId: 'workspace', boardId: 'board', taskId: 'task', unknown: false });
   await put('projed-draft-recovery', 'meeting-drafts', { key: meeting.scopeKey, ...meeting });
   await put('projed-dev123-meeting-audio', 'pointers', { key: 'pointer-1', scope: { accountId: scope.accountId } });
   const beforeRead = await snapshot();
-  await read({ verifyQuickReceipt: async () => true });
+  await read({ readQuickReceipt: async () => receipt });
   check('inspection-does-not-mutate-any-existing-store', beforeRead === await snapshot());
   await clear();
   return { status: 'PASS', checks, environment: 'isolated-headless-edge-real-indexeddb', production: 'NOT_RUN' };

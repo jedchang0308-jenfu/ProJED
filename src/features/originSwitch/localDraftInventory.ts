@@ -10,7 +10,7 @@ export interface LocalInventoryPorts {
   /** Must fence account/session changes and include unsaved editors/in-flight writes. */
   activity(): { current: boolean; editing: boolean; online: boolean; revision: string };
   /** Authoritative same-key readback, never the local `synced` flag alone. */
-  verifyQuickReceipt?(receipt: QuickCaptureReceipt): Promise<boolean>;
+  readQuickReceipt?(captureId: string): Promise<QuickCaptureReceipt | null>;
 }
 
 const record = (value: unknown): value is Record<string, unknown> =>
@@ -28,7 +28,7 @@ export async function inspectLocalDrafts(scope: LocalInventoryScope, ports: Loca
   if (!text(scope.accountId) || !['main', 'quick'].includes(scope.entry) || !before.current) return result;
   result.online = before.online;
   result.editing = before.editing;
-  const receipts: Array<{ receipt: QuickCaptureReceipt; title: string }> = [];
+  const receipts: Array<{ captureId: string; receipt?: QuickCaptureReceipt; title: string }> = [];
   const meetingKeys = new Set<string>();
   let valid = true;
 
@@ -47,11 +47,13 @@ export async function inspectLocalDrafts(scope: LocalInventoryScope, ports: Loca
     if (capture.state === 'synced') {
       if (isQuickCaptureReceipt(capture.receipt, capture)) {
         const { status, captureId, ownerId, titleHash, created, committedAt } = capture.receipt;
-        receipts.push({ receipt: { status, captureId, ownerId, titleHash, created, committedAt }, title: capture.title });
+        receipts.push({ captureId, receipt: { status, captureId, ownerId, titleHash, created, committedAt }, title: capture.title });
       }
       else result.unknown++;
     } else if (capture.lastErrorCode?.includes('CONFLICT')) result.conflicts++;
-    else if (capture.state === 'syncing' || (capture.attemptCount > 0 && !isQuickCaptureWritePaused(capture))) result.unknown++;
+    else if (capture.state === 'syncing' || (capture.attemptCount > 0 && !isQuickCaptureWritePaused(capture))) {
+      receipts.push({ captureId: capture.captureId, title: capture.title });
+    }
     else if (['awaiting_auth', 'pending', 'failed_auth', 'failed_retryable', 'failed_permanent'].includes(capture.state)) result.pending++;
     else valid = false;
   };
@@ -104,11 +106,14 @@ export async function inspectLocalDrafts(scope: LocalInventoryScope, ports: Loca
         }
       }
     }
-    for (const { receipt, title } of receipts) {
+    for (const { captureId, receipt, title } of receipts) {
       if (!ports.activity().current) { valid = false; break; }
       const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(title));
       const hash = Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join('');
-      if (hash !== receipt.titleHash || !ports.verifyQuickReceipt || !await ports.verifyQuickReceipt(receipt)) result.unknown++;
+      if (receipt && hash !== receipt.titleHash) { result.unknown++; continue; }
+      const remote = ports.readQuickReceipt ? await ports.readQuickReceipt(captureId) : null;
+      if (!isQuickCaptureReceipt(remote, { captureId, accountId: scope.accountId, title }) || hash !== remote.titleHash
+        || (receipt && remote.committedAt !== receipt.committedAt)) result.unknown++;
     }
     result.pending += meetingKeys.size;
     const after = ports.activity();

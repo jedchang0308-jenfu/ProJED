@@ -711,11 +711,17 @@ Server 搬移與 browser storage 恢復分開驗收。第一階段維持原 orig
 
 **唯讀草稿盤點（2026-11-25，本機開發）。** `src/features/originSwitch/localDraftInventory.ts` 可讀取既有 Quick capture／編輯草稿、任務詳情 checkpoint、會議 IndexedDB／sessionStorage 復原副本及音訊／定位 outbox，僅回傳目前帳號的狀態與數量。Quick 只檢查自己的儲存來源；主站另檢查備註／會議／音訊。未綁帳記錄單獨列為待確認，不自行認領；其他帳號的正文與數量不回傳。這是當下唯讀盤點，不是跨 origin 交接完成證明。
 
-盤點不建立／升級 DB、不改舊 schema、不清理過期草稿、不啟動同步或模型。Quick 的本機 `synced` 旗標不能單獨放行：須核對原 capture／owner／正文 hash，並由 `verifyQuickReceipt` 取得同 key 的可信回執結果；沒有接上或結果不明仍為 unknown。編輯中、進行過但結果不明的提交、衝突、未綁帳、讀取失敗與不支援格式都不當作空資料；換帳／登入失效或盤點期間編輯 revision 改變使結果不完整。會議復原副本即使超過既有一般復原顯示期限，盤點也不據此忽略未處理內容；兩種儲存的同一 scope 不重複計數，不合併或刪除正文。
+盤點不建立／升級 DB、不改舊 schema、不清理過期草稿、不啟動同步或模型。Quick 的本機 `synced` 旗標不能單獨放行：須核對原 capture／owner／正文 hash，並由 `readQuickReceipt` 取得同 key 的可信回執結果；沒有接上或結果不明仍為 unknown。編輯中、進行過但結果不明的提交、衝突、未綁帳、讀取失敗與不支援格式都不當作空資料；換帳／登入失效或盤點期間編輯 revision 改變使結果不完整。會議復原副本即使超過既有一般復原顯示期限，盤點也不據此忽略未處理內容；兩種儲存的同一 scope 不重複計數，不合併或刪除正文。
 
 本機重現：`python qa/dev-139/s3/verify-local-draft-inventory.py --report output/dev139-origin-guide-preview/inventory-qa`。本輪隔離無視窗 Edge／真 IndexedDB 22項通過，另有原引導狀態14項與受影響 strict typecheck／lint 通過；結果見 `output/dev139-origin-guide-preview/inventory-qa-r7/result.json`。回執 provider 與活動快照仍是合成 adapter，不宣稱實際登入、雲端回執或正式使用者驗收。最初兩次 sandbox 程序等待已停止並保留觀察紀錄，放行同一個本機隔離測試後才取得結果，不以等待當 PASS。正式接線時仍須接既有 Session／editor dirty guard／原回執讀回，並在真正離站／完成前重新檢查；不可用本次盤點取代跨分頁寫入保護、來源／目的身分驗證或草稿交接。本輪未把任何盤點或預覽模組掛進正式 App／Quick。
 
 本輪來源已正常合併最新 `origin/main` `f642c7b`，合併點 `6803c11`，未改 main 或正式環境。合併後完整 S3 unit **198/198** 通過；直接 S3 typecheck 因共享安裝缺少 lockfile 已列的 `@types/pg` 失敗，保留原輸出，再以既有 Platform 相同 **8.23.1** 宣告的本機隔離 overlay 通過，未安裝或修改共享依賴。相關紀錄與來源檔雜湊見同結果目錄的 `verification.json`、`s3-unit.log`、`s3-types.log` 及 `s3-types-overlay.log`；不宣稱遠端 CI 或正式雲端通過。
+
+**原回執唯讀讀回（2026-11-25，source／隔離接線）。** 補齊 `QuickTaskRepository.readReceipt`、`createQuickTaskReceiptHttpDispatcher` 與 HTTP adapter 的 `readReceipt`。候選路由為 `GET /api/v1/quick-tasks/:captureId/receipt`，只接受原 capture ID，沿既有可信 Session／expected actor／交易核心與 owner RLS 查一筆回執；沒有 owner 參數、正文、額外資料權限或新 migration。本人既有提交回 `created:false` 與原 committedAt；不存在或屬於其他帳號都回 `{data:null}`，無法用來判定可以重新新增。無 Session／過期／換帳／不合法ID及非GET均拒絕，API仍採 private no-store。
+
+草稿盤點的 `readQuickReceipt` 只傳原記事識別碼，再核對服務端回執的原 owner／key／正文 hash與已知 committedAt。本機 synced 仍須查證；先前已提交但HTTP回覆遺失、尚無本機成功回執者，也可用同 key 唯讀確認，不新增、重送或修改本機狀態。查不到、異內容、拒絕或失敗保持 unknown。此 dispatcher 目前只由隔離驗證註冊，**正式 runtime、App／Quick與正式引導均未接入**；不能將 source API 或隔離結果當正式雲端證明。
+
+本輪 PostgreSQL **18.4／76項 DB與HTTP檢查**通過，含原 migration套用／冪等及新增本人讀回、跨帳不見、過期、換帳、method拒絕與讀前後task／receipt筆數一致；結果 `output/qa/dev-139/s3/20261125T135106Z-d005ef7a/result.json`。另有 **24項**真IndexedDB／合成回執與 **205項**S3及新增repository／dispatcher unit通過，受影響lint及同lock版pg宣告overlay型別通過，紀錄在 `output/dev139-origin-guide-preview/receipt-qa-r1/`。首次測試fixture的錯誤代碼型別失敗保留於 `types.log`，改用既有 `ACTOR_INVALID`後 `types-r2.log`通過；既有同狀態401的原生HTTP證據仍適用，不因此重跑已通過DB。隔離DB／HTTP已關閉並清除，容量預留已釋放。本輪無模型、正式資料、IAM／Secret／billing／容量配置、部署或切流變更；草稿交接、目的端證明、正式接線與零留存外部資格仍按原分母追蹤，不另增required gate。
 
 **本輪可確認的實作範圍。** `src/features/originSwitch/` 的共用元件／狀態邏輯依序處理草稿、原帳號、新日常入口；主程式／Quick、來源與目標origin、原帳號及本次換址版本分別保存進度。稍後會保留進度；重開後重新查證草稿與目的身分，不能只信舊localStorage的完成旗標。pending／unknown／衝突／未綁帳號／仍在編輯／離線／盤點失敗均不放行；晚到回應在換帳或取消後失效。安裝accepted／dismissed事件不直接完成，最後須由使用者確認從新圖示或書籤開啟且資料正確，並再驗身分及內容狀態。
 

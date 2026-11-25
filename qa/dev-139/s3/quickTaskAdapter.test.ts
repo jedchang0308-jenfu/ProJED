@@ -65,3 +65,50 @@ test('quick task HTTP adapter rejects a malformed receipt', async () => {
     (error: unknown) => error instanceof Error && error.message === 'INVALID_RECEIPT',
   );
 });
+
+test('receipt read uses only GET with the original id and a fresh Session binding', async () => {
+  const requests: Array<{ path: string; init?: RequestInit }> = [];
+  const client = new HttpApiClient(async (input, init) => {
+    requests.push({ path: String(input), init });
+    return new Response(JSON.stringify({ data: { status: 'committed', captureId: capture.captureId,
+      ownerId: capture.accountId, titleHash: 'a'.repeat(64), created: false, committedAt: 1 } }),
+    { headers: { 'content-type': 'application/json' } });
+  });
+  client.bindExpectedActor({ accountId: capture.accountId!, contextId: 'quick-receipt-context' });
+  assert.equal((await createHttpQuickTaskAdapter(client).readReceipt(capture.captureId, new AbortController().signal))?.created, false);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].path, `/api/v1/quick-tasks/${capture.captureId}/receipt`);
+  assert.equal(requests[0].init?.method, 'GET');
+  assert.equal(requests[0].init?.body, undefined);
+  assert.equal(requests[0].init?.cache, 'no-store');
+  assert.equal(new Headers(requests[0].init?.headers).get('x-projed-expected-account-id'), capture.accountId);
+});
+
+test('missing receipt and failed read never fall back to POST', async () => {
+  for (const status of [200, 401, 503]) {
+    let calls = 0;
+    const client = new HttpApiClient(async (_input, init) => {
+      calls++; assert.equal(init?.method, 'GET');
+      return new Response(JSON.stringify(status === 200 ? { data: null } : { error: { code: 'READ_UNAVAILABLE' } }),
+        { status, headers: { 'content-type': 'application/json' } });
+    });
+    const read = createHttpQuickTaskAdapter(client).readReceipt(capture.captureId, new AbortController().signal);
+    if (status === 200) assert.equal(await read, null); else await assert.rejects(read);
+    assert.equal(calls, 1);
+  }
+});
+
+test('receipt read rejects invalid paths, wrong capture and creation responses', async () => {
+  let calls = 0;
+  const client = new HttpApiClient(async () => {
+    calls++;
+    return new Response(JSON.stringify({ data: { status: 'committed', captureId: capture.captureId,
+      ownerId: capture.accountId, titleHash: 'a'.repeat(64), created: true, committedAt: 1 } }),
+    { headers: { 'content-type': 'application/json' } });
+  });
+  const adapter = createHttpQuickTaskAdapter(client);
+  await assert.rejects(adapter.readReceipt('../foreign?token=secret', new AbortController().signal), /INVALID_CAPTURE/u);
+  assert.equal(calls, 0);
+  await assert.rejects(adapter.readReceipt(capture.captureId, new AbortController().signal), /INVALID_RECEIPT/u);
+  await assert.rejects(adapter.readReceipt('task_workbench_unplaced_22222222-2222-4222-8222-222222222222', new AbortController().signal), /INVALID_RECEIPT/u);
+});
