@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { createServer, request as requestHttp, type Server } from 'node:http';
 import { resolve } from 'node:path';
 
 import { createAppSessionService } from '../../../server/appSessionService.js';
@@ -31,6 +32,7 @@ export async function startOwnerSessionHttpConsumer(options: {
   manifestSha256: string;
   tokenProvider: (audience: string) => Promise<string>;
   externalOwnerOrigin?: string;
+  enableOriginTransition?: boolean;
 }) {
   if (!/^dev014_[a-f0-9]{20}$/u.test(options.databaseName)
       || !Number.isSafeInteger(options.databasePort) || options.databasePort < 1024
@@ -110,9 +112,43 @@ export async function startOwnerSessionHttpConsumer(options: {
     resolveLogoutIdentity: (...args) => getAuth().resolveLogoutIdentity(...args),
     destroySession: (...args) => getAuth().destroySession(...args),
   });
+  const transitionServers: Server[] = [];
+  const closeTransitionServers = async () => {
+    for (const server of transitionServers) {
+      if (!server.listening) continue;
+      server.closeAllConnections();
+      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+    }
+  };
   try {
     const address = await kernel.listen();
     const origin = `http://${address.host}:${address.port}`;
+    const transitionOrigins: { main: string; quick: string } | undefined = options.enableOriginTransition
+      ? { main: '', quick: '' } : undefined;
+    // Test-only physical loopback entries. Forward to the same actual kernel
+    // using raw HTTP so Node fetch cannot replace the requested entry's Host.
+    // Each listener rejects a forged Host, and can reach only this kernel.
+    if (transitionOrigins) for (const entry of ['main', 'quick'] as const) {
+      const proxy = createServer((incoming, outgoing) => {
+        if (!transitionOrigins[entry] || incoming.headers.host !== new URL(transitionOrigins[entry]).host) {
+          incoming.resume(); outgoing.writeHead(400); outgoing.end(); return;
+        }
+        const forwarded = requestHttp({ hostname: address.host, port: address.port, method: incoming.method,
+          path: incoming.url, headers: incoming.headers }, response => {
+          outgoing.writeHead(response.statusCode ?? 503, response.headers);
+          response.pipe(outgoing);
+        });
+        forwarded.on('error', () => { if (!outgoing.headersSent) outgoing.writeHead(503); outgoing.end(); });
+        forwarded.setTimeout(10_000, () => forwarded.destroy(new Error('LOCAL_SIMULATION_ENTRY_TIMEOUT')));
+        incoming.on('aborted', () => forwarded.destroy());
+        incoming.pipe(forwarded);
+      });
+      transitionServers.push(proxy);
+      await new Promise<void>((resolve, reject) => { proxy.once('error', reject); proxy.listen(0, '127.0.0.1', resolve); });
+      const bound = proxy.address();
+      if (!bound || typeof bound === 'string') throw new Error('LOCAL_SIMULATION_ENTRY_BIND_REJECTED');
+      transitionOrigins[entry] = `http://127.0.0.1:${bound.port}`;
+    }
     const binding = {
       contractVersion: 'jenfu.sso-handoff.v4' as const, audience: 'projed' as const,
       issuer: `${options.brokerOrigin}/api/sso`, manifestSha256: options.manifestSha256,
@@ -129,7 +165,10 @@ export async function startOwnerSessionHttpConsumer(options: {
     const mappings = new GooglePrincipalMappingResolver(database);
     const handoffs = createPlatformHandoffClient({
       environment: 'test', brokerOrigin: options.brokerOrigin, binding,
-      callbacks: { main: `${origin}/api/auth/jenfu-sso/callback`, quick: `${origin}/api/auth/jenfu-sso/callback` },
+      callbacks: {
+        main: [origin, ...(transitionOrigins ? [transitionOrigins.main] : [])].map(value => `${value}/api/auth/jenfu-sso/callback`),
+        quick: [origin, ...(transitionOrigins ? [transitionOrigins.quick] : [])].map(value => `${value}/api/auth/jenfu-sso/callback`),
+      },
       tokenProvider: options.tokenProvider,
     });
     const consumer = new IdentityConsumer({ pins: [binding], mappings,
@@ -137,12 +176,19 @@ export async function startOwnerSessionHttpConsumer(options: {
     });
     auth = createAppSessionService({
       store: new PostgresAppSessionStore(database), consumer, mappings, binding,
-      pins: [binding], origins: { main: origin, quick: origin }, environment: 'test',
+      pins: [binding], origins: { main: [origin, ...(transitionOrigins ? [transitionOrigins.main] : [])],
+        quick: [origin, ...(transitionOrigins ? [transitionOrigins.quick] : [])] }, environment: 'test',
     });
-    return { origin, shutdown: () => kernel.shutdown(), readCounters: () => ({ ownerAuthorizationQueries, lastDatabaseFailure, lastStateRead }) };
+    if (transitionOrigins) console.log(JSON.stringify({ scope: 'LOCAL_SIMULATION_OWNER_ORIGINS',
+      pid: process.pid, origin, transitionOrigins }));
+    return { origin, transitionOrigins: transitionOrigins && Object.freeze({ ...transitionOrigins }),
+      shutdown: async () => { try { await closeTransitionServers(); } finally { await kernel.shutdown(); } },
+      readCounters: () => ({ ownerAuthorizationQueries, lastDatabaseFailure, lastStateRead }) };
   } catch (error) {
-    if (kernel.server.listening) await kernel.shutdown();
-    else await database.end();
+    try { await closeTransitionServers(); } finally {
+      if (kernel.server.listening) await kernel.shutdown();
+      else await database.end();
+    }
     throw error;
   }
 }

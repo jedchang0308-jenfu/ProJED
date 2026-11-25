@@ -771,6 +771,10 @@ RLS只允許具名intent的原context或正確目的context讀取另一端Sessio
 
 本批程式接線與隔離驗證完成，ProJED PR #41及Platform PR #244仍保留draft；完整DEV-139未結案。跨owner候選的原始登入整合、正式callback／新址啟用及真實PWA安裝不以本輪HTTP fixture代替；Gemini／RAG零留存外部資格仍未證明而維持停用。不部署、不換網址、不動正式schema或業務資料、不擴IAM／Secret／billing；既有舊網址／PWA／草稿維持原狀。
 
+**跨owner原始登入演練（2026-11-25，本機原生通過）。** 沿Platform既有 `test-dev007-projed-postgres.mjs`與三owner source-flow追加新入口，不另建gate。ProJED的test-only `ownerSessionHttpConsumer`可選 `enableOriginTransition`，於原loopback kernel外建立兩個同程序、僅綁127.0.0.1的main／Quick入口，保留各自Host並拒絕偽造Host；未啟用仍保留舊helper行為，沒有正式runtime／環境設定變更。Platform使用真正config reader驗明並凍結兩個額外callback，正常authorize／token／cancel均呼叫實際handler與repository，OrgMaster使用獨立工作樹 `d49c11b`的本機server artifact；Firebase／OIDC仍明確為LOCAL_SIMULATION，不是真Google資格。
+
+本機PG18.4 **27/27**檢查通過，含**7個**真owner HTTP source-flow案例與**5個**既有登入交易案例。新增main／Quick原UUID、Quick異帳、Cookie／callback跨origin拒絕、exact redirect／PKCE／單次換碼／重播拒絕及取消兩端intent均cancelled且零新增Session；未修改產品拒絕規則。結果 `output/dev139-platform-origin-aliases/output/dev-007/postgres/2026-11-25T15-29-02.371Z-a7a605aa/`封存三方實際source hashes與consumer副本，原生cleanup的clientClosed／clusterStopped／portReleased／tempRemoved／pathConfined皆true；額外入口亦隨helper關閉。當時source含未提交測試差額，後續提交須逐一比對實際bytes再重用，不將舊head字串冒稱新head。正式callback發布、新址／實機PWA與Gemini／RAG外部零留存資格仍未執行。
+
 **本輪可確認的實作範圍。** `src/features/originSwitch/` 的共用元件／狀態邏輯依序處理草稿、原帳號、新日常入口；主程式／Quick、來源與目標origin、原帳號及本次換址版本分別保存進度。稍後會保留進度；重開後重新查證草稿與目的身分，不能只信舊localStorage的完成旗標。pending／unknown／衝突／未綁帳號／仍在編輯／離線／盤點失敗均不放行；晚到回應在換帳或取消後失效。安裝accepted／dismissed事件不直接完成，最後須由使用者確認從新圖示或書籤開啟且資料正確，並再驗身分及內容狀態。
 
 預覽檔 `qa/dev-139/s3/origin-guide.fixture.tsx` 只提供合成帳號、內容狀態與模擬登入／安裝，沒有被正式App或Quick入口匯入。`scripts/build-dev139-origin-guide-preview.mjs` 產生單檔HTML，CSP封鎖外部連線；正式新網址仍待固定，預覽的保留測試網域不會真的開啟。PWA裝置判斷沿既有 `pwaInstallService`，不新增安裝程序、不複製Session、不傳私人內容，也不清除任何業務儲存。
