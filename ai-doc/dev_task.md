@@ -78,6 +78,9 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
 ## DEV-139：ProJED 納入 Jenfu-Platform，Cloud Run／Cloud SQL 對齊並保留 Vite
 
+
+- 2026-11-25 管理清單補齊：對應 ORGMASTER/DEV-057 新增個人／外部帳號清單與停用／恢復。ProJED 0052 僅提供最小 metadata 與 account guard CAS；包含未首登既有帳號，不讀私人工作區／任務，停用讓主站／Quick 舊 Session 失效，恢復須重新登入。人類已確認維持現有註冊方式。來源實作及兩 owner 實際 SQL 隔離 9 組驗證通過，正式尚未部署；詳[SPEC 契約](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-orgmaster-user-directory)。
+
   - **最後換址流程定案（2026-11-25，僅文件）**：人類採用方案2「引導完成切換」：確認草稿→原帳號登入新站→更新書籤／主與Quick PWA入口。DEV-142完成且舊網址上的中央後端運作穩定後才啟用；支援稍後／中斷續行，保留原帳號、UUID、權限與草稿，unknown先查原key回執，交接未核實不標完成、不清舊儲存。規格與驗收見[SPEC-139 §6.4.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-guided-origin-switch)；本次未實作或執行換址。
 
   - **正式切流目前結果（2026-11-25）**：DEV-142已完成正式資料一次搬遷、獨立核對及舊網址業務切流；Platform023身分修復與HTTP草稿同步修正已發布。真帳號、原工作區／看板、主站／Quick正常PWA更新、原草稿關閉重開後同步與雲端重載讀回通過；中央dev142-97891d3承接100%。來源fence／reader NOLOGIN、原資料／網址／PWA及零留存限制維持，最後換址與完整DEV-139仍另階段。詳[SPEC-142](specs/SPEC-142-projed-production-data-migration.md)及[恢復紀錄](reports/DEV-142-precutover-recovery-point-20261124.md)。

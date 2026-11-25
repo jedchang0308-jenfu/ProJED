@@ -2133,3 +2133,15 @@ Dispatch增加真正唯讀的exact-payload readback RPC；unknown COMMIT不重�
 
 
 0037修復source `b93b40f4569acce5dd366d690226b6fc0307568a` 的 [CI40873354609](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/40873354609)兩jobs SUCCESS：451 unit（S2 290／S3 120／migration14／release27）、原lockfile strict型別／三boundary／compiled artifact PASS；PG17.11 domain71／snapshot60、37份移轉與OCI16 PASS。已讀回artifacts `12896932993`（s3/20261029T123029Z-b5c89ad2、migration/20261029T123144Z-a61a9c87）與`12897620424`（dev139-oci-0508d0d98d77e62731fdf00a）。新增SQL／checkpoint ACL／5 helpers精確grants、真repository actor-free首次結算與同payload重播、source刪除cascade／ledger保留、readonly dispatch readback、owner status收斂、ASR完不重領及unknown／pending lease assertions均在原meeting-upload helper完成；不是僅看schema可套用或mock PASS。首輪oracle及第二輪shared fixture expiry失敗均保留，未改0001–0037 bytes或放寬正式actor／安全拒絕。正式provider、Google IAM／Cloud SQL／normal browser與release仍NOT_RUN；durable host／完整recovery、最終討論分段與來源詞索引重編、RAG／候選／resolution及正式publisher、外部Session、資料／舊origin／writer fence／切流發布全部仍計入完成分母，沒有因本輪451或private checkpoint結案。
+
+
+<a id="dev139-orgmaster-user-directory"></a>
+## OrgMaster 使用者清單的最小帳號契約（2026-11-25）
+
+人類已要求 OrgMaster 可查全部 ProJED 個人／外部帳號的登入資格與啟用狀態，並停用／恢復；已確認維持現有已驗證 Google 首登建立個人帳號方式。此為 DEV-139 的管理可見性補齊，實際 UI／Session 管理命令歸 ORGMASTER/DEV-057，不新增私人內容讀取或註冊核准條件。
+
+`0052_orgmaster_user_directory_v1.sql` 提供 `projed_contract.read_user_directory_v1()` 及 `set_user_active_v1(uuid,bigint,boolean)`。讀取僅含帳號 ID、Google subject、Email、顯示名稱、guard active/revision；不提供 workspace／board／task。包含已搬遷而尚未在新平台首登的既有 Google proof/profile，故既有帳號不需為管理可見性先登入。既有 OrgMaster owner/migrator 只獲限定 metadata view／函式；OrgMaster runtime 沒有 ProJED core 或直接 contract 存取權。ProJED owner 沿原 IAM owner role mapping 部署，不新增正式 IAM／Secret。
+
+停用與現行 domain transaction／account 撤銷採同一鎖順序，在交易內 CAS 更新 guard，主站／Quick 舊 Session 無法再用；恢復前進新 revision，舊 Session 不復活。兩種動作均不刪 profile、工作區、看板、任務或本機草稿，不改其他 App 身分。OrgMaster 070 用 verified Session＋exact app-admin 授權並原子保存 command receipt；Email 不當授權鍵，外部已撤銷邀請不因恢復帳號而恢復。
+
+交付順序：先 ProJED 0052 metadata contract，再 OrgMaster 070／前後端；正式部署仍沿各 owner 正常來源及發布入口，未包含在本次來源開發內。未具備契約時管理 API 明確回 unavailable，不能回傳空清單冒充成功。必要驗證使用兩方實際 SQL 的隔離 PostgreSQL，涵蓋未首登帳號、有效非管理員拒絕、跨 owner 私人內容隔離、並行／CAS／重送、主站Quick舊 Session fence、恢復與 rollback；OrgMaster UI／API 沿其原任務記錄，不新增 required gate。零留存、現行 URL／PWA、正式資料及模型啟用狀態不變。
