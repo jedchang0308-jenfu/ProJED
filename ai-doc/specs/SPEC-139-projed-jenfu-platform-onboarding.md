@@ -2140,6 +2140,8 @@ Dispatch增加真正唯讀的exact-payload readback RPC；unknown COMMIT不重�
 
 人類已要求 OrgMaster 可查全部 ProJED 個人／外部帳號的登入資格與啟用狀態，並停用／恢復；已確認維持現有已驗證 Google 首登建立個人帳號方式。此為 DEV-139 的管理可見性補齊，實際 UI／Session 管理命令歸 ORGMASTER/DEV-057，不新增私人內容讀取或註冊核准條件。
 
+2026-11-25 人類確認的介面收斂：OrgMaster 改為「所有使用者」，依 OrgMaster／AI-PDM／JF-FMS／ProJED 分頁，身分僅分員工／非員工；ProJED personal／external 合併為非員工顯示，原外部協作資格及准入仍獨立。彙整只按可信 Principal，不以 Email 合併；新增 OrgMaster 自有唯讀 071，不改 ProJED 0052、既有 Google 首登、CAS／撤權與私人資料隔離。ProJED 操作仍限自身 App；其他系統沿原角色管理與發布資格契約。本輪僅來源與隔離驗證，無正式部署／切流。
+
 `0052_orgmaster_user_directory_v1.sql` 提供 `projed_contract.read_user_directory_v1()` 及 `set_user_active_v1(uuid,bigint,boolean)`。讀取僅含帳號 ID、Google subject、Email、顯示名稱、guard active/revision；不提供 workspace／board／task。包含已搬遷而尚未在新平台首登的既有 Google proof/profile，故既有帳號不需為管理可見性先登入。既有 OrgMaster owner/migrator 只獲限定 metadata view／函式；OrgMaster runtime 沒有 ProJED core 或直接 contract 存取權。ProJED owner 沿原 IAM owner role mapping 部署，不新增正式 IAM／Secret。
 
 停用與現行 domain transaction／account 撤銷採同一鎖順序，在交易內 CAS 更新 guard，主站／Quick 舊 Session 無法再用；恢復前進新 revision，舊 Session 不復活。兩種動作均不刪 profile、工作區、看板、任務或本機草稿，不改其他 App 身分。OrgMaster 070 用 verified Session＋exact app-admin 授權並原子保存 command receipt；Email 不當授權鍵，外部已撤銷邀請不因恢復帳號而恢復。
