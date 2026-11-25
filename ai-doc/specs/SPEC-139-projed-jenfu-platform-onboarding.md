@@ -787,15 +787,17 @@ ProJED `c5237b9`自己的 [CI45646153483](https://github.com/jedchang0308-jenfu/
 
 PostgreSQL18.4原生DB／HTTP **78項**通過（`output/qa/dev-139/s3/20261125T161414Z-657fb739/result.json`），含已撤銷目的端→新Session／新意圖成功、原意圖不可重綁。首輪僅因新增登入後固定交換計數仍為舊值而失敗，保留 `final-navigation-native-20261126.log`；修正預期後同範圍重驗通過，`final-navigation-native-r2-20261126.log`與原生收據並存，自建DB／HTTP清理完成、capacity lease釋放。本次隨後只改前端確定拒絕分支與測試，不使此server／SQL測試失效。此批不修改任何SQL bytes、正式環境或provider資格，原跨owner證據只按其受測來源重用。
 
+本批提交 `bbb1924e262750b444807cb9d2a18f69d57fb062` 的 [CI45652448372](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45652448372) 兩jobs SUCCESS；PG17.12 DB／HTTP78、snapshot67與Linux OCI／PG17.11 23通過。收據已讀回 `output/dev139-origin-guide-preview/final-navigation-ci/`，`verified-summary.json`核對同一sourceSha及三份收據各53份SQL（Windows checkout CRLF、Linux Git bytes），OCI registryPush／productionRelease皆NOT_RUN。新39項單元亦包含於S3 CI，初次dispatch500經唯讀確認未建立run後才限次重試。原預覽已另目錄建置相容版本，沒有取代使用者保留的預覽。此後僅文件／索引證據補記，不改程式／SQL／測試輸入，不重跑同套CI；原跨owner正式身分發布、新址啟用及真PWA安裝限制維持。
+
 **零留存唯讀查核（2026-11-25）。** 已用既有SDK登入唯讀讀回中央 `jenfu-platform-prod` 的 `cacheConfig`，實際 `disableCache=true`；沒有PATCH設定或推論。三個既定model/location的 `fetchPublisherModelConfig`均回404 NOT_FOUND，依[官方logging說明](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/capabilities/request-response-logging)表示該logging config不存在、預設不記錄；本次不藉此推定模型可用或整體ZDR合格。結果在 `output/dev139-origin-guide-preview/zdr-readonly-20261125.json`及`zdr-model-logging-readonly-20261125.json`，credential僅程序記憶體，沒有payload檔案。
 
 [官方零留存說明](https://docs.cloud.google.com/gemini-enterprise-agent-platform/resources/zero-data-retention)及[abuse monitoring](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/abuse-monitoring)仍要求核對適用契約與模型範圍，不能把不供訓練、cache關閉或供應商稱ZDR-aligned視為本需求的零內容留存證明。可用郵件的專案／ZDR條件檢索沒有找到核准；Drive僅檢索文件metadata，未找到可識別的Google Cloud Master Agreement或ProJED豁免文件，未讀取不相關文件內容。此檢索範圍有限，不證明契約不存在。現行meeting／RAG binding皆仍為NULL，不啟用Gemini／RAG、不傳會議內容；尚缺可查核的適用契約／Google豁免證據與其後合成provider驗證，不能以程式或checkbox自行補成PASS。
 
 **本輪可確認的實作範圍。** `src/features/originSwitch/` 的共用元件／狀態邏輯依序處理草稿、原帳號、新日常入口；主程式／Quick、來源與目標origin、原帳號及本次換址版本分別保存進度。稍後會保留進度；重開後重新查證草稿與目的身分，不能只信舊localStorage的完成旗標。pending／unknown／衝突／未綁帳號／仍在編輯／離線／盤點失敗均不放行；晚到回應在換帳或取消後失效。安裝accepted／dismissed事件不直接完成，最後須由使用者確認從新圖示或書籤開啟且資料正確，並再驗身分及內容狀態。
 
-預覽檔 `qa/dev-139/s3/origin-guide.fixture.tsx` 只提供合成帳號、內容狀態與模擬登入／安裝，沒有被正式App或Quick入口匯入。`scripts/build-dev139-origin-guide-preview.mjs` 產生單檔HTML，CSP封鎖外部連線；正式新網址仍待固定，預覽的保留測試網域不會真的開啟。PWA裝置判斷沿既有 `pwaInstallService`，不新增安裝程序、不複製Session、不傳私人內容，也不清除任何業務儲存。
+預覽檔 `qa/dev-139/s3/origin-guide.fixture.tsx` 只提供合成帳號、內容狀態與模擬登入／安裝，沒有被正式App或Quick入口匯入。`scripts/build-dev139-origin-guide-preview.mjs` 產生單檔HTML，CSP封鎖外部連線；正式候選main／Quick origin依本節已驗的固定路由，尚未啟用；預覽的保留測試網域不會真的開啟。PWA裝置判斷沿既有 `pwaInstallService`，不新增安裝程序、不複製Session、不傳私人內容，也不清除任何業務儲存。
 
-重現：`node --import tsx --test qa/dev-139/s3/originGuide.test.ts`（14項）；`node scripts/build-dev139-origin-guide-preview.mjs`；`python qa/dev-139/s3/verify-origin-guide.py --report output/dev139-origin-guide-preview/copy-qa-r2/result.json`（18項本機無視窗Edge，含桌面／iOS指引及390／320寬度）。受影響嚴格型別／lint通過。這些只證明共用邏輯及合成預覽，不等於真新origin、真帳號回執、實際原生安裝或正式草稿跨站交接已完成；沒有新增required gate或固定觀察期。
+初版預覽重現與歷史結果：`node --import tsx --test qa/dev-139/s3/originGuide.test.ts`（當時14項；目前接線結果以上段為準）；`node scripts/build-dev139-origin-guide-preview.mjs`；`python qa/dev-139/s3/verify-origin-guide.py --report output/dev139-origin-guide-preview/copy-qa-r2/result.json`（18項本機無視窗Edge，含桌面／iOS指引及390／320寬度）。受影響嚴格型別／lint通過。這些只證明共用邏輯及合成預覽，不等於真新origin、真帳號回執、實際原生安裝或正式草稿跨站交接已完成；沒有新增required gate或固定觀察期。
 
 正式接線時，盤點adapter須完整覆蓋本次裝置／入口的既有outbox、任務／會議／其他人工草稿及編輯狀態；不能把無法讀取或未盤點當作零。目的身分adapter須由受信任後端驗證的原Principal／UUID及權限結果提供，不能將query、postMessage、自填信箱或checkbox當作身分證據。保留原ID／key與既有CAS／回執；unknown先讀回、不盲重送。這些現有義務仍未因預覽通過而被縮減。
 

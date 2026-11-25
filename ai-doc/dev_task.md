@@ -80,7 +80,7 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
   - **換址引導／草稿恢復（2026-11-25，開發中）**：同一草稿[PR #41](https://github.com/jedchang0308-jenfu/ProJED/pull/41)收斂三步白話引導、真本機草稿盤點與原key唯讀回執；保留主／Quick、帳號、未解內容與未知結果，不自動認領或重送。原生PG18.4 76項、本機IndexedDB24項及unit205項通過；接線來源2a4df4a的[CI45631620870](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45631620870)兩jobs SUCCESS，PG17.12 76／snapshot67／OCI23已回讀，原型別失敗保留。詳[SPEC-139 §6.4.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-guided-origin-switch)。
   - **接線授權與下一步**：人類已核准「開放程式接線，仍不部署／換址」。主／Quick正常入口已接真Session、原key回執／本機草稿盤點及短效目的端意圖；53版source c5237b9的CI45646153483成功（PG78／snapshot67／OCI23）。Platform DEV-007草稿PR244的cbb8426f已通過required Source QC45647762791及三owner原生45647877885（owner27／flow7／legacy5、OrgMaster22、中央foundation19、舊foundation19＋4預期拒絕），逐檔source驗證與cleanup皆通過；Google／OIDC仍為LOCAL_SIMULATION，不冒稱正式新址驗收。零留存唯讀已確認中央cache關閉，仍缺可查核的適用契約／Google豁免與後續provider資格；meeting／RAG binding保持NULL，其他完整provider／新址驗收分母保留。後續只續行已授權的來源／隔離工作，正式部署、換址、IAM／Secret／billing限制不變。
-  - **引導完成動作（2026-11-26）**：已修正完成後仍留舊網址，改為重新核對草稿／目的端與期限後前往固定新入口；等待期間取消或出現新草稿不離站，目的端重登可用新意圖恢復、舊意圖不可重綁。本機focused39項／正常入口headless10項及原生PG18.4 78項通過，正式未部署／未換址；詳同一SPEC §6.4.1。
+  - **引導完成動作（2026-11-26）**：已修正完成後仍留舊網址，改為重新核對草稿／目的端與期限後前往固定新入口；等待期間取消或出現新草稿不離站，目的端重登可用新意圖恢復、舊意圖不可重綁。本機focused39項／正常入口headless10項及原生PG18.4 78項通過；bbb1924的[CI45652448372](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45652448372)兩jobs SUCCESS（PG78／snapshot67／OCI23），收據／source及53份SQL已核對，正式未部署／未換址；詳同一SPEC §6.4.1。
   - **正式畫面界線**：右側「試看看不同情況」、合成帳號／保存／登入／安裝選項、計數與重設僅供本機預覽；正式頁面不匯入或掛載、不留空欄。正式狀態依真實登入與保存結果判斷，保留使用者從新圖示／書籤開啟的最後確認，不能手動宣告成功來跳過。
 
 
@@ -541,7 +541,7 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
   - 現行方向：先在舊主／Quick 網址完成新版前端、登入、API與中央後端接線，正式資料搬遷獨立列 DEV-142；日常運作確認後才換新網址，不重搬 DB／Storage。[DEV-139 現況](#dev-139-jenfu-platform-onboarding)｜[SPEC §3.0](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-two-stage-rollout)。
   - 最後換址已選方案2「引導完成切換」，[草稿→原帳號→書籤／PWA交接](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-guided-origin-switch)已完成本機引導預覽／狀態邏輯，已接真Session、原回執與目的端短效證明；原生／正常入口隔離驗證已通過，來源4f9d346的CI45643364974成功（PG78／snapshot67／OCI23），跨owner新入口PG27／HTTP7、Platform required Source QC45647762791／native45647877885及ProJED CI45646153483通過；正式啟用未執行，後端在舊網址穩定及必要交接驗證成立後才換址。
   - 現有候選與本機證據依各自 source／revision 重用；DEV-142的正式資料與舊入口驗收沿其交付證據，不再列為未搬遷。完整DEV-139仍含新入口交接與provider零留存資格，不把單元／CI當正式新址驗收。
-  - 下一步：2026-11-26已補引導最後離站／取消與重登恢復，focused39項、正常入口10項及原生PG78項通過，收斂本批CI後維持草稿候選；續處理原驗收尚缺的provider資格，Gemini／RAG須先有可查核的零留存契約／豁免證據，未取得前維持停用。正式新址／callback／PWA驗收待解除部署／換址暫緩後再執行。DEV-142已交付，不重搬資料或重跑既有正式回歸。
+  - 下一步：2026-11-26已補引導最後離站／取消與重登恢復，focused39項、正常入口10項及原生PG78項通過，bbb1924 CI45652448372兩jobs SUCCESS（PG78／snapshot67／OCI23），同PR41維持草稿候選；續處理原驗收尚缺的provider資格，Gemini／RAG須先有可查核的零留存契約／豁免證據，未取得前維持停用。正式新址／callback／PWA驗收待解除部署／換址暫緩後再執行。DEV-142已交付，不重搬資料或重跑既有正式回歸。
   - 資料交付：[DEV-142](#dev-142-production-data-migration)／[SPEC-142](specs/SPEC-142-projed-production-data-migration.md)，正式匯入／獨立核對與舊網址切流已完成；來源fence、reader NOLOGIN及原資料保留，登入／記事／草稿恢復及Quick正式回歸PASS，DEV-142已交付。原帳號／個人與外部權限、取消／CAS／unknown／exactly-once及完整DEV-139分母保留，父子不重複認列。
 
 - ✓ DEV-138 [開發點] [已完成／正式發布、限定登入與 RPC 驗收及清理 PASS] [P1] [ProJED] DEV-133 guard 恢復、分支整合與正式驗證後清理
