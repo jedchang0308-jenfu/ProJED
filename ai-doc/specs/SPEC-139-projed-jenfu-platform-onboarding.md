@@ -745,6 +745,8 @@ Handoff exchange新增server-only `callbackOrigin`，只來自已claim且再次�
 
 本機認證／入口49項及完整S2／S3 **760項**通過，server/S2與S3嚴格型別通過。首次舊exchange expected少新欄位及新fixture埠誤撞既有Quick的失敗保留，已修正測試資料，沒有改安全oracle。兩認證檔原有no-control-regex共9個lint錯誤與基線相同，保留診斷、不關規則；新增／其他受影響檔未新增lint錯誤。唯讀技術複核無具體認證缺陷，不算獨立QC／新gate。既有原生演練已補同一loopback kernel的新直接入口＋舊relay、5次精確callback／PKCE交換、原UUID／回執、跨origin Cookie拒絕與撤權；尚待本輪CI實跑，不以單元通過代替。未新增migration、env實際值、正式callback發布、IAM／Secret／billing或部署。目的端intent／receipt與正常App／Quick UI仍續行。
 
+Origin來源 `34c7381` 的 [CI45636070238](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45636070238) 型別／unit／boundary／compiled artifact及OCI通過，但新增直接入口的原生登入得403，該native驗收未通過，後續相依案例不冒充已跑。已以一次loopback wire讀回重現：Node fetch把指定Host改為socket位址，而Origin仍是新域名，因此既有Host／Origin拒絕正確運作。只把測試直接通路改用`node:http.request`攜帶正確Host；舊relay、認證規則、角色與SQL未改。原失敗與診斷保留在 `output/dev139-origin-guide-preview/auth-origin-ci-first-failed.log`／`auth-origin-host-diagnosis.json`，修正來源再驗，不重試舊來源或略過拒絕。
+
 **本輪可確認的實作範圍。** `src/features/originSwitch/` 的共用元件／狀態邏輯依序處理草稿、原帳號、新日常入口；主程式／Quick、來源與目標origin、原帳號及本次換址版本分別保存進度。稍後會保留進度；重開後重新查證草稿與目的身分，不能只信舊localStorage的完成旗標。pending／unknown／衝突／未綁帳號／仍在編輯／離線／盤點失敗均不放行；晚到回應在換帳或取消後失效。安裝accepted／dismissed事件不直接完成，最後須由使用者確認從新圖示或書籤開啟且資料正確，並再驗身分及內容狀態。
 
 預覽檔 `qa/dev-139/s3/origin-guide.fixture.tsx` 只提供合成帳號、內容狀態與模擬登入／安裝，沒有被正式App或Quick入口匯入。`scripts/build-dev139-origin-guide-preview.mjs` 產生單檔HTML，CSP封鎖外部連線；正式新網址仍待固定，預覽的保留測試網域不會真的開啟。PWA裝置判斷沿既有 `pwaInstallService`，不新增安裝程序、不複製Session、不傳私人內容，也不清除任何業務儲存。

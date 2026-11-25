@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash, generateKeyPairSync, randomBytes, randomUUID } from 'node:crypto';
-import type { Server } from 'node:http';
+import { request as requestHttp, type Server } from 'node:http';
 import pg from 'pg';
 import { createLocalJWKSet, exportJWK, SignJWT } from 'jose';
 import { RuntimeDatabase } from '../../../server/db.js';
@@ -234,9 +234,33 @@ export async function verifyLegacyEntryMappingSessionsPostgres(config: RuntimeCo
     const request = (publicOrigin: string, path: string, init: RequestInit = {}) => {
       assert.ok([LEGACY_MAIN_ORIGIN, LEGACY_QUICK_ORIGIN, NEXT_MAIN_ORIGIN, NEXT_QUICK_ORIGIN].includes(publicOrigin));
       const direct = publicOrigin === NEXT_MAIN_ORIGIN || publicOrigin === NEXT_QUICK_ORIGIN;
-      return fetch(`http://127.0.0.1:${direct ? central.port : address.port}${path}`, {
+      if (direct) {
+        // Fetch deliberately replaces Host with its socket destination. Use
+        // native HTTP for a real loopback request carrying the configured host.
+        assert.ok(init.body === undefined || typeof init.body === 'string');
+        return new Promise<Response>((resolve, reject) => {
+          const outgoing = requestHttp({ hostname: '127.0.0.1', port: central.port, path,
+            method: init.method ?? 'GET', headers: { ...Object.fromEntries(new Headers(init.headers)),
+              host: new URL(publicOrigin).host, origin: publicOrigin } }, incoming => {
+            const chunks: Buffer[] = [];
+            incoming.on('data', (chunk: Buffer) => chunks.push(chunk));
+            incoming.on('error', reject);
+            incoming.on('end', () => {
+              const headers = new Headers();
+              for (const [name, value] of Object.entries(incoming.headers)) {
+                for (const item of Array.isArray(value) ? value : value === undefined ? [] : [value]) headers.append(name, item);
+              }
+              resolve(new Response(Buffer.concat(chunks), { status: incoming.statusCode ?? 500, headers }));
+            });
+          });
+          outgoing.on('error', reject);
+          outgoing.setTimeout(10_000, () => outgoing.destroy(new Error('LOCAL_DIRECT_HTTP_TIMEOUT')));
+          outgoing.end(init.body);
+        });
+      }
+      return fetch(`http://127.0.0.1:${address.port}${path}`, {
         ...init, redirect: 'manual', headers: {
-          ...(direct ? { host: new URL(publicOrigin).host } : { 'x-forwarded-host': new URL(publicOrigin).host }),
+          'x-forwarded-host': new URL(publicOrigin).host,
           origin: publicOrigin, ...Object.fromEntries(new Headers(init.headers)),
         },
       });
