@@ -78,7 +78,10 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
 ## DEV-139：ProJED 納入 Jenfu-Platform，Cloud Run／Cloud SQL 對齊並保留 Vite
 
-  - **換址引導前置準備（2026-11-25，本機預覽待人類確認）**：依本輪要求完成三步共用引導元件與狀態邏輯，支援主程式／Quick獨立帳號進度、稍後與重開續行、錯帳／過期／未知結果拒絕、裝置適用的新PWA或書籤指引，安裝事件不直接標完成。14項狀態測試、18項本機瀏覽器／手機案例、嚴格型別與lint通過；單檔預覽可本機操作，已套用確認過的白話緣由／資料保留／程式安裝文案，不連正式服務。入口仍未匯入預覽或開提示；真草稿盤點／交接、受信任新站回執、固定新網址及正式接線待續，不執行換址。來源與重現見[SPEC-139 §6.4.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-guided-origin-switch)。
+  - **換址引導前置準備（2026-11-25，本機預覽待人類確認）**：依本輪要求完成三步共用引導元件與狀態邏輯，支援主程式／Quick獨立帳號進度、稍後與重開續行、錯帳／過期／未知結果拒絕、裝置適用的新PWA或書籤指引，安裝事件不直接標完成。14項狀態測試、18項本機瀏覽器／手機案例、嚴格型別與lint通過；單檔預覽可本機操作，已套用確認過的白話緣由／資料保留／程式安裝文案，不連正式服務。入口仍未匯入預覽或開提示；真草稿盤點接線／交接、受信任新站回執、固定新網址及正式接線待續，不執行換址。來源與重現見[SPEC-139 §6.4.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-guided-origin-switch)。
+  - **換址草稿盤點（2026-11-25，本機開發）**：補唯讀 Quick／備註／會議復原／音訊盤點，隔離無視窗 Edge 真 IndexedDB 22項、原引導14項及受影響型別／lint通過。保留舊副本與原 key，不把本機 synced 當雲端成功、不自動認領或重送；跨帳／編輯 revision 改變、儲存失敗及未知結果拒絕。回執／活動 adapter 僅合成驗證，真 Session／原回執接線、交接及新網址尚待，未掛正式入口、未部署或切流；詳[SPEC-139 §6.4.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-guided-origin-switch)。
+  - **正式畫面界線（2026-11-25）**：右側「試看看不同情況」、合成帳號／保存／登入／安裝選項、模擬開站計數與重設按鈕僅供本機預覽，正式頁面不匯入或掛載。正式引導依實際程式、帳號、記事保存與登入結果判斷，不能由使用者選成功來跳過；保留最後從新圖示／書籤開啟的使用確認。詳[SPEC-139 §6.4.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-guided-origin-switch)；此項確認僅補文件，盤點開發另見上項；尚未接線、部署或切流。
+
 
 
 - 2026-11-25 管理清單補齊：對應 ORGMASTER/DEV-057 新增個人／外部帳號清單與停用／恢復。ProJED 0052 僅提供最小 metadata 與 account guard CAS；包含未首登既有帳號，不讀私人工作區／任務，停用讓主站／Quick 舊 Session 失效，恢復須重新登入。人類已確認維持現有註冊方式。來源實作及兩 owner 實際 SQL 隔離 9 組驗證通過，正式尚未部署；詳[SPEC 契約](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-orgmaster-user-directory)。
