@@ -9,6 +9,7 @@ import { MANAGED_DATABASE } from '../../../shared/dev139ManagedDatabase.mjs';
 import { S3_MIGRATION_PATHS } from '../../../scripts/lib/dev139-migration-paths.mjs';
 
 const revision = 'projed-prod-loginpending-3c3f8b0';
+const currentProductionProxyImage = 'gcr.io/cloud-sql-connectors/cloud-sql-proxy@sha256:b239a84edd20cfcf1fef20a8d297ac578a73e5cb0ba0eaaf5498782de4f9f861';
 
 function binding() {
   return {
@@ -140,6 +141,7 @@ test('rejects stale, public, drifting, model-enabled, and caller-expanded baseli
     value => { value.readback.template.scaling.maxInstanceCount = 2; },
     value => { value.readback.template.serviceAccount = 'other@example.iam.gserviceaccount.com'; },
     value => { value.readback.template.vpcAccess.networkInterfaces[0].network += '-other'; },
+    value => { value.readback.template.containers[1].image = 'gcr.io/cloud-sql-connectors/cloud-sql-proxy@sha256:' + '0'.repeat(64); },
     value => { value.readback.template.containers[0].env.push({ name: 'GEMINI_API_KEY', value: 'hidden' }); },
     value => { value.readback.template.containers[0].env.find(row => row.name === 'PROJED_MAIN_PUBLIC_ORIGIN').value = 'https://attacker.invalid'; },
     value => { value.readback.traffic.push(
@@ -183,6 +185,14 @@ test('refreshes one existing zero-traffic candidate tag and tolerates historical
   assert.deepEqual(plan.rollback.bodyWithoutEtag.traffic.at(-1),
     { revision: previousCandidate.revision, tag: previousCandidate.tag });
   assert.deepEqual(plan.rollback.bodyWithoutEtag.template.labels, value.readback.template.labels);
+});
+
+test('preserves the exact current production proxy while refreshing only the private candidate', () => {
+  const value = input();
+  value.readback.template.containers[1].image = currentProductionProxyImage;
+  const plan = renderOriginCutoverPlan(value);
+  assert.equal(plan.stages.privateCandidate.request.body.template.containers[1].image, currentProductionProxyImage);
+  assert.equal(plan.rollback.bodyWithoutEtag.template.containers[1].image, currentProductionProxyImage);
 });
 
 test('CLI consumes the unmodified v2 readback envelope from stdin without a provider operation', () => {

@@ -18,6 +18,12 @@ const ENVIRONMENT = [
 ];
 const MODEL_ENV = /(?:GEMINI|VERTEX|RAG|MODEL|API_KEY|CONTENT_LOG|CACHE)/iu;
 const CANDIDATE_TAG = 'dev139-origin-cutover';
+const COMPATIBLE_PROXY_IMAGES = new Set([
+  CLOUD_RUN_TARGET.proxyImage,
+  // Immutable digest on the current 100% production revision. Candidate
+  // refreshes preserve it; proxy upgrades remain a separate release concern.
+  'gcr.io/cloud-sql-connectors/cloud-sql-proxy@sha256:b239a84edd20cfcf1fef20a8d297ac578a73e5cb0ba0eaaf5498782de4f9f861',
+]);
 const READBACK_KEYS = ['client', 'clientVersion', 'conditions', 'createTime', 'creator', 'etag', 'generation',
   'ingress', 'labels', 'lastModifier', 'latestCreatedRevision', 'latestReadyRevision', 'launchStage', 'name',
   'observedGeneration', 'scaling', 'template', 'terminalCondition', 'traffic', 'trafficStatuses', 'uid',
@@ -155,7 +161,7 @@ function assertBaseline(input) {
       || !isDeepStrictEqual(app.dependsOn, ['cloud-sql-proxy'])
       || !isDeepStrictEqual(app.startupProbe, { timeoutSeconds: 2, periodSeconds: 5, failureThreshold: 36,
         httpGet: { path: '/health/ready', port: 8080 } })
-      || proxy?.name !== 'cloud-sql-proxy' || proxy.image !== CLOUD_RUN_TARGET.proxyImage
+      || proxy?.name !== 'cloud-sql-proxy' || !COMPATIBLE_PROXY_IMAGES.has(proxy.image)
       || !isDeepStrictEqual(proxy.resources, { limits: { cpu: '1', memory: '256Mi' }, cpuIdle: true, startupCpuBoost: true })
       || !isDeepStrictEqual(proxy.startupProbe, { initialDelaySeconds: 1, timeoutSeconds: 2, periodSeconds: 3,
         failureThreshold: 30, tcpSocket: { port: 5432 } })
