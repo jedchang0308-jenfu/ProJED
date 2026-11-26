@@ -22,6 +22,7 @@ import {CURRENT_MEETING_LLM_BINDING,hasQualifiedMeetingLlmBinding} from './meeti
 import {createRuntimeSessionAuth} from './runtimeSessionAuth.js';
 import {createServiceAccessTokenProvider} from './serviceAccessToken.js';
 import {awaitDatabaseStartup} from './startup.js';
+import {runtimeMigrationPolicy} from './migrationCompatibility.js';
 
 /** Check-only imports code, but never loads credentials/config or opens a DB. */
 export function meetingAsrJobCheck(
@@ -51,8 +52,8 @@ export async function meetingAsrJobMain(args:readonly string[]=process.argv.slic
   const timer=setTimeout(stop,Math.max(0,jobDeadlineAtMs-Date.now()));timer.unref();
   process.once('SIGTERM',stop);process.once('SIGINT',stop);
   try{
-    await awaitDatabaseStartup(()=>database.assertRuntimeBoundary(expected));
     const auth=createRuntimeSessionAuth(config,database);
+    await awaitDatabaseStartup(()=>database.assertRuntimeBoundary(expected,runtimeMigrationPolicy(auth.originSwitchCampaign)));
     const configuredBucket=process.env.PROJED_MEETING_AUDIO_BUCKET;
     const getAccessToken=createServiceAccessTokenProvider();
     const audioStorage=createManagedMeetingAudioStorage(configuredBucket,getAccessToken);
