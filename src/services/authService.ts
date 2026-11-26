@@ -14,6 +14,7 @@ import type { FirestoreUser } from '../types';
 import { isHttpBackend, isLocalTestBackend, isSupabaseBackend } from './dataBackend';
 import { httpSessionService } from './httpApi/backend';
 import { HttpApiError } from './httpApi/httpApiClient';
+import { shouldStartFreshLogin } from './httpApi/loginRecovery';
 import { isSupabaseConfigured, supabase } from './supabase/client';
 import { BOARD_INVITE_TOKEN_PARAM } from '../utils/boardInviteToken';
 import { emitProfileUpdated } from '../utils/profileEvents';
@@ -335,7 +336,7 @@ export const authService = {
       try {
         return await httpSessionService.getSession();
       } catch (error) {
-        if (error instanceof HttpApiError && (error.status === 401 || error.status === 404)) {
+        if (error instanceof HttpApiError && shouldStartFreshLogin(error.status, error.code)) {
           const returnPath = `${window.location.pathname}${window.location.search}`;
           const authorizationUrl = await httpSessionService.startLogin('main', returnPath);
           window.location.assign(authorizationUrl);
@@ -401,7 +402,7 @@ export const authService = {
       try {
         return await httpSessionService.getSession();
       } catch (error) {
-        if (error instanceof HttpApiError && (error.status === 401 || error.status === 404)) return null;
+        if (error instanceof HttpApiError && shouldStartFreshLogin(error.status, error.code)) return null;
         throw error;
       }
     }
@@ -455,7 +456,7 @@ export const authService = {
         .then(user => { if (subscribed) callback(user); })
         .catch(error => {
           if (!subscribed) return;
-          if (!(error instanceof HttpApiError && (error.status === 401 || error.status === 404))) {
+          if (!(error instanceof HttpApiError && shouldStartFreshLogin(error.status, error.code))) {
             console.error('[authService] HTTP session read failed:', error);
           }
           callback(null);
