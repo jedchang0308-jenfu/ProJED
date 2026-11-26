@@ -10,7 +10,7 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 - 類型：**獨立交付點**；所屬整合目標：[DEV-139](#dev-139-jenfu-platform-onboarding)，P1。
 - 狀態（2026-11-25）：**已完成正式資料搬遷與舊網址業務切流**。最終備份／一次apply／獨立reconcile通過，來源fence保留、reader NOLOGIN／連線0，臨時importer／診斷Jobs均404。Platform023修復後真帳號可從舊網址使用原工作區／看板／任務；HTTP草稿同步修正已由PR #37合併並發布 `projed-prod-dev142-97891d3` 100%。主站／Quick正常PWA更新、記事儲存重載、同一草稿關閉重開後恢復同步及Quick帳號確認後同步通過；兩筆專用測試任務各一筆可見。CI45457970960（PG75／snapshot67／OCI23）、真modal14項、私人HTTP34與兩舊origin HTTP16通過。詳[SPEC-142](specs/SPEC-142-projed-production-data-migration.md)及[恢復紀錄](reports/DEV-142-precutover-recovery-point-20261124.md)；沒有把隔離或文件結果冒充正式使用者結果。
 - 唯一交付契約：[SPEC-142](specs/SPEC-142-projed-production-data-migration.md)；共用資料／身分／草稿安全沿 SPEC-139 §4–§6，不另建 SQL／API、QA/QC 或 required gate。
-- 最新人類授權：已明確起床並恢復DEV-142正式搬遷與業務切流；保留舊網址、介面、PWA及草稿，可接受重新登入。沿具名relay公開入口、兩小時reader與既有來源／發布授權續行，不新增IAM／Secret／容量責任。最後換址引導仍未啟用。
+- DEV-142交付時的人類授權：明確恢復正式搬遷與舊網址業務切流；保留舊網址、介面、PWA及草稿，可接受重新登入。沿具名relay公開入口、兩小時reader與既有來源／發布授權續行，不新增IAM／Secret／容量責任。其後最後換址引導已由DEV-139於2026-11-26另行核准並完成。
 - 成果：在原主站／Quick 網址使用新前端／登入／API，受控停止全部舊 writer，一次搬移並核對正式資料／私人檔案，再開放中央新後端唯一 writer；保留 UUID／權限／回執、舊來源與可用恢復參考。
 - 依賴：DEV-139 的過渡入口、原地更新、真 Session／mapping 與必要資料／權限／恢復準備就緒。既有 credential／importer／新入口核准沿用，正式停寫／資料寫入依最新人類授權續行；新責任擴張另核實。只限制相依正式操作，安全的 source／隔離驗證可繼續。
 - 窗口：偏好晚間低用量且操作者能確認結果的時段；先演練量測，再排日期／起訖，不強制凌晨、固定停機分鐘數或自動排程。
@@ -78,6 +78,7 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
 ## DEV-139：ProJED 納入 Jenfu-Platform，Cloud Run／Cloud SQL 對齊並保留 Vite
 
+  - **狀態（2026-11-26）：已完成。** DEV-142正式資料搬遷／舊網址業務切流、中央身分與Cloud SQL、真Speech／無模型背景處理，以及DEV-139最後Cloud Run新入口公開與100%切流均已交付。舊主／Quick網址、原帳號、工作區／看板／權限、既有PWA與草稿仍可用；主／Quick換址與安裝引導已在正式Edge「AI測試」完成真帳號回歸並保留「稍後再做」續行。每台裝置的實際PWA安裝仍由使用者自行確認，未冒充為全裝置已安裝。Gemini／RAG因零留存資格尚無可查核證據而維持NULL，屬安全停用邊界，不阻擋本整合交付結案。
   - **換址引導／草稿恢復（2026-11-25，開發中）**：同一草稿[PR #41](https://github.com/jedchang0308-jenfu/ProJED/pull/41)收斂三步白話引導、真本機草稿盤點與原key唯讀回執；保留主／Quick、帳號、未解內容與未知結果，不自動認領或重送。原生PG18.4 76項、本機IndexedDB24項及unit205項通過；接線來源2a4df4a的[CI45631620870](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45631620870)兩jobs SUCCESS，PG17.12 76／snapshot67／OCI23已回讀，原型別失敗保留。詳[SPEC-139 §6.4.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-guided-origin-switch)。
   - **接線授權與下一步**：人類已核准「開放程式接線，仍不部署／換址」。主／Quick正常入口已接真Session、原key回執／本機草稿盤點及短效目的端意圖；53版source c5237b9的CI45646153483成功（PG78／snapshot67／OCI23）。Platform DEV-007草稿PR244的cbb8426f已通過required Source QC45647762791及三owner原生45647877885（owner27／flow7／legacy5、OrgMaster22、中央foundation19、舊foundation19＋4預期拒絕），逐檔source驗證與cleanup皆通過；Google／OIDC仍為LOCAL_SIMULATION，不冒稱正式新址驗收。零留存唯讀已確認中央cache關閉，仍缺可查核的適用契約／Google豁免與後續provider資格；meeting／RAG binding保持NULL，其他完整provider／新址驗收分母保留。後續只續行已授權的來源／隔離工作，正式部署、換址、IAM／Secret／billing限制不變。
   - **引導完成動作（2026-11-26）**：已修正完成後仍留舊網址，改為重新核對草稿／目的端與期限後前往固定新入口；等待期間取消或出現新草稿不離站，目的端重登可用新意圖恢復、舊意圖不可重綁。本機focused39項／正常入口headless10項及原生PG18.4 78項通過；bbb1924的[CI45652448372](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45652448372)兩jobs SUCCESS（PG78／snapshot67／OCI23），收據／source及53份SQL已核對，正式未部署／未換址；詳同一SPEC §6.4.1。
@@ -549,12 +550,11 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
 
 - ✓ DEV-140 [交付點] [已實作／本機瀏覽器驗收通過] [ProJED] [以 OKR 模式整合清單模式](#dev-140-okr-list-consolidation)
 
-- → DEV-139 [整合交付點] [DEV-142舊網址中央後端已交付／ASR正式Job有界驗證完成／新網址引導程式候選已接線／未換址] [P1] ProJED 納入 Jenfu-Platform，保留 Vite
+- ✓ DEV-139 [整合交付點] [已完成／Cloud Run新入口公開100%／舊網址與主Quick換址引導回歸PASS] [P1] ProJED 納入 Jenfu-Platform，保留 Vite
   - 現行方向：先在舊主／Quick 網址完成新版前端、登入、API與中央後端接線，正式資料搬遷獨立列 DEV-142；日常運作確認後才換新網址，不重搬 DB／Storage。[DEV-139 現況](#dev-139-jenfu-platform-onboarding)｜[SPEC §3.0](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-two-stage-rollout)。
-  - 最後換址已選方案2「引導完成切換」，[草稿→原帳號→書籤／PWA交接](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-guided-origin-switch)已完成本機引導預覽／狀態邏輯，已接真Session、原回執與目的端短效證明；原生／正常入口隔離驗證已通過，來源4f9d346的CI45643364974成功（PG78／snapshot67／OCI23），跨owner新入口PG27／HTTP7、Platform required Source QC45647762791／native45647877885及ProJED CI45646153483通過；正式啟用未執行，後端在舊網址穩定及必要交接驗證成立後才換址。
-  - 現有候選與本機證據依各自 source／revision 重用；DEV-142的正式資料與舊入口驗收沿其交付證據，不再列為未搬遷。真Speech隔離資格、不可變ASR映像、正式generation7空佇列Cloud SQL正常入口已交叉驗證；未用真實會議內容，Gemini／RAG仍因零留存契約未證明而停用。完整DEV-139仍含新入口交接，不把單元／CI／空佇列當正式新址或語音品質驗收。
-  - 下一步：換址引導已完成最後離站／取消與重登恢復，focused39項、正常入口10項及原生PG78項通過，bbb1924 CI45652448372兩jobs SUCCESS（PG78／snapshot67／OCI23）；正式新址／callback／主與Quick PWA安裝交接仍待最後換址階段。公開計畫已修正驗證順序：公開前綁fresh etag／候選／舊站／回復點並跑provider validate-only；人類一次核准後才公開與升流量，隨即驗新址登入、PWA、引導與草稿／帳號隔離，失敗回復，不再要求私有網址先完成不可能的正常瀏覽器驗收。Gemini／RAG須先有可查核的零留存契約／豁免證據，未取得前維持停用；這不再阻擋已驗Speech／無模型分支，也不阻擋模型保持停用下完成最後換址。DEV-142已交付，不重搬資料或重跑既有正式回歸。
-  - 切換準備：已新增[舊／新網址並存計畫](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-origin-cutover-plan)，把私人0%候選與後續公開／升流量拆開；renderer固定保留舊主站／Quick作引導來源，拒絕身分、映像、網路、DB、容量、模型或流量漂移。最初generation40 readback用於建立回復基線；私人候選完成後，新增activation renderer以最新provider readback重新綁etag與精確候選。2026-11-26即時唯讀確認generation50／`projed-prod-00025-tnt`仍為0%私人tag，`projed-prod-boardsync-ee696fa`仍100%；render-only啟用計畫已產生，provider validate-only回HTTP 200且回讀狀態未變，但正式activation未套用，沒有公開或切流。
+  - 最後換址採方案2「引導完成切換」。[草稿→原帳號→書籤／PWA交接](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-guided-origin-switch)的來源、隔離、正常入口與正式真帳號驗證均已完成。既有PWA先由正常選單套用更新，主與Quick舊入口才出現換址說明；引導能確認目的端帳號／權限、顯示安裝新程式步驟並在返回後續接第3步。測試帳號選「稍後再做」保留進度，沒有假報已完成裝置安裝。
+  - 現有候選與本機證據依各自source／revision重用；DEV-142的正式資料與舊入口驗收不重跑、不重搬。真Speech隔離資格、不可變ASR映像、正式generation7空佇列Cloud SQL正常入口已交叉驗證；未用真實會議內容。Gemini／RAG仍因零留存契約未證明而停用，未取得資格前不得派送。
+  - 正式切換：人類已核准DEV-139公開與切流；fresh generation50／etag計畫、舊入口smoke、回復基線及provider validate-only通過後只送一次PATCH。最終generation／observedGeneration 51，`invokerIamDisabled=true`，`projed-prod-00025-tnt`以`dev139-origin-cutover`承接100%，仍綁已驗不可變映像`sha256:3f511658…02dd`；切流後一小時ERROR與HTTP 5xx讀回皆為空。新主站／Quick、SW／manifest、舊主／Quick、真帳號工作區／看板／任務、主站重載Session、Quick本機草稿恢復／清除與兩入口登入均通過；沒有建立測試任務或變更正式資料。
   - 資料交付：[DEV-142](#dev-142-production-data-migration)／[SPEC-142](specs/SPEC-142-projed-production-data-migration.md)，正式匯入／獨立核對與舊網址切流已完成；來源fence、reader NOLOGIN及原資料保留，登入／記事／草稿恢復及Quick正式回歸PASS，DEV-142已交付。原帳號／個人與外部權限、取消／CAS／unknown／exactly-once及完整DEV-139分母保留，父子不重複認列。
 
 - ✓ DEV-138 [開發點] [已完成／正式發布、限定登入與 RPC 驗收及清理 PASS] [P1] [ProJED] DEV-133 guard 恢復、分支整合與正式驗證後清理
