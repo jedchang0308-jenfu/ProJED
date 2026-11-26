@@ -6,7 +6,7 @@ import { renderAnalysisImageBuild } from './lib/dev139-analysis-image-build.mjs'
 const allowed = new Set(['output', 'predecessor-image', 'release-id', 'source-generation', 'source-revision', 'source-sha256']);
 const options = {};
 for (const argument of process.argv.slice(2)) {
-  const match = argument.match(/^--([a-z-]+)=(.+)$/);
+  const match = argument.match(/^--([a-z0-9-]+)=(.+)$/);
   if (!match || !allowed.has(match[1]) || Object.hasOwn(options, match[1])) {
     throw new Error('Use unique --predecessor-image=image --release-id=id --source-revision=sha --source-sha256=sha --source-generation=id [--output=file] options');
   }

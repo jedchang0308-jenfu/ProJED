@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import process from 'node:process';
 import test from 'node:test';
 
 import { CLOUD_RUN_TARGET } from '../../../scripts/lib/dev139-cloud-run-plan.mjs';
@@ -74,6 +76,22 @@ test('pins the builder, dedicated account, provenance, bounded time, and exact s
   assert.equal(build.queueTtl, '600s');
   assert.equal(build.timeout, '1200s');
   assert.equal(build.source.storageSource.generation, '123456789');
+});
+
+test('CLI accepts the source-sha256 flag and renders without a provider operation', () => {
+  const stdout = execFileSync(process.execPath, [
+    'scripts/create-dev139-analysis-image-build.mjs',
+    `--predecessor-image=${PREDECESSOR}`,
+    '--release-id=dev139-analysis-a1',
+    `--source-revision=${SOURCE}`,
+    `--source-sha256=${ARCHIVE}`,
+    '--source-generation=123456789',
+  ], { cwd: process.cwd(), encoding: 'utf8', windowsHide: true });
+  const plan = JSON.parse(stdout);
+  assert.equal(plan.renderOnly, true);
+  assert.equal(plan.sourceBinding.sha256, ARCHIVE);
+  assert.equal(plan.sourceBinding.generation, '123456789');
+  assert.equal(plan.expectedReadback.deployOrRunJob, false);
 });
 
 test('rejects mutable or foreign predecessors, malformed source bindings, and caller expansion', () => {
