@@ -827,7 +827,13 @@ Cloud Build `817bb362-4c4c-42ed-8e03-c35cb0a960d2` SUCCESS，來源包逐檔驗�
 
 正常主畫面的本機無視窗 Edge 回歸以隔離 HTTP fixture 驗舊／新兩個 origin：`IDENTITY_MAPPING_CONFLICT` 只有在本人按下登入後才各送出一次 login，保留 `returnPath`，返回上一頁不會自動登入循環；`ACCESS_DENIED` 仍顯示拒絕、URL 不變且不送 login。四種情況在登入前都不讀 workspace／task／record。完整 R2 先讓未受影響的10項主／Quick／草稿／取消案例通過，但新四項因測試 locator 未包含按鈕裝飾字元而判FAIL；只修正測試 selector 後，R3 針對受影響四項全數PASS，沒有重跑或改寫前10項結果。R1在瀏覽器 assertion 前發生本機啟動觀測逾時，不能算產品失敗或PASS。證據為 `output/dev139-origin-guide-preview/main-recovery-r2/result.json` 與 `main-recovery-r3/result.json`；兩輪任務程序及port均已確認清理。
 
-上述登入測試使用合成 broker／Session 錯誤及同源攔截，不呼叫正式雲端、provider或私人資料，故只證明前端復原及安全拒絕；不取代真帳號雲端登入驗收。既有0%候選 `projed-prod-origin-175dc0e025` 建置於熱修合併前，**尚不包含此修正**；在新的 immutable image／source binding 讀回並完成同範圍候選驗證前，不得把 main／CI 成功寫成已部署。
+上述登入測試使用合成 broker／Session 錯誤及同源攔截，不呼叫正式雲端、provider或私人資料，故只證明前端復原及安全拒絕；不取代真帳號雲端登入驗收。既有0%候選 `projed-prod-origin-175dc0e025` 建置於熱修合併前，當時不包含此修正；下列R4正式結果已補齊部署差額，但仍不把HTTP smoke寫成本人登入驗收。
+
+**舊網址登入復原正式結果（2026-11-26）。** PR #46 已將正常畫面回歸併入main，分支精確SHA `eb7b6739b4aff902f9643957f8cafca8c3a805ec` 的 [CI45743510673](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45743510673) 兩jobs SUCCESS。PR #47 再把舊PWA的 `GET /api/v1/session` 精確 `IDENTITY_MAPPING_CONFLICT` 轉成需重新登入的 `401 IDENTITY_INVALID`；寫入及其他mapping conflict仍維持409，不放寬權限或改資料。受測head `257b0fa6a9e6d3b97d73cd84a82c95bc30af3ece` 的 [CI45745882195](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45745882195) 兩jobs SUCCESS，包含型別、S2／S3、migration／release、真PostgreSQL、snapshot與Linux OCI；merge後正式source為 `f9a87e3ec2573d6635beea1ca5ecd30af10405e2`。
+
+中央Cloud Run revision `projed-prod-loginfix4-f9a87e3` 已ready並承接100%流量，immutable runtime digest為 `sha256:ccf4006187280bad10caf0e4b058603dba5dbdb1565757dd3968211123040f60`。provider readback再次確認min0／max1／concurrency40、原runtime SA、VPC、Cloud SQL、53份相容binding與既有主／Quick origin不變；舊 `projed-prod-board-4059d94`、R3及先前私人候選tag均保留作回復，不刪revision。舊正式主網址、Quick與`/sw.js`實測200且no-store，匿名`/api/v1/session`回401 `IDENTITY_INVALID`／no-store；切流後一小時內R4的severity ERROR與HTTP 5xx查詢皆為空。正式本人帳號重新登入仍待使用者實際確認，因此不宣稱完整登入驗收。
+
+首輪候選先因新靜態雜湊未同步runtime binding而被startup probe安全拒絕；修正後的第二輪再揭示Windows封包CRLF與canonical LF的profile／migration雜湊不符，兩輪均未承接流量。改以Git canonical位元重建後R3才通過。R4首次Cloud Build提交另因預設source bucket不允許既有專用builder讀取而在建置前被拒，沿R3已成功的區域來源路徑重送，沒有新增IAM或放寬驗證。最終R4沒有執行正式migration、改schema／業務資料、Secret、容量或模型binding；Gemini／RAG仍停用，零留存限制不變。這次正式修復只恢復舊網址／既有PWA登入，不是最後新網址切換或DEV-139結案。
 
 **Platform發布的獨立失敗。** 正常owner流程以 `e2589810`、既有runner image-only rotation及兩個callback執行 `PLATFORM-REL-20261126-DEV139-ORIGIN-A1`；[run45737088740](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/45737088740)的prepare／build／migrate／candidate／entrypoint通過，但verify的Workflows execution `65e5f374-1ffc-4b66-b41f-f76d80aee19f` 在create_session回401 `auth_token_invalid`。activate未執行，正常failure recovery成功；正式Platform原revision `jenfu-platform-prod-ff6819b25d22`仍100%，失敗候選tag已清理。
 
