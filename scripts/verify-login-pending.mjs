@@ -105,7 +105,7 @@ try {
   mode = 'redirect';
   await login.click();
   await pending.waitFor();
-  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
+  await page.evaluate(() => window.dispatchEvent(new window.PageTransitionEvent('pageshow', { persisted: true })));
   await login.waitFor();
   check('returning through browser back restores an actionable login button', await login.isEnabled());
   await page.screenshot({ path: path.join(output, 'recovery.png') });
