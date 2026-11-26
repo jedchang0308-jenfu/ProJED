@@ -165,6 +165,37 @@ test('session profile GET and PATCH report AppSession expiry while legacy mode k
   assert.equal((legacy.body as { data: { expiresAt: number } }).data.expiresAt, actor.expiresAtMs);
 });
 
+test('stale identity mapping is an authentication failure only on session GET', async () => {
+  const mappingConflict = createSessionHttpDispatcher(
+    config,
+    fakeDatabase(),
+    async () => { throw new KernelError('IDENTITY_MAPPING_CONFLICT', 'stale mapping', 409); },
+  );
+  const staleRead = await mappingConflict(incomingRequest('/api/v1/session', 'GET', {}), 'stale-session');
+  assert.equal(staleRead.status, 401);
+  assert.equal((staleRead.body as { error: { code: string; retryable: boolean } }).error.code, 'IDENTITY_MAPPING_CONFLICT');
+  assert.equal((staleRead.body as { error: { code: string; retryable: boolean } }).error.retryable, false);
+
+  const profileBody = JSON.stringify({ displayName: 'Unchanged' });
+  const staleWrite = await mappingConflict(incomingRequest('/api/v1/session/profile', 'PATCH', {
+    origin: 'http://localhost',
+    host: 'localhost',
+    'content-type': 'application/json',
+    'content-length': String(Buffer.byteLength(profileBody)),
+  }, profileBody), 'stale-write');
+  assert.equal(staleWrite.status, 409);
+  assert.equal((staleWrite.body as { error: { code: string } }).error.code, 'IDENTITY_MAPPING_CONFLICT');
+
+  const unrelatedConflict = createSessionHttpDispatcher(
+    config,
+    fakeDatabase(),
+    async () => { throw new KernelError('ACTOR_CHANGED', 'changed actor', 409); },
+  );
+  const unrelatedRead = await unrelatedConflict(incomingRequest('/api/v1/session', 'GET', {}), 'changed-session');
+  assert.equal(unrelatedRead.status, 409);
+  assert.equal((unrelatedRead.body as { error: { code: string } }).error.code, 'ACTOR_CHANGED');
+});
+
 test('kernel logout clears the cookie only after destroy succeeds and keeps legacy destroyers compatible', async () => {
   const database = { end: async () => undefined } as unknown as RuntimeDatabase;
   let mode: 'clear' | 'legacy' | 'fail' = 'clear';

@@ -31,16 +31,24 @@ type SessionProfileRow = {
   created_at_ms: string;
 };
 
-function errorResult(error: unknown, requestId: string): SessionHttpResult {
+function errorResult(error: unknown, requestId: string, staleSessionRead = false): SessionHttpResult {
   const kernelError = asKernelError(error);
+  // Older installed PWA releases only start a fresh SSO flow when the session
+  // probe reports an authentication failure. Preserve the precise error code,
+  // but expose a stale identity mapping as 401 at this one read boundary so
+  // those clients can recover instead of looping on 409. Writes and every
+  // other conflict keep their original status.
+  const status = staleSessionRead && kernelError.code === 'IDENTITY_MAPPING_CONFLICT'
+    ? 401
+    : kernelError.httpStatus;
   return {
     matched: true,
-    status: kernelError.httpStatus,
+    status,
     body: {
       error: {
         code: kernelError.code,
         requestId,
-        retryable: kernelError.httpStatus === 429 || kernelError.httpStatus >= 500,
+        retryable: status === 429 || status >= 500,
       },
     },
   };
@@ -167,7 +175,7 @@ export function createSessionHttpDispatcher(
         body: { data: await readProfile(database, config, actor, body.displayName.trim(), expiresAtMs) },
       };
     } catch (error) {
-      return errorResult(error, requestId);
+      return errorResult(error, requestId, isRead);
     }
   };
 }
