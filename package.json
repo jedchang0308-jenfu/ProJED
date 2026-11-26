@@ -20,6 +20,7 @@
     "create:dev-139:cloud-run-plan": "node scripts/create-dev139-cloud-run-plan.mjs",
     "create:dev-139:analysis-job-update": "node scripts/create-dev139-analysis-job-update.mjs",
     "create:dev-139:analysis-image-build": "node scripts/create-dev139-analysis-image-build.mjs",
+    "create:dev-139:analysis-source-bundle": "node scripts/create-dev139-analysis-source-bundle.mjs",
     "create:dev-139:hosting-config": "node scripts/create-dev139-hosting-config.mjs",
     "migrate:dev-139:data:plan": "tsx scripts/dev139-data-migration.ts plan",
     "migrate:dev-139:data:apply": "tsx scripts/dev139-data-migration.ts apply",
