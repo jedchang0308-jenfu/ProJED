@@ -210,7 +210,7 @@ interface RecordStoreState {
 }
 
 interface RecordStoreActions {
-  loadRecords: (workspaceId: string, boardId: string) => Promise<void>;
+  loadRecords: (workspaceId: string, boardId: string, options?: { background?: boolean }) => Promise<void>;
   resetRecordList: () => void;
   openPanel: () => void;
   closePanel: () => void;
@@ -654,10 +654,13 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
   meetingProjectImportMessage: null,
   meetingProjectImportRequestId: 0,
 
-  loadRecords: async (workspaceId, boardId) => {
+  loadRecords: async (workspaceId, boardId, { background = false } = {}) => {
     const scopeKey = createRecordScopeKey(workspaceId, boardId);
     const requestId = ++recordListRequestSequence;
-    set({ records: [], recordListLoad: { status: 'loading', scopeKey, error: null } });
+    const current = get().recordListLoad;
+    if (!background || current.status !== 'ready' || current.scopeKey !== scopeKey) {
+      set({ records: [], recordListLoad: { status: 'loading', scopeKey, error: null } });
+    }
     try {
       const records = await recordService.listByProject(workspaceId, boardId);
       if (requestId !== recordListRequestSequence) return;
