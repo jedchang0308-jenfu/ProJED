@@ -36,7 +36,7 @@ interface AuthGateProps {
 }
 
 export default function AuthGate({ children }: AuthGateProps) {
-  const { user, loading, error, signInWithGoogle } = useAuthStore();
+  const { user, loading, signingIn, error, signInWithGoogle } = useAuthStore();
   const [authWaitExpired, setAuthWaitExpired] = useState(false);
   useEffect(() => {
     if (!loading) return;
@@ -159,14 +159,14 @@ export default function AuthGate({ children }: AuthGateProps) {
   }, [user?.uid]);
 
   useEffect(() => {
-    const ready = !loading && (!user || migrationState === 'done');
+    const ready = !loading && !signingIn && (!user || migrationState === 'done');
     const epoch = `${user?.uid ?? 'anonymous'}:${migrationState}`;
     setPwaReloadReadiness('auth-shell', epoch, ready);
     return () => setPwaReloadReadiness('auth-shell', epoch, false);
-  }, [loading, migrationState, user?.uid]);
+  }, [loading, signingIn, migrationState, user?.uid]);
 
   useEffect(() => {
-    if (loading || user) return;
+    if (loading || signingIn || user) return;
 
     // 未登入時 AuthGate 就是目前的完整可見畫面；AppContent 尚未掛載，
     // 因此必須由登入 shell 接手 active-view readiness，避免等待中的新版
@@ -175,7 +175,7 @@ export default function AuthGate({ children }: AuthGateProps) {
     setPwaReloadReadiness('active-view', epoch, true);
     refreshPwaReloadSafety(null);
     return () => setPwaReloadReadiness('active-view', epoch, false);
-  }, [loading, migrationState, user?.uid]);
+  }, [loading, signingIn, migrationState, user?.uid]);
 
   // 載入中：顯示 spinner
   if (loading) {
@@ -217,7 +217,7 @@ export default function AuthGate({ children }: AuthGateProps) {
 
           {/* 錯誤訊息 */}
           {error && (
-            <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-6">
+            <div role="alert" className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-6">
               <p className="text-red-400 text-sm text-center">{error}</p>
             </div>
           )}
@@ -269,10 +269,16 @@ export default function AuthGate({ children }: AuthGateProps) {
           {/* Login button */}
           <button
             onClick={isLocalTestMode ? handleLocalTestSignIn : signInWithGoogle}
-            disabled={(shouldAutoTestLogin && loading) || (isInApp && !isHttpBackend)}
+            disabled={signingIn || (shouldAutoTestLogin && loading) || (isInApp && !isHttpBackend)}
+            aria-busy={signingIn}
             className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-50 text-gray-800 font-medium rounded-xl px-6 py-3.5 transition-all duration-200 hover:shadow-lg hover:shadow-white/10 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500 disabled:hover:shadow-none disabled:active:scale-100"
           >
-            {isLocalTestMode ? (
+            {signingIn ? (
+              <>
+                <span aria-hidden="true" className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                正在登入…
+              </>
+            ) : isLocalTestMode ? (
               <>
                 <span className="text-lg">T</span>
                 使用固定測試環境
