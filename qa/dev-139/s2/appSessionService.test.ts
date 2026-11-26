@@ -737,6 +737,54 @@ test('login preserves a valid same-origin Session cookie and cancellation remove
   assert.notEqual(f.store.sessions.get(digest(oldToken))?.revokedAtMs, null);
 });
 
+test('a shared fresh login cookie cannot replace the OAuth state while another PWA window is signing in', async () => {
+  const f = fixture({ origins: { main: MAIN_ORIGIN, quick: MAIN_ORIGIN } });
+  const oldToken = Buffer.alloc(32, 71).toString('base64url');
+  const oldIdentity = f.identity();
+  f.store.seedSession({
+    tokenHash: digest(oldToken), publicOrigin: MAIN_ORIGIN, entry: 'main', localUserId: USER_ID,
+    contextId: CONTEXT_ID, accountGuardRevision: '3', identity: oldIdentity,
+    expiresAtMs: f.now() + 60 * 60 * 1000, revokedAtMs: null,
+  });
+  const oldCookie = setSessionCookie({
+    environment: 'test', publicOrigin: MAIN_ORIGIN, sessionToken: oldToken,
+    expiresAtMs: f.now() + 60 * 60 * 1000, sourceSessionExpiresAtMs: oldIdentity.sourceSessionExpiresAtMs,
+    nowMs: f.now(),
+  }).split(';', 1)[0]!;
+
+  const first = await start(f, 'main', oldCookie);
+  assert.equal(first.status, 200);
+  const firstCookie = cookieValue(first);
+  const firstIntent = intentFrom(f, firstCookie);
+  const firstUrl = authorizationFrom(first);
+
+  const competing = await start(f, 'main', firstCookie);
+  assert.equal(competing.status, 409);
+  assert.equal((competing.body as { error: { code: string } }).error.code, 'DB_BUSY');
+  assert.equal(competing.headers?.['set-cookie'], undefined);
+  assert.equal(f.store.intents.get(firstIntent.tokenHash)?.status, 'pending');
+
+  const completed = await f.service.dispatchAuth(
+    callbackRequest(MAIN_ORIGIN, firstCookie, firstUrl.searchParams.get('state')!),
+    'first-window-callback',
+  );
+  assert.equal(completed.status, 303);
+  assert.equal(f.counts().producerCallCount, 1);
+});
+
+test('an abandoned login can be replaced after the bounded restart fence', async () => {
+  const f = fixture({ origins: { main: MAIN_ORIGIN, quick: MAIN_ORIGIN } });
+  const first = await start(f, 'main');
+  const firstCookie = cookieValue(first);
+  const firstIntent = intentFrom(f, firstCookie);
+
+  f.setNow(f.now() + 60_001);
+  const replacement = await start(f, 'main', firstCookie);
+  assert.equal(replacement.status, 200);
+  assert.equal(f.store.intents.get(firstIntent.tokenHash)?.status, 'cancelled');
+  assert.notEqual(intentFrom(f, cookieValue(replacement)).tokenHash, firstIntent.tokenHash);
+});
+
 test('bad origin, state or issuer fails without consuming producer proof or replacing the old cookie', async () => {
   const f = fixture();
   const forgedOrigin = await f.service.dispatchAuth(loginRequest(QUICK_ORIGIN, 'main'), 'bad-origin');
@@ -784,7 +832,7 @@ test('bad origin, state or issuer fails without consuming producer proof or repl
   assert.equal(f.counts().producerCallCount, 0);
 });
 
-test('an existing login nonce is cancelled before a replacement starts and fences an in-flight callback', async () => {
+test('an existing login nonce is cancelled after the restart fence and fences an in-flight callback', async () => {
   const f = fixture();
   const first = await start(f);
   const firstUrl = authorizationFrom(first);
@@ -803,6 +851,8 @@ test('an existing login nonce is cancelled before a replacement starts and fence
   );
   await started;
 
+  f.setNow(f.now() + 60_001);
+  f.setIdentity(identityAt(f.now()));
   const second = await start(f, 'main', firstCookie);
   assert.equal(second.status, 200);
   const secondCookie = cookieValue(second);
