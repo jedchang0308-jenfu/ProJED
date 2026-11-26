@@ -23,6 +23,13 @@ const READBACK_KEYS = ['client', 'clientVersion', 'conditions', 'createTime', 'c
   'observedGeneration', 'scaling', 'template', 'terminalCondition', 'traffic', 'trafficStatuses', 'uid',
   'updateTime', 'uri', 'urls'];
 
+function assertProvenanceLabels(labels) {
+  exactKeys(labels, ['projed-release', 'projed-source', 'projed-task']);
+  if (labels['projed-task'] !== 'dev-139'
+      || !/^[a-z][a-z0-9-]{0,62}$/u.test(labels['projed-release'] ?? '')
+      || !/^[a-f0-9]{40}$/u.test(labels['projed-source'] ?? '')) invalid();
+}
+
 function invalid() {
   throw Object.assign(new Error('Origin cutover input is outside the reviewed DEV-139 contract'), {
     code: 'ORIGIN_CUTOVER_PLAN_INVALID',
@@ -57,11 +64,8 @@ function revisionName(value) {
 
 function normalizeReadback(readback) {
   exactKeys(readback, READBACK_KEYS);
-  exactKeys(readback.labels, ['projed-release', 'projed-source', 'projed-task']);
+  assertProvenanceLabels(readback.labels);
   if (readback.name !== SERVICE_NAME || readback.ingress !== 'INGRESS_TRAFFIC_ALL' || readback.launchStage !== 'GA'
-      || readback.labels['projed-task'] !== 'dev-139'
-      || !/^[a-z][a-z0-9-]{0,62}$/u.test(readback.labels['projed-release'] ?? '')
-      || !/^[a-f0-9]{40}$/u.test(readback.labels['projed-source'] ?? '')
       || readback.scaling?.maxInstanceCount !== 10 || Object.keys(readback.scaling).length !== 1
       || !Array.isArray(readback.urls)
       || !isDeepStrictEqual(new Set(readback.urls), new Set([CLOUD_RUN_TARGET.publicOrigin, LEGACY_ENTRY_TARGET.upstream]))
@@ -79,8 +83,7 @@ function normalizeReadback(readback) {
     'maxInstanceRequestConcurrency', 'revision', 'scaling', 'serviceAccount', 'timeout', 'vpcAccess']);
   if (rawTemplate.revision !== latestReadyRevision || typeof rawTemplate.client !== 'string'
       || typeof rawTemplate.clientVersion !== 'string') invalid();
-  exactKeys(rawTemplate.labels, ['projed-release', 'projed-source', 'projed-task']);
-  if (!isDeepStrictEqual(rawTemplate.labels, readback.labels)) invalid();
+  assertProvenanceLabels(rawTemplate.labels);
   const scalingKeys = Object.keys(rawTemplate.scaling ?? {}).sort();
   if (!isDeepStrictEqual(scalingKeys, ['maxInstanceCount']) || rawTemplate.scaling.maxInstanceCount !== 1) invalid();
 
@@ -122,12 +125,14 @@ function assertBaseline(input) {
       || !IMAGE.test(baseline.image ?? '') || !Array.isArray(baseline.traffic)) invalid();
 
   const weighted = baseline.traffic.filter(target => target?.percent !== undefined);
+  const existingCandidateTargets = baseline.traffic.filter(target => target?.tag === CANDIDATE_TAG);
   if (weighted.length !== 1 || weighted[0].percent !== 100
       || weighted[0].revision !== baseline.latestReadyRevision
       || baseline.traffic.some(target => !target || typeof target !== 'object' || Array.isArray(target)
         || !REVISION.test(target.revision ?? '') || (target.percent !== undefined && target.percent !== 100)
         || (target.tag !== undefined && !/^[a-z][a-z0-9-]{0,62}$/u.test(target.tag)))
-      || baseline.traffic.some(target => target.tag === CANDIDATE_TAG)) invalid();
+      || existingCandidateTargets.length > 1
+      || existingCandidateTargets.some(target => target.percent !== undefined)) invalid();
 
   const template = baseline.template;
   exactKeys(template, ['containers', 'executionEnvironment', 'labels', 'maxInstanceRequestConcurrency', 'scaling',
@@ -231,6 +236,11 @@ export function renderOriginCutoverPlan(input) {
   };
   desiredTemplate.containers[0].env = Object.entries(desiredEnvironment).map(([name, value]) => ({ name, value }));
 
+  const refreshedCandidateTraffic = [
+    ...baseline.traffic.filter(target => target.tag !== CANDIDATE_TAG),
+    { revision: '<verified-candidate-revision>', tag: CANDIDATE_TAG },
+  ];
+
   const candidateBody = { name: SERVICE_NAME, etag: baseline.etag, template: desiredTemplate };
   return {
     renderOnly: true,
@@ -253,10 +263,10 @@ export function renderOriginCutoverPlan(input) {
         },
         verificationRoute: {
           requiresFreshReadbackAndEtag: true, movesTraffic: false, publishesNewOrigin: false,
+          replacesExistingZeroTrafficTag: baseline.traffic.some(target => target.tag === CANDIDATE_TAG),
           requestTemplate: {
             method: 'PATCH', url: `${SERVICE_URL}&updateMask=traffic`,
-            body: { etag: '<fresh-etag>', traffic: [...structuredClone(baseline.traffic),
-              { revision: '<verified-candidate-revision>', tag: CANDIDATE_TAG }] },
+            body: { etag: '<fresh-etag>', traffic: refreshedCandidateTraffic },
           },
         },
       },
