@@ -142,8 +142,9 @@ test('rejects stale, public, drifting, model-enabled, and caller-expanded baseli
     value => { value.readback.template.vpcAccess.networkInterfaces[0].network += '-other'; },
     value => { value.readback.template.containers[0].env.push({ name: 'GEMINI_API_KEY', value: 'hidden' }); },
     value => { value.readback.template.containers[0].env.find(row => row.name === 'PROJED_MAIN_PUBLIC_ORIGIN').value = 'https://attacker.invalid'; },
-    value => { value.readback.traffic.push({ type: 'TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION',
-      revision: 'projed-prod-old-candidate', tag: 'dev139-origin-cutover' }); },
+    value => { value.readback.traffic.push(
+      { type: 'TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION', revision: 'projed-prod-old-candidate', tag: 'dev139-origin-cutover' },
+      { type: 'TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION', revision: 'projed-prod-other-candidate', tag: 'dev139-origin-cutover' }); },
   ]) { const value = input(); mutate(value); invalid(value); }
   invalid({ ...input(), project: 'other' });
   invalid({ ...input(), campaign: 'contains spaces' });
@@ -163,6 +164,25 @@ test('does not accept a baseline where an origin campaign is already active', ()
   const value = input();
   value.readback.template.containers[0].env.push({ name: 'PROJED_ORIGIN_SWITCH_CAMPAIGN', value: '{}' });
   invalid(value);
+});
+
+test('refreshes one existing zero-traffic candidate tag and tolerates historical service/template label drift', () => {
+  const value = input();
+  const previousCandidate = { type: 'TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION',
+    revision: 'projed-prod-origin-previous', tag: 'dev139-origin-cutover' };
+  value.readback.traffic.push(previousCandidate);
+  value.readback.template.labels = {
+    'projed-release': 'dev139-older-template', 'projed-source': '1'.repeat(40), 'projed-task': 'dev-139',
+  };
+  const plan = renderOriginCutoverPlan(value);
+  const traffic = plan.stages.privateCandidate.verificationRoute.requestTemplate.body.traffic;
+  assert.equal(plan.stages.privateCandidate.verificationRoute.replacesExistingZeroTrafficTag, true);
+  assert.equal(traffic.filter(target => target.tag === 'dev139-origin-cutover').length, 1);
+  assert.deepEqual(traffic.find(target => target.tag === 'dev139-origin-cutover'),
+    { revision: '<verified-candidate-revision>', tag: 'dev139-origin-cutover' });
+  assert.deepEqual(plan.rollback.bodyWithoutEtag.traffic.at(-1),
+    { revision: previousCandidate.revision, tag: previousCandidate.tag });
+  assert.deepEqual(plan.rollback.bodyWithoutEtag.template.labels, value.readback.template.labels);
 });
 
 test('CLI consumes the unmodified v2 readback envelope from stdin without a provider operation', () => {
