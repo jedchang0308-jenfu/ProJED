@@ -327,18 +327,19 @@ const signInWithLocalSupabasePassword = async (): Promise<FirestoreUser> => {
 };
 
 export const authService = {
-  signInWithGoogle: async (): Promise<FirestoreUser | null> => {
+  signInWithGoogle: async (signal?: AbortSignal): Promise<FirestoreUser | null> => {
     if (isLocalTestAuth()) {
       return signInWithLocalTestUser();
     }
 
     if (isHttpBackend) {
       try {
-        return await httpSessionService.getSession();
+        return await httpSessionService.getSession(signal);
       } catch (error) {
         if (error instanceof HttpApiError && shouldStartFreshLogin(error.status, error.code)) {
           const returnPath = `${window.location.pathname}${window.location.search}`;
-          const authorizationUrl = await httpSessionService.startLogin('main', returnPath);
+          const authorizationUrl = await httpSessionService.startLogin('main', returnPath, signal);
+          signal?.throwIfAborted();
           window.location.assign(authorizationUrl);
           return null;
         }

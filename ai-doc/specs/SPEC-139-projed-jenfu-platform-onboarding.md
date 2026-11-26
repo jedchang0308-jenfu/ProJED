@@ -825,6 +825,10 @@ Cloud Build `817bb362-4c4c-42ed-8e03-c35cb0a960d2` SUCCESS，來源包逐檔驗�
 
 **登入復原熱修與候選差額（2026-11-26）。** PR #44 已合併為 `85a390179e7c7f6dd54bc56b8b482bc6f5f8fca6`，讓正常登入按鈕在 Session 回 `401`、`404` 或 `409 IDENTITY_MAPPING_CONFLICT` 時重新啟動 Jenfu-Platform 登入；其他拒絕仍維持拒絕，不能把 `403 ACCESS_DENIED` 轉成登入。受測 head `820ec4c6bf818a8f08ccbdcfc4afea7325476acf` 的 [CI45741209693](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45741209693) 兩個 jobs 均 SUCCESS，涵蓋型別、S2／S3、真 PostgreSQL、snapshot 與 OCI。三項 focused unit 另在目前 main 通過。
 
+**登入按鈕等待狀態（2026-11-26，來源修復）。** 主站按登入後保留原登入卡片，按鈕顯示「正在登入…」與載入動畫並停用；同一頁連點／鍵盤重送只啟動一次。取得 authorize URL 後仍維持等待，不能因 `location.assign()` 回傳就解除鎖定。登入期間 auth-shell／active-view readiness 為 false，避免 PWA 自動重載中斷流程；60 秒未離頁即中止該次 HTTP 等待、顯示可重試錯誤，晚到結果不能跳轉或覆寫下一次登入。一般失敗立即恢復按鈕；後端 `409 DB_BUSY` 表示已有登入，保持有界等待而不自動重送；由瀏覽器上一頁快取返回也恢復可重試狀態。不延長 Session、不改准入／權限或私人資料隔離。
+
+回歸入口：`qa/dev-139/s3/loginPending.test.ts`（沿既有 S3 unit CI），及 `npx --yes --package @playwright/cli -c "node scripts/verify-login-pending.mjs"`。後者以隔離無視窗 Edge／合成 HTTP 回覆驗實際 AuthGate，先觀測導向邊界以查核等待 UI，再實際導向合成 SSO；包含鍵盤連點、60 秒逾時、失敗、競爭回覆、晚到結果與上一頁恢復。證據輸出 `output/playwright/login-pending/`，不使用正式身分與業務資料，也不取代正式部署驗收。
+
 正常主畫面的本機無視窗 Edge 回歸以隔離 HTTP fixture 驗舊／新兩個 origin：`IDENTITY_MAPPING_CONFLICT` 只有在本人按下登入後才各送出一次 login，保留 `returnPath`，返回上一頁不會自動登入循環；`ACCESS_DENIED` 仍顯示拒絕、URL 不變且不送 login。四種情況在登入前都不讀 workspace／task／record。完整 R2 先讓未受影響的10項主／Quick／草稿／取消案例通過，但新四項因測試 locator 未包含按鈕裝飾字元而判FAIL；只修正測試 selector 後，R3 針對受影響四項全數PASS，沒有重跑或改寫前10項結果。R1在瀏覽器 assertion 前發生本機啟動觀測逾時，不能算產品失敗或PASS。證據為 `output/dev139-origin-guide-preview/main-recovery-r2/result.json` 與 `main-recovery-r3/result.json`；兩輪任務程序及port均已確認清理。
 
 上述登入測試使用合成 broker／Session 錯誤及同源攔截，不呼叫正式雲端、provider或私人資料，故只證明前端復原及安全拒絕；不取代真帳號雲端登入驗收。既有0%候選 `projed-prod-origin-175dc0e025` 建置於熱修合併前，當時不包含此修正；下列R4正式結果已補齊部署差額，但仍不把HTTP smoke寫成本人登入驗收。
