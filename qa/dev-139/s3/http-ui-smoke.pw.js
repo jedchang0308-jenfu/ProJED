@@ -1,6 +1,23 @@
 /* eslint-disable */
 async (page) => {
   const baseUrl = page.url().split('/').slice(0, 3).join('/');
+  const taskPath = '/api/v1/workspaces/ws-b/boards/board-shared/tasks';
+  await page.addInitScript(path => {
+    const fetchResponse = window.fetch.bind(window);
+    window.fetch = async (input, init) => {
+      const response = await fetchResponse(input, init);
+      const refresh = window.__DEV139_DELAY_TASK_REFRESH;
+      if (!refresh || refresh.started || !response.ok || new URL(response.url).pathname !== path
+        || (init?.method ?? 'GET') !== 'GET') return response;
+      const { data } = await response.clone().json();
+      if (refresh === window.__DEV139_DELAY_TASK_REFRESH && !refresh.started
+        && data.some(task => task.id === 'shared-parent' && task.title === refresh.title)) {
+        refresh.started = true;
+        await refresh.resume;
+      }
+      return response;
+    };
+  }, taskPath);
   const consoleErrors = [];
   const pageErrors = [];
   const responseErrors = [];
@@ -283,7 +300,6 @@ async (page) => {
     await waitForProduct();
 
     step = 'edit a task through its details dialog';
-    const taskPath = '/api/v1/workspaces/ws-b/boards/board-shared/tasks';
     const taskTitle = page.locator('[data-task-title-slot="true"][data-task-id="shared-parent"]').first();
     const modal = page.locator('[data-task-details-modal="true"]');
     const editTitle = async title => {
@@ -301,35 +317,23 @@ async (page) => {
       const canvas = page.locator('[data-kanban-mouse-pan-surface="true"]');
       const card = canvas.locator('[data-task-title-slot="true"][data-task-id="shared-parent"]').first();
       const beforeRefresh = await card.elementHandle();
-      let releaseRead;
-      const holdRead = new Promise(resolve => { releaseRead = resolve; });
-      let signalRead;
-      const readStarted = new Promise(resolve => { signalRead = resolve; });
-      let delayed = false;
-      const delayUpdatedSnapshot = async route => {
-        const response = await route.fetch();
-        if (!delayed && response.ok() && (await response.json()).data.some(task => task.id === 'shared-parent' && task.title === title)) {
-          delayed = true;
-          signalRead();
-          await holdRead;
-        }
-        await route.fulfill({ response });
-      };
-      await page.route(baseUrl + taskPath, delayUpdatedSnapshot);
-      let refreshTimeout;
+      await page.evaluate(title => {
+        let release;
+        const resume = new Promise(resolve => { release = resolve; });
+        window.__DEV139_DELAY_TASK_REFRESH = { title, started: false, resume, release };
+      }, title);
       try {
         await editTitle(title);
-        await Promise.race([readStarted, new Promise((_, reject) => {
-          refreshTimeout = setTimeout(() => reject(new Error('Saved task was not refreshed')), 15000);
-        })]);
+        await page.waitForFunction(() => window.__DEV139_DELAY_TASK_REFRESH?.started, undefined, { timeout: 15000 });
         await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
         assert(await card.isVisible() && await canvas.locator('[data-task-filter-result-state="loading"]').count() === 0,
           'the loaded board was hidden during a background refresh');
         assert(await beforeRefresh.evaluate(element => element.isConnected), 'the task was remounted during a background refresh');
       } finally {
-        clearTimeout(refreshTimeout);
-        releaseRead();
-        await page.unrouteAll({ behavior: 'wait' });
+        await page.evaluate(() => {
+          window.__DEV139_DELAY_TASK_REFRESH?.release();
+          delete window.__DEV139_DELAY_TASK_REFRESH;
+        });
         await beforeRefresh.dispose();
       }
     };
