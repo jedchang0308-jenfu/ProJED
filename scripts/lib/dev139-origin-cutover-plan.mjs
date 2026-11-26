@@ -7,6 +7,7 @@ import { MANAGED_SSO_BROKER_ORIGIN } from '../../shared/dev139DeploymentTarget.m
 
 const SERVICE_NAME = `projects/${CLOUD_RUN_TARGET.project}/locations/${CLOUD_RUN_TARGET.region}/services/${CLOUD_RUN_TARGET.service}`;
 const SERVICE_URL = `https://run.googleapis.com/v2/${SERVICE_NAME}?allowMissing=false&validateOnly=false`;
+const SERVICE_VALIDATE_URL = `https://run.googleapis.com/v2/${SERVICE_NAME}?allowMissing=false&validateOnly=true`;
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/iu;
 const REVISION = /^projed-prod-[a-z0-9][a-z0-9-]{0,62}$/u;
 const CAMPAIGN = /^[a-zA-Z0-9._-]{1,80}$/u;
@@ -18,6 +19,11 @@ const ENVIRONMENT = [
 ];
 const MODEL_ENV = /(?:GEMINI|VERTEX|RAG|MODEL|API_KEY|CONTENT_LOG|CACHE)/iu;
 const CANDIDATE_TAG = 'dev139-origin-cutover';
+const VALIDATE_ONLY_SUCCESS = {
+  httpStatus: 200,
+  responseErrorAbsent: true,
+  providerReadbackUnchanged: ['generation', 'observedGeneration', 'traffic', 'invokerIamDisabled'],
+};
 const COMPATIBLE_PROXY_IMAGES = new Set([
   CLOUD_RUN_TARGET.proxyImage,
   // Immutable digest on the current 100% production revision. Candidate
@@ -36,9 +42,10 @@ function assertProvenanceLabels(labels) {
       || !/^[a-f0-9]{40}$/u.test(labels['projed-source'] ?? '')) invalid();
 }
 
-function invalid() {
+function invalid(detail = 'contract') {
   throw Object.assign(new Error('Origin cutover input is outside the reviewed DEV-139 contract'), {
     code: 'ORIGIN_CUTOVER_PLAN_INVALID',
+    detail,
   });
 }
 
@@ -60,6 +67,11 @@ function envMap(container) {
   return result;
 }
 
+function parseJson(value) {
+  try { return JSON.parse(value); }
+  catch { invalid(); }
+}
+
 function revisionName(value) {
   const prefix = `${SERVICE_NAME}/revisions/`;
   if (typeof value !== 'string' || !value.startsWith(prefix)) invalid();
@@ -68,7 +80,7 @@ function revisionName(value) {
   return revision;
 }
 
-function normalizeReadback(readback) {
+function normalizeReadback(readback, { allowOmittedTemplateMetadata = false } = {}) {
   exactKeys(readback, READBACK_KEYS);
   assertProvenanceLabels(readback.labels);
   if (readback.name !== SERVICE_NAME || readback.ingress !== 'INGRESS_TRAFFIC_ALL' || readback.launchStage !== 'GA'
@@ -85,10 +97,14 @@ function normalizeReadback(readback) {
       || readback.conditions.some(condition => condition?.state !== 'CONDITION_SUCCEEDED')) invalid();
 
   const rawTemplate = readback.template;
-  exactKeys(rawTemplate, ['client', 'clientVersion', 'containers', 'executionEnvironment', 'labels',
-    'maxInstanceRequestConcurrency', 'revision', 'scaling', 'serviceAccount', 'timeout', 'vpcAccess']);
-  if (rawTemplate.revision !== latestReadyRevision || typeof rawTemplate.client !== 'string'
-      || typeof rawTemplate.clientVersion !== 'string') invalid();
+  const templateKeys = ['containers', 'executionEnvironment', 'labels', 'maxInstanceRequestConcurrency', 'scaling',
+    'serviceAccount', 'timeout', 'vpcAccess'];
+  const hasTemplateMetadata = Object.hasOwn(rawTemplate ?? {}, 'revision')
+    || Object.hasOwn(rawTemplate ?? {}, 'client') || Object.hasOwn(rawTemplate ?? {}, 'clientVersion');
+  exactKeys(rawTemplate, hasTemplateMetadata ? [...templateKeys, 'client', 'clientVersion', 'revision'] : templateKeys);
+  if ((!allowOmittedTemplateMetadata && !hasTemplateMetadata)
+      || (hasTemplateMetadata && (rawTemplate.revision !== latestReadyRevision || typeof rawTemplate.client !== 'string'
+        || typeof rawTemplate.clientVersion !== 'string'))) invalid();
   assertProvenanceLabels(rawTemplate.labels);
   const scalingKeys = Object.keys(rawTemplate.scaling ?? {}).sort();
   if (!isDeepStrictEqual(scalingKeys, ['maxInstanceCount']) || rawTemplate.scaling.maxInstanceCount !== 1) invalid();
@@ -252,6 +268,8 @@ export function renderOriginCutoverPlan(input) {
   ];
 
   const candidateBody = { name: SERVICE_NAME, etag: baseline.etag, template: desiredTemplate };
+  const publicActivationBody = { etag: '<fresh-etag>', invokerIamDisabled: true,
+    traffic: [providerTraffic({ revision: '<verified-candidate-revision>', percent: 100, tag: CANDIDATE_TAG })] };
   return {
     renderOnly: true,
     action: 'prepare-old-and-new-origin-coexistence',
@@ -281,12 +299,24 @@ export function renderOriginCutoverPlan(input) {
         },
       },
       publicActivation: {
-        authorizedByThisPlan: false, requiresHumanAuthorization: true,
-        prerequisites: ['fresh-etag', 'candidate-ready', 'old-url-smoke', 'new-url-login-smoke', 'pwa-handoff-smoke'],
+        authorizedByThisPlan: false, requiresHumanAuthorization: true, movesTraffic: true, publishesNewOrigin: true,
+        prerequisites: ['fresh-etag', 'candidate-ready', 'old-url-smoke', 'rollback-bound', 'provider-validate-only-pass'],
+        preflight: {
+          requiredBeforeApply: true,
+          successCriteria: structuredClone(VALIDATE_ONLY_SUCCESS),
+          requestTemplate: {
+            method: 'PATCH', url: `${SERVICE_VALIDATE_URL}&updateMask=invokerIamDisabled,traffic`,
+            body: structuredClone(publicActivationBody),
+          },
+        },
         requestTemplate: {
           method: 'PATCH', url: `${SERVICE_URL}&updateMask=invokerIamDisabled,traffic`,
-          body: { etag: '<fresh-etag>', invokerIamDisabled: true,
-            traffic: [providerTraffic({ revision: '<verified-candidate-revision>', percent: 100, tag: CANDIDATE_TAG })] },
+          body: structuredClone(publicActivationBody),
+        },
+        postActivationVerification: {
+          required: ['canonical-main-login-and-reload', 'canonical-quick-login-and-reload',
+            'old-origin-guidance', 'draft-handoff-and-account-isolation', 'main-and-quick-pwa-install-guidance'],
+          failureAction: 'rollback-before-retry',
         },
       },
     },
@@ -296,5 +326,114 @@ export function renderOriginCutoverPlan(input) {
         traffic: baseline.traffic.map(providerTraffic), template: structuredClone(baseline.template) },
     },
     exclusions: ['iam-grant', 'secret-change', 'billing-change', 'capacity-change', 'model-enable', 'data-write'],
+  };
+}
+
+function assertPreparedActivationPlan(plan) {
+  exactKeys(plan, ['action', 'campaign', 'exclusions', 'origins', 'renderOnly', 'rollback', 'stages', 'target']);
+  if (plan.renderOnly !== true || plan.action !== 'prepare-old-and-new-origin-coexistence'
+      || !isDeepStrictEqual(plan.origins, {
+        old: { ...LEGACY_ENTRY_ORIGINS },
+        new: { main: CLOUD_RUN_TARGET.publicOrigin, quick: LEGACY_ENTRY_TARGET.upstream },
+      }) || !isDeepStrictEqual(plan.campaign, switchConfiguration(plan.campaign?.campaign))
+      || !isDeepStrictEqual(plan.exclusions,
+        ['iam-grant', 'secret-change', 'billing-change', 'capacity-change', 'model-enable', 'data-write'])) invalid('prepared-plan');
+
+  const privateCandidate = plan.stages?.privateCandidate;
+  const publicActivation = plan.stages?.publicActivation;
+  if (privateCandidate?.authorizedByThisPlan !== true || privateCandidate.movesTraffic !== false
+      || privateCandidate.publishesNewOrigin !== false || publicActivation?.authorizedByThisPlan !== false
+      || publicActivation.requiresHumanAuthorization !== true || publicActivation.movesTraffic !== true
+      || publicActivation.publishesNewOrigin !== true
+      || !isDeepStrictEqual(publicActivation.prerequisites,
+        ['fresh-etag', 'candidate-ready', 'old-url-smoke', 'rollback-bound', 'provider-validate-only-pass'])
+      || publicActivation.preflight?.requiredBeforeApply !== true
+      || !isDeepStrictEqual(publicActivation.preflight.successCriteria, VALIDATE_ONLY_SUCCESS)
+      || !isDeepStrictEqual(publicActivation.postActivationVerification?.required,
+        ['canonical-main-login-and-reload', 'canonical-quick-login-and-reload',
+          'old-origin-guidance', 'draft-handoff-and-account-isolation', 'main-and-quick-pwa-install-guidance'])
+      || publicActivation.postActivationVerification?.failureAction !== 'rollback-before-retry') invalid('prepared-stages');
+
+  const candidateTemplate = privateCandidate.request?.body?.template;
+  const rollback = plan.rollback?.bodyWithoutEtag;
+  if (privateCandidate.request.method !== 'PATCH' || privateCandidate.request.body.name !== SERVICE_NAME
+      || privateCandidate.request.body.etag !== plan.target?.etag || !candidateTemplate
+      || rollback?.name !== SERVICE_NAME || rollback.invokerIamDisabled !== false
+      || !Array.isArray(rollback.traffic) || rollback.traffic.some(target =>
+        target?.type !== 'TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION')
+      || !rollback.template || plan.rollback.requiresFreshReadbackAndEtag !== true
+      || plan.target?.name !== SERVICE_NAME || !UUID.test(plan.target.uid ?? '')) invalid('prepared-rollback');
+
+  const expectedRollbackTraffic = privateCandidate.preconditions?.traffic?.map(providerTraffic);
+  const rollbackTemplate = structuredClone(rollback.template);
+  const candidateInvariant = structuredClone(candidateTemplate);
+  const rollbackEnvironment = envMap(rollbackTemplate.containers?.[0]);
+  if (privateCandidate.preconditions?.invokerIamDisabled !== false
+      || !isDeepStrictEqual(rollback.traffic, expectedRollbackTraffic)
+      || !IMAGE.test(rollbackTemplate.containers?.[0]?.image ?? '')
+      || rollbackEnvironment.PROJED_PUBLIC_APP_URL !== LEGACY_ENTRY_ORIGINS.main
+      || rollbackEnvironment.PROJED_MAIN_PUBLIC_ORIGIN !== LEGACY_ENTRY_ORIGINS.main
+      || rollbackEnvironment.PROJED_QUICK_PUBLIC_ORIGIN !== LEGACY_ENTRY_ORIGINS.quick
+      || rollbackEnvironment.PROJED_SSO_BROKER_ORIGIN !== MANAGED_SSO_BROKER_ORIGIN) invalid('prepared-rollback');
+  assertProvenanceLabels(rollbackTemplate.labels);
+  delete rollbackTemplate.labels;
+  delete candidateInvariant.labels;
+  rollbackTemplate.containers[0].image = '<application-image>';
+  candidateInvariant.containers[0].image = '<application-image>';
+  rollbackTemplate.containers[0].env = [];
+  candidateInvariant.containers[0].env = [];
+  if (!isDeepStrictEqual(rollbackTemplate, candidateInvariant)) invalid('prepared-rollback');
+  return { candidateTemplate, privateCandidate, publicActivation, rollback };
+}
+
+/** Materializes a provider-bound activation request after the private candidate exists. It is still render-only. */
+export function renderOriginActivationPlan(input) {
+  exactKeys(input, ['preparedPlan', 'readback']);
+  const prepared = assertPreparedActivationPlan(input.preparedPlan);
+  const current = normalizeReadback(input.readback, { allowOmittedTemplateMetadata: true });
+  if (current.uid !== input.preparedPlan.target.uid || current.ready !== true
+      || !/^[1-9][0-9]*$/u.test(current.generation ?? '') || current.observedGeneration !== current.generation
+      || typeof current.etag !== 'string' || current.etag.length < 8 || /[\r\n\p{Cc}]/u.test(current.etag)
+      || current.invokerIamDisabled !== false || !isDeepStrictEqual(current.template, prepared.candidateTemplate)
+      || current.image !== prepared.privateCandidate.expectedReadback?.image
+      || current.template.labels?.['projed-release'] !== prepared.privateCandidate.expectedReadback?.releaseId
+      || current.template.labels?.['projed-source'] !== prepared.privateCandidate.expectedReadback?.sourceRevision) invalid('live-candidate');
+
+  const weighted = current.traffic.filter(target => target.percent !== undefined);
+  const candidates = current.traffic.filter(target => target.tag === CANDIDATE_TAG);
+  if (weighted.length !== 1 || weighted[0].percent !== 100 || weighted[0].revision === current.latestReadyRevision
+      || candidates.length !== 1 || candidates[0].revision !== current.latestReadyRevision
+      || candidates[0].percent !== undefined) invalid('live-traffic');
+
+  const environment = Object.fromEntries(current.template.containers[0].env.map(row => [row.name, row.value]));
+  if (environment.PROJED_PUBLIC_APP_URL !== CLOUD_RUN_TARGET.publicOrigin
+      || environment.PROJED_MAIN_PUBLIC_ORIGIN !== CLOUD_RUN_TARGET.publicOrigin
+      || environment.PROJED_QUICK_PUBLIC_ORIGIN !== LEGACY_ENTRY_TARGET.upstream
+      || !isDeepStrictEqual(parseJson(environment.PROJED_MAIN_ADDITIONAL_PUBLIC_ORIGINS ?? 'null'),
+        [LEGACY_ENTRY_ORIGINS.main])
+      || !isDeepStrictEqual(parseJson(environment.PROJED_QUICK_ADDITIONAL_PUBLIC_ORIGINS ?? 'null'),
+        [LEGACY_ENTRY_ORIGINS.quick])
+      || !isDeepStrictEqual(parseJson(environment.PROJED_ORIGIN_SWITCH_CAMPAIGN ?? 'null'),
+        input.preparedPlan.campaign)
+      || Object.keys(environment).some(name => MODEL_ENV.test(name))) invalid('live-environment');
+
+  const activationBody = { etag: current.etag, invokerIamDisabled: true,
+    traffic: [providerTraffic({ revision: current.latestReadyRevision, percent: 100, tag: CANDIDATE_TAG })] };
+  const rollbackBody = { ...structuredClone(prepared.rollback), etag: '<fresh-etag>' };
+  return {
+    renderOnly: true,
+    action: 'activate-verified-origin-candidate',
+    target: { name: SERVICE_NAME, uid: current.uid, generation: current.generation, etag: current.etag },
+    candidate: { revision: current.latestReadyRevision, image: current.image,
+      releaseId: current.template.labels['projed-release'], sourceRevision: current.template.labels['projed-source'] },
+    prerequisites: structuredClone(prepared.publicActivation.prerequisites),
+    preflight: { requiredBeforeApply: true, successCriteria: structuredClone(VALIDATE_ONLY_SUCCESS), request: { method: 'PATCH',
+      url: `${SERVICE_VALIDATE_URL}&updateMask=invokerIamDisabled,traffic`, body: structuredClone(activationBody) } },
+    activation: { requiresHumanAuthorization: true, request: { method: 'PATCH',
+      url: `${SERVICE_URL}&updateMask=invokerIamDisabled,traffic`, body: structuredClone(activationBody) } },
+    postActivationVerification: structuredClone(prepared.publicActivation.postActivationVerification),
+    rollback: { requiresFreshReadbackAndEtag: true, requestTemplate: { method: 'PATCH',
+      url: `${SERVICE_URL}&updateMask=invokerIamDisabled,traffic,template`, body: rollbackBody } },
+    exclusions: structuredClone(input.preparedPlan.exclusions),
   };
 }
