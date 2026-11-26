@@ -182,6 +182,7 @@ export function useHttpSync(options: { enabled?: boolean } = {}) {
 
   useLayoutEffect(() => {
     if (!enabled) return;
+    const snapshots = boardSnapshots.current;
     readEpoch.current += 1;
     const userId = useAuthStore.getState().user?.uid ?? null;
     if (userId && !useAuthStore.getState().loading) cancelRecordSessionLogout(userId);
@@ -191,7 +192,7 @@ export function useHttpSync(options: { enabled?: boolean } = {}) {
     previousUserId.current = userId;
     return () => {
       readEpoch.current += 1;
-      boardSnapshots.current.clear();
+      snapshots.clear();
       retrySelection.current = false;
       protectRecordEditorOnIdentityChange(userId, identity);
       clearPublishedReads(useAuthStore.getState().user?.uid === userId);
