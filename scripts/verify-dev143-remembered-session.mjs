@@ -36,6 +36,13 @@ const check = (name, condition) => {
   checks.push(name);
   console.log('PASS ' + name);
 };
+const cleanupOwnedProfile = (profilePath, outputPath) => {
+  const ownedProfile = path.resolve(profilePath);
+  if (!ownedProfile.startsWith(outputPath + path.sep) || path.basename(ownedProfile) !== 'browser-profile') {
+    throw new Error('Unexpected browser profile cleanup target');
+  }
+  fs.rmSync(ownedProfile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+};
 const server = http.createServer(async (request, response) => {
   const url = new URL(request.url, 'http://127.0.0.1');
   const json = (code, body) => {
@@ -182,7 +189,7 @@ try {
   await reopened.reload();
   await reopened.locator('#quick-task-auth-status').filter({ hasText: '此快速 App 尚未登入' }).waitFor();
   const retainedForOwner = () => reopened.evaluate(async ({ expectedTitle, owner }) => {
-    const request = indexedDB.open('projed-quick-task-v1');
+    const request = window.indexedDB.open('projed-quick-task-v1');
     const db = await new Promise((resolve, reject) => {
       request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
     });
@@ -223,10 +230,6 @@ try {
   }, null, 2));
   // Only this run's synthetic browser profile is disposable. Keep the build,
   // screenshots and result so failed and successful runs remain reviewable.
-  const ownedProfile = path.resolve(profile);
-  if (!ownedProfile.startsWith(output + path.sep) || path.basename(ownedProfile) !== 'browser-profile') {
-    throw new Error('Unexpected browser profile cleanup target');
-  }
-  fs.rmSync(ownedProfile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  cleanupOwnedProfile(profile, output);
 }
 console.log('DEV143_BROWSER_RESULT=' + path.join(output, 'result.json'));
