@@ -4,17 +4,19 @@ import argparse
 import asyncio
 import json
 import os
+import re
 from pathlib import Path
 import socket
 import subprocess
 import time
 from urllib.request import urlopen
 from urllib.error import HTTPError
-from urllib.parse import urlsplit
+from urllib.parse import urlencode, urlsplit
 from playwright.async_api import async_playwright
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--report', type=Path, required=True)
+parser.add_argument('--login-recovery-only', action='store_true', help='Run only the affected visible login recovery cases')
 args = parser.parse_args()
 report = args.report.resolve()
 report.mkdir(parents=True, exist_ok=True)
@@ -42,7 +44,8 @@ async def run(local):
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(channel='msedge', headless=True)
         try:
-            async def page_for(origin, entry, enabled=True, locator=False, fixed_intent=False, controls=None):
+            async def page_for(origin, entry, enabled=True, locator=False, fixed_intent=False, controls=None,
+                               session_error=None, return_path=None):
                 context = await browser.new_context(viewport={'width': 390, 'height': 844})
                 calls = []
                 context_ids = {old: '33333333-3333-4333-8333-333333333333',
@@ -61,14 +64,27 @@ async def run(local):
                     if request_origin not in context_ids:
                         await route.abort()
                         return
+                    if url.path == '/api/sso/authorize':
+                        await route.fulfill(content_type='text/html', body='<p data-synthetic-broker>合成登入頁</p>')
+                        return
                     if url.path.startswith('/api/v1/'):
                         calls.append({'url': route.request.url, 'origin': request_origin, 'path': url.path, 'method': route.request.method,
                                       'headers': route.request.headers, 'body': route.request.post_data})
                         now = int(time.time() * 1000)
                         if url.path == '/api/v1/session':
+                            if session_error:
+                                status, code = session_error
+                                await route.fulfill(status=status, headers={'Cache-Control': 'no-store'},
+                                                    json={'error': {'code': code, 'retryable': False}})
+                                return
                             payload = {'localUserId': account, 'email': 'synthetic@example.test', 'displayName': '測試帳號',
                                        'createdAt': 1, 'expiresAt': now + 600000, 'authContextId': context_ids[request_origin],
                                        'entry': 'quick' if request_origin == new else 'main'}
+                        elif url.path == '/api/v1/session/login':
+                            query = urlencode({'client_id': 'projed', 'redirect_uri': request_origin + '/api/auth/jenfu-sso/callback',
+                                               'response_type': 'code', 'code_challenge': 'A' * 43,
+                                               'code_challenge_method': 'S256', 'state': 'B' * 43})
+                            payload = {'authorizationUrl': request_origin + '/api/sso/authorize?' + query}
                         elif url.path == '/api/v1/origin-switch/config':
                             payload = campaign if enabled else None
                         elif url.path.startswith('/api/v1/origin-switch/intents'):
@@ -124,11 +140,11 @@ async def run(local):
                 await context.route('**/*', route_request)
                 page = await context.new_page()
                 page.on('pageerror', lambda error: print('PAGE_ERROR ' + str(error), flush=True))
-                await page.goto(origin + ('/quick-task/' if entry == 'quick' else '/')
+                await page.goto(origin + (return_path or ('/quick-task/' if entry == 'quick' else '/'))
                                 + (f'#projed-origin-switch={intent_id}' if locator else ''), wait_until='domcontentloaded')
                 return context, page, calls
 
-            for entry in ['main', 'quick']:
+            for entry in ([] if args.login_recovery_only else ['main', 'quick']):
                 context, page, calls = await page_for(old, entry, enabled=False)
                 await page.wait_for_function("() => document.querySelector('#quick-task-title, #root')")
                 for _ in range(200):
@@ -146,6 +162,48 @@ async def run(local):
                 checks.append({'case': f'{entry}-disabled-preserves-normal-entry', 'status': 'PASS'})
                 print('PASS ' + checks[-1]['case'], flush=True)
                 await context.close()
+
+            # A fenced Session must allow the normal visible login action, while
+            # an account denial must stay denied. Neither may silently sign in.
+            for origin_key, origin in [('old', old), ('new', new_main)]:
+                for status, code in [(409, 'IDENTITY_MAPPING_CONFLICT'), (403, 'ACCESS_DENIED')]:
+                    case = f'main-{origin_key}-{code.lower()}-visible-login'
+                    return_path = '/?board=recovery-board'
+                    context, page, calls = await page_for(origin, 'main', enabled=False,
+                                                         session_error=(status, code), return_path=return_path)
+                    try:
+                        login = page.get_by_role('button', name=re.compile(r'檢查 Jenfu-Platform 登入$'))
+                        await login.wait_for(timeout=15000)
+                        assert not [call for call in calls if call['path'] == '/api/v1/session/login'], 'no automatic login'
+                        assert not await page.locator('[data-origin-switch-entry]').count(), 'no guide without a valid Session'
+                        await login.click()
+                        if status == 409:
+                            await page.locator('[data-synthetic-broker]').wait_for(timeout=10000)
+                            posts = [call for call in calls if call['path'] == '/api/v1/session/login']
+                            assert len(posts) == 1 and posts[0]['method'] == 'POST'
+                            assert json.loads(posts[0]['body']) == {'entry': 'main', 'returnPath': return_path}
+                            assert page.url.startswith(origin + '/api/sso/authorize?')
+                            await page.go_back(wait_until='domcontentloaded')
+                            await page.get_by_role('button', name=re.compile(r'檢查 Jenfu-Platform 登入$')).wait_for()
+                            await page.wait_for_load_state('networkidle', timeout=5000)
+                            assert len([call for call in calls if call['path'] == '/api/v1/session/login']) == 1, 'back must not loop into SSO'
+                        else:
+                            await page.get_by_text('ACCESS_DENIED', exact=True).wait_for()
+                            assert page.url == origin + return_path
+                            assert not [call for call in calls if call['path'] == '/api/v1/session/login'], 'denial must not become login'
+                        assert not [call for call in calls if call['path'].split('/')[3] in ('workspaces', 'tasks', 'records')], 'no private data before authentication'
+                        record(case)
+                    except Exception as error:
+                        failures.append({'entry': 'main', 'phase': case, 'error': type(error).__name__, 'url': page.url})
+                        (report / f'{case}-failure.json').write_text(json.dumps({'url': page.url, 'error': str(error),
+                            'calls': calls, 'body': await page.locator('body').inner_text()}, ensure_ascii=False, indent=2), encoding='utf-8')
+                        record(case, 'FAIL', url=page.url)
+                    finally:
+                        await context.close()
+
+            if args.login_recovery_only:
+                return {'checks': checks, 'status': 'FAIL' if failures else 'PASS', 'failures': failures,
+                        'scope': 'normal main login recovery with isolated HTTP fixtures', 'cloud': 'NOT_RUN'}
 
             context, page, calls = await page_for(old, 'main')
             try:

@@ -823,6 +823,12 @@ Cloud Build `817bb362-4c4c-42ed-8e03-c35cb0a960d2` SUCCESS，來源包逐檔驗�
 
 候選16項只讀HTTP檢查PASS：live／ready、主／Quick HTML、SW／manifest及build metadata對應已驗映像；舊版HTML可取得；無IAM憑證及偽造relay被拒絕；operator IAM token不能當使用者Session讀私人資料。換址config在campaign關閉時依現行契約回 `{data:null}`／no-store，不含私人資料。首輪錯把此公開的停用metadata當作需Session而判FAIL，已依來源修正oracle至精確null並保留失敗，未放寬使用者API授權。這16項不包含真使用者Session成功、跨新origin交接或裝置PWA安裝，不能冒稱完整產品驗收。
 
+**登入復原熱修與候選差額（2026-11-26）。** PR #44 已合併為 `85a390179e7c7f6dd54bc56b8b482bc6f5f8fca6`，讓正常登入按鈕在 Session 回 `401`、`404` 或 `409 IDENTITY_MAPPING_CONFLICT` 時重新啟動 Jenfu-Platform 登入；其他拒絕仍維持拒絕，不能把 `403 ACCESS_DENIED` 轉成登入。受測 head `820ec4c6bf818a8f08ccbdcfc4afea7325476acf` 的 [CI45741209693](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45741209693) 兩個 jobs 均 SUCCESS，涵蓋型別、S2／S3、真 PostgreSQL、snapshot 與 OCI。三項 focused unit 另在目前 main 通過。
+
+正常主畫面的本機無視窗 Edge 回歸以隔離 HTTP fixture 驗舊／新兩個 origin：`IDENTITY_MAPPING_CONFLICT` 只有在本人按下登入後才各送出一次 login，保留 `returnPath`，返回上一頁不會自動登入循環；`ACCESS_DENIED` 仍顯示拒絕、URL 不變且不送 login。四種情況在登入前都不讀 workspace／task／record。完整 R2 先讓未受影響的10項主／Quick／草稿／取消案例通過，但新四項因測試 locator 未包含按鈕裝飾字元而判FAIL；只修正測試 selector 後，R3 針對受影響四項全數PASS，沒有重跑或改寫前10項結果。R1在瀏覽器 assertion 前發生本機啟動觀測逾時，不能算產品失敗或PASS。證據為 `output/dev139-origin-guide-preview/main-recovery-r2/result.json` 與 `main-recovery-r3/result.json`；兩輪任務程序及port均已確認清理。
+
+上述登入測試使用合成 broker／Session 錯誤及同源攔截，不呼叫正式雲端、provider或私人資料，故只證明前端復原及安全拒絕；不取代真帳號雲端登入驗收。既有0%候選 `projed-prod-origin-175dc0e025` 建置於熱修合併前，**尚不包含此修正**；在新的 immutable image／source binding 讀回並完成同範圍候選驗證前，不得把 main／CI 成功寫成已部署。
+
 **Platform發布的獨立失敗。** 正常owner流程以 `e2589810`、既有runner image-only rotation及兩個callback執行 `PLATFORM-REL-20261126-DEV139-ORIGIN-A1`；[run45737088740](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/45737088740)的prepare／build／migrate／candidate／entrypoint通過，但verify的Workflows execution `65e5f374-1ffc-4b66-b41f-f76d80aee19f` 在create_session回401 `auth_token_invalid`。activate未執行，正常failure recovery成功；正式Platform原revision `jenfu-platform-prod-ff6819b25d22`仍100%，失敗候選tag已清理。
 
 既有smoke Secret version14 refresh及帳號lookup成功、帳號啟用／Email verified；SDK簽章、issuer／audience／uid／auth_time格式與期限檢查通過，但不能只以這些事實宣稱中央登入可用。同一憑證對原正式Platform也實際回相同401，故不是只在新候選出現。operator身分的SDK撤銷查詢另回internal-error，與正式401分開記錄，不以此推定runtime IAM故障。來源上Firebase撤銷與中央revokedBefore均可導致401，目前尚未讀回中央barrier，不宣稱唯一根因。既有正常smoke只做local logout，不能誤判它必然推進全域barrier。
