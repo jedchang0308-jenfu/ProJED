@@ -853,6 +853,10 @@ COO檢查僅用來避免重複人工作業：新出現的原正式401使先前�
 
 針對性5項與完整release unit 60/60、受影響lint、diff check均通過；實際generation 6 readback也通過形狀核對，辨識原binding 51份、候選53份，且`executeJob=false`。這只完成可審查／可回復的發布輸入，不代表新分析映像已建置、Job已更新或真實內容已執行；正式候選仍須綁定實際建置digest並依當下provider readback產生新計畫，Gemini／RAG繼續停用。
 
+**ASR 專用映像建置也已來源化（2026-11-26，未呼叫Cloud Build）。** `create:dev-139:analysis-image-build` 只接受固定中央專案／asia-east1、專用builder SA、精確GCS source generation與archive SHA、不可變正式runtime predecessor及安全release ID，輸出區域Cloud Build request。它只建置／推送 `projed-prod-asr-job` 的 `asr-job` target，不重建或推送Web runtime與migration Jobs；保留原PWA predecessor只為滿足相同artifact／binding契約。build內以固定digest的Docker builder核對來源label、非root worker CMD、ffmpeg、53份migration、managed binding及Gemini／RAG仍為NULL，所有檢查均無網路、read-only執行；輸出要求以SUCCESS readback取得immutable image digest，明列不部署或執行Job。tag不存在、source object generation與predecessor存在性仍是送出前provider precondition，renderer不假造其通過。
+
+針對性4項、完整release unit 64/64、受影響lint與diff check已在本機通過，遠端CI仍須綁本source查核；本段只把過去手工Cloud Build JSON收斂成機械契約，沒有上傳source、建立build、推送tag、改Job或產生費用。Cloud Build成功仍只代表候選artifact，後續必須把其digest與proof binding交給上一段Job update renderer，並以當下Job etag重新產生計畫。
+
 正常 `APP_INFRA_SMOKE_CREDENTIAL_ROTATION` 已通過完整saved-plan／apply／readback，只把原Workflow的numeric pin14改15；維護收據 `PLATFORM-MAINT-20261126-DEV139-SMOKE15/app-infra.json` SHA256 `69ccdaf511b8d0a07c6a6df726fbfd4fb0e9a4a6c65c6b64cc664f518a6199f6`。第一輪輸入絕對路徑被拒、第二輪缺少傳給Terraform backend的現有OAuth token而失敗；均保留。讀回確認Workflow仍14後，修正本機呼叫前提才重試成功，未重建或變更權限。Google SDK已確認有效，不要求重複gcloud登入。
 
 新 `PLATFORM-REL-20261126-DEV139-ORIGIN-A2` 沿recovered A1的FINALIZED／PRE_ACTIVATION_ABORTED基線建立，不直接重跑已清理tag的A1 failed job；source與runtime設定未變。新intent SHA256 `e7d4f5ee62d1e82272baaa30ad268109a525e43c1c35e88ee18075f0cfef21c4`，正常[owner run45740511123](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/45740511123)的十個階段全部SUCCESS，control為FINALIZED／RELEASED。build收據為REUSED_PROVIDER_BUILD，沿同一成功映像 `sha256:ed7b560e77671757ac00fc7e015d5dd8345569fe5ba623f90780cb7fcc128117`；migration新增0、核對重播25，沒有重搬資料或改既有SQL。
