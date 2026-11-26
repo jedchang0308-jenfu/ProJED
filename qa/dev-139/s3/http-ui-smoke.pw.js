@@ -185,7 +185,7 @@ async (page) => {
     let bodyText = await page.locator('body').innerText();
     assert(bodyText.includes('Shared board'), 'board title is missing from the normal UI', { bodyText: bodyText.slice(0, 1200) });
     assert(bodyText.includes('Shared parent'), 'task title is missing from the normal UI', { bodyText: bodyText.slice(0, 1200) });
-    assert(!bodyText.includes('檢查 Jenfu-Platform 登入'), 'authenticated actor was returned to the login shell');
+    assert(!bodyText.includes('使用 Google 帳號登入'), 'authenticated actor was returned to the login shell');
     await verifyOwnerBoardScope();
 
     step = 'keep the board readable and distinguish throttled unplaced reads from empty results';

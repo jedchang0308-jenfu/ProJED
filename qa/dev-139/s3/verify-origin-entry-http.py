@@ -172,7 +172,7 @@ async def run(local):
                     context, page, calls = await page_for(origin, 'main', enabled=False,
                                                          session_error=(status, code), return_path=return_path)
                     try:
-                        login = page.get_by_role('button', name=re.compile(r'檢查 Jenfu-Platform 登入$'))
+                        login = page.get_by_role('button', name=re.compile(r'使用 Google 帳號登入$'))
                         await login.wait_for(timeout=15000)
                         assert not [call for call in calls if call['path'] == '/api/v1/session/login'], 'no automatic login'
                         assert not await page.locator('[data-origin-switch-entry]').count(), 'no guide without a valid Session'
@@ -184,7 +184,7 @@ async def run(local):
                             assert json.loads(posts[0]['body']) == {'entry': 'main', 'returnPath': return_path}
                             assert page.url.startswith(origin + '/api/sso/authorize?')
                             await page.go_back(wait_until='domcontentloaded')
-                            await page.get_by_role('button', name=re.compile(r'檢查 Jenfu-Platform 登入$')).wait_for()
+                            await page.get_by_role('button', name=re.compile(r'使用 Google 帳號登入$')).wait_for()
                             await page.wait_for_load_state('networkidle', timeout=5000)
                             assert len([call for call in calls if call['path'] == '/api/v1/session/login']) == 1, 'back must not loop into SSO'
                         else:

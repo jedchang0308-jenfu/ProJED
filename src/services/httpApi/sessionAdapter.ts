@@ -61,6 +61,25 @@ export function validateLoginAuthorizationUrl(value: unknown, appOrigin: string)
   const secureTransport = authorization.protocol === 'https:'
     || (authorization.protocol === 'http:' && app.protocol === 'http:'
       && isLoopback(app.hostname) && isLoopback(authorization.hostname));
+  if (authorization.pathname === '/login') {
+    const returnTo = authorization.searchParams.get('returnTo');
+    if (!secureTransport || authorization.username || authorization.password || authorization.hash
+        || [...authorization.searchParams.keys()].length !== 2
+        || authorization.searchParams.getAll('reason').length !== 1
+        || authorization.searchParams.get('reason') !== 'account-selection'
+        || authorization.searchParams.getAll('returnTo').length !== 1
+        || !returnTo || !returnTo.startsWith('/api/sso/authorize?')) {
+      throw new Error('HTTP_API_INVALID_LOGIN_URL');
+    }
+    const nested = new URL(returnTo, authorization.origin);
+    if (nested.origin !== authorization.origin || nested.pathname !== '/api/sso/authorize') {
+      throw new Error('HTTP_API_INVALID_LOGIN_URL');
+    }
+    // Validate the original PKCE handoff and callback before opening the
+    // shared login page, whose normal Google button selects an account.
+    validateLoginAuthorizationUrl(nested.toString(), appOrigin);
+    return authorization.toString();
+  }
   const queryKeys = [...authorization.searchParams.keys()];
   const exactQuery = queryKeys.length === LOGIN_URL_QUERY_KEYS.length
     && LOGIN_URL_QUERY_KEYS.every(key => authorization.searchParams.getAll(key).length === 1)
@@ -150,7 +169,7 @@ export function createHttpSessionAdapter(client: HttpApiClient): ProjedSessionAd
       appliedRead = ++nextRead;
       client.clearExpectedActor();
       const response = record(await client.request<unknown>('/api/v1/session/login', {
-        method: 'POST', body: { entry, returnPath: normalizedReturnPath }, signal,
+        method: 'POST', body: { entry, returnPath: normalizedReturnPath, accountSelection: true }, signal,
       }), 'LOGIN_ENVELOPE');
       if (Object.keys(response).length !== 1) throw new Error('HTTP_API_INVALID_LOGIN_RESPONSE');
       const data = record(response.data, 'LOGIN_DATA');

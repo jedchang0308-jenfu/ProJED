@@ -79,7 +79,7 @@ async (page) => {
     assert(external.length === 0, 'unexpected HTTP destinations ' + JSON.stringify(external));
     assert(pageErrors.length === 0, 'unexpected browser errors ' + JSON.stringify(pageErrors));
     await page.screenshot({ path: 'output/playwright/dev-139-rag-ui/unavailable-mobile.png', fullPage: false });
-    const login = page.getByRole('button', { name: /檢查 Jenfu-Platform 登入/ });
+    const login = page.getByRole('button', { name: /使用 Google 帳號登入/ });
     const waitForRejectedRead = (status, code) => page.waitForResponse(async reply => {
       const path = new URL(reply.url()).pathname;
       if (!(path === '/api/v1/scope-revisions' || path === '/api/v1/workspaces' || path.startsWith('/api/v1/workspaces/'))

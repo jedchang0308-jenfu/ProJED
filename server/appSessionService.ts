@@ -681,8 +681,9 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
       request.resume();
       throw error;
     }
-    if (!onlyAllowedKeys(body, ['entry', 'returnPath'])
+    if (!onlyAllowedKeys(body, ['entry', 'returnPath', 'accountSelection'])
         || (body.entry !== 'main' && body.entry !== 'quick')
+        || (Object.hasOwn(body, 'accountSelection') && body.accountSelection !== true)
         || (Object.hasOwn(body, 'returnPath') && typeof body.returnPath !== 'string')) {
       throw new KernelError('DOMAIN_DATA_INVALID', 'Session login request is invalid', 400);
     }
@@ -789,8 +790,16 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
       ['code_challenge', sha256Base64Url(codeVerifier)],
       ['code_challenge_method', 'S256'],
     ]).toString();
-    const authorizationUrlValue = authorizationUrl.toString();
+    // Negotiate with the current frontend: older installed PWA validators
+    // require the original six query fields and remain compatible.
+    let authorizationUrlValue = authorizationUrl.toString();
     if (Buffer.byteLength(authorizationUrlValue, 'utf8') > 1024) unavailable();
+    if (body.accountSelection === true) {
+      const loginUrl = new URL('/login', binding.issuer);
+      loginUrl.searchParams.set('reason', 'account-selection');
+      loginUrl.searchParams.set('returnTo', `${authorizationUrl.pathname}${authorizationUrl.search}`);
+      authorizationUrlValue = loginUrl.toString();
+    }
     try {
       await options.store.begin(intent);
     } catch (error) {

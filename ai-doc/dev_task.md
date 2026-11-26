@@ -78,6 +78,8 @@ Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 
 ## DEV-139：ProJED 納入 Jenfu-Platform，Cloud Run／Cloud SQL 對齊並保留 Vite
 
+- 2026-11-26 登入維護切片（來源待發布）：Google 圖示／「使用 Google 帳號登入」，明確走共用登入頁的 ProJED 帳號選擇；保留舊 PWA 六欄 authorize 相容、等待鎖定與草稿。Platform 共用頁相容接線須先發布；[維護範圍](specs/SPEC-139-projed-jenfu-platform-onboarding.md#google-帳號選擇維護2026-11-26來源待發布)。
+
   - **狀態（2026-11-26）：已完成。** DEV-142正式資料搬遷／舊網址業務切流、中央身分與Cloud SQL、真Speech／無模型背景處理，以及DEV-139最後Cloud Run新入口公開與100%切流均已交付。舊主／Quick網址、原帳號、工作區／看板／權限、既有PWA與草稿仍可用；主／Quick換址與安裝引導已在正式Edge「AI測試」完成真帳號回歸並保留「稍後再做」續行。每台裝置的實際PWA安裝仍由使用者自行確認，未冒充為全裝置已安裝。Gemini／RAG因零留存資格尚無可查核證據而維持NULL，屬安全停用邊界，不阻擋本整合交付結案。
   - **換址引導／草稿恢復（2026-11-25，開發中）**：同一草稿[PR #41](https://github.com/jedchang0308-jenfu/ProJED/pull/41)收斂三步白話引導、真本機草稿盤點與原key唯讀回執；保留主／Quick、帳號、未解內容與未知結果，不自動認領或重送。原生PG18.4 76項、本機IndexedDB24項及unit205項通過；接線來源2a4df4a的[CI45631620870](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45631620870)兩jobs SUCCESS，PG17.12 76／snapshot67／OCI23已回讀，原型別失敗保留。詳[SPEC-139 §6.4.1](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-guided-origin-switch)。
   - **接線授權與下一步**：人類已核准「開放程式接線，仍不部署／換址」。主／Quick正常入口已接真Session、原key回執／本機草稿盤點及短效目的端意圖；53版source c5237b9的CI45646153483成功（PG78／snapshot67／OCI23）。Platform DEV-007草稿PR244的cbb8426f已通過required Source QC45647762791及三owner原生45647877885（owner27／flow7／legacy5、OrgMaster22、中央foundation19、舊foundation19＋4預期拒絕），逐檔source驗證與cleanup皆通過；Google／OIDC仍為LOCAL_SIMULATION，不冒稱正式新址驗收。零留存唯讀已確認中央cache關閉，仍缺可查核的適用契約／Google豁免與後續provider資格；meeting／RAG binding保持NULL，其他完整provider／新址驗收分母保留。後續只續行已授權的來源／隔離工作，正式部署、換址、IAM／Secret／billing限制不變。

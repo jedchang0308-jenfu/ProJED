@@ -142,10 +142,10 @@ test('session adapter starts same-origin login with the selected app entry and v
       ['/api/v1/session/login', 'POST'], ['/api/v1/session/login', 'POST'],
     ]);
     assert.deepEqual(JSON.parse(String(calls[0]?.init?.body)), {
-      entry: 'quick', returnPath: '/quick-task/?capture=clean',
+      entry: 'quick', returnPath: '/quick-task/?capture=clean', accountSelection: true,
     });
     assert.deepEqual(JSON.parse(String(calls[1]?.init?.body)), {
-      entry: 'main', returnPath: '/?board=one',
+      entry: 'main', returnPath: '/?board=one', accountSelection: true,
     });
     assert.equal(calls[0]?.init?.credentials, 'same-origin');
     assert.equal(calls[0]?.init?.cache, 'no-store');
@@ -190,5 +190,20 @@ test('login URL and return path reject cross-client, duplicate, extra, malformed
     assert.equal(requests, 0);
   } finally {
     restoreWindow();
+  }
+});
+
+test('Google account selection only opens the broker login with a validated same-broker PKCE return', () => {
+  const authorize = new URL(authorizationUrl());
+  const login = new URL('/login', authorize.origin);
+  login.searchParams.set('reason', 'account-selection');
+  login.searchParams.set('returnTo', authorize.pathname + authorize.search);
+  assert.equal(validateLoginAuthorizationUrl(login.toString(), appOrigin), login.toString());
+  for (const returnTo of ['https://evil.example.test/', '//evil.example.test/', '/login?returnTo=/api/sso/authorize?', '/api/sso/authorize?client_id=other', new URL(authorizationUrl({ redirect_uri: 'https://evil.example.test/callback' })).pathname + new URL(authorizationUrl({ redirect_uri: 'https://evil.example.test/callback' })).search]) {
+    const unsafe = new URL(login); unsafe.searchParams.set('returnTo', returnTo);
+    assert.throws(() => validateLoginAuthorizationUrl(unsafe.toString(), appOrigin), /HTTP_API_INVALID_LOGIN_URL/);
+  }
+  for (const query of ['&reason=account-selection', '&returnTo=/api/sso/authorize?', '&next=https://evil.example.test']) {
+    assert.throws(() => validateLoginAuthorizationUrl(login.toString() + query, appOrigin), /HTTP_API_INVALID_LOGIN_URL/);
   }
 });
