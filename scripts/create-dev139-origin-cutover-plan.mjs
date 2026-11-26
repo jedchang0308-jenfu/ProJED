@@ -12,9 +12,12 @@ for (const argument of process.argv.slice(2)) {
   }
   options[match[1]] = match[2];
 }
-if (!options.input) throw new Error('--input is required; this command only renders a plan');
+if (!options.input) throw new Error('--input is required; use a file or - for stdin; this command only renders a plan');
 let plan;
-try { plan = renderOriginCutoverPlan(JSON.parse(readFileSync(resolve(options.input), 'utf8'))); }
+try {
+  const source = options.input === '-' ? readFileSync(0, 'utf8') : readFileSync(resolve(options.input), 'utf8');
+  plan = renderOriginCutoverPlan(JSON.parse(source));
+}
 catch { throw new Error('Origin cutover plan input is invalid; no provider operation was performed'); }
 const output = `${JSON.stringify(plan, null, 2)}\n`;
 if (options.output) writeFileSync(resolve(options.output), output, { flag: 'wx', mode: 0o600 });

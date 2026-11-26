@@ -17,6 +17,10 @@ const ENVIRONMENT = [
 ];
 const MODEL_ENV = /(?:GEMINI|VERTEX|RAG|MODEL|API_KEY|CONTENT_LOG|CACHE)/iu;
 const CANDIDATE_TAG = 'dev139-origin-cutover';
+const READBACK_KEYS = ['client', 'clientVersion', 'conditions', 'createTime', 'creator', 'etag', 'generation',
+  'ingress', 'labels', 'lastModifier', 'latestCreatedRevision', 'latestReadyRevision', 'launchStage', 'name',
+  'observedGeneration', 'scaling', 'template', 'terminalCondition', 'traffic', 'trafficStatuses', 'uid',
+  'updateTime', 'uri', 'urls'];
 
 function invalid() {
   throw Object.assign(new Error('Origin cutover input is outside the reviewed DEV-139 contract'), {
@@ -42,10 +46,71 @@ function envMap(container) {
   return result;
 }
 
+function revisionName(value) {
+  const prefix = `${SERVICE_NAME}/revisions/`;
+  if (typeof value !== 'string' || !value.startsWith(prefix)) invalid();
+  const revision = value.slice(prefix.length);
+  if (!REVISION.test(revision)) invalid();
+  return revision;
+}
+
+function normalizeReadback(readback) {
+  exactKeys(readback, READBACK_KEYS);
+  exactKeys(readback.labels, ['projed-release', 'projed-source', 'projed-task']);
+  if (readback.name !== SERVICE_NAME || readback.ingress !== 'INGRESS_TRAFFIC_ALL' || readback.launchStage !== 'GA'
+      || readback.labels['projed-task'] !== 'dev-139'
+      || !/^[a-z][a-z0-9-]{0,62}$/u.test(readback.labels['projed-release'] ?? '')
+      || !/^[a-f0-9]{40}$/u.test(readback.labels['projed-source'] ?? '')
+      || readback.scaling?.maxInstanceCount !== 10 || Object.keys(readback.scaling).length !== 1
+      || !Array.isArray(readback.urls)
+      || !isDeepStrictEqual(new Set(readback.urls), new Set([CLOUD_RUN_TARGET.publicOrigin, LEGACY_ENTRY_TARGET.upstream]))
+      || readback.uri !== LEGACY_ENTRY_TARGET.upstream || !Array.isArray(readback.conditions)
+      || !Array.isArray(readback.trafficStatuses)) invalid();
+
+  const latestReadyRevision = revisionName(readback.latestReadyRevision);
+  if (revisionName(readback.latestCreatedRevision) !== latestReadyRevision
+      || readback.terminalCondition?.type !== 'Ready'
+      || readback.terminalCondition?.state !== 'CONDITION_SUCCEEDED'
+      || readback.conditions.some(condition => condition?.state !== 'CONDITION_SUCCEEDED')) invalid();
+
+  const rawTemplate = readback.template;
+  exactKeys(rawTemplate, ['client', 'clientVersion', 'containers', 'executionEnvironment', 'labels',
+    'maxInstanceRequestConcurrency', 'revision', 'scaling', 'serviceAccount', 'timeout', 'vpcAccess']);
+  if (rawTemplate.revision !== latestReadyRevision || typeof rawTemplate.client !== 'string'
+      || typeof rawTemplate.clientVersion !== 'string') invalid();
+  exactKeys(rawTemplate.labels, ['projed-release', 'projed-source', 'projed-task']);
+  if (!isDeepStrictEqual(rawTemplate.labels, readback.labels)) invalid();
+  const scalingKeys = Object.keys(rawTemplate.scaling ?? {}).sort();
+  if (!isDeepStrictEqual(scalingKeys, ['maxInstanceCount']) || rawTemplate.scaling.maxInstanceCount !== 1) invalid();
+
+  const traffic = readback.traffic.map(target => {
+    const keys = ['revision', 'type'];
+    if (Object.hasOwn(target, 'percent')) keys.push('percent');
+    if (Object.hasOwn(target, 'tag')) keys.push('tag');
+    exactKeys(target, keys);
+    if (target.type !== 'TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION') invalid();
+    return Object.fromEntries(Object.entries(target).filter(([key]) => key !== 'type'));
+  });
+  const template = {
+    labels: structuredClone(rawTemplate.labels),
+    scaling: { minInstanceCount: 0, maxInstanceCount: rawTemplate.scaling.maxInstanceCount },
+    vpcAccess: structuredClone(rawTemplate.vpcAccess), timeout: rawTemplate.timeout,
+    serviceAccount: rawTemplate.serviceAccount, containers: structuredClone(rawTemplate.containers),
+    executionEnvironment: rawTemplate.executionEnvironment,
+    maxInstanceRequestConcurrency: rawTemplate.maxInstanceRequestConcurrency,
+  };
+  return {
+    name: readback.name, uid: readback.uid, generation: readback.generation,
+    observedGeneration: readback.observedGeneration, etag: readback.etag,
+    ready: true, latestReadyRevision, invokerIamDisabled: false,
+    image: rawTemplate.containers?.[0]?.image, template, traffic,
+  };
+}
+
 function assertBaseline(input) {
-  exactKeys(input, ['baseline', 'campaign']);
+  exactKeys(input, ['campaign', 'readback']);
   if (!CAMPAIGN.test(input.campaign ?? '')) invalid();
-  const baseline = input.baseline;
+  const baseline = normalizeReadback(input.readback);
   exactKeys(baseline, ['etag', 'generation', 'image', 'invokerIamDisabled', 'latestReadyRevision', 'name',
     'observedGeneration', 'ready', 'template', 'traffic', 'uid']);
   if (baseline.name !== SERVICE_NAME || !UUID.test(baseline.uid ?? '')
@@ -64,7 +129,7 @@ function assertBaseline(input) {
       || baseline.traffic.some(target => target.tag === CANDIDATE_TAG)) invalid();
 
   const template = baseline.template;
-  exactKeys(template, ['containers', 'executionEnvironment', 'maxInstanceRequestConcurrency', 'scaling',
+  exactKeys(template, ['containers', 'executionEnvironment', 'labels', 'maxInstanceRequestConcurrency', 'scaling',
     'serviceAccount', 'timeout', 'vpcAccess']);
   if (template.serviceAccount !== 'projed-prod-runtime@jenfu-platform-prod.iam.gserviceaccount.com'
       || template.executionEnvironment !== 'EXECUTION_ENVIRONMENT_GEN2'
@@ -76,11 +141,21 @@ function assertBaseline(input) {
 
   const app = template.containers[0];
   const proxy = template.containers[1];
-  if (app?.name !== 'projed' || app.image !== baseline.image
-      || app.resources?.limits?.cpu !== '1' || app.resources?.limits?.memory !== '512Mi'
+  exactKeys(app, ['dependsOn', 'env', 'image', 'name', 'ports', 'resources', 'startupProbe']);
+  exactKeys(proxy, ['args', 'image', 'name', 'resources', 'startupProbe']);
+  if (app.name !== 'projed' || app.image !== baseline.image
+      || !isDeepStrictEqual(app.resources, { limits: { cpu: '1', memory: '512Mi' }, cpuIdle: true, startupCpuBoost: true })
+      || !isDeepStrictEqual(app.ports, [{ name: 'http1', containerPort: 8080 }])
+      || !isDeepStrictEqual(app.dependsOn, ['cloud-sql-proxy'])
+      || !isDeepStrictEqual(app.startupProbe, { timeoutSeconds: 2, periodSeconds: 5, failureThreshold: 36,
+        httpGet: { path: '/health/ready', port: 8080 } })
       || proxy?.name !== 'cloud-sql-proxy' || proxy.image !== CLOUD_RUN_TARGET.proxyImage
-      || proxy.resources?.limits?.cpu !== '1' || proxy.resources?.limits?.memory !== '256Mi'
-      || !Array.isArray(proxy.args) || proxy.args.at(-1) !== 'jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg') invalid();
+      || !isDeepStrictEqual(proxy.resources, { limits: { cpu: '1', memory: '256Mi' }, cpuIdle: true, startupCpuBoost: true })
+      || !isDeepStrictEqual(proxy.startupProbe, { initialDelaySeconds: 1, timeoutSeconds: 2, periodSeconds: 3,
+        failureThreshold: 30, tcpSocket: { port: 5432 } })
+      || !isDeepStrictEqual(proxy.args, ['--address=0.0.0.0', '--port=5432', '--private-ip', '--auto-iam-authn',
+        '--lazy-refresh', '--structured-logs', '--max-connections=5',
+        'jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg'])) invalid();
   const environment = envMap(app);
   if (environment.PROJED_ENV !== 'managed' || environment.PROJED_APP_ENTRY !== 'main'
       || environment.PROJED_SOURCE_PROFILE !== 'config/dev-139/s3-managed.profile.json'
