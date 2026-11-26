@@ -297,6 +297,40 @@ async (page) => {
       assert(saved.ok(), 'task save failed', { status: saved.status() });
       await modal.waitFor({ state: 'hidden' });
     };
+    const editTitleDuringBoardRefresh = async title => {
+      const canvas = page.locator('[data-kanban-mouse-pan-surface="true"]');
+      const card = canvas.locator('[data-task-title-slot="true"][data-task-id="shared-parent"]').first();
+      const beforeRefresh = await card.elementHandle();
+      let releaseRead;
+      const holdRead = new Promise(resolve => { releaseRead = resolve; });
+      let signalRead;
+      const readStarted = new Promise(resolve => { signalRead = resolve; });
+      const delayUpdatedSnapshot = async route => {
+        const response = await route.fetch();
+        if (response.ok() && (await response.json()).data.some(task => task.id === 'shared-parent' && task.title === title)) {
+          signalRead();
+          await holdRead;
+        }
+        await route.fulfill({ response });
+      };
+      await page.route(baseUrl + taskPath, delayUpdatedSnapshot);
+      let refreshTimeout;
+      try {
+        await editTitle(title);
+        await Promise.race([readStarted, new Promise((_, reject) => {
+          refreshTimeout = setTimeout(() => reject(new Error('Saved task was not refreshed')), 15000);
+        })]);
+        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        assert(await card.isVisible() && await canvas.locator('[data-task-filter-result-state="loading"]').count() === 0,
+          'the loaded board was hidden during a background refresh');
+        assert(await beforeRefresh.evaluate(element => element.isConnected), 'the task was remounted during a background refresh');
+      } finally {
+        clearTimeout(refreshTimeout);
+        releaseRead();
+        await page.unroute(baseUrl + taskPath, delayUpdatedSnapshot);
+        await beforeRefresh.dispose();
+      }
+    };
     const editedTitle = 'Shared parent edited in browser';
     step = 'open the shared board as its collaborator';
     collaboratorContext = await page.context().browser().newContext({ serviceWorkers: 'block' });
@@ -328,7 +362,8 @@ async (page) => {
     const otherTitle = collaborator.locator('[data-task-title-slot="true"][data-task-id="shared-parent"]').first();
     await otherTitle.filter({ hasText: 'Shared parent' }).waitFor();
     step = 'save as owner and observe recovery on the second client';
-    await editTitle(editedTitle);
+    await editTitleDuringBoardRefresh('Shared parent saved twice');
+    await editTitleDuringBoardRefresh(editedTitle);
     await otherTitle.filter({ hasText: editedTitle }).waitFor({ timeout: 30000 });
     assert(interrupted, 'collaborator did not encounter the simulated transient read failure');
     assert(!privateBoardRequest && !(await collaborator.locator('body').innerText()).includes('B secret'),

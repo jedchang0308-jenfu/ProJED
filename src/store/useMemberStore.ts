@@ -18,7 +18,7 @@ interface MemberState {
 interface MemberActions {
   clearMembers: () => void;
   updateMemberProfile: (userId: string, profile: Partial<CollaborationMemberProfile>) => void;
-  loadMembers: (workspaceId: string | null | undefined, boardId: string | null | undefined) => Promise<void>;
+  loadMembers: (workspaceId: string | null | undefined, boardId: string | null | undefined, options?: { background?: boolean }) => Promise<void>;
   inviteBoardMember: (workspaceId: string, boardId: string, userId: string, role: BoardMember['role']) => Promise<void>;
   removeBoardMember: (workspaceId: string, boardId: string, userId: string) => Promise<void>;
   updateBoardRolePermissions: (workspaceId: string, boardId: string, permissions: BoardRolePermissionMatrix) => Promise<void>;
@@ -72,7 +72,7 @@ export const useMemberStore = create<MemberStore>((set, get) => ({
     };
   }),
 
-  loadMembers: async (workspaceId, boardId) => {
+  loadMembers: async (workspaceId, boardId, { background = false } = {}) => {
     const generation = ++memberLoadGeneration;
     if (!workspaceId) {
       set({
@@ -88,7 +88,11 @@ export const useMemberStore = create<MemberStore>((set, get) => ({
       return;
     }
 
-    set({ loading: true, error: null, currentBoardAccess: null, loadedWorkspaceId: null, loadedBoardId: null });
+    const current = get();
+    const keepAccess = background && current.loadedWorkspaceId === workspaceId && current.loadedBoardId === boardId;
+    if (!keepAccess) {
+      set({ loading: true, error: null, currentBoardAccess: null, loadedWorkspaceId: null, loadedBoardId: null });
+    }
     try {
       const currentUserId = useAuthStore.getState().user?.uid;
       const currentBoardAccess = boardId && currentUserId
