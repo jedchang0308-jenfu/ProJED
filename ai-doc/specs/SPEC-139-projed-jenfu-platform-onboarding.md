@@ -789,6 +789,20 @@ PostgreSQL18.4原生DB／HTTP **78項**通過（`output/qa/dev-139/s3/20261125T1
 
 本批提交 `bbb1924e262750b444807cb9d2a18f69d57fb062` 的 [CI45652448372](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45652448372) 兩jobs SUCCESS；PG17.12 DB／HTTP78、snapshot67與Linux OCI／PG17.11 23通過。收據已讀回 `output/dev139-origin-guide-preview/final-navigation-ci/`，`verified-summary.json`核對同一sourceSha及三份收據各53份SQL（Windows checkout CRLF、Linux Git bytes），OCI registryPush／productionRelease皆NOT_RUN。新39項單元亦包含於S3 CI，初次dispatch500經唯讀確認未建立run後才限次重試。原預覽已另目錄建置相容版本，沒有取代使用者保留的預覽。此後僅文件／索引證據補記，不改程式／SQL／測試輸入，不重跑同套CI；原跨owner正式身分發布、新址啟用及真PWA安裝限制維持。
 
+<a id="dev139-candidate-release-next-scope"></a>
+
+**下一階段候選發布提案（2026-11-26，待解除「不部署」限制）。** 本輪「繼續」恢復目標，不自行解讀為撤銷前次「開放程式接線，仍不部署／換址」。來源為ProJED PR #41（程式bbb1924、文件2705a3b）及Platform DEV-007 PR #244（65642005、程式cbb8426f），沿已成功的必要CI與正常分支保護交付；本提案不新增required gate。具體下一階段範圍如下：
+
+- 將上述兩份PR轉ready並依正常保護合併。其後同範圍必要修正沿既有授權與必要回歸／CI收斂，不擴成其他產品改動。
+- 在 `jenfu-platform-prod` 建置具來源綁定的正式候選映像；必要的Platform身分相容發布只新增ProJED已固定的兩個Cloud Run callback，保留既有ProJED與其他App入口。OrgMaster本批沒有新來源變更，不因此部署。
+- 先核對正式schema ledger；只沿既有migrator套用尚缺的 `0053_origin_switch_intents_v1` forward-only意圖metadata，不改0001–0052 bytes、不改既有業務內容、不搬資料。如現有執行身分／權限不足，保留精確拒絕，不新增IAM／credential或自行開新owner window。
+- ProJED只部署IAM保護、0%一般流量的具名候選；保持目前正式revision承接100%，不套用create-only renderer的 `LATEST 100%`到現有服務。實際更新保留既有服務／proxy／網路／容量、正式Job與PAUSED排程，不能將候選當成正式Web切流。
+- 使用候選可驗證的真Session、讀取、拒絕與引導路徑；需雲端寫入的案例僅使用具名可清理測試資料，不改既有使用者資料。未公開新入口／未實測裝置安裝的部分仍標未驗，不以代理、HTTP200或PWA安裝事件冒稱正式新網址交接完成。
+
+**本次唯讀基線。** 中央service `projed-prod` 目前為 `projed-prod-board-4059d94` 100%（既有tag `dev139-session-env`），映像為 `asia-east1-docker.pkg.dev/jenfu-platform-prod/projed-release/projed-prod@sha256:9fc9dc667c0e21d0b4a5fa2b0d2c88ec3126579a02929ce1f5c15b42cf835fab`。source `4059d9442a1f25b58531629e46d196758e87296d`已由git ancestry驗明包含於本候選，該正式可讀性修正不會被遺漏；其來源清單已有0052，本批僅新增0053，真正DB ledger仍須執行前讀回。main為f642c7b，PR #41基底一致、工作樹乾淨。此唯讀觀測不是恢復測試、部署或新的正式驗收；真正執行前僅刷新會漂移的revision／traffic／image／ledger，沿用其他有效證據。
+
+**持續排除。** 不換舊網址／介面／既有PWA、不導正式使用者到新origin、不公開中央候選、不切Web流量、不重搬資料；不擴IAM／Secret／credential／billing／容量。零留存未資格的Gemini／RAG保持NULL，不傳會議內容；適用契約／Google豁免及完整真ASR／provider與最終新網址／PWA驗收仍保留於原DEV-139分母。本提案僅供人類一次決定是否恢復上述候選階段，尚未執行。
+
 **零留存唯讀查核（2026-11-25）。** 已用既有SDK登入唯讀讀回中央 `jenfu-platform-prod` 的 `cacheConfig`，實際 `disableCache=true`；沒有PATCH設定或推論。三個既定model/location的 `fetchPublisherModelConfig`均回404 NOT_FOUND，依[官方logging說明](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/capabilities/request-response-logging)表示該logging config不存在、預設不記錄；本次不藉此推定模型可用或整體ZDR合格。結果在 `output/dev139-origin-guide-preview/zdr-readonly-20261125.json`及`zdr-model-logging-readonly-20261125.json`，credential僅程序記憶體，沒有payload檔案。
 
 [官方零留存說明](https://docs.cloud.google.com/gemini-enterprise-agent-platform/resources/zero-data-retention)及[abuse monitoring](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/abuse-monitoring)仍要求核對適用契約與模型範圍，不能把不供訓練、cache關閉或供應商稱ZDR-aligned視為本需求的零內容留存證明。可用郵件的專案／ZDR條件檢索沒有找到核准；Drive僅檢索文件metadata，未找到可識別的Google Cloud Master Agreement或ProJED豁免文件，未讀取不相關文件內容。此檢索範圍有限，不證明契約不存在。現行meeting／RAG binding皆仍為NULL，不啟用Gemini／RAG、不傳會議內容；尚缺可查核的適用契約／Google豁免證據與其後合成provider驗證，不能以程式或checkbox自行補成PASS。
