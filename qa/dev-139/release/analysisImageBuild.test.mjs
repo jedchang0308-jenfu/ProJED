@@ -88,4 +88,3 @@ test('rejects mutable or foreign predecessors, malformed source bindings, and ca
   for (const sourceGeneration of ['', '0', '-1', 'latest', '1.5']) assertInvalid(makeInput({ sourceGeneration }));
   assertInvalid({ ...makeInput(), project: 'other-project' });
 });
-

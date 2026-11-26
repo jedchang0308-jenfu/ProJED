@@ -27,4 +27,3 @@ try {
 const text = `${JSON.stringify(plan, null, 2)}\n`;
 if (options.output) writeFileSync(resolve(options.output), text, { flag: 'wx', mode: 0o600 });
 else process.stdout.write(text);
-

@@ -122,4 +122,3 @@ export function renderAnalysisImageBuild(input) {
       immutableImageDigestRequired: true, deployOrRunJob: false },
   };
 }
-
