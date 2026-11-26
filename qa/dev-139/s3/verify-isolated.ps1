@@ -122,6 +122,21 @@ try {
   $env:PROJED_SOURCE_PROFILE = $profilePath
   $env:PROJED_RUNTIME_BINDING_FILE = $bindingPath
   $env:PROJED_MIGRATOR_DATABASE_URL = "postgresql://projed_migrator_disposable:${encodedMigrator}@127.0.0.1:$port/$databaseName"
+  $bridgeChecks = @()
+  if (-not $CalendarOnly -and -not $QuickUpgradeOnly) {
+    $env:PROJED_ENV = 'disposable'
+    $env:PROJED_APP_ENTRY = 'main'
+    $env:PROJED_DATABASE_URL = "postgresql://projed_runtime_disposable:${encodedRuntime}@127.0.0.1:$port/$databaseName"
+    $bridgeLines = @(& npx.cmd tsx qa/dev-139/s3/prepare-origin-bridge-predecessor-pg.ts)
+    $bridgeExitCode = $LASTEXITCODE
+    $bridgeLines | ForEach-Object { Write-Output $_ }
+    if ($bridgeExitCode -ne 0) { throw 'DEV-139 actual predecessor schema bridge verification failed' }
+    $bridgeResult = $bridgeLines[-1] | ConvertFrom-Json
+    if ($bridgeResult.status -cne 'PASS' -or $bridgeResult.checks -isnot [array] -or @($bridgeResult.checks).Count -eq 0) {
+      throw 'DEV-139 predecessor bridge result is invalid'
+    }
+    $bridgeChecks = @($bridgeResult.checks)
+  }
   npm.cmd run migrate:dev-139:s3:disposable
   if ($LASTEXITCODE -ne 0) { throw 'DEV-139 S3 migration failed' }
   npm.cmd run migrate:dev-139:s3:disposable
@@ -164,7 +179,7 @@ try {
     port = $port
     profileSha256 = $profileHash
     migrationSha256 = $migrationHashes
-    checks = @('migration-apply', 'migration-idempotent') + @($verifierResult.checks)
+    checks = @('migration-apply', 'migration-idempotent') + $bridgeChecks + @($verifierResult.checks)
   } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $evidenceDir 'result.json') -Encoding utf8
   Write-Output ("DEV139_S3_RESULT=PASS databaseOnly={0} output={1}" -f [bool]$DatabaseOnly, $evidenceDir)
 }

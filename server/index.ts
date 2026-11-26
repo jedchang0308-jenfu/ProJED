@@ -4,6 +4,7 @@ import { loadRuntimeConfig, sha256 } from './config.js';
 import { RuntimeDatabase, type ExpectedMigration } from './db.js';
 import { createKernelHttpServer } from './http.js';
 import { createRuntimeSessionAuth } from './runtimeSessionAuth.js';
+import { runtimeMigrationPolicy } from './migrationCompatibility.js';
 import { awaitDatabaseStartup } from './startup.js';
 import {createQualifiedCloudRagProvider} from './geminiRagProvider.js';
 import {CURRENT_RAG_BINDING} from './ragRuntimeBinding.js';
@@ -26,7 +27,9 @@ async function main(): Promise<void> {
     return { version, checksum };
   });
   const database = new RuntimeDatabase(config);
-  await awaitDatabaseStartup(() => database.assertRuntimeBoundary(expectedMigrations), {
+  const auth = createRuntimeSessionAuth(config, database);
+  const migrationPolicy = runtimeMigrationPolicy(auth.originSwitchCampaign);
+  await awaitDatabaseStartup(() => database.assertRuntimeBoundary(expectedMigrations, migrationPolicy), {
     onWait: info => console.log(JSON.stringify({ event: 'projed_kernel_database_startup_wait', ...info })),
   });
   const meetingSynthesisProvider = CURRENT_MEETING_LLM_BINDING === null ? undefined
@@ -34,7 +37,7 @@ async function main(): Promise<void> {
       getAccessToken:createServiceAccessTokenProvider()});
   const http = createKernelHttpServer(config, database, expectedMigrations, {
     prepareLegacyEntry: createLegacyEntryRequestPreparer(CURRENT_LEGACY_ENTRY_BINDING),
-    ...createRuntimeSessionAuth(config,database),
+    ...auth,
     ragProvider:CURRENT_RAG_BINDING===null?undefined:createQualifiedCloudRagProvider({binding:CURRENT_RAG_BINDING,
       getAccessToken:createServiceAccessTokenProvider()}),
     meetingSynthesisProvider,

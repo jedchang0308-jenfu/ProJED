@@ -1,4 +1,5 @@
 import { verifyCalendarMachinePostgres } from './verify-calendar-machine-pg.js';
+import { verifyOriginMigrationBridgePostgres } from './verify-origin-migration-bridge-pg.js';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -70,6 +71,7 @@ const collaborationReads = new CollaborationReadRepository();
 const collaborationCommands = new CollaborationWriteRepository(repository);
 const recordActivity = new RecordActivityRepository();
 await database.assertRuntimeBoundary(expected);
+await verifyOriginMigrationBridgePostgres(database, config, 53);
 await verifyGoogleMappingsPostgres(database);
 await verifyAppSessionsPostgres(database,config);
 await verifyLegacyEntryMappingSessionsPostgres(config);
@@ -1892,7 +1894,8 @@ if(independentFailures.length)throw new AggregateError(independentFailures,'Inde
 console.log(JSON.stringify({
   status: 'PASS',
   checks: [
-    'migration-boundary', 'google-proof-rls-original-uuid-read-only-and-guard-denial',
+    'migration-boundary', 'origin-migration-bridge-full53-strict-and-disabled-campaign-readiness',
+    'google-proof-rls-original-uuid-read-only-and-guard-denial',
     'quick-receipt-read-only-http-same-key-native-rls-missing-expired-and-actor-change-no-task-writes',
     'app-session-store-atomic-cancel-rotation-replay-rls',
     'legacy-main-quick-host-bound-login-imported-uuid-pg-session-capture-receipt-and-revocation-synthetic-owner',

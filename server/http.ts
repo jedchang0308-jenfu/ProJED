@@ -20,6 +20,7 @@ import { createQuickTaskHttpDispatcher } from './quickTaskHttp.js';
 import { createQuickTaskReceiptHttpDispatcher } from './quickTaskReceiptHttp.js';
 import { createOriginSwitchHttpDispatcher } from './originSwitchHttp.js';
 import type { OriginSwitchConfig } from './originSwitchConfig.js';
+import { runtimeMigrationPolicy } from './migrationCompatibility.js';
 import {
   createSessionHttpDispatcher,
   type TrustedSessionDestroyer,
@@ -203,6 +204,7 @@ export function createKernelHttpServer(
   expectedMigrations: readonly ExpectedMigration[],
   options: KernelHttpOptions = {},
 ): KernelHttpServer {
+  const migrationPolicy = runtimeMigrationPolicy(options.originSwitchCampaign);
   let shuttingDown = false;
   const prepareLegacyEntry = options.prepareLegacyEntry ?? createLegacyEntryRequestPreparer(null);
   const dispatchSession = createSessionHttpDispatcher(
@@ -253,7 +255,7 @@ export function createKernelHttpServer(
         json(response, 405, { code: 'METHOD_NOT_ALLOWED', requestId }, requestId);
         return;
       }
-      const ready = await database.readiness(expectedMigrations);
+      const ready = await database.readiness(expectedMigrations, migrationPolicy);
       json(response, ready ? 200 : 503, ready ? { status: 'ok' } : { status: 'unavailable', requestId }, requestId);
       return;
     }

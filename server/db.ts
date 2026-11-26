@@ -2,6 +2,7 @@ import { Pool, type PoolClient, type QueryResult, type QueryResultRow } from 'pg
 
 import type { RuntimeConfig } from './config.js';
 import { KernelError } from './errors.js';
+import { acceptedMigrationLedgers, migrationLedgerMatches, type RuntimeMigrationPolicy } from './migrationCompatibility.js';
 import { managedRuntimeJobConnectionOptions, prepareManagedDatabaseSession } from '../shared/dev139ManagedDatabase.mjs';
 
 export interface RuntimeDatabaseOptions {
@@ -102,7 +103,8 @@ export class RuntimeDatabase {
     };
   }
 
-  async assertRuntimeBoundary(expected: readonly ExpectedMigration[]): Promise<void> {
+  async assertRuntimeBoundary(expected: readonly ExpectedMigration[], policy: RuntimeMigrationPolicy = 'strict'): Promise<void> {
+    const accepted = acceptedMigrationLedgers(expected, this.#config, policy);
     const lease = await this.checkout();
     try {
       const identity = await lease.client.query<{
@@ -128,9 +130,7 @@ export class RuntimeDatabase {
       const ledger = await lease.client.query<{ version: string; checksum: string }>(
         'SELECT version, checksum FROM projed_core.schema_migrations ORDER BY version',
       );
-      if (ledger.rows.length !== expected.length
-          || expected.some((item, index) => ledger.rows[index]?.version !== item.version
-            || ledger.rows[index]?.checksum !== item.checksum)) {
+      if (!migrationLedgerMatches(ledger.rows, accepted)) {
         throw new KernelError('DB_BOUNDARY_INVALID', 'Migration ledger mismatch', 503);
       }
     } catch (error) {
@@ -141,10 +141,11 @@ export class RuntimeDatabase {
     lease.release();
   }
 
-  async readiness(expected: readonly ExpectedMigration[]): Promise<boolean> {
+  async readiness(expected: readonly ExpectedMigration[], policy: RuntimeMigrationPolicy = 'strict'): Promise<boolean> {
     let lease: DatabaseLease | undefined;
     let releaseAttempted = false;
     try {
+      const accepted = acceptedMigrationLedgers(expected, this.#config, policy);
       lease = await this.checkout();
       const result = await lease.client.query<{ ok: boolean }>(`
         SELECT current_database() = $1
@@ -157,13 +158,13 @@ export class RuntimeDatabase {
             SELECT COALESCE(
               jsonb_agg(jsonb_build_array(version, checksum) ORDER BY version),
               '[]'::jsonb
-            ) = $3::jsonb
+            ) IN (SELECT value FROM jsonb_array_elements($3::jsonb))
             FROM projed_core.schema_migrations
           ) AS ok
       `, [
         this.#config.binding.databaseName,
         this.#config.binding.runtimeRole,
-        JSON.stringify(expected.map(({ version, checksum }) => [version, checksum])),
+        JSON.stringify(accepted.map(ledger => ledger.map(({ version, checksum }) => [version, checksum]))),
       ]);
       releaseAttempted = true;
       lease.release();
