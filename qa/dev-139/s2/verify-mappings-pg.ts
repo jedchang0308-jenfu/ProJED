@@ -503,7 +503,7 @@ export async function verifyLegacyEntryMappingSessionsPostgres(config: RuntimeCo
     await admin.query('COMMIT');
     for (const [publicOrigin, session] of [[LEGACY_MAIN_ORIGIN, main], [LEGACY_QUICK_ORIGIN, quick], [NEXT_MAIN_ORIGIN, nextMain]] as const) {
       const revoked = await request(publicOrigin, '/api/v1/session', { headers: { cookie: session.cookie } });
-      assert.equal(revoked.status, 409); assert.equal(revoked.headers.get('cache-control'), 'no-store');
+      assert.equal(revoked.status, 401); assert.equal(revoked.headers.get('cache-control'), 'no-store');
       assert.equal(await errorCode(revoked), 'IDENTITY_MAPPING_CONFLICT');
       const revokedWrite = await request(publicOrigin, '/api/v1/quick-tasks', { method: 'POST', headers: {
         cookie: session.cookie, 'content-type': 'application/json', 'x-projed-expected-account-id': ownerId,
