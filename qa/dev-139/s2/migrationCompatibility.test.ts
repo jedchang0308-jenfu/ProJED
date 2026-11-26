@@ -6,7 +6,9 @@ import { RuntimeDatabase, type DatabaseLease, type ExpectedMigration } from '../
 import { createKernelHttpServer } from '../../../server/http.js';
 import { acceptedMigrationLedgers, migrationLedgerMatches, runtimeMigrationPolicy } from '../../../server/migrationCompatibility.js';
 
-const profile = JSON.parse(readFileSync('config/dev-139/s3-read-disposable.profile.json', 'utf8')) as SourceProfile;
+const currentProfile = JSON.parse(readFileSync('config/dev-139/s3-read-disposable.profile.json', 'utf8')) as SourceProfile;
+// Keep the exact 0052 -> 0053 bridge fixture. New device runtimes require 0054.
+const profile = { ...currentProfile, migrations: currentProfile.migrations.slice(0, 53) };
 const expected = profile.migrations.map(({ version, path }) => ({ version, checksum: sha256(readFileSync(path)) }));
 const config = {
   env: 'disposable', entry: 'main', databaseUrl: 'postgres://unused@127.0.0.1:1/unused', profile,
@@ -15,6 +17,19 @@ const config = {
 } as RuntimeConfig;
 const campaign = { campaign: 'fixture', routes: [] };
 const clone = () => expected.map(value => ({ ...value }));
+
+test('device runtime requires its complete 0054 ledger even with the origin campaign disabled', () => {
+  const currentExpected = currentProfile.migrations.map(({ version, path }) => ({ version, checksum: sha256(readFileSync(path)) }));
+  const currentConfig = { ...config, profile: currentProfile, binding: { ...config.binding,
+    migrationSha256: Object.fromEntries(currentProfile.migrations.map(({ path }, index) => [path, currentExpected[index]!.checksum])) } };
+  for (const policy of [undefined, 'strict', 'origin-switch-disabled'] as const) {
+    const accepted = acceptedMigrationLedgers(currentExpected, currentConfig, policy);
+    assert.deepEqual(accepted.map(value => value.length), [54]);
+    assert.equal(migrationLedgerMatches(currentExpected, accepted), true);
+    assert.equal(migrationLedgerMatches(currentExpected.slice(0, 53), accepted), false);
+    assert.equal(migrationLedgerMatches(currentExpected.slice(0, 52), accepted), false);
+  }
+});
 
 test('only disabled campaign permits the pinned full 52 or 53 snapshots; default remains strict', () => {
   const accepted = acceptedMigrationLedgers(expected, config, runtimeMigrationPolicy(null));
