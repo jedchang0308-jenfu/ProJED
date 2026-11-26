@@ -305,9 +305,11 @@ async (page) => {
       const holdRead = new Promise(resolve => { releaseRead = resolve; });
       let signalRead;
       const readStarted = new Promise(resolve => { signalRead = resolve; });
+      let delayed = false;
       const delayUpdatedSnapshot = async route => {
         const response = await route.fetch();
-        if (response.ok() && (await response.json()).data.some(task => task.id === 'shared-parent' && task.title === title)) {
+        if (!delayed && response.ok() && (await response.json()).data.some(task => task.id === 'shared-parent' && task.title === title)) {
+          delayed = true;
           signalRead();
           await holdRead;
         }
@@ -327,7 +329,7 @@ async (page) => {
       } finally {
         clearTimeout(refreshTimeout);
         releaseRead();
-        await page.unroute(baseUrl + taskPath, delayUpdatedSnapshot);
+        await page.unrouteAll({ behavior: 'wait' });
         await beforeRefresh.dispose();
       }
     };
