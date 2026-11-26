@@ -48,6 +48,7 @@ const IDENTITY_BASE_FIELDS = [
 ] as const;
 const IDENTITY_FIELDS: readonly (keyof ProducerVerifiedIdentity)[] = [...IDENTITY_BASE_FIELDS, 'verifiedEmail'];
 const LOGIN_TTL_MS = 5 * 60 * 1000;
+const LOGIN_RESTART_FENCE_MS = 60 * 1000;
 const SHA256_RE = /^[a-f0-9]{64}$/u;
 const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/u;
 const REVISION_RE = /^[1-9][0-9]{0,18}$/u;
@@ -704,6 +705,7 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
     }
     const oldSessionHash = tokens.sessionToken ? hash(tokens.sessionToken) : null;
     if (tokens.loginToken) {
+      const restartNowMs = nowFrom(now);
       let previousIntent: StoredLoginIntent | null;
       try {
         previousIntent = await options.store.readLogin(hash(tokens.loginToken));
@@ -715,7 +717,23 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
         if (recovered) return recovered;
         conflict();
       }
-      await cancelIntent(tokens.loginToken, publicOrigin, oldSessionHash, nowFrom(now), false);
+      if (previousIntent && validIntentShape(previousIntent)
+          && (previousIntent.status === 'pending' || previousIntent.status === 'processing')
+          && previousIntent.publicOrigin === publicOrigin
+          && previousIntent.oldSessionHash === oldSessionHash
+          && previousIntent.expiresAtMs > restartNowMs) {
+        const startedAtMs = previousIntent.expiresAtMs - LOGIN_TTL_MS;
+        const ageMs = restartNowMs - startedAtMs;
+        // A second installed-PWA window can share the just-issued login cookie
+        // and otherwise cancel the first window while it is selecting an SSO
+        // account. Keep the original OAuth state stable for a bounded minute;
+        // an abandoned attempt remains explicitly cancellable and can be
+        // restarted after the fence without extending its five-minute TTL.
+        if (Number.isSafeInteger(ageMs) && ageMs >= 0 && ageMs < LOGIN_RESTART_FENCE_MS) {
+          throw new KernelError('DB_BUSY', 'A login attempt is already in progress', 409);
+        }
+      }
+      await cancelIntent(tokens.loginToken, publicOrigin, oldSessionHash, restartNowMs, false);
     }
     const currentNowMs = nowFrom(now);
     let oldSession: StoredAppSession | null = null;
