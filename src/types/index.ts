@@ -697,6 +697,7 @@ export interface FirestoreUser {
 export interface AuthState {
   user: FirestoreUser | null;
   loading: boolean;
+  signingIn: boolean;
   error: string | null;
 }
 
