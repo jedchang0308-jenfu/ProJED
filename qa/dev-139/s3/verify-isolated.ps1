@@ -51,7 +51,21 @@ function Invoke-PgTool([string]$Name, [string[]]$Arguments) {
     $pgArguments = ($Arguments | ForEach-Object { '"' + $_.Replace('"', '\"') + '"' }) -join ' '
     $pgLauncher = Start-Process -FilePath $tool -ArgumentList $pgArguments -WindowStyle Hidden -PassThru -RedirectStandardOutput $pgOut -RedirectStandardError $pgErr
     if (-not $pgLauncher.WaitForExit(30000)) { throw 'Task pg_ctl exceeded its 30 second deadline.' }
-    if ($pgLauncher.ExitCode -ne 0) { Get-Content -LiteralPath $pgErr -ErrorAction SilentlyContinue | Write-Output; throw "pg_ctl failed with exit code $($pgLauncher.ExitCode)" }
+    # Windows PowerShell 5 can still expose a null ExitCode after both waits.
+    # In that case use the exact nonce port as provider readback; -w means a
+    # successful pg_ctl start/stop must already have reached this state.
+    $pgLauncher.WaitForExit()
+    $pgExitCode = $pgLauncher.ExitCode
+    if ($null -eq $pgExitCode) {
+      $expectedState = if ($Arguments -contains 'start') { Test-PortOpen -TargetPort $port } else { -not (Test-PortOpen -TargetPort $port) }
+      if (-not $expectedState) {
+        Get-Content -LiteralPath $pgErr -ErrorAction SilentlyContinue | Write-Output
+        throw 'pg_ctl exit code was unavailable and the nonce port state did not confirm completion.'
+      }
+    } elseif ($pgExitCode -ne 0) {
+      Get-Content -LiteralPath $pgErr -ErrorAction SilentlyContinue | Write-Output
+      throw "pg_ctl failed with exit code $pgExitCode"
+    }
     return
   }
   & $tool @Arguments

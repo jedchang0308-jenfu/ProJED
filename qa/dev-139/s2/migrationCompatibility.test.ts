@@ -10,11 +10,14 @@ const currentProfile = JSON.parse(readFileSync('config/dev-139/s3-read-disposabl
 // Keep the exact 0052 -> 0053 bridge fixture. New device runtimes require 0054.
 const profile = { ...currentProfile, migrations: currentProfile.migrations.slice(0, 53) };
 const expected = profile.migrations.map(({ version, path }) => ({ version, checksum: sha256(readFileSync(path)) }));
-const config = {
-  env: 'disposable', entry: 'main', databaseUrl: 'postgres://unused@127.0.0.1:1/unused', profile,
-  binding: { databaseName: 'unused', runtimeRole: 'projed_runtime_disposable',
+const config: RuntimeConfig = {
+  env: 'disposable', entry: 'main', host: '127.0.0.1', port: 0,
+  databaseUrl: 'postgres://unused@127.0.0.1:1/unused', profilePath: 'fixture-profile', profile,
+  bindingPath: 'fixture-binding', staticRoot: 'fixture-static',
+  binding: { databaseName: 'unused', databasePort: 1, runtimeRole: 'projed_runtime_disposable',
+    profileSha256: 'a'.repeat(64), staticFixtureSha256: 'b'.repeat(64),
     migrationSha256: Object.fromEntries(profile.migrations.map(({ path }, index) => [path, expected[index]!.checksum])) },
-} as RuntimeConfig;
+};
 const campaign = { campaign: 'fixture', routes: [] };
 const clone = () => expected.map(value => ({ ...value }));
 
