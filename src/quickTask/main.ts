@@ -119,6 +119,22 @@ const draftEditor = installQuickDraftEditor(titleInput, state => {
   draftRetry.textContent = state === 'conflict' ? '另存本機副本' : '重試本機保存';
 });
 draftRetry.addEventListener('click', () => { void draftEditor.retry(); });
+let rememberDeviceOnLogin = false;
+const createRememberDeviceChoice = () => {
+  const label = document.createElement('label');
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.dataset.rememberDevice = 'true';
+  input.checked = rememberDeviceOnLogin;
+  input.addEventListener('change', () => {
+    rememberDeviceOnLogin = input.checked;
+    document.querySelectorAll<HTMLInputElement>('[data-remember-device]').forEach(choice => {
+      choice.checked = rememberDeviceOnLogin;
+    });
+  });
+  label.append(input, '在此裝置保持登入（僅限個人裝置）');
+  return label;
+};
 const setAuthStatus = (text: string, showLogin: boolean, showLogout = false) => {
   authStatus.replaceChildren();
   authStatus.removeAttribute('data-state');
@@ -143,6 +159,7 @@ const setAuthStatus = (text: string, showLogin: boolean, showLogout = false) => 
   }
   authStatus.append(label);
   if (showLogin) {
+    if (isHttpBackend) authStatus.append(createRememberDeviceChoice());
     const loginButton = document.createElement('button');
     loginButton.type = 'button';
     loginButton.textContent = '登入';
@@ -152,7 +169,7 @@ const setAuthStatus = (text: string, showLogin: boolean, showLogout = false) => 
       callback.searchParams.delete('capture');
       callback.searchParams.delete('claim');
       callback.hash = '';
-      void getAuthApi().then(auth => auth.startQuickGoogleSignIn(callback.toString()))
+      void getAuthApi().then(auth => auth.startQuickGoogleSignIn(callback.toString(), rememberDeviceOnLogin))
         .catch(() => setAuthStatus('目前無法登入，任務仍可先記在本機。', true));
     });
     authStatus.append(loginButton);
@@ -696,8 +713,9 @@ const renderRecoveryFailure = (record: QuickCaptureRecord) => {
   recoveryContent.hidden = false;
   recoveryContent.innerHTML = `<strong>${writePaused ? '寫入暫停' : '同步未完成'}</strong><span>${escapeHtml(record.title)}</span><span>${explanation}</span><div class="quick-task-actions">${record.state === 'failed_auth' ? '<button type="button" data-recovery-login="true">重新登入</button>' : ''}${needsWorkspace ? '<button type="button" data-workbench="true">前往工作台</button>' : ''}${canRetry ? `<button type="button" data-retry="true">${writePaused ? '恢復後重試' : needsErrorVerification ? '重新確認' : '重試'}</button>` : ''}<button type="button" data-back="true">返回</button></div>`;
   recoveryDetails.open = true;
+  if (record.state === 'failed_auth' && isHttpBackend) recoveryContent.append(createRememberDeviceChoice());
   recoveryContent.querySelector<HTMLButtonElement>('[data-recovery-login]')?.addEventListener('click', () => {
-    void getAuthApi().then(auth => auth.startQuickGoogleSignIn(new URL('/quick-task/', window.location.origin).toString()))
+    void getAuthApi().then(auth => auth.startQuickGoogleSignIn(new URL('/quick-task/', window.location.origin).toString(), rememberDeviceOnLogin))
       .catch(() => setMessage('目前無法登入，待辦仍保留在本機。'));
   });
   recoveryContent.querySelector<HTMLButtonElement>('[data-workbench]')?.addEventListener('click', () => {

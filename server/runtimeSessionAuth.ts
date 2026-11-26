@@ -1,3 +1,4 @@
+import { readSessionProfile } from './sessionHttp.js';
 import { createAppSessionService } from './appSessionService.js';
 import type { RuntimeConfig } from './config.js';
 import type { RuntimeDatabase } from './db.js';
@@ -95,9 +96,12 @@ export function createRuntimeSessionAuth(
     pins: CURRENT_PRODUCTION_IDENTITY_PINS, mappings,
     verifier: createPlatformIdentityVerifier({ handoffs,stateReader:states,binding,environment:'production' }),
   });
+  if (env.PROJED_REMEMBERED_DEVICE_ENABLED !== undefined && !['true','false'].includes(env.PROJED_REMEMBERED_DEVICE_ENABLED)) configError();
   const auth = createAppSessionService({
     store: new PostgresAppSessionStore(database), consumer, mappings, binding,
     pins: CURRENT_PRODUCTION_IDENTITY_PINS, origins, environment:'production',
+    rememberedDeviceEnabled: env.PROJED_REMEMBERED_DEVICE_ENABLED !== 'false',
+    readSessionProfile: (actor,expiresAtMs,rememberedDevice) => readSessionProfile(database,config,actor,undefined,expiresAtMs,rememberedDevice),
   });
   return { publishExternalInvitation:createExternalInvitationPublisher(),dispatchAuth:auth.dispatchAuth,resolveActor:auth.resolveActor,
     originSwitchCampaign:parseOriginSwitchConfig(env.PROJED_ORIGIN_SWITCH_CAMPAIGN,origins),

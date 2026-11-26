@@ -129,6 +129,7 @@ const S3_RUNTIME_MIGRATION_PATHS:readonly string[] = [
   'db/migrations/0051_transfer_read_empty_context_v1.sql',
   'db/migrations/0052_orgmaster_user_directory_v1.sql',
   'db/migrations/0053_origin_switch_intents_v1.sql',
+  'db/migrations/0054_remembered_device_session_v1.sql',
 ];
 const PROFILE_MIGRATION_PATHS = new Map<string, readonly string[]>([
   ['^dev139_s1_[0-9a-f]{32}$', [

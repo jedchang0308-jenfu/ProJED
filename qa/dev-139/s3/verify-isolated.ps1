@@ -1,4 +1,4 @@
-param([string]$PostgresBin = '', [switch]$DatabaseOnly, [switch]$CalendarOnly, [switch]$QuickUpgradeOnly)
+param([string]$PostgresBin = '', [switch]$DatabaseOnly, [switch]$CalendarOnly, [switch]$QuickUpgradeOnly, [switch]$RememberedDeviceOnly)
 
 $ErrorActionPreference = 'Stop'
 if ($CalendarOnly -and $QuickUpgradeOnly) { throw 'Select one focused verifier.' }
@@ -44,6 +44,30 @@ $runtimePassword = ([guid]::NewGuid().ToString('N'))
 
 function Invoke-PgTool([string]$Name, [string[]]$Arguments) {
   $tool = Join-Path $PostgresBin $Name
+  if ($Name -eq 'pg_ctl.exe') {
+    # pg_ctl spawns a long-lived postmaster; keep its inherited streams out of the verifier pipeline.
+    $pgOut = Join-Path $tempRoot 'pg-ctl.stdout.log'
+    $pgErr = Join-Path $tempRoot 'pg-ctl.stderr.log'
+    $pgArguments = ($Arguments | ForEach-Object { '"' + $_.Replace('"', '\"') + '"' }) -join ' '
+    $pgLauncher = Start-Process -FilePath $tool -ArgumentList $pgArguments -WindowStyle Hidden -PassThru -RedirectStandardOutput $pgOut -RedirectStandardError $pgErr
+    if (-not $pgLauncher.WaitForExit(30000)) { throw 'Task pg_ctl exceeded its 30 second deadline.' }
+    # Windows PowerShell 5 can still expose a null ExitCode after both waits.
+    # In that case use the exact nonce port as provider readback; -w means a
+    # successful pg_ctl start/stop must already have reached this state.
+    $pgLauncher.WaitForExit()
+    $pgExitCode = $pgLauncher.ExitCode
+    if ($null -eq $pgExitCode) {
+      $expectedState = if ($Arguments -contains 'start') { Test-PortOpen -TargetPort $port } else { -not (Test-PortOpen -TargetPort $port) }
+      if (-not $expectedState) {
+        Get-Content -LiteralPath $pgErr -ErrorAction SilentlyContinue | Write-Output
+        throw 'pg_ctl exit code was unavailable and the nonce port state did not confirm completion.'
+      }
+    } elseif ($pgExitCode -ne 0) {
+      Get-Content -LiteralPath $pgErr -ErrorAction SilentlyContinue | Write-Output
+      throw "pg_ctl failed with exit code $pgExitCode"
+    }
+    return
+  }
   & $tool @Arguments
   if ($LASTEXITCODE -ne 0) { throw "$Name failed with exit code $LASTEXITCODE" }
 }
@@ -101,7 +125,7 @@ try {
   }
   [IO.File]::WriteAllText($bindingPath, ($binding | ConvertTo-Json -Depth 5), [Text.UTF8Encoding]::new($false))
 
-  if (-not $DatabaseOnly -and -not $CalendarOnly -and -not $QuickUpgradeOnly) {
+  if (-not $DatabaseOnly -and -not $CalendarOnly -and -not $QuickUpgradeOnly -and -not $RememberedDeviceOnly) {
     $env:PROJED_RELEASE_ID = "dev139-local-ui-$($nonce.Substring(0,8))"
     npm.cmd run build:dev-139:cloud-run
     if ($LASTEXITCODE -ne 0) { throw 'DEV-139 HTTP frontend candidate build failed' }
@@ -141,9 +165,9 @@ try {
   # Fixture-only administrative access, bound to this nonce database. The
   # verifier never logs this value; the runtime still uses its restricted role.
   $env:PROJED_QA_MEETING_ADMIN_URL = "postgresql://postgres:${adminPassword}@127.0.0.1:$port/$databaseName"
-  $env:PROJED_DEV139_BROWSER_SMOKE = if ($DatabaseOnly -or $CalendarOnly -or $QuickUpgradeOnly) { '0' } else { '1' }
+  $env:PROJED_DEV139_BROWSER_SMOKE = if ($DatabaseOnly -or $CalendarOnly -or $QuickUpgradeOnly -or $RememberedDeviceOnly) { '0' } else { '1' }
   $env:PORT = '0'
-  $verifierPath = if ($QuickUpgradeOnly) { 'qa/dev-139/s3/verify-quick-upgrade-only-pg.ts' } elseif ($CalendarOnly) { 'qa/dev-139/s3/verify-calendar-machine-only-pg.ts' } else { 'qa/dev-139/s3/verify-pg.ts' }
+  $verifierPath = if ($RememberedDeviceOnly) { 'qa/dev-139/s3/verify-remembered-device-only-pg.ts' } elseif ($QuickUpgradeOnly) { 'qa/dev-139/s3/verify-quick-upgrade-only-pg.ts' } elseif ($CalendarOnly) { 'qa/dev-139/s3/verify-calendar-machine-only-pg.ts' } else { 'qa/dev-139/s3/verify-pg.ts' }
   $verifierLines = @(& npx.cmd tsx $verifierPath)
   $verifierExitCode = $LASTEXITCODE
   $verifierLines | ForEach-Object { Write-Output $_ }
@@ -161,8 +185,8 @@ try {
   New-Item -ItemType Directory -Path $evidenceDir -Force | Out-Null
   [ordered]@{
     status = 'PASS'
-    evidenceLevel = if ($QuickUpgradeOnly) { 'A06_QUICK_BACKEND_UPGRADE_LOCAL_ACCEPTANCE' } elseif ($CalendarOnly) { 'CALENDAR_MACHINE_LOCAL_ACCEPTANCE' } elseif ($DatabaseOnly) { 'S3_DOMAIN_HTTP_DB_LOCAL_ACCEPTANCE' } else { 'S3_DOMAIN_CORE_LOCAL_ACCEPTANCE' }
-    browserSmoke = if ($QuickUpgradeOnly) { 'PASS' } elseif ($DatabaseOnly -or $CalendarOnly) { 'NOT_RUN' } else { 'PASS' }
+    evidenceLevel = if ($RememberedDeviceOnly) { 'DEV143_DEVICE_SESSION_LOCAL_ACCEPTANCE' } elseif ($QuickUpgradeOnly) { 'A06_QUICK_BACKEND_UPGRADE_LOCAL_ACCEPTANCE' } elseif ($CalendarOnly) { 'CALENDAR_MACHINE_LOCAL_ACCEPTANCE' } elseif ($DatabaseOnly) { 'S3_DOMAIN_HTTP_DB_LOCAL_ACCEPTANCE' } else { 'S3_DOMAIN_CORE_LOCAL_ACCEPTANCE' }
+    browserSmoke = if ($QuickUpgradeOnly) { 'PASS' } elseif ($DatabaseOnly -or $CalendarOnly -or $RememberedDeviceOnly) { 'NOT_RUN' } else { 'PASS' }
     postgres = $versionText
     node = (& node --version) -join ''
     databaseName = $databaseName
@@ -182,8 +206,8 @@ finally {
   Remove-Item Env:PROJED_RELEASE_ID -ErrorAction SilentlyContinue
   $cleanupSafe = -not $started
   if ($started) {
-    & (Join-Path $PostgresBin 'pg_ctl.exe') -D $dataPath -m fast -w stop | Out-Null
-    $cleanupSafe = $LASTEXITCODE -eq 0 -and -not (Test-PortOpen -TargetPort $port)
+    Invoke-PgTool 'pg_ctl.exe' @('-D', $dataPath, '-m', 'fast', '-w', 'stop')
+    $cleanupSafe = -not (Test-PortOpen -TargetPort $port)
   }
   Remove-Item -LiteralPath $pwFile -Force -ErrorAction SilentlyContinue
   Remove-Item -LiteralPath $bootstrapRuntime -Force -ErrorAction SilentlyContinue

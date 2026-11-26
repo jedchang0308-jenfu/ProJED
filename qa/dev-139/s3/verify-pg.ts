@@ -71,7 +71,7 @@ const collaborationReads = new CollaborationReadRepository();
 const collaborationCommands = new CollaborationWriteRepository(repository);
 const recordActivity = new RecordActivityRepository();
 await database.assertRuntimeBoundary(expected);
-await verifyOriginMigrationBridgePostgres(database, config, 53);
+await verifyOriginMigrationBridgePostgres(database, config, config.profile.migrations.length as 53 | 54);
 await verifyGoogleMappingsPostgres(database);
 await verifyAppSessionsPostgres(database,config);
 await verifyLegacyEntryMappingSessionsPostgres(config);
@@ -1894,7 +1894,7 @@ if(independentFailures.length)throw new AggregateError(independentFailures,'Inde
 console.log(JSON.stringify({
   status: 'PASS',
   checks: [
-    'migration-boundary', 'origin-migration-bridge-full53-strict-and-disabled-campaign-readiness',
+    'migration-boundary', 'current-schema-strict-and-disabled-campaign-readiness',
     'google-proof-rls-original-uuid-read-only-and-guard-denial',
     'quick-receipt-read-only-http-same-key-native-rls-missing-expired-and-actor-change-no-task-writes',
     'app-session-store-atomic-cancel-rotation-replay-rls',

@@ -223,7 +223,10 @@ export const signOutQuickSession = async () => {
   const { error } = await supabase.auth.signOut({ scope: 'local' });
   if (error) throw new Error('LOGOUT_SDK_FAILED');
 };
-export const startQuickGoogleSignIn = async (redirectTo: string) => {
+export const startQuickGoogleSignIn = async (redirectTo: string, rememberDevice = false) => {
+  // Legacy Supabase login has no ProJED device Session; retain the common
+  // adapter signature without silently changing its provider lifetime.
+  void rememberDevice;
   let prior = 'unknown';
   try {
     const { data, error } = await withDeadline(supabase.auth.getSession(), Date.now() + 15_000);

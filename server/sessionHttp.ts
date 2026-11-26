@@ -15,7 +15,7 @@ export type TrustedSessionLogoutIdentityResolver = (
 export type TrustedSessionInfoResolver = (
   request: IncomingMessage,
   actor: ServerActorV1,
-) => Promise<{ expiresAtMs: number }>;
+) => Promise<{ expiresAtMs: number; rememberedDevice?: true }>;
 
 export interface SessionHttpResult {
   readonly matched: boolean;
@@ -46,7 +46,7 @@ function errorResult(error: unknown, requestId: string): SessionHttpResult {
   };
 }
 
-function profileData(row: SessionProfileRow, actor: ServerActorV1, expiresAtMs = actor.expiresAtMs) {
+function profileData(row: SessionProfileRow, actor: ServerActorV1, expiresAtMs = actor.expiresAtMs, rememberedDevice?: true) {
   const createdAt = Number(row.created_at_ms);
   if (!Number.isSafeInteger(createdAt) || createdAt < 0) {
     throw new KernelError('DOMAIN_DATA_INVALID', 'Stored profile timestamp is invalid', 503);
@@ -57,17 +57,19 @@ function profileData(row: SessionProfileRow, actor: ServerActorV1, expiresAtMs =
     displayName: row.display_name,
     createdAt,
     expiresAt: expiresAtMs,
+    ...(rememberedDevice ? { rememberedDevice: true } : {}),
     authContextId: actor.contextId,
     entry: actor.entry,
   };
 }
 
-async function readProfile(
+export async function readSessionProfile(
   database: RuntimeDatabase,
   config: RuntimeConfig,
   actor: ServerActorV1,
   displayName?: string,
   expiresAtMs = actor.expiresAtMs,
+  rememberedDevice?: true,
 ) {
   return runActorTransaction(database, config, actor, async (port) => {
     const result = displayName === undefined
@@ -85,7 +87,7 @@ async function readProfile(
                  floor(extract(epoch FROM created_at) * 1000)::bigint::text AS created_at_ms
         `, [displayName]);
     if (result.rows.length !== 1) throw new KernelError('ACTOR_INVALID', 'Session profile is unavailable', 401);
-    return profileData(result.rows[0]!, actor, expiresAtMs);
+    return profileData(result.rows[0]!, actor, expiresAtMs, rememberedDevice);
   });
 }
 
@@ -145,7 +147,7 @@ export function createSessionHttpDispatcher(
         return {
           matched: true,
           status: 200,
-          body: { data: await readProfile(database, config, actor, undefined, expiresAtMs) },
+          body: { data: await readSessionProfile(database, config, actor, undefined, expiresAtMs, sessionInfo?.rememberedDevice) },
         };
       }
       assertExpectedActor(request, actor);
@@ -164,7 +166,7 @@ export function createSessionHttpDispatcher(
       return {
         matched: true,
         status: 200,
-        body: { data: await readProfile(database, config, actor, body.displayName.trim(), expiresAtMs) },
+        body: { data: await readSessionProfile(database, config, actor, body.displayName.trim(), expiresAtMs, sessionInfo?.rememberedDevice) },
       };
     } catch (error) {
       return errorResult(error, requestId);

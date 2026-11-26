@@ -124,6 +124,10 @@ jobs:
           DEV139_BROWSER_SMOKE: ${{ inputs.browser_smoke || contains(github.event.head_commit.message, '[dev139-browser]') }}
           DEV139_QUICK_UPGRADE: ${{ steps.quick_base_dependencies.outcome == 'success' }}
         run: '& ./qa/dev-139/s3/verify-isolated.ps1 -DatabaseOnly:($env:DEV139_BROWSER_SMOKE -ne "true") -PostgresBin $env:PGBIN'
+      - name: PostgreSQL remembered-device Session regressions
+        # DEV-143 uses a separate nonce fixture because its tests revoke accounts.
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: '& ./qa/dev-139/s3/verify-isolated.ps1 -RememberedDeviceOnly -PostgresBin $env:PGBIN'
       - name: PostgreSQL snapshot migration rehearsal
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         run: '& ./qa/dev-139/migration/verify-isolated.ps1 -PostgresBin $env:PGBIN'

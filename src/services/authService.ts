@@ -326,7 +326,7 @@ const signInWithLocalSupabasePassword = async (): Promise<FirestoreUser> => {
 };
 
 export const authService = {
-  signInWithGoogle: async (): Promise<FirestoreUser | null> => {
+  signInWithGoogle: async (rememberDevice = false): Promise<FirestoreUser | null> => {
     if (isLocalTestAuth()) {
       return signInWithLocalTestUser();
     }
@@ -337,7 +337,7 @@ export const authService = {
       } catch (error) {
         if (error instanceof HttpApiError && (error.status === 401 || error.status === 404)) {
           const returnPath = `${window.location.pathname}${window.location.search}`;
-          const authorizationUrl = await httpSessionService.startLogin('main', returnPath);
+          const authorizationUrl = await httpSessionService.startLogin('main', returnPath, undefined, rememberDevice);
           window.location.assign(authorizationUrl);
           return null;
         }

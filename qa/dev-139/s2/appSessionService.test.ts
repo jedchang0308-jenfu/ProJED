@@ -7,6 +7,7 @@ import test from 'node:test';
 import { IdentityConsumer, type IdentityContractPin, type ProducerVerifiedIdentity } from '../../../server/identityConsumer.js';
 import { KernelError } from '../../../server/errors.js';
 import { createAppSessionService } from '../../../server/appSessionService.js';
+import { REMEMBERED_DEVICE_TTL_MS } from '../../../server/appSessionStore.js';
 import type {
   AppSessionStore,
   CompleteLoginInput,
@@ -176,7 +177,8 @@ class FakeAppSessionStore implements AppSessionStore {
       contextId: input.contextId,
       accountGuardRevision: this.guardRevision,
       identity: input.identity,
-      expiresAtMs: input.identity.sourceSessionExpiresAtMs,
+      expiresAtMs: intent.rememberDevice ? input.nowMs + REMEMBERED_DEVICE_TTL_MS : input.identity.sourceSessionExpiresAtMs,
+      ...(intent.rememberDevice ? { rememberedDevice: true as const } : {}),
       revokedAtMs: null,
     });
     this.sessions.set(session.tokenHash, session);
@@ -206,6 +208,17 @@ class FakeAppSessionStore implements AppSessionStore {
     return this.meetingRuns.get(runId) ?? null;
   }
 
+  renewUnknownAfterCommit = false;
+  async renewSession(expected: StoredAppSession, nowMs: number): Promise<StoredAppSession> {
+    this.calls.push('renewSession');
+    const stored = this.sessions.get(expected.tokenHash);
+    if (!stored?.rememberedDevice || stored.revokedAtMs !== null || stored.expiresAtMs <= nowMs) throw new KernelError('IDENTITY_INVALID','expired',401);
+    const renewed = { ...stored, expiresAtMs: Math.max(stored.expiresAtMs, nowMs + REMEMBERED_DEVICE_TTL_MS) };
+    this.sessions.set(stored.tokenHash,renewed);
+    if (this.renewUnknownAfterCommit) { this.renewUnknownAfterCommit = false; throw new KernelError('DB_COMMIT_UNKNOWN','unknown',503); }
+    return renewed;
+  }
+
   async revokeSession(tokenHash: string, publicOrigin: string, nowMs: number): Promise<boolean> {
     this.calls.push('revokeSession');
     const session = this.sessions.get(tokenHash);
@@ -223,7 +236,7 @@ class FakeAppSessionStore implements AppSessionStore {
 
 type Fixture = ReturnType<typeof fixture>;
 
-function fixture(input: { pins?: readonly IdentityContractPin[]; origins?: { main: string; quick: string };
+function fixture(input: { rememberedDeviceEnabled?: boolean; pins?: readonly IdentityContractPin[]; origins?: { main: string; quick: string };
   allowedOrigins?: import('../../../server/appSessionService.js').AppSessionOrigins } = {}) {
   let nowMs = Date.now();
   let identity = identityAt(nowMs);
@@ -288,12 +301,14 @@ function fixture(input: { pins?: readonly IdentityContractPin[]; origins?: { mai
   };
   const service = createAppSessionService({
     store,
+    rememberedDeviceEnabled: input.rememberedDeviceEnabled,
     consumer,
     mappings,
     binding: BINDING,
     pins,
     origins: input.allowedOrigins ?? origins,
     environment: 'test',
+    readSessionProfile: async (actor,expiresAtMs,rememberedDevice) => ({ localUserId:actor.localUserId,email:null,displayName:null,createdAt:0,authContextId:actor.contextId,entry:actor.entry,expiresAt:expiresAtMs,rememberedDevice }),
     now: () => nowMs,
     createContextId: () => {
       contextCallCount += 1;
@@ -1217,4 +1232,73 @@ test('origin configuration is frozen and legacy meeting Sessions remain valid wi
   for (const invalid of [[], [MAIN_ORIGIN, MAIN_ORIGIN], ['https://foreign.test/path'], ['https://user@foreign.test']]) {
     assert.throws(() => fixture({ allowedOrigins: { main: invalid, quick: QUICK_ORIGIN } }), { code: 'CONFIG_INVALID' });
   }
+});
+
+async function rememberedLogin(f: Fixture, entry: 'main' | 'quick' = 'main') {
+  const origin = f.origins[entry];
+  const login = await f.service.dispatchAuth(request('POST','/api/v1/session/login', {
+    origin,host:host(origin),'content-type':'application/json',
+  },JSON.stringify({entry,rememberDevice:true})), 'remember-login');
+  const authorize = authorizationFrom(login);
+  const pendingCookie = cookieValue(login);
+  assert.equal(intentFrom(f,pendingCookie).rememberDevice,true);
+  const completed = await f.service.dispatchAuth(callbackRequest(origin,pendingCookie,authorize.searchParams.get('state')!), 'remember-callback');
+  assert.equal(completed.status,303);
+  return cookieValue(completed);
+}
+function renewRequest(origin:string,cookie:string,headers:Record<string,string>={}) {
+  return request('POST','/api/v1/session/renew',{host:host(origin),origin,cookie,'content-type':'application/json',
+    'x-projed-expected-account-id':USER_ID,'x-projed-expected-context-id':CONTEXT_ID,...headers},'{}');
+}
+for (const entry of ['main','quick'] as const) test(`remembered ${entry} Session survives source expiry and renews the same snapshot context for 90 days`,async()=>{
+  const f=fixture();const initialNow=f.now();const cookie=await rememberedLogin(f,entry);
+  const token=tokensFromCookie(cookie).sessionToken!;const original=f.store.sessions.get(digest(token))!;
+  assert.equal(original.expiresAtMs,initialNow+REMEMBERED_DEVICE_TTL_MS);
+  f.setNow(f.identity().sourceSessionExpiresAtMs+1000);
+  const actor=await f.service.resolveActor(request('GET','/api/v1/session',{host:host(f.origins[entry]),cookie}));
+  assert.equal(actor.contextId,original.contextId);
+  const reads=f.counts().stateReadCount;
+  const result=await f.service.dispatchAuth(renewRequest(f.origins[entry],cookie),'renew');
+  assert.equal(result.status,200);assert.equal(f.counts().stateReadCount,reads);
+  const data=(result.body as {data:Record<string,unknown>}).data;
+  assert.equal(data.localUserId,USER_ID);assert.equal(data.authContextId,original.contextId);
+  assert.equal(data.expiresAt,f.now()+REMEMBERED_DEVICE_TTL_MS);assert.equal(data.rememberedDevice,true);
+  assert.equal(tokensFromCookie(cookieValue(result)).sessionToken,token);
+  assert.deepEqual(f.store.sessions.get(digest(token))!.identity,original.identity);
+});
+test('remembered Session refuses renewal at exact day 90, after logout, on wrong origin or wrong expected actor',async()=>{
+  for(const reason of ['expiry','logout','origin','actor'] as const){
+    const f=fixture();const cookie=await rememberedLogin(f);const token=tokensFromCookie(cookie).sessionToken!;
+    if(reason==='expiry')f.setNow(f.store.sessions.get(digest(token))!.expiresAtMs);
+    if(reason==='logout')await f.service.destroySession(logoutRequest(MAIN_ORIGIN,cookie));
+    const result=await f.service.dispatchAuth(renewRequest(reason==='origin'?QUICK_ORIGIN:MAIN_ORIGIN,cookie,
+      reason==='actor'?{'x-projed-expected-context-id':'wrong'}:{}),'renew-denied');
+    assert.ok(result.status!>=400,reason);assert.equal(f.store.calls.filter(c=>c==='renewSession').length,0,reason);
+  }
+});
+test('unknown renewal reads back its same credential and legacy Sessions cannot opt in through renewal',async()=>{
+  const f=fixture();const cookie=await rememberedLogin(f);f.setNow(f.now()+1000);f.store.renewUnknownAfterCommit=true;
+  const renewed=await f.service.dispatchAuth(renewRequest(MAIN_ORIGIN,cookie),'unknown-renew');assert.equal(renewed.status,200);
+  const token=tokensFromCookie(cookie).sessionToken!;const stored=f.store.sessions.get(digest(token))!;
+  f.store.sessions.set(digest(token),{...stored,rememberedDevice:undefined,expiresAtMs:f.identity().sourceSessionExpiresAtMs} as StoredAppSession);
+  const result=await f.service.dispatchAuth(renewRequest(MAIN_ORIGIN,cookie),'legacy-renew');assert.equal(result.status,401);
+});
+
+test('feature kill switch preserves existing remembered reads and legacy login while new enrollment and renewal return retryable 503',async()=>{
+ const enabled=fixture();const cookie=await rememberedLogin(enabled);const token=tokensFromCookie(cookie).sessionToken!;
+ const existing=enabled.store.sessions.get(digest(token))!;
+ const disabled=fixture({rememberedDeviceEnabled:false});disabled.setIdentity(existing.identity);disabled.setNow(enabled.now());disabled.store.seedSession(existing);
+ const actor=await disabled.service.resolveActor(request('GET','/api/v1/session',{host:host(MAIN_ORIGIN),cookie}));assert.equal(actor.contextId,existing.contextId);
+ const renew=await disabled.service.dispatchAuth(renewRequest(MAIN_ORIGIN,cookie),'disabled-renew');assert.equal(renew.status,503);
+ assert.equal((renew.body as {error:{retryable:boolean}}).error.retryable,true);assert.equal(disabled.store.calls.includes('renewSession'),false);
+ const login=await disabled.service.dispatchAuth(request('POST','/api/v1/session/login',{host:host(MAIN_ORIGIN),origin:MAIN_ORIGIN,'content-type':'application/json'},JSON.stringify({entry:'main',rememberDevice:true})),'disabled-enroll');assert.equal(login.status,503);
+ const legacyLogin=await start(disabled);assert.equal(legacyLogin.status,200);
+ assert.equal(disabled.store.sessions.get(digest(token))!.expiresAtMs,existing.expiresAtMs);
+});
+
+test('disabling remembered sessions fences a previously issued opt-in callback before claiming or exchanging its code',async()=>{
+ const enabled=fixture();const login=await enabled.service.dispatchAuth(request('POST','/api/v1/session/login',{host:host(MAIN_ORIGIN),origin:MAIN_ORIGIN,'content-type':'application/json'},JSON.stringify({entry:'main',rememberDevice:true})),'pending-enabled');
+ const cookie=cookieValue(login);const intent=intentFrom(enabled,cookie);const disabled=fixture({rememberedDeviceEnabled:false});disabled.store.intents.set(intent.tokenHash,intent);
+ const result=await disabled.service.dispatchAuth(callbackRequest(MAIN_ORIGIN,cookie,authorizationFrom(login).searchParams.get('state')!),'pending-disabled');
+ assert.equal(result.status,503);assert.equal(disabled.counts().producerCallCount,0);assert.equal(disabled.store.calls.includes('claim'),false);assert.equal(disabled.store.sessions.size,0);
 });

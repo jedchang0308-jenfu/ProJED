@@ -5,6 +5,7 @@ export interface HttpSessionProfile extends FirestoreUser {
   expiresAt: number;
   authContextId: string;
   entry: 'main' | 'quick';
+  rememberedDevice?: boolean;
 }
 
 export type ProjedAppEntry = 'main' | 'quick';
@@ -12,7 +13,8 @@ export type ProjedAppEntry = 'main' | 'quick';
 export interface ProjedSessionAdapter {
   getSession(signal?: AbortSignal): Promise<HttpSessionProfile>;
   verifyBoundActor(accountId: string, entry: ProjedAppEntry, signal?: AbortSignal): Promise<Readonly<HttpExpectedActor>>;
-  startLogin(entry: ProjedAppEntry, returnPath?: string, signal?: AbortSignal): Promise<string>;
+  startLogin(entry: ProjedAppEntry, returnPath?: string, signal?: AbortSignal, rememberDevice?: boolean): Promise<string>;
+  renew(signal?: AbortSignal): Promise<HttpSessionProfile>;
   updateDisplayName(displayName: string, signal?: AbortSignal): Promise<HttpSessionProfile>;
   logout(signal?: AbortSignal): Promise<void>;
 }
@@ -103,6 +105,7 @@ function parseSession(value: unknown): HttpSessionProfile {
       || (data.entry !== 'main' && data.entry !== 'quick')) {
     throw new Error('HTTP_API_INVALID_SESSION_DATA');
   }
+  if (data.rememberedDevice !== undefined && typeof data.rememberedDevice !== 'boolean') throw new Error('HTTP_API_INVALID_SESSION_DATA');
   return {
     uid: data.localUserId,
     email: data.email,
@@ -111,6 +114,7 @@ function parseSession(value: unknown): HttpSessionProfile {
     expiresAt: Number(data.expiresAt),
     authContextId: data.authContextId,
     entry: data.entry,
+    ...(data.rememberedDevice !== undefined ? { rememberedDevice: data.rememberedDevice } : {}),
   };
 }
 
@@ -143,14 +147,22 @@ export function createHttpSessionAdapter(client: HttpApiClient): ProjedSessionAd
       client.bindExpectedActor({ accountId: session.uid, contextId: session.authContextId });
       return session;
     },
-    async startLogin(entry, returnPath = '/', signal) {
+    async renew(signal) {
+      const actor = client.snapshotExpectedActor();
+      const profile = parseSession(await client.request('/api/v1/session/renew', { method: 'POST', body: {}, expectedActor: actor, signal }));
+      if (profile.uid !== actor.accountId || profile.authContextId !== actor.contextId) {
+        throw new HttpApiError('ACTOR_CHANGED', 409, null, false);
+      }
+      return profile;
+    },
+    async startLogin(entry, returnPath = '/', signal, rememberDevice = false) {
       if (entry !== 'main' && entry !== 'quick') throw new Error('HTTP_API_INVALID_LOGIN_ENTRY');
       const origin = currentOrigin();
       const normalizedReturnPath = parseReturnPath(returnPath, origin);
       appliedRead = ++nextRead;
       client.clearExpectedActor();
       const response = record(await client.request<unknown>('/api/v1/session/login', {
-        method: 'POST', body: { entry, returnPath: normalizedReturnPath }, signal,
+        method: 'POST', body: { entry, returnPath: normalizedReturnPath, ...(rememberDevice ? { rememberDevice: true } : {}) }, signal,
       }), 'LOGIN_ENVELOPE');
       if (Object.keys(response).length !== 1) throw new Error('HTTP_API_INVALID_LOGIN_RESPONSE');
       const data = record(response.data, 'LOGIN_DATA');

@@ -4,6 +4,7 @@ import { HttpApiError } from '../../services/httpApi/httpApiClient';
 import { isQuickProductionOrigin } from './origins';
 import { getQuickAuthContext, saveQuickAuthContext } from './outbox';
 import type { QuickAuthContext } from './model';
+import { installForegroundSessionRenewal } from '../../services/httpApi/foregroundSession';
 
 export type VerifiedQuickAuthSnapshot = QuickAuthSnapshot & {
   email: string | null;
@@ -23,6 +24,7 @@ let cachedSnapshot: QuickAuthSnapshot | null = null;
 let locallyStopped = false;
 let sessionLoadRevision = 0;
 let sessionLoadState: 'checking' | 'authenticated' | 'unauthenticated' | 'unreachable' = 'checking';
+let rememberedDevice = false;
 
 const projectRef = typeof window === 'undefined' ? 'projed-http' : `http:${window.location.origin}`;
 const sessionIdentity = (contextId: string) => `http:${contextId}`;
@@ -111,6 +113,7 @@ const readQuickSession = async (): Promise<QuickAuthSnapshot | null> => {
     if (!isCurrent()) return staleResult();
     const profile = await httpSessionService.getSession();
     if (!isCurrent()) return staleResult();
+    rememberedDevice = profile.rememberedDevice === true;
     const identity = sessionIdentity(profile.authContextId);
     const context = await getQuickAuthContext();
     if (!isCurrent()) return staleResult();
@@ -265,18 +268,34 @@ export const signOutQuickSession = async () => {
   await httpSessionService.logout();
 };
 
-export const startQuickGoogleSignIn = async (redirectTo: string) => {
+export const startQuickGoogleSignIn = async (redirectTo: string, rememberDevice = false) => {
   const origin = window.location.origin;
   const target = new URL(redirectTo, origin);
   if (target.origin !== origin || target.hash) throw new Error('LOGIN_RETURN_PATH_INVALID');
   const returnPath = `${target.pathname}${target.search}`;
   const entry = isQuickProductionOrigin(origin) ? 'quick' : 'main';
-  const authorizationUrl = await httpSessionService.startLogin(entry, returnPath);
+  const authorizationUrl = await httpSessionService.startLogin(entry, returnPath, undefined, rememberDevice);
   window.location.assign(authorizationUrl);
 };
 export const completeQuickOAuthCallback = async () => undefined;
 export const consumeQuickOAuthClaimIntent = () => null;
 export const subscribeQuickAuth = async (onChange: (snapshot: QuickAuthSnapshot | null) => void) => {
-  void onChange;
-  return { unsubscribe: () => undefined };
+  const stop = installForegroundSessionRenewal(async signal => {
+    const expected = getQuickAuthSnapshot();
+    if (!rememberedDevice || !expected) return;
+    const revision = sessionLoadRevision;
+    const isCurrent = () => getQuickAuthSnapshot() === expected && sessionLoadRevision === revision;
+    const observed = await getQuickAuthContext();
+    if (!isCurrent() || signal.aborted) return;
+    try {
+      await httpSessionService.renew(signal);
+    } catch (error) {
+      if (isCurrent() && !signal.aborted && isAuthFailure(error)) {
+        await rejectSession(observed?.sessionId === expected.accessToken ? observed : undefined);
+        onChange(null);
+      }
+      throw error;
+    }
+  });
+  return { unsubscribe: stop };
 };

@@ -10,10 +10,10 @@ const useAuthStore = create<AuthStore>((set) => ({
   loading: true,
   error: null,
   
-  signInWithGoogle: async () => {
+  signInWithGoogle: async (rememberDevice = false) => {
     try {
       set({ loading: true, error: null });
-      const user = await authService.signInWithGoogle();
+      const user = await authService.signInWithGoogle(rememberDevice);
       set({ user: user ?? null, loading: false });
     } catch (error: any) {
       set({ error: error.message, loading: false });

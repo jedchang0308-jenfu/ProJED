@@ -2,6 +2,7 @@ import type { PoolClient, QueryResultRow } from 'pg';
 import { randomUUID } from 'node:crypto';
 
 import { validateServerActor, type ServerActorV1 } from './actorTransaction.js';
+import { REMEMBERED_DEVICE_TTL_MS } from './appSessionStore.js';
 import type { AppSessionStore, CompleteLoginInput, LoginIntentStatus, StoredAppSession, StoredLoginIntent } from './appSessionStore.js';
 import type { RuntimeDatabase } from './db.js';
 import { KernelError } from './errors.js';
@@ -41,6 +42,7 @@ function login(row: QueryResultRow): StoredLoginIntent {
     publicOrigin: string(row.public_origin), returnPath: string(row.return_path),
     oldSessionHash: nullableHash(row.old_session_hash), codeVerifier: verifier, status,
     claimHash: nullableHash(row.claim_hash), completedSessionHash: nullableHash(row.completed_session_hash),
+    ...(row.remember_device === true ? { rememberDevice: true } : {}),
     expiresAtMs: timestamp(row.expires_at_ms),
   });
 }
@@ -59,8 +61,10 @@ function session(row: QueryResultRow): StoredAppSession {
   } catch { unavailable(); }
   const expiresAtMs = timestamp(row.expires_at_ms);
   if (proof.contractVersion !== 'jenfu.sso-handoff.v4' || proof.audience !== 'projed'
-      || proof.googleSubject !== row.google_subject || expiresAtMs > proof.sourceSessionExpiresAtMs) unavailable();
+      || proof.googleSubject !== row.google_subject || (row.session_version !== 2 && expiresAtMs > proof.sourceSessionExpiresAtMs)
+      || (row.session_version !== undefined && row.session_version !== 1 && row.session_version !== 2)) unavailable();
   return Object.freeze({
+    ...(row.session_version === 2 ? { rememberedDevice: true as const } : {}),
     tokenHash: row.token_hash, publicOrigin: string(row.public_origin), entry: row.entry,
     localUserId: row.local_user_id, contextId: row.context_id, accountGuardRevision: revision,
     identity: Object.freeze({ ...proof }), expiresAtMs,
@@ -68,8 +72,8 @@ function session(row: QueryResultRow): StoredAppSession {
   });
 }
 
-const LOGIN_COLUMNS = 'token_hash,state_hash,entry,public_origin,return_path,old_session_hash,code_verifier,status,claim_hash,completed_session_hash,expires_at_ms::text';
-const SESSION_COLUMNS = 'token_hash,public_origin,entry,local_user_id::text,google_subject,context_id::text,account_guard_revision::text,identity,expires_at_ms::text,revoked_at_ms::text';
+const LOGIN_COLUMNS = 'remember_device,token_hash,state_hash,entry,public_origin,return_path,old_session_hash,code_verifier,status,claim_hash,completed_session_hash,expires_at_ms::text';
+const SESSION_COLUMNS = 'session_version,token_hash,public_origin,entry,local_user_id::text,google_subject,context_id::text,account_guard_revision::text,identity,expires_at_ms::text,revoked_at_ms::text';
 
 /** Durable state machine on the existing runtime pool; bootstrap is transaction-bound. */
 export class PostgresAppSessionStore implements AppSessionStore {
@@ -108,7 +112,7 @@ export class PostgresAppSessionStore implements AppSessionStore {
       lease.release(!safe);
       if (error instanceof KernelError) throw error;
       if ((error as { code?: string })?.code === '23505') conflict();
-      throw new KernelError('IDENTITY_STATE_UNAVAILABLE', 'Session storage is unavailable', 503);
+      throw new KernelError('IDENTITY_STATE_UNAVAILABLE', 'Session storage is unavailable', 503, { cause: error });
     }
   }
 
@@ -133,9 +137,9 @@ export class PostgresAppSessionStore implements AppSessionStore {
           WHERE old_session_hash=$1 AND status IN ('pending','processing')`,[intent.oldSessionHash]);
       }
       await client.query(`INSERT INTO projed_core.app_login_intents
-        (token_hash,state_hash,entry,public_origin,return_path,old_session_hash,code_verifier,expires_at_ms)
-        VALUES($1,$2,$3,$4,$5,$6,$7,$8::bigint)`, [intent.tokenHash,intent.stateHash,intent.entry,
-        intent.publicOrigin,intent.returnPath,intent.oldSessionHash,intent.codeVerifier,intent.expiresAtMs]);
+        (token_hash,state_hash,entry,public_origin,return_path,old_session_hash,code_verifier,expires_at_ms,remember_device)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8::bigint,$9::boolean)`, [intent.tokenHash,intent.stateHash,intent.entry,
+        intent.publicOrigin,intent.returnPath,intent.oldSessionHash,intent.codeVerifier,intent.expiresAtMs,intent.rememberDevice === true]);
     });
   }
 
@@ -292,10 +296,10 @@ export class PostgresAppSessionStore implements AppSessionStore {
       await client.query("SELECT set_config('projed.session_token_hash',$1,true)",[input.sessionTokenHash]);
       const permissions = await captureSessionPermissions(client,proof);
       const result = await client.query(`INSERT INTO projed_core.app_sessions
-        (token_hash,public_origin,entry,local_user_id,google_subject,context_id,account_guard_revision,identity,expires_at_ms,permission_snapshot)
-        VALUES($1,$2,$3,$4::uuid,$5,$6::uuid,$7::bigint,$8::jsonb,$9::bigint,$10::jsonb) RETURNING ${SESSION_COLUMNS}`,
+        (token_hash,public_origin,entry,local_user_id,google_subject,context_id,account_guard_revision,identity,expires_at_ms,permission_snapshot,session_version)
+        VALUES($1,$2,$3,$4::uuid,$5,$6::uuid,$7::bigint,$8::jsonb,$9::bigint,$10::jsonb,$11::smallint) RETURNING ${SESSION_COLUMNS}`,
       [input.sessionTokenHash,intent.publicOrigin,intent.entry,mapped.localUserId,proof.googleSubject,input.contextId,
-        mapped.accountGuardRevision,JSON.stringify(proof),proof.sourceSessionExpiresAtMs,JSON.stringify(permissions)]);
+        mapped.accountGuardRevision,JSON.stringify(proof),intent.rememberDevice ? this.#now() + REMEMBERED_DEVICE_TTL_MS : proof.sourceSessionExpiresAtMs,JSON.stringify(permissions),intent.rememberDevice ? 2 : 1]);
       const consumed = await client.query(`UPDATE projed_core.app_login_intents
         SET status='consumed',claim_hash=NULL,code_verifier=NULL,completed_session_hash=$2
         WHERE token_hash=$1 AND claim_hash=$3 AND status='processing'`,[input.tokenHash,input.sessionTokenHash,input.claimHash]);
@@ -329,6 +333,55 @@ export class PostgresAppSessionStore implements AppSessionStore {
           AND session.expires_at_ms>extract(epoch FROM clock_timestamp())*1000`,[runId]);
       if(result.rows.length>1)unavailable();
       return result.rows[0]?session(result.rows[0]):null;
+    });
+  }
+
+  async renewSession(expected: StoredAppSession, nowMs: number): Promise<StoredAppSession> {
+    hash(expected.tokenHash); timestamp(nowMs);
+    if (!expected.rememberedDevice) throw new KernelError('IDENTITY_INVALID','Device Session is required',401);
+    return this.#transaction(null,expected.tokenHash,false,async client => {
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended('projed:runtime-transaction:v1', 0))");
+      await client.query("SELECT pg_advisory_xact_lock_shared(hashtextextended('projed:account:' || $1, 0))",[expected.localUserId]);
+      const result = await client.query(`SELECT ${SESSION_COLUMNS} FROM projed_core.app_sessions WHERE token_hash=$1 FOR UPDATE`,[expected.tokenHash]);
+      if (result.rows.length !== 1) throw new KernelError('IDENTITY_INVALID','Device Session is unavailable',401);
+      const stored = session(result.rows[0]!);
+      if (!stored.rememberedDevice || stored.revokedAtMs !== null || stored.expiresAtMs <= this.#now()
+          || stored.publicOrigin !== expected.publicOrigin || stored.entry !== expected.entry
+          || stored.contextId !== expected.contextId || stored.localUserId !== expected.localUserId
+          || stored.accountGuardRevision !== expected.accountGuardRevision) {
+        throw new KernelError('IDENTITY_INVALID','Device Session is no longer valid',401);
+      }
+      const proof = stored.identity;
+      const states = createPlatformPrincipalStateReader({
+        contractBinding: PLATFORM_PROJED_PRINCIPAL_STATE_CONTRACT,
+        handoffBinding: { contractVersion:'jenfu.sso-handoff.v4',issuer:proof.issuer,manifestSha256:proof.manifestSha256,audience:'projed' },
+        query: { query: async (text,values) => client.query(text,[...values]) },now:this.#now,
+      });
+      // This principal-state contract takes an identity key, never a Platform Session.
+      const current = await states.readCurrent({ identityIssuer:proof.identityIssuer,identitySubject:proof.identitySubject,principalId:proof.principalId });
+      const revokedBeforeMs = current.revokedBefore === null ? null : Date.parse(current.revokedBefore);
+      if (current.principalKind !== proof.principalKind || current.employeeId !== proof.employeeId
+          || current.googleSubject !== proof.googleSubject || current.mappingRevision !== proof.mappingRevision
+          || current.authEpoch !== proof.authEpoch || revokedBeforeMs !== proof.revokedBeforeMs
+          || proof.authenticatedAtMs > Date.parse(current.readAt)
+          || (revokedBeforeMs !== null && proof.authenticatedAtMs <= revokedBeforeMs)) {
+        throw new KernelError('IDENTITY_INVALID','Principal changed before renewal',401);
+      }
+      const mapped = await resolveGoogleMappingInTransaction(client,proof);
+      if (mapped.status !== 'active' || mapped.localUserId !== stored.localUserId
+          || mapped.accountGuardRevision !== stored.accountGuardRevision) {
+        throw new KernelError('IDENTITY_INVALID','Original account is no longer authorized',401);
+      }
+      await client.query(`SELECT set_config('projed.actor_principal_id',$1,true),set_config('projed.actor_entry',$2,true),
+        set_config('projed.actor_context_id',$3,true),set_config('projed.actor_guard_revision',$4,true),
+        set_config('projed.actor_local_user_id',$5,true),set_config('projed.renew_session', $6, true)`,
+      [proof.principalId,stored.entry,stored.contextId,stored.accountGuardRevision,stored.localUserId,stored.tokenHash]);
+      const renewedAtMs = this.#now();
+      const renewed = await client.query(`UPDATE projed_core.app_sessions SET expires_at_ms=GREATEST(expires_at_ms,$2::bigint)
+        WHERE token_hash=$1 AND session_version=2 AND revoked_at_ms IS NULL AND expires_at_ms>$3::bigint
+        RETURNING ${SESSION_COLUMNS}`,[stored.tokenHash,renewedAtMs+REMEMBERED_DEVICE_TTL_MS,renewedAtMs]);
+      if (renewed.rows.length !== 1) throw new KernelError('IDENTITY_INVALID','Device Session expired before renewal',401);
+      return session(renewed.rows[0]!);
     });
   }
 
