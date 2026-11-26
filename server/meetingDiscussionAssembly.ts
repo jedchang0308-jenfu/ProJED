@@ -44,7 +44,11 @@ function validateSource(source:MeetingDiscussionSource):void{
     ||!Number.isSafeInteger(source.endOffsetMs+2000)||!SHA.test(source.sha256)||!GENERATION.test(source.generation))invalid();
   counter(source.overlapMs,500);counter(source.gapBeforeMs,Number.MAX_SAFE_INTEGER);
 }
-function fold(text:string):string{return text.normalize('NFKC').toLowerCase().replace(/\s/gu,'');}
+const DIGIT_WORDS:Readonly<Record<string,string>>={
+  '0':'零','1':'一','2':'二','3':'三','4':'四','5':'五','6':'六','7':'七','8':'八','9':'九',
+};
+function fold(text:string):string{return text.normalize('NFKC').toLowerCase().replace(/[0-9]/gu,digit=>DIGIT_WORDS[digit]!)
+  .replace(/\s/gu,'');}
 function punctuationOnly(text:string):boolean{return /^[\s\p{P}]*$/u.test(text);}
 
 /** Match real provider words to raw text. Only whitespace/punctuation may be

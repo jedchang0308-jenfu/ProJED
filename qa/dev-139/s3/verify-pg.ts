@@ -50,7 +50,7 @@ import { verifyQuickReceiptPostgres } from './verify-quick-receipt-pg.js';
 import { verifyMeetingCapturePostgres } from './verify-meeting-capture-pg.js';
 import { verifyMeetingAudioPostgres } from './verify-meeting-audio-pg.js';
 import { verifyMeetingAudioCleanupPostgres } from './verify-meeting-audio-cleanup-pg.js';
-import { verifyMeetingUploadPostgres } from './verify-meeting-upload-pg.js';
+import { verifyMeetingUploadPostgres, type MeetingUploadVerificationEvidence } from './verify-meeting-upload-pg.js';
 import { verifyMeetingReviewPostgres } from './verify-meeting-review-pg.js';
 import { verifyTaskOrderNotesPostgres } from './verify-task-order-notes-pg.js';
 import { verifyBoundBoardTransferPostgres } from './verify-bound-board-transfer-pg.js';
@@ -65,6 +65,16 @@ const { Client } = pg;
 const config = loadRuntimeConfig();
 const expected = config.profile.migrations.map(({ version, path }) => ({ version, checksum: sha256(readFileSync(path)) }));
 const database = new RuntimeDatabase(config);
+const realSpeechToken=process.env.PROJED_QA_REAL_SPEECH_ACCESS_TOKEN;
+const realSpeechWavPath=process.env.PROJED_QA_REAL_SPEECH_WAV_PATH;
+if((realSpeechToken===undefined)!==(realSpeechWavPath===undefined)){
+  throw new Error('DEV139_REAL_SPEECH_QUALIFICATION_INPUT_INCOMPLETE');
+}
+const realSpeechWavBytes=realSpeechWavPath===undefined?undefined:new Uint8Array(readFileSync(realSpeechWavPath));
+if(realSpeechWavBytes&&createHash('sha256').update(realSpeechWavBytes).digest('hex')
+    !=='b98e7f4f665da80dea6b6000723c320c1392a38749bfd92441958c6567111263'){
+  throw new Error('DEV139_REAL_SPEECH_FIXTURE_NOT_APPROVED_SYNTHETIC_AUDIO');
+}
 const repository = new DomainReadRepository();
 const commands = new DomainWriteRepository(repository);
 const collaborationReads = new CollaborationReadRepository();
@@ -155,7 +165,11 @@ await verifyMeetingSynthesisPostgres(database,config,actorB,actorA,actorD);
 await runIndependent('meeting-capture',()=>verifyMeetingCapturePostgres(database,config,actorB,actorA,actorD));
 await runIndependent('meeting-audio',()=>verifyMeetingAudioPostgres(database,config,actorB,actorA,actorD));
 await runIndependent('meeting-audio-cleanup',()=>verifyMeetingAudioCleanupPostgres(database,config,actorB,actorD));
-await runIndependent('meeting-upload',()=>verifyMeetingUploadPostgres(database,config,actorB,actorA,actorD));
+let meetingUploadEvidence:MeetingUploadVerificationEvidence|undefined;
+await runIndependent('meeting-upload',async()=>{
+  meetingUploadEvidence=await verifyMeetingUploadPostgres(database,config,actorB,actorA,actorD,
+    realSpeechToken&&realSpeechWavBytes?{wavBytes:realSpeechWavBytes,getAccessToken:async()=>realSpeechToken}:undefined);
+});
 await runIndependent('meeting-review',()=>verifyMeetingReviewPostgres(database,config,actorB,actorA,actorD));
 const aWorkspaces = await runActorTransaction(database, config, actorA, port => repository.listWorkspaces(port));
 assert.deepEqual(aWorkspaces.map(workspace => workspace.id), ['ws-a', 'ws-b']);
@@ -1893,6 +1907,7 @@ try {
 if(independentFailures.length)throw new AggregateError(independentFailures,'Independent native regressions failed');
 console.log(JSON.stringify({
   status: 'PASS',
+  realSpeechPublication: meetingUploadEvidence?.realSpeechPublication??null,
   checks: [
     'migration-boundary', 'origin-migration-bridge-full53-strict-and-disabled-campaign-readiness',
     'google-proof-rls-original-uuid-read-only-and-guard-denial',
@@ -1911,6 +1926,8 @@ console.log(JSON.stringify({
     'meeting-audio-private-proxy-generation-readback-cancel-parent-delete-and-cleanup-proof',
     'meeting-audio-cleanup-retention-lease-generation-and-no-private-content',
     'meeting-upload-source-freeze-once-reservation-budget-private-replay-and-atomic-rollback',
+    ...(meetingUploadEvidence?.realSpeechPublication
+      ? ['real-speech-native-worker-private-checkpoint-discussion-and-safe-no-model-publication-or-defer'] : []),
     'meeting-human-review-source-version-cas-private-decisions-projection-and-atomic-rollback',
     'workspace-board-scope', 'tenant-member-scope', 'board-member-scope',
     'tenant-scope-does-not-imply-board-read', 'suspended-member-deny',
