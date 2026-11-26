@@ -2,7 +2,7 @@
 
 - 日期 2026-11-26（Asia/Taipei）
 - 任務 [DEV-143](../dev_task.md#dev-143-projed-remembered-device-session)
-- 狀態 **已實作並完成本機專項驗證；正整合最新 main 與 CI**。採 90 天滾動續期，尚未正式發布。
+- 狀態 **已實作並完成本機專項驗證及最新 main 整合；CI 已通過**。採 90 天滾動續期，尚未正式發布。
 
 ## 1. 交付目標
 
