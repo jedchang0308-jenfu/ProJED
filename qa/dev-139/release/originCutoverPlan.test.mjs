@@ -22,6 +22,10 @@ function binding() {
 
 function input() {
   const digest = 'd'.repeat(64);
+  const candidateDigest = 'f'.repeat(64);
+  const candidateBinding = { ...binding(), staticFixtureSha256: '9'.repeat(64) };
+  const candidateSource = 'f'.repeat(40);
+  const candidateRelease = 'dev139-qualified-origin-r2';
   const service = renderProjedCloudRun({
     deploymentScope: 'candidate', releaseId: 'dev139-cutover-fixture', sourceRevision: 'e'.repeat(40), binding: binding(),
     runtimeImage: `${CLOUD_RUN_TARGET.repository}/projed-prod@sha256:${digest}`,
@@ -37,7 +41,15 @@ function input() {
   template.client = 'gcloud';
   template.clientVersion = '593.0.0';
   const name = service.name;
-  return { campaign: 'dev139-origin-handoff-v1', readback: {
+  return { campaign: 'dev139-origin-handoff-v1', qualifiedArtifact: {
+    status: 'QUALIFIED_PRIVATE_CANDIDATE_ARTIFACT', sourceRevision: candidateSource,
+    releaseId: candidateRelease,
+    registryImages: { runtime: `${CLOUD_RUN_TARGET.repository}/projed-prod@sha256:${candidateDigest}` },
+    binding: candidateBinding,
+    proof: { status: 'PASS', sourceRevision: candidateSource, releaseId: candidateRelease,
+      binding: globalThis.structuredClone(candidateBinding), modelsEnabled: false },
+    trafficCutover: false, productionSchemaApplied: false,
+  }, readback: {
     name, uid: '6203d6ac-4f16-413f-a11c-befe525283ab', generation: '40', observedGeneration: '40',
     etag: 'AAZhJksV/+Y', labels: globalThis.structuredClone(template.labels), createTime: '2026-11-23T00:00:00Z',
     updateTime: '2026-11-26T00:00:00Z', creator: 'operator@example.test', lastModifier: 'operator@example.test',
@@ -95,11 +107,18 @@ test('keeps old origins during the guided move and binds exact main and Quick de
   assert.equal(Object.keys(environment).some(name => /GEMINI|VERTEX|RAG|MODEL|API_KEY|CONTENT_LOG|CACHE/iu.test(name)), false);
 });
 
-test('preserves image, runtime, network, SQL proxy, capacity, and rollback baseline', () => {
+test('binds the qualified image and runtime receipt while preserving infrastructure and rollback baseline', () => {
   const fixture = input();
   const plan = renderOriginCutoverPlan(fixture);
   const candidate = plan.stages.privateCandidate.request.body.template;
-  assert.equal(candidate.containers[0].image, fixture.readback.template.containers[0].image);
+  assert.equal(candidate.containers[0].image, fixture.qualifiedArtifact.registryImages.runtime);
+  assert.deepEqual(JSON.parse(candidate.containers[0].env.find(row => row.name === 'PROJED_RUNTIME_BINDING_JSON').value),
+    fixture.qualifiedArtifact.binding);
+  assert.deepEqual(candidate.labels, {
+    'projed-release': fixture.qualifiedArtifact.releaseId,
+    'projed-source': fixture.qualifiedArtifact.sourceRevision,
+    'projed-task': 'dev-139',
+  });
   assert.equal(candidate.serviceAccount, fixture.readback.template.serviceAccount);
   assert.deepEqual(candidate.vpcAccess, fixture.readback.template.vpcAccess);
   assert.deepEqual(candidate.scaling, { minInstanceCount: 0, maxInstanceCount: 1 });
@@ -128,6 +147,16 @@ test('rejects stale, public, drifting, model-enabled, and caller-expanded baseli
   ]) { const value = input(); mutate(value); invalid(value); }
   invalid({ ...input(), project: 'other' });
   invalid({ ...input(), campaign: 'contains spaces' });
+});
+
+test('rejects an unqualified or internally inconsistent candidate artifact', () => {
+  for (const mutate of [
+    value => { value.qualifiedArtifact.status = 'BUILD_ONLY'; },
+    value => { value.qualifiedArtifact.registryImages.runtime = `${CLOUD_RUN_TARGET.repository}/projed-prod:latest`; },
+    value => { value.qualifiedArtifact.binding.staticFixtureSha256 = '0'.repeat(64); },
+    value => { value.qualifiedArtifact.proof.modelsEnabled = true; },
+    value => { value.qualifiedArtifact.trafficCutover = true; },
+  ]) { const value = input(); mutate(value); invalid(value); }
 });
 
 test('does not accept a baseline where an origin campaign is already active', () => {

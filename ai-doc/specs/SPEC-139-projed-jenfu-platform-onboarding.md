@@ -823,6 +823,12 @@ Cloud Build `817bb362-4c4c-42ed-8e03-c35cb0a960d2` SUCCESS，來源包逐檔驗�
 
 候選16項只讀HTTP檢查PASS：live／ready、主／Quick HTML、SW／manifest及build metadata對應已驗映像；舊版HTML可取得；無IAM憑證及偽造relay被拒絕；operator IAM token不能當使用者Session讀私人資料。換址config在campaign關閉時依現行契約回 `{data:null}`／no-store，不含私人資料。首輪錯把此公開的停用metadata當作需Session而判FAIL，已依來源修正oracle至精確null並保留失敗，未放寬使用者API授權。這16項不包含真使用者Session成功、跨新origin交接或裝置PWA安裝，不能冒稱完整產品驗收。
 
+**0053 與私人換址候選續驗（2026-11-26，仍未換址）。** 既有 `projed-prod-migration` 先以已驗 jobs digest `sha256:1d9943c…945d6` 更新，generation 4→5；service account、VPC／Cloud SQL、1CPU／512Mi、零重試與1800秒上限不變，executionCount仍6。隨後只執行一次 `projed-prod-migration-spv5p`，executionCount 6→7、attempt0、exit(0)／succeeded1；最終ledger逐筆回報0001–0053及精確checksum，最後0053為 `c41b1cfd…f7672`。未搬資料、未重寫業務內容、未呼叫模型。
+
+換址campaign首次候選使用正式舊映像，因strict53以 `DB_BOUNDARY_INVALID` 拒絕；撤除tag後正式流量未變。第二次雖改用已驗runtime digest `sha256:7ecd63ae…ddc1`，卻沿用了上一映像的runtime binding，`staticFixtureSha256`不一致而以 `CONFIG_INVALID` 拒絕；兩次失敗均保留且未取得正式流量。修正為同一 qualified artifact 同時提供runtime image、完整binding、release／source labels後，`projed-prod-origin-175dc0e025-r4` Ready，私人tag `dev139-origin-cutover` 為0%；原 `projed-prod-loginpending-3c3f8b0` 仍100%。匿名health為403，IAM仍只有既有 `projed-legacy-entry` SA；短效operator ID token health為200，config精確回傳固定main／Quick舊→新路由。Invoker IAM check、原網址／PWA、容量與模型停用狀態均未變，不能把私人tag驗證寫成公開新址或裝置PWA完成。
+
+為避免下一次重現，origin cutover renderer現在把 `QUALIFIED_PRIVATE_CANDIDATE_ARTIFACT` 視為不可拆分輸入：候選image、binding、release／source及PASS proof必須互相一致，且53份migration checksum、零模型、未切流／未套schema的建置收據均須成立；rollback仍保留原正式template。這是修正實際執行器落差，不新增人工關卡。
+
 **登入復原熱修與候選差額（2026-11-26）。** PR #44 已合併為 `85a390179e7c7f6dd54bc56b8b482bc6f5f8fca6`，讓正常登入按鈕在 Session 回 `401`、`404` 或 `409 IDENTITY_MAPPING_CONFLICT` 時重新啟動 Jenfu-Platform 登入；其他拒絕仍維持拒絕，不能把 `403 ACCESS_DENIED` 轉成登入。受測 head `820ec4c6bf818a8f08ccbdcfc4afea7325476acf` 的 [CI45741209693](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45741209693) 兩個 jobs 均 SUCCESS，涵蓋型別、S2／S3、真 PostgreSQL、snapshot 與 OCI。三項 focused unit 另在目前 main 通過。
 
 **登入按鈕等待狀態（2026-11-26，來源修復）。** 主站按登入後保留原登入卡片，按鈕顯示「正在登入…」與載入動畫並停用；同一頁連點／鍵盤重送只啟動一次。取得 authorize URL 後仍維持等待，不能因 `location.assign()` 回傳就解除鎖定。登入期間 auth-shell／active-view readiness 為 false，避免 PWA 自動重載中斷流程；60 秒未離頁即中止該次 HTTP 等待、顯示可重試錯誤，晚到結果不能跳轉或覆寫下一次登入。一般失敗立即恢復按鈕；後端 `409 DB_BUSY` 表示已有登入，保持有界等待而不自動重送；由瀏覽器上一頁快取返回也恢復可重試狀態。不延長 Session、不改准入／權限或私人資料隔離。

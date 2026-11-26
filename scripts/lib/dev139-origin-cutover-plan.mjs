@@ -2,6 +2,7 @@ import { isDeepStrictEqual } from 'node:util';
 
 import { CLOUD_RUN_TARGET } from './dev139-cloud-run-plan.mjs';
 import { LEGACY_ENTRY_ORIGINS, LEGACY_ENTRY_TARGET } from './dev139-legacy-entry-plan.mjs';
+import { S3_MIGRATION_PATHS } from './dev139-migration-paths.mjs';
 import { MANAGED_SSO_BROKER_ORIGIN } from '../../shared/dev139DeploymentTarget.mjs';
 
 const SERVICE_NAME = `projects/${CLOUD_RUN_TARGET.project}/locations/${CLOUD_RUN_TARGET.region}/services/${CLOUD_RUN_TARGET.service}`;
@@ -108,7 +109,7 @@ function normalizeReadback(readback) {
 }
 
 function assertBaseline(input) {
-  exactKeys(input, ['campaign', 'readback']);
+  exactKeys(input, ['campaign', 'qualifiedArtifact', 'readback']);
   if (!CAMPAIGN.test(input.campaign ?? '')) invalid();
   const baseline = normalizeReadback(input.readback);
   exactKeys(baseline, ['etag', 'generation', 'image', 'invokerIamDisabled', 'latestReadyRevision', 'name',
@@ -171,6 +172,30 @@ function assertBaseline(input) {
   return { baseline, environment };
 }
 
+function assertQualifiedArtifact(artifact) {
+  const binding = artifact?.binding;
+  const proof = artifact?.proof;
+  const runtimeImage = artifact?.registryImages?.runtime;
+  if (artifact?.status !== 'QUALIFIED_PRIVATE_CANDIDATE_ARTIFACT'
+      || !/^[a-f0-9]{40}$/u.test(artifact.sourceRevision ?? '')
+      || !/^[a-z][a-z0-9-]{0,62}$/u.test(artifact.releaseId ?? '')
+      || !IMAGE.test(runtimeImage ?? '') || proof?.status !== 'PASS'
+      || proof.sourceRevision !== artifact.sourceRevision || proof.releaseId !== artifact.releaseId
+      || !isDeepStrictEqual(proof.binding, binding) || proof.modelsEnabled !== false
+      || artifact.trafficCutover !== false || artifact.productionSchemaApplied !== false
+      || !binding || typeof binding !== 'object' || Array.isArray(binding)
+      || binding.cloudSqlInstance !== 'jenfu-platform-prod:asia-east1:jenfu-platform-prod-pg'
+      || binding.iamLogins?.runtime !== 'projed-prod-runtime@jenfu-platform-prod.iam'
+      || !/^[a-f0-9]{64}$/u.test(binding.profileSha256 ?? '')
+      || !/^[a-f0-9]{64}$/u.test(binding.staticFixtureSha256 ?? '')) invalid();
+  const migrations = binding.migrationSha256;
+  if (!migrations || typeof migrations !== 'object' || Array.isArray(migrations)
+      || !isDeepStrictEqual(Object.keys(migrations).sort(), [...S3_MIGRATION_PATHS].sort())
+      || Object.values(migrations).some(checksum => !/^[a-f0-9]{64}$/u.test(checksum))) invalid();
+  return { binding: structuredClone(binding), releaseId: artifact.releaseId,
+    runtimeImage, sourceRevision: artifact.sourceRevision };
+}
+
 function switchConfiguration(campaign) {
   return {
     campaign,
@@ -186,9 +211,17 @@ function switchConfiguration(campaign) {
 /** Pure, provider-bound preparation. It cannot publish a URL or move traffic. */
 export function renderOriginCutoverPlan(input) {
   const { baseline, environment } = assertBaseline(input);
+  const artifact = assertQualifiedArtifact(input.qualifiedArtifact);
   const desiredTemplate = structuredClone(baseline.template);
+  desiredTemplate.labels = {
+    'projed-release': artifact.releaseId,
+    'projed-source': artifact.sourceRevision,
+    'projed-task': 'dev-139',
+  };
+  desiredTemplate.containers[0].image = artifact.runtimeImage;
   const desiredEnvironment = {
     ...environment,
+    PROJED_RUNTIME_BINDING_JSON: JSON.stringify(artifact.binding),
     PROJED_PUBLIC_APP_URL: CLOUD_RUN_TARGET.publicOrigin,
     PROJED_MAIN_PUBLIC_ORIGIN: CLOUD_RUN_TARGET.publicOrigin,
     PROJED_QUICK_PUBLIC_ORIGIN: LEGACY_ENTRY_TARGET.upstream,
@@ -215,7 +248,8 @@ export function renderOriginCutoverPlan(input) {
         request: { method: 'PATCH', url: `${SERVICE_URL}&updateMask=template`, body: candidateBody },
         expectedReadback: {
           uid: baseline.uid, generationGreaterThan: baseline.generation,
-          image: baseline.image, invokerIamDisabled: false, traffic: structuredClone(baseline.traffic),
+          image: artifact.runtimeImage, releaseId: artifact.releaseId, sourceRevision: artifact.sourceRevision,
+          invokerIamDisabled: false, traffic: structuredClone(baseline.traffic),
         },
         verificationRoute: {
           requiresFreshReadbackAndEtag: true, movesTraffic: false, publishesNewOrigin: false,
