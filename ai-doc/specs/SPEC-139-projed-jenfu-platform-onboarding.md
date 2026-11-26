@@ -813,6 +813,28 @@ PostgreSQL18.4原生DB／HTTP **78項**通過（`output/qa/dev-139/s3/20261125T1
 
 真正套用正式0053之前，仍須先讓可接受新ledger的相容runtime承接正式流量，並處理受影響Job。該正式revision替換超出本次「0%候選、舊版100%不變」範圍，現在暫緩0053寫入；不以本次核准追認此額外主要動作。先完成已核准的安全獨立候選及上游身分相容工作，再提出具體後續範圍，不新增關卡或另立DEV。零留存與最終新址／PWA驗收分母不變。
 
+<a id="dev139-private-origin-candidate-result"></a>
+
+**私人候選實際結果（2026-11-26，非正式切流）。** 相容橋接PR #42已合併，main `175dc0e0258cb581da54e02b57f628cf5bf2204c` 與受測head `553eb6b32f37d78baa47711d22a2c0753220d907` 的Git tree完全一致。[CI45735653090](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45735653090)兩jobs SUCCESS，PG17.12共80項（包含真52版probe）、snapshot67及OCI23均通過；53份SQL與Git來源逐份核對。沿用未受影響的正常主／Quick瀏覽器10項結果，不因文件或merge SHA不同重跑。
+
+Cloud Build `817bb362-4c4c-42ed-8e03-c35cb0a960d2` SUCCESS，來源包逐檔驗證Git blob及SHA256。runtime digest `sha256:7ecd63ae3988fcdae09e8346a89ec55ef26314a70e94314471642f07b90addc1`、jobs `sha256:1d9943c130ae1b7a6524962aeaa7554dccecbc6f0dd6d182890057848a2945d6`、ASR `sha256:ed39f03fc91f7b2ddfcb96a2669b733736fa66f34d150424406fa0a8e2dd9b24` 已讀回綁定。首輪build `e41e946c-d4f9-43bb-b700-ac8c687303cf` 因Windows git archive輸出CRLF而與Git／正式LF checksum不同，最終驗證失敗；該產物未發布。修正打包為直接讀取Git blobs，沒有放寬checksum或改SQL，第一輪失敗與新包分開保留。
+
+中央 `projed-prod-origin-175dc0e025` 已ready；私人tag `dev139-origin-175dc0e025` 指向該revision且0%流量。原 `projed-prod-board-4059d94` 仍100%，原tag保留；IAM、網路、容量、正式Jobs及PAUSED排程不變。候選連現役52版資料庫，換址campaign關閉、Gemini／RAG仍NULL；0053尚未套用，未搬資料或寫業務內容。前版public／PWA資產由原正式不可變image取出並逐位元組保留。
+
+候選16項只讀HTTP檢查PASS：live／ready、主／Quick HTML、SW／manifest及build metadata對應已驗映像；舊版HTML可取得；無IAM憑證及偽造relay被拒絕；operator IAM token不能當使用者Session讀私人資料。換址config在campaign關閉時依現行契約回 `{data:null}`／no-store，不含私人資料。首輪錯把此公開的停用metadata當作需Session而判FAIL，已依來源修正oracle至精確null並保留失敗，未放寬使用者API授權。這16項不包含真使用者Session成功、跨新origin交接或裝置PWA安裝，不能冒稱完整產品驗收。
+
+**Platform發布的獨立失敗。** 正常owner流程以 `e2589810`、既有runner image-only rotation及兩個callback執行 `PLATFORM-REL-20261126-DEV139-ORIGIN-A1`；[run45737088740](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/45737088740)的prepare／build／migrate／candidate／entrypoint通過，但verify的Workflows execution `65e5f374-1ffc-4b66-b41f-f76d80aee19f` 在create_session回401 `auth_token_invalid`。activate未執行，正常failure recovery成功；正式Platform原revision `jenfu-platform-prod-ff6819b25d22`仍100%，失敗候選tag已清理。
+
+既有smoke Secret version14 refresh及帳號lookup成功、帳號啟用／Email verified；SDK簽章、issuer／audience／uid／auth_time格式與期限檢查通過，但不能只以這些事實宣稱中央登入可用。同一憑證對原正式Platform也實際回相同401，故不是只在新候選出現。operator身分的SDK撤銷查詢另回internal-error，與正式401分開記錄，不以此推定runtime IAM故障。來源上Firebase撤銷與中央revokedBefore均可導致401，目前尚未讀回中央barrier，不宣稱唯一根因。既有正常smoke只做local logout，不能誤判它必然推進全域barrier。
+
+COO檢查僅用來避免重複人工作業：新出現的原正式401使先前成功登入證據不足以支持本次驗證，不能重寫PASS或略過smoke；只更新同一帳號／同一既有smoke憑證資源，不新增身分、權限或required gate。本人已在本機頁完成重新驗證，canonical producer回COMMITTED：既有Secret14→15與既有GitHub Secret更新成功，正常Session／reload／local logout及撤銷檢查均通過。成功收據 `receipts/credential-reauth/2026-11-26T02-04-39.345Z-9421b4c80772d4c5.json`（SHA256 `404d70e5d8c2e9149520b53d6dece0c7fe12a6a2beb581bfc0241086997151f2`）位於原Platform release bucket；沒有保存credential payload。頁面／程序已關閉，port57234已釋放。
+
+正常 `APP_INFRA_SMOKE_CREDENTIAL_ROTATION` 已通過完整saved-plan／apply／readback，只把原Workflow的numeric pin14改15；維護收據 `PLATFORM-MAINT-20261126-DEV139-SMOKE15/app-infra.json` SHA256 `69ccdaf511b8d0a07c6a6df726fbfd4fb0e9a4a6c65c6b64cc664f518a6199f6`。第一輪輸入絕對路徑被拒、第二輪缺少傳給Terraform backend的現有OAuth token而失敗；均保留。讀回確認Workflow仍14後，修正本機呼叫前提才重試成功，未重建或變更權限。Google SDK已確認有效，不要求重複gcloud登入。
+
+新 `PLATFORM-REL-20261126-DEV139-ORIGIN-A2` 沿recovered A1的FINALIZED／PRE_ACTIVATION_ABORTED基線建立，不直接重跑已清理tag的A1 failed job；source與runtime設定未變。新intent SHA256 `e7d4f5ee62d1e82272baaa30ad268109a525e43c1c35e88ee18075f0cfef21c4`，由正常[owner run45740511123](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/45740511123)接續；結果未完成前不宣稱Platform相容發布或相依真Session已通過。
+
+本輪機器證據集中在task worktree的 `output/dev139-origin-guide-preview/candidate-release-20261126/`：`ci/verified-summary.json`、`artifact-175dc0e0258c-r2/qualified-artifact.json`、`candidate-deployment-proof.json`、`candidate-http-verified.json`、`platform-controller.json`、`platform-smoke-credential-diagnostic.json`、`platform-smoke-firebase-sdk-r2-diagnostic.json`及`platform-smoke-baseline-comparison.json`。它們只支持對應來源／映像／環境與已執行行為；必要的真ASR／零留存provider、正式新址與PWA驗收仍在DEV-139完成分母。
+
 **零留存唯讀查核（2026-11-25）。** 已用既有SDK登入唯讀讀回中央 `jenfu-platform-prod` 的 `cacheConfig`，實際 `disableCache=true`；沒有PATCH設定或推論。三個既定model/location的 `fetchPublisherModelConfig`均回404 NOT_FOUND，依[官方logging說明](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/capabilities/request-response-logging)表示該logging config不存在、預設不記錄；本次不藉此推定模型可用或整體ZDR合格。結果在 `output/dev139-origin-guide-preview/zdr-readonly-20261125.json`及`zdr-model-logging-readonly-20261125.json`，credential僅程序記憶體，沒有payload檔案。
 
 [官方零留存說明](https://docs.cloud.google.com/gemini-enterprise-agent-platform/resources/zero-data-retention)及[abuse monitoring](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/abuse-monitoring)仍要求核對適用契約與模型範圍，不能把不供訓練、cache關閉或供應商稱ZDR-aligned視為本需求的零內容留存證明。可用郵件的專案／ZDR條件檢索沒有找到核准；Drive僅檢索文件metadata，未找到可識別的Google Cloud Master Agreement或ProJED豁免文件，未讀取不相關文件內容。此檢索範圍有限，不證明契約不存在。現行meeting／RAG binding皆仍為NULL，不啟用Gemini／RAG、不傳會議內容；尚缺可查核的適用契約／Google豁免證據與其後合成provider驗證，不能以程式或checkbox自行補成PASS。
