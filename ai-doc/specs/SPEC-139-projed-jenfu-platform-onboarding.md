@@ -841,6 +841,12 @@ Cloud Build `817bb362-4c4c-42ed-8e03-c35cb0a960d2` SUCCESS，來源包逐檔驗�
 
 COO檢查僅用來避免重複人工作業：新出現的原正式401使先前成功登入證據不足以支持本次驗證，不能重寫PASS或略過smoke；只更新同一帳號／同一既有smoke憑證資源，不新增身分、權限或required gate。本人已在本機頁完成重新驗證，canonical producer回COMMITTED：既有Secret14→15與既有GitHub Secret更新成功，正常Session／reload／local logout及撤銷檢查均通過。成功收據 `receipts/credential-reauth/2026-11-26T02-04-39.345Z-9421b4c80772d4c5.json`（SHA256 `404d70e5d8c2e9149520b53d6dece0c7fe12a6a2beb581bfc0241086997151f2`）位於原Platform release bucket；沒有保存credential payload。頁面／程序已關閉，port57234已釋放。
 
+<a id="dev139-real-speech-publication-qualification"></a>
+
+**真實 Speech 到無模型結果發布的有界資格驗證（2026-11-26，來源／隔離驗證，未部署）。** 本輪只使用固定 3.64 秒合成繁中音訊（SHA256 `b98e7f4f665da80dea6b6000723c320c1392a38749bfd92441958c6567111263`）與臨時 PostgreSQL 18.4；憑證只在程序記憶體中使用，未寫入檔案或收據。原生 ASR worker 只發出一個 Google Speech V1 請求，結果為 `今天下午3點討論專案進度`，transcript SHA256 `c44ef4b06f829ee7fed5886dc1f8376531baf82164604c8862a2462945b17fe9`，12 個字詞時間點均綁定同一私人音訊來源。私人 checkpoint、discussion assembly 與結果發布均完成；LLM provider保持 `null`，用量帳本證明 Gemini／RAG dispatch為0，本地可完成的結果以 `published` 收旂，不因模型不可用而阻擋發布。
+
+第一個有效失敗發現 Speech raw transcript 的阿拉伯數字 `3` 與 provider word anchor 的中文數字 `三` 無法對齊；修正僅在對齊 fold 正規化數字，不改寫 raw transcript 或 provider word。第二次執行已實際發布，但測試 oracle 錯誤地只接受 `deferred`；修正為「本地可完成即 `published`，真正需模型才 `deferred`」後，最終結果 `output/qa/dev-139/s3/20261126T033724Z-32574256/result.json` PASS。受影響的 discussion／ASR／background 40/40、S3 unit 228/228也通過；三次的provider結果皆已知，沒有重送不明結果。本輪沒有使用正式會議內容、寫正式資料、建置映像、部署、調整流量或變更 IAM／Secret／容量。Gemini／RAG 的零留存契約仍未實證，所以付費模型綁定繼續停用；此 Speech 通過不等於整個 DEV-139 結案。
+
 正常 `APP_INFRA_SMOKE_CREDENTIAL_ROTATION` 已通過完整saved-plan／apply／readback，只把原Workflow的numeric pin14改15；維護收據 `PLATFORM-MAINT-20261126-DEV139-SMOKE15/app-infra.json` SHA256 `69ccdaf511b8d0a07c6a6df726fbfd4fb0e9a4a6c65c6b64cc664f518a6199f6`。第一輪輸入絕對路徑被拒、第二輪缺少傳給Terraform backend的現有OAuth token而失敗；均保留。讀回確認Workflow仍14後，修正本機呼叫前提才重試成功，未重建或變更權限。Google SDK已確認有效，不要求重複gcloud登入。
 
 新 `PLATFORM-REL-20261126-DEV139-ORIGIN-A2` 沿recovered A1的FINALIZED／PRE_ACTIVATION_ABORTED基線建立，不直接重跑已清理tag的A1 failed job；source與runtime設定未變。新intent SHA256 `e7d4f5ee62d1e82272baaa30ad268109a525e43c1c35e88ee18075f0cfef21c4`，正常[owner run45740511123](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/45740511123)的十個階段全部SUCCESS，control為FINALIZED／RELEASED。build收據為REUSED_PROVIDER_BUILD，沿同一成功映像 `sha256:ed7b560e77671757ac00fc7e015d5dd8345569fe5ba623f90780cb7fcc128117`；migration新增0、核對重播25，沒有重搬資料或改既有SQL。

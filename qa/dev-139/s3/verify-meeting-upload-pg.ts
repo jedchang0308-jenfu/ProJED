@@ -10,10 +10,12 @@ import { sha256, type RuntimeConfig } from '../../../server/config.js';
 import { RuntimeDatabase, type ExpectedMigration } from '../../../server/db.js';
 import { resolveBoard } from '../../../server/domainRead.js';
 import { KernelError } from '../../../server/errors.js';
+import { createGoogleCloudSpeechProvider } from '../../../server/googleCloudSpeechProvider.js';
 import { createKernelHttpServer } from '../../../server/http.js';
+import { buildMeetingAudioObjectKey } from '../../../server/meetingAudioInput.js';
 import type { MeetingAudioStorage } from '../../../server/meetingAudioStorage.js';
 import { createPostgresMeetingAsrControl, createPostgresMeetingAsrRepository } from '../../../server/meetingAsrRepository.js';
-import type { MeetingAsrClaim, MeetingAsrTranscriptUnit } from '../../../server/meetingAsrWorker.js';
+import { runMeetingAsrUnit, type MeetingAsrClaim, type MeetingAsrTranscriptUnit } from '../../../server/meetingAsrWorker.js';
 import { assembleMeetingDiscussionSource } from '../../../server/meetingDiscussionAssembly.js';
 import { createPostgresMeetingDiscussionRepository, parseMeetingDiscussionClaim, parseMeetingDiscussionProgress,
   parseMeetingDiscussionReadProgress, parseMeetingDiscussionSourceInput } from '../../../server/meetingDiscussionRepository.js';
@@ -47,7 +49,25 @@ type CompletionEntry = {
   sha256: string;
   objectPath: string;
 };
-type SegmentSeed = Omit<CompletionEntry, 'objectPath'> & { uploadState: 'verified' | 'pending' };
+type SegmentSeed = Omit<CompletionEntry, 'objectPath'> & {
+  uploadState: 'verified' | 'pending';
+  storageGeneration?: string;
+};
+
+export interface MeetingUploadRealSpeechQualification {
+  readonly wavBytes: Uint8Array;
+  readonly getAccessToken: () => Promise<string>;
+}
+
+export interface MeetingUploadVerificationEvidence {
+  readonly realSpeechPublication: null | {
+    readonly transcriptSha256: string;
+    readonly wordCount: number;
+    readonly speechRequests: 1;
+    readonly discussionComplete: true;
+    readonly llmOutcome: 'deferred' | 'published';
+  };
+}
 
 const DEFAULT_BUDGET_MICROS = '1000000000';
 const RESERVED_BUDGET_MICROS = '10000000';
@@ -76,6 +96,74 @@ function requireHttpError(error: unknown, code: string, status: number): boolean
 
 function digest(value: string): string {
   return createHash('sha256').update(value, 'utf8').digest('hex');
+}
+
+function normalizeSyntheticMandarin(value: string): string {
+  return value.normalize('NFKC').replaceAll('3', '三').replace(/[^\p{L}\p{N}]/gu, '');
+}
+
+function characterErrorRate(expected: string, actual: string): number {
+  let row = Array.from({ length: actual.length + 1 }, (_, index) => index);
+  for (let left = 1; left <= expected.length; left += 1) {
+    const next = [left];
+    for (let right = 1; right <= actual.length; right += 1) {
+      next[right] = Math.min(
+        next[right - 1]! + 1,
+        row[right]! + 1,
+        row[right - 1]! + (expected[left - 1] === actual[right - 1] ? 0 : 1),
+      );
+    }
+    row = next;
+  }
+  return expected.length === 0 ? (actual.length === 0 ? 0 : 1) : row[actual.length]! / expected.length;
+}
+
+/** Qualification-only decoder for the fixed, synthetic PCM WAV fixture. */
+function decodeSyntheticPcmWav(bytes: Uint8Array): Uint8Array {
+  const wav = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (wav.length < 44 || wav.toString('ascii', 0, 4) !== 'RIFF' || wav.toString('ascii', 8, 12) !== 'WAVE') {
+    throw new Error('DEV139_REAL_SPEECH_WAV_INVALID');
+  }
+  let offset = 12;
+  let format: { audioFormat: number; channels: number; sampleRate: number; bits: number } | undefined;
+  let samples: Buffer | undefined;
+  while (offset + 8 <= wav.length) {
+    const chunk = wav.toString('ascii', offset, offset + 4);
+    const size = wav.readUInt32LE(offset + 4);
+    const start = offset + 8;
+    const end = start + size;
+    if (end > wav.length) throw new Error('DEV139_REAL_SPEECH_WAV_INVALID');
+    if (chunk === 'fmt ') {
+      if (size < 16) throw new Error('DEV139_REAL_SPEECH_WAV_INVALID');
+      format = {
+        audioFormat: wav.readUInt16LE(start),
+        channels: wav.readUInt16LE(start + 2),
+        sampleRate: wav.readUInt32LE(start + 4),
+        bits: wav.readUInt16LE(start + 14),
+      };
+    } else if (chunk === 'data') {
+      samples = wav.subarray(start, end);
+    }
+    offset = end + (size % 2);
+  }
+  if (!format || !samples || format.audioFormat !== 1 || format.channels !== 1 || format.bits !== 16
+      || format.sampleRate < 8_000 || format.sampleRate > 48_000 || samples.length < 2 || samples.length % 2 !== 0) {
+    throw new Error('DEV139_REAL_SPEECH_WAV_INVALID');
+  }
+  if (format.sampleRate === 16_000) return new Uint8Array(samples);
+  const inputSamples = samples.length / 2;
+  const outputSamples = Math.floor(inputSamples * 16_000 / format.sampleRate);
+  const pcm = Buffer.allocUnsafe(outputSamples * 2);
+  for (let index = 0; index < outputSamples; index += 1) {
+    const position = index * format.sampleRate / 16_000;
+    const leftIndex = Math.min(inputSamples - 1, Math.floor(position));
+    const rightIndex = Math.min(inputSamples - 1, leftIndex + 1);
+    const fraction = position - leftIndex;
+    const left = samples.readInt16LE(leftIndex * 2);
+    const right = samples.readInt16LE(rightIndex * 2);
+    pcm.writeInt16LE(Math.max(-32_768, Math.min(32_767, Math.round(left + (right - left) * fraction))), index * 2);
+  }
+  return new Uint8Array(pcm);
 }
 
 function adminUrlFor(config: RuntimeConfig): URL {
@@ -142,6 +230,7 @@ async function beginAndStopCapture(
   tenantId: string,
   projectId: string,
   recordId: string,
+  durationMs = 200,
 ): Promise<string> {
   const begun = responseData(await post(client, {
     operation: 'begin', tenantId, projectId, recordId,
@@ -153,7 +242,7 @@ async function beginAndStopCapture(
   const captureId = String(begun.captureId);
   const stopped = responseData(await post(client, {
     operation: 'stop', captureId, expectedSourceVersion: 1,
-    epochManifest: [{ epoch: 0, captureOffsetMs: 0, monotonicStart: 1000, durationMs: 200, gapBeforeMs: 0 }],
+    epochManifest: [{ epoch: 0, captureOffsetMs: 0, monotonicStart: 1000, durationMs, gapBeforeMs: 0 }],
     finalPointerSequence: -1, gaps: [], pointerLoss: false, reason: 'qa-upload-completion-stop',
   }), 'meeting upload capture stop');
   assert.equal(stopped.state, 'stopped');
@@ -177,7 +266,15 @@ async function seedSegments(
   let committed = false;
   try {
     for (const value of input.segments) {
-      const objectPath = `${input.tenantId}/${input.projectId}/${input.recordId}/${input.captureId}/v1/${value.segmentIndex}.webm`;
+      const objectPath = buildMeetingAudioObjectKey({
+        tenantId: input.tenantId,
+        projectId: input.projectId,
+        recordId: input.recordId,
+        captureId: input.captureId,
+        sourceVersion: 1,
+        segmentIndex: value.segmentIndex,
+        mime: value.mime,
+      });
       const attemptId = `storage:${input.captureId}:v1:segment:${value.segmentIndex}`;
       input.onCleanupAttempt?.(attemptId);
       const existing = await admin.query(
@@ -188,7 +285,9 @@ async function seedSegments(
       const segmentId = randomUUID();
       const cleanupId = randomUUID();
       const operationToken = value.uploadState === 'verified' ? randomUUID() : null;
-      const generation = value.uploadState === 'verified' ? String(700_000 + value.segmentIndex) : null;
+      const generation = value.uploadState === 'verified'
+        ? (value.storageGeneration ?? String(700_000 + value.segmentIndex))
+        : null;
       const cleanupProof = value.uploadState === 'verified'
         ? { outcome: 'uploaded', sha256: value.sha256, bytes: value.bytes }
         : { outcome: null, sha256: null, bytes: null };
@@ -432,7 +531,8 @@ export async function verifyMeetingUploadPostgres(
   owner: ServerActorV1,
   reader: ServerActorV1,
   outsider: ServerActorV1,
-): Promise<void> {
+  realSpeech?: MeetingUploadRealSpeechQualification,
+): Promise<MeetingUploadVerificationEvidence> {
   const expected: ExpectedMigration[] = migrationSet(config);
   const httpConfig: RuntimeConfig = { ...config, host: '127.0.0.1', port: 0 };
   const adminUrl = adminUrlFor(config);
@@ -459,6 +559,7 @@ export async function verifyMeetingUploadPostgres(
   const cleanupAttemptIds = new Set<string>();
   const cleanupErrors: unknown[] = [];
   let storageCalls = 0;
+  let realSpeechPublication: MeetingUploadVerificationEvidence['realSpeechPublication'] = null;
   const forbiddenStorage: MeetingAudioStorage = {
     async upload() { storageCalls += 1; throw new Error('Unexpected synthetic storage upload'); },
     async read() { storageCalls += 1; throw new Error('Unexpected synthetic storage read'); },
@@ -1219,21 +1320,29 @@ export async function verifyMeetingUploadPostgres(
       assert.equal(result.rowCount,1,'the run token and its pool identify exactly one settlement ledger');
       return result.rows[0]!;
     };
-    const createSettlementFixture=async(label:string)=>{
+    const createSettlementFixture=async(label:string,sourceOverride?:{
+      bytes:number;endOffsetMs:number;mime:string;sha256:string;storageGeneration:string;
+    })=>{
+      const sourceSeed=sourceOverride??{bytes:128,endOffsetMs:100,mime:'audio/webm',
+        sha256:'b'.repeat(64),storageGeneration:'700000'};
       const recordId=await createPrivateMeeting(database,config,owner,workspace.id,board.id,`DEV-139 ASR ${label} fixture`);
-      const captureId=await beginAndStopCapture(post,ownerClient,workspace.id,board.id,recordId);
+      const captureId=await beginAndStopCapture(post,ownerClient,workspace.id,board.id,recordId,
+        Math.max(200,sourceSeed.endOffsetMs));
       captureIds.push(captureId);
       const manifest=await seedSegments(admin,{tenantId:workspace.id,projectId:board.id,recordId,captureId,
-        segments:[{segmentIndex:0,epoch:0,bytes:128,startOffsetMs:0,endOffsetMs:100,
-          overlapMs:0,gapBeforeMs:0,mime:'audio/webm',sha256:'b'.repeat(64),uploadState:'verified'}],
+        segments:[{segmentIndex:0,epoch:0,bytes:sourceSeed.bytes,startOffsetMs:0,endOffsetMs:sourceSeed.endOffsetMs,
+          overlapMs:0,gapBeforeMs:0,mime:sourceSeed.mime,sha256:sourceSeed.sha256,uploadState:'verified',
+          storageGeneration:sourceSeed.storageGeneration}],
         onCleanupAttempt:id=>cleanupAttemptIds.add(id)});
-      const source=await admin.query<{id:string}>(`SELECT id::text FROM projed_core.meeting_capture_segments
+      const source=await admin.query<{id:string;object_path:string;storage_generation:string}>(`SELECT id::text,object_path,storage_generation
+        FROM projed_core.meeting_capture_segments
         WHERE capture_id=$1::uuid AND source_version=1 AND segment_index=0 AND upload_state='verified'`,[captureId]);
       assert.equal(source.rowCount,1,'each settlement fixture owns exactly one verified source segment');
       const body=completionBody(captureId,manifest,`cloud-speech-${label}-${randomUUID()}`);
       const runId=String(responseData(await post(ownerClient,body),`ASR ${label} source completion`).runId);
       assert.match(runId,/^[a-f0-9-]{36}$/u);
-      return {recordId,captureId,sourceSegmentId:source.rows[0]!.id,manifest,body,runId,
+      return {recordId,captureId,sourceSegmentId:source.rows[0]!.id,sourceObjectPath:source.rows[0]!.object_path,
+        sourceGeneration:source.rows[0]!.storage_generation,manifest,body,runId,
         dispatchPayload:{chunkIndex:0,chunkCount:1,startSample:0,endSample:1600,
           decodedSha256:'b'.repeat(64),startOffsetMs:0,endOffsetMs:100} satisfies JsonObject};
     };
@@ -2106,6 +2215,83 @@ export async function verifyMeetingUploadPostgres(
         FROM projed_core.meeting_capture_sessions WHERE id=$1::uuid`,[fixture.captureId,fixture.runId]);
       assert.deepEqual(rows.rows[0],{state:'cancelled',active_transcript_revision_id:null,published:0});
     });
+
+    if(realSpeech){
+      const wavBytes=new Uint8Array(realSpeech.wavBytes);
+      const wavSha256=createHash('sha256').update(wavBytes).digest('hex');
+      const pcm=decodeSyntheticPcmWav(wavBytes);
+      const durationMs=Math.ceil(pcm.byteLength/32);
+      assert.ok(durationMs>1_000&&durationMs<10_000,'the bounded synthetic speech fixture is 1-10 seconds');
+      const fixture=await createSettlementFixture('real-speech-publication',{
+        bytes:wavBytes.byteLength,endOffsetMs:durationMs,mime:'audio/wav',sha256:wavSha256,
+        storageGeneration:'900001',
+      });
+      await verifyAsrSessionBinding(database,config,admin,owner,outsider,fixture.recordId,
+        fixture.captureId,fixture.runId,async actor=>{
+          assert.equal(record(await prepareSettlementFixture(fixture,actor),'real Speech ASR preparation').state,'queued');
+          let storageReads=0,speechRequests=0;
+          const repository=createPostgresMeetingAsrRepository({runId:fixture.runId,database,config,
+            resolveActor:async runId=>{assert.equal(runId,fixture.runId);return actor;}});
+          const provider=createGoogleCloudSpeechProvider({
+            getAccessToken:realSpeech.getAccessToken,
+            fetchImpl:async(input,init)=>{speechRequests+=1;return fetch(input,init);},
+          });
+          const result=await runMeetingAsrUnit({
+            repository,
+            storage:{async read(key){
+              storageReads+=1;assert.equal(key,fixture.sourceObjectPath);
+              return {bytes:wavBytes,contentType:'audio/wav',generation:fixture.sourceGeneration,size:wavBytes.byteLength};
+            }},
+            provider,
+            decode:async input=>{
+              assert.equal(input.mimeType,'audio/wav');
+              assert.equal(createHash('sha256').update(input.bytes).digest('hex'),wavSha256);
+              assert.equal(input.expectedDurationMs,durationMs);
+              return pcm;
+            },
+          },new AbortController().signal);
+          assert.equal(result.state,'published','the real Speech response is persisted through the native ASR repository');
+          assert.equal(storageReads,1,'the worker reads the exact frozen source once');
+          assert.equal(speechRequests,1,'one durable ASR unit sends at most one real Speech request');
+
+          const checkpoint=await admin.query<{result:unknown}>(`SELECT result FROM projed_core.meeting_asr_unit_results
+            WHERE run_id=$1::uuid`,[fixture.runId]);
+          assert.equal(checkpoint.rowCount,1,'the real Speech result creates exactly one private ASR checkpoint');
+          const transcript=record(checkpoint.rows[0]!.result,'real Speech private checkpoint');
+          const rawText=String(transcript.rawText??'');
+          const words=transcript.wordOffsets;
+          assert.ok(Array.isArray(words)&&words.length>0,'the real Speech result retains word anchors');
+          assert.ok(words.every(word=>record(word,'real Speech word').source_audio_segment_id===fixture.sourceSegmentId),
+            'every real Speech word remains anchored to the exact private source segment');
+          const expected=normalizeSyntheticMandarin('今天下午三點討論專案進度。');
+          const actual=normalizeSyntheticMandarin(rawText);
+          assert.ok(actual.length>0&&characterErrorRate(expected,actual)<=0.2,
+            'the fixed non-confidential Mandarin phrase remains recognizable');
+
+          const discussion=createPostgresMeetingDiscussionRepository({runId:fixture.runId,database,config,
+            resolveActor:async runId=>{assert.equal(runId,fixture.runId);return actor;}});
+          const discussionResult=await runMeetingDiscussionUnit({repository:discussion},new AbortController().signal);
+          assert.equal(discussionResult.state,'source_complete');
+          assert.equal(discussionResult.assemblyComplete,true,
+            'the real ASR checkpoint reaches the native discussion source boundary');
+
+          const pipeline=createPostgresMeetingLlmPipeline({runId:fixture.runId,database,config,resolveActor:async()=>actor});
+          let llmOutcome:'deferred'|'idle'|'local_completed'|'published'|'settled'='idle';
+          for(let step=0;step<10;step+=1){
+            const progress=await pipeline(null,new AbortController().signal);
+            llmOutcome=progress.state;
+            if(progress.state!=='local_completed')break;
+          }
+          assert.ok(llmOutcome==='deferred'||llmOutcome==='published',
+            'the zero-retention no-model branch either publishes local-only work or defers paid work');
+          const paidModelDispatch=await admin.query<{count:number}>(`SELECT count(*)::integer AS count
+            FROM projed_core.meeting_ai_usage_attempts WHERE run_id=$1::uuid
+              AND provider<>'google-cloud-speech' AND dispatch_state='dispatched'`,[fixture.runId]);
+          assert.equal(paidModelDispatch.rows[0]?.count,0,'the no-model branch does not dispatch Gemini or RAG work');
+          realSpeechPublication={transcriptSha256:createHash('sha256').update(rawText).digest('hex'),
+            wordCount:words.length,speechRequests:1,discussionComplete:true,llmOutcome};
+        },false);
+    }
   } catch (error) {
     failed = true;
     failure = error;
@@ -2196,4 +2382,5 @@ export async function verifyMeetingUploadPostgres(
   }
   assert.equal(budgetFixtureInserted, true);
   assert.equal(budgetFixtureReset, true);
+  return {realSpeechPublication};
 }

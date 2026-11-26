@@ -188,6 +188,18 @@ test('uses NFKC only to align while preserving fullwidth and combining raw text'
   assert.equal(segment.wordOffsets[1]?.text,'Café');
 });
 
+test('aligns provider Chinese numeral words to Arabic transcript digits without rewriting either source',()=>{
+  const rawText='今天下午3點討論專案進度';
+  const providerWords=Array.from('今天下午三點討論專案進度').map((text,index)=>({
+    text,start_ms:SOURCE_START_MS+index*100,end_ms:SOURCE_START_MS+(index+1)*100,
+  }));
+  const [segment]=Array.from(assembleMeetingDiscussionSource(oneChunkInput({rawText,words:providerWords})));
+  assert.ok(segment);
+  assert.equal(segment.rawText,rawText);
+  assert.equal(segment.normalizedText,rawText);
+  assert.deepEqual(segment.wordOffsets.map(word=>word.text),Array.from('今天下午三點討論專案進度'));
+});
+
 test('keeps fractional word times and applies the 30-second bound after integer rounding',()=>{
   const atBound=oneChunkInput({rawText:'bounded',words:[
     {text:'bounded',start_ms:SOURCE_START_MS+0.25,end_ms:SOURCE_START_MS+30_000},
