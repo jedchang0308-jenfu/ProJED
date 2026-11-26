@@ -887,14 +887,14 @@ Platform新版 `jenfu-platform-prod-f715331a1ed5` 已承接100%；這是本次�
 
 <a id="dev139-origin-cutover-plan"></a>
 
-**舊／新網址並存的切換計畫已來源化（2026-11-26，未套用）。** 既有 `entryStage=direct` 只把三個主要入口值改成 Cloud Run 網址，沒有同時保留舊主站／Quick origin，也沒有啟用搬家引導；若把該 create-only renderer 直接套到現有服務，會讓舊網址Session與引導來源缺少必要的共存設定。因此新增 `create:dev-139:origin-cutover-plan`，只接受固定中央服務的最新readback與短效campaign名稱，輸出兩段計畫，不呼叫provider：
+**舊／新網址並存的切換計畫已來源化（2026-11-26，未套用）。** 既有 `entryStage=direct` 只把三個主要入口值改成 Cloud Run 網址，沒有同時保留舊主站／Quick origin，也沒有啟用搬家引導；若把該 create-only renderer 直接套到現有服務，會讓舊網址Session與引導來源缺少必要的共存設定。因此新增 `create:dev-139:origin-cutover-plan`，直接接受固定中央服務的Cloud Run v2原始readback與短效campaign名稱，正規化provider省略的預設值後輸出兩段計畫，不呼叫provider：
 
 1. **私人0%候選。** 先只PATCH現有Web template，使用原etag並保持現有具名revision承接100%、`invokerIamDisabled=false`及所有既有tag不變；新revision Ready後，須用fresh etag把它加成固定 `dev139-origin-cutover` 的0%驗證tag，仍不移動流量或公開入口。主／Quick主要origin改為兩個已觀察的Cloud Run網址，同時把原web.app／firebaseapp.com各自加入有限additional origin，並產生兩條固定 `main→main`、`quick→quick` 搬家route。既有映像digest、runtime SA、VPC／subnet、Cloud SQL proxy與binding、min0／max1、concurrency40、CPU／memory、timeout及零模型環境均保持。
 2. **公開與升流量。** 只輸出待執行的request template，明列 `authorizedByThisPlan=false` 與 `requiresHumanAuthorization=true`；須重新讀取fresh etag、確認候選ready、舊網址smoke、新網址真登入與PWA交接後，才可另行關閉Invoker IAM check並把100%流量移到該精確候選revision。renderer不能自己填入revision／etag，也不能因此取得切流授權。
 
 計畫拒絕非Ready、generation／observedGeneration不同、不是唯一100%正式revision、已公開、任意origin／campaign、可變映像、不同SA／網路／Cloud SQL／容量、未知環境變數、已存在campaign或Gemini／Vertex／RAG／model旗標。rollback保留原template與完整traffic，但執行前仍須fresh readback／etag；不含IAM grant、Secret、credential、billing、容量、模型啟用或資料寫入。這是把已選的「引導完成切換」轉成可審查的機械輸入，不新增required gate。
 
-2026-11-26最新唯讀readback：`projed-prod` generation／observedGeneration 40、Ready，100%為 `projed-prod-loginpending-3c3f8b0`，immutable image digest `sha256:56040cd46344b683a5f8949d7ea74c38207a741b82b20acdad81e69915232935`；主／Quick仍是原web.app／firebaseapp.com，campaign未設定，Cloud Run新入口仍受IAM保護。既有tag保留但均為0%；runtime SA、VPC、Cloud SQL、min0／max1與concurrency40符合既定值。Platform正式runtime已包含兩個新callback，故此切換計畫不要求再部署Platform。這次只完成readback、來源與測試，沒有PATCH服務、公開新網址、改流量、重新搬資料或安裝PWA；Gemini／RAG仍停用。
+2026-11-26最新唯讀readback：`projed-prod` generation／observedGeneration 40、Ready，100%為 `projed-prod-loginpending-3c3f8b0`，immutable image digest `sha256:56040cd46344b683a5f8949d7ea74c38207a741b82b20acdad81e69915232935`；主／Quick仍是原web.app／firebaseapp.com，campaign未設定，Cloud Run新入口仍受IAM保護。既有tag保留但均為0%；runtime SA、VPC、Cloud SQL、min0／max1與concurrency40符合既定值。相同原始v2 readback已經stdin CLI實際產生 `renderOnly` 計畫，確認私人候選不移流量／不公開，公開階段仍為未授權template。Platform正式runtime已包含兩個新callback，故此切換計畫不要求再部署Platform。這次只完成readback、來源與測試，沒有PATCH服務、公開新網址、改流量、重新搬資料或安裝PWA；Gemini／RAG仍停用。
 
 **零留存唯讀查核（2026-11-25）。** 已用既有SDK登入唯讀讀回中央 `jenfu-platform-prod` 的 `cacheConfig`，實際 `disableCache=true`；沒有PATCH設定或推論。三個既定model/location的 `fetchPublisherModelConfig`均回404 NOT_FOUND，依[官方logging說明](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/capabilities/request-response-logging)表示該logging config不存在、預設不記錄；本次不藉此推定模型可用或整體ZDR合格。結果在 `output/dev139-origin-guide-preview/zdr-readonly-20261125.json`及`zdr-model-logging-readonly-20261125.json`，credential僅程序記憶體，沒有payload檔案。
 

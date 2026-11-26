@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import process from 'node:process';
 import test from 'node:test';
 
 import { CLOUD_RUN_TARGET, renderProjedCloudRun } from '../../../scripts/lib/dev139-cloud-run-plan.mjs';
@@ -27,11 +29,29 @@ function input() {
     analysisImage: `${CLOUD_RUN_TARGET.repository}/projed-prod-asr-job@sha256:${digest}`,
     audioBucket: 'jenfu-platform-prod-projed-meeting-audio',
   }).service;
-  return { campaign: 'dev139-origin-handoff-v1', baseline: {
-    name: service.name, uid: '6203d6ac-4f16-413f-a11c-befe525283ab', generation: '40', observedGeneration: '40',
-    etag: 'AAZhJksV/+Y', ready: true, latestReadyRevision: revision, invokerIamDisabled: false,
-    image: service.template.containers[0].image, template: service.template,
-    traffic: [{ revision, percent: 100 }, { revision: 'projed-prod-board-4059d94', tag: 'dev139-session-env' }],
+  const template = globalThis.structuredClone(service.template);
+  template.revision = revision;
+  template.labels = { 'projed-release': 'dev139-loginpending-r6', 'projed-source': 'e'.repeat(40), 'projed-task': 'dev-139' };
+  delete template.scaling.minInstanceCount;
+  delete template.containers[0].startupProbe.initialDelaySeconds;
+  template.client = 'gcloud';
+  template.clientVersion = '593.0.0';
+  const name = service.name;
+  return { campaign: 'dev139-origin-handoff-v1', readback: {
+    name, uid: '6203d6ac-4f16-413f-a11c-befe525283ab', generation: '40', observedGeneration: '40',
+    etag: 'AAZhJksV/+Y', labels: globalThis.structuredClone(template.labels), createTime: '2026-11-23T00:00:00Z',
+    updateTime: '2026-11-26T00:00:00Z', creator: 'operator@example.test', lastModifier: 'operator@example.test',
+    client: 'gcloud', clientVersion: '593.0.0', ingress: 'INGRESS_TRAFFIC_ALL', launchStage: 'GA', template,
+    traffic: [
+      { type: 'TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION', revision, percent: 100 },
+      { type: 'TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION', revision: 'projed-prod-board-4059d94', tag: 'dev139-session-env' },
+    ],
+    scaling: { maxInstanceCount: 10 },
+    urls: ['https://projed-prod-9536592944.asia-east1.run.app', 'https://projed-prod-56gnizku7q-de.a.run.app'],
+    terminalCondition: { type: 'Ready', state: 'CONDITION_SUCCEEDED' },
+    conditions: [{ type: 'RoutesReady', state: 'CONDITION_SUCCEEDED' }],
+    latestReadyRevision: `${name}/revisions/${revision}`, latestCreatedRevision: `${name}/revisions/${revision}`,
+    trafficStatuses: [], uri: 'https://projed-prod-56gnizku7q-de.a.run.app',
   } };
 }
 
@@ -48,7 +68,8 @@ test('renders a private zero-traffic candidate and a separately unauthorized act
   assert.equal(Object.hasOwn(plan.stages.privateCandidate.request.body, 'invokerIamDisabled'), false);
   assert.equal(Object.hasOwn(plan.stages.privateCandidate.request.body, 'traffic'), false);
   assert.equal(plan.stages.privateCandidate.preconditions.invokerIamDisabled, false);
-  assert.deepEqual(plan.stages.privateCandidate.preconditions.traffic, fixture.baseline.traffic);
+  assert.deepEqual(plan.stages.privateCandidate.preconditions.traffic,
+    fixture.readback.traffic.map(target => Object.fromEntries(Object.entries(target).filter(([key]) => key !== 'type'))));
   assert.equal(plan.stages.privateCandidate.verificationRoute.movesTraffic, false);
   assert.deepEqual(plan.stages.privateCandidate.verificationRoute.requestTemplate.body.traffic.at(-1),
     { revision: '<verified-candidate-revision>', tag: 'dev139-origin-cutover' });
@@ -78,30 +99,32 @@ test('preserves image, runtime, network, SQL proxy, capacity, and rollback basel
   const fixture = input();
   const plan = renderOriginCutoverPlan(fixture);
   const candidate = plan.stages.privateCandidate.request.body.template;
-  assert.equal(candidate.containers[0].image, fixture.baseline.image);
-  assert.equal(candidate.serviceAccount, fixture.baseline.template.serviceAccount);
-  assert.deepEqual(candidate.vpcAccess, fixture.baseline.template.vpcAccess);
+  assert.equal(candidate.containers[0].image, fixture.readback.template.containers[0].image);
+  assert.equal(candidate.serviceAccount, fixture.readback.template.serviceAccount);
+  assert.deepEqual(candidate.vpcAccess, fixture.readback.template.vpcAccess);
   assert.deepEqual(candidate.scaling, { minInstanceCount: 0, maxInstanceCount: 1 });
   assert.equal(candidate.maxInstanceRequestConcurrency, 40);
   assert.equal(candidate.containers[1].image, CLOUD_RUN_TARGET.proxyImage);
-  assert.deepEqual(plan.rollback.bodyWithoutEtag.template, fixture.baseline.template);
+  assert.equal(plan.rollback.bodyWithoutEtag.template.containers[0].image,
+    fixture.readback.template.containers[0].image);
   assert.equal(plan.rollback.requiresFreshReadbackAndEtag, true);
 });
 
 test('rejects stale, public, drifting, model-enabled, and caller-expanded baselines', () => {
   for (const mutate of [
-    value => { value.baseline.observedGeneration = '39'; },
-    value => { value.baseline.ready = false; },
-    value => { value.baseline.invokerIamDisabled = true; },
-    value => { value.baseline.traffic[0].percent = 50; },
-    value => { value.baseline.traffic.push({ revision: 'projed-prod-other', percent: 100 }); },
-    value => { value.baseline.image = `${CLOUD_RUN_TARGET.repository}/projed-prod:latest`; },
-    value => { value.baseline.template.scaling.maxInstanceCount = 2; },
-    value => { value.baseline.template.serviceAccount = 'other@example.iam.gserviceaccount.com'; },
-    value => { value.baseline.template.vpcAccess.networkInterfaces[0].network += '-other'; },
-    value => { value.baseline.template.containers[0].env.push({ name: 'GEMINI_API_KEY', value: 'hidden' }); },
-    value => { value.baseline.template.containers[0].env.find(row => row.name === 'PROJED_MAIN_PUBLIC_ORIGIN').value = 'https://attacker.invalid'; },
-    value => { value.baseline.traffic.push({ revision: 'projed-prod-old-candidate', tag: 'dev139-origin-cutover' }); },
+    value => { value.readback.observedGeneration = '39'; },
+    value => { value.readback.terminalCondition.state = 'CONDITION_FAILED'; },
+    value => { value.readback.invokerIamDisabled = true; },
+    value => { value.readback.traffic[0].percent = 50; },
+    value => { value.readback.traffic.push({ type: 'TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION', revision: 'projed-prod-other', percent: 100 }); },
+    value => { value.readback.template.containers[0].image = `${CLOUD_RUN_TARGET.repository}/projed-prod:latest`; },
+    value => { value.readback.template.scaling.maxInstanceCount = 2; },
+    value => { value.readback.template.serviceAccount = 'other@example.iam.gserviceaccount.com'; },
+    value => { value.readback.template.vpcAccess.networkInterfaces[0].network += '-other'; },
+    value => { value.readback.template.containers[0].env.push({ name: 'GEMINI_API_KEY', value: 'hidden' }); },
+    value => { value.readback.template.containers[0].env.find(row => row.name === 'PROJED_MAIN_PUBLIC_ORIGIN').value = 'https://attacker.invalid'; },
+    value => { value.readback.traffic.push({ type: 'TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION',
+      revision: 'projed-prod-old-candidate', tag: 'dev139-origin-cutover' }); },
   ]) { const value = input(); mutate(value); invalid(value); }
   invalid({ ...input(), project: 'other' });
   invalid({ ...input(), campaign: 'contains spaces' });
@@ -109,6 +132,17 @@ test('rejects stale, public, drifting, model-enabled, and caller-expanded baseli
 
 test('does not accept a baseline where an origin campaign is already active', () => {
   const value = input();
-  value.baseline.template.containers[0].env.push({ name: 'PROJED_ORIGIN_SWITCH_CAMPAIGN', value: '{}' });
+  value.readback.template.containers[0].env.push({ name: 'PROJED_ORIGIN_SWITCH_CAMPAIGN', value: '{}' });
   invalid(value);
+});
+
+test('CLI consumes the unmodified v2 readback envelope from stdin without a provider operation', () => {
+  const result = spawnSync(process.execPath, ['scripts/create-dev139-origin-cutover-plan.mjs', '--input=-'], {
+    cwd: process.cwd(), input: JSON.stringify(input()), encoding: 'utf8',
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const plan = JSON.parse(result.stdout);
+  assert.equal(plan.renderOnly, true);
+  assert.equal(plan.target.generation, '40');
+  assert.equal(plan.stages.privateCandidate.movesTraffic, false);
 });
