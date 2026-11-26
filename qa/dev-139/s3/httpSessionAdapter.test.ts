@@ -9,6 +9,58 @@ const appOrigin = 'https://projed.example.test';
 const state = 'S'.repeat(43);
 const challenge = 'C'.repeat(43);
 
+test('remembered sessions renew with the bound actor and cannot adopt a late account or context', async () => {
+  const actor = { accountId: 'a', contextId: 'original' };
+  let reply!: (response: Response) => void;
+  const client = new HttpApiClient(async (path, init) => {
+    assert.equal(String(path), '/api/v1/session/renew');
+    assert.equal(init?.method, 'POST');
+    assert.equal(init?.credentials, 'same-origin');
+    assert.deepEqual(JSON.parse(String(init?.body)), {});
+    assert.equal(new Headers(init?.headers).get('x-projed-expected-account-id'), actor.accountId);
+    assert.equal(new Headers(init?.headers).get('x-projed-expected-context-id'), actor.contextId);
+    return new Promise<Response>(resolve => { reply = resolve; });
+  });
+  const session = createHttpSessionAdapter(client);
+  const profile = (id = 'a', context = 'original', rememberedDevice: unknown = true) => Response.json({ data: {
+    localUserId: id, email: null, displayName: null, createdAt: 1, expiresAt: future,
+    entry: 'main', authContextId: context, rememberedDevice,
+  } });
+  client.bindExpectedActor(actor);
+  const renewal = session.renew();
+  reply(profile());
+  assert.equal((await renewal).rememberedDevice, true);
+  for (const result of [profile('b'), profile('a', 'other'), profile('a', 'original', 'true')]) {
+    const invalid = session.renew();
+    reply(result);
+    await assert.rejects(invalid);
+    assert.deepEqual(client.snapshotExpectedActor(), actor);
+  }
+  const late = session.renew();
+  const next = { accountId: 'b', contextId: 'next' };
+  client.bindExpectedActor(next);
+  reply(profile());
+  await assert.rejects(late, { code: 'ACTOR_CHANGED' });
+  assert.deepEqual(client.snapshotExpectedActor(), next);
+});
+
+test('remember-device is an explicit login choice and is not inferred from a previous session', async () => {
+  const restore = installWindowOrigin(appOrigin);
+  try {
+    const bodies: unknown[] = [];
+    const session = createHttpSessionAdapter(new HttpApiClient(async (_path, init) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return Response.json({ data: { authorizationUrl: authorizationUrl() } });
+    }));
+    await session.startLogin('main', '/', undefined, true);
+    await session.startLogin('quick', '/quick-task/');
+    assert.deepEqual(bodies, [
+      { entry: 'main', returnPath: '/', rememberDevice: true },
+      { entry: 'quick', returnPath: '/quick-task/' },
+    ]);
+  } finally { restore(); }
+});
+
 test('checking a workbench Session never adopts a different actor or replaces a newer login', async () => {
   const expected = { accountId: 'a', contextId: 'a-original' };
   const next = { accountId: 'b', contextId: 'b-new' };

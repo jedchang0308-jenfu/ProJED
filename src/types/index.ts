@@ -701,7 +701,7 @@ export interface AuthState {
 }
 
 export interface AuthActions {
-  signInWithGoogle: () => Promise<void>;
+  signInWithGoogle: (rememberDevice?: boolean) => Promise<void>;
   signOut: () => Promise<void>;
   updateDisplayName: (displayName: string) => Promise<void>;
 }

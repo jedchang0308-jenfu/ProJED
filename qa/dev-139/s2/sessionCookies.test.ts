@@ -197,3 +197,11 @@ test('setter rejects nonopaque or self-describing caller fields', () => {
     nowMs: NOW,
   } as never), 'IDENTITY_INVALID');
 });
+
+test('version 2 device cookie keeps 90 days despite an expired original Platform source',()=>{
+ const ttl=90*24*60*60*1000;
+ const cookie=setSessionCookie({...PROD,sessionToken:SESSION,expiresAtMs:NOW+ttl,sourceSessionExpiresAtMs:NOW-1000,rememberedDevice:true,nowMs:NOW});
+ assert.match(cookie,/Max-Age=7776000/u);assert.match(cookie,/HttpOnly; SameSite=Lax; Secure/u);
+ assert.deepEqual(parseSessionCookie(request(cookie.split(';')[0])),{sessionToken:SESSION});
+ expectCode(()=>setSessionCookie({...PROD,sessionToken:SESSION,expiresAtMs:NOW+ttl,sourceSessionExpiresAtMs:NOW-1000,nowMs:NOW}),'IDENTITY_INVALID');
+});

@@ -6,6 +6,7 @@ export type LoginIntentStatus = 'pending' | 'processing' | 'consumed' | 'cancell
 export interface StoredLoginIntent {
   readonly tokenHash: string;
   readonly stateHash: string;
+  readonly rememberDevice?: boolean;
   readonly entry: AppEntry;
   readonly publicOrigin: string;
   readonly returnPath: string;
@@ -17,7 +18,11 @@ export interface StoredLoginIntent {
   readonly expiresAtMs: number;
 }
 
+export const REMEMBERED_DEVICE_TTL_MS = 90 * 24 * 60 * 60 * 1000;
+
 export interface StoredAppSession {
+  /** Present only for version 2 device Sessions; original proof remains immutable. */
+  readonly rememberedDevice?: true;
   readonly tokenHash: string;
   readonly publicOrigin: string;
   readonly entry: AppEntry;
@@ -51,5 +56,6 @@ export interface AppSessionStore {
   readSession(tokenHash: string): Promise<StoredAppSession | null>;
   /** Optional until the ASR migration/host is present; server-only exact-run lookup. */
   readMeetingRunSession?(runId: string): Promise<StoredAppSession | null>;
+  renewSession?(expected: StoredAppSession, nowMs: number): Promise<StoredAppSession>;
   revokeSession(tokenHash: string, publicOrigin: string, nowMs: number): Promise<boolean>;
 }

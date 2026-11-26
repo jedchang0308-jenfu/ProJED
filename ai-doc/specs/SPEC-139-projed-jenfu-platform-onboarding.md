@@ -462,6 +462,8 @@ Session／私人 API 回應採 `Cache-Control: no-store`；SW 不快取 API、�
 
 ### 4.3 保護查詢與寫入
 
+ProJED 同一裝置保持登入的後續開發計畫見 [SPEC-143](SPEC-143-projed-remembered-device-session.md)。現行 Session 與撤權仍依本節。
+
 1. **登入時計算一次。** 員工、個人與外部協作者的每個新 Session 均採 AI-PDM DEV-121 的登入快照模式。完成登入時在 app transaction mutex 內，用同一 DB 的版本化契約核實 Principal、來源准入、到期與既有 UUID 映射。依 Workspace／Board 成員、SPEC-036 的 owner/admin 繼承、各 Board 能力矩陣（含自訂與空集合）及適用的外部資格，一次算出本人可用的資源範圍與動作，與該 Session 原子保存於伺服器。
 2. **操作時套用同一份結果。** 主程式與 Quick 各讀自己的本地有效 Session 及快照；前端依投影顯示操作，API 與資料層共用伺服器快照。一般讀寫、重載、輪詢、重連及以該 Session 執行的背景工作都不重算、不逐次查詢 OrgMaster／Platform，也不重新讀取成員、邀請與角色矩陣來推導本人權限。舊版 Session 缺少快照、已到期、已撤銷或無法確認有效性時，須重新登入。
 3. **資源以資料庫事實為準。** 查詢與寫入將快照允許的動作、範圍與目標當下的 Workspace／Board、歸屬及私人可見條件一併套用；瀏覽器提供的 ID 僅供定位。新建資料依相同的本人歸屬或已授權父範圍處理。資源移動、改為私人或換帳後，舊畫面與舊 ID 都不能取得範圍外資料。

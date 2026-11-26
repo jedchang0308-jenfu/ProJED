@@ -25,6 +25,9 @@ import { seedLocalTestEnvironment } from '../utils/localTestEnvironment';
 import { BOARD_INVITE_TOKEN_PARAM } from '../utils/boardInviteToken';
 import { refreshPwaReloadSafety, setPwaReloadReadiness } from '../services/pwaReloadSafety';
 import { getQuickCaptureUrl } from '../features/quickTaskCapture/origins';
+import { httpSessionService } from '../services/httpApi/backend';
+import { HttpApiError } from '../services/httpApi/httpApiClient';
+import { installForegroundSessionRenewal } from '../services/httpApi/foregroundSession';
 
 // 偵測是否為 App 內建瀏覽器 (Line, FB, IG 等)
 const detectInAppBrowser = (): boolean => {
@@ -37,6 +40,28 @@ interface AuthGateProps {
 
 export default function AuthGate({ children }: AuthGateProps) {
   const { user, loading, error, signInWithGoogle } = useAuthStore();
+  const [rememberDevice, setRememberDevice] = useState(false);
+  const userId = user?.uid ?? null;
+  const userContext = user && 'authContextId' in user ? user.authContextId : null;
+  const rememberedDevice = Boolean(user && 'rememberedDevice' in user && user.rememberedDevice === true);
+  useEffect(() => {
+    if (!isHttpBackend || !userId || !rememberedDevice) return;
+    const sameSession = () => {
+      const current = useAuthStore.getState().user;
+      return current?.uid === userId && current && 'authContextId' in current && current.authContextId === userContext;
+    };
+    return installForegroundSessionRenewal(async signal => {
+      try {
+        const renewed = await httpSessionService.renew(signal);
+        if (!signal.aborted && sameSession()) useAuthStore.setState({ user: renewed });
+      } catch (failure) {
+        if (!signal.aborted && failure instanceof HttpApiError && failure.status === 401 && sameSession()) {
+          useAuthStore.setState({ user: null, loading: false, error: '登入已失效，請重新登入。' });
+        }
+        throw failure;
+      }
+    });
+  }, [userId, userContext, rememberedDevice]);
   const [authWaitExpired, setAuthWaitExpired] = useState(false);
   useEffect(() => {
     if (!loading) return;
@@ -267,8 +292,12 @@ export default function AuthGate({ children }: AuthGateProps) {
           )}
 
           {/* Login button */}
+          {isHttpBackend && <label className="mb-4 flex items-center gap-2 text-sm text-slate-200">
+            <input type="checkbox" checked={rememberDevice} onChange={event => setRememberDevice(event.target.checked)} />
+            在此裝置保持登入（僅限個人裝置）
+          </label>}
           <button
-            onClick={isLocalTestMode ? handleLocalTestSignIn : signInWithGoogle}
+            onClick={isLocalTestMode ? handleLocalTestSignIn : () => signInWithGoogle(rememberDevice)}
             disabled={(shouldAutoTestLogin && loading) || (isInApp && !isHttpBackend)}
             className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-50 text-gray-800 font-medium rounded-xl px-6 py-3.5 transition-all duration-200 hover:shadow-lg hover:shadow-white/10 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500 disabled:hover:shadow-none disabled:active:scale-100"
           >

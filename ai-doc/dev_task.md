@@ -3,6 +3,14 @@
 Active repo：`C:\VIBE CODING\ProJED\ProJED`。不要從 `C:\VIBE CODING\ProJED`
 外層遞迴讀取 sibling clone 或備份資料夾。
 
+<a id="dev-143-projed-remembered-device-session"></a>
+
+## DEV-143 ProJED 同一裝置保持登入
+
+- **目標**　主站和 Quick 可各自在可信裝置保留登入，前景使用時採 90 天滾動續期，保留登出、撤權與本機草稿流程。
+- **現況**　2026-11-26 已實作主站／Quick opt-in、v2 裝置 Session、90 天續期及停止新續期開關；本機 Session、真 PG 與無視窗 Edge 驗證通過，正在整合最新 main 與 CI，尚未正式發布。契約及證據見 [SPEC-143](specs/SPEC-143-projed-remembered-device-session.md)。
+- **後續**　沿既有來源流程完成 main 整合及 CI；正式 migration／發布另依實際授權與相容恢復版本進行，不改 IAM／Secret／billing／容量。共用權限沿 [DEV-139](#dev-139-jenfu-platform-onboarding)。
+
 <a id="dev-142-production-data-migration"></a>
 
 ## DEV-142：正式資料一次搬遷與舊網址啟用新後端

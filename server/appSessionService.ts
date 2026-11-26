@@ -32,6 +32,7 @@ import type {
 } from './appSessionStore.js';
 
 const LOGIN_PATH = '/api/v1/session/login';
+const RENEW_PATH = '/api/v1/session/renew';
 const CANCEL_PATH = '/api/v1/session/login/cancel';
 const CALLBACK_PATH = '/api/auth/jenfu-sso/callback';
 const CALLBACK_QUERY_KEYS = ['code', 'error', 'state', 'iss'] as const;
@@ -67,6 +68,8 @@ export interface AppSessionServiceOptions {
   readonly environment: SessionCookieEnvironment;
   readonly now?: () => number;
   readonly createContextId?: () => string;
+  readonly rememberedDeviceEnabled?: boolean;
+  readonly readSessionProfile?: (actor: ServerActorV1, expiresAtMs: number, rememberedDevice?: true) => Promise<unknown>;
 }
 
 type AuthDispatchResult = {
@@ -214,10 +217,12 @@ function identityShape(value: unknown, binding: PlatformHandoffBinding): value i
 }
 
 function validStoredSessionShape(value: unknown, binding: PlatformHandoffBinding): value is StoredAppSession {
-  if (!exactKeys(value, [
+  if (!isRecord(value)) return false;
+  const sessionKeys = [
     'tokenHash', 'publicOrigin', 'entry', 'localUserId', 'contextId', 'accountGuardRevision',
     'identity', 'expiresAtMs', 'revokedAtMs',
-  ])) return false;
+  ];
+  if (!exactKeys(value, value.rememberedDevice === true ? [...sessionKeys, 'rememberedDevice'] : sessionKeys)) return false;
   const revision = value.accountGuardRevision;
   return typeof value.tokenHash === 'string' && SHA256_RE.test(value.tokenHash)
     && (value.entry === 'main' || value.entry === 'quick')
@@ -233,10 +238,12 @@ function sameIdentity(left: ProducerVerifiedIdentity, right: ProducerVerifiedIde
 }
 
 function validIntentShape(value: unknown): value is StoredLoginIntent {
-  return exactKeys(value, [
+  return isRecord(value) && exactKeys(value, [
+    ...(Object.hasOwn(value, 'rememberDevice') ? ['rememberDevice'] : []),
     'tokenHash', 'stateHash', 'entry', 'publicOrigin', 'returnPath', 'oldSessionHash', 'codeVerifier',
     'status', 'claimHash', 'completedSessionHash', 'expiresAtMs',
   ])
+    && (value.rememberDevice === undefined || typeof value.rememberDevice === 'boolean')
     && typeof value.tokenHash === 'string' && SHA256_RE.test(value.tokenHash)
     && typeof value.stateHash === 'string' && SHA256_RE.test(value.stateHash)
     && (value.entry === 'main' || value.entry === 'quick')
@@ -418,6 +425,8 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
       || (options.environment !== 'production' && options.environment !== 'development' && options.environment !== 'test')
       || (options.now !== undefined && typeof options.now !== 'function')
       || (options.createContextId !== undefined && typeof options.createContextId !== 'function')
+      || (options.rememberedDeviceEnabled !== undefined && typeof options.rememberedDeviceEnabled !== 'boolean')
+      || (options.readSessionProfile !== undefined && typeof options.readSessionProfile !== 'function')
       || !exactKeys(options.origins, ['main', 'quick'])
       || !validOriginChoice(options.origins.main, options.environment)
       || !validOriginChoice(options.origins.quick, options.environment)) {
@@ -435,6 +444,7 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
   }
   const binding = Object.freeze({ ...options.binding });
   const environment = options.environment;
+  const rememberedDeviceEnabled = options.rememberedDeviceEnabled !== false;
   const requestResolutions = new WeakMap<IncomingMessage, Promise<ResolvedSession>>();
   const logoutResolutions = new WeakMap<IncomingMessage, Promise<ResolvedSessionMetadata>>();
 
@@ -452,7 +462,7 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
     if (!stored) return null;
     if (!validStoredSessionShape(stored, binding) || !safeEqual(stored.tokenHash, hash(sessionToken))
         || stored.publicOrigin !== publicOrigin || !originByEntry[stored.entry].includes(stored.publicOrigin)
-        || stored.expiresAtMs > stored.identity.sourceSessionExpiresAtMs) invalidSession();
+        || (!stored.rememberedDevice && stored.expiresAtMs > stored.identity.sourceSessionExpiresAtMs)) invalidSession();
     if (!pins.some((pin) => pinMatches(pin, binding))) {
       throw new KernelError('IDENTITY_CONTRACT_UNAVAILABLE', 'No ProJED identity contract is pinned', 503);
     }
@@ -462,7 +472,7 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
   const actorForSession = async (stored: StoredAppSession): Promise<ServerActorV1> => {
     const nowMs = nowFrom(now);
     if (!stored || stored.revokedAtMs !== null
-        || stored.expiresAtMs <= nowMs || stored.identity.sourceSessionExpiresAtMs <= nowMs
+        || stored.expiresAtMs <= nowMs || (!stored.rememberedDevice && stored.identity.sourceSessionExpiresAtMs <= nowMs)
     ) {
       invalidSession();
     }
@@ -494,7 +504,7 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
       contextId: stored.contextId,
       expiresAtMs: Math.min(
         stored.expiresAtMs,
-        identity.sourceSessionExpiresAtMs,
+        stored.rememberedDevice ? stored.expiresAtMs : identity.sourceSessionExpiresAtMs,
         actorNowMs + PLATFORM_PRINCIPAL_STATE_MAX_READ_AGE_MS,
       ),
       accountGuardRevision: stored.accountGuardRevision,
@@ -527,7 +537,7 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
     catch (error) { identityInvalidOrUnavailable(error); }
     if (!stored || !validStoredSessionShape(stored,binding) || stored.entry !== 'main'
         || !originByEntry.main.includes(stored.publicOrigin)
-        || stored.expiresAtMs > stored.identity.sourceSessionExpiresAtMs) invalidSession();
+        || (!stored.rememberedDevice && stored.expiresAtMs > stored.identity.sourceSessionExpiresAtMs)) invalidSession();
     return actorForSession(stored);
   };
 
@@ -559,7 +569,7 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
         || stored.publicOrigin !== publicOrigin || !originByEntry[stored.entry].includes(stored.publicOrigin)) return null;
     const currentNowMs = nowFrom(now);
     if (stored.revokedAtMs !== null || stored.expiresAtMs <= currentNowMs
-        || stored.identity.sourceSessionExpiresAtMs <= currentNowMs) return clearCookie();
+        || (!stored.rememberedDevice && stored.identity.sourceSessionExpiresAtMs <= currentNowMs)) return clearCookie();
     return null;
   };
 
@@ -589,7 +599,7 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
   const resolveSessionInfo = async (request: IncomingMessage, actor: ServerActorV1) => {
     const resolved = await resolveRequest(request);
     if (resolved.actor !== actor) changedSession();
-    return { expiresAtMs: resolved.expiresAtMs };
+    return { expiresAtMs: resolved.expiresAtMs, ...(resolved.session.rememberedDevice ? { rememberedDevice: true as const } : {}) };
   };
 
   const resolveLogoutMetadata = (request: IncomingMessage): Promise<ResolvedSessionMetadata> => {
@@ -680,10 +690,14 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
       request.resume();
       throw error;
     }
-    if (!onlyAllowedKeys(body, ['entry', 'returnPath'])
+    if (!onlyAllowedKeys(body, ['entry', 'returnPath', 'rememberDevice'])
         || (body.entry !== 'main' && body.entry !== 'quick')
+        || (Object.hasOwn(body, 'rememberDevice') && typeof body.rememberDevice !== 'boolean')
         || (Object.hasOwn(body, 'returnPath') && typeof body.returnPath !== 'string')) {
       throw new KernelError('DOMAIN_DATA_INVALID', 'Session login request is invalid', 400);
+    }
+    if (body.rememberDevice === true && !rememberedDeviceEnabled) {
+      throw new KernelError('IDENTITY_STATE_UNAVAILABLE','Remembered device enrollment is temporarily unavailable',503);
     }
     const requestedEntry = body.entry as AppEntry;
     if (!originByEntry[requestedEntry].includes(publicOrigin)) {
@@ -722,7 +736,7 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
     if (tokens.sessionToken) {
       oldSession = await readSessionMetadata(tokens.sessionToken, publicOrigin);
       const oldExpiry = oldSession
-        ? Math.min(oldSession.expiresAtMs, oldSession.identity.sourceSessionExpiresAtMs)
+        ? oldSession.expiresAtMs
         : 0;
       if (!oldSession || oldSession.revokedAtMs !== null || oldExpiry - currentNowMs < 1_000) {
         return response(409, requestId, {
@@ -743,6 +757,7 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
     const intent: StoredLoginIntent = Object.freeze({
       tokenHash: hash(loginToken),
       stateHash: hash(state),
+      ...(body.rememberDevice === true ? { rememberDevice: true } : {}),
       entry,
       publicOrigin,
       returnPath,
@@ -759,7 +774,7 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
       ...(oldSession ? { sessionToken: tokens.sessionToken } : {}),
       loginToken,
       expiresAtMs: oldSession?.expiresAtMs ?? intentExpiresAtMs,
-      ...(oldSession ? { sourceSessionExpiresAtMs: oldSession.identity.sourceSessionExpiresAtMs } : {}),
+      ...(oldSession ? { sourceSessionExpiresAtMs: oldSession.identity.sourceSessionExpiresAtMs, ...(oldSession.rememberedDevice ? { rememberedDevice: true as const } : {}) } : {}),
       nowMs: currentNowMs,
     });
     const authorizationUrl = new URL(`${binding.issuer}/authorize`);
@@ -890,7 +905,7 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
       if (tokens.sessionToken) {
         const session = await readSessionMetadata(tokens.sessionToken, publicOrigin);
         const effectiveExpiry = session
-          ? Math.min(session.expiresAtMs, session.identity.sourceSessionExpiresAtMs)
+          ? session.expiresAtMs
           : 0;
         if (!session || session.revokedAtMs !== null || session.entry !== intent.entry || effectiveExpiry - cookieNowMs < 1_000) {
           cookie = clearSessionCookie({ environment, publicOrigin });
@@ -901,6 +916,7 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
             sessionToken: tokens.sessionToken,
             expiresAtMs: session.expiresAtMs,
             sourceSessionExpiresAtMs: session.identity.sourceSessionExpiresAtMs,
+            ...(session.rememberedDevice ? { rememberedDevice: true as const } : {}),
             nowMs: cookieNowMs,
           });
         }
@@ -918,6 +934,9 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
         || !originByEntry[intent.entry].includes(publicOrigin)
         || !intent.codeVerifier || !validOpaque(intent.codeVerifier)) invalidSession();
 
+    if (intent.rememberDevice && !rememberedDeviceEnabled) {
+      throw new KernelError('IDENTITY_STATE_UNAVAILABLE','Remembered device enrollment is temporarily unavailable',503);
+    }
     const claimHash = hash(opaque());
     let claimed: StoredLoginIntent;
     try {
@@ -1014,10 +1033,11 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
           || !validStoredSessionShape(completedSession, binding)
           || !safeEqual(completedSession.tokenHash, hash(sessionToken)) || completedSession.revokedAtMs !== null
           || completedSession.publicOrigin !== intent.publicOrigin || completedSession.entry !== intent.entry
+          || Boolean(completedSession.rememberedDevice) !== Boolean(intent.rememberDevice)
           || completedSession.contextId !== contextId
           || !sameIdentity(completedSession.identity, verified)
           || completedSession.expiresAtMs <= readbackNowMs
-          || completedSession.expiresAtMs > verified.sourceSessionExpiresAtMs) {
+          || (!completedSession.rememberedDevice && completedSession.expiresAtMs > verified.sourceSessionExpiresAtMs)) {
         identityInvalidOrUnavailable(error);
       }
       completed = completedSession;
@@ -1025,10 +1045,11 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
     if (!validStoredSessionShape(completed, binding)
         || !safeEqual(completed.tokenHash, hash(sessionToken))
         || completed.publicOrigin !== intent.publicOrigin || completed.entry !== intent.entry
+        || Boolean(completed.rememberedDevice) !== Boolean(intent.rememberDevice)
         || completed.contextId !== contextId
         || !sameIdentity(completed.identity, verified)
         || completed.expiresAtMs <= completeNowMs
-        || completed.expiresAtMs > verified.sourceSessionExpiresAtMs) unavailable();
+        || (!completed.rememberedDevice && completed.expiresAtMs > verified.sourceSessionExpiresAtMs)) unavailable();
     // Resolve the canonical account after the atomic completion. A first login
     // has no local UUID before that transaction; unknown commits only read back
     // the exact intent/Session and mapping, never replay the exchange or writes.
@@ -1052,6 +1073,7 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
       sessionToken,
       expiresAtMs: completed.expiresAtMs,
       sourceSessionExpiresAtMs: verified.sourceSessionExpiresAtMs,
+      ...(completed.rememberedDevice ? { rememberedDevice: true as const } : {}),
       nowMs: cookieNowMs,
     });
     return response(303, requestId, { data: null }, {
@@ -1098,7 +1120,7 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
       const session = await readSessionMetadata(tokens.sessionToken, publicOrigin);
       const cookieNowMs = nowFrom(now);
       const effectiveExpiry = session
-        ? Math.min(session.expiresAtMs, session.identity.sourceSessionExpiresAtMs)
+        ? session.expiresAtMs
         : 0;
       if (!session || session.revokedAtMs !== null || effectiveExpiry - cookieNowMs < 1_000) {
         return response(200, requestId, { data: null }, {
@@ -1111,6 +1133,7 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
         sessionToken: tokens.sessionToken,
         expiresAtMs: session.expiresAtMs,
         sourceSessionExpiresAtMs: session.identity.sourceSessionExpiresAtMs,
+            ...(session.rememberedDevice ? { rememberedDevice: true as const } : {}),
         nowMs: cookieNowMs,
       });
       return response(200, requestId, { data: null }, { 'set-cookie': cookie });
@@ -1119,9 +1142,44 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
     return response(200, requestId, { data: null }, { 'set-cookie': clearSessionCookie({ environment, publicOrigin }) });
   };
 
+  const renewSession = async (request: IncomingMessage, requestId: string): Promise<AuthDispatchResult> => {
+    if (request.method !== 'POST') {
+      request.resume();
+      return response(405, requestId, { error: { code: 'METHOD_NOT_ALLOWED', requestId, retryable: false } });
+    }
+    requestPostOrigin(request, originByEntry);
+    if (!rememberedDeviceEnabled) throw new KernelError('IDENTITY_STATE_UNAVAILABLE','Device renewal is temporarily unavailable',503);
+    const target = requestTarget(request);
+    if (!target || target.search !== '') throw new KernelError('DOMAIN_DATA_INVALID', 'Session renewal target is invalid', 400);
+    const body = await readJsonBody(request, 1024);
+    if (Reflect.ownKeys(body).length !== 0) throw new KernelError('DOMAIN_DATA_INVALID', 'Session renewal request is invalid', 400);
+    const resolved = await resolveRequest(request);
+    assertExpectedActor(request, resolved.actor);
+    if (!resolved.session.rememberedDevice || !options.store.renewSession) invalidSession();
+    if (!options.readSessionProfile) unavailable();
+    let renewed: StoredAppSession;
+    try { renewed = await options.store.renewSession(resolved.session, nowFrom(now)); }
+    catch (error) {
+      if (!(error instanceof KernelError) || error.code !== 'DB_COMMIT_UNKNOWN') throw error;
+      // Read back the same credential before a caller retries an unknown commit.
+      const readback = await readSessionMetadata(resolved.sessionToken, resolved.publicOrigin);
+      if (!readback || readback.revokedAtMs !== null || readback.contextId !== resolved.session.contextId
+          || readback.expiresAtMs <= resolved.session.expiresAtMs) throw error;
+      renewed = readback;
+    }
+    if (!renewed.rememberedDevice || renewed.tokenHash !== resolved.session.tokenHash
+        || renewed.contextId !== resolved.session.contextId || renewed.revokedAtMs !== null) invalidSession();
+    const actor = await actorForSession(renewed);
+    const profile = await options.readSessionProfile(actor, renewed.expiresAtMs, true);
+    return response(200, requestId, { data: profile }, {
+      'set-cookie': setSessionCookie({ environment, publicOrigin: resolved.publicOrigin,
+        sessionToken: resolved.sessionToken, expiresAtMs: renewed.expiresAtMs, rememberedDevice: true, nowMs: nowFrom(now) }),
+    });
+  };
+
   const dispatchAuth = async (request: IncomingMessage, requestId: string): Promise<AuthDispatchResult> => {
     const path = rawPath(request);
-    if (path !== LOGIN_PATH && path !== CANCEL_PATH && path !== CALLBACK_PATH) return { matched: false };
+    if (path !== LOGIN_PATH && path !== CANCEL_PATH && path !== CALLBACK_PATH && path !== RENEW_PATH) return { matched: false };
     if (pins.length === 0) {
       if (request.method !== 'GET') request.resume();
       return response(404, requestId, { error: { code: 'ENDPOINT_UNAVAILABLE', requestId, retryable: false } });
@@ -1131,6 +1189,7 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
       return response(503, requestId, { error: { code: 'IDENTITY_CONTRACT_UNAVAILABLE', requestId, retryable: true } });
     }
     try {
+      if (path === RENEW_PATH) return await renewSession(request, requestId);
       if (path === LOGIN_PATH) {
         const target = requestTarget(request);
         if (!target || target.search !== '') throw new KernelError('DOMAIN_DATA_INVALID', 'Session login target is invalid', 400);

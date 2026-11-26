@@ -240,6 +240,10 @@
     {
       "version": "0053_origin_switch_intents_v1",
       "path": "db/migrations/0053_origin_switch_intents_v1.sql"
+    },
+    {
+      "version": "0054_remembered_device_session_v1",
+      "path": "db/migrations/0054_remembered_device_session_v1.sql"
     }
   ],
   "objectAllowlist": [

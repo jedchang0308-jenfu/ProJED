@@ -28,6 +28,7 @@ export interface SetSessionCookieInput extends SessionCookieContext {
   readonly expiresAtMs: number;
   /** Hard cap from the upstream source Session when a local Session is present. */
   readonly sourceSessionExpiresAtMs?: number;
+  readonly rememberedDevice?: true;
   readonly nowMs?: number;
 }
 
@@ -36,7 +37,7 @@ const ENVELOPE_VERSION = 'v1';
 const OPAQUE_TOKEN_RE = /^[A-Za-z0-9_-]{43}$/u;
 const COOKIE_NAME_RE = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/u;
 const SET_INPUT_KEYS = [
-  'sessionToken', 'loginToken', 'expiresAtMs', 'sourceSessionExpiresAtMs', 'nowMs', 'environment', 'publicOrigin',
+  'sessionToken', 'loginToken', 'expiresAtMs', 'sourceSessionExpiresAtMs', 'nowMs', 'environment', 'publicOrigin', 'rememberedDevice',
 ] as const;
 
 function invalidIdentity(): never {
@@ -120,10 +121,12 @@ function maxAgeSeconds(input: SetSessionCookieInput): number {
   if (!Number.isSafeInteger(nowMs) || nowMs < 0 || !Number.isSafeInteger(input.expiresAtMs) || input.expiresAtMs < 0) {
     invalidIdentity();
   }
-  if (input.sessionToken !== undefined && input.sourceSessionExpiresAtMs === undefined) invalidIdentity();
+  if (input.rememberedDevice !== undefined && input.rememberedDevice !== true) invalidIdentity();
+  if (input.rememberedDevice === true && input.sessionToken === undefined) invalidIdentity();
+  if (input.sessionToken !== undefined && input.sourceSessionExpiresAtMs === undefined && input.rememberedDevice !== true) invalidIdentity();
   if (input.sourceSessionExpiresAtMs !== undefined
       && (!Number.isSafeInteger(input.sourceSessionExpiresAtMs) || input.sourceSessionExpiresAtMs < 0)) invalidIdentity();
-  const effectiveExpiry = Math.min(input.expiresAtMs, input.sourceSessionExpiresAtMs ?? input.expiresAtMs);
+  const effectiveExpiry = input.rememberedDevice === true ? input.expiresAtMs : Math.min(input.expiresAtMs, input.sourceSessionExpiresAtMs ?? input.expiresAtMs);
   const remainingMs = effectiveExpiry - nowMs;
   if (!Number.isSafeInteger(remainingMs) || remainingMs <= 0) invalidIdentity();
   const seconds = Math.floor(remainingMs / 1000);

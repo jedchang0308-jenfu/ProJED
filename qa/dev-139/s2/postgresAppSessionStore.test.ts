@@ -88,6 +88,7 @@ interface HarnessOptions {
   readonly failRollback?: boolean;
   readonly oldSessionRevokedAtMs?: number | null;
   readonly oldSessionExpiresAtMs?: number;
+  readonly rememberedDevice?: boolean;
   readonly revokeRowCount?: number;
 }
 
@@ -103,6 +104,7 @@ function harness(options: HarnessOptions = {}) {
   let createdLocalUserId: string | null = null;
   let commitFailurePending = options.failCommit === true;
   const oldSessionRow = {
+    session_version: options.rememberedDevice ? 2 : 1,
     token_hash: OLD_SESSION_HASH,
     public_origin: storedIntent.publicOrigin,
     entry: storedIntent.entry,
@@ -115,6 +117,7 @@ function harness(options: HarnessOptions = {}) {
     revoked_at_ms: options.oldSessionRevokedAtMs == null ? null : String(options.oldSessionRevokedAtMs),
   };
   const sessionRow = () => ({
+    session_version: storedIntent.rememberDevice ? 2 : 1,
     token_hash: SESSION_HASH,
     public_origin: storedIntent.publicOrigin,
     entry: storedIntent.entry,
@@ -123,7 +126,7 @@ function harness(options: HarnessOptions = {}) {
     context_id: CONTEXT_ID,
     account_guard_revision: guardCreated ? '1' : options.guardRevision ?? '3',
     identity: proof,
-    expires_at_ms: String(proof.sourceSessionExpiresAtMs),
+    expires_at_ms: String(storedIntent.rememberDevice ? NOW+90*24*60*60*1000 : proof.sourceSessionExpiresAtMs),
     revoked_at_ms: null,
   });
 
@@ -154,6 +157,7 @@ function harness(options: HarnessOptions = {}) {
       if (/SELECT .*FROM projed_core\.app_login_intents/u.test(normalized)) {
         if (options.failOperation === 'intent-select') throw new Error('simulated operation query failure');
         return result([{
+          remember_device: storedIntent.rememberDevice === true,
           token_hash: storedIntent.tokenHash,
           state_hash: storedIntent.stateHash,
           entry: storedIntent.entry,
@@ -194,6 +198,10 @@ function harness(options: HarnessOptions = {}) {
         return result([]);
       }
       if (/INSERT INTO projed_core\.app_sessions/u.test(normalized)) return result([sessionRow()] as unknown as R[]);
+      if (/UPDATE projed_core\.app_sessions SET expires_at_ms/u.test(normalized)) {
+        oldSessionRow.expires_at_ms=String(Math.max(Number(oldSessionRow.expires_at_ms),Number(values[1])));
+        return result([oldSessionRow] as unknown as R[]);
+      }
       if (/UPDATE projed_core\.app_sessions/u.test(normalized)) return result([], options.revokeRowCount ?? 1);
       if (/UPDATE projed_core\.app_login_intents/u.test(normalized)) return result([], 1);
       return result([]);
@@ -517,3 +525,28 @@ for (const drift of [{authEpoch:5},{mappingRevision:'13'},{googleSubject:'differ
     assert.ok(lock>=0&&read>lock);
   });
 }
+
+
+test('remembered login mints v2 90-day expiry without modifying the original source proof',async()=>{
+  const db=harness({intent:intent({rememberDevice:true})});const input=completeInput();const created=await db.store.complete(input);
+  assert.equal(created.rememberedDevice,true);assert.equal(created.expiresAtMs,NOW+90*24*60*60*1000);
+  assert.deepEqual(created.identity,input.identity);
+  const insert=db.queries.find(q=>q.sql.startsWith('INSERT INTO projed_core.app_sessions'))!;
+  assert.equal(insert.values[10],2);assert.equal(insert.values[8],created.expiresAtMs);
+});
+test('renewal reads principal state after original source expiry and preserves identity/context',async()=>{
+  const proof=identity({issuedAtMs:NOW-20000,expiresAtMs:NOW-10000,currentStateExpiresAtMs:NOW-10000,sourceSessionExpiresAtMs:NOW-1000,authenticatedAtMs:NOW-30000});
+  const db=harness({rememberedDevice:true,oldSessionIdentity:proof,identity:proof,oldSessionExpiresAtMs:NOW+10000});
+  const stored=(await db.store.readSession(OLD_SESSION_HASH))!;const renewed=await db.store.renewSession(stored,NOW);
+  assert.equal(renewed.expiresAtMs,NOW+90*24*60*60*1000);assert.deepEqual(renewed.identity,proof);assert.equal(renewed.contextId,stored.contextId);
+  const sql=db.queries.map(q=>q.sql);const runtimeLock=sql.findIndex(q=>q.includes('projed:runtime-transaction:v1'));
+  assert.ok(runtimeLock<sql.findIndex(q=>q.includes('platform_contract.read_projed_principal_state_v1')));
+  assert.match(sql.find(q=>q.startsWith('UPDATE projed_core.app_sessions SET expires_at_ms'))!,/GREATEST.*session_version=2.*revoked_at_ms IS NULL.*expires_at_ms>\$3/u);
+});
+for(const reason of ['revoked','expired','guard','epoch','mapping','unavailable'] as const)test(`renewal rejects ${reason} without an expiry write`,async()=>{
+  const db=harness({rememberedDevice:true,oldSessionExpiresAtMs:reason==='expired'?NOW:NOW+10000,
+    oldSessionRevokedAtMs:reason==='revoked'?NOW:null,sourceState:reason==='epoch'?{authEpoch:99}:reason==='mapping'?{mappingRevision:'99'}:reason==='unavailable'?'unavailable':undefined});
+  const stored=(await db.store.readSession(OLD_SESSION_HASH))!;
+  const expected=reason==='guard'?{...stored,accountGuardRevision:'999'}:stored;
+  await assert.rejects(db.store.renewSession(expected,NOW));assert.equal(db.queries.some(q=>q.sql.startsWith('UPDATE projed_core.app_sessions SET expires_at_ms')),false);
+});
