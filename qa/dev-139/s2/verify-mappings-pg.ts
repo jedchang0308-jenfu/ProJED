@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash, generateKeyPairSync, randomBytes, randomUUID } from 'node:crypto';
-import type { Server } from 'node:http';
+import { request as requestHttp, type Server } from 'node:http';
 import pg from 'pg';
 import { createLocalJWKSet, exportJWK, SignJWT } from 'jose';
 import { RuntimeDatabase } from '../../../server/db.js';
@@ -19,6 +19,8 @@ import { createLegacyEntryRelay } from '../../../server/legacyEntryRelay.js';
 import { createLegacyEntryRequestPreparer } from '../../../server/legacyEntryOrigin.js';
 import { LEGACY_ENTRY_ACCOUNT, LEGACY_ENTRY_UPSTREAM, LEGACY_MAIN_ORIGIN, LEGACY_QUICK_ORIGIN, type LegacyEntryBinding } from '../../../server/legacyEntryBinding.js';
 import { publishSyntheticPrincipalState } from './principalStateFixture.js';
+const NEXT_MAIN_ORIGIN = 'https://next-main.example.invalid';
+const NEXT_QUICK_ORIGIN = 'https://next-quick.example.invalid';
 
 export async function verifyGoogleMappingsPostgres(database: RuntimeDatabase): Promise<void> {
   const lease = await database.checkout();
@@ -172,7 +174,8 @@ export async function verifyLegacyEntryMappingSessionsPostgres(config: RuntimeCo
     const codes = new Map<string, { identity: ProducerVerifiedIdentity; callback: string; challenge: string }>();
     let exchanges = 0;
     const handoffs = createPlatformHandoffClient({ environment: 'production', brokerOrigin, binding: identityBinding,
-      callbacks: { main: `${LEGACY_MAIN_ORIGIN}/api/auth/jenfu-sso/callback`, quick: `${LEGACY_QUICK_ORIGIN}/api/auth/jenfu-sso/callback` },
+      callbacks: { main: [LEGACY_MAIN_ORIGIN, NEXT_MAIN_ORIGIN].map(value => `${value}/api/auth/jenfu-sso/callback`),
+        quick: [LEGACY_QUICK_ORIGIN, NEXT_QUICK_ORIGIN].map(value => `${value}/api/auth/jenfu-sso/callback`) },
       tokenProvider: async audience => { assert.equal(audience, brokerOrigin); return 'SYNTHETIC.owner-service-proof'; },
       fetchImpl: async (input, init) => {
         assert.equal(String(input), `${brokerOrigin}/api/sso/token`);
@@ -204,7 +207,7 @@ export async function verifyLegacyEntryMappingSessionsPostgres(config: RuntimeCo
     const consumer = new IdentityConsumer({ pins: [identityBinding], mappings,
       verifier: createPlatformIdentityVerifier({ handoffs, stateReader: states, binding: identityBinding, environment: 'production' }) });
     const auth = createAppSessionService({ store, consumer, mappings, binding: identityBinding, pins: [identityBinding],
-      origins: { main: LEGACY_MAIN_ORIGIN, quick: LEGACY_QUICK_ORIGIN }, environment: 'production' });
+      origins: { main: [LEGACY_MAIN_ORIGIN, NEXT_MAIN_ORIGIN], quick: [LEGACY_QUICK_ORIGIN, NEXT_QUICK_ORIGIN] }, environment: 'production' });
     const transport: LegacyEntryBinding = { version: 'projed.legacy-entry.v1', upstreamOrigin: LEGACY_ENTRY_UPSTREAM,
       serviceAccount: LEGACY_ENTRY_ACCOUNT, serviceAccountSubject: '123456789012345678901', qualificationSha256: 'b'.repeat(64) };
     const keys = generateKeyPairSync('rsa', { modulusLength: 2048 });
@@ -214,6 +217,10 @@ export async function verifyLegacyEntryMappingSessionsPostgres(config: RuntimeCo
       .setAudience(transport.upstreamOrigin).setSubject(transport.serviceAccountSubject)
       .setIssuedAt(nowSeconds).setExpirationTime(nowSeconds + 600).sign(keys.privateKey);
     kernel = createKernelHttpServer({ ...config, host: '127.0.0.1', port: 0 }, database, [], {
+      originSwitchCampaign: { campaign: 'native-origin-guide', routes: [{ entry: 'main', sourceOrigin: LEGACY_MAIN_ORIGIN,
+        targetOrigin: NEXT_MAIN_ORIGIN, sourceSessionEntry: 'main', targetSessionEntry: 'main' }, {
+        entry: 'quick', sourceOrigin: LEGACY_QUICK_ORIGIN, targetOrigin: NEXT_QUICK_ORIGIN,
+        sourceSessionEntry: 'quick', targetSessionEntry: 'quick' }] },
       prepareLegacyEntry: createLegacyEntryRequestPreparer(transport, {
         getKey: createLocalJWKSet({ keys: [{ ...jwk, alg: 'RS256', kid: 'isolated-pg-relay' }] }) }),
       dispatchAuth: auth.dispatchAuth, resolveActor: auth.resolveActor, resolveSessionInfo: auth.resolveSessionInfo,
@@ -228,10 +235,42 @@ export async function verifyLegacyEntryMappingSessionsPostgres(config: RuntimeCo
     const address = relay.address(); assert.ok(address && typeof address !== 'string');
     console.log(JSON.stringify({ scope: 'SYNTHETIC_OWNER_REAL_PG_LEGACY_RELAY', pid: process.pid,
       centralPort: central.port, relayPort: address.port }));
-    const request = (publicOrigin: string, path: string, init: RequestInit = {}) => fetch(`http://127.0.0.1:${address.port}${path}`, {
-      ...init, redirect: 'manual', headers: { 'x-forwarded-host': new URL(publicOrigin).host, origin: publicOrigin,
-        ...Object.fromEntries(new Headers(init.headers)) },
-    });
+    const request = (publicOrigin: string, path: string, init: RequestInit = {}) => {
+      assert.ok([LEGACY_MAIN_ORIGIN, LEGACY_QUICK_ORIGIN, NEXT_MAIN_ORIGIN, NEXT_QUICK_ORIGIN].includes(publicOrigin));
+      const direct = publicOrigin === NEXT_MAIN_ORIGIN || publicOrigin === NEXT_QUICK_ORIGIN;
+      if (direct) {
+        // Fetch deliberately replaces Host with its socket destination. Use
+        // native HTTP for a real loopback request carrying the configured host.
+        assert.ok(init.body === undefined || typeof init.body === 'string');
+        return new Promise<Response>((resolve, reject) => {
+          const outgoing = requestHttp({ hostname: '127.0.0.1', port: central.port, path,
+            method: init.method ?? 'GET', headers: {
+              host: new URL(publicOrigin).host, origin: publicOrigin, 'x-forwarded-proto': 'https',
+              ...Object.fromEntries(new Headers(init.headers)),
+            } }, incoming => {
+            const chunks: Buffer[] = [];
+            incoming.on('data', (chunk: Buffer) => chunks.push(chunk));
+            incoming.on('error', reject);
+            incoming.on('end', () => {
+              const headers = new Headers();
+              for (const [name, value] of Object.entries(incoming.headers)) {
+                for (const item of Array.isArray(value) ? value : value === undefined ? [] : [value]) headers.append(name, item);
+              }
+              resolve(new Response(Buffer.concat(chunks), { status: incoming.statusCode ?? 500, headers }));
+            });
+          });
+          outgoing.on('error', reject);
+          outgoing.setTimeout(10_000, () => outgoing.destroy(new Error('LOCAL_DIRECT_HTTP_TIMEOUT')));
+          outgoing.end(init.body);
+        });
+      }
+      return fetch(`http://127.0.0.1:${address.port}${path}`, {
+        ...init, redirect: 'manual', headers: {
+          'x-forwarded-host': new URL(publicOrigin).host,
+          origin: publicOrigin, ...Object.fromEntries(new Headers(init.headers)),
+        },
+      });
+    };
     const cookie = (response: Response) => {
       const value = response.headers.get('set-cookie'); assert.ok(value);
       assert.match(value, /; Path=\/;/u); assert.match(value, /; Secure;/u); assert.match(value, /; HttpOnly;/u);
@@ -278,12 +317,27 @@ export async function verifyLegacyEntryMappingSessionsPostgres(config: RuntimeCo
     const main = await login(LEGACY_MAIN_ORIGIN, 'main', ownerId);
     const quick = await login(LEGACY_QUICK_ORIGIN, 'quick', ownerId);
     const other = await login(LEGACY_MAIN_ORIGIN, 'main', otherId);
+    const nextMain = await login(NEXT_MAIN_ORIGIN, 'main', ownerId);
+    const nextQuick = await login(NEXT_QUICK_ORIGIN, 'quick', otherId);
+    assert.notEqual(nextMain.profile.authContextId, nextQuick.profile.authContextId);
+    assert.notEqual(nextMain.profile.localUserId, nextQuick.profile.localUserId);
+    const crossOriginWrite = await request(NEXT_MAIN_ORIGIN, '/api/v1/quick-tasks', { method: 'POST', headers: {
+      cookie: nextMain.cookie, origin: 'https://cross-site.example.invalid', 'content-type': 'application/json',
+      'x-projed-expected-account-id': ownerId, 'x-projed-expected-context-id': nextMain.profile.authContextId,
+    }, body: JSON.stringify({ captureId, title, workspaceHint: null }) });
+    assert.equal(crossOriginWrite.status, 403);
+    assert.equal(await errorCode(crossOriginWrite), 'ACCESS_DENIED');
     assert.notEqual(main.cookie, quick.cookie); assert.notEqual(main.profile.authContextId, quick.profile.authContextId);
     for (const [publicOrigin, sessionCookie] of [[LEGACY_MAIN_ORIGIN, quick.cookie], [LEGACY_QUICK_ORIGIN, main.cookie]]) {
       const wrong = await request(publicOrigin!, '/api/v1/session', { headers: { cookie: sessionCookie! } });
       assert.equal(wrong.status, 401); await wrong.arrayBuffer();
     }
-    for (const [publicOrigin, session] of [[LEGACY_MAIN_ORIGIN, main], [LEGACY_QUICK_ORIGIN, quick]] as const) {
+    for (const [publicOrigin, sessionCookie] of [[NEXT_MAIN_ORIGIN, main.cookie], [LEGACY_MAIN_ORIGIN, nextMain.cookie],
+      [NEXT_MAIN_ORIGIN, nextQuick.cookie], [NEXT_QUICK_ORIGIN, nextMain.cookie]]) {
+      const denied = await request(publicOrigin!, '/api/v1/session', { headers: { cookie: sessionCookie! } });
+      assert.equal(denied.status, 401); await denied.arrayBuffer();
+    }
+    for (const [publicOrigin, session] of [[LEGACY_MAIN_ORIGIN, main], [LEGACY_QUICK_ORIGIN, quick], [NEXT_MAIN_ORIGIN, nextMain]] as const) {
       const replay = await request(publicOrigin, '/api/v1/quick-tasks', { method: 'POST', headers: {
         cookie: session.cookie, 'content-type': 'application/json', 'x-projed-expected-account-id': ownerId,
         'x-projed-expected-context-id': session.profile.authContextId }, body: JSON.stringify({ captureId, title, workspaceHint: null }) });
@@ -309,11 +363,145 @@ export async function verifyLegacyEntryMappingSessionsPostgres(config: RuntimeCo
       (SELECT count(*)::int FROM projed_core.quick_task_capture_receipts WHERE capture_id=$2) AS receipts`,
     [[ownerId, otherId], captureId])).rows[0];
     assert.deepEqual(counts, { profiles: 2, tasks: 1, receipts: 1 });
-    assert.equal(exchanges, 3); assert.equal(codes.size, 0);
+    assert.equal(exchanges, 5); assert.equal(codes.size, 0);
+    const bound = (session: typeof main) => ({ cookie: session.cookie, 'content-type': 'application/json',
+      'x-projed-expected-account-id': session.profile.localUserId, 'x-projed-expected-context-id': session.profile.authContextId });
+    const guideId = randomUUID(), guidePath = `/api/v1/origin-switch/intents/${guideId}`;
+    const createGuide = () => request(LEGACY_MAIN_ORIGIN, '/api/v1/origin-switch/intents', { method: 'POST',
+      headers: bound(main), body: JSON.stringify({ id: guideId, campaign: 'native-origin-guide', entry: 'main', targetOrigin: NEXT_MAIN_ORIGIN }) });
+    const workspace = await request(LEGACY_MAIN_ORIGIN, '/api/v1/workspaces', { method: 'POST', headers: bound(main),
+      body: JSON.stringify({ title: 'Origin guide native creator rights' }) });
+    assert.equal(workspace.status, 201); await workspace.arrayBuffer();
+    assert.equal((await createGuide()).status, 200);
+    assert.equal((await createGuide()).status, 200, 'Same id and original source context are idempotent');
+    const pendingGuide = await request(LEGACY_MAIN_ORIGIN, guidePath, { headers: bound(main) });
+    assert.equal(pendingGuide.status, 200);
+    assert.equal((await json<{ data: { destination: unknown } }>(pendingGuide)).data.destination, null);
+    const hiddenGuide = await request(LEGACY_MAIN_ORIGIN, guidePath, { headers: bound(other) });
+    assert.equal(hiddenGuide.status, 200); assert.deepEqual(await hiddenGuide.json(), { data: null });
+    const noOriginGuide = await request(NEXT_MAIN_ORIGIN, `${guidePath}/confirm`, { method: 'POST',
+      headers: { ...bound(nextMain), origin: 'https://foreign.example.invalid' }, body: '{}' });
+    assert.equal(noOriginGuide.status, 403);
+    const downgraded = await request(NEXT_MAIN_ORIGIN, `${guidePath}/confirm`, { method: 'POST', headers: bound(nextMain), body: '{}' });
+    assert.equal(downgraded.status, 403, 'Destination snapshot without newly created workspace must not pass');
+    const wrongEntry = await request(LEGACY_QUICK_ORIGIN, `${guidePath}/confirm`, { method: 'POST', headers: bound(quick), body: '{}' });
+    assert.equal(wrongEntry.status, 403);
+    const freshNext = await login(NEXT_MAIN_ORIGIN, 'main', ownerId);
+    const confirmations = await Promise.all([1, 2].map(() => request(NEXT_MAIN_ORIGIN, `${guidePath}/confirm`,
+      { method: 'POST', headers: bound(freshNext), body: '{}' })));
+    for (const response of confirmations) {
+      assert.equal(response.status, 200);
+      const proof = (await json<{ data: { accountId: string; destination: { permissionsMatched: boolean; workspaceMatched: boolean } } }>(response)).data;
+      assert.equal(proof.accountId, ownerId); assert.equal(proof.destination.permissionsMatched, true);
+      assert.equal(proof.destination.workspaceMatched, true);
+    }
+    const recovered = await request(LEGACY_MAIN_ORIGIN, guidePath, { headers: bound(main) });
+    assert.equal(recovered.status, 200);
+    assert.ok((await json<{ data: { destination: unknown } }>(recovered)).data.destination, 'Source reads durable proof after target response loss');
+    const rebind = await request(NEXT_MAIN_ORIGIN, `${guidePath}/confirm`, { method: 'POST', headers: bound(nextMain), body: '{}' });
+    assert.equal(rebind.status, 403, 'A different target context cannot observe or take over a confirmed intent');
+    // No Session may list all same-account Sessions with this purpose scope.
+    const sessionTokenHash = createHash('sha256').update(main.cookie.slice('__session='.length)).digest('hex');
+    const actor = { principalId: proofs.get(ownerId)!.principalId, localUserId: ownerId, entry: 'main' as const,
+      contextId: main.profile.authContextId, expiresAtMs: Date.now() + 60_000, accountGuardRevision: '1', sessionTokenHash };
+    const { runActorTransaction } = await import('../../../server/actorTransaction.js');
+    assert.equal(await runActorTransaction(database, config, actor, async port =>
+      (await port.query('SELECT context_id FROM projed_core.app_sessions')).rowCount), 1);
+    assert.equal(await runActorTransaction(database, config, actor, async port =>
+      (await port.query('SELECT context_id FROM projed_core.app_sessions')).rowCount, { originSwitchIntentId: guideId }), 2);
+    assert.equal(await runActorTransaction(database, config, actor, async port =>
+      (await port.query('SELECT context_id FROM projed_core.app_sessions')).rowCount), 1, 'Purpose scope is transaction local');
+    const expiredId = randomUUID();
+    await admin.query('BEGIN');
+    await admin.query(`SELECT set_config('projed.session_token_hash',$1,true),set_config('projed.actor_context_id',$2,true)`,
+      [sessionTokenHash, actor.contextId]);
+    await admin.query(`INSERT INTO projed_core.origin_switch_intents
+      (id,campaign,local_user_id,principal_id,guard_revision,guide_entry,source_origin,target_origin,
+       source_entry,target_entry,source_context_id,source_permissions,created_at_ms,expires_at_ms)
+      SELECT $2::uuid,campaign,local_user_id,principal_id,guard_revision,guide_entry,source_origin,target_origin,
+        source_entry,target_entry,source_context_id,source_permissions,
+        floor(extract(epoch FROM clock_timestamp())*1000),floor(extract(epoch FROM clock_timestamp())*1000)+100
+      FROM projed_core.origin_switch_intents WHERE id=$1::uuid`, [guideId, expiredId]);
+    await admin.query('COMMIT');
+    await new Promise(resolve => setTimeout(resolve, 150));
+    assert.equal(await runActorTransaction(database, config, actor, async port =>
+      (await port.query('SELECT context_id FROM projed_core.app_sessions')).rowCount, { originSwitchIntentId: expiredId }), 1,
+    'Expired purpose cannot grant counterpart Session visibility');
+    assert.equal((await request(LEGACY_MAIN_ORIGIN, `/api/v1/origin-switch/intents/${expiredId}`, { headers: bound(main) })).status, 409);
+    const { OriginSwitchRepository } = await import('../../../server/originSwitch.js');
+    const proofsRepository = new OriginSwitchRepository({ campaign: 'native-origin-guide', routes: [{ entry: 'main',
+      sourceOrigin: LEGACY_MAIN_ORIGIN, targetOrigin: NEXT_MAIN_ORIGIN, sourceSessionEntry: 'main', targetSessionEntry: 'main' }] });
+    let releaseConfirmation!: () => void, enteredConfirmation!: () => void;
+    const entered = new Promise<void>(resolve => { enteredConfirmation = resolve; });
+    const release = new Promise<void>(resolve => { releaseConfirmation = resolve; });
+    const heldConfirmation = runActorTransaction(database, config, actor, async port => {
+      const proof = await proofsRepository.read(port, actor, guideId);
+      assert.ok(proof?.destination?.permissionsMatched);
+      enteredConfirmation(); await release; return proof;
+    }, { originSwitchIntentId: guideId });
+    void heldConfirmation.catch(() => undefined);
+    let revoke: Promise<boolean> | undefined;
+    let revocationResults: PromiseSettledResult<unknown>[] = [];
+    try {
+      await Promise.race([entered, heldConfirmation.then(() => { throw new Error('Confirmation did not pause'); })]);
+      const targetHash = createHash('sha256').update(freshNext.cookie.slice('__session='.length)).digest('hex');
+      revoke = store.revokeSession(targetHash, NEXT_MAIN_ORIGIN, Date.now());
+      void revoke.catch(() => undefined);
+      const deadline = Date.now() + 1500;
+      let waiting = false;
+      do {
+        waiting = (await admin.query(`SELECT 1 FROM pg_stat_activity WHERE datname=current_database()
+          AND pid<>pg_backend_pid() AND wait_event='advisory'
+          AND query LIKE '%projed:runtime-transaction:v1%'`)).rowCount! > 0;
+        if (waiting) break;
+        await new Promise(resolve => setTimeout(resolve, 20));
+      } while (Date.now() < deadline);
+      assert.ok(waiting, 'Logout must wait behind the active proof transaction');
+    } finally {
+      releaseConfirmation();
+      revocationResults = await Promise.allSettled([heldConfirmation, ...(revoke ? [revoke] : [])]);
+    }
+    for (const result of revocationResults) if (result.status === 'rejected') throw result.reason;
+    assert.equal(await revoke, true);
+    assert.equal((await request(LEGACY_MAIN_ORIGIN, guidePath, { headers: bound(main) })).status, 409,
+      'Known target logout invalidates the proof and permits a new explicit intent');
+    assert.equal((await request(LEGACY_MAIN_ORIGIN, guidePath, { headers: bound(freshNext) })).status, 401);
+    const replacementId = randomUUID(), replacementPath = `/api/v1/origin-switch/intents/${replacementId}`;
+    const replacementIntent = await request(LEGACY_MAIN_ORIGIN, '/api/v1/origin-switch/intents', {
+      method: 'POST', headers: bound(main), body: JSON.stringify({ id: replacementId,
+        campaign: 'native-origin-guide', entry: 'main', targetOrigin: NEXT_MAIN_ORIGIN }) });
+    assert.equal(replacementIntent.status, 200); await replacementIntent.arrayBuffer();
+    const reloggedTarget = await login(NEXT_MAIN_ORIGIN, 'main', ownerId);
+    assert.equal((await request(NEXT_MAIN_ORIGIN, `${guidePath}/confirm`, {
+      method: 'POST', headers: bound(reloggedTarget), body: '{}' })).status, 403,
+      'A fresh target Session cannot rebind the original intent');
+    const reconfirmed = await request(NEXT_MAIN_ORIGIN, `${replacementPath}/confirm`, {
+      method: 'POST', headers: bound(reloggedTarget), body: '{}' });
+    assert.equal(reconfirmed.status, 200); await reconfirmed.arrayBuffer();
+    const replacementProof = await request(LEGACY_MAIN_ORIGIN, replacementPath, { headers: bound(main) });
+    assert.equal(replacementProof.status, 200);
+    assert.ok((await json<{ data: { destination: unknown } }>(replacementProof)).data.destination);
+    const changed = await request(LEGACY_MAIN_ORIGIN, '/api/v1/workspaces', { method: 'POST', headers: bound(main),
+      body: JSON.stringify({ title: 'Source changed after confirmation' }) });
+    assert.equal(changed.status, 201); await changed.arrayBuffer();
+    assert.equal((await request(LEGACY_MAIN_ORIGIN, guidePath, { headers: bound(main) })).status, 409,
+      'New effective source rights invalidate the earlier baseline');
+    assert.equal(exchanges, 7);
+    const quickGuideId = randomUUID(), quickPath = `/api/v1/origin-switch/intents/${quickGuideId}`;
+    const quickIntent = await request(LEGACY_QUICK_ORIGIN, '/api/v1/origin-switch/intents', { method: 'POST', headers: bound(quick),
+      body: JSON.stringify({ id: quickGuideId, campaign: 'native-origin-guide', entry: 'quick', targetOrigin: NEXT_QUICK_ORIGIN }) });
+    assert.equal(quickIntent.status, 200); await quickIntent.arrayBuffer();
+    const foreignQuick = await request(NEXT_QUICK_ORIGIN, `${quickPath}/confirm`, { method: 'POST', headers: bound(nextQuick), body: '{}' });
+    assert.equal(foreignQuick.status, 403, 'Main and Quick accounts are independent, not inferred by origin');
+    const freshQuick = await login(NEXT_QUICK_ORIGIN, 'quick', ownerId);
+    const ownQuick = await request(NEXT_QUICK_ORIGIN, `${quickPath}/confirm`, { method: 'POST', headers: bound(freshQuick), body: '{}' });
+    assert.equal(ownQuick.status, 200);
+    const quickProof = (await json<{ data: { entry: string; destination: { permissionsMatched: boolean } } }>(ownQuick)).data;
+    assert.equal(quickProof.entry, 'quick'); assert.equal(quickProof.destination.permissionsMatched, true);
     await admin.query('BEGIN; SET LOCAL ROLE projed_owner_disposable');
     await admin.query('SELECT projed_contract.invalidate_google_sessions_v1($1::text)', [`legacy-google-${ownerId}`]);
     await admin.query('COMMIT');
-    for (const [publicOrigin, session] of [[LEGACY_MAIN_ORIGIN, main], [LEGACY_QUICK_ORIGIN, quick]] as const) {
+    for (const [publicOrigin, session] of [[LEGACY_MAIN_ORIGIN, main], [LEGACY_QUICK_ORIGIN, quick], [NEXT_MAIN_ORIGIN, nextMain]] as const) {
       const revoked = await request(publicOrigin, '/api/v1/session', { headers: { cookie: session.cookie } });
       assert.equal(revoked.status, 409); assert.equal(revoked.headers.get('cache-control'), 'no-store');
       assert.equal(await errorCode(revoked), 'IDENTITY_MAPPING_CONFLICT');
@@ -322,7 +510,9 @@ export async function verifyLegacyEntryMappingSessionsPostgres(config: RuntimeCo
         'x-projed-expected-context-id': session.profile.authContextId }, body: JSON.stringify({ captureId, title, workspaceHint: null }) });
       assert.equal(revokedWrite.status, 409); assert.equal(await errorCode(revokedWrite), 'IDENTITY_MAPPING_CONFLICT');
     }
-    assert.equal(exchanges, 3, 'Session reads/revocation must not exchange another owner code');
+    const unaffected = await request(NEXT_QUICK_ORIGIN, '/api/v1/session', { headers: { cookie: nextQuick.cookie } });
+    assert.equal(unaffected.status, 200); await unaffected.arrayBuffer();
+    assert.equal(exchanges, 8, 'Session reads/revocation must not exchange another owner code');
   } finally {
     if (relay?.listening) await new Promise<void>((resolve, reject) => {
       relay!.close(error => error ? reject(error) : resolve()); relay!.closeAllConnections();

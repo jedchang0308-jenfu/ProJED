@@ -29,7 +29,7 @@ ProJED 已有使用者，移轉以不丟資料、不重建帳號、不改既有�
 
 ### 人類產品決策
 
-**D7（2026-11-25，Human Confirmed；方案2）**：最後換網址採「引導完成切換」。待 DEV-142 完成、中央後端在舊網址運作穩定後才執行；舊站依序引導確認草稿、以原帳號登入新站、更新書籤／PWA入口。草稿、原UUID及主／Quick各自帳號隔離沿 §6.2；流程與驗收見 [§6.4.1](#dev139-guided-origin-switch)。本次僅更新開發文件，不啟用提示、導流、部署或變更任何正式資源；不將「已選方案」認列為換址已完成。
+**D7（2026-11-25，Human Confirmed；方案2）**：最後換網址採「引導完成切換」。待 DEV-142 完成、中央後端在舊網址運作穩定後才執行；舊站依序引導確認草稿、以原帳號登入新站、更新書籤／PWA入口。草稿、原UUID及主／Quick各自帳號隔離沿 §6.2；流程與驗收見 [§6.4.1](#dev139-guided-origin-switch)。原定案時僅更新文件；本輪已開始本機引導預覽與狀態邏輯實作，尚不啟用正式提示、導流、部署或變更正式資源，不將方案／預覽認列為實際換址完成。
 
 **D6（2026-11-23，Human Confirmed；本輪文件）**：採「舊網址先跑新系統，穩定後一次換新網址」，目的為縮小最後使用者更換網址的作業與排錯窗口。原主站／Quick origin 先承載新版前端與中央後端，最後才改 Cloud Run 直接入口；允許規劃有界過渡入口，不表示已核准其新資源／公開權限。資料搬遷特別拆成獨立交付點 DEV-142，其他準備與最後網址切換仍由 DEV-139 管理。D6 取代 D4／D5 的網址先後次序，保留原資料／權限、本機草稿、零留存與費用不大幅增加；現行 active 目標仍只完成切流前準備、部署候選並驗證，原業務資料先不搬遷、原網址／PWA 先不切換。這不是正式停寫、資料搬入、新 writer 或入口 IAM／Secret／credential／billing 的執行授權。
 
@@ -678,19 +678,142 @@ Server 搬移與 browser storage 恢復分開驗收。第一階段維持原 orig
 
 <a id="dev139-guided-origin-switch"></a>
 
-#### 6.4.1 方案2：引導完成新網址切換（2026-11-25，人類已採用／待開發與後續啟用）
+#### 6.4.1 方案2：引導完成新網址切換（2026-11-25，程式接線與隔離驗證／正式未啟用）
 
-**執行時機。** DEV-142 正式資料搬遷完成，且同一中央後端在舊網址的登入、工作區／看板／權限、記事同步及必要背景處理已有可查證的穩定運作結果，才進入本階段；沿 §3.0 日常確認，不新增固定觀察天數、全員簽到或另一道人工簽核。未符合前提時不啟用換址提示或轉址。本次只確定流程並更新文件，實作／驗證及正式換址沿後續授權執行；未資格模型仍保持停用，穩定運作不冒充完整模型驗收。
+**執行時機。** DEV-142 正式資料搬遷完成，且同一中央後端在舊網址的登入、工作區／看板／權限、記事同步及必要背景處理已有可查證的穩定運作結果，才進入本階段；沿 §3.0 日常確認，不新增固定觀察天數、全員簽到或另一道人工簽核。未符合前提時不啟用換址提示或轉址。人類本輪要求開始切流前置準備、先確認換網址及PWA引導功能，已實作可操作的本機預覽及共用狀態邏輯；本輪另補唯讀本機草稿盤點；正式登入回執／草稿交接 adapter、固定新網址、主／Quick接線及正式提示尚未啟用。未資格模型仍保持停用，預覽不冒充正式換址或模型驗收。
 
-舊站提示建議為「換到新入口，您的資料都在」，提供「開始切換」與「稍後」。提示不打斷正在輸入、強制重載或宣稱所有本機草稿已在雲端。「稍後」仍可沿舊網址使用同一新後端，之後能從原提示或設定再次開始。新站目的地、主／Quick callback及manifest須在實作／發布前固定並驗明，只允許既定目的地；不從任意query或外部return URL決定。
+舊站提示採「ProJED 要換新網址了」，提供「開始更換」與「稍後再做」。提示不打斷正在輸入、強制重載或宣稱所有本機草稿已在雲端。「稍後」仍可沿舊網址使用同一新後端，之後能從原提示或設定再次開始。新站目的地、主／Quick callback及manifest須在實作／發布前固定並驗明，只允許既定目的地；不從任意query或外部return URL決定。
 
 | 使用者步驟 | 程式行為與完成依據 | 未完成／中斷時 |
 |---|---|---|
 | 1．確認內容已保存 | 從目前舊origin／安裝儲存檢查Quick待送項、編輯中備註及人工草稿；清楚區分已存本機、待同步、已同步、失敗／衝突。可同步者沿原owner／ID／key同步並讀回；未能同步者沿 §6.2 提供受控交接／恢復，保留原內容、版本、帳號及回執。 | 離線、unknown或衝突不標記已完成，不清舊副本；使用者可稍後重試或繼續編輯。開啟新站不代表草稿已交接。 |
 | 2．用原帳號登入新站 | 新站建立自己的Session，以可信Principal→原UUID mapping核對目的帳號、原工作區／看板及權限。主／Quick各自核對原帳號，可保留兩入口原本不同的帳號。雲端已存在的資料只讀取，不再複製；需恢復的本機內容依 §6.2 驗身分、權限、版本與同key回執後讀回。 | 取消登入、登入逾期、新站不可用或mapping不明可回舊站；錯帳不預覽／認領他人草稿、不建立替代空帳號、不靜默改owner或覆寫衝突。切帳及晚到回應沿既有CAS／epoch保護。 |
-| 3．更新日常入口 | 瀏覽器提供明確新網址與更新書籤指引；已安裝主程式／Quick分別提供裝置適用的新PWA安裝／加入主畫面指引。先從新入口開啟、核對原帳號及交接結果，再建議移除舊圖示；保留必要深層連結的原ID與授權檢查。 | 不宣稱舊PWA會自動變新origin，不自動卸載／清儲存。平台無法可靠判定安裝時，提供人工確認步驟；單次安裝事件、開頁或HTTP200均不能代替交接完成。 |
+| 3．安裝程式或更新書籤 | 瀏覽器提供明確新網址與更新書籤指引；已安裝主程式／Quick分別提供裝置適用的新PWA安裝／加入主畫面指引。先從新入口開啟、核對原帳號及交接結果，再建議移除舊圖示；保留必要深層連結的原ID與授權檢查。 | 不宣稱舊PWA會自動變新origin，不自動卸載／清儲存。平台無法可靠判定安裝時，提供人工確認步驟；單次安裝事件、開頁或HTTP200均不能代替交接完成。 |
 
 **草稿與進度。** 沿 §6.2 重用既有outbox／編輯草稿／receipt與用途限定恢復證明，不新增第二份業務權威或永久Session bridge。新origin不能直接讀舊IndexedDB／localStorage，cookie／token不跨站複製，私人內容不塞入網址、analytics或公開log。進度至少可區分尚未開始、待處理草稿、待原帳號登入、待更新入口及完成；按來源origin、主／Quick及原帳號隔離，關閉重開後能續行，換帳不沿用前帳號的完成狀態。只有該入口本機內容已有可核實處置、新站原帳號及資料已確認、使用者已驗明日常入口，才顯示完成；不據一台裝置的完成推論其他裝置。原副本清理仍沿 §6.2／§6.4，不因引導完成就刪除未解資料。
+
+**白話文案確認（本機預覽更新）。** 依人類確認的文案，開場補上統一維護／更新的更換原因、原帳號資料保留、舊網址仍可用；三步改用「確認資料／原帳號登入／安裝程式」，補齊手機／電腦安裝、新圖示開啟與可先用瀏覽器的說明。提示不向使用者暴露PWA、origin、交接或同步等技術詞；仍只更新本機預覽，不接正式回執、部署或切流。
+
+**預覽面板與正式畫面的界線（2026-11-25，已確認）。** 右側「試看看不同情況」只供本機預覽與測試，正式環境不顯示，也不能以隱藏面板的方式留在正式頁面。正式畫面只保留使用者需要的更換原因、資料保存、原帳號登入及安裝／書籤引導；拿掉測試面板後不保留右側空欄。
+
+| 項目 | 本機預覽 | 正式環境 |
+|---|---|---|
+| 主程式／建待辦、原帳號 | 可切換合成程式情境及測試帳號，確認各自進度不混用。 | 依使用者目前開啟的程式與已登入身分取得，不提供模擬帳號選單。 |
+| 記事保存、登入與資料狀態 | 可模擬未保存、結果不明、錯帳、過期、無法連線等情況。 | 由實際草稿／既有儲存回執與受信任的登入、原資料及權限檢查決定；使用者不能自行選「資料已存好」或「登入成功」來跳過。 |
+| 手機／電腦及安裝結果 | 可切換裝置與按下安裝／取消安裝等測試情境。 | 沿既有裝置判斷顯示對應說明，使用真實安裝能力／事件；不提供模擬裝置或安裝結果選單。 |
+| 開站計數、重設測試進度 | 只用來觀察與重跑合成預覽。 | 不顯示模擬開站次數或測試重設按鈕，也不提供網址參數、快捷鍵等方式開啟測試面板。 |
+
+`qa/dev-139/s3/origin-guide.fixture.tsx`、合成資料及預覽建置／服務腳本不得由正式App／Quick入口匯入、掛載或複製到正式公開頁面；只用CSS隱藏不符合本項要求。共用的引導元件可以重用，但其正式資料來源須符合本節既有信任與帳號隔離條件，不能沿用fixture回傳值。
+
+使用者最後確認「我已從新圖示／書籤開啟，帳號與資料都正確」仍保留，這是無法完全自動判斷的日常使用確認，不是讓使用者宣告登入或保存成功。該確認仍須配合實際身分與保存結果；只按下安裝、接受安裝提示或開啟頁面都不直接標記完成。離線、檢查失敗或結果不明時保留未完成狀態與原內容。
+
+後續接線的受影響檢查須確認：正式入口沒有上述測試控制或合成資料；預覽仍明確標示模擬且可重現各情境；真實失敗不能被測試選項或手動完成旗標覆蓋。沿本節既有驗收補查，不另建required gate。上述界線確認原僅補文件；本輪盤點開發見下段，正式接線、部署與換址仍未執行。
+
+**唯讀草稿盤點（2026-11-25，本機開發）。** `src/features/originSwitch/localDraftInventory.ts` 可讀取既有 Quick capture／編輯草稿、任務詳情 checkpoint、會議 IndexedDB／sessionStorage 復原副本及音訊／定位 outbox，僅回傳目前帳號的狀態與數量。Quick 只檢查自己的儲存來源；主站另檢查備註／會議／音訊。未綁帳記錄單獨列為待確認，不自行認領；其他帳號的正文與數量不回傳。這是當下唯讀盤點，不是跨 origin 交接完成證明。
+
+盤點不建立／升級 DB、不改舊 schema、不清理過期草稿、不啟動同步或模型。Quick 的本機 `synced` 旗標不能單獨放行：須核對原 capture／owner／正文 hash，並由 `readQuickReceipt` 取得同 key 的可信回執結果；沒有接上或結果不明仍為 unknown。編輯中、進行過但結果不明的提交、衝突、未綁帳、讀取失敗與不支援格式都不當作空資料；換帳／登入失效或盤點期間編輯 revision 改變使結果不完整。會議復原副本即使超過既有一般復原顯示期限，盤點也不據此忽略未處理內容；兩種儲存的同一 scope 不重複計數，不合併或刪除正文。
+
+本機重現：`python qa/dev-139/s3/verify-local-draft-inventory.py --report output/dev139-origin-guide-preview/inventory-qa`。本輪隔離無視窗 Edge／真 IndexedDB 22項通過，另有原引導狀態14項與受影響 strict typecheck／lint 通過；結果見 `output/dev139-origin-guide-preview/inventory-qa-r7/result.json`。回執 provider 與活動快照仍是合成 adapter，不宣稱實際登入、雲端回執或正式使用者驗收。最初兩次 sandbox 程序等待已停止並保留觀察紀錄，放行同一個本機隔離測試後才取得結果，不以等待當 PASS。正式接線時仍須接既有 Session／editor dirty guard／原回執讀回，並在真正離站／完成前重新檢查；不可用本次盤點取代跨分頁寫入保護、來源／目的身分驗證或草稿交接。本輪未把任何盤點或預覽模組掛進正式 App／Quick。
+
+本輪來源已正常合併最新 `origin/main` `f642c7b`，合併點 `6803c11`，未改 main 或正式環境。合併後完整 S3 unit **198/198** 通過；直接 S3 typecheck 因共享安裝缺少 lockfile 已列的 `@types/pg` 失敗，保留原輸出，再以既有 Platform 相同 **8.23.1** 宣告的本機隔離 overlay 通過，未安裝或修改共享依賴。相關紀錄與來源檔雜湊見同結果目錄的 `verification.json`、`s3-unit.log`、`s3-types.log` 及 `s3-types-overlay.log`；不宣稱遠端 CI 或正式雲端通過。
+
+**原回執唯讀讀回（2026-11-25，source／隔離接線）。** 補齊 `QuickTaskRepository.readReceipt`、`createQuickTaskReceiptHttpDispatcher` 與 HTTP adapter 的 `readReceipt`。候選路由為 `GET /api/v1/quick-tasks/:captureId/receipt`，只接受原 capture ID，沿既有可信 Session／expected actor／交易核心與 owner RLS 查一筆回執；沒有 owner 參數、正文、額外資料權限或新 migration。本人既有提交回 `created:false` 與原 committedAt；不存在或屬於其他帳號都回 `{data:null}`，無法用來判定可以重新新增。無 Session／過期／換帳／不合法ID及非GET均拒絕，API仍採 private no-store。
+
+草稿盤點的 `readQuickReceipt` 只傳原記事識別碼，再核對服務端回執的原 owner／key／正文 hash與已知 committedAt。本機 synced 仍須查證；先前已提交但HTTP回覆遺失、尚無本機成功回執者，也可用同 key 唯讀確認，不新增、重送或修改本機狀態。查不到、異內容、拒絕或失敗保持 unknown。此 dispatcher 目前只由隔離驗證註冊，**正式 runtime、App／Quick與正式引導均未接入**；不能將 source API 或隔離結果當正式雲端證明。
+
+本輪 PostgreSQL **18.4／76項 DB與HTTP檢查**通過，含原 migration套用／冪等及新增本人讀回、跨帳不見、過期、換帳、method拒絕與讀前後task／receipt筆數一致；結果 `output/qa/dev-139/s3/20261125T135106Z-d005ef7a/result.json`。另有 **24項**真IndexedDB／合成回執與 **205項**S3及新增repository／dispatcher unit通過，受影響lint及同lock版pg宣告overlay型別通過，紀錄在 `output/dev139-origin-guide-preview/receipt-qa-r1/`。首次測試fixture的錯誤代碼型別失敗保留於 `types.log`，改用既有 `ACTOR_INVALID`後 `types-r2.log`通過；既有同狀態401的原生HTTP證據仍適用，不因此重跑已通過DB。隔離DB／HTTP已關閉並清除，容量預留已釋放。本輪無模型、正式資料、IAM／Secret／billing／容量配置、部署或切流變更；草稿交接、目的端證明、正式接線與零留存外部資格仍按原分母追蹤，不另增required gate。
+
+來源已推送同一分支並建立草稿 [PR #41](https://github.com/jedchang0308-jenfu/ProJED/pull/41)，不合併／部署。首輪 [CI45628300966](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45628300966) 的真正PostgreSQL／snapshot、前端型別與unit獨立通過，但後端 `noUncheckedIndexedAccess` 發現新route擷取與新增測試陣列索引的可能undefined，造成後端型別、compiled artifact與OCI失敗；不是provider／資料失敗。原run與 `ci-first-failed.log`保留，在同一PR補上明確非空窄化，不改嚴格設定／gate；使用既有相同pg宣告的server/S2完整overlay與受影響lint通過，修正來源另走原CI驗證，不把首輪整體記為PASS。
+
+**程式接線續行（2026-11-25，人類已核准）。** 人類已明確回覆「開放程式接線，仍不部署／換址」；原暫緩程式接線的限制至此解除，部署、換網址、IAM／Secret／billing限制不變。前一來源 `18db288` 的 [CI45629036385](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45629036385) 兩jobs SUCCESS：原lock依賴型別與unit、三boundary、compiled artifact、PG17.12 DB／HTTP76項、snapshot67項及Linux OCI23項通過；兩份artifact `15030895561`／`15030760212` 已取回，OCI sourceSha與同run一致、52 migrations，registry push與production release均NOT_RUN。首輪失敗不改寫。
+
+沿新授權將回執dispatcher接到既有kernel HTTP路由；`httpDraftInspector`提供可直接接入 `GuidePorts.inspectDrafts` 的正式資料來源，先沿原Session／expected actor檢查本人，再以原key讀回回執與盤點既有本機內容。五秒請求deadline及source Session／editor revision圍籬阻止晚到結果；離線保留本機狀態、不發網路請求。Guide的main／quick範圍與實際Session entry分開，因此既有同origin Quick可合法驗其Main Session，不錯套獨立Quick帳號。新來源接線6項unit及受影響server/S2、S3隔離型別通過；正常App／Quick畫面、目的端證明及草稿實際保存／恢復接線仍待，不宣稱已完整上線。新來源將沿同一PR／CI續驗，不因前版CI綠燈宣稱新source已通過。
+
+接線來源 `2a4df4a` 的 [CI45631620870](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45631620870) 已兩jobs SUCCESS，PG17.12 DB／HTTP76、snapshot67與Linux OCI23通過，涵蓋kernel實際回執route與跨帳不可見；52 migrations未變。取回artifact `15030567626`／`15030802177`，OCI精確sourceSha一致、productionRelease與registryPush皆NOT_RUN。報告存於 `output/dev139-origin-guide-preview/receipt-qa-r1/ci-wired/`。接續複核另修正完成前的競爭：等待目的端驗證時舊站可能產生新草稿，`confirmEntry`與恢復complete在目的端回覆後再盤點一次，狀態測試15項通過；此小修尚未包含在上述2a4df4a CI中，後續同批來源再驗，不重寫舊收據。
+
+**新舊入口、目的端證明與安裝接線方向。** 技術複核基於2a4df4a的真碼，不列為額外required gate。後續沿本節原驗收實作：
+
+- 每個實際Session entry使用明確、有限的origin集合，允許過渡期舊／新並行；仍要求stored publicOrigin等於該請求的可信Host所對應origin，Cookie不跨站接受。登入authorize與exchange採已claim login intent的exact callback，不能只依entry替換成另一個固定網址；既有meeting run Session也保留原origin資格。Platform端callback須沿其既有契約實作／驗證，不能用ProJED本機PASS代替。
+- 已唯讀核實同一 `projed-prod` 服務提供兩個既有網址，開發採主站 `https://projed-prod-9536592944.asia-east1.run.app/`、獨立Quick `https://projed-prod-56gnizku7q-de.a.run.app/quick-task/`，共用既有runtime／DB、不新增服務。兩者origin分開，保留原本獨立帳號；既有主origin的Quick仍沿Main Session。此為程式接線的固定目的設定，不代表已公開、已部署或已發布callback；讀回metadata見同證據目錄 `cloud-run-origins-readback.json`。
+- 目的端證明採一個短效、用途限定的intent／receipt，使用forward-only schema與既有Session證明、owner／purpose RLS及CAS，不建立永久broker、新Secret或泛用Session列舉。綁campaign、source／target origin、Principal→原UUID、guideEntry與實際sessionEntry、source context及原workspace／board／有效能力；目的端以自己的Session驗明並綁精確target context。舊端只讀自己intent的可信結果；期限不得超過兩端Session，換帳／撤銷／context替換／未知commit均先核實同intent，不改綁另一個目的context。有效能力含created-resource權限，不直接hash整包含時間metadata的snapshot。
+- URL／訊息只可傳無授權能力的locator，不能夾帶帳號、私人正文或Cookie／token，持有locator不足以完成或讀私人scope。目標登入round-trip與來源關閉重開可續行，但仍重新核實身分與本機草稿；新端無權宣告已讀取舊IDB。
+- 舊站只能開具名新入口或顯示指引，不能呼叫自己的native prompt冒充新PWA安裝；安裝／加入主畫面發生在已驗明的新origin及正確entry。來源關閉時，目的端最多顯示新站已確認、仍待回舊站核實內容。完成前保留來源最新草稿檢查與既有手動新入口確認，不憑安裝事件或HTTP200完成。
+
+**有限origin集合與exact callback實作（2026-11-25，開發中）。** `AppSessionService`的每entry origin可保留單字串或明確有限清單，建立時複製／凍結；所有stored Session／intent仍須等於該實際請求origin，舊meeting run也只接受仍在main清單的原origin。Runtime可選 `PROJED_MAIN_ADDITIONAL_PUBLIC_ORIGINS`／`PROJED_QUICK_ADDITIONAL_PUBLIC_ORIGINS` JSON清單，不設定時維持原行為；同一集合產生SSO callbacks，不接受wildcard、重複、不規範URL或新增跨entry共用origin。既有明確共用的primary保留相容性，不把兩個原本獨立帳號合併到同一個新增origin。
+
+Handoff exchange新增server-only `callbackOrigin`，只來自已claim且再次核對的login intent；必須精確命中該entry既定callback。多callback未帶origin即拒絕，單callback保留相容，任意redirectUri欄位仍拒絕。authorize／exchange的redirect_uri、PKCE、state與原Host／Origin綁定不變。前端主／Quick網址配對也識別既有Cloud Run兩origin；舊配對仍回舊網址，不自動導往新站，localhost與相似網域不取得production Quick身分。
+
+本機認證／入口49項及完整S2／S3 **760項**通過，server/S2與S3嚴格型別通過。首次舊exchange expected少新欄位及新fixture埠誤撞既有Quick的失敗保留，已修正測試資料，沒有改安全oracle。兩認證檔原有no-control-regex共9個lint錯誤與基線相同，保留診斷、不關規則；新增／其他受影響檔未新增lint錯誤。唯讀技術複核無具體認證缺陷，不算獨立QC／新gate。既有原生演練已補同一loopback kernel的新直接入口＋舊relay、5次精確callback／PKCE交換、原UUID／回執、跨origin Cookie拒絕與撤權；尚待本輪CI實跑，不以單元通過代替。未新增migration、env實際值、正式callback發布、IAM／Secret／billing或部署。目的端intent／receipt與正常App／Quick UI仍續行。
+
+Origin來源 `34c7381` 的 [CI45636070238](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45636070238) 型別／unit／boundary／compiled artifact及OCI通過，但新增直接入口的原生登入得403，該native驗收未通過，後續相依案例不冒充已跑。已以一次loopback wire讀回重現：Node fetch把指定Host改為socket位址，而Origin仍是新域名，因此既有Host／Origin拒絕正確運作。只把測試直接通路改用`node:http.request`攜帶正確Host；舊relay、認證規則、角色與SQL未改。原失敗與診斷保留在 `output/dev139-origin-guide-preview/auth-origin-ci-first-failed.log`／`auth-origin-host-diagnosis.json`，修正來源再驗，不重試舊來源或略過拒絕。
+
+第二輪origin來源 `005b5f7` 的 [CI45637429691](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45637429691) OCI與其他獨立檢查通過，native已完成新舊五次登入／Cookie隔離，但新直接入口寫入仍403，該回歸未通過。後續定位是loopback socket為HTTP，卻模擬HTTPS origin而未帶Cloud Run邊緣協定metadata；只在測試直接通路補正Host與`x-forwarded-proto=https`，仍讓顯式錯誤Origin的負向請求到達原拒絕檢查，未放寬產品規則。補正後本機PostgreSQL18.4 DB／HTTP **77項**完整通過（`output/qa/dev-139/s3/20261125T145141Z-ab580e38/result.json`）；自建DB／HTTP已停止與清除、容量lease已釋放。兩輪失敗保留，不改成PASS。
+
+另補目的端用的有效權限語意比較核心 `originSwitchPermissions`，8項正常／降權／錯工作區／外部Board-only／不可信形狀／重複scope與非修改來源案例通過；輸入必須沿既有 `session_effective_permissions_v1`包含created-resource權限。只比較原scope與有效動作，不以role標籤或整包metadata hash代替。此核心尚未接目的端intent持久化，不代表目的端證明完成。
+
+跨owner來源：Platform [DEV-007 PR #244](https://github.com/jedchang0308-jenfu/Jenfu-Platform/pull/244)／`53f69c72`已補ProJED專用 `PORTAL_PROJED_ADDITIONAL_CALLBACK_URIS` 可選JSON清單，authorize／exchange／cancel共用精確比對；未設定維持舊行為，空query／fragment等拒絕，未改v4 wire。225項受影響測試與型別、[Source QC45637992993](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/45637992993)通過，主控已讀核心diff核對；仍為draft，未做本次跨owner原生整合或正式provider驗收。Platform工作樹 `output/dev139-platform-origin-aliases`保留供整合，不改正式owner profile env／fixedValues、不發布callback。後續需要兩邊候選在同一隔離登入流程核實，不用單邊mock宣稱整合完成。
+
+**短效目的端證明與正常入口接線（2026-11-25，source候選）。** 人類已核准程式接線；部署／換址限制不變。新增forward-only `0053_origin_switch_intents_v1`，0001–0052 bytes不改。唯一新table只存campaign、原UUID／Principal、原／新origin及實際entry、source／target context、有效權限基線與最長15分鐘期限，不存草稿正文、email或登入憑證；不授importer寫入、不新增SA／Secret或排程。`originSwitchPermissions`已接repository，created-resource權限與原scope均納入；新增能力不當失敗，原範圍降權或來源權限變動則拒絕。
+
+`GET /api/v1/origin-switch/config`回公開的核准入口設定，未設定 `PROJED_ORIGIN_SWITCH_CAMPAIGN` 即 `{data:null}`；其餘API預設404。設定為server-only JSON `{campaign,routes}`，route明列guide entry、source／target origin及各自Session entry，兩端均須已在既有認證origin清單；不接受瀏覽器指定任意redirect。沒有設定任何正式env值。`POST /api/v1/origin-switch/intents`只接受固定UUID、campaign、entry、targetOrigin；`GET /intents/:id`讀原意圖；`POST /intents/:id/confirm`由目的端自己的真Session確認。三者均沿expected actor／kernel／FORCE RLS，寫入須同源；同UUID／同target context可重播，未知提交先查同id，不更換帳號或context重綁。
+
+RLS只允許具名intent的原context或正確目的context讀取另一端Session，沒有同帳號Session列舉；counterpart讀取權隨期限失效。核實public origin由kernel從自己的已驗Session row設置，不信客戶端欄位。登出沿既有app transaction鎖，與登入替換／目的端確認序列一致；避免撤銷先提交後仍確認成功。複核指出的期限與撤銷競爭已修正，相關原生案例已通過，不另設required gate。
+
+主程式與Quick以非阻塞lazy入口接引導，仍重用既有編輯／本機保存與同步；沒有campaign不顯示提示、不等完整看板或引導完成才允許記事。正式元件不匯入fixture或右側「試看看不同情況」控制。來源以目前Session與editor safety盤點，再使用同key唯讀回執取得保存結果；目的端locator只放隨機UUID於fragment，登入前保存並移除，沒有登入能力。來源端不呼叫原origin的PWA安裝提示；只有已確認的新站可安裝新程式。目的端不能宣稱已盤點舊IDB，最終完成仍在舊站重查保存與目的端證明後，配合使用者從新圖示／書籤開啟的確認。
+
+前端接線43項focused、全src型別及既有同版pg宣告overlay的S3型別均通過；同帳號context更新以既有HTTP actor binding訂閱重掛引導，來源意圖key也綁source context。已知GET 409失效才可由使用者再次前往時建立新意圖，未知或拒絕不換key；目的端未知確認只讀回，不盲重送。
+
+前端正常入口以無視窗Edge跑真Vite頁面與隔離HTTP fixture，**5/5**通過（`output/dev139-origin-guide-preview/frontend-entry-http-r3/result.json`）：停用時main／Quick不出現引導、原Quick草稿關閉重開可恢復、正常AuthGate後顯示引導、未送出的Quick草稿不會建立換址intent、新Quick使用自己的Session確認而不冒稱來源草稿或整體完成。所有網路被攔到本機，使用合成帳號，不是真Google／正式部署證據；首兩次Quick原bootstrap未走入口掛載的有效失敗已保留並修正。主控已檢視390px目的端截圖，安裝步驟與回原網址確認按鈕可讀，沒有測試面板。後端完整S2 **564/564**通過；首次sandbox阻擋loopback EACCES原輸出保留，開放同一隔離loopback後原案例通過，未改產品條件。
+
+認證來源 `602d35b` 的 [CI45639660728](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45639660728) 已兩jobs SUCCESS，原生PG17與OCI收據已取回至 `output/dev139-origin-guide-preview/auth-origin-ci-green/`；此證據只支持其52版來源。新53版曾因compiled runtime migration清單漏新增路徑而在啟動拒絕，失敗保留 `origin-proof-first-profile-failed.log`，修正同一allowlist後，本機PostgreSQL18.4完整78項通過；接著收窄RLS／補登出互斥後再次78項通過（`output/qa/dev-139/s3/20261125T150901Z-c9910265/result.json`），含真Session／原UUID／降權拒絕、同context並行確認、持久讀回、到期Session讀權取消及原生advisory鎖等待。此份不包含其後新增Quick跨帳與正向確認案例，該差額沿最終來源CI驗證，不改寫舊證據。
+
+最終程式來源 `4f9d346` 的 [CI45643364974](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45643364974) **兩jobs SUCCESS**：原lock依賴的前後端型別、單元／三boundary與compiled artifact通過，PostgreSQL17.12 DB／HTTP **78項**、snapshot **67項**及Linux OCI／PG17.11 **23項**通過，均含53份migration。最後Quick原帳確認／異帳拒絕已包含，主／Quick各自Session不合併。收據取回 `output/dev139-origin-guide-preview/origin-proof-ci-final/`，`verified-summary.json`逐一核對53份SQL：Windows收據採其checkout CRLF、Linux收據為同SHA的Git bytes；OCI sourceSha完全一致，registryPush／productionRelease皆NOT_RUN，沒有改寫舊收據。task-owned DB／HTTP／本輪Vite已清除，容量lease已釋放；先前交給使用者檢視的預覽另行保留。此後只有本段及直接索引的證據文字更新，程式／SQL／測試輸入不變，不重跑同套驗證。
+
+本批程式接線與隔離驗證完成，ProJED PR #41及Platform PR #244仍保留draft；完整DEV-139未結案。跨owner候選的原始登入整合、正式callback／新址啟用及真實PWA安裝不以本輪HTTP fixture代替；Gemini／RAG零留存外部資格仍未證明而維持停用。不部署、不換網址、不動正式schema或業務資料、不擴IAM／Secret／billing；既有舊網址／PWA／草稿維持原狀。
+
+**跨owner原始登入演練（2026-11-25，本機原生通過）。** 沿Platform既有 `test-dev007-projed-postgres.mjs`與三owner source-flow追加新入口，不另建gate。ProJED的test-only `ownerSessionHttpConsumer`可選 `enableOriginTransition`，於原loopback kernel外建立兩個同程序、僅綁127.0.0.1的main／Quick入口，保留各自Host並拒絕偽造Host；未啟用仍保留舊helper行為，沒有正式runtime／環境設定變更。Platform使用真正config reader驗明並凍結兩個額外callback，正常authorize／token／cancel均呼叫實際handler與repository，OrgMaster使用獨立工作樹 `d49c11b`的本機server artifact；Firebase／OIDC仍明確為LOCAL_SIMULATION，不是真Google資格。
+
+本機PG18.4 **27/27**檢查通過，含**7個**真owner HTTP source-flow案例與**5個**既有登入交易案例。新增main／Quick原UUID、Quick異帳、Cookie／callback跨origin拒絕、exact redirect／PKCE／單次換碼／重播拒絕及取消兩端intent均cancelled且零新增Session；未修改產品拒絕規則。結果 `output/dev139-platform-origin-aliases/output/dev-007/postgres/2026-11-25T15-29-02.371Z-a7a605aa/`封存三方實際source hashes與consumer副本，原生cleanup的clientClosed／clusterStopped／portReleased／tempRemoved／pathConfined皆true；額外入口亦隨helper關閉。當時source含未提交測試差額，已核對573檔實際bytes與提交後c5237b9 checkout完全一致；原head字串不改寫，current-source驗證以下列CI為準。正式callback發布、新址／實機PWA與Gemini／RAG外部零留存資格仍未執行。
+
+跨owner最終來源為Platform `cbb8426f`／ProJED `c5237b9`／OrgMaster `d49c11b`。[Platform required Source QC45647762791](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/45647762791)及[native45647877885](https://github.com/jedchang0308-jenfu/Jenfu-Platform/actions/runs/45647877885)皆SUCCESS；artifact已取回 `output/dev139-platform-origin-aliases/output/dev-007/cross-origin-ci-final/`並逐一核對Platform testedSources與ProJED consumer573檔（僅允許checkout CRLF轉換）。owner27／flow7／legacy5、OrgMaster22、中央foundation19與舊foundation19＋4預期拒絕通過，cleanup全true。首輪45646486711的owner新入口已通過，但把中央consumer profile送入舊005／006 foundation造成IAM名稱比對失敗；已恢復獨立legacy fixture的原pin與所有斷言，原失敗不改寫，COO確認屬來源接線錯置後退出、不新增gate。
+
+ProJED `c5237b9`自己的 [CI45646153483](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45646153483)兩jobs SUCCESS，53份schema、PG17.12 DB／HTTP78／snapshot67及Linux OCI23通過，OCI sourceSha吻合、registryPush／productionRelease皆NOT_RUN。結果 `output/dev139-origin-guide-preview/cross-owner-projed-ci/`。本輪OrgMaster測試工作樹`output/dev139-origin-owner-fixture`已在確認來源／inactive／內容後移除，測過的server bundle按原hash另存本機27項attempt，外部共享依賴保留；交付工作樹與先前使用者預覽保留。本節此後只有證據／直接索引文字更新，不改程式、SQL、測試輸入，不重新執行native。正式Google新入口、callback發布、新PWA安裝與未資格模型仍不因此算完成。
+
+**引導最後一步與中斷保護修正（2026-11-26，來源／隔離驗證，未部署）。** 正常主程式與Quick完整演練先證實「開始使用」只關閉提示而留在舊網址；首失敗保留於 `output/dev139-origin-guide-preview/full-entry-endpoint-before-fix-r1/`。完成動作現重新核對來源草稿、目的端登入／權限及最後期限，再同步導向固定新入口的一般路徑，不帶locator／query；目的端真確認成功即清除本頁sessionStorage locator，避免返回後再進確認迴圈。保留既定三步文案與版面，右側模擬區仍僅預覽。
+
+建立／讀回短效意圖與實際導航拆開：網路等待後再盤點來源草稿，稍後／ESC／帳號context替換／卸載會封住晚到導航；來源的「前往新網址安裝」沿同一流程，不提示安裝舊PWA。最後草稿檢查期間證明到期也不得完成或離站。目的端已登出／失效時，只有已驗證原來源的counterpart讀取回409，供使用者明確重開新意圖；原意圖不改綁，其他403／未知DB結果不轉成可重送。
+
+本機focused unit **39/39**、前後端型別與差額lint（零error、兩個既有Fast Refresh warning）通過。真Vite頁面／IndexedDB配隔離HTTP的正常入口 **10/10**通過，包含main／Quick完整跨頁→各自Session確認→回原頁→最後固定新入口、真RecordSidebar／owner的受控晚到草稿，以及延遲POST時稍後／ESC取消。結果 `output/dev139-origin-guide-preview/full-entry-endpoint-after-fix-r3/result.json`；晚到草稿為公開store action觸發，不冒稱使用者能在modal外打字。Google登入、正式callback、新PWA實際安裝與正式新址皆NOT_RUN；不以HTTP fixture或安裝事件代替最後使用者確認。目的端confirm僅在原POST明確回403 ACCESS_DENIED／400 DOMAIN_DATA_INVALID／409 REVISION_CONFLICT時，持久記為known-rejected，允許下次使用者主動以同id確認；network／5xx／未知commit／成功回應解析失敗仍attempted，只GET讀回，絕不把後續GET403當成原POST未提交。針對性技術審視已核對transaction commit與HTTP分類邊界，不新增required gate。
+
+PostgreSQL18.4原生DB／HTTP **78項**通過（`output/qa/dev-139/s3/20261125T161414Z-657fb739/result.json`），含已撤銷目的端→新Session／新意圖成功、原意圖不可重綁。首輪僅因新增登入後固定交換計數仍為舊值而失敗，保留 `final-navigation-native-20261126.log`；修正預期後同範圍重驗通過，`final-navigation-native-r2-20261126.log`與原生收據並存，自建DB／HTTP清理完成、capacity lease釋放。本次隨後只改前端確定拒絕分支與測試，不使此server／SQL測試失效。此批不修改任何SQL bytes、正式環境或provider資格，原跨owner證據只按其受測來源重用。
+
+本批提交 `bbb1924e262750b444807cb9d2a18f69d57fb062` 的 [CI45652448372](https://github.com/jedchang0308-jenfu/ProJED/actions/runs/45652448372) 兩jobs SUCCESS；PG17.12 DB／HTTP78、snapshot67與Linux OCI／PG17.11 23通過。收據已讀回 `output/dev139-origin-guide-preview/final-navigation-ci/`，`verified-summary.json`核對同一sourceSha及三份收據各53份SQL（Windows checkout CRLF、Linux Git bytes），OCI registryPush／productionRelease皆NOT_RUN。新39項單元亦包含於S3 CI，初次dispatch500經唯讀確認未建立run後才限次重試。原預覽已另目錄建置相容版本，沒有取代使用者保留的預覽。此後僅文件／索引證據補記，不改程式／SQL／測試輸入，不重跑同套CI；原跨owner正式身分發布、新址啟用及真PWA安裝限制維持。
+
+<a id="dev139-candidate-release-next-scope"></a>
+
+**下一階段候選發布提案（2026-11-26，待解除「不部署」限制）。** 本輪「繼續」恢復目標，不自行解讀為撤銷前次「開放程式接線，仍不部署／換址」。來源為ProJED PR #41（程式bbb1924、文件2705a3b）及Platform DEV-007 PR #244（65642005、程式cbb8426f），沿已成功的必要CI與正常分支保護交付；本提案不新增required gate。具體下一階段範圍如下：
+
+- 將上述兩份PR轉ready並依正常保護合併。其後同範圍必要修正沿既有授權與必要回歸／CI收斂，不擴成其他產品改動。
+- 在 `jenfu-platform-prod` 建置具來源綁定的正式候選映像；必要的Platform身分相容發布只新增ProJED已固定的兩個Cloud Run callback，保留既有ProJED與其他App入口。OrgMaster本批沒有新來源變更，不因此部署。
+- 先核對正式schema ledger；只沿既有migrator套用尚缺的 `0053_origin_switch_intents_v1` forward-only意圖metadata，不改0001–0052 bytes、不改既有業務內容、不搬資料。如現有執行身分／權限不足，保留精確拒絕，不新增IAM／credential或自行開新owner window。
+- ProJED只部署IAM保護、0%一般流量的具名候選；保持目前正式revision承接100%，不套用create-only renderer的 `LATEST 100%`到現有服務。實際更新保留既有服務／proxy／網路／容量、正式Job與PAUSED排程，不能將候選當成正式Web切流。
+- 使用候選可驗證的真Session、讀取、拒絕與引導路徑；需雲端寫入的案例僅使用具名可清理測試資料，不改既有使用者資料。未公開新入口／未實測裝置安裝的部分仍標未驗，不以代理、HTTP200或PWA安裝事件冒稱正式新網址交接完成。
+
+**本次唯讀基線。** 中央service `projed-prod` 目前為 `projed-prod-board-4059d94` 100%（既有tag `dev139-session-env`），映像為 `asia-east1-docker.pkg.dev/jenfu-platform-prod/projed-release/projed-prod@sha256:9fc9dc667c0e21d0b4a5fa2b0d2c88ec3126579a02929ce1f5c15b42cf835fab`。source `4059d9442a1f25b58531629e46d196758e87296d`已由git ancestry驗明包含於本候選，該正式可讀性修正不會被遺漏；其來源清單已有0052，本批僅新增0053，真正DB ledger仍須執行前讀回。main為f642c7b，PR #41基底一致、工作樹乾淨。此唯讀觀測不是恢復測試、部署或新的正式驗收；真正執行前僅刷新會漂移的revision／traffic／image／ledger，沿用其他有效證據。
+
+**持續排除。** 不換舊網址／介面／既有PWA、不導正式使用者到新origin、不公開中央候選、不切Web流量、不重搬資料；不擴IAM／Secret／credential／billing／容量。零留存未資格的Gemini／RAG保持NULL，不傳會議內容；適用契約／Google豁免及完整真ASR／provider與最終新網址／PWA驗收仍保留於原DEV-139分母。本提案僅供人類一次決定是否恢復上述候選階段，尚未執行。
+
+**零留存唯讀查核（2026-11-25）。** 已用既有SDK登入唯讀讀回中央 `jenfu-platform-prod` 的 `cacheConfig`，實際 `disableCache=true`；沒有PATCH設定或推論。三個既定model/location的 `fetchPublisherModelConfig`均回404 NOT_FOUND，依[官方logging說明](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/capabilities/request-response-logging)表示該logging config不存在、預設不記錄；本次不藉此推定模型可用或整體ZDR合格。結果在 `output/dev139-origin-guide-preview/zdr-readonly-20261125.json`及`zdr-model-logging-readonly-20261125.json`，credential僅程序記憶體，沒有payload檔案。
+
+[官方零留存說明](https://docs.cloud.google.com/gemini-enterprise-agent-platform/resources/zero-data-retention)及[abuse monitoring](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/abuse-monitoring)仍要求核對適用契約與模型範圍，不能把不供訓練、cache關閉或供應商稱ZDR-aligned視為本需求的零內容留存證明。可用郵件的專案／ZDR條件檢索沒有找到核准；Drive僅檢索文件metadata，未找到可識別的Google Cloud Master Agreement或ProJED豁免文件，未讀取不相關文件內容。此檢索範圍有限，不證明契約不存在。現行meeting／RAG binding皆仍為NULL，不啟用Gemini／RAG、不傳會議內容；尚缺可查核的適用契約／Google豁免證據與其後合成provider驗證，不能以程式或checkbox自行補成PASS。
+
+**本輪可確認的實作範圍。** `src/features/originSwitch/` 的共用元件／狀態邏輯依序處理草稿、原帳號、新日常入口；主程式／Quick、來源與目標origin、原帳號及本次換址版本分別保存進度。稍後會保留進度；重開後重新查證草稿與目的身分，不能只信舊localStorage的完成旗標。pending／unknown／衝突／未綁帳號／仍在編輯／離線／盤點失敗均不放行；晚到回應在換帳或取消後失效。安裝accepted／dismissed事件不直接完成，最後須由使用者確認從新圖示或書籤開啟且資料正確，並再驗身分及內容狀態。
+
+預覽檔 `qa/dev-139/s3/origin-guide.fixture.tsx` 只提供合成帳號、內容狀態與模擬登入／安裝，沒有被正式App或Quick入口匯入。`scripts/build-dev139-origin-guide-preview.mjs` 產生單檔HTML，CSP封鎖外部連線；正式候選main／Quick origin依本節已驗的固定路由，尚未啟用；預覽的保留測試網域不會真的開啟。PWA裝置判斷沿既有 `pwaInstallService`，不新增安裝程序、不複製Session、不傳私人內容，也不清除任何業務儲存。
+
+初版預覽重現與歷史結果：`node --import tsx --test qa/dev-139/s3/originGuide.test.ts`（當時14項；目前接線結果以上段為準）；`node scripts/build-dev139-origin-guide-preview.mjs`；`python qa/dev-139/s3/verify-origin-guide.py --report output/dev139-origin-guide-preview/copy-qa-r2/result.json`（18項本機無視窗Edge，含桌面／iOS指引及390／320寬度）。受影響嚴格型別／lint通過。這些只證明共用邏輯及合成預覽，不等於真新origin、真帳號回執、實際原生安裝或正式草稿跨站交接已完成；沒有新增required gate或固定觀察期。
+
+正式接線時，盤點adapter須完整覆蓋本次裝置／入口的既有outbox、任務／會議／其他人工草稿及編輯狀態；不能把無法讀取或未盤點當作零。目的身分adapter須由受信任後端驗證的原Principal／UUID及權限結果提供，不能將query、postMessage、自填信箱或checkbox當作身分證據。保留原ID／key與既有CAS／回執；unknown先讀回、不盲重送。這些現有義務仍未因預覽通過而被縮減。
 
 **驗收沿既有A11、T05及本機草稿案例補驗。** 使用正常舊／新origin及同一新後端，驗主／Quick各自帳號、純雲端資料與有本機草稿兩種起點；覆蓋「稍後」、輸入中提示、弱網／離線、關閉重開、取消／逾期登入、錯帳與換帳、衝突及提交結果不明後恢復。須證明原UUID／權限與正文保留、同key不重建、未核實不顯示完成；書籤／深層連結正確落點，已安裝PWA與一般瀏覽器各有可操作交接。新站失敗仍能回舊入口使用同一新後端；不解除舊Supabase writer fence。此為既有換址驗收的使用者流程，未新增required gate，也不提前退役舊入口。
 

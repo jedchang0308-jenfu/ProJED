@@ -11,7 +11,7 @@ export type ProjedAppEntry = 'main' | 'quick';
 
 export interface ProjedSessionAdapter {
   getSession(signal?: AbortSignal): Promise<HttpSessionProfile>;
-  verifyBoundActor(accountId: string, entry: ProjedAppEntry): Promise<Readonly<HttpExpectedActor>>;
+  verifyBoundActor(accountId: string, entry: ProjedAppEntry, signal?: AbortSignal): Promise<Readonly<HttpExpectedActor>>;
   startLogin(entry: ProjedAppEntry, returnPath?: string, signal?: AbortSignal): Promise<string>;
   updateDisplayName(displayName: string, signal?: AbortSignal): Promise<HttpSessionProfile>;
   logout(signal?: AbortSignal): Promise<void>;
@@ -118,10 +118,10 @@ export function createHttpSessionAdapter(client: HttpApiClient): ProjedSessionAd
   let nextRead = 0;
   let appliedRead = 0;
   return {
-    async verifyBoundActor(accountId, entry) {
+    async verifyBoundActor(accountId, entry, signal) {
       const expectedActor = client.snapshotExpectedActor();
       if (expectedActor.accountId !== accountId) throw new HttpApiError('ACTOR_CHANGED', 409, null, false);
-      const profile = parseSession(await client.request('/api/v1/session', { expectedActor }));
+      const profile = parseSession(await client.request('/api/v1/session', { expectedActor, signal }));
       if (profile.entry !== entry || profile.uid !== accountId || profile.authContextId !== expectedActor.contextId) {
         throw new HttpApiError('ACTOR_CHANGED', 409, null, false);
       }

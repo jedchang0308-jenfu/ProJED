@@ -72,8 +72,11 @@ export async function runActorTransaction<T>(
   config: RuntimeConfig,
   actor: ServerActorV1,
   callback: (port: ActorQueryPort) => Promise<T>,
-  options: { readonly signal?: AbortSignal } = {},
+  options: { readonly signal?: AbortSignal; readonly originSwitchIntentId?: string } = {},
 ): Promise<T> {
+  if (options.originSwitchIntentId !== undefined && !UUID_RE.test(options.originSwitchIntentId)) {
+    throw new KernelError('TRANSACTION_USAGE_INVALID', 'Origin intent scope is invalid');
+  }
   const checkCancellation = () => {
     if (options.signal?.aborted) throw new KernelError('TRANSACTION_USAGE_INVALID','Operation was cancelled',409);
   };
@@ -362,6 +365,7 @@ export async function runActorTransaction<T>(
     transactionStarted = true;
     await client.query(`
       SELECT set_config('projed.actor_principal_id', $1, true),
+             set_config('projed.actor_public_origin', '', true),
              set_config('projed.actor_local_user_id', $2, true),
              set_config('projed.actor_entry', $3, true),
              set_config('projed.actor_context_id', $4, true),
@@ -382,7 +386,8 @@ export async function runActorTransaction<T>(
     if (actor.sessionTokenHash) {
       await client.query("SELECT set_config('projed.session_token_hash',$1,true)", [actor.sessionTokenHash]);
       const bound = await client.query(`
-        SELECT set_config('projed.session_permissions',
+        SELECT set_config('projed.actor_public_origin',public_origin,true),
+          set_config('projed.session_permissions',
           projed_core.session_effective_permissions_v1(permission_snapshot,created_resource_permissions)::text, true)
           FROM projed_core.app_sessions
          WHERE token_hash=$1 AND context_id=$2::uuid AND local_user_id=$3::uuid
@@ -393,6 +398,10 @@ export async function runActorTransaction<T>(
       if (bound.rowCount !== 1) throw new KernelError('ACCESS_DENIED','Session permissions are unavailable',403);
     } else if (config.env === 'managed') {
       throw new KernelError('ACCESS_DENIED','An authenticated Session is required',403);
+    }
+    if (options.originSwitchIntentId !== undefined) {
+      if (!actor.sessionTokenHash) throw new KernelError('ACCESS_DENIED', 'An authenticated Session is required', 403);
+      await guardedClientQuery("SELECT set_config('projed.origin_switch_intent_id',$1,true)", [options.originSwitchIntentId]);
     }
     const result = await callback({
       query,

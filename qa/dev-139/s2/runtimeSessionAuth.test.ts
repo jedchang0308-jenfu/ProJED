@@ -41,6 +41,26 @@ test('disposable kernels retain local test auth after production pins are publis
   assert.equal(calls,0);
 });
 
+test('additional public origins are explicit JSON lists and never permissive defaults', () => {
+  const config = { env: 'managed' } as RuntimeConfig;
+  const database = { checkout: async () => { throw new Error('must not connect'); } } as unknown as RuntimeDatabase;
+  assert.equal(typeof createRuntimeSessionAuth(config, database, { ...publishedEnvironment,
+    PROJED_MAIN_ADDITIONAL_PUBLIC_ORIGINS: JSON.stringify(['https://main-next.example.test']),
+    PROJED_QUICK_ADDITIONAL_PUBLIC_ORIGINS: JSON.stringify(['https://quick-next.example.test']),
+  }).resolveActor, 'function');
+  for (const value of ['*', '"https://next.test"', '["http://next.test"]', '["https://next.test/path"]',
+    JSON.stringify([publishedEnvironment.PROJED_MAIN_PUBLIC_ORIGIN]),
+    JSON.stringify([publishedEnvironment.PROJED_QUICK_PUBLIC_ORIGIN])]) {
+    assert.throws(() => createRuntimeSessionAuth(config, database, { ...publishedEnvironment,
+      PROJED_MAIN_ADDITIONAL_PUBLIC_ORIGINS: value }), { code: 'CONFIG_INVALID' });
+  }
+  assert.equal(typeof createRuntimeSessionAuth(config, database, { ...publishedEnvironment,
+    PROJED_QUICK_PUBLIC_ORIGIN: publishedEnvironment.PROJED_MAIN_PUBLIC_ORIGIN,
+    PROJED_MAIN_ADDITIONAL_PUBLIC_ORIGINS: '["https://main-next.example.test"]',
+    PROJED_QUICK_ADDITIONAL_PUBLIC_ORIGINS: '["https://quick-next.example.test"]',
+  }).resolveActor, 'function');
+});
+
 test('owner simulation rejects remote destinations before opening a database', async () => {
   const base = {root:'.',databaseName:`dev014_${'a'.repeat(20)}`,databasePort:54321,
     brokerOrigin:'http://127.0.0.1:54322',manifestSha256:'c'.repeat(64),

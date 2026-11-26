@@ -54,6 +54,8 @@ const REVISION_RE = /^[1-9][0-9]{0,18}$/u;
 const MAX_INT64 = 9_223_372_036_854_775_807n;
 const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[a-f0-9]{12}$/iu;
 const URL_SENTINEL = 'http://projed.invalid';
+export type AppSessionOrigins = Readonly<Record<AppEntry, string | readonly string[]>>;
+type OriginSets = Readonly<Record<AppEntry, readonly string[]>>;
 
 export interface AppSessionServiceOptions {
   readonly store: AppSessionStore;
@@ -61,7 +63,7 @@ export interface AppSessionServiceOptions {
   readonly mappings: PrincipalMappingResolver;
   readonly binding: PlatformHandoffBinding;
   readonly pins: readonly IdentityContractPin[];
-  readonly origins: Readonly<{ main: string; quick: string }>;
+  readonly origins: AppSessionOrigins;
   readonly environment: SessionCookieEnvironment;
   readonly now?: () => number;
   readonly createContextId?: () => string;
@@ -269,23 +271,23 @@ function nowFrom(now: () => number): number {
   return value;
 }
 
-function sameOriginForHost(host: unknown, origins: Readonly<{ main: string; quick: string }>): string {
+function sameOriginForHost(host: unknown, origins: OriginSets): string {
   if (typeof host !== 'string' || host.length === 0 || /[\u0000-\u0020\u007f,/@\\]/u.test(host)) {
     throw new KernelError('ACCESS_DENIED', 'Request origin is not allowed', 403);
   }
-  const matches = [...new Set([origins.main, origins.quick].filter((origin) => new URL(origin).host === host))];
+  const matches = [...new Set([...origins.main, ...origins.quick].filter((origin) => new URL(origin).host === host))];
   if (matches.length !== 1) throw new KernelError('ACCESS_DENIED', 'Request origin is not allowed', 403);
   return matches[0]!;
 }
 
 function requestPostOrigin(
   request: IncomingMessage,
-  origins: Readonly<{ main: string; quick: string }>,
+  origins: OriginSets,
 ): string {
   const origin = request.headers.origin;
   const fetchSite = request.headers['sec-fetch-site'];
   if (typeof origin !== 'string' || (fetchSite !== undefined && typeof fetchSite !== 'string')
-      || fetchSite === 'cross-site' || (origin !== origins.main && origin !== origins.quick)) {
+      || fetchSite === 'cross-site' || (!origins.main.includes(origin) && !origins.quick.includes(origin))) {
     throw new KernelError('ACCESS_DENIED', 'Request origin is not allowed', 403);
   }
   const hostOrigin = sameOriginForHost(request.headers.host, origins);
@@ -389,6 +391,16 @@ function response(
   return { matched: true, status, body, headers };
 }
 
+function validOriginChoice(value: unknown, environment: SessionCookieEnvironment): boolean {
+  const values: unknown[] = Array.isArray(value) ? value : [value];
+  return values.length > 0 && values.length <= 8 && new Set(values).size === values.length
+    && values.every(item => typeof item === 'string' && validPublicOrigin(item, environment));
+}
+
+function originChoice(value: string | readonly string[]): readonly string[] {
+  return Object.freeze(typeof value === 'string' ? [value] : [...value]);
+}
+
 export function createAppSessionService(options: AppSessionServiceOptions) {
   const now = options?.now ?? Date.now;
   const pins = Array.isArray(options?.pins) ? Object.freeze([...options.pins]) : [];
@@ -407,12 +419,13 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
       || (options.now !== undefined && typeof options.now !== 'function')
       || (options.createContextId !== undefined && typeof options.createContextId !== 'function')
       || !exactKeys(options.origins, ['main', 'quick'])
-      || !validPublicOrigin(options.origins.main, options.environment)
-      || !validPublicOrigin(options.origins.quick, options.environment)) {
+      || !validOriginChoice(options.origins.main, options.environment)
+      || !validOriginChoice(options.origins.quick, options.environment)) {
     throw new KernelError('CONFIG_INVALID', 'Application session service configuration is invalid', 503);
   }
+  const originByEntry: OriginSets = Object.freeze({ main: originChoice(options.origins.main), quick: originChoice(options.origins.quick) });
   const hostValues = new Map<string, string>();
-  for (const publicOrigin of new Set([options.origins.main, options.origins.quick])) {
+  for (const publicOrigin of new Set([...originByEntry.main, ...originByEntry.quick])) {
     const host = new URL(publicOrigin).host;
     const previous = hostValues.get(host);
     if (previous && previous !== publicOrigin) {
@@ -421,7 +434,6 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
     hostValues.set(host, publicOrigin);
   }
   const binding = Object.freeze({ ...options.binding });
-  const originByEntry = Object.freeze({ main: options.origins.main, quick: options.origins.quick });
   const environment = options.environment;
   const requestResolutions = new WeakMap<IncomingMessage, Promise<ResolvedSession>>();
   const logoutResolutions = new WeakMap<IncomingMessage, Promise<ResolvedSessionMetadata>>();
@@ -439,7 +451,7 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
     }
     if (!stored) return null;
     if (!validStoredSessionShape(stored, binding) || !safeEqual(stored.tokenHash, hash(sessionToken))
-        || stored.publicOrigin !== publicOrigin || stored.publicOrigin !== originByEntry[stored.entry]
+        || stored.publicOrigin !== publicOrigin || !originByEntry[stored.entry].includes(stored.publicOrigin)
         || stored.expiresAtMs > stored.identity.sourceSessionExpiresAtMs) invalidSession();
     if (!pins.some((pin) => pinMatches(pin, binding))) {
       throw new KernelError('IDENTITY_CONTRACT_UNAVAILABLE', 'No ProJED identity contract is pinned', 503);
@@ -514,7 +526,7 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
     try { stored = await options.store.readMeetingRunSession(runId); }
     catch (error) { identityInvalidOrUnavailable(error); }
     if (!stored || !validStoredSessionShape(stored,binding) || stored.entry !== 'main'
-        || stored.publicOrigin !== originByEntry.main
+        || !originByEntry.main.includes(stored.publicOrigin)
         || stored.expiresAtMs > stored.identity.sourceSessionExpiresAtMs) invalidSession();
     return actorForSession(stored);
   };
@@ -528,7 +540,7 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
     const expectedOldSessionHash = tokens.sessionToken ? hash(tokens.sessionToken) : null;
     if (!validIntentShape(intent) || intent.status !== 'consumed'
         || !safeEqual(intent.tokenHash, tokens.loginToken ? hash(tokens.loginToken) : '')
-        || intent.publicOrigin !== publicOrigin || intent.publicOrigin !== originByEntry[intent.entry]
+        || intent.publicOrigin !== publicOrigin || !originByEntry[intent.entry].includes(intent.publicOrigin)
         || intent.oldSessionHash !== expectedOldSessionHash) conflict();
     const clearCookie = () => response(409, requestId, {
       error: { code: 'ACTOR_CHANGED', requestId, retryable: false },
@@ -544,7 +556,7 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
     }
     if (!stored) return clearCookie();
     if (!validStoredSessionShape(stored, binding) || !safeEqual(stored.tokenHash, intent.oldSessionHash)
-        || stored.publicOrigin !== publicOrigin || stored.publicOrigin !== originByEntry[stored.entry]) return null;
+        || stored.publicOrigin !== publicOrigin || !originByEntry[stored.entry].includes(stored.publicOrigin)) return null;
     const currentNowMs = nowFrom(now);
     if (stored.revokedAtMs !== null || stored.expiresAtMs <= currentNowMs
         || stored.identity.sourceSessionExpiresAtMs <= currentNowMs) return clearCookie();
@@ -674,7 +686,7 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
       throw new KernelError('DOMAIN_DATA_INVALID', 'Session login request is invalid', 400);
     }
     const requestedEntry = body.entry as AppEntry;
-    if (publicOrigin !== originByEntry[requestedEntry]) {
+    if (!originByEntry[requestedEntry].includes(publicOrigin)) {
       throw new KernelError('ACCESS_DENIED', 'Request origin does not match the selected entry', 403);
     }
     const target = requestTarget(request);
@@ -719,7 +731,7 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
       }
     }
     const entry = oldSession?.entry ?? requestedEntry;
-    if (publicOrigin !== originByEntry[entry]) {
+    if (!originByEntry[entry].includes(publicOrigin)) {
       throw new KernelError('ACCESS_DENIED', 'Stored Session entry does not match this origin', 403);
     }
 
@@ -831,7 +843,7 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
     const currentNowMs = nowFrom(now);
     if (!intent || !validIntentShape(intent) || !safeEqual(intent.tokenHash, tokenHash)
         || !safeEqual(intent.stateHash, hash(parsed.state))
-        || intent.publicOrigin !== originByEntry[intent.entry]
+        || !originByEntry[intent.entry].includes(intent.publicOrigin)
         || intent.oldSessionHash !== (tokens.sessionToken ? hash(tokens.sessionToken) : null)) invalidSession();
     if (publicOrigin !== intent.publicOrigin || parsed.issuer !== binding.issuer) invalidSession();
     if (intent.status === 'consumed') {
@@ -903,7 +915,7 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
     }
     if (intent.status !== 'pending' || intent.claimHash !== null || intent.completedSessionHash !== null
         || intent.expiresAtMs <= currentNowMs
-        || publicOrigin !== originByEntry[intent.entry]
+        || !originByEntry[intent.entry].includes(publicOrigin)
         || !intent.codeVerifier || !validOpaque(intent.codeVerifier)) invalidSession();
 
     const claimHash = hash(opaque());
@@ -943,6 +955,7 @@ export function createAppSessionService(options: AppSessionServiceOptions) {
         entry: claimed.entry,
         code: parsed.code,
         codeVerifier: claimed.codeVerifier,
+        callbackOrigin: claimed.publicOrigin,
       });
     } catch (error) {
       try {

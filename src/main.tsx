@@ -11,7 +11,9 @@ import { registerPwaReloadLocation } from './services/pwaReloadLocation'
 import useBoardStore from './store/useBoardStore'
 import { installAppIconRefresh } from './services/appIconService'
 import { captureQuickWorkbenchIntent } from './features/taskWorkbench/entryIntent'
+import { captureOriginSwitchLocator } from './features/originSwitch/locator'
 
+try { captureOriginSwitchLocator('main', window.location, window.history, sessionStorage); } catch { /* No locator proof if storage is unavailable. */ }
 installAppIconRefresh('main');
 captureQuickWorkbenchIntent();
 installSupabaseBrowserDiagnostics();

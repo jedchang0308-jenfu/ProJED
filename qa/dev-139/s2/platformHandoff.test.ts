@@ -69,6 +69,28 @@ function hasCode(code: string) {
   return (error: unknown) => error instanceof KernelError && error.code === code;
 }
 
+test('multiple callbacks require the exact server-claimed origin and never cross entry', async () => {
+  const mainCallbacks = ['https://old.projed.test/api/auth/jenfu-sso/callback', 'https://new.projed.test/api/auth/jenfu-sso/callback'];
+  const sent: string[] = [];
+  let tokens = 0;
+  const subject = createPlatformHandoffClient(clientConfig({
+    callbacks: { main: mainCallbacks, quick: 'https://quick.projed.test/api/auth/jenfu-sso/callback' },
+    tokenProvider: async () => { tokens++; return 'fixture-service-token.not-real'; },
+    fetchImpl: async (_url, init) => {
+      sent.push(new URLSearchParams(String(init?.body)).get('redirect_uri')!);
+      return new Response(JSON.stringify(wire()), { headers: { 'content-type': 'application/json' } });
+    },
+  }));
+  mainCallbacks.push('https://injected.projed.test/api/auth/jenfu-sso/callback');
+  const input = { entry: 'main' as const, code: 'C'.repeat(43), codeVerifier: 'V'.repeat(43) };
+  for (const callbackOrigin of [undefined, 'https://attacker.test', 'https://quick.projed.test', 'https://injected.projed.test', 'https://new.projed.test/path']) {
+    await assert.rejects(subject.exchange({ ...input, ...(callbackOrigin === undefined ? {} : { callbackOrigin }) }), hasCode('IDENTITY_INVALID'));
+  }
+  assert.equal(tokens, 0);
+  for (const callbackOrigin of ['https://old.projed.test', 'https://new.projed.test']) await subject.exchange({ ...input, callbackOrigin });
+  assert.deepEqual(sent, mainCallbacks.slice(0, 2));
+});
+
 test('v4 parser accepts personal null Employee and employee string without creating an actor', () => {
   const personal = parsePlatformHandoffV4(wire(), BINDING, NOW);
   assert.equal(personal.identity.principalKind, 'personal');

@@ -29,7 +29,9 @@ const CAPTURE_ID_RE = /^task_workbench_unplaced_[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-
 
 function receipt(row: ReceiptRow, created: boolean): QuickTaskCreateReceipt {
   const committedAt = Number(row.committed_at_ms);
-  if (!Number.isSafeInteger(committedAt) || committedAt <= 0) {
+  if (!Number.isSafeInteger(committedAt) || committedAt <= 0
+      || !CAPTURE_ID_RE.test(row.capture_id) || !/^[a-f0-9]{64}$/u.test(row.title_hash)
+      || !/^[0-9a-f-]{36}$/iu.test(row.owner_id)) {
     throw new KernelError('DB_BOUNDARY_INVALID', 'Stored quick task receipt is invalid', 503);
   }
   return {
@@ -61,6 +63,24 @@ function normalize(input: QuickTaskCreateInput): QuickTaskCreateInput {
 }
 
 export class QuickTaskRepository {
+  /** Read only: absence is not permission to create or resend a capture. */
+  async readReceipt(port: ActorQueryPort, captureId: string): Promise<QuickTaskCreateReceipt | null> {
+    if (typeof captureId !== 'string' || !CAPTURE_ID_RE.test(captureId)) {
+      throw new KernelError('QUICK_TASK_INVALID_CAPTURE', 'Quick task capture id is invalid', 400);
+    }
+    const found = await port.query<ReceiptRow>(`
+      SELECT owner_id::text, capture_id, title_hash,
+             floor(extract(epoch FROM committed_at) * 1000)::bigint::text AS committed_at_ms
+        FROM projed_core.quick_task_capture_receipts
+       WHERE owner_id = projed_core.current_actor_user_id_v1() AND capture_id = $1
+    `, [captureId]);
+    if (!found.rows[0]) return null;
+    if (found.rows.length !== 1 || found.rows[0].capture_id !== captureId) {
+      throw new KernelError('DB_BOUNDARY_INVALID', 'Stored quick task receipt is invalid', 503);
+    }
+    return receipt(found.rows[0], false);
+  }
+
   async create(port: ActorQueryPort, unsafeInput: QuickTaskCreateInput): Promise<QuickTaskCreateReceipt> {
     const input = normalize(unsafeInput);
     const titleHash = createHash('sha256').update(input.title, 'utf8').digest('hex');
@@ -69,17 +89,12 @@ export class QuickTaskRepository {
         hashtextextended('projed:unplaced:' || projed_core.current_actor_user_id_v1()::text, 0)
       )
     `);
-    const existing = await port.query<ReceiptRow>(`
-      SELECT owner_id::text, capture_id, title_hash,
-             floor(extract(epoch FROM committed_at) * 1000)::bigint::text AS committed_at_ms
-        FROM projed_core.quick_task_capture_receipts
-       WHERE owner_id = projed_core.current_actor_user_id_v1() AND capture_id = $1
-    `, [input.captureId]);
-    if (existing.rows[0]) {
-      if (existing.rows[0].title_hash !== titleHash) {
+    const existing = await this.readReceipt(port, input.captureId);
+    if (existing) {
+      if (existing.titleHash !== titleHash) {
         throw new KernelError('QUICK_TASK_IDEMPOTENCY_CONFLICT', 'Capture id already committed with another title', 409);
       }
-      return receipt(existing.rows[0], false);
+      return existing;
     }
 
     const occupied = await port.query<{ occupied: boolean }>(`

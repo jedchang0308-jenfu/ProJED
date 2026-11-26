@@ -11,7 +11,7 @@
  * - 遷移完成後，由 onSnapshot 自動更新畫面，無須手動 reload
  * - 若無舊版資料，跳過遷移
  */
-import { lazy, Suspense, useEffect, useLayoutEffect, useRef } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useSyncExternalStore } from 'react';
 import useBoardStore from './store/useBoardStore';
 import useAuthStore from './store/useAuthStore';
 import { useMemberStore } from './store/useMemberStore';
@@ -43,6 +43,8 @@ import { createBoardAssigneeFilterOptions } from './features/taskFilters';
 import { PwaReloadSafetyBridge, PwaReloadSafetyOwners } from './components/PwaReloadSafetyBridge';
 import { GoalCellSessionProvider, GoalCellRecoveryNotice } from './components/GoalCellSessionProvider';
 import MeetingDraftRecoveryNotice from './components/Records/MeetingDraftRecoveryNotice';
+import { getPwaReloadSafetySnapshot, refreshPwaReloadSafety } from './services/pwaReloadSafety';
+import { httpApiClient } from './services/httpApi/backend';
 
 const BoardView = lazy(() => import('./components/BoardView'));
 const GanttView = lazy(() => import('./components/GanttView'));
@@ -82,6 +84,23 @@ function AppContent() {
   const { currentView, workspaces, activeWorkspaceId, activeBoardId } = useBoardStore();
   const user = useAuthStore(s => s.user);
   const userId = user?.uid ?? null;
+  const httpActor = useSyncExternalStore(httpApiClient.subscribeExpectedActor, httpApiClient.getExpectedActor);
+  useEffect(() => {
+    if (dataBackend !== 'http' || !userId || httpActor?.accountId !== userId) return;
+    let active = true;
+    let cleanup: (() => void) | undefined;
+    void import('./features/originSwitch/runtime').then(module => module.installOriginSwitchEntry({
+      entry: 'main', accountId: userId, accountLabel: user?.email || user?.displayName || '目前帳號',
+      current: () => active && useAuthStore.getState().user?.uid === userId,
+      activity: () => {
+        refreshPwaReloadSafety();
+        const safety = getPwaReloadSafetySnapshot();
+        return { current: active, online: navigator.onLine, editing: safety.state !== 'safe',
+          revision: JSON.stringify(safety.owners.map(owner => [owner.ownerId, owner.revision, owner.state])) };
+      },
+    })).then(dispose => { if (active) cleanup = dispose; else dispose(); }).catch(() => undefined);
+    return () => { active = false; cleanup?.(); };
+  }, [userId, user?.email, user?.displayName, httpActor?.accountId, httpActor?.contextId]);
   const userEmail = user?.email ?? null;
   const userDisplayName = user?.displayName ?? null;
   const loadRecords = useRecordStore(s => s.loadRecords);
