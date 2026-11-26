@@ -219,6 +219,10 @@ function switchConfiguration(campaign) {
   };
 }
 
+function providerTraffic(target) {
+  return { type: 'TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION', ...structuredClone(target) };
+}
+
 /** Pure, provider-bound preparation. It cannot publish a URL or move traffic. */
 export function renderOriginCutoverPlan(input) {
   const { baseline, environment } = assertBaseline(input);
@@ -243,8 +247,8 @@ export function renderOriginCutoverPlan(input) {
   desiredTemplate.containers[0].env = Object.entries(desiredEnvironment).map(([name, value]) => ({ name, value }));
 
   const refreshedCandidateTraffic = [
-    ...baseline.traffic.filter(target => target.tag !== CANDIDATE_TAG),
-    { revision: '<verified-candidate-revision>', tag: CANDIDATE_TAG },
+    ...baseline.traffic.filter(target => target.tag !== CANDIDATE_TAG).map(providerTraffic),
+    providerTraffic({ revision: '<verified-candidate-revision>', tag: CANDIDATE_TAG }),
   ];
 
   const candidateBody = { name: SERVICE_NAME, etag: baseline.etag, template: desiredTemplate };
@@ -282,14 +286,14 @@ export function renderOriginCutoverPlan(input) {
         requestTemplate: {
           method: 'PATCH', url: `${SERVICE_URL}&updateMask=invokerIamDisabled,traffic`,
           body: { etag: '<fresh-etag>', invokerIamDisabled: true,
-            traffic: [{ revision: '<verified-candidate-revision>', percent: 100, tag: CANDIDATE_TAG }] },
+            traffic: [providerTraffic({ revision: '<verified-candidate-revision>', percent: 100, tag: CANDIDATE_TAG })] },
         },
       },
     },
     rollback: {
       requiresFreshReadbackAndEtag: true,
       bodyWithoutEtag: { name: SERVICE_NAME, invokerIamDisabled: false,
-        traffic: structuredClone(baseline.traffic), template: structuredClone(baseline.template) },
+        traffic: baseline.traffic.map(providerTraffic), template: structuredClone(baseline.template) },
     },
     exclusions: ['iam-grant', 'secret-change', 'billing-change', 'capacity-change', 'model-enable', 'data-write'],
   };

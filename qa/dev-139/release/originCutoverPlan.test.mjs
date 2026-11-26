@@ -85,11 +85,18 @@ test('renders a private zero-traffic candidate and a separately unauthorized act
     fixture.readback.traffic.map(target => Object.fromEntries(Object.entries(target).filter(([key]) => key !== 'type'))));
   assert.equal(plan.stages.privateCandidate.verificationRoute.movesTraffic, false);
   assert.deepEqual(plan.stages.privateCandidate.verificationRoute.requestTemplate.body.traffic.at(-1),
-    { revision: '<verified-candidate-revision>', tag: 'dev139-origin-cutover' });
+    { type: 'TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION',
+      revision: '<verified-candidate-revision>', tag: 'dev139-origin-cutover' });
+  assert.equal(plan.stages.privateCandidate.verificationRoute.requestTemplate.body.traffic
+    .every(target => target.type === 'TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION'), true);
   assert.equal(plan.stages.publicActivation.authorizedByThisPlan, false);
   assert.equal(plan.stages.publicActivation.requiresHumanAuthorization, true);
   assert.equal(plan.stages.publicActivation.requestTemplate.body.invokerIamDisabled, true);
   assert.equal(plan.stages.publicActivation.requestTemplate.body.etag, '<fresh-etag>');
+  assert.equal(plan.stages.publicActivation.requestTemplate.body.traffic[0].type,
+    'TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION');
+  assert.equal(plan.rollback.bodyWithoutEtag.traffic
+    .every(target => target.type === 'TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION'), true);
   assert.deepEqual(plan.exclusions, ['iam-grant', 'secret-change', 'billing-change', 'capacity-change', 'model-enable', 'data-write']);
 });
 
@@ -181,9 +188,11 @@ test('refreshes one existing zero-traffic candidate tag and tolerates historical
   assert.equal(plan.stages.privateCandidate.verificationRoute.replacesExistingZeroTrafficTag, true);
   assert.equal(traffic.filter(target => target.tag === 'dev139-origin-cutover').length, 1);
   assert.deepEqual(traffic.find(target => target.tag === 'dev139-origin-cutover'),
-    { revision: '<verified-candidate-revision>', tag: 'dev139-origin-cutover' });
+    { type: 'TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION',
+      revision: '<verified-candidate-revision>', tag: 'dev139-origin-cutover' });
   assert.deepEqual(plan.rollback.bodyWithoutEtag.traffic.at(-1),
-    { revision: previousCandidate.revision, tag: previousCandidate.tag });
+    { type: 'TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION',
+      revision: previousCandidate.revision, tag: previousCandidate.tag });
   assert.deepEqual(plan.rollback.bodyWithoutEtag.template.labels, value.readback.template.labels);
 });
 
