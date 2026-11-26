@@ -1,5 +1,13 @@
 # SPEC-139：ProJED 納入 Jenfu-Platform 的產品與技術交接契約
 
+## Google 帳號選擇維護（2026-11-26，來源待發布）
+
+登入卡片統一顯示 Google 圖示與「使用 Google 帳號登入」。目前 HTTP client 以 `accountSelection: true` 開始登入，由後端產生固定 broker `/login?reason=account-selection&returnTo=...`，內層仍是原本六欄 PKCE authorize URL，callback 與原頁返回路徑綁定不變。client 驗證外層只能含精確 reason／單一 returnTo，並驗證內層同 broker 與本 App callback；外部、遞迴、重複或額外欄位拒絕。
+
+共用登入頁僅在 `account-selection` 且 `client_id=projed` 時，先呼叫既有 `/api/auth/projed/session` DELETE 清理 ProJED source Session，然後準備原登入 intent；Google provider 沿原 `select_account`。不清 Portal Cookie、不呼叫全域登出、不改其他 App、Principal、權限與私人資料。清理失敗不啟動選帳號或新 intent。既有有效 AppSession 仍直接使用；選帳號取消沿原回呼取消流程，草稿保留。
+
+發布順序：Platform 的共用登入相容接線先發布，再發布 ProJED client／backend。舊 PWA 未傳 `accountSelection` 時仍回原六欄 authorize URL，保留舊嚴格 validator 相容性。本切片只有程式／隔離驗證與 PR／CI，不把來源通過記作已發布或真帳號 Google popup 驗收。
+
 > 2026-11-26：DEV-142正式資料搬遷與舊網址業務切流已交付；DEV-139亦已完成Cloud Run新入口公開、精確候選100%切流及主／Quick換址引導啟用。原帳號、工作區／看板／權限、記事、本機草稿、舊網址與既有PWA更新路徑均保留。Gemini／RAG因尚無可查核的零留存資格而繼續停用，不影響Speech與無模型路徑或本次整合結案。較早準備紀錄依其日期解讀。
 
 **2026-11-25 最新執行狀態**：來源 `97891d3`（PR #37／main合併 `5d88415`）已通過CI45457970960並由Cloud Build72bc0fab-3eed-4884-bcfd-2208aa81f52f建置；`projed-prod-dev142-97891d3`承接100%，映像digest `sha256:c85ccff28ff91ca2f059444fc3c7bd635a33333b9667dab57adef1a21b2eed58`。正式資料已一次apply／獨立reconcile，來源fence與NOLOGIN保留；私人HTTP34、兩舊origin HTTP16及四manifest identity通過。Platform023身分修復後，真帳號沿原網址與正常PWA選單可用原資料；同一草稿跨關閉重開恢復、同步、重載讀回，Quick本機待同步／帳號確認／成功提交皆已驗。analysis generation6、七筆既有execution、Scheduler PAUSED、中央私人IAM不變；Gemini／RAG仍停用。恢復與實際版本見[DEV-142恢復紀錄](../reports/DEV-142-precutover-recovery-point-20261124.md)。

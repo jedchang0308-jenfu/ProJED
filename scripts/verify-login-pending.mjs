@@ -39,7 +39,7 @@ try {
   let authorizes = 0;
   let mode = 'redirect';
   let releaseSlow;
-  await context.route('**/api/**', async route => {
+  await context.route('**/*', async route => {
     const url = new URL(route.request().url());
     const json = (status, body) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
     if (url.pathname === '/api/v1/session/login') {
@@ -50,16 +50,20 @@ try {
       const query = new URLSearchParams({ client_id: 'projed', response_type: 'code',
         redirect_uri: origin + '/api/auth/jenfu-sso/callback', code_challenge: 'C'.repeat(43),
         code_challenge_method: 'S256', state: 'S'.repeat(43) });
-      return json(200, { data: { authorizationUrl: origin + '/api/sso/authorize?' + query } });
+      const loginUrl = new URL('/login', origin);
+      loginUrl.searchParams.set('reason', 'account-selection');
+      loginUrl.searchParams.set('returnTo', '/api/sso/authorize?' + query);
+      return json(200, { data: { authorizationUrl: loginUrl.toString() } });
     }
-    if (url.pathname === '/api/sso/authorize') {
+    if (url.pathname === '/login') {
       ++authorizes;
-      return route.fulfill({ status: 200, contentType: 'text/html', body: '<title>Synthetic SSO</title>' });
+      return route.fulfill({ status: 200, contentType: 'text/html', body: '<title>Synthetic Google account selection</title>' });
     }
+    if (!url.pathname.startsWith('/api/')) return route.continue();
     return json(401, { error: { code: 'IDENTITY_INVALID', retryable: false } });
   });
   await page.goto(origin);
-  const login = page.getByRole('button', { name: '檢查 Jenfu-Platform 登入' });
+  const login = page.getByRole('button', { name: '使用 Google 帳號登入' });
   await login.waitFor();
   await page.screenshot({ path: path.join(output, 'idle.png') });
   await page.clock.install();
@@ -74,7 +78,7 @@ try {
   for (let i = 0; i < 5; ++i) await page.keyboard.press('Enter');
   await pending.evaluate(button => { for (let i = 0; i < 5; ++i) button.click(); });
   check('keyboard and repeated clicks send only one login request', logins === 1);
-  check('login reaches the validated redirect boundary', (await page.evaluate(() => window.__LOGIN_DESTINATION__)).startsWith(origin + '/api/sso/authorize?'));
+  check('login reaches the shared Google account-selection entry', (await page.evaluate(() => window.__LOGIN_DESTINATION__)).startsWith(origin + '/login?reason=account-selection&returnTo='));
   await page.screenshot({ path: path.join(output, 'pending.png') });
   await page.clock.fastForward(60_001);
   await login.waitFor();
@@ -112,8 +116,8 @@ try {
   mode = 'redirect';
   await page.evaluate(() => { window.__LOGIN_TEST_NAVIGATE__ = true; });
   await login.click();
-  await page.waitForURL('**/api/sso/authorize?**');
-  check('explicit retry navigates to the synthetic SSO entry', authorizes === 1 && await page.title() === 'Synthetic SSO');
+  await page.waitForURL('**/login?reason=account-selection&returnTo=**');
+  check('explicit retry navigates to the synthetic Google account selection', authorizes === 1 && await page.title() === 'Synthetic Google account selection');
   fs.writeFileSync(path.join(output, 'result.json'), JSON.stringify({ status: 'PASS', scope: 'isolated browser with synthetic HTTP responses; no production identity or data', checks }, null, 2));
 } finally {
   await browser?.close();

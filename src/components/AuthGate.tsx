@@ -283,11 +283,6 @@ export default function AuthGate({ children }: AuthGateProps) {
                 <span className="text-lg">T</span>
                 使用固定測試環境
               </>
-            ) : isHttpBackend ? (
-              <>
-                <span className="text-lg">J</span>
-                檢查 Jenfu-Platform 登入
-              </>
             ) : isLocalSupabasePasswordMode ? (
               <>
                 <span className="text-lg">S</span>

@@ -352,8 +352,9 @@ function loginRequest(
   entry: 'main' | 'quick',
   cookie?: string,
   returnPath?: string,
+  accountSelection?: unknown,
 ): IncomingMessage {
-  const body = JSON.stringify({ entry, ...(returnPath === undefined ? {} : { returnPath }) });
+  const body = JSON.stringify({ entry, ...(returnPath === undefined ? {} : { returnPath }), ...(accountSelection === undefined ? {} : { accountSelection }) });
   return request('POST', '/api/v1/session/login', {
     origin: publicOrigin,
     host: host(publicOrigin),
@@ -417,6 +418,24 @@ function intentFrom(f: Fixture, cookie: string): StoredLoginIntent {
   return intent;
 }
 
+test('Google account selection routes Main and Quick through the shared login without changing the PKCE callback', async () => {
+  for (const entry of ['main', 'quick'] as const) {
+    const f = fixture();
+    const login = await f.service.dispatchAuth(loginRequest(f.origins[entry], entry, undefined, '/', true), 'select-google');
+    const url = authorizationFrom(login);
+    assert.equal(url.origin, BROKER_ORIGIN);
+    assert.equal(url.pathname, '/login');
+    assert.equal(url.searchParams.get('reason'), 'account-selection');
+    const nested = new URL(url.searchParams.get('returnTo')!, url.origin);
+    assert.equal(nested.pathname, '/api/sso/authorize');
+    assert.equal(nested.searchParams.get('client_id'), 'projed');
+    assert.equal(nested.searchParams.get('redirect_uri'), `${f.origins[entry]}/api/auth/jenfu-sso/callback`);
+    const callback = await f.service.dispatchAuth(callbackRequest(f.origins[entry], cookieValue(login), nested.searchParams.get('state')!), 'google-callback');
+    assert.equal(callback.status, 303);
+    assert.equal(callback.headers?.location, `${f.origins[entry]}/`);
+  }
+});
+
 test('personal login creates exact authorize URL and one callback yields an eight-hour AppSession', async () => {
   const f = fixture();
   const login = await start(f, 'main', undefined, '/boards?view=mine');
@@ -427,6 +446,7 @@ test('personal login creates exact authorize URL and one callback yields an eigh
     'response_type', 'client_id', 'redirect_uri', 'state', 'code_challenge', 'code_challenge_method',
   ]);
   assert.equal(authorize.searchParams.get('client_id'), 'projed');
+  assert.equal(authorize.searchParams.has('prompt'), false, 'older installed PWAs keep their strict six-field URL');
   assert.equal(authorize.searchParams.get('response_type'), 'code');
   assert.equal(authorize.searchParams.get('redirect_uri'), `${MAIN_ORIGIN}/api/auth/jenfu-sso/callback`);
   assert.equal(authorize.searchParams.get('code_challenge_method'), 'S256');
