@@ -803,6 +803,16 @@ PostgreSQL18.4原生DB／HTTP **78項**通過（`output/qa/dev-139/s3/20261125T1
 
 **持續排除。** 不換舊網址／介面／既有PWA、不導正式使用者到新origin、不公開中央候選、不切Web流量、不重搬資料；不擴IAM／Secret／credential／billing／容量。零留存未資格的Gemini／RAG保持NULL，不傳會議內容；適用契約／Google豁免及完整真ASR／provider與最終新網址／PWA驗收仍保留於原DEV-139分母。本提案僅供人類一次決定是否恢復上述候選階段，尚未執行。
 
+**候選發布已核准與執行（2026-11-26）。** 人類已明確核准「候選發布與驗證，仍不換址／切流」，解除本提案內候選階段的部署暫緩；持續排除項不變。ProJED #41已正常合併為0712924433843f7bfdc6080299e0379548409df9，Platform #244合併為7e5ee0ea；後續發布設定落差#246經132項focused與Source QC45734544593通過，合併為e2589810。#246只把兩個新callback加入既有v3 profile／exact env validator，保留舊值；沿正常owner runner build／image-only rotation，不新增IAM或Secret，不以修改provider validator為由虛報舊runner輸入等價。
+
+發布前發現必須處理的實際相容性：正式Web的52版profile／舊不可變image在startup與readiness精確核對整個ledger。若先套0053，既有Web會ready503或冷啟動拒絕；0%新candidate不能修正仍承接100%的舊image。唯讀另觀察analysis Job generation6尚綁51版，migration Job generation4；本批不改這兩個正式Job，不因此宣稱真分析可用。
+
+本批source補具名0052→0053相容橋接：profile／binding仍鎖完整53份；只有實際解析的換址campaign未啟用時，startup／readiness／新Job接受兩個具名、逐checksum完全一致的52／53全集。預設及啟用campaign保持strict53；未知版本、錯checksum、缺中間項、亂序、不同profile或未綁checksum仍拒絕，無通用prefix容忍或環境bypass。換址API保持關閉，不改任何SQL bytes或正式ledger。先以此source部署連現役52庫的IAM保護0%候選，才能在不影響使用者下繼續候選驗證。
+
+本機24項targeted與兩個嚴格型別overlay通過。原生PG18.4在nonce DB先逐一執行原1–52份SQL及原子ledger記錄，真檢查0053表不存在，驗相容startup/readiness成功及strict拒絕；再由原migration runner套53並重播，完整79項及真52 probe通過（output/qa/dev-139/s3/20261126T012234Z-00ed1be6/result.json與candidate-release-20261126/bridge-native-r2.log）。首輪因新的前置probe缺少App entry環境而失敗，保留bridge-native-r1.log；修正fixture前置後重驗，正式規則未放寬。其後只將52 probe自己回報的checks併入現有wrapper收據，待CI覆蓋新輸出形狀；不重寫舊79項收據。自建DB及容量lease已清理／釋放。
+
+真正套用正式0053之前，仍須先讓可接受新ledger的相容runtime承接正式流量，並處理受影響Job。該正式revision替換超出本次「0%候選、舊版100%不變」範圍，現在暫緩0053寫入；不以本次核准追認此額外主要動作。先完成已核准的安全獨立候選及上游身分相容工作，再提出具體後續範圍，不新增關卡或另立DEV。零留存與最終新址／PWA驗收分母不變。
+
 **零留存唯讀查核（2026-11-25）。** 已用既有SDK登入唯讀讀回中央 `jenfu-platform-prod` 的 `cacheConfig`，實際 `disableCache=true`；沒有PATCH設定或推論。三個既定model/location的 `fetchPublisherModelConfig`均回404 NOT_FOUND，依[官方logging說明](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/capabilities/request-response-logging)表示該logging config不存在、預設不記錄；本次不藉此推定模型可用或整體ZDR合格。結果在 `output/dev139-origin-guide-preview/zdr-readonly-20261125.json`及`zdr-model-logging-readonly-20261125.json`，credential僅程序記憶體，沒有payload檔案。
 
 [官方零留存說明](https://docs.cloud.google.com/gemini-enterprise-agent-platform/resources/zero-data-retention)及[abuse monitoring](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/abuse-monitoring)仍要求核對適用契約與模型範圍，不能把不供訓練、cache關閉或供應商稱ZDR-aligned視為本需求的零內容留存證明。可用郵件的專案／ZDR條件檢索沒有找到核准；Drive僅檢索文件metadata，未找到可識別的Google Cloud Master Agreement或ProJED豁免文件，未讀取不相關文件內容。此檢索範圍有限，不證明契約不存在。現行meeting／RAG binding皆仍為NULL，不啟用Gemini／RAG、不傳會議內容；尚缺可查核的適用契約／Google豁免證據與其後合成provider驗證，不能以程式或checkbox自行補成PASS。
