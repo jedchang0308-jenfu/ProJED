@@ -552,6 +552,7 @@ DEV-121 R39 已由 clean source commit `3579b4693c8d072a2958fc6e46240629ac311521
   - 最後換址已選方案2「引導完成切換」，[草稿→原帳號→書籤／PWA交接](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-guided-origin-switch)已完成本機引導預覽／狀態邏輯，已接真Session、原回執與目的端短效證明；原生／正常入口隔離驗證已通過，來源4f9d346的CI45643364974成功（PG78／snapshot67／OCI23），跨owner新入口PG27／HTTP7、Platform required Source QC45647762791／native45647877885及ProJED CI45646153483通過；正式啟用未執行，後端在舊網址穩定及必要交接驗證成立後才換址。
   - 現有候選與本機證據依各自 source／revision 重用；DEV-142的正式資料與舊入口驗收沿其交付證據，不再列為未搬遷。真Speech隔離資格、不可變ASR映像、正式generation7空佇列Cloud SQL正常入口已交叉驗證；未用真實會議內容，Gemini／RAG仍因零留存契約未證明而停用。完整DEV-139仍含新入口交接，不把單元／CI／空佇列當正式新址或語音品質驗收。
   - 下一步：換址引導已完成最後離站／取消與重登恢復，focused39項、正常入口10項及原生PG78項通過，bbb1924 CI45652448372兩jobs SUCCESS（PG78／snapshot67／OCI23）；正式新址／callback／主與Quick PWA安裝交接仍待最後換址階段。Gemini／RAG須先有可查核的零留存契約／豁免證據，未取得前維持停用；這不再阻擋已驗Speech／無模型分支。DEV-142已交付，不重搬資料或重跑既有正式回歸。
+  - 切換準備：已新增[舊／新網址並存計畫](specs/SPEC-139-projed-jenfu-platform-onboarding.md#dev139-origin-cutover-plan)，把私人0%候選與後續公開／升流量拆開；renderer固定保留舊主站／Quick作引導來源，拒絕身分、映像、網路、DB、容量、模型或流量漂移。2026-11-26唯讀readback確認正式仍為generation40／`projed-prod-loginpending-3c3f8b0` 100%，新入口仍私人、campaign關閉；本輪未部署、公開或切流。
   - 資料交付：[DEV-142](#dev-142-production-data-migration)／[SPEC-142](specs/SPEC-142-projed-production-data-migration.md)，正式匯入／獨立核對與舊網址切流已完成；來源fence、reader NOLOGIN及原資料保留，登入／記事／草稿恢復及Quick正式回歸PASS，DEV-142已交付。原帳號／個人與外部權限、取消／CAS／unknown／exactly-once及完整DEV-139分母保留，父子不重複認列。
 
 - ✓ DEV-138 [開發點] [已完成／正式發布、限定登入與 RPC 驗收及清理 PASS] [P1] [ProJED] DEV-133 guard 恢復、分支整合與正式驗證後清理

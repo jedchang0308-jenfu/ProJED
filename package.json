@@ -18,6 +18,7 @@
     "migrate:dev-139:s3:managed": "node scripts/migrate-dev-139-s1.mjs --profile=managed",
     "create:dev-139:managed-binding": "node scripts/create-dev139-managed-binding.mjs",
     "create:dev-139:cloud-run-plan": "node scripts/create-dev139-cloud-run-plan.mjs",
+    "create:dev-139:origin-cutover-plan": "node scripts/create-dev139-origin-cutover-plan.mjs",
     "create:dev-139:analysis-job-update": "node scripts/create-dev139-analysis-job-update.mjs",
     "create:dev-139:analysis-image-build": "node scripts/create-dev139-analysis-image-build.mjs",
     "create:dev-139:analysis-source-bundle": "node scripts/create-dev139-analysis-source-bundle.mjs",
